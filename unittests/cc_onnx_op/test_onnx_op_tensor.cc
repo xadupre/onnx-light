@@ -123,7 +123,7 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> cast_schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Cast");
 
-  EXPECT_EQ(schemas.size(), 65u);
+  EXPECT_EQ(schemas.size(), 67u);
 
   const onnx_op::LightOpSchema *const cast_v1 = FindByVersion(cast_schemas, 1);
   const onnx_op::LightOpSchema *const cast_v6 = FindByVersion(cast_schemas, 6);
@@ -567,6 +567,44 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsTriluSchemaWithoutShapeInference) {
   EXPECT_EQ(std::get<int64_t>(trilu_v14->attributes()[0].default_value), 1);
 
   EXPECT_FALSE(trilu_v14->doc().empty());
+}
+
+TEST(OnnxOpTensorRegistrationTest, ReturnsCompressSchemasWithoutShapeInference) {
+  const std::vector<onnx_op::LightOpSchema> compress_schemas =
+      onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Compress");
+
+  const onnx_op::LightOpSchema *const compress_v9 = FindByVersion(compress_schemas, 9);
+  const onnx_op::LightOpSchema *const compress_v11 = FindByVersion(compress_schemas, 11);
+  ASSERT_NE(nullptr, compress_v9);
+  ASSERT_NE(nullptr, compress_v11);
+
+  EXPECT_EQ(compress_v11->name(), "Compress");
+  EXPECT_EQ(compress_v11->domain(), onnx_op::kOnnxDomain);
+  EXPECT_EQ(compress_v11->since_version(), 11);
+
+  ASSERT_EQ(compress_v11->inputs().size(), 2u);
+  EXPECT_EQ(compress_v11->inputs()[0].name, "input");
+  EXPECT_EQ(compress_v11->inputs()[0].type, "T");
+  EXPECT_EQ(compress_v11->inputs()[1].name, "condition");
+  EXPECT_EQ(compress_v11->inputs()[1].type, "T1");
+
+  ASSERT_EQ(compress_v11->outputs().size(), 1u);
+  EXPECT_EQ(compress_v11->outputs()[0].name, "output");
+  EXPECT_EQ(compress_v11->outputs()[0].type, "T");
+
+  ASSERT_EQ(compress_v11->type_constraints().size(), 2u);
+  EXPECT_EQ(compress_v11->type_constraints()[0].type_param_str, "T");
+  EXPECT_EQ(compress_v11->type_constraints()[0].allowed_type_strs, onnx_op::AllTensorTypes());
+  EXPECT_EQ(compress_v11->type_constraints()[1].type_param_str, "T1");
+  EXPECT_EQ(compress_v11->type_constraints()[1].allowed_type_strs,
+            std::vector<onnx_op::TensorType>{onnx_op::TensorType::kBool});
+
+  ASSERT_EQ(compress_v11->attributes().size(), 1u);
+  EXPECT_EQ(compress_v11->attributes()[0].name, "axis");
+  EXPECT_EQ(compress_v11->attributes()[0].type, onnx_op::AttributeType::INT);
+  EXPECT_FALSE(compress_v11->attributes()[0].required);
+
+  EXPECT_FALSE(compress_v11->doc().empty());
 }
 
 } // namespace Test

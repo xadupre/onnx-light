@@ -371,7 +371,6 @@ clip_splitbounds_expanded
 compress_0
 compress_1
 compress_default_axis
-compress_negative_axis
 constant_pad_axes
 constant_pad
 constant_pad_negative_axes

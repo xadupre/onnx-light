@@ -968,6 +968,31 @@ std::string MakeTriluTypeConstraintDescription(int since_version) {
   return "Constrain input and output types to all tensor types.";
 }
 
+std::string MakeCompressDoc(int since_version) {
+  if (since_version <= 9) {
+    return R"DOC(
+Selects slices from an input tensor along a given axis value passed.
+
+In case axis is not provided, input is flattened before elements being selected.
+
+Compress behaves like numpy.compress: https://docs.scipy.org/doc/numpy/reference/generated/numpy.compress.html
+)DOC";
+  }
+  return R"DOC(
+Selects slices from an input tensor along a given axis value passed.
+
+In case axis is not provided, input is flattened before elements being selected.
+Positive value means counting dimensions from the front.
+Negative value means counting dimensions from the back.
+Compress behaves like numpy.compress: https://docs.scipy.org/doc/numpy/reference/generated/numpy.compress.html
+)DOC";
+}
+
+std::string MakeCompressTypeConstraintDescription(int since_version) {
+  (void)since_version;
+  return "Constrain input and output types to all tensor types.";
+}
+
 } // namespace tensor
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

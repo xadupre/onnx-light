@@ -7,6 +7,7 @@
 #include "onnx_backend_test/kernels/kernel_context.h"
 #include "onnx_backend_test/simple_tensor.h"
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -392,6 +393,33 @@ public:
                   Tensor &output) const;
 
   /// Output shape differs from both inputs in general.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Reference implementation of the ONNX ``Compress`` operator (since opset 9
+/// in the ``ai.onnx`` domain; axis may be negative since opset 11). Selects
+/// slices from ``input`` along a given ``axis`` where the corresponding entry
+/// of ``condition`` (a rank-1 BOOL tensor) is ``true``. When ``axis`` is not
+/// supplied the input is first flattened and individual elements are selected;
+/// the output is then a 1-D tensor.
+///
+/// The ``condition`` length may be shorter than the input size along the axis
+/// (or the flattened size when no axis is given); excess slices are discarded.
+///
+/// The output dtype always matches ``input``. The selected count is a runtime
+/// value and is therefore unknown at shape-inference time.
+class Compress : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  /// ``axis`` is an ``std::optional<int64_t>``: pass ``std::nullopt`` to
+  /// compress the flattened input, or the axis index to compress along.
+  Tensor operator()(const Tensor &input, const Tensor &condition,
+                    std::optional<int64_t> axis) const;
+  void operator()(const Tensor &input, const Tensor &condition, std::optional<int64_t> axis,
+                  Tensor &output) const;
+
+  /// Output size is data-dependent and cannot be inferred without evaluating
+  /// ``condition`` at runtime.
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 

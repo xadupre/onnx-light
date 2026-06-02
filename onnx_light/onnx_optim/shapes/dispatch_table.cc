@@ -299,6 +299,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          math::ComputeShapeTanh(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:ThresholdedRelu",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeThresholdedRelu(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:TopK",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

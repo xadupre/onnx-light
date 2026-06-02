@@ -160,6 +160,7 @@ ONNX_OPTIM_SHAPE_INFERENCE_OPS: frozenset[tuple[str, str]] = frozenset(
         ("ai.onnx", "RegexFullMatch"),
         ("ai.onnx", "Tan"),
         ("ai.onnx", "Tanh"),
+        ("ai.onnx", "ThresholdedRelu"),
         ("ai.onnx", "TopK"),
         ("ai.onnx", "Where"),
         ("ai.onnx", "Xor"),

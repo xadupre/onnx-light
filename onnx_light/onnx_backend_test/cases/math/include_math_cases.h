@@ -77,6 +77,9 @@ void RegisterTanCases(std::vector<TestCase> &registry);
 /// Registers the ``Tanh`` backend test node case(s).
 void RegisterTanhCases(std::vector<TestCase> &registry);
 
+/// Registers the ``ThresholdedRelu`` backend test node case(s).
+void RegisterThresholdedReluCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Add`` backend test node case(s).
 void RegisterAddCases(std::vector<TestCase> &registry);
 

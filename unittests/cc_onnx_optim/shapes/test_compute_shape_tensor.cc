@@ -1188,6 +1188,135 @@ TEST(OnnxOptimShapesTensorTile, RejectsWrongOpType) {
 }
 
 // ---------------------------------------------------------------------------
+// Upsample shape-inference tests
+// ---------------------------------------------------------------------------
+
+namespace {
+
+NodeProto MakeUpsampleNodeV7(const std::vector<float> &scales) {
+  NodeProto node;
+  node.set_op_type("Upsample");
+  node.add_input("X");
+  node.add_output("Y");
+  AddAttribute<std::vector<float>>(node, "scales", scales);
+  return node;
+}
+
+NodeProto MakeUpsampleNodeV9() {
+  NodeProto node;
+  node.set_op_type("Upsample");
+  node.add_input("X");
+  node.add_input("scales");
+  node.add_output("Y");
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesTensorUpsample, AppliesV7ScalesAttributeFloorToConcreteDims) {
+  // Input [1, 1, 2, 2], scales [1, 1, 2, 3] -> [1, 1, 4, 6].
+  NodeProto node = MakeUpsampleNodeV7({1.0f, 1.0f, 2.0f, 3.0f});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                          onnx_optim::OptimDim(2), onnx_optim::OptimDim(2)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeUpsample(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                    onnx_optim::OptimDim(4), onnx_optim::OptimDim(6)}));
+}
+
+TEST(OnnxOptimShapesTensorUpsample, AppliesV1WidthHeightScalesOnNCHWInput) {
+  // 4-D NCHW input with v1 attributes: width_scale=3, height_scale=2.
+  NodeProto node;
+  node.set_op_type("Upsample");
+  node.add_input("X");
+  node.add_output("Y");
+  AddAttribute<float>(node, "width_scale", 3.0f);
+  AddAttribute<float>(node, "height_scale", 2.0f);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                          onnx_optim::OptimDim(2), onnx_optim::OptimDim(2)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeUpsample(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                    onnx_optim::OptimDim(4), onnx_optim::OptimDim(6)}));
+}
+
+TEST(OnnxOptimShapesTensorUpsample, SymbolicInputDimYieldsSymbolicOutputDim) {
+  NodeProto node = MakeUpsampleNodeV7({1.0f, 1.0f, 2.0f, 2.0f});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(1),
+                                          onnx_optim::OptimDim(2), onnx_optim::OptimDim(2)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeUpsample(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  ASSERT_EQ(ctx.Get("Y").Shape().Rank(), 4u);
+  EXPECT_TRUE(ctx.Get("Y").Shape()[0].IsExpr());
+  EXPECT_EQ(ctx.Get("Y").Shape()[1], onnx_optim::OptimDim(1));
+  EXPECT_EQ(ctx.Get("Y").Shape()[2], onnx_optim::OptimDim(4));
+  EXPECT_EQ(ctx.Get("Y").Shape()[3], onnx_optim::OptimDim(4));
+}
+
+TEST(OnnxOptimShapesTensorUpsample, V9FloatScalesInputLeavesDimsSymbolic) {
+  // v9/v10 takes scales as a runtime input (1-D FLOAT). The shape-lattice
+  // does not carry float values, so output dims are symbolic but the rank
+  // is preserved and the dtype matches the input.
+  NodeProto node = MakeUpsampleNodeV9();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(2),
+                                                              onnx_optim::OptimDim(3),
+                                                              onnx_optim::OptimDim(4)}));
+  ctx.Set("scales", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                            onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeUpsample(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kInt32);
+  ASSERT_EQ(ctx.Get("Y").Shape().Rank(), 3u);
+  EXPECT_TRUE(ctx.Get("Y").Shape()[0].IsExpr());
+  EXPECT_TRUE(ctx.Get("Y").Shape()[1].IsExpr());
+  EXPECT_TRUE(ctx.Get("Y").Shape()[2].IsExpr());
+}
+
+TEST(OnnxOptimShapesTensorUpsample, RejectsWrongOpType) {
+  NodeProto node = MakeUpsampleNodeV7({1.0f, 1.0f, 2.0f, 2.0f});
+  node.set_op_type("Resize");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                          onnx_optim::OptimDim(2), onnx_optim::OptimDim(2)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeUpsample(ctx, node), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesTensorUpsample, RejectsScalesLengthMismatch) {
+  NodeProto node = MakeUpsampleNodeV7({1.0f, 2.0f, 2.0f});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                          onnx_optim::OptimDim(2), onnx_optim::OptimDim(2)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeUpsample(ctx, node), std::invalid_argument);
+}
+
+// ---------------------------------------------------------------------------
 // Transpose shape-inference tests
 // ---------------------------------------------------------------------------
 

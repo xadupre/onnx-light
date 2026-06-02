@@ -591,6 +591,44 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of the (deprecated) ONNX ``Upsample`` operator
+/// (since opset 1 in the ``ai.onnx`` domain, last refreshed at opset 10 and
+/// replaced by ``Resize`` from opset 10 onwards).
+///
+/// The kernel takes the input tensor ``X`` and a 1-D ``FLOAT`` ``scales``
+/// tensor of length ``rank(X)`` and produces a tensor whose dim ``i`` is
+/// ``floor(X.shape[i] * scales[i])``. The ``mode`` attribute selects the
+/// interpolation rule:
+///
+///   * ``"nearest"`` (default) — every output element is copied from the
+///     nearest input element using ``floor(out / scale)`` to map output
+///     coordinates back to input coordinates. Supports any input rank.
+///   * ``"linear"`` / ``"bilinear"`` — supported only for 4-D NCHW input,
+///     with scales equal to ``1`` on the ``N`` and ``C`` axes. The two
+///     spatial axes are upsampled with the "asymmetric" coordinate
+///     transformation used by Upsample v7/9/10 in upstream ONNX.
+///
+/// The reference implementation supports the same whole-byte element
+/// types as :cpp:func:`ElementSize` for ``"nearest"`` mode; ``"linear"``
+/// mode requires a floating-point input (``FLOAT16``/``FLOAT``/``DOUBLE``).
+class Upsample : public KernelBase {
+public:
+  /// Attributes carried by the ONNX ``Upsample`` operator.
+  struct Attributes {
+    std::string mode = "nearest";
+  };
+
+  using KernelBase::KernelBase;
+
+  Tensor operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs) const;
+  void operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs,
+                  Tensor &output) const;
+
+  /// Output shape generally differs from input shape, so storage cannot be
+  /// shared with the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

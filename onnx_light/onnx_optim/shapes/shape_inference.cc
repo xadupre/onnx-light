@@ -93,43 +93,6 @@ void ComputeShapes(ShapesContext &ctx, const utils::RepeatedProtoField<NodeProto
 
 namespace {
 
-// Builds an OptimShape from a TensorShapeProto, preserving symbolic
-// dimensions: ``dim_value`` becomes a concrete int dim, ``dim_param``
-// becomes a symbolic dim with the same name, and an unset dim becomes
-// a fresh ``"?"`` placeholder.
-OptimShape ShapeFromTensorShapeProto(const TensorShapeProto &sp) {
-  OptimShape shape;
-  for (int i = 0; i < sp.dim().size(); ++i) {
-    const TensorShapeProto::Dimension &d = sp.dim()[i];
-    if (d.has_dim_value()) {
-      shape.PushBack(OptimDim(static_cast<int64_t>(d.dim_value())));
-    } else if (d.has_dim_param()) {
-      shape.PushBack(OptimDim(std::string(d.dim_param().data(), d.dim_param().size())));
-    } else {
-      shape.PushBack(OptimDim(std::string("?")));
-    }
-  }
-  return shape;
-}
-
-// Builds an OptimTensor from a ValueInfoProto wrapping a tensor type.
-// Returns ``false`` when the ValueInfoProto wraps a non-tensor type
-// (sequence/map/optional/sparse), in which case the caller is
-// expected to skip the entry; ``OptimTensor`` does not model these.
-bool OptimTensorFromValueInfo(const ValueInfoProto &vi, OptimTensor &out) {
-  if (!vi.has_type() || !vi.type().has_tensor_type()) {
-    return false;
-  }
-  const TypeProto::Tensor &tt = vi.type().tensor_type();
-  const TensorType dtype = DataTypeToTensorType(tt.elem_type());
-  OptimShape shape;
-  if (tt.has_shape()) {
-    shape = ShapeFromTensorShapeProto(tt.shape());
-  }
-  out = OptimTensor(nullptr, dtype, std::move(shape));
-  return true;
-}
-
 // Builds an OptimTensor describing a graph initializer. Small 1-D
 // integer initializers also get a ``ValueAsShape`` annotation derived
 // from their content so that downstream ops (such as ``Reshape``) can
@@ -197,42 +160,6 @@ void ComputeShapeModel(ShapesContext &ctx, const ModelProto &model) {
   ComputeShapeGraph(ctx, model.graph());
 }
 
-namespace {
-
-// Writes the (dtype, shape) of ``tensor`` into ``vi``. Concrete
-// integer dimensions become ``dim_value`` entries and symbolic
-// dimensions become ``dim_param`` entries. Any pre-existing
-// type/shape entry on ``vi`` is overwritten so that the inferred
-// information takes precedence. Returns ``false`` (and leaves ``vi``
-// unchanged) when ``tensor`` has an undefined element type, since
-// ``TensorProto::DataType`` does not provide a meaningful encoding
-// for it.
-bool WriteOptimTensorToValueInfo(const OptimTensor &tensor, ValueInfoProto &vi) {
-  const TensorProto::DataType dtype = TensorTypeToDataType(tensor.Dtype());
-  if (dtype == TensorProto::DataType::UNDEFINED) {
-    return false;
-  }
-  // Reset any pre-existing type/shape information so it is replaced
-  // wholesale by the inferred descriptor.
-  vi.clear_type();
-  TypeProto *tp = vi.add_type();
-  TypeProto::Tensor *tt = tp->add_tensor_type();
-  tt->set_elem_type(static_cast<int>(dtype));
-  TensorShapeProto *sp = tt->add_shape();
-  for (std::size_t i = 0; i < tensor.Shape().Rank(); ++i) {
-    const OptimDim &d = tensor.Shape()[i];
-    TensorShapeProto::Dimension *dim = sp->add_dim();
-    if (d.IsInt()) {
-      dim->set_dim_value(d.AsInt());
-    } else {
-      dim->set_dim_param(d.AsExpr());
-    }
-  }
-  return true;
-}
-
-} // namespace
-
 void ApplyInferredShapesToGraph(const ShapesContext &ctx, GraphProto &graph) {
   // Names that already have authoritative type/shape information in
   // the proto and must not be overwritten.
@@ -250,7 +177,7 @@ void ApplyInferredShapesToGraph(const ShapesContext &ctx, GraphProto &graph) {
     const std::string name = vi.name().as_string();
     output_names.insert(name);
     if (!name.empty() && ctx.Has(name)) {
-      WriteOptimTensorToValueInfo(ctx.Get(name), vi);
+      OptimTensorToValueInfo(ctx.Get(name), vi);
     }
   }
   // Track existing value_info entries to avoid creating duplicates;
@@ -261,7 +188,7 @@ void ApplyInferredShapesToGraph(const ShapesContext &ctx, GraphProto &graph) {
     const std::string name = vi.name().as_string();
     existing_value_info.insert(name);
     if (!name.empty() && ctx.Has(name)) {
-      WriteOptimTensorToValueInfo(ctx.Get(name), vi);
+      OptimTensorToValueInfo(ctx.Get(name), vi);
     }
   }
   // Append a new value_info entry for every other inferred tensor.
@@ -285,7 +212,7 @@ void ApplyInferredShapesToGraph(const ShapesContext &ctx, GraphProto &graph) {
     }
     ValueInfoProto *vi = graph.add_value_info();
     vi->set_name(name);
-    WriteOptimTensorToValueInfo(tensor, *vi);
+    OptimTensorToValueInfo(tensor, *vi);
   }
 }
 

@@ -281,6 +281,17 @@ constexpr int GPUIndex(Device d) noexcept {
 std::string DeviceName(Device d);
 
 /**
+ * Parses a device name produced by :cpp:func:`DeviceName` back into a
+ * :cpp:enum:`Device` enumerator.
+ *
+ * Recognises ``"Undefined"``, ``"CPU"`` and ``"GPU<i>"`` where ``i``
+ * is a decimal integer in ``[0, kMaxGPUIndex]``. Any other input
+ * (including the empty string, ``"Unknown"`` or an out-of-range GPU
+ * index) yields :cpp:enumerator:`Device::kUndefined`.
+ */
+Device DeviceFromName(const std::string &name);
+
+/**
  * A non-owning view over a contiguous tensor buffer. ``OptimTensor`` never
  * allocates: the caller is responsible for the lifetime of the underlying
  * memory referenced by ``data``. The shape may contain symbolic dimensions
@@ -401,6 +412,50 @@ private:
   OptimShape shape_{};
   std::optional<OptimShape> value_as_shape_{};
 };
+
+/// Well-known key used to round-trip :cpp:enum:`Device` through the
+/// ``ValueInfoProto::metadata_props`` field. Exposed so that callers
+/// outside ``onnx_optim`` can inspect or remove the entry.
+inline constexpr const char *kValueInfoDeviceMetadataKey = "device";
+
+/**
+ * Populates ``out`` from a ``ValueInfoProto`` describing a tensor.
+ *
+ * The element type and (optional) shape are read from
+ * ``vi.type().tensor_type()``. When ``vi.metadata_props()`` contains an
+ * entry whose key matches :cpp:var:`kValueInfoDeviceMetadataKey`, its
+ * value is parsed with :cpp:func:`DeviceFromName` and assigned to the
+ * resulting tensor; otherwise the device is left as
+ * :cpp:enumerator:`Device::kUndefined`.
+ *
+ * @param vi  ``ValueInfoProto`` to read from.
+ * @param out Tensor to overwrite on success.
+ * @return ``true`` when ``vi`` wraps a tensor type; ``false`` for
+ *         sequence/map/optional/sparse types (which ``OptimTensor``
+ *         does not model), in which case ``out`` is left untouched.
+ */
+bool OptimTensorFromValueInfo(const ValueInfoProto &vi, OptimTensor &out);
+
+/**
+ * Writes the ``(dtype, shape, device)`` triple carried by ``tensor``
+ * into ``vi``.
+ *
+ * Any pre-existing ``type`` on ``vi`` is overwritten so that the
+ * inferred descriptor takes precedence. The device is encoded as a
+ * ``metadata_props`` entry keyed by
+ * :cpp:var:`kValueInfoDeviceMetadataKey`; if such an entry already
+ * exists it is updated in place, and if the tensor's device is
+ * :cpp:enumerator:`Device::kUndefined` the existing entry (when any)
+ * is removed. The ``name`` and ``doc_string`` fields of ``vi`` are
+ * never touched.
+ *
+ * @param tensor Source tensor.
+ * @param vi     Destination ``ValueInfoProto``.
+ * @return ``false`` (and leaves ``vi`` unchanged) when ``tensor`` has
+ *         an undefined element type, since ``TensorProto::DataType``
+ *         provides no meaningful encoding for it; ``true`` otherwise.
+ */
+bool OptimTensorToValueInfo(const OptimTensor &tensor, ValueInfoProto &vi);
 
 } // namespace onnx_optim
 } // namespace ONNX_LIGHT_NAMESPACE

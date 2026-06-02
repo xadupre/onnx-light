@@ -404,4 +404,194 @@ TEST(OnnxOptimTensor, CmpDevice) {
   EXPECT_EQ(cpu.Cmp(cpu2), onnx_optim::OptimCmpResult::kMorePrecise);
 }
 
+TEST(OnnxOptimDevice, DeviceFromName) {
+  EXPECT_EQ(onnx_optim::DeviceFromName("CPU"), onnx_optim::Device::kCPU);
+  EXPECT_EQ(onnx_optim::DeviceFromName("Undefined"), onnx_optim::Device::kUndefined);
+  EXPECT_EQ(onnx_optim::DeviceFromName("GPU0"), onnx_optim::Device::kGPU0);
+  EXPECT_EQ(onnx_optim::DeviceFromName("GPU42"), onnx_optim::MakeGPUDevice(42));
+  EXPECT_EQ(onnx_optim::DeviceFromName("GPU8191"), onnx_optim::Device::kGPU8191);
+  // Round-trip every well-formed name.
+  for (int i = 0; i <= onnx_optim::kMaxGPUIndex; i += 2731) {
+    const onnx_optim::Device d = onnx_optim::MakeGPUDevice(i);
+    EXPECT_EQ(onnx_optim::DeviceFromName(onnx_optim::DeviceName(d)), d);
+  }
+  // Malformed / out-of-range names map back to Undefined.
+  EXPECT_EQ(onnx_optim::DeviceFromName(""), onnx_optim::Device::kUndefined);
+  EXPECT_EQ(onnx_optim::DeviceFromName("cpu"), onnx_optim::Device::kUndefined);
+  EXPECT_EQ(onnx_optim::DeviceFromName("GPU"), onnx_optim::Device::kUndefined);
+  EXPECT_EQ(onnx_optim::DeviceFromName("GPU-1"), onnx_optim::Device::kUndefined);
+  EXPECT_EQ(onnx_optim::DeviceFromName("GPU+1"), onnx_optim::Device::kUndefined);
+  EXPECT_EQ(onnx_optim::DeviceFromName("GPU 1"), onnx_optim::Device::kUndefined);
+  EXPECT_EQ(onnx_optim::DeviceFromName("GPU8192"), onnx_optim::Device::kUndefined);
+  EXPECT_EQ(onnx_optim::DeviceFromName("Unknown"), onnx_optim::Device::kUndefined);
+}
+
+namespace {
+
+ValueInfoProto MakeTensorValueInfo(const std::string &name, TensorProto::DataType dtype,
+                                   const std::vector<onnx_optim::OptimDim> &dims) {
+  ValueInfoProto vi;
+  vi.set_name(name);
+  TypeProto *tp = vi.add_type();
+  TypeProto::Tensor *tt = tp->add_tensor_type();
+  tt->set_elem_type(static_cast<int>(dtype));
+  TensorShapeProto *sp = tt->add_shape();
+  for (const auto &d : dims) {
+    auto *dim = sp->add_dim();
+    if (d.IsInt()) {
+      dim->set_dim_value(d.AsInt());
+    } else {
+      dim->set_dim_param(d.AsExpr());
+    }
+  }
+  return vi;
+}
+
+} // namespace
+
+TEST(OnnxOptimValueInfo, FromValueInfoTensorTypeAndShape) {
+  ValueInfoProto vi = MakeTensorValueInfo(
+      "x", TensorProto::DataType::FLOAT,
+      {onnx_optim::OptimDim(2), onnx_optim::OptimDim("N"), onnx_optim::OptimDim(3)});
+  onnx_optim::OptimTensor t;
+  EXPECT_TRUE(onnx_optim::OptimTensorFromValueInfo(vi, t));
+  EXPECT_EQ(t.Dtype(), onnx_optim::TensorType::kFloat);
+  ASSERT_EQ(t.Shape().Rank(), 3u);
+  EXPECT_TRUE(t.Shape()[0].IsInt());
+  EXPECT_EQ(t.Shape()[0].AsInt(), 2);
+  EXPECT_TRUE(t.Shape()[1].IsExpr());
+  EXPECT_EQ(t.Shape()[1].AsExpr(), "N");
+  EXPECT_EQ(t.Shape()[2].AsInt(), 3);
+  EXPECT_EQ(t.GetDevice(), onnx_optim::Device::kUndefined);
+}
+
+TEST(OnnxOptimValueInfo, FromValueInfoMissingTypeReturnsFalse) {
+  ValueInfoProto vi;
+  vi.set_name("x");
+  onnx_optim::OptimTensor t(nullptr, onnx_optim::TensorType::kInt32, onnx_optim::OptimShape{});
+  EXPECT_FALSE(onnx_optim::OptimTensorFromValueInfo(vi, t));
+  // ``out`` must be left untouched on failure.
+  EXPECT_EQ(t.Dtype(), onnx_optim::TensorType::kInt32);
+}
+
+TEST(OnnxOptimValueInfo, FromValueInfoReadsDeviceMetadata) {
+  ValueInfoProto vi =
+      MakeTensorValueInfo("x", TensorProto::DataType::FLOAT, {onnx_optim::OptimDim(4)});
+  auto *entry = vi.add_metadata_props();
+  entry->set_key(onnx_optim::kValueInfoDeviceMetadataKey);
+  entry->set_value("GPU3");
+  onnx_optim::OptimTensor t;
+  ASSERT_TRUE(onnx_optim::OptimTensorFromValueInfo(vi, t));
+  EXPECT_EQ(t.GetDevice(), onnx_optim::MakeGPUDevice(3));
+}
+
+TEST(OnnxOptimValueInfo, FromValueInfoIgnoresUnknownDeviceMetadata) {
+  ValueInfoProto vi =
+      MakeTensorValueInfo("x", TensorProto::DataType::FLOAT, {onnx_optim::OptimDim(4)});
+  auto *entry = vi.add_metadata_props();
+  entry->set_key(onnx_optim::kValueInfoDeviceMetadataKey);
+  entry->set_value("Mars");
+  onnx_optim::OptimTensor t;
+  ASSERT_TRUE(onnx_optim::OptimTensorFromValueInfo(vi, t));
+  EXPECT_EQ(t.GetDevice(), onnx_optim::Device::kUndefined);
+}
+
+TEST(OnnxOptimValueInfo, ToValueInfoWritesTypeShape) {
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim("M")};
+  onnx_optim::OptimTensor t(nullptr, onnx_optim::TensorType::kInt64, shape);
+  ValueInfoProto vi;
+  vi.set_name("y");
+  ASSERT_TRUE(onnx_optim::OptimTensorToValueInfo(t, vi));
+  ASSERT_TRUE(vi.has_type());
+  ASSERT_TRUE(vi.type().has_tensor_type());
+  const auto &tt = vi.type().tensor_type();
+  EXPECT_EQ(tt.elem_type(), static_cast<int>(TensorProto::DataType::INT64));
+  ASSERT_TRUE(tt.has_shape());
+  ASSERT_EQ(tt.shape().dim().size(), 2);
+  EXPECT_EQ(tt.shape().dim()[0].dim_value(), 2);
+  EXPECT_EQ(tt.shape().dim()[1].dim_param().as_string(), "M");
+  // No device set => no metadata_props entry added.
+  EXPECT_EQ(vi.metadata_props().size(), 0u);
+  // The original name is preserved.
+  EXPECT_EQ(vi.name().as_string(), "y");
+}
+
+TEST(OnnxOptimValueInfo, ToValueInfoUndefinedDtypeReturnsFalse) {
+  onnx_optim::OptimTensor t;
+  ValueInfoProto vi;
+  vi.set_name("y");
+  EXPECT_FALSE(onnx_optim::OptimTensorToValueInfo(t, vi));
+  EXPECT_FALSE(vi.has_type());
+}
+
+TEST(OnnxOptimValueInfo, ToValueInfoWritesDeviceMetadata) {
+  onnx_optim::OptimTensor t(nullptr, onnx_optim::TensorType::kFloat,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+  t.SetDevice(onnx_optim::MakeGPUDevice(7));
+  ValueInfoProto vi;
+  ASSERT_TRUE(onnx_optim::OptimTensorToValueInfo(t, vi));
+  ASSERT_EQ(vi.metadata_props().size(), 1u);
+  EXPECT_EQ(vi.metadata_props()[0].key().as_string(), onnx_optim::kValueInfoDeviceMetadataKey);
+  EXPECT_EQ(vi.metadata_props()[0].value().as_string(), "GPU7");
+}
+
+TEST(OnnxOptimValueInfo, ToValueInfoUpdatesExistingDeviceMetadataInPlace) {
+  onnx_optim::OptimTensor t(nullptr, onnx_optim::TensorType::kFloat,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+  t.SetDevice(onnx_optim::Device::kCPU);
+  ValueInfoProto vi;
+  // Pre-existing unrelated metadata + stale device entry.
+  auto *misc = vi.add_metadata_props();
+  misc->set_key("author");
+  misc->set_value("test");
+  auto *dev = vi.add_metadata_props();
+  dev->set_key(onnx_optim::kValueInfoDeviceMetadataKey);
+  dev->set_value("GPU0");
+  ASSERT_TRUE(onnx_optim::OptimTensorToValueInfo(t, vi));
+  ASSERT_EQ(vi.metadata_props().size(), 2u);
+  // The unrelated entry survives untouched.
+  EXPECT_EQ(vi.metadata_props()[0].key().as_string(), "author");
+  EXPECT_EQ(vi.metadata_props()[0].value().as_string(), "test");
+  // The device entry is updated in place.
+  EXPECT_EQ(vi.metadata_props()[1].key().as_string(), onnx_optim::kValueInfoDeviceMetadataKey);
+  EXPECT_EQ(vi.metadata_props()[1].value().as_string(), "CPU");
+}
+
+TEST(OnnxOptimValueInfo, ToValueInfoRemovesStaleDeviceMetadata) {
+  onnx_optim::OptimTensor t(nullptr, onnx_optim::TensorType::kFloat,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+  // device left undefined on purpose.
+  ValueInfoProto vi;
+  auto *dev = vi.add_metadata_props();
+  dev->set_key(onnx_optim::kValueInfoDeviceMetadataKey);
+  dev->set_value("GPU0");
+  auto *misc = vi.add_metadata_props();
+  misc->set_key("author");
+  misc->set_value("test");
+  ASSERT_TRUE(onnx_optim::OptimTensorToValueInfo(t, vi));
+  ASSERT_EQ(vi.metadata_props().size(), 1u);
+  // The remaining entry is the unrelated one (swap-and-pop moved it
+  // from position 1 to position 0).
+  EXPECT_EQ(vi.metadata_props()[0].key().as_string(), "author");
+  EXPECT_EQ(vi.metadata_props()[0].value().as_string(), "test");
+}
+
+TEST(OnnxOptimValueInfo, RoundTripPreservesDtypeShapeAndDevice) {
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim("N"),
+                               onnx_optim::OptimDim(5)};
+  onnx_optim::OptimTensor t(nullptr, onnx_optim::TensorType::kDouble, shape);
+  t.SetDevice(onnx_optim::MakeGPUDevice(42));
+  ValueInfoProto vi;
+  vi.set_name("rt");
+  ASSERT_TRUE(onnx_optim::OptimTensorToValueInfo(t, vi));
+  onnx_optim::OptimTensor back;
+  ASSERT_TRUE(onnx_optim::OptimTensorFromValueInfo(vi, back));
+  EXPECT_EQ(back.Dtype(), t.Dtype());
+  EXPECT_EQ(back.GetDevice(), t.GetDevice());
+  ASSERT_EQ(back.Shape().Rank(), shape.Rank());
+  EXPECT_EQ(back.Shape()[0].AsInt(), 2);
+  EXPECT_EQ(back.Shape()[1].AsExpr(), "N");
+  EXPECT_EQ(back.Shape()[2].AsInt(), 5);
+}
+
 } // namespace Test

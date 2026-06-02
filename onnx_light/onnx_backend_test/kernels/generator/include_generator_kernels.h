@@ -83,6 +83,18 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of ONNX ``EyeLike`` (since opset 9):
+/// returns a matrix with ones on diagonal ``k`` and zeros elsewhere, with
+/// output shape copied from the 2-D ``input`` tensor.
+class EyeLike : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &input, int64_t k = 0, int32_t dtype = 0) const;
+  void operator()(const Tensor &input, int64_t k, int32_t dtype, Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Reference implementation of the ONNX ``Bernoulli`` operator (since
 /// opset 15 in the ``ai.onnx`` domain). Draws binary samples ``y[i]`` from
 /// a Bernoulli distribution with probability ``input[i]`` (a value in

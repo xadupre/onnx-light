@@ -91,6 +91,20 @@ void ComputeShapeConstant(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeConstantOfShape(ShapesContext &ctx, const NodeProto &node);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of an ``EyeLike`` node
+ * and stores it in ``ctx``.
+ *
+ * ``EyeLike`` outputs a tensor with the same 2-D shape as its input.
+ * The output dtype is set from the optional ``dtype`` attribute when
+ * present, otherwise it defaults to the input dtype.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"EyeLike"``,
+ *         if ``node`` has no input or output, if the input rank is not 2, or
+ *         if ``dtype`` is present but unsupported.
+ */
+void ComputeShapeEyeLike(ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``BlackmanWindow``
  * node and stores it in ``ctx``.
  *

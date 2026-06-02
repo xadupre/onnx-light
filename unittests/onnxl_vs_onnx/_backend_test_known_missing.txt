@@ -370,11 +370,6 @@ clip_outbounds
 clip_outbounds_expanded
 clip_splitbounds
 clip_splitbounds_expanded
-col2im_5d
-col2im
-col2im_dilations
-col2im_pads
-col2im_strides
 compress_0
 compress_1
 compress_default_axis
@@ -441,8 +436,6 @@ elu_example_expanded_ver18
 elu_expanded_ver18
 erf
 eyelike_populate_off_main_diagonal
-eyelike_with_dtype
-eyelike_without_dtype
 flexattention_causal_mask
 flexattention_causal_mask_expanded_ver26
 flexattention

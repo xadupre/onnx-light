@@ -26,7 +26,11 @@ namespace Test {
 
 namespace {
 
-std::string ToString(const utils::String &s) { return std::string(s.data(), s.size()); }
+constexpr int64_t kFallbackDefaultOpsetVersion = 18;
+
+std::string UtilsStringToStdString(const utils::String &s) {
+  return std::string(s.data(), s.size());
+}
 
 int64_t GetDefaultOpsetVersion(const ModelProto &model) {
   for (const auto &opset : model.ref_opset_import()) {
@@ -34,7 +38,7 @@ int64_t GetDefaultOpsetVersion(const ModelProto &model) {
       return opset.version();
     }
   }
-  return 18;
+  return kFallbackDefaultOpsetVersion;
 }
 
 std::vector<int64_t> ToInt64Vector(const Tensor &t) {
@@ -65,7 +69,7 @@ TEST(BackendKernels, SplitKernelRunsOnBackendTestCases) {
     SCOPED_TRACE(tc.name);
     ASSERT_EQ(tc.model.ref_graph().ref_node().size(), 1u);
     const NodeProto &node = tc.model.ref_graph().ref_node()[0];
-    ASSERT_EQ(ToString(node.ref_op_type()), "Split");
+    ASSERT_EQ(UtilsStringToStdString(node.ref_op_type()), "Split");
 
     const int64_t axis = GetAttributeOr<int64_t>(node, "axis", 0);
     int64_t num_outputs = GetAttributeOr<int64_t>(node, "num_outputs", 0);

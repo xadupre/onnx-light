@@ -106,6 +106,13 @@ void RegisterMomentumCases(std::vector<TestCase> &registry) {
   }
 
   // From Momentum.export_momentum_multiple():
+  // NOTE: the upstream Python case labels the momentum-buffer inputs
+  // "H1"/"H2" (an artefact of the test's source code), even though the
+  // outputs use the "V*_new" naming. The string labels are purely cosmetic
+  // — positionally these inputs are the per-tensor momentum buffers V1/V2
+  // that the kernel reads. We mirror the upstream names verbatim so the
+  // generated NodeProto matches the upstream ``test_momentum_multiple``
+  // model byte-for-byte.
   {
     NodeProto node;
     node.set_op_type("Momentum");

@@ -107,6 +107,9 @@ void RegisterFloorCases(std::vector<TestCase> &registry);
 /// Registers the ``Ceil`` backend test node case(s).
 void RegisterCeilCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Clip`` backend test node case(s).
+void RegisterClipCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Round`` backend test node case(s).
 void RegisterRoundCases(std::vector<TestCase> &registry);
 

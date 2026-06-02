@@ -249,6 +249,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          math::ComputeShapeCeil(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:Clip",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeClip(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:Floor",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

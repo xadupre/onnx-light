@@ -16,12 +16,12 @@ namespace kernel {
 namespace {
 constexpr const char *kPReluName = "kernel::PRelu";
 
-// Branch on the sign of ``x`` rather than evaluating
-// ``max(0, x) + slope * min(0, x)``: the latter form turns ``+inf`` /
-// ``-inf`` inputs into ``NaN`` because ``slope * 0`` is fine but the
-// arithmetic on the masked branch evaluates ``slope * inf`` first. See
-// microsoft/onnxruntime#28732 for the regression that motivated this
-// reference kernel.
+// Branches on the sign of ``x`` rather than evaluating
+// ``max(0, x) + slope * min(0, x)``: the latter form produces ``NaN``
+// for ``+inf`` / ``-inf`` inputs because the arithmetic on the masked
+// branch still evaluates ``slope * inf`` before the sum cancels it.
+// See microsoft/onnxruntime#28732 for the regression that motivated
+// this reference kernel.
 template <typename T> inline T PReluOp(T x, T slope) {
   return x < static_cast<T>(0) ? static_cast<T>(slope * x) : x;
 }

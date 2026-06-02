@@ -15,9 +15,9 @@ void ComputeShapePRelu(ShapesContext &ctx, const NodeProto &node, const char *x,
   // PRelu is element-wise binary; the output shape matches ``x``'s shape
   // (``slope`` is unidirectionally broadcastable to ``x``) and the output
   // dtype matches the shared input dtype (type constraint ``T``).
-  // Multidirectional broadcasting (used here) is a strict superset of the
-  // unidirectional broadcasting permitted by the ONNX schema, so it is safe
-  // to reuse the same helper.
+  // Multidirectional broadcasting is a strict superset of the
+  // unidirectional broadcasting permitted by the ONNX schema, so the
+  // same helper is reused.
   const TensorType out_dtype = ctx.Get(x).Dtype();
   ComputeShapeBinaryBroadcast(ctx, node, x, slope, "PRelu", out_dtype);
 }

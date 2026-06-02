@@ -21,13 +21,6 @@ import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 from onnx_light.ext_test_case import ExtTestCase
 
-try:
-    import onnxruntime as ort
-
-    HAS_ORT = True
-except ImportError:  # pragma: no cover - exercised only when ORT is missing
-    HAS_ORT = False
-
 
 def _make_model_with_initializers() -> (
     tuple[onnxl.ModelProto, np.ndarray, np.ndarray, np.ndarray, np.ndarray]
@@ -61,11 +54,12 @@ def _make_model_with_initializers() -> (
     return model, x, w, b, expected
 
 
-@unittest.skipIf(not HAS_ORT, "onnxruntime is not installed")
 class TestSaveAndRunWithOnnxRuntime(ExtTestCase):
     """Verifies models saved by ``onnx_light.save`` load and run in ORT."""
 
     def _check_with_ort(self, model_path: str, x: np.ndarray, expected: np.ndarray) -> None:
+        import onnxruntime as ort
+
         sess = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
         (got,) = sess.run(None, {"X": x})
         np.testing.assert_allclose(got, expected, rtol=1e-5, atol=1e-5)

@@ -605,6 +605,32 @@ void ComputeShapeCumProd(ShapesContext &ctx, const NodeProto &node, const char *
  */
 void ComputeShapeTopK(ShapesContext &ctx, const NodeProto &node, const char *x);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``DFT`` node and stores
+ * it in ``ctx``.
+ *
+ * ``DFT`` (since opset 17; ``axis`` moved from attribute to input at opset
+ * 20) returns a tensor of the same rank as ``node.input(0)``. Its trailing
+ * dimension is ``1`` when ``onesided`` and ``inverse`` are both set (IRFFT)
+ * and ``2`` otherwise. The signal axis dimension is replaced by
+ * ``dft_length`` (or ``floor(dft_length/2)+1`` for RFFT) when the
+ * ``dft_length`` input is a known scalar constant; it is left symbolic
+ * otherwise. The non-signal/non-trailing dimensions are copied from the
+ * input.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``node.input(0)``. On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``DFT`` ``NodeProto`` whose output should be described.
+ *              ``node.op_type()`` must be ``"DFT"`` and ``node`` must
+ *              declare at least one input and one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"DFT"`` or
+ *         if ``node`` declares no inputs/outputs.
+ * @throws std::out_of_range     if the data input is missing from ``ctx``.
+ */
+void ComputeShapeDFT(ShapesContext &ctx, const NodeProto &node);
+
 } // namespace math
 } // namespace shapes
 } // namespace onnx_optim

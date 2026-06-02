@@ -511,6 +511,35 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of the ONNX ``DFT`` operator (since opset 17;
+/// in opset 20 the ``axis`` attribute moved to an optional third input).
+///
+/// Computes the (one-dimensional) discrete Fourier Transform of ``input``
+/// along ``axis``. ``input`` must be a floating-point tensor of rank >= 2,
+/// where the trailing dimension is ``1`` (real-valued samples) or ``2``
+/// (interleaved real/imaginary parts). The returned tensor has the same
+/// rank as ``input``; its last dimension is ``2`` (complex output) except
+/// for IRFFT (``onesided=1`` and ``inverse=1``), in which case it is ``1``.
+///
+/// When ``dft_length`` is specified the signal is zero-padded or truncated
+/// along ``axis``; otherwise the axis dimension is used (or
+/// ``2 * (signal_dim_axis - 1)`` for the IRFFT default).
+class DFT : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  /// ``axis`` is the signal axis (must satisfy ``-rank <= axis``, ``axis !=
+  /// -1`` and ``axis < rank - 1``). ``dft_length`` is a pointer to a 0-D
+  /// INT32/INT64 tensor; pass ``nullptr`` to use the default.
+  Tensor operator()(const Tensor &input, const Tensor *dft_length, int64_t axis,
+                    bool onesided = false, bool inverse = false) const;
+  void operator()(const Tensor &input, const Tensor *dft_length, int64_t axis, bool onesided,
+                  bool inverse, Tensor &output) const;
+
+  /// The output shape (last dim and signal axis) generally differs from the
+  /// input shape, so storage cannot be shared.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Reference implementation of the ``TopK`` operator (opsets 1, 10, 11).
 ///
 /// Selects the ``k`` largest (or smallest, when ``largest`` is false) values

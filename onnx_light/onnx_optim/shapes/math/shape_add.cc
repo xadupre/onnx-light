@@ -16,6 +16,7 @@ void ComputeShapeAdd(ShapesContext &ctx, const NodeProto &node, const char *a, c
   // shared input dtype (type constraint ``T``).
   const TensorType out_dtype = ctx.Get(a).Dtype();
   ComputeShapeBinaryBroadcast(ctx, node, a, b, "Add", out_dtype);
+  PropagateValueAsShapeArithmetic(ctx, node, a, b, BroadcastDimOp::kAdd);
 }
 
 } // namespace math

@@ -244,6 +244,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 2);
          math::ComputeShapeCumSum(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:DFT",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeDFT(ctx, node);
+       }},
       {"ai.onnx:Ceil",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
@@ -469,6 +474,12 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          math::ComputeShapeMul(ctx, node, node.input(0).as_string().c_str(),
                                node.input(1).as_string().c_str());
        }},
+      {"ai.onnx:Sub",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         math::ComputeShapeSub(ctx, node, node.input(0).as_string().c_str(),
+                               node.input(1).as_string().c_str());
+       }},
       {"ai.onnx:MatMul",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
@@ -629,6 +640,10 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:SequenceConstruct",
        [](ShapesContext &ctx, const NodeProto &node) {
          sequence::ComputeShapeSequenceConstruct(ctx, node);
+       }},
+      {"ai.onnx:SequenceEmpty",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         sequence::ComputeShapeSequenceEmpty(ctx, node);
        }},
       {"ai.onnx:SequenceLength",
        [](ShapesContext &ctx, const NodeProto &node) {

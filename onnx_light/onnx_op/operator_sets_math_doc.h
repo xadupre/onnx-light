@@ -128,6 +128,16 @@ std::string MakeTopKDoc(int since_version);
  */
 std::string MakeSumDoc(int since_version);
 
+/**
+ * Returns the documentation string for the DFT operator at the given opset
+ * version.
+ *
+ * @param since_version Opset version for which to generate the documentation
+ *                      (17 or 20).
+ * @return Documentation string for the DFT operator.
+ */
+std::string MakeDFTDoc(int since_version);
+
 } // namespace math
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

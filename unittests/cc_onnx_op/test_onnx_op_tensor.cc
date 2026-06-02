@@ -123,7 +123,7 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> cast_schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Cast");
 
-  EXPECT_EQ(schemas.size(), 67u);
+  EXPECT_EQ(schemas.size(), 75u);
 
   const onnx_op::LightOpSchema *const cast_v1 = FindByVersion(cast_schemas, 1);
   const onnx_op::LightOpSchema *const cast_v6 = FindByVersion(cast_schemas, 6);
@@ -531,6 +531,64 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsNonZeroSchemasWithoutShapeInference) {
 
   EXPECT_EQ(nz_v9->type_constraints()[0].allowed_type_strs, onnx_op::AllTensorTypes());
   EXPECT_FALSE(nz_v13->doc().empty());
+}
+
+TEST(OnnxOpTensorRegistrationTest, ReturnsShapeSchemasWithHistory) {
+  const std::vector<onnx_op::LightOpSchema> shape_schemas =
+      onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Shape");
+
+  ASSERT_EQ(shape_schemas.size(), 8u);
+  for (const onnx_op::LightOpSchema &s : shape_schemas) {
+    EXPECT_EQ(s.name(), "Shape");
+    EXPECT_EQ(s.domain(), "ai.onnx");
+
+    ASSERT_EQ(s.inputs().size(), 1u);
+    EXPECT_EQ(s.inputs()[0].name, "data");
+    EXPECT_EQ(s.inputs()[0].description, "An input tensor.");
+    EXPECT_EQ(s.inputs()[0].type, "T");
+
+    ASSERT_EQ(s.outputs().size(), 1u);
+    EXPECT_EQ(s.outputs()[0].name, "shape");
+    EXPECT_EQ(s.outputs()[0].description, "Shape of the input tensor");
+    EXPECT_EQ(s.outputs()[0].type, "T1");
+
+    ASSERT_EQ(s.type_constraints().size(), 2u);
+    EXPECT_EQ(s.type_constraints()[0].type_param_str, "T");
+    EXPECT_EQ(s.type_constraints()[1].type_param_str, "T1");
+    EXPECT_EQ(s.type_constraints()[1].allowed_type_strs,
+              std::vector<onnx_op::TensorType>{onnx_op::TensorType::kInt64});
+    EXPECT_FALSE(s.doc().empty());
+  }
+
+  // Versions < 15 have no attributes; versions >= 15 declare ``start`` and ``end``.
+  const onnx_op::LightOpSchema *const s_v1 = FindByVersion(shape_schemas, 1);
+  const onnx_op::LightOpSchema *const s_v13 = FindByVersion(shape_schemas, 13);
+  const onnx_op::LightOpSchema *const s_v15 = FindByVersion(shape_schemas, 15);
+  const onnx_op::LightOpSchema *const s_v25 = FindByVersion(shape_schemas, 25);
+  ASSERT_NE(nullptr, s_v1);
+  ASSERT_NE(nullptr, s_v13);
+  ASSERT_NE(nullptr, s_v15);
+  ASSERT_NE(nullptr, s_v25);
+
+  EXPECT_TRUE(s_v1->attributes().empty());
+  EXPECT_TRUE(s_v13->attributes().empty());
+
+  ASSERT_EQ(s_v15->attributes().size(), 2u);
+  EXPECT_EQ(s_v15->attributes()[0].name, "start");
+  EXPECT_EQ(s_v15->attributes()[0].type, onnx_op::AttributeType::INT);
+  EXPECT_FALSE(s_v15->attributes()[0].required);
+  ASSERT_TRUE(std::holds_alternative<int64_t>(s_v15->attributes()[0].default_value));
+  EXPECT_EQ(std::get<int64_t>(s_v15->attributes()[0].default_value), 0);
+  EXPECT_EQ(s_v15->attributes()[1].name, "end");
+  EXPECT_EQ(s_v15->attributes()[1].type, onnx_op::AttributeType::INT);
+  EXPECT_FALSE(s_v15->attributes()[1].required);
+  EXPECT_TRUE(std::holds_alternative<std::monostate>(s_v15->attributes()[1].default_value));
+
+  // Type sets evolve with IR versions.
+  EXPECT_EQ(s_v1->type_constraints()[0].allowed_type_strs, onnx_op::AllTensorTypes());
+  EXPECT_EQ(s_v13->type_constraints()[0].allowed_type_strs, onnx_op::ConcatTypesVer13());
+  EXPECT_EQ(s_v25->type_constraints()[0].allowed_type_strs.size(), 26u);
+  EXPECT_EQ(s_v25->type_constraints()[0].allowed_type_strs.back(), onnx_op::TensorType::kInt2);
 }
 
 TEST(OnnxOpTensorRegistrationTest, ReturnsTriluSchemaWithoutShapeInference) {

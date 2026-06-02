@@ -606,6 +606,49 @@ TEST(BackendKernelClass, NonZeroBoolRespectsTruthiness) {
   EXPECT_EQ(py[5], 1);
 }
 
+using onnx_backend_test::kernel::Shape;
+
+TEST(BackendKernelClass, ShapeDefaultReturnsFullShape) {
+  const KernelContext ctx{DefaultOpset(15)};
+  Shape shape_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 3, 4}, std::vector<float>(24, 0.0f));
+  Tensor y = shape_kernel(x);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{3}));
+  const int64_t *py = y.AsInt64();
+  EXPECT_EQ(py[0], 2);
+  EXPECT_EQ(py[1], 3);
+  EXPECT_EQ(py[2], 4);
+}
+
+TEST(BackendKernelClass, ShapeStartEndAndNegativesAreClamped) {
+  const KernelContext ctx{DefaultOpset(15)};
+  Shape shape_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 3, 4, 5}, std::vector<float>(120, 0.0f));
+
+  Shape::Attributes a;
+  a.start = 1;
+  a.end = 3;
+  Tensor y = shape_kernel(x, a);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2}));
+  EXPECT_EQ(y.AsInt64()[0], 3);
+  EXPECT_EQ(y.AsInt64()[1], 4);
+
+  Shape::Attributes neg;
+  neg.start = -2;
+  Tensor y2 = shape_kernel(x, neg);
+  ASSERT_EQ(y2.shape, (std::vector<int64_t>{2}));
+  EXPECT_EQ(y2.AsInt64()[0], 4);
+  EXPECT_EQ(y2.AsInt64()[1], 5);
+
+  // start > end yields empty 1-D output.
+  Shape::Attributes inv;
+  inv.start = 3;
+  inv.end = 1;
+  Tensor y3 = shape_kernel(x, inv);
+  EXPECT_EQ(y3.shape, (std::vector<int64_t>{0}));
+}
+
 TEST(BackendKernelClass, NonZeroScalarProducesShapeZeroByNnz) {
   const KernelContext ctx{DefaultOpset(13)};
   NonZero nonzero_kernel{ctx};

@@ -343,6 +343,39 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of the ONNX ``Shape`` operator (since opset 1 in
+/// the ``ai.onnx`` domain; extended with ``start``/``end`` attributes in
+/// opset 15). Returns the shape of the input tensor as an ``INT64`` 1-D
+/// tensor.
+///
+/// Attributes ``start`` (int, default 0) and ``end`` (int, optional) bound
+/// the slice ``input.shape[start:end]`` (using numpy-style indexing).
+/// Negative values count from the back; out-of-range values are clamped to
+/// ``[0, r]`` where ``r`` is the rank of the input. When ``start > end``
+/// (after normalisation) the output is empty.
+///
+/// The kernel reads only the input shape, never its data buffer, so it
+/// accepts an input of any element type.
+class Shape : public KernelBase {
+public:
+  /// Attributes carried by the ONNX ``Shape`` operator.
+  struct Attributes {
+    int64_t start = 0;
+    /// ``std::nullopt`` means "use the input rank" (no slicing on the right).
+    std::optional<int64_t> end = std::nullopt;
+  };
+
+  using KernelBase::KernelBase;
+
+  Tensor operator()(const Tensor &data) const;
+  Tensor operator()(const Tensor &data, const Attributes &attrs) const;
+  void operator()(const Tensor &data, const Attributes &attrs, Tensor &output) const;
+
+  /// Output has a different dtype (INT64) and shape from the input, so
+  /// storage cannot be shared.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Reference implementation of the ONNX ``Gather`` operator (since opset 1 in
 /// the ``ai.onnx`` domain). Gathers entries of the ``axis`` dimension of
 /// ``data`` indexed by ``indices``, producing an output tensor of rank

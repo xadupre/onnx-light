@@ -11,6 +11,7 @@ void CollectControlflowTestCases(std::vector<TestCase> &registry, const std::str
   static const OpRegisterMap kEntries = {
       {"If", &RegisterIfCases},
       {"Loop", &RegisterLoopCases},
+      {"Scan", &RegisterScanCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

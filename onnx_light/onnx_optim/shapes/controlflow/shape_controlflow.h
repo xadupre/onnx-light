@@ -110,6 +110,48 @@ void ComputeShapeIf(ShapesContext &ctx, const NodeProto &node);
  */
 void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` descriptors of a
+ * ``Scan`` node and stores them in ``ctx``.
+ *
+ * ``Scan`` iterates over ``M`` ``scan_input`` tensors and produces ``K``
+ * ``scan_output`` tensors, optionally maintaining ``N`` loop-carried
+ * state variables. The node has ``N + M`` inputs and ``N + K`` outputs.
+ * Its ``body`` subgraph declares ``N + M`` inputs and ``N + K`` outputs:
+ *
+ *   - body input ``i`` for ``i < N`` is the current value of the ``i``-th
+ *     state variable; for ``i >= N`` it is the per-iteration slice of the
+ *     ``(i - N)``-th ``scan_input`` (rank equals the scan input's rank
+ *     minus one for opset >= 9 when the scan axis is removed, and minus
+ *     one for opset 8 which always has axis 0).
+ *   - body output ``i`` for ``i < N`` is the updated state variable; for
+ *     ``i >= N`` it is the per-iteration scan output element.
+ *
+ * The output descriptors are derived as:
+ *
+ *   - the ``i``-th state output (for ``i < N``) adopts the body's
+ *     ``v_out[i]`` element dtype and the shape of ``v_initial[i]`` when
+ *     they agree, otherwise the dtype/shape produced by the body;
+ *   - the ``k``-th scan output adopts the body's scan-output element
+ *     dtype and shape, prefixed by a leading axis of length equal to the
+ *     scan dimension of the first ``scan_input`` (or a symbolic
+ *     placeholder when that dimension is unknown).
+ *
+ * @param ctx   In/out context. Must already contain entries for every
+ *              non-empty input of ``node`` and for every outer-scope
+ *              value referenced from the body; on return it also
+ *              contains entries for every non-empty output declared by
+ *              ``node``.
+ * @param node  The ``Scan`` ``NodeProto`` whose outputs should be
+ *              described. ``node.op_type()`` must be ``"Scan"``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Scan"``,
+ *         if the ``body`` attribute is missing or not a ``GraphProto``,
+ *         if the ``num_scan_inputs`` attribute is missing or non-positive,
+ *         or if the body's arity is inconsistent with ``node``.
+ */
+void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node);
+
 } // namespace controlflow
 } // namespace shapes
 } // namespace onnx_optim

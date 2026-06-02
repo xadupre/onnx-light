@@ -71,7 +71,7 @@ def median_time(fn, n_iter: int = N_ITER) -> float:
 # Build the model and prepare on-disk layouts
 # --------------------------------------------
 #
-# Three reference files are produced once and then re-used for the load
+# Three reference files are produced once and then reused for the load
 # benchmarks: a single packed file, a model with one external data file,
 # and a model whose external data is split into several files.
 

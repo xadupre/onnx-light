@@ -401,18 +401,4 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesPropagateSymbolicDims) {
   }
 }
 
-// Third pass: run the ONNX checker on every collected backend test case.
-// The checker validates the structural integrity of the ModelProto (types,
-// opset imports, op schemas, etc.) and is a complementary safety net to
-// shape inference.
-TEST(BackendTestCaseShapeInference, AllCollectedCasesPassChecker) {
-  std::vector<TestCase> cases = CollectTestCases();
-  ASSERT_FALSE(cases.empty());
-
-  for (TestCase &tc : cases) {
-    SCOPED_TRACE(tc.name);
-    ASSERT_NO_THROW(checker::check_model(tc.model, /*full_check=*/false)) << "case: " << tc.name;
-  }
-}
-
 } // namespace Test

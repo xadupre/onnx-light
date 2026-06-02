@@ -323,6 +323,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          nn::ComputeShapeDeformConv(ctx, node, node.input(0).as_string().c_str(),
                                     node.input(1).as_string().c_str());
        }},
+      {"ai.onnx:Det",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeDet(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:Div",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);

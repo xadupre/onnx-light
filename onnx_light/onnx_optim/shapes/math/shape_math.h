@@ -381,6 +381,16 @@ void ComputeShapeMatMul(ShapesContext &ctx, const NodeProto &node, const char *a
 /// Log is element-wise unary: output dtype and shape match the input.
 void ComputeShapeLog(ShapesContext &ctx, const NodeProto &node, const char *x);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Det`` node and stores
+ * it in ``ctx``.
+ *
+ * ``Det`` takes one input of shape ``[*, M, M]`` (rank >= 2) and produces an
+ * output of shape ``[*]`` containing the determinants of all input
+ * submatrices. The output dtype matches the input dtype.
+ */
+void ComputeShapeDet(ShapesContext &ctx, const NodeProto &node, const char *x);
+
 /// Sigmoid is element-wise unary: output dtype and shape match the input.
 void ComputeShapeSigmoid(ShapesContext &ctx, const NodeProto &node, const char *x);
 

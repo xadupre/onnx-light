@@ -141,6 +141,23 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Determinant of a square matrix or batches of square matrices.
+///
+/// The input must have shape ``[*, M, M]`` (rank >= 2) with the inner-most
+/// two dimensions forming square matrices. The output has shape ``[*]``
+/// (the leading batch dimensions); when the input is 2-D the output is a
+/// scalar (rank-0). Both input and output are FLOAT tensors.
+class Det : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x) const;
+  void operator()(const Tensor &x, Tensor &output) const;
+
+  /// The output buffer is smaller than the input (drops the trailing two
+  /// dimensions); storage can never be shared with the input.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Element-wise ceiling: y = ceil(x), the smallest integer >= x.
 class Ceil : public KernelBase {
 public:

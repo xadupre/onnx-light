@@ -206,13 +206,14 @@ TEST(OnnxOpControlflowRegistrationTest, ReturnsScanSchemasWithExpectedHistory) {
     EXPECT_EQ(s->outputs()[0].type, "V");
   }
 
-  // Type constraints: V always present; I only on opset 8.
+  // Type constraints: V always present; opset 8 lists I first (to match
+  // ONNX's TypeConstraint registration order), then V.
   EXPECT_EQ(scan_v8->type_constraints().size(), 2u);
-  EXPECT_EQ(scan_v8->type_constraints()[0].type_param_str, "V");
-  EXPECT_EQ(scan_v8->type_constraints()[0].allowed_type_strs.size(), 15u);
-  EXPECT_EQ(scan_v8->type_constraints()[1].type_param_str, "I");
-  EXPECT_EQ(scan_v8->type_constraints()[1].allowed_type_strs.size(), 1u);
-  EXPECT_EQ(scan_v8->type_constraints()[1].allowed_type_strs[0], onnx_op::TensorType::kInt64);
+  EXPECT_EQ(scan_v8->type_constraints()[0].type_param_str, "I");
+  EXPECT_EQ(scan_v8->type_constraints()[0].allowed_type_strs.size(), 1u);
+  EXPECT_EQ(scan_v8->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kInt64);
+  EXPECT_EQ(scan_v8->type_constraints()[1].type_param_str, "V");
+  EXPECT_EQ(scan_v8->type_constraints()[1].allowed_type_strs.size(), 15u);
   EXPECT_EQ(scan_v9->type_constraints().size(), 1u);
   EXPECT_EQ(scan_v11->type_constraints().size(), 1u);
   EXPECT_EQ(scan_v11->type_constraints()[0].allowed_type_strs.size(), 15u);

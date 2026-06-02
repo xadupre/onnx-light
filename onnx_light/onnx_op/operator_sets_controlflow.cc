@@ -113,10 +113,10 @@ LightOpSchema MakeScanSchema(int since_version) {
                     "V"});
 
   std::vector<TypeConstraintParam> type_constraints;
-  type_constraints.push_back({"V", AllTensorTypes(), "All Tensor types"});
   if (since_version == 8) {
     type_constraints.push_back({"I", {TensorType::kInt64}, "Int64 tensor"});
   }
+  type_constraints.push_back({"V", AllTensorTypes(), "All Tensor types"});
 
   std::vector<AttributeParam> attributes;
   attributes.push_back(AttributeParam{"body", MakeScanBodyAttributeDescription(),

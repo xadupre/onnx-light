@@ -50,6 +50,9 @@ void RegisterCumSumCases(std::vector<TestCase> &registry);
 /// Registers the ``CumProd`` backend test node case(s).
 void RegisterCumProdCases(std::vector<TestCase> &registry);
 
+/// Registers the ``DFT`` backend test node case(s).
+void RegisterDFTCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Det`` backend test node case(s).
 void RegisterDetCases(std::vector<TestCase> &registry);
 

@@ -307,6 +307,24 @@ void ComputeShapeUnsqueeze(ShapesContext &ctx, const NodeProto &node);
  */
 void ComputeShapeTile(ShapesContext &ctx, const NodeProto &node);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of an ``Upsample`` node and
+ * stores it in ``ctx``. Supports Upsample opsets 1, 7, 9 and 10:
+ *
+ * - v1: the per-spatial-axis ``width_scale`` and ``height_scale`` FLOAT
+ *   attributes give the scales of the two trailing axes of a 4-D NCHW
+ *   input. Output dim ``k`` is ``floor(input_dim[k] * scale[k])``.
+ * - v7: the ``scales`` FLOATS attribute carries one scale per input axis.
+ * - v9/v10: the ``scales`` input tensor (1-D FLOAT) carries one scale per
+ *   input axis. Because the data-propagation lattice only tracks integer
+ *   shape values, the float scales cannot be recovered here in general;
+ *   the output rank is preserved and every output dim is left symbolic.
+ *
+ * The output dtype always matches the input dtype (type constraint ``T``)
+ * and the output rank equals the input rank.
+ */
+void ComputeShapeUpsample(ShapesContext &ctx, const NodeProto &node);
+
 void ComputeShapeTranspose(ShapesContext &ctx, const NodeProto &node);
 
 /**

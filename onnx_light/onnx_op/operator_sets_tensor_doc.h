@@ -253,6 +253,24 @@ std::string MakeTileDoc(int since_version);
 std::string MakeTileTypeConstraintDescription(int since_version);
 
 /**
+ * Returns the documentation string for the Upsample operator at the given
+ * opset version.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the Upsample operator.
+ */
+std::string MakeUpsampleDoc(int since_version);
+
+/**
+ * Returns the type-constraint description for the Upsample operator at the
+ * given opset version (applies to type parameter ``T``).
+ *
+ * @param since_version Opset version for which to generate the description.
+ * @return Type-constraint description string for the Upsample input/output.
+ */
+std::string MakeUpsampleTypeConstraintDescription(int since_version);
+
+/**
  * Returns the documentation string for the Transpose operator at the given
  * opset version.
  *

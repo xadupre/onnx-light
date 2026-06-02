@@ -746,6 +746,99 @@ TEST(BackendKernelClass, DepthToSpaceRejectsChannelNotDivisible) {
 }
 
 // ---------------------------------------------------------------------------
+// Upsample kernel tests
+// ---------------------------------------------------------------------------
+
+namespace {
+
+Tensor MakeUpsampleScales(const std::vector<float> &scales) {
+  return Tensor::FromFloat("", {static_cast<int64_t>(scales.size())}, scales);
+}
+
+} // namespace
+
+TEST(BackendKernelClass, UpsampleNearestMatchesUpstreamNCHWReference) {
+  // Mirrors the upstream ``test_upsample_nearest`` node test exactly.
+  const KernelContext ctx{DefaultOpset(9)};
+  onnx_backend_test::kernel::Upsample upsample{ctx};
+  Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {1.f, 2.f, 3.f, 4.f});
+  Tensor scales = MakeUpsampleScales({1.f, 1.f, 2.f, 3.f});
+  onnx_backend_test::kernel::Upsample::Attributes a;
+  a.mode = "nearest";
+  Tensor y = upsample(x, scales, a);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 1, 4, 6}));
+  const std::vector<float> expected{
+      1.f, 1.f, 1.f, 2.f, 2.f, 2.f, 1.f, 1.f, 1.f, 2.f, 2.f, 2.f,
+      3.f, 3.f, 3.f, 4.f, 4.f, 4.f, 3.f, 3.f, 3.f, 4.f, 4.f, 4.f,
+  };
+  const float *py = y.AsFloat();
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_FLOAT_EQ(py[i], expected[i]) << "at index " << i;
+  }
+}
+
+TEST(BackendKernelClass, UpsampleNearest1DDoublesEachElement) {
+  const KernelContext ctx{DefaultOpset(9)};
+  onnx_backend_test::kernel::Upsample upsample{ctx};
+  Tensor x = Tensor::FromFloat("", {3}, {10.f, 20.f, 30.f});
+  Tensor scales = MakeUpsampleScales({2.f});
+  onnx_backend_test::kernel::Upsample::Attributes a;
+  a.mode = "nearest";
+  Tensor y = upsample(x, scales, a);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{6}));
+  const std::vector<float> expected{10.f, 10.f, 20.f, 20.f, 30.f, 30.f};
+  const float *py = y.AsFloat();
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_FLOAT_EQ(py[i], expected[i]);
+  }
+}
+
+TEST(BackendKernelClass, UpsampleLinear4DBilinearReference) {
+  // Bilinear upsampling of [[1, 2], [3, 4]] by 2x in both spatial axes
+  // using the "asymmetric" coordinate transformation (in_coord =
+  // out_coord / scale, clamped to [0, in_dim - 1]) matches the upstream
+  // Upsample v7 semantics.
+  const KernelContext ctx{DefaultOpset(9)};
+  onnx_backend_test::kernel::Upsample upsample{ctx};
+  Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {1.f, 2.f, 3.f, 4.f});
+  Tensor scales = MakeUpsampleScales({1.f, 1.f, 2.f, 2.f});
+  onnx_backend_test::kernel::Upsample::Attributes a;
+  a.mode = "linear";
+  Tensor y = upsample(x, scales, a);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 1, 4, 4}));
+  // Reference computed by hand from the bilinear formula on a 2x2 grid
+  // with in_coord = out_coord / 2 (clamped).
+  const std::vector<float> expected{
+      1.0f, 1.5f, 2.0f, 2.0f, 2.0f, 2.5f, 3.0f, 3.0f,
+      3.0f, 3.5f, 4.0f, 4.0f, 3.0f, 3.5f, 4.0f, 4.0f,
+  };
+  const float *py = y.AsFloat();
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_FLOAT_EQ(py[i], expected[i]) << "at index " << i;
+  }
+}
+
+TEST(BackendKernelClass, UpsampleRejectsUnknownMode) {
+  const KernelContext ctx{DefaultOpset(9)};
+  onnx_backend_test::kernel::Upsample upsample{ctx};
+  Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {1.f, 2.f, 3.f, 4.f});
+  Tensor scales = MakeUpsampleScales({1.f, 1.f, 2.f, 2.f});
+  onnx_backend_test::kernel::Upsample::Attributes a;
+  a.mode = "cubic";
+  EXPECT_THROW((void)upsample(x, scales, a), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, UpsampleRejectsScalesLengthMismatch) {
+  const KernelContext ctx{DefaultOpset(9)};
+  onnx_backend_test::kernel::Upsample upsample{ctx};
+  Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {1.f, 2.f, 3.f, 4.f});
+  // 3 scales for a rank-4 input.
+  Tensor scales = MakeUpsampleScales({1.f, 2.f, 2.f});
+  onnx_backend_test::kernel::Upsample::Attributes a;
+  EXPECT_THROW((void)upsample(x, scales, a), std::invalid_argument);
+}
+
+// ---------------------------------------------------------------------------
 // Trilu kernel tests
 // ---------------------------------------------------------------------------
 

@@ -365,6 +365,48 @@ std::string MakeTileTypeConstraintDescription(int since_version) {
   return "Constrain input and output types to all tensor types.";
 }
 
+std::string MakeUpsampleDoc(int since_version) {
+  if (since_version == 1) {
+    return R"DOC(
+Upsample the input tensor.
+The width and height of the output tensor are:
+  output_width = floor(input_width * width_scale),
+  output_height = floor(input_height * height_scale).
+Example:
+  Given `data` tensor, width_scale, height_scale, mode,
+  Upsample the input 4-D tensor in nearest mode:
+  data = [[[
+      [1, 2],
+      [3, 4]
+  ]]]
+  width_scale = 2
+  height_scale = 2
+  mode = "nearest"
+  output = [[[
+      [1, 1, 2, 2],
+      [1, 1, 2, 2],
+      [3, 3, 4, 4],
+      [3, 3, 4, 4]
+  ]]]
+)DOC";
+  }
+  return R"DOC(
+Upsample the input tensor.
+Each dimension value of the output tensor is:
+  output_dimension = floor(input_dimension * scale).
+)DOC";
+}
+
+std::string MakeUpsampleTypeConstraintDescription(int since_version) {
+  if (since_version == 1) {
+    return "Constrain output types to bool, int32, int64, float16, float, double tensors.";
+  }
+  if (since_version == 7) {
+    return "Constrain input and output types to all tensor types.";
+  }
+  return "Constrain input 'X' and output 'Y' to all tensor types.";
+}
+
 std::string MakeTransposeDoc(int since_version) {
   (void)since_version;
   return R"DOC(

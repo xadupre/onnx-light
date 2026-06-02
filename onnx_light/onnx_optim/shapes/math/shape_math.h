@@ -477,6 +477,9 @@ void ComputeShapeTan(ShapesContext &ctx, const NodeProto &node, const char *x);
  */
 void ComputeShapeTanh(ShapesContext &ctx, const NodeProto &node, const char *x);
 
+/// ThresholdedRelu is element-wise unary: output dtype and shape match the input.
+void ComputeShapeThresholdedRelu(ShapesContext &ctx, const NodeProto &node, const char *x);
+
 /**
  * Computes the output :cpp:class:`OptimTensor` of a ``Floor`` node and
  * stores it in ``ctx``.

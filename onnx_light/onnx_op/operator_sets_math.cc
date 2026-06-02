@@ -1008,17 +1008,38 @@ std::vector<LightOpSchema> BuildCumProdSchemas() {
   return schemas;
 }
 
+// Mirrors OpSchema::all_float_types_ir4() ordering used by the upstream DFT v20 schema (T1).
+std::vector<TensorType> DFTFloatTypesVer20() {
+  return {
+      TensorType::kBfloat16,
+      TensorType::kFloat16,
+      TensorType::kFloat,
+      TensorType::kDouble,
+  };
+}
+
+// Mirrors the explicit type list used by the upstream DFT v17 schema (T1), which keeps
+// bfloat16 last rather than first.
+std::vector<TensorType> DFTFloatTypesVer17() {
+  return {
+      TensorType::kFloat16,
+      TensorType::kFloat,
+      TensorType::kDouble,
+      TensorType::kBfloat16,
+  };
+}
+
 std::vector<LightOpSchema> BuildDFTSchemas() {
   std::vector<LightOpSchema> schemas;
   schemas.reserve(2);
 
-  const std::string input_desc =
+  const std::string input_desc_v20 =
       "For real input, the following shape is expected: "
       "`[signal_dim0][signal_dim1][signal_dim2]...[signal_dimN][1]`. "
       "For complex input, the following shape is expected: "
       "`[signal_dim0][signal_dim1][signal_dim2]...[signal_dimN][2]`. "
       "The final dimension represents the real and imaginary parts of the value in that order.";
-  const std::string dft_length_desc =
+  const std::string dft_length_desc_v20 =
       "The length of the signal as a scalar. "
       "If greater than the axis dimension, the signal will be zero-padded up to `dft_length`. "
       "If less than the axis dimension, only the first `dft_length` values will be used as the "
@@ -1026,7 +1047,7 @@ std::vector<LightOpSchema> BuildDFTSchemas() {
       "If not provided, the default `dft_length = signal_dim_axis`, except for the IRFFT case "
       "(`onesided=1`, `inverse=1`), in which case the default dft_length is "
       "`2 * (signal_dim_axis - 1)`.";
-  const std::string output_desc =
+  const std::string output_desc_v20 =
       "The Fourier Transform of the input vector. "
       "For standard DFT (`onesided=0`), the output shape is: "
       "`[signal_dim0][signal_dim1][signal_dim2]...[signal_dimN][2]` (complex), with "
@@ -1037,6 +1058,34 @@ std::vector<LightOpSchema> BuildDFTSchemas() {
       "For IRFFT (`onesided=1`, `inverse=1`), the output shape is: "
       "`[signal_dim0][signal_dim1][signal_dim2]...[signal_dimN][1]` (real), where "
       "`signal_dim_axis = dft_length`.";
+  const std::string input_desc_v17 =
+      "For real input, the following shape is expected: "
+      "[batch_idx][signal_dim1][signal_dim2]...[signal_dimN][1]. "
+      "For complex input, the following shape is expected: "
+      "[batch_idx][signal_dim1][signal_dim2]...[signal_dimN][2]. "
+      "The first dimension is the batch dimension. "
+      "The following N dimensions correspond to the signal's dimensions. "
+      "The final dimension represents the real and imaginary parts of the value in that order.";
+  const std::string dft_length_desc_v17 =
+      "The length of the signal as a scalar. "
+      "If greater than the axis dimension, the signal will be zero-padded up to dft_length. "
+      "If less than the axis dimension, only the first dft_length values will be used as the "
+      "signal. "
+      "If not provided, the default dft_length = signal_dim_axis, except for the IRFFT case "
+      "(onesided=1, inverse=1), in which case the default dft_length is 2 * (signal_dim_axis - "
+      "1). "
+      "It's an optional value.";
+  const std::string output_desc_v17 =
+      "The Fourier Transform of the input vector. "
+      "For standard DFT (onesided=0), the output shape is: "
+      "[batch_idx][signal_dim1][signal_dim2]...[signal_dimN][2] (complex), with "
+      "signal_dim_axis = dft_length. "
+      "For RFFT (onesided=1, inverse=0), the output shape is: "
+      "[batch_idx][signal_dim1][signal_dim2]...[signal_dimN][2] (one-sided complex), "
+      "with signal_dim_axis = floor(dft_length/2) + 1. "
+      "For IRFFT (onesided=1, inverse=1), the output shape is: "
+      "[batch_idx][signal_dim1][signal_dim2]...[signal_dimN][1] (real), where "
+      "signal_dim_axis = dft_length.";
   const std::string onesided_desc =
       "If `onesided` is `1`, only values for `k` in `[0, 1, 2, ..., floor(n_fft/2) + 1]` are "
       "used or returned because the real-to-complex Fourier transform satisfies the conjugate "
@@ -1054,8 +1103,8 @@ std::vector<LightOpSchema> BuildDFTSchemas() {
   schemas.push_back(LightOpSchema(
       "DFT", kOnnxDomain, 20, MakeDFTDoc(20),
       {
-          {"input", input_desc, "T1"},
-          {"dft_length", dft_length_desc, "T2"},
+          {"input", input_desc_v20, "T1"},
+          {"dft_length", dft_length_desc_v20, "T2"},
           {"axis",
            "The axis as a scalar on which to perform the DFT. Default is `-2` (last signal "
            "axis). Negative value means counting dimensions from the back. Accepted range is "
@@ -1064,10 +1113,10 @@ std::vector<LightOpSchema> BuildDFTSchemas() {
            "tensor(int64)"},
       },
       {
-          {"output", output_desc, "T1"},
+          {"output", output_desc_v20, "T1"},
       },
       {
-          {"T1", FloatTypes(), "Constrain input and output types to float tensors."},
+          {"T1", DFTFloatTypesVer20(), "Constrain input and output types to float tensors."},
           {"T2",
            {TensorType::kInt32, TensorType::kInt64},
            "Constrain scalar length types to integers."},
@@ -1083,17 +1132,17 @@ std::vector<LightOpSchema> BuildDFTSchemas() {
   schemas.push_back(LightOpSchema(
       "DFT", kOnnxDomain, 17, MakeDFTDoc(17),
       {
-          {"input", input_desc, "T1"},
-          {"dft_length", dft_length_desc, "T2"},
+          {"input", input_desc_v17, "T1"},
+          {"dft_length", dft_length_desc_v17, "T2"},
       },
       {
-          {"output", output_desc, "T1"},
+          {"output", output_desc_v17, "T1"},
       },
       {
-          {"T1", FloatTypes(), "Constrain input and output types to float tensors."},
+          {"T1", DFTFloatTypesVer17(), "Constrain input and output types to float tensors."},
           {"T2",
            {TensorType::kInt32, TensorType::kInt64},
-           "Constrain scalar length types to integers."},
+           "Constrain scalar length types to int64_t."},
       },
       {
           AttributeParam{"axis",

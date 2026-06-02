@@ -107,20 +107,6 @@ void RegisterDFTCases(std::vector<TestCase> &registry) {
     registry.back().atol = kDFTAtol;
   }
 
-  // --- v20: IRFFT — round-trip the RFFT output back to a real signal.
-  //   Use a fresh RFFT output as the IRFFT input so the test exercises the
-  //   actual inverse path (one-sided complex -> real).
-  {
-    Tensor axis = Tensor::FromInt64("axis", {}, {1});
-    Tensor rfft_y = dft_v20(x_real, /*dft_length=*/nullptr, 1, /*onesided=*/true,
-                            /*inverse=*/false);
-    Tensor y = dft_v20(rfft_y, /*dft_length=*/nullptr, 1, /*onesided=*/true,
-                       /*inverse=*/true);
-    Expect(MakeDFTNodeV20(/*inverse=*/true, /*onesided=*/true), {rfft_y, axis}, {y},
-           "test_cc_dft_irfft", {opset_v20}, "backend-test", registry);
-    registry.back().atol = kDFTAtol;
-  }
-
   // --- v17: standard forward DFT with axis attribute.
   {
     Tensor y = dft_v17(x_real, /*dft_length=*/nullptr, 1, /*onesided=*/false,

@@ -1008,6 +1008,122 @@ std::vector<LightOpSchema> BuildCumProdSchemas() {
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildDFTSchemas() {
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(2);
+
+  const std::string input_desc =
+      "For real input, the following shape is expected: "
+      "`[signal_dim0][signal_dim1][signal_dim2]...[signal_dimN][1]`. "
+      "For complex input, the following shape is expected: "
+      "`[signal_dim0][signal_dim1][signal_dim2]...[signal_dimN][2]`. "
+      "The final dimension represents the real and imaginary parts of the value in that order.";
+  const std::string dft_length_desc =
+      "The length of the signal as a scalar. "
+      "If greater than the axis dimension, the signal will be zero-padded up to `dft_length`. "
+      "If less than the axis dimension, only the first `dft_length` values will be used as the "
+      "signal. "
+      "If not provided, the default `dft_length = signal_dim_axis`, except for the IRFFT case "
+      "(`onesided=1`, `inverse=1`), in which case the default dft_length is "
+      "`2 * (signal_dim_axis - 1)`.";
+  const std::string output_desc =
+      "The Fourier Transform of the input vector. "
+      "For standard DFT (`onesided=0`), the output shape is: "
+      "`[signal_dim0][signal_dim1][signal_dim2]...[signal_dimN][2]` (complex), with "
+      "`signal_dim_axis = dft_length`. "
+      "For RFFT (`onesided=1`, `inverse=0`), the output shape is: "
+      "`[signal_dim0][signal_dim1][signal_dim2]...[signal_dimN][2]` (one-sided complex), "
+      "with `signal_dim_axis = floor(dft_length/2) + 1`. "
+      "For IRFFT (`onesided=1`, `inverse=1`), the output shape is: "
+      "`[signal_dim0][signal_dim1][signal_dim2]...[signal_dimN][1]` (real), where "
+      "`signal_dim_axis = dft_length`.";
+  const std::string onesided_desc =
+      "If `onesided` is `1`, only values for `k` in `[0, 1, 2, ..., floor(n_fft/2) + 1]` are "
+      "used or returned because the real-to-complex Fourier transform satisfies the conjugate "
+      "symmetry, i.e., `X[m, k] = X[m, n_fft-k]*`, where `m` denotes \"all other dimensions\" "
+      "DFT was not applied on. When `onesided=1` and `inverse=0` (forward DFT), only real input "
+      "is supported and a one-sided complex spectrum is returned (RFFT). When `onesided=1` and "
+      "`inverse=1` (inverse DFT), only complex input is supported and a full real signal is "
+      "returned (IRFFT). Value can be `0` or `1`. Default is `0`.";
+  const std::string inverse_desc =
+      "Whether to perform the inverse discrete Fourier Transform. Default is 0, which "
+      "corresponds to `false`.";
+
+  // DFT v20: axis becomes an optional input. Only ``onesided`` and ``inverse``
+  // remain as attributes.
+  schemas.push_back(LightOpSchema(
+      "DFT", kOnnxDomain, 20, MakeDFTDoc(20),
+      {
+          {"input", input_desc, "T1"},
+          {"dft_length", dft_length_desc, "T2"},
+          {"axis",
+           "The axis as a scalar on which to perform the DFT. Default is `-2` (last signal "
+           "axis). Negative value means counting dimensions from the back. Accepted range is "
+           "$[-r, -2] \\cup [0, r-2]$ where `r = rank(input)`. The last dimension is for "
+           "representing complex numbers and thus is an invalid axis.",
+           "tensor(int64)"},
+      },
+      {
+          {"output", output_desc, "T1"},
+      },
+      {
+          {"T1", FloatTypes(), "Constrain input and output types to float tensors."},
+          {"T2",
+           {TensorType::kInt32, TensorType::kInt64},
+           "Constrain scalar length types to integers."},
+      },
+      {
+          AttributeParam{"onesided", onesided_desc, AttributeType::INT, /*required=*/false,
+                         static_cast<int64_t>(0)},
+          AttributeParam{"inverse", inverse_desc, AttributeType::INT, /*required=*/false,
+                         static_cast<int64_t>(0)},
+      }));
+
+  // DFT v17: axis is an INT attribute (default 1).
+  schemas.push_back(LightOpSchema(
+      "DFT", kOnnxDomain, 17, MakeDFTDoc(17),
+      {
+          {"input", input_desc, "T1"},
+          {"dft_length", dft_length_desc, "T2"},
+      },
+      {
+          {"output", output_desc, "T1"},
+      },
+      {
+          {"T1", FloatTypes(), "Constrain input and output types to float tensors."},
+          {"T2",
+           {TensorType::kInt32, TensorType::kInt64},
+           "Constrain scalar length types to int64_t."},
+      },
+      {
+          AttributeParam{"axis",
+                         "The axis on which to perform the DFT. By default this value is set to "
+                         "1, which corresponds to the first dimension after the batch index. "
+                         "Negative value means counting dimensions from the back. Accepted range "
+                         "is $[-r, -2] \\cup [0, r-2]$ where `r = rank(input)`. The last "
+                         "dimension is for representing complex numbers and thus is an invalid "
+                         "axis.",
+                         AttributeType::INT, /*required=*/false, static_cast<int64_t>(1)},
+          AttributeParam{"inverse",
+                         "Whether to perform the inverse discrete fourier transform. By default "
+                         "this value is set to 0, which corresponds to false.",
+                         AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)},
+          AttributeParam{"onesided",
+                         "If onesided is 1, only values for w in [0, 1, 2, ..., floor(n_fft/2) "
+                         "+ 1] are used or returned because the real-to-complex Fourier "
+                         "transform satisfies the conjugate symmetry, i.e., X[m, w] = X[m, "
+                         "n_fft-w]*. When onesided=1 and inverse=0 (forward DFT), only real "
+                         "input is supported and a one-sided complex spectrum is returned "
+                         "(RFFT). When onesided=1 and inverse=1 (inverse DFT), only complex "
+                         "input is supported and a full real signal is returned (IRFFT). When "
+                         "invoked with real or complex valued input, the default value is 0. "
+                         "Values can be 0 or 1.",
+                         AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)},
+      }));
+
+  return schemas;
+}
+
 std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string &op_type,
                                                               bool init_doc) {
   static const std::map<std::string, SchemaBuilder> builders = {
@@ -1025,6 +1141,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Cosh", [] { return BuildUnaryFloatMathSchemas("Cosh", 22, 9); }},
       {"CumProd", [] { return BuildCumProdSchemas(); }},
       {"CumSum", [] { return BuildCumSumSchemas(); }},
+      {"DFT", [] { return BuildDFTSchemas(); }},
       {"Div", [] { return BuildElementwiseMathSchemaForVersion("Div"); }},
       {"Einsum", [] { return BuildEinsumSchemas(); }},
       {"Exp", [] { return BuildUnaryFloatMathSchemasWithV1("Exp", 13, 6, 1); }},

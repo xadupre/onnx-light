@@ -401,16 +401,6 @@ dequantizelinear_uint2
 dequantizelinear_uint4
 det_2d
 det_nd
-dft_axis
-dft_axis_opset19
-dft
-dft_inverse
-dft_inverse_opset19
-dft_irfft
-dft_irfft_opset19
-dft_opset19
-dft_rfft
-dft_rfft_opset19
 dropout_default_mask
 dropout_default_mask_ratio
 dropout_default_old

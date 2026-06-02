@@ -93,7 +93,7 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> einsum_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Einsum");
 
-  EXPECT_EQ(schemas.size(), 92u);
+  EXPECT_EQ(schemas.size(), 94u);
 
   // Einsum was introduced at v12 and has had a single schema since then.
   ASSERT_EQ(einsum_schemas.size(), 1u);
@@ -521,6 +521,67 @@ TEST(OnnxOpMathRegistrationTest, FloorCeilRoundHistoryHasExpectedVersions) {
   EXPECT_EQ(ceil_v13->outputs()[0].name, "Y");
   EXPECT_EQ(round_v22->inputs()[0].name, "X");
   EXPECT_EQ(round_v22->outputs()[0].name, "Y");
+}
+
+TEST(OnnxOpMathRegistrationTest, ReturnsDFTSchemasWithoutShapeInference) {
+  const std::vector<onnx_op::LightOpSchema> dft_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("DFT");
+
+  const onnx_op::LightOpSchema *const dft_v17 = FindByVersion(dft_schemas, 17);
+  const onnx_op::LightOpSchema *const dft_v20 = FindByVersion(dft_schemas, 20);
+  ASSERT_NE(nullptr, dft_v17);
+  ASSERT_NE(nullptr, dft_v20);
+
+  // --- v17: axis is an INT attribute; inputs are (input, dft_length?).
+  EXPECT_EQ(dft_v17->name(), "DFT");
+  EXPECT_EQ(dft_v17->domain(), onnx_op::kOnnxDomain);
+  EXPECT_EQ(dft_v17->since_version(), 17);
+  ASSERT_EQ(dft_v17->inputs().size(), 2u);
+  EXPECT_EQ(dft_v17->inputs()[0].name, "input");
+  EXPECT_EQ(dft_v17->inputs()[0].type, "T1");
+  EXPECT_EQ(dft_v17->inputs()[1].name, "dft_length");
+  EXPECT_EQ(dft_v17->inputs()[1].type, "T2");
+  ASSERT_EQ(dft_v17->outputs().size(), 1u);
+  EXPECT_EQ(dft_v17->outputs()[0].name, "output");
+  EXPECT_EQ(dft_v17->outputs()[0].type, "T1");
+  ASSERT_EQ(dft_v17->attributes().size(), 3u);
+  // axis / inverse / onesided.
+  bool has_axis = false, has_inverse = false, has_onesided = false;
+  for (const auto &attr : dft_v17->attributes()) {
+    if (attr.name == "axis") {
+      has_axis = true;
+      EXPECT_EQ(attr.type, onnx_op::AttributeType::INT);
+    } else if (attr.name == "inverse") {
+      has_inverse = true;
+      EXPECT_EQ(attr.type, onnx_op::AttributeType::INT);
+    } else if (attr.name == "onesided") {
+      has_onesided = true;
+      EXPECT_EQ(attr.type, onnx_op::AttributeType::INT);
+    }
+  }
+  EXPECT_TRUE(has_axis);
+  EXPECT_TRUE(has_inverse);
+  EXPECT_TRUE(has_onesided);
+
+  // --- v20: axis is the third input; only inverse/onesided remain as attrs.
+  EXPECT_EQ(dft_v20->since_version(), 20);
+  ASSERT_EQ(dft_v20->inputs().size(), 3u);
+  EXPECT_EQ(dft_v20->inputs()[0].name, "input");
+  EXPECT_EQ(dft_v20->inputs()[0].type, "T1");
+  EXPECT_EQ(dft_v20->inputs()[1].name, "dft_length");
+  EXPECT_EQ(dft_v20->inputs()[1].type, "T2");
+  EXPECT_EQ(dft_v20->inputs()[2].name, "axis");
+  EXPECT_EQ(dft_v20->inputs()[2].type, "tensor(int64)");
+  ASSERT_EQ(dft_v20->outputs().size(), 1u);
+  EXPECT_EQ(dft_v20->outputs()[0].name, "output");
+  ASSERT_EQ(dft_v20->attributes().size(), 2u);
+  for (const auto &attr : dft_v20->attributes()) {
+    EXPECT_TRUE(attr.name == "inverse" || attr.name == "onesided");
+    EXPECT_EQ(attr.type, onnx_op::AttributeType::INT);
+  }
+
+  EXPECT_FALSE(dft_v17->doc().empty());
+  EXPECT_FALSE(dft_v20->doc().empty());
 }
 
 } // namespace Test

@@ -768,6 +768,36 @@ class TestOnnxLightHelper(ExtTestCase):
                 err_msg=f"Mismatch at initializer {i}",
             )
 
+    def test_save_single_external_file_alignment_change_from_no_copy(self):
+        # Regression test: no-copy external-data reload + re-save to the same
+        # single external-data file with a different alignment must preserve
+        # tensor contents.
+        name = self.get_dump_file("test_single_ext_align_nocopy_same_location.onnx")
+        location = self.get_dump_file("test_single_ext_align_nocopy_same_location.data")
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        onnxl.save(model, name)
+        src = onnxl.load(name)
+        onnxl.save(src, name, location=location)
+
+        borrowed = onnxl.ModelProto()
+        popts = onnxl.ParseOptions()
+        popts.no_copy = True
+        borrowed.ParseFromFile(name, popts, location)
+
+        sopts = onnxl.SerializeOptions()
+        sopts.alignment = 4096
+        borrowed.SerializeToFile(name, sopts, location)
+
+        loaded = onnxl.load(name, location=location)
+        self.assertEqual(len(loaded.graph.initializer), len(model.graph.initializer))
+        for i, expected in enumerate(model.graph.initializer):
+            got = loaded.graph.initializer[i]
+            np.testing.assert_array_equal(
+                onnxl.numpy_helper.to_array(expected),
+                onnxl.numpy_helper.to_array(got),
+                err_msg=f"Mismatch at initializer {i}",
+            )
+
     def test_loading_external_weights_split_files_auto_discovery(self):
         # Verify that ``load_external_data=True`` without an explicit ``location``
         # automatically discovers the primary external data file and loads all

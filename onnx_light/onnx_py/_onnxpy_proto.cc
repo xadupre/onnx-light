@@ -12,6 +12,7 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/tuple.h>
 #include <nanobind/stl/vector.h>
+#include <optional>
 #include <type_traits>
 
 namespace nb = nanobind;
@@ -21,29 +22,14 @@ namespace {
 constexpr size_t MAX_SHORT_REPR_LENGTH = 60;
 inline bool is_space_char(char c) { return std::isspace(static_cast<unsigned char>(c)) != 0; }
 
-void MaterializeBorrowedRawData(ModelProto &model) {
-  if (!model.has_graph()) {
-    return;
-  }
-  IteratorTensorProto it(&model.ref_graph());
-  while (it.next()) {
-    auto &raw_data = it->ref_raw_data();
-    if (!raw_data.is_borrowed()) {
-      continue;
-    }
-    // Convert zero-copy borrowed tensor bytes into owned storage before opening
-    // output streams. This avoids reading from aliased external files that may be
-    // truncated/overwritten when saving back to the same location.
-    const uint8_t *src = raw_data.data();
-    const size_t n = raw_data.size();
-    std::vector<uint8_t> owned(src, src + n);
-    // resize() on a borrowed ByteSpan switches to owned mode and resets the
-    // borrowed owner, so copy through a temporary owned buffer.
-    raw_data.resize(n);
-    if (n > 0) {
-      std::memcpy(raw_data.data(), owned.data(), n);
-    }
-  }
+ModelProto MakeOwnedModelProtoCopy(const ModelProto &model) {
+  // Fully reparse through bytes to ensure every borrowed span in the model
+  // becomes owned before serialization paths that may mutate buffers/metadata.
+  std::string serialized;
+  model.SerializeToString(serialized);
+  ModelProto owned;
+  owned.ParseFromString(serialized);
+  return owned;
 }
 
 } // namespace
@@ -328,9 +314,17 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           "SerializeToFile",
           [](cls &self, const std::string &file_path, nb::object options,
              std::string &external_data_file) {
+            cls *to_write = &self;
+            std::optional<ModelProto> owned_copy;
             if constexpr (std::is_same_v<cls, ModelProto>) {
-              if (!external_data_file.empty()) {
-                MaterializeBorrowedRawData(self);
+              bool needs_materialization = !external_data_file.empty();
+              if (nb::isinstance<SerializeOptions &>(options)) {
+                needs_materialization =
+                    needs_materialization || nb::cast<SerializeOptions &>(options).alignment > 0;
+              }
+              if (needs_materialization) {
+                owned_copy = MakeOwnedModelProtoCopy(self);
+                to_write = &(*owned_copy);
               }
             }
             utils::BinaryWriteStream *stream =
@@ -338,11 +332,11 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
                     ? new utils::FileWriteStream(file_path)
                     : new utils::TwoFilesWriteStream(file_path, external_data_file);
             if (nb::isinstance<SerializeOptions &>(options)) {
-              SerializeProtoToStream(self, *stream, nb::cast<SerializeOptions &>(options),
+              SerializeProtoToStream(*to_write, *stream, nb::cast<SerializeOptions &>(options),
                                      !external_data_file.empty());
             } else {
               SerializeOptions opts;
-              SerializeProtoToStream(self, *stream, opts, !external_data_file.empty());
+              SerializeProtoToStream(*to_write, *stream, opts, !external_data_file.empty());
             }
             delete stream;
           },

@@ -3,15 +3,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """Backward-compatibility shim that merges the public attributes of the
-:mod:`onnx_light.onnx_py._onnxpyproto`,
+:mod:`onnx_light.onnx_py._onnxpyprotoop`,
+:mod:`onnx_light.onnx_py._onnxpyprotolib`,
 :mod:`onnx_light.onnx_py._onnxpyoptim` and
 :mod:`onnx_light.onnx_py._onnxbackend` compiled extensions into a single
 namespace.
 
-The original ``_onnxpy`` extension was split into three nanobind modules:
+The original ``_onnxpy`` extension was split into four nanobind modules:
 
-* :mod:`onnx_light.onnx_py._onnxpyproto` exposes the proto bindings, the
-  operator-schema (``onnx_op``) bindings and the onnx_lib bindings
+* :mod:`onnx_light.onnx_py._onnxpyprotoop` exposes the proto bindings and
+  operator-schema (``onnx_op``) bindings.
+* :mod:`onnx_light.onnx_py._onnxpyprotolib` exposes the onnx_lib bindings
   (``defs``, ``parser``, ``checker``, ``inliner``, ``shape_inference``,
   ``version_converter``).
 * :mod:`onnx_light.onnx_py._onnxpyoptim` exposes the optim bindings
@@ -38,13 +40,20 @@ from typing import Any
 # looked up.  The order matters: when several extensions expose a value with
 # the same name (and the value is not a submodule), the first match wins,
 # which mirrors the historical eager-merge behavior.
-_EXTENSIONS: tuple[str, ...] = ("_onnxpyproto", "_onnxpyoptim", "_onnxbackend")
+_EXTENSIONS: tuple[str, ...] = (
+    "_onnxpyprotoop",
+    "_onnxpyprotolib",
+    "_onnxpyoptim",
+    "_onnxbackend",
+)
 
 # Attribute names that are exposed as submodules by more than one extension.
 # Looking up such a name forces every listed extension to be imported so that
 # their public attributes can be merged into a single namespace, matching the
 # previous eager-merge behavior.
-_COLLISIONS: dict[str, tuple[str, ...]] = {"shape_inference": ("_onnxpyproto", "_onnxpyoptim")}
+_COLLISIONS: dict[str, tuple[str, ...]] = {
+    "shape_inference": ("_onnxpyprotolib", "_onnxpyoptim")
+}
 
 _loaded: dict[str, ModuleType] = {}
 

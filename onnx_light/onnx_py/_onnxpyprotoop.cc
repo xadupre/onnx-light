@@ -6,10 +6,9 @@
 
 namespace nb = nanobind;
 
-NB_MODULE(_onnxpyproto, m) {
-  m.doc() = "onnx proto, defs and op (schema) bindings from python without protobuf "
-            "but using the same format";
+NB_MODULE(_onnxpyprotoop, m) {
+  m.doc() = "onnx proto and onnx_op (schema) bindings from python without protobuf but "
+            "using the same format";
   AddOnnxPyProto(m);
-  AddOnnxPyLib(m);
   AddOnnxPyOp(m);
 }

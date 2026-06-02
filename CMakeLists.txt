@@ -79,11 +79,14 @@ file(GLOB ONNX_LIGHT_SOURCES CONFIGURE_DEPENDS
 )
 file(GLOB ONNX_COMMON_SOURCES CONFIGURE_DEPENDS "${ONNX_COMMON_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_DEFS_SOURCES CONFIGURE_DEPENDS "${ONNX_DEFS_PATH}/*.cc")
-set(ONNX_PY_PROTO_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpyproto.cc"
+set(ONNX_PY_PROTOOP_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpyprotoop.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_proto.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_lib.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_op.cc"
+)
+set(ONNX_PY_PROTOLIB_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpyprotolib.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_lib.cc"
 )
 set(ONNX_PY_OPTIM_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpyoptim.cc"
@@ -129,7 +132,7 @@ set(ONNX_LIGHT_LIB_ALL_SOURCES
 
 # Builds onnx_proto library.
 # Build as SHARED when ONNX_LIGHT_BUILD_PYTHON=ON so that both
-# _onnxpyproto and _onnxbackend share a single copy of the proto class
+# _onnxpyprotoop and _onnxbackend share a single copy of the proto class
 # definitions (vtables, typeid, out-of-line member functions) at runtime.
 # This lets the two extensions exchange proto objects (e.g. ModelProto)
 # without the serialise/reparse round-trip and avoids any duplicate
@@ -239,17 +242,22 @@ set_target_properties(lib_onnx_backend_test PROPERTIES EXPORT_NAME onnx_backend_
 target_compile_features(lib_onnx_backend_test PUBLIC cxx_std_20)
 target_link_libraries(lib_onnx_backend_test PUBLIC lib_onnx_proto)
 
-# Builds _onnxpyproto, _onnxpyoptim and _onnxbackend libraries.
+# Builds _onnxpyprotoop, _onnxpyprotolib, _onnxpyoptim and _onnxbackend libraries.
 if(ONNX_LIGHT_BUILD_PYTHON)
-  # _onnxpyproto: proto + lib (defs/parser/checker/inliner/shape/version_converter) +
-  # onnx_op schemas. Links the onnx_light static libraries except lib_onnx_optim
-  # and lib_onnx_backend_test.
-  nanobind_add_module(_onnxpyproto ${ONNX_PY_PROTO_SOURCES})
-  target_include_directories(_onnxpyproto PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
-  target_link_libraries(_onnxpyproto PRIVATE lib_onnx_lib lib_onnx_op)
+  # _onnxpyprotoop: proto bindings + onnx_op schema bindings.
+  nanobind_add_module(_onnxpyprotoop ${ONNX_PY_PROTOOP_SOURCES})
+  target_include_directories(_onnxpyprotoop PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
+  target_link_libraries(_onnxpyprotoop PRIVATE lib_onnx_op)
+
+  # _onnxpyprotolib: onnx_lib bindings (defs/parser/checker/inliner/
+  # shape/version_converter). This module does not register proto classes;
+  # those are registered by _onnxpyprotoop.
+  nanobind_add_module(_onnxpyprotolib ${ONNX_PY_PROTOLIB_SOURCES})
+  target_include_directories(_onnxpyprotolib PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
+  target_link_libraries(_onnxpyprotolib PRIVATE lib_onnx_lib)
 
   # _onnxpyoptim: optim bindings (symbolic expressions and shape inference).
-  # Split from _onnxpyproto so the schema bindings and the shape-inference
+  # Split from _onnxpyproto* so the schema bindings and the shape-inference
   # bindings live in distinct extensions.
   nanobind_add_module(_onnxpyoptim ${ONNX_PY_OPTIM_SOURCES})
   target_include_directories(_onnxpyoptim PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
@@ -258,7 +266,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # _onnxbackend: backend helpers (random) and backend-test case utilities. Links
   # lib_onnx_backend_test (which publicly depends on lib_onnx_proto so that
   # ModelProto can be returned by reference to Python and resolved against the
-  # single nb::class_<ModelProto> registered by _onnxpyproto).
+  # single nb::class_<ModelProto> registered by _onnxpyprotoop).
   nanobind_add_module(_onnxbackend ${ONNX_PY_BACKEND_SOURCES})
   target_include_directories(_onnxbackend PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
   target_link_libraries(_onnxbackend PRIVATE lib_onnx_backend_test)
@@ -267,11 +275,11 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # directory (onnx_light/onnx_py/). Set an $ORIGIN rpath so the dynamic loader
   # picks the colocated proto library at import time without LD_LIBRARY_PATH.
   if(_lib_onnx_proto_type STREQUAL "SHARED" AND (UNIX AND NOT APPLE))
-    set_target_properties(_onnxpyproto _onnxpyoptim _onnxbackend PROPERTIES
+    set_target_properties(_onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxbackend PROPERTIES
         BUILD_RPATH "\$ORIGIN"
         INSTALL_RPATH "\$ORIGIN")
   elseif(_lib_onnx_proto_type STREQUAL "SHARED" AND APPLE)
-    set_target_properties(_onnxpyproto _onnxpyoptim _onnxbackend PROPERTIES
+    set_target_properties(_onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxbackend PROPERTIES
         BUILD_RPATH "@loader_path"
         INSTALL_RPATH "@loader_path")
   endif()
@@ -409,7 +417,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # Install the extensions into the package directory. When lib_onnx_proto is
   # built SHARED (the default in Python builds), install it alongside so the
   # $ORIGIN rpath above resolves it without LD_LIBRARY_PATH.
-  install(TARGETS _onnxpyproto _onnxpyoptim _onnxbackend LIBRARY DESTINATION onnx_light/onnx_py)
+  install(TARGETS _onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxbackend LIBRARY DESTINATION onnx_light/onnx_py)
   if(_lib_onnx_proto_type STREQUAL "SHARED")
     install(TARGETS lib_onnx_proto
         LIBRARY DESTINATION onnx_light/onnx_py

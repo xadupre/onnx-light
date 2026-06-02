@@ -237,6 +237,30 @@ beginning of the output. The equation string may contain space (U+0020) characte
 )DOC";
 }
 
+std::string MakeDFTDoc(int since_version) {
+  if (since_version <= 17) {
+    return R"DOC(Computes the discrete Fourier transform of input.)DOC";
+  }
+  return R"DOC(Computes the discrete Fourier Transform (DFT) of the input.
+
+Assuming the input has shape `[M, N]`, where `N` is the dimension over which the
+DFT is computed and `M` denotes the conceptual "all other dimensions,"
+the DFT `y[m, k]` of shape `[M, N]` is defined as
+
+$$y[m, k] = \sum_{n=0}^{N-1} e^{-2 \pi j \frac{k n}{N} } x[m, n] ,$$
+
+and the inverse transform is defined as
+
+$$x[m, n] = \frac{1}{N} \sum_{k=0}^{N-1} e^{2 \pi j \frac{k n}{N} } y[m, k] ,$$
+
+where $j$ is the imaginary unit.
+
+The actual shape of the output is specified in the "output" section.
+
+Reference: https://docs.scipy.org/doc/scipy/tutorial/fft.html
+)DOC";
+}
+
 } // namespace math
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

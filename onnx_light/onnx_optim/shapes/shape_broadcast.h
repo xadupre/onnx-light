@@ -75,6 +75,33 @@ void ComputeShapeBinaryBroadcast(ShapesContext &ctx, const NodeProto &node, cons
                                  const char *input_b, const char *expected_op_type,
                                  TensorType output_dtype);
 
+/**
+ * Kind of elementwise arithmetic to apply when propagating
+ * :cpp:func:`OptimTensor::ValueAsShape` through a numpy-broadcasting
+ * binary operator with :cpp:func:`PropagateValueAsShapeArithmetic`.
+ */
+enum class BroadcastDimOp { kAdd, kSub };
+
+/**
+ * Propagates the ``ValueAsShape`` annotation through a numpy-broadcast
+ * binary operator that performs elementwise integer arithmetic
+ * (currently ``Add`` and ``Sub``).
+ *
+ * If both inputs of ``node`` carry a ``ValueAsShape`` annotation, the
+ * helper combines them with right-aligned broadcasting using the
+ * matching :cpp:func:`expressions::dim_add` /
+ * :cpp:func:`expressions::dim_sub` operation, and writes the resulting
+ * 1-D dim vector back as the ``ValueAsShape`` of ``node.output(0)``
+ * (which must already exist in ``ctx``). Missing leading dimensions on
+ * the shorter side are treated as the integer ``1``, matching numpy's
+ * broadcasting rules.
+ *
+ * Does nothing if either input is missing a ``ValueAsShape`` or if
+ * the resulting shape would exceed :cpp:var:`kMaxOptimRank` dims.
+ */
+void PropagateValueAsShapeArithmetic(ShapesContext &ctx, const NodeProto &node, const char *input_a,
+                                     const char *input_b, BroadcastDimOp op);
+
 } // namespace shapes
 } // namespace onnx_optim
 } // namespace ONNX_LIGHT_NAMESPACE

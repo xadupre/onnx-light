@@ -93,6 +93,13 @@ TEST(OnnxOpSequenceRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_STREQ(
       onnx_op::ToTypeString(sequence_empty_v11->type_constraints()[0].allowed_type_strs.back()),
       "seq(tensor(complex128))");
+  // Optional 'dtype' attribute (no default).
+  ASSERT_EQ(sequence_empty_v11->attributes().size(), 1u);
+  EXPECT_EQ(sequence_empty_v11->attributes()[0].name, "dtype");
+  EXPECT_EQ(sequence_empty_v11->attributes()[0].type, onnx_op::AttributeType::INT);
+  EXPECT_FALSE(sequence_empty_v11->attributes()[0].required);
+  EXPECT_TRUE(
+      std::holds_alternative<std::monostate>(sequence_empty_v11->attributes()[0].default_value));
 
   EXPECT_EQ(sequence_length_v11->domain(), "ai.onnx");
   EXPECT_EQ(sequence_length_v11->inputs().size(), 1u);

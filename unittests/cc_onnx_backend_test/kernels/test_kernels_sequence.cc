@@ -20,6 +20,7 @@ using onnx_backend_test::Tensor;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::SequenceAt;
 using onnx_backend_test::kernel::SequenceConstruct;
+using onnx_backend_test::kernel::SequenceEmpty;
 using onnx_backend_test::kernel::SequenceErase;
 using onnx_backend_test::kernel::SequenceInsert;
 using onnx_backend_test::kernel::SequenceLength;
@@ -153,6 +154,35 @@ TEST(BackendKernelClass, SequenceLengthHandlesEmptySequence) {
   EXPECT_TRUE(out.shape.empty());
   ASSERT_EQ(out.data.size(), sizeof(int64_t));
   EXPECT_EQ(*out.AsInt64(), 0);
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// SequenceEmpty kernel tests.
+// ──────────────────────────────────────────────────────────────────────
+
+TEST(BackendKernelClass, SequenceEmptyDefaultDtypeIsFloat) {
+  const KernelContext ctx{DefaultOpset(11)};
+  SequenceEmpty op{ctx};
+  Sequence out = op();
+  EXPECT_TRUE(out.empty());
+  EXPECT_EQ(out.size(), 0u);
+  EXPECT_EQ(out.elem_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+}
+
+TEST(BackendKernelClass, SequenceEmptyUndefinedDtypeFallsBackToFloat) {
+  const KernelContext ctx{DefaultOpset(11)};
+  SequenceEmpty op{ctx};
+  Sequence out = op(static_cast<int32_t>(onnx_backend_test::DataType::UNDEFINED));
+  EXPECT_TRUE(out.empty());
+  EXPECT_EQ(out.elem_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+}
+
+TEST(BackendKernelClass, SequenceEmptyHonoursExplicitDtype) {
+  const KernelContext ctx{DefaultOpset(11)};
+  SequenceEmpty op{ctx};
+  Sequence out = op(static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  EXPECT_TRUE(out.empty());
+  EXPECT_EQ(out.elem_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
 }
 
 // ──────────────────────────────────────────────────────────────────────

@@ -119,6 +119,30 @@ void ComputeShapeConcatFromSequence(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeSequenceLength(ShapesContext &ctx, const NodeProto &node);
 
 /**
+ * Computes the output :cpp:class:`OptimSequence` of a ``SequenceEmpty``
+ * node and stores it in ``ctx``.
+ *
+ * ``SequenceEmpty`` (since opset 11 in the ``ai.onnx`` domain) takes no
+ * inputs and produces an empty sequence whose element dtype is taken
+ * from the optional ``dtype`` attribute (an INT-valued
+ * ``onnx::TensorProto::DataType``). When ``dtype`` is absent the schema
+ * default is ``FLOAT``. The output sequence length is always ``0`` and
+ * the per-element shapes vector is empty.
+ *
+ * @param ctx   In/out context. On return it contains an
+ *              :cpp:class:`OptimSequence` entry for ``node.output(0)``.
+ * @param node  The ``SequenceEmpty`` ``NodeProto`` whose output should
+ *              be described. ``node.op_type()`` must be
+ *              ``"SequenceEmpty"`` and ``node`` must declare at least
+ *              one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"SequenceEmpty"``, if ``node`` has no output, or if the
+ *         ``dtype`` attribute is present but is not an INT.
+ */
+void ComputeShapeSequenceEmpty(ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Computes the output :cpp:class:`OptimSequence` of a
  * ``SequenceErase`` node and stores it in ``ctx``.
  *

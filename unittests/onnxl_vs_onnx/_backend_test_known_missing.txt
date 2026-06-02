@@ -1,5 +1,3 @@
-adagrad
-adagrad_multiple
 affine_grid_2d_align_corners_expanded
 affine_grid_2d_expanded
 affine_grid_3d_align_corners_expanded
@@ -732,13 +730,10 @@ mod_uint16
 mod_uint32
 mod_uint64
 mod_uint8
-momentum
-momentum_multiple
 mvn
 mvn_expanded
 mvn_expanded_ver18
 neg_example
-nesterov_momentum
 nllloss_NC
 nllloss_NC_expanded
 nllloss_NCd1

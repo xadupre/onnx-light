@@ -56,7 +56,19 @@ void ComputeShapeShape(ShapesContext &ctx, const NodeProto &node) {
   OptimShape out_shape;
   out_shape.PushBack(OptimDim(length));
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, TensorType::kInt64, std::move(out_shape)));
+  OptimTensor out_tensor(nullptr, TensorType::kInt64, std::move(out_shape));
+
+  // The values produced by ``Shape`` are exactly the input's selected
+  // dimensions; record them as ``ValueAsShape`` so that downstream
+  // operators (``Concat``, ``Expand``, ``Reshape``, …) can propagate
+  // the data even when the input shape carries symbolic dims.
+  OptimShape value_as_shape;
+  for (int64_t i = start; i < end; ++i) {
+    value_as_shape.PushBack(input.Shape()[static_cast<std::size_t>(i)]);
+  }
+  out_tensor.SetValueAsShape(std::move(value_as_shape));
+
+  ctx.Set(node.output(0), std::move(out_tensor));
 }
 
 } // namespace tensor

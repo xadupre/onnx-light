@@ -139,11 +139,21 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     operations (layout == 1) are not supported. If you need support
 #     create a github issue with justification."). The reference backend
 #     still exercises these cases.
+#   * ``test_cc_attention_4d_with_past_and_present_qk_matmul_bias_3d_mask_causal``
+#     and ``test_cc_attention_4d_with_past_and_present_qk_matmul_bias_4d_mask_causal``
+#     — ORT's CPU ``Attention`` kernel writes ``-FLT_MAX`` (≈ -3.4e38) into the
+#     ``qk_matmul_output`` at causal-masked positions while the ONNX reference
+#     (and this lightweight backend) writes the mathematical ``-inf`` from the
+#     additive causal bias. Both produce the same softmax outputs but differ
+#     bit-for-bit in the intermediate ``qk_matmul_output``. The reference
+#     backend still exercises these cases.
 # These cases remain covered by the reference backend tests.
 ORT_EXCLUDE_REGEX = [
     r"^test_cc_roialign_max$",
     r"^test_cc_roialign_mode_max$",
     r"^test_cc_flex_attention_",
+    r"^test_cc_attention_4d_with_past_and_present_qk_matmul_bias_3d_mask_causal$",
+    r"^test_cc_attention_4d_with_past_and_present_qk_matmul_bias_4d_mask_causal$",
     r"^test_cc_adam_",
     r"^test_adam$",
     r"^test_adam_multiple$",

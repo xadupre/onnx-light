@@ -163,6 +163,27 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Element-wise clip: y = min(max(x, min_val), max_val) (since opset 6).
+///
+/// Both ``min`` and ``max`` are optional scalar tensors (since opset 11);
+/// when omitted, the corresponding bound defaults to
+/// ``std::numeric_limits<T>::lowest()`` and ``std::numeric_limits<T>::max()``.
+/// When ``min > max`` the operator returns ``max`` for every element,
+/// matching the ONNX specification (``Min(max, Max(input, min))``).
+class Clip : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  /// Computes ``y = clip(x, min, max)``. ``min``/``max`` may be ``nullptr``
+  /// to use the dtype-specific default bound. When provided, each must be a
+  /// 0-D (scalar) tensor whose dtype matches ``x``.
+  Tensor operator()(const Tensor &x, const Tensor *min = nullptr,
+                    const Tensor *max = nullptr) const;
+  void operator()(const Tensor &x, const Tensor *min, const Tensor *max, Tensor &output) const;
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// Element-wise round to nearest integer, ties to even (banker's rounding).
 class Round : public KernelBase {
 public:

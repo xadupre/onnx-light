@@ -1051,4 +1051,65 @@ TEST(BackendTestCase, HammingWindowCasesArePresent) {
   }
 }
 
+TEST(BackendTestCase, ClipOnnxCasesArePresent) {
+  const std::vector<std::string> expected_names = {
+      "test_clip_example",          "test_clip",
+      "test_clip_inbounds",         "test_clip_outbounds",
+      "test_clip_splitbounds",      "test_clip_min_greater_than_max",
+      "test_clip_default_min",      "test_clip_default_max",
+      "test_clip_default_inbounds", "test_clip_default_int8_min",
+      "test_clip_default_int8_max", "test_clip_default_int8_inbounds",
+  };
+  auto cases = CollectTestCases();
+  for (const auto &name : expected_names) {
+    EXPECT_NE(FindCase(cases, name), nullptr) << "Missing ONNX/math case: " << name;
+  }
+}
+
+TEST(BackendTestCase, ClipExampleClampsToMinAndMax) {
+  auto cases = CollectTestCases("Clip");
+  const TestCase *tc = FindCase(cases, "test_clip_example");
+  ASSERT_NE(tc, nullptr);
+  ASSERT_EQ(tc->data_sets.size(), 1u);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 3u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  const float *y = ds.outputs[0].AsFloat();
+  ASSERT_EQ(ds.outputs[0].element_count(), 3);
+  EXPECT_FLOAT_EQ(y[0], -1.0f);
+  EXPECT_FLOAT_EQ(y[1], 0.0f);
+  EXPECT_FLOAT_EQ(y[2], 1.0f);
+}
+
+TEST(BackendTestCase, ClipMinGreaterThanMaxReplacesAllValuesByMax) {
+  auto cases = CollectTestCases("Clip");
+  const TestCase *tc = FindCase(cases, "test_clip_min_greater_than_max");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  const float *y = ds.outputs[0].AsFloat();
+  ASSERT_EQ(ds.outputs[0].element_count(), 3);
+  // Per ONNX semantics: Min(max, Max(input, min)) collapses to max when
+  // min > max.
+  EXPECT_FLOAT_EQ(y[0], 1.0f);
+  EXPECT_FLOAT_EQ(y[1], 1.0f);
+  EXPECT_FLOAT_EQ(y[2], 1.0f);
+}
+
+TEST(BackendTestCase, ClipDefaultMaxNodeOmitsTrailingMinInput) {
+  auto cases = CollectTestCases("Clip");
+  // ``test_clip_default_max`` declares the optional ``min`` input as an
+  // empty string, matching the upstream ``make_node("Clip", ["x", "",
+  // "max"], ...)`` pattern. The data set itself only carries the two
+  // *named* tensors (x and max).
+  const TestCase *tc = FindCase(cases, "test_clip_default_max");
+  ASSERT_NE(tc, nullptr);
+  const GraphProto &graph = tc->model.ref_graph();
+  ASSERT_EQ(graph.ref_node().size(), 1u);
+  const auto &node_inputs = graph.ref_node()[0].ref_input();
+  ASSERT_EQ(node_inputs.size(), 3u);
+  EXPECT_EQ(std::string(node_inputs[1].data(), node_inputs[1].size()), "");
+  ASSERT_EQ(tc->data_sets[0].inputs.size(), 2u);
+}
+
 } // namespace Test

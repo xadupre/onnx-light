@@ -1251,6 +1251,37 @@ TEST(OnnxOptimShapesMathCeil, RejectsWrongOpType) {
   EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeCeil(ctx, node, "X"), std::invalid_argument);
 }
 
+TEST(OnnxOptimShapesMathClip, PropagatesFullyKnownShape) {
+  NodeProto node = MakeUnaryNode("Clip");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  onnx_optim::shapes::math::ComputeShapeClip(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+}
+
+TEST(OnnxOptimShapesMathClip, PropagatesSymbolicShape) {
+  NodeProto node = MakeUnaryNode("Clip");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
+
+  onnx_optim::shapes::math::ComputeShapeClip(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
+}
+
+TEST(OnnxOptimShapesMathClip, RejectsWrongOpType) {
+  NodeProto node = MakeUnaryNode("Ceil");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeClip(ctx, node, "X"), std::invalid_argument);
+}
+
 TEST(OnnxOptimShapesMathRound, PropagatesSymbolicShape) {
   NodeProto node = MakeUnaryNode("Round");
   onnx_optim::shapes::ShapesContext ctx;

@@ -451,6 +451,16 @@ void ComputeShapeFloor(ShapesContext &ctx, const NodeProto &node, const char *x)
 void ComputeShapeCeil(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Clip`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Clip`` is element-wise; the optional ``min`` and ``max`` inputs are
+ * scalars (or in v1/v6 schema attributes) that do not influence the
+ * output shape or dtype, which always match the input ``x``.
+ */
+void ComputeShapeClip(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``Round`` node and
  * stores it in ``ctx``.
  *

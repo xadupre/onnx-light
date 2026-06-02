@@ -26,14 +26,16 @@ std::vector<uint8_t> FloatBytes(const std::vector<float> &values) {
   return out;
 }
 
-// Adds a graph input named ``name`` with a tensor type ``dtype`` and no
-// declared shape (rank/shape will be inferred or left unspecified).
+// Adds a graph input named ``name`` with a tensor type ``dtype``. The shape
+// field is intentionally left unset so the rank is unspecified — ORT's body
+// shape inference will determine the per-iteration rank from the enclosing
+// Scan node (declaring an empty shape here would assert rank 0 and conflict
+// with the inferred rank).
 void AddGraphInputTensor(GraphProto &g, const std::string &name, TensorProto::DataType dtype) {
   ValueInfoProto *vi = g.add_input();
   vi->set_name(name);
   TypeProto::Tensor *tensor_type = vi->ref_type().mutable_tensor_type();
   tensor_type->set_elem_type(static_cast<int>(dtype));
-  tensor_type->mutable_shape();
 }
 
 void AddGraphOutputTensor(GraphProto &g, const std::string &name, TensorProto::DataType dtype) {
@@ -41,7 +43,6 @@ void AddGraphOutputTensor(GraphProto &g, const std::string &name, TensorProto::D
   vi->set_name(name);
   TypeProto::Tensor *tensor_type = vi->ref_type().mutable_tensor_type();
   tensor_type->set_elem_type(static_cast<int>(dtype));
-  tensor_type->mutable_shape();
 }
 
 // Builds a Scan body subgraph for our simple test case:

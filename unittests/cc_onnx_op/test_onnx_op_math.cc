@@ -99,7 +99,7 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> topk_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("TopK");
 
-  EXPECT_EQ(schemas.size(), 106u);
+  EXPECT_EQ(schemas.size(), 109u);
 
   // Einsum was introduced at v12 and has had a single schema since then.
   ASSERT_EQ(einsum_schemas.size(), 1u);

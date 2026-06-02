@@ -359,10 +359,8 @@ edge_pad
 einsum_batch_diagonal
 einsum_inner_prod
 einsum_scalar
-elu
 elu_default
 elu_default_expanded_ver18
-elu_example
 elu_example_expanded_ver18
 elu_expanded_ver18
 eyelike_populate_off_main_diagonal
@@ -884,7 +882,6 @@ reduce_sum_square_negative_axes_keepdims_random
 reduce_sum_square_negative_axes_keepdims_random_expanded
 reflect_pad
 regex_full_match_email_domain
-relu
 relu_expanded_ver18
 reshape_allowzero_reordered
 reshape_extended_dims

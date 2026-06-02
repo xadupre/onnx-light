@@ -157,6 +157,11 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #   * ``test_cc_top_k_uint64`` — ORT's CPU EP has no ``TopK(11)`` kernel
 #     registered for ``uint64`` ("Could not find an implementation for
 #     TopK(11) node"). The reference backend still exercises this case.
+#   * ``test_cc_prelu_inf`` — ORT's CPU EP ``PRelu`` kernel evaluates
+#     ``slope * x`` on both branches of the sign mask and so returns
+#     ``NaN`` for ``+inf`` / ``-inf`` inputs (see
+#     microsoft/onnxruntime#28732). The reference backend still exercises
+#     this case to lock in the ``±inf``-preserving behaviour.
 ORT_EXCLUDE_REGEX = [
     r"^test_cc_roialign_max$",
     r"^test_cc_roialign_mode_max$",
@@ -212,6 +217,7 @@ ORT_EXCLUDE_REGEX = [
     r"^test_bitshift_right_uint16$",
     r"^test_cc_top_k_uint64$",
     r"^test_cc_scan_zero_trip_count$",
+    r"^test_cc_prelu_inf$",
 ]
 
 TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_REGEX)

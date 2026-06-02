@@ -334,11 +334,16 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
         RequireInputs(node, 1);
         math::ComputeShapeEinsum(ctx, node);
       }},
-      {"ai.onnx:Exp",
+      {"ai.onnx:Erf",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeExp(ctx, node, node.input(0).as_string().c_str());
+        math::ComputeShapeErf(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:Exp",
+      [](ShapesContext &ctx, const NodeProto &node) {
+        RequireInputs(node, 1);
+        math::ComputeShapeExp(ctx, node, node.input(0).as_string().c_str());
+      }},
       {"ai.onnx:Equal",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);

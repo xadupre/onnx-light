@@ -82,6 +82,8 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Softmax");
   const std::vector<onnx_op::LightOpSchema> exp_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Exp");
+  const std::vector<onnx_op::LightOpSchema> erf_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Erf");
   const std::vector<onnx_op::LightOpSchema> log_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Log");
   const std::vector<onnx_op::LightOpSchema> mat_mul_schemas =
@@ -93,7 +95,7 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> einsum_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Einsum");
 
-  EXPECT_EQ(schemas.size(), 92u);
+  EXPECT_EQ(schemas.size(), 94u);
 
   // Einsum was introduced at v12 and has had a single schema since then.
   ASSERT_EQ(einsum_schemas.size(), 1u);
@@ -194,6 +196,8 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const onnx_op::LightOpSchema *const exp_v13 = FindByVersion(exp_schemas, 13);
   const onnx_op::LightOpSchema *const exp_v6 = FindByVersion(exp_schemas, 6);
   const onnx_op::LightOpSchema *const exp_v1 = FindByVersion(exp_schemas, 1);
+  const onnx_op::LightOpSchema *const erf_v13 = FindByVersion(erf_schemas, 13);
+  const onnx_op::LightOpSchema *const erf_v9 = FindByVersion(erf_schemas, 9);
   const onnx_op::LightOpSchema *const log_v13 = FindByVersion(log_schemas, 13);
   const onnx_op::LightOpSchema *const log_v6 = FindByVersion(log_schemas, 6);
   const onnx_op::LightOpSchema *const log_v1 = FindByVersion(log_schemas, 1);
@@ -251,6 +255,8 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   ASSERT_NE(nullptr, exp_v13);
   ASSERT_NE(nullptr, exp_v6);
   ASSERT_NE(nullptr, exp_v1);
+  ASSERT_NE(nullptr, erf_v13);
+  ASSERT_NE(nullptr, erf_v9);
   ASSERT_NE(nullptr, log_v13);
   ASSERT_NE(nullptr, log_v6);
   ASSERT_NE(nullptr, log_v1);

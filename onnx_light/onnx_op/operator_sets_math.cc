@@ -400,6 +400,36 @@ std::vector<LightOpSchema> BuildUnaryFloatMathSchemas(const char *op_type, int l
                     })};
 }
 
+std::vector<LightOpSchema> BuildErfSchemas() {
+  const std::string doc = MakeUnaryMathDoc("Erf");
+  const std::string output_description = MakeUnaryMathOutputDescription("Erf");
+  return std::vector<LightOpSchema>{
+      LightOpSchema("Erf", kOnnxDomain, 13, doc,
+                    {
+                        {"input", "Input tensor", "T"},
+                    },
+                    {
+                        {"output", output_description, "T"},
+                    },
+                    {
+                        {"T",
+                         {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat,
+                          TensorType::kDouble},
+                         "Constrain input and output types to float tensors."},
+                    }),
+      LightOpSchema(
+          "Erf", kOnnxDomain, 9, doc,
+          {
+              {"input", "Input tensor", "T"},
+          },
+          {
+              {"output", output_description, "T"},
+          },
+          {
+              {"T", AllNumericTypes(), "Constrain input and output types to all numeric tensors."},
+          })};
+}
+
 std::vector<LightOpSchema> BuildFloorSchemas() {
   static constexpr const char *kFloorDocV13 = R"DOC(
 Floor takes one input data (Tensor<T>) and produces one output data
@@ -1027,6 +1057,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"CumSum", [] { return BuildCumSumSchemas(); }},
       {"Div", [] { return BuildElementwiseMathSchemaForVersion("Div"); }},
       {"Einsum", [] { return BuildEinsumSchemas(); }},
+      {"Erf", [] { return BuildErfSchemas(); }},
       {"Exp", [] { return BuildUnaryFloatMathSchemasWithV1("Exp", 13, 6, 1); }},
       {"Floor", [] { return BuildFloorSchemas(); }},
       {"Gemm", [] { return BuildGemmSchemas(); }},

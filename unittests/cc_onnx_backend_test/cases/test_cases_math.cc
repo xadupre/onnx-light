@@ -187,6 +187,22 @@ TEST(BackendTestCase, ExpCaseOutputsMatchStdExp) {
   }
 }
 
+TEST(BackendTestCase, ErfCaseOutputsMatchStdErf) {
+  auto cases = CollectTestCases("Erf");
+  const TestCase *tc = FindCase(cases, "test_cc_erf");
+  ASSERT_NE(tc, nullptr);
+  ASSERT_EQ(tc->data_sets.size(), 1u);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 1u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  ASSERT_EQ(ds.inputs[0].element_count(), ds.outputs[0].element_count());
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::erf(x[i]), 1e-6f);
+  }
+}
+
 TEST(BackendTestCase, LogCaseOutputsMatchStdLog) {
   auto cases = CollectTestCases("Log");
   const TestCase *tc = FindCase(cases, "test_cc_log");

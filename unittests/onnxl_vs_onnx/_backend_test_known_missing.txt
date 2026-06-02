@@ -370,11 +370,6 @@ clip_outbounds
 clip_outbounds_expanded
 clip_splitbounds
 clip_splitbounds_expanded
-col2im_5d
-col2im
-col2im_dilations
-col2im_pads
-col2im_strides
 compress_0
 compress_1
 compress_default_axis

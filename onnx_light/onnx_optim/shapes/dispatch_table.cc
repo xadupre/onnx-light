@@ -287,6 +287,13 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          quantization::ComputeShapeDequantizeLinear(ctx, node, x_name.c_str(),
                                                     x_scale_name.c_str());
        }},
+      {"ai.onnx:Col2Im",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 3);
+         nn::ComputeShapeCol2Im(ctx, node, node.input(0).as_string().c_str(),
+                                node.input(1).as_string().c_str(),
+                                node.input(2).as_string().c_str());
+       }},
       {"ai.onnx:Conv",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);

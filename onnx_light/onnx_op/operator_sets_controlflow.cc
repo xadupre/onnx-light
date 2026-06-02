@@ -98,6 +98,62 @@ LightOpSchema MakeLoopSchema(int since_version) {
       });
 }
 
+LightOpSchema MakeScanSchema(int since_version) {
+  std::vector<FormalParameter> inputs;
+  if (since_version == 8) {
+    inputs.push_back({"sequence_lens",
+                      "Optional tensor specifying lengths of the sequences in a batch. "
+                      "If this input is not specified, all sequences are assumed to be of "
+                      "the maximum sequence length (the dimension of the sequence axis of "
+                      "the scan_input tensors).",
+                      "I"});
+  }
+  inputs.push_back({"initial_state_and_scan_inputs",
+                    "Initial values of the loop's N state variables followed by M scan_inputs",
+                    "V"});
+
+  std::vector<TypeConstraintParam> type_constraints;
+  type_constraints.push_back({"V", AllTensorTypes(), "All Tensor types"});
+  if (since_version == 8) {
+    type_constraints.push_back({"I", {TensorType::kInt64}, "Int64 tensor"});
+  }
+
+  std::vector<AttributeParam> attributes;
+  attributes.push_back(AttributeParam{"body", MakeScanBodyAttributeDescription(),
+                                      AttributeType::GRAPH,
+                                      /*required=*/true, std::monostate{}});
+  attributes.push_back(AttributeParam{
+      "num_scan_inputs", MakeScanNumScanInputsAttributeDescription(), AttributeType::INT,
+      /*required=*/true, std::monostate{}});
+  if (since_version == 8) {
+    attributes.push_back(AttributeParam{"directions", MakeScanDirectionsAttributeDescription(),
+                                        AttributeType::INTS,
+                                        /*required=*/false, std::monostate{}});
+  } else {
+    attributes.push_back(AttributeParam{
+        "scan_input_directions", MakeScanInputDirectionsAttributeDescription(), AttributeType::INTS,
+        /*required=*/false, std::monostate{}});
+    attributes.push_back(AttributeParam{"scan_output_directions",
+                                        MakeScanOutputDirectionsAttributeDescription(),
+                                        AttributeType::INTS,
+                                        /*required=*/false, std::monostate{}});
+    attributes.push_back(AttributeParam{"scan_input_axes", MakeScanInputAxesAttributeDescription(),
+                                        AttributeType::INTS,
+                                        /*required=*/false, std::monostate{}});
+    attributes.push_back(AttributeParam{
+        "scan_output_axes", MakeScanOutputAxesAttributeDescription(), AttributeType::INTS,
+        /*required=*/false, std::monostate{}});
+  }
+
+  return LightOpSchema(
+      "Scan", kOnnxDomain, since_version, MakeScanDoc(since_version), std::move(inputs),
+      {
+          {"final_state_and_scan_outputs",
+           "Final values of the loop's N state variables followed by K scan_outputs", "V"},
+      },
+      std::move(type_constraints), std::move(attributes));
+}
+
 } // namespace
 
 std::vector<LightOpSchema> GetAllOnnxOpControlflowSchemasWithHistory(const std::string &op_type,
@@ -117,6 +173,14 @@ std::vector<LightOpSchema> GetAllOnnxOpControlflowSchemasWithHistory(const std::
              MakeLoopSchema(13),
              MakeLoopSchema(11),
              MakeLoopSchema(1),
+         };
+       }},
+      {"Scan",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeScanSchema(11),
+             MakeScanSchema(9),
+             MakeScanSchema(8),
          };
        }},
   };

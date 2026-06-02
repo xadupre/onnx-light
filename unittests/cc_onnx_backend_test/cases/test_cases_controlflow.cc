@@ -131,4 +131,62 @@ TEST(BackendTestCase, LoopCasesArePresent) {
   EXPECT_EQ(trip0->data_sets[0].outputs[0].element_count(), 0);
 }
 
+TEST(BackendTestCase, ScanCasesArePresent) {
+  auto cases = CollectTestCases("Scan");
+  const TestCase *trip3 = nullptr;
+  const TestCase *trip0 = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_scan_basic_trip_count")
+      trip3 = &c;
+    if (c.name == "test_cc_scan_zero_trip_count")
+      trip0 = &c;
+  }
+  ASSERT_NE(trip3, nullptr);
+  ASSERT_NE(trip0, nullptr);
+
+  for (const TestCase *tc : {trip3, trip0}) {
+    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    const auto &op_type = node.ref_op_type();
+    EXPECT_EQ(std::string(op_type.data(), op_type.size()), "Scan");
+    // Two attributes: body (GRAPH) and num_scan_inputs (INT).
+    ASSERT_EQ(node.ref_attribute().size(), 2u);
+    bool has_body = false;
+    bool has_num = false;
+    for (const auto &attr : node.ref_attribute()) {
+      const std::string name(attr.ref_name().data(), attr.ref_name().size());
+      if (name == "body") {
+        EXPECT_EQ(attr.type(), AttributeProto::AttributeType::GRAPH);
+        ASSERT_TRUE(attr.has_g());
+        has_body = true;
+      } else if (name == "num_scan_inputs") {
+        EXPECT_EQ(attr.type(), AttributeProto::AttributeType::INT);
+        EXPECT_EQ(attr.i(), 1);
+        has_num = true;
+      }
+    }
+    EXPECT_TRUE(has_body);
+    EXPECT_TRUE(has_num);
+
+    ASSERT_EQ(tc->data_sets.size(), 1u);
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 1u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+    ASSERT_EQ(ds.outputs[0].shape.size(), 2u);
+    EXPECT_EQ(ds.outputs[0].shape[1], 2);
+  }
+
+  // Trip-count 3 → output shape [3, 2] containing [[0, 1], [2, 3], [4, 5]].
+  EXPECT_EQ(trip3->data_sets[0].outputs[0].shape[0], 3);
+  ASSERT_EQ(trip3->data_sets[0].outputs[0].element_count(), 6);
+  EXPECT_FLOAT_EQ(trip3->data_sets[0].outputs[0].AsFloat()[0], 0.0f);
+  EXPECT_FLOAT_EQ(trip3->data_sets[0].outputs[0].AsFloat()[5], 5.0f);
+  // Trip-count 0 → output shape [0, 2].
+  EXPECT_EQ(trip0->data_sets[0].outputs[0].shape[0], 0);
+  EXPECT_EQ(trip0->data_sets[0].outputs[0].element_count(), 0);
+}
+
 } // namespace Test

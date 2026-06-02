@@ -99,6 +99,102 @@ std::string MakeIfElseBranchAttributeDescription() {
          " the number of outputs in the then_branch.";
 }
 
+namespace {
+
+// Shared prose used by all Scan doc revisions: a description of the scan
+// semantics that does not change across opset versions.
+constexpr const char *kScanDocBody =
+    R"DOC(Scan can be used to iterate over one or more scan_input tensors,
+constructing zero or more scan_output tensors. It combines ideas from general recurrences,
+functional programming constructs such as scan, fold, map, and zip, and is intended to enable
+generalizations of RNN-like constructs for sequence-to-sequence processing.
+Other tensors (referred to as state_variables here) can be used to carry a state
+when iterating from one element to another (similar to hidden-state in RNNs, also referred
+to as loop-carried dependences in the context of loops).
+Many common usages involve a single scan_input tensor (where functionality
+similar to scan, fold and map can be obtained). When more than one scan_input is used,
+a behavior similar to zip is obtained.
+
+The attribute body must be a graph, specifying the computation to be performed in
+every iteration. It takes as input the current values of the state_variables and
+the current iterated element of the scan_inputs. It must return the (updated) values
+of the state_variables and zero or more scan_output_element tensors. The values of the
+scan_output_element tensors are concatenated over all the iterations to produce the
+scan_output values of the scan construct (similar to the concatenated intermediate
+hidden-state values of RNN-like constructs). All the output tensors (state_variables as
+well as scan_output_element tensors) are required to have the same shape in each iteration
+of the loop (a restriction imposed to enable efficient memory allocation).)DOC";
+
+constexpr const char *kScanDocOpset8Trailer =
+    "\n\nNote that the iterated element passed to the body subgraph does not have a sequence "
+    "axis. It will have a rank one less than the rank of the corresponding scan_input.";
+
+constexpr const char *kScanDocOpset9Trailer =
+    "\n\nThe operation supports batching, and the batch-axis is required to be 0. "
+    "When multiple scan_input tensors are used, they must all have the same batch-size, "
+    "and they must all have the same maximum-sequence-length (the dimensionality of the "
+    "sequence axis or scan axis).";
+
+} // namespace
+
+std::string MakeScanDoc(int since_version) {
+  std::string doc = kScanDocBody;
+  if (since_version <= 8) {
+    doc += kScanDocOpset8Trailer;
+  } else {
+    doc += kScanDocOpset9Trailer;
+  }
+  return doc;
+}
+
+std::string MakeScanBodyAttributeDescription() {
+  return "The graph run each iteration. It has N+M inputs: "
+         "(loop state variables..., scan_input_elts...). It has N+K outputs: "
+         "(loop state variables..., scan_output_elts...). Each "
+         "scan_output is created by concatenating the value of the specified "
+         "scan_output_elt value at the end of each iteration of the loop. It is an error"
+         " if the dimensions of these values change across loop iterations.";
+}
+
+std::string MakeScanNumScanInputsAttributeDescription() {
+  return "An attribute specifying the number of scan_inputs M. ";
+}
+
+std::string MakeScanDirectionsAttributeDescription() {
+  return "An optional list of M flags. The i-th element of the list specifies the direction "
+         "to be scanned for the i-th scan_input tensor: 0 indicates forward direction and 1 "
+         "indicates reverse direction. "
+         "If omitted, all scan_input tensors will be scanned in the forward direction.";
+}
+
+std::string MakeScanInputDirectionsAttributeDescription() {
+  return MakeScanDirectionsAttributeDescription();
+}
+
+std::string MakeScanOutputDirectionsAttributeDescription() {
+  return "An optional list of K flags, one for each scan_output. The i-th element of the list "
+         "specifies whether the i-th scan_output should be constructed by appending or "
+         "prepending a new value in each iteration: 0 indicates appending and 1 "
+         "indicates prepending. "
+         "If omitted, all scan_output tensors will be produced by appending a value "
+         "in each iteration.";
+}
+
+std::string MakeScanInputAxesAttributeDescription() {
+  return "An optional list of M flags. The i-th element of the list specifies the axis "
+         "to be scanned (the sequence axis) for the i-th scan_input. If omitted, 0 will "
+         "be used as the scan axis for every scan_input. Negative value for an axis means "
+         "counting dimensions from the back. Accepted range is [-r, r-1] where r = rank(input).";
+}
+
+std::string MakeScanOutputAxesAttributeDescription() {
+  return "An optional list of K flags. The i-th element of the list specifies the axis "
+         "for the i-th scan_output. The scan outputs are accumulated along the specified "
+         "axis. If omitted, 0 will be used as the scan axis for every scan_output. "
+         "Negative value for an axis means counting dimensions from the back. Accepted "
+         "range is [-r, r-1].";
+}
+
 } // namespace controlflow
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

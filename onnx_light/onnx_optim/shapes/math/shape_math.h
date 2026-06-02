@@ -589,6 +589,36 @@ void ComputeShapeCumSum(ShapesContext &ctx, const NodeProto &node, const char *x
 void ComputeShapeCumProd(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` entries of a ``TopK`` node
+ * and stores them in ``ctx``.
+ *
+ * ``TopK`` returns two outputs that share the same shape:
+ *
+ * - ``Values`` has the same dtype as the input ``x`` and shape
+ *   ``x.shape`` with the ``axis`` dimension replaced by ``k``.
+ * - ``Indices`` has dtype ``INT64`` and the same shape as ``Values``.
+ *
+ * In opset 1 the number ``k`` is read from the required integer attribute
+ * ``k``. In opsets 10 and 11 ``k`` is supplied as a 1-D tensor input;
+ * because :class:`OptimTensor` does not always carry concrete data, the
+ * axis dimension is emitted as a symbolic dimension (``TopK_<output>_k``)
+ * when ``k`` cannot be resolved from a constant.
+ *
+ * @param ctx   In/out context. Must already contain an entry for the data
+ *              input ``x``. On return it also contains entries for
+ *              ``node.output(0)`` and (when present) ``node.output(1)``.
+ * @param node  The ``TopK`` ``NodeProto`` whose outputs should be described.
+ *              ``node.op_type()`` must be ``"TopK"`` and ``node`` must
+ *              declare at least one output.
+ * @param x     Name of the data input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"TopK"``
+ *         or if ``node`` has no output.
+ * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
+ */
+void ComputeShapeTopK(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``DFT`` node and stores
  * it in ``ctx``.
  *

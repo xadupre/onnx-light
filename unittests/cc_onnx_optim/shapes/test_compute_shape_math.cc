@@ -1478,4 +1478,75 @@ TEST(OnnxOptimShapesMathEinsum, RejectsWrongOpType) {
   EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeEinsum(ctx, node), std::invalid_argument);
 }
 
+namespace {
+
+NodeProto MakeTopKNode(bool with_k_attribute, int64_t axis = -1) {
+  NodeProto node;
+  node.set_op_type("TopK");
+  node.add_input("X");
+  if (!with_k_attribute) {
+    node.add_input("K");
+  }
+  node.add_output("Values");
+  node.add_output("Indices");
+  if (with_k_attribute) {
+    AttributeProto *k_attr = node.add_attribute();
+    k_attr->set_name("k");
+    k_attr->set_type(AttributeProto::INT);
+    k_attr->set_i(3);
+  }
+  AttributeProto *axis_attr = node.add_attribute();
+  axis_attr->set_name("axis");
+  axis_attr->set_type(AttributeProto::INT);
+  axis_attr->set_i(axis);
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesMathTopK, ResolvesKFromAttribute) {
+  NodeProto node = MakeTopKNode(/*with_k_attribute=*/true, /*axis=*/-1);
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape in_shape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(5)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, in_shape));
+
+  onnx_optim::shapes::math::ComputeShapeTopK(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Values"));
+  ASSERT_TRUE(ctx.Has("Indices"));
+  onnx_optim::OptimShape expected{onnx_optim::OptimDim(4), onnx_optim::OptimDim(3)};
+  EXPECT_EQ(ctx.Get("Values"),
+            onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, expected));
+  EXPECT_EQ(ctx.Get("Indices"),
+            onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64, expected));
+}
+
+TEST(OnnxOptimShapesMathTopK, EmitsSymbolicDimWhenKIsTensorInput) {
+  NodeProto node = MakeTopKNode(/*with_k_attribute=*/false, /*axis=*/0);
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape in_shape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(5)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, in_shape));
+  ctx.Set("K", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(1)}));
+
+  onnx_optim::shapes::math::ComputeShapeTopK(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Values"));
+  const onnx_optim::OptimTensor &values = ctx.Get("Values");
+  ASSERT_EQ(values.Shape().Rank(), 2u);
+  EXPECT_TRUE(values.Shape()[0].IsExpr());
+  EXPECT_EQ(values.Shape()[1], onnx_optim::OptimDim(5));
+  EXPECT_EQ(values.Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Indices").Dtype(), onnx_optim::TensorType::kInt64);
+}
+
+TEST(OnnxOptimShapesMathTopK, RejectsWrongOpType) {
+  NodeProto node = MakeTopKNode(/*with_k_attribute=*/true);
+  node.set_op_type("Mul");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(4)}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeTopK(ctx, node, "X"), std::invalid_argument);
+}
+
 } // namespace Test

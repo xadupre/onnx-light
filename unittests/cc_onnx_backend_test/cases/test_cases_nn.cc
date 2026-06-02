@@ -275,9 +275,9 @@ TEST(BackendTestCase, AttentionCasesArePresent) {
   const TestCase *basic = nullptr;
   const TestCase *gqa = nullptr;
   for (const auto &c : cases) {
-    if (c.name == "test_cc_attention_basic") {
+    if (c.name == "test_cc_attention_4d") {
       basic = &c;
-    } else if (c.name == "test_cc_attention_gqa") {
+    } else if (c.name == "test_cc_attention_4d_gqa") {
       gqa = &c;
     }
   }

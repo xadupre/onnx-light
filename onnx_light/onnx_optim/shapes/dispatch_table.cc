@@ -598,6 +598,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          tensor::ComputeShapeTrilu(ctx, node);
        }},
+      {"ai.onnx:ReverseSequence",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         tensor::ComputeShapeReverseSequence(ctx, node);
+       }},
       {"ai.onnx:Unsqueeze",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);

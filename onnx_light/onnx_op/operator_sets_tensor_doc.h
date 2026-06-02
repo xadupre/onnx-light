@@ -307,6 +307,25 @@ std::string MakeTriluDoc(int since_version);
 std::string MakeTriluTypeConstraintDescription(int since_version);
 
 /**
+ * Returns the documentation string for the ReverseSequence operator at the
+ * given opset version.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the ReverseSequence operator.
+ */
+std::string MakeReverseSequenceDoc(int since_version);
+
+/**
+ * Returns the type-constraint description for the ReverseSequence operator at
+ * the given opset version (applies to type parameter ``T``).
+ *
+ * @param since_version Opset version for which to generate the description.
+ * @return Type-constraint description string for the ReverseSequence
+ *         input/output.
+ */
+std::string MakeReverseSequenceTypeConstraintDescription(int since_version);
+
+/**
  * Returns the documentation string for the Gather operator at the given
  * opset version.
  */

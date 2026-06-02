@@ -53,6 +53,9 @@ void RegisterTransposeCases(std::vector<TestCase> &registry);
 /// Registers the ``Trilu`` backend test node case(s).
 void RegisterTriluCases(std::vector<TestCase> &registry);
 
+/// Registers the ``ReverseSequence`` backend test node case(s).
+void RegisterReverseSequenceCases(std::vector<TestCase> &registry);
+
 /// Registers the ``DepthToSpace`` backend test node case(s).
 void RegisterDepthToSpaceCases(std::vector<TestCase> &registry);
 

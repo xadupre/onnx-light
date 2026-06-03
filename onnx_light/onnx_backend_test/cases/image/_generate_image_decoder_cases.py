@@ -1,4 +1,6 @@
-import os, onnx
+import os
+
+import onnx
 from onnx import numpy_helper
 
 base = os.path.dirname(onnx.__file__) + '/backend/test/data/node'
@@ -7,7 +9,7 @@ cases = sorted(d for d in os.listdir(base) if d.startswith('test_image_decoder_'
 def emit_uint8_array(name, data):
     out = [f"const unsigned char {name}[{len(data)}] = {{"]
     line = '   '
-    for i, b in enumerate(data):
+    for b in data:
         s = f' {b},'
         if len(line) + len(s) > 96:
             out.append(line)
@@ -121,7 +123,8 @@ src.append('    std::vector<uint8_t> out_bytes(e.expected, e.expected + out_coun
 src.append('    Tensor out_tensor =')
 src.append('        Tensor::FromUint8("", {e.height, e.width, e.channels}, out_bytes);')
 src.append('')
-src.append('    Expect(node, {in_tensor}, {out_tensor}, e.name, {opset}, "backend-test", registry);')
+src.append('    Expect(node, {in_tensor}, {out_tensor}, e.name, {opset}, "backend-test",')
+src.append('           registry);')
 src.append('  }')
 src.append('}')
 src.append('')

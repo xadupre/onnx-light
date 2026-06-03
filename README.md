@@ -35,6 +35,26 @@
   with explicit offset alignment (for example 4096-byte page alignment) through
   `onnxl.SerializeOptions().alignment`
 
+## Modular C++ libraries
+
+The C++ code is split into several small libraries so a downstream project
+can link only what it needs:
+
+- `onnx_light::lib_onnx_proto` – protobuf-compatible message types,
+  parser / serializer, external data, optional AES-256 encrypted save / load.
+- `onnx_light::lib_onnx_op` – lightweight `LightOpSchema` registrations for
+  ONNX operator domains, with no shape inference.
+- `onnx_light::lib_onnx_light` – full ONNX-compatible schemas (with history),
+  checker, inliner, shape inference and version converter.
+- `lib_onnx_optim` – shape-inference dispatch table, expression engine and
+  graph optimization helpers.
+- `onnx_light::lib_onnx_backend_test` – C++ backend test infrastructure and
+  reference operator kernels.
+
+See the
+[library split design page](https://sdpython.github.io/doc/onnx-light/dev/design/library_split.html)
+for the detailed breakdown.
+
 ## Getting started
 
 Install the package in editable mode:

@@ -32,6 +32,19 @@ ModelProto MakeOwnedModelProtoCopy(const ModelProto &model) {
   return owned;
 }
 
+bool HasBorrowedRawData(ModelProto &model) {
+  if (!model.has_graph()) {
+    return false;
+  }
+  IteratorTensorProto it(&model.ref_graph());
+  while (it.next()) {
+    if (it->ref_raw_data().is_borrowed()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 } // namespace
 
 #define PYDEFINE_PROTO(m, cls)                                                                     \
@@ -317,12 +330,7 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
             cls *to_write = &self;
             std::optional<ModelProto> owned_copy;
             if constexpr (std::is_same_v<cls, ModelProto>) {
-              bool needs_materialization = !external_data_file.empty();
-              if (nb::isinstance<SerializeOptions &>(options)) {
-                needs_materialization =
-                    needs_materialization || nb::cast<SerializeOptions &>(options).alignment > 0;
-              }
-              if (needs_materialization) {
+              if (!external_data_file.empty() && HasBorrowedRawData(self)) {
                 owned_copy = MakeOwnedModelProtoCopy(self);
                 to_write = &(*owned_copy);
               }

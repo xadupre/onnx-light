@@ -1756,7 +1756,7 @@ std::vector<LightOpSchema> BuildSTFTSchemas() {
   const std::string window_desc =
       "A tensor representing the window that will be slid over the signal."
       "The window must have rank 1 with shape: [window_shape]. "
-      "It's an optional value. ";
+      "It's an optional value.";
   const std::string frame_length_desc = "A scalar representing the size of the DFT. "
                                         "It's an optional value.";
   const std::string output_desc =
@@ -1768,7 +1768,7 @@ std::vector<LightOpSchema> BuildSTFTSchemas() {
   const std::string onesided_desc =
       "If onesided is 1, only values for w in [0, 1, 2, ..., floor(n_fft/2) + 1] are "
       "returned because the real-to-complex Fourier transform satisfies the conjugate "
-      "symmetry, i.e., X[m, w] = X[m,w]=X[m,n_fft-w]*. Note if the input or window tensors "
+      "symmetry, i.e., X[m, w] = X[m, n_fft-w]*. Note if the input or window tensors "
       "are complex, then onesided output is not possible. Enabling onesided with real "
       "inputs performs a Real-valued fast Fourier transform (RFFT). When invoked with real "
       "or complex valued input, the default value is 1. Values can be 0 or 1.";

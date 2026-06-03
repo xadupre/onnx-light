@@ -32,11 +32,14 @@ ModelProto MakeOwnedModelProtoCopy(const ModelProto &model) {
   return owned;
 }
 
-bool HasBorrowedRawData(ModelProto &model) {
+bool HasBorrowedRawData(const ModelProto &model) {
   if (!model.has_graph()) {
     return false;
   }
-  IteratorTensorProto it(&model.ref_graph());
+  // IteratorTensorProto currently exposes a mutable GraphProto traversal API.
+  // The scan is read-only, so cast away constness only to walk the graph.
+  auto &mutable_model = const_cast<ModelProto &>(model);
+  IteratorTensorProto it(&mutable_model.ref_graph());
   while (it.next()) {
     if (it->ref_raw_data().is_borrowed()) {
       return true;

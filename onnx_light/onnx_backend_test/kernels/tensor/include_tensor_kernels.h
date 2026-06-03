@@ -769,10 +769,12 @@ public:
 ///
 /// Only the ``"nearest"`` mode of the ``mode`` attribute is supported, using
 /// the ``"asymmetric"`` ``coordinate_transformation_mode`` (``in_coord =
-/// out_coord / scale``, clamped to ``[0, in_dim - 1]``). This matches the
-/// reference output for the simple test cases registered alongside the
-/// kernel. The supported element types are the same whole-byte types as
-/// :cpp:func:`ElementSize`.
+/// out_coord / scale``, then rounded according to ``nearest_mode`` and
+/// clamped to ``[0, in_dim - 1]``). All four ONNX ``nearest_mode`` values
+/// (``round_prefer_floor`` -- the default -- ``round_prefer_ceil``,
+/// ``floor``, ``ceil``) are supported. This matches the reference output
+/// for the simple test cases registered alongside the kernel. The supported
+/// element types are the same whole-byte types as :cpp:func:`ElementSize`.
 class Resize : public KernelBase {
 public:
   /// Attributes carried by the ONNX ``Resize`` operator. Only the ``mode``

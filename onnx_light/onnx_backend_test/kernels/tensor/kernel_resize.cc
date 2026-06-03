@@ -68,11 +68,35 @@ std::vector<int64_t> ComputeOutputShapeFromScales(const std::vector<int64_t> &in
   return out_shape;
 }
 
+// Applies the ``nearest_mode`` rounding rule to convert a (real-valued)
+// input coordinate to an integer index. Supports the four modes defined by
+// the ONNX Resize spec.
+int64_t ApplyNearestMode(double x, const std::string &nearest_mode) {
+  if (nearest_mode == "floor") {
+    return static_cast<int64_t>(std::floor(x));
+  }
+  if (nearest_mode == "ceil") {
+    return static_cast<int64_t>(std::ceil(x));
+  }
+  if (nearest_mode == "round_prefer_ceil") {
+    // Round half up.
+    return static_cast<int64_t>(std::floor(x + 0.5));
+  }
+  // Default: "round_prefer_floor" — round half down.
+  const double f = std::floor(x);
+  if (x - f == 0.5) {
+    return static_cast<int64_t>(f);
+  }
+  return static_cast<int64_t>(std::floor(x + 0.5));
+}
+
 // Nearest-neighbor resize for any rank, byte-element-wise copy. Uses the
-// ``asymmetric`` coordinate transformation (``in_coord = floor(out_coord /
-// scale)``, clamped to ``[0, in_dim - 1]``).
+// ``asymmetric`` coordinate transformation (``in_coord = out_coord /
+// scale``) combined with the ``nearest_mode`` rounding rule. The resulting
+// index is clamped to ``[0, in_dim - 1]``.
 void ResizeNearest(const Tensor &input, const std::vector<float> &scales,
-                   const std::vector<int64_t> &out_shape, Tensor &output) {
+                   const std::vector<int64_t> &out_shape, const std::string &nearest_mode,
+                   Tensor &output) {
   const std::size_t elem_size = ElementSize(input.data_type);
   const std::size_t rank = out_shape.size();
 
@@ -101,8 +125,8 @@ void ResizeNearest(const Tensor &input, const std::vector<float> &scales,
     for (std::size_t k = 0; k < rank; ++k) {
       const int64_t out_coord = remaining / out_strides[k];
       remaining %= out_strides[k];
-      int64_t in_coord = static_cast<int64_t>(
-          std::floor(static_cast<double>(out_coord) / static_cast<double>(scales[k])));
+      int64_t in_coord = ApplyNearestMode(
+          static_cast<double>(out_coord) / static_cast<double>(scales[k]), nearest_mode);
       if (in_coord >= input.shape[k]) {
         in_coord = input.shape[k] - 1;
       }
@@ -151,7 +175,7 @@ void Resize::operator()(const Tensor &X, const Tensor &scales, const Attributes 
   EXT_ENFORCE_INVALID(attrs.coordinate_transformation_mode == "asymmetric",
                       "kernel::Resize: only 'asymmetric' coordinate_transformation_mode is "
                       "supported in this reference implementation.");
-  ResizeNearest(X, scales_vec, out_shape, output);
+  ResizeNearest(X, scales_vec, out_shape, attrs.nearest_mode, output);
 }
 
 Tensor Resize::ResizeSizes(const Tensor &X, const Tensor &sizes, const Attributes &attrs) const {
@@ -178,7 +202,7 @@ Tensor Resize::ResizeSizes(const Tensor &X, const Tensor &sizes, const Attribute
   EXT_ENFORCE_INVALID(attrs.coordinate_transformation_mode == "asymmetric",
                       "kernel::Resize: only 'asymmetric' coordinate_transformation_mode is "
                       "supported in this reference implementation.");
-  ResizeNearest(X, scales_vec, sizes_vec, output);
+  ResizeNearest(X, scales_vec, sizes_vec, attrs.nearest_mode, output);
   return output;
 }
 

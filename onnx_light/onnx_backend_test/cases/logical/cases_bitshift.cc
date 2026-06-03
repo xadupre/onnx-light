@@ -58,30 +58,70 @@ void RegisterBitShiftCases(std::vector<TestCase> &registry) {
   }
 
   // Upstream ONNX node cases (BitShift.export_left*/export_right*).
-  // RIGHT direction over UINT16 with broadcasting.
+  // Mirrors ``onnx.backend.test.case.node.bitshift.BitShift`` exports.
+  // RIGHT direction over UINT8.
+  {
+    NodeProto node = MakeBitShiftNode("RIGHT");
+    Tensor x = Tensor::FromUint8("", {3}, {16, 4, 1});
+    Tensor y = Tensor::FromUint8("", {3}, {1, 2, 3});
+    Tensor z = k(x, y, kernel::BitShift::Direction::kRight);
+    Expect(node, {x, y}, {z}, "test_bitshift_right_uint8", {opset}, "backend-test", registry);
+  }
+  // RIGHT direction over UINT16.
   {
     NodeProto node = MakeBitShiftNode("RIGHT");
     Tensor x = Tensor::FromUint16("", {3}, {16, 4, 1});
-    Tensor y = Tensor::FromUint16("", {3}, {1, 2, 1});
+    Tensor y = Tensor::FromUint16("", {3}, {1, 2, 3});
     Tensor z = k(x, y, kernel::BitShift::Direction::kRight);
     Expect(node, {x, y}, {z}, "test_bitshift_right_uint16", {opset}, "backend-test", registry);
   }
-  // LEFT direction over UINT32 with broadcasting.
+  // RIGHT direction over UINT32.
+  {
+    NodeProto node = MakeBitShiftNode("RIGHT");
+    Tensor x = Tensor::FromUint32("", {3}, {16, 4, 1});
+    Tensor y = Tensor::FromUint32("", {3}, {1, 2, 3});
+    Tensor z = k(x, y, kernel::BitShift::Direction::kRight);
+    Expect(node, {x, y}, {z}, "test_bitshift_right_uint32", {opset}, "backend-test", registry);
+  }
+  // RIGHT direction over UINT64.
+  {
+    NodeProto node = MakeBitShiftNode("RIGHT");
+    Tensor x = Tensor::FromUint64("", {3}, {16, 4, 1});
+    Tensor y = Tensor::FromUint64("", {3}, {1, 2, 3});
+    Tensor z = k(x, y, kernel::BitShift::Direction::kRight);
+    Expect(node, {x, y}, {z}, "test_bitshift_right_uint64", {opset}, "backend-test", registry);
+  }
+  // LEFT direction over UINT8.
+  {
+    NodeProto node = MakeBitShiftNode("LEFT");
+    Tensor x = Tensor::FromUint8("", {3}, {16, 4, 1});
+    Tensor y = Tensor::FromUint8("", {3}, {1, 2, 3});
+    Tensor z = k(x, y, kernel::BitShift::Direction::kLeft);
+    Expect(node, {x, y}, {z}, "test_bitshift_left_uint8", {opset}, "backend-test", registry);
+  }
+  // LEFT direction over UINT16.
+  {
+    NodeProto node = MakeBitShiftNode("LEFT");
+    Tensor x = Tensor::FromUint16("", {3}, {16, 4, 1});
+    Tensor y = Tensor::FromUint16("", {3}, {1, 2, 3});
+    Tensor z = k(x, y, kernel::BitShift::Direction::kLeft);
+    Expect(node, {x, y}, {z}, "test_bitshift_left_uint16", {opset}, "backend-test", registry);
+  }
+  // LEFT direction over UINT32.
   {
     NodeProto node = MakeBitShiftNode("LEFT");
     Tensor x = Tensor::FromUint32("", {3}, {16, 4, 1});
-    Tensor y = Tensor::FromUint32("", {3}, {1, 2, 1});
+    Tensor y = Tensor::FromUint32("", {3}, {1, 2, 3});
     Tensor z = k(x, y, kernel::BitShift::Direction::kLeft);
     Expect(node, {x, y}, {z}, "test_bitshift_left_uint32", {opset}, "backend-test", registry);
   }
-  // UINT64 broadcast (scalar shift amount), RIGHT direction.
+  // LEFT direction over UINT64.
   {
-    NodeProto node = MakeBitShiftNode("RIGHT");
-    Tensor x = Tensor::FromUint64("", {4}, {256, 128, 64, 32});
-    Tensor y = Tensor::FromUint64("", {1}, {2});
-    Tensor z = k(x, y, kernel::BitShift::Direction::kRight);
-    Expect(node, {x, y}, {z}, "test_bitshift_right_uint64_bcast", {opset}, "backend-test",
-           registry);
+    NodeProto node = MakeBitShiftNode("LEFT");
+    Tensor x = Tensor::FromUint64("", {3}, {16, 4, 1});
+    Tensor y = Tensor::FromUint64("", {3}, {1, 2, 3});
+    Tensor z = k(x, y, kernel::BitShift::Direction::kLeft);
+    Expect(node, {x, y}, {z}, "test_bitshift_left_uint64", {opset}, "backend-test", registry);
   }
 }
 

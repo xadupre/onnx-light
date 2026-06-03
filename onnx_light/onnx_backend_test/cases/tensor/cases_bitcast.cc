@@ -78,12 +78,77 @@ void RegisterBitCastCases(std::vector<TestCase> &registry) {
     Expect(node, {x}, {y}, "test_cc_bitcast_uint8_to_int8", {opset}, "backend-test", registry);
   }
 
-  // Identity reinterpret: same dtype must be a no-op pass-through.
+  // ---------------------------------------------------------------------------
+  // Upstream ONNX node cases — mirrors
+  // ``onnx.backend.test.case.node.bitcast.BitCast`` exports.
+  // ---------------------------------------------------------------------------
+
+  // float32 -> int32 (1-D).
+  {
+    NodeProto node = MakeBitCastNode(DataType::INT32);
+    Tensor x = Tensor::FromFloat("", {3}, {1.0f, -2.5f, 3.75f});
+    Tensor y = k(x, DataType::INT32);
+    Expect(node, {x}, {y}, "test_bitcast_float32_to_int32", {opset}, "backend-test", registry);
+  }
+  // int32 -> float32 (1-D).
   {
     NodeProto node = MakeBitCastNode(DataType::FLOAT);
-    Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+    Tensor x = Tensor::FromInt32("", {3}, {1065353216, -1071644672, 1081081856});
     Tensor y = k(x, DataType::FLOAT);
-    Expect(node, {x}, {y}, "test_cc_bitcast_float_identity", {opset}, "backend-test", registry);
+    Expect(node, {x}, {y}, "test_bitcast_int32_to_float32", {opset}, "backend-test", registry);
+  }
+  // float64 -> int64.
+  {
+    NodeProto node = MakeBitCastNode(DataType::INT64);
+    Tensor x = Tensor::FromDouble("", {3}, {1.0, -2.5, 3.75});
+    Tensor y = k(x, DataType::INT64);
+    Expect(node, {x}, {y}, "test_bitcast_float64_to_int64", {opset}, "backend-test", registry);
+  }
+  // int64 -> float64.
+  {
+    NodeProto node = MakeBitCastNode(DataType::DOUBLE);
+    Tensor x = Tensor::FromInt64("", {3},
+                                 {static_cast<int64_t>(4607182418800017408LL),
+                                  static_cast<int64_t>(-4611686018427387904LL),
+                                  static_cast<int64_t>(4614256656552045184LL)});
+    Tensor y = k(x, DataType::DOUBLE);
+    Expect(node, {x}, {y}, "test_bitcast_int64_to_float64", {opset}, "backend-test", registry);
+  }
+  // uint32 -> int32 (same size, different signedness).
+  {
+    NodeProto node = MakeBitCastNode(DataType::INT32);
+    Tensor x = Tensor::FromUint32("", {3}, {4294967295u, 2147483648u, 2147483647u});
+    Tensor y = k(x, DataType::INT32);
+    Expect(node, {x}, {y}, "test_bitcast_uint32_to_int32", {opset}, "backend-test", registry);
+  }
+  // 2-D float32 -> int32.
+  {
+    NodeProto node = MakeBitCastNode(DataType::INT32);
+    Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+    Tensor y = k(x, DataType::INT32);
+    Expect(node, {x}, {y}, "test_bitcast_2d_float32_to_int32", {opset}, "backend-test", registry);
+  }
+  // int8 -> uint8 (same size, different signedness).
+  {
+    NodeProto node = MakeBitCastNode(DataType::UINT8);
+    Tensor x = Tensor::FromInt8("", {4}, {-1, -128, 127, 0});
+    Tensor y = k(x, DataType::UINT8);
+    Expect(node, {x}, {y}, "test_bitcast_int8_to_uint8", {opset}, "backend-test", registry);
+  }
+  // Scalar float32 -> int32.
+  {
+    NodeProto node = MakeBitCastNode(DataType::INT32);
+    Tensor x = Tensor::FromFloat("", {}, {1.0f});
+    Tensor y = k(x, DataType::INT32);
+    Expect(node, {x}, {y}, "test_bitcast_scalar_float32_to_int32", {opset}, "backend-test",
+           registry);
+  }
+  // bool -> uint8 (same size).
+  {
+    NodeProto node = MakeBitCastNode(DataType::UINT8);
+    Tensor x = Tensor::FromBool("", {4}, {1, 0, 1, 0});
+    Tensor y = k(x, DataType::UINT8);
+    Expect(node, {x}, {y}, "test_bitcast_bool_to_uint8", {opset}, "backend-test", registry);
   }
 }
 

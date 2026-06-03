@@ -110,7 +110,7 @@ def _pack_header(shape: Iterable[int], item_type: int, bits: int, data_length: i
 
 
 def write_nnef_tensor(path_or_file: str | os.PathLike[str] | BinaryIO, array: np.ndarray) -> None:
-    """Serialises ``array`` to a NNEF ``*.dat`` file.
+    """Serializes ``array`` to a NNEF ``*.dat`` file.
 
     Args:
         path_or_file: Destination path (``str``/:class:`os.PathLike`) or

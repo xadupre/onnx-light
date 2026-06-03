@@ -45,6 +45,14 @@ std::string MakeConstantOfShapeDoc(int since_version);
  */
 std::string MakeEyeLikeDoc(int since_version);
 
+/**
+ * Returns the documentation string for the Range operator. The
+ * documentation has been stable since opset 11.
+ *
+ * @return Documentation string for the Range operator.
+ */
+std::string MakeRangeDoc();
+
 } // namespace generator
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

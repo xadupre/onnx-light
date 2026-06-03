@@ -20,6 +20,7 @@ constexpr size_t kExpectedBernoulliSchemaCount = 2;
 constexpr size_t kExpectedConstantSchemaCount = 10;
 constexpr size_t kExpectedConstantOfShapeSchemaCount = 6;
 constexpr size_t kExpectedEyeLikeSchemaCount = 2;
+constexpr size_t kExpectedRangeSchemaCount = 1;
 
 static const onnx_op::LightOpSchema *
 FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
@@ -38,7 +39,8 @@ TEST(OnnxOpGeneratorRegistrationTest, ReturnsConstantSchemasWithoutShapeInferenc
       onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory("Constant");
 
   EXPECT_EQ(schemas.size(), kExpectedConstantSchemaCount + kExpectedConstantOfShapeSchemaCount +
-                                kExpectedEyeLikeSchemaCount + kExpectedBernoulliSchemaCount);
+                                kExpectedEyeLikeSchemaCount + kExpectedBernoulliSchemaCount +
+                                kExpectedRangeSchemaCount);
 
   const onnx_op::LightOpSchema *const constant_v25 = FindByVersion(constant_schemas, 25);
   const onnx_op::LightOpSchema *const constant_v24 = FindByVersion(constant_schemas, 24);
@@ -239,6 +241,40 @@ TEST(OnnxOpGeneratorRegistrationTest, ReturnsEyeLikeSchemas) {
   EXPECT_EQ(eye_like_v22->type_constraints()[0].allowed_type_strs.size(), 13u);
   EXPECT_EQ(eye_like_v22->type_constraints()[0].allowed_type_strs[8],
             onnx_op::TensorType::kBfloat16);
+}
+
+TEST(OnnxOpGeneratorRegistrationTest, ReturnsRangeSchemas) {
+  const std::vector<onnx_op::LightOpSchema> range_schemas =
+      onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory("Range");
+  ASSERT_EQ(range_schemas.size(), kExpectedRangeSchemaCount);
+
+  const onnx_op::LightOpSchema *const range_v11 = FindByVersion(range_schemas, 11);
+  ASSERT_NE(nullptr, range_v11);
+
+  EXPECT_EQ(range_v11->domain(), "ai.onnx");
+  ASSERT_EQ(range_v11->inputs().size(), 3u);
+  EXPECT_EQ(range_v11->inputs()[0].name, "start");
+  EXPECT_EQ(range_v11->inputs()[0].type, "T");
+  EXPECT_EQ(range_v11->inputs()[1].name, "limit");
+  EXPECT_EQ(range_v11->inputs()[1].type, "T");
+  EXPECT_EQ(range_v11->inputs()[2].name, "delta");
+  EXPECT_EQ(range_v11->inputs()[2].type, "T");
+
+  ASSERT_EQ(range_v11->outputs().size(), 1u);
+  EXPECT_EQ(range_v11->outputs()[0].name, "output");
+  EXPECT_EQ(range_v11->outputs()[0].type, "T");
+
+  ASSERT_EQ(range_v11->type_constraints().size(), 1u);
+  EXPECT_EQ(range_v11->type_constraints()[0].type_param_str, "T");
+  EXPECT_EQ(
+      range_v11->type_constraints()[0].allowed_type_strs,
+      (std::vector<onnx_op::TensorType>{onnx_op::TensorType::kFloat, onnx_op::TensorType::kDouble,
+                                        onnx_op::TensorType::kInt16, onnx_op::TensorType::kInt32,
+                                        onnx_op::TensorType::kInt64}));
+  EXPECT_EQ(range_v11->type_constraints()[0].description,
+            "Constrain input types to common numeric type tensors.");
+
+  EXPECT_EQ(range_v11->attributes().size(), 0u);
 }
 
 } // namespace Test

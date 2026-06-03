@@ -698,4 +698,108 @@ TEST(OnnxOptimShapeBernoulli, RejectsBadOpType) {
                std::invalid_argument);
 }
 
+namespace {
+
+NodeProto MakeRangeNode() {
+  NodeProto node;
+  node.set_op_type("Range");
+  node.add_input("start");
+  node.add_input("limit");
+  node.add_input("delta");
+  node.add_output("y");
+  return node;
+}
+
+onnx_optim::OptimTensor MakeScalar(onnx_optim::TensorType dtype) {
+  return onnx_optim::OptimTensor(nullptr, dtype, onnx_optim::OptimShape{});
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeRange, UnknownValuesProducesSymbolicDim) {
+  NodeProto node = MakeRangeNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("start", MakeScalar(onnx_optim::TensorType::kFloat));
+  ctx.Set("limit", MakeScalar(onnx_optim::TensorType::kFloat));
+  ctx.Set("delta", MakeScalar(onnx_optim::TensorType::kFloat));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ASSERT_TRUE(ctx.Has("y"));
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
+  ASSERT_EQ(ctx.Get("y").Shape().Rank(), 1u);
+  EXPECT_FALSE(ctx.Get("y").Shape()[0].IsInt());
+}
+
+TEST(OnnxOptimShapeRange, KnownIntegerValuesProducesConcreteDim) {
+  NodeProto node = MakeRangeNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor start = MakeScalar(onnx_optim::TensorType::kInt64);
+  onnx_optim::OptimTensor limit = MakeScalar(onnx_optim::TensorType::kInt64);
+  onnx_optim::OptimTensor delta = MakeScalar(onnx_optim::TensorType::kInt64);
+  start.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(3)});
+  limit.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(9)});
+  delta.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(3)});
+  ctx.Set("start", std::move(start));
+  ctx.Set("limit", std::move(limit));
+  ctx.Set("delta", std::move(delta));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ASSERT_TRUE(ctx.Has("y"));
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kInt64);
+  EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+}
+
+TEST(OnnxOptimShapeRange, NegativeDeltaProducesConcreteDim) {
+  NodeProto node = MakeRangeNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor start = MakeScalar(onnx_optim::TensorType::kInt32);
+  onnx_optim::OptimTensor limit = MakeScalar(onnx_optim::TensorType::kInt32);
+  onnx_optim::OptimTensor delta = MakeScalar(onnx_optim::TensorType::kInt32);
+  start.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(10)});
+  limit.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(6)});
+  delta.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(-3)});
+  ctx.Set("start", std::move(start));
+  ctx.Set("limit", std::move(limit));
+  ctx.Set("delta", std::move(delta));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ASSERT_TRUE(ctx.Has("y"));
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kInt32);
+  EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+}
+
+TEST(OnnxOptimShapeRange, EmptyOutputWhenStartEqualsLimit) {
+  NodeProto node = MakeRangeNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor start = MakeScalar(onnx_optim::TensorType::kInt64);
+  onnx_optim::OptimTensor limit = MakeScalar(onnx_optim::TensorType::kInt64);
+  onnx_optim::OptimTensor delta = MakeScalar(onnx_optim::TensorType::kInt64);
+  start.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(5)});
+  limit.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(5)});
+  delta.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+  ctx.Set("start", std::move(start));
+  ctx.Set("limit", std::move(limit));
+  ctx.Set("delta", std::move(delta));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ASSERT_TRUE(ctx.Has("y"));
+  EXPECT_EQ(ctx.Get("y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(static_cast<int64_t>(0))}));
+}
+
+TEST(OnnxOptimShapeRange, RejectsBadOpType) {
+  NodeProto node;
+  node.set_op_type("NotRange");
+  node.add_input("start");
+  node.add_input("limit");
+  node.add_input("delta");
+  node.add_output("y");
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("start", MakeScalar(onnx_optim::TensorType::kFloat));
+  ctx.Set("limit", MakeScalar(onnx_optim::TensorType::kFloat));
+  ctx.Set("delta", MakeScalar(onnx_optim::TensorType::kFloat));
+  EXPECT_THROW(onnx_optim::shapes::generator::ComputeShapeRange(ctx, node), std::invalid_argument);
+}
+
 } // namespace Test

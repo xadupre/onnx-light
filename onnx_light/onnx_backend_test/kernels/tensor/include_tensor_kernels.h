@@ -591,6 +591,31 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of the ONNX ``SpaceToDepth`` operator (since opset
+/// 1; type set extended in opset 13). Rearranges blocks of spatial data into
+/// depth — the inverse of ``DepthToSpace``. The input must be a 4-D tensor of
+/// shape ``(N, C, H, W)`` with ``H`` and ``W`` both divisible by
+/// ``blocksize``. The output has shape
+/// ``(N, C*blocksize*blocksize, H/blocksize, W/blocksize)``.
+///
+/// The reference implementation supports whole-byte tensor element types
+/// supported by :cpp:func:`ElementSize`.
+class SpaceToDepth : public KernelBase {
+public:
+  /// Attributes carried by the ONNX ``SpaceToDepth`` operator.
+  struct Attributes {
+    int64_t blocksize = 0;
+  };
+
+  using KernelBase::KernelBase;
+
+  Tensor operator()(const Tensor &input, const Attributes &attrs) const;
+  void operator()(const Tensor &input, const Attributes &attrs, Tensor &output) const;
+
+  /// Output shape differs from input shape in general.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Reference implementation of the (deprecated) ONNX ``Upsample`` operator
 /// (since opset 1 in the ``ai.onnx`` domain, last refreshed at opset 10 and
 /// replaced by ``Resize`` from opset 10 onwards).

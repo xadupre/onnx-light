@@ -344,7 +344,7 @@ offset_t AlignExternalDataStreaming(const std::string &src_onnx_path,
             : ((current_offset + alignment - 1) / alignment) * alignment;
     if (aligned_offset > current_offset) {
       static constexpr size_t kZeroBufSize = 4096;
-      static const std::array<char, kZeroBufSize> kZeros{}; // value-initialised → zero-filled
+      static const std::array<char, kZeroBufSize> kZeros{}; // value-initialized → zero-filled
       int64_t pad = aligned_offset - current_offset;
       while (pad > 0) {
         const std::streamsize to_write =

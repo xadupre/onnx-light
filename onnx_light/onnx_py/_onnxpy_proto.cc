@@ -782,10 +782,12 @@ memory allocations.
       },
       nb::arg("src_onnx_path"), nb::arg("dst_onnx_path"), nb::arg("dst_weights_path"),
       nb::arg("alignment") = 4096, nb::arg("chunk_size") = 4 * 1024 * 1024,
-      R"pbdoc(Rewrites an existing two-file ONNX model (``.onnx`` + external
-weights file(s)) into a new ``(dst_onnx_path, dst_weights_path)`` pair so that
-every tensor's offset inside the destination weights file is aligned to
+      R"pbdoc(Rewrites an existing two-file ONNX model (``.onnx`` + one or more
+external weights file(s)) into a new ``(dst_onnx_path, dst_weights_path)`` pair
+so that every tensor's offset inside the destination weights file is aligned to
 ``alignment`` bytes — without ever loading the full set of weights in memory.
+The destination always uses a single consolidated weights file even when the
+source spreads tensors across multiple ``external_data.location`` files.
 
 The source ``.onnx`` is parsed with ``skip_raw_data=True``, so only the
 initializer metadata (including ``external_data``) is read.  For each tensor

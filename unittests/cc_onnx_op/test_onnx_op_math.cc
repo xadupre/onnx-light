@@ -98,8 +98,26 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Einsum");
   const std::vector<onnx_op::LightOpSchema> topk_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("TopK");
+  const std::vector<onnx_op::LightOpSchema> swish_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Swish");
 
-  EXPECT_EQ(schemas.size(), 111u);
+  EXPECT_EQ(schemas.size(), 112u);
+
+  // Swish was introduced at v24 and has had a single schema since then.
+  ASSERT_EQ(swish_schemas.size(), 1u);
+  const onnx_op::LightOpSchema *const swish_v24 = FindByVersion(swish_schemas, 24);
+  ASSERT_NE(nullptr, swish_v24);
+  EXPECT_EQ(swish_v24->domain(), "ai.onnx");
+  EXPECT_EQ(swish_v24->since_version(), 24);
+  EXPECT_TRUE(swish_v24->has_function_implementation());
+  ASSERT_EQ(swish_v24->inputs().size(), 1u);
+  EXPECT_EQ(swish_v24->inputs()[0].name, "X");
+  ASSERT_EQ(swish_v24->outputs().size(), 1u);
+  EXPECT_EQ(swish_v24->outputs()[0].name, "Y");
+  ASSERT_EQ(swish_v24->attributes().size(), 1u);
+  EXPECT_EQ(swish_v24->attributes()[0].name, "alpha");
+  EXPECT_EQ(swish_v24->attributes()[0].type, onnx_op::AttributeType::FLOAT);
+  EXPECT_FALSE(swish_v24->attributes()[0].required);
 
   // Einsum was introduced at v12 and has had a single schema since then.
   ASSERT_EQ(einsum_schemas.size(), 1u);

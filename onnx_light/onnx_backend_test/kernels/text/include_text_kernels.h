@@ -177,6 +177,78 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of the ``TfIdfVectorizer`` operator
+/// (ai.onnx, since opset 9).
+///
+/// Extracts n-grams from a ``[C]``- or ``[N, C]``-shaped integer
+/// (``tensor(int32)`` or ``tensor(int64)``) or string
+/// (``tensor(string)``) input and produces a ``tensor(float)`` count
+/// (``"TF"``) / weight (``"IDF"`` / ``"TFIDF"``) vector with last
+/// dimension ``max(ngram_indexes) + 1``.
+///
+/// The kernel parameters mirror the operator attributes:
+///
+/// * ``mode`` &mdash; one of ``"TF"``, ``"IDF"`` or ``"TFIDF"``.
+/// * ``min_gram_length`` / ``max_gram_length`` &mdash; inclusive
+///   range of n-gram sizes to extract.
+/// * ``max_skip_count`` &mdash; maximum number of tokens to skip
+///   between consecutive elements of an n-gram (``skip_distance``
+///   ranges from 1 to ``max_skip_count + 1``).
+/// * ``ngram_counts`` &mdash; starting offsets of 1-grams, 2-grams,
+///   ... in the pool (CSR-style).
+/// * ``ngram_indexes`` &mdash; output coordinate of each pool entry
+///   (parallel to ``pool_*``).
+/// * ``pool_int64s`` or ``pool_strings`` &mdash; exactly one must be
+///   set; the type of the active pool must match the input dtype.
+/// * ``weights`` &mdash; optional per-output weight; defaults to all
+///   ones when ``IDF``/``TFIDF`` is selected and ``weights`` is
+///   empty.
+class TfIdfVectorizer : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Weighting criteria. Matches the ``mode`` attribute of the
+  /// ``TfIdfVectorizer`` operator.
+  enum class Mode { kTF, kIDF, kTFIDF };
+
+  /// Parses the string form of the ``mode`` attribute (``"TF"``,
+  /// ``"IDF"`` or ``"TFIDF"``). Throws ``std::invalid_argument`` for
+  /// any other value.
+  static Mode ParseMode(const std::string &value);
+
+  /// Computes the output shape of a TfIdfVectorizer node given the
+  /// input shape and the size of the ``ngram_indexes`` attribute.
+  /// Input rank must be 1 or 2.
+  static std::vector<int64_t> ComputeOutputShape(const std::vector<int64_t> &input_shape,
+                                                 int64_t output_size);
+
+  /// Allocating overload. ``pool_int64s`` must be non-empty when ``x``
+  /// is an integer tensor; ``pool_strings`` must be non-empty when
+  /// ``x`` is a string tensor. ``weights`` may be empty (treated as
+  /// all-ones for ``IDF`` / ``TFIDF``).
+  Tensor operator()(const Tensor &x, Mode mode, int64_t min_gram_length, int64_t max_gram_length,
+                    int64_t max_skip_count, const std::vector<int64_t> &ngram_counts,
+                    const std::vector<int64_t> &ngram_indexes,
+                    const std::vector<int64_t> &pool_int64s,
+                    const std::vector<std::string> &pool_strings,
+                    const std::vector<float> &weights) const;
+
+  /// In-place overload. ``output`` must already be a ``tensor(float)``
+  /// with the shape returned by :cpp:func:`ComputeOutputShape` and a
+  /// pre-sized ``data`` buffer.
+  void operator()(const Tensor &x, Mode mode, int64_t min_gram_length, int64_t max_gram_length,
+                  int64_t max_skip_count, const std::vector<int64_t> &ngram_counts,
+                  const std::vector<int64_t> &ngram_indexes,
+                  const std::vector<int64_t> &pool_int64s,
+                  const std::vector<std::string> &pool_strings, const std::vector<float> &weights,
+                  Tensor &output) const;
+
+  /// Output values depend on every input element and on the entire
+  /// pool; the output buffer cannot safely alias the input buffer
+  /// (different dtype / shape).
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

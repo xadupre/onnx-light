@@ -1057,5 +1057,26 @@ class TestPlotOnnxTime(ExtTestCase):
         self.assertNotIn("File size", output)
 
 
+class TestCpuTopology(ExtTestCase):
+    def test_get_cpu_topology_keys(self):
+        from onnx_light.doc import get_cpu_topology
+
+        topo = get_cpu_topology()
+        self.assertEqual(set(topo.keys()), {"logical", "physical_cores", "sockets"})
+        # logical processors must be a positive integer when available.
+        if topo["logical"] is not None:
+            self.assertIsInstance(topo["logical"], int)
+            self.assertGreater(topo["logical"], 0)
+        for key in ("physical_cores", "sockets"):
+            if topo[key] is not None:
+                self.assertIsInstance(topo[key], int)
+                self.assertGreater(topo[key], 0)
+        # If both are known, logical >= physical >= sockets.
+        if topo["logical"] is not None and topo["physical_cores"] is not None:
+            self.assertGreaterEqual(topo["logical"], topo["physical_cores"])
+        if topo["physical_cores"] is not None and topo["sockets"] is not None:
+            self.assertGreaterEqual(topo["physical_cores"], topo["sockets"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

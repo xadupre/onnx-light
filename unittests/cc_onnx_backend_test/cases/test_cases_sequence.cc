@@ -456,4 +456,45 @@ TEST(BackendTestCase, SequenceEmptyCasesAreRegistered) {
   EXPECT_EQ(dtype_attr.ref_i(), static_cast<int64_t>(TensorProto::INT64));
 }
 
+TEST(BackendTestCase, SplitToSequenceCasesAreRegistered) {
+  auto cases = CollectTestCases("SplitToSequence");
+  const TestCase *case1 = nullptr;
+  const TestCase *case2 = nullptr;
+  const TestCase *case_nokd = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_split_to_sequence_1") {
+      case1 = &c;
+    } else if (c.name == "test_cc_split_to_sequence_2") {
+      case2 = &c;
+    } else if (c.name == "test_cc_split_to_sequence_nokeepdims") {
+      case_nokd = &c;
+    }
+  }
+  ASSERT_NE(case1, nullptr);
+  ASSERT_NE(case2, nullptr);
+  ASSERT_NE(case_nokd, nullptr);
+
+  // All cases have a single SplitToSequence node and a sequence-typed output.
+  for (const TestCase *tc : {case1, case2, case_nokd}) {
+    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u) << tc->name;
+    EXPECT_EQ(graph.ref_node()[0].ref_op_type().as_string(), "SplitToSequence") << tc->name;
+    ASSERT_EQ(graph.ref_output().size(), 1u);
+    EXPECT_TRUE(graph.ref_output()[0].ref_type().has_sequence_type()) << tc->name;
+    ASSERT_EQ(tc->data_sets.size(), 1u);
+  }
+
+  // Case 1: input [3,6] + scalar split=2 → 3 chunks of [3,2] stacked to [3,3,2].
+  EXPECT_EQ(case1->data_sets[0].inputs.size(), 2u);
+  EXPECT_EQ(case1->data_sets[0].outputs[0].shape, (std::vector<int64_t>{3, 3, 2}));
+
+  // Case 2: input [4,6] + vector split=[2,2] → 2 chunks of [2,6] stacked to [2,2,6].
+  EXPECT_EQ(case2->data_sets[0].inputs.size(), 2u);
+  EXPECT_EQ(case2->data_sets[0].outputs[0].shape, (std::vector<int64_t>{2, 2, 6}));
+
+  // No-keepdims case: input [3,6], keepdims=0 → 6 chunks of [3] stacked to [6,3].
+  EXPECT_EQ(case_nokd->data_sets[0].inputs.size(), 1u);
+  EXPECT_EQ(case_nokd->data_sets[0].outputs[0].shape, (std::vector<int64_t>{6, 3}));
+}
+
 } // namespace Test

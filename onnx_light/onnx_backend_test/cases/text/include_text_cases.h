@@ -29,6 +29,9 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry);
 /// Registers the ``RegexFullMatch`` backend test node case(s).
 void RegisterRegexFullMatchCases(std::vector<TestCase> &registry);
 
+/// Registers the ``TfIdfVectorizer`` backend test node case(s).
+void RegisterTfIdfVectorizerCases(std::vector<TestCase> &registry);
+
 /// Collects all ``text`` op category backend test node cases by invoking
 /// every ``Register*Cases`` helper declared in this header.
 void CollectTextTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");

@@ -122,10 +122,14 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     ``dim0_offset < dim0_size`` ("Invalid dim0_offset of 0. Dimension 0
 #     is 0"). The reference backend still exercises the zero-trip-count
 #     case.
-#   * ``test_bitshift_right_uint16`` — ORT's CPU EP does not register a
-#     ``BitShift`` kernel for ``uint16`` ("Could not find an implementation
-#     for BitShift(11) node"); only ``uint8`` / ``uint32`` / ``uint64`` are
-#     registered. The reference backend still exercises the ``uint16`` case.
+#   * ``test_bitshift_right_uint16`` and ``test_bitshift_left_uint16`` — ORT's
+#     CPU EP does not register a ``BitShift`` kernel for ``uint16`` ("Could
+#     not find an implementation for BitShift(11) node"); only ``uint8`` /
+#     ``uint32`` / ``uint64`` are registered. The reference backend still
+#     exercises the ``uint16`` cases.
+#   * ``test_bitcast_*`` — ORT's CPU EP does not register a ``BitCast`` kernel
+#     ("Could not find an implementation for BitCast(26) node"). The reference
+#     backend still exercises these cases.
 #   * ``test_cc_dict_vectorizer_*`` and ``test_cc_cast_map_*`` — these models
 #     declare an ``ai.onnx.ml::DictVectorizer`` / ``ai.onnx.ml::CastMap``
 #     input typed as ``map(K, V)``. ORT loads the model with a map-typed
@@ -215,6 +219,8 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_lstm_batchwise$",
     r"^test_cc_gru_batchwise$",
     r"^test_bitshift_right_uint16$",
+    r"^test_bitshift_left_uint16$",
+    r"^test_bitcast_",
     r"^test_cc_top_k_uint64$",
     r"^test_cc_scan_zero_trip_count$",
     r"^test_cc_prelu_inf$",

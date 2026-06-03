@@ -86,10 +86,11 @@ that pattern:
 Python extension modules and proto duplication
 ----------------------------------------------
 
-The Python package ships three nanobind extension modules,
-``onnx_light.onnx_py._onnxpyproto``,
+The Python package ships four nanobind extension modules,
+``onnx_light.onnx_py._onnxpyprotoop``,
+``onnx_light.onnx_py._onnxpyprotolib``,
 ``onnx_light.onnx_py._onnxpyoptim`` and
-``onnx_light.onnx_py._onnxbackend``.  All three need access to the proto
+``onnx_light.onnx_py._onnxbackend``.  All four need access to the proto
 classes (``ModelProto``, ``NodeProto``, ``TensorProto``, ...) defined in
 ``onnx_light/onnx_proto``.  How do the extensions agree on a single
 ``nb::class_<ModelProto>`` registration so that values can flow between
@@ -119,18 +120,18 @@ single ``std::type_info`` instance.  Consequently
 extension, and nanobind's cross-module type registry resolves
 ``ModelProto`` references coming from ``_onnxpyoptim`` or
 ``_onnxbackend`` against the
-``nb::class_<ModelProto>`` that ``_onnxpyproto`` registered.  In
-practice, only ``_onnxpyproto`` declares
+``nb::class_<ModelProto>`` that ``_onnxpyprotoop`` registered.  In
+practice, only ``_onnxpyprotoop`` declares
 ``nb::class_<NodeProto>`` / ``nb::class_<ModelProto>`` / ...; the
-``_onnxpyoptim`` and ``_onnxbackend`` modules return proto values by
+``_onnxpyprotolib``, ``_onnxpyoptim`` and ``_onnxbackend`` modules return proto values by
 reference (for example
 ``TestCase.model``, see ``onnx_light/onnx_py/_onnxpy_backend_test.cc``)
 and let the shared registry produce a Python object backed by the same
 binding.  The package's ``onnx_light/onnx_py/_onnxpy.py`` shim imports
-``_onnxpyproto`` before ``_onnxpyoptim`` and ``_onnxbackend`` to
+``_onnxpyprotoop`` before ``_onnxpyprotolib``, ``_onnxpyoptim`` and ``_onnxbackend`` to
 guarantee that the
-``ModelProto`` binding exists by the time any ``_onnxpyoptim`` or
-``_onnxbackend`` accessor is used.
+``ModelProto`` binding exists by the time any ``_onnxpyprotolib``,
+``_onnxpyoptim`` or ``_onnxbackend`` accessor is used.
 
 See also
 --------

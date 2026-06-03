@@ -101,6 +101,64 @@ def get_processor_name() -> str:
     return platform.processor() or platform.machine() or "unknown"
 
 
+def get_cpu_topology() -> dict[str, int | None]:
+    """Returns CPU topology information.
+
+    The returned mapping contains:
+
+    * ``logical``: number of logical processors (threads) available, or ``None``
+      if it cannot be determined.
+    * ``physical_cores``: total number of physical cores across all sockets, or
+      ``None`` if it cannot be determined.
+    * ``sockets``: number of physical processors (sockets), or ``None`` if it
+      cannot be determined.
+
+    On Linux, ``/proc/cpuinfo`` is parsed to derive physical core and socket
+    counts.  On other platforms (or when ``/proc/cpuinfo`` is unavailable), only
+    the logical processor count from :func:`os.cpu_count` is reported.
+    """
+    logical: int | None = os.cpu_count()
+    physical_cores: int | None = None
+    sockets: int | None = None
+    try:
+        with open("/proc/cpuinfo", "r", encoding="utf-8") as f:
+            # Map physical socket id -> cores per socket reported by the kernel.
+            socket_cores: dict[str, int] = {}
+            current_socket: str | None = None
+            current_cores: int | None = None
+            logical_seen = 0
+            for raw in f:
+                line = raw.strip()
+                if not line:
+                    if current_socket is not None and current_cores is not None:
+                        socket_cores.setdefault(current_socket, current_cores)
+                    current_socket = None
+                    current_cores = None
+                    continue
+                key, _, value = line.partition(":")
+                key = key.strip()
+                value = value.strip()
+                if key == "processor":
+                    logical_seen += 1
+                elif key == "physical id":
+                    current_socket = value
+                elif key == "cpu cores":
+                    try:
+                        current_cores = int(value)
+                    except ValueError:
+                        current_cores = None
+            if current_socket is not None and current_cores is not None:
+                socket_cores.setdefault(current_socket, current_cores)
+            if logical_seen > 0:
+                logical = logical_seen
+            if socket_cores:
+                sockets = len(socket_cores)
+                physical_cores = sum(socket_cores.values())
+    except OSError:
+        pass
+    return {"logical": logical, "physical_cores": physical_cores, "sockets": sockets}
+
+
 def get_total_memory_gb() -> float | None:
     """Returns total system memory in GB, or ``None`` if it cannot be determined."""
     try:

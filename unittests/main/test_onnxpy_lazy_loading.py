@@ -39,7 +39,7 @@ def test_importing_shim_does_not_load_extensions() -> None:
 
 
 def test_proto_only_access_does_not_load_optim_or_backend() -> None:
-    """Looking up a proto attribute imports ``_onnxpyproto`` only."""
+    """Looking up a proto attribute imports ``_onnxpyprotoop`` only."""
     out = _run("""
         import sys
         from onnx_light.onnx_py import _onnxpy
@@ -53,9 +53,10 @@ def test_proto_only_access_does_not_load_optim_or_backend() -> None:
             or n.startswith("onnx_light.onnx_py._onnxbackend")
         )
         # Only the proto extension (and its submodules) should be loaded.
+        assert "_onnxpyprotolib" not in loaded, loaded
         assert "_onnxpyoptim" not in loaded, loaded
         assert "_onnxbackend" not in loaded, loaded
-        assert "_onnxpyproto" in loaded, loaded
+        assert "_onnxpyprotoop" in loaded, loaded
         print("ok")
         """)
     assert out.strip() == "ok"

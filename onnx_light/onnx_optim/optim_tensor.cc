@@ -19,6 +19,7 @@
 
 #include <sstream>
 #include <stdexcept>
+#include <string>
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
 
@@ -448,11 +449,25 @@ std::string OptimTensor::ToString() const {
   if (value_as_shape_.has_value()) {
     oss << ", value_as_shape=" << value_as_shape_->ToString();
   }
+  if (min_.has_value()) {
+    oss << ", min=" << *min_;
+  }
+  if (max_.has_value()) {
+    oss << ", max=" << *max_;
+  }
   if (data_ != nullptr) {
     oss << ", data=" << data_;
   }
   oss << ")";
   return oss.str();
+}
+
+void OptimTensor::SetMinMax(double min, double max) {
+  if (min > max) {
+    throw std::invalid_argument("OptimTensor::SetMinMax requires min <= max");
+  }
+  min_ = min;
+  max_ = max;
 }
 
 OptimCmpResult OptimTensor::Cmp(const OptimTensor &other) const noexcept {
@@ -508,6 +523,46 @@ OptimCmpResult OptimTensor::Cmp(const OptimTensor &other) const noexcept {
     rhs_more = true;
   }
 
+  // Min bound: a known bound is more precise than an absent one;
+  // between two known bounds, the higher value is the tighter (more
+  // precise) lower bound.
+  if (min_.has_value() && other.min_.has_value()) {
+    if (*min_ > *other.min_) {
+      lhs_more = true;
+    } else if (*min_ < *other.min_) {
+      rhs_more = true;
+    }
+  } else if (min_.has_value()) {
+    lhs_more = true;
+  } else if (other.min_.has_value()) {
+    rhs_more = true;
+  }
+
+  // Max bound: a known bound is more precise than an absent one;
+  // between two known bounds, the lower value is the tighter (more
+  // precise) upper bound.
+  if (max_.has_value() && other.max_.has_value()) {
+    if (*max_ < *other.max_) {
+      lhs_more = true;
+    } else if (*max_ > *other.max_) {
+      rhs_more = true;
+    }
+  } else if (max_.has_value()) {
+    lhs_more = true;
+  } else if (other.max_.has_value()) {
+    rhs_more = true;
+  }
+
+  // Cross-side interval disjointedness: when both sides expose enough
+  // bounds to prove the intervals do not overlap, the descriptors
+  // contradict each other.
+  if (min_.has_value() && other.max_.has_value() && *min_ > *other.max_) {
+    conflict = true;
+  }
+  if (other.min_.has_value() && max_.has_value() && *other.min_ > *max_) {
+    conflict = true;
+  }
+
   // Data-pointer presence. Two distinct non-null pointers carry no
   // precision signal because the contents are not inspected.
   if (data_ != nullptr && other.data_ == nullptr) {
@@ -550,15 +605,74 @@ OptimShape ShapeFromTensorShapeProto(const TensorShapeProto &sp) {
   return shape;
 }
 
-// Returns the index of the metadata entry whose key matches
-// kValueInfoDeviceMetadataKey, or -1 when none is present.
-int FindDeviceMetadataIndex(const ValueInfoProto &vi) {
+// Returns the index of the metadata entry whose key matches ``key``,
+// or -1 when none is present.
+int FindMetadataIndex(const ValueInfoProto &vi, const char *key) {
   for (int i = 0; i < vi.metadata_props().size(); ++i) {
-    if (vi.metadata_props()[i].key().as_string() == kValueInfoDeviceMetadataKey) {
+    if (vi.metadata_props()[i].key().as_string() == key) {
       return i;
     }
   }
   return -1;
+}
+
+int FindDeviceMetadataIndex(const ValueInfoProto &vi) {
+  return FindMetadataIndex(vi, kValueInfoDeviceMetadataKey);
+}
+
+// Removes the metadata entry at ``idx`` from ``vi`` in place using a
+// swap-and-pop. ``idx`` must reference a valid entry.
+void RemoveMetadataAt(ValueInfoProto &vi, int idx) {
+  std::vector<StringStringEntryProto> &storage = vi.metadata_props().mutable_values();
+  const std::size_t last = storage.size() - 1;
+  const std::size_t i = static_cast<std::size_t>(idx);
+  if (i != last) {
+    const std::string key = storage[last].key().as_string();
+    const std::string value = storage[last].value().as_string();
+    storage[i].set_key(key);
+    storage[i].set_value(value);
+  }
+  storage.pop_back();
+}
+
+// Writes/updates/removes a numeric metadata entry on ``vi``: when
+// ``value`` is present, the entry keyed by ``key`` is updated in place
+// or appended; when ``value`` is absent any pre-existing entry is
+// removed. Numeric values are serialised with ``std::to_string`` which
+// is locale-independent and round-trips through ``std::stod``.
+void SetOrRemoveNumericMetadata(ValueInfoProto &vi, const char *key,
+                                const std::optional<double> &value) {
+  const int idx = FindMetadataIndex(vi, key);
+  if (value.has_value()) {
+    StringStringEntryProto *entry = idx >= 0
+                                        ? vi.mutable_metadata_props(static_cast<std::size_t>(idx))
+                                        : vi.add_metadata_props();
+    entry->set_key(key);
+    entry->set_value(std::to_string(*value));
+  } else if (idx >= 0) {
+    RemoveMetadataAt(vi, idx);
+  }
+}
+
+// Reads an ``std::optional<double>`` from the metadata entry keyed by
+// ``key`` on ``vi``. Returns an absent optional when the entry is
+// missing or unparsable.
+std::optional<double> ReadNumericMetadata(const ValueInfoProto &vi, const char *key) {
+  const int idx = FindMetadataIndex(vi, key);
+  if (idx < 0) {
+    return std::nullopt;
+  }
+  try {
+    std::size_t consumed = 0;
+    const std::string value = vi.metadata_props()[idx].value().as_string();
+    const double parsed = std::stod(value, &consumed);
+    if (consumed != value.size()) {
+      return std::nullopt;
+    }
+    return parsed;
+  } catch (const std::exception &) {
+    return std::nullopt;
+  }
 }
 
 } // namespace
@@ -580,6 +694,14 @@ bool OptimTensorFromValueInfo(const ValueInfoProto &vi, OptimTensor &out) {
     if (device != Device::kUndefined) {
       out.SetDevice(device);
     }
+  }
+  const std::optional<double> min_v = ReadNumericMetadata(vi, kValueInfoMinMetadataKey);
+  if (min_v.has_value()) {
+    out.SetMin(*min_v);
+  }
+  const std::optional<double> max_v = ReadNumericMetadata(vi, kValueInfoMaxMetadataKey);
+  if (max_v.has_value()) {
+    out.SetMax(*max_v);
   }
   return true;
 }
@@ -617,22 +739,16 @@ bool OptimTensorToValueInfo(const OptimTensor &tensor, ValueInfoProto &vi) {
     entry->set_key(kValueInfoDeviceMetadataKey);
     entry->set_value(DeviceName(tensor.GetDevice()));
   } else if (idx >= 0) {
-    // Remove the stale device entry in place. ``RepeatedField`` has no
-    // ``erase`` helper, so copy the last entry over the slot being
-    // removed (when it isn't the last) and shrink by one.
-    std::vector<StringStringEntryProto> &storage = vi.metadata_props().mutable_values();
-    const std::size_t last = storage.size() - 1;
-    const std::size_t i = static_cast<std::size_t>(idx);
-    if (i != last) {
-      // Read-then-write via local strings to avoid holding two live
-      // references into the vector across the assignment.
-      const std::string key = storage[last].key().as_string();
-      const std::string value = storage[last].value().as_string();
-      storage[i].set_key(key);
-      storage[i].set_value(value);
-    }
-    storage.pop_back();
+    RemoveMetadataAt(vi, idx);
   }
+  // Round-trip the optional ``min``/``max`` bounds the same way. An
+  // absent bound removes the corresponding metadata entry (if any).
+  SetOrRemoveNumericMetadata(vi, kValueInfoMinMetadataKey,
+                             tensor.HasMin() ? std::optional<double>(tensor.Min())
+                                             : std::optional<double>());
+  SetOrRemoveNumericMetadata(vi, kValueInfoMaxMetadataKey,
+                             tensor.HasMax() ? std::optional<double>(tensor.Max())
+                                             : std::optional<double>());
   return true;
 }
 

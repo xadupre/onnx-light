@@ -369,6 +369,34 @@ is applied to the tensor elementwise.
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildSwishSchemas() {
+  static constexpr const char *kSwishDoc = R"DOC(
+Swish function takes one input data (Tensor<T>) and produces one output data (Tensor<T>) of the same shape,
+where $Swish(x) = x * sigmoid(alpha * x)$.
+)DOC";
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(1);
+  schemas.push_back(LightOpSchema(
+      "Swish", kOnnxDomain, 24, kSwishDoc,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T",
+           {TensorType::kFloat16, TensorType::kFloat, TensorType::kBfloat16, TensorType::kDouble},
+           "Constrain input and output types to float tensors."},
+      },
+      {
+          {"alpha", "Coefficient to multiply with input before sigmoid.", AttributeType::FLOAT,
+           /*required=*/false, 1.0},
+      },
+      /*has_function_implementation=*/true));
+  return schemas;
+}
+
 std::vector<LightOpSchema> BuildSqrtSchemas() {
   static constexpr const char *kSqrtDoc = R"DOC(
 Square root takes one input data (Tensor<T>) and produces one output data
@@ -1531,6 +1559,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Sqrt", [] { return BuildSqrtSchemas(); }},
       {"Sub", [] { return BuildElementwiseMathSchemaForVersion("Sub"); }},
       {"Sum", [] { return BuildSumSchemas(); }},
+      {"Swish", [] { return BuildSwishSchemas(); }},
       {"Tan", [] { return BuildUnaryFloatMathSchemas("Tan", 22, 7); }},
       {"Tanh", [] { return BuildTanhSchemas(); }},
       {"ThresholdedRelu", [] { return BuildThresholdedReluSchemas(); }},

@@ -289,6 +289,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          math::ComputeShapeSum(ctx, node);
        }},
+      {"ai.onnx:Swish",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeSwish(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:Tan",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
@@ -709,6 +714,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          sequence::ComputeShapeSequenceMap(ctx, node);
        }},
+      {"ai.onnx:SplitToSequence",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         sequence::ComputeShapeSplitToSequence(ctx, node);
+       }},
       {"ai.onnx:ConcatFromSequence",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
@@ -744,6 +754,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
          text::ComputeShapeRegexFullMatch(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:TfIdfVectorizer",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         text::ComputeShapeTfIdfVectorizer(ctx, node, node.input(0).as_string().c_str());
        }},
       {"ai.onnx.ml:Binarizer",
        [](ShapesContext &ctx, const NodeProto &node) {

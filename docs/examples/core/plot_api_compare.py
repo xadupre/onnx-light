@@ -27,6 +27,10 @@ lists:
 It also compares the *top-level* public functions of both packages
 (``onnx.load`` / ``onnx.save`` vs ``onnx_light.onnx.load`` /
 ``onnx_light.onnx.save``).
+
+Finally, it lists the ONNX node-level backend tests (exposed by
+:mod:`onnx.backend.test`) that do not yet have a counterpart in
+:mod:`onnx_light.backend.test`.
 """
 
 from __future__ import annotations
@@ -142,3 +146,57 @@ print(f"  total common functions     : {total_common}")
 print(f"  total missing in onnx_light: {total_missing}")
 print(f"  total extra in onnx_light  : {total_extra}")
 print(f"  total signature mismatches : {total_diffs}")
+
+
+#####################################
+# Backend test differences
+# ++++++++++++++++++++++++
+#
+# ``onnx.backend.test`` exposes one node-level test case per operator
+# scenario.  ``onnx_light`` reimplements the same backend test
+# infrastructure under :mod:`onnx_light.backend.test`.  This section
+# lists the ONNX node-level backend tests that do **not** yet have a
+# counterpart in :mod:`onnx_light` (i.e. there is no ``onnx_light``
+# backend test whose name contains the stripped ONNX test name).
+
+import onnx.backend.base  # noqa: E402
+from onnx.backend.test import BackendTest  # noqa: E402
+
+from onnx_light.backend.test.case.base import collect_test_case  # noqa: E402
+
+
+class _DummyBackend(onnx.backend.base.Backend):
+    @classmethod
+    def supports_device(cls, device):
+        return True
+
+
+def _onnx_node_cpu_test_names() -> list[str]:
+    """Returns all ONNX node-level backend test method names ending in ``_cpu``."""
+    bt = BackendTest(_DummyBackend, "dummy")
+    cls = bt.test_cases["OnnxBackendNodeModelTest"]
+    return sorted(
+        m
+        for m in dir(cls)
+        if m.startswith("test_") and m.endswith("_cpu") and callable(getattr(cls, m))
+    )
+
+
+_light_names = set(collect_test_case().keys())
+_onnx_tests = _onnx_node_cpu_test_names()
+
+_missing_in_onnxl: list[str] = []
+for _method_name in _onnx_tests:
+    _stripped = _method_name[len("test_") : -len("_cpu")]
+    if not any(_stripped in _light_name for _light_name in _light_names):
+        _missing_in_onnxl.append(_stripped)
+
+print()
+print("=== backend tests ===")
+print(f"  ONNX node-level backend tests       : {len(_onnx_tests)}")
+print(f"  onnx_light backend test cases       : {len(_light_names)}")
+print(f"  ONNX tests missing in onnx_light    : {len(_missing_in_onnxl)}")
+if _missing_in_onnxl:
+    print("  - ONNX backend tests without an onnx_light counterpart:")
+    for _name in _missing_in_onnxl:
+        print(f"      * {_name}")

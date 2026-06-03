@@ -21,6 +21,9 @@
 
 [Documentation](https://sdpython.github.io/doc/onnx-light/dev/index.html)
 
+See also the [ONNX roadmap](https://github.com/onnx/onnx/blob/main/ROADMAP.md)
+for the upstream project's direction and priorities.
+
 ## onnx without protobuf
 
 - **Files larger than 2 GB** – The standard `onnx` package relies on protobuf,

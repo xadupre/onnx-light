@@ -177,6 +177,10 @@ Load a model with parallel tensor parsing:
 
 Source code: `https://github.com/xadupre/onnx-light <https://github.com/xadupre/onnx-light>`_
 
+See also the `ONNX roadmap
+<https://github.com/onnx/onnx/blob/main/ROADMAP.md>`_ for the upstream
+project's direction and priorities.
+
 .. toctree::
     :maxdepth: 1
     :caption: Contents

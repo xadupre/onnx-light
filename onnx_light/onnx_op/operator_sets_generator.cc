@@ -337,6 +337,156 @@ LightOpSchema MakeEyeLikeSchema(int since_version) {
       });
 }
 
+// Output type constraint sets for the four ONNX Random* operators. v22
+// promoted the constraint to ``all_float_types_ir4`` (adds ``bfloat16``);
+// v1 used the legacy ``float16, float, double`` triple.
+std::vector<TensorType> RandomFloatTypes(int since_version) {
+  switch (since_version) {
+  case 22:
+    return {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+  case 1:
+    return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+  default:
+    throw SchemaError("Unsupported Random* since_version: " + std::to_string(since_version));
+  }
+}
+
+// Input type constraint for the *Like variants. v22 promoted T1 to
+// ``all_tensor_types_ir4``; v1 used ``all_tensor_types``.
+std::vector<TensorType> RandomLikeT1Types(int since_version) {
+  switch (since_version) {
+  case 22:
+    return {
+        TensorType::kUint8,      TensorType::kUint16, TensorType::kUint32,
+        TensorType::kUint64,     TensorType::kInt8,   TensorType::kInt16,
+        TensorType::kInt32,      TensorType::kInt64,  TensorType::kBfloat16,
+        TensorType::kFloat16,    TensorType::kFloat,  TensorType::kDouble,
+        TensorType::kString,     TensorType::kBool,   TensorType::kComplex64,
+        TensorType::kComplex128,
+    };
+  case 1:
+    return {
+        TensorType::kUint8,   TensorType::kUint16,    TensorType::kUint32,     TensorType::kUint64,
+        TensorType::kInt8,    TensorType::kInt16,     TensorType::kInt32,      TensorType::kInt64,
+        TensorType::kFloat16, TensorType::kFloat,     TensorType::kDouble,     TensorType::kString,
+        TensorType::kBool,    TensorType::kComplex64, TensorType::kComplex128,
+    };
+  default:
+    throw SchemaError("Unsupported Random*Like since_version: " + std::to_string(since_version));
+  }
+}
+
+LightOpSchema MakeRandomNormalSchema(int since_version) {
+  return LightOpSchema(
+      "RandomNormal", kOnnxDomain, since_version, MakeRandomNormalDoc(), {},
+      {
+          {"output", "Output tensor of random values drawn from normal distribution", "T"},
+      },
+      {
+          {"T", RandomFloatTypes(since_version), "Constrain output types to float tensors."},
+      },
+      {
+          {"mean", "The mean of the normal distribution.", AttributeType::FLOAT,
+           /*required=*/false, 0.0},
+          {"scale", "The standard deviation of the normal distribution.", AttributeType::FLOAT,
+           /*required=*/false, 1.0},
+          {"seed",
+           "(Optional) Seed to the random generator, if not specified we will auto generate one.",
+           AttributeType::FLOAT, /*required=*/false, std::monostate{}},
+          {"dtype",
+           "The data type for the elements of the output tensor. Default is TensorProto::FLOAT.",
+           AttributeType::INT, /*required=*/false, static_cast<int64_t>(1)},
+          {"shape", "The shape of the output tensor.", AttributeType::INTS, /*required=*/true,
+           std::monostate{}},
+      });
+}
+
+LightOpSchema MakeRandomUniformSchema(int since_version) {
+  return LightOpSchema(
+      "RandomUniform", kOnnxDomain, since_version, MakeRandomUniformDoc(), {},
+      {
+          {"output", "Output tensor of random values drawn from uniform distribution", "T"},
+      },
+      {
+          {"T", RandomFloatTypes(since_version), "Constrain output types to float tensors."},
+      },
+      {
+          {"low", "Lower boundary of the output values.", AttributeType::FLOAT,
+           /*required=*/false, 0.0},
+          {"high", "Upper boundary of the output values.", AttributeType::FLOAT,
+           /*required=*/false, 1.0},
+          {"seed",
+           "(Optional) Seed to the random generator, if not specified we will auto generate one.",
+           AttributeType::FLOAT, /*required=*/false, std::monostate{}},
+          {"dtype",
+           "The data type for the elements of the output tensor. If not specified, default is "
+           "TensorProto::FLOAT.",
+           AttributeType::INT, /*required=*/false, static_cast<int64_t>(1)},
+          {"shape", "The shape of the output tensor.", AttributeType::INTS, /*required=*/true,
+           std::monostate{}},
+      });
+}
+
+LightOpSchema MakeRandomNormalLikeSchema(int since_version) {
+  return LightOpSchema(
+      "RandomNormalLike", kOnnxDomain, since_version, MakeRandomNormalLikeDoc(),
+      {
+          {"input", "Input tensor to copy shape and optionally type information from.", "T1"},
+      },
+      {
+          {"output", "Output tensor of random values drawn from normal distribution", "T2"},
+      },
+      {
+          {"T1", RandomLikeT1Types(since_version),
+           "Constrain to any tensor type. If the dtype attribute is not provided this must be a "
+           "valid output type."},
+          {"T2", RandomFloatTypes(since_version), "Constrain output types to float tensors."},
+      },
+      {
+          {"mean", "The mean of the normal distribution.", AttributeType::FLOAT,
+           /*required=*/false, 0.0},
+          {"scale", "The standard deviation of the normal distribution.", AttributeType::FLOAT,
+           /*required=*/false, 1.0},
+          {"seed",
+           "(Optional) Seed to the random generator, if not specified we will auto generate one.",
+           AttributeType::FLOAT, /*required=*/false, std::monostate{}},
+          {"dtype",
+           "(Optional) The data type for the elements of the output tensor, if not specified, "
+           "we will use the data type of the input tensor.",
+           AttributeType::INT, /*required=*/false, std::monostate{}},
+      });
+}
+
+LightOpSchema MakeRandomUniformLikeSchema(int since_version) {
+  return LightOpSchema(
+      "RandomUniformLike", kOnnxDomain, since_version, MakeRandomUniformLikeDoc(),
+      {
+          {"input", "Input tensor to copy shape and optionally type information from.", "T1"},
+      },
+      {
+          {"output", "Output tensor of random values drawn from uniform distribution", "T2"},
+      },
+      {
+          {"T1", RandomLikeT1Types(since_version),
+           "Constrain to any tensor type. If the dtype attribute is not provided this must be a "
+           "valid output type."},
+          {"T2", RandomFloatTypes(since_version), "Constrain output types to float tensors."},
+      },
+      {
+          {"low", "Lower boundary of the output values.", AttributeType::FLOAT,
+           /*required=*/false, 0.0},
+          {"high", "Upper boundary of the output values.", AttributeType::FLOAT,
+           /*required=*/false, 1.0},
+          {"seed",
+           "(Optional) Seed to the random generator, if not specified we will auto generate one.",
+           AttributeType::FLOAT, /*required=*/false, std::monostate{}},
+          {"dtype",
+           "(Optional) The data type for the elements of the output tensor, if not specified, "
+           "we will use the data type of the input tensor.",
+           AttributeType::INT, /*required=*/false, std::monostate{}},
+      });
+}
+
 } // namespace
 
 std::vector<LightOpSchema> GetAllOnnxOpGeneratorSchemasWithHistory(const std::string &op_type,
@@ -371,6 +521,34 @@ std::vector<LightOpSchema> GetAllOnnxOpGeneratorSchemasWithHistory(const std::st
          return std::vector<LightOpSchema>{
              MakeEyeLikeSchema(22),
              MakeEyeLikeSchema(9),
+         };
+       }},
+      {"RandomNormal",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeRandomNormalSchema(22),
+             MakeRandomNormalSchema(1),
+         };
+       }},
+      {"RandomNormalLike",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeRandomNormalLikeSchema(22),
+             MakeRandomNormalLikeSchema(1),
+         };
+       }},
+      {"RandomUniform",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeRandomUniformSchema(22),
+             MakeRandomUniformSchema(1),
+         };
+       }},
+      {"RandomUniformLike",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeRandomUniformLikeSchema(22),
+             MakeRandomUniformLikeSchema(1),
          };
        }},
   };

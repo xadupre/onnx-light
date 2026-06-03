@@ -20,6 +20,10 @@ constexpr size_t kExpectedBernoulliSchemaCount = 2;
 constexpr size_t kExpectedConstantSchemaCount = 10;
 constexpr size_t kExpectedConstantOfShapeSchemaCount = 6;
 constexpr size_t kExpectedEyeLikeSchemaCount = 2;
+constexpr size_t kExpectedRandomNormalSchemaCount = 2;
+constexpr size_t kExpectedRandomNormalLikeSchemaCount = 2;
+constexpr size_t kExpectedRandomUniformSchemaCount = 2;
+constexpr size_t kExpectedRandomUniformLikeSchemaCount = 2;
 
 static const onnx_op::LightOpSchema *
 FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
@@ -37,8 +41,11 @@ TEST(OnnxOpGeneratorRegistrationTest, ReturnsConstantSchemasWithoutShapeInferenc
   const std::vector<onnx_op::LightOpSchema> constant_schemas =
       onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory("Constant");
 
-  EXPECT_EQ(schemas.size(), kExpectedConstantSchemaCount + kExpectedConstantOfShapeSchemaCount +
-                                kExpectedEyeLikeSchemaCount + kExpectedBernoulliSchemaCount);
+  EXPECT_EQ(schemas.size(),
+            kExpectedConstantSchemaCount + kExpectedConstantOfShapeSchemaCount +
+                kExpectedEyeLikeSchemaCount + kExpectedBernoulliSchemaCount +
+                kExpectedRandomNormalSchemaCount + kExpectedRandomNormalLikeSchemaCount +
+                kExpectedRandomUniformSchemaCount + kExpectedRandomUniformLikeSchemaCount);
 
   const onnx_op::LightOpSchema *const constant_v25 = FindByVersion(constant_schemas, 25);
   const onnx_op::LightOpSchema *const constant_v24 = FindByVersion(constant_schemas, 24);
@@ -239,6 +246,113 @@ TEST(OnnxOpGeneratorRegistrationTest, ReturnsEyeLikeSchemas) {
   EXPECT_EQ(eye_like_v22->type_constraints()[0].allowed_type_strs.size(), 13u);
   EXPECT_EQ(eye_like_v22->type_constraints()[0].allowed_type_strs[8],
             onnx_op::TensorType::kBfloat16);
+}
+
+namespace {
+
+// Common per-version invariants for the four Random* schemas.
+void CheckRandomSchemaInvariants(const onnx_op::LightOpSchema *schema, bool is_like,
+                                 size_t expected_attr_count) {
+  ASSERT_NE(nullptr, schema);
+  EXPECT_EQ(schema->domain(), "ai.onnx");
+  ASSERT_EQ(schema->outputs().size(), 1u);
+  EXPECT_EQ(schema->outputs()[0].name, "output");
+  if (is_like) {
+    ASSERT_EQ(schema->inputs().size(), 1u);
+    EXPECT_EQ(schema->inputs()[0].name, "input");
+    EXPECT_EQ(schema->inputs()[0].type, "T1");
+    EXPECT_EQ(schema->outputs()[0].type, "T2");
+    ASSERT_EQ(schema->type_constraints().size(), 2u);
+    EXPECT_EQ(schema->type_constraints()[0].type_param_str, "T1");
+    EXPECT_EQ(schema->type_constraints()[1].type_param_str, "T2");
+  } else {
+    EXPECT_EQ(schema->inputs().size(), 0u);
+    EXPECT_EQ(schema->outputs()[0].type, "T");
+    ASSERT_EQ(schema->type_constraints().size(), 1u);
+    EXPECT_EQ(schema->type_constraints()[0].type_param_str, "T");
+  }
+  ASSERT_EQ(schema->attributes().size(), expected_attr_count);
+}
+
+} // namespace
+
+TEST(OnnxOpGeneratorRegistrationTest, ReturnsRandomNormalSchemas) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory("RandomNormal");
+  ASSERT_EQ(schemas.size(), kExpectedRandomNormalSchemaCount);
+  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+  CheckRandomSchemaInvariants(v22, /*is_like=*/false, /*expected_attr_count=*/5);
+  CheckRandomSchemaInvariants(v1, /*is_like=*/false, /*expected_attr_count=*/5);
+
+  // v22 adds bfloat16 to T.
+  EXPECT_EQ(v1->type_constraints()[0].allowed_type_strs.size(), 3u);
+  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs.size(), 4u);
+  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kBfloat16);
+
+  // Attribute order: mean, scale, seed, dtype, shape.
+  EXPECT_EQ(v22->attributes()[0].name, "mean");
+  EXPECT_EQ(v22->attributes()[0].type, onnx_op::AttributeType::FLOAT);
+  EXPECT_EQ(v22->attributes()[1].name, "scale");
+  EXPECT_EQ(v22->attributes()[2].name, "seed");
+  EXPECT_EQ(v22->attributes()[3].name, "dtype");
+  EXPECT_EQ(v22->attributes()[4].name, "shape");
+  EXPECT_EQ(v22->attributes()[4].type, onnx_op::AttributeType::INTS);
+  EXPECT_TRUE(v22->attributes()[4].required);
+}
+
+TEST(OnnxOpGeneratorRegistrationTest, ReturnsRandomUniformSchemas) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory("RandomUniform");
+  ASSERT_EQ(schemas.size(), kExpectedRandomUniformSchemaCount);
+  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+  CheckRandomSchemaInvariants(v22, /*is_like=*/false, /*expected_attr_count=*/5);
+  CheckRandomSchemaInvariants(v1, /*is_like=*/false, /*expected_attr_count=*/5);
+
+  EXPECT_EQ(v22->attributes()[0].name, "low");
+  EXPECT_EQ(v22->attributes()[1].name, "high");
+  EXPECT_EQ(v22->attributes()[2].name, "seed");
+  EXPECT_EQ(v22->attributes()[3].name, "dtype");
+  EXPECT_EQ(v22->attributes()[4].name, "shape");
+  EXPECT_TRUE(v22->attributes()[4].required);
+}
+
+TEST(OnnxOpGeneratorRegistrationTest, ReturnsRandomNormalLikeSchemas) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory("RandomNormalLike");
+  ASSERT_EQ(schemas.size(), kExpectedRandomNormalLikeSchemaCount);
+  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+  CheckRandomSchemaInvariants(v22, /*is_like=*/true, /*expected_attr_count=*/4);
+  CheckRandomSchemaInvariants(v1, /*is_like=*/true, /*expected_attr_count=*/4);
+
+  // v22 adds bfloat16 to T1 and T2.
+  EXPECT_EQ(v1->type_constraints()[0].allowed_type_strs.size(), 15u);
+  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs.size(), 16u);
+  EXPECT_EQ(v1->type_constraints()[1].allowed_type_strs.size(), 3u);
+  EXPECT_EQ(v22->type_constraints()[1].allowed_type_strs.size(), 4u);
+
+  EXPECT_EQ(v22->attributes()[0].name, "mean");
+  EXPECT_EQ(v22->attributes()[1].name, "scale");
+  EXPECT_EQ(v22->attributes()[2].name, "seed");
+  EXPECT_EQ(v22->attributes()[3].name, "dtype");
+  EXPECT_FALSE(v22->attributes()[3].required);
+}
+
+TEST(OnnxOpGeneratorRegistrationTest, ReturnsRandomUniformLikeSchemas) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory("RandomUniformLike");
+  ASSERT_EQ(schemas.size(), kExpectedRandomUniformLikeSchemaCount);
+  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+  CheckRandomSchemaInvariants(v22, /*is_like=*/true, /*expected_attr_count=*/4);
+  CheckRandomSchemaInvariants(v1, /*is_like=*/true, /*expected_attr_count=*/4);
+
+  EXPECT_EQ(v22->attributes()[0].name, "low");
+  EXPECT_EQ(v22->attributes()[1].name, "high");
+  EXPECT_EQ(v22->attributes()[2].name, "seed");
+  EXPECT_EQ(v22->attributes()[3].name, "dtype");
 }
 
 } // namespace Test

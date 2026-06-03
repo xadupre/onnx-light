@@ -698,4 +698,114 @@ TEST(OnnxOptimShapeBernoulli, RejectsBadOpType) {
                std::invalid_argument);
 }
 
+namespace {
+
+NodeProto MakeRandomNode(const std::string &op_type, const std::vector<int64_t> &shape) {
+  NodeProto node;
+  node.set_op_type(op_type);
+  node.add_output("y");
+  AttributeProto *attr = AddAttr(node, "shape", AttributeProto::AttributeType::INTS);
+  for (int64_t v : shape) {
+    attr->ref_ints().push_back(v);
+  }
+  return node;
+}
+
+NodeProto MakeRandomLikeNode(const std::string &op_type) {
+  NodeProto node;
+  node.set_op_type(op_type);
+  node.add_input("x");
+  node.add_output("y");
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeRandomNormal, UsesShapeAttributeAndDefaultsToFloat) {
+  NodeProto node = MakeRandomNode("RandomNormal", {2, 3});
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ASSERT_TRUE(ctx.Has("y"));
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+}
+
+TEST(OnnxOptimShapeRandomNormal, DtypeAttributeOverridesOutputDtype) {
+  NodeProto node = MakeRandomNode("RandomNormal", {4});
+  AddAttr(node, "dtype", AttributeProto::AttributeType::INT)
+      ->set_i(static_cast<int64_t>(TensorProto::DOUBLE));
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kDouble);
+  EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(4)}));
+}
+
+TEST(OnnxOptimShapeRandomNormal, MissingShapeAttributeThrows) {
+  NodeProto node;
+  node.set_op_type("RandomNormal");
+  node.add_output("y");
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::generator::ComputeShapeRandomNormal(ctx, node),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeRandomUniform, UsesShapeAttributeAndDefaultsToFloat) {
+  NodeProto node = MakeRandomNode("RandomUniform", {5});
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(5)}));
+}
+
+TEST(OnnxOptimShapeRandomNormalLike, CopiesInputShapeAndDtypeByDefault) {
+  NodeProto node = MakeRandomLikeNode("RandomNormalLike");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor x(
+      nullptr, onnx_optim::TensorType::kFloat16,
+      onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(8)});
+  ctx.Set("x", std::move(x));
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat16);
+  EXPECT_EQ(ctx.Get("y").Shape().Rank(), 2u);
+  EXPECT_FALSE(ctx.Get("y").Shape()[0].IsInt());
+  EXPECT_TRUE(ctx.Get("y").Shape()[1].IsInt());
+}
+
+TEST(OnnxOptimShapeRandomNormalLike, DtypeAttributeOverridesOutputDtype) {
+  NodeProto node = MakeRandomLikeNode("RandomNormalLike");
+  AddAttr(node, "dtype", AttributeProto::AttributeType::INT)
+      ->set_i(static_cast<int64_t>(TensorProto::DOUBLE));
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor x(nullptr, onnx_optim::TensorType::kFloat,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(3)});
+  ctx.Set("x", std::move(x));
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kDouble);
+  EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+}
+
+TEST(OnnxOptimShapeRandomUniformLike, CopiesInputShapeAndDtypeByDefault) {
+  NodeProto node = MakeRandomLikeNode("RandomUniformLike");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor x(
+      nullptr, onnx_optim::TensorType::kFloat,
+      onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(2)});
+  ctx.Set("x", std::move(x));
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(2)}));
+}
+
+TEST(OnnxOptimShapeRandomUniformLike, RejectsBadOpType) {
+  NodeProto node = MakeRandomLikeNode("NotRandomUniformLike");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor x(nullptr, onnx_optim::TensorType::kFloat,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+  ctx.Set("x", std::move(x));
+  EXPECT_THROW(onnx_optim::shapes::generator::ComputeShapeRandomUniformLike(ctx, node),
+               std::invalid_argument);
+}
+
 } // namespace Test

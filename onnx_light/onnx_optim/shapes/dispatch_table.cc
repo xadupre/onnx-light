@@ -156,6 +156,24 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          generator::ComputeShapeBernoulli(ctx, node);
        }},
+      {"ai.onnx:RandomNormal",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         generator::ComputeShapeRandomNormal(ctx, node);
+       }},
+      {"ai.onnx:RandomNormalLike",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         generator::ComputeShapeRandomNormalLike(ctx, node);
+       }},
+      {"ai.onnx:RandomUniform",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         generator::ComputeShapeRandomUniform(ctx, node);
+       }},
+      {"ai.onnx:RandomUniformLike",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         generator::ComputeShapeRandomUniformLike(ctx, node);
+       }},
       {"ai.onnx:BitCast",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

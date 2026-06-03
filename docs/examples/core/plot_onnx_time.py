@@ -120,6 +120,7 @@ import onnx_light.onnx as onnxl
 import onnx_light.onnx_lib.helper as onnxlh
 from onnx_light.doc import (
     find_standalone_executable,
+    get_cpu_topology,
     get_processor_name,
     get_total_memory_gb,
     measure_cpp_with_example,
@@ -1069,13 +1070,23 @@ _ort_med = "lightgreen"
 processor_name = get_processor_name()
 total_memory_gb = get_total_memory_gb()
 memory_str = f"{total_memory_gb:.1f} GB" if total_memory_gb is not None else "unknown"
-cpu_count = os.cpu_count() or 0
+cpu_topology = get_cpu_topology()
+logical_cpus = cpu_topology["logical"] or os.cpu_count() or 0
+physical_cores = cpu_topology["physical_cores"]
+sockets = cpu_topology["sockets"]
+cpu_parts: list[str] = []
+if sockets is not None:
+    cpu_parts.append(f"{sockets} processor{'s' if sockets != 1 else ''}")
+if physical_cores is not None:
+    cpu_parts.append(f"{physical_cores} physical core{'s' if physical_cores != 1 else ''}")
+cpu_parts.append(f"{logical_cpus} logical processor{'s' if logical_cpus != 1 else ''}")
+cpu_topology_str = ", ".join(cpu_parts)
 
 ax = df[["avg", "median"]].plot.barh(
     title=(
         f"onnx vs onnx_light vs ort load/save (s), size={file_size / 2 ** 20:.2f} MB "
         f"(lower is better)\n"
-        f"CPU: {processor_name} ({cpu_count} cores), RAM: {memory_str}\n"
+        f"CPU: {processor_name} ({cpu_topology_str}), RAM: {memory_str}\n"
         f"benchmark key: <op>/<files>x<threads>/<lib>\n"
         f"op=load|save|parse|serialize, files=1|2, threads=1|4, "
         f"lib=onnx|onnx-cpp|onnxlight|onnxlight-cpp|onnxlight-cpp-nocopy|"

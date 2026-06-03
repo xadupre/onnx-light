@@ -1,8 +1,13 @@
 #include "onnx_helper.h"
+#include <array>
+#include <charconv>
 #include <filesystem>
+#include <fstream>
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 bool IteratorTensorProto::next() {
@@ -140,6 +145,240 @@ void ClearExternalData(ModelProto &model) {
       it->reset_data_location();
     }
   }
+}
+
+namespace {
+
+// Parses an int64_t encoded as decimal text inside external_data entries (offset/length/size).
+int64_t ParseExternalDataInt64(const utils::String &value, const char *key) {
+  int64_t out = 0;
+  const char *begin = value.data();
+  const char *end = begin + value.size();
+  auto parsed = std::from_chars(begin, end, out);
+  EXT_ENFORCE(parsed.ec == std::errc() && parsed.ptr == end,
+              "AlignExternalDataStreaming: unable to parse external_data '", key,
+              "' as int64, value='", value.as_string(true), "'.");
+  return out;
+}
+
+// Reads location/offset/length out of a tensor's external_data; length is optional and falls
+// back to the alias 'size' before defaulting to -1 (caller must enforce).
+void ReadExternalDataEntries(const TensorProto &tensor, std::string &location, int64_t &offset,
+                             int64_t &length) {
+  location.clear();
+  offset = 0;
+  length = -1;
+  bool has_offset = false;
+  for (int i = 0; i < tensor.ref_external_data().size(); ++i) {
+    const StringStringEntryProto &entry = tensor.ref_external_data()[i];
+    const utils::String &key = entry.ref_key();
+    if (key == "location") {
+      location = entry.ref_value().as_string();
+    } else if (key == "offset") {
+      offset = ParseExternalDataInt64(entry.ref_value(), "offset");
+      has_offset = true;
+    } else if (key == "length" || key == "size") {
+      length = ParseExternalDataInt64(entry.ref_value(), key.data());
+    }
+  }
+  EXT_ENFORCE(!location.empty(), "AlignExternalDataStreaming: tensor '",
+              tensor.ref_name().as_string(), "' has no external_data.location.");
+  EXT_ENFORCE(has_offset || offset == 0, "AlignExternalDataStreaming: tensor '",
+              tensor.ref_name().as_string(), "' has invalid external_data.offset.");
+  EXT_ENFORCE(length >= 0, "AlignExternalDataStreaming: tensor '", tensor.ref_name().as_string(),
+              "' has no external_data.length.");
+}
+
+// Rewrites the existing external_data entries to point at (new_location, new_offset, length).
+// Preserves the 'checksum' entry (if any) since the bytes content is unchanged.
+void RewriteExternalDataEntries(TensorProto &tensor, const std::string &new_location,
+                                int64_t new_offset, int64_t length) {
+  std::string checksum;
+  bool has_checksum = false;
+  for (int i = 0; i < tensor.ref_external_data().size(); ++i) {
+    const StringStringEntryProto &entry = tensor.ref_external_data()[i];
+    if (entry.ref_key() == "checksum") {
+      checksum = entry.ref_value().as_string();
+      has_checksum = true;
+      break;
+    }
+  }
+  tensor.clr_external_data();
+  StringStringEntryProto *loc = tensor.add_external_data();
+  loc->set_key("location");
+  loc->set_value(new_location);
+  StringStringEntryProto *off = tensor.add_external_data();
+  off->set_key("offset");
+  off->set_value(onnx_light_helpers::MakeString(new_offset));
+  StringStringEntryProto *len = tensor.add_external_data();
+  len->set_key("length");
+  len->set_value(onnx_light_helpers::MakeString(length));
+  if (has_checksum) {
+    StringStringEntryProto *ck = tensor.add_external_data();
+    ck->set_key("checksum");
+    ck->set_value(checksum);
+  }
+}
+
+// Streams n_bytes from src starting at src_offset into dst at its current position,
+// copying at most chunk_size bytes per iteration via a single reused heap buffer.
+void StreamCopyFileRange(std::ifstream &src, int64_t src_offset, int64_t n_bytes,
+                         std::ofstream &dst, std::vector<char> &buffer) {
+  EXT_ENFORCE(n_bytes >= 0, "StreamCopyFileRange: n_bytes must be >= 0, got ", n_bytes, ".");
+  if (n_bytes == 0)
+    return;
+  src.clear();
+  src.seekg(src_offset, std::ios::beg);
+  EXT_ENFORCE(static_cast<bool>(src),
+              "StreamCopyFileRange: failed to seek source weights file to offset ", src_offset,
+              ".");
+  int64_t remaining = n_bytes;
+  while (remaining > 0) {
+    const std::streamsize to_read = static_cast<std::streamsize>(
+        std::min<int64_t>(remaining, static_cast<int64_t>(buffer.size())));
+    src.read(buffer.data(), to_read);
+    EXT_ENFORCE(src.gcount() == to_read,
+                "StreamCopyFileRange: short read from source weights file (asked for ", to_read,
+                ", got ", src.gcount(), ", at offset ", src_offset + (n_bytes - remaining), ").");
+    dst.write(buffer.data(), to_read);
+    EXT_ENFORCE(static_cast<bool>(dst), "StreamCopyFileRange: failed to write ", to_read,
+                " bytes to destination weights file.");
+    remaining -= to_read;
+  }
+}
+
+} // namespace
+
+offset_t AlignExternalDataStreaming(const std::string &src_onnx_path,
+                                    const std::string &dst_onnx_path,
+                                    const std::string &dst_weights_path, int64_t alignment,
+                                    int64_t chunk_size) {
+  onnx_light_helpers::ValidateAlignmentOption(alignment, "AlignExternalDataStreaming.alignment");
+  EXT_ENFORCE(alignment >= 1, "AlignExternalDataStreaming: alignment must be >= 1, got ", alignment,
+              ".");
+  EXT_ENFORCE(chunk_size > 0, "AlignExternalDataStreaming: chunk_size must be > 0, got ",
+              chunk_size, ".");
+
+  const std::filesystem::path src_path(src_onnx_path);
+  const std::filesystem::path src_dir = src_path.parent_path();
+  const std::filesystem::path dst_path(dst_onnx_path);
+  const std::filesystem::path dst_dir = dst_path.parent_path();
+  const std::filesystem::path dst_weights_full(dst_weights_path);
+
+  // Location to record in external_data: path of dst_weights relative to dst_onnx's directory
+  // (matches how SerializeModelProtoToStream computes locations for TwoFilesWriteStream).
+  std::filesystem::path stored_location =
+      dst_dir.empty() ? dst_weights_full : std::filesystem::relative(dst_weights_full, dst_dir);
+  if (stored_location.empty()) {
+    stored_location = dst_weights_full;
+  }
+  const std::string stored_location_str = stored_location.string();
+
+  // 1) Parse the source .onnx with skip_raw_data=true so weights bytes are never loaded.
+  ModelProto model;
+  {
+    utils::FileStream rstream(src_onnx_path);
+    ParseOptions ropts;
+    ropts.skip_raw_data = true;
+    ropts.raw_data_threshold = 0; // skip all raw_data, regardless of size
+    // Important: do not auto-clear external_data, we need it to drive the copy.
+    ParseModelProtoFromStream(model, rstream, ropts, /*clear_external_data=*/false);
+  }
+
+  // 2) Stream-copy external tensor bytes from their source files into a single aligned dst file,
+  //    updating each tensor's external_data entries in-place.
+  std::ofstream out(dst_weights_path, std::ios::binary | std::ios::trunc);
+  EXT_ENFORCE(out.is_open(), "AlignExternalDataStreaming: cannot open destination weights file '",
+              dst_weights_path, "' for writing.");
+
+  // Cache one ifstream per source weights location so we don't reopen for every tensor.
+  std::unordered_map<std::string, std::unique_ptr<std::ifstream>> src_streams;
+  std::vector<char> buffer(static_cast<size_t>(chunk_size));
+  offset_t current_offset = 0;
+
+  IteratorTensorProto it(&model.ref_graph());
+  while (it.next()) {
+    TensorProto &tensor = *it;
+    const bool has_inline_raw = tensor.has_raw_data() && tensor.raw_data_.size() > 0;
+    const bool is_external = tensor.has_data_location() &&
+                             tensor.ref_data_location() == TensorProto::DataLocation::EXTERNAL &&
+                             tensor.has_external_data();
+    EXT_ENFORCE(!has_inline_raw || !is_external, "AlignExternalDataStreaming: tensor '",
+                tensor.ref_name().as_string(),
+                "' has both inline raw_data and external_data; this is not supported.");
+    if (!is_external) {
+      // Inline tensors are preserved as-is in the destination .onnx. If they had large
+      // inline raw_data, ParseModelProtoFromStream with skip_raw_data=true would have
+      // dropped the bytes; detect and refuse such cases so we never silently corrupt data.
+      EXT_ENFORCE(!tensor.has_data_location() ||
+                      tensor.ref_data_location() == TensorProto::DataLocation::DEFAULT,
+                  "AlignExternalDataStreaming: tensor '", tensor.ref_name().as_string(),
+                  "' is marked EXTERNAL but has no external_data entries.");
+      continue;
+    }
+
+    std::string src_location;
+    int64_t src_offset = 0;
+    int64_t length = 0;
+    ReadExternalDataEntries(tensor, src_location, src_offset, length);
+
+    // Resolve source weights file path relative to src .onnx directory.
+    std::filesystem::path src_weights_path = src_location;
+    if (!src_weights_path.is_absolute() && !src_dir.empty()) {
+      src_weights_path = src_dir / src_location;
+    }
+    const std::string src_weights_key = src_weights_path.string();
+
+    auto stream_it = src_streams.find(src_weights_key);
+    if (stream_it == src_streams.end()) {
+      auto s = std::make_unique<std::ifstream>(src_weights_key, std::ios::binary);
+      EXT_ENFORCE(s->is_open(), "AlignExternalDataStreaming: cannot open source weights file '",
+                  src_weights_key, "' for tensor '", tensor.ref_name().as_string(), "'.");
+      stream_it = src_streams.emplace(src_weights_key, std::move(s)).first;
+    }
+
+    // Pad the destination file up to the next aligned offset (zero bytes).
+    const offset_t aligned_offset =
+        (current_offset == 0 || alignment <= 1)
+            ? current_offset
+            : ((current_offset + alignment - 1) / alignment) * alignment;
+    if (aligned_offset > current_offset) {
+      static constexpr size_t kZeroBufSize = 4096;
+      static const std::array<char, kZeroBufSize> kZeros{}; // value-initialised → zero-filled
+      int64_t pad = aligned_offset - current_offset;
+      while (pad > 0) {
+        const std::streamsize to_write =
+            static_cast<std::streamsize>(std::min<int64_t>(pad, kZeroBufSize));
+        out.write(kZeros.data(), to_write);
+        EXT_ENFORCE(static_cast<bool>(out),
+                    "AlignExternalDataStreaming: failed to write padding to destination.");
+        pad -= to_write;
+      }
+      current_offset = aligned_offset;
+    }
+
+    // Stream-copy the tensor bytes.
+    StreamCopyFileRange(*stream_it->second, src_offset, length, out, buffer);
+
+    // Update metadata to point at the new file/offset/length.
+    RewriteExternalDataEntries(tensor, stored_location_str, current_offset, length);
+    current_offset += length;
+  }
+
+  out.flush();
+  EXT_ENFORCE(static_cast<bool>(out),
+              "AlignExternalDataStreaming: failed to flush destination weights file.");
+  out.close();
+
+  // 3) Persist the updated proto to dst_onnx. Use FileWriteStream (single-file) so external_data
+  //    entries are written as-is and no new weights file is generated.
+  {
+    utils::FileWriteStream wstream(dst_onnx_path);
+    SerializeOptions wopts;
+    SerializeProtoToStream(model, wstream, wopts);
+  }
+
+  return current_offset;
 }
 
 std::shared_ptr<uint8_t[]> ConsolidateTensorsToBuffer(ModelProto &model,

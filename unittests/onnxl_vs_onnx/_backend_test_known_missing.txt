@@ -1097,8 +1097,6 @@ softsign
 softsign_example
 softsign_example_expanded_ver18
 softsign_expanded_ver18
-spacetodepth
-spacetodepth_example
 squeeze_negative_axes
 stft
 stft_with_window

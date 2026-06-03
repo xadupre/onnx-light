@@ -394,6 +394,37 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsDepthToSpaceSchemasWithoutShapeInferen
   EXPECT_NE(d2s_v13->doc().find("DepthToSpace"), std::string::npos);
 }
 
+TEST(OnnxOpTensorRegistrationTest, ReturnsSpaceToDepthSchemasWithoutShapeInference) {
+  const std::vector<onnx_op::LightOpSchema> s2d_schemas =
+      onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("SpaceToDepth");
+
+  const onnx_op::LightOpSchema *const s2d_v1 = FindByVersion(s2d_schemas, 1);
+  const onnx_op::LightOpSchema *const s2d_v13 = FindByVersion(s2d_schemas, 13);
+  ASSERT_NE(nullptr, s2d_v1);
+  ASSERT_NE(nullptr, s2d_v13);
+
+  EXPECT_EQ(s2d_v13->domain(), "ai.onnx");
+  ASSERT_EQ(s2d_v13->inputs().size(), 1u);
+  EXPECT_EQ(s2d_v13->inputs()[0].name, "input");
+  EXPECT_EQ(s2d_v13->inputs()[0].type, "T");
+  ASSERT_EQ(s2d_v13->outputs().size(), 1u);
+  EXPECT_EQ(s2d_v13->outputs()[0].name, "output");
+  EXPECT_EQ(s2d_v13->outputs()[0].type, "T");
+  ASSERT_EQ(s2d_v13->type_constraints().size(), 1u);
+  EXPECT_EQ(s2d_v13->type_constraints()[0].type_param_str, "T");
+  EXPECT_EQ(s2d_v13->type_constraints()[0].allowed_type_strs, onnx_op::ConcatTypesVer13());
+  EXPECT_EQ(s2d_v1->type_constraints()[0].allowed_type_strs, onnx_op::AllTensorTypes());
+  // Both versions only expose the required blocksize attribute (no mode).
+  ASSERT_EQ(s2d_v1->attributes().size(), 1u);
+  EXPECT_EQ(s2d_v1->attributes()[0].name, "blocksize");
+  EXPECT_EQ(s2d_v1->attributes()[0].type, onnx_op::AttributeType::INT);
+  EXPECT_TRUE(s2d_v1->attributes()[0].required);
+  ASSERT_EQ(s2d_v13->attributes().size(), 1u);
+  EXPECT_EQ(s2d_v13->attributes()[0].name, "blocksize");
+  EXPECT_FALSE(s2d_v13->doc().empty());
+  EXPECT_NE(s2d_v13->doc().find("SpaceToDepth"), std::string::npos);
+}
+
 TEST(OnnxOpTensorRegistrationTest, ReturnsTransposeSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> transpose_schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Transpose");

@@ -13,6 +13,7 @@ void CollectTextTestCases(std::vector<TestCase> &registry, const std::string &op
       {"StringSplit", &RegisterStringSplitCases},
       {"StringNormalizer", &RegisterStringNormalizerCases},
       {"RegexFullMatch", &RegisterRegexFullMatchCases},
+      {"TfIdfVectorizer", &RegisterTfIdfVectorizerCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

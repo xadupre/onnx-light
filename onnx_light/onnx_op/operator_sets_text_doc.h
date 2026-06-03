@@ -46,6 +46,15 @@ std::string MakeRegexFullMatchDoc(int since_version);
  */
 std::string MakeStringNormalizerDoc(int since_version);
 
+/**
+ * Returns the documentation string for the TfIdfVectorizer operator at the
+ * given opset version.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the TfIdfVectorizer operator.
+ */
+std::string MakeTfIdfVectorizerDoc(int since_version);
+
 } // namespace text
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -16,7 +16,7 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
 
-constexpr size_t kExpectedTextSchemaCount = 4;
+constexpr size_t kExpectedTextSchemaCount = 5;
 
 static const onnx_op::LightOpSchema *
 FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
@@ -151,6 +151,37 @@ TEST(OnnxOpTextRegistrationTest, ReturnsStringNormalizerSchema) {
 
   EXPECT_NE(normalizer_v10->doc().find("StringNormalization performs string operations"),
             std::string::npos);
+}
+
+TEST(OnnxOpTextRegistrationTest, ReturnsTfIdfVectorizerSchema) {
+  const std::vector<onnx_op::LightOpSchema> tf_idf_schemas =
+      onnx_op::text::GetAllOnnxOpTextSchemasWithHistory("TfIdfVectorizer");
+
+  const onnx_op::LightOpSchema *const tf_idf_v9 = FindByVersion(tf_idf_schemas, 9);
+  ASSERT_NE(nullptr, tf_idf_v9);
+
+  EXPECT_EQ(tf_idf_v9->domain(), "ai.onnx");
+  EXPECT_EQ(tf_idf_v9->name(), "TfIdfVectorizer");
+  EXPECT_EQ(tf_idf_v9->inputs().size(), 1u);
+  EXPECT_EQ(tf_idf_v9->outputs().size(), 1u);
+  EXPECT_EQ(tf_idf_v9->type_constraints().size(), 2u);
+  EXPECT_EQ(tf_idf_v9->attributes().size(), 9u);
+
+  EXPECT_EQ(tf_idf_v9->inputs()[0].name, "X");
+  EXPECT_EQ(tf_idf_v9->inputs()[0].type, "T");
+  EXPECT_EQ(tf_idf_v9->outputs()[0].name, "Y");
+  EXPECT_EQ(tf_idf_v9->outputs()[0].type, "T1");
+
+  EXPECT_EQ(tf_idf_v9->type_constraints()[0].type_param_str, "T");
+  EXPECT_EQ(
+      tf_idf_v9->type_constraints()[0].allowed_type_strs,
+      (std::vector<onnx_op::TensorType>{onnx_op::TensorType::kString, onnx_op::TensorType::kInt32,
+                                        onnx_op::TensorType::kInt64}));
+  EXPECT_EQ(tf_idf_v9->type_constraints()[1].type_param_str, "T1");
+  EXPECT_EQ(tf_idf_v9->type_constraints()[1].allowed_type_strs,
+            std::vector<onnx_op::TensorType>{onnx_op::TensorType::kFloat});
+
+  EXPECT_NE(tf_idf_v9->doc().find("This transform extracts n-grams"), std::string::npos);
 }
 
 TEST(OnnxOpTextRegistrationTest, StripDocsRemovesDocumentation) {

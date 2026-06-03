@@ -308,6 +308,10 @@ Reference: https://docs.scipy.org/doc/scipy/tutorial/fft.html
 )DOC";
 }
 
+std::string MakeSTFTDoc(int /*since_version*/) {
+  return R"DOC(Computes the Short-time Fourier Transform of the signal.)DOC";
+}
+
 } // namespace math
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -698,6 +698,33 @@ void ComputeShapeTopK(ShapesContext &ctx, const NodeProto &node, const char *x);
  */
 void ComputeShapeDFT(ShapesContext &ctx, const NodeProto &node);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of an ``STFT`` node and stores
+ * it in ``ctx``.
+ *
+ * ``STFT`` (opset 17) returns a rank-4 tensor with shape
+ * ``[batch_size, n_frames, dft_unique_bins, 2]`` where
+ * ``n_frames = (signal_length - frame_length) / frame_step + 1`` and
+ * ``dft_unique_bins`` is ``floor(frame_length / 2) + 1`` when ``onesided``
+ * is enabled (its default) or ``frame_length`` otherwise. The
+ * ``signal_length``, ``frame_step`` and ``frame_length`` (or window length)
+ * may be unknown at shape-inference time; in that case the corresponding
+ * dimension is left symbolic.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``node.input(0)``. On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``STFT`` ``NodeProto`` whose output should be described.
+ *              ``node.op_type()`` must be ``"STFT"`` and ``node`` must
+ *              declare at least two inputs (signal, frame_step) and one
+ *              output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"STFT"`` or
+ *         if ``node`` declares fewer than two inputs/one output.
+ * @throws std::out_of_range     if the data input is missing from ``ctx``.
+ */
+void ComputeShapeSTFT(ShapesContext &ctx, const NodeProto &node);
+
 } // namespace math
 } // namespace shapes
 } // namespace onnx_optim

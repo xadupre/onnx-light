@@ -138,6 +138,15 @@ std::string MakeSumDoc(int since_version);
  */
 std::string MakeDFTDoc(int since_version);
 
+/**
+ * Returns the documentation string for the STFT operator at the given opset
+ * version (currently only opset 17).
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the STFT operator.
+ */
+std::string MakeSTFTDoc(int since_version);
+
 } // namespace math
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -36,6 +36,7 @@ void CollectMathTestCases(std::vector<TestCase> &registry, const std::string &op
       {"CumProd", &RegisterCumProdCases},
       {"CumSum", &RegisterCumSumCases},
       {"DFT", &RegisterDFTCases},
+      {"STFT", &RegisterSTFTCases},
       {"Det", &RegisterDetCases},
       {"Sin", &RegisterSinCases},
       {"Sinh", &RegisterSinhCases},

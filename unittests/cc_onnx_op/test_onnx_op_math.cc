@@ -101,7 +101,7 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> swish_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Swish");
 
-  EXPECT_EQ(schemas.size(), 121u);
+  EXPECT_EQ(schemas.size(), 122u);
 
   // Swish was introduced at v24 and has had a single schema since then.
   ASSERT_EQ(swish_schemas.size(), 1u);
@@ -671,6 +671,34 @@ TEST(OnnxOpMathRegistrationTest, ReturnsDFTSchemasWithoutShapeInference) {
 
   EXPECT_FALSE(dft_v17->doc().empty());
   EXPECT_FALSE(dft_v20->doc().empty());
+}
+
+TEST(OnnxOpMathRegistrationTest, ReturnsSTFTSchemaWithoutShapeInference) {
+  const std::vector<onnx_op::LightOpSchema> stft_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("STFT");
+
+  const onnx_op::LightOpSchema *const stft_v17 = FindByVersion(stft_schemas, 17);
+  ASSERT_NE(nullptr, stft_v17);
+
+  EXPECT_EQ(stft_v17->name(), "STFT");
+  EXPECT_EQ(stft_v17->domain(), onnx_op::kOnnxDomain);
+  EXPECT_EQ(stft_v17->since_version(), 17);
+  ASSERT_EQ(stft_v17->inputs().size(), 4u);
+  EXPECT_EQ(stft_v17->inputs()[0].name, "signal");
+  EXPECT_EQ(stft_v17->inputs()[0].type, "T1");
+  EXPECT_EQ(stft_v17->inputs()[1].name, "frame_step");
+  EXPECT_EQ(stft_v17->inputs()[1].type, "T2");
+  EXPECT_EQ(stft_v17->inputs()[2].name, "window");
+  EXPECT_EQ(stft_v17->inputs()[2].type, "T1");
+  EXPECT_EQ(stft_v17->inputs()[3].name, "frame_length");
+  EXPECT_EQ(stft_v17->inputs()[3].type, "T2");
+  ASSERT_EQ(stft_v17->outputs().size(), 1u);
+  EXPECT_EQ(stft_v17->outputs()[0].name, "output");
+  EXPECT_EQ(stft_v17->outputs()[0].type, "T1");
+  ASSERT_EQ(stft_v17->attributes().size(), 1u);
+  EXPECT_EQ(stft_v17->attributes()[0].name, "onesided");
+  EXPECT_EQ(stft_v17->attributes()[0].type, onnx_op::AttributeType::INT);
+  EXPECT_FALSE(stft_v17->doc().empty());
 }
 
 } // namespace Test

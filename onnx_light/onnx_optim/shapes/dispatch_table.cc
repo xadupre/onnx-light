@@ -284,6 +284,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          math::ComputeShapeSqrt(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:STFT",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         math::ComputeShapeSTFT(ctx, node);
+       }},
       {"ai.onnx:Sum",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

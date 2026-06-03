@@ -1074,8 +1074,6 @@ softsign_example
 softsign_example_expanded_ver18
 softsign_expanded_ver18
 squeeze_negative_axes
-stft
-stft_with_window
 string_concat_broadcasting
 string_concat_empty_string
 strnormalizer_export_monday_casesensintive_lower

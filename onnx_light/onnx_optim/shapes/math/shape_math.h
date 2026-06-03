@@ -430,6 +430,12 @@ void ComputeShapeSwish(ShapesContext &ctx, const NodeProto &node, const char *x)
 /// Softmax preserves dtype/shape and validates the axis attribute.
 void ComputeShapeSoftmax(ShapesContext &ctx, const NodeProto &node, const char *x);
 
+/// Softplus is element-wise unary: output dtype and shape match the input.
+void ComputeShapeSoftplus(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/// Softsign is element-wise unary: output dtype and shape match the input.
+void ComputeShapeSoftsign(ShapesContext &ctx, const NodeProto &node, const char *x);
+
 /**
  * Computes the output ``OptimTensor``(s) of a ``SoftmaxCrossEntropyLoss``
  * node and stores them in ``ctx``.

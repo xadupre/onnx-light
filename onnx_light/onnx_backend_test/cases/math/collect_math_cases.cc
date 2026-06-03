@@ -42,6 +42,8 @@ void CollectMathTestCases(std::vector<TestCase> &registry, const std::string &op
       {"Sigmoid", &RegisterSigmoidCases},
       {"Softmax", &RegisterSoftmaxCases},
       {"SoftmaxCrossEntropyLoss", &RegisterSoftmaxCrossEntropyLossCases},
+      {"Softplus", &RegisterSoftplusCases},
+      {"Softsign", &RegisterSoftsignCases},
       {"Sqrt", &RegisterSqrtCases},
       {"Tan", &RegisterTanCases},
       {"Tanh", &RegisterTanhCases},

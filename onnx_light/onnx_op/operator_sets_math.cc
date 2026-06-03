@@ -326,6 +326,80 @@ to the tensor element-wise.
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildSoftplusSchemas() {
+  static constexpr const char *kSoftplusDoc = R"DOC(
+Softplus takes one input data (Tensor<T>) and produces one output data
+(Tensor<T>) where the softplus function, y = ln(exp(x) + 1), is applied to
+the tensor elementwise.
+)DOC";
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(2);
+  schemas.push_back(LightOpSchema(
+      "Softplus", kOnnxDomain, 22, kSoftplusDoc,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T",
+           {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble},
+           "Constrain input and output types to float tensors."},
+      },
+      /*has_function_implementation=*/true));
+  schemas.push_back(
+      LightOpSchema("Softplus", kOnnxDomain, 1, kSoftplusDoc,
+                    {
+                        {"X", "Input tensor", "T"},
+                    },
+                    {
+                        {"Y", "Output tensor", "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    },
+                    /*has_function_implementation=*/true));
+  return schemas;
+}
+
+std::vector<LightOpSchema> BuildSoftsignSchemas() {
+  static constexpr const char *kSoftsignDoc = R"DOC(
+Calculates the softsign (x/(1+|x|)) of the given input tensor element-wise.
+)DOC";
+  static constexpr const char *kSoftsignOutputDescription =
+      "The softsign (x/(1+|x|)) values of the input tensor computed element-wise";
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(2);
+  schemas.push_back(LightOpSchema(
+      "Softsign", kOnnxDomain, 22, kSoftsignDoc,
+      {
+          {"input", "Input tensor", "T"},
+      },
+      {
+          {"output", kSoftsignOutputDescription, "T"},
+      },
+      {
+          {"T",
+           {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble},
+           "Constrain input and output types to float tensors."},
+      },
+      /*has_function_implementation=*/true));
+  schemas.push_back(
+      LightOpSchema("Softsign", kOnnxDomain, 1, kSoftsignDoc,
+                    {
+                        {"input", "Input tensor", "T"},
+                    },
+                    {
+                        {"output", kSoftsignOutputDescription, "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    },
+                    /*has_function_implementation=*/true));
+  return schemas;
+}
+
 std::vector<LightOpSchema> BuildThresholdedReluSchemas() {
   static constexpr const char *kThresholdedReluDoc = R"DOC(
 ThresholdedRelu takes one input data (Tensor<T>) and produces one output data
@@ -1706,6 +1780,8 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Sinh", [] { return BuildUnaryFloatMathSchemas("Sinh", 22, 9); }},
       {"Softmax", [] { return BuildSoftmaxSchemas(); }},
       {"SoftmaxCrossEntropyLoss", [] { return BuildSoftmaxCrossEntropyLossSchemas(); }},
+      {"Softplus", [] { return BuildSoftplusSchemas(); }},
+      {"Softsign", [] { return BuildSoftsignSchemas(); }},
       {"Sqrt", [] { return BuildSqrtSchemas(); }},
       {"Sub", [] { return BuildElementwiseMathSchemaForVersion("Sub"); }},
       {"Sum", [] { return BuildSumSchemas(); }},

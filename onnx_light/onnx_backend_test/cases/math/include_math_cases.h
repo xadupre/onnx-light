@@ -65,6 +65,12 @@ void RegisterSoftmaxCases(std::vector<TestCase> &registry);
 /// Registers the ``SoftmaxCrossEntropyLoss`` backend test node case(s).
 void RegisterSoftmaxCrossEntropyLossCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Softplus`` backend test node case(s).
+void RegisterSoftplusCases(std::vector<TestCase> &registry);
+
+/// Registers the ``Softsign`` backend test node case(s).
+void RegisterSoftsignCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Sin`` backend test node case(s).
 void RegisterSinCases(std::vector<TestCase> &registry);
 

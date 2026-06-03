@@ -292,6 +292,28 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Element-wise softplus activation: y = ln(1 + exp(x)).
+class Softplus : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x) const;
+  void operator()(const Tensor &x, Tensor &output) const;
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
+/// Element-wise softsign activation: y = x / (1 + |x|).
+class Softsign : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x) const;
+  void operator()(const Tensor &x, Tensor &output) const;
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// SoftmaxCrossEntropyLoss computes the cross-entropy loss between the
 /// (un-normalized) softmax distribution of ``scores`` and integer class
 /// indices given by ``labels``. Optionally supports per-class weights and

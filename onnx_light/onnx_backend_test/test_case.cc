@@ -49,6 +49,18 @@ std::vector<std::string> NonEmpty(const utils::RepeatedField<utils::String> &nam
 
 } // namespace
 
+void InitModel(ModelProto &model, int64_t ir_version, const std::vector<OpsetId> &opset_imports,
+               const std::string &producer_name) {
+  model.set_ir_version(ir_version);
+  model.set_producer_name(producer_name);
+  for (const auto &osid : opset_imports) {
+    OperatorSetIdProto proto;
+    proto.set_domain(osid.domain);
+    proto.set_version(osid.version);
+    model.add_opset_import(proto);
+  }
+}
+
 void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
             const std::vector<Tensor> &outputs, const std::string &name,
             const std::vector<OpsetId> &opset_imports, const std::string &producer_name,
@@ -70,14 +82,7 @@ void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
   tc.atol = 1e-7;
 
   ModelProto &model = tc.model;
-  model.set_ir_version(kDefaultIrVersion);
-  model.set_producer_name(producer_name);
-  for (const auto &osid : opset_imports) {
-    OperatorSetIdProto proto;
-    proto.set_domain(osid.domain);
-    proto.set_version(osid.version);
-    model.add_opset_import(proto);
-  }
+  InitModel(model, kDefaultIrVersion, opset_imports, producer_name);
 
   GraphProto *graph = model.add_graph();
   graph->set_name(name);

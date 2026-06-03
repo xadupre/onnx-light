@@ -25,26 +25,34 @@ constexpr int64_t kDefaultIrVersion = 10;
 // ---------------------------------------------------------------------------
 // ``Add → Concat(axis=2) → Reshape(shape=[0, 0, -1])`` — mirrors the
 // "Add + Concat + Reshape" model from the ``plot_computed_shapes`` gallery
-// page. The Reshape uses ``[0, 0, -1]`` so the output retains the leading
-// ``(batch, seq)`` dimensions and the last dimension is recovered as
-// ``2 * d_model``. The model is registered with concrete dims so the
-// reference kernels can produce expected outputs; the generic shape-inference
-// tests substitute symbolic ``dim_params`` to also exercise the symbolic
-// propagation path.
+// page (https://xadupre.github.io/docs/yet-another-onnx-builder/
+// auto_examples_core/plot_computed_shapes.html). The ``reshape_shape``
+// initializer is ``[0, 0, -1]`` exactly as on the page. The concrete
+// per-tensor shapes registered in the graph (inputs, ``value_info`` and
+// output) are the literal shapes printed on the page for
+// ``context = dict(batch=2, seq=5, d_model=8)``:
+//
+//   X            (2, 5, 8)
+//   Y            (2, 5, 8)
+//   added        (2, 5, 8)
+//   concat_out   (2, 5, 16)
+//   Z            (2, 5, 16)
+//
+// The generic shape-inference tests substitute symbolic ``dim_params`` on
+// top to also exercise the symbolic propagation path.
 // ---------------------------------------------------------------------------
 void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(18);
   const kernel::KernelContext ctx{opset};
 
-  // Concrete dimensions used to materialise reference outputs.
-  constexpr int64_t kBatch = 2;
-  constexpr int64_t kSeq = 5;
-  constexpr int64_t kDModel = 8;
-  const std::vector<int64_t> input_shape = {kBatch, kSeq, kDModel};
+  // Concrete shapes from the gallery page (``batch=2, seq=5, d_model=8``).
+  const std::vector<int64_t> input_shape = {2, 5, 8};   // X, Y, added
+  const std::vector<int64_t> concat_shape = {2, 5, 16}; // concat_out, Z
 
   // Simple, fully-populated input tensors.
-  std::vector<float> x_values(kBatch * kSeq * kDModel);
-  std::vector<float> y_values(kBatch * kSeq * kDModel);
+  const int64_t input_size = input_shape[0] * input_shape[1] * input_shape[2];
+  std::vector<float> x_values(static_cast<size_t>(input_size));
+  std::vector<float> y_values(static_cast<size_t>(input_size));
   for (size_t i = 0; i < x_values.size(); ++i) {
     x_values[i] = static_cast<float>(i) * 0.1f;
     y_values[i] = static_cast<float>(i) * 0.01f + 1.0f;
@@ -53,10 +61,10 @@ void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry
   Tensor y = Tensor::FromFloat("Y", input_shape, y_values);
   Tensor reshape_shape = Tensor::FromInt64("reshape_shape", {3}, {0, 0, -1});
 
-  // Compute expected intermediate/output tensors with the reference kernels.
-  Tensor added = kernel::Add(ctx)(x, y);
-  Tensor concat_out = kernel::Concat(ctx)({added, x}, /*axis=*/2);
-  Tensor z = kernel::Reshape(ctx)(concat_out, reshape_shape);
+  // Compute reference output values with the kernels (data only — the shape
+  // declarations in the graph use the literal values from the page).
+  Tensor z = kernel::Reshape(ctx)(kernel::Concat(ctx)({kernel::Add(ctx)(x, y), x}, /*axis=*/2),
+                                  reshape_shape);
   z.name = "Z";
 
   const std::string name = "test_cc_shape_inference_add_concat_reshape";
@@ -64,17 +72,12 @@ void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry
   TestCase tc;
   tc.name = name;
   tc.model_name = name;
-  tc.kind = "node";
+  tc.kind = "model";
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
   ModelProto &model = tc.model;
-  model.set_ir_version(kDefaultIrVersion);
-  model.set_producer_name("backend-test");
-  OperatorSetIdProto proto;
-  proto.set_domain(opset.domain);
-  proto.set_version(opset.version);
-  model.add_opset_import(proto);
+  InitModel(model, kDefaultIrVersion, {opset});
 
   GraphProto *graph = model.add_graph();
   graph->set_name(name);
@@ -101,25 +104,27 @@ void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry
   reshape_node->add_input("reshape_shape");
   reshape_node->add_output("Z");
 
-  // Graph inputs: X, Y and the shape tensor.
-  FillValueInfo(x, *graph->add_input());
-  FillValueInfo(y, *graph->add_input());
+  // Helper to declare a tensor-typed ValueInfo with a literal float shape.
+  const auto add_float_value_info = [](ValueInfoProto &vi, const std::string &vi_name,
+                                       const std::vector<int64_t> &shape) {
+    Tensor t;
+    t.name = vi_name;
+    t.data_type = static_cast<int32_t>(DataType::FLOAT);
+    t.shape = shape;
+    FillValueInfo(t, vi);
+  };
+
+  // Graph inputs: X, Y and the shape tensor — shapes from the page.
+  add_float_value_info(*graph->add_input(), "X", input_shape);
+  add_float_value_info(*graph->add_input(), "Y", input_shape);
   FillValueInfo(reshape_shape, *graph->add_input());
 
-  // Intermediate ValueInfo entries with the expected concrete shapes so that
-  // a reader (or shape-inference comparison) can see the expected shape of
-  // every tensor in the graph. ``added`` keeps the input shape; ``concat_out``
-  // doubles the last dimension via ``axis=2``.
-  Tensor added_vi = added;
-  added_vi.name = "added";
-  Tensor concat_out_vi = concat_out;
-  concat_out_vi.name = "concat_out";
-  FillValueInfo(added_vi, *graph->add_value_info());
-  FillValueInfo(concat_out_vi, *graph->add_value_info());
+  // Intermediate value_info entries with the literal shapes from the page.
+  add_float_value_info(*graph->add_value_info(), "added", input_shape);
+  add_float_value_info(*graph->add_value_info(), "concat_out", concat_shape);
 
-  // Graph output Z carries the fully resolved shape ``[kBatch, kSeq, 2 *
-  // kDModel]``.
-  FillValueInfo(z, *graph->add_output());
+  // Graph output Z — literal shape from the page.
+  add_float_value_info(*graph->add_output(), "Z", concat_shape);
 
   DataSet ds;
   ds.inputs.push_back(x);

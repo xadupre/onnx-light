@@ -68,17 +68,12 @@ void RegisterNonZeroChainCase(const std::string &name, NonZeroOutputAnnotation a
   TestCase tc;
   tc.name = name;
   tc.model_name = name;
-  tc.kind = "node";
+  tc.kind = "model";
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
   ModelProto &model = tc.model;
-  model.set_ir_version(kDefaultIrVersion);
-  model.set_producer_name("backend-test");
-  OperatorSetIdProto proto;
-  proto.set_domain(opset.domain);
-  proto.set_version(opset.version);
-  model.add_opset_import(proto);
+  InitModel(model, kDefaultIrVersion, {opset});
 
   GraphProto *graph = model.add_graph();
   graph->set_name(name);

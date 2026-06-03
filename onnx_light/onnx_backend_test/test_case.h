@@ -57,6 +57,15 @@ struct TestCase {
 };
 
 /**
+ * Initializes ``model`` with ``ir_version``, ``producer_name`` and the given
+ * ``opset_imports`` (default ai.onnx domain when an entry's ``domain`` is
+ * empty). Mirrors the boilerplate that opens every manually-built backend
+ * test case model so callers don't have to repeat it.
+ */
+void InitModel(ModelProto &model, int64_t ir_version, const std::vector<OpsetId> &opset_imports,
+               const std::string &producer_name = "backend-test");
+
+/**
  * Builds a single-node ``ModelProto`` from ``node`` and the provided typed
  * inputs/outputs, then appends a ``TestCase`` to ``registry``.
  *

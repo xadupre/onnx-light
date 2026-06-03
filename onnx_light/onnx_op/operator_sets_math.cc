@@ -280,6 +280,81 @@ Calculates the hyperbolic tangent of the given input tensor element-wise.
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildSeluSchemas() {
+  static constexpr const char *kSeluDoc = R"DOC(
+Selu takes one input data (Tensor<T>) and produces one output data
+(Tensor<T>) where the scaled exponential linear unit function,
+`y = gamma * (alpha * e^x - alpha) for x <= 0`, `y = gamma * x for x > 0`,
+is applied to the tensor elementwise.
+)DOC";
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(3);
+  schemas.push_back(LightOpSchema(
+      "Selu", kOnnxDomain, 22, kSeluDoc,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T",
+           {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble},
+           "Constrain input and output types to float tensors."},
+      },
+      {
+          {"alpha",
+           "Coefficient of SELU default to 1.67326319217681884765625 "
+           "(i.e., float32 approximation of 1.6732632423543772848170429916717).",
+           AttributeType::FLOAT, /*required=*/false, 1.67326319217681884765625},
+          {"gamma",
+           "Coefficient of SELU default to 1.05070102214813232421875 "
+           "(i.e., float32 approximation of 1.0507009873554804934193349852946).",
+           AttributeType::FLOAT, /*required=*/false, 1.05070102214813232421875},
+      },
+      /*has_function_implementation=*/true));
+  schemas.push_back(
+      LightOpSchema("Selu", kOnnxDomain, 6, kSeluDoc,
+                    {
+                        {"X", "Input tensor", "T"},
+                    },
+                    {
+                        {"Y", "Output tensor", "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    },
+                    {
+                        {"alpha",
+                         "Coefficient of SELU default to 1.67326319217681884765625 "
+                         "(i.e., float32 approximation of 1.6732632423543772848170429916717).",
+                         AttributeType::FLOAT, /*required=*/false, 1.67326319217681884765625},
+                        {"gamma",
+                         "Coefficient of SELU default to 1.05070102214813232421875 "
+                         "(i.e., float32 approximation of 1.0507009873554804934193349852946).",
+                         AttributeType::FLOAT, /*required=*/false, 1.05070102214813232421875},
+                    },
+                    /*has_function_implementation=*/true));
+  schemas.push_back(
+      LightOpSchema("Selu", kOnnxDomain, 1, kSeluDoc,
+                    {
+                        {"X", "Input tensor", "T"},
+                    },
+                    {
+                        {"Y", "Output tensor", "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    },
+                    {
+                        {"alpha", "Coefficient of SELU default to 1.6732.", AttributeType::FLOAT,
+                         /*required=*/false, 1.6732},
+                        {"gamma", "Coefficient of SELU default to 1.0507.", AttributeType::FLOAT,
+                         /*required=*/false, 1.0507},
+                    }));
+  return schemas;
+}
+
 std::vector<LightOpSchema> BuildSigmoidSchemas() {
   static constexpr const char *kSigmoidDoc = R"DOC(
 Sigmoid takes one input data (Tensor<T>) and produces one output data
@@ -1775,6 +1850,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Mul", [] { return BuildElementwiseMathSchemaForVersion("Mul"); }},
       {"Pow", [] { return BuildPowSchemas(); }},
       {"Round", [] { return BuildRoundSchemas(); }},
+      {"Selu", [] { return BuildSeluSchemas(); }},
       {"Sigmoid", [] { return BuildSigmoidSchemas(); }},
       {"Sin", [] { return BuildUnaryFloatMathSchemas("Sin", 22, 7); }},
       {"Sinh", [] { return BuildUnaryFloatMathSchemas("Sinh", 22, 9); }},

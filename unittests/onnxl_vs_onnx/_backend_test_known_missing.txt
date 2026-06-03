@@ -1040,10 +1040,7 @@ sce_sum
 sce_sum_expanded
 sce_sum_log_prob
 sce_sum_log_prob_expanded
-selu
-selu_default
 selu_default_expanded_ver18
-selu_example
 selu_example_expanded_ver18
 selu_expanded_ver18
 sequence_insert_at_back

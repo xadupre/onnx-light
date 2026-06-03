@@ -101,7 +101,7 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> swish_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Swish");
 
-  EXPECT_EQ(schemas.size(), 118u);
+  EXPECT_EQ(schemas.size(), 121u);
 
   // Swish was introduced at v24 and has had a single schema since then.
   ASSERT_EQ(swish_schemas.size(), 1u);

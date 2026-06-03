@@ -8,7 +8,6 @@
 #include "onnx_backend_test/test_case.h"
 
 #include <cstdint>
-#include <cstring>
 #include <string>
 #include <utility>
 #include <vector>
@@ -20,16 +19,6 @@ namespace {
 
 // IR version used by the manually-built models below.
 constexpr int64_t kDefaultIrVersion = 10;
-
-// Builds the 1-D INT64 ``shape`` tensor consumed by the ``Reshape`` node.
-Tensor MakeShapeTensor(const std::string &name, const std::vector<int64_t> &dims) {
-  const std::vector<int64_t> shape_shape = {static_cast<int64_t>(dims.size())};
-  std::vector<uint8_t> data(dims.size() * sizeof(int64_t));
-  if (!dims.empty()) {
-    std::memcpy(data.data(), dims.data(), data.size());
-  }
-  return Tensor(name, static_cast<int32_t>(DataType::INT64), shape_shape, std::move(data));
-}
 
 } // namespace
 
@@ -62,7 +51,7 @@ void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry
   }
   Tensor x = Tensor::FromFloat("X", input_shape, x_values);
   Tensor y = Tensor::FromFloat("Y", input_shape, y_values);
-  Tensor reshape_shape = MakeShapeTensor("reshape_shape", {0, 0, -1});
+  Tensor reshape_shape = Tensor::FromInt64("reshape_shape", {3}, {0, 0, -1});
 
   // Compute expected intermediate/output tensors with the reference kernels.
   Tensor added = kernel::Add(ctx)(x, y);

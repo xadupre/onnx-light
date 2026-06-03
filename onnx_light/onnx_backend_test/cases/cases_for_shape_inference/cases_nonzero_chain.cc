@@ -79,15 +79,14 @@ void RegisterNonZeroChainCase(const std::string &name, NonZeroOutputAnnotation a
   GraphProto *graph = model.add_graph();
   graph->set_name(name);
 
-  *graph->add_node() = MakeNode("Abs", {"X"}, {"abs_out"});
-  *graph->add_node() = MakeNode("Relu", {"abs_out"}, {"relu_out"});
-  *graph->add_node() = MakeNode("Add", {"relu_out", "relu_out"}, {"double_out"});
-  *graph->add_node() = MakeNode("Mul", {"double_out", "relu_out"}, {"mul_out"});
-  *graph->add_node() = MakeNode("NonZero", {"mul_out"}, {"nz"});
-  *graph->add_node() = MakeNode("Transpose", {"nz"}, {"transposed_nz"});
-  NodeProto *cast_node = graph->add_node();
-  *cast_node = MakeNode("Cast", {"transposed_nz"}, {"nz_float"});
-  AddAttribute<int64_t>(*cast_node, "to", static_cast<int64_t>(DataType::FLOAT));
+  AddNode(*graph, "Abs", {"X"}, {"abs_out"});
+  AddNode(*graph, "Relu", {"abs_out"}, {"relu_out"});
+  AddNode(*graph, "Add", {"relu_out", "relu_out"}, {"double_out"});
+  AddNode(*graph, "Mul", {"double_out", "relu_out"}, {"mul_out"});
+  AddNode(*graph, "NonZero", {"mul_out"}, {"nz"});
+  AddNode(*graph, "Transpose", {"nz"}, {"transposed_nz"});
+  NodeProto &cast_node = AddNode(*graph, "Cast", {"transposed_nz"}, {"nz_float"});
+  AddAttribute<int64_t>(cast_node, "to", static_cast<int64_t>(DataType::FLOAT));
 
   // Graph input: X with concrete dims.
   FillValueInfo(x, *graph->add_input());

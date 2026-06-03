@@ -426,4 +426,11 @@ NodeProto MakeNode(const char *op_type, const std::vector<std::string> &inputs,
   return node;
 }
 
+NodeProto &AddNode(GraphProto &graph, const char *op_type, const std::vector<std::string> &inputs,
+                   const std::vector<std::string> &outputs, const char *domain, const char *name) {
+  NodeProto *node = graph.add_node();
+  *node = MakeNode(op_type, inputs, outputs, domain, name);
+  return *node;
+}
+
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -46,27 +46,12 @@ void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry
   const OpsetId opset = DefaultOpset(18);
   const kernel::KernelContext ctx{opset};
 
-  // Concrete shapes from the gallery page (``batch=2, seq=5, d_model=8``).
-  const std::vector<int64_t> input_shape = {2, 5, 8};   // X, Y, added
-  const std::vector<int64_t> concat_shape = {2, 5, 16}; // concat_out, Z
+  // Concrete shape from the gallery page for the inputs / ``added``
+  // (``batch=2, seq=5, d_model=8``). ``concat_shape`` is declared further
+  // down, next to where it is used.
+  const std::vector<int64_t> input_shape = {2, 5, 8}; // X, Y, added
 
-  // Simple, fully-populated input tensors.
-  const int64_t input_size = input_shape[0] * input_shape[1] * input_shape[2];
-  std::vector<float> x_values(static_cast<size_t>(input_size));
-  std::vector<float> y_values(static_cast<size_t>(input_size));
-  for (size_t i = 0; i < x_values.size(); ++i) {
-    x_values[i] = static_cast<float>(i) * 0.1f;
-    y_values[i] = static_cast<float>(i) * 0.01f + 1.0f;
-  }
-  Tensor x = Tensor::FromFloat("X", input_shape, x_values);
-  Tensor y = Tensor::FromFloat("Y", input_shape, y_values);
   Tensor reshape_shape = Tensor::FromInt64("reshape_shape", {3}, {0, 0, -1});
-
-  // Compute reference output values with the kernels (data only — the shape
-  // declarations in the graph use the literal values from the page).
-  Tensor z = kernel::Reshape(ctx)(kernel::Concat(ctx)({kernel::Add(ctx)(x, y), x}, /*axis=*/2),
-                                  reshape_shape);
-  z.name = "Z";
 
   const std::string name = "test_cc_shape_inference_add_concat_reshape";
 
@@ -83,13 +68,10 @@ void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry
   GraphProto *graph = model.add_graph();
   graph->set_name(name);
 
-  *graph->add_node() = MakeNode("Add", {"X", "Y"}, {"added"});
-
-  NodeProto *concat_node = graph->add_node();
-  *concat_node = MakeNode("Concat", {"added", "X"}, {"concat_out"});
-  AddAttribute<int64_t>(*concat_node, "axis", 2);
-
-  *graph->add_node() = MakeNode("Reshape", {"concat_out", "reshape_shape"}, {"Z"});
+  AddNode(*graph, "Add", {"X", "Y"}, {"added"});
+  NodeProto &concat_node = AddNode(*graph, "Concat", {"added", "X"}, {"concat_out"});
+  AddAxisAttribute(concat_node, /*axis=*/2);
+  AddNode(*graph, "Reshape", {"concat_out", "reshape_shape"}, {"Z"});
 
   // Helper to declare a tensor-typed ValueInfo with a literal float shape.
   const auto add_float_value_info = [](ValueInfoProto &vi, const std::string &vi_name,
@@ -107,11 +89,28 @@ void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry
   FillValueInfo(reshape_shape, *graph->add_input());
 
   // Intermediate value_info entries with the literal shapes from the page.
+  // ``concat_out`` / ``Z`` use ``[2, 5, 16]`` (last dim doubled by Concat).
+  const std::vector<int64_t> concat_shape = {2, 5, 16}; // concat_out, Z
   add_float_value_info(*graph->add_value_info(), "added", input_shape);
   add_float_value_info(*graph->add_value_info(), "concat_out", concat_shape);
 
   // Graph output Z — literal shape from the page.
   add_float_value_info(*graph->add_output(), "Z", concat_shape);
+
+  // Build the reference DataSet right next to its consumers: simple,
+  // fully-populated input tensors, then run the kernels to materialise Z.
+  const int64_t input_size = input_shape[0] * input_shape[1] * input_shape[2];
+  std::vector<float> x_values(static_cast<size_t>(input_size));
+  std::vector<float> y_values(static_cast<size_t>(input_size));
+  for (size_t i = 0; i < x_values.size(); ++i) {
+    x_values[i] = static_cast<float>(i) * 0.1f;
+    y_values[i] = static_cast<float>(i) * 0.01f + 1.0f;
+  }
+  Tensor x = Tensor::FromFloat("X", input_shape, x_values);
+  Tensor y = Tensor::FromFloat("Y", input_shape, y_values);
+  Tensor z = kernel::Reshape(ctx)(kernel::Concat(ctx)({kernel::Add(ctx)(x, y), x}, /*axis=*/2),
+                                  reshape_shape);
+  z.name = "Z";
 
   DataSet ds;
   ds.inputs.push_back(x);

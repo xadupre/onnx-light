@@ -5,12 +5,15 @@
 #include "onnx_lib/onnx-data.pb.h"
 #include <algorithm>
 #include <cctype>
+#include <cstring>
 #include <nanobind/make_iterator.h>
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/tuple.h>
 #include <nanobind/stl/vector.h>
+#include <optional>
+#include <type_traits>
 
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -18,6 +21,32 @@ using namespace ONNX_LIGHT_NAMESPACE;
 namespace {
 constexpr size_t MAX_SHORT_REPR_LENGTH = 60;
 inline bool is_space_char(char c) { return std::isspace(static_cast<unsigned char>(c)) != 0; }
+
+ModelProto MakeOwnedModelProtoCopy(const ModelProto &model) {
+  // Fully reparse through bytes to ensure every borrowed span in the model
+  // becomes owned before serialization paths that may mutate buffers/metadata.
+  std::string serialized;
+  model.SerializeToString(serialized);
+  ModelProto owned;
+  owned.ParseFromString(serialized);
+  return owned;
+}
+
+bool HasBorrowedRawData(const ModelProto &model) {
+  if (!model.has_graph()) {
+    return false;
+  }
+  // IteratorTensorProto currently exposes a mutable GraphProto traversal API.
+  // The scan is read-only, so cast away constness only to walk the graph.
+  auto &mutable_model = const_cast<ModelProto &>(model);
+  IteratorTensorProto it(&mutable_model.ref_graph());
+  while (it.next()) {
+    if (it->ref_raw_data().is_borrowed()) {
+      return true;
+    }
+  }
+  return false;
+}
 
 } // namespace
 
@@ -301,16 +330,24 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           "SerializeToFile",
           [](cls &self, const std::string &file_path, nb::object options,
              std::string &external_data_file) {
+            cls *to_write = &self;
+            std::optional<ModelProto> owned_copy;
+            if constexpr (std::is_same_v<cls, ModelProto>) {
+              if (!external_data_file.empty() && HasBorrowedRawData(self)) {
+                owned_copy = MakeOwnedModelProtoCopy(self);
+                to_write = &(*owned_copy);
+              }
+            }
             utils::BinaryWriteStream *stream =
                 external_data_file.empty()
                     ? new utils::FileWriteStream(file_path)
                     : new utils::TwoFilesWriteStream(file_path, external_data_file);
             if (nb::isinstance<SerializeOptions &>(options)) {
-              SerializeProtoToStream(self, *stream, nb::cast<SerializeOptions &>(options),
+              SerializeProtoToStream(*to_write, *stream, nb::cast<SerializeOptions &>(options),
                                      !external_data_file.empty());
             } else {
               SerializeOptions opts;
-              SerializeProtoToStream(self, *stream, opts, !external_data_file.empty());
+              SerializeProtoToStream(*to_write, *stream, opts, !external_data_file.empty());
             }
             delete stream;
           },

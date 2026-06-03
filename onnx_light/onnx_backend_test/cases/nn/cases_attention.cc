@@ -8,6 +8,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -49,6 +50,131 @@ NodeProto MakeAttentionNode(const std::vector<std::string> &inputs,
     node.add_output(name);
   }
   return node;
+}
+
+// IEEE-754 binary32 -> binary16 conversion with round-to-nearest-even. Handles
+// normals, zeros, subnormals, infinities and NaNs. Only used by the rank-4
+// ``test_cc_attention_4d_fp16*`` cases so the helper is intentionally local.
+uint16_t FloatToFloat16Bits(float f) {
+  uint32_t x;
+  std::memcpy(&x, &f, sizeof(float));
+  const uint32_t sign = (x >> 16) & 0x8000u;
+  const int32_t e32 = static_cast<int32_t>((x >> 23) & 0xffu);
+  const uint32_t m32 = x & 0x007fffffu;
+  if (e32 == 0xff) {
+    // Inf or NaN — preserve sign; collapse the mantissa to a quiet-NaN
+    // marker when it was non-zero.
+    return static_cast<uint16_t>(sign | 0x7c00u | (m32 != 0 ? 0x0200u : 0u));
+  }
+  const int32_t e = e32 - 127 + 15;
+  if (e >= 31) {
+    return static_cast<uint16_t>(sign | 0x7c00u); // overflow -> +/-inf
+  }
+  if (e <= 0) {
+    if (e < -10) {
+      return static_cast<uint16_t>(sign); // too small -> +/-0
+    }
+    // Subnormal: build the implicit leading bit then shift.
+    uint32_t m = (m32 | 0x00800000u) >> static_cast<uint32_t>(1 - e);
+    const uint32_t round_bit = (m >> 12) & 1u;
+    const uint32_t sticky = m & 0x00000fffu;
+    uint16_t h = static_cast<uint16_t>(sign | (m >> 13));
+    if (round_bit && (sticky != 0 || (h & 1))) {
+      h = static_cast<uint16_t>(h + 1);
+    }
+    return h;
+  }
+  // Normal: pack exponent + truncated mantissa, then round-to-nearest-even.
+  const uint32_t low = m32 & 0x1fffu;
+  uint16_t h = static_cast<uint16_t>(sign | (static_cast<uint32_t>(e) << 10) | (m32 >> 13));
+  if (low > 0x1000u || (low == 0x1000u && (h & 1u))) {
+    h = static_cast<uint16_t>(h + 1); // mantissa carry naturally bumps exponent
+  }
+  return h;
+}
+
+// Inverse of ``FloatToFloat16Bits`` — decodes an IEEE-754 binary16 bit
+// pattern into the corresponding ``float`` value. Matches the FLOAT16 -> FLOAT
+// path used by ``kernel::Bernoulli``.
+float Float16BitsToFloat(uint16_t h) {
+  const uint32_t sign = (static_cast<uint32_t>(h) >> 15) & 0x1u;
+  const uint32_t exp = (static_cast<uint32_t>(h) >> 10) & 0x1fu;
+  const uint32_t mant = static_cast<uint32_t>(h) & 0x3ffu;
+  uint32_t f;
+  if (exp == 0) {
+    if (mant == 0) {
+      f = sign << 31;
+    } else {
+      uint32_t m = mant;
+      int32_t e = -1;
+      while ((m & 0x400u) == 0) {
+        m <<= 1;
+        --e;
+      }
+      m &= 0x3ffu;
+      f = (sign << 31) | (static_cast<uint32_t>(e + 127 + 1) << 23) | (m << 13);
+    }
+  } else if (exp == 0x1fu) {
+    f = (sign << 31) | 0x7f800000u | (mant << 13);
+  } else {
+    f = (sign << 31) | (static_cast<uint32_t>(exp - 15 + 127) << 23) | (mant << 13);
+  }
+  float fv;
+  std::memcpy(&fv, &f, sizeof(float));
+  return fv;
+}
+
+// Encodes a FLOAT tensor as a FLOAT16 tensor by round-tripping every element
+// through ``FloatToFloat16Bits``. Caller-provided ``name`` becomes the
+// tensor name on the resulting ``Tensor``.
+Tensor FloatToFloat16Tensor(const std::string &name, const Tensor &f) {
+  EXT_ENFORCE_INVALID(f.data_type == DataType::FLOAT, "FloatToFloat16Tensor: input must be FLOAT.");
+  const int64_t n = f.element_count();
+  std::vector<uint16_t> bits(static_cast<size_t>(n));
+  const float *src = f.AsFloat();
+  for (int64_t i = 0; i < n; ++i) {
+    bits[static_cast<size_t>(i)] = FloatToFloat16Bits(src[i]);
+  }
+  Tensor t = Tensor::FromUint16(name, f.shape, bits);
+  t.data_type = static_cast<int32_t>(DataType::FLOAT16);
+  return t;
+}
+
+// Round-trips every element through ``FloatToFloat16Bits`` / decode and
+// returns a fresh FLOAT tensor reflecting the FP16 storage precision. Used
+// to simulate the input-side rounding that happens when FLOAT16 tensors are
+// fed into a backend that internally promotes to FLOAT.
+Tensor RoundToFloat16(const Tensor &f) {
+  EXT_ENFORCE_INVALID(f.data_type == DataType::FLOAT, "RoundToFloat16: input must be FLOAT.");
+  const int64_t n = f.element_count();
+  std::vector<float> rounded(static_cast<size_t>(n));
+  const float *src = f.AsFloat();
+  for (int64_t i = 0; i < n; ++i) {
+    rounded[static_cast<size_t>(i)] = Float16BitsToFloat(FloatToFloat16Bits(src[i]));
+  }
+  return Tensor::FromFloat(f.name, f.shape, rounded);
+}
+
+// Builds a small deterministic FLOAT tensor of the requested shape. Values
+// are derived from a simple LCG seeded by ``seed`` and then mapped into
+// ``[lo, hi]`` so the generated data covers a range where FP16 rounding is
+// well-behaved.
+Tensor MakeDeterministicFloatTensor(const std::vector<int64_t> &shape, uint32_t seed, float lo,
+                                    float hi) {
+  int64_t n = 1;
+  for (int64_t d : shape) {
+    EXT_ENFORCE_INVALID(d >= 0, "MakeDeterministicFloatTensor: negative dimension.");
+    n *= d;
+  }
+  std::vector<float> values(static_cast<size_t>(n));
+  uint32_t s = seed;
+  for (int64_t i = 0; i < n; ++i) {
+    // Numerical Recipes LCG; produces a deterministic pseudo-uniform stream.
+    s = s * 1664525u + 1013904223u;
+    const float u = static_cast<float>(s & 0x00ffffffu) / static_cast<float>(0x01000000u);
+    values[static_cast<size_t>(i)] = lo + (hi - lo) * u;
+  }
+  return Tensor::FromFloat("", shape, values);
 }
 
 // ---- Deterministic small input tensors --------------------------------
@@ -1204,6 +1330,235 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
     AddFloat(node, "scale", 0.5f);
     Expect(node, {Q, K, V, mask}, {Y}, "test_cc_attention_4d_diff_heads_mask4d_padded_kv", {opset},
            "backend-test", registry);
+  }
+
+  // -------------------------------------------------------------------
+  // Additional rank-3 (fused layout) ``diff_heads_sizes`` variants
+  // mirroring the upstream ``test_attention_3d_diff_heads_sizes_*`` cases.
+  // V has a head_size of 3 (vs. 2 for Q/K), exercising the asymmetric
+  // ``v_head_size`` path together with each feature attribute. The V
+  // values are the rank-3 fused-layout reshape of the rank-4 ``(1, 2, 3,
+  // 3)`` tensor used by the 4D ``diff_heads_sizes`` cases above.
+
+  auto rank3_diff_heads_V = []() {
+    // V: (1, 3, 6) ← collapse of (1, 2, 3, 3) — same payload as
+    // ``MakeV_1_2_3_3`` written out in fused-layout order.
+    return Tensor::FromFloat("", {1, 3, 6},
+                             {1.0f, 0.0f, -1.0f, 2.0f, -2.0f, 1.0f, 0.0f, 1.0f, 2.0f, 0.5f, 0.25f,
+                              -0.25f, -1.0f, 1.0f, 0.5f, -0.5f, 0.0f, 1.0f});
+  };
+
+  // 3D diff_heads_sizes + scaled.
+  {
+    Tensor Q = rank3_inputs();
+    Tensor K = rank3_K();
+    Tensor V = rank3_diff_heads_V();
+    kernel::Attention::Attributes attrs;
+    attrs.q_num_heads = 2;
+    attrs.kv_num_heads = 2;
+    attrs.has_scale = true;
+    attrs.scale = 1e-2f;
+    Tensor Y = attention(Q, K, V, attrs).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
+    AddInt(node, "q_num_heads", 2);
+    AddInt(node, "kv_num_heads", 2);
+    AddFloat(node, "scale", 1e-2f);
+    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_3d_diff_heads_sizes_scaled", {opset},
+           "backend-test", registry);
+  }
+
+  // 3D diff_heads_sizes + softcap.
+  {
+    Tensor Q = rank3_inputs();
+    Tensor K = rank3_K();
+    Tensor V = rank3_diff_heads_V();
+    kernel::Attention::Attributes attrs;
+    attrs.q_num_heads = 2;
+    attrs.kv_num_heads = 2;
+    attrs.has_scale = true;
+    attrs.scale = 1.0f;
+    attrs.softcap = 0.5f;
+    Tensor Y = attention(Q, K, V, attrs).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
+    AddInt(node, "q_num_heads", 2);
+    AddInt(node, "kv_num_heads", 2);
+    AddFloat(node, "scale", 1.0f);
+    AddFloat(node, "softcap", 0.5f);
+    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_3d_diff_heads_sizes_softcap", {opset},
+           "backend-test", registry);
+  }
+
+  // 3D diff_heads_sizes + attn_mask.
+  {
+    Tensor Q = rank3_inputs();
+    Tensor K = rank3_K();
+    Tensor V = rank3_diff_heads_V();
+    Tensor mask = Tensor::FromFloat("", {2, 3}, {0.0f, -0.5f, -1.0f, 0.5f, 0.0f, -0.2f});
+    kernel::Attention::Attributes attrs;
+    attrs.q_num_heads = 2;
+    attrs.kv_num_heads = 2;
+    attrs.has_scale = true;
+    attrs.scale = 0.5f;
+    Tensor Y = attention(Q, K, V, attrs, &mask).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
+    AddInt(node, "q_num_heads", 2);
+    AddInt(node, "kv_num_heads", 2);
+    AddFloat(node, "scale", 0.5f);
+    Expect(node, {Q, K, V, mask}, {Y}, "test_cc_attention_3d_diff_heads_sizes_attn_mask", {opset},
+           "backend-test", registry);
+  }
+
+  // 3D diff_heads_sizes + causal — square q/kv lengths.
+  {
+    Tensor Q = Tensor::FromFloat(
+        "", {1, 3, 4}, {1.0f, 0.0f, -1.0f, 1.0f, 0.0f, 1.0f, 1.0f, -1.0f, 0.5f, 0.5f, 0.25f, 0.5f});
+    Tensor K = rank3_K();
+    Tensor V = rank3_diff_heads_V();
+    kernel::Attention::Attributes attrs;
+    attrs.q_num_heads = 2;
+    attrs.kv_num_heads = 2;
+    attrs.is_causal = true;
+    Tensor Y = attention(Q, K, V, attrs).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
+    AddInt(node, "q_num_heads", 2);
+    AddInt(node, "kv_num_heads", 2);
+    AddInt(node, "is_causal", 1);
+    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_3d_diff_heads_sizes_causal", {opset},
+           "backend-test", registry);
+  }
+
+  // 3D diff_heads_sizes with past_key/past_value (and present_*) and an
+  // attn_mask covering ``past_kv_seq_len + kv_seq_len``. Mirrors upstream's
+  // ``test_attention_3d_diff_heads_with_past_and_present`` whose only
+  // asymmetry is ``V`` carrying a larger head_size than Q/K.
+  {
+    Tensor Q = rank3_inputs();
+    Tensor K = rank3_K();
+    Tensor V = rank3_diff_heads_V();
+    Tensor past_key = Tensor::FromFloat("", {1, 2, 2, 2},
+                                        {0.5f, -0.5f, 0.0f, 0.5f,   // head 0
+                                         1.0f, 0.0f, -0.5f, 1.0f}); // head 1
+    Tensor past_value = Tensor::FromFloat("", {1, 2, 2, 3},
+                                          {0.5f, 0.5f, -1.0f, 0.0f, 0.25f, 0.5f,     // head 0
+                                           0.0f, 0.5f, 0.5f, -0.5f, 0.75f, -0.25f}); // head 1
+    Tensor mask = Tensor::FromFloat("", {2, 5},
+                                    {0.0f, -0.5f, -1.0f, 0.2f, 0.0f,   // q=0
+                                     0.5f, 0.0f, -0.2f, -0.1f, 0.0f}); // q=1
+    kernel::Attention::Attributes attrs;
+    attrs.q_num_heads = 2;
+    attrs.kv_num_heads = 2;
+    attrs.has_scale = true;
+    attrs.scale = 0.5f;
+    auto r = attention(Q, K, V, attrs, &mask, &past_key, &past_value);
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask", "past_key", "past_value"},
+                                       {"Y", "present_key", "present_value"});
+    AddInt(node, "q_num_heads", 2);
+    AddInt(node, "kv_num_heads", 2);
+    AddFloat(node, "scale", 0.5f);
+    Expect(node, {Q, K, V, mask, past_key, past_value}, {r.Y, r.present_key, r.present_value},
+           "test_cc_attention_3d_diff_heads_with_past_and_present", {opset}, "backend-test",
+           registry);
+  }
+
+  // 3D transpose verification — mirrors upstream's
+  // ``test_attention_3d_transpose_verification``. Each query head carries
+  // its own distinctive scalar pattern in the hidden dimension so the
+  // rank-3 -> rank-4 reshape + transpose path can be inspected by reading
+  // off ``Y``.
+  {
+    const int64_t q_num_heads = 3;
+    const int64_t kv_num_heads = 3;
+    const int64_t batch = 1;
+    const int64_t q_seq = 2;
+    const int64_t kv_seq = 2;
+    const int64_t head_size = 4;
+    const int64_t q_hidden = q_num_heads * head_size;
+    const int64_t kv_hidden = kv_num_heads * head_size;
+    std::vector<float> q_values(static_cast<size_t>(batch * q_seq * q_hidden), 0.0f);
+    for (int64_t s = 0; s < q_seq; ++s) {
+      for (int64_t h = 0; h < q_num_heads; ++h) {
+        const float value = static_cast<float>(h + 1);
+        for (int64_t d = 0; d < head_size; ++d) {
+          q_values[static_cast<size_t>(s * q_hidden + h * head_size + d)] = value;
+        }
+      }
+    }
+    Tensor Q = Tensor::FromFloat("", {batch, q_seq, q_hidden}, q_values);
+    Tensor K = Tensor::FromFloat(
+        "", {batch, kv_seq, kv_hidden},
+        std::vector<float>(static_cast<size_t>(batch * kv_seq * kv_hidden), 0.1f));
+    Tensor V = Tensor::FromFloat(
+        "", {batch, kv_seq, kv_hidden},
+        std::vector<float>(static_cast<size_t>(batch * kv_seq * kv_hidden), 0.1f));
+    kernel::Attention::Attributes attrs;
+    attrs.q_num_heads = q_num_heads;
+    attrs.kv_num_heads = kv_num_heads;
+    Tensor Y = attention(Q, K, V, attrs).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
+    AddInt(node, "q_num_heads", q_num_heads);
+    AddInt(node, "kv_num_heads", kv_num_heads);
+    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_3d_transpose_verification", {opset},
+           "backend-test", registry);
+  }
+
+  // -------------------------------------------------------------------
+  // Rank-4 FP16 variants. The kernel itself runs in FP32; inputs are
+  // round-tripped through the FP16 encoding so the expected output mirrors
+  // the precision a true FP16 backend would deliver. Tolerances on the
+  // registered cases are loosened to account for the resulting rounding
+  // error.
+
+  // 4D fp16 — basic MHA over deterministic small inputs.
+  {
+    Tensor Q32 = MakeDeterministicFloatTensor({2, 3, 4, 8}, 0x1234u, 0.0f, 1.0f);
+    Tensor K32 = MakeDeterministicFloatTensor({2, 3, 6, 8}, 0x5678u, 0.0f, 1.0f);
+    Tensor V32 = MakeDeterministicFloatTensor({2, 3, 6, 8}, 0x9abcu, 0.0f, 1.0f);
+    Tensor Q_in = RoundToFloat16(Q32);
+    Tensor K_in = RoundToFloat16(K32);
+    Tensor V_in = RoundToFloat16(V32);
+    Tensor Y32 = attention(Q_in, K_in, V_in);
+    Tensor Q = FloatToFloat16Tensor("", Q_in);
+    Tensor K = FloatToFloat16Tensor("", K_in);
+    Tensor V = FloatToFloat16Tensor("", V_in);
+    Tensor Y = FloatToFloat16Tensor("", Y32);
+    NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
+    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_4d_fp16", {opset}, "backend-test", registry);
+    registry.back().atol = 5e-3;
+    registry.back().rtol = 5e-3;
+  }
+
+  // 4D GQA + past/present, fp16.
+  {
+    Tensor Q32 = MakeDeterministicFloatTensor({2, 9, 4, 8}, 0xdeadu, 0.0f, 1.0f);
+    Tensor K32 = MakeDeterministicFloatTensor({2, 3, 6, 8}, 0xbeefu, 0.0f, 1.0f);
+    Tensor V32 = MakeDeterministicFloatTensor({2, 3, 6, 8}, 0xfeedu, 0.0f, 1.0f);
+    Tensor mask32 = MakeDeterministicFloatTensor({4, 18}, 0xcafeu, 0.0f, 1.0f);
+    Tensor pk32 = MakeDeterministicFloatTensor({2, 3, 12, 8}, 0xface, 0.0f, 1.0f);
+    Tensor pv32 = MakeDeterministicFloatTensor({2, 3, 12, 8}, 0xb16bu, 0.0f, 1.0f);
+    Tensor Q_in = RoundToFloat16(Q32);
+    Tensor K_in = RoundToFloat16(K32);
+    Tensor V_in = RoundToFloat16(V32);
+    Tensor mask_in = RoundToFloat16(mask32);
+    Tensor pk_in = RoundToFloat16(pk32);
+    Tensor pv_in = RoundToFloat16(pv32);
+    kernel::Attention::Attributes attrs;
+    auto r = attention(Q_in, K_in, V_in, attrs, &mask_in, &pk_in, &pv_in);
+    Tensor Q = FloatToFloat16Tensor("", Q_in);
+    Tensor K = FloatToFloat16Tensor("", K_in);
+    Tensor V = FloatToFloat16Tensor("", V_in);
+    Tensor mask = FloatToFloat16Tensor("", mask_in);
+    Tensor pk = FloatToFloat16Tensor("", pk_in);
+    Tensor pv = FloatToFloat16Tensor("", pv_in);
+    Tensor Y = FloatToFloat16Tensor("", r.Y);
+    Tensor present_key = FloatToFloat16Tensor("", r.present_key);
+    Tensor present_value = FloatToFloat16Tensor("", r.present_value);
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask", "past_key", "past_value"},
+                                       {"Y", "present_key", "present_value"});
+    Expect(node, {Q, K, V, mask, pk, pv}, {Y, present_key, present_value},
+           "test_cc_attention_4d_gqa_with_past_and_present_fp16", {opset}, "backend-test",
+           registry);
+    registry.back().atol = 5e-3;
+    registry.back().rtol = 5e-3;
   }
 }
 

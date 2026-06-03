@@ -186,3 +186,4 @@ Source code: `https://github.com/xadupre/onnx-light <https://github.com/xadupre/
     api/index
     operators/index
     examples
+    references

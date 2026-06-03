@@ -156,6 +156,7 @@ ONNX_OPTIM_SHAPE_INFERENCE_OPS: frozenset[tuple[str, str]] = frozenset(
         ("ai.onnx", "Softmax"),
         ("ai.onnx", "Sqrt"),
         ("ai.onnx", "Sum"),
+        ("ai.onnx", "Swish"),
         ("ai.onnx", "StringConcat"),
         ("ai.onnx", "StringSplit"),
         ("ai.onnx", "StringNormalizer"),

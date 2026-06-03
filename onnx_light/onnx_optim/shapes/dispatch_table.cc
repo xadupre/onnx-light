@@ -289,6 +289,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          math::ComputeShapeSum(ctx, node);
        }},
+      {"ai.onnx:Swish",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeSwish(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:Tan",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

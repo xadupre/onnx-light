@@ -62,7 +62,10 @@ jobs:
       - name: Detect runner CPU count
         id: cpu_count
         shell: bash
-        run: echo "count=$(python -c 'import os; print(os.cpu_count() or 1)')" >> "$GITHUB_OUTPUT"
+        run: |
+          count=$(python -c 'import os; print(os.cpu_count() or 1)')
+          echo "count=${count}" >> "$GITHUB_OUTPUT"
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${count}"
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.23.2
         env:
@@ -100,7 +103,10 @@ jobs:
       - name: Detect runner CPU count
         id: cpu_count
         shell: bash
-        run: echo "count=$(python -c 'import os; print(os.cpu_count() or 1)')" >> "$GITHUB_OUTPUT"
+        run: |
+          count=$(python -c 'import os; print(os.cpu_count() or 1)')
+          echo "count=${count}" >> "$GITHUB_OUTPUT"
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${count}"
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.23.2
         env:

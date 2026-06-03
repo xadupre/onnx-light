@@ -47,6 +47,8 @@ using onnx_backend_test::kernel::Sigmoid;
 using onnx_backend_test::kernel::Sin;
 using onnx_backend_test::kernel::Sinh;
 using onnx_backend_test::kernel::Softmax;
+using onnx_backend_test::kernel::Softplus;
+using onnx_backend_test::kernel::Softsign;
 using onnx_backend_test::kernel::Sqrt;
 using onnx_backend_test::kernel::Sub;
 using onnx_backend_test::kernel::Tan;
@@ -236,6 +238,35 @@ TEST(BackendKernelClass, SigmoidClassMatchesReference) {
   EXPECT_NEAR(py[0], 0.11920292f, 1e-6f);
   EXPECT_NEAR(py[1], 0.5f, 1e-6f);
   EXPECT_NEAR(py[2], 0.88079708f, 1e-6f);
+}
+
+TEST(BackendKernelClass, SoftplusClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(22)};
+  Softplus softplus_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {4}, {-20.0f, -1.0f, 0.0f, 2.0f});
+  Tensor y = softplus_kernel(x);
+  ASSERT_EQ(y.element_count(), 4);
+  const float *py = y.AsFloat();
+  // Reference values from y = ln(1 + exp(x)); numerically stable around large magnitudes.
+  EXPECT_NEAR(py[0], 2.0611537e-9f, 1e-6f);
+  EXPECT_NEAR(py[1], 0.31326169f, 1e-6f);
+  EXPECT_NEAR(py[2], 0.69314718f, 1e-6f);
+  EXPECT_NEAR(py[3], 2.12692809f, 1e-6f);
+}
+
+TEST(BackendKernelClass, SoftsignClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(22)};
+  Softsign softsign_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {4}, {-3.0f, -1.0f, 0.0f, 4.0f});
+  Tensor y = softsign_kernel(x);
+  ASSERT_EQ(y.element_count(), 4);
+  const float *py = y.AsFloat();
+  EXPECT_NEAR(py[0], -0.75f, 1e-6f);
+  EXPECT_NEAR(py[1], -0.5f, 1e-6f);
+  EXPECT_NEAR(py[2], 0.0f, 1e-6f);
+  EXPECT_NEAR(py[3], 0.8f, 1e-6f);
 }
 
 TEST(BackendKernelClass, DetClassComputesScalarFor2DInput) {

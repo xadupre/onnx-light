@@ -1083,11 +1083,9 @@ softmax_large_number_expanded_ver18
 softmax_negative_axis
 softmax_negative_axis_expanded
 softmax_negative_axis_expanded_ver18
-softplus
 softplus_example
 softplus_example_expanded_ver18
 softplus_expanded_ver18
-softsign
 softsign_example
 softsign_example_expanded_ver18
 softsign_expanded_ver18

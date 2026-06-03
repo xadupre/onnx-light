@@ -171,6 +171,38 @@ TEST(BackendTestCase, SigmoidCaseOutputsMatchLogisticFunction) {
   }
 }
 
+TEST(BackendTestCase, SoftplusCaseOutputsMatchSoftplusFunction) {
+  auto cases = CollectTestCases("Softplus");
+  const TestCase *tc = FindCase(cases, "test_cc_softplus");
+  ASSERT_NE(tc, nullptr);
+  ASSERT_EQ(tc->data_sets.size(), 1u);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 1u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  ASSERT_EQ(ds.inputs[0].element_count(), ds.outputs[0].element_count());
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::log1p(std::exp(x[i])), 1e-6f);
+  }
+}
+
+TEST(BackendTestCase, SoftsignCaseOutputsMatchSoftsignFunction) {
+  auto cases = CollectTestCases("Softsign");
+  const TestCase *tc = FindCase(cases, "test_cc_softsign");
+  ASSERT_NE(tc, nullptr);
+  ASSERT_EQ(tc->data_sets.size(), 1u);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 1u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  ASSERT_EQ(ds.inputs[0].element_count(), ds.outputs[0].element_count());
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], x[i] / (1.0f + std::fabs(x[i])), 1e-6f);
+  }
+}
+
 TEST(BackendTestCase, ExpCaseOutputsMatchStdExp) {
   auto cases = CollectTestCases("Exp");
   const TestCase *tc = FindCase(cases, "test_cc_exp");

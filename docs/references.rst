@@ -28,3 +28,8 @@ Papers
     deterministic and bit-reproducible across platforms;
   - exposing the corresponding artifacts (conformance test reports,
     traceability matrices) needed for certification.
+
+  See also the `ONNX roadmap
+  <https://github.com/onnx/onnx/blob/main/ROADMAP.md>`_ for the upstream
+  project's direction and priorities, which provides useful context for
+  how a SONNX profile could evolve alongside ONNX.

@@ -643,6 +643,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          tensor::ComputeShapeNonZero(ctx, node);
        }},
+      {"ai.onnx:Unique",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         tensor::ComputeShapeUnique(ctx, node);
+       }},
       {"ai.onnx:Shape",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

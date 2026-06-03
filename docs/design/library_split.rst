@@ -50,7 +50,7 @@ Summary of each library
         Does not depend on shape inference and does not pull in the
         full ONNX defs.  Useful when only the operator catalogue is
         needed.  Depends publicly on ``lib_onnx_proto``.
-    * - ``onnx_light::lib_onnx_lib`` (exported as ``onnx_light``)
+    * - ``onnx_light::onnx_light`` (in-tree target ``lib_onnx_lib``)
       - ``onnx_light/onnx_lib/common/``,
         ``onnx_light/onnx_lib/defs/``,
         ``onnx_light/onnx_lib/checker.cc``,
@@ -61,13 +61,13 @@ Summary of each library
         inliner, shape inference and version converter.  This is the
         target to link for the *complete* ONNX-light experience.
         Depends publicly on ``lib_onnx_proto``.
-    * - ``lib_onnx_optim``
+    * - ``lib_onnx_optim`` (exported as ``onnx_light::lib_onnx_optim``)
       - ``onnx_light/onnx_optim/``
       - Shape-inference dispatch table, expression engine for small
         tensor / backward-propagation shape inference, and graph
         optimization helpers.  Depends publicly on ``lib_onnx_op``.
-    * - ``onnx_light::lib_onnx_backend_test`` (exported as
-        ``onnx_backend_test``)
+    * - ``onnx_light::onnx_backend_test`` (in-tree target
+        ``lib_onnx_backend_test``)
       - ``onnx_light/onnx_backend_test/``
       - Backend test infrastructure (``struct Tensor``,
         ``struct TestCase``, ``expect()``), a registry of C++
@@ -90,14 +90,14 @@ smallest set** that covers its needs.  The most common scenarios are:
   shape inference — link ``onnx_light::lib_onnx_op``.
 * **Full ONNX feature set** (schemas with history, checker, inliner,
   shape inference, version conversion) — link
-  ``onnx_light::lib_onnx_light``.
+  ``onnx_light::onnx_light``.
 * **Shape inference and graph optimization passes** — link
-  ``lib_onnx_optim`` (which transitively pulls
+  ``onnx_light::lib_onnx_optim`` (which transitively pulls
   ``lib_onnx_op`` and ``lib_onnx_proto``).
 * **Run backend tests / evaluate models in C++** using the built-in
-  reference kernels — link ``onnx_light::lib_onnx_backend_test``.  It
-  can be combined with ``lib_onnx_lib`` when both schema validation
-  and execution are needed.
+  reference kernels — link ``onnx_light::onnx_backend_test``.  It
+  can be combined with ``onnx_light::onnx_light`` when both schema
+  validation and execution are needed.
 
 The Python extensions follow the same split and each link to the
 minimal C++ library that provides their feature.  See

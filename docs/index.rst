@@ -97,11 +97,11 @@ projects can link only what they need:
   parser / serializer, external data, optional AES-256 encrypted save / load.
 - ``onnx_light::lib_onnx_op`` – lightweight ``LightOpSchema``
   registrations for ONNX operator domains, with no shape inference.
-- ``onnx_light::lib_onnx_light`` – full ONNX-compatible schemas (with
+- ``onnx_light::onnx_light`` – full ONNX-compatible schemas (with
   history), checker, inliner, shape inference and version converter.
-- ``lib_onnx_optim`` – shape-inference dispatch table, expression engine
-  and graph optimization helpers.
-- ``onnx_light::lib_onnx_backend_test`` – C++ backend test
+- ``onnx_light::lib_onnx_optim`` – shape-inference dispatch table,
+  expression engine and graph optimization helpers.
+- ``onnx_light::onnx_backend_test`` – C++ backend test
   infrastructure and reference operator kernels.
 
 See :ref:`l-design-library-split` for the detailed breakdown of each

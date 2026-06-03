@@ -535,6 +535,12 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          math::ComputeShapePRelu(ctx, node, node.input(0).as_string().c_str(),
                                  node.input(1).as_string().c_str());
        }},
+      {"ai.onnx:Pow",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         math::ComputeShapePow(ctx, node, node.input(0).as_string().c_str(),
+                               node.input(1).as_string().c_str());
+       }},
       {"ai.onnx:Sub",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);

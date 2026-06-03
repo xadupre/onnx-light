@@ -123,6 +123,8 @@ ONNX_OPTIM_SHAPE_INFERENCE_OPS: frozenset[tuple[str, str]] = frozenset(
         ("ai.onnx", "QuantizeLinear"),
         ("ai.onnx", "ReduceL1"),
         ("ai.onnx", "ReduceL2"),
+        ("ai.onnx", "ReduceLogSum"),
+        ("ai.onnx", "ReduceLogSumExp"),
         ("ai.onnx", "ReduceMax"),
         ("ai.onnx", "ReduceMean"),
         ("ai.onnx", "ReduceMin"),

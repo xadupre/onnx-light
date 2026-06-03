@@ -6,4 +6,3 @@ How-to
 
     install_onnx_light
     load_save_onnx_files
-    export_nnef

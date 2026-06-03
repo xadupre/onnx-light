@@ -4,11 +4,19 @@ Standalone C++ example: export an ONNX model to NNEF
 ====================================================
 
 This page documents ``examples/export_nnef``, a self-contained CMake project
-that demonstrates linking with *onnx-light* and exporting an ONNX
-:cpp:class:`ModelProto` to the
-`Khronos NNEF v1.0 <https://www.khronos.org/nnef>`_ representation from C++
-using :cpp:func:`ONNX_LIGHT_NAMESPACE::nnef::ToNNEFText` and
-:cpp:func:`ONNX_LIGHT_NAMESPACE::nnef::SaveNNEF`.
+that demonstrates how to export an ONNX :cpp:class:`ModelProto` to the
+`Khronos NNEF v1.0 <https://www.khronos.org/nnef>`_ representation from C++.
+
+The NNEF exporter is **not** part of the *onnx-light* package itself: the
+example ships its own implementation under ``examples/export_nnef/nnef/``
+(``tensor_io.{h,cc}`` for the NNEF 128-byte-header binary tensor reader /
+writer, and ``exporter.{h,cc}`` for the ONNX → NNEF graph translator with
+builtin op converters for ``Conv``, ``BatchNormalization``,
+``MaxPool``/``AveragePool``, the elementwise math/logical/comparison ops,
+``Gemm``, ``MatMul``, ``Reshape``, ``Flatten``, ``Transpose``, ``Concat``,
+``Identity`` and ``Clip``).  Only the proto layer of *onnx-light*
+(``onnx_light::lib_onnx_proto``) is linked, to load and walk the ONNX
+``ModelProto``.
 
 Step 1 – Install the C++ library
 ---------------------------------
@@ -54,8 +62,8 @@ CMakeLists.txt
 --------------
 
 The example uses ``find_package`` and links against the exported
-``onnx_light::onnx_nnef`` target, which transitively pulls
-``lib_onnx_proto``:
+``onnx_light::lib_onnx_proto`` target. The NNEF sources are compiled in
+the same executable:
 
 .. code-block:: cmake
 
@@ -67,17 +75,23 @@ The example uses ``find_package`` and links against the exported
 
     find_package(onnx_light REQUIRED)
 
-    add_executable(export_nnef main.cc)
-    target_link_libraries(export_nnef PRIVATE onnx_light::onnx_nnef)
+    add_executable(export_nnef
+        main.cc
+        nnef/exporter.cc
+        nnef/tensor_io.cc
+    )
+    target_include_directories(export_nnef PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(export_nnef PRIVATE onnx_light::lib_onnx_proto)
 
 main.cc
 --------
 
 The program loads an ONNX model with ``FileStream`` /
 ``ParseModelProtoFromStream``, prints the ``graph.nnef`` text and writes
-the NNEF directory.  ``NNEFExportError`` is raised when an ONNX construct
-cannot be expressed in NNEF (for instance an op with no registered
-converter, or a ``Reshape`` with a non-constant ``shape`` input).
+the NNEF directory.  ``nnef::NNEFExportError`` is thrown when an ONNX
+construct cannot be expressed in NNEF (for instance an op with no
+registered converter, or a ``Reshape`` with a non-constant ``shape``
+input).
 
 .. code-block:: cpp
 
@@ -86,7 +100,6 @@ converter, or a ``Reshape`` with a non-constant ``shape`` input).
     #include "onnx_helper.h"
     #include "stream.h"
 
-    #include <filesystem>
     #include <iostream>
     #include <string>
 
@@ -117,14 +130,12 @@ converter, or a ``Reshape`` with a non-constant ``shape`` input).
       return 0;
     }
 
-Registering a custom op converter from C++
--------------------------------------------
+Registering a custom op converter
+---------------------------------
 
 Operators without a builtin converter raise
-:cpp:class:`ONNX_LIGHT_NAMESPACE::nnef::NNEFExportError`.  New converters
-can be plugged in by calling
-:cpp:func:`ONNX_LIGHT_NAMESPACE::nnef::RegisterOpConverter` before
-``ToNNEFText`` / ``SaveNNEF``:
+``nnef::NNEFExportError``.  New converters can be plugged in by calling
+``nnef::RegisterOpConverter`` before ``ToNNEFText`` / ``SaveNNEF``:
 
 .. code-block:: cpp
 
@@ -143,6 +154,5 @@ can be plugged in by calling
 See also
 --------
 
-* :ref:`l-howto-export-nnef` – higher-level overview of the NNEF exporter.
 * :doc:`../api/cpp/onnx/checker` – checker API reference (useful to
   validate a model before exporting it).

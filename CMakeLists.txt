@@ -66,7 +66,6 @@ set(ONNX_DEFS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/defs")
 set(ONNX_OP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_op")
 set(ONNX_OPTIM_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_optim")
 set(ONNX_BACKEND_TEST_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_backend_test")
-set(ONNX_NNEF_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/nnef")
 
 # List all files to be built.
 file(GLOB_RECURSE ONNX_LIGHT_HEADERS CONFIGURE_DEPENDS
@@ -98,14 +97,9 @@ set(ONNX_PY_BACKEND_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_backend.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_backend_test.cc"
 )
-set(ONNX_PY_NNEF_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpynnef.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_nnef.cc"
-)
 file(GLOB_RECURSE ONNX_OP_SOURCES CONFIGURE_DEPENDS "${ONNX_OP_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_OPTIM_SOURCES CONFIGURE_DEPENDS "${ONNX_OPTIM_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_BACKEND_TEST_SOURCES CONFIGURE_DEPENDS "${ONNX_BACKEND_TEST_PATH}/*.cc")
-file(GLOB ONNX_NNEF_SOURCES CONFIGURE_DEPENDS "${ONNX_NNEF_PATH}/*.cc")
 set(ONNX_INLINER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/inliner/inliner.cc")
 file(GLOB ONNX_SHAPE_INFERENCE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/shape_inference/*.cc")
 file(GLOB ONNX_VERSION_CONVERTER_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/version_converter/*.cc")
@@ -115,7 +109,6 @@ file(GLOB_RECURSE ONNX_CPP_LIB_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_S
 file(GLOB_RECURSE ONNX_CPP_OP_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_op/test_*.cc")
 file(GLOB_RECURSE ONNX_CPP_OPTIM_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_optim/test_*.cc")
 file(GLOB_RECURSE ONNX_CPP_BACKEND_TEST_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_backend_test/test_*.cc")
-file(GLOB_RECURSE ONNX_CPP_NNEF_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_nnef/test_*.cc")
 file(GLOB_RECURSE ONNX_CPP_CC_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/proto/test_*.cc")
 set(ONNX_CPP_TEST_SOURCES
     ${ONNX_CPP_PROTO_TEST_SOURCES}
@@ -123,7 +116,6 @@ set(ONNX_CPP_TEST_SOURCES
     ${ONNX_CPP_OP_TEST_SOURCES}
     ${ONNX_CPP_OPTIM_TEST_SOURCES}
     ${ONNX_CPP_BACKEND_TEST_TEST_SOURCES}
-    ${ONNX_CPP_NNEF_TEST_SOURCES}
     ${ONNX_CPP_CC_TEST_SOURCES}
 )
 set(ONNX_CPP_ALL_TEST_SOURCES ${ONNX_CPP_TEST_SOURCES})
@@ -250,21 +242,6 @@ set_target_properties(lib_onnx_backend_test PROPERTIES EXPORT_NAME onnx_backend_
 target_compile_features(lib_onnx_backend_test PUBLIC cxx_std_20)
 target_link_libraries(lib_onnx_backend_test PUBLIC lib_onnx_proto)
 
-# Builds onnx_nnef library (NNEF exporter, C++ implementation).
-# Publicly depends on lib_onnx_proto so callers can pass ModelProto.
-add_library(lib_onnx_nnef STATIC ${ONNX_LIGHT_HEADERS} ${ONNX_NNEF_SOURCES})
-source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES ${ONNX_NNEF_SOURCES})
-target_include_directories(lib_onnx_nnef PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
-    $<BUILD_INTERFACE:${ROOT_INCLUDE_PATH}>
-    $<BUILD_INTERFACE:${ONNX_PROTO_PATH}>
-    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light>
-)
-set_property(TARGET lib_onnx_nnef PROPERTY POSITION_INDEPENDENT_CODE ON)
-set_target_properties(lib_onnx_nnef PROPERTIES EXPORT_NAME onnx_nnef)
-target_compile_features(lib_onnx_nnef PUBLIC cxx_std_20)
-target_link_libraries(lib_onnx_nnef PUBLIC lib_onnx_proto)
-
 # Builds _onnxpyprotoop, _onnxpyprotolib, _onnxpyoptim and _onnxbackend libraries.
 if(ONNX_LIGHT_BUILD_PYTHON)
   # _onnxpyprotoop: proto bindings + onnx_op schema bindings.
@@ -294,20 +271,15 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   target_include_directories(_onnxbackend PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
   target_link_libraries(_onnxbackend PRIVATE lib_onnx_backend_test)
 
-  # _onnxpynnef: NNEF exporter bindings.
-  nanobind_add_module(_onnxpynnef ${ONNX_PY_NNEF_SOURCES})
-  target_include_directories(_onnxpynnef PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
-  target_link_libraries(_onnxpynnef PRIVATE lib_onnx_nnef)
-
   # All extensions and the shared lib_onnx_proto.so are installed in the same
   # directory (onnx_light/onnx_py/). Set an $ORIGIN rpath so the dynamic loader
   # picks the colocated proto library at import time without LD_LIBRARY_PATH.
   if(_lib_onnx_proto_type STREQUAL "SHARED" AND (UNIX AND NOT APPLE))
-    set_target_properties(_onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxbackend _onnxpynnef PROPERTIES
+    set_target_properties(_onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxbackend PROPERTIES
         BUILD_RPATH "\$ORIGIN"
         INSTALL_RPATH "\$ORIGIN")
   elseif(_lib_onnx_proto_type STREQUAL "SHARED" AND APPLE)
-    set_target_properties(_onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxbackend _onnxpynnef PROPERTIES
+    set_target_properties(_onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxbackend PROPERTIES
         BUILD_RPATH "@loader_path"
         INSTALL_RPATH "@loader_path")
   endif()
@@ -345,7 +317,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
     "${ONNX_PROTO_PATH}"
     "${ONNX_COMMON_PATH}"
   )
-  target_link_libraries(test_onnx_light PRIVATE lib_onnx_lib lib_onnx_op lib_onnx_optim lib_onnx_backend_test lib_onnx_nnef GTest::gtest_main)
+  target_link_libraries(test_onnx_light PRIVATE lib_onnx_lib lib_onnx_op lib_onnx_optim lib_onnx_backend_test GTest::gtest_main)
   gtest_discover_tests(test_onnx_light DISCOVERY_TIMEOUT 120)
 
   add_custom_target(onnx_cpp_tests SOURCES ${ONNX_CPP_ALL_TEST_SOURCES})
@@ -445,7 +417,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # Install the extensions into the package directory. When lib_onnx_proto is
   # built SHARED (the default in Python builds), install it alongside so the
   # $ORIGIN rpath above resolves it without LD_LIBRARY_PATH.
-  install(TARGETS _onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxbackend _onnxpynnef LIBRARY DESTINATION onnx_light/onnx_py)
+  install(TARGETS _onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxbackend LIBRARY DESTINATION onnx_light/onnx_py)
   if(_lib_onnx_proto_type STREQUAL "SHARED")
     install(TARGETS lib_onnx_proto
         LIBRARY DESTINATION onnx_light/onnx_py
@@ -457,7 +429,7 @@ if(ONNX_LIGHT_INSTALL)
   include(CMakePackageConfigHelpers)
 
   # Install the static library and export its target
-  install(TARGETS lib_onnx_proto lib_onnx_lib lib_onnx_op lib_onnx_optim lib_onnx_backend_test lib_onnx_nnef
+  install(TARGETS lib_onnx_proto lib_onnx_lib lib_onnx_op lib_onnx_optim lib_onnx_backend_test
     EXPORT onnx_lightTargets
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
@@ -518,12 +490,6 @@ if(ONNX_LIGHT_INSTALL)
   # Install public headers from onnx_light/onnx_backend_test
   install(DIRECTORY "${ONNX_BACKEND_TEST_PATH}/"
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_backend_test"
-    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
-  )
-
-  # Install public headers from onnx_light/nnef
-  install(DIRECTORY "${ONNX_NNEF_PATH}/"
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/nnef"
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
   )
 

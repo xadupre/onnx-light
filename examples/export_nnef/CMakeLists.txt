@@ -1,6 +1,7 @@
 # Standalone C++ example: export an ONNX model to the Khronos NNEF v1.0
-# format using the onnx_light C++ API.  The executable links against
-# ``onnx_light::onnx_nnef`` (which transitively pulls ``lib_onnx_proto``).
+# format. The NNEF exporter itself is compiled as part of this example
+# (sources under ``nnef/``) so the onnx_light package does not ship the
+# functionality — only the proto layer of onnx_light is required.
 #
 # Prerequisites
 # -------------
@@ -35,6 +36,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(onnx_light REQUIRED)
 
-add_executable(export_nnef main.cc)
-# onnx_light::onnx_nnef is the exported CMake name of the lib_onnx_nnef target.
-target_link_libraries(export_nnef PRIVATE onnx_light::onnx_nnef)
+add_executable(export_nnef
+    main.cc
+    nnef/exporter.cc
+    nnef/tensor_io.cc
+)
+# The NNEF sources include "nnef/exporter.h" / "nnef/tensor_io.h" relative to
+# the example root, so expose this directory as a private include path.
+target_include_directories(export_nnef PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(export_nnef PRIVATE onnx_light::lib_onnx_proto)

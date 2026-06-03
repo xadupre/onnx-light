@@ -645,6 +645,36 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of the ONNX ``STFT`` operator (opset 17).
+///
+/// Computes the Short-time Fourier Transform of ``signal`` by sliding a
+/// (optionally windowed) DFT of length ``frame_length`` over the signal axis
+/// with step ``frame_step``. ``signal`` must be a floating-point tensor of
+/// shape ``[batch_size, signal_length, 1]`` (real input) or
+/// ``[batch_size, signal_length, 2]`` (interleaved real/imaginary parts).
+/// The output has shape ``[batch_size, n_frames, dft_unique_bins, 2]`` where
+/// ``n_frames = (signal_length - frame_length) / frame_step + 1`` and
+/// ``dft_unique_bins`` is ``floor(frame_length / 2) + 1`` when ``onesided``
+/// is true (the default for real input) or ``frame_length`` otherwise.
+///
+/// ``window`` is an optional 1-D tensor with shape ``[frame_length]``; pass
+/// ``nullptr`` to skip the windowing step. ``frame_length`` is an optional
+/// pointer to a 0-D INT32/INT64 tensor; pass ``nullptr`` to derive
+/// ``frame_length`` from the ``window`` shape. At least one of ``window``
+/// or ``frame_length`` must be provided.
+class STFT : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &signal, const Tensor &frame_step, const Tensor *window,
+                    const Tensor *frame_length, bool onesided = true) const;
+  void operator()(const Tensor &signal, const Tensor &frame_step, const Tensor *window,
+                  const Tensor *frame_length, bool onesided, Tensor &output) const;
+
+  /// The output shape generally differs from the input, so storage cannot be
+  /// shared.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Reference implementation of the ``TopK`` operator (opsets 1, 10, 11).
 ///
 /// Selects the ``k`` largest (or smallest, when ``largest`` is false) values

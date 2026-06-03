@@ -1741,6 +1741,65 @@ std::vector<LightOpSchema> BuildDFTSchemas() {
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildSTFTSchemas() {
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(1);
+
+  const std::string signal_desc =
+      "Input tensor representing a real or complex valued signal. "
+      "For real input, the following shape is expected: [batch_size][signal_length][1]. "
+      "For complex input, the following shape is expected: "
+      "[batch_size][signal_length][2], where "
+      "[batch_size][signal_length][0] represents the real component and "
+      "[batch_size][signal_length][1] represents the imaginary component of the signal.";
+  const std::string frame_step_desc = "The number of samples to step between successive DFTs.";
+  const std::string window_desc =
+      "A tensor representing the window that will be slid over the signal."
+      "The window must have rank 1 with shape: [window_shape]. "
+      "It's an optional value. ";
+  const std::string frame_length_desc = "A scalar representing the size of the DFT. "
+                                        "It's an optional value.";
+  const std::string output_desc =
+      "The Short-time Fourier Transform of the signals."
+      "If onesided is 1, the output has the shape: [batch_size][frames][dft_unique_bins][2], "
+      "where dft_unique_bins is frame_length // 2 + 1 (the unique components of the DFT) "
+      "If onesided is 0, the output has the shape: [batch_size][frames][frame_length][2], "
+      "where frame_length is the length of the DFT.";
+  const std::string onesided_desc =
+      "If onesided is 1, only values for w in [0, 1, 2, ..., floor(n_fft/2) + 1] are "
+      "returned because the real-to-complex Fourier transform satisfies the conjugate "
+      "symmetry, i.e., X[m, w] = X[m,w]=X[m,n_fft-w]*. Note if the input or window tensors "
+      "are complex, then onesided output is not possible. Enabling onesided with real "
+      "inputs performs a Real-valued fast Fourier transform (RFFT). When invoked with real "
+      "or complex valued input, the default value is 1. Values can be 0 or 1.";
+
+  schemas.push_back(LightOpSchema(
+      "STFT", kOnnxDomain, 17, MakeSTFTDoc(17),
+      {
+          {"signal", signal_desc, "T1"},
+          {"frame_step", frame_step_desc, "T2"},
+          {"window", window_desc, "T1"},
+          {"frame_length", frame_length_desc, "T2"},
+      },
+      {
+          {"output", output_desc, "T1"},
+      },
+      {
+          {"T1",
+           {TensorType::kFloat, TensorType::kFloat16, TensorType::kDouble, TensorType::kBfloat16},
+           "Constrain signal and output to float tensors."},
+          {"T2",
+           {TensorType::kInt32, TensorType::kInt64},
+           "Constrain scalar length types to int64_t."},
+      },
+      {
+          AttributeParam{"onesided", onesided_desc, AttributeType::INT, /*required=*/false,
+                         static_cast<int64_t>(1)},
+      }));
+
+  return schemas;
+}
+
 std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string &op_type,
                                                               bool init_doc) {
   static const std::map<std::string, SchemaBuilder> builders = {
@@ -1783,6 +1842,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Softplus", [] { return BuildSoftplusSchemas(); }},
       {"Softsign", [] { return BuildSoftsignSchemas(); }},
       {"Sqrt", [] { return BuildSqrtSchemas(); }},
+      {"STFT", [] { return BuildSTFTSchemas(); }},
       {"Sub", [] { return BuildElementwiseMathSchemaForVersion("Sub"); }},
       {"Sum", [] { return BuildSumSchemas(); }},
       {"Swish", [] { return BuildSwishSchemas(); }},

@@ -1,8 +1,10 @@
+.. _l-howto-export-nnef:
+
 Export a model to NNEF format
 =============================
 
 ``onnx_light`` ships with a small, dependency-free exporter that
-translates an ONNX :class:`ModelProto` into the
+translates an ONNX :cpp:class:`ModelProto` into the
 `Khronos NNEF v1.0 <https://www.khronos.org/nnef>`_ representation.
 
 The exporter produces a directory containing:
@@ -11,35 +13,48 @@ The exporter produces a directory containing:
 * one ``<label>.dat`` file per initializer, encoded with the standard
   NNEF binary tensor format (128-byte header followed by raw data).
 
-Quick start
------------
+The implementation lives in the ``lib_onnx_nnef`` C++ library and is
+exposed through the public C++ API
+(:cpp:func:`ONNX_LIGHT_NAMESPACE::nnef::ExportToNNEF`,
+:cpp:func:`ONNX_LIGHT_NAMESPACE::nnef::ToNNEFText`,
+:cpp:func:`ONNX_LIGHT_NAMESPACE::nnef::SaveNNEF`).
 
-.. code-block:: python
+Quick start (C++)
+-----------------
 
-    import onnx_light.onnx as onnxl
-    from onnx_light.nnef import save_nnef
+Load an ONNX model with the proto reader and call ``SaveNNEF``:
 
-    model = onnxl.load("model.onnx")
-    save_nnef(model, "model_nnef")
+.. code-block:: cpp
 
-The exporter also works on a :mod:`onnx` ``ModelProto`` because it only
-relies on the public attributes shared by both implementations:
+    #include "nnef/exporter.h"
+    #include "onnx.h"
+    #include "onnx_helper.h"
+    #include "stream.h"
 
-.. code-block:: python
+    #include <iostream>
 
-    import onnx
-    from onnx_light.nnef import save_nnef, to_nnef_text
+    int main() {
+      ONNX_LIGHT_NAMESPACE::ModelProto model;
+      ONNX_LIGHT_NAMESPACE::utils::FileStream stream("model.onnx");
+      ONNX_LIGHT_NAMESPACE::ParseOptions opts;
+      ONNX_LIGHT_NAMESPACE::ParseModelProtoFromStream(model, stream, opts);
 
-    model = onnx.load("model.onnx")
-    print(to_nnef_text(model))   # textual graph only
-    save_nnef(model, "model_nnef")
+      // graph.nnef text only:
+      std::cout << ONNX_LIGHT_NAMESPACE::nnef::ToNNEFText(model);
+
+      // graph.nnef + one <label>.dat file per initializer:
+      ONNX_LIGHT_NAMESPACE::nnef::SaveNNEF(model, "model_nnef");
+    }
+
+A complete standalone CMake project (build + run instructions) is
+documented in :ref:`l-cpp-export-nnef-example`.
 
 Supported operators
 -------------------
 
-The list of ONNX op types that have a builtin NNEF converter is
-returned by :func:`onnx_light.nnef.supported_ops`.  It currently covers
-the most common operators of vision-style networks: ``Conv``,
+The list of ONNX op types that have a builtin NNEF converter is returned
+by :cpp:func:`ONNX_LIGHT_NAMESPACE::nnef::SupportedOps`.  It currently
+covers the most common operators of vision-style networks: ``Conv``,
 ``BatchNormalization``, ``MaxPool``, ``AveragePool``,
 ``GlobalAveragePool``, ``GlobalMaxPool``, ``Relu``, ``Sigmoid``,
 ``Tanh``, ``Softmax``, ``Gemm``, ``MatMul``, ``Reshape``, ``Flatten``,
@@ -52,17 +67,31 @@ Extending the converter
 If you need to export an operator that is not built in, register a
 custom converter:
 
-.. code-block:: python
+.. code-block:: cpp
 
-    from onnx_light.nnef import register_op_converter
+    #include "nnef/exporter.h"
 
-    def convert_my_op(ctx, node, attrs, inputs, outputs):
-        # ``inputs`` and ``outputs`` are NNEF identifiers already mapped
-        # from the ONNX names; ``attrs`` is a {name: value} dictionary.
-        ctx.add_statement(f"{outputs[0]} = my_op({inputs[0]});")
+    using namespace ONNX_LIGHT_NAMESPACE::nnef;
 
-    register_op_converter("MyOp", convert_my_op)
+    RegisterOpConverter("MyOp",
+        [](ExportContext &ctx, const ONNX_LIGHT_NAMESPACE::NodeProto &,
+           const std::map<std::string, AttributeValue> &,
+           const std::vector<std::string> &inputs,
+           const std::vector<std::string> &outputs) {
+          // ``inputs`` and ``outputs`` are NNEF identifiers already mapped
+          // from the ONNX names.
+          ctx.AddStatement(outputs[0] + " = my_op(" + inputs[0] + ");");
+        });
 
 If the exporter encounters an op without a registered converter it
-raises :class:`onnx_light.nnef.NNEFExportError` with a descriptive
-message.
+throws :cpp:class:`ONNX_LIGHT_NAMESPACE::nnef::NNEFExportError` with a
+descriptive message.
+
+Python bindings
+---------------
+
+The same C++ API is also reachable from Python via the
+``onnx_light.nnef`` package (``save_nnef``, ``to_nnef_text``,
+``export_to_nnef``, ``register_op_converter``, ``supported_ops``).  The
+Python module is a thin re-export shim over the C++ implementation, so
+both entry points share the converter registry.

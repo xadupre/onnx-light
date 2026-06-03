@@ -6,6 +6,7 @@
 #include "onnx_backend_test/kernels/math/include_math_kernels.h"
 #include "onnx_backend_test/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_backend_test/test_case.h"
+#include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
 #include <string>
@@ -78,34 +79,15 @@ void RegisterNonZeroChainCase(const std::string &name, NonZeroOutputAnnotation a
   GraphProto *graph = model.add_graph();
   graph->set_name(name);
 
-  const auto add_unary = [&](const char *op_type, const char *in_name, const char *out_name) {
-    NodeProto *node = graph->add_node();
-    node->set_op_type(op_type);
-    node->add_input(in_name);
-    node->add_output(out_name);
-    return node;
-  };
-  const auto add_binary = [&](const char *op_type, const char *in_a, const char *in_b,
-                              const char *out_name) {
-    NodeProto *node = graph->add_node();
-    node->set_op_type(op_type);
-    node->add_input(in_a);
-    node->add_input(in_b);
-    node->add_output(out_name);
-    return node;
-  };
-
-  add_unary("Abs", "X", "abs_out");
-  add_unary("Relu", "abs_out", "relu_out");
-  add_binary("Add", "relu_out", "relu_out", "double_out");
-  add_binary("Mul", "double_out", "relu_out", "mul_out");
-  add_unary("NonZero", "mul_out", "nz");
-  add_unary("Transpose", "nz", "transposed_nz");
-  NodeProto *cast_node = add_unary("Cast", "transposed_nz", "nz_float");
-  AttributeProto *to_attr = cast_node->add_attribute();
-  to_attr->set_name("to");
-  to_attr->set_type(AttributeProto::AttributeType::INT);
-  to_attr->set_i(static_cast<int64_t>(DataType::FLOAT));
+  *graph->add_node() = MakeNode("Abs", {"X"}, {"abs_out"});
+  *graph->add_node() = MakeNode("Relu", {"abs_out"}, {"relu_out"});
+  *graph->add_node() = MakeNode("Add", {"relu_out", "relu_out"}, {"double_out"});
+  *graph->add_node() = MakeNode("Mul", {"double_out", "relu_out"}, {"mul_out"});
+  *graph->add_node() = MakeNode("NonZero", {"mul_out"}, {"nz"});
+  *graph->add_node() = MakeNode("Transpose", {"nz"}, {"transposed_nz"});
+  NodeProto *cast_node = graph->add_node();
+  *cast_node = MakeNode("Cast", {"transposed_nz"}, {"nz_float"});
+  AddAttribute<int64_t>(*cast_node, "to", static_cast<int64_t>(DataType::FLOAT));
 
   // Graph input: X with concrete dims.
   FillValueInfo(x, *graph->add_input());

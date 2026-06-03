@@ -6,6 +6,7 @@
 #include "onnx_backend_test/kernels/math/include_math_kernels.h"
 #include "onnx_backend_test/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_backend_test/test_case.h"
+#include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
 #include <string>
@@ -82,27 +83,13 @@ void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry
   GraphProto *graph = model.add_graph();
   graph->set_name(name);
 
-  NodeProto *add_node = graph->add_node();
-  add_node->set_op_type("Add");
-  add_node->add_input("X");
-  add_node->add_input("Y");
-  add_node->add_output("added");
+  *graph->add_node() = MakeNode("Add", {"X", "Y"}, {"added"});
 
   NodeProto *concat_node = graph->add_node();
-  concat_node->set_op_type("Concat");
-  concat_node->add_input("added");
-  concat_node->add_input("X");
-  concat_node->add_output("concat_out");
-  AttributeProto *axis_attr = concat_node->add_attribute();
-  axis_attr->set_name("axis");
-  axis_attr->set_type(AttributeProto::AttributeType::INT);
-  axis_attr->set_i(2);
+  *concat_node = MakeNode("Concat", {"added", "X"}, {"concat_out"});
+  AddAttribute<int64_t>(*concat_node, "axis", 2);
 
-  NodeProto *reshape_node = graph->add_node();
-  reshape_node->set_op_type("Reshape");
-  reshape_node->add_input("concat_out");
-  reshape_node->add_input("reshape_shape");
-  reshape_node->add_output("Z");
+  *graph->add_node() = MakeNode("Reshape", {"concat_out", "reshape_shape"}, {"Z"});
 
   // Helper to declare a tensor-typed ValueInfo with a literal float shape.
   const auto add_float_value_info = [](ValueInfoProto &vi, const std::string &vi_name,

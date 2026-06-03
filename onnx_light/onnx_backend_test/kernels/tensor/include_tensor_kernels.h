@@ -498,6 +498,65 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Reference implementation of the ONNX ``ScatterElements`` operator (since
+/// opset 11 in the ``ai.onnx`` domain; ``reduction`` attribute added in opset
+/// 16 (``add``/``mul``) and extended in opset 18 (``max``/``min``)). ``data``,
+/// ``indices`` and ``updates`` must have the same rank ``r`` and the output
+/// has the same shape and dtype as ``data``. ``indices`` may be INT32 or
+/// INT64; negative values count from the back of the scattered axis.
+///
+/// When ``reduction`` is ``"none"``, repeated indices result in unspecified
+/// behaviour (the order of iteration is not defined). When ``reduction`` is
+/// ``"add"``, ``"mul"``, ``"max"`` or ``"min"``, the corresponding element of
+/// ``data`` is updated with ``f(out_elem, updates_elem)``.
+class ScatterElements : public KernelBase {
+public:
+  /// Attributes carried by the ONNX ``ScatterElements`` operator.
+  struct Attributes {
+    int64_t axis = 0;
+    std::string reduction = "none";
+  };
+
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &data, const Tensor &indices, const Tensor &updates,
+                    const Attributes &attrs) const;
+  void operator()(const Tensor &data, const Tensor &indices, const Tensor &updates,
+                  const Attributes &attrs, Tensor &output) const;
+
+  /// Output shape matches ``data`` so the output buffer could share storage
+  /// with the first input; the reference implementation always writes into a
+  /// freshly allocated buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
+/// Reference implementation of the ONNX ``ScatterND`` operator (since opset
+/// 11 in the ``ai.onnx`` domain; ``reduction`` attribute added in opset 16
+/// (``add``/``mul``) and extended in opset 18 (``max``/``min``)). The output
+/// has the same shape and dtype as ``data``. ``indices`` must be INT64;
+/// negative values count from the back of the corresponding ``data`` axis.
+///
+/// When ``reduction`` is ``"none"``, repeated indices result in unspecified
+/// behaviour. When ``reduction`` is ``"add"``, ``"mul"``, ``"max"`` or
+/// ``"min"``, the corresponding slice of ``data`` is updated with
+/// ``f(out_slice, updates_slice)``.
+class ScatterND : public KernelBase {
+public:
+  /// Attributes carried by the ONNX ``ScatterND`` operator.
+  struct Attributes {
+    std::string reduction = "none";
+  };
+
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &data, const Tensor &indices, const Tensor &updates,
+                    const Attributes &attrs) const;
+  void operator()(const Tensor &data, const Tensor &indices, const Tensor &updates,
+                  const Attributes &attrs, Tensor &output) const;
+
+  /// Output shape matches ``data`` so the output buffer could share storage
+  /// with the first input; the reference implementation always writes into a
+  /// freshly allocated buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
 /// Reference implementation of the ONNX ``Compress`` operator (since opset 9
 /// in the ``ai.onnx`` domain; axis may be negative since opset 11). Selects
 /// slices from ``input`` along a given ``axis`` where the corresponding entry

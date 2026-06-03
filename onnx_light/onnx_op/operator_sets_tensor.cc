@@ -887,6 +887,88 @@ LightOpSchema MakeTensorScatterSchema(int since_version, const std::vector<Tenso
       });
 }
 
+LightOpSchema MakeScatterElementsSchema(int since_version, const std::vector<TensorType> &types) {
+  std::vector<AttributeParam> attributes;
+  attributes.push_back(
+      {"axis",
+       "Which axis to scatter on. Negative value means counting dimensions from the back. "
+       "Accepted range is [-r, r-1] where r = rank(data).",
+       AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)});
+  if (since_version >= 16) {
+    std::string reduction_desc;
+    if (since_version >= 18) {
+      reduction_desc = "Type of reduction to apply: none (default), add, mul, max, min. "
+                       "'none': no reduction applied. "
+                       "'add':  reduction using the addition operation. "
+                       "'mul': reduction using the multiplication operation."
+                       "'max': reduction using the maximum operation."
+                       "'min': reduction using the minimum operation.";
+    } else {
+      reduction_desc = "Type of reduction to apply: none (default), add, mul. "
+                       "'none': no reduction applied. "
+                       "'add':  reduction using the addition operation. "
+                       "'mul': reduction using the multiplication operation.";
+    }
+    attributes.push_back({"reduction", reduction_desc, AttributeType::STRING,
+                          /*required=*/false, std::string("none")});
+  }
+  return LightOpSchema(
+      "ScatterElements", kOnnxDomain, since_version, MakeScatterElementsDoc(since_version),
+      {
+          {"data", "Tensor of rank r >= 1.", "T"},
+          {"indices",
+           "Tensor of int32/int64 indices, of r >= 1 (same rank as input). All index values "
+           "are expected to be "
+           "within bounds [-s, s-1] along axis of size s. It is an error if any of the index "
+           "values are out of bounds.",
+           "Tind"},
+          {"updates", "Tensor of rank r >=1 (same rank and shape as indices)", "T"},
+      },
+      {
+          {"output", "Tensor of rank r >= 1 (same rank as input).", "T"},
+      },
+      {
+          {"T", types, "Input and output types can be of any tensor type."},
+          {"Tind", {TensorType::kInt32, TensorType::kInt64}, "Constrain indices to integer types"},
+      },
+      std::move(attributes));
+}
+
+LightOpSchema MakeScatterNDSchema(int since_version, const std::vector<TensorType> &types) {
+  std::vector<AttributeParam> attributes;
+  if (since_version >= 16) {
+    std::string reduction_desc;
+    if (since_version >= 18) {
+      reduction_desc = "Type of reduction to apply: none (default), add, mul, max, min. "
+                       "'none': no reduction applied. "
+                       "'add':  reduction using the addition operation. "
+                       "'mul':  reduction using the addition operation. "
+                       "'max': reduction using the maximum operation."
+                       "'min': reduction using the minimum operation.";
+    } else {
+      reduction_desc = "Type of reduction to apply: none (default), add, mul. "
+                       "'none': no reduction applied. "
+                       "'add':  reduction using the addition operation. "
+                       "'mul': reduction using the multiplication operation.";
+    }
+    attributes.push_back({"reduction", reduction_desc, AttributeType::STRING,
+                          /*required=*/false, std::string("none")});
+  }
+  return LightOpSchema("ScatterND", kOnnxDomain, since_version, MakeScatterNDDoc(since_version),
+                       {
+                           {"data", "Tensor of rank r >= 1.", "T"},
+                           {"indices", "Tensor of rank q >= 1.", "tensor(int64)"},
+                           {"updates", "Tensor of rank q + r - indices_shape[-1] - 1.", "T"},
+                       },
+                       {
+                           {"output", "Tensor of rank r >= 1.", "T"},
+                       },
+                       {
+                           {"T", types, "Constrain input and output types to any tensor type."},
+                       },
+                       std::move(attributes));
+}
+
 LightOpSchema MakeTriluSchema(int since_version, const std::vector<TensorType> &types) {
   return LightOpSchema(
       "Trilu", kOnnxDomain, since_version, MakeTriluDoc(since_version),
@@ -1180,6 +1262,24 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
        [] {
          return std::vector<LightOpSchema>{
              MakeTensorScatterSchema(24, TransposeTypesVer24()),
+         };
+       }},
+      {"ScatterElements",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeScatterElementsSchema(18, ConcatTypesVer13()),
+             MakeScatterElementsSchema(16, ConcatTypesVer13()),
+             MakeScatterElementsSchema(13, ConcatTypesVer13()),
+             MakeScatterElementsSchema(11, AllTensorTypes()),
+         };
+       }},
+      {"ScatterND",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeScatterNDSchema(18, ConcatTypesVer13()),
+             MakeScatterNDSchema(16, ConcatTypesVer13()),
+             MakeScatterNDSchema(13, ConcatTypesVer13()),
+             MakeScatterNDSchema(11, AllTensorTypes()),
          };
        }},
       {"Squeeze",

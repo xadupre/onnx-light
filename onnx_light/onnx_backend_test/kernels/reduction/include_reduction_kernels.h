@@ -206,6 +206,56 @@ public:
       : ReduceL1L2(ctx, ReduceL1L2::Mode::kSumSquare) {}
 };
 
+/// Shared FLOAT kernel for ``ReduceLogSum`` and ``ReduceLogSumExp``.
+///
+/// ``ReduceLogSum`` computes ``y = log(sum(x, axes))``.
+/// ``ReduceLogSumExp`` computes ``y = log(sum(exp(x), axes))`` using the
+/// numerically-stable ``max-shift`` trick:
+/// ``y = m + log(sum(exp(x - m), axes))`` where ``m = max(x, axes)``.
+/// For both operators the empty-set identity is ``-inf`` (``log(0)``); when
+/// reducing over a size-0 axis the result is ``-inf``.
+///
+/// The interface mirrors :class:`ReduceL1L2`: the ``axes`` may either be
+/// omitted (reduce-all unless ``noop_with_empty_axes == true``) or supplied
+/// as an int64 tensor (opset 18+). Negative axes follow ONNX semantics.
+class ReduceLogSumOp : public KernelBase {
+public:
+  enum class Mode { kLogSum, kLogSumExp };
+
+  ReduceLogSumOp(const KernelContext &ctx, Mode mode) : KernelBase(ctx), mode_(mode) {}
+
+  Tensor operator()(const Tensor &data, bool keepdims = true,
+                    bool noop_with_empty_axes = false) const;
+  void operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
+                  Tensor &output) const;
+
+  Tensor operator()(const Tensor &data, const Tensor &axes, bool keepdims = true,
+                    bool noop_with_empty_axes = false) const;
+  void operator()(const Tensor &data, const Tensor &axes, bool keepdims, bool noop_with_empty_axes,
+                  Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+
+private:
+  Mode mode_;
+};
+
+/// ``ReduceLogSum`` wrapper around :class:`ReduceLogSumOp` configured for
+/// ``log(sum(x, axes))``.
+class ReduceLogSum : public ReduceLogSumOp {
+public:
+  explicit ReduceLogSum(const KernelContext &ctx)
+      : ReduceLogSumOp(ctx, ReduceLogSumOp::Mode::kLogSum) {}
+};
+
+/// ``ReduceLogSumExp`` wrapper around :class:`ReduceLogSumOp` configured for
+/// ``log(sum(exp(x), axes))``.
+class ReduceLogSumExp : public ReduceLogSumOp {
+public:
+  explicit ReduceLogSumExp(const KernelContext &ctx)
+      : ReduceLogSumOp(ctx, ReduceLogSumOp::Mode::kLogSumExp) {}
+};
+
 /// Arithmetic mean reduction of a FLOAT input ``data`` along the dimensions
 /// listed in the optional ``axes`` int64 tensor. ``ReduceMean`` computes
 /// ``y = sum(x, axes) / N`` where ``N`` is the product of the reduced

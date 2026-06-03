@@ -397,6 +397,22 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Element-wise scaled exponential linear unit:
+/// ``y = gamma * x`` for ``x > 0`` and
+/// ``y = gamma * (alpha * exp(x) - alpha)`` for ``x <= 0``.
+/// ``alpha`` and ``gamma`` default to the ONNX schema defaults
+/// (~1.6732632 and ~1.0507009 respectively).
+class Selu : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x, float alpha = 1.67326319217681884765625f,
+                    float gamma = 1.05070102214813232421875f) const;
+  void operator()(const Tensor &x, float alpha, float gamma, Tensor &output) const;
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// Element-wise addition with NumPy-style broadcasting.
 class Add : public KernelBase {
 public:

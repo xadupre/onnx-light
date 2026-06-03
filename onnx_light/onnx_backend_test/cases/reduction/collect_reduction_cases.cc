@@ -14,6 +14,8 @@ void CollectReductionTestCases(std::vector<TestCase> &registry, const std::strin
       {"ArgMin", &RegisterArgMinCases},
       {"ReduceL1", &RegisterReduceL1Cases},
       {"ReduceL2", &RegisterReduceL2Cases},
+      {"ReduceLogSum", &RegisterReduceLogSumCases},
+      {"ReduceLogSumExp", &RegisterReduceLogSumExpCases},
       {"ReduceMax", &RegisterReduceMaxCases},
       {"ReduceMean", &RegisterReduceMeanCases},
       {"ReduceMin", &RegisterReduceMinCases},

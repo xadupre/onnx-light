@@ -314,6 +314,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          math::ComputeShapeThresholdedRelu(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:Selu",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeSelu(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:TopK",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
@@ -466,6 +471,16 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 2);
          tensor::ComputeShapeTensorScatter(ctx, node);
        }},
+      {"ai.onnx:ScatterElements",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 3);
+         tensor::ComputeShapeScatterElements(ctx, node);
+       }},
+      {"ai.onnx:ScatterND",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 3);
+         tensor::ComputeShapeScatterND(ctx, node);
+       }},
       {"ai.onnx:HammingWindow",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
@@ -570,6 +585,26 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
              node.input_size() >= 2 ? node.input(1).as_string() : std::string();
          reduction::ComputeShapeReduceL2(ctx, node, data_name.c_str(),
                                          node.input_size() >= 2 ? axes_name.c_str() : nullptr);
+       }},
+      {"ai.onnx:ReduceLogSum",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         const std::string data_name = node.input(0).as_string();
+         const std::string axes_name =
+             node.input_size() >= 2 ? node.input(1).as_string() : std::string();
+         reduction::ComputeShapeReduceLogSum(
+             ctx, node, data_name.c_str(),
+             node.input_size() >= 2 ? axes_name.c_str() : nullptr);
+       }},
+      {"ai.onnx:ReduceLogSumExp",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         const std::string data_name = node.input(0).as_string();
+         const std::string axes_name =
+             node.input_size() >= 2 ? node.input(1).as_string() : std::string();
+         reduction::ComputeShapeReduceLogSumExp(
+             ctx, node, data_name.c_str(),
+             node.input_size() >= 2 ? axes_name.c_str() : nullptr);
        }},
       {"ai.onnx:ReduceMax",
        [](ShapesContext &ctx, const NodeProto &node) {

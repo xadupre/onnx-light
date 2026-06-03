@@ -42,12 +42,12 @@ TEST(OnnxOpGeneratorRegistrationTest, ReturnsConstantSchemasWithoutShapeInferenc
   const std::vector<onnx_op::LightOpSchema> constant_schemas =
       onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory("Constant");
 
-  EXPECT_EQ(schemas.size(),
-            kExpectedConstantSchemaCount + kExpectedConstantOfShapeSchemaCount +
-                kExpectedEyeLikeSchemaCount + kExpectedBernoulliSchemaCount +
-                kExpectedRandomNormalSchemaCount + kExpectedRandomNormalLikeSchemaCount +
-                kExpectedRandomUniformSchemaCount + kExpectedRandomUniformLikeSchemaCount +
-                kExpectedRangeSchemaCount);
+  EXPECT_EQ(schemas.size(), kExpectedConstantSchemaCount + kExpectedConstantOfShapeSchemaCount +
+                                kExpectedEyeLikeSchemaCount + kExpectedBernoulliSchemaCount +
+                                kExpectedRandomNormalSchemaCount +
+                                kExpectedRandomNormalLikeSchemaCount +
+                                kExpectedRandomUniformSchemaCount +
+                                kExpectedRandomUniformLikeSchemaCount + kExpectedRangeSchemaCount);
 
   const onnx_op::LightOpSchema *const constant_v25 = FindByVersion(constant_schemas, 25);
   const onnx_op::LightOpSchema *const constant_v24 = FindByVersion(constant_schemas, 24);

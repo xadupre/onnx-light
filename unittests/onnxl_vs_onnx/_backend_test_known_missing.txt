@@ -363,7 +363,6 @@ flexattention_score_mod
 flexattention_score_mod_expanded_ver26
 flexattention_soft_cap
 flexattention_soft_cap_expanded_ver26
-gather_2d_indices
 gelu_default_1
 gelu_default_1_expanded
 gelu_default_2

@@ -56,6 +56,17 @@ void RegisterGatherCases(std::vector<TestCase> &registry) {
            "backend-test", registry);
   }
 
+  // test_cc_gather_2d_indices — mirrors the upstream ``test_gather_2d_indices``
+  // node test: gather along axis=1 with 2-D indices.
+  {
+    Tensor data =
+        Tensor::FromFloat("", {3, 3}, {1.0f, 1.2f, 1.9f, 2.3f, 3.4f, 3.9f, 4.5f, 5.7f, 5.9f});
+    Tensor indices = Tensor::FromInt64("", {1, 2}, {0, 2});
+    Tensor output = gather_kernel(data, indices, 1);
+    Expect(MakeGatherNode(1), {data, indices}, {output}, "test_cc_gather_2d_indices", {opset},
+           "backend-test", registry);
+  }
+
   // test_cc_gather_negative_indices — negative indices wrap around the axis.
   {
     Tensor data = Tensor::FromFloat("", {5}, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f});

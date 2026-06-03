@@ -23,6 +23,19 @@ namespace onnx_backend_test {
 /// Registers backend test cases that add tensors with empty shapes.
 void RegisterAddEmptyShapeCases(std::vector<TestCase> &registry);
 
+/// Registers backend test cases that subtract tensors with empty shapes.
+void RegisterSubEmptyShapeCases(std::vector<TestCase> &registry);
+
+/// Registers backend test cases that multiply tensors with empty shapes.
+void RegisterMulEmptyShapeCases(std::vector<TestCase> &registry);
+
+/// Registers backend test cases that divide tensors with empty shapes.
+void RegisterDivEmptyShapeCases(std::vector<TestCase> &registry);
+
+/// Registers backend test cases that apply ``PRelu`` to tensors with empty
+/// shapes.
+void RegisterPReluEmptyShapeCases(std::vector<TestCase> &registry);
+
 /// Registers backend test cases that run the ``Compress`` node on tensors
 /// with empty shapes (and/or producing outputs with empty shapes).
 void RegisterCompressEmptyShapeCases(std::vector<TestCase> &registry);

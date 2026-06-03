@@ -433,6 +433,41 @@ TEST(BackendTestCase, ReduceProdCasesRegistered) {
   EXPECT_EQ(empty_nr->data_sets[0].outputs[0].data.size(), 0u);
 }
 
+TEST(BackendTestCase, ReduceMeanCasesRegistered) {
+  const auto cases = CollectTestCases("ReduceMean");
+  const TestCase *keepdims = FindCase(cases, "test_cc_reducemean_keepdims");
+  ASSERT_NE(keepdims, nullptr);
+  const GraphProto &graph = keepdims->model.ref_graph();
+  ASSERT_EQ(graph.ref_node().size(), 1u);
+  const NodeProto &node = graph.ref_node()[0];
+  const auto &op = node.ref_op_type();
+  EXPECT_EQ(std::string(op.data(), op.size()), "ReduceMean");
+
+  // Input is the ``arange(1, 13)`` ``[3, 2, 2]`` block used by the case
+  // registry; the mean along axis 1 averages each (slice, col) pair.
+  const auto &ds = keepdims->data_sets[0];
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 1, 2}));
+  const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
+  EXPECT_FLOAT_EQ(py[0], 2.0f);  // (1+3)/2
+  EXPECT_FLOAT_EQ(py[1], 3.0f);  // (2+4)/2
+  EXPECT_FLOAT_EQ(py[2], 6.0f);  // (5+7)/2
+  EXPECT_FLOAT_EQ(py[3], 7.0f);  // (6+8)/2
+  EXPECT_FLOAT_EQ(py[4], 10.0f); // (9+11)/2
+  EXPECT_FLOAT_EQ(py[5], 11.0f); // (10+12)/2
+
+  EXPECT_NE(FindCase(cases, "test_cc_reducemean_default_axes_keepdims"), nullptr);
+  EXPECT_NE(FindCase(cases, "test_cc_reducemean_do_not_keepdims"), nullptr);
+  EXPECT_NE(FindCase(cases, "test_cc_reducemean_negative_axes_keepdims"), nullptr);
+
+  const TestCase *noop = FindCase(cases, "test_cc_reducemean_empty_axes_input_noop");
+  ASSERT_NE(noop, nullptr);
+  // With ``noop_with_empty_axes=1`` and empty axes the reduction is skipped:
+  // ReduceMean is the identity in this case (output equals input).
+  const auto &n_ds = noop->data_sets[0];
+  EXPECT_EQ(n_ds.outputs[0].data, n_ds.inputs[0].data);
+}
+
 namespace {
 
 void CheckArgReduceCasePresent(const std::vector<TestCase> &cases, const std::string &name,

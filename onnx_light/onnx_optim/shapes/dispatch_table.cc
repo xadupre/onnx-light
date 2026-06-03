@@ -570,6 +570,15 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          reduction::ComputeShapeReduceMax(ctx, node, data_name.c_str(),
                                           node.input_size() >= 2 ? axes_name.c_str() : nullptr);
        }},
+      {"ai.onnx:ReduceMean",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         const std::string data_name = node.input(0).as_string();
+         const std::string axes_name =
+             node.input_size() >= 2 ? node.input(1).as_string() : std::string();
+         reduction::ComputeShapeReduceMean(ctx, node, data_name.c_str(),
+                                           node.input_size() >= 2 ? axes_name.c_str() : nullptr);
+       }},
       {"ai.onnx:ReduceMin",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

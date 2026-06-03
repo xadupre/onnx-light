@@ -183,7 +183,9 @@ TEST(BackendTestCase, SoftplusCaseOutputsMatchSoftplusFunction) {
   const float *y = ds.outputs[0].AsFloat();
   ASSERT_EQ(ds.inputs[0].element_count(), ds.outputs[0].element_count());
   for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
-    EXPECT_NEAR(y[i], std::log1p(std::exp(x[i])), 1e-6f);
+    // Match the numerically-stable formulation used by the kernel.
+    const float abs_x = std::fabs(x[i]);
+    EXPECT_NEAR(y[i], std::log1p(std::exp(-abs_x)) + std::fmax(x[i], 0.0f), 1e-6f);
   }
 }
 

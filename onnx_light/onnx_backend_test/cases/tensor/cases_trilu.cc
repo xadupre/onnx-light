@@ -92,6 +92,203 @@ void RegisterTriluCases(std::vector<TestCase> &registry) {
     Expect(MakeTriluNode(/*with_k=*/false, /*upper=*/true, /*set_upper_attr=*/false), {x}, {y},
            "test_cc_trilu_batched_upper", {opset}, "backend-test", registry);
   }
+
+  // The cases below mirror the upstream ONNX backend tests for the Trilu op
+  // (``test_triu_*`` and ``test_tril_*``). The substring-based coverage test
+  // ``test_onnx_backend_test_names_found_in_onnx_light`` matches these names
+  // against the upstream node tests.
+  //
+  // Inputs match the example tensors documented in
+  // ``onnx/backend/test/case/node/trilu.py``; expected outputs are computed by
+  // the reference ``kernel::Trilu`` so they always agree with the spec.
+
+  // 4x5 input shared by the ``triu_*`` and ``tril_*`` (non-square) cases.
+  const std::vector<int64_t> x45_data = {4, 7, 3, 7, 9, 1, 2, 8, 6, 9,
+                                         9, 4, 0, 8, 7, 4, 3, 4, 2, 4};
+  // 2x3x3 input shared by ``triu_square`` and ``triu_square_neg``.
+  const std::vector<int64_t> x233_triu = {4, 6, 9, 7, 5, 4, 8, 1, 2, 1, 4, 9, 9, 6, 3, 8, 9, 8};
+  // 2x3x3 input shared by ``tril_square`` and ``tril_square_neg``.
+  const std::vector<int64_t> x233_tril = {0, 4, 3, 2, 0, 9, 8, 2, 5, 2, 7, 2, 2, 6, 0, 2, 6, 5};
+
+  // -------- triu_* (upper triangular; ``upper`` attribute omitted) --------
+
+  // test_cc_triu
+  {
+    const Tensor x = Tensor::FromInt64("X", {4, 5}, x45_data);
+    kernel::Trilu::Attributes attrs;
+    const Tensor y = trilu_kernel(x, /*k=*/nullptr, attrs);
+    Expect(MakeTriluNode(/*with_k=*/false, /*upper=*/true, /*set_upper_attr=*/false), {x}, {y},
+           "test_cc_triu", {opset}, "backend-test", registry);
+  }
+
+  // test_cc_triu_neg: k = -1
+  {
+    const Tensor x = Tensor::FromInt64("X", {4, 5}, x45_data);
+    const Tensor k = Tensor::FromInt64("K", {}, {-1});
+    kernel::Trilu::Attributes attrs;
+    const Tensor y = trilu_kernel(x, &k, attrs);
+    Expect(MakeTriluNode(/*with_k=*/true, /*upper=*/true, /*set_upper_attr=*/false), {x, k}, {y},
+           "test_cc_triu_neg", {opset}, "backend-test", registry);
+  }
+
+  // test_cc_triu_out_neg_out: k = -7 (whole tensor kept)
+  {
+    const Tensor x = Tensor::FromInt64("X", {4, 5}, x45_data);
+    const Tensor k = Tensor::FromInt64("K", {}, {-7});
+    kernel::Trilu::Attributes attrs;
+    const Tensor y = trilu_kernel(x, &k, attrs);
+    Expect(MakeTriluNode(/*with_k=*/true, /*upper=*/true, /*set_upper_attr=*/false), {x, k}, {y},
+           "test_cc_triu_out_neg_out", {opset}, "backend-test", registry);
+  }
+
+  // test_cc_triu_pos: k = 2
+  {
+    const Tensor x = Tensor::FromInt64("X", {4, 5}, x45_data);
+    const Tensor k = Tensor::FromInt64("K", {}, {2});
+    kernel::Trilu::Attributes attrs;
+    const Tensor y = trilu_kernel(x, &k, attrs);
+    Expect(MakeTriluNode(/*with_k=*/true, /*upper=*/true, /*set_upper_attr=*/false), {x, k}, {y},
+           "test_cc_triu_pos", {opset}, "backend-test", registry);
+  }
+
+  // test_cc_triu_out_pos: k = 6 (whole tensor zeroed)
+  {
+    const Tensor x = Tensor::FromInt64("X", {4, 5}, x45_data);
+    const Tensor k = Tensor::FromInt64("K", {}, {6});
+    kernel::Trilu::Attributes attrs;
+    const Tensor y = trilu_kernel(x, &k, attrs);
+    Expect(MakeTriluNode(/*with_k=*/true, /*upper=*/true, /*set_upper_attr=*/false), {x, k}, {y},
+           "test_cc_triu_out_pos", {opset}, "backend-test", registry);
+  }
+
+  // test_cc_triu_square: 2x3x3 batched upper, default k.
+  {
+    const Tensor x = Tensor::FromInt64("X", {2, 3, 3}, x233_triu);
+    kernel::Trilu::Attributes attrs;
+    const Tensor y = trilu_kernel(x, /*k=*/nullptr, attrs);
+    Expect(MakeTriluNode(/*with_k=*/false, /*upper=*/true, /*set_upper_attr=*/false), {x}, {y},
+           "test_cc_triu_square", {opset}, "backend-test", registry);
+  }
+
+  // test_cc_triu_square_neg: 2x3x3 batched upper, k = -1.
+  {
+    const Tensor x = Tensor::FromInt64("X", {2, 3, 3}, x233_triu);
+    const Tensor k = Tensor::FromInt64("K", {}, {-1});
+    kernel::Trilu::Attributes attrs;
+    const Tensor y = trilu_kernel(x, &k, attrs);
+    Expect(MakeTriluNode(/*with_k=*/true, /*upper=*/true, /*set_upper_attr=*/false), {x, k}, {y},
+           "test_cc_triu_square_neg", {opset}, "backend-test", registry);
+  }
+
+  // test_cc_triu_one_row: shape [3, 1, 5], k = 1.
+  {
+    const Tensor x =
+        Tensor::FromInt64("X", {3, 1, 5}, {1, 4, 9, 7, 1, 9, 2, 8, 8, 4, 3, 9, 7, 4, 2});
+    const Tensor k = Tensor::FromInt64("K", {}, {1});
+    kernel::Trilu::Attributes attrs;
+    const Tensor y = trilu_kernel(x, &k, attrs);
+    Expect(MakeTriluNode(/*with_k=*/true, /*upper=*/true, /*set_upper_attr=*/false), {x, k}, {y},
+           "test_cc_triu_one_row", {opset}, "backend-test", registry);
+  }
+
+  // test_cc_triu_zero: shape [0, 5], k = 6 (zero-sized input).
+  {
+    const Tensor x = Tensor::FromInt64("X", {0, 5}, {});
+    const Tensor k = Tensor::FromInt64("K", {}, {6});
+    kernel::Trilu::Attributes attrs;
+    const Tensor y = trilu_kernel(x, &k, attrs);
+    Expect(MakeTriluNode(/*with_k=*/true, /*upper=*/true, /*set_upper_attr=*/false), {x, k}, {y},
+           "test_cc_triu_zero", {opset}, "backend-test", registry);
+  }
+
+  // -------- tril_* (lower triangular; ``upper`` attribute set to 0) --------
+
+  // test_cc_tril_neg: k = -1.
+  {
+    const Tensor x = Tensor::FromInt64("X", {4, 5}, x45_data);
+    const Tensor k = Tensor::FromInt64("K", {}, {-1});
+    kernel::Trilu::Attributes attrs;
+    attrs.upper = 0;
+    const Tensor y = trilu_kernel(x, &k, attrs);
+    Expect(MakeTriluNode(/*with_k=*/true, /*upper=*/false, /*set_upper_attr=*/true), {x, k}, {y},
+           "test_cc_tril_neg", {opset}, "backend-test", registry);
+  }
+
+  // test_cc_tril_out_neg: k = -7 (whole tensor zeroed).
+  {
+    const Tensor x = Tensor::FromInt64("X", {4, 5}, x45_data);
+    const Tensor k = Tensor::FromInt64("K", {}, {-7});
+    kernel::Trilu::Attributes attrs;
+    attrs.upper = 0;
+    const Tensor y = trilu_kernel(x, &k, attrs);
+    Expect(MakeTriluNode(/*with_k=*/true, /*upper=*/false, /*set_upper_attr=*/true), {x, k}, {y},
+           "test_cc_tril_out_neg", {opset}, "backend-test", registry);
+  }
+
+  // test_cc_tril_pos: k = 2.
+  {
+    const Tensor x = Tensor::FromInt64("X", {4, 5}, x45_data);
+    const Tensor k = Tensor::FromInt64("K", {}, {2});
+    kernel::Trilu::Attributes attrs;
+    attrs.upper = 0;
+    const Tensor y = trilu_kernel(x, &k, attrs);
+    Expect(MakeTriluNode(/*with_k=*/true, /*upper=*/false, /*set_upper_attr=*/true), {x, k}, {y},
+           "test_cc_tril_pos", {opset}, "backend-test", registry);
+  }
+
+  // test_cc_tril_out_pos: k = 6 (whole tensor kept).
+  {
+    const Tensor x = Tensor::FromInt64("X", {4, 5}, x45_data);
+    const Tensor k = Tensor::FromInt64("K", {}, {6});
+    kernel::Trilu::Attributes attrs;
+    attrs.upper = 0;
+    const Tensor y = trilu_kernel(x, &k, attrs);
+    Expect(MakeTriluNode(/*with_k=*/true, /*upper=*/false, /*set_upper_attr=*/true), {x, k}, {y},
+           "test_cc_tril_out_pos", {opset}, "backend-test", registry);
+  }
+
+  // test_cc_tril_square: 2x3x3 batched lower, default k.
+  {
+    const Tensor x = Tensor::FromInt64("X", {2, 3, 3}, x233_tril);
+    kernel::Trilu::Attributes attrs;
+    attrs.upper = 0;
+    const Tensor y = trilu_kernel(x, /*k=*/nullptr, attrs);
+    Expect(MakeTriluNode(/*with_k=*/false, /*upper=*/false, /*set_upper_attr=*/true), {x}, {y},
+           "test_cc_tril_square", {opset}, "backend-test", registry);
+  }
+
+  // test_cc_tril_square_neg: 2x3x3 batched lower, k = -1.
+  {
+    const Tensor x = Tensor::FromInt64("X", {2, 3, 3}, x233_tril);
+    const Tensor k = Tensor::FromInt64("K", {}, {-1});
+    kernel::Trilu::Attributes attrs;
+    attrs.upper = 0;
+    const Tensor y = trilu_kernel(x, &k, attrs);
+    Expect(MakeTriluNode(/*with_k=*/true, /*upper=*/false, /*set_upper_attr=*/true), {x, k}, {y},
+           "test_cc_tril_square_neg", {opset}, "backend-test", registry);
+  }
+
+  // test_cc_tril_one_row_neg: shape [3, 1, 5], default k, lower.
+  {
+    const Tensor x =
+        Tensor::FromInt64("X", {3, 1, 5}, {6, 2, 4, 1, 6, 8, 3, 8, 7, 0, 2, 2, 9, 5, 9});
+    kernel::Trilu::Attributes attrs;
+    attrs.upper = 0;
+    const Tensor y = trilu_kernel(x, /*k=*/nullptr, attrs);
+    Expect(MakeTriluNode(/*with_k=*/false, /*upper=*/false, /*set_upper_attr=*/true), {x}, {y},
+           "test_cc_tril_one_row_neg", {opset}, "backend-test", registry);
+  }
+
+  // test_cc_tril_zero: shape [3, 0, 5], k = 6 (zero-sized input), lower.
+  {
+    const Tensor x = Tensor::FromInt64("X", {3, 0, 5}, {});
+    const Tensor k = Tensor::FromInt64("K", {}, {6});
+    kernel::Trilu::Attributes attrs;
+    attrs.upper = 0;
+    const Tensor y = trilu_kernel(x, &k, attrs);
+    Expect(MakeTriluNode(/*with_k=*/true, /*upper=*/false, /*set_upper_attr=*/true), {x, k}, {y},
+           "test_cc_tril_zero", {opset}, "backend-test", registry);
+  }
 }
 
 } // namespace onnx_backend_test

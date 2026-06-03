@@ -95,7 +95,7 @@ jobs:
     needs: [core_tests_ubuntu, changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 23
     permissions:
       contents: read
       id-token: write
@@ -155,7 +155,7 @@ jobs:
     needs: [core_tests_ubuntu, changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: windows-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:

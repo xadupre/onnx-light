@@ -1,6 +1,7 @@
 # source: https://github.com/onnx/onnx/blob/main/onnx/test/basic_test.py
 from __future__ import annotations
 
+import inspect
 import os
 import pathlib
 import tempfile
@@ -33,6 +34,10 @@ def _simple_tensor() -> onnxl.TensorProto:
 
 class TestIOModel(ExtTestCase):
     """Tests for saving and loading ModelProto (protobuf format only)."""
+
+    def test_load_api_is_local_only(self) -> None:
+        self.assertFalse(hasattr(onnxl, "hub"))
+        self.assertNotIn("silent", inspect.signature(onnxl.load).parameters)
 
     def test_load_model_when_input_is_bytes(self) -> None:
         proto = _simple_model()

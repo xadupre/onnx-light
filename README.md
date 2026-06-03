@@ -37,6 +37,10 @@ for the upstream project's direction and priorities.
 - **Aligned external tensor offsets** – external tensor data can be written
   with explicit offset alignment (for example 4096-byte page alignment) through
   `onnxl.SerializeOptions().alignment`
+- **Local-only model loading** – `onnx_light.onnx.load` loads local files or
+  in-memory bytes only; `onnx-light` does not implement `onnx.hub.load`, so the
+  upstream `silent=True` trust-bypass advisory GHSA-qrhj-v62m-vmpf does not
+  apply here.
 
 ## Modular C++ libraries
 

@@ -44,7 +44,7 @@ Tensor ComputeRange(const Tensor &start, const Tensor &limit, const Tensor &delt
   std::vector<uint8_t> out_data(static_cast<std::size_t>(n) * sizeof(T));
   T *out_ptr = reinterpret_cast<T *>(out_data.data());
   for (int64_t i = 0; i < n; ++i) {
-    out_ptr[i] = static_cast<T>(s + static_cast<T>(i) * d);
+    out_ptr[i] = static_cast<T>(s + static_cast<T>(i * d));
   }
   return Tensor("", dtype, {n}, std::move(out_data));
 }

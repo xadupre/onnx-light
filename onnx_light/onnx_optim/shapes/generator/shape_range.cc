@@ -21,11 +21,11 @@ namespace generator {
 
 namespace {
 
-// Returns the single integer scalar carried by a scalar ``ValueAsShape``
-// annotation, if any. ``Range``'s inputs are scalar tensors, so the
-// data-propagated representation of a scalar known constant is a rank-0
-// shape with no dim. For convenience this helper also accepts a rank-1
-// shape of size 1 carrying a single int dim.
+// Returns the single integer scalar carried by a ``ValueAsShape``
+// annotation, if any. ``Range``'s inputs are 0-D scalar tensors; in the
+// data-propagated shape representation a known scalar constant is encoded
+// as a rank-1 shape with a single integer dim holding the value. Rank-0
+// shapes carry no extractable integer value here and are rejected.
 bool TryReadKnownIntScalar(const OptimTensor &input, int64_t *out) {
   if (!input.HasValueAsShape()) {
     return false;

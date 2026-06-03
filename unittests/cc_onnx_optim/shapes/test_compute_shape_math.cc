@@ -795,6 +795,69 @@ TEST(OnnxOptimShapesBroadcast, IncompatibleConcreteThrows) {
   EXPECT_THROW(onnx_optim::shapes::BroadcastShapes(a, b), std::invalid_argument);
 }
 
+// The following tests mirror the broadcast_shape tests from
+// yet-another-onnx-builder/unittests/xshape/test_shape_type_compute.py
+// (test_broadcast_shape_*) so that the equivalent C++ behaviour is
+// covered by ``BroadcastShapes``.
+
+TEST(OnnxOptimShapesBroadcast, EmptyFirstRank2) {
+  // Python: broadcast_shape((), (3, 4)) == (3, 4)
+  onnx_optim::OptimShape empty{};
+  onnx_optim::OptimShape b{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)};
+  EXPECT_EQ(onnx_optim::shapes::BroadcastShapes(empty, b), b);
+}
+
+TEST(OnnxOptimShapesBroadcast, EmptySecondRank2) {
+  // Python: broadcast_shape((3, 4), ()) == (3, 4)
+  onnx_optim::OptimShape a{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)};
+  onnx_optim::OptimShape empty{};
+  EXPECT_EQ(onnx_optim::shapes::BroadcastShapes(a, empty), a);
+}
+
+TEST(OnnxOptimShapesBroadcast, ScalarRank1FirstBroadcastsToRank2) {
+  // Python: broadcast_shape((1,), (3, 4)) == (3, 4)
+  onnx_optim::OptimShape a{onnx_optim::OptimDim(1)};
+  onnx_optim::OptimShape b{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)};
+  EXPECT_EQ(onnx_optim::shapes::BroadcastShapes(a, b), b);
+}
+
+TEST(OnnxOptimShapesBroadcast, ScalarRank1SecondBroadcastsToRank2) {
+  // Python: broadcast_shape((3, 4), (1,)) == (3, 4)
+  onnx_optim::OptimShape a{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)};
+  onnx_optim::OptimShape b{onnx_optim::OptimDim(1)};
+  EXPECT_EQ(onnx_optim::shapes::BroadcastShapes(a, b), a);
+}
+
+TEST(OnnxOptimShapesBroadcast, ExtendRank) {
+  // Python: broadcast_shape((4,), (3, 4)) == (3, 4)
+  onnx_optim::OptimShape a{onnx_optim::OptimDim(4)};
+  onnx_optim::OptimShape b{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)};
+  EXPECT_EQ(onnx_optim::shapes::BroadcastShapes(a, b), b);
+}
+
+TEST(OnnxOptimShapesBroadcast, WithOnesRank2) {
+  // Python: broadcast_shape((1, 4), (3, 1)) == (3, 4)
+  onnx_optim::OptimShape a{onnx_optim::OptimDim(1), onnx_optim::OptimDim(4)};
+  onnx_optim::OptimShape b{onnx_optim::OptimDim(3), onnx_optim::OptimDim(1)};
+  onnx_optim::OptimShape expected{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)};
+  EXPECT_EQ(onnx_optim::shapes::BroadcastShapes(a, b), expected);
+}
+
+TEST(OnnxOptimShapesBroadcast, DynamicOneVsSymbolic) {
+  // Python: broadcast_shape((1, "seq"), ("batch", "seq")) == ("batch", "seq")
+  onnx_optim::OptimShape a{onnx_optim::OptimDim(1), onnx_optim::OptimDim("seq")};
+  onnx_optim::OptimShape b{onnx_optim::OptimDim("batch"), onnx_optim::OptimDim("seq")};
+  EXPECT_EQ(onnx_optim::shapes::BroadcastShapes(a, b), b);
+}
+
+TEST(OnnxOptimShapesBroadcast, IntOverridesOneBothDirections) {
+  // Python: broadcast_shape((5,), (1,)) == (5,) and broadcast_shape((1,), (5,)) == (5,)
+  onnx_optim::OptimShape five{onnx_optim::OptimDim(5)};
+  onnx_optim::OptimShape one{onnx_optim::OptimDim(1)};
+  EXPECT_EQ(onnx_optim::shapes::BroadcastShapes(five, one), five);
+  EXPECT_EQ(onnx_optim::shapes::BroadcastShapes(one, five), five);
+}
+
 TEST(OnnxOptimShapesMathAdd, PropagatesEqualShapesAndDtype) {
   NodeProto node = MakeAddNode();
   onnx_optim::shapes::ShapesContext ctx;

@@ -203,6 +203,11 @@ void ComputeShapeReduceProd(ShapesContext &ctx, const NodeProto &node, const cha
   ComputeShapeReduceCommon(ctx, node, data, axes, "ReduceProd");
 }
 
+void ComputeShapeReduceMean(ShapesContext &ctx, const NodeProto &node, const char *data,
+                            const char *axes) {
+  ComputeShapeReduceCommon(ctx, node, data, axes, "ReduceMean");
+}
+
 } // namespace reduction
 } // namespace shapes
 } // namespace onnx_optim

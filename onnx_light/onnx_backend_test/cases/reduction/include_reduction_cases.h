@@ -29,6 +29,9 @@ void RegisterReduceSumCases(std::vector<TestCase> &registry);
 /// Registers the ``ReduceMax`` backend test node case(s).
 void RegisterReduceMaxCases(std::vector<TestCase> &registry);
 
+/// Registers the ``ReduceMean`` backend test node case(s).
+void RegisterReduceMeanCases(std::vector<TestCase> &registry);
+
 /// Registers the ``ReduceMin`` backend test node case(s).
 void RegisterReduceMinCases(std::vector<TestCase> &registry);
 

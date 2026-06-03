@@ -142,13 +142,10 @@ SoftmaxCrossEntropyLoss::operator()(const Tensor &scores, const Tensor &labels,
   if (reduction == "sum") {
     reduced = sum_loss;
   } else {
-    // "mean": when weights are provided, divide by the sum of selected weights;
-    // otherwise divide by the number of contributing samples.
-    if (weights_ptr != nullptr) {
-      reduced = sum_weight != 0.0f ? sum_loss / sum_weight : 0.0f;
-    } else {
-      reduced = sum_weight != 0.0f ? sum_loss / sum_weight : 0.0f;
-    }
+    // "mean": divide by the sum of selected weights. When ``weights`` is not
+    // provided, ``per_sample_weight`` is 1.0 for every contributing sample,
+    // so ``sum_weight`` equals the number of contributing samples.
+    reduced = sum_weight != 0.0f ? sum_loss / sum_weight : 0.0f;
   }
 
   Tensor loss("", DataType::FLOAT, std::vector<int64_t>{}, std::vector<uint8_t>(sizeof(float)));

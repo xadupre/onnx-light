@@ -87,6 +87,26 @@ onnx without protobuf
       blob = onnxl.save_encrypted_string(model, key="my_passphrase")
       model = onnxl.load_encrypted_string(blob, key="my_passphrase")
 
+Modular C++ libraries
++++++++++++++++++++++
+
+The C++ code is shipped as several small libraries so that downstream
+projects can link only what they need:
+
+- ``onnx_light::lib_onnx_proto`` – protobuf-compatible message types,
+  parser / serializer, external data, optional AES-256 encrypted save / load.
+- ``onnx_light::lib_onnx_op`` – lightweight ``LightOpSchema``
+  registrations for ONNX operator domains, with no shape inference.
+- ``onnx_light::onnx_light`` – full ONNX-compatible schemas (with
+  history), checker, inliner, shape inference and version converter.
+- ``onnx_light::lib_onnx_optim`` – shape-inference dispatch table,
+  expression engine and graph optimization helpers.
+- ``onnx_light::onnx_backend_test`` – C++ backend test
+  infrastructure and reference operator kernels.
+
+See :ref:`l-design-library-split` for the detailed breakdown of each
+assembly and :ref:`l-design-cpp-linking` for the matching CMake usage.
+
 Getting started
 +++++++++++++++
 

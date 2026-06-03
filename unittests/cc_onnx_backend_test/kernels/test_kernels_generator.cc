@@ -19,6 +19,7 @@ using onnx_backend_test::kernel::Constant;
 using onnx_backend_test::kernel::ConstantOfShape;
 using onnx_backend_test::kernel::EyeLike;
 using onnx_backend_test::kernel::KernelContext;
+using onnx_backend_test::kernel::Range;
 
 namespace Test {
 
@@ -232,6 +233,63 @@ TEST(BackendKernelClass, BernoulliRejectsUnsupportedInputDtype) {
   Bernoulli kernel{ctx};
   const Tensor int_in = Tensor::FromInt32("", {2}, {0, 1});
   EXPECT_THROW(kernel(int_in), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, RangeFloatPositiveDelta) {
+  const KernelContext ctx{DefaultOpset(11)};
+  Range kernel{ctx};
+  const Tensor start = Tensor::FromFloat("", {}, {1.0f});
+  const Tensor limit = Tensor::FromFloat("", {}, {5.0f});
+  const Tensor delta = Tensor::FromFloat("", {}, {2.0f});
+  const Tensor y = kernel(start, limit, delta);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.0f);
+  EXPECT_FLOAT_EQ(py[1], 3.0f);
+}
+
+TEST(BackendKernelClass, RangeInt32NegativeDelta) {
+  const KernelContext ctx{DefaultOpset(11)};
+  Range kernel{ctx};
+  const Tensor start = Tensor::FromInt32("", {}, {10});
+  const Tensor limit = Tensor::FromInt32("", {}, {6});
+  const Tensor delta = Tensor::FromInt32("", {}, {-3});
+  const Tensor y = kernel(start, limit, delta);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2}));
+  const int32_t *py = y.AsInt32();
+  EXPECT_EQ(py[0], 10);
+  EXPECT_EQ(py[1], 7);
+}
+
+TEST(BackendKernelClass, RangeEmptyWhenStartExceedsLimitForPositiveDelta) {
+  const KernelContext ctx{DefaultOpset(11)};
+  Range kernel{ctx};
+  const Tensor start = Tensor::FromInt64("", {}, {5});
+  const Tensor limit = Tensor::FromInt64("", {}, {5});
+  const Tensor delta = Tensor::FromInt64("", {}, {1});
+  const Tensor y = kernel(start, limit, delta);
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{0}));
+  EXPECT_EQ(y.element_count(), 0);
+}
+
+TEST(BackendKernelClass, RangeRejectsMismatchedDtypes) {
+  const KernelContext ctx{DefaultOpset(11)};
+  Range kernel{ctx};
+  const Tensor start = Tensor::FromFloat("", {}, {1.0f});
+  const Tensor limit = Tensor::FromInt32("", {}, {5});
+  const Tensor delta = Tensor::FromFloat("", {}, {1.0f});
+  EXPECT_THROW(kernel(start, limit, delta), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, RangeRejectsZeroDelta) {
+  const KernelContext ctx{DefaultOpset(11)};
+  Range kernel{ctx};
+  const Tensor start = Tensor::FromInt64("", {}, {0});
+  const Tensor limit = Tensor::FromInt64("", {}, {5});
+  const Tensor delta = Tensor::FromInt64("", {}, {0});
+  EXPECT_THROW(kernel(start, limit, delta), std::invalid_argument);
 }
 
 } // namespace Test

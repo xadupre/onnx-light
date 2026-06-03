@@ -177,6 +177,31 @@ void ComputeShapeHammingWindow(ShapesContext &ctx, const NodeProto &node);
  */
 void ComputeShapeBernoulli(ShapesContext &ctx, const NodeProto &node);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Range`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Range`` produces a 1-D tensor whose element type matches the three
+ * scalar inputs ``start``, ``limit`` and ``delta`` (which must all share
+ * the same dtype, per the schema's ``T`` constraint).
+ *
+ * When the values of all three inputs have been data-propagated as
+ * scalars, the output dimension is explicitly computed as
+ * ``max(ceil((limit - start) / delta), 0)``. Otherwise the output is
+ * described as a 1-D tensor with a single symbolic dim of unknown size.
+ *
+ * @param ctx   In/out context. On return contains an entry for
+ *              ``node.output(0)`` describing the output.
+ * @param node  The ``Range`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Range"`` and
+ *              ``node`` must declare exactly three inputs and one
+ *              output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Range"``,
+ *         if ``node`` has fewer than three inputs or no output.
+ */
+void ComputeShapeRange(ShapesContext &ctx, const NodeProto &node);
+
 } // namespace generator
 } // namespace shapes
 } // namespace onnx_optim

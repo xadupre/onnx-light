@@ -1040,4 +1040,199 @@ TEST(OnnxOptimShapeInference, DispatchesSequenceEmpty) {
   EXPECT_EQ(out.Length().AsInt(), 0);
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// SplitToSequence shape-inference tests.
+// ──────────────────────────────────────────────────────────────────────
+
+namespace {
+
+NodeProto MakeSplitToSequenceNode(const std::string &input, const std::string &output,
+                                  bool with_split, int64_t axis = 0, int64_t keepdims = 1,
+                                  bool with_keepdims = false) {
+  NodeProto node;
+  node.set_op_type("SplitToSequence");
+  node.add_input(input);
+  if (with_split) {
+    node.add_input("split");
+  }
+  node.add_output(output);
+  AttributeProto *axis_attr = node.add_attribute();
+  axis_attr->set_name("axis");
+  axis_attr->set_type(AttributeProto::INT);
+  axis_attr->set_i(axis);
+  if (with_keepdims) {
+    AttributeProto *kd_attr = node.add_attribute();
+    kd_attr->set_name("keepdims");
+    kd_attr->set_type(AttributeProto::INT);
+    kd_attr->set_i(keepdims);
+  }
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeSplitToSequence, OmittedSplitProducesUnitChunks) {
+  NodeProto node = MakeSplitToSequenceNode("x", "out", /*with_split=*/false, /*axis=*/1);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("x", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(6)}));
+
+  onnx_optim::shapes::sequence::ComputeShapeSplitToSequence(ctx, node);
+
+  ASSERT_TRUE(ctx.HasSequence("out"));
+  const onnx_optim::OptimSequence &out = ctx.GetSequence("out");
+  EXPECT_EQ(out.ElemDtype(), onnx_optim::TensorType::kFloat);
+  ASSERT_TRUE(out.HasElemShapes());
+  ASSERT_EQ(out.ElemShapes().size(), 6u);
+  for (const auto &shape : out.ElemShapes()) {
+    ASSERT_EQ(shape.Rank(), 2u);
+    EXPECT_EQ(shape[0].AsInt(), 3);
+    EXPECT_EQ(shape[1].AsInt(), 1);
+  }
+}
+
+TEST(OnnxOptimShapeSplitToSequence, OmittedSplitKeepdimsZeroSqueezesAxis) {
+  NodeProto node = MakeSplitToSequenceNode("x", "out", /*with_split=*/false, /*axis=*/1,
+                                           /*keepdims=*/0, /*with_keepdims=*/true);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("x", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(6)}));
+
+  onnx_optim::shapes::sequence::ComputeShapeSplitToSequence(ctx, node);
+
+  ASSERT_TRUE(ctx.HasSequence("out"));
+  const onnx_optim::OptimSequence &out = ctx.GetSequence("out");
+  ASSERT_TRUE(out.HasElemShapes());
+  ASSERT_EQ(out.ElemShapes().size(), 6u);
+  for (const auto &shape : out.ElemShapes()) {
+    ASSERT_EQ(shape.Rank(), 1u);
+    EXPECT_EQ(shape[0].AsInt(), 3);
+  }
+}
+
+TEST(OnnxOptimShapeSplitToSequence, KnownVectorSplitProducesPerChunkShapes) {
+  NodeProto node = MakeSplitToSequenceNode("x", "out", /*with_split=*/true, /*axis=*/0);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("x", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(6)}));
+  // Encode the value of ``split`` ([1, 2]) via the tensor's value-as-shape.
+  onnx_optim::OptimTensor split_t(nullptr, onnx_optim::TensorType::kInt64,
+                                  onnx_optim::OptimShape{onnx_optim::OptimDim(2)});
+  split_t.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(2)});
+  ctx.Set("split", std::move(split_t));
+
+  onnx_optim::shapes::sequence::ComputeShapeSplitToSequence(ctx, node);
+
+  ASSERT_TRUE(ctx.HasSequence("out"));
+  const onnx_optim::OptimSequence &out = ctx.GetSequence("out");
+  ASSERT_TRUE(out.HasElemShapes());
+  ASSERT_EQ(out.ElemShapes().size(), 2u);
+  EXPECT_EQ(out.ElemShapes()[0][0].AsInt(), 1);
+  EXPECT_EQ(out.ElemShapes()[0][1].AsInt(), 6);
+  EXPECT_EQ(out.ElemShapes()[1][0].AsInt(), 2);
+  EXPECT_EQ(out.ElemShapes()[1][1].AsInt(), 6);
+}
+
+TEST(OnnxOptimShapeSplitToSequence, KnownScalarSplitProducesEqualChunks) {
+  NodeProto node = MakeSplitToSequenceNode("x", "out", /*with_split=*/true, /*axis=*/1);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("x", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(6)}));
+  // Scalar split with value 2.
+  onnx_optim::OptimTensor split_t(nullptr, onnx_optim::TensorType::kInt64,
+                                  onnx_optim::OptimShape{});
+  split_t.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(2)});
+  ctx.Set("split", std::move(split_t));
+
+  onnx_optim::shapes::sequence::ComputeShapeSplitToSequence(ctx, node);
+
+  ASSERT_TRUE(ctx.HasSequence("out"));
+  const onnx_optim::OptimSequence &out = ctx.GetSequence("out");
+  ASSERT_TRUE(out.HasElemShapes());
+  ASSERT_EQ(out.ElemShapes().size(), 3u);
+  for (const auto &shape : out.ElemShapes()) {
+    EXPECT_EQ(shape[0].AsInt(), 3);
+    EXPECT_EQ(shape[1].AsInt(), 2);
+  }
+}
+
+TEST(OnnxOptimShapeSplitToSequence, UnknownSplitValueLeavesShapesUnresolved) {
+  NodeProto node = MakeSplitToSequenceNode("x", "out", /*with_split=*/true, /*axis=*/0);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("x", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(6)}));
+  // ``split`` has known shape but unknown value.
+  ctx.Set("split", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                           onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+
+  onnx_optim::shapes::sequence::ComputeShapeSplitToSequence(ctx, node);
+
+  ASSERT_TRUE(ctx.HasSequence("out"));
+  const onnx_optim::OptimSequence &out = ctx.GetSequence("out");
+  EXPECT_EQ(out.ElemDtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_FALSE(out.HasElemShapes());
+  EXPECT_FALSE(out.Length().IsInt());
+}
+
+TEST(OnnxOptimShapeSplitToSequence, NegativeAxisIsResolved) {
+  NodeProto node = MakeSplitToSequenceNode("x", "out", /*with_split=*/false, /*axis=*/-1);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("x", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kInt32,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(2)}));
+
+  onnx_optim::shapes::sequence::ComputeShapeSplitToSequence(ctx, node);
+
+  ASSERT_TRUE(ctx.HasSequence("out"));
+  const onnx_optim::OptimSequence &out = ctx.GetSequence("out");
+  ASSERT_TRUE(out.HasElemShapes());
+  ASSERT_EQ(out.ElemShapes().size(), 2u);
+  for (const auto &shape : out.ElemShapes()) {
+    EXPECT_EQ(shape[0].AsInt(), 4);
+    EXPECT_EQ(shape[1].AsInt(), 1);
+  }
+}
+
+TEST(OnnxOptimShapeSplitToSequence, RejectsOutOfRangeAxis) {
+  NodeProto node = MakeSplitToSequenceNode("x", "out", /*with_split=*/false, /*axis=*/5);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("x", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+  EXPECT_THROW(onnx_optim::shapes::sequence::ComputeShapeSplitToSequence(ctx, node),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeSplitToSequence, RejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("NotSplitToSequence");
+  node.add_input("x");
+  node.add_output("out");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("x", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+  EXPECT_THROW(onnx_optim::shapes::sequence::ComputeShapeSplitToSequence(ctx, node),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeInference, DispatchesSplitToSequence) {
+  NodeProto node = MakeSplitToSequenceNode("x", "out", /*with_split=*/false, /*axis=*/0);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("x", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)}));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.HasSequence("out"));
+  const onnx_optim::OptimSequence &out = ctx.GetSequence("out");
+  EXPECT_EQ(out.ElemDtype(), onnx_optim::TensorType::kFloat);
+  ASSERT_TRUE(out.HasElemShapes());
+  EXPECT_EQ(out.ElemShapes().size(), 3u);
+}
+
 } // namespace Test

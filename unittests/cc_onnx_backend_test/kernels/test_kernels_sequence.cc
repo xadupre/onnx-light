@@ -24,6 +24,7 @@ using onnx_backend_test::kernel::SequenceEmpty;
 using onnx_backend_test::kernel::SequenceErase;
 using onnx_backend_test::kernel::SequenceInsert;
 using onnx_backend_test::kernel::SequenceLength;
+using onnx_backend_test::kernel::SplitToSequence;
 
 namespace Test {
 
@@ -638,6 +639,125 @@ TEST(BackendKernelClass, SequenceMapPreservesElemTypeOnEmptyInputSequence) {
   ASSERT_EQ(outs.size(), 1u);
   EXPECT_EQ(outs[0].size(), 0u);
   EXPECT_EQ(outs[0].elem_type, static_cast<int32_t>(onnx_backend_test::DataType::UNDEFINED));
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// SplitToSequence kernel tests.
+// ──────────────────────────────────────────────────────────────────────
+
+TEST(BackendKernelClass, SplitToSequenceScalarSplitProducesEqualChunks) {
+  const KernelContext ctx{DefaultOpset(11)};
+  SplitToSequence op{ctx};
+  // arange(18) reshaped to [3, 6].
+  std::vector<float> data(18);
+  for (int i = 0; i < 18; ++i)
+    data[static_cast<std::size_t>(i)] = static_cast<float>(i);
+  Tensor input = Tensor::FromFloat("", {3, 6}, data);
+  Tensor split = Tensor::FromInt64("", {}, {2});
+
+  Sequence out = op(input, &split, /*axis=*/1);
+
+  ASSERT_EQ(out.size(), 3u);
+  EXPECT_EQ(out.elem_type, input.data_type);
+  for (std::size_t i = 0; i < 3; ++i) {
+    EXPECT_EQ(out.at(i).shape, (std::vector<int64_t>{3, 2}));
+  }
+  const float expected0[] = {0.f, 1.f, 6.f, 7.f, 12.f, 13.f};
+  const float expected1[] = {2.f, 3.f, 8.f, 9.f, 14.f, 15.f};
+  const float expected2[] = {4.f, 5.f, 10.f, 11.f, 16.f, 17.f};
+  EXPECT_EQ(0, std::memcmp(out.at(0).data.data(), expected0, sizeof(expected0)));
+  EXPECT_EQ(0, std::memcmp(out.at(1).data.data(), expected1, sizeof(expected1)));
+  EXPECT_EQ(0, std::memcmp(out.at(2).data.data(), expected2, sizeof(expected2)));
+}
+
+TEST(BackendKernelClass, SplitToSequenceVectorSplitProducesUnevenChunks) {
+  const KernelContext ctx{DefaultOpset(11)};
+  SplitToSequence op{ctx};
+  std::vector<float> data(18);
+  for (int i = 0; i < 18; ++i)
+    data[static_cast<std::size_t>(i)] = static_cast<float>(i);
+  Tensor input = Tensor::FromFloat("", {3, 6}, data);
+  Tensor split = Tensor::FromInt64("", {2}, {1, 2});
+
+  Sequence out = op(input, &split, /*axis=*/0);
+
+  ASSERT_EQ(out.size(), 2u);
+  EXPECT_EQ(out.at(0).shape, (std::vector<int64_t>{1, 6}));
+  EXPECT_EQ(out.at(1).shape, (std::vector<int64_t>{2, 6}));
+  const float row0[] = {0.f, 1.f, 2.f, 3.f, 4.f, 5.f};
+  const float rows12[] = {6.f, 7.f, 8.f, 9.f, 10.f, 11.f, 12.f, 13.f, 14.f, 15.f, 16.f, 17.f};
+  EXPECT_EQ(0, std::memcmp(out.at(0).data.data(), row0, sizeof(row0)));
+  EXPECT_EQ(0, std::memcmp(out.at(1).data.data(), rows12, sizeof(rows12)));
+}
+
+TEST(BackendKernelClass, SplitToSequenceOmittedSplitKeepdimsDefaults) {
+  const KernelContext ctx{DefaultOpset(11)};
+  SplitToSequence op{ctx};
+  std::vector<float> data(18);
+  for (int i = 0; i < 18; ++i)
+    data[static_cast<std::size_t>(i)] = static_cast<float>(i);
+  Tensor input = Tensor::FromFloat("", {3, 6}, data);
+
+  Sequence out = op(input, /*split=*/nullptr, /*axis=*/1, /*keepdims=*/1);
+
+  ASSERT_EQ(out.size(), 6u);
+  for (std::size_t i = 0; i < 6; ++i) {
+    EXPECT_EQ(out.at(i).shape, (std::vector<int64_t>{3, 1}));
+  }
+}
+
+TEST(BackendKernelClass, SplitToSequenceOmittedSplitNoKeepdimsSqueezesAxis) {
+  const KernelContext ctx{DefaultOpset(11)};
+  SplitToSequence op{ctx};
+  std::vector<float> data(18);
+  for (int i = 0; i < 18; ++i)
+    data[static_cast<std::size_t>(i)] = static_cast<float>(i);
+  Tensor input = Tensor::FromFloat("", {3, 6}, data);
+
+  Sequence out = op(input, /*split=*/nullptr, /*axis=*/1, /*keepdims=*/0);
+
+  ASSERT_EQ(out.size(), 6u);
+  for (std::size_t i = 0; i < 6; ++i) {
+    EXPECT_EQ(out.at(i).shape, (std::vector<int64_t>{3}));
+  }
+  // Column i of input (rows are 0..6, 6..12, 12..18 → column i values are i, i+6, i+12).
+  const float col1[] = {1.f, 7.f, 13.f};
+  EXPECT_EQ(0, std::memcmp(out.at(1).data.data(), col1, sizeof(col1)));
+}
+
+TEST(BackendKernelClass, SplitToSequenceNegativeAxisIsAccepted) {
+  const KernelContext ctx{DefaultOpset(11)};
+  SplitToSequence op{ctx};
+  Tensor input = Tensor::FromFloat("", {2, 4}, {1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f});
+  Tensor split = Tensor::FromInt64("", {}, {2});
+
+  Sequence out = op(input, &split, /*axis=*/-1);
+
+  ASSERT_EQ(out.size(), 2u);
+  EXPECT_EQ(out.at(0).shape, (std::vector<int64_t>{2, 2}));
+  EXPECT_EQ(out.at(1).shape, (std::vector<int64_t>{2, 2}));
+}
+
+TEST(BackendKernelClass, SplitToSequenceRejectsScalarInput) {
+  const KernelContext ctx{DefaultOpset(11)};
+  SplitToSequence op{ctx};
+  Tensor input = Tensor::FromFloat("", {}, {1.0f});
+  EXPECT_THROW(op(input, /*split=*/nullptr), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, SplitToSequenceRejectsOutOfRangeAxis) {
+  const KernelContext ctx{DefaultOpset(11)};
+  SplitToSequence op{ctx};
+  Tensor input = Tensor::FromFloat("", {2}, {1.f, 2.f});
+  EXPECT_THROW(op(input, /*split=*/nullptr, /*axis=*/3), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, SplitToSequenceRejectsMismatchedSplitSum) {
+  const KernelContext ctx{DefaultOpset(11)};
+  SplitToSequence op{ctx};
+  Tensor input = Tensor::FromFloat("", {3, 6}, std::vector<float>(18, 0.f));
+  Tensor split = Tensor::FromInt64("", {2}, {1, 1}); // sums to 2, not 3
+  EXPECT_THROW(op(input, &split, /*axis=*/0), std::invalid_argument);
 }
 
 } // namespace Test

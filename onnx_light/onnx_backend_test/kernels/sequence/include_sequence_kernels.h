@@ -235,6 +235,39 @@ public:
                       const Tensor *position = nullptr) const;
 };
 
+/// Splits ``input`` along ``axis`` into a tensor sequence. This mirrors
+/// ONNX ``SplitToSequence`` (since opset 11 in the ai.onnx domain).
+///
+/// When ``split`` is null (omitted), ``input`` is split into chunks of
+/// size 1 along ``axis``; ``keepdims`` controls whether the split axis
+/// is preserved (default 1) or squeezed away (0).
+///
+/// When ``split`` is provided, ``keepdims`` is ignored. If ``split`` is
+/// a scalar (rank-0 INT32/INT64 tensor) with value ``s``, ``input`` is
+/// split into equal chunks of size ``s`` along ``axis``; the last chunk
+/// may be smaller when the axis dimension is not divisible by ``s``. If
+/// ``split`` is a 1-D INT32/INT64 tensor, its entries give the per-chunk
+/// size along ``axis`` and must sum to ``input.shape[axis]``.
+///
+/// ``axis`` may be negative, in which case it counts from the back of
+/// ``input``'s rank. The kernel supports all whole-byte element types
+/// supported by :cpp:func:`ElementSize`; STRING and sub-byte element
+/// types are not supported and will cause the kernel to throw
+/// ``std::invalid_argument``.
+class SplitToSequence : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Computes the split. ``split`` may be ``nullptr`` (omitted), a
+  /// scalar INT32/INT64 tensor, or a 1-D INT32/INT64 tensor.
+  Sequence operator()(const Tensor &input, const Tensor *split, int64_t axis = 0,
+                      int64_t keepdims = 1) const;
+
+  /// Output sequence elements are freshly allocated slices and do not
+  /// share storage with ``input``.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

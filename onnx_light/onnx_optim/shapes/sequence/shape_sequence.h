@@ -279,6 +279,53 @@ void ComputeShapeSequenceInsert(ShapesContext &ctx, const NodeProto &node);
  */
 void ComputeShapeSequenceMap(ShapesContext &ctx, const NodeProto &node);
 
+/**
+ * Computes the output :cpp:class:`OptimSequence` of a ``SplitToSequence``
+ * node and stores it in ``ctx``.
+ *
+ * ``SplitToSequence`` (since opset 11 in the ``ai.onnx`` domain) takes a
+ * tensor input and an optional ``split`` tensor input, plus the
+ * attributes ``axis`` (default ``0``) and ``keepdims`` (default ``1``,
+ * ignored when ``split`` is provided), and produces a single
+ * tensor-sequence output. The output element dtype matches the input
+ * tensor dtype.
+ *
+ * Per-element shapes are inferred when possible:
+ *
+ * * when ``split`` is omitted, the input axis dimension is split into
+ *   chunks of size ``1``; with ``keepdims == 1`` each element keeps the
+ *   input rank with axis dim ``1``, with ``keepdims == 0`` the axis is
+ *   squeezed away;
+ * * when ``split`` is a 1-D tensor whose value is known at shape
+ *   inference time, each entry gives the corresponding element's size
+ *   along ``axis``;
+ * * when ``split`` is a scalar whose value is known, equal chunks of
+ *   that size are produced (the last chunk possibly being smaller).
+ *
+ * When the axis dimension or the ``split`` value are unknown the
+ * sequence length and per-element shapes are dropped and only the
+ * element dtype is forwarded together with a symbolic length.
+ *
+ * @param ctx   In/out context. Must already contain an
+ *              :cpp:class:`OptimTensor` entry for ``node.input(0)``
+ *              and, when present, for ``node.input(1)``; on return it
+ *              also contains an :cpp:class:`OptimSequence` entry for
+ *              ``node.output(0)``.
+ * @param node  The ``SplitToSequence`` ``NodeProto`` whose output
+ *              should be described. ``node.op_type()`` must be
+ *              ``"SplitToSequence"`` and ``node`` must declare at
+ *              least one input and one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"SplitToSequence"``, if ``node`` has no input or no
+ *         output, if ``axis`` is out of range when the input rank is
+ *         known, or if a known ``split`` tensor disagrees with the
+ *         input axis dimension.
+ * @throws std::out_of_range     if a named input is missing from
+ *         ``ctx``.
+ */
+void ComputeShapeSplitToSequence(ShapesContext &ctx, const NodeProto &node);
+
 } // namespace sequence
 } // namespace shapes
 } // namespace onnx_optim

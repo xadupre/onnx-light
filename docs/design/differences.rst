@@ -316,6 +316,34 @@ See :ref:`l-api-onnx-onnx-proto-onnx-crypt` for the full C++ API reference.
 
 ----
 
+No checked-in markdown files for operators
+-------------------------------------------
+
+The official :epkg:`onnx` repository tracks operator metadata in a set of
+markdown files (``docs/Operators.md``, ``docs/Operators-ml.md``,
+``docs/Changelog.md``, ``docs/Changelog-ml.md``,
+``docs/TestCoverage.md``, ``docs/TestCoverage-ml.md``).  These files are
+**generated** from the C++ schemas and the Python test suite, and the
+``onnx`` CI fails if a change to an operator schema is not accompanied by
+a regeneration of the corresponding markdown files.
+
+``onnx_light`` does **not** ship any equivalent set of generated markdown
+files, and adding a new operator (or modifying an existing schema, opset
+history, kernel, shape-inference rule, backend test case, …) **never**
+requires editing or regenerating any ``.md`` file in this repository.
+
+All operator documentation is produced on the fly by the Sphinx build
+from the live ``LightOpSchema`` objects (see
+:ref:`l-design-test-coverage`), so the single source of truth is the
+C++ code itself.  Contributors should therefore:
+
+* never commit a regenerated ``Operators.md`` / ``Changelog.md`` /
+  ``TestCoverage.md`` (or any ``-ml`` variant);
+* never add a new ``.md`` file under ``docs/`` to describe a new
+  operator — the operator pages are generated automatically.
+
+----
+
 API compatibility
 -----------------
 

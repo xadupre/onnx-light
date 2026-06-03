@@ -461,6 +461,16 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 2);
          tensor::ComputeShapeTensorScatter(ctx, node);
        }},
+      {"ai.onnx:ScatterElements",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 3);
+         tensor::ComputeShapeScatterElements(ctx, node);
+       }},
+      {"ai.onnx:ScatterND",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 3);
+         tensor::ComputeShapeScatterND(ctx, node);
+       }},
       {"ai.onnx:HammingWindow",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

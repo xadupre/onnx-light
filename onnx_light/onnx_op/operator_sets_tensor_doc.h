@@ -404,6 +404,18 @@ std::string MakeGatherNDDoc(int since_version);
 std::string MakeCompressDoc(int since_version);
 
 /**
+ * Returns the documentation string for the ScatterElements operator at the
+ * given opset version.
+ */
+std::string MakeScatterElementsDoc(int since_version);
+
+/**
+ * Returns the documentation string for the ScatterND operator at the given
+ * opset version.
+ */
+std::string MakeScatterNDDoc(int since_version);
+
+/**
  * Returns the documentation string for the TensorScatter operator at the
  * given opset version.
  */

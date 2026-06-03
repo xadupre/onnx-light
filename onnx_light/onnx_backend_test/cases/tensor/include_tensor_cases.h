@@ -98,6 +98,12 @@ void RegisterSplitCases(std::vector<TestCase> &registry);
 /// Registers the ``TensorScatter`` backend test node case(s).
 void RegisterTensorScatterCases(std::vector<TestCase> &registry);
 
+/// Registers the ``ScatterElements`` backend test node case(s).
+void RegisterScatterElementsCases(std::vector<TestCase> &registry);
+
+/// Registers the ``ScatterND`` backend test node case(s).
+void RegisterScatterNDCases(std::vector<TestCase> &registry);
+
 /// Collects all ``tensor`` op category backend test node cases by invoking
 /// every ``Register*Cases`` helper declared in this header.
 void CollectTensorTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");

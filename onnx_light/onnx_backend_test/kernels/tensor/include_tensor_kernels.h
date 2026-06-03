@@ -654,6 +654,55 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of the ONNX ``Unique`` operator (since opset 11
+/// in the ``ai.onnx`` domain). Returns the unique values or subtensors of
+/// the input tensor and three optional companion outputs:
+///
+///   * ``Y``               — unique values (1-D when ``axis`` is not provided)
+///                           or unique subtensors sliced along ``axis``;
+///   * ``indices``         — 1-D INT64 indices of the first occurrence of
+///                           every ``Y`` element in ``X``;
+///   * ``inverse_indices`` — 1-D INT64 indices that map every ``X`` element
+///                           back to its position in ``Y``;
+///   * ``counts``          — 1-D INT64 count of each ``Y`` element in ``X``.
+///
+/// When ``sorted`` is ``true`` (the default) outputs are ordered by ascending
+/// value (or lexicographic order when ``axis`` is provided). When ``sorted``
+/// is ``false`` the order of first occurrence in ``X`` is preserved.
+///
+/// The reference implementation supports the same whole-byte element types
+/// as :cpp:func:`ElementSize` (FLOAT, DOUBLE, INT8/16/32/64, UINT8/16/32/64,
+/// BOOL) and STRING.
+class Unique : public KernelBase {
+public:
+  /// Attributes carried by the ONNX ``Unique`` operator.
+  struct Attributes {
+    /// Whether to sort unique elements in ascending order. Defaults to
+    /// ``true`` (matching the schema default of 1).
+    bool sorted = true;
+    /// Axis along which to take unique subtensors. ``std::nullopt`` means
+    /// "flatten the input" (matching the schema default behaviour).
+    std::optional<int64_t> axis = std::nullopt;
+  };
+
+  /// Aggregated output of :cpp:class:`Unique`.
+  struct Outputs {
+    Tensor y;
+    Tensor indices;
+    Tensor inverse_indices;
+    Tensor counts;
+  };
+
+  using KernelBase::KernelBase;
+
+  Outputs operator()(const Tensor &x) const;
+  Outputs operator()(const Tensor &x, const Attributes &attrs) const;
+
+  /// The outputs have different dtypes (Y matches X; the others are INT64)
+  /// and different shapes, so storage cannot be shared with the input.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

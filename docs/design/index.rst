@@ -11,6 +11,13 @@ and speed up this first step.
 It replicates the same Python API and the same C++ API to enable
 a smooth replacement.
 
+`onnx-light` is intentionally split into several small C++ libraries
+(``lib_onnx_proto``, ``lib_onnx_op``, ``lib_onnx_lib``,
+``lib_onnx_optim``, ``lib_onnx_backend_test``) so that any downstream
+project can link **only** the assembly it actually needs — from a bare
+proto parser up to the full schema / shape-inference / runtime stack.
+See :ref:`l-design-library-split` for the detailed breakdown.
+
 .. toctree::
     :caption: Without Protobuf
     :maxdepth: 1
@@ -18,6 +25,7 @@ a smooth replacement.
     differences
     protobuf_format
     no_copy_ownership
+    library_split
     cplusplus_linking
 
 Shape Inference is still under development as a new algorithm

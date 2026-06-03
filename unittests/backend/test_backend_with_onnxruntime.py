@@ -51,6 +51,14 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     registered for ``RandomUniformLike(22)`` ("Could not find an
 #     implementation for RandomUniformLike(22) node"). The reference backend
 #     still exercises these cases.
+#   * ``test_training_dropout``, ``test_training_dropout_mask``,
+#     ``test_training_dropout_default`` and
+#     ``test_training_dropout_default_mask`` — training-mode ``Dropout`` with
+#     ``ratio > 0`` selects kept/dropped elements via a runtime-defined RNG,
+#     so the expected outputs computed by ``kernel::Dropout`` are not
+#     bit-comparable with ORT's CPU kernel even for the same seed. The
+#     zero-ratio variants remain deterministic (output equals input, mask is
+#     all ones) and are still exercised.
 #   * ``test_cc_binarizer_int64`` — ORT only registers a ``float`` kernel for
 #     ``ai.onnx.ml::Binarizer``, so the ``int64`` variant fails with
 #     "Could not find an implementation for Binarizer(1) node". The
@@ -183,6 +191,10 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_bernoulli$",
     r"^test_cc_bernoulli_double$",
     r"^test_cc_bernoulli_seed$",
+    r"^test_training_dropout$",
+    r"^test_training_dropout_mask$",
+    r"^test_training_dropout_default$",
+    r"^test_training_dropout_default_mask$",
     r"^test_cc_binarizer_int64$",
     r"^test_cc_scaler_int64$",
     r"^test_cc_cast_.*FLOAT8E4M3.*$",

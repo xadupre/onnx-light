@@ -431,6 +431,21 @@ void ComputeShapeSwish(ShapesContext &ctx, const NodeProto &node, const char *x)
 void ComputeShapeSoftmax(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
+ * Computes the output ``OptimTensor``(s) of a ``SoftmaxCrossEntropyLoss``
+ * node and stores them in ``ctx``.
+ *
+ * Inputs are ``scores`` (shape ``(N, C)`` or ``(N, C, D1, ..., Dk)``),
+ * ``labels`` (shape ``(N)`` or ``(N, D1, ..., Dk)``), and optionally
+ * ``weights`` (shape ``(C)``). The first output ``output`` has the
+ * loss shape: ``(N, D1, ..., Dk)`` when ``reduction = "none"`` and a
+ * scalar otherwise. The optional second output ``log_prob`` has the
+ * same shape and dtype as ``scores``.
+ */
+void ComputeShapeSoftmaxCrossEntropyLoss(ShapesContext &ctx, const NodeProto &node,
+                                         const char *scores, const char *labels,
+                                         const char *weights);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``Sin`` node and
  * stores it in ``ctx``.
  *

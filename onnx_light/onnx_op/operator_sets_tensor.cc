@@ -502,6 +502,60 @@ LightOpSchema MakeNonZeroSchema(int since_version, const std::vector<TensorType>
                        });
 }
 
+LightOpSchema MakeUniqueSchema(int since_version, const std::vector<TensorType> &types) {
+  LightOpSchema schema(
+      "Unique", kOnnxDomain, since_version, MakeUniqueDoc(since_version),
+      {
+          {"X", "A N-D input tensor that is to be processed.", "T"},
+      },
+      {
+          {"Y",
+           "A tensor of the same type as 'X' "
+           "containing all the unique values or subtensors sliced along a provided 'axis' in "
+           "'X', either sorted "
+           "or maintained in the same order they occur in input 'X'",
+           "T"},
+          {"indices",
+           "A 1-D INT64 tensor "
+           "containing indices of 'Y' elements' first occurrence in 'X'. "
+           "When 'axis' is provided, it contains indices to subtensors in input 'X' on the "
+           "'axis'. "
+           "When 'axis' is not provided, it contains indices to values in the flattened input "
+           "tensor. ",
+           "tensor(int64)"},
+          {"inverse_indices",
+           "A 1-D INT64 tensor "
+           "containing, for elements of 'X', its corresponding indices in 'Y'. "
+           "When 'axis' is provided, it contains indices to subtensors in output 'Y' on the "
+           "'axis'. "
+           "When 'axis' is not provided, it contains indices to values in output 'Y'. ",
+           "tensor(int64)"},
+          {"counts",
+           "A 1-D INT64 tensor containing "
+           "the count of each element "
+           "of 'Y' in input 'X'",
+           "tensor(int64)"},
+      },
+      {
+          {"T", types, MakeUniqueTypeConstraintDescription(since_version)},
+      },
+      {
+          {"sorted",
+           "(Optional) Whether to sort the unique elements in ascending order before returning "
+           "as output. "
+           "Must be one of 0, or 1 (default).",
+           AttributeType::INT, /*required=*/false, static_cast<int64_t>(1)},
+          {"axis",
+           "(Optional) The dimension to apply unique. If not specified, the unique elements of "
+           "the "
+           "flattened input are returned. Negative value means counting dimensions "
+           "from the back. Accepted range is [-r, r-1] where r = rank(input).",
+           AttributeType::INT, /*required=*/false},
+      });
+  schema.set_min_output(1).set_max_output(4);
+  return schema;
+}
+
 LightOpSchema MakeShapeSchema(int since_version, const std::vector<TensorType> &types) {
   std::vector<AttributeParam> attributes;
   if (since_version >= 15) {
@@ -1153,6 +1207,12 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
              MakeUnsqueezeSchema(13, ConcatTypesVer13()),
              MakeUnsqueezeSchema(11, AllTensorTypes()),
              MakeUnsqueezeSchema(1, AllTensorTypes()),
+         };
+       }},
+      {"Unique",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeUniqueSchema(11, AllTensorTypes()),
          };
        }},
   };

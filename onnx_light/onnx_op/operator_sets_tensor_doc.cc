@@ -515,6 +515,50 @@ std::string MakeUpsampleTypeConstraintDescription(int since_version) {
   return "Constrain input 'X' and output 'Y' to all tensor types.";
 }
 
+std::string MakeResizeDoc(int since_version) {
+  if (since_version == 10) {
+    return R"DOC(
+Resize the input tensor.
+Each dimension value of the output tensor is:
+  output_dimension = floor(input_dimension * scale).
+)DOC";
+  }
+  if (since_version == 11 || since_version == 13) {
+    return R"DOC(
+Resize the input tensor. In general, it calculates every value in the output tensor as a weighted average of neighborhood (a.k.a. sampling locations) in the input tensor.
+Each dimension value of the output tensor is:
+  output_dimension = floor(input_dimension * (roi_end - roi_start) * scale) if input \"sizes\" is not specified.
+)DOC";
+  }
+  if (since_version == 18) {
+    return R"DOC(
+Resize the input tensor. In general, it calculates every value in the output tensor as a weighted average of neighborhood (a.k.a. sampling locations) in the input tensor.
+Each dimension value of the output tensor is: <br/>
+  `output_dimension = floor(input_dimension * (roi_end - roi_start) * scale)` <br/>
+if input \"sizes\" is not specified.
+)DOC";
+  }
+  // since_version == 19 (and any later opset reusing the v19 doc).
+  return R"DOC(
+Resize the input tensor. In general, it calculates every value in the output tensor as a weighted average of neighborhood (a.k.a. sampling locations) in the input tensor.
+Each dimension value of the output tensor is:
+```
+output_dimension = floor(input_dimension * (roi_end - roi_start) * scale)
+```
+if input \"sizes\" is not specified.
+)DOC";
+}
+
+std::string MakeResizeT1TypeConstraintDescription(int since_version) {
+  (void)since_version;
+  return "Constrain input 'X' and output 'Y' to all tensor types.";
+}
+
+std::string MakeResizeT2TypeConstraintDescription(int since_version) {
+  (void)since_version;
+  return "Constrain roi type to float or double.";
+}
+
 std::string MakeTransposeDoc(int since_version) {
   (void)since_version;
   return R"DOC(

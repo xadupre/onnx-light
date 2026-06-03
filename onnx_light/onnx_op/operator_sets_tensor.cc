@@ -689,6 +689,182 @@ LightOpSchema MakeUpsampleSchema(int since_version) {
       });
 }
 
+namespace {
+
+// Type-constraint helper for Resize ``T2`` (input ``roi``):
+// {float16, float, double}. Same for all opset versions starting at v11.
+std::vector<TensorType> ResizeRoiTypes() {
+  return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+}
+
+} // namespace
+
+LightOpSchema MakeResizeSchema(int since_version) {
+  // Common parameter description strings shared across multiple opset versions.
+  // Each multi-line string here is the concatenation that appears in
+  // ``onnx_lib/defs/tensor/old.cc`` and ``defs.cc`` (one space between
+  // adjacent pieces). The OnnxOpSchemaParityTest enforces an exact match,
+  // so do not modify the wording without updating onnx_lib accordingly.
+  if (since_version == 10) {
+    return LightOpSchema(
+        "Resize", kOnnxDomain, since_version, MakeResizeDoc(since_version),
+        {
+            {"X", "N-D tensor", "T"},
+            {"scales",
+             "The scale array along each dimension. It takes value greater than 0. If it's less "
+             "than 1, it's sampling down, otherwise, it's upsampling. The number of elements of "
+             "'scales' should be the same as the rank of input 'X'.",
+             "tensor(float)"},
+        },
+        {
+            {"Y", "N-D tensor after resizing", "T"},
+        },
+        {
+            {"T", AllTensorTypes(), MakeResizeT1TypeConstraintDescription(since_version)},
+        },
+        {
+            {"mode",
+             "Two interpolation modes: nearest (default), and linear (including bilinear, "
+             "trilinear, etc)",
+             AttributeType::STRING, /*required=*/false, std::string("nearest")},
+        });
+  }
+  if (since_version == 11) {
+    return LightOpSchema(
+        "Resize", kOnnxDomain, since_version, MakeResizeDoc(since_version),
+        {
+            {"X", "N-D tensor", "T1"},
+            {"roi",
+             "1-D tensor given as [start1, ..., startN, end1, ..., endN], where N is the rank of "
+             "X. The RoIs' coordinates are normalized in the coordinate system of the input "
+             "image. It only takes effect when coordinate_transformation_mode is "
+             "\"tf_crop_and_resize\"",
+             "T2"},
+            {"scales",
+             "The scale array along each dimension. It takes value greater than 0. If it's less "
+             "than 1, it's sampling down, otherwise, it's upsampling. The number of elements of "
+             "'scales' should be the same as the rank of input 'X'. If 'size' is needed, the "
+             "user must set 'scales' to an empty tensor.",
+             "tensor(float)"},
+            {"sizes",
+             "The size of the output tensor. The number of elements of 'sizes' should be the "
+             "same as the rank of input 'X'. May only be set if 'scales' is set to an empty "
+             "tensor.",
+             "tensor(int64)"},
+        },
+        {
+            {"Y", "N-D tensor after resizing", "T1"},
+        },
+        {
+            {"T1", AllTensorTypes(), MakeResizeT1TypeConstraintDescription(since_version)},
+            {"T2", ResizeRoiTypes(), MakeResizeT2TypeConstraintDescription(since_version)},
+        },
+        {
+            {"mode",
+             "Three interpolation modes: nearest (default), linear and cubic. "
+             "The \"linear\" mode includes linear interpolation for 1D tensor and N-linear "
+             "interpolation for N-D tensor (for example, bilinear interpolation for 2D tensor). "
+             "The \"cubic\" mode includes cubic interpolation for 1D tensor and N-cubic "
+             "interpolation for N-D tensor (for example, bicubic interpolation for 2D tensor).",
+             AttributeType::STRING, /*required=*/false, std::string("nearest")},
+            {"cubic_coeff_a",
+             "The coefficient 'a' used in cubic interpolation. Two common choice are -0.5 (in "
+             "some cases of TensorFlow) and -0.75 (in PyTorch). Check out Equation (4) in "
+             "https://ieeexplore.ieee.org/document/1163711 for the details. "
+             "This attribute is valid only if \"mode\" is \"cubic\".",
+             AttributeType::FLOAT, /*required=*/false, static_cast<double>(-0.75)},
+            {"exclude_outside",
+             "If set to 1, the weight of sampling locations outside the tensor will be set to 0"
+             " and the weight will be renormalized so that their sum is 1.0. The default value "
+             "is 0.",
+             AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)},
+            {"coordinate_transformation_mode",
+             "Describes how to transform coordinates between the resized and original tensor "
+             "(e.g. half_pixel, asymmetric, align_corners, pytorch_half_pixel, "
+             "tf_crop_and_resize, tf_half_pixel_for_nn).",
+             AttributeType::STRING, /*required=*/false, std::string("half_pixel")},
+            {"nearest_mode",
+             "Four modes: round_prefer_floor (default, as known as round half down), "
+             "round_prefer_ceil (as known as round half up), floor, ceil. Only used by nearest "
+             "interpolation. It indicates how to get \"nearest\" pixel in input tensor from "
+             "x_original, so this attribute is valid only if \"mode\" is \"nearest\".",
+             AttributeType::STRING, /*required=*/false, std::string("round_prefer_floor")},
+            {"extrapolation_value",
+             "When coordinate_transformation_mode is \"tf_crop_and_resize\" and x_original is "
+             "outside the range [0, length_original - 1], this value is used as the "
+             "corresponding output value. Default is 0.0f.",
+             AttributeType::FLOAT, /*required=*/false, static_cast<double>(0)},
+        });
+  }
+  if (since_version == 13) {
+    return LightOpSchema(
+        "Resize", kOnnxDomain, since_version, MakeResizeDoc(since_version),
+        {
+            {"X", "N-D tensor", "T1"},
+            {"roi",
+             "1-D tensor given as [start1, ..., startN, end1, ..., endN], where N is the rank of "
+             "X. The RoIs' coordinates are normalized in the coordinate system of the input "
+             "image. It only takes effect when coordinate_transformation_mode is "
+             "\"tf_crop_and_resize\"",
+             "T2"},
+            {"scales",
+             "The scale array along each dimension. It takes value greater than 0. If it's less "
+             "than 1, it's sampling down, otherwise, it's upsampling. The number of elements of "
+             "'scales' should be the same as the rank of input 'X'. One of 'scales' and 'sizes' "
+             "MUST be specified and it is an error if both are specified. If 'sizes' is needed, "
+             "the user can use an empty string as the name of 'scales' in this operator's input "
+             "list.",
+             "tensor(float)"},
+            {"sizes",
+             "The size of the output tensor. The number of elements of 'sizes' should be the "
+             "same as the rank of input 'X'. Only one of 'scales' and 'sizes' can be specified.",
+             "tensor(int64)"},
+        },
+        {
+            {"Y", "N-D tensor after resizing", "T1"},
+        },
+        {
+            {"T1", ConcatTypesVer13(), MakeResizeT1TypeConstraintDescription(since_version)},
+            {"T2", ResizeRoiTypes(), MakeResizeT2TypeConstraintDescription(since_version)},
+        });
+  }
+  // v18 and v19 share the same set of formal parameters; only the doc body and
+  // a couple of attribute defaults differ (the parity test does not check
+  // attributes, only inputs/outputs/type constraints).
+  return LightOpSchema(
+      "Resize", kOnnxDomain, since_version, MakeResizeDoc(since_version),
+      {
+          {"X", "N-D tensor", "T1"},
+          {"roi",
+           "1-D tensor given as [start1, ..., startN, end1, ..., endN], where N is the rank of X "
+           "or the length of axes, if provided. The RoIs' coordinates are normalized in the "
+           "coordinate system of the input image. It only takes effect when "
+           "coordinate_transformation_mode is \"tf_crop_and_resize\"",
+           "T2"},
+          {"scales",
+           "The scale array along each dimension. It takes value greater than 0. If it's less "
+           "than 1, it's sampling down, otherwise, it's upsampling. The number of elements of "
+           "'scales' should be the same as the rank of input 'X' or the length of 'axes', if "
+           "provided. One of 'scales' and 'sizes' MUST be specified and it is an error if both "
+           "are specified. If 'sizes' is needed, the user can use an empty string as the name of "
+           "'scales' in this operator's input list.",
+           "tensor(float)"},
+          {"sizes",
+           "Target size of the output tensor. Its interpretation depends on the "
+           "'keep_aspect_ratio_policy' value.The number of elements of 'sizes' should be the "
+           "same as the rank of input 'X', or the length of 'axes', if provided. Only one of "
+           "'scales' and 'sizes' can be specified. ",
+           "tensor(int64)"},
+      },
+      {
+          {"Y", "N-D tensor after resizing", "T1"},
+      },
+      {
+          {"T1", ConcatTypesVer13(), MakeResizeT1TypeConstraintDescription(since_version)},
+          {"T2", ResizeRoiTypes(), MakeResizeT2TypeConstraintDescription(since_version)},
+      });
+}
+
 LightOpSchema MakeTransposeSchema(int since_version, const std::vector<TensorType> &types) {
   return LightOpSchema(
       "Transpose", kOnnxDomain, since_version, MakeTransposeDoc(since_version),
@@ -1308,6 +1484,13 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
              MakeUpsampleSchema(9),
              MakeUpsampleSchema(7),
              MakeUpsampleSchema(1),
+         };
+       }},
+      {"Resize",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeResizeSchema(19), MakeResizeSchema(18), MakeResizeSchema(13),
+             MakeResizeSchema(11), MakeResizeSchema(10),
          };
        }},
       {"NonZero",

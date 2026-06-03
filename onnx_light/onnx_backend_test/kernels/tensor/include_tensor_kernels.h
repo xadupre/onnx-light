@@ -757,6 +757,49 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of the ONNX ``Resize`` operator (since opset 10
+/// in the ``ai.onnx`` domain, replacing the deprecated ``Upsample``).
+///
+/// The kernel computes ``Y`` from input ``X`` and either ``scales`` (a 1-D
+/// FLOAT tensor with one entry per input axis) or ``sizes`` (a 1-D INT64
+/// tensor giving the target shape). Exactly one of ``scales`` and ``sizes``
+/// must be provided. The output dim ``i`` is ``floor(X.shape[i] *
+/// scales[i])`` when ``scales`` is used and ``sizes[i]`` when ``sizes`` is
+/// used.
+///
+/// Only the ``"nearest"`` mode of the ``mode`` attribute is supported, using
+/// the ``"asymmetric"`` ``coordinate_transformation_mode`` (``in_coord =
+/// out_coord / scale``, clamped to ``[0, in_dim - 1]``). This matches the
+/// reference output for the simple test cases registered alongside the
+/// kernel. The supported element types are the same whole-byte types as
+/// :cpp:func:`ElementSize`.
+class Resize : public KernelBase {
+public:
+  /// Attributes carried by the ONNX ``Resize`` operator. Only the ``mode``
+  /// attribute is interpreted by this reference implementation.
+  struct Attributes {
+    std::string mode = "nearest";
+    std::string coordinate_transformation_mode = "asymmetric";
+    std::string nearest_mode = "round_prefer_floor";
+  };
+
+  using KernelBase::KernelBase;
+
+  /// Resize using the ``scales`` input only. The ``sizes`` input is treated
+  /// as absent (matching the ``Resize(X, scales)`` convenience form).
+  Tensor operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs) const;
+  void operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs,
+                  Tensor &output) const;
+
+  /// Resize using the ``sizes`` input (1-D INT64 tensor giving the target
+  /// shape). The ``scales`` input must be empty.
+  Tensor ResizeSizes(const Tensor &X, const Tensor &sizes, const Attributes &attrs) const;
+
+  /// Output shape generally differs from input shape, so storage cannot be
+  /// shared with the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Reference implementation of the ONNX ``Unique`` operator (since opset 11
 /// in the ``ai.onnx`` domain). Returns the unique values or subtensors of
 /// the input tensor and three optional companion outputs:

@@ -50,6 +50,9 @@ void RegisterTileCases(std::vector<TestCase> &registry);
 /// Registers the ``Upsample`` backend test node case(s).
 void RegisterUpsampleCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Resize`` backend test node case(s).
+void RegisterResizeCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Transpose`` backend test node case(s).
 void RegisterTransposeCases(std::vector<TestCase> &registry);
 

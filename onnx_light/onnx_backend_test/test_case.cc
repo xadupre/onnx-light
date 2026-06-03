@@ -4,6 +4,7 @@
 
 #include "onnx_backend_test/test_case.h"
 
+#include "onnx_backend_test/cases/cases_for_shapes/shape_inference/include_shape_inference_cases.h"
 #include "onnx_backend_test/cases/controlflow/include_controlflow_cases.h"
 #include "onnx_backend_test/cases/generator/include_generator_cases.h"
 #include "onnx_backend_test/cases/logical/include_logical_cases.h"
@@ -48,6 +49,55 @@ std::vector<std::string> NonEmpty(const utils::RepeatedField<utils::String> &nam
 
 } // namespace
 
+void InitModel(ModelProto &model, int64_t ir_version, const std::vector<OpsetId> &opset_imports,
+               const std::string &producer_name) {
+  model.set_ir_version(ir_version);
+  model.set_producer_name(producer_name);
+  for (const auto &osid : opset_imports) {
+    OperatorSetIdProto proto;
+    proto.set_domain(osid.domain);
+    proto.set_version(osid.version);
+    model.add_opset_import(proto);
+  }
+}
+
+void AppendValueInfo(ValueInfoProto &vi, const std::string &name, int32_t elem_type,
+                     const std::vector<int64_t> &shape) {
+  vi.set_name(name);
+  TypeProto *tp = vi.add_type();
+  TypeProto::Tensor *tt = tp->add_tensor_type();
+  tt->set_elem_type(elem_type);
+  TensorShapeProto *sh = tt->add_shape();
+  for (int64_t d : shape) {
+    sh->add_dim()->set_dim_value(d);
+  }
+}
+
+void AppendValueInfo(ValueInfoProto &vi, const std::string &name, int32_t elem_type,
+                     const std::vector<DimSpec> &dims) {
+  vi.set_name(name);
+  TypeProto *tp = vi.add_type();
+  TypeProto::Tensor *tt = tp->add_tensor_type();
+  tt->set_elem_type(elem_type);
+  TensorShapeProto *sh = tt->add_shape();
+  for (const auto &d : dims) {
+    auto *dim = sh->add_dim();
+    if (d.value >= 0) {
+      dim->set_dim_value(d.value);
+    } else if (!d.param.empty()) {
+      dim->set_dim_param(d.param);
+    }
+    // else: leave the dim unannotated (no dim_value, no dim_param).
+  }
+}
+
+void AppendDataSet(TestCase &tc, std::vector<Tensor> inputs, std::vector<Tensor> outputs) {
+  DataSet ds;
+  ds.inputs = std::move(inputs);
+  ds.outputs = std::move(outputs);
+  tc.data_sets.emplace_back(std::move(ds));
+}
+
 void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
             const std::vector<Tensor> &outputs, const std::string &name,
             const std::vector<OpsetId> &opset_imports, const std::string &producer_name,
@@ -69,14 +119,7 @@ void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
   tc.atol = 1e-7;
 
   ModelProto &model = tc.model;
-  model.set_ir_version(kDefaultIrVersion);
-  model.set_producer_name(producer_name);
-  for (const auto &osid : opset_imports) {
-    OperatorSetIdProto proto;
-    proto.set_domain(osid.domain);
-    proto.set_version(osid.version);
-    model.add_opset_import(proto);
-  }
+  InitModel(model, kDefaultIrVersion, opset_imports, producer_name);
 
   GraphProto *graph = model.add_graph();
   graph->set_name(name);
@@ -142,6 +185,7 @@ std::vector<TestCase> CollectTestCases(const std::string &op_type) {
   CollectTextTestCases(registry, op_type);
   CollectTraditionalMLTestCases(registry, op_type);
   CollectTrainingTestCases(registry, op_type);
+  CollectShapeInferenceTestCases(registry, op_type);
   CollectEmptyShapeTestCases(registry, op_type);
   return registry;
 }

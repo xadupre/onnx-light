@@ -77,6 +77,14 @@ std::string MakeRandomUniformDoc();
  */
 std::string MakeRandomUniformLikeDoc();
 
+/**
+ * Returns the documentation string for the Range operator. The
+ * documentation has been stable since opset 11.
+ *
+ * @return Documentation string for the Range operator.
+ */
+std::string MakeRangeDoc();
+
 } // namespace generator
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -146,6 +146,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          generator::ComputeShapeEyeLike(ctx, node);
        }},
+      {"ai.onnx:Range",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 3);
+         generator::ComputeShapeRange(ctx, node);
+       }},
       {"ai.onnx:Flatten",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

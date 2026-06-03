@@ -487,6 +487,26 @@ LightOpSchema MakeRandomUniformLikeSchema(int since_version) {
       });
 }
 
+LightOpSchema MakeRangeSchema(int since_version) {
+  return LightOpSchema(
+      "Range", kOnnxDomain, since_version, MakeRangeDoc(),
+      {
+          {"start", "Scalar. First entry for the range of output values.", "T"},
+          {"limit", "Scalar. Exclusive upper limit for the range of output values.", "T"},
+          {"delta", "Scalar. Value to step by.", "T"},
+      },
+      {
+          {"output",
+           "A 1-D tensor with same type as the inputs containing generated range of values.", "T"},
+      },
+      {
+          {"T",
+           {TensorType::kFloat, TensorType::kDouble, TensorType::kInt16, TensorType::kInt32,
+            TensorType::kInt64},
+           "Constrain input types to common numeric type tensors."},
+      });
+}
+
 } // namespace
 
 std::vector<LightOpSchema> GetAllOnnxOpGeneratorSchemasWithHistory(const std::string &op_type,
@@ -549,6 +569,12 @@ std::vector<LightOpSchema> GetAllOnnxOpGeneratorSchemasWithHistory(const std::st
          return std::vector<LightOpSchema>{
              MakeRandomUniformLikeSchema(22),
              MakeRandomUniformLikeSchema(1),
+         };
+       }},
+      {"Range",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeRangeSchema(11),
          };
        }},
   };

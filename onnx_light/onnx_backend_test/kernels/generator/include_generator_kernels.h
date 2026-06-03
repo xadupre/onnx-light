@@ -233,6 +233,32 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of the ONNX ``Range`` operator (since opset 11
+/// in the ``ai.onnx`` domain). Generates a 1-D tensor with values
+/// ``[start, start + delta, start + 2*delta, ...]`` up to (but excluding)
+/// ``limit``.
+///
+/// The three inputs ``start``, ``limit`` and ``delta`` must all be
+/// scalar tensors of the same element type. Supported element types are
+/// ``FLOAT``, ``DOUBLE``, ``INT16``, ``INT32`` and ``INT64`` (matching
+/// the upstream ``Range`` schema's ``T`` type-constraint).
+///
+/// The number of output elements is
+/// ``max(ceil((limit - start) / delta), 0)``. When the result would be
+/// empty (e.g. ``start >= limit`` with a positive ``delta``), the kernel
+/// returns an empty 1-D tensor of length 0.
+class Range : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &start, const Tensor &limit, const Tensor &delta) const;
+  void operator()(const Tensor &start, const Tensor &limit, const Tensor &delta,
+                  Tensor &output) const;
+
+  /// The output buffer has a different size than the inputs, so storage
+  /// cannot be shared.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

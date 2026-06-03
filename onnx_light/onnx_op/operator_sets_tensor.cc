@@ -741,6 +741,28 @@ LightOpSchema MakeDepthToSpaceSchema(int since_version, const std::vector<Tensor
       std::move(attributes));
 }
 
+LightOpSchema MakeSpaceToDepthSchema(int since_version, const std::vector<TensorType> &types) {
+  return LightOpSchema(
+      "SpaceToDepth", kOnnxDomain, since_version, MakeSpaceToDepthDoc(since_version),
+      {
+          {"input",
+           "Input tensor of [N,C,H,W], where N is the batch axis, C is the channel or depth, "
+           "H is the height and W is the width.",
+           "T"},
+      },
+      {
+          {"output", "Output tensor of [N, C * blocksize * blocksize, H/blocksize, W/blocksize].",
+           "T"},
+      },
+      {
+          {"T", types, MakeSpaceToDepthTypeConstraintDescription(since_version)},
+      },
+      {
+          {"blocksize", "Blocks of [blocksize, blocksize] are moved.", AttributeType::INT,
+           /*required=*/true},
+      });
+}
+
 LightOpSchema MakeGatherSchema(int since_version, const std::vector<TensorType> &types) {
   const std::string axis_desc =
       since_version >= 11
@@ -1075,6 +1097,13 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
              MakeDepthToSpaceSchema(13, ConcatTypesVer13()),
              MakeDepthToSpaceSchema(11, AllTensorTypes()),
              MakeDepthToSpaceSchema(1, AllTensorTypes()),
+         };
+       }},
+      {"SpaceToDepth",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeSpaceToDepthSchema(13, ConcatTypesVer13()),
+             MakeSpaceToDepthSchema(1, AllTensorTypes()),
          };
        }},
       {"Expand",

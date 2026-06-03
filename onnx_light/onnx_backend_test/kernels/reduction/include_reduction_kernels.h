@@ -206,6 +206,34 @@ public:
       : ReduceL1L2(ctx, ReduceL1L2::Mode::kSumSquare) {}
 };
 
+/// Arithmetic mean reduction of a FLOAT input ``data`` along the dimensions
+/// listed in the optional ``axes`` int64 tensor. ``ReduceMean`` computes
+/// ``y = sum(x, axes) / N`` where ``N`` is the product of the reduced
+/// dimension sizes. ONNX does not define a value for the empty-set case
+/// (division by zero); this kernel returns ``0`` in that case for
+/// consistency with the other reduction kernels.
+///
+/// The interface mirrors :class:`ReduceMinMax` / :class:`ReduceL1L2`: the
+/// ``axes`` may either be omitted (reduce-all unless
+/// ``noop_with_empty_axes == true``) or supplied as an int64 tensor (opset
+/// 18+). Negative axes follow ONNX semantics.
+class ReduceMean : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  Tensor operator()(const Tensor &data, bool keepdims = true,
+                    bool noop_with_empty_axes = false) const;
+  void operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
+                  Tensor &output) const;
+
+  Tensor operator()(const Tensor &data, const Tensor &axes, bool keepdims = true,
+                    bool noop_with_empty_axes = false) const;
+  void operator()(const Tensor &data, const Tensor &axes, bool keepdims, bool noop_with_empty_axes,
+                  Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Product reduction of a FLOAT input ``data`` along the dimensions listed in
 /// the optional ``axes`` int64 tensor. ``ReduceProd`` computes
 /// ``y = prod(x, axes)``; the empty-set identity is ``1`` (so reducing over a

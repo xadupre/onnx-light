@@ -746,6 +746,87 @@ TEST(BackendKernelClass, DepthToSpaceRejectsChannelNotDivisible) {
 }
 
 // ---------------------------------------------------------------------------
+// SpaceToDepth kernel tests
+// ---------------------------------------------------------------------------
+
+TEST(BackendKernelClass, SpaceToDepthMatchesNumpyReference) {
+  // Cross-checks the SpaceToDepth computation against the NumPy equivalent
+  // given in the ONNX spec:
+  //   tmp = reshape(x, [N, C, H/bs, bs, W/bs, bs])
+  //   tmp = transpose(tmp, [0, 3, 5, 1, 2, 4])
+  //   y   = reshape(tmp, [N, C*bs*bs, H/bs, W/bs])
+  const KernelContext ctx{DefaultOpset(13)};
+  onnx_backend_test::kernel::SpaceToDepth s2d{ctx};
+  std::vector<float> values(8);
+  for (int i = 0; i < 8; ++i)
+    values[i] = static_cast<float>(i);
+  // Input shape (1, 2, 2, 2): blocksize=2 -> output shape (1, 8, 1, 1).
+  Tensor x = Tensor::FromFloat("", {1, 2, 2, 2}, values);
+  onnx_backend_test::kernel::SpaceToDepth::Attributes a;
+  a.blocksize = 2;
+  Tensor y = s2d(x, a);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 8, 1, 1}));
+  // Reference computed by hand from the spec.
+  // c_out: bh,bw,c -> (bh*bs*C + bw*C + c)
+  //   c_out=0: bh=0,bw=0,c=0 -> x[0,0,0,0]=0
+  //   c_out=1: bh=0,bw=0,c=1 -> x[0,1,0,0]=4
+  //   c_out=2: bh=0,bw=1,c=0 -> x[0,0,0,1]=1
+  //   c_out=3: bh=0,bw=1,c=1 -> x[0,1,0,1]=5
+  //   c_out=4: bh=1,bw=0,c=0 -> x[0,0,1,0]=2
+  //   c_out=5: bh=1,bw=0,c=1 -> x[0,1,1,0]=6
+  //   c_out=6: bh=1,bw=1,c=0 -> x[0,0,1,1]=3
+  //   c_out=7: bh=1,bw=1,c=1 -> x[0,1,1,1]=7
+  const std::vector<float> expected{0.f, 4.f, 1.f, 5.f, 2.f, 6.f, 3.f, 7.f};
+  const float *py = y.AsFloat();
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_FLOAT_EQ(py[i], expected[i]);
+  }
+}
+
+TEST(BackendKernelClass, SpaceToDepthIsInverseOfDepthToSpaceDCR) {
+  // Round-trip x -> SpaceToDepth -> DepthToSpace(DCR) should be identity.
+  const KernelContext ctx{DefaultOpset(13)};
+  onnx_backend_test::kernel::SpaceToDepth s2d{ctx};
+  onnx_backend_test::kernel::DepthToSpace d2s{ctx};
+  std::vector<float> values(2 * 3 * 4 * 6);
+  for (std::size_t i = 0; i < values.size(); ++i)
+    values[i] = static_cast<float>(i);
+  Tensor x = Tensor::FromFloat("", {2, 3, 4, 6}, values);
+  onnx_backend_test::kernel::SpaceToDepth::Attributes a;
+  a.blocksize = 2;
+  Tensor y = s2d(x, a);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 12, 2, 3}));
+  onnx_backend_test::kernel::DepthToSpace::Attributes ad;
+  ad.blocksize = 2;
+  ad.mode = "DCR";
+  Tensor z = d2s(y, ad);
+  ASSERT_EQ(z.shape, x.shape);
+  const float *pz = z.AsFloat();
+  for (std::size_t i = 0; i < values.size(); ++i) {
+    EXPECT_FLOAT_EQ(pz[i], values[i]);
+  }
+}
+
+TEST(BackendKernelClass, SpaceToDepthRejectsNonRank4Input) {
+  const KernelContext ctx{DefaultOpset(13)};
+  onnx_backend_test::kernel::SpaceToDepth s2d{ctx};
+  Tensor x = Tensor::FromFloat("", {1, 4}, {0.f, 1.f, 2.f, 3.f});
+  onnx_backend_test::kernel::SpaceToDepth::Attributes a;
+  a.blocksize = 2;
+  EXPECT_THROW((void)s2d(x, a), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, SpaceToDepthRejectsSpatialDimNotDivisible) {
+  const KernelContext ctx{DefaultOpset(13)};
+  onnx_backend_test::kernel::SpaceToDepth s2d{ctx};
+  // H=3 is not divisible by blocksize=2.
+  Tensor x = Tensor::FromFloat("", {1, 1, 3, 2}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
+  onnx_backend_test::kernel::SpaceToDepth::Attributes a;
+  a.blocksize = 2;
+  EXPECT_THROW((void)s2d(x, a), std::invalid_argument);
+}
+
+// ---------------------------------------------------------------------------
 // Upsample kernel tests
 // ---------------------------------------------------------------------------
 

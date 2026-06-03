@@ -19,6 +19,7 @@ using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::ReduceL1;
 using onnx_backend_test::kernel::ReduceL2;
 using onnx_backend_test::kernel::ReduceMax;
+using onnx_backend_test::kernel::ReduceMean;
 using onnx_backend_test::kernel::ReduceMin;
 using onnx_backend_test::kernel::ReduceProd;
 using onnx_backend_test::kernel::ReduceSum;
@@ -472,6 +473,67 @@ TEST(BackendKernelClass, ReduceProdRejectsNonFloatData) {
   ReduceProd reduce_prod{ctx};
   Tensor data = Tensor::FromInt64("", {2}, {1, 2});
   EXPECT_THROW(reduce_prod(data), std::invalid_argument);
+}
+
+// ── ReduceMean ────────────────────────────────────────────────────────────
+
+TEST(BackendKernelClass, ReduceMeanDefaultAxesReducesAll) {
+  const KernelContext ctx{DefaultOpset(18)};
+  ReduceMean reduce_mean{ctx};
+  Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+  Tensor y = reduce_mean(data); // keepdims=true, noop_with_empty_axes=false
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 1}));
+  EXPECT_FLOAT_EQ(y.AsFloat()[0], 3.5f);
+}
+
+TEST(BackendKernelClass, ReduceMeanExplicitAxisReducesAlongAxis) {
+  const KernelContext ctx{DefaultOpset(18)};
+  ReduceMean reduce_mean{ctx};
+  Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+  Tensor axes = Tensor::FromInt64("", {1}, {1});
+  Tensor y = reduce_mean(data, axes, /*keepdims=*/false,
+                         /*noop_with_empty_axes=*/false);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2}));
+  EXPECT_FLOAT_EQ(y.AsFloat()[0], 2.0f); // (1+2+3)/3
+  EXPECT_FLOAT_EQ(y.AsFloat()[1], 5.0f); // (4+5+6)/3
+}
+
+TEST(BackendKernelClass, ReduceMeanNegativeAxisKeepdims) {
+  const KernelContext ctx{DefaultOpset(18)};
+  ReduceMean reduce_mean{ctx};
+  Tensor data = Tensor::FromFloat(
+      "", {3, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f});
+  Tensor axes = Tensor::FromInt64("", {1}, {-2});
+  Tensor y = reduce_mean(data, axes, /*keepdims=*/true,
+                         /*noop_with_empty_axes=*/false);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{3, 1, 2}));
+  const float *py = y.AsFloat();
+  // mean along axis 1 (middle dim of size 2):
+  // batch 0: rows (1,2) and (3,4) -> ((1+3)/2, (2+4)/2) = (2, 3)
+  // batch 1: rows (5,6) and (7,8) -> (6, 7)
+  // batch 2: rows (9,10) and (11,12) -> (10, 11)
+  EXPECT_FLOAT_EQ(py[0], 2.0f);
+  EXPECT_FLOAT_EQ(py[1], 3.0f);
+  EXPECT_FLOAT_EQ(py[2], 6.0f);
+  EXPECT_FLOAT_EQ(py[3], 7.0f);
+  EXPECT_FLOAT_EQ(py[4], 10.0f);
+  EXPECT_FLOAT_EQ(py[5], 11.0f);
+}
+
+TEST(BackendKernelClass, ReduceMeanNoopWithEmptyAxesIsIdentity) {
+  const KernelContext ctx{DefaultOpset(18)};
+  ReduceMean reduce_mean{ctx};
+  Tensor data = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor y = reduce_mean(data, /*keepdims=*/true, /*noop_with_empty_axes=*/true);
+  ASSERT_EQ(y.shape, data.shape);
+  EXPECT_EQ(y.data, data.data);
+}
+
+TEST(BackendKernelClass, ReduceMeanRejectsNonFloatData) {
+  const KernelContext ctx{DefaultOpset(18)};
+  ReduceMean reduce_mean{ctx};
+  Tensor data = Tensor::FromInt64("", {2}, {1, 2});
+  EXPECT_THROW(reduce_mean(data), std::invalid_argument);
 }
 
 } // namespace Test

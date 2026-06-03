@@ -8,17 +8,20 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 void CollectReductionTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
+  // clang-format off
   static const OpRegisterMap kEntries = {
       {"ArgMax", &RegisterArgMaxCases},
       {"ArgMin", &RegisterArgMinCases},
       {"ReduceL1", &RegisterReduceL1Cases},
       {"ReduceL2", &RegisterReduceL2Cases},
       {"ReduceMax", &RegisterReduceMaxCases},
+      {"ReduceMean", &RegisterReduceMeanCases},
       {"ReduceMin", &RegisterReduceMinCases},
       {"ReduceProd", &RegisterReduceProdCases},
       {"ReduceSum", &RegisterReduceSumCases},
       {"ReduceSumSquare", &RegisterReduceSumSquareCases},
   };
+  // clang-format on
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }
 

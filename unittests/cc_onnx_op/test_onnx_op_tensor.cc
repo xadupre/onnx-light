@@ -627,6 +627,46 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsTriluSchemaWithoutShapeInference) {
   EXPECT_FALSE(trilu_v14->doc().empty());
 }
 
+TEST(OnnxOpTensorRegistrationTest, ReturnsTensorScatterSchemaWithoutShapeInference) {
+  const std::vector<onnx_op::LightOpSchema> ts_schemas =
+      onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("TensorScatter");
+
+  const onnx_op::LightOpSchema *const ts_v24 = FindByVersion(ts_schemas, 24);
+  ASSERT_NE(nullptr, ts_v24);
+  EXPECT_EQ(ts_v24->name(), "TensorScatter");
+  EXPECT_EQ(ts_v24->domain(), onnx_op::kOnnxDomain);
+  EXPECT_EQ(ts_v24->since_version(), 24);
+
+  ASSERT_EQ(ts_v24->inputs().size(), 3u);
+  EXPECT_EQ(ts_v24->inputs()[0].name, "past_cache");
+  EXPECT_EQ(ts_v24->inputs()[0].type, "T");
+  EXPECT_EQ(ts_v24->inputs()[1].name, "update");
+  EXPECT_EQ(ts_v24->inputs()[1].type, "T");
+  EXPECT_EQ(ts_v24->inputs()[2].name, "write_indices");
+  EXPECT_EQ(ts_v24->inputs()[2].type, "tensor(int64)");
+
+  ASSERT_EQ(ts_v24->outputs().size(), 1u);
+  EXPECT_EQ(ts_v24->outputs()[0].name, "present_cache");
+  EXPECT_EQ(ts_v24->outputs()[0].type, "T");
+
+  ASSERT_EQ(ts_v24->type_constraints().size(), 1u);
+  EXPECT_EQ(ts_v24->type_constraints()[0].type_param_str, "T");
+
+  ASSERT_EQ(ts_v24->attributes().size(), 2u);
+  EXPECT_EQ(ts_v24->attributes()[0].name, "axis");
+  EXPECT_EQ(ts_v24->attributes()[0].type, onnx_op::AttributeType::INT);
+  EXPECT_FALSE(ts_v24->attributes()[0].required);
+  ASSERT_TRUE(std::holds_alternative<int64_t>(ts_v24->attributes()[0].default_value));
+  EXPECT_EQ(std::get<int64_t>(ts_v24->attributes()[0].default_value), -2);
+  EXPECT_EQ(ts_v24->attributes()[1].name, "mode");
+  EXPECT_EQ(ts_v24->attributes()[1].type, onnx_op::AttributeType::STRING);
+  EXPECT_FALSE(ts_v24->attributes()[1].required);
+  ASSERT_TRUE(std::holds_alternative<std::string>(ts_v24->attributes()[1].default_value));
+  EXPECT_EQ(std::get<std::string>(ts_v24->attributes()[1].default_value), "linear");
+
+  EXPECT_FALSE(ts_v24->doc().empty());
+}
+
 TEST(OnnxOpTensorRegistrationTest, ReturnsReverseSequenceSchemaWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> rs_schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("ReverseSequence");

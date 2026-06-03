@@ -454,6 +454,50 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of the ONNX ``TensorScatter`` operator (since
+/// opset 24 in the ``ai.onnx`` domain). Performs a functional update of a
+/// KV-cache style tensor by writing slices of ``update`` into a copy of
+/// ``past_cache`` along the ``axis`` (sequence) dimension, starting at the
+/// per-batch positions given by ``write_indices``.
+///
+/// Inputs:
+///   * ``past_cache``: tensor of rank ``r >= 2`` with shape
+///     ``(batch_size, D1, ..., max_sequence_length, ..., Dn)``.
+///   * ``update``: tensor of the same dtype and rank as ``past_cache``;
+///     the only dimension that may differ is the ``axis`` (sequence)
+///     dimension which holds ``sequence_length``.
+///   * ``write_indices``: optional 1-D ``INT64`` tensor of length
+///     ``batch_size``. When omitted (``nullptr``) it defaults to all zeros.
+///
+/// Attributes ``axis`` (int, default ``-2``) and ``mode`` (string,
+/// default ``"linear"``): ``axis`` selects the sequence dimension and
+/// cannot be the batch dimension (``0``). When ``mode`` is ``"linear"``
+/// every ``write_indices[batch] + sequence_idx`` must remain in
+/// ``[0, max_sequence_length)``; when ``mode`` is ``"circular"`` the
+/// write index wraps around modulo ``max_sequence_length``.
+///
+/// Output dtype and shape always match ``past_cache``.
+class TensorScatter : public KernelBase {
+public:
+  /// Attributes carried by the ONNX ``TensorScatter`` operator.
+  struct Attributes {
+    int64_t axis = -2;
+    std::string mode = "linear";
+  };
+
+  using KernelBase::KernelBase;
+
+  Tensor operator()(const Tensor &past_cache, const Tensor &update, const Tensor *write_indices,
+                    const Attributes &attrs) const;
+  void operator()(const Tensor &past_cache, const Tensor &update, const Tensor *write_indices,
+                  const Attributes &attrs, Tensor &output) const;
+
+  /// Output shape matches ``past_cache`` so the output buffer could share
+  /// storage with the first input; the reference implementation always
+  /// writes into a freshly allocated buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// Reference implementation of the ONNX ``Compress`` operator (since opset 9
 /// in the ``ai.onnx`` domain; axis may be negative since opset 11). Selects
 /// slices from ``input`` along a given ``axis`` where the corresponding entry

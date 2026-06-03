@@ -1910,4 +1910,119 @@ TEST(OnnxOptimShapesTensorSplit, RejectsWrongOpType) {
   EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeSplit(ctx, node), std::invalid_argument);
 }
 
+// ---------------------------------------------------------------------------
+// TensorScatter shape-inference tests
+// ---------------------------------------------------------------------------
+
+namespace {
+
+NodeProto MakeTensorScatterNode(bool with_write_indices = true) {
+  NodeProto node;
+  node.set_op_type("TensorScatter");
+  node.add_input("past_cache");
+  node.add_input("update");
+  if (with_write_indices) {
+    node.add_input("write_indices");
+  }
+  node.add_output("present_cache");
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesTensorTensorScatter, PreservesPastCacheShapeAndDtype) {
+  NodeProto node = MakeTensorScatterNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("past_cache",
+          onnx_optim::OptimTensor(
+              nullptr, onnx_optim::TensorType::kFloat,
+              onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(1),
+                                     onnx_optim::OptimDim(4), onnx_optim::OptimDim(5)}));
+  ctx.Set("update", onnx_optim::OptimTensor(
+                        nullptr, onnx_optim::TensorType::kFloat,
+                        onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(1),
+                                               onnx_optim::OptimDim(1), onnx_optim::OptimDim(5)}));
+  ctx.Set("write_indices",
+          onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                  onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeTensorScatter(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("present_cache"));
+  EXPECT_EQ(ctx.Get("present_cache").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("present_cache").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(1),
+                                    onnx_optim::OptimDim(4), onnx_optim::OptimDim(5)}));
+}
+
+TEST(OnnxOptimShapesTensorTensorScatter, AcceptsMissingWriteIndices) {
+  NodeProto node = MakeTensorScatterNode(/*with_write_indices=*/false);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("past_cache", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32,
+                                                onnx_optim::OptimShape{onnx_optim::OptimDim(3),
+                                                                       onnx_optim::OptimDim(4),
+                                                                       onnx_optim::OptimDim(5)}));
+  ctx.Set("update", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32,
+                                            onnx_optim::OptimShape{onnx_optim::OptimDim(3),
+                                                                   onnx_optim::OptimDim(2),
+                                                                   onnx_optim::OptimDim(5)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeTensorScatter(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("present_cache"));
+  EXPECT_EQ(ctx.Get("present_cache").Dtype(), onnx_optim::TensorType::kInt32);
+  EXPECT_EQ(ctx.Get("present_cache").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4),
+                                    onnx_optim::OptimDim(5)}));
+}
+
+TEST(OnnxOptimShapesTensorTensorScatter, RejectsRankMismatch) {
+  NodeProto node = MakeTensorScatterNode(/*with_write_indices=*/false);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("past_cache", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                                onnx_optim::OptimShape{onnx_optim::OptimDim(2),
+                                                                       onnx_optim::OptimDim(4),
+                                                                       onnx_optim::OptimDim(5)}));
+  ctx.Set("update", onnx_optim::OptimTensor(
+                        nullptr, onnx_optim::TensorType::kFloat,
+                        onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(5)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeTensorScatter(ctx, node),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesTensorTensorScatter, RejectsBatchAxis) {
+  NodeProto node = MakeTensorScatterNode(/*with_write_indices=*/false);
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name("axis");
+  attr->set_type(AttributeProto::INT);
+  attr->set_i(0);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("past_cache", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                                onnx_optim::OptimShape{onnx_optim::OptimDim(2),
+                                                                       onnx_optim::OptimDim(4),
+                                                                       onnx_optim::OptimDim(5)}));
+  ctx.Set("update", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                            onnx_optim::OptimShape{onnx_optim::OptimDim(2),
+                                                                   onnx_optim::OptimDim(4),
+                                                                   onnx_optim::OptimDim(5)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeTensorScatter(ctx, node),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesTensorTensorScatter, RejectsWrongOpType) {
+  NodeProto node = MakeTensorScatterNode(/*with_write_indices=*/false);
+  node.set_op_type("Abs");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("past_cache", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                                onnx_optim::OptimShape{onnx_optim::OptimDim(2),
+                                                                       onnx_optim::OptimDim(4),
+                                                                       onnx_optim::OptimDim(5)}));
+  ctx.Set("update", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                            onnx_optim::OptimShape{onnx_optim::OptimDim(2),
+                                                                   onnx_optim::OptimDim(4),
+                                                                   onnx_optim::OptimDim(5)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeTensorScatter(ctx, node),
+               std::invalid_argument);
+}
+
 } // namespace Test

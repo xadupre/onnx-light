@@ -933,6 +933,87 @@ TEST(BackendKernelClass, TriluRejectsNonInt64K) {
 }
 
 // ---------------------------------------------------------------------------
+// TensorScatter (opset 24).
+// ---------------------------------------------------------------------------
+
+TEST(BackendKernelClass, TensorScatterLinearWritesUpdateSlices) {
+  const KernelContext ctx{DefaultOpset(24)};
+  onnx_backend_test::kernel::TensorScatter ts{ctx};
+  // past_cache shape (2,1,4,5); update (2,1,1,5); write_indices=[1,2].
+  Tensor past = Tensor::FromFloat("", {2, 1, 4, 5},
+                                  {1, 2, 3, 4, 5, 5, 6, 7, 8, 9, 8, 7, 6, 5, 4, 4, 3, 2, 1, 0,
+                                   1, 2, 3, 4, 5, 5, 6, 7, 8, 9, 8, 7, 6, 5, 4, 4, 3, 2, 1, 0});
+  Tensor update = Tensor::FromFloat("", {2, 1, 1, 5}, {5, 5, 5, 5, 5, 1, 1, 1, 1, 1});
+  Tensor write = Tensor::FromInt64("", {2}, {1, 2});
+  onnx_backend_test::kernel::TensorScatter::Attributes attrs;
+  Tensor y = ts(past, update, &write, attrs);
+  ASSERT_EQ(y.shape, past.shape);
+  const float *py = y.AsFloat();
+  // Batch 0: row 1 -> [5,5,5,5,5]. Batch 1: row 2 -> [1,1,1,1,1].
+  const std::vector<float> expected{1, 2, 3, 4, 5, 5, 5, 5, 5, 5, 8, 7, 6, 5, 4, 4, 3, 2, 1, 0,
+                                    1, 2, 3, 4, 5, 5, 6, 7, 8, 9, 1, 1, 1, 1, 1, 4, 3, 2, 1, 0};
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_FLOAT_EQ(py[i], expected[i]) << "i=" << i;
+  }
+}
+
+TEST(BackendKernelClass, TensorScatterCircularWrapsWriteIndex) {
+  const KernelContext ctx{DefaultOpset(24)};
+  onnx_backend_test::kernel::TensorScatter ts{ctx};
+  // Single-batch (1,4) where update length 2 starts at index 3 and wraps to 0.
+  Tensor past = Tensor::FromFloat("", {1, 4}, {0, 0, 0, 0});
+  Tensor update = Tensor::FromFloat("", {1, 2}, {1, 2});
+  Tensor write = Tensor::FromInt64("", {1}, {3});
+  onnx_backend_test::kernel::TensorScatter::Attributes attrs;
+  attrs.axis = 1;
+  attrs.mode = "circular";
+  Tensor y = ts(past, update, &write, attrs);
+  const float *py = y.AsFloat();
+  // index 3 := 1 then (3+1) % 4 == 0 := 2.
+  const std::vector<float> expected{2, 0, 0, 1};
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_FLOAT_EQ(py[i], expected[i]) << "i=" << i;
+  }
+}
+
+TEST(BackendKernelClass, TensorScatterDefaultsWriteIndicesToZero) {
+  const KernelContext ctx{DefaultOpset(24)};
+  onnx_backend_test::kernel::TensorScatter ts{ctx};
+  Tensor past = Tensor::FromFloat("", {2, 3}, {0, 0, 0, 0, 0, 0});
+  Tensor update = Tensor::FromFloat("", {2, 1}, {7, 9});
+  onnx_backend_test::kernel::TensorScatter::Attributes attrs;
+  attrs.axis = 1;
+  Tensor y = ts(past, update, /*write_indices=*/nullptr, attrs);
+  const float *py = y.AsFloat();
+  // write_indices defaults to all zeros, so update goes into column 0.
+  const std::vector<float> expected{7, 0, 0, 9, 0, 0};
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_FLOAT_EQ(py[i], expected[i]) << "i=" << i;
+  }
+}
+
+TEST(BackendKernelClass, TensorScatterRejectsOutOfRangeLinearIndex) {
+  const KernelContext ctx{DefaultOpset(24)};
+  onnx_backend_test::kernel::TensorScatter ts{ctx};
+  Tensor past = Tensor::FromFloat("", {1, 4}, {0, 0, 0, 0});
+  Tensor update = Tensor::FromFloat("", {1, 2}, {1, 2});
+  Tensor write = Tensor::FromInt64("", {1}, {3}); // 3+2 > 4 in linear mode.
+  onnx_backend_test::kernel::TensorScatter::Attributes attrs;
+  attrs.axis = 1;
+  EXPECT_THROW((void)ts(past, update, &write, attrs), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, TensorScatterRejectsAxisOnBatchDim) {
+  const KernelContext ctx{DefaultOpset(24)};
+  onnx_backend_test::kernel::TensorScatter ts{ctx};
+  Tensor past = Tensor::FromFloat("", {2, 3}, {0, 0, 0, 0, 0, 0});
+  Tensor update = Tensor::FromFloat("", {1, 3}, {1, 2, 3});
+  onnx_backend_test::kernel::TensorScatter::Attributes attrs;
+  attrs.axis = 0; // batch axis is forbidden.
+  EXPECT_THROW((void)ts(past, update, /*write_indices=*/nullptr, attrs), std::invalid_argument);
+}
+
+// ---------------------------------------------------------------------------
 // ReverseSequence kernel tests
 // ---------------------------------------------------------------------------
 

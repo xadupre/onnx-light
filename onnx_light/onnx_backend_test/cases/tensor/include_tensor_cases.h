@@ -92,6 +92,9 @@ void RegisterCompressCases(std::vector<TestCase> &registry);
 /// Registers the ``Split`` backend test node case(s).
 void RegisterSplitCases(std::vector<TestCase> &registry);
 
+/// Registers the ``TensorScatter`` backend test node case(s).
+void RegisterTensorScatterCases(std::vector<TestCase> &registry);
+
 /// Collects all ``tensor`` op category backend test node cases by invoking
 /// every ``Register*Cases`` helper declared in this header.
 void CollectTensorTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");

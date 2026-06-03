@@ -828,6 +828,43 @@ LightOpSchema MakeGatherNDSchema(int since_version, const std::vector<TensorType
       std::move(attributes));
 }
 
+LightOpSchema MakeTensorScatterSchema(int since_version, const std::vector<TensorType> &types) {
+  return LightOpSchema(
+      "TensorScatter", kOnnxDomain, since_version, MakeTensorScatterDoc(since_version),
+      {
+          {"past_cache",
+           "Past state cache for key or value with shape `(batch_size, D1, D2, ..., "
+           "max_sequence_length, ..., Dn)`.",
+           "T"},
+          {"update",
+           "New update tensor with shape `(batch_size, D1, D2, ..., sequence_length, ..., Dn)`.",
+           "T"},
+          {"write_indices",
+           "Write indices for the incoming update tensor in the cache. Shape is `(batch_size,)`. "
+           "Assumed to be all zeros if not provided.",
+           "tensor(int64)"},
+      },
+      {
+          {"present_cache", "Updated cache. Same shape as `past_cache`.", "T"},
+      },
+      {
+          {"T", types, "Constrain input and output types to any tensor type."},
+      },
+      {
+          {"axis",
+           "Sequence dimension of the `past_cache` and `update` tensors. It cannot be 0 (the "
+           "batch dimension). Default is -2.",
+           AttributeType::INT, /*required=*/false, static_cast<int64_t>(-2)},
+          {"mode",
+           "Write mode of cache update. Supported modes include `linear` and `circular`. "
+           "`linear` mode requires "
+           "write_indices+sequence_length<=max_sequence_length. For `circular` mode, the "
+           "updates happen in "
+           "wrap-around fashion, ie, the update index is modulo `max_sequence_length`",
+           AttributeType::STRING, /*required=*/false, std::string("linear")},
+      });
+}
+
 LightOpSchema MakeTriluSchema(int since_version, const std::vector<TensorType> &types) {
   return LightOpSchema(
       "Trilu", kOnnxDomain, since_version, MakeTriluDoc(since_version),
@@ -1108,6 +1145,12 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
              MakeGatherNDSchema(13, ConcatTypesVer13()),
              MakeGatherNDSchema(12, AllTensorTypes()),
              MakeGatherNDSchema(11, AllTensorTypes()),
+         };
+       }},
+      {"TensorScatter",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeTensorScatterSchema(24, TransposeTypesVer24()),
          };
        }},
       {"Squeeze",

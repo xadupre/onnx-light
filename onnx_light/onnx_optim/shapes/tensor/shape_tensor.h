@@ -541,6 +541,36 @@ void ComputeShapeGatherElements(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeGatherND(ShapesContext &ctx, const NodeProto &node);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``TensorScatter`` node
+ * and stores it in ``ctx``.
+ *
+ * ``TensorScatter`` writes slices of ``update`` into a copy of
+ * ``past_cache`` along the sequence ``axis`` and produces an output with the
+ * same dtype and the same shape as ``past_cache``. The dimensions of
+ * ``update`` must match ``past_cache`` on every axis other than ``axis`` and
+ * be ``<=`` the corresponding ``past_cache`` dimension on ``axis``; the
+ * optional ``write_indices`` input must be a rank-1 tensor of length
+ * ``batch_size``.
+ *
+ * @param ctx   In/out context. Must already contain entries for
+ *              ``node.input(0)`` (``past_cache``) and ``node.input(1)``
+ *              (``update``); ``node.input(2)`` (``write_indices``) is
+ *              optional. On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``TensorScatter`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"TensorScatter"``,
+ *              ``node`` must declare at least two inputs and at least one
+ *              output, and the inputs must have the same rank ``>= 2``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"TensorScatter"``, if ``node`` has fewer than two inputs or no
+ *         output, if the input ranks differ, or if the resolved ``axis`` is
+ *         not a valid non-batch dimension.
+ * @throws std::out_of_range     if an input name is missing from ``ctx``.
+ */
+void ComputeShapeTensorScatter(ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``Trilu`` node and stores
  * it in ``ctx``.
  *

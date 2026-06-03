@@ -104,13 +104,20 @@ public:
   /** Clears the logical content while preserving capacity. */
   inline void clear() { size_ = 0; }
 
-  /** Resizes the buffer without value-initializing newly exposed bytes. */
+  /** Resizes the buffer, zero-initializing newly exposed bytes. */
   inline void resize(size_t n) {
     if (n <= capacity_) {
+      if (n > size_) {
+        std::memset(storage_.get() + size_, 0, n - size_);
+      }
       size_ = n;
       return;
     }
+    size_t old_size = size_;
     reserve(n);
+    if (n > old_size) {
+      std::memset(storage_.get() + old_size, 0, n - old_size);
+    }
     size_ = n;
   }
 

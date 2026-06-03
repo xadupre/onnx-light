@@ -56,7 +56,13 @@ void ThreadPool::worker_thread() {
       jobs_.pop();
     }
 
-    job();
+    try {
+      job();
+    } catch (...) {
+      // Prevent uncaught exceptions from calling std::terminate().
+      // The error is silently swallowed; the caller should validate
+      // results after WaitForDelayedBlock() returns.
+    }
 
     {
       std::lock_guard<std::mutex> lock(mutex_);

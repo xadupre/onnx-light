@@ -745,8 +745,14 @@ void TensorProto::LoadExternalData(const std::string &base_dir) {
   EXT_ENFORCE(!location.empty(),
               "TensorProto::LoadExternalData missing 'location' entry in external_data, name='",
               ref_name().as_string(), "'.");
-  std::filesystem::path data_path = base_dir.empty() ? std::filesystem::path(location)
-                                                     : std::filesystem::path(base_dir) / location;
+  // Validate that location does not escape the base directory (path traversal).
+  std::filesystem::path loc_path(location);
+  std::filesystem::path loc_normal = loc_path.lexically_normal();
+  EXT_ENFORCE(!loc_normal.has_root_path() && !loc_normal.empty() && *loc_normal.begin() != "..",
+              "TensorProto::LoadExternalData: location '", location,
+              "' must be a relative path that does not escape the base directory.");
+  std::filesystem::path data_path =
+      base_dir.empty() ? loc_normal : std::filesystem::path(base_dir) / loc_normal;
   std::ifstream file(data_path, std::ios::binary);
   EXT_ENFORCE(file.is_open(), "TensorProto::LoadExternalData unable to open external data file '",
               data_path.string(), "' for tensor '", ref_name().as_string(), "'.");

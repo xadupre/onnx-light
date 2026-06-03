@@ -289,6 +289,9 @@ void StringStream::CanRead(uint64_t len, const char *msg) {
 }
 
 const uint8_t *StringStream::read_bytes(offset_t n_bytes, uint8_t *pre_allocated_buffer) {
+  EXT_ENFORCE(n_bytes >= 0 && pos_ + n_bytes <= size_,
+              "[StringStream::read_bytes] out of bounds: pos=", pos_, ", n_bytes=", n_bytes,
+              ", size=", size_);
   if (pre_allocated_buffer != nullptr) {
     memcpy(pre_allocated_buffer, data_ + pos_, n_bytes);
     pos_ += n_bytes;
@@ -300,7 +303,12 @@ const uint8_t *StringStream::read_bytes(offset_t n_bytes, uint8_t *pre_allocated
   }
 }
 
-void StringStream::skip_bytes(offset_t n_bytes) { pos_ += n_bytes; }
+void StringStream::skip_bytes(offset_t n_bytes) {
+  EXT_ENFORCE(n_bytes >= 0 && pos_ + n_bytes <= size_,
+              "[StringStream::skip_bytes] out of bounds: pos=", pos_, ", n_bytes=", n_bytes,
+              ", size=", size_);
+  pos_ += n_bytes;
+}
 
 uint64_t StringStream::next_uint64() {
   // Fast path: single-byte varint (covers field numbers 1-15 and other small values).
@@ -709,6 +717,9 @@ uint64_t FileStream::next_uint64() {
 }
 
 const uint8_t *FileStream::read_bytes(offset_t n_bytes, uint8_t *pre_allocated_buffer) {
+  EXT_ENFORCE(n_bytes >= 0 && static_cast<int64_t>(tell()) + n_bytes <= size_,
+              "[FileStream::read_bytes] out of bounds: tell=", tell(), ", n_bytes=", n_bytes,
+              ", size=", size_);
   if (pre_allocated_buffer) {
     // Drain the read-ahead buffer first, then pull any remaining bytes from file.
     size_t buffered = read_buf_end_ - read_buf_pos_;
@@ -721,6 +732,9 @@ const uint8_t *FileStream::read_bytes(offset_t n_bytes, uint8_t *pre_allocated_b
     auto remaining = static_cast<offset_t>(n_bytes - from_buf);
     if (remaining > 0) {
       file_stream_.read(reinterpret_cast<char *>(pre_allocated_buffer + from_buf), remaining);
+      EXT_ENFORCE(file_stream_.gcount() == static_cast<std::streamsize>(remaining),
+                  "[FileStream::read_bytes] short read from file: expected=", remaining,
+                  ", got=", file_stream_.gcount());
     }
     return pre_allocated_buffer;
   }
@@ -730,10 +744,16 @@ const uint8_t *FileStream::read_bytes(offset_t n_bytes, uint8_t *pre_allocated_b
   if (n_bytes > static_cast<offset_t>(buffer_.size()))
     buffer_.resize(n_bytes);
   file_stream_.read(reinterpret_cast<char *>(buffer_.data()), n_bytes);
+  EXT_ENFORCE(file_stream_.gcount() == static_cast<std::streamsize>(n_bytes),
+              "[FileStream::read_bytes] short read from file: expected=", n_bytes,
+              ", got=", file_stream_.gcount());
   return buffer_.data();
 }
 
 void FileStream::skip_bytes(offset_t n_bytes) {
+  EXT_ENFORCE(n_bytes >= 0 && static_cast<int64_t>(tell()) + n_bytes <= size_,
+              "[FileStream::skip_bytes] out of bounds: tell=", tell(), ", n_bytes=", n_bytes,
+              ", size=", size_);
   size_t buffered = read_buf_end_ - read_buf_pos_;
   if (static_cast<size_t>(n_bytes) <= buffered) {
     read_buf_pos_ += static_cast<size_t>(n_bytes);
@@ -792,6 +812,9 @@ void FileStream::ReadDelayedBlock(DelayedBlock &block) {
     std::ifstream file_stream(this->file_path_, std::ios::binary);
     file_stream.seekg(block.offset);
     file_stream.read(reinterpret_cast<char *>(block.data), block.size);
+    EXT_ENFORCE(file_stream.gcount() == static_cast<std::streamsize>(block.size),
+                "[FileStream::ReadDelayedBlock] short read: expected=", block.size,
+                ", got=", file_stream.gcount());
 #endif
   });
   // Advance the stream past the block data, draining the read-ahead buffer first.
@@ -1093,6 +1116,9 @@ void TwoFilesStream::ReadDelayedBlock(DelayedBlock &block) {
       std::ifstream file_stream(this->file_path(), std::ios::binary);
       file_stream.seekg(block.offset);
       file_stream.read(reinterpret_cast<char *>(block.data), block.size);
+      EXT_ENFORCE(file_stream.gcount() == static_cast<std::streamsize>(block.size),
+                  "[TwoFilesStream::ReadDelayedBlock#main] short read: expected=", block.size,
+                  ", got=", file_stream.gcount());
 #endif
     });
     // Advance past the block, draining the read-ahead buffer first.
@@ -1111,6 +1137,9 @@ void TwoFilesStream::ReadDelayedBlock(DelayedBlock &block) {
       std::ifstream file_stream(this->weights_file_path(), std::ios::binary);
       file_stream.seekg(block.offset);
       file_stream.read(reinterpret_cast<char *>(block.data), block.size);
+      EXT_ENFORCE(file_stream.gcount() == static_cast<std::streamsize>(block.size),
+                  "[TwoFilesStream::ReadDelayedBlock#weights] short read: expected=", block.size,
+                  ", got=", file_stream.gcount());
 #endif
     });
     // Advance the weights stream past the block; the weights stream's read

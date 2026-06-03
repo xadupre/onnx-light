@@ -160,8 +160,22 @@ static void resizeShapeInferenceVersioned(InferenceContext &ctx, int opset_versi
       if (sizes_shape.dim_size() == 0) {
         hasSizesInput = false;
       } else {
+        // If any dim is symbolic (no value), we cannot compute output dims
+        // from ``sizes``; treat as if ``sizes`` were absent for shape
+        // inference purposes (the operator is still validly using ``sizes``).
+        bool all_known = true;
         for (int i = 0; i < sizes_shape.dim_size(); ++i) {
-          sizes_data.push_back(sizes_shape.dim(i).dim_value());
+          if (!sizes_shape.dim(i).has_dim_value()) {
+            all_known = false;
+            break;
+          }
+        }
+        if (all_known) {
+          for (int i = 0; i < sizes_shape.dim_size(); ++i) {
+            sizes_data.push_back(sizes_shape.dim(i).dim_value());
+          }
+        } else {
+          sizes_data.clear();
         }
       }
     }
@@ -221,6 +235,12 @@ static void resizeShapeInferenceVersioned(InferenceContext &ctx, int opset_versi
     checkDuplicateAxes(axes, rank_x);
   }
   if (hasSizesInput) {
+    if (sizes_data.empty()) {
+      // ``sizes`` is provided but its values are not statically known; we
+      // cannot compute concrete output dims. Leave the output shape with the
+      // same rank as the input and symbolic dims.
+      return;
+    }
     if (!axes.empty()) {
       if (sizes_data.size() != axes.size()) {
         fail_shape_inference("Number of elements of input 'sizes' (", sizes_data.size(),

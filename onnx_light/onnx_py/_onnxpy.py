@@ -45,6 +45,7 @@ _EXTENSIONS: tuple[str, ...] = (
     "_onnxpyprotolib",
     "_onnxpyoptim",
     "_onnxbackend",
+    "_onnxpynnef",
 )
 
 # Attribute names that are exposed as submodules by more than one extension.

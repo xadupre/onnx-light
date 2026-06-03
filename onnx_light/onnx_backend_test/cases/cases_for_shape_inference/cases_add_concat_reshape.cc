@@ -103,12 +103,7 @@ void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry
                                   reshape_shape);
   z.name = "Z";
 
-  DataSet ds;
-  ds.inputs.push_back(x);
-  ds.inputs.push_back(y);
-  ds.inputs.push_back(reshape_shape);
-  ds.outputs.push_back(z);
-  tc.data_sets.emplace_back(std::move(ds));
+  AppendDataSet(tc, {x, y, reshape_shape}, {z});
 
   registry.emplace_back(std::move(tc));
 }

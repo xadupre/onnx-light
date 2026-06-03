@@ -78,6 +78,15 @@ void AppendValueInfo(ValueInfoProto &vi, const std::string &name, int32_t elem_t
                      const std::vector<int64_t> &shape);
 
 /**
+ * Appends a new ``DataSet`` to ``tc.data_sets`` populated with the given
+ * ``inputs`` and ``outputs``. Saves the
+ * ``DataSet ds; ds.inputs.push_back(...); ds.outputs.push_back(...);
+ * tc.data_sets.emplace_back(std::move(ds));`` boilerplate that every
+ * manually-built TestCase otherwise repeats.
+ */
+void AppendDataSet(TestCase &tc, std::vector<Tensor> inputs, std::vector<Tensor> outputs);
+
+/**
  * Builds a single-node ``ModelProto`` from ``node`` and the provided typed
  * inputs/outputs, then appends a ``TestCase`` to ``registry``.
  *

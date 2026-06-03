@@ -73,6 +73,13 @@ void AppendValueInfo(ValueInfoProto &vi, const std::string &name, int32_t elem_t
   }
 }
 
+void AppendDataSet(TestCase &tc, std::vector<Tensor> inputs, std::vector<Tensor> outputs) {
+  DataSet ds;
+  ds.inputs = std::move(inputs);
+  ds.outputs = std::move(outputs);
+  tc.data_sets.emplace_back(std::move(ds));
+}
+
 void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
             const std::vector<Tensor> &outputs, const std::string &name,
             const std::vector<OpsetId> &opset_imports, const std::string &producer_name,

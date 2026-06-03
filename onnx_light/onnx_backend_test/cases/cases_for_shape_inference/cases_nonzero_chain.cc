@@ -151,15 +151,11 @@ void RegisterNonZeroChainCase(const std::string &name, NonZeroOutputAnnotation a
   }
 
   // Provide a concrete DataSet so the case is executable end-to-end.
-  DataSet ds;
-  ds.inputs.push_back(x);
   Tensor nz_out = nz;
   nz_out.name = "nz";
   Tensor nz_float_out = nz_float;
   nz_float_out.name = "nz_float";
-  ds.outputs.push_back(std::move(nz_out));
-  ds.outputs.push_back(std::move(nz_float_out));
-  tc.data_sets.emplace_back(std::move(ds));
+  AppendDataSet(tc, {x}, {std::move(nz_out), std::move(nz_float_out)});
 
   registry.emplace_back(std::move(tc));
 }

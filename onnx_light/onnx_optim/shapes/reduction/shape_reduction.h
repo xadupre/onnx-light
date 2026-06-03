@@ -112,6 +112,22 @@ void ComputeShapeReduceSumSquare(ShapesContext &ctx, const NodeProto &node, cons
                                  const char *axes);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``ReduceLogSum`` node.
+ * Shape/attribute semantics are the same as :cpp:func:`ComputeShapeReduceSum`
+ * and the output dtype matches the input dtype.
+ */
+void ComputeShapeReduceLogSum(ShapesContext &ctx, const NodeProto &node, const char *data,
+                              const char *axes);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``ReduceLogSumExp`` node.
+ * Shape/attribute semantics are the same as :cpp:func:`ComputeShapeReduceSum`
+ * and the output dtype matches the input dtype.
+ */
+void ComputeShapeReduceLogSumExp(ShapesContext &ctx, const NodeProto &node, const char *data,
+                                 const char *axes);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``ReduceProd`` node.
  * Shape/attribute semantics are the same as :cpp:func:`ComputeShapeReduceSum`
  * and the output dtype matches the input dtype.

@@ -208,6 +208,16 @@ void ComputeShapeReduceMean(ShapesContext &ctx, const NodeProto &node, const cha
   ComputeShapeReduceCommon(ctx, node, data, axes, "ReduceMean");
 }
 
+void ComputeShapeReduceLogSum(ShapesContext &ctx, const NodeProto &node, const char *data,
+                              const char *axes) {
+  ComputeShapeReduceCommon(ctx, node, data, axes, "ReduceLogSum");
+}
+
+void ComputeShapeReduceLogSumExp(ShapesContext &ctx, const NodeProto &node, const char *data,
+                                 const char *axes) {
+  ComputeShapeReduceCommon(ctx, node, data, axes, "ReduceLogSumExp");
+}
+
 } // namespace reduction
 } // namespace shapes
 } // namespace onnx_optim

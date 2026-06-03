@@ -44,6 +44,12 @@ void RegisterReduceL1Cases(std::vector<TestCase> &registry);
 /// Registers the ``ReduceL2`` backend test node case(s).
 void RegisterReduceL2Cases(std::vector<TestCase> &registry);
 
+/// Registers the ``ReduceLogSum`` backend test node case(s).
+void RegisterReduceLogSumCases(std::vector<TestCase> &registry);
+
+/// Registers the ``ReduceLogSumExp`` backend test node case(s).
+void RegisterReduceLogSumExpCases(std::vector<TestCase> &registry);
+
 /// Registers the ``ReduceSumSquare`` backend test node case(s).
 void RegisterReduceSumSquareCases(std::vector<TestCase> &registry);
 

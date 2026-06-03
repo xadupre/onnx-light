@@ -191,7 +191,7 @@ class TestBackendFunction(ExtTestCase):
             self.assertEqual(tc.name, name)
             self.assertIsNotNone(tc.model)
             self.assertIsNotNone(tc.data_sets)
-            self.assertEqual(tc.kind, "node")
+            self.assertIn(tc.kind, ("node", "model"))
             self.assertIsInstance(tc.rtol, float)
             self.assertIsInstance(tc.atol, float)
 

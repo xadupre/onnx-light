@@ -739,6 +739,17 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          math::ComputeShapeSoftmax(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:SoftmaxCrossEntropyLoss",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         const std::string scores_name = node.input(0).as_string();
+         const std::string labels_name = node.input(1).as_string();
+         const std::string weights_name =
+             node.input_size() >= 3 ? node.input(2).as_string() : std::string();
+         math::ComputeShapeSoftmaxCrossEntropyLoss(
+             ctx, node, scores_name.c_str(), labels_name.c_str(),
+             weights_name.empty() ? nullptr : weights_name.c_str());
+       }},
       {"ai.onnx:StringConcat",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);

@@ -7,6 +7,8 @@
 #include "onnx_backend_test/kernels/kernel_context.h"
 #include "onnx_backend_test/simple_tensor.h"
 
+#include <string>
+#include <utility>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -287,6 +289,32 @@ public:
 
   /// Softmax needs the full input slice to compute each output value; aliasing
   /// input/output would overwrite values needed for later positions.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// SoftmaxCrossEntropyLoss computes the cross-entropy loss between the
+/// (un-normalized) softmax distribution of ``scores`` and integer class
+/// indices given by ``labels``. Optionally supports per-class weights and
+/// an ``ignore_index`` value used to mask labels that should not contribute
+/// to the loss. The kernel always returns the loss tensor and the
+/// log-probability tensor (same shape and dtype as ``scores``); the caller
+/// is free to ignore ``log_prob`` when the node does not request it.
+class SoftmaxCrossEntropyLoss : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  /// @param scores Input scores of shape ``(N, C)`` or ``(N, C, D1, ..., Dk)``.
+  /// @param labels Integer class indices of shape ``(N)`` or ``(N, D1, ..., Dk)``.
+  /// @param weights Optional rank-1 tensor of length ``C``; ``nullptr`` means unweighted.
+  /// @param reduction One of ``"none"``, ``"sum"``, or ``"mean"``.
+  /// @param has_ignore_index Whether ``ignore_index`` is set.
+  /// @param ignore_index Class index to ignore (only used when ``has_ignore_index`` is true).
+  /// @return Pair ``(loss, log_prob)`` with the loss tensor (shape per ``reduction``) and the
+  ///         log-probability tensor (same shape and dtype as ``scores``).
+  std::pair<Tensor, Tensor> operator()(const Tensor &scores, const Tensor &labels,
+                                       const Tensor *weights, const std::string &reduction,
+                                       bool has_ignore_index, int64_t ignore_index) const;
+
+  /// The kernel allocates new outputs; it does not support input/output aliasing.
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 

@@ -404,6 +404,12 @@ std::string MakeGatherNDDoc(int since_version);
 std::string MakeCompressDoc(int since_version);
 
 /**
+ * Returns the documentation string for the TensorScatter operator at the
+ * given opset version.
+ */
+std::string MakeTensorScatterDoc(int since_version);
+
+/**
  * Returns the documentation string for the Split operator at the given
  * opset version.
  *

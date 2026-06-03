@@ -68,10 +68,10 @@ WARN_IF_UNDOCUMENTED   = NO
 WARN_IF_DOC_ERROR      = NO
 WARN_NO_PARAMDOC       = NO
 WARN_IF_INCOMPLETE_DOC = NO
-DOT_GRAPH_MAX_NODES    = 100
 
-# KernelBase has >150 derived kernel classes, which exceeds DOT_GRAPH_MAX_NODES
-# and produces an inheritance-graph warning during the documentation build.
-# The class is a tiny boilerplate-reduction helper that does not benefit from
-# a dedicated reference page or inheritance graph, so exclude it from Doxygen.
-EXCLUDE_SYMBOLS        = ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::KernelBase
+# Disable dot-based graphs entirely. KernelBase has 150+ derived kernel classes
+# and triggers an "inheritance graph ... too many nodes" warning when DOT graphs
+# are enabled; the graphs are not used by the published documentation anyway.
+HAVE_DOT               = NO
+CLASS_GRAPH            = NO
+COLLABORATION_GRAPH    = NO

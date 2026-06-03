@@ -73,29 +73,20 @@ void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry
   AddAxisAttribute(concat_node, 2);
   AddNode(*graph, "Reshape", {"concat_out", "reshape_shape"}, {"Z"});
 
-  // Helper to declare a tensor-typed ValueInfo with a literal float shape.
-  const auto add_float_value_info = [](ValueInfoProto &vi, const std::string &vi_name,
-                                       const std::vector<int64_t> &shape) {
-    Tensor t;
-    t.name = vi_name;
-    t.data_type = static_cast<int32_t>(DataType::FLOAT);
-    t.shape = shape;
-    FillValueInfo(t, vi);
-  };
-
   // Graph inputs: X, Y and the shape tensor — shapes from the page.
-  add_float_value_info(*graph->add_input(), "X", input_shape);
-  add_float_value_info(*graph->add_input(), "Y", input_shape);
+  const int32_t kFloat = static_cast<int32_t>(DataType::FLOAT);
+  AppendValueInfo(*graph->add_input(), "X", kFloat, input_shape);
+  AppendValueInfo(*graph->add_input(), "Y", kFloat, input_shape);
   FillValueInfo(reshape_shape, *graph->add_input());
 
   // Intermediate value_info entries with the literal shapes from the page.
   // ``concat_out`` / ``Z`` use ``[2, 5, 16]`` (last dim doubled by Concat).
   const std::vector<int64_t> concat_shape = {2, 5, 16}; // concat_out, Z
-  add_float_value_info(*graph->add_value_info(), "added", input_shape);
-  add_float_value_info(*graph->add_value_info(), "concat_out", concat_shape);
+  AppendValueInfo(*graph->add_value_info(), "added", kFloat, input_shape);
+  AppendValueInfo(*graph->add_value_info(), "concat_out", kFloat, concat_shape);
 
   // Graph output Z — literal shape from the page.
-  add_float_value_info(*graph->add_output(), "Z", concat_shape);
+  AppendValueInfo(*graph->add_output(), "Z", kFloat, concat_shape);
 
   // Build the reference DataSet right next to its consumers: simple,
   // fully-populated input tensors, then run the kernels to materialise Z.

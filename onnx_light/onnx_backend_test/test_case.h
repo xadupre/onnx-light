@@ -66,6 +66,18 @@ void InitModel(ModelProto &model, int64_t ir_version, const std::vector<OpsetId>
                const std::string &producer_name = "backend-test");
 
 /**
+ * Fills ``vi`` with a tensor-typed ValueInfo (``name``, ``elem_type`` and the
+ * concrete dimension values from ``shape``). Mirrors the boilerplate every
+ * manually-built graph repeats when declaring graph inputs / ``value_info``
+ * / outputs for which a literal shape is already known (e.g. the gallery
+ * shapes used by the shape-inference cases). For Tensor-backed metadata see
+ * the ``FillValueInfo(const Tensor&, ValueInfoProto&)`` overload in
+ * ``simple_tensor.h``.
+ */
+void AppendValueInfo(ValueInfoProto &vi, const std::string &name, int32_t elem_type,
+                     const std::vector<int64_t> &shape);
+
+/**
  * Builds a single-node ``ModelProto`` from ``node`` and the provided typed
  * inputs/outputs, then appends a ``TestCase`` to ``registry``.
  *

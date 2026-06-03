@@ -61,6 +61,18 @@ void InitModel(ModelProto &model, int64_t ir_version, const std::vector<OpsetId>
   }
 }
 
+void AppendValueInfo(ValueInfoProto &vi, const std::string &name, int32_t elem_type,
+                     const std::vector<int64_t> &shape) {
+  vi.set_name(name);
+  TypeProto *tp = vi.add_type();
+  TypeProto::Tensor *tt = tp->add_tensor_type();
+  tt->set_elem_type(elem_type);
+  TensorShapeProto *sh = tt->add_shape();
+  for (int64_t d : shape) {
+    sh->add_dim()->set_dim_value(d);
+  }
+}
+
 void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
             const std::vector<Tensor> &outputs, const std::string &name,
             const std::vector<OpsetId> &opset_imports, const std::string &producer_name,

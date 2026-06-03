@@ -40,6 +40,17 @@ class TestDoxygenConfig(ExtTestCase):
         self.assertIn("WARN_IF_INCOMPLETE_DOC = NO", content)
         self.assertIn("DOT_GRAPH_MAX_NODES    = 100", content)
 
+    def test_kernel_base_is_excluded_from_doxygen(self):
+        """Verifies that KernelBase is excluded so its 150+ derived classes do
+        not exceed DOT_GRAPH_MAX_NODES and emit an inheritance-graph warning."""
+        doxygen_path = Path(__file__).resolve().parents[2] / "docs" / "Doxyfile"
+        content = doxygen_path.read_text(encoding="utf-8")
+        self.assertIn(
+            "EXCLUDE_SYMBOLS        = "
+            "ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::KernelBase",
+            content,
+        )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

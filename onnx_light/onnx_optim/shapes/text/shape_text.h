@@ -122,6 +122,33 @@ void ComputeShapeStringNormalizer(ShapesContext &ctx, const NodeProto &node, con
  */
 void ComputeShapeRegexFullMatch(ShapesContext &ctx, const NodeProto &node, const char *a);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``TfIdfVectorizer``
+ * node and stores it in ``ctx``.
+ *
+ * ``TfIdfVectorizer`` (since opset 9 in the ``ai.onnx`` domain) extracts
+ * n-grams from a ``[C]``- or ``[N, C]``-shaped integer / string input and
+ * produces a ``tensor(float)`` whose last dimension is
+ * ``max(ngram_indexes) + 1``. The output preserves the input batch
+ * dimension when the input has rank 2.
+ *
+ * @param ctx   In/out context. Must already contain an entry for ``a``;
+ *              on return it also contains an entry for ``node.output(0)``.
+ * @param node  The ``TfIdfVectorizer`` ``NodeProto`` whose output should
+ *              be described. ``node.op_type()`` must be
+ *              ``"TfIdfVectorizer"`` and ``node`` must declare at least
+ *              one output. The ``ngram_indexes`` attribute must be a
+ *              non-empty list of non-negative ``int64``s.
+ * @param a     Name of the input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"TfIdfVectorizer"``, if ``node`` has no output, if
+ *         ``ngram_indexes`` is missing/invalid, or if the input shape
+ *         has an unsupported rank.
+ * @throws std::out_of_range     if ``a`` is missing from ``ctx``.
+ */
+void ComputeShapeTfIdfVectorizer(ShapesContext &ctx, const NodeProto &node, const char *a);
+
 } // namespace text
 } // namespace shapes
 } // namespace onnx_optim

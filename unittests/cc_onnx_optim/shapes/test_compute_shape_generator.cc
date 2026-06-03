@@ -732,7 +732,6 @@ NodeProto MakeRangeNode() {
 onnx_optim::OptimTensor MakeScalar(onnx_optim::TensorType dtype) {
   return onnx_optim::OptimTensor(nullptr, dtype, onnx_optim::OptimShape{});
 }
-}
 
 } // namespace
 
@@ -907,7 +906,6 @@ TEST(OnnxOptimShapeRange, RejectsBadOpType) {
   ctx.Set("limit", MakeScalar(onnx_optim::TensorType::kFloat));
   ctx.Set("delta", MakeScalar(onnx_optim::TensorType::kFloat));
   EXPECT_THROW(onnx_optim::shapes::generator::ComputeShapeRange(ctx, node), std::invalid_argument);
-}
 }
 
 } // namespace Test

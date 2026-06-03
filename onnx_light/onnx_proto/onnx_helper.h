@@ -346,7 +346,7 @@ inline void AddFloatAttribute(ProtoT &proto, const char *name, float value) {
 /**
  * Appends the canonical ``axis`` INT attribute to ``node``. Shorthand for the
  * ``axis``-INT attribute that virtually every ONNX op exposing an axis uses
- * (``Concat``, ``Softmax``, ``Gather``, ``Split``, ``Cast``, ...). Equivalent
+ * (``Concat``, ``Softmax``, ``Gather``, ``Split``, ...). Equivalent
  * to ``AddAttribute<int64_t>(node, "axis", axis)``.
  *
  * @param node Target node.

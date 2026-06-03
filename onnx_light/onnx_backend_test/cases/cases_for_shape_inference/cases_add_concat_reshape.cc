@@ -70,7 +70,7 @@ void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry
 
   AddNode(*graph, "Add", {"X", "Y"}, {"added"});
   NodeProto &concat_node = AddNode(*graph, "Concat", {"added", "X"}, {"concat_out"});
-  AddAxisAttribute(concat_node, /*axis=*/2);
+  AddAxisAttribute(concat_node, 2);
   AddNode(*graph, "Reshape", {"concat_out", "reshape_shape"}, {"Z"});
 
   // Helper to declare a tensor-typed ValueInfo with a literal float shape.

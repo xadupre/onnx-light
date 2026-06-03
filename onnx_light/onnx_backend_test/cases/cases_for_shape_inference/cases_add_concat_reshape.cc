@@ -117,6 +117,17 @@ void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry
   FillValueInfo(y, *graph->add_input());
   FillValueInfo(reshape_shape, *graph->add_input());
 
+  // Intermediate ValueInfo entries with the expected concrete shapes so that
+  // a reader (or shape-inference comparison) can see the expected shape of
+  // every tensor in the graph. ``added`` keeps the input shape; ``concat_out``
+  // doubles the last dimension via ``axis=2``.
+  Tensor added_vi = added;
+  added_vi.name = "added";
+  Tensor concat_out_vi = concat_out;
+  concat_out_vi.name = "concat_out";
+  FillValueInfo(added_vi, *graph->add_value_info());
+  FillValueInfo(concat_out_vi, *graph->add_value_info());
+
   // Graph output Z carries the fully resolved shape ``[kBatch, kSeq, 2 *
   // kDModel]``.
   FillValueInfo(z, *graph->add_output());

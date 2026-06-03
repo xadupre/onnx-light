@@ -115,33 +115,61 @@ void RegisterNonZeroChainCase(const std::string &name, NonZeroOutputAnnotation a
   // Graph input: X with concrete dims.
   FillValueInfo(x, *graph->add_input());
 
+  // Intermediate ValueInfo entries. Tensors before ``NonZero`` keep the
+  // input's concrete ``[3, 4]`` shape; ``transposed_nz`` has the same
+  // data-dependent ``nnz`` dimension as ``nz``. The annotation style mirrors
+  // the graph outputs (anonymous vs named ``nnz``/``do1``).
+  Tensor abs_vi = abs_out;
+  abs_vi.name = "abs_out";
+  Tensor relu_vi = abs_out;
+  relu_vi.name = "relu_out";
+  Tensor double_vi = double_out;
+  double_vi.name = "double_out";
+  Tensor mul_vi = mul_out;
+  mul_vi.name = "mul_out";
+  FillValueInfo(abs_vi, *graph->add_value_info());
+  FillValueInfo(relu_vi, *graph->add_value_info());
+  FillValueInfo(double_vi, *graph->add_value_info());
+  FillValueInfo(mul_vi, *graph->add_value_info());
+
   // Graph outputs: nz and nz_float. The rank dimension is always known
   // (equal to the input rank, 2), so it is declared with ``dim_value=2``.
   // The data-dependent ``nnz`` dimension stays symbolic — either named
   // (``"nnz"``/``"do1"``) or anonymous (no dim_param/dim_value).
+  const auto add_value_info_with_dims =
+      [&](ValueInfoProto *vi, const std::string &out_name, int32_t elem_type,
+          const std::vector<std::pair<int64_t, std::string>> &dims) {
+        vi->set_name(out_name);
+        TypeProto *tp = vi->add_type();
+        TypeProto::Tensor *tt = tp->add_tensor_type();
+        tt->set_elem_type(elem_type);
+        TensorShapeProto *shape = tt->add_shape();
+        for (const auto &d : dims) {
+          auto *dim = shape->add_dim();
+          if (d.first >= 0) {
+            dim->set_dim_value(d.first);
+          } else if (!d.second.empty()) {
+            dim->set_dim_param(d.second);
+          }
+          // else: leave the dim unannotated (no dim_value, no dim_param).
+        }
+      };
   const auto add_output = [&](const std::string &out_name, int32_t elem_type,
                               const std::vector<std::pair<int64_t, std::string>> &dims) {
-    ValueInfoProto *vi = graph->add_output();
-    vi->set_name(out_name);
-    TypeProto *tp = vi->add_type();
-    TypeProto::Tensor *tt = tp->add_tensor_type();
-    tt->set_elem_type(elem_type);
-    TensorShapeProto *shape = tt->add_shape();
-    for (const auto &d : dims) {
-      auto *dim = shape->add_dim();
-      if (d.first >= 0) {
-        dim->set_dim_value(d.first);
-      } else if (!d.second.empty()) {
-        dim->set_dim_param(d.second);
-      }
-      // else: leave the dim unannotated (no dim_value, no dim_param).
-    }
+    add_value_info_with_dims(graph->add_output(), out_name, elem_type, dims);
   };
 
+  // Intermediate value_info for ``nz`` would collide with the graph output of
+  // the same name, so it is omitted. ``transposed_nz`` is a pure intermediate
+  // and its shape mirrors ``nz_float`` (same dim layout, INT64 dtype).
   if (annotation == NonZeroOutputAnnotation::kNamedDims) {
+    add_value_info_with_dims(graph->add_value_info(), "transposed_nz",
+                             static_cast<int32_t>(DataType::INT64), {{-1, "do1"}, {2, ""}});
     add_output("nz", static_cast<int32_t>(DataType::INT64), {{2, ""}, {-1, "nnz"}});
     add_output("nz_float", static_cast<int32_t>(DataType::FLOAT), {{-1, "do1"}, {2, ""}});
   } else {
+    add_value_info_with_dims(graph->add_value_info(), "transposed_nz",
+                             static_cast<int32_t>(DataType::INT64), {{-1, ""}, {2, ""}});
     add_output("nz", static_cast<int32_t>(DataType::INT64), {{2, ""}, {-1, ""}});
     add_output("nz_float", static_cast<int32_t>(DataType::FLOAT), {{-1, ""}, {2, ""}});
   }

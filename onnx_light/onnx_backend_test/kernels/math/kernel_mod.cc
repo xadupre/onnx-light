@@ -43,7 +43,13 @@ template <typename T> T TruncMod(T a, T b) {
 }
 
 // ``fmod == 1`` on floats: C ``std::fmod``. Matches the upstream
-// ``test_mod_mixed_sign_float{32,64}`` reference cases.
+// ``test_mod_mixed_sign_float{32,64}`` reference cases. No explicit
+// divide-by-zero check is required here: ``std::fmod`` follows IEEE 754
+// and returns NaN for ``b == 0``, mirroring NumPy's ``np.fmod``. The
+// integer ``PythonMod``/``TruncMod`` overloads above also do not check
+// for zero divisors, matching the convention established by
+// :ref:`kernel::Div` (the upstream ONNX backend tests guarantee non-zero
+// divisors).
 template <typename T> T FloatFmod(T a, T b) {
   static_assert(std::is_floating_point<T>::value, "FloatFmod requires a floating-point type.");
   return std::fmod(a, b);

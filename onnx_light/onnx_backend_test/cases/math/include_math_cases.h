@@ -116,6 +116,9 @@ void RegisterPReluCases(std::vector<TestCase> &registry);
 /// Registers the ``Div`` backend test node case(s).
 void RegisterDivCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Mod`` backend test node case(s).
+void RegisterModCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Einsum`` backend test node case(s).
 void RegisterEinsumCases(std::vector<TestCase> &registry);
 

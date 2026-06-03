@@ -485,6 +485,25 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Element-wise modulo with NumPy-style broadcasting. The ``fmod`` flag
+/// controls the semantics:
+///   * ``fmod == 0`` (default): integer modulo whose sign follows the divisor
+///     (Python ``%`` / ``numpy.mod``). Only valid for integer dtypes.
+///   * ``fmod == 1``: C ``fmod`` semantics whose sign follows the dividend.
+///     Required when either input is floating point and also accepted for
+///     integer inputs (where it coincides with C ``%`` truncated modulo).
+class Mod : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x, const Tensor &y, int64_t fmod = 0) const;
+  void operator()(const Tensor &x, const Tensor &y, int64_t fmod, Tensor &output) const;
+
+  /// Element-wise binary kernel: the output buffer may alias an input buffer
+  /// when that input is not broadcast-expanded (i.e. its shape equals the
+  /// output shape).
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// BlackmanWindow function evaluated at ``size`` integer samples. When
 /// ``periodic`` is true the window is computed as if of length ``size+1`` and
 /// the last sample is discarded (matches NumPy/ONNX conventions).

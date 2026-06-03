@@ -116,6 +116,7 @@ ONNX_OPTIM_SHAPE_INFERENCE_OPS: frozenset[tuple[str, str]] = frozenset(
         ("ai.onnx", "Log"),
         ("ai.onnx", "LSTM"),
         ("ai.onnx", "MatMul"),
+        ("ai.onnx", "Mod"),
         ("ai.onnx", "Mul"),
         ("ai.onnx", "NonZero"),
         ("ai.onnx", "Optional"),

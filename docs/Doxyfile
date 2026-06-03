@@ -68,4 +68,10 @@ WARN_IF_UNDOCUMENTED   = NO
 WARN_IF_DOC_ERROR      = NO
 WARN_NO_PARAMDOC       = NO
 WARN_IF_INCOMPLETE_DOC = NO
-DOT_GRAPH_MAX_NODES    = 100
+
+# Disable dot-based graphs entirely. KernelBase has 150+ derived kernel classes
+# and triggers an "inheritance graph ... too many nodes" warning when DOT graphs
+# are enabled; the graphs are not used by the published documentation anyway.
+HAVE_DOT               = NO
+CLASS_GRAPH            = NO
+COLLABORATION_GRAPH    = NO

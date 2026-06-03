@@ -142,7 +142,14 @@ def _run_onnxruntime(tc: TestCase) -> tuple[float | None, str | None]:
                 # Nothing to compare element-wise; matching shapes already
                 # implies an equal output.
                 continue
-            diff = float(np.max(np.abs(ea.astype(np.float64) - oa.astype(np.float64))))
+            # ``np.errstate(invalid="ignore")`` keeps NaN inputs from emitting
+            # a ``RuntimeWarning`` to stderr; such a warning would otherwise be
+            # captured by ``sphinx_runpython`` when this report is rendered in
+            # the documentation and would corrupt the surrounding reST output.
+            with np.errstate(invalid="ignore"):
+                diff = float(
+                    np.max(np.abs(ea.astype(np.float64) - oa.astype(np.float64)))
+                )
             if diff > max_diff:
                 max_diff = diff
     return (max_diff, None)

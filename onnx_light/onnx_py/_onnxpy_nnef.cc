@@ -112,10 +112,6 @@ nb::object NNEFTensorToNumpy(const NNEFTensor &t) {
   default:
     throw std::runtime_error("Unsupported NNEF item type");
   }
-  size_t elem_bytes = (t.item_type == nnef::kItemTypeBool) ? 1u : static_cast<size_t>(t.bits / 8);
-  size_t nelem = elem_bytes > 0 ? t.data.size() / elem_bytes : 0;
-  (void)nelem;
-
   // Allocate owning buffer via a shared_ptr-like deleter mechanism.
   auto *buf = new std::vector<uint8_t>(t.data);
   nb::capsule owner(buf, [](void *p) noexcept { delete static_cast<std::vector<uint8_t> *>(p); });

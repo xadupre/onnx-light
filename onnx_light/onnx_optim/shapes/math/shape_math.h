@@ -178,6 +178,33 @@ void ComputeShapePRelu(ShapesContext &ctx, const NodeProto &node, const char *x,
 void ComputeShapeDiv(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Mod`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Mod`` is element-wise and binary, with numpy-style multidirectional
+ * broadcasting between its two operands (since opset 13). The output
+ * dtype matches the input dtype (both operands share the same type via
+ * the ``T`` type constraint) and the output shape is the broadcast of
+ * the two input shapes.
+ *
+ * @param ctx   In/out context. Must already contain entries for both
+ *              ``a`` and ``b``; on return it also contains an entry
+ *              for ``node.output(0)``.
+ * @param node  The ``Mod`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Mod"`` and
+ *              ``node`` must declare at least one output.
+ * @param a     Name of the first input value to read from ``ctx``.
+ * @param b     Name of the second input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Mod"``,
+ *         if ``node`` has no output, or if the two input shapes are not
+ *         broadcast-compatible.
+ * @throws std::out_of_range     if either ``a`` or ``b`` is missing
+ *         from ``ctx``.
+ */
+void ComputeShapeMod(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of an ``Acos`` node and
  * stores it in ``ctx``.
  *

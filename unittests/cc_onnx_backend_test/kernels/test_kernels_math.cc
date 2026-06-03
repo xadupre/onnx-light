@@ -40,6 +40,7 @@ using onnx_backend_test::kernel::HannWindow;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::Log;
 using onnx_backend_test::kernel::MatMul;
+using onnx_backend_test::kernel::Mod;
 using onnx_backend_test::kernel::Mul;
 using onnx_backend_test::kernel::PRelu;
 using onnx_backend_test::kernel::Round;
@@ -748,6 +749,84 @@ TEST(BackendKernelClass, DivClassSupportsIntegerTypesWithTruncation) {
     EXPECT_EQ(pz[0], 3);
     EXPECT_EQ(pz[1], 4);
     EXPECT_EQ(pz[2], 1);
+  }
+}
+
+TEST(BackendKernelClass, ModClassMatchesPythonAndCSemantics) {
+  // ``kernel::Mod`` must match ``numpy.mod`` (sign follows divisor) when
+  // ``fmod=0`` and ``numpy.fmod`` / C ``fmod`` (sign follows dividend) when
+  // ``fmod=1``. Cross-checked against the upstream
+  // ``test_mod_mixed_sign_int*`` / ``test_mod_int64_fmod`` /
+  // ``test_mod_mixed_sign_float*`` reference outputs.
+  const KernelContext ctx{DefaultOpset(13)};
+  Mod mod_kernel{ctx};
+
+  // Default fmod=0 on signed integers (Python-style mod).
+  {
+    Tensor x = Tensor::FromInt32("", {6}, {-4, 7, 5, 4, -7, 8});
+    Tensor y = Tensor::FromInt32("", {6}, {2, -3, 8, -2, 3, 5});
+    Tensor z = mod_kernel(x, y);
+    const int32_t *pz = z.AsInt32();
+    EXPECT_EQ(pz[0], 0);
+    EXPECT_EQ(pz[1], -2);
+    EXPECT_EQ(pz[2], 5);
+    EXPECT_EQ(pz[3], 0);
+    EXPECT_EQ(pz[4], 2);
+    EXPECT_EQ(pz[5], 3);
+  }
+
+  // fmod=1 on signed integers (C-style truncated mod).
+  {
+    Tensor x = Tensor::FromInt64("", {6}, {-4, 7, 5, 4, -7, 8});
+    Tensor y = Tensor::FromInt64("", {6}, {2, -3, 8, -2, 3, 5});
+    Tensor z = mod_kernel(x, y, /*fmod=*/1);
+    const int64_t *pz = z.AsInt64();
+    EXPECT_EQ(pz[0], 0);
+    EXPECT_EQ(pz[1], 1);
+    EXPECT_EQ(pz[2], 5);
+    EXPECT_EQ(pz[3], 0);
+    EXPECT_EQ(pz[4], -1);
+    EXPECT_EQ(pz[5], 3);
+  }
+
+  // Unsigned integers (fmod=0).
+  {
+    Tensor x = Tensor::FromUint16("", {3}, {4, 7, 5});
+    Tensor y = Tensor::FromUint16("", {3}, {2, 3, 8});
+    Tensor z = mod_kernel(x, y);
+    const uint16_t *pz = z.AsUint16();
+    EXPECT_EQ(pz[0], 0);
+    EXPECT_EQ(pz[1], 1);
+    EXPECT_EQ(pz[2], 5);
+  }
+
+  // Floating-point inputs require fmod=1.
+  {
+    Tensor x = Tensor::FromFloat("", {3}, {-4.3f, 7.2f, 5.0f});
+    Tensor y = Tensor::FromFloat("", {3}, {2.1f, -3.4f, 8.0f});
+    Tensor z = mod_kernel(x, y, /*fmod=*/1);
+    const float *pz = z.AsFloat();
+    EXPECT_NEAR(pz[0], std::fmod(-4.3f, 2.1f), 1e-6f);
+    EXPECT_NEAR(pz[1], std::fmod(7.2f, -3.4f), 1e-6f);
+    EXPECT_FLOAT_EQ(pz[2], 5.0f);
+  }
+
+  // Floating-point with fmod=0 must throw.
+  {
+    Tensor x = Tensor::FromFloat("", {1}, {1.0f});
+    Tensor y = Tensor::FromFloat("", {1}, {2.0f});
+    EXPECT_THROW(mod_kernel(x, y), std::invalid_argument);
+  }
+
+  // Broadcasting (int32, scalar-ish divisor).
+  {
+    Tensor x = Tensor::FromInt32("", {2, 3}, {0, 1, 2, 3, 4, 5});
+    Tensor y = Tensor::FromInt32("", {1}, {7});
+    Tensor z = mod_kernel(x, y);
+    ASSERT_EQ(z.shape, (std::vector<int64_t>{2, 3}));
+    const int32_t *pz = z.AsInt32();
+    EXPECT_EQ(pz[0], 0);
+    EXPECT_EQ(pz[5], 5);
   }
 }
 

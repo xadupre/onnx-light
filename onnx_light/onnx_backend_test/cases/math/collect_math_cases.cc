@@ -22,6 +22,7 @@ void CollectMathTestCases(std::vector<TestCase> &registry, const std::string &op
       {"Mul", &RegisterMulCases},
       {"PRelu", &RegisterPReluCases},
       {"Div", &RegisterDivCases},
+      {"Mod", &RegisterModCases},
       {"Einsum", &RegisterEinsumCases},
       {"BlackmanWindow", &RegisterBlackmanWindowCases},
       {"Erf", &RegisterErfCases},

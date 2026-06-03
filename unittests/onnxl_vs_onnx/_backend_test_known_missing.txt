@@ -411,15 +411,6 @@ identity_opt
 identity_sequence
 if_opt
 if_seq
-image_decoder_decode_bmp_rgb
-image_decoder_decode_jpeg2k_rgb
-image_decoder_decode_jpeg_bgr
-image_decoder_decode_jpeg_grayscale
-image_decoder_decode_jpeg_rgb
-image_decoder_decode_png_rgb
-image_decoder_decode_pnm_rgb
-image_decoder_decode_tiff_rgb
-image_decoder_decode_webp_rgb
 instancenorm_epsilon
 instancenorm_example
 isinf

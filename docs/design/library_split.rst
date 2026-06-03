@@ -15,9 +15,14 @@ dependencies on the other libraries.  The full dependency graph is::
 
     lib_onnx_proto
         ├── lib_onnx_op
-        │       └── lib_onnx_lib
-        │               └── lib_onnx_optim
+        │       └── lib_onnx_optim
+        ├── lib_onnx_lib
         └── lib_onnx_backend_test
+
+``lib_onnx_lib`` and ``lib_onnx_op`` are independent siblings: both link
+directly against ``lib_onnx_proto`` but neither depends on the other.
+``lib_onnx_optim`` depends on ``lib_onnx_op`` only (it does **not** pull
+in ``lib_onnx_lib``).
 
 When installed (``cmake --install``) all libraries are exported under the
 ``onnx_light::`` namespace and can be consumed individually through

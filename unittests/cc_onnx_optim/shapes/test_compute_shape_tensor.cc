@@ -1484,6 +1484,106 @@ TEST(OnnxOptimShapesTensorDepthToSpace, RejectsChannelNotDivisibleByBlocksizeSqu
 }
 
 // ---------------------------------------------------------------------------
+// SpaceToDepth shape-inference tests
+// ---------------------------------------------------------------------------
+
+namespace {
+
+NodeProto MakeSpaceToDepthNode(const std::string &input = "X", const std::string &out = "Y",
+                               int64_t blocksize = 2, bool with_blocksize = true) {
+  NodeProto node;
+  node.set_op_type("SpaceToDepth");
+  node.add_input(input);
+  node.add_output(out);
+  if (with_blocksize) {
+    AddAttribute<int64_t>(node, "blocksize", blocksize);
+  }
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesTensorSpaceToDepth, ComputesConcreteOutputShape) {
+  NodeProto node = MakeSpaceToDepthNode("X", "Y", /*blocksize=*/3);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(2),
+                                          onnx_optim::OptimDim(12), onnx_optim::OptimDim(15)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeSpaceToDepth(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(18),
+                                    onnx_optim::OptimDim(4), onnx_optim::OptimDim(5)}));
+}
+
+TEST(OnnxOptimShapesTensorSpaceToDepth, PreservesSymbolicBatchDim) {
+  NodeProto node = MakeSpaceToDepthNode("X", "Y", /*blocksize=*/2);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kInt32,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(2),
+                                          onnx_optim::OptimDim(6), onnx_optim::OptimDim(8)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeSpaceToDepth(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kInt32);
+  EXPECT_TRUE(ctx.Get("Y").Shape()[0].IsExpr());
+  EXPECT_EQ(ctx.Get("Y").Shape()[0].AsExpr(), "N");
+  EXPECT_EQ(ctx.Get("Y").Shape()[1], onnx_optim::OptimDim(8));
+  EXPECT_EQ(ctx.Get("Y").Shape()[2], onnx_optim::OptimDim(3));
+  EXPECT_EQ(ctx.Get("Y").Shape()[3], onnx_optim::OptimDim(4));
+}
+
+TEST(OnnxOptimShapesTensorSpaceToDepth, RejectsMissingBlocksize) {
+  NodeProto node = MakeSpaceToDepthNode("X", "Y", /*blocksize=*/0, /*with_blocksize=*/false);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                          onnx_optim::OptimDim(2), onnx_optim::OptimDim(2)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeSpaceToDepth(ctx, node),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesTensorSpaceToDepth, RejectsNonPositiveBlocksize) {
+  NodeProto node = MakeSpaceToDepthNode("X", "Y", /*blocksize=*/0);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                          onnx_optim::OptimDim(2), onnx_optim::OptimDim(2)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeSpaceToDepth(ctx, node),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesTensorSpaceToDepth, RejectsNonRank4Input) {
+  NodeProto node = MakeSpaceToDepthNode("X", "Y", /*blocksize=*/2);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(8)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeSpaceToDepth(ctx, node),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesTensorSpaceToDepth, RejectsSpatialDimNotDivisibleByBlocksize) {
+  NodeProto node = MakeSpaceToDepthNode("X", "Y", /*blocksize=*/2);
+  onnx_optim::shapes::ShapesContext ctx;
+  // H=3 is not divisible by blocksize=2.
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                          onnx_optim::OptimDim(3), onnx_optim::OptimDim(2)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeSpaceToDepth(ctx, node),
+               std::invalid_argument);
+}
+
+// ---------------------------------------------------------------------------
 // Squeeze / Unsqueeze shape-inference tests
 // ---------------------------------------------------------------------------
 

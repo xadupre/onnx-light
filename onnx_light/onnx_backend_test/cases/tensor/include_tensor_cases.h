@@ -62,6 +62,9 @@ void RegisterReverseSequenceCases(std::vector<TestCase> &registry);
 /// Registers the ``DepthToSpace`` backend test node case(s).
 void RegisterDepthToSpaceCases(std::vector<TestCase> &registry);
 
+/// Registers the ``SpaceToDepth`` backend test node case(s).
+void RegisterSpaceToDepthCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Squeeze`` backend test node case(s).
 void RegisterSqueezeCases(std::vector<TestCase> &registry);
 

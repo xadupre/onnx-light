@@ -605,6 +605,19 @@ std::string MakeDepthToSpaceTypeConstraintDescription(int since_version) {
   return "Constrain input and output types to all tensor types.";
 }
 
+std::string MakeSpaceToDepthDoc(int since_version) {
+  (void)since_version;
+  return R"DOC(SpaceToDepth rearranges blocks of spatial data into depth. More specifically,
+this op outputs a copy of the input tensor where values from the height and width dimensions
+are moved to the depth dimension.
+)DOC";
+}
+
+std::string MakeSpaceToDepthTypeConstraintDescription(int since_version) {
+  (void)since_version;
+  return "Constrain input and output types to all tensor types.";
+}
+
 std::string MakeGatherDoc(int since_version) {
   if (since_version <= 1) {
     return R"DOC(

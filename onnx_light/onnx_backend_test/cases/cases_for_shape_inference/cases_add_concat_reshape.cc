@@ -28,28 +28,22 @@ constexpr int64_t kDefaultIrVersion = 10;
 // "Add + Concat + Reshape" model from the ``plot_computed_shapes`` gallery
 // page (https://xadupre.github.io/docs/yet-another-onnx-builder/
 // auto_examples_core/plot_computed_shapes.html). The ``reshape_shape``
-// initializer is ``[0, 0, -1]`` exactly as on the page. The concrete
-// per-tensor shapes registered in the graph (inputs, ``value_info`` and
-// output) are the literal shapes printed on the page for
-// ``context = dict(batch=2, seq=5, d_model=8)``:
+// initializer is ``[0, 0, -1]`` exactly as on the page. The per-tensor
+// shapes registered in the graph (inputs, ``value_info`` and output) use
+// the symbolic dim names from the page (``batch``/``seq``/``d_model``):
 //
-//   X            (2, 5, 8)
-//   Y            (2, 5, 8)
-//   added        (2, 5, 8)
-//   concat_out   (2, 5, 16)
-//   Z            (2, 5, 16)
+//   X            (batch, seq, d_model)
+//   Y            (batch, seq, d_model)
+//   added        (batch, seq, d_model)
+//   concat_out   (batch, seq, ?)          // last dim is ``2 * d_model``
+//   Z            (batch, seq, ?)          // recovered by Reshape([0, 0, -1])
 //
-// The generic shape-inference tests substitute symbolic ``dim_params`` on
-// top to also exercise the symbolic propagation path.
+// The reference DataSet still uses concrete sizes (``batch=2, seq=5,
+// d_model=8``) for the actual tensor values, so the case is executable.
 // ---------------------------------------------------------------------------
 void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(18);
   const kernel::KernelContext ctx{opset};
-
-  // Concrete shape from the gallery page for the inputs / ``added``
-  // (``batch=2, seq=5, d_model=8``). ``concat_shape`` is declared further
-  // down, next to where it is used.
-  const std::vector<int64_t> input_shape = {2, 5, 8}; // X, Y, added
 
   Tensor reshape_shape = Tensor::FromInt64("reshape_shape", {3}, {0, 0, -1});
 
@@ -73,32 +67,39 @@ void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry
   AddAxisAttribute(concat_node, 2);
   AddNode(*graph, "Reshape", {"concat_out", "reshape_shape"}, {"Z"});
 
-  // Graph inputs: X, Y and the shape tensor — shapes from the page.
+  // Graph inputs: X, Y use the symbolic shape from the page; reshape_shape
+  // is a concrete-shape initializer carried by ``FillValueInfo``.
   const int32_t kFloat = static_cast<int32_t>(DataType::FLOAT);
+  const std::vector<DimSpec> input_shape = {"batch", "seq", "d_model"};
   AppendValueInfo(*graph->add_input(), "X", kFloat, input_shape);
   AppendValueInfo(*graph->add_input(), "Y", kFloat, input_shape);
   FillValueInfo(reshape_shape, *graph->add_input());
 
-  // Intermediate value_info entries with the literal shapes from the page.
-  // ``concat_out`` / ``Z`` use ``[2, 5, 16]`` (last dim doubled by Concat).
-  const std::vector<int64_t> concat_shape = {2, 5, 16}; // concat_out, Z
+  // Intermediate value_info entries with symbolic dim names. The last dim
+  // of ``concat_out``/``Z`` is ``2 * d_model`` on the page; we leave it
+  // unannotated since ONNX shape inference cannot represent that symbolic
+  // product (Concat of two ``d_model`` symbolic dims yields a fresh
+  // anonymous dim, and Reshape([0, 0, -1]) keeps it anonymous).
+  const std::vector<DimSpec> concat_shape = {"batch", "seq", DimSpec()};
   AppendValueInfo(*graph->add_value_info(), "added", kFloat, input_shape);
   AppendValueInfo(*graph->add_value_info(), "concat_out", kFloat, concat_shape);
 
-  // Graph output Z — literal shape from the page.
+  // Graph output Z — same symbolic dims as concat_out.
   AppendValueInfo(*graph->add_output(), "Z", kFloat, concat_shape);
 
-  // Build the reference DataSet right next to its consumers: simple,
-  // fully-populated input tensors, then run the kernels to materialise Z.
-  const int64_t input_size = input_shape[0] * input_shape[1] * input_shape[2];
+  // Build the reference DataSet right next to its consumers: concrete
+  // ``batch=2, seq=5, d_model=8`` tensors, then run the kernels to
+  // materialise Z.
+  const std::vector<int64_t> data_shape = {2, 5, 8}; // batch=2, seq=5, d_model=8
+  const int64_t input_size = data_shape[0] * data_shape[1] * data_shape[2];
   std::vector<float> x_values(static_cast<size_t>(input_size));
   std::vector<float> y_values(static_cast<size_t>(input_size));
   for (size_t i = 0; i < x_values.size(); ++i) {
     x_values[i] = static_cast<float>(i) * 0.1f;
     y_values[i] = static_cast<float>(i) * 0.01f + 1.0f;
   }
-  Tensor x = Tensor::FromFloat("X", input_shape, x_values);
-  Tensor y = Tensor::FromFloat("Y", input_shape, y_values);
+  Tensor x = Tensor::FromFloat("X", data_shape, x_values);
+  Tensor y = Tensor::FromFloat("Y", data_shape, y_values);
   Tensor z = kernel::Reshape(ctx)(kernel::Concat(ctx)({kernel::Add(ctx)(x, y), x}, /*axis=*/2),
                                   reshape_shape);
   z.name = "Z";

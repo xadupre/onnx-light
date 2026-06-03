@@ -88,66 +88,39 @@ void RegisterNonZeroChainCase(const std::string &name, NonZeroOutputAnnotation a
   NodeProto &cast_node = AddNode(*graph, "Cast", {"transposed_nz"}, {"nz_float"});
   AddAttribute<int64_t>(cast_node, "to", static_cast<int64_t>(DataType::FLOAT));
 
-  // Graph input: X with concrete dims.
-  FillValueInfo(x, *graph->add_input());
+  // Graph input X uses symbolic ``batch``/``seq`` dims; concrete sizes
+  // ``[3, 4]`` are only used in the DataSet below.
+  const int32_t kInt64 = static_cast<int32_t>(DataType::INT64);
+  const int32_t kFloat = static_cast<int32_t>(DataType::FLOAT);
+  const std::vector<DimSpec> symbolic_input_shape = {"batch", "seq"};
+  AppendValueInfo(*graph->add_input(), "X", kFloat, symbolic_input_shape);
 
   // Intermediate ValueInfo entries. Tensors before ``NonZero`` keep the
-  // input's concrete ``[3, 4]`` shape; ``transposed_nz`` has the same
+  // input's symbolic ``[batch, seq]`` shape; ``transposed_nz`` has the same
   // data-dependent ``nnz`` dimension as ``nz``. The annotation style mirrors
   // the graph outputs (anonymous vs named ``nnz``/``do1``).
-  Tensor abs_vi = abs_out;
-  abs_vi.name = "abs_out";
-  Tensor relu_vi = abs_out;
-  relu_vi.name = "relu_out";
-  Tensor double_vi = double_out;
-  double_vi.name = "double_out";
-  Tensor mul_vi = mul_out;
-  mul_vi.name = "mul_out";
-  FillValueInfo(abs_vi, *graph->add_value_info());
-  FillValueInfo(relu_vi, *graph->add_value_info());
-  FillValueInfo(double_vi, *graph->add_value_info());
-  FillValueInfo(mul_vi, *graph->add_value_info());
+  AppendValueInfo(*graph->add_value_info(), "abs_out", kFloat, symbolic_input_shape);
+  AppendValueInfo(*graph->add_value_info(), "relu_out", kFloat, symbolic_input_shape);
+  AppendValueInfo(*graph->add_value_info(), "double_out", kFloat, symbolic_input_shape);
+  AppendValueInfo(*graph->add_value_info(), "mul_out", kFloat, symbolic_input_shape);
 
   // Graph outputs: nz and nz_float. The rank dimension is always known
   // (equal to the input rank, 2), so it is declared with ``dim_value=2``.
   // The data-dependent ``nnz`` dimension stays symbolic — either named
   // (``"nnz"``/``"do1"``) or anonymous (no dim_param/dim_value).
-  const auto add_value_info_with_dims =
-      [&](ValueInfoProto *vi, const std::string &out_name, int32_t elem_type,
-          const std::vector<std::pair<int64_t, std::string>> &dims) {
-        vi->set_name(out_name);
-        TypeProto *tp = vi->add_type();
-        TypeProto::Tensor *tt = tp->add_tensor_type();
-        tt->set_elem_type(elem_type);
-        TensorShapeProto *shape = tt->add_shape();
-        for (const auto &d : dims) {
-          auto *dim = shape->add_dim();
-          if (d.first >= 0) {
-            dim->set_dim_value(d.first);
-          } else if (!d.second.empty()) {
-            dim->set_dim_param(d.second);
-          }
-          // else: leave the dim unannotated (no dim_value, no dim_param).
-        }
-      };
-  const auto add_output = [&](const std::string &out_name, int32_t elem_type,
-                              const std::vector<std::pair<int64_t, std::string>> &dims) {
-    add_value_info_with_dims(graph->add_output(), out_name, elem_type, dims);
-  };
-
+  //
   // Intermediate value_info for ``nz`` would collide with the graph output of
   // the same name, so it is omitted. ``transposed_nz`` is a pure intermediate
   // and its shape mirrors ``nz_float`` (same dim layout, INT64 dtype).
   if (annotation == NonZeroOutputAnnotation::kNamedDims) {
-    add_value_info_with_dims(graph->add_value_info(), "transposed_nz",
-                             static_cast<int32_t>(DataType::INT64), {{-1, "do1"}, {2, ""}});
-    add_output("nz", static_cast<int32_t>(DataType::INT64), {{2, ""}, {-1, "nnz"}});
-    add_output("nz_float", static_cast<int32_t>(DataType::FLOAT), {{-1, "do1"}, {2, ""}});
+    AppendValueInfo(*graph->add_value_info(), "transposed_nz", kInt64,
+                    {DimSpec("do1"), DimSpec(2)});
+    AppendValueInfo(*graph->add_output(), "nz", kInt64, {DimSpec(2), DimSpec("nnz")});
+    AppendValueInfo(*graph->add_output(), "nz_float", kFloat, {DimSpec("do1"), DimSpec(2)});
   } else {
-    add_value_info_with_dims(graph->add_value_info(), "transposed_nz",
-                             static_cast<int32_t>(DataType::INT64), {{-1, ""}, {2, ""}});
-    add_output("nz", static_cast<int32_t>(DataType::INT64), {{2, ""}, {-1, ""}});
-    add_output("nz_float", static_cast<int32_t>(DataType::FLOAT), {{-1, ""}, {2, ""}});
+    AppendValueInfo(*graph->add_value_info(), "transposed_nz", kInt64, {DimSpec(), DimSpec(2)});
+    AppendValueInfo(*graph->add_output(), "nz", kInt64, {DimSpec(2), DimSpec()});
+    AppendValueInfo(*graph->add_output(), "nz_float", kFloat, {DimSpec(), DimSpec(2)});
   }
 
   // Provide a concrete DataSet so the case is executable end-to-end.

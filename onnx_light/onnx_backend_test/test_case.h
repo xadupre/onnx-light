@@ -66,6 +66,23 @@ void InitModel(ModelProto &model, int64_t ir_version, const std::vector<OpsetId>
                const std::string &producer_name = "backend-test");
 
 /**
+ * Describes one tensor dimension entry used to build a ValueInfoProto.
+ * - ``DimSpec(int64_t v)`` (``v >= 0``): concrete ``dim_value``.
+ * - ``DimSpec("name")`` / ``DimSpec(std::string)``: symbolic ``dim_param``.
+ * - ``DimSpec()``: unannotated dim (neither ``dim_value`` nor ``dim_param``).
+ */
+struct DimSpec {
+  int64_t value = -1;
+  std::string param;
+
+  DimSpec() = default;
+  DimSpec(int v) : value(v) {}
+  DimSpec(int64_t v) : value(v) {}
+  DimSpec(const char *p) : param(p) {}
+  DimSpec(std::string p) : param(std::move(p)) {}
+};
+
+/**
  * Fills ``vi`` with a tensor-typed ValueInfo (``name``, ``elem_type`` and the
  * concrete dimension values from ``shape``). Mirrors the boilerplate every
  * manually-built graph repeats when declaring graph inputs / ``value_info``
@@ -76,6 +93,16 @@ void InitModel(ModelProto &model, int64_t ir_version, const std::vector<OpsetId>
  */
 void AppendValueInfo(ValueInfoProto &vi, const std::string &name, int32_t elem_type,
                      const std::vector<int64_t> &shape);
+
+/**
+ * Overload of :ref:`AppendValueInfo` accepting a mix of concrete
+ * (``DimSpec(int64_t)``), symbolic (``DimSpec("name")``) and unannotated
+ * (``DimSpec()``) dimensions. Used by the shape-inference cases to declare
+ * symbolic ``batch``/``seq``/``d_model``/``nnz`` dims without repeating the
+ * ``TypeProto::Tensor::add_shape()`` + ``add_dim()`` boilerplate.
+ */
+void AppendValueInfo(ValueInfoProto &vi, const std::string &name, int32_t elem_type,
+                     const std::vector<DimSpec> &dims);
 
 /**
  * Appends a new ``DataSet`` to ``tc.data_sets`` populated with the given

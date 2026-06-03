@@ -4,7 +4,7 @@
 
 #include "onnx_backend_test/test_case.h"
 
-#include "onnx_backend_test/cases/cases_for_shape_inference/include_shape_inference_cases.h"
+#include "onnx_backend_test/cases/cases_for_shapes/shape_inference/include_shape_inference_cases.h"
 #include "onnx_backend_test/cases/controlflow/include_controlflow_cases.h"
 #include "onnx_backend_test/cases/generator/include_generator_cases.h"
 #include "onnx_backend_test/cases/logical/include_logical_cases.h"

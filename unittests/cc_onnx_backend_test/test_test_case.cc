@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_backend_test/cases/cases_for_shape_inference/include_shape_inference_cases.h"
 #include "onnx_backend_test/cases/controlflow/include_controlflow_cases.h"
 #include "onnx_backend_test/cases/generator/include_generator_cases.h"
 #include "onnx_backend_test/cases/logical/include_logical_cases.h"
@@ -243,13 +244,18 @@ TEST(BackendTestCase, PerSubfolderCollectorsAggregateIntoMain) {
   onnx_backend_test::CollectEmptyShapeTestCases(empty_shape_only);
   EXPECT_FALSE(empty_shape_only.empty());
 
+  std::vector<TestCase> shape_inference_only;
+  onnx_backend_test::CollectShapeInferenceTestCases(shape_inference_only);
+  EXPECT_FALSE(shape_inference_only.empty());
+
   const auto all = CollectTestCases();
   EXPECT_EQ(all.size(), math_only.size() + logical_only.size() + tensor_only.size() +
                             controlflow_only.size() + generator_only.size() +
                             object_detection_only.size() + optional_only.size() +
                             preview_only.size() + quantization_only.size() + reduction_only.size() +
                             sequence_only.size() + text_only.size() + traditionalml_only.size() +
-                            training_only.size() + nn_only.size() + empty_shape_only.size());
+                            training_only.size() + nn_only.size() + empty_shape_only.size() +
+                            shape_inference_only.size());
 }
 
 TEST(BackendTestCase, CollectTestCasesFilterByOpTypeKeepsOnlyMatchingOps) {

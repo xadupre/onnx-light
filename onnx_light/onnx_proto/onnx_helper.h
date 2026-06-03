@@ -305,6 +305,26 @@ NodeProto MakeNode(const char *op_type, const std::vector<std::string> &inputs,
                    const char *name = nullptr);
 
 /**
+ * Appends a new node to ``graph`` with the given ``op_type``, input and output
+ * names, and optional ``domain`` / ``name``, and returns a reference to the
+ * newly added node. This is a thin convenience wrapper combining
+ * :ref:`MakeNode` with ``graph.add_node()``; use it instead of
+ * ``*graph.add_node() = MakeNode(...)`` when subsequent code needs to attach
+ * attributes to the node.
+ *
+ * @param  graph   Graph to append the node to.
+ * @param  op_type Operator type (e.g. ``"Conv"``).
+ * @param  inputs  Input names, appended in order.
+ * @param  outputs Output names, appended in order.
+ * @param  domain  Optional operator domain.
+ * @param  name    Optional node name.
+ * @return Reference to the newly added node, owned by ``graph``.
+ */
+NodeProto &AddNode(GraphProto &graph, const char *op_type, const std::vector<std::string> &inputs,
+                   const std::vector<std::string> &outputs, const char *domain = nullptr,
+                   const char *name = nullptr);
+
+/**
  * Appends a single FLOAT attribute (``name`` -> ``value``) to ``proto``.
  *
  * Works with any ONNX proto exposing an ``add_attribute`` member that returns
@@ -321,6 +341,23 @@ inline void AddFloatAttribute(ProtoT &proto, const char *name, float value) {
   attr->set_name(name);
   attr->set_type(AttributeProto::AttributeType::FLOAT);
   attr->set_f(value);
+}
+
+/**
+ * Appends the canonical ``axis`` INT attribute to ``node``. Shorthand for the
+ * ``axis``-INT attribute that virtually every ONNX op exposing an axis uses
+ * (``Concat``, ``Softmax``, ``Gather``, ``Split``, ...). Equivalent
+ * to ``AddAttribute<int64_t>(node, "axis", axis)``.
+ *
+ * @param node Target node.
+ * @param axis Axis value (may be negative; the caller is responsible for
+ *             passing a valid range for the target op).
+ */
+inline void AddAxisAttribute(NodeProto &node, int64_t axis) {
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name("axis");
+  attr->set_type(AttributeProto::AttributeType::INT);
+  attr->set_i(axis);
 }
 
 /////////////

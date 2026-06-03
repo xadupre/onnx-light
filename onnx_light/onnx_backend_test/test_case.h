@@ -57,6 +57,63 @@ struct TestCase {
 };
 
 /**
+ * Initializes ``model`` with ``ir_version``, ``producer_name`` and the given
+ * ``opset_imports`` (default ai.onnx domain when an entry's ``domain`` is
+ * empty). Mirrors the boilerplate that opens every manually-built backend
+ * test case model so callers don't have to repeat it.
+ */
+void InitModel(ModelProto &model, int64_t ir_version, const std::vector<OpsetId> &opset_imports,
+               const std::string &producer_name = "backend-test");
+
+/**
+ * Describes one tensor dimension entry used to build a ValueInfoProto.
+ * - ``DimSpec(int64_t v)`` (``v >= 0``): concrete ``dim_value``.
+ * - ``DimSpec("name")`` / ``DimSpec(std::string)``: symbolic ``dim_param``.
+ * - ``DimSpec()``: unannotated dim (neither ``dim_value`` nor ``dim_param``).
+ */
+struct DimSpec {
+  int64_t value = -1;
+  std::string param;
+
+  DimSpec() = default;
+  DimSpec(int v) : value(v) {}
+  DimSpec(int64_t v) : value(v) {}
+  DimSpec(const char *p) : param(p) {}
+  DimSpec(std::string p) : param(std::move(p)) {}
+};
+
+/**
+ * Fills ``vi`` with a tensor-typed ValueInfo (``name``, ``elem_type`` and the
+ * concrete dimension values from ``shape``). Mirrors the boilerplate every
+ * manually-built graph repeats when declaring graph inputs / ``value_info``
+ * / outputs for which a literal shape is already known (e.g. the gallery
+ * shapes used by the shape-inference cases). For Tensor-backed metadata see
+ * the ``FillValueInfo(const Tensor&, ValueInfoProto&)`` overload in
+ * ``simple_tensor.h``.
+ */
+void AppendValueInfo(ValueInfoProto &vi, const std::string &name, int32_t elem_type,
+                     const std::vector<int64_t> &shape);
+
+/**
+ * Overload of :ref:`AppendValueInfo` accepting a mix of concrete
+ * (``DimSpec(int64_t)``), symbolic (``DimSpec("name")``) and unannotated
+ * (``DimSpec()``) dimensions. Used by the shape-inference cases to declare
+ * symbolic ``batch``/``seq``/``d_model``/``nnz`` dims without repeating the
+ * ``TypeProto::Tensor::add_shape()`` + ``add_dim()`` boilerplate.
+ */
+void AppendValueInfo(ValueInfoProto &vi, const std::string &name, int32_t elem_type,
+                     const std::vector<DimSpec> &dims);
+
+/**
+ * Appends a new ``DataSet`` to ``tc.data_sets`` populated with the given
+ * ``inputs`` and ``outputs``. Saves the
+ * ``DataSet ds; ds.inputs.push_back(...); ds.outputs.push_back(...);
+ * tc.data_sets.emplace_back(std::move(ds));`` boilerplate that every
+ * manually-built TestCase otherwise repeats.
+ */
+void AppendDataSet(TestCase &tc, std::vector<Tensor> inputs, std::vector<Tensor> outputs);
+
+/**
  * Builds a single-node ``ModelProto`` from ``node`` and the provided typed
  * inputs/outputs, then appends a ``TestCase`` to ``registry``.
  *

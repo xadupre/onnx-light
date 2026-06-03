@@ -453,6 +453,36 @@ void ComputeShapeGridSample(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeNonZero(ShapesContext &ctx, const NodeProto &node);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` entries of a ``Unique`` node
+ * and stores them in ``ctx``.
+ *
+ * ``Unique`` (opset 11) returns up to four outputs (``Y``, ``indices``,
+ * ``inverse_indices``, ``counts``). All optional outputs are 1-D
+ * :cpp:enum:`TensorType::kInt64` tensors of an unknown length. ``Y`` matches
+ * the dtype of the input:
+ *
+ * - when the ``axis`` attribute is not provided the input is flattened and
+ *   ``Y`` is 1-D with an unknown length;
+ * - when ``axis`` is provided ``Y`` has the same rank and shape as the input
+ *   except along ``axis``, whose dimension is symbolic.
+ *
+ * Optional outputs declared as the empty string in ``node.output`` are
+ * skipped.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``node.input(0)``. On return it also contains entries for
+ *              every non-empty entry in ``node.output``.
+ * @param node  The ``Unique`` ``NodeProto`` whose outputs should be
+ *              described. ``node.op_type()`` must be ``"Unique"``,
+ *              ``node`` must declare one input and at least one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Unique"``,
+ *         if ``node`` has no input or output, or if ``axis`` is out of range.
+ * @throws std::out_of_range     if the input name is missing from ``ctx``.
+ */
+void ComputeShapeUnique(ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``Shape`` node and stores
  * it in ``ctx``.
  *

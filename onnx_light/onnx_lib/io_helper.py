@@ -21,10 +21,16 @@ def _find_external_location(model_path: str) -> str:
     found inside node attributes) for the first ``location`` entry in their
     ``external_data`` metadata.
 
+    The discovered location is validated against path traversal and symlink
+    escape before being returned.
+
     :param model_path: Absolute or relative path to the ``.onnx`` model file.
     :return: Absolute path to the primary external data file, or ``""`` if no
         external data references are found.
+    :raises ValueError: If the location would escape the model directory.
     """
+    from ._path_security import validate_external_data_path
+
     struct_model = ModelProto()
     struct_model.ParseFromFile(model_path)
     model_dir = os.path.dirname(os.path.abspath(model_path))
@@ -43,7 +49,7 @@ def _find_external_location(model_path: str) -> str:
                 for j in range(len(init.external_data)):
                     entry = init.external_data[j]
                     if entry.key == "location" and entry.value:
-                        return os.path.join(model_dir, entry.value)
+                        return validate_external_data_path(str(entry.value), model_dir)
         for i in range(len(graph.node)):
             node = graph.node[i]
             for j in range(len(node.attribute)):
@@ -123,6 +129,12 @@ def save(
     if save_as_external_data or location:
         if location is None:
             location = str(f) + ".data"
+        # Validate that the external data location does not escape the model
+        # directory via path traversal (CVE-2025-51480).
+        from ._path_security import validate_external_data_path
+
+        model_dir = os.path.dirname(os.path.abspath(str(f)))
+        validate_external_data_path(location, model_dir, allow_absolute=os.path.isabs(location))
         opts = SerializeOptions()
         opts.raw_data_threshold = size_threshold
         opts.num_threads = num_threads

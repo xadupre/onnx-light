@@ -1,7 +1,6 @@
 # source: https://github.com/onnx/onnx/blob/main/onnx/numpy_helper.py
 from __future__ import annotations
 
-import os
 import sys
 from typing import TYPE_CHECKING, Any
 
@@ -194,10 +193,18 @@ def _pack_2bitx4(array: np.ndarray) -> npt.NDArray[np.uint8]:
 def _load_external_data_for_tensor(tensor: TensorProto, base_dir: str) -> None:
     """Loads data from an external file into tensor.raw_data.
 
+    Validates that the external data path does not escape *base_dir* via
+    path traversal or symlink indirection before reading the file.
+
     Args:
         tensor: a TensorProto object whose external_data field describes the file.
         base_dir: directory that contains the external data file.
+
+    Raises:
+        ValueError: If the location escapes the base directory.
     """
+    from ._path_security import validate_external_data_path
+
     location = ""
     offset: int | None = None
     length: int | None = None
@@ -211,7 +218,7 @@ def _load_external_data_for_tensor(tensor: TensorProto, base_dir: str) -> None:
         elif key == "length":
             length = int(value)
 
-    data_path = os.path.join(base_dir, location)
+    data_path = validate_external_data_path(location, base_dir)
     with open(data_path, "rb") as data_file:
         if offset is not None:
             data_file.seek(offset)

@@ -19,6 +19,7 @@
 #include "onnx_backend_test/cases/text/include_text_cases.h"
 #include "onnx_backend_test/cases/traditionalml/include_traditionalml_cases.h"
 #include "onnx_backend_test/cases/training/include_training_cases.h"
+#include "onnx_backend_test/cases_for_shapes/empty_shape/include_empty_shape_cases.h"
 
 #include <stdexcept>
 
@@ -141,6 +142,7 @@ std::vector<TestCase> CollectTestCases(const std::string &op_type) {
   CollectTextTestCases(registry, op_type);
   CollectTraditionalMLTestCases(registry, op_type);
   CollectTrainingTestCases(registry, op_type);
+  CollectEmptyShapeTestCases(registry, op_type);
   return registry;
 }
 

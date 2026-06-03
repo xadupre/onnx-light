@@ -47,12 +47,12 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
       .def_rw("inputs", &DataSet::inputs)
       .def_rw("outputs", &DataSet::outputs);
 
-  // ``ModelProto`` is exposed by the sibling ``_onnxpyproto`` extension.
+  // ``ModelProto`` is exposed by the sibling ``_onnxpyprotoop`` extension.
   // Because ``lib_onnx_proto`` is a shared library linked by both extensions
   // (see CMakeLists.txt), the ``&typeid(ModelProto)`` resolved here is the
-  // same as the one used by ``_onnxpyproto`` and nanobind's cross-module
+  // same as the one used by ``_onnxpyprotoop`` and nanobind's cross-module
   // type registry finds the existing ``nb::class_<ModelProto>`` binding
-  // automatically. Callers must therefore have imported ``_onnxpyproto``
+  // automatically. Callers must therefore have imported ``_onnxpyprotoop``
   // before accessing ``TestCase.model``; the package ``_onnxpy.py`` shim
   // guarantees that ordering.
   nb::class_<TestCase>(bt_mod, "TestCase",
@@ -68,7 +68,7 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
           "model", [](TestCase &tc) -> ModelProto & { return tc.model; },
           nb::rv_policy::reference_internal,
           "Returns the ``ModelProto`` of this test case, resolved against the "
-          "binding registered by ``_onnxpyproto``.");
+          "binding registered by ``_onnxpyprotoop``.");
 
   bt_mod.def(
       "collect_test_cases",

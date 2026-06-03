@@ -14,6 +14,16 @@ namespace ONNX_LIGHT_NAMESPACE {
  * Saves and loads ONNX ModelProto objects as single, AES-256-CBC encrypted
  * binary files.
  *
+ * @warning **Security limitation**: The current format (ONNXCRY1) uses
+ * AES-256-CBC without a Message Authentication Code (MAC).  This means
+ * encrypted payloads are malleable — an attacker who can modify the
+ * ciphertext can tamper with the decrypted output without detection.
+ * A future format revision (ONNXCRY2) should use an authenticated
+ * encryption mode (e.g. AES-256-GCM) to provide integrity guarantees.
+ * Until then, callers should verify model integrity via an external
+ * mechanism (e.g. HMAC signature, content hash) when loading models
+ * from untrusted sources.
+ *
  * ### File format
  *
  * ```

@@ -143,6 +143,7 @@ void read_field(utils::BinaryStream &stream, int wire_type, std::vector<uint8_t>
   EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
               name, "' at position '", stream.tell_around(), "'");
   uint64_t len = stream.next_uint64();
+  stream.CanRead(len, "[read_field<vector<uint8_t>>] length exceeds stream bounds");
   field.resize(len);
   stream.read_bytes(len, field.data());
 }
@@ -153,6 +154,7 @@ void read_field(utils::BinaryStream &stream, int wire_type, utils::ByteSpan &fie
   EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
               name, "' at position '", stream.tell_around(), "'");
   uint64_t len = stream.next_uint64();
+  stream.CanRead(len, "[read_field<ByteSpan>] length exceeds stream bounds");
   field.resize(len);
   stream.read_bytes(len, field.data());
 }
@@ -166,6 +168,7 @@ void read_field_limit_parallel(utils::BinaryStream &stream, int wire_type,
     EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
                 name, "' at position '", stream.tell_around(), "'");
     uint64_t len = stream.next_uint64();
+    stream.CanRead(len, "[read_field_limit_parallel] length exceeds stream bounds");
     if (!options.skip_raw_data || static_cast<int64_t>(len) < options.raw_data_threshold) {
       field.resize(len);
       if (options.is_parallel() && static_cast<int64_t>(len) >= options.min_parallel_block_size) {
@@ -204,6 +207,7 @@ void read_field_limit_parallel_nc(utils::BinaryStream &stream, int wire_type,
   EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
               name, "' at position '", stream.tell_around(), "'");
   uint64_t len = stream.next_uint64();
+  stream.CanRead(len, "[read_field_limit_parallel_nc] length exceeds stream bounds");
   if (!options.skip_raw_data || static_cast<int64_t>(len) < options.raw_data_threshold) {
     if (use_zero_copy) {
       if (options.alignment > 1) {
@@ -352,6 +356,7 @@ void read_repeated_field_packed_numerical_float(utils::BinaryStream &stream, int
   EXT_ENFORCE(size % sizeof(T) == 0, "unexpected size ", size, ", it is not a multiple of sizeof(",
               typeid(T).name(), ") for field '", name, "' at position '", stream.tell_around(),
               "'");
+  stream.CanRead(size, "[read_repeated_field_packed_numerical_float] length exceeds stream bounds");
   size /= sizeof(T);
   field.resize(size);
   // Bulk read: a single read_bytes call replaces per-element virtual dispatch.
@@ -371,6 +376,7 @@ void read_repeated_field_packed_numerical_int(utils::BinaryStream &stream, int w
               name, "' at position '", stream.tell_around(), "'");
 
   uint64_t length = stream.next_uint64();
+  stream.CanRead(length, "[read_repeated_field_packed_numerical_int] length exceeds stream bounds");
   // Each varint encodes at least 1 byte, so `length` is a strict upper bound
   // on the element count. Pre-reserving avoids the O(log n) reallocations
   // a plain push_back loop would cause on large packed tensors (shapes,

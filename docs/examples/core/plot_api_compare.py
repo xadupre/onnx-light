@@ -36,9 +36,12 @@ Finally, it lists the ONNX node-level backend tests (exposed by
 from __future__ import annotations
 
 import onnx
+import onnx.backend.base
 import onnx.inliner  # noqa: F401  -- ensure the inliner sub-module is bound on ``onnx``
-import onnx_light.onnx as onnxl
+from onnx.backend.test import BackendTest
 
+import onnx_light.onnx as onnxl
+from onnx_light.backend.test.case.base import collect_test_case
 from onnx_light.compatibility import DEFAULT_SUBMODULES, compare_packages
 
 #####################################
@@ -158,11 +161,6 @@ print(f"  total signature mismatches : {total_diffs}")
 # lists the ONNX node-level backend tests that do **not** yet have a
 # counterpart in :mod:`onnx_light` (i.e. there is no ``onnx_light``
 # backend test whose name contains the stripped ONNX test name).
-
-import onnx.backend.base  # noqa: E402
-from onnx.backend.test import BackendTest  # noqa: E402
-
-from onnx_light.backend.test.case.base import collect_test_case  # noqa: E402
 
 
 class _DummyBackend(onnx.backend.base.Backend):

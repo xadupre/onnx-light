@@ -83,6 +83,41 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Element-wise ``IsNaN``: returns a BOOL tensor with the same shape as the
+/// input, where each element is ``true`` iff the corresponding input value
+/// is NaN. Mirrors the upstream ONNX ``IsNaN`` reference implementation
+/// (``np.isnan``). Only the FLOAT input dtype is supported.
+class IsNaN : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x) const;
+  void operator()(const Tensor &x, Tensor &output) const;
+
+  /// Input is FLOAT (4 bytes/elt) and output is BOOL (1 byte/elt), so the
+  /// output buffer cannot alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Element-wise ``IsInf``: returns a BOOL tensor with the same shape as the
+/// input, where each element is ``true`` iff the corresponding input value
+/// is +/- infinity. The two boolean attributes ``detect_positive`` and
+/// ``detect_negative`` (both default to 1) toggle whether +inf and -inf
+/// are reported respectively. Mirrors the upstream ONNX ``IsInf`` reference
+/// implementation (``np.isinf`` / ``np.isposinf`` / ``np.isneginf``). Only
+/// the FLOAT input dtype is supported.
+class IsInf : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x, int64_t detect_positive = 1,
+                    int64_t detect_negative = 1) const;
+  void operator()(const Tensor &x, int64_t detect_positive, int64_t detect_negative,
+                  Tensor &output) const;
+
+  /// Input is FLOAT (4 bytes/elt) and output is BOOL (1 byte/elt), so the
+  /// output buffer cannot alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Element-wise ``Greater`` comparison with multidirectional broadcasting.
 /// Inputs may be FLOAT, INT8, INT16, UINT8, UINT16, UINT32 or UINT64 (both
 /// inputs must share the same dtype); the output is BOOL (one byte per

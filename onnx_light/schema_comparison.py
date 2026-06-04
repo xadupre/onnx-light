@@ -115,6 +115,8 @@ ONNX_OPTIM_SHAPE_INFERENCE_OPS: frozenset[tuple[str, str]] = frozenset(
         ("ai.onnx", "Identity"),
         ("ai.onnx", "ImageDecoder"),
         ("ai.onnx", "InstanceNormalization"),
+        ("ai.onnx", "IsInf"),
+        ("ai.onnx", "IsNaN"),
         ("ai.onnx", "Less"),
         ("ai.onnx", "Loop"),
         ("ai.onnx", "Log"),

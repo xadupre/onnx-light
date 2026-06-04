@@ -44,6 +44,12 @@ void RegisterWhereCases(std::vector<TestCase> &registry);
 /// Registers the ``Not`` backend test node case(s).
 void RegisterNotCases(std::vector<TestCase> &registry);
 
+/// Registers the ``IsNaN`` backend test node case(s).
+void RegisterIsNaNCases(std::vector<TestCase> &registry);
+
+/// Registers the ``IsInf`` backend test node case(s).
+void RegisterIsInfCases(std::vector<TestCase> &registry);
+
 /// Registers the ``BitwiseAnd`` backend test node case(s).
 void RegisterBitwiseAndCases(std::vector<TestCase> &registry);
 

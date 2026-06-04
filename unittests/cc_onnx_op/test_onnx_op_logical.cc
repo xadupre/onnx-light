@@ -48,8 +48,48 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
       onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory("Not");
   const std::vector<onnx_op::logical::LightOpSchema> where_schemas =
       onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory("Where");
+  const std::vector<onnx_op::logical::LightOpSchema> isnan_schemas =
+      onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory("IsNaN");
+  const std::vector<onnx_op::logical::LightOpSchema> isinf_schemas =
+      onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory("IsInf");
 
-  EXPECT_EQ(schemas.size(), 29u);
+  EXPECT_EQ(schemas.size(), 34u);
+
+  // IsNaN: v9, v13, v20.
+  ASSERT_EQ(isnan_schemas.size(), 3u);
+  const onnx_op::logical::LightOpSchema *const isnan_v9 = FindByVersion(isnan_schemas, 9);
+  const onnx_op::logical::LightOpSchema *const isnan_v13 = FindByVersion(isnan_schemas, 13);
+  const onnx_op::logical::LightOpSchema *const isnan_v20 = FindByVersion(isnan_schemas, 20);
+  ASSERT_NE(nullptr, isnan_v9);
+  ASSERT_NE(nullptr, isnan_v13);
+  ASSERT_NE(nullptr, isnan_v20);
+  EXPECT_EQ(isnan_v20->domain(), "ai.onnx");
+  ASSERT_EQ(isnan_v20->inputs().size(), 1u);
+  EXPECT_EQ(isnan_v20->inputs()[0].name, "X");
+  ASSERT_EQ(isnan_v20->outputs().size(), 1u);
+  EXPECT_EQ(isnan_v20->outputs()[0].name, "Y");
+  ASSERT_EQ(isnan_v20->type_constraints().size(), 2u);
+  EXPECT_EQ(isnan_v20->type_constraints()[0].type_param_str, "T1");
+  EXPECT_EQ(isnan_v20->type_constraints()[1].type_param_str, "T2");
+  ASSERT_EQ(isnan_v20->type_constraints()[1].allowed_type_strs.size(), 1u);
+  EXPECT_EQ(isnan_v20->type_constraints()[1].allowed_type_strs[0], onnx_op::TensorType::kBool);
+  EXPECT_TRUE(isnan_v20->attributes().empty());
+
+  // IsInf: v10, v20.
+  ASSERT_EQ(isinf_schemas.size(), 2u);
+  const onnx_op::logical::LightOpSchema *const isinf_v10 = FindByVersion(isinf_schemas, 10);
+  const onnx_op::logical::LightOpSchema *const isinf_v20 = FindByVersion(isinf_schemas, 20);
+  ASSERT_NE(nullptr, isinf_v10);
+  ASSERT_NE(nullptr, isinf_v20);
+  ASSERT_EQ(isinf_v20->outputs().size(), 1u);
+  ASSERT_EQ(isinf_v20->type_constraints().size(), 2u);
+  EXPECT_EQ(isinf_v20->type_constraints()[1].allowed_type_strs[0], onnx_op::TensorType::kBool);
+  ASSERT_EQ(isinf_v20->attributes().size(), 2u);
+  EXPECT_EQ(isinf_v20->attributes()[0].name, "detect_positive");
+  EXPECT_EQ(isinf_v20->attributes()[1].name, "detect_negative");
+  EXPECT_EQ(isinf_v20->attributes()[0].type, onnx_op::AttributeType::INT);
+  EXPECT_FALSE(isinf_v20->attributes()[0].required);
+  EXPECT_FALSE(isinf_v20->attributes()[1].required);
 
   const onnx_op::logical::LightOpSchema *const and_v7 = FindByVersion(and_schemas, 7);
   const onnx_op::logical::LightOpSchema *const and_v1 = FindByVersion(and_schemas, 1);

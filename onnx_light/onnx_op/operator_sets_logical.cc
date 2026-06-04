@@ -282,6 +282,120 @@ std::vector<LightOpSchema> BuildBitwiseNotSchemas() {
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildIsNaNSchemas() {
+  static constexpr const char *kIsNaNDoc = R"DOC(Returns which elements of the input are NaN.)DOC";
+  // ``IsNaN`` v20 widens the input dtype set to every IR-9 float type
+  // (adds ``float8e*``). v13 added ``bfloat16``; v9 only accepted the
+  // three legacy float types.
+  static const std::vector<TensorType> kIsNaNTypesV20 = {
+      TensorType::kBfloat16,   TensorType::kFloat16,        TensorType::kFloat,
+      TensorType::kDouble,     TensorType::kFloat8e4m3fn,   TensorType::kFloat8e4m3fnuz,
+      TensorType::kFloat8e5m2, TensorType::kFloat8e5m2fnuz,
+  };
+  static const std::vector<TensorType> kIsNaNTypesV13 = {
+      TensorType::kFloat16,
+      TensorType::kFloat,
+      TensorType::kDouble,
+      TensorType::kBfloat16,
+  };
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(3);
+  schemas.push_back(
+      LightOpSchema("IsNaN", kOnnxDomain, 20, kIsNaNDoc,
+                    {
+                        {"X", "input", "T1"},
+                    },
+                    {
+                        {"Y", "output", "T2"},
+                    },
+                    {
+                        {"T1", kIsNaNTypesV20, "Constrain input types to float tensors."},
+                        {"T2", {TensorType::kBool}, "Constrain output types to boolean tensors."},
+                    }));
+  schemas.push_back(
+      LightOpSchema("IsNaN", kOnnxDomain, 13, kIsNaNDoc,
+                    {
+                        {"X", "input", "T1"},
+                    },
+                    {
+                        {"Y", "output", "T2"},
+                    },
+                    {
+                        {"T1", kIsNaNTypesV13, "Constrain input types to float tensors."},
+                        {"T2", {TensorType::kBool}, "Constrain output types to boolean tensors."},
+                    }));
+  schemas.push_back(
+      LightOpSchema("IsNaN", kOnnxDomain, 9, kIsNaNDoc,
+                    {
+                        {"X", "input", "T1"},
+                    },
+                    {
+                        {"Y", "output", "T2"},
+                    },
+                    {
+                        {"T1", FloatTypes(), "Constrain input types to float tensors."},
+                        {"T2", {TensorType::kBool}, "Constrain output types to boolean tensors."},
+                    }));
+  return schemas;
+}
+
+std::vector<LightOpSchema> BuildIsInfSchemas() {
+  static constexpr const char *kIsInfDoc =
+      R"DOC(Map infinity to true and other values to false.)DOC";
+  // ``IsInf`` v20 widens the input dtype set to every IR-9 float type;
+  // v10 only accepted ``float`` and ``double``.
+  static const std::vector<TensorType> kIsInfTypesV20 = {
+      TensorType::kBfloat16,   TensorType::kFloat16,        TensorType::kFloat,
+      TensorType::kDouble,     TensorType::kFloat8e4m3fn,   TensorType::kFloat8e4m3fnuz,
+      TensorType::kFloat8e5m2, TensorType::kFloat8e5m2fnuz,
+  };
+  static const std::vector<TensorType> kIsInfTypesV10 = {
+      TensorType::kFloat,
+      TensorType::kDouble,
+  };
+  const std::vector<AttributeParam> kIsInfAttributes = {
+      {"detect_positive",
+       "(Optional) Whether map positive infinity to true. Default to 1 "
+       "so that positive infinity induces true. Set this attribute to 0 "
+       "if positive infinity should be mapped to false.",
+       AttributeType::INT, /*required=*/false, static_cast<int64_t>(1)},
+      {"detect_negative",
+       "(Optional) Whether map negative infinity to true. Default to 1 "
+       "so that negative infinity induces true. Set this attribute to 0 "
+       "if negative infinity should be mapped to false.",
+       AttributeType::INT, /*required=*/false, static_cast<int64_t>(1)},
+  };
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(2);
+  schemas.push_back(
+      LightOpSchema("IsInf", kOnnxDomain, 20, kIsInfDoc,
+                    {
+                        {"X", "input", "T1"},
+                    },
+                    {
+                        {"Y", "output", "T2"},
+                    },
+                    {
+                        {"T1", kIsInfTypesV20, "Constrain input types to float tensors."},
+                        {"T2", {TensorType::kBool}, "Constrain output types to boolean tensors."},
+                    },
+                    kIsInfAttributes));
+  schemas.push_back(
+      LightOpSchema("IsInf", kOnnxDomain, 10, kIsInfDoc,
+                    {
+                        {"X", "input", "T1"},
+                    },
+                    {
+                        {"Y", "output", "T2"},
+                    },
+                    {
+                        {"T1", kIsInfTypesV10, "Constrain input types to float tensors."},
+                        {"T2", {TensorType::kBool}, "Constrain output types to boolean tensors."},
+                    },
+                    kIsInfAttributes));
+  return schemas;
+}
+
 std::vector<LightOpSchema> BuildBitShiftSchemas() {
   // BitShift (opset 11): two integer inputs (unsigned dtypes) with
   // multidirectional broadcasting and a required ``direction`` string
@@ -328,6 +442,8 @@ std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory(const std::stri
       {"Equal", [] { return BuildEqualSchemas(); }},
       {"Greater", [] { return BuildGreaterLessSchemas("Greater"); }},
       {"GreaterOrEqual", [] { return BuildGreaterLessOrEqualSchemas("GreaterOrEqual"); }},
+      {"IsInf", [] { return BuildIsInfSchemas(); }},
+      {"IsNaN", [] { return BuildIsNaNSchemas(); }},
       {"Less", [] { return BuildGreaterLessSchemas("Less"); }},
       {"Not",
        [] {

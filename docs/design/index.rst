@@ -49,3 +49,14 @@ a huge package to publish.
     backend_tests
     test_coverage
     runtime_coverage
+
+A set of `atheris`-based Python fuzz targets exercises the public API
+surface (loader, checker, parser, shape inference, version converter)
+from random inputs. They are driven by OSS-Fuzz for long-running
+campaigns and by a short CI smoke workflow.
+
+.. toctree::
+    :caption: Fuzzing
+    :maxdepth: 1
+
+    fuzz

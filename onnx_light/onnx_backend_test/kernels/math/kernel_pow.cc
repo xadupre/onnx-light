@@ -81,7 +81,8 @@ void PowLoop(const detail::BroadcastInfo &bi, const TBase *px, const TExp *py, T
 // Compute broadcast shape/strides without enforcing that ``x`` and ``y`` share
 // a dtype. ``Pow`` is the only element-wise binary kernel in the backend test
 // library whose two inputs may have different dtypes, so the standard
-// :cpp:func:`detail::CheckBinaryBroadcast(InOut)` helpers (which require
+// :cpp:func:`detail::CheckBinaryBroadcast` / :cpp:func:`detail::CheckBinaryBroadcastInOut`
+// helpers (which require
 // ``x.data_type == y.data_type``) cannot be used.
 detail::BroadcastInfo BroadcastShape(const Tensor &x, const Tensor &y) {
   const size_t rank = x.shape.size() > y.shape.size() ? x.shape.size() : y.shape.size();

@@ -325,6 +325,30 @@ void ComputeShapeTile(ShapesContext &ctx, const NodeProto &node);
  */
 void ComputeShapeUpsample(ShapesContext &ctx, const NodeProto &node);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Resize`` node and stores
+ * it in ``ctx``.
+ *
+ * ``Resize`` (since opset 10 in the ``ai.onnx`` domain) accepts a runtime
+ * ``scales`` or ``sizes`` input that selects the output shape. Three schema
+ * layouts are supported:
+ *
+ * - v10: inputs ``(X, scales)`` -- ``scales`` is a 1-D FLOAT tensor (one
+ *   entry per input axis).
+ * - v11 / v13: inputs ``(X, roi, scales, sizes)`` -- ``roi`` and either
+ *   ``scales`` or ``sizes`` can be omitted via empty-string input names.
+ * - v18 / v19: same as v11/v13 but with optional ``axes`` /
+ *   ``keep_aspect_ratio_policy`` attributes.
+ *
+ * The output dtype always matches the input dtype (type constraint ``T1``)
+ * and the output rank equals the input rank. Per-axis output dims are
+ * computed concretely when both the corresponding input dim and the
+ * ``sizes`` constant are statically known (data-propagation lattice only
+ * carries integer shape values, so ``scales`` -- a FLOAT input -- always
+ * leaves dims symbolic).
+ */
+void ComputeShapeResize(ShapesContext &ctx, const NodeProto &node);
+
 void ComputeShapeTranspose(ShapesContext &ctx, const NodeProto &node);
 
 /**

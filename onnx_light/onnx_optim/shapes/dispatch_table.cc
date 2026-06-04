@@ -713,6 +713,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          tensor::ComputeShapeUpsample(ctx, node);
        }},
+      {"ai.onnx:Resize",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         tensor::ComputeShapeResize(ctx, node);
+       }},
       {"ai.onnx:NonZero",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

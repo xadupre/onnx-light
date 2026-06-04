@@ -289,6 +289,33 @@ std::string MakeUpsampleDoc(int since_version);
 std::string MakeUpsampleTypeConstraintDescription(int since_version);
 
 /**
+ * Returns the documentation string for the Resize operator at the given opset
+ * version.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the Resize operator.
+ */
+std::string MakeResizeDoc(int since_version);
+
+/**
+ * Returns the type-constraint description for the Resize ``T1`` type parameter
+ * (input ``X`` and output ``Y``) at the given opset version.
+ *
+ * @param since_version Opset version for which to generate the description.
+ * @return Type-constraint description string for the Resize input/output.
+ */
+std::string MakeResizeT1TypeConstraintDescription(int since_version);
+
+/**
+ * Returns the type-constraint description for the Resize ``T2`` type parameter
+ * (input ``roi``) at the given opset version.
+ *
+ * @param since_version Opset version for which to generate the description.
+ * @return Type-constraint description string for the Resize ``roi`` input.
+ */
+std::string MakeResizeT2TypeConstraintDescription(int since_version);
+
+/**
  * Returns the documentation string for the Transpose operator at the given
  * opset version.
  *

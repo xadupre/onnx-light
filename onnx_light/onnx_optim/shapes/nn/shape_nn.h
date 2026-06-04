@@ -123,6 +123,27 @@ void ComputeShapeFlatten(ShapesContext &ctx, const NodeProto &node, const char *
 void ComputeShapeLRN(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of an ``LpNormalization`` node
+ * and stores it in ``ctx``.
+ *
+ * The output dtype and shape match the input dtype and shape. The input must
+ * have rank ``>= 1``.
+ *
+ * @param ctx   In/out context. Must already contain an entry for ``x``;
+ *              on return it also contains an entry for ``node.output(0)``.
+ * @param node  The ``LpNormalization`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"LpNormalization"`` and
+ *              ``node`` must declare at least one output.
+ * @param x     Name of the input value to read from ``ctx``. Must be
+ *              present in ``ctx``.
+ *
+ * @throws std::invalid_argument if the input has rank 0 or if ``node`` has
+ *         no output.
+ * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
+ */
+void ComputeShapeLpNormalization(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``BatchNormalization``
  * node and stores it in ``ctx``.
  *

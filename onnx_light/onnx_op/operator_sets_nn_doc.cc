@@ -692,6 +692,27 @@ std::string MakeLRNDoc(int since_version) {
 
 namespace {
 
+constexpr const char *kLpNormalization_doc = R"DOC(
+Given a matrix, apply Lp-normalization along the provided axis.
+The output is computed as: `output = input / Lp_norm(input, axis)`.
+When the Lp norm is zero (i.e., all elements along the axis are zero),
+the output is defined to be zero to avoid division by zero.
+)DOC";
+
+} // namespace
+
+std::string MakeLpNormalizationDoc(int since_version) {
+  switch (since_version) {
+  case 1:
+  case 22:
+    return kLpNormalization_doc;
+  default:
+    return "";
+  }
+}
+
+namespace {
+
 constexpr const char *kDeformConvDoc = R"DOC(
 Performs deformable convolution as described in https://arxiv.org/abs/1703.06211 and https://arxiv.org/abs/1811.11168.
 This operator specification supports the general N-D case. Note that most common use cases have 2D or 3D data.

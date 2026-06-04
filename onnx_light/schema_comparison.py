@@ -124,6 +124,8 @@ ONNX_OPTIM_SHAPE_INFERENCE_OPS: frozenset[tuple[str, str]] = frozenset(
         ("ai.onnx", "Or"),
         ("ai.onnx", "PRelu"),
         ("ai.onnx", "Pow"),
+        ("ai.onnx", "QLinearConv"),
+        ("ai.onnx", "QLinearMatMul"),
         ("ai.onnx", "QuantizeLinear"),
         ("ai.onnx", "RandomNormal"),
         ("ai.onnx", "RandomNormalLike"),

@@ -18,8 +18,11 @@ namespace Test {
 
 constexpr size_t kExpectedQuantizeLinearSchemaCount = 7;
 constexpr size_t kExpectedDequantizeLinearSchemaCount = 7;
+constexpr size_t kExpectedQLinearConvSchemaCount = 1;
+constexpr size_t kExpectedQLinearMatMulSchemaCount = 2;
 constexpr size_t kExpectedQuantizationSchemaCount =
-    kExpectedQuantizeLinearSchemaCount + kExpectedDequantizeLinearSchemaCount;
+    kExpectedQuantizeLinearSchemaCount + kExpectedDequantizeLinearSchemaCount +
+    kExpectedQLinearConvSchemaCount + kExpectedQLinearMatMulSchemaCount;
 
 static const onnx_op::LightOpSchema *
 FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {

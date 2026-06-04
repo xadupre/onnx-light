@@ -7,6 +7,9 @@
 #include "onnx_backend_test/kernels/kernel_context.h"
 #include "onnx_backend_test/simple_tensor.h"
 
+#include <string>
+#include <vector>
+
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 namespace kernel {
@@ -95,6 +98,66 @@ public:
 
   /// Output element type (FLOAT) differs from the integer/float8 input
   /// element type, so storage can never be shared with an input.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Reference ``QLinearMatMul`` kernel for the per-tensor (scalar scales and
+/// scalar zero-points) case, restricted to INT8/UINT8 inputs and outputs and
+/// FLOAT scales. Implements
+/// ``y = saturate(round(((a - a_zp) * a_scale) * ((b - b_zp) * b_scale) /
+/// y_scale) + y_zp)``. Matrix multiplication follows the standard
+/// :cpp:class:`MatMul` broadcasting rules.
+class QLinearMatMul : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Returning overload. Output element type is taken from ``y_zero_point``.
+  Tensor operator()(const Tensor &a, const Tensor &a_scale, const Tensor &a_zero_point,
+                    const Tensor &b, const Tensor &b_scale, const Tensor &b_zero_point,
+                    const Tensor &y_scale, const Tensor &y_zero_point) const;
+
+  /// In-place overload writing into a caller-allocated output.
+  void operator()(const Tensor &a, const Tensor &a_scale, const Tensor &a_zero_point,
+                  const Tensor &b, const Tensor &b_scale, const Tensor &b_zero_point,
+                  const Tensor &y_scale, const Tensor &y_zero_point, Tensor &output) const;
+
+  /// Output dtype/shape generally differs from any input, so storage cannot be shared.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Reference N-D ``QLinearConv`` kernel for the per-tensor (or per-output-channel
+/// ``w_scale`` / ``w_zero_point``) case, restricted to INT8/UINT8 ``x``, ``w``
+/// and ``y`` and FLOAT scales. Implements
+/// ``y = saturate(round(((x - x_zp) * x_scale) * ((w - w_zp) * w_scale) /
+/// y_scale + bias * x_scale * w_scale / y_scale) + y_zp)`` using the standard
+/// :cpp:class:`Conv` shape/padding/dilation rules.
+class QLinearConv : public KernelBase {
+public:
+  /// Attributes carried by the ONNX ``QLinearConv`` operator.
+  struct Attributes {
+    std::vector<int64_t> kernel_shape;
+    std::vector<int64_t> strides;
+    std::vector<int64_t> pads;
+    std::vector<int64_t> dilations;
+    int64_t group = 1;
+    std::string auto_pad = "NOTSET";
+  };
+
+  using KernelBase::KernelBase;
+
+  /// Returning overload. ``B`` may be a default-constructed (empty) ``Tensor``
+  /// to indicate the optional bias is missing.
+  Tensor operator()(const Tensor &x, const Tensor &x_scale, const Tensor &x_zero_point,
+                    const Tensor &w, const Tensor &w_scale, const Tensor &w_zero_point,
+                    const Tensor &y_scale, const Tensor &y_zero_point, const Tensor &B,
+                    const Attributes &attrs) const;
+
+  void operator()(const Tensor &x, const Tensor &x_scale, const Tensor &x_zero_point,
+                  const Tensor &w, const Tensor &w_scale, const Tensor &w_zero_point,
+                  const Tensor &y_scale, const Tensor &y_zero_point, const Tensor &B,
+                  const Attributes &attrs, Tensor &output) const;
+
+  /// Output dtype/shape generally differs from any input, so storage cannot be shared.
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 

@@ -101,6 +101,64 @@ void ComputeShapeQuantizeLinear(ShapesContext &ctx, const NodeProto &node, const
 void ComputeShapeDequantizeLinear(ShapesContext &ctx, const NodeProto &node, const char *x,
                                   const char *x_scale);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``QLinearConv`` node and
+ * stores it in ``ctx``.
+ *
+ * The output shape rule matches :cpp:func:`ComputeShapeConv` applied to the
+ * quantized inputs ``x`` (input 0) and ``w`` (input 3). The output dtype is
+ * the dtype of ``y_zero_point`` (input 7).
+ *
+ * @param ctx           In/out context. Must already contain entries for
+ *                      ``x``, ``w``, and ``y_zero_point``; on return it
+ *                      also contains an entry for ``node.output(0)``.
+ * @param node          The ``QLinearConv`` ``NodeProto`` whose output should
+ *                      be described. ``node.op_type()`` must be
+ *                      ``"QLinearConv"`` and ``node`` must declare at least
+ *                      one output.
+ * @param x             Name of the input data value (rank >= 3) in ``ctx``.
+ * @param w             Name of the weight value (rank >= 3) in ``ctx``.
+ * @param y_zero_point  Name of the ``y_zero_point`` input value, used to
+ *                      derive the output element type. Must be present in
+ *                      ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"QLinearConv"`` or if ``node`` has no output.
+ * @throws std::out_of_range     if ``x``, ``w``, or ``y_zero_point`` is not
+ *         present in ``ctx``.
+ */
+void ComputeShapeQLinearConv(ShapesContext &ctx, const NodeProto &node, const char *x,
+                             const char *w, const char *y_zero_point);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``QLinearMatMul`` node
+ * and stores it in ``ctx``.
+ *
+ * The output shape rule matches :cpp:func:`ComputeShapeMatMul` applied to
+ * the quantized inputs ``a`` (input 0) and ``b`` (input 3). The output
+ * dtype is the dtype of ``y_zero_point`` (input 7).
+ *
+ * @param ctx           In/out context. Must already contain entries for
+ *                      ``a``, ``b``, and ``y_zero_point``; on return it
+ *                      also contains an entry for ``node.output(0)``.
+ * @param node          The ``QLinearMatMul`` ``NodeProto`` whose output
+ *                      should be described. ``node.op_type()`` must be
+ *                      ``"QLinearMatMul"`` and ``node`` must declare at
+ *                      least one output.
+ * @param a             Name of the input ``a`` value (rank >= 1) in ``ctx``.
+ * @param b             Name of the input ``b`` value (rank >= 1) in ``ctx``.
+ * @param y_zero_point  Name of the ``y_zero_point`` input value, used to
+ *                      derive the output element type. Must be present in
+ *                      ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"QLinearMatMul"`` or if ``node`` has no output.
+ * @throws std::out_of_range     if ``a``, ``b``, or ``y_zero_point`` is
+ *         not present in ``ctx``.
+ */
+void ComputeShapeQLinearMatMul(ShapesContext &ctx, const NodeProto &node, const char *a,
+                               const char *b, const char *y_zero_point);
+
 } // namespace quantization
 } // namespace shapes
 } // namespace onnx_optim

@@ -596,6 +596,24 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          quantization::ComputeShapeQuantizeLinear(ctx, node, x_name.c_str(),
                                                   zp_name.empty() ? nullptr : zp_name.c_str());
        }},
+      {"ai.onnx:QLinearConv",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 8);
+         const std::string x_name = node.input(0).as_string();
+         const std::string w_name = node.input(3).as_string();
+         const std::string yzp_name = node.input(7).as_string();
+         quantization::ComputeShapeQLinearConv(ctx, node, x_name.c_str(), w_name.c_str(),
+                                               yzp_name.c_str());
+       }},
+      {"ai.onnx:QLinearMatMul",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 8);
+         const std::string a_name = node.input(0).as_string();
+         const std::string b_name = node.input(3).as_string();
+         const std::string yzp_name = node.input(7).as_string();
+         quantization::ComputeShapeQLinearMatMul(ctx, node, a_name.c_str(), b_name.c_str(),
+                                                 yzp_name.c_str());
+       }},
       {"ai.onnx:ReduceSum",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

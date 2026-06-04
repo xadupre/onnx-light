@@ -890,6 +890,73 @@ std::vector<LightOpSchema> BuildSoftmaxCrossEntropyLossSchemas() {
   };
 }
 
+// --- NegativeLogLikelihoodLoss -----------------------------------------------
+
+static constexpr const char *kNegativeLogLikelihoodLossDoc = R"DOC(
+A NegativeLogLikelihoodLoss operator computes (weighted) negative log likelihood loss.
+Its "input" tensor has the shape of (N, C, d1, d2, ..., dk) where k >= 0.
+The "input" tensor contains log-probabilities for input[n, :, d_1, d_2,..., d_k] being in a class of [0, C).
+The operator's "target" input tensor has the shape of (N, d1, d2, ..., dk). It encodes class labels (one of C classes)
+or it may contain a special value (indicated by an attribute ignore_index) for N x d1 x d2 x ... x dk samples.
+The loss value for input[n, :, d_1, d_2,...d_k] being classified as class c = target[n][d_1][d_2]...[d_k] is computed as:
+
+```
+loss[n][d_1][d_2]...[d_k] = -input[n][c][d_1][d_2]...[d_k].
+```
+)DOC";
+
+LightOpSchema MakeNegativeLogLikelihoodLossSchema(int since_version) {
+  std::vector<TensorType> t_types = {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+  if (since_version >= 13) {
+    t_types.push_back(TensorType::kBfloat16);
+  }
+  return LightOpSchema(
+      "NegativeLogLikelihoodLoss", kOnnxDomain, since_version, kNegativeLogLikelihoodLossDoc,
+      {
+          {"input", "Input tensor of shape (N, C) or (N, C, d1, d2, ..., dk).", "T"},
+          {"target",
+           "Target tensor of shape (N) or (N, d1, d2, ..., dk). Target element value shall be "
+           "in range of [0, C). "
+           "If ignore_index is specified, it may have a value outside [0, C) and the target "
+           "values should either be "
+           "in the range [0, C) or have the value ignore_index.",
+           "Tind"},
+          {"weight",
+           "Optional rescaling weight tensor. "
+           "If given, it has to be a tensor of size C. Otherwise, it is treated as if having "
+           "all ones.",
+           "T"},
+      },
+      {
+          {"loss", "The negative log likelihood loss", "T"},
+      },
+      {
+          {"T", t_types, "Constrain input, weight, and output types to floating-point tensors."},
+          {"Tind", {TensorType::kInt32, TensorType::kInt64}, "Constrain target to integer types"},
+      },
+      {
+          {"reduction",
+           "Type of reduction to apply to loss: none, sum, mean (default). "
+           "'none': the output is the loss for each sample. "
+           "'sum': the output will be summed. "
+           "'mean': the sum of the output will be divided by the sum of applied weights.",
+           AttributeType::STRING, /*required=*/false, std::string("mean")},
+          {"ignore_index",
+           "Specifies a target value that is ignored and does not contribute to the input "
+           "gradient. It's an optional value.",
+           AttributeType::INT, /*required=*/false},
+      },
+      /*has_function_implementation=*/true);
+}
+
+std::vector<LightOpSchema> BuildNegativeLogLikelihoodLossSchemas() {
+  return std::vector<LightOpSchema>{
+      MakeNegativeLogLikelihoodLossSchema(22),
+      MakeNegativeLogLikelihoodLossSchema(13),
+      MakeNegativeLogLikelihoodLossSchema(12),
+  };
+}
+
 std::vector<LightOpSchema> BuildUnaryFloatMathSchemas(const char *op_type, int latest_version,
                                                       int previous_version) {
   const std::string doc = MakeUnaryMathDoc(op_type);
@@ -1978,6 +2045,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"MatMul", [] { return BuildMatMulSchemas(); }},
       {"Mod", [] { return BuildModSchemas(); }},
       {"Mul", [] { return BuildElementwiseMathSchemaForVersion("Mul"); }},
+      {"NegativeLogLikelihoodLoss", [] { return BuildNegativeLogLikelihoodLossSchemas(); }},
       {"PRelu", [] { return BuildPReluSchemas(); }},
       {"Pow", [] { return BuildPowSchemas(); }},
       {"Round", [] { return BuildRoundSchemas(); }},

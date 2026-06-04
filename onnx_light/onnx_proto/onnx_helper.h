@@ -34,6 +34,58 @@ offset_t PopulateExternalData(ModelProto &model, size_t threshold,
 void ClearExternalData(ModelProto &model);
 
 /**
+ * Rewrites an existing two-file ONNX model (one ``.onnx`` proto + one or more
+ * external weights files) into a new ``(.onnx, weights)`` pair so that every
+ * tensor's offset inside the destination weights file is aligned to
+ * ``alignment`` bytes.
+ *
+ * The whole model is **never loaded in memory**:
+ *
+ *  - The source ``.onnx`` is parsed with ``skip_raw_data=true``, so the
+ *    initializer metadata (including ``external_data``) is read but the
+ *    tensor bytes are not.  Models whose initializers all live in external
+ *    files only carry a few kilobytes of metadata.
+ *  - For each tensor with ``external_data``, the function streams ``length``
+ *    bytes from the source weights file at the recorded ``offset`` to the
+ *    destination weights file at a newly aligned offset, copying at most
+ *    ``chunk_size`` bytes per I/O call.  The tensor's ``external_data`` keys
+ *    (``location``/``offset``/``length``) are updated in the in-memory proto
+ *    to point at the new file and offset.
+ *  - The updated proto is then serialized into ``dst_onnx_path``.
+ *
+ * Peak heap usage is therefore bounded by the proto metadata size plus
+ * ``chunk_size`` bytes — independent of the total weights size.
+ *
+ * @param src_onnx_path     Path to the source ``.onnx`` file.  Initializer
+ *                          ``external_data.location`` entries are resolved
+ *                          relative to this file's parent directory.
+ * @param dst_onnx_path     Destination ``.onnx`` file (created/truncated).
+ * @param dst_weights_path  Destination weights file (created/truncated).
+ *                          Its location relative to ``dst_onnx_path``'s parent
+ *                          directory is stored in every tensor's
+ *                          ``external_data.location``.
+ * @param alignment         Alignment in bytes applied to each tensor's offset
+ *                          in the destination weights file.  Must be a power
+ *                          of two (>= 1).  Use 4096 for mmap-friendly pages.
+ * @param chunk_size        Maximum number of bytes copied per read/write call.
+ *                          Bounds peak memory used while copying.  Must be > 0.
+ * @return The total number of bytes written to ``dst_weights_path``, including
+ *         any alignment padding.
+ *
+ * @note Tensors **without** ``external_data`` (i.e. inline ``raw_data`` left in
+ *       the source ``.onnx``) are preserved as-is in the destination ``.onnx``,
+ *       only when their inline ``raw_data`` is smaller than the parser's
+ *       ``raw_data_threshold`` — larger inline payloads would be skipped by
+ *       ``skip_raw_data`` and lost.  The function therefore throws when it
+ *       encounters such a tensor; externalize all big weights first (for
+ *       example by saving the model once with ``TwoFilesWriteStream``).
+ */
+offset_t AlignExternalDataStreaming(const std::string &src_onnx_path,
+                                    const std::string &dst_onnx_path,
+                                    const std::string &dst_weights_path, int64_t alignment,
+                                    int64_t chunk_size = 4 * 1024 * 1024);
+
+/**
  * Transfers all tensor raw_data whose size is >= opts.raw_data_threshold into a single
  * contiguous buffer owned via a shared_ptr, updating each qualifying tensor's raw_data
  * to borrow from that buffer.  The buffer is kept alive by the shared_ptr stored inside

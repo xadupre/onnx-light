@@ -32,6 +32,7 @@ from ..onnx_proto._onnxpy import (  # type: ignore
     TypeProto,
     ValueInfoProto,
     IR_VERSION,
+    align_external_data_streaming,
     consolidate_tensors_to_buffer,
     utils_onnx_read_varint64,
 )

@@ -413,6 +413,81 @@ TEST(OnnxOptimShapesNnRoiAlign, RejectsWrongOpType) {
       std::invalid_argument);
 }
 
+namespace {
+
+NodeProto MakeNonMaxSuppressionNode() {
+  NodeProto node;
+  node.set_op_type("NonMaxSuppression");
+  node.add_input("boxes");
+  node.add_input("scores");
+  node.add_output("selected_indices");
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesNnNonMaxSuppression, OutputIsRank2Int64WithSymbolicFirstDim) {
+  NodeProto node = MakeNonMaxSuppressionNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("boxes", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                           onnx_optim::OptimShape{onnx_optim::OptimDim(1),
+                                                                  onnx_optim::OptimDim(6),
+                                                                  onnx_optim::OptimDim(4)}));
+  ctx.Set("scores", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                            onnx_optim::OptimShape{onnx_optim::OptimDim(1),
+                                                                   onnx_optim::OptimDim(1),
+                                                                   onnx_optim::OptimDim(6)}));
+
+  onnx_optim::shapes::nn::ComputeShapeNonMaxSuppression(ctx, node, "boxes", "scores");
+
+  ASSERT_TRUE(ctx.Has("selected_indices"));
+  const onnx_optim::OptimShape &out = ctx.Get("selected_indices").Shape();
+  ASSERT_EQ(out.Rank(), 2u);
+  EXPECT_TRUE(out[0].IsExpr());
+  EXPECT_TRUE(out[1].IsInt());
+  EXPECT_EQ(out[1].AsInt(), 3);
+  EXPECT_EQ(ctx.Get("selected_indices").Dtype(), onnx_optim::TensorType::kInt64);
+}
+
+TEST(OnnxOptimShapesNnNonMaxSuppression, RejectsBadRanks) {
+  NodeProto node = MakeNonMaxSuppressionNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  // boxes wrong rank (2 instead of 3).
+  ctx.Set("boxes", onnx_optim::OptimTensor(
+                       nullptr, onnx_optim::TensorType::kFloat,
+                       onnx_optim::OptimShape{onnx_optim::OptimDim(6), onnx_optim::OptimDim(4)}));
+  ctx.Set("scores", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                            onnx_optim::OptimShape{onnx_optim::OptimDim(1),
+                                                                   onnx_optim::OptimDim(1),
+                                                                   onnx_optim::OptimDim(6)}));
+  EXPECT_THROW(onnx_optim::shapes::nn::ComputeShapeNonMaxSuppression(ctx, node, "boxes", "scores"),
+               std::invalid_argument);
+
+  // boxes last dim != 4.
+  ctx.Set("boxes", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                           onnx_optim::OptimShape{onnx_optim::OptimDim(1),
+                                                                  onnx_optim::OptimDim(6),
+                                                                  onnx_optim::OptimDim(5)}));
+  EXPECT_THROW(onnx_optim::shapes::nn::ComputeShapeNonMaxSuppression(ctx, node, "boxes", "scores"),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesNnNonMaxSuppression, RejectsWrongOpType) {
+  NodeProto node = MakeNonMaxSuppressionNode();
+  node.set_op_type("RoiAlign");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("boxes", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                           onnx_optim::OptimShape{onnx_optim::OptimDim(1),
+                                                                  onnx_optim::OptimDim(1),
+                                                                  onnx_optim::OptimDim(4)}));
+  ctx.Set("scores", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                            onnx_optim::OptimShape{onnx_optim::OptimDim(1),
+                                                                   onnx_optim::OptimDim(1),
+                                                                   onnx_optim::OptimDim(1)}));
+  EXPECT_THROW(onnx_optim::shapes::nn::ComputeShapeNonMaxSuppression(ctx, node, "boxes", "scores"),
+               std::invalid_argument);
+}
+
 TEST(OnnxOptimShapesNnRoiAlign, RejectsWrongRanks) {
   NodeProto node = MakeRoiAlignNode();
   onnx_optim::shapes::ShapesContext ctx;

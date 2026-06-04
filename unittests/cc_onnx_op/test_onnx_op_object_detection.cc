@@ -35,7 +35,7 @@ TEST(OnnxOpObjectDetectionRegistrationTest, ReturnsRoiAlignSchemaHistory) {
   const std::vector<onnx_op::LightOpSchema> roi_align_schemas =
       onnx_op::object_detection::GetAllOnnxOpObjectDetectionSchemasWithHistory("RoiAlign");
 
-  EXPECT_EQ(schemas.size(), 3u);
+  EXPECT_EQ(schemas.size(), 5u);
 
   const std::vector<int> expected_versions = {22, 16, 10};
   for (int version : expected_versions) {
@@ -70,6 +70,44 @@ TEST(OnnxOpObjectDetectionRegistrationTest, ReturnsRoiAlignSchemaHistory) {
     EXPECT_EQ(schema->type_constraints()[1].allowed_type_strs[0], onnx_op::TensorType::kInt64);
     EXPECT_STREQ(onnx_op::ToTypeString(schema->type_constraints()[1].allowed_type_strs[0]),
                  "tensor(int64)");
+
+    EXPECT_FALSE(schema->doc().empty());
+  }
+}
+
+TEST(OnnxOpObjectDetectionRegistrationTest, ReturnsNonMaxSuppressionSchemaHistory) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::object_detection::GetAllOnnxOpObjectDetectionSchemasWithHistory("NonMaxSuppression");
+  ASSERT_EQ(schemas.size(), 2u);
+
+  const std::vector<int> expected_versions = {11, 10};
+  for (int version : expected_versions) {
+    SCOPED_TRACE("NonMaxSuppression@" + std::to_string(version));
+    const onnx_op::LightOpSchema *const schema = FindByVersion(schemas, version);
+    ASSERT_NE(nullptr, schema);
+    EXPECT_EQ(schema->name(), "NonMaxSuppression");
+    EXPECT_EQ(schema->domain(), onnx_op::kOnnxDomain);
+    EXPECT_EQ(schema->since_version(), version);
+
+    ASSERT_EQ(schema->inputs().size(), 5u);
+    EXPECT_EQ(schema->inputs()[0].name, "boxes");
+    EXPECT_EQ(schema->inputs()[1].name, "scores");
+    EXPECT_EQ(schema->inputs()[2].name, "max_output_boxes_per_class");
+    EXPECT_EQ(schema->inputs()[3].name, "iou_threshold");
+    EXPECT_EQ(schema->inputs()[4].name, "score_threshold");
+
+    ASSERT_EQ(schema->outputs().size(), 1u);
+    EXPECT_EQ(schema->outputs()[0].name, "selected_indices");
+    EXPECT_EQ(schema->outputs()[0].type, "tensor(int64)");
+
+    // NonMaxSuppression uses literal type strings on its inputs/outputs and
+    // declares no named type-parameter constraints.
+    EXPECT_EQ(schema->type_constraints().size(), 0u);
+
+    ASSERT_EQ(schema->attributes().size(), 1u);
+    EXPECT_EQ(schema->attributes()[0].name, "center_point_box");
+    EXPECT_EQ(schema->attributes()[0].type, onnx_op::AttributeType::INT);
+    EXPECT_FALSE(schema->attributes()[0].required);
 
     EXPECT_FALSE(schema->doc().empty());
   }

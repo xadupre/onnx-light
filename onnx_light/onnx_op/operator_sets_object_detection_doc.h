@@ -17,6 +17,15 @@ namespace object_detection {
  */
 std::string MakeRoiAlignDoc();
 
+/**
+ * Returns the documentation string for the NonMaxSuppression operator.
+ *
+ * Matches the upstream ONNX NonMaxSuppression docs (since opset 10).
+ *
+ * @return Documentation string for the NonMaxSuppression operator.
+ */
+std::string MakeNonMaxSuppressionDoc();
+
 } // namespace object_detection
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

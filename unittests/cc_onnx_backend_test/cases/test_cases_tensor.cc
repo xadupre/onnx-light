@@ -1058,4 +1058,39 @@ TEST(BackendTestCase, TensorScatterCasesRegistered) {
   }
 }
 
+TEST(BackendTestCase, OneHotCasesRegistered) {
+  const auto cases = CollectTestCases("OneHot");
+
+  struct Expected {
+    const char *name;
+    std::vector<int64_t> output_shape;
+  };
+  const std::vector<Expected> expected{
+      {"test_onehot_without_axis", {3, 12}},
+      {"test_onehot_with_axis", {2, 10, 2}},
+      {"test_onehot_negative_indices", {3, 10}},
+      {"test_onehot_with_negative_axis", {2, 10, 2}},
+      {"test_cc_onehot_default_axis_int64_indices", {2, 3}},
+  };
+
+  for (const Expected &exp : expected) {
+    const TestCase *tc = FindCase(cases, exp.name);
+    ASSERT_NE(tc, nullptr) << "missing backend test case: " << exp.name;
+
+    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    const auto &op_type = node.ref_op_type();
+    EXPECT_EQ(std::string(op_type.data(), op_type.size()), "OneHot");
+
+    ASSERT_EQ(tc->data_sets.size(), 1u);
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].shape, exp.output_shape);
+    // Output dtype matches the dtype of the third input ("values").
+    EXPECT_EQ(ds.outputs[0].data_type, ds.inputs[2].data_type);
+  }
+}
+
 } // namespace Test

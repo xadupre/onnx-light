@@ -217,6 +217,28 @@ std::string MakeNonZeroDoc(int since_version);
 std::string MakeNonZeroTypeConstraintDescription(int since_version);
 
 /**
+ * Returns the documentation string for the OneHot operator at the given
+ * opset version.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the OneHot operator.
+ */
+std::string MakeOneHotDoc(int since_version);
+
+/**
+ * Returns the type-constraint description for the OneHot ``T1`` (indices),
+ * ``T2`` (depth) and ``T3`` (values/output) type parameters at the given
+ * opset version.
+ *
+ * @param since_version Opset version for which to generate the description.
+ * @return Type-constraint description string for the requested OneHot type
+ *         parameter.
+ */
+std::string MakeOneHotIndicesTypeConstraintDescription(int since_version);
+std::string MakeOneHotDepthTypeConstraintDescription(int since_version);
+std::string MakeOneHotValuesTypeConstraintDescription(int since_version);
+
+/**
  * Returns the documentation string for the Unique operator at the given
  * opset version.
  *

@@ -155,6 +155,13 @@ static void convPoolShapeInference_opset19(InferenceContext &ctx, bool use_dilat
       }
       kernel_shape.push_back(second_input_shape.dim(i).dim_value());
     }
+    // Reject weight/input spatial-rank mismatch; prevents OOB read of dilations/pads below.
+    if (kernel_shape.size() != n_input_dims) {
+      fail_shape_inference(
+          "Number of spatial dimensions in the weight tensor (", kernel_shape.size(),
+          ") does not match the number of spatial dimensions in the input tensor (", n_input_dims,
+          ").");
+    }
   }
 
   std::vector<int64_t> effective_kernel_shape = kernel_shape;
@@ -1674,6 +1681,13 @@ static void convPoolShapeInference_opset1_to_11(InferenceContext &ctx, bool use_
         return;
       }
       kernel_shape.push_back(second_input_shape.dim(i).dim_value());
+    }
+    // Reject weight/input spatial-rank mismatch; prevents OOB read of dilations/pads below.
+    if (kernel_shape.size() != n_input_dims) {
+      fail_shape_inference(
+          "Number of spatial dimensions in the weight tensor (", kernel_shape.size(),
+          ") does not match the number of spatial dimensions in the input tensor (", n_input_dims,
+          ").");
     }
   }
 

@@ -455,6 +455,49 @@ to the tensor element-wise.
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildMishSchemas() {
+  static constexpr const char *kMishDoc = R"DOC(
+Mish: A Self Regularized Non-Monotonic Neural Activation Function.
+
+Perform the linear unit element-wise on the input tensor X using formula:
+
+```
+mish(x) = x * tanh(softplus(x)) = x * tanh(ln(1 + e^{x}))
+```
+)DOC";
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(2);
+  schemas.push_back(LightOpSchema(
+      "Mish", kOnnxDomain, 22, kMishDoc,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T",
+           {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble},
+           "Constrain input X and output types to float tensors."},
+      },
+      /*has_function_implementation=*/true));
+  schemas.push_back(
+      LightOpSchema("Mish", kOnnxDomain, 18, kMishDoc,
+                    {
+                        {"X", "Input tensor", "T"},
+                    },
+                    {
+                        {"Y", "Output tensor", "T"},
+                    },
+                    {
+                        {"T",
+                         {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble},
+                         "Constrain input X and output types to float tensors."},
+                    },
+                    /*has_function_implementation=*/true));
+  return schemas;
+}
+
 std::vector<LightOpSchema> BuildSoftplusSchemas() {
   static constexpr const char *kSoftplusDoc = R"DOC(
 Softplus takes one input data (Tensor<T>) and produces one output data
@@ -2311,6 +2354,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Mean", [] { return BuildMeanSchemas(); }},
       {"MelWeightMatrix", [] { return BuildMelWeightMatrixSchemas(); }},
       {"Min", [] { return BuildMinSchemas(); }},
+      {"Mish", [] { return BuildMishSchemas(); }},
       {"Mod", [] { return BuildModSchemas(); }},
       {"Mul", [] { return BuildElementwiseMathSchemaForVersion("Mul"); }},
       {"Neg", [] { return BuildNegSchemas(); }},

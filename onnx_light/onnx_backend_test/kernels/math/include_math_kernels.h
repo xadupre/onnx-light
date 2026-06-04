@@ -303,6 +303,18 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Element-wise Mish activation: y = x * tanh(softplus(x)) =
+/// x * tanh(ln(1 + exp(x))).
+class Mish : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x) const;
+  void operator()(const Tensor &x, Tensor &output) const;
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// Element-wise softsign activation: y = x / (1 + |x|).
 class Softsign : public KernelBase {
 public:

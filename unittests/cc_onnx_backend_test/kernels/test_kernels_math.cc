@@ -40,6 +40,7 @@ using onnx_backend_test::kernel::HannWindow;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::Log;
 using onnx_backend_test::kernel::MatMul;
+using onnx_backend_test::kernel::Mish;
 using onnx_backend_test::kernel::Mod;
 using onnx_backend_test::kernel::Mul;
 using onnx_backend_test::kernel::Neg;
@@ -288,6 +289,21 @@ TEST(BackendKernelClass, SoftplusClassMatchesReference) {
   EXPECT_NEAR(py[1], 0.31326169f, 1e-6f);
   EXPECT_NEAR(py[2], 0.69314718f, 1e-6f);
   EXPECT_NEAR(py[3], 2.12692809f, 1e-6f);
+}
+
+TEST(BackendKernelClass, MishClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(22)};
+  Mish mish_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {4}, {-4.0f, -1.0f, 0.0f, 2.0f});
+  Tensor y = mish_kernel(x);
+  ASSERT_EQ(y.element_count(), 4);
+  const float *py = y.AsFloat();
+  // Reference values from y = x * tanh(softplus(x)) computed in double precision.
+  EXPECT_NEAR(py[0], -0.07259174f, 1e-6f);
+  EXPECT_NEAR(py[1], -0.30340147f, 1e-6f);
+  EXPECT_NEAR(py[2], 0.0f, 1e-6f);
+  EXPECT_NEAR(py[3], 1.94395934f, 1e-6f);
 }
 
 TEST(BackendKernelClass, SoftsignClassMatchesReference) {

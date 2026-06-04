@@ -77,6 +77,58 @@ class TestDataPropagation(ExtTestCase):
 
         self._assert_shape(y_type, [3, 4, 5], onnxl.TensorProto.INT32)
 
+    def test_unsqueeze_inmemory_int64_axes(self) -> None:
+        """Regression test mirroring microsoft/onnxruntime#28778: shape inference
+        on ``Shape -> Identity -> Unsqueeze(axes=INT64 initializer)`` must complete
+        without overrun and propagate the expected output shape.
+        """
+        axis_count = 16
+        input_tensor = oh.make_tensor_value_info(
+            "input", onnxl.TensorProto.FLOAT, [1] * axis_count
+        )
+        output_tensor = oh.make_tensor_value_info(
+            "output", onnxl.TensorProto.INT64, [1] * axis_count + [axis_count]
+        )
+        shape_node = oh.make_node("Shape", ["input"], ["shape_out"])
+        identity_node = oh.make_node("Identity", ["shape_out"], ["identity_out"])
+        axes = oh.make_tensor(
+            "unsq_axes",
+            onnxl.TensorProto.INT64,
+            [axis_count],
+            list(range(axis_count)),
+        )
+        unsqueeze_node = oh.make_node(
+            "Unsqueeze", ["identity_out", "unsq_axes"], ["output"]
+        )
+        graph = oh.make_graph(
+            [shape_node, identity_node, unsqueeze_node],
+            "Unsqueeze_InMemory_INT64_Axes",
+            [input_tensor],
+            [output_tensor],
+            initializer=[axes],
+        )
+        model = oh.make_model(
+            graph, opset_imports=[oh.make_opsetid("", 18)]
+        )
+        model.ir_version = 8
+
+        shape_inference.infer_shapes(model)
+
+        # The Shape -> Identity chain carries an INT64 vector of length axis_count.
+        value_info_by_name = {vi.name: vi for vi in model.graph.value_info}
+        for name in ("shape_out", "identity_out"):
+            self.assertIn(name, value_info_by_name)
+            self._assert_shape(
+                value_info_by_name[name].type, [axis_count], onnxl.TensorProto.INT64
+            )
+
+        # The Unsqueeze output keeps the declared rank with the expected last dim.
+        out = model.graph.output[0]
+        self.assertEqual(out.name, "output")
+        self._assert_shape(
+            out.type, [1] * axis_count + [axis_count], onnxl.TensorProto.INT64
+        )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

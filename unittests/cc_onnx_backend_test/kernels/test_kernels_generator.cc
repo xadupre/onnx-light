@@ -19,6 +19,10 @@ using onnx_backend_test::kernel::Constant;
 using onnx_backend_test::kernel::ConstantOfShape;
 using onnx_backend_test::kernel::EyeLike;
 using onnx_backend_test::kernel::KernelContext;
+using onnx_backend_test::kernel::RandomNormal;
+using onnx_backend_test::kernel::RandomNormalLike;
+using onnx_backend_test::kernel::RandomUniform;
+using onnx_backend_test::kernel::RandomUniformLike;
 using onnx_backend_test::kernel::Range;
 
 namespace Test {
@@ -233,6 +237,96 @@ TEST(BackendKernelClass, BernoulliRejectsUnsupportedInputDtype) {
   Bernoulli kernel{ctx};
   const Tensor int_in = Tensor::FromInt32("", {2}, {0, 1});
   EXPECT_THROW(kernel(int_in), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, RandomNormalProducesFloatTensorOfRequestedShape) {
+  const KernelContext ctx{DefaultOpset(22)};
+  RandomNormal kernel{ctx};
+  Tensor y = kernel({2, 3});
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
+  EXPECT_EQ(y.element_count(), 6);
+}
+
+TEST(BackendKernelClass, RandomNormalIsDeterministicForSameSeed) {
+  const KernelContext ctx{DefaultOpset(22)};
+  RandomNormal kernel{ctx};
+  Tensor a = kernel({4}, /*mean=*/0.0, /*scale=*/1.0, /*seed=*/42);
+  Tensor b = kernel({4}, /*mean=*/0.0, /*scale=*/1.0, /*seed=*/42);
+  EXPECT_EQ(a.data, b.data);
+  Tensor c = kernel({4}, /*mean=*/0.0, /*scale=*/1.0, /*seed=*/43);
+  EXPECT_NE(a.data, c.data);
+}
+
+TEST(BackendKernelClass, RandomNormalDtypeOverrideProducesDouble) {
+  const KernelContext ctx{DefaultOpset(22)};
+  RandomNormal kernel{ctx};
+  Tensor y = kernel({3}, 0.0, 1.0, RandomNormal::kNoSeed,
+                    static_cast<int32_t>(onnx_backend_test::DataType::DOUBLE));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::DOUBLE));
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{3}));
+}
+
+TEST(BackendKernelClass, RandomNormalRejectsUnsupportedDtype) {
+  const KernelContext ctx{DefaultOpset(22)};
+  RandomNormal kernel{ctx};
+  EXPECT_THROW(kernel({2}, 0.0, 1.0, RandomNormal::kNoSeed,
+                      static_cast<int32_t>(onnx_backend_test::DataType::INT32)),
+               std::invalid_argument);
+}
+
+TEST(BackendKernelClass, RandomUniformProducesFloatInRange) {
+  const KernelContext ctx{DefaultOpset(22)};
+  RandomUniform kernel{ctx};
+  Tensor y = kernel({16}, /*low=*/-2.0, /*high=*/3.0, /*seed=*/7);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.element_count(), 16);
+  const float *py = y.AsFloat();
+  for (int i = 0; i < 16; ++i) {
+    EXPECT_GE(py[i], -2.0f);
+    EXPECT_LT(py[i], 3.0f);
+  }
+}
+
+TEST(BackendKernelClass, RandomUniformIsDeterministicForSameSeed) {
+  const KernelContext ctx{DefaultOpset(22)};
+  RandomUniform kernel{ctx};
+  Tensor a = kernel({5}, 0.0, 1.0, /*seed=*/99);
+  Tensor b = kernel({5}, 0.0, 1.0, /*seed=*/99);
+  EXPECT_EQ(a.data, b.data);
+}
+
+TEST(BackendKernelClass, RandomNormalLikeCopiesInputShape) {
+  const KernelContext ctx{DefaultOpset(22)};
+  RandomNormalLike kernel{ctx};
+  const Tensor x = Tensor::FromFloat("", {2, 4}, std::vector<float>(8, 0.0f));
+  Tensor y = kernel(x);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 4}));
+}
+
+TEST(BackendKernelClass, RandomNormalLikeDtypeOverridesOutputType) {
+  const KernelContext ctx{DefaultOpset(22)};
+  RandomNormalLike kernel{ctx};
+  const Tensor x = Tensor::FromFloat("", {3}, {0.0f, 0.0f, 0.0f});
+  Tensor y = kernel(x, 0.0, 1.0, RandomNormalLike::kNoSeed,
+                    static_cast<int32_t>(onnx_backend_test::DataType::DOUBLE));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::DOUBLE));
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{3}));
+}
+
+TEST(BackendKernelClass, RandomUniformLikeCopiesInputShapeAndProducesInRange) {
+  const KernelContext ctx{DefaultOpset(22)};
+  RandomUniformLike kernel{ctx};
+  const Tensor x = Tensor::FromFloat("", {6}, std::vector<float>(6, 0.0f));
+  Tensor y = kernel(x, /*low=*/0.0, /*high=*/1.0, /*seed=*/11);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{6}));
+  const float *py = y.AsFloat();
+  for (int i = 0; i < 6; ++i) {
+    EXPECT_GE(py[i], 0.0f);
+    EXPECT_LT(py[i], 1.0f);
+  }
 }
 
 TEST(BackendKernelClass, RangeFloatPositiveDelta) {

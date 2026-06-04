@@ -178,6 +178,58 @@ void ComputeShapeHammingWindow(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeBernoulli(ShapesContext &ctx, const NodeProto &node);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``RandomNormal`` node and
+ * stores it in ``ctx``.
+ *
+ * ``RandomNormal`` produces a tensor whose shape is given by the required
+ * ``shape`` attribute (a ``std::vector<int64_t>``) and whose element type is
+ * given by the optional ``dtype`` attribute (a :cpp:class:`TensorProto::DataType`
+ * value, defaults to ``FLOAT``).
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"RandomNormal"``,
+ *         if ``node`` has no output, if the ``shape`` attribute is missing,
+ *         contains negative dims, or if ``dtype`` is present but holds an
+ *         unsupported value.
+ */
+void ComputeShapeRandomNormal(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``RandomUniform`` node and
+ * stores it in ``ctx``. Same shape/dtype semantics as
+ * :cpp:func:`ComputeShapeRandomNormal`.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"RandomUniform"``
+ *         or as documented in :cpp:func:`ComputeShapeRandomNormal`.
+ */
+void ComputeShapeRandomUniform(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``RandomNormalLike``
+ * node and stores it in ``ctx``.
+ *
+ * ``RandomNormalLike`` copies its single input tensor's shape. The output
+ * element type is given by the optional ``dtype`` attribute (a
+ * :cpp:class:`TensorProto::DataType` value); when the attribute is absent,
+ * the output dtype matches the input dtype.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"RandomNormalLike"``, if ``node`` has no input or output, or if
+ *         ``dtype`` is present but holds an unsupported value.
+ */
+void ComputeShapeRandomNormalLike(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``RandomUniformLike``
+ * node and stores it in ``ctx``. Same shape/dtype semantics as
+ * :cpp:func:`ComputeShapeRandomNormalLike`.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"RandomUniformLike"`` or as documented in
+ *         :cpp:func:`ComputeShapeRandomNormalLike`.
+ */
+void ComputeShapeRandomUniformLike(ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``Range`` node and
  * stores it in ``ctx``.
  *

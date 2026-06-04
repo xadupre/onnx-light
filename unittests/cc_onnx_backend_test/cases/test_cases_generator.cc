@@ -359,4 +359,55 @@ TEST(BackendTestCase, BernoulliCasesArePresent) {
   }
 }
 
+namespace {
+
+void CheckRandomCasePresent(const std::vector<TestCase> &cases, const std::string &name,
+                            const std::string &expected_op_type, int expected_inputs) {
+  const TestCase *tc = FindCase(cases, name);
+  ASSERT_NE(tc, nullptr) << "missing case: " << name;
+  const GraphProto &graph = tc->model.ref_graph();
+  ASSERT_EQ(graph.ref_node().size(), 1u);
+  const NodeProto &node = graph.ref_node()[0];
+  const auto &op_type = node.ref_op_type();
+  EXPECT_EQ(std::string(op_type.data(), op_type.size()), expected_op_type);
+  ASSERT_EQ(graph.ref_input().size(), static_cast<size_t>(expected_inputs));
+  ASSERT_EQ(graph.ref_output().size(), 1u);
+  ASSERT_EQ(tc->data_sets.size(), 1u);
+  ASSERT_EQ(tc->data_sets[0].outputs.size(), 1u);
+}
+
+} // namespace
+
+TEST(BackendTestCase, RandomNormalCasesArePresent) {
+  auto cases = CollectTestCases("RandomNormal");
+  ASSERT_FALSE(cases.empty());
+  CheckRandomCasePresent(cases, "test_cc_randomnormal", "RandomNormal", 0);
+  CheckRandomCasePresent(cases, "test_cc_randomnormal_seeded", "RandomNormal", 0);
+  CheckRandomCasePresent(cases, "test_cc_randomnormal_double", "RandomNormal", 0);
+}
+
+TEST(BackendTestCase, RandomUniformCasesArePresent) {
+  auto cases = CollectTestCases("RandomUniform");
+  ASSERT_FALSE(cases.empty());
+  CheckRandomCasePresent(cases, "test_cc_randomuniform", "RandomUniform", 0);
+  CheckRandomCasePresent(cases, "test_cc_randomuniform_seeded", "RandomUniform", 0);
+  CheckRandomCasePresent(cases, "test_cc_randomuniform_double", "RandomUniform", 0);
+}
+
+TEST(BackendTestCase, RandomNormalLikeCasesArePresent) {
+  auto cases = CollectTestCases("RandomNormalLike");
+  ASSERT_FALSE(cases.empty());
+  CheckRandomCasePresent(cases, "test_cc_randomnormallike", "RandomNormalLike", 1);
+  CheckRandomCasePresent(cases, "test_cc_randomnormallike_double", "RandomNormalLike", 1);
+  CheckRandomCasePresent(cases, "test_cc_randomnormallike_seeded", "RandomNormalLike", 1);
+}
+
+TEST(BackendTestCase, RandomUniformLikeCasesArePresent) {
+  auto cases = CollectTestCases("RandomUniformLike");
+  ASSERT_FALSE(cases.empty());
+  CheckRandomCasePresent(cases, "test_cc_randomuniformlike", "RandomUniformLike", 1);
+  CheckRandomCasePresent(cases, "test_cc_randomuniformlike_double", "RandomUniformLike", 1);
+  CheckRandomCasePresent(cases, "test_cc_randomuniformlike_seeded", "RandomUniformLike", 1);
+}
+
 } // namespace Test

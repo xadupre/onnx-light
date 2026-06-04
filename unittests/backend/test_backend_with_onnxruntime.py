@@ -51,6 +51,13 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     registered for ``RandomUniformLike(22)`` ("Could not find an
 #     implementation for RandomUniformLike(22) node"). The reference backend
 #     still exercises these cases.
+#   * ``test_cc_randomnormal*``, ``test_cc_randomnormallike*``,
+#     ``test_cc_randomuniform*`` and ``test_cc_randomuniformlike*`` — ORT's
+#     CPU EP has no kernel registered for ``RandomNormal(22)``,
+#     ``RandomNormalLike(22)``, ``RandomUniform(22)`` or
+#     ``RandomUniformLike(22)`` ("Could not find an implementation for
+#     RandomNormal(22) node"). The reference backend still exercises these
+#     cases.
 #   * ``test_training_dropout``, ``test_training_dropout_mask``,
 #     ``test_training_dropout_default`` and
 #     ``test_training_dropout_default_mask`` — training-mode ``Dropout`` with
@@ -191,6 +198,18 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_bernoulli$",
     r"^test_cc_bernoulli_double$",
     r"^test_cc_bernoulli_seed$",
+    r"^test_cc_randomnormal$",
+    r"^test_cc_randomnormal_double$",
+    r"^test_cc_randomnormal_seeded$",
+    r"^test_cc_randomnormallike$",
+    r"^test_cc_randomnormallike_double$",
+    r"^test_cc_randomnormallike_seeded$",
+    r"^test_cc_randomuniform$",
+    r"^test_cc_randomuniform_double$",
+    r"^test_cc_randomuniform_seeded$",
+    r"^test_cc_randomuniformlike$",
+    r"^test_cc_randomuniformlike_double$",
+    r"^test_cc_randomuniformlike_seeded$",
     r"^test_training_dropout$",
     r"^test_training_dropout_mask$",
     r"^test_training_dropout_default$",

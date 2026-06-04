@@ -46,6 +46,38 @@ std::string MakeConstantOfShapeDoc(int since_version);
 std::string MakeEyeLikeDoc(int since_version);
 
 /**
+ * Returns the documentation string for the RandomNormal operator. The
+ * documentation has been stable since opset 1.
+ *
+ * @return Documentation string for the RandomNormal operator.
+ */
+std::string MakeRandomNormalDoc();
+
+/**
+ * Returns the documentation string for the RandomNormalLike operator. The
+ * documentation has been stable since opset 1.
+ *
+ * @return Documentation string for the RandomNormalLike operator.
+ */
+std::string MakeRandomNormalLikeDoc();
+
+/**
+ * Returns the documentation string for the RandomUniform operator. The
+ * documentation has been stable since opset 1.
+ *
+ * @return Documentation string for the RandomUniform operator.
+ */
+std::string MakeRandomUniformDoc();
+
+/**
+ * Returns the documentation string for the RandomUniformLike operator. The
+ * documentation has been stable since opset 1.
+ *
+ * @return Documentation string for the RandomUniformLike operator.
+ */
+std::string MakeRandomUniformLikeDoc();
+
+/**
  * Returns the documentation string for the Range operator. The
  * documentation has been stable since opset 11.
  *

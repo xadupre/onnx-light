@@ -13,6 +13,10 @@ void CollectGeneratorTestCases(std::vector<TestCase> &registry, const std::strin
       {"Constant", &RegisterConstantCases},
       {"ConstantOfShape", &RegisterConstantOfShapeCases},
       {"EyeLike", &RegisterEyeLikeCases},
+      {"RandomNormal", &RegisterRandomNormalCases},
+      {"RandomNormalLike", &RegisterRandomNormalLikeCases},
+      {"RandomUniform", &RegisterRandomUniformCases},
+      {"RandomUniformLike", &RegisterRandomUniformLikeCases},
       {"Range", &RegisterRangeCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);

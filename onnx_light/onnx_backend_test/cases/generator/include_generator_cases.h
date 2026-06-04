@@ -29,6 +29,18 @@ void RegisterConstantOfShapeCases(std::vector<TestCase> &registry);
 /// Registers the ``EyeLike`` backend test node case(s).
 void RegisterEyeLikeCases(std::vector<TestCase> &registry);
 
+/// Registers the ``RandomNormal`` backend test node case(s).
+void RegisterRandomNormalCases(std::vector<TestCase> &registry);
+
+/// Registers the ``RandomNormalLike`` backend test node case(s).
+void RegisterRandomNormalLikeCases(std::vector<TestCase> &registry);
+
+/// Registers the ``RandomUniform`` backend test node case(s).
+void RegisterRandomUniformCases(std::vector<TestCase> &registry);
+
+/// Registers the ``RandomUniformLike`` backend test node case(s).
+void RegisterRandomUniformLikeCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Range`` backend test node case(s).
 void RegisterRangeCases(std::vector<TestCase> &registry);
 

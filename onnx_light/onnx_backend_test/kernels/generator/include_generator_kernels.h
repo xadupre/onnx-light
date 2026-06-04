@@ -7,6 +7,9 @@
 #include "onnx_backend_test/kernels/kernel_context.h"
 #include "onnx_backend_test/simple_tensor.h"
 
+#include <cstdint>
+#include <vector>
+
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 namespace kernel {
@@ -134,6 +137,99 @@ public:
   /// The output buffer has the same byte size as the input only when
   /// ``dtype`` is identical to the input dtype, which we do not require;
   /// disable in-place support to keep the contract simple.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Reference implementation of the ONNX ``RandomNormal`` operator (since
+/// opset 1 in the ``ai.onnx`` domain). Produces an output tensor of the
+/// given ``shape`` filled with samples drawn from a normal distribution
+/// with mean ``mean`` and standard deviation ``scale``.
+///
+/// ``RandomNormal`` is non-deterministic; this reference kernel uses the
+/// deterministic :cpp:func:`Randn` helper (SplitMix64 + Irwin-Hall) so
+/// expected outputs are bit-stable for testing. When ``seed`` is
+/// :cpp:var:`kNoSeed` the kernel's default seed is used; otherwise the
+/// optional ``seed`` attribute (declared as FLOAT in the schema) is
+/// truncated to ``uint64_t`` and forwarded to :cpp:func:`Randn`.
+///
+/// Supported output dtypes are ``FLOAT`` (default) and ``DOUBLE``; any
+/// other value of ``dtype`` triggers ``std::invalid_argument``.
+class RandomNormal : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  /// Produces a ``shape``-shaped tensor of normal samples. ``mean`` and
+  /// ``scale`` come from the operator attributes (defaults ``0.0`` /
+  /// ``1.0``). ``dtype`` defaults to ``DataType::FLOAT`` to mirror the
+  /// schema default. ``seed`` selects the RNG seed; pass ``kNoSeed`` to
+  /// use the kernel's default.
+  Tensor operator()(const std::vector<int64_t> &shape, double mean = 0.0, double scale = 1.0,
+                    int64_t seed = kNoSeed, int32_t dtype = 0) const;
+  void operator()(const std::vector<int64_t> &shape, double mean, double scale, int64_t seed,
+                  int32_t dtype, Tensor &output) const;
+
+  /// Sentinel meaning ``seed`` attribute is absent.
+  static constexpr int64_t kNoSeed = -1;
+  /// No input tensor to alias with: in-place semantics are not relevant.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Reference implementation of the ONNX ``RandomUniform`` operator (since
+/// opset 1 in the ``ai.onnx`` domain). Produces an output tensor of the
+/// given ``shape`` filled with samples drawn uniformly from the half-open
+/// interval ``[low, high)``.
+///
+/// Uses the deterministic :cpp:func:`Rand` helper (SplitMix64). Supported
+/// output dtypes are ``FLOAT`` (default) and ``DOUBLE``; any other value
+/// of ``dtype`` triggers ``std::invalid_argument``.
+class RandomUniform : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  /// Produces a ``shape``-shaped tensor of uniform samples in
+  /// ``[low, high)``. ``low`` defaults to ``0.0`` and ``high`` to
+  /// ``1.0`` to mirror the schema. ``dtype`` defaults to
+  /// ``DataType::FLOAT``. ``seed`` selects the RNG seed; pass ``kNoSeed``
+  /// to use the kernel's default.
+  Tensor operator()(const std::vector<int64_t> &shape, double low = 0.0, double high = 1.0,
+                    int64_t seed = kNoSeed, int32_t dtype = 0) const;
+  void operator()(const std::vector<int64_t> &shape, double low, double high, int64_t seed,
+                  int32_t dtype, Tensor &output) const;
+
+  /// Sentinel meaning ``seed`` attribute is absent.
+  static constexpr int64_t kNoSeed = -1;
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Reference implementation of the ONNX ``RandomNormalLike`` operator
+/// (since opset 1 in the ``ai.onnx`` domain). Produces an output tensor
+/// whose shape matches ``input`` filled with samples drawn from a normal
+/// distribution. When ``dtype`` is ``0`` the output dtype equals the
+/// input dtype (which must be one of the supported output dtypes);
+/// otherwise the value overrides the output dtype.
+class RandomNormalLike : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &input, double mean = 0.0, double scale = 1.0,
+                    int64_t seed = kNoSeed, int32_t dtype = 0) const;
+  void operator()(const Tensor &input, double mean, double scale, int64_t seed, int32_t dtype,
+                  Tensor &output) const;
+
+  static constexpr int64_t kNoSeed = -1;
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Reference implementation of the ONNX ``RandomUniformLike`` operator
+/// (since opset 1 in the ``ai.onnx`` domain). Same semantics as
+/// :cpp:class:`RandomUniform` but the output shape is copied from
+/// ``input``.
+class RandomUniformLike : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &input, double low = 0.0, double high = 1.0,
+                    int64_t seed = kNoSeed, int32_t dtype = 0) const;
+  void operator()(const Tensor &input, double low, double high, int64_t seed, int32_t dtype,
+                  Tensor &output) const;
+
+  static constexpr int64_t kNoSeed = -1;
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 

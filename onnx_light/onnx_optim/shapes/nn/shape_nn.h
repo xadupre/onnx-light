@@ -204,6 +204,20 @@ void ComputeShapeInstanceNormalization(ShapesContext &ctx, const NodeProto &node
 void ComputeShapeGroupNormalization(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a
+ * ``MeanVarianceNormalization`` node and stores it in ``ctx``.
+ *
+ * The output dtype and shape are always inherited from input ``X``.
+ *
+ * @param ctx   In/out context. Must already contain an entry for ``x``; on
+ *              return it also contains an entry for ``node.output(0)``.
+ * @param node  The ``MeanVarianceNormalization`` ``NodeProto``.
+ * @param x     Name of the data input value to read from ``ctx``.
+ */
+void ComputeShapeMeanVarianceNormalization(ShapesContext &ctx, const NodeProto &node,
+                                           const char *x);
+
+/**
  * Computes the output :cpp:class:`OptimTensor`(s) of a ``Dropout`` node and
  * stores them in ``ctx``.
  *

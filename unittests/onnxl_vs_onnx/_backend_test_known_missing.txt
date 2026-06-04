@@ -555,9 +555,6 @@ maxunpool_export_without_output_shape
 min_float16
 mish_expanded
 mod_mixed_sign_float16
-mvn
-mvn_expanded
-mvn_expanded_ver18
 nllloss_NC
 nllloss_NC_expanded
 nllloss_NCd1

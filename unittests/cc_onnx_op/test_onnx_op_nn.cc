@@ -32,6 +32,7 @@ constexpr size_t kExpectedGlobalMaxPoolSchemaCount = 2;
 constexpr size_t kExpectedGRUSchemaCount = 5;
 constexpr size_t kExpectedGroupNormalizationSchemaCount = 2;
 constexpr size_t kExpectedInstanceNormalizationSchemaCount = 3;
+constexpr size_t kExpectedMeanVarianceNormalizationSchemaCount = 2;
 constexpr size_t kExpectedLRNSchemaCount = 2;
 constexpr size_t kExpectedLSTMSchemaCount = 4;
 constexpr size_t kExpectedRNNSchemaCount = 4;
@@ -43,7 +44,8 @@ constexpr size_t kExpectedNnSchemaCount =
     kExpectedDropoutSchemaCount + kExpectedGlobalLpPoolSchemaCount + kExpectedFlattenSchemaCount +
     kExpectedGlobalMaxPoolSchemaCount + kExpectedGRUSchemaCount +
     kExpectedGroupNormalizationSchemaCount + kExpectedInstanceNormalizationSchemaCount +
-    kExpectedLRNSchemaCount + kExpectedLSTMSchemaCount + kExpectedRNNSchemaCount;
+    kExpectedLRNSchemaCount + kExpectedLSTMSchemaCount + kExpectedRNNSchemaCount +
+    kExpectedMeanVarianceNormalizationSchemaCount;
 
 static const onnx_op::LightOpSchema *
 FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
@@ -724,6 +726,34 @@ TEST(OnnxOpNnRegistrationTest, ReturnsGroupNormalizationSchemasForAllVersions) {
   // v21 adds ``stash_type``.
   EXPECT_FALSE(v21->deprecated());
   EXPECT_EQ(v21->attributes().size(), 3u);
+}
+
+TEST(OnnxOpNnRegistrationTest, ReturnsMeanVarianceNormalizationSchemasForAllVersions) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("MeanVarianceNormalization");
+  ASSERT_EQ(schemas.size(), kExpectedMeanVarianceNormalizationSchemaCount);
+
+  const onnx_op::LightOpSchema *const v13 = FindByVersion(schemas, 13);
+  const onnx_op::LightOpSchema *const v9 = FindByVersion(schemas, 9);
+  ASSERT_NE(nullptr, v13);
+  ASSERT_NE(nullptr, v9);
+
+  for (const onnx_op::LightOpSchema *schema : {v9, v13}) {
+    SCOPED_TRACE("MeanVarianceNormalization@" + std::to_string(schema->since_version()));
+    EXPECT_EQ(schema->name(), "MeanVarianceNormalization");
+    EXPECT_EQ(schema->domain(), "ai.onnx");
+    ASSERT_EQ(schema->inputs().size(), 1u);
+    EXPECT_EQ(schema->inputs()[0].name, "X");
+    ASSERT_EQ(schema->outputs().size(), 1u);
+    EXPECT_EQ(schema->outputs()[0].name, "Y");
+    ASSERT_EQ(schema->attributes().size(), 1u);
+    EXPECT_EQ(schema->attributes()[0].name, "axes");
+    ASSERT_EQ(schema->type_constraints().size(), 1u);
+    EXPECT_FALSE(schema->doc().empty());
+  }
+
+  EXPECT_EQ(v9->type_constraints()[0].allowed_type_strs.size(), 3u);
+  EXPECT_EQ(v13->type_constraints()[0].allowed_type_strs.size(), 4u);
 }
 
 } // namespace Test

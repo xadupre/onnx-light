@@ -10,6 +10,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -40,6 +41,7 @@ struct ExpectedOutput {
   std::string name;
   int32_t elem_type = 0;
   std::vector<int64_t> shape;
+  bool had_shape = false;
 };
 
 // Returns the underlying ``TypeProto::Tensor`` carried by ``type``, drilling
@@ -101,6 +103,7 @@ std::vector<ExpectedOutput> SnapshotAndStripOutputs(ModelProto &model) {
     if (out.has_type()) {
       if (auto *tt = MutableTensorTypeOf(*out.mutable_type()); tt != nullptr) {
         exp.elem_type = static_cast<int32_t>(tt->elem_type());
+        exp.had_shape = tt->has_shape();
         exp.shape = DimsOf(*tt);
         // Strip the recorded shape so InferShapes has to recover it.
         // We keep elem_type so the ValueInfo remains well-formed.
@@ -110,6 +113,78 @@ std::vector<ExpectedOutput> SnapshotAndStripOutputs(ModelProto &model) {
     snapshot.emplace_back(std::move(exp));
   }
   return snapshot;
+}
+
+// Same as :ref:`SnapshotAndStripOutputs` but for the intermediate
+// ``value_info`` entries declared by the graph. Used for ``kind == "model"``
+// test cases that record expected intermediate shapes in ``value_info``: we
+// strip them so shape inference must recover them, then compare the snapshot
+// to the post-inference ``value_info``.
+std::vector<ExpectedOutput> SnapshotAndStripValueInfo(ModelProto &model) {
+  std::vector<ExpectedOutput> snapshot;
+  auto &value_infos = model.mutable_graph()->ref_value_info();
+  snapshot.reserve(value_infos.size());
+  for (size_t i = 0; i < value_infos.size(); ++i) {
+    auto &vi = value_infos[i];
+    ExpectedOutput exp;
+    exp.name.assign(vi.ref_name().data(), vi.ref_name().size());
+    if (vi.has_type()) {
+      if (auto *tt = MutableTensorTypeOf(*vi.mutable_type()); tt != nullptr) {
+        exp.elem_type = static_cast<int32_t>(tt->elem_type());
+        exp.had_shape = tt->has_shape();
+        exp.shape = DimsOf(*tt);
+        // Strip the recorded shape so InferShapes has to recover it.
+        // We keep elem_type so the ValueInfo remains well-formed.
+        tt->clear_shape();
+      }
+    }
+    snapshot.emplace_back(std::move(exp));
+  }
+  return snapshot;
+}
+
+// Verifies that every entry in ``expected`` is present in
+// ``graph.value_info`` after shape inference with the same elem_type and a
+// compatible shape (concrete dims must match; symbolic / unknown dims are
+// tolerated, mirroring the output check above). When the snapshot recorded
+// a shape, shape inference must have populated one as well, so we can detect
+// intermediate names for which inference produced nothing at all.
+void CheckValueInfoMatchesExpected(const GraphProto &graph,
+                                   const std::vector<ExpectedOutput> &expected) {
+  std::unordered_map<std::string, const ValueInfoProto *> by_name;
+  const auto &value_infos = graph.ref_value_info();
+  by_name.reserve(value_infos.size());
+  for (size_t i = 0; i < value_infos.size(); ++i) {
+    const auto &vi = value_infos[i];
+    by_name.emplace(std::string(vi.ref_name().data(), vi.ref_name().size()), &vi);
+  }
+
+  for (const auto &exp : expected) {
+    auto it = by_name.find(exp.name);
+    ASSERT_NE(it, by_name.end()) << "value_info " << exp.name
+                                 << " missing from graph after shape inference";
+    const auto &vi = *it->second;
+    ASSERT_TRUE(vi.has_type()) << "value_info " << exp.name << " missing type";
+    const TypeProto::Tensor *tt_ptr = TensorTypeOf(vi.ref_type());
+    ASSERT_NE(tt_ptr, nullptr) << "value_info " << exp.name << " not a tensor";
+    const auto &tt = *tt_ptr;
+    EXPECT_EQ(static_cast<int32_t>(tt.elem_type()), exp.elem_type)
+        << "elem_type mismatch on value_info " << exp.name;
+    if (exp.had_shape) {
+      ASSERT_TRUE(tt.has_shape()) << "value_info " << exp.name
+                                  << " has no shape after inference (expected rank "
+                                  << exp.shape.size() << ")";
+      const auto inferred_dims = DimsOf(tt);
+      ASSERT_EQ(inferred_dims.size(), exp.shape.size())
+          << "rank mismatch on value_info " << exp.name;
+      for (size_t d = 0; d < inferred_dims.size(); ++d) {
+        if (inferred_dims[d] != -1 && exp.shape[d] != -1) {
+          EXPECT_EQ(inferred_dims[d], exp.shape[d])
+              << "dim[" << d << "] mismatch on value_info " << exp.name;
+        }
+      }
+    }
+  }
 }
 
 } // namespace
@@ -234,11 +309,27 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesInferOutputShapes) {
 
   for (TestCase &tc : cases) {
     SCOPED_TRACE(tc.name);
-    const auto expected = SnapshotAndStripOutputs(tc.model);
 
-    ASSERT_NO_THROW(shape_inference::InferShapes(tc.model)) << "case: " << tc.name;
+    // For ``kind == "model"`` cases the test model also records expected
+    // intermediate shapes in ``value_info``. Operate on a deep copy of the
+    // model so we can wipe out those intermediate values (and the recorded
+    // output shapes) without mutating the original test case, then verify
+    // shape inference recovers them.
+    ModelProto *model_ptr = &tc.model;
+    ModelProto model_copy;
+    std::vector<ExpectedOutput> expected_value_info;
+    if (tc.kind == "model") {
+      std::string serialized;
+      tc.model.SerializeToString(serialized);
+      model_copy.ParseFromString(serialized);
+      model_ptr = &model_copy;
+      expected_value_info = SnapshotAndStripValueInfo(*model_ptr);
+    }
+    const auto expected = SnapshotAndStripOutputs(*model_ptr);
 
-    const auto &outputs = tc.model.ref_graph().ref_output();
+    ASSERT_NO_THROW(shape_inference::InferShapes(*model_ptr)) << "case: " << tc.name;
+
+    const auto &outputs = model_ptr->ref_graph().ref_output();
     ASSERT_EQ(outputs.size(), expected.size());
     for (size_t i = 0; i < outputs.size(); ++i) {
       const auto &out = outputs[i];
@@ -260,6 +351,10 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesInferOutputShapes) {
           }
         }
       }
+    }
+
+    if (tc.kind == "model") {
+      CheckValueInfoMatchesExpected(model_ptr->ref_graph(), expected_value_info);
     }
   }
 }

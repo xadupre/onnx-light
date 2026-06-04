@@ -28,6 +28,24 @@ std::string MakeQuantizeLinearDoc(int since_version);
  */
 std::string MakeDequantizeLinearDoc(int since_version);
 
+/**
+ * Returns the documentation string for the QLinearConv operator at the
+ * given opset version.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the QLinearConv operator.
+ */
+std::string MakeQLinearConvDoc(int since_version);
+
+/**
+ * Returns the documentation string for the QLinearMatMul operator at the
+ * given opset version.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the QLinearMatMul operator.
+ */
+std::string MakeQLinearMatMulDoc(int since_version);
+
 } // namespace quantization
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

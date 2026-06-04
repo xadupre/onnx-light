@@ -23,6 +23,12 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry);
 /// Registers the ``DequantizeLinear`` backend test node case(s).
 void RegisterDequantizeLinearCases(std::vector<TestCase> &registry);
 
+/// Registers the ``QLinearMatMul`` backend test node case(s).
+void RegisterQLinearMatMulCases(std::vector<TestCase> &registry);
+
+/// Registers the ``QLinearConv`` backend test node case(s).
+void RegisterQLinearConvCases(std::vector<TestCase> &registry);
+
 /// Collects all ``quantization`` op category backend test node cases by
 /// invoking every ``Register*Cases`` helper declared in this header.
 void CollectQuantizationTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");

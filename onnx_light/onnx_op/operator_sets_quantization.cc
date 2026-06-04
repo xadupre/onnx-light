@@ -473,6 +473,157 @@ LightOpSchema MakeDequantizeLinearV10Schema() {
       });
 }
 
+// --- QLinearConv -------------------------------------------------------------
+
+LightOpSchema MakeQLinearConvV10Schema() {
+  return LightOpSchema(
+      "QLinearConv", kOnnxDomain, 10, MakeQLinearConvDoc(10),
+      {
+          {"x",
+           "Input data tensor from previous layer; "
+           "has size (N x C x H x W), where N is the batch size, "
+           "C is the number of channels, and H and W are the "
+           "height and width. Note that this is for the 2D image. "
+           "Otherwise the size is (N x C x D1 x D2 ... x Dn). "
+           "Optionally, if dimension denotation is "
+           "in effect, the operation expects input data tensor "
+           "to arrive with the dimension denotation of [DATA_BATCH, "
+           "DATA_CHANNEL, DATA_FEATURE, DATA_FEATURE ...].",
+           "T1"},
+          {"x_scale",
+           "Scale tensor for input 'x'. It's a scalar, which means a per-tensor/layer "
+           "quantization.",
+           "tensor(float)"},
+          {"x_zero_point",
+           "Zero point tensor for input 'x'. It's a scalar, which means a per-tensor/layer "
+           "quantization.",
+           "T1"},
+          {"w",
+           "The weight tensor that will be used in the "
+           "convolutions; has size (M x C/group x kH x kW), where C "
+           "is the number of channels, and kH and kW are the "
+           "height and width of the kernel, and M is the number "
+           "of feature maps. For more than 2 dimensions, the "
+           "kernel shape will be (M x C/group x k1 x k2 x ... x kn), "
+           "where (k1 x k2 x ... kn) is the dimension of the kernel. "
+           "Optionally, if dimension denotation is in effect, "
+           "the operation expects the weight tensor to arrive "
+           "with the dimension denotation of [FILTER_OUT_CHANNEL, "
+           "FILTER_IN_CHANNEL, FILTER_SPATIAL, FILTER_SPATIAL ...]. "
+           "X.shape[1] == (W.shape[1] * group) == C "
+           "(assuming zero based indices for the shape array). "
+           "Or in other words FILTER_IN_CHANNEL should be equal to DATA_CHANNEL. ",
+           "T2"},
+          {"w_scale",
+           "Scale tensor for input 'w'. It could be a scalar or a 1-D tensor, which means a "
+           "per-tensor/layer or per output channel quantization. If it's a 1-D tensor, its "
+           "number of elements should be equal to the number of output channels (M).",
+           "tensor(float)"},
+          {"w_zero_point",
+           "Zero point tensor for input 'w'. It could be a scalar or a 1-D tensor, which means "
+           "a per-tensor/layer or per output channel quantization. If it's a 1-D tensor, its "
+           "number of elements should be equal to the number of output channels (M).",
+           "T2"},
+          {"y_scale",
+           "Scale tensor for output 'y'. It's a scalar, which means a per-tensor/layer "
+           "quantization.",
+           "tensor(float)"},
+          {"y_zero_point",
+           "Zero point tensor for output 'y'. It's a scalar, which means a per-tensor/layer "
+           "quantization.",
+           "T3"},
+          {"B",
+           "Optional 1D bias to be added to the convolution, has size of M. "
+           "Bias must be quantized using scale = x_scale * w_scale and zero_point = 0",
+           "T4"},
+      },
+      {
+          {"y",
+           "Output data tensor that contains the result of the "
+           "convolution. The output dimensions are functions "
+           "of the kernel size, stride size, and pad lengths.",
+           "T3"},
+      },
+      {
+          {"T1",
+           {TensorType::kInt8, TensorType::kUint8},
+           "Constrain input type to 8-bit integer tensor."},
+          {"T2",
+           {TensorType::kInt8, TensorType::kUint8},
+           "Constrain filter type to 8-bit integer tensor."},
+          {"T3",
+           {TensorType::kInt8, TensorType::kUint8},
+           "Constrain output type to 8-bit integer tensor."},
+          {"T4", {TensorType::kInt32}, "Constrain bias type to 32-bit integer tensor."},
+      });
+}
+
+// --- QLinearMatMul -----------------------------------------------------------
+
+LightOpSchema MakeQLinearMatMulV21Schema() {
+  return LightOpSchema(
+      "QLinearMatMul", kOnnxDomain, 21, MakeQLinearMatMulDoc(21),
+      {
+          {"a", "N-dimensional quantized matrix a", "T1"},
+          {"a_scale", "scale of quantized input a", "TS"},
+          {"a_zero_point", "zero point of quantized input a", "T1"},
+          {"b", "N-dimensional quantized matrix b", "T2"},
+          {"b_scale", "scale of quantized input b", "TS"},
+          {"b_zero_point", "zero point of quantized input b", "T2"},
+          {"y_scale", "scale of quantized output y", "TS"},
+          {"y_zero_point", "zero point of quantized output y", "T3"},
+      },
+      {
+          {"y", "Quantized matrix multiply results from a * b", "T3"},
+      },
+      {
+          {"TS",
+           {TensorType::kFloat, TensorType::kFloat16, TensorType::kBfloat16},
+           "Constrain scales."},
+          {"T1",
+           {TensorType::kInt8, TensorType::kUint8, TensorType::kFloat8e4m3fn,
+            TensorType::kFloat8e4m3fnuz, TensorType::kFloat8e5m2, TensorType::kFloat8e5m2fnuz},
+           "The type of input a and its zeropoint."},
+          {"T2",
+           {TensorType::kInt8, TensorType::kUint8, TensorType::kFloat8e4m3fn,
+            TensorType::kFloat8e4m3fnuz, TensorType::kFloat8e5m2, TensorType::kFloat8e5m2fnuz},
+           "The type of input b and its zeropoint."},
+          {"T3",
+           {TensorType::kInt8, TensorType::kUint8, TensorType::kFloat8e4m3fn,
+            TensorType::kFloat8e4m3fnuz, TensorType::kFloat8e5m2, TensorType::kFloat8e5m2fnuz},
+           "The type of the output and its zeropoint."},
+      });
+}
+
+LightOpSchema MakeQLinearMatMulV10Schema() {
+  return LightOpSchema(
+      "QLinearMatMul", kOnnxDomain, 10, MakeQLinearMatMulDoc(10),
+      {
+          {"a", "N-dimensional quantized matrix a", "T1"},
+          {"a_scale", "scale of quantized input a", "tensor(float)"},
+          {"a_zero_point", "zero point of quantized input a", "T1"},
+          {"b", "N-dimensional quantized matrix b", "T2"},
+          {"b_scale", "scale of quantized input b", "tensor(float)"},
+          {"b_zero_point", "zero point of quantized input b", "T2"},
+          {"y_scale", "scale of quantized output y", "tensor(float)"},
+          {"y_zero_point", "zero point of quantized output y", "T3"},
+      },
+      {
+          {"y", "Quantized matrix multiply results from a * b", "T3"},
+      },
+      {
+          {"T1",
+           {TensorType::kInt8, TensorType::kUint8},
+           "Constrain input a and its zero point data type to 8-bit integer tensor."},
+          {"T2",
+           {TensorType::kInt8, TensorType::kUint8},
+           "Constrain input b and its zero point data type to 8-bit integer tensor."},
+          {"T3",
+           {TensorType::kInt8, TensorType::kUint8},
+           "Constrain output y and its zero point data type to 8-bit integer tensor."},
+      });
+}
+
 } // namespace
 
 std::vector<LightOpSchema> GetAllOnnxOpQuantizationSchemasWithHistory(const std::string &op_type,
@@ -494,6 +645,19 @@ std::vector<LightOpSchema> GetAllOnnxOpQuantizationSchemasWithHistory(const std:
              MakeDequantizeLinearV23Schema(), MakeDequantizeLinearV21Schema(),
              MakeDequantizeLinearV19Schema(), MakeDequantizeLinearV13Schema(),
              MakeDequantizeLinearV10Schema(),
+         };
+       }},
+      {"QLinearConv",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeQLinearConvV10Schema(),
+         };
+       }},
+      {"QLinearMatMul",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeQLinearMatMulV21Schema(),
+             MakeQLinearMatMulV10Schema(),
          };
        }},
   };

@@ -216,6 +216,38 @@ std::string MakeDequantizeLinearDoc(int since_version) {
   }
 }
 
+namespace {
+
+constexpr const char *kQLinearConvVer10Doc = R"DOC(
+The convolution operator consumes a quantized input tensor, its scale and zero point,
+a quantized filter, its scale and zero point, and output's scale and zero point,
+and computes the quantized output. Each scale and zero-point pair must have same shape.
+It means they must be either scalars (per tensor) or 1-D tensors (per output channel).
+Each input or output and its related zero point must have same type.
+When bias is present it must be quantized using scale = input scale * weight scale and
+zero point as 0.
+)DOC";
+
+constexpr const char *kQLinearMatMulDoc = R"DOC(
+Matrix product that behaves like [numpy.matmul](https://numpy.org/doc/stable/reference/generated/numpy.matmul.html).
+It consumes two quantized input tensors, their scales and zero points, scale and zero point of output,
+and computes the quantized output. The quantization formula is y = saturate((x / y_scale) + y_zero_point).
+For (x / y_scale), it is rounding to nearest ties to even. Refer to https://en.wikipedia.org/wiki/Rounding for details.
+Scale and zero point must have same shape. They must be either scalar (per tensor) or N-D tensor
+(per row for 'a' and per column for 'b'). Scalar refers to per tensor quantization whereas N-D refers to per row
+or per column quantization. If the input is 2D of shape [M, K] then zero point and scale tensor may be
+an M element vector [v_1, v_2, ..., v_M] for per row quantization and K element vector of shape [v_1, v_2, ..., v_K]
+for per column quantization. If the input is N-D tensor with shape [D1, D2, M, K] then zero point and scale tensor may
+have shape [D1, D2, M, 1] for per row quantization and shape [D1, D2, 1, K] for per column quantization.
+Production must never overflow, and accumulation may overflow if and only if in 32 bits.
+)DOC";
+
+} // namespace
+
+std::string MakeQLinearConvDoc(int /*since_version*/) { return kQLinearConvVer10Doc; }
+
+std::string MakeQLinearMatMulDoc(int /*since_version*/) { return kQLinearMatMulDoc; }
+
 } // namespace quantization
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

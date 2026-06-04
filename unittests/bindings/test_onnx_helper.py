@@ -566,7 +566,7 @@ class TestAlignExternalDataStreaming(ExtTestCase):
             metadata = onnxl.load(dst_onnx, load_external_data=False)
             inits = list(metadata.graph.initializer)
             self.assertEqual(len(inits), len(payloads))
-            for i, (init, arr) in enumerate(zip(inits, payloads)):
+            for init, arr in zip(inits, payloads):
                 self.assertEqual(int(init.data_location), int(onnxl.TensorProto.EXTERNAL))
                 entries = {e.key: e.value for e in init.external_data}
                 self.assertEqual(str(entries["location"]), os.path.basename(dst_weights))

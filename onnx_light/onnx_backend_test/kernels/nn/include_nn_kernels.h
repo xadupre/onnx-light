@@ -290,6 +290,28 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Reference implementation of ``LpNormalization``.
+///
+/// Computes ``output = input / Lp_norm(input, axis)`` element-wise along the
+/// given ``axis`` (negative values count from the end). When the Lp norm
+/// along a slice is zero, the corresponding output slice is set to zero to
+/// avoid division by zero.
+///
+/// The kernel accepts FLOAT inputs of any rank ``>= 1``. ``axis`` defaults
+/// to ``-1`` (the last axis). ``p`` must be either ``1`` (L1 norm) or
+/// ``2`` (L2 norm) and defaults to ``2``. The output shape matches the
+/// input shape.
+class LpNormalization : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Returns a FLOAT output tensor whose shape matches ``x``.
+  Tensor operator()(const Tensor &x, int64_t axis = -1, int64_t p = 2) const;
+
+  /// Output shape matches input shape, so storage may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// Single-direction (``"forward"``) one-layer RNN on FLOAT tensors using
 /// the ``Tanh`` activation. Implements the upstream ONNX ``RNN`` formula
 ///

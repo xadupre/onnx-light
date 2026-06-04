@@ -906,10 +906,11 @@ loss[n][d_1][d_2]...[d_k] = -input[n][c][d_1][d_2]...[d_k].
 )DOC";
 
 LightOpSchema MakeNegativeLogLikelihoodLossSchema(int since_version) {
-  std::vector<TensorType> t_types = {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
-  if (since_version >= 13) {
-    t_types.push_back(TensorType::kBfloat16);
-  }
+  std::vector<TensorType> t_types =
+      since_version >= 22
+          ? std::vector<TensorType>{TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat,
+                                    TensorType::kDouble}
+          : std::vector<TensorType>{TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
   return LightOpSchema(
       "NegativeLogLikelihoodLoss", kOnnxDomain, since_version, kNegativeLogLikelihoodLossDoc,
       {

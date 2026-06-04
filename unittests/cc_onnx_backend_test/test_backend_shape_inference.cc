@@ -309,18 +309,27 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesInferOutputShapes) {
 
   for (TestCase &tc : cases) {
     SCOPED_TRACE(tc.name);
-    const auto expected = SnapshotAndStripOutputs(tc.model);
-    // ``kind == "model"`` cases record expected intermediate shapes in
-    // ``value_info``; snapshot and strip them so shape inference must
-    // recover them too.
+
+    // For ``kind == "model"`` cases the test model also records expected
+    // intermediate shapes in ``value_info``. Operate on a deep copy of the
+    // model so we can wipe out those intermediate values (and the recorded
+    // output shapes) without mutating the original test case, then verify
+    // shape inference recovers them.
+    ModelProto *model_ptr = &tc.model;
+    ModelProto model_copy;
     std::vector<ExpectedOutput> expected_value_info;
     if (tc.kind == "model") {
-      expected_value_info = SnapshotAndStripValueInfo(tc.model);
+      std::string serialized;
+      tc.model.SerializeToString(serialized);
+      model_copy.ParseFromString(serialized);
+      model_ptr = &model_copy;
+      expected_value_info = SnapshotAndStripValueInfo(*model_ptr);
     }
+    const auto expected = SnapshotAndStripOutputs(*model_ptr);
 
-    ASSERT_NO_THROW(shape_inference::InferShapes(tc.model)) << "case: " << tc.name;
+    ASSERT_NO_THROW(shape_inference::InferShapes(*model_ptr)) << "case: " << tc.name;
 
-    const auto &outputs = tc.model.ref_graph().ref_output();
+    const auto &outputs = model_ptr->ref_graph().ref_output();
     ASSERT_EQ(outputs.size(), expected.size());
     for (size_t i = 0; i < outputs.size(); ++i) {
       const auto &out = outputs[i];
@@ -345,7 +354,7 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesInferOutputShapes) {
     }
 
     if (tc.kind == "model") {
-      CheckValueInfoMatchesExpected(tc.model.ref_graph(), expected_value_info);
+      CheckValueInfoMatchesExpected(model_ptr->ref_graph(), expected_value_info);
     }
   }
 }

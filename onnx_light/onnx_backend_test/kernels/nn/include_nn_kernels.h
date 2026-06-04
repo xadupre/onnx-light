@@ -208,6 +208,33 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Reference implementation of ``LRN`` (Local Response Normalization).
+///
+/// Implements
+///
+///   ``Y[n, c, d1, ..., dk] = X[n, c, d1, ..., dk] /``
+///   ``(bias + alpha / size * square_sum[n, c, d1, ..., dk]) ** beta``
+///
+/// where ``square_sum[n, c, d1, ..., dk]`` is the sum of squares over the
+/// channel window
+/// ``i in [max(0, c - floor((size-1)/2)), min(C-1, c + ceil((size-1)/2))]``.
+///
+/// The kernel accepts FLOAT inputs of rank ``>= 2`` laid out as
+/// ``(N, C, D1, ..., Dk)``. ``size`` must be a strictly positive integer.
+/// ``alpha`` defaults to ``0.0001``, ``beta`` to ``0.75`` and ``bias`` to
+/// ``1.0`` (the ONNX defaults). The output shape matches the input shape.
+class LRN : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Returns a FLOAT output tensor whose shape matches ``x``.
+  Tensor operator()(const Tensor &x, int64_t size, float alpha = 0.0001f, float beta = 0.75f,
+                    float bias = 1.0f) const;
+
+  /// Output shape matches input shape, so storage may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// Single-direction (``"forward"``) one-layer RNN on FLOAT tensors using
 /// the ``Tanh`` activation. Implements the upstream ONNX ``RNN`` formula
 ///

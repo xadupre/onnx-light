@@ -532,8 +532,6 @@ lppool_2d_same_lower
 lppool_2d_same_upper
 lppool_2d_strides
 lppool_3d_default
-lrn
-lrn_default
 matmul_1d_1d
 matmul_1d_3d
 matmul_3d

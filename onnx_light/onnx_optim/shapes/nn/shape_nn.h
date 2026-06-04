@@ -188,6 +188,35 @@ void ComputeShapeRoiAlign(ShapesContext &ctx, const NodeProto &node, const char 
                           const char *rois, const char *batch_indices);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``NonMaxSuppression`` node
+ * and stores it in ``ctx``.
+ *
+ * The output dtype is always ``TensorType::kInt64``. The output shape is
+ * always rank 2: ``(num_selected_indices, 3)`` where ``num_selected_indices``
+ * is a fresh symbolic expression because it depends on the runtime values of
+ * the inputs. The optional ``max_output_boxes_per_class``, ``iou_threshold``
+ * and ``score_threshold`` inputs are not read by shape inference and may be
+ * omitted from ``ctx``.
+ *
+ * @param ctx    In/out context. Must already contain entries for ``boxes`` and
+ *               ``scores``; on return it also contains an entry for
+ *               ``node.output(0)``.
+ * @param node   The ``NonMaxSuppression`` ``NodeProto`` whose output should be
+ *               described. ``node.op_type()`` must be ``"NonMaxSuppression"``
+ *               and ``node`` must declare at least one output.
+ * @param boxes  Name of the boxes input (rank 3, last dim == 4) in ``ctx``.
+ * @param scores Name of the scores input (rank 3) in ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"NonMaxSuppression"``, if ``node`` has no output, or if the
+ *         present inputs have inconsistent ranks/shapes.
+ * @throws std::out_of_range     if ``boxes`` or ``scores`` is not present in
+ *                               ``ctx``.
+ */
+void ComputeShapeNonMaxSuppression(ShapesContext &ctx, const NodeProto &node, const char *boxes,
+                                   const char *scores);
+
+/**
  * Computes the output :cpp:class:`OptimTensor`(s) of an ``RNN``, ``GRU`` or
  * ``LSTM`` node and stores them in ``ctx``. The three operators share the
  * same output-shape semantics — only the number of outputs differs

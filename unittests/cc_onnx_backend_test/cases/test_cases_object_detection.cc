@@ -125,4 +125,47 @@ TEST(BackendTestCase, RoiAlignUpstreamCasesArePresent) {
   }
 }
 
+TEST(BackendTestCase, NonMaxSuppressionUpstreamCasesArePresent) {
+  auto cases = CollectTestCases("NonMaxSuppression");
+  const std::vector<std::string> expected_names = {
+      "test_cc_nonmaxsuppression_suppress_by_IOU",
+      "test_cc_nonmaxsuppression_suppress_by_IOU_and_scores",
+      "test_cc_nonmaxsuppression_flipped_coordinates",
+      "test_cc_nonmaxsuppression_limit_output_size",
+      "test_cc_nonmaxsuppression_single_box",
+      "test_cc_nonmaxsuppression_identical_boxes",
+      "test_cc_nonmaxsuppression_center_point_box_format",
+      "test_cc_nonmaxsuppression_two_classes",
+      "test_cc_nonmaxsuppression_two_batches",
+      "test_cc_nonmaxsuppression_iou_threshold_boundary",
+  };
+
+  for (const std::string &name : expected_names) {
+    SCOPED_TRACE(name);
+    const TestCase *tc = nullptr;
+    for (const auto &c : cases) {
+      if (c.name == name) {
+        tc = &c;
+        break;
+      }
+    }
+    ASSERT_NE(tc, nullptr);
+    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    const auto &op_type = node.ref_op_type();
+    EXPECT_EQ(std::string(op_type.data(), op_type.size()), "NonMaxSuppression");
+    EXPECT_EQ(graph.ref_input().size(), 5u);
+    ASSERT_EQ(graph.ref_output().size(), 1u);
+
+    ASSERT_EQ(tc->data_sets.size(), 1u);
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 5u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+    ASSERT_EQ(ds.outputs[0].shape.size(), 2u);
+    EXPECT_EQ(ds.outputs[0].shape[1], 3);
+  }
+}
+
 } // namespace Test

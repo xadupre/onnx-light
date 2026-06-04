@@ -84,6 +84,48 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference NonMaxSuppression kernel (since opset 10 in the ai.onnx domain).
+///
+/// Implements the upstream NMS reference: for each (batch, class) pair the
+/// kernel sorts boxes by descending score, optionally pre-filters by
+/// ``score_threshold``, then greedily picks boxes whose IoU with all
+/// previously selected boxes is at most ``iou_threshold``. The selection is
+/// capped at ``max_output_boxes_per_class`` per (batch, class) pair and the
+/// final output rows are emitted in the upstream order: outer loop over
+/// batches, then classes, then per-pair selection order (which itself is the
+/// descending-score insertion order).
+///
+/// Inputs are restricted to FLOAT for ``boxes``/``scores``/``iou_threshold``/
+/// ``score_threshold`` and INT64 for ``max_output_boxes_per_class``; the
+/// optional scalar inputs (``max_output_boxes_per_class``, ``iou_threshold``,
+/// ``score_threshold``) may be omitted by passing a ``nullptr`` ``Tensor``
+/// pointer to ``operator()``. Defaults follow the ONNX schema:
+/// ``max_output_boxes_per_class = 0`` (no output), ``iou_threshold = 0`` and
+/// ``score_threshold = -inf`` (no score filtering).
+class NonMaxSuppression : public KernelBase {
+public:
+  /// Attributes carried by the ONNX ``NonMaxSuppression`` operator. The
+  /// default matches the schema (``center_point_box = 0`` — the
+  /// ``[y1, x1, y2, x2]`` corner format).
+  struct Attributes {
+    int64_t center_point_box = 0;
+  };
+
+  using KernelBase::KernelBase;
+
+  /// Computes selected indices and returns a freshly allocated INT64 tensor
+  /// of shape ``(num_selected, 3)``. The optional scalar inputs may be
+  /// ``nullptr`` to indicate "not provided" (in which case their schema
+  /// defaults apply).
+  Tensor operator()(const Tensor &boxes, const Tensor &scores,
+                    const Tensor *max_output_boxes_per_class, const Tensor *iou_threshold,
+                    const Tensor *score_threshold, const Attributes &attrs) const;
+
+  /// Output element layout differs fundamentally from any input
+  /// (FLOAT/INT64 mix, distinct rank and shape), so storage cannot be shared.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

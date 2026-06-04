@@ -51,6 +51,11 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     registered for ``RandomUniformLike(22)`` ("Could not find an
 #     implementation for RandomUniformLike(22) node"). The reference backend
 #     still exercises these cases.
+#   * ``test_cc_multinomial``, ``test_cc_multinomial_seeded`` and
+#     ``test_cc_multinomial_int64`` — ORT's CPU EP has no kernel registered
+#     for ``Multinomial(22)`` ("Could not find an implementation for
+#     Multinomial(22) node"). The reference backend still exercises these
+#     cases.
 #   * ``test_cc_randomnormal*``, ``test_cc_randomnormallike*``,
 #     ``test_cc_randomuniform*`` and ``test_cc_randomuniformlike*`` — ORT's
 #     CPU EP has no kernel registered for ``RandomNormal(22)``,
@@ -203,6 +208,9 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_bernoulli$",
     r"^test_cc_bernoulli_double$",
     r"^test_cc_bernoulli_seed$",
+    r"^test_cc_multinomial$",
+    r"^test_cc_multinomial_seeded$",
+    r"^test_cc_multinomial_int64$",
     r"^test_cc_randomnormal$",
     r"^test_cc_randomnormal_double$",
     r"^test_cc_randomnormal_seeded$",

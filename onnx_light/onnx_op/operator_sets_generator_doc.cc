@@ -65,6 +65,13 @@ TensorProto message.
 )DOC";
 }
 
+std::string MakeMultinomialDoc() {
+  return R"DOC(
+Generate a tensor of samples from a multinomial distribution according to the probabilities
+of each of the possible outcomes.
+)DOC";
+}
+
 std::string MakeRandomNormalLikeDoc() {
   return R"DOC(
 Generate a tensor with random values drawn from a normal distribution.

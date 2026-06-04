@@ -230,6 +230,24 @@ void ComputeShapeRandomNormalLike(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeRandomUniformLike(ShapesContext &ctx, const NodeProto &node);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Multinomial`` node
+ * and stores it in ``ctx``.
+ *
+ * ``Multinomial`` draws ``sample_size`` samples per row from a multinomial
+ * distribution whose unnormalized log-probabilities are given by the
+ * 2-D input tensor of shape ``[batch_size, class_size]``. The output is a
+ * 2-D tensor of shape ``[batch_size, sample_size]`` whose element type
+ * defaults to ``INT32`` (and may also be ``INT64``).
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"Multinomial"``, if ``node`` has no input or output, if the
+ *         input rank is statically known to be different from 2, or if
+ *         the ``dtype`` attribute is present but is neither ``INT32`` nor
+ *         ``INT64``.
+ */
+void ComputeShapeMultinomial(ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``Range`` node and
  * stores it in ``ctx``.
  *

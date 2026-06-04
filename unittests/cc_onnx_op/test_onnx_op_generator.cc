@@ -25,6 +25,7 @@ constexpr size_t kExpectedRandomNormalLikeSchemaCount = 2;
 constexpr size_t kExpectedRandomUniformSchemaCount = 2;
 constexpr size_t kExpectedRandomUniformLikeSchemaCount = 2;
 constexpr size_t kExpectedRangeSchemaCount = 1;
+constexpr size_t kExpectedMultinomialSchemaCount = 2;
 
 static const onnx_op::LightOpSchema *
 FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
@@ -42,12 +43,12 @@ TEST(OnnxOpGeneratorRegistrationTest, ReturnsConstantSchemasWithoutShapeInferenc
   const std::vector<onnx_op::LightOpSchema> constant_schemas =
       onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory("Constant");
 
-  EXPECT_EQ(schemas.size(), kExpectedConstantSchemaCount + kExpectedConstantOfShapeSchemaCount +
-                                kExpectedEyeLikeSchemaCount + kExpectedBernoulliSchemaCount +
-                                kExpectedRandomNormalSchemaCount +
-                                kExpectedRandomNormalLikeSchemaCount +
-                                kExpectedRandomUniformSchemaCount +
-                                kExpectedRandomUniformLikeSchemaCount + kExpectedRangeSchemaCount);
+  EXPECT_EQ(schemas.size(),
+            kExpectedConstantSchemaCount + kExpectedConstantOfShapeSchemaCount +
+                kExpectedEyeLikeSchemaCount + kExpectedBernoulliSchemaCount +
+                kExpectedRandomNormalSchemaCount + kExpectedRandomNormalLikeSchemaCount +
+                kExpectedRandomUniformSchemaCount + kExpectedRandomUniformLikeSchemaCount +
+                kExpectedRangeSchemaCount + kExpectedMultinomialSchemaCount);
 
   const onnx_op::LightOpSchema *const constant_v25 = FindByVersion(constant_schemas, 25);
   const onnx_op::LightOpSchema *const constant_v24 = FindByVersion(constant_schemas, 24);
@@ -389,6 +390,53 @@ TEST(OnnxOpGeneratorRegistrationTest, ReturnsRangeSchemas) {
             "Constrain input types to common numeric type tensors.");
 
   EXPECT_EQ(range_v11->attributes().size(), 0u);
+}
+
+TEST(OnnxOpGeneratorRegistrationTest, ReturnsMultinomialSchemas) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory("Multinomial");
+  ASSERT_EQ(schemas.size(), kExpectedMultinomialSchemaCount);
+
+  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const onnx_op::LightOpSchema *const v7 = FindByVersion(schemas, 7);
+  ASSERT_NE(nullptr, v22);
+  ASSERT_NE(nullptr, v7);
+
+  for (const onnx_op::LightOpSchema *schema : {v22, v7}) {
+    EXPECT_EQ(schema->domain(), "ai.onnx");
+    ASSERT_EQ(schema->inputs().size(), 1u);
+    EXPECT_EQ(schema->inputs()[0].name, "input");
+    EXPECT_EQ(schema->inputs()[0].type, "T1");
+    ASSERT_EQ(schema->outputs().size(), 1u);
+    EXPECT_EQ(schema->outputs()[0].name, "output");
+    EXPECT_EQ(schema->outputs()[0].type, "T2");
+
+    ASSERT_EQ(schema->type_constraints().size(), 2u);
+    EXPECT_EQ(schema->type_constraints()[0].type_param_str, "T1");
+    EXPECT_EQ(schema->type_constraints()[1].type_param_str, "T2");
+    EXPECT_EQ(schema->type_constraints()[0].description, "Constrain input types to float tensors.");
+    EXPECT_EQ(schema->type_constraints()[1].description,
+              "Constrain output types to integral tensors.");
+    EXPECT_EQ(schema->type_constraints()[1].allowed_type_strs,
+              (std::vector<onnx_op::TensorType>{onnx_op::TensorType::kInt32,
+                                                onnx_op::TensorType::kInt64}));
+
+    ASSERT_EQ(schema->attributes().size(), 3u);
+    EXPECT_EQ(schema->attributes()[0].name, "sample_size");
+    EXPECT_EQ(schema->attributes()[0].type, onnx_op::AttributeType::INT);
+    EXPECT_FALSE(schema->attributes()[0].required);
+    EXPECT_EQ(schema->attributes()[1].name, "seed");
+    EXPECT_EQ(schema->attributes()[1].type, onnx_op::AttributeType::FLOAT);
+    EXPECT_FALSE(schema->attributes()[1].required);
+    EXPECT_EQ(schema->attributes()[2].name, "dtype");
+    EXPECT_EQ(schema->attributes()[2].type, onnx_op::AttributeType::INT);
+    EXPECT_FALSE(schema->attributes()[2].required);
+  }
+
+  // v22 adds bfloat16 to the T1 constraint.
+  EXPECT_EQ(v7->type_constraints()[0].allowed_type_strs.size(), 3u);
+  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs.size(), 4u);
+  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kBfloat16);
 }
 
 } // namespace Test

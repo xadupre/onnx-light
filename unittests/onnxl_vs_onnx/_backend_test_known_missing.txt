@@ -554,8 +554,6 @@ maxunpool_export_with_output_shape
 maxunpool_export_without_output_shape
 melweightmatrix
 min_float16
-mish
-mish_expanded
 mod_mixed_sign_float16
 mvn
 mvn_expanded

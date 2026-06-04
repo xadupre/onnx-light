@@ -1,6 +1,12 @@
+// _GNU_SOURCE must be defined before any system header to expose splice(2) on Linux.
+#if defined(__linux__) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE
+#endif
 #include "onnx_helper.h"
 #include <array>
+#include <cerrno>
 #include <charconv>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -8,6 +14,15 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+#if defined(_WIN32)
+#include <fcntl.h>
+#include <io.h>
+#include <sys/stat.h>
+#else
+#include <fcntl.h>
+#include <unistd.h>
+#endif
 
 namespace ONNX_LIGHT_NAMESPACE {
 bool IteratorTensorProto::next() {
@@ -220,31 +235,175 @@ void RewriteExternalDataEntries(TensorProto &tensor, const std::string &new_loca
   }
 }
 
-// Streams n_bytes from src starting at src_offset into dst at its current position,
-// copying at most chunk_size bytes per iteration via a single reused heap buffer.
-void StreamCopyFileRange(std::ifstream &src, int64_t src_offset, int64_t n_bytes,
-                         std::ofstream &dst, std::vector<char> &buffer) {
+// Streams n_bytes from src starting at src_offset into dst at its current position.
+// On Linux uses splice(2) via a kernel pipe (zero-copy in kernel space); on other platforms
+// falls back to a buffered read/write loop. `buffer.size()` bounds the per-iteration transfer.
+void StreamCopyFileRange(int src_fd, int64_t src_offset, int64_t n_bytes, int dst_fd,
+                         std::vector<char> &buffer) {
   EXT_ENFORCE(n_bytes >= 0, "StreamCopyFileRange: n_bytes must be >= 0, got ", n_bytes, ".");
   if (n_bytes == 0)
     return;
-  src.clear();
-  src.seekg(src_offset, std::ios::beg);
-  EXT_ENFORCE(static_cast<bool>(src),
-              "StreamCopyFileRange: failed to seek source weights file to offset ", src_offset,
-              ".");
+  EXT_ENFORCE(!buffer.empty(), "StreamCopyFileRange: chunk buffer must be non-empty.");
+  const size_t chunk = buffer.size();
+#if defined(__linux__)
+  // Zero-copy path: src_fd -> pipe -> dst_fd, entirely in kernel space.
+  int pipefd[2];
+  EXT_ENFORCE(::pipe(pipefd) == 0, "StreamCopyFileRange: pipe() failed (errno=", errno, ": ",
+              std::strerror(errno), ").");
+  // RAII pipe closer so we never leak fds on exception.
+  struct PipeGuard {
+    int *p;
+    ~PipeGuard() {
+      if (p[0] >= 0)
+        ::close(p[0]);
+      if (p[1] >= 0)
+        ::close(p[1]);
+    }
+  } pg{pipefd};
+  loff_t in_off = static_cast<loff_t>(src_offset);
   int64_t remaining = n_bytes;
   while (remaining > 0) {
-    const std::streamsize to_read = static_cast<std::streamsize>(
-        std::min<int64_t>(remaining, static_cast<int64_t>(buffer.size())));
-    src.read(buffer.data(), to_read);
-    EXT_ENFORCE(src.gcount() == to_read,
-                "StreamCopyFileRange: short read from source weights file (asked for ", to_read,
-                ", got ", src.gcount(), ", at offset ", src_offset + (n_bytes - remaining), ").");
-    dst.write(buffer.data(), to_read);
-    EXT_ENFORCE(static_cast<bool>(dst), "StreamCopyFileRange: failed to write ", to_read,
-                " bytes to destination weights file.");
-    remaining -= to_read;
+    const size_t to_xfer =
+        static_cast<size_t>(std::min<int64_t>(remaining, static_cast<int64_t>(chunk)));
+    ssize_t r =
+        ::splice(src_fd, &in_off, pipefd[1], nullptr, to_xfer, SPLICE_F_MOVE | SPLICE_F_MORE);
+    if (r < 0 && errno == EINTR)
+      continue;
+    EXT_ENFORCE(r > 0, "StreamCopyFileRange: splice(src->pipe) failed at offset ",
+                src_offset + (n_bytes - remaining), " (errno=", errno, ": ", std::strerror(errno),
+                ", returned ", r, ").");
+    ssize_t to_drain = r;
+    while (to_drain > 0) {
+      ssize_t w = ::splice(pipefd[0], nullptr, dst_fd, nullptr, static_cast<size_t>(to_drain),
+                           SPLICE_F_MOVE | SPLICE_F_MORE);
+      if (w < 0 && errno == EINTR)
+        continue;
+      EXT_ENFORCE(w > 0, "StreamCopyFileRange: splice(pipe->dst) failed (errno=", errno, ": ",
+                  std::strerror(errno), ", returned ", w, ").");
+      to_drain -= w;
+    }
+    remaining -= r;
   }
+#else
+  // Portable fallback: pread/read + write loop through the heap buffer.
+#if defined(_WIN32)
+  const __int64 seeked = ::_lseeki64(src_fd, static_cast<__int64>(src_offset), SEEK_SET);
+  EXT_ENFORCE(seeked == static_cast<__int64>(src_offset),
+              "StreamCopyFileRange: _lseeki64 failed (errno=", errno, ": ", std::strerror(errno),
+              ").");
+#else
+  const off_t seeked = ::lseek(src_fd, static_cast<off_t>(src_offset), SEEK_SET);
+  EXT_ENFORCE(seeked == static_cast<off_t>(src_offset),
+              "StreamCopyFileRange: lseek failed (errno=", errno, ": ", std::strerror(errno), ").");
+#endif
+  int64_t remaining = n_bytes;
+  while (remaining > 0) {
+    const size_t to_read =
+        static_cast<size_t>(std::min<int64_t>(remaining, static_cast<int64_t>(chunk)));
+#if defined(_WIN32)
+    int r = ::_read(src_fd, buffer.data(), static_cast<unsigned>(to_read));
+#else
+    ssize_t r = ::read(src_fd, buffer.data(), to_read);
+    if (r < 0 && errno == EINTR)
+      continue;
+#endif
+    EXT_ENFORCE(r > 0 && static_cast<size_t>(r) == to_read,
+                "StreamCopyFileRange: short read from source weights file (asked for ", to_read,
+                ", got ", r, ", at offset ", src_offset + (n_bytes - remaining), ", errno=", errno,
+                ": ", std::strerror(errno), ").");
+    const char *p = buffer.data();
+    size_t left = static_cast<size_t>(r);
+    while (left > 0) {
+#if defined(_WIN32)
+      int w = ::_write(dst_fd, p, static_cast<unsigned>(left));
+#else
+      ssize_t w = ::write(dst_fd, p, left);
+      if (w < 0 && errno == EINTR)
+        continue;
+#endif
+      EXT_ENFORCE(w > 0, "StreamCopyFileRange: failed to write to destination (errno=", errno, ": ",
+                  std::strerror(errno), ").");
+      p += w;
+      left -= static_cast<size_t>(w);
+    }
+    remaining -= r;
+  }
+#endif
+}
+
+// Writes `n` zero bytes to dst_fd; used to pad up to alignment between tensors.
+void WriteZeros(int dst_fd, int64_t n) {
+  static constexpr size_t kZeroBufSize = 4096;
+  static const std::array<char, kZeroBufSize> kZeros{}; // value-initialized → zero-filled
+  while (n > 0) {
+    const size_t to_write = static_cast<size_t>(std::min<int64_t>(n, kZeroBufSize));
+    const char *p = kZeros.data();
+    size_t left = to_write;
+    while (left > 0) {
+#if defined(_WIN32)
+      int w = ::_write(dst_fd, p, static_cast<unsigned>(left));
+#else
+      ssize_t w = ::write(dst_fd, p, left);
+      if (w < 0 && errno == EINTR)
+        continue;
+#endif
+      EXT_ENFORCE(w > 0,
+                  "AlignExternalDataStreaming: failed to write padding to destination (errno=",
+                  errno, ": ", std::strerror(errno), ").");
+      p += w;
+      left -= static_cast<size_t>(w);
+    }
+    n -= to_write;
+  }
+}
+
+// RAII wrapper around a POSIX-style file descriptor (auto-closes on destruction).
+class ScopedFd {
+public:
+  ScopedFd() = default;
+  explicit ScopedFd(int fd) : fd_(fd) {}
+  ScopedFd(const ScopedFd &) = delete;
+  ScopedFd &operator=(const ScopedFd &) = delete;
+  ScopedFd(ScopedFd &&other) noexcept : fd_(other.fd_) { other.fd_ = -1; }
+  ScopedFd &operator=(ScopedFd &&other) noexcept {
+    if (this != &other) {
+      reset();
+      fd_ = other.fd_;
+      other.fd_ = -1;
+    }
+    return *this;
+  }
+  ~ScopedFd() { reset(); }
+  int get() const { return fd_; }
+  void reset() {
+    if (fd_ >= 0) {
+#if defined(_WIN32)
+      ::_close(fd_);
+#else
+      ::close(fd_);
+#endif
+      fd_ = -1;
+    }
+  }
+
+private:
+  int fd_ = -1;
+};
+
+int OpenForRead(const std::string &path) {
+#if defined(_WIN32)
+  return ::_open(path.c_str(), _O_RDONLY | _O_BINARY);
+#else
+  return ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
+#endif
+}
+
+int OpenForWriteTrunc(const std::string &path) {
+#if defined(_WIN32)
+  return ::_open(path.c_str(), _O_WRONLY | _O_CREAT | _O_TRUNC | _O_BINARY, _S_IREAD | _S_IWRITE);
+#else
+  return ::open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+#endif
 }
 
 } // namespace
@@ -287,12 +446,13 @@ offset_t AlignExternalDataStreaming(const std::string &src_onnx_path,
 
   // 2) Stream-copy external tensor bytes from their source files into a single aligned dst file,
   //    updating each tensor's external_data entries in-place.
-  std::ofstream out(dst_weights_path, std::ios::binary | std::ios::trunc);
-  EXT_ENFORCE(out.is_open(), "AlignExternalDataStreaming: cannot open destination weights file '",
-              dst_weights_path, "' for writing.");
+  ScopedFd out_fd(OpenForWriteTrunc(dst_weights_path));
+  EXT_ENFORCE(out_fd.get() >= 0,
+              "AlignExternalDataStreaming: cannot open destination weights file '",
+              dst_weights_path, "' for writing (errno=", errno, ": ", std::strerror(errno), ").");
 
-  // Cache one ifstream per source weights location so we don't reopen for every tensor.
-  std::unordered_map<std::string, std::unique_ptr<std::ifstream>> src_streams;
+  // Cache one fd per source weights location so we don't reopen for every tensor.
+  std::unordered_map<std::string, ScopedFd> src_fds;
   std::vector<char> buffer(static_cast<size_t>(chunk_size));
   offset_t current_offset = 0;
 
@@ -329,12 +489,13 @@ offset_t AlignExternalDataStreaming(const std::string &src_onnx_path,
     }
     const std::string src_weights_key = src_weights_path.string();
 
-    auto stream_it = src_streams.find(src_weights_key);
-    if (stream_it == src_streams.end()) {
-      auto s = std::make_unique<std::ifstream>(src_weights_key, std::ios::binary);
-      EXT_ENFORCE(s->is_open(), "AlignExternalDataStreaming: cannot open source weights file '",
-                  src_weights_key, "' for tensor '", tensor.ref_name().as_string(), "'.");
-      stream_it = src_streams.emplace(src_weights_key, std::move(s)).first;
+    auto stream_it = src_fds.find(src_weights_key);
+    if (stream_it == src_fds.end()) {
+      int fd = OpenForRead(src_weights_key);
+      EXT_ENFORCE(fd >= 0, "AlignExternalDataStreaming: cannot open source weights file '",
+                  src_weights_key, "' for tensor '", tensor.ref_name().as_string(),
+                  "' (errno=", errno, ": ", std::strerror(errno), ").");
+      stream_it = src_fds.emplace(src_weights_key, ScopedFd(fd)).first;
     }
 
     // Pad the destination file up to the next aligned offset (zero bytes).
@@ -343,32 +504,28 @@ offset_t AlignExternalDataStreaming(const std::string &src_onnx_path,
             ? current_offset
             : ((current_offset + alignment - 1) / alignment) * alignment;
     if (aligned_offset > current_offset) {
-      static constexpr size_t kZeroBufSize = 4096;
-      static const std::array<char, kZeroBufSize> kZeros{}; // value-initialized → zero-filled
-      int64_t pad = aligned_offset - current_offset;
-      while (pad > 0) {
-        const std::streamsize to_write =
-            static_cast<std::streamsize>(std::min<int64_t>(pad, kZeroBufSize));
-        out.write(kZeros.data(), to_write);
-        EXT_ENFORCE(static_cast<bool>(out),
-                    "AlignExternalDataStreaming: failed to write padding to destination.");
-        pad -= to_write;
-      }
+      WriteZeros(out_fd.get(), aligned_offset - current_offset);
       current_offset = aligned_offset;
     }
 
-    // Stream-copy the tensor bytes.
-    StreamCopyFileRange(*stream_it->second, src_offset, length, out, buffer);
+    // Stream-copy the tensor bytes (splice(2) on Linux, buffered read/write elsewhere).
+    StreamCopyFileRange(stream_it->second.get(), src_offset, length, out_fd.get(), buffer);
 
     // Update metadata to point at the new file/offset/length.
     RewriteExternalDataEntries(tensor, stored_location_str, current_offset, length);
     current_offset += length;
   }
 
-  out.flush();
-  EXT_ENFORCE(static_cast<bool>(out),
-              "AlignExternalDataStreaming: failed to flush destination weights file.");
-  out.close();
+#if defined(_WIN32)
+  EXT_ENFORCE(::_commit(out_fd.get()) == 0,
+              "AlignExternalDataStreaming: failed to flush destination weights file (errno=", errno,
+              ": ", std::strerror(errno), ").");
+#else
+  // fsync is not strictly needed (close will flush), but matches the prior flush+close intent.
+  // We intentionally do not fail on fsync errors that may occur on tmpfs in CI.
+  ::fsync(out_fd.get());
+#endif
+  out_fd.reset();
 
   // 3) Persist the updated proto to dst_onnx. Use FileWriteStream (single-file) so external_data
   //    entries are written as-is and no new weights file is generated.

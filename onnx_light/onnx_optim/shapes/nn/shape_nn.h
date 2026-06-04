@@ -143,6 +143,46 @@ void ComputeShapeBatchNormalization(ShapesContext &ctx, const NodeProto &node, c
                                     const char *input_mean);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of an ``InstanceNormalization``
+ * node and stores it in ``ctx``.
+ *
+ * The output dtype and shape are always inherited from input ``X``. ``scale``
+ * and ``B`` inputs are not read for shape inference.
+ *
+ * @param ctx   In/out context. Must already contain an entry for ``x``; on
+ *              return it also contains an entry for ``node.output(0)``.
+ * @param node  The ``InstanceNormalization`` ``NodeProto``. ``node.op_type()``
+ *              must be ``"InstanceNormalization"`` and ``node`` must declare
+ *              at least one output.
+ * @param x     Name of the data input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"InstanceNormalization"`` or if ``node`` has no output.
+ * @throws std::out_of_range if ``x`` is not present in ``ctx``.
+ */
+void ComputeShapeInstanceNormalization(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``GroupNormalization``
+ * node and stores it in ``ctx``.
+ *
+ * The output dtype and shape are always inherited from input ``X``. ``scale``
+ * and ``bias`` inputs are not read for shape inference.
+ *
+ * @param ctx   In/out context. Must already contain an entry for ``x``; on
+ *              return it also contains an entry for ``node.output(0)``.
+ * @param node  The ``GroupNormalization`` ``NodeProto``. ``node.op_type()``
+ *              must be ``"GroupNormalization"`` and ``node`` must declare at
+ *              least one output.
+ * @param x     Name of the data input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"GroupNormalization"`` or if ``node`` has no output.
+ * @throws std::out_of_range if ``x`` is not present in ``ctx``.
+ */
+void ComputeShapeGroupNormalization(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
  * Computes the output :cpp:class:`OptimTensor`(s) of a ``Dropout`` node and
  * stores them in ``ctx``.
  *

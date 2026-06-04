@@ -797,6 +797,85 @@ std::string MakeFlattenDoc(int since_version) {
   }
 }
 
+namespace {
+
+constexpr const char *kInstanceNormalizationDoc = R"DOC(
+Carries out instance normalization as described in the paper
+https://arxiv.org/abs/1607.08022.
+
+y = scale * (x - mean) / sqrt(variance + epsilon) + B,
+where mean and variance are computed per instance per channel.
+
+)DOC";
+
+constexpr const char *kGroupNormalizationDocOpset18 = R"DOC(
+A GroupNormalization function. Carries out group normalization as described in
+the paper https://arxiv.org/abs/1803.08494
+
+This operator transforms input according to
+```
+y = scale * (x - mean) / sqrt(variance + epsilon) + bias,
+```
+where the mean and variance are computed per instance per group of channels, and
+`scale` and `bias` should be specified for each group of channels. The number of
+groups `num_groups` should be divisible by the number of channels so that there are
+an equal number of channels per group.
+
+When the number of groups is the same as the number of channels, this operator is
+equivalent to InstanceNormalization. When there is only one group, this operator
+is equivalent to LayerNormalization.
+)DOC";
+
+constexpr const char *kGroupNormalizationDocOpset21 = R"DOC(
+A GroupNormalization function. Carries out group normalization as described in
+the paper https://arxiv.org/abs/1803.08494
+
+This operator transforms input according to
+```
+y = scale * (x - mean) / sqrt(variance + epsilon) + bias,
+```
+where the mean and variance are computed per instance per group of channels, and
+`scale` and `bias` should be specified for each channel. The number of
+groups `num_groups` should be divisible by the number of channels so that there are
+an equal number of channels per group.
+
+The overall computation has two stages: the first stage normalizes the elements to
+have zero mean and unit variance for each instance in each group, and the second
+stage scales and shifts the results of the first stage. The floating-point precision
+used in the first stage is determined by the `stash_type` attribute. For example,
+if `stash_type` is 1, the operator casts all input variables to 32-bit float,
+performs the computation, and finally casts the normalized results back to the
+original type of `X`. The second stage does not depend on `stash_type`.
+
+When the number of groups is the same as the number of channels, this operator is
+equivalent to InstanceNormalization. When there is only one group, this operator
+is equivalent to LayerNormalization.
+)DOC";
+
+} // namespace
+
+std::string MakeInstanceNormalizationDoc(int since_version) {
+  switch (since_version) {
+  case 1:
+  case 6:
+  case 22:
+    return kInstanceNormalizationDoc;
+  default:
+    return "";
+  }
+}
+
+std::string MakeGroupNormalizationDoc(int since_version) {
+  switch (since_version) {
+  case 18:
+    return kGroupNormalizationDocOpset18;
+  case 21:
+    return kGroupNormalizationDocOpset21;
+  default:
+    return "";
+  }
+}
+
 } // namespace nn
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

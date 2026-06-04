@@ -384,9 +384,7 @@ gridsample_volumetric_bilinear_align_corners_0
 gridsample_volumetric_bilinear_align_corners_1
 gridsample_volumetric_nearest_align_corners_0
 gridsample_volumetric_nearest_align_corners_1
-group_normalization_epsilon
 group_normalization_epsilon_expanded
-group_normalization_example
 group_normalization_example_expanded
 hammingwindow_expanded
 hammingwindow_symmetric_expanded
@@ -411,8 +409,6 @@ identity_opt
 identity_sequence
 if_opt
 if_seq
-instancenorm_epsilon
-instancenorm_example
 isinf
 isinf_float16
 isinf_negative

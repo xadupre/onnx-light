@@ -191,6 +191,46 @@ TEST(BackendTestCase, BatchNormalizationCasesArePresent) {
   }
 }
 
+TEST(BackendTestCase, InstanceNormalizationCasesArePresent) {
+  auto cases = CollectTestCases("InstanceNormalization");
+  const TestCase *example = nullptr;
+  const TestCase *epsilon = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_instancenorm_example") {
+      example = &c;
+    } else if (c.name == "test_cc_instancenorm_epsilon") {
+      epsilon = &c;
+    }
+  }
+  ASSERT_NE(example, nullptr);
+  ASSERT_NE(epsilon, nullptr);
+  ASSERT_EQ(example->data_sets.size(), 1u);
+  const auto &ds = example->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 3u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+}
+
+TEST(BackendTestCase, GroupNormalizationCasesArePresent) {
+  auto cases = CollectTestCases("GroupNormalization");
+  const TestCase *example = nullptr;
+  const TestCase *epsilon = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_group_normalization_example") {
+      example = &c;
+    } else if (c.name == "test_cc_group_normalization_epsilon") {
+      epsilon = &c;
+    }
+  }
+  ASSERT_NE(example, nullptr);
+  ASSERT_NE(epsilon, nullptr);
+  ASSERT_EQ(example->data_sets.size(), 1u);
+  const auto &ds = example->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 3u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+}
+
 TEST(BackendTestCase, RNNCasesArePresent) {
   auto cases = CollectTestCases();
   const TestCase *defaults = nullptr;

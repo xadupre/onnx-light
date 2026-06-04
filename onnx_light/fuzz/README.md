@@ -56,6 +56,15 @@ To generate the seed corpora that OSS-Fuzz uses as starting inputs:
 python -m onnx_light.fuzz.make_seed_corpus /tmp/vc_seeds.zip /tmp/parser_seeds.zip
 ```
 
+## Continuous fuzzing in CI
+
+The `.github/workflows/fuzz.yml` workflow runs a short smoke campaign
+(`-runs=2000` per harness) on a weekly schedule (Mondays at 06:00 UTC),
+on manual `workflow_dispatch`, and on pull requests that touch
+`onnx_light/fuzz/**`. It is meant to catch regressions in the harnesses
+themselves and obvious shallow bugs; long-running coverage-guided
+campaigns are still expected to be driven by OSS-Fuzz.
+
 ## Design notes
 
 ### Why `except Exception: return`?

@@ -204,7 +204,7 @@ GraphProto BuildLoop11Body() {
     AttributeProto *a = n->add_attribute();
     a->set_name("axes");
     a->set_type(AttributeProto::AttributeType::INTS);
-    a->add_ints(0);
+    a->add_ints(static_cast<int64_t>(0));
   }
   // x_i = Gather(x, iter_1d, axis=0) — FLOAT[1].
   {

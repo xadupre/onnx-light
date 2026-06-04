@@ -736,6 +736,31 @@ void ComputeShapeMax(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeMin(ShapesContext &ctx, const NodeProto &node);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Mean`` node and stores
+ * it in ``ctx``.
+ *
+ * ``Mean`` (opsets 1, 6, 8 and 13) is a variadic element-wise mean operator.
+ * Since opset 8 it supports NumPy-style multidirectional broadcasting; in
+ * earlier opsets all inputs are required to share the same shape. The output
+ * dtype always matches that of the first input (the type constraint ``T``
+ * forces every input to share the same float dtype), and the output shape is
+ * the multidirectional broadcast of every input shape.
+ *
+ * @param ctx   In/out context. Must already contain entries for every input
+ *              of ``node``. On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Mean`` ``NodeProto`` whose output should be described.
+ *              ``node.op_type()`` must be ``"Mean"`` and ``node`` must
+ *              declare at least one input and at least one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Mean"``,
+ *         if ``node`` has no input or no output, or if any pair of inputs
+ *         have shapes that are not broadcast-compatible.
+ * @throws std::out_of_range     if any input name is missing from ``ctx``.
+ */
+void ComputeShapeMean(ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``CumSum`` node and
  * stores it in ``ctx``.
  *

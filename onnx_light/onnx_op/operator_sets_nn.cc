@@ -365,6 +365,51 @@ LightOpSchema MakeFlattenSchema(int since_version) {
       });
 }
 
+// --- LRN ---------------------------------------------------------------------
+
+std::vector<TensorType> LRNTypes(int since_version) {
+  if (since_version >= 13) {
+    return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kBfloat16};
+  }
+  return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+}
+
+const char *const kLRNXDescription =
+    "Input data tensor from the previous operator; "
+    "dimensions for image case are (N x C x H x W), "
+    "where N is the batch size, C is the number of "
+    "channels, and H and W are the height and the "
+    "width of the data. For non image case, the "
+    "dimensions are in the form of "
+    "(N x C x D1 x D2 ... Dn), where N is the batch "
+    "size. Optionally, if dimension denotation is "
+    "in effect, the operation expects the input "
+    "data tensor to arrive with the dimension denotation "
+    "of [DATA_BATCH, DATA_CHANNEL, DATA_FEATURE, DATA_FEATURE ...].";
+
+LightOpSchema MakeLRNSchema(int since_version) {
+  return LightOpSchema(
+      "LRN", kOnnxDomain, since_version, MakeLRNDoc(since_version),
+      {
+          {"X", kLRNXDescription, "T"},
+      },
+      {
+          {"Y", "Output tensor, which has the shape and type as input tensor", "T"},
+      },
+      {
+          {"T", LRNTypes(since_version),
+           "Constrain input and output "
+           " types to float tensors."},
+      },
+      {
+          {"alpha", "Scaling parameter.", AttributeType::FLOAT, /*required=*/false, 0.0001f},
+          {"beta", "The exponent.", AttributeType::FLOAT, /*required=*/false, 0.75f},
+          {"bias", "", AttributeType::FLOAT, /*required=*/false, 1.0f},
+          {"size", "The number of channels to sum over", AttributeType::INT, /*required=*/true,
+           std::monostate{}},
+      });
+}
+
 // Inputs/outputs and type-constraint descriptions are reproduced verbatim from
 // upstream ONNX so that the LightOpSchema parity test in test_onnx_ops.cc
 // passes.
@@ -1516,6 +1561,13 @@ std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &o
              MakeLSTMSchema(14),
              MakeLSTMSchema(7),
              MakeLSTMSchema(1),
+         };
+       }},
+      {"LRN",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeLRNSchema(13),
+             MakeLRNSchema(1),
          };
        }},
       {"RNN",

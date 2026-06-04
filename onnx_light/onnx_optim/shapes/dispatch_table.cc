@@ -567,6 +567,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          logical::ComputeShapeLess(ctx, node, node.input(0).as_string().c_str(),
                                    node.input(1).as_string().c_str());
        }},
+      {"ai.onnx:LRN",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         nn::ComputeShapeLRN(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:Mul",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
@@ -622,6 +627,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
          math::ComputeShapeMax(ctx, node);
+       }},
+      {"ai.onnx:Mean",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeMean(ctx, node);
        }},
       {"ai.onnx:Min",
        [](ShapesContext &ctx, const NodeProto &node) {

@@ -38,6 +38,13 @@ std::string MakeGlobalMaxPoolDoc(int since_version);
 std::string MakeGlobalLpPoolDoc(int since_version);
 
 /**
+ * Returns the documentation string for the LRN (Local Response Normalization)
+ * operator at the given opset version (1 or 13). The opset 1 text uses bare
+ * identifiers while the opset 13 text wraps them in Markdown backticks.
+ */
+std::string MakeLRNDoc(int since_version);
+
+/**
  * Returns the documentation string for the RNN operator at the given opset
  * version (1, 7, 14, or 22).
  */

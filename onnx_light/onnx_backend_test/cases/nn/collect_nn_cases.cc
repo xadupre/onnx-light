@@ -25,6 +25,7 @@ void CollectNNTestCases(std::vector<TestCase> &registry, const std::string &op_t
       {"GroupNormalization", &RegisterGroupNormalizationCases},
       {"GRU", &RegisterGRUCases},
       {"InstanceNormalization", &RegisterInstanceNormalizationCases},
+      {"LRN", &RegisterLRNCases},
       {"LSTM", &RegisterLSTMCases},
       {"RNN", &RegisterRNNCases},
   };

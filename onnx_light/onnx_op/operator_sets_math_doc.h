@@ -151,6 +151,17 @@ std::string MakeMaxDoc(int since_version);
 std::string MakeMinDoc(int since_version);
 
 /**
+ * Returns the documentation string for the Mean operator at the given opset
+ * version. Opsets 1 and 6 share the legacy wording (variadic element-wise mean
+ * with no broadcasting); opsets 8 and 13 share the wording that exposes
+ * NumPy-style multidirectional broadcasting.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the Mean operator.
+ */
+std::string MakeMeanDoc(int since_version);
+
+/**
  * Returns the documentation string for the DFT operator at the given opset
  * version.
  *

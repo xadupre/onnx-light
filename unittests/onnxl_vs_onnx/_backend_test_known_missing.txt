@@ -514,7 +514,6 @@ logsoftmax_negative_axis_expanded
 logsoftmax_negative_axis_expanded_ver18
 loop13_seq
 loop16_seq_none
-lpnormalization_default
 lppool_1d_default
 lppool_2d_default
 lppool_2d_dilations

@@ -548,7 +548,6 @@ maxpool_with_argmax_2d_precomputed_strides
 maxunpool_export_with_output_shape
 maxunpool_export_without_output_shape
 min_float16
-mish
 mish_expanded
 mod_mixed_sign_float16
 mvn

@@ -254,6 +254,15 @@ void ComputeShapeDiv(ShapesContext &ctx, const NodeProto &node, const char *a, c
 void ComputeShapeMod(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Mish`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Mish`` is element-wise and unary: the output dtype and shape match
+ * the input.
+ */
+void ComputeShapeMish(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of an ``Acos`` node and
  * stores it in ``ctx``.
  *

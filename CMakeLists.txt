@@ -94,7 +94,6 @@ set(ONNX_PY_OPTIM_SOURCES
 )
 set(ONNX_PY_BACKEND_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxbackend.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_backend.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_backend_test.cc"
 )
 file(GLOB_RECURSE ONNX_OP_SOURCES CONFIGURE_DEPENDS "${ONNX_OP_PATH}/*.cc")

@@ -49,8 +49,7 @@ int64_t ReadScalarAsInt64(const Tensor &t, std::size_t index) {
 // Validates ``depth`` and returns its scalar value as int64. ``depth`` must
 // be a scalar or a rank-1 tensor with exactly one element.
 int64_t ReadDepth(const Tensor &depth) {
-  EXT_ENFORCE_INVALID(depth.shape.size() == 0 ||
-                          (depth.shape.size() == 1 && depth.shape[0] == 1),
+  EXT_ENFORCE_INVALID(depth.shape.size() == 0 || (depth.shape.size() == 1 && depth.shape[0] == 1),
                       "kernel::OneHot: input 'depth' must be a scalar or a rank-1 tensor with a "
                       "single element.");
   EXT_ENFORCE_INVALID(depth.element_count() == 1,
@@ -69,8 +68,8 @@ int64_t ResolveAxis(int64_t axis, int64_t out_rank) {
 
 // Computes the output shape: ``indices.shape`` with ``depth`` inserted at
 // position ``axis`` (already normalised to a non-negative value).
-std::vector<int64_t> ComputeOneHotShape(const std::vector<int64_t> &indices_shape,
-                                        int64_t axis_pos, int64_t depth) {
+std::vector<int64_t> ComputeOneHotShape(const std::vector<int64_t> &indices_shape, int64_t axis_pos,
+                                        int64_t depth) {
   std::vector<int64_t> out_shape;
   out_shape.reserve(indices_shape.size() + 1);
   for (int64_t i = 0; i < static_cast<int64_t>(indices_shape.size()) + 1; ++i) {
@@ -89,8 +88,7 @@ std::vector<int64_t> ComputeOneHotShape(const std::vector<int64_t> &indices_shap
 // ``off_value`` is a single element starting at ``values.data[]`` index 0.
 // Uses ``memcpy`` to copy ``elem_size`` bytes per element so any numeric or
 // ``BOOL`` element type is supported.
-void FillScalarRepeat(const uint8_t *src, std::size_t elem_size, std::size_t count,
-                      uint8_t *dst) {
+void FillScalarRepeat(const uint8_t *src, std::size_t elem_size, std::size_t count, uint8_t *dst) {
   for (std::size_t i = 0; i < count; ++i) {
     std::memcpy(dst + i * elem_size, src, elem_size);
   }
@@ -113,11 +111,9 @@ Tensor OneHot::operator()(const Tensor &indices, const Tensor &depth, const Tens
   output.data_type = values.data_type;
   output.shape = out_shape;
   const int64_t out_count = output.element_count();
-  if (values.data_type == static_cast<int32_t>(DataType::STRING)) {
-    output.string_data.assign(static_cast<std::size_t>(out_count), std::string());
-  } else {
-    output.data.assign(PackedByteSize(values.data_type, out_count), static_cast<uint8_t>(0));
-  }
+  EXT_ENFORCE_INVALID(values.data_type != static_cast<int32_t>(DataType::STRING),
+                      "kernel::OneHot: STRING element type is not supported.");
+  output.data.assign(PackedByteSize(values.data_type, out_count), static_cast<uint8_t>(0));
   (*this)(indices, depth, values, attrs, output);
   return output;
 }

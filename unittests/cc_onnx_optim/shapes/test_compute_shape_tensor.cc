@@ -2153,15 +2153,13 @@ void SeedOneHotInputs(onnx_optim::shapes::ShapesContext &ctx,
                       onnx_optim::TensorType values_dtype, std::optional<int64_t> depth_value) {
   ctx.Set("indices",
           onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64, indices_shape));
-  onnx_optim::OptimTensor depth(nullptr, onnx_optim::TensorType::kInt64,
-                                onnx_optim::OptimShape{});
+  onnx_optim::OptimTensor depth(nullptr, onnx_optim::TensorType::kInt64, onnx_optim::OptimShape{});
   if (depth_value.has_value()) {
     depth.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(*depth_value)});
   }
   ctx.Set("depth", std::move(depth));
-  ctx.Set("values",
-          onnx_optim::OptimTensor(nullptr, values_dtype,
-                                  onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+  ctx.Set("values", onnx_optim::OptimTensor(nullptr, values_dtype,
+                                            onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
 }
 
 } // namespace
@@ -2169,9 +2167,8 @@ void SeedOneHotInputs(onnx_optim::shapes::ShapesContext &ctx,
 TEST(OnnxOptimShapesTensorOneHot, AppendsDepthDimWithDefaultAxis) {
   NodeProto node = MakeOneHotNode();
   onnx_optim::shapes::ShapesContext ctx;
-  SeedOneHotInputs(
-      ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)},
-      onnx_optim::TensorType::kFloat, /*depth_value=*/5);
+  SeedOneHotInputs(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)},
+                   onnx_optim::TensorType::kFloat, /*depth_value=*/5);
 
   onnx_optim::shapes::tensor::ComputeShapeOneHot(ctx, node);
 
@@ -2185,9 +2182,8 @@ TEST(OnnxOptimShapesTensorOneHot, AppendsDepthDimWithDefaultAxis) {
 TEST(OnnxOptimShapesTensorOneHot, InsertsDepthAtExplicitAxis) {
   NodeProto node = MakeOneHotNode(/*set_axis=*/true, /*axis=*/1);
   onnx_optim::shapes::ShapesContext ctx;
-  SeedOneHotInputs(
-      ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(2)},
-      onnx_optim::TensorType::kInt32, /*depth_value=*/10);
+  SeedOneHotInputs(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(2)},
+                   onnx_optim::TensorType::kInt32, /*depth_value=*/10);
 
   onnx_optim::shapes::tensor::ComputeShapeOneHot(ctx, node);
 

@@ -694,14 +694,14 @@ LightOpSchema MakeOneHotSchema(int since_version, const std::vector<TensorType> 
           ? std::string(
                 "Input tensor containing indices. Any entries in the 'indices' input tensor with "
                 "values outside the range [-depth, depth-1] will result in one-hot representation "
-                "with all 'off_value' values in the output tensor. "
+                "with all 'off_value' values in the output tensor."
                 "In case 'indices' is of non-integer type, the values will be casted to int64 "
                 "before use.")
           : std::string(
                 "Input tensor containing indices. The values must be non-negative integers. "
                 "Any entries in the 'indices' input tensor with values outside the range "
                 "[0, depth) will result in one-hot representation with all 'off_value' values in "
-                "the output tensor. "
+                "the output tensor."
                 "In case 'indices' is of non-integer type, the values will be casted to int64 "
                 "before use.");
   const std::string depth_doc =

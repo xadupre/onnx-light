@@ -72,6 +72,20 @@ class TestBackendFunction(ExtTestCase):
         np.testing.assert_array_equal(inputs_list[1], b)
         np.testing.assert_array_equal(outputs_list[0], c)
 
+    def test_collect_test_case_registers_if_sequence_case(self):
+        """Collects the Python-defined ``If`` sequence case."""
+        result = collect_test_case()
+        self.assertIn("test_if_seq", result)
+        tc = result["test_if_seq"]
+        self.assertIsNotNone(tc.model)
+        self.assertEqual(tc.model.graph.node[0].op_type, "If")
+        self.assertEqual(tc.model.opset_import[0].version, 13)
+        inputs_list, outputs_list = tc.data_sets[0]
+        self.assertEqual(len(inputs_list), 1)
+        self.assertEqual(len(outputs_list), 1)
+        self.assertEqual(len(outputs_list[0]), 1)
+        np.testing.assert_array_equal(outputs_list[0][0], np.array([1, 2, 3, 4, 5], np.float32))
+
     def test_expect_with_optional_inputs(self):
         """Tests expect with optional inputs (empty string in node.input)."""
         # Create a node with an optional trailing input omitted via empty string.

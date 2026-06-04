@@ -186,6 +186,60 @@ e.g., When the input is 2-D, the output is a scalar(shape is empty: `[]`).
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildNegSchemas() {
+  static constexpr const char *kNegDoc = R"DOC(
+Neg takes one input data (Tensor<T>) and produces one output data
+(Tensor<T>) where each element flipped sign, y = -x, is applied to
+the tensor elementwise.
+)DOC";
+  // ``Neg`` accepts only signed numeric tensors. The exact type set is
+  // inlined here because no shared helper exposes it.
+  const std::vector<TensorType> kNegTypesV13 = {
+      TensorType::kFloat, TensorType::kInt32,   TensorType::kInt8,   TensorType::kInt16,
+      TensorType::kInt64, TensorType::kFloat16, TensorType::kDouble, TensorType::kBfloat16,
+  };
+  const std::vector<TensorType> kNegTypesV6 = {
+      TensorType::kFloat, TensorType::kInt32,   TensorType::kInt8,   TensorType::kInt16,
+      TensorType::kInt64, TensorType::kFloat16, TensorType::kDouble,
+  };
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(3);
+  schemas.push_back(LightOpSchema(
+      "Neg", kOnnxDomain, 13, kNegDoc,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T", kNegTypesV13, "Constrain input and output types to signed numeric tensors."},
+      }));
+  schemas.push_back(LightOpSchema(
+      "Neg", kOnnxDomain, 6, kNegDoc,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T", kNegTypesV6, "Constrain input and output types to signed numeric tensors."},
+      }));
+  schemas.push_back(
+      LightOpSchema("Neg", kOnnxDomain, 1, kNegDoc,
+                    {
+                        {"X", "Input tensor", "T"},
+                    },
+                    {
+                        {"Y", "Output tensor", "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    }));
+  return schemas;
+}
+
 std::vector<LightOpSchema> BuildAbsSchemas() {
   static constexpr const char *kAbsDocV13 = R"DOC(
 Absolute takes one input data (Tensor<T>) and produces one output data
@@ -2046,6 +2100,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"MatMul", [] { return BuildMatMulSchemas(); }},
       {"Mod", [] { return BuildModSchemas(); }},
       {"Mul", [] { return BuildElementwiseMathSchemaForVersion("Mul"); }},
+      {"Neg", [] { return BuildNegSchemas(); }},
       {"NegativeLogLikelihoodLoss", [] { return BuildNegativeLogLikelihoodLossSchemas(); }},
       {"PRelu", [] { return BuildPReluSchemas(); }},
       {"Pow", [] { return BuildPowSchemas(); }},

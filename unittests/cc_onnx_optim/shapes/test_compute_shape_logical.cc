@@ -633,4 +633,45 @@ TEST(OnnxOptimShapesLogicalBitwiseNot, ThrowsOnWrongOpType) {
                std::invalid_argument);
 }
 
+namespace {
+
+NodeProto MakeNotNode(const std::string &x = "X", const std::string &out = "Y") {
+  NodeProto node;
+  node.set_op_type("Not");
+  node.add_input(x);
+  node.add_output(out);
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesLogicalNot, PropagatesShapeAndDtype) {
+  NodeProto node = MakeNotNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(30), onnx_optim::OptimDim(4),
+                               onnx_optim::OptimDim(5)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, shape));
+
+  onnx_optim::shapes::logical::ComputeShapeNot(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_EQ(ctx.Get("Y").Shape(), shape);
+}
+
+TEST(OnnxOptimShapesLogicalNot, ThrowsOnWrongOpType) {
+  NodeProto node = MakeNotNode();
+  node.set_op_type("BitwiseNot");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+  EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeNot(ctx, node, "X"), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesLogicalNot, ThrowsWhenInputMissingFromContext) {
+  NodeProto node = MakeNotNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeNot(ctx, node, "X"), std::out_of_range);
+}
+
 } // namespace Test

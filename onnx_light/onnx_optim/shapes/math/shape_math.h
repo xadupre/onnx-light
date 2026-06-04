@@ -41,6 +41,29 @@ namespace math {
 void ComputeShapeAbs(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Neg`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Neg`` is element-wise and unary in every revision of its schema
+ * (v1, v6, v13 — later revisions only widen the accepted dtype set),
+ * so the output dtype and shape always match those of the input.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``x``; on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Neg`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Neg"`` and
+ *              ``node`` must declare at least one output.
+ * @param x     Name of the input value to read from ``ctx``. Must
+ *              be present in ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Neg"``
+ *         or if ``node`` has no output.
+ * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
+ */
+void ComputeShapeNeg(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of an ``Add`` node and
  * stores it in ``ctx``.
  *

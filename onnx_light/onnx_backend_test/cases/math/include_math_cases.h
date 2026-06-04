@@ -113,6 +113,9 @@ void RegisterSumCases(std::vector<TestCase> &registry);
 /// Registers the ``Mul`` backend test node case(s).
 void RegisterMulCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Neg`` backend test node case(s).
+void RegisterNegCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Pow`` backend test node case(s).
 void RegisterPowCases(std::vector<TestCase> &registry);
 

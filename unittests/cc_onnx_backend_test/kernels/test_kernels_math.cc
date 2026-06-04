@@ -42,6 +42,8 @@ using onnx_backend_test::kernel::Log;
 using onnx_backend_test::kernel::MatMul;
 using onnx_backend_test::kernel::Mod;
 using onnx_backend_test::kernel::Mul;
+using onnx_backend_test::kernel::Neg;
+using onnx_backend_test::kernel::Pow;
 using onnx_backend_test::kernel::PRelu;
 using onnx_backend_test::kernel::Round;
 using onnx_backend_test::kernel::Sigmoid;
@@ -69,6 +71,38 @@ TEST(BackendKernelClass, AbsClassMatchesReference) {
   EXPECT_FLOAT_EQ(py[0], 1.0f);
   EXPECT_FLOAT_EQ(py[1], 0.0f);
   EXPECT_FLOAT_EQ(py[2], 2.5f);
+}
+
+TEST(BackendKernelClass, NegClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Neg neg_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 2.5f});
+  Tensor y = neg_kernel(x);
+  ASSERT_EQ(y.element_count(), 3);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.0f);
+  EXPECT_FLOAT_EQ(py[1], -0.0f);
+  EXPECT_FLOAT_EQ(py[2], -2.5f);
+}
+
+TEST(BackendKernelClass, NegInPlaceWritesToPreallocatedOutput) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Neg neg_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {2}, {-4.0f, 2.0f});
+  Tensor y("", onnx_backend_test::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float)));
+  neg_kernel(x, y);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 4.0f);
+  EXPECT_FLOAT_EQ(py[1], -2.0f);
+}
+
+TEST(BackendKernelClass, NegRejectsNonFloatTensors) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Neg neg_kernel{ctx};
+  Tensor x = Tensor::FromInt32("", {2}, {-1, 2});
+  EXPECT_THROW((void)neg_kernel(x), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, AcosClassMatchesReference) {
@@ -1247,6 +1281,135 @@ TEST(BackendKernelClass, PReluRejectsUnsupportedDtype) {
   Tensor x = Tensor::FromInt8("", {2}, {-1, 2});
   Tensor slope = Tensor::FromInt8("", {2}, {1, 1});
   EXPECT_THROW(prelu_kernel(x, slope), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, PowClassMatchesReferenceFloat) {
+  // Matches the upstream ``test_pow_example`` reference case.
+  const KernelContext ctx{DefaultOpset(15)};
+  Pow pow_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
+  Tensor y = Tensor::FromFloat("", {3}, {4.0f, 5.0f, 6.0f});
+  Tensor z = pow_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 3);
+  ASSERT_EQ(z.data_type, onnx_backend_test::DataType::FLOAT);
+  const float *pz = z.AsFloat();
+  EXPECT_FLOAT_EQ(pz[0], 1.0f);
+  EXPECT_FLOAT_EQ(pz[1], 32.0f);
+  EXPECT_FLOAT_EQ(pz[2], 729.0f);
+}
+
+TEST(BackendKernelClass, PowClassBroadcastsScalarExponent) {
+  // Matches the upstream ``test_pow_bcast_scalar`` reference case.
+  const KernelContext ctx{DefaultOpset(15)};
+  Pow pow_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
+  Tensor y = Tensor::FromFloat("", {}, {2.0f});
+  Tensor z = pow_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 3);
+  const float *pz = z.AsFloat();
+  EXPECT_FLOAT_EQ(pz[0], 1.0f);
+  EXPECT_FLOAT_EQ(pz[1], 4.0f);
+  EXPECT_FLOAT_EQ(pz[2], 9.0f);
+}
+
+TEST(BackendKernelClass, PowClassBroadcastsArrayExponent) {
+  // Matches the upstream ``test_pow_bcast_array`` reference case.
+  const KernelContext ctx{DefaultOpset(15)};
+  Pow pow_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+  Tensor y = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
+  Tensor z = pow_kernel(x, y);
+  ASSERT_EQ(z.shape, (std::vector<int64_t>{2, 3}));
+  const float *pz = z.AsFloat();
+  EXPECT_FLOAT_EQ(pz[0], 1.0f);
+  EXPECT_FLOAT_EQ(pz[1], 4.0f);
+  EXPECT_FLOAT_EQ(pz[2], 27.0f);
+  EXPECT_FLOAT_EQ(pz[3], 4.0f);
+  EXPECT_FLOAT_EQ(pz[4], 25.0f);
+  EXPECT_FLOAT_EQ(pz[5], 216.0f);
+}
+
+TEST(BackendKernelClass, PowClassSupportsMixedBaseExponentDtypes) {
+  // ``Pow`` is the only element-wise binary kernel whose ``T`` (base) and
+  // ``T1`` (exponent) type constraints differ — exercise the cross-dtype
+  // pairs covered by the upstream ``test_pow_types_*`` reference cases.
+  const KernelContext ctx{DefaultOpset(15)};
+  Pow pow_kernel{ctx};
+  {
+    // float ^ int64 -> float
+    Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
+    Tensor y = Tensor::FromInt64("", {3}, {4, 5, 6});
+    Tensor z = pow_kernel(x, y);
+    ASSERT_EQ(z.data_type, onnx_backend_test::DataType::FLOAT);
+    const float *pz = z.AsFloat();
+    EXPECT_FLOAT_EQ(pz[0], 1.0f);
+    EXPECT_FLOAT_EQ(pz[1], 32.0f);
+    EXPECT_FLOAT_EQ(pz[2], 729.0f);
+  }
+  {
+    // int64 ^ float -> int64 (truncated)
+    Tensor x = Tensor::FromInt64("", {3}, {1, 2, 3});
+    Tensor y = Tensor::FromFloat("", {3}, {4.0f, 5.0f, 6.0f});
+    Tensor z = pow_kernel(x, y);
+    ASSERT_EQ(z.data_type, onnx_backend_test::DataType::INT64);
+    const int64_t *pz = z.AsInt64();
+    EXPECT_EQ(pz[0], 1);
+    EXPECT_EQ(pz[1], 32);
+    EXPECT_EQ(pz[2], 729);
+  }
+  {
+    // int32 ^ int32 -> int32
+    Tensor x = Tensor::FromInt32("", {3}, {1, 2, 3});
+    Tensor y = Tensor::FromInt32("", {3}, {4, 5, 6});
+    Tensor z = pow_kernel(x, y);
+    ASSERT_EQ(z.data_type, onnx_backend_test::DataType::INT32);
+    const int32_t *pz = z.AsInt32();
+    EXPECT_EQ(pz[0], 1);
+    EXPECT_EQ(pz[1], 32);
+    EXPECT_EQ(pz[2], 729);
+  }
+  {
+    // float ^ uint64 -> float
+    Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
+    Tensor y = Tensor::FromUint64("", {3}, {4, 5, 6});
+    Tensor z = pow_kernel(x, y);
+    ASSERT_EQ(z.data_type, onnx_backend_test::DataType::FLOAT);
+    const float *pz = z.AsFloat();
+    EXPECT_FLOAT_EQ(pz[0], 1.0f);
+    EXPECT_FLOAT_EQ(pz[1], 32.0f);
+    EXPECT_FLOAT_EQ(pz[2], 729.0f);
+  }
+}
+
+TEST(BackendKernelClass, PowInPlaceWritesToPreallocatedOutput) {
+  const KernelContext ctx{DefaultOpset(15)};
+  Pow pow_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor y = Tensor::FromFloat("", {2, 2}, {2.0f, 3.0f, 2.0f, 3.0f});
+  Tensor z("", onnx_backend_test::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
+  pow_kernel(x, y, z);
+  const float *pz = z.AsFloat();
+  EXPECT_FLOAT_EQ(pz[0], 1.0f);
+  EXPECT_FLOAT_EQ(pz[1], 8.0f);
+  EXPECT_FLOAT_EQ(pz[2], 9.0f);
+  EXPECT_FLOAT_EQ(pz[3], 64.0f);
+}
+
+TEST(BackendKernelClass, PowRejectsUnsupportedBaseDtype) {
+  const KernelContext ctx{DefaultOpset(15)};
+  Pow pow_kernel{ctx};
+  // UINT8 is not in the ``T`` (base) constraint of ONNX Pow.
+  Tensor x = Tensor::FromUint8("", {2}, {1u, 2u});
+  Tensor y = Tensor::FromFloat("", {2}, {2.0f, 3.0f});
+  EXPECT_THROW(pow_kernel(x, y), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, PowRejectsIncompatibleShapes) {
+  const KernelContext ctx{DefaultOpset(15)};
+  Pow pow_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
+  Tensor y = Tensor::FromFloat("", {4}, {1.0f, 2.0f, 3.0f, 4.0f});
+  EXPECT_THROW(pow_kernel(x, y), std::invalid_argument);
 }
 
 } // namespace Test

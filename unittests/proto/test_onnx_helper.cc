@@ -1664,3 +1664,114 @@ TEST(onnx_helper, GetAttributeIntsAppendsValues) {
   EXPECT_FALSE(GetAttributeInts(node, "missing", empty));
   EXPECT_TRUE(empty.empty());
 }
+
+// -----------------------------------------------------------------------
+// Streaming alignment of an existing two-file model. The function must:
+//  - rewrite the external weights file so that every tensor's offset is a
+//    multiple of the requested alignment,
+//  - update the proto's external_data entries (location + offset + length),
+//  - preserve raw bytes exactly,
+//  - and never load the full set of weights in memory (we rely on the
+//    chunk_size argument to enforce this: setting it to a tiny value still
+//    produces a correct output).
+// -----------------------------------------------------------------------
+TEST(onnx_alignment, AlignExternalDataStreamingRewritesAlignedWeights) {
+  namespace fs = std::filesystem;
+
+  // Build a model with three initializers of different sizes so that the
+  // streaming layout must insert padding between them when re-aligned.
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+
+  const std::vector<std::vector<float>> payloads = {
+      std::vector<float>(7, 1.5f),  // 28 bytes, not a 64-multiple
+      std::vector<float>(3, -2.0f), //  12 bytes
+      std::vector<float>(17, 3.0f), //  68 bytes
+  };
+  for (size_t i = 0; i < payloads.size(); ++i) {
+    TensorProto *t = graph->add_initializer();
+    t->set_name(std::string("w") + std::to_string(i));
+    t->set_data_type(TensorProto::DataType::FLOAT);
+    t->ref_dims().push_back(static_cast<int64_t>(payloads[i].size()));
+    t->ref_raw_data().resize(payloads[i].size() * sizeof(float));
+    std::memcpy(t->ref_raw_data().data(), payloads[i].data(), payloads[i].size() * sizeof(float));
+  }
+
+  const std::string src_onnx = "stream_align_src.onnx";
+  const std::string src_weights = "stream_align_src.data";
+  const std::string dst_onnx = "stream_align_dst.onnx";
+  const std::string dst_weights = "stream_align_dst.data";
+  for (const auto &p : {src_onnx, src_weights, dst_onnx, dst_weights}) {
+    std::remove(p.c_str());
+  }
+
+  // 1) Save the model with unaligned (offset 0) external data — packed tight.
+  {
+    utils::TwoFilesWriteStream wstream(src_onnx, src_weights);
+    SerializeOptions sopts;
+    sopts.raw_data_threshold = 0;
+    SerializeProtoToStream(model, wstream, sopts);
+  }
+  ASSERT_TRUE(fs::exists(src_onnx));
+  ASSERT_TRUE(fs::exists(src_weights));
+
+  // 2) Stream-align with a tiny chunk_size to exercise the chunked copy path.
+  constexpr int64_t alignment = 64;
+  constexpr int64_t chunk_size = 7; // < every payload, forces multiple I/O loops
+  const offset_t total =
+      AlignExternalDataStreaming(src_onnx, dst_onnx, dst_weights, alignment, chunk_size);
+  ASSERT_GT(total, 0);
+  EXPECT_EQ(static_cast<int64_t>(fs::file_size(dst_weights)), static_cast<int64_t>(total));
+
+  // 3) Load the destination model and verify alignment + content.
+  ModelProto loaded;
+  {
+    utils::TwoFilesStream rstream(dst_onnx, dst_weights);
+    ParseOptions ropts;
+    ParseProtoFromStream(loaded, rstream, ropts);
+  }
+  ASSERT_EQ(loaded.ref_graph().ref_initializer().size(), payloads.size());
+
+  // 4) Inspect the proto-side metadata (offsets must be aligned, location must
+  //    point at the new file). Use FileStream so we don't load weights twice.
+  ModelProto metadata;
+  {
+    utils::FileStream meta_stream(dst_onnx);
+    ParseOptions meta_opts;
+    ParseProtoFromStream(metadata, meta_stream, meta_opts, /*clear_external_data=*/false);
+  }
+  ASSERT_EQ(metadata.ref_graph().ref_initializer().size(), payloads.size());
+  for (size_t i = 0; i < payloads.size(); ++i) {
+    const TensorProto &meta = metadata.ref_graph().ref_initializer()[i];
+    ASSERT_TRUE(meta.has_data_location());
+    ASSERT_EQ(meta.ref_data_location(), TensorProto::DataLocation::EXTERNAL);
+    std::string loc;
+    int64_t off = -1;
+    int64_t len = -1;
+    for (int j = 0; j < meta.ref_external_data().size(); ++j) {
+      const StringStringEntryProto &e = meta.ref_external_data()[j];
+      if (e.ref_key() == "location")
+        loc = e.ref_value().as_string();
+      else if (e.ref_key() == "offset")
+        off = std::stoll(e.ref_value().as_string());
+      else if (e.ref_key() == "length" || e.ref_key() == "size")
+        len = std::stoll(e.ref_value().as_string());
+    }
+    EXPECT_EQ(loc, dst_weights);
+    ASSERT_GE(off, 0);
+    EXPECT_EQ(off % alignment, 0);
+    EXPECT_EQ(len, static_cast<int64_t>(payloads[i].size() * sizeof(float)));
+
+    // Compare bytes.
+    const TensorProto &lt = loaded.ref_graph().ref_initializer()[i];
+    ASSERT_EQ(lt.ref_raw_data().size(), payloads[i].size() * sizeof(float));
+    EXPECT_EQ(std::memcmp(lt.ref_raw_data().data(), payloads[i].data(),
+                          payloads[i].size() * sizeof(float)),
+              0);
+  }
+
+  for (const auto &p : {src_onnx, src_weights, dst_onnx, dst_weights}) {
+    std::remove(p.c_str());
+  }
+}

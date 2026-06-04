@@ -559,6 +559,16 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          math::ComputeShapeMod(ctx, node, node.input(0).as_string().c_str(),
                                node.input(1).as_string().c_str());
        }},
+      {"ai.onnx:Neg",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeNeg(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:Not",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         logical::ComputeShapeNot(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:PRelu",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
@@ -801,6 +811,12 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
         nn::ComputeShapeRoiAlign(ctx, node, node.input(0).as_string().c_str(),
                                  node.input(1).as_string().c_str(),
                                   node.input(2).as_string().c_str());
+       }},
+      {"ai.onnx:NonMaxSuppression",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         nn::ComputeShapeNonMaxSuppression(ctx, node, node.input(0).as_string().c_str(),
+                                           node.input(1).as_string().c_str());
        }},
       {"ai.onnx:RNN",
        [](ShapesContext &ctx, const NodeProto &node) {

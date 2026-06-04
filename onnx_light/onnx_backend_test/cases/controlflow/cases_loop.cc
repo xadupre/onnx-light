@@ -43,7 +43,7 @@ void AddGraphInputTensor(GraphProto &g, const std::string &name, TensorProto::Da
   vi->set_name(name);
   TypeProto::Tensor *tensor_type = vi->ref_type().mutable_tensor_type();
   tensor_type->set_elem_type(static_cast<int>(dtype));
-  TensorShapeProto *s = tensor_type->add_shape();
+  TensorShapeProto *s = tensor_type->mutable_shape();
   for (int64_t d : shape) {
     s->add_dim()->set_dim_value(d);
   }

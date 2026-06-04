@@ -397,6 +397,47 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of the ONNX ``OneHot`` operator (since opset 9 in
+/// the ``ai.onnx`` domain; opset 11 added support for negative indices).
+///
+/// Inputs:
+///   * ``indices``: rank ``>= 1`` numeric tensor of indices. Negative entries
+///     are accepted from opset 11 onwards (negative ``i`` selects depth
+///     position ``i + depth``); entries outside ``[-depth, depth-1]`` (or
+///     ``[0, depth)`` for opset 9) leave the corresponding row filled with
+///     ``off_value``.
+///   * ``depth``: numeric scalar (or rank-1 tensor with a single element)
+///     giving the size of the new one-hot dimension.
+///   * ``values``: rank-1 tensor of length 2, formatted as
+///     ``[off_value, on_value]``.
+///
+/// Attribute ``axis`` (int, default ``-1``): position at which the new
+/// dimension is inserted in the output. Accepted range is
+/// ``[-rank(indices)-1, rank(indices)]``.
+///
+/// The output has rank ``rank(indices) + 1``; its element type matches
+/// ``values``. The reference implementation supports all numeric element
+/// types for ``indices`` and ``depth`` (cast to ``int64`` before use) and
+/// all numeric and ``BOOL`` element types for ``values`` / the output.
+class OneHot : public KernelBase {
+public:
+  /// Attributes carried by the ONNX ``OneHot`` operator.
+  struct Attributes {
+    int64_t axis = -1;
+  };
+
+  using KernelBase::KernelBase;
+
+  Tensor operator()(const Tensor &indices, const Tensor &depth, const Tensor &values,
+                    const Attributes &attrs) const;
+  void operator()(const Tensor &indices, const Tensor &depth, const Tensor &values,
+                  const Attributes &attrs, Tensor &output) const;
+
+  /// The output has a different shape (one extra dimension) than any of the
+  /// inputs, so storage cannot be shared.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Reference implementation of the ONNX ``Shape`` operator (since opset 1 in
 /// the ``ai.onnx`` domain; extended with ``start``/``end`` attributes in
 /// opset 15). Returns the shape of the input tensor as an ``INT64`` 1-D

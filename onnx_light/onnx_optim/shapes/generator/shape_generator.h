@@ -156,6 +156,26 @@ void ComputeShapeHannWindow(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeHammingWindow(ShapesContext &ctx, const NodeProto &node);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``MelWeightMatrix``
+ * node and stores it in ``ctx``.
+ *
+ * ``MelWeightMatrix`` produces a 2-D tensor of shape
+ * ``[floor(dft_length/2) + 1, num_mel_bins]`` holding the triangular
+ * Mel filter-bank weights. The output element type is given by the
+ * optional ``output_datatype`` attribute (a
+ * :cpp:class:`TensorProto::DataType` value, defaults to ``FLOAT``).
+ *
+ * The output shape is taken from the input's
+ * :cpp:func:`OptimTensor::ValueAsShape` annotation when available
+ * (i.e. when ``num_mel_bins`` and ``dft_length`` are known constants).
+ * Otherwise the corresponding output dim is symbolic.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"MelWeightMatrix"`` or if ``node`` has no output.
+ */
+void ComputeShapeMelWeightMatrix(ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``Bernoulli`` node and
  * stores it in ``ctx``.
  *

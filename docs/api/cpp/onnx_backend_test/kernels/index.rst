@@ -8,6 +8,7 @@ kernels
     kernel_context
     include_controlflow_kernels
     include_generator_kernels
+    include_image_kernels
     include_logical_kernels
     include_math_kernels
     include_nn_kernels

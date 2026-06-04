@@ -534,6 +534,32 @@ void ComputeShapeGridSample(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeNonZero(ShapesContext &ctx, const NodeProto &node);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``OneHot`` node and
+ * stores it in ``ctx``.
+ *
+ * ``OneHot`` (since opset 9 in the ``ai.onnx`` domain) produces a tensor of
+ * rank ``rank(indices) + 1``, inserting a new dimension at position ``axis``
+ * (default ``-1``). The dtype of the output matches ``values`` (the third
+ * input). When the value of the ``depth`` input is known via
+ * data-propagation the inserted dimension is concrete; otherwise it is a
+ * symbolic dimension.
+ *
+ * @param ctx   In/out context. Must already contain entries for
+ *              ``node.input(0)`` (indices), ``node.input(1)`` (depth) and
+ *              ``node.input(2)`` (values). On return it also contains an
+ *              entry for ``node.output(0)``.
+ * @param node  The ``OneHot`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"OneHot"`` and
+ *              ``node`` must declare three inputs and at least one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"OneHot"``,
+ *         if ``node`` has fewer than three inputs or no output, or if
+ *         ``axis`` is out of range.
+ * @throws std::out_of_range     if any input name is missing from ``ctx``.
+ */
+void ComputeShapeOneHot(ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` entries of a ``Unique`` node
  * and stores them in ``ctx``.
  *

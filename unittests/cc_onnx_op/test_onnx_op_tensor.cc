@@ -123,7 +123,7 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> cast_schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Cast");
 
-  EXPECT_EQ(schemas.size(), 121u);
+  EXPECT_EQ(schemas.size(), 123u);
 
   const onnx_op::LightOpSchema *const cast_v1 = FindByVersion(cast_schemas, 1);
   const onnx_op::LightOpSchema *const cast_v6 = FindByVersion(cast_schemas, 6);
@@ -840,6 +840,51 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsSplitSchemasWithoutShapeInference) {
   EXPECT_EQ(split_v18->attributes()[1].name, "num_outputs");
 
   EXPECT_FALSE(split_v18->doc().empty());
+}
+
+TEST(OnnxOpTensorRegistrationTest, ReturnsOneHotSchemaWithAxisAttribute) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("OneHot");
+
+  const onnx_op::LightOpSchema *const one_hot_v11 = FindByVersion(schemas, 11);
+  const onnx_op::LightOpSchema *const one_hot_v9 = FindByVersion(schemas, 9);
+  ASSERT_NE(nullptr, one_hot_v11);
+  ASSERT_NE(nullptr, one_hot_v9);
+  EXPECT_EQ(one_hot_v11->name(), "OneHot");
+  EXPECT_EQ(one_hot_v11->domain(), onnx_op::kOnnxDomain);
+  EXPECT_EQ(one_hot_v11->since_version(), 11);
+
+  ASSERT_EQ(one_hot_v11->inputs().size(), 3u);
+  EXPECT_EQ(one_hot_v11->inputs()[0].name, "indices");
+  EXPECT_EQ(one_hot_v11->inputs()[0].type, "T1");
+  EXPECT_EQ(one_hot_v11->inputs()[1].name, "depth");
+  EXPECT_EQ(one_hot_v11->inputs()[1].type, "T2");
+  EXPECT_EQ(one_hot_v11->inputs()[2].name, "values");
+  EXPECT_EQ(one_hot_v11->inputs()[2].type, "T3");
+
+  ASSERT_EQ(one_hot_v11->outputs().size(), 1u);
+  EXPECT_EQ(one_hot_v11->outputs()[0].name, "output");
+  EXPECT_EQ(one_hot_v11->outputs()[0].type, "T3");
+
+  ASSERT_EQ(one_hot_v11->type_constraints().size(), 3u);
+  EXPECT_EQ(one_hot_v11->type_constraints()[0].type_param_str, "T1");
+  EXPECT_EQ(one_hot_v11->type_constraints()[1].type_param_str, "T2");
+  EXPECT_EQ(one_hot_v11->type_constraints()[2].type_param_str, "T3");
+  EXPECT_EQ(one_hot_v11->type_constraints()[0].allowed_type_strs, onnx_op::AllNumericTypes());
+  EXPECT_EQ(one_hot_v11->type_constraints()[1].allowed_type_strs, onnx_op::AllNumericTypes());
+  EXPECT_EQ(one_hot_v11->type_constraints()[2].allowed_type_strs, onnx_op::AllTensorTypes());
+
+  ASSERT_EQ(one_hot_v11->attributes().size(), 1u);
+  EXPECT_EQ(one_hot_v11->attributes()[0].name, "axis");
+  EXPECT_EQ(one_hot_v11->attributes()[0].type, onnx_op::AttributeType::INT);
+  EXPECT_FALSE(one_hot_v11->attributes()[0].required);
+  ASSERT_TRUE(std::holds_alternative<int64_t>(one_hot_v11->attributes()[0].default_value));
+  EXPECT_EQ(std::get<int64_t>(one_hot_v11->attributes()[0].default_value), -1);
+
+  EXPECT_FALSE(one_hot_v11->doc().empty());
+  EXPECT_FALSE(one_hot_v9->doc().empty());
+  EXPECT_EQ(one_hot_v9->since_version(), 9);
+  ASSERT_EQ(one_hot_v9->inputs().size(), 3u);
 }
 
 } // namespace Test

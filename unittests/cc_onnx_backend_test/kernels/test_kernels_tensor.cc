@@ -1255,4 +1255,122 @@ TEST(BackendKernelClass, SplitClassRejectsSplitMismatch) {
                std::invalid_argument);
 }
 
+// ---------------------------------------------------------------------------
+// OneHot kernel tests
+// ---------------------------------------------------------------------------
+
+TEST(BackendKernelClass, OneHotDefaultAxisMatchesReference) {
+  const KernelContext ctx{DefaultOpset(11)};
+  onnx_backend_test::kernel::OneHot one_hot{ctx};
+  Tensor indices = Tensor::FromInt64("", {3}, {0, 7, 8});
+  Tensor depth = Tensor::FromFloat("", {}, {12.0f});
+  Tensor values = Tensor::FromInt32("", {2}, {2, 5});
+  onnx_backend_test::kernel::OneHot::Attributes attrs; // axis = -1
+  Tensor y = one_hot(indices, depth, values, attrs);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{3, 12}));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
+  const int32_t *py = y.AsInt32();
+  // Expected rows: position 0, 7, 8 are 5 (on_value); rest 2 (off_value).
+  for (int64_t i = 0; i < 3; ++i) {
+    const std::vector<int64_t> on_positions{0, 7, 8};
+    for (int64_t k = 0; k < 12; ++k) {
+      const int32_t expected = (k == on_positions[i]) ? 5 : 2;
+      EXPECT_EQ(py[i * 12 + k], expected) << "i=" << i << " k=" << k;
+    }
+  }
+}
+
+TEST(BackendKernelClass, OneHotWithAxisInsertsDimensionAtPosition) {
+  const KernelContext ctx{DefaultOpset(11)};
+  onnx_backend_test::kernel::OneHot one_hot{ctx};
+  // indices shape (2, 2), axis = 1 -> output shape (2, 10, 2).
+  Tensor indices = Tensor::FromFloat("", {2, 2}, {1.0f, 9.0f, 2.0f, 4.0f});
+  Tensor depth = Tensor::FromFloat("", {}, {10.0f});
+  Tensor values = Tensor::FromFloat("", {2}, {1.0f, 3.0f});
+  onnx_backend_test::kernel::OneHot::Attributes attrs;
+  attrs.axis = 1;
+  Tensor y = one_hot(indices, depth, values, attrs);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 10, 2}));
+  const float *py = y.AsFloat();
+  // For each (outer, inner) the entry is 3 at the slot corresponding to
+  // the (outer, inner) value of ``indices``, otherwise 1.
+  const std::vector<std::vector<int64_t>> idx_values{{1, 9}, {2, 4}};
+  for (int64_t outer = 0; outer < 2; ++outer) {
+    for (int64_t k = 0; k < 10; ++k) {
+      for (int64_t inner = 0; inner < 2; ++inner) {
+        const float expected = (k == idx_values[outer][inner]) ? 3.0f : 1.0f;
+        EXPECT_FLOAT_EQ(py[(outer * 10 + k) * 2 + inner], expected)
+            << "outer=" << outer << " k=" << k << " inner=" << inner;
+      }
+    }
+  }
+}
+
+TEST(BackendKernelClass, OneHotNegativeIndicesWrapAroundDepth) {
+  const KernelContext ctx{DefaultOpset(11)};
+  onnx_backend_test::kernel::OneHot one_hot{ctx};
+  // axis = 1, depth = 10, indices = [0, -7, -8] -> selected slots 0, 3, 2.
+  Tensor indices = Tensor::FromInt64("", {3}, {0, -7, -8});
+  Tensor depth = Tensor::FromFloat("", {}, {10.0f});
+  Tensor values = Tensor::FromFloat("", {2}, {1.0f, 3.0f});
+  onnx_backend_test::kernel::OneHot::Attributes attrs;
+  attrs.axis = 1;
+  Tensor y = one_hot(indices, depth, values, attrs);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{3, 10}));
+  const float *py = y.AsFloat();
+  const std::vector<int64_t> selected{0, 3, 2};
+  for (int64_t i = 0; i < 3; ++i) {
+    for (int64_t k = 0; k < 10; ++k) {
+      const float expected = (k == selected[i]) ? 3.0f : 1.0f;
+      EXPECT_FLOAT_EQ(py[i * 10 + k], expected) << "i=" << i << " k=" << k;
+    }
+  }
+}
+
+TEST(BackendKernelClass, OneHotOutOfRangeIndicesLeaveOffValue) {
+  const KernelContext ctx{DefaultOpset(11)};
+  onnx_backend_test::kernel::OneHot one_hot{ctx};
+  Tensor indices = Tensor::FromInt64("", {2}, {5, 100});
+  Tensor depth = Tensor::FromInt64("", {}, {3});
+  Tensor values = Tensor::FromFloat("", {2}, {0.0f, 1.0f});
+  onnx_backend_test::kernel::OneHot::Attributes attrs;
+  Tensor y = one_hot(indices, depth, values, attrs);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
+  const float *py = y.AsFloat();
+  for (int64_t i = 0; i < 6; ++i) {
+    EXPECT_FLOAT_EQ(py[i], 0.0f);
+  }
+}
+
+TEST(BackendKernelClass, OneHotRejectsValuesNotRankOneOfTwo) {
+  const KernelContext ctx{DefaultOpset(11)};
+  onnx_backend_test::kernel::OneHot one_hot{ctx};
+  Tensor indices = Tensor::FromInt64("", {2}, {0, 1});
+  Tensor depth = Tensor::FromInt64("", {}, {3});
+  Tensor bad_values = Tensor::FromFloat("", {3}, {0.0f, 1.0f, 2.0f});
+  onnx_backend_test::kernel::OneHot::Attributes attrs;
+  EXPECT_THROW((void)one_hot(indices, depth, bad_values, attrs), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, OneHotRejectsZeroDepth) {
+  const KernelContext ctx{DefaultOpset(11)};
+  onnx_backend_test::kernel::OneHot one_hot{ctx};
+  Tensor indices = Tensor::FromInt64("", {2}, {0, 1});
+  Tensor depth = Tensor::FromInt64("", {}, {0});
+  Tensor values = Tensor::FromFloat("", {2}, {0.0f, 1.0f});
+  onnx_backend_test::kernel::OneHot::Attributes attrs;
+  EXPECT_THROW((void)one_hot(indices, depth, values, attrs), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, OneHotRejectsAxisOutOfRange) {
+  const KernelContext ctx{DefaultOpset(11)};
+  onnx_backend_test::kernel::OneHot one_hot{ctx};
+  Tensor indices = Tensor::FromInt64("", {2}, {0, 1});
+  Tensor depth = Tensor::FromInt64("", {}, {3});
+  Tensor values = Tensor::FromFloat("", {2}, {0.0f, 1.0f});
+  onnx_backend_test::kernel::OneHot::Attributes attrs;
+  attrs.axis = 5;
+  EXPECT_THROW((void)one_hot(indices, depth, values, attrs), std::invalid_argument);
+}
+
 } // namespace Test

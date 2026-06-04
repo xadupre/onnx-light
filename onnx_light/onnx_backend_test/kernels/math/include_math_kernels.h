@@ -715,6 +715,26 @@ public:
   /// buffer when that input is not broadcast-expanded.
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
+
+/// MelWeightMatrix generates the triangular Mel filter-bank weight matrix
+/// used to re-weight a linearly sampled frequency spectrum into Mel-scaled
+/// bands (since opset 17). The output has shape
+/// ``[floor(dft_length/2) + 1, num_mel_bins]`` with element type
+/// ``output_dtype`` (default ``FLOAT``).
+class MelWeightMatrix : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &num_mel_bins, const Tensor &dft_length, const Tensor &sample_rate,
+                    const Tensor &lower_edge_hertz, const Tensor &upper_edge_hertz,
+                    DataType output_dtype = DataType::FLOAT) const;
+  void operator()(const Tensor &num_mel_bins, const Tensor &dft_length, const Tensor &sample_rate,
+                  const Tensor &lower_edge_hertz, const Tensor &upper_edge_hertz,
+                  DataType output_dtype, Tensor &output) const;
+
+  /// Output shape is unrelated to input shapes (all inputs are scalars):
+  /// storage cannot be shared with an input.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
 /// INT32 or INT64 tensor whose value selects the dimension along which the
 /// cumulative sum is computed (negative values count from the back). The
 /// ``exclusive`` flag, when true, excludes the current element from each

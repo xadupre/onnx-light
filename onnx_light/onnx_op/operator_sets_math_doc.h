@@ -61,6 +61,13 @@ std::string MakeHannWindowDoc();
 std::string MakeHammingWindowDoc();
 
 /**
+ * Returns the documentation string for the MelWeightMatrix operator.
+ *
+ * @return Documentation string for the MelWeightMatrix operator.
+ */
+std::string MakeMelWeightMatrixDoc();
+
+/**
  * Returns the documentation string for the Pow operator.
  *
  * @return Documentation string for the Pow operator.

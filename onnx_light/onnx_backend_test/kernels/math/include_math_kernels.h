@@ -398,6 +398,59 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Element-wise rectified linear unit: ``y = max(0, x)``. Defined for both
+/// floating-point and signed integer tensors (see schema since v14).
+class Relu : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x) const;
+  void operator()(const Tensor &x, Tensor &output) const;
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
+/// Element-wise exponential linear unit:
+/// ``y = x`` for ``x >= 0`` and ``y = alpha * (exp(x) - 1)`` otherwise.
+/// ``alpha`` defaults to 1.0 to match the ONNX schema.
+class Elu : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x, float alpha = 1.0f) const;
+  void operator()(const Tensor &x, float alpha, Tensor &output) const;
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
+/// Element-wise continuously differentiable exponential linear unit:
+/// ``y = max(0, x) + min(0, alpha * (exp(x / alpha) - 1))``.
+/// ``alpha`` defaults to 1.0 to match the ONNX schema. Only ``FLOAT`` inputs
+/// are accepted (matching the v12 schema).
+class Celu : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x, float alpha = 1.0f) const;
+  void operator()(const Tensor &x, float alpha, Tensor &output) const;
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
+/// Element-wise gaussian error linear unit. When ``approximate == "none"``
+/// (the default) the exact formulation ``y = 0.5 * x * (1 + erf(x / sqrt(2)))``
+/// is used; when ``approximate == "tanh"`` the tanh-based approximation
+/// ``y = 0.5 * x * (1 + tanh(sqrt(2/pi) * (x + 0.044715 * x^3)))`` is used.
+class Gelu : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x, const std::string &approximate = "none") const;
+  void operator()(const Tensor &x, const std::string &approximate, Tensor &output) const;
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// Element-wise Swish activation: y = x * sigmoid(alpha * x). ``alpha``
 /// defaults to 1.0 to match the ONNX schema (opset 24).
 class Swish : public KernelBase {

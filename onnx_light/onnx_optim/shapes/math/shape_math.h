@@ -603,6 +603,18 @@ void ComputeShapeTanh(ShapesContext &ctx, const NodeProto &node, const char *x);
 /// ThresholdedRelu is element-wise unary: output dtype and shape match the input.
 void ComputeShapeThresholdedRelu(ShapesContext &ctx, const NodeProto &node, const char *x);
 
+/// Relu is element-wise unary: output dtype and shape match the input.
+void ComputeShapeRelu(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/// Elu is element-wise unary: output dtype and shape match the input.
+void ComputeShapeElu(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/// Celu is element-wise unary: output dtype and shape match the input.
+void ComputeShapeCelu(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/// Gelu is element-wise unary: output dtype and shape match the input.
+void ComputeShapeGelu(ShapesContext &ctx, const NodeProto &node, const char *x);
+
 /// Selu is element-wise unary: output dtype and shape match the input.
 void ComputeShapeSelu(ShapesContext &ctx, const NodeProto &node, const char *x);
 

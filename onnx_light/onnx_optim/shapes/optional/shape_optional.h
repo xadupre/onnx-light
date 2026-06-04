@@ -56,6 +56,58 @@ namespace optional {
  */
 void ComputeShapeOptional(ShapesContext &ctx, const NodeProto &node);
 
+/**
+ * Computes the output descriptor of an ``OptionalGetElement`` node and
+ * stores it in ``ctx``.
+ *
+ * ``OptionalGetElement`` (since opset 15 in the ``ai.onnx`` domain)
+ * extracts the element from an optional-type input. Since opset 18 the
+ * operator also accepts non-optional tensor or sequence inputs as a
+ * no-op. Because :cpp:class:`OptimTensor` does not model optional
+ * values, this implementation forwards the input descriptor verbatim:
+ *
+ *   - if the input name is bound to an :cpp:class:`OptimSequence` in
+ *     ``ctx``, the output is registered as the same sequence;
+ *   - otherwise the input must be bound to an :cpp:class:`OptimTensor`
+ *     and the output is registered as a tensor with the same dtype and
+ *     shape.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``node.input(0)``; on return it also contains an entry
+ *              for ``node.output(0)``.
+ * @param node  The ``OptionalGetElement`` ``NodeProto``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"OptionalGetElement"``, if ``node`` does not declare
+ *         exactly one input and one output, or if the input name is
+ *         empty.
+ * @throws std::out_of_range     if the input name is missing from
+ *         ``ctx``.
+ */
+void ComputeShapeOptionalGetElement(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output descriptor of an ``OptionalHasElement`` node and
+ * stores it in ``ctx``.
+ *
+ * ``OptionalHasElement`` (since opset 15 in the ``ai.onnx`` domain)
+ * produces a scalar boolean tensor indicating whether the input
+ * optional contains an element. Since opset 18 the input may also be a
+ * non-optional tensor or sequence, and the input may be omitted
+ * entirely (in which case the output is ``false``). The output is
+ * always a scalar :cpp:class:`OptimTensor` of dtype
+ * :cpp:enumerator:`TensorType::kBool`.
+ *
+ * @param ctx   In/out context. On return it contains an
+ *              :cpp:class:`OptimTensor` entry for ``node.output(0)``.
+ * @param node  The ``OptionalHasElement`` ``NodeProto``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"OptionalHasElement"``, if ``node`` declares more than one
+ *         input or does not declare exactly one output.
+ */
+void ComputeShapeOptionalHasElement(ShapesContext &ctx, const NodeProto &node);
+
 } // namespace optional
 } // namespace shapes
 } // namespace onnx_optim

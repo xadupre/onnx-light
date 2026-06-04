@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <string>
 
+#include "onnx_optim/optim_sequence.h"
 #include "onnx_optim/optim_tensor.h"
 #include "onnx_optim/shapes/shape_check.h"
 
@@ -100,6 +101,54 @@ void ComputeShapeOptional(ShapesContext &ctx, const NodeProto &node) {
         "ComputeShapeOptional: the 'type' attribute must wrap a tensor or an "
         "optional-of-tensor type; sequence, map and sparse types are not supported.");
   ctx.Set(node.output(0), OptimTensorFromTensorTypeProto(*elem_tp));
+}
+
+void ComputeShapeOptionalGetElement(ShapesContext &ctx, const NodeProto &node) {
+  CheckNodeOpAndOutput(node, "OptionalGetElement", "ComputeShapeOptionalGetElement");
+
+  EXT_ENFORCE_INVALID(
+      node.input_size() == 1,
+      "ComputeShapeOptionalGetElement: op 'OptionalGetElement' expects exactly 1 input, got " +
+          std::to_string(node.input_size()) + ".");
+
+  const std::string input_name = node.input(0).as_string();
+  EXT_ENFORCE_INVALID(
+      !input_name.empty(),
+      "ComputeShapeOptionalGetElement: input name of op 'OptionalGetElement' must not be empty.");
+
+  // ``OptimTensor`` does not model optional types, so the wrapping (if
+  // any) is elided and the output descriptor mirrors the input
+  // descriptor. The input may be either a tensor or a sequence (the
+  // latter is supported by the schema since opset 15 for
+  // optional<sequence> and since opset 18 for bare sequences).
+  if (ctx.HasSequence(input_name)) {
+    const OptimSequence &seq = ctx.GetSequence(input_name);
+    if (seq.HasElemShapes()) {
+      ctx.SetSequence(node.output(0),
+                      OptimSequence(seq.ElemDtype(), std::vector<OptimShape>(seq.ElemShapes())));
+    } else {
+      ctx.SetSequence(node.output(0), OptimSequence(seq.ElemDtype(), OptimDim(seq.Length())));
+    }
+    return;
+  }
+
+  const OptimTensor &in = ctx.Get(input_name);
+  ctx.Set(node.output(0), OptimTensor(nullptr, in.Dtype(), OptimShape(in.Shape().Dims())));
+}
+
+void ComputeShapeOptionalHasElement(ShapesContext &ctx, const NodeProto &node) {
+  CheckNodeOpAndOutput(node, "OptionalHasElement", "ComputeShapeOptionalHasElement");
+
+  EXT_ENFORCE_INVALID(
+      node.input_size() <= 1,
+      "ComputeShapeOptionalHasElement: op 'OptionalHasElement' expects at most 1 input, got " +
+          std::to_string(node.input_size()) + ".");
+
+  // The output is always a scalar boolean tensor regardless of the
+  // input. The input itself is not consulted: its presence/absence is a
+  // runtime property and the output shape does not depend on the input
+  // dtype or shape.
+  ctx.Set(node.output(0), OptimTensor(nullptr, TensorType::kBool, OptimShape{}));
 }
 
 } // namespace optional

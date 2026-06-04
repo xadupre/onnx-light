@@ -10,6 +10,8 @@ namespace onnx_backend_test {
 void CollectOptionalTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   static const OpRegisterMap kEntries = {
       {"Optional", &RegisterOptionalCases},
+      {"OptionalGetElement", &RegisterOptionalGetElementCases},
+      {"OptionalHasElement", &RegisterOptionalHasElementCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

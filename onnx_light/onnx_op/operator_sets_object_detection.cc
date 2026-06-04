@@ -57,6 +57,55 @@ LightOpSchema MakeRoiAlignSchema(int since_version) {
 
 } // namespace
 
+LightOpSchema MakeNonMaxSuppressionSchema(int since_version) {
+  return LightOpSchema(
+      "NonMaxSuppression", kOnnxDomain, since_version, MakeNonMaxSuppressionDoc(),
+      {
+          {"boxes",
+           "An input tensor with shape [num_batches, spatial_dimension, 4]. The single box "
+           "data format is indicated by center_point_box.",
+           "tensor(float)"},
+          {"scores", "An input tensor with shape [num_batches, num_classes, spatial_dimension]",
+           "tensor(float)"},
+          {"max_output_boxes_per_class",
+           "Integer representing the maximum number of boxes to be selected per batch per "
+           "class. It is a scalar. Default to 0, which means no output.",
+           "tensor(int64)"},
+          {"iou_threshold",
+           since_version >= 11
+               ? "Float representing the threshold for deciding whether boxes overlap too much "
+                 "with respect to IOU. Boxes with IoU strictly greater than this threshold are "
+                 "suppressed. It is scalar. Value range [0, 1]. Default to 0."
+               : "Float representing the threshold for deciding whether boxes overlap too much "
+                 "with respect to IOU. It is scalar. Value range [0, 1]. Default to 0.",
+           "tensor(float)"},
+          {"score_threshold",
+           "Float representing the threshold for deciding when to remove boxes based on score. "
+           "It is a scalar.",
+           "tensor(float)"},
+      },
+      {
+          {"selected_indices",
+           "selected indices from the boxes tensor. [num_selected_indices, 3], the selected "
+           "index format is [batch_index, class_index, box_index].",
+           "tensor(int64)"},
+      },
+      // NonMaxSuppression uses literal type strings on inputs/outputs instead of named
+      // type-parameter constraints, so no TypeConstraintParam entries are required.
+      {},
+      {
+          AttributeParam{"center_point_box",
+                         "Integer indicate the format of the box data. The default is 0. "
+                         "0 - the box data is supplied as [y1, x1, y2, x2] where (y1, x1) and "
+                         "(y2, x2) are the coordinates of any diagonal pair of box corners "
+                         "and the coordinates can be provided as normalized (i.e., lying in the "
+                         "interval [0, 1]) or absolute. Mostly used for TF models. "
+                         "1 - the box data is supplied as [x_center, y_center, width, height]. "
+                         "Mostly used for Pytorch models.",
+                         AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)},
+      });
+}
+
 std::vector<LightOpSchema> GetAllOnnxOpObjectDetectionSchemasWithHistory(const std::string &op_type,
                                                                          bool init_doc) {
   static const std::map<std::string, SchemaBuilder> builders = {
@@ -66,6 +115,13 @@ std::vector<LightOpSchema> GetAllOnnxOpObjectDetectionSchemasWithHistory(const s
              MakeRoiAlignSchema(22),
              MakeRoiAlignSchema(16),
              MakeRoiAlignSchema(10),
+         };
+       }},
+      {"NonMaxSuppression",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeNonMaxSuppressionSchema(11),
+             MakeNonMaxSuppressionSchema(10),
          };
        }},
   };

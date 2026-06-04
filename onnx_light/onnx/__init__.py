@@ -36,6 +36,7 @@ from ..onnx_lib import (  # noqa: F401
     ValueInfoProto,
     checker,
     compose,
+    align_external_data_streaming,
     consolidate_tensors_to_buffer,
     utils_onnx_read_varint64,
     defs,

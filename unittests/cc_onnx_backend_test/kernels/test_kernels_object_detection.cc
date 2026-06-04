@@ -17,6 +17,7 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DefaultOpset;
 using onnx_backend_test::Tensor;
 using onnx_backend_test::kernel::KernelContext;
+using onnx_backend_test::kernel::NonMaxSuppression;
 using onnx_backend_test::kernel::RoiAlign;
 
 namespace Test {
@@ -136,6 +137,81 @@ TEST(BackendKernelClass, RoiAlignRejectsBadInputs) {
   Tensor bad_out("", static_cast<int32_t>(onnx_backend_test::DataType::FLOAT), {1, 1, 3, 3},
                  std::vector<uint8_t>(9 * sizeof(float)));
   EXPECT_THROW(roialign(x, rois, batch_indices, attrs, bad_out), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, NonMaxSuppressionSuppressByIoU) {
+  const KernelContext ctx{onnx_backend_test::DefaultOpset(11)};
+  NonMaxSuppression nms{ctx};
+  // Mirror the upstream test_nonmaxsuppression_suppress_by_IOU fixture.
+  Tensor boxes = Tensor::FromFloat("", {1, 6, 4}, {0.f, 0.f,   1.f, 1.f,   0.f, 0.1f,  1.f, 1.1f,
+                                                   0.f, -0.1f, 1.f, 0.9f,  0.f, 10.f,  1.f, 11.f,
+                                                   0.f, 10.1f, 1.f, 11.1f, 0.f, 100.f, 1.f, 101.f});
+  Tensor scores = Tensor::FromFloat("", {1, 1, 6}, {0.9f, 0.75f, 0.6f, 0.95f, 0.5f, 0.3f});
+  Tensor max_out = Tensor::FromInt64("", {1}, {3});
+  Tensor iou = Tensor::FromFloat("", {1}, {0.5f});
+  Tensor score = Tensor::FromFloat("", {1}, {0.0f});
+  NonMaxSuppression::Attributes attrs;
+  Tensor y = nms(boxes, scores, &max_out, &iou, &score, attrs);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{3, 3}));
+  const int64_t *py = y.AsInt64();
+  const std::vector<int64_t> expected = {0, 0, 3, 0, 0, 0, 0, 0, 5};
+  for (size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_EQ(py[i], expected[i]);
+  }
+}
+
+TEST(BackendKernelClass, NonMaxSuppressionDefaultsAndOptionalInputs) {
+  const KernelContext ctx{onnx_backend_test::DefaultOpset(11)};
+  NonMaxSuppression nms{ctx};
+  // Two non-overlapping boxes; with no max_output_boxes_per_class (default 0)
+  // the output must be empty.
+  Tensor boxes =
+      Tensor::FromFloat("", {1, 2, 4}, {0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 10.0f, 1.0f, 11.0f});
+  Tensor scores = Tensor::FromFloat("", {1, 1, 2}, {0.9f, 0.8f});
+  NonMaxSuppression::Attributes attrs;
+
+  Tensor y_empty = nms(boxes, scores, /*max_out=*/nullptr, /*iou=*/nullptr,
+                       /*score=*/nullptr, attrs);
+  EXPECT_EQ(y_empty.shape, (std::vector<int64_t>{0, 3}));
+
+  // With max=10 both boxes must be selected (they don't overlap).
+  Tensor max_out = Tensor::FromInt64("", {1}, {10});
+  Tensor y_two = nms(boxes, scores, &max_out, /*iou=*/nullptr, /*score=*/nullptr, attrs);
+  EXPECT_EQ(y_two.shape, (std::vector<int64_t>{2, 3}));
+  const int64_t *py = y_two.AsInt64();
+  // Higher-scored box first.
+  EXPECT_EQ(py[0], 0);
+  EXPECT_EQ(py[1], 0);
+  EXPECT_EQ(py[2], 0);
+  EXPECT_EQ(py[3], 0);
+  EXPECT_EQ(py[4], 0);
+  EXPECT_EQ(py[5], 1);
+}
+
+TEST(BackendKernelClass, NonMaxSuppressionRejectsBadInputs) {
+  const KernelContext ctx{onnx_backend_test::DefaultOpset(11)};
+  NonMaxSuppression nms{ctx};
+  Tensor boxes = Tensor::FromFloat("", {1, 1, 4}, {0.0f, 0.0f, 1.0f, 1.0f});
+  Tensor scores = Tensor::FromFloat("", {1, 1, 1}, {0.9f});
+  NonMaxSuppression::Attributes attrs;
+
+  // boxes must be 3-D with last dim == 4.
+  Tensor bad_boxes = Tensor::FromFloat("", {1, 1, 3}, {0.0f, 0.0f, 1.0f});
+  EXPECT_THROW(nms(bad_boxes, scores, nullptr, nullptr, nullptr, attrs), std::invalid_argument);
+
+  // boxes and scores must agree on batch.
+  Tensor mismatch_scores = Tensor::FromFloat("", {2, 1, 1}, {0.9f, 0.8f});
+  EXPECT_THROW(nms(boxes, mismatch_scores, nullptr, nullptr, nullptr, attrs),
+               std::invalid_argument);
+
+  // boxes must be FLOAT.
+  Tensor int_boxes = Tensor::FromInt32("", {1, 1, 4}, std::vector<int32_t>(4, 0));
+  EXPECT_THROW(nms(int_boxes, scores, nullptr, nullptr, nullptr, attrs), std::invalid_argument);
+
+  // max_output_boxes_per_class must be INT64.
+  Tensor bad_max = Tensor::FromInt32("", {1}, {1});
+  EXPECT_THROW(nms(boxes, scores, &bad_max, nullptr, nullptr, attrs), std::invalid_argument);
 }
 
 } // namespace Test

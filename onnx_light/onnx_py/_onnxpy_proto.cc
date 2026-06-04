@@ -773,6 +773,45 @@ memory allocations.
     options (threshold=0, alignment=0 → consolidate all tensors without alignment).
 )pbdoc");
 
+  m.def(
+      "align_external_data_streaming",
+      [](const std::string &src_onnx_path, const std::string &dst_onnx_path,
+         const std::string &dst_weights_path, int64_t alignment, int64_t chunk_size) -> int64_t {
+        return static_cast<int64_t>(AlignExternalDataStreaming(
+            src_onnx_path, dst_onnx_path, dst_weights_path, alignment, chunk_size));
+      },
+      nb::arg("src_onnx_path"), nb::arg("dst_onnx_path"), nb::arg("dst_weights_path"),
+      nb::arg("alignment") = 4096, nb::arg("chunk_size") = 4 * 1024 * 1024,
+      R"pbdoc(Rewrites an existing two-file ONNX model (``.onnx`` + one or more
+external weights file(s)) into a new ``(dst_onnx_path, dst_weights_path)`` pair
+so that every tensor's offset inside the destination weights file is aligned to
+``alignment`` bytes — without ever loading the full set of weights in memory.
+The destination always uses a single consolidated weights file even when the
+source spreads tensors across multiple ``external_data.location`` files.
+
+The source ``.onnx`` is parsed with ``skip_raw_data=True``, so only the
+initializer metadata (including ``external_data``) is read.  For each tensor
+referenced as external data, ``length`` bytes are streamed from the source
+weights file to the destination weights file in chunks of ``chunk_size`` bytes,
+and the proto's ``external_data`` entries are updated in place to point at the
+new file and aligned offset.  Finally, the updated proto is written to
+``dst_onnx_path``.
+
+Peak heap usage is therefore bounded by the proto metadata size plus
+``chunk_size`` bytes — independent of the total weights size.  Use this when
+you need to align weights for mmap or accelerator-friendly loading but cannot
+afford to load the full model in memory.
+
+:param src_onnx_path: Path to the source ``.onnx`` file.
+    ``external_data.location`` entries are resolved relative to its parent
+    directory.
+:param dst_onnx_path: Destination ``.onnx`` file (created/truncated).
+:param dst_weights_path: Destination weights file (created/truncated).
+:param alignment: Alignment in bytes (power of two, >= 1).  Defaults to 4096.
+:param chunk_size: Maximum bytes copied per I/O call.  Defaults to 4 MiB.
+:return: Total bytes written to ``dst_weights_path`` (including padding).
+)pbdoc");
+
   nb::class_<utils::PrintOptions>(m, "PrintOptions", "Printing options for proto classes")
       .def(nb::init<>())
       .def_rw("skip_raw_data", &utils::PrintOptions::skip_raw_data,

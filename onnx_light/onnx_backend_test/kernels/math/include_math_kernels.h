@@ -504,6 +504,31 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Element-wise exponentiation ``z = x ^ y`` with NumPy-style multidirectional
+/// broadcasting (since opset 7). Unlike most binary element-wise kernels,
+/// ``Pow`` allows ``x`` and ``y`` to have different dtypes: the output dtype
+/// always matches the dtype of the base ``x`` (per the ONNX schema, ``Z`` is
+/// constrained to ``T`` while ``Y`` is constrained to the broader ``T1``).
+///
+/// Supported base dtypes (``T``): FLOAT, INT32, INT64.
+/// Supported exponent dtypes (``T1``): FLOAT, INT32, INT64, UINT32, UINT64.
+/// Integer base / integer exponent pairs evaluate the power in ``double``
+/// precision and cast the result back to the base dtype, matching the
+/// reference behaviour of NumPy's ``numpy.power`` and the upstream ONNX
+/// backend test cases.
+class Pow : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x, const Tensor &y) const;
+  void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
+
+  /// Element-wise binary kernel: the output buffer may alias the base input
+  /// buffer when that input is not broadcast-expanded (i.e. its shape equals
+  /// the output shape). Aliasing the exponent is generally not safe because
+  /// it may have a different dtype than the output.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// BlackmanWindow function evaluated at ``size`` integer samples. When
 /// ``periodic`` is true the window is computed as if of length ``size+1`` and
 /// the last sample is discarded (matches NumPy/ONNX conventions).

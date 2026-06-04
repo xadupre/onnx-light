@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/cases/cases_numerical/nan_inf/include_nan_inf_cases.h"
+#include "onnx_backend_test/cases_numerical/nan_inf/include_nan_inf_cases.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {

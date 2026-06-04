@@ -32,9 +32,9 @@ void RegisterQLinearConvCases(std::vector<TestCase> &registry) {
   const kernel::QLinearConv qc{ctx};
 
   {
-    // 1x1 conv over a 7x7 UINT8 plane. Inputs are constructed similarly to
-    // the upstream ``QLinearConv`` backend test case but with deterministic
-    // values, so the expected output is fully reproducible.
+    // 1x1 conv over a 7x7 UINT8 plane, mirroring the shape and dtype layout
+    // of the upstream ``test_qlinearconv`` backend test. Input values follow
+    // a fixed ``i * 4`` pattern so the expected output is fully reproducible.
     std::vector<uint8_t> x_vals(49);
     for (size_t i = 0; i < x_vals.size(); ++i) {
       x_vals[i] = static_cast<uint8_t>(i * 4);

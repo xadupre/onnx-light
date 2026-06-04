@@ -44,6 +44,8 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Mod");
   const std::vector<onnx_op::LightOpSchema> pow_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Pow");
+  const std::vector<onnx_op::LightOpSchema> prelu_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("PRelu");
   const std::vector<onnx_op::LightOpSchema> abs_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Abs");
   const std::vector<onnx_op::LightOpSchema> sin_schemas =
@@ -101,7 +103,7 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> swish_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Swish");
 
-  EXPECT_EQ(schemas.size(), 122u);
+  EXPECT_EQ(schemas.size(), 127u);
 
   // Swish was introduced at v24 and has had a single schema since then.
   ASSERT_EQ(swish_schemas.size(), 1u);
@@ -264,6 +266,40 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   ASSERT_NE(nullptr, mod_v10);
   ASSERT_NE(nullptr, pow_v7);
   ASSERT_NE(nullptr, pow_v1);
+
+  // PRelu has five versioned schemas (v1, v6, v7, v9, v16). The element type
+  // set widens over time and the v16 schema ships with a function body.
+  ASSERT_EQ(prelu_schemas.size(), 5u);
+  const onnx_op::LightOpSchema *const prelu_v1 = FindByVersion(prelu_schemas, 1);
+  const onnx_op::LightOpSchema *const prelu_v6 = FindByVersion(prelu_schemas, 6);
+  const onnx_op::LightOpSchema *const prelu_v7 = FindByVersion(prelu_schemas, 7);
+  const onnx_op::LightOpSchema *const prelu_v9 = FindByVersion(prelu_schemas, 9);
+  const onnx_op::LightOpSchema *const prelu_v16 = FindByVersion(prelu_schemas, 16);
+  ASSERT_NE(nullptr, prelu_v1);
+  ASSERT_NE(nullptr, prelu_v6);
+  ASSERT_NE(nullptr, prelu_v7);
+  ASSERT_NE(nullptr, prelu_v9);
+  ASSERT_NE(nullptr, prelu_v16);
+  EXPECT_EQ(prelu_v16->domain(), "ai.onnx");
+  EXPECT_TRUE(prelu_v16->has_function_implementation());
+  ASSERT_EQ(prelu_v16->inputs().size(), 2u);
+  EXPECT_EQ(prelu_v16->inputs()[0].name, "X");
+  EXPECT_EQ(prelu_v16->inputs()[1].name, "slope");
+  ASSERT_EQ(prelu_v16->outputs().size(), 1u);
+  EXPECT_EQ(prelu_v16->outputs()[0].name, "Y");
+  EXPECT_TRUE(prelu_v16->attributes().empty());
+  // v1 carries the legacy ``consumed_inputs`` attribute; later opsets drop it.
+  ASSERT_EQ(prelu_v1->attributes().size(), 1u);
+  EXPECT_EQ(prelu_v1->attributes()[0].name, "consumed_inputs");
+  EXPECT_TRUE(prelu_v6->attributes().empty());
+  EXPECT_TRUE(prelu_v7->attributes().empty());
+  EXPECT_TRUE(prelu_v9->attributes().empty());
+  // v9 widens T to include unsigned/signed 32/64-bit integer types relative to v7.
+  EXPECT_NE(prelu_v7->type_constraints()[0].allowed_type_strs,
+            prelu_v9->type_constraints()[0].allowed_type_strs);
+  // v16 widens T further to include bfloat16.
+  EXPECT_NE(prelu_v9->type_constraints()[0].allowed_type_strs,
+            prelu_v16->type_constraints()[0].allowed_type_strs);
   ASSERT_NE(nullptr, abs_v13);
   ASSERT_NE(nullptr, abs_v6);
   ASSERT_NE(nullptr, abs_v1);

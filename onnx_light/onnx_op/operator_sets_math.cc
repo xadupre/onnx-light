@@ -518,6 +518,73 @@ is applied to the tensor elementwise.
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildPReluSchemas() {
+  static constexpr const char *kPReluDoc = R"DOC(
+PRelu takes input data (Tensor<T>) and slope tensor as input, and produces one
+output data (Tensor<T>) where the function `f(x) = slope * x for x < 0`,
+`f(x) = x for x >= 0`., is applied to the data tensor elementwise.
+)DOC";
+  static const std::vector<FormalParameter> v1_inputs = {
+      {"X", "Input tensor", "T"},
+      {"slope",
+       "Slope tensor. If `Slope` is of size 1, the value is shared"
+       "across different channels",
+       "T"},
+  };
+  static const std::vector<FormalParameter> v7_inputs = {
+      {"X", "Input tensor", "T"},
+      {"slope",
+       "Slope tensor. The shape of slope can be smaller than first input X; "
+       "if so, its shape must be unidirectional broadcastable to X",
+       "T"},
+  };
+  static const std::vector<FormalParameter> v7_outputs = {
+      {"Y", "Output tensor (same size as X)", "T"},
+  };
+  static const std::vector<FormalParameter> v1_outputs = {
+      {"Y", "Output tensor", "T"},
+  };
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(5);
+  schemas.push_back(LightOpSchema(
+      "PRelu", kOnnxDomain, 16, kPReluDoc, v7_inputs, v7_outputs,
+      {
+          {"T",
+           {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble,
+            TensorType::kUint32, TensorType::kUint64, TensorType::kInt32, TensorType::kInt64},
+           "Constrain input and output types to float/int tensors."},
+      },
+      /*has_function_implementation=*/true));
+  schemas.push_back(LightOpSchema(
+      "PRelu", kOnnxDomain, 9, kPReluDoc, v7_inputs, v7_outputs,
+      {
+          {"T",
+           {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kUint32,
+            TensorType::kUint64, TensorType::kInt32, TensorType::kInt64},
+           "Constrain input and output types to float/int tensors."},
+      }));
+  schemas.push_back(
+      LightOpSchema("PRelu", kOnnxDomain, 7, kPReluDoc, v7_inputs, v7_outputs,
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    }));
+  schemas.push_back(
+      LightOpSchema("PRelu", kOnnxDomain, 6, kPReluDoc, v1_inputs, v1_outputs,
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    }));
+  schemas.push_back(
+      LightOpSchema("PRelu", kOnnxDomain, 1, kPReluDoc, v1_inputs, v1_outputs,
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    },
+                    std::vector<AttributeParam>{
+                        AttributeParam{"consumed_inputs", "legacy optimization attribute.",
+                                       AttributeType::INTS, false, std::monostate{}},
+                    }));
+  return schemas;
+}
+
 std::vector<LightOpSchema> BuildSwishSchemas() {
   static constexpr const char *kSwishDoc = R"DOC(
 Swish function takes one input data (Tensor<T>) and produces one output data (Tensor<T>) of the same shape,
@@ -1911,6 +1978,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"MatMul", [] { return BuildMatMulSchemas(); }},
       {"Mod", [] { return BuildModSchemas(); }},
       {"Mul", [] { return BuildElementwiseMathSchemaForVersion("Mul"); }},
+      {"PRelu", [] { return BuildPReluSchemas(); }},
       {"Pow", [] { return BuildPowSchemas(); }},
       {"Round", [] { return BuildRoundSchemas(); }},
       {"Selu", [] { return BuildSeluSchemas(); }},

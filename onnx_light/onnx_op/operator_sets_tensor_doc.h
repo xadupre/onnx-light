@@ -253,6 +253,24 @@ std::string MakeShapeDoc(int since_version);
 std::string MakeShapeTypeConstraintDescription(int since_version);
 
 /**
+ * Returns the documentation string for the Identity operator at the given
+ * opset version.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the Identity operator.
+ */
+std::string MakeIdentityDoc(int since_version);
+
+/**
+ * Returns the type-constraint description for the Identity ``T``/``V`` type
+ * parameter at the given opset version.
+ *
+ * @param since_version Opset version for which to generate the description.
+ * @return Type-constraint description string for the Identity input/output.
+ */
+std::string MakeIdentityTypeConstraintDescription(int since_version);
+
+/**
  * Returns the documentation string for the Tile operator at the given opset
  * version.
  *

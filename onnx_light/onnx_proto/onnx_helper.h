@@ -123,8 +123,10 @@ offset_t AlignExternalDataStreaming(const std::string &src_onnx_path,
  *                          ``dst_weights_path`` (new).
  * @param dst_onnx_path     Destination ``.onnx`` file (created/truncated).
  * @param dst_weights_path  Destination weights file for the new initializers
- *                          (created/truncated; left as a zero-byte file when
- *                          the second model has no new inline weights).
+ *                          (created/truncated only when the second model has at
+ *                          least one new inline initializer; not created at all
+ *                          when every initializer is reused from the first
+ *                          model).
  * @param alignment         Alignment in bytes applied to each new tensor's
  *                          offset in ``dst_weights_path``.  Must be a power of
  *                          two (>= 1).  Use 4096 for mmap-friendly pages.

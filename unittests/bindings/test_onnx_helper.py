@@ -701,7 +701,7 @@ class TestSaveModelWithSharedExternalData(ExtTestCase):
                 np.testing.assert_array_equal(got, arr)
 
     def test_save_model_with_only_reused_weights(self) -> None:
-        """No new initializer: dst_weights file is created empty, return value is 0,
+        """No new initializer: dst_weights file is not created, return value is 0,
         reused initializers keep pointing at the first model's weights file."""
         from onnx_light.onnx import save_model_with_shared_external_data
 

@@ -1388,7 +1388,10 @@ const char *const kGroupNormalizationBiasDescVer21 = "Bias tensor of shape `(C)`
 const char *const kGroupNormalizationTConstraintDesc =
     "Constrain input and output types to float tensors.";
 
-std::vector<TensorType> GroupNormalizationFloatTypes() {
+std::vector<TensorType> GroupNormalizationFloatTypes(int since_version) {
+  if (since_version >= 21) {
+    return {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+  }
   return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kBfloat16};
 }
 
@@ -1423,7 +1426,7 @@ LightOpSchema MakeGroupNormalizationSchema(int since_version) {
           {"Y", kGroupNormalizationYDesc, "T"},
       },
       {
-          {"T", GroupNormalizationFloatTypes(), kGroupNormalizationTConstraintDesc},
+          {"T", GroupNormalizationFloatTypes(since_version), kGroupNormalizationTConstraintDesc},
       },
       std::move(attrs), /*has_function_implementation=*/true);
   if (since_version == 18) {

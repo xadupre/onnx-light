@@ -341,6 +341,60 @@ class TestNumpyHelper(ExtTestCase):
         expected = np.array([0xC9], dtype=np.uint8)
         np.testing.assert_array_equal(packed, expected)
 
+    def test_to_array_4bit_payload_too_small_raw_data(self) -> None:
+        for name, data_type in [
+            ("uint4", onnxl.TensorProto.UINT4),
+            ("int4", onnxl.TensorProto.INT4),
+            ("float4e2m1", onnxl.TensorProto.FLOAT4E2M1),
+        ]:
+            with self.subTest(name=name):
+                tensor = onnxl.TensorProto()
+                tensor.data_type = data_type
+                tensor.dims.extend([1000])
+                tensor.raw_data = b"\x00"  # encodes 2 elements, not 1000
+                with self.assertRaises(ValueError):
+                    numpy_helper.to_array(tensor)
+
+    def test_to_array_4bit_payload_too_small_int32_data(self) -> None:
+        for name, data_type in [
+            ("uint4", onnxl.TensorProto.UINT4),
+            ("int4", onnxl.TensorProto.INT4),
+            ("float4e2m1", onnxl.TensorProto.FLOAT4E2M1),
+        ]:
+            with self.subTest(name=name):
+                tensor = onnxl.TensorProto()
+                tensor.data_type = data_type
+                tensor.dims.extend([1000])
+                tensor.int32_data.append(0)  # encodes 8 elements, not 1000
+                with self.assertRaises(ValueError):
+                    numpy_helper.to_array(tensor)
+
+    def test_to_array_2bit_payload_too_small_raw_data(self) -> None:
+        for name, data_type in [
+            ("uint2", onnxl.TensorProto.UINT2),
+            ("int2", onnxl.TensorProto.INT2),
+        ]:
+            with self.subTest(name=name):
+                tensor = onnxl.TensorProto()
+                tensor.data_type = data_type
+                tensor.dims.extend([1000])
+                tensor.raw_data = b"\x00"  # encodes 4 elements, not 1000
+                with self.assertRaises(ValueError):
+                    numpy_helper.to_array(tensor)
+
+    def test_to_array_2bit_payload_too_small_int32_data(self) -> None:
+        for name, data_type in [
+            ("uint2", onnxl.TensorProto.UINT2),
+            ("int2", onnxl.TensorProto.INT2),
+        ]:
+            with self.subTest(name=name):
+                tensor = onnxl.TensorProto()
+                tensor.data_type = data_type
+                tensor.dims.extend([1000])
+                tensor.int32_data.append(0)  # encodes 16 elements, not 1000
+                with self.assertRaises(ValueError):
+                    numpy_helper.to_array(tensor)
+
 
 class TestHelperExtensions(ExtTestCase):
     def test_tensor_dtype_to_storage_tensor_dtype(self) -> None:

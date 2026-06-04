@@ -401,6 +401,23 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of the ONNX ``Identity`` operator (since opset 1
+/// in the ``ai.onnx`` domain). Copies the input tensor to the output
+/// unchanged. The output dtype and shape always match the input.
+///
+/// The kernel is element-type agnostic: it simply copies the raw data buffer
+/// (and forwards string elements when applicable), so it accepts any tensor
+/// element type supported by ``Tensor``.
+class Identity : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &input) const;
+  void operator()(const Tensor &input, Tensor &output) const;
+
+  /// Output is a bit-for-bit copy of the input; storage may safely be shared
+  /// when the caller decides so.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
 /// Reference implementation of the ONNX ``Gather`` operator (since opset 1 in
 /// the ``ai.onnx`` domain). Gathers entries of the ``axis`` dimension of
 /// ``data`` indexed by ``indices``, producing an output tensor of rank

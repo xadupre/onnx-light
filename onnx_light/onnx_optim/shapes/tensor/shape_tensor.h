@@ -560,6 +560,19 @@ void ComputeShapeUnique(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeShape(ShapesContext &ctx, const NodeProto &node);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of an ``Identity`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Identity`` copies its single input verbatim, so the output has the same
+ * dtype and shape as the input.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Identity"``,
+ *         or if ``node`` has no input or output.
+ * @throws std::out_of_range     if the input name is missing from ``ctx``.
+ */
+void ComputeShapeIdentity(ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``Gather`` node and stores
  * it in ``ctx``.
  *

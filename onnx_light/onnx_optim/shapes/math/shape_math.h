@@ -124,6 +124,32 @@ void ComputeShapeSub(ShapesContext &ctx, const NodeProto &node, const char *a, c
 void ComputeShapeMul(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Pow`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Pow`` is element-wise and binary, with numpy-style multidirectional
+ * broadcasting between its two operands (since opset 7). The output
+ * dtype matches the first input dtype and the output shape is the
+ * broadcast of the two input shapes.
+ *
+ * @param ctx   In/out context. Must already contain entries for both
+ *              ``a`` and ``b``; on return it also contains an entry
+ *              for ``node.output(0)``.
+ * @param node  The ``Pow`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Pow"`` and
+ *              ``node`` must declare at least one output.
+ * @param a     Name of the first input value to read from ``ctx``.
+ * @param b     Name of the second input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Pow"``,
+ *         if ``node`` has no output, or if the two input shapes are not
+ *         broadcast-compatible.
+ * @throws std::out_of_range     if either ``a`` or ``b`` is missing
+ *         from ``ctx``.
+ */
+void ComputeShapePow(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``PRelu`` node and
  * stores it in ``ctx``.
  *

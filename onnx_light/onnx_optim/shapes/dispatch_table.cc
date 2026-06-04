@@ -11,6 +11,7 @@
 
 #include "onnx_optim/shapes/controlflow/shape_controlflow.h"
 #include "onnx_optim/shapes/generator/shape_generator.h"
+#include "onnx_optim/shapes/image/shape_image.h"
 #include "onnx_optim/shapes/logical/shape_logical.h"
 #include "onnx_optim/shapes/math/shape_math.h"
 #include "onnx_optim/shapes/nn/shape_nn.h"
@@ -516,6 +517,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        }},
       {"ai.onnx:If",
        [](ShapesContext &ctx, const NodeProto &node) { controlflow::ComputeShapeIf(ctx, node); }},
+      {"ai.onnx:ImageDecoder",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         image::ComputeShapeImageDecoder(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:Loop",
        [](ShapesContext &ctx, const NodeProto &node) {
          controlflow::ComputeShapeLoop(ctx, node);
@@ -552,6 +558,12 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 2);
          math::ComputeShapePRelu(ctx, node, node.input(0).as_string().c_str(),
                                  node.input(1).as_string().c_str());
+       }},
+      {"ai.onnx:Pow",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         math::ComputeShapePow(ctx, node, node.input(0).as_string().c_str(),
+                               node.input(1).as_string().c_str());
        }},
       {"ai.onnx:Sub",
        [](ShapesContext &ctx, const NodeProto &node) {

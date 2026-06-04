@@ -181,10 +181,15 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     ``NaN`` for ``+inf`` / ``-inf`` inputs (see
 #     microsoft/onnxruntime#28732). The reference backend still exercises
 #     this case to lock in the ``±inf``-preserving behaviour.
+#   * ``test_pow_types_float32_uint32`` and ``test_pow_types_float32_uint64``
+#     — ORT has no CPU kernel for ``Pow(13)`` with ``uint32``/``uint64``
+#     exponent inputs ("Could not find an implementation for Pow(13) node").
+#     The reference backend still exercises these mixed-type coverage cases.
 ORT_EXCLUDE_REGEX = [
     r"^test_cc_roialign_max$",
     r"^test_cc_roialign_mode_max$",
     r"^test_cc_flex_attention_",
+    r"^test_cc_image_decoder_",
     r"^test_cc_attention_4d_with_past_and_present_qk_matmul_bias_3d_mask_causal$",
     r"^test_cc_attention_4d_with_past_and_present_qk_matmul_bias_4d_mask_causal$",
     r"^test_cc_adam_",
@@ -255,6 +260,8 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_top_k_uint64$",
     r"^test_cc_scan_zero_trip_count$",
     r"^test_cc_prelu_inf$",
+    r"^test_pow_types_float32_uint32$",
+    r"^test_pow_types_float32_uint64$",
 ]
 
 TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_REGEX)

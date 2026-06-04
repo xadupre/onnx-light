@@ -411,15 +411,6 @@ identity_opt
 identity_sequence
 if_opt
 if_seq
-image_decoder_decode_bmp_rgb
-image_decoder_decode_jpeg2k_rgb
-image_decoder_decode_jpeg_bgr
-image_decoder_decode_jpeg_grayscale
-image_decoder_decode_jpeg_rgb
-image_decoder_decode_png_rgb
-image_decoder_decode_pnm_rgb
-image_decoder_decode_tiff_rgb
-image_decoder_decode_webp_rgb
 instancenorm_epsilon
 instancenorm_example
 isinf
@@ -676,18 +667,6 @@ optional_has_element_empty_no_input_tensor_input
 optional_has_element_empty_optional_input
 optional_has_element_optional_input
 optional_has_element_tensor_input
-pow
-pow_bcast_array
-pow_bcast_scalar
-pow_example
-pow_types_float32_int32
-pow_types_float32_int64
-pow_types_float32_uint32
-pow_types_float32_uint64
-pow_types_int32_float32
-pow_types_int32_int32
-pow_types_int64_float32
-pow_types_int64_int64
 prelu_broadcast_expanded
 prelu_example_expanded
 qlinearmatmul_2D_int8_float16
@@ -1056,7 +1035,6 @@ softplus_expanded_ver18
 softsign_example
 softsign_example_expanded_ver18
 softsign_expanded_ver18
-squeeze_negative_axes
 string_concat_broadcasting
 string_concat_empty_string
 strnormalizer_export_monday_casesensintive_lower
@@ -1075,13 +1053,6 @@ transpose_all_permutations_2
 transpose_all_permutations_3
 transpose_all_permutations_4
 transpose_all_permutations_5
-unsqueeze_axis_0
-unsqueeze_axis_1
-unsqueeze_axis_2
-unsqueeze_negative_axes
-unsqueeze_three_axes
-unsqueeze_two_axes
-unsqueeze_unsorted_axes
 
 where_long_example
 wrap_pad

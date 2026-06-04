@@ -58,6 +58,10 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
   nb::class_<TestCase>(bt_mod, "TestCase",
                        "A single C++-generated backend test case (mirrors "
                        "onnx_light.backend.test.case.base.TestCase).")
+      .def(nb::init<std::string, std::string, std::string, std::string, double, double>(),
+           nb::arg("name"), nb::arg("model_name") = std::string(),
+           nb::arg("kind") = std::string("node"), nb::arg("tag") = std::string(),
+           nb::arg("rtol") = 1e-3, nb::arg("atol") = 1e-7)
       .def_ro("name", &TestCase::name)
       .def_ro("model_name", &TestCase::model_name)
       .def_ro("kind", &TestCase::kind)

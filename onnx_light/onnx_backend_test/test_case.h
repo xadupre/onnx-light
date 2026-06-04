@@ -64,9 +64,9 @@ struct TestCase {
 
   TestCase() : kind("node"), tag() {}
   explicit TestCase(std::string name_, std::string model_name_ = "", std::string kind_ = "node",
-                    std::string tag_ = "")
+                    std::string tag_ = "", double rtol_ = 1e-3, double atol_ = 1e-7)
       : name(std::move(name_)), model_name(std::move(model_name_)), kind(std::move(kind_)),
-        tag(std::move(tag_)) {}
+        tag(std::move(tag_)), rtol(rtol_), atol(atol_) {}
 
   // Explicit move constructor. Required because the ``const std::string``
   // members would otherwise cause the implicit move constructor to fall

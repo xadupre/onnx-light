@@ -7,6 +7,7 @@
 #include "onnx_backend_test/cases/cases_for_shapes/shape_inference/include_shape_inference_cases.h"
 #include "onnx_backend_test/cases/controlflow/include_controlflow_cases.h"
 #include "onnx_backend_test/cases/generator/include_generator_cases.h"
+#include "onnx_backend_test/cases/image/include_image_cases.h"
 #include "onnx_backend_test/cases/logical/include_logical_cases.h"
 #include "onnx_backend_test/cases/math/include_math_cases.h"
 #include "onnx_backend_test/cases/nn/include_nn_cases.h"
@@ -172,6 +173,7 @@ std::vector<TestCase> CollectTestCases(const std::string &op_type) {
   std::vector<TestCase> registry;
   CollectControlflowTestCases(registry, op_type);
   CollectGeneratorTestCases(registry, op_type);
+  CollectImageTestCases(registry, op_type);
   CollectLogicalTestCases(registry, op_type);
   CollectMathTestCases(registry, op_type);
   CollectNNTestCases(registry, op_type);

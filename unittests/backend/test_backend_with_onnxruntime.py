@@ -189,6 +189,7 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_roialign_max$",
     r"^test_cc_roialign_mode_max$",
     r"^test_cc_flex_attention_",
+    r"^test_cc_image_decoder_",
     r"^test_cc_attention_4d_with_past_and_present_qk_matmul_bias_3d_mask_causal$",
     r"^test_cc_attention_4d_with_past_and_present_qk_matmul_bias_4d_mask_causal$",
     r"^test_cc_adam_",

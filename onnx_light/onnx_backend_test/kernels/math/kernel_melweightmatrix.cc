@@ -39,8 +39,7 @@ double ReadFloatScalar(const Tensor &t, const char *what) {
   EXT_THROW("kernel::MelWeightMatrix ", what, " must be a FLOAT or DOUBLE tensor.");
 }
 
-template <typename T>
-void FillOutput(const std::vector<double> &values, Tensor &output) {
+template <typename T> void FillOutput(const std::vector<double> &values, Tensor &output) {
   T *po = reinterpret_cast<T *>(output.data.data());
   for (size_t i = 0; i < values.size(); ++i) {
     po[i] = static_cast<T>(values[i]);
@@ -54,8 +53,7 @@ Tensor MelWeightMatrix::operator()(const Tensor &num_mel_bins, const Tensor &dft
                                    const Tensor &upper_edge_hertz, DataType output_dtype) const {
   const int64_t num_mel_bins_v = ReadIntScalar(num_mel_bins, "num_mel_bins");
   const int64_t dft_length_v = ReadIntScalar(dft_length, "dft_length");
-  EXT_ENFORCE_INVALID(num_mel_bins_v > 0,
-                      "kernel::MelWeightMatrix num_mel_bins must be positive.");
+  EXT_ENFORCE_INVALID(num_mel_bins_v > 0, "kernel::MelWeightMatrix num_mel_bins must be positive.");
   EXT_ENFORCE_INVALID(dft_length_v > 0, "kernel::MelWeightMatrix dft_length must be positive.");
 
   const int64_t num_spectrogram_bins = dft_length_v / 2 + 1;
@@ -88,8 +86,7 @@ void MelWeightMatrix::operator()(const Tensor &num_mel_bins, const Tensor &dft_l
   const double lower_hz = ReadFloatScalar(lower_edge_hertz, "lower_edge_hertz");
   const double upper_hz = ReadFloatScalar(upper_edge_hertz, "upper_edge_hertz");
 
-  EXT_ENFORCE_INVALID(num_mel_bins_v > 0,
-                      "kernel::MelWeightMatrix num_mel_bins must be positive.");
+  EXT_ENFORCE_INVALID(num_mel_bins_v > 0, "kernel::MelWeightMatrix num_mel_bins must be positive.");
   EXT_ENFORCE_INVALID(dft_length_v > 0, "kernel::MelWeightMatrix dft_length must be positive.");
   EXT_ENFORCE_INVALID(sample_rate_v > 0, "kernel::MelWeightMatrix sample_rate must be positive.");
   EXT_ENFORCE_INVALID(output.data_type == output_dtype,
@@ -113,8 +110,8 @@ void MelWeightMatrix::operator()(const Tensor &num_mel_bins, const Tensor &dft_l
     const double mel_value = static_cast<double>(i) * mel_step + low_mel;
     const double hz = 700.0 * (std::pow(10.0, mel_value / 2595.0) - 1.0);
     // floor division to match NumPy's ``//`` on non-negative values.
-    const double scaled = (static_cast<double>(dft_length_v) + 1.0) * hz /
-                          static_cast<double>(sample_rate_v);
+    const double scaled =
+        (static_cast<double>(dft_length_v) + 1.0) * hz / static_cast<double>(sample_rate_v);
     bin_indices[static_cast<size_t>(i)] = static_cast<int64_t>(std::floor(scaled));
   }
 

@@ -1395,9 +1395,7 @@ std::vector<LightOpSchema> BuildMelWeightMatrixSchemas() {
                "T3"},
           },
           {
-              {"T1",
-               {TensorType::kInt32, TensorType::kInt64},
-               "Constrain to integer tensors."},
+              {"T1", {TensorType::kInt32, TensorType::kInt64}, "Constrain to integer tensors."},
               {"T2",
                {TensorType::kFloat, TensorType::kFloat16, TensorType::kDouble,
                 TensorType::kBfloat16},

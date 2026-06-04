@@ -712,9 +712,8 @@ public:
 class MelWeightMatrix : public KernelBase {
 public:
   using KernelBase::KernelBase;
-  Tensor operator()(const Tensor &num_mel_bins, const Tensor &dft_length,
-                    const Tensor &sample_rate, const Tensor &lower_edge_hertz,
-                    const Tensor &upper_edge_hertz,
+  Tensor operator()(const Tensor &num_mel_bins, const Tensor &dft_length, const Tensor &sample_rate,
+                    const Tensor &lower_edge_hertz, const Tensor &upper_edge_hertz,
                     DataType output_dtype = DataType::FLOAT) const;
   void operator()(const Tensor &num_mel_bins, const Tensor &dft_length, const Tensor &sample_rate,
                   const Tensor &lower_edge_hertz, const Tensor &upper_edge_hertz,

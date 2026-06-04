@@ -1036,7 +1036,6 @@ softplus_expanded_ver18
 softsign_example
 softsign_example_expanded_ver18
 softsign_expanded_ver18
-squeeze_negative_axes
 string_concat_broadcasting
 string_concat_empty_string
 strnormalizer_export_monday_casesensintive_lower
@@ -1055,13 +1054,6 @@ transpose_all_permutations_2
 transpose_all_permutations_3
 transpose_all_permutations_4
 transpose_all_permutations_5
-unsqueeze_axis_0
-unsqueeze_axis_1
-unsqueeze_axis_2
-unsqueeze_negative_axes
-unsqueeze_three_axes
-unsqueeze_two_axes
-unsqueeze_unsorted_axes
 
 where_long_example
 wrap_pad

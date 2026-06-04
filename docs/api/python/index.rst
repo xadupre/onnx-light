@@ -37,6 +37,12 @@ Python API
 
     compatibility/index
 
+.. toctree::
+    :maxdepth: 1
+    :caption: Extra tools
+
+    tools/index
+
 onnx
 ++++
 

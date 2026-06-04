@@ -8,6 +8,7 @@
 
 #include <gtest/gtest.h>
 
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -22,6 +23,8 @@ using onnx_backend_test::kernel::BitwiseXor;
 using onnx_backend_test::kernel::Equal;
 using onnx_backend_test::kernel::Greater;
 using onnx_backend_test::kernel::GreaterOrEqual;
+using onnx_backend_test::kernel::IsInf;
+using onnx_backend_test::kernel::IsNaN;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::Less;
 using onnx_backend_test::kernel::Not;
@@ -630,6 +633,65 @@ TEST(BackendKernelClass, NotRejectsNonBoolTensors) {
   Not not_kernel{ctx};
   Tensor x = Tensor::FromInt32("", {2}, {0, 1});
   EXPECT_THROW((void)not_kernel(x), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, IsNaNClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(20)};
+  IsNaN isnan_kernel{ctx};
+  const float nan_v = std::numeric_limits<float>::quiet_NaN();
+  const float inf_v = std::numeric_limits<float>::infinity();
+  Tensor x = Tensor::FromFloat("", {6}, {-1.2f, nan_v, inf_v, 2.8f, -inf_v, inf_v});
+  Tensor y = isnan_kernel(x);
+  ASSERT_EQ(y.element_count(), 6);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::BOOL));
+  EXPECT_EQ(y.data[0], 0u);
+  EXPECT_EQ(y.data[1], 1u);
+  EXPECT_EQ(y.data[2], 0u);
+  EXPECT_EQ(y.data[3], 0u);
+  EXPECT_EQ(y.data[4], 0u);
+  EXPECT_EQ(y.data[5], 0u);
+}
+
+TEST(BackendKernelClass, IsNaNRejectsNonFloatTensors) {
+  const KernelContext ctx{DefaultOpset(20)};
+  IsNaN isnan_kernel{ctx};
+  Tensor x = Tensor::FromInt32("", {2}, {0, 1});
+  EXPECT_THROW((void)isnan_kernel(x), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, IsInfClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(20)};
+  IsInf isinf_kernel{ctx};
+  const float nan_v = std::numeric_limits<float>::quiet_NaN();
+  const float inf_v = std::numeric_limits<float>::infinity();
+  Tensor x = Tensor::FromFloat("", {6}, {-1.2f, nan_v, inf_v, 2.8f, -inf_v, inf_v});
+
+  Tensor both = isinf_kernel(x);
+  ASSERT_EQ(both.element_count(), 6);
+  EXPECT_EQ(both.data_type, static_cast<int32_t>(onnx_backend_test::DataType::BOOL));
+  EXPECT_EQ(both.data[0], 0u);
+  EXPECT_EQ(both.data[1], 0u);
+  EXPECT_EQ(both.data[2], 1u);
+  EXPECT_EQ(both.data[3], 0u);
+  EXPECT_EQ(both.data[4], 1u);
+  EXPECT_EQ(both.data[5], 1u);
+
+  Tensor only_pos = isinf_kernel(x, /*detect_positive=*/1, /*detect_negative=*/0);
+  EXPECT_EQ(only_pos.data[2], 1u);
+  EXPECT_EQ(only_pos.data[4], 0u);
+  EXPECT_EQ(only_pos.data[5], 1u);
+
+  Tensor only_neg = isinf_kernel(x, /*detect_positive=*/0, /*detect_negative=*/1);
+  EXPECT_EQ(only_neg.data[2], 0u);
+  EXPECT_EQ(only_neg.data[4], 1u);
+  EXPECT_EQ(only_neg.data[5], 0u);
+}
+
+TEST(BackendKernelClass, IsInfRejectsNonFloatTensors) {
+  const KernelContext ctx{DefaultOpset(20)};
+  IsInf isinf_kernel{ctx};
+  Tensor x = Tensor::FromInt32("", {2}, {0, 1});
+  EXPECT_THROW((void)isinf_kernel(x), std::invalid_argument);
 }
 
 } // namespace Test

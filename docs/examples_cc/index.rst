@@ -8,6 +8,7 @@ headers via `Doxygen <https://www.doxygen.nl/>`_ and rendered by
 .. toctree::
     :maxdepth: 1
 
+    aidge_onnx_light_example
     check_onnx_light_model_example
     build_save_load_onnx_proto_example
     export_nnef_example

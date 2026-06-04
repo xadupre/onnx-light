@@ -32,6 +32,7 @@ void CollectTensorTestCases(std::vector<TestCase> &registry, const std::string &
       {"NonZero", &RegisterNonZeroCases},
       {"Unique", &RegisterUniqueCases},
       {"Shape", &RegisterShapeCases},
+      {"Identity", &RegisterIdentityCases},
       {"Gather", &RegisterGatherCases},
       {"GatherElements", &RegisterGatherElementsCases},
       {"GatherND", &RegisterGatherNDCases},

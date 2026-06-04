@@ -311,6 +311,52 @@ void ComputeShapeBitwiseNot(ShapesContext &ctx, const NodeProto &node, const cha
 void ComputeShapeNot(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of an ``IsNaN`` node and
+ * stores it in ``ctx``.
+ *
+ * ``IsNaN`` is element-wise on a floating-point tensor: the output dtype
+ * is always :cpp:enumerator:`TensorType::kBool` and the output shape
+ * matches the input shape.
+ *
+ * @param ctx   In/out context. Must already contain an entry for ``x``;
+ *              on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``IsNaN`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"IsNaN"`` and
+ *              ``node`` must declare at least one output.
+ * @param x     Name of the input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"IsNaN"``
+ *         or if ``node`` has no output.
+ * @throws std::out_of_range     if ``x`` is missing from ``ctx``.
+ */
+void ComputeShapeIsNaN(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of an ``IsInf`` node and
+ * stores it in ``ctx``.
+ *
+ * ``IsInf`` is element-wise on a floating-point tensor: the output dtype
+ * is always :cpp:enumerator:`TensorType::kBool` and the output shape
+ * matches the input shape. The ``detect_positive`` and ``detect_negative``
+ * attributes do not affect the output type or shape and are therefore not
+ * inspected by this function.
+ *
+ * @param ctx   In/out context. Must already contain an entry for ``x``;
+ *              on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``IsInf`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"IsInf"`` and
+ *              ``node`` must declare at least one output.
+ * @param x     Name of the input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"IsInf"``
+ *         or if ``node`` has no output.
+ * @throws std::out_of_range     if ``x`` is missing from ``ctx``.
+ */
+void ComputeShapeIsInf(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``BitShift`` node
  * (opset 11) and stores it in ``ctx``.
  *

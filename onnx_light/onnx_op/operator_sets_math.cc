@@ -1664,6 +1664,109 @@ std::vector<LightOpSchema> BuildSumSchemas() {
   return schemas;
 }
 
+namespace {
+
+// Shared schema builder for the variadic element-wise ``Max``/``Min``
+// operators. Both share the same shape, version history (v1, v6, v8, v12,
+// v13) and the same type-constraint progression -- only the docs and the
+// output description differ.
+std::vector<LightOpSchema> BuildVariadicMinMaxSchemas(const char *op_type, const char *output_name,
+                                                      const std::string &input_doc_v1,
+                                                      const std::string &output_doc_v1,
+                                                      const std::string &input_doc_v8,
+                                                      std::string (*doc_fn)(int)) {
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(5);
+
+  const std::vector<TensorType> numeric_types_ir4 = AllNumericTypesIr4();
+  const std::vector<TensorType> numeric_types = AllNumericTypes();
+  const std::vector<TensorType> float_types_no_bf16 = FloatTypes();
+
+  // v13: type constraint widens to ``all_numeric_types_ir4`` (adds bfloat16).
+  schemas.push_back(LightOpSchema(
+      op_type, kOnnxDomain, 13, doc_fn(13),
+      {
+          {"data_0", input_doc_v8, "T"},
+      },
+      {
+          {output_name, "Output tensor.", "T"},
+      },
+      {
+          {"T", numeric_types_ir4, "Constrain input and output types to numeric tensors."},
+      }));
+
+  // v12: type constraint widens to all numeric types (introduced in opset 12).
+  schemas.push_back(LightOpSchema(
+      op_type, kOnnxDomain, 12, doc_fn(12),
+      {
+          {"data_0", input_doc_v8, "T"},
+      },
+      {
+          {output_name, "Output tensor.", "T"},
+      },
+      {
+          {"T", numeric_types, "Constrain input and output types to numeric tensors."},
+      }));
+
+  // v8: introduces multidirectional broadcasting; type constraint stays at
+  // the float types from v6.
+  schemas.push_back(LightOpSchema(
+      op_type, kOnnxDomain, 8, doc_fn(8),
+      {
+          {"data_0", input_doc_v8, "T"},
+      },
+      {
+          {output_name, "Output tensor.", "T"},
+      },
+      {
+          {"T", float_types_no_bf16, "Constrain input and output types to float tensors."},
+      }));
+
+  // v6: same wording as v1; no broadcasting (all inputs must share shape).
+  schemas.push_back(LightOpSchema(
+      op_type, kOnnxDomain, 6, doc_fn(6),
+      {
+          {"data_0", input_doc_v1, "T"},
+      },
+      {
+          {output_name, output_doc_v1, "T"},
+      },
+      {
+          {"T", float_types_no_bf16, "Constrain input and output types to float tensors."},
+      }));
+
+  // v1: original schema, no broadcasting, legacy ``consumed_inputs`` attr.
+  schemas.push_back(LightOpSchema(
+      op_type, kOnnxDomain, 1, doc_fn(1),
+      {
+          {"data_0", input_doc_v1, "T"},
+      },
+      {
+          {output_name, output_doc_v1, "T"},
+      },
+      {
+          {"T", float_types_no_bf16, "Constrain input and output types to float tensors."},
+      },
+      {AttributeParam{"consumed_inputs", "legacy optimization attribute.", AttributeType::INTS,
+                      false, std::monostate{}}}));
+
+  return schemas;
+}
+
+} // namespace
+
+std::vector<LightOpSchema> BuildMaxSchemas() {
+  return BuildVariadicMinMaxSchemas("Max", "max", "List of tensors for Max.",
+                                    "Output tensor. Same dimension as inputs.",
+                                    "List of tensors for max.", &MakeMaxDoc);
+}
+
+std::vector<LightOpSchema> BuildMinSchemas() {
+  return BuildVariadicMinMaxSchemas("Min", "min", "List of tensors for Min",
+                                    "Output tensor. Same dimension as inputs.",
+                                    "List of tensors for min.", &MakeMinDoc);
+}
+
 std::vector<LightOpSchema> BuildCumSumSchemas() {
   const std::string doc = MakeCumSumDoc();
   const std::vector<AttributeParam> attrs = {
@@ -2098,6 +2201,8 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"HannWindow", [] { return BuildHannWindowSchemas(); }},
       {"Log", [] { return BuildLogSchemas(); }},
       {"MatMul", [] { return BuildMatMulSchemas(); }},
+      {"Max", [] { return BuildMaxSchemas(); }},
+      {"Min", [] { return BuildMinSchemas(); }},
       {"Mod", [] { return BuildModSchemas(); }},
       {"Mul", [] { return BuildElementwiseMathSchemaForVersion("Mul"); }},
       {"Neg", [] { return BuildNegSchemas(); }},

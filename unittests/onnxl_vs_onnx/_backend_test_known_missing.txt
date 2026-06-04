@@ -1076,13 +1076,6 @@ transpose_all_permutations_2
 transpose_all_permutations_3
 transpose_all_permutations_4
 transpose_all_permutations_5
-unsqueeze_axis_0
-unsqueeze_axis_1
-unsqueeze_axis_2
-unsqueeze_negative_axes
-unsqueeze_three_axes
-unsqueeze_two_axes
-unsqueeze_unsorted_axes
 
 where_long_example
 wrap_pad

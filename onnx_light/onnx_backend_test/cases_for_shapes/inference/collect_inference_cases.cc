@@ -18,6 +18,7 @@ void CollectShapeInferenceTestCases(std::vector<TestCase> &registry, const std::
       // ``CollectTestCases("Add")``/etc. still pick up the corresponding case.
       {"Add", &RegisterAddConcatReshapeShapeInferenceCases},
       {"Abs", &RegisterNonZeroChainAnonShapeInferenceCases},
+      {"Shape", &RegisterShapeIdentityUnsqueezeShapeInferenceCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
   if (op_type.empty()) {

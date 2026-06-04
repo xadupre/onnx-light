@@ -674,4 +674,82 @@ TEST(OnnxOptimShapesLogicalNot, ThrowsWhenInputMissingFromContext) {
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeNot(ctx, node, "X"), std::out_of_range);
 }
 
+namespace {
+
+NodeProto MakeIsNaNNode(const std::string &x = "X", const std::string &out = "Y") {
+  NodeProto node;
+  node.set_op_type("IsNaN");
+  node.add_input(x);
+  node.add_output(out);
+  return node;
+}
+
+NodeProto MakeIsInfNode(const std::string &x = "X", const std::string &out = "Y") {
+  NodeProto node;
+  node.set_op_type("IsInf");
+  node.add_input(x);
+  node.add_output(out);
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesLogicalIsNaN, PropagatesShapeAndBoolDtype) {
+  NodeProto node = MakeIsNaNNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(3), onnx_optim::OptimDim("N")};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  onnx_optim::shapes::logical::ComputeShapeIsNaN(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_EQ(ctx.Get("Y").Shape(), shape);
+}
+
+TEST(OnnxOptimShapesLogicalIsNaN, ThrowsOnWrongOpType) {
+  NodeProto node = MakeIsNaNNode();
+  node.set_op_type("IsInf");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+  EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeIsNaN(ctx, node, "X"),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesLogicalIsNaN, ThrowsWhenInputMissingFromContext) {
+  NodeProto node = MakeIsNaNNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeIsNaN(ctx, node, "X"), std::out_of_range);
+}
+
+TEST(OnnxOptimShapesLogicalIsInf, PropagatesShapeAndBoolDtype) {
+  NodeProto node = MakeIsInfNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(5)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
+
+  onnx_optim::shapes::logical::ComputeShapeIsInf(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_EQ(ctx.Get("Y").Shape(), shape);
+}
+
+TEST(OnnxOptimShapesLogicalIsInf, ThrowsOnWrongOpType) {
+  NodeProto node = MakeIsInfNode();
+  node.set_op_type("IsNaN");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+  EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeIsInf(ctx, node, "X"),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesLogicalIsInf, ThrowsWhenInputMissingFromContext) {
+  NodeProto node = MakeIsInfNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeIsInf(ctx, node, "X"), std::out_of_range);
+}
+
 } // namespace Test

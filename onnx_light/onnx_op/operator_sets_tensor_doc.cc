@@ -460,6 +460,423 @@ std::string MakeShapeTypeConstraintDescription(int since_version) {
   return "Input tensor can be of arbitrary type.";
 }
 
+std::string MakePadDoc(int since_version) {
+  if (since_version <= 1) {
+    return R"DOC(
+Given `data` tensor, paddings, mode, and value.
+Example:
+  Insert 0 paddings to the beginning of the second dimension.
+  data = [
+      [1.0, 1.2],
+      [2.3, 3.4],
+      [4.5, 5.7],
+  ]
+  paddings = [0, 0, 2, 0]
+  output = [
+      [
+          [0.0, 0.0, 1.0, 1.2],
+          [0.0, 0.0, 2.3, 3.4],
+          [0.0, 0.0, 4.5, 5.7],
+      ],
+  ]
+)DOC";
+  }
+  if (since_version == 2) {
+    return R"DOC(
+Given `data` tensor, pads, mode, and value.
+Example:
+  Insert 0 pads to the beginning of the second dimension.
+  data = [
+      [1.0, 1.2],
+      [2.3, 3.4],
+      [4.5, 5.7],
+  ]
+  pads = [0, 2, 0, 0]
+  output = [
+      [
+          [0.0, 0.0, 1.0, 1.2],
+          [0.0, 0.0, 2.3, 3.4],
+          [0.0, 0.0, 4.5, 5.7],
+      ],
+  ]
+)DOC";
+  }
+  if (since_version == 11) {
+    return R"DOC(
+Given a tensor containing the data to be padded (`data`), a tensor containing the number of start and end pad values for axis (`pads`), (optionally) a `mode`, and (optionally) `constant_value`,
+a padded tensor (`output`) is generated.
+
+The three supported `modes` are (similar to corresponding modes supported by `numpy.pad`):
+
+1) `constant`(default) - pads with a given constant value as specified by `constant_value` (which defaults to 0)
+
+2) `reflect` - pads with the reflection of the vector mirrored on the first and last values of the vector along each axis
+
+3) `edge` - pads with the edge values of array
+
+
+Example 1 (`constant` mode):
+  Insert 0 pads to the beginning of the second dimension.
+
+  data =
+  [
+      [1.0, 1.2],
+      [2.3, 3.4],
+      [4.5, 5.7],
+  ]
+
+  pads = [0, 2, 0, 0]
+
+  mode = 'constant'
+
+  constant_value = 0.0
+
+  output =
+  [
+      [0.0, 0.0, 1.0, 1.2],
+      [0.0, 0.0, 2.3, 3.4],
+      [0.0, 0.0, 4.5, 5.7],
+  ]
+
+
+Example 2 (`reflect` mode):
+  data =
+  [
+      [1.0, 1.2],
+      [2.3, 3.4],
+      [4.5, 5.7],
+  ]
+
+  pads = [0, 2, 0, 0]
+
+  mode = 'reflect'
+
+  output =
+  [
+      [1.0, 1.2, 1.0, 1.2],
+      [2.3, 3.4, 2.3, 3.4],
+      [4.5, 5.7, 4.5, 5.7],
+  ]
+
+
+Example 3 (`edge` mode):
+  data =
+  [
+      [1.0, 1.2],
+      [2.3, 3.4],
+      [4.5, 5.7],
+  ]
+
+  pads = [0, 2, 0, 0]
+
+  mode = 'edge'
+
+  output =
+  [
+      [1.0, 1.0, 1.0, 1.2],
+      [2.3, 2.3, 2.3, 3.4],
+      [4.5, 4.5, 4.5, 5.7],
+  ]
+
+
+)DOC";
+  }
+  if (since_version == 13) {
+    return R"DOC(
+Given a tensor containing the data to be padded (`data`), a tensor containing the number of start and end pad values for axis (`pads`), (optionally) a `mode`, and (optionally) `constant_value`,
+a padded tensor (`output`) is generated.
+
+The three supported `modes` are (similar to corresponding modes supported by `numpy.pad`):
+
+1) `constant`(default) - pads with a given constant value as specified by `constant_value` (which defaults to 0, empty string, or False)
+
+2) `reflect` - pads with the reflection of the vector mirrored on the first and last values of the vector along each axis
+
+3) `edge` - pads with the edge values of array
+
+
+Example 1 (`constant` mode):
+  Insert 0 pads to the beginning of the second dimension.
+
+  data =
+  [
+      [1.0, 1.2],
+      [2.3, 3.4],
+      [4.5, 5.7],
+  ]
+
+  pads = [0, 2, 0, 0]
+
+  mode = 'constant'
+
+  constant_value = 0.0
+
+  output =
+  [
+      [0.0, 0.0, 1.0, 1.2],
+      [0.0, 0.0, 2.3, 3.4],
+      [0.0, 0.0, 4.5, 5.7],
+  ]
+
+
+Example 2 (`reflect` mode):
+  data =
+  [
+      [1.0, 1.2],
+      [2.3, 3.4],
+      [4.5, 5.7],
+  ]
+
+  pads = [0, 2, 0, 0]
+
+  mode = 'reflect'
+
+  output =
+  [
+      [1.0, 1.2, 1.0, 1.2],
+      [2.3, 3.4, 2.3, 3.4],
+      [4.5, 5.7, 4.5, 5.7],
+  ]
+
+
+Example 3 (`edge` mode):
+  data =
+  [
+      [1.0, 1.2],
+      [2.3, 3.4],
+      [4.5, 5.7],
+  ]
+
+  pads = [0, 2, 0, 0]
+
+  mode = 'edge'
+
+  output =
+  [
+      [1.0, 1.0, 1.0, 1.2],
+      [2.3, 2.3, 2.3, 3.4],
+      [4.5, 4.5, 4.5, 5.7],
+  ]
+
+
+)DOC";
+  }
+  if (since_version == 18) {
+    return R"DOC(
+Given a tensor containing the data to be padded (`data`), a tensor containing the number of start and end pad values for axis (`pads`), (optionally) a `mode`, and (optionally) `constant_value`,
+a padded tensor (`output`) is generated.
+
+The three supported `modes` are (similar to corresponding modes supported by `numpy.pad`):
+
+1) `constant`(default) - pads with a given constant value as specified by `constant_value` (which defaults to 0, empty string, or False)
+
+2) `reflect` - pads with the reflection of the vector mirrored on the first and last values of the vector along each axis
+
+3) `edge` - pads with the edge values of array
+
+
+Example 1 (`constant` mode):
+
+Insert 0 pads to the beginning of the second dimension.
+
+```
+data = [
+    [1.0, 1.2],
+    [2.3, 3.4],
+    [4.5, 5.7],
+]
+
+pads = [0, 2, 0, 0]
+
+mode = 'constant'
+
+constant_value = 0.0
+
+output = [
+    [0.0, 0.0, 1.0, 1.2],
+    [0.0, 0.0, 2.3, 3.4],
+    [0.0, 0.0, 4.5, 5.7],
+]
+```
+
+Example 2 (`reflect` mode):
+
+```
+data = [
+    [1.0, 1.2],
+    [2.3, 3.4],
+    [4.5, 5.7],
+]
+
+pads = [0, 2, 0, 0]
+
+mode = 'reflect'
+
+output = [
+    [1.0, 1.2, 1.0, 1.2],
+    [2.3, 3.4, 2.3, 3.4],
+    [4.5, 5.7, 4.5, 5.7],
+]
+```
+
+Example 3 (`edge` mode):
+
+```
+data = [
+    [1.0, 1.2],
+    [2.3, 3.4],
+    [4.5, 5.7],
+]
+
+pads = [0, 2, 0, 0]
+
+mode = 'edge'
+
+output = [
+    [1.0, 1.0, 1.0, 1.2],
+    [2.3, 2.3, 2.3, 3.4],
+    [4.5, 4.5, 4.5, 5.7],
+]
+```
+)DOC";
+  }
+  // v19 onwards adds the ``wrap`` mode and uses the same documentation.
+  return R"DOC(
+Given a tensor containing the data to be padded (`data`), a tensor containing the number of start and end pad values for axis (`pads`), (optionally) a `mode`, and (optionally) `constant_value`,
+a padded tensor (`output`) is generated.
+
+The three supported `modes` are (similar to corresponding modes supported by `numpy.pad`):
+
+1) `constant`(default) - pads with a given constant value as specified by `constant_value` (which defaults to 0, empty string, or False)
+
+2) `reflect` - pads with the reflection of the vector mirrored on the first and last values of the vector along each axis
+
+3) `edge` - pads with the edge values of array
+
+4) `wrap` - wrap-around padding as if the data tensor forms a torus
+
+
+Example 1 (`constant` mode):
+
+Insert 0 pads to the beginning of the second dimension.
+
+```
+data = [
+    [1.0, 1.2],
+    [2.3, 3.4],
+    [4.5, 5.7],
+]
+
+pads = [0, 2, 0, 0]
+
+mode = 'constant'
+
+constant_value = 0.0
+
+output = [
+    [0.0, 0.0, 1.0, 1.2],
+    [0.0, 0.0, 2.3, 3.4],
+    [0.0, 0.0, 4.5, 5.7],
+]
+```
+
+Example 2 (`reflect` mode):
+
+```
+data = [
+    [1.0, 1.2],
+    [2.3, 3.4],
+    [4.5, 5.7],
+]
+
+pads = [0, 2, 0, 0]
+
+mode = 'reflect'
+
+output = [
+    [1.0, 1.2, 1.0, 1.2],
+    [2.3, 3.4, 2.3, 3.4],
+    [4.5, 5.7, 4.5, 5.7],
+]
+```
+
+Example 3 (`edge` mode):
+
+```
+data = [
+    [1.0, 1.2],
+    [2.3, 3.4],
+    [4.5, 5.7],
+]
+
+pads = [0, 2, 0, 0]
+
+mode = 'edge'
+
+output = [
+    [1.0, 1.0, 1.0, 1.2],
+    [2.3, 2.3, 2.3, 3.4],
+    [4.5, 4.5, 4.5, 5.7],
+]
+```
+
+Example 4 (`wrap` mode):
+
+```
+data = [
+    [1.0, 1.2],
+    [2.3, 3.4],
+    [4.5, 5.7],
+]
+
+pads = [2, 1, 1, 1]
+
+mode = 'wrap'
+
+output = [
+    [3.4, 2.3, 3.4, 2.3],
+    [5.7, 4.5, 5.7, 4.5],
+    [1.2, 1.0, 1.2, 1.0],
+    [3.4, 2.3, 3.4, 2.3],
+    [5.7, 4.5, 5.7, 4.5],
+    [1.2, 1.0, 1.2, 1.0],
+]
+```
+)DOC";
+}
+
+std::string MakePadModeDescription(int since_version) {
+  if (since_version <= 2) {
+    return "Three modes: constant(default), reflect, edge";
+  }
+  if (since_version < 19) {
+    return "Supported modes: `constant`(default), `reflect`, `edge`";
+  }
+  return "Supported modes: `constant`(default), `reflect`, `edge`, `wrap`";
+}
+
+std::string MakePadTypeConstraintDescription(int since_version) {
+  if (since_version <= 2) {
+    return "Constrain input and output types to float tensors.";
+  }
+  if (since_version == 11) {
+    return "Constrain input and output to only numeric types.";
+  }
+  if (since_version <= 19) {
+    return "Constrain input and output types to all tensor types.";
+  }
+  if (since_version == 21) {
+    return "Constrain input and output types to all tensor types up to IRv10.";
+  }
+  if (since_version == 23) {
+    return "Constrain input and output types to all tensor types up to IRv11.";
+  }
+  if (since_version == 24) {
+    return "Constrain input and output types to all tensor types up to IRv12.";
+  }
+  return "Constrain input and output types to all tensor types up to IRv13.";
+}
+
 std::string MakeTileDoc(int since_version) {
   (void)since_version;
   return R"DOC(Constructs a tensor by tiling a given tensor.

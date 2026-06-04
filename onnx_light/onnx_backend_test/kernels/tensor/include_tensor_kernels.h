@@ -258,6 +258,35 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Pads the input ``data`` tensor along selected axes (ONNX ``Pad`` operator,
+/// since opset 18 with the ``axes`` input; earlier semantics covered by
+/// passing ``axes == nullptr``).
+///
+/// ``pads`` is a 1-D INT64 tensor of length ``2 * num_axes`` formatted as
+/// ``[x1_begin, x2_begin, ..., x1_end, x2_end, ...]``. When ``axes`` is
+/// ``nullptr`` it defaults to ``[0, 1, ..., rank-1]``. ``constant_value`` is
+/// an optional scalar (one-element tensor) used only when ``mode`` is
+/// ``"constant"`` (its dtype must match ``data``); when ``nullptr`` and the
+/// mode is ``"constant"``, the kernel uses a zero-initialized value of the
+/// input dtype. Supported modes mirror ``numpy.pad``: ``"constant"`` (default),
+/// ``"reflect"``, ``"edge"`` and ``"wrap"`` (introduced in opset 19).
+///
+/// All padding entries must be non-negative (negative pads, i.e. cropping,
+/// are accepted by the schema but the reference implementation rejects them
+/// to keep the kernel focused on the cases covered by the bundled tests).
+/// String and sub-byte dtypes are not supported and cause the kernel to
+/// throw ``std::invalid_argument``.
+class Pad : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &data, const Tensor &pads, const Tensor *constant_value = nullptr,
+                    const Tensor *axes = nullptr, const std::string &mode = "constant") const;
+  void operator()(const Tensor &data, const Tensor &pads, const Tensor *constant_value,
+                  const Tensor *axes, const std::string &mode, Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Constructs a tensor by tiling the ``input`` tensor a number of times along
 /// each axis given by the 1-D INT64 ``repeats`` tensor (ONNX ``Tile``
 /// operator, since opset 6 in the ``ai.onnx`` domain).

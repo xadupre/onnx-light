@@ -308,6 +308,38 @@ void ComputeShapeUnsqueeze(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeTile(ShapesContext &ctx, const NodeProto &node);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Pad`` node and stores
+ * it in ``ctx``. Supports the full Pad history (opsets 1, 2, 11, 13, 18,
+ * 19, 21, 23, 24, 25):
+ *
+ * - opsets 1 and 2 read the padding values from the ``paddings`` / ``pads``
+ *   INTS attribute and apply them on every input axis.
+ * - opsets >= 11 read the padding values from the 1-D INT64 ``pads`` input
+ *   (when statically known via data-propagation).
+ * - opsets >= 18 additionally accept an optional ``axes`` input that
+ *   restricts the padding to a subset of the input axes (negative values
+ *   count from the back).
+ *
+ * The output dtype always matches the dtype of ``data``. The output shape
+ * is rank-preserving; on every axis the output dim becomes
+ * ``input_dim + pad_begin + pad_end`` when both the input dim and the
+ * relevant pad values are statically known, otherwise a fresh symbolic
+ * dimension is produced.
+ *
+ * @param ctx   In/out context. Must already contain an entry for every
+ *              name in ``node.input``. On return it also contains an entry
+ *              for ``node.output(0)``.
+ * @param node  The ``Pad`` ``NodeProto`` whose output should be described.
+ *              ``node.op_type()`` must be ``"Pad"``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Pad"``, if
+ *         ``node`` has no input or output, or if a known ``pads`` /
+ *         ``axes`` initializer has an inconsistent shape.
+ * @throws std::out_of_range     if any input name is missing from ``ctx``.
+ */
+void ComputeShapePad(ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of an ``Upsample`` node and
  * stores it in ``ctx``. Supports Upsample opsets 1, 7, 9 and 10:
  *

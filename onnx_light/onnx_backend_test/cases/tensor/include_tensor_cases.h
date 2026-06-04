@@ -47,6 +47,9 @@ void RegisterSliceCases(std::vector<TestCase> &registry);
 /// Registers the ``Tile`` backend test node case(s).
 void RegisterTileCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Pad`` backend test node case(s).
+void RegisterPadCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Upsample`` backend test node case(s).
 void RegisterUpsampleCases(std::vector<TestCase> &registry);
 

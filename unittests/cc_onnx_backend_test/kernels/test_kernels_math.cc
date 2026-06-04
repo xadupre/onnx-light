@@ -42,6 +42,7 @@ using onnx_backend_test::kernel::Log;
 using onnx_backend_test::kernel::MatMul;
 using onnx_backend_test::kernel::Mod;
 using onnx_backend_test::kernel::Mul;
+using onnx_backend_test::kernel::Neg;
 using onnx_backend_test::kernel::PRelu;
 using onnx_backend_test::kernel::Round;
 using onnx_backend_test::kernel::Sigmoid;
@@ -69,6 +70,38 @@ TEST(BackendKernelClass, AbsClassMatchesReference) {
   EXPECT_FLOAT_EQ(py[0], 1.0f);
   EXPECT_FLOAT_EQ(py[1], 0.0f);
   EXPECT_FLOAT_EQ(py[2], 2.5f);
+}
+
+TEST(BackendKernelClass, NegClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Neg neg_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 2.5f});
+  Tensor y = neg_kernel(x);
+  ASSERT_EQ(y.element_count(), 3);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.0f);
+  EXPECT_FLOAT_EQ(py[1], -0.0f);
+  EXPECT_FLOAT_EQ(py[2], -2.5f);
+}
+
+TEST(BackendKernelClass, NegInPlaceWritesToPreallocatedOutput) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Neg neg_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {2}, {-4.0f, 2.0f});
+  Tensor y("", onnx_backend_test::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float)));
+  neg_kernel(x, y);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 4.0f);
+  EXPECT_FLOAT_EQ(py[1], -2.0f);
+}
+
+TEST(BackendKernelClass, NegRejectsNonFloatTensors) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Neg neg_kernel{ctx};
+  Tensor x = Tensor::FromInt32("", {2}, {-1, 2});
+  EXPECT_THROW((void)neg_kernel(x), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, AcosClassMatchesReference) {

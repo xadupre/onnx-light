@@ -24,6 +24,7 @@ using onnx_backend_test::kernel::Greater;
 using onnx_backend_test::kernel::GreaterOrEqual;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::Less;
+using onnx_backend_test::kernel::Not;
 using onnx_backend_test::kernel::Or;
 using onnx_backend_test::kernel::Where;
 using onnx_backend_test::kernel::Xor;
@@ -598,6 +599,37 @@ TEST(BackendKernelClass, BitwiseNotRejectsBoolTensors) {
   BitwiseNot kernel{ctx};
   Tensor x("", onnx_backend_test::DataType::BOOL, {2}, {1, 0});
   EXPECT_THROW((void)kernel(x), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, NotClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(1)};
+  Not not_kernel{ctx};
+  Tensor x("", onnx_backend_test::DataType::BOOL, {4}, {1, 0, 1, 0});
+  Tensor y = not_kernel(x);
+  ASSERT_EQ(y.element_count(), 4);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::BOOL));
+  EXPECT_EQ(y.data[0], 0u);
+  EXPECT_EQ(y.data[1], 1u);
+  EXPECT_EQ(y.data[2], 0u);
+  EXPECT_EQ(y.data[3], 1u);
+}
+
+TEST(BackendKernelClass, NotInPlaceWritesToPreallocatedOutput) {
+  const KernelContext ctx{DefaultOpset(1)};
+  Not not_kernel{ctx};
+  Tensor x("", onnx_backend_test::DataType::BOOL, {3}, {0, 1, 0});
+  Tensor y("", onnx_backend_test::DataType::BOOL, {3}, std::vector<uint8_t>(3));
+  not_kernel(x, y);
+  EXPECT_EQ(y.data[0], 1u);
+  EXPECT_EQ(y.data[1], 0u);
+  EXPECT_EQ(y.data[2], 1u);
+}
+
+TEST(BackendKernelClass, NotRejectsNonBoolTensors) {
+  const KernelContext ctx{DefaultOpset(1)};
+  Not not_kernel{ctx};
+  Tensor x = Tensor::FromInt32("", {2}, {0, 1});
+  EXPECT_THROW((void)not_kernel(x), std::invalid_argument);
 }
 
 } // namespace Test

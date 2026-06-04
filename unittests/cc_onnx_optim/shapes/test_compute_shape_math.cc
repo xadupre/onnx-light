@@ -89,6 +89,58 @@ TEST(OnnxOptimShapesMathAbs, ThrowsWhenInputMissingFromContext) {
   EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeAbs(ctx, node, "X"), std::out_of_range);
 }
 
+namespace {
+
+NodeProto MakeNegNode(const std::string &input_name = "X", const std::string &output_name = "Y") {
+  NodeProto node;
+  node.set_op_type("Neg");
+  node.add_input(input_name);
+  node.add_output(output_name);
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesMathNeg, PropagatesFullyKnownShape) {
+  NodeProto node = MakeNegNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  onnx_optim::shapes::math::ComputeShapeNeg(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+}
+
+TEST(OnnxOptimShapesMathNeg, PropagatesSymbolicShape) {
+  NodeProto node = MakeNegNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64, shape));
+
+  onnx_optim::shapes::math::ComputeShapeNeg(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64, shape));
+}
+
+TEST(OnnxOptimShapesMathNeg, RejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("Abs");
+  node.add_input("X");
+  node.add_output("Y");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeNeg(ctx, node, "X"), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesMathNeg, ThrowsWhenInputMissingFromContext) {
+  NodeProto node = MakeNegNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeNeg(ctx, node, "X"), std::out_of_range);
+}
+
 TEST(OnnxOptimShapesContext, OpsetVersionDefaultsToUnknown) {
   onnx_optim::shapes::ShapesContext ctx;
   EXPECT_FALSE(ctx.HasOpsetVersion("ai.onnx"));

@@ -71,6 +71,18 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Element-wise logical NOT on a BOOL tensor (opset 1). The output has the
+/// same BOOL dtype and shape as the input. Mirrors the upstream ONNX
+/// ``Not`` reference implementation (``np.logical_not``).
+class Not : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x) const;
+  void operator()(const Tensor &x, Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// Element-wise ``Greater`` comparison with multidirectional broadcasting.
 /// Inputs may be FLOAT, INT8, INT16, UINT8, UINT16, UINT32 or UINT64 (both
 /// inputs must share the same dtype); the output is BOOL (one byte per

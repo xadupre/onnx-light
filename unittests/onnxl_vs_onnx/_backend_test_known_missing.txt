@@ -604,7 +604,6 @@ mod_mixed_sign_float16
 mvn
 mvn_expanded
 mvn_expanded_ver18
-neg_example
 nllloss_NC
 nllloss_NC_expanded
 nllloss_NCd1

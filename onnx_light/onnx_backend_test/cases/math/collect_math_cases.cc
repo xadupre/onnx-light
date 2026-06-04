@@ -20,6 +20,7 @@ void CollectMathTestCases(std::vector<TestCase> &registry, const std::string &op
       {"Sub", &RegisterSubCases},
       {"Sum", &RegisterSumCases},
       {"Mul", &RegisterMulCases},
+      {"Neg", &RegisterNegCases},
       {"Pow", &RegisterPowCases},
       {"PRelu", &RegisterPReluCases},
       {"Div", &RegisterDivCases},

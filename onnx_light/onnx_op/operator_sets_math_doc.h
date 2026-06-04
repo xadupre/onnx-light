@@ -129,6 +129,28 @@ std::string MakeTopKDoc(int since_version);
 std::string MakeSumDoc(int since_version);
 
 /**
+ * Returns the documentation string for the Max operator at the given opset
+ * version. Opsets 1 and 6 share the legacy wording (variadic element-wise max
+ * with no broadcasting); opsets 8, 12 and 13 share the wording that exposes
+ * NumPy-style multidirectional broadcasting.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the Max operator.
+ */
+std::string MakeMaxDoc(int since_version);
+
+/**
+ * Returns the documentation string for the Min operator at the given opset
+ * version. Opsets 1 and 6 share the legacy wording (variadic element-wise min
+ * with no broadcasting); opsets 8, 12 and 13 share the wording that exposes
+ * NumPy-style multidirectional broadcasting.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the Min operator.
+ */
+std::string MakeMinDoc(int since_version);
+
+/**
  * Returns the documentation string for the DFT operator at the given opset
  * version.
  *

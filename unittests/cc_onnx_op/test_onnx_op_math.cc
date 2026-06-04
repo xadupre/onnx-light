@@ -104,8 +104,12 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Swish");
   const std::vector<onnx_op::LightOpSchema> neg_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Neg");
+  const std::vector<onnx_op::LightOpSchema> max_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Max");
+  const std::vector<onnx_op::LightOpSchema> min_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Min");
 
-  EXPECT_EQ(schemas.size(), 133u);
+  EXPECT_EQ(schemas.size(), 143u);
 
   // Neg has three versioned schemas (v1, v6, v13).
   ASSERT_EQ(neg_schemas.size(), 3u);
@@ -209,6 +213,46 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(sum_v1->attributes()[0].name, "consumed_inputs");
   EXPECT_TRUE(sum_v6->attributes().empty());
   EXPECT_TRUE(sum_v13->attributes().empty());
+
+  // Max and Min each have five versioned schemas (v1, v6, v8, v12, v13).
+  for (const auto *schemas_ptr : {&max_schemas, &min_schemas}) {
+    const auto &s = *schemas_ptr;
+    EXPECT_EQ(s.size(), 5u);
+    const onnx_op::LightOpSchema *const s_v13 = FindByVersion(s, 13);
+    const onnx_op::LightOpSchema *const s_v12 = FindByVersion(s, 12);
+    const onnx_op::LightOpSchema *const s_v8 = FindByVersion(s, 8);
+    const onnx_op::LightOpSchema *const s_v6 = FindByVersion(s, 6);
+    const onnx_op::LightOpSchema *const s_v1 = FindByVersion(s, 1);
+    ASSERT_NE(nullptr, s_v13);
+    ASSERT_NE(nullptr, s_v12);
+    ASSERT_NE(nullptr, s_v8);
+    ASSERT_NE(nullptr, s_v6);
+    ASSERT_NE(nullptr, s_v1);
+    EXPECT_EQ(s_v13->domain(), "ai.onnx");
+    EXPECT_EQ(s_v13->since_version(), 13);
+    EXPECT_FALSE(s_v13->has_function_implementation());
+    EXPECT_EQ(s_v13->inputs().size(), 1u);
+    EXPECT_EQ(s_v13->inputs()[0].name, "data_0");
+    EXPECT_EQ(s_v13->outputs().size(), 1u);
+    EXPECT_EQ(s_v13->type_constraints().size(), 1u);
+    // v13 widens T to all numeric types incl. bfloat16; v12 only to all
+    // numeric types; v8 keeps the float-only set inherited from v6.
+    EXPECT_NE(s_v13->type_constraints()[0].allowed_type_strs,
+              s_v12->type_constraints()[0].allowed_type_strs);
+    EXPECT_NE(s_v12->type_constraints()[0].allowed_type_strs,
+              s_v8->type_constraints()[0].allowed_type_strs);
+    EXPECT_EQ(s_v8->type_constraints()[0].allowed_type_strs,
+              s_v6->type_constraints()[0].allowed_type_strs);
+    // v8 introduces broadcasting; v6 keeps the legacy "no broadcasting" doc.
+    EXPECT_NE(s_v8->doc(), s_v6->doc());
+    // v1 carries the legacy ``consumed_inputs`` attribute; later opsets drop it.
+    EXPECT_EQ(s_v1->attributes().size(), 1u);
+    EXPECT_EQ(s_v1->attributes()[0].name, "consumed_inputs");
+    EXPECT_TRUE(s_v6->attributes().empty());
+    EXPECT_TRUE(s_v13->attributes().empty());
+  }
+  EXPECT_EQ(FindByVersion(max_schemas, 13)->outputs()[0].name, "max");
+  EXPECT_EQ(FindByVersion(min_schemas, 13)->outputs()[0].name, "min");
 
   const onnx_op::LightOpSchema *const add = FindByVersion(add_schemas, 14);
   const onnx_op::LightOpSchema *const add_v1 = FindByVersion(add_schemas, 1);

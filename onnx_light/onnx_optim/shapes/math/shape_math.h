@@ -688,6 +688,54 @@ void ComputeShapeEinsum(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeSum(ShapesContext &ctx, const NodeProto &node);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Max`` node and stores
+ * it in ``ctx``.
+ *
+ * ``Max`` (opsets 1-13) is a variadic element-wise maximum operator. Since
+ * opset 8 it supports NumPy-style multidirectional broadcasting; in earlier
+ * opsets all inputs are required to share the same shape. The output dtype
+ * always matches that of the first input, and the output shape is the
+ * multidirectional broadcast of every input shape.
+ *
+ * @param ctx   In/out context. Must already contain entries for every input
+ *              of ``node``. On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Max`` ``NodeProto`` whose output should be described.
+ *              ``node.op_type()`` must be ``"Max"`` and ``node`` must
+ *              declare at least one input and at least one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Max"``,
+ *         if ``node`` has no input or no output, or if any pair of inputs
+ *         have shapes that are not broadcast-compatible.
+ * @throws std::out_of_range     if any input name is missing from ``ctx``.
+ */
+void ComputeShapeMax(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Min`` node and stores
+ * it in ``ctx``.
+ *
+ * ``Min`` (opsets 1-13) is a variadic element-wise minimum operator. Since
+ * opset 8 it supports NumPy-style multidirectional broadcasting; in earlier
+ * opsets all inputs are required to share the same shape. The output dtype
+ * always matches that of the first input, and the output shape is the
+ * multidirectional broadcast of every input shape.
+ *
+ * @param ctx   In/out context. Must already contain entries for every input
+ *              of ``node``. On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Min`` ``NodeProto`` whose output should be described.
+ *              ``node.op_type()`` must be ``"Min"`` and ``node`` must
+ *              declare at least one input and at least one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Min"``,
+ *         if ``node`` has no input or no output, or if any pair of inputs
+ *         have shapes that are not broadcast-compatible.
+ * @throws std::out_of_range     if any input name is missing from ``ctx``.
+ */
+void ComputeShapeMin(ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``CumSum`` node and
  * stores it in ``ctx``.
  *

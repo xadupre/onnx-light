@@ -289,6 +289,28 @@ void ComputeShapeBitwiseXor(ShapesContext &ctx, const NodeProto &node, const cha
 void ComputeShapeBitwiseNot(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Not`` node
+ * (opset 1) and stores it in ``ctx``.
+ *
+ * ``Not`` is the element-wise logical NOT of a boolean tensor: the
+ * output dtype is always :cpp:enumerator:`TensorType::kBool` (matching
+ * the input) and the output shape matches the input shape.
+ *
+ * @param ctx   In/out context. Must already contain an entry for ``x``;
+ *              on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Not`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Not"`` and
+ *              ``node`` must declare at least one output.
+ * @param x     Name of the input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Not"``
+ *         or if ``node`` has no output.
+ * @throws std::out_of_range     if ``x`` is missing from ``ctx``.
+ */
+void ComputeShapeNot(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``BitShift`` node
  * (opset 11) and stores it in ``ctx``.
  *

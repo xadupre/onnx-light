@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/cases/cases_for_shapes/shape_inference/include_shape_inference_cases.h"
+#include "onnx_backend_test/cases_for_shapes/inference/include_inference_cases.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {

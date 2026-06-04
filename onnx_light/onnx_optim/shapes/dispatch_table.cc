@@ -564,6 +564,16 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          generator::ComputeShapeMultinomial(ctx, node);
        }},
+      {"ai.onnx:Neg",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeNeg(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:Not",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         logical::ComputeShapeNot(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:PRelu",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);

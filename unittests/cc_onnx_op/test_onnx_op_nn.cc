@@ -43,8 +43,7 @@ constexpr size_t kExpectedNnSchemaCount =
     kExpectedDropoutSchemaCount + kExpectedGlobalLpPoolSchemaCount + kExpectedFlattenSchemaCount +
     kExpectedGlobalMaxPoolSchemaCount + kExpectedGRUSchemaCount +
     kExpectedGroupNormalizationSchemaCount + kExpectedInstanceNormalizationSchemaCount +
-    kExpectedLRNSchemaCount +
-    kExpectedLSTMSchemaCount + kExpectedRNNSchemaCount;
+    kExpectedLRNSchemaCount + kExpectedLSTMSchemaCount + kExpectedRNNSchemaCount;
 
 static const onnx_op::LightOpSchema *
 FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {

@@ -14,6 +14,8 @@ namespace kernel {
 
 namespace {
 
+constexpr double kMvnEpsilon = 1e-9;
+
 std::vector<int64_t> NormalizeAxes(const std::vector<int64_t> &axes, int64_t rank) {
   std::vector<int64_t> normalized;
   normalized.reserve(axes.size());
@@ -28,6 +30,23 @@ std::vector<int64_t> NormalizeAxes(const std::vector<int64_t> &axes, int64_t ran
     }
   }
   return normalized;
+}
+
+int64_t ComputeLane(int64_t idx, const std::vector<int64_t> &dims,
+                    const std::vector<uint8_t> &reduce_mask) {
+  const int64_t rank = static_cast<int64_t>(dims.size());
+  int64_t lane = 0;
+  int64_t lane_multiplier = 1;
+  int64_t rem = idx;
+  for (int64_t d = rank - 1; d >= 0; --d) {
+    const int64_t coord = rem % dims[static_cast<size_t>(d)];
+    rem /= dims[static_cast<size_t>(d)];
+    if (!reduce_mask[static_cast<size_t>(d)]) {
+      lane += coord * lane_multiplier;
+      lane_multiplier *= dims[static_cast<size_t>(d)];
+    }
+  }
+  return lane;
 }
 
 template <typename T>
@@ -65,17 +84,7 @@ void ComputeMvn(const Tensor &x, Tensor &output, const std::vector<int64_t> &axe
   T *py = output.As<T>();
 
   for (int64_t idx = 0; idx < total; ++idx) {
-    int64_t lane = 0;
-    int64_t lane_multiplier = 1;
-    int64_t rem = idx;
-    for (int64_t d = rank - 1; d >= 0; --d) {
-      const int64_t coord = rem % dims[static_cast<size_t>(d)];
-      rem /= dims[static_cast<size_t>(d)];
-      if (!reduce_mask[static_cast<size_t>(d)]) {
-        lane += coord * lane_multiplier;
-        lane_multiplier *= dims[static_cast<size_t>(d)];
-      }
-    }
+    const int64_t lane = ComputeLane(idx, dims, reduce_mask);
     sum[static_cast<size_t>(lane)] += static_cast<double>(px[idx]);
   }
 
@@ -85,35 +94,15 @@ void ComputeMvn(const Tensor &x, Tensor &output, const std::vector<int64_t> &axe
   }
 
   for (int64_t idx = 0; idx < total; ++idx) {
-    int64_t lane = 0;
-    int64_t lane_multiplier = 1;
-    int64_t rem = idx;
-    for (int64_t d = rank - 1; d >= 0; --d) {
-      const int64_t coord = rem % dims[static_cast<size_t>(d)];
-      rem /= dims[static_cast<size_t>(d)];
-      if (!reduce_mask[static_cast<size_t>(d)]) {
-        lane += coord * lane_multiplier;
-        lane_multiplier *= dims[static_cast<size_t>(d)];
-      }
-    }
+    const int64_t lane = ComputeLane(idx, dims, reduce_mask);
     const double centered = static_cast<double>(px[idx]) - mean[static_cast<size_t>(lane)];
     sqsum[static_cast<size_t>(lane)] += centered * centered;
   }
 
   for (int64_t idx = 0; idx < total; ++idx) {
-    int64_t lane = 0;
-    int64_t lane_multiplier = 1;
-    int64_t rem = idx;
-    for (int64_t d = rank - 1; d >= 0; --d) {
-      const int64_t coord = rem % dims[static_cast<size_t>(d)];
-      rem /= dims[static_cast<size_t>(d)];
-      if (!reduce_mask[static_cast<size_t>(d)]) {
-        lane += coord * lane_multiplier;
-        lane_multiplier *= dims[static_cast<size_t>(d)];
-      }
-    }
+    const int64_t lane = ComputeLane(idx, dims, reduce_mask);
     const double variance = sqsum[static_cast<size_t>(lane)] / reduced_size_d;
-    const double denom = std::sqrt(variance);
+    const double denom = std::sqrt(variance + kMvnEpsilon);
     py[idx] =
         static_cast<T>((static_cast<double>(px[idx]) - mean[static_cast<size_t>(lane)]) / denom);
   }

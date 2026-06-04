@@ -213,6 +213,10 @@ void ComputeShapeGroupNormalization(ShapesContext &ctx, const NodeProto &node, c
  *              return it also contains an entry for ``node.output(0)``.
  * @param node  The ``MeanVarianceNormalization`` ``NodeProto``.
  * @param x     Name of the data input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"MeanVarianceNormalization"`` or if ``node`` has no output.
+ * @throws std::out_of_range if ``x`` is not present in ``ctx``.
  */
 void ComputeShapeMeanVarianceNormalization(ShapesContext &ctx, const NodeProto &node,
                                            const char *x);

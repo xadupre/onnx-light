@@ -233,6 +233,42 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of the ONNX ``Multinomial`` operator (since
+/// opset 7 in the ``ai.onnx`` domain). Draws ``sample_size`` samples from
+/// a multinomial distribution per batch row, where the per-row
+/// unnormalized log-probabilities are given by the 2-D input tensor of
+/// shape ``[batch_size, class_size]``. The output is a 2-D tensor of
+/// shape ``[batch_size, sample_size]`` of integer class indices.
+///
+/// ``Multinomial`` is non-deterministic; this reference implementation
+/// uses a ``std::mt19937`` engine seeded either with the value of the
+/// optional ``seed`` attribute (interpreted by truncating to
+/// ``uint32_t``) or, when the attribute is absent, with a fixed default
+/// seed so the kernel is reproducible for testing.
+///
+/// Supported input dtypes are ``FLOAT``, ``DOUBLE`` and ``FLOAT16``.
+/// Supported output dtypes are ``INT32`` (default) and ``INT64``.
+class Multinomial : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  /// Draws ``sample_size`` samples per batch row of ``input``. ``seed`` is
+  /// the value of the ``seed`` attribute when present (truncated to
+  /// ``uint32_t``); pass ``kNoSeed`` to use the kernel's default seed.
+  /// ``dtype`` is the value of the ``dtype`` attribute; pass ``0`` (or
+  /// :cpp:enumerator:`DataType::INT32`) to produce ``INT32`` output, or
+  /// :cpp:enumerator:`DataType::INT64` for ``INT64`` output.
+  Tensor operator()(const Tensor &input, int64_t sample_size = 1, int64_t seed = kNoSeed,
+                    int32_t dtype = 0) const;
+  void operator()(const Tensor &input, int64_t sample_size, int64_t seed, int32_t dtype,
+                  Tensor &output) const;
+
+  /// Sentinel meaning ``seed`` attribute is absent.
+  static constexpr int64_t kNoSeed = -1;
+  /// The output buffer has a different shape than the input, so storage
+  /// cannot generally be shared.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Reference implementation of the ONNX ``Range`` operator (since opset 11
 /// in the ``ai.onnx`` domain). Generates a 1-D tensor with values
 /// ``[start, start + delta, start + 2*delta, ...]`` up to (but excluding)

@@ -19,6 +19,7 @@ using onnx_backend_test::kernel::Constant;
 using onnx_backend_test::kernel::ConstantOfShape;
 using onnx_backend_test::kernel::EyeLike;
 using onnx_backend_test::kernel::KernelContext;
+using onnx_backend_test::kernel::Multinomial;
 using onnx_backend_test::kernel::RandomNormal;
 using onnx_backend_test::kernel::RandomNormalLike;
 using onnx_backend_test::kernel::RandomUniform;
@@ -237,6 +238,62 @@ TEST(BackendKernelClass, BernoulliRejectsUnsupportedInputDtype) {
   Bernoulli kernel{ctx};
   const Tensor int_in = Tensor::FromInt32("", {2}, {0, 1});
   EXPECT_THROW(kernel(int_in), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, MultinomialProducesInt32SamplesWithExpectedShape) {
+  const KernelContext ctx{DefaultOpset(22)};
+  Multinomial kernel{ctx};
+  // Two batches, three classes; class 1 has overwhelmingly more probability mass.
+  const Tensor x = Tensor::FromFloat("", {2, 3}, {0.0f, 10.0f, 0.0f, 0.0f, 10.0f, 0.0f});
+  Tensor y = kernel(x, /*sample_size=*/5);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 5}));
+  ASSERT_EQ(y.element_count(), 10);
+  const int32_t *py = y.AsInt32();
+  for (int i = 0; i < 10; ++i) {
+    EXPECT_EQ(py[i], 1);
+  }
+}
+
+TEST(BackendKernelClass, MultinomialIsDeterministicForSameSeed) {
+  const KernelContext ctx{DefaultOpset(22)};
+  Multinomial kernel{ctx};
+  const Tensor x = Tensor::FromFloat("", {1, 4}, {0.1f, 0.2f, 0.3f, 0.4f});
+  Tensor a = kernel(x, /*sample_size=*/6, /*seed=*/42, /*dtype=*/0);
+  Tensor b = kernel(x, /*sample_size=*/6, /*seed=*/42, /*dtype=*/0);
+  EXPECT_EQ(a.data, b.data);
+  Tensor c = kernel(x, /*sample_size=*/6, /*seed=*/43, /*dtype=*/0);
+  EXPECT_NE(a.data, c.data);
+}
+
+TEST(BackendKernelClass, MultinomialDtypeAttributeOverridesOutputType) {
+  const KernelContext ctx{DefaultOpset(22)};
+  Multinomial kernel{ctx};
+  const Tensor x = Tensor::FromFloat("", {1, 2}, {10.0f, 0.0f});
+  Tensor y = kernel(x, /*sample_size=*/3, Multinomial::kNoSeed,
+                    /*dtype=*/static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{1, 3}));
+  const int64_t *py = y.AsInt64();
+  for (int i = 0; i < 3; ++i) {
+    EXPECT_EQ(py[i], 0);
+  }
+}
+
+TEST(BackendKernelClass, MultinomialRejectsNon2DInput) {
+  const KernelContext ctx{DefaultOpset(22)};
+  Multinomial kernel{ctx};
+  const Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
+  EXPECT_THROW(kernel(x), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, MultinomialRejectsUnsupportedOutputDtype) {
+  const KernelContext ctx{DefaultOpset(22)};
+  Multinomial kernel{ctx};
+  const Tensor x = Tensor::FromFloat("", {1, 2}, {1.0f, 1.0f});
+  EXPECT_THROW(kernel(x, /*sample_size=*/1, Multinomial::kNoSeed,
+                      /*dtype=*/static_cast<int32_t>(onnx_backend_test::DataType::FLOAT)),
+               std::invalid_argument);
 }
 
 TEST(BackendKernelClass, RandomNormalProducesFloatTensorOfRequestedShape) {

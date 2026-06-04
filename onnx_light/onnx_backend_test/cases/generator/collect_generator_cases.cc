@@ -18,6 +18,7 @@ void CollectGeneratorTestCases(std::vector<TestCase> &registry, const std::strin
       {"RandomUniform", &RegisterRandomUniformCases},
       {"RandomUniformLike", &RegisterRandomUniformLikeCases},
       {"Range", &RegisterRangeCases},
+      {"Multinomial", &RegisterMultinomialCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

@@ -700,6 +700,79 @@ TEST(OnnxOptimShapeBernoulli, RejectsBadOpType) {
 
 namespace {
 
+NodeProto MakeMultinomialNode() {
+  NodeProto node;
+  node.set_op_type("Multinomial");
+  node.add_input("x");
+  node.add_output("y");
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeMultinomial, DefaultProducesInt32BatchBySampleSizeOne) {
+  NodeProto node = MakeMultinomialNode();
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor x(
+      nullptr, onnx_optim::TensorType::kFloat,
+      onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(5)});
+  ctx.Set("x", std::move(x));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ASSERT_TRUE(ctx.Has("y"));
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kInt32);
+  EXPECT_EQ(ctx.Get("y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(1)}));
+}
+
+TEST(OnnxOptimShapeMultinomial, SampleSizeAndDtypeAttributesAreApplied) {
+  NodeProto node = MakeMultinomialNode();
+  AddAttr(node, "sample_size", AttributeProto::AttributeType::INT)->set_i(7);
+  AddAttr(node, "dtype", AttributeProto::AttributeType::INT)
+      ->set_i(static_cast<int64_t>(TensorProto::INT64));
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor x(
+      nullptr, onnx_optim::TensorType::kDouble,
+      onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)});
+  ctx.Set("x", std::move(x));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ASSERT_TRUE(ctx.Has("y"));
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kInt64);
+  ASSERT_EQ(ctx.Get("y").Shape().Rank(), 2u);
+  EXPECT_FALSE(ctx.Get("y").Shape()[0].IsInt());
+  EXPECT_TRUE(ctx.Get("y").Shape()[1].IsInt());
+  EXPECT_EQ(ctx.Get("y").Shape()[1].AsInt(), 7);
+}
+
+TEST(OnnxOptimShapeMultinomial, RejectsUnsupportedDtype) {
+  NodeProto node = MakeMultinomialNode();
+  AddAttr(node, "dtype", AttributeProto::AttributeType::INT)
+      ->set_i(static_cast<int64_t>(TensorProto::FLOAT));
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor x(
+      nullptr, onnx_optim::TensorType::kFloat,
+      onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(2)});
+  ctx.Set("x", std::move(x));
+  EXPECT_THROW(onnx_optim::shapes::generator::ComputeShapeMultinomial(ctx, node),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeMultinomial, RejectsNon2DInput) {
+  NodeProto node = MakeMultinomialNode();
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor x(nullptr, onnx_optim::TensorType::kFloat,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(4)});
+  ctx.Set("x", std::move(x));
+  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+}
+
+namespace {
+
 NodeProto MakeRandomNode(const std::string &op_type, const std::vector<int64_t> &shape) {
   NodeProto node;
   node.set_op_type(op_type);

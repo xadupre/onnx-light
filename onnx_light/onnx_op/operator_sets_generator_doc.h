@@ -54,6 +54,14 @@ std::string MakeEyeLikeDoc(int since_version);
 std::string MakeRandomNormalDoc();
 
 /**
+ * Returns the documentation string for the Multinomial operator. The
+ * documentation has been stable since opset 7.
+ *
+ * @return Documentation string for the Multinomial operator.
+ */
+std::string MakeMultinomialDoc();
+
+/**
  * Returns the documentation string for the RandomNormalLike operator. The
  * documentation has been stable since opset 1.
  *

@@ -487,6 +487,59 @@ LightOpSchema MakeRandomUniformLikeSchema(int since_version) {
       });
 }
 
+// Multinomial T1 (input) type-constraint set, indexed by since_version.
+// Mirrors the upstream ``onnx`` ``Multinomial`` schema history
+// (see ``onnx_light/onnx_lib/defs/generator/{defs,old}.cc``).
+// v7  : float16, float, double
+// v22 : adds bfloat16 (all_float_types_ir4)
+std::vector<TensorType> MultinomialT1(int since_version) {
+  switch (since_version) {
+  case 22:
+    return {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+  case 7:
+    return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+  default:
+    throw SchemaError("Unsupported Multinomial since_version: " + std::to_string(since_version));
+  }
+}
+
+LightOpSchema MakeMultinomialSchema(int since_version) {
+  return LightOpSchema(
+      "Multinomial", kOnnxDomain, since_version, MakeMultinomialDoc(),
+      {
+          {"input",
+           "Input tensor with shape [batch_size, class_size], where class_size is the number "
+           "of all possible outcomes. Each value along the axis zero represents the "
+           "unnormalized log-probability of each corresponding outcome in a batch.",
+           "T1"},
+      },
+      {
+          {"output",
+           "Output tensor with shape [batch_size, sample_size], where sample_size is the "
+           "number of times to sample. Each value along the axis zero represents the outcome "
+           "of the corresponding sample in a batch.",
+           "T2"},
+      },
+      {
+          {"T1", MultinomialT1(since_version), "Constrain input types to float tensors."},
+          {"T2",
+           {TensorType::kInt32, TensorType::kInt64},
+           "Constrain output types to integral tensors."},
+      },
+      {
+          {"sample_size", "Number of times to sample.", AttributeType::INT,
+           /*required=*/false, static_cast<int64_t>(1)},
+          {"seed",
+           "(Optional) Seed to the random generator, if not specified we will auto generate one.",
+           AttributeType::FLOAT, /*required=*/false, std::monostate{}},
+          {"dtype",
+           "(Optional) The data type for the elements of the output tensor, if not specified, "
+           "we will use int32.",
+           AttributeType::INT, /*required=*/false,
+           /*default=*/static_cast<int64_t>(6) /* TensorProto::INT32 */},
+      });
+}
+
 LightOpSchema MakeRangeSchema(int since_version) {
   return LightOpSchema(
       "Range", kOnnxDomain, since_version, MakeRangeDoc(),
@@ -541,6 +594,13 @@ std::vector<LightOpSchema> GetAllOnnxOpGeneratorSchemasWithHistory(const std::st
          return std::vector<LightOpSchema>{
              MakeEyeLikeSchema(22),
              MakeEyeLikeSchema(9),
+         };
+       }},
+      {"Multinomial",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeMultinomialSchema(22),
+             MakeMultinomialSchema(7),
          };
        }},
       {"RandomNormal",

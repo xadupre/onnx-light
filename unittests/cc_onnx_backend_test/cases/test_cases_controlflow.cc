@@ -91,14 +91,18 @@ TEST(BackendTestCase, LoopCasesArePresent) {
   auto cases = CollectTestCases("Loop");
   const TestCase *trip3 = nullptr;
   const TestCase *trip0 = nullptr;
+  const TestCase *loop11 = nullptr;
   for (const auto &c : cases) {
     if (c.name == "test_cc_loop_basic_trip_count")
       trip3 = &c;
     if (c.name == "test_cc_loop_zero_trip_count")
       trip0 = &c;
+    if (c.name == "test_cc_loop11_carried_state")
+      loop11 = &c;
   }
   ASSERT_NE(trip3, nullptr);
   ASSERT_NE(trip0, nullptr);
+  ASSERT_NE(loop11, nullptr);
 
   for (const TestCase *tc : {trip3, trip0}) {
     const GraphProto &graph = tc->model.ref_graph();
@@ -129,6 +133,41 @@ TEST(BackendTestCase, LoopCasesArePresent) {
   // Trip-count 0 produces an empty leading axis → shape [0, 1].
   EXPECT_EQ(trip0->data_sets[0].outputs[0].shape[0], 0);
   EXPECT_EQ(trip0->data_sets[0].outputs[0].element_count(), 0);
+
+  // ``test_cc_loop11_carried_state`` mirrors ONNX's ``test_loop11``:
+  // trip-count 5, FLOAT[1] loop-carried state ``y = [-2]`` and a FLOAT[1]
+  // scan output. Inputs are ``(trip_count, cond, y)`` and outputs are
+  // ``(res_y, res_scan)``.
+  {
+    const GraphProto &graph = loop11->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    EXPECT_EQ(std::string(node.ref_op_type().data(), node.ref_op_type().size()), "Loop");
+    ASSERT_EQ(node.ref_input().size(), 3u);
+    ASSERT_EQ(node.ref_output().size(), 2u);
+
+    ASSERT_EQ(loop11->data_sets.size(), 1u);
+    const auto &ds = loop11->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    ASSERT_EQ(ds.outputs.size(), 2u);
+    // res_y is FLOAT[1] = [13].
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+    ASSERT_EQ(ds.outputs[0].shape.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].shape[0], 1);
+    ASSERT_EQ(ds.outputs[0].element_count(), 1);
+    EXPECT_FLOAT_EQ(ds.outputs[0].AsFloat()[0], 13.0f);
+    // res_scan is FLOAT[5, 1] = [[-1], [1], [4], [8], [13]].
+    EXPECT_EQ(ds.outputs[1].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+    ASSERT_EQ(ds.outputs[1].shape.size(), 2u);
+    EXPECT_EQ(ds.outputs[1].shape[0], 5);
+    EXPECT_EQ(ds.outputs[1].shape[1], 1);
+    ASSERT_EQ(ds.outputs[1].element_count(), 5);
+    EXPECT_FLOAT_EQ(ds.outputs[1].AsFloat()[0], -1.0f);
+    EXPECT_FLOAT_EQ(ds.outputs[1].AsFloat()[1], 1.0f);
+    EXPECT_FLOAT_EQ(ds.outputs[1].AsFloat()[2], 4.0f);
+    EXPECT_FLOAT_EQ(ds.outputs[1].AsFloat()[3], 8.0f);
+    EXPECT_FLOAT_EQ(ds.outputs[1].AsFloat()[4], 13.0f);
+  }
 }
 
 TEST(BackendTestCase, ScanCasesArePresent) {

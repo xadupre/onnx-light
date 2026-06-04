@@ -528,6 +528,16 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          image::ComputeShapeImageDecoder(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:IsInf",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         logical::ComputeShapeIsInf(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:IsNaN",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         logical::ComputeShapeIsNaN(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:Loop",
        [](ShapesContext &ctx, const NodeProto &node) {
          controlflow::ComputeShapeLoop(ctx, node);
@@ -597,6 +607,16 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 2);
          math::ComputeShapeMatMul(ctx, node, node.input(0).as_string().c_str(),
                                   node.input(1).as_string().c_str());
+       }},
+      {"ai.onnx:Max",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeMax(ctx, node);
+       }},
+      {"ai.onnx:Min",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeMin(ctx, node);
        }},
       {"ai.onnx:Optional",
        [](ShapesContext &ctx, const NodeProto &node) {
@@ -809,6 +829,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
          tensor::ComputeShapeShape(ctx, node);
+       }},
+      {"ai.onnx:Identity",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         tensor::ComputeShapeIdentity(ctx, node);
        }},
       {"ai.onnx:RoiAlign",
        [](ShapesContext &ctx, const NodeProto &node) {

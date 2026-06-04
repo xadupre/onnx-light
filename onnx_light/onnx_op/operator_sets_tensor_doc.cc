@@ -460,6 +460,21 @@ std::string MakeShapeTypeConstraintDescription(int since_version) {
   return "Input tensor can be of arbitrary type.";
 }
 
+std::string MakeIdentityDoc(int since_version) {
+  (void)since_version;
+  return "Identity operator";
+}
+
+std::string MakeIdentityTypeConstraintDescription(int since_version) {
+  if (since_version < 14) {
+    return "Constrain input and output types to all tensor types.";
+  }
+  if (since_version < 16) {
+    return "Constrain input and output types to all tensor and sequence types.";
+  }
+  return "Constrain input and output types to all tensor, sequence, and optional types.";
+}
+
 std::string MakeTileDoc(int since_version) {
   (void)since_version;
   return R"DOC(Constructs a tensor by tiling a given tensor.

@@ -112,6 +112,54 @@ std::vector<TensorType> ShapeTypesVer19() {
 // as a separate helper so the GridSample schema reads naturally.
 std::vector<TensorType> GridSampleGridTypesVer22() { return AffineGridFloatTypes(); }
 
+// Helpers for Identity type constraints: append all tensor sequence types
+// (since opset 14) and all optional types (since opset 16) to a base
+// tensor-type set. The ordering matches the upstream schema where the base
+// tensor types are listed first, then sequence types, then optional types.
+std::vector<TensorType> AppendSequenceTypes(std::vector<TensorType> types) {
+  const std::vector<TensorType> seq = AllTensorSequenceTypes();
+  types.insert(types.end(), seq.begin(), seq.end());
+  return types;
+}
+
+std::vector<TensorType> AppendSequenceAndOptionalTypes(std::vector<TensorType> types) {
+  const std::vector<TensorType> seq = AllTensorSequenceTypes();
+  const std::vector<TensorType> opt = AllOptionalTypes();
+  types.insert(types.end(), seq.begin(), seq.end());
+  types.insert(types.end(), opt.begin(), opt.end());
+  return types;
+}
+
+// Identity type sets per opset version (V/T type constraint):
+//   v1  : OpSchema::all_tensor_types()                                       -> AllTensorTypes()
+//   v13 : OpSchema::all_tensor_types_ir4()                                   -> ConcatTypesVer13()
+//   v14 : all_tensor_types_ir4 + sequence
+//   v16 : all_tensor_types_ir4 + sequence + optional
+//   v19 : all_tensor_types_ir9 + sequence + optional
+//   v21 : all_tensor_types_ir10 + sequence + optional
+//   v23 : all_tensor_types_ir11 + sequence + optional
+//   v24 : all_tensor_types_ir12 + sequence + optional
+//   v25 : all_tensor_types_ir13 + sequence + optional
+std::vector<TensorType> IdentityTypesVer14() { return AppendSequenceTypes(ConcatTypesVer13()); }
+std::vector<TensorType> IdentityTypesVer16() {
+  return AppendSequenceAndOptionalTypes(ConcatTypesVer13());
+}
+std::vector<TensorType> IdentityTypesVer19() {
+  return AppendSequenceAndOptionalTypes(ShapeTypesVer19());
+}
+std::vector<TensorType> IdentityTypesVer21() {
+  return AppendSequenceAndOptionalTypes(TransposeTypesVer21());
+}
+std::vector<TensorType> IdentityTypesVer23() {
+  return AppendSequenceAndOptionalTypes(TransposeTypesVer23());
+}
+std::vector<TensorType> IdentityTypesVer24() {
+  return AppendSequenceAndOptionalTypes(TransposeTypesVer24());
+}
+std::vector<TensorType> IdentityTypesVer25() {
+  return AppendSequenceAndOptionalTypes(TransposeTypesVer25());
+}
+
 } // namespace
 
 LightOpSchema MakeAffineGridSchema(int since_version) {
@@ -363,6 +411,21 @@ LightOpSchema MakeReshapeSchema(int since_version, const std::vector<TensorType>
                            {"T", types, "Constrain input and output types to all tensor types."},
                        },
                        std::move(attributes));
+}
+
+LightOpSchema MakeIdentitySchema(int since_version, const std::vector<TensorType> &types) {
+  const std::string type_param = since_version >= 14 ? "V" : "T";
+  return LightOpSchema(
+      "Identity", kOnnxDomain, since_version, MakeIdentityDoc(since_version),
+      {
+          {"input", "Input tensor", type_param},
+      },
+      {
+          {"output", "Tensor to copy input into.", type_param},
+      },
+      {
+          {type_param, types, MakeIdentityTypeConstraintDescription(since_version)},
+      });
 }
 
 LightOpSchema MakeSliceSchema(int since_version, const std::vector<TensorType> &types) {
@@ -1385,6 +1448,20 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
              MakeShapeSchema(23, TransposeTypesVer23()), MakeShapeSchema(21, TransposeTypesVer21()),
              MakeShapeSchema(19, ShapeTypesVer19()),     MakeShapeSchema(15, ConcatTypesVer13()),
              MakeShapeSchema(13, ConcatTypesVer13()),    MakeShapeSchema(1, AllTensorTypes()),
+         };
+       }},
+      {"Identity",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeIdentitySchema(25, IdentityTypesVer25()),
+             MakeIdentitySchema(24, IdentityTypesVer24()),
+             MakeIdentitySchema(23, IdentityTypesVer23()),
+             MakeIdentitySchema(21, IdentityTypesVer21()),
+             MakeIdentitySchema(19, IdentityTypesVer19()),
+             MakeIdentitySchema(16, IdentityTypesVer16()),
+             MakeIdentitySchema(14, IdentityTypesVer14()),
+             MakeIdentitySchema(13, ConcatTypesVer13()),
+             MakeIdentitySchema(1, AllTensorTypes()),
          };
        }},
       {"Slice",

@@ -192,7 +192,7 @@ def _transform_value(arr):
     return arr
 
 
-def _import_python_test_case_modules() -> None:
+def _import_python_test_case_module() -> None:
     from . import if_  # noqa: F401
 
 
@@ -410,7 +410,7 @@ def collect_test_case() -> dict[str, TestCase]:
     # empty ALL_TESTS before collecting
     ALL_TESTS.clear()
 
-    _import_python_test_case_modules()
+    _import_python_test_case_module()
 
     # call all export methods on user-defined Base subclasses so they can
     # register additional Python-only test cases through ``expect``.

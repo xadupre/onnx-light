@@ -426,6 +426,12 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
                                     node.input(1).as_string().c_str(),
                                     node.input(2).as_string().c_str());
        }},
+      {"ai.onnx:Or",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         logical::ComputeShapeOr(ctx, node, node.input(0).as_string().c_str(),
+                                 node.input(1).as_string().c_str());
+       }},
       {"ai.onnx:Xor",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);

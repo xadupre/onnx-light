@@ -1,5 +1,7 @@
 # source: https://github.com/onnx/onnx/blob/main/onnx/test/helper_test.py
+import os
 import random
+import tempfile
 import unittest
 from typing import Any
 import numpy as np
@@ -509,6 +511,96 @@ class TestOnnxLightHelper(ExtTestCase):
             ),
         )
         self.assertIsInstance(m, onnxl.MapProto)
+
+
+class TestAlignExternalDataStreaming(ExtTestCase):
+    @staticmethod
+    def _make_model_with_external(path: str) -> list[np.ndarray]:
+        """Builds and saves a model with three differently-sized FLOAT initializers
+        as external data; returns the per-initializer numpy payloads."""
+        payloads = [
+            np.full((7,), 1.5, dtype=np.float32),   # 28 bytes (unaligned)
+            np.full((3,), -2.0, dtype=np.float32),  # 12 bytes
+            np.full((17,), 3.0, dtype=np.float32),  # 68 bytes
+        ]
+        inits = [
+            oh.make_tensor(
+                name=f"w{i}",
+                data_type=onnxl.TensorProto.FLOAT,
+                dims=arr.shape,
+                vals=arr.tobytes(),
+                raw=True,
+            )
+            for i, arr in enumerate(payloads)
+        ]
+        graph = oh.make_graph([], "g", [], [], initializer=inits)
+        model = oh.make_model(graph, producer_name="test")
+        onnxl.save(model, path, save_as_external_data=True, size_threshold=0)
+        return payloads
+
+    def test_align_external_data_streaming_python_binding(self) -> None:
+        from onnx_light.onnx import align_external_data_streaming
+
+        with tempfile.TemporaryDirectory() as tdir:
+            src_onnx = os.path.join(tdir, "src.onnx")
+            dst_onnx = os.path.join(tdir, "dst.onnx")
+            dst_weights = os.path.join(tdir, "dst.data")
+            payloads = self._make_model_with_external(src_onnx)
+            # Default location used by onnxl.save is "<src_onnx>.data"
+            self.assertTrue(os.path.exists(src_onnx + ".data"))
+
+            alignment = 64
+            # Tiny chunk_size forces multiple iterations of the streaming copy loop.
+            total = align_external_data_streaming(
+                src_onnx_path=src_onnx,
+                dst_onnx_path=dst_onnx,
+                dst_weights_path=dst_weights,
+                alignment=alignment,
+                chunk_size=7,
+            )
+            self.assertIsInstance(total, int)
+            self.assertGreater(total, 0)
+            self.assertEqual(os.path.getsize(dst_weights), total)
+
+            # 1) Inspect rewritten metadata (offsets aligned, location rewritten).
+            metadata = onnxl.load(dst_onnx, load_external_data=False)
+            inits = list(metadata.graph.initializer)
+            self.assertEqual(len(inits), len(payloads))
+            for i, (init, arr) in enumerate(zip(inits, payloads)):
+                self.assertEqual(int(init.data_location), int(onnxl.TensorProto.EXTERNAL))
+                entries = {e.key: e.value for e in init.external_data}
+                self.assertEqual(str(entries["location"]), os.path.basename(dst_weights))
+                offset = int(str(entries["offset"]))
+                length = int(str(entries["length"]))
+                self.assertEqual(offset % alignment, 0)
+                self.assertEqual(length, arr.nbytes)
+
+            # 2) Verify byte-for-byte equality by reading the destination weights file
+            #    at each tensor's recorded offset/length.
+            with open(dst_weights, "rb") as fh:
+                weights_bytes = fh.read()
+            for init, arr in zip(inits, payloads):
+                entries = {e.key: e.value for e in init.external_data}
+                offset = int(str(entries["offset"]))
+                length = int(str(entries["length"]))
+                got = np.frombuffer(weights_bytes[offset : offset + length], dtype=np.float32)
+                np.testing.assert_array_equal(got, arr)
+
+    def test_align_external_data_streaming_default_alignment_arg(self) -> None:
+        from onnx_light.onnx import align_external_data_streaming
+
+        with tempfile.TemporaryDirectory() as tdir:
+            src_onnx = os.path.join(tdir, "src.onnx")
+            dst_onnx = os.path.join(tdir, "dst.onnx")
+            dst_weights = os.path.join(tdir, "dst.data")
+            self._make_model_with_external(src_onnx)
+            # Use default alignment (4096) and default chunk_size.
+            total = align_external_data_streaming(src_onnx, dst_onnx, dst_weights)
+            self.assertGreater(total, 0)
+            metadata = onnxl.load(dst_onnx, load_external_data=False)
+            for init in metadata.graph.initializer:
+                entries = {e.key: e.value for e in init.external_data}
+                self.assertEqual(int(str(entries["offset"])) % 4096, 0)
 
 
 if __name__ == "__main__":

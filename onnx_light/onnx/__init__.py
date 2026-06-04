@@ -38,6 +38,7 @@ from ..onnx_lib import (  # noqa: F401
     compose,
     align_external_data_streaming,
     consolidate_tensors_to_buffer,
+    save_model_with_shared_external_data,
     utils_onnx_read_varint64,
     defs,
     helper,

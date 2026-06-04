@@ -34,6 +34,7 @@ from ..onnx_proto._onnxpy import (  # type: ignore
     IR_VERSION,
     align_external_data_streaming,
     consolidate_tensors_to_buffer,
+    save_model_with_shared_external_data,
     utils_onnx_read_varint64,
 )
 from . import defs

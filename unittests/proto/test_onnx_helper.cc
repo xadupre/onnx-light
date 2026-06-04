@@ -1775,3 +1775,129 @@ TEST(onnx_alignment, AlignExternalDataStreamingRewritesAlignedWeights) {
     std::remove(p.c_str());
   }
 }
+
+// -----------------------------------------------------------------------
+// SaveModelWithSharedExternalData mirrors the AlignExternalDataStreaming test
+// for the "two models" scenario from the upstream issue: a first model is
+// saved with external data, then loaded without it; a second model reuses
+// those external initializers and adds new ones, and is saved through this
+// function — the new external file must only contain the new weights, the
+// reused ones must keep referencing the first model's file.
+// -----------------------------------------------------------------------
+TEST(onnx_alignment, SaveModelWithSharedExternalDataReusesFirstModelWeights) {
+  namespace fs = std::filesystem;
+
+  // ---- 1) Build the first model with two external initializers.
+  ModelProto first;
+  GraphProto *g1 = first.add_graph();
+  g1->set_name("g1");
+  const std::vector<std::vector<float>> first_payloads = {
+      std::vector<float>(7, 1.5f),   // 28 bytes
+      std::vector<float>(11, -2.0f), // 44 bytes
+  };
+  for (size_t i = 0; i < first_payloads.size(); ++i) {
+    TensorProto *t = g1->add_initializer();
+    t->set_name(std::string("a") + std::to_string(i));
+    t->set_data_type(TensorProto::DataType::FLOAT);
+    t->ref_dims().push_back(static_cast<int64_t>(first_payloads[i].size()));
+    t->ref_raw_data().resize(first_payloads[i].size() * sizeof(float));
+    std::memcpy(t->ref_raw_data().data(), first_payloads[i].data(),
+                first_payloads[i].size() * sizeof(float));
+  }
+
+  const std::string src_onnx = "share_weights_src.onnx";
+  const std::string src_weights = "share_weights_src.data";
+  const std::string dst_onnx = "share_weights_dst.onnx";
+  const std::string dst_weights = "share_weights_dst.data";
+  for (const auto &p : {src_onnx, src_weights, dst_onnx, dst_weights}) {
+    std::remove(p.c_str());
+  }
+  {
+    utils::TwoFilesWriteStream wstream(src_onnx, src_weights);
+    SerializeOptions sopts;
+    sopts.raw_data_threshold = 0;
+    SerializeProtoToStream(first, wstream, sopts);
+  }
+  ASSERT_TRUE(fs::exists(src_onnx));
+  ASSERT_TRUE(fs::exists(src_weights));
+
+  // ---- 2) Re-parse the first model without loading external data (so its
+  // initializers keep external_data entries with location='share_weights_src.data').
+  ModelProto first_meta;
+  {
+    utils::FileStream rstream(src_onnx);
+    ParseOptions ropts;
+    ropts.skip_raw_data = true;
+    ropts.raw_data_threshold = 0;
+    ParseModelProtoFromStream(first_meta, rstream, ropts, /*clear_external_data=*/false);
+  }
+
+  // ---- 3) Build the second model: reuse first's two initializers and add a new one.
+  ModelProto second;
+  GraphProto *g2 = second.add_graph();
+  g2->set_name("g2");
+  for (size_t i = 0; i < first_meta.ref_graph().ref_initializer().size(); ++i) {
+    TensorProto *t = g2->add_initializer();
+    *t = first_meta.ref_graph().ref_initializer()[i];
+  }
+  std::vector<float> new_payload(5, 7.0f); // 20 bytes
+  {
+    TensorProto *t = g2->add_initializer();
+    t->set_name("n0");
+    t->set_data_type(TensorProto::DataType::FLOAT);
+    t->ref_dims().push_back(static_cast<int64_t>(new_payload.size()));
+    t->ref_raw_data().resize(new_payload.size() * sizeof(float));
+    std::memcpy(t->ref_raw_data().data(), new_payload.data(), new_payload.size() * sizeof(float));
+  }
+
+  // ---- 4) Save with shared weights.
+  constexpr int64_t alignment = 64;
+  const auto src_size_before = fs::file_size(src_weights);
+  const offset_t total =
+      SaveModelWithSharedExternalData(src_onnx, second, dst_onnx, dst_weights, alignment);
+  EXPECT_EQ(total, static_cast<offset_t>(new_payload.size() * sizeof(float))); // 20 bytes only
+  ASSERT_TRUE(fs::exists(dst_weights));
+  EXPECT_EQ(static_cast<offset_t>(fs::file_size(dst_weights)), total);
+  // First weights file is untouched.
+  EXPECT_EQ(fs::file_size(src_weights), src_size_before);
+
+  // ---- 5) Inspect the rewritten metadata.
+  ModelProto meta;
+  {
+    utils::FileStream meta_stream(dst_onnx);
+    ParseOptions meta_opts;
+    ParseProtoFromStream(meta, meta_stream, meta_opts, /*clear_external_data=*/false);
+  }
+  ASSERT_EQ(meta.ref_graph().ref_initializer().size(), 3);
+  for (int i = 0; i < meta.ref_graph().ref_initializer().size(); ++i) {
+    const TensorProto &t = meta.ref_graph().ref_initializer()[i];
+    ASSERT_TRUE(t.has_data_location());
+    ASSERT_EQ(t.ref_data_location(), TensorProto::DataLocation::EXTERNAL);
+    std::string loc;
+    int64_t off = -1;
+    int64_t len = -1;
+    for (int j = 0; j < t.ref_external_data().size(); ++j) {
+      const StringStringEntryProto &e = t.ref_external_data()[j];
+      if (e.ref_key() == "location")
+        loc = e.ref_value().as_string();
+      else if (e.ref_key() == "offset")
+        off = std::stoll(e.ref_value().as_string());
+      else if (e.ref_key() == "length" || e.ref_key() == "size")
+        len = std::stoll(e.ref_value().as_string());
+    }
+    if (t.ref_name().as_string()[0] == 'a') {
+      // Reused — must still reference the first model's weights file.
+      EXPECT_EQ(loc, src_weights);
+    } else {
+      // New — written into dst_weights at an aligned offset.
+      EXPECT_EQ(loc, dst_weights);
+      ASSERT_GE(off, 0);
+      EXPECT_EQ(off % alignment, 0);
+      EXPECT_EQ(len, static_cast<int64_t>(new_payload.size() * sizeof(float)));
+    }
+  }
+
+  for (const auto &p : {src_onnx, src_weights, dst_onnx, dst_weights}) {
+    std::remove(p.c_str());
+  }
+}

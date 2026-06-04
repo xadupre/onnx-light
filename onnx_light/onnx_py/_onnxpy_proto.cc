@@ -812,6 +812,50 @@ afford to load the full model in memory.
 :return: Total bytes written to ``dst_weights_path`` (including padding).
 )pbdoc");
 
+  m.def(
+      "save_model_with_shared_external_data",
+      [](const std::string &src_onnx_path, ModelProto &model, const std::string &dst_onnx_path,
+         const std::string &dst_weights_path, int64_t alignment) -> int64_t {
+        return static_cast<int64_t>(SaveModelWithSharedExternalData(
+            src_onnx_path, model, dst_onnx_path, dst_weights_path, alignment));
+      },
+      nb::arg("src_onnx_path"), nb::arg("model"), nb::arg("dst_onnx_path"),
+      nb::arg("dst_weights_path"), nb::arg("alignment") = 4096,
+      R"pbdoc(Saves a second model while reusing the weights of a first model.
+
+This is the companion of :func:`align_external_data_streaming` for the scenario
+where a first model has already been written to ``src_onnx_path`` (plus its
+external weights file(s)) and then loaded **without** external data, and a
+second model is built from it: some of its initializers reuse the first model's
+external tensors (so they still carry the original ``external_data`` entries)
+and new initializers are added with inline ``raw_data``.
+
+Calling this function saves the second model to ``dst_onnx_path`` such that:
+
+* Reused initializers keep pointing at the first model's weights file: only
+  their ``external_data.location`` is rewritten so that it remains valid
+  relative to ``dst_onnx_path``'s parent directory.  No byte is copied from
+  those files.
+* New initializers are streamed to ``dst_weights_path`` at aligned offsets, and
+  their ``external_data`` entries are updated in place to point at this new
+  file.  ``dst_weights_path`` therefore contains *only* the new weights.
+
+:param src_onnx_path: Path of the first model's ``.onnx`` file.  Used to
+    resolve the (possibly relative) ``external_data.location`` of the reused
+    initializers when computing their new location relative to
+    ``dst_onnx_path``'s parent directory.
+:param model: Second model, mutated in place.  After the call, all its inline
+    ``raw_data`` initializers reference ``dst_weights_path`` instead.
+:param dst_onnx_path: Destination ``.onnx`` file (created/truncated).
+:param dst_weights_path: Destination weights file for the new initializers
+    (created/truncated; left as a zero-byte file when the second model has no
+    new inline weights).
+:param alignment: Alignment in bytes (power of two, >= 1) applied to each new
+    tensor's offset in ``dst_weights_path``.  Defaults to 4096.
+:return: Total bytes written to ``dst_weights_path`` (including padding;
+    ``0`` when no new initializer needed to be written).
+)pbdoc");
+
   nb::class_<utils::PrintOptions>(m, "PrintOptions", "Printing options for proto classes")
       .def(nb::init<>())
       .def_rw("skip_raw_data", &utils::PrintOptions::skip_raw_data,

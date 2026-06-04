@@ -80,6 +80,9 @@ void RegisterUnsqueezeCases(std::vector<TestCase> &registry);
 /// Registers the ``NonZero`` backend test node case(s).
 void RegisterNonZeroCases(std::vector<TestCase> &registry);
 
+/// Registers the ``OneHot`` backend test node case(s).
+void RegisterOneHotCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Unique`` backend test node case(s).
 void RegisterUniqueCases(std::vector<TestCase> &registry);
 

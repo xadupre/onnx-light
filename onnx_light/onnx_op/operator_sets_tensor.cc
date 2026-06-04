@@ -686,6 +686,78 @@ LightOpSchema MakeNonZeroSchema(int since_version, const std::vector<TensorType>
                        });
 }
 
+LightOpSchema MakeOneHotSchema(int since_version, const std::vector<TensorType> &indices_types,
+                               const std::vector<TensorType> &depth_types,
+                               const std::vector<TensorType> &values_types) {
+  const std::string indices_doc =
+      since_version >= 11
+          ? std::string(
+                "Input tensor containing indices. Any entries in the 'indices' input tensor with "
+                "values outside the range [-depth, depth-1] will result in one-hot representation "
+                "with all 'off_value' values in the output tensor."
+                "In case 'indices' is of non-integer type, the values will be casted to int64 "
+                "before use.")
+          : std::string(
+                "Input tensor containing indices. The values must be non-negative integers. "
+                "Any entries in the 'indices' input tensor with values outside the range "
+                "[0, depth) will result in one-hot representation with all 'off_value' values in "
+                "the output tensor."
+                "In case 'indices' is of non-integer type, the values will be casted to int64 "
+                "before use.");
+  const std::string depth_doc =
+      since_version >= 11
+          ? std::string(
+                "Scalar or Rank 1 tensor containing exactly one element, specifying the number "
+                "of classes in one-hot tensor. This is also the size of the one-hot dimension "
+                "(specified by 'axis' attribute) added on in the output tensor. The values in "
+                "the 'indices' input tensor are expected to be in the range [-depth, depth-1]. "
+                "In case 'depth' is of non-integer type, it will be casted to int64 before use.")
+          : std::string(
+                "Scalar or rank 1 tensor containing exactly one element, specifying the number "
+                "of classes in one-hot tensor. This is also the size of the one-hot dimension "
+                "(specified by 'axis' attribute) added on in the output tensor. The values in "
+                "the 'indices' input tensor are expected to be in the range [0, depth). "
+                "In case 'depth' is of non-integer type, it will be casted to int64 before use.");
+  const std::string axis_doc =
+      since_version >= 11
+          ? std::string(
+                "(Optional) Axis along which one-hot representation in added. Default: axis=-1. "
+                "axis=-1 means that the additional dimension will be inserted as the "
+                "innermost/last dimension in the output tensor. Negative value means counting "
+                "dimensions from the back. Accepted range is [-r-1, r] where r = rank(indices).")
+          : std::string(
+                "(Optional) Axis along which one-hot representation in added. Default: axis=-1. "
+                "axis=-1 means that the additional dimension will be inserted as the "
+                "innermost/last dimension in the output tensor.");
+  return LightOpSchema(
+      "OneHot", kOnnxDomain, since_version, MakeOneHotDoc(since_version),
+      {
+          {"indices", indices_doc, "T1"},
+          {"depth", depth_doc, "T2"},
+          {"values",
+           "Rank 1 tensor containing exactly two elements, in the format [off_value, on_value], "
+           "where 'on_value' is the value used for filling locations specified in 'indices' input "
+           "tensor, and 'off_value' is the value used for filling locations other than those "
+           "specified in 'indices' input tensor. ",
+           "T3"},
+      },
+      {
+          {"output",
+           "Tensor of rank one greater than input tensor 'indices', i.e. rank(output) = "
+           "rank(indices) + 1. The data type for the elements of the output tensor is the same "
+           "as the type of input 'values' is used.",
+           "T3"},
+      },
+      {
+          {"T1", indices_types, MakeOneHotIndicesTypeConstraintDescription(since_version)},
+          {"T2", depth_types, MakeOneHotDepthTypeConstraintDescription(since_version)},
+          {"T3", values_types, MakeOneHotValuesTypeConstraintDescription(since_version)},
+      },
+      {
+          {"axis", axis_doc, AttributeType::INT, /*required=*/false, static_cast<int64_t>(-1)},
+      });
+}
+
 LightOpSchema MakeUniqueSchema(int since_version, const std::vector<TensorType> &types) {
   LightOpSchema schema(
       "Unique", kOnnxDomain, since_version, MakeUniqueDoc(since_version),
@@ -1706,6 +1778,13 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
          return std::vector<LightOpSchema>{
              MakeNonZeroSchema(13, ConcatTypesVer13()),
              MakeNonZeroSchema(9, AllTensorTypes()),
+         };
+       }},
+      {"OneHot",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeOneHotSchema(11, AllNumericTypes(), AllNumericTypes(), AllTensorTypes()),
+             MakeOneHotSchema(9, AllNumericTypes(), AllNumericTypes(), AllTensorTypes()),
          };
        }},
       {"Transpose",

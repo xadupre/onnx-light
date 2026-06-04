@@ -8,6 +8,7 @@
 
 #include <gtest/gtest.h>
 
+#include <optional>
 #include <stdexcept>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -2123,6 +2124,104 @@ TEST(OnnxOptimShapesTensorTensorScatter, RejectsWrongOpType) {
                                                                    onnx_optim::OptimDim(5)}));
   EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeTensorScatter(ctx, node),
                std::invalid_argument);
+}
+
+// ---------------------------------------------------------------------------
+// OneHot shape-inference tests
+// ---------------------------------------------------------------------------
+
+namespace {
+
+NodeProto MakeOneHotNode(bool set_axis = false, int64_t axis = -1) {
+  NodeProto node;
+  node.set_op_type("OneHot");
+  node.add_input("indices");
+  node.add_input("depth");
+  node.add_input("values");
+  node.add_output("Y");
+  if (set_axis) {
+    AttributeProto *attr = node.add_attribute();
+    attr->set_name("axis");
+    attr->set_type(AttributeProto::INT);
+    attr->set_i(axis);
+  }
+  return node;
+}
+
+void SeedOneHotInputs(onnx_optim::shapes::ShapesContext &ctx,
+                      const onnx_optim::OptimShape &indices_shape,
+                      onnx_optim::TensorType values_dtype, std::optional<int64_t> depth_value) {
+  ctx.Set("indices",
+          onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64, indices_shape));
+  onnx_optim::OptimTensor depth(nullptr, onnx_optim::TensorType::kInt64, onnx_optim::OptimShape{});
+  if (depth_value.has_value()) {
+    depth.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(*depth_value)});
+  }
+  ctx.Set("depth", std::move(depth));
+  ctx.Set("values", onnx_optim::OptimTensor(nullptr, values_dtype,
+                                            onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesTensorOneHot, AppendsDepthDimWithDefaultAxis) {
+  NodeProto node = MakeOneHotNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedOneHotInputs(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)},
+                   onnx_optim::TensorType::kFloat, /*depth_value=*/5);
+
+  onnx_optim::shapes::tensor::ComputeShapeOneHot(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3),
+                                    onnx_optim::OptimDim(5)}));
+}
+
+TEST(OnnxOptimShapesTensorOneHot, InsertsDepthAtExplicitAxis) {
+  NodeProto node = MakeOneHotNode(/*set_axis=*/true, /*axis=*/1);
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedOneHotInputs(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(2)},
+                   onnx_optim::TensorType::kInt32, /*depth_value=*/10);
+
+  onnx_optim::shapes::tensor::ComputeShapeOneHot(ctx, node);
+
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kInt32);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(10),
+                                    onnx_optim::OptimDim(2)}));
+}
+
+TEST(OnnxOptimShapesTensorOneHot, UsesSymbolicDimWhenDepthUnknown) {
+  NodeProto node = MakeOneHotNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedOneHotInputs(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(3)},
+                   onnx_optim::TensorType::kFloat, /*depth_value=*/std::nullopt);
+
+  onnx_optim::shapes::tensor::ComputeShapeOneHot(ctx, node);
+
+  const auto &out = ctx.Get("Y").Shape();
+  ASSERT_EQ(out.Rank(), 2u);
+  EXPECT_EQ(out[0], onnx_optim::OptimDim(3));
+  EXPECT_TRUE(out[1].IsExpr());
+}
+
+TEST(OnnxOptimShapesTensorOneHot, RejectsAxisOutOfRange) {
+  NodeProto node = MakeOneHotNode(/*set_axis=*/true, /*axis=*/5);
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedOneHotInputs(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(2)},
+                   onnx_optim::TensorType::kFloat, /*depth_value=*/3);
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeOneHot(ctx, node), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesTensorOneHot, RejectsWrongOpType) {
+  NodeProto node = MakeOneHotNode();
+  node.set_op_type("NotOneHot");
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedOneHotInputs(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(2)},
+                   onnx_optim::TensorType::kFloat, /*depth_value=*/3);
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeOneHot(ctx, node), std::invalid_argument);
 }
 
 } // namespace Test

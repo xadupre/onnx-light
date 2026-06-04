@@ -850,6 +850,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          tensor::ComputeShapeNonZero(ctx, node);
        }},
+      {"ai.onnx:OneHot",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 3);
+         tensor::ComputeShapeOneHot(ctx, node);
+       }},
       {"ai.onnx:Unique",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

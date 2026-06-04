@@ -48,6 +48,13 @@ void RegisterNonZeroChainAnonShapeInferenceCases(std::vector<TestCase> &registry
 /// Cast`` case with named output value-info dimensions.
 void RegisterNonZeroChainNamedShapeInferenceCases(std::vector<TestCase> &registry);
 
+/// Registers a multi-node ``Shape → Identity → Unsqueeze`` case that
+/// exercises shape-data propagation through ``Shape``/``Identity`` and the
+/// INT64 ``axes`` initializer path of ``Unsqueeze``. Mirrors the upstream
+/// onnxruntime regression model from
+/// https://github.com/microsoft/onnxruntime/pull/28778.
+void RegisterShapeIdentityUnsqueezeShapeInferenceCases(std::vector<TestCase> &registry);
+
 /// Collects all shape-inference oriented backend test cases by invoking
 /// every ``Register*ShapeInferenceCases`` helper declared in this header.
 void CollectShapeInferenceTestCases(std::vector<TestCase> &registry,

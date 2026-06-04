@@ -95,6 +95,21 @@ def _principal_op(tc: TestCase) -> tuple[str, str]:
     return ("", "")
 
 
+# Test cases that are known to abort (SIGABRT / exit) ``onnxruntime`` rather
+# than raise a catchable Python exception. They are skipped here so the
+# coverage report can still be computed; the cases remain fully exercised by
+# the reference backend and by the C++ shape-inference tests.
+#   * ``test_cc_shape_inference_shape_identity_unsqueeze`` — exercises the
+#     in-memory INT64 initializer path in
+#     ``Graph::SaveShapeValuesFromDataPropagation``. ORT versions predating
+#     microsoft/onnxruntime#28778 abort while loading the model.
+_ORT_SKIP_CASES = frozenset(
+    {
+        "test_cc_shape_inference_shape_identity_unsqueeze",
+    }
+)
+
+
 def _run_onnxruntime(tc: TestCase) -> tuple[float | None, str | None]:
     """Runs ``tc.model`` with onnxruntime CPU and returns ``(max_diff, error)``.
 
@@ -110,6 +125,9 @@ def _run_onnxruntime(tc: TestCase) -> tuple[float | None, str | None]:
 
     if tc.model is None:
         return (None, "no model")
+
+    if tc.name in _ORT_SKIP_CASES:
+        return (None, "skipped: known to abort onnxruntime (see microsoft/onnxruntime#28778)")
 
     try:
         sess = ort.InferenceSession(

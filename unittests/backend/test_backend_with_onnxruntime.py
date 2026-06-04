@@ -190,6 +190,12 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     — ORT has no CPU kernel for ``Pow(13)`` with ``uint32``/``uint64``
 #     exponent inputs ("Could not find an implementation for Pow(13) node").
 #     The reference backend still exercises these mixed-type coverage cases.
+#   * ``test_cc_shape_inference_shape_identity_unsqueeze`` — model
+#     intentionally exercises the in-memory INT64 initializer path in
+#     ``Graph::SaveShapeValuesFromDataPropagation`` (the regression scenario
+#     fixed by microsoft/onnxruntime#28778). ORT versions on the macOS /
+#     Windows CI runners predate that fix and abort on the model during
+#     graph re-resolution. The reference backend still exercises this case.
 #   * ``test_max_int16``, ``test_max_uint16``, ``test_min_int16`` and
 #     ``test_min_uint16`` — ORT has no CPU kernel for ``Max(13)`` /
 #     ``Min(13)`` with ``int16``/``uint16`` inputs ("Could not find an
@@ -275,6 +281,7 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_prelu_inf$",
     r"^test_pow_types_float32_uint32$",
     r"^test_pow_types_float32_uint64$",
+    r"^test_cc_shape_inference_shape_identity_unsqueeze$",
     r"^test_max_int16$",
     r"^test_max_uint16$",
     r"^test_min_int16$",

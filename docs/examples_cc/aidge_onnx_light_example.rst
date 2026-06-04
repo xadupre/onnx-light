@@ -89,7 +89,7 @@ Example output without Aidge:
       Inputs           : 1
       Outputs          : 1
       Initializers     : 0
-    Re-serialized with onnx-light: path/to/model.onnx.onnxlight.tmp
+    Re-serialized with onnx-light: path/to/model.onnx.onnxlight.12345.tmp
       Save time (ms)   : 0.079
     Aidge integration disabled at build time (rebuild with the Eclipse Aidge
     CMake packages on CMAKE_PREFIX_PATH to enable it).

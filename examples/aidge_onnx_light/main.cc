@@ -30,6 +30,14 @@
 #include <string>
 #include <utility>
 
+#ifdef _WIN32
+#include <process.h>
+#define AIDGE_ONNX_LIGHT_GETPID _getpid
+#else
+#include <unistd.h>
+#define AIDGE_ONNX_LIGHT_GETPID getpid
+#endif
+
 #ifdef AIDGE_ONNX_LIGHT_HAS_AIDGE
 #include <aidge/graph/GraphView.hpp>
 #include <aidge/onnx/ONNX.hpp>
@@ -119,7 +127,7 @@ int main(int argc, char *argv[]) {
   bool temporary_output = (argc < 3);
   if (temporary_output) {
     output_path = std::filesystem::path(input_path);
-    output_path += ".onnxlight.tmp";
+    output_path += ".onnxlight." + std::to_string(AIDGE_ONNX_LIGHT_GETPID()) + ".tmp";
   } else {
     output_path = argv[2];
   }

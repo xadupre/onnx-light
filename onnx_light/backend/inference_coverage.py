@@ -220,6 +220,8 @@ def compute_inference_coverage() -> InferenceCoverageReport:
 
     for tc in _iter_inference_cases():
         original = tc.model
+        if original is None:  # pragma: no cover - defensive
+            continue
         try:
             mermaid = to_mermaid(original)
         except Exception as exc:  # pragma: no cover - defensive only

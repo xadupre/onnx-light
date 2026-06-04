@@ -687,6 +687,22 @@ public:
   /// See :class:`Max`.
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
+
+/// Element-wise mean of a list of tensors with NumPy-style (multidirectional)
+/// broadcasting. At least one input is required. All inputs must share the
+/// same float dtype (FLOAT or DOUBLE); the output has the broadcast shape of
+/// all inputs and the same dtype. The result is the element-wise sum of all
+/// inputs divided by the number of inputs.
+class Mean : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const std::vector<Tensor> &inputs) const;
+  void operator()(const std::vector<Tensor> &inputs, Tensor &output) const;
+
+  /// Variadic element-wise kernel: the output buffer may alias an input
+  /// buffer when that input is not broadcast-expanded.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
 /// INT32 or INT64 tensor whose value selects the dimension along which the
 /// cumulative sum is computed (negative values count from the back). The
 /// ``exclusive`` flag, when true, excludes the current element from each

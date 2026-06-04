@@ -149,6 +149,9 @@ void RegisterMaxCases(std::vector<TestCase> &registry);
 /// Registers the ``Min`` backend test node case(s).
 void RegisterMinCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Mean`` backend test node case(s).
+void RegisterMeanCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Log`` backend test node case(s).
 void RegisterLogCases(std::vector<TestCase> &registry);
 

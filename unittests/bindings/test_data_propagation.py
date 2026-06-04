@@ -78,9 +78,9 @@ class TestDataPropagation(ExtTestCase):
         self._assert_shape(y_type, [3, 4, 5], onnxl.TensorProto.INT32)
 
     def test_unsqueeze_inmemory_int64_axes(self) -> None:
-        """Regression test mirroring microsoft/onnxruntime#28778: shape inference
-        on ``Shape -> Identity -> Unsqueeze(axes=INT64 initializer)`` must complete
-        without overrun and propagate the expected output shape.
+        """Checks that shape inference on ``Shape -> Identity -> Unsqueeze(axes=INT64
+        initializer)`` completes without overrun and propagates the expected output
+        shape (regression test mirroring microsoft/onnxruntime#28778).
         """
         axis_count = 16
         input_tensor = oh.make_tensor_value_info(

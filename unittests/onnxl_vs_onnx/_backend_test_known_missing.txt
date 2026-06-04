@@ -384,17 +384,10 @@ hannwindow_symmetric_expanded
 hardmax_axis_0
 hardmax_axis_1
 hardmax_axis_2
-hardmax_default_axis
-hardmax_example
-hardmax_negative_axis
 hardmax_one_hot
-hardsigmoid
-hardsigmoid_default
 hardsigmoid_default_expanded_ver18
-hardsigmoid_example
 hardsigmoid_example_expanded_ver18
 hardsigmoid_expanded_ver18
-hardswish
 hardswish_expanded
 identity_opt
 identity_sequence

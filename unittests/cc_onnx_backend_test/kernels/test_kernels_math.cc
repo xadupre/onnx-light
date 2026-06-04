@@ -37,6 +37,9 @@ using onnx_backend_test::kernel::Exp;
 using onnx_backend_test::kernel::Floor;
 using onnx_backend_test::kernel::HammingWindow;
 using onnx_backend_test::kernel::HannWindow;
+using onnx_backend_test::kernel::Hardmax;
+using onnx_backend_test::kernel::HardSigmoid;
+using onnx_backend_test::kernel::HardSwish;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::Log;
 using onnx_backend_test::kernel::MatMul;
@@ -318,6 +321,68 @@ TEST(BackendKernelClass, SoftsignClassMatchesReference) {
   EXPECT_NEAR(py[1], -0.5f, 1e-6f);
   EXPECT_NEAR(py[2], 0.0f, 1e-6f);
   EXPECT_NEAR(py[3], 0.8f, 1e-6f);
+}
+
+TEST(BackendKernelClass, HardSigmoidClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(22)};
+  HardSigmoid hard_sigmoid_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {5}, {-3.0f, -1.0f, 0.0f, 1.0f, 3.0f});
+  // alpha = 0.5, beta = 0.6 -> y = max(0, min(1, 0.5*x + 0.6))
+  Tensor y = hard_sigmoid_kernel(x, 0.5f, 0.6f);
+  ASSERT_EQ(y.element_count(), 5);
+  const float *py = y.AsFloat();
+  EXPECT_NEAR(py[0], 0.0f, 1e-6f);
+  EXPECT_NEAR(py[1], 0.1f, 1e-6f);
+  EXPECT_NEAR(py[2], 0.6f, 1e-6f);
+  EXPECT_NEAR(py[3], 1.0f, 1e-6f);
+  EXPECT_NEAR(py[4], 1.0f, 1e-6f);
+}
+
+TEST(BackendKernelClass, HardSwishClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(22)};
+  HardSwish hard_swish_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {4}, {-4.0f, 0.0f, 1.0f, 4.0f});
+  Tensor y = hard_swish_kernel(x);
+  ASSERT_EQ(y.element_count(), 4);
+  const float *py = y.AsFloat();
+  // y = x * max(0, min(1, x/6 + 0.5))
+  EXPECT_NEAR(py[0], 0.0f, 1e-6f);                        // x=-4 -> hs=max(0,-1/6) = 0
+  EXPECT_NEAR(py[1], 0.0f, 1e-6f);                        // x=0 -> hs=0.5, x*hs=0
+  EXPECT_NEAR(py[2], 1.0f * (1.0f / 6.0f + 0.5f), 1e-6f); // x=1 -> hs = 2/3
+  EXPECT_NEAR(py[3], 4.0f, 1e-6f);                        // x=4 -> hs = min(1, 7/6) = 1
+}
+
+TEST(BackendKernelClass, HardmaxClassWritesOneHotAlongAxis) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Hardmax hardmax_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 1.0f, -1.0f});
+  // axis = 1 -> max along columns of each row.
+  Tensor y = hardmax_kernel(x, 1);
+  ASSERT_EQ(y.element_count(), 6);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 0.0f);
+  EXPECT_FLOAT_EQ(py[1], 0.0f);
+  EXPECT_FLOAT_EQ(py[2], 1.0f);
+  EXPECT_FLOAT_EQ(py[3], 1.0f);
+  EXPECT_FLOAT_EQ(py[4], 0.0f);
+  EXPECT_FLOAT_EQ(py[5], 0.0f);
+}
+
+TEST(BackendKernelClass, HardmaxClassPicksFirstMaxOnTies) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Hardmax hardmax_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {1, 4}, {1.0f, 3.0f, 3.0f, 2.0f});
+  Tensor y = hardmax_kernel(x, -1);
+  ASSERT_EQ(y.element_count(), 4);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 0.0f);
+  EXPECT_FLOAT_EQ(py[1], 1.0f); // first occurrence of max wins
+  EXPECT_FLOAT_EQ(py[2], 0.0f);
+  EXPECT_FLOAT_EQ(py[3], 0.0f);
 }
 
 TEST(BackendKernelClass, DetClassComputesScalarFor2DInput) {

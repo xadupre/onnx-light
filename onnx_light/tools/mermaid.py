@@ -99,7 +99,7 @@ def _format_shape(type_proto: Any) -> str:
 
     # TensorType
     tensor_type = getattr(type_proto, "tensor_type", None)
-    if tensor_type is not None and getattr(tensor_type, "elem_type", 0):
+    if tensor_type is not None and getattr(tensor_type, "elem_type", None):
         dtype = _dtype_name(int(tensor_type.elem_type))
         shape = _format_tensor_shape(getattr(tensor_type, "shape", None))
         return f"{dtype}[{shape}]" if shape else dtype
@@ -118,7 +118,7 @@ def _format_shape(type_proto: Any) -> str:
 
     # MapType
     map_type = getattr(type_proto, "map_type", None)
-    if map_type is not None and getattr(map_type, "key_type", 0):
+    if map_type is not None and getattr(map_type, "key_type", None):
         key = _dtype_name(int(map_type.key_type))
         value = _format_shape(getattr(map_type, "value_type", None))
         return f"map({key}, {value})" if value else f"map({key})"

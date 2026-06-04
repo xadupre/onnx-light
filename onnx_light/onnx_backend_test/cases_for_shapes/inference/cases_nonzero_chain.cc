@@ -22,10 +22,13 @@ namespace {
 constexpr int64_t kDefaultIrVersion = 10;
 
 // Describes how the graph outputs (``nz`` and ``nz_float``) should be
-// annotated in the model's ValueInfo. ``kNamedDims`` reuses the symbolic
-// names from the ``plot_computed_shapes`` page (rank/nnz on ``nz`` and
-// do1/do2 on ``nz_float``); ``kAnonymousDims`` leaves both dimensions
-// without a name so that shape inference must derive them.
+// annotated in the model's ValueInfo. Both variants use the symbolic
+// names from the ``plot_computed_shapes`` page (``nnz`` on ``nz`` and
+// ``do1`` on ``nz_float``); they currently produce identical models and
+// are kept as separate registered cases for parity with the
+// gallery-page distinction. Neither variant uses default-constructed
+// ``DimSpec()`` — every dim carries either a ``dim_value`` or a
+// ``dim_param``.
 enum class NonZeroOutputAnnotation { kAnonymousDims, kNamedDims };
 
 // Builds the shared 7-node ``Abs → Relu → Add → Mul → NonZero → Transpose
@@ -103,8 +106,9 @@ void RegisterNonZeroChainCase(const std::string &name, NonZeroOutputAnnotation a
 
   // Graph outputs: nz and nz_float. The rank dimension is always known
   // (equal to the input rank, 2), so it is declared with ``dim_value=2``.
-  // The data-dependent ``nnz`` dimension stays symbolic — either named
-  // (``"nnz"``/``"do1"``) or anonymous (no dim_param/dim_value).
+  // The data-dependent ``nnz`` dimension stays symbolic with a named
+  // dim_param (``"nnz"`` on ``nz`` / ``"do1"`` on ``nz_float`` and
+  // ``transposed_nz``) — never a default-constructed ``DimSpec()``.
   //
   // Intermediate value_info for ``nz`` would collide with the graph output of
   // the same name, so it is omitted. ``transposed_nz`` is a pure intermediate
@@ -115,9 +119,10 @@ void RegisterNonZeroChainCase(const std::string &name, NonZeroOutputAnnotation a
     AppendValueInfo(*graph->add_output(), "nz", kInt64, {DimSpec(2), DimSpec("nnz")});
     AppendValueInfo(*graph->add_output(), "nz_float", kFloat, {DimSpec("do1"), DimSpec(2)});
   } else {
-    AppendValueInfo(*graph->add_value_info(), "transposed_nz", kInt64, {DimSpec(), DimSpec(2)});
-    AppendValueInfo(*graph->add_output(), "nz", kInt64, {DimSpec(2), DimSpec()});
-    AppendValueInfo(*graph->add_output(), "nz_float", kFloat, {DimSpec(), DimSpec(2)});
+    AppendValueInfo(*graph->add_value_info(), "transposed_nz", kInt64,
+                    {DimSpec("do1"), DimSpec(2)});
+    AppendValueInfo(*graph->add_output(), "nz", kInt64, {DimSpec(2), DimSpec("nnz")});
+    AppendValueInfo(*graph->add_output(), "nz_float", kFloat, {DimSpec("do1"), DimSpec(2)});
   }
 
   // Provide a concrete DataSet so the case is executable end-to-end.

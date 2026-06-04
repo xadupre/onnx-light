@@ -1301,6 +1301,140 @@ LightOpSchema MakeCol2ImSchema(int since_version) {
       });
 }
 
+// --- InstanceNormalization --------------------------------------------------
+
+const char *const kInstanceNormalizationXDescVer1 = "The input 4-dimensional tensor of shape NCHW.";
+
+const char *const kInstanceNormalizationXDescVer6 =
+    "Input data tensor from the previous operator; "
+    "dimensions for image case are (N x C x H x W), "
+    "where N is the batch size, C is the number of "
+    "channels, and H and W are the height and the "
+    "width of the data. For non image case, the "
+    "dimensions are in the form of "
+    "(N x C x D1 x D2 ... Dn), where N is the batch "
+    "size.";
+
+const char *const kInstanceNormalizationScaleDesc =
+    "The input 1-dimensional scale tensor of size C.";
+
+const char *const kInstanceNormalizationBiasDesc = "The input 1-dimensional bias tensor of size C.";
+
+const char *const kInstanceNormalizationYDescVer1 =
+    "The output 4-dimensional tensor of the same shape as input.";
+
+const char *const kInstanceNormalizationYDescVer6 = "The output tensor of the same shape as input.";
+
+const char *const kInstanceNormalizationTConstraintDesc =
+    "Constrain input and output types to float tensors.";
+
+std::vector<TensorType> InstanceNormalizationFloatTypes(int since_version) {
+  if (since_version >= 22) {
+    return {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+  }
+  return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+}
+
+LightOpSchema MakeInstanceNormalizationSchema(int since_version) {
+  std::vector<AttributeParam> attrs;
+  if (since_version == 1) {
+    attrs.push_back(AttributeParam{"consumed_inputs", "legacy optimization attribute.",
+                                   AttributeType::INTS, /*required=*/false, std::monostate{}});
+  }
+  attrs.push_back(AttributeParam{"epsilon", "The epsilon value to use to avoid division by zero.",
+                                 AttributeType::FLOAT, /*required=*/false,
+                                 static_cast<double>(1e-5f)});
+
+  const char *x_desc =
+      since_version == 1 ? kInstanceNormalizationXDescVer1 : kInstanceNormalizationXDescVer6;
+  const char *y_desc =
+      since_version == 1 ? kInstanceNormalizationYDescVer1 : kInstanceNormalizationYDescVer6;
+
+  return LightOpSchema("InstanceNormalization", kOnnxDomain, since_version,
+                       MakeInstanceNormalizationDoc(since_version),
+                       {
+                           {"input", x_desc, "T"},
+                           {"scale", kInstanceNormalizationScaleDesc, "T"},
+                           {"B", kInstanceNormalizationBiasDesc, "T"},
+                       },
+                       {
+                           {"output", y_desc, "T"},
+                       },
+                       {
+                           {"T", InstanceNormalizationFloatTypes(since_version),
+                            kInstanceNormalizationTConstraintDesc},
+                       },
+                       std::move(attrs));
+}
+
+// --- GroupNormalization -----------------------------------------------------
+
+const char *const kGroupNormalizationXDesc =
+    "Input data tensor. Dimensions for image cases are `(N x C x H x W)`, where `N` is "
+    "the batch size, "
+    "`C` is the number of channels, and `H` and `W` are the height and width of the "
+    "data. Statistics are "
+    "computed for every group of channels over `C`, `H`, and `W`. For non-image cases, "
+    "the dimensions are "
+    "in the form of `(N x C x D1 x D2 ... Dn)`.";
+
+const char *const kGroupNormalizationYDesc = "The output tensor of the same shape as `X`.";
+
+const char *const kGroupNormalizationScaleDescVer18 = "Scale tensor of shape `(num_groups)`.";
+const char *const kGroupNormalizationBiasDescVer18 = "Bias tensor of shape `(num_groups)`.";
+const char *const kGroupNormalizationScaleDescVer21 = "Scale tensor of shape `(C)`.";
+const char *const kGroupNormalizationBiasDescVer21 = "Bias tensor of shape `(C)`.";
+
+const char *const kGroupNormalizationTConstraintDesc =
+    "Constrain input and output types to float tensors.";
+
+std::vector<TensorType> GroupNormalizationFloatTypes(int since_version) {
+  if (since_version >= 21) {
+    return {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+  }
+  return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kBfloat16};
+}
+
+LightOpSchema MakeGroupNormalizationSchema(int since_version) {
+  std::vector<AttributeParam> attrs;
+  attrs.push_back(AttributeParam{"epsilon", "The epsilon value to use to avoid division by zero.",
+                                 AttributeType::FLOAT, /*required=*/false,
+                                 static_cast<double>(1e-5f)});
+  attrs.push_back(AttributeParam{
+      "num_groups",
+      "The number of groups of channels. It should be a divisor of the number of channels `C`.",
+      AttributeType::INT, /*required=*/true, std::monostate{}});
+  if (since_version >= 21) {
+    attrs.push_back(AttributeParam{
+        "stash_type", "The floating-point precision used in stage one of the computation.",
+        AttributeType::INT, /*required=*/false, static_cast<int64_t>(1)});
+  }
+
+  const char *scale_desc =
+      since_version >= 21 ? kGroupNormalizationScaleDescVer21 : kGroupNormalizationScaleDescVer18;
+  const char *bias_desc =
+      since_version >= 21 ? kGroupNormalizationBiasDescVer21 : kGroupNormalizationBiasDescVer18;
+
+  LightOpSchema schema(
+      "GroupNormalization", kOnnxDomain, since_version, MakeGroupNormalizationDoc(since_version),
+      {
+          {"X", kGroupNormalizationXDesc, "T"},
+          {"scale", scale_desc, "T"},
+          {"bias", bias_desc, "T"},
+      },
+      {
+          {"Y", kGroupNormalizationYDesc, "T"},
+      },
+      {
+          {"T", GroupNormalizationFloatTypes(since_version), kGroupNormalizationTConstraintDesc},
+      },
+      std::move(attrs), /*has_function_implementation=*/true);
+  if (since_version == 18) {
+    schema.set_deprecated(true);
+  }
+  return schema;
+}
+
 } // namespace
 
 std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &op_type,
@@ -1406,6 +1540,21 @@ std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &o
          return std::vector<LightOpSchema>{
              MakeGRUSchema(22), MakeGRUSchema(14), MakeGRUSchema(7),
              MakeGRUSchema(3),  MakeGRUSchema(1),
+         };
+       }},
+      {"GroupNormalization",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeGroupNormalizationSchema(21),
+             MakeGroupNormalizationSchema(18),
+         };
+       }},
+      {"InstanceNormalization",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeInstanceNormalizationSchema(22),
+             MakeInstanceNormalizationSchema(6),
+             MakeInstanceNormalizationSchema(1),
          };
        }},
       {"LSTM",

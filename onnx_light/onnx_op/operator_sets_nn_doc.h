@@ -69,6 +69,19 @@ std::string MakeLSTMDoc(int since_version);
 std::string MakeBatchNormalizationDoc(int since_version);
 
 /**
+ * Returns the documentation string for the InstanceNormalization operator at
+ * the given opset version (1, 6, or 22). The text is identical for every
+ * opset and matches the upstream ``kDoc_InstanceNormalization_ver6`` string.
+ */
+std::string MakeInstanceNormalizationDoc(int since_version);
+
+/**
+ * Returns the documentation string for the GroupNormalization operator at the
+ * given opset version (18 or 21).
+ */
+std::string MakeGroupNormalizationDoc(int since_version);
+
+/**
  * Returns the documentation string for the Flatten operator at the given
  * opset version (1, 9, 11, 13, 21, 23, 24, or 25). The text is identical for
  * every opset and matches the upstream ``kDoc_Flatten_ver24`` string.

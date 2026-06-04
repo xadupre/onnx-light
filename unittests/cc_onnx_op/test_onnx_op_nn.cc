@@ -30,6 +30,8 @@ constexpr size_t kExpectedGlobalAveragePoolSchemaCount = 2;
 constexpr size_t kExpectedGlobalLpPoolSchemaCount = 3;
 constexpr size_t kExpectedGlobalMaxPoolSchemaCount = 2;
 constexpr size_t kExpectedGRUSchemaCount = 5;
+constexpr size_t kExpectedGroupNormalizationSchemaCount = 2;
+constexpr size_t kExpectedInstanceNormalizationSchemaCount = 3;
 constexpr size_t kExpectedLRNSchemaCount = 2;
 constexpr size_t kExpectedLSTMSchemaCount = 4;
 constexpr size_t kExpectedRNNSchemaCount = 4;
@@ -39,8 +41,9 @@ constexpr size_t kExpectedNnSchemaCount =
     kExpectedConvIntegerSchemaCount + kExpectedConvTransposeSchemaCount +
     kExpectedDeformConvSchemaCount + kExpectedGlobalAveragePoolSchemaCount +
     kExpectedDropoutSchemaCount + kExpectedGlobalLpPoolSchemaCount + kExpectedFlattenSchemaCount +
-    kExpectedGlobalMaxPoolSchemaCount + kExpectedGRUSchemaCount + kExpectedLRNSchemaCount +
-    kExpectedLSTMSchemaCount + kExpectedRNNSchemaCount;
+    kExpectedGlobalMaxPoolSchemaCount + kExpectedGRUSchemaCount +
+    kExpectedGroupNormalizationSchemaCount + kExpectedInstanceNormalizationSchemaCount +
+    kExpectedLRNSchemaCount + kExpectedLSTMSchemaCount + kExpectedRNNSchemaCount;
 
 static const onnx_op::LightOpSchema *
 FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
@@ -650,6 +653,77 @@ TEST(OnnxOpNnRegistrationTest, ReturnsConvTransposeSchemasForAllVersions) {
 
   EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs.size(), 4u);
   EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kBfloat16);
+}
+
+TEST(OnnxOpNnRegistrationTest, ReturnsInstanceNormalizationSchemasForAllVersions) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("InstanceNormalization");
+  ASSERT_EQ(schemas.size(), kExpectedInstanceNormalizationSchemaCount);
+
+  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const onnx_op::LightOpSchema *const v6 = FindByVersion(schemas, 6);
+  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+  ASSERT_NE(nullptr, v22);
+  ASSERT_NE(nullptr, v6);
+  ASSERT_NE(nullptr, v1);
+
+  for (const onnx_op::LightOpSchema *schema : {v1, v6, v22}) {
+    SCOPED_TRACE("InstanceNormalization@" + std::to_string(schema->since_version()));
+    EXPECT_EQ(schema->name(), "InstanceNormalization");
+    EXPECT_EQ(schema->domain(), "ai.onnx");
+    ASSERT_EQ(schema->inputs().size(), 3u);
+    EXPECT_EQ(schema->inputs()[0].name, "input");
+    EXPECT_EQ(schema->inputs()[1].name, "scale");
+    EXPECT_EQ(schema->inputs()[2].name, "B");
+    ASSERT_EQ(schema->outputs().size(), 1u);
+    EXPECT_EQ(schema->outputs()[0].name, "output");
+    ASSERT_EQ(schema->type_constraints().size(), 1u);
+    EXPECT_FALSE(schema->doc().empty());
+  }
+
+  // v1 has the legacy ``consumed_inputs`` attribute in addition to ``epsilon``.
+  EXPECT_EQ(v1->attributes().size(), 2u);
+  EXPECT_EQ(v6->attributes().size(), 1u);
+  EXPECT_EQ(v22->attributes().size(), 1u);
+
+  // v22 widens to {bfloat16, float16, float, double}.
+  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs.size(), 4u);
+  // v1/v6 remain {float16, float, double}.
+  EXPECT_EQ(v1->type_constraints()[0].allowed_type_strs.size(), 3u);
+  EXPECT_EQ(v6->type_constraints()[0].allowed_type_strs.size(), 3u);
+}
+
+TEST(OnnxOpNnRegistrationTest, ReturnsGroupNormalizationSchemasForAllVersions) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("GroupNormalization");
+  ASSERT_EQ(schemas.size(), kExpectedGroupNormalizationSchemaCount);
+
+  const onnx_op::LightOpSchema *const v21 = FindByVersion(schemas, 21);
+  const onnx_op::LightOpSchema *const v18 = FindByVersion(schemas, 18);
+  ASSERT_NE(nullptr, v21);
+  ASSERT_NE(nullptr, v18);
+
+  for (const onnx_op::LightOpSchema *schema : {v18, v21}) {
+    SCOPED_TRACE("GroupNormalization@" + std::to_string(schema->since_version()));
+    EXPECT_EQ(schema->name(), "GroupNormalization");
+    EXPECT_EQ(schema->domain(), "ai.onnx");
+    ASSERT_EQ(schema->inputs().size(), 3u);
+    EXPECT_EQ(schema->inputs()[0].name, "X");
+    EXPECT_EQ(schema->inputs()[1].name, "scale");
+    EXPECT_EQ(schema->inputs()[2].name, "bias");
+    ASSERT_EQ(schema->outputs().size(), 1u);
+    EXPECT_EQ(schema->outputs()[0].name, "Y");
+    ASSERT_EQ(schema->type_constraints().size(), 1u);
+    EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs.size(), 4u);
+    EXPECT_FALSE(schema->doc().empty());
+  }
+
+  // v18 is deprecated and has only ``epsilon`` and ``num_groups``.
+  EXPECT_TRUE(v18->deprecated());
+  EXPECT_EQ(v18->attributes().size(), 2u);
+  // v21 adds ``stash_type``.
+  EXPECT_FALSE(v21->deprecated());
+  EXPECT_EQ(v21->attributes().size(), 3u);
 }
 
 } // namespace Test

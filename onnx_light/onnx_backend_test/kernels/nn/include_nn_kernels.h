@@ -158,6 +158,61 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Reference implementation of ``InstanceNormalization`` (opset 1, 6, 22).
+///
+/// Normalizes a FLOAT input ``X`` of shape ``(N, C, D1, ..., Dk)`` (rank
+/// >= 2) per-instance, per-channel:
+///
+/// ``Y = scale * (X - mean) / sqrt(var + epsilon) + B``
+///
+/// where ``mean`` and ``var`` are computed over the spatial dimensions
+/// ``D1, ..., Dk`` for every ``(n, c)`` pair. ``scale`` and ``B`` are 1-D
+/// FLOAT tensors of length ``C``.
+class InstanceNormalization : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Returns the output ``Y``. ``epsilon`` defaults to 1e-5f, the upstream
+  /// default.
+  Tensor operator()(const Tensor &x, const Tensor &scale, const Tensor &bias,
+                    float epsilon = 1e-5f) const;
+
+  void operator()(const Tensor &x, const Tensor &scale, const Tensor &bias, Tensor &output,
+                  float epsilon = 1e-5f) const;
+
+  /// Output ``Y`` has the same shape as ``X`` so the output buffer may
+  /// alias the input ``X`` buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
+/// Reference implementation of ``GroupNormalization`` (opset 18, 21).
+///
+/// Groups the ``C`` channel dimension of a FLOAT input ``X`` of shape
+/// ``(N, C, D1, ..., Dk)`` (rank >= 2) into ``num_groups`` equal-sized
+/// groups, normalizes each ``(n, group)`` block over its channels and
+/// spatial dims, then applies a per-channel affine ``scale * x + bias``:
+///
+/// ``Y = scale * (X - mean) / sqrt(var + epsilon) + bias``
+///
+/// The kernel implements the opset-21 contract where ``scale`` and ``bias``
+/// are 1-D FLOAT tensors of length ``C``. ``num_groups`` must divide ``C``.
+class GroupNormalization : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Returns the output ``Y``. ``epsilon`` defaults to 1e-5f, the upstream
+  /// default.
+  Tensor operator()(const Tensor &x, const Tensor &scale, const Tensor &bias, int64_t num_groups,
+                    float epsilon = 1e-5f) const;
+
+  void operator()(const Tensor &x, const Tensor &scale, const Tensor &bias, int64_t num_groups,
+                  Tensor &output, float epsilon = 1e-5f) const;
+
+  /// Output ``Y`` has the same shape as ``X`` so the output buffer may
+  /// alias the input ``X`` buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// Flattens an input tensor of any element type into a 2-D matrix. Given an
 /// input of shape ``(d_0, d_1, ..., d_n)`` and integer attribute ``axis``,
 /// the output has shape ``(d_0 * d_1 * ... * d_(axis-1), d_axis * ... * d_n)``.

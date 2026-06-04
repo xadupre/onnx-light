@@ -131,7 +131,7 @@ src.append('')
 src.append('}  // namespace onnx_backend_test')
 src.append('}  // namespace ONNX_LIGHT_NAMESPACE')
 
-out = '\n'.join(src) + '\n'
+content = '\n'.join(src) + '\n'
 with open('/tmp/gen/cases_image_decoder.cc', 'w') as f:
-    f.write(out)
-print('Wrote', len(out), 'bytes')
+    f.write(content)
+print('Wrote', len(content), 'bytes')

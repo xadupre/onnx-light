@@ -1,8 +1,8 @@
-"""Tests for :mod:`onnx_light.backend.inference_coverage`."""
+"""Tests for the shape-inference coverage helpers in :mod:`onnx_light.doc`."""
 
 import unittest
 
-from onnx_light.backend.inference_coverage import (
+from onnx_light.doc import (
     InferenceCaseReport,
     InferenceCoverageReport,
     ValueComparison,

@@ -36,7 +36,7 @@ Overall pass rate across all ``"inference"``-tagged backend test cases:
 .. runpython::
     :rst:
 
-    from onnx_light.backend.inference_coverage import (
+    from onnx_light.doc import (
         compute_inference_coverage,
         render_rst_summary,
     )
@@ -52,7 +52,7 @@ Per-case details
 .. runpython::
     :rst:
 
-    from onnx_light.backend.inference_coverage import (
+    from onnx_light.doc import (
         compute_inference_coverage,
         render_rst_report,
     )

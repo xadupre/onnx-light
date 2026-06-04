@@ -413,11 +413,7 @@ if_opt
 if_seq
 instancenorm_epsilon
 instancenorm_example
-isinf
 isinf_float16
-isinf_negative
-isinf_positive
-isnan
 isnan_float16
 l1normalization_axis_0
 l1normalization_axis_1

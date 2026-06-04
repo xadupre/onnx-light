@@ -18,6 +18,8 @@ void CollectLogicalTestCases(std::vector<TestCase> &registry, const std::string 
       {"Equal", &RegisterEqualCases},
       {"Where", &RegisterWhereCases},
       {"Not", &RegisterNotCases},
+      {"IsNaN", &RegisterIsNaNCases},
+      {"IsInf", &RegisterIsInfCases},
       {"BitwiseAnd", &RegisterBitwiseAndCases},
       {"BitwiseOr", &RegisterBitwiseOrCases},
       {"BitwiseXor", &RegisterBitwiseXorCases},

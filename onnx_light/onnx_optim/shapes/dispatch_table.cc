@@ -528,6 +528,16 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          image::ComputeShapeImageDecoder(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:IsInf",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         logical::ComputeShapeIsInf(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:IsNaN",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         logical::ComputeShapeIsNaN(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:Loop",
        [](ShapesContext &ctx, const NodeProto &node) {
          controlflow::ComputeShapeLoop(ctx, node);

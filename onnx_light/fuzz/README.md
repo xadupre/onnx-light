@@ -13,6 +13,7 @@ targets for `onnx-light`, ported from the upstream ONNX harnesses introduced in
 | `fuzz_model_loader.py` | `onnx_light.onnx.load` + `checker.check_model` | Raw bytes → protobuf parser |
 | `fuzz_parser.py` | `onnx_light.onnx.parser.parse_model` | UTF-8 text (ONNX text format) |
 | `fuzz_shape_inference.py` | `onnx_light.onnx.shape_inference.infer_shapes` | Raw bytes **and** structured model (toggle byte) |
+| `fuzz_optim_shape_inference.py` | `onnx_light.onnx_optim.shape_inference.infer_shapes_model` | Raw bytes **and** structured model (toggle byte) |
 | `fuzz_version_converter.py` | `onnx_light.onnx.version_converter.convert_version` | Raw bytes → protobuf parser |
 | `make_seed_corpus.py` | *(seed generator, not a fuzzer)* | Produces seed zips for OSS-Fuzz |
 
@@ -45,6 +46,7 @@ pip install atheris
 python -m onnx_light.fuzz.fuzz_checker -runs=1000
 python -m onnx_light.fuzz.fuzz_parser -runs=1000
 python -m onnx_light.fuzz.fuzz_shape_inference -runs=1000
+python -m onnx_light.fuzz.fuzz_optim_shape_inference -runs=1000
 python -m onnx_light.fuzz.fuzz_version_converter -runs=1000
 ```
 

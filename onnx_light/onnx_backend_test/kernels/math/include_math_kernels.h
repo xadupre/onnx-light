@@ -340,6 +340,31 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// NegativeLogLikelihoodLoss computes the (optionally weighted) negative
+/// log-likelihood loss given an ``input`` tensor of log-probabilities of
+/// shape ``(N, C)`` or ``(N, C, D1, ..., Dk)`` and integer class indices
+/// ``target`` of shape ``(N)`` or ``(N, D1, ..., Dk)``. Unlike
+/// ``SoftmaxCrossEntropyLoss``, the input is assumed to already contain
+/// log-probabilities (no softmax is applied internally).
+class NegativeLogLikelihoodLoss : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  /// @param input Log-probabilities of shape ``(N, C)`` or ``(N, C, D1, ..., Dk)``.
+  /// @param target Integer class indices of shape ``(N)`` or ``(N, D1, ..., Dk)``.
+  /// @param weight Optional rank-1 tensor of length ``C``; ``nullptr`` means unweighted.
+  /// @param reduction One of ``"none"``, ``"sum"``, or ``"mean"``.
+  /// @param has_ignore_index Whether ``ignore_index`` is set.
+  /// @param ignore_index Class index to ignore (only used when ``has_ignore_index`` is true).
+  /// @return Loss tensor whose shape depends on ``reduction``: matches the
+  ///         shape of ``target`` for ``"none"``; scalar otherwise.
+  Tensor operator()(const Tensor &input, const Tensor &target, const Tensor *weight,
+                    const std::string &reduction, bool has_ignore_index,
+                    int64_t ignore_index) const;
+
+  /// The kernel allocates new outputs; it does not support input/output aliasing.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Element-wise hyperbolic sine: y = sinh(x), defined for all real x.
 class Sinh : public KernelBase {
 public:

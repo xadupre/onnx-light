@@ -918,6 +918,17 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
              ctx, node, scores_name.c_str(), labels_name.c_str(),
              weights_name.empty() ? nullptr : weights_name.c_str());
        }},
+      {"ai.onnx:NegativeLogLikelihoodLoss",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         const std::string input_name = node.input(0).as_string();
+         const std::string target_name = node.input(1).as_string();
+         const std::string weight_name =
+             node.input_size() >= 3 ? node.input(2).as_string() : std::string();
+         math::ComputeShapeNegativeLogLikelihoodLoss(
+             ctx, node, input_name.c_str(), target_name.c_str(),
+             weight_name.empty() ? nullptr : weight_name.c_str());
+       }},
       {"ai.onnx:StringConcat",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);

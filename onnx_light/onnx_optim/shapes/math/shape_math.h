@@ -528,6 +528,20 @@ void ComputeShapeSoftmaxCrossEntropyLoss(ShapesContext &ctx, const NodeProto &no
                                          const char *weights);
 
 /**
+ * Computes the output ``OptimTensor`` of a ``NegativeLogLikelihoodLoss``
+ * node and stores it in ``ctx``.
+ *
+ * Inputs are ``input`` (shape ``(N, C)`` or ``(N, C, D1, ..., Dk)``),
+ * ``target`` (shape ``(N)`` or ``(N, D1, ..., Dk)``), and optionally
+ * ``weight`` (shape ``(C)``). The single output ``loss`` has shape
+ * ``(N, D1, ..., Dk)`` when ``reduction = "none"`` and is a scalar
+ * otherwise. The output dtype matches the dtype of ``input``.
+ */
+void ComputeShapeNegativeLogLikelihoodLoss(ShapesContext &ctx, const NodeProto &node,
+                                           const char *input, const char *target,
+                                           const char *weight);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``Sin`` node and
  * stores it in ``ctx``.
  *

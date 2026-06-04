@@ -413,6 +413,127 @@ LightOpSchema MakeReshapeSchema(int since_version, const std::vector<TensorType>
                        std::move(attributes));
 }
 
+LightOpSchema MakePadSchema(int since_version, const std::vector<TensorType> &types) {
+  const std::string mode_description = MakePadModeDescription(since_version);
+  const std::string type_constraint_description = MakePadTypeConstraintDescription(since_version);
+  const std::string doc = MakePadDoc(since_version);
+
+  // Opsets 1 and 2: only one input (``data``); pads/value live as attributes.
+  if (since_version <= 2) {
+    const bool is_v1 = since_version == 1;
+    const std::string pads_attr_name = is_v1 ? "paddings" : "pads";
+    const std::string pads_attr_description =
+        is_v1 ? "List of integers indicate the padding element count at the beginning and end of "
+                "each axis, for 2D it is the number of pixel. `paddings` rank should be double of "
+                "the input's rank. `paddings` format should be as follow [x1_begin, "
+                "x2_begin...x1_end, x2_end,...], where xi_begin the number of pixels added at the "
+                "beginning of axis `i` and xi_end, the number of pixels added at the end of axis "
+                "`i`."
+              : "List of integers indicating the number of padding elements to add or remove (if "
+                "negative) at the beginning and end of each axis. For 2D it is the number of "
+                "pixels. `pads` rank should be double of the input's rank. `pads` format should be "
+                "as follow [x1_begin, x2_begin...x1_end, x2_end,...], where xi_begin the number of "
+                "pixels added at the beginning of axis `i` and xi_end, the number of pixels added "
+                "at the end of axis `i`.";
+    const std::string value_description =
+        is_v1 ? "One float, indicates the value to be filled, default is 0"
+              : "One float, indicates the value to be filled.";
+    return LightOpSchema(
+        "Pad", kOnnxDomain, since_version, doc,
+        {
+            {"data", "Input tensor.", "T"},
+        },
+        {
+            {"output", "Tensor after padding.", "T"},
+        },
+        {
+            {"T", types, type_constraint_description},
+        },
+        {
+            {"value", value_description, AttributeType::FLOAT, /*required=*/false, 0.0},
+            {"mode", mode_description, AttributeType::STRING, /*required=*/false,
+             std::string("constant")},
+            {pads_attr_name, pads_attr_description, AttributeType::INTS, /*required=*/true,
+             std::monostate{}},
+        });
+  }
+
+  // Opset 11 and 13: ``pads`` and ``constant_value`` become inputs (no ``axes``).
+  if (since_version <= 13) {
+    const bool is_v11 = since_version == 11;
+    const std::string constant_value_description =
+        is_v11
+            ? "(Optional) A scalar value to be used if the mode chosen is `constant` (by default "
+              "it is 0)."
+            : "(Optional) A scalar value to be used if the mode chosen is `constant` (by default "
+              "it is 0, empty string or False).";
+    return LightOpSchema(
+        "Pad", kOnnxDomain, since_version, doc,
+        {
+            {"data", "Input tensor.", "T"},
+            {"pads",
+             "Tensor of integers indicating the number of padding elements to add or remove (if "
+             "negative) at the beginning and end of each axis. For 2D input tensor, it is the "
+             "number of pixels. `pads` should be a 1D tensor of shape [2 * input_rank]. `pads` "
+             "format should be: [x1_begin, x2_begin,...,x1_end, x2_end,...], where xi_begin is "
+             "the number of pad values added at the beginning of axis `i` and xi_end, the number "
+             "of pad values added at the end of axis `i`.",
+             "tensor(int64)"},
+            {"constant_value", constant_value_description, "T"},
+        },
+        {
+            {"output", "Tensor after padding.", "T"},
+        },
+        {
+            {"T", types, type_constraint_description},
+        },
+        {
+            {"mode", mode_description, AttributeType::STRING, /*required=*/false,
+             std::string("constant")},
+        });
+  }
+
+  // Opset 18 onwards: adds the optional ``axes`` input (and updates ``pads``
+  // documentation to talk about ``num_axes``); opset 19+ further allows the
+  // ``wrap`` mode (handled by ``mode_description``).
+  return LightOpSchema(
+      "Pad", kOnnxDomain, since_version, doc,
+      {
+          {"data", "Input tensor.", "T"},
+          {"pads",
+           "Tensor of integers indicating the number of padding elements to add or remove (if "
+           "negative) at the beginning and end of each axis. For 2D input tensor, it is the "
+           "number of pixels. `pads` should be a 1D tensor of shape [2 * num_axes] where "
+           "`num_axes` refers to the number of elements in the `axes` input or the input rank if "
+           "`axes` are not provided explicitly. `pads` format should be: [x1_begin, x2_begin, "
+           "..., x1_end, x2_end,...], where xi_begin is the number of pad values added at the "
+           "beginning of axis `axes[i]` and xi_end, the number of pad values added at the end of "
+           "axis `axes[i]`.",
+           "tensor(int64)"},
+          {"constant_value",
+           "(Optional) A scalar value to be used if the mode chosen is `constant` (by default it "
+           "is 0, empty string or False).",
+           "T"},
+          {"axes",
+           "1-D tensor of axes that `pads` apply to. Negative value means counting dimensions "
+           "from the back. Accepted range is [-r, r-1] where r = rank(data). Behavior is "
+           "undefined if an axis is repeated. If not provided, all axes are assumed (`[0, 1, "
+           "..., input_rank-1]`).",
+           "Tind"},
+      },
+      {
+          {"output", "Tensor after padding.", "T"},
+      },
+      {
+          {"T", types, type_constraint_description},
+          {"Tind", {TensorType::kInt32, TensorType::kInt64}, "Constrain indices to integer types"},
+      },
+      {
+          {"mode", mode_description, AttributeType::STRING, /*required=*/false,
+           std::string("constant")},
+      });
+}
+
 LightOpSchema MakeIdentitySchema(int since_version, const std::vector<TensorType> &types) {
   const std::string type_param = since_version >= 14 ? "V" : "T";
   return LightOpSchema(
@@ -1468,6 +1589,16 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
        [] {
          return std::vector<LightOpSchema>{
              MakeSliceSchema(13, ConcatTypesVer13()),
+         };
+       }},
+      {"Pad",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakePadSchema(25, TransposeTypesVer25()), MakePadSchema(24, TransposeTypesVer24()),
+             MakePadSchema(23, TransposeTypesVer23()), MakePadSchema(21, TransposeTypesVer21()),
+             MakePadSchema(19, ConcatTypesVer13()),    MakePadSchema(18, ConcatTypesVer13()),
+             MakePadSchema(13, ConcatTypesVer13()),    MakePadSchema(11, AllNumericTypes()),
+             MakePadSchema(2, FloatTypes()),           MakePadSchema(1, FloatTypes()),
          };
        }},
       {"Split",

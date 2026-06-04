@@ -253,6 +253,34 @@ std::string MakeShapeDoc(int since_version);
 std::string MakeShapeTypeConstraintDescription(int since_version);
 
 /**
+ * Returns the documentation string for the Pad operator at the given opset
+ * version.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the Pad operator.
+ */
+std::string MakePadDoc(int since_version);
+
+/**
+ * Returns the description of the ``mode`` attribute for the Pad operator at
+ * the given opset version. Older versions only list ``constant``, ``reflect``
+ * and ``edge``; opsets >= 19 also include ``wrap``.
+ *
+ * @param since_version Opset version for which to generate the description.
+ * @return Mode-attribute description string for the Pad operator.
+ */
+std::string MakePadModeDescription(int since_version);
+
+/**
+ * Returns the type-constraint description for the Pad operator at the given
+ * opset version (applies to type parameter ``T``).
+ *
+ * @param since_version Opset version for which to generate the description.
+ * @return Type-constraint description string for the Pad input/output.
+ */
+std::string MakePadTypeConstraintDescription(int since_version);
+
+/**
  * Returns the documentation string for the Identity operator at the given
  * opset version.
  *

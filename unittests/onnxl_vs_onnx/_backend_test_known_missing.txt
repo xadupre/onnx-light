@@ -287,9 +287,6 @@ clip_splitbounds_expanded
 compress_0
 compress_1
 compress_default_axis
-constant_pad
-constant_pad_axes
-constant_pad_negative_axes
 conv_with_strides_and_asymmetric_padding
 conv_with_strides_no_padding
 convinteger_without_padding
@@ -328,7 +325,6 @@ dynamicquantizelinear_max_adjusted
 dynamicquantizelinear_max_adjusted_expanded
 dynamicquantizelinear_min_adjusted
 dynamicquantizelinear_min_adjusted_expanded
-edge_pad
 einsum_batch_diagonal
 einsum_inner_prod
 einsum_scalar
@@ -764,7 +760,6 @@ reduce_sum_square_negative_axes_keepdims_example
 reduce_sum_square_negative_axes_keepdims_example_expanded
 reduce_sum_square_negative_axes_keepdims_random
 reduce_sum_square_negative_axes_keepdims_random_expanded
-reflect_pad
 regex_full_match_email_domain
 relu_expanded_ver18
 reshape_allowzero_reordered
@@ -1005,4 +1000,3 @@ transpose_all_permutations_4
 transpose_all_permutations_5
 
 where_long_example
-wrap_pad

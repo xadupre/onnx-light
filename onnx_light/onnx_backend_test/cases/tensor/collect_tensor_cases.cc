@@ -24,6 +24,7 @@ void CollectTensorTestCases(std::vector<TestCase> &registry, const std::string &
       {"DepthToSpace", &RegisterDepthToSpaceCases},
       {"SpaceToDepth", &RegisterSpaceToDepthCases},
       {"Tile", &RegisterTileCases},
+      {"Pad", &RegisterPadCases},
       {"Upsample", &RegisterUpsampleCases},
       {"Resize", &RegisterResizeCases},
       {"Squeeze", &RegisterSqueezeCases},

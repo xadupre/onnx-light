@@ -5627,3 +5627,26 @@ TEST(onnx_proto, OptionalProto_MultipleValueTypes) {
   // EXPECT_FALSE(optional2.has_sequence_value());
   // EXPECT_FALSE(optional2.has_tensor_value());
 }
+
+// Security: a length value > INT64_MAX in a length-delimited record must be
+// rejected. Previously, CanRead() cast the uint64_t length to int64_t to do
+// pos_ + len <= size_; a malicious length encoded as a 10-byte varint with the
+// high bit set became a negative int64_t and bypassed the bounds check.
+TEST(onnx_stream_security, StringStreamCanReadRejectsHugeLength) {
+  std::vector<uint8_t> data{0x00, 0x01, 0x02, 0x03};
+  utils::StringStream stream(data.data(), data.size());
+  // Plausible bound: anything strictly larger than the underlying buffer.
+  EXPECT_THROW(stream.CanRead(static_cast<uint64_t>(data.size()) + 1, "oob"), std::exception);
+  // Length above INT64_MAX (would previously cast to negative and pass).
+  EXPECT_THROW(stream.CanRead(static_cast<uint64_t>(INT64_MAX) + 1, "hi"), std::exception);
+  EXPECT_THROW(stream.CanRead(UINT64_MAX, "max"), std::exception);
+  // Sanity: a valid request still succeeds.
+  EXPECT_NO_THROW(stream.CanRead(static_cast<uint64_t>(data.size()), "ok"));
+}
+
+TEST(onnx_stream_security, StringStreamLimitToNextRejectsHugeLength) {
+  std::vector<uint8_t> data{0x00, 0x01, 0x02, 0x03};
+  utils::StringStream stream(data.data(), data.size());
+  EXPECT_THROW(stream.LimitToNext(static_cast<uint64_t>(INT64_MAX) + 1), std::exception);
+  EXPECT_THROW(stream.LimitToNext(UINT64_MAX), std::exception);
+}

@@ -764,9 +764,18 @@ void TensorProto::LoadExternalData(const std::string &base_dir) {
   if (length < 0) {
     file.seekg(0, std::ios::end);
     std::streampos file_end = file.tellg();
-    file.seekg(offset > 0 ? offset : 0, std::ios::beg);
-    length = static_cast<int64_t>(file_end) - (offset > 0 ? offset : 0);
+    EXT_ENFORCE(file_end != std::streampos(-1) && static_cast<std::streamoff>(file_end) >= 0,
+                "TensorProto::LoadExternalData unable to determine size of '", data_path.string(),
+                "' (tellg failed).");
+    const int64_t effective_offset = offset > 0 ? offset : 0;
+    EXT_ENFORCE(static_cast<int64_t>(file_end) >= effective_offset,
+                "TensorProto::LoadExternalData offset ", effective_offset, " is past end of file '",
+                data_path.string(), "' (size=", static_cast<int64_t>(file_end), ").");
+    file.seekg(effective_offset, std::ios::beg);
+    length = static_cast<int64_t>(file_end) - effective_offset;
   }
+  EXT_ENFORCE(length >= 0, "TensorProto::LoadExternalData negative length=", length, " for '",
+              data_path.string(), "'.");
   ref_raw_data().resize(static_cast<size_t>(length));
   if (length > 0) {
     file.read(reinterpret_cast<char *>(ref_raw_data().data()),

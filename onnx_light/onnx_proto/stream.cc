@@ -284,8 +284,13 @@ void StringStream::Setup(const uint8_t *data, int64_t size) {
 }
 
 void StringStream::CanRead(uint64_t len, const char *msg) {
-  EXT_ENFORCE(pos_ + static_cast<int64_t>(len) <= size_, msg, " unable to read ", len,
-              " bytes, pos_=", pos_, ", size_=", size_);
+  // Use unsigned arithmetic to avoid signed overflow / signed-cast bypass when
+  // ``len`` comes from an untrusted varint and is > INT64_MAX. ``pos_`` and
+  // ``size_`` are non-negative by construction (pos_ is advanced from 0 and
+  // never past size_), so the subtraction below cannot underflow.
+  EXT_ENFORCE(pos_ >= 0 && size_ >= 0 && pos_ <= size_ &&
+                  static_cast<uint64_t>(size_ - pos_) >= len,
+              msg, " unable to read ", len, " bytes, pos_=", pos_, ", size_=", size_);
 }
 
 const uint8_t *StringStream::read_bytes(offset_t n_bytes, uint8_t *pre_allocated_buffer) {
@@ -654,6 +659,8 @@ FileStream::FileStream(const std::string &file_path)
 #endif
   file_stream_.seekg(0, std::ios::end);
   std::streampos end = file_stream_.tellg();
+  EXT_ENFORCE(end != std::streampos(-1) && static_cast<std::streamoff>(end) >= 0,
+              "Unable to determine size of file (tellg failed): ", file_path);
   file_stream_.seekg(0);
   size_ = static_cast<offset_t>(end);
   read_buf_.resize(READ_BUF_SIZE);
@@ -667,8 +674,12 @@ void FileStream::LimitTo(uint64_t len) {
 }
 
 void FileStream::CanRead(uint64_t len, const char *msg) {
-  EXT_ENFORCE(static_cast<int64_t>(tell()) + static_cast<int64_t>(len) <= size_, msg,
-              " unable to read ", len, " bytes, pos_=", tell(), ", size_=", size_);
+  // Use unsigned arithmetic to avoid signed overflow / signed-cast bypass when
+  // ``len`` comes from an untrusted varint and is > INT64_MAX. ``tell()`` and
+  // ``size_`` are non-negative by construction.
+  const int64_t cur = tell();
+  EXT_ENFORCE(cur >= 0 && size_ >= 0 && cur <= size_ && static_cast<uint64_t>(size_ - cur) >= len,
+              msg, " unable to read ", len, " bytes, pos_=", cur, ", size_=", size_);
 }
 
 void FileStream::_fill_read_buffer() {

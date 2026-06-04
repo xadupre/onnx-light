@@ -163,6 +163,8 @@ void LoadEncryptedModel(ModelProto &model, const std::string &file_path, const s
     throw std::runtime_error("Cannot open encrypted file: " + file_path);
 
   const std::streamsize file_size = ifs.tellg();
+  if (file_size < 0)
+    throw std::runtime_error("Cannot determine size of encrypted file: " + file_path);
   ifs.seekg(0, std::ios::beg);
   std::string file_buf(static_cast<size_t>(file_size), '\0');
   ifs.read(file_buf.data(), file_size);

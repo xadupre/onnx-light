@@ -408,7 +408,7 @@ def to_mermaid_graph(
 
     # Emit output nodes (stadium shape).  We only need to add the styling
     # since the identifiers already exist from the producing nodes; we
-    # therefore re-declare them with the output shape.
+    # therefore redeclare them with the output shape.
     for value_info in _iter(getattr(graph, "output", ())):
         name = _s(value_info.name)
         if not name:

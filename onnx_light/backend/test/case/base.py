@@ -50,6 +50,7 @@ class TestCase:
     kind: str
     rtol: float
     atol: float
+    tag: str = ""
     # Tell PyTest this isn't a real test.
     __test__: bool = False
 
@@ -318,6 +319,7 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
             kind=tc.kind,
             rtol=tc.rtol,
             atol=tc.atol,
+            tag=tc.tag,
         )
     return result
 

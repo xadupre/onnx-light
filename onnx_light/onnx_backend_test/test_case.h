@@ -63,7 +63,7 @@ struct TestCase {
   std::vector<DataSet> data_sets;
 
   TestCase() : kind("node"), tag() {}
-  explicit TestCase(std::string name_, std::string model_name_, std::string kind_ = "node",
+  explicit TestCase(std::string name_, std::string model_name_ = "", std::string kind_ = "node",
                     std::string tag_ = "")
       : name(std::move(name_)), model_name(std::move(model_name_)), kind(std::move(kind_)),
         tag(std::move(tag_)) {}

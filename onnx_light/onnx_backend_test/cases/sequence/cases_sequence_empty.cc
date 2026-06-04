@@ -40,10 +40,7 @@ void RegisterSequenceEmptyCase(const std::string &name, bool has_dtype, int64_t 
   Tensor expected = kernel::SequenceLength(ctx)(empty_seq);
   expected.name = "length";
 
-  TestCase tc;
-  tc.name = name;
-  tc.model_name = name;
-  tc.kind = "node";
+  TestCase tc(name, name);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 

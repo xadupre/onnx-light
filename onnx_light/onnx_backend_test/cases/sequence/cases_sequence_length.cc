@@ -54,10 +54,7 @@ void RegisterSequenceLengthCase(const std::string &name, const OpsetId &opset,
   FillValueInfo(c, *graph->add_input());
   FillValueInfo(expected, *graph->add_output());
 
-  TestCase tc;
-  tc.name = name;
-  tc.model_name = name;
-  tc.kind = "node";
+  TestCase tc(name, name);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
   tc.model = std::move(model);

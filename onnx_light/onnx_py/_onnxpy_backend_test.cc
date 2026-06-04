@@ -58,9 +58,10 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
   nb::class_<TestCase>(bt_mod, "TestCase",
                        "A single C++-generated backend test case (mirrors "
                        "onnx_light.backend.test.case.base.TestCase).")
-      .def_rw("name", &TestCase::name)
-      .def_rw("model_name", &TestCase::model_name)
-      .def_rw("kind", &TestCase::kind)
+      .def_ro("name", &TestCase::name)
+      .def_ro("model_name", &TestCase::model_name)
+      .def_ro("kind", &TestCase::kind)
+      .def_ro("tag", &TestCase::tag)
       .def_rw("rtol", &TestCase::rtol)
       .def_rw("atol", &TestCase::atol)
       .def_rw("data_sets", &TestCase::data_sets)

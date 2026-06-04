@@ -57,10 +57,7 @@ void RegisterSplitToSequenceCase(const std::string &name, const Tensor &input, c
   Tensor stacked = kernel::SequenceConstruct(ctx)(chunks);
   stacked.name = "output_sequence";
 
-  TestCase tc;
-  tc.name = name;
-  tc.model_name = name;
-  tc.kind = "node";
+  TestCase tc(name, name);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 

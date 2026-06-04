@@ -103,7 +103,7 @@ void AppendDataSet(TestCase &tc, std::vector<Tensor> inputs, std::vector<Tensor>
 void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
             const std::vector<Tensor> &outputs, const std::string &name,
             const std::vector<OpsetId> &opset_imports, const std::string &producer_name,
-            std::vector<TestCase> &registry) {
+            std::vector<TestCase> &registry, const std::string &tag) {
   const auto present_inputs = NonEmpty(node.ref_input());
   const auto present_outputs = NonEmpty(node.ref_output());
   EXT_ENFORCE_INVALID(
@@ -113,10 +113,7 @@ void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
       present_outputs.size() == outputs.size(),
       "Expect: number of output tensors does not match the non-empty outputs of the node.");
 
-  TestCase tc;
-  tc.name = name;
-  tc.model_name = name;
-  tc.kind = "node";
+  TestCase tc(name, name, "node", tag);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 

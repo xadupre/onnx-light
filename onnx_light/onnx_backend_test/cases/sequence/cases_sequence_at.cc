@@ -37,10 +37,7 @@ void RegisterSequenceAtCase(const std::string &name, const std::vector<Tensor> &
   Tensor expected = kernel::SequenceAt(ctx)(seq, position_tensor);
   expected.name = "output_tensor";
 
-  TestCase tc;
-  tc.name = name;
-  tc.model_name = name;
-  tc.kind = "node";
+  TestCase tc(name, name);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 

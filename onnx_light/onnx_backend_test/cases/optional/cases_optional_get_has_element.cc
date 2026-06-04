@@ -53,10 +53,7 @@ void RegisterOptionalInputCase(const std::string &name, const std::string &op_ty
                                const Tensor &input, const Tensor &expected_output,
                                const std::vector<int64_t> &input_shape, int32_t input_elem_type,
                                const OpsetId &opset, std::vector<TestCase> &registry) {
-  TestCase tc;
-  tc.name = name;
-  tc.model_name = name;
-  tc.kind = "node";
+  TestCase tc(name, name);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 

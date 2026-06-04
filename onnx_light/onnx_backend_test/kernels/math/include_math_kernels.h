@@ -504,6 +504,19 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Element-wise negation: y = -x. Mirrors the upstream ONNX ``Neg``
+/// reference implementation (``np.negative``). Only the FLOAT dtype is
+/// supported.
+class Neg : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x) const;
+  void operator()(const Tensor &x, Tensor &output) const;
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// Element-wise exponentiation ``z = x ^ y`` with NumPy-style multidirectional
 /// broadcasting (since opset 7). Unlike most binary element-wise kernels,
 /// ``Pow`` allows ``x`` and ``y`` to have different dtypes: the output dtype

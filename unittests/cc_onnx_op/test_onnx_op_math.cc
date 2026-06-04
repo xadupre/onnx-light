@@ -102,8 +102,27 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("TopK");
   const std::vector<onnx_op::LightOpSchema> swish_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Swish");
+  const std::vector<onnx_op::LightOpSchema> neg_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Neg");
 
-  EXPECT_EQ(schemas.size(), 127u);
+  EXPECT_EQ(schemas.size(), 130u);
+
+  // Neg has three versioned schemas (v1, v6, v13).
+  ASSERT_EQ(neg_schemas.size(), 3u);
+  const onnx_op::LightOpSchema *const neg_v1 = FindByVersion(neg_schemas, 1);
+  const onnx_op::LightOpSchema *const neg_v6 = FindByVersion(neg_schemas, 6);
+  const onnx_op::LightOpSchema *const neg_v13 = FindByVersion(neg_schemas, 13);
+  ASSERT_NE(nullptr, neg_v1);
+  ASSERT_NE(nullptr, neg_v6);
+  ASSERT_NE(nullptr, neg_v13);
+  EXPECT_EQ(neg_v13->domain(), "ai.onnx");
+  EXPECT_EQ(neg_v13->since_version(), 13);
+  ASSERT_EQ(neg_v13->inputs().size(), 1u);
+  EXPECT_EQ(neg_v13->inputs()[0].name, "X");
+  ASSERT_EQ(neg_v13->outputs().size(), 1u);
+  EXPECT_EQ(neg_v13->outputs()[0].name, "Y");
+  ASSERT_EQ(neg_v13->type_constraints().size(), 1u);
+  EXPECT_EQ(neg_v13->type_constraints()[0].type_param_str, "T");
 
   // Swish was introduced at v24 and has had a single schema since then.
   ASSERT_EQ(swish_schemas.size(), 1u);

@@ -23,6 +23,7 @@ void CollectNNTestCases(std::vector<TestCase> &registry, const std::string &op_t
       {"GlobalLpPool", &RegisterGlobalLpPoolCases},
       {"GlobalMaxPool", &RegisterGlobalMaxPoolCases},
       {"GRU", &RegisterGRUCases},
+      {"LRN", &RegisterLRNCases},
       {"LSTM", &RegisterLSTMCases},
       {"RNN", &RegisterRNNCases},
   };

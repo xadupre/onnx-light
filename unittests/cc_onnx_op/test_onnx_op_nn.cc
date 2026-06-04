@@ -30,6 +30,7 @@ constexpr size_t kExpectedGlobalAveragePoolSchemaCount = 2;
 constexpr size_t kExpectedGlobalLpPoolSchemaCount = 3;
 constexpr size_t kExpectedGlobalMaxPoolSchemaCount = 2;
 constexpr size_t kExpectedGRUSchemaCount = 5;
+constexpr size_t kExpectedLRNSchemaCount = 2;
 constexpr size_t kExpectedLSTMSchemaCount = 4;
 constexpr size_t kExpectedRNNSchemaCount = 4;
 constexpr size_t kExpectedNnSchemaCount =
@@ -38,8 +39,8 @@ constexpr size_t kExpectedNnSchemaCount =
     kExpectedConvIntegerSchemaCount + kExpectedConvTransposeSchemaCount +
     kExpectedDeformConvSchemaCount + kExpectedGlobalAveragePoolSchemaCount +
     kExpectedDropoutSchemaCount + kExpectedGlobalLpPoolSchemaCount + kExpectedFlattenSchemaCount +
-    kExpectedGlobalMaxPoolSchemaCount + kExpectedGRUSchemaCount + kExpectedLSTMSchemaCount +
-    kExpectedRNNSchemaCount;
+    kExpectedGlobalMaxPoolSchemaCount + kExpectedGRUSchemaCount + kExpectedLRNSchemaCount +
+    kExpectedLSTMSchemaCount + kExpectedRNNSchemaCount;
 
 static const onnx_op::LightOpSchema *
 FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
@@ -429,6 +430,51 @@ TEST(OnnxOpNnRegistrationTest, ReturnsCol2ImSchemasForAllVersions) {
   EXPECT_EQ(v18->attributes()[2].type, onnx_op::AttributeType::INTS);
   EXPECT_FALSE(v18->attributes()[2].required);
   EXPECT_FALSE(v18->doc().empty());
+}
+
+TEST(OnnxOpNnRegistrationTest, ReturnsLRNSchemasForAllVersions) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("LRN");
+
+  ASSERT_EQ(schemas.size(), kExpectedLRNSchemaCount);
+
+  const onnx_op::LightOpSchema *const v13 = FindByVersion(schemas, 13);
+  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+
+  ASSERT_NE(nullptr, v13);
+  ASSERT_NE(nullptr, v1);
+
+  for (const onnx_op::LightOpSchema *schema : {v1, v13}) {
+    SCOPED_TRACE("LRN@" + std::to_string(schema->since_version()));
+    EXPECT_EQ(schema->name(), "LRN");
+    EXPECT_EQ(schema->domain(), "ai.onnx");
+    ASSERT_EQ(schema->inputs().size(), 1u);
+    EXPECT_EQ(schema->inputs()[0].name, "X");
+    EXPECT_EQ(schema->inputs()[0].type, "T");
+    ASSERT_EQ(schema->outputs().size(), 1u);
+    EXPECT_EQ(schema->outputs()[0].name, "Y");
+    EXPECT_EQ(schema->outputs()[0].type, "T");
+    ASSERT_EQ(schema->type_constraints().size(), 1u);
+    EXPECT_EQ(schema->type_constraints()[0].type_param_str, "T");
+    ASSERT_EQ(schema->attributes().size(), 4u);
+    EXPECT_EQ(schema->attributes()[0].name, "alpha");
+    EXPECT_EQ(schema->attributes()[0].type, onnx_op::AttributeType::FLOAT);
+    EXPECT_FALSE(schema->attributes()[0].required);
+    EXPECT_EQ(schema->attributes()[1].name, "beta");
+    EXPECT_EQ(schema->attributes()[1].type, onnx_op::AttributeType::FLOAT);
+    EXPECT_FALSE(schema->attributes()[1].required);
+    EXPECT_EQ(schema->attributes()[2].name, "bias");
+    EXPECT_EQ(schema->attributes()[2].type, onnx_op::AttributeType::FLOAT);
+    EXPECT_FALSE(schema->attributes()[2].required);
+    EXPECT_EQ(schema->attributes()[3].name, "size");
+    EXPECT_EQ(schema->attributes()[3].type, onnx_op::AttributeType::INT);
+    EXPECT_TRUE(schema->attributes()[3].required);
+    EXPECT_FALSE(schema->doc().empty());
+  }
+
+  // v13 adds bfloat16 to the type constraint set.
+  EXPECT_EQ(v13->type_constraints()[0].allowed_type_strs.size(), 4u);
+  EXPECT_EQ(v1->type_constraints()[0].allowed_type_strs.size(), 3u);
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsFlattenSchemasForAllVersions) {

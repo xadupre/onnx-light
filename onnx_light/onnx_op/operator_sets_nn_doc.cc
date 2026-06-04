@@ -651,6 +651,47 @@ std::string MakeGlobalLpPoolDoc(int since_version) {
 
 namespace {
 
+constexpr const char *kLRN_ver1_doc = R"DOC(
+Local Response Normalization proposed in the [AlexNet paper](https://papers.nips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networks.pdf).
+It normalizes over local input regions.
+The local region is defined across the channels. For an element X[n, c, d1, ..., dk] in a tensor
+of shape (N x C x D1 x D2, ..., Dk), its region is
+{X[n, i, d1, ..., dk] | max(0, c - floor((size - 1) / 2)) <= i <= min(C - 1, c + ceil((size - 1) / 2))}.
+
+square_sum[n, c, d1, ..., dk] = sum(X[n, i, d1, ..., dk] ^ 2),
+where max(0, c - floor((size - 1) / 2)) <= i <= min(C - 1, c + ceil((size - 1) / 2)).
+
+Y[n, c, d1, ..., dk] = X[n, c, d1, ..., dk] / (bias + alpha / size * square_sum[n, c, d1, ..., dk] ) ^ beta
+)DOC";
+
+constexpr const char *kLRN_ver13_doc = R"DOC(
+Local Response Normalization proposed in the [AlexNet paper](https://papers.nips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networks.pdf).
+It normalizes over local input regions.
+The local region is defined across the channels. For an element `X[n, c, d1, ..., dk]` in a tensor
+of shape `(N x C x D1 x D2, ..., Dk)`, its region is
+`{X[n, i, d1, ..., dk] | max(0, c - floor((size - 1) / 2)) <= i <= min(C - 1, c + ceil((size - 1) / 2))}`.
+
+`square_sum[n, c, d1, ..., dk] = sum(X[n, i, d1, ..., dk] ^ 2)`,
+where `max(0, c - floor((size - 1) / 2)) <= i <= min(C - 1, c + ceil((size - 1) / 2))`.
+
+`Y[n, c, d1, ..., dk] = X[n, c, d1, ..., dk] / (bias + alpha / size * square_sum[n, c, d1, ..., dk] ) ^ beta`
+)DOC";
+
+} // namespace
+
+std::string MakeLRNDoc(int since_version) {
+  switch (since_version) {
+  case 1:
+    return kLRN_ver1_doc;
+  case 13:
+    return kLRN_ver13_doc;
+  default:
+    return "";
+  }
+}
+
+namespace {
+
 constexpr const char *kDeformConvDoc = R"DOC(
 Performs deformable convolution as described in https://arxiv.org/abs/1703.06211 and https://arxiv.org/abs/1811.11168.
 This operator specification supports the general N-D case. Note that most common use cases have 2D or 3D data.

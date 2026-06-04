@@ -567,6 +567,10 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
     // Write alignment padding before the tensor data if the expected offset is ahead of the
     // current write position.  This happens when PopulateExternalData (or
     // AssignExternalDataChunks) has rounded the offset up to an alignment boundary.
+    // The padding is emitted from a small static zero buffer in fixed-size chunks rather than
+    // a single allocation proportional to `padding`. This mirrors the mitigation in upstream
+    // PR https://github.com/onnx/onnx/pull/8055 and prevents a crafted external-data offset
+    // from triggering an unbounded allocation during serialization.
     if (expected_offset > current_offset) {
       const int64_t padding = expected_offset - current_offset;
       static constexpr size_t CHUNK = 128;

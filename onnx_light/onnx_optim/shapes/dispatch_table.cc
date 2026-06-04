@@ -598,6 +598,16 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          math::ComputeShapeMatMul(ctx, node, node.input(0).as_string().c_str(),
                                   node.input(1).as_string().c_str());
        }},
+      {"ai.onnx:Max",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeMax(ctx, node);
+       }},
+      {"ai.onnx:Min",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeMin(ctx, node);
+       }},
       {"ai.onnx:Optional",
        [](ShapesContext &ctx, const NodeProto &node) {
          optional::ComputeShapeOptional(ctx, node);

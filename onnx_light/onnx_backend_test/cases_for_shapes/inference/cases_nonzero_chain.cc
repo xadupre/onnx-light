@@ -66,10 +66,7 @@ void RegisterNonZeroChainCase(const std::string &name, NonZeroOutputAnnotation a
   Tensor nz_float = kernel::Cast(ctx)(transposed_nz, static_cast<int32_t>(DataType::FLOAT));
   nz_float.name = "nz_float";
 
-  TestCase tc;
-  tc.name = name;
-  tc.model_name = name;
-  tc.kind = "model";
+  TestCase tc(name, name, "model", "inference");
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 

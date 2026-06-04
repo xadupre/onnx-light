@@ -75,7 +75,7 @@ void RegisterBinaryEmptyShape(std::vector<TestCase> &registry, const char *op_ty
     Tensor z = kk(x, y);
 
     const std::string name = "test_cc_" + test_name_stem + "_empty_shape_" + c.suffix;
-    Expect(node, {x, y}, {z}, name, {opset}, "backend-test", registry);
+    Expect(node, {x, y}, {z}, name, {opset}, "backend-test", registry, "empty_shape");
   }
 }
 

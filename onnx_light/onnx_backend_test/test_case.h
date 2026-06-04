@@ -45,15 +45,49 @@ struct DataSet {
  * A backend test case mirroring ``onnx_light.backend.test.case.base.TestCase``.
  * It bundles a single-node ``ModelProto`` together with the expected input/
  * output data sets a runtime must reproduce.
+ *
+ * The string-typed fields (``name``, ``model_name``, ``kind``, ``tag``) are
+ * declared ``const`` and must therefore be supplied at construction time.
+ * ``tag`` is an optional, free-form label used to group families of cases
+ * (e.g. ``"empty_shape"``, ``"nan_inf"``, ``"inference"``); it defaults to
+ * the empty string for the ordinary node cases.
  */
 struct TestCase {
-  std::string name;
-  std::string model_name;
-  std::string kind = "node";
+  const std::string name;
+  const std::string model_name;
+  const std::string kind;
+  const std::string tag;
   double rtol = 1e-3;
   double atol = 1e-7;
   ModelProto model;
   std::vector<DataSet> data_sets;
+
+  TestCase() : kind("node"), tag() {}
+  explicit TestCase(std::string name_, std::string model_name_ = "", std::string kind_ = "node",
+                    std::string tag_ = "", double rtol_ = 1e-3, double atol_ = 1e-7)
+      : name(std::move(name_)), model_name(std::move(model_name_)), kind(std::move(kind_)),
+        tag(std::move(tag_)), rtol(rtol_), atol(atol_) {}
+
+  // Explicit move constructor. Required because the ``const std::string``
+  // members would otherwise cause the implicit move constructor to fall
+  // back to ``std::string`` copy construction (and therefore not be
+  // ``noexcept``), which in turn forces ``std::vector<TestCase>`` to
+  // copy-construct existing elements on reallocation — impossible because
+  // ``ModelProto`` is move-only. The ``const_cast`` is well-defined here:
+  // every ``TestCase`` is originally allocated as a non-const object, so
+  // casting away the member-level ``const`` to invoke ``std::string``'s
+  // move constructor on the moved-from source does not modify an
+  // actually-const object.
+  TestCase(TestCase &&other) noexcept
+      : name(std::move(const_cast<std::string &>(other.name))),
+        model_name(std::move(const_cast<std::string &>(other.model_name))),
+        kind(std::move(const_cast<std::string &>(other.kind))),
+        tag(std::move(const_cast<std::string &>(other.tag))), rtol(other.rtol), atol(other.atol),
+        model(std::move(other.model)), data_sets(std::move(other.data_sets)) {}
+
+  TestCase(const TestCase &) = delete;
+  TestCase &operator=(const TestCase &) = delete;
+  TestCase &operator=(TestCase &&) = delete;
 };
 
 /**
@@ -140,7 +174,7 @@ void AppendDataSet(TestCase &tc, std::vector<Tensor> inputs, std::vector<Tensor>
 void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
             const std::vector<Tensor> &outputs, const std::string &name,
             const std::vector<OpsetId> &opset_imports, const std::string &producer_name,
-            std::vector<TestCase> &registry);
+            std::vector<TestCase> &registry, const std::string &tag = "");
 
 /// Function pointer registering one or more :ref:`TestCase` entries into the
 /// caller-supplied ``registry``. Used by ``Collect*TestCases`` dispatch tables.

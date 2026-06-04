@@ -1,9 +1,9 @@
 import re
-from dataclasses import dataclass
 from typing import Any, Callable, Sequence
 import numpy as np
 from .... import onnx
 from ....onnx import helper as onnx_helper
+from ....onnx_py._onnxpy import backend_test as _backend_test_cc
 from ....onnx_py._onnxpy import onnx_op as _onnx_op  # type: ignore[attr-defined]
 from ....ext_test_case import ExtTestCase
 
@@ -35,23 +35,67 @@ def _latest_since_version(op_type: str, domain: str) -> int:
     return _LIGHT_SINCE_VERSION_CACHE[(lookup_domain, op_type)]
 
 
-@dataclass
-class TestCase:
+class TestCase(_backend_test_cc.TestCase):
     """
     Defines a test case.
+
+    Inherits the immutable metadata fields (``name``, ``model_name``, ``kind``,
+    ``tag``) and the numeric tolerances (``rtol``, ``atol``) from the C++
+    :class:`onnx_light.onnx_py._onnxpy.backend_test.TestCase` binding. The
+    Python-only fields (``url``, ``model_dir``) and the Python-side
+    ``model``/``data_sets`` overlay (which store an :class:`onnx.ModelProto`
+    and Python sequences of numpy arrays, distinct from the C++
+    ``vector<DataSet>`` of raw-byte ``Tensor`` instances) are added by this
+    subclass.
     """
 
-    name: str
-    model_name: str
-    url: str | None
-    model_dir: str | None
-    model: onnx.ModelProto | None
-    data_sets: Sequence[tuple[Sequence[np.ndarray], Sequence[np.ndarray]]] | None
-    kind: str
-    rtol: float
-    atol: float
     # Tell PyTest this isn't a real test.
-    __test__: bool = False
+    __test__ = False
+
+    def __init__(
+        self,
+        name: str,
+        model_name: str,
+        url: str | None,
+        model_dir: str | None,
+        model: onnx.ModelProto | None,
+        data_sets: Sequence[tuple[Sequence[np.ndarray], Sequence[np.ndarray]]] | None,
+        kind: str,
+        rtol: float,
+        atol: float,
+        tag: str = "",
+    ) -> None:
+        super().__init__(
+            name=name, model_name=model_name, kind=kind, tag=tag, rtol=rtol, atol=atol
+        )
+        self.url = url
+        self.model_dir = model_dir
+        # The C++ ``model`` / ``data_sets`` members hold C++-side proto / Tensor
+        # instances. Python callers populate them with the Python ``ModelProto``
+        # and lists of numpy arrays, so we shadow them with Python-side storage
+        # accessed through the ``model`` / ``data_sets`` properties below.
+        self._py_model = model
+        self._py_data_sets = data_sets
+
+    @property
+    def model(self) -> onnx.ModelProto | None:
+        return self._py_model
+
+    @model.setter
+    def model(self, value: onnx.ModelProto | None) -> None:
+        self._py_model = value
+
+    @property
+    def data_sets(
+        self,
+    ) -> Sequence[tuple[Sequence[np.ndarray], Sequence[np.ndarray]]] | None:
+        return self._py_data_sets
+
+    @data_sets.setter
+    def data_sets(
+        self, value: Sequence[tuple[Sequence[np.ndarray], Sequence[np.ndarray]]] | None
+    ) -> None:
+        self._py_data_sets = value
 
     def __repr__(self) -> str:
         "usual"
@@ -318,6 +362,7 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
             kind=tc.kind,
             rtol=tc.rtol,
             atol=tc.atol,
+            tag=tc.tag,
         )
     return result
 

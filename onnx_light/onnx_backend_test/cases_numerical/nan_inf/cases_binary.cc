@@ -58,7 +58,7 @@ void RegisterBinaryNanInf(std::vector<TestCase> &registry, const char *op_type, 
     Tensor z = kk(x, y);
 
     const std::string name = "test_cc_" + test_name_stem + "_nan_inf";
-    Expect(node, {x, y}, {z}, name, {opset}, "backend-test", registry);
+    Expect(node, {x, y}, {z}, name, {opset}, "backend-test", registry, "nan_inf");
   }
 
   // Scalar-broadcast case: combining a NaN scalar against a vector of
@@ -71,7 +71,7 @@ void RegisterBinaryNanInf(std::vector<TestCase> &registry, const char *op_type, 
     Tensor z = kk(x, y);
 
     const std::string name = "test_cc_" + test_name_stem + "_nan_inf_bcast_nan_scalar";
-    Expect(node, {x, y}, {z}, name, {opset}, "backend-test", registry);
+    Expect(node, {x, y}, {z}, name, {opset}, "backend-test", registry, "nan_inf");
   }
 
   // Scalar-broadcast case: combining a +Inf scalar against a vector of
@@ -85,7 +85,7 @@ void RegisterBinaryNanInf(std::vector<TestCase> &registry, const char *op_type, 
     Tensor z = kk(x, y);
 
     const std::string name = "test_cc_" + test_name_stem + "_nan_inf_bcast_inf_scalar";
-    Expect(node, {x, y}, {z}, name, {opset}, "backend-test", registry);
+    Expect(node, {x, y}, {z}, name, {opset}, "backend-test", registry, "nan_inf");
   }
 }
 

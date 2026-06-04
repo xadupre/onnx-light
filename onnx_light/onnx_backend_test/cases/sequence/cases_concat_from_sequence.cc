@@ -40,10 +40,7 @@ void RegisterConcatFromSequenceCase(const std::string &name, const std::vector<i
   Tensor expected = kernel::ConcatFromSequence(ctx)({a, b, c}, axis, new_axis);
   expected.name = "concat_result";
 
-  TestCase tc;
-  tc.name = name;
-  tc.model_name = name;
-  tc.kind = "node";
+  TestCase tc(name, name);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 

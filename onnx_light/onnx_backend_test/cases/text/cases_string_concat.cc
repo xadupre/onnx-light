@@ -91,10 +91,7 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry) {
   // two StringConcat nodes in a single graph. Exercises shape inference and
   // execution across multiple StringConcat invocations.
   {
-    TestCase tc;
-    tc.name = "test_cc_string_concat_chained_3in_1out";
-    tc.model_name = tc.name;
-    tc.kind = "node";
+    TestCase tc("test_cc_string_concat_chained_3in_1out", "test_cc_string_concat_chained_3in_1out");
     tc.rtol = 1e-3;
     tc.atol = 1e-7;
 

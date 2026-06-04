@@ -125,6 +125,7 @@ TEST(BackendTestCase, ExpectBuildsSingleNodeModel) {
   const TestCase &tc = registry[0];
   EXPECT_EQ(tc.name, "test_dummy_add");
   EXPECT_EQ(tc.kind, "node");
+  EXPECT_EQ(tc.tag, "");
   EXPECT_EQ(tc.data_sets.size(), 1u);
   EXPECT_EQ(tc.data_sets[0].inputs.size(), 2u);
   EXPECT_EQ(tc.data_sets[0].outputs.size(), 1u);
@@ -162,6 +163,42 @@ TEST(BackendTestCase, ExpectRejectsArityMismatch) {
   EXPECT_THROW(Expect(node, /*inputs=*/{}, /*outputs=*/{Tensor::FromFloat("y", {1}, {1.0f})}, "bad",
                       {}, "backend-test", registry),
                std::invalid_argument);
+}
+
+TEST(BackendTestCase, TagDefaultsToEmptyForOrdinaryCases) {
+  std::vector<TestCase> registry;
+  onnx_backend_test::CollectMathTestCases(registry);
+  ASSERT_FALSE(registry.empty());
+  for (const auto &tc : registry) {
+    EXPECT_EQ(tc.tag, "") << "case: " << tc.name;
+  }
+}
+
+TEST(BackendTestCase, TagIsEmptyShapeForEmptyShapeCases) {
+  std::vector<TestCase> registry;
+  onnx_backend_test::CollectEmptyShapeTestCases(registry);
+  ASSERT_FALSE(registry.empty());
+  for (const auto &tc : registry) {
+    EXPECT_EQ(tc.tag, "empty_shape") << "case: " << tc.name;
+  }
+}
+
+TEST(BackendTestCase, TagIsNanInfForNanInfCases) {
+  std::vector<TestCase> registry;
+  onnx_backend_test::CollectNanInfTestCases(registry);
+  ASSERT_FALSE(registry.empty());
+  for (const auto &tc : registry) {
+    EXPECT_EQ(tc.tag, "nan_inf") << "case: " << tc.name;
+  }
+}
+
+TEST(BackendTestCase, TagIsInferenceForShapeInferenceCases) {
+  std::vector<TestCase> registry;
+  onnx_backend_test::CollectShapeInferenceTestCases(registry);
+  ASSERT_FALSE(registry.empty());
+  for (const auto &tc : registry) {
+    EXPECT_EQ(tc.tag, "inference") << "case: " << tc.name;
+  }
 }
 
 TEST(BackendTestCase, CollectReturnsExpectedNames) {

@@ -55,9 +55,6 @@ void AddBodyTensorIO(ValueInfoProto *vi, const std::string &name, int32_t elem_t
 // (IR version, producer, opset import, named empty graph) and returns
 // the freshly added graph for further population by the caller.
 GraphProto *InitSequenceMapModel(TestCase &tc, const std::string &name, const OpsetId &opset) {
-  tc.name = name;
-  tc.model_name = name;
-  tc.kind = "node";
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 
@@ -227,7 +224,7 @@ void RegisterSequenceMapIdentityCase(const std::string &name, const std::vector<
   Tensor stacked = kernel::SequenceConstruct(ctx)(stacked_in);
   stacked.name = "output_sequence";
 
-  TestCase tc;
+  TestCase tc(name, name);
   GraphProto *graph = InitSequenceMapModel(tc, name, opset);
 
   // Node 1: SequenceConstruct <inputs…> → input_seq.
@@ -307,7 +304,7 @@ void RegisterSequenceMapIdentity2SequencesCase(const OpsetId &opset,
       kernel::SequenceConstruct(ctx)({out_seqs[1].values.begin(), out_seqs[1].values.end()});
   stacked1.name = "y1";
 
-  TestCase tc;
+  TestCase tc(name, name);
   GraphProto *graph = InitSequenceMapModel(tc, name, opset);
 
   // Node 1+2: build the two input sequences.
@@ -405,7 +402,7 @@ void RegisterSequenceMapAdd2SequencesCase(const OpsetId &opset, std::vector<Test
       kernel::SequenceConstruct(ctx)({out_seqs[0].values.begin(), out_seqs[0].values.end()});
   stacked.name = "y0";
 
-  TestCase tc;
+  TestCase tc(name, name);
   GraphProto *graph = InitSequenceMapModel(tc, name, opset);
 
   NodeProto *sc0 = graph->add_node();
@@ -492,7 +489,7 @@ void RegisterSequenceMapAdd1Sequence1TensorCase(const OpsetId &opset,
       kernel::SequenceConstruct(ctx)({out_seqs[0].values.begin(), out_seqs[0].values.end()});
   stacked.name = "y0";
 
-  TestCase tc;
+  TestCase tc(name, name);
   GraphProto *graph = InitSequenceMapModel(tc, name, opset);
 
   NodeProto *sc0 = graph->add_node();
@@ -572,7 +569,7 @@ void RegisterSequenceMapExtractShapesCase(const OpsetId &opset, std::vector<Test
       kernel::SequenceConstruct(ctx)({out_seqs[0].values.begin(), out_seqs[0].values.end()});
   stacked.name = "shapes";
 
-  TestCase tc;
+  TestCase tc(name, name);
   GraphProto *graph = InitSequenceMapModel(tc, name, opset);
 
   NodeProto *sc = graph->add_node();

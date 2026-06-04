@@ -563,9 +563,6 @@ maxpool_with_argmax_2d_precomputed_pads
 maxpool_with_argmax_2d_precomputed_strides
 maxunpool_export_with_output_shape
 maxunpool_export_without_output_shape
-mean_example
-mean_one_input
-mean_two_inputs
 melweightmatrix
 min_float16
 mish

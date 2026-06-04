@@ -1767,6 +1767,72 @@ std::vector<LightOpSchema> BuildMinSchemas() {
                                     "List of tensors for min.", &MakeMinDoc);
 }
 
+std::vector<LightOpSchema> BuildMeanSchemas() {
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(4);
+
+  const std::vector<TensorType> float_types_with_bf16 = {
+      TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kBfloat16};
+  const std::vector<TensorType> float_types_no_bf16 = FloatTypes();
+
+  // Mean v13: adds bfloat16 to the type constraint; multidirectional
+  // (NumPy-style) broadcasting (since v8). Single variadic input ``data_0``.
+  schemas.push_back(LightOpSchema(
+      "Mean", kOnnxDomain, 13, MakeMeanDoc(13),
+      {
+          {"data_0", "List of tensors for mean.", "T"},
+      },
+      {
+          {"mean", "Output tensor.", "T"},
+      },
+      {
+          {"T", float_types_with_bf16, "Constrain input and output types to float tensors."},
+      }));
+
+  // Mean v8: introduces multidirectional broadcasting.
+  schemas.push_back(LightOpSchema(
+      "Mean", kOnnxDomain, 8, MakeMeanDoc(8),
+      {
+          {"data_0", "List of tensors for mean.", "T"},
+      },
+      {
+          {"mean", "Output tensor.", "T"},
+      },
+      {
+          {"T", float_types_no_bf16, "Constrain input and output types to float tensors."},
+      }));
+
+  // Mean v6: same wording as v1; no broadcasting (all inputs must share shape).
+  schemas.push_back(LightOpSchema(
+      "Mean", kOnnxDomain, 6, MakeMeanDoc(6),
+      {
+          {"data_0", "List of tensors for Mean.", "T"},
+      },
+      {
+          {"mean", "Output tensor. Same dimension as inputs.", "T"},
+      },
+      {
+          {"T", float_types_no_bf16, "Constrain input and output types to float tensors."},
+      }));
+
+  // Mean v1: original schema, no broadcasting.
+  schemas.push_back(LightOpSchema(
+      "Mean", kOnnxDomain, 1, MakeMeanDoc(1),
+      {
+          {"data_0", "List of tensors for Mean.", "T"},
+      },
+      {
+          {"mean", "Output tensor. Same dimension as inputs.", "T"},
+      },
+      {
+          {"T", float_types_no_bf16, "Constrain input and output types to float tensors."},
+      },
+      {AttributeParam{"consumed_inputs", "legacy optimization attribute.", AttributeType::INTS,
+                      false, std::monostate{}}}));
+
+  return schemas;
+}
+
 std::vector<LightOpSchema> BuildCumSumSchemas() {
   const std::string doc = MakeCumSumDoc();
   const std::vector<AttributeParam> attrs = {
@@ -2202,6 +2268,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Log", [] { return BuildLogSchemas(); }},
       {"MatMul", [] { return BuildMatMulSchemas(); }},
       {"Max", [] { return BuildMaxSchemas(); }},
+      {"Mean", [] { return BuildMeanSchemas(); }},
       {"Min", [] { return BuildMinSchemas(); }},
       {"Mod", [] { return BuildModSchemas(); }},
       {"Mul", [] { return BuildElementwiseMathSchemaForVersion("Mul"); }},

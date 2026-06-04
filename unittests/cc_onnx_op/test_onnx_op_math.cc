@@ -108,8 +108,10 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Max");
   const std::vector<onnx_op::LightOpSchema> min_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Min");
+  const std::vector<onnx_op::LightOpSchema> mean_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Mean");
 
-  EXPECT_EQ(schemas.size(), 143u);
+  EXPECT_EQ(schemas.size(), 147u);
 
   // Neg has three versioned schemas (v1, v6, v13).
   ASSERT_EQ(neg_schemas.size(), 3u);
@@ -213,6 +215,38 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(sum_v1->attributes()[0].name, "consumed_inputs");
   EXPECT_TRUE(sum_v6->attributes().empty());
   EXPECT_TRUE(sum_v13->attributes().empty());
+
+  // Mean has four versioned schemas (v1, v6, v8, v13), mirroring Sum.
+  EXPECT_EQ(mean_schemas.size(), 4u);
+  const onnx_op::LightOpSchema *const mean_v13 = FindByVersion(mean_schemas, 13);
+  const onnx_op::LightOpSchema *const mean_v8 = FindByVersion(mean_schemas, 8);
+  const onnx_op::LightOpSchema *const mean_v6 = FindByVersion(mean_schemas, 6);
+  const onnx_op::LightOpSchema *const mean_v1 = FindByVersion(mean_schemas, 1);
+  ASSERT_NE(nullptr, mean_v13);
+  ASSERT_NE(nullptr, mean_v8);
+  ASSERT_NE(nullptr, mean_v6);
+  ASSERT_NE(nullptr, mean_v1);
+  EXPECT_EQ(mean_v13->domain(), "ai.onnx");
+  EXPECT_EQ(mean_v13->since_version(), 13);
+  EXPECT_FALSE(mean_v13->has_function_implementation());
+  EXPECT_EQ(mean_v13->inputs().size(), 1u);
+  EXPECT_EQ(mean_v13->inputs()[0].name, "data_0");
+  EXPECT_EQ(mean_v13->outputs().size(), 1u);
+  EXPECT_EQ(mean_v13->outputs()[0].name, "mean");
+  EXPECT_EQ(mean_v13->type_constraints().size(), 1u);
+  // v13 widens T to include bfloat16; v8 does not.
+  EXPECT_NE(mean_v13->type_constraints()[0].allowed_type_strs,
+            mean_v8->type_constraints()[0].allowed_type_strs);
+  // v8 and v6 share the same float type set; their docs differ
+  // (v8+ documents broadcasting).
+  EXPECT_EQ(mean_v8->type_constraints()[0].allowed_type_strs,
+            mean_v6->type_constraints()[0].allowed_type_strs);
+  EXPECT_NE(mean_v8->doc(), mean_v6->doc());
+  // v1 carries the legacy ``consumed_inputs`` attribute; later opsets drop it.
+  EXPECT_EQ(mean_v1->attributes().size(), 1u);
+  EXPECT_EQ(mean_v1->attributes()[0].name, "consumed_inputs");
+  EXPECT_TRUE(mean_v6->attributes().empty());
+  EXPECT_TRUE(mean_v13->attributes().empty());
 
   // Max and Min each have five versioned schemas (v1, v6, v8, v12, v13).
   for (const auto *schemas_ptr : {&max_schemas, &min_schemas}) {

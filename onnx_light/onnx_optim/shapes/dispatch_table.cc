@@ -613,6 +613,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          math::ComputeShapeMax(ctx, node);
        }},
+      {"ai.onnx:Mean",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeMean(ctx, node);
+       }},
       {"ai.onnx:Min",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

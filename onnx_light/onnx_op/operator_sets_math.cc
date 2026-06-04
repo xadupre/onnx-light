@@ -1365,6 +1365,48 @@ std::vector<LightOpSchema> BuildHammingWindowSchemas() {
   };
 }
 
+std::vector<LightOpSchema> BuildMelWeightMatrixSchemas() {
+  return std::vector<LightOpSchema>{
+      LightOpSchema(
+          "MelWeightMatrix", kOnnxDomain, 17, MakeMelWeightMatrixDoc(),
+          {
+              {"num_mel_bins", "The number of bands in the mel spectrum.", "T1"},
+              {"dft_length",
+               "The size of the original DFT. "
+               "The size of the original DFT is used to infer the size of the onesided DFT, which "
+               "is understood to be floor(dft_length/2) + 1, i.e. the spectrogram only contains "
+               "the nonredundant DFT bins.",
+               "T1"},
+              {"sample_rate",
+               "Samples per second of the input signal used to create the spectrogram. Used to "
+               "figure out the frequencies corresponding to each spectrogram bin, which dictates "
+               "how they are mapped into the mel scale.",
+               "T1"},
+              {"lower_edge_hertz",
+               "Lower bound on the frequencies to be included in the mel spectrum. This "
+               "corresponds to the lower edge of the lowest triangular band.",
+               "T2"},
+              {"upper_edge_hertz", "The desired top edge of the highest frequency band.", "T2"},
+          },
+          {
+              {"output",
+               "The Mel Weight Matrix. "
+               "The output has the shape: [floor(dft_length/2) + 1][num_mel_bins].",
+               "T3"},
+          },
+          {
+              {"T1",
+               {TensorType::kInt32, TensorType::kInt64},
+               "Constrain to integer tensors."},
+              {"T2",
+               {TensorType::kFloat, TensorType::kFloat16, TensorType::kDouble,
+                TensorType::kBfloat16},
+               "Constrain to float tensors"},
+              {"T3", AllNumericTypesIr4(), "Constrain to any numerical types."},
+          }),
+  };
+}
+
 std::vector<TensorType> MatMulGemmTypes(int since_version) {
   if (since_version >= 13) {
     return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kUint32,
@@ -2269,6 +2311,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"MatMul", [] { return BuildMatMulSchemas(); }},
       {"Max", [] { return BuildMaxSchemas(); }},
       {"Mean", [] { return BuildMeanSchemas(); }},
+      {"MelWeightMatrix", [] { return BuildMelWeightMatrixSchemas(); }},
       {"Min", [] { return BuildMinSchemas(); }},
       {"Mod", [] { return BuildModSchemas(); }},
       {"Mul", [] { return BuildElementwiseMathSchemaForVersion("Mul"); }},

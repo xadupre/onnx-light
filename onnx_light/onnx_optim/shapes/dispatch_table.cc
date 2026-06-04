@@ -638,6 +638,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          math::ComputeShapeMean(ctx, node);
        }},
+      {"ai.onnx:MelWeightMatrix",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 5);
+         generator::ComputeShapeMelWeightMatrix(ctx, node);
+       }},
       {"ai.onnx:Min",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

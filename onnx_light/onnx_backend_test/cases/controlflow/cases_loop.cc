@@ -136,11 +136,11 @@ NodeProto MakeLoopNode(const std::string &m, const std::string &cond,
 //   res_y    = [13]
 //   res_scan = [[-1], [1], [4], [8], [13]]
 //
-// The body subgraph is well-formed (carrying ``y_in`` through Identity and
-// emitting a per-iteration Constant scan value) but its numeric output is
-// irrelevant: the kernel does not execute the body and the registered
-// expected outputs come directly from the ``kernel::Loop`` reference
-// implementation above.
+// The body subgraph is well-formed and now also numerically correct:
+// ``y_out = y_in + x[iter_count]`` with ``x = [1, 2, 3, 4, 5]`` as a body
+// Constant, and ``scan_out = y_out``. The ``kernel::Loop`` reference does
+// not execute the body, but external backends (e.g. onnxruntime) do — so
+// the body must produce the same expected outputs registered below.
 // ---------------------------------------------------------------------------
 namespace {
 
@@ -152,13 +152,19 @@ std::vector<uint8_t> FloatBytes(float v) {
   return out;
 }
 
+// Returns the little-endian bytes of ``values`` packed as FLOAT.
+std::vector<uint8_t> FloatBytes(const std::vector<float> &values) {
+  std::vector<uint8_t> out(values.size() * sizeof(float));
+  std::memcpy(out.data(), values.data(), out.size());
+  return out;
+}
+
 // Body subgraph for the loop11 case: 3 inputs (iter_count, cond_in, y_in),
-// 3 outputs (cond_out, y_out, scan_out). The body just passes ``cond_in``
-// through Identity, passes ``y_in`` through Identity (so the carried
-// dependency keeps its dtype/shape) and emits a per-iteration Constant
-// FLOAT[1] scan value. The kernel does not execute this graph; its sole
-// purpose is to make the ``Loop`` node well-formed against the operator
-// schema.
+// 3 outputs (cond_out, y_out, scan_out). The body computes
+// ``y_out = y_in + x[iter_count]`` where ``x = [1, 2, 3, 4, 5]`` is a
+// per-body Constant, and emits ``y_out`` as the scan output. With initial
+// ``y = [-2]`` this produces the expected prefix-sum sequence
+// ``[[-1], [1], [4], [8], [13]]`` and final ``y = [13]``.
 GraphProto BuildLoop11Body() {
   GraphProto g;
   g.set_name("loop11_body");
@@ -174,25 +180,58 @@ GraphProto BuildLoop11Body() {
     n->add_input("cond_in");
     n->add_output("cond_out");
   }
-  // y_out = Identity(y_in)
-  {
-    NodeProto *n = g.add_node();
-    n->set_op_type("Identity");
-    n->add_input("y_in");
-    n->add_output("y_out");
-  }
-  // scan_out = Constant(value=float [0.0])
+  // x = Constant(value=float [1, 2, 3, 4, 5])
   {
     NodeProto *n = g.add_node();
     n->set_op_type("Constant");
-    n->add_output("scan_out");
+    n->add_output("x");
     AttributeProto *a = n->add_attribute();
     a->set_name("value");
     a->set_type(AttributeProto::AttributeType::TENSOR);
     TensorProto *t = a->add_t();
     t->set_data_type(TensorProto::DataType::FLOAT);
-    t->add_dims(1);
-    t->set_raw_data(utils::ByteSpan(FloatBytes(0.0f)));
+    t->add_dims(5);
+    t->set_raw_data(utils::ByteSpan(FloatBytes({1.0f, 2.0f, 3.0f, 4.0f, 5.0f})));
+  }
+  // iter_1d = Unsqueeze(iter_count, axes=[0]) — turn the INT64 scalar into
+  // an INT64 tensor of shape [1] suitable as Gather indices producing a
+  // FLOAT[1] output.
+  {
+    NodeProto *n = g.add_node();
+    n->set_op_type("Unsqueeze");
+    n->add_input("iter_count");
+    n->add_output("iter_1d");
+    AttributeProto *a = n->add_attribute();
+    a->set_name("axes");
+    a->set_type(AttributeProto::AttributeType::INTS);
+    a->add_ints(0);
+  }
+  // x_i = Gather(x, iter_1d, axis=0) — FLOAT[1].
+  {
+    NodeProto *n = g.add_node();
+    n->set_op_type("Gather");
+    n->add_input("x");
+    n->add_input("iter_1d");
+    n->add_output("x_i");
+    AttributeProto *a = n->add_attribute();
+    a->set_name("axis");
+    a->set_type(AttributeProto::AttributeType::INT);
+    a->set_i(0);
+  }
+  // y_out = Add(y_in, x_i)
+  {
+    NodeProto *n = g.add_node();
+    n->set_op_type("Add");
+    n->add_input("y_in");
+    n->add_input("x_i");
+    n->add_output("y_out");
+  }
+  // scan_out = Identity(y_out)
+  {
+    NodeProto *n = g.add_node();
+    n->set_op_type("Identity");
+    n->add_input("y_out");
+    n->add_output("scan_out");
   }
 
   AddGraphOutputTensor(g, "cond_out", TensorProto::DataType::BOOL);

@@ -53,6 +53,103 @@ LightOpSchema MakeAveragePoolSchema(int since_version) {
                        });
 }
 
+const char *const kMaxPoolIndicesDescription =
+    "Indices tensor from max pooling across the input tensor. "
+    "The dimensions of indices are the same as output tensor. "
+    "The values in indices of are the indices of the selected values during pooling. "
+    "The indices are computed as flatten 1-D tensor, "
+    "and the indices do not consider padding. "
+    "So the values in indices are in [0, N x C x D1 x ... x Dn).";
+
+std::vector<TensorType> MaxPoolTypes(int since_version) {
+  if (since_version >= 22) {
+    return {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat,
+            TensorType::kDouble,   TensorType::kInt8,    TensorType::kUint8};
+  }
+  if (since_version >= 12) {
+    return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble,
+            TensorType::kInt8,    TensorType::kUint8};
+  }
+  return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+}
+
+LightOpSchema MakeMaxPoolSchema(int since_version) {
+  // v1 has only the primary output Y; v8+ adds the optional Indices output.
+  std::vector<FormalParameter> outputs = {
+      {"Y", kPoolingOutputDescription, "T"},
+  };
+  std::vector<TypeConstraintParam> tcs = {
+      {"T", MaxPoolTypes(since_version),
+       since_version >= 12 ? "Constrain input and output types to float and 8 bit tensors."
+                           : "Constrain input and output types to float tensors."},
+  };
+  if (since_version >= 8) {
+    outputs.push_back({"Indices", kMaxPoolIndicesDescription, "I"});
+    tcs.push_back({"I", {TensorType::kInt64}, "Constrain index tensor to int64"});
+  }
+  return LightOpSchema("MaxPool", kOnnxDomain, since_version, MakeMaxPoolDoc(since_version),
+                       {
+                           {"X", kPoolingInputDescription, "T"},
+                       },
+                       std::move(outputs), std::move(tcs));
+}
+
+const char *const kMaxUnpoolXDescription =
+    "Input data tensor that has to be unpooled. "
+    "This tensor is typically the first output of the MaxPool op."
+    "Dimensions for image case are (N x C x H x W), "
+    "where N is the batch size, C is the number of "
+    "channels, and H and W are the height and the "
+    "width of the data. For non-image case, the "
+    "dimensions are in the form of "
+    "(N x C x D1 x D2 ... Dn), where N is the batch "
+    "size. Optionally, if dimension denotation is "
+    "in effect, the operation expects the input "
+    "data tensor to arrive with the dimension denotation "
+    "of [DATA_BATCH, DATA_CHANNEL, DATA_FEATURE, DATA_FEATURE ...].";
+
+const char *const kMaxUnpoolIDescription =
+    "Input data tensor containing the indices corresponding to "
+    "elements in the first input tensor X."
+    "This tensor is typically the second output of the MaxPool op."
+    "Dimensions must be the same as input tensor X. "
+    "The indices are linear, i.e. computed considering the tensor as flattened 1-D tensor, "
+    "assuming row-major storage. Also, the linear indices should not consider padding. "
+    "So the values in indices are in the range [0, N x C x D1 x ... x Dn).";
+
+const char *const kMaxUnpoolOutputShapeDescription =
+    "The shape of the output can be explicitly set which will cause pads values to be "
+    "auto generated. If 'output_shape' is specified, "
+    "'pads' values are ignored.";
+
+const char *const kMaxUnpoolOutputDescription =
+    "Output data tensor that contains the result of the unpooling.";
+
+std::vector<TensorType> MaxUnpoolFloatTypes(int since_version) {
+  if (since_version >= 22) {
+    return {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+  }
+  return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+}
+
+LightOpSchema MakeMaxUnpoolSchema(int since_version) {
+  return LightOpSchema(
+      "MaxUnpool", kOnnxDomain, since_version, MakeMaxUnpoolDoc(since_version),
+      {
+          {"X", kMaxUnpoolXDescription, "T1"},
+          {"I", kMaxUnpoolIDescription, "T2"},
+          {"output_shape", kMaxUnpoolOutputShapeDescription, "T2"},
+      },
+      {
+          {"output", kMaxUnpoolOutputDescription, "T1"},
+      },
+      {
+          {"T1", MaxUnpoolFloatTypes(since_version),
+           "Constrain input and output types to float tensors."},
+          {"T2", {TensorType::kInt64}, "Constrain index tensor to int64"},
+      });
+}
+
 const char *const kDropoutDataDescription = "The input data as Tensor.";
 const char *const kDropoutOutputDescription = "The output.";
 const char *const kDropoutMaskDescriptionVer1And6 =
@@ -1608,6 +1705,21 @@ std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &o
          return std::vector<LightOpSchema>{
              MakeLpNormalizationSchema(22),
              MakeLpNormalizationSchema(1),
+         };
+       }},
+      {"MaxPool",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeMaxPoolSchema(22), MakeMaxPoolSchema(12), MakeMaxPoolSchema(11),
+             MakeMaxPoolSchema(10), MakeMaxPoolSchema(8),  MakeMaxPoolSchema(1),
+         };
+       }},
+      {"MaxUnpool",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeMaxUnpoolSchema(22),
+             MakeMaxUnpoolSchema(11),
+             MakeMaxUnpoolSchema(9),
          };
        }},
       {"RNN",

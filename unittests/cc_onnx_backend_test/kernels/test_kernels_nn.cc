@@ -21,6 +21,8 @@ using onnx_backend_test::kernel::AveragePool;
 using onnx_backend_test::kernel::BatchNormalization;
 using onnx_backend_test::kernel::Dropout;
 using onnx_backend_test::kernel::KernelContext;
+using onnx_backend_test::kernel::MaxPool;
+using onnx_backend_test::kernel::MaxUnpool;
 
 namespace Test {
 
@@ -632,6 +634,136 @@ TEST(BackendKernelClass, AttentionRejectsInvalidInputs) {
     Attention::Attributes attrs;
     EXPECT_THROW(attention(Q, K, V, attrs, &bad_mask).Y, std::invalid_argument);
   }
+}
+
+TEST(BackendKernelClass, MaxPool2DDefault) {
+  const KernelContext ctx{DefaultOpset(22)};
+  MaxPool pool{ctx};
+  Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
+                               {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f,
+                                12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+  Tensor y = pool(x, /*kernel_shape=*/{2, 2});
+  const std::vector<int64_t> expected_shape = {1, 1, 3, 3};
+  EXPECT_EQ(y.shape, expected_shape);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 6.0f);
+  EXPECT_FLOAT_EQ(py[1], 7.0f);
+  EXPECT_FLOAT_EQ(py[2], 8.0f);
+  EXPECT_FLOAT_EQ(py[3], 10.0f);
+  EXPECT_FLOAT_EQ(py[4], 11.0f);
+  EXPECT_FLOAT_EQ(py[5], 12.0f);
+  EXPECT_FLOAT_EQ(py[6], 14.0f);
+  EXPECT_FLOAT_EQ(py[7], 15.0f);
+  EXPECT_FLOAT_EQ(py[8], 16.0f);
+}
+
+TEST(BackendKernelClass, MaxPool2DCeil) {
+  // mirrors test_maxpool_2d_ceil: kernel (3, 3), stride (2, 2), ceil_mode=1.
+  const KernelContext ctx{DefaultOpset(22)};
+  MaxPool pool{ctx};
+  Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
+                               {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f,
+                                12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+  Tensor y = pool(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2}, /*pads=*/{},
+                  /*ceil_mode=*/true);
+  const std::vector<int64_t> expected_shape = {1, 1, 2, 2};
+  EXPECT_EQ(y.shape, expected_shape);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 11.0f);
+  EXPECT_FLOAT_EQ(py[1], 12.0f);
+  EXPECT_FLOAT_EQ(py[2], 15.0f);
+  EXPECT_FLOAT_EQ(py[3], 16.0f);
+}
+
+TEST(BackendKernelClass, MaxPool2DDilations) {
+  // mirrors test_maxpool_2d_dilations: kernel (2, 2), dilations (2, 2).
+  const KernelContext ctx{DefaultOpset(22)};
+  MaxPool pool{ctx};
+  Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
+                               {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f,
+                                12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+  Tensor y = pool(x, /*kernel_shape=*/{2, 2}, /*strides=*/{1, 1}, /*pads=*/{},
+                  /*ceil_mode=*/false, /*dilations=*/{2, 2});
+  const std::vector<int64_t> expected_shape = {1, 1, 2, 2};
+  EXPECT_EQ(y.shape, expected_shape);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 11.0f);
+  EXPECT_FLOAT_EQ(py[1], 12.0f);
+  EXPECT_FLOAT_EQ(py[2], 15.0f);
+  EXPECT_FLOAT_EQ(py[3], 16.0f);
+}
+
+TEST(BackendKernelClass, MaxPoolWithIndices) {
+  // mirrors test_maxpool_with_argmax_2d_precomputed_pads.
+  const KernelContext ctx{DefaultOpset(22)};
+  MaxPool pool{ctx};
+  Tensor x = Tensor::FromFloat("", {1, 1, 5, 5},
+                               {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
+                                10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f,
+                                19.0f, 20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f});
+  auto yz = pool.WithIndices(x, /*kernel_shape=*/{5, 5}, /*strides=*/{1, 1},
+                             /*pads=*/{2, 2, 2, 2});
+  const Tensor &y = yz.first;
+  const Tensor &indices = yz.second;
+  const std::vector<int64_t> expected_shape = {1, 1, 5, 5};
+  EXPECT_EQ(y.shape, expected_shape);
+  EXPECT_EQ(indices.shape, expected_shape);
+  ASSERT_EQ(indices.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  const float *py = y.AsFloat();
+  const int64_t *pi = indices.AsInt64();
+  // Top-left: window contains 13, located at flat index 12.
+  EXPECT_FLOAT_EQ(py[0], 13.0f);
+  EXPECT_EQ(pi[0], 12);
+  // Bottom-right: window contains 25 at flat index 24.
+  EXPECT_FLOAT_EQ(py[24], 25.0f);
+  EXPECT_EQ(pi[24], 24);
+}
+
+TEST(BackendKernelClass, MaxPoolRejectsNonRowMajorStorageOrder) {
+  const KernelContext ctx{DefaultOpset(22)};
+  MaxPool pool{ctx};
+  Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  EXPECT_THROW(pool(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
+                    /*ceil_mode=*/false, /*dilations=*/{}, /*storage_order=*/1),
+               std::invalid_argument);
+}
+
+TEST(BackendKernelClass, MaxUnpoolWithoutOutputShape) {
+  // mirrors test_maxunpool_export_without_output_shape.
+  const KernelContext ctx{DefaultOpset(22)};
+  MaxUnpool unpool{ctx};
+  Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor indices = Tensor::FromInt64("", {1, 1, 2, 2}, {5, 7, 13, 15});
+  Tensor y = unpool(x, indices, /*kernel_shape=*/{2, 2}, /*strides=*/{2, 2});
+  const std::vector<int64_t> expected_shape = {1, 1, 4, 4};
+  EXPECT_EQ(y.shape, expected_shape);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[5], 1.0f);
+  EXPECT_FLOAT_EQ(py[7], 2.0f);
+  EXPECT_FLOAT_EQ(py[13], 3.0f);
+  EXPECT_FLOAT_EQ(py[15], 4.0f);
+  for (int i = 0; i < 16; ++i) {
+    if (i != 5 && i != 7 && i != 13 && i != 15) {
+      EXPECT_FLOAT_EQ(py[i], 0.0f);
+    }
+  }
+}
+
+TEST(BackendKernelClass, MaxUnpoolWithOutputShape) {
+  // mirrors test_maxunpool_export_with_output_shape.
+  const KernelContext ctx{DefaultOpset(22)};
+  MaxUnpool unpool{ctx};
+  Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {5.0f, 6.0f, 7.0f, 8.0f});
+  Tensor indices = Tensor::FromInt64("", {1, 1, 2, 2}, {5, 7, 13, 15});
+  Tensor output_shape = Tensor::FromInt64("", {4}, {1, 1, 5, 5});
+  Tensor y = unpool(x, indices, output_shape, /*kernel_shape=*/{2, 2}, /*strides=*/{2, 2});
+  const std::vector<int64_t> expected_shape = {1, 1, 5, 5};
+  EXPECT_EQ(y.shape, expected_shape);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[6], 5.0f);
+  EXPECT_FLOAT_EQ(py[8], 6.0f);
+  EXPECT_FLOAT_EQ(py[16], 7.0f);
+  EXPECT_FLOAT_EQ(py[18], 8.0f);
 }
 
 } // namespace Test

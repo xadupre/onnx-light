@@ -74,6 +74,12 @@ void RegisterLpNormalizationCases(std::vector<TestCase> &registry);
 /// Registers the ``LSTM`` backend test node case(s).
 void RegisterLSTMCases(std::vector<TestCase> &registry);
 
+/// Registers the ``MaxPool`` backend test node case(s).
+void RegisterMaxPoolCases(std::vector<TestCase> &registry);
+
+/// Registers the ``MaxUnpool`` backend test node case(s).
+void RegisterMaxUnpoolCases(std::vector<TestCase> &registry);
+
 /// Registers the ``RNN`` backend test node case(s).
 void RegisterRNNCases(std::vector<TestCase> &registry);
 

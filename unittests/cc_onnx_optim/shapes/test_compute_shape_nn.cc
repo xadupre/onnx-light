@@ -237,6 +237,93 @@ TEST(OnnxOptimShapesNnAveragePool, RejectsRankMismatch) {
                std::invalid_argument);
 }
 
+TEST(OnnxOptimShapesNnMaxPool, Default2DSingleOutput) {
+  // mirrors test_cc_maxpool_2d_default: kernel (2, 2), no strides, no pads
+  // -> 31x31 output and no Indices output declared.
+  NodeProto node;
+  node.set_op_type("MaxPool");
+  node.add_input("X");
+  node.add_output("Y");
+  AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SetInput(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(3),
+                                       onnx_optim::OptimDim(32), onnx_optim::OptimDim(32)});
+
+  onnx_optim::shapes::nn::ComputeShapeMaxPool(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  ASSERT_EQ(out.Rank(), 4u);
+  EXPECT_EQ(out[0].AsInt(), 1);
+  EXPECT_EQ(out[1].AsInt(), 3);
+  EXPECT_EQ(out[2].AsInt(), 31);
+  EXPECT_EQ(out[3].AsInt(), 31);
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+}
+
+TEST(OnnxOptimShapesNnMaxPool, EmitsIndicesWhenSecondOutputDeclared) {
+  // mirrors test_cc_maxpool_with_argmax_2d_precomputed_pads: kernel (5, 5),
+  // pads (2, 2, 2, 2), Indices output present with int64 dtype.
+  NodeProto node;
+  node.set_op_type("MaxPool");
+  node.add_input("X");
+  node.add_output("Y");
+  node.add_output("Indices");
+  AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {5, 5});
+  AddAttribute<std::vector<int64_t>>(node, "pads", {2, 2, 2, 2});
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SetInput(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                       onnx_optim::OptimDim(5), onnx_optim::OptimDim(5)});
+
+  onnx_optim::shapes::nn::ComputeShapeMaxPool(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Indices"));
+  const onnx_optim::OptimShape &y_shape = ctx.Get("Y").Shape();
+  const onnx_optim::OptimShape &i_shape = ctx.Get("Indices").Shape();
+  EXPECT_EQ(y_shape[2].AsInt(), 5);
+  EXPECT_EQ(y_shape[3].AsInt(), 5);
+  EXPECT_EQ(i_shape[2].AsInt(), 5);
+  EXPECT_EQ(i_shape[3].AsInt(), 5);
+  EXPECT_EQ(ctx.Get("Indices").Dtype(), onnx_optim::TensorType::kInt64);
+}
+
+TEST(OnnxOptimShapesNnMaxUnpool, ComputesShapeFromAttributes) {
+  // mirrors test_cc_maxunpool_export_without_output_shape: 2x2 kernel, stride
+  // 2 -> output spatial 4x4 from a 2x2 input.
+  NodeProto node;
+  node.set_op_type("MaxUnpool");
+  node.add_input("X");
+  node.add_input("I");
+  node.add_output("output");
+  AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
+  AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(1),
+                                                              onnx_optim::OptimDim(1),
+                                                              onnx_optim::OptimDim(2),
+                                                              onnx_optim::OptimDim(2)}));
+  ctx.Set("I", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(1),
+                                                              onnx_optim::OptimDim(1),
+                                                              onnx_optim::OptimDim(2),
+                                                              onnx_optim::OptimDim(2)}));
+
+  onnx_optim::shapes::nn::ComputeShapeMaxUnpool(ctx, node, "X", "I", nullptr);
+
+  ASSERT_TRUE(ctx.Has("output"));
+  const onnx_optim::OptimShape &out = ctx.Get("output").Shape();
+  ASSERT_EQ(out.Rank(), 4u);
+  EXPECT_EQ(out[0].AsInt(), 1);
+  EXPECT_EQ(out[1].AsInt(), 1);
+  EXPECT_EQ(out[2].AsInt(), 4);
+  EXPECT_EQ(out[3].AsInt(), 4);
+  EXPECT_EQ(ctx.Get("output").Dtype(), onnx_optim::TensorType::kFloat);
+}
+
 TEST(OnnxOptimShapesNnDropout, PropagatesPrimaryOutputShapeAndType) {
   NodeProto node = MakeDropoutNode();
   onnx_optim::shapes::ShapesContext ctx;

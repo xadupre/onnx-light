@@ -35,6 +35,8 @@ constexpr size_t kExpectedInstanceNormalizationSchemaCount = 3;
 constexpr size_t kExpectedLRNSchemaCount = 2;
 constexpr size_t kExpectedLpNormalizationSchemaCount = 2;
 constexpr size_t kExpectedLSTMSchemaCount = 4;
+constexpr size_t kExpectedMaxPoolSchemaCount = 6;
+constexpr size_t kExpectedMaxUnpoolSchemaCount = 3;
 constexpr size_t kExpectedRNNSchemaCount = 4;
 constexpr size_t kExpectedNnSchemaCount =
     kExpectedAttentionSchemaCount + kExpectedAveragePoolSchemaCount +
@@ -45,7 +47,7 @@ constexpr size_t kExpectedNnSchemaCount =
     kExpectedGlobalMaxPoolSchemaCount + kExpectedGRUSchemaCount +
     kExpectedGroupNormalizationSchemaCount + kExpectedInstanceNormalizationSchemaCount +
     kExpectedLRNSchemaCount + kExpectedLpNormalizationSchemaCount + kExpectedLSTMSchemaCount +
-    kExpectedRNNSchemaCount;
+    kExpectedMaxPoolSchemaCount + kExpectedMaxUnpoolSchemaCount + kExpectedRNNSchemaCount;
 
 static const onnx_op::LightOpSchema *
 FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
@@ -103,6 +105,88 @@ TEST(OnnxOpNnRegistrationTest, ReturnsAveragePoolSchemasWithoutShapeInference) {
 
   EXPECT_FALSE(ap_v1->doc().empty());
   EXPECT_FALSE(ap_v22->doc().empty());
+}
+
+TEST(OnnxOpNnRegistrationTest, ReturnsMaxPoolSchemasForAllVersions) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> mp_schemas =
+      onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("MaxPool");
+
+  EXPECT_EQ(mp_schemas.size(), kExpectedMaxPoolSchemaCount);
+
+  const onnx_op::LightOpSchema *const mp_v22 = FindByVersion(mp_schemas, 22);
+  const onnx_op::LightOpSchema *const mp_v12 = FindByVersion(mp_schemas, 12);
+  const onnx_op::LightOpSchema *const mp_v11 = FindByVersion(mp_schemas, 11);
+  const onnx_op::LightOpSchema *const mp_v10 = FindByVersion(mp_schemas, 10);
+  const onnx_op::LightOpSchema *const mp_v8 = FindByVersion(mp_schemas, 8);
+  const onnx_op::LightOpSchema *const mp_v1 = FindByVersion(mp_schemas, 1);
+
+  ASSERT_NE(nullptr, mp_v22);
+  ASSERT_NE(nullptr, mp_v12);
+  ASSERT_NE(nullptr, mp_v11);
+  ASSERT_NE(nullptr, mp_v10);
+  ASSERT_NE(nullptr, mp_v8);
+  ASSERT_NE(nullptr, mp_v1);
+
+  // Opset 1 has a single output (Y); the second output ``Indices`` was
+  // added in opset 8.
+  EXPECT_EQ(mp_v1->inputs().size(), 1u);
+  EXPECT_EQ(mp_v1->outputs().size(), 1u);
+  EXPECT_EQ(mp_v8->outputs().size(), 2u);
+  EXPECT_EQ(mp_v8->outputs()[1].name, "Indices");
+
+  EXPECT_EQ(mp_v22->domain(), "ai.onnx");
+  EXPECT_EQ(mp_v22->inputs().size(), 1u);
+  EXPECT_EQ(mp_v22->outputs().size(), 2u);
+  EXPECT_EQ(mp_v22->inputs()[0].name, "X");
+  EXPECT_EQ(mp_v22->outputs()[0].name, "Y");
+  EXPECT_EQ(mp_v22->outputs()[1].name, "Indices");
+
+  // Type-constraint widening across opsets: 3 → 5 → 6 floating/integer types.
+  EXPECT_EQ(mp_v1->type_constraints()[0].allowed_type_strs.size(), 3u);
+  EXPECT_EQ(mp_v8->type_constraints()[0].allowed_type_strs.size(), 3u);
+  EXPECT_EQ(mp_v10->type_constraints()[0].allowed_type_strs.size(), 3u);
+  EXPECT_EQ(mp_v11->type_constraints()[0].allowed_type_strs.size(), 3u);
+  EXPECT_EQ(mp_v12->type_constraints()[0].allowed_type_strs.size(), 5u);
+  EXPECT_EQ(mp_v22->type_constraints()[0].allowed_type_strs.size(), 6u);
+
+  EXPECT_FALSE(mp_v1->doc().empty());
+  EXPECT_FALSE(mp_v22->doc().empty());
+}
+
+TEST(OnnxOpNnRegistrationTest, ReturnsMaxUnpoolSchemasForAllVersions) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> mu_schemas =
+      onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("MaxUnpool");
+
+  EXPECT_EQ(mu_schemas.size(), kExpectedMaxUnpoolSchemaCount);
+
+  const onnx_op::LightOpSchema *const mu_v22 = FindByVersion(mu_schemas, 22);
+  const onnx_op::LightOpSchema *const mu_v11 = FindByVersion(mu_schemas, 11);
+  const onnx_op::LightOpSchema *const mu_v9 = FindByVersion(mu_schemas, 9);
+
+  ASSERT_NE(nullptr, mu_v22);
+  ASSERT_NE(nullptr, mu_v11);
+  ASSERT_NE(nullptr, mu_v9);
+
+  EXPECT_EQ(mu_v22->domain(), "ai.onnx");
+  EXPECT_EQ(mu_v22->inputs().size(), 3u);
+  EXPECT_EQ(mu_v22->outputs().size(), 1u);
+  EXPECT_EQ(mu_v22->inputs()[0].name, "X");
+  EXPECT_EQ(mu_v22->inputs()[1].name, "I");
+  EXPECT_EQ(mu_v22->inputs()[2].name, "output_shape");
+  EXPECT_EQ(mu_v22->outputs()[0].name, "output");
+  EXPECT_EQ(mu_v22->type_constraints().size(), 2u);
+
+  // T1 widens from 3 to 4 float types in opset 22; T2 is always int64.
+  EXPECT_EQ(mu_v9->type_constraints()[0].allowed_type_strs.size(), 3u);
+  EXPECT_EQ(mu_v11->type_constraints()[0].allowed_type_strs.size(), 3u);
+  EXPECT_EQ(mu_v22->type_constraints()[0].allowed_type_strs.size(), 4u);
+
+  EXPECT_FALSE(mu_v9->doc().empty());
+  EXPECT_FALSE(mu_v22->doc().empty());
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsRNNSchemasForAllVersions) {

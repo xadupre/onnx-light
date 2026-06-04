@@ -35,8 +35,8 @@ constexpr int64_t kDefaultIrVersion = 10;
 //   X            (batch, seq, d_model)
 //   Y            (batch, seq, d_model)
 //   added        (batch, seq, d_model)
-//   concat_out   (batch, seq, ?)          // last dim is ``2 * d_model``
-//   Z            (batch, seq, ?)          // recovered by Reshape([0, 0, -1])
+//   concat_out   (batch, seq, two_d_model)  // last dim is ``2 * d_model``
+//   Z            (batch, seq, two_d_model)  // recovered by Reshape([0, 0, -1])
 //
 // The reference DataSet still uses concrete sizes (``batch=2, seq=5,
 // d_model=8``) for the actual tensor values, so the case is executable.
@@ -73,11 +73,11 @@ void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry
   FillValueInfo(reshape_shape, *graph->add_input());
 
   // Intermediate value_info entries with symbolic dim names. The last dim
-  // of ``concat_out``/``Z`` is ``2 * d_model`` on the page; we leave it
-  // unannotated since ONNX shape inference cannot represent that symbolic
-  // product (Concat of two ``d_model`` symbolic dims yields a fresh
-  // anonymous dim, and Reshape([0, 0, -1]) keeps it anonymous).
-  const std::vector<DimSpec> concat_shape = {"batch", "seq", DimSpec()};
+  // of ``concat_out``/``Z`` is ``2 * d_model`` on the page; ONNX shape
+  // inference cannot represent that symbolic product, so we give it a
+  // dedicated symbolic name (``two_d_model``) instead of leaving the dim
+  // unannotated. The reference DataSet uses ``2 * d_model = 16``.
+  const std::vector<DimSpec> concat_shape = {"batch", "seq", "two_d_model"};
   AppendValueInfo(*graph->add_value_info(), "added", kFloat, input_shape);
   AppendValueInfo(*graph->add_value_info(), "concat_out", kFloat, concat_shape);
 

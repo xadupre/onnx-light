@@ -23,14 +23,12 @@ constexpr int64_t kDefaultIrVersion = 10;
 
 // Describes how the graph outputs (``nz`` and ``nz_float``) should be
 // annotated in the model's ValueInfo. Both variants use the symbolic
-// names from the ``plot_computed_shapes`` page (rank/nnz on ``nz`` and
-// do1/do2 on ``nz_float``); ``kNamedDims`` declares the names on the
-// graph outputs directly, while ``kAnonymousDims`` declares them only
-// where strictly required (the data-dependent ``nnz``/``do1`` dim on the
-// graph outputs and the intermediate ``transposed_nz`` value_info) so
-// that shape inference still has to propagate the link between them.
-// Neither variant uses default-constructed ``DimSpec()`` — every dim
-// carries either a ``dim_value`` or a ``dim_param``.
+// names from the ``plot_computed_shapes`` page (``nnz`` on ``nz`` and
+// ``do1`` on ``nz_float``); they currently produce identical models and
+// are kept as separate registered cases for parity with the
+// gallery-page distinction. Neither variant uses default-constructed
+// ``DimSpec()`` — every dim carries either a ``dim_value`` or a
+// ``dim_param``.
 enum class NonZeroOutputAnnotation { kAnonymousDims, kNamedDims };
 
 // Builds the shared 7-node ``Abs → Relu → Add → Mul → NonZero → Transpose

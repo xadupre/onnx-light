@@ -6,7 +6,13 @@ Convert an ONNX model or graph to a `Mermaid <https://mermaid.js.org/>`_
 embedded in Markdown or in a Sphinx page via the ``.. mermaid::``
 directive.
 
-Example:
+Example
+++++++
+
+Building a tiny model and printing its Mermaid source — using
+``sphinx_runpython``'s ``.. runpython:: :showcode:`` directive, which
+executes the Python block at documentation build time and renders both
+the code and its standard output:
 
 .. runpython::
     :showcode:
@@ -31,10 +37,33 @@ Example:
     )
     print(to_mermaid(model))
 
-Rendered as a Mermaid diagram:
+Rendering the diagram
++++++++++++++++++++++
 
-.. runpython::
-    :rst:
+To actually display the diagram, ``sphinx_runpython`` ships a
+``.. runmermaid::`` directive that wraps the Mermaid source into the
+HTML output (which is then rendered client-side by `mermaid.js
+<https://mermaid.js.org/>`_). It accepts a ``:script:`` option: when
+present, the directive body is executed as Python and its standard
+output is used as the Mermaid source. This pairs naturally with
+:func:`to_mermaid`, which already prints a complete ``flowchart``
+definition.
+
+The pattern is therefore::
+
+    .. runmermaid::
+        :script:
+
+        # any Python code that ends with `print(to_mermaid(model))`
+        from onnx_light.onnx import helper, TensorProto
+        from onnx_light.tools import to_mermaid
+        ...
+        print(to_mermaid(model))
+
+Applied to the model above:
+
+.. runmermaid::
+    :script:
 
     from onnx_light.onnx import helper, TensorProto
     from onnx_light.tools import to_mermaid
@@ -54,10 +83,17 @@ Rendered as a Mermaid diagram:
     model = helper.make_model(
         graph, opset_imports=[helper.make_opsetid("", 17)]
     )
-    print(".. mermaid::")
-    print()
-    for line in to_mermaid(model).splitlines():
-        print("    " + line)
+    print(to_mermaid(model))
+
+If the Mermaid source is already available as a static string (for
+instance copy-pasted from a previous run), the same ``.. runmermaid::``
+directive can be used without ``:script:`` and the body is treated as
+raw Mermaid::
+
+    .. runmermaid::
+
+        flowchart TB
+            A --> B --> C
 
 API
 +++

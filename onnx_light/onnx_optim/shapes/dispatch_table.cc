@@ -587,6 +587,14 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        [](ShapesContext &ctx, const NodeProto &node) {
          optional::ComputeShapeOptional(ctx, node);
        }},
+      {"ai.onnx:OptionalGetElement",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         optional::ComputeShapeOptionalGetElement(ctx, node);
+       }},
+      {"ai.onnx:OptionalHasElement",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         optional::ComputeShapeOptionalHasElement(ctx, node);
+       }},
       {"ai.onnx:QuantizeLinear",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);

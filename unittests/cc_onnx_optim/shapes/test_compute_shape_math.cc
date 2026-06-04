@@ -1523,6 +1523,12 @@ TEST(OnnxOptimShapesMathCeil, RejectsWrongOpType) {
   EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeCeil(ctx, node, "X"), std::invalid_argument);
 }
 
+TEST(OnnxOptimShapesMathCeil, ThrowsWhenInputMissingFromContext) {
+  NodeProto node = MakeUnaryNode("Ceil");
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeCeil(ctx, node, "X"), std::out_of_range);
+}
+
 TEST(OnnxOptimShapesMathClip, PropagatesFullyKnownShape) {
   NodeProto node = MakeUnaryNode("Clip");
   onnx_optim::shapes::ShapesContext ctx;

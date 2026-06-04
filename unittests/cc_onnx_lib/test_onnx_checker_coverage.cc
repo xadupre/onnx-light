@@ -257,6 +257,105 @@ TEST(CHECKER_COVERAGE, TensorUnrecognizedDataTypeRejected) {
   EXPECT_THROW(checker::check_tensor(t, MakeCtx()), ValidationError);
 }
 
+// Reject packed sub-byte tensors whose raw_data payload is too small.
+TEST(CHECKER_COVERAGE, TensorPackedSubByteRawDataTooSmall) {
+  // 4-bit types: 2 elements per byte.
+  for (TensorProto::DataType dtype :
+       {TensorProto::INT4, TensorProto::UINT4, TensorProto::FLOAT4E2M1}) {
+    TensorProto t;
+    t.set_name("t");
+    t.set_data_type(dtype);
+    t.add_dims(10);
+    for (int i = 0; i < 4; ++i) {
+      t.ref_raw_data().push_back('\0'); // 1 byte too short (need 5)
+    }
+    EXPECT_THROW(checker::check_tensor(t, MakeCtx()), ValidationError);
+
+    TensorProto ok;
+    ok.set_name("t");
+    ok.set_data_type(dtype);
+    ok.add_dims(10);
+    for (int i = 0; i < 5; ++i) {
+      ok.ref_raw_data().push_back('\0'); // ceil(10/2) = 5
+    }
+    EXPECT_NO_THROW(checker::check_tensor(ok, MakeCtx()));
+  }
+
+  // 2-bit types: 4 elements per byte.
+  for (TensorProto::DataType dtype : {TensorProto::INT2, TensorProto::UINT2}) {
+    TensorProto t;
+    t.set_name("t");
+    t.set_data_type(dtype);
+    t.add_dims(10);
+    for (int i = 0; i < 2; ++i) {
+      t.ref_raw_data().push_back('\0'); // 1 byte too short (need 3)
+    }
+    EXPECT_THROW(checker::check_tensor(t, MakeCtx()), ValidationError);
+
+    TensorProto ok;
+    ok.set_name("t");
+    ok.set_data_type(dtype);
+    ok.add_dims(10);
+    for (int i = 0; i < 3; ++i) {
+      ok.ref_raw_data().push_back('\0'); // ceil(10/4) = 3
+    }
+    EXPECT_NO_THROW(checker::check_tensor(ok, MakeCtx()));
+  }
+}
+
+// Reject packed sub-byte tensors whose int32_data payload is too small.
+TEST(CHECKER_COVERAGE, TensorPackedSubByteInt32DataTooSmall) {
+  // 4-bit types: 8 elements per int32.
+  for (TensorProto::DataType dtype :
+       {TensorProto::INT4, TensorProto::UINT4, TensorProto::FLOAT4E2M1}) {
+    TensorProto t;
+    t.set_name("t");
+    t.set_data_type(dtype);
+    t.add_dims(10);
+    t.add_int32_data(0); // 1 int32, need 2
+    EXPECT_THROW(checker::check_tensor(t, MakeCtx()), ValidationError);
+
+    TensorProto ok;
+    ok.set_name("t");
+    ok.set_data_type(dtype);
+    ok.add_dims(10);
+    ok.add_int32_data(0);
+    ok.add_int32_data(0); // ceil(10/8) = 2
+    EXPECT_NO_THROW(checker::check_tensor(ok, MakeCtx()));
+  }
+
+  // 2-bit types: 16 elements per int32.
+  for (TensorProto::DataType dtype : {TensorProto::INT2, TensorProto::UINT2}) {
+    TensorProto t;
+    t.set_name("t");
+    t.set_data_type(dtype);
+    t.add_dims(20);
+    t.add_int32_data(0); // 1 int32, need 2
+    EXPECT_THROW(checker::check_tensor(t, MakeCtx()), ValidationError);
+
+    TensorProto ok;
+    ok.set_name("t");
+    ok.set_data_type(dtype);
+    ok.add_dims(20);
+    ok.add_int32_data(0);
+    ok.add_int32_data(0); // ceil(20/16) = 2
+    EXPECT_NO_THROW(checker::check_tensor(ok, MakeCtx()));
+  }
+}
+
+// Zero-element packed tensors with empty payload must be valid.
+TEST(CHECKER_COVERAGE, TensorPackedSubByteZeroElems) {
+  for (TensorProto::DataType dtype :
+       {TensorProto::INT4, TensorProto::UINT4, TensorProto::FLOAT4E2M1, TensorProto::INT2,
+        TensorProto::UINT2}) {
+    TensorProto t;
+    t.set_name("t");
+    t.set_data_type(dtype);
+    t.add_dims(uint64_t{0});
+    EXPECT_NO_THROW(checker::check_tensor(t, MakeCtx()));
+  }
+}
+
 // ---------------------------------------------------------------------------
 // check_sparse_tensor
 // ---------------------------------------------------------------------------

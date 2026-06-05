@@ -556,6 +556,21 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          generator::ComputeShapeHannWindow(ctx, node);
        }},
+      {"ai.onnx:HardSigmoid",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeHardSigmoid(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:HardSwish",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeHardSwish(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:Hardmax",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeHardmax(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:If",
        [](ShapesContext &ctx, const NodeProto &node) { controlflow::ComputeShapeIf(ctx, node); }},
       {"ai.onnx:ImageDecoder",

@@ -13,6 +13,8 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 namespace math {
 
+AttributeParam MakeSoftmaxAxisAttr(int64_t default_axis);
+
 std::vector<LightOpSchema> BuildElementwiseMathSchemaForVersion(const char *op_type) {
   return std::vector<LightOpSchema>{
       LightOpSchema(op_type, kOnnxDomain, 14, MakeElementwiseMathDoc(op_type, 14),
@@ -495,6 +497,179 @@ mish(x) = x * tanh(softplus(x)) = x * tanh(ln(1 + e^{x}))
                          "Constrain input X and output types to float tensors."},
                     },
                     /*has_function_implementation=*/true));
+  return schemas;
+}
+
+std::vector<LightOpSchema> BuildHardSigmoidSchemas() {
+  static constexpr const char *kHardSigmoidDoc = R"DOC(
+HardSigmoid takes one input data (Tensor<T>) and produces one output data
+(Tensor<T>) where the HardSigmoid function, y = max(0, min(1, alpha * x + beta)),
+is applied to the tensor elementwise.
+)DOC";
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(3);
+  schemas.push_back(LightOpSchema(
+      "HardSigmoid", kOnnxDomain, 22, kHardSigmoidDoc,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T",
+           {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble},
+           "Constrain input and output types to float tensors."},
+      },
+      {
+          {"alpha", "Value of alpha.", AttributeType::FLOAT, /*required=*/false,
+           0.20000000298023224},
+          {"beta", "Value of beta.", AttributeType::FLOAT, /*required=*/false, 0.5},
+      },
+      /*has_function_implementation=*/true));
+  schemas.push_back(
+      LightOpSchema("HardSigmoid", kOnnxDomain, 6, kHardSigmoidDoc,
+                    {
+                        {"X", "Input tensor", "T"},
+                    },
+                    {
+                        {"Y", "Output tensor", "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    },
+                    {
+                        {"alpha", "Value of alpha.", AttributeType::FLOAT, /*required=*/false,
+                         0.20000000298023224},
+                        {"beta", "Value of beta.", AttributeType::FLOAT, /*required=*/false, 0.5},
+                    },
+                    /*has_function_implementation=*/true));
+  schemas.push_back(LightOpSchema(
+      "HardSigmoid", kOnnxDomain, 1, kHardSigmoidDoc,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+      },
+      {
+          {"alpha", "Value of alpha default to 0.2", AttributeType::FLOAT, /*required=*/false,
+           0.20000000298023224},
+          {"beta", "Value of beta default to 0.5", AttributeType::FLOAT, /*required=*/false, 0.5},
+      }));
+  return schemas;
+}
+
+std::vector<LightOpSchema> BuildHardSwishSchemas() {
+  static constexpr const char *kHardSwishDoc = R"DOC(
+HardSwish takes one input data (Tensor<T>) and produces one output data (Tensor<T>) where
+the HardSwish function, y = x * max(0, min(1, alpha * x + beta)) = x * HardSigmoid<alpha, beta>(x),
+where alpha = 1/6 and beta = 0.5, is applied to the tensor elementwise.
+)DOC";
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(2);
+  schemas.push_back(LightOpSchema(
+      "HardSwish", kOnnxDomain, 22, kHardSwishDoc,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T",
+           {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble},
+           "Constrain input and output types to float tensors."},
+      },
+      /*attributes=*/std::vector<AttributeParam>{},
+      /*has_function_implementation=*/true));
+  schemas.push_back(
+      LightOpSchema("HardSwish", kOnnxDomain, 14, kHardSwishDoc,
+                    {
+                        {"X", "Input tensor", "T"},
+                    },
+                    {
+                        {"Y", "Output tensor", "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    },
+                    /*attributes=*/std::vector<AttributeParam>{},
+                    /*has_function_implementation=*/true));
+  return schemas;
+}
+
+std::vector<LightOpSchema> BuildHardmaxSchemas() {
+  static constexpr const char *kHardmaxDocV13 = R"DOC(
+The operator computes the hardmax values for the given input.
+The "axis" attribute indicates the dimension along which Hardmax is
+performed. The output tensor has the same shape as the input tensor.
+)DOC";
+  static constexpr const char *kHardmaxDocV1 = R"DOC(
+The operator computes the hardmax (1 for the first maximum value, and 0 for all others)
+values for the given input.
+Inputs are conceptually coerced to a 2D matrix and Hardmax is applied on the
+second dimension. The output tensor has the same shape as the input tensor.
+)DOC";
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(3);
+  schemas.push_back(LightOpSchema(
+      "Hardmax", kOnnxDomain, 13, kHardmaxDocV13,
+      {
+          {"input", "The input tensor of rank >= axis.", "T"},
+      },
+      {
+          {"output", "The output values with the same shape as the input tensor.", "T"},
+      },
+      {
+          {"T",
+           {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kBfloat16},
+           "Constrain input and output types to float tensors."},
+      },
+      {
+          MakeSoftmaxAxisAttr(-1),
+      }));
+  schemas.push_back(LightOpSchema(
+      "Hardmax", kOnnxDomain, 11, kHardmaxDocV1,
+      {
+          {"input",
+           "The input tensor that's coerced into a 2D matrix of size (NxD) as described above.",
+           "T"},
+      },
+      {
+          {"output",
+           "The output values with the same shape as input tensor (the original size without "
+           "coercion).",
+           "T"},
+      },
+      {
+          {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+      },
+      {
+          MakeSoftmaxAxisAttr(1),
+      }));
+  schemas.push_back(LightOpSchema(
+      "Hardmax", kOnnxDomain, 1, kHardmaxDocV1,
+      {
+          {"input",
+           "The input tensor that's coerced into a 2D matrix of size (NxD) as described above.",
+           "T"},
+      },
+      {
+          {"output",
+           "The output values with the same shape as input tensor (the original size without "
+           "coercion).",
+           "T"},
+      },
+      {
+          {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+      },
+      {
+          MakeSoftmaxAxisAttr(1),
+      }));
   return schemas;
 }
 
@@ -2541,6 +2716,9 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Gemm", [] { return BuildGemmSchemas(); }},
       {"HammingWindow", [] { return BuildHammingWindowSchemas(); }},
       {"HannWindow", [] { return BuildHannWindowSchemas(); }},
+      {"HardSigmoid", [] { return BuildHardSigmoidSchemas(); }},
+      {"HardSwish", [] { return BuildHardSwishSchemas(); }},
+      {"Hardmax", [] { return BuildHardmaxSchemas(); }},
       {"Log", [] { return BuildLogSchemas(); }},
       {"MatMul", [] { return BuildMatMulSchemas(); }},
       {"Max", [] { return BuildMaxSchemas(); }},

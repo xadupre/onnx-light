@@ -269,6 +269,43 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Element-wise HardSigmoid activation:
+///     y = max(0, min(1, alpha * x + beta)).
+class HardSigmoid : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x, float alpha, float beta) const;
+  void operator()(const Tensor &x, float alpha, float beta, Tensor &output) const;
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
+/// Element-wise HardSwish activation:
+///     y = x * max(0, min(1, x/6 + 0.5)) = x * HardSigmoid(x; alpha=1/6, beta=0.5).
+class HardSwish : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x) const;
+  void operator()(const Tensor &x, Tensor &output) const;
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
+/// Hardmax: emits 1 at the position of the first maximum value along ``axis``,
+/// 0 elsewhere. The output has the same shape and dtype as the input.
+class Hardmax : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x, int64_t axis) const;
+  void operator()(const Tensor &x, int64_t axis, Tensor &output) const;
+
+  /// Hardmax must look at every value along the axis before it can write any
+  /// output, so it cannot run in place safely.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Element-wise sine: y = sin(x), defined for all real x with y in [-1, 1].
 class Sin : public KernelBase {
 public:

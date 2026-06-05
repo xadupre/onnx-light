@@ -32,7 +32,6 @@ Core objects and where ownership lives
 Every tensor stores bytes in ``TensorProto::raw_data`` (type ``utils::ByteSpan``).
 That ``ByteSpan`` object is a member of the ``TensorProto`` instance, so its
 lifetime is tied to the model object graph (``ModelProto -> GraphProto -> TensorProto``).
-
 ``ByteSpan`` has two storage modes:
 
 * **Owned mode**: it owns an internal byte buffer.
@@ -86,7 +85,6 @@ loading scenario:
 The function returns a ``std::shared_ptr<uint8_t[]>`` (Python: the function returns
 ``None``; the buffer lifetime is managed by the tensors).  Tensors that are smaller
 than the threshold remain in their original owned or borrowed state.
-
 This is useful for:
 
 * Reducing memory fragmentation after loading a model that was parsed without the

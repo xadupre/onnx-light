@@ -58,6 +58,11 @@ See the
 [library split design page](https://sdpython.github.io/doc/onnx-light/dev/design/library_split.html)
 for the detailed breakdown.
 
+## Backend Tests
+
+- Fully written in C++, it can be used in any language.
+- Output are always generated with a C++ kernel.
+
 ## Getting started
 
 Install the package in editable mode:

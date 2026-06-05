@@ -628,6 +628,7 @@ class TestSaveModelWithSharedExternalData(ExtTestCase):
 
     def test_save_model_reuses_first_model_weights(self) -> None:
         from onnx_light.onnx import save_model_with_shared_external_data
+        from onnx_light.onnx_lib import SerializeOptions
 
         with tempfile.TemporaryDirectory() as tdir:
             src_onnx = os.path.join(tdir, "src.onnx")
@@ -658,15 +659,17 @@ class TestSaveModelWithSharedExternalData(ExtTestCase):
             graph_b = oh.make_graph([], "g2", [], [], initializer=second_inits)
             second = oh.make_model(graph_b, producer_name="second")
 
+            # Save the second model next to the first one so the reused initializers'
+            # external_data.location (kept as-is) still resolves to src.onnx.data.
             dst_onnx = os.path.join(tdir, "dst.onnx")
-            dst_weights = os.path.join(tdir, "dst.data")
+            dst_weights = dst_onnx + ".data"
             alignment = 64
+            opts = SerializeOptions()
+            opts.alignment = alignment
             total = save_model_with_shared_external_data(
-                src_onnx_path=src_onnx,
                 model=second,
                 dst_onnx_path=dst_onnx,
-                dst_weights_path=dst_weights,
-                alignment=alignment,
+                options=opts,
             )
             # Only the new initializers should land in dst.data (20 bytes, then 64-aligned
             # padding, then 12 bytes => 76 bytes total).
@@ -676,8 +679,9 @@ class TestSaveModelWithSharedExternalData(ExtTestCase):
             # The first model's data file must NOT have been modified or duplicated.
             self.assertEqual(os.path.getsize(src_data), src_data_size)
 
-            # 1) Inspect metadata: reused initializers keep pointing at src.onnx.data,
-            #    new ones point at dst.data with aligned offsets.
+            # 1) Inspect metadata: reused initializers keep pointing at src.onnx.data
+            #    (their location is preserved as-is), new ones point at dst.onnx.data
+            #    with aligned offsets.
             meta = onnxl.load(dst_onnx, load_external_data=False)
             inits = list(meta.graph.initializer)
             self.assertEqual(len(inits), len(payloads_first) + len(payloads_new))
@@ -701,8 +705,8 @@ class TestSaveModelWithSharedExternalData(ExtTestCase):
                 np.testing.assert_array_equal(got, arr)
 
     def test_save_model_with_only_reused_weights(self) -> None:
-        """No new initializer: dst_weights file is not created, return value is 0,
-        reused initializers keep pointing at the first model's weights file."""
+        """No new initializer: secondary weights file is not created, return value is
+        0, reused initializers keep pointing at the first model's weights file."""
         from onnx_light.onnx import save_model_with_shared_external_data
 
         with tempfile.TemporaryDirectory() as tdir:
@@ -716,12 +720,10 @@ class TestSaveModelWithSharedExternalData(ExtTestCase):
             second = oh.make_model(graph_b, producer_name="second")
 
             dst_onnx = os.path.join(tdir, "dst.onnx")
-            dst_weights = os.path.join(tdir, "dst.data")
-            total = save_model_with_shared_external_data(
-                src_onnx, second, dst_onnx, dst_weights
-            )
+            dst_weights = dst_onnx + ".data"
+            total = save_model_with_shared_external_data(second, dst_onnx)
             self.assertEqual(total, 0)
-            # dst_weights file is not created when there is nothing to write.
+            # The secondary weights file is not created when there is nothing to write.
             self.assertFalse(os.path.exists(dst_weights))
 
             loaded = onnxl.load(dst_onnx, load_external_data=True)
@@ -729,16 +731,21 @@ class TestSaveModelWithSharedExternalData(ExtTestCase):
                 got = np.frombuffer(init.raw_data, dtype=np.float32)
                 np.testing.assert_array_equal(got, arr)
 
-    def test_save_model_dst_in_subdirectory_rewrites_location(self) -> None:
-        """When the destination model lives in a different directory than the first
-        model, the reused initializers' location is rewritten so it still resolves to
-        the first model's weights file."""
+    def test_save_model_preserves_existing_external_location_as_is(self) -> None:
+        """Reused initializers' external_data entries (location, offset, length) are
+        written out unchanged — no rewriting relative to the destination's directory."""
         from onnx_light.onnx import save_model_with_shared_external_data
 
         with tempfile.TemporaryDirectory() as tdir:
             src_onnx = os.path.join(tdir, "src.onnx")
-            payloads_first = self._make_first_model(src_onnx)
+            self._make_first_model(src_onnx)
             first = onnxl.load(src_onnx, load_external_data=False)
+
+            # Capture the original external_data entries before saving.
+            original_entries: list[dict[str, str]] = [
+                {e.key: str(e.value) for e in init.external_data}
+                for init in first.graph.initializer
+            ]
 
             new_arr = np.full((2,), 9.0, dtype=np.float32)
             new_init = oh.make_tensor(
@@ -753,35 +760,28 @@ class TestSaveModelWithSharedExternalData(ExtTestCase):
             )
             second = oh.make_model(graph_b, producer_name="second")
 
+            # Save the second model in a subdirectory: with the new API, the reused
+            # initializers' location is kept exactly as it was on the first model,
+            # so it still reads "src.onnx.data" (not a "../src.onnx.data" rewrite).
             sub = os.path.join(tdir, "sub")
             os.makedirs(sub)
             dst_onnx = os.path.join(sub, "dst.onnx")
-            dst_weights = os.path.join(sub, "dst.data")
-            save_model_with_shared_external_data(src_onnx, second, dst_onnx, dst_weights)
+            save_model_with_shared_external_data(second, dst_onnx)
 
-            # The rewritten location must resolve (relative to dst's directory) to the
-            # first model's weights file.
             meta = onnxl.load(dst_onnx, load_external_data=False)
-            for init in meta.graph.initializer:
-                if not str(init.name).startswith("a"):
-                    continue
+            reused = [init for init in meta.graph.initializer if str(init.name).startswith("a")]
+            self.assertEqual(len(reused), len(original_entries))
+            for init, original in zip(reused, original_entries):
                 entries = {e.key: str(e.value) for e in init.external_data}
-                resolved = os.path.normpath(
-                    os.path.join(os.path.dirname(dst_onnx), str(entries["location"]))
-                )
-                self.assertEqual(resolved, os.path.normpath(src_onnx + ".data"))
+                # Every external_data entry of a reused initializer is preserved verbatim.
+                self.assertEqual(entries, original)
 
-            # The newly written initializer is stored next to dst.onnx with a plain
-            # filename location (no folder), which is the only layout the loader allows.
-            for init in meta.graph.initializer:
-                if str(init.name).startswith("n"):
-                    entries = {e.key: str(e.value) for e in init.external_data}
-                    self.assertEqual(str(entries["location"]), os.path.basename(dst_weights))
-            # NB: the reused initializers' location is rewritten with a ``../`` segment
-            # because the destination model lives in a subdirectory; ``onnx_light.load``
-            # rejects such paths by default for security reasons, so we do not call it
-            # here.  Users who need to load such a model can pass the resolved absolute
-            # location through ``load_external_data`` overrides.
+            # The newly written initializer points at the auto-derived secondary file
+            # placed next to dst.onnx, with a plain basename location.
+            new_metas = [init for init in meta.graph.initializer if str(init.name).startswith("n")]
+            self.assertEqual(len(new_metas), 1)
+            new_entries = {e.key: str(e.value) for e in new_metas[0].external_data}
+            self.assertEqual(str(new_entries["location"]), os.path.basename(dst_onnx) + ".data")
 
 
 if __name__ == "__main__":

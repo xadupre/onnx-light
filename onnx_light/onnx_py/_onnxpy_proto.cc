@@ -814,47 +814,49 @@ afford to load the full model in memory.
 
   m.def(
       "save_model_with_shared_external_data",
-      [](const std::string &src_onnx_path, ModelProto &model, const std::string &dst_onnx_path,
-         const std::string &dst_weights_path, int64_t alignment) -> int64_t {
-        return static_cast<int64_t>(SaveModelWithSharedExternalData(
-            src_onnx_path, model, dst_onnx_path, dst_weights_path, alignment));
+      [](ModelProto &model, const std::string &dst_onnx_path,
+         const SerializeOptions &options) -> int64_t {
+        return static_cast<int64_t>(SaveModelWithSharedExternalData(model, dst_onnx_path, options));
       },
-      nb::arg("src_onnx_path"), nb::arg("model"), nb::arg("dst_onnx_path"),
-      nb::arg("dst_weights_path"), nb::arg("alignment") = 4096,
-      R"pbdoc(Saves a second model while reusing the weights of a first model.
+      nb::arg("model"), nb::arg("dst_onnx_path"), nb::arg("options") = SerializeOptions{},
+      R"pbdoc(Saves a model while reusing already-external weights of any
+previously saved model the initializers were taken from.
 
 This is the companion of :func:`align_external_data_streaming` for the scenario
-where a first model has already been written to ``src_onnx_path`` (plus its
-external weights file(s)) and then loaded **without** external data, and a
-second model is built from it: some of its initializers reuse the first model's
-external tensors (so they still carry the original ``external_data`` entries)
-and new initializers are added with inline ``raw_data``.
+where a first model has already been written to disk (one ``.onnx`` + one or
+more weights files) and was then loaded **without** external data, so its
+initializers still carry the original ``external_data`` metadata.  A model is
+then built that mixes some of those reused initializers with new initializers
+carrying inline ``raw_data``.
 
-Calling this function saves the second model to ``dst_onnx_path`` such that:
+Calling this function serializes that model to ``dst_onnx_path`` such that:
 
-* Reused initializers keep pointing at the first model's weights file: only
-  their ``external_data.location`` is rewritten so that it remains valid
-  relative to ``dst_onnx_path``'s parent directory.  No byte is copied from
-  those files.
-* New initializers are streamed to ``dst_weights_path`` at aligned offsets, and
-  their ``external_data`` entries are updated in place to point at this new
-  file.  ``dst_weights_path`` therefore contains *only* the new weights.
+* Initializers already marked as EXTERNAL are written out as-is: their
+  ``external_data`` entries (``location``, ``offset``, ``length``) are kept
+  unchanged, so they keep referencing whatever weights file they already
+  pointed at.  No byte is copied from those files.  The caller is responsible
+  for the recorded ``location`` remaining resolvable relative to
+  ``dst_onnx_path``'s parent directory.
+* New initializers carrying inline ``raw_data`` are written to a single
+  secondary weights file named ``<dst_onnx_path>.data`` (placed next to
+  ``dst_onnx_path``) at aligned offsets.  Their inline bytes are then cleared
+  from the in-memory proto and their ``external_data`` entries are updated to
+  point at that secondary file.  The secondary file therefore contains *only*
+  the new weights, and is not created at all when every initializer is reused.
 
-:param src_onnx_path: Path of the first model's ``.onnx`` file.  Used to
-    resolve the (possibly relative) ``external_data.location`` of the reused
-    initializers when computing their new location relative to
-    ``dst_onnx_path``'s parent directory.
-:param model: Second model, mutated in place.  After the call, all its inline
-    ``raw_data`` initializers reference ``dst_weights_path`` instead.
-:param dst_onnx_path: Destination ``.onnx`` file (created/truncated).
-:param dst_weights_path: Destination weights file for the new initializers
-    (created/truncated only when the second model has at least one new inline
-    initializer; not created at all when every initializer is reused from the
-    first model).
-:param alignment: Alignment in bytes (power of two, >= 1) applied to each new
-    tensor's offset in ``dst_weights_path``.  Defaults to 4096.
-:return: Total bytes written to ``dst_weights_path`` (including padding;
-    ``0`` when no new initializer needed to be written).
+:param model: ModelProto, mutated in place.  After the call, new initializers
+    reference the secondary weights file instead of carrying inline
+    ``raw_data``.
+:param dst_onnx_path: Destination ``.onnx`` file (created/truncated).  The
+    secondary weights file (when needed) is created at
+    ``dst_onnx_path + ".data"``.
+:param options: :class:`SerializeOptions`.  Only ``alignment`` (inherited from
+    :class:`TensorBufferOptions`) is honored: it controls the alignment in
+    bytes applied to each new tensor's offset in the secondary weights file
+    (``0`` disables alignment; use ``4096`` for mmap-friendly pages).  Defaults
+    to a freshly constructed :class:`SerializeOptions`.
+:return: Total bytes written to the secondary weights file (including any
+    alignment padding; ``0`` when no new initializer needed to be written).
 )pbdoc");
 
   nb::class_<utils::PrintOptions>(m, "PrintOptions", "Printing options for proto classes")

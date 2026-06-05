@@ -538,22 +538,26 @@ offset_t AlignExternalDataStreaming(const std::string &src_onnx_path,
   return current_offset;
 }
 
-offset_t SaveModelWithSharedExternalData(const std::string &src_onnx_path, ModelProto &model,
-                                         const std::string &dst_onnx_path,
-                                         const std::string &dst_weights_path, int64_t alignment) {
-  onnx_light_helpers::ValidateAlignmentOption(alignment,
-                                              "SaveModelWithSharedExternalData.alignment");
-  EXT_ENFORCE(alignment >= 1, "SaveModelWithSharedExternalData: alignment must be >= 1, got ",
+offset_t SaveModelWithSharedExternalData(ModelProto &model, const std::string &dst_onnx_path,
+                                         const SerializeOptions &options) {
+  const int64_t alignment = options.alignment;
+  EXT_ENFORCE(alignment >= 0, "SaveModelWithSharedExternalData: alignment must be >= 0, got ",
               alignment, ".");
+  if (alignment > 1) {
+    onnx_light_helpers::ValidateAlignmentOption(alignment,
+                                                "SaveModelWithSharedExternalData.alignment");
+  }
 
   namespace fs = std::filesystem;
-  const fs::path src_path(src_onnx_path);
-  const fs::path src_dir = src_path.parent_path();
   const fs::path dst_path(dst_onnx_path);
   const fs::path dst_dir = dst_path.parent_path();
+
+  // Secondary weights file is always next to dst_onnx_path with a ".data" suffix.
+  const std::string dst_weights_path = dst_onnx_path + ".data";
   const fs::path dst_weights_full(dst_weights_path);
 
-  // Location to record for new initializers (path of dst_weights relative to dst_onnx's directory).
+  // Location to record for new initializers: path of the secondary weights file relative to
+  // dst_onnx_path's parent directory (i.e. just its filename).
   fs::path stored_new_location =
       dst_dir.empty() ? dst_weights_full : fs::relative(dst_weights_full, dst_dir);
   if (stored_new_location.empty()) {
@@ -589,23 +593,9 @@ offset_t SaveModelWithSharedExternalData(const std::string &src_onnx_path, Model
                 "' has both inline raw_data and external_data; this is not supported.");
 
     if (is_external) {
-      // Reused initializer: rewrite its location so it remains valid relative to dst_dir,
-      // but do not touch the file it references.
-      std::string src_location;
-      int64_t src_offset = 0;
-      int64_t length = 0;
-      ReadExternalDataEntries(tensor, src_location, src_offset, length);
-
-      fs::path original(src_location);
-      fs::path absolute = original;
-      if (!absolute.is_absolute() && !src_dir.empty()) {
-        absolute = src_dir / original;
-      }
-      fs::path new_loc = dst_dir.empty() ? absolute : fs::relative(absolute, dst_dir);
-      if (new_loc.empty()) {
-        new_loc = absolute;
-      }
-      RewriteExternalDataEntries(tensor, new_loc.string(), src_offset, length);
+      // Reused initializer: its external_data entries belong to a previously saved model and
+      // are kept as-is. The caller is responsible for the recorded location remaining
+      // resolvable relative to dst_onnx_path's parent directory.
       continue;
     }
 

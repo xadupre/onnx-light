@@ -86,62 +86,60 @@ offset_t AlignExternalDataStreaming(const std::string &src_onnx_path,
                                     int64_t chunk_size = 4 * 1024 * 1024);
 
 /**
- * Saves a second model while reusing the weights of a first model.
+ * Saves a model while reusing already-external weights of any previously saved
+ * model the initializers were taken from.
  *
  * Companion of :func:`AlignExternalDataStreaming` for the scenario described in
- * the issue: a first model has already been written to ``(src_onnx_path,
- * <weights file(s)>)`` and was then loaded **without** external data, so its
- * initializers still carry the original ``external_data`` metadata.  A second
- * model is built from that one — some of its initializers reuse those external
- * tensors (they keep the ``external_data`` entries pointing at the first
- * model's weights file), and new initializers are added with inline
- * ``raw_data``.
+ * the issue: a first model has already been written to disk (one ``.onnx`` +
+ * one or more weights files) and was then loaded **without** external data, so
+ * its initializers still carry the original ``external_data`` metadata.  A
+ * model is built that mixes some of those reused initializers with new ones
+ * carrying inline ``raw_data``.  This function serializes that model in a way
+ * that avoids re-writing the reused weights:
  *
- * This function saves the second model to ``dst_onnx_path`` such that:
- *
- *  - Initializers already marked as EXTERNAL keep referencing the first model's
- *    weights file.  Their ``external_data.location`` is rewritten so that it
- *    remains valid relative to ``dst_onnx_path``'s parent directory (i.e. it
- *    keeps resolving to the same absolute file it pointed to before).  Offsets
- *    and lengths are left unchanged: no byte is copied from those files.
+ *  - Initializers already marked as EXTERNAL are left untouched: their
+ *    ``external_data`` entries (``location``, ``offset``, ``length``) are
+ *    serialized as-is, so they keep referencing whatever weights file they
+ *    already pointed at.  No byte is copied from those files.  The caller is
+ *    responsible for the recorded ``location`` remaining resolvable relative
+ *    to ``dst_onnx_path``'s parent directory (for example by saving the
+ *    model next to the first model, or by using an absolute path on the first
+ *    model's initializers).
  *  - Initializers carrying inline ``raw_data`` (the "new" weights) are written
- *    out to ``dst_weights_path`` at aligned offsets, their bytes are then
- *    cleared from the in-memory proto, and their ``external_data`` entries are
- *    set to point at ``dst_weights_path``.
+ *    out to a single secondary weights file named ``<dst_onnx_path>.data``
+ *    (placed next to ``dst_onnx_path``) at aligned offsets.  Their inline
+ *    bytes are cleared from the in-memory proto and their ``external_data``
+ *    entries are set to point at that secondary file (location stored
+ *    relative to ``dst_onnx_path``'s parent directory).
  *  - The resulting proto is serialized to ``dst_onnx_path`` as a single
- *    ``.onnx`` file (the destination weights file thus contains *only* the new
- *    initializers).
+ *    ``.onnx`` file.  The secondary weights file is created only when the
+ *    model has at least one new inline initializer; it is not created at all
+ *    when every initializer is reused from the first model.
  *
- * @param src_onnx_path     Path of the first model's ``.onnx`` file.  Used to
- *                          resolve the (possibly relative)
- *                          ``external_data.location`` entries of the reused
- *                          initializers when computing their new location
- *                          relative to ``dst_onnx_path``'s parent directory.
- * @param model             Second model, mutated in place.  After the call, all
- *                          its initializers reference external data: either the
- *                          first model's weights file (reused) or
- *                          ``dst_weights_path`` (new).
- * @param dst_onnx_path     Destination ``.onnx`` file (created/truncated).
- * @param dst_weights_path  Destination weights file for the new initializers
- *                          (created/truncated only when the second model has at
- *                          least one new inline initializer; not created at all
- *                          when every initializer is reused from the first
- *                          model).
- * @param alignment         Alignment in bytes applied to each new tensor's
- *                          offset in ``dst_weights_path``.  Must be a power of
- *                          two (>= 1).  Use 4096 for mmap-friendly pages.
- * @return The total number of bytes written to ``dst_weights_path``, including
- *         any alignment padding (0 when no new initializer was written).
+ * @param model           Model, mutated in place.  After the call, the inline
+ *                        ``raw_data`` of new initializers has been moved to
+ *                        the secondary weights file and their
+ *                        ``external_data`` updated accordingly.
+ * @param dst_onnx_path   Destination ``.onnx`` file (created/truncated).  The
+ *                        secondary weights file (when needed) is created at
+ *                        ``dst_onnx_path + ".data"``.
+ * @param options         Serializing options.  Only ``alignment`` (inherited
+ *                        from :cpp:class:`TensorBufferOptions`) is honored:
+ *                        it controls the alignment in bytes applied to each
+ *                        new tensor's offset in the secondary weights file
+ *                        (``0`` disables alignment; use ``4096`` for
+ *                        mmap-friendly pages).
+ * @return The total number of bytes written to the secondary weights file,
+ *         including any alignment padding (``0`` when no new initializer
+ *         needed to be written).
  *
- * @note Tensors that have neither inline ``raw_data`` nor ``external_data`` are
- *       left untouched (e.g. small tensors that use the typed ``*_data``
+ * @note Tensors that have neither inline ``raw_data`` nor ``external_data``
+ *       are left untouched (e.g. small tensors that use the typed ``*_data``
  *       fields).  A tensor having both inline ``raw_data`` and an EXTERNAL
  *       ``data_location`` is rejected.
  */
-offset_t SaveModelWithSharedExternalData(const std::string &src_onnx_path, ModelProto &model,
-                                         const std::string &dst_onnx_path,
-                                         const std::string &dst_weights_path,
-                                         int64_t alignment = 4096);
+offset_t SaveModelWithSharedExternalData(ModelProto &model, const std::string &dst_onnx_path,
+                                         const SerializeOptions &options = SerializeOptions{});
 
 /**
  * Transfers all tensor raw_data whose size is >= opts.raw_data_threshold into a single

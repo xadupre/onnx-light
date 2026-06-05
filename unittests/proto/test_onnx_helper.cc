@@ -1808,7 +1808,7 @@ TEST(onnx_alignment, SaveModelWithSharedExternalDataReusesFirstModelWeights) {
   const std::string src_onnx = "share_weights_src.onnx";
   const std::string src_weights = "share_weights_src.data";
   const std::string dst_onnx = "share_weights_dst.onnx";
-  const std::string dst_weights = "share_weights_dst.data";
+  const std::string dst_weights = dst_onnx + ".data";
   for (const auto &p : {src_onnx, src_weights, dst_onnx, dst_weights}) {
     std::remove(p.c_str());
   }
@@ -1853,8 +1853,9 @@ TEST(onnx_alignment, SaveModelWithSharedExternalDataReusesFirstModelWeights) {
   // ---- 4) Save with shared weights.
   constexpr int64_t alignment = 64;
   const auto src_size_before = fs::file_size(src_weights);
-  const offset_t total =
-      SaveModelWithSharedExternalData(src_onnx, second, dst_onnx, dst_weights, alignment);
+  SerializeOptions save_opts;
+  save_opts.alignment = alignment;
+  const offset_t total = SaveModelWithSharedExternalData(second, dst_onnx, save_opts);
   EXPECT_EQ(total, static_cast<offset_t>(new_payload.size() * sizeof(float))); // 20 bytes only
   ASSERT_TRUE(fs::exists(dst_weights));
   EXPECT_EQ(static_cast<offset_t>(fs::file_size(dst_weights)), total);
@@ -1886,10 +1887,11 @@ TEST(onnx_alignment, SaveModelWithSharedExternalDataReusesFirstModelWeights) {
         len = std::stoll(e.ref_value().as_string());
     }
     if (t.ref_name().as_string()[0] == 'a') {
-      // Reused — must still reference the first model's weights file.
-      EXPECT_EQ(loc, src_weights);
+      // Reused — must still reference the first model's weights file as-is
+      // (TwoFilesWriteStream records "./<file>" when the .onnx has no parent directory).
+      EXPECT_EQ(loc, std::string("./") + src_weights);
     } else {
-      // New — written into dst_weights at an aligned offset.
+      // New — written into the auto-derived secondary file at an aligned offset.
       EXPECT_EQ(loc, dst_weights);
       ASSERT_GE(off, 0);
       EXPECT_EQ(off % alignment, 0);

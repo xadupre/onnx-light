@@ -67,8 +67,8 @@ std::vector<TensorType> MaxPoolTypes(int since_version) {
             TensorType::kDouble,   TensorType::kInt8,    TensorType::kUint8};
   }
   if (since_version >= 12) {
-    return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble,
-            TensorType::kInt8,    TensorType::kUint8};
+    return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kInt8,
+            TensorType::kUint8};
   }
   return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
 }
@@ -133,21 +133,20 @@ std::vector<TensorType> MaxUnpoolFloatTypes(int since_version) {
 }
 
 LightOpSchema MakeMaxUnpoolSchema(int since_version) {
-  return LightOpSchema(
-      "MaxUnpool", kOnnxDomain, since_version, MakeMaxUnpoolDoc(since_version),
-      {
-          {"X", kMaxUnpoolXDescription, "T1"},
-          {"I", kMaxUnpoolIDescription, "T2"},
-          {"output_shape", kMaxUnpoolOutputShapeDescription, "T2"},
-      },
-      {
-          {"output", kMaxUnpoolOutputDescription, "T1"},
-      },
-      {
-          {"T1", MaxUnpoolFloatTypes(since_version),
-           "Constrain input and output types to float tensors."},
-          {"T2", {TensorType::kInt64}, "Constrain index tensor to int64"},
-      });
+  return LightOpSchema("MaxUnpool", kOnnxDomain, since_version, MakeMaxUnpoolDoc(since_version),
+                       {
+                           {"X", kMaxUnpoolXDescription, "T1"},
+                           {"I", kMaxUnpoolIDescription, "T2"},
+                           {"output_shape", kMaxUnpoolOutputShapeDescription, "T2"},
+                       },
+                       {
+                           {"output", kMaxUnpoolOutputDescription, "T1"},
+                       },
+                       {
+                           {"T1", MaxUnpoolFloatTypes(since_version),
+                            "Constrain input and output types to float tensors."},
+                           {"T2", {TensorType::kInt64}, "Constrain index tensor to int64"},
+                       });
 }
 
 const char *const kDropoutDataDescription = "The input data as Tensor.";

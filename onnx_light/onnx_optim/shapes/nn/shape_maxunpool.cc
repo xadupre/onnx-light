@@ -76,8 +76,8 @@ void ComputeShapeMaxUnpool(ShapesContext &ctx, const NodeProto &node, const char
     }
     const OptimDim &d = in_shape[i + 2];
     if (d.IsInt()) {
-      const int64_t out_d = strides[i] * (d.AsInt() - 1) + kernel_shape[i] - pads[i] -
-                            pads[i + n_input_dims];
+      const int64_t out_d =
+          strides[i] * (d.AsInt() - 1) + kernel_shape[i] - pads[i] - pads[i + n_input_dims];
       out_shape.PushBack(OptimDim(out_d));
     } else {
       std::string expr = "MaxUnpool(" + d.AsExpr() + ",k=" + std::to_string(kernel_shape[i]) +

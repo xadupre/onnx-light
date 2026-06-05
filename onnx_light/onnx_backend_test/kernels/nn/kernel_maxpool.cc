@@ -92,8 +92,7 @@ std::pair<Tensor, Tensor> RunMaxPool(const Tensor &x, const std::vector<int64_t>
 
   const size_t k = kernel_shape.size();
   std::vector<int64_t> strides = strides_in.empty() ? std::vector<int64_t>(k, 1) : strides_in;
-  std::vector<int64_t> dilations =
-      dilations_in.empty() ? std::vector<int64_t>(k, 1) : dilations_in;
+  std::vector<int64_t> dilations = dilations_in.empty() ? std::vector<int64_t>(k, 1) : dilations_in;
   EXT_ENFORCE_INVALID(strides.size() == k,
                       "kernel::MaxPool: strides must have one entry per spatial axis.");
   EXT_ENFORCE_INVALID(dilations.size() == k,

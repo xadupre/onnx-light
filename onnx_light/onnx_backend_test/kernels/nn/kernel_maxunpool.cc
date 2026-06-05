@@ -28,8 +28,7 @@ namespace {
 //      top-left corner of a zero buffer of shape ``output_shape``.
 Tensor RunMaxUnpool(const Tensor &x, const Tensor &indices,
                     const std::vector<int64_t> &kernel_shape,
-                    const std::vector<int64_t> &strides_in,
-                    const std::vector<int64_t> &pads_in,
+                    const std::vector<int64_t> &strides_in, const std::vector<int64_t> &pads_in,
                     const std::vector<int64_t> *explicit_output_shape) {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::MaxUnpool: x must be FLOAT.");
@@ -37,10 +36,8 @@ Tensor RunMaxUnpool(const Tensor &x, const Tensor &indices,
                       "kernel::MaxUnpool: indices must be INT64.");
   EXT_ENFORCE_INVALID(x.shape == indices.shape,
                       "kernel::MaxUnpool: indices must have the same shape as x.");
-  EXT_ENFORCE_INVALID(x.shape.size() >= 2,
-                      "kernel::MaxUnpool: x must have rank >= 2 (N, C, ...).");
-  EXT_ENFORCE_INVALID(!kernel_shape.empty(),
-                      "kernel::MaxUnpool: kernel_shape must be non-empty.");
+  EXT_ENFORCE_INVALID(x.shape.size() >= 2, "kernel::MaxUnpool: x must have rank >= 2 (N, C, ...).");
+  EXT_ENFORCE_INVALID(!kernel_shape.empty(), "kernel::MaxUnpool: kernel_shape must be non-empty.");
   const size_t k = kernel_shape.size();
   EXT_ENFORCE_INVALID(x.shape.size() == k + 2,
                       "kernel::MaxUnpool: x rank must equal kernel_shape.size() + 2.");
@@ -104,9 +101,8 @@ Tensor RunMaxUnpool(const Tensor &x, const Tensor &indices,
   // The output dimensions must be at least as large as the inferred ones; the
   // inferred region is copied into the top-left corner.
   for (size_t i = 0; i < x.shape.size(); ++i) {
-    EXT_ENFORCE_INVALID(
-        (*explicit_output_shape)[i] >= inferred_shape[i],
-        "kernel::MaxUnpool: output_shape must be >= inferred shape on every axis.");
+    EXT_ENFORCE_INVALID((*explicit_output_shape)[i] >= inferred_shape[i],
+                        "kernel::MaxUnpool: output_shape must be >= inferred shape on every axis.");
   }
   int64_t out_total = 1;
   for (int64_t d : *explicit_output_shape) {

@@ -351,8 +351,7 @@ public:
   Tensor operator()(const Tensor &x, const std::vector<int64_t> &kernel_shape,
                     const std::vector<int64_t> &strides = {}, const std::vector<int64_t> &pads = {},
                     bool ceil_mode = false, const std::vector<int64_t> &dilations = {},
-                    int64_t storage_order = 0,
-                    const std::string &auto_pad = "NOTSET") const;
+                    int64_t storage_order = 0, const std::string &auto_pad = "NOTSET") const;
 
   /// Returns ``(Y, Indices)`` where ``Indices`` is an ``int64`` tensor with
   /// the same shape as ``Y`` containing the flat indices into the un-padded

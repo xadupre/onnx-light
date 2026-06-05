@@ -301,16 +301,14 @@ TEST(OnnxOptimShapesNnMaxUnpool, ComputesShapeFromAttributes) {
   AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
 
   onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
-                                       onnx_optim::OptimShape{onnx_optim::OptimDim(1),
-                                                              onnx_optim::OptimDim(1),
-                                                              onnx_optim::OptimDim(2),
-                                                              onnx_optim::OptimDim(2)}));
-  ctx.Set("I", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
-                                       onnx_optim::OptimShape{onnx_optim::OptimDim(1),
-                                                              onnx_optim::OptimDim(1),
-                                                              onnx_optim::OptimDim(2),
-                                                              onnx_optim::OptimDim(2)}));
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                          onnx_optim::OptimDim(2), onnx_optim::OptimDim(2)}));
+  ctx.Set("I", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kInt64,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                          onnx_optim::OptimDim(2), onnx_optim::OptimDim(2)}));
 
   onnx_optim::shapes::nn::ComputeShapeMaxUnpool(ctx, node, "X", "I", nullptr);
 

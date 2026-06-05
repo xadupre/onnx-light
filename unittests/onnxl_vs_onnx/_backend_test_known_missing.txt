@@ -928,7 +928,6 @@ shrink_hard
 shrink_hard_expanded_ver18
 shrink_soft
 shrink_soft_expanded_ver18
-sigmoid_example
 size_example
 softmax_axis_0
 softmax_axis_0_expanded

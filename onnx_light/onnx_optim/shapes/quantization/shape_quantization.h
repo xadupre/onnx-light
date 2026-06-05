@@ -102,6 +102,35 @@ void ComputeShapeDequantizeLinear(ShapesContext &ctx, const NodeProto &node, con
                                   const char *x_scale);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` entries of a
+ * ``DynamicQuantizeLinear`` node and stores them in ``ctx``.
+ *
+ * ``DynamicQuantizeLinear`` produces three outputs (since opset 11 in the
+ * ai.onnx domain):
+ *
+ *   - ``y`` — same shape as the input ``x``, with dtype ``uint8``;
+ *   - ``y_scale`` — scalar (rank 0) ``float``;
+ *   - ``y_zero_point`` — scalar (rank 0) ``uint8``.
+ *
+ * The operator takes no attributes that affect output shapes.
+ *
+ * @param ctx   In/out context. Must already contain an entry for ``x``; on
+ *              return it also contains entries for the (up to three)
+ *              non-empty outputs of ``node``.
+ * @param node  The ``DynamicQuantizeLinear`` ``NodeProto`` whose outputs
+ *              should be described. ``node.op_type()`` must be
+ *              ``"DynamicQuantizeLinear"`` and ``node`` must declare at
+ *              least one output.
+ * @param x     Name of the input value to read from ``ctx``. Must be
+ *              present in ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"DynamicQuantizeLinear"`` or if ``node`` has no output.
+ * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
+ */
+void ComputeShapeDynamicQuantizeLinear(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``QLinearConv`` node and
  * stores it in ``ctx``.
  *

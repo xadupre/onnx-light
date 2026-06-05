@@ -20,9 +20,11 @@ constexpr size_t kExpectedQuantizeLinearSchemaCount = 7;
 constexpr size_t kExpectedDequantizeLinearSchemaCount = 7;
 constexpr size_t kExpectedQLinearConvSchemaCount = 1;
 constexpr size_t kExpectedQLinearMatMulSchemaCount = 2;
+constexpr size_t kExpectedDynamicQuantizeLinearSchemaCount = 1;
 constexpr size_t kExpectedQuantizationSchemaCount =
     kExpectedQuantizeLinearSchemaCount + kExpectedDequantizeLinearSchemaCount +
-    kExpectedQLinearConvSchemaCount + kExpectedQLinearMatMulSchemaCount;
+    kExpectedQLinearConvSchemaCount + kExpectedQLinearMatMulSchemaCount +
+    kExpectedDynamicQuantizeLinearSchemaCount;
 
 static const onnx_op::LightOpSchema *
 FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
@@ -209,6 +211,41 @@ TEST(OnnxOpQuantizationRegistrationTest, ReturnsDequantizeLinearSchemasWithoutSh
   EXPECT_NE(v25->doc().find("linear dequantization operator"), std::string::npos);
   EXPECT_NE(v25->doc().find("output_dtype"), std::string::npos);
   EXPECT_NE(v10->doc().find("linear dequantization operator"), std::string::npos);
+}
+
+TEST(OnnxOpQuantizationRegistrationTest, ReturnsDynamicQuantizeLinearSchema) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::quantization::GetAllOnnxOpQuantizationSchemasWithHistory("DynamicQuantizeLinear");
+
+  ASSERT_EQ(schemas.size(), kExpectedDynamicQuantizeLinearSchemaCount);
+  const onnx_op::LightOpSchema *const v11 = FindByVersion(schemas, 11);
+  ASSERT_NE(nullptr, v11);
+
+  EXPECT_EQ(v11->domain(), "ai.onnx");
+  EXPECT_FALSE(v11->has_function_implementation());
+
+  // DynamicQuantizeLinear has 1 input (x) and 3 outputs
+  // (y, y_scale, y_zero_point).
+  ASSERT_EQ(v11->inputs().size(), 1u);
+  EXPECT_EQ(v11->inputs()[0].name, "x");
+  EXPECT_EQ(v11->inputs()[0].type, "T1");
+  ASSERT_EQ(v11->outputs().size(), 3u);
+  EXPECT_EQ(v11->outputs()[0].name, "y");
+  EXPECT_EQ(v11->outputs()[0].type, "T2");
+  EXPECT_EQ(v11->outputs()[1].name, "y_scale");
+  EXPECT_EQ(v11->outputs()[1].type, "tensor(float)");
+  EXPECT_EQ(v11->outputs()[2].name, "y_zero_point");
+  EXPECT_EQ(v11->outputs()[2].type, "T2");
+
+  ASSERT_EQ(v11->type_constraints().size(), 2u);
+  EXPECT_EQ(v11->type_constraints()[0].type_param_str, "T1");
+  ASSERT_EQ(v11->type_constraints()[0].allowed_type_strs.size(), 1u);
+  EXPECT_EQ(v11->type_constraints()[0].allowed_type_strs.front(), onnx_op::TensorType::kFloat);
+  EXPECT_EQ(v11->type_constraints()[1].type_param_str, "T2");
+  ASSERT_EQ(v11->type_constraints()[1].allowed_type_strs.size(), 1u);
+  EXPECT_EQ(v11->type_constraints()[1].allowed_type_strs.front(), onnx_op::TensorType::kUint8);
+
+  EXPECT_NE(v11->doc().find("Scale, Zero Point"), std::string::npos);
 }
 
 } // namespace Test

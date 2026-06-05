@@ -640,6 +640,46 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(gemm_v11->outputs()[0].description, "Output tensor of shape (M, N).");
 }
 
+TEST(OnnxOpMathRegistrationTest, MatMulIntegerSchemaHasExpectedSignature) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("MatMulInteger");
+  ASSERT_EQ(schemas.size(), 1u);
+  const onnx_op::LightOpSchema *const v10 = FindByVersion(schemas, 10);
+  ASSERT_NE(nullptr, v10);
+  EXPECT_EQ(v10->domain(), "ai.onnx");
+  EXPECT_EQ(v10->name(), "MatMulInteger");
+  EXPECT_EQ(v10->since_version(), 10);
+  EXPECT_FALSE(v10->has_function_implementation());
+
+  ASSERT_EQ(v10->inputs().size(), 4u);
+  EXPECT_EQ(v10->inputs()[0].name, "A");
+  EXPECT_EQ(v10->inputs()[0].type, "T1");
+  EXPECT_EQ(v10->inputs()[1].name, "B");
+  EXPECT_EQ(v10->inputs()[1].type, "T2");
+  EXPECT_EQ(v10->inputs()[2].name, "a_zero_point");
+  EXPECT_EQ(v10->inputs()[2].type, "T1");
+  EXPECT_EQ(v10->inputs()[3].name, "b_zero_point");
+  EXPECT_EQ(v10->inputs()[3].type, "T2");
+
+  ASSERT_EQ(v10->outputs().size(), 1u);
+  EXPECT_EQ(v10->outputs()[0].name, "Y");
+  EXPECT_EQ(v10->outputs()[0].type, "T3");
+
+  ASSERT_EQ(v10->type_constraints().size(), 3u);
+  EXPECT_EQ(v10->type_constraints()[0].type_param_str, "T1");
+  EXPECT_EQ(
+      v10->type_constraints()[0].allowed_type_strs,
+      (std::vector<onnx_op::TensorType>{onnx_op::TensorType::kInt8, onnx_op::TensorType::kUint8}));
+  EXPECT_EQ(v10->type_constraints()[1].type_param_str, "T2");
+  EXPECT_EQ(
+      v10->type_constraints()[1].allowed_type_strs,
+      (std::vector<onnx_op::TensorType>{onnx_op::TensorType::kInt8, onnx_op::TensorType::kUint8}));
+  EXPECT_EQ(v10->type_constraints()[2].type_param_str, "T3");
+  EXPECT_EQ(v10->type_constraints()[2].allowed_type_strs,
+            (std::vector<onnx_op::TensorType>{onnx_op::TensorType::kInt32}));
+  EXPECT_TRUE(v10->attributes().empty());
+}
+
 TEST(OnnxOpMathRegistrationTest, DetHistoryHasExpectedVersions) {
   const std::vector<onnx_op::LightOpSchema> det_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Det");

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "../onnx_proto/_onnxpy.h"
+#include "_onnxpy.h"
 #include "onnx_op/light_op_schema.h"
 #include "onnx_op/operator_sets.h"
 

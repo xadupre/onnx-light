@@ -538,6 +538,141 @@ offset_t AlignExternalDataStreaming(const std::string &src_onnx_path,
   return current_offset;
 }
 
+offset_t SaveModelWithSharedExternalData(ModelProto &model, const std::string &dst_onnx_path,
+                                         const SerializeOptions &options) {
+  const int64_t alignment = options.alignment;
+  onnx_light_helpers::ValidateAlignmentOption(alignment,
+                                              "SaveModelWithSharedExternalData.alignment");
+
+  namespace fs = std::filesystem;
+  const fs::path dst_path(dst_onnx_path);
+  const fs::path dst_dir = dst_path.parent_path();
+
+  // Secondary weights file is always next to dst_onnx_path with a ".data" suffix.
+  const std::string dst_weights_path = dst_onnx_path + ".data";
+  const fs::path dst_weights_full(dst_weights_path);
+
+  // Location to record for new initializers: path of the secondary weights file relative to
+  // dst_onnx_path's parent directory (i.e. just its filename).
+  fs::path stored_new_location =
+      dst_dir.empty() ? dst_weights_full : fs::relative(dst_weights_full, dst_dir);
+  if (stored_new_location.empty()) {
+    stored_new_location = dst_weights_full;
+  }
+  const std::string stored_new_location_str = stored_new_location.string();
+
+  // Lazily open the destination weights file only when there is at least one new initializer.
+  ScopedFd out_fd;
+  bool out_open = false;
+  offset_t current_offset = 0;
+
+  auto ensure_out_open = [&]() {
+    if (!out_open) {
+      out_fd = ScopedFd(OpenForWriteTrunc(dst_weights_path));
+      EXT_ENFORCE(out_fd.get() >= 0,
+                  "SaveModelWithSharedExternalData: cannot open destination weights file '",
+                  dst_weights_path, "' for writing (errno=", errno, ": ", std::strerror(errno),
+                  ").");
+      out_open = true;
+    }
+  };
+
+  IteratorTensorProto it(&model.ref_graph());
+  while (it.next()) {
+    TensorProto &tensor = *it;
+    const bool has_inline_raw = tensor.has_raw_data() && tensor.raw_data_.size() > 0;
+    const bool is_external = tensor.has_data_location() &&
+                             tensor.ref_data_location() == TensorProto::DataLocation::EXTERNAL &&
+                             tensor.has_external_data();
+    EXT_ENFORCE(!has_inline_raw || !is_external, "SaveModelWithSharedExternalData: tensor '",
+                tensor.ref_name().as_string(),
+                "' has both inline raw_data and external_data; this is not supported.");
+
+    if (is_external) {
+      // Reused initializer: its external_data entries belong to a previously saved model and
+      // are kept as-is. The caller is responsible for the recorded location remaining
+      // resolvable relative to dst_onnx_path's parent directory.
+      continue;
+    }
+
+    if (!has_inline_raw) {
+      // Nothing to externalize (e.g. tensors using typed *_data fields, or empty raw_data).
+      EXT_ENFORCE(!tensor.has_data_location() ||
+                      tensor.ref_data_location() == TensorProto::DataLocation::DEFAULT,
+                  "SaveModelWithSharedExternalData: tensor '", tensor.ref_name().as_string(),
+                  "' is marked EXTERNAL but has no external_data entries.");
+      continue;
+    }
+
+    // New initializer: write its raw_data to dst_weights_path at an aligned offset.
+    ensure_out_open();
+    const offset_t aligned_offset =
+        (current_offset == 0 || alignment <= 1)
+            ? current_offset
+            : ((current_offset + alignment - 1) / alignment) * alignment;
+    if (aligned_offset > current_offset) {
+      WriteZeros(out_fd.get(), aligned_offset - current_offset);
+      current_offset = aligned_offset;
+    }
+
+    const size_t n_bytes = tensor.raw_data_.size();
+    const char *p = reinterpret_cast<const char *>(tensor.raw_data_.data());
+    size_t left = n_bytes;
+    while (left > 0) {
+#if defined(_WIN32)
+      int w = ::_write(out_fd.get(), p, static_cast<unsigned>(left));
+#else
+      ssize_t w = ::write(out_fd.get(), p, left);
+      if (w < 0 && errno == EINTR)
+        continue;
+#endif
+      EXT_ENFORCE(w > 0, "SaveModelWithSharedExternalData: failed to write tensor '",
+                  tensor.ref_name().as_string(), "' to destination weights file (errno=", errno,
+                  ": ", std::strerror(errno), ").");
+      p += w;
+      left -= static_cast<size_t>(w);
+    }
+
+    // Promote the tensor to EXTERNAL pointing at dst_weights_path; drop the inline bytes so
+    // the upcoming serialization (single-file FileWriteStream) does not write them inline.
+    tensor.ref_data_location() = TensorProto::DataLocation::EXTERNAL;
+    tensor.clr_external_data();
+    StringStringEntryProto *loc = tensor.add_external_data();
+    loc->set_key("location");
+    loc->set_value(stored_new_location_str);
+    StringStringEntryProto *off = tensor.add_external_data();
+    off->set_key("offset");
+    off->set_value(onnx_light_helpers::MakeString(current_offset));
+    StringStringEntryProto *len = tensor.add_external_data();
+    len->set_key("length");
+    len->set_value(onnx_light_helpers::MakeString(static_cast<int64_t>(n_bytes)));
+    tensor.raw_data_.clear();
+
+    current_offset += static_cast<offset_t>(n_bytes);
+  }
+
+  if (out_open) {
+#if defined(_WIN32)
+    EXT_ENFORCE(::_commit(out_fd.get()) == 0,
+                "SaveModelWithSharedExternalData: failed to flush destination weights file (errno=",
+                errno, ": ", std::strerror(errno), ").");
+#else
+    ::fsync(out_fd.get());
+#endif
+    out_fd.reset();
+  }
+
+  // Persist the updated proto to dst_onnx_path as a single .onnx file. external_data entries
+  // (both for reused and newly externalized initializers) are written as-is.
+  {
+    utils::FileWriteStream wstream(dst_onnx_path);
+    SerializeOptions wopts;
+    SerializeProtoToStream(model, wstream, wopts);
+  }
+
+  return current_offset;
+}
+
 std::shared_ptr<uint8_t[]> ConsolidateTensorsToBuffer(ModelProto &model,
                                                       const TensorBufferOptions &opts) {
   onnx_light_helpers::ValidateAlignmentOption(opts.alignment, "TensorBufferOptions.alignment");

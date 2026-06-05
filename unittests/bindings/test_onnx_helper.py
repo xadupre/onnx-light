@@ -603,5 +603,186 @@ class TestAlignExternalDataStreaming(ExtTestCase):
                 self.assertEqual(int(str(entries["offset"])) % 4096, 0)
 
 
+class TestSaveModelWithSharedExternalData(ExtTestCase):
+    @staticmethod
+    def _make_first_model(path: str) -> list[np.ndarray]:
+        """Saves a first model with two external initializers and returns their payloads."""
+        payloads = [
+            np.full((7,), 1.5, dtype=np.float32),    # 28 bytes
+            np.full((11,), -2.0, dtype=np.float32),  # 44 bytes
+        ]
+        inits = [
+            oh.make_tensor(
+                name=f"a{i}",
+                data_type=onnxl.TensorProto.FLOAT,
+                dims=arr.shape,
+                vals=arr.tobytes(),
+                raw=True,
+            )
+            for i, arr in enumerate(payloads)
+        ]
+        graph = oh.make_graph([], "g", [], [], initializer=inits)
+        model = oh.make_model(graph, producer_name="first")
+        onnxl.save(model, path, save_as_external_data=True, size_threshold=0)
+        return payloads
+
+    def test_save_model_reuses_first_model_weights(self) -> None:
+        from onnx_light.onnx import save_model_with_shared_external_data
+        from onnx_light.onnx_lib import SerializeOptions
+
+        with tempfile.TemporaryDirectory() as tdir:
+            src_onnx = os.path.join(tdir, "src.onnx")
+            payloads_first = self._make_first_model(src_onnx)
+            src_data = src_onnx + ".data"
+            src_data_size = os.path.getsize(src_data)
+            self.assertGreater(src_data_size, 0)
+
+            # Build a second model that reuses every initializer from the first one
+            # (loaded without external data — so external_data entries are preserved)
+            # and adds two brand-new initializers with inline raw_data.
+            first = onnxl.load(src_onnx, load_external_data=False)
+            payloads_new = [
+                np.full((5,), 7.0, dtype=np.float32),    # 20 bytes (new)
+                np.full((3,), -3.5, dtype=np.float32),   # 12 bytes (new)
+            ]
+            new_inits = [
+                oh.make_tensor(
+                    name=f"n{i}",
+                    data_type=onnxl.TensorProto.FLOAT,
+                    dims=arr.shape,
+                    vals=arr.tobytes(),
+                    raw=True,
+                )
+                for i, arr in enumerate(payloads_new)
+            ]
+            second_inits = list(first.graph.initializer) + new_inits
+            graph_b = oh.make_graph([], "g2", [], [], initializer=second_inits)
+            second = oh.make_model(graph_b, producer_name="second")
+
+            # Save the second model next to the first one so the reused initializers'
+            # external_data.location (kept as-is) still resolves to src.onnx.data.
+            dst_onnx = os.path.join(tdir, "dst.onnx")
+            dst_weights = dst_onnx + ".data"
+            alignment = 64
+            opts = SerializeOptions()
+            opts.alignment = alignment
+            total = save_model_with_shared_external_data(
+                model=second,
+                dst_onnx_path=dst_onnx,
+                options=opts,
+            )
+            # Only the new initializers should land in dst.data (20 bytes, then 64-aligned
+            # padding, then 12 bytes => 76 bytes total).
+            self.assertIsInstance(total, int)
+            self.assertEqual(total, 76)
+            self.assertEqual(os.path.getsize(dst_weights), total)
+            # The first model's data file must NOT have been modified or duplicated.
+            self.assertEqual(os.path.getsize(src_data), src_data_size)
+
+            # 1) Inspect metadata: reused initializers keep pointing at src.onnx.data
+            #    (their location is preserved as-is), new ones point at dst.onnx.data
+            #    with aligned offsets.
+            meta = onnxl.load(dst_onnx, load_external_data=False)
+            inits = list(meta.graph.initializer)
+            self.assertEqual(len(inits), len(payloads_first) + len(payloads_new))
+            for init in inits:
+                self.assertEqual(int(init.data_location), int(onnxl.TensorProto.EXTERNAL))
+                entries = {e.key: str(e.value) for e in init.external_data}
+                location = str(entries["location"])
+                offset = int(str(entries["offset"]))
+                if str(init.name).startswith("a"):
+                    self.assertEqual(location, os.path.basename(src_data))
+                else:
+                    self.assertEqual(location, os.path.basename(dst_weights))
+                    self.assertEqual(offset % alignment, 0)
+
+            # 2) Load the destination model with external data and verify bytes match.
+            loaded = onnxl.load(dst_onnx, load_external_data=True)
+            loaded_inits = list(loaded.graph.initializer)
+            all_payloads = payloads_first + payloads_new
+            for init, arr in zip(loaded_inits, all_payloads):
+                got = np.frombuffer(init.raw_data, dtype=np.float32)
+                np.testing.assert_array_equal(got, arr)
+
+    def test_save_model_with_only_reused_weights(self) -> None:
+        """No new initializer: secondary weights file is not created, return value is
+        0, reused initializers' external_data entries are written out unchanged."""
+        from onnx_light.onnx import save_model_with_shared_external_data
+
+        with tempfile.TemporaryDirectory() as tdir:
+            src_onnx = os.path.join(tdir, "src.onnx")
+            payloads_first = self._make_first_model(src_onnx)
+            first = onnxl.load(src_onnx, load_external_data=False)
+
+            graph_b = oh.make_graph(
+                [], "g2", [], [], initializer=list(first.graph.initializer)
+            )
+            second = oh.make_model(graph_b, producer_name="second")
+
+            dst_onnx = os.path.join(tdir, "dst.onnx")
+            dst_weights = dst_onnx + ".data"
+            total = save_model_with_shared_external_data(second, dst_onnx)
+            self.assertEqual(total, 0)
+            # The secondary weights file is not created when there is nothing to write.
+            self.assertFalse(os.path.exists(dst_weights))
+
+            loaded = onnxl.load(dst_onnx, load_external_data=True)
+            for init, arr in zip(loaded.graph.initializer, payloads_first):
+                got = np.frombuffer(init.raw_data, dtype=np.float32)
+                np.testing.assert_array_equal(got, arr)
+
+    def test_save_model_preserves_existing_external_location_as_is(self) -> None:
+        """Reused initializers' external_data entries (location, offset, length) are
+        written out unchanged — no rewriting relative to the destination's directory."""
+        from onnx_light.onnx import save_model_with_shared_external_data
+
+        with tempfile.TemporaryDirectory() as tdir:
+            src_onnx = os.path.join(tdir, "src.onnx")
+            self._make_first_model(src_onnx)
+            first = onnxl.load(src_onnx, load_external_data=False)
+
+            # Capture the original external_data entries before saving.
+            original_entries: list[dict[str, str]] = [
+                {e.key: str(e.value) for e in init.external_data}
+                for init in first.graph.initializer
+            ]
+
+            new_arr = np.full((2,), 9.0, dtype=np.float32)
+            new_init = oh.make_tensor(
+                name="n0",
+                data_type=onnxl.TensorProto.FLOAT,
+                dims=new_arr.shape,
+                vals=new_arr.tobytes(),
+                raw=True,
+            )
+            graph_b = oh.make_graph(
+                [], "g2", [], [], initializer=list(first.graph.initializer) + [new_init]
+            )
+            second = oh.make_model(graph_b, producer_name="second")
+
+            # Save the second model in a subdirectory: with the new API, the reused
+            # initializers' location is kept exactly as it was on the first model,
+            # so it still reads "src.onnx.data" (not a "../src.onnx.data" rewrite).
+            sub = os.path.join(tdir, "sub")
+            os.makedirs(sub)
+            dst_onnx = os.path.join(sub, "dst.onnx")
+            save_model_with_shared_external_data(second, dst_onnx)
+
+            meta = onnxl.load(dst_onnx, load_external_data=False)
+            reused = [init for init in meta.graph.initializer if str(init.name).startswith("a")]
+            self.assertEqual(len(reused), len(original_entries))
+            for init, original in zip(reused, original_entries):
+                entries = {e.key: str(e.value) for e in init.external_data}
+                # Every external_data entry of a reused initializer is preserved verbatim.
+                self.assertEqual(entries, original)
+
+            # The newly written initializer points at the auto-derived secondary file
+            # placed next to dst.onnx, with a plain basename location.
+            new_metas = [init for init in meta.graph.initializer if str(init.name).startswith("n")]
+            self.assertEqual(len(new_metas), 1)
+            new_entries = {e.key: str(e.value) for e in new_metas[0].external_data}
+            self.assertEqual(str(new_entries["location"]), os.path.basename(dst_onnx) + ".data")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

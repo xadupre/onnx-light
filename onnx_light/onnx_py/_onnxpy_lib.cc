@@ -1,4 +1,3 @@
-#include "_onnxpy.h"
 #include "onnx.h"
 #include "onnx_lib/checker.h"
 #include "onnx_lib/defs/parser.h"
@@ -24,6 +23,14 @@
 
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
+
+void AddOnnxPyLib(nb::module_ &m);
+
+NB_MODULE(_onnxpyprotolib, m) {
+  m.doc() = "onnx lib bindings (defs/parser/checker/inliner/shape/version_converter) from "
+            "python without protobuf but using the same format";
+  AddOnnxPyLib(m);
+}
 
 void AddOnnxPyLib(nb::module_ &m) {
   // -----------------------------------------------------------------------

@@ -515,6 +515,18 @@ std::string MakeShapeTypeConstraintDescription(int since_version) {
   return "Input tensor can be of arbitrary type.";
 }
 
+std::string MakeSizeDoc(int since_version) {
+  (void)since_version;
+  return R"DOC(
+Takes a tensor as input and outputs a int64 scalar that equals to the total number of elements of the input tensor.
+)DOC";
+}
+
+std::string MakeSizeTypeConstraintDescription(int since_version) {
+  (void)since_version;
+  return "Input tensor can be of arbitrary type.";
+}
+
 std::string MakePadDoc(int since_version) {
   if (since_version <= 1) {
     return R"DOC(

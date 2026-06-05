@@ -147,6 +147,20 @@ class TestBackendFunction(ExtTestCase):
         self.assertEqual(tc.rtol, 1e-3)
         self.assertEqual(tc.atol, 1e-7)
 
+    def test_test_case_repr(self):
+        """TestCase has a useful __repr__ showing name and kind."""
+        # Python subclass instance.
+        node = onnxl.helper.make_node("Abs", inputs=["x"], outputs=["y"])
+        x = np.array([1.0], dtype=np.float32)
+        expect(node, inputs=[x], outputs=[np.abs(x)], name="test_abs_repr")
+        tc = ALL_TESTS["test_abs_repr"]
+        self.assertEqual(repr(tc), "TestCase(name='test_abs_repr', kind='node')")
+
+        # C++-bound instance returned by collect_test_case.
+        result = collect_test_case()
+        cc = result["test_cc_abs"]
+        self.assertEqual(repr(cc), "TestCase(name='test_cc_abs', kind='node')")
+
     def test_collect_test_case_returns_dict(self):
         """Tests that collect_test_case returns a dictionary."""
         result = collect_test_case()

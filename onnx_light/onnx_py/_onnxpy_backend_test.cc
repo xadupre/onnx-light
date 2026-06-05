@@ -127,7 +127,10 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
           "model", [](TestCase &tc) -> ModelProto & { return tc.model; },
           nb::rv_policy::reference_internal,
           "Returns the ``ModelProto`` of this test case, resolved against the "
-          "binding registered by ``_onnxpyprotoop``.");
+          "binding registered by ``_onnxpyprotoop``.")
+      .def("__repr__", [](const TestCase &tc) {
+        return "TestCase(name='" + tc.name + "', kind='" + tc.kind + "')";
+      });
 
   bt_mod.def(
       "collect_test_cases",

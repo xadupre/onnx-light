@@ -700,6 +700,12 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          math::ComputeShapeMatMul(ctx, node, node.input(0).as_string().c_str(),
                                   node.input(1).as_string().c_str());
        }},
+      {"ai.onnx:MatMulInteger",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         math::ComputeShapeMatMulInteger(ctx, node, node.input(0).as_string().c_str(),
+                                         node.input(1).as_string().c_str());
+       }},
       {"ai.onnx:Max",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
@@ -896,6 +902,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
          tensor::ComputeShapeTrilu(ctx, node);
+       }},
+      {"ai.onnx:CenterCropPad",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         tensor::ComputeShapeCenterCropPad(ctx, node);
        }},
       {"ai.onnx:ReverseSequence",
        [](ShapesContext &ctx, const NodeProto &node) {

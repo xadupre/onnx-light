@@ -61,9 +61,7 @@ def _build_branch(fdp, depth, max_depth):
             nodes.append(_const_bool(cond))
             else_body = _build_branch(fdp, depth + 1, max_depth)
             nodes.append(
-                helper.make_node(
-                    "If", [cond], [out], then_branch=body, else_branch=else_body
-                )
+                helper.make_node("If", [cond], [out], then_branch=body, else_branch=else_body)
             )
         elif sub_op == "Loop":
             trip = f"M_{depth}"
@@ -73,11 +71,7 @@ def _build_branch(fdp, depth, max_depth):
             nodes.append(_const_bool(cond))
             nodes.append(helper.make_node("Loop", [trip, cond], [out], body=body))
         else:  # Scan
-            nodes.append(
-                helper.make_node(
-                    "Scan", [start], [out], body=body, num_scan_inputs=1
-                )
-            )
+            nodes.append(helper.make_node("Scan", [start], [out], body=body, num_scan_inputs=1))
         last = out
     else:
         last = start

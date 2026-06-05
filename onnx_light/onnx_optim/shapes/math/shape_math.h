@@ -493,6 +493,17 @@ void ComputeShapeGemm(ShapesContext &ctx, const NodeProto &node, const char *a, 
  */
 void ComputeShapeMatMul(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``MatMulInteger`` node and
+ * stores it in ``ctx``.
+ *
+ * The shape rule matches :cpp:func:`ComputeShapeMatMul` applied to the inputs
+ * ``A`` (input 0) and ``B`` (input 1). The output dtype is always
+ * :cpp:enumerator:`TensorType::kInt32`.
+ */
+void ComputeShapeMatMulInteger(ShapesContext &ctx, const NodeProto &node, const char *a,
+                               const char *b);
+
 /// Log is element-wise unary: output dtype and shape match the input.
 void ComputeShapeLog(ShapesContext &ctx, const NodeProto &node, const char *x);
 

@@ -124,6 +124,13 @@ std::string MakeMatMulDoc() {
          "[numpy.matmul](https://numpy.org/doc/stable/reference/generated/numpy.matmul.html).\n";
 }
 
+std::string MakeMatMulIntegerDoc() {
+  return "\nMatrix product that behaves like "
+         "[numpy.matmul](https://numpy.org/doc/stable/reference/generated/numpy.matmul.html).\n"
+         "The production MUST never overflow. The accumulation may overflow if and only if in 32 "
+         "bits.\n";
+}
+
 std::string MakeGemmDoc(int since_version) {
   if (since_version <= 6) {
     return R"DOC(General Matrix multiplication:

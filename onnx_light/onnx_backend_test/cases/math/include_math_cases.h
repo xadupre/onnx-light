@@ -164,6 +164,9 @@ void RegisterGemmCases(std::vector<TestCase> &registry);
 /// Registers the ``MatMul`` backend test node case(s).
 void RegisterMatMulCases(std::vector<TestCase> &registry);
 
+/// Registers the ``MatMulInteger`` backend test node case(s).
+void RegisterMatMulIntegerCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Max`` backend test node case(s).
 void RegisterMaxCases(std::vector<TestCase> &registry);
 

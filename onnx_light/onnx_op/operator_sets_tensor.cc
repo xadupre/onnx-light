@@ -1426,6 +1426,31 @@ LightOpSchema MakeTriluSchema(int since_version, const std::vector<TensorType> &
       });
 }
 
+LightOpSchema MakeCenterCropPadSchema(int since_version, const std::vector<TensorType> &types) {
+  return LightOpSchema(
+      "CenterCropPad", kOnnxDomain, since_version, MakeCenterCropPadDoc(since_version),
+      {
+          {"input_data", "Input to extract the centered crop from.", "T"},
+          {"shape", "1-D tensor representing the cropping window dimensions.", "Tind"},
+      },
+      {
+          {"output_data", "Output data.", "T"},
+      },
+      {
+          {"T", types, MakeCenterCropPadTypeConstraintDescription(since_version)},
+          {"Tind", {TensorType::kInt32, TensorType::kInt64}, "Constrain indices to integer types"},
+      },
+      {
+          {"axes",
+           "If provided, it specifies a subset of axes that 'shape' refer to. "
+           "If not provided, all axes are assumed [0, 1, ..., r-1], where r = rank(data). "
+           "Negative value means counting dimensions from the back. Accepted range is [-r, "
+           "r-1], where r = rank(data). "
+           "Behavior is undefined if an axis is repeated.",
+           AttributeType::INTS, /*required=*/false},
+      });
+}
+
 LightOpSchema MakeReverseSequenceSchema(int since_version, const std::vector<TensorType> &types) {
   return LightOpSchema(
       "ReverseSequence", kOnnxDomain, since_version, MakeReverseSequenceDoc(since_version),
@@ -1802,6 +1827,12 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
        [] {
          return std::vector<LightOpSchema>{
              MakeTriluSchema(14, ConcatTypesVer13()),
+         };
+       }},
+      {"CenterCropPad",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeCenterCropPadSchema(18, ConcatTypesVer13()),
          };
        }},
       {"ReverseSequence",

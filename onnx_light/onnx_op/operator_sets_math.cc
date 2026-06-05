@@ -1986,6 +1986,44 @@ std::vector<LightOpSchema> BuildMatMulSchemas() {
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildMatMulIntegerSchemas() {
+  const std::string doc = MakeMatMulIntegerDoc();
+  std::vector<LightOpSchema> schemas;
+  schemas.push_back(LightOpSchema(
+      "MatMulInteger", kOnnxDomain, 10, doc,
+      {
+          {"A", "N-dimensional matrix A", "T1"},
+          {"B", "N-dimensional matrix B", "T2"},
+          {"a_zero_point",
+           "Zero point tensor for input 'A'. It's optional and default value is 0. It could be a "
+           "scalar or N-D tensor. Scalar refers to per tensor quantization whereas N-D refers to "
+           "per row quantization. If the input is 2D of shape [M, K] then zero point tensor may "
+           "be an M element vector [zp_1, zp_2, ..., zp_M]. If the input is N-D tensor with shape "
+           "[D1, D2, M, K] then zero point tensor may have shape [D1, D2, M, 1]. ",
+           "T1"},
+          {"b_zero_point",
+           "Zero point tensor for input 'B'. It's optional and default value is 0. It could be a "
+           "scalar or a N-D tensor, Scalar refers to per tensor quantization whereas N-D refers "
+           "to per col quantization. If the input is 2D of shape [K, N] then zero point tensor "
+           "may be an N element vector [zp_1, zp_2, ..., zp_N]. If the input is N-D tensor with "
+           "shape [D1, D2, K, N] then zero point tensor may have shape [D1, D2, 1, N]. ",
+           "T2"},
+      },
+      {
+          {"Y", "Matrix multiply results from A * B", "T3"},
+      },
+      {
+          {"T1",
+           {TensorType::kInt8, TensorType::kUint8},
+           "Constrain input A data type to 8-bit integer tensor."},
+          {"T2",
+           {TensorType::kInt8, TensorType::kUint8},
+           "Constrain input B data type to 8-bit integer tensor."},
+          {"T3", {TensorType::kInt32}, "Constrain output Y data type as 32-bit integer tensor."},
+      }));
+  return schemas;
+}
+
 std::vector<LightOpSchema> BuildUnaryFloatMathSchemasWithV1(const char *op_type, int latest_version,
                                                             int previous_version,
                                                             int oldest_version) {
@@ -2859,6 +2897,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Log", [] { return BuildLogSchemas(); }},
       {"LogSoftmax", [] { return BuildLogSoftmaxSchemas(); }},
       {"MatMul", [] { return BuildMatMulSchemas(); }},
+      {"MatMulInteger", [] { return BuildMatMulIntegerSchemas(); }},
       {"Max", [] { return BuildMaxSchemas(); }},
       {"Mean", [] { return BuildMeanSchemas(); }},
       {"MelWeightMatrix", [] { return BuildMelWeightMatrixSchemas(); }},

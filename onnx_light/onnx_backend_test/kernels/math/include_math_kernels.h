@@ -768,6 +768,31 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference ``MatMulInteger`` kernel (opset 10). Computes
+/// ``Y = matmul(A - a_zero_point, B - b_zero_point)`` with INT8/UINT8 inputs
+/// and an INT32 output. ``a_zero_point`` and ``b_zero_point`` are optional and
+/// default to 0 when default-constructed (empty) tensors are passed. This
+/// reference implementation handles per-tensor (scalar or one-element 1-D)
+/// zero points.
+class MatMulInteger : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Returning overload allocating an INT32 output. ``a_zero_point`` /
+  /// ``b_zero_point`` may be default-constructed (empty) tensors meaning the
+  /// optional input is absent.
+  Tensor operator()(const Tensor &a, const Tensor &b, const Tensor &a_zero_point,
+                    const Tensor &b_zero_point) const;
+
+  /// In-place overload writing into a caller-allocated INT32 output.
+  void operator()(const Tensor &a, const Tensor &b, const Tensor &a_zero_point,
+                  const Tensor &b_zero_point, Tensor &output) const;
+
+  /// Output dtype (INT32) differs from inputs (INT8/UINT8), so storage cannot
+  /// be shared with an input.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Element-wise sum of a list of tensors with NumPy-style (multidirectional)
 /// broadcasting. At least one input is required. All inputs must share the
 /// same float dtype (FLOAT or DOUBLE); the output has the broadcast shape of

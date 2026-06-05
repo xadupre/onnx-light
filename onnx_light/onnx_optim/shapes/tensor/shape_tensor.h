@@ -731,6 +731,32 @@ void ComputeShapeTensorScatter(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeTrilu(ShapesContext &ctx, const NodeProto &node);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``CenterCropPad`` node
+ * (since opset 18) and stores it in ``ctx``.
+ *
+ * The output has the same dtype as ``node.input(0)`` and the same rank as
+ * the input. The output dimensions are taken from the ``shape`` input
+ * (input(1)) for axes listed in the optional ``axes`` attribute (or all
+ * axes when ``axes`` is absent); other axes keep the input dimension. When
+ * ``shape`` is not available as a known value, the affected output
+ * dimensions become symbolic.
+ *
+ * @param ctx   In/out context. Must already contain entries for
+ *              ``node.input(0)`` (``input_data``) and ``node.input(1)``
+ *              (``shape``). On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``CenterCropPad`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"CenterCropPad"``,
+ *              ``node`` must declare two inputs and at least one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"CenterCropPad"``, if ``node`` has fewer than two inputs or no
+ *         output, or if the axes attribute references an out-of-range axis.
+ * @throws std::out_of_range     if an input name is missing from ``ctx``.
+ */
+void ComputeShapeCenterCropPad(ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``ReverseSequence`` node
  * and stores it in ``ctx``.
  *

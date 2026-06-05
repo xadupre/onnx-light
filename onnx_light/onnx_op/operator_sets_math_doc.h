@@ -82,6 +82,13 @@ std::string MakePowDoc();
 std::string MakeMatMulDoc();
 
 /**
+ * Returns the documentation string for the MatMulInteger operator.
+ *
+ * @return Documentation string for the MatMulInteger operator (opset 10).
+ */
+std::string MakeMatMulIntegerDoc();
+
+/**
  * Returns the documentation string for the Gemm operator at the given opset
  * version.
  *

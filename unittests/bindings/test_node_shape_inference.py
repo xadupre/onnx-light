@@ -58,9 +58,7 @@ class TestNodeShapeInference(ExtTestCase):
 
     def test_conv_weight_rank_mismatch_raises_latest(self) -> None:
         # Conv-22 -> convPoolShapeInference
-        self._check_conv_weight_rank_mismatch_raises(
-            onnxl.defs.get_schema("Conv").since_version
-        )
+        self._check_conv_weight_rank_mismatch_raises(onnxl.defs.get_schema("Conv").since_version)
 
 
 if __name__ == "__main__":

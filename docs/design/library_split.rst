@@ -33,13 +33,12 @@ Summary of each library
 
 .. list-table::
     :header-rows: 1
-    :widths: 22 18 60
+    :widths: 10 20
 
-    * - Library / CMake target
-      - Sources
+    * - Library / CMake target and Sources
       - What it contains
-    * - ``onnx_light::lib_onnx_proto``
-      - ``onnx_light/onnx_proto/``,
+    * - ``onnx_light::lib_onnx_proto``:
+        ``onnx_light/onnx_proto/``,
         ``onnx_light/onnx_helpers/onnx_light_helpers.cc``
       - Protobuf-compatible message types (``ModelProto``,
         ``GraphProto``, ``NodeProto``, ``TensorProto``, ...), parser /
@@ -48,15 +47,14 @@ Summary of each library
         ``ONNX_LIGHT_BUILD_PYTHON=ON`` so that every Python extension
         shares the same proto class registrations; built as **STATIC**
         for pure C++ consumers.
-    * - ``onnx_light::lib_onnx_op``
-      - ``onnx_light/onnx_op/``
+    * - ``onnx_light::lib_onnx_op``:``onnx_light/onnx_op/``
       - Lightweight ``LightOpSchema`` registrations for ONNX operator
         domains (math, logical, tensor, sequence, traditional ML, ...).
         Does not depend on shape inference and does not pull in the
         full ONNX defs.  Useful when only the operator catalogue is
         needed.  Depends publicly on ``lib_onnx_proto``.
-    * - ``onnx_light::onnx_light`` (in-tree target ``lib_onnx_lib``)
-      - ``onnx_light/onnx_lib/common/``,
+    * - ``onnx_light::onnx_light`` (in-tree target ``lib_onnx_lib``):
+        ``onnx_light/onnx_lib/common/``,
         ``onnx_light/onnx_lib/defs/``,
         ``onnx_light/onnx_lib/checker.cc``,
         ``onnx_light/onnx_lib/inliner/``,
@@ -66,14 +64,14 @@ Summary of each library
         inliner, shape inference and version converter.  This is the
         target to link for the *complete* ONNX-light experience.
         Depends publicly on ``lib_onnx_proto``.
-    * - ``lib_onnx_optim`` (exported as ``onnx_light::lib_onnx_optim``)
-      - ``onnx_light/onnx_optim/``
+    * - ``lib_onnx_optim`` (exported as ``onnx_light::lib_onnx_optim``):
+        ``onnx_light/onnx_optim/``
       - Shape-inference dispatch table, expression engine for small
         tensor / backward-propagation shape inference, and graph
         optimization helpers.  Depends publicly on ``lib_onnx_op``.
     * - ``onnx_light::onnx_backend_test`` (in-tree target
-        ``lib_onnx_backend_test``)
-      - ``onnx_light/onnx_backend_test/``
+        ``lib_onnx_backend_test``):
+        ``onnx_light/onnx_backend_test/``
       - Backend test infrastructure (``struct Tensor``,
         ``struct TestCase``, ``expect()``), a registry of C++
         operator kernels used to evaluate models in-process, and
@@ -94,8 +92,7 @@ smallest set** that covers its needs.  The most common scenarios are:
   code generation or to validate node op types) without paying for
   shape inference — link ``onnx_light::lib_onnx_op``.
 * **Full ONNX feature set** (schemas with history, checker, inliner,
-  shape inference, version conversion) — link
-  ``onnx_light::onnx_light``.
+  shape inference, version conversion) — link ``onnx_light::onnx_light``.
 * **Shape inference and graph optimization passes** — link
   ``onnx_light::lib_onnx_optim`` (which transitively pulls
   ``lib_onnx_op`` and ``lib_onnx_proto``).

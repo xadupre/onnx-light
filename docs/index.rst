@@ -107,6 +107,12 @@ projects can link only what they need:
 See :ref:`l-design-library-split` for the detailed breakdown of each
 assembly and :ref:`l-design-cpp-linking` for the matching CMake usage.
 
+Backend tests
++++++++++++++
+
+They are fully written in C++. They can be called from any language.
+Every output is generated with a C++ implementation of the operator.
+
 Getting started
 +++++++++++++++
 

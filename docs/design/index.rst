@@ -3,13 +3,17 @@
 Design
 ======
 
-`onnx-light` replaces :epkg`protobuf` by a custom implementation
-but keeps the same ONNX to make it fully compatible. It offers
-more freedom to implement any custom loading, parsing scenario
-and speed up this first step.
+Uncomprimising Objective
+++++++++++++++++++++++++
 
-It replicates the same Python API and the same C++ API to enable
-a smooth replacement.
+**No protobuf**
+
+`onnx-light` replaces :epkg:`protobuf` by a custom implementation
+but keeps the same ONNX format to make it fully compatible. It offers
+more freedom to implement any custom loading, parsing scenario
+and speed up this first step (see :ref:`l-how-to` section).
+
+**Compile only what you need**
 
 `onnx-light` is intentionally split into several small C++ libraries
 (``lib_onnx_proto``, ``lib_onnx_op``, ``lib_onnx_lib``,
@@ -18,29 +22,32 @@ project can link **only** the assembly it actually needs — from a bare
 proto parser up to the full schema / shape-inference / runtime stack.
 See :ref:`l-design-library-split` for the detailed breakdown.
 
+**C++ Backend Test and Kernels**
+
+Backend Tests are implemented in C++. They cannot contain any large tensor
+and any output is generated through a C++ kernel implemented in C++.
+
+
+In Details
+++++++++++
+
+It replicates the same Python API and the same C++ API to enable
+a smooth replacement.
+
 .. toctree::
-    :caption: Without Protobuf
+    :caption: No protobuf
     :maxdepth: 1
 
     differences
     protobuf_format
     no_copy_ownership
-    library_split
-    cplusplus_linking
-
-Shape Inference is still under development as a new algorithm
-is being implemented to handle small tensor and other backward propagation.
-It supports simple expressions often used in models.
 
 .. toctree::
-    :caption: Shape Inference
+    :caption: Library Split
     :maxdepth: 1
 
-    expressions
-
-A C++ backend test is implemented enabling the testing of a runtime
-in both Python and C++. It does not store any big tensor to avoid having
-a huge package to publish.
+    library_split
+    cplusplus_linking
 
 .. toctree::
     :caption: Backend
@@ -49,6 +56,15 @@ a huge package to publish.
     backend_tests
     test_coverage
     runtime_coverage
+
+Shape Inference
+++++++++++++++++
+
+.. toctree::
+    :caption: Shape Inference
+    :maxdepth: 1
+
+    expressions
     inference_coverage
 
 A set of `atheris`-based Python fuzz targets exercises the public API

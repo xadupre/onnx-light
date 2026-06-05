@@ -64,7 +64,6 @@ The wire types relevant to ONNX are:
 
 Wire types 3 and 4 (start-group / end-group) are deprecated and not
 used by ONNX.
-
 The decoding side appears in ``onnx_light/onnx_proto/stream.cc``: the
 function ``BinaryStream::next_field()`` reads the tag varint and splits
 it into ``field_number = tag >> 3`` and ``wire_type = tag & 0x07``.

@@ -43,6 +43,7 @@ using onnx_backend_test::kernel::HardSwish;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::Log;
 using onnx_backend_test::kernel::MatMul;
+using onnx_backend_test::kernel::MatMulInteger;
 using onnx_backend_test::kernel::Mish;
 using onnx_backend_test::kernel::Mod;
 using onnx_backend_test::kernel::Mul;
@@ -998,6 +999,94 @@ TEST(BackendKernelClass, MatMulInPlaceWritesToPreallocatedOutput) {
   EXPECT_EQ(py[1], 28u);
   EXPECT_EQ(py[2], 49u);
   EXPECT_EQ(py[3], 64u);
+}
+
+TEST(BackendKernelClass, MatMulIntegerUint8MatchesONNXReference) {
+  // Mirrors the ONNX reference ``test_matmulinteger`` example with per-tensor
+  // UINT8 zero points: Y = matmul(A - a_zp, B - b_zp).
+  const KernelContext ctx{DefaultOpset(10)};
+  MatMulInteger mmi{ctx};
+  Tensor a = Tensor::FromUint8("", {4, 3}, {11, 7, 3, 10, 6, 2, 9, 5, 1, 8, 4, 0});
+  Tensor b = Tensor::FromUint8("", {3, 2}, {1, 4, 2, 5, 3, 6});
+  Tensor a_zp("", onnx_backend_test::DataType::UINT8, {1}, std::vector<uint8_t>{12});
+  Tensor b_zp("", onnx_backend_test::DataType::UINT8, {1}, std::vector<uint8_t>{0});
+  Tensor y = mmi(a, b, a_zp, b_zp);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{4, 2}));
+  const int32_t *py = y.AsInt32();
+  EXPECT_EQ(py[0], -38);
+  EXPECT_EQ(py[1], -83);
+  EXPECT_EQ(py[2], -44);
+  EXPECT_EQ(py[3], -98);
+  EXPECT_EQ(py[4], -50);
+  EXPECT_EQ(py[5], -113);
+  EXPECT_EQ(py[6], -56);
+  EXPECT_EQ(py[7], -128);
+}
+
+TEST(BackendKernelClass, MatMulIntegerWithDefaultZeroPoints) {
+  // Default-constructed (empty) zero-point tensors must be treated as 0.
+  const KernelContext ctx{DefaultOpset(10)};
+  MatMulInteger mmi{ctx};
+  Tensor a = Tensor::FromUint8("", {2, 3}, {1, 2, 3, 4, 5, 6});
+  Tensor b = Tensor::FromUint8("", {3, 2}, {7, 8, 9, 10, 11, 12});
+  Tensor a_zp;
+  Tensor b_zp;
+  Tensor y = mmi(a, b, a_zp, b_zp);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 2}));
+  const int32_t *py = y.AsInt32();
+  EXPECT_EQ(py[0], 58);
+  EXPECT_EQ(py[1], 64);
+  EXPECT_EQ(py[2], 139);
+  EXPECT_EQ(py[3], 154);
+}
+
+TEST(BackendKernelClass, MatMulIntegerInt8WithScalarZeroPoints) {
+  const KernelContext ctx{DefaultOpset(10)};
+  MatMulInteger mmi{ctx};
+  Tensor a = Tensor::FromInt8("", {2, 3}, {1, -2, 3, -4, 5, -6});
+  Tensor b = Tensor::FromInt8("", {3, 2}, {1, 2, -3, 4, 5, -6});
+  Tensor a_zp("", onnx_backend_test::DataType::INT8, {},
+              std::vector<uint8_t>{static_cast<uint8_t>(static_cast<int8_t>(1))});
+  Tensor b_zp("", onnx_backend_test::DataType::INT8, {},
+              std::vector<uint8_t>{static_cast<uint8_t>(static_cast<int8_t>(-1))});
+  Tensor y = mmi(a, b, a_zp, b_zp);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 2}));
+  // (A - 1) * (B + 1): manually computed reference.
+  const int32_t *py = y.AsInt32();
+  // A' = {{0,-3,2},{-5,4,-7}}, B' = {{2,3},{-2,5},{6,-5}}
+  // Row 0: 0*2 + (-3)*(-2) + 2*6 = 18 ; 0*3 + (-3)*5 + 2*(-5) = -25
+  // Row 1: -5*2 + 4*(-2) + (-7)*6 = -60 ; -5*3 + 4*5 + (-7)*(-5) = 40
+  EXPECT_EQ(py[0], 18);
+  EXPECT_EQ(py[1], -25);
+  EXPECT_EQ(py[2], -60);
+  EXPECT_EQ(py[3], 40);
+}
+
+TEST(BackendKernelClass, MatMulIntegerInPlaceWritesToPreallocatedOutput) {
+  const KernelContext ctx{DefaultOpset(10)};
+  MatMulInteger mmi{ctx};
+  Tensor a = Tensor::FromUint8("", {2, 3}, {1, 2, 3, 4, 5, 6});
+  Tensor b = Tensor::FromUint8("", {3, 2}, {7, 8, 9, 10, 11, 12});
+  Tensor a_zp;
+  Tensor b_zp;
+  Tensor y("", onnx_backend_test::DataType::INT32, {2, 2},
+           std::vector<uint8_t>(4 * sizeof(int32_t)));
+  mmi(a, b, a_zp, b_zp, y);
+  const int32_t *py = y.AsInt32();
+  EXPECT_EQ(py[0], 58);
+  EXPECT_EQ(py[1], 64);
+  EXPECT_EQ(py[2], 139);
+  EXPECT_EQ(py[3], 154);
+}
+
+TEST(BackendKernelClass, MatMulIntegerRejectsNonByteInput) {
+  const KernelContext ctx{DefaultOpset(10)};
+  MatMulInteger mmi{ctx};
+  Tensor a = Tensor::FromInt32("", {2, 3}, {1, 2, 3, 4, 5, 6});
+  Tensor b = Tensor::FromUint8("", {3, 2}, {1, 2, 3, 4, 5, 6});
+  Tensor a_zp;
+  Tensor b_zp;
+  EXPECT_THROW(mmi(a, b, a_zp, b_zp), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, FloorClassMatchesReference) {

@@ -121,10 +121,7 @@ for node in model.graph.node:
         if not out_name:
             continue
         t = ctx.get(str(out_name))
-        print(
-            f"after {node.op_type:<7s} -> {out_name}: "
-            f"dtype={t.dtype}, shape={list(t.shape)}"
-        )
+        print(f"after {node.op_type:<7s} -> {out_name}: dtype={t.dtype}, shape={list(t.shape)}")
 
 
 #####################################
@@ -135,9 +132,7 @@ for node in model.graph.node:
 # the graph output ``Y`` as the model-level call.
 
 y_model = next(o for o in model.graph.output if o.name == "Y")
-y_model_shape = [
-    d.dim_value or d.dim_param for d in y_model.type.tensor_type.shape.dim
-]
+y_model_shape = [d.dim_value or d.dim_param for d in y_model.type.tensor_type.shape.dim]
 y_node = ctx.get("Y")
 print()
 print(f"Y (model-level): dtype={y_model.type.tensor_type.elem_type}, shape={y_model_shape}")

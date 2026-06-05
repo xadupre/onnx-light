@@ -201,6 +201,14 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     ``Min(13)`` with ``int16``/``uint16`` inputs ("Could not find an
 #     implementation for Max(13) node" / "Could not find an implementation
 #     for Min(13) node"). The reference backend still exercises these cases.
+#   * ``test_cc_maxunpool_export_with_output_shape`` — when ``output_shape``
+#     differs from the shape inferred from ``kernel_shape``/``strides``/
+#     ``pads``, ORT's CPU EP scatters ``X`` into ``output_shape`` directly by
+#     reinterpreting ``indices`` as flat offsets into ``output_shape``. The
+#     ONNX reference implementation instead scatters into the inferred shape
+#     and copies that region into the top-left corner of ``output_shape``
+#     (see ``onnx/reference/ops/op_max_unpool.py``). The reference backend
+#     still exercises this case.
 ORT_EXCLUDE_REGEX = [
     r"^test_cc_roialign_max$",
     r"^test_cc_roialign_mode_max$",
@@ -286,6 +294,7 @@ ORT_EXCLUDE_REGEX = [
     r"^test_max_uint16$",
     r"^test_min_int16$",
     r"^test_min_uint16$",
+    r"^test_cc_maxunpool_export_with_output_shape$",
 ]
 
 TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_REGEX)

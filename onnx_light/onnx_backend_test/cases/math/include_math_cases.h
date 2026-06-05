@@ -194,6 +194,15 @@ void RegisterHannWindowCases(std::vector<TestCase> &registry);
 /// Registers the ``HammingWindow`` backend test node case(s).
 void RegisterHammingWindowCases(std::vector<TestCase> &registry);
 
+/// Registers the ``HardSigmoid`` backend test node case(s).
+void RegisterHardSigmoidCases(std::vector<TestCase> &registry);
+
+/// Registers the ``HardSwish`` backend test node case(s).
+void RegisterHardSwishCases(std::vector<TestCase> &registry);
+
+/// Registers the ``Hardmax`` backend test node case(s).
+void RegisterHardmaxCases(std::vector<TestCase> &registry);
+
 /// Registers the ``TopK`` backend test node case(s).
 void RegisterTopKCases(std::vector<TestCase> &registry);
 

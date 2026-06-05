@@ -3,7 +3,9 @@
 Standalone C++ example: combine onnx-light with Eclipse Aidge
 =============================================================
 
-This page documents ``examples/aidge_onnx_light``, a self-contained CMake
+This page documents ``examples/aidge_onnx_light``
+(`view on GitHub <https://github.com/xadupre/onnx-light/tree/main/examples/aidge_onnx_light>`_),
+a self-contained CMake
 project that demonstrates how to use *onnx-light* together with the
 `Eclipse Aidge <https://projects.eclipse.org/projects/technology.aidge>`_
 deep-learning framework from a single C++ program.

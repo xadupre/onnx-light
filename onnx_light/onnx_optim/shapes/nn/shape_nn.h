@@ -518,6 +518,31 @@ void ComputeShapeConvInteger(ShapesContext &ctx, const NodeProto &node, const ch
 void ComputeShapeConvTranspose(ShapesContext &ctx, const NodeProto &node, const char *x,
                                const char *w);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``MaxPool`` node.
+ *
+ * Mirrors :cpp:func:`ComputeShapeAveragePool`. The first output ``Y`` has
+ * the same dtype as ``X`` and a shape derived from ``kernel_shape``,
+ * ``strides``, ``pads``, ``dilations``, ``ceil_mode`` and ``auto_pad``.
+ * If the node declares a second output (``Indices``) and that output's
+ * name is non-empty, an entry is also added to ``ctx`` with dtype
+ * ``int64`` and the same shape as ``Y``.
+ */
+void ComputeShapeMaxPool(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``MaxUnpool`` node.
+ *
+ * The output dtype matches ``X``. When ``output_shape`` is provided and is
+ * a rank-1 ``int64`` tensor with a known value, the output shape is taken
+ * directly from those values; otherwise the output shape is computed from
+ * ``kernel_shape``, ``strides`` and ``pads`` according to the formula
+ * ``out_dim[i] = strides[i] * (in_dim[i] - 1) + kernel_shape[i] - pads[i] -
+ * pads[i + k]``. ``output_shape`` may be ``nullptr`` for the two-input form.
+ */
+void ComputeShapeMaxUnpool(ShapesContext &ctx, const NodeProto &node, const char *x, const char *I,
+                           const char *output_shape);
+
 } // namespace nn
 } // namespace shapes
 } // namespace onnx_optim

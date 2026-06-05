@@ -1,5 +1,5 @@
 import re
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Sequence, TypeAlias
 import numpy as np
 from .... import onnx
 from ....onnx import helper as onnx_helper
@@ -8,6 +8,12 @@ from ....onnx_py._onnxpy import onnx_op as _onnx_op  # type: ignore[attr-defined
 from ....ext_test_case import ExtTestCase
 
 _LIGHT_SINCE_VERSION_CACHE: dict[tuple[str, str], int] = {}
+# Backend test inputs/outputs are usually ndarrays, but ONNX sequence cases use
+# recursively nested Python lists of ndarrays.
+BackendTestValue: TypeAlias = np.ndarray | list["BackendTestValue"]
+BackendTestDataSets: TypeAlias = Sequence[
+    tuple[Sequence[BackendTestValue], Sequence[BackendTestValue]]
+]
 
 
 def _latest_since_version(op_type: str, domain: str) -> int:
@@ -59,7 +65,7 @@ class TestCase(_backend_test_cc.TestCase):
         url: str | None,
         model_dir: str | None,
         model: onnx.ModelProto | None,
-        data_sets: Sequence[tuple[Sequence[np.ndarray], Sequence[np.ndarray]]] | None,
+        data_sets: BackendTestDataSets | None,
         kind: str,
         rtol: float,
         atol: float,
@@ -88,13 +94,11 @@ class TestCase(_backend_test_cc.TestCase):
     @property
     def data_sets(
         self,
-    ) -> Sequence[tuple[Sequence[np.ndarray], Sequence[np.ndarray]]] | None:
+    ) -> BackendTestDataSets | None:
         return self._py_data_sets
 
     @data_sets.setter
-    def data_sets(
-        self, value: Sequence[tuple[Sequence[np.ndarray], Sequence[np.ndarray]]] | None
-    ) -> None:
+    def data_sets(self, value: BackendTestDataSets | None) -> None:
         self._py_data_sets = value
 
     def __repr__(self) -> str:
@@ -119,13 +123,27 @@ class TestCase(_backend_test_cc.TestCase):
                 f"Number of outputs ({len(outputs)}) != expected ({len(expected)}) "
                 f"in test {self!r}"
             )
-            for j, (out, exp) in enumerate(zip(outputs, expected)):
+
+            def _assert_value(out, exp, location):
+                if isinstance(exp, list):
+                    assert isinstance(out, (list, tuple)), (
+                        f"{location} is not a sequence in test {self.name!r}: "
+                        f"{type(out)} != {type(exp)}"
+                    )
+                    assert len(out) == len(exp), (
+                        f"{location} length mismatch for test {self.name!r}: "
+                        f"{len(out)} != {len(exp)}"
+                    )
+                    for k, (sub_out, sub_exp) in enumerate(zip(out, exp)):
+                        _assert_value(sub_out, sub_exp, f"{location}[{k}]")
+                    return
+
                 exp_arr = np.asarray(exp)
                 if exp_arr.dtype.kind in ("U", "S", "O"):
                     np.testing.assert_array_equal(
                         np.asarray(out),
                         exp_arr,
-                        err_msg=f"Output {i}/{j} mismatch for test {self.name!r}",
+                        err_msg=f"{location} mismatch for test {self.name!r}",
                     )
                 else:
                     np.testing.assert_allclose(
@@ -133,8 +151,11 @@ class TestCase(_backend_test_cc.TestCase):
                         exp,
                         rtol=use_rtol,
                         atol=use_atol,
-                        err_msg=f"Output {i}/{j} mismatch for test {self.name!r}",
+                        err_msg=f"{location} mismatch for test {self.name!r}",
                     )
+
+            for j, (out, exp) in enumerate(zip(outputs, expected)):
+                _assert_value(out, exp, f"Output {i}/{j}")
 
 
 class Base:
@@ -167,10 +188,16 @@ def _light_op_since_version(op_type: str, domain: str) -> int:
 
 
 def _transform_value(arr):
+    if isinstance(arr, list):
+        return [_transform_value(x) for x in arr]
     if isinstance(arr, (int, float, str, np.integer, np.floating, np.str_)):
         arr = np.array(arr)
     assert isinstance(arr, np.ndarray), f"Not implemented when arr is {type(arr)}."
     return arr
+
+
+def _import_python_test_case_module() -> None:
+    from . import if_  # noqa: F401
 
 
 # build value infos using onnx_light helper
@@ -386,6 +413,8 @@ def collect_test_case() -> dict[str, TestCase]:
 
     # empty ALL_TESTS before collecting
     ALL_TESTS.clear()
+
+    _import_python_test_case_module()
 
     # call all export methods on user-defined Base subclasses so they can
     # register additional Python-only test cases through ``expect``.

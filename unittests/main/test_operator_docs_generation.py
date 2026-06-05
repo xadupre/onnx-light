@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.doc as doc_module
 
@@ -98,6 +99,15 @@ class TestGenOperators(ExtTestCase):
             content = f.read_text(encoding="utf-8")
             self.assertIn(":doc:`Add`", content, f"{f.name} must link back to Add (latest)")
             self.assertIn("**Since version**", content)
+            # Past-version pages must be hidden from the search index.
+            self.assertIn(":nosearch:", content, f"{f.name} must declare :nosearch:")
+
+    def test_latest_version_page_is_searchable(self):
+        self._init()
+        # The latest-version page must NOT carry the :nosearch: marker so
+        # operators remain discoverable via the search index.
+        content = Path(self.tmp_dir, "ai_onnx", "Add.rst").read_text(encoding="utf-8")
+        self.assertNotIn(":nosearch:", content)
 
     def test_latest_version_links_to_past_versions(self):
         self._init()
@@ -231,6 +241,15 @@ class TestGenOperators(ExtTestCase):
         )
         self.assertIn("See `the doc <Broadcasting.md>`_.", content)
         self.assertIn("Use ``X`` and ``Y`` to compute ``f(x)``.", content)
+
+    def test_format_example_array_supports_sequences(self):
+        value = [np.array([1, 2, 3], dtype=np.float32)]
+        content = doc_module._format_example_array(value)
+        self.assertIn("[0] [1., 2., 3.]", content)
+        self.assertEqual(
+            doc_module._format_example_value_info(value),
+            "sequence(len=1), element_shape=(3,), element_dtype=float32",
+        )
 
     def test_format_doc_separates_inline_code_followed_by_word_char(self):
         # ``NaN`` immediately followed by ``s`` (as in the TreeEnsemble

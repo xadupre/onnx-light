@@ -556,6 +556,21 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          generator::ComputeShapeHannWindow(ctx, node);
        }},
+      {"ai.onnx:HardSigmoid",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeHardSigmoid(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:HardSwish",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeHardSwish(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:Hardmax",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeHardmax(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:If",
        [](ShapesContext &ctx, const NodeProto &node) { controlflow::ComputeShapeIf(ctx, node); }},
       {"ai.onnx:ImageDecoder",
@@ -601,6 +616,23 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
          nn::ComputeShapeLpNormalization(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:MaxPool",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         nn::ComputeShapeMaxPool(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:MaxUnpool",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         const char *output_shape = nullptr;
+         std::string output_shape_name;
+         if (node.input_size() >= 3 && !node.input(2).as_string().empty()) {
+           output_shape_name = node.input(2).as_string();
+           output_shape = output_shape_name.c_str();
+         }
+         nn::ComputeShapeMaxUnpool(ctx, node, node.input(0).as_string().c_str(),
+                                   node.input(1).as_string().c_str(), output_shape);
        }},
       {"ai.onnx:Mul",
        [](ShapesContext &ctx, const NodeProto &node) {

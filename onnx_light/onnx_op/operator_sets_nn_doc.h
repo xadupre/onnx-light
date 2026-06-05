@@ -20,6 +20,21 @@ namespace nn {
 std::string MakeAveragePoolDoc(int since_version);
 
 /**
+ * Returns the documentation string for the MaxPool operator at the given
+ * opset version (1, 8, 10, 11, 12, or 22). The text mirrors the upstream
+ * ONNX ``PoolOpSchemaGenerator_*`` doc templates with ``name=MaxPool``,
+ * ``opName=max`` and the additional max-pool-specific description.
+ */
+std::string MakeMaxPoolDoc(int since_version);
+
+/**
+ * Returns the documentation string for the MaxUnpool operator at the given
+ * opset version (9, 11, or 22). The text is identical for every opset and
+ * matches the upstream ``kDoc_MaxUnpool_ver11`` string.
+ */
+std::string MakeMaxUnpoolDoc(int since_version);
+
+/**
  * Returns the documentation string for the GlobalAveragePool operator at the
  * given opset version (1 or 22).
  */

@@ -80,20 +80,17 @@ file(GLOB ONNX_LIGHT_SOURCES CONFIGURE_DEPENDS
 file(GLOB ONNX_COMMON_SOURCES CONFIGURE_DEPENDS "${ONNX_COMMON_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_DEFS_SOURCES CONFIGURE_DEPENDS "${ONNX_DEFS_PATH}/*.cc")
 set(ONNX_PY_PROTOOP_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpyprotoop.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_proto.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_op.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpyprotoop.cc"
 )
 set(ONNX_PY_PROTOLIB_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpyprotolib.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_lib.cc"
 )
 set(ONNX_PY_OPTIM_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpyoptim.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_optim.cc"
 )
 set(ONNX_PY_BACKEND_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxbackend.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_backend_test.cc"
 )
 file(GLOB_RECURSE ONNX_OP_SOURCES CONFIGURE_DEPENDS "${ONNX_OP_PATH}/*.cc")
@@ -240,6 +237,30 @@ set_property(TARGET lib_onnx_backend_test PROPERTY POSITION_INDEPENDENT_CODE ON)
 set_target_properties(lib_onnx_backend_test PROPERTIES EXPORT_NAME onnx_backend_test)
 target_compile_features(lib_onnx_backend_test PUBLIC cxx_std_20)
 target_link_libraries(lib_onnx_backend_test PUBLIC lib_onnx_proto)
+
+# Speed up the build of lib_onnx_backend_test by precompiling the small set
+# of headers that virtually every one of the 400+ source files in
+# onnx_light/onnx_backend_test/{cases,kernels,...} ends up parsing. The
+# common base is ``onnx_backend_test/test_case.h`` (which transitively
+# brings in ``onnx.h`` and ``simple_tensor.h``) and a handful of widely
+# used C++ standard headers (``<vector>``, ``<string>``, ``<cstdint>``,
+# ``<stdexcept>``). Without a PCH each translation unit re-parses tens of
+# thousands of lines; with a PCH that work is done once for the target.
+#
+# This is a transparent optimization (no source changes required) and
+# only affects targets that opt in. Other targets that link against
+# ``lib_onnx_backend_test`` still see the regular public headers.
+target_precompile_headers(lib_onnx_backend_test PRIVATE
+    "${ONNX_BACKEND_TEST_PATH}/test_case.h"
+    <algorithm>
+    <cmath>
+    <cstdint>
+    <cstring>
+    <stdexcept>
+    <string>
+    <utility>
+    <vector>
+)
 
 # Builds _onnxpyprotoop, _onnxpyprotolib, _onnxpyoptim and _onnxbackend libraries.
 if(ONNX_LIGHT_BUILD_PYTHON)

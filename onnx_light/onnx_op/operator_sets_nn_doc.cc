@@ -179,6 +179,198 @@ std::string MakeAveragePoolDoc(int since_version) {
 
 namespace {
 
+// MaxPool docs at opsets 1 and 8 share the ``PoolOpSchemaGenerator_opset1_to_8``
+// template (only the attributes change between v1 and v8). The text mirrors
+// ``kAveragePoolDocOpset1`` with ``opName=max`` substitutions and the
+// MaxPool-specific final sentence.
+constexpr const char *kMaxPoolDocOpset1 = R"DOC(
+ MaxPool consumes an input tensor X and applies max pooling across
+ the tensor according to kernel sizes, stride sizes, and pad lengths.
+ max pooling consisting of computing the max on all values of a
+ subset of the input tensor according to the kernel size and downsampling the
+ data into the output tensor Y for further processing. The output spatial shape will be following:
+ ```
+ output_spatial_shape[i] = floor((input_spatial_shape[i] + pad_shape[i] - kernel_spatial_shape[i]) / strides_spatial_shape[i] + 1)
+
+ * pad_shape[i] is sum of pads along axis i
+ ```
+
+ `auto_pad` is a DEPRECATED attribute. If you are using them currently, the output spatial shape will be following:
+ ```
+ VALID: output_spatial_shape[i] = ceil((input_spatial_shape[i] - kernel_spatial_shape[i] + 1) / strides_spatial_shape[i])
+ SAME_UPPER or SAME_LOWER: output_spatial_shape[i] = ceil(input_spatial_shape[i] / strides_spatial_shape[i])
+ ```
+ And pad shape will be following if `SAME_UPPER` or `SAME_LOWER`:
+ ```
+ pad_shape[i] = (output_spatial_shape[i] - 1) * strides_spatial_shape[i] + kernel_spatial_shape[i] - input_spatial_shape[i]
+ ```
+ The output of each pooling window is maximum number of elements exclude pad.
+ )DOC";
+
+// MaxPool docs at opsets 10 and 11 share the ``PoolOpSchemaGenerator_opset10_to_11``
+// template with ``use_dilation=true``: the ``kernel_spatial_shape[i]`` token in
+// the AveragePool variant of the same template is replaced everywhere with
+// ``((kernel_spatial_shape[i] - 1) * dilations[i] + 1)``.
+constexpr const char *kMaxPoolDocOpset10 = R"DOC(
+ MaxPool consumes an input tensor X and applies max pooling across
+ the tensor according to kernel sizes, stride sizes, and pad lengths.
+ max pooling consisting of computing the max on all values of a
+ subset of the input tensor according to the kernel size and downsampling the
+ data into the output tensor Y for further processing. The output spatial shape will be following:
+ ```
+ output_spatial_shape[i] = floor((input_spatial_shape[i] + pad_shape[i] - ((kernel_spatial_shape[i] - 1) * dilations[i] + 1)) / strides_spatial_shape[i] + 1)
+ ```
+ or
+ ```
+ output_spatial_shape[i] = ceil((input_spatial_shape[i] + pad_shape[i] - ((kernel_spatial_shape[i] - 1) * dilations[i] + 1)) / strides_spatial_shape[i] + 1)
+ ```
+ if ceil_mode is enabled
+
+ ```
+ * pad_shape[i] is sum of pads along axis i
+ ```
+
+ `auto_pad` is a DEPRECATED attribute. If you are using them currently, the output spatial shape will be following:
+ ```
+ VALID: output_spatial_shape[i] = ceil((input_spatial_shape[i] - ((kernel_spatial_shape[i] - 1) * dilations[i] + 1) + 1) / strides_spatial_shape[i])
+ SAME_UPPER or SAME_LOWER: output_spatial_shape[i] = ceil(input_spatial_shape[i] / strides_spatial_shape[i])
+ ```
+ And pad shape will be following if `SAME_UPPER` or `SAME_LOWER`:
+ ```
+ pad_shape[i] = (output_spatial_shape[i] - 1) * strides_spatial_shape[i] + ((kernel_spatial_shape[i] - 1) * dilations[i] + 1) - input_spatial_shape[i]
+ ```
+ The output of each pooling window is maximum number of elements exclude pad.
+ )DOC";
+
+// MaxPool doc at opset 12 — uses the ``PoolOpSchemaGenerator_opset19``
+// template with ``use_dilation=true``. The trailing space in the additional
+// description is intentional and matches upstream.
+constexpr const char *kMaxPoolDocOpset12 = R"DOC(
+ MaxPool consumes an input tensor X and applies max pooling across
+ the tensor according to kernel sizes, stride sizes, and pad lengths.
+ max pooling consisting of computing the max on all values of a
+ subset of the input tensor according to the kernel size and downsampling the
+ data into the output tensor Y for further processing. The output spatial shape is calculated differently
+ depending on whether explicit padding is used, where pads is employed, or auto padding is used, where auto_pad is utilized.
+ With explicit padding (https://pytorch.org/docs/stable/generated/torch.nn.MaxPool2d.html?highlight=maxpool#torch.nn.MaxPool2d):
+ ```
+ output_spatial_shape[i] = floor((input_spatial_shape[i] + pad_shape[i] - dilation[i] * (kernel_shape[i] - 1) - 1) / strides_spatial_shape[i] + 1)
+ ```
+ or
+ ```
+ output_spatial_shape[i] = ceil((input_spatial_shape[i] + pad_shape[i] - dilation[i] * (kernel_shape[i] - 1) - 1) / strides_spatial_shape[i] + 1)
+ ```
+ if ceil_mode is enabled. `pad_shape[i]` is the sum of pads along axis `i`.
+
+ `auto_pad` is a DEPRECATED attribute. If you are using them currently, the output spatial shape will be following when ceil_mode is enabled:
+ ```
+ VALID: output_spatial_shape[i] = ceil((input_spatial_shape[i] - ((kernel_spatial_shape[i] - 1) * dilations[i] + 1) + 1) / strides_spatial_shape[i])
+ SAME_UPPER or SAME_LOWER: output_spatial_shape[i] = ceil(input_spatial_shape[i] / strides_spatial_shape[i])
+ ```
+ or when ceil_mode is disabled (https://www.tensorflow.org/api_docs/python/tf/keras/layers/AveragePooling2D):
+ ```
+ VALID: output_spatial_shape[i] = floor((input_spatial_shape[i] - ((kernel_spatial_shape[i] - 1) * dilations[i] + 1)) / strides_spatial_shape[i]) + 1
+ SAME_UPPER or SAME_LOWER: output_spatial_shape[i] = floor((input_spatial_shape[i] - 1) / strides_spatial_shape[i]) + 1
+ ```
+ And pad shape will be following if `SAME_UPPER` or `SAME_LOWER`:
+ ```
+ pad_shape[i] = (output_spatial_shape[i] - 1) * strides_spatial_shape[i] + ((kernel_spatial_shape[i] - 1) * dilations[i] + 1) - input_spatial_shape[i]
+ ```
+ The output of each pooling window is maximum number of elements exclude pad. 
+ )DOC";
+
+// MaxPool doc at opset 22 — same template as opset 12 plus the new
+// "Sliding windows that would start in the right padded region are ignored."
+// sentence introduced by ``PoolOpSchemaGenerator`` in defs.cc.
+constexpr const char *kMaxPoolDocOpset22 = R"DOC(
+ MaxPool consumes an input tensor X and applies max pooling across
+ the tensor according to kernel sizes, stride sizes, and pad lengths.
+ max pooling consisting of computing the max on all values of a
+ subset of the input tensor according to the kernel size and downsampling the
+ data into the output tensor Y for further processing. The output spatial shape is calculated differently
+ depending on whether explicit padding is used, where pads is employed, or auto padding is used, where auto_pad is utilized.
+ With explicit padding (https://pytorch.org/docs/stable/generated/torch.nn.MaxPool2d.html?highlight=maxpool#torch.nn.MaxPool2d):
+ ```
+ output_spatial_shape[i] = floor((input_spatial_shape[i] + pad_shape[i] - dilation[i] * (kernel_shape[i] - 1) - 1) / strides_spatial_shape[i] + 1)
+ ```
+ or
+ ```
+ output_spatial_shape[i] = ceil((input_spatial_shape[i] + pad_shape[i] - dilation[i] * (kernel_shape[i] - 1) - 1) / strides_spatial_shape[i] + 1)
+ ```
+ if ceil_mode is enabled. `pad_shape[i]` is the sum of pads along axis `i`. Sliding windows that would start in the right padded region are ignored.
+
+ `auto_pad` is a DEPRECATED attribute. If you are using them currently, the output spatial shape will be following when ceil_mode is enabled:
+ ```
+ VALID: output_spatial_shape[i] = ceil((input_spatial_shape[i] - ((kernel_spatial_shape[i] - 1) * dilations[i] + 1) + 1) / strides_spatial_shape[i])
+ SAME_UPPER or SAME_LOWER: output_spatial_shape[i] = ceil(input_spatial_shape[i] / strides_spatial_shape[i])
+ ```
+ or when ceil_mode is disabled (https://www.tensorflow.org/api_docs/python/tf/keras/layers/AveragePooling2D):
+ ```
+ VALID: output_spatial_shape[i] = floor((input_spatial_shape[i] - ((kernel_spatial_shape[i] - 1) * dilations[i] + 1)) / strides_spatial_shape[i]) + 1
+ SAME_UPPER or SAME_LOWER: output_spatial_shape[i] = floor((input_spatial_shape[i] - 1) / strides_spatial_shape[i]) + 1
+ ```
+ And pad shape will be following if `SAME_UPPER` or `SAME_LOWER`:
+ ```
+ pad_shape[i] = (output_spatial_shape[i] - 1) * strides_spatial_shape[i] + ((kernel_spatial_shape[i] - 1) * dilations[i] + 1) - input_spatial_shape[i]
+ ```
+ The output of each pooling window is maximum number of elements exclude pad. 
+ )DOC";
+
+// Mirrors upstream ``kDoc_MaxUnpool_ver11``. The text is identical for opset
+// 9, 11 and 22 in upstream ONNX.
+constexpr const char *kMaxUnpoolDoc = R"DOC(
+MaxUnpool essentially computes the partial inverse of the MaxPool op.
+ The input information to this op is typically the output information from a MaxPool op. The first
+ input tensor X is the tensor that needs to be unpooled, which is typically the pooled tensor (first output)
+ from MaxPool. The second input tensor, I, contains the indices to the (locally maximal) elements corresponding
+ to the elements in the first input tensor X. Input tensor I is typically the second output of the MaxPool op.
+ The third (optional) input is a tensor that specifies the output size of the unpooling operation.
+
+MaxUnpool is intended to do 'partial' inverse of the MaxPool op. 'Partial' because all the non-maximal
+ values from the original input to MaxPool are set to zero in the output of the MaxUnpool op. Pooling
+ the result of an unpooling operation should give back the original input to the unpooling op.
+
+MaxUnpool can produce the same output size for several input sizes, which makes unpooling op ambiguous.
+ The third input argument, output_size, is meant to disambiguate the op and produce output tensor of
+ known/predictable size.
+
+In addition to the inputs, MaxUnpool takes three attributes, namely kernel_shape, strides, and pads,
+ which define the exact unpooling op. The attributes typically have the same values as the corresponding
+ pooling op that the unpooling op is trying to invert.
+)DOC";
+
+} // namespace
+
+std::string MakeMaxPoolDoc(int since_version) {
+  switch (since_version) {
+  case 1:
+  case 8:
+    return kMaxPoolDocOpset1;
+  case 10:
+  case 11:
+    return kMaxPoolDocOpset10;
+  case 12:
+    return kMaxPoolDocOpset12;
+  case 22:
+    return kMaxPoolDocOpset22;
+  default:
+    return "";
+  }
+}
+
+std::string MakeMaxUnpoolDoc(int since_version) {
+  switch (since_version) {
+  case 9:
+  case 11:
+  case 22:
+    return kMaxUnpoolDoc;
+  default:
+    return "";
+  }
+}
+
+namespace {
+
 constexpr const char *kRNNDoc = R"DOC(
 Computes an one-layer simple RNN. This operator is usually supported
 via some custom implementation such as CuDNN.

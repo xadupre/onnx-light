@@ -515,6 +515,15 @@ void ComputeShapeSwish(ShapesContext &ctx, const NodeProto &node, const char *x)
 /// Softmax preserves dtype/shape and validates the axis attribute.
 void ComputeShapeSoftmax(ShapesContext &ctx, const NodeProto &node, const char *x);
 
+/// Hardmax preserves dtype/shape and validates the axis attribute.
+void ComputeShapeHardmax(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/// HardSigmoid is element-wise unary: output dtype and shape match the input.
+void ComputeShapeHardSigmoid(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/// HardSwish is element-wise unary: output dtype and shape match the input.
+void ComputeShapeHardSwish(ShapesContext &ctx, const NodeProto &node, const char *x);
+
 /// Softplus is element-wise unary: output dtype and shape match the input.
 void ComputeShapeSoftplus(ShapesContext &ctx, const NodeProto &node, const char *x);
 

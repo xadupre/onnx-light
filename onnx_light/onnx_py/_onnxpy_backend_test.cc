@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "_onnxpy.h"
 #include "onnx_backend_test/random.h"
 #include "onnx_backend_test/simple_tensor.h"
 #include "onnx_backend_test/test_case.h"
@@ -19,6 +18,17 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DataSet;
 using onnx_backend_test::Tensor;
 using onnx_backend_test::TestCase;
+
+void AddOnnxPyBackend(nb::module_ &m);
+void AddOnnxPyBackendTest(nb::module_ &m);
+
+NB_MODULE(_onnxbackend, m) {
+  m.doc() = "onnx_light backend bindings: deterministic pseudo-random helpers and "
+            "ONNX backend-test case utilities.";
+
+  AddOnnxPyBackend(m);
+  AddOnnxPyBackendTest(m);
+}
 
 void AddOnnxPyBackend(nb::module_ &m) {
   // -----------------------------------------------------------------------

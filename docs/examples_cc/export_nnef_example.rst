@@ -3,7 +3,9 @@
 Standalone C++ example: export an ONNX model to NNEF
 ====================================================
 
-This page documents ``examples/export_nnef``, a self-contained CMake project
+This page documents ``examples/export_nnef``
+(`view on GitHub <https://github.com/xadupre/onnx-light/tree/main/examples/export_nnef>`_),
+a self-contained CMake project
 that demonstrates how to export an ONNX :cpp:class:`ModelProto` to the
 `Khronos NNEF v1.0 <https://www.khronos.org/nnef>`_ representation from C++.
 

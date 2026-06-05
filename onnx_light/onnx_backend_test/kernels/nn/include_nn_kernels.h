@@ -330,6 +330,73 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// N-D max pooling on a FLOAT tensor laid out as ``(N, C, D1, ..., Dk)``.
+/// Implements the ONNX ``MaxPool`` operator restricted to ``storage_order=0``
+/// (row-major). ``kernel_shape`` must have ``k`` entries; ``strides``,
+/// ``pads`` and ``dilations`` (lengths ``k``, ``2 * k`` and ``k``
+/// respectively) default to all-ones / all-zeros / all-ones when omitted.
+/// ``auto_pad`` defaults to ``NOTSET`` (use explicit ``pads``); when set to
+/// ``SAME_UPPER``, ``SAME_LOWER`` or ``VALID`` the ``pads`` argument must be
+/// empty and the begin/end padding is computed from the input shape.
+///
+/// The :cpp:func:`operator()` overload returns only the primary output ``Y``.
+/// :cpp:func:`WithIndices` additionally produces the optional ``Indices``
+/// tensor (``int64`` flat indices into the un-padded input buffer, mirroring
+/// the upstream ONNX semantics).
+class MaxPool : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Returns the primary output ``Y`` (FLOAT tensor of the pooled values).
+  Tensor operator()(const Tensor &x, const std::vector<int64_t> &kernel_shape,
+                    const std::vector<int64_t> &strides = {}, const std::vector<int64_t> &pads = {},
+                    bool ceil_mode = false, const std::vector<int64_t> &dilations = {},
+                    int64_t storage_order = 0, const std::string &auto_pad = "NOTSET") const;
+
+  /// Returns ``(Y, Indices)`` where ``Indices`` is an ``int64`` tensor with
+  /// the same shape as ``Y`` containing the flat indices into the un-padded
+  /// input ``(N, C, D1, ..., Dk)`` buffer.
+  std::pair<Tensor, Tensor>
+  WithIndices(const Tensor &x, const std::vector<int64_t> &kernel_shape,
+              const std::vector<int64_t> &strides = {}, const std::vector<int64_t> &pads = {},
+              bool ceil_mode = false, const std::vector<int64_t> &dilations = {},
+              int64_t storage_order = 0, const std::string &auto_pad = "NOTSET") const;
+
+  /// Output shape generally differs from the input shape.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// N-D ``MaxUnpool`` on a FLOAT tensor with ``int64`` indices. Implements the
+/// ONNX ``MaxUnpool`` operator: each value of ``x`` is scattered into a
+/// zero-initialized output buffer at the linear index given by ``indices``
+/// (interpreted as the flat ``(N, C, D1, ..., Dk)`` offset of the output).
+///
+/// Two overloads are provided: one that derives the output shape from the
+/// ``kernel_shape``, ``strides`` and ``pads`` attributes, and one that takes
+/// an explicit rank-1 ``int64`` ``output_shape`` tensor (if specified, the
+/// ``pads`` attribute is ignored, matching the ONNX spec).
+class MaxUnpool : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Two-input form: derives the output shape from ``kernel_shape``,
+  /// ``strides`` and ``pads`` (defaults: 1 and 0).
+  Tensor operator()(const Tensor &x, const Tensor &indices,
+                    const std::vector<int64_t> &kernel_shape,
+                    const std::vector<int64_t> &strides = {},
+                    const std::vector<int64_t> &pads = {}) const;
+
+  /// Three-input form: ``output_shape`` is a rank-1 ``int64`` tensor giving
+  /// the full output shape ``(N, C, D1, ..., Dk)``.
+  Tensor operator()(const Tensor &x, const Tensor &indices, const Tensor &output_shape,
+                    const std::vector<int64_t> &kernel_shape,
+                    const std::vector<int64_t> &strides = {},
+                    const std::vector<int64_t> &pads = {}) const;
+
+  /// Output shape differs from input shape.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Single-direction (``"forward"``) one-layer RNN on FLOAT tensors using
 /// the ``Tanh`` activation. Implements the upstream ONNX ``RNN`` formula
 ///
@@ -722,7 +789,6 @@ public:
 };
 
 /// Reference N-D ``Col2Im`` kernel restricted to FLOAT tensors.
-///
 /// Implements the upstream ``ai.onnx::Col2Im`` operator (since opset 18),
 /// rearranging column blocks back into a multi-dimensional batched image.
 ///

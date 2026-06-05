@@ -4,31 +4,43 @@
 Retrieve a backend test case and display its model and data
 ===========================================================
 
-:mod:`onnx_light.backend.test` exposes the ONNX backend node test
-suite (model + input/output reference tensors). Each entry is a
-:class:`onnx_light.backend.test.case.base.TestCase` returned by
-:func:`onnx_light.backend.test.case.collect_test_case`.
+The ONNX backend test suite shipped with ``onnx-light`` is exposed
+as a small C++ data model bound to Python under
+:mod:`onnx_light.backend_test`. Each entry is a ``TestCase`` made of
+a ``ModelProto`` plus one or more ``DataSet`` (lists of reference
+input / output ``Tensor`` instances).
 
-This example picks one of these test cases (``test_abs``) and shows:
+:func:`onnx_light.backend_test.collect_test_cases` returns the C++
+test cases as a ``list``. When called with an operator type it
+returns only the cases whose top-level graph contains a node with
+that ``op_type``.
 
-* the ``ModelProto`` that defines the graph,
-* the reference input tensors,
-* the reference output tensors.
+This example:
+
+* retrieves the ``test_abs`` case via ``collect_test_cases("Abs")``,
+* displays its ``ModelProto``,
+* displays the reference input and output tensors.
 """
 
 from __future__ import annotations
 
-from onnx_light.backend.test.case import collect_test_case
+import numpy as np
+
+from onnx_light.backend_test import collect_test_cases
 
 #####################################
-# Retrieve a specific test case
-# +++++++++++++++++++++++++++++
+# Retrieve a backend test case
+# ++++++++++++++++++++++++++++
 #
-# :func:`collect_test_case` accepts an optional ``name`` argument to
-# return a single :class:`TestCase` directly. The ``test_abs`` case
-# exercises the ``Abs`` operator on a small ``float32`` tensor.
+# ``collect_test_cases("Abs")`` returns every backend test case that
+# exercises the ``Abs`` operator. We pick the canonical ``test_abs``
+# case from the result.
 
-tc = collect_test_case("test_abs")
+abs_cases = collect_test_cases("Abs")
+print(f"Number of Abs cases: {len(abs_cases)}")
+print(f"Names              : {[tc.name for tc in abs_cases]}")
+
+tc = next(tc for tc in abs_cases if tc.name == "test_abs")
 print(f"name      : {tc.name}")
 print(f"model_name: {tc.model_name}")
 print(f"kind      : {tc.kind}")
@@ -48,16 +60,26 @@ print(tc.model)
 # Display the inputs and outputs
 # ++++++++++++++++++++++++++++++
 #
-# ``data_sets`` is a sequence of ``(inputs, outputs)`` pairs of
-# numpy arrays. Node tests typically ship a single reference data
-# set.
+# ``data_sets`` is a list of ``DataSet`` objects. Each ``DataSet``
+# exposes ``inputs`` and ``outputs`` as lists of ``Tensor`` whose
+# ``raw_data`` bytes are stored in row-major little-endian layout.
+# We decode the float32 buffer to a numpy array for display.
 
-assert tc.data_sets is not None
-for ds_idx, (inputs, outputs) in enumerate(tc.data_sets):
+_DTYPE_TO_NP = {1: np.float32}  # ``Abs`` test case uses float32
+
+
+def _to_numpy(t):
+    dtype = _DTYPE_TO_NP[int(t.data_type)]
+    return np.frombuffer(t.raw_data(), dtype=dtype).reshape(tuple(int(d) for d in t.shape))
+
+
+for ds_idx, ds in enumerate(tc.data_sets):
     print(f"-- data set #{ds_idx} --")
-    for i, x in enumerate(inputs):
-        print(f"  input[{i}]: dtype={x.dtype}, shape={tuple(x.shape)}")
-        print(x)
-    for i, y in enumerate(outputs):
-        print(f"  output[{i}]: dtype={y.dtype}, shape={tuple(y.shape)}")
-        print(y)
+    for i, x in enumerate(ds.inputs):
+        arr = _to_numpy(x)
+        print(f"  input[{i}]: dtype={arr.dtype}, shape={tuple(arr.shape)}")
+        print(arr)
+    for i, y in enumerate(ds.outputs):
+        arr = _to_numpy(y)
+        print(f"  output[{i}]: dtype={arr.dtype}, shape={tuple(arr.shape)}")
+        print(arr)

@@ -926,6 +926,40 @@ TEST(BackendKernelClass, ModClassMatchesPythonAndCSemantics) {
     EXPECT_FLOAT_EQ(pz[2], 5.0f);
   }
 
+  // FLOAT16 inputs require fmod=1; the output bit pattern must match
+  // ``numpy.fmod`` on the IEEE-754 binary16 inputs (upstream
+  // ``test_mod_mixed_sign_float16`` reference).
+  {
+    Tensor x("", static_cast<int32_t>(onnx_backend_test::DataType::FLOAT16), {6}, {});
+    Tensor y("", static_cast<int32_t>(onnx_backend_test::DataType::FLOAT16), {6}, {});
+    // Bit patterns of float16(-4.3, 7.2, 5.0, 4.3, -7.2, 8.0) and
+    // float16(2.1, -3.4, 8.0, -2.1, 3.4, 5.0).
+    const std::vector<uint16_t> xb = {0xc44dU, 0x4733U, 0x4500U, 0x444dU, 0xc733U, 0x4800U};
+    const std::vector<uint16_t> yb = {0x4033U, 0xc2cdU, 0x4800U, 0xc033U, 0x42cdU, 0x4500U};
+    x.data.assign(reinterpret_cast<const uint8_t *>(xb.data()),
+                  reinterpret_cast<const uint8_t *>(xb.data() + xb.size()));
+    y.data.assign(reinterpret_cast<const uint8_t *>(yb.data()),
+                  reinterpret_cast<const uint8_t *>(yb.data() + yb.size()));
+    Tensor z = mod_kernel(x, y, /*fmod=*/1);
+    ASSERT_EQ(z.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT16));
+    const uint16_t *pz = reinterpret_cast<const uint16_t *>(z.data.data());
+    EXPECT_EQ(pz[0], 0xae80U); // -0.1015625
+    EXPECT_EQ(pz[1], 0x3660U); //  0.3984375
+    EXPECT_EQ(pz[2], 0x4500U); //  5.0
+    EXPECT_EQ(pz[3], 0x2e80U); //  0.1015625
+    EXPECT_EQ(pz[4], 0xb660U); // -0.3984375
+    EXPECT_EQ(pz[5], 0x4200U); //  3.0
+  }
+
+  // FLOAT16 with fmod=0 must throw (matches FLOAT/DOUBLE behaviour).
+  {
+    Tensor x("", static_cast<int32_t>(onnx_backend_test::DataType::FLOAT16), {1},
+             std::vector<uint8_t>(sizeof(uint16_t), 0));
+    Tensor y("", static_cast<int32_t>(onnx_backend_test::DataType::FLOAT16), {1},
+             std::vector<uint8_t>(sizeof(uint16_t), 0));
+    EXPECT_THROW(mod_kernel(x, y), std::invalid_argument);
+  }
+
   // Floating-point with fmod=0 must throw.
   {
     Tensor x = Tensor::FromFloat("", {1}, {1.0f});

@@ -9,6 +9,7 @@
 #include <array>
 #include <optional>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -68,10 +69,10 @@ TEST(OnnxOptimShape, PushBackAndRankLimit) {
 }
 
 TEST(OnnxOptimShape, RejectsOversizedInitializerList) {
-  EXPECT_THROW((onnx_optim::OptimShape{
-                   onnx_optim::OptimDim(1), onnx_optim::OptimDim(2), onnx_optim::OptimDim(3),
-                   onnx_optim::OptimDim(4), onnx_optim::OptimDim(5), onnx_optim::OptimDim(6),
-                   onnx_optim::OptimDim(7), onnx_optim::OptimDim(8), onnx_optim::OptimDim(9)}),
+  const auto make_oversized = []<std::size_t... I>(std::index_sequence<I...>) {
+    return onnx_optim::OptimShape{onnx_optim::OptimDim(static_cast<int64_t>(I + 1))...};
+  };
+  EXPECT_THROW((make_oversized(std::make_index_sequence<onnx_optim::kMaxOptimRank + 1>{})),
                std::length_error);
 }
 

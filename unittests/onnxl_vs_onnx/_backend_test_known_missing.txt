@@ -297,14 +297,6 @@ cumsum_1d_int32_exclusive
 cumsum_2d_int32
 depthtospace_crd_mode_example
 depthtospace_example
-dequantizelinear_axis
-dequantizelinear_blocked
-dequantizelinear_e4m3fn_float16
-dequantizelinear_float4e2m1
-dequantizelinear_int2
-dequantizelinear_int4
-dequantizelinear_uint2
-dequantizelinear_uint4
 dft_axis
 dft_axis_opset19
 dft_inverse_opset19

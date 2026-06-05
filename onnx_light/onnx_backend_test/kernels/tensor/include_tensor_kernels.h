@@ -908,22 +908,37 @@ public:
 /// scales[i])`` when ``scales`` is used and ``sizes[i]`` when ``sizes`` is
 /// used.
 ///
-/// Only the ``"nearest"`` mode of the ``mode`` attribute is supported, using
-/// the ``"asymmetric"`` ``coordinate_transformation_mode`` (``in_coord =
-/// out_coord / scale``, then rounded according to ``nearest_mode`` and
-/// clamped to ``[0, in_dim - 1]``). All four ONNX ``nearest_mode`` values
+/// Only the ``"nearest"`` mode of the ``mode`` attribute is supported. The
+/// input coordinate of an output position is computed according to
+/// ``coordinate_transformation_mode`` (``half_pixel`` -- the default --
+/// ``half_pixel_symmetric``, ``pytorch_half_pixel``, ``align_corners`` and
+/// ``asymmetric``), rounded according to ``nearest_mode`` and clamped to
+/// ``[0, in_dim - 1]``. All four ONNX ``nearest_mode`` values
 /// (``round_prefer_floor`` -- the default -- ``round_prefer_ceil``,
-/// ``floor``, ``ceil``) are supported. This matches the reference output
-/// for the simple test cases registered alongside the kernel. The supported
-/// element types are the same whole-byte types as :cpp:func:`ElementSize`.
+/// ``floor``, ``ceil``) are supported. The optional ``axes`` attribute
+/// (opset 18) selects the subset of axes ``scales``/``sizes`` refer to, and
+/// ``keep_aspect_ratio_policy`` (``"stretch"`` -- the default --
+/// ``"not_larger"``, ``"not_smaller"``) is honoured when ``sizes`` is used.
+/// The ``"tf_crop_and_resize"`` coordinate transformation, the ``roi``
+/// input, ``exclude_outside``, ``antialias`` and the ``linear``/``cubic``
+/// interpolation modes are not implemented. The supported element types
+/// are the same whole-byte types as :cpp:func:`ElementSize`.
 class Resize : public KernelBase {
 public:
   /// Attributes carried by the ONNX ``Resize`` operator. Only the ``mode``
   /// attribute is interpreted by this reference implementation.
   struct Attributes {
     std::string mode = "nearest";
-    std::string coordinate_transformation_mode = "asymmetric";
+    std::string coordinate_transformation_mode = "half_pixel";
     std::string nearest_mode = "round_prefer_floor";
+    /// Subset of input axes that ``scales``/``sizes`` apply to. When empty,
+    /// every axis is resized (matching the pre-opset-18 behaviour).
+    std::vector<int64_t> axes;
+    /// How to interpret ``sizes``. ``"stretch"`` honours ``sizes`` exactly;
+    /// ``"not_larger"`` / ``"not_smaller"`` rescale by a common factor so
+    /// that the resulting output is not larger / smaller than ``sizes`` on
+    /// any of the selected ``axes`` (other axes are left untouched).
+    std::string keep_aspect_ratio_policy = "stretch";
   };
 
   using KernelBase::KernelBase;

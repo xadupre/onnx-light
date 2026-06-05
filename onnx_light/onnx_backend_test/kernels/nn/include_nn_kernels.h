@@ -868,6 +868,55 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of ``ai.onnx::RotaryEmbedding`` (v23).
+///
+/// Applies the rotary positional embedding (RoPE) defined in
+/// https://arxiv.org/pdf/2104.09864 to the input tensor ``X``. The kernel
+/// accepts both the rank-3 layout ``(batch_size, sequence_length,
+/// hidden_size)`` (in which case ``num_heads`` must be provided and
+/// ``hidden_size = num_heads * head_size``) and the rank-4 layout
+/// ``(batch_size, num_heads, sequence_length, head_size)``. The output has
+/// the same shape and dtype as ``X``.
+///
+/// ``cos_cache`` and ``sin_cache`` are either rank-2
+/// ``(max_position_id_plus_1, head_size / 2)`` tables indexed by the
+/// optional ``position_ids`` input or rank-3
+/// ``(batch_size, sequence_length, head_size / 2)`` tensors used directly
+/// when ``position_ids`` is omitted. When ``rotary_embedding_dim`` is
+/// non-zero the last dimension of the caches must equal
+/// ``rotary_embedding_dim / 2`` and rotation is applied only to the first
+/// ``rotary_embedding_dim`` channels of each head; the remaining channels
+/// are passed through unchanged.
+///
+/// When ``interleaved`` is true, even/odd channels of each head are paired
+/// instead of the (default) splitting into two contiguous halves.
+class RotaryEmbedding : public KernelBase {
+public:
+  /// Attributes carried by the ONNX ``RotaryEmbedding`` operator. All
+  /// defaults match the upstream schema.
+  struct Attributes {
+    bool interleaved = false;         ///< Pair (0,1),(2,3),... instead of (0,h/2),(1,h/2+1),...
+    int64_t rotary_embedding_dim = 0; ///< 0 means "rotate all of head_size".
+    int64_t num_heads = 0;            ///< Required when ``X`` is rank-3.
+  };
+
+  using KernelBase::KernelBase;
+
+  /// Returning overload. ``position_ids`` may be a default-constructed
+  /// (empty-shape) ``Tensor`` to indicate the optional input is missing.
+  Tensor operator()(const Tensor &X, const Tensor &cos_cache, const Tensor &sin_cache,
+                    const Tensor &position_ids, const Attributes &attrs) const;
+
+  /// In-place overload writing into a caller-allocated output of the same
+  /// shape and dtype as ``X``.
+  void operator()(const Tensor &X, const Tensor &cos_cache, const Tensor &sin_cache,
+                  const Tensor *position_ids, const Attributes &attrs, Tensor &output) const;
+
+  /// Output shape matches input shape; storage could theoretically alias
+  /// ``X`` but the in-place overload above does not exploit it.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

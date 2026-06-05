@@ -422,6 +422,30 @@ void ComputeShapeAttention(ShapesContext &ctx, const NodeProto &node, const char
                            const char *past_value = nullptr);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``RotaryEmbedding`` node
+ * (since opset 23 in the ``ai.onnx`` domain) and stores it in ``ctx``.
+ *
+ * The output has the same shape and dtype as the input ``X``. ``X`` may be
+ * either rank-4 ``(batch_size, num_heads, sequence_length, head_size)`` or
+ * rank-3 ``(batch_size, sequence_length, hidden_size)``; in the latter case
+ * the ``num_heads`` attribute must be set.
+ *
+ * @param ctx   In/out context. Must already contain an entry for ``x``; on
+ *              return it also contains an entry for ``node.output(0)``.
+ * @param node  The ``RotaryEmbedding`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"RotaryEmbedding"``
+ *              and ``node`` must declare at least one output.
+ * @param x     Name of the input value to read from ``ctx``. Must be present
+ *              in ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"RotaryEmbedding"``, if ``node`` has no output, or if ``X`` has
+ *         a rank other than 3 or 4.
+ * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
+ */
+void ComputeShapeRotaryEmbedding(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``DeformConv`` node and
  * stores it in ``ctx``.
  *

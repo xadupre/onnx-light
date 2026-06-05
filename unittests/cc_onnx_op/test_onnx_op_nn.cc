@@ -40,6 +40,7 @@ constexpr size_t kExpectedMaxPoolSchemaCount = 6;
 constexpr size_t kExpectedMaxRoiPoolSchemaCount = 2;
 constexpr size_t kExpectedMaxUnpoolSchemaCount = 3;
 constexpr size_t kExpectedRNNSchemaCount = 4;
+constexpr size_t kExpectedRotaryEmbeddingSchemaCount = 1;
 constexpr size_t kExpectedNnSchemaCount =
     kExpectedAttentionSchemaCount + kExpectedAveragePoolSchemaCount +
     kExpectedBatchNormalizationSchemaCount + kExpectedCol2ImSchemaCount + kExpectedConvSchemaCount +
@@ -50,7 +51,8 @@ constexpr size_t kExpectedNnSchemaCount =
     kExpectedGroupNormalizationSchemaCount + kExpectedInstanceNormalizationSchemaCount +
     kExpectedLRNSchemaCount + kExpectedLpNormalizationSchemaCount + kExpectedLSTMSchemaCount +
     kExpectedMaxPoolSchemaCount + kExpectedMaxRoiPoolSchemaCount + kExpectedMaxUnpoolSchemaCount +
-    kExpectedMeanVarianceNormalizationSchemaCount + kExpectedRNNSchemaCount;
+    kExpectedMeanVarianceNormalizationSchemaCount + kExpectedRNNSchemaCount +
+    kExpectedRotaryEmbeddingSchemaCount;
 
 static const onnx_op::LightOpSchema *
 FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {

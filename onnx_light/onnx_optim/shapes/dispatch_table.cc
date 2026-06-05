@@ -966,6 +966,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
                                  node.input(1).as_string().c_str(),
                                   node.input(2).as_string().c_str());
        }},
+      {"ai.onnx:RotaryEmbedding",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 3);
+         nn::ComputeShapeRotaryEmbedding(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:NonMaxSuppression",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);

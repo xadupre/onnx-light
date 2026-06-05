@@ -3,7 +3,9 @@
 Standalone C++ example: measure ONNX loading time
 =================================================
 
-This page documents ``examples/load_onnx_time``, a self-contained CMake
+This page documents ``examples/load_onnx_time``
+(`view on GitHub <https://github.com/xadupre/onnx-light/tree/main/examples/load_onnx_time>`_),
+a self-contained CMake
 project that benchmarks ONNX model loading using the standard ``onnx``
 C++ library (protobuf-based).  It is intended as a reference comparison
 against the :ref:`l-cpp-load-onnx-light-time-example`.

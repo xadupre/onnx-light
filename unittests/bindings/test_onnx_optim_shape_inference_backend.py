@@ -10,11 +10,11 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
         pass
 
     def test_rejects_model_without_graph(self):
-        shs = []
+        shape_tests = []
         for test in collect_test_cases():
             if "test_cc_shape_inference_add_concat_reshape" == test.name:
-                shs.append(test)
-        self.assertEqual(len(shs), 1)
+                shape_tests.append(test)
+        self.assertEqual(len(shape_tests), 1)
         tests = collect_test_cases("test_cc_shape_inference_add_concat_reshape")
         self.assertEqual(len(tests), 1)
         test = tests[0]

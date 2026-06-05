@@ -1635,7 +1635,7 @@ def compute_inference_coverage() -> InferenceCoverageReport:
         try:
             mermaid = to_mermaid(original)
         except Exception as exc:  # pragma: no cover - defensive only
-            mermaid = f"flowchart TB\n    err[\"to_mermaid failed: {exc}\"]"
+            mermaid = f'flowchart TB\n    err["to_mermaid failed: {exc}"]'
 
         # Snapshot expected shapes from the original (untouched) model so
         # that we can compare them against the shapes produced by shape
@@ -1692,10 +1692,7 @@ def compute_inference_coverage() -> InferenceCoverageReport:
 
         report.cases.append(
             InferenceCaseReport(
-                name=tc.name,
-                mermaid=mermaid,
-                error=error,
-                comparisons=comparisons,
+                name=tc.name, mermaid=mermaid, error=error, comparisons=comparisons
             )
         )
 
@@ -1722,11 +1719,7 @@ def _format_shape(shape: ValueShape | None) -> str:
     elif not shape.shape:
         dims = "[]"
     else:
-        dims = (
-            "["
-            + ", ".join("?" if d is None else str(d) for d in shape.shape)
-            + "]"
-        )
+        dims = "[" + ", ".join("?" if d is None else str(d) for d in shape.shape) + "]"
     return f"{elem}{dims}"
 
 

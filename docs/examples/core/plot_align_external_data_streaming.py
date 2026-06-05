@@ -78,9 +78,7 @@ out_dir = "temp_plot_align_external_data_streaming"
 os.makedirs(out_dir, exist_ok=True)
 
 model = make_model()
-total_weight_bytes = sum(
-    int(np.prod(init.dims)) * 4 for init in model.graph.initializer
-)
+total_weight_bytes = sum(int(np.prod(init.dims)) * 4 for init in model.graph.initializer)
 print(f"Number of initializers : {len(model.graph.initializer)}")
 print(f"Total weight bytes     : {total_weight_bytes / 2 ** 20:.2f} MB")
 print(f"Alignment              : {ALIGNMENT} bytes")
@@ -126,7 +124,7 @@ def measure(name: str, fn) -> dict:
     elapsed = time.perf_counter() - t0
     _, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
-    peak_mb = peak / 2 ** 20
+    peak_mb = peak / 2**20
     print(f"{name:<40} time={elapsed * 1e3:8.1f} ms   peak={peak_mb:7.2f} MB")
     return {"name": name, "time_s": elapsed, "peak_mb": peak_mb}
 
@@ -207,9 +205,7 @@ streaming_loaded = onnxl.load(streaming_onnx, load_external_data=False)
 inmem_loaded = onnxl.load(inmem_onnx, load_external_data=False)
 
 with open(streaming_data, "rb") as f_stream, open(inmem_data, "rb") as f_inmem:
-    for s_init, m_init in zip(
-        streaming_loaded.graph.initializer, inmem_loaded.graph.initializer
-    ):
+    for s_init, m_init in zip(streaming_loaded.graph.initializer, inmem_loaded.graph.initializer):
         s_meta = {e.key: e.value for e in s_init.external_data}
         m_meta = {e.key: e.value for e in m_init.external_data}
         s_off, s_len = int(s_meta["offset"]), int(s_meta["length"])
@@ -219,9 +215,7 @@ with open(streaming_data, "rb") as f_stream, open(inmem_data, "rb") as f_inmem:
         assert s_len == m_len, f"length mismatch: {s_len} vs {m_len}"
         f_stream.seek(s_off)
         f_inmem.seek(m_off)
-        assert f_stream.read(s_len) == f_inmem.read(m_len), (
-            f"payload mismatch on {s_init.name}"
-        )
+        assert f_stream.read(s_len) == f_inmem.read(m_len), f"payload mismatch on {s_init.name}"
 print("Both approaches produced byte-equivalent aligned tensor payloads.")
 
 # %%

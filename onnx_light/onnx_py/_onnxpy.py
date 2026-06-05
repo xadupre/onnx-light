@@ -51,9 +51,7 @@ _EXTENSIONS: tuple[str, ...] = (
 # Looking up such a name forces every listed extension to be imported so that
 # their public attributes can be merged into a single namespace, matching the
 # previous eager-merge behavior.
-_COLLISIONS: dict[str, tuple[str, ...]] = {
-    "shape_inference": ("_onnxpyprotolib", "_onnxpyoptim")
-}
+_COLLISIONS: dict[str, tuple[str, ...]] = {"shape_inference": ("_onnxpyprotolib", "_onnxpyoptim")}
 
 _loaded: dict[str, ModuleType] = {}
 

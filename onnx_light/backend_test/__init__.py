@@ -26,9 +26,4 @@ TestCase = _C.TestCase
 # Helper that collects every C++-registered backend test case.
 collect_test_cases = _C.collect_test_cases
 
-__all__ = [
-    "DataSet",
-    "Tensor",
-    "TestCase",
-    "collect_test_cases",
-]
+__all__ = ["DataSet", "Tensor", "TestCase", "collect_test_cases"]

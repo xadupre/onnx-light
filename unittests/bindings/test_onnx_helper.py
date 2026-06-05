@@ -519,7 +519,7 @@ class TestAlignExternalDataStreaming(ExtTestCase):
         """Builds and saves a model with three differently-sized FLOAT initializers
         as external data; returns the per-initializer numpy payloads."""
         payloads = [
-            np.full((7,), 1.5, dtype=np.float32),   # 28 bytes (unaligned)
+            np.full((7,), 1.5, dtype=np.float32),  # 28 bytes (unaligned)
             np.full((3,), -2.0, dtype=np.float32),  # 12 bytes
             np.full((17,), 3.0, dtype=np.float32),  # 68 bytes
         ]
@@ -608,7 +608,7 @@ class TestSaveModelWithSharedExternalData(ExtTestCase):
     def _make_first_model(path: str) -> list[np.ndarray]:
         """Saves a first model with two external initializers and returns their payloads."""
         payloads = [
-            np.full((7,), 1.5, dtype=np.float32),    # 28 bytes
+            np.full((7,), 1.5, dtype=np.float32),  # 28 bytes
             np.full((11,), -2.0, dtype=np.float32),  # 44 bytes
         ]
         inits = [
@@ -642,8 +642,8 @@ class TestSaveModelWithSharedExternalData(ExtTestCase):
             # and adds two brand-new initializers with inline raw_data.
             first = onnxl.load(src_onnx, load_external_data=False)
             payloads_new = [
-                np.full((5,), 7.0, dtype=np.float32),    # 20 bytes (new)
-                np.full((3,), -3.5, dtype=np.float32),   # 12 bytes (new)
+                np.full((5,), 7.0, dtype=np.float32),  # 20 bytes (new)
+                np.full((3,), -3.5, dtype=np.float32),  # 12 bytes (new)
             ]
             new_inits = [
                 oh.make_tensor(
@@ -667,9 +667,7 @@ class TestSaveModelWithSharedExternalData(ExtTestCase):
             opts = SerializeOptions()
             opts.alignment = alignment
             total = save_model_with_shared_external_data(
-                model=second,
-                dst_onnx_path=dst_onnx,
-                options=opts,
+                model=second, dst_onnx_path=dst_onnx, options=opts
             )
             # Only the new initializers should land in dst.data (20 bytes, then 64-aligned
             # padding, then 12 bytes => 76 bytes total).
@@ -714,9 +712,7 @@ class TestSaveModelWithSharedExternalData(ExtTestCase):
             payloads_first = self._make_first_model(src_onnx)
             first = onnxl.load(src_onnx, load_external_data=False)
 
-            graph_b = oh.make_graph(
-                [], "g2", [], [], initializer=list(first.graph.initializer)
-            )
+            graph_b = oh.make_graph([], "g2", [], [], initializer=list(first.graph.initializer))
             second = oh.make_model(graph_b, producer_name="second")
 
             dst_onnx = os.path.join(tdir, "dst.onnx")
@@ -756,7 +752,7 @@ class TestSaveModelWithSharedExternalData(ExtTestCase):
                 raw=True,
             )
             graph_b = oh.make_graph(
-                [], "g2", [], [], initializer=list(first.graph.initializer) + [new_init]
+                [], "g2", [], [], initializer=[*first.graph.initializer, new_init]
             )
             second = oh.make_model(graph_b, producer_name="second")
 
@@ -778,7 +774,9 @@ class TestSaveModelWithSharedExternalData(ExtTestCase):
 
             # The newly written initializer points at the auto-derived secondary file
             # placed next to dst.onnx, with a plain basename location.
-            new_metas = [init for init in meta.graph.initializer if str(init.name).startswith("n")]
+            new_metas = [
+                init for init in meta.graph.initializer if str(init.name).startswith("n")
+            ]
             self.assertEqual(len(new_metas), 1)
             new_entries = {e.key: str(e.value) for e in new_metas[0].external_data}
             self.assertEqual(str(new_entries["location"]), os.path.basename(dst_onnx) + ".data")

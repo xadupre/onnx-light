@@ -92,9 +92,7 @@ class TestCase(_backend_test_cc.TestCase):
         self._py_model = value
 
     @property
-    def data_sets(
-        self,
-    ) -> BackendTestDataSets | None:
+    def data_sets(self) -> BackendTestDataSets | None:
         return self._py_data_sets
 
     @data_sets.setter

@@ -103,11 +103,7 @@ def _principal_op(tc: TestCase) -> tuple[str, str]:
 #     in-memory INT64 initializer path in
 #     ``Graph::SaveShapeValuesFromDataPropagation``. ORT versions predating
 #     microsoft/onnxruntime#28778 abort while loading the model.
-_ORT_SKIP_CASES = frozenset(
-    {
-        "test_cc_shape_inference_shape_identity_unsqueeze",
-    }
-)
+_ORT_SKIP_CASES = frozenset({"test_cc_shape_inference_shape_identity_unsqueeze"})
 
 
 def _run_onnxruntime(tc: TestCase) -> tuple[float | None, str | None]:
@@ -165,9 +161,7 @@ def _run_onnxruntime(tc: TestCase) -> tuple[float | None, str | None]:
             # captured by ``sphinx_runpython`` when this report is rendered in
             # the documentation and would corrupt the surrounding reST output.
             with np.errstate(invalid="ignore"):
-                diff = float(
-                    np.max(np.abs(ea.astype(np.float64) - oa.astype(np.float64)))
-                )
+                diff = float(np.max(np.abs(ea.astype(np.float64) - oa.astype(np.float64))))
             if diff > max_diff:
                 max_diff = diff
     return (max_diff, None)

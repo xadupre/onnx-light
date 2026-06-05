@@ -37,10 +37,7 @@ def _make_model_with_initializers() -> (
     tfloat = oh.TensorProto.FLOAT
     model = oh.make_model(
         oh.make_graph(
-            [
-                oh.make_node("MatMul", ["X", "W"], ["XW"]),
-                oh.make_node("Add", ["XW", "B"], ["Y"]),
-            ],
+            [oh.make_node("MatMul", ["X", "W"], ["XW"]), oh.make_node("Add", ["XW", "B"], ["Y"])],
             "g",
             [oh.make_tensor_value_info("X", tfloat, [None, 16])],
             [oh.make_tensor_value_info("Y", tfloat, [None, 8])],
@@ -115,9 +112,7 @@ class TestSaveAndRunWithOnnxRuntime(ExtTestCase):
         """Asserts that at least two external weights files were produced."""
         directory = os.path.dirname(prefix) or "."
         basename = os.path.basename(prefix)
-        produced = sorted(
-            f for f in os.listdir(directory) if f.startswith(basename)
-        )
+        produced = sorted(f for f in os.listdir(directory) if f.startswith(basename))
         self.assertGreaterEqual(
             len(produced),
             2,

@@ -247,7 +247,12 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           "Returns the underlying value as either ``int`` or ``str``.")
       .def("__str__", &OptimDim::ToString)
       .def("__repr__",
-           [](const OptimDim &d) { return std::string("OptimDim(") + d.ToString() + ")"; })
+           [](const OptimDim &d) {
+             if (d.IsInt()) {
+               return std::string("OptimDim(") + std::to_string(d.AsInt()) + ")";
+             }
+             return std::string("OptimDim('") + d.AsExpr() + "')";
+           })
       .def(nb::self == nb::self)
       .def(nb::self != nb::self);
 
@@ -281,7 +286,23 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       .def("__iter__", [shape_to_list](const OptimShape &s) { return nb::iter(shape_to_list(s)); })
       .def("__str__", &OptimShape::ToString)
       .def("__repr__",
-           [](const OptimShape &s) { return std::string("OptimShape(") + s.ToString() + ")"; })
+           [](const OptimShape &s) {
+             std::string out = "OptimShape([";
+             for (std::size_t i = 0; i < s.Rank(); ++i) {
+               if (i > 0) {
+                 out += ", ";
+               }
+               if (s[i].IsInt()) {
+                 out += std::to_string(s[i].AsInt());
+               } else {
+                 out += "'";
+                 out += s[i].AsExpr();
+                 out += "'";
+               }
+             }
+             out += "])";
+             return out;
+           })
       .def(nb::self == nb::self)
       .def(nb::self != nb::self);
 

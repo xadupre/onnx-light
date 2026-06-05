@@ -176,7 +176,7 @@ inmem_data = os.path.join(out_dir, "inmem.data")
 
 
 def run_in_memory() -> None:
-    loaded = onnxl.load(src_onnx, load_external_data=True)
+    loaded = onnxl.load(src_onnx, load_external_data=True, num_threads=1)
     opts = onnxl.SerializeOptions()
     opts.alignment = ALIGNMENT
     # Disable honouring existing external_data.location entries so every

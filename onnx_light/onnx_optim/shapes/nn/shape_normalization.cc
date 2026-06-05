@@ -23,6 +23,13 @@ void ComputeShapeGroupNormalization(ShapesContext &ctx, const NodeProto &node, c
   ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), input.Shape()));
 }
 
+void ComputeShapeMeanVarianceNormalization(ShapesContext &ctx, const NodeProto &node,
+                                           const char *x) {
+  CheckNodeOpAndOutput(node, "MeanVarianceNormalization", "ComputeShapeMeanVarianceNormalization");
+  const OptimTensor &input = ctx.Get(x);
+  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), input.Shape()));
+}
+
 } // namespace nn
 } // namespace shapes
 } // namespace onnx_optim

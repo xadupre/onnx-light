@@ -49,6 +49,7 @@ a huge package to publish.
     backend_tests
     test_coverage
     runtime_coverage
+    inference_coverage
 
 A set of `atheris`-based Python fuzz targets exercises the public API
 surface (loader, checker, parser, shape inference, version converter)

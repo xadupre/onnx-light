@@ -213,6 +213,24 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Reference implementation of ``MeanVarianceNormalization`` (opset 9, 13).
+///
+/// Normalizes each element as
+/// ``Y = (X - mean(X, axes)) / sqrt(mean((X - mean(X, axes))^2, axes))``.
+/// The default axes are ``[0, 2, 3]``.
+class MeanVarianceNormalization : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  Tensor operator()(const Tensor &x, const std::vector<int64_t> &axes = {0, 2, 3}) const;
+  void operator()(const Tensor &x, Tensor &output,
+                  const std::vector<int64_t> &axes = {0, 2, 3}) const;
+
+  /// Output ``Y`` has the same shape as ``X`` so the output buffer may
+  /// alias the input ``X`` buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// Flattens an input tensor of any element type into a 2-D matrix. Given an
 /// input of shape ``(d_0, d_1, ..., d_n)`` and integer attribute ``axis``,
 /// the output has shape ``(d_0 * d_1 * ... * d_(axis-1), d_axis * ... * d_n)``.
@@ -285,6 +303,28 @@ public:
   /// Returns a FLOAT output tensor whose shape matches ``x``.
   Tensor operator()(const Tensor &x, int64_t size, float alpha = 0.0001f, float beta = 0.75f,
                     float bias = 1.0f) const;
+
+  /// Output shape matches input shape, so storage may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
+/// Reference implementation of ``LpNormalization``.
+///
+/// Computes ``output = input / Lp_norm(input, axis)`` element-wise along the
+/// given ``axis`` (negative values count from the end). When the Lp norm
+/// along a slice is zero, the corresponding output slice is set to zero to
+/// avoid division by zero.
+///
+/// The kernel accepts FLOAT inputs of any rank ``>= 1``. ``axis`` defaults
+/// to ``-1`` (the last axis). ``p`` must be either ``1`` (L1 norm) or
+/// ``2`` (L2 norm) and defaults to ``2``. The output shape matches the
+/// input shape.
+class LpNormalization : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Returns a FLOAT output tensor whose shape matches ``x``.
+  Tensor operator()(const Tensor &x, int64_t axis = -1, int64_t p = 2) const;
 
   /// Output shape matches input shape, so storage may alias the input buffer.
   static constexpr bool CanRunInPlace() noexcept { return true; }

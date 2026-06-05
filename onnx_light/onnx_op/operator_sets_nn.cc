@@ -410,6 +410,36 @@ LightOpSchema MakeLRNSchema(int since_version) {
       });
 }
 
+// --- LpNormalization ---------------------------------------------------------
+
+std::vector<TensorType> LpNormalizationTypes(int since_version) {
+  if (since_version >= 22) {
+    return {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+  }
+  return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+}
+
+LightOpSchema MakeLpNormalizationSchema(int since_version) {
+  return LightOpSchema(
+      "LpNormalization", kOnnxDomain, since_version, MakeLpNormalizationDoc(since_version),
+      {
+          {"input", "Input matrix", "T"},
+      },
+      {
+          {"output", "Matrix after normalization", "T"},
+      },
+      {
+          {"T", LpNormalizationTypes(since_version),
+           "Constrain input and output types to float tensors."},
+      },
+      {
+          {"axis", "The axis on which to apply normalization, -1 mean last axis.",
+           AttributeType::INT, /*required=*/false, static_cast<int64_t>(-1)},
+          {"p", "The order of the normalization, only 1 or 2 are supported.", AttributeType::INT,
+           /*required=*/false, static_cast<int64_t>(2)},
+      });
+}
+
 // Inputs/outputs and type-constraint descriptions are reproduced verbatim from
 // upstream ONNX so that the LightOpSchema parity test in test_onnx_ops.cc
 // passes.
@@ -1435,6 +1465,40 @@ LightOpSchema MakeGroupNormalizationSchema(int since_version) {
   return schema;
 }
 
+// --- MeanVarianceNormalization ----------------------------------------------
+
+const char *const kMeanVarianceNormalizationAxesDesc =
+    "A list of integers, along which to reduce. The default is to calculate along axes [0,2,3] "
+    "for calculating mean and variance along each channel. Two variables with the same "
+    "C-coordinate are associated with the same mean and variance.";
+
+std::vector<TensorType> MeanVarianceNormalizationTypes(int since_version) {
+  if (since_version >= 13) {
+    return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kBfloat16};
+  }
+  return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+}
+
+LightOpSchema MakeMeanVarianceNormalizationSchema(int since_version) {
+  return LightOpSchema("MeanVarianceNormalization", kOnnxDomain, since_version,
+                       MakeMeanVarianceNormalizationDoc(since_version),
+                       {
+                           {"X", "Input tensor", "T"},
+                       },
+                       {
+                           {"Y", "Output tensor", "T"},
+                       },
+                       {
+                           {"T", MeanVarianceNormalizationTypes(since_version),
+                            "Constrain input and output types to all numeric tensors."},
+                       },
+                       {
+                           {"axes", kMeanVarianceNormalizationAxesDesc, AttributeType::INTS,
+                            /*required=*/false, std::vector<int64_t>{0, 2, 3}},
+                       },
+                       /*has_function_implementation=*/true);
+}
+
 } // namespace
 
 std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &op_type,
@@ -1571,6 +1635,20 @@ std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &o
          return std::vector<LightOpSchema>{
              MakeLRNSchema(13),
              MakeLRNSchema(1),
+         };
+       }},
+      {"MeanVarianceNormalization",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeMeanVarianceNormalizationSchema(13),
+             MakeMeanVarianceNormalizationSchema(9),
+         };
+       }},
+      {"LpNormalization",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeLpNormalizationSchema(22),
+             MakeLpNormalizationSchema(1),
          };
        }},
       {"RNN",

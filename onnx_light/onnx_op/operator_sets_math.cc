@@ -455,6 +455,49 @@ to the tensor element-wise.
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildMishSchemas() {
+  static constexpr const char *kMishDoc = R"DOC(
+Mish: A Self Regularized Non-Monotonic Neural Activation Function.
+
+Perform the linear unit element-wise on the input tensor X using formula:
+
+```
+mish(x) = x * tanh(softplus(x)) = x * tanh(ln(1 + e^{x}))
+```
+)DOC";
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(2);
+  schemas.push_back(LightOpSchema(
+      "Mish", kOnnxDomain, 22, kMishDoc,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T",
+           {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble},
+           "Constrain input X and output types to float tensors."},
+      },
+      /*has_function_implementation=*/true));
+  schemas.push_back(
+      LightOpSchema("Mish", kOnnxDomain, 18, kMishDoc,
+                    {
+                        {"X", "Input tensor", "T"},
+                    },
+                    {
+                        {"Y", "Output tensor", "T"},
+                    },
+                    {
+                        {"T",
+                         {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble},
+                         "Constrain input X and output types to float tensors."},
+                    },
+                    /*has_function_implementation=*/true));
+  return schemas;
+}
+
 std::vector<LightOpSchema> BuildSoftplusSchemas() {
   static constexpr const char *kSoftplusDoc = R"DOC(
 Softplus takes one input data (Tensor<T>) and produces one output data
@@ -526,6 +569,196 @@ Calculates the softsign (x/(1+|x|)) of the given input tensor element-wise.
                         {"T", FloatTypes(), "Constrain input and output types to float tensors."},
                     },
                     /*has_function_implementation=*/true));
+  return schemas;
+}
+
+std::vector<LightOpSchema> BuildReluSchemas() {
+  static constexpr const char *kReluDoc = R"DOC(
+Relu takes one input data (Tensor<T>) and produces one output data
+(Tensor<T>) where the rectified linear function, y = max(0, x), is applied to
+the tensor elementwise.
+)DOC";
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(4);
+  schemas.push_back(LightOpSchema(
+      "Relu", kOnnxDomain, 14, kReluDoc,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T",
+           {TensorType::kFloat, TensorType::kInt32, TensorType::kInt8, TensorType::kInt16,
+            TensorType::kInt64, TensorType::kFloat16, TensorType::kDouble, TensorType::kBfloat16},
+           "Constrain input and output types to signed numeric tensors."},
+      },
+      /*attributes=*/{},
+      /*has_function_implementation=*/true));
+  schemas.push_back(LightOpSchema(
+      "Relu", kOnnxDomain, 13, kReluDoc,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T",
+           {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kBfloat16},
+           "Constrain input and output types to float tensors."},
+      }));
+  schemas.push_back(
+      LightOpSchema("Relu", kOnnxDomain, 6, kReluDoc,
+                    {
+                        {"X", "Input tensor", "T"},
+                    },
+                    {
+                        {"Y", "Output tensor", "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    }));
+  schemas.push_back(
+      LightOpSchema("Relu", kOnnxDomain, 1, kReluDoc,
+                    {
+                        {"X", "Input tensor", "T"},
+                    },
+                    {
+                        {"Y", "Output tensor", "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    }));
+  return schemas;
+}
+
+std::vector<LightOpSchema> BuildEluSchemas() {
+  static constexpr const char *kEluDoc = R"DOC(
+Elu takes one input data (Tensor<T>) and produces one output data
+(Tensor<T>) where the function `f(x) = alpha * (exp(x) - 1.) for x <
+0`, `f(x) = x for x >= 0`., is applied to the tensor elementwise.
+
+)DOC";
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(3);
+  schemas.push_back(LightOpSchema(
+      "Elu", kOnnxDomain, 22, kEluDoc,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T",
+           {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble},
+           "Constrain input and output types to float tensors."},
+      },
+      {
+          {"alpha", "Coefficient of ELU.", AttributeType::FLOAT, /*required=*/false, 1.0},
+      },
+      /*has_function_implementation=*/true));
+  schemas.push_back(LightOpSchema(
+      "Elu", kOnnxDomain, 6, kEluDoc,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+      },
+      {
+          {"alpha", "Coefficient of ELU.", AttributeType::FLOAT, /*required=*/false, 1.0},
+      },
+      /*has_function_implementation=*/true));
+  schemas.push_back(
+      LightOpSchema("Elu", kOnnxDomain, 1, kEluDoc,
+                    {
+                        {"X", "Input tensor", "T"},
+                    },
+                    {
+                        {"Y", "Output tensor", "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    },
+                    {
+                        {"alpha", "Coefficient of ELU default to 1.0.", AttributeType::FLOAT,
+                         /*required=*/false, 1.0},
+                    }));
+  return schemas;
+}
+
+std::vector<LightOpSchema> BuildCeluSchemas() {
+  static constexpr const char *kCeluDoc = R"DOC(
+Continuously Differentiable Exponential Linear Units:
+Perform the linear unit element-wise on the input tensor X
+using formula:
+
+```
+max(0,x) + min(0,alpha*(exp(x/alpha)-1))
+```
+)DOC";
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(1);
+  schemas.push_back(LightOpSchema(
+      "Celu", kOnnxDomain, 12, kCeluDoc,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T", {TensorType::kFloat}, "Constrain input and output types to float32 tensors."},
+      },
+      {
+          {"alpha",
+           "The Alpha value in Celu formula which control the shape of "
+           "the unit. The default value is 1.0.",
+           AttributeType::FLOAT, /*required=*/false, 1.0},
+      },
+      /*has_function_implementation=*/true));
+  return schemas;
+}
+
+std::vector<LightOpSchema> BuildGeluSchemas() {
+  static constexpr const char *kGeluDoc = R"DOC(
+Gelu takes one input data (Tensor<T>) and produces one
+output data (Tensor<T>) where the gaussian error linear units function,
+$y = 0.5 * x * (1 + erf(x/sqrt(2)))$ is applied to the tensor elementwise.
+If the attribute "approximate" is set to "tanh", the function estimation,
+$y = 0.5 * x * (1 + Tanh(sqrt(2/\pi) * (x + 0.044715 * x^3)))$ is used and applied
+to the tensor elementwise.
+
+)DOC";
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(1);
+  schemas.push_back(LightOpSchema(
+      "Gelu", kOnnxDomain, 20, kGeluDoc,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T",
+           {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kBfloat16},
+           "Constrain input and output types to float tensors."},
+      },
+      {
+          {"approximate",
+           "Gelu approximation algorithm: `\"tanh\"`, `\"none\"`(default)."
+           "`\"none\"`: do not use approximation."
+           "`\"tanh\"`: use tanh approximation.",
+           AttributeType::STRING, /*required=*/false, std::string("none")},
+      },
+      /*has_function_implementation=*/true));
   return schemas;
 }
 
@@ -2290,6 +2523,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Atanh", [] { return BuildUnaryFloatMathSchemas("Atanh", 22, 9); }},
       {"BlackmanWindow", [] { return BuildBlackmanWindowSchemas(); }},
       {"Ceil", [] { return BuildCeilSchemas(); }},
+      {"Celu", [] { return BuildCeluSchemas(); }},
       {"Clip", [] { return BuildClipSchemas(); }},
       {"Cos", [] { return BuildUnaryFloatMathSchemas("Cos", 22, 7); }},
       {"Cosh", [] { return BuildUnaryFloatMathSchemas("Cosh", 22, 9); }},
@@ -2299,9 +2533,11 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Det", [] { return BuildDetSchemas(); }},
       {"Div", [] { return BuildElementwiseMathSchemaForVersion("Div"); }},
       {"Einsum", [] { return BuildEinsumSchemas(); }},
+      {"Elu", [] { return BuildEluSchemas(); }},
       {"Erf", [] { return BuildErfSchemas(); }},
       {"Exp", [] { return BuildUnaryFloatMathSchemasWithV1("Exp", 13, 6, 1); }},
       {"Floor", [] { return BuildFloorSchemas(); }},
+      {"Gelu", [] { return BuildGeluSchemas(); }},
       {"Gemm", [] { return BuildGemmSchemas(); }},
       {"HammingWindow", [] { return BuildHammingWindowSchemas(); }},
       {"HannWindow", [] { return BuildHannWindowSchemas(); }},
@@ -2311,12 +2547,14 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Mean", [] { return BuildMeanSchemas(); }},
       {"MelWeightMatrix", [] { return BuildMelWeightMatrixSchemas(); }},
       {"Min", [] { return BuildMinSchemas(); }},
+      {"Mish", [] { return BuildMishSchemas(); }},
       {"Mod", [] { return BuildModSchemas(); }},
       {"Mul", [] { return BuildElementwiseMathSchemaForVersion("Mul"); }},
       {"Neg", [] { return BuildNegSchemas(); }},
       {"NegativeLogLikelihoodLoss", [] { return BuildNegativeLogLikelihoodLossSchemas(); }},
       {"PRelu", [] { return BuildPReluSchemas(); }},
       {"Pow", [] { return BuildPowSchemas(); }},
+      {"Relu", [] { return BuildReluSchemas(); }},
       {"Round", [] { return BuildRoundSchemas(); }},
       {"Selu", [] { return BuildSeluSchemas(); }},
       {"Sigmoid", [] { return BuildSigmoidSchemas(); }},

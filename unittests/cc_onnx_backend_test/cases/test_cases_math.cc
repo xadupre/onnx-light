@@ -189,6 +189,24 @@ TEST(BackendTestCase, SoftplusCaseOutputsMatchSoftplusFunction) {
   }
 }
 
+TEST(BackendTestCase, MishCaseOutputsMatchMishFunction) {
+  auto cases = CollectTestCases("Mish");
+  const TestCase *tc = FindCase(cases, "test_cc_mish");
+  ASSERT_NE(tc, nullptr);
+  ASSERT_EQ(tc->data_sets.size(), 1u);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 1u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  ASSERT_EQ(ds.inputs[0].element_count(), ds.outputs[0].element_count());
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    const float abs_x = std::fabs(x[i]);
+    const float sp = std::log1p(std::exp(-abs_x)) + std::fmax(x[i], 0.0f);
+    EXPECT_NEAR(y[i], x[i] * std::tanh(sp), 1e-6f);
+  }
+}
+
 TEST(BackendTestCase, SoftsignCaseOutputsMatchSoftsignFunction) {
   auto cases = CollectTestCases("Softsign");
   const TestCase *tc = FindCase(cases, "test_cc_softsign");

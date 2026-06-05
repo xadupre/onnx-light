@@ -1131,6 +1131,77 @@ LightOpSchema MakeAttentionSchema(int since_version) {
       /*has_function_implementation=*/true);
 }
 
+// --- RotaryEmbedding ---------------------------------------------------------
+
+// Input/output descriptions reproduced verbatim from the upstream ONNX
+// RotaryEmbedding schema (v23 in onnx_lib/defs/nn/defs.cc) so the
+// LightOpSchema parity test passes.
+
+const char *const kRotaryEmbeddingXDescription =
+    "The input tensor representing the token embeddings. "
+    "4D tensor with shape `(batch_size, num_heads, sequence_length, head_size)` or 3D "
+    "tensor with shape `(batch_size, sequence_length, hidden_size)`. "
+    "For cases with a 4D input tensor, `head_size` has to be even. For cases with a 3D "
+    "input tensor, `num_heads` attribute must be provided and "
+    "`hidden_size` must be an even multiple of `num_heads` where `hidden_size = "
+    "num_heads * head_size`";
+
+const char *const kRotaryEmbeddingCosCacheDescription =
+    "The cosine values for the rotation. "
+    "2D tensor with shape `(max_position_id_plus_1, head_size / 2)` for full rotation "
+    "or `(max_position_id_plus_1, rotary_embedding_dim / 2)` "
+    "for partial rotation when `position_ids` are provided. 3D tensor with shape "
+    "`(batch_size, sequence_length, head_size / 2)` "
+    "for full rotation or `(batch_size, sequence_length, rotary_embedding_dim / 2)` for "
+    "partial rotation when `position_ids` are not provided. "
+    "`max_position_id_plus_1` is a parameter to the model.";
+
+const char *const kRotaryEmbeddingSinCacheDescription =
+    "The sine values for the rotation. "
+    "2D tensor with shape `(max_position_id_plus_1, head_size / 2)` for full rotation "
+    "or `(max_position_id_plus_1, rotary_embedding_dim / 2)` "
+    "for partial rotation when `position_ids` are provided. 3D tensor with shape "
+    "`(batch_size, sequence_length, head_size / 2)` "
+    "for full rotation or `(batch_size, sequence_length, rotary_embedding_dim / 2)` for "
+    "partial rotation when `position_ids` are not provided. "
+    "`max_position_id_plus_1` is a parameter to the model.";
+
+const char *const kRotaryEmbeddingPositionIdsDescription =
+    "The position indices for the tokens. 2D tensor with shape `(batch_size, "
+    "sequence_length)`";
+
+LightOpSchema MakeRotaryEmbeddingSchema(int since_version) {
+  std::vector<FormalParameter> inputs = {
+      {"X", kRotaryEmbeddingXDescription, "T"},
+      {"cos_cache", kRotaryEmbeddingCosCacheDescription, "T"},
+      {"sin_cache", kRotaryEmbeddingSinCacheDescription, "T"},
+      {"position_ids", kRotaryEmbeddingPositionIdsDescription, "M"},
+  };
+  std::vector<FormalParameter> outputs = {
+      {"Y", "Tensor with same shape as input.", "T"},
+  };
+  std::vector<AttributeParam> attrs = {
+      {"interleaved", "Rotate using interleaved pattern. Default value is 0 (False).",
+       AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)},
+      {"rotary_embedding_dim",
+       "Rotary embedding dimension used to apply partial rotary embeddings.", AttributeType::INT,
+       /*required=*/false, static_cast<int64_t>(0)},
+      {"num_heads", "Number of attention heads. Must be provided when input is a 3D tensor. ",
+       AttributeType::INT, /*required=*/false, std::monostate{}},
+  };
+  return LightOpSchema(
+      "RotaryEmbedding", kOnnxDomain, since_version, MakeRotaryEmbeddingDoc(since_version),
+      std::move(inputs), std::move(outputs),
+      {
+          {"T",
+           {TensorType::kFloat, TensorType::kFloat16, TensorType::kBfloat16},
+           "Constrain input and output types to float tensors."},
+          {"M", {TensorType::kInt64}, "Constrain input and output types to integer tensors."},
+      },
+      std::move(attrs),
+      /*has_function_implementation=*/true);
+}
+
 // --- Conv --------------------------------------------------------------------
 // Floating-point Conv operator. Type constraint ``T`` was widened in opset 22
 // to also allow ``tensor(bfloat16)`` via ``OpSchema::all_float_types_ir4()``.
@@ -1822,6 +1893,12 @@ std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &o
              MakeRNNSchema(14),
              MakeRNNSchema(7),
              MakeRNNSchema(1),
+         };
+       }},
+      {"RotaryEmbedding",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeRotaryEmbeddingSchema(23),
          };
        }},
   };

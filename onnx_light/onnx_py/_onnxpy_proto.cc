@@ -679,10 +679,10 @@ void AddOnnxPyProto(nb::module_ &m) {
               "if true, raw data will not be read but skipped, tensors are not valid in that "
               "case  but the model structure is still available")
       .def_rw("num_threads", &ParseOptions::num_threads,
-              "Number of threads to use for parallel reading. 1 (default) means "
-              "no parallelization, > 1 uses exactly that many worker threads, and "
-              "any negative value picks a sensible value based on the number of "
-              "available CPU cores.")
+              "Number of threads to use for parallel reading. Any negative value "
+              "(``-1`` is the default) picks a sensible value based on the number "
+              "of available CPU cores. ``1`` means no parallelization, and ``> 1`` "
+              "uses exactly that many worker threads.")
       .def("is_parallel", &ParseOptions::is_parallel,
            "Returns True when parallel reading should be enabled (num_threads != 1).")
       .def_rw("min_parallel_block_size", &ParseOptions::min_parallel_block_size,
@@ -714,10 +714,10 @@ void AddOnnxPyProto(nb::module_ &m) {
               "if true, raw data will not be written but skipped, tensors are not valid in that "
               "case  but the model structure is still available")
       .def_rw("num_threads", &SerializeOptions::num_threads,
-              "Number of threads to use for parallel writing. 1 (default) means "
-              "no parallelization, > 1 uses exactly that many worker threads, and "
-              "any negative value picks a sensible value based on the number of "
-              "available CPU cores.")
+              "Number of threads to use for parallel writing. Any negative value "
+              "(``-1`` is the default) picks a sensible value based on the number "
+              "of available CPU cores. ``1`` means no parallelization, and ``> 1`` "
+              "uses exactly that many worker threads.")
       .def("is_parallel", &SerializeOptions::is_parallel,
            "Returns True when parallel writing should be enabled (num_threads != 1).")
       .def_rw("min_parallel_block_size", &SerializeOptions::min_parallel_block_size,

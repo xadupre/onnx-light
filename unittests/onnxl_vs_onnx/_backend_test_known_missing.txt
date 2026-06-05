@@ -509,7 +509,6 @@ matmul_3d
 matmul_4d
 matmul_4d_1d
 matmul_bcast
-matmulinteger
 max_float16
 maxpool_2d_uint8
 maxpool_3d_dilations

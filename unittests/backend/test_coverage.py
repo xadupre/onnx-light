@@ -151,9 +151,7 @@ class TestCoverage(ExtTestCase):
             nodes=[node1, node2], name="test_multi", inputs=[in_vi], outputs=[out_vi]
         )
         model = onnxl.helper.make_model(
-            graph,
-            opset_imports=[onnxl.helper.make_opsetid("", 13)],
-            producer_name="test",
+            graph, opset_imports=[onnxl.helper.make_opsetid("", 13)], producer_name="test"
         )
         tc = TestCase(
             name="test_multi",

@@ -15,7 +15,11 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
             if "test_cc_shape_inference_add_concat_reshape" == test.name:
                 shape_tests.append(test)
         self.assertEqual(len(shape_tests), 1)
-        tests = collect_test_cases("test_cc_shape_inference_add_concat_reshape")
+        tests = [
+            test
+            for test in collect_test_cases("Add")
+            if "test_cc_shape_inference_add_concat_reshape" == test.name
+        ]
         self.assertEqual(len(tests), 1)
         test = tests[0]
         model = test.model

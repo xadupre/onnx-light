@@ -585,7 +585,7 @@ class TestOnnxLightHelper(ExtTestCase):
                 self.calls.append((args, kwargs))
 
         with patch.object(io_helper, "ModelProto", FakeModelProto):
-            model = io_helper.load("model.onnx", location="model.data")
+            model = io_helper.load("model.onnx", location="model.data", num_threads=1)
 
         self.assertEqual(len(model.calls), 1)
         args, kwargs = model.calls[0]
@@ -634,7 +634,7 @@ class TestOnnxLightHelper(ExtTestCase):
                 self.calls.append((args, kwargs))
 
         with patch.object(io_helper, "ModelProto", FakeModelProto):
-            model = io_helper.load("model.onnx")
+            model = io_helper.load("model.onnx", num_threads=1)
 
         self.assertEqual(len(model.calls), 1)
         args, kwargs = model.calls[0]
@@ -651,7 +651,7 @@ class TestOnnxLightHelper(ExtTestCase):
 
         with patch.object(io_helper, "ModelProto", FakeModelProto):
             model = FakeModelProto()
-            io_helper.save(model, "model.onnx")
+            io_helper.save(model, "model.onnx", num_threads=1)
 
         self.assertEqual(len(model.calls), 1)
         args, kwargs = model.calls[0]

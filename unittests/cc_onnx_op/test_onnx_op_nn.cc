@@ -40,6 +40,7 @@ constexpr size_t kExpectedMaxPoolSchemaCount = 6;
 constexpr size_t kExpectedMaxRoiPoolSchemaCount = 2;
 constexpr size_t kExpectedMaxUnpoolSchemaCount = 3;
 constexpr size_t kExpectedRNNSchemaCount = 4;
+constexpr size_t kExpectedRMSNormalizationSchemaCount = 1;
 constexpr size_t kExpectedRotaryEmbeddingSchemaCount = 1;
 constexpr size_t kExpectedNnSchemaCount =
     kExpectedAttentionSchemaCount + kExpectedAveragePoolSchemaCount +
@@ -52,7 +53,7 @@ constexpr size_t kExpectedNnSchemaCount =
     kExpectedLRNSchemaCount + kExpectedLpNormalizationSchemaCount + kExpectedLSTMSchemaCount +
     kExpectedMaxPoolSchemaCount + kExpectedMaxRoiPoolSchemaCount + kExpectedMaxUnpoolSchemaCount +
     kExpectedMeanVarianceNormalizationSchemaCount + kExpectedRNNSchemaCount +
-    kExpectedRotaryEmbeddingSchemaCount;
+    kExpectedRMSNormalizationSchemaCount + kExpectedRotaryEmbeddingSchemaCount;
 
 static const onnx_op::LightOpSchema *
 FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
@@ -918,6 +919,37 @@ TEST(OnnxOpNnRegistrationTest, ReturnsMeanVarianceNormalizationSchemasForAllVers
 
   EXPECT_EQ(v9->type_constraints()[0].allowed_type_strs.size(), 3u);
   EXPECT_EQ(v13->type_constraints()[0].allowed_type_strs.size(), 4u);
+}
+
+TEST(OnnxOpNnRegistrationTest, ReturnsRMSNormalizationSchemasForAllVersions) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("RMSNormalization");
+  ASSERT_EQ(schemas.size(), kExpectedRMSNormalizationSchemaCount);
+
+  const onnx_op::LightOpSchema *const v23 = FindByVersion(schemas, 23);
+  ASSERT_NE(nullptr, v23);
+
+  EXPECT_EQ(v23->name(), "RMSNormalization");
+  EXPECT_EQ(v23->domain(), "ai.onnx");
+  ASSERT_EQ(v23->inputs().size(), 2u);
+  EXPECT_EQ(v23->inputs()[0].name, "X");
+  EXPECT_EQ(v23->inputs()[0].type, "T");
+  EXPECT_EQ(v23->inputs()[1].name, "scale");
+  EXPECT_EQ(v23->inputs()[1].type, "V");
+  ASSERT_EQ(v23->outputs().size(), 1u);
+  EXPECT_EQ(v23->outputs()[0].name, "Y");
+  EXPECT_EQ(v23->outputs()[0].type, "V");
+  ASSERT_EQ(v23->type_constraints().size(), 2u);
+  EXPECT_EQ(v23->type_constraints()[0].type_param_str, "T");
+  EXPECT_EQ(v23->type_constraints()[0].allowed_type_strs.size(), 4u);
+  EXPECT_EQ(v23->type_constraints()[1].type_param_str, "V");
+  EXPECT_EQ(v23->type_constraints()[1].allowed_type_strs.size(), 4u);
+  ASSERT_EQ(v23->attributes().size(), 3u);
+  EXPECT_EQ(v23->attributes()[0].name, "axis");
+  EXPECT_EQ(v23->attributes()[1].name, "epsilon");
+  EXPECT_EQ(v23->attributes()[2].name, "stash_type");
+  EXPECT_TRUE(v23->has_function_implementation());
+  EXPECT_FALSE(v23->doc().empty());
 }
 
 } // namespace Test

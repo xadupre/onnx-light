@@ -213,6 +213,34 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Reference implementation of ``RMSNormalization`` (opset 23).
+///
+/// Normalizes a FLOAT input ``X`` of arbitrary rank ``r`` by dividing it by
+/// the root-mean-square computed over the last ``r - axis`` dimensions, then
+/// multiplies the normalized result by ``scale`` (with unidirectional
+/// broadcasting):
+///
+/// ``Y = X / sqrt(mean(X * X, axes=normalized_axes) + epsilon) * scale``
+///
+/// where ``normalized_axes = [axis, ..., r - 1]``. ``scale`` must be
+/// broadcastable to the normalized shape (i.e. ``X.shape[axis:]``).
+class RMSNormalization : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Returns the output ``Y``. ``axis`` defaults to ``-1`` and ``epsilon``
+  /// to ``1e-5f`` to match the upstream defaults.
+  Tensor operator()(const Tensor &x, const Tensor &scale, int64_t axis = -1,
+                    float epsilon = 1e-5f) const;
+
+  void operator()(const Tensor &x, const Tensor &scale, Tensor &output, int64_t axis = -1,
+                  float epsilon = 1e-5f) const;
+
+  /// Output ``Y`` has the same shape as ``X`` so the output buffer may
+  /// alias the input ``X`` buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// Reference implementation of ``MeanVarianceNormalization`` (opset 9, 13).
 ///
 /// Normalizes each element as

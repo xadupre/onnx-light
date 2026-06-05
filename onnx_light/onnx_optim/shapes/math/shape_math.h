@@ -515,6 +515,9 @@ void ComputeShapeSwish(ShapesContext &ctx, const NodeProto &node, const char *x)
 /// Softmax preserves dtype/shape and validates the axis attribute.
 void ComputeShapeSoftmax(ShapesContext &ctx, const NodeProto &node, const char *x);
 
+/// LogSoftmax preserves dtype/shape and validates the axis attribute.
+void ComputeShapeLogSoftmax(ShapesContext &ctx, const NodeProto &node, const char *x);
+
 /// Hardmax preserves dtype/shape and validates the axis attribute.
 void ComputeShapeHardmax(ShapesContext &ctx, const NodeProto &node, const char *x);
 
@@ -614,6 +617,9 @@ void ComputeShapeThresholdedRelu(ShapesContext &ctx, const NodeProto &node, cons
 
 /// Relu is element-wise unary: output dtype and shape match the input.
 void ComputeShapeRelu(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/// LeakyRelu is element-wise unary: output dtype and shape match the input.
+void ComputeShapeLeakyRelu(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /// Elu is element-wise unary: output dtype and shape match the input.
 void ComputeShapeElu(ShapesContext &ctx, const NodeProto &node, const char *x);

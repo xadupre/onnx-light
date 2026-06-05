@@ -59,7 +59,7 @@ class TestCase(_backend_test_cc.TestCase):
         url: str | None,
         model_dir: str | None,
         model: onnx.ModelProto | None,
-        data_sets: Sequence[tuple[Sequence[np.ndarray], Sequence[np.ndarray]]] | None,
+        data_sets: Sequence[tuple[Sequence[Any], Sequence[Any]]] | None,
         kind: str,
         rtol: float,
         atol: float,
@@ -88,12 +88,12 @@ class TestCase(_backend_test_cc.TestCase):
     @property
     def data_sets(
         self,
-    ) -> Sequence[tuple[Sequence[np.ndarray], Sequence[np.ndarray]]] | None:
+    ) -> Sequence[tuple[Sequence[Any], Sequence[Any]]] | None:
         return self._py_data_sets
 
     @data_sets.setter
     def data_sets(
-        self, value: Sequence[tuple[Sequence[np.ndarray], Sequence[np.ndarray]]] | None
+        self, value: Sequence[tuple[Sequence[Any], Sequence[Any]]] | None
     ) -> None:
         self._py_data_sets = value
 

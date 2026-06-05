@@ -489,11 +489,6 @@ matmul_4d
 matmul_4d_1d
 matmul_bcast
 max_float16
-maxpool_2d_uint8
-maxpool_3d_dilations
-maxpool_3d_dilations_use_ref_impl
-maxpool_3d_dilations_use_ref_impl_large
-maxpool_with_argmax_2d_precomputed_strides
 min_float16
 mish_expanded
 mod_mixed_sign_float16

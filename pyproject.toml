@@ -7,7 +7,7 @@ name = "onnx-light"
 version = "0.1.0"
 description = "onnx without protobuf"
 readme = "README.md"
-license = "MIT"
+license = "Apache-2.0"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [

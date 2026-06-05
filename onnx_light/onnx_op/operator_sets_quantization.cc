@@ -473,6 +473,29 @@ LightOpSchema MakeDequantizeLinearV10Schema() {
       });
 }
 
+// --- DynamicQuantizeLinear ---------------------------------------------------
+
+LightOpSchema MakeDynamicQuantizeLinearV11Schema() {
+  return LightOpSchema(
+      "DynamicQuantizeLinear", kOnnxDomain, 11, MakeDynamicQuantizeLinearDoc(11),
+      {
+          {"x", "Input tensor", "T1"},
+      },
+      {
+          {"y", "Quantized output tensor", "T2"},
+          {"y_scale", "Output scale. It's a scalar, which means a per-tensor/layer quantization.",
+           "tensor(float)"},
+          {"y_zero_point",
+           "Output zero point. It's a scalar, which means a per-tensor/layer quantization.", "T2"},
+      },
+      {
+          {"T1", {TensorType::kFloat}, "Constrain 'x' to float tensor."},
+          {"T2",
+           {TensorType::kUint8},
+           "Constrain 'y_zero_point' and 'y' to 8-bit unsigned integer tensor."},
+      });
+}
+
 // --- QLinearConv -------------------------------------------------------------
 
 LightOpSchema MakeQLinearConvV10Schema() {
@@ -651,6 +674,12 @@ std::vector<LightOpSchema> GetAllOnnxOpQuantizationSchemasWithHistory(const std:
        [] {
          return std::vector<LightOpSchema>{
              MakeQLinearConvV10Schema(),
+         };
+       }},
+      {"DynamicQuantizeLinear",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeDynamicQuantizeLinearV11Schema(),
          };
        }},
       {"QLinearMatMul",

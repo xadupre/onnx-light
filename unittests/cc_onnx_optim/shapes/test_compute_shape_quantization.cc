@@ -330,4 +330,54 @@ TEST(OnnxOptimShapesQuantizationDequantizeLinear, DispatchesViaComputeShapeNode)
   EXPECT_EQ(ctx.Get("y").Shape()[0].AsInt(), 4);
 }
 
+TEST(OnnxOptimShapesQuantizationDynamicQuantizeLinear, AllThreeOutputsTypedAndShaped) {
+  // ``DynamicQuantizeLinear`` has 1 input ``x`` (float) and 3 outputs:
+  //   y           : uint8, shape == x
+  //   y_scale     : scalar float
+  //   y_zero_point: scalar uint8
+  NodeProto node;
+  node.set_op_type("DynamicQuantizeLinear");
+  node.add_input("x");
+  node.add_output("y");
+  node.add_output("y_scale");
+  node.add_output("y_zero_point");
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("x", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)}));
+
+  onnx_optim::shapes::quantization::ComputeShapeDynamicQuantizeLinear(ctx, node, "x");
+
+  ASSERT_TRUE(ctx.Has("y"));
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kUint8);
+  ASSERT_EQ(ctx.Get("y").Shape().Rank(), 2u);
+  EXPECT_TRUE(ctx.Get("y").Shape()[0].IsExpr());
+  EXPECT_EQ(ctx.Get("y").Shape()[0].AsExpr(), "N");
+  EXPECT_EQ(ctx.Get("y").Shape()[1].AsInt(), 4);
+
+  ASSERT_TRUE(ctx.Has("y_scale"));
+  EXPECT_EQ(ctx.Get("y_scale").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("y_scale").Shape().Rank(), 0u);
+
+  ASSERT_TRUE(ctx.Has("y_zero_point"));
+  EXPECT_EQ(ctx.Get("y_zero_point").Dtype(), onnx_optim::TensorType::kUint8);
+  EXPECT_EQ(ctx.Get("y_zero_point").Shape().Rank(), 0u);
+}
+
+TEST(OnnxOptimShapesQuantizationDynamicQuantizeLinear, RejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("QuantizeLinear");
+  node.add_input("x");
+  node.add_output("y");
+  node.add_output("y_scale");
+  node.add_output("y_zero_point");
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("x", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(1)}));
+  EXPECT_THROW(onnx_optim::shapes::quantization::ComputeShapeDynamicQuantizeLinear(ctx, node, "x"),
+               std::invalid_argument);
+}
+
 } // namespace Test

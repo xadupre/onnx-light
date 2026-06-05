@@ -753,6 +753,12 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          quantization::ComputeShapeQuantizeLinear(ctx, node, x_name.c_str(),
                                                   zp_name.empty() ? nullptr : zp_name.c_str());
        }},
+      {"ai.onnx:DynamicQuantizeLinear",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         const std::string x_name = node.input(0).as_string();
+         quantization::ComputeShapeDynamicQuantizeLinear(ctx, node, x_name.c_str());
+       }},
       {"ai.onnx:QLinearConv",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 8);

@@ -11,6 +11,7 @@ void CollectQuantizationTestCases(std::vector<TestCase> &registry, const std::st
   static const OpRegisterMap kEntries = {
       {"QuantizeLinear", &RegisterQuantizeLinearCases},
       {"DequantizeLinear", &RegisterDequantizeLinearCases},
+      {"DynamicQuantizeLinear", &RegisterDynamicQuantizeLinearCases},
       {"QLinearMatMul", &RegisterQLinearMatMulCases},
       {"QLinearConv", &RegisterQLinearConvCases},
   };

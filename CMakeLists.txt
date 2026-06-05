@@ -80,20 +80,17 @@ file(GLOB ONNX_LIGHT_SOURCES CONFIGURE_DEPENDS
 file(GLOB ONNX_COMMON_SOURCES CONFIGURE_DEPENDS "${ONNX_COMMON_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_DEFS_SOURCES CONFIGURE_DEPENDS "${ONNX_DEFS_PATH}/*.cc")
 set(ONNX_PY_PROTOOP_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpyprotoop.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_proto.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_op.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpyprotoop.cc"
 )
 set(ONNX_PY_PROTOLIB_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpyprotolib.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_lib.cc"
 )
 set(ONNX_PY_OPTIM_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpyoptim.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_optim.cc"
 )
 set(ONNX_PY_BACKEND_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxbackend.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_backend_test.cc"
 )
 file(GLOB_RECURSE ONNX_OP_SOURCES CONFIGURE_DEPENDS "${ONNX_OP_PATH}/*.cc")

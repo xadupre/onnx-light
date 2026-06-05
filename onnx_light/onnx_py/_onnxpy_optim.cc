@@ -1,4 +1,3 @@
-#include "_onnxpy.h"
 #include "onnx_optim/expressions.h"
 #include "onnx_optim/shapes/shape_inference.h"
 #include "onnx_optim/shapes/shapes_context.h"
@@ -10,6 +9,12 @@
 
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
+
+NB_MODULE(_onnxpyoptim, m) {
+  m.doc() = "onnx optim bindings from python: symbolic dimension expressions and "
+            "shape inference helpers (operating on the same proto format).";
+  AddOnnxPyExpressions(m);
+}
 
 void AddOnnxPyExpressions(nb::module_ &m) {
   // -----------------------------------------------------------------------

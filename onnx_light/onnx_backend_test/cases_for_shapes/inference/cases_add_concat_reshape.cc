@@ -35,8 +35,8 @@ constexpr int64_t kDefaultIrVersion = 10;
 //   X            (batch, seq, d_model)
 //   Y            (batch, seq, d_model)
 //   added        (batch, seq, d_model)
-//   concat_out   (batch, seq, two_d_model)  // last dim is ``2 * d_model``
-//   Z            (batch, seq, two_d_model)  // recovered by Reshape([0, 0, -1])
+//   concat_out   (batch, seq, 2*d_model)  // last dim is ``2 * d_model``
+//   Z            (batch, seq, 2*d_model)  // recovered by Reshape([0, 0, -1])
 //
 // The reference DataSet still uses concrete sizes (``batch=2, seq=5,
 // d_model=8``) for the actual tensor values, so the case is executable.
@@ -77,7 +77,7 @@ void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry
   // inference cannot represent that symbolic product, so we give it a
   // dedicated symbolic name (``two_d_model``) instead of leaving the dim
   // unannotated. The reference DataSet uses ``2 * d_model = 16``.
-  const std::vector<DimSpec> concat_shape = {"batch", "seq", "two_d_model"};
+  const std::vector<DimSpec> concat_shape = {"batch", "seq", "2*d_model"};
   AppendValueInfo(*graph->add_value_info(), "added", kFloat, input_shape);
   AppendValueInfo(*graph->add_value_info(), "concat_out", kFloat, concat_shape);
 

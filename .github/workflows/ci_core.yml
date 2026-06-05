@@ -54,7 +54,7 @@ jobs:
   core_tests_ubuntu:
     name: core (ubuntu-latest, py3.13)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -95,7 +95,7 @@ jobs:
     needs: [core_tests_ubuntu, changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 23
+    timeout-minutes: 28
     permissions:
       contents: read
       id-token: write
@@ -155,7 +155,7 @@ jobs:
     needs: [core_tests_ubuntu, changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:

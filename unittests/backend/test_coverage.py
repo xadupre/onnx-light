@@ -79,8 +79,13 @@ class TestCoverage(ExtTestCase):
         )
         self.assertGreaterEqual(report.ratio, 0.0)
         self.assertLessEqual(report.ratio, 1.0)
-        # uncovered_operators must match operators with no covered type.
-        zero = {(oc.domain, oc.name) for oc in report.operator_coverages if oc.covered == 0}
+        # uncovered_operators must match operators with no covered type
+        # (excluding operators whose schema declares no type constraint).
+        zero = {
+            (oc.domain, oc.name)
+            for oc in report.operator_coverages
+            if oc.covered == 0 and oc.total > 0
+        }
         self.assertEqual(set(report.uncovered_operators), zero)
 
     def test_explicit_test_cases_abs_float(self):
@@ -132,6 +137,48 @@ class TestCoverage(ExtTestCase):
         )
         report = compute_test_case_coverage({"test_custom": tc})
         self.assertEqual(report.covered_signatures, 0)
+
+    def test_multi_node_test_case_credits_every_op(self):
+        """Each node in a multi-node model contributes to coverage of its operator."""
+        # Two-node graph: Identity -> Abs. Both operators must be credited
+        # with tensor(float).
+        a = np.array([-1.0, 2.0], dtype=np.float32)
+        node1 = onnxl.helper.make_node("Identity", ["in0"], ["mid"], domain="")
+        node2 = onnxl.helper.make_node("Abs", ["mid"], ["out0"], domain="")
+        in_vi = onnxl.helper.make_tensor_value_info("in0", int(onnxl.TensorProto.FLOAT), [2])
+        out_vi = onnxl.helper.make_tensor_value_info("out0", int(onnxl.TensorProto.FLOAT), [2])
+        graph = onnxl.helper.make_graph(
+            nodes=[node1, node2], name="test_multi", inputs=[in_vi], outputs=[out_vi]
+        )
+        model = onnxl.helper.make_model(
+            graph,
+            opset_imports=[onnxl.helper.make_opsetid("", 13)],
+            producer_name="test",
+        )
+        tc = TestCase(
+            name="test_multi",
+            model_name="test_multi",
+            url=None,
+            model_dir=None,
+            model=model,
+            data_sets=[([a], [np.abs(a)])],
+            kind="node",
+            rtol=1e-3,
+            atol=1e-7,
+        )
+        report = compute_test_case_coverage({"test_multi": tc})
+        ident = next(
+            oc for oc in report.operator_coverages if oc.name == "Identity" and oc.domain == "ai.onnx"
+        )
+        abs_oc = next(
+            oc for oc in report.operator_coverages if oc.name == "Abs" and oc.domain == "ai.onnx"
+        )
+        # Identity sees its input (graph input, float) and Abs sees its
+        # output (graph output, float). Both must be credited.
+        self.assertIn("tensor(float)", ident.covered_types)
+        self.assertIn("tensor(float)", abs_oc.covered_types)
+        self.assertNotIn(("ai.onnx", "Identity"), report.uncovered_operators)
+        self.assertNotIn(("ai.onnx", "Abs"), report.uncovered_operators)
 
 
 if __name__ == "__main__":

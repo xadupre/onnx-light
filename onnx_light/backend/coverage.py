@@ -116,7 +116,7 @@ class CoverageReport:
         ``(domain, name)``.
     :param uncovered_operators: ``(domain, op_name)`` pairs of operators that
         have **no** test case at all (a strict subset of ``operator_coverages``
-        entries whose ``covered == 0``).
+        entries whose ``covered == 0`` and ``total > 0``).
     """
 
     total_signatures: int
@@ -194,48 +194,98 @@ def _normalize_domain(domain: str) -> str:
     return domain or "ai.onnx"
 
 
-def _types_used_by_test_case(test_case: Any) -> tuple[str, str, set[str]] | None:
-    """Returns ``(domain, op_type, used_type_strings)`` for ``test_case``.
+def _type_proto_to_string(vt: Any) -> str | None:
+    """Returns the ONNX type string for a :class:`TypeProto`, or ``None``.
 
-    Inspects the (single) node of the test case's :class:`ModelProto` and the
-    typed graph inputs/outputs. Returns ``None`` if the model has no node.
+    The returned strings match the format used by ``LightOpSchema`` type
+    constraints, e.g. ``"tensor(float)"``, ``"seq(tensor(int32))"`` or
+    ``"optional(tensor(double))"``. Handles ``tensor_type``,
+    ``sequence_type`` and ``optional_type`` (the latter wrapping either a
+    tensor or a sequence of tensors). Returns ``None`` when the element
+    type is unknown (``0``) or unsupported.
+    """
+    if vt is None:
+        return None
+    tensor_type = getattr(vt, "tensor_type", None)
+    if tensor_type is not None:
+        try:
+            elem_type = int(tensor_type.elem_type)
+        except (AttributeError, TypeError, ValueError):
+            elem_type = 0
+        if elem_type != 0:
+            return _TENSOR_PROTO_TO_TYPE_STRING.get(elem_type)
+    seq_type = getattr(vt, "sequence_type", None)
+    if seq_type is not None:
+        try:
+            seq_elem = int(seq_type.elem_type.tensor_type.elem_type)
+        except (AttributeError, TypeError, ValueError):
+            seq_elem = 0
+        if seq_elem != 0 and seq_elem in _TENSOR_PROTO_TO_TYPE_STRING:
+            return "seq(" + _TENSOR_PROTO_TO_TYPE_STRING[seq_elem] + ")"
+    opt_type = getattr(vt, "optional_type", None)
+    if opt_type is not None:
+        try:
+            inner = opt_type.elem_type
+        except AttributeError:
+            inner = None
+        inner_str = _type_proto_to_string(inner) if inner is not None else None
+        if inner_str is not None:
+            return "optional(" + inner_str + ")"
+    return None
+
+
+def _build_name_to_type(graph: Any) -> dict[str, str]:
+    """Builds ``{value_name: type_string}`` for every typed value in ``graph``.
+
+    Combines graph inputs, outputs, ``value_info`` entries and initializers
+    (whose ``data_type`` defines a ``tensor(...)`` type).
+    """
+    name_to_type: dict[str, str] = {}
+    for vi in list(graph.input) + list(graph.output) + list(graph.value_info):
+        ts = _type_proto_to_string(vi.type)
+        if ts is not None:
+            name_to_type[vi.name] = ts
+    for init in graph.initializer:
+        try:
+            elem_type = int(init.data_type)
+        except (AttributeError, TypeError, ValueError):
+            elem_type = 0
+        if elem_type != 0 and elem_type in _TENSOR_PROTO_TO_TYPE_STRING:
+            name_to_type.setdefault(init.name, _TENSOR_PROTO_TO_TYPE_STRING[elem_type])
+    return name_to_type
+
+
+def _types_used_by_test_case(test_case: Any) -> list[tuple[str, str, set[str]]]:
+    """Returns a list of ``(domain, op_type, used_type_strings)`` tuples,
+    one per node in the test case's :class:`ModelProto`.
+
+    Walks every node in the model (test cases may contain helper nodes such
+    as ``SequenceConstruct`` before the operator actually being exercised).
+    For each node, the used type strings are the types — pulled from graph
+    inputs/outputs, ``value_info`` and initializers — of that node's named
+    inputs and outputs. Returns an empty list when the model has no node.
     """
     model = test_case.model
     if model is None:
-        return None
+        return []
     graph = model.graph
     nodes = list(graph.node)
     if not nodes:
-        return None
-    node = nodes[0]
-    op_type = node.op_type
-    domain = _normalize_domain(node.domain)
-
-    used: set[str] = set()
-    for vi in list(graph.input) + list(graph.output):
-        vt = vi.type
-        if vt is None:
-            continue
-        tensor_type = getattr(vt, "tensor_type", None)
-        if tensor_type is not None:
-            try:
-                elem_type = int(tensor_type.elem_type)
-            except (AttributeError, TypeError, ValueError):
-                elem_type = 0
-            if elem_type != 0:
-                ts = _TENSOR_PROTO_TO_TYPE_STRING.get(elem_type)
-                if ts is not None:
-                    used.add(ts)
+        return []
+    name_to_type = _build_name_to_type(graph)
+    entries: list[tuple[str, str, set[str]]] = []
+    for node in nodes:
+        op_type = node.op_type
+        domain = _normalize_domain(node.domain)
+        used: set[str] = set()
+        for value_name in list(node.input) + list(node.output):
+            if not value_name:
                 continue
-        seq_type = getattr(vt, "sequence_type", None)
-        if seq_type is not None:
-            try:
-                seq_elem = int(seq_type.elem_type.tensor_type.elem_type)
-            except (AttributeError, TypeError, ValueError):
-                seq_elem = 0
-            if seq_elem != 0 and seq_elem in _TENSOR_PROTO_TO_TYPE_STRING:
-                used.add("seq(" + _TENSOR_PROTO_TO_TYPE_STRING[seq_elem] + ")")
-    return domain, op_type, used
+            ts = name_to_type.get(value_name)
+            if ts is not None:
+                used.add(ts)
+        entries.append((domain, op_type, used))
+    return entries
 
 
 def compute_test_case_coverage(
@@ -271,17 +321,14 @@ def compute_test_case_coverage(
     # operator -> set of covered type strings
     covered_per_op: dict[tuple[str, str], set[str]] = {}
     for tc in cases_iter:
-        info = _types_used_by_test_case(tc)
-        if info is None:
-            continue
-        domain, op_type, used = info
-        key = (domain, op_type)
-        if key not in supported:
-            # Operator unknown to the light schema baseline (e.g. a private
-            # op exported from a downstream Base subclass). Skip it.
-            continue
-        bucket = covered_per_op.setdefault(key, set())
-        bucket.update(t for t in used if t in set(supported[key]))
+        for domain, op_type, used in _types_used_by_test_case(tc):
+            key = (domain, op_type)
+            if key not in supported:
+                # Operator unknown to the light schema baseline (e.g. a private
+                # op exported from a downstream Base subclass). Skip it.
+                continue
+            bucket = covered_per_op.setdefault(key, set())
+            bucket.update(t for t in used if t in set(supported[key]))
 
     operator_coverages: list[OperatorCoverage] = []
     total_signatures = 0
@@ -294,7 +341,7 @@ def compute_test_case_coverage(
         covered_types = [t for t in types if t in covered_types_set]
         total_signatures += len(types)
         covered_signatures += len(covered_types)
-        if not covered_types_set:
+        if types and not covered_types_set:
             uncovered_operators.append(key)
         operator_coverages.append(
             OperatorCoverage(

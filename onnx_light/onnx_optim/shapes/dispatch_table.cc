@@ -1082,6 +1082,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          math::ComputeShapeSoftsign(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:Shrink",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeShrink(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:SoftmaxCrossEntropyLoss",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);

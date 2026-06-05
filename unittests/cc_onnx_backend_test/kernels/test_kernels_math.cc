@@ -9,6 +9,8 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <cstdint>
+#include <cstring>
 #include <limits>
 #include <stdexcept>
 #include <vector>
@@ -51,6 +53,7 @@ using onnx_backend_test::kernel::Neg;
 using onnx_backend_test::kernel::Pow;
 using onnx_backend_test::kernel::PRelu;
 using onnx_backend_test::kernel::Round;
+using onnx_backend_test::kernel::Shrink;
 using onnx_backend_test::kernel::Sigmoid;
 using onnx_backend_test::kernel::Sin;
 using onnx_backend_test::kernel::Sinh;
@@ -1614,6 +1617,58 @@ TEST(BackendKernelClass, PowRejectsIncompatibleShapes) {
   Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
   Tensor y = Tensor::FromFloat("", {4}, {1.0f, 2.0f, 3.0f, 4.0f});
   EXPECT_THROW(pow_kernel(x, y), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, ShrinkClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(9)};
+  Shrink shrink_kernel{ctx};
+
+  // Soft shrink: bias=1.5, lambd=1.5.
+  Tensor x = Tensor::FromFloat("", {5}, {-2.0f, -1.0f, 0.0f, 1.0f, 2.0f});
+  Tensor y = shrink_kernel(x, /*bias=*/1.5f, /*lambd=*/1.5f);
+  ASSERT_EQ(y.element_count(), 5);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], -0.5f); // -2 < -1.5 -> -2 + 1.5
+  EXPECT_FLOAT_EQ(py[1], 0.0f);  // -1 in [-1.5, 1.5] -> 0
+  EXPECT_FLOAT_EQ(py[2], 0.0f);
+  EXPECT_FLOAT_EQ(py[3], 0.0f); // 1 in [-1.5, 1.5] -> 0
+  EXPECT_FLOAT_EQ(py[4], 0.5f); // 2 > 1.5 -> 2 - 1.5
+}
+
+TEST(BackendKernelClass, ShrinkClassHardShrinkDefaultBias) {
+  const KernelContext ctx{DefaultOpset(9)};
+  Shrink shrink_kernel{ctx};
+
+  // Hard shrink: bias=0.0, lambd=1.5.
+  Tensor x = Tensor::FromFloat("", {5}, {-2.0f, -1.0f, 0.0f, 1.0f, 2.0f});
+  Tensor y = shrink_kernel(x, /*bias=*/0.0f, /*lambd=*/1.5f);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], -2.0f);
+  EXPECT_FLOAT_EQ(py[1], 0.0f);
+  EXPECT_FLOAT_EQ(py[2], 0.0f);
+  EXPECT_FLOAT_EQ(py[3], 0.0f);
+  EXPECT_FLOAT_EQ(py[4], 2.0f);
+}
+
+TEST(BackendKernelClass, ShrinkClassDoubleDtype) {
+  const KernelContext ctx{DefaultOpset(9)};
+  Shrink shrink_kernel{ctx};
+  std::vector<double> values{-2.0, -1.0, 0.0, 1.0, 2.0};
+  std::vector<uint8_t> bytes(values.size() * sizeof(double));
+  std::memcpy(bytes.data(), values.data(), bytes.size());
+  Tensor x("", onnx_backend_test::DataType::DOUBLE, {static_cast<int64_t>(values.size())}, bytes);
+  Tensor y = shrink_kernel(x, /*bias=*/1.5f, /*lambd=*/1.5f);
+  const double *py = reinterpret_cast<const double *>(y.data.data());
+  EXPECT_DOUBLE_EQ(py[0], -0.5);
+  EXPECT_DOUBLE_EQ(py[1], 0.0);
+  EXPECT_DOUBLE_EQ(py[4], 0.5);
+}
+
+TEST(BackendKernelClass, ShrinkClassRejectsUnsupportedDtype) {
+  const KernelContext ctx{DefaultOpset(9)};
+  Shrink shrink_kernel{ctx};
+  Tensor x = Tensor::FromUint8("", {2}, {1u, 2u});
+  EXPECT_THROW(shrink_kernel(x), std::invalid_argument);
 }
 
 } // namespace Test

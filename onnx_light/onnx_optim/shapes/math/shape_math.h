@@ -644,6 +644,9 @@ void ComputeShapeGelu(ShapesContext &ctx, const NodeProto &node, const char *x);
 /// Selu is element-wise unary: output dtype and shape match the input.
 void ComputeShapeSelu(ShapesContext &ctx, const NodeProto &node, const char *x);
 
+/// Shrink is element-wise unary: output dtype and shape match the input.
+void ComputeShapeShrink(ShapesContext &ctx, const NodeProto &node, const char *x);
+
 /**
  * Computes the output :cpp:class:`OptimTensor` of a ``Floor`` node and
  * stores it in ``ctx``.

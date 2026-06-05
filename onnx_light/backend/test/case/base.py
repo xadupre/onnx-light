@@ -1,5 +1,5 @@
 import re
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Sequence, TypeAlias
 import numpy as np
 from .... import onnx
 from ....onnx import helper as onnx_helper
@@ -8,6 +8,10 @@ from ....onnx_py._onnxpy import onnx_op as _onnx_op  # type: ignore[attr-defined
 from ....ext_test_case import ExtTestCase
 
 _LIGHT_SINCE_VERSION_CACHE: dict[tuple[str, str], int] = {}
+BackendTestValue: TypeAlias = np.ndarray | list["BackendTestValue"]
+BackendTestDataSets: TypeAlias = Sequence[
+    tuple[Sequence[BackendTestValue], Sequence[BackendTestValue]]
+]
 
 
 def _latest_since_version(op_type: str, domain: str) -> int:
@@ -59,7 +63,7 @@ class TestCase(_backend_test_cc.TestCase):
         url: str | None,
         model_dir: str | None,
         model: onnx.ModelProto | None,
-        data_sets: Sequence[tuple[Sequence[Any], Sequence[Any]]] | None,
+        data_sets: BackendTestDataSets | None,
         kind: str,
         rtol: float,
         atol: float,
@@ -88,13 +92,11 @@ class TestCase(_backend_test_cc.TestCase):
     @property
     def data_sets(
         self,
-    ) -> Sequence[tuple[Sequence[Any], Sequence[Any]]] | None:
+    ) -> BackendTestDataSets | None:
         return self._py_data_sets
 
     @data_sets.setter
-    def data_sets(
-        self, value: Sequence[tuple[Sequence[Any], Sequence[Any]]] | None
-    ) -> None:
+    def data_sets(self, value: BackendTestDataSets | None) -> None:
         self._py_data_sets = value
 
     def __repr__(self) -> str:

@@ -7,7 +7,14 @@ This page summarizes the design used to consume *onnx-light* as a standalone
 C++ library from another project.
 
 Runnable examples are available in :epkg:`C++ onnx-light examples`, including
-``examples/load_onnx_light_time`` and ``examples/check_onnx_light_model``.
+``examples/load_onnx_light_time``, ``examples/save_onnx_light_time``,
+``examples/build_save_load_onnx_proto``, ``examples/check_onnx_light_model``,
+``examples/export_nnef``, ``examples/run_add_node_test`` and
+``examples/run_backend_test_ort``.  Each example's ``CMakeLists.txt`` shows
+which subset of the exported targets is needed.
+
+See :ref:`l-design-library-split` for the full dependency graph of the C++
+libraries and a per-target description.
 
 Install and link model
 ----------------------
@@ -53,6 +60,30 @@ inference support, downstream code can link:
     find_package(onnx_light REQUIRED)
     target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_op)
 
+When shape inference dispatch and graph optimization passes are also needed
+(without pulling in the full ``onnx_light::onnx_light`` checker/inliner/version
+converter), link the optim target instead, which transitively pulls in
+``lib_onnx_op`` and ``lib_onnx_proto``:
+
+.. code-block:: cmake
+
+    find_package(onnx_light REQUIRED)
+    target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_optim)
+
+To evaluate ONNX models in-process using the bundled reference kernels
+(backend test infrastructure: ``struct Tensor``, ``struct TestCase``,
+``expect()``, ``SplitMix64``-based deterministic RNG, ...), link:
+
+.. code-block:: cmake
+
+    find_package(onnx_light REQUIRED)
+    target_link_libraries(my_target PRIVATE onnx_light::onnx_backend_test)
+
+``onnx_light::onnx_backend_test`` is intentionally independent from
+``onnx_light::onnx_light`` / ``onnx_light::lib_onnx_op``; it can be combined
+with ``onnx_light::onnx_light`` when both schema validation and execution are
+needed in the same binary.
+
 This keeps downstream CMake files independent from hardcoded include paths and
 library file names. If *onnx-light* is installed to a non-standard prefix,
 configure the downstream project with ``-DCMAKE_PREFIX_PATH=<prefix>``.
@@ -70,8 +101,9 @@ For monorepos or local development, a downstream CMake project can also include
     target_link_libraries(my_target PRIVATE lib_onnx_lib)
 
 Use the in-tree ``lib_onnx_proto`` target instead when only proto
-parsing/serialization is needed. This uses the in-tree build targets instead of
-``find_package``.
+parsing/serialization is needed, or ``lib_onnx_op``, ``lib_onnx_optim`` or
+``lib_onnx_backend_test`` for the corresponding feature subset.  This uses the
+in-tree build targets directly instead of ``find_package``.
 
 Excerpt from the example project
 --------------------------------
@@ -98,7 +130,7 @@ them without a serialise/parse round-trip?
 
 When ``ONNX_LIGHT_BUILD_PYTHON=ON``, ``CMakeLists.txt`` builds
 ``lib_onnx_proto`` as a **shared** library (``liblib_onnx_proto.so`` /
-``.dylib`` / ``.dll``) instead of a static archive.  All three
+``.dylib`` / ``.dll``) instead of a static archive.  All four
 extensions link against that single shared
 object (directly or transitively through ``lib_onnx_lib`` /
 ``lib_onnx_op`` / ``lib_onnx_optim`` / ``lib_onnx_backend_test``), and
@@ -136,4 +168,5 @@ guarantee that the
 See also
 --------
 
+* :ref:`l-design-library-split`
 * :ref:`l-cpp-load-onnx-light-time-example`

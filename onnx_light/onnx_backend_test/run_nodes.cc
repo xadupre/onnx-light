@@ -90,9 +90,9 @@ template <class KernelT> NodeKernelFn MakeUnaryTrampoline() {
   return [](const NodeProto &node, RuntimeContext &rt) {
     RequireInputCount(node, 1);
     RequireOutputCount(node, 1);
-    const Tensor &x = GetInput(node, 0, rt.tensors);
-    KernelT kernel(rt.kernel_ctx);
-    SetOutput(node, 0, kernel(x), rt.tensors);
+    const Tensor &x = GetInput(node, 0, rt.tensors());
+    KernelT kernel(rt.kernel_ctx());
+    SetOutput(node, 0, kernel(x), rt.tensors());
   };
 }
 
@@ -100,10 +100,10 @@ template <class KernelT> NodeKernelFn MakeBinaryTrampoline() {
   return [](const NodeProto &node, RuntimeContext &rt) {
     RequireInputCount(node, 2);
     RequireOutputCount(node, 1);
-    const Tensor &x = GetInput(node, 0, rt.tensors);
-    const Tensor &y = GetInput(node, 1, rt.tensors);
-    KernelT kernel(rt.kernel_ctx);
-    SetOutput(node, 0, kernel(x, y), rt.tensors);
+    const Tensor &x = GetInput(node, 0, rt.tensors());
+    const Tensor &y = GetInput(node, 1, rt.tensors());
+    KernelT kernel(rt.kernel_ctx());
+    SetOutput(node, 0, kernel(x, y), rt.tensors());
   };
 }
 

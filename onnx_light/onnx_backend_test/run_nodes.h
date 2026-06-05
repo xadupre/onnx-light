@@ -4,8 +4,7 @@
 
 #pragma once
 
-#include "onnx_backend_test/kernels/kernel_context.h"
-#include "onnx_backend_test/simple_tensor.h"
+#include "onnx_backend_test/runtime_context.h"
 #include "onnx_proto/onnx.h"
 
 #include <functional>
@@ -22,12 +21,13 @@
  *        by ``onnx_optim`` for shape inference.
  *
  * Inputs and outputs are exchanged through a name-keyed
- * :cpp:type:`TensorMap` so a chain of nodes can be evaluated in
- * topological order (as required by the ONNX specification for
- * ``GraphProto::node()``). A node is dispatched by its
- * ``(domain, op_type)`` pair through :cpp:func:`KernelDispatchTable`;
- * new operators are added by registering a single new entry in that
- * table without changing :cpp:func:`RunNode` / :cpp:func:`RunNodes`.
+ * :cpp:type:`TensorMap` (owned by :cpp:class:`RuntimeContext`) so a
+ * chain of nodes can be evaluated in topological order (as required
+ * by the ONNX specification for ``GraphProto::node()``). A node is
+ * dispatched by its ``(domain, op_type)`` pair through
+ * :cpp:func:`KernelDispatchTable`; new operators are added by
+ * registering a single new entry in that table without changing
+ * :cpp:func:`RunNode` / :cpp:func:`RunNodes`.
  *
  * Only a small, working baseline of operators is registered today
  * (the simple element-wise ``ai.onnx`` ops ``Abs``, ``Add``, ``Div``,
@@ -42,49 +42,12 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 /**
- * Name-keyed map of tensors carrying both the graph inputs/initializers
- * and the intermediate values produced by previously executed nodes.
- * Stored inside :cpp:class:`RuntimeContext`; :cpp:func:`RunNode` reads
- * a node's inputs from this map by name (matching ``node.input(i)``)
- * and inserts every produced output under the name declared by
- * ``node.output(i)``.
- */
-using TensorMap = std::unordered_map<std::string, Tensor>;
-
-/**
- * Per-invocation runtime state passed to :cpp:func:`RunNode` /
- * :cpp:func:`RunNodes`.
- *
- * Bundles together everything a chain of nodes needs to execute:
- *  * ``tensors`` — the name-keyed :cpp:type:`TensorMap` carrying the
- *    graph inputs / initializers and every intermediate value
- *    produced by previously executed nodes.
- *  * ``kernel_ctx`` — the construction-time
- *    :cpp:class:`kernel::KernelContext` (opset and any future
- *    construction-time inputs) used to instantiate each per-operator
- *    kernel.
- *
- * Grouping them in a single object keeps the dispatcher signatures
- * stable as more per-invocation state (allocators, device descriptors,
- * profiling hooks, …) is added in the future without forcing every
- * trampoline or call site to take an extra argument.
- */
-struct RuntimeContext {
-  /// In/out tensor map shared across every node in a chain.
-  TensorMap tensors;
-  /// Kernel construction context (opset).
-  kernel::KernelContext kernel_ctx;
-
-  RuntimeContext() = default;
-  explicit RuntimeContext(kernel::KernelContext kernel_ctx_) : kernel_ctx(std::move(kernel_ctx_)) {}
-};
-
-/**
  * Signature of every per-operator trampoline registered in
  * :cpp:func:`KernelDispatchTable`. Implementations read their inputs
- * from ``rt.tensors`` by name, call the matching kernel (constructed
- * with ``rt.kernel_ctx``), and insert the produced outputs back into
- * ``rt.tensors`` under the names declared by ``node.output(i)``.
+ * from ``rt.tensors()`` by name, call the matching kernel
+ * (constructed with ``rt.kernel_ctx()``), and insert the produced
+ * outputs back into ``rt.tensors()`` under the names declared by
+ * ``node.output(i)``.
  */
 using NodeKernelFn = std::function<void(const NodeProto &node, RuntimeContext &rt)>;
 
@@ -100,23 +63,23 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable();
 
 /**
  * Runs the kernel registered for ``node`` and stores its outputs in
- * ``rt.tensors``.
+ * ``rt.tensors()``.
  *
- * The node's input descriptors are read from ``rt.tensors`` by name
- * (so every non-empty input must already be present), and the output
- * descriptors are inserted into ``rt.tensors`` under the names
- * declared by ``node.output(i)``.
+ * The node's input descriptors are read from ``rt.tensors()`` by
+ * name (so every non-empty input must already be present), and the
+ * output descriptors are inserted into ``rt.tensors()`` under the
+ * names declared by ``node.output(i)``.
  *
  * @param node The node to execute.
- * @param rt   In/out runtime context. ``rt.tensors`` must already
+ * @param rt   In/out runtime context. ``rt.tensors()`` must already
  *             contain entries for every input referenced by ``node``;
  *             on return it also contains entries for every output
- *             declared by ``node``. ``rt.kernel_ctx`` is used to
+ *             declared by ``node``. ``rt.kernel_ctx()`` is used to
  *             construct the per-operator kernel.
  *
  * @throws std::invalid_argument if ``node.op_type()`` is not
  *         registered in :cpp:func:`KernelDispatchTable`, if a
- *         required input is missing from ``rt.tensors``, or if the
+ *         required input is missing from ``rt.tensors()``, or if the
  *         per-operator trampoline rejects the node.
  */
 void RunNode(const NodeProto &node, RuntimeContext &rt);
@@ -128,12 +91,12 @@ void RunNode(const NodeProto &node, RuntimeContext &rt);
  * dependencies (as required by the ONNX specification for
  * ``GraphProto::node``) so that every input of a node has already
  * been produced — either as a pre-existing graph input/initializer
- * carried in ``rt.tensors`` or as the output of an earlier node in
- * ``nodes`` — by the time the node is processed.
+ * carried in ``rt.tensors()`` or as the output of an earlier node
+ * in ``nodes`` — by the time the node is processed.
  *
  * @param nodes The list of nodes to execute, in topological order.
  * @param rt    In/out runtime context seeded with the graph inputs
- *              and initializers in ``rt.tensors``; on return it
+ *              and initializers in ``rt.tensors()``; on return it
  *              additionally contains every node output.
  *
  * @throws std::invalid_argument if any node cannot be dispatched.

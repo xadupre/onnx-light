@@ -62,12 +62,12 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
 
 TEST(RunNodes, RunNodeSingleAdd) {
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
-  rt.tensors["x"] = Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f});
-  rt.tensors["y"] = Tensor::FromFloat("y", {3}, {10.0f, 20.0f, 30.0f});
+  rt.tensors()["x"] = Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f});
+  rt.tensors()["y"] = Tensor::FromFloat("y", {3}, {10.0f, 20.0f, 30.0f});
   NodeProto node = MakeNode("Add", {"x", "y"}, {"z"});
   RunNode(node, rt);
-  ASSERT_NE(rt.tensors.find("z"), rt.tensors.end());
-  const Tensor &z = rt.tensors["z"];
+  ASSERT_NE(rt.tensors().find("z"), rt.tensors().end());
+  const Tensor &z = rt.tensors()["z"];
   EXPECT_EQ(z.name, "z");
   EXPECT_EQ(z.shape, std::vector<int64_t>({3}));
   ASSERT_EQ(z.element_count(), 3);
@@ -81,12 +81,12 @@ TEST(RunNodes, RunNodeNormalisesDefaultDomain) {
   // The default ONNX domain is the empty string. The dispatcher must
   // normalise it to ``ai.onnx`` before looking up the kernel.
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
-  rt.tensors["x"] = Tensor::FromFloat("x", {2}, {-1.5f, 2.5f});
+  rt.tensors()["x"] = Tensor::FromFloat("x", {2}, {-1.5f, 2.5f});
   NodeProto node = MakeNode("Abs", {"x"}, {"y"}); // empty domain
   EXPECT_TRUE(node.domain().as_string().empty());
   RunNode(node, rt);
-  const float *got = rt.tensors["y"].AsFloat();
-  ASSERT_EQ(rt.tensors["y"].element_count(), 2);
+  const float *got = rt.tensors()["y"].AsFloat();
+  ASSERT_EQ(rt.tensors()["y"].element_count(), 2);
   EXPECT_FLOAT_EQ(got[0], 1.5f);
   EXPECT_FLOAT_EQ(got[1], 2.5f);
 }
@@ -97,9 +97,9 @@ TEST(RunNodes, RunNodesOnRepeatedProtoFieldChain) {
   // RepeatedProtoField<NodeProto> directly (mirroring how a caller
   // would feed ``graph.node()``).
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
-  rt.tensors["x"] = Tensor::FromFloat("x", {2}, {1.0f, 2.0f});
-  rt.tensors["y"] = Tensor::FromFloat("y", {2}, {3.0f, 4.0f});
-  rt.tensors["z"] = Tensor::FromFloat("z", {2}, {0.5f, 0.25f});
+  rt.tensors()["x"] = Tensor::FromFloat("x", {2}, {1.0f, 2.0f});
+  rt.tensors()["y"] = Tensor::FromFloat("y", {2}, {3.0f, 4.0f});
+  rt.tensors()["z"] = Tensor::FromFloat("z", {2}, {0.5f, 0.25f});
 
   utils::RepeatedProtoField<NodeProto> nodes;
   *nodes.Add() = MakeNode("Mul", {"x", "y"}, {"t"});
@@ -107,21 +107,21 @@ TEST(RunNodes, RunNodesOnRepeatedProtoFieldChain) {
 
   RunNodes(nodes, rt);
 
-  ASSERT_NE(rt.tensors.find("t"), rt.tensors.end());
-  ASSERT_NE(rt.tensors.find("out"), rt.tensors.end());
-  const float *out = rt.tensors["out"].AsFloat();
-  ASSERT_EQ(rt.tensors["out"].element_count(), 2);
+  ASSERT_NE(rt.tensors().find("t"), rt.tensors().end());
+  ASSERT_NE(rt.tensors().find("out"), rt.tensors().end());
+  const float *out = rt.tensors()["out"].AsFloat();
+  ASSERT_EQ(rt.tensors()["out"].element_count(), 2);
   EXPECT_FLOAT_EQ(out[0], 1.0f * 3.0f - 0.5f);
   EXPECT_FLOAT_EQ(out[1], 2.0f * 4.0f - 0.25f);
-  EXPECT_EQ(rt.tensors["out"].name, "out");
+  EXPECT_EQ(rt.tensors()["out"].name, "out");
 }
 
 TEST(RunNodes, RunNodesOnIteratorRangeFromVector) {
   // Same graph, but driven through the generic iterator overload so
   // any container whose elements dereference to ``NodeProto`` works.
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
-  rt.tensors["a"] = Tensor::FromFloat("a", {1}, {6.0f});
-  rt.tensors["b"] = Tensor::FromFloat("b", {1}, {2.0f});
+  rt.tensors()["a"] = Tensor::FromFloat("a", {1}, {6.0f});
+  rt.tensors()["b"] = Tensor::FromFloat("b", {1}, {2.0f});
 
   std::vector<NodeProto> nodes;
   nodes.push_back(MakeNode("Div", {"a", "b"}, {"q"})); // q = 3
@@ -129,14 +129,14 @@ TEST(RunNodes, RunNodesOnIteratorRangeFromVector) {
 
   RunNodes(nodes.begin(), nodes.end(), rt);
 
-  const float *out = rt.tensors["out"].AsFloat();
-  ASSERT_EQ(rt.tensors["out"].element_count(), 1);
+  const float *out = rt.tensors()["out"].AsFloat();
+  ASSERT_EQ(rt.tensors()["out"].element_count(), 1);
   EXPECT_FLOAT_EQ(out[0], -3.0f);
 }
 
 TEST(RunNodes, RunNodeUnsupportedOpTypeThrows) {
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
-  rt.tensors["x"] = Tensor::FromFloat("x", {1}, {1.0f});
+  rt.tensors()["x"] = Tensor::FromFloat("x", {1}, {1.0f});
   NodeProto node = MakeNode("ThisOpDoesNotExist", {"x"}, {"y"});
   EXPECT_THROW(RunNode(node, rt), std::invalid_argument);
 }
@@ -149,10 +149,19 @@ TEST(RunNodes, RunNodeMissingInputThrows) {
 
 TEST(RunNodes, RunNodeWrongInputCountThrows) {
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
-  rt.tensors["x"] = Tensor::FromFloat("x", {1}, {1.0f});
+  rt.tensors()["x"] = Tensor::FromFloat("x", {1}, {1.0f});
   // Add expects two inputs but we only declare one.
   NodeProto node = MakeNode("Add", {"x"}, {"y"});
   EXPECT_THROW(RunNode(node, rt), std::invalid_argument);
+}
+
+TEST(RunNodes, RuntimeContextSetGetHas) {
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  EXPECT_FALSE(rt.Has("x"));
+  rt.Set("x", Tensor::FromFloat("x", {1}, {7.0f}));
+  EXPECT_TRUE(rt.Has("x"));
+  EXPECT_FLOAT_EQ(rt.Get("x").AsFloat()[0], 7.0f);
+  EXPECT_THROW(rt.Get("missing"), std::out_of_range);
 }
 
 } // namespace Test

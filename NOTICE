@@ -1,0 +1,21 @@
+onnx-light
+Copyright 2026 ONNX Contributors
+
+This product is licensed under the Apache License, Version 2.0 (the "License").
+You may obtain a copy of the License in the LICENSE file or at:
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+This product includes or depends on software developed by third parties.
+The following third-party projects are used by onnx-light. Each retains its
+own copyright and is distributed under its respective license.
+
+------------------------------------------------------------------------------
+nanobind
+------------------------------------------------------------------------------
+  Home:    https://github.com/wjakob/nanobind
+  Used:    Python bindings for the native modules (_onnxpyprotoop,
+           _onnxpyprotolib, _onnxpyoptim, _onnxbackend).
+  License: BSD 3-Clause License
+           Copyright (c) Wenzel Jakob and contributors.
+           https://github.com/wjakob/nanobind/blob/master/LICENSE

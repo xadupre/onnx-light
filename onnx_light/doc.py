@@ -1080,6 +1080,12 @@ def _operator_version_page_rst(
     stem = _domain_file_stem(domain)
     lines: list[str] = []
 
+    # Hide past-version pages from the search index.  They remain reachable
+    # via direct links from the latest-version page and from the hidden
+    # toctree on the domain page.
+    lines.append(":nosearch:")
+    lines.append("")
+
     anchor = f"op_{stem}_{schema.name}-{schema.since_version}"
     lines.append(f".. _{anchor}:")
     lines.append("")

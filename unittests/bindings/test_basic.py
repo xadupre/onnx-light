@@ -194,5 +194,46 @@ class TestBasicFunctions(ExtTestCase):
         self.assertIn("Test function proto", function_str)
 
 
+    def test_repeated_proto_field_survives_container_clear(self) -> None:
+        # Regression test: a Python reference to an element of a repeated proto
+        # field must keep the underlying C++ object alive even after the
+        # container is cleared via __delitem__ / clear.
+        import numpy as np
+
+        graph = oh.make_graph(
+            [
+                oh.make_node("MatMul", ["X", "W"], ["XW"]),
+                oh.make_node("Add", ["XW", "B"], ["Z"]),
+                oh.make_node("Relu", ["Z"], ["Y"]),
+            ],
+            "shape_inference_demo",
+            inputs=[oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["N", 4])],
+            outputs=[oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)],
+            initializer=[
+                oh.make_tensor(
+                    "W",
+                    onnxl.TensorProto.FLOAT,
+                    [4, 3],
+                    np.zeros((4, 3), dtype=np.float32).flatten(),
+                ),
+                oh.make_tensor("B", onnxl.TensorProto.FLOAT, [3], np.zeros(3, dtype=np.float32)),
+            ],
+        )
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)], ir_version=8)
+
+        # Take references via __getitem__, iteration and add() then clear the
+        # underlying container; each held reference must remain usable.
+        node_via_getitem = model.graph.node[0]
+        iter_nodes = list(model.graph.node)
+        new_node = model.graph.node.add()
+        new_node.op_type = "Identity"
+
+        del model.graph.node[:]
+
+        self.assertEqual(node_via_getitem.op_type, "MatMul")
+        self.assertEqual([n.op_type for n in iter_nodes], ["MatMul", "Add", "Relu"])
+        self.assertEqual(new_node.op_type, "Identity")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

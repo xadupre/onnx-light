@@ -397,6 +397,42 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// 2-D ``MaxRoiPool`` kernel restricted to FLOAT inputs/outputs. Implements
+/// the ONNX ``MaxRoiPool`` operator: for each RoI ``[batch_id, x1, y1, x2,
+/// y2]`` the kernel scales the corner coordinates by ``spatial_scale``,
+/// rounds them to the nearest integer feature-map cell, divides the
+/// resulting region into a ``pooled_shape[0] x pooled_shape[1]`` grid of
+/// bins, and produces one max value per (channel, bin) pair. Empty bins
+/// (e.g. when the scaled RoI is smaller than the requested pooled output)
+/// emit ``0`` — mirroring the upstream reference implementation in
+/// ``onnx/reference/ops/op_max_roi_pool.py``.
+class MaxRoiPool : public KernelBase {
+public:
+  /// Attributes carried by the ONNX ``MaxRoiPool`` operator.
+  struct Attributes {
+    /// ROI pool output shape (height, width). Required; must contain
+    /// exactly two positive entries.
+    std::vector<int64_t> pooled_shape;
+    /// Multiplicative spatial scale factor (default 1.0).
+    float spatial_scale = 1.0f;
+  };
+
+  using KernelBase::KernelBase;
+
+  /// Returns the pooled output ``Y`` of shape
+  /// ``(num_rois, C, pooled_shape[0], pooled_shape[1])``.
+  Tensor operator()(const Tensor &x, const Tensor &rois, const Attributes &attrs) const;
+
+  /// In-place variant that writes into a pre-allocated ``output`` tensor of
+  /// the expected shape and FLOAT dtype.
+  void operator()(const Tensor &x, const Tensor &rois, const Attributes &attrs,
+                  Tensor &output) const;
+
+  /// Output element layout (num_rois, C, pooled_shape[0], pooled_shape[1])
+  /// differs from any input, so storage cannot be shared.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Single-direction (``"forward"``) one-layer RNN on FLOAT tensors using
 /// the ``Tanh`` activation. Implements the upstream ONNX ``RNN`` formula
 ///

@@ -37,6 +37,7 @@ constexpr size_t kExpectedLRNSchemaCount = 2;
 constexpr size_t kExpectedLpNormalizationSchemaCount = 2;
 constexpr size_t kExpectedLSTMSchemaCount = 4;
 constexpr size_t kExpectedMaxPoolSchemaCount = 6;
+constexpr size_t kExpectedMaxRoiPoolSchemaCount = 2;
 constexpr size_t kExpectedMaxUnpoolSchemaCount = 3;
 constexpr size_t kExpectedRNNSchemaCount = 4;
 constexpr size_t kExpectedNnSchemaCount =
@@ -48,7 +49,7 @@ constexpr size_t kExpectedNnSchemaCount =
     kExpectedGlobalMaxPoolSchemaCount + kExpectedGRUSchemaCount +
     kExpectedGroupNormalizationSchemaCount + kExpectedInstanceNormalizationSchemaCount +
     kExpectedLRNSchemaCount + kExpectedLpNormalizationSchemaCount + kExpectedLSTMSchemaCount +
-    kExpectedMaxPoolSchemaCount + kExpectedMaxUnpoolSchemaCount +
+    kExpectedMaxPoolSchemaCount + kExpectedMaxRoiPoolSchemaCount + kExpectedMaxUnpoolSchemaCount +
     kExpectedMeanVarianceNormalizationSchemaCount + kExpectedRNNSchemaCount;
 
 static const onnx_op::LightOpSchema *
@@ -189,6 +190,42 @@ TEST(OnnxOpNnRegistrationTest, ReturnsMaxUnpoolSchemasForAllVersions) {
 
   EXPECT_FALSE(mu_v9->doc().empty());
   EXPECT_FALSE(mu_v22->doc().empty());
+}
+
+TEST(OnnxOpNnRegistrationTest, ReturnsMaxRoiPoolSchemasForAllVersions) {
+  const std::vector<onnx_op::LightOpSchema> mrp_schemas =
+      onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("MaxRoiPool");
+
+  EXPECT_EQ(mrp_schemas.size(), kExpectedMaxRoiPoolSchemaCount);
+
+  const onnx_op::LightOpSchema *const mrp_v22 = FindByVersion(mrp_schemas, 22);
+  const onnx_op::LightOpSchema *const mrp_v1 = FindByVersion(mrp_schemas, 1);
+
+  ASSERT_NE(nullptr, mrp_v22);
+  ASSERT_NE(nullptr, mrp_v1);
+
+  EXPECT_EQ(mrp_v22->domain(), "ai.onnx");
+  EXPECT_EQ(mrp_v22->inputs().size(), 2u);
+  EXPECT_EQ(mrp_v22->outputs().size(), 1u);
+  EXPECT_EQ(mrp_v22->inputs()[0].name, "X");
+  EXPECT_EQ(mrp_v22->inputs()[1].name, "rois");
+  EXPECT_EQ(mrp_v22->outputs()[0].name, "Y");
+  EXPECT_EQ(mrp_v22->type_constraints().size(), 1u);
+
+  // T widens from 3 to 4 float types in opset 22 (adds bfloat16).
+  EXPECT_EQ(mrp_v1->type_constraints()[0].allowed_type_strs.size(), 3u);
+  EXPECT_EQ(mrp_v22->type_constraints()[0].allowed_type_strs.size(), 4u);
+
+  // Both versions have the same two attributes: pooled_shape (required) and
+  // spatial_scale (default 1.0).
+  ASSERT_EQ(mrp_v22->attributes().size(), 2u);
+  EXPECT_EQ(mrp_v22->attributes()[0].name, "pooled_shape");
+  EXPECT_TRUE(mrp_v22->attributes()[0].required);
+  EXPECT_EQ(mrp_v22->attributes()[1].name, "spatial_scale");
+  EXPECT_FALSE(mrp_v22->attributes()[1].required);
+
+  EXPECT_FALSE(mrp_v1->doc().empty());
+  EXPECT_FALSE(mrp_v22->doc().empty());
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsRNNSchemasForAllVersions) {

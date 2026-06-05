@@ -806,6 +806,41 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of the ONNX ``CenterCropPad`` operator (since
+/// opset 18 in the ``ai.onnx`` domain). It centrally crops and/or pads the
+/// input tensor to the dimensions given by the ``shape`` input. The
+/// ``shape`` input is a 1-D tensor of length ``rank(input_data)`` when
+/// ``axes`` is unset, or ``len(axes)`` otherwise. The ``axes`` attribute,
+/// when set, specifies the subset of input axes ``shape`` refers to;
+/// unspecified axes are left unchanged. Negative axes are supported.
+///
+/// On each selected axis the kernel matches the upstream reference: when
+/// ``shape[i] < input_dim`` a centered cropping window of length
+/// ``shape[i]`` is extracted (the start index is rounded down on odd
+/// differences); when ``shape[i] > input_dim`` the input is zero-padded
+/// equally on both sides (an extra pixel is added on the right when the
+/// total padding is odd).
+class CenterCropPad : public KernelBase {
+public:
+  /// Attributes carried by the ONNX ``CenterCropPad`` operator. ``axes`` is
+  /// optional; an empty vector here means "all axes" (i.e. ``shape`` has
+  /// length equal to ``rank(input_data)``).
+  struct Attributes {
+    std::vector<int64_t> axes;
+    bool axes_present = false;
+  };
+
+  using KernelBase::KernelBase;
+
+  Tensor operator()(const Tensor &input_data, const Tensor &shape, const Attributes &attrs) const;
+  void operator()(const Tensor &input_data, const Tensor &shape, const Attributes &attrs,
+                  Tensor &output) const;
+
+  /// Output shape generally differs from input shape, so storage cannot be
+  /// shared with the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Reference implementation of the (deprecated) ONNX ``Upsample`` operator
 /// (since opset 1 in the ``ai.onnx`` domain, last refreshed at opset 10 and
 /// replaced by ``Resize`` from opset 10 onwards).

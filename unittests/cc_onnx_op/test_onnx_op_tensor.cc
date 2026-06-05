@@ -123,7 +123,7 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> cast_schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Cast");
 
-  EXPECT_EQ(schemas.size(), 123u);
+  EXPECT_EQ(schemas.size(), 124u);
 
   const onnx_op::LightOpSchema *const cast_v1 = FindByVersion(cast_schemas, 1);
   const onnx_op::LightOpSchema *const cast_v6 = FindByVersion(cast_schemas, 6);
@@ -656,6 +656,39 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsTriluSchemaWithoutShapeInference) {
   EXPECT_EQ(std::get<int64_t>(trilu_v14->attributes()[0].default_value), 1);
 
   EXPECT_FALSE(trilu_v14->doc().empty());
+}
+
+TEST(OnnxOpTensorRegistrationTest, ReturnsCenterCropPadSchemaWithoutShapeInference) {
+  const std::vector<onnx_op::LightOpSchema> ccp_schemas =
+      onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("CenterCropPad");
+
+  const onnx_op::LightOpSchema *const ccp_v18 = FindByVersion(ccp_schemas, 18);
+  ASSERT_NE(nullptr, ccp_v18);
+  EXPECT_EQ(ccp_v18->name(), "CenterCropPad");
+  EXPECT_EQ(ccp_v18->domain(), onnx_op::kOnnxDomain);
+  EXPECT_EQ(ccp_v18->since_version(), 18);
+
+  ASSERT_EQ(ccp_v18->inputs().size(), 2u);
+  EXPECT_EQ(ccp_v18->inputs()[0].name, "input_data");
+  EXPECT_EQ(ccp_v18->inputs()[0].type, "T");
+  EXPECT_EQ(ccp_v18->inputs()[1].name, "shape");
+  EXPECT_EQ(ccp_v18->inputs()[1].type, "Tind");
+
+  ASSERT_EQ(ccp_v18->outputs().size(), 1u);
+  EXPECT_EQ(ccp_v18->outputs()[0].name, "output_data");
+  EXPECT_EQ(ccp_v18->outputs()[0].type, "T");
+
+  ASSERT_EQ(ccp_v18->type_constraints().size(), 2u);
+  EXPECT_EQ(ccp_v18->type_constraints()[0].type_param_str, "T");
+  EXPECT_EQ(ccp_v18->type_constraints()[0].allowed_type_strs, onnx_op::ConcatTypesVer13());
+  EXPECT_EQ(ccp_v18->type_constraints()[1].type_param_str, "Tind");
+
+  ASSERT_EQ(ccp_v18->attributes().size(), 1u);
+  EXPECT_EQ(ccp_v18->attributes()[0].name, "axes");
+  EXPECT_EQ(ccp_v18->attributes()[0].type, onnx_op::AttributeType::INTS);
+  EXPECT_FALSE(ccp_v18->attributes()[0].required);
+
+  EXPECT_FALSE(ccp_v18->doc().empty());
 }
 
 TEST(OnnxOpTensorRegistrationTest, ReturnsTensorScatterSchemaWithoutShapeInference) {

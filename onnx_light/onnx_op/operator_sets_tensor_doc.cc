@@ -1715,6 +1715,31 @@ std::string MakeTriluTypeConstraintDescription(int since_version) {
   return "Constrain input and output types to all tensor types.";
 }
 
+std::string MakeCenterCropPadDoc(int since_version) {
+  (void)since_version;
+  return R"DOC(
+Center crop or pad an input to given dimensions.
+
+The crop/pad dimensions can be specified for a subset of the `axes`; unspecified dimensions will remain unchanged.
+
+If the input dimensions are larger than the target crop dimensions, a centered cropping window will be extracted
+from the input. The starting value for the cropping window is rounded down, which means that if the difference
+between the input shape and the crop shape is odd, the cropping window will be shifted half a pixel to the left
+of the input center.
+
+If the input dimensions are smaller than the target crop dimensions, the input will be padded equally on both sides
+to center it in the output. In cases where the total number of padding pixels is odd, an additional pixel will be
+added to the right side.
+
+The padding value used is zero.
+)DOC";
+}
+
+std::string MakeCenterCropPadTypeConstraintDescription(int since_version) {
+  (void)since_version;
+  return "Constrain input and output types to all tensor types.";
+}
+
 std::string MakeReverseSequenceDoc(int since_version) {
   (void)since_version;
   return R"DOC(

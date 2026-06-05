@@ -47,6 +47,7 @@ docs = [
 
 [tool.scikit-build]
 wheel.packages = ["onnx_light"]
+sdist.include = ["sbom.cdx.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["unittests"]

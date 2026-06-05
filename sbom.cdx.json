@@ -1,0 +1,38 @@
+{
+  "$schema": "https://cyclonedx.org/schema/bom-1.7.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.7",
+  "version": 1,
+  "metadata": {
+    "lifecycles": [{"phase": "build"}],
+    "component": {
+      "type": "library",
+      "name": "onnx-light",
+      "description": "onnx without protobuf — lightweight ONNX loader, schemas and runtime",
+      "purl": "pkg:pypi/onnx-light",
+      "bom-ref": "onnx-light"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "nanobind",
+      "bom-ref": "nanobind",
+      "purl": "pkg:pypi/nanobind",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/wjakob/nanobind.git"
+        }
+      ],
+      "licenses": [{"license": {"id": "BSD-3-Clause"}}]
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "onnx-light",
+      "dependsOn": ["nanobind"]
+    },
+    {"ref": "nanobind"}
+  ]
+}

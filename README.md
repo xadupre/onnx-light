@@ -63,6 +63,15 @@ for the detailed breakdown.
 - Fully written in C++, it can be used in any language.
 - Output are always generated with a C++ kernel.
 
+## Software Bill of Materials (SBOM)
+
+A [CycloneDX 1.7](https://cyclonedx.org/) Software Bill of Materials is shipped
+at the root of the repository as [`sbom.cdx.json`](sbom.cdx.json) and is also
+included in the source distribution. It lists the third-party components
+bundled into the built artifacts (currently only `nanobind`, used to expose the
+C++ extension to Python). The file is validated against the CycloneDX 1.7
+schema by the [`SBOM`](.github/workflows/sbom.yml) GitHub Actions workflow.
+
 ## Getting started
 
 Install the package in editable mode:

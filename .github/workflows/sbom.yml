@@ -1,0 +1,32 @@
+name: SBOM
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-sbom:
+    name: Validate SBOM
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install check-jsonschema
+        run: pip install -q check-jsonschema
+      - name: Validate sbom.cdx.json against CycloneDX 1.7 schema
+        run: |
+          python -m check_jsonschema \
+            --schemafile "https://cyclonedx.org/schema/bom-1.7.schema.json" \
+            sbom.cdx.json

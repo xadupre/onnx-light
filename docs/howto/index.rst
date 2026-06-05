@@ -8,3 +8,5 @@ How-to
 
     install_onnx_light
     load_save_onnx_files
+    align_external_data_streaming
+    save_model_with_shared_external_data

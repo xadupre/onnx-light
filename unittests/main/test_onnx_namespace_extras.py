@@ -37,7 +37,7 @@ class TestOnnxNamespaceExtras(ExtTestCase):
     def test_backend_test_exposes_data_model(self):
         import onnx_light.backend_test as bt
 
-        for name in ("DataSet", "Tensor", "TestCase", "collect_test_cases"):
+        for name in ("DataSet", "Tensor", "TestCase", "collect_test_cases", "collect_test_cases_by_name"):
             self.assertTrue(hasattr(bt, name))
 
 

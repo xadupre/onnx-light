@@ -1,4 +1,4 @@
-#include "../onnx_proto/_onnxpy.h"
+#include "_onnxpy.h"
 #include "onnx_optim/expressions.h"
 #include "onnx_optim/shapes/shape_inference.h"
 #include "onnx_optim/shapes/shapes_context.h"

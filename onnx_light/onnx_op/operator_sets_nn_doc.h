@@ -45,6 +45,13 @@ std::string MakeGlobalLpPoolDoc(int since_version);
 std::string MakeLRNDoc(int since_version);
 
 /**
+ * Returns the documentation string for the LpNormalization operator at the
+ * given opset version (1 or 22). The text is identical for both opsets and
+ * matches the upstream ``kDoc_LpNormalization_ver1`` string.
+ */
+std::string MakeLpNormalizationDoc(int since_version);
+
+/**
  * Returns the documentation string for the RNN operator at the given opset
  * version (1, 7, 14, or 22).
  */
@@ -80,6 +87,12 @@ std::string MakeInstanceNormalizationDoc(int since_version);
  * given opset version (18 or 21).
  */
 std::string MakeGroupNormalizationDoc(int since_version);
+
+/**
+ * Returns the documentation string for the MeanVarianceNormalization operator
+ * at the given opset version (9 or 13).
+ */
+std::string MakeMeanVarianceNormalizationDoc(int since_version);
 
 /**
  * Returns the documentation string for the Flatten operator at the given

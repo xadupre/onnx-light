@@ -32,7 +32,9 @@ constexpr size_t kExpectedGlobalMaxPoolSchemaCount = 2;
 constexpr size_t kExpectedGRUSchemaCount = 5;
 constexpr size_t kExpectedGroupNormalizationSchemaCount = 2;
 constexpr size_t kExpectedInstanceNormalizationSchemaCount = 3;
+constexpr size_t kExpectedMeanVarianceNormalizationSchemaCount = 2;
 constexpr size_t kExpectedLRNSchemaCount = 2;
+constexpr size_t kExpectedLpNormalizationSchemaCount = 2;
 constexpr size_t kExpectedLSTMSchemaCount = 4;
 constexpr size_t kExpectedRNNSchemaCount = 4;
 constexpr size_t kExpectedNnSchemaCount =
@@ -43,7 +45,8 @@ constexpr size_t kExpectedNnSchemaCount =
     kExpectedDropoutSchemaCount + kExpectedGlobalLpPoolSchemaCount + kExpectedFlattenSchemaCount +
     kExpectedGlobalMaxPoolSchemaCount + kExpectedGRUSchemaCount +
     kExpectedGroupNormalizationSchemaCount + kExpectedInstanceNormalizationSchemaCount +
-    kExpectedLRNSchemaCount + kExpectedLSTMSchemaCount + kExpectedRNNSchemaCount;
+    kExpectedLRNSchemaCount + kExpectedLpNormalizationSchemaCount + kExpectedLSTMSchemaCount +
+    kExpectedRNNSchemaCount + kExpectedMeanVarianceNormalizationSchemaCount;
 
 static const onnx_op::LightOpSchema *
 FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
@@ -480,6 +483,45 @@ TEST(OnnxOpNnRegistrationTest, ReturnsLRNSchemasForAllVersions) {
   EXPECT_EQ(v1->type_constraints()[0].allowed_type_strs.size(), 3u);
 }
 
+TEST(OnnxOpNnRegistrationTest, ReturnsLpNormalizationSchemasForAllVersions) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("LpNormalization");
+
+  ASSERT_EQ(schemas.size(), kExpectedLpNormalizationSchemaCount);
+
+  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+
+  ASSERT_NE(nullptr, v22);
+  ASSERT_NE(nullptr, v1);
+
+  for (const onnx_op::LightOpSchema *schema : {v1, v22}) {
+    SCOPED_TRACE("LpNormalization@" + std::to_string(schema->since_version()));
+    EXPECT_EQ(schema->name(), "LpNormalization");
+    EXPECT_EQ(schema->domain(), "ai.onnx");
+    ASSERT_EQ(schema->inputs().size(), 1u);
+    EXPECT_EQ(schema->inputs()[0].name, "input");
+    EXPECT_EQ(schema->inputs()[0].type, "T");
+    ASSERT_EQ(schema->outputs().size(), 1u);
+    EXPECT_EQ(schema->outputs()[0].name, "output");
+    EXPECT_EQ(schema->outputs()[0].type, "T");
+    ASSERT_EQ(schema->type_constraints().size(), 1u);
+    EXPECT_EQ(schema->type_constraints()[0].type_param_str, "T");
+    ASSERT_EQ(schema->attributes().size(), 2u);
+    EXPECT_EQ(schema->attributes()[0].name, "axis");
+    EXPECT_EQ(schema->attributes()[0].type, onnx_op::AttributeType::INT);
+    EXPECT_FALSE(schema->attributes()[0].required);
+    EXPECT_EQ(schema->attributes()[1].name, "p");
+    EXPECT_EQ(schema->attributes()[1].type, onnx_op::AttributeType::INT);
+    EXPECT_FALSE(schema->attributes()[1].required);
+    EXPECT_FALSE(schema->doc().empty());
+  }
+
+  // v22 adds bfloat16 to the type constraint set.
+  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs.size(), 4u);
+  EXPECT_EQ(v1->type_constraints()[0].allowed_type_strs.size(), 3u);
+}
+
 TEST(OnnxOpNnRegistrationTest, ReturnsFlattenSchemasForAllVersions) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("Flatten");
@@ -724,6 +766,34 @@ TEST(OnnxOpNnRegistrationTest, ReturnsGroupNormalizationSchemasForAllVersions) {
   // v21 adds ``stash_type``.
   EXPECT_FALSE(v21->deprecated());
   EXPECT_EQ(v21->attributes().size(), 3u);
+}
+
+TEST(OnnxOpNnRegistrationTest, ReturnsMeanVarianceNormalizationSchemasForAllVersions) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("MeanVarianceNormalization");
+  ASSERT_EQ(schemas.size(), kExpectedMeanVarianceNormalizationSchemaCount);
+
+  const onnx_op::LightOpSchema *const v13 = FindByVersion(schemas, 13);
+  const onnx_op::LightOpSchema *const v9 = FindByVersion(schemas, 9);
+  ASSERT_NE(nullptr, v13);
+  ASSERT_NE(nullptr, v9);
+
+  for (const onnx_op::LightOpSchema *schema : {v9, v13}) {
+    SCOPED_TRACE("MeanVarianceNormalization@" + std::to_string(schema->since_version()));
+    EXPECT_EQ(schema->name(), "MeanVarianceNormalization");
+    EXPECT_EQ(schema->domain(), "ai.onnx");
+    ASSERT_EQ(schema->inputs().size(), 1u);
+    EXPECT_EQ(schema->inputs()[0].name, "X");
+    ASSERT_EQ(schema->outputs().size(), 1u);
+    EXPECT_EQ(schema->outputs()[0].name, "Y");
+    ASSERT_EQ(schema->attributes().size(), 1u);
+    EXPECT_EQ(schema->attributes()[0].name, "axes");
+    ASSERT_EQ(schema->type_constraints().size(), 1u);
+    EXPECT_FALSE(schema->doc().empty());
+  }
+
+  EXPECT_EQ(v9->type_constraints()[0].allowed_type_strs.size(), 3u);
+  EXPECT_EQ(v13->type_constraints()[0].allowed_type_strs.size(), 4u);
 }
 
 } // namespace Test

@@ -167,6 +167,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 3);
          nn::ComputeShapeInstanceNormalization(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:MeanVarianceNormalization",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         nn::ComputeShapeMeanVarianceNormalization(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:Bernoulli",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
@@ -347,6 +352,26 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
          math::ComputeShapeThresholdedRelu(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:Relu",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeRelu(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:Elu",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeElu(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:Celu",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeCelu(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:Gelu",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeGelu(ctx, node, node.input(0).as_string().c_str());
        }},
       {"ai.onnx:Selu",
        [](ShapesContext &ctx, const NodeProto &node) {
@@ -571,6 +596,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
          nn::ComputeShapeLRN(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:LpNormalization",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         nn::ComputeShapeLpNormalization(ctx, node, node.input(0).as_string().c_str());
        }},
       {"ai.onnx:Mul",
        [](ShapesContext &ctx, const NodeProto &node) {

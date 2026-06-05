@@ -26,7 +26,9 @@ void CollectNNTestCases(std::vector<TestCase> &registry, const std::string &op_t
       {"GRU", &RegisterGRUCases},
       {"InstanceNormalization", &RegisterInstanceNormalizationCases},
       {"LRN", &RegisterLRNCases},
+      {"LpNormalization", &RegisterLpNormalizationCases},
       {"LSTM", &RegisterLSTMCases},
+      {"MeanVarianceNormalization", &RegisterMeanVarianceNormalizationCases},
       {"RNN", &RegisterRNNCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);

@@ -600,6 +600,38 @@ TEST(OnnxOptimShapesNnBatchNormalization, RejectsWrongOpType) {
                std::invalid_argument);
 }
 
+TEST(OnnxOptimShapesNnMeanVarianceNormalization, PropagatesInputShapeAndType) {
+  NodeProto node;
+  node.set_op_type("MeanVarianceNormalization");
+  node.add_input("X");
+  node.add_output("Y");
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(2),
+                                                              onnx_optim::OptimDim(3),
+                                                              onnx_optim::OptimDim(4)}));
+
+  onnx_optim::shapes::nn::ComputeShapeMeanVarianceNormalization(ctx, node, "X");
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kDouble);
+  const onnx_optim::OptimShape &y = ctx.Get("Y").Shape();
+  ASSERT_EQ(y.Rank(), 3u);
+  EXPECT_EQ(y[0], onnx_optim::OptimDim(2));
+  EXPECT_EQ(y[1], onnx_optim::OptimDim(3));
+  EXPECT_EQ(y[2], onnx_optim::OptimDim(4));
+}
+
+TEST(OnnxOptimShapesNnMeanVarianceNormalization, RejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("BatchNormalization");
+  node.add_input("X");
+  node.add_output("Y");
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::nn::ComputeShapeMeanVarianceNormalization(ctx, node, "X"),
+               std::invalid_argument);
+}
+
 namespace {
 
 NodeProto MakeRNNNode(const std::string &op_type, int n_outputs, int64_t hidden_size = -1,

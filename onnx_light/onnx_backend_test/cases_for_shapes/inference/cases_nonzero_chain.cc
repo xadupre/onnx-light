@@ -51,13 +51,13 @@ void RegisterNonZeroChainCase(const std::string &name, NonZeroOutputAnnotation a
   Tensor x = Tensor::FromFloat("X", input_shape, x_values);
 
   // Reference computation:
-  //   abs_out   = |X|
-  //   relu_out  = Relu(abs_out) = abs_out (no negative entries)
-  //   double_out = abs_out + abs_out
-  //   mul_out   = double_out * abs_out
-  //   nz        = NonZero(mul_out)   shape (2, nnz)
+  //   abs_out       = |X|
+  //   relu_out      = Relu(abs_out) = abs_out (no negative entries)
+  //   double_out    = abs_out + abs_out
+  //   mul_out       = double_out * abs_out
+  //   nz            = NonZero(mul_out)   shape (2, nnz)
   //   transposed_nz = Transpose(nz)  shape (nnz, 2)
-  //   nz_float  = Cast(transposed_nz, FLOAT)
+  //   nz_float      = Cast(transposed_nz, FLOAT)
   Tensor abs_out = kernel::Abs(ctx)(x);
   Tensor relu_out = abs_out;
   relu_out.name = "";

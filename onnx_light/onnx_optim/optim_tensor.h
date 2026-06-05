@@ -127,7 +127,7 @@ private:
 /// Maximum number of dimensions an ``OptimShape`` can describe inline. Shapes
 /// in practice rarely exceed this rank, so storing the dimensions in a small
 /// container keeps the structure compact and cache-friendly.
-inline constexpr std::size_t kMaxOptimRank = 8;
+inline constexpr std::size_t kMaxOptimRank = 16;
 
 /**
  * A short, value-typed shape composed of ``OptimDim`` entries. The rank is

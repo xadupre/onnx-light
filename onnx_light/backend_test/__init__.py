@@ -30,7 +30,7 @@ TestCase = _C.TestCase
 collect_test_cases = _C.collect_test_cases
 
 
-def collect_test_cases_by_name(pattern: Union[str, Pattern[str]]) -> list:
+def collect_test_cases_by_name(pattern: Union[str, Pattern[str]]) -> list[TestCase]:
     """Returns the C++-implemented backend test cases whose name matches *pattern*.
 
     Args:

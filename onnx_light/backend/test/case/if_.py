@@ -20,20 +20,14 @@ class If(Base):
         y = [np.array([5, 4, 3, 2, 1], dtype=np.float32)]
 
         then_const_node = onnx.helper.make_node(
-            "Constant",
-            inputs=[],
-            outputs=["x"],
-            value=onnx.numpy_helper.from_array(x[0]),
+            "Constant", inputs=[], outputs=["x"], value=onnx.numpy_helper.from_array(x[0])
         )
         then_seq_node = onnx.helper.make_node(
             "SequenceConstruct", inputs=["x"], outputs=["then_out"]
         )
 
         else_const_node = onnx.helper.make_node(
-            "Constant",
-            inputs=[],
-            outputs=["y"],
-            value=onnx.numpy_helper.from_array(y[0]),
+            "Constant", inputs=[], outputs=["y"], value=onnx.numpy_helper.from_array(y[0])
         )
         else_seq_node = onnx.helper.make_node(
             "SequenceConstruct", inputs=["y"], outputs=["else_out"]
@@ -47,11 +41,7 @@ class If(Base):
         )
 
         if_node = onnx.helper.make_node(
-            "If",
-            inputs=["cond"],
-            outputs=["res"],
-            then_branch=then_body,
-            else_branch=else_body,
+            "If", inputs=["cond"], outputs=["res"], then_branch=then_body, else_branch=else_body
         )
 
         cond = np.array(True, dtype=bool)

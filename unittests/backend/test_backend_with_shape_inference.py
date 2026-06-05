@@ -68,18 +68,18 @@ def _check_match(
     """
     by_name = {vi.name: vi for vi in value_infos}
     for name, elem_type, had_shape, expected_shape, is_plain_tensor in snapshot:
-        assert name in by_name, (
-            f"{label} {name!r} missing from graph after shape inference (case {case_name!r})"
-        )
+        assert (
+            name in by_name
+        ), f"{label} {name!r} missing from graph after shape inference (case {case_name!r})"
         vi = by_name[name]
         assert vi.has_type(), f"{label} {name!r} missing type (case {case_name!r})"
         if not is_plain_tensor:
             # Non-tensor types are passed through unchanged; nothing more to
             # check against the snapshot.
             continue
-        assert vi.type.has_tensor_type(), (
-            f"{label} {name!r} lost its tensor_type after inference (case {case_name!r})"
-        )
+        assert (
+            vi.type.has_tensor_type()
+        ), f"{label} {name!r} lost its tensor_type after inference (case {case_name!r})"
         tt = vi.type.tensor_type
         assert int(tt.elem_type) == elem_type, (
             f"elem_type mismatch on {label} {name!r} (case {case_name!r}): "
@@ -133,11 +133,7 @@ def shape_inference_check(model: onnxl.ModelProto, *inputs):
     shape_inference.infer_shapes(work)
 
     _check_match(
-        work.graph.output,
-        output_snapshot,
-        label="output",
-        case_name=name,
-        strict_shape=False,
+        work.graph.output, output_snapshot, label="output", case_name=name, strict_shape=False
     )
     if has_intermediate_value_info:
         _check_match(
@@ -158,4 +154,3 @@ TestShapeInferenceBackend = make_test_class(shape_inference_check)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
-

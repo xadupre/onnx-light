@@ -20,19 +20,13 @@ def _make_model(op_type: str, opset_version: int, inputs: list[str], attrs=None)
     if "X" in inputs:
         graph_inputs.append(helper.make_tensor_value_info("X", TensorProto.FLOAT, [1]))
     if "scales" in inputs:
-        graph_inputs.append(
-            helper.make_tensor_value_info("scales", TensorProto.FLOAT, [1])
-        )
+        graph_inputs.append(helper.make_tensor_value_info("scales", TensorProto.FLOAT, [1]))
 
     graph_outputs = [helper.make_tensor_value_info("Y", TensorProto.FLOAT, [1])]
     node = helper.make_node(op_type, inputs, ["Y"], **attrs)
-    graph = helper.make_graph(
-        [node], f"{op_type.lower()}-seed", graph_inputs, graph_outputs
-    )
+    graph = helper.make_graph([node], f"{op_type.lower()}-seed", graph_inputs, graph_outputs)
     model = helper.make_model(
-        graph,
-        producer_name="oss-fuzz",
-        opset_imports=[helper.make_opsetid("", opset_version)],
+        graph, producer_name="oss-fuzz", opset_imports=[helper.make_opsetid("", opset_version)]
     )
     return model.SerializeToString()
 
@@ -121,17 +115,13 @@ def _write_zip(path: str, entries: Mapping[str, bytes | str]) -> None:
 
 def main() -> int:
     if len(sys.argv) != 3:
-        sys.stderr.write(
-            f"Usage: {sys.argv[0]} <version_converter_out.zip> <parser_out.zip>\n"
-        )
+        sys.stderr.write(f"Usage: {sys.argv[0]} <version_converter_out.zip> <parser_out.zip>\n")
         return 2
     version_converter_out = sys.argv[1]
     parser_out = sys.argv[2]
 
     version_converter_seeds = {
-        "cast_9_missing_input.onnx": _make_model(
-            "Cast", 9, [], {"to": TensorProto.FLOAT}
-        ),
+        "cast_9_missing_input.onnx": _make_model("Cast", 9, [], {"to": TensorProto.FLOAT}),
         "softmax_12_missing_input.onnx": _make_model("Softmax", 12, []),
         "softmax_13_missing_input.onnx": _make_model("Softmax", 13, []),
         "upsample_6_missing_input.onnx": _make_model("Upsample", 6, []),

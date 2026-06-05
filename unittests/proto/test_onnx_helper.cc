@@ -1833,12 +1833,24 @@ TEST(onnx_alignment, SaveModelWithSharedExternalDataReusesFirstModelWeights) {
   }
 
   // ---- 3) Build the second model: reuse first's two initializers and add a new one.
+  //
+  // Capture the location each reused initializer carries (it was recorded by the original
+  // TwoFilesWriteStream; its exact spelling — bare filename vs ``./<file>`` vs ``.\<file>`` —
+  // depends on the std::filesystem implementation, so we don't hard-code it).
   ModelProto second;
   GraphProto *g2 = second.add_graph();
   g2->set_name("g2");
+  std::unordered_map<std::string, std::string> reused_expected_location;
   for (size_t i = 0; i < first_meta.ref_graph().ref_initializer().size(); ++i) {
     TensorProto *t = g2->add_initializer();
     *t = first_meta.ref_graph().ref_initializer()[i];
+    for (int j = 0; j < t->ref_external_data().size(); ++j) {
+      const StringStringEntryProto &e = t->ref_external_data()[j];
+      if (e.ref_key() == "location") {
+        reused_expected_location[t->ref_name().as_string()] = e.ref_value().as_string();
+        break;
+      }
+    }
   }
   std::vector<float> new_payload(5, 7.0f); // 20 bytes
   {
@@ -1887,9 +1899,12 @@ TEST(onnx_alignment, SaveModelWithSharedExternalDataReusesFirstModelWeights) {
         len = std::stoll(e.ref_value().as_string());
     }
     if (t.ref_name().as_string()[0] == 'a') {
-      // Reused — must still reference the first model's weights file as-is
-      // (TwoFilesWriteStream records "./<file>" when the .onnx has no parent directory).
-      EXPECT_EQ(loc, std::string("./") + src_weights);
+      // Reused — must still reference the first model's weights file using the exact
+      // location string recorded when the first model was originally saved.
+      auto it = reused_expected_location.find(t.ref_name().as_string());
+      ASSERT_NE(it, reused_expected_location.end());
+      EXPECT_EQ(loc, it->second);
+      EXPECT_NE(loc.find(src_weights), std::string::npos);
     } else {
       // New — written into the auto-derived secondary file at an aligned offset.
       EXPECT_EQ(loc, dst_weights);

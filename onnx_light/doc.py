@@ -1224,15 +1224,6 @@ def _index_page_rst(domains: list[str]) -> str:
         lines.append(f"   {stem}")
     lines.append("")
 
-    lines.append("Domain overview")
-    lines.append("---------------")
-    lines.append("")
-    for domain in sorted(domains):
-        stem = _domain_file_stem(domain)
-        domain_title = _domain_title(domain)
-        lines.append(f"- :doc:`{domain_title} <{stem}>`")
-    lines.append("")
-
     return "\n".join(lines)
 
 

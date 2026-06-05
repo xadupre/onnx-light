@@ -838,7 +838,9 @@ if _run_scenario("save"):
     # Save with ``onnx_light.onnx``.
 
     out_onnxl = os.path.join(tmp_dir, "out_onnxlight.onnx")
-    data.append(measure("save/1filex1/onnxlight", lambda: onnxl.save(onxl, out_onnxl, num_threads=1)))
+    data.append(
+        measure("save/1filex1/onnxlight", lambda: onnxl.save(onxl, out_onnxl, num_threads=1))
+    )
     print_stats("save/1filex1/onnxlight", data[-1])
 
     # %%

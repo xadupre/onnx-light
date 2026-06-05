@@ -168,7 +168,9 @@ class TestCoverage(ExtTestCase):
         )
         report = compute_test_case_coverage({"test_multi": tc})
         ident = next(
-            oc for oc in report.operator_coverages if oc.name == "Identity" and oc.domain == "ai.onnx"
+            oc
+            for oc in report.operator_coverages
+            if oc.name == "Identity" and oc.domain == "ai.onnx"
         )
         abs_oc = next(
             oc for oc in report.operator_coverages if oc.name == "Abs" and oc.domain == "ai.onnx"

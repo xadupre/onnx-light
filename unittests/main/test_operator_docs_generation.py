@@ -98,6 +98,15 @@ class TestGenOperators(ExtTestCase):
             content = f.read_text(encoding="utf-8")
             self.assertIn(":doc:`Add`", content, f"{f.name} must link back to Add (latest)")
             self.assertIn("**Since version**", content)
+            # Past-version pages must be hidden from the search index.
+            self.assertIn(":nosearch:", content, f"{f.name} must declare :nosearch:")
+
+    def test_latest_version_page_is_searchable(self):
+        self._init()
+        # The latest-version page must NOT carry the :nosearch: marker so
+        # operators remain discoverable via the search index.
+        content = Path(self.tmp_dir, "ai_onnx", "Add.rst").read_text(encoding="utf-8")
+        self.assertNotIn(":nosearch:", content)
 
     def test_latest_version_links_to_past_versions(self):
         self._init()

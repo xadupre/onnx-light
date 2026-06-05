@@ -392,9 +392,9 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
     return result
 
 
-def collect_test_case() -> dict[str, TestCase]:
+def collect_test_case(name: str | None = None) -> dict[str, TestCase] | TestCase:
     """
-    Collects all backend test cases.
+    Collects backend test cases.
 
     The canonical node test cases are produced by the C++
     ``lib_onnx_backend_test`` library and exposed through the
@@ -404,8 +404,16 @@ def collect_test_case() -> dict[str, TestCase]:
     extra Python-defined cases through the :func:`expect` helper.
     Python-defined cases take precedence over C++ cases of the same name.
 
+    Args:
+        name: If provided, return only the :class:`TestCase` with that
+            name (e.g. ``"test_abs"``). Raises :class:`KeyError` if no
+            such test case exists. When ``None`` (the default), all
+            collected test cases are returned as a dictionary.
+
     Returns:
-        A dictionary mapping test case names to TestCase instances.
+        Either the single :class:`TestCase` matching ``name``, or a
+        dictionary mapping test case names to :class:`TestCase`
+        instances when ``name`` is ``None``.
     """
     global ALL_TESTS
 
@@ -426,12 +434,16 @@ def collect_test_case() -> dict[str, TestCase]:
     # merge in C++-generated backend test node cases (Python-defined cases win
     # on name collision to preserve backwards compatibility)
     cc_cases = _collect_cc_test_cases()
-    for name, tc in cc_cases.items():
-        ALL_TESTS.setdefault(name, tc)
+    for cc_name, tc in cc_cases.items():
+        ALL_TESTS.setdefault(cc_name, tc)
 
     # copy ALL_TESTS and reset it
     result = dict(ALL_TESTS)
     ALL_TESTS.clear()
+    if name is not None:
+        if name not in result:
+            raise KeyError(f"No backend test case named {name!r}.")
+        return result[name]
     return result
 
 

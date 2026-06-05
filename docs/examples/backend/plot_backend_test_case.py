@@ -21,25 +21,14 @@ from __future__ import annotations
 from onnx_light.backend.test.case import collect_test_case
 
 #####################################
-# Collect every available backend test case
-# +++++++++++++++++++++++++++++++++++++++++
-#
-# :func:`collect_test_case` returns a ``dict`` mapping each test case
-# name to a :class:`TestCase`. The ONNX node tests follow the
-# ``test_<op>[_<variant>]`` naming convention.
-
-all_cases = collect_test_case()
-print(f"Number of available backend test cases: {len(all_cases)}")
-
-#####################################
 # Retrieve a specific test case
 # +++++++++++++++++++++++++++++
 #
-# The ``test_abs`` case exercises the ``Abs`` operator on a small
-# ``float32`` tensor.
+# :func:`collect_test_case` accepts an optional ``name`` argument to
+# return a single :class:`TestCase` directly. The ``test_abs`` case
+# exercises the ``Abs`` operator on a small ``float32`` tensor.
 
-case_name = "test_abs"
-tc = all_cases[case_name]
+tc = collect_test_case("test_abs")
 print(f"name      : {tc.name}")
 print(f"model_name: {tc.model_name}")
 print(f"kind      : {tc.kind}")

@@ -214,6 +214,10 @@ Tensor MakeFloat16Tensor(const std::vector<int64_t> &shape, const std::vector<fl
 // ---------------------------------------------------------------------------
 void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(13);
+  // Opset 21 introduced the ``block_size`` attribute and the UINT4/INT4
+  // sub-byte input types; opset 23 added the UINT2/INT2/FLOAT4E2M1 types.
+  const OpsetId opset_v21 = DefaultOpset(21);
+  const OpsetId opset_v23 = DefaultOpset(23);
   const kernel::KernelContext ctx{opset};
   const kernel::DequantizeLinear dequantize_kernel{ctx};
 
@@ -409,8 +413,8 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
                                  {6.0f,   178.0f, 136.0f,  199.0f, 144.0f, 78.0f,  12.0f,  48.0f,
                                   96.0f,  86.0f,  60.0f,   -14.0f, 10.0f,  20.0f,  32.0f,  90.0f,
                                   250.0f, 80.0f,  1210.0f, 194.0f, 0.0f,   417.0f, 530.0f, 200.0f});
-    Expect(blocked_node, {x, x_scale, x_zero_point}, {y}, "test_dequantizelinear_blocked", {opset},
-           "backend-test", registry);
+    Expect(blocked_node, {x, x_scale, x_zero_point}, {y}, "test_dequantizelinear_blocked",
+           {opset_v21}, "backend-test", registry);
   }
 
   // From DequantizeLinear.export_e4m3fn_float16(): FLOAT8E4M3FN input with a
@@ -427,7 +431,7 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
                                 &kernel::FloatToFloat8E4M3FNBits);
     Tensor x_scale = MakeFloat16Tensor({}, {2.0f});
     Tensor y = MakeFloat16Tensor(f8_shape, {0.0f, 1.0f, 2.0f, 896.0f, -208.0f});
-    Expect(f16_node, {x, x_scale}, {y}, "test_dequantizelinear_e4m3fn_float16", {opset},
+    Expect(f16_node, {x, x_scale}, {y}, "test_dequantizelinear_e4m3fn_float16", {opset_v21},
            "backend-test", registry);
   }
 
@@ -451,7 +455,7 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
     Tensor x_zero_point = MakeSubByteTensor(DataType::UINT4, {1}, {1}, /*bits=*/4);
     Tensor y = Tensor::FromFloat("", {5}, {-2.0f, 0.0f, 12.0f, 18.0f, 28.0f});
     Expect(sub_byte_node, {x, sub_byte_scale, x_zero_point}, {y}, "test_dequantizelinear_uint4",
-           {opset}, "backend-test", registry);
+           {opset_v21}, "backend-test", registry);
   }
 
   // From DequantizeLinear.export_int4().
@@ -460,7 +464,7 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
     Tensor x_zero_point = MakeSubByteTensor(DataType::INT4, {1}, {1}, /*bits=*/4);
     Tensor y = Tensor::FromFloat("", {5}, {-2.0f, 0.0f, 12.0f, -10.0f, -18.0f});
     Expect(sub_byte_node, {x, sub_byte_scale, x_zero_point}, {y}, "test_dequantizelinear_int4",
-           {opset}, "backend-test", registry);
+           {opset_v21}, "backend-test", registry);
   }
 
   // From DequantizeLinear.export_uint2().
@@ -469,7 +473,7 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
     Tensor x_zero_point = MakeSubByteTensor(DataType::UINT2, {1}, {1}, /*bits=*/2);
     Tensor y = Tensor::FromFloat("", {4}, {-2.0f, 0.0f, 2.0f, 4.0f});
     Expect(sub_byte_node, {x, sub_byte_scale, x_zero_point}, {y}, "test_dequantizelinear_uint2",
-           {opset}, "backend-test", registry);
+           {opset_v23}, "backend-test", registry);
   }
 
   // From DequantizeLinear.export_int2().
@@ -478,7 +482,7 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
     Tensor x_zero_point = MakeSubByteTensor(DataType::INT2, {1}, {1}, /*bits=*/2);
     Tensor y = Tensor::FromFloat("", {4}, {-2.0f, 0.0f, -4.0f, -6.0f});
     Expect(sub_byte_node, {x, sub_byte_scale, x_zero_point}, {y}, "test_dequantizelinear_int2",
-           {opset}, "backend-test", registry);
+           {opset_v23}, "backend-test", registry);
   }
 
   // From DequantizeLinear.export_float4e2m1().
@@ -487,7 +491,7 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
     Tensor x_zero_point = MakeFloat4E2M1Tensor({1}, {0.0f});
     Tensor y = Tensor::FromFloat("", {5}, {0.0f, 2.0f, -2.0f, 3.0f, -8.0f});
     Expect(sub_byte_node, {x, sub_byte_scale, x_zero_point}, {y},
-           "test_dequantizelinear_float4e2m1", {opset}, "backend-test", registry);
+           "test_dequantizelinear_float4e2m1", {opset_v23}, "backend-test", registry);
   }
 }
 

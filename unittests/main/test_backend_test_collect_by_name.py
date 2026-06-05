@@ -36,7 +36,7 @@ class TestCollectTestCasesByName(ExtTestCase):
             bt.collect_test_cases_by_name(123)  # type: ignore[arg-type]
 
     def test_collect_invalid_regex_raises(self):
-        with self.assertRaises(re.error):
+        with self.assertRaises(ValueError):
             bt.collect_test_cases_by_name("(")
 
 

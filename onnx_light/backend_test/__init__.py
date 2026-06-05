@@ -33,11 +33,16 @@ collect_test_cases = _C.collect_test_cases
 def collect_test_cases_by_name(pattern: Union[str, Pattern[str]]) -> list[TestCase]:
     """Returns the C++-implemented backend test cases whose name matches *pattern*.
 
+    The actual filtering happens in C++
+    (``onnx_backend_test::CollectTestCasesByName``) using
+    ``std::regex_search`` with ECMAScript syntax. A compiled
+    :class:`re.Pattern` is accepted for convenience and is forwarded as
+    its source string.
+
     Args:
         pattern: A regular expression (as a string or a pre-compiled
-            :class:`re.Pattern`) matched against :attr:`TestCase.name`
-            with :func:`re.search`. Use ``"^...$"`` to require a full
-            match.
+            :class:`re.Pattern`) matched against :attr:`TestCase.name`.
+            Use ``"^...$"`` to require a full match.
 
     Returns:
         The list of :class:`TestCase` instances (in their natural
@@ -46,18 +51,18 @@ def collect_test_cases_by_name(pattern: Union[str, Pattern[str]]) -> list[TestCa
     Raises:
         TypeError: If *pattern* is neither a string nor a compiled
             regular expression.
-        re.error: If *pattern* is an invalid regular expression.
+        ValueError: If *pattern* is not a valid regular expression.
     """
     if isinstance(pattern, str):
-        compiled = re.compile(pattern)
+        source = pattern
     elif isinstance(pattern, re.Pattern):
-        compiled = pattern
+        source = pattern.pattern
     else:
         raise TypeError(
             "pattern must be a str or a compiled re.Pattern, "
             f"got {type(pattern).__name__}."
         )
-    return [tc for tc in collect_test_cases() if compiled.search(tc.name)]
+    return _C.collect_test_cases_by_name(source)
 
 
 __all__ = [

@@ -43,7 +43,7 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
             self.assertEqual(expected, inferred)
 
     def test_inference_by_node(self):
-        from onnx_light.onnx_py._onnxpy.shape_inference import (
+        from onnx_light.onnx_py._onnxpy import (
             compute_shape_node,
             ShapesContext,
             OptimTensor,

@@ -197,9 +197,12 @@ def _normalize_domain(domain: str) -> str:
 def _type_proto_to_string(vt: Any) -> str | None:
     """Returns the ONNX type string for a :class:`TypeProto`, or ``None``.
 
-    Handles ``tensor_type``, ``sequence_type`` and ``optional_type`` (the
-    latter wrapping either a tensor or a sequence of tensors). Returns
-    ``None`` when the element type is unknown (``0``) or unsupported.
+    The returned strings match the format used by ``LightOpSchema`` type
+    constraints, e.g. ``"tensor(float)"``, ``"seq(tensor(int32))"`` or
+    ``"optional(tensor(double))"``. Handles ``tensor_type``,
+    ``sequence_type`` and ``optional_type`` (the latter wrapping either a
+    tensor or a sequence of tensors). Returns ``None`` when the element
+    type is unknown (``0``) or unsupported.
     """
     if vt is None:
         return None
@@ -253,14 +256,14 @@ def _build_name_to_type(graph: Any) -> dict[str, str]:
 
 
 def _types_used_by_test_case(test_case: Any) -> list[tuple[str, str, set[str]]]:
-    """Returns one ``(domain, op_type, used_type_strings)`` entry per node.
+    """Returns a list of ``(domain, op_type, used_type_strings)`` tuples,
+    one per node in the test case's :class:`ModelProto`.
 
-    Walks every node in the test case's :class:`ModelProto` (test cases may
-    contain helper nodes such as ``SequenceConstruct`` before the operator
-    actually being exercised). For each node, the used type strings are the
-    types — pulled from graph inputs/outputs, ``value_info`` and initializers
-    — of that node's named inputs and outputs. Returns an empty list when the
-    model has no node.
+    Walks every node in the model (test cases may contain helper nodes such
+    as ``SequenceConstruct`` before the operator actually being exercised).
+    For each node, the used type strings are the types — pulled from graph
+    inputs/outputs, ``value_info`` and initializers — of that node's named
+    inputs and outputs. Returns an empty list when the model has no node.
     """
     model = test_case.model
     if model is None:

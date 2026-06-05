@@ -706,7 +706,7 @@ class TestSaveModelWithSharedExternalData(ExtTestCase):
 
     def test_save_model_with_only_reused_weights(self) -> None:
         """No new initializer: secondary weights file is not created, return value is
-        0, reused initializers keep pointing at the first model's weights file."""
+        0, reused initializers' external_data entries are written out unchanged."""
         from onnx_light.onnx import save_model_with_shared_external_data
 
         with tempfile.TemporaryDirectory() as tdir:

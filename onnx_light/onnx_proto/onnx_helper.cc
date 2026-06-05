@@ -541,12 +541,8 @@ offset_t AlignExternalDataStreaming(const std::string &src_onnx_path,
 offset_t SaveModelWithSharedExternalData(ModelProto &model, const std::string &dst_onnx_path,
                                          const SerializeOptions &options) {
   const int64_t alignment = options.alignment;
-  EXT_ENFORCE(alignment >= 0, "SaveModelWithSharedExternalData: alignment must be >= 0, got ",
-              alignment, ".");
-  if (alignment > 1) {
-    onnx_light_helpers::ValidateAlignmentOption(alignment,
-                                                "SaveModelWithSharedExternalData.alignment");
-  }
+  onnx_light_helpers::ValidateAlignmentOption(alignment,
+                                              "SaveModelWithSharedExternalData.alignment");
 
   namespace fs = std::filesystem;
   const fs::path dst_path(dst_onnx_path);

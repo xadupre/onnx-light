@@ -275,6 +275,24 @@ std::string MakeShapeDoc(int since_version);
 std::string MakeShapeTypeConstraintDescription(int since_version);
 
 /**
+ * Returns the documentation string for the Size operator at the given
+ * opset version.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the Size operator.
+ */
+std::string MakeSizeDoc(int since_version);
+
+/**
+ * Returns the type-constraint description for the Size ``T`` type parameter
+ * at the given opset version.
+ *
+ * @param since_version Opset version for which to generate the description.
+ * @return Type-constraint description string for the Size input.
+ */
+std::string MakeSizeTypeConstraintDescription(int since_version);
+
+/**
  * Returns the documentation string for the Pad operator at the given opset
  * version.
  *

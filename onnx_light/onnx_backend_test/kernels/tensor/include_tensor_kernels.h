@@ -471,6 +471,25 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of the ONNX ``Size`` operator (since opset 1 in
+/// the ``ai.onnx`` domain). Returns a 0-D (scalar) INT64 tensor whose single
+/// value is the total number of elements of the input tensor, i.e. the
+/// product of its dimensions.
+///
+/// The kernel reads only the input shape, never its data buffer, so it
+/// accepts an input of any element type.
+class Size : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  Tensor operator()(const Tensor &data) const;
+  void operator()(const Tensor &data, Tensor &output) const;
+
+  /// Output has a different dtype (INT64) and shape (scalar) from the input,
+  /// so storage cannot be shared.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Reference implementation of the ONNX ``Identity`` operator (since opset 1
 /// in the ``ai.onnx`` domain). Copies the input tensor to the output
 /// unchanged. The output dtype and shape always match the input.

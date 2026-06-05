@@ -618,6 +618,30 @@ void ComputeShapeUnique(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeShape(ShapesContext &ctx, const NodeProto &node);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Size`` node and stores
+ * it in ``ctx``.
+ *
+ * ``Size`` returns a 0-D (scalar) INT64 tensor whose single value is the
+ * total number of elements of the input tensor (the product of its
+ * dimensions). The output shape is therefore always known (the empty
+ * shape); the scalar value is also recorded as a single-element
+ * ``ValueAsShape`` when every input dimension is a concrete (non-symbolic)
+ * value, so that downstream operators can propagate it.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``node.input(0)``. On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Size`` ``NodeProto`` whose output should be described.
+ *              ``node.op_type()`` must be ``"Size"``; ``node`` must declare
+ *              one input and at least one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Size"``,
+ *         or if ``node`` has no input or output.
+ * @throws std::out_of_range     if the input name is missing from ``ctx``.
+ */
+void ComputeShapeSize(ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of an ``Identity`` node and
  * stores it in ``ctx``.
  *

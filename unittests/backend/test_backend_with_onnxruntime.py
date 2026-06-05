@@ -136,6 +136,10 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     ``GlobalLpPool(22)`` ("Could not find an implementation for
 #     GlobalLpPool(22) node"). The reference backend still exercises these
 #     cases.
+#   * ``test_cc_maxroipool_*`` — ORT has no CPU kernel for
+#     ``MaxRoiPool(22)`` ("Could not find an implementation for
+#     MaxRoiPool(22) node"). The reference backend still exercises these
+#     cases.
 #   * ``test_cc_scan_zero_trip_count`` — ORT's ``Scan`` implementation
 #     unconditionally slices the scan input at ``dim0_offset=0`` even when
 #     the scan-input leading dimension is 0, asserting
@@ -275,6 +279,7 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_linearregressor_single_target$",
     r"^test_cc_treeensembleclassifier_int64_binary$",
     r"^test_cc_globallppool_",
+    r"^test_cc_maxroipool_",
     r"^test_cc_dict_vectorizer_",
     r"^test_cc_cast_map_",
     r"^test_cc_feature_vectorizer_mixed_dtypes$",

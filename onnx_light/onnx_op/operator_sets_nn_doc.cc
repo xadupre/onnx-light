@@ -914,6 +914,11 @@ equivalent to InstanceNormalization. When there is only one group, this operator
 is equivalent to LayerNormalization.
 )DOC";
 
+constexpr const char *kMeanVarianceNormalizationDoc = R"DOC(
+      A MeanVarianceNormalization Function: Perform mean variance normalization
+      on the input tensor X using formula: `(X-EX)/sqrt(E(X-EX)^2)`
+)DOC";
+
 } // namespace
 
 std::string MakeInstanceNormalizationDoc(int since_version) {
@@ -933,6 +938,16 @@ std::string MakeGroupNormalizationDoc(int since_version) {
     return kGroupNormalizationDocOpset18;
   case 21:
     return kGroupNormalizationDocOpset21;
+  default:
+    return "";
+  }
+}
+
+std::string MakeMeanVarianceNormalizationDoc(int since_version) {
+  switch (since_version) {
+  case 9:
+  case 13:
+    return kMeanVarianceNormalizationDoc;
   default:
     return "";
   }

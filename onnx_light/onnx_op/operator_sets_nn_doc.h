@@ -89,6 +89,12 @@ std::string MakeInstanceNormalizationDoc(int since_version);
 std::string MakeGroupNormalizationDoc(int since_version);
 
 /**
+ * Returns the documentation string for the MeanVarianceNormalization operator
+ * at the given opset version (9 or 13).
+ */
+std::string MakeMeanVarianceNormalizationDoc(int since_version);
+
+/**
  * Returns the documentation string for the Flatten operator at the given
  * opset version (1, 9, 11, 13, 21, 23, 24, or 25). The text is identical for
  * every opset and matches the upstream ``kDoc_Flatten_ver24`` string.

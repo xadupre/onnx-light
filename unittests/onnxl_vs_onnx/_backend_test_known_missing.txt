@@ -377,11 +377,6 @@ identity_sequence
 if_opt
 isinf_float16
 isnan_float16
-l1normalization_axis_0
-l1normalization_axis_1
-l1normalization_axis_last
-l2normalization_axis_0
-l2normalization_axis_1
 layer_normalization_2d_axis0
 layer_normalization_2d_axis0_expanded
 layer_normalization_2d_axis0_expanded_ver18

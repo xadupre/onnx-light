@@ -614,7 +614,7 @@ if _run_scenario("load"):
     # %%
     # Load with ``onnx_light.onnx``.
 
-    data.append(measure("load/1filex1/onnxlight", lambda: onnxl.load(onnx_path)))
+    data.append(measure("load/1filex1/onnxlight", lambda: onnxl.load(onnx_path, num_threads=1)))
     print_stats("load/1filex1/onnxlight", data[-1])
 
     # %%
@@ -635,7 +635,8 @@ if _run_scenario("load"):
 
     data.append(
         measure(
-            "load/1filex1/onnxlight-mmap", lambda: onnxl.load(onnx_path, file_load_mode="MMAP")
+            "load/1filex1/onnxlight-mmap",
+            lambda: onnxl.load(onnx_path, file_load_mode="MMAP", num_threads=1),
         )
     )
     print_stats("load/1filex1/onnxlight-mmap", data[-1])
@@ -643,7 +644,7 @@ if _run_scenario("load"):
     data.append(
         measure(
             "load/1filex1/onnxlight-ifstream",
-            lambda: onnxl.load(onnx_path, file_load_mode="IFSTREAM"),
+            lambda: onnxl.load(onnx_path, file_load_mode="IFSTREAM", num_threads=1),
         )
     )
     print_stats("load/1filex1/onnxlight-ifstream", data[-1])
@@ -837,7 +838,7 @@ if _run_scenario("save"):
     # Save with ``onnx_light.onnx``.
 
     out_onnxl = os.path.join(tmp_dir, "out_onnxlight.onnx")
-    data.append(measure("save/1filex1/onnxlight", lambda: onnxl.save(onxl, out_onnxl)))
+    data.append(measure("save/1filex1/onnxlight", lambda: onnxl.save(onxl, out_onnxl, num_threads=1)))
     print_stats("save/1filex1/onnxlight", data[-1])
 
     # %%
@@ -868,7 +869,7 @@ if _run_scenario("save"):
     out_ext_data = out_ext + ".data"
 
     def _save_onnxlight_external_with_flush() -> None:
-        onnxl.save(onxl, out_ext, location=out_ext_data)
+        onnxl.save(onxl, out_ext, location=out_ext_data, num_threads=1)
         _flush_file(out_ext_data)
         _flush_file(out_ext)
 
@@ -996,7 +997,8 @@ if _run_scenario("load"):
 
     data.append(
         measure(
-            "load/2filex1/onnxlight", lambda: onnxl.load(ext_load_onnx, location=ext_load_data)
+            "load/2filex1/onnxlight",
+            lambda: onnxl.load(ext_load_onnx, location=ext_load_data, num_threads=1),
         )
     )
     print_stats("load/2filex1/onnxlight", data[-1])
@@ -1010,7 +1012,11 @@ if _run_scenario("load"):
         measure(
             "load/2filex1/onnxlight-nocopy",
             lambda: onnxl.load(
-                ext_load_onnx, location=ext_load_data, no_copy=True, touch_raw_data_pages=True
+                ext_load_onnx,
+                location=ext_load_data,
+                no_copy=True,
+                touch_raw_data_pages=True,
+                num_threads=1,
             ),
         )
     )

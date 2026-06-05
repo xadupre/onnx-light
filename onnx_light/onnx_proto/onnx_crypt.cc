@@ -188,6 +188,8 @@ void LoadEncryptedModelFromString(ModelProto &model, const std::string &encrypte
                                      encrypted_data.size(), key);
   ParseOptions mutable_opts = opts;
   utils::StringStream stream(plaintext.data(), static_cast<int64_t>(plaintext.size()));
+  if (mutable_opts.is_parallel())
+    stream.StartThreadPool(mutable_opts.num_threads);
   // AES-CBC has no MAC, so a wrong key still produces valid-looking plaintext
   // about 1/256 of the time (whenever the PKCS#7 padding happens to be valid).
   // The downstream proto parser then operates on garbage bytes and may throw a
@@ -199,7 +201,11 @@ void LoadEncryptedModelFromString(ModelProto &model, const std::string &encrypte
   // corrupt data even with the right key).
   try {
     model.ParseFromStream(stream, mutable_opts);
+    if (mutable_opts.is_parallel())
+      stream.WaitForDelayedBlock();
   } catch (const std::exception &ex) {
+    if (mutable_opts.is_parallel())
+      stream.WaitForDelayedBlock();
     std::string sanitized;
     sanitized.reserve(std::strlen(ex.what()));
     for (const char *p = ex.what(); *p != '\0'; ++p) {

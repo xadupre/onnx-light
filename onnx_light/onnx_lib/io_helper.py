@@ -71,7 +71,7 @@ def save(
     location: str | None = None,
     size_threshold: int = 1024,
     convert_attribute: bool = False,
-    num_threads: int = 1,
+    num_threads: int = -1,
     min_block_size: int = 0,
     max_external_file_size: int = 0,
 ) -> None:
@@ -109,9 +109,10 @@ def save(
         If true, convert all tensors to external data
         If false, convert only non-attribute tensors to external data
     :param num_threads: number of threads to use for parallel serialization.
-        ``1`` (default) disables parallelization, ``> 1`` uses exactly that
-        many worker threads, and any negative value picks a sensible value
-        based on the number of available CPU cores.
+        ``1`` disables parallelization, ``> 1`` uses exactly that
+        many worker threads, and any negative value (``-1`` is the
+        default) picks a sensible value based on the number of
+        available CPU cores.
     :param min_block_size: minimum raw-data block size in bytes to write in parallel
         when ``num_threads != 1``; tensor blocks smaller than this threshold are
         written on the calling thread to avoid thread-pool overhead.
@@ -157,7 +158,7 @@ def load(
     skip_raw_data: bool = False,
     raw_data_threshold: int = 1024,
     load_external_data: Optional[bool] = None,
-    num_threads: int = 1,
+    num_threads: int = -1,
     location: str = "",
     min_block_size: int = 0,
     no_copy: bool = False,
@@ -191,9 +192,10 @@ def load(
     :param load_external_data: Whether to load the external data.
             Set to True if the data is under the same directory of the model.
     :param num_threads: number of threads to use for parallel parsing.
-        ``1`` (default) disables parallelization, ``> 1`` uses exactly that
-        many worker threads, and any negative value picks a sensible value
-        based on the number of available CPU cores.
+        ``1`` disables parallelization, ``> 1`` uses exactly that
+        many worker threads, and any negative value (``-1`` is the
+        default) picks a sensible value based on the number of
+        available CPU cores.
     :param location: location of the external weights
         (can be different from the value stored in the main model).
         When ``load_external_data`` is ``True`` and this parameter is omitted,
@@ -292,7 +294,7 @@ def save_encrypted(
     f: str | Path,
     key: str | bytes,
     *,
-    num_threads: int = 1,
+    num_threads: int = -1,
     size_threshold: int = 1024,
     min_block_size: int = 0,
 ) -> None:
@@ -314,9 +316,9 @@ def save_encrypted(
         When *key* is :class:`bytes` it is decoded as ``latin-1`` before
         PBKDF2 so that arbitrary byte values are preserved faithfully.
     :param num_threads: Number of threads to use for parallel serialization.
-        ``1`` (default) disables parallelization, ``> 1`` uses exactly that many
-        worker threads, and any negative value picks a sensible value based on
-        the number of available CPU cores.
+        ``1`` disables parallelization, ``> 1`` uses exactly that many
+        worker threads, and any negative value (``-1`` is the default)
+        picks a sensible value based on the number of available CPU cores.
     :param size_threshold: Minimum tensor raw-data size (bytes) that is
         considered "large" for the purposes of parallelisation.
     :param min_block_size: Minimum raw-data block size (bytes) parallelised
@@ -341,7 +343,7 @@ def save_encrypted(
 
 
 def load_encrypted(
-    f: str | Path, key: str | bytes, *, num_threads: int = 1, min_block_size: int = 0
+    f: str | Path, key: str | bytes, *, num_threads: int = -1, min_block_size: int = 0
 ) -> ModelProto:
     """Decrypts and parses an AES-256-CBC encrypted ONNX model.
 
@@ -357,9 +359,9 @@ def load_encrypted(
     :param key: Passphrase or raw bytes (must match the one used to save).
         :class:`bytes` values are decoded as ``latin-1``.
     :param num_threads: Number of threads to use for parallel parsing.
-        ``1`` (default) disables parallelization, ``> 1`` uses exactly that many
-        worker threads, and any negative value picks a sensible value based on
-        the number of available CPU cores.
+        ``1`` disables parallelization, ``> 1`` uses exactly that many
+        worker threads, and any negative value (``-1`` is the default)
+        picks a sensible value based on the number of available CPU cores.
     :param min_block_size: Minimum block size (bytes) to parallelise
         when ``num_threads != 1``.
     :return: The decrypted and parsed :class:`ModelProto`.
@@ -386,7 +388,7 @@ def save_encrypted_string(
     proto: ModelProto,
     key: str | bytes,
     *,
-    num_threads: int = 1,
+    num_threads: int = -1,
     size_threshold: int = 1024,
     min_block_size: int = 0,
 ) -> bytes:
@@ -406,9 +408,9 @@ def save_encrypted_string(
         When *key* is :class:`bytes` it is decoded as ``latin-1`` before
         PBKDF2 so that arbitrary byte values are preserved faithfully.
     :param num_threads: Number of threads to use for parallel serialization.
-        ``1`` (default) disables parallelization, ``> 1`` uses exactly that many
-        worker threads, and any negative value picks a sensible value based on
-        the number of available CPU cores.
+        ``1`` disables parallelization, ``> 1`` uses exactly that many
+        worker threads, and any negative value (``-1`` is the default)
+        picks a sensible value based on the number of available CPU cores.
     :param size_threshold: Minimum tensor raw-data size (bytes) that is
         considered "large" for the purposes of parallelisation.
     :param min_block_size: Minimum raw-data block size (bytes) parallelised
@@ -433,7 +435,7 @@ def save_encrypted_string(
 
 
 def load_encrypted_string(
-    data: bytes, key: str | bytes, *, num_threads: int = 1, min_block_size: int = 0
+    data: bytes, key: str | bytes, *, num_threads: int = -1, min_block_size: int = 0
 ) -> ModelProto:
     """Decrypts and parses an in-memory AES-256-CBC encrypted ONNX model.
 
@@ -449,9 +451,9 @@ def load_encrypted_string(
     :param key: Passphrase or raw bytes (must match the one used to encrypt).
         :class:`bytes` values are decoded as ``latin-1``.
     :param num_threads: Number of threads to use for parallel parsing.
-        ``1`` (default) disables parallelization, ``> 1`` uses exactly that many
-        worker threads, and any negative value picks a sensible value based on
-        the number of available CPU cores.
+        ``1`` disables parallelization, ``> 1`` uses exactly that many
+        worker threads, and any negative value (``-1`` is the default)
+        picks a sensible value based on the number of available CPU cores.
     :param min_block_size: Minimum block size (bytes) to parallelise
         when ``num_threads != 1``.
     :return: The decrypted and parsed :class:`ModelProto`.

@@ -392,7 +392,6 @@ hardswish_expanded
 identity_opt
 identity_sequence
 if_opt
-if_seq
 isinf_float16
 isnan_float16
 l1normalization_axis_0

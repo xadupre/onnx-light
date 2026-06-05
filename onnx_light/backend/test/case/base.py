@@ -8,6 +8,8 @@ from ....onnx_py._onnxpy import onnx_op as _onnx_op  # type: ignore[attr-defined
 from ....ext_test_case import ExtTestCase
 
 _LIGHT_SINCE_VERSION_CACHE: dict[tuple[str, str], int] = {}
+# Backend test inputs/outputs are usually ndarrays, but ONNX sequence cases use
+# recursively nested Python lists of ndarrays.
 BackendTestValue: TypeAlias = np.ndarray | list["BackendTestValue"]
 BackendTestDataSets: TypeAlias = Sequence[
     tuple[Sequence[BackendTestValue], Sequence[BackendTestValue]]

@@ -77,6 +77,9 @@ void RegisterLSTMCases(std::vector<TestCase> &registry);
 /// Registers the ``MaxPool`` backend test node case(s).
 void RegisterMaxPoolCases(std::vector<TestCase> &registry);
 
+/// Registers the ``MaxRoiPool`` backend test node case(s).
+void RegisterMaxRoiPoolCases(std::vector<TestCase> &registry);
+
 /// Registers the ``MaxUnpool`` backend test node case(s).
 void RegisterMaxUnpoolCases(std::vector<TestCase> &registry);
 

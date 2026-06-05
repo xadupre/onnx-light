@@ -149,6 +149,52 @@ LightOpSchema MakeMaxUnpoolSchema(int since_version) {
                        });
 }
 
+// --- MaxRoiPool --------------------------------------------------------------
+
+std::vector<TensorType> MaxRoiPoolFloatTypes(int since_version) {
+  if (since_version >= 22) {
+    return {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+  }
+  return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+}
+
+LightOpSchema MakeMaxRoiPoolSchema(int since_version) {
+  return LightOpSchema(
+      "MaxRoiPool", kOnnxDomain, since_version, MakeMaxRoiPoolDoc(since_version),
+      {
+          {"X",
+           "Input data tensor from the previous operator; "
+           "dimensions for image case are (N x C x H x W), "
+           "where N is the batch size, C is the number of "
+           "channels, and H and W are the height and the "
+           "width of the data.",
+           "T"},
+          {"rois",
+           "RoIs (Regions of Interest) to pool over. Should "
+           "be a 2-D tensor of shape (num_rois, 5) given as "
+           "[[batch_id, x1, y1, x2, y2], ...].",
+           "T"},
+      },
+      {
+          {"Y",
+           "RoI pooled output 4-D tensor of shape (num_rois, channels, pooled_shape[0], "
+           "pooled_shape[1]).",
+           "T"},
+      },
+      {
+          {"T", MaxRoiPoolFloatTypes(since_version),
+           "Constrain input and output types to float tensors."},
+      },
+      {
+          {"pooled_shape", "ROI pool output shape (height, width).", AttributeType::INTS,
+           /*required=*/true, std::monostate{}},
+          {"spatial_scale",
+           "Multiplicative spatial scale factor to translate ROI coordinates from their input "
+           "scale to the scale used when pooling.",
+           AttributeType::FLOAT, /*required=*/false, 1.0f},
+      });
+}
+
 const char *const kDropoutDataDescription = "The input data as Tensor.";
 const char *const kDropoutOutputDescription = "The output.";
 const char *const kDropoutMaskDescriptionVer1And6 =
@@ -1760,6 +1806,13 @@ std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &o
              MakeMaxUnpoolSchema(22),
              MakeMaxUnpoolSchema(11),
              MakeMaxUnpoolSchema(9),
+         };
+       }},
+      {"MaxRoiPool",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeMaxRoiPoolSchema(22),
+             MakeMaxRoiPoolSchema(1),
          };
        }},
       {"RNN",

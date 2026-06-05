@@ -500,6 +500,93 @@ TEST(OnnxOptimShapesNnRoiAlign, RejectsWrongOpType) {
 
 namespace {
 
+NodeProto MakeMaxRoiPoolNode(int64_t pooled_h = 2, int64_t pooled_w = 2,
+                             bool include_pooled_shape = true) {
+  NodeProto node;
+  node.set_op_type("MaxRoiPool");
+  node.add_input("X");
+  node.add_input("rois");
+  node.add_output("Y");
+  if (include_pooled_shape) {
+    AddAttribute<std::vector<int64_t>>(node, "pooled_shape", {pooled_h, pooled_w});
+  }
+  return node;
+}
+
+void SetMaxRoiPoolInputs(onnx_optim::shapes::ShapesContext &ctx, const onnx_optim::OptimShape &x,
+                         const onnx_optim::OptimShape &rois,
+                         onnx_optim::TensorType dtype = onnx_optim::TensorType::kFloat) {
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, dtype, x));
+  ctx.Set("rois", onnx_optim::OptimTensor(nullptr, dtype, rois));
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesNnMaxRoiPool, StaticShape) {
+  NodeProto node = MakeMaxRoiPoolNode(/*pooled_h=*/3, /*pooled_w=*/4);
+  onnx_optim::shapes::ShapesContext ctx;
+  SetMaxRoiPoolInputs(ctx,
+                      onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(8),
+                                             onnx_optim::OptimDim(16), onnx_optim::OptimDim(16)},
+                      onnx_optim::OptimShape{onnx_optim::OptimDim(5), onnx_optim::OptimDim(5)});
+
+  onnx_optim::shapes::nn::ComputeShapeMaxRoiPool(ctx, node, "X", "rois");
+
+  const onnx_optim::OptimTensor &out = ctx.Get("Y");
+  EXPECT_EQ(out.Dtype(), onnx_optim::TensorType::kFloat);
+  const onnx_optim::OptimShape &out_shape = out.Shape();
+  ASSERT_EQ(out_shape.Rank(), 4u);
+  EXPECT_EQ(out_shape[0].AsInt(), 5);
+  EXPECT_EQ(out_shape[1].AsInt(), 8);
+  EXPECT_EQ(out_shape[2].AsInt(), 3);
+  EXPECT_EQ(out_shape[3].AsInt(), 4);
+}
+
+TEST(OnnxOptimShapesNnMaxRoiPool, PropagatesSymbolicNumRoisAndChannels) {
+  NodeProto node = MakeMaxRoiPoolNode(/*pooled_h=*/7, /*pooled_w=*/7);
+  onnx_optim::shapes::ShapesContext ctx;
+  SetMaxRoiPoolInputs(ctx,
+                      onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim("C"),
+                                             onnx_optim::OptimDim(32), onnx_optim::OptimDim(32)},
+                      onnx_optim::OptimShape{onnx_optim::OptimDim("R"), onnx_optim::OptimDim(5)});
+
+  onnx_optim::shapes::nn::ComputeShapeMaxRoiPool(ctx, node, "X", "rois");
+
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  EXPECT_TRUE(out[0].IsExpr());
+  EXPECT_EQ(out[0].AsExpr(), "R");
+  EXPECT_TRUE(out[1].IsExpr());
+  EXPECT_EQ(out[1].AsExpr(), "C");
+  EXPECT_EQ(out[2].AsInt(), 7);
+  EXPECT_EQ(out[3].AsInt(), 7);
+}
+
+TEST(OnnxOptimShapesNnMaxRoiPool, RejectsMissingPooledShape) {
+  NodeProto node = MakeMaxRoiPoolNode(/*pooled_h=*/2, /*pooled_w=*/2,
+                                      /*include_pooled_shape=*/false);
+  onnx_optim::shapes::ShapesContext ctx;
+  SetMaxRoiPoolInputs(ctx,
+                      onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                             onnx_optim::OptimDim(4), onnx_optim::OptimDim(4)},
+                      onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(5)});
+  EXPECT_THROW(onnx_optim::shapes::nn::ComputeShapeMaxRoiPool(ctx, node, "X", "rois"),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesNnMaxRoiPool, RejectsWrongOpType) {
+  NodeProto node = MakeMaxRoiPoolNode();
+  node.set_op_type("RoiAlign");
+  onnx_optim::shapes::ShapesContext ctx;
+  SetMaxRoiPoolInputs(ctx,
+                      onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                             onnx_optim::OptimDim(4), onnx_optim::OptimDim(4)},
+                      onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(5)});
+  EXPECT_THROW(onnx_optim::shapes::nn::ComputeShapeMaxRoiPool(ctx, node, "X", "rois"),
+               std::invalid_argument);
+}
+
+namespace {
+
 NodeProto MakeNonMaxSuppressionNode() {
   NodeProto node;
   node.set_op_type("NonMaxSuppression");

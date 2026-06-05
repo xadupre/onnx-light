@@ -543,6 +543,35 @@ void ComputeShapeMaxPool(ShapesContext &ctx, const NodeProto &node, const char *
 void ComputeShapeMaxUnpool(ShapesContext &ctx, const NodeProto &node, const char *x, const char *I,
                            const char *output_shape);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``MaxRoiPool`` node and
+ * stores it in ``ctx``.
+ *
+ * The output dtype matches the input feature-map dtype. The output shape
+ * is ``(num_rois, C, pooled_shape[0], pooled_shape[1])`` where ``num_rois``
+ * is taken from dim 0 of ``rois`` (which may be symbolic); ``C`` is taken
+ * from dim 1 of ``x``; and the spatial sizes come from the required
+ * ``pooled_shape`` attribute.
+ *
+ * @param ctx   In/out context. Must already contain entries for ``x`` and
+ *              ``rois``; on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``MaxRoiPool`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"MaxRoiPool"`` and
+ *              ``node`` must declare at least one output.
+ * @param x     Name of the feature-map input value (rank 4) in ``ctx``.
+ * @param rois  Name of the RoIs input value (rank 2 with last dim 5) in
+ *              ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"MaxRoiPool"``,
+ *         if ``node`` has no output, if any input has the wrong rank, or
+ *         if ``pooled_shape`` is missing, has the wrong size, or contains
+ *         non-positive values.
+ * @throws std::out_of_range     if any input name is not present in ``ctx``.
+ */
+void ComputeShapeMaxRoiPool(ShapesContext &ctx, const NodeProto &node, const char *x,
+                            const char *rois);
+
 } // namespace nn
 } // namespace shapes
 } // namespace onnx_optim

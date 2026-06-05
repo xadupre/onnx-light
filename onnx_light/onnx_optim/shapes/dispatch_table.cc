@@ -634,6 +634,12 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          nn::ComputeShapeMaxUnpool(ctx, node, node.input(0).as_string().c_str(),
                                    node.input(1).as_string().c_str(), output_shape);
        }},
+      {"ai.onnx:MaxRoiPool",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         nn::ComputeShapeMaxRoiPool(ctx, node, node.input(0).as_string().c_str(),
+                                    node.input(1).as_string().c_str());
+       }},
       {"ai.onnx:Mul",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);

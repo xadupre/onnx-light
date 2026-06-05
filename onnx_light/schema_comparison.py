@@ -132,6 +132,7 @@ ONNX_OPTIM_SHAPE_INFERENCE_OPS: frozenset[tuple[str, str]] = frozenset(
         ("ai.onnx", "MatMul"),
         ("ai.onnx", "Max"),
         ("ai.onnx", "MaxPool"),
+        ("ai.onnx", "MaxRoiPool"),
         ("ai.onnx", "MaxUnpool"),
         ("ai.onnx", "Mean"),
         ("ai.onnx", "MeanVarianceNormalization"),

@@ -35,6 +35,14 @@ std::string MakeMaxPoolDoc(int since_version);
 std::string MakeMaxUnpoolDoc(int since_version);
 
 /**
+ * Returns the documentation string for the MaxRoiPool operator at the given
+ * opset version (1 or 22). The text is identical for both opsets and
+ * matches the upstream ``RoiPoolOpSchemaGenerator`` template instantiated
+ * with ``name="max"``.
+ */
+std::string MakeMaxRoiPoolDoc(int since_version);
+
+/**
  * Returns the documentation string for the GlobalAveragePool operator at the
  * given opset version (1 or 22).
  */

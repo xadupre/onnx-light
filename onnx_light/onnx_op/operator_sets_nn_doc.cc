@@ -371,6 +371,29 @@ std::string MakeMaxUnpoolDoc(int since_version) {
 
 namespace {
 
+// MaxRoiPool doc mirrors the upstream ``RoiPoolOpSchemaGenerator`` template
+// instantiated with ``name="max"``. The text is identical for opset 1 and
+// opset 22 (the bump in opset 22 only widens the type constraint to add
+// ``bfloat16``).
+constexpr const char *kMaxRoiPoolDoc = R"DOC(
+ ROI max pool consumes an input tensor X and regions of interest (RoIs) to
+ apply max pooling across each RoI, to produce output 4-D tensor of shape
+ (num_rois, channels, pooled_shape[0], pooled_shape[1]).)DOC";
+
+} // namespace
+
+std::string MakeMaxRoiPoolDoc(int since_version) {
+  switch (since_version) {
+  case 1:
+  case 22:
+    return kMaxRoiPoolDoc;
+  default:
+    return "";
+  }
+}
+
+namespace {
+
 constexpr const char *kRNNDoc = R"DOC(
 Computes an one-layer simple RNN. This operator is usually supported
 via some custom implementation such as CuDNN.

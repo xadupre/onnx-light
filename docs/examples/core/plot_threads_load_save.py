@@ -35,7 +35,7 @@ import onnx_light.onnx as onnxl
 N_INIT = 8 if os.environ.get("UNITTEST_GOING") == "1" else 40
 DIM = 128 if os.environ.get("UNITTEST_GOING") == "1" else 2048
 N_ITER = 2 if os.environ.get("UNITTEST_GOING") == "1" else 5
-THREAD_COUNTS = (1, 2) if os.environ.get("UNITTEST_GOING") == "1" else (1, 2, 4, 8)
+THREAD_COUNTS = (1, 2, 3) if os.environ.get("UNITTEST_GOING") == "1" else (1, 2, 3, 4, 8)
 
 
 def _detect_processor_name() -> str:

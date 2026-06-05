@@ -43,11 +43,7 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
             self.assertEqual(expected, inferred)
 
     def test_inference_by_node(self):
-        from onnx_light.onnx_py._onnxpy import (
-            compute_shape_node,
-            ShapesContext,
-            OptimTensor,
-        )
+        from onnx_light.onnx_py._onnxpy import shape_inference as si
 
         tests = [
             test
@@ -58,18 +54,18 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
         test = tests[0]
         expected = {info.name: info for info in test.model.graph.value_info}
 
-        ctx = ShapesContext()
+        ctx = si.ShapesContext()
         for opset in test.model.opset_import:
             ctx.set_opset_version(opset.domain, opset.version)
         for inp in test.model.graph.input:
             tt = inp.type.tensor_type
             dims = [d.dim_value if d.dim_value else d.dim_param for d in tt.shape.dim]
-            ctx.set(inp.name, OptimTensor(tt.elem_type, dims))
+            ctx.set(inp.name, si.OptimTensor(tt.elem_type, dims))
         for init in test.model.graph.initializer:
-            ctx.set(init.name, OptimTensor(init.data_type, list(init.dims)))
+            ctx.set(init.name, si.OptimTensor(init.data_type, list(init.dims)))
 
         for node in test.model.graph.node:
-            compute_shape_node(ctx, node)
+            si.compute_shape_node(ctx, node)
             for out_name in node.output:
                 if not out_name:
                     continue

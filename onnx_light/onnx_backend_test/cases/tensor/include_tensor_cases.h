@@ -92,6 +92,9 @@ void RegisterUniqueCases(std::vector<TestCase> &registry);
 /// Registers the ``Shape`` backend test node case(s).
 void RegisterShapeCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Size`` backend test node case(s).
+void RegisterSizeCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Identity`` backend test node case(s).
 void RegisterIdentityCases(std::vector<TestCase> &registry);
 

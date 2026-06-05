@@ -89,6 +89,9 @@ void RegisterMeanVarianceNormalizationCases(std::vector<TestCase> &registry);
 /// Registers the ``RNN`` backend test node case(s).
 void RegisterRNNCases(std::vector<TestCase> &registry);
 
+/// Registers the ``RMSNormalization`` backend test node case(s).
+void RegisterRMSNormalizationCases(std::vector<TestCase> &registry);
+
 /// Registers the ``RotaryEmbedding`` backend test node case(s).
 void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry);
 

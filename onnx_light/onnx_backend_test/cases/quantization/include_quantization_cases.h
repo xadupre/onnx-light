@@ -23,6 +23,9 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry);
 /// Registers the ``DequantizeLinear`` backend test node case(s).
 void RegisterDequantizeLinearCases(std::vector<TestCase> &registry);
 
+/// Registers the ``DynamicQuantizeLinear`` backend test node case(s).
+void RegisterDynamicQuantizeLinearCases(std::vector<TestCase> &registry);
+
 /// Registers the ``QLinearMatMul`` backend test node case(s).
 void RegisterQLinearMatMulCases(std::vector<TestCase> &registry);
 

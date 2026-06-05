@@ -172,6 +172,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          nn::ComputeShapeMeanVarianceNormalization(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:RMSNormalization",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         nn::ComputeShapeRMSNormalization(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:Bernoulli",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
@@ -753,6 +758,12 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          quantization::ComputeShapeQuantizeLinear(ctx, node, x_name.c_str(),
                                                   zp_name.empty() ? nullptr : zp_name.c_str());
        }},
+      {"ai.onnx:DynamicQuantizeLinear",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         const std::string x_name = node.input(0).as_string();
+         quantization::ComputeShapeDynamicQuantizeLinear(ctx, node, x_name.c_str());
+       }},
       {"ai.onnx:QLinearConv",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 8);
@@ -953,6 +964,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
          tensor::ComputeShapeShape(ctx, node);
+       }},
+      {"ai.onnx:Size",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         tensor::ComputeShapeSize(ctx, node);
        }},
       {"ai.onnx:Identity",
        [](ShapesContext &ctx, const NodeProto &node) {

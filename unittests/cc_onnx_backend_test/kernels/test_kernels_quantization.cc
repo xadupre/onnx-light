@@ -19,6 +19,7 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DefaultOpset;
 using onnx_backend_test::Tensor;
 using onnx_backend_test::kernel::DequantizeLinear;
+using onnx_backend_test::kernel::DynamicQuantizeLinear;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::QuantizeLinear;
 
@@ -258,6 +259,55 @@ TEST(BackendKernelClass, DequantizeLinearFloat8E4M3FNWithZeroPoint) {
   EXPECT_FLOAT_EQ(y.AsFloat()[2], 2.0f);
   EXPECT_FLOAT_EQ(y.AsFloat()[3], 896.0f);
   EXPECT_FLOAT_EQ(y.AsFloat()[4], -208.0f);
+}
+
+TEST(BackendKernelClass, DynamicQuantizeLinearStraddleZero) {
+  // Mirrors the upstream ``DynamicQuantizeLinear.export()`` test:
+  // expected scale 0.0196078438 and zero point 153.
+  const KernelContext ctx{DefaultOpset(11)};
+  DynamicQuantizeLinear d{ctx};
+  Tensor x = Tensor::FromFloat("", {6}, {0.0f, 2.0f, -3.0f, -2.5f, 1.34f, 0.5f});
+  auto [y, y_scale, y_zero_point] = d(x);
+
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::UINT8));
+  ASSERT_EQ(y.element_count(), 6);
+  ASSERT_EQ(y_scale.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_TRUE(y_scale.shape.empty());
+  ASSERT_EQ(y_zero_point.data_type, static_cast<int32_t>(onnx_backend_test::DataType::UINT8));
+  ASSERT_TRUE(y_zero_point.shape.empty());
+
+  EXPECT_NEAR(y_scale.AsFloat()[0], 0.0196078438f, 1e-7f);
+  EXPECT_EQ(static_cast<int>(y_zero_point.data[0]), 153);
+}
+
+TEST(BackendKernelClass, DynamicQuantizeLinearAllNegative) {
+  // Mirrors ``DynamicQuantizeLinear.export_max_adjusted()``: all-negative
+  // input, max gets clipped to 0; expected scale 0.0156862754 and zero
+  // point 255.
+  const KernelContext ctx{DefaultOpset(11)};
+  DynamicQuantizeLinear d{ctx};
+  Tensor x = Tensor::FromFloat("", {6}, {-1.0f, -2.1f, -1.3f, -2.5f, -3.34f, -4.0f});
+  auto [y, y_scale, y_zero_point] = d(x);
+
+  EXPECT_NEAR(y_scale.AsFloat()[0], 0.0156862754f, 1e-7f);
+  EXPECT_EQ(static_cast<int>(y_zero_point.data[0]), 255);
+}
+
+TEST(BackendKernelClass, DynamicQuantizeLinearAllPositive) {
+  // Mirrors ``DynamicQuantizeLinear.export_min_adjusted()``: all-positive
+  // 2-D input, min gets clipped to 0; expected scale 0.0156862754 and
+  // zero point 0.
+  const KernelContext ctx{DefaultOpset(11)};
+  DynamicQuantizeLinear d{ctx};
+  Tensor x = Tensor::FromFloat(
+      "", {3, 4}, {1.0f, 2.1f, 1.3f, 2.5f, 3.34f, 4.0f, 1.5f, 2.6f, 3.9f, 4.0f, 3.0f, 2.345f});
+  auto [y, y_scale, y_zero_point] = d(x);
+
+  EXPECT_NEAR(y_scale.AsFloat()[0], 0.0156862754f, 1e-7f);
+  EXPECT_EQ(static_cast<int>(y_zero_point.data[0]), 0);
+  ASSERT_EQ(y.shape.size(), 2u);
+  EXPECT_EQ(y.shape[0], 3);
+  EXPECT_EQ(y.shape[1], 4);
 }
 
 } // namespace Test

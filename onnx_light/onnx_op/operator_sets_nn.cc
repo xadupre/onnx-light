@@ -1202,6 +1202,60 @@ LightOpSchema MakeRotaryEmbeddingSchema(int since_version) {
       /*has_function_implementation=*/true);
 }
 
+// --- RMSNormalization --------------------------------------------------------
+
+// Input/output descriptions reproduced verbatim from the upstream ONNX
+// RMSNormalization schema (v23 in onnx_lib/defs/nn/defs.cc) so the
+// LightOpSchema parity test passes.
+
+const char *const kRMSNormalizationXDescription =
+    "The input tensor to be normalized. "
+    "In general, the shape is (D1, D2, ... , Dn) for n-dimensional data, where "
+    "the root mean squared norm is taken over the last D dimensions, D is determined by "
+    "the axis attribute.";
+
+const char *const kRMSNormalizationScaleDescription =
+    "Scale tensor. Scale tensor shape should be broadcastable to the normalized shape.";
+
+const char *const kRMSNormalizationYDescription = "Output data tensor. Same shape as X";
+
+const char *const kRMSNormalizationTConstraintDesc = "Constrain input X type to float tensors.";
+
+const char *const kRMSNormalizationVConstraintDesc =
+    "Constrain output Y and scale type to float tensors.";
+
+LightOpSchema MakeRMSNormalizationSchema(int since_version) {
+  std::vector<FormalParameter> inputs = {
+      {"X", kRMSNormalizationXDescription, "T"},
+      {"scale", kRMSNormalizationScaleDescription, "V"},
+  };
+  std::vector<FormalParameter> outputs = {
+      {"Y", kRMSNormalizationYDescription, "V"},
+  };
+  std::vector<AttributeParam> attrs = {
+      {"axis",
+       "The first normalization dimension. If rank(X) is r, axis' allowed range is [-r, r). "
+       "Negative value means counting dimensions from the back.",
+       AttributeType::INT, /*required=*/false, static_cast<int64_t>(-1)},
+      {"epsilon", "The epsilon value to use to avoid division by zero.", AttributeType::FLOAT,
+       /*required=*/false, static_cast<double>(1e-5f)},
+      {"stash_type", "The floating-point precision used in stage one of the computation.",
+       AttributeType::INT, /*required=*/false, static_cast<int64_t>(1)},
+  };
+  return LightOpSchema(
+      "RMSNormalization", kOnnxDomain, since_version, MakeRMSNormalizationDoc(since_version),
+      std::move(inputs), std::move(outputs),
+      {
+          {"T",
+           {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kBfloat16},
+           kRMSNormalizationTConstraintDesc},
+          {"V",
+           {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kBfloat16},
+           kRMSNormalizationVConstraintDesc},
+      },
+      std::move(attrs), /*has_function_implementation=*/true);
+}
+
 // --- Conv --------------------------------------------------------------------
 // Floating-point Conv operator. Type constraint ``T`` was widened in opset 22
 // to also allow ``tensor(bfloat16)`` via ``OpSchema::all_float_types_ir4()``.
@@ -1893,6 +1947,12 @@ std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &o
              MakeRNNSchema(14),
              MakeRNNSchema(7),
              MakeRNNSchema(1),
+         };
+       }},
+      {"RMSNormalization",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeRMSNormalizationSchema(23),
          };
        }},
       {"RotaryEmbedding",

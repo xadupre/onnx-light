@@ -8,6 +8,7 @@
 #include "onnx_backend_test/simple_tensor.h"
 
 #include <string>
+#include <tuple>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -98,6 +99,28 @@ public:
 
   /// Output element type (FLOAT) differs from the integer/float8 input
   /// element type, so storage can never be shared with an input.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Per-tensor dynamic linear quantization of a FLOAT input ``x`` to a UINT8
+/// output ``y`` together with the derived scalar ``y_scale`` (FLOAT) and
+/// scalar ``y_zero_point`` (UINT8). Matches the ONNX ``DynamicQuantizeLinear``
+/// operator (opset 11) for the canonical uint8 case:
+///   ``y_scale = (max(0, max(x)) - min(0, min(x))) / 255``
+///   ``y_zero_point = saturate(round(-min(0, min(x)) / y_scale))``
+///   ``y = saturate(round(x / y_scale) + y_zero_point)``
+class DynamicQuantizeLinear : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Returning overload: produces ``{y, y_scale, y_zero_point}``.
+  std::tuple<Tensor, Tensor, Tensor> operator()(const Tensor &x) const;
+
+  /// In-place overload writing into caller-allocated outputs.
+  void operator()(const Tensor &x, Tensor &y, Tensor &y_scale, Tensor &y_zero_point) const;
+
+  /// Output element type (UINT8) differs from the FLOAT input element type,
+  /// so storage can never be shared with the input.
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 

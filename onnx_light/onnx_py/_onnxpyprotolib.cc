@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "../onnx_proto/_onnxpy.h"
+#include "_onnxpy.h"
 
 namespace nb = nanobind;
 

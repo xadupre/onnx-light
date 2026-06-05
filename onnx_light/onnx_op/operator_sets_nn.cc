@@ -1562,6 +1562,40 @@ LightOpSchema MakeGroupNormalizationSchema(int since_version) {
   return schema;
 }
 
+// --- MeanVarianceNormalization ----------------------------------------------
+
+const char *const kMeanVarianceNormalizationAxesDesc =
+    "A list of integers, along which to reduce. The default is to calculate along axes [0,2,3] "
+    "for calculating mean and variance along each channel. Two variables with the same "
+    "C-coordinate are associated with the same mean and variance.";
+
+std::vector<TensorType> MeanVarianceNormalizationTypes(int since_version) {
+  if (since_version >= 13) {
+    return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kBfloat16};
+  }
+  return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+}
+
+LightOpSchema MakeMeanVarianceNormalizationSchema(int since_version) {
+  return LightOpSchema("MeanVarianceNormalization", kOnnxDomain, since_version,
+                       MakeMeanVarianceNormalizationDoc(since_version),
+                       {
+                           {"X", "Input tensor", "T"},
+                       },
+                       {
+                           {"Y", "Output tensor", "T"},
+                       },
+                       {
+                           {"T", MeanVarianceNormalizationTypes(since_version),
+                            "Constrain input and output types to all numeric tensors."},
+                       },
+                       {
+                           {"axes", kMeanVarianceNormalizationAxesDesc, AttributeType::INTS,
+                            /*required=*/false, std::vector<int64_t>{0, 2, 3}},
+                       },
+                       /*has_function_implementation=*/true);
+}
+
 } // namespace
 
 std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &op_type,
@@ -1698,6 +1732,13 @@ std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &o
          return std::vector<LightOpSchema>{
              MakeLRNSchema(13),
              MakeLRNSchema(1),
+         };
+       }},
+      {"MeanVarianceNormalization",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeMeanVarianceNormalizationSchema(13),
+             MakeMeanVarianceNormalizationSchema(9),
          };
        }},
       {"LpNormalization",

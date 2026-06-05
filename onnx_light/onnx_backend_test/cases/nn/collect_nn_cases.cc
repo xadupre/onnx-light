@@ -30,6 +30,7 @@ void CollectNNTestCases(std::vector<TestCase> &registry, const std::string &op_t
       {"LSTM", &RegisterLSTMCases},
       {"MaxPool", &RegisterMaxPoolCases},
       {"MaxUnpool", &RegisterMaxUnpoolCases},
+      {"MeanVarianceNormalization", &RegisterMeanVarianceNormalizationCases},
       {"RNN", &RegisterRNNCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);

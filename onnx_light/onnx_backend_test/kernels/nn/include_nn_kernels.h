@@ -213,6 +213,24 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Reference implementation of ``MeanVarianceNormalization`` (opset 9, 13).
+///
+/// Normalizes each element as
+/// ``Y = (X - mean(X, axes)) / sqrt(mean((X - mean(X, axes))^2, axes))``.
+/// The default axes are ``[0, 2, 3]``.
+class MeanVarianceNormalization : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  Tensor operator()(const Tensor &x, const std::vector<int64_t> &axes = {0, 2, 3}) const;
+  void operator()(const Tensor &x, Tensor &output,
+                  const std::vector<int64_t> &axes = {0, 2, 3}) const;
+
+  /// Output ``Y`` has the same shape as ``X`` so the output buffer may
+  /// alias the input ``X`` buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// Flattens an input tensor of any element type into a 2-D matrix. Given an
 /// input of shape ``(d_0, d_1, ..., d_n)`` and integer attribute ``axis``,
 /// the output has shape ``(d_0 * d_1 * ... * d_(axis-1), d_axis * ... * d_n)``.

@@ -23,6 +23,7 @@ using onnx_backend_test::kernel::Dropout;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::MaxPool;
 using onnx_backend_test::kernel::MaxUnpool;
+using onnx_backend_test::kernel::MeanVarianceNormalization;
 
 namespace Test {
 
@@ -271,6 +272,40 @@ TEST(BackendKernelClass, BatchNormalizationRank1InputTreatsChannelAsOne) {
   for (int64_t i = 0; i < 4; ++i) {
     EXPECT_NEAR(py[i], (static_cast<float>(i + 1) - 2.5f) * 2.0f + (-1.0f), 1e-3f);
   }
+}
+
+TEST(BackendKernelClass, MeanVarianceNormalizationDefaultAxes) {
+  const KernelContext ctx{DefaultOpset(13)};
+  MeanVarianceNormalization mvn{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 2, 1, 1}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor y = mvn(x);
+  ASSERT_EQ(y.shape, x.shape);
+  const float *py = y.AsFloat();
+  // Default axes [0,2,3] normalize channel-wise across N.
+  EXPECT_NEAR(py[0], -1.0f, 1e-5f);
+  EXPECT_NEAR(py[1], -1.0f, 1e-5f);
+  EXPECT_NEAR(py[2], 1.0f, 1e-5f);
+  EXPECT_NEAR(py[3], 1.0f, 1e-5f);
+}
+
+TEST(BackendKernelClass, MeanVarianceNormalizationCustomAxes) {
+  const KernelContext ctx{DefaultOpset(13)};
+  MeanVarianceNormalization mvn{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 3.0f, 5.0f, 7.0f});
+  Tensor y = mvn(x, {1});
+  ASSERT_EQ(y.shape, x.shape);
+  const float *py = y.AsFloat();
+  EXPECT_NEAR(py[0], -1.0f, 1e-5f);
+  EXPECT_NEAR(py[1], 1.0f, 1e-5f);
+  EXPECT_NEAR(py[2], -1.0f, 1e-5f);
+  EXPECT_NEAR(py[3], 1.0f, 1e-5f);
+}
+
+TEST(BackendKernelClass, MeanVarianceNormalizationRejectsAxisOutOfRange) {
+  const KernelContext ctx{DefaultOpset(13)};
+  MeanVarianceNormalization mvn{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  EXPECT_THROW(mvn(x, {2}), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, DropoutInferenceModeCopiesInputAndOnesMask) {

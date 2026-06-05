@@ -3,7 +3,9 @@
 Standalone C++ example: build, save and load an ONNX model with only ``lib_onnx_proto``
 =======================================================================================
 
-This page documents ``examples/build_save_load_onnx_proto``, a self-contained
+This page documents ``examples/build_save_load_onnx_proto``
+(`view on GitHub <https://github.com/xadupre/onnx-light/tree/main/examples/build_save_load_onnx_proto>`_),
+a self-contained
 CMake project that builds a tiny ONNX :cpp:class:`onnx::ModelProto` entirely
 in C++, serializes it to disk, parses it back, and checks the round-trip.
 

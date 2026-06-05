@@ -74,6 +74,9 @@ void RegisterLpNormalizationCases(std::vector<TestCase> &registry);
 /// Registers the ``LSTM`` backend test node case(s).
 void RegisterLSTMCases(std::vector<TestCase> &registry);
 
+/// Registers the ``MeanVarianceNormalization`` backend test node case(s).
+void RegisterMeanVarianceNormalizationCases(std::vector<TestCase> &registry);
+
 /// Registers the ``RNN`` backend test node case(s).
 void RegisterRNNCases(std::vector<TestCase> &registry);
 

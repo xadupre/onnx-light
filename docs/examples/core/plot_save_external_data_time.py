@@ -123,7 +123,10 @@ onnx_light_external_data = onnx_light_external_path + ".data"
 
 def _save_onnxlight_external_with_flush() -> None:
     onnxl.save(
-        onnx_light_model, onnx_light_external_path, location=onnx_light_external_data, num_threads=1
+        onnx_light_model,
+        onnx_light_external_path,
+        location=onnx_light_external_data,
+        num_threads=1,
     )
     _flush_file(onnx_light_external_data)
     _flush_file(onnx_light_external_path)

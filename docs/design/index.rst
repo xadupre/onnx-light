@@ -3,7 +3,7 @@
 Design
 ======
 
-Uncomprimising Objective
+Uncompromising Objective
 ++++++++++++++++++++++++
 
 **No protobuf**

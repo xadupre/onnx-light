@@ -87,9 +87,10 @@ void RMSNormalization::operator()(const Tensor &x, const Tensor &scale, Tensor &
 
   // Pre-compute the per-element index into ``scale`` for every position in
   // the normalized block. This is the broadcast resolution: a normalized
-  // shape coordinate ``(c0, ..., cN)`` (with ``N = rank - axis - 1``) maps
-  // to ``(c_offset, ..., cN)`` in ``scale``, with any ``scale`` dim equal
-  // to 1 contributing 0 to the index.
+  // shape coordinate ``(c_0, ..., c_{normalized_rank-1})`` maps to
+  // ``(c_offset, ..., c_{normalized_rank-1})`` in ``scale`` (i.e. the last
+  // ``scale_rank`` coordinates), with any ``scale`` dim equal to 1
+  // contributing 0 to the index.
   const int64_t normalized_rank = rank - axis;
   const int64_t scale_rank = static_cast<int64_t>(scale.shape.size());
   const int64_t offset = normalized_rank - scale_rank;

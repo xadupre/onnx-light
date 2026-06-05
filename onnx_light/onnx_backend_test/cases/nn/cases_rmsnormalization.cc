@@ -27,8 +27,9 @@ namespace onnx_backend_test {
 namespace {
 
 // Generates a deterministic float tensor of shape ``shape`` whose data is
-// ``f(i)`` for the i-th element in row-major order. This avoids relying on
-// platform-dependent RNGs and makes the recorded expected output stable.
+// ``i * scale + offset`` for the i-th element in row-major order. This avoids
+// relying on platform-dependent RNGs and makes the recorded expected output
+// stable.
 Tensor MakeFloatTensor(const std::string &name, const std::vector<int64_t> &shape, float scale,
                        float offset) {
   int64_t total = 1;

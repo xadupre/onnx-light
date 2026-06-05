@@ -358,6 +358,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          math::ComputeShapeRelu(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:LeakyRelu",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeLeakyRelu(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:Elu",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
@@ -1034,6 +1039,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
          math::ComputeShapeSoftmax(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:LogSoftmax",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeLogSoftmax(ctx, node, node.input(0).as_string().c_str());
        }},
       {"ai.onnx:Softplus",
        [](ShapesContext &ctx, const NodeProto &node) {

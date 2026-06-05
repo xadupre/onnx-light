@@ -809,6 +809,63 @@ the tensor elementwise.
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildLeakyReluSchemas() {
+  static constexpr const char *kLeakyReluDoc = R"DOC(
+LeakyRelu takes input data (Tensor<T>) and an argument alpha, and produces one
+output data (Tensor<T>) where the function `f(x) = alpha * x for x < 0`,
+`f(x) = x for x >= 0`, is applied to the data tensor elementwise.
+)DOC";
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(3);
+  schemas.push_back(LightOpSchema(
+      "LeakyRelu", kOnnxDomain, 16, kLeakyReluDoc,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T",
+           {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble},
+           "Constrain input and output types to float tensors."},
+      },
+      {
+          {"alpha", "Coefficient of leakage.", AttributeType::FLOAT, /*required=*/false, 0.01},
+      },
+      /*has_function_implementation=*/true));
+  schemas.push_back(LightOpSchema(
+      "LeakyRelu", kOnnxDomain, 6, kLeakyReluDoc,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+      },
+      {
+          {"alpha", "Coefficient of leakage.", AttributeType::FLOAT, /*required=*/false, 0.01},
+      }));
+  schemas.push_back(
+      LightOpSchema("LeakyRelu", kOnnxDomain, 1, kLeakyReluDoc,
+                    {
+                        {"X", "Input tensor", "T"},
+                    },
+                    {
+                        {"Y", "Output tensor", "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    },
+                    {
+                        {"alpha", "Coefficient of leakage default to 0.01.", AttributeType::FLOAT,
+                         /*required=*/false, 0.01},
+                    }));
+  return schemas;
+}
+
 std::vector<LightOpSchema> BuildEluSchemas() {
   static constexpr const char *kEluDoc = R"DOC(
 Elu takes one input data (Tensor<T>) and produces one output data
@@ -1183,6 +1240,85 @@ second dimension. The output tensor has the same shape as the input tensor.
       }));
   schemas.push_back(LightOpSchema(
       "Softmax", kOnnxDomain, 1, kSoftmaxDocV1,
+      {
+          {"input",
+           "The input tensor that's coerced into a 2D matrix of size (NxD) as described above.",
+           "T"},
+      },
+      {
+          {"output",
+           "The output values with the same shape as input tensor (the original size without "
+           "coercion).",
+           "T"},
+      },
+      {
+          {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+      },
+      {
+          MakeSoftmaxAxisAttr(1),
+      }));
+  return schemas;
+}
+
+std::vector<LightOpSchema> BuildLogSoftmaxSchemas() {
+  static constexpr const char *kLogSoftmaxDocV13 = R"DOC(
+The operator computes the log of softmax values for the given input:
+
+ LogSoftmax(input, axis) = Log(Softmax(input, axis=axis))
+
+The "axis" attribute indicates the dimension along which LogSoftmax
+will be performed. The output tensor has the same shape as the input tensor.
+)DOC";
+  static constexpr const char *kLogSoftmaxDocV11 = R"DOC(
+The operator computes the logsoftmax (log of softmax) values for the given input.
+The "axis" attribute indicates the dimension along which LogSoftmax is
+performed. The output tensor has the same shape as the input tensor.
+)DOC";
+  static constexpr const char *kLogSoftmaxDocV1 = R"DOC(
+The operator computes the logsoftmax (log of softmax) values for the given input.
+Inputs are conceptually coerced to a 2D matrix and LogSoftmax is applied on the
+second dimension. The output tensor has the same shape as the input tensor.
+)DOC";
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(3);
+  schemas.push_back(LightOpSchema(
+      "LogSoftmax", kOnnxDomain, 13, kLogSoftmaxDocV13,
+      {
+          {"input", "The input tensor of rank >= axis.", "T"},
+      },
+      {
+          {"output", "The output values with the same shape as the input tensor.", "T"},
+      },
+      {
+          {"T",
+           {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kBfloat16},
+           "Constrain input and output types to float tensors."},
+      },
+      {
+          MakeSoftmaxAxisAttr(-1),
+      },
+      /*has_function_implementation=*/true));
+  schemas.push_back(LightOpSchema(
+      "LogSoftmax", kOnnxDomain, 11, kLogSoftmaxDocV11,
+      {
+          {"input",
+           "The input tensor that's coerced into a 2D matrix of size (NxD) as described above.",
+           "T"},
+      },
+      {
+          {"output",
+           "The output values with the same shape as input tensor (the original size without "
+           "coercion).",
+           "T"},
+      },
+      {
+          {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+      },
+      {
+          MakeSoftmaxAxisAttr(1),
+      }));
+  schemas.push_back(LightOpSchema(
+      "LogSoftmax", kOnnxDomain, 1, kLogSoftmaxDocV1,
       {
           {"input",
            "The input tensor that's coerced into a 2D matrix of size (NxD) as described above.",
@@ -2757,7 +2893,9 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"HardSigmoid", [] { return BuildHardSigmoidSchemas(); }},
       {"HardSwish", [] { return BuildHardSwishSchemas(); }},
       {"Hardmax", [] { return BuildHardmaxSchemas(); }},
+      {"LeakyRelu", [] { return BuildLeakyReluSchemas(); }},
       {"Log", [] { return BuildLogSchemas(); }},
+      {"LogSoftmax", [] { return BuildLogSoftmaxSchemas(); }},
       {"MatMul", [] { return BuildMatMulSchemas(); }},
       {"MatMulInteger", [] { return BuildMatMulIntegerSchemas(); }},
       {"Max", [] { return BuildMaxSchemas(); }},

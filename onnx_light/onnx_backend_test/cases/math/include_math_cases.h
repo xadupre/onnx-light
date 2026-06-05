@@ -65,6 +65,9 @@ void RegisterSigmoidCases(std::vector<TestCase> &registry);
 /// Registers the ``Softmax`` backend test node case(s).
 void RegisterSoftmaxCases(std::vector<TestCase> &registry);
 
+/// Registers the ``LogSoftmax`` backend test node case(s).
+void RegisterLogSoftmaxCases(std::vector<TestCase> &registry);
+
 /// Registers the ``SoftmaxCrossEntropyLoss`` backend test node case(s).
 void RegisterSoftmaxCrossEntropyLossCases(std::vector<TestCase> &registry);
 
@@ -97,6 +100,9 @@ void RegisterThresholdedReluCases(std::vector<TestCase> &registry);
 
 /// Registers the ``Relu`` backend test node case(s).
 void RegisterReluCases(std::vector<TestCase> &registry);
+
+/// Registers the ``LeakyRelu`` backend test node case(s).
+void RegisterLeakyReluCases(std::vector<TestCase> &registry);
 
 /// Registers the ``Elu`` backend test node case(s).
 void RegisterEluCases(std::vector<TestCase> &registry);

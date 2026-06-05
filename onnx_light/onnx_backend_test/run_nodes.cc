@@ -80,30 +80,30 @@ void RequireOutputCount(const NodeProto &node, int expected) {
 // ---------------------------------------------------------------------------
 // Trampoline factories. Each helper returns a NodeKernelFn that:
 //   * validates the node's input/output count,
-//   * reads the typed inputs from ``tensors`` by name,
-//   * constructs the kernel with the caller-supplied KernelContext,
-//   * stores the produced output back in ``tensors`` by name.
+//   * reads the typed inputs from ``rt.tensors`` by name,
+//   * constructs the kernel with ``rt.kernel_ctx``,
+//   * stores the produced output back in ``rt.tensors`` by name.
 // Centralising the boilerplate keeps the dispatch table compact.
 // ---------------------------------------------------------------------------
 
 template <class KernelT> NodeKernelFn MakeUnaryTrampoline() {
-  return [](const NodeProto &node, TensorMap &tensors, const kernel::KernelContext &ctx) {
+  return [](const NodeProto &node, RuntimeContext &rt) {
     RequireInputCount(node, 1);
     RequireOutputCount(node, 1);
-    const Tensor &x = GetInput(node, 0, tensors);
-    KernelT kernel(ctx);
-    SetOutput(node, 0, kernel(x), tensors);
+    const Tensor &x = GetInput(node, 0, rt.tensors);
+    KernelT kernel(rt.kernel_ctx);
+    SetOutput(node, 0, kernel(x), rt.tensors);
   };
 }
 
 template <class KernelT> NodeKernelFn MakeBinaryTrampoline() {
-  return [](const NodeProto &node, TensorMap &tensors, const kernel::KernelContext &ctx) {
+  return [](const NodeProto &node, RuntimeContext &rt) {
     RequireInputCount(node, 2);
     RequireOutputCount(node, 1);
-    const Tensor &x = GetInput(node, 0, tensors);
-    const Tensor &y = GetInput(node, 1, tensors);
-    KernelT kernel(ctx);
-    SetOutput(node, 0, kernel(x, y), tensors);
+    const Tensor &x = GetInput(node, 0, rt.tensors);
+    const Tensor &y = GetInput(node, 1, rt.tensors);
+    KernelT kernel(rt.kernel_ctx);
+    SetOutput(node, 0, kernel(x, y), rt.tensors);
   };
 }
 
@@ -123,7 +123,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
   return table;
 }
 
-void RunNode(const NodeProto &node, TensorMap &tensors, const kernel::KernelContext &ctx) {
+void RunNode(const NodeProto &node, RuntimeContext &rt) {
   const std::string op_type = node.op_type().as_string();
   const std::string key = NormaliseDispatchDomain(node) + ":" + op_type;
   const auto &table = KernelDispatchTable();
@@ -132,13 +132,12 @@ void RunNode(const NodeProto &node, TensorMap &tensors, const kernel::KernelCont
     throw std::invalid_argument("RunNode: unsupported op_type '" + op_type + "' in domain '" +
                                 NormaliseDispatchDomain(node) + "'.");
   }
-  it->second(node, tensors, ctx);
+  it->second(node, rt);
 }
 
-void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, TensorMap &tensors,
-              const kernel::KernelContext &ctx) {
+void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext &rt) {
   for (size_t i = 0; i < nodes.size(); ++i) {
-    RunNode(nodes[i], tensors, ctx);
+    RunNode(nodes[i], rt);
   }
 }
 

@@ -20,6 +20,7 @@ using onnx_backend_test::DefaultOpset;
 using onnx_backend_test::KernelDispatchTable;
 using onnx_backend_test::RunNode;
 using onnx_backend_test::RunNodes;
+using onnx_backend_test::RuntimeContext;
 using onnx_backend_test::Tensor;
 using onnx_backend_test::TensorMap;
 using onnx_backend_test::kernel::KernelContext;
@@ -60,14 +61,13 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
 }
 
 TEST(RunNodes, RunNodeSingleAdd) {
-  TensorMap tensors;
-  tensors["x"] = Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f});
-  tensors["y"] = Tensor::FromFloat("y", {3}, {10.0f, 20.0f, 30.0f});
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.tensors["x"] = Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f});
+  rt.tensors["y"] = Tensor::FromFloat("y", {3}, {10.0f, 20.0f, 30.0f});
   NodeProto node = MakeNode("Add", {"x", "y"}, {"z"});
-  KernelContext ctx(DefaultOpset(18));
-  RunNode(node, tensors, ctx);
-  ASSERT_NE(tensors.find("z"), tensors.end());
-  const Tensor &z = tensors["z"];
+  RunNode(node, rt);
+  ASSERT_NE(rt.tensors.find("z"), rt.tensors.end());
+  const Tensor &z = rt.tensors["z"];
   EXPECT_EQ(z.name, "z");
   EXPECT_EQ(z.shape, std::vector<int64_t>({3}));
   ASSERT_EQ(z.element_count(), 3);
@@ -80,14 +80,13 @@ TEST(RunNodes, RunNodeSingleAdd) {
 TEST(RunNodes, RunNodeNormalisesDefaultDomain) {
   // The default ONNX domain is the empty string. The dispatcher must
   // normalise it to ``ai.onnx`` before looking up the kernel.
-  TensorMap tensors;
-  tensors["x"] = Tensor::FromFloat("x", {2}, {-1.5f, 2.5f});
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.tensors["x"] = Tensor::FromFloat("x", {2}, {-1.5f, 2.5f});
   NodeProto node = MakeNode("Abs", {"x"}, {"y"}); // empty domain
   EXPECT_TRUE(node.domain().as_string().empty());
-  KernelContext ctx(DefaultOpset(18));
-  RunNode(node, tensors, ctx);
-  const float *got = tensors["y"].AsFloat();
-  ASSERT_EQ(tensors["y"].element_count(), 2);
+  RunNode(node, rt);
+  const float *got = rt.tensors["y"].AsFloat();
+  ASSERT_EQ(rt.tensors["y"].element_count(), 2);
   EXPECT_FLOAT_EQ(got[0], 1.5f);
   EXPECT_FLOAT_EQ(got[1], 2.5f);
 }
@@ -97,68 +96,63 @@ TEST(RunNodes, RunNodesOnRepeatedProtoFieldChain) {
   // and runs it through the iterator overload that drives a
   // RepeatedProtoField<NodeProto> directly (mirroring how a caller
   // would feed ``graph.node()``).
-  TensorMap tensors;
-  tensors["x"] = Tensor::FromFloat("x", {2}, {1.0f, 2.0f});
-  tensors["y"] = Tensor::FromFloat("y", {2}, {3.0f, 4.0f});
-  tensors["z"] = Tensor::FromFloat("z", {2}, {0.5f, 0.25f});
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.tensors["x"] = Tensor::FromFloat("x", {2}, {1.0f, 2.0f});
+  rt.tensors["y"] = Tensor::FromFloat("y", {2}, {3.0f, 4.0f});
+  rt.tensors["z"] = Tensor::FromFloat("z", {2}, {0.5f, 0.25f});
 
   utils::RepeatedProtoField<NodeProto> nodes;
   *nodes.Add() = MakeNode("Mul", {"x", "y"}, {"t"});
   *nodes.Add() = MakeNode("Sub", {"t", "z"}, {"out"});
 
-  KernelContext ctx(DefaultOpset(18));
-  RunNodes(nodes, tensors, ctx);
+  RunNodes(nodes, rt);
 
-  ASSERT_NE(tensors.find("t"), tensors.end());
-  ASSERT_NE(tensors.find("out"), tensors.end());
-  const float *out = tensors["out"].AsFloat();
-  ASSERT_EQ(tensors["out"].element_count(), 2);
+  ASSERT_NE(rt.tensors.find("t"), rt.tensors.end());
+  ASSERT_NE(rt.tensors.find("out"), rt.tensors.end());
+  const float *out = rt.tensors["out"].AsFloat();
+  ASSERT_EQ(rt.tensors["out"].element_count(), 2);
   EXPECT_FLOAT_EQ(out[0], 1.0f * 3.0f - 0.5f);
   EXPECT_FLOAT_EQ(out[1], 2.0f * 4.0f - 0.25f);
-  EXPECT_EQ(tensors["out"].name, "out");
+  EXPECT_EQ(rt.tensors["out"].name, "out");
 }
 
 TEST(RunNodes, RunNodesOnIteratorRangeFromVector) {
   // Same graph, but driven through the generic iterator overload so
   // any container whose elements dereference to ``NodeProto`` works.
-  TensorMap tensors;
-  tensors["a"] = Tensor::FromFloat("a", {1}, {6.0f});
-  tensors["b"] = Tensor::FromFloat("b", {1}, {2.0f});
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.tensors["a"] = Tensor::FromFloat("a", {1}, {6.0f});
+  rt.tensors["b"] = Tensor::FromFloat("b", {1}, {2.0f});
 
   std::vector<NodeProto> nodes;
   nodes.push_back(MakeNode("Div", {"a", "b"}, {"q"})); // q = 3
   nodes.push_back(MakeNode("Neg", {"q"}, {"out"}));    // out = -3
 
-  KernelContext ctx(DefaultOpset(18));
-  RunNodes(nodes.begin(), nodes.end(), tensors, ctx);
+  RunNodes(nodes.begin(), nodes.end(), rt);
 
-  const float *out = tensors["out"].AsFloat();
-  ASSERT_EQ(tensors["out"].element_count(), 1);
+  const float *out = rt.tensors["out"].AsFloat();
+  ASSERT_EQ(rt.tensors["out"].element_count(), 1);
   EXPECT_FLOAT_EQ(out[0], -3.0f);
 }
 
 TEST(RunNodes, RunNodeUnsupportedOpTypeThrows) {
-  TensorMap tensors;
-  tensors["x"] = Tensor::FromFloat("x", {1}, {1.0f});
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.tensors["x"] = Tensor::FromFloat("x", {1}, {1.0f});
   NodeProto node = MakeNode("ThisOpDoesNotExist", {"x"}, {"y"});
-  KernelContext ctx(DefaultOpset(18));
-  EXPECT_THROW(RunNode(node, tensors, ctx), std::invalid_argument);
+  EXPECT_THROW(RunNode(node, rt), std::invalid_argument);
 }
 
 TEST(RunNodes, RunNodeMissingInputThrows) {
-  TensorMap tensors; // empty: "x" is not present
+  RuntimeContext rt(KernelContext(DefaultOpset(18))); // empty: "x" is not present
   NodeProto node = MakeNode("Abs", {"x"}, {"y"});
-  KernelContext ctx(DefaultOpset(18));
-  EXPECT_THROW(RunNode(node, tensors, ctx), std::invalid_argument);
+  EXPECT_THROW(RunNode(node, rt), std::invalid_argument);
 }
 
 TEST(RunNodes, RunNodeWrongInputCountThrows) {
-  TensorMap tensors;
-  tensors["x"] = Tensor::FromFloat("x", {1}, {1.0f});
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.tensors["x"] = Tensor::FromFloat("x", {1}, {1.0f});
   // Add expects two inputs but we only declare one.
   NodeProto node = MakeNode("Add", {"x"}, {"y"});
-  KernelContext ctx(DefaultOpset(18));
-  EXPECT_THROW(RunNode(node, tensors, ctx), std::invalid_argument);
+  EXPECT_THROW(RunNode(node, rt), std::invalid_argument);
 }
 
 } // namespace Test

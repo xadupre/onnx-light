@@ -44,22 +44,49 @@ namespace onnx_backend_test {
 /**
  * Name-keyed map of tensors carrying both the graph inputs/initializers
  * and the intermediate values produced by previously executed nodes.
- *
- * :cpp:func:`RunNode` reads a node's inputs from this map by name
- * (matching ``node.input(i)``) and inserts every produced output
- * under the name declared by ``node.output(i)``.
+ * Stored inside :cpp:class:`RuntimeContext`; :cpp:func:`RunNode` reads
+ * a node's inputs from this map by name (matching ``node.input(i)``)
+ * and inserts every produced output under the name declared by
+ * ``node.output(i)``.
  */
 using TensorMap = std::unordered_map<std::string, Tensor>;
 
 /**
- * Signature of every per-operator trampoline registered in
- * :cpp:func:`KernelDispatchTable`. Implementations read their
- * inputs from ``tensors`` by name, call the matching kernel
- * (constructed with ``ctx``), and insert the produced outputs back
- * into ``tensors`` under the names declared by ``node.output(i)``.
+ * Per-invocation runtime state passed to :cpp:func:`RunNode` /
+ * :cpp:func:`RunNodes`.
+ *
+ * Bundles together everything a chain of nodes needs to execute:
+ *  * ``tensors`` — the name-keyed :cpp:type:`TensorMap` carrying the
+ *    graph inputs / initializers and every intermediate value
+ *    produced by previously executed nodes.
+ *  * ``kernel_ctx`` — the construction-time
+ *    :cpp:class:`kernel::KernelContext` (opset and any future
+ *    construction-time inputs) used to instantiate each per-operator
+ *    kernel.
+ *
+ * Grouping them in a single object keeps the dispatcher signatures
+ * stable as more per-invocation state (allocators, device descriptors,
+ * profiling hooks, …) is added in the future without forcing every
+ * trampoline or call site to take an extra argument.
  */
-using NodeKernelFn = std::function<void(const NodeProto &node, TensorMap &tensors,
-                                        const kernel::KernelContext &ctx)>;
+struct RuntimeContext {
+  /// In/out tensor map shared across every node in a chain.
+  TensorMap tensors;
+  /// Kernel construction context (opset).
+  kernel::KernelContext kernel_ctx;
+
+  RuntimeContext() = default;
+  explicit RuntimeContext(kernel::KernelContext kernel_ctx_) : kernel_ctx(std::move(kernel_ctx_)) {}
+};
+
+/**
+ * Signature of every per-operator trampoline registered in
+ * :cpp:func:`KernelDispatchTable`. Implementations read their inputs
+ * from ``rt.tensors`` by name, call the matching kernel (constructed
+ * with ``rt.kernel_ctx``), and insert the produced outputs back into
+ * ``rt.tensors`` under the names declared by ``node.output(i)``.
+ */
+using NodeKernelFn = std::function<void(const NodeProto &node, RuntimeContext &rt)>;
 
 /**
  * Returns the ``"<domain>:<op_type>"`` dispatch table used by
@@ -73,26 +100,26 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable();
 
 /**
  * Runs the kernel registered for ``node`` and stores its outputs in
- * ``tensors``.
+ * ``rt.tensors``.
  *
- * The node's input descriptors are read from ``tensors`` by name (so
- * every non-empty input must already be present), and the output
- * descriptors are inserted into ``tensors`` under the names declared
- * by ``node.output(i)``.
+ * The node's input descriptors are read from ``rt.tensors`` by name
+ * (so every non-empty input must already be present), and the output
+ * descriptors are inserted into ``rt.tensors`` under the names
+ * declared by ``node.output(i)``.
  *
- * @param node    The node to execute.
- * @param tensors In/out tensor map. Must already contain entries for
- *                every input referenced by ``node``; on return it also
- *                contains entries for every output declared by
- *                ``node``.
- * @param ctx     Kernel construction context (opset).
+ * @param node The node to execute.
+ * @param rt   In/out runtime context. ``rt.tensors`` must already
+ *             contain entries for every input referenced by ``node``;
+ *             on return it also contains entries for every output
+ *             declared by ``node``. ``rt.kernel_ctx`` is used to
+ *             construct the per-operator kernel.
  *
  * @throws std::invalid_argument if ``node.op_type()`` is not
  *         registered in :cpp:func:`KernelDispatchTable`, if a
- *         required input is missing from ``tensors``, or if the
+ *         required input is missing from ``rt.tensors``, or if the
  *         per-operator trampoline rejects the node.
  */
-void RunNode(const NodeProto &node, TensorMap &tensors, const kernel::KernelContext &ctx);
+void RunNode(const NodeProto &node, RuntimeContext &rt);
 
 /**
  * Runs :cpp:func:`RunNode` on every node of ``nodes`` in order.
@@ -101,19 +128,17 @@ void RunNode(const NodeProto &node, TensorMap &tensors, const kernel::KernelCont
  * dependencies (as required by the ONNX specification for
  * ``GraphProto::node``) so that every input of a node has already
  * been produced — either as a pre-existing graph input/initializer
- * carried in ``tensors`` or as the output of an earlier node in
+ * carried in ``rt.tensors`` or as the output of an earlier node in
  * ``nodes`` — by the time the node is processed.
  *
- * @param nodes   The list of nodes to execute, in topological order.
- * @param tensors In/out tensor map seeded with the graph inputs and
- *                initializers; on return it additionally contains
- *                every node output.
- * @param ctx     Kernel construction context (opset).
+ * @param nodes The list of nodes to execute, in topological order.
+ * @param rt    In/out runtime context seeded with the graph inputs
+ *              and initializers in ``rt.tensors``; on return it
+ *              additionally contains every node output.
  *
  * @throws std::invalid_argument if any node cannot be dispatched.
  */
-void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, TensorMap &tensors,
-              const kernel::KernelContext &ctx);
+void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext &rt);
 
 /**
  * Generic iterator overload of :cpp:func:`RunNodes`. Accepts any
@@ -122,10 +147,9 @@ void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, TensorMap &tens
  * dispatcher from ``std::vector<NodeProto>``, ``std::list<NodeProto>``
  * or any other container — not only ``RepeatedProtoField``.
  */
-template <class InputIt>
-void RunNodes(InputIt first, InputIt last, TensorMap &tensors, const kernel::KernelContext &ctx) {
+template <class InputIt> void RunNodes(InputIt first, InputIt last, RuntimeContext &rt) {
   for (auto it = first; it != last; ++it) {
-    RunNode(*it, tensors, ctx);
+    RunNode(*it, rt);
   }
 }
 

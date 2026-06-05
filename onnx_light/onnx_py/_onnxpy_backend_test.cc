@@ -19,6 +19,9 @@ using onnx_backend_test::DataSet;
 using onnx_backend_test::Tensor;
 using onnx_backend_test::TestCase;
 
+void AddOnnxPyBackend(nb::module_ &m);
+void AddOnnxPyBackendTest(nb::module_ &m);
+
 NB_MODULE(_onnxbackend, m) {
   m.doc() = "onnx_light backend bindings: deterministic pseudo-random helpers and "
             "ONNX backend-test case utilities.";

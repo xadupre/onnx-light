@@ -10,6 +10,8 @@
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
 
+void AddOnnxPyExpressions(nb::module_ &m);
+
 NB_MODULE(_onnxpyoptim, m) {
   m.doc() = "onnx optim bindings from python: symbolic dimension expressions and "
             "shape inference helpers (operating on the same proto format).";

@@ -41,6 +41,8 @@ Python API
     :maxdepth: 1
     :caption: Extra tools
 
+    backend_test
+    fuzz
     tools/index
 
 onnx

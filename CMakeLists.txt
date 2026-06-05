@@ -241,6 +241,30 @@ set_target_properties(lib_onnx_backend_test PROPERTIES EXPORT_NAME onnx_backend_
 target_compile_features(lib_onnx_backend_test PUBLIC cxx_std_20)
 target_link_libraries(lib_onnx_backend_test PUBLIC lib_onnx_proto)
 
+# Speed up the build of lib_onnx_backend_test by precompiling the small set
+# of headers that virtually every one of the 400+ source files in
+# onnx_light/onnx_backend_test/{cases,kernels,...} ends up parsing. The
+# common base is ``onnx_backend_test/test_case.h`` (which transitively
+# brings in ``onnx.h`` and ``simple_tensor.h``) and a handful of widely
+# used C++ standard headers (``<vector>``, ``<string>``, ``<cstdint>``,
+# ``<stdexcept>``). Without a PCH each translation unit re-parses tens of
+# thousands of lines; with a PCH that work is done once for the target.
+#
+# This is a transparent optimization (no source changes required) and
+# only affects targets that opt in. Other targets that link against
+# ``lib_onnx_backend_test`` still see the regular public headers.
+target_precompile_headers(lib_onnx_backend_test PRIVATE
+    "${ONNX_BACKEND_TEST_PATH}/test_case.h"
+    <algorithm>
+    <cmath>
+    <cstdint>
+    <cstring>
+    <stdexcept>
+    <string>
+    <utility>
+    <vector>
+)
+
 # Builds _onnxpyprotoop, _onnxpyprotolib, _onnxpyoptim and _onnxbackend libraries.
 if(ONNX_LIGHT_BUILD_PYTHON)
   # _onnxpyprotoop: proto bindings + onnx_op schema bindings.

@@ -6,6 +6,7 @@
 
 #include "onnx_backend_test/kernels/kernel_context.h"
 #include "onnx_backend_test/simple_tensor.h"
+#include "onnx_light_helpers.h"
 
 #include <string>
 #include <unordered_map>
@@ -68,8 +69,12 @@ public:
   /// Returns ``true`` if a tensor named ``name`` is currently held.
   bool Has(const std::string &name) const { return tensors_.find(name) != tensors_.end(); }
 
-  /// Inserts (or overwrites) the tensor under ``name``.
-  void Set(const std::string &name, Tensor tensor) { tensors_[name] = std::move(tensor); }
+  /// Inserts the tensor under ``name``. The name must not already
+  /// be present in the map; use ``tensors()`` directly to overwrite.
+  void Set(const std::string &name, Tensor tensor) {
+    EXT_ENFORCE(!Has(name), "RuntimeContext::Set: a tensor named '", name, "' already exists.");
+    tensors_[name] = std::move(tensor);
+  }
 
   /**
    * Returns the tensor stored under ``name``.

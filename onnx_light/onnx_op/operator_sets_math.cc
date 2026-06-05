@@ -747,6 +747,36 @@ Calculates the softsign (x/(1+|x|)) of the given input tensor element-wise.
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildShrinkSchemas() {
+  static constexpr const char *kShrinkDoc = R"DOC(
+Shrink takes one input data (Tensor<numeric>) and produces one Tensor output,
+having same datatype and shape with input. It has two attributes, lambd and
+bias. The formula of this operator is: If x < -lambd, y = x + bias;
+If x > lambd, y = x - bias; Otherwise, y = 0.
+)DOC";
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(1);
+  schemas.push_back(LightOpSchema(
+      "Shrink", kOnnxDomain, 9, kShrinkDoc,
+      {
+          {"input", "The input data as Tensor.", "T"},
+      },
+      {
+          {"output", "The output.", "T"},
+      },
+      {
+          {"T", AllNumericTypes(), "Constrain input to only numeric types."},
+      },
+      {
+          {"bias", "The bias value added to output. Default is 0.", AttributeType::FLOAT,
+           /*required=*/false, 0.0},
+          {"lambd", "The lambd value for the Shrink formulation. Default is 0.5.",
+           AttributeType::FLOAT, /*required=*/false, 0.5},
+      },
+      /*has_function_implementation=*/true));
+  return schemas;
+}
+
 std::vector<LightOpSchema> BuildReluSchemas() {
   static constexpr const char *kReluDoc = R"DOC(
 Relu takes one input data (Tensor<T>) and produces one output data
@@ -2913,6 +2943,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Round", [] { return BuildRoundSchemas(); }},
       {"Selu", [] { return BuildSeluSchemas(); }},
       {"Sigmoid", [] { return BuildSigmoidSchemas(); }},
+      {"Shrink", [] { return BuildShrinkSchemas(); }},
       {"Sin", [] { return BuildUnaryFloatMathSchemas("Sin", 22, 7); }},
       {"Sinh", [] { return BuildUnaryFloatMathSchemas("Sinh", 22, 9); }},
       {"Softmax", [] { return BuildSoftmaxSchemas(); }},

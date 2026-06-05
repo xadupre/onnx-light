@@ -212,6 +212,9 @@ void RegisterHardSwishCases(std::vector<TestCase> &registry);
 /// Registers the ``Hardmax`` backend test node case(s).
 void RegisterHardmaxCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Shrink`` backend test node case(s).
+void RegisterShrinkCases(std::vector<TestCase> &registry);
+
 /// Registers the ``TopK`` backend test node case(s).
 void RegisterTopKCases(std::vector<TestCase> &registry);
 

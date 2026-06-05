@@ -10,6 +10,7 @@ Each edge label is the attribute name (or names) that carries the nested proto.
 
 .. runmermaid::
 
+    %%{init: {'flowchart': {'defaultRenderer': 'elk', 'useMaxWidth': false, 'nodeSpacing': 60, 'rankSpacing': 70}, 'themeVariables': {'fontSize': '18px'}}}%%
     flowchart TD
         ModelProto -->|graph| GraphProto
         ModelProto -->|opset_import| OperatorSetIdProto

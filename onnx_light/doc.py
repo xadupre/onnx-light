@@ -809,7 +809,36 @@ def _format_example_array(arr: Any) -> str:
     """Returns a compact textual representation of a numpy array for examples."""
     import numpy as np
 
-    return np.array2string(arr, threshold=64, max_line_width=80, separator=", ")
+    if isinstance(arr, list):
+        if not arr:
+            return "[]"
+        lines = ["["]
+        for i, value in enumerate(arr):
+            formatted = _format_example_array(value).splitlines()
+            lines.append(f"  [{i}] {formatted[0]}")
+            lines.extend(f"      {line}" for line in formatted[1:])
+        lines.append("]")
+        return "\n".join(lines)
+    return np.array2string(np.asarray(arr), threshold=64, max_line_width=80, separator=", ")
+
+
+def _format_example_value_info(arr: Any) -> str:
+    """Returns a compact shape/dtype summary for an example value."""
+    import numpy as np
+
+    if isinstance(arr, list):
+        if not arr:
+            return "sequence(len=0)"
+        first = arr[0]
+        if isinstance(first, np.ndarray):
+            return (
+                f"sequence(len={len(arr)}), "
+                f"element_shape={tuple(int(d) for d in first.shape)}, "
+                f"element_dtype={first.dtype}"
+            )
+        return f"sequence(len={len(arr)})"
+    arr = np.asarray(arr)
+    return f"shape={tuple(int(d) for d in arr.shape)}, dtype={arr.dtype}"
 
 
 def _format_example_attribute(attr: Any) -> str:
@@ -920,10 +949,7 @@ def _examples_section_lines(schema: Any, domain: str) -> list[str]:
             for i, arr in enumerate(inputs):
                 label = input_names[i] if i < len(input_names) else f"input_{i}"
                 formatted = _format_example_array(arr)
-                lines.append(
-                    f"      {label}: shape={tuple(int(d) for d in arr.shape)}, "
-                    f"dtype={arr.dtype}"
-                )
+                lines.append(f"      {label}: {_format_example_value_info(arr)}")
                 for ln in formatted.splitlines():
                     lines.append(f"        {ln}")
             lines.append("")
@@ -931,10 +957,7 @@ def _examples_section_lines(schema: Any, domain: str) -> list[str]:
             for i, arr in enumerate(outputs):
                 label = output_names[i] if i < len(output_names) else f"output_{i}"
                 formatted = _format_example_array(arr)
-                lines.append(
-                    f"      {label}: shape={tuple(int(d) for d in arr.shape)}, "
-                    f"dtype={arr.dtype}"
-                )
+                lines.append(f"      {label}: {_format_example_value_info(arr)}")
                 for ln in formatted.splitlines():
                     lines.append(f"        {ln}")
             lines.append("")

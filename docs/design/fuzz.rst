@@ -26,22 +26,22 @@ Harnesses
       - Entry point fuzzed
       - Input path
     * - ``fuzz_checker.py``
-      - ``onnx_light.onnx.load`` + ``checker.check_model``
+      - :func:`onnx_light.onnx.load` + :func:`onnx_light.onnx.checker.check_model`
       - Raw bytes → protobuf parser
     * - ``fuzz_model_loader.py``
-      - ``onnx_light.onnx.load`` + ``checker.check_model``
+      - :func:`onnx_light.onnx.load` + :func:`onnx_light.onnx.checker.check_model`
       - Raw bytes → protobuf parser
     * - ``fuzz_parser.py``
-      - ``onnx_light.onnx.parser.parse_model``
+      - :func:`onnx_light.onnx.parser.parse_model`
       - UTF-8 text (ONNX text format)
     * - ``fuzz_shape_inference.py``
-      - ``onnx_light.onnx.shape_inference.infer_shapes``
+      - :func:`onnx_light.onnx.shape_inference.infer_shapes`
       - Raw bytes **and** structured model (toggle byte)
     * - ``fuzz_optim_shape_inference.py``
-      - ``onnx_light.onnx_optim.shape_inference.infer_shapes_model``
+      - :func:`onnx_light.onnx_optim.shape_inference.infer_shapes_model`
       - Raw bytes **and** structured model (toggle byte)
     * - ``fuzz_version_converter.py``
-      - ``onnx_light.onnx.version_converter.convert_version``
+      - :func:`onnx_light.onnx.version_converter.convert_version`
       - Raw bytes → protobuf parser
     * - ``make_seed_corpus.py``
       - *(seed generator, not a fuzzer)*
@@ -52,15 +52,15 @@ Differences from upstream ONNX harnesses
 
 `onnx-light` exposes a slightly smaller surface than `onnx`:
 
-* ``onnx_light.checker.check_model`` takes a ``ModelProto`` only (no raw
+* :func:`onnx_light.onnx.checker.check_model` takes a ``ModelProto`` only (no raw
   bytes overload, no ``full_check`` flag). The checker harness therefore
   loads first and then checks.
-* ``onnx_light.shape_inference.infer_shapes(model)`` does not accept
+* :func:`onnx_light.onnx.shape_inference.infer_shapes` does not accept
   ``strict_mode`` / ``check_type`` kwargs. The shape-inference harness
   still consumes a toggle byte to switch between the raw-bytes path and
   the structured-model path; the unused toggle bits are reserved for
   future use.
-* ``onnx_light.onnx.load(bytes)`` replaces ``onnx.load_model_from_string``.
+* :func:`onnx_light.onnx.load` replaces ``onnx.load_model_from_string``.
 
 How OSS-Fuzz uses these files
 +++++++++++++++++++++++++++++

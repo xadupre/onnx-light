@@ -25,8 +25,8 @@ lists:
   signatures differ (positional/keyword parameter names).
 
 It also compares the *top-level* public functions of both packages
-(``onnx.load`` / ``onnx.save`` vs ``onnx_light.onnx.load`` /
-``onnx_light.onnx.save``).
+(:func:`onnx.load` / :func:`onnx.save` vs :func:`onnx_light.onnx.load` /
+:func:`onnx_light.onnx.save`).
 
 Finally, it lists the ONNX node-level backend tests (exposed by
 :mod:`onnx.backend.test`) that do not yet have a counterpart in
@@ -72,7 +72,7 @@ for name in submods["extra_in_onnxl"]:
 # Top-level functions
 # +++++++++++++++++++
 #
-# ``onnx.load`` / ``onnx.save`` and their ``onnx_light`` counterparts
+# :func:`onnx.load` / :func:`onnx.save` and their ``onnx_light`` counterparts
 # live directly on the package (no sub-module), so they are reported
 # separately here.
 

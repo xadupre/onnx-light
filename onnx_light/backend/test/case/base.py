@@ -196,6 +196,7 @@ def _transform_value(arr):
 
 def _import_python_test_case_module() -> None:
     from . import if_  # noqa: F401
+    from . import scan  # noqa: F401
 
 
 # build value infos using onnx_light helper

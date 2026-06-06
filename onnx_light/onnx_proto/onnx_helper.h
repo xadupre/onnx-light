@@ -290,6 +290,24 @@ inline void SerializeProtoToStream(ModelProto &model, utils::BinaryWriteStream &
 bool ReadIntegerValues(const TensorProto &tensor_proto, std::vector<int64_t> &out);
 
 /**
+ * Extracts floating-point payload values from a TensorProto into ``out``.
+ *
+ * The function reads from the type-specific repeated field
+ * (``float_data`` for FLOAT, ``double_data`` for DOUBLE) when populated
+ * and otherwise falls back to ``raw_data`` (little-endian fixed-width,
+ * as required by ONNX).
+ *
+ * Supported element types are FLOAT and DOUBLE.
+ *
+ * @param tensor_proto Tensor to read floating-point payload values from.
+ * @param out Output vector receiving extracted values in storage order.
+ *            Cleared before being filled.
+ * @return ``true`` on successful extraction, ``false`` when tensor data
+ *         is absent or the tensor type/encoding is not supported.
+ */
+bool ReadFloatingValues(const TensorProto &tensor_proto, std::vector<double> &out);
+
+/**
  * The function reads the ONNX model from a binary stream.
  * If external weights is triggered, the model is modified to add external data.
  * @tparam T ONNX proto type to parse.

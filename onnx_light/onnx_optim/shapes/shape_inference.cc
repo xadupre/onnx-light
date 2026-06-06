@@ -91,42 +91,6 @@ void ComputeShapes(ShapesContext &ctx, const utils::RepeatedProtoField<NodeProto
   }
 }
 
-namespace {
-
-// Builds an OptimTensor describing a graph initializer. Small 1-D
-// integer initializers also get a ``ValueAsShape`` annotation derived
-// from their content so that downstream ops (such as ``Reshape``) can
-// see the actual target-shape values.
-OptimTensor OptimTensorFromInitializer(const TensorProto &tp) {
-  OptimTensor tensor;
-  // ``OptimTensorFromTensorProto`` only fails on UNDEFINED dtype; mirror
-  // the historical behaviour by still producing an (otherwise empty)
-  // descriptor in that case so callers always see *some* entry.
-  if (!OptimTensorFromTensorProto(tp, tensor)) {
-    tensor =
-        OptimTensor(nullptr, DataTypeToTensorType(tp.data_type()), ShapeFromTensorProtoDims(tp));
-  }
-  if (IsIntegerTensorType(tensor.Dtype()) && tensor.Shape().Rank() <= 1) {
-    int64_t count = 1;
-    for (std::size_t i = 0; i < tensor.Shape().Rank(); ++i) {
-      count *= tensor.Shape()[i].AsInt();
-    }
-    if (count >= 0 && count < generator::kConstantValueAsShapeMaxElements) {
-      std::vector<int64_t> values;
-      if (ReadIntegerValues(tp, values) && static_cast<int64_t>(values.size()) == count) {
-        OptimShape value_shape;
-        for (int64_t v : values) {
-          value_shape.PushBack(OptimDim(v));
-        }
-        tensor.SetValueAsShape(std::move(value_shape));
-      }
-    }
-  }
-  return tensor;
-}
-
-} // namespace
-
 void ComputeShapeGraph(ShapesContext &ctx, const GraphProto &graph) {
   // Seed initializers first so that they shadow any duplicate input
   // (an ONNX initializer may appear both in ``graph.initializer()``
@@ -137,7 +101,10 @@ void ComputeShapeGraph(ShapesContext &ctx, const GraphProto &graph) {
     if (name.empty() || ctx.Has(name)) {
       continue;
     }
-    ctx.Set(name, OptimTensorFromInitializer(init));
+    OptimTensor tensor;
+    if (OptimTensorFromTensorProto(init, tensor)) {
+      ctx.Set(name, std::move(tensor));
+    }
   }
   // Then seed graph inputs (skipping those already known via the
   // initializers or via outer-scope entries carried in ``ctx``).

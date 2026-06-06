@@ -50,7 +50,11 @@ struct DataSet {
  * declared ``const`` and must therefore be supplied at construction time.
  * ``tag`` is an optional, free-form label used to group families of cases
  * (e.g. ``"empty_shape"``, ``"nan_inf"``, ``"inference"``); it defaults to
- * the empty string for the ordinary node cases.
+ * the empty string for the ordinary node cases in the default ``ai.onnx``
+ * domain. For test cases whose underlying node belongs to a non-default
+ * operator domain (e.g. ``"ai.onnx.ml"``, ``"ai.onnx.preview.training"``),
+ * :func:`Expect` defaults the tag to the node's domain string when the
+ * caller does not provide an explicit one.
  */
 struct TestCase {
   const std::string name;

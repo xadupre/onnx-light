@@ -69,8 +69,8 @@ public:
   /// Returns ``true`` if a tensor named ``name`` is currently held.
   bool Has(const std::string &name) const { return tensors_.find(name) != tensors_.end(); }
 
-  /// Removes the tensor stored under ``name`` if present and returns
-  /// whether an entry was erased.
+  /// Removes the tensor stored under ``name`` if present. Returns
+  /// ``true`` if an entry was erased, ``false`` otherwise.
   bool Remove(const std::string &name) { return tensors_.erase(name) > 0; }
 
   /// Inserts the tensor under ``name``. The name must not already

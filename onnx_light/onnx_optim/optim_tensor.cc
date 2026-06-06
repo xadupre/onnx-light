@@ -706,6 +706,15 @@ bool OptimTensorFromValueInfo(const ValueInfoProto &vi, OptimTensor &out) {
   return true;
 }
 
+bool OptimTensorFromTensorProto(const TensorProto &tp, OptimTensor &out) {
+  const TensorType dtype = DataTypeToTensorType(tp.data_type());
+  if (dtype == TensorType::kUndefined) {
+    return false;
+  }
+  out = OptimTensor(nullptr, dtype, ShapeFromTensorProtoDims(tp));
+  return true;
+}
+
 bool OptimTensorToValueInfo(const OptimTensor &tensor, ValueInfoProto &vi) {
   const TensorProto::DataType dtype = TensorTypeToDataType(tensor.Dtype());
   if (dtype == TensorProto::DataType::UNDEFINED) {

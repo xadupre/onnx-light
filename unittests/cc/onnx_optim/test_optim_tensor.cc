@@ -816,4 +816,52 @@ TEST(OnnxOptimValueInfo, RoundTripPreservesMinMax) {
   EXPECT_TRUE(back.IsNullConstant());
 }
 
+namespace {
+
+TensorProto MakeTensorProto(const std::string &name, TensorProto::DataType dtype,
+                            const std::vector<int64_t> &dims) {
+  TensorProto tp;
+  tp.set_name(name);
+  tp.set_data_type(static_cast<int>(dtype));
+  for (int64_t d : dims) {
+    tp.add_dims(d);
+  }
+  return tp;
+}
+
+} // namespace
+
+TEST(OnnxOptimTensorProto, FromTensorProtoDtypeAndShape) {
+  TensorProto tp = MakeTensorProto("w", TensorProto::DataType::FLOAT, {2, 3, 4});
+  onnx_optim::OptimTensor t;
+  EXPECT_TRUE(onnx_optim::OptimTensorFromTensorProto(tp, t));
+  EXPECT_EQ(t.Dtype(), onnx_optim::TensorType::kFloat);
+  ASSERT_EQ(t.Shape().Rank(), 3u);
+  EXPECT_EQ(t.Shape()[0].AsInt(), 2);
+  EXPECT_EQ(t.Shape()[1].AsInt(), 3);
+  EXPECT_EQ(t.Shape()[2].AsInt(), 4);
+  EXPECT_EQ(t.Data(), nullptr);
+  EXPECT_EQ(t.GetDevice(), onnx_optim::Device::kUndefined);
+  EXPECT_FALSE(t.HasMin());
+  EXPECT_FALSE(t.HasMax());
+  EXPECT_FALSE(t.HasValueAsShape());
+}
+
+TEST(OnnxOptimTensorProto, FromTensorProtoScalarHasEmptyShape) {
+  TensorProto tp = MakeTensorProto("s", TensorProto::DataType::INT64, {});
+  onnx_optim::OptimTensor t;
+  EXPECT_TRUE(onnx_optim::OptimTensorFromTensorProto(tp, t));
+  EXPECT_EQ(t.Dtype(), onnx_optim::TensorType::kInt64);
+  EXPECT_EQ(t.Shape().Rank(), 0u);
+}
+
+TEST(OnnxOptimTensorProto, FromTensorProtoUndefinedDtypeReturnsFalse) {
+  TensorProto tp = MakeTensorProto("u", TensorProto::DataType::UNDEFINED, {1, 2});
+  onnx_optim::OptimTensor t(nullptr, onnx_optim::TensorType::kInt32, onnx_optim::OptimShape{});
+  EXPECT_FALSE(onnx_optim::OptimTensorFromTensorProto(tp, t));
+  // ``out`` must be left untouched on failure.
+  EXPECT_EQ(t.Dtype(), onnx_optim::TensorType::kInt32);
+  EXPECT_EQ(t.Shape().Rank(), 0u);
+}
+
 } // namespace Test

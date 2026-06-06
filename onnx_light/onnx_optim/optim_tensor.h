@@ -501,6 +501,26 @@ inline constexpr const char *kValueInfoDeviceMetadataKey = "device";
 bool OptimTensorFromValueInfo(const ValueInfoProto &vi, OptimTensor &out);
 
 /**
+ * Populates ``out`` from a ``TensorProto`` (typically a graph initializer).
+ *
+ * The element type is read from ``tp.data_type()`` and the shape is built
+ * from ``tp.dims()`` via :cpp:func:`ShapeFromTensorProtoDims` (every
+ * dimension becomes a concrete integer :cpp:class:`OptimDim`). The tensor
+ * data pointer is left null, the device is left
+ * :cpp:enumerator:`Device::kUndefined`, and no ``min``/``max`` bound or
+ * value-as-shape annotation is attached. Callers that want to layer the
+ * shape-inference value-as-shape heuristic on top can do so after this
+ * call.
+ *
+ * @param tp  ``TensorProto`` to read from.
+ * @param out Tensor to overwrite on success.
+ * @return ``false`` (and leaves ``out`` untouched) when
+ *         ``tp.data_type()`` is ``TensorProto::DataType::UNDEFINED``;
+ *         ``true`` otherwise.
+ */
+bool OptimTensorFromTensorProto(const TensorProto &tp, OptimTensor &out);
+
+/**
  * Writes the ``(dtype, shape, device)`` triple carried by ``tensor``
  * into ``vi``.
  *

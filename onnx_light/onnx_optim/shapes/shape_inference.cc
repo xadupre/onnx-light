@@ -98,9 +98,14 @@ namespace {
 // from their content so that downstream ops (such as ``Reshape``) can
 // see the actual target-shape values.
 OptimTensor OptimTensorFromInitializer(const TensorProto &tp) {
-  const TensorType dtype = DataTypeToTensorType(tp.data_type());
-  OptimShape shape = ShapeFromTensorProtoDims(tp);
-  OptimTensor tensor(nullptr, dtype, std::move(shape));
+  OptimTensor tensor;
+  // ``OptimTensorFromTensorProto`` only fails on UNDEFINED dtype; mirror
+  // the historical behaviour by still producing an (otherwise empty)
+  // descriptor in that case so callers always see *some* entry.
+  if (!OptimTensorFromTensorProto(tp, tensor)) {
+    tensor =
+        OptimTensor(nullptr, DataTypeToTensorType(tp.data_type()), ShapeFromTensorProtoDims(tp));
+  }
   if (IsIntegerTensorType(tensor.Dtype()) && tensor.Shape().Rank() <= 1) {
     int64_t count = 1;
     for (std::size_t i = 0; i < tensor.Shape().Rank(); ++i) {

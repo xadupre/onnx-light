@@ -49,14 +49,14 @@ using AnchorMap = std::unordered_map<std::string, OptimTensor>;
 
 void AddValueInfoAsAnchor(const ValueInfoProto &vi, AnchorMap &anchors) {
   const std::string name = vi.name().as_string();
-  if (name.empty() || anchors.find(name) != anchors.end()) {
+  if (name.empty()) {
     return;
   }
   OptimTensor tensor;
   if (!OptimTensorFromValueInfo(vi, tensor)) {
     return;
   }
-  anchors.emplace(name, std::move(tensor));
+  anchors.try_emplace(name, std::move(tensor));
 }
 
 AnchorMap CollectGraphAnchors(const GraphProto &graph) {
@@ -80,8 +80,10 @@ OptimTensor SelectTensorPreferringAnchor(const OptimTensor &inferred, const Opti
     return anchor;
   case OptimCmpResult::kLessPrecise:
     return inferred;
+  default:
+    // Forward compatibility in case OptimCmpResult gains new values.
+    return inferred;
   }
-  return inferred;
 }
 
 void MergeAnchorsIntoContext(ShapesContext &ctx, const AnchorMap &anchors) {
@@ -92,9 +94,10 @@ void MergeAnchorsIntoContext(ShapesContext &ctx, const AnchorMap &anchors) {
       ctx.Set(name, OptimTensor(anchor));
       continue;
     }
-    const OptimTensor chosen = SelectTensorPreferringAnchor(ctx.Get(name), anchor);
-    if (chosen != ctx.Get(name)) {
-      ctx.Set(name, OptimTensor(chosen));
+    const OptimTensor &current = ctx.Get(name);
+    OptimTensor chosen = SelectTensorPreferringAnchor(current, anchor);
+    if (chosen != current) {
+      ctx.Set(name, std::move(chosen));
     }
   }
 }

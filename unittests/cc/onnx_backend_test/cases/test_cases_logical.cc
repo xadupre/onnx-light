@@ -64,7 +64,7 @@ TEST(BackendTestCase, AndCaseOutputsAreElementwiseAnd) {
   const auto &ds = tc->data_sets[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   ASSERT_EQ(ds.outputs.size(), 1u);
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::BOOL));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
   const uint8_t *x = ds.inputs[0].data.data();
   const uint8_t *y = ds.inputs[1].data.data();
   const uint8_t *z = ds.outputs[0].data.data();
@@ -112,7 +112,7 @@ TEST(BackendTestCase, AndOnnxBroadcastCaseShapesAndOutput) {
   EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{1, 4, 1, 6}));
   EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{3, 1, 5, 6}));
   EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5, 6}));
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::BOOL));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
   EXPECT_EQ(ds.outputs[0].element_count(), 3 * 4 * 5 * 6);
 
   // Spot-check broadcasting correctness against the input data.
@@ -180,7 +180,7 @@ TEST(BackendTestCase, OrCaseOutputsAreElementwiseOr) {
   const auto &ds = tc->data_sets[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   ASSERT_EQ(ds.outputs.size(), 1u);
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::BOOL));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
   const uint8_t *x = ds.inputs[0].data.data();
   const uint8_t *y = ds.inputs[1].data.data();
   const uint8_t *z = ds.outputs[0].data.data();
@@ -196,7 +196,7 @@ TEST(BackendTestCase, XorCaseOutputsAreElementwiseXor) {
   const auto &ds = tc->data_sets[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   ASSERT_EQ(ds.outputs.size(), 1u);
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::BOOL));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
   const uint8_t *x = ds.inputs[0].data.data();
   const uint8_t *y = ds.inputs[1].data.data();
   const uint8_t *z = ds.outputs[0].data.data();
@@ -241,8 +241,8 @@ TEST(BackendTestCase, GreaterCaseOutputsAreElementwiseGreater) {
   const auto &ds = tc->data_sets[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   ASSERT_EQ(ds.outputs.size(), 1u);
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::BOOL));
-  EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
+  EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
   EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{3, 4, 5}));
   EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
@@ -261,8 +261,8 @@ TEST(BackendTestCase, LessCaseOutputsAreElementwiseLess) {
   const auto &ds = tc->data_sets[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   ASSERT_EQ(ds.outputs.size(), 1u);
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::BOOL));
-  EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
+  EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   const float *x = reinterpret_cast<const float *>(ds.inputs[0].data.data());
   const float *y = reinterpret_cast<const float *>(ds.inputs[1].data.data());
   const uint8_t *z = ds.outputs[0].data.data();
@@ -280,8 +280,7 @@ TEST(BackendTestCase, GreaterLessBroadcastCasesHaveBroadcastShapes) {
     EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5})) << name;
     EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{5})) << name;
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5})) << name;
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::BOOL))
-        << name;
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL)) << name;
   }
 }
 
@@ -292,18 +291,18 @@ TEST(BackendTestCase, GreaterLessIntegerCasesUseRequestedDtype) {
     int32_t dtype;
   };
   for (const Expected &e : {
-           Expected{"test_greater_int8", onnx_backend_test::DataType::INT8},
-           Expected{"test_greater_int16", onnx_backend_test::DataType::INT16},
-           Expected{"test_greater_uint8", onnx_backend_test::DataType::UINT8},
-           Expected{"test_greater_uint16", onnx_backend_test::DataType::UINT16},
-           Expected{"test_greater_uint32", onnx_backend_test::DataType::UINT32},
-           Expected{"test_greater_uint64", onnx_backend_test::DataType::UINT64},
-           Expected{"test_less_int8", onnx_backend_test::DataType::INT8},
-           Expected{"test_less_int16", onnx_backend_test::DataType::INT16},
-           Expected{"test_less_uint8", onnx_backend_test::DataType::UINT8},
-           Expected{"test_less_uint16", onnx_backend_test::DataType::UINT16},
-           Expected{"test_less_uint32", onnx_backend_test::DataType::UINT32},
-           Expected{"test_less_uint64", onnx_backend_test::DataType::UINT64},
+           Expected{"test_greater_int8", onnx_kernels::DataType::INT8},
+           Expected{"test_greater_int16", onnx_kernels::DataType::INT16},
+           Expected{"test_greater_uint8", onnx_kernels::DataType::UINT8},
+           Expected{"test_greater_uint16", onnx_kernels::DataType::UINT16},
+           Expected{"test_greater_uint32", onnx_kernels::DataType::UINT32},
+           Expected{"test_greater_uint64", onnx_kernels::DataType::UINT64},
+           Expected{"test_less_int8", onnx_kernels::DataType::INT8},
+           Expected{"test_less_int16", onnx_kernels::DataType::INT16},
+           Expected{"test_less_uint8", onnx_kernels::DataType::UINT8},
+           Expected{"test_less_uint16", onnx_kernels::DataType::UINT16},
+           Expected{"test_less_uint32", onnx_kernels::DataType::UINT32},
+           Expected{"test_less_uint64", onnx_kernels::DataType::UINT64},
        }) {
     const TestCase *tc = FindLogicalCase(cases, e.name);
     ASSERT_NE(tc, nullptr) << e.name;
@@ -311,7 +310,7 @@ TEST(BackendTestCase, GreaterLessIntegerCasesUseRequestedDtype) {
     ASSERT_EQ(ds.inputs.size(), 2u) << e.name;
     EXPECT_EQ(ds.inputs[0].data_type, e.dtype) << e.name;
     EXPECT_EQ(ds.inputs[1].data_type, e.dtype) << e.name;
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::BOOL))
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL))
         << e.name;
     EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5})) << e.name;
     EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{3, 4, 5})) << e.name;
@@ -342,8 +341,8 @@ TEST(BackendTestCase, GreaterOrEqualCaseOutputsAreElementwiseGreaterOrEqual) {
   const auto &ds = tc->data_sets[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   ASSERT_EQ(ds.outputs.size(), 1u);
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::BOOL));
-  EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
+  EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
   EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{3, 4, 5}));
   EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
@@ -363,7 +362,7 @@ TEST(BackendTestCase, GreaterOrEqualBroadcastCaseHasBroadcastShapes) {
   EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
   EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{5}));
   EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::BOOL));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
 }
 
 TEST(BackendTestCase, EqualCasesArePresent) {
@@ -389,8 +388,8 @@ TEST(BackendTestCase, EqualCaseOutputsAreElementwiseEqual) {
   const auto &ds = tc->data_sets[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   ASSERT_EQ(ds.outputs.size(), 1u);
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::BOOL));
-  EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
+  EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
   EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
   EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{3, 4, 5}));
   EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
@@ -410,7 +409,7 @@ TEST(BackendTestCase, EqualBroadcastCaseHasBroadcastShapes) {
   EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
   EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{5}));
   EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::BOOL));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
 }
 
 TEST(BackendTestCase, EqualIntegerCasesUseRequestedDtype) {
@@ -420,13 +419,13 @@ TEST(BackendTestCase, EqualIntegerCasesUseRequestedDtype) {
     int32_t dtype;
   };
   for (const Expected &e : {
-           Expected{"test_equal", onnx_backend_test::DataType::INT32},
-           Expected{"test_equal_int8", onnx_backend_test::DataType::INT8},
-           Expected{"test_equal_int16", onnx_backend_test::DataType::INT16},
-           Expected{"test_equal_uint8", onnx_backend_test::DataType::UINT8},
-           Expected{"test_equal_uint16", onnx_backend_test::DataType::UINT16},
-           Expected{"test_equal_uint32", onnx_backend_test::DataType::UINT32},
-           Expected{"test_equal_uint64", onnx_backend_test::DataType::UINT64},
+           Expected{"test_equal", onnx_kernels::DataType::INT32},
+           Expected{"test_equal_int8", onnx_kernels::DataType::INT8},
+           Expected{"test_equal_int16", onnx_kernels::DataType::INT16},
+           Expected{"test_equal_uint8", onnx_kernels::DataType::UINT8},
+           Expected{"test_equal_uint16", onnx_kernels::DataType::UINT16},
+           Expected{"test_equal_uint32", onnx_kernels::DataType::UINT32},
+           Expected{"test_equal_uint64", onnx_kernels::DataType::UINT64},
        }) {
     const TestCase *tc = FindLogicalCase(cases, e.name);
     ASSERT_NE(tc, nullptr) << e.name;
@@ -434,7 +433,7 @@ TEST(BackendTestCase, EqualIntegerCasesUseRequestedDtype) {
     ASSERT_EQ(ds.inputs.size(), 2u) << e.name;
     EXPECT_EQ(ds.inputs[0].data_type, e.dtype) << e.name;
     EXPECT_EQ(ds.inputs[1].data_type, e.dtype) << e.name;
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::BOOL))
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL))
         << e.name;
     EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5})) << e.name;
     EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{3, 4, 5})) << e.name;
@@ -449,12 +448,9 @@ TEST(BackendTestCase, EqualStringCasesHaveExpectedShapesAndDtype) {
     ASSERT_NE(tc, nullptr) << name;
     const auto &ds = tc->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 2u) << name;
-    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::STRING))
-        << name;
-    EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(onnx_backend_test::DataType::STRING))
-        << name;
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::BOOL))
-        << name;
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::STRING)) << name;
+    EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(onnx_kernels::DataType::STRING)) << name;
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL)) << name;
     EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{2})) << name;
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{2})) << name;
   }
@@ -483,7 +479,7 @@ TEST(BackendTestCase, WhereCaseOutputsSelectExpectedElements) {
   const auto &ds = tc->data_sets[0];
   ASSERT_EQ(ds.inputs.size(), 3u);
   ASSERT_EQ(ds.outputs.size(), 1u);
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   const float *z = reinterpret_cast<const float *>(ds.outputs[0].data.data());
   ASSERT_EQ(ds.outputs[0].element_count(), 4);
   EXPECT_FLOAT_EQ(z[0], 1.0f);
@@ -533,8 +529,8 @@ TEST(BackendTestCase, BitwiseAndI32CaseOutputsAreElementwiseAnd) {
   const auto &ds = tc->data_sets[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   ASSERT_EQ(ds.outputs.size(), 1u);
-  EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
+  EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
   const int32_t *x = reinterpret_cast<const int32_t *>(ds.inputs[0].data.data());
   const int32_t *y = reinterpret_cast<const int32_t *>(ds.inputs[1].data.data());
   const int32_t *z = reinterpret_cast<const int32_t *>(ds.outputs[0].data.data());

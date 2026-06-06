@@ -53,13 +53,13 @@ TEST(BackendTestCase, OptionalCaseIsPresent) {
   ASSERT_TRUE(tp.has_optional_type());
   const TypeProto &elem = tp.ref_optional_type().ref_elem_type();
   ASSERT_TRUE(elem.has_tensor_type());
-  EXPECT_EQ(elem.ref_tensor_type().ref_elem_type(), onnx_backend_test::DataType::FLOAT);
+  EXPECT_EQ(elem.ref_tensor_type().ref_elem_type(), onnx_kernels::DataType::FLOAT);
 
   ASSERT_EQ(opt_case->data_sets.size(), 1u);
   const auto &ds = opt_case->data_sets[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   const std::vector<int64_t> expected_shape = {2, 3};
   EXPECT_EQ(ds.outputs[0].shape, expected_shape);
   // Passthrough: output bytes match input bytes.

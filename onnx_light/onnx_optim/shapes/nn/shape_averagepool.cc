@@ -22,7 +22,7 @@ namespace {
 
 // Computes the size of the output along a single spatial axis according to
 // the ONNX ``AveragePool`` formula with explicit padding. Mirrors
-// ``onnx_backend_test::kernel::AveragePool::OutputDim``. ``dilation``
+// ``onnx_kernels::kernel::AveragePool::OutputDim``. ``dilation``
 // defaults to 1; for dilated kernels the effective kernel extent along an
 // axis is ``dilation * (kernel - 1) + 1``.
 int64_t OutputDim(int64_t in_dim, int64_t kernel, int64_t stride, int64_t pad_begin,
@@ -42,7 +42,7 @@ int64_t OutputDim(int64_t in_dim, int64_t kernel, int64_t stride, int64_t pad_be
 }
 
 // Resolves a single spatial axis under ``auto_pad`` other than NOTSET.
-// Mirrors ``onnx_backend_test::kernel::ResolveAutoPadAxis``.
+// Mirrors ``onnx_kernels::kernel::ResolveAutoPadAxis``.
 int64_t AutoPadOutputDim(const std::string &auto_pad, int64_t in_dim, int64_t kernel,
                          int64_t stride, int64_t dilation) {
   const int64_t eff_kernel = dilation * (kernel - 1) + 1;

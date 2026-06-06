@@ -68,9 +68,9 @@ TEST(BackendTestCase, IfCasesArePresent) {
     const auto &ds = tc->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 1u);
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::BOOL));
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
     EXPECT_EQ(ds.inputs[0].shape.size(), 0u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
     ASSERT_EQ(ds.outputs[0].shape.size(), 1u);
     EXPECT_EQ(ds.outputs[0].shape[0], 2);
   }
@@ -121,8 +121,8 @@ TEST(BackendTestCase, LoopCasesArePresent) {
     const auto &ds = tc->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 1u);
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
     ASSERT_EQ(ds.outputs[0].shape.size(), 2u);
     EXPECT_EQ(ds.outputs[0].shape[1], 1);
   }
@@ -151,13 +151,13 @@ TEST(BackendTestCase, LoopCasesArePresent) {
     ASSERT_EQ(ds.inputs.size(), 3u);
     ASSERT_EQ(ds.outputs.size(), 2u);
     // res_y is FLOAT[1] = [13].
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
     ASSERT_EQ(ds.outputs[0].shape.size(), 1u);
     EXPECT_EQ(ds.outputs[0].shape[0], 1);
     ASSERT_EQ(ds.outputs[0].element_count(), 1);
     EXPECT_FLOAT_EQ(ds.outputs[0].AsFloat()[0], 13.0f);
     // res_scan is FLOAT[5, 1] = [[-1], [1], [4], [8], [13]].
-    EXPECT_EQ(ds.outputs[1].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[1].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
     ASSERT_EQ(ds.outputs[1].shape.size(), 2u);
     EXPECT_EQ(ds.outputs[1].shape[0], 5);
     EXPECT_EQ(ds.outputs[1].shape[1], 1);
@@ -212,8 +212,8 @@ TEST(BackendTestCase, ScanCasesArePresent) {
     const auto &ds = tc->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 1u);
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
     ASSERT_EQ(ds.outputs[0].shape.size(), 2u);
     EXPECT_EQ(ds.outputs[0].shape[1], 2);
   }

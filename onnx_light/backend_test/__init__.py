@@ -1,12 +1,12 @@
 """Python re-export of the C++ ``backend_test`` bindings.
 
 This sub-package exposes the runtime data model used by the C++ backend
-test infrastructure (``onnx_backend_test``) through a stable Python
+test infrastructure (``onnx_kernels``) through a stable Python
 import path (``onnx_light.backend_test``).
 
 The underlying objects are implemented in C++
-(``onnx_light/onnx_backend_test/test_case.{h,cc}``,
-``onnx_light/onnx_backend_test/simple_tensor.{h,cc}``) and bound to
+(``onnx_light/onnx_kernels/test_case.{h,cc}``,
+``onnx_light/onnx_kernels/simple_tensor.{h,cc}``) and bound to
 Python via :mod:`onnx_light.onnx_py._onnxbackend`.
 
 It mirrors :mod:`onnx_light.backend` (which exposes the deterministic
@@ -34,7 +34,7 @@ def collect_test_cases_by_name(pattern: Union[str, Pattern[str]]) -> list[TestCa
     """Returns the C++-implemented backend test cases whose name matches *pattern*.
 
     The actual filtering happens in C++
-    (``onnx_backend_test::CollectTestCasesByName``) using
+    (``onnx_kernels::CollectTestCasesByName``) using
     ``std::regex_search`` with ECMAScript syntax. A compiled
     :class:`re.Pattern` is accepted for convenience and is forwarded as
     its source string.

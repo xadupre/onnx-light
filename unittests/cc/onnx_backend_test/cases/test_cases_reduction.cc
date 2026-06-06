@@ -52,7 +52,7 @@ void CheckReduceSumCasePresent(const std::vector<TestCase> &cases, const std::st
   const auto &ds = tc->data_sets[0];
   ASSERT_EQ(ds.inputs.size(), expected_inputs);
   ASSERT_EQ(ds.outputs.size(), 1u);
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   EXPECT_EQ(ds.outputs[0].shape, expected_shape);
 }
 
@@ -487,7 +487,7 @@ void CheckArgReduceCasePresent(const std::vector<TestCase> &cases, const std::st
   const auto &ds = tc->data_sets[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
   EXPECT_EQ(ds.outputs[0].shape, expected_shape);
   ASSERT_EQ(ds.outputs[0].data.size(), expected_values.size() * sizeof(int64_t));
   const int64_t *py = reinterpret_cast<const int64_t *>(ds.outputs[0].data.data());

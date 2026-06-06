@@ -207,7 +207,7 @@ TEST(BackendTestCaseShapeInference, ZipMapInfersSequenceOfMapsOutputType) {
   input->set_name("X");
   TypeProto *input_type = input->add_type();
   TypeProto::Tensor *input_tt = input_type->add_tensor_type();
-  input_tt->set_elem_type(onnx_backend_test::DataType::FLOAT);
+  input_tt->set_elem_type(onnx_kernels::DataType::FLOAT);
   TensorShapeProto *mutable_input_shape = input_tt->add_shape();
   mutable_input_shape->add_dim()->set_dim_value(2);
   mutable_input_shape->add_dim()->set_dim_value(3);
@@ -239,7 +239,7 @@ TEST(BackendTestCaseShapeInference, ZipMapInfersSequenceOfMapsOutputType) {
   const TypeProto::Map &map_type = seq_elem_type.ref_map_type();
   ASSERT_TRUE(map_type.ref_value_type().has_tensor_type());
   const TypeProto::Tensor &value_tensor = map_type.ref_value_type().ref_tensor_type();
-  EXPECT_EQ(value_tensor.ref_elem_type(), onnx_backend_test::DataType::FLOAT);
+  EXPECT_EQ(value_tensor.ref_elem_type(), onnx_kernels::DataType::FLOAT);
   ASSERT_TRUE(value_tensor.has_shape());
   EXPECT_EQ(value_tensor.ref_shape().ref_dim().size(), 0u);
 }
@@ -263,7 +263,7 @@ TEST(BackendTestCaseShapeInference, ZipMapInfersSequenceOfStringKeyMapsOutputTyp
   input->set_name("X");
   TypeProto *input_type = input->add_type();
   TypeProto::Tensor *input_tt = input_type->add_tensor_type();
-  input_tt->set_elem_type(onnx_backend_test::DataType::FLOAT);
+  input_tt->set_elem_type(onnx_kernels::DataType::FLOAT);
   TensorShapeProto *mutable_input_shape = input_tt->add_shape();
   mutable_input_shape->add_dim()->set_dim_value(2);
   mutable_input_shape->add_dim()->set_dim_value(kClassCount);
@@ -298,7 +298,7 @@ TEST(BackendTestCaseShapeInference, ZipMapInfersSequenceOfStringKeyMapsOutputTyp
   const TypeProto::Map &map_type = seq_elem_type.ref_map_type();
   ASSERT_TRUE(map_type.ref_value_type().has_tensor_type());
   const TypeProto::Tensor &value_tensor = map_type.ref_value_type().ref_tensor_type();
-  EXPECT_EQ(value_tensor.ref_elem_type(), onnx_backend_test::DataType::FLOAT);
+  EXPECT_EQ(value_tensor.ref_elem_type(), onnx_kernels::DataType::FLOAT);
   ASSERT_TRUE(value_tensor.has_shape());
   EXPECT_EQ(value_tensor.ref_shape().ref_dim().size(), 0u);
 }

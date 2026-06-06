@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/cases/logical/include_logical_cases.h"
-#include "onnx_backend_test/kernels/logical/include_logical_kernels.h"
-#include "onnx_backend_test/random.h"
 #include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/logical/include_logical_kernels.h"
+#include "onnx_kernels/random.h"
 
 #include <cstdint>
 #include <string>

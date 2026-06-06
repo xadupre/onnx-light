@@ -22,7 +22,7 @@ namespace {
 
 // Computes the size of the output along a single spatial axis according to
 // the ONNX ``LpPool`` formula with explicit padding. Mirrors
-// :cpp:func:`onnx_backend_test::kernel::LpPool::OutputDim`.
+// :cpp:func:`onnx_kernels::kernel::LpPool::OutputDim`.
 int64_t OutputDim(int64_t in_dim, int64_t kernel, int64_t stride, int64_t pad_begin,
                   int64_t pad_end, bool ceil_mode, int64_t dilation = 1) {
   const int64_t eff_kernel = dilation * (kernel - 1) + 1;

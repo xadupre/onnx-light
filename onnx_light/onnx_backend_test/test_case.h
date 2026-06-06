@@ -5,7 +5,8 @@
 #pragma once
 
 #include "onnx.h"
-#include "onnx_backend_test/simple_tensor.h"
+#include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/simple_tensor.h"
 
 #include <cstdint>
 #include <string>
@@ -17,23 +18,9 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-/**
- * Lightweight opset identifier used by the backend test library.
- *
- * Mirrors the (domain, version) pair carried by ``OperatorSetIdProto`` but
- * keeps the public API of this library independent from the proto type so
- * test cases can be declared without touching the proto wire format.
- */
-struct OpsetId {
-  std::string domain;
-  int64_t version = 0;
-
-  OpsetId() = default;
-  OpsetId(std::string domain_, int64_t version_) : domain(std::move(domain_)), version(version_) {}
-};
-
-/// Builds an :ref:`OpsetId` for the default ai.onnx domain (empty string).
-inline OpsetId DefaultOpset(int64_t version) { return OpsetId(std::string(), version); }
+using namespace onnx_kernels;
+using OpsetId = onnx_kernels::kernel::OpsetId;
+using onnx_kernels::kernel::DefaultOpset;
 
 /// A single (inputs, expected outputs) data set associated with a TestCase.
 struct DataSet {

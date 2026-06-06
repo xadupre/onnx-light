@@ -1,9 +1,9 @@
 """Deterministic pseudo-random helpers.
 
 This module is a thin Python wrapper around the C++ implementation in
-``onnx_light.onnx_backend_test`` exposed through the ``_onnxpy.backend``
-nanobind submodule. The behavior is bit-identical to the prior pure-Python
-implementation.
+``onnx_light.onnx_kernels`` exposed through the ``_onnxpy.backend``
+nanobind submodule (compiled from the ``_onnxkernels`` extension).
+The behavior is bit-identical to the prior pure-Python implementation.
 """
 
 from typing import Iterable

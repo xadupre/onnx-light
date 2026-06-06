@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/kernel_context.h"
-#include "onnx_backend_test/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <gtest/gtest.h>
@@ -17,10 +17,10 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::CollectTestCases;
 using onnx_backend_test::DataSet;
 using onnx_backend_test::DefaultOpset;
-using onnx_backend_test::Tensor;
 using onnx_backend_test::TestCase;
-using onnx_backend_test::kernel::KernelContext;
-using onnx_backend_test::kernel::Split;
+using onnx_kernels::Tensor;
+using onnx_kernels::kernel::KernelContext;
+using onnx_kernels::kernel::Split;
 
 namespace Test {
 
@@ -42,7 +42,7 @@ int64_t GetDefaultOpsetVersion(const ModelProto &model) {
 }
 
 std::vector<int64_t> ToInt64Vector(const Tensor &t) {
-  EXPECT_EQ(t.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  EXPECT_EQ(t.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
   std::vector<int64_t> values;
   values.reserve(static_cast<size_t>(t.element_count()));
   const int64_t *p = t.AsInt64();

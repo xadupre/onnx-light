@@ -1,0 +1,292 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/kernels/text/include_text_kernels.h"
+
+#include <gtest/gtest.h>
+
+#include <stdexcept>
+#include <string>
+#include <vector>
+
+using namespace ONNX_LIGHT_NAMESPACE;
+using onnx_backend_test::DefaultOpset;
+using onnx_kernels::Tensor;
+using onnx_kernels::kernel::KernelContext;
+using onnx_kernels::kernel::RegexFullMatch;
+using onnx_kernels::kernel::StringConcat;
+using onnx_kernels::kernel::StringNormalizer;
+using onnx_kernels::kernel::StringSplit;
+
+namespace Test {
+
+TEST(KernelClass, StringConcatEqualShapeMatchesReference) {
+  const KernelContext ctx{DefaultOpset(20)};
+  StringConcat string_concat{ctx};
+  Tensor x = Tensor::FromStrings("", {3}, {"abc", "", "hello "});
+  Tensor y = Tensor::FromStrings("", {3}, {"def", "xyz", "world"});
+  Tensor z = string_concat(x, y);
+  ASSERT_EQ(z.element_count(), 3);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::STRING));
+  EXPECT_EQ(z.shape, x.shape);
+  const auto &out = z.AsStrings();
+  ASSERT_EQ(out.size(), 3u);
+  EXPECT_EQ(out[0], "abcdef");
+  EXPECT_EQ(out[1], "xyz");
+  EXPECT_EQ(out[2], "hello world");
+}
+
+TEST(KernelClass, StringConcatBroadcastsScalar) {
+  const KernelContext ctx{DefaultOpset(20)};
+  StringConcat string_concat{ctx};
+  Tensor x = Tensor::FromStrings("", {2, 2}, {"a", "b", "c", "d"});
+  Tensor y = Tensor::FromStrings("", {}, {"!"});
+  Tensor z = string_concat(x, y);
+  EXPECT_EQ(z.shape, x.shape);
+  const auto &out = z.AsStrings();
+  ASSERT_EQ(out.size(), 4u);
+  EXPECT_EQ(out[0], "a!");
+  EXPECT_EQ(out[1], "b!");
+  EXPECT_EQ(out[2], "c!");
+  EXPECT_EQ(out[3], "d!");
+
+  // Symmetric: scalar on the left side.
+  Tensor z2 = string_concat(y, x);
+  const auto &out2 = z2.AsStrings();
+  ASSERT_EQ(out2.size(), 4u);
+  EXPECT_EQ(out2[0], "!a");
+  EXPECT_EQ(out2[3], "!d");
+}
+
+TEST(KernelClass, StringConcatRejectsBadInputsAndMismatchedOutput) {
+  const KernelContext ctx{DefaultOpset(20)};
+  StringConcat string_concat{ctx};
+  Tensor x = Tensor::FromStrings("", {2}, {"a", "b"});
+  Tensor y = Tensor::FromStrings("", {2}, {"x", "y"});
+
+  // Non-STRING input is rejected.
+  Tensor bad_dtype = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  EXPECT_THROW(string_concat(bad_dtype, y), std::invalid_argument);
+  EXPECT_THROW(string_concat(x, bad_dtype), std::invalid_argument);
+
+  // Incompatible shapes are rejected (neither equal nor scalar broadcast).
+  Tensor mismatched = Tensor::FromStrings("", {3}, {"u", "v", "w"});
+  EXPECT_THROW(string_concat(x, mismatched), std::invalid_argument);
+
+  // In-place overload with wrong-dtype / shape / size preallocated output is
+  // rejected.
+  Tensor bad_out_dtype = Tensor::FromFloat("", {2}, {0.0f, 0.0f});
+  EXPECT_THROW(string_concat(x, y, bad_out_dtype), std::invalid_argument);
+
+  Tensor bad_out_shape = Tensor::MakeString("", {3}, std::vector<std::string>(3));
+  EXPECT_THROW(string_concat(x, y, bad_out_shape), std::invalid_argument);
+
+  Tensor bad_out_size = Tensor::MakeString("", {2}, std::vector<std::string>(1));
+  EXPECT_THROW(string_concat(x, y, bad_out_size), std::invalid_argument);
+}
+
+TEST(KernelClass, StringSplitBasicMatchesReference) {
+  const KernelContext ctx{DefaultOpset(20)};
+  StringSplit string_split{ctx};
+  Tensor x = Tensor::FromStrings("", {2}, {"abc.com", "def.net"});
+  auto [y, z] = string_split(x, ".");
+
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 2}));
+  EXPECT_EQ(z.shape, x.shape);
+  EXPECT_EQ(y.AsStrings(), (std::vector<std::string>{"abc", "com", "def", "net"}));
+  const int64_t *counts = z.AsInt64();
+  ASSERT_NE(counts, nullptr);
+  EXPECT_EQ(counts[0], 2);
+  EXPECT_EQ(counts[1], 2);
+}
+
+TEST(KernelClass, StringSplitHandlesWhitespaceAndPadding) {
+  const KernelContext ctx{DefaultOpset(20)};
+  StringSplit string_split{ctx};
+  Tensor x =
+      Tensor::FromStrings("", {2, 2}, {"hello world", "def.net", "o n n x", "the quick brown fox"});
+  auto [y, z] = string_split(x, "", 2);
+
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 2, 3}));
+  EXPECT_EQ(z.shape, x.shape);
+  EXPECT_EQ(y.AsStrings(), (std::vector<std::string>{"hello", "world", "", "def.net", "", "", "o",
+                                                     "n", "n x", "the", "quick", "brown fox"}));
+  const int64_t *counts = z.AsInt64();
+  ASSERT_NE(counts, nullptr);
+  EXPECT_EQ(counts[0], 2);
+  EXPECT_EQ(counts[1], 1);
+  EXPECT_EQ(counts[2], 3);
+  EXPECT_EQ(counts[3], 3);
+}
+
+TEST(KernelClass, StringSplitConsecutiveDelimitersAndEmptyTensor) {
+  const KernelContext ctx{DefaultOpset(20)};
+  StringSplit string_split{ctx};
+
+  Tensor x = Tensor::FromStrings("", {2}, {"o-n-n--x-", "o-n----nx"});
+  auto [y, z] = string_split(x, "-");
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 6}));
+  EXPECT_EQ(y.AsStrings(),
+            (std::vector<std::string>{"o", "n", "n", "", "x", "", "o", "n", "", "", "", "nx"}));
+  const int64_t *counts = z.AsInt64();
+  ASSERT_NE(counts, nullptr);
+  EXPECT_EQ(counts[0], 6);
+  EXPECT_EQ(counts[1], 6);
+
+  Tensor empty = Tensor::FromStrings("", {0}, std::vector<std::string>{});
+  auto [empty_y, empty_z] = string_split(empty);
+  EXPECT_EQ(empty_y.shape, (std::vector<int64_t>{0, 0}));
+  EXPECT_TRUE(empty_y.AsStrings().empty());
+  EXPECT_EQ(empty_z.shape, (std::vector<int64_t>{0}));
+}
+
+TEST(KernelClass, StringSplitRejectsNonStringInput) {
+  const KernelContext ctx{DefaultOpset(20)};
+  StringSplit string_split{ctx};
+  Tensor bad_dtype = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  EXPECT_THROW(string_split(bad_dtype), std::invalid_argument);
+}
+
+TEST(KernelClass, StringNormalizerLowercases1D) {
+  const KernelContext ctx{DefaultOpset(10)};
+  StringNormalizer normalizer{ctx};
+  Tensor x = Tensor::FromStrings("", {3}, {"Hello", "World", "FOO"});
+  Tensor y = normalizer(x, StringNormalizer::CaseChangeAction::kLower);
+  EXPECT_EQ(y.shape, x.shape);
+  const auto &out = y.AsStrings();
+  ASSERT_EQ(out.size(), 3u);
+  EXPECT_EQ(out[0], "hello");
+  EXPECT_EQ(out[1], "world");
+  EXPECT_EQ(out[2], "foo");
+}
+
+TEST(KernelClass, StringNormalizerDropsCaseInsensitiveStopwords2D) {
+  const KernelContext ctx{DefaultOpset(10)};
+  StringNormalizer normalizer{ctx};
+  Tensor x = Tensor::FromStrings("", {1, 4}, {"A", "hello", "a", "world"});
+  Tensor y = normalizer(x, StringNormalizer::CaseChangeAction::kUpper,
+                        /*is_case_sensitive=*/false, {"a"});
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{1, 2}));
+  const auto &out = y.AsStrings();
+  ASSERT_EQ(out.size(), 2u);
+  EXPECT_EQ(out[0], "HELLO");
+  EXPECT_EQ(out[1], "WORLD");
+}
+
+TEST(KernelClass, StringNormalizerCaseSensitiveStopwords) {
+  const KernelContext ctx{DefaultOpset(10)};
+  StringNormalizer normalizer{ctx};
+  Tensor x = Tensor::FromStrings("", {3}, {"The", "the", "cat"});
+  Tensor y = normalizer(x, StringNormalizer::CaseChangeAction::kNone,
+                        /*is_case_sensitive=*/true, {"the"});
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2}));
+  const auto &out = y.AsStrings();
+  ASSERT_EQ(out.size(), 2u);
+  EXPECT_EQ(out[0], "The");
+  EXPECT_EQ(out[1], "cat");
+}
+
+TEST(KernelClass, StringNormalizerAllDroppedEmitsEmpty) {
+  const KernelContext ctx{DefaultOpset(10)};
+  StringNormalizer normalizer{ctx};
+  Tensor x1d = Tensor::FromStrings("", {2}, {"a", "b"});
+  Tensor y1d = normalizer(x1d, StringNormalizer::CaseChangeAction::kNone, false, {"a", "b"});
+  EXPECT_EQ(y1d.shape, (std::vector<int64_t>{1}));
+  ASSERT_EQ(y1d.AsStrings().size(), 1u);
+  EXPECT_EQ(y1d.AsStrings()[0], "");
+
+  Tensor x2d = Tensor::FromStrings("", {1, 2}, {"a", "b"});
+  Tensor y2d = normalizer(x2d, StringNormalizer::CaseChangeAction::kNone, false, {"a", "b"});
+  EXPECT_EQ(y2d.shape, (std::vector<int64_t>{1, 1}));
+  ASSERT_EQ(y2d.AsStrings().size(), 1u);
+  EXPECT_EQ(y2d.AsStrings()[0], "");
+}
+
+TEST(KernelClass, StringNormalizerParseCaseChangeAction) {
+  EXPECT_EQ(StringNormalizer::ParseCaseChangeAction("NONE"),
+            StringNormalizer::CaseChangeAction::kNone);
+  EXPECT_EQ(StringNormalizer::ParseCaseChangeAction("LOWER"),
+            StringNormalizer::CaseChangeAction::kLower);
+  EXPECT_EQ(StringNormalizer::ParseCaseChangeAction("UPPER"),
+            StringNormalizer::CaseChangeAction::kUpper);
+  EXPECT_THROW(StringNormalizer::ParseCaseChangeAction("lower"), std::invalid_argument);
+  EXPECT_THROW(StringNormalizer::ParseCaseChangeAction(""), std::invalid_argument);
+}
+
+TEST(KernelClass, StringNormalizerRejectsBadInputs) {
+  const KernelContext ctx{DefaultOpset(10)};
+  StringNormalizer normalizer{ctx};
+
+  // Non-string input.
+  Tensor bad_dtype = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  EXPECT_THROW(normalizer(bad_dtype), std::invalid_argument);
+
+  // Unsupported rank (rank 3).
+  Tensor bad_rank = Tensor::MakeString("", {1, 1, 2}, std::vector<std::string>(2));
+  EXPECT_THROW(normalizer(bad_rank), std::invalid_argument);
+
+  // 2-D shape with leading dim != 1 is rejected.
+  Tensor bad_2d = Tensor::MakeString("", {2, 2}, std::vector<std::string>(4));
+  EXPECT_THROW(normalizer(bad_2d), std::invalid_argument);
+}
+
+TEST(KernelClass, RegexFullMatchProducesElementWiseBoolMask) {
+  const KernelContext ctx{DefaultOpset(20)};
+  RegexFullMatch regex_full_match{ctx};
+  Tensor x = Tensor::FromStrings("", {3}, {"www.google.com", "www.facebook.com", "www.bbc.co.uk"});
+  Tensor y = regex_full_match(x, "www\\.[\\w.-]+\\.\\bcom\\b");
+  EXPECT_EQ(y.shape, x.shape);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::BOOL));
+  const uint8_t *out = y.AsBool();
+  ASSERT_NE(out, nullptr);
+  EXPECT_EQ(out[0], 1u);
+  EXPECT_EQ(out[1], 1u);
+  EXPECT_EQ(out[2], 0u);
+}
+
+TEST(KernelClass, RegexFullMatchRequiresFullMatchNotPartial) {
+  const KernelContext ctx{DefaultOpset(20)};
+  RegexFullMatch regex_full_match{ctx};
+  Tensor x = Tensor::FromStrings("", {2}, {"abc", "abcdef"});
+  // Partial match of "abc" inside "abcdef" must NOT count.
+  Tensor y = regex_full_match(x, "abc");
+  const uint8_t *out = y.AsBool();
+  ASSERT_NE(out, nullptr);
+  EXPECT_EQ(out[0], 1u);
+  EXPECT_EQ(out[1], 0u);
+}
+
+TEST(KernelClass, RegexFullMatchEmptyInputReturnsEmptyBool) {
+  const KernelContext ctx{DefaultOpset(20)};
+  RegexFullMatch regex_full_match{ctx};
+  Tensor x = Tensor::FromStrings("", {0}, std::vector<std::string>{});
+  Tensor y = regex_full_match(x, "abc");
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{0}));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::BOOL));
+  EXPECT_EQ(y.element_count(), 0);
+}
+
+TEST(KernelClass, RegexFullMatchRejectsBadInputsAndOutputs) {
+  const KernelContext ctx{DefaultOpset(20)};
+  RegexFullMatch regex_full_match{ctx};
+  Tensor x = Tensor::FromStrings("", {2}, {"a", "b"});
+
+  // Non-STRING input is rejected.
+  Tensor bad_dtype = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  EXPECT_THROW(regex_full_match(bad_dtype, "."), std::invalid_argument);
+
+  // Invalid regex pattern is rejected.
+  EXPECT_THROW(regex_full_match(x, "("), std::invalid_argument);
+
+  // In-place overload with wrong dtype / shape / size is rejected.
+  Tensor bad_out_dtype = Tensor::FromStrings("", {2}, std::vector<std::string>{"", ""});
+  EXPECT_THROW(regex_full_match(x, ".", bad_out_dtype), std::invalid_argument);
+
+  Tensor bad_out_shape = Tensor::FromBool("", {3}, std::vector<uint8_t>(3, 0));
+  EXPECT_THROW(regex_full_match(x, ".", bad_out_shape), std::invalid_argument);
+}
+
+} // namespace Test

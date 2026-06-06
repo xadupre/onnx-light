@@ -1,0 +1,273 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#pragma once
+
+#include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/simple_sequence.h"
+#include "onnx_kernels/simple_tensor.h"
+
+#include <vector>
+
+namespace ONNX_LIGHT_NAMESPACE {
+namespace onnx_kernels {
+namespace kernel {
+
+// ---------------------------------------------------------------------------
+// Reference implementations of the ``sequence`` backend test kernels.
+//
+// Each kernel is exposed as a small class whose constructor takes a
+// :ref:`KernelContext` (carrying the opset against which the kernel must
+// behave) and whose ``operator()`` performs the computation.
+//
+// Two flavors of ``operator()`` are provided:
+//
+//   * The returning overload (``Tensor operator()(...) const``) allocates a
+//     fresh ``Tensor`` whose data buffer is owned by the returned value.
+//   * The in-place overload (``void operator()(..., Tensor &output) const``)
+//     writes results into a caller-supplied output tensor whose buffer has
+//     already been allocated. The caller is responsible for setting
+//     ``output.data_type``, ``output.shape`` and sizing ``output.data`` to
+//     match the operator's expected output; the kernel validates these
+//     attributes and throws ``std::invalid_argument`` on mismatch.
+//
+// ``SequenceConstruct`` mirrors the ONNX ``SequenceConstruct`` operator
+// (since opset 11 in the ai.onnx domain): it builds a tensor sequence from
+// ``N`` input tensors that share the same element type. Because the
+// project's runtime :ref:`Tensor` type does not natively model sequence
+// values, the kernel materializes the constructed sequence as a single
+// stacked ``Tensor`` whose outer dimension is the sequence length: given
+// ``N`` inputs of identical shape ``[d0, ..., dk]`` and element type ``T``,
+// the output has shape ``[N, d0, ..., dk]`` and element type ``T``, and its
+// byte buffer is the row-major concatenation of the per-element byte
+// buffers. The N == 0 case yields a tensor with shape ``[0]`` and an empty
+// byte buffer; the element type defaults to ``UNDEFINED`` since it cannot
+// be inferred from inputs alone.
+//
+// Each kernel class also exposes a ``static constexpr bool CanRunInPlace()``
+// query indicating whether the output tensor's data buffer may alias any
+// input tensor's buffer. ``SequenceConstruct`` produces an output whose
+// layout fundamentally differs from any single input, so aliasing is not
+// permitted.
+// ---------------------------------------------------------------------------
+
+/// Stacks ``inputs`` along a new outer axis 0 to materialize the constructed
+/// tensor sequence. All inputs must share the same ``data_type`` and
+/// ``shape``; the output has shape ``[N, *inputs[0].shape]`` and contains
+/// the concatenation of the per-input byte buffers.
+class SequenceConstruct : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  Tensor operator()(const std::vector<Tensor> &inputs) const;
+  void operator()(const std::vector<Tensor> &inputs, Tensor &output) const;
+
+  /// Sequence-returning overload. Builds an :cpp:struct:`Sequence`
+  /// whose ``elem_type`` is the common element type of ``inputs`` (or
+  /// ``UNDEFINED`` when ``inputs`` is empty) and whose ``values``
+  /// preserves the input order. Unlike the ``Tensor``-returning
+  /// overloads, this overload does not stack the inputs into a single
+  /// buffer and does not require the inputs to share a common shape.
+  Sequence AsSequence(const std::vector<Tensor> &inputs) const;
+
+  /// Output layout is a stacked concatenation of input byte buffers, which
+  /// cannot share storage with any single input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Concatenates the tensor elements of an input sequence along ``axis``
+/// (when ``new_axis == 0``, the default) or stacks them along a new
+/// axis at position ``axis`` (when ``new_axis == 1``), mirroring the
+/// ONNX ``ConcatFromSequence`` operator (since opset 11 in the
+/// ai.onnx domain). The project's runtime ``Tensor`` type does not
+/// natively model sequence values, so this kernel takes the sequence
+/// as a ``std::vector<Tensor>`` of identically-typed tensors. All
+/// inputs must share the same ``data_type`` and rank, and must agree
+/// on every dimension except (for ``new_axis == 0``) the concat axis,
+/// which must be equal across inputs (for ``new_axis == 1``) every
+/// dimension must match exactly. The output element type is the
+/// common input element type; the output shape follows the ONNX
+/// schema (rank ``r`` for ``new_axis == 0``, rank ``r + 1`` for
+/// ``new_axis == 1``).
+class ConcatFromSequence : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Returning overload. ``axis`` follows the ONNX convention and may
+  /// be negative; ``new_axis`` must be 0 (concat) or 1 (stack).
+  Tensor operator()(const std::vector<Tensor> &inputs, int64_t axis, int64_t new_axis = 0) const;
+
+  /// In-place overload. ``output`` must already carry the expected
+  /// ``data_type``, ``shape`` and sufficiently-sized ``data`` buffer.
+  void operator()(const std::vector<Tensor> &inputs, int64_t axis, int64_t new_axis,
+                  Tensor &output) const;
+
+  /// Output layout fundamentally differs from any single input
+  /// (concatenation/stacking along an axis), so aliasing is not
+  /// permitted.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Produces a scalar INT64 tensor containing the number of tensor
+/// elements in ``input_sequence``. This mirrors ONNX
+/// ``SequenceLength`` (since opset 11 in the ai.onnx domain).
+class SequenceLength : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Computes ``Tensor<int64, {}>{ len(input_sequence) }``.
+  Tensor operator()(const Sequence &input_sequence) const;
+};
+
+/// Constructs an empty tensor sequence with element type ``dtype``.
+/// This mirrors ONNX ``SequenceEmpty`` (since opset 11 in the ai.onnx
+/// domain).
+///
+/// ``dtype`` is the integer value of an ONNX ``TensorProto::DataType``
+/// (e.g. ``DataType::FLOAT``). When ``dtype`` is ``0``
+/// (``DataType::UNDEFINED``), the kernel falls back to
+/// ``DataType::FLOAT`` to match the ONNX schema default.
+class SequenceEmpty : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Returns an empty :cpp:struct:`Sequence` whose ``elem_type`` is the
+  /// resolved ``dtype`` (defaulting to ``DataType::FLOAT``).
+  Sequence operator()(int32_t dtype = 0) const;
+
+  /// Output sequence is freshly constructed, so it cannot share storage
+  /// with any input (there are no inputs).
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Removes the tensor at ``position`` from ``input_sequence`` and
+/// returns the resulting sequence. This mirrors ONNX
+/// ``SequenceErase`` (since opset 11 in the ai.onnx domain).
+///
+/// ``position`` is optional; when omitted the last element is erased.
+/// Negative positions count from the back of the sequence:
+/// ``position == -1`` addresses the last element. The accepted range
+/// is ``[-n, n - 1]`` where ``n`` is the sequence length.
+class SequenceErase : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Erases the element at ``position`` (default: last element).
+  Sequence operator()(const Sequence &input_sequence, const Tensor *position = nullptr) const;
+};
+
+/// Returns a copy of the tensor at ``position`` in ``input_sequence``.
+/// This mirrors ONNX ``SequenceAt`` (since opset 11 in the ai.onnx
+/// domain).
+///
+/// ``position`` is a required scalar INT32 or INT64 tensor. Negative
+/// positions count from the back of the sequence: ``position == -1``
+/// addresses the last element. The accepted range is ``[-n, n - 1]``
+/// where ``n`` is the sequence length.
+class SequenceAt : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Returns a copy of the tensor at ``position``.
+  Tensor operator()(const Sequence &input_sequence, const Tensor &position) const;
+};
+
+/// Reference implementation of the ONNX ``SequenceMap`` operator (since
+/// opset 17 in the ai.onnx domain).
+///
+/// Like :class:`If` and :class:`Loop`, this kernel does not execute the
+/// ``body`` subgraph itself; it consumes already-evaluated per-iteration
+/// body output tensors and merely assembles the operator's output
+/// sequences:
+///
+///   * the operator has one or more output sequences (``M >= 1``), one
+///     per body output;
+///   * for each output ``k``, the kernel groups the ``N`` per-iteration
+///     tensors ``body_outputs_per_iter[k]`` into a single
+///     :cpp:struct:`Sequence` of length ``N``, where
+///     ``N == input_sequence.size()``;
+///   * all per-iteration tensors of a given output ``k`` must share the
+///     same data type (the ONNX schema permits per-iteration shape
+///     variation, so shapes are not required to match).
+///
+/// The kernel is therefore a faithful reference for the operator's
+/// composition semantics that is useful for shape and type-propagation
+/// tests while keeping the implementation independent from any graph
+/// executor.
+class SequenceMap : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// @param input_sequence         Input sequence whose length determines
+  ///                               the number of iterations ``N``.
+  /// @param body_outputs_per_iter  Per-iteration body outputs, given as
+  ///                               ``body_outputs_per_iter[k][i]`` —
+  ///                               ``M`` body outputs each with one
+  ///                               tensor per iteration (rectangular).
+  ///                               Every row must have length ``N`` and
+  ///                               all tensors in a given row must share
+  ///                               the same data type.
+  /// @return ``M`` output sequences each of length ``N``.
+  std::vector<Sequence>
+  operator()(const Sequence &input_sequence,
+             const std::vector<std::vector<Tensor>> &body_outputs_per_iter) const;
+
+  /// Output sequences are freshly constructed, so they cannot share
+  /// storage with any input.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Inserts ``tensor`` into ``input_sequence`` at ``position`` and returns
+/// the resulting sequence. This mirrors ONNX ``SequenceInsert`` (since
+/// opset 11 in the ai.onnx domain).
+///
+/// ``position`` is optional; when omitted ``tensor`` is appended to the
+/// back of the sequence. Negative positions count from the back:
+/// ``position == -1`` inserts before the last element. The accepted range
+/// is ``[-n, n]`` where ``n`` is the sequence length.
+class SequenceInsert : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Inserts ``tensor`` at ``position`` (default: append to back).
+  Sequence operator()(const Sequence &input_sequence, const Tensor &tensor,
+                      const Tensor *position = nullptr) const;
+};
+
+/// Splits ``input`` along ``axis`` into a tensor sequence. This mirrors
+/// ONNX ``SplitToSequence`` (since opset 11 in the ai.onnx domain).
+///
+/// When ``split`` is null (omitted), ``input`` is split into chunks of
+/// size 1 along ``axis``; ``keepdims`` controls whether the split axis
+/// is preserved (default 1) or squeezed away (0).
+///
+/// When ``split`` is provided, ``keepdims`` is ignored. If ``split`` is
+/// a scalar (rank-0 INT32/INT64 tensor) with value ``s``, ``input`` is
+/// split into equal chunks of size ``s`` along ``axis``; the last chunk
+/// may be smaller when the axis dimension is not divisible by ``s``. If
+/// ``split`` is a 1-D INT32/INT64 tensor, its entries give the per-chunk
+/// size along ``axis`` and must sum to ``input.shape[axis]``.
+///
+/// ``axis`` may be negative, in which case it counts from the back of
+/// ``input``'s rank. The kernel supports all whole-byte element types
+/// supported by :cpp:func:`ElementSize`; STRING and sub-byte element
+/// types are not supported and will cause the kernel to throw
+/// ``std::invalid_argument``.
+class SplitToSequence : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Computes the split. ``split`` may be ``nullptr`` (omitted), a
+  /// scalar INT32/INT64 tensor, or a 1-D INT32/INT64 tensor.
+  Sequence operator()(const Tensor &input, const Tensor *split, int64_t axis = 0,
+                      int64_t keepdims = 1) const;
+
+  /// Output sequence elements are freshly allocated slices and do not
+  /// share storage with ``input``.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+} // namespace kernel
+} // namespace onnx_kernels
+} // namespace ONNX_LIGHT_NAMESPACE

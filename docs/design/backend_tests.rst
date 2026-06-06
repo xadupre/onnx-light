@@ -211,16 +211,18 @@ Running backend tests in C++
 
 The exact same node test cases are also available directly from C++ via
 the ``lib_onnx_backend_test`` static library, with no dependency on
-Python. The library lives in ``onnx_light/onnx_backend_test/`` and only
-depends on ``lib_onnx_proto``. It exposes:
+Python. The library lives in ``onnx_light/onnx_backend_test/`` and
+publicly links the ``lib_onnx_kernels`` static library (under
+``onnx_light/onnx_kernels/``) which provides the runtime data model
+and reference kernel implementations. Together they expose:
 
-* a runtime :cpp:struct:`onnx::onnx_backend_test::Tensor` (distinct from
+* a runtime :cpp:struct:`onnx::onnx_kernels::Tensor` (distinct from
   :cpp:class:`onnx::TensorProto`) that stores raw element bytes,
-* a :cpp:struct:`onnx::onnx_backend_test::TestCase` bundle of
+* a :cpp:struct:`onnx::onnx_kernels::TestCase` bundle of
   :cpp:class:`onnx::ModelProto` and expected input/output data sets,
-* the :cpp:func:`onnx::onnx_backend_test::Expect` helper used by every
+* the :cpp:func:`onnx::onnx_kernels::Expect` helper used by every
   ``RegisterXxxCases`` function to register a single-node model, and
-* :cpp:func:`onnx::onnx_backend_test::CollectTestCases`, which returns
+* :cpp:func:`onnx::onnx_kernels::CollectTestCases`, which returns
   the full registry of node test cases (the same registry that the
   Python bindings expose through
   ``onnx_light.onnx_py._onnxpy.backend_test``).
@@ -229,16 +231,16 @@ Per-operator cases are organised under
 ``onnx_light/onnx_backend_test/cases/<group>/`` (``math``, ``logical``,
 ``nn``, ``tensor``, …) and the expected outputs are computed with the
 reference kernels under
-``onnx_light/onnx_backend_test/kernels/<group>/`` so the registry is
+``onnx_light/onnx_kernels/kernels/<group>/`` so the registry is
 fully self-contained and deterministic.
 
 A minimal C++ runtime evaluator therefore looks like:
 
 .. code-block:: cpp
 
-    #include "onnx_backend_test/test_case.h"
+    #include "onnx_kernels/test_case.h"
 
-    using namespace onnx::onnx_backend_test;
+    using namespace onnx::onnx_kernels;
 
     int main() {
       std::vector<TestCase> cases = CollectTestCases();
@@ -250,7 +252,8 @@ A minimal C++ runtime evaluator therefore looks like:
     }
 
 The library ships its own GoogleTest-based unit tests under
-``unittests/cc_onnx_backend_test/``. To build and run them, configure
+``unittests/cc/onnx_kernels/`` and ``unittests/cc/onnx_backend_test/``.
+To build and run them, configure
 the project with ``ONNX_LIGHT_BUILD_TESTS=ON`` and use ``ctest``:
 
 .. code-block:: bash
@@ -259,7 +262,7 @@ the project with ``ONNX_LIGHT_BUILD_TESTS=ON`` and use ``ctest``:
     cmake --build build -j
     ctest --test-dir build -R Backend --output-on-failure
 
-The ``-R`` regex can be tightened (for example ``-R BackendKernelClass``)
+The ``-R`` regex can be tightened (for example ``-R KernelClass``)
 to focus on a single test group.
 
 ----
@@ -268,5 +271,8 @@ See also
 --------
 
 * :ref:`l-api-backend` — Python API reference for the backend module.
+* :doc:`../api/cpp/onnx_kernels/index` — C++ API reference for the
+  ``lib_onnx_kernels`` library (kernels and runtime data model).
 * :doc:`../api/cpp/onnx_backend_test/index` — C++ API reference for
-  the ``lib_onnx_backend_test`` library.
+  the ``lib_onnx_backend_test`` library (per-operator test-case
+  registries).

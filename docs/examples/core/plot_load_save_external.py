@@ -73,9 +73,9 @@ print(f"Model ByteSize: {onnx_model.ByteSize() / 1024:.1f} KB")
 # Save to a single .onnx file first
 # -----------------------------------
 #
-# Write the model to disk using standard ``onnx.save`` so that we can later
-# convert it to the two-file layout via :func:`onnxl.load` /
-# :func:`onnxl.save`.
+# Write the model to disk using standard :func:`onnx.save` so that we can later
+# convert it to the two-file layout via :func:`onnx_light.onnx.load` /
+# :func:`onnx_light.onnx.save`.
 
 out_dir = "temp_plot_load_save_external"
 os.makedirs(out_dir, exist_ok=True)

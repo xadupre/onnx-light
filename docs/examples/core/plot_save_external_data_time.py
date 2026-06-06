@@ -115,7 +115,7 @@ def _save_onnx_external_with_flush() -> None:
 results.append(profile_call("save/2filex1/onnx", _save_onnx_external_with_flush, repeat=1))
 print(f"{results[-1]['name']:<35} total={results[-1]['total'] * 1e3:.1f} ms")
 
-# ``onnx_light.onnx.save`` restores the in-memory model after the write, but we
+# :func:`onnx_light.onnx.save` restores the in-memory model after the write, but we
 # keep the benchmark single-shot so the rows stay directly comparable.
 onnx_light_external_path = os.path.join(out_dir, "out_onnxlight_ext.onnx")
 onnx_light_external_data = onnx_light_external_path + ".data"

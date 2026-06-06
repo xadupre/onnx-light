@@ -68,7 +68,7 @@ In-place consolidation with ConsolidateTensorsToBuffer
 ------------------------------------------------------
 
 The function ``ConsolidateTensorsToBuffer(ModelProto &model, const TensorBufferOptions &opts)``
-(Python: ``onnx_light.onnx.consolidate_tensors_to_buffer``) takes an already-loaded
+(Python: :func:`onnx_light.onnx.consolidate_tensors_to_buffer`) takes an already-loaded
 model and moves all qualifying tensor payloads into a single contiguous buffer,
 reproducing the shared-buffer ownership pattern of the no-copy external-data
 loading scenario:

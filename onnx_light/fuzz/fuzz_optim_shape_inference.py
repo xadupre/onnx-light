@@ -3,7 +3,7 @@
 """Atheris fuzz harness for onnx_light.onnx_optim.shape_inference.
 
 Exercises onnx-light's own C++-backed ``infer_shapes_model`` pipeline,
-distinct from ``onnx_light.onnx.shape_inference.infer_shapes`` (which
+distinct from :func:`onnx_light.onnx.shape_inference.infer_shapes` (which
 mirrors upstream ONNX). Both paths share the structured-vs-raw toggle
 pattern from :mod:`fuzz_shape_inference` so the harness reaches the
 per-node inference dispatch even when random bytes would not parse.

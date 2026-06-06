@@ -103,7 +103,11 @@ print("equal expressions:", simplify_two_expressions("e*2", "e+e"))
 # from variable names to ``int`` values, and returns the integer result.
 
 print(evaluate_expression("x - y", {"x": 5, "y": 6}))
-print(evaluate_expression("batch * seq_length + offset", {"batch": 4, "seq_length": 128, "offset": 0}))
+print(
+    evaluate_expression(
+        "batch * seq_length + offset", {"batch": 4, "seq_length": 128, "offset": 0}
+    )
+)
 print(evaluate_expression("CeilToInt(7, 2)", {}))
 
 #####################################
@@ -134,10 +138,7 @@ print(rename_expression("Max(s10, s3)", {"s10": "E", "s3": "D"}))
 
 # :func:`rename_dynamic_expression` additionally applies a lightweight
 # simplification pass after renaming.
-replacements = {
-    "s9": "cache_length",
-    "seq_length": "seq_length",
-}
+replacements = {"s9": "cache_length", "seq_length": "seq_length"}
 print(rename_dynamic_expression("s9+seq_length", replacements))
 
 #####################################

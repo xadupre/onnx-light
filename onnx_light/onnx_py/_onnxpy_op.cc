@@ -9,6 +9,7 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
+#include <sstream>
 
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -159,10 +160,12 @@ void AddOnnxPyOp(nb::module_ &m) {
              const std::string description = quote(a.description);
              const std::string default_value = onnx_op::AttributeDefaultRepr(a.default_value);
              const std::string default_repr = default_value.empty() ? "None" : quote(default_value);
-             return "AttributeParam(name=" + name + ", description=" + description +
-                    ", type=AttributeType." + onnx_op::AttributeType_Name(a.type) +
-                    ", required=" + (a.required ? std::string("True") : std::string("False")) +
-                    ", default_value=" + default_repr + ")";
+             std::ostringstream os;
+             os << "AttributeParam(name=" << name << ", description=" << description
+                << ", type=AttributeType." << onnx_op::AttributeType_Name(a.type)
+                << ", required=" << (a.required ? "True" : "False")
+                << ", default_value=" << default_repr << ")";
+             return os.str();
            })
       .def_rw("default_value", &onnx_op::AttributeParam::default_value,
               "Typed default value (``None`` if absent, otherwise int, float, "

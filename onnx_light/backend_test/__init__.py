@@ -17,14 +17,14 @@ builds higher-level helpers on top of.
 from __future__ import annotations
 
 import re
-from typing import Pattern, Union
+from typing import Any, Pattern, Union
 
 from ..onnx_py._onnxpy import backend_test as _C  # type: ignore[attr-defined]
 
 # Core data model.
-DataSet = _C.DataSet
-Tensor = _C.Tensor
-TestCase = _C.TestCase
+DataSet: Any = _C.DataSet
+Tensor: Any = _C.Tensor
+TestCase: Any = _C.TestCase
 
 # Helper that collects every C++-registered backend test case.
 collect_test_cases = _C.collect_test_cases

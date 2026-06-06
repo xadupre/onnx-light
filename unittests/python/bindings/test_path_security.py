@@ -16,7 +16,7 @@ import unittest
 _spec = importlib.util.spec_from_file_location(
     "onnx_light.onnx_lib._path_security",
     os.path.join(
-        os.path.dirname(__file__), "..", "..", "onnx_light", "onnx_lib", "_path_security.py"
+        os.path.dirname(__file__), "..", "..", "..", "onnx_light", "onnx_lib", "_path_security.py"
     ),
 )
 _mod = importlib.util.module_from_spec(_spec)

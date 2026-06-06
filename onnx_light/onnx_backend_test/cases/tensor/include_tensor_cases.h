@@ -119,6 +119,10 @@ void RegisterTensorScatterCases(std::vector<TestCase> &registry);
 /// Registers the ``ScatterElements`` backend test node case(s).
 void RegisterScatterElementsCases(std::vector<TestCase> &registry);
 
+/// Registers the deprecated ``Scatter`` (opset 9, deprecated since opset 11)
+/// backend test node case(s).
+void RegisterScatterCases(std::vector<TestCase> &registry);
+
 /// Registers the ``ScatterND`` backend test node case(s).
 void RegisterScatterNDCases(std::vector<TestCase> &registry);
 

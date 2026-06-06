@@ -44,6 +44,7 @@ void CollectTensorTestCases(std::vector<TestCase> &registry, const std::string &
       {"TensorScatter", &RegisterTensorScatterCases},
       {"ScatterElements", &RegisterScatterElementsCases},
       {"ScatterND", &RegisterScatterNDCases},
+      {"Scatter", &RegisterScatterCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

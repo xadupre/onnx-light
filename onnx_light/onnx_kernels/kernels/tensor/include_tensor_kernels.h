@@ -635,6 +635,32 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Reference implementation of the deprecated ONNX ``Scatter`` operator
+/// (opset 9, deprecated since opset 11 in favour of ``ScatterElements``).
+/// Semantically equivalent to ``ScatterElements`` with ``reduction="none"``:
+/// ``data``, ``indices`` and ``updates`` must have the same rank ``r`` and
+/// the output has the same shape and dtype as ``data``. ``indices`` may be
+/// INT32 or INT64; negative values count from the back of the scattered
+/// axis.
+class Scatter : public KernelBase {
+public:
+  /// Attributes carried by the ONNX ``Scatter`` operator.
+  struct Attributes {
+    int64_t axis = 0;
+  };
+
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &data, const Tensor &indices, const Tensor &updates,
+                    const Attributes &attrs) const;
+  void operator()(const Tensor &data, const Tensor &indices, const Tensor &updates,
+                  const Attributes &attrs, Tensor &output) const;
+
+  /// Output shape matches ``data`` so the output buffer could share storage
+  /// with the first input; the reference implementation always writes into a
+  /// freshly allocated buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// Reference implementation of the ONNX ``ScatterND`` operator (since opset
 /// 11 in the ``ai.onnx`` domain; ``reduction`` attribute added in opset 16
 /// (``add``/``mul``) and extended in opset 18 (``max``/``min``)). The output

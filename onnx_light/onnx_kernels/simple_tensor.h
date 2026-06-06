@@ -232,5 +232,23 @@ size_t PackedByteSize(int32_t dtype, int64_t element_count);
 /// ``vi.name`` is set to ``tensor.name``.
 void FillValueInfo(const Tensor &tensor, ValueInfoProto &vi);
 
+/**
+ * Converts a ``TensorProto`` to a :cpp:class:`Tensor`.
+ *
+ * Supports all numeric data types stored either in the typed repeated
+ * fields (``float_data``, ``int32_data``, ``int64_data``, ``double_data``,
+ * ``uint64_data``) or in the raw little-endian ``raw_data`` field.
+ * ``STRING`` tensors are read from ``string_data``.
+ *
+ * The resulting ``Tensor::name`` is set from ``tp.name()``; the shape is
+ * taken from ``tp.dims()``.
+ *
+ * @param tp The source ``TensorProto``.
+ * @return   A ``Tensor`` whose data matches the content of ``tp``.
+ *
+ * @throws std::invalid_argument for unsupported ``data_type`` values.
+ */
+Tensor TensorFromProto(const TensorProto &tp);
+
 } // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

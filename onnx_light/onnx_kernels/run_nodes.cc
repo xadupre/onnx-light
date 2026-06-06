@@ -141,5 +141,29 @@ void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext 
   }
 }
 
+void RunGraph(const GraphProto &graph, RuntimeContext &rt) {
+  // Seed the tensor map with all graph initializers.
+  const auto &inits = graph.initializer();
+  for (size_t i = 0; i < inits.size(); ++i) {
+    const TensorProto &tp = inits[i];
+    const std::string init_name = tp.name().as_string();
+    // Only insert if the caller has not already provided a value for this
+    // name (i.e. runtime overrides of initializers are respected).
+    if (!rt.Has(init_name)) {
+      rt.Set(init_name, TensorFromProto(tp));
+    }
+  }
+  RunNodes(graph.node(), rt);
+}
+
+void RunFunction(const FunctionProto &func, RuntimeContext &rt) { RunNodes(func.node(), rt); }
+
+void RunModel(const ModelProto &model, RuntimeContext &rt) {
+  if (!model.has_graph()) {
+    throw std::invalid_argument("RunModel: the ModelProto does not contain a graph.");
+  }
+  RunGraph(model.ref_graph(), rt);
+}
+
 } // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

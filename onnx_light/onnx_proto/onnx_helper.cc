@@ -918,6 +918,73 @@ bool ReadIntegerValues(const TensorProto &tensor_proto, std::vector<int64_t> &ou
   }
 }
 
+bool ReadFloatingValues(const TensorProto &tensor_proto, std::vector<double> &out) {
+  const auto dtype = tensor_proto.data_type();
+  out.clear();
+
+  // Type-specific storage takes precedence over raw_data when populated.
+  if (dtype == TensorProto::DataType::FLOAT && tensor_proto.float_data().size() > 0) {
+    out.reserve(tensor_proto.float_data().size());
+    for (int i = 0; i < tensor_proto.float_data().size(); ++i) {
+      out.push_back(static_cast<double>(tensor_proto.float_data()[i]));
+    }
+    return true;
+  }
+  if (dtype == TensorProto::DataType::DOUBLE && tensor_proto.double_data().size() > 0) {
+    out.reserve(tensor_proto.double_data().size());
+    for (int i = 0; i < tensor_proto.double_data().size(); ++i) {
+      out.push_back(tensor_proto.double_data()[i]);
+    }
+    return true;
+  }
+
+  // Fall back to raw_data (little-endian fixed-width).
+  if (!tensor_proto.is_raw_data()) {
+    return false;
+  }
+  const utils::ByteSpan &raw = tensor_proto.raw_data();
+  const uint8_t *bytes = raw.data();
+  const size_t nbytes = raw.size();
+  switch (dtype) {
+  case TensorProto::DataType::FLOAT: {
+    if (nbytes % 4 != 0) {
+      return false;
+    }
+    const size_t count = nbytes / 4;
+    out.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+      uint32_t u = 0;
+      for (size_t b = 0; b < 4; ++b) {
+        u |= static_cast<uint32_t>(bytes[i * 4 + b]) << (8 * b);
+      }
+      float f;
+      std::memcpy(&f, &u, sizeof(float));
+      out.push_back(static_cast<double>(f));
+    }
+    return true;
+  }
+  case TensorProto::DataType::DOUBLE: {
+    if (nbytes % 8 != 0) {
+      return false;
+    }
+    const size_t count = nbytes / 8;
+    out.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+      uint64_t u = 0;
+      for (size_t b = 0; b < 8; ++b) {
+        u |= static_cast<uint64_t>(bytes[i * 8 + b]) << (8 * b);
+      }
+      double d;
+      std::memcpy(&d, &u, sizeof(double));
+      out.push_back(d);
+    }
+    return true;
+  }
+  default:
+    return false;
+  }
+}
+
 const GraphProto &FindGraphAttribute(const NodeProto &node, const char *attr_name,
                                      const char *context) {
   const std::string prefix =

@@ -109,6 +109,25 @@ void RegisterCumSumCases(std::vector<TestCase> &registry) {
     Tensor y = cumsum_kernel(x, axis);
     Expect(node, {x, axis}, {y}, "test_cumsum_2d_negative_axis", {opset}, "backend-test", registry);
   }
+
+  // 2-D cumulative sum on INT32 input along axis 0.
+  {
+    NodeProto node = MakeCumSumNode(/*exclusive=*/false, /*reverse=*/false);
+    Tensor x = Tensor::FromInt32("", {2, 3}, {1, 2, 3, 4, 5, 6});
+    Tensor axis = Tensor::FromInt32("", {}, {0});
+    Tensor y = cumsum_kernel(x, axis);
+    Expect(node, {x, axis}, {y}, "test_cumsum_2d_int32", {opset}, "backend-test", registry);
+  }
+
+  // 1-D exclusive cumulative sum on INT32 input (axis = 0).
+  {
+    NodeProto node = MakeCumSumNode(/*exclusive=*/true, /*reverse=*/false);
+    Tensor x = Tensor::FromInt32("", {5}, {1, 2, 3, 4, 5});
+    Tensor axis = Tensor::FromInt32("", {}, {0});
+    Tensor y = cumsum_kernel(x, axis, /*exclusive=*/true);
+    Expect(node, {x, axis}, {y}, "test_cumsum_1d_int32_exclusive", {opset}, "backend-test",
+           registry);
+  }
 }
 
 } // namespace onnx_backend_test

@@ -258,6 +258,14 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
   const TestCase *upstream_e4m3fn_case = nullptr;
   const TestCase *upstream_e5m2_case = nullptr;
   const TestCase *upstream_e4m3fn_zp_case = nullptr;
+  const TestCase *axis_case = nullptr;
+  const TestCase *blocked_case = nullptr;
+  const TestCase *e4m3fn_float16_case = nullptr;
+  const TestCase *uint4_case = nullptr;
+  const TestCase *int4_case = nullptr;
+  const TestCase *uint2_case = nullptr;
+  const TestCase *int2_case = nullptr;
+  const TestCase *float4e2m1_case = nullptr;
   for (const auto &c : cases) {
     if (c.name == "test_cc_dequantizelinear") {
       uint8_case = &c;
@@ -275,6 +283,22 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
       upstream_e5m2_case = &c;
     } else if (c.name == "test_dequantizelinear_e4m3fn_zero_point") {
       upstream_e4m3fn_zp_case = &c;
+    } else if (c.name == "test_dequantizelinear_axis") {
+      axis_case = &c;
+    } else if (c.name == "test_dequantizelinear_blocked") {
+      blocked_case = &c;
+    } else if (c.name == "test_dequantizelinear_e4m3fn_float16") {
+      e4m3fn_float16_case = &c;
+    } else if (c.name == "test_dequantizelinear_uint4") {
+      uint4_case = &c;
+    } else if (c.name == "test_dequantizelinear_int4") {
+      int4_case = &c;
+    } else if (c.name == "test_dequantizelinear_uint2") {
+      uint2_case = &c;
+    } else if (c.name == "test_dequantizelinear_int2") {
+      int2_case = &c;
+    } else if (c.name == "test_dequantizelinear_float4e2m1") {
+      float4e2m1_case = &c;
     }
   }
   ASSERT_NE(uint8_case, nullptr);
@@ -285,6 +309,14 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
   ASSERT_NE(upstream_e4m3fn_case, nullptr);
   ASSERT_NE(upstream_e5m2_case, nullptr);
   ASSERT_NE(upstream_e4m3fn_zp_case, nullptr);
+  ASSERT_NE(axis_case, nullptr);
+  ASSERT_NE(blocked_case, nullptr);
+  ASSERT_NE(e4m3fn_float16_case, nullptr);
+  ASSERT_NE(uint4_case, nullptr);
+  ASSERT_NE(int4_case, nullptr);
+  ASSERT_NE(uint2_case, nullptr);
+  ASSERT_NE(int2_case, nullptr);
+  ASSERT_NE(float4e2m1_case, nullptr);
 
   // Default UINT8 case: two inputs (x, x_scale), single FLOAT output.
   {
@@ -414,6 +446,164 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
     EXPECT_FLOAT_EQ(py[0], 0.0f);
     EXPECT_FLOAT_EQ(py[3], 896.0f);
     EXPECT_FLOAT_EQ(py[4], -208.0f);
+  }
+
+  // Upstream per-axis UINT8 case (test_dequantizelinear_axis): per-channel
+  // form with 3-element x_scale and x_zero_point. The upstream node relies on
+  // the default ``axis`` (1), so the saved NodeProto has no explicit ``axis``
+  // attribute; the per-channel layout is inferred from the scale shape.
+  {
+    const GraphProto &graph = axis_case->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &n = graph.ref_node()[0];
+    EXPECT_EQ(n.ref_attribute().size(), 0u);
+
+    ASSERT_EQ(axis_case->data_sets.size(), 1u);
+    const auto &ds = axis_case->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    const std::vector<int64_t> scale_shape = {3};
+    EXPECT_EQ(ds.inputs[1].shape, scale_shape);
+    EXPECT_EQ(ds.inputs[2].shape, scale_shape);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+    const std::vector<int64_t> y_shape = {1, 3, 3, 2};
+    EXPECT_EQ(ds.outputs[0].shape, y_shape);
+    const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
+    EXPECT_FLOAT_EQ(py[0], -162.0f);
+    EXPECT_FLOAT_EQ(py[1], 10.0f);
+    EXPECT_FLOAT_EQ(py[12], 245.0f);
+    EXPECT_FLOAT_EQ(py[17], -470.0f);
+  }
+
+  // Upstream blocked UINT8 case (test_dequantizelinear_blocked): axis=1,
+  // block_size=2.
+  {
+    const GraphProto &graph = blocked_case->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &n = graph.ref_node()[0];
+    ASSERT_EQ(n.ref_attribute().size(), 2u);
+    bool saw_axis = false;
+    bool saw_block_size = false;
+    for (const auto &attr : n.ref_attribute()) {
+      const std::string attr_name(attr.ref_name().data(), attr.ref_name().size());
+      if (attr_name == "axis") {
+        EXPECT_EQ(attr.i(), static_cast<int64_t>(1));
+        saw_axis = true;
+      } else if (attr_name == "block_size") {
+        EXPECT_EQ(attr.i(), static_cast<int64_t>(2));
+        saw_block_size = true;
+      }
+    }
+    EXPECT_TRUE(saw_axis);
+    EXPECT_TRUE(saw_block_size);
+
+    ASSERT_EQ(blocked_case->data_sets.size(), 1u);
+    const auto &ds = blocked_case->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    const std::vector<int64_t> y_shape = {1, 4, 3, 2};
+    EXPECT_EQ(ds.outputs[0].shape, y_shape);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+    const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
+    EXPECT_FLOAT_EQ(py[0], 6.0f);
+    EXPECT_FLOAT_EQ(py[1], 178.0f);
+    EXPECT_FLOAT_EQ(py[18], 1210.0f);
+    EXPECT_FLOAT_EQ(py[23], 200.0f);
+  }
+
+  // Upstream FLOAT8E4M3FN -> FLOAT16 case (test_dequantizelinear_e4m3fn_float16):
+  // axis=0, scalar FLOAT16 x_scale, FLOAT16 output.
+  {
+    const GraphProto &graph = e4m3fn_float16_case->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &n = graph.ref_node()[0];
+    ASSERT_EQ(n.ref_attribute().size(), 1u);
+    const auto &attr = n.ref_attribute()[0];
+    const std::string attr_name(attr.ref_name().data(), attr.ref_name().size());
+    EXPECT_EQ(attr_name, "axis");
+    EXPECT_EQ(attr.i(), static_cast<int64_t>(0));
+
+    ASSERT_EQ(e4m3fn_float16_case->data_sets.size(), 1u);
+    const auto &ds = e4m3fn_float16_case->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 2u);
+    EXPECT_EQ(ds.inputs[0].data_type,
+              static_cast<int32_t>(onnx_backend_test::DataType::FLOAT8E4M3FN));
+    EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT16));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT16));
+    EXPECT_EQ(ds.inputs[1].shape, std::vector<int64_t>{});
+    EXPECT_EQ(ds.outputs[0].data.size(), 5u * sizeof(uint16_t));
+  }
+
+  // Sub-byte upstream cases (UINT4/INT4/FLOAT4E2M1 pack two values per byte,
+  // UINT2/INT2 pack four values per byte). All use axis=0, scalar x_scale and
+  // a 1-element x_zero_point.
+  for (auto *c : {uint4_case, int4_case, float4e2m1_case}) {
+    ASSERT_EQ(c->data_sets.size(), 1u);
+    const auto &ds = c->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    const std::vector<int64_t> shape = {5};
+    EXPECT_EQ(ds.outputs[0].shape, shape);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data.size(), 5u * sizeof(float));
+  }
+  for (auto *c : {uint2_case, int2_case}) {
+    ASSERT_EQ(c->data_sets.size(), 1u);
+    const auto &ds = c->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    const std::vector<int64_t> shape = {4};
+    EXPECT_EQ(ds.outputs[0].shape, shape);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data.size(), 4u * sizeof(float));
+  }
+
+  // Spot-check the exact dequantized float outputs for the sub-byte cases
+  // against the upstream values from onnx.backend.test.case.node.dequantizelinear.
+  {
+    const auto &ds = uint4_case->data_sets[0];
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::UINT4));
+    const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
+    EXPECT_FLOAT_EQ(py[0], -2.0f);
+    EXPECT_FLOAT_EQ(py[1], 0.0f);
+    EXPECT_FLOAT_EQ(py[2], 12.0f);
+    EXPECT_FLOAT_EQ(py[3], 18.0f);
+    EXPECT_FLOAT_EQ(py[4], 28.0f);
+  }
+  {
+    const auto &ds = int4_case->data_sets[0];
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT4));
+    const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
+    EXPECT_FLOAT_EQ(py[0], -2.0f);
+    EXPECT_FLOAT_EQ(py[1], 0.0f);
+    EXPECT_FLOAT_EQ(py[2], 12.0f);
+    EXPECT_FLOAT_EQ(py[3], -10.0f);
+    EXPECT_FLOAT_EQ(py[4], -18.0f);
+  }
+  {
+    const auto &ds = uint2_case->data_sets[0];
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::UINT2));
+    const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
+    EXPECT_FLOAT_EQ(py[0], -2.0f);
+    EXPECT_FLOAT_EQ(py[1], 0.0f);
+    EXPECT_FLOAT_EQ(py[2], 2.0f);
+    EXPECT_FLOAT_EQ(py[3], 4.0f);
+  }
+  {
+    const auto &ds = int2_case->data_sets[0];
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT2));
+    const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
+    EXPECT_FLOAT_EQ(py[0], -2.0f);
+    EXPECT_FLOAT_EQ(py[1], 0.0f);
+    EXPECT_FLOAT_EQ(py[2], -4.0f);
+    EXPECT_FLOAT_EQ(py[3], -6.0f);
+  }
+  {
+    const auto &ds = float4e2m1_case->data_sets[0];
+    EXPECT_EQ(ds.inputs[0].data_type,
+              static_cast<int32_t>(onnx_backend_test::DataType::FLOAT4E2M1));
+    const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
+    EXPECT_FLOAT_EQ(py[0], 0.0f);
+    EXPECT_FLOAT_EQ(py[1], 2.0f);
+    EXPECT_FLOAT_EQ(py[2], -2.0f);
+    EXPECT_FLOAT_EQ(py[3], 3.0f);
+    EXPECT_FLOAT_EQ(py[4], -8.0f);
   }
 }
 

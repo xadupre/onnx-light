@@ -52,6 +52,7 @@ using onnx_backend_test::kernel::Mul;
 using onnx_backend_test::kernel::Neg;
 using onnx_backend_test::kernel::Pow;
 using onnx_backend_test::kernel::PRelu;
+using onnx_backend_test::kernel::Reciprocal;
 using onnx_backend_test::kernel::Round;
 using onnx_backend_test::kernel::Shrink;
 using onnx_backend_test::kernel::Sigmoid;
@@ -268,6 +269,20 @@ TEST(BackendKernelClass, SqrtClassMatchesReference) {
   EXPECT_NEAR(py[1], 1.0f, 1e-6f);
   EXPECT_NEAR(py[2], 2.0f, 1e-6f);
   EXPECT_NEAR(py[3], 3.0f, 1e-6f);
+}
+
+TEST(BackendKernelClass, ReciprocalClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Reciprocal reciprocal_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {4}, {-4.0f, -0.5f, 1.0f, 2.0f});
+  Tensor y = reciprocal_kernel(x);
+  ASSERT_EQ(y.element_count(), 4);
+  const float *py = y.AsFloat();
+  EXPECT_NEAR(py[0], -0.25f, 1e-6f);
+  EXPECT_NEAR(py[1], -2.0f, 1e-6f);
+  EXPECT_NEAR(py[2], 1.0f, 1e-6f);
+  EXPECT_NEAR(py[3], 0.5f, 1e-6f);
 }
 
 TEST(BackendKernelClass, SigmoidClassMatchesReference) {

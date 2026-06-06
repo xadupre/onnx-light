@@ -500,6 +500,44 @@ inline constexpr const char *kValueInfoDeviceMetadataKey = "device";
  */
 bool OptimTensorFromValueInfo(const ValueInfoProto &vi, OptimTensor &out);
 
+/// Maximum element count of a small integer tensor for which
+/// :cpp:func:`OptimTensorFromTensorProto` (and friends) populate the
+/// :cpp:func:`OptimTensor::ValueAsShape` annotation. Tensors beyond
+/// this threshold are not data-propagated (the dtype, shape and
+/// ``min``/``max`` bounds are still recorded normally).
+inline constexpr int64_t kOptimValueAsShapeMaxElements = 8;
+
+/**
+ * Populates ``out`` from a ``TensorProto`` (typically a graph initializer).
+ *
+ * The element type is read from ``tp.data_type()`` and the shape is built
+ * from ``tp.dims()`` via :cpp:func:`ShapeFromTensorProtoDims` (every
+ * dimension becomes a concrete integer :cpp:class:`OptimDim`). The data
+ * pointer is left null and the device is left
+ * :cpp:enumerator:`Device::kUndefined`.
+ *
+ * When the tensor payload is readable, the function also annotates the
+ * resulting descriptor with:
+ *   - the ``min``/``max`` value bounds derived from the actual content.
+ *     Both integer (INT8/16/32/64, UINT8/16/32/64) and floating-point
+ *     (FLOAT, DOUBLE) element types are supported. The bounds are skipped
+ *     for empty tensors and for tensors whose payload cannot be decoded
+ *     (no typed field and no ``raw_data``, unsupported dtype, etc.);
+ *   - the :cpp:func:`OptimTensor::ValueAsShape` annotation when the
+ *     element type is integer, the rank is at most one, and the element
+ *     count is strictly less than
+ *     :cpp:var:`kOptimValueAsShapeMaxElements`. This mirrors the upstream
+ *     ONNX shape-inference data-propagation behaviour for small integer
+ *     constants.
+ *
+ * @param tp  ``TensorProto`` to read from.
+ * @param out Tensor to overwrite on success.
+ * @return ``false`` (and leaves ``out`` untouched) when
+ *         ``tp.data_type()`` is ``TensorProto::DataType::UNDEFINED``;
+ *         ``true`` otherwise.
+ */
+bool OptimTensorFromTensorProto(const TensorProto &tp, OptimTensor &out);
+
 /**
  * Writes the ``(dtype, shape, device)`` triple carried by ``tensor``
  * into ``vi``.

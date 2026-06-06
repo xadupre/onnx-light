@@ -762,6 +762,54 @@ TEST(OnnxOptimShapesMathSqrt, ThrowsWhenInputMissingFromContext) {
   EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeSqrt(ctx, node, "X"), std::out_of_range);
 }
 
+TEST(OnnxOptimShapesMathReciprocal, PropagatesFullyKnownShape) {
+  NodeProto node = MakeUnaryNode("Reciprocal");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  onnx_optim::shapes::math::ComputeShapeReciprocal(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+}
+
+TEST(OnnxOptimShapesMathReciprocal, PropagatesSymbolicShape) {
+  NodeProto node = MakeUnaryNode("Reciprocal");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
+
+  onnx_optim::shapes::math::ComputeShapeReciprocal(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
+}
+
+TEST(OnnxOptimShapesMathReciprocal, RejectsWrongOpType) {
+  NodeProto node = MakeUnaryNode("Sqrt");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeReciprocal(ctx, node, "X"),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesMathReciprocal, RejectsNodeWithoutOutput) {
+  NodeProto node;
+  node.set_op_type("Reciprocal");
+  node.add_input("X");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeReciprocal(ctx, node, "X"),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesMathReciprocal, ThrowsWhenInputMissingFromContext) {
+  NodeProto node = MakeUnaryNode("Reciprocal");
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeReciprocal(ctx, node, "X"), std::out_of_range);
+}
+
 namespace {
 
 NodeProto MakeAddNode(const std::string &a = "A", const std::string &b = "B",

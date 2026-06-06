@@ -22,8 +22,9 @@ namespace generator {
 /// :cpp:func:`ComputeShapeConstant` populates the output
 /// :cpp:func:`OptimTensor::ValueAsShape` annotation. Constants beyond
 /// this threshold are not data-propagated (the output dtype and shape
-/// are still inferred normally).
-inline constexpr int64_t kConstantValueAsShapeMaxElements = 8;
+/// are still inferred normally). Kept in sync with
+/// :cpp:var:`kOptimValueAsShapeMaxElements`.
+inline constexpr int64_t kConstantValueAsShapeMaxElements = kOptimValueAsShapeMaxElements;
 
 /**
  * Computes the output :cpp:class:`OptimTensor` of a ``Constant`` node

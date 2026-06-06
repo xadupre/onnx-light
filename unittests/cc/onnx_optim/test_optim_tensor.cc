@@ -816,4 +816,117 @@ TEST(OnnxOptimValueInfo, RoundTripPreservesMinMax) {
   EXPECT_TRUE(back.IsNullConstant());
 }
 
+namespace {
+
+TensorProto MakeTensorProto(const std::string &name, TensorProto::DataType dtype,
+                            const std::vector<int64_t> &dims) {
+  TensorProto tp;
+  tp.set_name(name);
+  tp.set_data_type(static_cast<int>(dtype));
+  for (int64_t d : dims) {
+    tp.add_dims(d);
+  }
+  return tp;
+}
+
+} // namespace
+
+TEST(OnnxOptimTensorProto, FromTensorProtoDtypeAndShape) {
+  // FLOAT initializer without any payload: dtype and shape are still
+  // populated but min/max are absent (nothing to read).
+  TensorProto tp = MakeTensorProto("w", TensorProto::DataType::FLOAT, {2, 3, 4});
+  onnx_optim::OptimTensor t;
+  EXPECT_TRUE(onnx_optim::OptimTensorFromTensorProto(tp, t));
+  EXPECT_EQ(t.Dtype(), onnx_optim::TensorType::kFloat);
+  ASSERT_EQ(t.Shape().Rank(), 3u);
+  EXPECT_EQ(t.Shape()[0].AsInt(), 2);
+  EXPECT_EQ(t.Shape()[1].AsInt(), 3);
+  EXPECT_EQ(t.Shape()[2].AsInt(), 4);
+  EXPECT_EQ(t.Data(), nullptr);
+  EXPECT_EQ(t.GetDevice(), onnx_optim::Device::kUndefined);
+  EXPECT_FALSE(t.HasMin());
+  EXPECT_FALSE(t.HasMax());
+  EXPECT_FALSE(t.HasValueAsShape());
+}
+
+TEST(OnnxOptimTensorProto, FromTensorProtoScalarHasEmptyShape) {
+  TensorProto tp = MakeTensorProto("s", TensorProto::DataType::INT64, {});
+  onnx_optim::OptimTensor t;
+  EXPECT_TRUE(onnx_optim::OptimTensorFromTensorProto(tp, t));
+  EXPECT_EQ(t.Dtype(), onnx_optim::TensorType::kInt64);
+  EXPECT_EQ(t.Shape().Rank(), 0u);
+}
+
+TEST(OnnxOptimTensorProto, FromTensorProtoUndefinedDtypeReturnsFalse) {
+  TensorProto tp = MakeTensorProto("u", TensorProto::DataType::UNDEFINED, {1, 2});
+  onnx_optim::OptimTensor t(nullptr, onnx_optim::TensorType::kInt32, onnx_optim::OptimShape{});
+  EXPECT_FALSE(onnx_optim::OptimTensorFromTensorProto(tp, t));
+  // ``out`` must be left untouched on failure.
+  EXPECT_EQ(t.Dtype(), onnx_optim::TensorType::kInt32);
+  EXPECT_EQ(t.Shape().Rank(), 0u);
+}
+
+TEST(OnnxOptimTensorProto, FromTensorProtoFloatPopulatesMinMax) {
+  TensorProto tp = MakeTensorProto("w", TensorProto::DataType::FLOAT, {4});
+  tp.add_float_data(-1.5f);
+  tp.add_float_data(0.0f);
+  tp.add_float_data(2.25f);
+  tp.add_float_data(-3.5f);
+  onnx_optim::OptimTensor t;
+  ASSERT_TRUE(onnx_optim::OptimTensorFromTensorProto(tp, t));
+  ASSERT_TRUE(t.HasMin());
+  ASSERT_TRUE(t.HasMax());
+  EXPECT_DOUBLE_EQ(t.Min(), -3.5);
+  EXPECT_DOUBLE_EQ(t.Max(), 2.25);
+  // Float initializers never get a value-as-shape annotation.
+  EXPECT_FALSE(t.HasValueAsShape());
+}
+
+TEST(OnnxOptimTensorProto, FromTensorProtoDoublePopulatesMinMax) {
+  TensorProto tp = MakeTensorProto("w", TensorProto::DataType::DOUBLE, {3});
+  tp.add_double_data(7.0);
+  tp.add_double_data(-2.5);
+  tp.add_double_data(4.0);
+  onnx_optim::OptimTensor t;
+  ASSERT_TRUE(onnx_optim::OptimTensorFromTensorProto(tp, t));
+  ASSERT_TRUE(t.HasMin());
+  ASSERT_TRUE(t.HasMax());
+  EXPECT_DOUBLE_EQ(t.Min(), -2.5);
+  EXPECT_DOUBLE_EQ(t.Max(), 7.0);
+}
+
+TEST(OnnxOptimTensorProto, FromTensorProtoIntegerPopulatesMinMaxAndValueAsShape) {
+  TensorProto tp = MakeTensorProto("dims", TensorProto::DataType::INT64, {3});
+  tp.add_int64_data(2);
+  tp.add_int64_data(5);
+  tp.add_int64_data(-1);
+  onnx_optim::OptimTensor t;
+  ASSERT_TRUE(onnx_optim::OptimTensorFromTensorProto(tp, t));
+  ASSERT_TRUE(t.HasMin());
+  ASSERT_TRUE(t.HasMax());
+  EXPECT_DOUBLE_EQ(t.Min(), -1.0);
+  EXPECT_DOUBLE_EQ(t.Max(), 5.0);
+  // Small 1-D integer initializers also get the value-as-shape annotation.
+  ASSERT_TRUE(t.HasValueAsShape());
+  ASSERT_EQ(t.ValueAsShape().Rank(), 3u);
+  EXPECT_EQ(t.ValueAsShape()[0].AsInt(), 2);
+  EXPECT_EQ(t.ValueAsShape()[1].AsInt(), 5);
+  EXPECT_EQ(t.ValueAsShape()[2].AsInt(), -1);
+}
+
+TEST(OnnxOptimTensorProto, FromTensorProtoLargeIntegerSkipsValueAsShapeButKeepsMinMax) {
+  TensorProto tp = MakeTensorProto("dims", TensorProto::DataType::INT64,
+                                   {onnx_optim::kOptimValueAsShapeMaxElements});
+  for (int64_t i = 0; i < onnx_optim::kOptimValueAsShapeMaxElements; ++i) {
+    tp.add_int64_data(i);
+  }
+  onnx_optim::OptimTensor t;
+  ASSERT_TRUE(onnx_optim::OptimTensorFromTensorProto(tp, t));
+  ASSERT_TRUE(t.HasMin());
+  ASSERT_TRUE(t.HasMax());
+  EXPECT_DOUBLE_EQ(t.Min(), 0.0);
+  EXPECT_DOUBLE_EQ(t.Max(), static_cast<double>(onnx_optim::kOptimValueAsShapeMaxElements - 1));
+  EXPECT_FALSE(t.HasValueAsShape());
+}
+
 } // namespace Test

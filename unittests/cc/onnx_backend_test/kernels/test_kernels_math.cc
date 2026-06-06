@@ -44,6 +44,7 @@ using onnx_backend_test::kernel::HardSigmoid;
 using onnx_backend_test::kernel::HardSwish;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::Log;
+using onnx_backend_test::kernel::LogSoftmax;
 using onnx_backend_test::kernel::MatMul;
 using onnx_backend_test::kernel::MatMulInteger;
 using onnx_backend_test::kernel::Mish;
@@ -453,6 +454,42 @@ TEST(BackendKernelClass, SoftmaxClassMatchesReferenceAxis1) {
   EXPECT_NEAR(py[3], 0.09003057f, 1e-6f);
   EXPECT_NEAR(py[4], 0.24472848f, 1e-6f);
   EXPECT_NEAR(py[5], 0.66524094f, 1e-6f);
+}
+
+TEST(BackendKernelClass, LogSoftmaxClassMatchesReferenceAxis1) {
+  const KernelContext ctx{DefaultOpset(13)};
+  LogSoftmax logsoftmax_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 1.0f, 2.0f, 3.0f});
+  Tensor y = logsoftmax_kernel(x, 1);
+  ASSERT_EQ(y.element_count(), 6);
+  const float *py = y.AsFloat();
+  // log of the Softmax reference values above.
+  EXPECT_NEAR(py[0], std::log(0.09003057f), 1e-5f);
+  EXPECT_NEAR(py[1], std::log(0.24472848f), 1e-5f);
+  EXPECT_NEAR(py[2], std::log(0.66524094f), 1e-5f);
+  EXPECT_NEAR(py[3], std::log(0.09003057f), 1e-5f);
+  EXPECT_NEAR(py[4], std::log(0.24472848f), 1e-5f);
+  EXPECT_NEAR(py[5], std::log(0.66524094f), 1e-5f);
+}
+
+TEST(BackendKernelClass, LogSoftmaxClassIsNumericallyStableForLargeInputs) {
+  const KernelContext ctx{DefaultOpset(13)};
+  LogSoftmax logsoftmax_kernel{ctx};
+
+  // Without the max-subtraction trick, exp(1002) would overflow to +inf.
+  Tensor x = Tensor::FromFloat("", {1, 3}, {1000.0f, 1001.0f, 1002.0f});
+  Tensor y = logsoftmax_kernel(x, -1);
+  ASSERT_EQ(y.element_count(), 3);
+  const float *py = y.AsFloat();
+  EXPECT_TRUE(std::isfinite(py[0]));
+  EXPECT_TRUE(std::isfinite(py[1]));
+  EXPECT_TRUE(std::isfinite(py[2]));
+  // log-sum-exp([1000,1001,1002]) - max == log(1+e+e^2) and y == x - max - log-sum.
+  const float lse = std::log(std::exp(-2.0f) + std::exp(-1.0f) + 1.0f);
+  EXPECT_NEAR(py[0], -2.0f - lse, 1e-4f);
+  EXPECT_NEAR(py[1], -1.0f - lse, 1e-4f);
+  EXPECT_NEAR(py[2], 0.0f - lse, 1e-4f);
 }
 
 TEST(BackendKernelClass, SinClassMatchesReference) {

@@ -572,6 +572,23 @@ TEST(OnnxOptimShapeInference, ComputeShapeModelReshapeDynamicShape) {
   EXPECT_EQ(ctx.Get("Y").Shape()[1], onnx_optim::OptimDim(2));
 }
 
+TEST(OnnxOptimShapeInference, ComputeShapeModelPrefillPrefersOutputAnchor) {
+  ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{-1, 4},
+                                                  /*target=*/{-1, 2},
+                                                  /*symbolic_names=*/{"N"});
+  SetValueInfoTensorType(*model.mutable_graph()->mutable_output(0), TensorProto::DataType::FLOAT,
+                         /*shape=*/{-1, 2}, /*symbolic_names=*/{"ANCHOR"});
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::shapes::ComputeShapeModel(ctx, model, /*prefill_with_value_info_output=*/true);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  ASSERT_EQ(ctx.Get("Y").Shape().Rank(), 2u);
+  EXPECT_TRUE(ctx.Get("Y").Shape()[0].IsExpr());
+  EXPECT_EQ(ctx.Get("Y").Shape()[0].AsExpr(), "ANCHOR");
+  EXPECT_EQ(ctx.Get("Y").Shape()[1], onnx_optim::OptimDim(2));
+}
+
 TEST(OnnxOptimShapeInference, ComputeShapeModelSeedsInitializerAsShape) {
   // The Reshape ``shape`` input is provided as a graph initializer
   // (i.e. weight-style data) rather than as a Constant node. The
@@ -693,6 +710,23 @@ TEST(OnnxOptimShapeInference, InferShapesModelEndToEnd) {
   ASSERT_TRUE(out.has_type() && out.type().has_tensor_type());
   ASSERT_EQ(out.type().tensor_type().shape().dim_size(), 2u);
   EXPECT_EQ(out.type().tensor_type().shape().dim()[0].dim_value(), 6);
+  EXPECT_EQ(out.type().tensor_type().shape().dim()[1].dim_value(), 2);
+}
+
+TEST(OnnxOptimShapeInference, InferShapesModelWithPrefillPrefersOutputAnchor) {
+  ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{-1, 4},
+                                                  /*target=*/{-1, 2},
+                                                  /*symbolic_names=*/{"N"});
+  SetValueInfoTensorType(*model.mutable_graph()->mutable_output(0), TensorProto::DataType::FLOAT,
+                         /*shape=*/{-1, 2}, /*symbolic_names=*/{"ANCHOR"});
+
+  onnx_optim::shapes::InferShapesModel(model, /*prefill_with_value_info_output=*/true);
+
+  const ValueInfoProto &out = model.graph().output(0);
+  ASSERT_TRUE(out.has_type() && out.type().has_tensor_type());
+  ASSERT_EQ(out.type().tensor_type().shape().dim_size(), 2u);
+  EXPECT_TRUE(out.type().tensor_type().shape().dim()[0].has_dim_param());
+  EXPECT_EQ(out.type().tensor_type().shape().dim()[0].dim_param().as_string(), "ANCHOR");
   EXPECT_EQ(out.type().tensor_type().shape().dim()[1].dim_value(), 2);
 }
 

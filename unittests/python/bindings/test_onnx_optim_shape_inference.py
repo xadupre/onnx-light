@@ -65,6 +65,20 @@ class TestOnnxOptimShapeInferenceModel(ExtTestCase):
         self.assertTrue(dims[0].has_dim_param())
         self.assertEqual(dims[1].dim_value, 2)
 
+    def test_prefill_prefers_output_anchor(self):
+        model = self._make_reshape_with_constant_model(["N", 4], [-1, 2])
+        model.graph.output[0].CopyFrom(
+            oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, ["ANCHOR", 2])
+        )
+        infer_shapes_model(model, prefill_with_value_info_output=True)
+
+        y = model.graph.output[0]
+        dims = list(y.type.tensor_type.shape.dim)
+        self.assertEqual(len(dims), 2)
+        self.assertTrue(dims[0].has_dim_param())
+        self.assertEqual(dims[0].dim_param, "ANCHOR")
+        self.assertEqual(dims[1].dim_value, 2)
+
     def test_rejects_model_without_graph(self):
         model = onnxl.ModelProto()
         with self.assertRaises(ValueError):

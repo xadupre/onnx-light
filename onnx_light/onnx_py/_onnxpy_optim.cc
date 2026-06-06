@@ -539,12 +539,16 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
 
   shape_mod.def(
       "compute_shape_model",
-      [](onnx_shapes::ShapesContext &ctx, const ModelProto &model) {
-        onnx_shapes::ComputeShapeModel(ctx, model);
+      [](onnx_shapes::ShapesContext &ctx, const ModelProto &model,
+         bool prefill_with_value_info_output) {
+        onnx_shapes::ComputeShapeModel(ctx, model, prefill_with_value_info_output);
       },
-      nb::arg("ctx"), nb::arg("model"),
+      nb::arg("ctx"), nb::arg("model"), nb::arg("prefill_with_value_info_output") = false,
       "Records every ``(domain, version)`` pair from ``model.opset_import`` in "
-      "``ctx`` and delegates to ``compute_shape_graph``.");
+      "``ctx`` and delegates to ``compute_shape_graph``. When "
+      "``prefill_with_value_info_output`` is true, tensor descriptors from "
+      "``model.graph.value_info`` and ``model.graph.output`` are added as "
+      "anchors and preferred when there is a non-conflicting choice at the end.");
 
   shape_mod.def(
       "apply_inferred_shapes_to_graph",
@@ -565,9 +569,13 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       "``model.graph``.");
 
   shape_mod.def(
-      "infer_shapes_model", [](ModelProto &model) { onnx_shapes::InferShapesModel(model); },
-      nb::arg("model"),
+      "infer_shapes_model",
+      [](ModelProto &model, bool prefill_with_value_info_output) {
+        onnx_shapes::InferShapesModel(model, prefill_with_value_info_output);
+      },
+      nb::arg("model"), nb::arg("prefill_with_value_info_output") = false,
       "Runs shape inference on ``model`` and writes the inferred element types and shapes "
       "back into ``model.graph.output`` and ``model.graph.value_info``. The ModelProto is "
-      "mutated in place.");
+      "mutated in place. When ``prefill_with_value_info_output`` is true, existing "
+      "``value_info``/``output`` tensor descriptors are used as anchors.");
 }

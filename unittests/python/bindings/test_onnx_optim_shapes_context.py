@@ -211,6 +211,22 @@ class TestShapesContextBindings(ExtTestCase):
         self.assertEqual(out_dims[0].dim_param, "N")
         self.assertEqual(out_dims[1].dim_value, 4)
 
+    def test_compute_shape_model_prefill_prefers_anchor(self):
+        node = oh.make_node("Relu", inputs=["X"], outputs=["Y"])
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["N", 4])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, ["ANCHOR", 4])
+        graph = oh.make_graph([node], "g", [x], [y])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+        model.ir_version = 8
+
+        ctx_no_prefill = si.ShapesContext()
+        si.compute_shape_model(ctx_no_prefill, model)
+        self.assertEqual(list(ctx_no_prefill.get("Y").shape), ["N", 4])
+
+        ctx_prefill = si.ShapesContext()
+        si.compute_shape_model(ctx_prefill, model, prefill_with_value_info_output=True)
+        self.assertEqual(list(ctx_prefill.get("Y").shape), ["ANCHOR", 4])
+
 
 if __name__ == "__main__":
     unittest.main()

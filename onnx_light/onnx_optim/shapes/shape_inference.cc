@@ -45,6 +45,60 @@ std::string NormaliseDispatchDomain(const NodeProto &node) {
   return domain.empty() ? std::string(kOnnxDomain) : domain;
 }
 
+using AnchorMap = std::unordered_map<std::string, OptimTensor>;
+
+void AddValueInfoAsAnchor(const ValueInfoProto &vi, AnchorMap &anchors) {
+  const std::string name = vi.name().as_string();
+  if (name.empty() || anchors.find(name) != anchors.end()) {
+    return;
+  }
+  OptimTensor tensor;
+  if (!OptimTensorFromValueInfo(vi, tensor)) {
+    return;
+  }
+  anchors.emplace(name, std::move(tensor));
+}
+
+AnchorMap CollectGraphAnchors(const GraphProto &graph) {
+  AnchorMap anchors;
+  // Outputs are considered more authoritative than value_info for the
+  // same name (first insert wins).
+  for (int i = 0; i < graph.output_size(); ++i) {
+    AddValueInfoAsAnchor(graph.output(i), anchors);
+  }
+  for (int i = 0; i < graph.value_info_size(); ++i) {
+    AddValueInfoAsAnchor(graph.value_info(i), anchors);
+  }
+  return anchors;
+}
+
+OptimTensor SelectTensorPreferringAnchor(const OptimTensor &inferred, const OptimTensor &anchor) {
+  switch (anchor.Cmp(inferred)) {
+  case OptimCmpResult::kMorePrecise:
+  case OptimCmpResult::kComplementary:
+  case OptimCmpResult::kConflict:
+    return anchor;
+  case OptimCmpResult::kLessPrecise:
+    return inferred;
+  }
+  return inferred;
+}
+
+void MergeAnchorsIntoContext(ShapesContext &ctx, const AnchorMap &anchors) {
+  for (const auto &kv : anchors) {
+    const std::string &name = kv.first;
+    const OptimTensor &anchor = kv.second;
+    if (!ctx.Has(name)) {
+      ctx.Set(name, OptimTensor(anchor));
+      continue;
+    }
+    const OptimTensor chosen = SelectTensorPreferringAnchor(ctx.Get(name), anchor);
+    if (chosen != ctx.Get(name)) {
+      ctx.Set(name, OptimTensor(chosen));
+    }
+  }
+}
+
 } // namespace
 
 void CheckInputsAvailable(const ShapesContext &ctx, const NodeProto &node) {
@@ -122,14 +176,22 @@ void ComputeShapeGraph(ShapesContext &ctx, const GraphProto &graph) {
   ComputeShapes(ctx, graph.node());
 }
 
-void ComputeShapeModel(ShapesContext &ctx, const ModelProto &model) {
+void ComputeShapeModel(ShapesContext &ctx, const ModelProto &model,
+                       bool prefill_with_value_info_output) {
   for (int i = 0; i < model.opset_import().size(); ++i) {
     const OperatorSetIdProto &osi = model.opset_import()[i];
     ctx.SetOpsetVersion(osi.domain().as_string(), static_cast<int>(osi.version()));
   }
   EXT_ENFORCE_INVALID(model.has_graph(),
                       "ComputeShapeModel: the ModelProto has no graph to run shape inference on.");
+  AnchorMap anchors;
+  if (prefill_with_value_info_output) {
+    anchors = CollectGraphAnchors(model.graph());
+  }
   ComputeShapeGraph(ctx, model.graph());
+  if (prefill_with_value_info_output) {
+    MergeAnchorsIntoContext(ctx, anchors);
+  }
 }
 
 void ApplyInferredShapesToGraph(const ShapesContext &ctx, GraphProto &graph) {
@@ -195,9 +257,9 @@ void ApplyInferredShapesToModel(const ShapesContext &ctx, ModelProto &model) {
   ApplyInferredShapesToGraph(ctx, *model.mutable_graph());
 }
 
-void InferShapesModel(ModelProto &model) {
+void InferShapesModel(ModelProto &model, bool prefill_with_value_info_output) {
   ShapesContext ctx;
-  ComputeShapeModel(ctx, model);
+  ComputeShapeModel(ctx, model, prefill_with_value_info_output);
   ApplyInferredShapesToModel(ctx, model);
 }
 

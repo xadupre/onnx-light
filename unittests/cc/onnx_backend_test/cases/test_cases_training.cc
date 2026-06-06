@@ -21,8 +21,8 @@ std::vector<onnx_backend_test::TestCase> CollectTestCases(const std::string &op_
   return registry;
 }
 } // namespace
-using onnx_kernels::Tensor;
 using onnx_backend_test::TestCase;
+using onnx_kernels::Tensor;
 
 namespace Test {
 

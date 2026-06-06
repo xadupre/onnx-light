@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/random.h"
 #include "onnx_kernels/simple_tensor.h"
-#include "onnx_backend_test/test_case.h"
 
 #include <cstdint>
 #include <cstring>
@@ -17,8 +17,8 @@
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DataSet;
-using onnx_kernels::Tensor;
 using onnx_backend_test::TestCase;
+using onnx_kernels::Tensor;
 
 void AddOnnxPyBackend(nb::module_ &m);
 void AddOnnxPyBackendTest(nb::module_ &m);

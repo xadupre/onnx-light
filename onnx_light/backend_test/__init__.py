@@ -59,16 +59,9 @@ def collect_test_cases_by_name(pattern: Union[str, Pattern[str]]) -> list[TestCa
         source = pattern.pattern
     else:
         raise TypeError(
-            "pattern must be a str or a compiled re.Pattern, "
-            f"got {type(pattern).__name__}."
+            "pattern must be a str or a compiled re.Pattern, got {type(pattern).__name__}."
         )
     return _C.collect_test_cases_by_name(source)
 
 
-__all__ = [
-    "DataSet",
-    "Tensor",
-    "TestCase",
-    "collect_test_cases",
-    "collect_test_cases_by_name",
-]
+__all__ = ["DataSet", "Tensor", "TestCase", "collect_test_cases", "collect_test_cases_by_name"]

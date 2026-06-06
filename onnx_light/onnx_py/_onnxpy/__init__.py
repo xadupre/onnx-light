@@ -66,7 +66,7 @@ _loaded: dict[str, ModuleType] = {}
 
 
 def _load(ext_name: str) -> ModuleType:
-    """Import the given compiled extension on first use and cache it."""
+    """Imports the given compiled extension on first use and caches it."""
     mod = _loaded.get(ext_name)
     if mod is None:
         # The compiled extensions live in the parent package (onnx_light.onnx_py),
@@ -78,7 +78,7 @@ def _load(ext_name: str) -> ModuleType:
 
 
 def _merge_submodule(existing: ModuleType, extra: ModuleType) -> ModuleType:
-    """Copy public attributes from ``extra`` into ``existing`` in place."""
+    """Copies public attributes from ``extra`` into ``existing`` in place."""
     for _attr in dir(extra):
         if _attr.startswith("_"):
             continue

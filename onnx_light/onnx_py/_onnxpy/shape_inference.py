@@ -23,7 +23,7 @@ _cached: Any = None
 
 
 def _merged() -> Any:
-    """Return the merged ``shape_inference`` submodule (loaded lazily)."""
+    """Returns the merged ``shape_inference`` submodule (loaded lazily)."""
     global _cached
     if _cached is None:
         import importlib
@@ -40,12 +40,13 @@ def _merged() -> Any:
 
 
 def __getattr__(name: str) -> Any:
+    merged = _merged()
     try:
-        val = getattr(_merged(), name)
-        globals()[name] = val
-        return val
+        val = getattr(merged, name)
     except AttributeError:
-        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}") from None
+    globals()[name] = val
+    return val
 
 
 def __dir__() -> list[str]:

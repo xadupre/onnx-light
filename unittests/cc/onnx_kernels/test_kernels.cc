@@ -65,7 +65,7 @@ namespace Test {
 // ---------------------------------------------------------------------------
 // Framework-level tests for the backend kernel harness itself. Tests that
 // exercise individual kernels live in kernels/<subfolder>/*.cc, mirroring the
-// layout of onnx_backend_test/kernels/.
+// layout of onnx_kernels/kernels/.
 // ---------------------------------------------------------------------------
 
 TEST(KernelClass, KernelContextStoresOpset) {

@@ -82,8 +82,12 @@ tools take the object by reference and operate on it in place:
           return copy;
         });
 
-No bytes are produced, no parser runs, and no extra copy of the model is
-materialised on the Python side.  The same direct-call pattern is used by
+No bytes are produced and no parser runs.  The inliner still makes an
+internal C++ copy of the ``ModelProto`` so the caller's model is left
+unchanged, but that copy is a structural deep-copy of C++ objects, not a
+serialize + parse round-trip — it is orders of magnitude cheaper than the
+protobuf path and no temporary ``bytes`` object is materialised on the
+Python side.  The same direct-call pattern is used by
 ``onnx_light.onnx.checker``, ``onnx_light.onnx.shape_inference``, and the
 version converter, so invoking any of these helpers on a model already
 loaded by ``onnx_light`` is essentially free apart from the work of the

@@ -921,12 +921,24 @@ def _examples_section_lines(schema: Any, domain: str) -> list[str]:
                     target_node = node
                     break
 
-        if target_node is not None and len(target_node.attribute) > 0:
+        if target_node is not None:
             lines.append(".. code-block:: text")
             lines.append("")
-            lines.append("    Attributes:")
-            for attr in target_node.attribute:
-                lines.append(f"      {_format_example_attribute(attr)}")
+            lines.append("    Node:")
+            op_type = target_node.op_type
+            if target_node.domain:
+                op_type = f"{target_node.domain}.{op_type}"
+            input_list = ", ".join(
+                (str(n) if str(n) != "" else '""') for n in target_node.input
+            )
+            output_list = ", ".join(
+                (str(n) if str(n) != "" else '""') for n in target_node.output
+            )
+            lines.append(f"      {op_type}({input_list}) -> ({output_list})")
+            if len(target_node.attribute) > 0:
+                lines.append("      Attributes:")
+                for attr in target_node.attribute:
+                    lines.append(f"        {_format_example_attribute(attr)}")
             lines.append("")
 
         for ds_index, (inputs, outputs) in enumerate(tc.data_sets or []):

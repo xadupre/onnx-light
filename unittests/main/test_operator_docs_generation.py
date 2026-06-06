@@ -215,6 +215,10 @@ class TestGenOperators(ExtTestCase):
         # The Abs backend test uses input ``x`` and output ``y``.
         self.assertIn("x: shape=(2, 3)", content)
         self.assertIn("y: shape=(2, 3)", content)
+        # Every example should also show the node being tested, with its
+        # op_type and input/output names.
+        self.assertIn("Node:", content)
+        self.assertIn("Abs(x) -> (y)", content)
 
     def test_operator_page_without_backend_test_has_no_examples(self):
         self._init()

@@ -53,6 +53,18 @@ class TestOnnxPyOp(ExtTestCase):
         self.assertEqual(len(tc.allowed_type_strs), 2)
         self.assertEqual(tc.allowed_type_strs[0], self.mod.TensorType.kFloat)
 
+    def test_type_constraint_param_repr(self) -> None:
+        tc = self.mod.TypeConstraintParam()
+        tc.type_param_str = "T"
+        tc.allowed_type_strs = [self.mod.TensorType.kFloat, self.mod.TensorType.kDouble]
+        tc.description = "any float"
+        self.assertEqual(
+            repr(tc),
+            "TypeConstraintParam(type_param_str='T', "
+            "allowed_type_strs=[TensorType.kFloat, TensorType.kDouble], "
+            "description='any float')",
+        )
+
     def test_construct_attribute_param_repr(self) -> None:
         attr = self.mod.AttributeParam()
         attr.name = "axis"

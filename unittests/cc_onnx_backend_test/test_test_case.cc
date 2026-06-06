@@ -25,12 +25,14 @@
 
 #include <gtest/gtest.h>
 
+#include <regex>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::CollectTestCases;
+using onnx_backend_test::CollectTestCasesByName;
 using onnx_backend_test::DefaultOpset;
 using onnx_backend_test::Expect;
 using onnx_backend_test::OpsetId;
@@ -216,6 +218,52 @@ TEST(BackendTestCase, CollectReturnsExpectedNames) {
   EXPECT_TRUE(has_abs);
   EXPECT_TRUE(has_add);
   EXPECT_TRUE(has_add_bcast);
+}
+
+TEST(BackendTestCase, CollectByNameSubstringMatchesAbs) {
+  auto cases = CollectTestCasesByName("abs");
+  ASSERT_FALSE(cases.empty());
+  for (const auto &c : cases) {
+    EXPECT_NE(c.name.find("abs"), std::string::npos) << "case: " << c.name;
+  }
+  bool has_abs = false;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_abs") {
+      has_abs = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(has_abs);
+}
+
+TEST(BackendTestCase, CollectByNameAnchoredRegex) {
+  auto cases = CollectTestCasesByName("^test_cc_add(_|$)");
+  ASSERT_FALSE(cases.empty());
+  bool has_add = false, has_add_bcast = false;
+  for (const auto &c : cases) {
+    EXPECT_EQ(c.name.rfind("test_cc_add", 0), 0u) << "case: " << c.name;
+    if (c.name == "test_cc_add")
+      has_add = true;
+    if (c.name == "test_cc_add_bcast")
+      has_add_bcast = true;
+  }
+  EXPECT_TRUE(has_add);
+  EXPECT_TRUE(has_add_bcast);
+}
+
+TEST(BackendTestCase, CollectByNameEmptyPatternReturnsAll) {
+  auto all_cases = CollectTestCases();
+  auto by_empty = CollectTestCasesByName("");
+  EXPECT_EQ(all_cases.size(), by_empty.size());
+}
+
+TEST(BackendTestCase, CollectByNameNoMatchReturnsEmpty) {
+  auto cases = CollectTestCasesByName("__definitely_no_such_case__");
+  EXPECT_TRUE(cases.empty());
+}
+
+TEST(BackendTestCase, CollectByNameInvalidRegexThrows) {
+  EXPECT_THROW(CollectTestCasesByName("("), std::regex_error);
 }
 
 TEST(BackendTestCase, PerSubfolderCollectorsAggregateIntoMain) {

@@ -66,6 +66,7 @@ def _check_match(
     have one after inference. When False, a missing shape is tolerated (some
     operators cannot recover output shapes without data propagation).
     """
+    # TODO: make this test more strict
     by_name = {vi.name: vi for vi in value_infos}
     for name, elem_type, had_shape, expected_shape, is_plain_tensor in snapshot:
         assert (

@@ -121,6 +121,26 @@ TEST(OnnxOptimShapesTensorConcat, SymbolicAxisDimProducesSymbolicOutput) {
   EXPECT_EQ(ctx.Get("Y").Shape()[1], onnx_optim::OptimDim(3));
 }
 
+TEST(OnnxOptimShapesTensorConcat, RepeatedSymbolicAxisDimProducesScaledExpression) {
+  NodeProto node = MakeConcatNode({"A", "B"}, /*axis=*/2);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim("batch"),
+                                                              onnx_optim::OptimDim("seq"),
+                                                              onnx_optim::OptimDim("d_model")}));
+  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim("batch"),
+                                                              onnx_optim::OptimDim("seq"),
+                                                              onnx_optim::OptimDim("d_model")}));
+
+  onnx_optim::shapes::tensor::ComputeShapeConcat(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim("batch"), onnx_optim::OptimDim("seq"),
+                                    onnx_optim::OptimDim("2*d_model")}));
+}
+
 TEST(OnnxOptimShapesTensorConcat, MergesSymbolicNonConcatDimWithConcreteOne) {
   NodeProto node = MakeConcatNode({"A", "B"}, /*axis=*/1);
   onnx_optim::shapes::ShapesContext ctx;

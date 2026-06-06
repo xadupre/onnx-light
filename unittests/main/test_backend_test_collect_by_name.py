@@ -26,10 +26,7 @@ class TestCollectTestCasesByName(ExtTestCase):
         compiled = re.compile(r"abs")
         cases = bt.collect_test_cases_by_name(compiled)
         cases_str = bt.collect_test_cases_by_name("abs")
-        self.assertEqual(
-            sorted(tc.name for tc in cases),
-            sorted(tc.name for tc in cases_str),
-        )
+        self.assertEqual(sorted(tc.name for tc in cases), sorted(tc.name for tc in cases_str))
 
     def test_collect_invalid_type_raises(self):
         with self.assertRaises(TypeError):

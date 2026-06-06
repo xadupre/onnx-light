@@ -64,13 +64,20 @@ void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry
   AddAxisAttribute(concat_node, 2);
   AddNode(*graph, "Reshape", {"concat_out", "reshape_shape"}, {"Z"});
 
+  TensorProto &tensor = *graph->add_initializer();
+  tensor.set_name("reshape_shape");
+  tensor.set_data_type(TensorProto::DataType::INT64);
+  tensor.add_dims(static_cast<int64_t>(3));
+  tensor.ref_int64_data().push_back(0);
+  tensor.ref_int64_data().push_back(0);
+  tensor.ref_int64_data().push_back(-1);
+
   // Graph inputs: X, Y use the symbolic shape from the page; reshape_shape
   // is a concrete-shape initializer carried by ``FillValueInfo``.
   const int32_t kFloat = static_cast<int32_t>(DataType::FLOAT);
   const std::vector<DimSpec> input_shape = {"batch", "seq", "d_model"};
   AppendValueInfo(*graph->add_input(), "X", kFloat, input_shape);
   AppendValueInfo(*graph->add_input(), "Y", kFloat, input_shape);
-  FillValueInfo(reshape_shape, *graph->add_input());
 
   // Intermediate value_info entries with symbolic dim names. The last dim
   // of ``concat_out``/``Z`` is ``2 * d_model`` on the page; ONNX shape
@@ -97,11 +104,12 @@ void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry
   }
   Tensor x = Tensor::FromFloat("X", data_shape, x_values);
   Tensor y = Tensor::FromFloat("Y", data_shape, y_values);
-  Tensor z = kernel::Reshape(ctx)(kernel::Concat(ctx)({kernel::Add(ctx)(x, y), x}, /*axis=*/2),
-                                  reshape_shape);
+  const Tensor new_shape = Tensor::FromInt64("", {3}, {0, 0, -1});
+  Tensor z =
+      kernel::Reshape(ctx)(kernel::Concat(ctx)({kernel::Add(ctx)(x, y), x}, /*axis=*/2), new_shape);
   z.name = "Z";
 
-  AppendDataSet(tc, {x, y, reshape_shape}, {z});
+  AppendDataSet(tc, {x, y}, {z});
 
   registry.emplace_back(std::move(tc));
 }

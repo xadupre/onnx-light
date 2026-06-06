@@ -360,7 +360,18 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       .def("__str__", &OptimTensor::ToString)
       .def("__repr__", &OptimTensor::ToString)
       .def(nb::self == nb::self)
-      .def(nb::self != nb::self);
+      .def(nb::self != nb::self)
+      .def(
+          "__eq__",
+          [](const OptimTensor &t, const ValueInfoProto &vi) {
+            OptimTensor vi_tensor;
+            return ::onnx_light::onnx_optim::OptimTensorFromValueInfo(vi, vi_tensor) &&
+                   t == vi_tensor;
+          },
+          nb::arg("other"),
+          "Compares this descriptor against a ``ValueInfoProto`` by converting the "
+          "value-info tensor type/shape into an ``OptimTensor`` and checking "
+          "descriptor equality.");
 
   // -----------------------------------------------------------------------
   // ShapesContext

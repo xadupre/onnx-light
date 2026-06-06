@@ -84,15 +84,10 @@ set(ONNX_PY_PROTOOP_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_op.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpyprotoop.cc"
 )
-set(ONNX_PY_PROTOLIB_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_lib.cc"
-)
-set(ONNX_PY_OPTIM_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_optim.cc"
-)
-set(ONNX_PY_BACKEND_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_backend_test.cc"
-)
+set(ONNX_PY_PROTOLIB_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_lib.cc")
+set(ONNX_PY_OPTIM_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_optim.cc")
+set(ONNX_PY_BACKEND_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_backend_test.cc")
+
 file(GLOB_RECURSE ONNX_OP_SOURCES CONFIGURE_DEPENDS "${ONNX_OP_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_OPTIM_SOURCES CONFIGURE_DEPENDS "${ONNX_OPTIM_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_BACKEND_TEST_SOURCES CONFIGURE_DEPENDS "${ONNX_BACKEND_TEST_PATH}/*.cc")
@@ -100,21 +95,6 @@ set(ONNX_INLINER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/inline
 file(GLOB ONNX_SHAPE_INFERENCE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/shape_inference/*.cc")
 file(GLOB ONNX_VERSION_CONVERTER_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/version_converter/*.cc")
 set(ONNX_CHECKER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/checker.cc" )
-file(GLOB_RECURSE ONNX_CPP_PROTO_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_proto/test_*.cc")
-file(GLOB_RECURSE ONNX_CPP_LIB_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_lib/test_*.cc")
-file(GLOB_RECURSE ONNX_CPP_OP_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_op/test_*.cc")
-file(GLOB_RECURSE ONNX_CPP_OPTIM_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_optim/test_*.cc")
-file(GLOB_RECURSE ONNX_CPP_BACKEND_TEST_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_backend_test/test_*.cc")
-file(GLOB_RECURSE ONNX_CPP_CC_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/proto/test_*.cc")
-set(ONNX_CPP_TEST_SOURCES
-    ${ONNX_CPP_PROTO_TEST_SOURCES}
-    ${ONNX_CPP_LIB_TEST_SOURCES}
-    ${ONNX_CPP_OP_TEST_SOURCES}
-    ${ONNX_CPP_OPTIM_TEST_SOURCES}
-    ${ONNX_CPP_BACKEND_TEST_TEST_SOURCES}
-    ${ONNX_CPP_CC_TEST_SOURCES}
-)
-set(ONNX_CPP_ALL_TEST_SOURCES ${ONNX_CPP_TEST_SOURCES})
 file(GLOB_RECURSE ONNX_LIGHT_BENCHMARK_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/bench_*.cc")
 set(ONNX_LIGHT_PROTO_ALL_SOURCES ${ONNX_LIGHT_SOURCES} "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_helpers/onnx_light_helpers.cc")
 set(ONNX_LIGHT_LIB_ALL_SOURCES
@@ -307,6 +287,21 @@ endif()
 
 # Builds test
 if(ONNX_LIGHT_BUILD_TESTS)
+
+  file(GLOB_RECURSE ONNX_CPP_PROTO_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_proto/test_*.cc")
+  file(GLOB_RECURSE ONNX_CPP_LIB_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_lib/test_*.cc")
+  file(GLOB_RECURSE ONNX_CPP_OP_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_op/test_*.cc")
+  file(GLOB_RECURSE ONNX_CPP_OPTIM_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_optim/test_*.cc")
+  file(GLOB_RECURSE ONNX_CPP_BACKEND_TEST_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_backend_test/test_*.cc")
+  set(ONNX_CPP_TEST_SOURCES
+      ${ONNX_CPP_PROTO_TEST_SOURCES}
+      ${ONNX_CPP_LIB_TEST_SOURCES}
+      ${ONNX_CPP_OP_TEST_SOURCES}
+      ${ONNX_CPP_OPTIM_TEST_SOURCES}
+      ${ONNX_CPP_BACKEND_TEST_TEST_SOURCES}
+  )
+  set(ONNX_CPP_ALL_TEST_SOURCES ${ONNX_CPP_TEST_SOURCES})
+
   enable_testing()
 
   # Find or fetch GTest
@@ -341,18 +336,16 @@ if(ONNX_LIGHT_BUILD_TESTS)
   gtest_discover_tests(test_onnx_light DISCOVERY_TIMEOUT 120)
 
   add_custom_target(onnx_cpp_tests SOURCES ${ONNX_CPP_ALL_TEST_SOURCES})
-  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_proto" PREFIX "Source Files/cc_onnx_proto"
+  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_proto" PREFIX "Source Files/cc/onnx_proto"
                FILES ${ONNX_CPP_PROTO_TEST_SOURCES})
-  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_lib" PREFIX "Source Files/cc_onnx_lib"
+  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_lib" PREFIX "Source Files/cc/onnx_lib"
                FILES ${ONNX_CPP_LIB_TEST_SOURCES})
-  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_op" PREFIX "Source Files/cc_onnx_op"
+  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_op" PREFIX "Source Files/cc/onnx_op"
                FILES ${ONNX_CPP_OP_TEST_SOURCES})
-  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_optim" PREFIX "Source Files/cc_onnx_optim"
+  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_optim" PREFIX "Source Files/cc/onnx_optim"
                FILES ${ONNX_CPP_OPTIM_TEST_SOURCES})
-  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_backend_test" PREFIX "Source Files/cc_onnx_backend_test"
+  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_backend_test" PREFIX "Source Files/cc/onnx_backend_test"
                FILES ${ONNX_CPP_BACKEND_TEST_TEST_SOURCES})
-  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/proto" PREFIX "Source Files/proto"
-               FILES ${ONNX_CPP_CC_TEST_SOURCES})
 endif()
 
 # Each benchmark is an individual project placed in the "Benchmarks" VS solution folder.

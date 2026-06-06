@@ -82,6 +82,7 @@ _SUBMODULE_NAMES = [
     "version_converter",
 ]
 
+# TODO: module sys should be avoided.
 for _name in _SUBMODULE_NAMES:
     _key = f"onnx_light.onnx.{_name}"
     if _key not in sys.modules:

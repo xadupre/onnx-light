@@ -95,7 +95,21 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
       .def(
           "string_data", [](const Tensor &t) { return t.string_data; },
           "Returns the string element values (only populated when "
-          "``data_type == TensorProto::DataType::STRING``).");
+          "``data_type == TensorProto::DataType::STRING``).")
+      .def("__repr__", [](const Tensor &t) {
+        std::string r = "Tensor(name='";
+        r += t.name;
+        r += "', data_type=";
+        r += TensorProto::DataType_Name(static_cast<TensorProto::DataType>(t.data_type));
+        r += ", shape=[";
+        for (size_t i = 0; i < t.shape.size(); ++i) {
+          if (i > 0)
+            r += ", ";
+          r += std::to_string(t.shape[i]);
+        }
+        r += "])";
+        return r;
+      });
 
   nb::class_<DataSet>(bt_mod, "DataSet",
                       "A single (inputs, expected outputs) data set of a TestCase.")

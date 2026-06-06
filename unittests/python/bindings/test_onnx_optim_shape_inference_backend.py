@@ -30,6 +30,13 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
         self.assertEqual(len(abs_tests), 1)
         self.assertEqual(repr(abs_tests[0].data_sets[0]), "DataSet(inputs=1, outputs=1)")
 
+    def test_tensor_repr(self):
+        abs_tests = [test for test in collect_test_cases("Abs") if test.name == "test_cc_abs"]
+        self.assertEqual(len(abs_tests), 1)
+        ds = abs_tests[0].data_sets[0]
+        self.assertEqual(repr(ds.inputs[0]), "Tensor(name='x', data_type=FLOAT, shape=[2, 3])")
+        self.assertEqual(repr(ds.outputs[0]), "Tensor(name='y', data_type=FLOAT, shape=[2, 3])")
+
     def test_inference_shape(self):
         from onnx_light.onnx_optim.shape_inference import infer_shapes_model
 

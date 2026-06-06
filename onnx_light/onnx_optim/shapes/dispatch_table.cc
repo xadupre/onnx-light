@@ -167,6 +167,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 3);
          nn::ComputeShapeInstanceNormalization(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:LayerNormalization",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         nn::ComputeShapeLayerNormalization(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:MeanVarianceNormalization",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

@@ -32,6 +32,7 @@ constexpr size_t kExpectedGlobalMaxPoolSchemaCount = 2;
 constexpr size_t kExpectedGRUSchemaCount = 5;
 constexpr size_t kExpectedGroupNormalizationSchemaCount = 2;
 constexpr size_t kExpectedInstanceNormalizationSchemaCount = 3;
+constexpr size_t kExpectedLayerNormalizationSchemaCount = 1;
 constexpr size_t kExpectedMeanVarianceNormalizationSchemaCount = 2;
 constexpr size_t kExpectedLRNSchemaCount = 2;
 constexpr size_t kExpectedLpNormalizationSchemaCount = 2;
@@ -51,11 +52,11 @@ constexpr size_t kExpectedNnSchemaCount =
     kExpectedDropoutSchemaCount + kExpectedGlobalLpPoolSchemaCount + kExpectedFlattenSchemaCount +
     kExpectedGlobalMaxPoolSchemaCount + kExpectedGRUSchemaCount +
     kExpectedGroupNormalizationSchemaCount + kExpectedInstanceNormalizationSchemaCount +
-    kExpectedLRNSchemaCount + kExpectedLpNormalizationSchemaCount + kExpectedLpPoolSchemaCount +
-    kExpectedLSTMSchemaCount + kExpectedMaxPoolSchemaCount + kExpectedMaxRoiPoolSchemaCount +
-    kExpectedMaxUnpoolSchemaCount + kExpectedMeanVarianceNormalizationSchemaCount +
-    kExpectedRNNSchemaCount + kExpectedRMSNormalizationSchemaCount +
-    kExpectedRotaryEmbeddingSchemaCount;
+    kExpectedLayerNormalizationSchemaCount + kExpectedLRNSchemaCount +
+    kExpectedLpNormalizationSchemaCount + kExpectedLpPoolSchemaCount + kExpectedLSTMSchemaCount +
+    kExpectedMaxPoolSchemaCount + kExpectedMaxRoiPoolSchemaCount + kExpectedMaxUnpoolSchemaCount +
+    kExpectedMeanVarianceNormalizationSchemaCount + kExpectedRNNSchemaCount +
+    kExpectedRMSNormalizationSchemaCount + kExpectedRotaryEmbeddingSchemaCount;
 
 static const onnx_op::LightOpSchema *
 FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
@@ -963,6 +964,43 @@ TEST(OnnxOpNnRegistrationTest, ReturnsMeanVarianceNormalizationSchemasForAllVers
 
   EXPECT_EQ(v9->type_constraints()[0].allowed_type_strs.size(), 3u);
   EXPECT_EQ(v13->type_constraints()[0].allowed_type_strs.size(), 4u);
+}
+
+TEST(OnnxOpNnRegistrationTest, ReturnsLayerNormalizationSchemasForAllVersions) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("LayerNormalization");
+  ASSERT_EQ(schemas.size(), kExpectedLayerNormalizationSchemaCount);
+
+  const onnx_op::LightOpSchema *const v17 = FindByVersion(schemas, 17);
+  ASSERT_NE(nullptr, v17);
+
+  EXPECT_EQ(v17->name(), "LayerNormalization");
+  EXPECT_EQ(v17->domain(), "ai.onnx");
+  ASSERT_EQ(v17->inputs().size(), 3u);
+  EXPECT_EQ(v17->inputs()[0].name, "X");
+  EXPECT_EQ(v17->inputs()[0].type, "T");
+  EXPECT_EQ(v17->inputs()[1].name, "Scale");
+  EXPECT_EQ(v17->inputs()[1].type, "T");
+  EXPECT_EQ(v17->inputs()[2].name, "B");
+  EXPECT_EQ(v17->inputs()[2].type, "T");
+  ASSERT_EQ(v17->outputs().size(), 3u);
+  EXPECT_EQ(v17->outputs()[0].name, "Y");
+  EXPECT_EQ(v17->outputs()[0].type, "T");
+  EXPECT_EQ(v17->outputs()[1].name, "Mean");
+  EXPECT_EQ(v17->outputs()[1].type, "U");
+  EXPECT_EQ(v17->outputs()[2].name, "InvStdDev");
+  EXPECT_EQ(v17->outputs()[2].type, "U");
+  ASSERT_EQ(v17->type_constraints().size(), 2u);
+  EXPECT_EQ(v17->type_constraints()[0].type_param_str, "T");
+  EXPECT_EQ(v17->type_constraints()[0].allowed_type_strs.size(), 4u);
+  EXPECT_EQ(v17->type_constraints()[1].type_param_str, "U");
+  EXPECT_EQ(v17->type_constraints()[1].allowed_type_strs.size(), 2u);
+  ASSERT_EQ(v17->attributes().size(), 3u);
+  EXPECT_EQ(v17->attributes()[0].name, "axis");
+  EXPECT_EQ(v17->attributes()[1].name, "epsilon");
+  EXPECT_EQ(v17->attributes()[2].name, "stash_type");
+  EXPECT_TRUE(v17->has_function_implementation());
+  EXPECT_FALSE(v17->doc().empty());
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsRMSNormalizationSchemasForAllVersions) {

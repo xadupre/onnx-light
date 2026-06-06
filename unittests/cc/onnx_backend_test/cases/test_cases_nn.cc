@@ -251,6 +251,28 @@ TEST(BackendTestCase, RMSNormalizationCasesArePresent) {
   EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
 }
 
+TEST(BackendTestCase, LayerNormalizationCasesArePresent) {
+  auto cases = CollectTestCases("LayerNormalization");
+  const TestCase *axis0 = nullptr;
+  const TestCase *default_axis = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_layer_normalization_2d_axis0") {
+      axis0 = &c;
+    } else if (c.name == "test_cc_layer_normalization_default_axis") {
+      default_axis = &c;
+    }
+  }
+  ASSERT_NE(axis0, nullptr);
+  ASSERT_NE(default_axis, nullptr);
+  ASSERT_EQ(axis0->data_sets.size(), 1u);
+  const auto &ds = axis0->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 3u);
+  ASSERT_EQ(ds.outputs.size(), 3u);
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(ds.outputs[1].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(ds.outputs[2].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+}
+
 TEST(BackendTestCase, MeanVarianceNormalizationCasesArePresent) {
   auto cases = CollectTestCases("MeanVarianceNormalization");
   const TestCase *mvn = nullptr;

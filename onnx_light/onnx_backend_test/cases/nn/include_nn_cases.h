@@ -65,6 +65,9 @@ void RegisterGRUCases(std::vector<TestCase> &registry);
 /// Registers the ``InstanceNormalization`` backend test node case(s).
 void RegisterInstanceNormalizationCases(std::vector<TestCase> &registry);
 
+/// Registers the ``LayerNormalization`` backend test node case(s).
+void RegisterLayerNormalizationCases(std::vector<TestCase> &registry);
+
 /// Registers the ``LRN`` backend test node case(s).
 void RegisterLRNCases(std::vector<TestCase> &registry);
 

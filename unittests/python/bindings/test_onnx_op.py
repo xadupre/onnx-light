@@ -44,6 +44,19 @@ class TestOnnxPyOp(ExtTestCase):
         self.assertEqual(len(tc.allowed_type_strs), 2)
         self.assertEqual(tc.allowed_type_strs[0], self.mod.TensorType.kFloat)
 
+    def test_construct_attribute_param_repr(self) -> None:
+        attr = self.mod.AttributeParam()
+        attr.name = "axis"
+        attr.description = "axis for reduction"
+        attr.type = self.mod.AttributeType.INT
+        attr.required = False
+        attr.default_value = 1
+        self.assertEqual(
+            repr(attr),
+            "AttributeParam(name='axis', description='axis for reduction', "
+            "type=AttributeType.INT, required=False, default_value='1')",
+        )
+
     def test_construct_light_op_schema(self) -> None:
         fp = self.mod.FormalParameter()
         fp.name, fp.description, fp.type = "X", "in", "T"

@@ -150,6 +150,20 @@ void AddOnnxPyOp(nb::module_ &m) {
       .def_rw("description", &onnx_op::AttributeParam::description)
       .def_rw("type", &onnx_op::AttributeParam::type)
       .def_rw("required", &onnx_op::AttributeParam::required)
+      .def("__repr__",
+           [](const onnx_op::AttributeParam &a) {
+             const auto quote = [](const std::string &s) {
+               return nb::cast<std::string>(nb::repr(nb::cast(s)));
+             };
+             const std::string name = quote(a.name);
+             const std::string description = quote(a.description);
+             const std::string default_value = onnx_op::AttributeDefaultRepr(a.default_value);
+             const std::string default_repr = default_value.empty() ? "None" : quote(default_value);
+             return "AttributeParam(name=" + name + ", description=" + description +
+                    ", type=AttributeType." + onnx_op::AttributeType_Name(a.type) +
+                    ", required=" + (a.required ? std::string("True") : std::string("False")) +
+                    ", default_value=" + default_repr + ")";
+           })
       .def_rw("default_value", &onnx_op::AttributeParam::default_value,
               "Typed default value (``None`` if absent, otherwise int, float, "
               "str, or a list thereof).")

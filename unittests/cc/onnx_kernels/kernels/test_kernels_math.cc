@@ -43,6 +43,7 @@ using onnx_kernels::kernel::Hardmax;
 using onnx_kernels::kernel::HardSigmoid;
 using onnx_kernels::kernel::HardSwish;
 using onnx_kernels::kernel::KernelContext;
+using onnx_kernels::kernel::LeakyRelu;
 using onnx_kernels::kernel::Log;
 using onnx_kernels::kernel::LogSoftmax;
 using onnx_kernels::kernel::MatMul;
@@ -1536,6 +1537,74 @@ TEST(KernelClass, PReluRejectsUnsupportedDtype) {
   Tensor x = Tensor::FromInt8("", {2}, {-1, 2});
   Tensor slope = Tensor::FromInt8("", {2}, {1, 1});
   EXPECT_THROW(prelu_kernel(x, slope), std::invalid_argument);
+}
+
+// ---------------------------------------------------------------------------
+// LeakyRelu kernel tests
+// ---------------------------------------------------------------------------
+
+TEST(KernelClass, LeakyReluClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(16)};
+  LeakyRelu leakyrelu_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {6}, {-3.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f});
+  Tensor y = leakyrelu_kernel(x, 0.1f);
+  ASSERT_EQ(y.element_count(), 6);
+  ASSERT_EQ(y.data_type, onnx_kernels::DataType::FLOAT);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], -0.3f);
+  EXPECT_FLOAT_EQ(py[1], -0.1f);
+  EXPECT_FLOAT_EQ(py[2], 0.0f);
+  EXPECT_FLOAT_EQ(py[3], 1.0f);
+  EXPECT_FLOAT_EQ(py[4], 2.0f);
+  EXPECT_FLOAT_EQ(py[5], 3.0f);
+}
+
+TEST(KernelClass, LeakyReluClassDefaultAlpha) {
+  const KernelContext ctx{DefaultOpset(16)};
+  LeakyRelu leakyrelu_kernel{ctx};
+  // Default alpha is 0.01f to match the ONNX schema.
+  Tensor x = Tensor::FromFloat("", {3}, {-2.0f, 0.0f, 5.0f});
+  Tensor y = leakyrelu_kernel(x);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], -0.02f);
+  EXPECT_FLOAT_EQ(py[1], 0.0f);
+  EXPECT_FLOAT_EQ(py[2], 5.0f);
+}
+
+TEST(KernelClass, LeakyReluClassSupportsDouble) {
+  const KernelContext ctx{DefaultOpset(16)};
+  LeakyRelu leakyrelu_kernel{ctx};
+  Tensor x("", onnx_kernels::DataType::DOUBLE, {3}, std::vector<uint8_t>(3 * sizeof(double)));
+  double *px = reinterpret_cast<double *>(x.data.data());
+  px[0] = -4.0;
+  px[1] = 0.0;
+  px[2] = 7.0;
+  Tensor y = leakyrelu_kernel(x, 0.25f);
+  ASSERT_EQ(y.data_type, onnx_kernels::DataType::DOUBLE);
+  const double *py = reinterpret_cast<const double *>(y.data.data());
+  EXPECT_DOUBLE_EQ(py[0], -1.0);
+  EXPECT_DOUBLE_EQ(py[1], 0.0);
+  EXPECT_DOUBLE_EQ(py[2], 7.0);
+}
+
+TEST(KernelClass, LeakyReluInPlaceWritesToPreallocatedOutput) {
+  const KernelContext ctx{DefaultOpset(16)};
+  LeakyRelu leakyrelu_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {-1.0f, -2.0f, 3.0f, -4.0f});
+  Tensor y("", onnx_kernels::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
+  leakyrelu_kernel(x, 0.5f, y);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], -0.5f);
+  EXPECT_FLOAT_EQ(py[1], -1.0f);
+  EXPECT_FLOAT_EQ(py[2], 3.0f);
+  EXPECT_FLOAT_EQ(py[3], -2.0f);
+}
+
+TEST(KernelClass, LeakyReluRejectsUnsupportedDtype) {
+  const KernelContext ctx{DefaultOpset(16)};
+  LeakyRelu leakyrelu_kernel{ctx};
+  Tensor x = Tensor::FromInt8("", {2}, {-1, 2});
+  EXPECT_THROW(leakyrelu_kernel(x, 0.1f), std::invalid_argument);
 }
 
 TEST(KernelClass, PowClassMatchesReferenceFloat) {

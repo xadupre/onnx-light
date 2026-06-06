@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/traditionalml/include_traditionalml_kernels.h"
+#include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
 #include <cstdint>
 #include <stdexcept>
@@ -12,7 +12,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 namespace kernel {
 
 namespace {
@@ -112,5 +112,5 @@ ONNX_LIGHT_INSTANTIATE_DICT_VECTORIZER(std::string, double);
 #undef ONNX_LIGHT_INSTANTIATE_DICT_VECTORIZER
 
 } // namespace kernel
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

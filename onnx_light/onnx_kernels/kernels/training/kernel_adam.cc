@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/training/include_training_kernels.h"
+#include "onnx_kernels/kernels/training/include_training_kernels.h"
 
 #include <cmath>
 #include <cstddef>
@@ -12,7 +12,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 namespace kernel {
 
 namespace {
@@ -182,5 +182,5 @@ void Adam::operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor
 }
 
 } // namespace kernel
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

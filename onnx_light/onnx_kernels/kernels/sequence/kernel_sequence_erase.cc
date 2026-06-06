@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/sequence/include_sequence_kernels.h"
+#include "onnx_kernels/kernels/sequence/include_sequence_kernels.h"
 
 #include <cstdint>
 #include <stdexcept>
@@ -10,7 +10,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 namespace kernel {
 
 Sequence SequenceErase::operator()(const Sequence &input_sequence, const Tensor *position) const {
@@ -52,5 +52,5 @@ Sequence SequenceErase::operator()(const Sequence &input_sequence, const Tensor 
 }
 
 } // namespace kernel
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

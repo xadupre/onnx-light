@@ -2,63 +2,63 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/controlflow/include_controlflow_kernels.h"
-#include "onnx_backend_test/kernels/generator/include_generator_kernels.h"
-#include "onnx_backend_test/kernels/kernel_context.h"
-#include "onnx_backend_test/kernels/logical/include_logical_kernels.h"
-#include "onnx_backend_test/kernels/math/include_math_kernels.h"
-#include "onnx_backend_test/kernels/nn/include_nn_kernels.h"
-#include "onnx_backend_test/kernels/object_detection/include_object_detection_kernels.h"
-#include "onnx_backend_test/kernels/optional/include_optional_kernels.h"
-#include "onnx_backend_test/kernels/preview/include_preview_kernels.h"
-#include "onnx_backend_test/kernels/quantization/include_quantization_kernels.h"
-#include "onnx_backend_test/kernels/reduction/include_reduction_kernels.h"
-#include "onnx_backend_test/kernels/sequence/include_sequence_kernels.h"
-#include "onnx_backend_test/kernels/tensor/include_tensor_kernels.h"
-#include "onnx_backend_test/kernels/text/include_text_kernels.h"
-#include "onnx_backend_test/kernels/traditionalml/include_traditionalml_kernels.h"
-#include "onnx_backend_test/kernels/training/include_training_kernels.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/controlflow/include_controlflow_kernels.h"
+#include "onnx_kernels/kernels/generator/include_generator_kernels.h"
+#include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/kernels/logical/include_logical_kernels.h"
+#include "onnx_kernels/kernels/math/include_math_kernels.h"
+#include "onnx_kernels/kernels/nn/include_nn_kernels.h"
+#include "onnx_kernels/kernels/object_detection/include_object_detection_kernels.h"
+#include "onnx_kernels/kernels/optional/include_optional_kernels.h"
+#include "onnx_kernels/kernels/preview/include_preview_kernels.h"
+#include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
+#include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
+#include "onnx_kernels/kernels/sequence/include_sequence_kernels.h"
+#include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
+#include "onnx_kernels/kernels/text/include_text_kernels.h"
+#include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
+#include "onnx_kernels/kernels/training/include_training_kernels.h"
+#include "onnx_kernels/test_case.h"
 
 #include <gtest/gtest.h>
 
 #include <string>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_backend_test::DefaultOpset;
-using onnx_backend_test::kernel::Abs;
-using onnx_backend_test::kernel::Adam;
-using onnx_backend_test::kernel::Add;
-using onnx_backend_test::kernel::And;
-using onnx_backend_test::kernel::ArrayFeatureExtractor;
-using onnx_backend_test::kernel::AveragePool;
-using onnx_backend_test::kernel::BatchNormalization;
-using onnx_backend_test::kernel::Binarizer;
-using onnx_backend_test::kernel::BlackmanWindow;
-using onnx_backend_test::kernel::Concat;
-using onnx_backend_test::kernel::Dropout;
-using onnx_backend_test::kernel::FlexAttention;
-using onnx_backend_test::kernel::HammingWindow;
-using onnx_backend_test::kernel::HannWindow;
-using onnx_backend_test::kernel::If;
-using onnx_backend_test::kernel::KernelContext;
-using onnx_backend_test::kernel::LabelEncoder;
-using onnx_backend_test::kernel::LinearClassifier;
-using onnx_backend_test::kernel::LinearRegressor;
-using onnx_backend_test::kernel::Normalizer;
-using onnx_backend_test::kernel::Or;
-using onnx_backend_test::kernel::QuantizeLinear;
-using onnx_backend_test::kernel::ReduceSum;
-using onnx_backend_test::kernel::RoiAlign;
-using onnx_backend_test::kernel::Scaler;
-using onnx_backend_test::kernel::SequenceConstruct;
-using onnx_backend_test::kernel::StringConcat;
-using onnx_backend_test::kernel::StringSplit;
-using onnx_backend_test::kernel::SVMClassifier;
-using onnx_backend_test::kernel::SVMRegressor;
-using onnx_backend_test::kernel::Xor;
-using onnx_backend_test::kernel::ZipMap;
-using OptionalKernel = onnx_backend_test::kernel::Optional;
+using onnx_kernels::DefaultOpset;
+using onnx_kernels::kernel::Abs;
+using onnx_kernels::kernel::Adam;
+using onnx_kernels::kernel::Add;
+using onnx_kernels::kernel::And;
+using onnx_kernels::kernel::ArrayFeatureExtractor;
+using onnx_kernels::kernel::AveragePool;
+using onnx_kernels::kernel::BatchNormalization;
+using onnx_kernels::kernel::Binarizer;
+using onnx_kernels::kernel::BlackmanWindow;
+using onnx_kernels::kernel::Concat;
+using onnx_kernels::kernel::Dropout;
+using onnx_kernels::kernel::FlexAttention;
+using onnx_kernels::kernel::HammingWindow;
+using onnx_kernels::kernel::HannWindow;
+using onnx_kernels::kernel::If;
+using onnx_kernels::kernel::KernelContext;
+using onnx_kernels::kernel::LabelEncoder;
+using onnx_kernels::kernel::LinearClassifier;
+using onnx_kernels::kernel::LinearRegressor;
+using onnx_kernels::kernel::Normalizer;
+using onnx_kernels::kernel::Or;
+using onnx_kernels::kernel::QuantizeLinear;
+using onnx_kernels::kernel::ReduceSum;
+using onnx_kernels::kernel::RoiAlign;
+using onnx_kernels::kernel::Scaler;
+using onnx_kernels::kernel::SequenceConstruct;
+using onnx_kernels::kernel::StringConcat;
+using onnx_kernels::kernel::StringSplit;
+using onnx_kernels::kernel::SVMClassifier;
+using onnx_kernels::kernel::SVMRegressor;
+using onnx_kernels::kernel::Xor;
+using onnx_kernels::kernel::ZipMap;
+using OptionalKernel = onnx_kernels::kernel::Optional;
 
 namespace Test {
 

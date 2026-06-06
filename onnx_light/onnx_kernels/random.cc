@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/random.h"
+#include "onnx_kernels/random.h"
 
 #include <cstdint>
 #include <limits>
@@ -10,7 +10,7 @@
 #include <type_traits>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 
 namespace {
 
@@ -157,5 +157,5 @@ Tensor RandBool(const std::vector<int64_t> &shape, std::optional<uint64_t> seed)
   return Tensor("", static_cast<int32_t>(DataType::BOOL), shape, std::move(bytes));
 }
 
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

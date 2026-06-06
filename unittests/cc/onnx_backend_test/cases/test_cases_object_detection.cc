@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/cases/object_detection/include_object_detection_cases.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/test_case.h"
 
 #include <gtest/gtest.h>
 
@@ -12,16 +12,16 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_backend_test::CollectObjectDetectionTestCases;
+using onnx_kernels::CollectObjectDetectionTestCases;
 
 namespace {
-std::vector<onnx_backend_test::TestCase> CollectTestCases(const std::string &op_type = "") {
-  std::vector<onnx_backend_test::TestCase> registry;
+std::vector<onnx_kernels::TestCase> CollectTestCases(const std::string &op_type = "") {
+  std::vector<onnx_kernels::TestCase> registry;
   CollectObjectDetectionTestCases(registry, op_type);
   return registry;
 }
 } // namespace
-using onnx_backend_test::TestCase;
+using onnx_kernels::TestCase;
 
 namespace Test {
 
@@ -54,7 +54,7 @@ TEST(BackendTestCase, RoiAlignCasesArePresent) {
     const auto &ds = avg->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{2, 1, 5, 5}));
     // Outputs sample from a feature map whose values lie in [0, 1).
     const float *y = ds.outputs[0].AsFloat();
@@ -162,7 +162,7 @@ TEST(BackendTestCase, NonMaxSuppressionUpstreamCasesArePresent) {
     const auto &ds = tc->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 5u);
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
     ASSERT_EQ(ds.outputs[0].shape.size(), 2u);
     EXPECT_EQ(ds.outputs[0].shape[1], 3);
   }

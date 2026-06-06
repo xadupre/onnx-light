@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/kernel_context.h"
-#include "onnx_backend_test/kernels/preview/include_preview_kernels.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/kernels/preview/include_preview_kernels.h"
+#include "onnx_kernels/test_case.h"
 
 #include <gtest/gtest.h>
 
@@ -13,10 +13,10 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_backend_test::OpsetId;
-using onnx_backend_test::Tensor;
-using onnx_backend_test::kernel::FlexAttention;
-using onnx_backend_test::kernel::KernelContext;
+using onnx_kernels::OpsetId;
+using onnx_kernels::Tensor;
+using onnx_kernels::kernel::FlexAttention;
+using onnx_kernels::kernel::KernelContext;
 
 namespace Test {
 
@@ -91,7 +91,7 @@ TEST(BackendKernelClass, FlexAttentionRejectsInvalidInputs) {
   EXPECT_THROW(flex(bad, K, V), std::invalid_argument);
 
   // Non-FLOAT input is rejected.
-  Tensor int_Q("", onnx_backend_test::DataType::INT32, {1, 1, 1, 2},
+  Tensor int_Q("", onnx_kernels::DataType::INT32, {1, 1, 1, 2},
                std::vector<uint8_t>(2 * sizeof(int32_t)));
   EXPECT_THROW(flex(int_Q, K, V), std::invalid_argument);
 

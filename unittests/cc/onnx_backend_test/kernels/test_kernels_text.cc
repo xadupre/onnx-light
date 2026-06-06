@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/kernel_context.h"
-#include "onnx_backend_test/kernels/text/include_text_kernels.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/kernels/text/include_text_kernels.h"
+#include "onnx_kernels/test_case.h"
 
 #include <gtest/gtest.h>
 
@@ -13,13 +13,13 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_backend_test::DefaultOpset;
-using onnx_backend_test::Tensor;
-using onnx_backend_test::kernel::KernelContext;
-using onnx_backend_test::kernel::RegexFullMatch;
-using onnx_backend_test::kernel::StringConcat;
-using onnx_backend_test::kernel::StringNormalizer;
-using onnx_backend_test::kernel::StringSplit;
+using onnx_kernels::DefaultOpset;
+using onnx_kernels::Tensor;
+using onnx_kernels::kernel::KernelContext;
+using onnx_kernels::kernel::RegexFullMatch;
+using onnx_kernels::kernel::StringConcat;
+using onnx_kernels::kernel::StringNormalizer;
+using onnx_kernels::kernel::StringSplit;
 
 namespace Test {
 
@@ -30,7 +30,7 @@ TEST(BackendKernelClass, StringConcatEqualShapeMatchesReference) {
   Tensor y = Tensor::FromStrings("", {3}, {"def", "xyz", "world"});
   Tensor z = string_concat(x, y);
   ASSERT_EQ(z.element_count(), 3);
-  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_backend_test::DataType::STRING));
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::STRING));
   EXPECT_EQ(z.shape, x.shape);
   const auto &out = z.AsStrings();
   ASSERT_EQ(out.size(), 3u);

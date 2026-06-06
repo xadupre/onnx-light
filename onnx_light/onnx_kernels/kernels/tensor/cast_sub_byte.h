@@ -19,12 +19,12 @@
 
 #pragma once
 
-#include "onnx_backend_test/simple_tensor.h"
+#include "onnx_kernels/simple_tensor.h"
 
 #include <cstdint>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 namespace kernel {
 
 // ---------------------------------------------------------------------------
@@ -47,5 +47,5 @@ std::int8_t Int2BitsToInt8(std::uint8_t bits) noexcept;
 std::uint8_t Uint2BitsToUint8(std::uint8_t bits) noexcept;
 
 } // namespace kernel
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/nn/include_nn_kernels.h"
+#include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
 #include <algorithm>
 #include <cmath>
@@ -14,7 +14,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 namespace kernel {
 
 namespace {
@@ -250,5 +250,5 @@ MaxPool::WithIndices(const Tensor &x, const std::vector<int64_t> &kernel_shape,
 }
 
 } // namespace kernel
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

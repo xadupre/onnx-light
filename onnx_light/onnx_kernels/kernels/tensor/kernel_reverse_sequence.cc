@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/tensor/include_tensor_kernels.h"
+#include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
 #include <cstdint>
 #include <cstring>
@@ -10,7 +10,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 namespace kernel {
 
 Tensor ReverseSequence::operator()(const Tensor &input, const Tensor &sequence_lens,
@@ -132,5 +132,5 @@ void ReverseSequence::operator()(const Tensor &input, const Tensor &sequence_len
 }
 
 } // namespace kernel
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

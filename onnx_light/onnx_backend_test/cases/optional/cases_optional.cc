@@ -3,14 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/cases/optional/include_optional_cases.h"
-#include "onnx_backend_test/kernels/optional/include_optional_kernels.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/optional/include_optional_kernels.h"
+#include "onnx_kernels/test_case.h"
 
 #include <cstdint>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 
 // ---------------------------------------------------------------------------
 // Optional — wraps a tensor input into an optional-of-tensor value (since
@@ -74,5 +74,5 @@ void RegisterOptionalCases(std::vector<TestCase> &registry) {
   out_tp.reset_tensor_type();
 }
 
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

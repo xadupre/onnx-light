@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/nn/include_nn_kernels.h"
+#include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
 #include <cstdint>
 #include <stdexcept>
@@ -10,7 +10,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 namespace kernel {
 
 namespace {
@@ -223,5 +223,5 @@ void Col2Im::operator()(const Tensor &input, const Tensor &image_shape, const Te
 }
 
 } // namespace kernel
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

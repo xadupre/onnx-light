@@ -2,13 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/sequence/include_sequence_kernels.h"
+#include "onnx_kernels/kernels/sequence/include_sequence_kernels.h"
 
 #include <cstdint>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 namespace kernel {
 
 Sequence SequenceEmpty::operator()(int32_t dtype) const {
@@ -21,5 +21,5 @@ Sequence SequenceEmpty::operator()(int32_t dtype) const {
 }
 
 } // namespace kernel
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

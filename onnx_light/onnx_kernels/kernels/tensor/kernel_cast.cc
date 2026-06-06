@@ -2,10 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/tensor/include_tensor_kernels.h"
+#include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
-#include "onnx_backend_test/kernels/tensor/cast_float8.h"
-#include "onnx_backend_test/kernels/tensor/cast_sub_byte.h"
+#include "onnx_kernels/kernels/tensor/cast_float8.h"
+#include "onnx_kernels/kernels/tensor/cast_sub_byte.h"
 
 #include <algorithm>
 #include <cmath>
@@ -17,7 +17,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 namespace kernel {
 
 namespace {
@@ -25,7 +25,7 @@ namespace {
 // Returns true when ``dtype`` is one of the numeric (non-STRING) element
 // types supported by ``Cast``. Element bytes for these types live in
 // ``Tensor::data``; their fixed element size is given by
-// ``onnx_backend_test::ElementSize``.
+// ``onnx_kernels::ElementSize``.
 bool IsSupportedNumericCastDtype(int32_t dtype) {
   switch (static_cast<DataType>(dtype)) {
   case DataType::FLOAT:
@@ -536,5 +536,5 @@ void Cast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
 }
 
 } // namespace kernel
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

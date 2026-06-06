@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/kernel_context.h"
-#include "onnx_backend_test/kernels/tensor/include_tensor_kernels.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
+#include "onnx_kernels/test_case.h"
 
 #include <gtest/gtest.h>
 
@@ -12,16 +12,16 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_backend_test::DefaultOpset;
-using onnx_backend_test::Tensor;
-using onnx_backend_test::kernel::Cast;
-using onnx_backend_test::kernel::CastLike;
-using onnx_backend_test::kernel::Concat;
-using onnx_backend_test::kernel::KernelContext;
-using onnx_backend_test::kernel::Reshape;
-using onnx_backend_test::kernel::Slice;
-using onnx_backend_test::kernel::Squeeze;
-using onnx_backend_test::kernel::Unsqueeze;
+using onnx_kernels::DefaultOpset;
+using onnx_kernels::Tensor;
+using onnx_kernels::kernel::Cast;
+using onnx_kernels::kernel::CastLike;
+using onnx_kernels::kernel::Concat;
+using onnx_kernels::kernel::KernelContext;
+using onnx_kernels::kernel::Reshape;
+using onnx_kernels::kernel::Slice;
+using onnx_kernels::kernel::Squeeze;
+using onnx_kernels::kernel::Unsqueeze;
 
 namespace Test {
 
@@ -74,7 +74,7 @@ TEST(BackendKernelClass, ConcatInPlaceWritesToPreallocatedOutput) {
   Concat concat_kernel{ctx};
   Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor x1 = Tensor::FromFloat("", {2, 3}, {5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f});
-  Tensor y("out", onnx_backend_test::DataType::FLOAT, {2, 5},
+  Tensor y("out", onnx_kernels::DataType::FLOAT, {2, 5},
            std::vector<uint8_t>(10 * sizeof(float)));
   concat_kernel({x0, x1}, /*axis=*/-1, y);
   EXPECT_EQ(y.name, "out");
@@ -91,7 +91,7 @@ TEST(BackendKernelClass, ConcatInPlaceRejectsMismatchedShape) {
   Concat concat_kernel{ctx};
   Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor x1 = Tensor::FromFloat("", {2, 2}, {5.0f, 6.0f, 7.0f, 8.0f});
-  Tensor bad_shape("", onnx_backend_test::DataType::FLOAT, {3, 2},
+  Tensor bad_shape("", onnx_kernels::DataType::FLOAT, {3, 2},
                    std::vector<uint8_t>(6 * sizeof(float)));
   EXPECT_THROW(concat_kernel({x0, x1}, /*axis=*/0, bad_shape), std::invalid_argument);
 }
@@ -191,8 +191,8 @@ TEST(BackendKernelClass, CastClassFloatToDouble) {
   const KernelContext ctx{DefaultOpset(13)};
   Cast cast_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {-1.5f, 0.0f, 2.25f});
-  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_backend_test::DataType::DOUBLE));
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::DOUBLE));
+  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::DOUBLE));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::DOUBLE));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{3}));
   const double *py = y.AsDouble();
   EXPECT_DOUBLE_EQ(py[0], -1.5);
@@ -204,8 +204,8 @@ TEST(BackendKernelClass, CastClassFloatToInt32TruncatesTowardZero) {
   const KernelContext ctx{DefaultOpset(13)};
   Cast cast_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {4}, {-1.5f, 0.0f, 2.75f, 4.0f});
-  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
+  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::INT32));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
   const int32_t *py = y.AsInt32();
   EXPECT_EQ(py[0], -1);
   EXPECT_EQ(py[1], 0);
@@ -217,8 +217,8 @@ TEST(BackendKernelClass, CastClassInt64ToFloat) {
   const KernelContext ctx{DefaultOpset(13)};
   Cast cast_kernel{ctx};
   Tensor x = Tensor::FromInt64("", {4}, {-3, 0, 7, 42});
-  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], -3.0f);
   EXPECT_FLOAT_EQ(py[1], 0.0f);
@@ -230,7 +230,7 @@ TEST(BackendKernelClass, CastClassIdentityCopiesBytes) {
   const KernelContext ctx{DefaultOpset(13)};
   Cast cast_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
-  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   ASSERT_EQ(y.shape, x.shape);
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], 1.0f);
@@ -243,7 +243,7 @@ TEST(BackendKernelClass, CastClassRejectsUnsupportedTo) {
   Cast cast_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {1}, {1.0f});
   // FLOAT16 is not in the supported set for the kernel today.
-  EXPECT_THROW((void)cast_kernel(x, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT16)),
+  EXPECT_THROW((void)cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16)),
                std::invalid_argument);
 }
 
@@ -252,9 +252,9 @@ TEST(BackendKernelClass, CastInPlaceRejectsDtypeMismatch) {
   Cast cast_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   // Output dtype declared as FLOAT but the caller asks for INT32.
-  Tensor wrong_out("", onnx_backend_test::DataType::FLOAT, {2},
+  Tensor wrong_out("", onnx_kernels::DataType::FLOAT, {2},
                    std::vector<uint8_t>(2 * sizeof(float)));
-  EXPECT_THROW(cast_kernel(x, static_cast<int32_t>(onnx_backend_test::DataType::INT32), wrong_out),
+  EXPECT_THROW(cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::INT32), wrong_out),
                std::invalid_argument);
 }
 
@@ -274,7 +274,7 @@ TEST(BackendKernelClass, CastLikeClassFloatToDouble) {
   // target_type carries the destination dtype only; its value is ignored.
   Tensor target = Tensor::FromDouble("", {1}, {0.0});
   Tensor y = castlike_kernel(x, target);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::DOUBLE));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::DOUBLE));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{3}));
   const double *py = y.AsDouble();
   EXPECT_DOUBLE_EQ(py[0], -1.5);
@@ -292,8 +292,8 @@ TEST(BackendKernelClass, CastLikeClassIgnoresTargetValues) {
   Tensor t2 = Tensor::FromInt32("", {2}, {12345, -67890});
   Tensor y1 = castlike_kernel(x, t1);
   Tensor y2 = castlike_kernel(x, t2);
-  ASSERT_EQ(y1.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
-  ASSERT_EQ(y2.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
+  ASSERT_EQ(y1.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
+  ASSERT_EQ(y2.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
   ASSERT_EQ(y1.shape, x.shape);
   ASSERT_EQ(y2.shape, x.shape);
   const int32_t *p1 = y1.AsInt32();
@@ -313,7 +313,7 @@ TEST(BackendKernelClass, CastLikeInPlaceWritesToPreallocatedOutput) {
   CastLike castlike_kernel{ctx};
   Tensor x = Tensor::FromInt64("", {3}, {-3, 0, 42});
   Tensor target = Tensor::FromFloat("", {1}, {0.0f});
-  Tensor out("", onnx_backend_test::DataType::FLOAT, {3}, std::vector<uint8_t>(3 * sizeof(float)));
+  Tensor out("", onnx_kernels::DataType::FLOAT, {3}, std::vector<uint8_t>(3 * sizeof(float)));
   castlike_kernel(x, target, out);
   const float *po = out.AsFloat();
   EXPECT_FLOAT_EQ(po[0], -3.0f);
@@ -327,7 +327,7 @@ TEST(BackendKernelClass, CastLikeInPlaceRejectsDtypeMismatch) {
   Tensor x = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   Tensor target = Tensor::FromInt32("", {1}, {0});
   // Pre-allocated output dtype does not match target_type.data_type.
-  Tensor wrong_out("", onnx_backend_test::DataType::FLOAT, {2},
+  Tensor wrong_out("", onnx_kernels::DataType::FLOAT, {2},
                    std::vector<uint8_t>(2 * sizeof(float)));
   EXPECT_THROW(castlike_kernel(x, target, wrong_out), std::invalid_argument);
 }
@@ -336,7 +336,7 @@ TEST(BackendKernelClass, CastLikeInPlaceRejectsDtypeMismatch) {
 // AffineGrid kernel tests.
 // ---------------------------------------------------------------------------
 
-using onnx_backend_test::kernel::AffineGrid;
+using onnx_kernels::kernel::AffineGrid;
 
 namespace {
 
@@ -454,7 +454,7 @@ TEST(BackendKernelClass, AffineGridRejectsBadShapes) {
 // GridSample kernel tests.
 // ---------------------------------------------------------------------------
 
-using onnx_backend_test::kernel::GridSample;
+using onnx_kernels::kernel::GridSample;
 TEST(BackendKernelClass, GridSampleBilinearMatchesUpstream) {
   // Matches ``test_gridsample_bilinear`` from
   // ``onnx/backend/test/case/node/gridsample.py``.
@@ -558,7 +558,7 @@ TEST(BackendKernelClass, GridSampleRejectsBadInputs) {
   EXPECT_THROW((void)gs(X, Grid_ok, bad_attrs), std::invalid_argument);
 }
 
-using onnx_backend_test::kernel::NonZero;
+using onnx_kernels::kernel::NonZero;
 
 TEST(BackendKernelClass, NonZeroFloat2DReturnsRowMajorIndices) {
   const KernelContext ctx{DefaultOpset(13)};
@@ -567,7 +567,7 @@ TEST(BackendKernelClass, NonZeroFloat2DReturnsRowMajorIndices) {
   // Output is (rank=2, nnz=3) = [[0,1,1],[0,0,1]].
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 0.0f, 1.0f, 1.0f});
   Tensor y = nonzero_kernel(x);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
   const int64_t *py = y.AsInt64();
   EXPECT_EQ(py[0], 0);
@@ -606,14 +606,14 @@ TEST(BackendKernelClass, NonZeroBoolRespectsTruthiness) {
   EXPECT_EQ(py[5], 1);
 }
 
-using onnx_backend_test::kernel::Shape;
+using onnx_kernels::kernel::Shape;
 
 TEST(BackendKernelClass, ShapeDefaultReturnsFullShape) {
   const KernelContext ctx{DefaultOpset(15)};
   Shape shape_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 3, 4}, std::vector<float>(24, 0.0f));
   Tensor y = shape_kernel(x);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{3}));
   const int64_t *py = y.AsInt64();
   EXPECT_EQ(py[0], 2);
@@ -684,13 +684,13 @@ TEST(BackendKernelClass, DepthToSpaceDCRMatchesNumpyReference) {
   //   tmp = transpose(tmp, [0, 3, 4, 1, 5, 2])
   //   y   = reshape(tmp, [b, c/(b*b), h*blocksize, w*blocksize])
   const KernelContext ctx{DefaultOpset(13)};
-  onnx_backend_test::kernel::DepthToSpace d2s{ctx};
+  onnx_kernels::kernel::DepthToSpace d2s{ctx};
   std::vector<float> values(8);
   for (int i = 0; i < 8; ++i)
     values[i] = static_cast<float>(i);
   // Input shape (1, 8, 1, 1): C=8, blocksize=2 -> C_out=2, H_out=2, W_out=2.
   Tensor x = Tensor::FromFloat("", {1, 8, 1, 1}, values);
-  onnx_backend_test::kernel::DepthToSpace::Attributes a;
+  onnx_kernels::kernel::DepthToSpace::Attributes a;
   a.blocksize = 2;
   a.mode = "DCR";
   Tensor y = d2s(x, a);
@@ -706,12 +706,12 @@ TEST(BackendKernelClass, DepthToSpaceDCRMatchesNumpyReference) {
 
 TEST(BackendKernelClass, DepthToSpaceCRDMatchesNumpyReference) {
   const KernelContext ctx{DefaultOpset(13)};
-  onnx_backend_test::kernel::DepthToSpace d2s{ctx};
+  onnx_kernels::kernel::DepthToSpace d2s{ctx};
   std::vector<float> values(8);
   for (int i = 0; i < 8; ++i)
     values[i] = static_cast<float>(i);
   Tensor x = Tensor::FromFloat("", {1, 8, 1, 1}, values);
-  onnx_backend_test::kernel::DepthToSpace::Attributes a;
+  onnx_kernels::kernel::DepthToSpace::Attributes a;
   a.blocksize = 2;
   a.mode = "CRD";
   Tensor y = d2s(x, a);
@@ -727,20 +727,20 @@ TEST(BackendKernelClass, DepthToSpaceCRDMatchesNumpyReference) {
 
 TEST(BackendKernelClass, DepthToSpaceRejectsNonRank4Input) {
   const KernelContext ctx{DefaultOpset(13)};
-  onnx_backend_test::kernel::DepthToSpace d2s{ctx};
+  onnx_kernels::kernel::DepthToSpace d2s{ctx};
   Tensor x = Tensor::FromFloat("", {1, 4}, {0.f, 1.f, 2.f, 3.f});
-  onnx_backend_test::kernel::DepthToSpace::Attributes a;
+  onnx_kernels::kernel::DepthToSpace::Attributes a;
   a.blocksize = 2;
   EXPECT_THROW((void)d2s(x, a), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, DepthToSpaceRejectsChannelNotDivisible) {
   const KernelContext ctx{DefaultOpset(13)};
-  onnx_backend_test::kernel::DepthToSpace d2s{ctx};
+  onnx_kernels::kernel::DepthToSpace d2s{ctx};
   Tensor x = Tensor::FromFloat("", {1, 5, 2, 2},
                                {0.f,  1.f,  2.f,  3.f,  4.f,  5.f,  6.f,  7.f,  8.f,  9.f,
                                 10.f, 11.f, 12.f, 13.f, 14.f, 15.f, 16.f, 17.f, 18.f, 19.f});
-  onnx_backend_test::kernel::DepthToSpace::Attributes a;
+  onnx_kernels::kernel::DepthToSpace::Attributes a;
   a.blocksize = 2;
   EXPECT_THROW((void)d2s(x, a), std::invalid_argument);
 }
@@ -756,13 +756,13 @@ TEST(BackendKernelClass, SpaceToDepthMatchesNumpyReference) {
   //   tmp = transpose(tmp, [0, 3, 5, 1, 2, 4])
   //   y   = reshape(tmp, [N, C*bs*bs, H/bs, W/bs])
   const KernelContext ctx{DefaultOpset(13)};
-  onnx_backend_test::kernel::SpaceToDepth s2d{ctx};
+  onnx_kernels::kernel::SpaceToDepth s2d{ctx};
   std::vector<float> values(8);
   for (int i = 0; i < 8; ++i)
     values[i] = static_cast<float>(i);
   // Input shape (1, 2, 2, 2): blocksize=2 -> output shape (1, 8, 1, 1).
   Tensor x = Tensor::FromFloat("", {1, 2, 2, 2}, values);
-  onnx_backend_test::kernel::SpaceToDepth::Attributes a;
+  onnx_kernels::kernel::SpaceToDepth::Attributes a;
   a.blocksize = 2;
   Tensor y = s2d(x, a);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 8, 1, 1}));
@@ -786,17 +786,17 @@ TEST(BackendKernelClass, SpaceToDepthMatchesNumpyReference) {
 TEST(BackendKernelClass, SpaceToDepthIsInverseOfDepthToSpaceDCR) {
   // Round-trip x -> SpaceToDepth -> DepthToSpace(DCR) should be identity.
   const KernelContext ctx{DefaultOpset(13)};
-  onnx_backend_test::kernel::SpaceToDepth s2d{ctx};
-  onnx_backend_test::kernel::DepthToSpace d2s{ctx};
+  onnx_kernels::kernel::SpaceToDepth s2d{ctx};
+  onnx_kernels::kernel::DepthToSpace d2s{ctx};
   std::vector<float> values(2 * 3 * 4 * 6);
   for (std::size_t i = 0; i < values.size(); ++i)
     values[i] = static_cast<float>(i);
   Tensor x = Tensor::FromFloat("", {2, 3, 4, 6}, values);
-  onnx_backend_test::kernel::SpaceToDepth::Attributes a;
+  onnx_kernels::kernel::SpaceToDepth::Attributes a;
   a.blocksize = 2;
   Tensor y = s2d(x, a);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 12, 2, 3}));
-  onnx_backend_test::kernel::DepthToSpace::Attributes ad;
+  onnx_kernels::kernel::DepthToSpace::Attributes ad;
   ad.blocksize = 2;
   ad.mode = "DCR";
   Tensor z = d2s(y, ad);
@@ -809,19 +809,19 @@ TEST(BackendKernelClass, SpaceToDepthIsInverseOfDepthToSpaceDCR) {
 
 TEST(BackendKernelClass, SpaceToDepthRejectsNonRank4Input) {
   const KernelContext ctx{DefaultOpset(13)};
-  onnx_backend_test::kernel::SpaceToDepth s2d{ctx};
+  onnx_kernels::kernel::SpaceToDepth s2d{ctx};
   Tensor x = Tensor::FromFloat("", {1, 4}, {0.f, 1.f, 2.f, 3.f});
-  onnx_backend_test::kernel::SpaceToDepth::Attributes a;
+  onnx_kernels::kernel::SpaceToDepth::Attributes a;
   a.blocksize = 2;
   EXPECT_THROW((void)s2d(x, a), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, SpaceToDepthRejectsSpatialDimNotDivisible) {
   const KernelContext ctx{DefaultOpset(13)};
-  onnx_backend_test::kernel::SpaceToDepth s2d{ctx};
+  onnx_kernels::kernel::SpaceToDepth s2d{ctx};
   // H=3 is not divisible by blocksize=2.
   Tensor x = Tensor::FromFloat("", {1, 1, 3, 2}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
-  onnx_backend_test::kernel::SpaceToDepth::Attributes a;
+  onnx_kernels::kernel::SpaceToDepth::Attributes a;
   a.blocksize = 2;
   EXPECT_THROW((void)s2d(x, a), std::invalid_argument);
 }
@@ -841,10 +841,10 @@ Tensor MakeUpsampleScales(const std::vector<float> &scales) {
 TEST(BackendKernelClass, UpsampleNearestMatchesUpstreamNCHWReference) {
   // Mirrors the upstream ``test_upsample_nearest`` node test exactly.
   const KernelContext ctx{DefaultOpset(9)};
-  onnx_backend_test::kernel::Upsample upsample{ctx};
+  onnx_kernels::kernel::Upsample upsample{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {1.f, 2.f, 3.f, 4.f});
   Tensor scales = MakeUpsampleScales({1.f, 1.f, 2.f, 3.f});
-  onnx_backend_test::kernel::Upsample::Attributes a;
+  onnx_kernels::kernel::Upsample::Attributes a;
   a.mode = "nearest";
   Tensor y = upsample(x, scales, a);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 1, 4, 6}));
@@ -860,10 +860,10 @@ TEST(BackendKernelClass, UpsampleNearestMatchesUpstreamNCHWReference) {
 
 TEST(BackendKernelClass, UpsampleNearest1DDoublesEachElement) {
   const KernelContext ctx{DefaultOpset(9)};
-  onnx_backend_test::kernel::Upsample upsample{ctx};
+  onnx_kernels::kernel::Upsample upsample{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {10.f, 20.f, 30.f});
   Tensor scales = MakeUpsampleScales({2.f});
-  onnx_backend_test::kernel::Upsample::Attributes a;
+  onnx_kernels::kernel::Upsample::Attributes a;
   a.mode = "nearest";
   Tensor y = upsample(x, scales, a);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{6}));
@@ -880,10 +880,10 @@ TEST(BackendKernelClass, UpsampleLinear4DBilinearReference) {
   // out_coord / scale, clamped to [0, in_dim - 1]) matches the upstream
   // Upsample v7 semantics.
   const KernelContext ctx{DefaultOpset(9)};
-  onnx_backend_test::kernel::Upsample upsample{ctx};
+  onnx_kernels::kernel::Upsample upsample{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {1.f, 2.f, 3.f, 4.f});
   Tensor scales = MakeUpsampleScales({1.f, 1.f, 2.f, 2.f});
-  onnx_backend_test::kernel::Upsample::Attributes a;
+  onnx_kernels::kernel::Upsample::Attributes a;
   a.mode = "linear";
   Tensor y = upsample(x, scales, a);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 1, 4, 4}));
@@ -901,21 +901,21 @@ TEST(BackendKernelClass, UpsampleLinear4DBilinearReference) {
 
 TEST(BackendKernelClass, UpsampleRejectsUnknownMode) {
   const KernelContext ctx{DefaultOpset(9)};
-  onnx_backend_test::kernel::Upsample upsample{ctx};
+  onnx_kernels::kernel::Upsample upsample{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {1.f, 2.f, 3.f, 4.f});
   Tensor scales = MakeUpsampleScales({1.f, 1.f, 2.f, 2.f});
-  onnx_backend_test::kernel::Upsample::Attributes a;
+  onnx_kernels::kernel::Upsample::Attributes a;
   a.mode = "cubic";
   EXPECT_THROW((void)upsample(x, scales, a), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, UpsampleRejectsScalesLengthMismatch) {
   const KernelContext ctx{DefaultOpset(9)};
-  onnx_backend_test::kernel::Upsample upsample{ctx};
+  onnx_kernels::kernel::Upsample upsample{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {1.f, 2.f, 3.f, 4.f});
   // 3 scales for a rank-4 input.
   Tensor scales = MakeUpsampleScales({1.f, 2.f, 2.f});
-  onnx_backend_test::kernel::Upsample::Attributes a;
+  onnx_kernels::kernel::Upsample::Attributes a;
   EXPECT_THROW((void)upsample(x, scales, a), std::invalid_argument);
 }
 
@@ -925,9 +925,9 @@ TEST(BackendKernelClass, UpsampleRejectsScalesLengthMismatch) {
 
 TEST(BackendKernelClass, TriluUpperDefaultKeepsUpperTriangle) {
   const KernelContext ctx{DefaultOpset(14)};
-  onnx_backend_test::kernel::Trilu trilu{ctx};
+  onnx_kernels::kernel::Trilu trilu{ctx};
   Tensor x = Tensor::FromFloat("", {3, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
-  onnx_backend_test::kernel::Trilu::Attributes attrs;
+  onnx_kernels::kernel::Trilu::Attributes attrs;
   Tensor y = trilu(x, /*k=*/nullptr, attrs);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{3, 3}));
   const float *py = y.AsFloat();
@@ -939,9 +939,9 @@ TEST(BackendKernelClass, TriluUpperDefaultKeepsUpperTriangle) {
 
 TEST(BackendKernelClass, TriluLowerKeepsLowerTriangle) {
   const KernelContext ctx{DefaultOpset(14)};
-  onnx_backend_test::kernel::Trilu trilu{ctx};
+  onnx_kernels::kernel::Trilu trilu{ctx};
   Tensor x = Tensor::FromFloat("", {3, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
-  onnx_backend_test::kernel::Trilu::Attributes attrs;
+  onnx_kernels::kernel::Trilu::Attributes attrs;
   attrs.upper = 0;
   Tensor y = trilu(x, /*k=*/nullptr, attrs);
   const float *py = y.AsFloat();
@@ -953,11 +953,11 @@ TEST(BackendKernelClass, TriluLowerKeepsLowerTriangle) {
 
 TEST(BackendKernelClass, TriluUpperWithPositiveK) {
   const KernelContext ctx{DefaultOpset(14)};
-  onnx_backend_test::kernel::Trilu trilu{ctx};
+  onnx_kernels::kernel::Trilu trilu{ctx};
   // 3x4 matrix; upper, k=1 -> keep elements with j >= i + 1.
   Tensor x = Tensor::FromInt64("", {3, 4}, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
   Tensor k = Tensor::FromInt64("", {}, {1});
-  onnx_backend_test::kernel::Trilu::Attributes attrs;
+  onnx_kernels::kernel::Trilu::Attributes attrs;
   Tensor y = trilu(x, &k, attrs);
   const std::vector<int64_t> expected{0, 2, 3, 4, 0, 0, 7, 8, 0, 0, 0, 12};
   const int64_t *py = y.AsInt64();
@@ -968,11 +968,11 @@ TEST(BackendKernelClass, TriluUpperWithPositiveK) {
 
 TEST(BackendKernelClass, TriluLowerWithNegativeK) {
   const KernelContext ctx{DefaultOpset(14)};
-  onnx_backend_test::kernel::Trilu trilu{ctx};
+  onnx_kernels::kernel::Trilu trilu{ctx};
   // 3x3 matrix; lower, k=-1 -> keep elements with j <= i - 1 (strict lower).
   Tensor x = Tensor::FromFloat("", {3, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
   Tensor k = Tensor::FromInt64("", {}, {-1});
-  onnx_backend_test::kernel::Trilu::Attributes attrs;
+  onnx_kernels::kernel::Trilu::Attributes attrs;
   attrs.upper = 0;
   Tensor y = trilu(x, &k, attrs);
   const std::vector<float> expected{0.0f, 0.0f, 0.0f, 4.0f, 0.0f, 0.0f, 7.0f, 8.0f, 0.0f};
@@ -984,10 +984,10 @@ TEST(BackendKernelClass, TriluLowerWithNegativeK) {
 
 TEST(BackendKernelClass, TriluBatchedAppliesPerMatrix) {
   const KernelContext ctx{DefaultOpset(14)};
-  onnx_backend_test::kernel::Trilu trilu{ctx};
+  onnx_kernels::kernel::Trilu trilu{ctx};
   // Two 2x2 matrices stacked along a leading batch dim.
   Tensor x = Tensor::FromFloat("", {2, 2, 2}, {1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f});
-  onnx_backend_test::kernel::Trilu::Attributes attrs;
+  onnx_kernels::kernel::Trilu::Attributes attrs;
   Tensor y = trilu(x, /*k=*/nullptr, attrs);
   const std::vector<float> expected{1.f, 2.f, 0.f, 4.f, 5.f, 6.f, 0.f, 8.f};
   const float *py = y.AsFloat();
@@ -998,18 +998,18 @@ TEST(BackendKernelClass, TriluBatchedAppliesPerMatrix) {
 
 TEST(BackendKernelClass, TriluRejectsRankLessThanTwo) {
   const KernelContext ctx{DefaultOpset(14)};
-  onnx_backend_test::kernel::Trilu trilu{ctx};
+  onnx_kernels::kernel::Trilu trilu{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {1.f, 2.f, 3.f});
-  onnx_backend_test::kernel::Trilu::Attributes attrs;
+  onnx_kernels::kernel::Trilu::Attributes attrs;
   EXPECT_THROW((void)trilu(x, /*k=*/nullptr, attrs), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, TriluRejectsNonInt64K) {
   const KernelContext ctx{DefaultOpset(14)};
-  onnx_backend_test::kernel::Trilu trilu{ctx};
+  onnx_kernels::kernel::Trilu trilu{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.f, 2.f, 3.f, 4.f});
   Tensor k = Tensor::FromInt32("", {}, {1});
-  onnx_backend_test::kernel::Trilu::Attributes attrs;
+  onnx_kernels::kernel::Trilu::Attributes attrs;
   EXPECT_THROW((void)trilu(x, &k, attrs), std::invalid_argument);
 }
 
@@ -1019,14 +1019,14 @@ TEST(BackendKernelClass, TriluRejectsNonInt64K) {
 
 TEST(BackendKernelClass, TensorScatterLinearWritesUpdateSlices) {
   const KernelContext ctx{DefaultOpset(24)};
-  onnx_backend_test::kernel::TensorScatter ts{ctx};
+  onnx_kernels::kernel::TensorScatter ts{ctx};
   // past_cache shape (2,1,4,5); update (2,1,1,5); write_indices=[1,2].
   Tensor past = Tensor::FromFloat("", {2, 1, 4, 5},
                                   {1, 2, 3, 4, 5, 5, 6, 7, 8, 9, 8, 7, 6, 5, 4, 4, 3, 2, 1, 0,
                                    1, 2, 3, 4, 5, 5, 6, 7, 8, 9, 8, 7, 6, 5, 4, 4, 3, 2, 1, 0});
   Tensor update = Tensor::FromFloat("", {2, 1, 1, 5}, {5, 5, 5, 5, 5, 1, 1, 1, 1, 1});
   Tensor write = Tensor::FromInt64("", {2}, {1, 2});
-  onnx_backend_test::kernel::TensorScatter::Attributes attrs;
+  onnx_kernels::kernel::TensorScatter::Attributes attrs;
   Tensor y = ts(past, update, &write, attrs);
   ASSERT_EQ(y.shape, past.shape);
   const float *py = y.AsFloat();
@@ -1040,12 +1040,12 @@ TEST(BackendKernelClass, TensorScatterLinearWritesUpdateSlices) {
 
 TEST(BackendKernelClass, TensorScatterCircularWrapsWriteIndex) {
   const KernelContext ctx{DefaultOpset(24)};
-  onnx_backend_test::kernel::TensorScatter ts{ctx};
+  onnx_kernels::kernel::TensorScatter ts{ctx};
   // Single-batch (1,4) where update length 2 starts at index 3 and wraps to 0.
   Tensor past = Tensor::FromFloat("", {1, 4}, {0, 0, 0, 0});
   Tensor update = Tensor::FromFloat("", {1, 2}, {1, 2});
   Tensor write = Tensor::FromInt64("", {1}, {3});
-  onnx_backend_test::kernel::TensorScatter::Attributes attrs;
+  onnx_kernels::kernel::TensorScatter::Attributes attrs;
   attrs.axis = 1;
   attrs.mode = "circular";
   Tensor y = ts(past, update, &write, attrs);
@@ -1059,10 +1059,10 @@ TEST(BackendKernelClass, TensorScatterCircularWrapsWriteIndex) {
 
 TEST(BackendKernelClass, TensorScatterDefaultsWriteIndicesToZero) {
   const KernelContext ctx{DefaultOpset(24)};
-  onnx_backend_test::kernel::TensorScatter ts{ctx};
+  onnx_kernels::kernel::TensorScatter ts{ctx};
   Tensor past = Tensor::FromFloat("", {2, 3}, {0, 0, 0, 0, 0, 0});
   Tensor update = Tensor::FromFloat("", {2, 1}, {7, 9});
-  onnx_backend_test::kernel::TensorScatter::Attributes attrs;
+  onnx_kernels::kernel::TensorScatter::Attributes attrs;
   attrs.axis = 1;
   Tensor y = ts(past, update, /*write_indices=*/nullptr, attrs);
   const float *py = y.AsFloat();
@@ -1075,21 +1075,21 @@ TEST(BackendKernelClass, TensorScatterDefaultsWriteIndicesToZero) {
 
 TEST(BackendKernelClass, TensorScatterRejectsOutOfRangeLinearIndex) {
   const KernelContext ctx{DefaultOpset(24)};
-  onnx_backend_test::kernel::TensorScatter ts{ctx};
+  onnx_kernels::kernel::TensorScatter ts{ctx};
   Tensor past = Tensor::FromFloat("", {1, 4}, {0, 0, 0, 0});
   Tensor update = Tensor::FromFloat("", {1, 2}, {1, 2});
   Tensor write = Tensor::FromInt64("", {1}, {3}); // 3+2 > 4 in linear mode.
-  onnx_backend_test::kernel::TensorScatter::Attributes attrs;
+  onnx_kernels::kernel::TensorScatter::Attributes attrs;
   attrs.axis = 1;
   EXPECT_THROW((void)ts(past, update, &write, attrs), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, TensorScatterRejectsAxisOnBatchDim) {
   const KernelContext ctx{DefaultOpset(24)};
-  onnx_backend_test::kernel::TensorScatter ts{ctx};
+  onnx_kernels::kernel::TensorScatter ts{ctx};
   Tensor past = Tensor::FromFloat("", {2, 3}, {0, 0, 0, 0, 0, 0});
   Tensor update = Tensor::FromFloat("", {1, 3}, {1, 2, 3});
-  onnx_backend_test::kernel::TensorScatter::Attributes attrs;
+  onnx_kernels::kernel::TensorScatter::Attributes attrs;
   attrs.axis = 0; // batch axis is forbidden.
   EXPECT_THROW((void)ts(past, update, /*write_indices=*/nullptr, attrs), std::invalid_argument);
 }
@@ -1100,13 +1100,13 @@ TEST(BackendKernelClass, TensorScatterRejectsAxisOnBatchDim) {
 
 TEST(BackendKernelClass, ReverseSequenceTimeAxisMatchesSpecExample1) {
   const KernelContext ctx{DefaultOpset(10)};
-  onnx_backend_test::kernel::ReverseSequence rs{ctx};
+  onnx_kernels::kernel::ReverseSequence rs{ctx};
   // Spec example 1: 4x4 with time_axis=0, batch_axis=1.
   Tensor x = Tensor::FromFloat("", {4, 4},
                                {0.0f, 4.0f, 8.0f, 12.0f, 1.0f, 5.0f, 9.0f, 13.0f, 2.0f, 6.0f, 10.0f,
                                 14.0f, 3.0f, 7.0f, 11.0f, 15.0f});
   Tensor seq = Tensor::FromInt64("", {4}, {4, 3, 2, 1});
-  onnx_backend_test::kernel::ReverseSequence::Attributes attrs;
+  onnx_kernels::kernel::ReverseSequence::Attributes attrs;
   attrs.time_axis = 0;
   attrs.batch_axis = 1;
   Tensor y = rs(x, seq, attrs);
@@ -1120,13 +1120,13 @@ TEST(BackendKernelClass, ReverseSequenceTimeAxisMatchesSpecExample1) {
 
 TEST(BackendKernelClass, ReverseSequenceBatchAxisMatchesSpecExample2) {
   const KernelContext ctx{DefaultOpset(10)};
-  onnx_backend_test::kernel::ReverseSequence rs{ctx};
+  onnx_kernels::kernel::ReverseSequence rs{ctx};
   // Spec example 2: 4x4 with time_axis=1, batch_axis=0.
   Tensor x = Tensor::FromFloat("", {4, 4},
                                {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
                                 11.0f, 12.0f, 13.0f, 14.0f, 15.0f});
   Tensor seq = Tensor::FromInt64("", {4}, {1, 2, 3, 4});
-  onnx_backend_test::kernel::ReverseSequence::Attributes attrs;
+  onnx_kernels::kernel::ReverseSequence::Attributes attrs;
   attrs.time_axis = 1;
   attrs.batch_axis = 0;
   Tensor y = rs(x, seq, attrs);
@@ -1140,12 +1140,12 @@ TEST(BackendKernelClass, ReverseSequenceBatchAxisMatchesSpecExample2) {
 
 TEST(BackendKernelClass, ReverseSequenceRank3CopiesInnerDimension) {
   const KernelContext ctx{DefaultOpset(10)};
-  onnx_backend_test::kernel::ReverseSequence rs{ctx};
+  onnx_kernels::kernel::ReverseSequence rs{ctx};
   // shape [3 (time), 2 (batch), 2 (inner)] with sequence_lens=[3,1].
   Tensor x = Tensor::FromFloat("", {3, 2, 2},
                                {0.f, 1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f, 9.f, 10.f, 11.f});
   Tensor seq = Tensor::FromInt64("", {2}, {3, 1});
-  onnx_backend_test::kernel::ReverseSequence::Attributes attrs;
+  onnx_kernels::kernel::ReverseSequence::Attributes attrs;
   attrs.time_axis = 0;
   attrs.batch_axis = 1;
   Tensor y = rs(x, seq, attrs);
@@ -1160,28 +1160,28 @@ TEST(BackendKernelClass, ReverseSequenceRank3CopiesInnerDimension) {
 
 TEST(BackendKernelClass, ReverseSequenceRejectsRankLessThanTwo) {
   const KernelContext ctx{DefaultOpset(10)};
-  onnx_backend_test::kernel::ReverseSequence rs{ctx};
+  onnx_kernels::kernel::ReverseSequence rs{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {1.f, 2.f, 3.f});
   Tensor seq = Tensor::FromInt64("", {3}, {1, 1, 1});
-  onnx_backend_test::kernel::ReverseSequence::Attributes attrs;
+  onnx_kernels::kernel::ReverseSequence::Attributes attrs;
   EXPECT_THROW((void)rs(x, seq, attrs), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, ReverseSequenceRejectsNonInt64SequenceLens) {
   const KernelContext ctx{DefaultOpset(10)};
-  onnx_backend_test::kernel::ReverseSequence rs{ctx};
+  onnx_kernels::kernel::ReverseSequence rs{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.f, 2.f, 3.f, 4.f});
   Tensor seq = Tensor::FromInt32("", {2}, {2, 1});
-  onnx_backend_test::kernel::ReverseSequence::Attributes attrs;
+  onnx_kernels::kernel::ReverseSequence::Attributes attrs;
   EXPECT_THROW((void)rs(x, seq, attrs), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, ReverseSequenceRejectsAxesEqual) {
   const KernelContext ctx{DefaultOpset(10)};
-  onnx_backend_test::kernel::ReverseSequence rs{ctx};
+  onnx_kernels::kernel::ReverseSequence rs{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.f, 2.f, 3.f, 4.f});
   Tensor seq = Tensor::FromInt64("", {2}, {2, 1});
-  onnx_backend_test::kernel::ReverseSequence::Attributes attrs;
+  onnx_kernels::kernel::ReverseSequence::Attributes attrs;
   attrs.time_axis = 0;
   attrs.batch_axis = 0;
   EXPECT_THROW((void)rs(x, seq, attrs), std::invalid_argument);
@@ -1189,7 +1189,7 @@ TEST(BackendKernelClass, ReverseSequenceRejectsAxesEqual) {
 
 TEST(BackendKernelClass, SplitClassEqualPartsByNumOutputs) {
   const KernelContext ctx{DefaultOpset(18)};
-  onnx_backend_test::kernel::Split split{ctx};
+  onnx_kernels::kernel::Split split{ctx};
   Tensor x = Tensor::FromFloat("", {6}, {1.f, 2.f, 3.f, 4.f, 5.f, 6.f});
   std::vector<Tensor> outs = split(x, /*axis=*/0, /*split=*/{}, /*num_outputs=*/3);
   ASSERT_EQ(outs.size(), 3u);
@@ -1201,7 +1201,7 @@ TEST(BackendKernelClass, SplitClassEqualPartsByNumOutputs) {
 
 TEST(BackendKernelClass, SplitClassVariablePartsBySplitSizes) {
   const KernelContext ctx{DefaultOpset(18)};
-  onnx_backend_test::kernel::Split split{ctx};
+  onnx_kernels::kernel::Split split{ctx};
   Tensor x = Tensor::FromFloat("", {2, 6},
                                {1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f, 9.f, 10.f, 11.f, 12.f});
   std::vector<Tensor> outs = split(x, /*axis=*/1, /*split=*/{2, 4}, /*num_outputs=*/0);
@@ -1218,7 +1218,7 @@ TEST(BackendKernelClass, SplitClassVariablePartsBySplitSizes) {
 
 TEST(BackendKernelClass, SplitClassUnevenLastChunkSmaller) {
   const KernelContext ctx{DefaultOpset(18)};
-  onnx_backend_test::kernel::Split split{ctx};
+  onnx_kernels::kernel::Split split{ctx};
   Tensor x = Tensor::FromFloat("", {7}, {1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f});
   std::vector<Tensor> outs = split(x, /*axis=*/0, /*split=*/{}, /*num_outputs=*/4);
   ASSERT_EQ(outs.size(), 4u);
@@ -1231,7 +1231,7 @@ TEST(BackendKernelClass, SplitClassUnevenLastChunkSmaller) {
 
 TEST(BackendKernelClass, SplitClassNegativeAxis) {
   const KernelContext ctx{DefaultOpset(18)};
-  onnx_backend_test::kernel::Split split{ctx};
+  onnx_kernels::kernel::Split split{ctx};
   Tensor x = Tensor::FromFloat("", {2, 4}, {1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f});
   std::vector<Tensor> outs = split(x, /*axis=*/-1, /*split=*/{}, /*num_outputs=*/2);
   ASSERT_EQ(outs.size(), 2u);
@@ -1242,14 +1242,14 @@ TEST(BackendKernelClass, SplitClassNegativeAxis) {
 
 TEST(BackendKernelClass, SplitClassRejectsBadAxis) {
   const KernelContext ctx{DefaultOpset(18)};
-  onnx_backend_test::kernel::Split split{ctx};
+  onnx_kernels::kernel::Split split{ctx};
   Tensor x = Tensor::FromFloat("", {4}, {1.f, 2.f, 3.f, 4.f});
   EXPECT_THROW((void)split(x, /*axis=*/2, /*split=*/{}, /*num_outputs=*/2), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, SplitClassRejectsSplitMismatch) {
   const KernelContext ctx{DefaultOpset(18)};
-  onnx_backend_test::kernel::Split split{ctx};
+  onnx_kernels::kernel::Split split{ctx};
   Tensor x = Tensor::FromFloat("", {4}, {1.f, 2.f, 3.f, 4.f});
   EXPECT_THROW((void)split(x, /*axis=*/0, /*split=*/{1, 1}, /*num_outputs=*/0),
                std::invalid_argument);
@@ -1261,14 +1261,14 @@ TEST(BackendKernelClass, SplitClassRejectsSplitMismatch) {
 
 TEST(BackendKernelClass, OneHotDefaultAxisMatchesReference) {
   const KernelContext ctx{DefaultOpset(11)};
-  onnx_backend_test::kernel::OneHot one_hot{ctx};
+  onnx_kernels::kernel::OneHot one_hot{ctx};
   Tensor indices = Tensor::FromInt64("", {3}, {0, 7, 8});
   Tensor depth = Tensor::FromFloat("", {}, {12.0f});
   Tensor values = Tensor::FromInt32("", {2}, {2, 5});
-  onnx_backend_test::kernel::OneHot::Attributes attrs; // axis = -1
+  onnx_kernels::kernel::OneHot::Attributes attrs; // axis = -1
   Tensor y = one_hot(indices, depth, values, attrs);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{3, 12}));
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
   const int32_t *py = y.AsInt32();
   // Expected rows: position 0, 7, 8 are 5 (on_value); rest 2 (off_value).
   for (int64_t i = 0; i < 3; ++i) {
@@ -1282,12 +1282,12 @@ TEST(BackendKernelClass, OneHotDefaultAxisMatchesReference) {
 
 TEST(BackendKernelClass, OneHotWithAxisInsertsDimensionAtPosition) {
   const KernelContext ctx{DefaultOpset(11)};
-  onnx_backend_test::kernel::OneHot one_hot{ctx};
+  onnx_kernels::kernel::OneHot one_hot{ctx};
   // indices shape (2, 2), axis = 1 -> output shape (2, 10, 2).
   Tensor indices = Tensor::FromFloat("", {2, 2}, {1.0f, 9.0f, 2.0f, 4.0f});
   Tensor depth = Tensor::FromFloat("", {}, {10.0f});
   Tensor values = Tensor::FromFloat("", {2}, {1.0f, 3.0f});
-  onnx_backend_test::kernel::OneHot::Attributes attrs;
+  onnx_kernels::kernel::OneHot::Attributes attrs;
   attrs.axis = 1;
   Tensor y = one_hot(indices, depth, values, attrs);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 10, 2}));
@@ -1308,12 +1308,12 @@ TEST(BackendKernelClass, OneHotWithAxisInsertsDimensionAtPosition) {
 
 TEST(BackendKernelClass, OneHotNegativeIndicesWrapAroundDepth) {
   const KernelContext ctx{DefaultOpset(11)};
-  onnx_backend_test::kernel::OneHot one_hot{ctx};
+  onnx_kernels::kernel::OneHot one_hot{ctx};
   // axis = 1, depth = 10, indices = [0, -7, -8] -> selected slots 0, 3, 2.
   Tensor indices = Tensor::FromInt64("", {3}, {0, -7, -8});
   Tensor depth = Tensor::FromFloat("", {}, {10.0f});
   Tensor values = Tensor::FromFloat("", {2}, {1.0f, 3.0f});
-  onnx_backend_test::kernel::OneHot::Attributes attrs;
+  onnx_kernels::kernel::OneHot::Attributes attrs;
   attrs.axis = 1;
   Tensor y = one_hot(indices, depth, values, attrs);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{3, 10}));
@@ -1329,11 +1329,11 @@ TEST(BackendKernelClass, OneHotNegativeIndicesWrapAroundDepth) {
 
 TEST(BackendKernelClass, OneHotOutOfRangeIndicesLeaveOffValue) {
   const KernelContext ctx{DefaultOpset(11)};
-  onnx_backend_test::kernel::OneHot one_hot{ctx};
+  onnx_kernels::kernel::OneHot one_hot{ctx};
   Tensor indices = Tensor::FromInt64("", {2}, {5, 100});
   Tensor depth = Tensor::FromInt64("", {}, {3});
   Tensor values = Tensor::FromFloat("", {2}, {0.0f, 1.0f});
-  onnx_backend_test::kernel::OneHot::Attributes attrs;
+  onnx_kernels::kernel::OneHot::Attributes attrs;
   Tensor y = one_hot(indices, depth, values, attrs);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
   const float *py = y.AsFloat();
@@ -1344,31 +1344,31 @@ TEST(BackendKernelClass, OneHotOutOfRangeIndicesLeaveOffValue) {
 
 TEST(BackendKernelClass, OneHotRejectsValuesNotRankOneOfTwo) {
   const KernelContext ctx{DefaultOpset(11)};
-  onnx_backend_test::kernel::OneHot one_hot{ctx};
+  onnx_kernels::kernel::OneHot one_hot{ctx};
   Tensor indices = Tensor::FromInt64("", {2}, {0, 1});
   Tensor depth = Tensor::FromInt64("", {}, {3});
   Tensor bad_values = Tensor::FromFloat("", {3}, {0.0f, 1.0f, 2.0f});
-  onnx_backend_test::kernel::OneHot::Attributes attrs;
+  onnx_kernels::kernel::OneHot::Attributes attrs;
   EXPECT_THROW((void)one_hot(indices, depth, bad_values, attrs), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, OneHotRejectsZeroDepth) {
   const KernelContext ctx{DefaultOpset(11)};
-  onnx_backend_test::kernel::OneHot one_hot{ctx};
+  onnx_kernels::kernel::OneHot one_hot{ctx};
   Tensor indices = Tensor::FromInt64("", {2}, {0, 1});
   Tensor depth = Tensor::FromInt64("", {}, {0});
   Tensor values = Tensor::FromFloat("", {2}, {0.0f, 1.0f});
-  onnx_backend_test::kernel::OneHot::Attributes attrs;
+  onnx_kernels::kernel::OneHot::Attributes attrs;
   EXPECT_THROW((void)one_hot(indices, depth, values, attrs), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, OneHotRejectsAxisOutOfRange) {
   const KernelContext ctx{DefaultOpset(11)};
-  onnx_backend_test::kernel::OneHot one_hot{ctx};
+  onnx_kernels::kernel::OneHot one_hot{ctx};
   Tensor indices = Tensor::FromInt64("", {2}, {0, 1});
   Tensor depth = Tensor::FromInt64("", {}, {3});
   Tensor values = Tensor::FromFloat("", {2}, {0.0f, 1.0f});
-  onnx_backend_test::kernel::OneHot::Attributes attrs;
+  onnx_kernels::kernel::OneHot::Attributes attrs;
   attrs.axis = 5;
   EXPECT_THROW((void)one_hot(indices, depth, values, attrs), std::invalid_argument);
 }

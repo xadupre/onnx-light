@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "onnx_backend_test/simple_tensor.h"
+#include "onnx_kernels/simple_tensor.h"
 
 #include <algorithm>
 #include <cmath>
@@ -15,7 +15,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 namespace kernel {
 
 /// Node modes for TreeEnsembleRegressor / TreeEnsembleClassifier (string form).
@@ -283,5 +283,5 @@ inline int64_t TraverseClassicTree(const ClassicNodeMap &node_map, int64_t tree_
 }
 
 } // namespace kernel
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/generator/include_generator_kernels.h"
-#include "onnx_backend_test/kernels/kernel_context.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/generator/include_generator_kernels.h"
+#include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/test_case.h"
 
 #include <gtest/gtest.h>
 
@@ -12,19 +12,19 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_backend_test::DefaultOpset;
-using onnx_backend_test::Tensor;
-using onnx_backend_test::kernel::Bernoulli;
-using onnx_backend_test::kernel::Constant;
-using onnx_backend_test::kernel::ConstantOfShape;
-using onnx_backend_test::kernel::EyeLike;
-using onnx_backend_test::kernel::KernelContext;
-using onnx_backend_test::kernel::Multinomial;
-using onnx_backend_test::kernel::RandomNormal;
-using onnx_backend_test::kernel::RandomNormalLike;
-using onnx_backend_test::kernel::RandomUniform;
-using onnx_backend_test::kernel::RandomUniformLike;
-using onnx_backend_test::kernel::Range;
+using onnx_kernels::DefaultOpset;
+using onnx_kernels::Tensor;
+using onnx_kernels::kernel::Bernoulli;
+using onnx_kernels::kernel::Constant;
+using onnx_kernels::kernel::ConstantOfShape;
+using onnx_kernels::kernel::EyeLike;
+using onnx_kernels::kernel::KernelContext;
+using onnx_kernels::kernel::Multinomial;
+using onnx_kernels::kernel::RandomNormal;
+using onnx_kernels::kernel::RandomNormalLike;
+using onnx_kernels::kernel::RandomUniform;
+using onnx_kernels::kernel::RandomUniformLike;
+using onnx_kernels::kernel::Range;
 
 namespace Test {
 
@@ -47,10 +47,10 @@ TEST(BackendKernelClass, ConstantRejectsMismatchedOutput) {
   const KernelContext ctx{DefaultOpset(13)};
   Constant constant_kernel{ctx};
   Tensor value = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
-  Tensor bad_shape("", onnx_backend_test::DataType::FLOAT, {3},
+  Tensor bad_shape("", onnx_kernels::DataType::FLOAT, {3},
                    std::vector<uint8_t>(3 * sizeof(float)));
   EXPECT_THROW(constant_kernel(value, bad_shape), std::invalid_argument);
-  Tensor bad_type("", onnx_backend_test::DataType::INT32, {2},
+  Tensor bad_type("", onnx_kernels::DataType::INT32, {2},
                   std::vector<uint8_t>(2 * sizeof(int32_t)));
   EXPECT_THROW(constant_kernel(value, bad_type), std::invalid_argument);
 }
@@ -61,7 +61,7 @@ TEST(BackendKernelClass, ConstantOfShapeFloatOnes) {
   const Tensor shape = Tensor::FromInt64("", {3}, {2, 3, 1});
   const Tensor value = Tensor::FromFloat("", {1}, {1.0f});
   Tensor y = kernel(shape, value);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 3, 1}));
   ASSERT_EQ(y.element_count(), 6);
   const float *py = y.AsFloat();
@@ -76,7 +76,7 @@ TEST(BackendKernelClass, ConstantOfShapeInt64Fill) {
   const Tensor shape = Tensor::FromInt64("", {2}, {2, 2});
   const Tensor value = Tensor::FromInt64("", {1}, {static_cast<int64_t>(-7)});
   Tensor y = kernel(shape, value);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
   EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 2}));
   const int64_t *py = y.AsInt64();
   EXPECT_EQ(py[0], -7);
@@ -90,7 +90,7 @@ TEST(BackendKernelClass, ConstantOfShapeDefaultValueIsFloatZero) {
   ConstantOfShape kernel{ctx};
   const Tensor shape = Tensor::FromInt64("", {1}, {static_cast<int64_t>(4)});
   Tensor y = kernel(shape, Tensor());
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   EXPECT_EQ(y.shape, (std::vector<int64_t>{4}));
   const float *py = y.AsFloat();
   for (int i = 0; i < 4; ++i) {
@@ -123,7 +123,7 @@ TEST(BackendKernelClass, EyeLikeDefaultDtypeAndMainDiagonal) {
   EyeLike kernel{ctx};
   const Tensor x = Tensor::FromInt32("", {3, 4}, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
   Tensor y = kernel(x);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
   EXPECT_EQ(y.shape, (std::vector<int64_t>{3, 4}));
   const int32_t *py = y.AsInt32();
   EXPECT_EQ(py[0], 1);
@@ -138,8 +138,8 @@ TEST(BackendKernelClass, EyeLikeDtypeOverrideAndUpperDiagonal) {
   const KernelContext ctx{DefaultOpset(22)};
   EyeLike kernel{ctx};
   const Tensor x = Tensor::FromFloat("", {2, 4}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
-  Tensor y = kernel(x, /*k=*/1, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  Tensor y = kernel(x, /*k=*/1, static_cast<int32_t>(onnx_kernels::DataType::INT64));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
   EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 4}));
   const int64_t *py = y.AsInt64();
   EXPECT_EQ(py[0], 0);
@@ -177,7 +177,7 @@ TEST(BackendKernelClass, BernoulliPreservesShapeAndProducesZeroOrOne) {
   const std::vector<float> probs = {0.0f, 0.25f, 0.5f, 0.75f, 1.0f, 0.5f};
   const Tensor x = Tensor::FromFloat("", {2, 3}, probs);
   Tensor y = kernel(x);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
   ASSERT_EQ(y.element_count(), 6);
   const float *py = y.AsFloat();
@@ -216,8 +216,8 @@ TEST(BackendKernelClass, BernoulliDtypeAttributeOverridesOutputType) {
   Bernoulli kernel{ctx};
   const Tensor x = Tensor::FromFloat("", {4}, {0.0f, 1.0f, 0.0f, 1.0f});
   Tensor y = kernel(x, Bernoulli::kNoSeed,
-                    /*dtype=*/static_cast<int32_t>(onnx_backend_test::DataType::INT64));
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+                    /*dtype=*/static_cast<int32_t>(onnx_kernels::DataType::INT64));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
   EXPECT_EQ(y.shape, (std::vector<int64_t>{4}));
   const int64_t *py = y.AsInt64();
   EXPECT_EQ(py[0], 0);
@@ -246,7 +246,7 @@ TEST(BackendKernelClass, MultinomialProducesInt32SamplesWithExpectedShape) {
   // Two batches, three classes; class 1 has overwhelmingly more probability mass.
   const Tensor x = Tensor::FromFloat("", {2, 3}, {0.0f, 10.0f, 0.0f, 0.0f, 10.0f, 0.0f});
   Tensor y = kernel(x, /*sample_size=*/5);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
   EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 5}));
   ASSERT_EQ(y.element_count(), 10);
   const int32_t *py = y.AsInt32();
@@ -271,8 +271,8 @@ TEST(BackendKernelClass, MultinomialDtypeAttributeOverridesOutputType) {
   Multinomial kernel{ctx};
   const Tensor x = Tensor::FromFloat("", {1, 2}, {10.0f, 0.0f});
   Tensor y = kernel(x, /*sample_size=*/3, Multinomial::kNoSeed,
-                    /*dtype=*/static_cast<int32_t>(onnx_backend_test::DataType::INT64));
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+                    /*dtype=*/static_cast<int32_t>(onnx_kernels::DataType::INT64));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
   EXPECT_EQ(y.shape, (std::vector<int64_t>{1, 3}));
   const int64_t *py = y.AsInt64();
   for (int i = 0; i < 3; ++i) {
@@ -292,7 +292,7 @@ TEST(BackendKernelClass, MultinomialRejectsUnsupportedOutputDtype) {
   Multinomial kernel{ctx};
   const Tensor x = Tensor::FromFloat("", {1, 2}, {1.0f, 1.0f});
   EXPECT_THROW(kernel(x, /*sample_size=*/1, Multinomial::kNoSeed,
-                      /*dtype=*/static_cast<int32_t>(onnx_backend_test::DataType::FLOAT)),
+                      /*dtype=*/static_cast<int32_t>(onnx_kernels::DataType::FLOAT)),
                std::invalid_argument);
 }
 
@@ -300,7 +300,7 @@ TEST(BackendKernelClass, RandomNormalProducesFloatTensorOfRequestedShape) {
   const KernelContext ctx{DefaultOpset(22)};
   RandomNormal kernel{ctx};
   Tensor y = kernel({2, 3});
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
   EXPECT_EQ(y.element_count(), 6);
 }
@@ -319,8 +319,8 @@ TEST(BackendKernelClass, RandomNormalDtypeOverrideProducesDouble) {
   const KernelContext ctx{DefaultOpset(22)};
   RandomNormal kernel{ctx};
   Tensor y = kernel({3}, 0.0, 1.0, RandomNormal::kNoSeed,
-                    static_cast<int32_t>(onnx_backend_test::DataType::DOUBLE));
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::DOUBLE));
+                    static_cast<int32_t>(onnx_kernels::DataType::DOUBLE));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::DOUBLE));
   EXPECT_EQ(y.shape, (std::vector<int64_t>{3}));
 }
 
@@ -328,7 +328,7 @@ TEST(BackendKernelClass, RandomNormalRejectsUnsupportedDtype) {
   const KernelContext ctx{DefaultOpset(22)};
   RandomNormal kernel{ctx};
   EXPECT_THROW(kernel({2}, 0.0, 1.0, RandomNormal::kNoSeed,
-                      static_cast<int32_t>(onnx_backend_test::DataType::INT32)),
+                      static_cast<int32_t>(onnx_kernels::DataType::INT32)),
                std::invalid_argument);
 }
 
@@ -336,7 +336,7 @@ TEST(BackendKernelClass, RandomUniformProducesFloatInRange) {
   const KernelContext ctx{DefaultOpset(22)};
   RandomUniform kernel{ctx};
   Tensor y = kernel({16}, /*low=*/-2.0, /*high=*/3.0, /*seed=*/7);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   ASSERT_EQ(y.element_count(), 16);
   const float *py = y.AsFloat();
   for (int i = 0; i < 16; ++i) {
@@ -358,7 +358,7 @@ TEST(BackendKernelClass, RandomNormalLikeCopiesInputShape) {
   RandomNormalLike kernel{ctx};
   const Tensor x = Tensor::FromFloat("", {2, 4}, std::vector<float>(8, 0.0f));
   Tensor y = kernel(x);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 4}));
 }
 
@@ -367,8 +367,8 @@ TEST(BackendKernelClass, RandomNormalLikeDtypeOverridesOutputType) {
   RandomNormalLike kernel{ctx};
   const Tensor x = Tensor::FromFloat("", {3}, {0.0f, 0.0f, 0.0f});
   Tensor y = kernel(x, 0.0, 1.0, RandomNormalLike::kNoSeed,
-                    static_cast<int32_t>(onnx_backend_test::DataType::DOUBLE));
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::DOUBLE));
+                    static_cast<int32_t>(onnx_kernels::DataType::DOUBLE));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::DOUBLE));
   EXPECT_EQ(y.shape, (std::vector<int64_t>{3}));
 }
 
@@ -377,7 +377,7 @@ TEST(BackendKernelClass, RandomUniformLikeCopiesInputShapeAndProducesInRange) {
   RandomUniformLike kernel{ctx};
   const Tensor x = Tensor::FromFloat("", {6}, std::vector<float>(6, 0.0f));
   Tensor y = kernel(x, /*low=*/0.0, /*high=*/1.0, /*seed=*/11);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   EXPECT_EQ(y.shape, (std::vector<int64_t>{6}));
   const float *py = y.AsFloat();
   for (int i = 0; i < 6; ++i) {
@@ -393,7 +393,7 @@ TEST(BackendKernelClass, RangeFloatPositiveDelta) {
   const Tensor limit = Tensor::FromFloat("", {}, {5.0f});
   const Tensor delta = Tensor::FromFloat("", {}, {2.0f});
   const Tensor y = kernel(start, limit, delta);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   EXPECT_EQ(y.shape, (std::vector<int64_t>{2}));
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], 1.0f);
@@ -407,7 +407,7 @@ TEST(BackendKernelClass, RangeInt32NegativeDelta) {
   const Tensor limit = Tensor::FromInt32("", {}, {6});
   const Tensor delta = Tensor::FromInt32("", {}, {-3});
   const Tensor y = kernel(start, limit, delta);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
   EXPECT_EQ(y.shape, (std::vector<int64_t>{2}));
   const int32_t *py = y.AsInt32();
   EXPECT_EQ(py[0], 10);

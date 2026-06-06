@@ -2,14 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/sequence/include_sequence_kernels.h"
+#include "onnx_kernels/kernels/sequence/include_sequence_kernels.h"
 
 #include <cstdint>
 #include <string>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 namespace kernel {
 
 Sequence SequenceInsert::operator()(const Sequence &input_sequence, const Tensor &tensor,
@@ -50,5 +50,5 @@ Sequence SequenceInsert::operator()(const Sequence &input_sequence, const Tensor
 }
 
 } // namespace kernel
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

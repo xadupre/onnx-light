@@ -2,14 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/nn/include_nn_kernels.h"
+#include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
 #include <cmath>
 #include <cstdint>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 namespace kernel {
 
 Tensor LpNormalization::operator()(const Tensor &x, int64_t axis, int64_t p) const {
@@ -67,5 +67,5 @@ Tensor LpNormalization::operator()(const Tensor &x, int64_t axis, int64_t p) con
 }
 
 } // namespace kernel
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

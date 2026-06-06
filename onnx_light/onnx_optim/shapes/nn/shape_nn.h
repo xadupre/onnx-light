@@ -26,7 +26,7 @@ namespace nn {
  * and ``C``) are copied from the input. For each spatial axis ``i`` the
  * output dimension is computed from the ``kernel_shape``, ``strides``,
  * ``pads``, and ``ceil_mode`` attributes using the same rule as
- * :cpp:func:`onnx_backend_test::kernel::AveragePool` and ONNX Runtime:
+ * :cpp:func:`onnx_kernels::kernel::AveragePool` and ONNX Runtime:
  * when ``ceil_mode=1`` and the last sliding window would start entirely
  * in the right padded region, it is dropped. ``auto_pad`` other than the
  * default ``"NOTSET"`` (or ``"VALID"``) is not supported, and symbolic

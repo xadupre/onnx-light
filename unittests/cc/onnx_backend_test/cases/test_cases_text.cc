@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/cases/text/include_text_cases.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/test_case.h"
 
 #include <gtest/gtest.h>
 
@@ -11,16 +11,16 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_backend_test::CollectTextTestCases;
+using onnx_kernels::CollectTextTestCases;
 
 namespace {
-std::vector<onnx_backend_test::TestCase> CollectTestCases(const std::string &op_type = "") {
-  std::vector<onnx_backend_test::TestCase> registry;
+std::vector<onnx_kernels::TestCase> CollectTestCases(const std::string &op_type = "") {
+  std::vector<onnx_kernels::TestCase> registry;
   CollectTextTestCases(registry, op_type);
   return registry;
 }
 } // namespace
-using onnx_backend_test::TestCase;
+using onnx_kernels::TestCase;
 
 namespace Test {
 
@@ -54,7 +54,7 @@ TEST(BackendTestCase, StringConcatCaseIsPresent) {
     const auto &ds = equal_case->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 2u);
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::STRING));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::STRING));
     const std::vector<int64_t> expected_shape = {3};
     EXPECT_EQ(ds.outputs[0].shape, expected_shape);
     const std::vector<std::string> expected_strings = {"abcdef", "xyz", "hello world"};
@@ -113,7 +113,7 @@ TEST(BackendTestCase, StringNormalizerCaseIsPresent) {
     ASSERT_EQ(lower_case->data_sets.size(), 1u);
     const auto &ds = lower_case->data_sets[0];
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::STRING));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::STRING));
     const std::vector<int64_t> expected_shape = {3};
     EXPECT_EQ(ds.outputs[0].shape, expected_shape);
     const std::vector<std::string> expected_strings = {"hello", "world", "foo"};
@@ -147,7 +147,7 @@ TEST(BackendTestCase, StringNormalizerCaseIsPresent) {
     ASSERT_EQ(nostopwords_case->data_sets.size(), 1u);
     const auto &ds = nostopwords_case->data_sets[0];
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::STRING));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::STRING));
     const std::vector<int64_t> expected_shape = {2};
     EXPECT_EQ(ds.outputs[0].shape, expected_shape);
     const std::vector<std::string> expected_strings = {"monday", "tuesday"};
@@ -195,8 +195,8 @@ TEST(BackendTestCase, StringSplitCaseIsPresent) {
     const auto &ds = basic_case->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 1u);
     ASSERT_EQ(ds.outputs.size(), 2u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::STRING));
-    EXPECT_EQ(ds.outputs[1].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::STRING));
+    EXPECT_EQ(ds.outputs[1].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{2, 2}));
     EXPECT_EQ(ds.outputs[0].string_data, (std::vector<std::string>{"abc", "com", "def", "net"}));
   }

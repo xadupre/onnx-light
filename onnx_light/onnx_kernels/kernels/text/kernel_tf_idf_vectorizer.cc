@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/text/include_text_kernels.h"
+#include "onnx_kernels/kernels/text/include_text_kernels.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -13,7 +13,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 namespace kernel {
 
 namespace {
@@ -366,5 +366,5 @@ void TfIdfVectorizer::operator()(const Tensor &x, Mode mode, int64_t min_gram_le
 }
 
 } // namespace kernel
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/kernel_context.h"
-#include "onnx_backend_test/kernels/nn/include_nn_kernels.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/kernels/nn/include_nn_kernels.h"
+#include "onnx_kernels/test_case.h"
 
 #include <gtest/gtest.h>
 
@@ -13,10 +13,10 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_backend_test::DefaultOpset;
-using onnx_backend_test::Tensor;
-using onnx_backend_test::kernel::Col2Im;
-using onnx_backend_test::kernel::KernelContext;
+using onnx_kernels::DefaultOpset;
+using onnx_kernels::Tensor;
+using onnx_kernels::kernel::Col2Im;
+using onnx_kernels::kernel::KernelContext;
 
 namespace Test {
 
@@ -115,7 +115,7 @@ TEST(BackendKernelClass, Col2ImPadsDropOutOfBoundsContributions) {
 TEST(BackendKernelClass, Col2ImRejectsNonFloatInput) {
   const KernelContext ctx{DefaultOpset(18)};
   const Col2Im op{ctx};
-  Tensor input("", static_cast<int32_t>(onnx_backend_test::DataType::INT32),
+  Tensor input("", static_cast<int32_t>(onnx_kernels::DataType::INT32),
                std::vector<int64_t>{1, 5, 5}, std::vector<uint8_t>(25 * sizeof(int32_t)));
   Tensor image_shape = Tensor::FromInt64("", {2}, {5, 5});
   Tensor block_shape = Tensor::FromInt64("", {2}, {1, 5});

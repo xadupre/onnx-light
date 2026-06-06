@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/text/include_text_kernels.h"
+#include "onnx_kernels/kernels/text/include_text_kernels.h"
 
 #include <algorithm>
 #include <cctype>
@@ -12,7 +12,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 namespace kernel {
 
 namespace {
@@ -109,5 +109,5 @@ std::pair<Tensor, Tensor> StringSplit::operator()(const Tensor &x, const std::st
 }
 
 } // namespace kernel
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

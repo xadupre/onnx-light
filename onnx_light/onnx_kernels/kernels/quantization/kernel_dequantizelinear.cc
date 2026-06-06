@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/quantization/include_quantization_kernels.h"
-#include "onnx_backend_test/kernels/tensor/cast_float8.h"
+#include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
+#include "onnx_kernels/kernels/tensor/cast_float8.h"
 
 #include <cstdint>
 #include <cstring>
@@ -12,7 +12,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 namespace kernel {
 
 namespace {
@@ -183,5 +183,5 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
 }
 
 } // namespace kernel
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

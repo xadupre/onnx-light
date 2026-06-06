@@ -3,15 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/cases/generator/include_generator_cases.h"
-#include "onnx_backend_test/kernels/generator/include_generator_kernels.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/generator/include_generator_kernels.h"
+#include "onnx_kernels/test_case.h"
 
 #include <cstdint>
 #include <string>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 
 namespace {
 
@@ -93,5 +93,5 @@ void RegisterMultinomialCases(std::vector<TestCase> &registry) {
   }
 }
 
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

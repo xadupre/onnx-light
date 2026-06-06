@@ -4,11 +4,11 @@
 
 #pragma once
 
-#include "onnx_backend_test/kernels/kernel_context.h"
-#include "onnx_backend_test/simple_tensor.h"
+#include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/simple_tensor.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 namespace kernel {
 
 // ---------------------------------------------------------------------------
@@ -72,5 +72,5 @@ public:
 };
 
 } // namespace kernel
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

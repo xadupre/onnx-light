@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/tensor/include_tensor_kernels.h"
+#include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -10,7 +10,7 @@
 #include <string>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 namespace kernel {
 
 namespace {
@@ -102,5 +102,5 @@ void BitCast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
 }
 
 } // namespace kernel
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

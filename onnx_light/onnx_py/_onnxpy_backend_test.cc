@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/random.h"
-#include "onnx_backend_test/simple_tensor.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/random.h"
+#include "onnx_kernels/simple_tensor.h"
+#include "onnx_kernels/test_case.h"
 
 #include <cstdint>
 #include <cstring>
@@ -16,9 +16,9 @@
 
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_backend_test::DataSet;
-using onnx_backend_test::Tensor;
-using onnx_backend_test::TestCase;
+using onnx_kernels::DataSet;
+using onnx_kernels::Tensor;
+using onnx_kernels::TestCase;
 
 void AddOnnxPyBackend(nb::module_ &m);
 void AddOnnxPyBackendTest(nb::module_ &m);
@@ -41,13 +41,13 @@ void AddOnnxPyBackend(nb::module_ &m) {
       "Deterministic pseudo-random helpers (SplitMix64) used by onnx_light.backend.";
 
   backend_mod.def(
-      "next_uint64", [](uint64_t state) { return onnx_backend_test::NextUint64(state); },
+      "next_uint64", [](uint64_t state) { return onnx_kernels::NextUint64(state); },
       nb::arg("state"), "Returns ``(next_state, value)`` for the SplitMix64 generator.");
 
   backend_mod.def(
       "rand",
       [](const std::vector<int64_t> &shape, std::optional<uint64_t> seed) {
-        return onnx_backend_test::Rand(shape, seed);
+        return onnx_kernels::Rand(shape, seed);
       },
       nb::arg("shape"), nb::arg("seed") = nb::none(),
       "Returns ``prod(shape)`` deterministic uniform values in ``[0, 1)`` as a flat list.");
@@ -56,7 +56,7 @@ void AddOnnxPyBackend(nb::module_ &m) {
       "randint",
       [](int64_t low, int64_t high, const std::vector<int64_t> &shape,
          std::optional<uint64_t> seed) {
-        return onnx_backend_test::RandInt(low, high, shape, seed);
+        return onnx_kernels::RandInt(low, high, shape, seed);
       },
       nb::arg("low"), nb::arg("high"), nb::arg("shape"), nb::arg("seed") = nb::none(),
       "Returns ``prod(shape)`` deterministic integers in ``[low, high)`` as a flat list.");
@@ -64,7 +64,7 @@ void AddOnnxPyBackend(nb::module_ &m) {
   backend_mod.def(
       "randn",
       [](const std::vector<int64_t> &shape, std::optional<uint64_t> seed) {
-        return onnx_backend_test::Randn(shape, seed);
+        return onnx_kernels::Randn(shape, seed);
       },
       nb::arg("shape"), nb::arg("seed") = nb::none(),
       "Returns ``prod(shape)`` approximately normal-distributed values (Irwin-Hall) "
@@ -153,7 +153,7 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
 
   bt_mod.def(
       "collect_test_cases",
-      [](const std::string &op_type) { return onnx_backend_test::CollectTestCases(op_type); },
+      [](const std::string &op_type) { return onnx_kernels::CollectTestCases(op_type); },
       nb::arg("op_type") = std::string(),
       "Returns the list of C++-implemented backend test node cases. When ``op_type`` "
       "is non-empty, only cases whose top-level graph contains a node with that "
@@ -163,7 +163,7 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
       "collect_test_cases_by_name",
       [](const std::string &name_regex) {
         try {
-          return onnx_backend_test::CollectTestCasesByName(name_regex);
+          return onnx_kernels::CollectTestCasesByName(name_regex);
         } catch (const std::regex_error &e) {
           throw nb::value_error(e.what());
         }

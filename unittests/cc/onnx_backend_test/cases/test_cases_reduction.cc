@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/cases/reduction/include_reduction_cases.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/test_case.h"
 
 #include <gtest/gtest.h>
 
@@ -13,16 +13,16 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_backend_test::CollectReductionTestCases;
+using onnx_kernels::CollectReductionTestCases;
 
 namespace {
-std::vector<onnx_backend_test::TestCase> CollectTestCases(const std::string &op_type = "") {
-  std::vector<onnx_backend_test::TestCase> registry;
+std::vector<onnx_kernels::TestCase> CollectTestCases(const std::string &op_type = "") {
+  std::vector<onnx_kernels::TestCase> registry;
   CollectReductionTestCases(registry, op_type);
   return registry;
 }
 } // namespace
-using onnx_backend_test::TestCase;
+using onnx_kernels::TestCase;
 
 namespace Test {
 
@@ -52,7 +52,7 @@ void CheckReduceSumCasePresent(const std::vector<TestCase> &cases, const std::st
   const auto &ds = tc->data_sets[0];
   ASSERT_EQ(ds.inputs.size(), expected_inputs);
   ASSERT_EQ(ds.outputs.size(), 1u);
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   EXPECT_EQ(ds.outputs[0].shape, expected_shape);
 }
 
@@ -487,7 +487,7 @@ void CheckArgReduceCasePresent(const std::vector<TestCase> &cases, const std::st
   const auto &ds = tc->data_sets[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
   EXPECT_EQ(ds.outputs[0].shape, expected_shape);
   ASSERT_EQ(ds.outputs[0].data.size(), expected_values.size() * sizeof(int64_t));
   const int64_t *py = reinterpret_cast<const int64_t *>(ds.outputs[0].data.data());

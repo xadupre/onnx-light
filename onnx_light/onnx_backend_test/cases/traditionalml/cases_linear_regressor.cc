@@ -3,13 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/cases/traditionalml/include_traditionalml_cases.h"
-#include "onnx_backend_test/kernels/traditionalml/include_traditionalml_kernels.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
+#include "onnx_kernels/test_case.h"
 
 #include <cstdint>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 
 void RegisterLinearRegressorCases(std::vector<TestCase> &registry) {
   const OpsetId opset("ai.onnx.ml", 1);
@@ -51,5 +51,5 @@ void RegisterLinearRegressorCases(std::vector<TestCase> &registry) {
          "backend-test", registry);
 }
 
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

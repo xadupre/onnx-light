@@ -5,7 +5,7 @@
 #include "onnx_backend_test/cases_numerical/nan_inf/include_nan_inf_cases.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 
 void CollectNanInfTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   static const OpRegisterMap kEntries = {
@@ -16,5 +16,5 @@ void CollectNanInfTestCases(std::vector<TestCase> &registry, const std::string &
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }
 
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

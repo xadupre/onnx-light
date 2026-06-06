@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/optional/include_optional_kernels.h"
+#include "onnx_kernels/kernels/optional/include_optional_kernels.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -10,7 +10,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 namespace kernel {
 
 Tensor OptionalGetElement::operator()(const Tensor &input) const {
@@ -48,5 +48,5 @@ Sequence OptionalGetElement::operator()(const Sequence &input) const {
 }
 
 } // namespace kernel
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

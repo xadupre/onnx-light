@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/cases/tensor/include_tensor_cases.h"
-#include "onnx_backend_test/kernels/tensor/include_tensor_kernels.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
+#include "onnx_kernels/test_case.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
@@ -12,7 +12,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 
 namespace {
 
@@ -133,5 +133,5 @@ void RegisterGridSampleCases(std::vector<TestCase> &registry) {
           {-0.1406f, 0.3828f, 1.7556f, 2.9688f, 2.9688f, 1.7556f, 5.1445f, 1.3906f});
 }
 
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

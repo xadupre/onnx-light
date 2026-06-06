@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/cases/sequence/include_sequence_cases.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/test_case.h"
 
 #include <gtest/gtest.h>
 
@@ -12,16 +12,16 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_backend_test::CollectSequenceTestCases;
+using onnx_kernels::CollectSequenceTestCases;
 
 namespace {
-std::vector<onnx_backend_test::TestCase> CollectTestCases(const std::string &op_type = "") {
-  std::vector<onnx_backend_test::TestCase> registry;
+std::vector<onnx_kernels::TestCase> CollectTestCases(const std::string &op_type = "") {
+  std::vector<onnx_kernels::TestCase> registry;
   CollectSequenceTestCases(registry, op_type);
   return registry;
 }
 } // namespace
-using onnx_backend_test::TestCase;
+using onnx_kernels::TestCase;
 
 namespace Test {
 
@@ -50,13 +50,13 @@ TEST(BackendTestCase, SequenceConstructCaseIsPresent) {
   EXPECT_FALSE(out_tp.has_tensor_type());
   const TypeProto &elem = out_tp.ref_sequence_type().ref_elem_type();
   ASSERT_TRUE(elem.has_tensor_type());
-  EXPECT_EQ(elem.ref_tensor_type().ref_elem_type(), onnx_backend_test::DataType::FLOAT);
+  EXPECT_EQ(elem.ref_tensor_type().ref_elem_type(), onnx_kernels::DataType::FLOAT);
 
   ASSERT_EQ(seq_case->data_sets.size(), 1u);
   const auto &ds = seq_case->data_sets[0];
   ASSERT_EQ(ds.inputs.size(), 3u);
   ASSERT_EQ(ds.outputs.size(), 1u);
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   const std::vector<int64_t> expected_shape = {3, 2, 3};
   EXPECT_EQ(ds.outputs[0].shape, expected_shape);
   // Stacked output bytes equal the concatenation of the per-input buffers.
@@ -112,7 +112,7 @@ TEST(BackendTestCase, ConcatFromSequenceCasesAreRegistered) {
     const auto &ds = tc->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   }
 
   // Expected output shapes per case.
@@ -140,14 +140,14 @@ TEST(BackendTestCase, SequenceLengthCaseIsPresent) {
   const ValueInfoProto &out_vi = graph.ref_output()[0];
   ASSERT_TRUE(out_vi.ref_type().has_tensor_type());
   EXPECT_EQ(out_vi.ref_type().ref_tensor_type().ref_elem_type(),
-            onnx_backend_test::DataType::INT64);
+            onnx_kernels::DataType::INT64);
   EXPECT_EQ(out_vi.ref_type().ref_tensor_type().ref_shape().ref_dim().size(), 0u);
 
   ASSERT_EQ(length_case->data_sets.size(), 1u);
   const auto &ds = length_case->data_sets[0];
   ASSERT_EQ(ds.inputs.size(), 3u);
   ASSERT_EQ(ds.outputs.size(), 1u);
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
   EXPECT_TRUE(ds.outputs[0].shape.empty());
   ASSERT_EQ(ds.outputs[0].data.size(), sizeof(int64_t));
   EXPECT_EQ(*ds.outputs[0].AsInt64(), 3);
@@ -394,11 +394,11 @@ TEST(BackendTestCase, SequenceMapCasesAreRegistered) {
                   .ref_elem_type()
                   .ref_tensor_type()
                   .ref_elem_type(),
-              onnx_backend_test::DataType::INT64);
+              onnx_kernels::DataType::INT64);
     EXPECT_EQ(extract_shapes->data_sets[0].inputs.size(), 3u);
     EXPECT_EQ(extract_shapes->data_sets[0].outputs[0].shape, (std::vector<int64_t>{3, 3}));
     const auto &out = extract_shapes->data_sets[0].outputs[0];
-    EXPECT_EQ(out.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+    EXPECT_EQ(out.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
     const int64_t *out_data = out.As<int64_t>();
     // Shapes are {4,3,2}, {2,5,1}, {1,1,7}.
     EXPECT_EQ(out_data[0], 4);
@@ -440,8 +440,8 @@ TEST(BackendTestCase, SequenceEmptyCasesAreRegistered) {
     ASSERT_EQ(tc->data_sets.size(), 1u);
     EXPECT_TRUE(tc->data_sets[0].inputs.empty());
     ASSERT_EQ(tc->data_sets[0].outputs.size(), 1u);
-    const onnx_backend_test::Tensor &out = tc->data_sets[0].outputs[0];
-    EXPECT_EQ(out.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+    const onnx_kernels::Tensor &out = tc->data_sets[0].outputs[0];
+    EXPECT_EQ(out.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
     EXPECT_TRUE(out.shape.empty());
     ASSERT_EQ(out.data.size(), sizeof(int64_t));
     EXPECT_EQ(*out.AsInt64(), 0);

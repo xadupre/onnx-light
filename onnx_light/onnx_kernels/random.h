@@ -9,11 +9,11 @@
 #include <utility>
 #include <vector>
 
-#include "onnx_backend_test/simple_tensor.h"
+#include "onnx_kernels/simple_tensor.h"
 #include "onnx_light_helpers.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 
 /// Default seed used when no explicit seed is provided.
 inline constexpr uint64_t kDefaultSeed = 0;
@@ -166,5 +166,5 @@ RandUint<uint64_t>(int64_t high, const std::vector<int64_t> &shape, uint64_t see
  */
 Tensor RandBool(const std::vector<int64_t> &shape, std::optional<uint64_t> seed = std::nullopt);
 
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

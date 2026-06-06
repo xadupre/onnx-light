@@ -2,10 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/kernel_context.h"
-#include "onnx_backend_test/run_nodes.h"
-#include "onnx_backend_test/simple_tensor.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/run_nodes.h"
+#include "onnx_kernels/simple_tensor.h"
+#include "onnx_kernels/test_case.h"
 #include "onnx_proto/onnx.h"
 
 #include <gtest/gtest.h>
@@ -16,14 +16,14 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_backend_test::DefaultOpset;
-using onnx_backend_test::KernelDispatchTable;
-using onnx_backend_test::RunNode;
-using onnx_backend_test::RunNodes;
-using onnx_backend_test::RuntimeContext;
-using onnx_backend_test::Tensor;
-using onnx_backend_test::TensorMap;
-using onnx_backend_test::kernel::KernelContext;
+using onnx_kernels::DefaultOpset;
+using onnx_kernels::KernelDispatchTable;
+using onnx_kernels::RunNode;
+using onnx_kernels::RunNodes;
+using onnx_kernels::RuntimeContext;
+using onnx_kernels::Tensor;
+using onnx_kernels::TensorMap;
+using onnx_kernels::kernel::KernelContext;
 
 namespace Test {
 

@@ -20,7 +20,7 @@ namespace nn {
 
 namespace {
 
-// Mirrors :cpp:func:`onnx_backend_test::kernel::OutputDim` for MaxPool.
+// Mirrors :cpp:func:`onnx_kernels::kernel::OutputDim` for MaxPool.
 int64_t OutputDim(int64_t in_dim, int64_t kernel, int64_t stride, int64_t pad_begin,
                   int64_t pad_end, bool ceil_mode, int64_t dilation = 1) {
   const int64_t eff_kernel = dilation * (kernel - 1) + 1;

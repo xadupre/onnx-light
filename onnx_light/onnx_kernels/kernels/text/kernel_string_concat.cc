@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/text/include_text_kernels.h"
+#include "onnx_kernels/kernels/text/include_text_kernels.h"
 
 #include <cstdint>
 #include <stdexcept>
@@ -10,7 +10,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 namespace kernel {
 
 namespace {
@@ -76,5 +76,5 @@ void StringConcat::operator()(const Tensor &x, const Tensor &y, Tensor &output) 
 }
 
 } // namespace kernel
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

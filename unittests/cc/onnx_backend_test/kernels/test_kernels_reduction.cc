@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/kernel_context.h"
-#include "onnx_backend_test/kernels/reduction/include_reduction_kernels.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
+#include "onnx_kernels/test_case.h"
 
 #include <gtest/gtest.h>
 
@@ -13,17 +13,17 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_backend_test::DefaultOpset;
-using onnx_backend_test::Tensor;
-using onnx_backend_test::kernel::KernelContext;
-using onnx_backend_test::kernel::ReduceL1;
-using onnx_backend_test::kernel::ReduceL2;
-using onnx_backend_test::kernel::ReduceMax;
-using onnx_backend_test::kernel::ReduceMean;
-using onnx_backend_test::kernel::ReduceMin;
-using onnx_backend_test::kernel::ReduceProd;
-using onnx_backend_test::kernel::ReduceSum;
-using onnx_backend_test::kernel::ReduceSumSquare;
+using onnx_kernels::DefaultOpset;
+using onnx_kernels::Tensor;
+using onnx_kernels::kernel::KernelContext;
+using onnx_kernels::kernel::ReduceL1;
+using onnx_kernels::kernel::ReduceL2;
+using onnx_kernels::kernel::ReduceMax;
+using onnx_kernels::kernel::ReduceMean;
+using onnx_kernels::kernel::ReduceMin;
+using onnx_kernels::kernel::ReduceProd;
+using onnx_kernels::kernel::ReduceSum;
+using onnx_kernels::kernel::ReduceSumSquare;
 
 namespace Test {
 
@@ -32,7 +32,7 @@ TEST(BackendKernelClass, ReduceSumDefaultAxesReducesAll) {
   ReduceSum reduce_sum{ctx};
   Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
   Tensor y = reduce_sum(data); // keepdims=true, noop_with_empty_axes=false
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 1}));
   EXPECT_FLOAT_EQ(y.AsFloat()[0], 21.0f);
 }
@@ -96,7 +96,7 @@ TEST(BackendKernelClass, ReduceSumInPlaceWritesToPreallocatedOutput) {
   ReduceSum reduce_sum{ctx};
   Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
   Tensor axes = Tensor::FromInt64("", {1}, {0});
-  Tensor out("", static_cast<int32_t>(onnx_backend_test::DataType::FLOAT), {1, 3},
+  Tensor out("", static_cast<int32_t>(onnx_kernels::DataType::FLOAT), {1, 3},
              std::vector<uint8_t>(3 * sizeof(float), 0u));
   reduce_sum(data, axes, /*keepdims=*/true, /*noop_with_empty_axes=*/false, out);
   const float *po = out.AsFloat();
@@ -124,7 +124,7 @@ TEST(BackendKernelClass, ReduceSumRejectsBadInputs) {
 
   // In-place overload with mismatched output shape is rejected.
   Tensor axes = Tensor::FromInt64("", {1}, {0});
-  Tensor bad_shape("", static_cast<int32_t>(onnx_backend_test::DataType::FLOAT), {2},
+  Tensor bad_shape("", static_cast<int32_t>(onnx_kernels::DataType::FLOAT), {2},
                    std::vector<uint8_t>(2 * sizeof(float), 0u));
   EXPECT_THROW(reduce_sum(data, axes, /*keepdims=*/true,
                           /*noop_with_empty_axes=*/false, bad_shape),
@@ -302,8 +302,8 @@ TEST(BackendKernelClass, ReduceSumSquareNegativeAxisAndNoKeepdims) {
 
 // ── ArgMax / ArgMin kernels ────────────────────────────────────────────────
 
-using onnx_backend_test::kernel::ArgMax;
-using onnx_backend_test::kernel::ArgMin;
+using onnx_kernels::kernel::ArgMax;
+using onnx_kernels::kernel::ArgMin;
 
 TEST(BackendKernelClass, ArgMaxAlongAxisKeepdims) {
   const KernelContext ctx{DefaultOpset(13)};
@@ -311,7 +311,7 @@ TEST(BackendKernelClass, ArgMaxAlongAxisKeepdims) {
   Tensor data = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 3.0f, 10.0f});
   Tensor y = argmax(data, /*axis=*/1, /*keepdims=*/true,
                     /*select_last_index=*/false);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 1}));
   const int64_t *py = y.AsInt64();
   EXPECT_EQ(py[0], 0);
@@ -360,7 +360,7 @@ TEST(BackendKernelClass, ArgReduceInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(13)};
   ArgMax argmax{ctx};
   Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, 5.0f, 2.0f, 4.0f, 0.0f, 9.0f});
-  Tensor out("", static_cast<int32_t>(onnx_backend_test::DataType::INT64), {2, 1},
+  Tensor out("", static_cast<int32_t>(onnx_kernels::DataType::INT64), {2, 1},
              std::vector<uint8_t>(2 * sizeof(int64_t), 0u));
   argmax(data, /*axis=*/1, /*keepdims=*/true, /*select_last_index=*/false, out);
   const int64_t *po = out.AsInt64();
@@ -374,7 +374,7 @@ TEST(BackendKernelClass, ArgReduceRejectsBadInputs) {
   Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
 
   // Wrong data dtype.
-  Tensor bad_data("", static_cast<int32_t>(onnx_backend_test::DataType::INT32), {2, 3},
+  Tensor bad_data("", static_cast<int32_t>(onnx_kernels::DataType::INT32), {2, 3},
                   std::vector<uint8_t>(6 * sizeof(int32_t)));
   EXPECT_THROW(argmax(bad_data, /*axis=*/0), std::invalid_argument);
 
@@ -382,18 +382,18 @@ TEST(BackendKernelClass, ArgReduceRejectsBadInputs) {
   EXPECT_THROW(argmax(data, /*axis=*/5), std::invalid_argument);
 
   // Scalar input.
-  Tensor scalar("", static_cast<int32_t>(onnx_backend_test::DataType::FLOAT), {},
+  Tensor scalar("", static_cast<int32_t>(onnx_kernels::DataType::FLOAT), {},
                 std::vector<uint8_t>(sizeof(float), 0u));
   EXPECT_THROW(argmax(scalar, /*axis=*/0), std::invalid_argument);
 
   // Mismatched preallocated output shape.
-  Tensor bad_out("", static_cast<int32_t>(onnx_backend_test::DataType::INT64), {2, 3},
+  Tensor bad_out("", static_cast<int32_t>(onnx_kernels::DataType::INT64), {2, 3},
                  std::vector<uint8_t>(6 * sizeof(int64_t), 0u));
   EXPECT_THROW(argmax(data, /*axis=*/0, /*keepdims=*/true, /*select_last_index=*/false, bad_out),
                std::invalid_argument);
 
   // Wrong output dtype.
-  Tensor wrong_dtype_out("", static_cast<int32_t>(onnx_backend_test::DataType::FLOAT), {1, 3},
+  Tensor wrong_dtype_out("", static_cast<int32_t>(onnx_kernels::DataType::FLOAT), {1, 3},
                          std::vector<uint8_t>(3 * sizeof(float), 0u));
   EXPECT_THROW(
       argmax(data, /*axis=*/0, /*keepdims=*/true, /*select_last_index=*/false, wrong_dtype_out),
@@ -458,7 +458,7 @@ TEST(BackendKernelClass, ReduceProdEmptySetIdentityIsOne) {
   // Reducing over an axis of size 0 must yield the identity (1).
   const KernelContext ctx{DefaultOpset(18)};
   ReduceProd reduce_prod{ctx};
-  Tensor data("", static_cast<int32_t>(onnx_backend_test::DataType::FLOAT), {2, 0, 4}, {});
+  Tensor data("", static_cast<int32_t>(onnx_kernels::DataType::FLOAT), {2, 0, 4}, {});
   Tensor axes = Tensor::FromInt64("", {1}, {1});
   Tensor y = reduce_prod(data, axes, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 1, 4}));

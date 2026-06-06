@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/cases/optional/include_optional_cases.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/test_case.h"
 
 #include <gtest/gtest.h>
 
@@ -11,16 +11,16 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_backend_test::CollectOptionalTestCases;
+using onnx_kernels::CollectOptionalTestCases;
 
 namespace {
-std::vector<onnx_backend_test::TestCase> CollectTestCases(const std::string &op_type = "") {
-  std::vector<onnx_backend_test::TestCase> registry;
+std::vector<onnx_kernels::TestCase> CollectTestCases(const std::string &op_type = "") {
+  std::vector<onnx_kernels::TestCase> registry;
   CollectOptionalTestCases(registry, op_type);
   return registry;
 }
 } // namespace
-using onnx_backend_test::TestCase;
+using onnx_kernels::TestCase;
 
 namespace Test {
 
@@ -53,13 +53,13 @@ TEST(BackendTestCase, OptionalCaseIsPresent) {
   ASSERT_TRUE(tp.has_optional_type());
   const TypeProto &elem = tp.ref_optional_type().ref_elem_type();
   ASSERT_TRUE(elem.has_tensor_type());
-  EXPECT_EQ(elem.ref_tensor_type().ref_elem_type(), onnx_backend_test::DataType::FLOAT);
+  EXPECT_EQ(elem.ref_tensor_type().ref_elem_type(), onnx_kernels::DataType::FLOAT);
 
   ASSERT_EQ(opt_case->data_sets.size(), 1u);
   const auto &ds = opt_case->data_sets[0];
   ASSERT_EQ(ds.inputs.size(), 1u);
   ASSERT_EQ(ds.outputs.size(), 1u);
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   const std::vector<int64_t> expected_shape = {2, 3};
   EXPECT_EQ(ds.outputs[0].shape, expected_shape);
   // Passthrough: output bytes match input bytes.

@@ -2,10 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/tensor/include_tensor_kernels.h"
+#include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 namespace kernel {
 
 Tensor CastLike::operator()(const Tensor &x, const Tensor &target_type) const {
@@ -22,5 +22,5 @@ void CastLike::operator()(const Tensor &x, const Tensor &target_type, Tensor &ou
 }
 
 } // namespace kernel
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/kernel_context.h"
-#include "onnx_backend_test/kernels/sequence/include_sequence_kernels.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/kernels/sequence/include_sequence_kernels.h"
+#include "onnx_kernels/test_case.h"
 
 #include <gtest/gtest.h>
 
@@ -14,17 +14,17 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_backend_test::DefaultOpset;
-using onnx_backend_test::Sequence;
-using onnx_backend_test::Tensor;
-using onnx_backend_test::kernel::KernelContext;
-using onnx_backend_test::kernel::SequenceAt;
-using onnx_backend_test::kernel::SequenceConstruct;
-using onnx_backend_test::kernel::SequenceEmpty;
-using onnx_backend_test::kernel::SequenceErase;
-using onnx_backend_test::kernel::SequenceInsert;
-using onnx_backend_test::kernel::SequenceLength;
-using onnx_backend_test::kernel::SplitToSequence;
+using onnx_kernels::DefaultOpset;
+using onnx_kernels::Sequence;
+using onnx_kernels::Tensor;
+using onnx_kernels::kernel::KernelContext;
+using onnx_kernels::kernel::SequenceAt;
+using onnx_kernels::kernel::SequenceConstruct;
+using onnx_kernels::kernel::SequenceEmpty;
+using onnx_kernels::kernel::SequenceErase;
+using onnx_kernels::kernel::SequenceInsert;
+using onnx_kernels::kernel::SequenceLength;
+using onnx_kernels::kernel::SplitToSequence;
 
 namespace Test {
 
@@ -89,7 +89,7 @@ TEST(BackendKernelClass, SequenceConstructRejectsBadInputsAndMismatchedOutput) {
   EXPECT_THROW(seq({bad_first}), std::invalid_argument);
 
   // In-place overload with a mismatched output buffer is rejected.
-  Tensor bad_out_dtype("", static_cast<int32_t>(onnx_backend_test::DataType::INT32), {2, 2},
+  Tensor bad_out_dtype("", static_cast<int32_t>(onnx_kernels::DataType::INT32), {2, 2},
                        std::vector<uint8_t>(4 * sizeof(int32_t)));
   EXPECT_THROW(seq({a, b}, bad_out_dtype), std::invalid_argument);
 
@@ -132,13 +132,13 @@ TEST(BackendKernelClass, SequenceConstructAsSequenceRejectsDtypeMismatch) {
 TEST(BackendKernelClass, SequenceLengthReturnsScalarInt64Count) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceLength op{ctx};
-  Sequence seq("", static_cast<int32_t>(onnx_backend_test::DataType::FLOAT),
+  Sequence seq("", static_cast<int32_t>(onnx_kernels::DataType::FLOAT),
                {Tensor::FromFloat("", {2}, {1.0f, 2.0f}), Tensor::FromFloat("", {1}, {3.0f}),
                 Tensor::FromFloat("", {3}, {4.0f, 5.0f, 6.0f})});
 
   Tensor out = op(seq);
 
-  EXPECT_EQ(out.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  EXPECT_EQ(out.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
   EXPECT_TRUE(out.shape.empty());
   ASSERT_EQ(out.data.size(), sizeof(int64_t));
   EXPECT_EQ(*out.AsInt64(), 3);
@@ -151,7 +151,7 @@ TEST(BackendKernelClass, SequenceLengthHandlesEmptySequence) {
 
   Tensor out = op(empty);
 
-  EXPECT_EQ(out.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  EXPECT_EQ(out.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
   EXPECT_TRUE(out.shape.empty());
   ASSERT_EQ(out.data.size(), sizeof(int64_t));
   EXPECT_EQ(*out.AsInt64(), 0);
@@ -167,30 +167,30 @@ TEST(BackendKernelClass, SequenceEmptyDefaultDtypeIsFloat) {
   Sequence out = op();
   EXPECT_TRUE(out.empty());
   EXPECT_EQ(out.size(), 0u);
-  EXPECT_EQ(out.elem_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  EXPECT_EQ(out.elem_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
 }
 
 TEST(BackendKernelClass, SequenceEmptyUndefinedDtypeFallsBackToFloat) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceEmpty op{ctx};
-  Sequence out = op(static_cast<int32_t>(onnx_backend_test::DataType::UNDEFINED));
+  Sequence out = op(static_cast<int32_t>(onnx_kernels::DataType::UNDEFINED));
   EXPECT_TRUE(out.empty());
-  EXPECT_EQ(out.elem_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  EXPECT_EQ(out.elem_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
 }
 
 TEST(BackendKernelClass, SequenceEmptyHonoursExplicitDtype) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceEmpty op{ctx};
-  Sequence out = op(static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  Sequence out = op(static_cast<int32_t>(onnx_kernels::DataType::INT64));
   EXPECT_TRUE(out.empty());
-  EXPECT_EQ(out.elem_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  EXPECT_EQ(out.elem_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
 }
 
 // ──────────────────────────────────────────────────────────────────────
 // ConcatFromSequence kernel tests.
 // ──────────────────────────────────────────────────────────────────────
 
-using onnx_backend_test::kernel::ConcatFromSequence;
+using onnx_kernels::kernel::ConcatFromSequence;
 
 TEST(BackendKernelClass, ConcatFromSequenceAxis0ConcatenatesAlongLeadingAxis) {
   const KernelContext ctx{DefaultOpset(11)};
@@ -561,7 +561,7 @@ TEST(BackendKernelClass, SequenceAtRejectsNonScalarPosition) {
 
 TEST(BackendKernelClass, SequenceMapBuildsOneSequencePerBodyOutput) {
   const KernelContext ctx{DefaultOpset(17)};
-  onnx_backend_test::kernel::SequenceMap op{ctx};
+  onnx_kernels::kernel::SequenceMap op{ctx};
   Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   Tensor b = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
   Tensor c = Tensor::FromFloat("", {2}, {5.0f, 6.0f});
@@ -581,7 +581,7 @@ TEST(BackendKernelClass, SequenceMapBuildsOneSequencePerBodyOutput) {
 
 TEST(BackendKernelClass, SequenceMapBuildsMultipleOutputSequences) {
   const KernelContext ctx{DefaultOpset(17)};
-  onnx_backend_test::kernel::SequenceMap op{ctx};
+  onnx_kernels::kernel::SequenceMap op{ctx};
   Tensor a = Tensor::FromFloat("", {1}, {1.0f});
   Tensor b = Tensor::FromFloat("", {1}, {2.0f});
   Tensor x = Tensor::FromInt64("", {1}, {7});
@@ -603,7 +603,7 @@ TEST(BackendKernelClass, SequenceMapBuildsMultipleOutputSequences) {
 
 TEST(BackendKernelClass, SequenceMapRejectsRowLengthMismatch) {
   const KernelContext ctx{DefaultOpset(17)};
-  onnx_backend_test::kernel::SequenceMap op{ctx};
+  onnx_kernels::kernel::SequenceMap op{ctx};
   Tensor a = Tensor::FromFloat("", {1}, {1.0f});
   Tensor b = Tensor::FromFloat("", {1}, {2.0f});
   const Sequence in_seq("", a.data_type, {a, b});
@@ -615,7 +615,7 @@ TEST(BackendKernelClass, SequenceMapRejectsRowLengthMismatch) {
 
 TEST(BackendKernelClass, SequenceMapRejectsMixedDtypeWithinOneOutput) {
   const KernelContext ctx{DefaultOpset(17)};
-  onnx_backend_test::kernel::SequenceMap op{ctx};
+  onnx_kernels::kernel::SequenceMap op{ctx};
   Tensor a = Tensor::FromFloat("", {1}, {1.0f});
   Tensor x = Tensor::FromInt64("", {1}, {7});
   const Sequence in_seq("", a.data_type, {a, a});
@@ -627,8 +627,8 @@ TEST(BackendKernelClass, SequenceMapRejectsMixedDtypeWithinOneOutput) {
 
 TEST(BackendKernelClass, SequenceMapPreservesElemTypeOnEmptyInputSequence) {
   const KernelContext ctx{DefaultOpset(17)};
-  onnx_backend_test::kernel::SequenceMap op{ctx};
-  const Sequence in_seq("", static_cast<int32_t>(onnx_backend_test::DataType::FLOAT), {});
+  onnx_kernels::kernel::SequenceMap op{ctx};
+  const Sequence in_seq("", static_cast<int32_t>(onnx_kernels::DataType::FLOAT), {});
 
   // Zero iterations: each body output row is empty; the resulting output
   // sequence is empty and its elem_type degrades to UNDEFINED (since no
@@ -638,7 +638,7 @@ TEST(BackendKernelClass, SequenceMapPreservesElemTypeOnEmptyInputSequence) {
 
   ASSERT_EQ(outs.size(), 1u);
   EXPECT_EQ(outs[0].size(), 0u);
-  EXPECT_EQ(outs[0].elem_type, static_cast<int32_t>(onnx_backend_test::DataType::UNDEFINED));
+  EXPECT_EQ(outs[0].elem_type, static_cast<int32_t>(onnx_kernels::DataType::UNDEFINED));
 }
 
 // ──────────────────────────────────────────────────────────────────────

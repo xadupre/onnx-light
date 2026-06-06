@@ -4,12 +4,12 @@
 
 #pragma once
 
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/test_case.h"
 
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 
 // ---------------------------------------------------------------------------
 // Per-operator registration helpers for the ``quantization`` op category —
@@ -36,5 +36,5 @@ void RegisterQLinearConvCases(std::vector<TestCase> &registry);
 /// invoking every ``Register*Cases`` helper declared in this header.
 void CollectQuantizationTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");
 
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/cases/training/include_training_cases.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/test_case.h"
 #include "onnx_lib/shape_inference/implementation.h"
 
 #include <gtest/gtest.h>
@@ -12,17 +12,17 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_backend_test::CollectTrainingTestCases;
+using onnx_kernels::CollectTrainingTestCases;
 
 namespace {
-std::vector<onnx_backend_test::TestCase> CollectTestCases(const std::string &op_type = "") {
-  std::vector<onnx_backend_test::TestCase> registry;
+std::vector<onnx_kernels::TestCase> CollectTestCases(const std::string &op_type = "") {
+  std::vector<onnx_kernels::TestCase> registry;
   CollectTrainingTestCases(registry, op_type);
   return registry;
 }
 } // namespace
-using onnx_backend_test::Tensor;
-using onnx_backend_test::TestCase;
+using onnx_kernels::Tensor;
+using onnx_kernels::TestCase;
 
 namespace Test {
 
@@ -83,15 +83,15 @@ TEST(BackendTestCase, AdamCasesArePresent) {
     ASSERT_EQ(ds.inputs.size(), 6u);
     ASSERT_EQ(ds.outputs.size(), 3u);
     EXPECT_EQ(ds.inputs[0].data_type,
-              static_cast<int32_t>(onnx_backend_test::DataType::FLOAT)); // R
+              static_cast<int32_t>(onnx_kernels::DataType::FLOAT)); // R
     EXPECT_EQ(ds.inputs[1].data_type,
-              static_cast<int32_t>(onnx_backend_test::DataType::INT64)); // T
+              static_cast<int32_t>(onnx_kernels::DataType::INT64)); // T
     for (size_t i = 2; i < 6; ++i) {
-      EXPECT_EQ(ds.inputs[i].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+      EXPECT_EQ(ds.inputs[i].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
       EXPECT_EQ(ds.inputs[i].shape, (std::vector<int64_t>{3}));
     }
-    for (const onnx_backend_test::Tensor &t : ds.outputs) {
-      EXPECT_EQ(t.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+    for (const onnx_kernels::Tensor &t : ds.outputs) {
+      EXPECT_EQ(t.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
       EXPECT_EQ(t.shape, (std::vector<int64_t>{3}));
     }
   }
@@ -103,9 +103,9 @@ TEST(BackendTestCase, AdamCasesArePresent) {
     ASSERT_EQ(ds.inputs.size(), 10u);
     ASSERT_EQ(ds.outputs.size(), 6u);
     EXPECT_EQ(ds.inputs[0].data_type,
-              static_cast<int32_t>(onnx_backend_test::DataType::FLOAT)); // R
+              static_cast<int32_t>(onnx_kernels::DataType::FLOAT)); // R
     EXPECT_EQ(ds.inputs[1].data_type,
-              static_cast<int32_t>(onnx_backend_test::DataType::INT64)); // T
+              static_cast<int32_t>(onnx_kernels::DataType::INT64)); // T
     // X1, G1, V1, H1 are rank-1; X2, G2, V2, H2 are rank-2.
     for (size_t i : {2u, 4u, 6u, 8u}) {
       EXPECT_EQ(ds.inputs[i].shape, (std::vector<int64_t>{2}));
@@ -158,15 +158,15 @@ TEST(BackendTestCase, AdamOnnxCasesArePresent) {
     ASSERT_EQ(ds.inputs.size(), 6u);
     ASSERT_EQ(ds.outputs.size(), 3u);
     EXPECT_EQ(ds.inputs[0].data_type,
-              static_cast<int32_t>(onnx_backend_test::DataType::FLOAT)); // R
+              static_cast<int32_t>(onnx_kernels::DataType::FLOAT)); // R
     EXPECT_EQ(ds.inputs[1].data_type,
-              static_cast<int32_t>(onnx_backend_test::DataType::INT64)); // T
+              static_cast<int32_t>(onnx_kernels::DataType::INT64)); // T
     for (size_t i = 2; i < 6; ++i) {
-      EXPECT_EQ(ds.inputs[i].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+      EXPECT_EQ(ds.inputs[i].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
       EXPECT_EQ(ds.inputs[i].shape, (std::vector<int64_t>{2}));
     }
-    for (const onnx_backend_test::Tensor &t : ds.outputs) {
-      EXPECT_EQ(t.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+    for (const onnx_kernels::Tensor &t : ds.outputs) {
+      EXPECT_EQ(t.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
       EXPECT_EQ(t.shape, (std::vector<int64_t>{2}));
     }
   }
@@ -177,9 +177,9 @@ TEST(BackendTestCase, AdamOnnxCasesArePresent) {
     ASSERT_EQ(ds.inputs.size(), 10u);
     ASSERT_EQ(ds.outputs.size(), 6u);
     EXPECT_EQ(ds.inputs[0].data_type,
-              static_cast<int32_t>(onnx_backend_test::DataType::FLOAT)); // R
+              static_cast<int32_t>(onnx_kernels::DataType::FLOAT)); // R
     EXPECT_EQ(ds.inputs[1].data_type,
-              static_cast<int32_t>(onnx_backend_test::DataType::INT64)); // T
+              static_cast<int32_t>(onnx_kernels::DataType::INT64)); // T
     for (size_t i : {2u, 4u, 6u, 8u}) {
       EXPECT_EQ(ds.inputs[i].shape, (std::vector<int64_t>{1}));
     }
@@ -251,15 +251,15 @@ TEST(BackendTestCase, AdagradOnnxCasesArePresent) {
     ASSERT_EQ(ds.inputs.size(), 5u);
     ASSERT_EQ(ds.outputs.size(), 2u);
     EXPECT_EQ(ds.inputs[0].data_type,
-              static_cast<int32_t>(onnx_backend_test::DataType::FLOAT)); // R
+              static_cast<int32_t>(onnx_kernels::DataType::FLOAT)); // R
     EXPECT_EQ(ds.inputs[1].data_type,
-              static_cast<int32_t>(onnx_backend_test::DataType::INT64)); // T
+              static_cast<int32_t>(onnx_kernels::DataType::INT64)); // T
     for (size_t i = 2; i < 5; ++i) {
-      EXPECT_EQ(ds.inputs[i].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+      EXPECT_EQ(ds.inputs[i].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
       EXPECT_EQ(ds.inputs[i].shape, (std::vector<int64_t>{1}));
     }
-    for (const onnx_backend_test::Tensor &t : ds.outputs) {
-      EXPECT_EQ(t.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+    for (const onnx_kernels::Tensor &t : ds.outputs) {
+      EXPECT_EQ(t.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
       EXPECT_EQ(t.shape, (std::vector<int64_t>{1}));
     }
   }
@@ -272,9 +272,9 @@ TEST(BackendTestCase, AdagradOnnxCasesArePresent) {
     ASSERT_EQ(ds.inputs.size(), 8u);
     ASSERT_EQ(ds.outputs.size(), 4u);
     EXPECT_EQ(ds.inputs[0].data_type,
-              static_cast<int32_t>(onnx_backend_test::DataType::FLOAT)); // R
+              static_cast<int32_t>(onnx_kernels::DataType::FLOAT)); // R
     EXPECT_EQ(ds.inputs[1].data_type,
-              static_cast<int32_t>(onnx_backend_test::DataType::INT64)); // T
+              static_cast<int32_t>(onnx_kernels::DataType::INT64)); // T
     for (size_t i : {2u, 4u, 6u}) {
       EXPECT_EQ(ds.inputs[i].shape, (std::vector<int64_t>{1}));
     }
@@ -346,15 +346,15 @@ TEST(BackendTestCase, MomentumOnnxCasesArePresent) {
     ASSERT_EQ(ds.inputs.size(), 5u);
     ASSERT_EQ(ds.outputs.size(), 2u);
     EXPECT_EQ(ds.inputs[0].data_type,
-              static_cast<int32_t>(onnx_backend_test::DataType::FLOAT)); // R
+              static_cast<int32_t>(onnx_kernels::DataType::FLOAT)); // R
     EXPECT_EQ(ds.inputs[1].data_type,
-              static_cast<int32_t>(onnx_backend_test::DataType::INT64)); // T
+              static_cast<int32_t>(onnx_kernels::DataType::INT64)); // T
     for (size_t i = 2; i < 5; ++i) {
-      EXPECT_EQ(ds.inputs[i].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+      EXPECT_EQ(ds.inputs[i].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
       EXPECT_EQ(ds.inputs[i].shape, (std::vector<int64_t>{2}));
     }
-    for (const onnx_backend_test::Tensor &t : ds.outputs) {
-      EXPECT_EQ(t.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+    for (const onnx_kernels::Tensor &t : ds.outputs) {
+      EXPECT_EQ(t.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
       EXPECT_EQ(t.shape, (std::vector<int64_t>{2}));
     }
   }

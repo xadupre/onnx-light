@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/kernel_context.h"
-#include "onnx_backend_test/kernels/object_detection/include_object_detection_kernels.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/kernels/object_detection/include_object_detection_kernels.h"
+#include "onnx_kernels/test_case.h"
 
 #include <gtest/gtest.h>
 
@@ -14,11 +14,11 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_backend_test::DefaultOpset;
-using onnx_backend_test::Tensor;
-using onnx_backend_test::kernel::KernelContext;
-using onnx_backend_test::kernel::NonMaxSuppression;
-using onnx_backend_test::kernel::RoiAlign;
+using onnx_kernels::DefaultOpset;
+using onnx_kernels::Tensor;
+using onnx_kernels::kernel::KernelContext;
+using onnx_kernels::kernel::NonMaxSuppression;
+using onnx_kernels::kernel::RoiAlign;
 
 namespace Test {
 
@@ -50,7 +50,7 @@ TEST(BackendKernelClass, RoiAlignAvgProducesExpectedShapeAndRange) {
   attrs.coordinate_transformation_mode = "half_pixel";
   Tensor y = roialign(x, rois, batch_indices, attrs);
 
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   const std::vector<int64_t> expected_shape = {2, 1, 5, 5};
   EXPECT_EQ(y.shape, expected_shape);
   ASSERT_EQ(y.element_count(), 2 * 1 * 5 * 5);
@@ -134,13 +134,13 @@ TEST(BackendKernelClass, RoiAlignRejectsBadInputs) {
   EXPECT_THROW(roialign(x, rois, oob_bi, attrs), std::invalid_argument);
 
   // Mismatched preallocated output shape.
-  Tensor bad_out("", static_cast<int32_t>(onnx_backend_test::DataType::FLOAT), {1, 1, 3, 3},
+  Tensor bad_out("", static_cast<int32_t>(onnx_kernels::DataType::FLOAT), {1, 1, 3, 3},
                  std::vector<uint8_t>(9 * sizeof(float)));
   EXPECT_THROW(roialign(x, rois, batch_indices, attrs, bad_out), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, NonMaxSuppressionSuppressByIoU) {
-  const KernelContext ctx{onnx_backend_test::DefaultOpset(11)};
+  const KernelContext ctx{onnx_kernels::DefaultOpset(11)};
   NonMaxSuppression nms{ctx};
   // Mirror the upstream test_nonmaxsuppression_suppress_by_IOU fixture.
   Tensor boxes = Tensor::FromFloat("", {1, 6, 4}, {0.f, 0.f,   1.f, 1.f,   0.f, 0.1f,  1.f, 1.1f,
@@ -152,7 +152,7 @@ TEST(BackendKernelClass, NonMaxSuppressionSuppressByIoU) {
   Tensor score = Tensor::FromFloat("", {1}, {0.0f});
   NonMaxSuppression::Attributes attrs;
   Tensor y = nms(boxes, scores, &max_out, &iou, &score, attrs);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
   EXPECT_EQ(y.shape, (std::vector<int64_t>{3, 3}));
   const int64_t *py = y.AsInt64();
   const std::vector<int64_t> expected = {0, 0, 3, 0, 0, 0, 0, 0, 5};
@@ -162,7 +162,7 @@ TEST(BackendKernelClass, NonMaxSuppressionSuppressByIoU) {
 }
 
 TEST(BackendKernelClass, NonMaxSuppressionDefaultsAndOptionalInputs) {
-  const KernelContext ctx{onnx_backend_test::DefaultOpset(11)};
+  const KernelContext ctx{onnx_kernels::DefaultOpset(11)};
   NonMaxSuppression nms{ctx};
   // Two non-overlapping boxes; with no max_output_boxes_per_class (default 0)
   // the output must be empty.
@@ -190,7 +190,7 @@ TEST(BackendKernelClass, NonMaxSuppressionDefaultsAndOptionalInputs) {
 }
 
 TEST(BackendKernelClass, NonMaxSuppressionRejectsBadInputs) {
-  const KernelContext ctx{onnx_backend_test::DefaultOpset(11)};
+  const KernelContext ctx{onnx_kernels::DefaultOpset(11)};
   NonMaxSuppression nms{ctx};
   Tensor boxes = Tensor::FromFloat("", {1, 1, 4}, {0.0f, 0.0f, 1.0f, 1.0f});
   Tensor scores = Tensor::FromFloat("", {1, 1, 1}, {0.9f});

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/preview/include_preview_kernels.h"
+#include "onnx_kernels/kernels/preview/include_preview_kernels.h"
 
 #include <cmath>
 #include <cstddef>
@@ -11,7 +11,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 namespace kernel {
 
 namespace {
@@ -169,5 +169,5 @@ void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V
 }
 
 } // namespace kernel
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

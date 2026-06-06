@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/sequence/include_sequence_kernels.h"
+#include "onnx_kernels/kernels/sequence/include_sequence_kernels.h"
 
 #include <cstdint>
 #include <stdexcept>
@@ -10,7 +10,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 namespace kernel {
 
 std::vector<Sequence>
@@ -50,5 +50,5 @@ SequenceMap::operator()(const Sequence &input_sequence,
 }
 
 } // namespace kernel
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

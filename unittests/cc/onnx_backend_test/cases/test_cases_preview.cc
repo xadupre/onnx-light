@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/cases/preview/include_preview_cases.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/test_case.h"
 
 #include <gtest/gtest.h>
 
@@ -11,17 +11,17 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_backend_test::CollectPreviewTestCases;
+using onnx_kernels::CollectPreviewTestCases;
 
 namespace {
-std::vector<onnx_backend_test::TestCase> CollectTestCases(const std::string &op_type = "") {
-  std::vector<onnx_backend_test::TestCase> registry;
+std::vector<onnx_kernels::TestCase> CollectTestCases(const std::string &op_type = "") {
+  std::vector<onnx_kernels::TestCase> registry;
   CollectPreviewTestCases(registry, op_type);
   return registry;
 }
 } // namespace
-using onnx_backend_test::Tensor;
-using onnx_backend_test::TestCase;
+using onnx_kernels::Tensor;
+using onnx_kernels::TestCase;
 
 namespace Test {
 
@@ -61,10 +61,10 @@ TEST(BackendTestCase, FlexAttentionCasesArePresent) {
     ASSERT_EQ(ds.inputs.size(), 3u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     for (const Tensor &t : ds.inputs) {
-      EXPECT_EQ(t.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+      EXPECT_EQ(t.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
       EXPECT_EQ(t.shape.size(), 4u);
     }
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
     EXPECT_EQ(ds.outputs[0].shape.size(), 4u);
 
     // Model must import the ``ai.onnx.preview`` opset at version 1.

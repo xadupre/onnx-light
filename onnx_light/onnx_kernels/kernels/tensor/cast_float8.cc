@@ -6,13 +6,13 @@
 // ``include/onnxruntime/core/common/float8.h`` in the Microsoft ONNX
 // Runtime project (Copyright (c) Microsoft Corporation, MIT License).
 
-#include "onnx_backend_test/kernels/tensor/cast_float8.h"
+#include "onnx_kernels/kernels/tensor/cast_float8.h"
 
 #include <cstdint>
 #include <cstring>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 namespace kernel {
 
 namespace {
@@ -385,5 +385,5 @@ float Float8E5M2FNUZBitsToFloat(std::uint8_t val) noexcept {
 }
 
 } // namespace kernel
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

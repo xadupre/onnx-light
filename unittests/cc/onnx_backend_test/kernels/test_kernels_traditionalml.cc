@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/kernel_context.h"
-#include "onnx_backend_test/kernels/traditionalml/include_traditionalml_kernels.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
+#include "onnx_kernels/test_case.h"
 
 #include <gtest/gtest.h>
 
@@ -15,24 +15,24 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_backend_test::OpsetId;
-using onnx_backend_test::Tensor;
-using onnx_backend_test::kernel::ArrayFeatureExtractor;
-using onnx_backend_test::kernel::Binarizer;
-using onnx_backend_test::kernel::CategoryMapper;
-using onnx_backend_test::kernel::DictVectorizer;
-using onnx_backend_test::kernel::FeatureVectorizer;
-using onnx_backend_test::kernel::Imputer;
-using onnx_backend_test::kernel::KernelContext;
-using onnx_backend_test::kernel::LabelEncoder;
-using onnx_backend_test::kernel::LinearClassifier;
-using onnx_backend_test::kernel::LinearRegressor;
-using onnx_backend_test::kernel::Normalizer;
-using onnx_backend_test::kernel::OneHotEncoder;
-using onnx_backend_test::kernel::Scaler;
-using onnx_backend_test::kernel::SVMClassifier;
-using onnx_backend_test::kernel::SVMRegressor;
-using onnx_backend_test::kernel::ZipMap;
+using onnx_kernels::OpsetId;
+using onnx_kernels::Tensor;
+using onnx_kernels::kernel::ArrayFeatureExtractor;
+using onnx_kernels::kernel::Binarizer;
+using onnx_kernels::kernel::CategoryMapper;
+using onnx_kernels::kernel::DictVectorizer;
+using onnx_kernels::kernel::FeatureVectorizer;
+using onnx_kernels::kernel::Imputer;
+using onnx_kernels::kernel::KernelContext;
+using onnx_kernels::kernel::LabelEncoder;
+using onnx_kernels::kernel::LinearClassifier;
+using onnx_kernels::kernel::LinearRegressor;
+using onnx_kernels::kernel::Normalizer;
+using onnx_kernels::kernel::OneHotEncoder;
+using onnx_kernels::kernel::Scaler;
+using onnx_kernels::kernel::SVMClassifier;
+using onnx_kernels::kernel::SVMRegressor;
+using onnx_kernels::kernel::ZipMap;
 
 namespace Test {
 
@@ -43,7 +43,7 @@ TEST(BackendKernelClass, LabelEncoderInt64ToFloatMatchesReference) {
   const std::vector<float> values{0.5f, 1.5f, 2.5f};
   Tensor x = Tensor::FromInt64("", {4}, {0, 1, 2, 7});
   Tensor y = label_encoder.operator()<int64_t, float>(x, keys, values, /*default=*/-1.0f);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{4}));
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], 0.5f);
@@ -59,7 +59,7 @@ TEST(BackendKernelClass, LabelEncoderFloatToInt64MatchesReference) {
   const std::vector<int64_t> values{10, 20, 30};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 9.0f});
   Tensor y = label_encoder.operator()<float, int64_t>(x, keys, values, /*default=*/-1);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 2}));
   const int64_t *py = y.AsInt64();
   EXPECT_EQ(py[0], 10);
@@ -74,7 +74,7 @@ TEST(BackendKernelClass, LabelEncoderInPlaceWritesToPreallocatedOutput) {
   const std::vector<int64_t> keys{0, 1};
   const std::vector<float> values{7.0f, 8.0f};
   Tensor x = Tensor::FromInt64("", {3}, {1, 0, 9});
-  Tensor out("", onnx_backend_test::DataType::FLOAT, {3},
+  Tensor out("", onnx_kernels::DataType::FLOAT, {3},
              std::vector<uint8_t>(3 * sizeof(float), 0u));
   label_encoder.operator()<int64_t, float>(x, keys, values, /*default=*/-2.0f, out);
   const float *po = out.AsFloat();
@@ -110,7 +110,7 @@ TEST(BackendKernelClass, LabelEncoderStringToInt64WithDefault) {
   const std::vector<int64_t> values{0, 1, 2};
   Tensor x = Tensor::FromStrings("", {5}, {"a", "b", "d", "c", "g"});
   Tensor y = label_encoder.operator()<std::string, int64_t>(x, keys, values, /*default=*/42);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{5}));
   const int64_t *py = y.AsInt64();
   EXPECT_EQ(py[0], 0);
@@ -127,7 +127,7 @@ TEST(BackendKernelClass, LabelEncoderStringToInt16WithDefault) {
   const std::vector<int16_t> values{0, 1, 2};
   Tensor x = Tensor::FromStrings("", {5}, {"a", "b", "d", "c", "g"});
   Tensor y = label_encoder.operator()<std::string, int16_t>(x, keys, values, /*default=*/42);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT16));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT16));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{5}));
   const int16_t *py = reinterpret_cast<const int16_t *>(y.data.data());
   EXPECT_EQ(py[0], 0);
@@ -152,7 +152,7 @@ TEST(BackendKernelClass, BinarizerFloatThresholdElementwise) {
   Binarizer binarizer{ctx};
   Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, 0.0f, 0.5f, 1.0f, 1.5f, 2.0f});
   Tensor y = binarizer.operator()<float>(x, /*threshold=*/1.0f);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], 0.0f);
@@ -168,7 +168,7 @@ TEST(BackendKernelClass, BinarizerInt64ThresholdElementwise) {
   Binarizer binarizer{ctx};
   Tensor x = Tensor::FromInt64("", {5}, {0, 3, 4, -2, 10});
   Tensor y = binarizer.operator()<int64_t>(x, /*threshold=*/3);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{5}));
   const int64_t *py = y.AsInt64();
   EXPECT_EQ(py[0], 0);
@@ -182,7 +182,7 @@ TEST(BackendKernelClass, BinarizerInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
   Binarizer binarizer{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {-0.5f, 0.5f, 1.5f});
-  Tensor out("", onnx_backend_test::DataType::FLOAT, {3},
+  Tensor out("", onnx_kernels::DataType::FLOAT, {3},
              std::vector<uint8_t>(3 * sizeof(float), 0u));
   binarizer.operator()<float>(x, /*threshold=*/0.0f, out);
   const float *po = out.AsFloat();
@@ -202,7 +202,7 @@ TEST(BackendKernelClass, BinarizerRejectsMismatchedPreallocatedOutputShape) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
   Binarizer binarizer{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {-0.5f, 0.5f, 1.5f});
-  Tensor out("", onnx_backend_test::DataType::FLOAT, {2},
+  Tensor out("", onnx_kernels::DataType::FLOAT, {2},
              std::vector<uint8_t>(2 * sizeof(float), 0u));
   EXPECT_THROW(binarizer.operator()<float>(x, /*threshold=*/0.0f, out), std::invalid_argument);
 }
@@ -214,7 +214,7 @@ TEST(BackendKernelClass, ScalerPerFeatureFloat) {
   const std::vector<float> offset{0.5f, 1.0f, 1.5f};
   const std::vector<float> scale{2.0f, 0.5f, 1.0f};
   Tensor y = scaler.operator()<float>(x, offset, scale);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], (0.0f - 0.5f) * 2.0f);
@@ -232,7 +232,7 @@ TEST(BackendKernelClass, ScalerBroadcastInt64ProducesFloat) {
   const std::vector<float> offset{1.0f};
   const std::vector<float> scale{0.5f};
   Tensor y = scaler.operator()<int64_t>(x, offset, scale);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{5}));
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], -0.5f);
@@ -246,7 +246,7 @@ TEST(BackendKernelClass, ScalerInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
   Scaler scaler{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
-  Tensor out("", onnx_backend_test::DataType::FLOAT, {3},
+  Tensor out("", onnx_kernels::DataType::FLOAT, {3},
              std::vector<uint8_t>(3 * sizeof(float), 0u));
   scaler.operator()<float>(x, /*offset=*/{0.5f}, /*scale=*/{2.0f}, out);
   const float *po = out.AsFloat();
@@ -285,7 +285,7 @@ TEST(BackendKernelClass, NormalizerL2PerRowFloat) {
   Normalizer normalizer{ctx};
   Tensor x = Tensor::FromFloat("", {2, 3}, {3.0f, 4.0f, 0.0f, 1.0f, 2.0f, 2.0f});
   Tensor y = normalizer.operator()<float>(x, "L2");
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
   const float *py = y.AsFloat();
   // Row 0: divisor = sqrt(9+16+0) = 5.
@@ -304,7 +304,7 @@ TEST(BackendKernelClass, NormalizerL1RankOneInt64ProducesFloat) {
   // L1 divisor is sum(|x|) = 1+1+2+2 = 6.
   Tensor x = Tensor::FromInt64("", {4}, {1, -1, 2, -2});
   Tensor y = normalizer.operator()<int64_t>(x, "L1");
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{4}));
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], 1.0f / 6.0f);
@@ -319,7 +319,7 @@ TEST(BackendKernelClass, NormalizerMaxLeavesZeroRowUnchanged) {
   // Row 0: signed max(x) = 2 -> y = x/2. Row 1: all zeros -> y == x.
   Tensor x = Tensor::FromDouble("", {2, 3}, {1.0, -3.0, 2.0, 0.0, 0.0, 0.0});
   Tensor y = normalizer.operator()<double>(x, "MAX");
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], 0.5f);
@@ -334,7 +334,7 @@ TEST(BackendKernelClass, NormalizerInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
   Normalizer normalizer{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {3.0f, 4.0f, 0.0f});
-  Tensor out("", onnx_backend_test::DataType::FLOAT, {3},
+  Tensor out("", onnx_kernels::DataType::FLOAT, {3},
              std::vector<uint8_t>(3 * sizeof(float), 0u));
   normalizer.operator()<float>(x, "L2", out);
   const float *po = out.AsFloat();
@@ -371,7 +371,7 @@ TEST(BackendKernelClass, ArrayFeatureExtractorGathersAlongLastAxis) {
       "", {3, 4}, {0.0f, 1.0f, 2.0f, 3.0f, 10.0f, 11.0f, 12.0f, 13.0f, 20.0f, 21.0f, 22.0f, 23.0f});
   Tensor y = Tensor::FromInt64("", {3}, {0, 2, 3});
   Tensor z = afe.operator()<float>(x, y);
-  ASSERT_EQ(z.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   ASSERT_EQ(z.shape, (std::vector<int64_t>{3, 3}));
   const float *pz = z.AsFloat();
   const std::vector<float> expected{0.0f, 2.0f, 3.0f, 10.0f, 12.0f, 13.0f, 20.0f, 22.0f, 23.0f};
@@ -385,7 +385,7 @@ TEST(BackendKernelClass, ArrayFeatureExtractorInPlaceWritesToPreallocatedOutput)
   ArrayFeatureExtractor afe{ctx};
   Tensor x = Tensor::FromInt64("", {2, 4}, {1, 2, 3, 4, 5, 6, 7, 8});
   Tensor y = Tensor::FromInt64("", {2}, {3, 1});
-  Tensor out("", onnx_backend_test::DataType::INT64, {2, 2},
+  Tensor out("", onnx_kernels::DataType::INT64, {2, 2},
              std::vector<uint8_t>(4 * sizeof(int64_t), 0u));
   afe.operator()<int64_t>(x, y, out);
   const int64_t *po = out.AsInt64();
@@ -409,7 +409,7 @@ TEST(BackendKernelClass, ZipMapInt64LabelsCopiesFloatScores) {
   const std::vector<int64_t> labels{10, 20, 30};
   Tensor x = Tensor::FromFloat("", {2, 3}, {0.1f, 0.7f, 0.2f, 0.3f, 0.4f, 0.3f});
   Tensor y = zipmap(x, labels);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], 0.1f);
@@ -426,7 +426,7 @@ TEST(BackendKernelClass, ZipMapRank1ExpandsToSingleRow) {
   const std::vector<std::string> labels{"a", "b", "c"};
   Tensor x = Tensor::FromFloat("", {3}, {0.1f, 0.7f, 0.2f});
   Tensor y = zipmap(x, labels);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 3}));
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], 0.1f);
@@ -439,7 +439,7 @@ TEST(BackendKernelClass, ZipMapInPlaceWritesToPreallocatedOutput) {
   ZipMap zipmap{ctx};
   const std::vector<int64_t> labels{10, 20, 30};
   Tensor x = Tensor::FromFloat("", {2, 3}, {0.1f, 0.7f, 0.2f, 0.3f, 0.4f, 0.3f});
-  Tensor out("", onnx_backend_test::DataType::FLOAT, {2, 3},
+  Tensor out("", onnx_kernels::DataType::FLOAT, {2, 3},
              std::vector<uint8_t>(6 * sizeof(float), 0u));
   zipmap(x, labels, out);
   const float *po = out.AsFloat();
@@ -465,7 +465,7 @@ TEST(BackendKernelClass, OneHotEncoderInt64MatchesReference) {
   const std::vector<int64_t> cats{0, 1, 2, 3};
   Tensor x = Tensor::FromInt64("", {3}, {0, 2, 7});
   Tensor y = one_hot.operator()<int64_t>(x, cats, /*zeros=*/true);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{3, 4}));
   const float *py = y.AsFloat();
   // x=0 -> [1,0,0,0]; x=2 -> [0,0,1,0]; x=7 -> [0,0,0,0] (zeros=true)
@@ -481,7 +481,7 @@ TEST(BackendKernelClass, OneHotEncoderStringMatchesReference) {
   const std::vector<std::string> cats{"a", "b", "c"};
   Tensor x = Tensor::FromStrings("", {4}, {"a", "b", "d", "c"});
   Tensor y = one_hot(x, cats, /*zeros=*/true);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{4, 3}));
   const float *py = y.AsFloat();
   const std::vector<float> expected{1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1};
@@ -512,7 +512,7 @@ TEST(BackendKernelClass, OneHotEncoderInPlaceWritesToPreallocatedOutput) {
   OneHotEncoder one_hot{ctx};
   const std::vector<int64_t> cats{0, 1, 2};
   Tensor x = Tensor::FromInt64("", {2}, {1, 0});
-  Tensor out("", onnx_backend_test::DataType::FLOAT, {2, 3},
+  Tensor out("", onnx_kernels::DataType::FLOAT, {2, 3},
              std::vector<uint8_t>(6 * sizeof(float), 0u));
   one_hot.operator()<int64_t>(x, cats, /*zeros=*/true, out);
   const float *po = out.AsFloat();
@@ -546,7 +546,7 @@ TEST(BackendKernelClass, OneHotEncoderRejectsMismatchedPreallocatedOutputShape) 
   OneHotEncoder one_hot{ctx};
   const std::vector<int64_t> cats{0, 1, 2};
   Tensor x = Tensor::FromInt64("", {2}, {1, 0});
-  Tensor out("", onnx_backend_test::DataType::FLOAT, {2, 2},
+  Tensor out("", onnx_kernels::DataType::FLOAT, {2, 2},
              std::vector<uint8_t>(4 * sizeof(float), 0u));
   EXPECT_THROW(one_hot.operator()<int64_t>(x, cats, /*zeros=*/true, out), std::invalid_argument);
 }
@@ -667,7 +667,7 @@ TEST(BackendKernelClass, ImputerFloatReplacesMatchingElements) {
   Tensor x = Tensor::FromFloat("", {2, 3}, {0.0f, 1.0f, 0.0f, 5.0f, 0.0f, 6.0f});
   const std::vector<float> imputed{1.0f, 2.0f, 3.0f};
   Tensor y = imputer.operator()<float>(x, imputed, 0.0f);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], 1.0f); // 0.0 replaced by imputed[0 % 3 = 0]
@@ -684,7 +684,7 @@ TEST(BackendKernelClass, ImputerFloatBroadcastReplacement) {
   Tensor x = Tensor::FromFloat("", {4}, {-1.0f, 2.0f, -1.0f, 4.0f});
   const std::vector<float> imputed{0.0f};
   Tensor y = imputer.operator()<float>(x, imputed, -1.0f);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{4}));
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], 0.0f);
@@ -699,7 +699,7 @@ TEST(BackendKernelClass, ImputerInt64ReplacesMatchingElements) {
   Tensor x = Tensor::FromInt64("", {3, 2}, {0, 0, 1, 2, 0, 3});
   const std::vector<int64_t> imputed{10, 20};
   Tensor y = imputer.operator()<int64_t>(x, imputed, static_cast<int64_t>(0));
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{3, 2}));
   const int64_t *py = y.AsInt64();
   EXPECT_EQ(py[0], 10); // 0 replaced by imputed[0]
@@ -714,7 +714,7 @@ TEST(BackendKernelClass, ImputerInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
   Imputer imputer{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {0.0f, 5.0f, 0.0f});
-  Tensor out("", onnx_backend_test::DataType::FLOAT, {3},
+  Tensor out("", onnx_kernels::DataType::FLOAT, {3},
              std::vector<uint8_t>(3 * sizeof(float), 0u));
   imputer.operator()<float>(x, std::vector<float>{9.0f}, 0.0f, out);
   const float *po = out.AsFloat();
@@ -739,7 +739,7 @@ TEST(BackendKernelClass, CategoryMapperStringToInt64MapsAndUsesDefault) {
   Tensor x = Tensor::FromStrings("", {4}, {"a", "b", "?", "c"});
   Tensor y = cm.operator()<std::string, int64_t>(x, cats_strings, cats_int64s,
                                                  /*default_int64=*/-1);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{4}));
   const int64_t *py = y.AsInt64();
   EXPECT_EQ(py[0], 1);
@@ -756,7 +756,7 @@ TEST(BackendKernelClass, CategoryMapperInt64ToStringMapsAndUsesDefault) {
   Tensor x = Tensor::FromInt64("", {4}, {1, 2, 7, 3});
   Tensor y = cm.operator()<int64_t, std::string>(x, cats_strings, cats_int64s,
                                                  /*default_string=*/std::string("?"));
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::STRING));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::STRING));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{4}));
   ASSERT_EQ(y.string_data.size(), 4u);
   EXPECT_EQ(y.string_data[0], "a");
@@ -779,7 +779,7 @@ TEST(BackendKernelClass, CategoryMapperInPlaceWritesToPreallocatedOutput) {
   const std::vector<std::string> cats_strings{"a", "b"};
   const std::vector<int64_t> cats_int64s{10, 20};
   Tensor x = Tensor::FromStrings("", {3}, {"a", "b", "c"});
-  Tensor out("", static_cast<int32_t>(onnx_backend_test::DataType::INT64), {3},
+  Tensor out("", static_cast<int32_t>(onnx_kernels::DataType::INT64), {3},
              std::vector<uint8_t>(3 * sizeof(int64_t), 0u));
   cm.operator()<std::string, int64_t>(x, cats_strings, cats_int64s, /*default=*/-1, out);
   const int64_t *po = out.AsInt64();
@@ -790,7 +790,7 @@ TEST(BackendKernelClass, CategoryMapperInPlaceWritesToPreallocatedOutput) {
 
 TEST(BackendKernelClass, TreeEnsembleRegressorSumSingleTargetMatchesReference) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
-  onnx_backend_test::kernel::TreeEnsembleRegressor reg{ctx};
+  onnx_kernels::kernel::TreeEnsembleRegressor reg{ctx};
   // Single-tree: node 0 splits feature[0] <= 1.0; true -> leaf weight 1.0, false -> 3.0.
   Tensor x = Tensor::FromFloat("", {2, 1}, {0.5f, 2.0f});
   const std::vector<int64_t> treeids{0, 0, 0};
@@ -820,7 +820,7 @@ TEST(BackendKernelClass, TreeEnsembleRegressorSumSingleTargetMatchesReference) {
 
 TEST(BackendKernelClass, TreeEnsembleClassifierInt64BinaryMatchesReference) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
-  onnx_backend_test::kernel::TreeEnsembleClassifier cls{ctx};
+  onnx_kernels::kernel::TreeEnsembleClassifier cls{ctx};
   // Single-tree binary: node 0 splits feature[0] <= 0.5; true -> class 0, false -> class 1.
   Tensor x = Tensor::FromFloat("", {2, 1}, {0.0f, 1.0f});
   const std::vector<int64_t> treeids{0, 0, 0};
@@ -847,7 +847,7 @@ TEST(BackendKernelClass, TreeEnsembleClassifierInt64BinaryMatchesReference) {
 
 TEST(BackendKernelClass, TreeEnsembleV5SingleTreeMatchesReference) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 5)};
-  onnx_backend_test::kernel::TreeEnsemble tree_ens{ctx};
+  onnx_kernels::kernel::TreeEnsemble tree_ens{ctx};
   // Single-tree v5: root=0, node 0 splits feature[0] LEQ 0.5 (mode=0).
   //   true  -> leaf index 0 (target 0, weight 1.0)
   //   false -> leaf index 1 (target 0, weight 2.0)
@@ -872,7 +872,7 @@ TEST(BackendKernelClass, TreeEnsembleV5SingleTreeMatchesReference) {
 // expected outputs, including NaN feature handling.
 TEST(BackendKernelClass, TreeEnsembleV5SetMembershipMatchesReference) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 5)};
-  onnx_backend_test::kernel::TreeEnsemble tree_ens{ctx};
+  onnx_kernels::kernel::TreeEnsemble tree_ens{ctx};
   const float kNaN = std::numeric_limits<float>::quiet_NaN();
   Tensor x = Tensor::FromFloat("", {6, 1}, {1.2f, 3.4f, -0.12f, kNaN, 12.0f, 7.0f});
   Tensor y = tree_ens.operator()<float>(
@@ -901,7 +901,7 @@ TEST(BackendKernelClass, DictVectorizerStringKeyInt64Value) {
   const std::vector<std::string> keys{"a", "c"};
   const std::vector<int64_t> values{42, 7};
   Tensor y = dv.operator()<std::string, int64_t>(keys, values, vocab);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{4}));
   const int64_t *py = y.AsInt64();
   EXPECT_EQ(py[0], 42);
@@ -917,7 +917,7 @@ TEST(BackendKernelClass, DictVectorizerInt64KeyFloatValue) {
   const std::vector<int64_t> keys{30, 10};
   const std::vector<float> values{0.5f, 1.5f};
   Tensor y = dv.operator()<int64_t, float>(keys, values, vocab);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{3}));
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], 1.5f);
@@ -932,7 +932,7 @@ TEST(BackendKernelClass, DictVectorizerInt64KeyStringValue) {
   const std::vector<int64_t> keys{2};
   const std::vector<std::string> values{"hello"};
   Tensor y = dv.operator()<int64_t, std::string>(keys, values, vocab);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::STRING));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::STRING));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{3}));
   ASSERT_EQ(y.string_data.size(), 3u);
   EXPECT_EQ(y.string_data[0], "");
@@ -955,7 +955,7 @@ TEST(BackendKernelClass, FeatureVectorizerConcatsTwoFloatInputs) {
   Tensor a = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor b = Tensor::FromFloat("", {2, 1}, {5.0f, 6.0f});
   Tensor y = fv({a, b}, std::vector<int64_t>{});
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], 1.0f);
@@ -972,7 +972,7 @@ TEST(BackendKernelClass, FeatureVectorizerCastsMixedDtypesToFloat) {
   Tensor a = Tensor::FromInt64("", {1, 2}, {10, 20});
   Tensor b = Tensor::FromFloat("", {1, 1}, {0.5f});
   Tensor y = fv({a, b}, std::vector<int64_t>{});
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 3}));
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], 10.0f);
@@ -982,10 +982,10 @@ TEST(BackendKernelClass, FeatureVectorizerCastsMixedDtypesToFloat) {
 
 TEST(BackendKernelClass, CastMapDenseFloatSortsByKey) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
-  onnx_backend_test::kernel::CastMap cm{ctx};
+  onnx_kernels::kernel::CastMap cm{ctx};
   Tensor y = cm.operator()<float, float>(
       /*keys=*/{2, 0, 1}, /*values=*/{2.5f, 0.5f, 1.5f}, "TO_FLOAT", "DENSE", /*max_map=*/0);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{3}));
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], 0.5f);
@@ -995,7 +995,7 @@ TEST(BackendKernelClass, CastMapDenseFloatSortsByKey) {
 
 TEST(BackendKernelClass, CastMapSparseFloatScattersByKey) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
-  onnx_backend_test::kernel::CastMap cm{ctx};
+  onnx_kernels::kernel::CastMap cm{ctx};
   Tensor y = cm.operator()<float, float>(
       /*keys=*/{1, 3}, /*values=*/{10.0f, 30.0f}, "TO_FLOAT", "SPARSE", /*max_map=*/5);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{5}));
@@ -1009,10 +1009,10 @@ TEST(BackendKernelClass, CastMapSparseFloatScattersByKey) {
 
 TEST(BackendKernelClass, CastMapDenseStringValueToString) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
-  onnx_backend_test::kernel::CastMap cm{ctx};
+  onnx_kernels::kernel::CastMap cm{ctx};
   Tensor y = cm.operator()<std::string, std::string>(
       /*keys=*/{1, 0}, /*values=*/{"b", "a"}, "TO_STRING", "DENSE", /*max_map=*/0);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::STRING));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::STRING));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2}));
   ASSERT_EQ(y.string_data.size(), 2u);
   EXPECT_EQ(y.string_data[0], "a");
@@ -1021,10 +1021,10 @@ TEST(BackendKernelClass, CastMapDenseStringValueToString) {
 
 TEST(BackendKernelClass, CastMapFloatToInt64Truncates) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
-  onnx_backend_test::kernel::CastMap cm{ctx};
+  onnx_kernels::kernel::CastMap cm{ctx};
   Tensor y = cm.operator()<float, int64_t>(
       /*keys=*/{0, 1}, /*values=*/{1.7f, -2.3f}, "TO_INT64", "DENSE", /*max_map=*/0);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2}));
   const int64_t *py = y.AsInt64();
   EXPECT_EQ(py[0], 1);
@@ -1033,10 +1033,10 @@ TEST(BackendKernelClass, CastMapFloatToInt64Truncates) {
 
 TEST(BackendKernelClass, CastMapStringValueToFloatParses) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
-  onnx_backend_test::kernel::CastMap cm{ctx};
+  onnx_kernels::kernel::CastMap cm{ctx};
   Tensor y = cm.operator()<std::string, float>(
       /*keys=*/{0, 1}, /*values=*/{"1.25", "2.5"}, "TO_FLOAT", "DENSE", /*max_map=*/0);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], 1.25f);
   EXPECT_FLOAT_EQ(py[1], 2.5f);
@@ -1044,14 +1044,14 @@ TEST(BackendKernelClass, CastMapStringValueToFloatParses) {
 
 TEST(BackendKernelClass, CastMapSparseRejectsOutOfRangeKey) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
-  onnx_backend_test::kernel::CastMap cm{ctx};
+  onnx_kernels::kernel::CastMap cm{ctx};
   EXPECT_THROW((cm.operator()<float, float>({0, 5}, {1.0f, 2.0f}, "TO_FLOAT", "SPARSE", 3)),
                std::invalid_argument);
 }
 
 TEST(BackendKernelClass, CastMapRejectsMismatchedKeyValueLengths) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
-  onnx_backend_test::kernel::CastMap cm{ctx};
+  onnx_kernels::kernel::CastMap cm{ctx};
   EXPECT_THROW((cm.operator()<float, float>({0, 1}, {1.0f}, "TO_FLOAT", "DENSE", 0)),
                std::invalid_argument);
 }

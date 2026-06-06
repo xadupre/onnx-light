@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/kernel_context.h"
-#include "onnx_backend_test/kernels/nn/include_nn_kernels.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/kernels/nn/include_nn_kernels.h"
+#include "onnx_kernels/test_case.h"
 
 #include <gtest/gtest.h>
 
@@ -14,16 +14,16 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_backend_test::DefaultOpset;
-using onnx_backend_test::Tensor;
-using onnx_backend_test::kernel::Attention;
-using onnx_backend_test::kernel::AveragePool;
-using onnx_backend_test::kernel::BatchNormalization;
-using onnx_backend_test::kernel::Dropout;
-using onnx_backend_test::kernel::KernelContext;
-using onnx_backend_test::kernel::MaxPool;
-using onnx_backend_test::kernel::MaxUnpool;
-using onnx_backend_test::kernel::MeanVarianceNormalization;
+using onnx_kernels::DefaultOpset;
+using onnx_kernels::Tensor;
+using onnx_kernels::kernel::Attention;
+using onnx_kernels::kernel::AveragePool;
+using onnx_kernels::kernel::BatchNormalization;
+using onnx_kernels::kernel::Dropout;
+using onnx_kernels::kernel::KernelContext;
+using onnx_kernels::kernel::MaxPool;
+using onnx_kernels::kernel::MaxUnpool;
+using onnx_kernels::kernel::MeanVarianceNormalization;
 
 namespace Test {
 
@@ -34,7 +34,7 @@ TEST(BackendKernelClass, AveragePool2DDefault) {
                                {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f,
                                 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
   Tensor y = pool(x, /*kernel_shape=*/{2, 2});
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   const std::vector<int64_t> expected_shape = {1, 1, 3, 3};
   EXPECT_EQ(y.shape, expected_shape);
   const float *py = y.AsFloat();
@@ -230,7 +230,7 @@ TEST(BackendKernelClass, BatchNormalizationInferenceMatchesFormula) {
   Tensor mean = Tensor::FromFloat("", {2}, {0.0f, 3.0f});
   Tensor var = Tensor::FromFloat("", {2}, {1.0f, 1.5f});
   Tensor y = bn(x, scale, bias, mean, var);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
   const std::vector<int64_t> expected_shape = {1, 2, 1, 3};
   EXPECT_EQ(y.shape, expected_shape);
   const float *py = y.AsFloat();
@@ -312,7 +312,7 @@ TEST(BackendKernelClass, DropoutInferenceModeCopiesInputAndOnesMask) {
   const KernelContext ctx{DefaultOpset(22)};
   Dropout dropout{ctx};
   Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, -2.0f, 3.0f, -4.0f, 5.0f, -6.0f});
-  Tensor mask("", static_cast<int32_t>(onnx_backend_test::DataType::BOOL), x.shape,
+  Tensor mask("", static_cast<int32_t>(onnx_kernels::DataType::BOOL), x.shape,
               std::vector<uint8_t>(6, 0));
   Tensor y = dropout(x, /*ratio=*/0.5f, /*training_mode=*/false, mask);
   ASSERT_EQ(y.shape, x.shape);
@@ -337,7 +337,7 @@ TEST(BackendKernelClass, DropoutRejectsInvalidRatio) {
   const KernelContext ctx{DefaultOpset(22)};
   Dropout dropout{ctx};
   Tensor x = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
-  Tensor mask("", static_cast<int32_t>(onnx_backend_test::DataType::BOOL), x.shape,
+  Tensor mask("", static_cast<int32_t>(onnx_kernels::DataType::BOOL), x.shape,
               std::vector<uint8_t>(2, 0));
   EXPECT_THROW(dropout(x, /*ratio=*/1.0f, /*training_mode=*/true, mask), std::invalid_argument);
 }
@@ -591,7 +591,7 @@ TEST(BackendKernelClass, AttentionInPlaceOverloadWritesIntoOutput) {
   const KernelContext ctx = AttentionKernelContext();
   const Attention attention{ctx};
   const Tensor expected = attention(Q, K, V, 1.0f / std::sqrt(2.0f));
-  Tensor out("", onnx_backend_test::DataType::FLOAT, {1, 1, 1, 2},
+  Tensor out("", onnx_kernels::DataType::FLOAT, {1, 1, 1, 2},
              std::vector<uint8_t>(2 * sizeof(float)));
   attention(Q, K, V, 1.0f / std::sqrt(2.0f), /*attn_mask=*/nullptr, out);
   for (int64_t i = 0; i < expected.element_count(); ++i) {
@@ -599,12 +599,12 @@ TEST(BackendKernelClass, AttentionInPlaceOverloadWritesIntoOutput) {
   }
 
   // Mismatched output shape is rejected.
-  Tensor bad_shape("", onnx_backend_test::DataType::FLOAT, {1, 1, 1, 1},
+  Tensor bad_shape("", onnx_kernels::DataType::FLOAT, {1, 1, 1, 1},
                    std::vector<uint8_t>(sizeof(float)));
   EXPECT_THROW(attention(Q, K, V, 1.0f / std::sqrt(2.0f), /*attn_mask=*/nullptr, bad_shape),
                std::invalid_argument);
   // Non-FLOAT output buffer is rejected.
-  Tensor bad_type("", onnx_backend_test::DataType::INT32, {1, 1, 1, 2},
+  Tensor bad_type("", onnx_kernels::DataType::INT32, {1, 1, 1, 2},
                   std::vector<uint8_t>(2 * sizeof(int32_t)));
   EXPECT_THROW(attention(Q, K, V, 1.0f / std::sqrt(2.0f), /*attn_mask=*/nullptr, bad_type),
                std::invalid_argument);
@@ -632,7 +632,7 @@ TEST(BackendKernelClass, AttentionRejectsInvalidInputs) {
   }
   // Non-FLOAT input is rejected.
   {
-    Tensor int_Q("", onnx_backend_test::DataType::INT32, {1, 1, 1, 2},
+    Tensor int_Q("", onnx_kernels::DataType::INT32, {1, 1, 1, 2},
                  std::vector<uint8_t>(2 * sizeof(int32_t)));
     const Tensor K = Tensor::FromFloat("", {1, 1, 1, 2}, {1.0f, 0.0f});
     const Tensor V = Tensor::FromFloat("", {1, 1, 1, 1}, {1.0f});
@@ -743,7 +743,7 @@ TEST(BackendKernelClass, MaxPoolWithIndices) {
   const std::vector<int64_t> expected_shape = {1, 1, 5, 5};
   EXPECT_EQ(y.shape, expected_shape);
   EXPECT_EQ(indices.shape, expected_shape);
-  ASSERT_EQ(indices.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  ASSERT_EQ(indices.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
   const float *py = y.AsFloat();
   const int64_t *pi = indices.AsInt64();
   // Top-left: window contains 13, located at flat index 12.

@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "onnx_backend_test/simple_tensor.h"
+#include "onnx_kernels/simple_tensor.h"
 
 #include <cmath>
 #include <cstdint>
@@ -13,7 +13,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 namespace kernel {
 
 inline double ComputeSvmKernel(const char *kernel_type, const double *x, const float *sv,
@@ -74,5 +74,5 @@ inline void ValidateFeatureMatrixShape(const Tensor &x, int64_t &sample_count,
 }
 
 } // namespace kernel
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

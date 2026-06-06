@@ -5,7 +5,7 @@
 #include "onnx_backend_test/cases/traditionalml/include_traditionalml_cases.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 
 void CollectTraditionalMLTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   static const OpRegisterMap kEntries = {
@@ -32,5 +32,5 @@ void CollectTraditionalMLTestCases(std::vector<TestCase> &registry, const std::s
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }
 
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

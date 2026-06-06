@@ -3,15 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/cases/math/include_math_cases.h"
-#include "onnx_backend_test/kernels/math/include_math_kernels.h"
-#include "onnx_backend_test/random.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/math/include_math_kernels.h"
+#include "onnx_kernels/random.h"
+#include "onnx_kernels/test_case.h"
 
 #include <cstdint>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 
 // ---------------------------------------------------------------------------
 // Atanh — y = atanh(x) (since opset 9, widened to bfloat16 in opset 22).
@@ -65,5 +65,5 @@ void RegisterAtanhCases(std::vector<TestCase> &registry) {
   }
 }
 
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

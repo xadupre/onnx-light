@@ -5,7 +5,7 @@
 #include "onnx_backend_test/cases/preview/include_preview_cases.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 
 void CollectPreviewTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   static const OpRegisterMap kEntries = {
@@ -14,5 +14,5 @@ void CollectPreviewTestCases(std::vector<TestCase> &registry, const std::string 
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }
 
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

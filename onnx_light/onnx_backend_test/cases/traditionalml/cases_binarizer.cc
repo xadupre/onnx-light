@@ -3,14 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/cases/traditionalml/include_traditionalml_cases.h"
-#include "onnx_backend_test/kernels/traditionalml/include_traditionalml_kernels.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
+#include "onnx_kernels/test_case.h"
 
 #include <cstdint>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 
 // ---------------------------------------------------------------------------
 // Binarizer — y[i] = 1 if x[i] > threshold else 0 (element-wise; same dtype
@@ -73,5 +73,5 @@ void RegisterBinarizerCases(std::vector<TestCase> &registry) {
   }
 }
 
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

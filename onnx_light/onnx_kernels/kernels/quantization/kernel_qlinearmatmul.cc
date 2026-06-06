@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/quantization/include_quantization_kernels.h"
+#include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
 
 #include <algorithm>
 #include <cmath>
@@ -14,7 +14,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 namespace kernel {
 
 namespace {
@@ -267,5 +267,5 @@ void QLinearMatMul::operator()(const Tensor &a, const Tensor &a_scale, const Ten
 }
 
 } // namespace kernel
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

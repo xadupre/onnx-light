@@ -2,15 +2,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/traditionalml/include_traditionalml_kernels.h"
+#include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
-#include "onnx_backend_test/kernels/traditionalml/kernel_svm_common.h"
+#include "onnx_kernels/kernels/traditionalml/kernel_svm_common.h"
 
 #include <cstdint>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 namespace kernel {
 
 template <typename T>
@@ -60,5 +60,5 @@ ONNX_LIGHT_INSTANTIATE_SVM_REGRESSOR(int32_t);
 #undef ONNX_LIGHT_INSTANTIATE_SVM_REGRESSOR
 
 } // namespace kernel
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

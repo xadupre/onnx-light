@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/kernel_context.h"
-#include "onnx_backend_test/kernels/optional/include_optional_kernels.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/kernels/optional/include_optional_kernels.h"
+#include "onnx_kernels/test_case.h"
 
 #include <gtest/gtest.h>
 
@@ -12,10 +12,10 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_backend_test::DefaultOpset;
-using onnx_backend_test::Tensor;
-using onnx_backend_test::kernel::KernelContext;
-using OptionalKernel = onnx_backend_test::kernel::Optional;
+using onnx_kernels::DefaultOpset;
+using onnx_kernels::Tensor;
+using onnx_kernels::kernel::KernelContext;
+using OptionalKernel = onnx_kernels::kernel::Optional;
 
 namespace Test {
 
@@ -42,7 +42,7 @@ TEST(BackendKernelClass, OptionalRejectsBadInputsAndMismatchedOutput) {
   EXPECT_THROW(opt(bad_input), std::invalid_argument);
 
   // In-place overload with a mismatched output buffer is rejected.
-  Tensor bad_dtype("", static_cast<int32_t>(onnx_backend_test::DataType::INT32), x.shape,
+  Tensor bad_dtype("", static_cast<int32_t>(onnx_kernels::DataType::INT32), x.shape,
                    std::vector<uint8_t>(x.element_count() * sizeof(int32_t)));
   EXPECT_THROW(opt(x, bad_dtype), std::invalid_argument);
 

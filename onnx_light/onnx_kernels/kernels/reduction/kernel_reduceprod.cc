@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/reduction/include_reduction_kernels.h"
+#include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -12,7 +12,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 namespace kernel {
 
 namespace {
@@ -208,5 +208,5 @@ void ReduceProd::operator()(const Tensor &data, const Tensor &axes, bool keepdim
 }
 
 } // namespace kernel
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

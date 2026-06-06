@@ -5,7 +5,7 @@
 #pragma once
 
 #include "onnx.h"
-#include "onnx_backend_test/simple_tensor.h"
+#include "onnx_kernels/simple_tensor.h"
 
 #include <cstdint>
 #include <string>
@@ -15,7 +15,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 
 /**
  * Lightweight opset identifier used by the backend test library.
@@ -230,5 +230,5 @@ std::vector<TestCase> CollectTestCases(const std::string &op_type = "");
  */
 std::vector<TestCase> CollectTestCasesByName(const std::string &name_regex);
 
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -2,13 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/tensor/cast_sub_byte.h"
+#include "onnx_kernels/kernels/tensor/cast_sub_byte.h"
 
 #include <cmath>
 #include <cstdint>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 namespace kernel {
 
 namespace {
@@ -120,5 +120,5 @@ std::uint8_t Uint2BitsToUint8(std::uint8_t bits) noexcept {
 }
 
 } // namespace kernel
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -3,13 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/cases/math/include_math_cases.h"
-#include "onnx_backend_test/kernels/math/include_math_kernels.h"
-#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/math/include_math_kernels.h"
+#include "onnx_kernels/test_case.h"
 
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend_test {
+namespace onnx_kernels {
 
 void RegisterEluCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(6);
@@ -61,5 +61,5 @@ void RegisterEluCases(std::vector<TestCase> &registry) {
   }
 }
 
-} // namespace onnx_backend_test
+} // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

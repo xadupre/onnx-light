@@ -449,7 +449,7 @@ TEST(BackendTestCase, CollectCategoryFilterByOpTypeReturnsOnlyMatchingCases) {
 TEST(BackendTestCase, CollectTraditionalMLFilterFindsArrayFeatureExtractorCases) {
   std::vector<TestCase> array_feature_extractor_only;
   onnx_kernels::CollectTraditionalMLTestCases(array_feature_extractor_only,
-                                                   "ArrayFeatureExtractor");
+                                              "ArrayFeatureExtractor");
   ASSERT_FALSE(array_feature_extractor_only.empty());
   for (const auto &tc : array_feature_extractor_only) {
     ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());

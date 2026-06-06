@@ -55,9 +55,7 @@ void AddOnnxPyBackend(nb::module_ &m) {
   backend_mod.def(
       "randint",
       [](int64_t low, int64_t high, const std::vector<int64_t> &shape,
-         std::optional<uint64_t> seed) {
-        return onnx_kernels::RandInt(low, high, shape, seed);
-      },
+         std::optional<uint64_t> seed) { return onnx_kernels::RandInt(low, high, shape, seed); },
       nb::arg("low"), nb::arg("high"), nb::arg("shape"), nb::arg("seed") = nb::none(),
       "Returns ``prod(shape)`` deterministic integers in ``[low, high)`` as a flat list.");
 

@@ -346,12 +346,14 @@ if(ONNX_LIGHT_BUILD_TESTS)
   file(GLOB_RECURSE ONNX_CPP_OP_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_op/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_OPTIM_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_optim/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_BACKEND_TEST_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_backend_test/test_*.cc")
+  file(GLOB_RECURSE ONNX_CPP_KERNELS_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_kernels/test_*.cc")
   set(ONNX_CPP_TEST_SOURCES
       ${ONNX_CPP_PROTO_TEST_SOURCES}
       ${ONNX_CPP_LIB_TEST_SOURCES}
       ${ONNX_CPP_OP_TEST_SOURCES}
       ${ONNX_CPP_OPTIM_TEST_SOURCES}
       ${ONNX_CPP_BACKEND_TEST_TEST_SOURCES}
+      ${ONNX_CPP_KERNELS_TEST_SOURCES}
   )
   set(ONNX_CPP_ALL_TEST_SOURCES ${ONNX_CPP_TEST_SOURCES})
 
@@ -398,6 +400,8 @@ if(ONNX_LIGHT_BUILD_TESTS)
   source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_optim" PREFIX "Source Files/cc/onnx_optim"
                FILES ${ONNX_CPP_OPTIM_TEST_SOURCES})
   source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_backend_test" PREFIX "Source Files/cc/onnx_backend_test"
+               FILES ${ONNX_CPP_BACKEND_TEST_TEST_SOURCES})
+  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_kernels" PREFIX "Source Files/cc/onnx_kernels"
                FILES ${ONNX_CPP_BACKEND_TEST_TEST_SOURCES})
 endif()
 

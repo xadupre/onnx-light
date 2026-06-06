@@ -193,7 +193,6 @@ class TestBasicFunctions(ExtTestCase):
         self.assertIn("custom_domain", function_str)
         self.assertIn("Test function proto", function_str)
 
-
     def test_repeated_proto_field_survives_container_clear(self) -> None:
         # Regression test: a Python reference to an element of a repeated proto
         # field must keep the underlying C++ object alive even after the

@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/cases/nn/include_nn_cases.h"
-#include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 #include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
 #include <cmath>
 #include <cstdint>
@@ -198,8 +198,18 @@ Tensor MakeK_1_2_3_2() {
   // (batch=1, kv_heads=2, kv_seq=3, head_size=2)
   return Tensor::FromFloat("", {1, 2, 3, 2},
                            {
-                               1.0f, 0.0f, 0.5f, 0.5f, 0.0f, 1.0f,    // head 0
-                               -1.0f, 1.0f, 1.0f, 1.0f, 0.25f, -0.5f, // head 1
+                               1.0f,
+                               0.0f,
+                               0.5f,
+                               0.5f,
+                               0.0f,
+                               1.0f, // head 0
+                               -1.0f,
+                               1.0f,
+                               1.0f,
+                               1.0f,
+                               0.25f,
+                               -0.5f, // head 1
                            });
 }
 
@@ -207,8 +217,18 @@ Tensor MakeV_1_2_3_2() {
   // (batch=1, kv_heads=2, kv_seq=3, v_head_size=2)
   return Tensor::FromFloat("", {1, 2, 3, 2},
                            {
-                               1.0f, 0.0f, 0.0f, 1.0f, -1.0f, 1.0f,   // head 0
-                               2.0f, -2.0f, 0.5f, 0.25f, -0.5f, 0.0f, // head 1
+                               1.0f,
+                               0.0f,
+                               0.0f,
+                               1.0f,
+                               -1.0f,
+                               1.0f, // head 0
+                               2.0f,
+                               -2.0f,
+                               0.5f,
+                               0.25f,
+                               -0.5f,
+                               0.0f, // head 1
                            });
 }
 

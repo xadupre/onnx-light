@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/cases/preview/include_preview_cases.h"
-#include "onnx_kernels/kernels/preview/include_preview_kernels.h"
 #include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/preview/include_preview_kernels.h"
 
 #include <vector>
 

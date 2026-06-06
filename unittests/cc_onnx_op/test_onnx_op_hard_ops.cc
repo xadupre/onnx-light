@@ -102,4 +102,25 @@ TEST(OnnxOpMathHardmax, HasSchemasForV1V11V13) {
   EXPECT_FALSE(axis_v11->required);
 }
 
+TEST(OnnxOpMathShrink, HasSchemaForV9) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Shrink");
+  ASSERT_EQ(schemas.size(), 1u);
+  const onnx_op::LightOpSchema *const v9 = FindByVersion(schemas, 9);
+  ASSERT_NE(nullptr, v9);
+  EXPECT_EQ(v9->domain(), "ai.onnx");
+  EXPECT_EQ(v9->name(), "Shrink");
+  EXPECT_TRUE(v9->has_function_implementation());
+  ASSERT_EQ(v9->inputs().size(), 1u);
+  EXPECT_EQ(v9->inputs()[0].name, "input");
+  ASSERT_EQ(v9->outputs().size(), 1u);
+  EXPECT_EQ(v9->outputs()[0].name, "output");
+  const onnx_op::AttributeParam *bias = FindAttr(*v9, "bias");
+  ASSERT_NE(bias, nullptr);
+  EXPECT_FALSE(bias->required);
+  const onnx_op::AttributeParam *lambd = FindAttr(*v9, "lambd");
+  ASSERT_NE(lambd, nullptr);
+  EXPECT_FALSE(lambd->required);
+}
+
 } // namespace Test

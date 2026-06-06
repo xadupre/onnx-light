@@ -5,6 +5,7 @@
 #include "simple_string.h"
 #include <cstddef>
 #include <cstring>
+#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <stdint.h>
@@ -171,11 +172,13 @@ public:
   /** Returns a const reference to the element at the given index. */
   inline const T &operator[](size_t index) const;
   /** Returns a mutable reference to the owning pointer at the given index. */
-  inline simple_unique_ptr<T> &get(size_t index) { return values_[index]; }
+  inline std::shared_ptr<T> &get(size_t index) { return values_[index]; }
+  /** Returns the shared pointer at the given index (shared ownership copy). */
+  inline std::shared_ptr<T> shared_at(size_t index) const { return values_[index]; }
   /** Returns a mutable reference to the owning pointer at the given index. */
   inline const T &Get(size_t index) { return *values_[index]; }
   /** Returns a mutable reference to the owning pointer at the given index. */
-  inline T *Mutable(size_t index) { return &values_[index]; }
+  inline T *Mutable(size_t index) { return values_[index].get(); }
   /** Removes a contiguous range; currently only start=0, step=1, and stop=size() are supported. */
   inline void remove_range(size_t start, size_t stop, size_t step) {
     EXT_ENFORCE(step == 1, "remove_range not implemented for step=", static_cast<int>(step));
@@ -283,7 +286,7 @@ public:
   inline const_iterator end() const { return const_iterator(this, size()); }
 
 private:
-  std::vector<simple_unique_ptr<T>> values_;
+  std::vector<std::shared_ptr<T>> values_;
 };
 
 /** Optional field wrapper for message-like values. */

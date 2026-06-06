@@ -37,6 +37,12 @@ class TestShapesContextBindings(ExtTestCase):
         self.assertEqual(si.OptimDim(3), si.OptimDim(3))
         self.assertNotEqual(si.OptimDim(3), si.OptimDim(4))
         self.assertNotEqual(si.OptimDim(3), si.OptimDim("3"))
+        self.assertEqual(si.OptimDim("N"), si.OptimDim("N"))
+        self.assertNotEqual(si.OptimDim("N"), si.OptimDim("M"))
+
+    def test_optim_dim_repr(self):
+        self.assertEqual(repr(si.OptimDim(5)), "OptimDim(5)")
+        self.assertEqual(repr(si.OptimDim("N")), "OptimDim('N')")
 
     def test_optim_shape_construction_and_indexing(self):
         s = si.OptimShape([3, "N", 5])
@@ -53,6 +59,18 @@ class TestShapesContextBindings(ExtTestCase):
     def test_optim_shape_fully_known(self):
         s = si.OptimShape([2, 3, 4])
         self.assertTrue(s.is_fully_known())
+
+    def test_optim_shape_equality(self):
+        self.assertEqual(si.OptimShape([2, 3]), si.OptimShape([2, 3]))
+        self.assertEqual(si.OptimShape([2, "N"]), si.OptimShape([2, "N"]))
+        self.assertNotEqual(si.OptimShape([2, 3]), si.OptimShape([2, 4]))
+        self.assertNotEqual(si.OptimShape([2, 3]), si.OptimShape([2, 3, 1]))
+        self.assertNotEqual(si.OptimShape([2, "N"]), si.OptimShape([2, "M"]))
+
+    def test_optim_shape_repr(self):
+        self.assertEqual(repr(si.OptimShape([2, 3])), "OptimShape([2, 3])")
+        self.assertEqual(repr(si.OptimShape([2, "N", 5])), "OptimShape([2, 'N', 5])")
+        self.assertEqual(repr(si.OptimShape([])), "OptimShape([])")
 
     def test_optim_tensor_basic(self):
         t = si.OptimTensor(onnxl.TensorProto.FLOAT, [2, 3])
@@ -74,6 +92,22 @@ class TestShapesContextBindings(ExtTestCase):
         self.assertEqual(list(t.value_as_shape()), [3, "K"])
         t.clear_value_as_shape()
         self.assertFalse(t.has_value_as_shape())
+
+    def test_optim_tensor_equality(self):
+        a = si.OptimTensor(onnxl.TensorProto.FLOAT, [2, 3])
+        b = si.OptimTensor(onnxl.TensorProto.FLOAT, [2, 3])
+        c = si.OptimTensor(onnxl.TensorProto.FLOAT, [2, 4])
+        d = si.OptimTensor(onnxl.TensorProto.INT64, [2, 3])
+        self.assertEqual(a, b)
+        self.assertNotEqual(a, c)
+        self.assertNotEqual(a, d)
+
+    def test_optim_tensor_repr(self):
+        t = si.OptimTensor(onnxl.TensorProto.FLOAT, [2, 3])
+        r = repr(t)
+        self.assertIn("OptimTensor(", r)
+        self.assertIn("Float", r)
+        self.assertIn("[2,3]", r)
 
     # ------------------------------------------------------------------
     # ShapesContext bindings.

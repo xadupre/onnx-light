@@ -32,11 +32,7 @@ std::vector<std::string> RepeatedField<T>::PrintToVectorString(utils::PrintOptio
   return rows;
 }
 
-template <typename T> void RepeatedProtoField<T>::clear() {
-  for (auto &p : values_)
-    p.reset();
-  values_.clear();
-}
+template <typename T> void RepeatedProtoField<T>::clear() { values_.clear(); }
 
 template <typename T> inline T &RepeatedProtoField<T>::operator[](size_t index) {
   return *values_[index];
@@ -55,9 +51,9 @@ template <typename T> void RepeatedProtoField<T>::extend(const RepeatedProtoFiel
 }
 
 template <typename T> void RepeatedProtoField<T>::extend(RepeatedProtoField<T> &&v) {
-  // Steal ownership of each unique_ptr without allocating new placeholders or
-  // performing per-element swaps. std::make_move_iterator turns the source
-  // simple_unique_ptr<T> into rvalues so std::vector::insert calls the move
+  // Steal ownership of each shared_ptr without allocating new placeholders or
+  // performing per-element copies. std::make_move_iterator turns the source
+  // std::shared_ptr<T> into rvalues so std::vector::insert calls the move
   // constructor and leaves v.values_ in a valid (emptied) state.
   values_.reserve(values_.size() + v.values_.size());
   values_.insert(values_.end(), std::make_move_iterator(v.values_.begin()),
@@ -66,7 +62,7 @@ template <typename T> void RepeatedProtoField<T>::extend(RepeatedProtoField<T> &
 }
 
 template <typename T> T &RepeatedProtoField<T>::add() {
-  values_.emplace_back(simple_unique_ptr<T>(new T));
+  values_.emplace_back(std::make_shared<T>());
   return back();
 }
 

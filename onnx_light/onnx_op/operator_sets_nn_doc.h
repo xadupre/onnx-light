@@ -138,6 +138,13 @@ std::string MakeAttentionDoc(int since_version);
 std::string MakeRotaryEmbeddingDoc(int since_version);
 
 /**
+ * Returns the documentation string for the RMSNormalization operator at the
+ * given opset version (23). Mirrors the upstream ``RMSNormalization_ver23_doc``
+ * string.
+ */
+std::string MakeRMSNormalizationDoc(int since_version);
+
+/**
  * Returns the documentation string for the DeformConv operator at the given
  * opset version (19 or 22). The text is identical for both opsets and
  * matches the upstream ``kDoc_DeformConv_ver19`` string.

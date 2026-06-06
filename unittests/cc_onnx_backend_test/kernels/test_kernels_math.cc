@@ -9,6 +9,8 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <cstdint>
+#include <cstring>
 #include <limits>
 #include <stdexcept>
 #include <vector>
@@ -43,6 +45,7 @@ using onnx_backend_test::kernel::HardSwish;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::Log;
 using onnx_backend_test::kernel::MatMul;
+using onnx_backend_test::kernel::MatMulInteger;
 using onnx_backend_test::kernel::Mish;
 using onnx_backend_test::kernel::Mod;
 using onnx_backend_test::kernel::Mul;
@@ -50,6 +53,7 @@ using onnx_backend_test::kernel::Neg;
 using onnx_backend_test::kernel::Pow;
 using onnx_backend_test::kernel::PRelu;
 using onnx_backend_test::kernel::Round;
+using onnx_backend_test::kernel::Shrink;
 using onnx_backend_test::kernel::Sigmoid;
 using onnx_backend_test::kernel::Sin;
 using onnx_backend_test::kernel::Sinh;
@@ -926,6 +930,40 @@ TEST(BackendKernelClass, ModClassMatchesPythonAndCSemantics) {
     EXPECT_FLOAT_EQ(pz[2], 5.0f);
   }
 
+  // FLOAT16 inputs require fmod=1; the output bit pattern must match
+  // ``numpy.fmod`` on the IEEE-754 binary16 inputs (upstream
+  // ``test_mod_mixed_sign_float16`` reference).
+  {
+    Tensor x("", static_cast<int32_t>(onnx_backend_test::DataType::FLOAT16), {6}, {});
+    Tensor y("", static_cast<int32_t>(onnx_backend_test::DataType::FLOAT16), {6}, {});
+    // Bit patterns of float16(-4.3, 7.2, 5.0, 4.3, -7.2, 8.0) and
+    // float16(2.1, -3.4, 8.0, -2.1, 3.4, 5.0).
+    const std::vector<uint16_t> xb = {0xc44dU, 0x4733U, 0x4500U, 0x444dU, 0xc733U, 0x4800U};
+    const std::vector<uint16_t> yb = {0x4033U, 0xc2cdU, 0x4800U, 0xc033U, 0x42cdU, 0x4500U};
+    x.data.assign(reinterpret_cast<const uint8_t *>(xb.data()),
+                  reinterpret_cast<const uint8_t *>(xb.data() + xb.size()));
+    y.data.assign(reinterpret_cast<const uint8_t *>(yb.data()),
+                  reinterpret_cast<const uint8_t *>(yb.data() + yb.size()));
+    Tensor z = mod_kernel(x, y, /*fmod=*/1);
+    ASSERT_EQ(z.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT16));
+    const uint16_t *pz = reinterpret_cast<const uint16_t *>(z.data.data());
+    EXPECT_EQ(pz[0], 0xae80U); // -0.1015625
+    EXPECT_EQ(pz[1], 0x3660U); //  0.3984375
+    EXPECT_EQ(pz[2], 0x4500U); //  5.0
+    EXPECT_EQ(pz[3], 0x2e80U); //  0.1015625
+    EXPECT_EQ(pz[4], 0xb660U); // -0.3984375
+    EXPECT_EQ(pz[5], 0x4200U); //  3.0
+  }
+
+  // FLOAT16 with fmod=0 must throw (matches FLOAT/DOUBLE behaviour).
+  {
+    Tensor x("", static_cast<int32_t>(onnx_backend_test::DataType::FLOAT16), {1},
+             std::vector<uint8_t>(sizeof(uint16_t), 0));
+    Tensor y("", static_cast<int32_t>(onnx_backend_test::DataType::FLOAT16), {1},
+             std::vector<uint8_t>(sizeof(uint16_t), 0));
+    EXPECT_THROW(mod_kernel(x, y), std::invalid_argument);
+  }
+
   // Floating-point with fmod=0 must throw.
   {
     Tensor x = Tensor::FromFloat("", {1}, {1.0f});
@@ -998,6 +1036,94 @@ TEST(BackendKernelClass, MatMulInPlaceWritesToPreallocatedOutput) {
   EXPECT_EQ(py[1], 28u);
   EXPECT_EQ(py[2], 49u);
   EXPECT_EQ(py[3], 64u);
+}
+
+TEST(BackendKernelClass, MatMulIntegerUint8MatchesONNXReference) {
+  // Mirrors the ONNX reference ``test_matmulinteger`` example with per-tensor
+  // UINT8 zero points: Y = matmul(A - a_zp, B - b_zp).
+  const KernelContext ctx{DefaultOpset(10)};
+  MatMulInteger mmi{ctx};
+  Tensor a = Tensor::FromUint8("", {4, 3}, {11, 7, 3, 10, 6, 2, 9, 5, 1, 8, 4, 0});
+  Tensor b = Tensor::FromUint8("", {3, 2}, {1, 4, 2, 5, 3, 6});
+  Tensor a_zp("", onnx_backend_test::DataType::UINT8, {1}, std::vector<uint8_t>{12});
+  Tensor b_zp("", onnx_backend_test::DataType::UINT8, {1}, std::vector<uint8_t>{0});
+  Tensor y = mmi(a, b, a_zp, b_zp);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{4, 2}));
+  const int32_t *py = y.AsInt32();
+  EXPECT_EQ(py[0], -38);
+  EXPECT_EQ(py[1], -83);
+  EXPECT_EQ(py[2], -44);
+  EXPECT_EQ(py[3], -98);
+  EXPECT_EQ(py[4], -50);
+  EXPECT_EQ(py[5], -113);
+  EXPECT_EQ(py[6], -56);
+  EXPECT_EQ(py[7], -128);
+}
+
+TEST(BackendKernelClass, MatMulIntegerWithDefaultZeroPoints) {
+  // Default-constructed (empty) zero-point tensors must be treated as 0.
+  const KernelContext ctx{DefaultOpset(10)};
+  MatMulInteger mmi{ctx};
+  Tensor a = Tensor::FromUint8("", {2, 3}, {1, 2, 3, 4, 5, 6});
+  Tensor b = Tensor::FromUint8("", {3, 2}, {7, 8, 9, 10, 11, 12});
+  Tensor a_zp;
+  Tensor b_zp;
+  Tensor y = mmi(a, b, a_zp, b_zp);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 2}));
+  const int32_t *py = y.AsInt32();
+  EXPECT_EQ(py[0], 58);
+  EXPECT_EQ(py[1], 64);
+  EXPECT_EQ(py[2], 139);
+  EXPECT_EQ(py[3], 154);
+}
+
+TEST(BackendKernelClass, MatMulIntegerInt8WithScalarZeroPoints) {
+  const KernelContext ctx{DefaultOpset(10)};
+  MatMulInteger mmi{ctx};
+  Tensor a = Tensor::FromInt8("", {2, 3}, {1, -2, 3, -4, 5, -6});
+  Tensor b = Tensor::FromInt8("", {3, 2}, {1, 2, -3, 4, 5, -6});
+  Tensor a_zp("", onnx_backend_test::DataType::INT8, {},
+              std::vector<uint8_t>{static_cast<uint8_t>(static_cast<int8_t>(1))});
+  Tensor b_zp("", onnx_backend_test::DataType::INT8, {},
+              std::vector<uint8_t>{static_cast<uint8_t>(static_cast<int8_t>(-1))});
+  Tensor y = mmi(a, b, a_zp, b_zp);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 2}));
+  // (A - 1) * (B + 1): manually computed reference.
+  const int32_t *py = y.AsInt32();
+  // A' = {{0,-3,2},{-5,4,-7}}, B' = {{2,3},{-2,5},{6,-5}}
+  // Row 0: 0*2 + (-3)*(-2) + 2*6 = 18 ; 0*3 + (-3)*5 + 2*(-5) = -25
+  // Row 1: -5*2 + 4*(-2) + (-7)*6 = -60 ; -5*3 + 4*5 + (-7)*(-5) = 40
+  EXPECT_EQ(py[0], 18);
+  EXPECT_EQ(py[1], -25);
+  EXPECT_EQ(py[2], -60);
+  EXPECT_EQ(py[3], 40);
+}
+
+TEST(BackendKernelClass, MatMulIntegerInPlaceWritesToPreallocatedOutput) {
+  const KernelContext ctx{DefaultOpset(10)};
+  MatMulInteger mmi{ctx};
+  Tensor a = Tensor::FromUint8("", {2, 3}, {1, 2, 3, 4, 5, 6});
+  Tensor b = Tensor::FromUint8("", {3, 2}, {7, 8, 9, 10, 11, 12});
+  Tensor a_zp;
+  Tensor b_zp;
+  Tensor y("", onnx_backend_test::DataType::INT32, {2, 2},
+           std::vector<uint8_t>(4 * sizeof(int32_t)));
+  mmi(a, b, a_zp, b_zp, y);
+  const int32_t *py = y.AsInt32();
+  EXPECT_EQ(py[0], 58);
+  EXPECT_EQ(py[1], 64);
+  EXPECT_EQ(py[2], 139);
+  EXPECT_EQ(py[3], 154);
+}
+
+TEST(BackendKernelClass, MatMulIntegerRejectsNonByteInput) {
+  const KernelContext ctx{DefaultOpset(10)};
+  MatMulInteger mmi{ctx};
+  Tensor a = Tensor::FromInt32("", {2, 3}, {1, 2, 3, 4, 5, 6});
+  Tensor b = Tensor::FromUint8("", {3, 2}, {1, 2, 3, 4, 5, 6});
+  Tensor a_zp;
+  Tensor b_zp;
+  EXPECT_THROW(mmi(a, b, a_zp, b_zp), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, FloorClassMatchesReference) {
@@ -1491,6 +1617,58 @@ TEST(BackendKernelClass, PowRejectsIncompatibleShapes) {
   Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
   Tensor y = Tensor::FromFloat("", {4}, {1.0f, 2.0f, 3.0f, 4.0f});
   EXPECT_THROW(pow_kernel(x, y), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, ShrinkClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(9)};
+  Shrink shrink_kernel{ctx};
+
+  // Soft shrink: bias=1.5, lambd=1.5.
+  Tensor x = Tensor::FromFloat("", {5}, {-2.0f, -1.0f, 0.0f, 1.0f, 2.0f});
+  Tensor y = shrink_kernel(x, /*bias=*/1.5f, /*lambd=*/1.5f);
+  ASSERT_EQ(y.element_count(), 5);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], -0.5f); // -2 < -1.5 -> -2 + 1.5
+  EXPECT_FLOAT_EQ(py[1], 0.0f);  // -1 in [-1.5, 1.5] -> 0
+  EXPECT_FLOAT_EQ(py[2], 0.0f);
+  EXPECT_FLOAT_EQ(py[3], 0.0f); // 1 in [-1.5, 1.5] -> 0
+  EXPECT_FLOAT_EQ(py[4], 0.5f); // 2 > 1.5 -> 2 - 1.5
+}
+
+TEST(BackendKernelClass, ShrinkClassHardShrinkDefaultBias) {
+  const KernelContext ctx{DefaultOpset(9)};
+  Shrink shrink_kernel{ctx};
+
+  // Hard shrink: bias=0.0, lambd=1.5.
+  Tensor x = Tensor::FromFloat("", {5}, {-2.0f, -1.0f, 0.0f, 1.0f, 2.0f});
+  Tensor y = shrink_kernel(x, /*bias=*/0.0f, /*lambd=*/1.5f);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], -2.0f);
+  EXPECT_FLOAT_EQ(py[1], 0.0f);
+  EXPECT_FLOAT_EQ(py[2], 0.0f);
+  EXPECT_FLOAT_EQ(py[3], 0.0f);
+  EXPECT_FLOAT_EQ(py[4], 2.0f);
+}
+
+TEST(BackendKernelClass, ShrinkClassDoubleDtype) {
+  const KernelContext ctx{DefaultOpset(9)};
+  Shrink shrink_kernel{ctx};
+  std::vector<double> values{-2.0, -1.0, 0.0, 1.0, 2.0};
+  std::vector<uint8_t> bytes(values.size() * sizeof(double));
+  std::memcpy(bytes.data(), values.data(), bytes.size());
+  Tensor x("", onnx_backend_test::DataType::DOUBLE, {static_cast<int64_t>(values.size())}, bytes);
+  Tensor y = shrink_kernel(x, /*bias=*/1.5f, /*lambd=*/1.5f);
+  const double *py = reinterpret_cast<const double *>(y.data.data());
+  EXPECT_DOUBLE_EQ(py[0], -0.5);
+  EXPECT_DOUBLE_EQ(py[1], 0.0);
+  EXPECT_DOUBLE_EQ(py[4], 0.5);
+}
+
+TEST(BackendKernelClass, ShrinkClassRejectsUnsupportedDtype) {
+  const KernelContext ctx{DefaultOpset(9)};
+  Shrink shrink_kernel{ctx};
+  Tensor x = Tensor::FromUint8("", {2}, {1u, 2u});
+  EXPECT_THROW(shrink_kernel(x), std::invalid_argument);
 }
 
 } // namespace Test

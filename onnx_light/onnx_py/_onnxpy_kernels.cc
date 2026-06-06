@@ -3,27 +3,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_kernels/random.h"
-#include "onnx_kernels/simple_tensor.h"
-#include "onnx_kernels/test_case.h"
 
 #include <cstdint>
-#include <cstring>
+#include <nanobind/nanobind.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/pair.h>
-#include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
-#include <regex>
 
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_kernels::DataSet;
-using onnx_kernels::Tensor;
-using onnx_kernels::TestCase;
 
 void AddOnnxPyKernels(nb::module_ &m);
 
-NB_MODULE(_onnxbackend, m) {
-  m.doc() = "onnx_light kernels bindings.";
+NB_MODULE(_onnxkernels, m) {
+  m.doc() = "onnx_light kernels bindings: deterministic pseudo-random helpers "
+            "backing onnx_light.backend.";
 
   AddOnnxPyKernels(m);
 }

@@ -5,11 +5,12 @@
 """Backward-compatibility shim that merges the public attributes of the
 :mod:`onnx_light.onnx_py._onnxpyprotoop`,
 :mod:`onnx_light.onnx_py._onnxpyprotolib`,
-:mod:`onnx_light.onnx_py._onnxpyoptim` and
+:mod:`onnx_light.onnx_py._onnxpyoptim`,
+:mod:`onnx_light.onnx_py._onnxkernels` and
 :mod:`onnx_light.onnx_py._onnxbackend` compiled extensions into a single
 namespace.
 
-The original ``_onnxpy`` extension was split into four nanobind modules:
+The original ``_onnxpy`` extension was split into five nanobind modules:
 
 * :mod:`onnx_light.onnx_py._onnxpyprotoop` exposes the proto bindings and
   operator-schema (``onnx_op``) bindings.
@@ -18,8 +19,10 @@ The original ``_onnxpy`` extension was split into four nanobind modules:
   ``version_converter``).
 * :mod:`onnx_light.onnx_py._onnxpyoptim` exposes the optim bindings
   (``expressions`` and ``shape_inference``).
-* :mod:`onnx_light.onnx_py._onnxbackend` exposes the ``backend`` deterministic
-  random helpers and the ``backend_test`` test-case utilities.
+* :mod:`onnx_light.onnx_py._onnxkernels` exposes the ``backend``
+  deterministic pseudo-random helpers backing :mod:`onnx_light.backend`.
+* :mod:`onnx_light.onnx_py._onnxbackend` exposes the ``backend_test``
+  test-case utilities.
 
 This module re-exports every public attribute of all extensions so that
 existing callers writing ``onnx_light.onnx_py._onnxpy.<name>`` keep working.
@@ -44,6 +47,7 @@ _EXTENSIONS: tuple[str, ...] = (
     "_onnxpyprotoop",
     "_onnxpyprotolib",
     "_onnxpyoptim",
+    "_onnxkernels",
     "_onnxbackend",
 )
 

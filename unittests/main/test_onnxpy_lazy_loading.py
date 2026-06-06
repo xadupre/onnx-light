@@ -51,10 +51,12 @@ def test_proto_only_access_does_not_load_optim_or_backend() -> None:
             for n in sys.modules
             if n.startswith("onnx_light.onnx_py._onnxpy")
             or n.startswith("onnx_light.onnx_py._onnxbackend")
+            or n.startswith("onnx_light.onnx_py._onnxkernels")
         )
         # Only the proto extension (and its submodules) should be loaded.
         assert "_onnxpyprotolib" not in loaded, loaded
         assert "_onnxpyoptim" not in loaded, loaded
+        assert "_onnxkernels" not in loaded, loaded
         assert "_onnxbackend" not in loaded, loaded
         assert "_onnxpyprotoop" in loaded, loaded
         print("ok")

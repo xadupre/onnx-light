@@ -118,11 +118,12 @@ that pattern:
 Python extension modules and proto duplication
 ----------------------------------------------
 
-The Python package ships four nanobind extension modules,
+The Python package ships five nanobind extension modules,
 ``onnx_light.onnx_py._onnxpyprotoop``,
 ``onnx_light.onnx_py._onnxpyprotolib``,
-``onnx_light.onnx_py._onnxpyoptim`` and
-``onnx_light.onnx_py._onnxbackend``.  All four need access to the proto
+``onnx_light.onnx_py._onnxpyoptim``,
+``onnx_light.onnx_py._onnxkernels`` and
+``onnx_light.onnx_py._onnxbackend``.  All five need access to the proto
 classes (``ModelProto``, ``NodeProto``, ``TensorProto``, ...) defined in
 ``onnx_light/onnx_proto``.  How do the extensions agree on a single
 ``nb::class_<ModelProto>`` registration so that values can flow between
@@ -130,10 +131,11 @@ them without a serialise/parse round-trip?
 
 When ``ONNX_LIGHT_BUILD_PYTHON=ON``, ``CMakeLists.txt`` builds
 ``lib_onnx_proto`` as a **shared** library (``liblib_onnx_proto.so`` /
-``.dylib`` / ``.dll``) instead of a static archive.  All four
+``.dylib`` / ``.dll``) instead of a static archive.  All five
 extensions link against that single shared
 object (directly or transitively through ``lib_onnx_lib`` /
-``lib_onnx_op`` / ``lib_onnx_optim`` / ``lib_onnx_backend_test``), and
+``lib_onnx_op`` / ``lib_onnx_optim`` / ``lib_onnx_kernels`` /
+``lib_onnx_backend_test``), and
 the build installs every file side by side under
 ``onnx_light/onnx_py/``.  The extensions are linked with an ``$ORIGIN``
 runtime path (``@loader_path`` on macOS) so the dynamic loader finds
@@ -155,15 +157,17 @@ extension, and nanobind's cross-module type registry resolves
 ``nb::class_<ModelProto>`` that ``_onnxpyprotoop`` registered.  In
 practice, only ``_onnxpyprotoop`` declares
 ``nb::class_<NodeProto>`` / ``nb::class_<ModelProto>`` / ...; the
-``_onnxpyprotolib``, ``_onnxpyoptim`` and ``_onnxbackend`` modules return proto values by
+``_onnxpyprotolib``, ``_onnxpyoptim``, ``_onnxkernels`` and
+``_onnxbackend`` modules return proto values by
 reference (for example
 ``TestCase.model``, see ``onnx_light/onnx_py/_onnxpy_backend_test.cc``)
 and let the shared registry produce a Python object backed by the same
 binding.  The package's ``onnx_light/onnx_py/_onnxpy.py`` shim imports
-``_onnxpyprotoop`` before ``_onnxpyprotolib``, ``_onnxpyoptim`` and ``_onnxbackend`` to
+``_onnxpyprotoop`` before ``_onnxpyprotolib``, ``_onnxpyoptim``,
+``_onnxkernels`` and ``_onnxbackend`` to
 guarantee that the
 ``ModelProto`` binding exists by the time any ``_onnxpyprotolib``,
-``_onnxpyoptim`` or ``_onnxbackend`` accessor is used.
+``_onnxpyoptim``, ``_onnxkernels`` or ``_onnxbackend`` accessor is used.
 
 See also
 --------

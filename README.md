@@ -37,6 +37,13 @@ for the upstream project's direction and priorities.
 - **Aligned external tensor offsets** – external tensor data can be written
   with explicit offset alignment (for example 4096-byte page alignment) through
   `onnxl.SerializeOptions().alignment`
+- **No serialize/parse round-trip for C++ tools** – the Python `ModelProto`
+  *is* the C++ `ModelProto` (bound through nanobind), so calls into the
+  inliner, checker, shape inference or version converter operate on the
+  model directly. The standard `onnx` package must `SerializeToString` and
+  `ParseFromString` around every such call. See the
+  [differences design page](https://sdpython.github.io/doc/onnx-light/dev/design/differences.html)
+  for details.
 
 ## Modular C++ libraries
 

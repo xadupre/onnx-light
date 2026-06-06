@@ -193,7 +193,19 @@ void AddOnnxPyOp(nb::module_ &m) {
       .def(nb::init<>())
       .def_rw("type_param_str", &onnx_op::TypeConstraintParam::type_param_str)
       .def_rw("allowed_type_strs", &onnx_op::TypeConstraintParam::allowed_type_strs)
-      .def_rw("description", &onnx_op::TypeConstraintParam::description);
+      .def_rw("description", &onnx_op::TypeConstraintParam::description)
+      .def("__repr__", [](const onnx_op::TypeConstraintParam &tc) {
+        std::ostringstream os;
+        os << "TypeConstraintParam(type_param_str=" << ToPythonRepr(tc.type_param_str)
+           << ", allowed_type_strs=[";
+        for (std::size_t i = 0; i < tc.allowed_type_strs.size(); ++i) {
+          if (i != 0)
+            os << ", ";
+          os << nb::cast<std::string>(nb::repr(nb::cast(tc.allowed_type_strs[i])));
+        }
+        os << "], description=" << ToPythonRepr(tc.description) << ")";
+        return os.str();
+      });
 
   nb::class_<onnx_op::LightOpSchema>(
       onnx_op_mod, "LightOpSchema",

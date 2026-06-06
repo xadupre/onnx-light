@@ -2,12 +2,14 @@
 #include "onnx_optim/optim_tensor.h"
 #include "onnx_optim/shapes/shape_inference.h"
 #include "onnx_optim/shapes/shapes_context.h"
+#include <algorithm>
 #include <nanobind/operators.h>
 #include <nanobind/stl/map.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/unordered_set.h>
 #include <nanobind/stl/vector.h>
+#include <sstream>
 #include <vector>
 
 namespace nb = nanobind;
@@ -405,6 +407,52 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       .def("empty", &onnx_shapes::ShapesContext::Empty, "True when no entries are stored.")
       .def("clear", &onnx_shapes::ShapesContext::Clear,
            "Removes every entry (tensors, sequences and opset versions).")
+      .def(
+          "__repr__",
+          [](const onnx_shapes::ShapesContext &c) {
+            std::vector<std::string> tensor_names;
+            tensor_names.reserve(c.Tensors().size());
+            for (const auto &kv : c.Tensors())
+              tensor_names.push_back(kv.first);
+            std::sort(tensor_names.begin(), tensor_names.end());
+
+            std::vector<std::string> sequence_names;
+            sequence_names.reserve(c.Sequences().size());
+            for (const auto &kv : c.Sequences())
+              sequence_names.push_back(kv.first);
+            std::sort(sequence_names.begin(), sequence_names.end());
+
+            std::vector<std::string> opset_domains;
+            opset_domains.reserve(c.Opsets().size());
+            for (const auto &kv : c.Opsets())
+              opset_domains.push_back(kv.first);
+            std::sort(opset_domains.begin(), opset_domains.end());
+
+            std::ostringstream os;
+            os << "ShapesContext(tensors=[";
+            for (size_t i = 0; i < tensor_names.size(); ++i) {
+              if (i > 0)
+                os << ", ";
+              os << "'" << tensor_names[i] << "'";
+            }
+            os << "], sequences=[";
+            for (size_t i = 0; i < sequence_names.size(); ++i) {
+              if (i > 0)
+                os << ", ";
+              os << "'" << sequence_names[i] << "'";
+            }
+            os << "], opsets={";
+            for (size_t i = 0; i < opset_domains.size(); ++i) {
+              if (i > 0)
+                os << ", ";
+              const auto &domain = opset_domains[i];
+              os << "'" << domain << "': " << c.OpsetVersion(domain);
+            }
+            os << "})";
+            return os.str();
+          },
+          "Returns a deterministic representation of tensor names, sequence names "
+          "and opset versions stored in this context.")
       .def(
           "names",
           [](const onnx_shapes::ShapesContext &c) -> nb::list {

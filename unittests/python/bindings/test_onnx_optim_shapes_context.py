@@ -131,6 +131,18 @@ class TestShapesContextBindings(ExtTestCase):
         ctx.clear()
         self.assertTrue(ctx.empty())
 
+    def test_shapes_context_repr(self):
+        ctx = si.ShapesContext()
+        self.assertEqual(repr(ctx), "ShapesContext(tensors=[], sequences=[], opsets={})")
+
+        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, [2, 3]))
+        ctx.set_opset_version("", 18)
+        r = repr(ctx)
+        self.assertIn("ShapesContext(", r)
+        self.assertIn("tensors=['X']", r)
+        self.assertIn("sequences=[]", r)
+        self.assertIn("opsets={'ai.onnx': 18}", r)
+
     def test_shapes_context_opset_versions(self):
         ctx = si.ShapesContext()
         self.assertFalse(ctx.has_opset_version(""))

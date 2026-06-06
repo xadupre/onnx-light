@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -239,6 +240,44 @@ public:
 
   void operator()(const Tensor &x, const Tensor &scale, const Tensor &bias, int64_t num_groups,
                   Tensor &output, float epsilon = 1e-5f) const;
+
+  /// Output ``Y`` has the same shape as ``X`` so the output buffer may
+  /// alias the input ``X`` buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
+/// Reference implementation of ``LayerNormalization`` (opset 17).
+///
+/// Normalizes a FLOAT input ``X`` of arbitrary rank ``r`` along the last
+/// ``r - axis`` dimensions, then applies a per-element affine transform
+/// using ``Scale`` and the optional ``B`` (both broadcastable to the
+/// normalized shape ``X.shape[axis:]``):
+///
+/// ``Mean = ReduceMean(X, axes=[axis,...,r-1])``
+/// ``Var  = ReduceMean((X - Mean)^2, axes=[axis,...,r-1])``
+/// ``InvStdDev = 1 / sqrt(Var + epsilon)``
+/// ``Y = (X - Mean) * InvStdDev * Scale + B``
+///
+/// In addition to the normalized output ``Y``, the kernel also returns the
+/// per-row ``Mean`` and ``InvStdDev`` tensors. Their shape mirrors ``X``
+/// with the trailing ``r - axis`` dimensions collapsed to 1.
+class LayerNormalization : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Returns the tuple ``(Y, Mean, InvStdDev)``. ``axis`` defaults to ``-1``
+  /// and ``epsilon`` to ``1e-5f`` to match the upstream defaults. ``b`` may
+  /// be a default-constructed ``Tensor{}`` to indicate that the bias is
+  /// absent.
+  std::tuple<Tensor, Tensor, Tensor> operator()(const Tensor &x, const Tensor &scale,
+                                                const Tensor &b, int64_t axis = -1,
+                                                float epsilon = 1e-5f) const;
+
+  /// In-place overload. ``y`` must have the same shape and dtype as ``x``.
+  /// ``mean`` and ``inv_std_dev`` must have ``x``'s outer shape (i.e.
+  /// ``x.shape[:axis]``) padded with 1s up to ``x``'s rank.
+  void operator()(const Tensor &x, const Tensor &scale, const Tensor &b, Tensor &y, Tensor &mean,
+                  Tensor &inv_std_dev, int64_t axis = -1, float epsilon = 1e-5f) const;
 
   /// Output ``Y`` has the same shape as ``X`` so the output buffer may
   /// alias the input ``X`` buffer.

@@ -289,6 +289,29 @@ void ComputeShapeMeanVarianceNormalization(ShapesContext &ctx, const NodeProto &
 void ComputeShapeRMSNormalization(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``LayerNormalization``
+ * node and stores it in ``ctx``.
+ *
+ * Output 0 (``Y``) always inherits ``X``'s dtype and shape. The optional
+ * outputs ``Mean`` (output 1) and ``InvStdDev`` (output 2) have dtype
+ * ``stash_type`` (default ``FLOAT``) and shape
+ * ``[d[0], ..., d[axis-1], 1, ..., 1]`` (rank == rank(X)).
+ *
+ * @param ctx   In/out context. Must already contain an entry for ``x``; on
+ *              return it also contains an entry for every non-empty
+ *              ``node.output(i)`` (``i = 0, 1, 2``).
+ * @param node  The ``LayerNormalization`` ``NodeProto``. ``node.op_type()``
+ *              must be ``"LayerNormalization"`` and ``node`` must declare
+ *              at least one output.
+ * @param x     Name of the data input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"LayerNormalization"`` or if ``node`` has no output.
+ * @throws std::out_of_range if ``x`` is not present in ``ctx``.
+ */
+void ComputeShapeLayerNormalization(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
  * Computes the output :cpp:class:`OptimTensor`(s) of a ``Dropout`` node and
  * stores them in ``ctx``.
  *

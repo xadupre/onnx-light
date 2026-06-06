@@ -1258,6 +1258,60 @@ LightOpSchema MakeRotaryEmbeddingSchema(int since_version) {
       /*has_function_implementation=*/true);
 }
 
+// --- LayerNormalization ------------------------------------------------------
+
+// Input/output descriptions reproduced verbatim from the upstream ONNX
+// LayerNormalization schema (v17 in onnx_lib/defs/nn/defs.cc) so the
+// LightOpSchema parity test passes.
+
+const char *const kLayerNormalizationXDescription = "Tensor to be normalized.";
+const char *const kLayerNormalizationScaleDescription = "Scale tensor.";
+const char *const kLayerNormalizationBDescription = "Bias tensor.";
+const char *const kLayerNormalizationYDescription = "Normalized tensor.";
+const char *const kLayerNormalizationMeanDescription =
+    "Saved mean used during training to speed up gradient computation";
+const char *const kLayerNormalizationInvStdDevDescription =
+    "Saved inverse standard deviation used during training to speed up gradient "
+    "computation.";
+
+const char *const kLayerNormalizationTConstraintDesc =
+    "Constrain input types and output Y type to float tensors.";
+const char *const kLayerNormalizationUConstraintDesc = "Type of Mean and InvStdDev tensors.";
+
+LightOpSchema MakeLayerNormalizationSchema(int since_version) {
+  std::vector<FormalParameter> inputs = {
+      {"X", kLayerNormalizationXDescription, "T"},
+      {"Scale", kLayerNormalizationScaleDescription, "T"},
+      {"B", kLayerNormalizationBDescription, "T"},
+  };
+  std::vector<FormalParameter> outputs = {
+      {"Y", kLayerNormalizationYDescription, "T"},
+      {"Mean", kLayerNormalizationMeanDescription, "U"},
+      {"InvStdDev", kLayerNormalizationInvStdDevDescription, "U"},
+  };
+  std::vector<AttributeParam> attrs = {
+      {"axis",
+       "The first normalization dimension. If rank(X) is r, axis' allowed range is [-r, r). "
+       "Negative value means counting dimensions from the back.",
+       AttributeType::INT, /*required=*/false, static_cast<int64_t>(-1)},
+      {"epsilon", "The epsilon value to use to avoid division by zero.", AttributeType::FLOAT,
+       /*required=*/false, static_cast<double>(1e-5f)},
+      {"stash_type",
+       "Type of Mean and InvStdDev. This also specifies stage one's computation precision.",
+       AttributeType::INT, /*required=*/false, static_cast<int64_t>(1)},
+  };
+  return LightOpSchema(
+      "LayerNormalization", kOnnxDomain, since_version, MakeLayerNormalizationDoc(since_version),
+      std::move(inputs), std::move(outputs),
+      {
+          {"T",
+           {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kBfloat16},
+           kLayerNormalizationTConstraintDesc},
+          {"U", {TensorType::kFloat, TensorType::kBfloat16}, kLayerNormalizationUConstraintDesc},
+      },
+      std::move(attrs), /*has_function_implementation=*/true);
+}
+
 // --- RMSNormalization --------------------------------------------------------
 
 // Input/output descriptions reproduced verbatim from the upstream ONNX
@@ -1942,6 +1996,12 @@ std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &o
              MakeInstanceNormalizationSchema(22),
              MakeInstanceNormalizationSchema(6),
              MakeInstanceNormalizationSchema(1),
+         };
+       }},
+      {"LayerNormalization",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeLayerNormalizationSchema(17),
          };
        }},
       {"LSTM",

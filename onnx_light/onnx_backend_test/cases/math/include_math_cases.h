@@ -194,6 +194,9 @@ void RegisterCeilCases(std::vector<TestCase> &registry);
 /// Registers the ``Clip`` backend test node case(s).
 void RegisterClipCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Reciprocal`` backend test node case(s).
+void RegisterReciprocalCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Round`` backend test node case(s).
 void RegisterRoundCases(std::vector<TestCase> &registry);
 

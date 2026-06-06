@@ -76,6 +76,7 @@ void CollectMathTestCases(std::vector<TestCase> &registry, const std::string &op
       {"Ceil", &RegisterCeilCases},
       {"Clip", &RegisterClipCases},
       {"Round", &RegisterRoundCases},
+      {"Reciprocal", &RegisterReciprocalCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

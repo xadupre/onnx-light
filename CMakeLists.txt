@@ -241,6 +241,7 @@ target_precompile_headers(lib_onnx_kernels PRIVATE
     <cmath>
     <cstdint>
     <cstring>
+    <limits>
     <stdexcept>
     <string>
     <utility>
@@ -363,7 +364,6 @@ if(ONNX_LIGHT_BUILD_TESTS)
   file(GLOB_RECURSE ONNX_CPP_OPTIM_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_optim/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_KERNELS_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_kernels/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_BACKEND_TEST_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_backend_test/test_*.cc")
-  file(GLOB_RECURSE ONNX_CPP_KERNELS_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_kernels/test_*.cc")
   set(ONNX_CPP_TEST_SOURCES
       ${ONNX_CPP_PROTO_TEST_SOURCES}
       ${ONNX_CPP_LIB_TEST_SOURCES}
@@ -371,7 +371,6 @@ if(ONNX_LIGHT_BUILD_TESTS)
       ${ONNX_CPP_OPTIM_TEST_SOURCES}
       ${ONNX_CPP_KERNELS_TEST_SOURCES}
       ${ONNX_CPP_BACKEND_TEST_TEST_SOURCES}
-      ${ONNX_CPP_KERNELS_TEST_SOURCES}
   )
   set(ONNX_CPP_ALL_TEST_SOURCES ${ONNX_CPP_TEST_SOURCES})
 
@@ -406,6 +405,26 @@ if(ONNX_LIGHT_BUILD_TESTS)
     "${ONNX_COMMON_PATH}"
   )
   target_link_libraries(test_onnx_light PRIVATE lib_onnx_lib lib_onnx_op lib_onnx_optim lib_onnx_kernels lib_onnx_backend_test GTest::gtest_main)
+  # Precompile the heaviest headers shared across virtually every translation
+  # unit in unittests/cc. ``<gtest/gtest.h>`` is by far the dominant cost
+  # (~109/110 test files pull it in) and the standard headers below are
+  # included by the majority of those files; a PCH turns that work into a
+  # one-shot cost for the whole target.
+  #
+  # NOTE: do NOT add project headers (e.g. ``test_case.h``) here. Several
+  # test translation units (unittests/cc/onnx_op/test_onnx_op_*.cc) rely on
+  # a subtle ``#undef ONNX_LIGHT_NAMESPACE`` trick that only compiles when
+  # ``light_op_schema.h`` is the first header to declare
+  # ``namespace ONNX_LIGHT_NAMESPACE { ... }`` *before* the
+  # ``ONNX_LIGHT_NAMESPACE`` macro gets defined. Pulling in project headers
+  # via the PCH would define the macro first and break those tests.
+  target_precompile_headers(test_onnx_light PRIVATE
+      <gtest/gtest.h>
+      <cstdint>
+      <stdexcept>
+      <string>
+      <vector>
+  )
   gtest_discover_tests(test_onnx_light DISCOVERY_TIMEOUT 120)
 
   add_custom_target(onnx_cpp_tests SOURCES ${ONNX_CPP_ALL_TEST_SOURCES})
@@ -421,8 +440,6 @@ if(ONNX_LIGHT_BUILD_TESTS)
                FILES ${ONNX_CPP_KERNELS_TEST_SOURCES})
   source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_backend_test" PREFIX "Source Files/cc/onnx_backend_test"
                FILES ${ONNX_CPP_BACKEND_TEST_TEST_SOURCES})
-  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_kernels" PREFIX "Source Files/cc/onnx_kernels"
-               FILES ${ONNX_CPP_KERNELS_TEST_SOURCES})
 endif()
 
 # Each benchmark is an individual project placed in the "Benchmarks" VS solution folder.

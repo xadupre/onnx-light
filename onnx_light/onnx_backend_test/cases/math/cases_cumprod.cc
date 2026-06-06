@@ -110,6 +110,25 @@ void RegisterCumProdCases(std::vector<TestCase> &registry) {
     Expect(node, {x, axis}, {y}, "test_cumprod_2d_negative_axis", {opset}, "backend-test",
            registry);
   }
+
+  // 2-D cumulative product on INT32 input along axis 0.
+  {
+    NodeProto node = MakeCumProdNode(/*exclusive=*/false, /*reverse=*/false);
+    Tensor x = Tensor::FromInt32("", {2, 3}, {1, 2, 3, 4, 5, 6});
+    Tensor axis = Tensor::FromInt32("", {}, {0});
+    Tensor y = cumprod_kernel(x, axis);
+    Expect(node, {x, axis}, {y}, "test_cumprod_2d_int32", {opset}, "backend-test", registry);
+  }
+
+  // 1-D exclusive cumulative product on INT32 input (axis = 0).
+  {
+    NodeProto node = MakeCumProdNode(/*exclusive=*/true, /*reverse=*/false);
+    Tensor x = Tensor::FromInt32("", {5}, {1, 2, 3, 4, 5});
+    Tensor axis = Tensor::FromInt32("", {}, {0});
+    Tensor y = cumprod_kernel(x, axis, /*exclusive=*/true);
+    Expect(node, {x, axis}, {y}, "test_cumprod_1d_int32_exclusive", {opset}, "backend-test",
+           registry);
+  }
 }
 
 } // namespace onnx_backend_test

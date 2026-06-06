@@ -291,10 +291,6 @@ convtranspose_group_2
 convtranspose_group_2_image_3
 convtranspose_kernel_shape
 convtranspose_output_shape
-cumprod_1d_int32_exclusive
-cumprod_2d_int32
-cumsum_1d_int32_exclusive
-cumsum_2d_int32
 depthtospace_crd_mode_example
 depthtospace_example
 dft_axis

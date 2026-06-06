@@ -103,6 +103,25 @@ class TestOnnxPyOp(ExtTestCase):
         self.assertEqual(schema.max_output, 2**31 - 1)
         self.assertTrue(schema.deprecated)
 
+    def test_light_op_schema_repr(self) -> None:
+        fp = self.mod.FormalParameter()
+        fp.name, fp.description, fp.type = "X", "in", "T"
+        tc = self.mod.TypeConstraintParam()
+        tc.type_param_str = "T"
+        tc.allowed_type_strs = [self.mod.TensorType.kFloat]
+        tc.description = "any float"
+        schema = self.mod.LightOpSchema("MyOp", "ai.onnx", 1, "doc", [fp], [fp], [tc])
+        self.assertEqual(
+            repr(schema),
+            "LightOpSchema(name='MyOp', domain='ai.onnx', since_version=1, "
+            "inputs=[FormalParameter(name='X', type='T', description='in')], "
+            "outputs=[FormalParameter(name='X', type='T', description='in')], "
+            "type_constraints=[TypeConstraintParam(type_param_str='T', "
+            "allowed_type_strs=[TensorType.kFloat], description='any float')], "
+            "attributes=[], has_function_implementation=False, "
+            "min_output=1, max_output=1, deprecated=False)",
+        )
+
     def test_get_all_onnx_op_schemas_with_history(self) -> None:
         schemas = self.mod.GetAllOnnxOpSchemasWithHistory()
         self.assertIsInstance(schemas, list)

@@ -119,8 +119,8 @@ static void convPoolShapeInference_opset19(InferenceContext &ctx, bool use_dilat
   }
 
   auto input_shape = ctx.getInputType(input1Idx)->tensor_type().shape();
-  if (input_shape.dim_size() < 2) {
-    fail_shape_inference("Input tensor must have at least 2 dimensions");
+  if (input_shape.dim_size() < 3) {
+    fail_shape_inference("Input tensor must have at least 3 dimensions");
   }
 
   // first dim is the batch axis and the next is the number of channels.
@@ -133,6 +133,9 @@ static void convPoolShapeInference_opset19(InferenceContext &ctx, bool use_dilat
   if (use_dilation && getRepeatedAttribute(ctx, "dilations", dilations)) {
     if (dilations.size() != n_input_dims) {
       fail_shape_inference("Attribute dilations has incorrect size");
+    }
+    if (std::any_of(dilations.begin(), dilations.end(), [](int64_t d) { return d <= 0; })) {
+      fail_shape_inference("Attribute dilations must only contain positive values");
     }
   } else {
     dilations.assign(n_input_dims, 1);
@@ -164,6 +167,10 @@ static void convPoolShapeInference_opset19(InferenceContext &ctx, bool use_dilat
     }
   }
 
+  if (std::any_of(kernel_shape.begin(), kernel_shape.end(), [](int64_t k) { return k <= 0; })) {
+    fail_shape_inference("Attribute kernel_shape must only contain positive values");
+  }
+
   std::vector<int64_t> effective_kernel_shape = kernel_shape;
   for (size_t i = 0; i < kernel_shape.size(); i++) {
     // accounting for dilation, how big is the kernel in this dimension
@@ -174,6 +181,9 @@ static void convPoolShapeInference_opset19(InferenceContext &ctx, bool use_dilat
   if (getRepeatedAttribute(ctx, "pads", pads)) {
     if (pads.size() != n_input_dims * 2) {
       fail_shape_inference("Attribute pads has incorrect size");
+    }
+    if (std::any_of(pads.begin(), pads.end(), [](int64_t p) { return p < 0; })) {
+      fail_shape_inference("Attribute pads must not contain negative values");
     }
   } else {
     pads.assign(n_input_dims * 2, 0);
@@ -188,9 +198,10 @@ static void convPoolShapeInference_opset19(InferenceContext &ctx, bool use_dilat
             continue;
           }
           residual = input_shape.dim(2 + i).dim_value();
-          while (residual >= stride) {
-            residual -= stride;
+          if (residual < 0) {
+            continue;
           }
+          residual %= stride;
         }
         if (i >= effective_kernel_shape.size()) {
           fail_shape_inference("kernel shape should have ", input_dims_size, " values in ",
@@ -551,7 +562,10 @@ static void convTransposeShapeInference_opset11(InferenceContext &ctx) {
   std::vector<int64_t> dilations;
   if (getRepeatedAttribute(ctx, "dilations", dilations)) {
     if (dilations.size() != n_input_dims) {
-      return;
+      fail_shape_inference("Attribute dilations has incorrect size");
+    }
+    if (std::any_of(dilations.begin(), dilations.end(), [](int64_t d) { return d <= 0; })) {
+      fail_shape_inference("Attribute dilations must only contain positive values");
     }
   } else {
     dilations.assign(n_input_dims, 1);
@@ -560,7 +574,10 @@ static void convTransposeShapeInference_opset11(InferenceContext &ctx) {
   std::vector<int64_t> strides;
   if (getRepeatedAttribute(ctx, "strides", strides)) {
     if (strides.size() != n_input_dims) {
-      return;
+      fail_shape_inference("Attribute strides has incorrect size");
+    }
+    if (std::any_of(strides.begin(), strides.end(), [](int64_t s) { return s <= 0; })) {
+      fail_shape_inference("Attribute strides must only contain positive values");
     }
   } else {
     strides.assign(n_input_dims, 1);
@@ -569,7 +586,7 @@ static void convTransposeShapeInference_opset11(InferenceContext &ctx) {
   std::vector<int64_t> kernel_shape;
   if (getRepeatedAttribute(ctx, "kernel_shape", kernel_shape)) {
     if (kernel_shape.size() != n_input_dims) {
-      return;
+      fail_shape_inference("Attribute kernel_shape has incorrect size");
     }
   } else {
     auto second_input_shape = ctx.getInputType(1)->tensor_type().shape();
@@ -580,8 +597,12 @@ static void convTransposeShapeInference_opset11(InferenceContext &ctx) {
       kernel_shape.push_back(second_input_shape.dim(i).dim_value());
     }
     if (kernel_shape.size() != n_input_dims) {
-      return; // weight rank mismatch
+      fail_shape_inference("Weight tensor spatial rank does not match input tensor spatial rank");
     }
+  }
+
+  if (std::any_of(kernel_shape.begin(), kernel_shape.end(), [](int64_t k) { return k <= 0; })) {
+    fail_shape_inference("Attribute kernel_shape must only contain positive values");
   }
 
   std::vector<int64_t> effective_kernel_shape = kernel_shape;
@@ -594,6 +615,9 @@ static void convTransposeShapeInference_opset11(InferenceContext &ctx) {
   if (getRepeatedAttribute(ctx, "pads", pads)) {
     if (pads.size() != n_input_dims * 2) {
       fail_shape_inference("Attribute pads has incorrect size");
+    }
+    if (std::any_of(pads.begin(), pads.end(), [](int64_t p) { return p < 0; })) {
+      fail_shape_inference("Attribute pads must not contain negative values");
     }
     const auto *const auto_pad_attr = ctx.getAttribute("auto_pad");
     if (nullptr != auto_pad_attr && auto_pad_attr->s() != "NOTSET") {
@@ -625,7 +649,10 @@ static void convTransposeShapeInference_opset11(InferenceContext &ctx) {
   bool output_shape_presented = true;
   if (getRepeatedAttribute(ctx, "output_shape", output_shape)) {
     if (output_shape.size() != n_input_dims) {
-      return;
+      fail_shape_inference("Attribute output_shape has incorrect size");
+    }
+    if (std::any_of(output_shape.begin(), output_shape.end(), [](int64_t s) { return s < 0; })) {
+      fail_shape_inference("Attribute output_shape must not contain negative values");
     }
   } else {
     output_shape_presented = false;
@@ -634,7 +661,11 @@ static void convTransposeShapeInference_opset11(InferenceContext &ctx) {
   std::vector<int64_t> output_padding;
   if (getRepeatedAttribute(ctx, "output_padding", output_padding)) {
     if (output_padding.size() != n_input_dims) { // Added only to one side.
-      return;
+      fail_shape_inference("Attribute output_padding has incorrect size");
+    }
+    if (std::any_of(output_padding.begin(), output_padding.end(),
+                    [](int64_t p) { return p < 0; })) {
+      fail_shape_inference("Attribute output_padding must not contain negative values");
     }
   } else {
     output_padding.assign(n_input_dims, 0);
@@ -937,8 +968,8 @@ static void roiPoolTypeShapeInference_opset1(InferenceContext &ctx) {
   auto input_shape = ctx.getInputType(0)->tensor_type().shape();
   auto rios_shape = ctx.getInputType(1)->tensor_type().shape();
 
-  if (input_shape.dim_size() < 2) {
-    fail_shape_inference("Input tensor must have at least 2 dimensions");
+  if (input_shape.dim_size() < 4) {
+    fail_shape_inference("Input tensor must have at least 4 dimensions");
   }
   if (rios_shape.dim_size() != 2) {
     fail_shape_inference("RoIs tensor must have 2 dimensions");
@@ -951,6 +982,11 @@ static void roiPoolTypeShapeInference_opset1(InferenceContext &ctx) {
   if (getRepeatedAttribute(ctx, "pooled_shape", pooled_shape)) {
     if (pooled_shape.size() != n_input_dims) {
       fail_shape_inference("Attribute pooled_shape has incorrect length");
+    }
+    for (auto dim : pooled_shape) {
+      if (dim <= 0) {
+        fail_shape_inference("Attribute pooled_shape must only contain positive values");
+      }
     }
   } else {
     fail_shape_inference("Attribute pooled_shape must be specified");
@@ -1646,8 +1682,8 @@ static void convPoolShapeInference_opset1_to_11(InferenceContext &ctx, bool use_
   }
 
   auto input_shape = ctx.getInputType(input1Idx)->tensor_type().shape();
-  if (input_shape.dim_size() < 2) {
-    fail_shape_inference("Input tensor must have at least 2 dimensions");
+  if (input_shape.dim_size() < 3) {
+    fail_shape_inference("Input tensor must have at least 3 dimensions");
   }
 
   // first dim is the batch axis and the next is the number of channels.
@@ -1660,6 +1696,9 @@ static void convPoolShapeInference_opset1_to_11(InferenceContext &ctx, bool use_
   if (use_dilation && getRepeatedAttribute(ctx, "dilations", dilations)) {
     if (dilations.size() != n_input_dims) {
       fail_shape_inference("Attribute dilations has incorrect size");
+    }
+    if (std::any_of(dilations.begin(), dilations.end(), [](int64_t d) { return d <= 0; })) {
+      fail_shape_inference("Attribute dilations must only contain positive values");
     }
   } else {
     dilations.assign(n_input_dims, 1);
@@ -1691,6 +1730,10 @@ static void convPoolShapeInference_opset1_to_11(InferenceContext &ctx, bool use_
     }
   }
 
+  if (std::any_of(kernel_shape.begin(), kernel_shape.end(), [](int64_t k) { return k <= 0; })) {
+    fail_shape_inference("Attribute kernel_shape must only contain positive values");
+  }
+
   std::vector<int64_t> effective_kernel_shape = kernel_shape;
   for (size_t i = 0; i < kernel_shape.size(); i++) {
     // accounting for dilation, how big is the kernel in this dimension
@@ -1701,6 +1744,9 @@ static void convPoolShapeInference_opset1_to_11(InferenceContext &ctx, bool use_
   if (getRepeatedAttribute(ctx, "pads", pads)) {
     if (pads.size() != n_input_dims * 2) {
       fail_shape_inference("Attribute pads has incorrect size");
+    }
+    if (std::any_of(pads.begin(), pads.end(), [](int64_t p) { return p < 0; })) {
+      fail_shape_inference("Attribute pads must not contain negative values");
     }
   } else {
     pads.assign(n_input_dims * 2, 0);
@@ -1715,9 +1761,10 @@ static void convPoolShapeInference_opset1_to_11(InferenceContext &ctx, bool use_
             continue;
           }
           residual = input_shape.dim(2 + i).dim_value();
-          while (residual >= stride) {
-            residual -= stride;
+          if (residual < 0) {
+            continue;
           }
+          residual %= stride;
         }
         int64_t total_pad = residual == 0 ? effective_kernel_shape[i] - stride
                                           : effective_kernel_shape[i] - residual;
@@ -2520,7 +2567,10 @@ static void convTransposeShapeInference_opset1(InferenceContext &ctx) {
   std::vector<int64_t> dilations;
   if (getRepeatedAttribute(ctx, "dilations", dilations)) {
     if (dilations.size() != n_input_dims) {
-      return;
+      fail_shape_inference("Attribute dilations has incorrect size");
+    }
+    if (std::any_of(dilations.begin(), dilations.end(), [](int64_t d) { return d <= 0; })) {
+      fail_shape_inference("Attribute dilations must only contain positive values");
     }
   } else {
     dilations.assign(n_input_dims, 1);
@@ -2529,7 +2579,10 @@ static void convTransposeShapeInference_opset1(InferenceContext &ctx) {
   std::vector<int64_t> strides;
   if (getRepeatedAttribute(ctx, "strides", strides)) {
     if (strides.size() != n_input_dims) {
-      return;
+      fail_shape_inference("Attribute strides has incorrect size");
+    }
+    if (std::any_of(strides.begin(), strides.end(), [](int64_t s) { return s <= 0; })) {
+      fail_shape_inference("Attribute strides must only contain positive values");
     }
   } else {
     strides.assign(n_input_dims, 1);
@@ -2538,7 +2591,7 @@ static void convTransposeShapeInference_opset1(InferenceContext &ctx) {
   std::vector<int64_t> kernel_shape;
   if (getRepeatedAttribute(ctx, "kernel_shape", kernel_shape)) {
     if (kernel_shape.size() != n_input_dims) {
-      return;
+      fail_shape_inference("Attribute kernel_shape has incorrect size");
     }
   } else {
     auto second_input_shape = ctx.getInputType(1)->tensor_type().shape();
@@ -2549,8 +2602,12 @@ static void convTransposeShapeInference_opset1(InferenceContext &ctx) {
       kernel_shape.push_back(second_input_shape.dim(i).dim_value());
     }
     if (kernel_shape.size() != n_input_dims) {
-      return; // weight rank mismatch
+      fail_shape_inference("Weight tensor spatial rank does not match input tensor spatial rank");
     }
+  }
+
+  if (std::any_of(kernel_shape.begin(), kernel_shape.end(), [](int64_t k) { return k <= 0; })) {
+    fail_shape_inference("Attribute kernel_shape must only contain positive values");
   }
 
   std::vector<int64_t> effective_kernel_shape = kernel_shape;
@@ -2563,6 +2620,9 @@ static void convTransposeShapeInference_opset1(InferenceContext &ctx) {
   if (getRepeatedAttribute(ctx, "pads", pads)) {
     if (pads.size() != n_input_dims * 2) {
       fail_shape_inference("Attribute pads has incorrect size");
+    }
+    if (std::any_of(pads.begin(), pads.end(), [](int64_t p) { return p < 0; })) {
+      fail_shape_inference("Attribute pads must not contain negative values");
     }
   } else {
     pads.assign(n_input_dims * 2, 0);
@@ -2589,7 +2649,10 @@ static void convTransposeShapeInference_opset1(InferenceContext &ctx) {
   bool output_shape_presented = true;
   if (getRepeatedAttribute(ctx, "output_shape", output_shape)) {
     if (output_shape.size() != n_input_dims) {
-      return;
+      fail_shape_inference("Attribute output_shape has incorrect size");
+    }
+    if (std::any_of(output_shape.begin(), output_shape.end(), [](int64_t s) { return s < 0; })) {
+      fail_shape_inference("Attribute output_shape must not contain negative values");
     }
   } else {
     output_shape_presented = false;
@@ -2598,7 +2661,11 @@ static void convTransposeShapeInference_opset1(InferenceContext &ctx) {
   std::vector<int64_t> output_padding;
   if (getRepeatedAttribute(ctx, "output_padding", output_padding)) {
     if (output_padding.size() != n_input_dims) { // Added only to one side.
-      return;
+      fail_shape_inference("Attribute output_padding has incorrect size");
+    }
+    if (std::any_of(output_padding.begin(), output_padding.end(),
+                    [](int64_t p) { return p < 0; })) {
+      fail_shape_inference("Attribute output_padding must not contain negative values");
     }
   } else {
     output_padding.assign(n_input_dims, 0);

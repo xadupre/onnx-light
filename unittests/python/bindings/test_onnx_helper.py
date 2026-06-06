@@ -119,10 +119,7 @@ class TestOnnxLightHelper(ExtTestCase):
 
     def test_make_attribute_ref_doc_string(self) -> None:
         attr = oh.make_attribute_ref(
-            "alpha",
-            onnxl.AttributeProto.FLOAT,
-            doc_string="doc",
-            ref_attr_name="parent_alpha",
+            "alpha", onnxl.AttributeProto.FLOAT, doc_string="doc", ref_attr_name="parent_alpha"
         )
         self.assertEqual(attr.ref_attr_name, "parent_alpha")
         self.assertEqual(attr.doc_string, "doc")

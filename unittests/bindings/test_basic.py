@@ -5,7 +5,7 @@ import os
 import pathlib
 import tempfile
 import unittest
-
+import numpy as np
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
 from onnx_light.onnx import defs, parser
@@ -193,7 +193,6 @@ class TestBasicFunctions(ExtTestCase):
         self.assertIn("custom_domain", function_str)
         self.assertIn("Test function proto", function_str)
 
-
     def test_repeated_proto_field_survives_container_clear(self) -> None:
         # Regression test: a Python reference to an element of a repeated proto
         # field must keep the underlying C++ object alive even after the
@@ -233,6 +232,33 @@ class TestBasicFunctions(ExtTestCase):
         self.assertEqual(node_via_getitem.op_type, "MatMul")
         self.assertEqual([n.op_type for n in iter_nodes], ["MatMul", "Add", "Relu"])
         self.assertEqual(new_node.op_type, "Identity")
+
+    def test_persistence(self):
+        graph = oh.make_graph(
+            [
+                oh.make_node("MatMul", ["X", "W"], ["XW"]),
+                oh.make_node("Add", ["XW", "B"], ["Z"]),
+                oh.make_node("Relu", ["Z"], ["Y"]),
+            ],
+            "shape_inference_demo",
+            inputs=[oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["N", 4])],
+            outputs=[oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)],
+            initializer=[
+                oh.make_tensor(
+                    "W",
+                    onnxl.TensorProto.FLOAT,
+                    [4, 3],
+                    np.zeros((4, 3), dtype=np.float32).flatten(),
+                ),
+                oh.make_tensor("B", onnxl.TensorProto.FLOAT, [3], np.zeros(3, dtype=np.float32)),
+            ],
+        )
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)], ir_version=8)
+        node1 = model.graph.node[0]
+        s1 = node1.SerializeToString()
+        del model.graph.node[:]
+        s2 = node1.SerializeToString()
+        self.assertEqual(s1, s2)
 
 
 if __name__ == "__main__":

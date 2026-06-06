@@ -9,6 +9,7 @@
 #include <nanobind/make_iterator.h>
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/pair.h>
+#include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/tuple.h>
 #include <nanobind/stl/vector.h>
@@ -553,8 +554,13 @@ void define_repeated_field_type_proto(nb::class_<utils::RepeatedField<T>> &nbcls
           },
           nb::arg("sequence"), "Extends the list of values.");
   nbcls_proto.def(nb::init<>())
-      .def("add", &utils::RepeatedProtoField<T>::add, nb::rv_policy::reference,
-           "Adds an empty element.")
+      .def(
+          "add",
+          [](utils::RepeatedProtoField<T> &self) -> std::shared_ptr<T> {
+            self.add();
+            return self.shared_at(self.size() - 1);
+          },
+          "Adds an empty element.")
       .def("clear", &utils::RepeatedProtoField<T>::clear, "Removes every element.")
       .def("__len__", &utils::RepeatedProtoField<T>::size, "Returns the number of elements.")
       .def(
@@ -569,14 +575,14 @@ void define_repeated_field_type_proto(nb::class_<utils::RepeatedField<T>> &nbcls
           "Returns a python-like representation for the list of values.")
       .def(
           "__getitem__",
-          [](utils::RepeatedProtoField<T> &self, int index) -> T & {
+          [](utils::RepeatedProtoField<T> &self, int index) -> std::shared_ptr<T> {
             if (index < 0)
               index += static_cast<int>(self.size());
             EXT_ENFORCE(index >= 0 && index < static_cast<int>(self.size()), "index=", index,
                         " out of boundary");
-            return self[index];
+            return self.shared_at(static_cast<size_t>(index));
           },
-          nb::rv_policy::reference, nb::arg("index"), "Returns the element at position index.")
+          nb::arg("index"), "Returns the element at position index.")
       .def(
           "__delitem__",
           [](utils::RepeatedProtoField<T> &self, nb::slice slice) {
@@ -588,10 +594,17 @@ void define_repeated_field_type_proto(nb::class_<utils::RepeatedField<T>> &nbcls
       .def(
           "__iter__",
           [](utils::RepeatedProtoField<T> &self) {
-            return nb::make_iterator<nb::rv_policy::reference_internal>(
-                nb::type<utils::RepeatedProtoField<T>>(), "iterator", self.begin(), self.end());
+            // Materialize a python list of shared_ptr-backed wrappers so each
+            // element keeps the underlying C++ object alive independently of
+            // the container (e.g. across ``del container[:]`` after iteration
+            // has started).
+            nb::list values;
+            for (size_t i = 0; i < self.size(); ++i) {
+              values.append(nb::cast(self.shared_at(i)));
+            }
+            return nb::iter(values);
           },
-          nb::keep_alive<0, 1>(), "Iterates over the elements.")
+          "Iterates over the elements.")
       .def(
           "__eq__",
           [](utils::RepeatedField<T> &self, nb::list &obj) -> bool {

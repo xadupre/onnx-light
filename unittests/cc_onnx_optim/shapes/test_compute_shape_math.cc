@@ -1387,6 +1387,89 @@ TEST(OnnxOptimShapesMathMatMul, RejectsIncompatibleInnerDimensions) {
                std::invalid_argument);
 }
 
+// ---------------------------------------------------------------------------
+// MatMulInteger
+// ---------------------------------------------------------------------------
+TEST(OnnxOptimShapesMathMatMulInteger, PropagatesRank2xRank2ShapeAndInt32Dtype) {
+  NodeProto node = MakeBinaryNode("MatMulInteger");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kUint8,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(3)}));
+  ctx.Set("B", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kInt8,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(2)}));
+
+  onnx_optim::shapes::math::ComputeShapeMatMulInteger(ctx, node, "A", "B");
+
+  ASSERT_TRUE(ctx.Has("C"));
+  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kInt32);
+  EXPECT_EQ(ctx.Get("C").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(2)}));
+}
+
+TEST(OnnxOptimShapesMathMatMulInteger, HandlesRank1xRank2VectorMatrix) {
+  NodeProto node = MakeBinaryNode("MatMulInteger");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kUint8,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+  ctx.Set("B", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kUint8,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(5)}));
+
+  onnx_optim::shapes::math::ComputeShapeMatMulInteger(ctx, node, "A", "B");
+
+  ASSERT_TRUE(ctx.Has("C"));
+  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kInt32);
+  EXPECT_EQ(ctx.Get("C").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(5)}));
+}
+
+TEST(OnnxOptimShapesMathMatMulInteger, BroadcastsBatchPrefixes) {
+  NodeProto node = MakeBinaryNode("MatMulInteger");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kUint8,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(1),
+                                          onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)}));
+  ctx.Set("B", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kInt8,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(5),
+                                          onnx_optim::OptimDim(4), onnx_optim::OptimDim(6)}));
+
+  onnx_optim::shapes::math::ComputeShapeMatMulInteger(ctx, node, "A", "B");
+
+  ASSERT_TRUE(ctx.Has("C"));
+  EXPECT_EQ(ctx.Get("C").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(5),
+                                    onnx_optim::OptimDim(3), onnx_optim::OptimDim(6)}));
+}
+
+TEST(OnnxOptimShapesMathMatMulInteger, RejectsWrongOpType) {
+  NodeProto node = MakeBinaryNode("MatMul");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kUint8,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+  ctx.Set("B", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kUint8,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeMatMulInteger(ctx, node, "A", "B"),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesMathMatMulInteger, RejectsIncompatibleInnerDimensions) {
+  NodeProto node = MakeBinaryNode("MatMulInteger");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kUint8,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+  ctx.Set("B", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kUint8,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(5), onnx_optim::OptimDim(4)}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeMatMulInteger(ctx, node, "A", "B"),
+               std::invalid_argument);
+}
+
 TEST(OnnxOptimShapesMathTan, PropagatesFullyKnownShape) {
   NodeProto node = MakeUnaryNode("Tan");
   onnx_optim::shapes::ShapesContext ctx;

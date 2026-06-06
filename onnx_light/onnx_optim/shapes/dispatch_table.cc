@@ -172,6 +172,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          nn::ComputeShapeMeanVarianceNormalization(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:RMSNormalization",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         nn::ComputeShapeRMSNormalization(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:Bernoulli",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
@@ -960,6 +965,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          tensor::ComputeShapeShape(ctx, node);
        }},
+      {"ai.onnx:Size",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         tensor::ComputeShapeSize(ctx, node);
+       }},
       {"ai.onnx:Identity",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
@@ -1071,6 +1081,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
          math::ComputeShapeSoftsign(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:Shrink",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeShrink(ctx, node, node.input(0).as_string().c_str());
        }},
       {"ai.onnx:SoftmaxCrossEntropyLoss",
        [](ShapesContext &ctx, const NodeProto &node) {

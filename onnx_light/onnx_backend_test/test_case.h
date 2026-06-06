@@ -208,5 +208,23 @@ void DispatchRegisterByOpType(std::vector<TestCase> &registry, const std::string
  */
 std::vector<TestCase> CollectTestCases(const std::string &op_type = "");
 
+/**
+ * Collects C++-implemented backend test node cases whose
+ * :attr:`TestCase::name` matches a regular expression. Uses
+ * ``std::regex_search`` semantics (substring match by default; anchor with
+ * ``^...$`` to require a full match).
+ *
+ * @param name_regex ECMAScript regular expression matched against each
+ *                   test case name. An empty string matches every case
+ *                   (equivalent to :func:`CollectTestCases`).
+ *
+ * @return The subset of cases whose ``name`` matches ``name_regex``,
+ *         in the same registration order as :func:`CollectTestCases`.
+ *
+ * @throws std::regex_error if ``name_regex`` is not a valid ECMAScript
+ *         regular expression.
+ */
+std::vector<TestCase> CollectTestCasesByName(const std::string &name_regex);
+
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

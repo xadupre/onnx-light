@@ -840,6 +840,22 @@ LightOpSchema MakeShapeSchema(int since_version, const std::vector<TensorType> &
                        std::move(attributes));
 }
 
+LightOpSchema MakeSizeSchema(int since_version, const std::vector<TensorType> &types) {
+  return LightOpSchema("Size", kOnnxDomain, since_version, MakeSizeDoc(since_version),
+                       {
+                           {"data", "An input tensor.", "T"},
+                       },
+                       {
+                           {"size", "Total number of elements of the input tensor", "T1"},
+                       },
+                       {
+                           {"T", types, MakeSizeTypeConstraintDescription(since_version)},
+                           {"T1",
+                            {TensorType::kInt64},
+                            "Constrain output to int64 tensor, which should be a scalar though."},
+                       });
+}
+
 LightOpSchema MakeTileSchema(int since_version, const std::vector<TensorType> &types) {
   return LightOpSchema(
       "Tile", kOnnxDomain, since_version, MakeTileDoc(since_version),
@@ -1666,6 +1682,15 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
              MakeShapeSchema(23, TransposeTypesVer23()), MakeShapeSchema(21, TransposeTypesVer21()),
              MakeShapeSchema(19, ShapeTypesVer19()),     MakeShapeSchema(15, ConcatTypesVer13()),
              MakeShapeSchema(13, ConcatTypesVer13()),    MakeShapeSchema(1, AllTensorTypes()),
+         };
+       }},
+      {"Size",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeSizeSchema(25, TransposeTypesVer25()), MakeSizeSchema(24, TransposeTypesVer24()),
+             MakeSizeSchema(23, TransposeTypesVer23()), MakeSizeSchema(21, TransposeTypesVer21()),
+             MakeSizeSchema(19, ShapeTypesVer19()),     MakeSizeSchema(13, ConcatTypesVer13()),
+             MakeSizeSchema(1, AllTensorTypes()),
          };
        }},
       {"Identity",

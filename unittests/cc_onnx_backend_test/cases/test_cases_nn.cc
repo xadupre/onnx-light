@@ -231,6 +231,26 @@ TEST(BackendTestCase, GroupNormalizationCasesArePresent) {
   EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
 }
 
+TEST(BackendTestCase, RMSNormalizationCasesArePresent) {
+  auto cases = CollectTestCases("RMSNormalization");
+  const TestCase *axis0 = nullptr;
+  const TestCase *axis_neg1 = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_rms_normalization_2d_axis0") {
+      axis0 = &c;
+    } else if (c.name == "test_cc_rms_normalization_2d_axis_negative_1") {
+      axis_neg1 = &c;
+    }
+  }
+  ASSERT_NE(axis0, nullptr);
+  ASSERT_NE(axis_neg1, nullptr);
+  ASSERT_EQ(axis0->data_sets.size(), 1u);
+  const auto &ds = axis0->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 2u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+}
+
 TEST(BackendTestCase, MeanVarianceNormalizationCasesArePresent) {
   auto cases = CollectTestCases("MeanVarianceNormalization");
   const TestCase *mvn = nullptr;

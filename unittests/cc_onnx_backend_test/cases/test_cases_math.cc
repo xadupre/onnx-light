@@ -800,6 +800,35 @@ TEST(BackendTestCase, MatMulCaseShapesMatchExpectedSignatures) {
   EXPECT_EQ(batch->data_sets[0].outputs[0].shape, (std::vector<int64_t>{2, 2, 4}));
 }
 
+TEST(BackendTestCase, MatMulIntegerCasesArePresent) {
+  auto cases = CollectTestCases("MatMulInteger");
+  for (const char *name : {"test_cc_matmulinteger", "test_cc_matmulinteger_int8"}) {
+    EXPECT_NE(FindCase(cases, name), nullptr) << "Missing MatMulInteger case: " << name;
+  }
+}
+
+TEST(BackendTestCase, MatMulIntegerCaseShapesMatchExpectedSignatures) {
+  auto cases = CollectTestCases("MatMulInteger");
+
+  const TestCase *uint8_case = FindCase(cases, "test_cc_matmulinteger");
+  ASSERT_NE(uint8_case, nullptr);
+  ASSERT_EQ(uint8_case->data_sets.size(), 1u);
+  ASSERT_EQ(uint8_case->data_sets[0].inputs.size(), 4u);
+  EXPECT_EQ(uint8_case->data_sets[0].inputs[0].shape, (std::vector<int64_t>{4, 3}));
+  EXPECT_EQ(uint8_case->data_sets[0].inputs[1].shape, (std::vector<int64_t>{3, 2}));
+  ASSERT_EQ(uint8_case->data_sets[0].outputs.size(), 1u);
+  EXPECT_EQ(uint8_case->data_sets[0].outputs[0].shape, (std::vector<int64_t>{4, 2}));
+
+  const TestCase *int8_case = FindCase(cases, "test_cc_matmulinteger_int8");
+  ASSERT_NE(int8_case, nullptr);
+  ASSERT_EQ(int8_case->data_sets.size(), 1u);
+  ASSERT_EQ(int8_case->data_sets[0].inputs.size(), 4u);
+  EXPECT_EQ(int8_case->data_sets[0].inputs[0].shape, (std::vector<int64_t>{2, 3}));
+  EXPECT_EQ(int8_case->data_sets[0].inputs[1].shape, (std::vector<int64_t>{3, 2}));
+  ASSERT_EQ(int8_case->data_sets[0].outputs.size(), 1u);
+  EXPECT_EQ(int8_case->data_sets[0].outputs[0].shape, (std::vector<int64_t>{2, 2}));
+}
+
 TEST(BackendTestCase, AbsUpstreamOnnxCaseMatchesReference) {
   // Mirrors the upstream ``onnx.backend.test.case.node.abs.Abs`` export:
   // a single rank-3 ``[3, 4, 5]`` float input whose elementwise absolute

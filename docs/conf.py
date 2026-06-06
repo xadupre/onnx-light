@@ -41,10 +41,29 @@ breathe_projects = {"onnx-light": _doxygen_xml_dir}
 breathe_default_project = "onnx-light"
 
 sphinx_gallery_conf = {
-    "examples_dirs": ["examples"],
-    "gallery_dirs": ["auto_examples"],
-    "nested_sections": True,
+    # path to your examples scripts
+    "examples_dirs": [
+        os.path.join(os.path.dirname(__file__), "examples", "backend"),
+        os.path.join(os.path.dirname(__file__), "examples", "core"),
+        os.path.join(os.path.dirname(__file__), "examples", "optimization"),
+    ],
+    # path where to save gallery generated examples
+    "gallery_dirs": ["auto_examples_backend", "auto_examples_core", "auto_examples_optimization"],
+    # no parallelization to avoid conflict with environment variables
+    "parallel": 1,
+    # sorting
+    "within_subsection_order": "ExampleTitleSortKey",
+    # errors
+    "abort_on_example_error": True,
+    # recommendation
+    "recommender": {"enable": True, "n_examples": 3, "min_df": 3, "max_df": 0.9},
+    # ignore capture for matplotib axes
+    "ignore_repr_types": "matplotlib\\.(text|axes)",
+    # robubstness
+    "reset_modules_order": "both",
+    "reset_modules": ("matplotlib",),
 }
+
 
 # templates_path = ["_templates"]
 exclude_patterns = ["build"]

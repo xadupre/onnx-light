@@ -24,6 +24,7 @@
 #include "onnx_backend_test/cases_for_shapes/inference/include_inference_cases.h"
 #include "onnx_backend_test/cases_numerical/nan_inf/include_nan_inf_cases.h"
 
+#include <regex>
 #include <stdexcept>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -189,6 +190,22 @@ std::vector<TestCase> CollectTestCases(const std::string &op_type) {
   CollectEmptyShapeTestCases(registry, op_type);
   CollectNanInfTestCases(registry, op_type);
   return registry;
+}
+
+std::vector<TestCase> CollectTestCasesByName(const std::string &name_regex) {
+  std::vector<TestCase> all_cases = CollectTestCases();
+  if (name_regex.empty()) {
+    return all_cases;
+  }
+  std::regex pattern(name_regex);
+  std::vector<TestCase> filtered;
+  filtered.reserve(all_cases.size());
+  for (auto &tc : all_cases) {
+    if (std::regex_search(tc.name, pattern)) {
+      filtered.emplace_back(std::move(tc));
+    }
+  }
+  return filtered;
 }
 
 } // namespace onnx_backend_test

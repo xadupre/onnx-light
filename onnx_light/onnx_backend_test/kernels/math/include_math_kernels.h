@@ -549,6 +549,19 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Element-wise Shrink activation:
+/// ``y = x + bias`` if ``x < -lambd``, ``y = x - bias`` if ``x > lambd``,
+/// ``y = 0`` otherwise. ``lambd`` defaults to 0.5 and ``bias`` defaults to 0.
+class Shrink : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x, float bias = 0.0f, float lambd = 0.5f) const;
+  void operator()(const Tensor &x, float bias, float lambd, Tensor &output) const;
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// Element-wise scaled exponential linear unit:
 /// ``y = gamma * x`` for ``x > 0`` and
 /// ``y = gamma * (alpha * exp(x) - alpha)`` for ``x <= 0``.

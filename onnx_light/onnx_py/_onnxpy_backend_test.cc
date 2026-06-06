@@ -12,6 +12,7 @@
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
+#include <regex>
 
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -127,7 +128,10 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
           "model", [](TestCase &tc) -> ModelProto & { return tc.model; },
           nb::rv_policy::reference_internal,
           "Returns the ``ModelProto`` of this test case, resolved against the "
-          "binding registered by ``_onnxpyprotoop``.");
+          "binding registered by ``_onnxpyprotoop``.")
+      .def("__repr__", [](const TestCase &tc) {
+        return "TestCase(name='" + tc.name + "', kind='" + tc.kind + "')";
+      });
 
   bt_mod.def(
       "collect_test_cases",
@@ -136,4 +140,20 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
       "Returns the list of C++-implemented backend test node cases. When ``op_type`` "
       "is non-empty, only cases whose top-level graph contains a node with that "
       "operator type are returned.");
+
+  bt_mod.def(
+      "collect_test_cases_by_name",
+      [](const std::string &name_regex) {
+        try {
+          return onnx_backend_test::CollectTestCasesByName(name_regex);
+        } catch (const std::regex_error &e) {
+          throw nb::value_error(e.what());
+        }
+      },
+      nb::arg("name_regex") = std::string(),
+      "Returns the C++-implemented backend test node cases whose ``name`` matches "
+      "the ECMAScript regular expression ``name_regex`` (``std::regex_search`` "
+      "semantics: substring match by default; anchor with ``^...$`` to require a "
+      "full match). An empty pattern returns every case. Raises ``ValueError`` if "
+      "``name_regex`` is not a valid regular expression.");
 }

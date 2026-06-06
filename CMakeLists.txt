@@ -90,7 +90,18 @@ set(ONNX_PY_BACKEND_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onn
 
 file(GLOB_RECURSE ONNX_OP_SOURCES CONFIGURE_DEPENDS "${ONNX_OP_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_OPTIM_SOURCES CONFIGURE_DEPENDS "${ONNX_OPTIM_PATH}/*.cc")
-file(GLOB_RECURSE ONNX_BACKEND_TEST_SOURCES CONFIGURE_DEPENDS "${ONNX_BACKEND_TEST_PATH}/*.cc")
+# Kernel sources (operator implementations) live under
+# ``onnx_backend_test/kernels`` but are compiled into their own
+# ``lib_onnx_kernels`` library so that consumers can take a dependency on
+# the kernels alone, independent of the surrounding backend-test
+# infrastructure (test cases, ``TestCase``, ``Expect``).
+file(GLOB_RECURSE ONNX_KERNELS_SOURCES CONFIGURE_DEPENDS "${ONNX_BACKEND_TEST_PATH}/kernels/*.cc")
+file(GLOB_RECURSE ONNX_BACKEND_TEST_ALL_SOURCES CONFIGURE_DEPENDS "${ONNX_BACKEND_TEST_PATH}/*.cc")
+# ``lib_onnx_backend_test`` itself contains everything under
+# ``onnx_backend_test`` *except* the kernel sources (those are built by
+# ``lib_onnx_kernels`` and pulled in transitively).
+set(ONNX_BACKEND_TEST_SOURCES ${ONNX_BACKEND_TEST_ALL_SOURCES})
+list(REMOVE_ITEM ONNX_BACKEND_TEST_SOURCES ${ONNX_KERNELS_SOURCES})
 set(ONNX_INLINER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/inliner/inliner.cc")
 file(GLOB ONNX_SHAPE_INFERENCE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/shape_inference/*.cc")
 file(GLOB ONNX_VERSION_CONVERTER_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/version_converter/*.cc")
@@ -197,6 +208,43 @@ set_property(TARGET lib_onnx_optim PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_compile_features(lib_onnx_optim PUBLIC cxx_std_20)
 target_link_libraries(lib_onnx_optim PUBLIC lib_onnx_op)
 
+# Builds onnx_kernels library.
+# This library is the runtime/operator-kernel layer extracted from the
+# former monolithic ``lib_onnx_backend_test``. It contains the C++
+# implementations of every ONNX operator kernel used by the backend test
+# infrastructure (and exposed to Python through ``_onnxbackend``).
+# It depends on ``lib_onnx_proto`` for proto types and on the small
+# ``TestCase``/``OpsetId``/``Tensor`` headers shipped alongside the
+# kernels under ``onnx_backend_test/`` (which themselves live in
+# ``lib_onnx_backend_test``); only the kernel translation units are
+# compiled here, not the test cases.
+add_library(lib_onnx_kernels STATIC ${ONNX_LIGHT_HEADERS} ${ONNX_KERNELS_SOURCES})
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES ${ONNX_KERNELS_SOURCES})
+target_include_directories(lib_onnx_kernels PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
+    $<BUILD_INTERFACE:${ROOT_INCLUDE_PATH}>
+    $<BUILD_INTERFACE:${ONNX_PROTO_PATH}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light>
+)
+set_property(TARGET lib_onnx_kernels PROPERTY POSITION_INDEPENDENT_CODE ON)
+set_target_properties(lib_onnx_kernels PROPERTIES EXPORT_NAME onnx_kernels)
+target_compile_features(lib_onnx_kernels PUBLIC cxx_std_20)
+target_link_libraries(lib_onnx_kernels PUBLIC lib_onnx_proto)
+# Same PCH rationale as ``lib_onnx_backend_test``: kernel translation
+# units all pull in ``test_case.h`` (via ``kernel_context.h``) and the
+# usual standard-library headers.
+target_precompile_headers(lib_onnx_kernels PRIVATE
+    "${ONNX_BACKEND_TEST_PATH}/test_case.h"
+    <algorithm>
+    <cmath>
+    <cstdint>
+    <cstring>
+    <stdexcept>
+    <string>
+    <utility>
+    <vector>
+)
+
 # Builds onnx_backend_test library.
 # This library is intentionally independent from lib_onnx_lib/lib_onnx_op
 # but publicly depends on lib_onnx_proto because it uses proto types
@@ -205,6 +253,12 @@ target_link_libraries(lib_onnx_optim PUBLIC lib_onnx_op)
 # expect()) and a registry of C++-implemented backend test node cases.
 # It also bundles deterministic pseudo-random helpers (SplitMix64) used
 # to back ``onnx_light.backend``.
+#
+# The operator kernel implementations themselves live in the separate
+# ``lib_onnx_kernels`` target (built from ``onnx_backend_test/kernels``)
+# which ``lib_onnx_backend_test`` PUBLIC-links so existing consumers
+# transparently keep getting both the test infrastructure and the
+# kernels.
 add_library(lib_onnx_backend_test STATIC ${ONNX_LIGHT_HEADERS} ${ONNX_BACKEND_TEST_SOURCES})
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES ${ONNX_BACKEND_TEST_SOURCES})
 target_include_directories(lib_onnx_backend_test PUBLIC
@@ -216,7 +270,7 @@ target_include_directories(lib_onnx_backend_test PUBLIC
 set_property(TARGET lib_onnx_backend_test PROPERTY POSITION_INDEPENDENT_CODE ON)
 set_target_properties(lib_onnx_backend_test PROPERTIES EXPORT_NAME onnx_backend_test)
 target_compile_features(lib_onnx_backend_test PUBLIC cxx_std_20)
-target_link_libraries(lib_onnx_backend_test PUBLIC lib_onnx_proto)
+target_link_libraries(lib_onnx_backend_test PUBLIC lib_onnx_proto lib_onnx_kernels)
 
 # Speed up the build of lib_onnx_backend_test by precompiling the small set
 # of headers that virtually every one of the 400+ source files in
@@ -442,7 +496,7 @@ if(ONNX_LIGHT_INSTALL)
   include(CMakePackageConfigHelpers)
 
   # Install the static library and export its target
-  install(TARGETS lib_onnx_proto lib_onnx_lib lib_onnx_op lib_onnx_optim lib_onnx_backend_test
+  install(TARGETS lib_onnx_proto lib_onnx_lib lib_onnx_op lib_onnx_optim lib_onnx_kernels lib_onnx_backend_test
     EXPORT onnx_lightTargets
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"

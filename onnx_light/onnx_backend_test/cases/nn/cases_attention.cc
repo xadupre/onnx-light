@@ -198,17 +198,9 @@ Tensor MakeK_1_2_3_2() {
   // (batch=1, kv_heads=2, kv_seq=3, head_size=2)
   return Tensor::FromFloat("", {1, 2, 3, 2},
                            {
-                               1.0f,
-                               0.0f,
-                               0.5f,
-                               0.5f,
-                               0.0f,
+                               1.0f, 0.0f, 0.5f, 0.5f, 0.0f,
                                1.0f, // head 0
-                               -1.0f,
-                               1.0f,
-                               1.0f,
-                               1.0f,
-                               0.25f,
+                               -1.0f, 1.0f, 1.0f, 1.0f, 0.25f,
                                -0.5f, // head 1
                            });
 }
@@ -217,17 +209,9 @@ Tensor MakeV_1_2_3_2() {
   // (batch=1, kv_heads=2, kv_seq=3, v_head_size=2)
   return Tensor::FromFloat("", {1, 2, 3, 2},
                            {
-                               1.0f,
-                               0.0f,
-                               0.0f,
-                               1.0f,
-                               -1.0f,
+                               1.0f, 0.0f, 0.0f, 1.0f, -1.0f,
                                1.0f, // head 0
-                               2.0f,
-                               -2.0f,
-                               0.5f,
-                               0.25f,
-                               -0.5f,
+                               2.0f, -2.0f, 0.5f, 0.25f, -0.5f,
                                0.0f, // head 1
                            });
 }

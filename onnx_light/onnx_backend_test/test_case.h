@@ -5,8 +5,8 @@
 #pragma once
 
 #include "onnx.h"
-#include "onnx_kernels/simple_tensor.h"
 #include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/simple_tensor.h"
 
 #include <cstdint>
 #include <string>

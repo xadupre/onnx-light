@@ -432,6 +432,75 @@ NodeProto &AddNode(GraphProto &graph, const char *op_type, const std::vector<std
                    const std::vector<std::string> &outputs, const char *domain = nullptr,
                    const char *name = nullptr);
 
+////////////////////
+// Initializer factory
+////////////////////
+
+/**
+ * Builds a :class:`TensorProto` initializer named ``name`` carrying the given
+ * ``dims`` and ``values``. The :enum:`TensorProto::DataType` of the produced
+ * tensor is deduced from ``T`` and the values are stored in the matching
+ * typed payload field (``int64_data`` for ``int64_t``, ``float_data`` for
+ * ``float``, ...). This is the C++ counterpart to
+ * :func:`onnx.helper.make_tensor` and the recommended way to build an
+ * initializer everywhere a single :class:`TensorProto` is needed (test cases,
+ * fixtures, shape-inference unit tests, etc.).
+ *
+ * Explicit specializations are provided for ``int64_t``, ``int32_t``,
+ * ``uint64_t``, ``float``, ``double`` and ``std::string``.
+ *
+ * The product of ``dims`` is **not** validated against ``values.size()``: a
+ * scalar initializer is built by passing an empty ``dims`` vector and a
+ * single value (or, for variable-length payloads such as strings, by passing
+ * the relevant shape).
+ *
+ * @tparam T      Element type of ``values``.
+ * @param  name   Initializer name written to ``TensorProto::name``.
+ * @param  dims   Tensor shape, copied into ``TensorProto::dims``.
+ * @param  values Tensor payload, appended to the typed data field matching ``T``.
+ * @return A populated :class:`TensorProto`.
+ */
+template <typename T>
+TensorProto MakeInitializer(const char *name, const std::vector<int64_t> &dims,
+                            const std::vector<T> &values);
+
+/**
+ * Appends a new initializer to ``graph`` built by :ref:`MakeInitializer` and
+ * returns a reference to the newly added initializer. Thin convenience wrapper
+ * around ``*graph.add_initializer() = MakeInitializer(...)`` mirroring
+ * :ref:`AddNode` / :ref:`MakeNode`. Use it instead of the manual
+ * ``add_initializer`` + ``set_name`` + ``set_data_type`` + ``add_dims`` +
+ * ``ref_xxx_data().push_back(...)`` boilerplate.
+ *
+ * @tparam T      Element type of ``values``.
+ * @param  graph  Graph to append the initializer to.
+ * @param  name   Initializer name.
+ * @param  dims   Tensor shape.
+ * @param  values Tensor payload.
+ * @return Reference to the newly added initializer, owned by ``graph``.
+ */
+template <typename T>
+TensorProto &AddInitializer(GraphProto &graph, const char *name, const std::vector<int64_t> &dims,
+                            const std::vector<T> &values);
+
+/**
+ * Convenience overload of :ref:`MakeInitializer` for 1-D ``INT64`` "shape"
+ * initializers — by far the most common case (e.g. the ``shape`` input of
+ * ``Reshape``, the ``axes`` input of ``Unsqueeze`` / ``Squeeze``, the
+ * ``starts`` / ``ends`` / ``steps`` inputs of ``Slice``, ...). Equivalent to
+ * ``MakeInitializer<int64_t>(name, {values.size()}, values)``.
+ *
+ * @param  name   Initializer name.
+ * @param  values 1-D INT64 payload; the tensor shape is set to
+ *                ``{values.size()}``.
+ * @return A populated :class:`TensorProto`.
+ */
+TensorProto MakeInitializerShape(const char *name, const std::vector<int64_t> &values);
+
+/// Companion of :ref:`MakeInitializerShape` for :ref:`AddInitializer`.
+TensorProto &AddInitializerShape(GraphProto &graph, const char *name,
+                                 const std::vector<int64_t> &values);
+
 /**
  * Appends a single FLOAT attribute (``name`` -> ``value``) to ``proto``.
  *

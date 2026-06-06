@@ -1665,6 +1665,99 @@ TEST(onnx_helper, GetAttributeIntsAppendsValues) {
   EXPECT_TRUE(empty.empty());
 }
 
+TEST(onnx_helper, MakeInitializerInt64ShapeLike) {
+  TensorProto tensor = MakeInitializer<int64_t>("reshape_shape", {3}, {0, 0, -1});
+  EXPECT_EQ(std::string(tensor.ref_name().data(), tensor.ref_name().size()), "reshape_shape");
+  EXPECT_EQ(tensor.ref_data_type(), TensorProto::DataType::INT64);
+  ASSERT_EQ(tensor.ref_dims().size(), 1u);
+  EXPECT_EQ(tensor.ref_dims()[0], 3);
+  ASSERT_EQ(tensor.ref_int64_data().size(), 3u);
+  EXPECT_EQ(tensor.ref_int64_data()[0], 0);
+  EXPECT_EQ(tensor.ref_int64_data()[1], 0);
+  EXPECT_EQ(tensor.ref_int64_data()[2], -1);
+}
+
+TEST(onnx_helper, MakeInitializerFloat2D) {
+  TensorProto tensor = MakeInitializer<float>("W", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  EXPECT_EQ(std::string(tensor.ref_name().data(), tensor.ref_name().size()), "W");
+  EXPECT_EQ(tensor.ref_data_type(), TensorProto::DataType::FLOAT);
+  ASSERT_EQ(tensor.ref_dims().size(), 2u);
+  EXPECT_EQ(tensor.ref_dims()[0], 2);
+  EXPECT_EQ(tensor.ref_dims()[1], 2);
+  ASSERT_EQ(tensor.ref_float_data().size(), 4u);
+  EXPECT_FLOAT_EQ(tensor.ref_float_data()[0], 1.0f);
+  EXPECT_FLOAT_EQ(tensor.ref_float_data()[3], 4.0f);
+}
+
+TEST(onnx_helper, MakeInitializerInt32Double) {
+  TensorProto t32 = MakeInitializer<int32_t>("i32", {2}, {7, -8});
+  EXPECT_EQ(t32.ref_data_type(), TensorProto::DataType::INT32);
+  ASSERT_EQ(t32.ref_int32_data().size(), 2u);
+  EXPECT_EQ(t32.ref_int32_data()[0], 7);
+  EXPECT_EQ(t32.ref_int32_data()[1], -8);
+
+  TensorProto td = MakeInitializer<double>("d", {1}, {2.5});
+  EXPECT_EQ(td.ref_data_type(), TensorProto::DataType::DOUBLE);
+  ASSERT_EQ(td.ref_double_data().size(), 1u);
+  EXPECT_DOUBLE_EQ(td.ref_double_data()[0], 2.5);
+}
+
+TEST(onnx_helper, MakeInitializerUint64AndString) {
+  TensorProto tu = MakeInitializer<uint64_t>("u", {3}, {1u, 2u, 3u});
+  EXPECT_EQ(tu.ref_data_type(), TensorProto::DataType::UINT64);
+  ASSERT_EQ(tu.ref_uint64_data().size(), 3u);
+  EXPECT_EQ(tu.ref_uint64_data()[2], 3u);
+
+  TensorProto ts = MakeInitializer<std::string>("s", {2}, {"hello", "world"});
+  EXPECT_EQ(ts.ref_data_type(), TensorProto::DataType::STRING);
+  ASSERT_EQ(ts.ref_string_data().size(), 2u);
+  EXPECT_EQ(std::string(ts.ref_string_data()[0].data(), ts.ref_string_data()[0].size()), "hello");
+  EXPECT_EQ(std::string(ts.ref_string_data()[1].data(), ts.ref_string_data()[1].size()), "world");
+}
+
+TEST(onnx_helper, AddInitializerAppendsToGraphAndReturnsReference) {
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+
+  TensorProto &t1 = AddInitializer<int64_t>(*graph, "reshape_shape", {3}, {0, 0, -1});
+  TensorProto &t2 = AddInitializer<float>(*graph, "W", {2}, {0.5f, -0.25f});
+
+  ASSERT_EQ(graph->ref_initializer().size(), 2u);
+  EXPECT_EQ(&graph->ref_initializer()[0], &t1);
+  EXPECT_EQ(&graph->ref_initializer()[1], &t2);
+  EXPECT_EQ(std::string(t1.ref_name().data(), t1.ref_name().size()), "reshape_shape");
+  EXPECT_EQ(t1.ref_data_type(), TensorProto::DataType::INT64);
+  EXPECT_EQ(t2.ref_data_type(), TensorProto::DataType::FLOAT);
+}
+
+TEST(onnx_helper, MakeInitializerShape1DInt64) {
+  TensorProto tensor = MakeInitializerShape("axes", {0, 2, -1});
+  EXPECT_EQ(std::string(tensor.ref_name().data(), tensor.ref_name().size()), "axes");
+  EXPECT_EQ(tensor.ref_data_type(), TensorProto::DataType::INT64);
+  ASSERT_EQ(tensor.ref_dims().size(), 1u);
+  EXPECT_EQ(tensor.ref_dims()[0], 3);
+  ASSERT_EQ(tensor.ref_int64_data().size(), 3u);
+  EXPECT_EQ(tensor.ref_int64_data()[0], 0);
+  EXPECT_EQ(tensor.ref_int64_data()[1], 2);
+  EXPECT_EQ(tensor.ref_int64_data()[2], -1);
+}
+
+TEST(onnx_helper, AddInitializerShapeAppendsInt64Initializer) {
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+
+  TensorProto &t = AddInitializerShape(*graph, "reshape_shape", {0, 0, -1});
+
+  ASSERT_EQ(graph->ref_initializer().size(), 1u);
+  EXPECT_EQ(&graph->ref_initializer()[0], &t);
+  EXPECT_EQ(std::string(t.ref_name().data(), t.ref_name().size()), "reshape_shape");
+  EXPECT_EQ(t.ref_data_type(), TensorProto::DataType::INT64);
+  ASSERT_EQ(t.ref_dims().size(), 1u);
+  EXPECT_EQ(t.ref_dims()[0], 3);
+  ASSERT_EQ(t.ref_int64_data().size(), 3u);
+  EXPECT_EQ(t.ref_int64_data()[2], -1);
+}
+
 // -----------------------------------------------------------------------
 // Streaming alignment of an existing two-file model. The function must:
 //  - rewrite the external weights file so that every tensor's offset is a

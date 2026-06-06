@@ -53,6 +53,62 @@ LightOpSchema MakeAveragePoolSchema(int since_version) {
                        });
 }
 
+// --- LpPool ------------------------------------------------------------------
+
+// LpPool's input description differs from AveragePool/MaxPool: it does not
+// mention dimension denotation. v1 contains the upstream ``dimension are``
+// (without ``s``) typo; v2/v11/v18/v22 use ``dimensions are``.
+const char *const kLpPoolInputDescription = "Input data tensor from the previous operator; "
+                                            "dimensions for image case are (N x C x H x W), "
+                                            "where N is the batch size, C is the number of "
+                                            "channels, and H and W are the height and the "
+                                            "width of the data. For non image case, the "
+                                            "dimensions are in the form of "
+                                            "(N x C x D1 x D2 ... Dn), where N is the "
+                                            "batch size.";
+
+const char *const kLpPoolInputDescriptionVer1 = "Input data tensor from the previous operator; "
+                                                "dimensions for image case are (N x C x H x W), "
+                                                "where N is the batch size, C is the number of "
+                                                "channels, and H and W are the height and the "
+                                                "width of the data. For non image case, the "
+                                                "dimension are in the form of "
+                                                "(N x C x D1 x D2 ... Dn), where N is the "
+                                                "batch size.";
+
+const char *const kLpPoolOutputDescription =
+    "Output data tensor from Lp pooling across the input "
+    "tensor. Dimensions will vary based on various kernel, stride, and pad "
+    "sizes.";
+
+// Type constraints match upstream LpPool: float16, float, double across all
+// opsets up to and including 22 (LpPool at opset 22 keeps the same float
+// set, unlike AveragePool which gained bfloat16). Mirrors the upstream
+// ``schema.TypeConstraint("T", {"tensor(float16)", "tensor(float)",
+// "tensor(double)"}, ...)`` declarations in onnx_lib/defs/nn/{defs,old}.cc.
+std::vector<TensorType> LpPoolTypes(int since_version) {
+  if (since_version >= 22) {
+    return {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+  }
+  return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+}
+
+LightOpSchema MakeLpPoolSchema(int since_version) {
+  const char *input_desc =
+      since_version == 1 ? kLpPoolInputDescriptionVer1 : kLpPoolInputDescription;
+  return LightOpSchema(
+      "LpPool", kOnnxDomain, since_version, MakeLpPoolDoc(since_version),
+      {
+          {"X", input_desc, "T"},
+      },
+      {
+          {"Y", kLpPoolOutputDescription, "T"},
+      },
+      {
+          {"T", LpPoolTypes(since_version), "Constrain input and output types to float tensors."},
+      });
+}
+
 const char *const kMaxPoolIndicesDescription =
     "Indices tensor from max pooling across the input tensor. "
     "The dimensions of indices are the same as output tensor. "
@@ -1916,6 +1972,13 @@ std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &o
          return std::vector<LightOpSchema>{
              MakeLpNormalizationSchema(22),
              MakeLpNormalizationSchema(1),
+         };
+       }},
+      {"LpPool",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeLpPoolSchema(22), MakeLpPoolSchema(18), MakeLpPoolSchema(11),
+             MakeLpPoolSchema(2),  MakeLpPoolSchema(1),
          };
        }},
       {"MaxPool",

@@ -584,6 +584,16 @@ void ComputeShapeNegativeLogLikelihoodLoss(ShapesContext &ctx, const NodeProto &
 void ComputeShapeSin(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Reciprocal`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Reciprocal`` is element-wise and unary in every revision of its schema
+ * (v1, v6, v13 — later revisions only widen the accepted dtype set), so
+ * the output dtype and shape always match those of the input.
+ */
+void ComputeShapeReciprocal(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``Sinh`` node and
  * stores it in ``ctx``.
  *

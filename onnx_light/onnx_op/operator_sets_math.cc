@@ -1162,6 +1162,52 @@ where $Swish(x) = x * sigmoid(alpha * x)$.
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildReciprocalSchemas() {
+  static constexpr const char *kReciprocalDoc = R"DOC(
+Reciprocal takes one input data (Tensor<T>) and produces one output data
+(Tensor<T>) where the reciprocal is, y = 1/x, is applied to
+the tensor elementwise.
+)DOC";
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(3);
+  schemas.push_back(LightOpSchema(
+      "Reciprocal", kOnnxDomain, 13, kReciprocalDoc,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T",
+           {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kBfloat16},
+           "Constrain input and output types to float tensors."},
+      }));
+  schemas.push_back(
+      LightOpSchema("Reciprocal", kOnnxDomain, 6, kReciprocalDoc,
+                    {
+                        {"X", "Input tensor", "T"},
+                    },
+                    {
+                        {"Y", "Output tensor", "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    }));
+  schemas.push_back(
+      LightOpSchema("Reciprocal", kOnnxDomain, 1, kReciprocalDoc,
+                    {
+                        {"X", "Input tensor", "T"},
+                    },
+                    {
+                        {"Y", "Output tensor", "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    }));
+  return schemas;
+}
+
 std::vector<LightOpSchema> BuildSqrtSchemas() {
   static constexpr const char *kSqrtDoc = R"DOC(
 Square root takes one input data (Tensor<T>) and produces one output data
@@ -2940,6 +2986,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"PRelu", [] { return BuildPReluSchemas(); }},
       {"Pow", [] { return BuildPowSchemas(); }},
       {"Relu", [] { return BuildReluSchemas(); }},
+      {"Reciprocal", [] { return BuildReciprocalSchemas(); }},
       {"Round", [] { return BuildRoundSchemas(); }},
       {"Selu", [] { return BuildSeluSchemas(); }},
       {"Sigmoid", [] { return BuildSigmoidSchemas(); }},

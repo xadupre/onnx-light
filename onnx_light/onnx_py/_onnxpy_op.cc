@@ -249,7 +249,30 @@ void AddOnnxPyOp(nb::module_ &m) {
            "Sets the maximum number of outputs and returns ``self``.")
       .def("set_deprecated", &onnx_op::LightOpSchema::set_deprecated, nb::arg("value") = true,
            nb::rv_policy::reference_internal,
-           "Marks this operator as deprecated and returns ``self``.");
+           "Marks this operator as deprecated and returns ``self``.")
+      .def("__repr__", [](const onnx_op::LightOpSchema &s) {
+        const auto list_repr = [](const auto &items) {
+          std::ostringstream os;
+          os << "[";
+          for (std::size_t i = 0; i < items.size(); ++i) {
+            if (i != 0)
+              os << ", ";
+            os << nb::cast<std::string>(nb::repr(nb::cast(items[i])));
+          }
+          os << "]";
+          return os.str();
+        };
+        std::ostringstream os;
+        os << "LightOpSchema(name=" << ToPythonRepr(s.name())
+           << ", domain=" << ToPythonRepr(s.domain()) << ", since_version=" << s.since_version()
+           << ", inputs=" << list_repr(s.inputs()) << ", outputs=" << list_repr(s.outputs())
+           << ", type_constraints=" << list_repr(s.type_constraints())
+           << ", attributes=" << list_repr(s.attributes()) << ", has_function_implementation="
+           << (s.has_function_implementation() ? "True" : "False")
+           << ", min_output=" << s.min_output() << ", max_output=" << s.max_output()
+           << ", deprecated=" << (s.deprecated() ? "True" : "False") << ")";
+        return os.str();
+      });
 
   onnx_op_mod.def("GetAllOnnxOpSchemasWithHistory", &onnx_op::GetAllOnnxOpSchemasWithHistory,
                   nb::arg("op_type") = std::string(), nb::arg("init_doc") = true,

@@ -48,8 +48,8 @@ using TensorMap = std::unordered_map<std::string, Tensor>;
  * trampoline or call site to take an extra argument.
  *
  * Convenience accessors (:cpp:func:`Set`, :cpp:func:`Get`,
- * :cpp:func:`Has`) wrap the underlying map so callers do not have to
- * reach for ``rt.tensors()[name]`` directly.
+ * :cpp:func:`Has`, :cpp:func:`Remove`) wrap the underlying map so
+ * callers do not have to reach for ``rt.tensors()[name]`` directly.
  */
 class RuntimeContext {
 public:
@@ -68,6 +68,10 @@ public:
 
   /// Returns ``true`` if a tensor named ``name`` is currently held.
   bool Has(const std::string &name) const { return tensors_.find(name) != tensors_.end(); }
+
+  /// Removes the tensor stored under ``name`` if present and returns
+  /// whether an entry was erased.
+  bool Remove(const std::string &name) { return tensors_.erase(name) > 0; }
 
   /// Inserts the tensor under ``name``. The name must not already
   /// be present in the map; use ``tensors()`` directly to overwrite.

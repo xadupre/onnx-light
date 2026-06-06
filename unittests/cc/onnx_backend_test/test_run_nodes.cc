@@ -164,4 +164,13 @@ TEST(RunNodes, RuntimeContextSetGetHas) {
   EXPECT_THROW(rt.Get("missing"), std::out_of_range);
 }
 
+TEST(RunNodes, RuntimeContextRemove) {
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {1}, {7.0f}));
+  EXPECT_TRUE(rt.Remove("x"));
+  EXPECT_FALSE(rt.Has("x"));
+  EXPECT_THROW(rt.Get("x"), std::out_of_range);
+  EXPECT_FALSE(rt.Remove("x"));
+}
+
 } // namespace Test

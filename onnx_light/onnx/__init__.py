@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import sys
+import sys  # needed for package-level sys.modules registrations below
 
 from .. import onnx_lib  # noqa: F401
 from ..onnx_lib import (  # noqa: F401
@@ -66,31 +66,12 @@ from ..onnx_lib.io_helper import (  # noqa: F401
 # :mod:`onnx_light.compatibility.api_compare`) walk through.
 from .. import backend, backend_test, fuzz, tools  # noqa: F401
 
-# Register sub-modules in sys.modules so that
-# ``import onnx_light.onnx.<name>`` resolves correctly.
-_SUBMODULE_NAMES = [
-    "checker",
-    "compose",
-    "defs",
-    "helper",
-    "inliner",
-    "io_helper",
-    "numpy_helper",
-    "parser",
-    "shape_inference",
-    "utils",
-    "version_converter",
-]
-
-# TODO: module sys should be avoided.
-for _name in _SUBMODULE_NAMES:
-    _key = f"onnx_light.onnx.{_name}"
-    if _key not in sys.modules:
-        sys.modules[_key] = sys.modules[f"onnx_light.onnx_lib.{_name}"]
-
-# Same trick for the onnx-light-only sub-packages so that
+# Register the onnx-light-only sub-packages in sys.modules so that
 # ``import onnx_light.onnx.<name>`` resolves to the existing
-# ``onnx_light.<name>`` package.
+# ``onnx_light.<name>`` package.  A proxy .py file cannot be used here
+# because these are full packages (not single-file modules) and the
+# import identity check ``assertIs(mod, sys.modules["onnx_light.<name>"])``
+# must hold.
 for _name in ("backend", "backend_test", "fuzz", "tools"):
     _key = f"onnx_light.onnx.{_name}"
     if _key not in sys.modules:

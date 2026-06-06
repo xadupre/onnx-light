@@ -89,3 +89,28 @@ def test_unknown_attribute_raises_attribute_error() -> None:
             print("ok")
         """)
     assert out.strip() == "ok"
+
+
+def test_shape_inference_proxy_module_is_importable() -> None:
+    """``onnx_light.onnx_py._onnxpy.shape_inference`` is importable as a module.
+
+    This verifies the fix for the issue
+    "from onnx_light.onnx_py._onnxpy.shape_inference import ShapesContext does
+    not work": the dotted import must resolve to our proxy module without
+    requiring ``sys.modules`` manipulation.
+    """
+    out = _run("""
+        import sys
+        import importlib
+
+        # Importing the proxy module must succeed without any native extension.
+        mod = importlib.import_module("onnx_light.onnx_py._onnxpy.shape_inference")
+        assert mod.__name__ == "onnx_light.onnx_py._onnxpy.shape_inference", mod.__name__
+        assert "onnx_light.onnx_py._onnxpy.shape_inference" in sys.modules
+
+        # The proxy module must not have triggered a full extension import yet.
+        assert "onnx_light.onnx_py._onnxpyprotolib" not in sys.modules
+        assert "onnx_light.onnx_py._onnxpyoptim" not in sys.modules
+        print("ok")
+        """)
+    assert out.strip() == "ok"

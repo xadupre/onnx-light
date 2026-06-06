@@ -162,7 +162,7 @@ practice, only ``_onnxpyprotoop`` declares
 reference (for example
 ``TestCase.model``, see ``onnx_light/onnx_py/_onnxpy_backend_test.cc``)
 and let the shared registry produce a Python object backed by the same
-binding.  The package's ``onnx_light/onnx_py/_onnxpy.py`` shim imports
+binding.  The package's ``onnx_light/onnx_py/_onnxpy/__init__.py`` shim imports
 ``_onnxpyprotoop`` before ``_onnxpyprotolib``, ``_onnxpyoptim``,
 ``_onnxkernels`` and ``_onnxbackend`` to
 guarantee that the

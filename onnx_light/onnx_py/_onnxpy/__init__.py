@@ -24,13 +24,18 @@ The original ``_onnxpy`` extension was split into five nanobind modules:
 * :mod:`onnx_light.onnx_py._onnxbackend` exposes the ``backend_test``
   test-case utilities.
 
-This module re-exports every public attribute of all extensions so that
+This package re-exports every public attribute of all extensions so that
 existing callers writing ``onnx_light.onnx_py._onnxpy.<name>`` keep working.
 
 The compiled extensions are **loaded lazily**: the first access to an
-attribute through this module triggers the import of the extension(s) that
+attribute through this package triggers the import of the extension(s) that
 provide it.  Callers that only need, for example, the proto bindings never
 pay for importing the optim or backend extensions.
+
+The package also exposes ``shape_inference`` as a proper submodule (see
+:mod:`onnx_light.onnx_py._onnxpy.shape_inference`) so that the dotted
+import ``from onnx_light.onnx_py._onnxpy.shape_inference import ShapesContext``
+works without any ``sys.modules`` manipulation.
 """
 
 from __future__ import annotations
@@ -64,7 +69,10 @@ def _load(ext_name: str) -> ModuleType:
     """Import the given compiled extension on first use and cache it."""
     mod = _loaded.get(ext_name)
     if mod is None:
-        mod = importlib.import_module(f"{__package__}.{ext_name}")
+        # The compiled extensions live in the parent package (onnx_light.onnx_py),
+        # not in this package (onnx_light.onnx_py._onnxpy).
+        _parent = __package__.rsplit(".", 1)[0]
+        mod = importlib.import_module(f"{_parent}.{ext_name}")
         _loaded[ext_name] = mod
     return mod
 

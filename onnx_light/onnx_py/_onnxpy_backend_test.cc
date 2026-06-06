@@ -85,7 +85,7 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
   // same as the one used by ``_onnxpyprotoop`` and nanobind's cross-module
   // type registry finds the existing ``nb::class_<ModelProto>`` binding
   // automatically. Callers must therefore have imported ``_onnxpyprotoop``
-  // before accessing ``TestCase.model``; the package ``_onnxpy.py`` shim
+  // before accessing ``TestCase.model``; the package ``_onnxpy/__init__.py`` shim
   // guarantees that ordering.
   nb::class_<TestCase>(bt_mod, "TestCase",
                        "A single C++-generated backend test case (mirrors "

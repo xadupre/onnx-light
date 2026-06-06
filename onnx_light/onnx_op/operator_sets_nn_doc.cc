@@ -1029,6 +1029,73 @@ std::string MakeGlobalLpPoolDoc(int since_version) {
 
 namespace {
 
+// LpPool doc text for opset 1 — preserves the upstream ``across the / the
+// tensor`` duplication typo.
+constexpr const char *kLpPoolDocOpset1 = R"DOC(
+ LpPool consumes an input tensor X and applies Lp pooling across the
+ the tensor according to kernel sizes, stride sizes, and pad lengths.
+ Lp pooling consisting of computing the Lp norm on all values of a subset
+ of the input tensor according to the kernel size and downsampling the
+ data into the output tensor Y for further processing.)DOC";
+
+// LpPool doc text for opsets 2 and 11 — identical to upstream
+// ``LpPoolOpSchemaGenerator_opset2`` / ``LpPoolOpSchemaGenerator_opset11``.
+constexpr const char *kLpPoolDocOpset2 = R"DOC(
+ LpPool consumes an input tensor X and applies Lp pooling across
+ the tensor according to kernel sizes, stride sizes, and pad lengths.
+ Lp pooling consisting of computing the Lp norm on all values of a subset
+ of the input tensor according to the kernel size and downsampling the
+ data into the output tensor Y for further processing.)DOC";
+
+// LpPool doc text for opsets 18 and 22 — identical between the two opsets
+// and mirrors upstream ``LpPoolOpSchemaGenerator_opset18`` /
+// ``LpPoolOpSchemaGenerator``. The upstream generator only substitutes
+// ``{name}``; ``{kernelSpatialShape}`` is left as a literal placeholder in
+// the rendered text.
+constexpr const char *kLpPoolDocOpset18 = R"DOC(
+ LpPool consumes an input tensor X and applies Lp pooling across
+ the tensor according to kernel sizes, stride sizes, and pad lengths.
+ Lp pooling consisting of computing the Lp norm on all values of a subset
+ of the input tensor according to the kernel size and downsampling the
+ data into the output tensor Y for further processing. The output spatial shape will be following:
+ ```
+ output_spatial_shape[i] = floor((input_spatial_shape[i] + pad_shape[i] - {kernelSpatialShape}) / strides_spatial_shape[i] + 1)
+ ```
+ or
+ ```
+ output_spatial_shape[i] = ceil((input_spatial_shape[i] + pad_shape[i] - {kernelSpatialShape}) / strides_spatial_shape[i] + 1)
+ ```
+ if ceil_mode is enabled `pad_shape[i]` is the sum of pads along axis `i`.
+
+ `auto_pad` is a DEPRECATED attribute. If you are using them currently, the output spatial shape will be following:
+ ```
+ VALID: output_spatial_shape[i] = ceil((input_spatial_shape[i] - {kernelSpatialShape} + 1) / strides_spatial_shape[i])
+ SAME_UPPER or SAME_LOWER: output_spatial_shape[i] = ceil(input_spatial_shape[i] / strides_spatial_shape[i])
+ ```
+ And pad shape will be following if `SAME_UPPER` or `SAME_LOWER`:
+ ```
+ pad_shape[i] = (output_spatial_shape[i] - 1) * strides_spatial_shape[i] + {kernelSpatialShape} - input_spatial_shape[i]
+ ```)DOC";
+
+} // namespace
+
+std::string MakeLpPoolDoc(int since_version) {
+  switch (since_version) {
+  case 1:
+    return kLpPoolDocOpset1;
+  case 2:
+  case 11:
+    return kLpPoolDocOpset2;
+  case 18:
+  case 22:
+    return kLpPoolDocOpset18;
+  default:
+    return "";
+  }
+}
+
+namespace {
+
 constexpr const char *kLRN_ver1_doc = R"DOC(
 Local Response Normalization proposed in the [AlexNet paper](https://papers.nips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networks.pdf).
 It normalizes over local input regions.

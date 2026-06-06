@@ -632,6 +632,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          nn::ComputeShapeLpNormalization(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:LpPool",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         nn::ComputeShapeLpPool(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:MaxPool",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

@@ -71,6 +71,9 @@ void RegisterLRNCases(std::vector<TestCase> &registry);
 /// Registers the ``LpNormalization`` backend test node case(s).
 void RegisterLpNormalizationCases(std::vector<TestCase> &registry);
 
+/// Registers the ``LpPool`` backend test node case(s).
+void RegisterLpPoolCases(std::vector<TestCase> &registry);
+
 /// Registers the ``LSTM`` backend test node case(s).
 void RegisterLSTMCases(std::vector<TestCase> &registry);
 

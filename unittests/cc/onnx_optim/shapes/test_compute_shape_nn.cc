@@ -237,6 +237,122 @@ TEST(OnnxOptimShapesNnAveragePool, RejectsRankMismatch) {
                std::invalid_argument);
 }
 
+namespace {
+
+NodeProto MakeLpPoolNode(const std::vector<int64_t> &kernel_shape,
+                         const std::vector<int64_t> &strides = {},
+                         const std::vector<int64_t> &pads = {}, int64_t p = 2,
+                         const char *auto_pad = nullptr,
+                         const std::vector<int64_t> &dilations = {}) {
+  NodeProto node;
+  node.set_op_type("LpPool");
+  node.add_input("X");
+  node.add_output("Y");
+  AddAttribute<std::vector<int64_t>>(node, "kernel_shape", kernel_shape);
+  if (!strides.empty()) {
+    AddAttribute<std::vector<int64_t>>(node, "strides", strides);
+  }
+  if (!pads.empty()) {
+    AddAttribute<std::vector<int64_t>>(node, "pads", pads);
+  }
+  AddAttribute<int64_t>(node, "p", p);
+  if (auto_pad != nullptr) {
+    AddAttribute<std::string>(node, "auto_pad", std::string(auto_pad));
+  }
+  if (!dilations.empty()) {
+    AddAttribute<std::vector<int64_t>>(node, "dilations", dilations);
+  }
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesNnLpPool, Default2D) {
+  // mirrors test_cc_lppool_2d_default: kernel (2,2), no strides, no pads.
+  NodeProto node = MakeLpPoolNode({2, 2}, /*strides=*/{}, /*pads=*/{}, /*p=*/4);
+  onnx_optim::shapes::ShapesContext ctx;
+  SetInput(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(3),
+                                       onnx_optim::OptimDim(32), onnx_optim::OptimDim(32)});
+
+  onnx_optim::shapes::nn::ComputeShapeLpPool(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  ASSERT_EQ(out.Rank(), 4u);
+  EXPECT_EQ(out[0].AsInt(), 1);
+  EXPECT_EQ(out[1].AsInt(), 3);
+  EXPECT_EQ(out[2].AsInt(), 31);
+  EXPECT_EQ(out[3].AsInt(), 31);
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+}
+
+TEST(OnnxOptimShapesNnLpPool, PadsAndStrides) {
+  // mirrors test_cc_lppool_2d_pads: kernel (3,3), pad 2 on every side.
+  NodeProto node = MakeLpPoolNode({3, 3}, /*strides=*/{}, /*pads=*/{2, 2, 2, 2}, /*p=*/3);
+  onnx_optim::shapes::ShapesContext ctx;
+  SetInput(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(3),
+                                       onnx_optim::OptimDim(28), onnx_optim::OptimDim(28)});
+
+  onnx_optim::shapes::nn::ComputeShapeLpPool(ctx, node, "X");
+
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  EXPECT_EQ(out[2].AsInt(), 30);
+  EXPECT_EQ(out[3].AsInt(), 30);
+}
+
+TEST(OnnxOptimShapesNnLpPool, AutoPadSameUpper) {
+  NodeProto node = MakeLpPoolNode({2, 2}, /*strides=*/{}, /*pads=*/{}, /*p=*/2, "SAME_UPPER");
+  onnx_optim::shapes::ShapesContext ctx;
+  SetInput(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(3),
+                                       onnx_optim::OptimDim(32), onnx_optim::OptimDim(32)});
+
+  onnx_optim::shapes::nn::ComputeShapeLpPool(ctx, node, "X");
+
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  EXPECT_EQ(out[2].AsInt(), 32);
+  EXPECT_EQ(out[3].AsInt(), 32);
+}
+
+TEST(OnnxOptimShapesNnLpPool, Dilations2D) {
+  // mirrors test_cc_lppool_2d_dilations: kernel (2,2), dilations (2,2) on
+  // 1x1x4x4 input -> 2x2 output.
+  NodeProto node = MakeLpPoolNode({2, 2}, /*strides=*/{1, 1}, /*pads=*/{}, /*p=*/2,
+                                  /*auto_pad=*/nullptr, /*dilations=*/{2, 2});
+  onnx_optim::shapes::ShapesContext ctx;
+  SetInput(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                       onnx_optim::OptimDim(4), onnx_optim::OptimDim(4)});
+
+  onnx_optim::shapes::nn::ComputeShapeLpPool(ctx, node, "X");
+
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  EXPECT_EQ(out[2].AsInt(), 2);
+  EXPECT_EQ(out[3].AsInt(), 2);
+}
+
+TEST(OnnxOptimShapesNnLpPool, RejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("AveragePool");
+  node.add_input("X");
+  node.add_output("Y");
+  AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
+  onnx_optim::shapes::ShapesContext ctx;
+  SetInput(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                       onnx_optim::OptimDim(4), onnx_optim::OptimDim(4)});
+  EXPECT_THROW(onnx_optim::shapes::nn::ComputeShapeLpPool(ctx, node, "X"), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesNnLpPool, RejectsMissingKernelShape) {
+  NodeProto node;
+  node.set_op_type("LpPool");
+  node.add_input("X");
+  node.add_output("Y");
+  AddAttribute<int64_t>(node, "p", 2);
+  onnx_optim::shapes::ShapesContext ctx;
+  SetInput(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                       onnx_optim::OptimDim(4), onnx_optim::OptimDim(4)});
+  EXPECT_THROW(onnx_optim::shapes::nn::ComputeShapeLpPool(ctx, node, "X"), std::invalid_argument);
+}
+
 TEST(OnnxOptimShapesNnMaxPool, Default2DSingleOutput) {
   // mirrors test_cc_maxpool_2d_default: kernel (2, 2), no strides, no pads
   // -> 31x31 output and no Indices output declared.

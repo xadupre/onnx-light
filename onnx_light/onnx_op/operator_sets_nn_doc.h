@@ -61,6 +61,15 @@ std::string MakeGlobalMaxPoolDoc(int since_version);
 std::string MakeGlobalLpPoolDoc(int since_version);
 
 /**
+ * Returns the documentation string for the LpPool operator at the given
+ * opset version (1, 2, 11, 18, or 22). The v1 text differs slightly from
+ * v2/v11 (v1 has the upstream ``across the / the tensor`` duplication
+ * typo), and v18/v22 share a longer text with explicit output-shape
+ * formulas.
+ */
+std::string MakeLpPoolDoc(int since_version);
+
+/**
  * Returns the documentation string for the LRN (Local Response Normalization)
  * operator at the given opset version (1 or 13). The opset 1 text uses bare
  * identifiers while the opset 13 text wraps them in Markdown backticks.

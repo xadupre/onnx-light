@@ -130,6 +130,38 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// N-D Lp pooling on a FLOAT tensor laid out as ``(N, C, D1, ..., Dk)``.
+/// Implements the ONNX ``LpPool`` operator: for every output position, the
+/// kernel computes ``(sum |x_i|^p)^(1/p)`` over the input values inside the
+/// pooling window. Positions outside ``[0, in_dim)`` (i.e. in the padded
+/// region) contribute ``0`` to the sum (matching the upstream ONNX
+/// reference, where the input is zero-padded before pooling).
+///
+/// ``kernel_shape`` must have ``k`` entries; ``strides``, ``pads`` and
+/// ``dilations`` (lengths ``k``, ``2 * k`` and ``k`` respectively) default
+/// to all-ones / all-zeros / all-ones when omitted. ``auto_pad`` defaults
+/// to ``NOTSET`` (use explicit ``pads``); when set to ``SAME_UPPER``,
+/// ``SAME_LOWER`` or ``VALID`` the ``pads`` argument must be empty and the
+/// begin/end padding is computed from the input shape. ``p`` defaults to
+/// ``2`` (L2 norm).
+class LpPool : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// All attributes explicit. ``strides`` may be empty (treated as all 1),
+  /// ``pads`` may be empty (treated as all 0) and ``dilations`` may be empty
+  /// (treated as all 1).
+  Tensor operator()(const Tensor &x, const std::vector<int64_t> &kernel_shape,
+                    const std::vector<int64_t> &strides = {}, const std::vector<int64_t> &pads = {},
+                    int64_t p = 2, bool ceil_mode = false,
+                    const std::vector<int64_t> &dilations = {},
+                    const std::string &auto_pad = "NOTSET") const;
+
+  /// Output shape generally differs from the input shape, so the output
+  /// buffer cannot in general alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Inference-mode BatchNormalization on a FLOAT input laid out as
 /// ``(N, C, D1, ..., Dk)`` (any rank >= 2; rank 1 is also accepted with
 /// ``C`` treated as 1). All four extra inputs (``scale``, ``B``,

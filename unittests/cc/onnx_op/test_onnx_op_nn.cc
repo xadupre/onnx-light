@@ -35,6 +35,7 @@ constexpr size_t kExpectedInstanceNormalizationSchemaCount = 3;
 constexpr size_t kExpectedMeanVarianceNormalizationSchemaCount = 2;
 constexpr size_t kExpectedLRNSchemaCount = 2;
 constexpr size_t kExpectedLpNormalizationSchemaCount = 2;
+constexpr size_t kExpectedLpPoolSchemaCount = 5;
 constexpr size_t kExpectedLSTMSchemaCount = 4;
 constexpr size_t kExpectedMaxPoolSchemaCount = 6;
 constexpr size_t kExpectedMaxRoiPoolSchemaCount = 2;
@@ -50,10 +51,11 @@ constexpr size_t kExpectedNnSchemaCount =
     kExpectedDropoutSchemaCount + kExpectedGlobalLpPoolSchemaCount + kExpectedFlattenSchemaCount +
     kExpectedGlobalMaxPoolSchemaCount + kExpectedGRUSchemaCount +
     kExpectedGroupNormalizationSchemaCount + kExpectedInstanceNormalizationSchemaCount +
-    kExpectedLRNSchemaCount + kExpectedLpNormalizationSchemaCount + kExpectedLSTMSchemaCount +
-    kExpectedMaxPoolSchemaCount + kExpectedMaxRoiPoolSchemaCount + kExpectedMaxUnpoolSchemaCount +
-    kExpectedMeanVarianceNormalizationSchemaCount + kExpectedRNNSchemaCount +
-    kExpectedRMSNormalizationSchemaCount + kExpectedRotaryEmbeddingSchemaCount;
+    kExpectedLRNSchemaCount + kExpectedLpNormalizationSchemaCount + kExpectedLpPoolSchemaCount +
+    kExpectedLSTMSchemaCount + kExpectedMaxPoolSchemaCount + kExpectedMaxRoiPoolSchemaCount +
+    kExpectedMaxUnpoolSchemaCount + kExpectedMeanVarianceNormalizationSchemaCount +
+    kExpectedRNNSchemaCount + kExpectedRMSNormalizationSchemaCount +
+    kExpectedRotaryEmbeddingSchemaCount;
 
 static const onnx_op::LightOpSchema *
 FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
@@ -645,6 +647,48 @@ TEST(OnnxOpNnRegistrationTest, ReturnsLpNormalizationSchemasForAllVersions) {
   // v22 adds bfloat16 to the type constraint set.
   EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs.size(), 4u);
   EXPECT_EQ(v1->type_constraints()[0].allowed_type_strs.size(), 3u);
+}
+
+TEST(OnnxOpNnRegistrationTest, ReturnsLpPoolSchemasForAllVersions) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("LpPool");
+
+  ASSERT_EQ(schemas.size(), kExpectedLpPoolSchemaCount);
+
+  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const onnx_op::LightOpSchema *const v18 = FindByVersion(schemas, 18);
+  const onnx_op::LightOpSchema *const v11 = FindByVersion(schemas, 11);
+  const onnx_op::LightOpSchema *const v2 = FindByVersion(schemas, 2);
+  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+
+  ASSERT_NE(nullptr, v22);
+  ASSERT_NE(nullptr, v18);
+  ASSERT_NE(nullptr, v11);
+  ASSERT_NE(nullptr, v2);
+  ASSERT_NE(nullptr, v1);
+
+  for (const onnx_op::LightOpSchema *schema : {v1, v2, v11, v18, v22}) {
+    SCOPED_TRACE("LpPool@" + std::to_string(schema->since_version()));
+    EXPECT_EQ(schema->name(), "LpPool");
+    EXPECT_EQ(schema->domain(), "ai.onnx");
+    ASSERT_EQ(schema->inputs().size(), 1u);
+    EXPECT_EQ(schema->inputs()[0].name, "X");
+    EXPECT_EQ(schema->inputs()[0].type, "T");
+    ASSERT_EQ(schema->outputs().size(), 1u);
+    EXPECT_EQ(schema->outputs()[0].name, "Y");
+    EXPECT_EQ(schema->outputs()[0].type, "T");
+    ASSERT_EQ(schema->type_constraints().size(), 1u);
+    EXPECT_EQ(schema->type_constraints()[0].type_param_str, "T");
+    EXPECT_FALSE(schema->doc().empty());
+  }
+
+  // v22 promotes the type set to include bfloat16 (matches upstream
+  // LpPool@22, which uses ``OpSchema::all_float_types_ir4()``).
+  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs.size(), 4u);
+  for (const onnx_op::LightOpSchema *schema : {v1, v2, v11, v18}) {
+    SCOPED_TRACE("LpPool@" + std::to_string(schema->since_version()));
+    EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs.size(), 3u);
+  }
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsFlattenSchemasForAllVersions) {

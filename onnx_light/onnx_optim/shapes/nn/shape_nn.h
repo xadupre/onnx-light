@@ -51,6 +51,32 @@ namespace nn {
 void ComputeShapeAveragePool(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of an ``LpPool`` node and
+ * stores it in ``ctx``.
+ *
+ * The output dtype matches the input dtype and the output shape is computed
+ * identically to :cpp:func:`ComputeShapeAveragePool` (the two operators share
+ * the same ``kernel_shape``/``strides``/``pads``/``dilations``/``ceil_mode``
+ * / ``auto_pad`` attribute schema; ``LpPool`` has an extra ``p`` attribute
+ * that does not affect the output shape).
+ *
+ * @param ctx   In/out context. Must already contain an entry for ``x``;
+ *              on return it also contains an entry for ``node.output(0)``.
+ * @param node  The ``LpPool`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"LpPool"`` and
+ *              ``node`` must declare at least one output.
+ * @param x     Name of the input value to read from ``ctx``. Must be
+ *              present in ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"LpPool"``,
+ *         if ``node`` has no output, if the input rank is inconsistent
+ *         with the (required) ``kernel_shape`` attribute, or if
+ *         ``auto_pad`` is set to an unsupported value.
+ * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
+ */
+void ComputeShapeLpPool(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a global pooling node
  * (``GlobalAveragePool``, ``GlobalMaxPool``, or ``GlobalLpPool``) and stores
  * it in ``ctx``.

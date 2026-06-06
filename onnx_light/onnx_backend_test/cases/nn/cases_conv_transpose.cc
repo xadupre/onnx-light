@@ -211,8 +211,8 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry) {
 
   // -------------------------------------------------------------------
   // Cases 10/11: ConvTranspose with output_shape and with kernel_shape +
-  // output_padding (mirrors ``test_convtranspose_output_shape``,
-  // ``test_convtranspose_pad`` and ``test_convtranspose_kernel_shape``).
+  // output_padding (mirrors ``test_convtranspose_output_shape`` and
+  // ``test_convtranspose_kernel_shape``).
   {
     std::vector<float> Xv(9);
     for (int i = 0; i < 9; ++i) {

@@ -15,7 +15,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
+namespace onnx_backend_test {
 
 /**
  * Lightweight opset identifier used by the backend test library.
@@ -230,5 +230,5 @@ std::vector<TestCase> CollectTestCases(const std::string &op_type = "");
  */
 std::vector<TestCase> CollectTestCasesByName(const std::string &name_regex);
 
-} // namespace onnx_kernels
+} // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

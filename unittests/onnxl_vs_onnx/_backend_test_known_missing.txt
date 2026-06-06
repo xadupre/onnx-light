@@ -283,14 +283,6 @@ compress_default_axis
 conv_with_strides_and_asymmetric_padding
 conv_with_strides_no_padding
 convinteger_without_padding
-convtranspose_1d
-convtranspose_3d
-convtranspose_autopad_same
-convtranspose_dilations
-convtranspose_group_2
-convtranspose_group_2_image_3
-convtranspose_kernel_shape
-convtranspose_output_shape
 depthtospace_crd_mode_example
 depthtospace_example
 dft_axis

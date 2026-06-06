@@ -60,7 +60,8 @@ jobs:
           mkdir -p /tmp/fuzz_seeds
           python -m onnx_light.fuzz.make_seed_corpus \
             /tmp/fuzz_seeds/vc_seeds.zip \
-            /tmp/fuzz_seeds/parser_seeds.zip
+            /tmp/fuzz_seeds/parser_seeds.zip \
+            /tmp/fuzz_seeds/shape_inference_seeds.zip
 
       - name: Run fuzz_checker (smoke)
         run: python -m onnx_light.fuzz.fuzz_checker -runs=2000 -timeout=25

@@ -13,6 +13,12 @@
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
 
+namespace {
+std::string ToPythonRepr(const std::string &value) {
+  return nb::cast<std::string>(nb::repr(nb::cast(value)));
+}
+} // namespace
+
 void AddOnnxPyOp(nb::module_ &m) {
   // -----------------------------------------------------------------------
   // Submodule `onnx_op`
@@ -124,9 +130,8 @@ void AddOnnxPyOp(nb::module_ &m) {
       .def_rw("description", &onnx_op::FormalParameter::description)
       .def_rw("type", &onnx_op::FormalParameter::type)
       .def("__repr__", [](const onnx_op::FormalParameter &p) {
-        return "FormalParameter(name=" + nb::cast<std::string>(nb::repr(nb::cast(p.name))) +
-               ", type=" + nb::cast<std::string>(nb::repr(nb::cast(p.type))) +
-               ", description=" + nb::cast<std::string>(nb::repr(nb::cast(p.description))) + ")";
+        return "FormalParameter(name=" + ToPythonRepr(p.name) + ", type=" + ToPythonRepr(p.type) +
+               ", description=" + ToPythonRepr(p.description) + ")";
       });
 
   nb::enum_<onnx_op::AttributeType>(onnx_op_mod, "AttributeType",

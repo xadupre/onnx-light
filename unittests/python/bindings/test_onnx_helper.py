@@ -105,6 +105,37 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertEqual(attr.name, "a")
         self.assertEqual(attr.doc_string, "doc")
 
+    def test_make_attribute_ref(self) -> None:
+        attr = oh.make_attribute_ref(
+            "alpha", onnxl.AttributeProto.FLOAT, ref_attr_name="parent_alpha"
+        )
+        self.assertEqual(attr.name, "alpha")
+        self.assertEqual(attr.type, onnxl.AttributeProto.FLOAT)
+        self.assertEqual(attr.ref_attr_name, "parent_alpha")
+        # A reference attribute carries no data; it is resolved from the parent
+        # function's attribute at instantiation time.
+        with self.assertRaises(ValueError):
+            oh.get_attribute_value(attr)
+
+    def test_make_attribute_ref_doc_string(self) -> None:
+        attr = oh.make_attribute_ref(
+            "alpha",
+            onnxl.AttributeProto.FLOAT,
+            doc_string="doc",
+            ref_attr_name="parent_alpha",
+        )
+        self.assertEqual(attr.ref_attr_name, "parent_alpha")
+        self.assertEqual(attr.doc_string, "doc")
+
+    def test_make_attribute_ref_doc_string_positional(self) -> None:
+        attr = oh.make_attribute_ref("alpha", onnxl.AttributeProto.FLOAT, "doc")
+        self.assertEqual(attr.ref_attr_name, "alpha")
+        self.assertEqual(attr.doc_string, "doc")
+
+    def test_make_attribute_ref_requires_ref_attr_name(self) -> None:
+        with self.assertRaises(ValueError):
+            oh.make_attribute_ref("alpha", onnxl.AttributeProto.FLOAT, ref_attr_name="")
+
     def test_attr_string(self) -> None:
         # bytes
         attr = oh.make_attribute("str", b"test")

@@ -34,7 +34,7 @@ Tensor MakeFeatureMap() {
 
 } // namespace
 
-TEST(BackendKernelClass, RoiAlignAvgProducesExpectedShapeAndRange) {
+TEST(KernelClass, RoiAlignAvgProducesExpectedShapeAndRange) {
   const KernelContext ctx{DefaultOpset(16)};
   RoiAlign roialign{ctx};
   Tensor x = MakeFeatureMap();
@@ -71,7 +71,7 @@ TEST(BackendKernelClass, RoiAlignAvgProducesExpectedShapeAndRange) {
   EXPECT_NEAR(center, 0.5f, 0.2f);
 }
 
-TEST(BackendKernelClass, RoiAlignMaxPickedSampleNotSmallerThanAvg) {
+TEST(KernelClass, RoiAlignMaxPickedSampleNotSmallerThanAvg) {
   const KernelContext ctx{DefaultOpset(16)};
   RoiAlign roialign{ctx};
   Tensor x = MakeFeatureMap();
@@ -102,7 +102,7 @@ TEST(BackendKernelClass, RoiAlignMaxPickedSampleNotSmallerThanAvg) {
   }
 }
 
-TEST(BackendKernelClass, RoiAlignRejectsBadInputs) {
+TEST(KernelClass, RoiAlignRejectsBadInputs) {
   const KernelContext ctx{DefaultOpset(16)};
   RoiAlign roialign{ctx};
   Tensor x = MakeFeatureMap();
@@ -139,7 +139,7 @@ TEST(BackendKernelClass, RoiAlignRejectsBadInputs) {
   EXPECT_THROW(roialign(x, rois, batch_indices, attrs, bad_out), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, NonMaxSuppressionSuppressByIoU) {
+TEST(KernelClass, NonMaxSuppressionSuppressByIoU) {
   const KernelContext ctx{onnx_kernels::DefaultOpset(11)};
   NonMaxSuppression nms{ctx};
   // Mirror the upstream test_nonmaxsuppression_suppress_by_IOU fixture.
@@ -161,7 +161,7 @@ TEST(BackendKernelClass, NonMaxSuppressionSuppressByIoU) {
   }
 }
 
-TEST(BackendKernelClass, NonMaxSuppressionDefaultsAndOptionalInputs) {
+TEST(KernelClass, NonMaxSuppressionDefaultsAndOptionalInputs) {
   const KernelContext ctx{onnx_kernels::DefaultOpset(11)};
   NonMaxSuppression nms{ctx};
   // Two non-overlapping boxes; with no max_output_boxes_per_class (default 0)
@@ -189,7 +189,7 @@ TEST(BackendKernelClass, NonMaxSuppressionDefaultsAndOptionalInputs) {
   EXPECT_EQ(py[5], 1);
 }
 
-TEST(BackendKernelClass, NonMaxSuppressionRejectsBadInputs) {
+TEST(KernelClass, NonMaxSuppressionRejectsBadInputs) {
   const KernelContext ctx{onnx_kernels::DefaultOpset(11)};
   NonMaxSuppression nms{ctx};
   Tensor boxes = Tensor::FromFloat("", {1, 1, 4}, {0.0f, 0.0f, 1.0f, 1.0f});

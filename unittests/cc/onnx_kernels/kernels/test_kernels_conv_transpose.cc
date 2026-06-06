@@ -21,7 +21,7 @@ namespace Test {
 
 // Mirrors upstream ``test_convtranspose``: 1x1x3x3 input, 1x2x3x3 weight of
 // ones, default attrs. Output shape is (1, 2, 5, 5).
-TEST(BackendKernelClass, ConvTransposeBasicMatchesUpstream) {
+TEST(KernelClass, ConvTransposeBasicMatchesUpstream) {
   const KernelContext ctx{DefaultOpset(22)};
   const ConvTranspose ct{ctx};
   std::vector<float> X(9);
@@ -43,7 +43,7 @@ TEST(BackendKernelClass, ConvTransposeBasicMatchesUpstream) {
 }
 
 // ConvTranspose with explicit pads cropping the output.
-TEST(BackendKernelClass, ConvTransposeWithPadsCropsOutput) {
+TEST(KernelClass, ConvTransposeWithPadsCropsOutput) {
   const KernelContext ctx{DefaultOpset(22)};
   const ConvTranspose ct{ctx};
   std::vector<float> X(9);
@@ -61,7 +61,7 @@ TEST(BackendKernelClass, ConvTransposeWithPadsCropsOutput) {
 }
 
 // ConvTranspose with output_shape and stride.
-TEST(BackendKernelClass, ConvTransposeOutputShapeHonored) {
+TEST(KernelClass, ConvTransposeOutputShapeHonored) {
   const KernelContext ctx{DefaultOpset(22)};
   const ConvTranspose ct{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 3, 3}, std::vector<float>(9, 1.0f));
@@ -75,7 +75,7 @@ TEST(BackendKernelClass, ConvTransposeOutputShapeHonored) {
   ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 1, 6, 6}));
 }
 
-TEST(BackendKernelClass, ConvTransposeCanRunInPlaceIsFalse) {
+TEST(KernelClass, ConvTransposeCanRunInPlaceIsFalse) {
   EXPECT_FALSE(ConvTranspose::CanRunInPlace());
 }
 

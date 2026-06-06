@@ -35,7 +35,7 @@ void ExpectFloatEq(const Tensor &y, const std::vector<float> &expected, float to
 // Mirrors upstream ``test_col2im``: 1-D-like column folding back into a
 // 5x5 image with block-shape (1, 5), default stride / dilation / pads.
 // Each row of the 5x5 input contains a full block placed at row r.
-TEST(BackendKernelClass, Col2ImBasic2DMatchesUpstream) {
+TEST(KernelClass, Col2ImBasic2DMatchesUpstream) {
   const KernelContext ctx{DefaultOpset(18)};
   const Col2Im op{ctx};
   std::vector<float> in_v(25);
@@ -64,7 +64,7 @@ TEST(BackendKernelClass, Col2ImBasic2DMatchesUpstream) {
 
 // Overlap test: two adjacent 1x3 blocks contribute to the same column,
 // values must be summed.
-TEST(BackendKernelClass, Col2ImOverlappingBlocksSum) {
+TEST(KernelClass, Col2ImOverlappingBlocksSum) {
   const KernelContext ctx{DefaultOpset(18)};
   const Col2Im op{ctx};
   // block_shape (1, 3), stride 1, image_shape (1, 4) → L = 2 blocks.
@@ -92,7 +92,7 @@ TEST(BackendKernelClass, Col2ImOverlappingBlocksSum) {
 // Out-of-bounds samples from padding are dropped (padded values
 // contributed by blocks falling outside the image must not appear in the
 // output).
-TEST(BackendKernelClass, Col2ImPadsDropOutOfBoundsContributions) {
+TEST(KernelClass, Col2ImPadsDropOutOfBoundsContributions) {
   const KernelContext ctx{DefaultOpset(18)};
   const Col2Im op{ctx};
   // image (1, 2), block (1, 3), pads (left=1, right=0) → padded width 3,
@@ -112,7 +112,7 @@ TEST(BackendKernelClass, Col2ImPadsDropOutOfBoundsContributions) {
   ExpectFloatEq(y, {11.0f, 13.0f});
 }
 
-TEST(BackendKernelClass, Col2ImRejectsNonFloatInput) {
+TEST(KernelClass, Col2ImRejectsNonFloatInput) {
   const KernelContext ctx{DefaultOpset(18)};
   const Col2Im op{ctx};
   Tensor input("", static_cast<int32_t>(onnx_kernels::DataType::INT32),
@@ -123,7 +123,7 @@ TEST(BackendKernelClass, Col2ImRejectsNonFloatInput) {
   EXPECT_THROW(op(input, image_shape, block_shape, attrs), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, Col2ImRejectsInconsistentL) {
+TEST(KernelClass, Col2ImRejectsInconsistentL) {
   const KernelContext ctx{DefaultOpset(18)};
   const Col2Im op{ctx};
   // image (5, 5) + block (1, 5) → expected L = 5. We pass L = 4.

@@ -28,7 +28,7 @@ namespace Test {
 //   Y[0,1] = (3-1)+(4-1)+(6-1)+(7-1) = 16
 //   Y[1,0] = (5-1)+(6-1)+(8-1)+(9-1) = 24
 //   Y[1,1] = (6-1)+(7-1)+(9-1)+(10-1) = 28
-TEST(BackendKernelClass, ConvIntegerBasicWithoutPaddingMatchesUpstream) {
+TEST(KernelClass, ConvIntegerBasicWithoutPaddingMatchesUpstream) {
   const KernelContext ctx{DefaultOpset(10)};
   const ConvInteger ci{ctx};
   Tensor x = Tensor::FromUint8("", {1, 1, 3, 3}, {2, 3, 4, 5, 6, 7, 8, 9, 10});
@@ -48,8 +48,6 @@ TEST(BackendKernelClass, ConvIntegerBasicWithoutPaddingMatchesUpstream) {
   }
 }
 
-TEST(BackendKernelClass, ConvIntegerCanRunInPlaceIsFalse) {
-  EXPECT_FALSE(ConvInteger::CanRunInPlace());
-}
+TEST(KernelClass, ConvIntegerCanRunInPlaceIsFalse) { EXPECT_FALSE(ConvInteger::CanRunInPlace()); }
 
 } // namespace Test

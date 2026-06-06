@@ -64,16 +64,11 @@ struct DtypeNameEntry {
 
 const std::vector<DtypeNameEntry> &SupportedDtypeNames() {
   static const std::vector<DtypeNameEntry> kEntries = {
-      {onnx_kernels::DataType::FLOAT, "FLOAT"},
-      {onnx_kernels::DataType::DOUBLE, "DOUBLE"},
-      {onnx_kernels::DataType::INT32, "INT32"},
-      {onnx_kernels::DataType::INT64, "INT64"},
-      {onnx_kernels::DataType::INT8, "INT8"},
-      {onnx_kernels::DataType::UINT8, "UINT8"},
-      {onnx_kernels::DataType::INT16, "INT16"},
-      {onnx_kernels::DataType::UINT16, "UINT16"},
-      {onnx_kernels::DataType::BOOL, "BOOL"},
-      {onnx_kernels::DataType::STRING, "STRING"},
+      {onnx_kernels::DataType::FLOAT, "FLOAT"}, {onnx_kernels::DataType::DOUBLE, "DOUBLE"},
+      {onnx_kernels::DataType::INT32, "INT32"}, {onnx_kernels::DataType::INT64, "INT64"},
+      {onnx_kernels::DataType::INT8, "INT8"},   {onnx_kernels::DataType::UINT8, "UINT8"},
+      {onnx_kernels::DataType::INT16, "INT16"}, {onnx_kernels::DataType::UINT16, "UINT16"},
+      {onnx_kernels::DataType::BOOL, "BOOL"},   {onnx_kernels::DataType::STRING, "STRING"},
   };
   return kEntries;
 }

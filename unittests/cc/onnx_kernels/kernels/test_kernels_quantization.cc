@@ -25,7 +25,7 @@ using onnx_kernels::kernel::QuantizeLinear;
 
 namespace Test {
 
-TEST(BackendKernelClass, QuantizeLinearDefaultUint8) {
+TEST(KernelClass, QuantizeLinearDefaultUint8) {
   const KernelContext ctx{DefaultOpset(13)};
   QuantizeLinear q{ctx};
   Tensor x = Tensor::FromFloat("", {6}, {0.0f, 2.0f, 3.0f, 1000.0f, -254.0f, -1000.0f});
@@ -42,7 +42,7 @@ TEST(BackendKernelClass, QuantizeLinearDefaultUint8) {
   EXPECT_EQ(static_cast<int>(y.data[5]), 0);   // saturates below 0
 }
 
-TEST(BackendKernelClass, QuantizeLinearInt8WithZeroPoint) {
+TEST(KernelClass, QuantizeLinearInt8WithZeroPoint) {
   const KernelContext ctx{DefaultOpset(13)};
   QuantizeLinear q{ctx};
   Tensor x = Tensor::FromFloat("", {4}, {0.0f, 2.0f, -2.0f, 300.0f});
@@ -60,7 +60,7 @@ TEST(BackendKernelClass, QuantizeLinearInt8WithZeroPoint) {
   EXPECT_EQ(static_cast<int>(py[3]), 127); // 300/2 + (-10) = 140 -> saturates at INT8 max
 }
 
-TEST(BackendKernelClass, QuantizeLinearUint16WithZeroPoint) {
+TEST(KernelClass, QuantizeLinearUint16WithZeroPoint) {
   const KernelContext ctx{DefaultOpset(13)};
   QuantizeLinear q{ctx};
   Tensor x = Tensor::FromFloat("", {4}, {0.0f, 2.0f, 3.0f, 200000.0f});
@@ -79,7 +79,7 @@ TEST(BackendKernelClass, QuantizeLinearUint16WithZeroPoint) {
   EXPECT_EQ(py[3], std::numeric_limits<uint16_t>::max());
 }
 
-TEST(BackendKernelClass, QuantizeLinearInt16WithZeroPoint) {
+TEST(KernelClass, QuantizeLinearInt16WithZeroPoint) {
   const KernelContext ctx{DefaultOpset(13)};
   QuantizeLinear q{ctx};
   Tensor x = Tensor::FromFloat("", {4}, {0.0f, 2.0f, 3.0f, -100000.0f});
@@ -98,7 +98,7 @@ TEST(BackendKernelClass, QuantizeLinearInt16WithZeroPoint) {
   EXPECT_EQ(py[3], std::numeric_limits<int16_t>::min());
 }
 
-TEST(BackendKernelClass, QuantizeLinearRejectsBadInputs) {
+TEST(KernelClass, QuantizeLinearRejectsBadInputs) {
   const KernelContext ctx{DefaultOpset(13)};
   QuantizeLinear q{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {0.0f, 1.0f, 2.0f});
@@ -114,7 +114,7 @@ TEST(BackendKernelClass, QuantizeLinearRejectsBadInputs) {
   EXPECT_THROW(q(x, scale, zp_int32), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, DequantizeLinearDefaultUint8) {
+TEST(KernelClass, DequantizeLinearDefaultUint8) {
   const KernelContext ctx{DefaultOpset(13)};
   DequantizeLinear d{ctx};
   Tensor x = Tensor::FromUint8("", {4}, {0, 3, 128, 255});
@@ -129,7 +129,7 @@ TEST(BackendKernelClass, DequantizeLinearDefaultUint8) {
   EXPECT_FLOAT_EQ(y.AsFloat()[3], 510.0f);
 }
 
-TEST(BackendKernelClass, DequantizeLinearInt8WithZeroPoint) {
+TEST(KernelClass, DequantizeLinearInt8WithZeroPoint) {
   const KernelContext ctx{DefaultOpset(13)};
   DequantizeLinear d{ctx};
   Tensor x = Tensor::FromInt8("", {4}, {-10, -9, 0, 127});
@@ -146,7 +146,7 @@ TEST(BackendKernelClass, DequantizeLinearInt8WithZeroPoint) {
   EXPECT_FLOAT_EQ(y.AsFloat()[3], 274.0f);
 }
 
-TEST(BackendKernelClass, DequantizeLinearRejectsBadInputs) {
+TEST(KernelClass, DequantizeLinearRejectsBadInputs) {
   const KernelContext ctx{DefaultOpset(13)};
   DequantizeLinear d{ctx};
   Tensor x = Tensor::FromUint8("", {3}, {0, 1, 2});
@@ -163,7 +163,7 @@ TEST(BackendKernelClass, DequantizeLinearRejectsBadInputs) {
   EXPECT_THROW(d(bad_x, scale), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, DequantizeLinearUint16WithZeroPoint) {
+TEST(KernelClass, DequantizeLinearUint16WithZeroPoint) {
   const KernelContext ctx{DefaultOpset(13)};
   DequantizeLinear d{ctx};
   Tensor x = Tensor::FromUint16("", {4}, {30000, 31000, 32768, 33000});
@@ -182,7 +182,7 @@ TEST(BackendKernelClass, DequantizeLinearUint16WithZeroPoint) {
   EXPECT_FLOAT_EQ(y.AsFloat()[3], 466.0f);
 }
 
-TEST(BackendKernelClass, DequantizeLinearInt16WithZeroPoint) {
+TEST(KernelClass, DequantizeLinearInt16WithZeroPoint) {
   const KernelContext ctx{DefaultOpset(13)};
   DequantizeLinear d{ctx};
   Tensor x = Tensor::FromInt16("", {4}, {-300, -30, -1025, 1270});
@@ -201,7 +201,7 @@ TEST(BackendKernelClass, DequantizeLinearInt16WithZeroPoint) {
   EXPECT_FLOAT_EQ(y.AsFloat()[3], 4588.0f);
 }
 
-TEST(BackendKernelClass, DequantizeLinearFloat8E4M3FNNoZeroPoint) {
+TEST(KernelClass, DequantizeLinearFloat8E4M3FNNoZeroPoint) {
   const KernelContext ctx{DefaultOpset(13)};
   DequantizeLinear d{ctx};
   const std::vector<float> fvals = {0.0f, 0.5f, 1.0f, 448.0f, -104.0f};
@@ -221,7 +221,7 @@ TEST(BackendKernelClass, DequantizeLinearFloat8E4M3FNNoZeroPoint) {
   EXPECT_FLOAT_EQ(y.AsFloat()[4], -208.0f);
 }
 
-TEST(BackendKernelClass, DequantizeLinearFloat8E5M2NoZeroPoint) {
+TEST(KernelClass, DequantizeLinearFloat8E5M2NoZeroPoint) {
   const KernelContext ctx{DefaultOpset(13)};
   DequantizeLinear d{ctx};
   const std::vector<float> fvals = {0.0f, 0.5f, 1.0f, 49152.0f, -96.0f};
@@ -240,7 +240,7 @@ TEST(BackendKernelClass, DequantizeLinearFloat8E5M2NoZeroPoint) {
   EXPECT_FLOAT_EQ(y.AsFloat()[4], -192.0f);
 }
 
-TEST(BackendKernelClass, DequantizeLinearFloat8E4M3FNWithZeroPoint) {
+TEST(KernelClass, DequantizeLinearFloat8E4M3FNWithZeroPoint) {
   const KernelContext ctx{DefaultOpset(13)};
   DequantizeLinear d{ctx};
   const std::vector<float> fvals = {0.0f, 0.5f, 1.0f, 448.0f, -104.0f};
@@ -261,7 +261,7 @@ TEST(BackendKernelClass, DequantizeLinearFloat8E4M3FNWithZeroPoint) {
   EXPECT_FLOAT_EQ(y.AsFloat()[4], -208.0f);
 }
 
-TEST(BackendKernelClass, DynamicQuantizeLinearStraddleZero) {
+TEST(KernelClass, DynamicQuantizeLinearStraddleZero) {
   // Mirrors the upstream ``DynamicQuantizeLinear.export()`` test:
   // expected scale 0.0196078438 and zero point 153.
   const KernelContext ctx{DefaultOpset(11)};
@@ -280,7 +280,7 @@ TEST(BackendKernelClass, DynamicQuantizeLinearStraddleZero) {
   EXPECT_EQ(static_cast<int>(y_zero_point.data[0]), 153);
 }
 
-TEST(BackendKernelClass, DynamicQuantizeLinearAllNegative) {
+TEST(KernelClass, DynamicQuantizeLinearAllNegative) {
   // Mirrors ``DynamicQuantizeLinear.export_max_adjusted()``: all-negative
   // input, max gets clipped to 0; expected scale 0.0156862754 and zero
   // point 255.
@@ -293,7 +293,7 @@ TEST(BackendKernelClass, DynamicQuantizeLinearAllNegative) {
   EXPECT_EQ(static_cast<int>(y_zero_point.data[0]), 255);
 }
 
-TEST(BackendKernelClass, DynamicQuantizeLinearAllPositive) {
+TEST(KernelClass, DynamicQuantizeLinearAllPositive) {
   // Mirrors ``DynamicQuantizeLinear.export_min_adjusted()``: all-positive
   // 2-D input, min gets clipped to 0; expected scale 0.0156862754 and
   // zero point 0.

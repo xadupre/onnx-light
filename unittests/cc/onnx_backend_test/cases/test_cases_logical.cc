@@ -280,8 +280,7 @@ TEST(BackendTestCase, GreaterLessBroadcastCasesHaveBroadcastShapes) {
     EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5})) << name;
     EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{5})) << name;
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5})) << name;
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL))
-        << name;
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL)) << name;
   }
 }
 
@@ -449,12 +448,9 @@ TEST(BackendTestCase, EqualStringCasesHaveExpectedShapesAndDtype) {
     ASSERT_NE(tc, nullptr) << name;
     const auto &ds = tc->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 2u) << name;
-    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::STRING))
-        << name;
-    EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(onnx_kernels::DataType::STRING))
-        << name;
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL))
-        << name;
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::STRING)) << name;
+    EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(onnx_kernels::DataType::STRING)) << name;
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL)) << name;
     EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{2})) << name;
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{2})) << name;
   }

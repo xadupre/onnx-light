@@ -259,7 +259,7 @@ the project with ``ONNX_LIGHT_BUILD_TESTS=ON`` and use ``ctest``:
     cmake --build build -j
     ctest --test-dir build -R Backend --output-on-failure
 
-The ``-R`` regex can be tightened (for example ``-R BackendKernelClass``)
+The ``-R`` regex can be tightened (for example ``-R KernelClass``)
 to focus on a single test group.
 
 ----

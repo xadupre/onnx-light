@@ -27,7 +27,7 @@ using onnx_kernels::kernel::MeanVarianceNormalization;
 
 namespace Test {
 
-TEST(BackendKernelClass, AveragePool2DDefault) {
+TEST(KernelClass, AveragePool2DDefault) {
   const KernelContext ctx{DefaultOpset(19)};
   AveragePool pool{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
@@ -50,7 +50,7 @@ TEST(BackendKernelClass, AveragePool2DDefault) {
   EXPECT_FLOAT_EQ(py[8], 13.5f);
 }
 
-TEST(BackendKernelClass, AveragePool2DStrides) {
+TEST(KernelClass, AveragePool2DStrides) {
   const KernelContext ctx{DefaultOpset(19)};
   AveragePool pool{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 5, 5},
@@ -68,7 +68,7 @@ TEST(BackendKernelClass, AveragePool2DStrides) {
   EXPECT_FLOAT_EQ(py[3], 19.0f);
 }
 
-TEST(BackendKernelClass, AveragePool2DPadsCountIncludePad) {
+TEST(KernelClass, AveragePool2DPadsCountIncludePad) {
   const KernelContext ctx{DefaultOpset(19)};
   AveragePool pool{ctx};
   Tensor x =
@@ -88,7 +88,7 @@ TEST(BackendKernelClass, AveragePool2DPadsCountIncludePad) {
   EXPECT_FLOAT_EQ(py[8], 28.0f / 9.0f);
 }
 
-TEST(BackendKernelClass, AveragePool2DPadsCountExcludePad) {
+TEST(KernelClass, AveragePool2DPadsCountExcludePad) {
   const KernelContext ctx{DefaultOpset(19)};
   AveragePool pool{ctx};
   Tensor x =
@@ -104,7 +104,7 @@ TEST(BackendKernelClass, AveragePool2DPadsCountExcludePad) {
   EXPECT_FLOAT_EQ(py[8], 7.0f);
 }
 
-TEST(BackendKernelClass, AveragePoolCeilMode) {
+TEST(KernelClass, AveragePoolCeilMode) {
   const KernelContext ctx{DefaultOpset(19)};
   AveragePool pool{ctx};
   // 1x1x4x4 input, 3x3 kernel, stride 2; floor gives 1x1, ceil gives 2x2.
@@ -118,7 +118,7 @@ TEST(BackendKernelClass, AveragePoolCeilMode) {
   EXPECT_EQ(y_ceil.shape, (std::vector<int64_t>{1, 1, 2, 2}));
 }
 
-TEST(BackendKernelClass, AveragePool1D) {
+TEST(KernelClass, AveragePool1D) {
   const KernelContext ctx{DefaultOpset(19)};
   AveragePool pool{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 5}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
@@ -130,7 +130,7 @@ TEST(BackendKernelClass, AveragePool1D) {
   EXPECT_FLOAT_EQ(py[2], 4.0f);
 }
 
-TEST(BackendKernelClass, AveragePoolRejectsBadInputs) {
+TEST(KernelClass, AveragePoolRejectsBadInputs) {
   const KernelContext ctx{DefaultOpset(19)};
   AveragePool pool{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
@@ -150,7 +150,7 @@ TEST(BackendKernelClass, AveragePoolRejectsBadInputs) {
                std::invalid_argument);
 }
 
-TEST(BackendKernelClass, AveragePool2DDilations) {
+TEST(KernelClass, AveragePool2DDilations) {
   // mirrors test_averagepool_2d_dilations: 4x4 input 1..16, kernel 2x2,
   // dilations (2,2), stride 1, ceil_mode -> 2x2 output [[6, 7], [10, 11]].
   const KernelContext ctx{DefaultOpset(19)};
@@ -168,7 +168,7 @@ TEST(BackendKernelClass, AveragePool2DDilations) {
   EXPECT_FLOAT_EQ(py[3], 11.0f);
 }
 
-TEST(BackendKernelClass, AveragePool2DAutoPadSameUpperPrecomputed) {
+TEST(KernelClass, AveragePool2DAutoPadSameUpperPrecomputed) {
   // mirrors test_averagepool_2d_precomputed_same_upper: 5x5 input 1..25,
   // kernel 3x3, stride 2, auto_pad=SAME_UPPER -> 3x3 output
   // [[4, 5.5, 7], [11.5, 13, 14.5], [19, 20.5, 22]].
@@ -194,7 +194,7 @@ TEST(BackendKernelClass, AveragePool2DAutoPadSameUpperPrecomputed) {
   EXPECT_FLOAT_EQ(py[8], 22.0f);
 }
 
-TEST(BackendKernelClass, AveragePoolAutoPadAndPadsAreMutuallyExclusive) {
+TEST(KernelClass, AveragePoolAutoPadAndPadsAreMutuallyExclusive) {
   const KernelContext ctx{DefaultOpset(19)};
   AveragePool pool{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
@@ -216,7 +216,7 @@ TEST(BackendKernelClass, AveragePoolAutoPadAndPadsAreMutuallyExclusive) {
                std::invalid_argument);
 }
 
-TEST(BackendKernelClass, BatchNormalizationInferenceMatchesFormula) {
+TEST(KernelClass, BatchNormalizationInferenceMatchesFormula) {
   const KernelContext ctx{DefaultOpset(15)};
   BatchNormalization bn{ctx};
   // 1x2x1x3 input (the same shape as test_cc_batchnorm_example). With
@@ -245,7 +245,7 @@ TEST(BackendKernelClass, BatchNormalizationInferenceMatchesFormula) {
   EXPECT_NEAR(py[5], (4.0f - 3.0f) * k + 1.0f, 1e-3f);
 }
 
-TEST(BackendKernelClass, BatchNormalizationRejectsWrongChannelSize) {
+TEST(KernelClass, BatchNormalizationRejectsWrongChannelSize) {
   const KernelContext ctx{DefaultOpset(15)};
   BatchNormalization bn{ctx};
   Tensor x = Tensor::FromFloat("", {1, 2, 1, 1}, {0.0f, 0.0f});
@@ -257,7 +257,7 @@ TEST(BackendKernelClass, BatchNormalizationRejectsWrongChannelSize) {
   EXPECT_THROW(bn(x, scale, bias, mean, var), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, BatchNormalizationRank1InputTreatsChannelAsOne) {
+TEST(KernelClass, BatchNormalizationRank1InputTreatsChannelAsOne) {
   const KernelContext ctx{DefaultOpset(15)};
   BatchNormalization bn{ctx};
   Tensor x = Tensor::FromFloat("", {4}, {1.0f, 2.0f, 3.0f, 4.0f});
@@ -274,7 +274,7 @@ TEST(BackendKernelClass, BatchNormalizationRank1InputTreatsChannelAsOne) {
   }
 }
 
-TEST(BackendKernelClass, MeanVarianceNormalizationDefaultAxes) {
+TEST(KernelClass, MeanVarianceNormalizationDefaultAxes) {
   const KernelContext ctx{DefaultOpset(13)};
   MeanVarianceNormalization mvn{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2, 1, 1}, {1.0f, 2.0f, 3.0f, 4.0f});
@@ -288,7 +288,7 @@ TEST(BackendKernelClass, MeanVarianceNormalizationDefaultAxes) {
   EXPECT_NEAR(py[3], 1.0f, 1e-5f);
 }
 
-TEST(BackendKernelClass, MeanVarianceNormalizationCustomAxes) {
+TEST(KernelClass, MeanVarianceNormalizationCustomAxes) {
   const KernelContext ctx{DefaultOpset(13)};
   MeanVarianceNormalization mvn{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 3.0f, 5.0f, 7.0f});
@@ -301,14 +301,14 @@ TEST(BackendKernelClass, MeanVarianceNormalizationCustomAxes) {
   EXPECT_NEAR(py[3], 1.0f, 1e-5f);
 }
 
-TEST(BackendKernelClass, MeanVarianceNormalizationRejectsAxisOutOfRange) {
+TEST(KernelClass, MeanVarianceNormalizationRejectsAxisOutOfRange) {
   const KernelContext ctx{DefaultOpset(13)};
   MeanVarianceNormalization mvn{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   EXPECT_THROW(mvn(x, {2}), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, DropoutInferenceModeCopiesInputAndOnesMask) {
+TEST(KernelClass, DropoutInferenceModeCopiesInputAndOnesMask) {
   const KernelContext ctx{DefaultOpset(22)};
   Dropout dropout{ctx};
   Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, -2.0f, 3.0f, -4.0f, 5.0f, -6.0f});
@@ -323,7 +323,7 @@ TEST(BackendKernelClass, DropoutInferenceModeCopiesInputAndOnesMask) {
   }
 }
 
-TEST(BackendKernelClass, DropoutTrainingModeIsDeterministicForSeed) {
+TEST(KernelClass, DropoutTrainingModeIsDeterministicForSeed) {
   const KernelContext ctx{DefaultOpset(22)};
   Dropout dropout{ctx};
   Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, -2.0f, 3.0f, -4.0f, 5.0f, -6.0f});
@@ -333,7 +333,7 @@ TEST(BackendKernelClass, DropoutTrainingModeIsDeterministicForSeed) {
   ASSERT_EQ(y0.second.data, y1.second.data);
 }
 
-TEST(BackendKernelClass, DropoutRejectsInvalidRatio) {
+TEST(KernelClass, DropoutRejectsInvalidRatio) {
   const KernelContext ctx{DefaultOpset(22)};
   Dropout dropout{ctx};
   Tensor x = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
@@ -350,7 +350,7 @@ KernelContext AttentionKernelContext() { return KernelContext(DefaultOpset(23));
 
 } // namespace
 
-TEST(BackendKernelClass, AttentionMatchesHandComputedSingleHead) {
+TEST(KernelClass, AttentionMatchesHandComputedSingleHead) {
   // batch=1, heads=1, q_len=1, k_len=2, head_size=2, v_head_size=2,
   // default scale = 1/sqrt(head_size) = 1/sqrt(2).
   const Tensor Q = Tensor::FromFloat("", {1, 1, 1, 2}, {1.0f, 0.0f});
@@ -371,7 +371,7 @@ TEST(BackendKernelClass, AttentionMatchesHandComputedSingleHead) {
   EXPECT_NEAR(Y.AsFloat()[1], static_cast<float>(p0 * 2.0 + p1 * 4.0), 1e-6);
 }
 
-TEST(BackendKernelClass, AttentionExplicitScaleMatchesDefault) {
+TEST(KernelClass, AttentionExplicitScaleMatchesDefault) {
   const Tensor Q = Tensor::FromFloat("", {1, 1, 1, 2}, {1.0f, 0.0f});
   const Tensor K = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 0.0f, 0.0f, 1.0f});
   const Tensor V = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
@@ -386,7 +386,7 @@ TEST(BackendKernelClass, AttentionExplicitScaleMatchesDefault) {
   }
 }
 
-TEST(BackendKernelClass, AttentionSupportsGQAHeadSharing) {
+TEST(KernelClass, AttentionSupportsGQAHeadSharing) {
   // q_num_heads=2, kv_num_heads=1 (group_size=2). Single key/value position
   // → softmax probability is 1, so every Q head must reproduce V[0] exactly.
   const Tensor Q = Tensor::FromFloat("", {1, 2, 1, 2}, {1.0f, 0.0f, 0.0f, 1.0f});
@@ -403,7 +403,7 @@ TEST(BackendKernelClass, AttentionSupportsGQAHeadSharing) {
   }
 }
 
-TEST(BackendKernelClass, AttentionCausalMasksFuturePositions) {
+TEST(KernelClass, AttentionCausalMasksFuturePositions) {
   // q_seq=2, kv_seq=2. ``is_causal`` allows row 0 to attend only to col 0,
   // and row 1 to attend to cols 0 and 1. With Q=I row 0 must therefore
   // reproduce V[0] exactly regardless of K[1]/V[1].
@@ -427,7 +427,7 @@ TEST(BackendKernelClass, AttentionCausalMasksFuturePositions) {
   EXPECT_GT(Y.AsFloat()[3], -100.0f);
 }
 
-TEST(BackendKernelClass, AttentionBoolMaskExcludesFalsePositions) {
+TEST(KernelClass, AttentionBoolMaskExcludesFalsePositions) {
   // mask=[true, false] forces softmax to put all weight on position 0,
   // so the output must equal V[0] exactly.
   const Tensor Q = Tensor::FromFloat("", {1, 1, 1, 2}, {1.0f, 0.0f});
@@ -444,7 +444,7 @@ TEST(BackendKernelClass, AttentionBoolMaskExcludesFalsePositions) {
   EXPECT_FLOAT_EQ(Y.AsFloat()[1], 7.0f);
 }
 
-TEST(BackendKernelClass, AttentionFloatMaskAddsBias) {
+TEST(KernelClass, AttentionFloatMaskAddsBias) {
   // A large negative bias on position 1 effectively excludes it, mirroring
   // the BOOL-false case.
   const Tensor Q = Tensor::FromFloat("", {1, 1, 1, 2}, {1.0f, 0.0f});
@@ -460,7 +460,7 @@ TEST(BackendKernelClass, AttentionFloatMaskAddsBias) {
   EXPECT_NEAR(Y.AsFloat()[1], 7.0f, 1e-5f);
 }
 
-TEST(BackendKernelClass, AttentionSoftcapSaturatesExtremeScores) {
+TEST(KernelClass, AttentionSoftcapSaturatesExtremeScores) {
   // With huge raw scores ``s`` (here ``scale = 1e3``) the softcap
   // saturates them to ±softcap. The two key positions become
   // [+softcap, -softcap] which is far enough apart for softmax to put
@@ -483,7 +483,7 @@ TEST(BackendKernelClass, AttentionSoftcapSaturatesExtremeScores) {
   EXPECT_NEAR(Y.AsFloat()[0], static_cast<float>(w0 * 2.0 + w1 * -3.0), 1e-5f);
 }
 
-TEST(BackendKernelClass, AttentionPastKVConcatenatesIntoPresent) {
+TEST(KernelClass, AttentionPastKVConcatenatesIntoPresent) {
   // present_key/present_value are the concatenation along axis 2 of past_*
   // and the current K/V.
   const Tensor Q = Tensor::FromFloat("", {1, 1, 1, 2}, {1.0f, 0.0f});
@@ -512,7 +512,7 @@ TEST(BackendKernelClass, AttentionPastKVConcatenatesIntoPresent) {
   EXPECT_EQ(r.Y.shape, (std::vector<int64_t>{1, 1, 1, 2}));
 }
 
-TEST(BackendKernelClass, AttentionQkMatmulOutputModes) {
+TEST(KernelClass, AttentionQkMatmulOutputModes) {
   // (B=1, H=1, Lq=1, Lk=2, D=Dv=2). scale=2.0 makes the raw scores
   // easy to verify by hand.
   const Tensor Q = Tensor::FromFloat("", {1, 1, 1, 2}, {1.0f, 0.0f});
@@ -557,7 +557,7 @@ TEST(BackendKernelClass, AttentionQkMatmulOutputModes) {
   }
 }
 
-TEST(BackendKernelClass, AttentionRank3FusedLayoutRoundTripMatchesRank4) {
+TEST(KernelClass, AttentionRank3FusedLayoutRoundTripMatchesRank4) {
   // Same numerical data as the rank-4 case but expressed in the
   // ``(batch, seq, num_heads * head_size)`` fused layout, with
   // ``q_num_heads`` and ``kv_num_heads`` set on the attributes.
@@ -583,7 +583,7 @@ TEST(BackendKernelClass, AttentionRank3FusedLayoutRoundTripMatchesRank4) {
   }
 }
 
-TEST(BackendKernelClass, AttentionInPlaceOverloadWritesIntoOutput) {
+TEST(KernelClass, AttentionInPlaceOverloadWritesIntoOutput) {
   const Tensor Q = Tensor::FromFloat("", {1, 1, 1, 2}, {1.0f, 0.0f});
   const Tensor K = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 0.0f, 0.0f, 1.0f});
   const Tensor V = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
@@ -610,7 +610,7 @@ TEST(BackendKernelClass, AttentionInPlaceOverloadWritesIntoOutput) {
                std::invalid_argument);
 }
 
-TEST(BackendKernelClass, AttentionRejectsInvalidInputs) {
+TEST(KernelClass, AttentionRejectsInvalidInputs) {
   const KernelContext ctx = AttentionKernelContext();
   const Attention attention{ctx};
 
@@ -671,7 +671,7 @@ TEST(BackendKernelClass, AttentionRejectsInvalidInputs) {
   }
 }
 
-TEST(BackendKernelClass, MaxPool2DDefault) {
+TEST(KernelClass, MaxPool2DDefault) {
   const KernelContext ctx{DefaultOpset(22)};
   MaxPool pool{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
@@ -692,7 +692,7 @@ TEST(BackendKernelClass, MaxPool2DDefault) {
   EXPECT_FLOAT_EQ(py[8], 16.0f);
 }
 
-TEST(BackendKernelClass, MaxPool2DCeil) {
+TEST(KernelClass, MaxPool2DCeil) {
   // mirrors test_maxpool_2d_ceil: kernel (3, 3), stride (2, 2), ceil_mode=1.
   const KernelContext ctx{DefaultOpset(22)};
   MaxPool pool{ctx};
@@ -710,7 +710,7 @@ TEST(BackendKernelClass, MaxPool2DCeil) {
   EXPECT_FLOAT_EQ(py[3], 16.0f);
 }
 
-TEST(BackendKernelClass, MaxPool2DDilations) {
+TEST(KernelClass, MaxPool2DDilations) {
   // mirrors test_maxpool_2d_dilations: kernel (2, 2), dilations (2, 2).
   const KernelContext ctx{DefaultOpset(22)};
   MaxPool pool{ctx};
@@ -728,7 +728,7 @@ TEST(BackendKernelClass, MaxPool2DDilations) {
   EXPECT_FLOAT_EQ(py[3], 16.0f);
 }
 
-TEST(BackendKernelClass, MaxPoolWithIndices) {
+TEST(KernelClass, MaxPoolWithIndices) {
   // mirrors test_maxpool_with_argmax_2d_precomputed_pads.
   const KernelContext ctx{DefaultOpset(22)};
   MaxPool pool{ctx};
@@ -754,7 +754,7 @@ TEST(BackendKernelClass, MaxPoolWithIndices) {
   EXPECT_EQ(pi[24], 24);
 }
 
-TEST(BackendKernelClass, MaxPoolRejectsNonRowMajorStorageOrder) {
+TEST(KernelClass, MaxPoolRejectsNonRowMajorStorageOrder) {
   const KernelContext ctx{DefaultOpset(22)};
   MaxPool pool{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
@@ -763,7 +763,7 @@ TEST(BackendKernelClass, MaxPoolRejectsNonRowMajorStorageOrder) {
                std::invalid_argument);
 }
 
-TEST(BackendKernelClass, MaxUnpoolWithoutOutputShape) {
+TEST(KernelClass, MaxUnpoolWithoutOutputShape) {
   // mirrors test_maxunpool_export_without_output_shape.
   const KernelContext ctx{DefaultOpset(22)};
   MaxUnpool unpool{ctx};
@@ -784,7 +784,7 @@ TEST(BackendKernelClass, MaxUnpoolWithoutOutputShape) {
   }
 }
 
-TEST(BackendKernelClass, MaxUnpoolWithOutputShape) {
+TEST(KernelClass, MaxUnpoolWithOutputShape) {
   // mirrors test_maxunpool_export_with_output_shape.
   const KernelContext ctx{DefaultOpset(22)};
   MaxUnpool unpool{ctx};

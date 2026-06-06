@@ -32,7 +32,7 @@ void ExpectNear(const Tensor &y, const std::vector<float> &expected, float tol =
 } // namespace
 
 // Mirrors upstream ``test_basic_deform_conv_without_padding``.
-TEST(BackendKernelClass, DeformConvBasicWithoutPaddingMatchesUpstream) {
+TEST(KernelClass, DeformConvBasicWithoutPaddingMatchesUpstream) {
   const KernelContext ctx{DefaultOpset(19)};
   const DeformConv dc{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 3, 3}, {0, 1, 2, 3, 4, 5, 6, 7, 8});
@@ -51,7 +51,7 @@ TEST(BackendKernelClass, DeformConvBasicWithoutPaddingMatchesUpstream) {
 }
 
 // Mirrors upstream ``test_basic_deform_conv_with_padding``.
-TEST(BackendKernelClass, DeformConvBasicWithPaddingMatchesUpstream) {
+TEST(KernelClass, DeformConvBasicWithPaddingMatchesUpstream) {
   const KernelContext ctx{DefaultOpset(19)};
   const DeformConv dc{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 3, 3}, {0, 1, 2, 3, 4, 5, 6, 7, 8});
@@ -71,7 +71,7 @@ TEST(BackendKernelClass, DeformConvBasicWithPaddingMatchesUpstream) {
 }
 
 // Mirrors upstream ``test_deform_conv_with_mask_bias``.
-TEST(BackendKernelClass, DeformConvWithMaskBiasMatchesUpstream) {
+TEST(KernelClass, DeformConvWithMaskBiasMatchesUpstream) {
   const KernelContext ctx{DefaultOpset(19)};
   const DeformConv dc{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 3, 3}, {0, 1, 2, 3, 4, 5, 6, 7, 8});
@@ -92,7 +92,7 @@ TEST(BackendKernelClass, DeformConvWithMaskBiasMatchesUpstream) {
 }
 
 // Mirrors upstream ``test_deform_conv_with_multiple_offset_groups``.
-TEST(BackendKernelClass, DeformConvWithMultipleOffsetGroupsMatchesUpstream) {
+TEST(KernelClass, DeformConvWithMultipleOffsetGroupsMatchesUpstream) {
   const KernelContext ctx{DefaultOpset(19)};
   const DeformConv dc{ctx};
   std::vector<float> X(1 * 2 * 3 * 3, 0.0f);
@@ -116,8 +116,6 @@ TEST(BackendKernelClass, DeformConvWithMultipleOffsetGroupsMatchesUpstream) {
   ExpectNear(y, {33.5f, 32.1f, 32.0f, 32.0f});
 }
 
-TEST(BackendKernelClass, DeformConvCanRunInPlaceIsFalse) {
-  EXPECT_FALSE(DeformConv::CanRunInPlace());
-}
+TEST(KernelClass, DeformConvCanRunInPlaceIsFalse) { EXPECT_FALSE(DeformConv::CanRunInPlace()); }
 
 } // namespace Test

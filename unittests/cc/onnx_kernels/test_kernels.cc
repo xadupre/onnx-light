@@ -68,13 +68,13 @@ namespace Test {
 // layout of onnx_backend_test/kernels/.
 // ---------------------------------------------------------------------------
 
-TEST(BackendKernelClass, KernelContextStoresOpset) {
+TEST(KernelClass, KernelContextStoresOpset) {
   KernelContext ctx(DefaultOpset(13));
   EXPECT_EQ(ctx.opset.domain, std::string());
   EXPECT_EQ(ctx.opset.version, 13);
 }
 
-TEST(BackendKernelClass, CanRunInPlaceReportsKernelCapability) {
+TEST(KernelClass, CanRunInPlaceReportsKernelCapability) {
   // Element-wise unary/binary kernels can write their output into an input
   // buffer (shape and dtype match by construction or when no broadcasting
   // expansion is needed for that input).

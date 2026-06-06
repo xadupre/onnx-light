@@ -28,7 +28,7 @@ using onnx_kernels::kernel::Range;
 
 namespace Test {
 
-TEST(BackendKernelClass, ConstantClassMatchesReference) {
+TEST(KernelClass, ConstantClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(13)};
   Constant constant_kernel{ctx};
   Tensor value = Tensor::FromFloat("", {2, 2}, {1.0f, -2.0f, 3.5f, 0.0f});
@@ -43,19 +43,18 @@ TEST(BackendKernelClass, ConstantClassMatchesReference) {
   EXPECT_FLOAT_EQ(py[3], 0.0f);
 }
 
-TEST(BackendKernelClass, ConstantRejectsMismatchedOutput) {
+TEST(KernelClass, ConstantRejectsMismatchedOutput) {
   const KernelContext ctx{DefaultOpset(13)};
   Constant constant_kernel{ctx};
   Tensor value = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
-  Tensor bad_shape("", onnx_kernels::DataType::FLOAT, {3},
-                   std::vector<uint8_t>(3 * sizeof(float)));
+  Tensor bad_shape("", onnx_kernels::DataType::FLOAT, {3}, std::vector<uint8_t>(3 * sizeof(float)));
   EXPECT_THROW(constant_kernel(value, bad_shape), std::invalid_argument);
   Tensor bad_type("", onnx_kernels::DataType::INT32, {2},
                   std::vector<uint8_t>(2 * sizeof(int32_t)));
   EXPECT_THROW(constant_kernel(value, bad_type), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, ConstantOfShapeFloatOnes) {
+TEST(KernelClass, ConstantOfShapeFloatOnes) {
   const KernelContext ctx{DefaultOpset(20)};
   ConstantOfShape kernel{ctx};
   const Tensor shape = Tensor::FromInt64("", {3}, {2, 3, 1});
@@ -70,7 +69,7 @@ TEST(BackendKernelClass, ConstantOfShapeFloatOnes) {
   }
 }
 
-TEST(BackendKernelClass, ConstantOfShapeInt64Fill) {
+TEST(KernelClass, ConstantOfShapeInt64Fill) {
   const KernelContext ctx{DefaultOpset(20)};
   ConstantOfShape kernel{ctx};
   const Tensor shape = Tensor::FromInt64("", {2}, {2, 2});
@@ -85,7 +84,7 @@ TEST(BackendKernelClass, ConstantOfShapeInt64Fill) {
   EXPECT_EQ(py[3], -7);
 }
 
-TEST(BackendKernelClass, ConstantOfShapeDefaultValueIsFloatZero) {
+TEST(KernelClass, ConstantOfShapeDefaultValueIsFloatZero) {
   const KernelContext ctx{DefaultOpset(20)};
   ConstantOfShape kernel{ctx};
   const Tensor shape = Tensor::FromInt64("", {1}, {static_cast<int64_t>(4)});
@@ -98,7 +97,7 @@ TEST(BackendKernelClass, ConstantOfShapeDefaultValueIsFloatZero) {
   }
 }
 
-TEST(BackendKernelClass, ConstantOfShapeEmptyShapeProducesScalar) {
+TEST(KernelClass, ConstantOfShapeEmptyShapeProducesScalar) {
   const KernelContext ctx{DefaultOpset(20)};
   ConstantOfShape kernel{ctx};
   // An empty 1-D ``shape`` input produces a scalar output.
@@ -110,7 +109,7 @@ TEST(BackendKernelClass, ConstantOfShapeEmptyShapeProducesScalar) {
   EXPECT_FLOAT_EQ(y.AsFloat()[0], 2.5f);
 }
 
-TEST(BackendKernelClass, ConstantOfShapeRejectsNonInt64Shape) {
+TEST(KernelClass, ConstantOfShapeRejectsNonInt64Shape) {
   const KernelContext ctx{DefaultOpset(20)};
   ConstantOfShape kernel{ctx};
   const Tensor bad_shape = Tensor::FromInt32("", {2}, {2, 3});
@@ -118,7 +117,7 @@ TEST(BackendKernelClass, ConstantOfShapeRejectsNonInt64Shape) {
   EXPECT_THROW(kernel(bad_shape, value), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, EyeLikeDefaultDtypeAndMainDiagonal) {
+TEST(KernelClass, EyeLikeDefaultDtypeAndMainDiagonal) {
   const KernelContext ctx{DefaultOpset(22)};
   EyeLike kernel{ctx};
   const Tensor x = Tensor::FromInt32("", {3, 4}, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
@@ -134,7 +133,7 @@ TEST(BackendKernelClass, EyeLikeDefaultDtypeAndMainDiagonal) {
   EXPECT_EQ(py[11], 0);
 }
 
-TEST(BackendKernelClass, EyeLikeDtypeOverrideAndUpperDiagonal) {
+TEST(KernelClass, EyeLikeDtypeOverrideAndUpperDiagonal) {
   const KernelContext ctx{DefaultOpset(22)};
   EyeLike kernel{ctx};
   const Tensor x = Tensor::FromFloat("", {2, 4}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
@@ -152,7 +151,7 @@ TEST(BackendKernelClass, EyeLikeDtypeOverrideAndUpperDiagonal) {
   EXPECT_EQ(py[7], 0);
 }
 
-TEST(BackendKernelClass, EyeLikeFloatOutputUsesOneValue) {
+TEST(KernelClass, EyeLikeFloatOutputUsesOneValue) {
   const KernelContext ctx{DefaultOpset(22)};
   EyeLike kernel{ctx};
   const Tensor x = Tensor::FromFloat("", {2, 2}, {0.0f, 0.0f, 0.0f, 0.0f});
@@ -164,14 +163,14 @@ TEST(BackendKernelClass, EyeLikeFloatOutputUsesOneValue) {
   EXPECT_FLOAT_EQ(py[3], 1.0f);
 }
 
-TEST(BackendKernelClass, EyeLikeRejectsNonMatrixInput) {
+TEST(KernelClass, EyeLikeRejectsNonMatrixInput) {
   const KernelContext ctx{DefaultOpset(22)};
   EyeLike kernel{ctx};
   const Tensor x = Tensor::FromFloat("", {2, 2, 1}, {1.0f, 2.0f, 3.0f, 4.0f});
   EXPECT_THROW(kernel(x), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, BernoulliPreservesShapeAndProducesZeroOrOne) {
+TEST(KernelClass, BernoulliPreservesShapeAndProducesZeroOrOne) {
   const KernelContext ctx{DefaultOpset(22)};
   Bernoulli kernel{ctx};
   const std::vector<float> probs = {0.0f, 0.25f, 0.5f, 0.75f, 1.0f, 0.5f};
@@ -189,7 +188,7 @@ TEST(BackendKernelClass, BernoulliPreservesShapeAndProducesZeroOrOne) {
   EXPECT_FLOAT_EQ(py[4], 1.0f);
 }
 
-TEST(BackendKernelClass, BernoulliIsDeterministicAcrossInvocations) {
+TEST(KernelClass, BernoulliIsDeterministicAcrossInvocations) {
   const KernelContext ctx{DefaultOpset(22)};
   Bernoulli kernel{ctx};
   const Tensor x = Tensor::FromFloat("", {8}, {0.1f, 0.3f, 0.5f, 0.7f, 0.9f, 0.2f, 0.4f, 0.6f});
@@ -199,7 +198,7 @@ TEST(BackendKernelClass, BernoulliIsDeterministicAcrossInvocations) {
   EXPECT_EQ(a.data, b.data);
 }
 
-TEST(BackendKernelClass, BernoulliRespectsSeedAttribute) {
+TEST(KernelClass, BernoulliRespectsSeedAttribute) {
   const KernelContext ctx{DefaultOpset(22)};
   Bernoulli kernel{ctx};
   const Tensor x = Tensor::FromFloat("", {8}, {0.1f, 0.3f, 0.5f, 0.7f, 0.9f, 0.2f, 0.4f, 0.6f});
@@ -211,7 +210,7 @@ TEST(BackendKernelClass, BernoulliRespectsSeedAttribute) {
   EXPECT_NE(a.data, c.data);
 }
 
-TEST(BackendKernelClass, BernoulliDtypeAttributeOverridesOutputType) {
+TEST(KernelClass, BernoulliDtypeAttributeOverridesOutputType) {
   const KernelContext ctx{DefaultOpset(22)};
   Bernoulli kernel{ctx};
   const Tensor x = Tensor::FromFloat("", {4}, {0.0f, 1.0f, 0.0f, 1.0f});
@@ -226,21 +225,21 @@ TEST(BackendKernelClass, BernoulliDtypeAttributeOverridesOutputType) {
   EXPECT_EQ(py[3], 1);
 }
 
-TEST(BackendKernelClass, BernoulliRejectsOutOfRangeProbability) {
+TEST(KernelClass, BernoulliRejectsOutOfRangeProbability) {
   const KernelContext ctx{DefaultOpset(22)};
   Bernoulli kernel{ctx};
   const Tensor bad = Tensor::FromFloat("", {2}, {0.5f, 1.5f});
   EXPECT_THROW(kernel(bad), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, BernoulliRejectsUnsupportedInputDtype) {
+TEST(KernelClass, BernoulliRejectsUnsupportedInputDtype) {
   const KernelContext ctx{DefaultOpset(22)};
   Bernoulli kernel{ctx};
   const Tensor int_in = Tensor::FromInt32("", {2}, {0, 1});
   EXPECT_THROW(kernel(int_in), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, MultinomialProducesInt32SamplesWithExpectedShape) {
+TEST(KernelClass, MultinomialProducesInt32SamplesWithExpectedShape) {
   const KernelContext ctx{DefaultOpset(22)};
   Multinomial kernel{ctx};
   // Two batches, three classes; class 1 has overwhelmingly more probability mass.
@@ -255,7 +254,7 @@ TEST(BackendKernelClass, MultinomialProducesInt32SamplesWithExpectedShape) {
   }
 }
 
-TEST(BackendKernelClass, MultinomialIsDeterministicForSameSeed) {
+TEST(KernelClass, MultinomialIsDeterministicForSameSeed) {
   const KernelContext ctx{DefaultOpset(22)};
   Multinomial kernel{ctx};
   const Tensor x = Tensor::FromFloat("", {1, 4}, {0.1f, 0.2f, 0.3f, 0.4f});
@@ -266,7 +265,7 @@ TEST(BackendKernelClass, MultinomialIsDeterministicForSameSeed) {
   EXPECT_NE(a.data, c.data);
 }
 
-TEST(BackendKernelClass, MultinomialDtypeAttributeOverridesOutputType) {
+TEST(KernelClass, MultinomialDtypeAttributeOverridesOutputType) {
   const KernelContext ctx{DefaultOpset(22)};
   Multinomial kernel{ctx};
   const Tensor x = Tensor::FromFloat("", {1, 2}, {10.0f, 0.0f});
@@ -280,14 +279,14 @@ TEST(BackendKernelClass, MultinomialDtypeAttributeOverridesOutputType) {
   }
 }
 
-TEST(BackendKernelClass, MultinomialRejectsNon2DInput) {
+TEST(KernelClass, MultinomialRejectsNon2DInput) {
   const KernelContext ctx{DefaultOpset(22)};
   Multinomial kernel{ctx};
   const Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
   EXPECT_THROW(kernel(x), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, MultinomialRejectsUnsupportedOutputDtype) {
+TEST(KernelClass, MultinomialRejectsUnsupportedOutputDtype) {
   const KernelContext ctx{DefaultOpset(22)};
   Multinomial kernel{ctx};
   const Tensor x = Tensor::FromFloat("", {1, 2}, {1.0f, 1.0f});
@@ -296,7 +295,7 @@ TEST(BackendKernelClass, MultinomialRejectsUnsupportedOutputDtype) {
                std::invalid_argument);
 }
 
-TEST(BackendKernelClass, RandomNormalProducesFloatTensorOfRequestedShape) {
+TEST(KernelClass, RandomNormalProducesFloatTensorOfRequestedShape) {
   const KernelContext ctx{DefaultOpset(22)};
   RandomNormal kernel{ctx};
   Tensor y = kernel({2, 3});
@@ -305,7 +304,7 @@ TEST(BackendKernelClass, RandomNormalProducesFloatTensorOfRequestedShape) {
   EXPECT_EQ(y.element_count(), 6);
 }
 
-TEST(BackendKernelClass, RandomNormalIsDeterministicForSameSeed) {
+TEST(KernelClass, RandomNormalIsDeterministicForSameSeed) {
   const KernelContext ctx{DefaultOpset(22)};
   RandomNormal kernel{ctx};
   Tensor a = kernel({4}, /*mean=*/0.0, /*scale=*/1.0, /*seed=*/42);
@@ -315,7 +314,7 @@ TEST(BackendKernelClass, RandomNormalIsDeterministicForSameSeed) {
   EXPECT_NE(a.data, c.data);
 }
 
-TEST(BackendKernelClass, RandomNormalDtypeOverrideProducesDouble) {
+TEST(KernelClass, RandomNormalDtypeOverrideProducesDouble) {
   const KernelContext ctx{DefaultOpset(22)};
   RandomNormal kernel{ctx};
   Tensor y = kernel({3}, 0.0, 1.0, RandomNormal::kNoSeed,
@@ -324,7 +323,7 @@ TEST(BackendKernelClass, RandomNormalDtypeOverrideProducesDouble) {
   EXPECT_EQ(y.shape, (std::vector<int64_t>{3}));
 }
 
-TEST(BackendKernelClass, RandomNormalRejectsUnsupportedDtype) {
+TEST(KernelClass, RandomNormalRejectsUnsupportedDtype) {
   const KernelContext ctx{DefaultOpset(22)};
   RandomNormal kernel{ctx};
   EXPECT_THROW(kernel({2}, 0.0, 1.0, RandomNormal::kNoSeed,
@@ -332,7 +331,7 @@ TEST(BackendKernelClass, RandomNormalRejectsUnsupportedDtype) {
                std::invalid_argument);
 }
 
-TEST(BackendKernelClass, RandomUniformProducesFloatInRange) {
+TEST(KernelClass, RandomUniformProducesFloatInRange) {
   const KernelContext ctx{DefaultOpset(22)};
   RandomUniform kernel{ctx};
   Tensor y = kernel({16}, /*low=*/-2.0, /*high=*/3.0, /*seed=*/7);
@@ -345,7 +344,7 @@ TEST(BackendKernelClass, RandomUniformProducesFloatInRange) {
   }
 }
 
-TEST(BackendKernelClass, RandomUniformIsDeterministicForSameSeed) {
+TEST(KernelClass, RandomUniformIsDeterministicForSameSeed) {
   const KernelContext ctx{DefaultOpset(22)};
   RandomUniform kernel{ctx};
   Tensor a = kernel({5}, 0.0, 1.0, /*seed=*/99);
@@ -353,7 +352,7 @@ TEST(BackendKernelClass, RandomUniformIsDeterministicForSameSeed) {
   EXPECT_EQ(a.data, b.data);
 }
 
-TEST(BackendKernelClass, RandomNormalLikeCopiesInputShape) {
+TEST(KernelClass, RandomNormalLikeCopiesInputShape) {
   const KernelContext ctx{DefaultOpset(22)};
   RandomNormalLike kernel{ctx};
   const Tensor x = Tensor::FromFloat("", {2, 4}, std::vector<float>(8, 0.0f));
@@ -362,7 +361,7 @@ TEST(BackendKernelClass, RandomNormalLikeCopiesInputShape) {
   EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 4}));
 }
 
-TEST(BackendKernelClass, RandomNormalLikeDtypeOverridesOutputType) {
+TEST(KernelClass, RandomNormalLikeDtypeOverridesOutputType) {
   const KernelContext ctx{DefaultOpset(22)};
   RandomNormalLike kernel{ctx};
   const Tensor x = Tensor::FromFloat("", {3}, {0.0f, 0.0f, 0.0f});
@@ -372,7 +371,7 @@ TEST(BackendKernelClass, RandomNormalLikeDtypeOverridesOutputType) {
   EXPECT_EQ(y.shape, (std::vector<int64_t>{3}));
 }
 
-TEST(BackendKernelClass, RandomUniformLikeCopiesInputShapeAndProducesInRange) {
+TEST(KernelClass, RandomUniformLikeCopiesInputShapeAndProducesInRange) {
   const KernelContext ctx{DefaultOpset(22)};
   RandomUniformLike kernel{ctx};
   const Tensor x = Tensor::FromFloat("", {6}, std::vector<float>(6, 0.0f));
@@ -386,7 +385,7 @@ TEST(BackendKernelClass, RandomUniformLikeCopiesInputShapeAndProducesInRange) {
   }
 }
 
-TEST(BackendKernelClass, RangeFloatPositiveDelta) {
+TEST(KernelClass, RangeFloatPositiveDelta) {
   const KernelContext ctx{DefaultOpset(11)};
   Range kernel{ctx};
   const Tensor start = Tensor::FromFloat("", {}, {1.0f});
@@ -400,7 +399,7 @@ TEST(BackendKernelClass, RangeFloatPositiveDelta) {
   EXPECT_FLOAT_EQ(py[1], 3.0f);
 }
 
-TEST(BackendKernelClass, RangeInt32NegativeDelta) {
+TEST(KernelClass, RangeInt32NegativeDelta) {
   const KernelContext ctx{DefaultOpset(11)};
   Range kernel{ctx};
   const Tensor start = Tensor::FromInt32("", {}, {10});
@@ -414,7 +413,7 @@ TEST(BackendKernelClass, RangeInt32NegativeDelta) {
   EXPECT_EQ(py[1], 7);
 }
 
-TEST(BackendKernelClass, RangeEmptyWhenStartExceedsLimitForPositiveDelta) {
+TEST(KernelClass, RangeEmptyWhenStartExceedsLimitForPositiveDelta) {
   const KernelContext ctx{DefaultOpset(11)};
   Range kernel{ctx};
   const Tensor start = Tensor::FromInt64("", {}, {5});
@@ -425,7 +424,7 @@ TEST(BackendKernelClass, RangeEmptyWhenStartExceedsLimitForPositiveDelta) {
   EXPECT_EQ(y.element_count(), 0);
 }
 
-TEST(BackendKernelClass, RangeRejectsMismatchedDtypes) {
+TEST(KernelClass, RangeRejectsMismatchedDtypes) {
   const KernelContext ctx{DefaultOpset(11)};
   Range kernel{ctx};
   const Tensor start = Tensor::FromFloat("", {}, {1.0f});
@@ -434,7 +433,7 @@ TEST(BackendKernelClass, RangeRejectsMismatchedDtypes) {
   EXPECT_THROW(kernel(start, limit, delta), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, RangeRejectsZeroDelta) {
+TEST(KernelClass, RangeRejectsZeroDelta) {
   const KernelContext ctx{DefaultOpset(11)};
   Range kernel{ctx};
   const Tensor start = Tensor::FromInt64("", {}, {0});

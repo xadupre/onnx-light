@@ -190,10 +190,8 @@ TEST(BackendTestCase, QuantizeLinearCaseIsPresent) {
     ASSERT_EQ(e4m3fn_case->data_sets.size(), 1u);
     const auto &ds = e4m3fn_case->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
-    EXPECT_EQ(ds.inputs[2].data_type,
-              static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E4M3FN));
-    EXPECT_EQ(ds.outputs[0].data_type,
-              static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E4M3FN));
+    EXPECT_EQ(ds.inputs[2].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E4M3FN));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E4M3FN));
     EXPECT_EQ(ds.outputs[0].data.size(), 5u);
   }
 
@@ -202,10 +200,8 @@ TEST(BackendTestCase, QuantizeLinearCaseIsPresent) {
     ASSERT_EQ(e5m2_case->data_sets.size(), 1u);
     const auto &ds = e5m2_case->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
-    EXPECT_EQ(ds.inputs[2].data_type,
-              static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E5M2));
-    EXPECT_EQ(ds.outputs[0].data_type,
-              static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E5M2));
+    EXPECT_EQ(ds.inputs[2].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E5M2));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E5M2));
     EXPECT_EQ(ds.outputs[0].data.size(), 5u);
   }
 
@@ -402,8 +398,7 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
     ASSERT_EQ(upstream_e4m3fn_case->data_sets.size(), 1u);
     const auto &ds = upstream_e4m3fn_case->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 2u);
-    EXPECT_EQ(ds.inputs[0].data_type,
-              static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E4M3FN));
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E4M3FN));
     const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
     EXPECT_FLOAT_EQ(py[0], 0.0f);
     EXPECT_FLOAT_EQ(py[1], 1.0f);
@@ -418,8 +413,7 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
     ASSERT_EQ(upstream_e5m2_case->data_sets.size(), 1u);
     const auto &ds = upstream_e5m2_case->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 2u);
-    EXPECT_EQ(ds.inputs[0].data_type,
-              static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E5M2));
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E5M2));
     const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
     EXPECT_FLOAT_EQ(py[0], 0.0f);
     EXPECT_FLOAT_EQ(py[1], 1.0f);
@@ -436,10 +430,8 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
     ASSERT_EQ(upstream_e4m3fn_zp_case->data_sets.size(), 1u);
     const auto &ds = upstream_e4m3fn_zp_case->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
-    EXPECT_EQ(ds.inputs[0].data_type,
-              static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E4M3FN));
-    EXPECT_EQ(ds.inputs[2].data_type,
-              static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E4M3FN));
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E4M3FN));
+    EXPECT_EQ(ds.inputs[2].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E4M3FN));
     const std::vector<int64_t> zp_shape = {1};
     EXPECT_EQ(ds.inputs[2].shape, zp_shape);
     const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
@@ -524,8 +516,7 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
     ASSERT_EQ(e4m3fn_float16_case->data_sets.size(), 1u);
     const auto &ds = e4m3fn_float16_case->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 2u);
-    EXPECT_EQ(ds.inputs[0].data_type,
-              static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E4M3FN));
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E4M3FN));
     EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16));
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16));
     EXPECT_EQ(ds.inputs[1].shape, std::vector<int64_t>{});
@@ -596,8 +587,7 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
   }
   {
     const auto &ds = float4e2m1_case->data_sets[0];
-    EXPECT_EQ(ds.inputs[0].data_type,
-              static_cast<int32_t>(onnx_kernels::DataType::FLOAT4E2M1));
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT4E2M1));
     const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
     EXPECT_FLOAT_EQ(py[0], 0.0f);
     EXPECT_FLOAT_EQ(py[1], 2.0f);

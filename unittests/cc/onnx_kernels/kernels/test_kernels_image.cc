@@ -22,7 +22,7 @@ using onnx_kernels::kernel::KernelContext;
 
 namespace Test {
 
-TEST(BackendKernelClass, ImageDecoderChannelCountMapsPixelFormat) {
+TEST(KernelClass, ImageDecoderChannelCountMapsPixelFormat) {
   EXPECT_EQ(ImageDecoder::ChannelCount("RGB"), 3);
   EXPECT_EQ(ImageDecoder::ChannelCount("BGR"), 3);
   EXPECT_EQ(ImageDecoder::ChannelCount("Grayscale"), 1);
@@ -31,7 +31,7 @@ TEST(BackendKernelClass, ImageDecoderChannelCountMapsPixelFormat) {
   EXPECT_THROW(ImageDecoder::ChannelCount("RGBA"), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, ImageDecoderReturnsEmptyMatrixForRGB) {
+TEST(KernelClass, ImageDecoderReturnsEmptyMatrixForRGB) {
   const KernelContext ctx{DefaultOpset(20)};
   const ImageDecoder decoder{ctx};
 
@@ -45,7 +45,7 @@ TEST(BackendKernelClass, ImageDecoderReturnsEmptyMatrixForRGB) {
   EXPECT_TRUE(out.data.empty());
 }
 
-TEST(BackendKernelClass, ImageDecoderReturnsEmptyMatrixForGrayscale) {
+TEST(KernelClass, ImageDecoderReturnsEmptyMatrixForGrayscale) {
   const KernelContext ctx{DefaultOpset(20)};
   const ImageDecoder decoder{ctx};
 
@@ -57,7 +57,7 @@ TEST(BackendKernelClass, ImageDecoderReturnsEmptyMatrixForGrayscale) {
   EXPECT_TRUE(out.data.empty());
 }
 
-TEST(BackendKernelClass, ImageDecoderDefaultsToRGBPixelFormat) {
+TEST(KernelClass, ImageDecoderDefaultsToRGBPixelFormat) {
   const KernelContext ctx{DefaultOpset(20)};
   const ImageDecoder decoder{ctx};
   Tensor encoded = Tensor::FromUint8("", {0}, std::vector<uint8_t>{});
@@ -66,28 +66,28 @@ TEST(BackendKernelClass, ImageDecoderDefaultsToRGBPixelFormat) {
   EXPECT_EQ(out.shape, expected_shape);
 }
 
-TEST(BackendKernelClass, ImageDecoderRejectsNonUint8Input) {
+TEST(KernelClass, ImageDecoderRejectsNonUint8Input) {
   const KernelContext ctx{DefaultOpset(20)};
   const ImageDecoder decoder{ctx};
   Tensor encoded = Tensor::FromInt32("", {4}, {0, 1, 2, 3});
   EXPECT_THROW(decoder(encoded, "RGB"), std::exception);
 }
 
-TEST(BackendKernelClass, ImageDecoderRejectsNonOneDimensionalInput) {
+TEST(KernelClass, ImageDecoderRejectsNonOneDimensionalInput) {
   const KernelContext ctx{DefaultOpset(20)};
   const ImageDecoder decoder{ctx};
   Tensor encoded = Tensor::FromUint8("", {2, 2}, std::vector<uint8_t>{0, 0, 0, 0});
   EXPECT_THROW(decoder(encoded, "RGB"), std::exception);
 }
 
-TEST(BackendKernelClass, ImageDecoderRejectsUnknownPixelFormat) {
+TEST(KernelClass, ImageDecoderRejectsUnknownPixelFormat) {
   const KernelContext ctx{DefaultOpset(20)};
   const ImageDecoder decoder{ctx};
   Tensor encoded = Tensor::FromUint8("", {1}, std::vector<uint8_t>{0});
   EXPECT_THROW(decoder(encoded, "rgba"), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, ImageDecoderInPlaceOverloadValidatesOutput) {
+TEST(KernelClass, ImageDecoderInPlaceOverloadValidatesOutput) {
   const KernelContext ctx{DefaultOpset(20)};
   const ImageDecoder decoder{ctx};
   Tensor encoded = Tensor::FromUint8("", {2}, std::vector<uint8_t>{0xaa, 0xbb});

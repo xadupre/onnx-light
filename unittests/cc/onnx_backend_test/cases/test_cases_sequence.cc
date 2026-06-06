@@ -139,8 +139,7 @@ TEST(BackendTestCase, SequenceLengthCaseIsPresent) {
   ASSERT_EQ(graph.ref_output().size(), 1u);
   const ValueInfoProto &out_vi = graph.ref_output()[0];
   ASSERT_TRUE(out_vi.ref_type().has_tensor_type());
-  EXPECT_EQ(out_vi.ref_type().ref_tensor_type().ref_elem_type(),
-            onnx_kernels::DataType::INT64);
+  EXPECT_EQ(out_vi.ref_type().ref_tensor_type().ref_elem_type(), onnx_kernels::DataType::INT64);
   EXPECT_EQ(out_vi.ref_type().ref_tensor_type().ref_shape().ref_dim().size(), 0u);
 
   ASSERT_EQ(length_case->data_sets.size(), 1u);

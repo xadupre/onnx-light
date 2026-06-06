@@ -26,7 +26,7 @@ KernelContext PreviewKernelContext() { return KernelContext(OpsetId("ai.onnx.pre
 
 } // namespace
 
-TEST(BackendKernelClass, FlexAttentionMatchesHandComputedSingleHead) {
+TEST(KernelClass, FlexAttentionMatchesHandComputedSingleHead) {
   // batch=1, heads=1, q_len=1, k_len=2, head_size=2, v_head_size=2.
   // Q = [1, 0]; K = [[1,0],[0,1]]; V = [[1,2],[3,4]]; scale = 1/sqrt(2).
   const Tensor Q = Tensor::FromFloat("", {1, 1, 1, 2}, {1.0f, 0.0f});
@@ -47,7 +47,7 @@ TEST(BackendKernelClass, FlexAttentionMatchesHandComputedSingleHead) {
   EXPECT_NEAR(Y.AsFloat()[1], static_cast<float>(p0 * 2.0 + p1 * 4.0), 1e-6);
 }
 
-TEST(BackendKernelClass, FlexAttentionExplicitScaleMatchesDefault) {
+TEST(KernelClass, FlexAttentionExplicitScaleMatchesDefault) {
   const Tensor Q = Tensor::FromFloat("", {1, 1, 1, 2}, {1.0f, 0.0f});
   const Tensor K = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 0.0f, 0.0f, 1.0f});
   const Tensor V = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
@@ -62,7 +62,7 @@ TEST(BackendKernelClass, FlexAttentionExplicitScaleMatchesDefault) {
   }
 }
 
-TEST(BackendKernelClass, FlexAttentionSupportsGQAHeadSharing) {
+TEST(KernelClass, FlexAttentionSupportsGQAHeadSharing) {
   // batch=1, q_num_heads=2, kv_num_heads=1 (group_size=2), q_len=1, k_len=1,
   // head_size=v_head_size=2. With a single key/value position softmax yields
   // probability 1, so both query heads must produce the V[0] row exactly.
@@ -80,7 +80,7 @@ TEST(BackendKernelClass, FlexAttentionSupportsGQAHeadSharing) {
   }
 }
 
-TEST(BackendKernelClass, FlexAttentionRejectsInvalidInputs) {
+TEST(KernelClass, FlexAttentionRejectsInvalidInputs) {
   const KernelContext ctx = PreviewKernelContext();
   const FlexAttention flex{ctx};
 

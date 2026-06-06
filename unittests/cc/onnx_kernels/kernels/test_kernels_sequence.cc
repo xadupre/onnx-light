@@ -28,7 +28,7 @@ using onnx_kernels::kernel::SplitToSequence;
 
 namespace Test {
 
-TEST(BackendKernelClass, SequenceConstructStacksInputsAlongNewAxis) {
+TEST(KernelClass, SequenceConstructStacksInputsAlongNewAxis) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceConstruct seq{ctx};
   Tensor a = Tensor::FromFloat("", {2, 3}, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
@@ -48,7 +48,7 @@ TEST(BackendKernelClass, SequenceConstructStacksInputsAlongNewAxis) {
   EXPECT_EQ(out.data, expected_bytes);
 }
 
-TEST(BackendKernelClass, SequenceConstructSingleInputProducesUnitOuterDim) {
+TEST(KernelClass, SequenceConstructSingleInputProducesUnitOuterDim) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceConstruct seq{ctx};
   Tensor a = Tensor::FromInt64("", {4}, {-1, 0, 1, 2});
@@ -59,7 +59,7 @@ TEST(BackendKernelClass, SequenceConstructSingleInputProducesUnitOuterDim) {
   EXPECT_EQ(out.data, a.data);
 }
 
-TEST(BackendKernelClass, SequenceConstructEmptyInputsProducesEmptySequence) {
+TEST(KernelClass, SequenceConstructEmptyInputsProducesEmptySequence) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceConstruct seq{ctx};
   Tensor out = seq({});
@@ -70,7 +70,7 @@ TEST(BackendKernelClass, SequenceConstructEmptyInputsProducesEmptySequence) {
   EXPECT_TRUE(out.data.empty());
 }
 
-TEST(BackendKernelClass, SequenceConstructRejectsBadInputsAndMismatchedOutput) {
+TEST(KernelClass, SequenceConstructRejectsBadInputsAndMismatchedOutput) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceConstruct seq{ctx};
   Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
@@ -97,7 +97,7 @@ TEST(BackendKernelClass, SequenceConstructRejectsBadInputsAndMismatchedOutput) {
   EXPECT_THROW(seq({a, b}, bad_out_shape), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, SequenceConstructAsSequenceBuildsSequenceValue) {
+TEST(KernelClass, SequenceConstructAsSequenceBuildsSequenceValue) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceConstruct seq{ctx};
   Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
@@ -113,7 +113,7 @@ TEST(BackendKernelClass, SequenceConstructAsSequenceBuildsSequenceValue) {
   EXPECT_EQ(out.at(1).data, b.data);
 }
 
-TEST(BackendKernelClass, SequenceConstructAsSequenceEmptyIsUndefinedElemType) {
+TEST(KernelClass, SequenceConstructAsSequenceEmptyIsUndefinedElemType) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceConstruct seq{ctx};
   Sequence out = seq.AsSequence({});
@@ -121,7 +121,7 @@ TEST(BackendKernelClass, SequenceConstructAsSequenceEmptyIsUndefinedElemType) {
   EXPECT_TRUE(out.empty());
 }
 
-TEST(BackendKernelClass, SequenceConstructAsSequenceRejectsDtypeMismatch) {
+TEST(KernelClass, SequenceConstructAsSequenceRejectsDtypeMismatch) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceConstruct seq{ctx};
   Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
@@ -129,7 +129,7 @@ TEST(BackendKernelClass, SequenceConstructAsSequenceRejectsDtypeMismatch) {
   EXPECT_THROW(seq.AsSequence({a, bad}), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, SequenceLengthReturnsScalarInt64Count) {
+TEST(KernelClass, SequenceLengthReturnsScalarInt64Count) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceLength op{ctx};
   Sequence seq("", static_cast<int32_t>(onnx_kernels::DataType::FLOAT),
@@ -144,7 +144,7 @@ TEST(BackendKernelClass, SequenceLengthReturnsScalarInt64Count) {
   EXPECT_EQ(*out.AsInt64(), 3);
 }
 
-TEST(BackendKernelClass, SequenceLengthHandlesEmptySequence) {
+TEST(KernelClass, SequenceLengthHandlesEmptySequence) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceLength op{ctx};
   Sequence empty("", 0, {});
@@ -161,7 +161,7 @@ TEST(BackendKernelClass, SequenceLengthHandlesEmptySequence) {
 // SequenceEmpty kernel tests.
 // ──────────────────────────────────────────────────────────────────────
 
-TEST(BackendKernelClass, SequenceEmptyDefaultDtypeIsFloat) {
+TEST(KernelClass, SequenceEmptyDefaultDtypeIsFloat) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceEmpty op{ctx};
   Sequence out = op();
@@ -170,7 +170,7 @@ TEST(BackendKernelClass, SequenceEmptyDefaultDtypeIsFloat) {
   EXPECT_EQ(out.elem_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
 }
 
-TEST(BackendKernelClass, SequenceEmptyUndefinedDtypeFallsBackToFloat) {
+TEST(KernelClass, SequenceEmptyUndefinedDtypeFallsBackToFloat) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceEmpty op{ctx};
   Sequence out = op(static_cast<int32_t>(onnx_kernels::DataType::UNDEFINED));
@@ -178,7 +178,7 @@ TEST(BackendKernelClass, SequenceEmptyUndefinedDtypeFallsBackToFloat) {
   EXPECT_EQ(out.elem_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
 }
 
-TEST(BackendKernelClass, SequenceEmptyHonoursExplicitDtype) {
+TEST(KernelClass, SequenceEmptyHonoursExplicitDtype) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceEmpty op{ctx};
   Sequence out = op(static_cast<int32_t>(onnx_kernels::DataType::INT64));
@@ -192,7 +192,7 @@ TEST(BackendKernelClass, SequenceEmptyHonoursExplicitDtype) {
 
 using onnx_kernels::kernel::ConcatFromSequence;
 
-TEST(BackendKernelClass, ConcatFromSequenceAxis0ConcatenatesAlongLeadingAxis) {
+TEST(KernelClass, ConcatFromSequenceAxis0ConcatenatesAlongLeadingAxis) {
   const KernelContext ctx{DefaultOpset(11)};
   ConcatFromSequence op{ctx};
   Tensor a = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
@@ -212,7 +212,7 @@ TEST(BackendKernelClass, ConcatFromSequenceAxis0ConcatenatesAlongLeadingAxis) {
   EXPECT_EQ(out.data, expected_bytes);
 }
 
-TEST(BackendKernelClass, ConcatFromSequenceAxis1InterleavesPerOuterRow) {
+TEST(KernelClass, ConcatFromSequenceAxis1InterleavesPerOuterRow) {
   const KernelContext ctx{DefaultOpset(11)};
   ConcatFromSequence op{ctx};
   Tensor a = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
@@ -230,7 +230,7 @@ TEST(BackendKernelClass, ConcatFromSequenceAxis1InterleavesPerOuterRow) {
   EXPECT_EQ(got, expected_values);
 }
 
-TEST(BackendKernelClass, ConcatFromSequenceNegativeAxisResolvesAgainstRank) {
+TEST(KernelClass, ConcatFromSequenceNegativeAxisResolvesAgainstRank) {
   const KernelContext ctx{DefaultOpset(11)};
   ConcatFromSequence op{ctx};
   Tensor a = Tensor::FromInt64("", {2, 2}, {1, 2, 3, 4});
@@ -246,7 +246,7 @@ TEST(BackendKernelClass, ConcatFromSequenceNegativeAxisResolvesAgainstRank) {
   EXPECT_EQ(got, expected_values);
 }
 
-TEST(BackendKernelClass, ConcatFromSequenceNewAxisStacksAlongNewLeadingAxis) {
+TEST(KernelClass, ConcatFromSequenceNewAxisStacksAlongNewLeadingAxis) {
   const KernelContext ctx{DefaultOpset(11)};
   ConcatFromSequence op{ctx};
   Tensor a = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
@@ -264,7 +264,7 @@ TEST(BackendKernelClass, ConcatFromSequenceNewAxisStacksAlongNewLeadingAxis) {
   EXPECT_EQ(out.data, expected_bytes);
 }
 
-TEST(BackendKernelClass, ConcatFromSequenceNewAxisAtTailAppendsLengthDim) {
+TEST(KernelClass, ConcatFromSequenceNewAxisAtTailAppendsLengthDim) {
   const KernelContext ctx{DefaultOpset(11)};
   ConcatFromSequence op{ctx};
   Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
@@ -281,7 +281,7 @@ TEST(BackendKernelClass, ConcatFromSequenceNewAxisAtTailAppendsLengthDim) {
   EXPECT_EQ(got, expected_values);
 }
 
-TEST(BackendKernelClass, ConcatFromSequenceRejectsBadInputs) {
+TEST(KernelClass, ConcatFromSequenceRejectsBadInputs) {
   const KernelContext ctx{DefaultOpset(11)};
   ConcatFromSequence op{ctx};
   Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
@@ -310,7 +310,7 @@ TEST(BackendKernelClass, ConcatFromSequenceRejectsBadInputs) {
   EXPECT_THROW(op({base, mismatched_other}, /*axis=*/1), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, ConcatFromSequenceInPlaceWritesToPreallocatedOutput) {
+TEST(KernelClass, ConcatFromSequenceInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(11)};
   ConcatFromSequence op{ctx};
   Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
@@ -333,7 +333,7 @@ TEST(BackendKernelClass, ConcatFromSequenceInPlaceWritesToPreallocatedOutput) {
 // SequenceErase kernel tests.
 // ──────────────────────────────────────────────────────────────────────
 
-TEST(BackendKernelClass, SequenceEraseDefaultRemovesLastElement) {
+TEST(KernelClass, SequenceEraseDefaultRemovesLastElement) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceErase op{ctx};
   Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
@@ -349,7 +349,7 @@ TEST(BackendKernelClass, SequenceEraseDefaultRemovesLastElement) {
   EXPECT_EQ(out.at(1).data, b.data);
 }
 
-TEST(BackendKernelClass, SequenceErasePositivePositionRemovesMiddleElement) {
+TEST(KernelClass, SequenceErasePositivePositionRemovesMiddleElement) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceErase op{ctx};
   Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
@@ -365,7 +365,7 @@ TEST(BackendKernelClass, SequenceErasePositivePositionRemovesMiddleElement) {
   EXPECT_EQ(out.at(1).data, c.data);
 }
 
-TEST(BackendKernelClass, SequenceEraseNegativePositionCountsFromBack) {
+TEST(KernelClass, SequenceEraseNegativePositionCountsFromBack) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceErase op{ctx};
   Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
@@ -381,7 +381,7 @@ TEST(BackendKernelClass, SequenceEraseNegativePositionCountsFromBack) {
   EXPECT_EQ(out.at(1).data, c.data);
 }
 
-TEST(BackendKernelClass, SequenceEraseInt32PositionIsAccepted) {
+TEST(KernelClass, SequenceEraseInt32PositionIsAccepted) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceErase op{ctx};
   Tensor a = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
@@ -395,7 +395,7 @@ TEST(BackendKernelClass, SequenceEraseInt32PositionIsAccepted) {
   EXPECT_EQ(out.at(0).data, b.data);
 }
 
-TEST(BackendKernelClass, SequenceErasePreservesElemTypeOnEmptyResult) {
+TEST(KernelClass, SequenceErasePreservesElemTypeOnEmptyResult) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceErase op{ctx};
   Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
@@ -407,7 +407,7 @@ TEST(BackendKernelClass, SequenceErasePreservesElemTypeOnEmptyResult) {
   EXPECT_EQ(out.elem_type, a.data_type);
 }
 
-TEST(BackendKernelClass, SequenceEraseRejectsEmptySequenceWithNoPosition) {
+TEST(KernelClass, SequenceEraseRejectsEmptySequenceWithNoPosition) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceErase op{ctx};
   const Sequence empty("", 0, {});
@@ -415,7 +415,7 @@ TEST(BackendKernelClass, SequenceEraseRejectsEmptySequenceWithNoPosition) {
   EXPECT_THROW(op(empty), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, SequenceEraseRejectsOutOfRangePosition) {
+TEST(KernelClass, SequenceEraseRejectsOutOfRangePosition) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceErase op{ctx};
   Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
@@ -425,7 +425,7 @@ TEST(BackendKernelClass, SequenceEraseRejectsOutOfRangePosition) {
   EXPECT_THROW(op(seq, &pos), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, SequenceInsertDefaultAppendsToBack) {
+TEST(KernelClass, SequenceInsertDefaultAppendsToBack) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceInsert op{ctx};
   Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
@@ -441,7 +441,7 @@ TEST(BackendKernelClass, SequenceInsertDefaultAppendsToBack) {
   EXPECT_EQ(out.at(2).data, x.data);
 }
 
-TEST(BackendKernelClass, SequenceInsertPositionAndNegativePosition) {
+TEST(KernelClass, SequenceInsertPositionAndNegativePosition) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceInsert op{ctx};
   Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
@@ -467,7 +467,7 @@ TEST(BackendKernelClass, SequenceInsertPositionAndNegativePosition) {
   EXPECT_EQ(out_neg.at(3).data, c.data);
 }
 
-TEST(BackendKernelClass, SequenceInsertRejectsBadInputs) {
+TEST(KernelClass, SequenceInsertRejectsBadInputs) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceInsert op{ctx};
   Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
@@ -485,7 +485,7 @@ TEST(BackendKernelClass, SequenceInsertRejectsBadInputs) {
 // SequenceAt kernel tests.
 // ──────────────────────────────────────────────────────────────────────
 
-TEST(BackendKernelClass, SequenceAtReturnsElementAtPosition) {
+TEST(KernelClass, SequenceAtReturnsElementAtPosition) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceAt op{ctx};
   Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
@@ -504,7 +504,7 @@ TEST(BackendKernelClass, SequenceAtReturnsElementAtPosition) {
   EXPECT_EQ(out2.data, c.data);
 }
 
-TEST(BackendKernelClass, SequenceAtNegativePositionCountsFromBack) {
+TEST(KernelClass, SequenceAtNegativePositionCountsFromBack) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceAt op{ctx};
   Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
@@ -517,7 +517,7 @@ TEST(BackendKernelClass, SequenceAtNegativePositionCountsFromBack) {
   EXPECT_EQ(out.data, b.data);
 }
 
-TEST(BackendKernelClass, SequenceAtInt32PositionIsAccepted) {
+TEST(KernelClass, SequenceAtInt32PositionIsAccepted) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceAt op{ctx};
   Tensor a = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
@@ -529,7 +529,7 @@ TEST(BackendKernelClass, SequenceAtInt32PositionIsAccepted) {
   EXPECT_EQ(out.data, b.data);
 }
 
-TEST(BackendKernelClass, SequenceAtRejectsEmptySequence) {
+TEST(KernelClass, SequenceAtRejectsEmptySequence) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceAt op{ctx};
   const Sequence empty("", 0, {});
@@ -537,7 +537,7 @@ TEST(BackendKernelClass, SequenceAtRejectsEmptySequence) {
   EXPECT_THROW(op(empty, pos), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, SequenceAtRejectsOutOfRangePosition) {
+TEST(KernelClass, SequenceAtRejectsOutOfRangePosition) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceAt op{ctx};
   Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
@@ -546,7 +546,7 @@ TEST(BackendKernelClass, SequenceAtRejectsOutOfRangePosition) {
   EXPECT_THROW(op(seq, pos), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, SequenceAtRejectsNonScalarPosition) {
+TEST(KernelClass, SequenceAtRejectsNonScalarPosition) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceAt op{ctx};
   Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
@@ -559,7 +559,7 @@ TEST(BackendKernelClass, SequenceAtRejectsNonScalarPosition) {
 // SequenceMap kernel tests.
 // ──────────────────────────────────────────────────────────────────────
 
-TEST(BackendKernelClass, SequenceMapBuildsOneSequencePerBodyOutput) {
+TEST(KernelClass, SequenceMapBuildsOneSequencePerBodyOutput) {
   const KernelContext ctx{DefaultOpset(17)};
   onnx_kernels::kernel::SequenceMap op{ctx};
   Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
@@ -579,7 +579,7 @@ TEST(BackendKernelClass, SequenceMapBuildsOneSequencePerBodyOutput) {
   EXPECT_EQ(outs[0].at(2).data, c.data);
 }
 
-TEST(BackendKernelClass, SequenceMapBuildsMultipleOutputSequences) {
+TEST(KernelClass, SequenceMapBuildsMultipleOutputSequences) {
   const KernelContext ctx{DefaultOpset(17)};
   onnx_kernels::kernel::SequenceMap op{ctx};
   Tensor a = Tensor::FromFloat("", {1}, {1.0f});
@@ -601,7 +601,7 @@ TEST(BackendKernelClass, SequenceMapBuildsMultipleOutputSequences) {
   EXPECT_EQ(outs[1].at(1).data, y.data);
 }
 
-TEST(BackendKernelClass, SequenceMapRejectsRowLengthMismatch) {
+TEST(KernelClass, SequenceMapRejectsRowLengthMismatch) {
   const KernelContext ctx{DefaultOpset(17)};
   onnx_kernels::kernel::SequenceMap op{ctx};
   Tensor a = Tensor::FromFloat("", {1}, {1.0f});
@@ -613,7 +613,7 @@ TEST(BackendKernelClass, SequenceMapRejectsRowLengthMismatch) {
   EXPECT_THROW(op(in_seq, body_out), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, SequenceMapRejectsMixedDtypeWithinOneOutput) {
+TEST(KernelClass, SequenceMapRejectsMixedDtypeWithinOneOutput) {
   const KernelContext ctx{DefaultOpset(17)};
   onnx_kernels::kernel::SequenceMap op{ctx};
   Tensor a = Tensor::FromFloat("", {1}, {1.0f});
@@ -625,7 +625,7 @@ TEST(BackendKernelClass, SequenceMapRejectsMixedDtypeWithinOneOutput) {
   EXPECT_THROW(op(in_seq, body_out), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, SequenceMapPreservesElemTypeOnEmptyInputSequence) {
+TEST(KernelClass, SequenceMapPreservesElemTypeOnEmptyInputSequence) {
   const KernelContext ctx{DefaultOpset(17)};
   onnx_kernels::kernel::SequenceMap op{ctx};
   const Sequence in_seq("", static_cast<int32_t>(onnx_kernels::DataType::FLOAT), {});
@@ -645,7 +645,7 @@ TEST(BackendKernelClass, SequenceMapPreservesElemTypeOnEmptyInputSequence) {
 // SplitToSequence kernel tests.
 // ──────────────────────────────────────────────────────────────────────
 
-TEST(BackendKernelClass, SplitToSequenceScalarSplitProducesEqualChunks) {
+TEST(KernelClass, SplitToSequenceScalarSplitProducesEqualChunks) {
   const KernelContext ctx{DefaultOpset(11)};
   SplitToSequence op{ctx};
   // arange(18) reshaped to [3, 6].
@@ -670,7 +670,7 @@ TEST(BackendKernelClass, SplitToSequenceScalarSplitProducesEqualChunks) {
   EXPECT_EQ(0, std::memcmp(out.at(2).data.data(), expected2, sizeof(expected2)));
 }
 
-TEST(BackendKernelClass, SplitToSequenceVectorSplitProducesUnevenChunks) {
+TEST(KernelClass, SplitToSequenceVectorSplitProducesUnevenChunks) {
   const KernelContext ctx{DefaultOpset(11)};
   SplitToSequence op{ctx};
   std::vector<float> data(18);
@@ -690,7 +690,7 @@ TEST(BackendKernelClass, SplitToSequenceVectorSplitProducesUnevenChunks) {
   EXPECT_EQ(0, std::memcmp(out.at(1).data.data(), rows12, sizeof(rows12)));
 }
 
-TEST(BackendKernelClass, SplitToSequenceOmittedSplitKeepdimsDefaults) {
+TEST(KernelClass, SplitToSequenceOmittedSplitKeepdimsDefaults) {
   const KernelContext ctx{DefaultOpset(11)};
   SplitToSequence op{ctx};
   std::vector<float> data(18);
@@ -706,7 +706,7 @@ TEST(BackendKernelClass, SplitToSequenceOmittedSplitKeepdimsDefaults) {
   }
 }
 
-TEST(BackendKernelClass, SplitToSequenceOmittedSplitNoKeepdimsSqueezesAxis) {
+TEST(KernelClass, SplitToSequenceOmittedSplitNoKeepdimsSqueezesAxis) {
   const KernelContext ctx{DefaultOpset(11)};
   SplitToSequence op{ctx};
   std::vector<float> data(18);
@@ -725,7 +725,7 @@ TEST(BackendKernelClass, SplitToSequenceOmittedSplitNoKeepdimsSqueezesAxis) {
   EXPECT_EQ(0, std::memcmp(out.at(1).data.data(), col1, sizeof(col1)));
 }
 
-TEST(BackendKernelClass, SplitToSequenceNegativeAxisIsAccepted) {
+TEST(KernelClass, SplitToSequenceNegativeAxisIsAccepted) {
   const KernelContext ctx{DefaultOpset(11)};
   SplitToSequence op{ctx};
   Tensor input = Tensor::FromFloat("", {2, 4}, {1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f});
@@ -738,21 +738,21 @@ TEST(BackendKernelClass, SplitToSequenceNegativeAxisIsAccepted) {
   EXPECT_EQ(out.at(1).shape, (std::vector<int64_t>{2, 2}));
 }
 
-TEST(BackendKernelClass, SplitToSequenceRejectsScalarInput) {
+TEST(KernelClass, SplitToSequenceRejectsScalarInput) {
   const KernelContext ctx{DefaultOpset(11)};
   SplitToSequence op{ctx};
   Tensor input = Tensor::FromFloat("", {}, {1.0f});
   EXPECT_THROW(op(input, /*split=*/nullptr), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, SplitToSequenceRejectsOutOfRangeAxis) {
+TEST(KernelClass, SplitToSequenceRejectsOutOfRangeAxis) {
   const KernelContext ctx{DefaultOpset(11)};
   SplitToSequence op{ctx};
   Tensor input = Tensor::FromFloat("", {2}, {1.f, 2.f});
   EXPECT_THROW(op(input, /*split=*/nullptr, /*axis=*/3), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, SplitToSequenceRejectsMismatchedSplitSum) {
+TEST(KernelClass, SplitToSequenceRejectsMismatchedSplitSum) {
   const KernelContext ctx{DefaultOpset(11)};
   SplitToSequence op{ctx};
   Tensor input = Tensor::FromFloat("", {3, 6}, std::vector<float>(18, 0.f));

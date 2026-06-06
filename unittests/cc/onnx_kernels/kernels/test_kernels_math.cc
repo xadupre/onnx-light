@@ -70,7 +70,7 @@ using onnx_kernels::kernel::TopK;
 
 namespace Test {
 
-TEST(BackendKernelClass, AbsClassMatchesReference) {
+TEST(KernelClass, AbsClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(13)};
   Abs abs_kernel{ctx};
 
@@ -83,7 +83,7 @@ TEST(BackendKernelClass, AbsClassMatchesReference) {
   EXPECT_FLOAT_EQ(py[2], 2.5f);
 }
 
-TEST(BackendKernelClass, NegClassMatchesReference) {
+TEST(KernelClass, NegClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(13)};
   Neg neg_kernel{ctx};
 
@@ -96,7 +96,7 @@ TEST(BackendKernelClass, NegClassMatchesReference) {
   EXPECT_FLOAT_EQ(py[2], -2.5f);
 }
 
-TEST(BackendKernelClass, NegInPlaceWritesToPreallocatedOutput) {
+TEST(KernelClass, NegInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(13)};
   Neg neg_kernel{ctx};
 
@@ -108,14 +108,14 @@ TEST(BackendKernelClass, NegInPlaceWritesToPreallocatedOutput) {
   EXPECT_FLOAT_EQ(py[1], -2.0f);
 }
 
-TEST(BackendKernelClass, NegRejectsNonFloatTensors) {
+TEST(KernelClass, NegRejectsNonFloatTensors) {
   const KernelContext ctx{DefaultOpset(13)};
   Neg neg_kernel{ctx};
   Tensor x = Tensor::FromInt32("", {2}, {-1, 2});
   EXPECT_THROW((void)neg_kernel(x), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, AcosClassMatchesReference) {
+TEST(KernelClass, AcosClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(22)};
   Acos acos_kernel{ctx};
 
@@ -128,7 +128,7 @@ TEST(BackendKernelClass, AcosClassMatchesReference) {
   EXPECT_NEAR(py[2], 0.0f, 1e-6f);
 }
 
-TEST(BackendKernelClass, AcoshClassMatchesReference) {
+TEST(KernelClass, AcoshClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(22)};
   Acosh acosh_kernel{ctx};
 
@@ -141,7 +141,7 @@ TEST(BackendKernelClass, AcoshClassMatchesReference) {
   EXPECT_NEAR(py[2], 2.99322285f, 1e-5f);
 }
 
-TEST(BackendKernelClass, AsinClassMatchesReference) {
+TEST(KernelClass, AsinClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(22)};
   Asin asin_kernel{ctx};
 
@@ -154,7 +154,7 @@ TEST(BackendKernelClass, AsinClassMatchesReference) {
   EXPECT_NEAR(py[2], 1.57079633f, 1e-5f);
 }
 
-TEST(BackendKernelClass, AsinhClassMatchesReference) {
+TEST(KernelClass, AsinhClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(22)};
   Asinh asinh_kernel{ctx};
 
@@ -167,7 +167,7 @@ TEST(BackendKernelClass, AsinhClassMatchesReference) {
   EXPECT_NEAR(py[2], 0.88137358f, 1e-5f);
 }
 
-TEST(BackendKernelClass, AtanClassMatchesReference) {
+TEST(KernelClass, AtanClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(22)};
   Atan atan_kernel{ctx};
 
@@ -180,7 +180,7 @@ TEST(BackendKernelClass, AtanClassMatchesReference) {
   EXPECT_NEAR(py[2], 0.78539816f, 1e-5f);
 }
 
-TEST(BackendKernelClass, AtanhClassMatchesReference) {
+TEST(KernelClass, AtanhClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(22)};
   Atanh atanh_kernel{ctx};
 
@@ -193,7 +193,7 @@ TEST(BackendKernelClass, AtanhClassMatchesReference) {
   EXPECT_NEAR(py[2], 0.54930614f, 1e-5f);
 }
 
-TEST(BackendKernelClass, CosClassMatchesReference) {
+TEST(KernelClass, CosClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(22)};
   Cos cos_kernel{ctx};
 
@@ -206,7 +206,7 @@ TEST(BackendKernelClass, CosClassMatchesReference) {
   EXPECT_NEAR(py[2], 0.54030231f, 1e-5f);
 }
 
-TEST(BackendKernelClass, CoshClassMatchesReference) {
+TEST(KernelClass, CoshClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(22)};
   Cosh cosh_kernel{ctx};
 
@@ -219,7 +219,7 @@ TEST(BackendKernelClass, CoshClassMatchesReference) {
   EXPECT_NEAR(py[2], 1.54308063f, 1e-5f);
 }
 
-TEST(BackendKernelClass, ExpClassMatchesReference) {
+TEST(KernelClass, ExpClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(13)};
   Exp exp_kernel{ctx};
 
@@ -232,7 +232,7 @@ TEST(BackendKernelClass, ExpClassMatchesReference) {
   EXPECT_NEAR(py[2], 2.71828183f, 1e-6f);
 }
 
-TEST(BackendKernelClass, ErfClassMatchesReference) {
+TEST(KernelClass, ErfClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(13)};
   Erf erf_kernel{ctx};
 
@@ -245,7 +245,7 @@ TEST(BackendKernelClass, ErfClassMatchesReference) {
   EXPECT_NEAR(py[2], 0.84270079f, 1e-6f);
 }
 
-TEST(BackendKernelClass, LogClassMatchesReference) {
+TEST(KernelClass, LogClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(13)};
   Log log_kernel{ctx};
 
@@ -258,7 +258,7 @@ TEST(BackendKernelClass, LogClassMatchesReference) {
   EXPECT_NEAR(py[2], 0.69314718f, 1e-6f);
 }
 
-TEST(BackendKernelClass, SqrtClassMatchesReference) {
+TEST(KernelClass, SqrtClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(13)};
   Sqrt sqrt_kernel{ctx};
 
@@ -272,7 +272,7 @@ TEST(BackendKernelClass, SqrtClassMatchesReference) {
   EXPECT_NEAR(py[3], 3.0f, 1e-6f);
 }
 
-TEST(BackendKernelClass, ReciprocalClassMatchesReference) {
+TEST(KernelClass, ReciprocalClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(13)};
   Reciprocal reciprocal_kernel{ctx};
 
@@ -286,7 +286,7 @@ TEST(BackendKernelClass, ReciprocalClassMatchesReference) {
   EXPECT_NEAR(py[3], 0.5f, 1e-6f);
 }
 
-TEST(BackendKernelClass, SigmoidClassMatchesReference) {
+TEST(KernelClass, SigmoidClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(13)};
   Sigmoid sigmoid_kernel{ctx};
 
@@ -299,7 +299,7 @@ TEST(BackendKernelClass, SigmoidClassMatchesReference) {
   EXPECT_NEAR(py[2], 0.88079708f, 1e-6f);
 }
 
-TEST(BackendKernelClass, SoftplusClassMatchesReference) {
+TEST(KernelClass, SoftplusClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(22)};
   Softplus softplus_kernel{ctx};
 
@@ -314,7 +314,7 @@ TEST(BackendKernelClass, SoftplusClassMatchesReference) {
   EXPECT_NEAR(py[3], 2.12692809f, 1e-6f);
 }
 
-TEST(BackendKernelClass, MishClassMatchesReference) {
+TEST(KernelClass, MishClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(22)};
   Mish mish_kernel{ctx};
 
@@ -329,7 +329,7 @@ TEST(BackendKernelClass, MishClassMatchesReference) {
   EXPECT_NEAR(py[3], 1.94395934f, 1e-6f);
 }
 
-TEST(BackendKernelClass, SoftsignClassMatchesReference) {
+TEST(KernelClass, SoftsignClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(22)};
   Softsign softsign_kernel{ctx};
 
@@ -343,7 +343,7 @@ TEST(BackendKernelClass, SoftsignClassMatchesReference) {
   EXPECT_NEAR(py[3], 0.8f, 1e-6f);
 }
 
-TEST(BackendKernelClass, HardSigmoidClassMatchesReference) {
+TEST(KernelClass, HardSigmoidClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(22)};
   HardSigmoid hard_sigmoid_kernel{ctx};
 
@@ -359,7 +359,7 @@ TEST(BackendKernelClass, HardSigmoidClassMatchesReference) {
   EXPECT_NEAR(py[4], 1.0f, 1e-6f);
 }
 
-TEST(BackendKernelClass, HardSwishClassMatchesReference) {
+TEST(KernelClass, HardSwishClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(22)};
   HardSwish hard_swish_kernel{ctx};
 
@@ -374,7 +374,7 @@ TEST(BackendKernelClass, HardSwishClassMatchesReference) {
   EXPECT_NEAR(py[3], 4.0f, 1e-6f);                        // x=4 -> hs = min(1, 7/6) = 1
 }
 
-TEST(BackendKernelClass, HardmaxClassWritesOneHotAlongAxis) {
+TEST(KernelClass, HardmaxClassWritesOneHotAlongAxis) {
   const KernelContext ctx{DefaultOpset(13)};
   Hardmax hardmax_kernel{ctx};
 
@@ -391,7 +391,7 @@ TEST(BackendKernelClass, HardmaxClassWritesOneHotAlongAxis) {
   EXPECT_FLOAT_EQ(py[5], 0.0f);
 }
 
-TEST(BackendKernelClass, HardmaxClassPicksFirstMaxOnTies) {
+TEST(KernelClass, HardmaxClassPicksFirstMaxOnTies) {
   const KernelContext ctx{DefaultOpset(13)};
   Hardmax hardmax_kernel{ctx};
 
@@ -405,7 +405,7 @@ TEST(BackendKernelClass, HardmaxClassPicksFirstMaxOnTies) {
   EXPECT_FLOAT_EQ(py[3], 0.0f);
 }
 
-TEST(BackendKernelClass, DetClassComputesScalarFor2DInput) {
+TEST(KernelClass, DetClassComputesScalarFor2DInput) {
   const KernelContext ctx{DefaultOpset(11)};
   Det det_kernel{ctx};
 
@@ -417,7 +417,7 @@ TEST(BackendKernelClass, DetClassComputesScalarFor2DInput) {
   EXPECT_NEAR(y.AsFloat()[0], -2.0f, 1e-6f);
 }
 
-TEST(BackendKernelClass, DetClassComputesBatchOf2x2Determinants) {
+TEST(KernelClass, DetClassComputesBatchOf2x2Determinants) {
   const KernelContext ctx{DefaultOpset(11)};
   Det det_kernel{ctx};
 
@@ -433,14 +433,14 @@ TEST(BackendKernelClass, DetClassComputesBatchOf2x2Determinants) {
   EXPECT_NEAR(py[2], -8.0f, 1e-6f);
 }
 
-TEST(BackendKernelClass, DetClassRejectsNonSquareInput) {
+TEST(KernelClass, DetClassRejectsNonSquareInput) {
   const KernelContext ctx{DefaultOpset(11)};
   Det det_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
   EXPECT_THROW(det_kernel(x), std::exception);
 }
 
-TEST(BackendKernelClass, SoftmaxClassMatchesReferenceAxis1) {
+TEST(KernelClass, SoftmaxClassMatchesReferenceAxis1) {
   const KernelContext ctx{DefaultOpset(13)};
   Softmax softmax_kernel{ctx};
 
@@ -456,7 +456,7 @@ TEST(BackendKernelClass, SoftmaxClassMatchesReferenceAxis1) {
   EXPECT_NEAR(py[5], 0.66524094f, 1e-6f);
 }
 
-TEST(BackendKernelClass, LogSoftmaxClassMatchesReferenceAxis1) {
+TEST(KernelClass, LogSoftmaxClassMatchesReferenceAxis1) {
   const KernelContext ctx{DefaultOpset(13)};
   LogSoftmax logsoftmax_kernel{ctx};
 
@@ -473,7 +473,7 @@ TEST(BackendKernelClass, LogSoftmaxClassMatchesReferenceAxis1) {
   EXPECT_NEAR(py[5], std::log(0.66524094f), 1e-5f);
 }
 
-TEST(BackendKernelClass, LogSoftmaxClassIsNumericallyStableForLargeInputs) {
+TEST(KernelClass, LogSoftmaxClassIsNumericallyStableForLargeInputs) {
   const KernelContext ctx{DefaultOpset(13)};
   LogSoftmax logsoftmax_kernel{ctx};
 
@@ -492,7 +492,7 @@ TEST(BackendKernelClass, LogSoftmaxClassIsNumericallyStableForLargeInputs) {
   EXPECT_NEAR(py[2], 0.0f - lse, 1e-4f);
 }
 
-TEST(BackendKernelClass, SinClassMatchesReference) {
+TEST(KernelClass, SinClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(22)};
   Sin sin_kernel{ctx};
 
@@ -505,7 +505,7 @@ TEST(BackendKernelClass, SinClassMatchesReference) {
   EXPECT_NEAR(py[2], 0.84147098f, 1e-5f);
 }
 
-TEST(BackendKernelClass, SinhClassMatchesReference) {
+TEST(KernelClass, SinhClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(22)};
   Sinh sinh_kernel{ctx};
 
@@ -518,7 +518,7 @@ TEST(BackendKernelClass, SinhClassMatchesReference) {
   EXPECT_NEAR(py[2], 1.17520119f, 1e-5f);
 }
 
-TEST(BackendKernelClass, TanClassMatchesReference) {
+TEST(KernelClass, TanClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(22)};
   Tan tan_kernel{ctx};
 
@@ -531,7 +531,7 @@ TEST(BackendKernelClass, TanClassMatchesReference) {
   EXPECT_NEAR(py[2], 1.55740772f, 1e-5f);
 }
 
-TEST(BackendKernelClass, TanhClassMatchesReference) {
+TEST(KernelClass, TanhClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(13)};
   Tanh tanh_kernel{ctx};
 
@@ -544,7 +544,7 @@ TEST(BackendKernelClass, TanhClassMatchesReference) {
   EXPECT_NEAR(py[2], 0.76159416f, 1e-6f);
 }
 
-TEST(BackendKernelClass, AddClassBroadcastsScalar) {
+TEST(KernelClass, AddClassBroadcastsScalar) {
   const KernelContext ctx{DefaultOpset(14)};
   Add add_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
@@ -558,7 +558,7 @@ TEST(BackendKernelClass, AddClassBroadcastsScalar) {
   EXPECT_FLOAT_EQ(pz[3], 4.5f);
 }
 
-TEST(BackendKernelClass, BlackmanWindowPeriodicLength) {
+TEST(KernelClass, BlackmanWindowPeriodicLength) {
   const KernelContext ctx{DefaultOpset(17)};
   BlackmanWindow blackman_kernel{ctx};
   Tensor size = Tensor::FromInt32("", {}, {8});
@@ -568,7 +568,7 @@ TEST(BackendKernelClass, BlackmanWindowPeriodicLength) {
   EXPECT_NEAR(y.AsFloat()[0], 0.0f, 1e-6f);
 }
 
-TEST(BackendKernelClass, AbsInPlaceWritesToPreallocatedOutput) {
+TEST(KernelClass, AbsInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(13)};
   Abs abs_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 2.5f});
@@ -583,7 +583,7 @@ TEST(BackendKernelClass, AbsInPlaceWritesToPreallocatedOutput) {
   EXPECT_FLOAT_EQ(py[2], 2.5f);
 }
 
-TEST(BackendKernelClass, AddInPlaceWritesToPreallocatedOutput) {
+TEST(KernelClass, AddInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(14)};
   Add add_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
@@ -598,7 +598,7 @@ TEST(BackendKernelClass, AddInPlaceWritesToPreallocatedOutput) {
   EXPECT_FLOAT_EQ(pz[3], 4.5f);
 }
 
-TEST(BackendKernelClass, BlackmanWindowInPlaceWritesToPreallocatedOutput) {
+TEST(KernelClass, BlackmanWindowInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(17)};
   BlackmanWindow blackman_kernel{ctx};
   Tensor size = Tensor::FromInt32("", {}, {8});
@@ -608,7 +608,7 @@ TEST(BackendKernelClass, BlackmanWindowInPlaceWritesToPreallocatedOutput) {
   EXPECT_NEAR(y.AsFloat()[0], 0.0f, 1e-6f);
 }
 
-TEST(BackendKernelClass, HannWindowPeriodicLength) {
+TEST(KernelClass, HannWindowPeriodicLength) {
   const KernelContext ctx{DefaultOpset(17)};
   HannWindow hann_kernel{ctx};
   Tensor size = Tensor::FromInt32("", {}, {8});
@@ -618,7 +618,7 @@ TEST(BackendKernelClass, HannWindowPeriodicLength) {
   EXPECT_NEAR(y.AsFloat()[0], 0.0f, 1e-6f);
 }
 
-TEST(BackendKernelClass, HannWindowInPlaceWritesToPreallocatedOutput) {
+TEST(KernelClass, HannWindowInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(17)};
   HannWindow hann_kernel{ctx};
   Tensor size = Tensor::FromInt32("", {}, {8});
@@ -628,7 +628,7 @@ TEST(BackendKernelClass, HannWindowInPlaceWritesToPreallocatedOutput) {
   EXPECT_NEAR(y.AsFloat()[0], 0.0f, 1e-6f);
 }
 
-TEST(BackendKernelClass, HammingWindowPeriodicLength) {
+TEST(KernelClass, HammingWindowPeriodicLength) {
   const KernelContext ctx{DefaultOpset(17)};
   HammingWindow hamming_kernel{ctx};
   Tensor size = Tensor::FromInt32("", {}, {8});
@@ -638,7 +638,7 @@ TEST(BackendKernelClass, HammingWindowPeriodicLength) {
   EXPECT_NEAR(y.AsFloat()[0], static_cast<float>(4.0 / 46.0), 1e-6f);
 }
 
-TEST(BackendKernelClass, HammingWindowInPlaceWritesToPreallocatedOutput) {
+TEST(KernelClass, HammingWindowInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(17)};
   HammingWindow hamming_kernel{ctx};
   Tensor size = Tensor::FromInt32("", {}, {8});
@@ -648,7 +648,7 @@ TEST(BackendKernelClass, HammingWindowInPlaceWritesToPreallocatedOutput) {
   EXPECT_NEAR(y.AsFloat()[0], static_cast<float>(4.0 / 46.0), 1e-6f);
 }
 
-TEST(BackendKernelClass, InPlaceRejectsMismatchedShapeOrType) {
+TEST(KernelClass, InPlaceRejectsMismatchedShapeOrType) {
   const KernelContext ctx{DefaultOpset(13)};
   Abs abs_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 2.5f});
@@ -659,17 +659,15 @@ TEST(BackendKernelClass, InPlaceRejectsMismatchedShapeOrType) {
   EXPECT_THROW(abs_kernel(x, bad_dtype), std::invalid_argument);
 
   // Wrong shape.
-  Tensor bad_shape("", onnx_kernels::DataType::FLOAT, {2},
-                   std::vector<uint8_t>(2 * sizeof(float)));
+  Tensor bad_shape("", onnx_kernels::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float)));
   EXPECT_THROW(abs_kernel(x, bad_shape), std::invalid_argument);
 
   // Wrong buffer byte count.
-  Tensor bad_bytes("", onnx_kernels::DataType::FLOAT, {3},
-                   std::vector<uint8_t>(1 * sizeof(float)));
+  Tensor bad_bytes("", onnx_kernels::DataType::FLOAT, {3}, std::vector<uint8_t>(1 * sizeof(float)));
   EXPECT_THROW(abs_kernel(x, bad_bytes), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, AbsInPlaceAliasingInputAndOutput) {
+TEST(KernelClass, AbsInPlaceAliasingInputAndOutput) {
   // Demonstrates that Abs::CanRunInPlace() is honored by the implementation:
   // pass the same Tensor object as both input and output and verify the
   // result is written correctly in-place.
@@ -684,7 +682,7 @@ TEST(BackendKernelClass, AbsInPlaceAliasingInputAndOutput) {
   EXPECT_FLOAT_EQ(px[2], 2.5f);
 }
 
-TEST(BackendKernelClass, SubClassMatchesReference) {
+TEST(KernelClass, SubClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(14)};
   Sub sub_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
@@ -697,7 +695,7 @@ TEST(BackendKernelClass, SubClassMatchesReference) {
   EXPECT_FLOAT_EQ(pz[2], 2.0f);
 }
 
-TEST(BackendKernelClass, SubClassBroadcastsScalar) {
+TEST(KernelClass, SubClassBroadcastsScalar) {
   const KernelContext ctx{DefaultOpset(14)};
   Sub sub_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
@@ -711,7 +709,7 @@ TEST(BackendKernelClass, SubClassBroadcastsScalar) {
   EXPECT_FLOAT_EQ(pz[3], 3.5f);
 }
 
-TEST(BackendKernelClass, SubInPlaceWritesToPreallocatedOutput) {
+TEST(KernelClass, SubInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(14)};
   Sub sub_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
@@ -726,7 +724,7 @@ TEST(BackendKernelClass, SubInPlaceWritesToPreallocatedOutput) {
   EXPECT_FLOAT_EQ(pz[3], 3.5f);
 }
 
-TEST(BackendKernelClass, SubClassMatchesReferenceInt8) {
+TEST(KernelClass, SubClassMatchesReferenceInt8) {
   const KernelContext ctx{DefaultOpset(14)};
   Sub sub_kernel{ctx};
   Tensor x = Tensor::FromInt8("", {4}, {10, 0, -3, 7});
@@ -741,7 +739,7 @@ TEST(BackendKernelClass, SubClassMatchesReferenceInt8) {
   EXPECT_EQ(pz[3], 8);
 }
 
-TEST(BackendKernelClass, SubClassMatchesReferenceUint32) {
+TEST(KernelClass, SubClassMatchesReferenceUint32) {
   const KernelContext ctx{DefaultOpset(14)};
   Sub sub_kernel{ctx};
   Tensor x = Tensor::FromUint32("", {4}, {10u, 5u, 3u, 100u});
@@ -756,7 +754,7 @@ TEST(BackendKernelClass, SubClassMatchesReferenceUint32) {
   EXPECT_EQ(pz[3], 50u);
 }
 
-TEST(BackendKernelClass, SubRejectsUnsupportedDtype) {
+TEST(KernelClass, SubRejectsUnsupportedDtype) {
   // BOOL inputs are not in the supported dtype set (FLOAT/INT8/INT16/UINT8/
   // UINT16/UINT32/UINT64) so the kernel must reject them.
   const KernelContext ctx{DefaultOpset(14)};
@@ -766,7 +764,7 @@ TEST(BackendKernelClass, SubRejectsUnsupportedDtype) {
   EXPECT_THROW((void)sub_kernel(x, y), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, MulClassMatchesReference) {
+TEST(KernelClass, MulClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(14)};
   Mul mul_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
@@ -779,7 +777,7 @@ TEST(BackendKernelClass, MulClassMatchesReference) {
   EXPECT_FLOAT_EQ(pz[2], 18.0f);
 }
 
-TEST(BackendKernelClass, MulClassBroadcastsScalar) {
+TEST(KernelClass, MulClassBroadcastsScalar) {
   const KernelContext ctx{DefaultOpset(14)};
   Mul mul_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
@@ -793,7 +791,7 @@ TEST(BackendKernelClass, MulClassBroadcastsScalar) {
   EXPECT_FLOAT_EQ(pz[3], 8.0f);
 }
 
-TEST(BackendKernelClass, MulInPlaceWritesToPreallocatedOutput) {
+TEST(KernelClass, MulInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(14)};
   Mul mul_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
@@ -808,7 +806,7 @@ TEST(BackendKernelClass, MulInPlaceWritesToPreallocatedOutput) {
   EXPECT_FLOAT_EQ(pz[3], 12.0f);
 }
 
-TEST(BackendKernelClass, DivClassMatchesReference) {
+TEST(KernelClass, DivClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(14)};
   Div div_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
@@ -820,7 +818,7 @@ TEST(BackendKernelClass, DivClassMatchesReference) {
   EXPECT_FLOAT_EQ(pz[1], 2.0f);
 }
 
-TEST(BackendKernelClass, DivClassBroadcastsScalar) {
+TEST(KernelClass, DivClassBroadcastsScalar) {
   const KernelContext ctx{DefaultOpset(14)};
   Div div_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {2.0f, 4.0f, 6.0f, 8.0f});
@@ -834,7 +832,7 @@ TEST(BackendKernelClass, DivClassBroadcastsScalar) {
   EXPECT_FLOAT_EQ(pz[3], 4.0f);
 }
 
-TEST(BackendKernelClass, DivInPlaceWritesToPreallocatedOutput) {
+TEST(KernelClass, DivInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(14)};
   Div div_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {2.0f, 4.0f, 6.0f, 8.0f});
@@ -849,7 +847,7 @@ TEST(BackendKernelClass, DivInPlaceWritesToPreallocatedOutput) {
   EXPECT_FLOAT_EQ(pz[3], 4.0f);
 }
 
-TEST(BackendKernelClass, MulClassSupportsIntegerTypes) {
+TEST(KernelClass, MulClassSupportsIntegerTypes) {
   // ``kernel::Mul`` must handle every integer dtype exercised by the
   // upstream ``onnx.backend.test.case.node.mul.Mul`` cases.
   const KernelContext ctx{DefaultOpset(14)};
@@ -873,7 +871,7 @@ TEST(BackendKernelClass, MulClassSupportsIntegerTypes) {
   }
 }
 
-TEST(BackendKernelClass, AddClassSupportsIntegerTypes) {
+TEST(KernelClass, AddClassSupportsIntegerTypes) {
   // ``kernel::Add`` must handle every integer dtype exercised by the
   // upstream ``onnx.backend.test.case.node.add.Add`` cases.
   const KernelContext ctx{DefaultOpset(14)};
@@ -897,7 +895,7 @@ TEST(BackendKernelClass, AddClassSupportsIntegerTypes) {
   }
 }
 
-TEST(BackendKernelClass, DivClassSupportsIntegerTypesWithTruncation) {
+TEST(KernelClass, DivClassSupportsIntegerTypesWithTruncation) {
   // ``kernel::Div`` must implement truncating integer division for all
   // signed/unsigned integer dtypes registered by the upstream cases.
   const KernelContext ctx{DefaultOpset(14)};
@@ -923,7 +921,7 @@ TEST(BackendKernelClass, DivClassSupportsIntegerTypesWithTruncation) {
   }
 }
 
-TEST(BackendKernelClass, ModClassMatchesPythonAndCSemantics) {
+TEST(KernelClass, ModClassMatchesPythonAndCSemantics) {
   // ``kernel::Mod`` must match ``numpy.mod`` (sign follows divisor) when
   // ``fmod=0`` and ``numpy.fmod`` / C ``fmod`` (sign follows dividend) when
   // ``fmod=1``. Cross-checked against the upstream
@@ -1035,7 +1033,7 @@ TEST(BackendKernelClass, ModClassMatchesPythonAndCSemantics) {
   }
 }
 
-TEST(BackendKernelClass, MatMulClassMatchesReference2D) {
+TEST(KernelClass, MatMulClassMatchesReference2D) {
   const KernelContext ctx{DefaultOpset(13)};
   MatMul matmul_kernel{ctx};
   Tensor a = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
@@ -1049,7 +1047,7 @@ TEST(BackendKernelClass, MatMulClassMatchesReference2D) {
   EXPECT_FLOAT_EQ(py[3], 154.0f);
 }
 
-TEST(BackendKernelClass, MatMulClassSupportsVectorMatrix) {
+TEST(KernelClass, MatMulClassSupportsVectorMatrix) {
   const KernelContext ctx{DefaultOpset(13)};
   MatMul matmul_kernel{ctx};
   Tensor a = Tensor::FromInt32("", {3}, {2, 3, 4});
@@ -1061,7 +1059,7 @@ TEST(BackendKernelClass, MatMulClassSupportsVectorMatrix) {
   EXPECT_EQ(py[1], 56);
 }
 
-TEST(BackendKernelClass, MatMulClassBroadcastsBatchDimensions) {
+TEST(KernelClass, MatMulClassBroadcastsBatchDimensions) {
   const KernelContext ctx{DefaultOpset(13)};
   MatMul matmul_kernel{ctx};
   Tensor a = Tensor::FromFloat("", {2, 1, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
@@ -1075,13 +1073,12 @@ TEST(BackendKernelClass, MatMulClassBroadcastsBatchDimensions) {
   EXPECT_FLOAT_EQ(py[3], 50.0f);
 }
 
-TEST(BackendKernelClass, MatMulInPlaceWritesToPreallocatedOutput) {
+TEST(KernelClass, MatMulInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(13)};
   MatMul matmul_kernel{ctx};
   Tensor a = Tensor::FromUint32("", {2, 3}, {1u, 2u, 3u, 4u, 5u, 6u});
   Tensor b = Tensor::FromUint32("", {3, 2}, {1u, 2u, 3u, 4u, 5u, 6u});
-  Tensor y("", onnx_kernels::DataType::UINT32, {2, 2},
-           std::vector<uint8_t>(4 * sizeof(uint32_t)));
+  Tensor y("", onnx_kernels::DataType::UINT32, {2, 2}, std::vector<uint8_t>(4 * sizeof(uint32_t)));
   matmul_kernel(a, b, y);
   const uint32_t *py = y.AsUint32();
   EXPECT_EQ(py[0], 22u);
@@ -1090,7 +1087,7 @@ TEST(BackendKernelClass, MatMulInPlaceWritesToPreallocatedOutput) {
   EXPECT_EQ(py[3], 64u);
 }
 
-TEST(BackendKernelClass, MatMulIntegerUint8MatchesONNXReference) {
+TEST(KernelClass, MatMulIntegerUint8MatchesONNXReference) {
   // Mirrors the ONNX reference ``test_matmulinteger`` example with per-tensor
   // UINT8 zero points: Y = matmul(A - a_zp, B - b_zp).
   const KernelContext ctx{DefaultOpset(10)};
@@ -1112,7 +1109,7 @@ TEST(BackendKernelClass, MatMulIntegerUint8MatchesONNXReference) {
   EXPECT_EQ(py[7], -128);
 }
 
-TEST(BackendKernelClass, MatMulIntegerWithDefaultZeroPoints) {
+TEST(KernelClass, MatMulIntegerWithDefaultZeroPoints) {
   // Default-constructed (empty) zero-point tensors must be treated as 0.
   const KernelContext ctx{DefaultOpset(10)};
   MatMulInteger mmi{ctx};
@@ -1129,7 +1126,7 @@ TEST(BackendKernelClass, MatMulIntegerWithDefaultZeroPoints) {
   EXPECT_EQ(py[3], 154);
 }
 
-TEST(BackendKernelClass, MatMulIntegerInt8WithScalarZeroPoints) {
+TEST(KernelClass, MatMulIntegerInt8WithScalarZeroPoints) {
   const KernelContext ctx{DefaultOpset(10)};
   MatMulInteger mmi{ctx};
   Tensor a = Tensor::FromInt8("", {2, 3}, {1, -2, 3, -4, 5, -6});
@@ -1151,15 +1148,14 @@ TEST(BackendKernelClass, MatMulIntegerInt8WithScalarZeroPoints) {
   EXPECT_EQ(py[3], 40);
 }
 
-TEST(BackendKernelClass, MatMulIntegerInPlaceWritesToPreallocatedOutput) {
+TEST(KernelClass, MatMulIntegerInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(10)};
   MatMulInteger mmi{ctx};
   Tensor a = Tensor::FromUint8("", {2, 3}, {1, 2, 3, 4, 5, 6});
   Tensor b = Tensor::FromUint8("", {3, 2}, {7, 8, 9, 10, 11, 12});
   Tensor a_zp;
   Tensor b_zp;
-  Tensor y("", onnx_kernels::DataType::INT32, {2, 2},
-           std::vector<uint8_t>(4 * sizeof(int32_t)));
+  Tensor y("", onnx_kernels::DataType::INT32, {2, 2}, std::vector<uint8_t>(4 * sizeof(int32_t)));
   mmi(a, b, a_zp, b_zp, y);
   const int32_t *py = y.AsInt32();
   EXPECT_EQ(py[0], 58);
@@ -1168,7 +1164,7 @@ TEST(BackendKernelClass, MatMulIntegerInPlaceWritesToPreallocatedOutput) {
   EXPECT_EQ(py[3], 154);
 }
 
-TEST(BackendKernelClass, MatMulIntegerRejectsNonByteInput) {
+TEST(KernelClass, MatMulIntegerRejectsNonByteInput) {
   const KernelContext ctx{DefaultOpset(10)};
   MatMulInteger mmi{ctx};
   Tensor a = Tensor::FromInt32("", {2, 3}, {1, 2, 3, 4, 5, 6});
@@ -1178,7 +1174,7 @@ TEST(BackendKernelClass, MatMulIntegerRejectsNonByteInput) {
   EXPECT_THROW(mmi(a, b, a_zp, b_zp), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, FloorClassMatchesReference) {
+TEST(KernelClass, FloorClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(13)};
   Floor floor_kernel{ctx};
 
@@ -1193,7 +1189,7 @@ TEST(BackendKernelClass, FloorClassMatchesReference) {
   EXPECT_FLOAT_EQ(py[4], 1.0f);
 }
 
-TEST(BackendKernelClass, CeilClassMatchesReference) {
+TEST(KernelClass, CeilClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(13)};
   Ceil ceil_kernel{ctx};
 
@@ -1208,7 +1204,7 @@ TEST(BackendKernelClass, CeilClassMatchesReference) {
   EXPECT_FLOAT_EQ(py[4], 2.0f);
 }
 
-TEST(BackendKernelClass, RoundClassRoundsHalvesToEven) {
+TEST(KernelClass, RoundClassRoundsHalvesToEven) {
   const KernelContext ctx{DefaultOpset(22)};
   Round round_kernel{ctx};
 
@@ -1225,7 +1221,7 @@ TEST(BackendKernelClass, RoundClassRoundsHalvesToEven) {
   EXPECT_FLOAT_EQ(py[5], -2.0f);
 }
 
-TEST(BackendKernelClass, RoundClassNonHalvesRoundToNearest) {
+TEST(KernelClass, RoundClassNonHalvesRoundToNearest) {
   const KernelContext ctx{DefaultOpset(22)};
   Round round_kernel{ctx};
 
@@ -1238,7 +1234,7 @@ TEST(BackendKernelClass, RoundClassNonHalvesRoundToNearest) {
   EXPECT_FLOAT_EQ(py[3], -1.0f);
 }
 
-TEST(BackendKernelClass, EinsumTransposeMatchesNumpy) {
+TEST(KernelClass, EinsumTransposeMatchesNumpy) {
   const KernelContext ctx{DefaultOpset(13)};
   Einsum einsum_kernel{ctx};
 
@@ -1254,7 +1250,7 @@ TEST(BackendKernelClass, EinsumTransposeMatchesNumpy) {
   EXPECT_FLOAT_EQ(py[5], 6.0f);
 }
 
-TEST(BackendKernelClass, EinsumTraceMatchesSumOfDiagonal) {
+TEST(KernelClass, EinsumTraceMatchesSumOfDiagonal) {
   const KernelContext ctx{DefaultOpset(13)};
   Einsum einsum_kernel{ctx};
 
@@ -1264,7 +1260,7 @@ TEST(BackendKernelClass, EinsumTraceMatchesSumOfDiagonal) {
   EXPECT_FLOAT_EQ(y.AsFloat()[0], 1.0f + 5.0f + 9.0f);
 }
 
-TEST(BackendKernelClass, EinsumMatMulMatchesMatrixProduct) {
+TEST(KernelClass, EinsumMatMulMatchesMatrixProduct) {
   const KernelContext ctx{DefaultOpset(13)};
   Einsum einsum_kernel{ctx};
 
@@ -1279,7 +1275,7 @@ TEST(BackendKernelClass, EinsumMatMulMatchesMatrixProduct) {
   EXPECT_FLOAT_EQ(py[3], 4 * 8 + 5 * 10 + 6 * 12);
 }
 
-TEST(BackendKernelClass, EinsumOuterProductMatchesProduct) {
+TEST(KernelClass, EinsumOuterProductMatchesProduct) {
   const KernelContext ctx{DefaultOpset(13)};
   Einsum einsum_kernel{ctx};
 
@@ -1296,7 +1292,7 @@ TEST(BackendKernelClass, EinsumOuterProductMatchesProduct) {
   EXPECT_FLOAT_EQ(py[5], 15.0f);
 }
 
-TEST(BackendKernelClass, EinsumImplicitOutputIsAlphabetical) {
+TEST(KernelClass, EinsumImplicitOutputIsAlphabetical) {
   const KernelContext ctx{DefaultOpset(13)};
   Einsum einsum_kernel{ctx};
 
@@ -1312,7 +1308,7 @@ TEST(BackendKernelClass, EinsumImplicitOutputIsAlphabetical) {
   EXPECT_FLOAT_EQ(py[3], 5.0f);
 }
 
-TEST(BackendKernelClass, EinsumEllipsisBatchMatMul) {
+TEST(KernelClass, EinsumEllipsisBatchMatMul) {
   const KernelContext ctx{DefaultOpset(13)};
   Einsum einsum_kernel{ctx};
 
@@ -1333,14 +1329,14 @@ TEST(BackendKernelClass, EinsumEllipsisBatchMatMul) {
   EXPECT_FLOAT_EQ(py[7], 10.0f * 0 + 11 * 2 + 12 * 1);
 }
 
-TEST(BackendKernelClass, EinsumRejectsEmptyEquation) {
+TEST(KernelClass, EinsumRejectsEmptyEquation) {
   const KernelContext ctx{DefaultOpset(13)};
   Einsum einsum_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   EXPECT_THROW(einsum_kernel({x}, ""), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, EinsumRejectsRankMismatch) {
+TEST(KernelClass, EinsumRejectsRankMismatch) {
   const KernelContext ctx{DefaultOpset(13)};
   Einsum einsum_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 3}, {1, 2, 3, 4, 5, 6});
@@ -1348,7 +1344,7 @@ TEST(BackendKernelClass, EinsumRejectsRankMismatch) {
   EXPECT_THROW(einsum_kernel({x}, "i->i"), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, ClipClassClampsToMinAndMax) {
+TEST(KernelClass, ClipClassClampsToMinAndMax) {
   const KernelContext ctx{DefaultOpset(13)};
   Clip clip_kernel{ctx};
 
@@ -1365,7 +1361,7 @@ TEST(BackendKernelClass, ClipClassClampsToMinAndMax) {
   EXPECT_FLOAT_EQ(py[4], 1.0f);
 }
 
-TEST(BackendKernelClass, ClipClassDefaultsBoundsToDtypeLimits) {
+TEST(KernelClass, ClipClassDefaultsBoundsToDtypeLimits) {
   const KernelContext ctx{DefaultOpset(13)};
   Clip clip_kernel{ctx};
 
@@ -1378,7 +1374,7 @@ TEST(BackendKernelClass, ClipClassDefaultsBoundsToDtypeLimits) {
   EXPECT_FLOAT_EQ(py[2], 1.0f);
 }
 
-TEST(BackendKernelClass, ClipClassMinGreaterThanMaxCollapsesToMax) {
+TEST(KernelClass, ClipClassMinGreaterThanMaxCollapsesToMax) {
   const KernelContext ctx{DefaultOpset(13)};
   Clip clip_kernel{ctx};
 
@@ -1392,7 +1388,7 @@ TEST(BackendKernelClass, ClipClassMinGreaterThanMaxCollapsesToMax) {
   EXPECT_FLOAT_EQ(py[2], 1.0f);
 }
 
-TEST(BackendKernelClass, ClipClassSupportsInt8) {
+TEST(KernelClass, ClipClassSupportsInt8) {
   const KernelContext ctx{DefaultOpset(12)};
   Clip clip_kernel{ctx};
 
@@ -1408,7 +1404,7 @@ TEST(BackendKernelClass, ClipClassSupportsInt8) {
   EXPECT_EQ(py[4], 10);
 }
 
-TEST(BackendKernelClass, ClipClassRejectsNonScalarBound) {
+TEST(KernelClass, ClipClassRejectsNonScalarBound) {
   const KernelContext ctx{DefaultOpset(13)};
   Clip clip_kernel{ctx};
 
@@ -1417,7 +1413,7 @@ TEST(BackendKernelClass, ClipClassRejectsNonScalarBound) {
   EXPECT_THROW(clip_kernel(x, &bad_lo, /*max=*/nullptr), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, TopKLargestSortedMatchesReference) {
+TEST(KernelClass, TopKLargestSortedMatchesReference) {
   const KernelContext ctx{DefaultOpset(11)};
   TopK topk_kernel{ctx};
 
@@ -1442,7 +1438,7 @@ TEST(BackendKernelClass, TopKLargestSortedMatchesReference) {
   EXPECT_EQ(pi[8], 2);
 }
 
-TEST(BackendKernelClass, TopKSmallestPicksMinima) {
+TEST(KernelClass, TopKSmallestPicksMinima) {
   const KernelContext ctx{DefaultOpset(11)};
   TopK topk_kernel{ctx};
 
@@ -1455,7 +1451,7 @@ TEST(BackendKernelClass, TopKSmallestPicksMinima) {
   EXPECT_EQ(indices.AsInt64()[1], 3);
 }
 
-TEST(BackendKernelClass, TopKTieBreaksOnLowerIndex) {
+TEST(KernelClass, TopKTieBreaksOnLowerIndex) {
   const KernelContext ctx{DefaultOpset(11)};
   TopK topk_kernel{ctx};
 
@@ -1471,7 +1467,7 @@ TEST(BackendKernelClass, TopKTieBreaksOnLowerIndex) {
 // PRelu kernel tests
 // ---------------------------------------------------------------------------
 
-TEST(BackendKernelClass, PReluClassMatchesReference) {
+TEST(KernelClass, PReluClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(16)};
   PRelu prelu_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {4}, {-2.0f, -1.0f, 1.0f, 2.0f});
@@ -1485,7 +1481,7 @@ TEST(BackendKernelClass, PReluClassMatchesReference) {
   EXPECT_FLOAT_EQ(py[3], 2.0f);
 }
 
-TEST(BackendKernelClass, PReluClassBroadcastsSlope) {
+TEST(KernelClass, PReluClassBroadcastsSlope) {
   const KernelContext ctx{DefaultOpset(16)};
   PRelu prelu_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, -2.0f, -3.0f, 1.0f, 2.0f, 3.0f});
@@ -1503,7 +1499,7 @@ TEST(BackendKernelClass, PReluClassBroadcastsSlope) {
 
 // Regression for microsoft/onnxruntime#28732: PRelu must preserve ``+inf``
 // and ``-inf`` inputs rather than collapsing them to ``NaN``.
-TEST(BackendKernelClass, PReluPreservesInfiniteInputs) {
+TEST(KernelClass, PReluPreservesInfiniteInputs) {
   const KernelContext ctx{DefaultOpset(16)};
   PRelu prelu_kernel{ctx};
   const float pinf = std::numeric_limits<float>::infinity();
@@ -1520,7 +1516,7 @@ TEST(BackendKernelClass, PReluPreservesInfiniteInputs) {
   EXPECT_FALSE(std::isnan(py[1]));
 }
 
-TEST(BackendKernelClass, PReluInPlaceWritesToPreallocatedOutput) {
+TEST(KernelClass, PReluInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(16)};
   PRelu prelu_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {-1.0f, -2.0f, 3.0f, -4.0f});
@@ -1534,7 +1530,7 @@ TEST(BackendKernelClass, PReluInPlaceWritesToPreallocatedOutput) {
   EXPECT_FLOAT_EQ(py[3], -2.0f);
 }
 
-TEST(BackendKernelClass, PReluRejectsUnsupportedDtype) {
+TEST(KernelClass, PReluRejectsUnsupportedDtype) {
   const KernelContext ctx{DefaultOpset(16)};
   PRelu prelu_kernel{ctx};
   Tensor x = Tensor::FromInt8("", {2}, {-1, 2});
@@ -1542,7 +1538,7 @@ TEST(BackendKernelClass, PReluRejectsUnsupportedDtype) {
   EXPECT_THROW(prelu_kernel(x, slope), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, PowClassMatchesReferenceFloat) {
+TEST(KernelClass, PowClassMatchesReferenceFloat) {
   // Matches the upstream ``test_pow_example`` reference case.
   const KernelContext ctx{DefaultOpset(15)};
   Pow pow_kernel{ctx};
@@ -1557,7 +1553,7 @@ TEST(BackendKernelClass, PowClassMatchesReferenceFloat) {
   EXPECT_FLOAT_EQ(pz[2], 729.0f);
 }
 
-TEST(BackendKernelClass, PowClassBroadcastsScalarExponent) {
+TEST(KernelClass, PowClassBroadcastsScalarExponent) {
   // Matches the upstream ``test_pow_bcast_scalar`` reference case.
   const KernelContext ctx{DefaultOpset(15)};
   Pow pow_kernel{ctx};
@@ -1571,7 +1567,7 @@ TEST(BackendKernelClass, PowClassBroadcastsScalarExponent) {
   EXPECT_FLOAT_EQ(pz[2], 9.0f);
 }
 
-TEST(BackendKernelClass, PowClassBroadcastsArrayExponent) {
+TEST(KernelClass, PowClassBroadcastsArrayExponent) {
   // Matches the upstream ``test_pow_bcast_array`` reference case.
   const KernelContext ctx{DefaultOpset(15)};
   Pow pow_kernel{ctx};
@@ -1588,7 +1584,7 @@ TEST(BackendKernelClass, PowClassBroadcastsArrayExponent) {
   EXPECT_FLOAT_EQ(pz[5], 216.0f);
 }
 
-TEST(BackendKernelClass, PowClassSupportsMixedBaseExponentDtypes) {
+TEST(KernelClass, PowClassSupportsMixedBaseExponentDtypes) {
   // ``Pow`` is the only element-wise binary kernel whose ``T`` (base) and
   // ``T1`` (exponent) type constraints differ — exercise the cross-dtype
   // pairs covered by the upstream ``test_pow_types_*`` reference cases.
@@ -1640,7 +1636,7 @@ TEST(BackendKernelClass, PowClassSupportsMixedBaseExponentDtypes) {
   }
 }
 
-TEST(BackendKernelClass, PowInPlaceWritesToPreallocatedOutput) {
+TEST(KernelClass, PowInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(15)};
   Pow pow_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
@@ -1654,7 +1650,7 @@ TEST(BackendKernelClass, PowInPlaceWritesToPreallocatedOutput) {
   EXPECT_FLOAT_EQ(pz[3], 64.0f);
 }
 
-TEST(BackendKernelClass, PowRejectsUnsupportedBaseDtype) {
+TEST(KernelClass, PowRejectsUnsupportedBaseDtype) {
   const KernelContext ctx{DefaultOpset(15)};
   Pow pow_kernel{ctx};
   // UINT8 is not in the ``T`` (base) constraint of ONNX Pow.
@@ -1663,7 +1659,7 @@ TEST(BackendKernelClass, PowRejectsUnsupportedBaseDtype) {
   EXPECT_THROW(pow_kernel(x, y), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, PowRejectsIncompatibleShapes) {
+TEST(KernelClass, PowRejectsIncompatibleShapes) {
   const KernelContext ctx{DefaultOpset(15)};
   Pow pow_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
@@ -1671,7 +1667,7 @@ TEST(BackendKernelClass, PowRejectsIncompatibleShapes) {
   EXPECT_THROW(pow_kernel(x, y), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, ShrinkClassMatchesReference) {
+TEST(KernelClass, ShrinkClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(9)};
   Shrink shrink_kernel{ctx};
 
@@ -1687,7 +1683,7 @@ TEST(BackendKernelClass, ShrinkClassMatchesReference) {
   EXPECT_FLOAT_EQ(py[4], 0.5f); // 2 > 1.5 -> 2 - 1.5
 }
 
-TEST(BackendKernelClass, ShrinkClassHardShrinkDefaultBias) {
+TEST(KernelClass, ShrinkClassHardShrinkDefaultBias) {
   const KernelContext ctx{DefaultOpset(9)};
   Shrink shrink_kernel{ctx};
 
@@ -1702,7 +1698,7 @@ TEST(BackendKernelClass, ShrinkClassHardShrinkDefaultBias) {
   EXPECT_FLOAT_EQ(py[4], 2.0f);
 }
 
-TEST(BackendKernelClass, ShrinkClassDoubleDtype) {
+TEST(KernelClass, ShrinkClassDoubleDtype) {
   const KernelContext ctx{DefaultOpset(9)};
   Shrink shrink_kernel{ctx};
   std::vector<double> values{-2.0, -1.0, 0.0, 1.0, 2.0};
@@ -1716,7 +1712,7 @@ TEST(BackendKernelClass, ShrinkClassDoubleDtype) {
   EXPECT_DOUBLE_EQ(py[4], 0.5);
 }
 
-TEST(BackendKernelClass, ShrinkClassRejectsUnsupportedDtype) {
+TEST(KernelClass, ShrinkClassRejectsUnsupportedDtype) {
   const KernelContext ctx{DefaultOpset(9)};
   Shrink shrink_kernel{ctx};
   Tensor x = Tensor::FromUint8("", {2}, {1u, 2u});

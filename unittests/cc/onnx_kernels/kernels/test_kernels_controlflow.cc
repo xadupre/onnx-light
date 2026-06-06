@@ -23,7 +23,7 @@ using onnx_kernels::kernel::Scan;
 
 namespace Test {
 
-TEST(BackendKernelClass, IfClassSelectsThenBranchWhenCondTrue) {
+TEST(KernelClass, IfClassSelectsThenBranchWhenCondTrue) {
   const KernelContext ctx{DefaultOpset(13)};
   If if_kernel{ctx};
   Tensor cond("", onnx_kernels::DataType::BOOL, {}, {1});
@@ -36,7 +36,7 @@ TEST(BackendKernelClass, IfClassSelectsThenBranchWhenCondTrue) {
   EXPECT_FLOAT_EQ(out.AsFloat()[1], 2.0f);
 }
 
-TEST(BackendKernelClass, IfClassSelectsElseBranchWhenCondFalse) {
+TEST(KernelClass, IfClassSelectsElseBranchWhenCondFalse) {
   const KernelContext ctx{DefaultOpset(13)};
   If if_kernel{ctx};
   Tensor cond("", onnx_kernels::DataType::BOOL, {}, {0});
@@ -48,7 +48,7 @@ TEST(BackendKernelClass, IfClassSelectsElseBranchWhenCondFalse) {
   EXPECT_FLOAT_EQ(out.AsFloat()[1], 4.0f);
 }
 
-TEST(BackendKernelClass, IfClassRejectsInvalidInputs) {
+TEST(KernelClass, IfClassRejectsInvalidInputs) {
   const KernelContext ctx{DefaultOpset(13)};
   If if_kernel{ctx};
   Tensor cond_bool("", onnx_kernels::DataType::BOOL, {}, {1});
@@ -72,7 +72,7 @@ TEST(BackendKernelClass, IfClassRejectsInvalidInputs) {
   EXPECT_THROW((void)if_kernel(cond_bool, then_v, else_short), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, IfInPlaceWritesToPreallocatedOutput) {
+TEST(KernelClass, IfInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(13)};
   If if_kernel{ctx};
   Tensor then_v = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
@@ -81,8 +81,7 @@ TEST(BackendKernelClass, IfInPlaceWritesToPreallocatedOutput) {
   // cond = true → then-branch.
   {
     Tensor cond("", onnx_kernels::DataType::BOOL, {}, {1});
-    Tensor out("", onnx_kernels::DataType::FLOAT, {2},
-               std::vector<uint8_t>(2 * sizeof(float)));
+    Tensor out("", onnx_kernels::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float)));
     if_kernel(cond, then_v, else_v, out);
     EXPECT_FLOAT_EQ(out.AsFloat()[0], 1.0f);
     EXPECT_FLOAT_EQ(out.AsFloat()[1], 2.0f);
@@ -91,15 +90,14 @@ TEST(BackendKernelClass, IfInPlaceWritesToPreallocatedOutput) {
   // cond = false → else-branch.
   {
     Tensor cond("", onnx_kernels::DataType::BOOL, {}, {0});
-    Tensor out("", onnx_kernels::DataType::FLOAT, {2},
-               std::vector<uint8_t>(2 * sizeof(float)));
+    Tensor out("", onnx_kernels::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float)));
     if_kernel(cond, then_v, else_v, out);
     EXPECT_FLOAT_EQ(out.AsFloat()[0], 3.0f);
     EXPECT_FLOAT_EQ(out.AsFloat()[1], 4.0f);
   }
 }
 
-TEST(BackendKernelClass, IfInPlaceRejectsBadOutput) {
+TEST(KernelClass, IfInPlaceRejectsBadOutput) {
   const KernelContext ctx{DefaultOpset(13)};
   If if_kernel{ctx};
   Tensor cond("", onnx_kernels::DataType::BOOL, {}, {1});
@@ -112,13 +110,11 @@ TEST(BackendKernelClass, IfInPlaceRejectsBadOutput) {
   EXPECT_THROW(if_kernel(cond, then_v, else_v, bad_dtype), std::invalid_argument);
 
   // Wrong shape.
-  Tensor bad_shape("", onnx_kernels::DataType::FLOAT, {3},
-                   std::vector<uint8_t>(3 * sizeof(float)));
+  Tensor bad_shape("", onnx_kernels::DataType::FLOAT, {3}, std::vector<uint8_t>(3 * sizeof(float)));
   EXPECT_THROW(if_kernel(cond, then_v, else_v, bad_shape), std::invalid_argument);
 
   // Wrong buffer byte count.
-  Tensor bad_bytes("", onnx_kernels::DataType::FLOAT, {2},
-                   std::vector<uint8_t>(1 * sizeof(float)));
+  Tensor bad_bytes("", onnx_kernels::DataType::FLOAT, {2}, std::vector<uint8_t>(1 * sizeof(float)));
   EXPECT_THROW(if_kernel(cond, then_v, else_v, bad_bytes), std::invalid_argument);
 }
 
@@ -134,7 +130,7 @@ Tensor Int64Scalar(int64_t v) {
 }
 } // namespace
 
-TEST(BackendKernelClass, LoopStacksScanOutputsAcrossIterations) {
+TEST(KernelClass, LoopStacksScanOutputsAcrossIterations) {
   const KernelContext ctx{DefaultOpset(13)};
   Loop loop_kernel{ctx};
   // M = 3, no cond, no carried deps, K = 1 scan output of shape [2] per iter.
@@ -156,7 +152,7 @@ TEST(BackendKernelClass, LoopStacksScanOutputsAcrossIterations) {
   EXPECT_FLOAT_EQ(out[0].AsFloat()[5], 6.0f);
 }
 
-TEST(BackendKernelClass, LoopReturnsInitialStateWhenTripCountIsZero) {
+TEST(KernelClass, LoopReturnsInitialStateWhenTripCountIsZero) {
   const KernelContext ctx{DefaultOpset(13)};
   Loop loop_kernel{ctx};
   Tensor M = Int64Scalar(0);
@@ -169,7 +165,7 @@ TEST(BackendKernelClass, LoopReturnsInitialStateWhenTripCountIsZero) {
   EXPECT_FLOAT_EQ(out[0].AsFloat()[1], 8.0f);
 }
 
-TEST(BackendKernelClass, LoopHonorsCondFalseEvenWhenMIsLarge) {
+TEST(KernelClass, LoopHonorsCondFalseEvenWhenMIsLarge) {
   const KernelContext ctx{DefaultOpset(13)};
   Loop loop_kernel{ctx};
   Tensor M = Int64Scalar(5);
@@ -184,7 +180,7 @@ TEST(BackendKernelClass, LoopHonorsCondFalseEvenWhenMIsLarge) {
   EXPECT_TRUE(out[0].data.empty());
 }
 
-TEST(BackendKernelClass, LoopUsesPerIterRowLengthWhenMIsAbsent) {
+TEST(KernelClass, LoopUsesPerIterRowLengthWhenMIsAbsent) {
   // No M and no cond → trip count is the per-iteration row length (2).
   const KernelContext ctx{DefaultOpset(13)};
   Loop loop_kernel{ctx};
@@ -200,7 +196,7 @@ TEST(BackendKernelClass, LoopUsesPerIterRowLengthWhenMIsAbsent) {
   EXPECT_EQ(out[0].shape[1], 1);
 }
 
-TEST(BackendKernelClass, LoopRejectsMismatchedFinalStateAndVInitial) {
+TEST(KernelClass, LoopRejectsMismatchedFinalStateAndVInitial) {
   const KernelContext ctx{DefaultOpset(13)};
   Loop loop_kernel{ctx};
   Tensor M = Int64Scalar(1);
@@ -212,7 +208,7 @@ TEST(BackendKernelClass, LoopRejectsMismatchedFinalStateAndVInitial) {
                std::invalid_argument);
 }
 
-TEST(BackendKernelClass, LoopRejectsScanRowsOfDifferentLengths) {
+TEST(KernelClass, LoopRejectsScanRowsOfDifferentLengths) {
   const KernelContext ctx{DefaultOpset(13)};
   Loop loop_kernel{ctx};
   Tensor M = Int64Scalar(2);
@@ -223,7 +219,7 @@ TEST(BackendKernelClass, LoopRejectsScanRowsOfDifferentLengths) {
       std::invalid_argument);
 }
 
-TEST(BackendKernelClass, ScanStacksPerIterAlongLeadingAxisByDefault) {
+TEST(KernelClass, ScanStacksPerIterAlongLeadingAxisByDefault) {
   const KernelContext ctx{DefaultOpset(11)};
   Scan scan_kernel{ctx};
   // T = 3, no state vars, K = 1 scan output of shape [2] per iter.
@@ -244,7 +240,7 @@ TEST(BackendKernelClass, ScanStacksPerIterAlongLeadingAxisByDefault) {
   EXPECT_FLOAT_EQ(out[0].AsFloat()[5], 5.0f);
 }
 
-TEST(BackendKernelClass, ScanReturnsInitialStateWhenTripCountIsZero) {
+TEST(KernelClass, ScanReturnsInitialStateWhenTripCountIsZero) {
   const KernelContext ctx{DefaultOpset(11)};
   Scan scan_kernel{ctx};
   Tensor initial = Tensor::FromFloat("", {2}, {7.0f, 8.0f});
@@ -260,7 +256,7 @@ TEST(BackendKernelClass, ScanReturnsInitialStateWhenTripCountIsZero) {
   EXPECT_EQ(out[1].element_count(), 0);
 }
 
-TEST(BackendKernelClass, ScanReversesPerIterWhenDirectionPrepend) {
+TEST(KernelClass, ScanReversesPerIterWhenDirectionPrepend) {
   const KernelContext ctx{DefaultOpset(11)};
   Scan scan_kernel{ctx};
   Tensor s0 = Tensor::FromFloat("", {1}, {10.0f});
@@ -277,7 +273,7 @@ TEST(BackendKernelClass, ScanReversesPerIterWhenDirectionPrepend) {
   EXPECT_FLOAT_EQ(out[0].AsFloat()[2], 10.0f);
 }
 
-TEST(BackendKernelClass, ScanStacksAlongNonLeadingAxisWhenRequested) {
+TEST(KernelClass, ScanStacksAlongNonLeadingAxisWhenRequested) {
   const KernelContext ctx{DefaultOpset(11)};
   Scan scan_kernel{ctx};
   // Per-iter element shape [3] → stacking along axis=1 yields shape [3, T].
@@ -296,7 +292,7 @@ TEST(BackendKernelClass, ScanStacksAlongNonLeadingAxisWhenRequested) {
   EXPECT_FLOAT_EQ(out[0].AsFloat()[5], 6.0f);
 }
 
-TEST(BackendKernelClass, ScanRejectsMismatchedInitialAndFinalState) {
+TEST(KernelClass, ScanRejectsMismatchedInitialAndFinalState) {
   const KernelContext ctx{DefaultOpset(11)};
   Scan scan_kernel{ctx};
   Tensor initial = Tensor::FromFloat("", {1}, {1.0f});
@@ -304,7 +300,7 @@ TEST(BackendKernelClass, ScanRejectsMismatchedInitialAndFinalState) {
   EXPECT_THROW((void)scan_kernel(1, {initial}, {}, {}), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, ScanRejectsNegativeTripCount) {
+TEST(KernelClass, ScanRejectsNegativeTripCount) {
   const KernelContext ctx{DefaultOpset(11)};
   Scan scan_kernel{ctx};
   EXPECT_THROW((void)scan_kernel(-1, {}, {}, {}), std::invalid_argument);

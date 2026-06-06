@@ -34,7 +34,7 @@ void ExpectNear(const Tensor &y, const std::vector<float> &expected, float tol =
 // Mirrors upstream ``test_basic_conv_without_padding``: 1x1x5x5 input with
 // 1x1x3x3 kernel of ones, default stride 1, no padding. Output is the
 // sum of each 3x3 window.
-TEST(BackendKernelClass, ConvBasicWithoutPaddingMatchesUpstream) {
+TEST(KernelClass, ConvBasicWithoutPaddingMatchesUpstream) {
   const KernelContext ctx{DefaultOpset(22)};
   const Conv conv{ctx};
   std::vector<float> X(25);
@@ -53,7 +53,7 @@ TEST(BackendKernelClass, ConvBasicWithoutPaddingMatchesUpstream) {
 }
 
 // Mirrors upstream ``test_basic_conv_with_padding``: same data, pads=[1,1,1,1].
-TEST(BackendKernelClass, ConvBasicWithPaddingMatchesUpstream) {
+TEST(KernelClass, ConvBasicWithPaddingMatchesUpstream) {
   const KernelContext ctx{DefaultOpset(22)};
   const Conv conv{ctx};
   std::vector<float> X(25);
@@ -72,7 +72,7 @@ TEST(BackendKernelClass, ConvBasicWithPaddingMatchesUpstream) {
 
 // SAME_UPPER auto_pad keeps the output spatial size equal to the input
 // (ceil(in/stride) = in when stride == 1).
-TEST(BackendKernelClass, ConvSameUpperMatchesInputShape) {
+TEST(KernelClass, ConvSameUpperMatchesInputShape) {
   const KernelContext ctx{DefaultOpset(22)};
   const Conv conv{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 4, 4}, std::vector<float>(16, 1.0f));
@@ -85,6 +85,6 @@ TEST(BackendKernelClass, ConvSameUpperMatchesInputShape) {
   ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 1, 4, 4}));
 }
 
-TEST(BackendKernelClass, ConvCanRunInPlaceIsFalse) { EXPECT_FALSE(Conv::CanRunInPlace()); }
+TEST(KernelClass, ConvCanRunInPlaceIsFalse) { EXPECT_FALSE(Conv::CanRunInPlace()); }
 
 } // namespace Test

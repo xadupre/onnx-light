@@ -27,7 +27,7 @@ using onnx_kernels::kernel::ReduceSumSquare;
 
 namespace Test {
 
-TEST(BackendKernelClass, ReduceSumDefaultAxesReducesAll) {
+TEST(KernelClass, ReduceSumDefaultAxesReducesAll) {
   const KernelContext ctx{DefaultOpset(13)};
   ReduceSum reduce_sum{ctx};
   Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
@@ -37,7 +37,7 @@ TEST(BackendKernelClass, ReduceSumDefaultAxesReducesAll) {
   EXPECT_FLOAT_EQ(y.AsFloat()[0], 21.0f);
 }
 
-TEST(BackendKernelClass, ReduceSumDefaultAxesNoKeepdimsProducesScalar) {
+TEST(KernelClass, ReduceSumDefaultAxesNoKeepdimsProducesScalar) {
   const KernelContext ctx{DefaultOpset(13)};
   ReduceSum reduce_sum{ctx};
   Tensor data = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
@@ -47,7 +47,7 @@ TEST(BackendKernelClass, ReduceSumDefaultAxesNoKeepdimsProducesScalar) {
   EXPECT_FLOAT_EQ(y.AsFloat()[0], 10.0f);
 }
 
-TEST(BackendKernelClass, ReduceSumNoopWithEmptyAxesIsIdentity) {
+TEST(KernelClass, ReduceSumNoopWithEmptyAxesIsIdentity) {
   const KernelContext ctx{DefaultOpset(13)};
   ReduceSum reduce_sum{ctx};
   Tensor data = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
@@ -56,7 +56,7 @@ TEST(BackendKernelClass, ReduceSumNoopWithEmptyAxesIsIdentity) {
   EXPECT_EQ(y.data, data.data);
 }
 
-TEST(BackendKernelClass, ReduceSumExplicitAxisReducesAlongAxis) {
+TEST(KernelClass, ReduceSumExplicitAxisReducesAlongAxis) {
   const KernelContext ctx{DefaultOpset(13)};
   ReduceSum reduce_sum{ctx};
   Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
@@ -69,7 +69,7 @@ TEST(BackendKernelClass, ReduceSumExplicitAxisReducesAlongAxis) {
   EXPECT_FLOAT_EQ(py[1], 15.0f);
 }
 
-TEST(BackendKernelClass, ReduceSumNegativeAxisKeepdims) {
+TEST(KernelClass, ReduceSumNegativeAxisKeepdims) {
   const KernelContext ctx{DefaultOpset(13)};
   ReduceSum reduce_sum{ctx};
   Tensor data = Tensor::FromFloat(
@@ -91,7 +91,7 @@ TEST(BackendKernelClass, ReduceSumNegativeAxisKeepdims) {
   EXPECT_FLOAT_EQ(py[5], 22.0f);
 }
 
-TEST(BackendKernelClass, ReduceSumInPlaceWritesToPreallocatedOutput) {
+TEST(KernelClass, ReduceSumInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(13)};
   ReduceSum reduce_sum{ctx};
   Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
@@ -105,7 +105,7 @@ TEST(BackendKernelClass, ReduceSumInPlaceWritesToPreallocatedOutput) {
   EXPECT_FLOAT_EQ(po[2], 9.0f);
 }
 
-TEST(BackendKernelClass, ReduceSumRejectsBadInputs) {
+TEST(KernelClass, ReduceSumRejectsBadInputs) {
   const KernelContext ctx{DefaultOpset(13)};
   ReduceSum reduce_sum{ctx};
   Tensor data = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
@@ -131,7 +131,7 @@ TEST(BackendKernelClass, ReduceSumRejectsBadInputs) {
                std::invalid_argument);
 }
 
-TEST(BackendKernelClass, ReduceMaxExplicitAxisNoKeepdims) {
+TEST(KernelClass, ReduceMaxExplicitAxisNoKeepdims) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceMax reduce_max{ctx};
   Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, 9.0f, 3.0f, 4.0f, 2.0f, 6.0f});
@@ -143,7 +143,7 @@ TEST(BackendKernelClass, ReduceMaxExplicitAxisNoKeepdims) {
   EXPECT_FLOAT_EQ(py[1], 6.0f);
 }
 
-TEST(BackendKernelClass, ReduceMinNegativeAxisKeepdims) {
+TEST(KernelClass, ReduceMinNegativeAxisKeepdims) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceMin reduce_min{ctx};
   Tensor data = Tensor::FromFloat("", {2, 2, 2}, {4.0f, 2.0f, 3.0f, 7.0f, 1.0f, 9.0f, 6.0f, 5.0f});
@@ -157,7 +157,7 @@ TEST(BackendKernelClass, ReduceMinNegativeAxisKeepdims) {
   EXPECT_FLOAT_EQ(py[3], 5.0f);
 }
 
-TEST(BackendKernelClass, ReduceMaxAndMinNoopWithEmptyAxesIsIdentity) {
+TEST(KernelClass, ReduceMaxAndMinNoopWithEmptyAxesIsIdentity) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceMax reduce_max{ctx};
   ReduceMin reduce_min{ctx};
@@ -171,7 +171,7 @@ TEST(BackendKernelClass, ReduceMaxAndMinNoopWithEmptyAxesIsIdentity) {
   EXPECT_EQ(y_min.data, data.data);
 }
 
-TEST(BackendKernelClass, ReduceMinMaxRejectsBadInputs) {
+TEST(KernelClass, ReduceMinMaxRejectsBadInputs) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceMax reduce_max{ctx};
   Tensor data = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
@@ -187,7 +187,7 @@ TEST(BackendKernelClass, ReduceMinMaxRejectsBadInputs) {
 
 // ── ReduceL1 / ReduceL2 kernels ───────────────────────────────────────────
 
-TEST(BackendKernelClass, ReduceL1ExplicitAxisSumsAbsoluteValues) {
+TEST(KernelClass, ReduceL1ExplicitAxisSumsAbsoluteValues) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceL1 reduce_l1{ctx};
   // Mix of positives and negatives so the result differs from ReduceSum.
@@ -200,7 +200,7 @@ TEST(BackendKernelClass, ReduceL1ExplicitAxisSumsAbsoluteValues) {
   EXPECT_FLOAT_EQ(py[1], 15.0f); // |-4| + |5| + |-6|
 }
 
-TEST(BackendKernelClass, ReduceL2ExplicitAxisIsSqrtOfSumOfSquares) {
+TEST(KernelClass, ReduceL2ExplicitAxisIsSqrtOfSumOfSquares) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceL2 reduce_l2{ctx};
   Tensor data = Tensor::FromFloat("", {2, 2}, {3.0f, 4.0f, -6.0f, 8.0f});
@@ -212,7 +212,7 @@ TEST(BackendKernelClass, ReduceL2ExplicitAxisIsSqrtOfSumOfSquares) {
   EXPECT_FLOAT_EQ(py[1], 10.0f); // sqrt(36 + 64)
 }
 
-TEST(BackendKernelClass, ReduceL1DefaultAxesReducesAll) {
+TEST(KernelClass, ReduceL1DefaultAxesReducesAll) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceL1 reduce_l1{ctx};
   Tensor data = Tensor::FromFloat("", {2, 2}, {1.0f, -2.0f, 3.0f, -4.0f});
@@ -221,7 +221,7 @@ TEST(BackendKernelClass, ReduceL1DefaultAxesReducesAll) {
   EXPECT_FLOAT_EQ(y.AsFloat()[0], 10.0f);
 }
 
-TEST(BackendKernelClass, ReduceL2NoopWithEmptyAxesAppliesElementwiseAbs) {
+TEST(KernelClass, ReduceL2NoopWithEmptyAxesAppliesElementwiseAbs) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceL2 reduce_l2{ctx};
   Tensor data = Tensor::FromFloat("", {2, 2}, {1.0f, -2.0f, 3.0f, -4.0f});
@@ -235,7 +235,7 @@ TEST(BackendKernelClass, ReduceL2NoopWithEmptyAxesAppliesElementwiseAbs) {
   EXPECT_FLOAT_EQ(py[3], 4.0f);
 }
 
-TEST(BackendKernelClass, ReduceL1L2RejectsBadInputs) {
+TEST(KernelClass, ReduceL1L2RejectsBadInputs) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceL1 reduce_l1{ctx};
   Tensor bad_data = Tensor::FromInt32("", {2}, {1, 2});
@@ -251,7 +251,7 @@ TEST(BackendKernelClass, ReduceL1L2RejectsBadInputs) {
 
 // ── ReduceSumSquare kernel ────────────────────────────────────────────────
 
-TEST(BackendKernelClass, ReduceSumSquareExplicitAxisIsSumOfSquares) {
+TEST(KernelClass, ReduceSumSquareExplicitAxisIsSumOfSquares) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceSumSquare reduce_sum_square{ctx};
   Tensor data = Tensor::FromFloat("", {2, 2}, {3.0f, 4.0f, -6.0f, 8.0f});
@@ -263,7 +263,7 @@ TEST(BackendKernelClass, ReduceSumSquareExplicitAxisIsSumOfSquares) {
   EXPECT_FLOAT_EQ(py[1], 100.0f); // 36 + 64
 }
 
-TEST(BackendKernelClass, ReduceSumSquareDefaultAxesReducesAll) {
+TEST(KernelClass, ReduceSumSquareDefaultAxesReducesAll) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceSumSquare reduce_sum_square{ctx};
   Tensor data = Tensor::FromFloat("", {2, 2}, {1.0f, -2.0f, 3.0f, -4.0f});
@@ -272,7 +272,7 @@ TEST(BackendKernelClass, ReduceSumSquareDefaultAxesReducesAll) {
   EXPECT_FLOAT_EQ(y.AsFloat()[0], 30.0f); // 1 + 4 + 9 + 16
 }
 
-TEST(BackendKernelClass, ReduceSumSquareNoopWithEmptyAxesAppliesElementwiseSquare) {
+TEST(KernelClass, ReduceSumSquareNoopWithEmptyAxesAppliesElementwiseSquare) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceSumSquare reduce_sum_square{ctx};
   Tensor data = Tensor::FromFloat("", {2, 2}, {1.0f, -2.0f, 3.0f, -4.0f});
@@ -287,7 +287,7 @@ TEST(BackendKernelClass, ReduceSumSquareNoopWithEmptyAxesAppliesElementwiseSquar
   EXPECT_FLOAT_EQ(py[3], 16.0f);
 }
 
-TEST(BackendKernelClass, ReduceSumSquareNegativeAxisAndNoKeepdims) {
+TEST(KernelClass, ReduceSumSquareNegativeAxisAndNoKeepdims) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceSumSquare reduce_sum_square{ctx};
   Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
@@ -305,7 +305,7 @@ TEST(BackendKernelClass, ReduceSumSquareNegativeAxisAndNoKeepdims) {
 using onnx_kernels::kernel::ArgMax;
 using onnx_kernels::kernel::ArgMin;
 
-TEST(BackendKernelClass, ArgMaxAlongAxisKeepdims) {
+TEST(KernelClass, ArgMaxAlongAxisKeepdims) {
   const KernelContext ctx{DefaultOpset(13)};
   ArgMax argmax{ctx};
   Tensor data = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 3.0f, 10.0f});
@@ -318,7 +318,7 @@ TEST(BackendKernelClass, ArgMaxAlongAxisKeepdims) {
   EXPECT_EQ(py[1], 1);
 }
 
-TEST(BackendKernelClass, ArgMaxDefaultAxisNoKeepdims) {
+TEST(KernelClass, ArgMaxDefaultAxisNoKeepdims) {
   const KernelContext ctx{DefaultOpset(13)};
   ArgMax argmax{ctx};
   Tensor data = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 3.0f, 10.0f});
@@ -330,7 +330,7 @@ TEST(BackendKernelClass, ArgMaxDefaultAxisNoKeepdims) {
   EXPECT_EQ(py[1], 1);
 }
 
-TEST(BackendKernelClass, ArgMaxNegativeAxisSelectLastIndex) {
+TEST(KernelClass, ArgMaxNegativeAxisSelectLastIndex) {
   const KernelContext ctx{DefaultOpset(13)};
   ArgMax argmax{ctx};
   Tensor data = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 3.0f, 10.0f});
@@ -343,7 +343,7 @@ TEST(BackendKernelClass, ArgMaxNegativeAxisSelectLastIndex) {
   EXPECT_EQ(py[1], 1);
 }
 
-TEST(BackendKernelClass, ArgMinAlongAxisSelectLastIndex) {
+TEST(KernelClass, ArgMinAlongAxisSelectLastIndex) {
   const KernelContext ctx{DefaultOpset(13)};
   ArgMin argmin{ctx};
   Tensor data = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 3.0f, 10.0f});
@@ -356,7 +356,7 @@ TEST(BackendKernelClass, ArgMinAlongAxisSelectLastIndex) {
   EXPECT_EQ(py[1], 0);
 }
 
-TEST(BackendKernelClass, ArgReduceInPlaceWritesToPreallocatedOutput) {
+TEST(KernelClass, ArgReduceInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(13)};
   ArgMax argmax{ctx};
   Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, 5.0f, 2.0f, 4.0f, 0.0f, 9.0f});
@@ -368,7 +368,7 @@ TEST(BackendKernelClass, ArgReduceInPlaceWritesToPreallocatedOutput) {
   EXPECT_EQ(po[1], 2);
 }
 
-TEST(BackendKernelClass, ArgReduceRejectsBadInputs) {
+TEST(KernelClass, ArgReduceRejectsBadInputs) {
   const KernelContext ctx{DefaultOpset(13)};
   ArgMax argmax{ctx};
   Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
@@ -402,7 +402,7 @@ TEST(BackendKernelClass, ArgReduceRejectsBadInputs) {
 
 // ── ReduceProd ────────────────────────────────────────────────────────────
 
-TEST(BackendKernelClass, ReduceProdDefaultAxesReducesAll) {
+TEST(KernelClass, ReduceProdDefaultAxesReducesAll) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceProd reduce_prod{ctx};
   Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
@@ -411,7 +411,7 @@ TEST(BackendKernelClass, ReduceProdDefaultAxesReducesAll) {
   EXPECT_FLOAT_EQ(y.AsFloat()[0], 720.0f);
 }
 
-TEST(BackendKernelClass, ReduceProdExplicitAxisReducesAlongAxis) {
+TEST(KernelClass, ReduceProdExplicitAxisReducesAlongAxis) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceProd reduce_prod{ctx};
   Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
@@ -423,7 +423,7 @@ TEST(BackendKernelClass, ReduceProdExplicitAxisReducesAlongAxis) {
   EXPECT_FLOAT_EQ(y.AsFloat()[1], 120.0f); // 4*5*6
 }
 
-TEST(BackendKernelClass, ReduceProdNegativeAxisKeepdims) {
+TEST(KernelClass, ReduceProdNegativeAxisKeepdims) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceProd reduce_prod{ctx};
   Tensor data = Tensor::FromFloat(
@@ -445,7 +445,7 @@ TEST(BackendKernelClass, ReduceProdNegativeAxisKeepdims) {
   EXPECT_FLOAT_EQ(py[5], 120.0f);
 }
 
-TEST(BackendKernelClass, ReduceProdNoopWithEmptyAxesIsIdentity) {
+TEST(KernelClass, ReduceProdNoopWithEmptyAxesIsIdentity) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceProd reduce_prod{ctx};
   Tensor data = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
@@ -454,7 +454,7 @@ TEST(BackendKernelClass, ReduceProdNoopWithEmptyAxesIsIdentity) {
   EXPECT_EQ(y.data, data.data);
 }
 
-TEST(BackendKernelClass, ReduceProdEmptySetIdentityIsOne) {
+TEST(KernelClass, ReduceProdEmptySetIdentityIsOne) {
   // Reducing over an axis of size 0 must yield the identity (1).
   const KernelContext ctx{DefaultOpset(18)};
   ReduceProd reduce_prod{ctx};
@@ -468,7 +468,7 @@ TEST(BackendKernelClass, ReduceProdEmptySetIdentityIsOne) {
   }
 }
 
-TEST(BackendKernelClass, ReduceProdRejectsNonFloatData) {
+TEST(KernelClass, ReduceProdRejectsNonFloatData) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceProd reduce_prod{ctx};
   Tensor data = Tensor::FromInt64("", {2}, {1, 2});
@@ -477,7 +477,7 @@ TEST(BackendKernelClass, ReduceProdRejectsNonFloatData) {
 
 // ── ReduceMean ────────────────────────────────────────────────────────────
 
-TEST(BackendKernelClass, ReduceMeanDefaultAxesReducesAll) {
+TEST(KernelClass, ReduceMeanDefaultAxesReducesAll) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceMean reduce_mean{ctx};
   Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
@@ -486,7 +486,7 @@ TEST(BackendKernelClass, ReduceMeanDefaultAxesReducesAll) {
   EXPECT_FLOAT_EQ(y.AsFloat()[0], 3.5f);
 }
 
-TEST(BackendKernelClass, ReduceMeanExplicitAxisReducesAlongAxis) {
+TEST(KernelClass, ReduceMeanExplicitAxisReducesAlongAxis) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceMean reduce_mean{ctx};
   Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
@@ -498,7 +498,7 @@ TEST(BackendKernelClass, ReduceMeanExplicitAxisReducesAlongAxis) {
   EXPECT_FLOAT_EQ(y.AsFloat()[1], 5.0f); // (4+5+6)/3
 }
 
-TEST(BackendKernelClass, ReduceMeanNegativeAxisKeepdims) {
+TEST(KernelClass, ReduceMeanNegativeAxisKeepdims) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceMean reduce_mean{ctx};
   Tensor data = Tensor::FromFloat(
@@ -520,7 +520,7 @@ TEST(BackendKernelClass, ReduceMeanNegativeAxisKeepdims) {
   EXPECT_FLOAT_EQ(py[5], 11.0f);
 }
 
-TEST(BackendKernelClass, ReduceMeanNoopWithEmptyAxesIsIdentity) {
+TEST(KernelClass, ReduceMeanNoopWithEmptyAxesIsIdentity) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceMean reduce_mean{ctx};
   Tensor data = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
@@ -529,7 +529,7 @@ TEST(BackendKernelClass, ReduceMeanNoopWithEmptyAxesIsIdentity) {
   EXPECT_EQ(y.data, data.data);
 }
 
-TEST(BackendKernelClass, ReduceMeanRejectsNonFloatData) {
+TEST(KernelClass, ReduceMeanRejectsNonFloatData) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceMean reduce_mean{ctx};
   Tensor data = Tensor::FromInt64("", {2}, {1, 2});

@@ -23,7 +23,7 @@ using onnx_kernels::kernel::StringSplit;
 
 namespace Test {
 
-TEST(BackendKernelClass, StringConcatEqualShapeMatchesReference) {
+TEST(KernelClass, StringConcatEqualShapeMatchesReference) {
   const KernelContext ctx{DefaultOpset(20)};
   StringConcat string_concat{ctx};
   Tensor x = Tensor::FromStrings("", {3}, {"abc", "", "hello "});
@@ -39,7 +39,7 @@ TEST(BackendKernelClass, StringConcatEqualShapeMatchesReference) {
   EXPECT_EQ(out[2], "hello world");
 }
 
-TEST(BackendKernelClass, StringConcatBroadcastsScalar) {
+TEST(KernelClass, StringConcatBroadcastsScalar) {
   const KernelContext ctx{DefaultOpset(20)};
   StringConcat string_concat{ctx};
   Tensor x = Tensor::FromStrings("", {2, 2}, {"a", "b", "c", "d"});
@@ -61,7 +61,7 @@ TEST(BackendKernelClass, StringConcatBroadcastsScalar) {
   EXPECT_EQ(out2[3], "!d");
 }
 
-TEST(BackendKernelClass, StringConcatRejectsBadInputsAndMismatchedOutput) {
+TEST(KernelClass, StringConcatRejectsBadInputsAndMismatchedOutput) {
   const KernelContext ctx{DefaultOpset(20)};
   StringConcat string_concat{ctx};
   Tensor x = Tensor::FromStrings("", {2}, {"a", "b"});
@@ -88,7 +88,7 @@ TEST(BackendKernelClass, StringConcatRejectsBadInputsAndMismatchedOutput) {
   EXPECT_THROW(string_concat(x, y, bad_out_size), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, StringSplitBasicMatchesReference) {
+TEST(KernelClass, StringSplitBasicMatchesReference) {
   const KernelContext ctx{DefaultOpset(20)};
   StringSplit string_split{ctx};
   Tensor x = Tensor::FromStrings("", {2}, {"abc.com", "def.net"});
@@ -103,7 +103,7 @@ TEST(BackendKernelClass, StringSplitBasicMatchesReference) {
   EXPECT_EQ(counts[1], 2);
 }
 
-TEST(BackendKernelClass, StringSplitHandlesWhitespaceAndPadding) {
+TEST(KernelClass, StringSplitHandlesWhitespaceAndPadding) {
   const KernelContext ctx{DefaultOpset(20)};
   StringSplit string_split{ctx};
   Tensor x =
@@ -122,7 +122,7 @@ TEST(BackendKernelClass, StringSplitHandlesWhitespaceAndPadding) {
   EXPECT_EQ(counts[3], 3);
 }
 
-TEST(BackendKernelClass, StringSplitConsecutiveDelimitersAndEmptyTensor) {
+TEST(KernelClass, StringSplitConsecutiveDelimitersAndEmptyTensor) {
   const KernelContext ctx{DefaultOpset(20)};
   StringSplit string_split{ctx};
 
@@ -143,14 +143,14 @@ TEST(BackendKernelClass, StringSplitConsecutiveDelimitersAndEmptyTensor) {
   EXPECT_EQ(empty_z.shape, (std::vector<int64_t>{0}));
 }
 
-TEST(BackendKernelClass, StringSplitRejectsNonStringInput) {
+TEST(KernelClass, StringSplitRejectsNonStringInput) {
   const KernelContext ctx{DefaultOpset(20)};
   StringSplit string_split{ctx};
   Tensor bad_dtype = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   EXPECT_THROW(string_split(bad_dtype), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, StringNormalizerLowercases1D) {
+TEST(KernelClass, StringNormalizerLowercases1D) {
   const KernelContext ctx{DefaultOpset(10)};
   StringNormalizer normalizer{ctx};
   Tensor x = Tensor::FromStrings("", {3}, {"Hello", "World", "FOO"});
@@ -163,7 +163,7 @@ TEST(BackendKernelClass, StringNormalizerLowercases1D) {
   EXPECT_EQ(out[2], "foo");
 }
 
-TEST(BackendKernelClass, StringNormalizerDropsCaseInsensitiveStopwords2D) {
+TEST(KernelClass, StringNormalizerDropsCaseInsensitiveStopwords2D) {
   const KernelContext ctx{DefaultOpset(10)};
   StringNormalizer normalizer{ctx};
   Tensor x = Tensor::FromStrings("", {1, 4}, {"A", "hello", "a", "world"});
@@ -176,7 +176,7 @@ TEST(BackendKernelClass, StringNormalizerDropsCaseInsensitiveStopwords2D) {
   EXPECT_EQ(out[1], "WORLD");
 }
 
-TEST(BackendKernelClass, StringNormalizerCaseSensitiveStopwords) {
+TEST(KernelClass, StringNormalizerCaseSensitiveStopwords) {
   const KernelContext ctx{DefaultOpset(10)};
   StringNormalizer normalizer{ctx};
   Tensor x = Tensor::FromStrings("", {3}, {"The", "the", "cat"});
@@ -189,7 +189,7 @@ TEST(BackendKernelClass, StringNormalizerCaseSensitiveStopwords) {
   EXPECT_EQ(out[1], "cat");
 }
 
-TEST(BackendKernelClass, StringNormalizerAllDroppedEmitsEmpty) {
+TEST(KernelClass, StringNormalizerAllDroppedEmitsEmpty) {
   const KernelContext ctx{DefaultOpset(10)};
   StringNormalizer normalizer{ctx};
   Tensor x1d = Tensor::FromStrings("", {2}, {"a", "b"});
@@ -205,7 +205,7 @@ TEST(BackendKernelClass, StringNormalizerAllDroppedEmitsEmpty) {
   EXPECT_EQ(y2d.AsStrings()[0], "");
 }
 
-TEST(BackendKernelClass, StringNormalizerParseCaseChangeAction) {
+TEST(KernelClass, StringNormalizerParseCaseChangeAction) {
   EXPECT_EQ(StringNormalizer::ParseCaseChangeAction("NONE"),
             StringNormalizer::CaseChangeAction::kNone);
   EXPECT_EQ(StringNormalizer::ParseCaseChangeAction("LOWER"),
@@ -216,7 +216,7 @@ TEST(BackendKernelClass, StringNormalizerParseCaseChangeAction) {
   EXPECT_THROW(StringNormalizer::ParseCaseChangeAction(""), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, StringNormalizerRejectsBadInputs) {
+TEST(KernelClass, StringNormalizerRejectsBadInputs) {
   const KernelContext ctx{DefaultOpset(10)};
   StringNormalizer normalizer{ctx};
 
@@ -233,7 +233,7 @@ TEST(BackendKernelClass, StringNormalizerRejectsBadInputs) {
   EXPECT_THROW(normalizer(bad_2d), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, RegexFullMatchProducesElementWiseBoolMask) {
+TEST(KernelClass, RegexFullMatchProducesElementWiseBoolMask) {
   const KernelContext ctx{DefaultOpset(20)};
   RegexFullMatch regex_full_match{ctx};
   Tensor x = Tensor::FromStrings("", {3}, {"www.google.com", "www.facebook.com", "www.bbc.co.uk"});
@@ -247,7 +247,7 @@ TEST(BackendKernelClass, RegexFullMatchProducesElementWiseBoolMask) {
   EXPECT_EQ(out[2], 0u);
 }
 
-TEST(BackendKernelClass, RegexFullMatchRequiresFullMatchNotPartial) {
+TEST(KernelClass, RegexFullMatchRequiresFullMatchNotPartial) {
   const KernelContext ctx{DefaultOpset(20)};
   RegexFullMatch regex_full_match{ctx};
   Tensor x = Tensor::FromStrings("", {2}, {"abc", "abcdef"});
@@ -259,7 +259,7 @@ TEST(BackendKernelClass, RegexFullMatchRequiresFullMatchNotPartial) {
   EXPECT_EQ(out[1], 0u);
 }
 
-TEST(BackendKernelClass, RegexFullMatchEmptyInputReturnsEmptyBool) {
+TEST(KernelClass, RegexFullMatchEmptyInputReturnsEmptyBool) {
   const KernelContext ctx{DefaultOpset(20)};
   RegexFullMatch regex_full_match{ctx};
   Tensor x = Tensor::FromStrings("", {0}, std::vector<std::string>{});
@@ -269,7 +269,7 @@ TEST(BackendKernelClass, RegexFullMatchEmptyInputReturnsEmptyBool) {
   EXPECT_EQ(y.element_count(), 0);
 }
 
-TEST(BackendKernelClass, RegexFullMatchRejectsBadInputsAndOutputs) {
+TEST(KernelClass, RegexFullMatchRejectsBadInputsAndOutputs) {
   const KernelContext ctx{DefaultOpset(20)};
   RegexFullMatch regex_full_match{ctx};
   Tensor x = Tensor::FromStrings("", {2}, {"a", "b"});

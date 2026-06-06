@@ -68,7 +68,7 @@ void AdamReference(float R, int64_t T_val, const std::vector<float> &X, const st
 
 } // namespace
 
-TEST(BackendKernelClass, AdamSingleVariableMatchesReferenceUncorrected) {
+TEST(KernelClass, AdamSingleVariableMatchesReferenceUncorrected) {
   const KernelContext ctx = TrainingKernelContext();
   const Adam adam{ctx};
   const float alpha = 0.95f;
@@ -102,7 +102,7 @@ TEST(BackendKernelClass, AdamSingleVariableMatchesReferenceUncorrected) {
   }
 }
 
-TEST(BackendKernelClass, AdamMultiVariableMatchesReferenceBiasCorrected) {
+TEST(KernelClass, AdamMultiVariableMatchesReferenceBiasCorrected) {
   const KernelContext ctx = TrainingKernelContext();
   const Adam adam{ctx};
   // Defaults from the ONNX schema.
@@ -153,7 +153,7 @@ TEST(BackendKernelClass, AdamMultiVariableMatchesReferenceBiasCorrected) {
   }
 }
 
-TEST(BackendKernelClass, AdamPostNormCoefficientScalesXNew) {
+TEST(KernelClass, AdamPostNormCoefficientScalesXNew) {
   const KernelContext ctx = TrainingKernelContext();
   const Adam adam{ctx};
   const float alpha = 0.9f;
@@ -177,7 +177,7 @@ TEST(BackendKernelClass, AdamPostNormCoefficientScalesXNew) {
   EXPECT_FLOAT_EQ(outs[0].AsFloat()[1], -6.0f);
 }
 
-TEST(BackendKernelClass, AdamRejectsInvalidInputs) {
+TEST(KernelClass, AdamRejectsInvalidInputs) {
   const KernelContext ctx = TrainingKernelContext();
   const Adam adam{ctx};
 
@@ -239,7 +239,7 @@ void AdagradReference(float R, int64_t T_val, const std::vector<float> &X,
 
 } // namespace
 
-TEST(BackendKernelClass, AdagradSingleVariableMatchesReference) {
+TEST(KernelClass, AdagradSingleVariableMatchesReference) {
   const KernelContext ctx = TrainingKernelContext();
   const Adagrad adagrad{ctx};
   const float norm_coefficient = 0.001f;
@@ -267,7 +267,7 @@ TEST(BackendKernelClass, AdagradSingleVariableMatchesReference) {
   }
 }
 
-TEST(BackendKernelClass, AdagradMultiVariableMatchesReference) {
+TEST(KernelClass, AdagradMultiVariableMatchesReference) {
   const KernelContext ctx = TrainingKernelContext();
   const Adagrad adagrad{ctx};
   const float norm_coefficient = 0.001f;
@@ -308,7 +308,7 @@ TEST(BackendKernelClass, AdagradMultiVariableMatchesReference) {
   }
 }
 
-TEST(BackendKernelClass, AdagradAppliesDecayFactorAfterFirstIteration) {
+TEST(KernelClass, AdagradAppliesDecayFactorAfterFirstIteration) {
   // With T > 0 the learning rate is divided by ``1 + T * decay_factor``.
   const KernelContext ctx = TrainingKernelContext();
   const Adagrad adagrad{ctx};
@@ -330,7 +330,7 @@ TEST(BackendKernelClass, AdagradAppliesDecayFactorAfterFirstIteration) {
   EXPECT_FLOAT_EQ(outs[1].AsFloat()[0], 1.0f);
 }
 
-TEST(BackendKernelClass, AdagradRejectsInvalidInputs) {
+TEST(KernelClass, AdagradRejectsInvalidInputs) {
   const KernelContext ctx = TrainingKernelContext();
   const Adagrad adagrad{ctx};
 
@@ -391,7 +391,7 @@ void MomentumReference(float R, int64_t T_val, const std::vector<float> &X,
 
 } // namespace
 
-TEST(BackendKernelClass, MomentumStandardMatchesReference) {
+TEST(KernelClass, MomentumStandardMatchesReference) {
   const KernelContext ctx = TrainingKernelContext();
   const Momentum momentum{ctx};
   const float norm_coefficient = 0.001f;
@@ -419,7 +419,7 @@ TEST(BackendKernelClass, MomentumStandardMatchesReference) {
   }
 }
 
-TEST(BackendKernelClass, MomentumNesterovMatchesReference) {
+TEST(KernelClass, MomentumNesterovMatchesReference) {
   const KernelContext ctx = TrainingKernelContext();
   const Momentum momentum{ctx};
   const float norm_coefficient = 0.01f;
@@ -445,7 +445,7 @@ TEST(BackendKernelClass, MomentumNesterovMatchesReference) {
   }
 }
 
-TEST(BackendKernelClass, MomentumMultiVariableMatchesReference) {
+TEST(KernelClass, MomentumMultiVariableMatchesReference) {
   const KernelContext ctx = TrainingKernelContext();
   const Momentum momentum{ctx};
   const float norm_coefficient = 0.001f;
@@ -481,7 +481,7 @@ TEST(BackendKernelClass, MomentumMultiVariableMatchesReference) {
   }
 }
 
-TEST(BackendKernelClass, MomentumUsesBetaAfterFirstIteration) {
+TEST(KernelClass, MomentumUsesBetaAfterFirstIteration) {
   // With T > 0 the kernel must use ``beta`` as the regularized-gradient
   // coefficient instead of the first-iteration default of 1.
   const KernelContext ctx = TrainingKernelContext();
@@ -510,7 +510,7 @@ TEST(BackendKernelClass, MomentumUsesBetaAfterFirstIteration) {
   EXPECT_FLOAT_EQ(later[1].AsFloat()[0], 0.25f);
 }
 
-TEST(BackendKernelClass, MomentumRejectsInvalidInputs) {
+TEST(KernelClass, MomentumRejectsInvalidInputs) {
   const KernelContext ctx = TrainingKernelContext();
   const Momentum momentum{ctx};
 

@@ -34,7 +34,7 @@ using onnx_kernels::kernel::Xor;
 
 namespace Test {
 
-TEST(BackendKernelClass, AndClassMatchesReference) {
+TEST(KernelClass, AndClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(7)};
   And and_kernel{ctx};
   Tensor x("", onnx_kernels::DataType::BOOL, {2, 2}, {1, 0, 1, 0});
@@ -48,7 +48,7 @@ TEST(BackendKernelClass, AndClassMatchesReference) {
   EXPECT_EQ(z.data[3], 0);
 }
 
-TEST(BackendKernelClass, AndClassBroadcastsScalar) {
+TEST(KernelClass, AndClassBroadcastsScalar) {
   const KernelContext ctx{DefaultOpset(7)};
   And and_kernel{ctx};
   Tensor x("", onnx_kernels::DataType::BOOL, {2, 2}, {1, 0, 1, 0});
@@ -61,7 +61,7 @@ TEST(BackendKernelClass, AndClassBroadcastsScalar) {
   EXPECT_EQ(z.data[3], 0);
 }
 
-TEST(BackendKernelClass, OrClassMatchesReference) {
+TEST(KernelClass, OrClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(7)};
   Or or_kernel{ctx};
   Tensor x("", onnx_kernels::DataType::BOOL, {2, 2}, {1, 0, 1, 0});
@@ -75,7 +75,7 @@ TEST(BackendKernelClass, OrClassMatchesReference) {
   EXPECT_EQ(z.data[3], 0);
 }
 
-TEST(BackendKernelClass, XorClassMatchesReference) {
+TEST(KernelClass, XorClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(7)};
   Xor xor_kernel{ctx};
   Tensor x("", onnx_kernels::DataType::BOOL, {2, 2}, {1, 0, 1, 0});
@@ -89,7 +89,7 @@ TEST(BackendKernelClass, XorClassMatchesReference) {
   EXPECT_EQ(z.data[3], 0);
 }
 
-TEST(BackendKernelClass, LogicalRejectsNonBoolTensors) {
+TEST(KernelClass, LogicalRejectsNonBoolTensors) {
   const KernelContext ctx{DefaultOpset(7)};
   And and_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2}, {1.0f, 0.0f});
@@ -97,7 +97,7 @@ TEST(BackendKernelClass, LogicalRejectsNonBoolTensors) {
   EXPECT_THROW((void)and_kernel(x, y), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, AndInPlaceWritesToPreallocatedOutput) {
+TEST(KernelClass, AndInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(7)};
   And and_kernel{ctx};
   Tensor x("", onnx_kernels::DataType::BOOL, {2, 2}, {1, 0, 1, 0});
@@ -110,7 +110,7 @@ TEST(BackendKernelClass, AndInPlaceWritesToPreallocatedOutput) {
   EXPECT_EQ(z.data[3], 0);
 }
 
-TEST(BackendKernelClass, OrInPlaceWritesToPreallocatedOutput) {
+TEST(KernelClass, OrInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(7)};
   Or or_kernel{ctx};
   Tensor x("", onnx_kernels::DataType::BOOL, {2, 2}, {1, 0, 1, 0});
@@ -123,7 +123,7 @@ TEST(BackendKernelClass, OrInPlaceWritesToPreallocatedOutput) {
   EXPECT_EQ(z.data[3], 0);
 }
 
-TEST(BackendKernelClass, XorInPlaceWritesToPreallocatedOutput) {
+TEST(KernelClass, XorInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(7)};
   Xor xor_kernel{ctx};
   Tensor x("", onnx_kernels::DataType::BOOL, {2, 2}, {1, 0, 1, 0});
@@ -136,7 +136,7 @@ TEST(BackendKernelClass, XorInPlaceWritesToPreallocatedOutput) {
   EXPECT_EQ(z.data[3], 0);
 }
 
-TEST(BackendKernelClass, GreaterClassMatchesReference) {
+TEST(KernelClass, GreaterClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(13)};
   Greater greater_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
@@ -150,7 +150,7 @@ TEST(BackendKernelClass, GreaterClassMatchesReference) {
   EXPECT_EQ(z.data[3], 1); // 4 > 2 -> true
 }
 
-TEST(BackendKernelClass, GreaterClassBroadcastsScalar) {
+TEST(KernelClass, GreaterClassBroadcastsScalar) {
   const KernelContext ctx{DefaultOpset(13)};
   Greater greater_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
@@ -163,7 +163,7 @@ TEST(BackendKernelClass, GreaterClassBroadcastsScalar) {
   EXPECT_EQ(z.data[3], 1);
 }
 
-TEST(BackendKernelClass, GreaterInPlaceWritesToPreallocatedOutput) {
+TEST(KernelClass, GreaterInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(13)};
   Greater greater_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
@@ -176,7 +176,7 @@ TEST(BackendKernelClass, GreaterInPlaceWritesToPreallocatedOutput) {
   EXPECT_EQ(z.data[3], 1);
 }
 
-TEST(BackendKernelClass, GreaterRejectsUnsupportedDtype) {
+TEST(KernelClass, GreaterRejectsUnsupportedDtype) {
   // BOOL inputs are not in the supported dtype set (FLOAT/INT8/INT16/UINT8/
   // UINT16/UINT32/UINT64) so the kernel must reject them.
   const KernelContext ctx{DefaultOpset(13)};
@@ -186,7 +186,7 @@ TEST(BackendKernelClass, GreaterRejectsUnsupportedDtype) {
   EXPECT_THROW((void)greater_kernel(x, y), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, GreaterClassMatchesReferenceInt8) {
+TEST(KernelClass, GreaterClassMatchesReferenceInt8) {
   const KernelContext ctx{DefaultOpset(13)};
   Greater greater_kernel{ctx};
   Tensor x = Tensor::FromInt8("", {4}, {-2, 0, 3, 7});
@@ -200,7 +200,7 @@ TEST(BackendKernelClass, GreaterClassMatchesReferenceInt8) {
   EXPECT_EQ(z.data[3], 0); //  7 >  9 -> false
 }
 
-TEST(BackendKernelClass, GreaterClassMatchesReferenceUint32) {
+TEST(KernelClass, GreaterClassMatchesReferenceUint32) {
   const KernelContext ctx{DefaultOpset(13)};
   Greater greater_kernel{ctx};
   Tensor x = Tensor::FromUint32("", {4}, {1u, 5u, 0u, 7u});
@@ -213,7 +213,7 @@ TEST(BackendKernelClass, GreaterClassMatchesReferenceUint32) {
   EXPECT_EQ(z.data[3], 1);
 }
 
-TEST(BackendKernelClass, LessClassMatchesReference) {
+TEST(KernelClass, LessClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(13)};
   Less less_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
@@ -227,7 +227,7 @@ TEST(BackendKernelClass, LessClassMatchesReference) {
   EXPECT_EQ(z.data[3], 0); // 4 < 2 -> false
 }
 
-TEST(BackendKernelClass, LessClassBroadcastsScalar) {
+TEST(KernelClass, LessClassBroadcastsScalar) {
   const KernelContext ctx{DefaultOpset(13)};
   Less less_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
@@ -240,7 +240,7 @@ TEST(BackendKernelClass, LessClassBroadcastsScalar) {
   EXPECT_EQ(z.data[3], 0);
 }
 
-TEST(BackendKernelClass, LessInPlaceWritesToPreallocatedOutput) {
+TEST(KernelClass, LessInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(13)};
   Less less_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
@@ -253,7 +253,7 @@ TEST(BackendKernelClass, LessInPlaceWritesToPreallocatedOutput) {
   EXPECT_EQ(z.data[3], 0);
 }
 
-TEST(BackendKernelClass, LessRejectsUnsupportedDtype) {
+TEST(KernelClass, LessRejectsUnsupportedDtype) {
   // BOOL inputs are not in the supported dtype set (FLOAT/INT8/INT16/UINT8/
   // UINT16/UINT32/UINT64) so the kernel must reject them.
   const KernelContext ctx{DefaultOpset(13)};
@@ -263,7 +263,7 @@ TEST(BackendKernelClass, LessRejectsUnsupportedDtype) {
   EXPECT_THROW((void)less_kernel(x, y), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, LessClassMatchesReferenceInt16) {
+TEST(KernelClass, LessClassMatchesReferenceInt16) {
   const KernelContext ctx{DefaultOpset(13)};
   Less less_kernel{ctx};
   Tensor x = Tensor::FromInt16("", {4}, {-2, 0, 3, 7});
@@ -276,7 +276,7 @@ TEST(BackendKernelClass, LessClassMatchesReferenceInt16) {
   EXPECT_EQ(z.data[3], 1); //  7 <  9
 }
 
-TEST(BackendKernelClass, LessClassMatchesReferenceUint64) {
+TEST(KernelClass, LessClassMatchesReferenceUint64) {
   const KernelContext ctx{DefaultOpset(13)};
   Less less_kernel{ctx};
   Tensor x = Tensor::FromUint64("", {4}, {1ull, 5ull, 0ull, 7ull});
@@ -289,7 +289,7 @@ TEST(BackendKernelClass, LessClassMatchesReferenceUint64) {
   EXPECT_EQ(z.data[3], 0);
 }
 
-TEST(BackendKernelClass, GreaterOrEqualClassMatchesReference) {
+TEST(KernelClass, GreaterOrEqualClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(16)};
   GreaterOrEqual ge_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
@@ -303,7 +303,7 @@ TEST(BackendKernelClass, GreaterOrEqualClassMatchesReference) {
   EXPECT_EQ(z.data[3], 1); // 4 >= 2 -> true
 }
 
-TEST(BackendKernelClass, GreaterOrEqualClassBroadcastsScalar) {
+TEST(KernelClass, GreaterOrEqualClassBroadcastsScalar) {
   const KernelContext ctx{DefaultOpset(16)};
   GreaterOrEqual ge_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
@@ -316,7 +316,7 @@ TEST(BackendKernelClass, GreaterOrEqualClassBroadcastsScalar) {
   EXPECT_EQ(z.data[3], 1);
 }
 
-TEST(BackendKernelClass, GreaterOrEqualInPlaceWritesToPreallocatedOutput) {
+TEST(KernelClass, GreaterOrEqualInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(16)};
   GreaterOrEqual ge_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {4}, {1.0f, 2.0f, 3.0f, 4.0f});
@@ -330,7 +330,7 @@ TEST(BackendKernelClass, GreaterOrEqualInPlaceWritesToPreallocatedOutput) {
   EXPECT_EQ(output.data[3], 1);
 }
 
-TEST(BackendKernelClass, GreaterOrEqualRejectsUnsupportedDtype) {
+TEST(KernelClass, GreaterOrEqualRejectsUnsupportedDtype) {
   const KernelContext ctx{DefaultOpset(16)};
   Tensor x("", onnx_kernels::DataType::BOOL, {2}, {1, 0});
   Tensor y("", onnx_kernels::DataType::BOOL, {2}, {1, 1});
@@ -338,7 +338,7 @@ TEST(BackendKernelClass, GreaterOrEqualRejectsUnsupportedDtype) {
   EXPECT_THROW({ (void)ge_kernel(x, y); }, std::invalid_argument);
 }
 
-TEST(BackendKernelClass, EqualClassMatchesReference) {
+TEST(KernelClass, EqualClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(19)};
   Equal equal_kernel{ctx};
   Tensor x = Tensor::FromInt32("", {2, 2}, {1, 2, 3, 4});
@@ -352,7 +352,7 @@ TEST(BackendKernelClass, EqualClassMatchesReference) {
   EXPECT_EQ(z.data[3], 0); // 4 == 0
 }
 
-TEST(BackendKernelClass, EqualClassBroadcastsScalar) {
+TEST(KernelClass, EqualClassBroadcastsScalar) {
   const KernelContext ctx{DefaultOpset(19)};
   Equal equal_kernel{ctx};
   Tensor x = Tensor::FromInt32("", {2, 2}, {1, 2, 3, 4});
@@ -365,7 +365,7 @@ TEST(BackendKernelClass, EqualClassBroadcastsScalar) {
   EXPECT_EQ(z.data[3], 0);
 }
 
-TEST(BackendKernelClass, EqualInPlaceWritesToPreallocatedOutput) {
+TEST(KernelClass, EqualInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(19)};
   Equal equal_kernel{ctx};
   Tensor x = Tensor::FromInt32("", {3}, {1, 2, 3});
@@ -377,7 +377,7 @@ TEST(BackendKernelClass, EqualInPlaceWritesToPreallocatedOutput) {
   EXPECT_EQ(out.data[2], 1);
 }
 
-TEST(BackendKernelClass, EqualClassMatchesReferenceBool) {
+TEST(KernelClass, EqualClassMatchesReferenceBool) {
   const KernelContext ctx{DefaultOpset(19)};
   Equal equal_kernel{ctx};
   Tensor x("", onnx_kernels::DataType::BOOL, {4}, {1, 0, 1, 0});
@@ -390,7 +390,7 @@ TEST(BackendKernelClass, EqualClassMatchesReferenceBool) {
   EXPECT_EQ(z.data[3], 1);
 }
 
-TEST(BackendKernelClass, EqualClassMatchesReferenceFloat) {
+TEST(KernelClass, EqualClassMatchesReferenceFloat) {
   const KernelContext ctx{DefaultOpset(19)};
   Equal equal_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
@@ -402,7 +402,7 @@ TEST(BackendKernelClass, EqualClassMatchesReferenceFloat) {
   EXPECT_EQ(z.data[2], 1);
 }
 
-TEST(BackendKernelClass, EqualClassMatchesReferenceString) {
+TEST(KernelClass, EqualClassMatchesReferenceString) {
   const KernelContext ctx{DefaultOpset(19)};
   Equal equal_kernel{ctx};
   Tensor x = Tensor::FromStrings("", {2}, {"string1", "string2"});
@@ -414,7 +414,7 @@ TEST(BackendKernelClass, EqualClassMatchesReferenceString) {
   EXPECT_EQ(z.data[1], 0);
 }
 
-TEST(BackendKernelClass, EqualClassBroadcastsScalarString) {
+TEST(KernelClass, EqualClassBroadcastsScalarString) {
   const KernelContext ctx{DefaultOpset(19)};
   Equal equal_kernel{ctx};
   Tensor x = Tensor::FromStrings("", {2}, {"string1", "string2"});
@@ -425,7 +425,7 @@ TEST(BackendKernelClass, EqualClassBroadcastsScalarString) {
   EXPECT_EQ(z.data[1], 0);
 }
 
-TEST(BackendKernelClass, EqualRejectsUnsupportedDtype) {
+TEST(KernelClass, EqualRejectsUnsupportedDtype) {
   const KernelContext ctx{DefaultOpset(19)};
   Equal equal_kernel{ctx};
   Tensor x("", onnx_kernels::DataType::COMPLEX64, {2}, std::vector<uint8_t>(16));
@@ -433,7 +433,7 @@ TEST(BackendKernelClass, EqualRejectsUnsupportedDtype) {
   EXPECT_THROW((void)equal_kernel(x, y), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, WhereClassSelectsValuesElementwise) {
+TEST(KernelClass, WhereClassSelectsValuesElementwise) {
   const KernelContext ctx{DefaultOpset(16)};
   Where where_kernel{ctx};
   Tensor condition = Tensor::FromBool("condition", {2, 2}, {1, 0, 1, 0});
@@ -449,7 +449,7 @@ TEST(BackendKernelClass, WhereClassSelectsValuesElementwise) {
   EXPECT_FLOAT_EQ(values[3], 8.0f);
 }
 
-TEST(BackendKernelClass, WhereClassBroadcastsInputs) {
+TEST(KernelClass, WhereClassBroadcastsInputs) {
   const KernelContext ctx{DefaultOpset(16)};
   Where where_kernel{ctx};
   Tensor condition = Tensor::FromBool("condition", {2, 1}, {1, 0});
@@ -466,7 +466,7 @@ TEST(BackendKernelClass, WhereClassBroadcastsInputs) {
   EXPECT_EQ(values[5], 30);
 }
 
-TEST(BackendKernelClass, WhereRejectsNonBoolCondition) {
+TEST(KernelClass, WhereRejectsNonBoolCondition) {
   const KernelContext ctx{DefaultOpset(16)};
   Where where_kernel{ctx};
   Tensor condition = Tensor::FromFloat("condition", {2}, {1.0f, 0.0f});
@@ -479,7 +479,7 @@ TEST(BackendKernelClass, WhereRejectsNonBoolCondition) {
 // Bitwise kernels
 // ---------------------------------------------------------------------------
 
-TEST(BackendKernelClass, BitwiseAndClassMatchesReferenceInt32) {
+TEST(KernelClass, BitwiseAndClassMatchesReferenceInt32) {
   const KernelContext ctx{DefaultOpset(18)};
   BitwiseAnd kernel{ctx};
   Tensor x = Tensor::FromInt32("", {4}, {0xF0, 0x0F, 0xAA, 0x55});
@@ -494,7 +494,7 @@ TEST(BackendKernelClass, BitwiseAndClassMatchesReferenceInt32) {
   EXPECT_EQ(p[3], 0x55 & 0xF0);
 }
 
-TEST(BackendKernelClass, BitwiseOrClassMatchesReferenceInt32) {
+TEST(KernelClass, BitwiseOrClassMatchesReferenceInt32) {
   const KernelContext ctx{DefaultOpset(18)};
   BitwiseOr kernel{ctx};
   Tensor x = Tensor::FromInt32("", {3}, {1, 2, 4});
@@ -506,7 +506,7 @@ TEST(BackendKernelClass, BitwiseOrClassMatchesReferenceInt32) {
   EXPECT_EQ(p[2], 12);
 }
 
-TEST(BackendKernelClass, BitwiseXorClassMatchesReferenceInt32) {
+TEST(KernelClass, BitwiseXorClassMatchesReferenceInt32) {
   const KernelContext ctx{DefaultOpset(18)};
   BitwiseXor kernel{ctx};
   Tensor x = Tensor::FromInt32("", {3}, {0xFF, 0xAA, 0x0F});
@@ -518,7 +518,7 @@ TEST(BackendKernelClass, BitwiseXorClassMatchesReferenceInt32) {
   EXPECT_EQ(p[2], 0x0F ^ 0xF0);
 }
 
-TEST(BackendKernelClass, BitwiseAndClassBroadcastsScalar) {
+TEST(KernelClass, BitwiseAndClassBroadcastsScalar) {
   const KernelContext ctx{DefaultOpset(18)};
   BitwiseAnd kernel{ctx};
   Tensor x = Tensor::FromInt32("", {2, 2}, {0xF0, 0x0F, 0xAA, 0x55});
@@ -532,7 +532,7 @@ TEST(BackendKernelClass, BitwiseAndClassBroadcastsScalar) {
   EXPECT_EQ(p[3], 0x05);
 }
 
-TEST(BackendKernelClass, BitwiseAndInPlaceWritesToPreallocatedOutput) {
+TEST(KernelClass, BitwiseAndInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(18)};
   BitwiseAnd kernel{ctx};
   Tensor x = Tensor::FromInt32("", {3}, {0xF0, 0x0F, 0xAA});
@@ -545,7 +545,7 @@ TEST(BackendKernelClass, BitwiseAndInPlaceWritesToPreallocatedOutput) {
   EXPECT_EQ(p[2], 0x0A);
 }
 
-TEST(BackendKernelClass, BitwiseAndRejectsFloatTensors) {
+TEST(KernelClass, BitwiseAndRejectsFloatTensors) {
   const KernelContext ctx{DefaultOpset(18)};
   BitwiseAnd kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2}, {1.0f, 0.0f});
@@ -553,7 +553,7 @@ TEST(BackendKernelClass, BitwiseAndRejectsFloatTensors) {
   EXPECT_THROW((void)kernel(x, y), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, BitwiseAndRejectsBoolTensors) {
+TEST(KernelClass, BitwiseAndRejectsBoolTensors) {
   const KernelContext ctx{DefaultOpset(18)};
   BitwiseAnd kernel{ctx};
   Tensor x("", onnx_kernels::DataType::BOOL, {2}, {1, 0});
@@ -561,7 +561,7 @@ TEST(BackendKernelClass, BitwiseAndRejectsBoolTensors) {
   EXPECT_THROW((void)kernel(x, y), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, BitwiseNotClassMatchesReferenceInt32) {
+TEST(KernelClass, BitwiseNotClassMatchesReferenceInt32) {
   const KernelContext ctx{DefaultOpset(18)};
   BitwiseNot kernel{ctx};
   Tensor x = Tensor::FromInt32("", {4}, {0, -1, 0xFF, 0x0F});
@@ -575,7 +575,7 @@ TEST(BackendKernelClass, BitwiseNotClassMatchesReferenceInt32) {
   EXPECT_EQ(p[3], ~0x0F);
 }
 
-TEST(BackendKernelClass, BitwiseNotClassMatchesReferenceUint8) {
+TEST(KernelClass, BitwiseNotClassMatchesReferenceUint8) {
   const KernelContext ctx{DefaultOpset(18)};
   BitwiseNot kernel{ctx};
   Tensor x = Tensor::FromUint8("", {3}, {0x00, 0xF0, 0xAA});
@@ -586,7 +586,7 @@ TEST(BackendKernelClass, BitwiseNotClassMatchesReferenceUint8) {
   EXPECT_EQ(z.data[2], static_cast<uint8_t>(0x55));
 }
 
-TEST(BackendKernelClass, BitwiseNotInPlaceWritesToPreallocatedOutput) {
+TEST(KernelClass, BitwiseNotInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(18)};
   BitwiseNot kernel{ctx};
   Tensor x = Tensor::FromInt32("", {2}, {0, 0xFF});
@@ -597,14 +597,14 @@ TEST(BackendKernelClass, BitwiseNotInPlaceWritesToPreallocatedOutput) {
   EXPECT_EQ(p[1], ~0xFF);
 }
 
-TEST(BackendKernelClass, BitwiseNotRejectsBoolTensors) {
+TEST(KernelClass, BitwiseNotRejectsBoolTensors) {
   const KernelContext ctx{DefaultOpset(18)};
   BitwiseNot kernel{ctx};
   Tensor x("", onnx_kernels::DataType::BOOL, {2}, {1, 0});
   EXPECT_THROW((void)kernel(x), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, NotClassMatchesReference) {
+TEST(KernelClass, NotClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(1)};
   Not not_kernel{ctx};
   Tensor x("", onnx_kernels::DataType::BOOL, {4}, {1, 0, 1, 0});
@@ -617,7 +617,7 @@ TEST(BackendKernelClass, NotClassMatchesReference) {
   EXPECT_EQ(y.data[3], 1u);
 }
 
-TEST(BackendKernelClass, NotInPlaceWritesToPreallocatedOutput) {
+TEST(KernelClass, NotInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(1)};
   Not not_kernel{ctx};
   Tensor x("", onnx_kernels::DataType::BOOL, {3}, {0, 1, 0});
@@ -628,14 +628,14 @@ TEST(BackendKernelClass, NotInPlaceWritesToPreallocatedOutput) {
   EXPECT_EQ(y.data[2], 1u);
 }
 
-TEST(BackendKernelClass, NotRejectsNonBoolTensors) {
+TEST(KernelClass, NotRejectsNonBoolTensors) {
   const KernelContext ctx{DefaultOpset(1)};
   Not not_kernel{ctx};
   Tensor x = Tensor::FromInt32("", {2}, {0, 1});
   EXPECT_THROW((void)not_kernel(x), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, IsNaNClassMatchesReference) {
+TEST(KernelClass, IsNaNClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(20)};
   IsNaN isnan_kernel{ctx};
   const float nan_v = std::numeric_limits<float>::quiet_NaN();
@@ -652,14 +652,14 @@ TEST(BackendKernelClass, IsNaNClassMatchesReference) {
   EXPECT_EQ(y.data[5], 0u);
 }
 
-TEST(BackendKernelClass, IsNaNRejectsNonFloatTensors) {
+TEST(KernelClass, IsNaNRejectsNonFloatTensors) {
   const KernelContext ctx{DefaultOpset(20)};
   IsNaN isnan_kernel{ctx};
   Tensor x = Tensor::FromInt32("", {2}, {0, 1});
   EXPECT_THROW((void)isnan_kernel(x), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, IsInfClassMatchesReference) {
+TEST(KernelClass, IsInfClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(20)};
   IsInf isinf_kernel{ctx};
   const float nan_v = std::numeric_limits<float>::quiet_NaN();
@@ -687,7 +687,7 @@ TEST(BackendKernelClass, IsInfClassMatchesReference) {
   EXPECT_EQ(only_neg.data[5], 0u);
 }
 
-TEST(BackendKernelClass, IsInfRejectsNonFloatTensors) {
+TEST(KernelClass, IsInfRejectsNonFloatTensors) {
   const KernelContext ctx{DefaultOpset(20)};
   IsInf isinf_kernel{ctx};
   Tensor x = Tensor::FromInt32("", {2}, {0, 1});

@@ -19,7 +19,7 @@ using OptionalKernel = onnx_kernels::kernel::Optional;
 
 namespace Test {
 
-TEST(BackendKernelClass, OptionalPassthroughCopiesInput) {
+TEST(KernelClass, OptionalPassthroughCopiesInput) {
   const KernelContext ctx{DefaultOpset(15)};
   OptionalKernel opt{ctx};
   Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
@@ -32,7 +32,7 @@ TEST(BackendKernelClass, OptionalPassthroughCopiesInput) {
   EXPECT_NE(y.data.data(), x.data.data());
 }
 
-TEST(BackendKernelClass, OptionalRejectsBadInputsAndMismatchedOutput) {
+TEST(KernelClass, OptionalRejectsBadInputsAndMismatchedOutput) {
   const KernelContext ctx{DefaultOpset(15)};
   OptionalKernel opt{ctx};
   Tensor x = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
@@ -50,7 +50,7 @@ TEST(BackendKernelClass, OptionalRejectsBadInputsAndMismatchedOutput) {
   EXPECT_THROW(opt(x, bad_shape), std::invalid_argument);
 }
 
-TEST(BackendKernelClass, OptionalInPlaceAliasingInputAndOutput) {
+TEST(KernelClass, OptionalInPlaceAliasingInputAndOutput) {
   // Optional::CanRunInPlace() should be honored: passing the same Tensor as
   // both input and output must succeed and leave the bytes untouched (since
   // Optional is a passthrough).

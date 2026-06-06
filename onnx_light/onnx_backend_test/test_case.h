@@ -21,24 +21,6 @@ namespace onnx_backend_test {
 // directly available inside onnx_backend_test.
 using namespace onnx_kernels;
 
-/**
- * Lightweight opset identifier used by the backend test library.
- *
- * Mirrors the (domain, version) pair carried by ``OperatorSetIdProto`` but
- * keeps the public API of this library independent from the proto type so
- * test cases can be declared without touching the proto wire format.
- */
-struct OpsetId {
-  std::string domain;
-  int64_t version = 0;
-
-  OpsetId() = default;
-  OpsetId(std::string domain_, int64_t version_) : domain(std::move(domain_)), version(version_) {}
-};
-
-/// Builds an :ref:`OpsetId` for the default ai.onnx domain (empty string).
-inline OpsetId DefaultOpset(int64_t version) { return OpsetId(std::string(), version); }
-
 /// A single (inputs, expected outputs) data set associated with a TestCase.
 struct DataSet {
   std::vector<Tensor> inputs;

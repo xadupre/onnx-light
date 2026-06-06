@@ -10,7 +10,7 @@ Each edge label is the attribute name (or names) that carries the nested proto.
 
 .. runmermaid::
 
-    %%{init: {'flowchart': {'defaultRenderer': 'elk', 'useMaxWidth': false, 'nodeSpacing': 60, 'rankSpacing': 70}, 'themeVariables': {'fontSize': '18px'}}}%%
+    %%{init: {'flowchart': {'useMaxWidth': false, 'nodeSpacing': 60, 'rankSpacing': 70}, 'themeVariables': {'fontSize': '18px'}}}%%
     flowchart TD
         ModelProto -->|graph| GraphProto
         ModelProto -->|opset_import| OperatorSetIdProto
@@ -36,6 +36,7 @@ Each edge label is the attribute name (or names) that carries the nested proto.
         NodeProto -->|metadata_props| StringStringEntryProto
 
         NodeDeviceConfigurationProto -->|sharding_spec| ShardingSpecProto
+        NodeDeviceConfigurationProto -. configuration_id .-> DeviceConfigurationProto
         ShardingSpecProto -->|index_to_device_group_map| IntIntListEntryProto
         ShardingSpecProto -->|sharded_dim| ShardedDimProto
         ShardedDimProto -->|simple_sharding| SimpleShardedDimProto
@@ -44,8 +45,17 @@ Each edge label is the attribute name (or names) that carries the nested proto.
         ValueInfoProto -->|metadata_props| StringStringEntryProto
 
         TensorShapeProto -->|dim| Dimension
-        TypeProto -->|tensor_type.shape, sparse_tensor_type.shape| TensorShapeProto
-        TypeProto -->|sequence_type.elem_type, map_type.value_type, optional_type.elem_type| TypeProto
+
+        TypeProto -->|tensor_type| TypeProto.Tensor
+        TypeProto -->|sparse_tensor_type| TypeProto.SparseTensor
+        TypeProto -->|sequence_type| TypeProto.Sequence
+        TypeProto -->|map_type| TypeProto.Map
+        TypeProto -->|optional_type| TypeProto.Optional
+        TypeProto.Tensor -->|shape| TensorShapeProto
+        TypeProto.SparseTensor -->|shape| TensorShapeProto
+        TypeProto.Sequence -->|elem_type| TypeProto
+        TypeProto.Optional -->|elem_type| TypeProto
+        TypeProto.Map -->|value_type| TypeProto
 
         TensorProto -->|segment| Segment
         TensorProto -->|external_data, metadata_props| StringStringEntryProto
@@ -82,12 +92,15 @@ Quick attribute list used in the graph:
 * ``GraphProto``: ``node``, ``initializer``, ``sparse_initializer``, ``input``, ``output``, ``value_info``, ``quantization_annotation``, ``metadata_props``
 * ``FunctionProto``: ``attribute_proto``, ``node``, ``opset_import``, ``value_info``, ``metadata_props``
 * ``NodeProto``: ``attribute``, ``device_configurations``, ``metadata_props``
-* ``NodeDeviceConfigurationProto``: ``sharding_spec``
+* ``NodeDeviceConfigurationProto``: ``sharding_spec`` (and ``configuration_id``, a name reference to a ``DeviceConfigurationProto`` declared in ``ModelProto.configuration``)
 * ``ShardingSpecProto``: ``index_to_device_group_map``, ``sharded_dim``
 * ``ShardedDimProto``: ``simple_sharding``
 * ``ValueInfoProto``: ``type``, ``metadata_props``
 * ``TensorShapeProto``: ``dim``
-* ``TypeProto``: ``tensor_type.shape``, ``sparse_tensor_type.shape``, ``sequence_type.elem_type``, ``map_type.value_type``, ``optional_type.elem_type``
+* ``TypeProto``: ``tensor_type`` (``TypeProto.Tensor``), ``sparse_tensor_type`` (``TypeProto.SparseTensor``), ``sequence_type`` (``TypeProto.Sequence``), ``map_type`` (``TypeProto.Map``), ``optional_type`` (``TypeProto.Optional``)
+* ``TypeProto.Tensor`` / ``TypeProto.SparseTensor``: ``shape`` (a ``TensorShapeProto``)
+* ``TypeProto.Sequence`` / ``TypeProto.Optional``: ``elem_type`` (a ``TypeProto``)
+* ``TypeProto.Map``: ``value_type`` (a ``TypeProto``)
 * ``TensorProto``: ``segment``, ``external_data``, ``metadata_props``
 * ``SparseTensorProto``: ``values``, ``indices``
 * ``AttributeProto``: ``t``, ``tensors``, ``g``, ``graphs``, ``sparse_tensor``, ``sparse_tensors``, ``tp``, ``type_protos``

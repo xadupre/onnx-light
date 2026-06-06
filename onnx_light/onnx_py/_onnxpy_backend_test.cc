@@ -100,7 +100,11 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
   nb::class_<DataSet>(bt_mod, "DataSet",
                       "A single (inputs, expected outputs) data set of a TestCase.")
       .def_rw("inputs", &DataSet::inputs)
-      .def_rw("outputs", &DataSet::outputs);
+      .def_rw("outputs", &DataSet::outputs)
+      .def("__repr__", [](const DataSet &ds) {
+        return "DataSet(inputs=" + std::to_string(ds.inputs.size()) +
+               ", outputs=" + std::to_string(ds.outputs.size()) + ")";
+      });
 
   // ``ModelProto`` is exposed by the sibling ``_onnxpyprotoop`` extension.
   // Because ``lib_onnx_proto`` is a shared library linked by both extensions

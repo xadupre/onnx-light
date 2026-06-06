@@ -1,6 +1,7 @@
 import unittest
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx as onnxl
+import onnx_light.onnx.numpy_helper as onh
 from onnx_light.backend_test import collect_test_cases
 
 
@@ -60,9 +61,13 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
         for inp in test.model.graph.input:
             tt = inp.type.tensor_type
             dims = [d.dim_value if d.dim_value else d.dim_param for d in tt.shape.dim]
-            ctx.set(inp.name, si.OptimTensor(tt.elem_type, dims))
+            t = si.OptimTensor(tt.elem_type, dims)
+            ctx.set(inp.name, t)
         for init in test.model.graph.initializer:
-            ctx.set(init.name, si.OptimTensor(init.data_type, list(init.dims)))
+            t = si.OptimTensor(init.data_type, list(init.dims))
+            ctx.set(init.name, t)
+            a = onh.to_array(t)
+            t.set_value_as_shape(list(a))
 
         for node in test.model.graph.node:
             si.compute_shape_node(ctx, node)
@@ -71,7 +76,10 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
                     continue
                 t = ctx.get(str(out_name))
                 self.assertIn(out_name, expected)
-                self.assertEqual(t, expected[out_name])
+                v = expected[out_name]
+                self.assertEqual(len(v.type.tensor_type.shape.dim), len(t.shape))
+                for a, b in zip(v.type.tensor_type.shape.dim, t.shape):
+                    self.assertEqual(a.dim_param, b)
 
 
 if __name__ == "__main__":

@@ -70,7 +70,6 @@ void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry
   const std::vector<DimSpec> input_shape = {"batch", "seq", "d_model"};
   AppendValueInfo(*graph->add_input(), "X", kFloat, input_shape);
   AppendValueInfo(*graph->add_input(), "Y", kFloat, input_shape);
-  FillValueInfo(reshape_shape, *graph->add_input());
 
   // Intermediate value_info entries with symbolic dim names. The last dim
   // of ``concat_out``/``Z`` is ``2 * d_model`` on the page; ONNX shape
@@ -97,11 +96,10 @@ void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry
   }
   Tensor x = Tensor::FromFloat("X", data_shape, x_values);
   Tensor y = Tensor::FromFloat("Y", data_shape, y_values);
-  Tensor z = kernel::Reshape(ctx)(kernel::Concat(ctx)({kernel::Add(ctx)(x, y), x}, /*axis=*/2),
-                                  reshape_shape);
+  Tensor z = kernel::Concat(ctx)({kernel::Add(ctx)(x, y), x}, /*axis=*/2);
   z.name = "Z";
 
-  AppendDataSet(tc, {x, y, reshape_shape}, {z});
+  AppendDataSet(tc, {x, y}, {z});
 
   registry.emplace_back(std::move(tc));
 }

@@ -36,8 +36,8 @@ using onnx_backend_test::CollectTestCasesByName;
 using onnx_backend_test::DefaultOpset;
 using onnx_backend_test::Expect;
 using onnx_backend_test::OpsetId;
-using onnx_kernels::Tensor;
 using onnx_backend_test::TestCase;
+using onnx_kernels::Tensor;
 
 namespace Test {
 
@@ -449,7 +449,7 @@ TEST(BackendTestCase, CollectCategoryFilterByOpTypeReturnsOnlyMatchingCases) {
 TEST(BackendTestCase, CollectTraditionalMLFilterFindsArrayFeatureExtractorCases) {
   std::vector<TestCase> array_feature_extractor_only;
   onnx_backend_test::CollectTraditionalMLTestCases(array_feature_extractor_only,
-                                              "ArrayFeatureExtractor");
+                                                   "ArrayFeatureExtractor");
   ASSERT_FALSE(array_feature_extractor_only.empty());
   for (const auto &tc : array_feature_extractor_only) {
     ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());

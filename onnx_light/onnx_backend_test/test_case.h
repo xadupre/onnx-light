@@ -6,6 +6,7 @@
 
 #include "onnx.h"
 #include "onnx_kernels/simple_tensor.h"
+#include "onnx_kernels/kernels/kernel_context.h"
 
 #include <cstdint>
 #include <string>
@@ -20,6 +21,7 @@ namespace onnx_backend_test {
 // Make onnx_kernels types (Tensor, kernel::*, Randn, SplitMix64, etc.)
 // directly available inside onnx_backend_test.
 using namespace onnx_kernels;
+using OpsetId = onnx_kernels::kernel::OpsetId;
 
 /// A single (inputs, expected outputs) data set associated with a TestCase.
 struct DataSet {

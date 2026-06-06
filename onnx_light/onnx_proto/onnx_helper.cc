@@ -964,4 +964,127 @@ NodeProto &AddNode(GraphProto &graph, const char *op_type, const std::vector<std
   return *node;
 }
 
+namespace {
+
+// Fills ``tensor`` with ``name`` and ``dims``; the caller is responsible for
+// setting ``data_type`` and the typed payload field.
+void InitInitializerHeader(TensorProto &tensor, const char *name,
+                           const std::vector<int64_t> &dims) {
+  tensor.set_name(std::string(name));
+  for (int64_t d : dims) {
+    tensor.add_dims(d);
+  }
+}
+
+} // namespace
+
+template <>
+TensorProto MakeInitializer(const char *name, const std::vector<int64_t> &dims,
+                            const std::vector<int64_t> &values) {
+  TensorProto tensor;
+  InitInitializerHeader(tensor, name, dims);
+  tensor.set_data_type(TensorProto::DataType::INT64);
+  for (int64_t v : values) {
+    tensor.ref_int64_data().push_back(v);
+  }
+  return tensor;
+}
+
+template <>
+TensorProto MakeInitializer(const char *name, const std::vector<int64_t> &dims,
+                            const std::vector<int32_t> &values) {
+  TensorProto tensor;
+  InitInitializerHeader(tensor, name, dims);
+  tensor.set_data_type(TensorProto::DataType::INT32);
+  for (int32_t v : values) {
+    tensor.ref_int32_data().push_back(v);
+  }
+  return tensor;
+}
+
+template <>
+TensorProto MakeInitializer(const char *name, const std::vector<int64_t> &dims,
+                            const std::vector<uint64_t> &values) {
+  TensorProto tensor;
+  InitInitializerHeader(tensor, name, dims);
+  tensor.set_data_type(TensorProto::DataType::UINT64);
+  for (uint64_t v : values) {
+    tensor.ref_uint64_data().push_back(v);
+  }
+  return tensor;
+}
+
+template <>
+TensorProto MakeInitializer(const char *name, const std::vector<int64_t> &dims,
+                            const std::vector<float> &values) {
+  TensorProto tensor;
+  InitInitializerHeader(tensor, name, dims);
+  tensor.set_data_type(TensorProto::DataType::FLOAT);
+  for (float v : values) {
+    tensor.ref_float_data().push_back(v);
+  }
+  return tensor;
+}
+
+template <>
+TensorProto MakeInitializer(const char *name, const std::vector<int64_t> &dims,
+                            const std::vector<double> &values) {
+  TensorProto tensor;
+  InitInitializerHeader(tensor, name, dims);
+  tensor.set_data_type(TensorProto::DataType::DOUBLE);
+  for (double v : values) {
+    tensor.ref_double_data().push_back(v);
+  }
+  return tensor;
+}
+
+template <>
+TensorProto MakeInitializer(const char *name, const std::vector<int64_t> &dims,
+                            const std::vector<std::string> &values) {
+  TensorProto tensor;
+  InitInitializerHeader(tensor, name, dims);
+  tensor.set_data_type(TensorProto::DataType::STRING);
+  for (const std::string &v : values) {
+    *tensor.add_string_data() = utils::String(v);
+  }
+  return tensor;
+}
+
+template <typename T>
+TensorProto &AddInitializer(GraphProto &graph, const char *name, const std::vector<int64_t> &dims,
+                            const std::vector<T> &values) {
+  TensorProto *tensor = graph.add_initializer();
+  *tensor = MakeInitializer<T>(name, dims, values);
+  return *tensor;
+}
+
+// Explicit instantiations matching the MakeInitializer specializations above.
+template TensorProto &AddInitializer<int64_t>(GraphProto &, const char *,
+                                              const std::vector<int64_t> &,
+                                              const std::vector<int64_t> &);
+template TensorProto &AddInitializer<int32_t>(GraphProto &, const char *,
+                                              const std::vector<int64_t> &,
+                                              const std::vector<int32_t> &);
+template TensorProto &AddInitializer<uint64_t>(GraphProto &, const char *,
+                                               const std::vector<int64_t> &,
+                                               const std::vector<uint64_t> &);
+template TensorProto &AddInitializer<float>(GraphProto &, const char *,
+                                            const std::vector<int64_t> &,
+                                            const std::vector<float> &);
+template TensorProto &AddInitializer<double>(GraphProto &, const char *,
+                                             const std::vector<int64_t> &,
+                                             const std::vector<double> &);
+template TensorProto &AddInitializer<std::string>(GraphProto &, const char *,
+                                                  const std::vector<int64_t> &,
+                                                  const std::vector<std::string> &);
+
+TensorProto MakeInitializerShape(const char *name, const std::vector<int64_t> &values) {
+  return MakeInitializer<int64_t>(name, {static_cast<int64_t>(values.size())}, values);
+}
+
+TensorProto &AddInitializerShape(GraphProto &graph, const char *name,
+                                 const std::vector<int64_t> &values) {
+  return AddInitializer<int64_t>(graph, name, {static_cast<int64_t>(values.size())}, values);
+}
+
 } // namespace ONNX_LIGHT_NAMESPACE

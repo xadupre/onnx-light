@@ -422,7 +422,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
   source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_backend_test" PREFIX "Source Files/cc/onnx_backend_test"
                FILES ${ONNX_CPP_BACKEND_TEST_TEST_SOURCES})
   source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_kernels" PREFIX "Source Files/cc/onnx_kernels"
-               FILES ${ONNX_CPP_BACKEND_TEST_TEST_SOURCES})
+               FILES ${ONNX_CPP_KERNELS_TEST_SOURCES})
 endif()
 
 # Each benchmark is an individual project placed in the "Benchmarks" VS solution folder.

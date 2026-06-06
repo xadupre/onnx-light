@@ -203,6 +203,62 @@ TEST(BackendTestCase, TagIsInferenceForShapeInferenceCases) {
   }
 }
 
+TEST(BackendTestCase, TagDefaultsToDomainForNonDefaultDomainNode) {
+  // When the node belongs to a non-default operator domain (e.g.
+  // ``ai.onnx.ml``) and no explicit tag is supplied, ``Expect`` should
+  // default the tag to the node's domain so the test case can be grouped
+  // by domain. The empty domain and ``"ai.onnx"`` both refer to the
+  // standard ONNX domain and keep the empty tag.
+  NodeProto node;
+  node.set_op_type("Binarizer");
+  node.set_domain("ai.onnx.ml");
+  node.add_input("x");
+  node.add_output("y");
+
+  std::vector<TestCase> registry;
+  Expect(node, {Tensor::FromFloat("x", {2}, {1.0f, 2.0f})},
+         {Tensor::FromFloat("y", {2}, {0.0f, 1.0f})}, "test_cc_domain_tag",
+         {OpsetId("ai.onnx.ml", 1)}, "backend-test", registry);
+
+  ASSERT_EQ(registry.size(), 1u);
+  EXPECT_EQ(registry[0].tag, "ai.onnx.ml");
+}
+
+TEST(BackendTestCase, TagStaysEmptyForDefaultDomainNode) {
+  NodeProto node;
+  node.set_op_type("Add");
+  node.add_input("x");
+  node.add_input("y");
+  node.add_output("z");
+
+  std::vector<TestCase> registry;
+  Expect(node,
+         {Tensor::FromFloat("x", {2}, {1.0f, 2.0f}), Tensor::FromFloat("y", {2}, {3.0f, 4.0f})},
+         {Tensor::FromFloat("z", {2}, {4.0f, 6.0f})}, "test_cc_default_tag", {DefaultOpset(14)},
+         "backend-test", registry);
+
+  ASSERT_EQ(registry.size(), 1u);
+  EXPECT_EQ(registry[0].tag, "");
+}
+
+TEST(BackendTestCase, ExplicitTagOverridesDomainDefault) {
+  // An explicitly-supplied tag must take precedence over the domain-derived
+  // default, including for non-default-domain nodes.
+  NodeProto node;
+  node.set_op_type("Binarizer");
+  node.set_domain("ai.onnx.ml");
+  node.add_input("x");
+  node.add_output("y");
+
+  std::vector<TestCase> registry;
+  Expect(node, {Tensor::FromFloat("x", {2}, {1.0f, 2.0f})},
+         {Tensor::FromFloat("y", {2}, {0.0f, 1.0f})}, "test_cc_explicit_tag",
+         {OpsetId("ai.onnx.ml", 1)}, "backend-test", registry, "inference");
+
+  ASSERT_EQ(registry.size(), 1u);
+  EXPECT_EQ(registry[0].tag, "inference");
+}
+
 TEST(BackendTestCase, CollectReturnsExpectedNames) {
   auto cases = CollectTestCases();
   ASSERT_GE(cases.size(), 3u);

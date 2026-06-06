@@ -114,7 +114,20 @@ void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
       present_outputs.size() == outputs.size(),
       "Expect: number of output tensors does not match the non-empty outputs of the node.");
 
-  TestCase tc(name, name, "node", tag);
+  // When the test targets a non-default operator domain and the caller did
+  // not provide an explicit tag, default the tag to the node's domain so
+  // that tests can be filtered/grouped by domain (e.g. ``"ai.onnx.ml"``,
+  // ``"ai.onnx.preview.training"``). An empty domain or ``"ai.onnx"``
+  // refers to the standard ONNX domain and keeps the empty tag.
+  std::string resolved_tag = tag;
+  if (resolved_tag.empty()) {
+    const std::string node_domain = node.domain().as_string();
+    if (!node_domain.empty() && node_domain != "ai.onnx") {
+      resolved_tag = node_domain;
+    }
+  }
+
+  TestCase tc(name, name, "node", resolved_tag);
   tc.rtol = 1e-3;
   tc.atol = 1e-7;
 

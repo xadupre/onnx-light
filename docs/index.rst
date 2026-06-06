@@ -87,6 +87,13 @@ onnx without protobuf
       blob = onnxl.save_encrypted_string(model, key="my_passphrase")
       model = onnxl.load_encrypted_string(blob, key="my_passphrase")
 
+- **No serialize/parse round-trip for C++ tools** – the Python ``ModelProto``
+  exposed by ``onnx_light.onnx`` *is* the C++ ``ModelProto`` (bound through
+  nanobind), so calls into the inliner, checker, shape inference and version
+  converter operate on the model directly.  The standard ``onnx`` package
+  must ``SerializeToString`` and ``ParseFromString`` around every such call.
+  See :ref:`l-design-differences` for details.
+
 Modular C++ libraries
 +++++++++++++++++++++
 

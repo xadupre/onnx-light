@@ -43,25 +43,26 @@ onnxl.defs.register_onnx_operator_set_schema()
 
 import numpy as np  # noqa: E402
 
-W_init = oh.make_tensor(
-    "W", onnxl.TensorProto.FLOAT, [4, 3], np.zeros((4, 3), dtype=np.float32).flatten()
+model = oh.make_model(
+    oh.make_graph(
+        [
+            oh.make_node("MatMul", ["X", "W"], ["XW"]),
+            oh.make_node("Add", ["XW", "B"], ["Z"]),
+            oh.make_node("Relu", ["Z"], ["Y"]),
+        ],
+        "shape_inference_demo",
+        inputs=[oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["N", 4])],
+        outputs=[oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)],
+        initializer=[
+            oh.make_tensor(
+                "W", onnxl.TensorProto.FLOAT, [4, 3], np.zeros((4, 3), dtype=np.float32).flatten()
+            ),
+            oh.make_tensor("B", onnxl.TensorProto.FLOAT, [3], np.zeros(3, dtype=np.float32)),
+        ],
+    ),
+    opset_imports=[oh.make_opsetid("", 18)],
+    ir_version=8,
 )
-B_init = oh.make_tensor("B", onnxl.TensorProto.FLOAT, [3], np.zeros(3, dtype=np.float32))
-
-nodes = [
-    oh.make_node("MatMul", ["X", "W"], ["XW"]),
-    oh.make_node("Add", ["XW", "B"], ["Z"]),
-    oh.make_node("Relu", ["Z"], ["Y"]),
-]
-graph = oh.make_graph(
-    nodes,
-    "shape_inference_demo",
-    inputs=[oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["N", 4])],
-    outputs=[oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)],
-    initializer=[W_init, B_init],
-)
-model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
-model.ir_version = 8
 
 
 #####################################

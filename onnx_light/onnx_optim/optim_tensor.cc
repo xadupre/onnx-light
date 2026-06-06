@@ -17,6 +17,9 @@
 
 #include "onnx_optim/optim_tensor.h"
 
+#include "onnx_proto/onnx_helper.h"
+
+#include <algorithm>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -703,6 +706,65 @@ bool OptimTensorFromValueInfo(const ValueInfoProto &vi, OptimTensor &out) {
   if (max_v.has_value()) {
     out.SetMax(*max_v);
   }
+  return true;
+}
+
+bool OptimTensorFromTensorProto(const TensorProto &tp, OptimTensor &out) {
+  const TensorType dtype = DataTypeToTensorType(tp.data_type());
+  if (dtype == TensorType::kUndefined) {
+    return false;
+  }
+  OptimTensor tensor(nullptr, dtype, ShapeFromTensorProtoDims(tp));
+
+  // Determine the element count from the dims; used both to gate the
+  // value-as-shape heuristic and to validate decoded payload sizes.
+  int64_t count = 1;
+  bool count_known = true;
+  for (std::size_t i = 0; i < tensor.Shape().Rank(); ++i) {
+    const OptimDim &d = tensor.Shape()[i];
+    if (!d.IsInt() || d.AsInt() < 0) {
+      count_known = false;
+      break;
+    }
+    count *= d.AsInt();
+  }
+
+  // Record the actual value bounds when the payload is readable. This
+  // covers both integer and floating-point element types; tensors whose
+  // data is absent (no typed field, no raw_data) or in an unsupported
+  // dtype are left unannotated.
+  if (count_known && count > 0) {
+    if (IsIntegerTensorType(dtype)) {
+      std::vector<int64_t> values;
+      if (ReadIntegerValues(tp, values) && static_cast<int64_t>(values.size()) == count) {
+        const auto [min_it, max_it] = std::minmax_element(values.begin(), values.end());
+        tensor.SetMinMax(static_cast<double>(*min_it), static_cast<double>(*max_it));
+      }
+    } else if (dtype == TensorType::kFloat || dtype == TensorType::kDouble) {
+      std::vector<double> values;
+      if (ReadFloatingValues(tp, values) && static_cast<int64_t>(values.size()) == count) {
+        const auto [min_it, max_it] = std::minmax_element(values.begin(), values.end());
+        tensor.SetMinMax(*min_it, *max_it);
+      }
+    }
+  }
+
+  // Stamp small 1-D / 0-D integer tensors with a ValueAsShape annotation
+  // so that downstream ops (such as Reshape) can see the actual target
+  // shape values without re-reading the proto.
+  if (IsIntegerTensorType(dtype) && tensor.Shape().Rank() <= 1 && count_known && count >= 0 &&
+      count < kOptimValueAsShapeMaxElements) {
+    std::vector<int64_t> values;
+    if (ReadIntegerValues(tp, values) && static_cast<int64_t>(values.size()) == count) {
+      OptimShape value_shape;
+      for (int64_t v : values) {
+        value_shape.PushBack(OptimDim(v));
+      }
+      tensor.SetValueAsShape(std::move(value_shape));
+    }
+  }
+
+  out = std::move(tensor);
   return true;
 }
 

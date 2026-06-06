@@ -292,6 +292,43 @@ TEST(BackendTestCase, SoftmaxCaseOutputsAreNormalizedAlongAxis) {
   }
 }
 
+TEST(BackendTestCase, LogSoftmaxCaseExpRowsAreNormalizedAlongAxis) {
+  auto cases = CollectTestCases("LogSoftmax");
+  const TestCase *tc = FindCase(cases, "test_cc_logsoftmax_example_1");
+  ASSERT_NE(tc, nullptr);
+  ASSERT_EQ(tc->data_sets.size(), 1u);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 1u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  ASSERT_EQ(ds.outputs[0].shape.size(), 2u);
+  const float *y = ds.outputs[0].AsFloat();
+  const int64_t rows = ds.outputs[0].shape[0];
+  const int64_t cols = ds.outputs[0].shape[1];
+  // exp(LogSoftmax(x)) must be a probability distribution along the softmax axis.
+  for (int64_t r = 0; r < rows; ++r) {
+    float sum = 0.0f;
+    for (int64_t c = 0; c < cols; ++c) {
+      sum += std::exp(y[static_cast<size_t>(r * cols + c)]);
+    }
+    EXPECT_NEAR(sum, 1.0f, 1e-5f);
+  }
+}
+
+TEST(BackendTestCase, LogSoftmaxBackendCasesArePresent) {
+  // Mirrors the cases registered by RegisterLogSoftmaxCases in
+  // onnx_backend_test/cases/math/cases_logsoftmax.cc.
+  const std::vector<std::string> expected_names = {
+      "test_cc_logsoftmax_example_1",     "test_cc_logsoftmax_default_axis",
+      "test_cc_logsoftmax_negative_axis", "test_cc_logsoftmax_axis_0",
+      "test_cc_logsoftmax_axis_1",        "test_cc_logsoftmax_axis_2",
+      "test_cc_logsoftmax_large_number",
+  };
+  auto cases = CollectTestCases("LogSoftmax");
+  for (const auto &name : expected_names) {
+    EXPECT_NE(FindCase(cases, name), nullptr) << "Missing LogSoftmax case: " << name;
+  }
+}
+
 TEST(BackendTestCase, AcosAcoshAsinAsinhOnnxCasesArePresent) {
   // Mirrors the upstream-ONNX-mirrored cases exported by RegisterAcosCases,
   // RegisterAcoshCases, RegisterAsinCases and RegisterAsinhCases.

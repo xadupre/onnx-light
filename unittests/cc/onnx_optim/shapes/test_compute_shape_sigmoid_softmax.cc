@@ -79,4 +79,45 @@ TEST(OnnxOptimShapesMathSoftmax, RejectsOutOfRangeAxis) {
                std::invalid_argument);
 }
 
+TEST(OnnxOptimShapesMathLogSoftmax, PropagatesTypeAndShapeWithDefaultAxisOpset13) {
+  NodeProto node = MakeUnaryNode("LogSoftmax", "input", "output");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("ai.onnx", 13);
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("input", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
+
+  onnx_optim::shapes::math::ComputeShapeLogSoftmax(ctx, node, "input");
+
+  ASSERT_TRUE(ctx.Has("output"));
+  EXPECT_EQ(ctx.Get("output"),
+            onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
+}
+
+TEST(OnnxOptimShapesMathLogSoftmax, UsesOpsetDependentDefaultAxis) {
+  NodeProto node = MakeUnaryNode("LogSoftmax");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("ai.onnx", 11);
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(5)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  // Under opset 11 the default axis is 1, which is out of range for a rank-1 input.
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeLogSoftmax(ctx, node, "X"),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesMathLogSoftmax, RejectsOutOfRangeAxis) {
+  NodeProto node = MakeUnaryNode("LogSoftmax");
+  AttributeProto *axis = node.add_attribute();
+  axis->set_name("axis");
+  axis->set_type(AttributeProto::INT);
+  axis->set_i(2);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeLogSoftmax(ctx, node, "X"),
+               std::invalid_argument);
+}
+
 } // namespace Test

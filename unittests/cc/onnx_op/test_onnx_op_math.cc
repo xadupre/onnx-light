@@ -82,6 +82,8 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Sigmoid");
   const std::vector<onnx_op::LightOpSchema> softmax_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Softmax");
+  const std::vector<onnx_op::LightOpSchema> logsoftmax_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("LogSoftmax");
   const std::vector<onnx_op::LightOpSchema> sqrt_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Sqrt");
   const std::vector<onnx_op::LightOpSchema> exp_schemas =
@@ -334,6 +336,9 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const onnx_op::LightOpSchema *const softmax_v13 = FindByVersion(softmax_schemas, 13);
   const onnx_op::LightOpSchema *const softmax_v11 = FindByVersion(softmax_schemas, 11);
   const onnx_op::LightOpSchema *const softmax_v1 = FindByVersion(softmax_schemas, 1);
+  const onnx_op::LightOpSchema *const logsoftmax_v13 = FindByVersion(logsoftmax_schemas, 13);
+  const onnx_op::LightOpSchema *const logsoftmax_v11 = FindByVersion(logsoftmax_schemas, 11);
+  const onnx_op::LightOpSchema *const logsoftmax_v1 = FindByVersion(logsoftmax_schemas, 1);
   const onnx_op::LightOpSchema *const sqrt_v13 = FindByVersion(sqrt_schemas, 13);
   const onnx_op::LightOpSchema *const sqrt_v6 = FindByVersion(sqrt_schemas, 6);
   const onnx_op::LightOpSchema *const sqrt_v1 = FindByVersion(sqrt_schemas, 1);
@@ -430,6 +435,9 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   ASSERT_NE(nullptr, softmax_v13);
   ASSERT_NE(nullptr, softmax_v11);
   ASSERT_NE(nullptr, softmax_v1);
+  ASSERT_NE(nullptr, logsoftmax_v13);
+  ASSERT_NE(nullptr, logsoftmax_v11);
+  ASSERT_NE(nullptr, logsoftmax_v1);
   ASSERT_NE(nullptr, sqrt_v13);
   ASSERT_NE(nullptr, sqrt_v6);
   ASSERT_NE(nullptr, sqrt_v1);
@@ -567,6 +575,21 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(softmax_v13->attributes()[0].default_value, onnx_op::AttributeDefault(int64_t{-1}));
   EXPECT_EQ(softmax_v11->attributes()[0].default_value, onnx_op::AttributeDefault(int64_t{1}));
   EXPECT_EQ(softmax_v1->attributes()[0].default_value, onnx_op::AttributeDefault(int64_t{1}));
+  // LogSoftmax mirrors Softmax: same input/output names, attributes, and axis defaults.
+  EXPECT_EQ(logsoftmax_v13->inputs()[0].name, "input");
+  EXPECT_EQ(logsoftmax_v13->outputs()[0].name, "output");
+  ASSERT_EQ(logsoftmax_v13->attributes().size(), 1u);
+  ASSERT_EQ(logsoftmax_v11->attributes().size(), 1u);
+  ASSERT_EQ(logsoftmax_v1->attributes().size(), 1u);
+  EXPECT_EQ(logsoftmax_v13->attributes()[0].name, "axis");
+  EXPECT_EQ(logsoftmax_v13->attributes()[0].default_value, onnx_op::AttributeDefault(int64_t{-1}));
+  EXPECT_EQ(logsoftmax_v11->attributes()[0].default_value, onnx_op::AttributeDefault(int64_t{1}));
+  EXPECT_EQ(logsoftmax_v1->attributes()[0].default_value, onnx_op::AttributeDefault(int64_t{1}));
+  // v13 widens the type constraint to include bfloat16 vs. v11/v1.
+  EXPECT_NE(logsoftmax_v11->type_constraints()[0].allowed_type_strs,
+            logsoftmax_v13->type_constraints()[0].allowed_type_strs);
+  EXPECT_EQ(logsoftmax_v1->type_constraints()[0].allowed_type_strs,
+            logsoftmax_v11->type_constraints()[0].allowed_type_strs);
   EXPECT_EQ(blackman_window_v17->inputs().size(), 1u);
   EXPECT_EQ(blackman_window_v17->inputs()[0].name, "size");
   EXPECT_EQ(blackman_window_v17->inputs()[0].type, "T1");

@@ -4,12 +4,12 @@
 
 #pragma once
 
-#include "onnx_kernels/test_case.h"
+#include "onnx_backend_test/test_case.h"
 
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
+namespace onnx_backend_test {
 
 // ---------------------------------------------------------------------------
 // Per-operator registration helpers for the ``controlflow`` op category —
@@ -30,5 +30,5 @@ void RegisterScanCases(std::vector<TestCase> &registry);
 /// invoking every ``Register*Cases`` helper declared in this header.
 void CollectControlflowTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");
 
-} // namespace onnx_kernels
+} // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

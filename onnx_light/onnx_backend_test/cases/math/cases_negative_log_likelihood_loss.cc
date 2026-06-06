@@ -5,7 +5,7 @@
 #include "onnx_backend_test/cases/math/include_math_cases.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 #include "onnx_kernels/random.h"
-#include "onnx_kernels/test_case.h"
+#include "onnx_backend_test/test_case.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
@@ -14,7 +14,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
+namespace onnx_backend_test {
 
 void RegisterNegativeLogLikelihoodLossCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(13);
@@ -355,5 +355,5 @@ void RegisterNegativeLogLikelihoodLossCases(std::vector<TestCase> &registry) {
   }
 }
 
-} // namespace onnx_kernels
+} // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -5,7 +5,7 @@
 #include "onnx_backend_test/cases/text/include_text_cases.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
+namespace onnx_backend_test {
 
 void CollectTextTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   static const OpRegisterMap kEntries = {
@@ -18,5 +18,5 @@ void CollectTextTestCases(std::vector<TestCase> &registry, const std::string &op
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }
 
-} // namespace onnx_kernels
+} // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

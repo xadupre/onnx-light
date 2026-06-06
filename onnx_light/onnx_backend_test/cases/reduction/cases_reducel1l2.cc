@@ -4,7 +4,7 @@
 
 #include "onnx_backend_test/cases/reduction/include_reduction_cases.h"
 #include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
-#include "onnx_kernels/test_case.h"
+#include "onnx_backend_test/test_case.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
@@ -12,7 +12,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
+namespace onnx_backend_test {
 
 namespace {
 
@@ -109,5 +109,5 @@ void RegisterReduceL2Cases(std::vector<TestCase> &registry) {
   RegisterReduceL1L2Cases(registry, "ReduceL2", reduce_l2_kernel, "reducel2");
 }
 
-} // namespace onnx_kernels
+} // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

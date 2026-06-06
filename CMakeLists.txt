@@ -236,7 +236,7 @@ target_link_libraries(lib_onnx_kernels PUBLIC lib_onnx_proto)
 # units all pull in ``test_case.h`` (via ``kernel_context.h``) and the
 # usual standard-library headers.
 target_precompile_headers(lib_onnx_kernels PRIVATE
-    "${ONNX_KERNELS_PATH}/test_case.h"
+    "${ONNX_BACKEND_TEST_PATH}/test_case.h"
     <algorithm>
     <cmath>
     <cstdint>
@@ -287,7 +287,7 @@ target_link_libraries(lib_onnx_backend_test PUBLIC lib_onnx_proto lib_onnx_kerne
 # only affects targets that opt in. Other targets that link against
 # ``lib_onnx_backend_test`` still see the regular public headers.
 target_precompile_headers(lib_onnx_backend_test PRIVATE
-    "${ONNX_KERNELS_PATH}/test_case.h"
+    "${ONNX_BACKEND_TEST_PATH}/test_case.h"
     <algorithm>
     <cmath>
     <cstdint>

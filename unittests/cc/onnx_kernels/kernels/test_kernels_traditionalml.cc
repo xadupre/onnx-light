@@ -4,7 +4,7 @@
 
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
-#include "onnx_kernels/test_case.h"
+#include "onnx_backend_test/test_case.h"
 
 #include <gtest/gtest.h>
 
@@ -15,7 +15,7 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_kernels::OpsetId;
+using onnx_backend_test::OpsetId;
 using onnx_kernels::Tensor;
 using onnx_kernels::kernel::ArrayFeatureExtractor;
 using onnx_kernels::kernel::Binarizer;

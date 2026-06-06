@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/cases/nn/include_nn_cases.h"
-#include "onnx_kernels/test_case.h"
+#include "onnx_backend_test/test_case.h"
 
 #include <gtest/gtest.h>
 
@@ -12,16 +12,16 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_kernels::CollectNNTestCases;
+using onnx_backend_test::CollectNNTestCases;
 
 namespace {
-std::vector<onnx_kernels::TestCase> CollectTestCases(const std::string &op_type = "") {
-  std::vector<onnx_kernels::TestCase> registry;
+std::vector<onnx_backend_test::TestCase> CollectTestCases(const std::string &op_type = "") {
+  std::vector<onnx_backend_test::TestCase> registry;
   CollectNNTestCases(registry, op_type);
   return registry;
 }
 } // namespace
-using onnx_kernels::TestCase;
+using onnx_backend_test::TestCase;
 
 namespace Test {
 

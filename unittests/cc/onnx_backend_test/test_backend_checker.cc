@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_kernels/test_case.h"
+#include "onnx_backend_test/test_case.h"
 #include "onnx_lib/checker.h"
 #include "onnx_lib/shape_inference/implementation.h"
 
@@ -13,8 +13,8 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_kernels::CollectTestCases;
-using onnx_kernels::TestCase;
+using onnx_backend_test::CollectTestCases;
+using onnx_backend_test::TestCase;
 
 namespace Test {
 

@@ -15,7 +15,7 @@
  * release archive.
  */
 
-#include "onnx_kernels/test_case.h"
+#include "onnx_backend_test/test_case.h"
 
 #include <onnxruntime_cxx_api.h>
 

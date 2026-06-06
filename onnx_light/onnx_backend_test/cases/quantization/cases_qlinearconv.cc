@@ -4,7 +4,7 @@
 
 #include "onnx_backend_test/cases/quantization/include_quantization_cases.h"
 #include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
-#include "onnx_kernels/test_case.h"
+#include "onnx_backend_test/test_case.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
@@ -12,7 +12,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
+namespace onnx_backend_test {
 
 // ---------------------------------------------------------------------------
 // QLinearConv — per-tensor (or per-output-channel ``w``-side) 8-bit quantized
@@ -74,5 +74,5 @@ void RegisterQLinearConvCases(std::vector<TestCase> &registry) {
   }
 }
 
-} // namespace onnx_kernels
+} // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -4,12 +4,12 @@
 
 #pragma once
 
-#include "onnx_kernels/test_case.h"
+#include "onnx_backend_test/test_case.h"
 
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
+namespace onnx_backend_test {
 
 // ---------------------------------------------------------------------------
 // Per-operator registration helpers for the ``generator`` op category —
@@ -51,5 +51,5 @@ void RegisterMultinomialCases(std::vector<TestCase> &registry);
 /// every ``Register*Cases`` helper declared in this header.
 void CollectGeneratorTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");
 
-} // namespace onnx_kernels
+} // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

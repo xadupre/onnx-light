@@ -4,7 +4,7 @@
 
 #include "onnx_backend_test/cases_numerical/nan_inf/include_nan_inf_cases.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
-#include "onnx_kernels/test_case.h"
+#include "onnx_backend_test/test_case.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
@@ -12,7 +12,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
+namespace onnx_backend_test {
 
 void RegisterWhereNanInfCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(16);
@@ -54,5 +54,5 @@ void RegisterWhereNanInfCases(std::vector<TestCase> &registry) {
   }
 }
 
-} // namespace onnx_kernels
+} // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

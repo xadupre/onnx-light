@@ -4,7 +4,7 @@
 
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
-#include "onnx_kernels/test_case.h"
+#include "onnx_backend_test/test_case.h"
 
 #include <gtest/gtest.h>
 
@@ -16,7 +16,7 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_kernels::DefaultOpset;
+using onnx_backend_test::DefaultOpset;
 using onnx_kernels::Tensor;
 using onnx_kernels::kernel::Abs;
 using onnx_kernels::kernel::Acos;

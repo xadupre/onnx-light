@@ -5,7 +5,7 @@
 #include "onnx_backend_test/cases/quantization/include_quantization_cases.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
+namespace onnx_backend_test {
 
 void CollectQuantizationTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   static const OpRegisterMap kEntries = {
@@ -18,5 +18,5 @@ void CollectQuantizationTestCases(std::vector<TestCase> &registry, const std::st
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }
 
-} // namespace onnx_kernels
+} // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

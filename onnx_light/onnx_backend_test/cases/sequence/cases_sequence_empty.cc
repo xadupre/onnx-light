@@ -4,7 +4,7 @@
 
 #include "onnx_backend_test/cases/sequence/include_sequence_cases.h"
 #include "onnx_kernels/kernels/sequence/include_sequence_kernels.h"
-#include "onnx_kernels/test_case.h"
+#include "onnx_backend_test/test_case.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
@@ -13,7 +13,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
+namespace onnx_backend_test {
 
 namespace {
 
@@ -102,5 +102,5 @@ void RegisterSequenceEmptyCases(std::vector<TestCase> &registry) {
                             /*dtype=*/static_cast<int64_t>(TensorProto::INT64), opset, registry);
 }
 
-} // namespace onnx_kernels
+} // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

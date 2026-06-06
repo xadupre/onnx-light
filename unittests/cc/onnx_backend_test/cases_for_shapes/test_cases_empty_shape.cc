@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/cases_for_shapes/empty_shape/include_empty_shape_cases.h"
-#include "onnx_kernels/test_case.h"
+#include "onnx_backend_test/test_case.h"
 
 #include <gtest/gtest.h>
 
@@ -11,8 +11,8 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_kernels::CollectEmptyShapeTestCases;
-using onnx_kernels::TestCase;
+using onnx_backend_test::CollectEmptyShapeTestCases;
+using onnx_backend_test::TestCase;
 
 namespace {
 

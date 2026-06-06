@@ -4,14 +4,14 @@
 
 #include "onnx_backend_test/cases/nn/include_nn_cases.h"
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
-#include "onnx_kernels/test_case.h"
+#include "onnx_backend_test/test_case.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
+namespace onnx_backend_test {
 
 // ---------------------------------------------------------------------------
 // BatchNormalization — Y = (X - mean) / sqrt(var + epsilon) * scale + B (and,
@@ -90,5 +90,5 @@ void RegisterBatchNormalizationCases(std::vector<TestCase> &registry) {
   }
 }
 
-} // namespace onnx_kernels
+} // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -11,7 +11,7 @@
  * See CMakeLists.txt for build instructions.
  */
 
-#include "onnx_kernels/test_case.h"
+#include "onnx_backend_test/test_case.h"
 
 #include <cmath>
 #include <cstdint>

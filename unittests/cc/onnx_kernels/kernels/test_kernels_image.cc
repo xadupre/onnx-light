@@ -4,7 +4,7 @@
 
 #include "onnx_kernels/kernels/image/include_image_kernels.h"
 #include "onnx_kernels/kernels/kernel_context.h"
-#include "onnx_kernels/test_case.h"
+#include "onnx_backend_test/test_case.h"
 
 #include <gtest/gtest.h>
 
@@ -15,7 +15,7 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_kernels::DataType;
-using onnx_kernels::DefaultOpset;
+using onnx_backend_test::DefaultOpset;
 using onnx_kernels::Tensor;
 using onnx_kernels::kernel::ImageDecoder;
 using onnx_kernels::kernel::KernelContext;

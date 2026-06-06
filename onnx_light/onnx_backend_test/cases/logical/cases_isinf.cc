@@ -4,7 +4,7 @@
 
 #include "onnx_backend_test/cases/logical/include_logical_cases.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
-#include "onnx_kernels/test_case.h"
+#include "onnx_backend_test/test_case.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cmath>
@@ -13,7 +13,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
+namespace onnx_backend_test {
 
 // ---------------------------------------------------------------------------
 // IsInf — y = isinf(x), element-wise on a FLOAT tensor with optional
@@ -72,5 +72,5 @@ void RegisterIsInfCases(std::vector<TestCase> &registry) {
   }
 }
 
-} // namespace onnx_kernels
+} // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

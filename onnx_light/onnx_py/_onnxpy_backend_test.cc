@@ -4,7 +4,7 @@
 
 #include "onnx_kernels/random.h"
 #include "onnx_kernels/simple_tensor.h"
-#include "onnx_kernels/test_case.h"
+#include "onnx_backend_test/test_case.h"
 
 #include <cstdint>
 #include <cstring>
@@ -16,9 +16,9 @@
 
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_kernels::DataSet;
+using onnx_backend_test::DataSet;
 using onnx_kernels::Tensor;
-using onnx_kernels::TestCase;
+using onnx_backend_test::TestCase;
 
 void AddOnnxPyBackend(nb::module_ &m);
 void AddOnnxPyBackendTest(nb::module_ &m);
@@ -112,7 +112,7 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
 
   bt_mod.def(
       "collect_test_cases",
-      [](const std::string &op_type) { return onnx_kernels::CollectTestCases(op_type); },
+      [](const std::string &op_type) { return onnx_backend_test::CollectTestCases(op_type); },
       nb::arg("op_type") = std::string(),
       "Returns the list of C++-implemented backend test node cases. When ``op_type`` "
       "is non-empty, only cases whose top-level graph contains a node with that "
@@ -122,7 +122,7 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
       "collect_test_cases_by_name",
       [](const std::string &name_regex) {
         try {
-          return onnx_kernels::CollectTestCasesByName(name_regex);
+          return onnx_backend_test::CollectTestCasesByName(name_regex);
         } catch (const std::regex_error &e) {
           throw nb::value_error(e.what());
         }

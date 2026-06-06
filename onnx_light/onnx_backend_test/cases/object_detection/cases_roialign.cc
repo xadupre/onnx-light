@@ -4,7 +4,7 @@
 
 #include "onnx_backend_test/cases/object_detection/include_object_detection_cases.h"
 #include "onnx_kernels/kernels/object_detection/include_object_detection_kernels.h"
-#include "onnx_kernels/test_case.h"
+#include "onnx_backend_test/test_case.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
@@ -12,7 +12,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
+namespace onnx_backend_test {
 
 namespace {
 
@@ -261,5 +261,5 @@ void RegisterRoiAlignCases(std::vector<TestCase> &registry) {
   register_upstream("test_cc_roialign_mode_max", "max", "output_half_pixel");
 }
 
-} // namespace onnx_kernels
+} // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

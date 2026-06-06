@@ -5,7 +5,7 @@
 #include "onnx_backend_test/cases/logical/include_logical_cases.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 #include "onnx_kernels/random.h"
-#include "onnx_kernels/test_case.h"
+#include "onnx_backend_test/test_case.h"
 
 #include <cstdint>
 #include <string>
@@ -13,7 +13,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
+namespace onnx_backend_test {
 
 // ---------------------------------------------------------------------------
 // Equal — z = (x == y), element-wise with broadcasting (since opset 7;
@@ -131,5 +131,5 @@ void RegisterEqualCases(std::vector<TestCase> &registry) {
   }
 }
 
-} // namespace onnx_kernels
+} // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -4,13 +4,13 @@
 
 #pragma once
 
-#include "onnx_kernels/test_case.h"
+#include "onnx_backend_test/test_case.h"
 
 #include <string>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
+namespace onnx_backend_test {
 
 // ---------------------------------------------------------------------------
 // Backend test cases that exercise operators on tensors containing the
@@ -52,5 +52,5 @@ void RegisterWhereNanInfCases(std::vector<TestCase> &registry);
 /// ``Register*NanInfCases`` helper declared in this header.
 void CollectNanInfTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");
 
-} // namespace onnx_kernels
+} // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

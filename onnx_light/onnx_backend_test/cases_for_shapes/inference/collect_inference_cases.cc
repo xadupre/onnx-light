@@ -5,7 +5,7 @@
 #include "onnx_backend_test/cases_for_shapes/inference/include_inference_cases.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
+namespace onnx_backend_test {
 
 // The shape-inference cases are multi-node graphs whose ``op_type`` cannot
 // be reduced to a single representative operator. We therefore unconditionally
@@ -31,5 +31,5 @@ void CollectShapeInferenceTestCases(std::vector<TestCase> &registry, const std::
   }
 }
 
-} // namespace onnx_kernels
+} // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

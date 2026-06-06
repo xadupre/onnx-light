@@ -5,7 +5,7 @@
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/run_nodes.h"
 #include "onnx_kernels/simple_tensor.h"
-#include "onnx_kernels/test_case.h"
+#include "onnx_backend_test/test_case.h"
 #include "onnx_proto/onnx.h"
 
 #include <gtest/gtest.h>
@@ -16,7 +16,7 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_kernels::DefaultOpset;
+using onnx_backend_test::DefaultOpset;
 using onnx_kernels::KernelDispatchTable;
 using onnx_kernels::RunNode;
 using onnx_kernels::RunNodes;

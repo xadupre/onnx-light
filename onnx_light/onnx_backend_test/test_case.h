@@ -17,6 +17,10 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
+// Make onnx_kernels types (Tensor, kernel::*, Randn, SplitMix64, etc.)
+// directly available inside onnx_backend_test.
+using namespace onnx_kernels;
+
 /**
  * Lightweight opset identifier used by the backend test library.
  *

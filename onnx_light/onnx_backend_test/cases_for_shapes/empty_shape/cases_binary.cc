@@ -4,14 +4,14 @@
 
 #include "onnx_backend_test/cases_for_shapes/empty_shape/include_empty_shape_cases.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
-#include "onnx_kernels/test_case.h"
+#include "onnx_backend_test/test_case.h"
 
 #include <cstdint>
 #include <string>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
+namespace onnx_backend_test {
 
 namespace {
 
@@ -101,5 +101,5 @@ void RegisterPReluEmptyShapeCases(std::vector<TestCase> &registry) {
   RegisterBinaryEmptyShape<kernel::PRelu>(registry, "PRelu", 16, "prelu", kSecondInputSlope);
 }
 
-} // namespace onnx_kernels
+} // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

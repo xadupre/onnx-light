@@ -4,7 +4,7 @@
 
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/object_detection/include_object_detection_kernels.h"
-#include "onnx_kernels/test_case.h"
+#include "onnx_backend_test/test_case.h"
 
 #include <gtest/gtest.h>
 
@@ -14,7 +14,7 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_kernels::DefaultOpset;
+using onnx_backend_test::DefaultOpset;
 using onnx_kernels::Tensor;
 using onnx_kernels::kernel::KernelContext;
 using onnx_kernels::kernel::NonMaxSuppression;
@@ -140,7 +140,7 @@ TEST(KernelClass, RoiAlignRejectsBadInputs) {
 }
 
 TEST(KernelClass, NonMaxSuppressionSuppressByIoU) {
-  const KernelContext ctx{onnx_kernels::DefaultOpset(11)};
+  const KernelContext ctx{onnx_backend_test::DefaultOpset(11)};
   NonMaxSuppression nms{ctx};
   // Mirror the upstream test_nonmaxsuppression_suppress_by_IOU fixture.
   Tensor boxes = Tensor::FromFloat("", {1, 6, 4}, {0.f, 0.f,   1.f, 1.f,   0.f, 0.1f,  1.f, 1.1f,
@@ -162,7 +162,7 @@ TEST(KernelClass, NonMaxSuppressionSuppressByIoU) {
 }
 
 TEST(KernelClass, NonMaxSuppressionDefaultsAndOptionalInputs) {
-  const KernelContext ctx{onnx_kernels::DefaultOpset(11)};
+  const KernelContext ctx{onnx_backend_test::DefaultOpset(11)};
   NonMaxSuppression nms{ctx};
   // Two non-overlapping boxes; with no max_output_boxes_per_class (default 0)
   // the output must be empty.
@@ -190,7 +190,7 @@ TEST(KernelClass, NonMaxSuppressionDefaultsAndOptionalInputs) {
 }
 
 TEST(KernelClass, NonMaxSuppressionRejectsBadInputs) {
-  const KernelContext ctx{onnx_kernels::DefaultOpset(11)};
+  const KernelContext ctx{onnx_backend_test::DefaultOpset(11)};
   NonMaxSuppression nms{ctx};
   Tensor boxes = Tensor::FromFloat("", {1, 1, 4}, {0.0f, 0.0f, 1.0f, 1.0f});
   Tensor scores = Tensor::FromFloat("", {1, 1, 1}, {0.9f});

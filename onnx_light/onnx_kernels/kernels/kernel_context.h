@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "onnx_kernels/test_case.h"
+#include "onnx_backend_test/test_case.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {

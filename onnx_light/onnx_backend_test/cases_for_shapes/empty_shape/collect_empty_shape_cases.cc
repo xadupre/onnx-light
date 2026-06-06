@@ -5,7 +5,7 @@
 #include "onnx_backend_test/cases_for_shapes/empty_shape/include_empty_shape_cases.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
+namespace onnx_backend_test {
 
 void CollectEmptyShapeTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   static const OpRegisterMap kEntries = {
@@ -16,5 +16,5 @@ void CollectEmptyShapeTestCases(std::vector<TestCase> &registry, const std::stri
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }
 
-} // namespace onnx_kernels
+} // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

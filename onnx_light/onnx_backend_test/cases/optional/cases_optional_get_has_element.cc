@@ -5,7 +5,7 @@
 #include "onnx_backend_test/cases/optional/include_optional_cases.h"
 #include "onnx_kernels/kernels/optional/include_optional_kernels.h"
 #include "onnx_kernels/kernels/sequence/include_sequence_kernels.h"
-#include "onnx_kernels/test_case.h"
+#include "onnx_backend_test/test_case.h"
 
 #include <cstdint>
 #include <string>
@@ -13,7 +13,7 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_kernels {
+namespace onnx_backend_test {
 
 namespace {
 
@@ -423,5 +423,5 @@ void RegisterOptionalHasElementCases(std::vector<TestCase> &registry) {
       /*with_empty_input_name=*/true, opset18, registry);
 }
 
-} // namespace onnx_kernels
+} // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

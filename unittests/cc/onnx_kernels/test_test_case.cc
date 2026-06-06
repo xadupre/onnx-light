@@ -21,7 +21,7 @@
 #include "onnx_backend_test/cases_for_shapes/empty_shape/include_empty_shape_cases.h"
 #include "onnx_backend_test/cases_for_shapes/inference/include_inference_cases.h"
 #include "onnx_backend_test/cases_numerical/nan_inf/include_nan_inf_cases.h"
-#include "onnx_kernels/test_case.h"
+#include "onnx_backend_test/test_case.h"
 
 #include <gtest/gtest.h>
 
@@ -31,13 +31,13 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_kernels::CollectTestCases;
-using onnx_kernels::CollectTestCasesByName;
-using onnx_kernels::DefaultOpset;
-using onnx_kernels::Expect;
-using onnx_kernels::OpsetId;
+using onnx_backend_test::CollectTestCases;
+using onnx_backend_test::CollectTestCasesByName;
+using onnx_backend_test::DefaultOpset;
+using onnx_backend_test::Expect;
+using onnx_backend_test::OpsetId;
 using onnx_kernels::Tensor;
-using onnx_kernels::TestCase;
+using onnx_backend_test::TestCase;
 
 namespace Test {
 
@@ -169,7 +169,7 @@ TEST(BackendTestCase, ExpectRejectsArityMismatch) {
 
 TEST(BackendTestCase, TagDefaultsToEmptyForOrdinaryCases) {
   std::vector<TestCase> registry;
-  onnx_kernels::CollectMathTestCases(registry);
+  onnx_backend_test::CollectMathTestCases(registry);
   ASSERT_FALSE(registry.empty());
   for (const auto &tc : registry) {
     EXPECT_EQ(tc.tag, "") << "case: " << tc.name;
@@ -178,7 +178,7 @@ TEST(BackendTestCase, TagDefaultsToEmptyForOrdinaryCases) {
 
 TEST(BackendTestCase, TagIsEmptyShapeForEmptyShapeCases) {
   std::vector<TestCase> registry;
-  onnx_kernels::CollectEmptyShapeTestCases(registry);
+  onnx_backend_test::CollectEmptyShapeTestCases(registry);
   ASSERT_FALSE(registry.empty());
   for (const auto &tc : registry) {
     EXPECT_EQ(tc.tag, "empty_shape") << "case: " << tc.name;
@@ -187,7 +187,7 @@ TEST(BackendTestCase, TagIsEmptyShapeForEmptyShapeCases) {
 
 TEST(BackendTestCase, TagIsNanInfForNanInfCases) {
   std::vector<TestCase> registry;
-  onnx_kernels::CollectNanInfTestCases(registry);
+  onnx_backend_test::CollectNanInfTestCases(registry);
   ASSERT_FALSE(registry.empty());
   for (const auto &tc : registry) {
     EXPECT_EQ(tc.tag, "nan_inf") << "case: " << tc.name;
@@ -196,7 +196,7 @@ TEST(BackendTestCase, TagIsNanInfForNanInfCases) {
 
 TEST(BackendTestCase, TagIsInferenceForShapeInferenceCases) {
   std::vector<TestCase> registry;
-  onnx_kernels::CollectShapeInferenceTestCases(registry);
+  onnx_backend_test::CollectShapeInferenceTestCases(registry);
   ASSERT_FALSE(registry.empty());
   for (const auto &tc : registry) {
     EXPECT_EQ(tc.tag, "inference") << "case: " << tc.name;
@@ -324,79 +324,79 @@ TEST(BackendTestCase, CollectByNameInvalidRegexThrows) {
 
 TEST(BackendTestCase, PerSubfolderCollectorsAggregateIntoMain) {
   std::vector<TestCase> controlflow_only;
-  onnx_kernels::CollectControlflowTestCases(controlflow_only);
+  onnx_backend_test::CollectControlflowTestCases(controlflow_only);
   EXPECT_FALSE(controlflow_only.empty());
 
   std::vector<TestCase> generator_only;
-  onnx_kernels::CollectGeneratorTestCases(generator_only);
+  onnx_backend_test::CollectGeneratorTestCases(generator_only);
   EXPECT_FALSE(generator_only.empty());
 
   std::vector<TestCase> image_only;
-  onnx_kernels::CollectImageTestCases(image_only);
+  onnx_backend_test::CollectImageTestCases(image_only);
   EXPECT_FALSE(image_only.empty());
 
   std::vector<TestCase> logical_only;
-  onnx_kernels::CollectLogicalTestCases(logical_only);
+  onnx_backend_test::CollectLogicalTestCases(logical_only);
   EXPECT_FALSE(logical_only.empty());
 
   std::vector<TestCase> math_only;
-  onnx_kernels::CollectMathTestCases(math_only);
+  onnx_backend_test::CollectMathTestCases(math_only);
   EXPECT_FALSE(math_only.empty());
 
   std::vector<TestCase> nn_only;
-  onnx_kernels::CollectNNTestCases(nn_only);
+  onnx_backend_test::CollectNNTestCases(nn_only);
   EXPECT_FALSE(nn_only.empty());
 
   std::vector<TestCase> object_detection_only;
-  onnx_kernels::CollectObjectDetectionTestCases(object_detection_only);
+  onnx_backend_test::CollectObjectDetectionTestCases(object_detection_only);
   EXPECT_FALSE(object_detection_only.empty());
 
   std::vector<TestCase> optional_only;
-  onnx_kernels::CollectOptionalTestCases(optional_only);
+  onnx_backend_test::CollectOptionalTestCases(optional_only);
   EXPECT_FALSE(optional_only.empty());
 
   std::vector<TestCase> preview_only;
-  onnx_kernels::CollectPreviewTestCases(preview_only);
+  onnx_backend_test::CollectPreviewTestCases(preview_only);
   EXPECT_FALSE(preview_only.empty());
 
   std::vector<TestCase> quantization_only;
-  onnx_kernels::CollectQuantizationTestCases(quantization_only);
+  onnx_backend_test::CollectQuantizationTestCases(quantization_only);
   EXPECT_FALSE(quantization_only.empty());
 
   std::vector<TestCase> reduction_only;
-  onnx_kernels::CollectReductionTestCases(reduction_only);
+  onnx_backend_test::CollectReductionTestCases(reduction_only);
   EXPECT_FALSE(reduction_only.empty());
 
   std::vector<TestCase> sequence_only;
-  onnx_kernels::CollectSequenceTestCases(sequence_only);
+  onnx_backend_test::CollectSequenceTestCases(sequence_only);
   EXPECT_FALSE(sequence_only.empty());
 
   std::vector<TestCase> tensor_only;
-  onnx_kernels::CollectTensorTestCases(tensor_only);
+  onnx_backend_test::CollectTensorTestCases(tensor_only);
   EXPECT_FALSE(tensor_only.empty());
 
   std::vector<TestCase> text_only;
-  onnx_kernels::CollectTextTestCases(text_only);
+  onnx_backend_test::CollectTextTestCases(text_only);
   EXPECT_FALSE(text_only.empty());
 
   std::vector<TestCase> traditionalml_only;
-  onnx_kernels::CollectTraditionalMLTestCases(traditionalml_only);
+  onnx_backend_test::CollectTraditionalMLTestCases(traditionalml_only);
   EXPECT_FALSE(traditionalml_only.empty());
 
   std::vector<TestCase> training_only;
-  onnx_kernels::CollectTrainingTestCases(training_only);
+  onnx_backend_test::CollectTrainingTestCases(training_only);
   EXPECT_FALSE(training_only.empty());
 
   std::vector<TestCase> empty_shape_only;
-  onnx_kernels::CollectEmptyShapeTestCases(empty_shape_only);
+  onnx_backend_test::CollectEmptyShapeTestCases(empty_shape_only);
   EXPECT_FALSE(empty_shape_only.empty());
 
   std::vector<TestCase> shape_inference_only;
-  onnx_kernels::CollectShapeInferenceTestCases(shape_inference_only);
+  onnx_backend_test::CollectShapeInferenceTestCases(shape_inference_only);
   EXPECT_FALSE(shape_inference_only.empty());
 
   std::vector<TestCase> nan_inf_only;
-  onnx_kernels::CollectNanInfTestCases(nan_inf_only);
+  onnx_backend_test::CollectNanInfTestCases(nan_inf_only);
   EXPECT_FALSE(nan_inf_only.empty());
 
   const auto all = CollectTestCases();
@@ -427,7 +427,7 @@ TEST(BackendTestCase, CollectTestCasesFilterByOpTypeKeepsOnlyMatchingOps) {
 TEST(BackendTestCase, CollectCategoryFilterByOpTypeReturnsOnlyMatchingCases) {
   // Per-category collectors honour the op_type filter too.
   std::vector<TestCase> add_only;
-  onnx_kernels::CollectMathTestCases(add_only, "Add");
+  onnx_backend_test::CollectMathTestCases(add_only, "Add");
   ASSERT_FALSE(add_only.empty());
   for (const auto &tc : add_only) {
     ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
@@ -437,18 +437,18 @@ TEST(BackendTestCase, CollectCategoryFilterByOpTypeReturnsOnlyMatchingCases) {
 
   // Asking for an op that lives in a different category yields no cases.
   std::vector<TestCase> none_for_math;
-  onnx_kernels::CollectMathTestCases(none_for_math, "If");
+  onnx_backend_test::CollectMathTestCases(none_for_math, "If");
   EXPECT_TRUE(none_for_math.empty());
 
   // Empty op_type (the default) is a no-op and returns every case.
   std::vector<TestCase> all_math;
-  onnx_kernels::CollectMathTestCases(all_math);
+  onnx_backend_test::CollectMathTestCases(all_math);
   EXPECT_GT(all_math.size(), add_only.size());
 }
 
 TEST(BackendTestCase, CollectTraditionalMLFilterFindsArrayFeatureExtractorCases) {
   std::vector<TestCase> array_feature_extractor_only;
-  onnx_kernels::CollectTraditionalMLTestCases(array_feature_extractor_only,
+  onnx_backend_test::CollectTraditionalMLTestCases(array_feature_extractor_only,
                                               "ArrayFeatureExtractor");
   ASSERT_FALSE(array_feature_extractor_only.empty());
   for (const auto &tc : array_feature_extractor_only) {
@@ -460,7 +460,7 @@ TEST(BackendTestCase, CollectTraditionalMLFilterFindsArrayFeatureExtractorCases)
 
 TEST(BackendTestCase, CollectTraditionalMLFilterFindsOneHotEncoderCases) {
   std::vector<TestCase> one_hot_only;
-  onnx_kernels::CollectTraditionalMLTestCases(one_hot_only, "OneHotEncoder");
+  onnx_backend_test::CollectTraditionalMLTestCases(one_hot_only, "OneHotEncoder");
   ASSERT_FALSE(one_hot_only.empty());
   for (const auto &tc : one_hot_only) {
     ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
@@ -471,7 +471,7 @@ TEST(BackendTestCase, CollectTraditionalMLFilterFindsOneHotEncoderCases) {
 
 TEST(BackendTestCase, CollectTraditionalMLFilterFindsZipMapCases) {
   std::vector<TestCase> zipmap_only;
-  onnx_kernels::CollectTraditionalMLTestCases(zipmap_only, "ZipMap");
+  onnx_backend_test::CollectTraditionalMLTestCases(zipmap_only, "ZipMap");
   ASSERT_FALSE(zipmap_only.empty());
   for (const auto &tc : zipmap_only) {
     ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
@@ -486,7 +486,7 @@ TEST(BackendTestCase, CollectTraditionalMLFilterFindsZipMapCases) {
 
 TEST(BackendTestCase, CollectTraditionalMLFilterFindsSVMClassifierCases) {
   std::vector<TestCase> svm_only;
-  onnx_kernels::CollectTraditionalMLTestCases(svm_only, "SVMClassifier");
+  onnx_backend_test::CollectTraditionalMLTestCases(svm_only, "SVMClassifier");
   ASSERT_FALSE(svm_only.empty());
   for (const auto &tc : svm_only) {
     ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
@@ -497,7 +497,7 @@ TEST(BackendTestCase, CollectTraditionalMLFilterFindsSVMClassifierCases) {
 
 TEST(BackendTestCase, CollectTraditionalMLFilterFindsSVMRegressorCases) {
   std::vector<TestCase> svm_only;
-  onnx_kernels::CollectTraditionalMLTestCases(svm_only, "SVMRegressor");
+  onnx_backend_test::CollectTraditionalMLTestCases(svm_only, "SVMRegressor");
   ASSERT_FALSE(svm_only.empty());
   for (const auto &tc : svm_only) {
     ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
@@ -508,7 +508,7 @@ TEST(BackendTestCase, CollectTraditionalMLFilterFindsSVMRegressorCases) {
 
 TEST(BackendTestCase, CollectTraditionalMLFilterFindsLinearClassifierCases) {
   std::vector<TestCase> only;
-  onnx_kernels::CollectTraditionalMLTestCases(only, "LinearClassifier");
+  onnx_backend_test::CollectTraditionalMLTestCases(only, "LinearClassifier");
   ASSERT_FALSE(only.empty());
   for (const auto &tc : only) {
     ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
@@ -519,7 +519,7 @@ TEST(BackendTestCase, CollectTraditionalMLFilterFindsLinearClassifierCases) {
 
 TEST(BackendTestCase, CollectTraditionalMLFilterFindsLinearRegressorCases) {
   std::vector<TestCase> only;
-  onnx_kernels::CollectTraditionalMLTestCases(only, "LinearRegressor");
+  onnx_backend_test::CollectTraditionalMLTestCases(only, "LinearRegressor");
   ASSERT_FALSE(only.empty());
   for (const auto &tc : only) {
     ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
@@ -530,7 +530,7 @@ TEST(BackendTestCase, CollectTraditionalMLFilterFindsLinearRegressorCases) {
 
 TEST(BackendTestCase, CollectTraditionalMLFilterFindsTreeEnsembleRegressorCases) {
   std::vector<TestCase> only;
-  onnx_kernels::CollectTraditionalMLTestCases(only, "TreeEnsembleRegressor");
+  onnx_backend_test::CollectTraditionalMLTestCases(only, "TreeEnsembleRegressor");
   ASSERT_FALSE(only.empty());
   for (const auto &tc : only) {
     ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
@@ -541,7 +541,7 @@ TEST(BackendTestCase, CollectTraditionalMLFilterFindsTreeEnsembleRegressorCases)
 
 TEST(BackendTestCase, CollectTraditionalMLFilterFindsTreeEnsembleClassifierCases) {
   std::vector<TestCase> only;
-  onnx_kernels::CollectTraditionalMLTestCases(only, "TreeEnsembleClassifier");
+  onnx_backend_test::CollectTraditionalMLTestCases(only, "TreeEnsembleClassifier");
   ASSERT_FALSE(only.empty());
   for (const auto &tc : only) {
     ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
@@ -552,7 +552,7 @@ TEST(BackendTestCase, CollectTraditionalMLFilterFindsTreeEnsembleClassifierCases
 
 TEST(BackendTestCase, CollectTraditionalMLFilterFindsTreeEnsembleCases) {
   std::vector<TestCase> only;
-  onnx_kernels::CollectTraditionalMLTestCases(only, "TreeEnsemble");
+  onnx_backend_test::CollectTraditionalMLTestCases(only, "TreeEnsemble");
   ASSERT_FALSE(only.empty());
   for (const auto &tc : only) {
     ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
@@ -578,7 +578,7 @@ TEST(BackendTestCase, CollectPreservesPreExistingEntries) {
   ASSERT_EQ(registry.size(), 1u);
 
   // Collect ``If`` cases only — the existing ``Add`` entry must be untouched.
-  onnx_kernels::CollectControlflowTestCases(registry, "If");
+  onnx_backend_test::CollectControlflowTestCases(registry, "If");
   ASSERT_GE(registry.size(), 2u);
   EXPECT_EQ(registry[0].name, "pre_existing_add");
   for (size_t i = 1; i < registry.size(); ++i) {
@@ -589,9 +589,9 @@ TEST(BackendTestCase, CollectPreservesPreExistingEntries) {
 
 TEST(BackendTestCase, CollectEmptyFilterReturnsAllCases) {
   std::vector<TestCase> all_math;
-  onnx_kernels::CollectMathTestCases(all_math);
+  onnx_backend_test::CollectMathTestCases(all_math);
   std::vector<TestCase> all_math_default;
-  onnx_kernels::CollectMathTestCases(all_math_default, "");
+  onnx_backend_test::CollectMathTestCases(all_math_default, "");
   EXPECT_EQ(all_math.size(), all_math_default.size());
 }
 

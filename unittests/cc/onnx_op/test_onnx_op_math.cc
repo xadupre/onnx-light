@@ -897,4 +897,43 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSTFTSchemaWithoutShapeInference) {
   EXPECT_FALSE(stft_v17->doc().empty());
 }
 
+TEST(OnnxOpMathRegistrationTest, ReturnsLeakyReluSchemaWithoutShapeInference) {
+  const std::vector<onnx_op::LightOpSchema> leakyrelu_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("LeakyRelu");
+
+  // LeakyRelu has three versioned schemas (v1, v6, v16).
+  ASSERT_EQ(leakyrelu_schemas.size(), 3u);
+  const onnx_op::LightOpSchema *const leakyrelu_v1 = FindByVersion(leakyrelu_schemas, 1);
+  const onnx_op::LightOpSchema *const leakyrelu_v6 = FindByVersion(leakyrelu_schemas, 6);
+  const onnx_op::LightOpSchema *const leakyrelu_v16 = FindByVersion(leakyrelu_schemas, 16);
+  ASSERT_NE(nullptr, leakyrelu_v1);
+  ASSERT_NE(nullptr, leakyrelu_v6);
+  ASSERT_NE(nullptr, leakyrelu_v16);
+
+  EXPECT_EQ(leakyrelu_v16->name(), "LeakyRelu");
+  EXPECT_EQ(leakyrelu_v16->domain(), onnx_op::kOnnxDomain);
+  EXPECT_EQ(leakyrelu_v16->since_version(), 16);
+  // v16 ships a function body so the op can be inlined into primitive ops.
+  EXPECT_TRUE(leakyrelu_v16->has_function_implementation());
+  EXPECT_FALSE(leakyrelu_v6->has_function_implementation());
+  EXPECT_FALSE(leakyrelu_v1->has_function_implementation());
+
+  ASSERT_EQ(leakyrelu_v16->inputs().size(), 1u);
+  EXPECT_EQ(leakyrelu_v16->inputs()[0].name, "X");
+  EXPECT_EQ(leakyrelu_v16->inputs()[0].type, "T");
+  ASSERT_EQ(leakyrelu_v16->outputs().size(), 1u);
+  EXPECT_EQ(leakyrelu_v16->outputs()[0].name, "Y");
+  EXPECT_EQ(leakyrelu_v16->outputs()[0].type, "T");
+
+  ASSERT_EQ(leakyrelu_v16->attributes().size(), 1u);
+  EXPECT_EQ(leakyrelu_v16->attributes()[0].name, "alpha");
+  EXPECT_EQ(leakyrelu_v16->attributes()[0].type, onnx_op::AttributeType::FLOAT);
+  EXPECT_FALSE(leakyrelu_v16->attributes()[0].required);
+
+  // v16 widens T to include bfloat16 relative to v6.
+  EXPECT_NE(leakyrelu_v6->type_constraints()[0].allowed_type_strs,
+            leakyrelu_v16->type_constraints()[0].allowed_type_strs);
+  EXPECT_FALSE(leakyrelu_v16->doc().empty());
+}
+
 } // namespace Test

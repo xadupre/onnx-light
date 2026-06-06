@@ -1221,6 +1221,64 @@ TEST(OnnxOptimShapesMathPRelu, ThrowsWhenInputMissingFromContext) {
 }
 
 // ---------------------------------------------------------------------------
+// LeakyRelu
+// ---------------------------------------------------------------------------
+namespace {
+
+NodeProto MakeLeakyReluNode(const std::string &input_name = "X",
+                            const std::string &output_name = "Y") {
+  NodeProto node;
+  node.set_op_type("LeakyRelu");
+  node.add_input(input_name);
+  node.add_output(output_name);
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesMathLeakyRelu, PropagatesFullyKnownShape) {
+  NodeProto node = MakeLeakyReluNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4),
+                               onnx_optim::OptimDim(5)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  onnx_optim::shapes::math::ComputeShapeLeakyRelu(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Shape(), shape);
+}
+
+TEST(OnnxOptimShapesMathLeakyRelu, PropagatesSymbolicShapeAndDtype) {
+  NodeProto node = MakeLeakyReluNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(8)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
+
+  onnx_optim::shapes::math::ComputeShapeLeakyRelu(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kDouble);
+  EXPECT_EQ(ctx.Get("Y").Shape(), shape);
+}
+
+TEST(OnnxOptimShapesMathLeakyRelu, RejectsWrongOpType) {
+  NodeProto node = MakeLeakyReluNode();
+  node.set_op_type("Relu");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeLeakyRelu(ctx, node, "X"),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesMathLeakyRelu, ThrowsWhenInputMissingFromContext) {
+  NodeProto node = MakeLeakyReluNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeLeakyRelu(ctx, node, "X"), std::out_of_range);
+}
+
+// ---------------------------------------------------------------------------
 // Div
 // ---------------------------------------------------------------------------
 TEST(OnnxOptimShapesMathDiv, PropagatesEqualShapesAndDtype) {

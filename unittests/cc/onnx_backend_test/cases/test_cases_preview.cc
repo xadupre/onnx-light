@@ -42,10 +42,8 @@ TEST(BackendTestCase, FlexAttentionCasesArePresent) {
   const auto cases = CollectTestCases("FlexAttention");
   const TestCase *basic = FindCase(cases, "test_cc_flex_attention_basic");
   const TestCase *gqa = FindCase(cases, "test_cc_flex_attention_gqa");
-  const TestCase *prob_mod_id =
-      FindCase(cases, "test_cc_flex_attention_prob_mod_identity");
-  const TestCase *prob_mod_scale =
-      FindCase(cases, "test_cc_flex_attention_prob_mod_scale_half");
+  const TestCase *prob_mod_id = FindCase(cases, "test_cc_flex_attention_prob_mod_identity");
+  const TestCase *prob_mod_scale = FindCase(cases, "test_cc_flex_attention_prob_mod_scale_half");
   ASSERT_NE(basic, nullptr);
   ASSERT_NE(gqa, nullptr);
   ASSERT_NE(prob_mod_id, nullptr);
@@ -101,8 +99,7 @@ TEST(BackendTestCase, FlexAttentionCasesArePresent) {
     const NodeProto &node = tc->model.ref_graph().ref_node()[0];
     ASSERT_EQ(node.ref_attribute().size(), 1u) << tc->name;
     const AttributeProto &attr = node.ref_attribute()[0];
-    EXPECT_EQ(std::string(attr.ref_name().data(), attr.ref_name().size()), "prob_mod")
-        << tc->name;
+    EXPECT_EQ(std::string(attr.ref_name().data(), attr.ref_name().size()), "prob_mod") << tc->name;
     EXPECT_EQ(attr.type(), AttributeProto::AttributeType::GRAPH) << tc->name;
     ASSERT_TRUE(attr.has_g()) << tc->name;
     const GraphProto &body = attr.ref_g();
@@ -123,8 +120,7 @@ TEST(BackendTestCase, FlexAttentionCasesArePresent) {
     }
   }
   // Scale-by-0.5 prob_mod expected output equals 0.5 times the basic case.
-  ASSERT_EQ(prob_mod_scale->data_sets[0].outputs[0].shape,
-            basic->data_sets[0].outputs[0].shape);
+  ASSERT_EQ(prob_mod_scale->data_sets[0].outputs[0].shape, basic->data_sets[0].outputs[0].shape);
   {
     const float *baseline = basic->data_sets[0].outputs[0].AsFloat();
     const float *modified = prob_mod_scale->data_sets[0].outputs[0].AsFloat();

@@ -27,8 +27,7 @@ OpsetId PreviewOpset(int64_t version) { return OpsetId(kOnnxPreviewDomain, versi
 // Adds a tensor-typed value-info (rank-4) named ``name`` to ``g``. Matches
 // the FLOAT softmax_precision tensor shape ``(B, Hq, Lq, Lkv)`` carried in
 // and out of the ``score_mod`` / ``prob_mod`` modifier subgraphs.
-void AddModifierIO(ValueInfoProto *vi, const std::string &name,
-                   const std::vector<int64_t> &shape) {
+void AddModifierIO(ValueInfoProto *vi, const std::string &name, const std::vector<int64_t> &shape) {
   vi->set_name(name);
   TypeProto::Tensor *tt = vi->ref_type().mutable_tensor_type();
   tt->set_elem_type(static_cast<int>(TensorProto::DataType::FLOAT));
@@ -296,9 +295,9 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry) {
     Tensor V = Tensor::FromFloat("", {1, 2, 2, 2},
                                  {
                                      // head 0
-                                     1.0f, 2.0f, // v0
-                                     3.0f, 4.0f, // v1
-                                                 // head 1
+                                     1.0f, 2.0f,  // v0
+                                     3.0f, 4.0f,  // v1
+                                                  // head 1
                                      -1.0f, 0.0f, // v0
                                      0.0f, 1.0f,  // v1
                                  });
@@ -307,8 +306,8 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry) {
     Tensor Y = flex(Q, K, V);
     NodeProto node = make_node();
     AddGraphAttribute(node, "prob_mod", BuildIdentityProbMod(modifier_shape));
-    Expect(node, {Q, K, V}, {Y}, "test_cc_flex_attention_prob_mod_identity",
-           {default_opset, opset}, "backend-test", registry);
+    Expect(node, {Q, K, V}, {Y}, "test_cc_flex_attention_prob_mod_identity", {default_opset, opset},
+           "backend-test", registry);
   }
 
   // ----- Case 4: basic MHA shape with a non-empty ``prob_mod`` subgraph
@@ -338,9 +337,9 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry) {
     Tensor V = Tensor::FromFloat("", {1, 2, 2, 2},
                                  {
                                      // head 0
-                                     1.0f, 2.0f, // v0
-                                     3.0f, 4.0f, // v1
-                                                 // head 1
+                                     1.0f, 2.0f,  // v0
+                                     3.0f, 4.0f,  // v1
+                                                  // head 1
                                      -1.0f, 0.0f, // v0
                                      0.0f, 1.0f,  // v1
                                  });

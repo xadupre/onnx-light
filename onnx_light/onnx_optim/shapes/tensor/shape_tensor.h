@@ -693,6 +693,14 @@ void ComputeShapeGatherND(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeScatterElements(ShapesContext &ctx, const NodeProto &node);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a deprecated ``Scatter``
+ * node and stores it in ``ctx``.
+ *
+ * The output has the same shape and dtype as ``data``.
+ */
+void ComputeShapeScatter(ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``ScatterND`` node and
  * stores it in ``ctx``.
  *

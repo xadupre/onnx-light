@@ -1335,6 +1335,44 @@ LightOpSchema MakeTensorScatterSchema(int since_version, const std::vector<Tenso
       });
 }
 
+LightOpSchema MakeScatterSchema(int since_version, const std::vector<TensorType> &types) {
+  std::vector<AttributeParam> attributes;
+  const std::string axis_desc =
+      since_version >= 11
+          ? "Which axis to scatter on. Negative value means counting dimensions from the back. "
+            "Accepted range is [-r, r-1] where r = rank(data)."
+          : "Which axis to scatter on. Negative value means counting dimensions from the back. "
+            "Accepted range is [-r, r-1]";
+  attributes.push_back(
+      {"axis", axis_desc, AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)});
+  const std::string indices_desc =
+      since_version >= 11
+          ? "Tensor of int32/int64 indices, of r >= 1 (same rank as input). All index values "
+            "are expected to be "
+            "within bounds [-s, s-1] along axis of size s. It is an error if any of the index "
+            "values are out of bounds."
+          : "Tensor of int32/int64 indices, of r >= 1 (same rank as input).";
+  LightOpSchema schema(
+      "Scatter", kOnnxDomain, since_version, MakeScatterDoc(since_version),
+      {
+          {"data", "Tensor of rank r >= 1.", "T"},
+          {"indices", indices_desc, "Tind"},
+          {"updates", "Tensor of rank r >=1 (same rank and shape as indices)", "T"},
+      },
+      {
+          {"output", "Tensor of rank r >= 1 (same rank as input).", "T"},
+      },
+      {
+          {"T", types, "Input and output types can be of any tensor type."},
+          {"Tind", {TensorType::kInt32, TensorType::kInt64}, "Constrain indices to integer types"},
+      },
+      std::move(attributes));
+  if (since_version >= 11) {
+    schema.set_deprecated(true);
+  }
+  return schema;
+}
+
 LightOpSchema MakeScatterElementsSchema(int since_version, const std::vector<TensorType> &types) {
   std::vector<AttributeParam> attributes;
   attributes.push_back(
@@ -1768,6 +1806,13 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
        [] {
          return std::vector<LightOpSchema>{
              MakeTensorScatterSchema(24, TransposeTypesVer24()),
+         };
+       }},
+      {"Scatter",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeScatterSchema(11, AllTensorTypes()),
+             MakeScatterSchema(9, AllTensorTypes()),
          };
        }},
       {"ScatterElements",

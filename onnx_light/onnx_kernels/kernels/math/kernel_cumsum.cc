@@ -61,7 +61,7 @@ void CumulativeInPlace(const Tensor &x, int64_t axis, bool exclusive, bool rever
                        T identity, Op op) {
   int64_t outer = 0, dim = 0, inner = 0;
   SplitShape(x.shape, axis, outer, dim, inner);
-  const T *px = reinterpret_cast<const T *>(x.data.data());
+  const T *px = reinterpret_cast<const T *>(x.bytes());
   T *py = reinterpret_cast<T *>(output.data.data());
 
   // Iterate over the outer/inner cartesian product and accumulate along the

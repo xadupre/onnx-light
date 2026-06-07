@@ -117,7 +117,8 @@ std::tuple<Tensor, Tensor, Tensor> LayerNormalization::operator()(const Tensor &
   }
   const size_t reduced_bytes = static_cast<size_t>(reduced_elem) * sizeof(float);
 
-  Tensor y("", static_cast<int32_t>(DataType::FLOAT), x.shape, std::vector<uint8_t>(x.data.size()));
+  Tensor y("", static_cast<int32_t>(DataType::FLOAT), x.shape,
+           std::vector<uint8_t>(x.size_bytes()));
   Tensor mean("", static_cast<int32_t>(DataType::FLOAT), reduced_shape,
               std::vector<uint8_t>(reduced_bytes));
   Tensor inv_std_dev("", static_cast<int32_t>(DataType::FLOAT), reduced_shape,
@@ -141,10 +142,10 @@ void LayerNormalization::operator()(const Tensor &x, const Tensor &scale, const 
                       "kernel::LayerNormalization: InvStdDev must be FLOAT.");
   EXT_ENFORCE_INVALID(y.shape == x.shape,
                       "kernel::LayerNormalization: Y must have the same shape as X.");
-  EXT_ENFORCE_INVALID(y.data.size() == x.data.size(),
+  EXT_ENFORCE_INVALID(y.data.size() == x.size_bytes(),
                       "kernel::LayerNormalization: Y buffer must have the same byte size as X.");
 
-  const bool has_bias = !b.shape.empty() || !b.data.empty();
+  const bool has_bias = !b.shape.empty() || b.size_bytes() > 0;
   if (has_bias) {
     EXT_ENFORCE_INVALID(b.data_type == static_cast<int32_t>(DataType::FLOAT),
                         "kernel::LayerNormalization: B must be FLOAT.");

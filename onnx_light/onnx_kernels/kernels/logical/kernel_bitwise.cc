@@ -111,7 +111,7 @@ void BitwiseNotImpl(const char *dtype_name, int32_t dtype, const Tensor &x, Tens
     throw std::invalid_argument(std::string(kBitwiseNotName) +
                                 " preallocated output buffer has unexpected size in bytes.");
   }
-  const T *px = reinterpret_cast<const T *>(x.data.data());
+  const T *px = reinterpret_cast<const T *>(x.bytes());
   T *py = reinterpret_cast<T *>(output.data.data());
   for (int64_t i = 0; i < n; ++i) {
     py[static_cast<size_t>(i)] = static_cast<T>(~px[i]);

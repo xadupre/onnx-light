@@ -116,5 +116,57 @@ template <class InputIt> void RunNodes(InputIt first, InputIt last, RuntimeConte
   }
 }
 
+/**
+ * Runs all nodes in a ``GraphProto`` using the provided runtime context.
+ *
+ * Before executing the node sequence the function seeds ``rt.tensors()``
+ * with every ``TensorProto`` in ``graph.initializer()``, so that
+ * downstream nodes can look up constant values by name.  Graph inputs
+ * that the caller has already placed in ``rt.tensors()`` are left as-is.
+ *
+ * @param graph The graph to evaluate. Its ``node`` list must already be
+ *              in topological order (as required by the ONNX spec).
+ * @param rt    In/out runtime context seeded with the graph inputs;
+ *              on return ``rt.tensors()`` additionally contains every
+ *              node output and every initializer.
+ *
+ * @throws std::invalid_argument if any node cannot be dispatched.
+ */
+void RunGraph(const GraphProto &graph, RuntimeContext &rt);
+
+/**
+ * Runs all nodes in a ``FunctionProto`` using the provided runtime context.
+ *
+ * The caller is responsible for inserting the function's input tensors
+ * into ``rt.tensors()`` before calling this function.  On return
+ * ``rt.tensors()`` additionally contains every node output.
+ *
+ * @param func The function to evaluate. Its ``node`` list must already be
+ *             in topological order.
+ * @param rt   In/out runtime context seeded with the function's inputs;
+ *             on return it additionally contains every node output.
+ *
+ * @throws std::invalid_argument if any node cannot be dispatched.
+ */
+void RunFunction(const FunctionProto &func, RuntimeContext &rt);
+
+/**
+ * Runs the graph embedded in a ``ModelProto`` using the provided runtime
+ * context.
+ *
+ * This is a convenience wrapper that extracts ``model.graph()`` and
+ * delegates to :cpp:func:`RunGraph`.  The caller is responsible for
+ * inserting the model's input tensors into ``rt.tensors()`` beforehand.
+ *
+ * @param model The model whose ``graph`` field will be evaluated.
+ * @param rt    In/out runtime context seeded with the model inputs;
+ *              on return it additionally contains every node output and
+ *              every graph initializer.
+ *
+ * @throws std::invalid_argument if the model has no graph or any node
+ *         cannot be dispatched.
+ */
+void RunModel(const ModelProto &model, RuntimeContext &rt);
+
 } // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

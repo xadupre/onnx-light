@@ -34,7 +34,7 @@ Tensor GroupNormalization::operator()(const Tensor &x, const Tensor &scale, cons
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::GroupNormalization: X must be FLOAT.");
   Tensor out("", static_cast<int32_t>(DataType::FLOAT), x.shape,
-             std::vector<uint8_t>(x.data.size()));
+             std::vector<uint8_t>(x.size_bytes()));
   (*this)(x, scale, bias, num_groups, out, epsilon);
   return out;
 }
@@ -49,7 +49,7 @@ void GroupNormalization::operator()(const Tensor &x, const Tensor &scale, const 
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::GroupNormalization: output must have the same shape as X.");
   EXT_ENFORCE_INVALID(
-      output.data.size() == x.data.size(),
+      output.data.size() == x.size_bytes(),
       "kernel::GroupNormalization: output buffer must have the same byte size as X.");
   EXT_ENFORCE_INVALID(num_groups > 0, "kernel::GroupNormalization: num_groups must be > 0.");
 

@@ -21,7 +21,7 @@ void CheckImageDecoderInput(const Tensor &encoded_stream) {
   EXT_ENFORCE_INVALID(encoded_stream.shape.size() == 1u,
                       "kernel::ImageDecoder input ``encoded_stream`` must be a 1-D tensor "
                       "carrying the encoded bytestream.");
-  EXT_ENFORCE_INVALID(static_cast<int64_t>(encoded_stream.data.size()) ==
+  EXT_ENFORCE_INVALID(static_cast<int64_t>(encoded_stream.size_bytes()) ==
                           encoded_stream.element_count(),
                       "kernel::ImageDecoder input ``encoded_stream`` data size does not "
                       "match its shape.");

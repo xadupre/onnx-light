@@ -168,13 +168,18 @@ uint64_t *Tensor::AsUint64() { return As<uint64_t>(); }
 const uint8_t *Tensor::AsBool() const {
   EXT_ENFORCE_INVALID(data_type == static_cast<int32_t>(DataType::BOOL),
                       "Tensor data_type does not match the requested view type.");
-  return data.data();
+  return bytes();
 }
 
 uint8_t *Tensor::AsBool() {
   EXT_ENFORCE_INVALID(data_type == static_cast<int32_t>(DataType::BOOL),
                       "Tensor data_type does not match the requested view type.");
-  return data.data();
+  // For borrowed tensors borrow_ptr_ is const uint8_t*; const_cast is used so
+  // both owned and borrowed tensors can be accessed through this overload.
+  // Callers must not write through the returned pointer when the tensor is
+  // borrowed — doing so is undefined behaviour if the underlying storage is
+  // immutable.
+  return const_cast<uint8_t *>(bytes());
 }
 
 const std::vector<std::string> &Tensor::AsStrings() const {
@@ -198,6 +203,152 @@ void FillValueInfo(const Tensor &tensor, ValueInfoProto &vi) {
   for (int64_t d : tensor.shape) {
     sh->add_dim()->set_dim_value(d);
   }
+}
+
+Tensor Tensor::Borrow(std::string name, int32_t dtype, std::vector<int64_t> shape,
+                      const uint8_t *ptr, size_t sz) {
+  Tensor t;
+  t.name = std::move(name);
+  t.data_type = dtype;
+  t.shape = std::move(shape);
+  t.borrow_ptr_ = ptr;
+  t.borrow_size_ = sz;
+  return t;
+}
+
+Tensor TensorFromProto(const TensorProto &tp) {
+  // Tensor name.
+  const std::string name = tp.name().as_string();
+
+  // Tensor shape (dims are stored as uint64 in TensorProto).
+  std::vector<int64_t> shape;
+  shape.reserve(tp.dims().size());
+  for (size_t i = 0; i < tp.dims().size(); ++i) {
+    shape.push_back(static_cast<int64_t>(tp.dims()[i]));
+  }
+
+  const int32_t dtype = static_cast<int32_t>(tp.data_type());
+
+  // STRING tensors live in string_data, not in raw/typed bytes.
+  if (dtype == static_cast<int32_t>(DataType::STRING)) {
+    std::vector<std::string> strings;
+    strings.reserve(tp.string_data().size());
+    for (size_t i = 0; i < tp.string_data().size(); ++i) {
+      strings.emplace_back(tp.string_data()[i].as_string());
+    }
+    return Tensor::FromStrings(name, shape, strings);
+  }
+
+  // Raw data path: bytes are already in little-endian layout.
+  // Return a borrowed (zero-copy) view directly into the TensorProto buffer.
+  // The TensorProto must outlive the returned Tensor.
+  if (tp.is_raw_data()) {
+    const auto &rd = tp.raw_data();
+    return Tensor::Borrow(name, dtype, std::move(shape), rd.data(), rd.size());
+  }
+
+  // Typed-field path: convert each field's values into a raw byte vector.
+  std::vector<uint8_t> bytes;
+
+  switch (tp.data_type()) {
+  case TensorProto::DataType::FLOAT: {
+    const auto &fd = tp.float_data().values();
+    bytes.resize(fd.size() * sizeof(float));
+    if (!fd.empty()) {
+      std::memcpy(bytes.data(), fd.data(), bytes.size());
+    }
+    break;
+  }
+  case TensorProto::DataType::DOUBLE: {
+    const auto &dd = tp.double_data().values();
+    bytes.resize(dd.size() * sizeof(double));
+    if (!dd.empty()) {
+      std::memcpy(bytes.data(), dd.data(), bytes.size());
+    }
+    break;
+  }
+  case TensorProto::DataType::INT64: {
+    const auto &i64 = tp.int64_data().values();
+    bytes.resize(i64.size() * sizeof(int64_t));
+    if (!i64.empty()) {
+      std::memcpy(bytes.data(), i64.data(), bytes.size());
+    }
+    break;
+  }
+  case TensorProto::DataType::UINT64: {
+    const auto &u64 = tp.uint64_data().values();
+    bytes.resize(u64.size() * sizeof(uint64_t));
+    if (!u64.empty()) {
+      std::memcpy(bytes.data(), u64.data(), bytes.size());
+    }
+    break;
+  }
+  case TensorProto::DataType::UINT32: {
+    // uint64_data stores uint32 values as uint64; truncate each to 4 bytes.
+    const auto &u64 = tp.uint64_data().values();
+    bytes.resize(u64.size() * sizeof(uint32_t));
+    for (size_t i = 0; i < u64.size(); ++i) {
+      const uint32_t v = static_cast<uint32_t>(u64[i]);
+      std::memcpy(bytes.data() + i * sizeof(uint32_t), &v, sizeof(uint32_t));
+    }
+    break;
+  }
+  case TensorProto::DataType::INT32: {
+    const auto &i32 = tp.int32_data().values();
+    bytes.resize(i32.size() * sizeof(int32_t));
+    if (!i32.empty()) {
+      std::memcpy(bytes.data(), i32.data(), bytes.size());
+    }
+    break;
+  }
+  case TensorProto::DataType::INT16:
+  case TensorProto::DataType::UINT16:
+  case TensorProto::DataType::FLOAT16:
+  case TensorProto::DataType::BFLOAT16: {
+    // int32_data stores one 16-bit element per int32; take the low 2 bytes.
+    const auto &i32 = tp.int32_data().values();
+    bytes.resize(i32.size() * sizeof(uint16_t));
+    for (size_t i = 0; i < i32.size(); ++i) {
+      const uint16_t v = static_cast<uint16_t>(static_cast<uint32_t>(i32[i]));
+      std::memcpy(bytes.data() + i * sizeof(uint16_t), &v, sizeof(uint16_t));
+    }
+    break;
+  }
+  case TensorProto::DataType::INT8:
+  case TensorProto::DataType::UINT8:
+  case TensorProto::DataType::BOOL:
+  case TensorProto::DataType::FLOAT8E4M3FN:
+  case TensorProto::DataType::FLOAT8E4M3FNUZ:
+  case TensorProto::DataType::FLOAT8E5M2:
+  case TensorProto::DataType::FLOAT8E5M2FNUZ:
+  case TensorProto::DataType::FLOAT8E8M0: {
+    // int32_data stores one 8-bit element per int32; take the low byte.
+    const auto &i32 = tp.int32_data().values();
+    bytes.resize(i32.size());
+    for (size_t i = 0; i < i32.size(); ++i) {
+      bytes[i] = static_cast<uint8_t>(static_cast<uint32_t>(i32[i]));
+    }
+    break;
+  }
+  case TensorProto::DataType::INT4:
+  case TensorProto::DataType::UINT4:
+  case TensorProto::DataType::FLOAT4E2M1:
+  case TensorProto::DataType::INT2:
+  case TensorProto::DataType::UINT2: {
+    // Sub-byte packed types: each int32 stores one packed byte (two 4-bit or
+    // four 2-bit elements). Take the low byte of each int32.
+    const auto &i32 = tp.int32_data().values();
+    bytes.resize(i32.size());
+    for (size_t i = 0; i < i32.size(); ++i) {
+      bytes[i] = static_cast<uint8_t>(static_cast<uint32_t>(i32[i]));
+    }
+    break;
+  }
+  default:
+    throw std::invalid_argument("TensorFromProto: unsupported data_type " + std::to_string(dtype));
+  }
+
+  return Tensor(name, dtype, std::move(shape), std::move(bytes));
 }
 
 } // namespace onnx_kernels

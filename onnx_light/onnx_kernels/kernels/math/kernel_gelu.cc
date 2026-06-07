@@ -20,7 +20,7 @@ constexpr const char *kName = "kernel::Gelu";
 
 template <typename T> void ComputeExact(const Tensor &x, Tensor &output) {
   const int64_t n = x.element_count();
-  const T *px = reinterpret_cast<const T *>(x.data.data());
+  const T *px = reinterpret_cast<const T *>(x.bytes());
   T *py = reinterpret_cast<T *>(output.data.data());
   const T inv_sqrt2 = static_cast<T>(1.0L / 1.4142135623730951L);
   const T half = static_cast<T>(0.5);
@@ -33,7 +33,7 @@ template <typename T> void ComputeExact(const Tensor &x, Tensor &output) {
 
 template <typename T> void ComputeTanh(const Tensor &x, Tensor &output) {
   const int64_t n = x.element_count();
-  const T *px = reinterpret_cast<const T *>(x.data.data());
+  const T *px = reinterpret_cast<const T *>(x.bytes());
   T *py = reinterpret_cast<T *>(output.data.data());
   // sqrt(2/pi)
   const T sqrt_2_over_pi = static_cast<T>(0.7978845608028654L);

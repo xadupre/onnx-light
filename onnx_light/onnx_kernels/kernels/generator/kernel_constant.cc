@@ -23,10 +23,10 @@ void Constant::operator()(const Tensor &value, Tensor &output) const {
       "kernel::Constant preallocated output must have the same data type as the value.");
   EXT_ENFORCE_INVALID(output.shape == value.shape,
                       "kernel::Constant preallocated output shape must match the value shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == value.data.size(),
+  EXT_ENFORCE_INVALID(output.data.size() == value.size_bytes(),
                       "kernel::Constant preallocated output buffer has unexpected size in bytes.");
-  if (!value.data.empty()) {
-    std::memcpy(output.data.data(), value.data.data(), value.data.size());
+  if (value.size_bytes() > 0) {
+    std::memcpy(output.data.data(), value.bytes(), value.size_bytes());
   }
 }
 

@@ -146,7 +146,7 @@ void ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_emp
 
   if (noop_with_empty_axes) {
     // Identity: copy input bytes verbatim.
-    std::memcpy(output.data.data(), data.data.data(), data.data.size());
+    std::memcpy(output.data.data(), data.bytes(), data.size_bytes());
     return;
   }
 
@@ -222,7 +222,7 @@ void ReduceSum::operator()(const Tensor &data, const Tensor &axes, bool keepdims
                       "kernel::ReduceSum preallocated output buffer has unexpected size in bytes.");
 
   if (naxes == 0 && noop_with_empty_axes) {
-    std::memcpy(output.data.data(), data.data.data(), data.data.size());
+    std::memcpy(output.data.data(), data.bytes(), data.size_bytes());
     return;
   }
 

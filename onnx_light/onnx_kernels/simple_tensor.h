@@ -39,12 +39,13 @@ struct Tensor {
   int32_t data_type = 0;
   /// Tensor shape; an empty shape denotes a scalar (element_count == 1).
   std::vector<int64_t> shape;
-  /// Raw element bytes in row-major little-endian layout.
+  /// Raw element bytes in row-major little-endian layout (owned storage).
   ///
-  /// Unused (empty) when ``data_type`` is ``DataType::STRING``;
-  /// in that case the element values are stored in ``string_data`` instead
-  /// since UTF-8 strings are variable length and do not have a fixed byte
-  /// stride compatible with this raw buffer.
+  /// Empty when the tensor uses a borrowed (non-owning) view — use
+  /// :cpp:func:`bytes` and :cpp:func:`size_bytes` to access element bytes
+  /// regardless of storage mode.  Also empty when ``data_type`` is
+  /// ``DataType::STRING``; in that case the element values are stored in
+  /// ``string_data`` instead.
   std::vector<uint8_t> data;
 
   /// String element values in row-major layout. Populated only when
@@ -66,6 +67,37 @@ struct Tensor {
     t.string_data = std::move(sd);
     return t;
   }
+
+  /**
+   * Creates a non-owning (borrowed) ``Tensor`` that references an external
+   * byte buffer without copying.
+   *
+   * The pointed-to buffer at ``ptr[0 .. sz-1]`` **MUST** outlive this
+   * ``Tensor``.  Both the const and non-const ``As<T>()`` overloads (and
+   * ``AsBool()``) are available on borrowed tensors; the non-const overloads
+   * return a ``T *`` via ``const_cast``.  Callers must not write through that
+   * pointer if the underlying storage is immutable — doing so is undefined
+   * behaviour.
+   *
+   * @param name  Tensor name.
+   * @param dtype Element data type (a ``DataType`` integer value).
+   * @param shape Tensor shape.
+   * @param ptr   Pointer to the first byte of element data.
+   * @param sz    Total byte count of the element buffer.
+   * @return      A ``Tensor`` backed by the external buffer.
+   */
+  static Tensor Borrow(std::string name, int32_t dtype, std::vector<int64_t> shape,
+                       const uint8_t *ptr, size_t sz);
+
+  /// Returns a pointer to the raw element bytes.
+  /// Works for both owned (``data``) and borrowed (non-owning view) tensors.
+  const uint8_t *bytes() const noexcept {
+    return borrow_ptr_ != nullptr ? borrow_ptr_ : data.data();
+  }
+
+  /// Returns the total number of raw element bytes.
+  /// Works for both owned and borrowed tensors.
+  size_t size_bytes() const noexcept { return borrow_ptr_ != nullptr ? borrow_size_ : data.size(); }
 
   /// Returns the product of all shape dimensions; 1 for an empty shape.
   int64_t element_count() const;
@@ -158,6 +190,13 @@ struct Tensor {
   /// ``DataType::STRING``.
   const std::vector<std::string> &AsStrings() const;
   std::vector<std::string> &AsStrings();
+
+private:
+  /// Non-null only for borrowed (non-owning) tensors created via
+  /// :cpp:func:`Borrow`.  When set, element bytes are read from
+  /// ``borrow_ptr_[0 .. borrow_size_-1]`` rather than from ``data``.
+  const uint8_t *borrow_ptr_ = nullptr;
+  size_t borrow_size_ = 0;
 };
 
 /// Trait mapping a C++ element type to its ``DataType`` value.
@@ -205,13 +244,18 @@ Tensor Tensor::From(const std::string &name, const std::vector<int64_t> &shape,
 template <typename T> const T *Tensor::As() const {
   EXT_ENFORCE_INVALID(data_type == TensorElementType<T>::value,
                       "Tensor data_type does not match the requested view type.");
-  return reinterpret_cast<const T *>(data.data());
+  return reinterpret_cast<const T *>(bytes());
 }
 
 template <typename T> T *Tensor::As() {
   EXT_ENFORCE_INVALID(data_type == TensorElementType<T>::value,
                       "Tensor data_type does not match the requested view type.");
-  return reinterpret_cast<T *>(data.data());
+  // For borrowed tensors borrow_ptr_ is const uint8_t*; const_cast is used so
+  // both owned and borrowed tensors can be accessed through this overload.
+  // Callers must not write through the returned pointer when the tensor is
+  // borrowed — doing so is undefined behaviour if the underlying storage is
+  // immutable (e.g. a string literal or a read-only mapping).
+  return reinterpret_cast<T *>(const_cast<uint8_t *>(bytes()));
 }
 
 /// Returns the size in bytes of one element of ``dtype``
@@ -231,6 +275,24 @@ size_t PackedByteSize(int32_t dtype, int64_t element_count);
 /// Fills ``vi`` with the type/shape information described by ``tensor``.
 /// ``vi.name`` is set to ``tensor.name``.
 void FillValueInfo(const Tensor &tensor, ValueInfoProto &vi);
+
+/**
+ * Converts a ``TensorProto`` to a :cpp:class:`Tensor`.
+ *
+ * Supports all numeric data types stored either in the typed repeated
+ * fields (``float_data``, ``int32_data``, ``int64_data``, ``double_data``,
+ * ``uint64_data``) or in the raw little-endian ``raw_data`` field.
+ * ``STRING`` tensors are read from ``string_data``.
+ *
+ * The resulting ``Tensor::name`` is set from ``tp.name()``; the shape is
+ * taken from ``tp.dims()``.
+ *
+ * @param tp The source ``TensorProto``.
+ * @return   A ``Tensor`` whose data matches the content of ``tp``.
+ *
+ * @throws std::invalid_argument for unsupported ``data_type`` values.
+ */
+Tensor TensorFromProto(const TensorProto &tp);
 
 } // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

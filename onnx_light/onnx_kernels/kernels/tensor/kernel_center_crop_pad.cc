@@ -24,10 +24,10 @@ std::vector<int64_t> ReadShapeTensor(const Tensor &t) {
   std::vector<int64_t> out(n);
   if (t.data_type == DataType::INT64) {
     if (n > 0) {
-      std::memcpy(out.data(), t.data.data(), n * sizeof(int64_t));
+      std::memcpy(out.data(), t.bytes(), n * sizeof(int64_t));
     }
   } else if (t.data_type == DataType::INT32) {
-    const int32_t *p = reinterpret_cast<const int32_t *>(t.data.data());
+    const int32_t *p = reinterpret_cast<const int32_t *>(t.bytes());
     for (std::size_t i = 0; i < n; ++i) {
       out[i] = static_cast<int64_t>(p[i]);
     }
@@ -188,7 +188,7 @@ void CenterCropPad::operator()(const Tensor &input_data, const Tensor &shape,
   const int64_t inner_len = copy_len.back() * static_cast<int64_t>(elem_size);
   const int64_t inner_in_off_base = in_start.back();
   const int64_t inner_out_off_base = out_start.back();
-  const uint8_t *const in_ptr = input_data.data.data();
+  const uint8_t *const in_ptr = input_data.bytes();
   uint8_t *const out_ptr = output.data.data();
 
   while (true) {

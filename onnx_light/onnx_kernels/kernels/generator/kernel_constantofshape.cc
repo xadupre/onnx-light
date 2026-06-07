@@ -63,7 +63,7 @@ std::vector<int64_t> ReadShapeInput(const Tensor &shape) {
   const int64_t n = shape.shape[0];
   std::vector<int64_t> out(static_cast<std::size_t>(n));
   if (n > 0) {
-    std::memcpy(out.data(), shape.data.data(), static_cast<std::size_t>(n) * sizeof(int64_t));
+    std::memcpy(out.data(), shape.bytes(), static_cast<std::size_t>(n) * sizeof(int64_t));
   }
   return out;
 }
@@ -76,17 +76,17 @@ Tensor ConstantOfShape::operator()(const Tensor &shape, const Tensor &value) con
   // Default fill: a single FLOAT 0.0 (per the ONNX schema).
   int32_t out_dtype = value.data_type;
   std::vector<uint8_t> elem_bytes;
-  if (value.data.empty() && value.data_type == 0) {
+  if (value.size_bytes() == 0 && value.data_type == 0) {
     out_dtype = static_cast<int32_t>(DataType::FLOAT);
     elem_bytes.assign(sizeof(float), 0);
   } else {
     EXT_ENFORCE_INVALID(IsSupportedConstantOfShapeDtype(value.data_type),
                         "kernel::ConstantOfShape: unsupported 'value' dtype.");
     const std::size_t es = ElementSize(value.data_type);
-    EXT_ENFORCE_INVALID(value.data.size() == es,
+    EXT_ENFORCE_INVALID(value.size_bytes() == es,
                         "kernel::ConstantOfShape: 'value' attribute must hold exactly one "
                         "element.");
-    elem_bytes.assign(value.data.begin(), value.data.end());
+    elem_bytes.assign(value.bytes(), value.bytes() + value.size_bytes());
   }
 
   const int64_t n = ProductOfShape(out_shape);

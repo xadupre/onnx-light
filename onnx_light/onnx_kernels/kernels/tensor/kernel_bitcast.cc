@@ -79,7 +79,7 @@ Tensor BitCast::operator()(const Tensor &x, int32_t to) const {
   // BitCast preserves the exact bit pattern and the shape: same packed
   // byte size for both input and output. Copy the underlying bytes and
   // relabel the dtype.
-  Tensor y("", to, x.shape, x.data);
+  Tensor y("", to, x.shape, std::vector<uint8_t>(x.bytes(), x.bytes() + x.size_bytes()));
   return y;
 }
 
@@ -92,13 +92,13 @@ void BitCast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
     throw std::invalid_argument(
         "kernel::BitCast: preallocated output shape must match input shape.");
   }
-  if (output.data.size() != x.data.size()) {
+  if (output.data.size() != x.size_bytes()) {
     throw std::invalid_argument(
         "kernel::BitCast: preallocated output buffer has unexpected size in bytes.");
   }
   // Byte-wise copy keeps the bit pattern intact on little-endian hosts
   // (the only ABI exercised by the backend test library).
-  std::copy(x.data.begin(), x.data.end(), output.data.begin());
+  std::memcpy(output.data.data(), x.bytes(), x.size_bytes());
 }
 
 } // namespace kernel

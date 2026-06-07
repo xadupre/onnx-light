@@ -53,7 +53,7 @@ Tensor NonZero::operator()(const Tensor &x) const {
   std::vector<int64_t> nz_indices;
   nz_indices.reserve(static_cast<std::size_t>(total));
   for (int64_t i = 0; i < total; ++i) {
-    if (IsElementNonZero(x.data.data() + static_cast<std::size_t>(i) * elem_size, elem_size)) {
+    if (IsElementNonZero(x.bytes() + static_cast<std::size_t>(i) * elem_size, elem_size)) {
       nz_indices.push_back(i);
     }
   }

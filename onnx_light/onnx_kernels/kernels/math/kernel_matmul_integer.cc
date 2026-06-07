@@ -34,7 +34,7 @@ int32_t ReadIntElem(const Tensor &t, int64_t idx) {
 // tensor must hold exactly one element (scalar shape, or 1-D shape of size 1)
 // matching the dtype of the corresponding data tensor.
 int32_t ReadOptionalScalarZP(const Tensor &t, int32_t expected_dtype, const char *name) {
-  if (t.shape.empty() && t.data.empty()) {
+  if (t.shape.empty() && t.size_bytes() == 0) {
     return 0;
   }
   EXT_ENFORCE_INVALID(t.data_type == expected_dtype,

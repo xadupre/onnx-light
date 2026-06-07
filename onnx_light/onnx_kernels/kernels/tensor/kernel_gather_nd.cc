@@ -49,7 +49,7 @@ std::vector<int64_t> ReadGatherNDIndices(const Tensor &indices) {
   int64_t n = indices.element_count();
   std::vector<int64_t> out(static_cast<std::size_t>(n));
   if (n > 0) {
-    std::memcpy(out.data(), indices.data.data(), static_cast<std::size_t>(n) * sizeof(int64_t));
+    std::memcpy(out.data(), indices.bytes(), static_cast<std::size_t>(n) * sizeof(int64_t));
   }
   return out;
 }
@@ -134,7 +134,7 @@ void GatherND::operator()(const Tensor &data, const Tensor &indices, int64_t bat
       data_offset += idx * data_strides[static_cast<std::size_t>(batch_dims + k)];
     }
     std::memcpy(output.data.data() + static_cast<std::size_t>(t * slice_bytes),
-                data.data.data() +
+                data.bytes() +
                     static_cast<std::size_t>(data_offset) * static_cast<std::size_t>(elem_size),
                 static_cast<std::size_t>(slice_bytes));
   }

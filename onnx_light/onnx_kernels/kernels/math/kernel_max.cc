@@ -70,7 +70,7 @@ Tensor MaxAlloc(const char *dtype_name, int32_t dtype, const std::vector<Tensor>
   }
   Tensor z("", dtype, out_shape, std::vector<uint8_t>(static_cast<size_t>(out_count) * sizeof(T)));
   if (inputs.size() == 1) {
-    std::memcpy(z.data.data(), inputs[0].data.data(),
+    std::memcpy(z.data.data(), inputs[0].bytes(),
                 static_cast<size_t>(inputs[0].element_count()) * sizeof(T));
     return z;
   }
@@ -95,7 +95,7 @@ void MaxInPlace(const char *dtype_name, int32_t dtype, const std::vector<Tensor>
   }();
   detail::CheckPreallocatedOutput(kMaxName, dtype_name, dtype, out_shape, expected_bytes, output);
   if (inputs.size() == 1) {
-    std::memcpy(output.data.data(), inputs[0].data.data(),
+    std::memcpy(output.data.data(), inputs[0].bytes(),
                 static_cast<size_t>(inputs[0].element_count()) * sizeof(T));
     return;
   }

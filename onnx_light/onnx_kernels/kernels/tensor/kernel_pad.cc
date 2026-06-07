@@ -25,7 +25,7 @@ std::vector<int64_t> ReadInt64Vector(const Tensor &t, const std::string &name) {
   const std::size_t n = static_cast<std::size_t>(t.shape[0]);
   std::vector<int64_t> out(n);
   if (n > 0) {
-    std::memcpy(out.data(), t.data.data(), n * sizeof(int64_t));
+    std::memcpy(out.data(), t.bytes(), n * sizeof(int64_t));
   }
   return out;
 }
@@ -47,10 +47,10 @@ std::vector<int64_t> ResolveAxes(const Tensor *axes_tensor, std::size_t rank) {
   axes.resize(n);
   if (axes_tensor->data_type == DataType::INT64) {
     if (n > 0) {
-      std::memcpy(axes.data(), axes_tensor->data.data(), n * sizeof(int64_t));
+      std::memcpy(axes.data(), axes_tensor->bytes(), n * sizeof(int64_t));
     }
   } else if (axes_tensor->data_type == DataType::INT32) {
-    const int32_t *p = reinterpret_cast<const int32_t *>(axes_tensor->data.data());
+    const int32_t *p = reinterpret_cast<const int32_t *>(axes_tensor->bytes());
     for (std::size_t i = 0; i < n; ++i) {
       axes[i] = static_cast<int64_t>(p[i]);
     }
@@ -81,9 +81,9 @@ std::vector<uint8_t> ResolveConstantBytes(const Tensor *cv, int32_t data_type,
                       "kernel::Pad: 'constant_value' dtype must match 'data' dtype.");
   EXT_ENFORCE_INVALID(cv->element_count() == 1,
                       "kernel::Pad: 'constant_value' must be a scalar tensor.");
-  EXT_ENFORCE_INVALID(cv->data.size() == elem_size,
+  EXT_ENFORCE_INVALID(cv->size_bytes() == elem_size,
                       "kernel::Pad: 'constant_value' has unexpected byte size.");
-  return std::vector<uint8_t>(cv->data.begin(), cv->data.end());
+  return std::vector<uint8_t>(cv->bytes(), cv->bytes() + cv->size_bytes());
 }
 
 // Pre-computed row-major strides (in elements).
@@ -249,7 +249,7 @@ void Pad::operator()(const Tensor &data, const Tensor &pads, const Tensor *const
     if (is_pad) {
       std::memcpy(dst, constant_bytes.data(), elem_size);
     } else {
-      std::memcpy(dst, data.data.data() + static_cast<std::size_t>(in_idx) * elem_size, elem_size);
+      std::memcpy(dst, data.bytes() + static_cast<std::size_t>(in_idx) * elem_size, elem_size);
     }
   }
 }

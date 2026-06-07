@@ -251,7 +251,7 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs) con
           },
           attrs.sorted);
     } else {
-      const uint8_t *base = x.data.data();
+      const uint8_t *base = x.bytes();
       groups = ComputeUniqueGroups(
           count,
           [&](int64_t a, int64_t b) {
@@ -284,7 +284,7 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs) con
       };
       groups = ComputeUniqueGroups(count, cmp, attrs.sorted);
     } else {
-      const uint8_t *base = x.data.data();
+      const uint8_t *base = x.bytes();
       const std::size_t block_bytes = static_cast<std::size_t>(inner_elems) * elem_size;
       auto cmp = [&](int64_t ka, int64_t kb) -> int {
         for (int64_t o = 0; o < outer; ++o) {
@@ -328,7 +328,7 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs) con
             static_cast<std::size_t>(groups.first_occurrence[static_cast<std::size_t>(g)]) *
             elem_size;
         const std::size_t dst_off = static_cast<std::size_t>(g) * elem_size;
-        std::memcpy(y.data.data() + dst_off, x.data.data() + src_off, elem_size);
+        std::memcpy(y.data.data() + dst_off, x.bytes() + src_off, elem_size);
       }
       out.y = std::move(y);
     }
@@ -370,7 +370,7 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs) con
               (static_cast<std::size_t>(o) * static_cast<std::size_t>(n_unique) +
                static_cast<std::size_t>(g)) *
               block_bytes;
-          std::memcpy(y.data.data() + dst_off, x.data.data() + src_off, block_bytes);
+          std::memcpy(y.data.data() + dst_off, x.bytes() + src_off, block_bytes);
         }
       }
       out.y = std::move(y);

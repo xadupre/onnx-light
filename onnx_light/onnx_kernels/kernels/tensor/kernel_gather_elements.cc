@@ -26,9 +26,9 @@ std::vector<int64_t> ReadGatherElementsIndices(const Tensor &indices) {
     return out;
   }
   if (indices.data_type == int64_dt) {
-    std::memcpy(out.data(), indices.data.data(), static_cast<std::size_t>(n) * sizeof(int64_t));
+    std::memcpy(out.data(), indices.bytes(), static_cast<std::size_t>(n) * sizeof(int64_t));
   } else {
-    const int32_t *p = reinterpret_cast<const int32_t *>(indices.data.data());
+    const int32_t *p = reinterpret_cast<const int32_t *>(indices.bytes());
     for (int64_t i = 0; i < n; ++i) {
       out[static_cast<std::size_t>(i)] = static_cast<int64_t>(p[i]);
     }
@@ -99,7 +99,7 @@ void GatherElements::operator()(const Tensor &data, const Tensor &indices, int64
       data_idx += c * data_strides[static_cast<std::size_t>(k)];
     }
     std::memcpy(output.data.data() + static_cast<std::size_t>(out_idx) * elem_size,
-                data.data.data() + static_cast<std::size_t>(data_idx) * elem_size, elem_size);
+                data.bytes() + static_cast<std::size_t>(data_idx) * elem_size, elem_size);
   }
 }
 

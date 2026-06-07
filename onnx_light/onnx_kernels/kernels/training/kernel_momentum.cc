@@ -60,10 +60,10 @@ std::vector<Tensor> Momentum::operator()(const Tensor &R, const Tensor &T,
   outputs.reserve(Xs.size() * 2);
   // Layout: X_new_1..N, V_new_1..N.
   for (const auto &X : Xs) {
-    outputs.emplace_back("", DataType::FLOAT, X.shape, std::vector<uint8_t>(X.data.size()));
+    outputs.emplace_back("", DataType::FLOAT, X.shape, std::vector<uint8_t>(X.size_bytes()));
   }
   for (const auto &V : Vs) {
-    outputs.emplace_back("", DataType::FLOAT, V.shape, std::vector<uint8_t>(V.data.size()));
+    outputs.emplace_back("", DataType::FLOAT, V.shape, std::vector<uint8_t>(V.size_bytes()));
   }
   (*this)(R, T, Xs, Gs, Vs, outputs, alpha, beta, norm_coefficient, mode);
   return outputs;

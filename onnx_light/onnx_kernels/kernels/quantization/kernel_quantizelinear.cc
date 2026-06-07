@@ -56,7 +56,7 @@ void QuantizeLoop(const Tensor &x, float y_scale, ZP y_zero_point, Tensor &outpu
 
 template <typename ZP> ZP ReadScalarZeroPoint(const Tensor &y_zero_point) {
   ZP value{};
-  std::memcpy(&value, y_zero_point.data.data(), sizeof(ZP));
+  std::memcpy(&value, y_zero_point.bytes(), sizeof(ZP));
   return value;
 }
 

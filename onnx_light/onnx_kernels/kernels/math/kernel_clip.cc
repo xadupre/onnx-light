@@ -21,7 +21,7 @@ constexpr const char *kClipName = "kernel::Clip";
 template <typename T> T ReadScalar(const Tensor &t) {
   EXT_ENFORCE_INVALID(t.element_count() == 1,
                       std::string(kClipName) + ": min/max must be 0-D (scalar) tensors.");
-  return *reinterpret_cast<const T *>(t.data.data());
+  return *reinterpret_cast<const T *>(t.bytes());
 }
 
 template <typename T>
@@ -29,7 +29,7 @@ void ClipInPlace(const Tensor &x, const Tensor *min, const Tensor *max, Tensor &
   const T lo = min ? ReadScalar<T>(*min) : std::numeric_limits<T>::lowest();
   const T hi = max ? ReadScalar<T>(*max) : std::numeric_limits<T>::max();
   const int64_t n = x.element_count();
-  const T *px = reinterpret_cast<const T *>(x.data.data());
+  const T *px = reinterpret_cast<const T *>(x.bytes());
   T *py = reinterpret_cast<T *>(output.data.data());
   // Matches ONNX semantics: y = Min(max, Max(input, min)). When ``lo > hi``
   // every element is clamped to ``hi``.

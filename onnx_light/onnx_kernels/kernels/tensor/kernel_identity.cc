@@ -30,10 +30,10 @@ void Identity::operator()(const Tensor &input, Tensor &output) const {
                         "kernel::Identity: preallocated string output size mismatch.");
     output.string_data = input.string_data;
   } else {
-    EXT_ENFORCE_INVALID(output.data.size() == input.data.size(),
+    EXT_ENFORCE_INVALID(output.data.size() == input.size_bytes(),
                         "kernel::Identity: preallocated output byte-size mismatch.");
-    if (!input.data.empty()) {
-      std::copy(input.data.begin(), input.data.end(), output.data.begin());
+    if (input.size_bytes() != 0) {
+      std::memcpy(output.data.data(), input.bytes(), input.size_bytes());
     }
   }
 }

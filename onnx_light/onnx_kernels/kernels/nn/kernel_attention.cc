@@ -51,7 +51,7 @@ Tensor PromoteRank3(const Tensor &t, int64_t num_heads, const char *label) {
                           "' hidden_size must be a multiple of ``num_heads``.");
   const int64_t head_size = hidden / num_heads;
   Tensor out("", DataType::FLOAT, {batch, num_heads, seq, head_size},
-             std::vector<uint8_t>(t.data.size()));
+             std::vector<uint8_t>(t.size_bytes()));
   const float *src = t.AsFloat();
   float *dst = out.AsFloat();
   // src strides: (seq*hidden, hidden, 1) over (batch, seq, hidden).
@@ -82,7 +82,7 @@ Tensor CollapseToRank3(const Tensor &t) {
   const int64_t seq = t.shape[2];
   const int64_t head_size = t.shape[3];
   const int64_t hidden = num_heads * head_size;
-  Tensor out("", DataType::FLOAT, {batch, seq, hidden}, std::vector<uint8_t>(t.data.size()));
+  Tensor out("", DataType::FLOAT, {batch, seq, hidden}, std::vector<uint8_t>(t.size_bytes()));
   const float *src = t.AsFloat();
   float *dst = out.AsFloat();
   for (int64_t b = 0; b < batch; ++b) {
@@ -213,7 +213,7 @@ Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, 
   attrs.has_scale = true;
   attrs.scale = scale;
   const Tensor *const mask_ptr =
-      attn_mask.shape.empty() && attn_mask.data.empty() ? nullptr : &attn_mask;
+      attn_mask.shape.empty() && attn_mask.size_bytes() == 0 ? nullptr : &attn_mask;
   return (*this)(Q, K, V, attrs, mask_ptr).Y;
 }
 
@@ -228,9 +228,9 @@ void Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, fl
   EXT_ENFORCE_INVALID(output.shape == r.Y.shape,
                       "kernel::Attention preallocated output shape must be (batch_size, "
                       "q_num_heads, q_seq_len, v_head_size).");
-  EXT_ENFORCE_INVALID(output.data.size() == r.Y.data.size(),
+  EXT_ENFORCE_INVALID(output.size_bytes() == r.Y.size_bytes(),
                       "kernel::Attention preallocated output buffer has unexpected size in bytes.");
-  std::copy(r.Y.data.begin(), r.Y.data.end(), output.data.begin());
+  std::memcpy(output.data.data(), r.Y.bytes(), r.Y.size_bytes());
 }
 
 Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V,

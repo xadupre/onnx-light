@@ -145,7 +145,7 @@ Sequence SplitToSequence::operator()(const Tensor &input, const Tensor *split, i
     const std::size_t out_row_bytes = static_cast<std::size_t>(size) * inner_bytes;
     for (int64_t o = 0; o < outer; ++o) {
       std::memcpy(out.data.data() + static_cast<std::size_t>(o) * out_row_bytes,
-                  input.data.data() + static_cast<std::size_t>(o) * in_row_bytes + offset,
+                  input.bytes() + static_cast<std::size_t>(o) * in_row_bytes + offset,
                   out_row_bytes);
     }
     offset += out_row_bytes;

@@ -426,7 +426,7 @@ void Cast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
         throw std::invalid_argument("kernel::Cast: unsupported sub-byte 'from' dtype.");
       }
     } else {
-      const uint8_t *src = x.data.data();
+      const uint8_t *src = x.bytes();
       const auto from_dt = static_cast<DataType>(x.data_type);
       const auto to_dt = static_cast<DataType>(to);
       for (int64_t i = 0; i < n; ++i) {
@@ -484,7 +484,7 @@ void Cast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
         dst[i] = FloatToFloat8Bits(src[i], to);
       }
     } else {
-      const uint8_t *src = x.data.data();
+      const uint8_t *src = x.bytes();
       float *dst = output.AsFloat();
       for (int64_t i = 0; i < n; ++i) {
         dst[i] = Float8BitsToFloat(src[i], x.data_type);
@@ -524,8 +524,8 @@ void Cast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
   // match. This matches the ONNX semantics for ``to == input dtype`` and
   // avoids a needless double round-trip.
   if (x.data_type == to) {
-    if (!x.data.empty()) {
-      std::memcpy(output.data.data(), x.data.data(), x.data.size());
+    if (x.size_bytes() > 0) {
+      std::memcpy(output.data.data(), x.bytes(), x.size_bytes());
     }
     return;
   }

@@ -199,7 +199,7 @@ void LogSumNoopElementwise(const Tensor &data, ReduceLogSumOp::Mode mode, Tensor
     }
     break;
   case ReduceLogSumOp::Mode::kLogSumExp:
-    std::memcpy(output.data.data(), data.data.data(), data.data.size());
+    std::memcpy(output.data.data(), data.bytes(), data.size_bytes());
     break;
   }
 }

@@ -21,7 +21,7 @@ constexpr const char *kName = "kernel::Celu";
 
 void ComputeInPlace(const Tensor &x, float alpha, Tensor &output) {
   const int64_t n = x.element_count();
-  const float *px = reinterpret_cast<const float *>(x.data.data());
+  const float *px = reinterpret_cast<const float *>(x.bytes());
   float *py = reinterpret_cast<float *>(output.data.data());
   for (int64_t i = 0; i < n; ++i) {
     const float v = px[i];

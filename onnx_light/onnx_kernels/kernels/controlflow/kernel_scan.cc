@@ -34,9 +34,9 @@ std::size_t ElementBytes(const Tensor &t) {
   if (n == 0) {
     return 0;
   }
-  EXT_ENFORCE_INVALID(t.data.size() % static_cast<std::size_t>(n) == 0,
+  EXT_ENFORCE_INVALID(t.size_bytes() % static_cast<std::size_t>(n) == 0,
                       "kernel::Scan: tensor data is not a multiple of its element count.");
-  return t.data.size() / static_cast<std::size_t>(n);
+  return t.size_bytes() / static_cast<std::size_t>(n);
 }
 
 // Stacks the first ``trip_count`` per-iteration tensors along the chosen
@@ -114,7 +114,7 @@ Tensor StackScanOutput(const std::vector<Tensor> &per_iter, int64_t trip_count, 
         const std::size_t src_offset = static_cast<std::size_t>(o * inner) * elt_bytes;
         const std::size_t dst_offset =
             static_cast<std::size_t>(o * trip_count * inner + t * inner) * elt_bytes;
-        std::memcpy(out_data.data() + dst_offset, src.data.data() + src_offset, inner_bytes);
+        std::memcpy(out_data.data() + dst_offset, src.bytes() + src_offset, inner_bytes);
       }
     }
   }

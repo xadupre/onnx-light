@@ -37,10 +37,10 @@ int64_t EffectiveTripCount(const Tensor &M, const Tensor &cond, int64_t per_iter
                         "kernel::Loop: 'M' must be an INT64 tensor when provided.");
     EXT_ENFORCE_INVALID(M.element_count() == 1,
                         "kernel::Loop: 'M' must contain a single element when provided.");
-    EXT_ENFORCE_INVALID(M.data.size() >= sizeof(int64_t),
+    EXT_ENFORCE_INVALID(M.size_bytes() >= sizeof(int64_t),
                         "kernel::Loop: 'M' buffer is too small to hold an INT64.");
     int64_t m_value = 0;
-    std::memcpy(&m_value, M.data.data(), sizeof(int64_t));
+    std::memcpy(&m_value, M.bytes(), sizeof(int64_t));
     EXT_ENFORCE_INVALID(m_value >= 0, "kernel::Loop: 'M' must be non-negative.");
     if (m_value < limit) {
       limit = m_value;
@@ -67,10 +67,10 @@ Tensor StackScanOutput(const std::vector<Tensor> &per_iter, int64_t trip_count) 
     dtype = static_cast<DataType>(first.data_type);
     base_shape = first.shape;
     EXT_ENFORCE_INVALID(first.element_count() == 0 ||
-                            first.data.size() % first.element_count() == 0,
+                            first.size_bytes() % first.element_count() == 0,
                         "kernel::Loop: scan-output tensor data is not a multiple of its element "
                         "count.");
-    elem_bytes = first.element_count() == 0 ? 0 : first.data.size() / first.element_count();
+    elem_bytes = first.element_count() == 0 ? 0 : first.size_bytes() / first.element_count();
   }
   for (int64_t t = 0; t < trip_count; ++t) {
     const Tensor &it = per_iter[static_cast<std::size_t>(t)];
@@ -91,11 +91,11 @@ Tensor StackScanOutput(const std::vector<Tensor> &per_iter, int64_t trip_count) 
   stacked_shape.insert(stacked_shape.end(), base_shape.begin(), base_shape.end());
 
   std::vector<uint8_t> stacked_data;
-  if (trip_count > 0 && elem_bytes > 0 && !per_iter[0].data.empty()) {
-    stacked_data.reserve(static_cast<std::size_t>(trip_count) * per_iter[0].data.size());
+  if (trip_count > 0 && elem_bytes > 0 && per_iter[0].size_bytes() > 0) {
+    stacked_data.reserve(static_cast<std::size_t>(trip_count) * per_iter[0].size_bytes());
     for (int64_t t = 0; t < trip_count; ++t) {
-      const auto &src = per_iter[static_cast<std::size_t>(t)].data;
-      stacked_data.insert(stacked_data.end(), src.begin(), src.end());
+      const Tensor &it = per_iter[static_cast<std::size_t>(t)];
+      stacked_data.insert(stacked_data.end(), it.bytes(), it.bytes() + it.size_bytes());
     }
   }
   return Tensor("", static_cast<int32_t>(dtype), stacked_shape, std::move(stacked_data));

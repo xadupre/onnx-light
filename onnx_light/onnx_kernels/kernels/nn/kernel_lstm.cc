@@ -19,7 +19,7 @@ namespace {
 // when ``t`` is the sentinel default-constructed Tensor, used to indicate
 // that the corresponding optional input is missing).
 const float *AsFloatOrNull(const Tensor &t, const char *role) {
-  if (t.shape.empty() && t.data.empty()) {
+  if (t.shape.empty() && t.size_bytes() == 0) {
     return nullptr;
   }
   EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT),

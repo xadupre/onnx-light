@@ -106,7 +106,7 @@ void Concat::operator()(const std::vector<Tensor> &inputs, int64_t axis, Tensor 
     const size_t block_bytes = axis_dim * inner_bytes;
     for (int64_t o = 0; o < outer; ++o) {
       std::memcpy(output.data.data() + static_cast<size_t>(o) * row_bytes + row_offset,
-                  t.data.data() + static_cast<size_t>(o) * block_bytes, block_bytes);
+                  t.bytes() + static_cast<size_t>(o) * block_bytes, block_bytes);
     }
     row_offset += block_bytes;
   }

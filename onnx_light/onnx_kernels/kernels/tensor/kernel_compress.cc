@@ -32,7 +32,7 @@ std::vector<bool> ReadCondition(const Tensor &condition) {
   EXT_ENFORCE_INVALID(condition.shape.size() == 1, "kernel::Compress: 'condition' must be rank-1.");
   const int64_t n = condition.element_count();
   std::vector<bool> result(static_cast<std::size_t>(n));
-  const uint8_t *ptr = condition.data.data();
+  const uint8_t *ptr = condition.bytes();
   for (int64_t i = 0; i < n; ++i) {
     result[static_cast<std::size_t>(i)] = (ptr[static_cast<std::size_t>(i)] != 0);
   }
@@ -134,7 +134,7 @@ Tensor Compress::operator()(const Tensor &input, const Tensor &condition,
       const int64_t src_base = (o * axis_dim + src_axis) * inner;
       const int64_t dst_base = (o * selected_count + s) * inner;
       std::memcpy(output.data.data() + static_cast<std::size_t>(dst_base) * elem_size,
-                  input.data.data() + static_cast<std::size_t>(src_base) * elem_size,
+                  input.bytes() + static_cast<std::size_t>(src_base) * elem_size,
                   static_cast<std::size_t>(inner) * elem_size);
     }
   }

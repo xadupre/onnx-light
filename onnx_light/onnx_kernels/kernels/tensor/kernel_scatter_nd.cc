@@ -69,7 +69,8 @@ void ReduceSlice(int32_t data_type, uint8_t *out_bytes, const uint8_t *upd_bytes
 
 Tensor ScatterND::operator()(const Tensor &data, const Tensor &indices, const Tensor &updates,
                              const Attributes &attrs) const {
-  Tensor out("", data.data_type, data.shape, data.data);
+  Tensor out("", data.data_type, data.shape,
+             std::vector<uint8_t>(data.bytes(), data.bytes() + data.size_bytes()));
   (*this)(data, indices, updates, attrs, out);
   return out;
 }
@@ -104,10 +105,10 @@ void ScatterND::operator()(const Tensor &data, const Tensor &indices, const Tens
                       "data.shape[indices.shape[-1]:].");
 
   // Initialize output with a copy of data.
-  if (output.data.data() != data.data.data()) {
-    EXT_ENFORCE_INVALID(output.data.size() == data.data.size(),
+  if (output.data.data() != data.bytes()) {
+    EXT_ENFORCE_INVALID(output.data.size() == data.size_bytes(),
                         "kernel::ScatterND: output buffer size must match data.");
-    std::memcpy(output.data.data(), data.data.data(), data.data.size());
+    std::memcpy(output.data.data(), data.bytes(), data.size_bytes());
   }
 
   // Number of index tuples = prod(indices.shape[:-1]).
@@ -130,7 +131,7 @@ void ScatterND::operator()(const Tensor &data, const Tensor &indices, const Tens
   }
 
   const std::size_t elem_size = ElementSize(data.data_type);
-  const int64_t *idx_ptr = reinterpret_cast<const int64_t *>(indices.data.data());
+  const int64_t *idx_ptr = reinterpret_cast<const int64_t *>(indices.bytes());
 
   for (int64_t t = 0; t < n_tuples; ++t) {
     int64_t data_offset = 0;
@@ -144,8 +145,7 @@ void ScatterND::operator()(const Tensor &data, const Tensor &indices, const Tens
       data_offset += v * data_strides[static_cast<std::size_t>(j)];
     }
     uint8_t *dst = output.data.data() + static_cast<std::size_t>(data_offset) * elem_size;
-    const uint8_t *src =
-        updates.data.data() + static_cast<std::size_t>(t * slice_elems) * elem_size;
+    const uint8_t *src = updates.bytes() + static_cast<std::size_t>(t * slice_elems) * elem_size;
     ReduceSlice(data.data_type, dst, src, static_cast<std::size_t>(slice_elems), attrs.reduction);
   }
 }

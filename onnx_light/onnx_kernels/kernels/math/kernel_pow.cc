@@ -127,8 +127,8 @@ detail::BroadcastInfo BroadcastShape(const Tensor &x, const Tensor &y) {
 template <typename TBase, typename TExp>
 void PowDispatchExp(const Tensor &x, const Tensor &y, Tensor &output,
                     const detail::BroadcastInfo &bi) {
-  const TBase *px = reinterpret_cast<const TBase *>(x.data.data());
-  const TExp *py = reinterpret_cast<const TExp *>(y.data.data());
+  const TBase *px = reinterpret_cast<const TBase *>(x.bytes());
+  const TExp *py = reinterpret_cast<const TExp *>(y.bytes());
   TBase *pz = reinterpret_cast<TBase *>(output.data.data());
   PowLoop<TBase, TExp>(bi, px, py, pz);
 }

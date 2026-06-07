@@ -34,7 +34,7 @@ Tensor BatchNormalization::operator()(const Tensor &x, const Tensor &scale, cons
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::BatchNormalization: X must be FLOAT.");
   Tensor out("", static_cast<int32_t>(DataType::FLOAT), x.shape,
-             std::vector<uint8_t>(x.data.size()));
+             std::vector<uint8_t>(x.size_bytes()));
   (*this)(x, scale, bias, input_mean, input_var, out, epsilon);
   return out;
 }
@@ -50,7 +50,7 @@ void BatchNormalization::operator()(const Tensor &x, const Tensor &scale, const 
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::BatchNormalization: output must have the same shape as X.");
   EXT_ENFORCE_INVALID(
-      output.data.size() == x.data.size(),
+      output.data.size() == x.size_bytes(),
       "kernel::BatchNormalization: output buffer must have the same byte size as X.");
 
   // Per the opset 9+ spec, when X is rank 1 it is interpreted as N values

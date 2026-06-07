@@ -74,7 +74,7 @@ void ValidateInputs(const Tensor &theta, const Tensor &size) {
     EXT_ENFORCE_INVALID(theta.shape[1] == 3 && theta.shape[2] == 4,
                         "kernel::AffineGrid: theta must be (N, 3, 4) for 3D.");
   }
-  const int64_t *size_data = reinterpret_cast<const int64_t *>(size.data.data());
+  const int64_t *size_data = reinterpret_cast<const int64_t *>(size.bytes());
   EXT_ENFORCE_INVALID(size_data[0] == theta.shape[0],
                       "kernel::AffineGrid: size[0] must equal theta's batch dim N.");
 }
@@ -82,7 +82,7 @@ void ValidateInputs(const Tensor &theta, const Tensor &size) {
 // Computes the output shape for an AffineGrid call given a fully validated
 // ``size`` input (1-D INT64 of length 4 or 5).
 std::vector<int64_t> ComputeOutputShape(const Tensor &size) {
-  const int64_t *size_data = reinterpret_cast<const int64_t *>(size.data.data());
+  const int64_t *size_data = reinterpret_cast<const int64_t *>(size.bytes());
   std::vector<int64_t> out_shape;
   out_shape.push_back(size_data[0]); // N
   if (size.shape[0] == 4) {
@@ -146,7 +146,7 @@ void AffineGrid::operator()(const Tensor &theta, const Tensor &size, const Attri
                       "kernel::AffineGrid: preallocated output buffer has unexpected size.");
 
   const bool align_corners = attrs.align_corners != 0;
-  const float *theta_data = reinterpret_cast<const float *>(theta.data.data());
+  const float *theta_data = reinterpret_cast<const float *>(theta.bytes());
   float *out_data = reinterpret_cast<float *>(output.data.data());
 
   if (size.shape[0] == 4) {

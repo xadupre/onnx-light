@@ -72,9 +72,9 @@ void Unsqueeze::operator()(const Tensor &data, const std::vector<int64_t> &axes,
     output.string_data = data.string_data;
     return;
   }
-  EXT_ENFORCE_INVALID(output.data.size() == data.data.size(),
+  EXT_ENFORCE_INVALID(output.data.size() == data.size_bytes(),
                       "kernel::Unsqueeze: preallocated output byte-size mismatch.");
-  output.data = data.data;
+  std::memcpy(output.data.data(), data.bytes(), data.size_bytes());
 }
 
 } // namespace kernel

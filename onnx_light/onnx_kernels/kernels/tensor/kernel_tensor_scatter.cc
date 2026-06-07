@@ -111,9 +111,9 @@ void TensorScatter::operator()(const Tensor &past_cache, const Tensor &update,
     output.string_data.assign(past_cache.string_data.begin(), past_cache.string_data.end());
   } else {
     const std::size_t bytes = PackedByteSize(past_cache.data_type, past_cache.element_count());
-    EXT_ENFORCE_INVALID(past_cache.data.size() == bytes,
+    EXT_ENFORCE_INVALID(past_cache.size_bytes() == bytes,
                         "kernel::TensorScatter: 'past_cache' data size mismatch.");
-    std::memcpy(output.data.data(), past_cache.data.data(), bytes);
+    std::memcpy(output.data.data(), past_cache.bytes(), bytes);
   }
 
   // Strides for cache (output) and update tensors (in elements).
@@ -180,7 +180,7 @@ void TensorScatter::operator()(const Tensor &past_cache, const Tensor &update,
         }
       } else {
         std::memcpy(output.data.data() + static_cast<std::size_t>(cache_offset) * elem_size,
-                    update.data.data() + static_cast<std::size_t>(update_offset) * elem_size,
+                    update.bytes() + static_cast<std::size_t>(update_offset) * elem_size,
                     slice_bytes);
       }
     }

@@ -29,13 +29,13 @@ void OptionalGetElement::operator()(const Tensor &input, Tensor &output) const {
       output.shape == input.shape,
       "kernel::OptionalGetElement preallocated output shape must match input shape.");
   EXT_ENFORCE_INVALID(
-      output.data.size() == input.data.size(),
+      output.data.size() == input.size_bytes(),
       "kernel::OptionalGetElement preallocated output buffer has unexpected size in bytes.");
   // Passthrough: the "present" optional is unwrapped to an exact copy of
   // the input. ``std::memmove``-style safety is required so the in-place
   // overload may alias ``input`` and ``output``.
-  if (!output.data.empty() && output.data.data() != input.data.data()) {
-    std::copy(input.data.begin(), input.data.end(), output.data.begin());
+  if (!output.data.empty() && output.data.data() != input.bytes()) {
+    std::memcpy(output.data.data(), input.bytes(), input.size_bytes());
   }
 }
 

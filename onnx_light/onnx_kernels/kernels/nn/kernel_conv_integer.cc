@@ -60,7 +60,7 @@ int32_t ReadElem(const Tensor &t, int64_t idx) {
 }
 
 int32_t ReadScalarOrZero(const Tensor &t) {
-  if (t.shape.empty() && t.data.empty()) {
+  if (t.shape.empty() && t.size_bytes() == 0) {
     return 0;
   }
   return ReadElem(t, 0);
@@ -80,7 +80,7 @@ void ValidateInputs(const Tensor &x, const Tensor &w, const Tensor &x_zp, const 
                       "kernel::ConvInteger: x.shape[1] must equal w.shape[1] * group.");
   EXT_ENFORCE_INVALID(M % attrs.group == 0,
                       "kernel::ConvInteger: w.shape[0] must be divisible by group.");
-  if (!x_zp.shape.empty() || !x_zp.data.empty()) {
+  if (!x_zp.shape.empty() || x_zp.size_bytes() > 0) {
     EXT_ENFORCE_INVALID(x_zp.data_type == x.data_type,
                         "kernel::ConvInteger: x_zero_point dtype must match x.");
     int64_t numel = 1;
@@ -89,7 +89,7 @@ void ValidateInputs(const Tensor &x, const Tensor &w, const Tensor &x_zp, const 
     }
     EXT_ENFORCE_INVALID(numel == 1, "kernel::ConvInteger: x_zero_point must be a scalar.");
   }
-  if (!w_zp.shape.empty() || !w_zp.data.empty()) {
+  if (!w_zp.shape.empty() || w_zp.size_bytes() > 0) {
     EXT_ENFORCE_INVALID(w_zp.data_type == w.data_type,
                         "kernel::ConvInteger: w_zero_point dtype must match w.");
     int64_t numel = 1;
@@ -225,7 +225,7 @@ void ConvInteger::operator()(const Tensor &x, const Tensor &w, const Tensor &x_z
   const int32_t x_zp = ReadScalarOrZero(x_zero_point);
   // Per-channel or scalar w_zp. ``has_w_zp_per_channel`` true means there is
   // a length-M 1-D tensor; otherwise either scalar or absent.
-  const bool w_zp_present = !w_zero_point.shape.empty() || !w_zero_point.data.empty();
+  const bool w_zp_present = !w_zero_point.shape.empty() || w_zero_point.size_bytes() > 0;
   const bool w_zp_per_channel = w_zp_present && !w_zero_point.shape.empty() &&
                                 w_zero_point.shape.size() == 1 && w_zero_point.shape[0] == M;
   const int32_t w_zp_scalar = w_zp_present && !w_zp_per_channel ? ReadElem(w_zero_point, 0) : 0;

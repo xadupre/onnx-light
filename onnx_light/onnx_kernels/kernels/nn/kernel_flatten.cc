@@ -51,10 +51,10 @@ void Flatten::operator()(const Tensor &input, int64_t axis, Tensor &output) cons
                       "kernel::Flatten: preallocated output dtype must match input dtype.");
   EXT_ENFORCE_INVALID(output.shape == out_shape,
                       "kernel::Flatten: preallocated output shape mismatch.");
-  EXT_ENFORCE_INVALID(output.data.size() == input.data.size(),
+  EXT_ENFORCE_INVALID(output.data.size() == input.size_bytes(),
                       "kernel::Flatten: preallocated output byte-size mismatch.");
-  if (!input.data.empty()) {
-    std::memcpy(output.data.data(), input.data.data(), input.data.size());
+  if (input.size_bytes() > 0) {
+    std::memcpy(output.data.data(), input.bytes(), input.size_bytes());
   }
 }
 

@@ -62,7 +62,7 @@ void AccumulateAndScale(const char *dtype_name, int32_t dtype, const std::vector
                         Tensor &output) {
   // Single input: copy verbatim. ``Mean`` of a single tensor is the tensor itself.
   if (inputs.size() == 1) {
-    std::memcpy(output.data.data(), inputs[0].data.data(),
+    std::memcpy(output.data.data(), inputs[0].bytes(),
                 static_cast<size_t>(inputs[0].element_count()) * sizeof(T));
     return;
   }

@@ -8,7 +8,7 @@ Relations between protos
 The following Mermaid graph shows containment relations between ONNX protos.
 Each edge label is the attribute name (or names) that carries the nested proto.
 
-.. runmermaid::
+.. mermaid::
 
     %%{init: {'flowchart': {'useMaxWidth': false, 'nodeSpacing': 60, 'rankSpacing': 70}, 'themeVariables': {'fontSize': '18px'}}}%%
     flowchart TD

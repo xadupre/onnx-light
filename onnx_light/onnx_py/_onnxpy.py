@@ -36,8 +36,16 @@ pay for importing the optim or backend extensions.
 from __future__ import annotations
 
 import importlib
+import sys
+from importlib.abc import Loader, MetaPathFinder
+from importlib.machinery import ModuleSpec
 from types import ModuleType
 from typing import Any
+
+# Marking this module as a (namespace-like) package allows submodule import
+# statements such as ``from onnx_light.onnx_py._onnxpy.shape_inference import
+# ShapesContext`` to be handled by the meta-path finder installed below.
+__path__: list[str] = []
 
 # Ordered list of compiled extension modules to consult when an attribute is
 # looked up.  The order matters: when several extensions expose a value with
@@ -122,3 +130,48 @@ def __dir__() -> list[str]:
             if not n.startswith("_"):
                 names.add(n)
     return sorted(names)
+
+
+class _PreloadedLoader(Loader):
+    """Loader that returns an already-resolved module object."""
+
+    def __init__(self, module: ModuleType) -> None:
+        self._module = module
+
+    def create_module(self, spec: ModuleSpec) -> ModuleType:
+        return self._module
+
+    def exec_module(self, module: ModuleType) -> None:  # pragma: no cover - no-op
+        return None
+
+
+class _SubmoduleFinder(MetaPathFinder):
+    """Resolve submodules of :mod:`onnx_light.onnx_py._onnxpy` via ``__getattr__``.
+
+    This allows statements such as ``from onnx_light.onnx_py._onnxpy.shape_inference
+    import ShapesContext`` to work even though ``_onnxpy`` is implemented as a
+    single ``.py`` file rather than a real package directory.
+    """
+
+    _prefix = __name__ + "."
+
+    def find_spec(self, fullname: str, path: Any = None, target: Any = None) -> ModuleSpec | None:
+        if not fullname.startswith(self._prefix):
+            return None
+        sub = fullname[len(self._prefix) :]
+        if "." in sub or sub.startswith("_"):
+            return None
+        try:
+            value = __getattr__(sub)
+        except AttributeError:
+            return None
+        if not isinstance(value, ModuleType):
+            return None
+        sys.modules[fullname] = value
+        return ModuleSpec(fullname, _PreloadedLoader(value))
+
+
+# Install the finder exactly once; re-imports of this module (e.g. during
+# ``importlib.reload``) must not stack multiple finders.
+if not any(isinstance(_f, _SubmoduleFinder) for _f in sys.meta_path):
+    sys.meta_path.append(_SubmoduleFinder())

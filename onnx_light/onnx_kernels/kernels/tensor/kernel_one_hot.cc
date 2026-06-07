@@ -137,8 +137,8 @@ void OneHot::operator()(const Tensor &indices, const Tensor &depth, const Tensor
                       "kernel::OneHot: preallocated output shape mismatch.");
 
   const std::size_t elem_size = ElementSize(values.data_type);
-  const uint8_t *off_value = values.data.data();
-  const uint8_t *on_value = values.data.data() + elem_size;
+  const uint8_t *off_value = values.bytes();
+  const uint8_t *on_value = values.bytes() + elem_size;
   const int64_t out_count = output.element_count();
 
   // Initialise the whole buffer with ``off_value``.

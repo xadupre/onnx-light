@@ -75,7 +75,7 @@ void Trilu::operator()(const Tensor &input, const Tensor *k, const Trilu::Attrib
     EXT_ENFORCE_INVALID(static_cast<int64_t>(output.string_data.size()) == total,
                         "kernel::Trilu: output string_data size does not match shape.");
   } else {
-    EXT_ENFORCE_INVALID(static_cast<int64_t>(input.data.size()) ==
+    EXT_ENFORCE_INVALID(static_cast<int64_t>(input.size_bytes()) ==
                             static_cast<int64_t>(PackedByteSize(input.data_type, total)),
                         "kernel::Trilu: input data size does not match shape.");
     EXT_ENFORCE_INVALID(static_cast<int64_t>(output.data.size()) ==
@@ -99,7 +99,7 @@ void Trilu::operator()(const Tensor &input, const Tensor *k, const Trilu::Attrib
               keep ? input.string_data[static_cast<std::size_t>(flat)] : std::string();
         } else if (keep) {
           std::memcpy(output.data.data() + static_cast<std::size_t>(flat) * elem_size,
-                      input.data.data() + static_cast<std::size_t>(flat) * elem_size, elem_size);
+                      input.bytes() + static_cast<std::size_t>(flat) * elem_size, elem_size);
         } else {
           std::memset(output.data.data() + static_cast<std::size_t>(flat) * elem_size, 0,
                       elem_size);

@@ -39,7 +39,7 @@ void LogSoftmax::operator()(const Tensor &x, int64_t axis, Tensor &output) const
                       "kernel::LogSoftmax preallocated output must be a FLOAT tensor.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::LogSoftmax preallocated output shape must match input shape.");
-  EXT_ENFORCE_INVALID(output.data.data() != x.data.data(),
+  EXT_ENFORCE_INVALID(output.data.data() != x.bytes(),
                       "kernel::LogSoftmax does not support aliasing input/output buffers.");
 
   const int64_t n = x.element_count();

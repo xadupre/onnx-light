@@ -26,9 +26,9 @@ std::vector<int64_t> ReadIndicesAsInt64(const Tensor &indices, const std::string
     return out;
   }
   if (indices.data_type == int64_dt) {
-    std::memcpy(out.data(), indices.data.data(), static_cast<std::size_t>(n) * sizeof(int64_t));
+    std::memcpy(out.data(), indices.bytes(), static_cast<std::size_t>(n) * sizeof(int64_t));
   } else {
-    const int32_t *p = reinterpret_cast<const int32_t *>(indices.data.data());
+    const int32_t *p = reinterpret_cast<const int32_t *>(indices.bytes());
     for (int64_t i = 0; i < n; ++i) {
       out[static_cast<std::size_t>(i)] = static_cast<int64_t>(p[i]);
     }
@@ -102,8 +102,7 @@ void Gather::operator()(const Tensor &data, const Tensor &indices, int64_t axis,
   const int64_t out_outer_bytes = inner_bytes * q_count;
 
   for (int64_t o = 0; o < outer; ++o) {
-    const uint8_t *data_outer =
-        data.data.data() + static_cast<std::size_t>(o * data_axis_stride_bytes);
+    const uint8_t *data_outer = data.bytes() + static_cast<std::size_t>(o * data_axis_stride_bytes);
     uint8_t *out_outer = output.data.data() + static_cast<std::size_t>(o * out_outer_bytes);
     for (int64_t qi = 0; qi < q_count; ++qi) {
       int64_t idx = idx_values[static_cast<std::size_t>(qi)];

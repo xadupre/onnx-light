@@ -20,10 +20,10 @@ namespace {
 template <typename T> T ReadScalar(const Tensor &t, const char *name) {
   EXT_ENFORCE_INVALID(t.element_count() == 1, "kernel::Range: '", name,
                       "' must be a scalar (single-element) tensor.");
-  EXT_ENFORCE_INVALID(t.data.size() == sizeof(T), "kernel::Range: '", name,
+  EXT_ENFORCE_INVALID(t.size_bytes() == sizeof(T), "kernel::Range: '", name,
                       "' has unexpected byte size.");
   T value;
-  std::memcpy(&value, t.data.data(), sizeof(T));
+  std::memcpy(&value, t.bytes(), sizeof(T));
   return value;
 }
 

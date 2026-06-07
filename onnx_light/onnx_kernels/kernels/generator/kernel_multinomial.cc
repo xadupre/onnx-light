@@ -77,7 +77,7 @@ std::vector<double> ReadLogits(const Tensor &input, int64_t batch_size, int64_t 
     break;
   }
   case DataType::FLOAT16: {
-    const uint16_t *src = reinterpret_cast<const uint16_t *>(input.data.data());
+    const uint16_t *src = reinterpret_cast<const uint16_t *>(input.bytes());
     for (int64_t i = 0; i < n; ++i) {
       logits[static_cast<std::size_t>(i)] = DecodeHalf(src[i]);
     }

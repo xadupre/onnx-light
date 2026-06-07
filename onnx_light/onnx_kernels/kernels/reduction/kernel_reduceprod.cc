@@ -129,7 +129,7 @@ void ReduceProd::operator()(const Tensor &data, bool keepdims, bool noop_with_em
       "kernel::ReduceProd preallocated output buffer has unexpected size in bytes.");
 
   if (noop_with_empty_axes) {
-    std::memcpy(output.data.data(), data.data.data(), data.data.size());
+    std::memcpy(output.data.data(), data.bytes(), data.size_bytes());
     return;
   }
   const std::vector<int64_t> out_shape_noreduce =
@@ -199,7 +199,7 @@ void ReduceProd::operator()(const Tensor &data, const Tensor &axes, bool keepdim
       "kernel::ReduceProd preallocated output buffer has unexpected size in bytes.");
 
   if (naxes == 0 && noop_with_empty_axes) {
-    std::memcpy(output.data.data(), data.data.data(), data.data.size());
+    std::memcpy(output.data.data(), data.bytes(), data.size_bytes());
     return;
   }
   const std::vector<int64_t> out_shape_noreduce =

@@ -290,8 +290,8 @@ void ForEachIndex(const std::vector<int64_t> &shape, std::vector<int64_t> &idx, 
 template <typename T>
 void RunTyped(const Tensor &X, const Tensor &grid, Interp interp, Padding pad, bool align_corners,
               std::vector<uint8_t> &out_bytes, const std::vector<int64_t> &out_shape) {
-  const T *x_data = reinterpret_cast<const T *>(X.data.data());
-  const T *grid_data = reinterpret_cast<const T *>(grid.data.data());
+  const T *x_data = reinterpret_cast<const T *>(X.bytes());
+  const T *grid_data = reinterpret_cast<const T *>(grid.bytes());
   T *y_data = reinterpret_cast<T *>(out_bytes.data());
 
   const int64_t N = X.shape[0];

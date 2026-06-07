@@ -29,7 +29,7 @@ void Not::operator()(const Tensor &x, Tensor &output) const {
   const size_t expected_bytes = static_cast<size_t>(n);
   EXT_ENFORCE_INVALID(output.data.size() == expected_bytes,
                       "kernel::Not preallocated output buffer has unexpected size in bytes.");
-  const uint8_t *px = x.data.data();
+  const uint8_t *px = x.bytes();
   uint8_t *py = output.data.data();
   for (int64_t i = 0; i < n; ++i) {
     py[static_cast<size_t>(i)] = static_cast<uint8_t>(px[i] == 0 ? 1 : 0);

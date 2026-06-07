@@ -53,10 +53,10 @@ void ComputeZipMapOutput(const Tensor &x, const std::vector<T> &class_labels, Te
                       "kernel::ZipMap preallocated output dtype must be float.");
   EXT_ENFORCE_INVALID(output.shape == expected_shape,
                       "kernel::ZipMap preallocated output shape is incorrect.");
-  EXT_ENFORCE_INVALID(output.data.size() == x.data.size(),
+  EXT_ENFORCE_INVALID(output.data.size() == x.size_bytes(),
                       "kernel::ZipMap preallocated output buffer is incorrectly sized.");
-  if (!x.data.empty()) {
-    std::memcpy(output.data.data(), x.data.data(), x.data.size());
+  if (x.size_bytes() > 0) {
+    std::memcpy(output.data.data(), x.bytes(), x.size_bytes());
   }
 }
 

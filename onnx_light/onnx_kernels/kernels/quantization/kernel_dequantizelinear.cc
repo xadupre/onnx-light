@@ -28,7 +28,7 @@ inline void RequireScalar(const Tensor &t, const char *name) {
 
 template <typename XT>
 void DequantizeLoop(const Tensor &x, float x_scale, XT x_zero_point, Tensor &output) {
-  const XT *px = reinterpret_cast<const XT *>(x.data.data());
+  const XT *px = reinterpret_cast<const XT *>(x.bytes());
   float *py = output.AsFloat();
   const int64_t n = x.element_count();
   const float zp = static_cast<float>(x_zero_point);
@@ -59,7 +59,7 @@ inline Float8Decoder Float8DecoderFor(int32_t dtype) noexcept {
 
 inline void DequantizeFloat8Loop(const Tensor &x, float x_scale, float x_zero_point,
                                  Float8Decoder decode, Tensor &output) {
-  const std::uint8_t *px = x.data.data();
+  const std::uint8_t *px = x.bytes();
   float *py = output.AsFloat();
   const int64_t n = x.element_count();
   for (int64_t i = 0; i < n; ++i) {
@@ -143,26 +143,26 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
   const float scale = x_scale.AsFloat()[0];
   switch (x.data_type) {
   case static_cast<int32_t>(DataType::UINT8):
-    DequantizeLoop<uint8_t>(x, scale, static_cast<uint8_t>(x_zero_point.data[0]), output);
+    DequantizeLoop<uint8_t>(x, scale, static_cast<uint8_t>(x_zero_point.bytes()[0]), output);
     break;
   case static_cast<int32_t>(DataType::INT8):
-    DequantizeLoop<int8_t>(x, scale, static_cast<int8_t>(x_zero_point.data[0]), output);
+    DequantizeLoop<int8_t>(x, scale, static_cast<int8_t>(x_zero_point.bytes()[0]), output);
     break;
   case static_cast<int32_t>(DataType::UINT16): {
     uint16_t zp;
-    std::memcpy(&zp, x_zero_point.data.data(), sizeof(uint16_t));
+    std::memcpy(&zp, x_zero_point.bytes(), sizeof(uint16_t));
     DequantizeLoop<uint16_t>(x, scale, zp, output);
     break;
   }
   case static_cast<int32_t>(DataType::INT16): {
     int16_t zp;
-    std::memcpy(&zp, x_zero_point.data.data(), sizeof(int16_t));
+    std::memcpy(&zp, x_zero_point.bytes(), sizeof(int16_t));
     DequantizeLoop<int16_t>(x, scale, zp, output);
     break;
   }
   case static_cast<int32_t>(DataType::INT32): {
     int32_t zp;
-    std::memcpy(&zp, x_zero_point.data.data(), sizeof(int32_t));
+    std::memcpy(&zp, x_zero_point.bytes(), sizeof(int32_t));
     DequantizeLoop<int32_t>(x, scale, zp, output);
     break;
   }

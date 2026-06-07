@@ -17,7 +17,7 @@ Tensor If::operator()(const Tensor &cond, const Tensor &then_value,
   // the in-place overload enforces this); the in-place overload writes into
   // ``out.data`` below.
   Tensor out("", then_value.data_type, then_value.shape,
-             std::vector<uint8_t>(then_value.data.size()));
+             std::vector<uint8_t>(then_value.size_bytes()));
   (*this)(cond, then_value, else_value, out);
   return out;
 }
@@ -37,13 +37,13 @@ void If::operator()(const Tensor &cond, const Tensor &then_value, const Tensor &
       "kernel::If preallocated output must have the same data type as the branches.");
   EXT_ENFORCE_INVALID(output.shape == then_value.shape,
                       "kernel::If preallocated output shape must match the branch shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == then_value.data.size(),
+  EXT_ENFORCE_INVALID(output.data.size() == then_value.size_bytes(),
                       "kernel::If preallocated output buffer has unexpected size in bytes.");
 
-  const bool taken = cond.data[0] != 0;
+  const bool taken = cond.bytes()[0] != 0;
   const Tensor &src = taken ? then_value : else_value;
-  if (!src.data.empty()) {
-    std::memcpy(output.data.data(), src.data.data(), src.data.size());
+  if (src.size_bytes() > 0) {
+    std::memcpy(output.data.data(), src.bytes(), src.size_bytes());
   }
 }
 

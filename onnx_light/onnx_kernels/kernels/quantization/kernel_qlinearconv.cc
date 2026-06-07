@@ -220,7 +220,7 @@ void QLinearConv::operator()(const Tensor &x, const Tensor &x_scale, const Tenso
   const bool w_scale_per_channel = w_scale_numel == M;
   const bool w_zp_per_channel = w_zp_numel == M;
 
-  const bool has_bias = !B.shape.empty() || !B.data.empty();
+  const bool has_bias = !B.shape.empty() || B.size_bytes() > 0;
   if (has_bias) {
     EXT_ENFORCE_INVALID(B.data_type == static_cast<int32_t>(DataType::INT32),
                         std::string(kName) + ": B must be INT32.");

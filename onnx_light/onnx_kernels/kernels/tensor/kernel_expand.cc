@@ -27,7 +27,7 @@ std::vector<int64_t> ReadExpandShapeInput(const Tensor &shape) {
   const int64_t n = shape.shape[0];
   std::vector<int64_t> out(static_cast<std::size_t>(n));
   if (n > 0) {
-    std::memcpy(out.data(), shape.data.data(), static_cast<std::size_t>(n) * sizeof(int64_t));
+    std::memcpy(out.data(), shape.bytes(), static_cast<std::size_t>(n) * sizeof(int64_t));
   }
   return out;
 }
@@ -139,7 +139,7 @@ void Expand::operator()(const Tensor &input, const Tensor &shape, Tensor &output
       // contributing nothing to in_idx.
     }
     std::memcpy(output.data.data() + static_cast<std::size_t>(out_idx) * layout.elem_size,
-                input.data.data() + static_cast<std::size_t>(in_idx) * layout.elem_size,
+                input.bytes() + static_cast<std::size_t>(in_idx) * layout.elem_size,
                 layout.elem_size);
   }
 }

@@ -26,7 +26,7 @@ std::vector<int64_t> ReadTileRepeatsInput(const Tensor &repeats, std::size_t inp
                       "kernel::Tile: 'repeats' length must equal the rank of 'input'.");
   std::vector<int64_t> out(static_cast<std::size_t>(n));
   if (n > 0) {
-    std::memcpy(out.data(), repeats.data.data(), static_cast<std::size_t>(n) * sizeof(int64_t));
+    std::memcpy(out.data(), repeats.bytes(), static_cast<std::size_t>(n) * sizeof(int64_t));
   }
   for (int64_t r : out) {
     EXT_ENFORCE_INVALID(r >= 0, "kernel::Tile: 'repeats' values must be non-negative.");
@@ -105,7 +105,7 @@ void Tile::operator()(const Tensor &input, const Tensor &repeats, Tensor &output
       in_idx += in_coord * in_strides[k];
     }
     std::memcpy(output.data.data() + static_cast<std::size_t>(out_idx) * elem_size,
-                input.data.data() + static_cast<std::size_t>(in_idx) * elem_size, elem_size);
+                input.bytes() + static_cast<std::size_t>(in_idx) * elem_size, elem_size);
   }
 }
 

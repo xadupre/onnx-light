@@ -47,7 +47,7 @@ std::vector<double> ReadProbabilities(const Tensor &input) {
   case DataType::FLOAT16: {
     // FLOAT16 is stored as a 2-byte stride; convert via the IEEE-754
     // half-precision encoding.
-    const uint16_t *src = reinterpret_cast<const uint16_t *>(input.data.data());
+    const uint16_t *src = reinterpret_cast<const uint16_t *>(input.bytes());
     for (int64_t i = 0; i < n; ++i) {
       const uint16_t h = src[i];
       const uint32_t sign = (h >> 15) & 0x1u;

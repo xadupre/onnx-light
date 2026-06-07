@@ -130,7 +130,7 @@ void CopyConcatenated(const std::vector<Tensor> &inputs, int resolved_axis,
       const size_t slab_bytes = static_cast<size_t>(in_axis_dim * inner) * elem_size;
       const size_t in_offset = static_cast<size_t>(o) * slab_bytes;
       if (slab_bytes > 0) {
-        std::memcpy(output_bytes.data() + out_offset, in.data.data() + in_offset, slab_bytes);
+        std::memcpy(output_bytes.data() + out_offset, in.bytes() + in_offset, slab_bytes);
       }
       out_offset += slab_bytes;
     }

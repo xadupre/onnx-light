@@ -27,9 +27,9 @@ std::vector<int64_t> ReadScatterElementsIndices(const Tensor &indices) {
     return out;
   }
   if (indices.data_type == int64_dt) {
-    std::memcpy(out.data(), indices.data.data(), static_cast<std::size_t>(n) * sizeof(int64_t));
+    std::memcpy(out.data(), indices.bytes(), static_cast<std::size_t>(n) * sizeof(int64_t));
   } else {
-    const int32_t *p = reinterpret_cast<const int32_t *>(indices.data.data());
+    const int32_t *p = reinterpret_cast<const int32_t *>(indices.bytes());
     for (int64_t i = 0; i < n; ++i) {
       out[static_cast<std::size_t>(i)] = static_cast<int64_t>(p[i]);
     }
@@ -44,7 +44,7 @@ void ApplyScatterElementsTyped(const Tensor &updates, std::vector<uint8_t> &out_
                                const std::vector<int64_t> &idx_strides,
                                const std::string &reduction, int64_t r) {
   T *out = reinterpret_cast<T *>(out_bytes.data());
-  const T *upd = reinterpret_cast<const T *>(updates.data.data());
+  const T *upd = reinterpret_cast<const T *>(updates.bytes());
   const int64_t total = static_cast<int64_t>(idx_values.size());
   std::vector<int64_t> coord(static_cast<std::size_t>(r), 0);
   for (int64_t u_idx = 0; u_idx < total; ++u_idx) {
@@ -114,10 +114,10 @@ void ScatterElements::operator()(const Tensor &data, const Tensor &indices, cons
 
   // Initialize output as a copy of data (when caller passes a fresh tensor, it
   // may already share storage with data; only copy when the buffers differ).
-  if (output.data.data() != data.data.data()) {
-    EXT_ENFORCE_INVALID(output.data.size() == data.data.size(),
+  if (output.data.data() != data.bytes()) {
+    EXT_ENFORCE_INVALID(output.data.size() == data.size_bytes(),
                         "kernel::ScatterElements: output buffer size must match data.");
-    std::memcpy(output.data.data(), data.data.data(), data.data.size());
+    std::memcpy(output.data.data(), data.bytes(), data.size_bytes());
   }
 
   const std::vector<int64_t> idx_values = ReadScatterElementsIndices(indices);
@@ -179,7 +179,7 @@ void ScatterElements::operator()(const Tensor &data, const Tensor &indices, cons
         data_idx += c * data_strides[static_cast<std::size_t>(k)];
       }
       std::memcpy(output.data.data() + static_cast<std::size_t>(data_idx) * elem_size,
-                  updates.data.data() + static_cast<std::size_t>(u_idx) * elem_size, elem_size);
+                  updates.bytes() + static_cast<std::size_t>(u_idx) * elem_size, elem_size);
     }
   }
 }

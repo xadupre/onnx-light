@@ -31,7 +31,7 @@ std::vector<float> ReadUpsampleScales(const Tensor &scales, std::size_t rank) {
                       "kernel::Upsample: 'scales' length must equal the rank of 'X'.");
   std::vector<float> out(static_cast<std::size_t>(n));
   if (n > 0) {
-    std::memcpy(out.data(), scales.data.data(), static_cast<std::size_t>(n) * sizeof(float));
+    std::memcpy(out.data(), scales.bytes(), static_cast<std::size_t>(n) * sizeof(float));
   }
   for (float s : out) {
     EXT_ENFORCE_INVALID(s >= 1.0f, "kernel::Upsample: 'scales' values must be >= 1.");
@@ -71,7 +71,7 @@ void UpsampleNearest(const Tensor &input, const std::vector<float> &scales,
     }
   }
 
-  const uint8_t *const in_ptr = input.data.data();
+  const uint8_t *const in_ptr = input.bytes();
   uint8_t *const out_ptr = output.data.data();
 
   for (int64_t out_idx = 0; out_idx < total_elements; ++out_idx) {
@@ -98,7 +98,7 @@ void UpsampleNearest(const Tensor &input, const std::vector<float> &scales,
 // Reads a single element of ``input`` at flat index ``idx`` as a double,
 // for the floating-point element types supported by the "linear" mode.
 double LoadFloat(const Tensor &input, int64_t idx) {
-  const uint8_t *const base = input.data.data();
+  const uint8_t *const base = input.bytes();
   switch (input.data_type) {
   case DataType::FLOAT: {
     float v;

@@ -78,8 +78,8 @@ void BinaryElementwise(const char *op_name, const char *dtype_name, int32_t expe
   const size_t expected_bytes = static_cast<size_t>(bi.element_count) * sizeof(TOut);
   CheckPreallocatedOutput(op_name, dtype_name, expected_dtype, bi.shape, expected_bytes, output);
 
-  const TIn *px = reinterpret_cast<const TIn *>(x.data.data());
-  const TIn *py = reinterpret_cast<const TIn *>(y.data.data());
+  const TIn *px = reinterpret_cast<const TIn *>(x.bytes());
+  const TIn *py = reinterpret_cast<const TIn *>(y.bytes());
   TOut *pz = reinterpret_cast<TOut *>(output.data.data());
 
   // Fast paths: equal-shape and scalar broadcasting.
@@ -145,8 +145,8 @@ void BinaryElementwiseInOut(const char *op_name, const char *in_dtype_name, int3
   const size_t expected_bytes = static_cast<size_t>(bi.element_count) * sizeof(TOut);
   CheckPreallocatedOutput(op_name, out_dtype_name, out_dtype, bi.shape, expected_bytes, output);
 
-  const TIn *px = reinterpret_cast<const TIn *>(x.data.data());
-  const TIn *py = reinterpret_cast<const TIn *>(y.data.data());
+  const TIn *px = reinterpret_cast<const TIn *>(x.bytes());
+  const TIn *py = reinterpret_cast<const TIn *>(y.bytes());
   TOut *pz = reinterpret_cast<TOut *>(output.data.data());
 
   if (x.shape == y.shape) {

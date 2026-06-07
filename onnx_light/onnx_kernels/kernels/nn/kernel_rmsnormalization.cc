@@ -50,7 +50,7 @@ Tensor RMSNormalization::operator()(const Tensor &x, const Tensor &scale, int64_
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::RMSNormalization: X must be FLOAT.");
   Tensor out("", static_cast<int32_t>(DataType::FLOAT), x.shape,
-             std::vector<uint8_t>(x.data.size()));
+             std::vector<uint8_t>(x.size_bytes()));
   (*this)(x, scale, out, axis, epsilon);
   return out;
 }
@@ -65,7 +65,7 @@ void RMSNormalization::operator()(const Tensor &x, const Tensor &scale, Tensor &
                       "kernel::RMSNormalization: output must be FLOAT.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::RMSNormalization: output must have the same shape as X.");
-  EXT_ENFORCE_INVALID(output.data.size() == x.data.size(),
+  EXT_ENFORCE_INVALID(output.data.size() == x.size_bytes(),
                       "kernel::RMSNormalization: output buffer must have the same byte size as X.");
 
   const int64_t rank = static_cast<int64_t>(x.shape.size());

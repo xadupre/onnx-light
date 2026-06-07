@@ -88,7 +88,7 @@ void Transpose::operator()(const Tensor &data, const std::vector<int64_t> &perm,
       in_idx += coord * in_strides[static_cast<std::size_t>(resolved_perm[i])];
     }
     std::memcpy(output.data.data() + static_cast<std::size_t>(out_idx) * elem_size,
-                data.data.data() + static_cast<std::size_t>(in_idx) * elem_size, elem_size);
+                data.bytes() + static_cast<std::size_t>(in_idx) * elem_size, elem_size);
   }
 }
 

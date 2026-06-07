@@ -34,7 +34,7 @@ Tensor InstanceNormalization::operator()(const Tensor &x, const Tensor &scale, c
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::InstanceNormalization: X must be FLOAT.");
   Tensor out("", static_cast<int32_t>(DataType::FLOAT), x.shape,
-             std::vector<uint8_t>(x.data.size()));
+             std::vector<uint8_t>(x.size_bytes()));
   (*this)(x, scale, bias, out, epsilon);
   return out;
 }
@@ -50,7 +50,7 @@ void InstanceNormalization::operator()(const Tensor &x, const Tensor &scale, con
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::InstanceNormalization: output must have the same shape as X.");
   EXT_ENFORCE_INVALID(
-      output.data.size() == x.data.size(),
+      output.data.size() == x.size_bytes(),
       "kernel::InstanceNormalization: output buffer must have the same byte size as X.");
 
   const int64_t N = x.shape[0];

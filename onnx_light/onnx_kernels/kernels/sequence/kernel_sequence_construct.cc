@@ -32,13 +32,13 @@ void ValidateInputsAndComputeShape(const std::vector<Tensor> &inputs,
   EXT_ENFORCE_INVALID(first.data_type != 0,
                       "kernel::SequenceConstruct: input element type must be a defined "
                       "DataType.");
-  const size_t per_elem_bytes = first.data.size();
+  const size_t per_elem_bytes = first.size_bytes();
   for (size_t i = 1; i < inputs.size(); ++i) {
     EXT_ENFORCE_INVALID(inputs[i].data_type == first.data_type,
                         "kernel::SequenceConstruct: all inputs must share the same data_type.");
     EXT_ENFORCE_INVALID(inputs[i].shape == first.shape,
                         "kernel::SequenceConstruct: all inputs must share the same shape.");
-    EXT_ENFORCE_INVALID(inputs[i].data.size() == per_elem_bytes,
+    EXT_ENFORCE_INVALID(inputs[i].size_bytes() == per_elem_bytes,
                         "kernel::SequenceConstruct: all inputs must share the same byte size.");
   }
   stacked_shape.clear();
@@ -76,10 +76,10 @@ void SequenceConstruct::operator()(const std::vector<Tensor> &inputs, Tensor &ou
       "kernel::SequenceConstruct preallocated output buffer has unexpected size in bytes.");
   size_t offset = 0;
   for (const Tensor &in : inputs) {
-    if (!in.data.empty()) {
-      std::copy(in.data.begin(), in.data.end(), output.data.begin() + offset);
+    if (in.size_bytes() > 0) {
+      std::memcpy(output.data.data() + offset, in.bytes(), in.size_bytes());
     }
-    offset += in.data.size();
+    offset += in.size_bytes();
   }
 }
 

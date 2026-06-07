@@ -168,12 +168,14 @@ uint64_t *Tensor::AsUint64() { return As<uint64_t>(); }
 const uint8_t *Tensor::AsBool() const {
   EXT_ENFORCE_INVALID(data_type == static_cast<int32_t>(DataType::BOOL),
                       "Tensor data_type does not match the requested view type.");
-  return data.data();
+  return bytes();
 }
 
 uint8_t *Tensor::AsBool() {
   EXT_ENFORCE_INVALID(data_type == static_cast<int32_t>(DataType::BOOL),
                       "Tensor data_type does not match the requested view type.");
+  EXT_ENFORCE_INVALID(borrow_ptr_ == nullptr,
+                      "Tensor::AsBool(): cannot return mutable view of a borrowed tensor.");
   return data.data();
 }
 
@@ -200,6 +202,17 @@ void FillValueInfo(const Tensor &tensor, ValueInfoProto &vi) {
   }
 }
 
+Tensor Tensor::Borrow(std::string name, int32_t dtype, std::vector<int64_t> shape,
+                      const uint8_t *ptr, size_t sz) {
+  Tensor t;
+  t.name = std::move(name);
+  t.data_type = dtype;
+  t.shape = std::move(shape);
+  t.borrow_ptr_ = ptr;
+  t.borrow_size_ = sz;
+  return t;
+}
+
 Tensor TensorFromProto(const TensorProto &tp) {
   // Tensor name.
   const std::string name = tp.name().as_string();
@@ -224,10 +237,11 @@ Tensor TensorFromProto(const TensorProto &tp) {
   }
 
   // Raw data path: bytes are already in little-endian layout.
+  // Return a borrowed (zero-copy) view directly into the TensorProto buffer.
+  // The TensorProto must outlive the returned Tensor.
   if (tp.is_raw_data()) {
     const auto &rd = tp.raw_data();
-    std::vector<uint8_t> bytes(rd.data(), rd.data() + rd.size());
-    return Tensor(name, dtype, std::move(shape), std::move(bytes));
+    return Tensor::Borrow(name, dtype, std::move(shape), rd.data(), rd.size());
   }
 
   // Typed-field path: convert each field's values into a raw byte vector.

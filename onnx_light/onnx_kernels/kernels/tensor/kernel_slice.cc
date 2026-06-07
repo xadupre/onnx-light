@@ -25,12 +25,12 @@ std::vector<int64_t> ReadIntInput(const Tensor &t, const std::string &name) {
     return out;
   }
   if (t.data_type == static_cast<int32_t>(DataType::INT64)) {
-    std::memcpy(out.data(), t.data.data(), static_cast<std::size_t>(n) * sizeof(int64_t));
+    std::memcpy(out.data(), t.bytes(), static_cast<std::size_t>(n) * sizeof(int64_t));
     return out;
   }
   EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::INT32),
                       "kernel::Slice: '" + name + "' input must be INT32 or INT64.");
-  const int32_t *p = reinterpret_cast<const int32_t *>(t.data.data());
+  const int32_t *p = reinterpret_cast<const int32_t *>(t.bytes());
   for (int64_t i = 0; i < n; ++i) {
     out[static_cast<std::size_t>(i)] = static_cast<int64_t>(p[i]);
   }
@@ -185,7 +185,7 @@ void Slice::operator()(const Tensor &data, const Tensor &starts, const Tensor &e
       in_idx += in_coord * layout.in_strides[axis];
     }
     std::memcpy(output.data.data() + static_cast<std::size_t>(out_idx) * layout.elem_size,
-                data.data.data() + static_cast<std::size_t>(in_idx) * layout.elem_size,
+                data.bytes() + static_cast<std::size_t>(in_idx) * layout.elem_size,
                 layout.elem_size);
   }
 }

@@ -66,10 +66,10 @@ std::vector<Tensor> Adagrad::operator()(const Tensor &R, const Tensor &T,
   outputs.reserve(Xs.size() * 2);
   // Layout: X_new_1..N, H_new_1..N.
   for (const auto &X : Xs) {
-    outputs.emplace_back("", DataType::FLOAT, X.shape, std::vector<uint8_t>(X.data.size()));
+    outputs.emplace_back("", DataType::FLOAT, X.shape, std::vector<uint8_t>(X.size_bytes()));
   }
   for (const auto &H : Hs) {
-    outputs.emplace_back("", DataType::FLOAT, H.shape, std::vector<uint8_t>(H.data.size()));
+    outputs.emplace_back("", DataType::FLOAT, H.shape, std::vector<uint8_t>(H.size_bytes()));
   }
   (*this)(R, T, Xs, Gs, Hs, outputs, epsilon, decay_factor, norm_coefficient);
   return outputs;

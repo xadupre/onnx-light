@@ -25,7 +25,7 @@ std::vector<int64_t> ReadShapeTensor(const Tensor &shape) {
   const int64_t n = shape.shape[0];
   std::vector<int64_t> out(static_cast<std::size_t>(n));
   if (n > 0) {
-    std::memcpy(out.data(), shape.data.data(), static_cast<std::size_t>(n) * sizeof(int64_t));
+    std::memcpy(out.data(), shape.bytes(), static_cast<std::size_t>(n) * sizeof(int64_t));
   }
   return out;
 }
@@ -111,9 +111,9 @@ void Reshape::operator()(const Tensor &data, const Tensor &shape, int64_t allowz
                       "kernel::Reshape: preallocated output dtype must match input dtype.");
   EXT_ENFORCE_INVALID(output.shape == out_shape,
                       "kernel::Reshape: preallocated output shape mismatch.");
-  EXT_ENFORCE_INVALID(output.data.size() == data.data.size(),
+  EXT_ENFORCE_INVALID(output.data.size() == data.size_bytes(),
                       "kernel::Reshape: preallocated output byte-size mismatch.");
-  std::memcpy(output.data.data(), data.data.data(), data.data.size());
+  std::memcpy(output.data.data(), data.bytes(), data.size_bytes());
 }
 
 } // namespace kernel

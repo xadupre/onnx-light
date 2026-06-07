@@ -31,7 +31,7 @@ std::vector<float> ReadResizeScales(const Tensor &scales, std::size_t expected_l
                       "kernel::Resize: 'scales' length must match the number of resized axes.");
   std::vector<float> out(static_cast<std::size_t>(n));
   if (n > 0) {
-    std::memcpy(out.data(), scales.data.data(), static_cast<std::size_t>(n) * sizeof(float));
+    std::memcpy(out.data(), scales.bytes(), static_cast<std::size_t>(n) * sizeof(float));
   }
   for (float s : out) {
     EXT_ENFORCE_INVALID(s > 0.0f, "kernel::Resize: 'scales' values must be > 0.");
@@ -50,7 +50,7 @@ std::vector<int64_t> ReadResizeSizes(const Tensor &sizes, std::size_t expected_l
                       "kernel::Resize: 'sizes' length must match the number of resized axes.");
   std::vector<int64_t> out(static_cast<std::size_t>(n));
   if (n > 0) {
-    std::memcpy(out.data(), sizes.data.data(), static_cast<std::size_t>(n) * sizeof(int64_t));
+    std::memcpy(out.data(), sizes.bytes(), static_cast<std::size_t>(n) * sizeof(int64_t));
   }
   for (int64_t s : out) {
     EXT_ENFORCE_INVALID(s > 0, "kernel::Resize: 'sizes' values must be > 0.");
@@ -174,7 +174,7 @@ void ResizeNearest(const Tensor &input, const std::vector<float> &scales,
     }
   }
 
-  const uint8_t *const in_ptr = input.data.data();
+  const uint8_t *const in_ptr = input.bytes();
   uint8_t *const out_ptr = output.data.data();
 
   for (int64_t out_idx = 0; out_idx < total_elements; ++out_idx) {

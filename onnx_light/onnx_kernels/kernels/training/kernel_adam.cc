@@ -66,13 +66,13 @@ std::vector<Tensor> Adam::operator()(const Tensor &R, const Tensor &T,
   outputs.reserve(Xs.size() * 3);
   // Layout: X_final_1..N, V_new_1..N, H_new_1..N.
   for (const auto &X : Xs) {
-    outputs.emplace_back("", DataType::FLOAT, X.shape, std::vector<uint8_t>(X.data.size()));
+    outputs.emplace_back("", DataType::FLOAT, X.shape, std::vector<uint8_t>(X.size_bytes()));
   }
   for (const auto &V : Vs) {
-    outputs.emplace_back("", DataType::FLOAT, V.shape, std::vector<uint8_t>(V.data.size()));
+    outputs.emplace_back("", DataType::FLOAT, V.shape, std::vector<uint8_t>(V.size_bytes()));
   }
   for (const auto &H : Hs) {
-    outputs.emplace_back("", DataType::FLOAT, H.shape, std::vector<uint8_t>(H.data.size()));
+    outputs.emplace_back("", DataType::FLOAT, H.shape, std::vector<uint8_t>(H.size_bytes()));
   }
   (*this)(R, T, Xs, Gs, Vs, Hs, outputs, alpha, beta, epsilon, norm_coefficient,
           norm_coefficient_post);

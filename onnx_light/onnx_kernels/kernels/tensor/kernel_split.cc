@@ -100,8 +100,7 @@ std::vector<Tensor> Split::operator()(const Tensor &input, int64_t axis,
     const size_t out_row_bytes = static_cast<size_t>(size) * inner_bytes;
     for (int64_t o = 0; o < outer; ++o) {
       std::memcpy(out.data.data() + static_cast<size_t>(o) * out_row_bytes,
-                  input.data.data() + static_cast<size_t>(o) * in_row_bytes + offset,
-                  out_row_bytes);
+                  input.bytes() + static_cast<size_t>(o) * in_row_bytes + offset, out_row_bytes);
     }
     offset += out_row_bytes;
     outputs.push_back(std::move(out));

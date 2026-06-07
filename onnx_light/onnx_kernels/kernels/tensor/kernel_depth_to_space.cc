@@ -70,7 +70,7 @@ void DepthToSpace::operator()(const Tensor &input, const Attributes &attrs, Tens
   const int64_t out_stride_c = H_out * W_out;
   const int64_t out_stride_h = W_out;
 
-  const uint8_t *const in_ptr = input.data.data();
+  const uint8_t *const in_ptr = input.bytes();
   uint8_t *const out_ptr = output.data.data();
 
   for (int64_t n = 0; n < N; ++n) {

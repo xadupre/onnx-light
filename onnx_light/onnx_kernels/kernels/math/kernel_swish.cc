@@ -20,7 +20,7 @@ constexpr const char *kName = "kernel::Swish";
 
 template <typename T> void ComputeInPlace(const Tensor &x, T alpha, Tensor &output) {
   const int64_t n = x.element_count();
-  const T *px = reinterpret_cast<const T *>(x.data.data());
+  const T *px = reinterpret_cast<const T *>(x.bytes());
   T *py = reinterpret_cast<T *>(output.data.data());
   for (int64_t i = 0; i < n; ++i) {
     const T v = px[i];

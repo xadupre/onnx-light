@@ -55,7 +55,7 @@ Tensor RotaryEmbedding::operator()(const Tensor &X, const Tensor &cos_cache,
   output.shape = X.shape;
   output.data.assign(X.data.size(), 0);
   const Tensor *pos =
-      position_ids.shape.empty() && position_ids.data.empty() && position_ids.data_type == 0
+      position_ids.shape.empty() && position_ids.size_bytes() == 0 && position_ids.data_type == 0
           ? nullptr
           : &position_ids;
   (*this)(X, cos_cache, sin_cache, pos, attrs, output);

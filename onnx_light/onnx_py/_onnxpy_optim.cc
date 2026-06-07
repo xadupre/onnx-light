@@ -392,8 +392,10 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           },
           nb::arg("name"), nb::arg("tensor"),
           "Inserts or replaces the tensor descriptor stored under ``name``.")
-      .def("has", &onnx_shapes::ShapesContext::Has, nb::arg("name"),
-           "True when a tensor descriptor is stored under ``name``.")
+      .def(
+          "has",
+          [](const onnx_shapes::ShapesContext &c, const std::string &name) { return c.Has(name); },
+          nb::arg("name"), "True when a tensor descriptor is stored under ``name``.")
       .def(
           "get",
           [](const onnx_shapes::ShapesContext &c, const std::string &name) -> OptimTensor {
@@ -463,8 +465,12 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           },
           "Returns the list of names of stored tensor descriptors.")
       // Sequence descriptors
-      .def("has_sequence", &onnx_shapes::ShapesContext::HasSequence, nb::arg("name"),
-           "True when a sequence descriptor is stored under ``name``.")
+      .def(
+          "has_sequence",
+          [](const onnx_shapes::ShapesContext &c, const std::string &name) {
+            return c.HasSequence(name);
+          },
+          nb::arg("name"), "True when a sequence descriptor is stored under ``name``.")
       .def("sequences_size", &onnx_shapes::ShapesContext::SequencesSize,
            "Number of sequence descriptors currently stored.")
       .def(

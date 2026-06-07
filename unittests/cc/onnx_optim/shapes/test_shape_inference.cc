@@ -49,6 +49,20 @@ TEST(OnnxOptimShapeInference, DispatchesAbs) {
   EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
 }
 
+TEST(OnnxOptimShapeInference, SupportsUtilsStringLookupForNodeOutput) {
+  NodeProto node = MakeNode("Abs", {"X"}, {"Y"});
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  const auto &output_name = node.output(0);
+  ASSERT_TRUE(ctx.Has(output_name));
+  EXPECT_EQ(ctx.Get(output_name),
+            onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+}
+
 TEST(OnnxOptimShapeInference, DispatchesAddWithBroadcast) {
   NodeProto node = MakeNode("Add", {"A", "B"}, {"C"});
   onnx_optim::shapes::ShapesContext ctx;

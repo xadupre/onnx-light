@@ -5,6 +5,7 @@
 #include "onnx_backend_test/test_case.h"
 #include "onnx_lib/checker.h"
 #include "onnx_lib/shape_inference/implementation.h"
+#include "onnx_optim/optim_tensor.h"
 #include "onnx_optim/shapes/shape_inference.h"
 
 #include <gtest/gtest.h>
@@ -704,6 +705,61 @@ TEST(BackendTestCaseShapeInference, OnnxOptimSupportsNestedLocalFunctionCall) {
     EXPECT_EQ(dims[1].ref_dim_param().as_string(), "d_model");
   }
   ASSERT_TRUE(found) << "test_cc_shape_inference_nested_local_function_add case not registered";
+}
+
+// ---------------------------------------------------------------------------
+// onnx_optim shape inference + Shape→Identity→Unsqueeze
+// ---------------------------------------------------------------------------
+//
+// Verifies that the ``onnx_optim`` shape-inference pipeline can handle the
+// ``Shape → Identity → Unsqueeze`` case registered by
+// :cpp:func:`RegisterShapeIdentityUnsqueezeShapeInferenceCases`. The
+// ``Unsqueeze`` output rank equals ``kAxisCount + 1``; the case must keep
+// ``kAxisCount`` small enough that the inferred rank stays within
+// :cpp:var:`onnx_optim::kMaxOptimRank` (currently 16). A regression here
+// (e.g. raising ``kAxisCount`` back to 16, producing a rank-17 output)
+// would cause :cpp:func:`onnx_optim::shapes::InferShapesModel` to throw
+// ``std::length_error("OptimShape exceeds maximum rank")``.
+TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeIdentityUnsqueeze) {
+  const std::vector<TestCase> cases = CollectTestCases("Shape");
+  bool found = false;
+  for (const TestCase &tc : cases) {
+    if (tc.name != "test_cc_shape_inference_shape_identity_unsqueeze") {
+      continue;
+    }
+    found = true;
+
+    ModelProto model_copy;
+    std::string serialized;
+    tc.model.SerializeToString(serialized);
+    model_copy.ParseFromString(serialized);
+
+    // Strip the recorded output shape and intermediate value_info so optim
+    // shape inference has to recover them from scratch.
+    auto &outputs = model_copy.mutable_graph()->ref_output();
+    ASSERT_EQ(outputs.size(), 1u);
+    auto *tt = MutableTensorTypeOf(*outputs[0].mutable_type());
+    ASSERT_NE(tt, nullptr);
+    tt->clear_shape();
+    model_copy.mutable_graph()->mutable_value_info()->clear();
+
+    ASSERT_NO_THROW(onnx_optim::shapes::InferShapesModel(model_copy)) << "case: " << tc.name;
+
+    const ValueInfoProto &out = model_copy.ref_graph().ref_output()[0];
+    ASSERT_TRUE(out.has_type());
+    const TypeProto::Tensor *out_tt = TensorTypeOf(out.ref_type());
+    ASSERT_NE(out_tt, nullptr);
+    ASSERT_TRUE(out_tt->has_shape());
+    // Expected rank: ``kAxisCount + 1``. We do not require optim shape
+    // inference to recover concrete dim values here; the original
+    // regression was an unconditional throw from ``OptimShape`` whenever
+    // the inferred rank exceeded ``kMaxOptimRank``. Just verifying the
+    // rank pins down that the rank is now within the bound.
+    const auto inferred = DimsOf(*out_tt);
+    EXPECT_FALSE(inferred.empty());
+    EXPECT_LE(inferred.size(), onnx_optim::kMaxOptimRank);
+  }
+  ASSERT_TRUE(found) << "test_cc_shape_inference_shape_identity_unsqueeze case not registered";
 }
 
 } // namespace Test

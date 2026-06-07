@@ -89,3 +89,26 @@ def test_unknown_attribute_raises_attribute_error() -> None:
             print("ok")
         """)
     assert out.strip() == "ok"
+
+
+def test_submodule_import_from_shape_inference() -> None:
+    """Direct submodule imports such as ``from ..._onnxpy.shape_inference import X`` work."""
+    out = _run("""
+        from onnx_light.onnx_py._onnxpy.shape_inference import ShapesContext
+        from onnx_light.onnx_py._onnxpy.shape_inference import infer_shapes
+        import onnx_light.onnx_py._onnxpy.shape_inference as si
+        assert ShapesContext is si.ShapesContext
+        assert infer_shapes is si.infer_shapes
+        print("ok")
+        """)
+    assert out.strip() == "ok"
+
+
+def test_unknown_submodule_raises_module_not_found() -> None:
+    out = _run("""
+        try:
+            import onnx_light.onnx_py._onnxpy.does_not_exist  # noqa: F401
+        except ModuleNotFoundError:
+            print("ok")
+        """)
+    assert out.strip() == "ok"

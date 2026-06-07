@@ -7,8 +7,19 @@
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/simple_tensor.h"
 
+#include <string>
+#include <vector>
+
 namespace ONNX_LIGHT_NAMESPACE {
+
+// Forward declarations to avoid pulling the full proto / runtime headers
+// into every translation unit that needs only the kernel signatures.
+class GraphProto;
+
 namespace onnx_kernels {
+
+class RuntimeContext;
+
 namespace kernel {
 
 // ---------------------------------------------------------------------------
@@ -109,29 +120,87 @@ public:
 
 /// Reference implementation of the ONNX ``Scan`` operator.
 ///
-/// Like :class:`Loop`, this kernel does not execute the ``body`` subgraph
-/// itself; it consumes already-evaluated state and per-iteration values and
-/// merely validates and assembles the operator's outputs:
+/// Two ``operator()`` overloads are provided:
 ///
-///   * each of the ``N`` final state values is forwarded verbatim from the
-///     caller-provided ``final_state`` tensors (or from ``initial_state``
-///     when the trip count is zero);
+///   * a *body-aware* overload that takes the Scan ``body`` subgraph, the
+///     initial state and the per-axis scan inputs, executes the body once
+///     per iteration through :cpp:func:`onnx_kernels::RunSubgraph`, and
+///     returns the operator's full output list. This is the overload used
+///     when the kernel is invoked from the runtime dispatcher
+///     (:cpp:func:`onnx_kernels::RunNode`);
+///   * a *stacking-only* overload that consumes already-evaluated state
+///     and per-iteration values and merely assembles the operator's
+///     outputs. It is retained for legacy callers and for tests that want
+///     to exercise the stacking semantics in isolation, without standing
+///     up a runtime context.
+///
+/// For both overloads:
+///
+///   * each of the ``N`` final state values is returned as either the
+///     final body-produced state (when the trip count is non-zero) or
+///     the corresponding ``initial_state`` entry (when the trip count
+///     is zero);
 ///   * each of the ``K`` scan outputs is built by stacking the
-///     caller-provided per-iteration values along a new axis whose
-///     position is ``scan_output_axes[k]`` (default 0 &mdash; new leading
-///     axis) and whose length equals the trip count. When
-///     ``scan_output_directions[k]`` equals ``1`` the per-iteration values
-///     are reversed before stacking (prepend semantics).
-///
-/// The kernel is therefore a faithful reference for the operator's
-/// composition/stacking semantics that is useful for shape and
-/// type-propagation tests while keeping the implementation independent
-/// from any graph executor.
+///     per-iteration values along a new axis whose position is
+///     ``scan_output_axes[k]`` (default 0 &mdash; new leading axis) and
+///     whose length equals the trip count. When
+///     ``scan_output_directions[k]`` equals ``1`` the per-iteration
+///     values are reversed before stacking (prepend semantics).
 class Scan : public KernelBase {
 public:
   using KernelBase::KernelBase;
 
-  /// Returning overload.
+  /// Body-aware overload.
+  ///
+  /// Iterates the Scan ``body`` subgraph for the trip count implied by
+  /// the scan inputs, threading the state forward across iterations and
+  /// collecting the per-iteration scan outputs, then returns the
+  /// stacked operator outputs.
+  ///
+  /// @param body                    The Scan body subgraph. Its first
+  ///                                ``N`` formal inputs are bound to the
+  ///                                current state, its next ``M`` formal
+  ///                                inputs are bound to the per-iteration
+  ///                                scan-input slices, its first ``N``
+  ///                                outputs become the next state, and its
+  ///                                remaining ``K`` outputs are the
+  ///                                per-iteration scan outputs.
+  /// @param initial_state           Initial state values (size ``N``).
+  /// @param scan_inputs             Per-axis scan inputs (size ``M``).
+  ///                                Each must have rank at least 1; the
+  ///                                axis given by ``scan_input_axes`` is
+  ///                                consumed one element at a time and
+  ///                                determines the trip count.
+  /// @param rt                      Runtime context used to evaluate
+  ///                                ``body``. The body is executed in a
+  ///                                fresh child context per iteration so
+  ///                                it cannot mutate ``rt.tensors()``.
+  /// @param scan_input_axes         Per-scan-input axis along which the
+  ///                                input is sliced. When empty, axis 0
+  ///                                is used for every scan input.
+  ///                                Negative values count from the back
+  ///                                of the scan input's rank. When
+  ///                                non-empty, must have ``M`` entries.
+  /// @param scan_input_directions   Per-scan-input direction (0 =
+  ///                                forward, 1 = reverse). When empty,
+  ///                                all scan inputs use the forward
+  ///                                direction. When non-empty, must
+  ///                                have ``M`` entries.
+  /// @param scan_output_axes        Per-scan-output axis at which the
+  ///                                new stacking axis is inserted (see
+  ///                                the stacking-only overload).
+  /// @param scan_output_directions  Per-scan-output direction (see the
+  ///                                stacking-only overload).
+  /// @return ``N + K`` tensors: the final state values followed by the
+  ///         stacked scan outputs.
+  std::vector<Tensor> operator()(const GraphProto &body, const std::vector<Tensor> &initial_state,
+                                 const std::vector<Tensor> &scan_inputs, RuntimeContext &rt,
+                                 const std::vector<int64_t> &scan_input_axes = {},
+                                 const std::vector<int64_t> &scan_input_directions = {},
+                                 const std::vector<int64_t> &scan_output_axes = {},
+                                 const std::vector<int64_t> &scan_output_directions = {}) const;
+
+  /// Stacking-only overload.
   ///
   /// @param trip_count               Number of iterations actually executed
   ///                                 (non-negative).

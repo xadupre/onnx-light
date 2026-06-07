@@ -52,9 +52,11 @@ void AddGraphOutputTensor(GraphProto &g, const std::string &name, TensorProto::D
 //   outputs: (y_elt [FLOAT scalar-row])
 //
 // The body has no state variables (N == 0) and produces one scan output
-// (K == 1). The reference kernel does not execute the body; it is included
-// in the model purely so the registered ``TestCase`` is a well-formed ONNX
-// model with a valid ``Scan`` node.
+// (K == 1). The body is now executed end-to-end by ``RunScanNode`` (which
+// delegates to ``kernel::Scan``'s body-aware overload); we still keep the
+// pre-computed per-iteration outputs in the test registration so the
+// stacking-only overload can be exercised independently to derive the
+// expected output without depending on a runtime.
 GraphProto BuildSimpleScanBody() {
   GraphProto g;
   g.set_name("scan_body");
@@ -239,10 +241,10 @@ void RegisterScanCases(std::vector<TestCase> &registry) {
   //   - test_scan9_multi_state   (opset 9, two state variables)
   //   - test_scan9_scalar        (opset 9, scalar state and scan output)
   //
-  // The reference kernel only stacks per-iteration scan outputs; we compute
-  // the expected per-iteration ``scan_out`` slices and the final state
-  // externally so the registered ``TestCase`` exposes a well-formed model
-  // with deterministic expected outputs.
+  // ``kernel::Scan``'s body-aware overload now executes the body
+  // end-to-end inside the kernel, so the registered ``TestCase`` is a
+  // well-formed model with deterministic expected outputs computed
+  // externally for cross-checking.
   // -------------------------------------------------------------------------
 
   // test_scan_sum (opset 8): outer batch dim of size 1.
@@ -303,6 +305,92 @@ void RegisterScanCases(std::vector<TestCase> &registry) {
     const Tensor y("", DataType::FLOAT, {}, FloatBytes({15.f}));
     const Tensor z("", DataType::FLOAT, {5}, FloatBytes({1.f, 3.f, 6.f, 10.f, 15.f}));
     Expect(node, {initial, x}, {y, z}, "test_scan9_scalar", {opset9}, "backend-test", registry);
+  }
+
+  // -------------------------------------------------------------------------
+  // Additional opset-9 cases exercising the optional Scan attributes that
+  // upstream onnx does not cover in its node tests but are part of the
+  // operator's spec (and now end-to-end driven by ``kernel::Scan``'s
+  // body-aware overload).
+  // -------------------------------------------------------------------------
+
+  // Helper that injects a list-of-ints attribute into a NodeProto.
+  auto add_ints_attr = [](NodeProto &node, const std::string &name,
+                          const std::vector<int64_t> &values) {
+    AttributeProto *a = node.add_attribute();
+    a->set_name(name);
+    a->set_type(AttributeProto::AttributeType::INTS);
+    for (int64_t v : values) {
+      a->add_ints(v);
+    }
+  };
+
+  // test_cc_scan9_input_reverse (opset 9): scan_input_directions=[1] iterates
+  // x in reverse. With initial=0 and x=[1,2,3,4,5] the per-iter sums become
+  // [5,9,12,14,15] and the final state stays 15.
+  {
+    const OpsetId opset9 = DefaultOpset(9);
+    NodeProto node = MakeScanNodeWithBody({"initial", "x"}, {"y", "z"}, BuildSumScanBody(),
+                                          /*num_scan_inputs=*/1);
+    add_ints_attr(node, "scan_input_directions", {1});
+    const Tensor initial("", DataType::FLOAT, {}, FloatBytes({0.f}));
+    const Tensor x("", DataType::FLOAT, {5}, FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f}));
+    const Tensor y("", DataType::FLOAT, {}, FloatBytes({15.f}));
+    const Tensor z("", DataType::FLOAT, {5}, FloatBytes({5.f, 9.f, 12.f, 14.f, 15.f}));
+    Expect(node, {initial, x}, {y, z}, "test_cc_scan9_input_reverse", {opset9}, "backend-test",
+           registry);
+  }
+
+  // test_cc_scan9_output_reverse (opset 9): scan_output_directions=[1] reverses
+  // the stacked scan output. Per-iter sums [1,3,6,10,15] become [15,10,6,3,1].
+  {
+    const OpsetId opset9 = DefaultOpset(9);
+    NodeProto node = MakeScanNodeWithBody({"initial", "x"}, {"y", "z"}, BuildSumScanBody(),
+                                          /*num_scan_inputs=*/1);
+    add_ints_attr(node, "scan_output_directions", {1});
+    const Tensor initial("", DataType::FLOAT, {}, FloatBytes({0.f}));
+    const Tensor x("", DataType::FLOAT, {5}, FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f}));
+    const Tensor y("", DataType::FLOAT, {}, FloatBytes({15.f}));
+    const Tensor z("", DataType::FLOAT, {5}, FloatBytes({15.f, 10.f, 6.f, 3.f, 1.f}));
+    Expect(node, {initial, x}, {y, z}, "test_cc_scan9_output_reverse", {opset9}, "backend-test",
+           registry);
+  }
+
+  // test_cc_scan9_output_axis1 (opset 9): scan_output_axes=[1] places the
+  // trip-count axis as the *trailing* axis. initial=[0,0] [2],
+  // x=[[1,2],[3,4],[5,6]] [3,2] gives per-iter sums [[1,2],[4,6],[9,12]]
+  // which, stacked along axis 1 of the rank-2 per-iter element [2], yields
+  // shape [2, 3] = [[1, 4, 9], [2, 6, 12]] in row-major order.
+  {
+    const OpsetId opset9 = DefaultOpset(9);
+    NodeProto node = MakeScanNodeWithBody({"initial", "x"}, {"y", "z"}, BuildSumScanBody(),
+                                          /*num_scan_inputs=*/1);
+    add_ints_attr(node, "scan_output_axes", {1});
+    const Tensor initial("", DataType::FLOAT, {2}, FloatBytes({0.f, 0.f}));
+    const Tensor x("", DataType::FLOAT, {3, 2}, FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f, 6.f}));
+    const Tensor y("", DataType::FLOAT, {2}, FloatBytes({9.f, 12.f}));
+    const Tensor z("", DataType::FLOAT, {2, 3}, FloatBytes({1.f, 4.f, 9.f, 2.f, 6.f, 12.f}));
+    Expect(node, {initial, x}, {y, z}, "test_cc_scan9_output_axis1", {opset9}, "backend-test",
+           registry);
+  }
+
+  // test_cc_scan9_input_axis_negative (opset 9): scan_input_axes=[-1] uses
+  // the trailing dim as the scan axis. With x shape [2, 3] and the trailing
+  // axis being the scan axis, the per-iter slices are columns of x:
+  // [1,4], [2,5], [3,6]. Sum-accumulated, the final state is [6, 15] and
+  // the per-iter sums stacked along axis 0 give shape [3, 2] =
+  // [[1,4],[3,9],[6,15]].
+  {
+    const OpsetId opset9 = DefaultOpset(9);
+    NodeProto node = MakeScanNodeWithBody({"initial", "x"}, {"y", "z"}, BuildSumScanBody(),
+                                          /*num_scan_inputs=*/1);
+    add_ints_attr(node, "scan_input_axes", {-1});
+    const Tensor initial("", DataType::FLOAT, {2}, FloatBytes({0.f, 0.f}));
+    const Tensor x("", DataType::FLOAT, {2, 3}, FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f, 6.f}));
+    const Tensor y("", DataType::FLOAT, {2}, FloatBytes({6.f, 15.f}));
+    const Tensor z("", DataType::FLOAT, {3, 2}, FloatBytes({1.f, 4.f, 3.f, 9.f, 6.f, 15.f}));
+    Expect(node, {initial, x}, {y, z}, "test_cc_scan9_input_axis_negative", {opset9},
+           "backend-test", registry);
   }
 }
 

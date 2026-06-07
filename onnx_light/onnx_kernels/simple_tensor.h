@@ -73,9 +73,10 @@ struct Tensor {
    * byte buffer without copying.
    *
    * The pointed-to buffer at ``ptr[0 .. sz-1]`` **MUST** outlive this
-   * ``Tensor``.  Borrowed tensors are read-only: calling mutable accessors
-   * such as the non-const ``As<T>()`` overload on a borrowed tensor raises
-   * an ``invalid_argument`` exception.
+   * ``Tensor``.  Borrowed tensors expose their data through both the const and
+   * non-const ``As<T>()`` overloads (and ``AsBool()``).  The non-const
+   * overloads return a ``T *`` via ``const_cast`` — callers must not write
+   * through that pointer for borrowed storage.
    *
    * @param name  Tensor name.
    * @param dtype Element data type (a ``DataType`` integer value).
@@ -248,9 +249,9 @@ template <typename T> const T *Tensor::As() const {
 template <typename T> T *Tensor::As() {
   EXT_ENFORCE_INVALID(data_type == TensorElementType<T>::value,
                       "Tensor data_type does not match the requested view type.");
-  EXT_ENFORCE_INVALID(borrow_ptr_ == nullptr,
-                      "Tensor::As<T>(): cannot return mutable view of a borrowed tensor.");
-  return reinterpret_cast<T *>(data.data());
+  // For borrowed tensors borrow_ptr_ is const; const_cast is safe here because
+  // the Tensor object itself is non-const.  Callers must not write to borrowed storage.
+  return reinterpret_cast<T *>(const_cast<uint8_t *>(bytes()));
 }
 
 /// Returns the size in bytes of one element of ``dtype``

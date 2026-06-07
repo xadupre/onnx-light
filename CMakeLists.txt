@@ -131,14 +131,28 @@ set(ONNX_LIGHT_LIB_ALL_SOURCES
 #
 # Pure C++ consumers (ONNX_LIGHT_BUILD_PYTHON=OFF) keep the lighter static
 # variant they used to ship.
+#
+# Windows and macOS keep the five non-proto libs STATIC even when
+# ONNX_LIGHT_BUILD_PYTHON=ON: on Windows ``WINDOWS_EXPORT_ALL_SYMBOLS`` does
+# not export data symbols (e.g. the ``kDoc_*`` arrays), which would break
+# the C++ test executable and any cross-DLL data references, and on macOS
+# nanobind extensions are compiled with hidden visibility so RTTI for
+# exception types defined in those libs would not match across .dylib
+# boundaries. The original ``lib_onnx_proto`` SHARED variant predates this
+# change and is preserved on all platforms.
 if(ONNX_LIGHT_BUILD_PYTHON)
+  set(_lib_onnx_proto_type SHARED)
+else()
+  set(_lib_onnx_proto_type STATIC)
+endif()
+if(ONNX_LIGHT_BUILD_PYTHON AND UNIX AND NOT APPLE)
   set(_onnx_light_lib_type SHARED)
 else()
   set(_onnx_light_lib_type STATIC)
 endif()
 
-add_library(lib_onnx_proto ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} ${ONNX_LIGHT_PROTO_ALL_SOURCES})
-if(_onnx_light_lib_type STREQUAL "SHARED" AND WIN32)
+add_library(lib_onnx_proto ${_lib_onnx_proto_type} ${ONNX_LIGHT_HEADERS} ${ONNX_LIGHT_PROTO_ALL_SOURCES})
+if(_lib_onnx_proto_type STREQUAL "SHARED" AND WIN32)
   # Export every symbol so downstream extensions can use the proto classes
   # without sprinkling __declspec(dllexport) annotations in headers.
   set_target_properties(lib_onnx_proto PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
@@ -366,11 +380,11 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # All extensions and the shared lib_onnx_*.so are installed in the same
   # directory (onnx_light/onnx_py/). Set an $ORIGIN rpath so the dynamic loader
   # picks the colocated libraries at import time without LD_LIBRARY_PATH.
-  if(_onnx_light_lib_type STREQUAL "SHARED" AND (UNIX AND NOT APPLE))
+  if((_onnx_light_lib_type STREQUAL "SHARED" OR _lib_onnx_proto_type STREQUAL "SHARED") AND (UNIX AND NOT APPLE))
     set_target_properties(_onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxkernels _onnxbackend PROPERTIES
         BUILD_RPATH "\$ORIGIN"
         INSTALL_RPATH "\$ORIGIN")
-  elseif(_onnx_light_lib_type STREQUAL "SHARED" AND APPLE)
+  elseif((_onnx_light_lib_type STREQUAL "SHARED" OR _lib_onnx_proto_type STREQUAL "SHARED") AND APPLE)
     set_target_properties(_onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxkernels _onnxbackend PROPERTIES
         BUILD_RPATH "@loader_path"
         INSTALL_RPATH "@loader_path")
@@ -549,9 +563,13 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # LD_LIBRARY_PATH and the compiled code is shared across all extensions
   # instead of being duplicated inside each .so.
   install(TARGETS _onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxkernels _onnxbackend LIBRARY DESTINATION onnx_light/onnx_py)
+  if(_lib_onnx_proto_type STREQUAL "SHARED")
+    install(TARGETS lib_onnx_proto
+        LIBRARY DESTINATION onnx_light/onnx_py
+        RUNTIME DESTINATION onnx_light/onnx_py)
+  endif()
   if(_onnx_light_lib_type STREQUAL "SHARED")
     install(TARGETS
-        lib_onnx_proto
         lib_onnx_lib
         lib_onnx_op
         lib_onnx_optim

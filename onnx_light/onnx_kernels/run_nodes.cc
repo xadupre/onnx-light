@@ -354,15 +354,11 @@ void RunLoopNode(const NodeProto &node, RuntimeContext &rt) {
   const GraphProto &body = GetRequiredGraphAttribute(node, "body");
 
   Tensor m_tensor;
-  bool has_m = false;
   if (!node.input(0).as_string().empty()) {
-    has_m = true;
     m_tensor = GetInput(node, 0, rt.tensors());
   }
   Tensor cond_tensor;
-  bool has_cond_input = false;
   if (!node.input(1).as_string().empty()) {
-    has_cond_input = true;
     cond_tensor = GetInput(node, 1, rt.tensors());
   }
 
@@ -388,49 +384,24 @@ void RunLoopNode(const NodeProto &node, RuntimeContext &rt) {
     throw std::invalid_argument("RunNode: Loop node output count does not match body outputs.");
   }
 
-  int64_t max_trip = std::numeric_limits<int64_t>::max();
-  if (has_m) {
-    max_trip = ParseInt64Scalar(m_tensor, "Loop input 'M'");
-    if (max_trip < 0) {
-      throw std::invalid_argument("RunNode: Loop input 'M' must be non-negative.");
-    }
-  }
-  bool cond = has_cond_input ? ParseBoolScalar(cond_tensor, "Loop input 'cond'") : true;
-
-  std::vector<Tensor> state = v_initial;
-  std::vector<std::vector<Tensor>> scan_values(k);
-
-  for (int64_t iter = 0; iter < max_trip && cond; ++iter) {
+  auto run_body = [&](int64_t iter, bool cond_in,
+                      const std::vector<Tensor> &state) -> std::vector<Tensor> {
     std::vector<std::pair<std::string, Tensor>> bindings;
     bindings.reserve(2 + n);
     bindings.emplace_back(body.input(0).name().as_string(),
                           MakeInt64Scalar(body.input(0).name().as_string(), iter));
     bindings.emplace_back(body.input(1).name().as_string(),
-                          MakeBoolScalar(body.input(1).name().as_string(), cond));
+                          MakeBoolScalar(body.input(1).name().as_string(), cond_in));
     for (size_t i = 0; i < n; ++i) {
       Tensor t = state[i];
       t.name = body.input(2 + i).name().as_string();
       bindings.emplace_back(t.name, std::move(t));
     }
-
-    const std::vector<Tensor> body_outputs = RunSubgraph(body, bindings, rt);
-    cond = ParseBoolScalar(body_outputs[0], "Loop body output #0");
-
-    std::vector<Tensor> next_state;
-    next_state.reserve(n);
-    for (size_t i = 0; i < n; ++i) {
-      next_state.push_back(body_outputs[1 + i]);
-    }
-    state = std::move(next_state);
-    for (size_t i = 0; i < k; ++i) {
-      scan_values[i].push_back(body_outputs[1 + n + i]);
-    }
-  }
+    return RunSubgraph(body, bindings, rt);
+  };
 
   kernel::Loop loop_kernel(rt.kernel_ctx());
-  std::vector<Tensor> outputs =
-      loop_kernel(has_m ? m_tensor : Tensor(), has_cond_input ? cond_tensor : Tensor(), v_initial,
-                  state, scan_values);
+  std::vector<Tensor> outputs = loop_kernel(m_tensor, cond_tensor, v_initial, k, run_body);
   PropagateOutputsToCaller(node, outputs, rt);
 }
 

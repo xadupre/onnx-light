@@ -219,6 +219,120 @@ TEST(KernelClass, LoopRejectsScanRowsOfDifferentLengths) {
       std::invalid_argument);
 }
 
+// ---------------------------------------------------------------------------
+// Tests for the body-runner overload (kernel actually executes the body).
+// ---------------------------------------------------------------------------
+namespace {
+Tensor BoolScalar(bool v) {
+  return Tensor("", onnx_kernels::DataType::BOOL, {}, {static_cast<uint8_t>(v ? 1 : 0)});
+}
+} // namespace
+
+TEST(KernelClass, LoopBodyRunnerComputesPrefixSum) {
+  // Body: y_out = y_in + iter, cond_out = true, scan_out = y_out.
+  const KernelContext ctx{DefaultOpset(13)};
+  Loop loop_kernel{ctx};
+  Tensor M = Int64Scalar(4);
+  Tensor cond_undef;
+  Tensor y0 = Tensor::FromFloat("", {1}, {0.0f});
+
+  Loop::BodyRunner runner = [](int64_t iter, bool /*cond_in*/,
+                               const std::vector<Tensor> &state) -> std::vector<Tensor> {
+    const float y_in = state[0].AsFloat()[0];
+    const float y_out = y_in + static_cast<float>(iter);
+    return {BoolScalar(true), Tensor::FromFloat("", {1}, {y_out}),
+            Tensor::FromFloat("", {1}, {y_out})};
+  };
+
+  std::vector<Tensor> out =
+      loop_kernel(M, cond_undef, /*v_initial=*/{y0}, /*num_scan_outputs=*/1, runner);
+  ASSERT_EQ(out.size(), 2u);
+  // Final y = 0 + 0 + 1 + 2 + 3 = 6.
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[0], 6.0f);
+  // Scan output is [[0], [1], [3], [6]].
+  ASSERT_EQ(out[1].shape.size(), 2u);
+  EXPECT_EQ(out[1].shape[0], 4);
+  EXPECT_EQ(out[1].shape[1], 1);
+  EXPECT_FLOAT_EQ(out[1].AsFloat()[0], 0.0f);
+  EXPECT_FLOAT_EQ(out[1].AsFloat()[1], 1.0f);
+  EXPECT_FLOAT_EQ(out[1].AsFloat()[2], 3.0f);
+  EXPECT_FLOAT_EQ(out[1].AsFloat()[3], 6.0f);
+}
+
+TEST(KernelClass, LoopBodyRunnerHonorsEarlyTerminationFromCondOut) {
+  // M = 10 but body sets cond_out = false after iter == 2 → only 3 iterations.
+  const KernelContext ctx{DefaultOpset(13)};
+  Loop loop_kernel{ctx};
+  Tensor M = Int64Scalar(10);
+  Tensor cond_undef;
+  Tensor count0 = Tensor::From<int64_t>("", {}, {0});
+
+  int call_count = 0;
+  Loop::BodyRunner runner = [&](int64_t iter, bool /*cond_in*/,
+                                const std::vector<Tensor> &state) -> std::vector<Tensor> {
+    ++call_count;
+    const int64_t next = state[0].AsInt64()[0] + 1;
+    return {BoolScalar(iter < 2), Tensor::From<int64_t>("", {}, {next})};
+  };
+
+  std::vector<Tensor> out =
+      loop_kernel(M, cond_undef, /*v_initial=*/{count0}, /*num_scan_outputs=*/0, runner);
+  ASSERT_EQ(out.size(), 1u);
+  EXPECT_EQ(call_count, 3);
+  EXPECT_EQ(out[0].AsInt64()[0], 3);
+}
+
+TEST(KernelClass, LoopBodyRunnerSkippedWhenInitialCondFalse) {
+  // cond = false on entry → body never invoked, v_initial returned as-is.
+  const KernelContext ctx{DefaultOpset(13)};
+  Loop loop_kernel{ctx};
+  Tensor M = Int64Scalar(5);
+  Tensor cond_false = BoolScalar(false);
+  Tensor y0 = Tensor::FromFloat("", {1}, {42.0f});
+
+  bool called = false;
+  Loop::BodyRunner runner = [&](int64_t, bool, const std::vector<Tensor> &) -> std::vector<Tensor> {
+    called = true;
+    return {BoolScalar(true), Tensor::FromFloat("", {1}, {0.0f})};
+  };
+
+  std::vector<Tensor> out =
+      loop_kernel(M, cond_false, /*v_initial=*/{y0}, /*num_scan_outputs=*/0, runner);
+  ASSERT_EQ(out.size(), 1u);
+  EXPECT_FALSE(called);
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[0], 42.0f);
+}
+
+TEST(KernelClass, LoopBodyRunnerRejectsWrongOutputCount) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Loop loop_kernel{ctx};
+  Tensor M = Int64Scalar(1);
+  Tensor cond_undef;
+
+  // Body returns only the cond_out (missing the loop-carried output).
+  Loop::BodyRunner runner = [](int64_t, bool, const std::vector<Tensor> &) {
+    return std::vector<Tensor>{BoolScalar(true)};
+  };
+  Tensor y0 = Tensor::FromFloat("", {1}, {0.0f});
+  EXPECT_THROW((void)loop_kernel(M, cond_undef, /*v_initial=*/{y0}, /*num_scan_outputs=*/0, runner),
+               std::invalid_argument);
+}
+
+TEST(KernelClass, LoopBodyRunnerRejectsCarriedDtypeMismatch) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Loop loop_kernel{ctx};
+  Tensor M = Int64Scalar(1);
+  Tensor cond_undef;
+  Tensor y0 = Tensor::FromFloat("", {1}, {0.0f});
+
+  // Body returns a carried output with a different dtype (INT32 vs FLOAT).
+  Loop::BodyRunner runner = [](int64_t, bool, const std::vector<Tensor> &) {
+    return std::vector<Tensor>{BoolScalar(true), Tensor::From<int32_t>("", {1}, {7})};
+  };
+  EXPECT_THROW((void)loop_kernel(M, cond_undef, /*v_initial=*/{y0}, /*num_scan_outputs=*/0, runner),
+               std::invalid_argument);
+}
+
 TEST(KernelClass, ScanStacksPerIterAlongLeadingAxisByDefault) {
   const KernelContext ctx{DefaultOpset(11)};
   Scan scan_kernel{ctx};

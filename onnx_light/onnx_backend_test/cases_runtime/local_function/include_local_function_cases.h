@@ -35,6 +35,13 @@ void RegisterFunctionCallsFunctionAcrossDomainsCase(std::vector<TestCase> &regis
 /// function registry propagates through arbitrary nesting depth.
 void RegisterFunctionThreeLevelNestedCallsCase(std::vector<TestCase> &registry);
 
+/// Registers a test case where a model-local function declares formal
+/// attributes (``then_branch``/``else_branch``) that the body's ``If``
+/// node references via ``ref_attr_name``. Exercises that
+/// ``CallModelLocalFunction`` resolves the references against the
+/// call-site attributes before executing the function body.
+void RegisterFunctionLinkedAttributeCase(std::vector<TestCase> &registry);
+
 /// Collects all model-local-function backend test cases by invoking every
 /// ``Register*Case`` helper declared in this header. When ``op_type`` is
 /// non-empty only the case whose top-level node ``op_type`` matches is

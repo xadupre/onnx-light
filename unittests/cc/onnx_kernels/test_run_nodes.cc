@@ -775,6 +775,218 @@ TEST(RunModel, ModelLocalFunctionWrongInputCountThrows) {
   EXPECT_THROW(RunModel(model, rt), std::invalid_argument);
 }
 
+// ---------------------------------------------------------------------------
+// Model-local function with linked (ref_attr_name) attributes
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Builds a constant-only sub-graph that emits a single FLOAT scalar
+// named ``out_name`` set to ``value``. Used as a GRAPH attribute below.
+void FillConstantBranch(GraphProto &g, const std::string &branch_name, const std::string &init_name,
+                        const std::string &out_name, float value) {
+  g.set_name(branch_name);
+  TensorProto *init = g.add_initializer();
+  init->set_name(init_name);
+  init->set_data_type(TensorProto::DataType::FLOAT);
+  init->add_float_data(value);
+  // The If implementation expects each branch sub-graph to produce its
+  // output via at least one node. Use Add(init, init) so the value is
+  // doubled, mirroring the existing ``IfNodeWithBranchSubgraphs`` test.
+  NodeProto *add = g.add_node();
+  add->set_op_type("Add");
+  add->add_input(init_name);
+  add->add_input(init_name);
+  add->add_output(out_name);
+  g.add_output()->set_name(out_name);
+}
+
+} // namespace
+
+TEST(RunModel, ModelLocalFunctionLinkedAttributeFromCallSite) {
+  // Define a model-local function "Pick(cond)" whose body delegates to
+  // an ``If`` node where both ``then_branch`` and ``else_branch`` are
+  // attribute references (``ref_attr_name``) to call-site attributes of
+  // the same name. Two distinct call-sites supply different branch
+  // sub-graphs, proving that the attribute is resolved per call rather
+  // than baked in at function-definition time.
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+  OperatorSetIdProto *custom_os = model.add_opset_import();
+  custom_os->set_domain("custom");
+  custom_os->set_version(1);
+
+  FunctionProto *func = model.add_functions();
+  func->set_name("Pick");
+  func->set_domain("custom");
+  func->add_input("cond");
+  func->add_output("out");
+  func->add_attribute("then_branch");
+  func->add_attribute("else_branch");
+  {
+    NodeProto *n = func->add_node();
+    n->set_op_type("If");
+    n->add_input("cond");
+    n->add_output("out");
+    AttributeProto *tref = n->add_attribute();
+    tref->set_name("then_branch");
+    tref->set_ref_attr_name("then_branch");
+    tref->set_type(AttributeProto::AttributeType::GRAPH);
+    AttributeProto *eref = n->add_attribute();
+    eref->set_name("else_branch");
+    eref->set_ref_attr_name("else_branch");
+    eref->set_type(AttributeProto::AttributeType::GRAPH);
+  }
+
+  GraphProto *g = model.add_graph();
+  g->set_name("test");
+  NodeProto *call = g->add_node();
+  call->set_op_type("Pick");
+  call->set_domain("custom");
+  call->add_input("cond");
+  call->add_output("out");
+  AttributeProto *tattr = call->add_attribute();
+  tattr->set_name("then_branch");
+  tattr->set_type(AttributeProto::AttributeType::GRAPH);
+  FillConstantBranch(*tattr->add_g(), "then_g", "t", "z", 10.0f);
+  AttributeProto *eattr = call->add_attribute();
+  eattr->set_name("else_branch");
+  eattr->set_type(AttributeProto::AttributeType::GRAPH);
+  FillConstantBranch(*eattr->add_g(), "else_g", "e", "z", 1.0f);
+
+  RuntimeContext rt_true(KernelContext(DefaultOpset(18)));
+  rt_true.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  RunModel(model, rt_true);
+  ASSERT_TRUE(rt_true.Has("out"));
+  EXPECT_FLOAT_EQ(rt_true.Get("out").AsFloat()[0], 20.0f);
+
+  RuntimeContext rt_false(KernelContext(DefaultOpset(18)));
+  rt_false.Set("cond", Tensor::FromBool("cond", {}, {0}));
+  RunModel(model, rt_false);
+  ASSERT_TRUE(rt_false.Has("out"));
+  EXPECT_FLOAT_EQ(rt_false.Get("out").AsFloat()[0], 2.0f);
+}
+
+TEST(RunModel, ModelLocalFunctionLinkedAttributeUsesDefault) {
+  // The function declares typed defaults for ``then_branch`` and
+  // ``else_branch`` via ``attribute_proto``. The call-site omits both
+  // and the defaults must be used instead.
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+  OperatorSetIdProto *custom_os = model.add_opset_import();
+  custom_os->set_domain("custom");
+  custom_os->set_version(1);
+
+  FunctionProto *func = model.add_functions();
+  func->set_name("Pick");
+  func->set_domain("custom");
+  func->add_input("cond");
+  func->add_output("out");
+  AttributeProto *tdef = func->add_attribute_proto();
+  tdef->set_name("then_branch");
+  tdef->set_type(AttributeProto::AttributeType::GRAPH);
+  FillConstantBranch(*tdef->add_g(), "then_default_g", "t_def", "z", 5.0f);
+  AttributeProto *edef = func->add_attribute_proto();
+  edef->set_name("else_branch");
+  edef->set_type(AttributeProto::AttributeType::GRAPH);
+  FillConstantBranch(*edef->add_g(), "else_default_g", "e_def", "z", 7.0f);
+  {
+    NodeProto *n = func->add_node();
+    n->set_op_type("If");
+    n->add_input("cond");
+    n->add_output("out");
+    AttributeProto *tref = n->add_attribute();
+    tref->set_name("then_branch");
+    tref->set_ref_attr_name("then_branch");
+    tref->set_type(AttributeProto::AttributeType::GRAPH);
+    AttributeProto *eref = n->add_attribute();
+    eref->set_name("else_branch");
+    eref->set_ref_attr_name("else_branch");
+    eref->set_type(AttributeProto::AttributeType::GRAPH);
+  }
+
+  GraphProto *g = model.add_graph();
+  g->set_name("test");
+  NodeProto *call = g->add_node();
+  call->set_op_type("Pick");
+  call->set_domain("custom");
+  call->add_input("cond");
+  call->add_output("out");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  RunModel(model, rt);
+  ASSERT_TRUE(rt.Has("out"));
+  EXPECT_FLOAT_EQ(rt.Get("out").AsFloat()[0], 10.0f);
+}
+
+TEST(RunModel, ModelLocalFunctionDoesNotMutateModel) {
+  // Verify that resolving ``ref_attr_name`` references operates on a
+  // copy of the FunctionProto so the source ModelProto's function body
+  // is unchanged after RunModel.
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+  OperatorSetIdProto *custom_os = model.add_opset_import();
+  custom_os->set_domain("custom");
+  custom_os->set_version(1);
+
+  FunctionProto *func = model.add_functions();
+  func->set_name("Pick");
+  func->set_domain("custom");
+  func->add_input("cond");
+  func->add_output("out");
+  func->add_attribute("then_branch");
+  func->add_attribute("else_branch");
+  {
+    NodeProto *n = func->add_node();
+    n->set_op_type("If");
+    n->add_input("cond");
+    n->add_output("out");
+    AttributeProto *tref = n->add_attribute();
+    tref->set_name("then_branch");
+    tref->set_ref_attr_name("then_branch");
+    tref->set_type(AttributeProto::AttributeType::GRAPH);
+    AttributeProto *eref = n->add_attribute();
+    eref->set_name("else_branch");
+    eref->set_ref_attr_name("else_branch");
+    eref->set_type(AttributeProto::AttributeType::GRAPH);
+  }
+
+  GraphProto *g = model.add_graph();
+  g->set_name("test");
+  NodeProto *call = g->add_node();
+  call->set_op_type("Pick");
+  call->set_domain("custom");
+  call->add_input("cond");
+  call->add_output("out");
+  AttributeProto *tattr = call->add_attribute();
+  tattr->set_name("then_branch");
+  tattr->set_type(AttributeProto::AttributeType::GRAPH);
+  FillConstantBranch(*tattr->add_g(), "then_g", "t", "z", 10.0f);
+  AttributeProto *eattr = call->add_attribute();
+  eattr->set_name("else_branch");
+  eattr->set_type(AttributeProto::AttributeType::GRAPH);
+  FillConstantBranch(*eattr->add_g(), "else_g", "e", "z", 1.0f);
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  RunModel(model, rt);
+
+  // The function body's attribute must still be a reference (no graph
+  // baked in) so the same model can be executed again with a different
+  // call-site attribute.
+  const FunctionProto &saved = model.functions()[0];
+  const AttributeProto &a = saved.node()[0].attribute()[0];
+  EXPECT_EQ(a.ref_attr_name().as_string(), "then_branch");
+  EXPECT_FALSE(a.has_g());
+}
+
 TEST(RunModel, IfNodeWithBranchSubgraphs) {
   ModelProto model;
   model.set_ir_version(10);

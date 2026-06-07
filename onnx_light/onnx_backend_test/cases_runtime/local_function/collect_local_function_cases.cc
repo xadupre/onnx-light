@@ -11,6 +11,7 @@ void CollectLocalFunctionTestCases(std::vector<TestCase> &registry, const std::s
   static const OpRegisterMap kEntries = {
       {"SquareThenAdd", &RegisterFunctionCallsFunctionAcrossDomainsCase},
       {"Outer", &RegisterFunctionThreeLevelNestedCallsCase},
+      {"Pick", &RegisterFunctionLinkedAttributeCase},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

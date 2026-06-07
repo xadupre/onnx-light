@@ -562,11 +562,60 @@ void RunScanNode(const NodeProto &node, RuntimeContext &rt) {
   PropagateOutputsToCaller(node, outputs, rt);
 }
 
+// Replaces every attribute of ``node`` (and recursively in any
+// sub-graph attribute) carrying a non-empty ``ref_attr_name`` with the
+// corresponding entry from ``attr_map``. When the call-site does not
+// supply a value for a referenced attribute, the referenced attribute
+// is removed -- matching the ONNX function-inliner semantics.
+//
+// The local attribute name declared inside the function body is
+// preserved; only the attribute's value is taken from the call-site.
+void BindRefAttributes(NodeProto &node,
+                       const std::unordered_map<std::string, const AttributeProto *> &attr_map) {
+  auto &attributes = node.attribute();
+  for (auto it = attributes.begin(); it != attributes.end();) {
+    AttributeProto &attr = *it;
+    if (!attr.ref_attr_name().as_string().empty()) {
+      auto found = attr_map.find(attr.ref_attr_name().as_string());
+      if (found != attr_map.end()) {
+        const std::string local_name = attr.name().as_string();
+        attr.CopyFrom(*found->second);
+        attr.set_name(local_name);
+        ++it;
+      } else {
+        it = attributes.erase(it);
+      }
+    } else {
+      // Recurse into any sub-graph attributes so that nested nodes
+      // also receive the bound attribute values.
+      if (attr.has_g()) {
+        GraphProto &gp = attr.ref_g();
+        for (size_t i = 0; i < gp.node().size(); ++i) {
+          BindRefAttributes(gp.ref_node()[i], attr_map);
+        }
+      }
+      auto &gs = attr.graphs();
+      for (size_t gi = 0; gi < gs.size(); ++gi) {
+        GraphProto &gp = gs[gi];
+        for (size_t i = 0; i < gp.node().size(); ++i) {
+          BindRefAttributes(gp.ref_node()[i], attr_map);
+        }
+      }
+      ++it;
+    }
+  }
+}
+
 // Invokes a model-local FunctionProto in response to a call site
 // ``node``. The function is executed in a child RuntimeContext so its
 // local names cannot collide with the caller's tensor map; only the
 // formal outputs are propagated back to the caller under the names
 // declared by ``node.output(i)``.
+//
+// Before execution, every attribute reference (``ref_attr_name``) in
+// the function body is resolved against the call-site attributes,
+// falling back to the typed defaults declared in
+// ``FunctionProto::attribute_proto`` when the call-site omits a value.
 void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, RuntimeContext &rt) {
   const std::string op_type = node.op_type().as_string();
   if (static_cast<int>(node.input_size()) != static_cast<int>(func.input_size())) {
@@ -606,7 +655,34 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
     child.tensors()[param_name] = std::move(bound);
   }
 
-  RunFunction(func, child);
+  // Resolve attribute references (``ref_attr_name``) inside the
+  // function body. Resolution proceeds in two steps: the call-site
+  // attributes take precedence, and any unresolved reference falls
+  // back to the typed default declared in
+  // ``FunctionProto::attribute_proto``. Resolution is performed on a
+  // local copy of the function so the caller's ModelProto is not
+  // mutated and the runtime stays thread-safe with respect to the
+  // shared function registry.
+  const bool has_attribute_refs = !node.attribute().empty() || !func.attribute_proto().empty();
+  if (has_attribute_refs) {
+    std::unordered_map<std::string, const AttributeProto *> attr_map;
+    for (size_t i = 0; i < func.attribute_proto().size(); ++i) {
+      const AttributeProto &a = func.attribute_proto()[i];
+      attr_map[a.name().as_string()] = &a;
+    }
+    for (size_t i = 0; i < node.attribute().size(); ++i) {
+      const AttributeProto &a = node.attribute()[i];
+      attr_map[a.name().as_string()] = &a;
+    }
+    FunctionProto bound_func;
+    bound_func.CopyFrom(func);
+    for (size_t i = 0; i < bound_func.node().size(); ++i) {
+      BindRefAttributes(bound_func.ref_node()[i], attr_map);
+    }
+    RunFunction(bound_func, child);
+  } else {
+    RunFunction(func, child);
+  }
 
   // Copy the function's formal outputs back into the caller's tensor
   // map under the names declared by the node's output list.

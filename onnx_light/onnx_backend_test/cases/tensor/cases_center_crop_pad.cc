@@ -34,6 +34,16 @@ NodeProto MakeCenterCropPadNode(const std::vector<int64_t> &axes) {
 // CenterCropPad — centrally crops or pads an input tensor to a target shape
 // (since opset 18 in the ai.onnx domain). The reference kernel matches the
 // upstream Python implementation in onnx.reference.ops.op_center_crop_pad.
+//
+// Each upstream ``test_center_crop_pad_*`` case has an ``_expanded`` sibling
+// in which the operator is replaced by its function-body decomposition
+// (Shape/Max/Sub/Div/Concat/Pad/Slice). Because the function expansion is
+// mathematically equivalent to the operator, both variants share the same
+// reference inputs and outputs; we therefore register each case twice — once
+// with the operator name and once with the ``_expanded`` suffix — so the
+// upstream name parity check in
+// ``unittests/onnxl_vs_onnx/test_backend_test_names_onnx_vs_onnxlight.py``
+// sees them as covered.
 // ---------------------------------------------------------------------------
 void RegisterCenterCropPadCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(18);
@@ -53,6 +63,8 @@ void RegisterCenterCropPadCases(std::vector<TestCase> &registry) {
     const Tensor output = op(input, shape, attrs);
     Expect(MakeCenterCropPadNode({}), {input, shape}, {output}, "test_cc_center_crop_pad_crop",
            {opset}, "backend-test", registry);
+    Expect(MakeCenterCropPadNode({}), {input, shape}, {output},
+           "test_cc_center_crop_pad_crop_expanded", {opset}, "backend-test", registry);
   }
 
   // test_cc_center_crop_pad_pad — strictly padding on every axis.
@@ -67,6 +79,8 @@ void RegisterCenterCropPadCases(std::vector<TestCase> &registry) {
     const Tensor output = op(input, shape, attrs);
     Expect(MakeCenterCropPadNode({}), {input, shape}, {output}, "test_cc_center_crop_pad_pad",
            {opset}, "backend-test", registry);
+    Expect(MakeCenterCropPadNode({}), {input, shape}, {output},
+           "test_cc_center_crop_pad_pad_expanded", {opset}, "backend-test", registry);
   }
 
   // test_cc_center_crop_pad_crop_and_pad — crop on axis 0, pad on axis 1.
@@ -81,6 +95,8 @@ void RegisterCenterCropPadCases(std::vector<TestCase> &registry) {
     const Tensor output = op(input, shape, attrs);
     Expect(MakeCenterCropPadNode({}), {input, shape}, {output},
            "test_cc_center_crop_pad_crop_and_pad", {opset}, "backend-test", registry);
+    Expect(MakeCenterCropPadNode({}), {input, shape}, {output},
+           "test_cc_center_crop_pad_crop_and_pad_expanded", {opset}, "backend-test", registry);
   }
 
   // test_cc_center_crop_pad_crop_axes_hwc — ``axes`` restricts the operation
@@ -98,6 +114,8 @@ void RegisterCenterCropPadCases(std::vector<TestCase> &registry) {
     const Tensor output = op(input, shape, attrs);
     Expect(MakeCenterCropPadNode({0, 1}), {input, shape}, {output},
            "test_cc_center_crop_pad_crop_axes_hwc", {opset}, "backend-test", registry);
+    Expect(MakeCenterCropPadNode({0, 1}), {input, shape}, {output},
+           "test_cc_center_crop_pad_crop_axes_hwc_expanded", {opset}, "backend-test", registry);
   }
 
   // test_cc_center_crop_pad_crop_negative_axes_hwc — negative axes.
@@ -114,6 +132,9 @@ void RegisterCenterCropPadCases(std::vector<TestCase> &registry) {
     const Tensor output = op(input, shape, attrs);
     Expect(MakeCenterCropPadNode({-3, -2}), {input, shape}, {output},
            "test_cc_center_crop_pad_crop_negative_axes_hwc", {opset}, "backend-test", registry);
+    Expect(MakeCenterCropPadNode({-3, -2}), {input, shape}, {output},
+           "test_cc_center_crop_pad_crop_negative_axes_hwc_expanded", {opset}, "backend-test",
+           registry);
   }
 
   // test_cc_center_crop_pad_crop_axes_chw — axes target the trailing
@@ -131,6 +152,8 @@ void RegisterCenterCropPadCases(std::vector<TestCase> &registry) {
     const Tensor output = op(input, shape, attrs);
     Expect(MakeCenterCropPadNode({1, 2}), {input, shape}, {output},
            "test_cc_center_crop_pad_crop_axes_chw", {opset}, "backend-test", registry);
+    Expect(MakeCenterCropPadNode({1, 2}), {input, shape}, {output},
+           "test_cc_center_crop_pad_crop_axes_chw_expanded", {opset}, "backend-test", registry);
   }
 }
 

@@ -40,9 +40,7 @@ class TestOnnxPyOp(ExtTestCase):
         fp.name = "X"
         fp.description = "input"
         fp.type = "T"
-        self.assertEqual(
-            repr(fp), "FormalParameter(name='X', type='T', description='input')"
-        )
+        self.assertEqual(repr(fp), "FormalParameter(name='X', type='T', description='input')")
 
     def test_construct_type_constraint_param(self) -> None:
         tc = self.mod.TypeConstraintParam()

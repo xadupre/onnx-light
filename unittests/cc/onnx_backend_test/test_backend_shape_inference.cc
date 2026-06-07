@@ -15,7 +15,9 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::CollectTestCases;
+using onnx_backend_test::DataSet;
 using onnx_backend_test::TestCase;
+using DataTensor = onnx_kernels::Tensor;
 
 namespace Test {
 
@@ -355,6 +357,107 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesInferOutputShapes) {
 
     if (tc.kind == "model") {
       CheckValueInfoMatchesExpected(model_ptr->ref_graph(), expected_value_info);
+    }
+
+    // Additional pass: for every collected data set, override the graph input
+    // shapes with the concrete shapes from the ``DataSet`` input tensors, run
+    // shape inference, and verify the inferred output shapes match the
+    // ground-truth ``DataSet`` output tensor shapes (i.e. the shapes a runtime
+    // would actually observe). This complements the recorded-shape check
+    // above, which only validates against the shapes pre-stored in the
+    // model's output ``ValueInfo``. Outputs whose graph type is not a plain
+    // tensor (sequence / optional / map) are skipped because a single
+    // ``DataSet`` tensor does not describe the container shape.
+    for (size_t ds_idx = 0; ds_idx < tc.data_sets.size(); ++ds_idx) {
+      const DataSet &ds = tc.data_sets[ds_idx];
+      SCOPED_TRACE("data_set[" + std::to_string(ds_idx) + "]");
+
+      std::unordered_map<std::string, const DataTensor *> ds_inputs_by_name;
+      for (const DataTensor &t : ds.inputs) {
+        if (!t.name.empty()) {
+          ds_inputs_by_name.emplace(t.name, &t);
+        }
+      }
+      std::unordered_map<std::string, const DataTensor *> ds_outputs_by_name;
+      for (const DataTensor &t : ds.outputs) {
+        if (!t.name.empty()) {
+          ds_outputs_by_name.emplace(t.name, &t);
+        }
+      }
+
+      ModelProto ds_model;
+      std::string ds_serialized;
+      tc.model.SerializeToString(ds_serialized);
+      ds_model.ParseFromString(ds_serialized);
+
+      auto &ds_inputs = ds_model.mutable_graph()->ref_input();
+      for (size_t i = 0; i < ds_inputs.size(); ++i) {
+        auto &vi = ds_inputs[i];
+        if (!vi.has_type()) {
+          continue;
+        }
+        TypeProto::Tensor *tt = MutableTensorTypeOf(*vi.mutable_type());
+        if (tt == nullptr) {
+          continue;
+        }
+        const std::string in_name(vi.ref_name().data(), vi.ref_name().size());
+        auto it = ds_inputs_by_name.find(in_name);
+        if (it == ds_inputs_by_name.end()) {
+          continue;
+        }
+        const DataTensor &src = *it->second;
+        tt->clear_shape();
+        TensorShapeProto *shape = tt->add_shape();
+        for (int64_t d : src.shape) {
+          shape->add_dim()->set_dim_value(d);
+        }
+      }
+
+      auto &ds_outputs_pre = ds_model.mutable_graph()->ref_output();
+      for (size_t i = 0; i < ds_outputs_pre.size(); ++i) {
+        auto &out = ds_outputs_pre[i];
+        if (!out.has_type()) {
+          continue;
+        }
+        if (TypeProto::Tensor *tt = MutableTensorTypeOf(*out.mutable_type()); tt != nullptr) {
+          tt->clear_shape();
+        }
+      }
+      ds_model.mutable_graph()->mutable_value_info()->clear();
+
+      ASSERT_NO_THROW(shape_inference::InferShapes(ds_model)) << "case: " << tc.name;
+
+      const auto &ds_outputs = ds_model.ref_graph().ref_output();
+      for (size_t i = 0; i < ds_outputs.size(); ++i) {
+        const auto &out = ds_outputs[i];
+        const std::string out_name(out.ref_name().data(), out.ref_name().size());
+        auto it = ds_outputs_by_name.find(out_name);
+        if (it == ds_outputs_by_name.end()) {
+          continue;
+        }
+        if (!out.has_type() || !out.ref_type().has_tensor_type()) {
+          continue;
+        }
+        const TypeProto::Tensor &tt = out.ref_type().ref_tensor_type();
+        if (!tt.has_shape()) {
+          // Shape inference produced no shape for this output; mirror the
+          // tolerance of the recorded-shape check above. Such cases are
+          // pre-existing per-op coverage gaps, out of scope here.
+          continue;
+        }
+        const DataTensor &expected_tensor = *it->second;
+        const auto inferred_dims = DimsOf(tt);
+        ASSERT_EQ(inferred_dims.size(), expected_tensor.shape.size())
+            << "rank mismatch on output " << out_name;
+        for (size_t d = 0; d < inferred_dims.size(); ++d) {
+          if (inferred_dims[d] != -1) {
+            EXPECT_EQ(inferred_dims[d], expected_tensor.shape[d])
+                << "dim[" << d << "] mismatch on output " << out_name
+                << " (inferred=" << inferred_dims[d] << ", actual=" << expected_tensor.shape[d]
+                << ")";
+          }
+        }
+      }
     }
   }
 }

@@ -32,6 +32,17 @@ class TestBackendDocs(ExtTestCase):
         self.assertIn(".. _l-api-backend:", backend_api_content)
         self.assertIn(":ref:`l-api-backend`", backend_design_content)
 
+    def test_backend_design_page_covers_cpp_and_shape_details(self):
+        design_page = (
+            Path(__file__).resolve().parents[2] / "docs" / "design" / "backend_tests.rst"
+        )
+        content = design_page.read_text(encoding="utf-8")
+        self.assertIn("Dependencies and layering", content)
+        self.assertIn('kind="node"', content)
+        self.assertIn("SplitMix64", content)
+        self.assertIn("AppendValueInfo", content)
+        self.assertIn("graph.value_info", content)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

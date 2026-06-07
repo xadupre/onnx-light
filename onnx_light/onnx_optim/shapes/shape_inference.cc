@@ -12,6 +12,7 @@
 
 #include "onnx_proto/onnx_helper.h"
 
+#include "onnx_lib/shape_inference/attribute_binder.h"
 #include "onnx_optim/shapes/dispatch_table.h"
 #include "onnx_optim/shapes/generator/shape_generator.h"
 #include "onnx_optim/shapes/preview/shape_preview.h"
@@ -89,8 +90,23 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
       sub_ctx.SetSequence(callee_name, OptimSequence(ctx.GetSequence(caller_name)));
     }
   }
-  // Recursively run shape inference on the function body.
-  ComputeShapes(sub_ctx, func.node());
+  // Resolve linked attributes (``ref_attr_name``) in the function body
+  // against the call-site node's attributes before running shape
+  // inference. Attributes referencing a name not supplied by the call
+  // site are removed (matching ``AttributeBinder`` semantics).
+  internal::AttributeMap attr_map;
+  for (const auto &attr : node.attribute()) {
+    attr_map[attr.name().as_string()] = &attr;
+  }
+  internal::AttributeBinder attribute_binder(attr_map);
+  // Recursively run shape inference on the function body, binding
+  // attribute references on a per-node copy to avoid mutating ``func``.
+  for (const auto &fn_node : func.node()) {
+    NodeProto bound_node;
+    bound_node.CopyFrom(fn_node);
+    attribute_binder.VisitNode(&bound_node);
+    ComputeShapeNode(sub_ctx, bound_node);
+  }
   // Map function outputs back to caller-visible names.
   const int n_outputs = std::min(node.output_size(), func.output_size());
   for (int i = 0; i < n_outputs; ++i) {

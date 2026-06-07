@@ -4,10 +4,13 @@
 
 #include "onnx_optim/shapes/tensor/shape_tensor.h"
 
+#include <algorithm>
 #include <cstdint>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "onnx_optim/optim_tensor.h"
 #include "onnx_optim/shapes/shape_check.h"
@@ -17,6 +20,69 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
 namespace shapes {
 namespace tensor {
+
+namespace {
+
+std::optional<OptimDim> InferNegOneFromFactors(const OptimShape &data_shape,
+                                               const OptimShape &out_shape, int neg_one_index) {
+  int64_t input_int_product = 1;
+  std::vector<OptimDim> input_symbolic_factors;
+  for (const OptimDim &dim : data_shape.Dims()) {
+    if (dim.IsInt()) {
+      input_int_product *= dim.AsInt();
+    } else {
+      input_symbolic_factors.push_back(dim);
+    }
+  }
+
+  int64_t output_int_product = 1;
+  std::vector<OptimDim> output_symbolic_factors;
+  for (int i = 0; i < static_cast<int>(out_shape.Rank()); ++i) {
+    if (i == neg_one_index) {
+      continue;
+    }
+    const OptimDim &dim = out_shape[i];
+    if (dim.IsInt()) {
+      output_int_product *= dim.AsInt();
+    } else {
+      output_symbolic_factors.push_back(dim);
+    }
+  }
+
+  for (const OptimDim &factor : output_symbolic_factors) {
+    auto it = std::find(input_symbolic_factors.begin(), input_symbolic_factors.end(), factor);
+    if (it == input_symbolic_factors.end()) {
+      return std::nullopt;
+    }
+    input_symbolic_factors.erase(it);
+  }
+
+  if (output_int_product == 0 || input_int_product % output_int_product != 0) {
+    return std::nullopt;
+  }
+  const int64_t remaining_int = input_int_product / output_int_product;
+
+  if (input_symbolic_factors.empty()) {
+    return OptimDim(remaining_int);
+  }
+  if (remaining_int == 1 && input_symbolic_factors.size() == 1) {
+    return input_symbolic_factors.front();
+  }
+
+  std::string expr;
+  if (remaining_int != 1) {
+    expr = std::to_string(remaining_int);
+  }
+  for (const OptimDim &factor : input_symbolic_factors) {
+    if (!expr.empty()) {
+      expr += "*";
+    }
+    expr += factor.IsInt() ? std::to_string(factor.AsInt()) : factor.AsExpr();
+  }
+  return OptimDim(std::move(expr));
+}
+
+} // namespace
 
 void ComputeShapeReshape(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Reshape", "ComputeShapeReshape");
@@ -137,10 +203,16 @@ void ComputeShapeReshape(ShapesContext &ctx, const NodeProto &node) {
       }
       out_shape[neg_one_index] = OptimDim(input_product / output_product);
     } else {
-      out_shape[neg_one_index] = OptimDim("Reshape_neg1_" + std::to_string(neg_one_index));
+      auto inferred = InferNegOneFromFactors(data_shape, out_shape, neg_one_index);
+      out_shape[neg_one_index] = inferred.has_value()
+                                     ? inferred.value()
+                                     : OptimDim("Reshape_neg1_" + std::to_string(neg_one_index));
     }
   } else if (neg_one_index != -1) {
-    out_shape[neg_one_index] = OptimDim("Reshape_neg1_" + std::to_string(neg_one_index));
+    auto inferred = InferNegOneFromFactors(data_shape, out_shape, neg_one_index);
+    out_shape[neg_one_index] = inferred.has_value()
+                                   ? inferred.value()
+                                   : OptimDim("Reshape_neg1_" + std::to_string(neg_one_index));
   }
 
   ctx.Set(node.output(0), OptimTensor(nullptr, dtype, std::move(out_shape)));

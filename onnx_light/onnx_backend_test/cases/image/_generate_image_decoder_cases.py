@@ -134,7 +134,7 @@ src.append("           registry);")
 src.append("  }")
 src.append("}")
 src.append("")
-src.append('}  // namespace onnx_kernels')
+src.append("}  // namespace onnx_kernels")
 src.append("}  // namespace ONNX_LIGHT_NAMESPACE")
 
 content = "\n".join(src) + "\n"

@@ -45,10 +45,7 @@ def _si_linear() -> bytes:
     X = helper.make_tensor_value_info("X", TensorProto.FLOAT, [1, 4])
     Y = helper.make_tensor_value_info("Y", TensorProto.FLOAT, [1, 4])
     graph = helper.make_graph(
-        [
-            helper.make_node("Relu", ["X"], ["T"]),
-            helper.make_node("Sigmoid", ["T"], ["Y"]),
-        ],
+        [helper.make_node("Relu", ["X"], ["T"]), helper.make_node("Sigmoid", ["T"], ["Y"])],
         "linear",
         [X],
         [Y],
@@ -64,10 +61,7 @@ def _si_concat() -> bytes:
     B = helper.make_tensor_value_info("B", TensorProto.FLOAT, [3, 4])
     Y = helper.make_tensor_value_info("Y", TensorProto.FLOAT, [5, 4])
     graph = helper.make_graph(
-        [helper.make_node("Concat", ["A", "B"], ["Y"], axis=0)],
-        "concat",
-        [A, B],
-        [Y],
+        [helper.make_node("Concat", ["A", "B"], ["Y"], axis=0)], "concat", [A, B], [Y]
     )
     return helper.make_model(
         graph, opset_imports=[helper.make_opsetid("", 15)]
@@ -80,10 +74,7 @@ def _si_matmul() -> bytes:
     B = helper.make_tensor_value_info("B", TensorProto.FLOAT, [8, 2])
     Y = helper.make_tensor_value_info("Y", TensorProto.FLOAT, [4, 2])
     graph = helper.make_graph(
-        [helper.make_node("MatMul", ["A", "B"], ["Y"])],
-        "matmul",
-        [A, B],
-        [Y],
+        [helper.make_node("MatMul", ["A", "B"], ["Y"])], "matmul", [A, B], [Y]
     )
     return helper.make_model(
         graph, opset_imports=[helper.make_opsetid("", 15)]
@@ -165,9 +156,7 @@ def _si_loop() -> bytes:
             helper.make_tensor_value_info("scan_out", TensorProto.FLOAT, [1]),
         ],
     )
-    loop_node = helper.make_node(
-        "Loop", ["trip_count", "cond"], ["loop_out"], body=body
-    )
+    loop_node = helper.make_node("Loop", ["trip_count", "cond"], ["loop_out"], body=body)
     graph = helper.make_graph(
         [trip_node, cond_node, loop_node],
         "loop_graph",
@@ -262,8 +251,7 @@ def _write_zip(path: str, entries: Mapping[str, bytes | str]) -> None:
 
 
 _USAGE = (
-    "Usage: {prog} <version_converter_out.zip> <parser_out.zip> "
-    "<shape_inference_out.zip>\n"
+    "Usage: {prog} <version_converter_out.zip> <parser_out.zip> <shape_inference_out.zip>\n"
 )
 
 

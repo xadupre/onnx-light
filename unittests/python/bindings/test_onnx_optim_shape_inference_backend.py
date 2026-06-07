@@ -93,6 +93,9 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
                 for a, b in zip(v.type.tensor_type.shape.dim, t.shape):
                     self.assertEqual(a.dim_param, b)
 
+        # outputs
+        self.assertEqual(["batch", "seq", "2*d_model"], list(ctx.get("Z").shape))
+
 
 if __name__ == "__main__":
     unittest.main()

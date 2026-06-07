@@ -928,6 +928,7 @@ def _examples_section_lines(schema: Any, domain: str) -> list[str]:
             op_type = target_node.op_type
             if target_node.domain:
                 op_type = f"{target_node.domain}.{op_type}"
+
             def _fmt_name(n: Any) -> str:
                 s = str(n)
                 return s if s != "" else '""'

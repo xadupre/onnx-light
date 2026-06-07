@@ -237,6 +237,8 @@ int64_t Product(const std::vector<int64_t> &shape, size_t begin, size_t end,
   return p;
 }
 
+} // namespace
+
 int64_t ResolveAxis(int64_t axis, size_t rank, const std::string &op_name) {
   int64_t a = axis;
   const int64_t r = static_cast<int64_t>(rank);
@@ -317,6 +319,8 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
   }
   return outputs;
 }
+
+namespace {
 
 void PropagateOutputsToCaller(const NodeProto &node, const std::vector<Tensor> &outputs,
                               RuntimeContext &rt) {
@@ -479,86 +483,22 @@ void RunScanNode(const NodeProto &node, RuntimeContext &rt) {
     scan_inputs.push_back(GetInput(node, idx, rt.tensors()));
   }
 
-  std::vector<int64_t> scan_input_axes = GetAttributeIntsOrDefault(node, "scan_input_axes", {});
-  std::vector<int64_t> scan_input_directions =
+  const std::vector<int64_t> scan_input_axes =
+      GetAttributeIntsOrDefault(node, "scan_input_axes", {});
+  const std::vector<int64_t> scan_input_directions =
       GetAttributeIntsOrDefault(node, "scan_input_directions", {});
-  std::vector<int64_t> scan_output_axes = GetAttributeIntsOrDefault(node, "scan_output_axes", {});
-  std::vector<int64_t> scan_output_directions =
+  const std::vector<int64_t> scan_output_axes =
+      GetAttributeIntsOrDefault(node, "scan_output_axes", {});
+  const std::vector<int64_t> scan_output_directions =
       GetAttributeIntsOrDefault(node, "scan_output_directions", {});
 
-  if (scan_input_axes.empty()) {
-    scan_input_axes.assign(m, 0);
-  } else if (scan_input_axes.size() != m) {
-    throw std::invalid_argument(
-        "RunNode: Scan attribute 'scan_input_axes' must have num_scan_inputs entries.");
-  }
-  if (scan_input_directions.empty()) {
-    scan_input_directions.assign(m, 0);
-  } else if (scan_input_directions.size() != m) {
-    throw std::invalid_argument(
-        "RunNode: Scan attribute 'scan_input_directions' must have num_scan_inputs entries.");
-  }
-  for (size_t i = 0; i < m; ++i) {
-    if (scan_input_directions[i] != 0 && scan_input_directions[i] != 1) {
-      throw std::invalid_argument(
-          "RunNode: Scan attribute 'scan_input_directions' entries must be 0 or 1.");
-    }
-  }
-
-  int64_t trip_count = -1;
-  std::vector<int64_t> resolved_scan_input_axes;
-  resolved_scan_input_axes.reserve(m);
-  for (size_t i = 0; i < m; ++i) {
-    const Tensor &scan = scan_inputs[i];
-    if (scan.shape.empty()) {
-      throw std::invalid_argument("RunNode: Scan input rank must be >= 1.");
-    }
-    const int64_t axis = ResolveAxis(scan_input_axes[i], scan.shape.size(), "Scan");
-    resolved_scan_input_axes.push_back(axis);
-    const int64_t dim = scan.shape[static_cast<size_t>(axis)];
-    if (trip_count < 0) {
-      trip_count = dim;
-    } else if (trip_count != dim) {
-      throw std::invalid_argument("RunNode: all Scan inputs must have the same trip count.");
-    }
-  }
-  if (trip_count < 0) {
-    trip_count = 0;
-  }
-
-  std::vector<Tensor> state = initial_state;
-  std::vector<std::vector<Tensor>> scan_values(k);
-  for (int64_t iter = 0; iter < trip_count; ++iter) {
-    std::vector<std::pair<std::string, Tensor>> bindings;
-    bindings.reserve(n + m);
-    for (size_t i = 0; i < n; ++i) {
-      Tensor t = state[i];
-      t.name = body.input(i).name().as_string();
-      bindings.emplace_back(t.name, std::move(t));
-    }
-    for (size_t i = 0; i < m; ++i) {
-      const int64_t index = (scan_input_directions[i] == 0) ? iter : (trip_count - 1 - iter);
-      Tensor slice =
-          SliceTensorAlongAxis(scan_inputs[i], resolved_scan_input_axes[i], index, "Scan");
-      slice.name = body.input(n + i).name().as_string();
-      bindings.emplace_back(slice.name, std::move(slice));
-    }
-
-    const std::vector<Tensor> body_outputs = RunSubgraph(body, bindings, rt);
-    std::vector<Tensor> next_state;
-    next_state.reserve(n);
-    for (size_t i = 0; i < n; ++i) {
-      next_state.push_back(body_outputs[i]);
-    }
-    state = std::move(next_state);
-    for (size_t i = 0; i < k; ++i) {
-      scan_values[i].push_back(body_outputs[n + i]);
-    }
-  }
-
+  // The Scan kernel now owns the iteration loop (including the body
+  // subgraph evaluation): RunScanNode is reduced to validating the node
+  // shape and forwarding inputs / attributes to the kernel.
   kernel::Scan scan_kernel(rt.kernel_ctx());
-  std::vector<Tensor> outputs = scan_kernel(trip_count, initial_state, state, scan_values,
-                                            scan_output_axes, scan_output_directions);
+  std::vector<Tensor> outputs =
+      scan_kernel(body, initial_state, scan_inputs, rt, scan_input_axes, scan_input_directions,
+                  scan_output_axes, scan_output_directions);
   PropagateOutputsToCaller(node, outputs, rt);
 }
 

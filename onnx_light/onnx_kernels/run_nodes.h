@@ -5,11 +5,14 @@
 #pragma once
 
 #include "onnx_kernels/runtime_context.h"
+#include "onnx_kernels/simple_tensor.h"
 #include "onnx_proto/onnx.h"
 
 #include <functional>
 #include <string>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 /**
  * @file run_nodes.h
@@ -188,6 +191,46 @@ void RunFunction(const FunctionProto &func, RuntimeContext &rt);
  *         cannot be dispatched.
  */
 void RunModel(const ModelProto &model, RuntimeContext &rt);
+
+/**
+ * Evaluates a subgraph in a fresh child :cpp:class:`RuntimeContext` that
+ * inherits the caller's tensor map and function registry, additionally
+ * seeded with ``bindings`` (typically the formal-input ↔ actual-input
+ * tensor pairs for the subgraph). Returns the subgraph's outputs in the
+ * order declared by ``graph.output()``.
+ *
+ * Exposed publicly so control-flow kernels (e.g. :cpp:class:`kernel::Scan`)
+ * can run their body subgraph without going through
+ * :cpp:func:`RunNode` themselves.
+ *
+ * @throws std::invalid_argument if a subgraph output has an empty name or
+ *         is not produced by the body.
+ */
+std::vector<Tensor> RunSubgraph(const GraphProto &graph,
+                                const std::vector<std::pair<std::string, Tensor>> &bindings,
+                                RuntimeContext &rt);
+
+/**
+ * Resolves a possibly-negative ``axis`` against a tensor of rank
+ * ``rank`` and returns the non-negative axis in ``[0, rank)``. Throws
+ * ``std::invalid_argument`` with a message that mentions ``op_name``
+ * when the axis is out of range.
+ */
+int64_t ResolveAxis(int64_t axis, std::size_t rank, const std::string &op_name);
+
+/**
+ * Returns the tensor obtained by selecting the ``index``-th slice of
+ * ``t`` along axis ``axis`` (the resulting tensor's rank is
+ * ``t.shape.size() - 1``). The slice is copied into a fresh buffer; the
+ * source tensor is not modified. ``op_name`` only appears in error
+ * messages.
+ *
+ * @throws std::invalid_argument if ``t`` is a rank-0 tensor, the index
+ *         is out of range, or the slice would exceed addressable buffer
+ *         size.
+ */
+Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
+                            const std::string &op_name);
 
 } // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

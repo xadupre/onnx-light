@@ -515,6 +515,168 @@ TEST(RunModel, ModelLocalFunctionCanCallAnotherFunction) {
   EXPECT_FLOAT_EQ(res[2], -12.0f);
 }
 
+TEST(RunModel, ModelLocalFunctionCallsAnotherFunctionAcrossDomains) {
+  // Define two model-local functions in different domains; the function
+  // in domain "outer" calls into the function in domain "inner". This
+  // exercises that the function registry propagated to the child
+  // RuntimeContext is keyed by (domain, name, overload) and that
+  // cross-domain function-to-function dispatch works.
+  //
+  //   inner::Square(x) -> Mul(x, x)
+  //   outer::SquareThenAdd(x, y) -> Add(inner::Square(x), y)
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+
+  FunctionProto *square = model.add_functions();
+  square->set_name("Square");
+  square->set_domain("inner");
+  square->add_input("x");
+  square->add_output("y");
+  {
+    NodeProto *n = square->add_node();
+    n->set_op_type("Mul");
+    n->add_input("x");
+    n->add_input("x");
+    n->add_output("y");
+  }
+
+  FunctionProto *sqadd = model.add_functions();
+  sqadd->set_name("SquareThenAdd");
+  sqadd->set_domain("outer");
+  sqadd->add_input("a");
+  sqadd->add_input("b");
+  sqadd->add_output("z");
+  {
+    NodeProto *n = sqadd->add_node();
+    n->set_op_type("Square");
+    n->set_domain("inner");
+    n->add_input("a");
+    n->add_output("a2");
+  }
+  {
+    NodeProto *n = sqadd->add_node();
+    n->set_op_type("Add");
+    n->add_input("a2");
+    n->add_input("b");
+    n->add_output("z");
+  }
+
+  GraphProto *g = model.add_graph();
+  g->set_name("test");
+  NodeProto *node = g->add_node();
+  node->set_op_type("SquareThenAdd");
+  node->set_domain("outer");
+  node->add_input("x");
+  node->add_input("y");
+  node->add_output("z");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}));
+  rt.Set("y", Tensor::FromFloat("y", {3}, {10.0f, 20.0f, 30.0f}));
+
+  RunModel(model, rt);
+
+  ASSERT_TRUE(rt.Has("z"));
+  const float *res = rt.Get("z").AsFloat();
+  ASSERT_EQ(rt.Get("z").element_count(), 3);
+  EXPECT_FLOAT_EQ(res[0], 1.0f * 1.0f + 10.0f);
+  EXPECT_FLOAT_EQ(res[1], 2.0f * 2.0f + 20.0f);
+  EXPECT_FLOAT_EQ(res[2], 3.0f * 3.0f + 30.0f);
+  // The intermediate name produced inside the outer function must not
+  // leak into the caller's tensor map.
+  EXPECT_FALSE(rt.Has("a2"));
+}
+
+TEST(RunModel, ModelLocalFunctionThreeLevelNestedCalls) {
+  // Demonstrates that the function registry is propagated through
+  // arbitrary nesting depth: the top-level graph calls Outer, Outer
+  // calls Middle, and Middle calls Inner. Each level is a separate
+  // FunctionProto in the model.
+  //
+  //   Inner(x)  -> Add(x, x)        => 2*x
+  //   Middle(x) -> Inner(Inner(x))  => 4*x
+  //   Outer(x)  -> Middle(Inner(x)) => 8*x
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+
+  FunctionProto *inner = model.add_functions();
+  inner->set_name("Inner");
+  inner->set_domain("custom");
+  inner->add_input("x");
+  inner->add_output("y");
+  {
+    NodeProto *n = inner->add_node();
+    n->set_op_type("Add");
+    n->add_input("x");
+    n->add_input("x");
+    n->add_output("y");
+  }
+
+  FunctionProto *middle = model.add_functions();
+  middle->set_name("Middle");
+  middle->set_domain("custom");
+  middle->add_input("x");
+  middle->add_output("y");
+  {
+    NodeProto *n = middle->add_node();
+    n->set_op_type("Inner");
+    n->set_domain("custom");
+    n->add_input("x");
+    n->add_output("t");
+  }
+  {
+    NodeProto *n = middle->add_node();
+    n->set_op_type("Inner");
+    n->set_domain("custom");
+    n->add_input("t");
+    n->add_output("y");
+  }
+
+  FunctionProto *outer = model.add_functions();
+  outer->set_name("Outer");
+  outer->set_domain("custom");
+  outer->add_input("x");
+  outer->add_output("y");
+  {
+    NodeProto *n = outer->add_node();
+    n->set_op_type("Inner");
+    n->set_domain("custom");
+    n->add_input("x");
+    n->add_output("t");
+  }
+  {
+    NodeProto *n = outer->add_node();
+    n->set_op_type("Middle");
+    n->set_domain("custom");
+    n->add_input("t");
+    n->add_output("y");
+  }
+
+  GraphProto *g = model.add_graph();
+  g->set_name("test");
+  NodeProto *node = g->add_node();
+  node->set_op_type("Outer");
+  node->set_domain("custom");
+  node->add_input("x");
+  node->add_output("y");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.5f, -3.0f}));
+
+  RunModel(model, rt);
+
+  ASSERT_TRUE(rt.Has("y"));
+  const float *res = rt.Get("y").AsFloat();
+  ASSERT_EQ(rt.Get("y").element_count(), 3);
+  EXPECT_FLOAT_EQ(res[0], 8.0f);
+  EXPECT_FLOAT_EQ(res[1], 20.0f);
+  EXPECT_FLOAT_EQ(res[2], -24.0f);
+}
+
 TEST(RunModel, ModelLocalFunctionOverloadDisambiguation) {
   // Two functions share the same (domain, name) but differ by overload.
   // The dispatcher must pick the one matching node.overload.

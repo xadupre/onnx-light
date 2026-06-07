@@ -23,8 +23,15 @@ namespace tensor {
 
 namespace {
 
+// Tries to infer the Reshape ``-1`` dimension from ``data_shape`` and already
+// materialized ``out_shape`` dimensions by:
+// 1) multiplying concrete integer factors on both sides,
+// 2) cancelling matching symbolic factors present in ``out_shape`` from the
+//    symbolic factors of ``data_shape``,
+// 3) returning the remaining symbolic/integer product when exactly derivable.
+// Returns ``std::nullopt`` when inference is ambiguous or incompatible.
 std::optional<OptimDim> InferNegOneFromFactors(const OptimShape &data_shape,
-                                               const OptimShape &out_shape, int neg_one_index) {
+                                               const OptimShape &out_shape, int neg_one_dim_index) {
   int64_t input_int_product = 1;
   std::vector<OptimDim> input_symbolic_factors;
   for (const OptimDim &dim : data_shape.Dims()) {
@@ -38,7 +45,7 @@ std::optional<OptimDim> InferNegOneFromFactors(const OptimShape &data_shape,
   int64_t output_int_product = 1;
   std::vector<OptimDim> output_symbolic_factors;
   for (int i = 0; i < static_cast<int>(out_shape.Rank()); ++i) {
-    if (i == neg_one_index) {
+    if (i == neg_one_dim_index) {
       continue;
     }
     const OptimDim &dim = out_shape[i];
@@ -57,7 +64,10 @@ std::optional<OptimDim> InferNegOneFromFactors(const OptimShape &data_shape,
     input_symbolic_factors.erase(it);
   }
 
-  if (output_int_product == 0 || input_int_product % output_int_product != 0) {
+  if (output_int_product == 0) {
+    return std::nullopt;
+  }
+  if (input_int_product % output_int_product != 0) {
     return std::nullopt;
   }
   const int64_t remaining_int = input_int_product / output_int_product;
@@ -77,9 +87,18 @@ std::optional<OptimDim> InferNegOneFromFactors(const OptimShape &data_shape,
     if (!expr.empty()) {
       expr += "*";
     }
-    expr += factor.IsInt() ? std::to_string(factor.AsInt()) : factor.AsExpr();
+    expr += factor.AsExpr();
   }
   return OptimDim(std::move(expr));
+}
+
+// Wraps ``InferNegOneFromFactors`` and falls back to a stable symbolic
+// placeholder when no deterministic inference is possible.
+OptimDim InferredOrFallbackDim(const OptimShape &data_shape, const OptimShape &out_shape,
+                               int neg_one_dim_index) {
+  auto inferred = InferNegOneFromFactors(data_shape, out_shape, neg_one_dim_index);
+  return inferred.has_value() ? inferred.value()
+                              : OptimDim("Reshape_neg1_" + std::to_string(neg_one_dim_index));
 }
 
 } // namespace
@@ -203,16 +222,10 @@ void ComputeShapeReshape(ShapesContext &ctx, const NodeProto &node) {
       }
       out_shape[neg_one_index] = OptimDim(input_product / output_product);
     } else {
-      auto inferred = InferNegOneFromFactors(data_shape, out_shape, neg_one_index);
-      out_shape[neg_one_index] = inferred.has_value()
-                                     ? inferred.value()
-                                     : OptimDim("Reshape_neg1_" + std::to_string(neg_one_index));
+      out_shape[neg_one_index] = InferredOrFallbackDim(data_shape, out_shape, neg_one_index);
     }
   } else if (neg_one_index != -1) {
-    auto inferred = InferNegOneFromFactors(data_shape, out_shape, neg_one_index);
-    out_shape[neg_one_index] = inferred.has_value()
-                                   ? inferred.value()
-                                   : OptimDim("Reshape_neg1_" + std::to_string(neg_one_index));
+    out_shape[neg_one_index] = InferredOrFallbackDim(data_shape, out_shape, neg_one_index);
   }
 
   ctx.Set(node.output(0), OptimTensor(nullptr, dtype, std::move(out_shape)));

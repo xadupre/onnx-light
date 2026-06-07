@@ -344,10 +344,10 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
   RequireInputCount(node, 1);
 
   const Tensor &cond = GetInput(node, 0, rt.tensors());
-  const bool take_then = ParseBoolScalar(cond, "If input 'cond'");
-  const GraphProto &branch = take_then ? GetRequiredGraphAttribute(node, "then_branch")
-                                       : GetRequiredGraphAttribute(node, "else_branch");
-  std::vector<Tensor> outputs = RunSubgraph(branch, {}, rt);
+  const GraphProto &then_branch = GetRequiredGraphAttribute(node, "then_branch");
+  const GraphProto &else_branch = GetRequiredGraphAttribute(node, "else_branch");
+  kernel::If if_kernel(rt.kernel_ctx());
+  std::vector<Tensor> outputs = if_kernel(cond, then_branch, else_branch, rt);
   PropagateOutputsToCaller(node, outputs, rt);
 }
 

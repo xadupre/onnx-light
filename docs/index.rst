@@ -49,8 +49,12 @@ onnx without protobuf
   The ``max_external_file_size`` option automatically partitions weights across
   multiple files (``model.data``, ``model.data.1``, …) when a single file
   would exceed the given byte limit.
-- **Parallel loading** – Tensor weights can be read in parallel using multiple
-  threads, which significantly reduces wall-clock load time for large models.
+- **Parallel loading and saving** – Tensor weights can be read and written in
+  parallel using multiple threads via the ``num_threads`` parameter of
+  :func:`onnx_light.onnx.load` and :func:`onnx_light.onnx.save`. In practice
+  loading or saving large models is roughly **3 times faster with 4 threads**
+  compared to the single-threaded path (see the
+  :ref:`threads benchmark example <l-example-plot-threads-load-save>`).
 - **Zero-copy parsing** – When parsing from an in-memory bytes buffer, the
   ``no_copy=True`` option makes each tensor's ``raw_data`` point directly into
   the source bytes without allocating an extra copy.  This eliminates one

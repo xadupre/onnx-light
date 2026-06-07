@@ -7,6 +7,7 @@
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/simple_tensor.h"
 #include "onnx_light_helpers.h"
+#include "onnx_proto/onnx.h"
 
 #include <string>
 #include <unordered_map>
@@ -29,6 +30,22 @@ namespace onnx_kernels {
  * every produced output under the name declared by ``node.output(i)``.
  */
 using TensorMap = std::unordered_map<std::string, Tensor>;
+
+/**
+ * Name-keyed map of model-local :cpp:type:`FunctionProto` definitions
+ * known to the runtime. Populated by :cpp:func:`RunModel` from
+ * ``ModelProto::functions()`` so the dispatcher in :cpp:func:`RunNode`
+ * can transparently invoke :cpp:func:`RunFunction` whenever a node
+ * references a model-local function instead of a built-in kernel.
+ *
+ * Keys are the canonical ``"<domain>:<op_type>:<overload>"`` triple
+ * (the default ONNX domain — the empty ``NodeProto::domain()`` — is
+ * normalised to ``"ai.onnx"`` and the overload defaults to the empty
+ * string). Values are non-owning pointers into the caller-owned
+ * ``ModelProto``; the entries are valid only as long as the model
+ * outlives the runtime context.
+ */
+using FunctionMap = std::unordered_map<std::string, const FunctionProto *>;
 
 /**
  * Per-invocation runtime state passed to :cpp:func:`RunNode` /
@@ -66,6 +83,11 @@ public:
   kernel::KernelContext &kernel_ctx() noexcept { return kernel_ctx_; }
   const kernel::KernelContext &kernel_ctx() const noexcept { return kernel_ctx_; }
 
+  /// Model-local function registry consulted by :cpp:func:`RunNode`
+  /// before falling back to the built-in kernel dispatch table.
+  FunctionMap &functions() noexcept { return functions_; }
+  const FunctionMap &functions() const noexcept { return functions_; }
+
   /// Returns ``true`` if a tensor named ``name`` is currently held.
   bool Has(const std::string &name) const { return tensors_.find(name) != tensors_.end(); }
 
@@ -91,6 +113,7 @@ public:
 private:
   TensorMap tensors_;
   kernel::KernelContext kernel_ctx_;
+  FunctionMap functions_;
 };
 
 } // namespace onnx_kernels

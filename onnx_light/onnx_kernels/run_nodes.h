@@ -36,6 +36,19 @@
  * ``NodeProto``-driven call site, additional entries can be added
  * to ``KernelDispatchTable`` and they become callable from
  * :cpp:func:`RunNode` / :cpp:func:`RunNodes` automatically.
+ *
+ * In addition to the static :cpp:func:`KernelDispatchTable`,
+ * :cpp:func:`RunNode` also consults
+ * :cpp:func:`RuntimeContext::functions` for model-local functions
+ * (``ModelProto::functions``). When a node's
+ * ``(domain, op_type, overload)`` triple matches a registered
+ * :cpp:type:`FunctionProto`, the call is dispatched to
+ * :cpp:func:`RunFunction` with a fresh child :cpp:class:`RuntimeContext`
+ * bound to the function's formal inputs; the function's formal outputs
+ * are then propagated back to the caller under the names declared by
+ * ``node.output``. :cpp:func:`RunModel` populates that registry from
+ * ``model.functions()`` before delegating to :cpp:func:`RunGraph`, so
+ * nodes referring to local functions are resolved transparently.
  */
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -154,8 +167,12 @@ void RunFunction(const FunctionProto &func, RuntimeContext &rt);
  * Runs the graph embedded in a ``ModelProto`` using the provided runtime
  * context.
  *
- * This is a convenience wrapper that extracts ``model.graph()`` and
- * delegates to :cpp:func:`RunGraph`.  The caller is responsible for
+ * Before delegating to :cpp:func:`RunGraph`, every ``FunctionProto`` in
+ * ``model.functions()`` is registered in
+ * :cpp:func:`RuntimeContext::functions` so that nodes referring to a
+ * model-local function by ``(domain, op_type, overload)`` are
+ * dispatched through :cpp:func:`RunFunction` rather than the static
+ * :cpp:func:`KernelDispatchTable`. The caller is responsible for
  * inserting the model's input tensors into ``rt.tensors()`` beforehand.
  *
  * @param model The model whose ``graph`` field will be evaluated.

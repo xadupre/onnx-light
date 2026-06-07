@@ -158,6 +158,9 @@ void RegisterExpCases(std::vector<TestCase> &registry);
 /// Registers the ``Erf`` backend test node case(s).
 void RegisterErfCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Sign`` backend test node case(s).
+void RegisterSignCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Gemm`` backend test node case(s).
 void RegisterGemmCases(std::vector<TestCase> &registry);
 

@@ -452,6 +452,9 @@ void ComputeShapeExp(ShapesContext &ctx, const NodeProto &node, const char *x);
 /// Erf is element-wise unary: output dtype and shape match the input.
 void ComputeShapeErf(ShapesContext &ctx, const NodeProto &node, const char *x);
 
+/// Sign is element-wise unary: output dtype and shape match the input.
+void ComputeShapeSign(ShapesContext &ctx, const NodeProto &node, const char *x);
+
 /**
  * Computes the output :cpp:class:`OptimTensor` of a ``Gemm`` node and
  * stores it in ``ctx``.

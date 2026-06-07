@@ -203,6 +203,17 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Element-wise sign: y = sign(x), returning -1 for x<0, 0 for x==0, +1 for x>0.
+class Sign : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x) const;
+  void operator()(const Tensor &x, Tensor &output) const;
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// Element-wise round to nearest integer, ties to even (banker's rounding).
 class Round : public KernelBase {
 public:

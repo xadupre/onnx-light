@@ -58,6 +58,7 @@ using onnx_kernels::kernel::Reciprocal;
 using onnx_kernels::kernel::Round;
 using onnx_kernels::kernel::Shrink;
 using onnx_kernels::kernel::Sigmoid;
+using onnx_kernels::kernel::Sign;
 using onnx_kernels::kernel::Sin;
 using onnx_kernels::kernel::Sinh;
 using onnx_kernels::kernel::Softmax;
@@ -244,6 +245,21 @@ TEST(KernelClass, ErfClassMatchesReference) {
   EXPECT_NEAR(py[0], -0.84270079f, 1e-6f);
   EXPECT_NEAR(py[1], 0.0f, 1e-6f);
   EXPECT_NEAR(py[2], 0.84270079f, 1e-6f);
+}
+
+TEST(KernelClass, SignClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Sign sign_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {5}, {-2.5f, -0.5f, 0.0f, 0.5f, 2.5f});
+  Tensor y = sign_kernel(x);
+  ASSERT_EQ(y.element_count(), 5);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], -1.0f);
+  EXPECT_FLOAT_EQ(py[1], -1.0f);
+  EXPECT_FLOAT_EQ(py[2], 0.0f);
+  EXPECT_FLOAT_EQ(py[3], 1.0f);
+  EXPECT_FLOAT_EQ(py[4], 1.0f);
 }
 
 TEST(KernelClass, LogClassMatchesReference) {

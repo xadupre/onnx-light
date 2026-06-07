@@ -216,6 +216,21 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     ``Min(13)`` with ``int16``/``uint16`` inputs ("Could not find an
 #     implementation for Max(13) node" / "Could not find an implementation
 #     for Min(13) node"). The reference backend still exercises these cases.
+#   * ``test_resize_downsample_scales_linear_align_corners`` and
+#     ``test_resize_downsample_scales_cubic_align_corners`` — when
+#     downsampling with ``coordinate_transformation_mode="align_corners"``
+#     and float ``scales``, ORT's CPU EP computes the output spatial size
+#     by rounding ``input_size * scale`` (e.g. ``round(4 * 0.6) = 2`` and
+#     ``round(4 * 0.8) = 3``) and then maps coordinates with
+#     ``(output_size - 1) / (input_size - 1)``, which lands sampling
+#     positions exactly on existing grid points and reproduces the input
+#     values verbatim. The ONNX reference implementation in
+#     ``onnx/reference/ops/op_resize.py`` instead computes ``align_corners``
+#     downsample positions using the float scale directly
+#     (``i * (input_size - 1) * scale / (output_size - 1)``), which yields
+#     the fractional sample positions baked into the upstream
+#     ``test_resize_downsample_scales_*_align_corners`` reference outputs.
+#     The reference backend still exercises these cases.
 #   * ``test_cc_maxunpool_export_with_output_shape`` — when ``output_shape``
 #     differs from the shape inferred from ``kernel_shape``/``strides``/
 #     ``pads``, ORT's CPU EP scatters ``X`` into ``output_shape`` directly by
@@ -318,6 +333,8 @@ ORT_EXCLUDE_REGEX = [
     r"^test_min_int16$",
     r"^test_min_uint16$",
     r"^test_cc_maxunpool_export_with_output_shape$",
+    r"^test_resize_downsample_scales_linear_align_corners$",
+    r"^test_resize_downsample_scales_cubic_align_corners$",
 ]
 
 TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_REGEX)

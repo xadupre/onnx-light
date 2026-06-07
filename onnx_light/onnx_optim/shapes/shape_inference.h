@@ -157,11 +157,18 @@ void ComputeShapeGraph(ShapesContext &ctx, const GraphProto &graph);
  *               inputs and every intermediate value computed by the
  *               graph nodes.
  * @param model  The model whose main graph is processed.
+ * @param prefill_with_value_info_output  When ``true``, tensor descriptors
+ *               found in ``model.graph().value_info()`` and
+ *               ``model.graph().output()`` are collected as anchors and
+ *               merged back into ``ctx`` after node-level inference.
+ *               During this final merge, anchors are preferred when
+ *               they provide an alternative non-conflicting choice.
  *
  * @throws std::invalid_argument when ``model`` has no graph or when
  *         shape inference of the graph rejects a node.
  */
-void ComputeShapeModel(ShapesContext &ctx, const ModelProto &model);
+void ComputeShapeModel(ShapesContext &ctx, const ModelProto &model,
+                       bool prefill_with_value_info_output = false);
 
 /**
  * Writes the shape and element-type descriptors stored in ``ctx``
@@ -215,11 +222,14 @@ void ApplyInferredShapesToModel(const ShapesContext &ctx, ModelProto &model);
  *
  * @param model  In/out model on which shape inference is run and
  *               whose proto is updated with the inferred results.
+ * @param prefill_with_value_info_output  When ``true``, enables the same
+ *               prefill/anchor behavior as
+ *               :cpp:func:`ComputeShapeModel`.
  *
  * @throws std::invalid_argument when ``model`` has no graph or when
  *         shape inference of the graph rejects a node.
  */
-void InferShapesModel(ModelProto &model);
+void InferShapesModel(ModelProto &model, bool prefill_with_value_info_output = false);
 
 } // namespace shapes
 } // namespace onnx_optim

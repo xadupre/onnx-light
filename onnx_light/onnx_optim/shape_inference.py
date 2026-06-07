@@ -21,7 +21,7 @@ from __future__ import annotations
 from ..onnx_py._onnxpy import shape_inference as _C  # type: ignore[attr-defined]
 
 
-def infer_shapes_model(model) -> None:
+def infer_shapes_model(model, prefill_with_value_info_output: bool = False) -> None:
     """Runs shape inference on a ``ModelProto`` in place.
 
     Seeds the shape-inference context from the model's ``opset_import``,
@@ -31,11 +31,14 @@ def infer_shapes_model(model) -> None:
     ``model.graph.value_info``.
 
     :param model: A ``ModelProto`` to mutate in place.
+    :param prefill_with_value_info_output: When ``True``, prefill from
+        ``model.graph.value_info`` and ``model.graph.output`` and prefer these
+        anchors when there is a non-conflicting end-state alternative.
     :raises ValueError: If shape inference rejects a node (for
         example because of an unsupported op type) or if ``model``
         has no graph.
     """
-    _C.infer_shapes_model(model)
+    _C.infer_shapes_model(model, prefill_with_value_info_output)
 
 
 __all__ = ["infer_shapes_model"]

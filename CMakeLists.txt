@@ -119,23 +119,29 @@ set(ONNX_LIGHT_LIB_ALL_SOURCES
     ${ONNX_VERSION_CONVERTER_SOURCES}
 )
 
-# Builds onnx_proto library.
-# Build as SHARED when ONNX_LIGHT_BUILD_PYTHON=ON so that all Python
-# extensions (_onnxpyprotoop, _onnxpyprotolib, _onnxpyoptim, _onnxkernels
-# and _onnxbackend) share a single copy of the proto class definitions
-# (vtables, typeid, out-of-line member functions) at runtime.
-# This lets the extensions exchange proto objects (e.g. ModelProto)
-# without the serialise/reparse round-trip and avoids any duplicate
-# definition concern between the .so files.
+# Build the core C++ libraries (lib_onnx_proto / lib_onnx_lib / lib_onnx_op /
+# lib_onnx_optim / lib_onnx_kernels / lib_onnx_backend_test) as SHARED when
+# ONNX_LIGHT_BUILD_PYTHON=ON so that all Python extensions (_onnxpyprotoop,
+# _onnxpyprotolib, _onnxpyoptim, _onnxkernels and _onnxbackend) share a
+# single copy of every library's compiled code (vtables, typeid, out-of-line
+# member functions, kernel registries, ...) at runtime. This avoids
+# duplicating tens of megabytes of compiled code across the five Python
+# extension .so/.pyd files and makes it safe for the extensions to exchange
+# objects (e.g. ModelProto, TestCase) by pointer.
+#
 # Pure C++ consumers (ONNX_LIGHT_BUILD_PYTHON=OFF) keep the lighter static
 # variant they used to ship.
 if(ONNX_LIGHT_BUILD_PYTHON)
-  set(_lib_onnx_proto_type SHARED)
+  set(_onnx_light_lib_type SHARED)
 else()
-  set(_lib_onnx_proto_type STATIC)
+  set(_onnx_light_lib_type STATIC)
 endif()
-add_library(lib_onnx_proto ${_lib_onnx_proto_type} ${ONNX_LIGHT_HEADERS} ${ONNX_LIGHT_PROTO_ALL_SOURCES})
-if(_lib_onnx_proto_type STREQUAL "SHARED" AND WIN32)
+# Kept as an alias for backwards compatibility with code paths below that
+# still reference the proto-specific variable name.
+set(_lib_onnx_proto_type ${_onnx_light_lib_type})
+
+add_library(lib_onnx_proto ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} ${ONNX_LIGHT_PROTO_ALL_SOURCES})
+if(_onnx_light_lib_type STREQUAL "SHARED" AND WIN32)
   # Export every symbol so downstream extensions can use the proto classes
   # without sprinkling __declspec(dllexport) annotations in headers.
   set_target_properties(lib_onnx_proto PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
@@ -159,7 +165,10 @@ if(OpenSSL_FOUND)
 endif()
 
 # Builds onnx_lib library.
-add_library(lib_onnx_lib STATIC ${ONNX_LIGHT_HEADERS} ${ONNX_LIGHT_LIB_ALL_SOURCES})
+add_library(lib_onnx_lib ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} ${ONNX_LIGHT_LIB_ALL_SOURCES})
+if(_onnx_light_lib_type STREQUAL "SHARED" AND WIN32)
+  set_target_properties(lib_onnx_lib PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES ${ONNX_LIGHT_LIB_ALL_SOURCES})
 target_include_directories(lib_onnx_lib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
@@ -186,7 +195,10 @@ target_precompile_headers(lib_onnx_lib PRIVATE
 )
 
 # Builds onnx_op library.
-add_library(lib_onnx_op STATIC ${ONNX_LIGHT_HEADERS} ${ONNX_OP_SOURCES})
+add_library(lib_onnx_op ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} ${ONNX_OP_SOURCES})
+if(_onnx_light_lib_type STREQUAL "SHARED" AND WIN32)
+  set_target_properties(lib_onnx_op PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES ${ONNX_OP_SOURCES})
 target_include_directories(lib_onnx_op PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
@@ -199,7 +211,10 @@ target_compile_features(lib_onnx_op PUBLIC cxx_std_20)
 target_link_libraries(lib_onnx_op PUBLIC lib_onnx_proto)
 
 # Builds onnx_optim library.
-add_library(lib_onnx_optim STATIC ${ONNX_LIGHT_HEADERS} ${ONNX_OPTIM_SOURCES})
+add_library(lib_onnx_optim ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} ${ONNX_OPTIM_SOURCES})
+if(_onnx_light_lib_type STREQUAL "SHARED" AND WIN32)
+  set_target_properties(lib_onnx_optim PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES ${ONNX_OPTIM_SOURCES})
 target_include_directories(lib_onnx_optim PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
@@ -220,7 +235,10 @@ target_link_libraries(lib_onnx_optim PUBLIC lib_onnx_op)
 # exposed to Python through ``_onnxkernels`` (and re-exported via
 # ``_onnxbackend`` transitively through ``lib_onnx_backend_test``). It
 # only depends on ``lib_onnx_proto`` for proto types.
-add_library(lib_onnx_kernels STATIC ${ONNX_LIGHT_HEADERS} ${ONNX_KERNELS_SOURCES})
+add_library(lib_onnx_kernels ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} ${ONNX_KERNELS_SOURCES})
+if(_onnx_light_lib_type STREQUAL "SHARED" AND WIN32)
+  set_target_properties(lib_onnx_kernels PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES ${ONNX_KERNELS_SOURCES})
 target_include_directories(lib_onnx_kernels PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
@@ -262,7 +280,10 @@ target_precompile_headers(lib_onnx_kernels PRIVATE
 # which ``lib_onnx_backend_test`` PUBLIC-links so existing consumers
 # transparently keep getting both the test infrastructure and the
 # kernels.
-add_library(lib_onnx_backend_test STATIC ${ONNX_LIGHT_HEADERS} ${ONNX_BACKEND_TEST_SOURCES})
+add_library(lib_onnx_backend_test ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} ${ONNX_BACKEND_TEST_SOURCES})
+if(_onnx_light_lib_type STREQUAL "SHARED" AND WIN32)
+  set_target_properties(lib_onnx_backend_test PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES ${ONNX_BACKEND_TEST_SOURCES})
 target_include_directories(lib_onnx_backend_test PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
@@ -331,24 +352,28 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # (which publicly depends on lib_onnx_kernels and lib_onnx_proto so that
   # ModelProto can be returned by reference to Python and resolved against the
   # single nb::class_<ModelProto> registered by _onnxpyprotoop).
-  # ``lib_onnx_backend_test`` is repeated after ``lib_onnx_kernels`` to resolve
-  # a circular reference between the two static archives: the
-  # ``CollectTestCases`` aggregator (in ``lib_onnx_kernels``'s
-  # ``test_case.cc``) calls per-category ``Collect*TestCases`` functions
-  # defined in ``lib_onnx_backend_test``, which the linker only discovers after
-  # scanning the kernel library.
+  # When the libraries are built SHARED (the default for Python builds), the
+  # cross-library references between ``lib_onnx_backend_test`` and
+  # ``lib_onnx_kernels`` are resolved through the dynamic linker so no
+  # special ordering is required; in the pure C++ STATIC variant we repeat
+  # ``lib_onnx_backend_test`` after ``lib_onnx_kernels`` to break the
+  # circular reference between the two static archives.
   nanobind_add_module(_onnxbackend ${ONNX_PY_BACKEND_SOURCES})
   target_include_directories(_onnxbackend PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
-  target_link_libraries(_onnxbackend PRIVATE lib_onnx_backend_test lib_onnx_kernels lib_onnx_backend_test)
+  if(_onnx_light_lib_type STREQUAL "SHARED")
+    target_link_libraries(_onnxbackend PRIVATE lib_onnx_backend_test lib_onnx_kernels)
+  else()
+    target_link_libraries(_onnxbackend PRIVATE lib_onnx_backend_test lib_onnx_kernels lib_onnx_backend_test)
+  endif()
 
-  # All extensions and the shared lib_onnx_proto.so are installed in the same
+  # All extensions and the shared lib_onnx_*.so are installed in the same
   # directory (onnx_light/onnx_py/). Set an $ORIGIN rpath so the dynamic loader
-  # picks the colocated proto library at import time without LD_LIBRARY_PATH.
-  if(_lib_onnx_proto_type STREQUAL "SHARED" AND (UNIX AND NOT APPLE))
+  # picks the colocated libraries at import time without LD_LIBRARY_PATH.
+  if(_onnx_light_lib_type STREQUAL "SHARED" AND (UNIX AND NOT APPLE))
     set_target_properties(_onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxkernels _onnxbackend PROPERTIES
         BUILD_RPATH "\$ORIGIN"
         INSTALL_RPATH "\$ORIGIN")
-  elseif(_lib_onnx_proto_type STREQUAL "SHARED" AND APPLE)
+  elseif(_onnx_light_lib_type STREQUAL "SHARED" AND APPLE)
     set_target_properties(_onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxkernels _onnxbackend PROPERTIES
         BUILD_RPATH "@loader_path"
         INSTALL_RPATH "@loader_path")
@@ -521,12 +546,20 @@ if(ONNX_LIGHT_BUILD_TESTS OR ONNX_LIGHT_BUILD_BENCHMARKS)
 endif()
 
 if(ONNX_LIGHT_BUILD_PYTHON)
-  # Install the extensions into the package directory. When lib_onnx_proto is
-  # built SHARED (the default in Python builds), install it alongside so the
-  # $ORIGIN rpath above resolves it without LD_LIBRARY_PATH.
+  # Install the extensions into the package directory. When the core C++
+  # libraries are built SHARED (the default in Python builds), install them
+  # alongside so the $ORIGIN rpath above resolves them without
+  # LD_LIBRARY_PATH and the compiled code is shared across all extensions
+  # instead of being duplicated inside each .so.
   install(TARGETS _onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxkernels _onnxbackend LIBRARY DESTINATION onnx_light/onnx_py)
-  if(_lib_onnx_proto_type STREQUAL "SHARED")
-    install(TARGETS lib_onnx_proto
+  if(_onnx_light_lib_type STREQUAL "SHARED")
+    install(TARGETS
+        lib_onnx_proto
+        lib_onnx_lib
+        lib_onnx_op
+        lib_onnx_optim
+        lib_onnx_kernels
+        lib_onnx_backend_test
         LIBRARY DESTINATION onnx_light/onnx_py
         RUNTIME DESTINATION onnx_light/onnx_py)
   endif()

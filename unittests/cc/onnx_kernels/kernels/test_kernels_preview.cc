@@ -114,4 +114,106 @@ TEST(KernelClass, FlexAttentionRejectsInvalidInputs) {
   EXPECT_THROW(flex(Qh2, Kh3, Vh1), std::invalid_argument);
 }
 
+TEST(KernelClass, FlexAttentionEmptyProbModMatchesBaseline) {
+  // An empty std::function for ``prob_mod`` must reproduce exactly the
+  // un-modified baseline produced by the overload without a callback.
+  const Tensor Q = Tensor::FromFloat("", {1, 1, 1, 2}, {1.0f, 0.0f});
+  const Tensor K = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 0.0f, 0.0f, 1.0f});
+  const Tensor V = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+
+  const KernelContext ctx = PreviewKernelContext();
+  const FlexAttention flex{ctx};
+  const float scale = 1.0f / std::sqrt(2.0f);
+  const Tensor Y_baseline = flex(Q, K, V, scale);
+  const Tensor Y_empty_cb = flex(Q, K, V, scale, FlexAttention::ProbModFn{});
+  ASSERT_EQ(Y_baseline.shape, Y_empty_cb.shape);
+  for (int64_t i = 0; i < Y_baseline.element_count(); ++i) {
+    EXPECT_FLOAT_EQ(Y_baseline.AsFloat()[i], Y_empty_cb.AsFloat()[i]);
+  }
+}
+
+TEST(KernelClass, FlexAttentionIdentityProbModMatchesBaseline) {
+  // A no-op ``prob_mod`` callback must reproduce the baseline output and
+  // observe a probability tensor with the expected shape, dtype and
+  // softmax row-sums of 1.
+  const Tensor Q = Tensor::FromFloat("", {1, 2, 1, 2}, {1.0f, 0.0f, 0.0f, 1.0f});
+  const Tensor K = Tensor::FromFloat("", {1, 2, 2, 2}, {1, 0, 0, 1, 1, 1, -1, 1});
+  const Tensor V = Tensor::FromFloat("", {1, 2, 2, 2}, {1, 2, 3, 4, -1, 0, 0, 1});
+
+  const KernelContext ctx = PreviewKernelContext();
+  const FlexAttention flex{ctx};
+  const float scale = 1.0f / std::sqrt(2.0f);
+  const Tensor Y_baseline = flex(Q, K, V, scale);
+
+  bool observed = false;
+  auto identity = [&observed](Tensor &probs) {
+    observed = true;
+    EXPECT_EQ(probs.data_type, onnx_kernels::DataType::FLOAT);
+    EXPECT_EQ(probs.shape, (std::vector<int64_t>{1, 2, 1, 2}));
+    // Softmax probabilities sum to 1 along the last axis.
+    for (int64_t b = 0; b < probs.shape[0]; ++b) {
+      for (int64_t h = 0; h < probs.shape[1]; ++h) {
+        for (int64_t i = 0; i < probs.shape[2]; ++i) {
+          double row_sum = 0.0;
+          for (int64_t j = 0; j < probs.shape[3]; ++j) {
+            row_sum +=
+                probs.AsFloat()[((b * probs.shape[1] + h) * probs.shape[2] + i) * probs.shape[3] +
+                                j];
+          }
+          EXPECT_NEAR(row_sum, 1.0, 1e-5);
+        }
+      }
+    }
+  };
+
+  const Tensor Y_identity = flex(Q, K, V, scale, identity);
+  EXPECT_TRUE(observed);
+  ASSERT_EQ(Y_baseline.shape, Y_identity.shape);
+  for (int64_t i = 0; i < Y_baseline.element_count(); ++i) {
+    EXPECT_FLOAT_EQ(Y_baseline.AsFloat()[i], Y_identity.AsFloat()[i]);
+  }
+}
+
+TEST(KernelClass, FlexAttentionScalingProbModRescalesOutput) {
+  // Rescaling every probability by 0.5 must scale the final output by the
+  // same factor (since Y = probs @ V is linear in probs).
+  const Tensor Q = Tensor::FromFloat("", {1, 1, 1, 2}, {1.0f, 0.0f});
+  const Tensor K = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 0.0f, 0.0f, 1.0f});
+  const Tensor V = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+
+  const KernelContext ctx = PreviewKernelContext();
+  const FlexAttention flex{ctx};
+  const float scale = 1.0f / std::sqrt(2.0f);
+  const Tensor Y_baseline = flex(Q, K, V, scale);
+
+  auto half = [](Tensor &probs) {
+    float *p = probs.AsFloat();
+    for (int64_t i = 0; i < probs.element_count(); ++i) {
+      p[i] *= 0.5f;
+    }
+  };
+
+  const Tensor Y_half = flex(Q, K, V, scale, half);
+  ASSERT_EQ(Y_baseline.shape, Y_half.shape);
+  for (int64_t i = 0; i < Y_baseline.element_count(); ++i) {
+    EXPECT_FLOAT_EQ(Y_half.AsFloat()[i], 0.5f * Y_baseline.AsFloat()[i]);
+  }
+}
+
+TEST(KernelClass, FlexAttentionProbModMustPreserveShapeAndType) {
+  const Tensor Q = Tensor::FromFloat("", {1, 1, 1, 2}, {1.0f, 0.0f});
+  const Tensor K = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 0.0f, 0.0f, 1.0f});
+  const Tensor V = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+
+  const KernelContext ctx = PreviewKernelContext();
+  const FlexAttention flex{ctx};
+  const float scale = 1.0f / std::sqrt(2.0f);
+
+  auto reshape = [](Tensor &probs) { probs.shape = {1, 1, 2, 1}; };
+  EXPECT_THROW(flex(Q, K, V, scale, reshape), std::invalid_argument);
+
+  auto retype = [](Tensor &probs) { probs.data_type = onnx_kernels::DataType::DOUBLE; };
+  EXPECT_THROW(flex(Q, K, V, scale, retype), std::invalid_argument);
+}
+
 } // namespace Test

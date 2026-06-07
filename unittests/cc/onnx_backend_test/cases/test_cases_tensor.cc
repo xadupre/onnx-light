@@ -1088,4 +1088,77 @@ TEST(BackendTestCase, OneHotCasesRegistered) {
   }
 }
 
+TEST(BackendTestCase, PadCasesRegistered) {
+  // Verifies that the C++ backend test registry mirrors every upstream
+  // ONNX ``Pad`` node test (``onnx/backend/test/case/node/pad.py``). The
+  // registered case names are prefixed with ``test_cc_`` so the substring
+  // match enforced by ``unittests/onnxl_vs_onnx/test_backend_test_names_onnx_vs_onnxlight.py``
+  // pairs each upstream ``test_*_pad*`` name with one of these cases.
+  const auto cases = CollectTestCases("Pad");
+
+  struct Expected {
+    const char *name;
+    std::size_t num_inputs;
+    std::vector<int64_t> input_shape;
+    std::vector<int64_t> output_shape;
+    int32_t input_dtype;
+  };
+  const std::vector<Expected> expected{
+      // constant mode, 3 inputs (data, pads, value), padding on trailing axes
+      {"test_cc_constant_pad",
+       3,
+       {1, 3, 4, 5},
+       {1, 3, 7, 12},
+       static_cast<int32_t>(onnx_kernels::DataType::FLOAT)},
+      // constant mode, 4 inputs (data, pads, value, axes), restricted axes
+      {"test_cc_constant_pad_axes",
+       4,
+       {1, 3, 4, 5},
+       {1, 3, 4, 12},
+       static_cast<int32_t>(onnx_kernels::DataType::FLOAT)},
+      // constant mode, 4 inputs, negative axes
+      {"test_cc_constant_pad_negative_axes",
+       4,
+       {1, 3, 4, 5},
+       {1, 3, 4, 12},
+       static_cast<int32_t>(onnx_kernels::DataType::FLOAT)},
+      // edge/reflect/wrap modes, 2 inputs (data, pads), int32 inputs
+      {"test_cc_edge_pad",
+       2,
+       {1, 3, 4, 5},
+       {1, 3, 6, 7},
+       static_cast<int32_t>(onnx_kernels::DataType::INT32)},
+      {"test_cc_reflect_pad",
+       2,
+       {1, 3, 4, 5},
+       {1, 3, 6, 7},
+       static_cast<int32_t>(onnx_kernels::DataType::INT32)},
+      {"test_cc_wrap_pad",
+       2,
+       {1, 3, 4, 5},
+       {1, 3, 6, 7},
+       static_cast<int32_t>(onnx_kernels::DataType::INT32)},
+  };
+
+  for (const Expected &exp : expected) {
+    const TestCase *tc = FindCase(cases, exp.name);
+    ASSERT_NE(tc, nullptr) << "missing backend test case: " << exp.name;
+
+    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    const auto &op_type = node.ref_op_type();
+    EXPECT_EQ(std::string(op_type.data(), op_type.size()), "Pad");
+
+    ASSERT_EQ(tc->data_sets.size(), 1u);
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), exp.num_inputs);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.inputs[0].shape, exp.input_shape);
+    EXPECT_EQ(ds.inputs[0].data_type, exp.input_dtype);
+    EXPECT_EQ(ds.outputs[0].shape, exp.output_shape);
+    EXPECT_EQ(ds.outputs[0].data_type, exp.input_dtype);
+  }
+}
+
 } // namespace Test

@@ -217,10 +217,22 @@ Tensor MakeBoolScalar(const std::string &name, bool v) {
   return Tensor::FromBool(name, {}, {static_cast<uint8_t>(v ? 1 : 0)});
 }
 
-int64_t Product(const std::vector<int64_t> &shape, size_t begin, size_t end) {
+int64_t CheckedMulInt64(int64_t a, int64_t b, const std::string &where) {
+  if (a < 0 || b < 0) {
+    throw std::invalid_argument("RunNode: " + where + " encountered a negative dimension (" +
+                                std::to_string(a) + ", " + std::to_string(b) + ").");
+  }
+  if (a != 0 && b > std::numeric_limits<int64_t>::max() / a) {
+    throw std::invalid_argument("RunNode: " + where + " overflows INT64 shape arithmetic.");
+  }
+  return a * b;
+}
+
+int64_t Product(const std::vector<int64_t> &shape, size_t begin, size_t end,
+                const std::string &where) {
   int64_t p = 1;
   for (size_t i = begin; i < end; ++i) {
-    p *= shape[i];
+    p = CheckedMulInt64(p, shape[i], where);
   }
   return p;
 }
@@ -254,11 +266,19 @@ Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
     }
   }
 
-  const int64_t outer = Product(t.shape, 0, static_cast<size_t>(axis));
-  const int64_t inner = Product(t.shape, static_cast<size_t>(axis) + 1, t.shape.size());
+  const int64_t outer = Product(t.shape, 0, static_cast<size_t>(axis), op_name);
+  const int64_t inner = Product(t.shape, static_cast<size_t>(axis) + 1, t.shape.size(), op_name);
   const size_t elem_bytes = t.element_size();
+  const int64_t elements_per_slice = CheckedMulInt64(outer, inner, op_name);
+  if (inner > 0 && static_cast<uint64_t>(inner) > std::numeric_limits<size_t>::max() / elem_bytes) {
+    throw std::invalid_argument("RunNode: op '" + op_name + "' exceeds addressable buffer size.");
+  }
   const size_t inner_bytes = static_cast<size_t>(inner) * elem_bytes;
-  std::vector<uint8_t> out_data(static_cast<size_t>(outer * inner) * elem_bytes);
+  if (elements_per_slice > 0 &&
+      static_cast<uint64_t>(elements_per_slice) > std::numeric_limits<size_t>::max() / elem_bytes) {
+    throw std::invalid_argument("RunNode: op '" + op_name + "' exceeds addressable buffer size.");
+  }
+  std::vector<uint8_t> out_data(static_cast<size_t>(elements_per_slice) * elem_bytes);
 
   for (int64_t o = 0; o < outer; ++o) {
     const size_t src_offset = static_cast<size_t>((o * dim + index) * inner) * elem_bytes;

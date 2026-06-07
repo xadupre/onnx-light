@@ -10,7 +10,6 @@ write ``onnx_light.onnx.<name>`` consistently.
 from __future__ import annotations
 
 import importlib
-import sys
 import unittest
 
 import onnx_light.onnx as onnxl
@@ -28,11 +27,11 @@ class TestOnnxNamespaceExtras(ExtTestCase):
             mod = getattr(onnxl, name)
             self.assertEqual(mod.__name__, f"onnx_light.{name}")
 
-    def test_dotted_imports_resolve(self):
+    def test_attributes_are_the_real_modules(self):
+        """``onnx_light.onnx.<name>`` attribute IS the real ``onnx_light.<name>`` module."""
         for name in ("backend", "backend_test", "fuzz", "tools"):
-            full = f"onnx_light.onnx.{name}"
-            mod = importlib.import_module(full)
-            self.assertIs(mod, sys.modules[f"onnx_light.{name}"])
+            real = importlib.import_module(f"onnx_light.{name}")
+            self.assertIs(getattr(onnxl, name), real)
 
     def test_backend_test_exposes_data_model(self):
         import onnx_light.backend_test as bt

@@ -174,8 +174,11 @@ const uint8_t *Tensor::AsBool() const {
 uint8_t *Tensor::AsBool() {
   EXT_ENFORCE_INVALID(data_type == static_cast<int32_t>(DataType::BOOL),
                       "Tensor data_type does not match the requested view type.");
-  // For borrowed tensors borrow_ptr_ is const; const_cast is safe here because
-  // the Tensor object itself is non-const.  Callers must not write to borrowed storage.
+  // For borrowed tensors borrow_ptr_ is const uint8_t*; const_cast is used so
+  // both owned and borrowed tensors can be accessed through this overload.
+  // Callers must not write through the returned pointer when the tensor is
+  // borrowed — doing so is undefined behaviour if the underlying storage is
+  // immutable.
   return const_cast<uint8_t *>(bytes());
 }
 

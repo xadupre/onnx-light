@@ -613,4 +613,166 @@ TEST(RunModel, ModelLocalFunctionWrongInputCountThrows) {
   EXPECT_THROW(RunModel(model, rt), std::invalid_argument);
 }
 
+TEST(RunModel, IfNodeWithBranchSubgraphs) {
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *if_node = g->add_node();
+  if_node->set_op_type("If");
+  if_node->add_input("cond");
+  if_node->add_output("out");
+
+  AttributeProto *then_attr = if_node->add_attribute();
+  then_attr->set_name("then_branch");
+  then_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  GraphProto *then_g = then_attr->add_g();
+  then_g->set_name("then_graph");
+  TensorProto *then_init = then_g->add_initializer();
+  then_init->set_name("t");
+  then_init->set_data_type(TensorProto::DataType::FLOAT);
+  then_init->add_float_data(10.0f);
+  NodeProto *then_add = then_g->add_node();
+  then_add->set_op_type("Add");
+  then_add->add_input("t");
+  then_add->add_input("t");
+  then_add->add_output("z");
+  then_g->add_output()->set_name("z");
+
+  AttributeProto *else_attr = if_node->add_attribute();
+  else_attr->set_name("else_branch");
+  else_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  GraphProto *else_g = else_attr->add_g();
+  else_g->set_name("else_graph");
+  TensorProto *else_init = else_g->add_initializer();
+  else_init->set_name("e");
+  else_init->set_data_type(TensorProto::DataType::FLOAT);
+  else_init->add_float_data(1.0f);
+  NodeProto *else_add = else_g->add_node();
+  else_add->set_op_type("Add");
+  else_add->add_input("e");
+  else_add->add_input("e");
+  else_add->add_output("z");
+  else_g->add_output()->set_name("z");
+
+  RuntimeContext rt_true(KernelContext(DefaultOpset(18)));
+  rt_true.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  RunModel(model, rt_true);
+  ASSERT_TRUE(rt_true.Has("out"));
+  EXPECT_FLOAT_EQ(rt_true.Get("out").AsFloat()[0], 20.0f);
+
+  RuntimeContext rt_false(KernelContext(DefaultOpset(18)));
+  rt_false.Set("cond", Tensor::FromBool("cond", {}, {0}));
+  RunModel(model, rt_false);
+  ASSERT_TRUE(rt_false.Has("out"));
+  EXPECT_FLOAT_EQ(rt_false.Get("out").AsFloat()[0], 2.0f);
+}
+
+TEST(RunModel, LoopNodeRunsBodySubgraph) {
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *loop = g->add_node();
+  loop->set_op_type("Loop");
+  loop->add_input("M");
+  loop->add_input("cond");
+  loop->add_input("s_init");
+  loop->add_output("s_final");
+  loop->add_output("scan");
+
+  AttributeProto *body_attr = loop->add_attribute();
+  body_attr->set_name("body");
+  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  GraphProto *body = body_attr->add_g();
+  body->set_name("loop_body");
+  body->add_input()->set_name("iter");
+  body->add_input()->set_name("cond_in");
+  body->add_input()->set_name("s_in");
+  TensorProto *one = body->add_initializer();
+  one->set_name("one");
+  one->set_data_type(TensorProto::DataType::FLOAT);
+  one->add_float_data(1.0f);
+  NodeProto *add = body->add_node();
+  add->set_op_type("Add");
+  add->add_input("s_in");
+  add->add_input("one");
+  add->add_output("s_out");
+  body->add_output()->set_name("cond_in");
+  body->add_output()->set_name("s_out");
+  body->add_output()->set_name("s_out");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("M", Tensor::FromInt64("M", {}, {3}));
+  rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  rt.Set("s_init", Tensor::FromFloat("s_init", {}, {0.0f}));
+
+  RunModel(model, rt);
+
+  ASSERT_TRUE(rt.Has("s_final"));
+  ASSERT_TRUE(rt.Has("scan"));
+  EXPECT_FLOAT_EQ(rt.Get("s_final").AsFloat()[0], 3.0f);
+  ASSERT_EQ(rt.Get("scan").shape, (std::vector<int64_t>{3}));
+  const float *scan = rt.Get("scan").AsFloat();
+  EXPECT_FLOAT_EQ(scan[0], 1.0f);
+  EXPECT_FLOAT_EQ(scan[1], 2.0f);
+  EXPECT_FLOAT_EQ(scan[2], 3.0f);
+}
+
+TEST(RunModel, ScanNodeRunsBodySubgraph) {
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *scan = g->add_node();
+  scan->set_op_type("Scan");
+  scan->add_input("state0");
+  scan->add_input("x");
+  scan->add_output("state_final");
+  scan->add_output("y");
+  AttributeProto *num_attr = scan->add_attribute();
+  num_attr->set_name("num_scan_inputs");
+  num_attr->set_type(AttributeProto::AttributeType::INT);
+  num_attr->set_i(1);
+
+  AttributeProto *body_attr = scan->add_attribute();
+  body_attr->set_name("body");
+  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  GraphProto *body = body_attr->add_g();
+  body->set_name("scan_body");
+  body->add_input()->set_name("state_in");
+  body->add_input()->set_name("x_in");
+  NodeProto *add = body->add_node();
+  add->set_op_type("Add");
+  add->add_input("state_in");
+  add->add_input("x_in");
+  add->add_output("state_out");
+  body->add_output()->set_name("state_out");
+  body->add_output()->set_name("state_out");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("state0", Tensor::FromFloat("state0", {}, {0.0f}));
+  rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}));
+
+  RunModel(model, rt);
+
+  ASSERT_TRUE(rt.Has("state_final"));
+  ASSERT_TRUE(rt.Has("y"));
+  EXPECT_FLOAT_EQ(rt.Get("state_final").AsFloat()[0], 6.0f);
+  ASSERT_EQ(rt.Get("y").shape, (std::vector<int64_t>{3}));
+  const float *y = rt.Get("y").AsFloat();
+  EXPECT_FLOAT_EQ(y[0], 1.0f);
+  EXPECT_FLOAT_EQ(y[1], 3.0f);
+  EXPECT_FLOAT_EQ(y[2], 6.0f);
+}
+
 } // namespace Test

@@ -177,5 +177,99 @@ void RegisterFunctionThreeLevelNestedCallsCase(std::vector<TestCase> &registry) 
   registry.emplace_back(std::move(tc));
 }
 
+// ---------------------------------------------------------------------------
+// Model-local function with linked (``ref_attr_name``) attributes
+// ---------------------------------------------------------------------------
+//
+//   Pick(cond) -> If(cond) { then_branch = ref(then_branch),
+//                            else_branch = ref(else_branch) }
+//
+// The call-site supplies concrete branch sub-graphs as GRAPH attributes
+// of the call node, and ``CallModelLocalFunction`` must resolve the
+// ``ref_attr_name`` references in the function body to those sub-graphs
+// before executing the ``If``. Each branch is a constant-only graph
+// that emits a single FLOAT scalar; the test asserts the value selected
+// by the condition matches the corresponding branch.
+// ---------------------------------------------------------------------------
+void RegisterFunctionLinkedAttributeCase(std::vector<TestCase> &registry) {
+  const std::string name = "test_cc_local_function_linked_attribute";
+
+  TestCase tc(name, name, "node", "local_function");
+  ModelProto &model = tc.model;
+  model.set_ir_version(kIrVersion);
+  model.set_producer_name("backend-test");
+  AddOpsetImport(model, "", kOnnxOpsetVersion);
+  AddOpsetImport(model, "custom", 1);
+
+  // custom::Pick(cond) with formal attributes ``then_branch`` and
+  // ``else_branch`` referenced from the body's If node.
+  FunctionProto *func = model.add_functions();
+  func->set_name("Pick");
+  func->set_domain("custom");
+  func->add_input("cond");
+  func->add_output("out");
+  func->add_attribute("then_branch");
+  func->add_attribute("else_branch");
+  {
+    NodeProto *n = func->add_node();
+    n->set_op_type("If");
+    n->add_input("cond");
+    n->add_output("out");
+    AttributeProto *tref = n->add_attribute();
+    tref->set_name("then_branch");
+    tref->set_ref_attr_name("then_branch");
+    tref->set_type(AttributeProto::AttributeType::GRAPH);
+    AttributeProto *eref = n->add_attribute();
+    eref->set_name("else_branch");
+    eref->set_ref_attr_name("else_branch");
+    eref->set_type(AttributeProto::AttributeType::GRAPH);
+  }
+
+  // Top-level graph: out = custom::Pick(cond) with concrete branches.
+  GraphProto *g = model.add_graph();
+  g->set_name(name);
+  NodeProto *call = g->add_node();
+  call->set_op_type("Pick");
+  call->set_domain("custom");
+  call->add_input("cond");
+  call->add_output("out");
+
+  auto fill_branch = [](GraphProto &gp, const std::string &branch_name,
+                        const std::string &init_name, float value) {
+    gp.set_name(branch_name);
+    TensorProto *init = gp.add_initializer();
+    init->set_name(init_name);
+    init->set_data_type(TensorProto::DataType::FLOAT);
+    init->add_float_data(value);
+    NodeProto *add = gp.add_node();
+    add->set_op_type("Add");
+    add->add_input(init_name);
+    add->add_input(init_name);
+    add->add_output("z");
+    gp.add_output()->set_name("z");
+  };
+
+  AttributeProto *tattr = call->add_attribute();
+  tattr->set_name("then_branch");
+  tattr->set_type(AttributeProto::AttributeType::GRAPH);
+  fill_branch(*tattr->add_g(), "then_g", "t", 10.0f);
+  AttributeProto *eattr = call->add_attribute();
+  eattr->set_name("else_branch");
+  eattr->set_type(AttributeProto::AttributeType::GRAPH);
+  fill_branch(*eattr->add_g(), "else_g", "e", 1.0f);
+
+  Tensor cond_true = Tensor::FromBool("cond", {}, {1});
+  Tensor cond_false = Tensor::FromBool("cond", {}, {0});
+  Tensor out_true = Tensor::FromFloat("out", {}, {20.0f});
+  Tensor out_false = Tensor::FromFloat("out", {}, {2.0f});
+
+  FillValueInfo(cond_true, *g->add_input());
+  FillValueInfo(out_true, *g->add_output());
+
+  AppendDataSet(tc, {cond_true}, {out_true});
+  AppendDataSet(tc, {cond_false}, {out_false});
+  registry.emplace_back(std::move(tc));
+}
+
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

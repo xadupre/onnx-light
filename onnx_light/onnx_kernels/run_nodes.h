@@ -83,6 +83,10 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable();
  * output descriptors are inserted into ``rt.tensors()`` under the
  * names declared by ``node.output(i)``.
  *
+ * In addition to table-dispatched kernels and model-local functions,
+ * this dispatcher also evaluates control-flow nodes (``If``, ``Loop``,
+ * ``Scan``) by recursively executing their embedded subgraphs.
+ *
  * @param node The node to execute.
  * @param rt   In/out runtime context. ``rt.tensors()`` must already
  *             contain entries for every input referenced by ``node``;

@@ -120,27 +120,32 @@ and then passes it to protobuf, which copies it again internally.
 
 ----
 
-Parallel tensor loading
------------------------
+Parallel tensor loading and saving
+----------------------------------
 
 Large ONNX models contain hundreds or thousands of initializers (tensor
-weights).  Parsing these sequentially is the dominant cost when loading a
-model.
-``onnx_light`` exposes a ``num_threads`` option that distributes the initializer
-parsing across a thread pool:
+weights).  Parsing or serializing these sequentially is the dominant cost
+when loading or saving a model.
+``onnx_light`` exposes a ``num_threads`` option on both
+:func:`onnx_light.onnx.load` and :func:`onnx_light.onnx.save` that
+distributes the initializer parsing / writing across a thread pool:
 
 .. code-block:: python
 
     import onnx_light.onnx as onnxl
 
     model = onnxl.load("model.onnx", num_threads=4)
+    onnxl.save(model, "model.onnx", num_threads=4)
 
 On the C++ side the thread pool is implemented in ``thread_pool.h`` /
-``thread_pool.cc``.  Each worker independently parses a slice of the
-initializer list, so wall-clock loading time scales with the number of
-hardware threads available.
+``thread_pool.cc``.  Each worker independently parses (or writes) a slice
+of the initializer list, so wall-clock load and save time scales with the
+number of hardware threads available.  In practice loading or saving a
+large model is roughly **3 times faster with 4 threads** than with the
+single-threaded path (see
+:ref:`l-example-plot-threads-load-save` for a detailed benchmark).
 The standard ``onnx`` package is single-threaded; it offers no built-in
-parallel loading mechanism.
+parallel loading or saving mechanism.
 
 ----
 

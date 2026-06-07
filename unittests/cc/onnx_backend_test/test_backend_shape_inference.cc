@@ -5,6 +5,8 @@
 #include "onnx_backend_test/test_case.h"
 #include "onnx_lib/checker.h"
 #include "onnx_lib/shape_inference/implementation.h"
+#include "onnx_optim/optim_tensor.h"
+#include "onnx_optim/shapes/shape_inference.h"
 
 #include <gtest/gtest.h>
 
@@ -597,6 +599,167 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesPropagateSymbolicDims) {
       }
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// onnx_optim shape inference + model-local functions
+// ---------------------------------------------------------------------------
+//
+// Verifies that the ``onnx_optim`` shape-inference pipeline
+// (:cpp:func:`onnx_optim::shapes::InferShapesModel`) correctly handles a
+// node whose ``op_type`` references a model-local
+// :cpp:class:`FunctionProto`. The model is built by
+// :cpp:func:`RegisterLocalFunctionAddShapeInferenceCases`; its single graph
+// node calls ``local:func_add(X, Y) -> Z`` where the function body is a
+// one-node ``Add``. After expansion, the inferred ``Z`` must carry the
+// symbolic ``(batch, d_model)`` shape of the inputs.
+TEST(BackendTestCaseShapeInference, OnnxOptimSupportsLocalFunctionCall) {
+  const std::vector<TestCase> cases = CollectTestCases("func_add");
+  bool found = false;
+  for (const TestCase &tc : cases) {
+    if (tc.name != "test_cc_shape_inference_local_function_add") {
+      continue;
+    }
+    found = true;
+
+    ModelProto model_copy;
+    std::string serialized;
+    tc.model.SerializeToString(serialized);
+    model_copy.ParseFromString(serialized);
+
+    // Strip the recorded output shape so optim shape inference has to
+    // recover it from the function body's ``Add`` node.
+    auto &outputs = model_copy.mutable_graph()->ref_output();
+    ASSERT_EQ(outputs.size(), 1u);
+    auto *tt = MutableTensorTypeOf(*outputs[0].mutable_type());
+    ASSERT_NE(tt, nullptr);
+    tt->clear_shape();
+
+    ASSERT_NO_THROW(onnx_optim::shapes::InferShapesModel(model_copy)) << "case: " << tc.name;
+
+    // Output shape should now be ``(batch, d_model)`` — symbolic dims
+    // inherited from the inputs via the expanded function body.
+    const ValueInfoProto &out = model_copy.ref_graph().ref_output()[0];
+    ASSERT_TRUE(out.has_type());
+    const TypeProto::Tensor *out_tt = TensorTypeOf(out.ref_type());
+    ASSERT_NE(out_tt, nullptr);
+    EXPECT_EQ(static_cast<int32_t>(out_tt->elem_type()), 1 /* FLOAT */);
+    ASSERT_TRUE(out_tt->has_shape());
+    const auto &dims = out_tt->ref_shape().ref_dim();
+    ASSERT_EQ(dims.size(), 2u);
+    EXPECT_TRUE(dims[0].has_dim_param());
+    EXPECT_EQ(dims[0].ref_dim_param().as_string(), "batch");
+    EXPECT_TRUE(dims[1].has_dim_param());
+    EXPECT_EQ(dims[1].ref_dim_param().as_string(), "d_model");
+  }
+  ASSERT_TRUE(found) << "test_cc_shape_inference_local_function_add case not registered";
+}
+
+// ---------------------------------------------------------------------------
+// onnx_optim shape inference + nested model-local function call
+// ---------------------------------------------------------------------------
+//
+// Verifies that the ``onnx_optim`` shape-inference pipeline correctly handles
+// a node whose ``op_type`` references a model-local :cpp:class:`FunctionProto`
+// **whose body itself calls another model-local function**. The model is
+// built by :cpp:func:`RegisterNestedLocalFunctionAddShapeInferenceCases`:
+// its single graph node calls ``local:func_outer_add(X, Y) -> Z`` whose body
+// is a single call into ``local:func_inner_add(a, b) -> c { c = Add(a, b) }``.
+// After two levels of expansion, the inferred ``Z`` must carry the symbolic
+// ``(batch, d_model)`` shape of the inputs.
+TEST(BackendTestCaseShapeInference, OnnxOptimSupportsNestedLocalFunctionCall) {
+  const std::vector<TestCase> cases = CollectTestCases("func_outer_add");
+  bool found = false;
+  for (const TestCase &tc : cases) {
+    if (tc.name != "test_cc_shape_inference_nested_local_function_add") {
+      continue;
+    }
+    found = true;
+
+    ModelProto model_copy;
+    std::string serialized;
+    tc.model.SerializeToString(serialized);
+    model_copy.ParseFromString(serialized);
+
+    // Strip the recorded output shape so optim shape inference has to
+    // recover it through the two levels of function-body expansion.
+    auto &outputs = model_copy.mutable_graph()->ref_output();
+    ASSERT_EQ(outputs.size(), 1u);
+    auto *tt = MutableTensorTypeOf(*outputs[0].mutable_type());
+    ASSERT_NE(tt, nullptr);
+    tt->clear_shape();
+
+    ASSERT_NO_THROW(onnx_optim::shapes::InferShapesModel(model_copy)) << "case: " << tc.name;
+
+    const ValueInfoProto &out = model_copy.ref_graph().ref_output()[0];
+    ASSERT_TRUE(out.has_type());
+    const TypeProto::Tensor *out_tt = TensorTypeOf(out.ref_type());
+    ASSERT_NE(out_tt, nullptr);
+    EXPECT_EQ(static_cast<int32_t>(out_tt->elem_type()), 1 /* FLOAT */);
+    ASSERT_TRUE(out_tt->has_shape());
+    const auto &dims = out_tt->ref_shape().ref_dim();
+    ASSERT_EQ(dims.size(), 2u);
+    EXPECT_TRUE(dims[0].has_dim_param());
+    EXPECT_EQ(dims[0].ref_dim_param().as_string(), "batch");
+    EXPECT_TRUE(dims[1].has_dim_param());
+    EXPECT_EQ(dims[1].ref_dim_param().as_string(), "d_model");
+  }
+  ASSERT_TRUE(found) << "test_cc_shape_inference_nested_local_function_add case not registered";
+}
+
+// ---------------------------------------------------------------------------
+// onnx_optim shape inference + Shape→Identity→Unsqueeze
+// ---------------------------------------------------------------------------
+//
+// Verifies that the ``onnx_optim`` shape-inference pipeline can handle the
+// ``Shape → Identity → Unsqueeze`` case registered by
+// :cpp:func:`RegisterShapeIdentityUnsqueezeShapeInferenceCases`. The
+// ``Unsqueeze`` output rank equals ``kAxisCount + 1``; the case must keep
+// ``kAxisCount`` small enough that the inferred rank stays within
+// :cpp:var:`onnx_optim::kMaxOptimRank` (currently 16). A regression here
+// (e.g. raising ``kAxisCount`` back to 16, producing a rank-17 output)
+// would cause :cpp:func:`onnx_optim::shapes::InferShapesModel` to throw
+// ``std::length_error("OptimShape exceeds maximum rank")``.
+TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeIdentityUnsqueeze) {
+  const std::vector<TestCase> cases = CollectTestCases("Shape");
+  bool found = false;
+  for (const TestCase &tc : cases) {
+    if (tc.name != "test_cc_shape_inference_shape_identity_unsqueeze") {
+      continue;
+    }
+    found = true;
+
+    ModelProto model_copy;
+    std::string serialized;
+    tc.model.SerializeToString(serialized);
+    model_copy.ParseFromString(serialized);
+
+    // Strip the recorded output shape and intermediate value_info so optim
+    // shape inference has to recover them from scratch.
+    auto &outputs = model_copy.mutable_graph()->ref_output();
+    ASSERT_EQ(outputs.size(), 1u);
+    auto *tt = MutableTensorTypeOf(*outputs[0].mutable_type());
+    ASSERT_NE(tt, nullptr);
+    tt->clear_shape();
+    model_copy.mutable_graph()->mutable_value_info()->clear();
+
+    ASSERT_NO_THROW(onnx_optim::shapes::InferShapesModel(model_copy)) << "case: " << tc.name;
+
+    const ValueInfoProto &out = model_copy.ref_graph().ref_output()[0];
+    ASSERT_TRUE(out.has_type());
+    const TypeProto::Tensor *out_tt = TensorTypeOf(out.ref_type());
+    ASSERT_NE(out_tt, nullptr);
+    ASSERT_TRUE(out_tt->has_shape());
+    // Expected rank: ``kAxisCount + 1``. We do not require optim shape
+    // inference to recover concrete dim values here; the original
+    // regression was an unconditional throw from ``OptimShape`` whenever
+    // the inferred rank exceeded ``kMaxOptimRank``. Just verifying the
+    // rank pins down that the rank is now within the bound.
+    const auto inferred = DimsOf(*out_tt);
+    EXPECT_FALSE(inferred.empty());
+    EXPECT_LE(inferred.size(), onnx_optim::kMaxOptimRank);
+  }
+  ASSERT_TRUE(found) << "test_cc_shape_inference_shape_identity_unsqueeze case not registered";
 }
 
 } // namespace Test

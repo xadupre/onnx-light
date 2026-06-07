@@ -515,6 +515,168 @@ TEST(RunModel, ModelLocalFunctionCanCallAnotherFunction) {
   EXPECT_FLOAT_EQ(res[2], -12.0f);
 }
 
+TEST(RunModel, ModelLocalFunctionCallsAnotherFunctionAcrossDomains) {
+  // Define two model-local functions in different domains; the function
+  // in domain "outer" calls into the function in domain "inner". This
+  // exercises that the function registry propagated to the child
+  // RuntimeContext is keyed by (domain, name, overload) and that
+  // cross-domain function-to-function dispatch works.
+  //
+  //   inner::Square(x) -> Mul(x, x)
+  //   outer::SquareThenAdd(x, y) -> Add(inner::Square(x), y)
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+
+  FunctionProto *square = model.add_functions();
+  square->set_name("Square");
+  square->set_domain("inner");
+  square->add_input("x");
+  square->add_output("y");
+  {
+    NodeProto *n = square->add_node();
+    n->set_op_type("Mul");
+    n->add_input("x");
+    n->add_input("x");
+    n->add_output("y");
+  }
+
+  FunctionProto *sqadd = model.add_functions();
+  sqadd->set_name("SquareThenAdd");
+  sqadd->set_domain("outer");
+  sqadd->add_input("a");
+  sqadd->add_input("b");
+  sqadd->add_output("z");
+  {
+    NodeProto *n = sqadd->add_node();
+    n->set_op_type("Square");
+    n->set_domain("inner");
+    n->add_input("a");
+    n->add_output("a2");
+  }
+  {
+    NodeProto *n = sqadd->add_node();
+    n->set_op_type("Add");
+    n->add_input("a2");
+    n->add_input("b");
+    n->add_output("z");
+  }
+
+  GraphProto *g = model.add_graph();
+  g->set_name("test");
+  NodeProto *node = g->add_node();
+  node->set_op_type("SquareThenAdd");
+  node->set_domain("outer");
+  node->add_input("x");
+  node->add_input("y");
+  node->add_output("z");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}));
+  rt.Set("y", Tensor::FromFloat("y", {3}, {10.0f, 20.0f, 30.0f}));
+
+  RunModel(model, rt);
+
+  ASSERT_TRUE(rt.Has("z"));
+  const float *res = rt.Get("z").AsFloat();
+  ASSERT_EQ(rt.Get("z").element_count(), 3);
+  EXPECT_FLOAT_EQ(res[0], 1.0f * 1.0f + 10.0f);
+  EXPECT_FLOAT_EQ(res[1], 2.0f * 2.0f + 20.0f);
+  EXPECT_FLOAT_EQ(res[2], 3.0f * 3.0f + 30.0f);
+  // The intermediate name produced inside the SquareThenAdd function
+  // body must not leak into the caller's tensor map.
+  EXPECT_FALSE(rt.Has("a2"));
+}
+
+TEST(RunModel, ModelLocalFunctionThreeLevelNestedCalls) {
+  // Demonstrates that the function registry is propagated through
+  // arbitrary nesting depth: the top-level graph calls Outer, Outer
+  // calls Middle, and Middle calls Inner. Each level is a separate
+  // FunctionProto in the model.
+  //
+  //   Inner(x)  -> Add(x, x)        => 2*x
+  //   Middle(x) -> Inner(Inner(x))  => 4*x
+  //   Outer(x)  -> Middle(Inner(x)) => 8*x
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+
+  FunctionProto *inner = model.add_functions();
+  inner->set_name("Inner");
+  inner->set_domain("custom");
+  inner->add_input("x");
+  inner->add_output("y");
+  {
+    NodeProto *n = inner->add_node();
+    n->set_op_type("Add");
+    n->add_input("x");
+    n->add_input("x");
+    n->add_output("y");
+  }
+
+  FunctionProto *middle = model.add_functions();
+  middle->set_name("Middle");
+  middle->set_domain("custom");
+  middle->add_input("x");
+  middle->add_output("y");
+  {
+    NodeProto *n = middle->add_node();
+    n->set_op_type("Inner");
+    n->set_domain("custom");
+    n->add_input("x");
+    n->add_output("t");
+  }
+  {
+    NodeProto *n = middle->add_node();
+    n->set_op_type("Inner");
+    n->set_domain("custom");
+    n->add_input("t");
+    n->add_output("y");
+  }
+
+  FunctionProto *outer = model.add_functions();
+  outer->set_name("Outer");
+  outer->set_domain("custom");
+  outer->add_input("x");
+  outer->add_output("y");
+  {
+    NodeProto *n = outer->add_node();
+    n->set_op_type("Inner");
+    n->set_domain("custom");
+    n->add_input("x");
+    n->add_output("t");
+  }
+  {
+    NodeProto *n = outer->add_node();
+    n->set_op_type("Middle");
+    n->set_domain("custom");
+    n->add_input("t");
+    n->add_output("y");
+  }
+
+  GraphProto *g = model.add_graph();
+  g->set_name("test");
+  NodeProto *node = g->add_node();
+  node->set_op_type("Outer");
+  node->set_domain("custom");
+  node->add_input("x");
+  node->add_output("y");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.5f, -3.0f}));
+
+  RunModel(model, rt);
+
+  ASSERT_TRUE(rt.Has("y"));
+  const float *res = rt.Get("y").AsFloat();
+  ASSERT_EQ(rt.Get("y").element_count(), 3);
+  EXPECT_FLOAT_EQ(res[0], 8.0f);
+  EXPECT_FLOAT_EQ(res[1], 20.0f);
+  EXPECT_FLOAT_EQ(res[2], -24.0f);
+}
+
 TEST(RunModel, ModelLocalFunctionOverloadDisambiguation) {
   // Two functions share the same (domain, name) but differ by overload.
   // The dispatcher must pick the one matching node.overload.
@@ -611,6 +773,218 @@ TEST(RunModel, ModelLocalFunctionWrongInputCountThrows) {
   rt.Set("x", Tensor::FromFloat("x", {1}, {1.0f}));
 
   EXPECT_THROW(RunModel(model, rt), std::invalid_argument);
+}
+
+// ---------------------------------------------------------------------------
+// Model-local function with linked (ref_attr_name) attributes
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Builds a constant-only sub-graph that emits a single FLOAT scalar
+// named ``out_name`` set to ``value``. Used as a GRAPH attribute below.
+void FillConstantBranch(GraphProto &g, const std::string &branch_name, const std::string &init_name,
+                        const std::string &out_name, float value) {
+  g.set_name(branch_name);
+  TensorProto *init = g.add_initializer();
+  init->set_name(init_name);
+  init->set_data_type(TensorProto::DataType::FLOAT);
+  init->add_float_data(value);
+  // The If implementation expects each branch sub-graph to produce its
+  // output via at least one node. Use Add(init, init) so the value is
+  // doubled, mirroring the existing ``IfNodeWithBranchSubgraphs`` test.
+  NodeProto *add = g.add_node();
+  add->set_op_type("Add");
+  add->add_input(init_name);
+  add->add_input(init_name);
+  add->add_output(out_name);
+  g.add_output()->set_name(out_name);
+}
+
+} // namespace
+
+TEST(RunModel, ModelLocalFunctionLinkedAttributeFromCallSite) {
+  // Define a model-local function "Pick(cond)" whose body delegates to
+  // an ``If`` node where both ``then_branch`` and ``else_branch`` are
+  // attribute references (``ref_attr_name``) to call-site attributes of
+  // the same name. Two distinct call-sites supply different branch
+  // sub-graphs, proving that the attribute is resolved per call rather
+  // than baked in at function-definition time.
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+  OperatorSetIdProto *custom_os = model.add_opset_import();
+  custom_os->set_domain("custom");
+  custom_os->set_version(1);
+
+  FunctionProto *func = model.add_functions();
+  func->set_name("Pick");
+  func->set_domain("custom");
+  func->add_input("cond");
+  func->add_output("out");
+  func->add_attribute("then_branch");
+  func->add_attribute("else_branch");
+  {
+    NodeProto *n = func->add_node();
+    n->set_op_type("If");
+    n->add_input("cond");
+    n->add_output("out");
+    AttributeProto *tref = n->add_attribute();
+    tref->set_name("then_branch");
+    tref->set_ref_attr_name("then_branch");
+    tref->set_type(AttributeProto::AttributeType::GRAPH);
+    AttributeProto *eref = n->add_attribute();
+    eref->set_name("else_branch");
+    eref->set_ref_attr_name("else_branch");
+    eref->set_type(AttributeProto::AttributeType::GRAPH);
+  }
+
+  GraphProto *g = model.add_graph();
+  g->set_name("test");
+  NodeProto *call = g->add_node();
+  call->set_op_type("Pick");
+  call->set_domain("custom");
+  call->add_input("cond");
+  call->add_output("out");
+  AttributeProto *tattr = call->add_attribute();
+  tattr->set_name("then_branch");
+  tattr->set_type(AttributeProto::AttributeType::GRAPH);
+  FillConstantBranch(*tattr->add_g(), "then_g", "t", "z", 10.0f);
+  AttributeProto *eattr = call->add_attribute();
+  eattr->set_name("else_branch");
+  eattr->set_type(AttributeProto::AttributeType::GRAPH);
+  FillConstantBranch(*eattr->add_g(), "else_g", "e", "z", 1.0f);
+
+  RuntimeContext rt_true(KernelContext(DefaultOpset(18)));
+  rt_true.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  RunModel(model, rt_true);
+  ASSERT_TRUE(rt_true.Has("out"));
+  EXPECT_FLOAT_EQ(rt_true.Get("out").AsFloat()[0], 20.0f);
+
+  RuntimeContext rt_false(KernelContext(DefaultOpset(18)));
+  rt_false.Set("cond", Tensor::FromBool("cond", {}, {0}));
+  RunModel(model, rt_false);
+  ASSERT_TRUE(rt_false.Has("out"));
+  EXPECT_FLOAT_EQ(rt_false.Get("out").AsFloat()[0], 2.0f);
+}
+
+TEST(RunModel, ModelLocalFunctionLinkedAttributeUsesDefault) {
+  // The function declares typed defaults for ``then_branch`` and
+  // ``else_branch`` via ``attribute_proto``. The call-site omits both
+  // and the defaults must be used instead.
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+  OperatorSetIdProto *custom_os = model.add_opset_import();
+  custom_os->set_domain("custom");
+  custom_os->set_version(1);
+
+  FunctionProto *func = model.add_functions();
+  func->set_name("Pick");
+  func->set_domain("custom");
+  func->add_input("cond");
+  func->add_output("out");
+  AttributeProto *tdef = func->add_attribute_proto();
+  tdef->set_name("then_branch");
+  tdef->set_type(AttributeProto::AttributeType::GRAPH);
+  FillConstantBranch(*tdef->add_g(), "then_default_g", "t_def", "z", 5.0f);
+  AttributeProto *edef = func->add_attribute_proto();
+  edef->set_name("else_branch");
+  edef->set_type(AttributeProto::AttributeType::GRAPH);
+  FillConstantBranch(*edef->add_g(), "else_default_g", "e_def", "z", 7.0f);
+  {
+    NodeProto *n = func->add_node();
+    n->set_op_type("If");
+    n->add_input("cond");
+    n->add_output("out");
+    AttributeProto *tref = n->add_attribute();
+    tref->set_name("then_branch");
+    tref->set_ref_attr_name("then_branch");
+    tref->set_type(AttributeProto::AttributeType::GRAPH);
+    AttributeProto *eref = n->add_attribute();
+    eref->set_name("else_branch");
+    eref->set_ref_attr_name("else_branch");
+    eref->set_type(AttributeProto::AttributeType::GRAPH);
+  }
+
+  GraphProto *g = model.add_graph();
+  g->set_name("test");
+  NodeProto *call = g->add_node();
+  call->set_op_type("Pick");
+  call->set_domain("custom");
+  call->add_input("cond");
+  call->add_output("out");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  RunModel(model, rt);
+  ASSERT_TRUE(rt.Has("out"));
+  EXPECT_FLOAT_EQ(rt.Get("out").AsFloat()[0], 10.0f);
+}
+
+TEST(RunModel, ModelLocalFunctionDoesNotMutateModel) {
+  // Verify that resolving ``ref_attr_name`` references operates on a
+  // copy of the FunctionProto so the source ModelProto's function body
+  // is unchanged after RunModel.
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+  OperatorSetIdProto *custom_os = model.add_opset_import();
+  custom_os->set_domain("custom");
+  custom_os->set_version(1);
+
+  FunctionProto *func = model.add_functions();
+  func->set_name("Pick");
+  func->set_domain("custom");
+  func->add_input("cond");
+  func->add_output("out");
+  func->add_attribute("then_branch");
+  func->add_attribute("else_branch");
+  {
+    NodeProto *n = func->add_node();
+    n->set_op_type("If");
+    n->add_input("cond");
+    n->add_output("out");
+    AttributeProto *tref = n->add_attribute();
+    tref->set_name("then_branch");
+    tref->set_ref_attr_name("then_branch");
+    tref->set_type(AttributeProto::AttributeType::GRAPH);
+    AttributeProto *eref = n->add_attribute();
+    eref->set_name("else_branch");
+    eref->set_ref_attr_name("else_branch");
+    eref->set_type(AttributeProto::AttributeType::GRAPH);
+  }
+
+  GraphProto *g = model.add_graph();
+  g->set_name("test");
+  NodeProto *call = g->add_node();
+  call->set_op_type("Pick");
+  call->set_domain("custom");
+  call->add_input("cond");
+  call->add_output("out");
+  AttributeProto *tattr = call->add_attribute();
+  tattr->set_name("then_branch");
+  tattr->set_type(AttributeProto::AttributeType::GRAPH);
+  FillConstantBranch(*tattr->add_g(), "then_g", "t", "z", 10.0f);
+  AttributeProto *eattr = call->add_attribute();
+  eattr->set_name("else_branch");
+  eattr->set_type(AttributeProto::AttributeType::GRAPH);
+  FillConstantBranch(*eattr->add_g(), "else_g", "e", "z", 1.0f);
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  RunModel(model, rt);
+
+  // The function body's attribute must still be a reference (no graph
+  // baked in) so the same model can be executed again with a different
+  // call-site attribute.
+  const FunctionProto &saved = model.functions()[0];
+  const AttributeProto &a = saved.node()[0].attribute()[0];
+  EXPECT_EQ(a.ref_attr_name().as_string(), "then_branch");
+  EXPECT_FALSE(a.has_g());
 }
 
 TEST(RunModel, IfNodeWithBranchSubgraphs) {

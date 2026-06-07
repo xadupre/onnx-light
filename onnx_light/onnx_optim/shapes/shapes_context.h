@@ -9,6 +9,7 @@
 
 #include "onnx_optim/optim_sequence.h"
 #include "onnx_optim/optim_tensor.h"
+#include "onnx_proto/onnx.h"
 #include "onnx_proto/simple_string.h"
 
 /**
@@ -83,9 +84,17 @@ public:
   /// Returns ``true`` when an entry exists for ``name``.
   bool Has(const std::string &name) const { return tensors_.find(name) != tensors_.end(); }
 
+  /// Overload: ``name`` given as a :cpp:class:`utils::String`.
+  bool Has(const utils::String &name) const { return Has(std::string(name.data(), name.size())); }
+
   /// Returns the descriptor for ``name``. Throws ``std::out_of_range``
   /// if no such entry exists.
   const OptimTensor &Get(const std::string &name) const { return tensors_.at(name); }
+
+  /// Overload: ``name`` given as a :cpp:class:`utils::String`.
+  const OptimTensor &Get(const utils::String &name) const {
+    return Get(std::string(name.data(), name.size()));
+  }
 
   /// Number of named entries currently stored.
   std::size_t Size() const noexcept { return tensors_.size(); }
@@ -98,6 +107,7 @@ public:
     tensors_.clear();
     sequences_.clear();
     opsets_.clear();
+    local_functions_.clear();
   }
 
   /// Read-only access to the underlying map (useful for iteration).
@@ -127,9 +137,19 @@ public:
     return sequences_.find(name) != sequences_.end();
   }
 
+  /// Overload: ``name`` given as a :cpp:class:`utils::String`.
+  bool HasSequence(const utils::String &name) const {
+    return HasSequence(std::string(name.data(), name.size()));
+  }
+
   /// Returns the sequence descriptor for ``name``. Throws
   /// ``std::out_of_range`` if no such entry exists.
   const OptimSequence &GetSequence(const std::string &name) const { return sequences_.at(name); }
+
+  /// Overload: ``name`` given as a :cpp:class:`utils::String`.
+  const OptimSequence &GetSequence(const utils::String &name) const {
+    return GetSequence(std::string(name.data(), name.size()));
+  }
 
   /// Number of sequence-typed entries currently stored.
   std::size_t SequencesSize() const noexcept { return sequences_.size(); }
@@ -169,6 +189,50 @@ public:
   /// Read-only access to the underlying ``domain → opset_version`` map.
   const std::unordered_map<std::string, int> &Opsets() const noexcept { return opsets_; }
 
+  // ── Model-local functions ──────────────────────────────────────────
+  //
+  // ``onnx_optim`` shape inference dispatches node-level inference via
+  // the registered op schemas (see ``DispatchTable``). A node whose
+  // ``op_type`` is not registered may still be valid if it calls a
+  // model-local :cpp:class:`FunctionProto` declared in
+  // ``ModelProto::functions``. Local functions are addressed by a
+  // ``"<domain>:<name>"`` key (matching :cpp:func:`GetFunctionIdentifier`
+  // in ``onnx_lib``); :cpp:func:`ComputeShapeModel` registers every
+  // entry of ``model.functions()`` here so that
+  // :cpp:func:`ComputeShapeNode` can detect and expand the call.
+
+  /// Registers a non-owning pointer to a model-local
+  /// :cpp:class:`FunctionProto`. The pointer must remain valid for the
+  /// lifetime of the shape-inference pass. Replaces any previous entry
+  /// registered under the same ``"<domain>:<name>"`` key. ``func`` must
+  /// not be ``nullptr``.
+  void SetLocalFunction(const FunctionProto *func) {
+    EXT_ENFORCE_INVALID(func != nullptr, "SetLocalFunction: func must not be nullptr.");
+    const std::string key = func->domain().as_string() + ":" + func->name().as_string();
+    local_functions_[key] = func;
+  }
+
+  /// ``true`` when a model-local function is registered for ``key``.
+  /// ``key`` is expected to be the ``"<domain>:<name>"`` identifier of
+  /// the function.
+  bool HasLocalFunction(const std::string &key) const {
+    return local_functions_.find(key) != local_functions_.end();
+  }
+
+  /// Returns the registered ``FunctionProto`` pointer for ``key``, or
+  /// ``nullptr`` when none is registered. ``key`` is expected to be the
+  /// ``"<domain>:<name>"`` identifier of the function.
+  const FunctionProto *GetLocalFunction(const std::string &key) const {
+    auto it = local_functions_.find(key);
+    return it == local_functions_.end() ? nullptr : it->second;
+  }
+
+  /// Read-only access to the underlying ``"<domain>:<name>" →
+  /// FunctionProto*`` map.
+  const std::unordered_map<std::string, const FunctionProto *> &LocalFunctions() const noexcept {
+    return local_functions_;
+  }
+
 private:
   static std::string NormaliseDomain(const std::string &domain) {
     return domain.empty() ? std::string(kOnnxDomain) : domain;
@@ -177,6 +241,7 @@ private:
   std::unordered_map<std::string, OptimTensor> tensors_;
   std::unordered_map<std::string, OptimSequence> sequences_;
   std::unordered_map<std::string, int> opsets_;
+  std::unordered_map<std::string, const FunctionProto *> local_functions_;
 };
 
 } // namespace shapes

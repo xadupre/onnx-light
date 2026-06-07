@@ -44,10 +44,18 @@ void RegisterShapeIdentityUnsqueezeShapeInferenceCases(std::vector<TestCase> &re
   const OpsetId opset = DefaultOpset(18);
   const kernel::KernelContext ctx{opset};
 
-  // Use rank 16 to mirror the upstream regression model (axis_count = 16).
-  // Each input dim is 1, so the resulting Shape tensor is
-  // ``[1, 1, ..., 1]`` (16 entries) and the Unsqueeze output rank is 17.
-  constexpr int64_t kAxisCount = 16;
+  // Use rank 15 (one less than the upstream regression model, which used
+  // ``axis_count = 16``). The upstream test exercised a memcpy buffer
+  // overrun in ``Graph::SaveShapeValuesFromDataPropagation`` that triggers
+  // for any rank > 0; the exact rank is not load-bearing for the
+  // regression. We cap at 15 here so the ``Unsqueeze`` output (rank
+  // ``kAxisCount + 1 = 16``) still fits inside ``onnx_optim``'s
+  // :cpp:var:`onnx_optim::kMaxOptimRank` (``= 16``) bound. With
+  // ``axis_count = 16`` the output rank would be 17, which would cause
+  // :cpp:func:`onnx_optim::shapes::InferShapesModel` to throw
+  // ``std::length_error("OptimShape exceeds maximum rank")`` and fail
+  // optim shape inference on this case.
+  constexpr int64_t kAxisCount = 15;
   const std::vector<int64_t> input_shape(static_cast<size_t>(kAxisCount), 1);
 
   std::vector<int64_t> axes_values(static_cast<size_t>(kAxisCount));

@@ -237,6 +237,8 @@ int64_t Product(const std::vector<int64_t> &shape, size_t begin, size_t end,
   return p;
 }
 
+} // namespace
+
 int64_t ResolveAxis(int64_t axis, size_t rank, const std::string &op_name) {
   int64_t a = axis;
   const int64_t r = static_cast<int64_t>(rank);
@@ -318,6 +320,8 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
   return outputs;
 }
 
+namespace {
+
 void PropagateOutputsToCaller(const NodeProto &node, const std::vector<Tensor> &outputs,
                               RuntimeContext &rt) {
   if (outputs.size() != node.output_size()) {
@@ -340,10 +344,10 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
   RequireInputCount(node, 1);
 
   const Tensor &cond = GetInput(node, 0, rt.tensors());
-  const bool take_then = ParseBoolScalar(cond, "If input 'cond'");
-  const GraphProto &branch = take_then ? GetRequiredGraphAttribute(node, "then_branch")
-                                       : GetRequiredGraphAttribute(node, "else_branch");
-  std::vector<Tensor> outputs = RunSubgraph(branch, {}, rt);
+  const GraphProto &then_branch = GetRequiredGraphAttribute(node, "then_branch");
+  const GraphProto &else_branch = GetRequiredGraphAttribute(node, "else_branch");
+  kernel::If if_kernel(rt.kernel_ctx());
+  std::vector<Tensor> outputs = if_kernel(cond, then_branch, else_branch, rt);
   PropagateOutputsToCaller(node, outputs, rt);
 }
 
@@ -450,87 +454,67 @@ void RunScanNode(const NodeProto &node, RuntimeContext &rt) {
     scan_inputs.push_back(GetInput(node, idx, rt.tensors()));
   }
 
-  std::vector<int64_t> scan_input_axes = GetAttributeIntsOrDefault(node, "scan_input_axes", {});
-  std::vector<int64_t> scan_input_directions =
+  const std::vector<int64_t> scan_input_axes =
+      GetAttributeIntsOrDefault(node, "scan_input_axes", {});
+  const std::vector<int64_t> scan_input_directions =
       GetAttributeIntsOrDefault(node, "scan_input_directions", {});
-  std::vector<int64_t> scan_output_axes = GetAttributeIntsOrDefault(node, "scan_output_axes", {});
-  std::vector<int64_t> scan_output_directions =
+  const std::vector<int64_t> scan_output_axes =
+      GetAttributeIntsOrDefault(node, "scan_output_axes", {});
+  const std::vector<int64_t> scan_output_directions =
       GetAttributeIntsOrDefault(node, "scan_output_directions", {});
 
-  if (scan_input_axes.empty()) {
-    scan_input_axes.assign(m, 0);
-  } else if (scan_input_axes.size() != m) {
-    throw std::invalid_argument(
-        "RunNode: Scan attribute 'scan_input_axes' must have num_scan_inputs entries.");
-  }
-  if (scan_input_directions.empty()) {
-    scan_input_directions.assign(m, 0);
-  } else if (scan_input_directions.size() != m) {
-    throw std::invalid_argument(
-        "RunNode: Scan attribute 'scan_input_directions' must have num_scan_inputs entries.");
-  }
-  for (size_t i = 0; i < m; ++i) {
-    if (scan_input_directions[i] != 0 && scan_input_directions[i] != 1) {
-      throw std::invalid_argument(
-          "RunNode: Scan attribute 'scan_input_directions' entries must be 0 or 1.");
-    }
-  }
-
-  int64_t trip_count = -1;
-  std::vector<int64_t> resolved_scan_input_axes;
-  resolved_scan_input_axes.reserve(m);
-  for (size_t i = 0; i < m; ++i) {
-    const Tensor &scan = scan_inputs[i];
-    if (scan.shape.empty()) {
-      throw std::invalid_argument("RunNode: Scan input rank must be >= 1.");
-    }
-    const int64_t axis = ResolveAxis(scan_input_axes[i], scan.shape.size(), "Scan");
-    resolved_scan_input_axes.push_back(axis);
-    const int64_t dim = scan.shape[static_cast<size_t>(axis)];
-    if (trip_count < 0) {
-      trip_count = dim;
-    } else if (trip_count != dim) {
-      throw std::invalid_argument("RunNode: all Scan inputs must have the same trip count.");
-    }
-  }
-  if (trip_count < 0) {
-    trip_count = 0;
-  }
-
-  std::vector<Tensor> state = initial_state;
-  std::vector<std::vector<Tensor>> scan_values(k);
-  for (int64_t iter = 0; iter < trip_count; ++iter) {
-    std::vector<std::pair<std::string, Tensor>> bindings;
-    bindings.reserve(n + m);
-    for (size_t i = 0; i < n; ++i) {
-      Tensor t = state[i];
-      t.name = body.input(i).name().as_string();
-      bindings.emplace_back(t.name, std::move(t));
-    }
-    for (size_t i = 0; i < m; ++i) {
-      const int64_t index = (scan_input_directions[i] == 0) ? iter : (trip_count - 1 - iter);
-      Tensor slice =
-          SliceTensorAlongAxis(scan_inputs[i], resolved_scan_input_axes[i], index, "Scan");
-      slice.name = body.input(n + i).name().as_string();
-      bindings.emplace_back(slice.name, std::move(slice));
-    }
-
-    const std::vector<Tensor> body_outputs = RunSubgraph(body, bindings, rt);
-    std::vector<Tensor> next_state;
-    next_state.reserve(n);
-    for (size_t i = 0; i < n; ++i) {
-      next_state.push_back(body_outputs[i]);
-    }
-    state = std::move(next_state);
-    for (size_t i = 0; i < k; ++i) {
-      scan_values[i].push_back(body_outputs[n + i]);
-    }
-  }
-
+  // The Scan kernel now owns the iteration loop (including the body
+  // subgraph evaluation): RunScanNode is reduced to validating the node
+  // shape and forwarding inputs / attributes to the kernel.
   kernel::Scan scan_kernel(rt.kernel_ctx());
-  std::vector<Tensor> outputs = scan_kernel(trip_count, initial_state, state, scan_values,
-                                            scan_output_axes, scan_output_directions);
+  std::vector<Tensor> outputs =
+      scan_kernel(body, initial_state, scan_inputs, rt, scan_input_axes, scan_input_directions,
+                  scan_output_axes, scan_output_directions);
   PropagateOutputsToCaller(node, outputs, rt);
+}
+
+// Replaces every attribute of ``node`` (and recursively in any
+// sub-graph attribute) carrying a non-empty ``ref_attr_name`` with the
+// corresponding entry from ``attr_map``. When the call-site does not
+// supply a value for a referenced attribute, the referenced attribute
+// is removed -- matching the ONNX function-inliner semantics.
+//
+// The local attribute name declared inside the function body is
+// preserved; only the attribute's value is taken from the call-site.
+void BindRefAttributes(NodeProto &node,
+                       const std::unordered_map<std::string, const AttributeProto *> &attr_map) {
+  auto &attributes = node.attribute();
+  for (auto it = attributes.begin(); it != attributes.end();) {
+    AttributeProto &attr = *it;
+    if (!attr.ref_attr_name().as_string().empty()) {
+      auto found = attr_map.find(attr.ref_attr_name().as_string());
+      if (found != attr_map.end()) {
+        const std::string local_name = attr.name().as_string();
+        attr.CopyFrom(*found->second);
+        attr.set_name(local_name);
+        ++it;
+      } else {
+        it = attributes.erase(it);
+      }
+    } else {
+      // Recurse into any sub-graph attributes so that nested nodes
+      // also receive the bound attribute values.
+      if (attr.has_g()) {
+        GraphProto &gp = attr.ref_g();
+        for (size_t i = 0; i < gp.node().size(); ++i) {
+          BindRefAttributes(gp.ref_node()[i], attr_map);
+        }
+      }
+      auto &gs = attr.graphs();
+      for (size_t gi = 0; gi < gs.size(); ++gi) {
+        GraphProto &gp = gs[gi];
+        for (size_t i = 0; i < gp.node().size(); ++i) {
+          BindRefAttributes(gp.ref_node()[i], attr_map);
+        }
+      }
+      ++it;
+    }
+  }
 }
 
 // Invokes a model-local FunctionProto in response to a call site
@@ -538,6 +522,11 @@ void RunScanNode(const NodeProto &node, RuntimeContext &rt) {
 // local names cannot collide with the caller's tensor map; only the
 // formal outputs are propagated back to the caller under the names
 // declared by ``node.output(i)``.
+//
+// Before execution, every attribute reference (``ref_attr_name``) in
+// the function body is resolved against the call-site attributes,
+// falling back to the typed defaults declared in
+// ``FunctionProto::attribute_proto`` when the call-site omits a value.
 void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, RuntimeContext &rt) {
   const std::string op_type = node.op_type().as_string();
   if (static_cast<int>(node.input_size()) != static_cast<int>(func.input_size())) {
@@ -577,7 +566,29 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
     child.tensors()[param_name] = std::move(bound);
   }
 
-  RunFunction(func, child);
+  // Resolve attribute references (``ref_attr_name``) inside the
+  // function body. Resolution proceeds in two steps: the call-site
+  // attributes take precedence, and any unresolved reference falls
+  // back to the typed default declared in
+  // ``FunctionProto::attribute_proto``. Resolution is performed on a
+  // local copy of the function so the caller's ModelProto is not
+  // mutated and the runtime stays thread-safe with respect to the
+  // shared function registry.
+  std::unordered_map<std::string, const AttributeProto *> attr_map;
+  for (size_t i = 0; i < func.attribute_proto().size(); ++i) {
+    const AttributeProto &a = func.attribute_proto()[i];
+    attr_map[a.name().as_string()] = &a;
+  }
+  for (size_t i = 0; i < node.attribute().size(); ++i) {
+    const AttributeProto &a = node.attribute()[i];
+    attr_map[a.name().as_string()] = &a;
+  }
+  FunctionProto bound_func;
+  bound_func.CopyFrom(func);
+  for (size_t i = 0; i < bound_func.node().size(); ++i) {
+    BindRefAttributes(bound_func.ref_node()[i], attr_map);
+  }
+  RunFunction(bound_func, child);
 
   // Copy the function's formal outputs back into the caller's tensor
   // map under the names declared by the node's output list.

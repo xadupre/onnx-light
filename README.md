@@ -30,8 +30,13 @@ for the upstream project's direction and priorities.
   which enforces a 2 GB message-size limit and cannot load or save models that
   exceed that threshold. `onnx-light` bypasses protobuf entirely and supports
   arbitrarily large ONNX files.
-- **Parallel loading** – Tensor weights can be read in parallel using multiple
-  threads, which significantly reduces wall-clock load time for large models
+- **Parallel loading and saving** – Tensor weights can be read and written in
+  parallel using multiple threads via the ``num_threads`` parameter of
+  ``onnx_light.onnx.load`` and ``onnx_light.onnx.save``. In practice loading
+  or saving large models is roughly **3 times faster with 4 threads** compared
+  to the single-threaded path (see
+  [docs/examples/core/plot_threads_load_save.py](docs/examples/core/plot_threads_load_save.py)
+  for a benchmark).
 - **Zero-copy parsing** – creates the ModelProto without any tensor copy,
   all initializers point to the data inside ModelProto
 - **Aligned external tensor offsets** – external tensor data can be written

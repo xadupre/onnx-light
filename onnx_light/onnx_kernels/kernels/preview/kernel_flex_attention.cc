@@ -42,6 +42,11 @@ Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor 
 
 Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V,
                                  float scale) const {
+  return (*this)(Q, K, V, scale, ProbModFn{});
+}
+
+Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
+                                 const ProbModFn &prob_mod) const {
   CheckRank4Float(Q, "Q");
   CheckRank4Float(V, "V");
   const int64_t batch_size = Q.shape[0];
@@ -51,12 +56,17 @@ Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor 
   const int64_t out_count = batch_size * q_num_heads * q_seq_len * v_head_size;
   Tensor out("", DataType::FLOAT, {batch_size, q_num_heads, q_seq_len, v_head_size},
              std::vector<uint8_t>(static_cast<size_t>(out_count) * sizeof(float)));
-  (*this)(Q, K, V, scale, out);
+  (*this)(Q, K, V, scale, prob_mod, out);
   return out;
 }
 
 void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
                                Tensor &output) const {
+  (*this)(Q, K, V, scale, ProbModFn{}, output);
+}
+
+void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
+                               const ProbModFn &prob_mod, Tensor &output) const {
   CheckRank4Float(Q, "Q");
   CheckRank4Float(K, "K");
   CheckRank4Float(V, "V");
@@ -120,14 +130,25 @@ void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V
   const int64_t y_head_stride = q_seq_len * v_head_size;
   const int64_t y_batch_stride = q_num_heads * y_head_stride;
 
+  // Allocate the full (B, Hq, L, S) probability tensor so the optional
+  // ``prob_mod`` callback — which operates on the whole tensor in ONNX —
+  // can rewrite it in place before the final ``probs @ V`` matmul.
+  const std::vector<int64_t> probs_shape = {batch_size, q_num_heads, q_seq_len, kv_seq_len};
+  const int64_t probs_count = batch_size * q_num_heads * q_seq_len * kv_seq_len;
+  Tensor probs("", DataType::FLOAT, probs_shape,
+               std::vector<uint8_t>(static_cast<size_t>(probs_count) * sizeof(float)));
+  float *pProbs = probs.AsFloat();
+
+  const int64_t probs_head_stride = q_seq_len * kv_seq_len;
+  const int64_t probs_batch_stride = q_num_heads * probs_head_stride;
+
   std::vector<double> scores(static_cast<size_t>(kv_seq_len));
   for (int64_t b = 0; b < batch_size; ++b) {
     for (int64_t h = 0; h < q_num_heads; ++h) {
       const int64_t kv_h = h / group_size;
       const float *Qbh = pQ + b * q_batch_stride + h * q_head_stride;
       const float *Kbh = pK + b * k_batch_stride + kv_h * k_head_stride;
-      const float *Vbh = pV + b * v_batch_stride + kv_h * v_head_stride;
-      float *Ybh = pY + b * y_batch_stride + h * y_head_stride;
+      float *Pbh = pProbs + b * probs_batch_stride + h * probs_head_stride;
 
       for (int64_t i = 0; i < q_seq_len; ++i) {
         // scores[j] = sum_d Q[i, d] * K[j, d] * scale
@@ -153,13 +174,44 @@ void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V
         }
         const double inv_denom = denom != 0.0 ? 1.0 / denom : 0.0;
         for (int64_t j = 0; j < kv_seq_len; ++j) {
-          scores[static_cast<size_t>(j)] *= inv_denom;
+          Pbh[i * kv_seq_len + j] = static_cast<float>(scores[static_cast<size_t>(j)] * inv_denom);
         }
-        // Y[i, dv] = sum_j probs[j] * V[j, dv]
+      }
+    }
+  }
+
+  // Apply the optional ``prob_mod`` modifier subgraph callback. The
+  // callback may freely rewrite the probability values but must preserve
+  // the FLOAT element type and the (B, Hq, L, S) shape.
+  if (prob_mod) {
+    prob_mod(probs);
+    EXT_ENFORCE_INVALID(probs.data_type == DataType::FLOAT,
+                        "kernel::FlexAttention: 'prob_mod' callback must preserve the FLOAT "
+                        "element type of the probability tensor.");
+    EXT_ENFORCE_INVALID(probs.shape == probs_shape,
+                        "kernel::FlexAttention: 'prob_mod' callback must preserve the "
+                        "(batch_size, q_num_heads, q_seq_len, kv_seq_len) shape of the "
+                        "probability tensor.");
+    EXT_ENFORCE_INVALID(
+        probs.data.size() == static_cast<size_t>(probs_count) * sizeof(float),
+        "kernel::FlexAttention: 'prob_mod' callback must preserve the byte size of the "
+        "probability tensor buffer.");
+    pProbs = probs.AsFloat();
+  }
+
+  // Y = probs @ V, per (batch, query-head, query-pos, value-dim).
+  for (int64_t b = 0; b < batch_size; ++b) {
+    for (int64_t h = 0; h < q_num_heads; ++h) {
+      const int64_t kv_h = h / group_size;
+      const float *Vbh = pV + b * v_batch_stride + kv_h * v_head_stride;
+      const float *Pbh = pProbs + b * probs_batch_stride + h * probs_head_stride;
+      float *Ybh = pY + b * y_batch_stride + h * y_head_stride;
+      for (int64_t i = 0; i < q_seq_len; ++i) {
         for (int64_t dv = 0; dv < v_head_size; ++dv) {
           double y = 0.0;
           for (int64_t j = 0; j < kv_seq_len; ++j) {
-            y += scores[static_cast<size_t>(j)] * static_cast<double>(Vbh[j * v_head_size + dv]);
+            y += static_cast<double>(Pbh[i * kv_seq_len + j]) *
+                 static_cast<double>(Vbh[j * v_head_size + dv]);
           }
           Ybh[i * v_head_size + dv] = static_cast<float>(y);
         }

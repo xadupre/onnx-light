@@ -3,11 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_kernels/kernels/controlflow/include_controlflow_kernels.h"
+#include "onnx_kernels/run_nodes.h"
+#include "onnx_kernels/runtime_context.h"
+#include "onnx_proto/onnx.h"
 
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <numeric>
+#include <string>
+#include <utility>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -158,6 +163,101 @@ std::vector<Tensor> Scan::operator()(int64_t trip_count, const std::vector<Tenso
     out.push_back(StackScanOutput(scan_values_per_iter[ki], trip_count, axis, reverse));
   }
   return out;
+}
+
+std::vector<Tensor> Scan::operator()(const GraphProto &body,
+                                     const std::vector<Tensor> &initial_state,
+                                     const std::vector<Tensor> &scan_inputs, RuntimeContext &rt,
+                                     const std::vector<int64_t> &scan_input_axes_in,
+                                     const std::vector<int64_t> &scan_input_directions_in,
+                                     const std::vector<int64_t> &scan_output_axes,
+                                     const std::vector<int64_t> &scan_output_directions) const {
+  const std::size_t n = initial_state.size();
+  const std::size_t m = scan_inputs.size();
+  EXT_ENFORCE_INVALID(m > 0, "kernel::Scan: at least one scan input is required.");
+  EXT_ENFORCE_INVALID(static_cast<std::size_t>(body.input_size()) >= n + m,
+                      "kernel::Scan: body graph does not declare enough inputs for N+M.");
+  EXT_ENFORCE_INVALID(static_cast<std::size_t>(body.output_size()) >= n,
+                      "kernel::Scan: body graph does not declare enough outputs for N.");
+  const std::size_t k = static_cast<std::size_t>(body.output_size()) - n;
+
+  // Normalize per-scan-input axes and directions to length M.
+  std::vector<int64_t> scan_input_axes = scan_input_axes_in;
+  std::vector<int64_t> scan_input_directions = scan_input_directions_in;
+  if (scan_input_axes.empty()) {
+    scan_input_axes.assign(m, 0);
+  } else {
+    EXT_ENFORCE_INVALID(scan_input_axes.size() == m,
+                        "kernel::Scan: 'scan_input_axes' must have num_scan_inputs entries.");
+  }
+  if (scan_input_directions.empty()) {
+    scan_input_directions.assign(m, 0);
+  } else {
+    EXT_ENFORCE_INVALID(scan_input_directions.size() == m,
+                        "kernel::Scan: 'scan_input_directions' must have num_scan_inputs entries.");
+  }
+  for (std::size_t i = 0; i < m; ++i) {
+    EXT_ENFORCE_INVALID(scan_input_directions[i] == 0 || scan_input_directions[i] == 1,
+                        "kernel::Scan: 'scan_input_directions' entries must be 0 or 1.");
+  }
+
+  // Resolve scan-input axes and determine the trip count from the
+  // sliced dimension. All scan inputs must agree on it.
+  std::vector<int64_t> resolved_scan_input_axes;
+  resolved_scan_input_axes.reserve(m);
+  int64_t trip_count = -1;
+  for (std::size_t i = 0; i < m; ++i) {
+    const Tensor &scan = scan_inputs[i];
+    EXT_ENFORCE_INVALID(!scan.shape.empty(), "kernel::Scan: scan input rank must be >= 1.");
+    const int64_t axis = ::ONNX_LIGHT_NAMESPACE::onnx_kernels::ResolveAxis(
+        scan_input_axes[i], scan.shape.size(), "Scan");
+    resolved_scan_input_axes.push_back(axis);
+    const int64_t dim = scan.shape[static_cast<std::size_t>(axis)];
+    if (trip_count < 0) {
+      trip_count = dim;
+    } else {
+      EXT_ENFORCE_INVALID(trip_count == dim,
+                          "kernel::Scan: all scan inputs must have the same trip count "
+                          "along their respective scan axis.");
+    }
+  }
+  if (trip_count < 0) {
+    trip_count = 0;
+  }
+
+  // Iterate the body once per scan step, threading the state forward and
+  // collecting the per-iteration scan outputs.
+  std::vector<Tensor> state = initial_state;
+  std::vector<std::vector<Tensor>> scan_values(k);
+  for (int64_t iter = 0; iter < trip_count; ++iter) {
+    std::vector<std::pair<std::string, Tensor>> bindings;
+    bindings.reserve(n + m);
+    for (std::size_t i = 0; i < n; ++i) {
+      Tensor t = state[i];
+      t.name = body.input(static_cast<int>(i)).name().as_string();
+      bindings.emplace_back(t.name, std::move(t));
+    }
+    for (std::size_t i = 0; i < m; ++i) {
+      const int64_t index = (scan_input_directions[i] == 0) ? iter : (trip_count - 1 - iter);
+      Tensor slice =
+          SliceTensorAlongAxis(scan_inputs[i], resolved_scan_input_axes[i], index, "Scan");
+      slice.name = body.input(static_cast<int>(n + i)).name().as_string();
+      bindings.emplace_back(slice.name, std::move(slice));
+    }
+
+    const std::vector<Tensor> body_outputs = RunSubgraph(body, bindings, rt);
+    EXT_ENFORCE_INVALID(body_outputs.size() == n + k,
+                        "kernel::Scan: body produced an unexpected number of outputs.");
+    state.assign(body_outputs.begin(), body_outputs.begin() + static_cast<std::ptrdiff_t>(n));
+    for (std::size_t i = 0; i < k; ++i) {
+      scan_values[i].push_back(body_outputs[n + i]);
+    }
+  }
+
+  // Delegate to the stacking-only overload for the final assembly so the
+  // two overloads share the validation/stacking semantics.
+  return (*this)(trip_count, initial_state, state, scan_values, scan_output_axes,
+                 scan_output_directions);
 }
 
 } // namespace kernel

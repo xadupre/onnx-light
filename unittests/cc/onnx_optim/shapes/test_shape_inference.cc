@@ -49,6 +49,20 @@ TEST(OnnxOptimShapeInference, DispatchesAbs) {
   EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
 }
 
+TEST(OnnxOptimShapeInference, SupportsUtilsStringLookupForNodeOutput) {
+  NodeProto node = MakeNode("Abs", {"X"}, {"Y"});
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  const auto &output_name = node.output(0);
+  ASSERT_TRUE(ctx.Has(output_name));
+  EXPECT_EQ(ctx.Get(output_name),
+            onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+}
+
 TEST(OnnxOptimShapeInference, DispatchesAddWithBroadcast) {
   NodeProto node = MakeNode("Add", {"A", "B"}, {"C"});
   onnx_optim::shapes::ShapesContext ctx;
@@ -728,6 +742,183 @@ TEST(OnnxOptimShapeInference, InferShapesModelWithPrefillPrefersOutputAnchor) {
   EXPECT_TRUE(out.type().tensor_type().shape().dim()[0].has_dim_param());
   EXPECT_EQ(out.type().tensor_type().shape().dim()[0].dim_param().as_string(), "ANCHOR");
   EXPECT_EQ(out.type().tensor_type().shape().dim()[1].dim_value(), 2);
+}
+
+// ── Model-local functions ────────────────────────────────────────────
+
+namespace {
+
+// Builds ``model.functions()`` entry ``local:func_add(a, b) -> c`` whose
+// body is a single ``Add`` node.
+FunctionProto *AddLocalFuncAdd(ModelProto &model) {
+  FunctionProto *func = model.add_functions();
+  func->set_name("func_add");
+  func->set_domain("local");
+  func->add_input("a");
+  func->add_input("b");
+  func->add_output("c");
+  OperatorSetIdProto *opset = func->add_opset_import();
+  opset->set_domain("");
+  opset->set_version(static_cast<int64_t>(18));
+  NodeProto *body = func->add_node();
+  body->set_op_type("Add");
+  body->add_input("a");
+  body->add_input("b");
+  body->add_output("c");
+  return func;
+}
+
+// Builds a minimal model:
+//   inputs X, Y (float, shape {3, 4}); output Z = local:func_add(X, Y).
+ModelProto MakeLocalFunctionAddModel() {
+  ModelProto model;
+  model.set_ir_version(static_cast<int64_t>(8));
+  OperatorSetIdProto *ai = model.add_opset_import();
+  ai->set_domain("");
+  ai->set_version(static_cast<int64_t>(18));
+  OperatorSetIdProto *loc = model.add_opset_import();
+  loc->set_domain("local");
+  loc->set_version(static_cast<int64_t>(1));
+  AddLocalFuncAdd(model);
+
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+  ValueInfoProto *x = graph->add_input();
+  x->set_name("X");
+  SetValueInfoTensorType(*x, TensorProto::DataType::FLOAT, /*shape=*/{3, 4});
+  ValueInfoProto *y = graph->add_input();
+  y->set_name("Y");
+  SetValueInfoTensorType(*y, TensorProto::DataType::FLOAT, /*shape=*/{3, 4});
+  ValueInfoProto *z = graph->add_output();
+  z->set_name("Z");
+  // Leave Z's type empty so shape inference must recover it.
+  z->add_type();
+
+  NodeProto *call = graph->add_node();
+  call->set_op_type("func_add");
+  call->set_domain("local");
+  call->add_input("X");
+  call->add_input("Y");
+  call->add_output("Z");
+  return model;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeInference, ComputeShapeModelExpandsLocalFunctionCall) {
+  // A node calling the model-local function ``local:func_add`` must be
+  // expanded: the function body's ``Add`` is run in a sub-context that
+  // rebinds the function-local names ``a``/``b``/``c`` to the caller's
+  // ``X``/``Y``/``Z``, and the inferred output is mapped back.
+  ModelProto model = MakeLocalFunctionAddModel();
+  onnx_optim::shapes::ShapesContext ctx;
+
+  onnx_optim::shapes::ComputeShapeModel(ctx, model);
+
+  ASSERT_TRUE(ctx.Has("Z"));
+  EXPECT_EQ(ctx.Get("Z").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Z").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)}));
+  // The local-function map should have been populated from model.functions().
+  EXPECT_TRUE(ctx.HasLocalFunction("local:func_add"));
+}
+
+TEST(OnnxOptimShapeInference, InferShapesModelWritesBackLocalFunctionOutput) {
+  // End-to-end: ``InferShapesModel`` writes the inferred Z shape back to
+  // the proto.
+  ModelProto model = MakeLocalFunctionAddModel();
+
+  onnx_optim::shapes::InferShapesModel(model);
+
+  const ValueInfoProto &out = model.graph().output(0);
+  ASSERT_TRUE(out.has_type() && out.type().has_tensor_type());
+  ASSERT_TRUE(out.type().tensor_type().has_shape());
+  ASSERT_EQ(out.type().tensor_type().shape().dim_size(), 2u);
+  EXPECT_EQ(out.type().tensor_type().shape().dim()[0].dim_value(), 3);
+  EXPECT_EQ(out.type().tensor_type().shape().dim()[1].dim_value(), 4);
+}
+
+TEST(OnnxOptimShapeInference, ComputeShapeNodeRejectsUnknownNonLocalFunctionDomain) {
+  // Sanity check: a node in an unknown domain that does **not** match any
+  // registered model-local function still triggers the domain check.
+  NodeProto node = MakeNode("does_not_exist", {"X"}, {"Y"}, "com.acme");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+}
+
+namespace {
+
+// Builds a model whose local function body uses ``ref_attr_name`` to
+// reference a formal attribute (``to``) supplied by the call site.
+//   local:func_cast(a) -> b   with body: b = Cast(a) [to = ref(to)]
+ModelProto MakeLocalFunctionRefAttrCastModel(int64_t cast_to) {
+  ModelProto model;
+  model.set_ir_version(static_cast<int64_t>(8));
+  OperatorSetIdProto *ai = model.add_opset_import();
+  ai->set_domain("");
+  ai->set_version(static_cast<int64_t>(18));
+  OperatorSetIdProto *loc = model.add_opset_import();
+  loc->set_domain("local");
+  loc->set_version(static_cast<int64_t>(1));
+
+  FunctionProto *func = model.add_functions();
+  func->set_name("func_cast");
+  func->set_domain("local");
+  func->add_input("a");
+  func->add_output("b");
+  func->add_attribute("to");
+  OperatorSetIdProto *fopset = func->add_opset_import();
+  fopset->set_domain("");
+  fopset->set_version(static_cast<int64_t>(18));
+  NodeProto *body = func->add_node();
+  body->set_op_type("Cast");
+  body->add_input("a");
+  body->add_output("b");
+  AttributeProto *ref = body->add_attribute();
+  ref->set_name("to");
+  ref->set_ref_attr_name("to");
+  ref->set_type(AttributeProto::AttributeType::INT);
+
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+  ValueInfoProto *x = graph->add_input();
+  x->set_name("X");
+  SetValueInfoTensorType(*x, TensorProto::DataType::FLOAT, /*shape=*/{2, 3});
+  ValueInfoProto *z = graph->add_output();
+  z->set_name("Z");
+  z->add_type();
+
+  NodeProto *call = graph->add_node();
+  call->set_op_type("func_cast");
+  call->set_domain("local");
+  call->add_input("X");
+  call->add_output("Z");
+  AttributeProto *attr = call->add_attribute();
+  attr->set_name("to");
+  attr->set_type(AttributeProto::AttributeType::INT);
+  attr->set_i(cast_to);
+  return model;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeInference, ExpandsLocalFunctionWithLinkedAttribute) {
+  // A function body using ``ref_attr_name`` must have its attribute
+  // references bound to the call-site attribute values before shape
+  // inference runs over the body. The Cast op's ``to`` attribute
+  // (referenced from the function body) determines the output element
+  // type, so the inferred Z must take that dtype.
+  ModelProto model =
+      MakeLocalFunctionRefAttrCastModel(static_cast<int64_t>(TensorProto::DataType::INT64));
+  onnx_optim::shapes::ShapesContext ctx;
+
+  onnx_optim::shapes::ComputeShapeModel(ctx, model);
+
+  ASSERT_TRUE(ctx.Has("Z"));
+  EXPECT_EQ(ctx.Get("Z").Dtype(), onnx_optim::TensorType::kInt64);
+  EXPECT_EQ(ctx.Get("Z").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
 }
 
 } // namespace Test

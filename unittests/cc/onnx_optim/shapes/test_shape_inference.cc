@@ -847,4 +847,78 @@ TEST(OnnxOptimShapeInference, ComputeShapeNodeRejectsUnknownNonLocalFunctionDoma
   EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
 }
 
+namespace {
+
+// Builds a model whose local function body uses ``ref_attr_name`` to
+// reference a formal attribute (``to``) supplied by the call site.
+//   local:func_cast(a) -> b   with body: b = Cast(a) [to = ref(to)]
+ModelProto MakeLocalFunctionRefAttrCastModel(int64_t cast_to) {
+  ModelProto model;
+  model.set_ir_version(static_cast<int64_t>(8));
+  OperatorSetIdProto *ai = model.add_opset_import();
+  ai->set_domain("");
+  ai->set_version(static_cast<int64_t>(18));
+  OperatorSetIdProto *loc = model.add_opset_import();
+  loc->set_domain("local");
+  loc->set_version(static_cast<int64_t>(1));
+
+  FunctionProto *func = model.add_functions();
+  func->set_name("func_cast");
+  func->set_domain("local");
+  func->add_input("a");
+  func->add_output("b");
+  func->add_attribute("to");
+  OperatorSetIdProto *fopset = func->add_opset_import();
+  fopset->set_domain("");
+  fopset->set_version(static_cast<int64_t>(18));
+  NodeProto *body = func->add_node();
+  body->set_op_type("Cast");
+  body->add_input("a");
+  body->add_output("b");
+  AttributeProto *ref = body->add_attribute();
+  ref->set_name("to");
+  ref->set_ref_attr_name("to");
+  ref->set_type(AttributeProto::AttributeType::INT);
+
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+  ValueInfoProto *x = graph->add_input();
+  x->set_name("X");
+  SetValueInfoTensorType(*x, TensorProto::DataType::FLOAT, /*shape=*/{2, 3});
+  ValueInfoProto *z = graph->add_output();
+  z->set_name("Z");
+  z->add_type();
+
+  NodeProto *call = graph->add_node();
+  call->set_op_type("func_cast");
+  call->set_domain("local");
+  call->add_input("X");
+  call->add_output("Z");
+  AttributeProto *attr = call->add_attribute();
+  attr->set_name("to");
+  attr->set_type(AttributeProto::AttributeType::INT);
+  attr->set_i(cast_to);
+  return model;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeInference, ExpandsLocalFunctionWithLinkedAttribute) {
+  // A function body using ``ref_attr_name`` must have its attribute
+  // references bound to the call-site attribute values before shape
+  // inference runs over the body. The Cast op's ``to`` attribute
+  // (referenced from the function body) determines the output element
+  // type, so the inferred Z must take that dtype.
+  ModelProto model =
+      MakeLocalFunctionRefAttrCastModel(static_cast<int64_t>(TensorProto::DataType::INT64));
+  onnx_optim::shapes::ShapesContext ctx;
+
+  onnx_optim::shapes::ComputeShapeModel(ctx, model);
+
+  ASSERT_TRUE(ctx.Has("Z"));
+  EXPECT_EQ(ctx.Get("Z").Dtype(), onnx_optim::TensorType::kInt64);
+  EXPECT_EQ(ctx.Get("Z").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+}
+
 } // namespace Test

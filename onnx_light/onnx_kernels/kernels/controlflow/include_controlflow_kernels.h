@@ -7,8 +7,13 @@
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/simple_tensor.h"
 
+#include <vector>
+
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
+
+class RuntimeContext;
+
 namespace kernel {
 
 // ---------------------------------------------------------------------------
@@ -29,12 +34,20 @@ namespace kernel {
 //     match the operator's expected output; the kernel validates these
 //     attributes and throws ``std::invalid_argument`` on mismatch.
 //
-// ``If`` mirrors the ONNX ``If`` operator: it selects one of two precomputed
-// branch values based on a scalar BOOL condition. The kernel does not
-// execute the branch subgraphs itself — it consumes their already-evaluated
-// outputs, which keeps this reference implementation independent from any
-// graph-executor machinery while still exercising the operator's selection
-// semantics.
+// ``If`` mirrors the ONNX ``If`` operator. Two flavors of selection are
+// provided:
+//
+//   * The "precomputed branches" overloads
+//     (``operator()(cond, then_value, else_value [, output])``) consume
+//     already-evaluated branch outputs and simply select one based on the
+//     scalar BOOL ``cond``. They are convenient for unit tests that do not
+//     need a graph executor.
+//   * The "branch graphs" overload
+//     (``operator()(cond, then_branch, else_branch, rt)``) executes the
+//     selected ``GraphProto`` subgraph through :cpp:func:`RunGraph` using
+//     the caller-provided :cpp:class:`RuntimeContext` and returns the
+//     subgraph's outputs in declaration order. This is the form used by
+//     :cpp:func:`RunIfNode` when dispatching ``If`` from a model graph.
 //
 // Each kernel class also exposes a ``static constexpr bool CanRunInPlace()``
 // query indicating whether the output tensor's data buffer may alias one of
@@ -51,6 +64,23 @@ public:
   Tensor operator()(const Tensor &cond, const Tensor &then_value, const Tensor &else_value) const;
   void operator()(const Tensor &cond, const Tensor &then_value, const Tensor &else_value,
                   Tensor &output) const;
+
+  /// Branch-graph overload.
+  ///
+  /// Selects the ``then_branch`` :cpp:class:`GraphProto` when the scalar
+  /// BOOL ``cond`` is true and ``else_branch`` otherwise, then executes
+  /// the selected subgraph through :cpp:func:`RunGraph` using ``rt`` (a
+  /// child :cpp:class:`RuntimeContext` is created internally so the
+  /// caller's tensor map is left untouched apart from being inherited as
+  /// the outer scope of the subgraph). The returned vector contains the
+  /// subgraph outputs in the order declared by ``branch.output()``.
+  ///
+  /// @throws std::invalid_argument if ``cond`` is not a BOOL scalar, if a
+  ///         declared subgraph output is missing, if ``then_branch`` and
+  ///         ``else_branch`` declare a different number of outputs, or if
+  ///         any node of the executed subgraph fails to dispatch.
+  std::vector<Tensor> operator()(const Tensor &cond, const GraphProto &then_branch,
+                                 const GraphProto &else_branch, RuntimeContext &rt) const;
 
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };

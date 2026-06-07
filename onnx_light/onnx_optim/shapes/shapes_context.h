@@ -83,18 +83,12 @@ public:
   /// Returns ``true`` when an entry exists for ``name``.
   bool Has(const std::string &name) const { return tensors_.find(name) != tensors_.end(); }
 
-  /// Overload: ``name`` given as a null-terminated C string.
-  bool Has(const char *name) const { return Has(std::string(name)); }
-
   /// Overload: ``name`` given as a :cpp:class:`utils::String`.
   bool Has(const utils::String &name) const { return Has(std::string(name.data(), name.size())); }
 
   /// Returns the descriptor for ``name``. Throws ``std::out_of_range``
   /// if no such entry exists.
   const OptimTensor &Get(const std::string &name) const { return tensors_.at(name); }
-
-  /// Overload: ``name`` given as a null-terminated C string.
-  const OptimTensor &Get(const char *name) const { return Get(std::string(name)); }
 
   /// Overload: ``name`` given as a :cpp:class:`utils::String`.
   const OptimTensor &Get(const utils::String &name) const {
@@ -141,9 +135,6 @@ public:
     return sequences_.find(name) != sequences_.end();
   }
 
-  /// Overload: ``name`` given as a null-terminated C string.
-  bool HasSequence(const char *name) const { return HasSequence(std::string(name)); }
-
   /// Overload: ``name`` given as a :cpp:class:`utils::String`.
   bool HasSequence(const utils::String &name) const {
     return HasSequence(std::string(name.data(), name.size()));
@@ -152,11 +143,6 @@ public:
   /// Returns the sequence descriptor for ``name``. Throws
   /// ``std::out_of_range`` if no such entry exists.
   const OptimSequence &GetSequence(const std::string &name) const { return sequences_.at(name); }
-
-  /// Overload: ``name`` given as a null-terminated C string.
-  const OptimSequence &GetSequence(const char *name) const {
-    return GetSequence(std::string(name));
-  }
 
   /// Overload: ``name`` given as a :cpp:class:`utils::String`.
   const OptimSequence &GetSequence(const utils::String &name) const {

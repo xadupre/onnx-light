@@ -22,6 +22,9 @@ void CollectShapeInferenceTestCases(std::vector<TestCase> &registry, const std::
       // Single node calling a model-local function. The dispatch key is
       // the function name (the op_type the caller node uses).
       {"func_add", &RegisterLocalFunctionAddShapeInferenceCases},
+      // Single node calling a model-local function whose body calls
+      // another model-local function (nested expansion).
+      {"func_outer_add", &RegisterNestedLocalFunctionAddShapeInferenceCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
   if (op_type.empty()) {

@@ -663,26 +663,21 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
   // local copy of the function so the caller's ModelProto is not
   // mutated and the runtime stays thread-safe with respect to the
   // shared function registry.
-  const bool has_attribute_refs = !node.attribute().empty() || !func.attribute_proto().empty();
-  if (has_attribute_refs) {
-    std::unordered_map<std::string, const AttributeProto *> attr_map;
-    for (size_t i = 0; i < func.attribute_proto().size(); ++i) {
-      const AttributeProto &a = func.attribute_proto()[i];
-      attr_map[a.name().as_string()] = &a;
-    }
-    for (size_t i = 0; i < node.attribute().size(); ++i) {
-      const AttributeProto &a = node.attribute()[i];
-      attr_map[a.name().as_string()] = &a;
-    }
-    FunctionProto bound_func;
-    bound_func.CopyFrom(func);
-    for (size_t i = 0; i < bound_func.node().size(); ++i) {
-      BindRefAttributes(bound_func.ref_node()[i], attr_map);
-    }
-    RunFunction(bound_func, child);
-  } else {
-    RunFunction(func, child);
+  std::unordered_map<std::string, const AttributeProto *> attr_map;
+  for (size_t i = 0; i < func.attribute_proto().size(); ++i) {
+    const AttributeProto &a = func.attribute_proto()[i];
+    attr_map[a.name().as_string()] = &a;
   }
+  for (size_t i = 0; i < node.attribute().size(); ++i) {
+    const AttributeProto &a = node.attribute()[i];
+    attr_map[a.name().as_string()] = &a;
+  }
+  FunctionProto bound_func;
+  bound_func.CopyFrom(func);
+  for (size_t i = 0; i < bound_func.node().size(); ++i) {
+    BindRefAttributes(bound_func.ref_node()[i], attr_map);
+  }
+  RunFunction(bound_func, child);
 
   // Copy the function's formal outputs back into the caller's tensor
   // map under the names declared by the node's output list.

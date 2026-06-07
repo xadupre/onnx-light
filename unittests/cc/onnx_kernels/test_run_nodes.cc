@@ -584,8 +584,8 @@ TEST(RunModel, ModelLocalFunctionCallsAnotherFunctionAcrossDomains) {
   EXPECT_FLOAT_EQ(res[0], 1.0f * 1.0f + 10.0f);
   EXPECT_FLOAT_EQ(res[1], 2.0f * 2.0f + 20.0f);
   EXPECT_FLOAT_EQ(res[2], 3.0f * 3.0f + 30.0f);
-  // The intermediate name produced inside the outer function must not
-  // leak into the caller's tensor map.
+  // The intermediate name produced inside the SquareThenAdd function
+  // body must not leak into the caller's tensor map.
   EXPECT_FALSE(rt.Has("a2"));
 }
 

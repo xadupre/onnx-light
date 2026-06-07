@@ -118,7 +118,7 @@ class TestRunNodesBindings(ExtTestCase):
         node.op_type = "ThisOpDoesNotExist"
         ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
         ctx.set("x", _make_float_tensor("x", [1.0]))
-        with self.assertRaises(Exception):
+        with self.assertRaises((ValueError, RuntimeError)):
             rt.run_node(node, ctx)
 
     def test_run_model_without_graph_raises(self):
@@ -128,7 +128,7 @@ class TestRunNodesBindings(ExtTestCase):
         empty = ModelProto()
         empty.ir_version = 10
         ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
-        with self.assertRaises(Exception):
+        with self.assertRaises((ValueError, RuntimeError)):
             rt.run_model(empty, ctx)
 
 

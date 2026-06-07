@@ -136,9 +136,6 @@ if(ONNX_LIGHT_BUILD_PYTHON)
 else()
   set(_onnx_light_lib_type STATIC)
 endif()
-# Kept as an alias for backwards compatibility with code paths below that
-# still reference the proto-specific variable name.
-set(_lib_onnx_proto_type ${_onnx_light_lib_type})
 
 add_library(lib_onnx_proto ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} ${ONNX_LIGHT_PROTO_ALL_SOURCES})
 if(_onnx_light_lib_type STREQUAL "SHARED" AND WIN32)

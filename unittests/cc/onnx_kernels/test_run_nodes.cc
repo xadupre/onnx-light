@@ -383,4 +383,234 @@ TEST(RunModel, NoGraphThrows) {
   EXPECT_THROW(RunModel(model, rt), std::invalid_argument);
 }
 
+// ---------------------------------------------------------------------------
+// Model-local function dispatch tests
+// ---------------------------------------------------------------------------
+
+TEST(RunModel, NodeDispatchedToModelLocalFunction) {
+  // Define a model-local function "MyAddMul" in domain "custom":
+  //   inputs:  a, b, c
+  //   output:  out  = (a + b) * c
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+  OperatorSetIdProto *custom_os = model.add_opset_import();
+  custom_os->set_domain("custom");
+  custom_os->set_version(1);
+
+  FunctionProto *func = model.add_functions();
+  func->set_name("MyAddMul");
+  func->set_domain("custom");
+  func->add_input("a");
+  func->add_input("b");
+  func->add_input("c");
+  func->add_output("out");
+  {
+    NodeProto *n = func->add_node();
+    n->set_op_type("Add");
+    n->add_input("a");
+    n->add_input("b");
+    n->add_output("tmp");
+  }
+  {
+    NodeProto *n = func->add_node();
+    n->set_op_type("Mul");
+    n->add_input("tmp");
+    n->add_input("c");
+    n->add_output("out");
+  }
+
+  // Main graph: y = MyAddMul(x, w, k) where (x, w, k) are graph inputs.
+  GraphProto *g = model.add_graph();
+  g->set_name("test");
+  NodeProto *node = g->add_node();
+  node->set_op_type("MyAddMul");
+  node->set_domain("custom");
+  node->add_input("x");
+  node->add_input("w");
+  node->add_input("k");
+  node->add_output("y");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {2}, {1.0f, 2.0f}));
+  rt.Set("w", Tensor::FromFloat("w", {2}, {3.0f, 4.0f}));
+  rt.Set("k", Tensor::FromFloat("k", {2}, {10.0f, 100.0f}));
+
+  RunModel(model, rt);
+
+  ASSERT_TRUE(rt.Has("y"));
+  const float *res = rt.Get("y").AsFloat();
+  ASSERT_EQ(rt.Get("y").element_count(), 2);
+  EXPECT_FLOAT_EQ(res[0], (1.0f + 3.0f) * 10.0f);
+  EXPECT_FLOAT_EQ(res[1], (2.0f + 4.0f) * 100.0f);
+  // The function's internal "tmp" value must NOT leak into the caller's
+  // tensor map: the child context is isolated.
+  EXPECT_FALSE(rt.Has("tmp"));
+}
+
+TEST(RunModel, ModelLocalFunctionCanCallAnotherFunction) {
+  // Define two model-local functions in "custom":
+  //   AddOne(x) -> Add(x, one_init_passed_as_input)  -- here we use x+x
+  //   Quad(x)   -> AddOne(AddOne(x))                 -- so result = x*4? No: just chained calls
+  // To keep it simple and only exercise nesting, use:
+  //   Twice(x)  -> Add(x, x)
+  //   Quad(x)   -> Twice(Twice(x))   => 4*x
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+
+  FunctionProto *twice = model.add_functions();
+  twice->set_name("Twice");
+  twice->set_domain("custom");
+  twice->add_input("x");
+  twice->add_output("y");
+  {
+    NodeProto *n = twice->add_node();
+    n->set_op_type("Add");
+    n->add_input("x");
+    n->add_input("x");
+    n->add_output("y");
+  }
+
+  FunctionProto *quad = model.add_functions();
+  quad->set_name("Quad");
+  quad->set_domain("custom");
+  quad->add_input("x");
+  quad->add_output("y");
+  {
+    NodeProto *n = quad->add_node();
+    n->set_op_type("Twice");
+    n->set_domain("custom");
+    n->add_input("x");
+    n->add_output("t");
+  }
+  {
+    NodeProto *n = quad->add_node();
+    n->set_op_type("Twice");
+    n->set_domain("custom");
+    n->add_input("t");
+    n->add_output("y");
+  }
+
+  GraphProto *g = model.add_graph();
+  g->set_name("test");
+  NodeProto *node = g->add_node();
+  node->set_op_type("Quad");
+  node->set_domain("custom");
+  node->add_input("x");
+  node->add_output("y");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.5f, -3.0f}));
+
+  RunModel(model, rt);
+
+  ASSERT_TRUE(rt.Has("y"));
+  const float *res = rt.Get("y").AsFloat();
+  ASSERT_EQ(rt.Get("y").element_count(), 3);
+  EXPECT_FLOAT_EQ(res[0], 4.0f);
+  EXPECT_FLOAT_EQ(res[1], 10.0f);
+  EXPECT_FLOAT_EQ(res[2], -12.0f);
+}
+
+TEST(RunModel, ModelLocalFunctionOverloadDisambiguation) {
+  // Two functions share the same (domain, name) but differ by overload.
+  // The dispatcher must pick the one matching node.overload.
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+
+  FunctionProto *f_sum = model.add_functions();
+  f_sum->set_name("Combine");
+  f_sum->set_domain("custom");
+  f_sum->set_overload("sum");
+  f_sum->add_input("a");
+  f_sum->add_input("b");
+  f_sum->add_output("out");
+  {
+    NodeProto *n = f_sum->add_node();
+    n->set_op_type("Add");
+    n->add_input("a");
+    n->add_input("b");
+    n->add_output("out");
+  }
+
+  FunctionProto *f_diff = model.add_functions();
+  f_diff->set_name("Combine");
+  f_diff->set_domain("custom");
+  f_diff->set_overload("diff");
+  f_diff->add_input("a");
+  f_diff->add_input("b");
+  f_diff->add_output("out");
+  {
+    NodeProto *n = f_diff->add_node();
+    n->set_op_type("Sub");
+    n->add_input("a");
+    n->add_input("b");
+    n->add_output("out");
+  }
+
+  GraphProto *g = model.add_graph();
+  g->set_name("test");
+  NodeProto *n1 = g->add_node();
+  n1->set_op_type("Combine");
+  n1->set_domain("custom");
+  n1->set_overload("sum");
+  n1->add_input("x");
+  n1->add_input("y");
+  n1->add_output("s");
+  NodeProto *n2 = g->add_node();
+  n2->set_op_type("Combine");
+  n2->set_domain("custom");
+  n2->set_overload("diff");
+  n2->add_input("x");
+  n2->add_input("y");
+  n2->add_output("d");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {1}, {10.0f}));
+  rt.Set("y", Tensor::FromFloat("y", {1}, {3.0f}));
+
+  RunModel(model, rt);
+
+  ASSERT_TRUE(rt.Has("s"));
+  ASSERT_TRUE(rt.Has("d"));
+  EXPECT_FLOAT_EQ(rt.Get("s").AsFloat()[0], 13.0f);
+  EXPECT_FLOAT_EQ(rt.Get("d").AsFloat()[0], 7.0f);
+}
+
+TEST(RunModel, ModelLocalFunctionWrongInputCountThrows) {
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+
+  FunctionProto *func = model.add_functions();
+  func->set_name("F");
+  func->set_domain("custom");
+  func->add_input("a");
+  func->add_input("b");
+  func->add_output("out");
+  NodeProto *fn = func->add_node();
+  fn->set_op_type("Add");
+  fn->add_input("a");
+  fn->add_input("b");
+  fn->add_output("out");
+
+  GraphProto *g = model.add_graph();
+  NodeProto *node = g->add_node();
+  node->set_op_type("F");
+  node->set_domain("custom");
+  node->add_input("x"); // only 1, function expects 2
+  node->add_output("y");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {1}, {1.0f}));
+
+  EXPECT_THROW(RunModel(model, rt), std::invalid_argument);
+}
+
 } // namespace Test

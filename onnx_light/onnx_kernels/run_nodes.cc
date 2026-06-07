@@ -123,14 +123,108 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
   return table;
 }
 
+namespace {
+
+// Builds the canonical "<domain>:<op_type>:<overload>" key used to
+// look up model-local FunctionProto definitions in
+// ``RuntimeContext::functions``. The default ONNX domain (empty
+// ``NodeProto::domain``) is normalised to ``ai.onnx``.
+std::string FunctionLookupKey(const std::string &domain, const std::string &op_type,
+                              const std::string &overload) {
+  const std::string d = domain.empty() ? std::string(kDefaultOnnxDomain) : domain;
+  return d + ":" + op_type + ":" + overload;
+}
+
+// Invokes a model-local FunctionProto in response to a call site
+// ``node``. The function is executed in a child RuntimeContext so its
+// local names cannot collide with the caller's tensor map; only the
+// formal outputs are propagated back to the caller under the names
+// declared by ``node.output(i)``.
+void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, RuntimeContext &rt) {
+  const std::string op_type = node.op_type().as_string();
+  if (static_cast<int>(node.input_size()) != static_cast<int>(func.input_size())) {
+    throw std::invalid_argument("RunNode: call to model-local function '" + op_type + "' expects " +
+                                std::to_string(func.input_size()) + " input(s), got " +
+                                std::to_string(node.input_size()) + ".");
+  }
+  if (static_cast<int>(node.output_size()) != static_cast<int>(func.output_size())) {
+    throw std::invalid_argument("RunNode: call to model-local function '" + op_type + "' expects " +
+                                std::to_string(func.output_size()) + " output(s), got " +
+                                std::to_string(node.output_size()) + ".");
+  }
+
+  // Build a child runtime context that shares the kernel construction
+  // context and the function registry (so nested function calls work)
+  // but starts with a fresh, isolated tensor map.
+  RuntimeContext child(rt.kernel_ctx());
+  child.functions() = rt.functions();
+
+  // Bind formal function inputs to the caller's actuals.
+  for (size_t i = 0; i < func.input_size(); ++i) {
+    const std::string caller_name = node.input(i).as_string();
+    const std::string param_name = func.input(i).as_string();
+    // Optional/unused function inputs (empty actual or formal name) are skipped.
+    if (caller_name.empty() || param_name.empty()) {
+      continue;
+    }
+    auto it = rt.tensors().find(caller_name);
+    if (it == rt.tensors().end()) {
+      throw std::invalid_argument("RunNode: input '" + caller_name +
+                                  "' of call to model-local "
+                                  "function '" +
+                                  op_type + "' is missing from the tensor map.");
+    }
+    Tensor bound = it->second;
+    bound.name = param_name;
+    child.tensors()[param_name] = std::move(bound);
+  }
+
+  RunFunction(func, child);
+
+  // Copy the function's formal outputs back into the caller's tensor
+  // map under the names declared by the node's output list.
+  for (size_t i = 0; i < func.output_size(); ++i) {
+    const std::string caller_name = node.output(i).as_string();
+    const std::string param_name = func.output(i).as_string();
+    if (caller_name.empty()) {
+      // The caller does not want this output; skip it.
+      continue;
+    }
+    auto it = child.tensors().find(param_name);
+    if (it == child.tensors().end()) {
+      throw std::invalid_argument("RunNode: output '" + param_name + "' of model-local function '" +
+                                  op_type + "' was not produced by the function body.");
+    }
+    Tensor result = std::move(it->second);
+    result.name = caller_name;
+    rt.tensors()[caller_name] = std::move(result);
+  }
+}
+
+} // namespace
+
 void RunNode(const NodeProto &node, RuntimeContext &rt) {
   const std::string op_type = node.op_type().as_string();
-  const std::string key = NormaliseDispatchDomain(node) + ":" + op_type;
+  const std::string domain = NormaliseDispatchDomain(node);
+
+  // A node referring to a model-local FunctionProto (registered by
+  // ``RunModel`` from ``ModelProto::functions()``) takes priority over
+  // the built-in kernel dispatch table so that user-defined functions
+  // override same-named built-ins, matching the ONNX runtime semantics
+  // for model-local functions.
+  const std::string fkey = FunctionLookupKey(domain, op_type, node.overload().as_string());
+  auto fit = rt.functions().find(fkey);
+  if (fit != rt.functions().end()) {
+    CallModelLocalFunction(node, *fit->second, rt);
+    return;
+  }
+
+  const std::string key = domain + ":" + op_type;
   const auto &table = KernelDispatchTable();
   auto it = table.find(key);
   if (it == table.end()) {
     throw std::invalid_argument("RunNode: unsupported op_type '" + op_type + "' in domain '" +
-                                NormaliseDispatchDomain(node) + "'.");
+                                domain + "'.");
   }
   it->second(node, rt);
 }
@@ -161,6 +255,16 @@ void RunFunction(const FunctionProto &func, RuntimeContext &rt) { RunNodes(func.
 void RunModel(const ModelProto &model, RuntimeContext &rt) {
   if (!model.has_graph()) {
     throw std::invalid_argument("RunModel: the ModelProto does not contain a graph.");
+  }
+  // Register every model-local function so that nodes referring to
+  // them by (domain, op_type, overload) are dispatched to
+  // :cpp:func:`RunFunction` rather than rejected as unsupported ops.
+  const auto &fns = model.functions();
+  for (size_t i = 0; i < fns.size(); ++i) {
+    const FunctionProto &f = fns[i];
+    const std::string key =
+        FunctionLookupKey(f.domain().as_string(), f.name().as_string(), f.overload().as_string());
+    rt.functions()[key] = &f;
   }
   RunGraph(model.ref_graph(), rt);
 }

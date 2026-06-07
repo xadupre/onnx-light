@@ -225,7 +225,7 @@ void ConvInteger::operator()(const Tensor &x, const Tensor &w, const Tensor &x_z
   const int32_t x_zp = ReadScalarOrZero(x_zero_point);
   // Per-channel or scalar w_zp. ``has_w_zp_per_channel`` true means there is
   // a length-M 1-D tensor; otherwise either scalar or absent.
-  const bool w_zp_present = !w_zero_point.shape.empty() || !w_zero_point.size_bytes() == 0;
+  const bool w_zp_present = !w_zero_point.shape.empty() || w_zero_point.size_bytes() > 0;
   const bool w_zp_per_channel = w_zp_present && !w_zero_point.shape.empty() &&
                                 w_zero_point.shape.size() == 1 && w_zero_point.shape[0] == M;
   const int32_t w_zp_scalar = w_zp_present && !w_zp_per_channel ? ReadElem(w_zero_point, 0) : 0;

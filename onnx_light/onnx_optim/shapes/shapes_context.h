@@ -189,9 +189,7 @@ public:
   /// registered under the same ``"<domain>:<name>"`` key. ``func`` must
   /// not be ``nullptr``.
   void SetLocalFunction(const FunctionProto *func) {
-    if (func == nullptr) {
-      return;
-    }
+    EXT_ENFORCE_INVALID(func != nullptr, "SetLocalFunction: func must not be nullptr.");
     const std::string key = func->domain().as_string() + ":" + func->name().as_string();
     local_functions_[key] = func;
   }

@@ -1925,6 +1925,44 @@ round([-4.5]) = [-4.0]
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildSignSchemas() {
+  static constexpr const char *kSignDoc = R"DOC(
+Calculate the sign of the given input tensor element-wise.
+If input > 0, output 1. if input < 0, output -1. if input == 0, output 0.
+)DOC";
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(2);
+  schemas.push_back(LightOpSchema(
+      "Sign", kOnnxDomain, 13, kSignDoc,
+      {
+          {"input", "Input tensor", "T"},
+      },
+      {
+          {"output",
+           "The sign of the input tensor "
+           "computed element-wise. It has the same shape and type of the input.",
+           "T"},
+      },
+      {
+          {"T", AllNumericTypesIr4(), "Constrain input and output types to all numeric tensors."},
+      }));
+  schemas.push_back(LightOpSchema(
+      "Sign", kOnnxDomain, 9, kSignDoc,
+      {
+          {"input", "Input tensor", "T"},
+      },
+      {
+          {"output",
+           "The sign of the input tensor "
+           "computed element-wise. It has the same shape and type of the input.",
+           "T"},
+      },
+      {
+          {"T", AllNumericTypes(), "Constrain input and output types to all numeric tensors."},
+      }));
+  return schemas;
+}
+
 std::vector<LightOpSchema> BuildBlackmanWindowSchemas() {
   return std::vector<LightOpSchema>{
       LightOpSchema(
@@ -2990,6 +3028,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Round", [] { return BuildRoundSchemas(); }},
       {"Selu", [] { return BuildSeluSchemas(); }},
       {"Sigmoid", [] { return BuildSigmoidSchemas(); }},
+      {"Sign", [] { return BuildSignSchemas(); }},
       {"Shrink", [] { return BuildShrinkSchemas(); }},
       {"Sin", [] { return BuildUnaryFloatMathSchemas("Sin", 22, 7); }},
       {"Sinh", [] { return BuildUnaryFloatMathSchemas("Sinh", 22, 9); }},

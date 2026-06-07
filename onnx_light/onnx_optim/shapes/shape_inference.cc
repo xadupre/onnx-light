@@ -38,6 +38,75 @@ void CheckOnnxDomain(const NodeProto &node) {
                           "' for op '" + node.op_type().as_string() + "'.");
 }
 
+// Returns the ``"<domain>:<name>"`` identifier used as a key in
+// :cpp:func:`ShapesContext::SetLocalFunction` /
+// :cpp:func:`ShapesContext::GetLocalFunction`. The empty default ONNX
+// domain is kept as-is here because local functions live in non-default
+// domains in practice; the domain is matched literally against the
+// FunctionProto's own ``domain`` field.
+std::string LocalFunctionKey(const std::string &domain, const std::string &name) {
+  return domain + ":" + name;
+}
+
+// Expands a single local-function call ``node`` into shape inference
+// over ``func.node()`` with the function's input/output names rebound
+// to the caller's names. Bound through positional binding of
+// ``node.input(i)`` to ``func.input(i)`` and ``node.output(i)`` to
+// ``func.output(i)``.
+//
+// The function body is processed in an isolated :cpp:class:`ShapesContext`
+// that carries the function's own opset imports (falling back to the
+// caller's opsets for any domain not redeclared by the function) and
+// the same local-function map, so nested local-function calls are also
+// supported.
+void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const FunctionProto &func) {
+  ShapesContext sub_ctx;
+  // Inherit caller opsets first, then let the function's own opset
+  // imports override them.
+  for (const auto &kv : ctx.Opsets()) {
+    sub_ctx.SetOpsetVersion(kv.first, kv.second);
+  }
+  for (int i = 0; i < func.opset_import().size(); ++i) {
+    const OperatorSetIdProto &osi = func.opset_import()[i];
+    sub_ctx.SetOpsetVersion(osi.domain().as_string(), static_cast<int>(osi.version()));
+  }
+  // Forward the local-function map so nested calls are dispatched too.
+  for (const auto &kv : ctx.LocalFunctions()) {
+    sub_ctx.SetLocalFunction(kv.second);
+  }
+  // Positional binding: function input names take the descriptors of
+  // the caller's input names.
+  const int n_inputs = std::min(node.input_size(), func.input_size());
+  for (int i = 0; i < n_inputs; ++i) {
+    const std::string caller_name = node.input(i).as_string();
+    const std::string callee_name = func.input(i).as_string();
+    if (caller_name.empty() || callee_name.empty()) {
+      continue;
+    }
+    if (ctx.Has(caller_name)) {
+      sub_ctx.Set(callee_name, OptimTensor(ctx.Get(caller_name)));
+    } else if (ctx.HasSequence(caller_name)) {
+      sub_ctx.SetSequence(callee_name, OptimSequence(ctx.GetSequence(caller_name)));
+    }
+  }
+  // Recursively run shape inference on the function body.
+  ComputeShapes(sub_ctx, func.node());
+  // Map function outputs back to caller-visible names.
+  const int n_outputs = std::min(node.output_size(), func.output_size());
+  for (int i = 0; i < n_outputs; ++i) {
+    const std::string callee_name = func.output(i).as_string();
+    const std::string caller_name = node.output(i).as_string();
+    if (caller_name.empty() || callee_name.empty()) {
+      continue;
+    }
+    if (sub_ctx.Has(callee_name)) {
+      ctx.Set(caller_name, OptimTensor(sub_ctx.Get(callee_name)));
+    } else if (sub_ctx.HasSequence(callee_name)) {
+      ctx.SetSequence(caller_name, OptimSequence(sub_ctx.GetSequence(callee_name)));
+    }
+  }
+}
+
 // Normalises the empty default ONNX domain to ``kOnnxDomain`` so that
 // dispatch-table lookups always use a canonical key.
 std::string NormaliseDispatchDomain(const NodeProto &node) {
@@ -129,10 +198,20 @@ void CheckOutputsNotAvailable(const ShapesContext &ctx, const NodeProto &node) {
 }
 
 void ComputeShapeNode(ShapesContext &ctx, const NodeProto &node) {
+  // Model-local function calls bypass the domain check (their domain
+  // is arbitrary) and the op-type dispatch table; they are expanded
+  // by recursively running shape inference on the FunctionProto body.
+  const std::string op_type = node.op_type().as_string();
+  const std::string local_key = LocalFunctionKey(node.domain().as_string(), op_type);
+  if (const FunctionProto *func = ctx.GetLocalFunction(local_key); func != nullptr) {
+    CheckInputsAvailable(ctx, node);
+    CheckOutputsNotAvailable(ctx, node);
+    ExpandLocalFunctionCall(ctx, node, *func);
+    return;
+  }
   CheckOnnxDomain(node);
   CheckInputsAvailable(ctx, node);
   CheckOutputsNotAvailable(ctx, node);
-  const std::string op_type = node.op_type().as_string();
   const std::string key = NormaliseDispatchDomain(node) + ":" + op_type;
   const auto &table = DispatchTable();
   auto it = table.find(key);
@@ -184,6 +263,12 @@ void ComputeShapeModel(ShapesContext &ctx, const ModelProto &model,
   for (int i = 0; i < model.opset_import().size(); ++i) {
     const OperatorSetIdProto &osi = model.opset_import()[i];
     ctx.SetOpsetVersion(osi.domain().as_string(), static_cast<int>(osi.version()));
+  }
+  // Register every model-local function so node-level dispatch can
+  // expand calls to them. The pointers reference entries owned by
+  // ``model`` and remain valid for the duration of this call.
+  for (int i = 0; i < model.functions().size(); ++i) {
+    ctx.SetLocalFunction(&model.functions()[i]);
   }
   EXT_ENFORCE_INVALID(model.has_graph(),
                       "ComputeShapeModel: the ModelProto has no graph to run shape inference on.");

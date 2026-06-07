@@ -9,6 +9,7 @@
 
 #include "onnx_optim/optim_sequence.h"
 #include "onnx_optim/optim_tensor.h"
+#include "onnx_proto/onnx.h"
 #include "onnx_proto/simple_string.h"
 
 /**
@@ -106,6 +107,7 @@ public:
     tensors_.clear();
     sequences_.clear();
     opsets_.clear();
+    local_functions_.clear();
   }
 
   /// Read-only access to the underlying map (useful for iteration).
@@ -187,6 +189,50 @@ public:
   /// Read-only access to the underlying ``domain → opset_version`` map.
   const std::unordered_map<std::string, int> &Opsets() const noexcept { return opsets_; }
 
+  // ── Model-local functions ──────────────────────────────────────────
+  //
+  // ``onnx_optim`` shape inference dispatches node-level inference via
+  // the registered op schemas (see ``DispatchTable``). A node whose
+  // ``op_type`` is not registered may still be valid if it calls a
+  // model-local :cpp:class:`FunctionProto` declared in
+  // ``ModelProto::functions``. Local functions are addressed by a
+  // ``"<domain>:<name>"`` key (matching :cpp:func:`GetFunctionIdentifier`
+  // in ``onnx_lib``); :cpp:func:`ComputeShapeModel` registers every
+  // entry of ``model.functions()`` here so that
+  // :cpp:func:`ComputeShapeNode` can detect and expand the call.
+
+  /// Registers a non-owning pointer to a model-local
+  /// :cpp:class:`FunctionProto`. The pointer must remain valid for the
+  /// lifetime of the shape-inference pass. Replaces any previous entry
+  /// registered under the same ``"<domain>:<name>"`` key. ``func`` must
+  /// not be ``nullptr``.
+  void SetLocalFunction(const FunctionProto *func) {
+    EXT_ENFORCE_INVALID(func != nullptr, "SetLocalFunction: func must not be nullptr.");
+    const std::string key = func->domain().as_string() + ":" + func->name().as_string();
+    local_functions_[key] = func;
+  }
+
+  /// ``true`` when a model-local function is registered for ``key``.
+  /// ``key`` is expected to be the ``"<domain>:<name>"`` identifier of
+  /// the function.
+  bool HasLocalFunction(const std::string &key) const {
+    return local_functions_.find(key) != local_functions_.end();
+  }
+
+  /// Returns the registered ``FunctionProto`` pointer for ``key``, or
+  /// ``nullptr`` when none is registered. ``key`` is expected to be the
+  /// ``"<domain>:<name>"`` identifier of the function.
+  const FunctionProto *GetLocalFunction(const std::string &key) const {
+    auto it = local_functions_.find(key);
+    return it == local_functions_.end() ? nullptr : it->second;
+  }
+
+  /// Read-only access to the underlying ``"<domain>:<name>" →
+  /// FunctionProto*`` map.
+  const std::unordered_map<std::string, const FunctionProto *> &LocalFunctions() const noexcept {
+    return local_functions_;
+  }
+
 private:
   static std::string NormaliseDomain(const std::string &domain) {
     return domain.empty() ? std::string(kOnnxDomain) : domain;
@@ -195,6 +241,7 @@ private:
   std::unordered_map<std::string, OptimTensor> tensors_;
   std::unordered_map<std::string, OptimSequence> sequences_;
   std::unordered_map<std::string, int> opsets_;
+  std::unordered_map<std::string, const FunctionProto *> local_functions_;
 };
 
 } // namespace shapes

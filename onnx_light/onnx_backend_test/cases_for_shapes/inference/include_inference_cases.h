@@ -55,6 +55,12 @@ void RegisterNonZeroChainNamedShapeInferenceCases(std::vector<TestCase> &registr
 /// https://github.com/microsoft/onnxruntime/pull/28778.
 void RegisterShapeIdentityUnsqueezeShapeInferenceCases(std::vector<TestCase> &registry);
 
+/// Registers a single-node case whose op is a call to a **model-local
+/// function** (declared in ``ModelProto::functions``). The function body
+/// is a one-node ``Add`` of two same-shape inputs. Exercises the
+/// FunctionProto-expansion path of ``onnx_optim`` shape inference.
+void RegisterLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &registry);
+
 /// Collects all shape-inference oriented backend test cases by invoking
 /// every ``Register*ShapeInferenceCases`` helper declared in this header.
 void CollectShapeInferenceTestCases(std::vector<TestCase> &registry,

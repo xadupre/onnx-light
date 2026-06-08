@@ -121,7 +121,7 @@ template <class KernelT> NodeKernelFn MakeAxisTrampoline(int64_t default_axis = 
   };
 }
 
-// Wraps reduction kernels of the form:
+// Creates trampolines for reduction kernels of the form:
 //   ``operator()(data, keepdims, noop_with_empty_axes)``
 //   ``operator()(data, axes, keepdims, noop_with_empty_axes)``
 // where ``axes`` is either an optional second input (opset 13+/18+ depending
@@ -131,7 +131,7 @@ template <class KernelT> NodeKernelFn MakeReduceTrampoline() {
     RequireMinInputCount(node, 1);
     if (node.input_size() > 2) {
       throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
-                                  "' expects 1 or 2 inputs.");
+                                  "' expects at most 2 inputs.");
     }
     RequireOutputCount(node, 1);
     const Tensor &data = GetInput(node, 0, rt.tensors());

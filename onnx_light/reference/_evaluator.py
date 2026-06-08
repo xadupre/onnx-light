@@ -28,7 +28,7 @@ from ..onnx_lib import (
     load,
     numpy_helper,
 )
-from ..onnx_py._onnxkernels import runtime as _runtime
+from ..onnx_py._onnxkernels import runtime as _runtime  # type: ignore[missing-import]
 
 try:
     import ml_dtypes as _ml_dtypes  # type: ignore
@@ -265,11 +265,11 @@ class ReferenceEvaluator:
 
         # Pick the opset version of the default ai.onnx domain (falls back
         # to the highest version declared otherwise, then to 0).
-        version = self._opsets.get("", self._opsets.get("ai.onnx", 0))
+        version: int = int(self._opsets.get("", self._opsets.get("ai.onnx", 0)) or 0)
         if version == 0 and self._opsets:
-            version = max(self._opsets.values())
+            version = int(max(self._opsets.values()))
         ctx = _runtime.RuntimeContext(
-            _runtime.KernelContext(_runtime.default_opset(int(version)))
+            _runtime.KernelContext(_runtime.default_opset(version))
         )
 
         for name, value in feed_inputs.items():

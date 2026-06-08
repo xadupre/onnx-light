@@ -64,7 +64,7 @@ from ..onnx_lib.io_helper import (  # noqa: F401
 # is the API entry point that mirrors the upstream :mod:`onnx` package and
 # is what compatibility helpers (see
 # :mod:`onnx_light.compatibility.api_compare`) walk through.
-from .. import backend, backend_test, fuzz, tools  # noqa: F401
+from .. import backend, backend_test, tools  # noqa: F401
 
 # Register sub-modules in sys.modules so that
 # ``import onnx_light.onnx.<name>`` resolves correctly.
@@ -91,7 +91,7 @@ for _name in _SUBMODULE_NAMES:
 # Same trick for the onnx-light-only sub-packages so that
 # ``import onnx_light.onnx.<name>`` resolves to the existing
 # ``onnx_light.<name>`` package.
-for _name in ("backend", "backend_test", "fuzz", "tools"):
+for _name in ("backend", "backend_test", "tools"):
     _key = f"onnx_light.onnx.{_name}"
     if _key not in sys.modules:
         sys.modules[_key] = sys.modules[f"onnx_light.{_name}"]

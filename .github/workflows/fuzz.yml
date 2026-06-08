@@ -8,8 +8,9 @@ on:
   pull_request:
     branches: ["main"]
     paths:
-      - "onnx_light/fuzz/**"
+      - "fuzz/**"
       - ".github/workflows/fuzz.yml"
+      - "CMakeLists.txt"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -17,7 +18,7 @@ concurrency:
 
 jobs:
   fuzz_smoke:
-    name: fuzz smoke (ubuntu-latest, py3.11)
+    name: fuzz smoke (ubuntu-latest, clang+libFuzzer)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -31,8 +32,14 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install OpenSSL (Linux)
-        run: sudo apt-get install -y libssl-dev clang
+      - name: Install Clang and OpenSSL (Linux)
+        run: sudo apt-get install -y clang ninja-build libssl-dev
+
+      - name: Install Python build deps
+        # nanobind is pulled in via CMakeLists.txt only when
+        # ONNX_LIGHT_BUILD_PYTHON=ON; this job builds the C++ fuzz
+        # harnesses only, so the dependency is intentionally omitted.
+        run: pip install --upgrade cmake
 
       - name: Set parallel build level
         shell: bash
@@ -40,43 +47,50 @@ jobs:
           CMAKE_BUILD_PARALLEL_LEVEL=$(python -c 'import os; print(os.cpu_count() or 1)')
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
 
-      - name: Build and install package
+      - name: Configure fuzz build (Clang + libFuzzer + AddressSanitizer)
         env:
           CC: clang
           CXX: clang++
-        run: pip install -Cbuild-dir=build -e .[dev]
+        run: |
+          cmake -S . -B build-fuzz -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DONNX_LIGHT_BUILD_FUZZERS=ON \
+            -DONNX_LIGHT_BUILD_PYTHON=OFF \
+            -DONNX_LIGHT_INSTALL=OFF
 
-      - name: Install atheris
-        env:
-          CC: clang
-          CXX: clang++
-        run: pip install atheris
-
-      - name: pip freeze
-        run: pip freeze
+      - name: Build fuzz harnesses
+        run: |
+          cmake --build build-fuzz --target \
+            fuzz_checker \
+            fuzz_model_loader \
+            fuzz_parser \
+            fuzz_shape_inference \
+            fuzz_optim_shape_inference \
+            fuzz_version_converter \
+            make_seed_corpus
 
       - name: Generate seed corpora
         run: |
           mkdir -p /tmp/fuzz_seeds
-          python -m onnx_light.fuzz.make_seed_corpus \
-            /tmp/fuzz_seeds/vc_seeds.zip \
-            /tmp/fuzz_seeds/parser_seeds.zip \
-            /tmp/fuzz_seeds/shape_inference_seeds.zip
+          ./build-fuzz/make_seed_corpus \
+            /tmp/fuzz_seeds/version_converter \
+            /tmp/fuzz_seeds/parser \
+            /tmp/fuzz_seeds/shape_inference
 
       - name: Run fuzz_checker (smoke)
-        run: python -m onnx_light.fuzz.fuzz_checker -runs=2000 -timeout=25
+        run: ./build-fuzz/fuzz_checker -runs=2000 -timeout=25
 
       - name: Run fuzz_model_loader (smoke)
-        run: python -m onnx_light.fuzz.fuzz_model_loader -runs=2000 -timeout=25
+        run: ./build-fuzz/fuzz_model_loader -runs=2000 -timeout=25
 
       - name: Run fuzz_parser (smoke)
-        run: python -m onnx_light.fuzz.fuzz_parser -runs=2000 -timeout=25
+        run: ./build-fuzz/fuzz_parser /tmp/fuzz_seeds/parser -runs=2000 -timeout=25
 
       - name: Run fuzz_shape_inference (smoke)
-        run: python -m onnx_light.fuzz.fuzz_shape_inference -runs=2000 -timeout=25
+        run: ./build-fuzz/fuzz_shape_inference /tmp/fuzz_seeds/shape_inference -runs=2000 -timeout=25
 
       - name: Run fuzz_optim_shape_inference (smoke)
-        run: python -m onnx_light.fuzz.fuzz_optim_shape_inference -runs=2000 -timeout=25
+        run: ./build-fuzz/fuzz_optim_shape_inference /tmp/fuzz_seeds/shape_inference -runs=2000 -timeout=25
 
       - name: Run fuzz_version_converter (smoke)
-        run: python -m onnx_light.fuzz.fuzz_version_converter -runs=2000 -timeout=25
+        run: ./build-fuzz/fuzz_version_converter /tmp/fuzz_seeds/version_converter -runs=2000 -timeout=25

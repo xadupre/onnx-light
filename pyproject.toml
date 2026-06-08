@@ -117,4 +117,4 @@ ignore_missing_imports = true
 
 [tool.pyrefly]
 project-includes = ["onnx_light/**/*.py"]
-ignore-missing-imports = ["pandas", "matplotlib", "matplotlib.axes", "matplotlib.pyplot", "matplotlib.patches", "atheris"]
+ignore-missing-imports = ["pandas", "matplotlib", "matplotlib.axes", "matplotlib.pyplot", "matplotlib.patches"]

@@ -385,6 +385,14 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto &gp, bool nested, cons
       // in the case of an undefined reference
       createDummyValue(g, to_std_string(gp.output()[i].name()), value_by_name_of);
     }
+    if (!value_by_name_of.count(to_std_string(gp.output()[i].name()))) {
+      // Top-level graph output that does not match any node output,
+      // graph input, or initializer. Reject the model rather than
+      // dereferencing a null Value*.
+      std::ostringstream msg;
+      msg << "Output " << to_std_string(gp.output()[i].name()) << " is undefined!";
+      ONNX_THROW_EX(std::out_of_range(msg.str()));
+    }
     const auto &output_tensor_type = gp.output()[i].type().tensor_type();
     if (output_tensor_type.has_elem_type()) {
       value_by_name_of[to_std_string(gp.output()[i].name())]->setElemType(

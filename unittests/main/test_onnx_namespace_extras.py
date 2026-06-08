@@ -1,5 +1,5 @@
 """Tests that :mod:`onnx_light.onnx` re-exposes the onnx-light specific
-sub-packages (``backend``, ``backend_test``, ``fuzz``, ``tools``).
+sub-packages (``backend``, ``backend_test``, ``tools``).
 
 These sub-packages live at ``onnx_light.<name>`` but are also reachable
 from the ``onnx_light.onnx`` namespace (the API entry point that
@@ -21,7 +21,7 @@ class TestOnnxNamespaceExtras(ExtTestCase):
     """Verifies the re-exports added in ``onnx_light/onnx/__init__.py``."""
 
     def test_attributes_are_present(self):
-        for name in ("backend", "backend_test", "fuzz", "tools"):
+        for name in ("backend", "backend_test", "tools"):
             self.assertTrue(
                 hasattr(onnxl, name), f"onnx_light.onnx is missing attribute {name!r}"
             )
@@ -29,7 +29,7 @@ class TestOnnxNamespaceExtras(ExtTestCase):
             self.assertEqual(mod.__name__, f"onnx_light.{name}")
 
     def test_dotted_imports_resolve(self):
-        for name in ("backend", "backend_test", "fuzz", "tools"):
+        for name in ("backend", "backend_test", "tools"):
             full = f"onnx_light.onnx.{name}"
             mod = importlib.import_module(full)
             self.assertIs(mod, sys.modules[f"onnx_light.{name}"])

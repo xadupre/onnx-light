@@ -127,6 +127,21 @@ void RegisterSequenceInsertCases(std::vector<TestCase> &registry) {
                              /*has_position=*/true, /*position=*/1, opset, registry);
   RegisterSequenceInsertCase("test_cc_sequence_insert_neg", {a, b, c}, x, elem_shape,
                              /*has_position=*/true, /*position=*/-1, opset, registry);
+
+  // Cases mirroring upstream test_sequence_insert_at_back and
+  // test_sequence_insert_at_front (INT64 tensors).
+  {
+    const std::vector<int64_t> int_elem_shape = {3};
+    Tensor i0 = Tensor::FromInt64("i0", int_elem_shape, {1, 2, 3});
+    Tensor i1 = Tensor::FromInt64("i1", int_elem_shape, {4, 5, 6});
+    Tensor i2 = Tensor::FromInt64("i2", int_elem_shape, {7, 8, 9});
+    Tensor ix = Tensor::FromInt64("ix", int_elem_shape, {10, 11, 12});
+
+    RegisterSequenceInsertCase("test_cc_sequence_insert_at_back", {i0, i1, i2}, ix, int_elem_shape,
+                               /*has_position=*/false, /*position=*/0, opset, registry);
+    RegisterSequenceInsertCase("test_cc_sequence_insert_at_front", {i0, i1, i2}, ix, int_elem_shape,
+                               /*has_position=*/true, /*position=*/0, opset, registry);
+  }
 }
 
 } // namespace onnx_backend_test

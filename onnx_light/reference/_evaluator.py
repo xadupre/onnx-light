@@ -33,7 +33,7 @@ from ..onnx_py._onnxkernels import runtime as _runtime  # type: ignore[missing-i
 try:
     import ml_dtypes as _ml_dtypes  # type: ignore
 except ImportError:  # pragma: no cover - ml_dtypes is a runtime dependency
-    _ml_dtypes = None
+    _ml_dtypes = None  # type: ignore[assignment]
 
 
 # ---------------------------------------------------------------------------

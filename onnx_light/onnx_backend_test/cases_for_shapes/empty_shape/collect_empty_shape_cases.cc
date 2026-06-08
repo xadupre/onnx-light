@@ -9,9 +9,12 @@ namespace onnx_backend_test {
 
 void CollectEmptyShapeTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   static const OpRegisterMap kEntries = {
-      {"empty_shape", &RegisterAddEmptyShapeCases},     {"empty_shape", &RegisterSubEmptyShapeCases},
-      {"empty_shape", &RegisterMulEmptyShapeCases},     {"empty_shape", &RegisterDivEmptyShapeCases},
-      {"empty_shape", &RegisterPReluEmptyShapeCases}, {"empty_shape", &RegisterCompressEmptyShapeCases},
+      {"empty_shape", &RegisterAddEmptyShapeCases},
+      {"empty_shape", &RegisterSubEmptyShapeCases},
+      {"empty_shape", &RegisterMulEmptyShapeCases},
+      {"empty_shape", &RegisterDivEmptyShapeCases},
+      {"empty_shape", &RegisterPReluEmptyShapeCases},
+      {"empty_shape", &RegisterCompressEmptyShapeCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

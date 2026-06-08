@@ -213,13 +213,8 @@ bool HasBorrowedRawData(const ModelProto &model) {
                                                                   "RepeatedProtoField" #cls #T);
 
 template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> &name_inst) {
-  name_inst
-      .def(
-          "Clear",
-          [](cls &self) {
-            self.CopyFrom(cls());
-          },
-          "Clears the object.")
+  name_inst.def(
+               "Clear", [](cls &self) { self.CopyFrom(cls()); }, "Clears the object.")
       .def(
           "ParseFromString",
           [](cls &self, nb::bytes data, nb::object options) {

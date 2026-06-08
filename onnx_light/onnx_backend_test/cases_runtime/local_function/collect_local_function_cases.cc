@@ -9,9 +9,9 @@ namespace onnx_backend_test {
 
 void CollectLocalFunctionTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   static const OpRegisterMap kEntries = {
-      {"SquareThenAdd", &RegisterFunctionCallsFunctionAcrossDomainsCase},
-      {"Outer", &RegisterFunctionThreeLevelNestedCallsCase},
-      {"Pick", &RegisterFunctionLinkedAttributeCase},
+      {"runtime", &RegisterFunctionCallsFunctionAcrossDomainsCase},
+      {"runtime", &RegisterFunctionThreeLevelNestedCallsCase},
+      {"runtime", &RegisterFunctionLinkedAttributeCase},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

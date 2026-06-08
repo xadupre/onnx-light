@@ -16,23 +16,18 @@ void CollectShapeInferenceTestCases(std::vector<TestCase> &registry, const std::
   static const OpRegisterMap kEntries = {
       // First node of each multi-node graph is used as the dispatch key so
       // ``CollectTestCases("Add")``/etc. still pick up the corresponding case.
-      {"Add", &RegisterAddConcatReshapeShapeInferenceCases},
-      {"Abs", &RegisterNonZeroChainAnonShapeInferenceCases},
-      {"Shape", &RegisterShapeIdentityUnsqueezeShapeInferenceCases},
+      {"shape", &RegisterAddConcatReshapeShapeInferenceCases},
+      {"shape", &RegisterNonZeroChainAnonShapeInferenceCases},
+      {"shape", &RegisterShapeIdentityUnsqueezeShapeInferenceCases},
       // Single node calling a model-local function. The dispatch key is
       // the function name (the op_type the caller node uses).
-      {"func_add", &RegisterLocalFunctionAddShapeInferenceCases},
+      {"shape", &RegisterLocalFunctionAddShapeInferenceCases},
       // Single node calling a model-local function whose body calls
       // another model-local function (nested expansion).
-      {"func_outer_add", &RegisterNestedLocalFunctionAddShapeInferenceCases},
+      {"shape", &RegisterNestedLocalFunctionAddShapeInferenceCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
-  if (op_type.empty()) {
-    // Both NonZero-chain flavours share the same leading ``Abs`` node, so
-    // the second one is registered here to avoid colliding entries in the
-    // ``OpRegisterMap`` above.
-    RegisterNonZeroChainNamedShapeInferenceCases(registry);
-  } else if (op_type == "Abs") {
+  if (op_type.empty() or op_type == "shape") {
     RegisterNonZeroChainNamedShapeInferenceCases(registry);
   }
 }

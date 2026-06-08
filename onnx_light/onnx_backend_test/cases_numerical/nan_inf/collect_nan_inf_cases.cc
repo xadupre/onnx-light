@@ -9,9 +9,9 @@ namespace onnx_backend_test {
 
 void CollectNanInfTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   static const OpRegisterMap kEntries = {
-      {"Add", &RegisterAddNanInfCases},     {"Sub", &RegisterSubNanInfCases},
-      {"Mul", &RegisterMulNanInfCases},     {"Div", &RegisterDivNanInfCases},
-      {"Where", &RegisterWhereNanInfCases},
+      {"numerical", &RegisterAddNanInfCases},     {"numerical", &RegisterSubNanInfCases},
+      {"numerical", &RegisterMulNanInfCases},     {"numerical", &RegisterDivNanInfCases},
+      {"numerical", &RegisterWhereNanInfCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

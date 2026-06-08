@@ -48,12 +48,33 @@ def shape_inference_check(model: onnxl.ModelProto, *inputs):
     work.CopyFrom(model)
     if work.graph.value_info:
         work.graph.value_info.clear()
+    for o in work.graph.output:
+        o.type.Clear()
+    for i in work.graph.input:
+        if i.name in {"axis", "axes"}:
+            continue
+        dims = i.type.tensor_type.shape
+        mapp = {}
+        for shape in dims:
+            for di, d in enumerate(shape):
+                if d not in mapp:
+                    assert not d.dim_param, f"Unexpected input dimension in {i}"
+                    mapp[d.dim_value] = f"{i.name}_{di}"
+    for i in work.graph.input:
+        if i.name in {"axis", "axes"}:
+            continue
+        dims = i.type.tensor_type.shape
+        new_shape = [mapp[d.dim_value] for d in dims]
+        for i in range(len(dims)):
+            dims[i].reset_dim_value()
+            dims[i].set_dim_param(new_shape[i])
+
     shape_inference.infer_shapes_model(work)
     _check_match(model.graph.input, model.graph.value_info, work.graph.value_info)
-    _check_match(model.graph.input, model.graph.output, work.graph.output, rank_only=True)
+    _check_match(model.graph.input, model.graph.output, work.graph.output)
 
 
-TestOptimShapeInferenceBackend = make_test_class(
+TestOptimShapeInferenceDynamicBackend = make_test_class(
     shape_inference_check,
     exclude_regex=[
         "test_cc_shape_inference_add_concat_reshape.*",

@@ -1016,6 +1016,46 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference ``LinearAttention`` kernel restricted to FLOAT tensors.
+///
+/// Implements the unified linear attention recurrence defined by the upstream
+/// ``ai.onnx::LinearAttention`` operator (since opset 27). Supports four
+/// ``update_rule`` variants: ``"linear"``, ``"gated"``, ``"delta"``, and
+/// ``"gated_delta"``. Inputs use 3D packed format ``(B, T, H*D)``; the
+/// recurrent state is 4D ``(B, H_kv, d_k, d_v)``. Group-query attention
+/// (GQA) is supported when ``q_num_heads`` is a positive multiple of
+/// ``kv_num_heads``.
+class LinearAttention : public KernelBase {
+public:
+  /// Attributes carried by the ONNX ``LinearAttention`` operator.
+  struct Attributes {
+    std::string update_rule = "gated_delta"; ///< Recurrence type.
+    bool has_scale = false;                  ///< When true, ``scale`` overrides the default.
+    float scale = 0.0f;                      ///< Output scaling factor; 0 means 1/sqrt(d_k).
+    int64_t q_num_heads = 0;                 ///< Number of query heads (required).
+    int64_t kv_num_heads = 0;                ///< Number of key/value heads (required).
+    int64_t chunk_size = 64;                 ///< Chunk size hint (not used in reference impl).
+  };
+
+  /// Bundles every output produced by the kernel.
+  struct Result {
+    Tensor output;        ///< 3D packed ``(B, T, H_q * d_v)``.
+    Tensor present_state; ///< 4D ``(B, H_kv, d_k, d_v)``.
+  };
+
+  using KernelBase::KernelBase;
+
+  /// Default-attribute overload (update_rule="linear", scale=auto).
+  Tensor operator()(const Tensor &query, const Tensor &key, const Tensor &value) const;
+
+  /// Comprehensive overload covering every supported feature.
+  Result operator()(const Tensor &query, const Tensor &key, const Tensor &value,
+                    const Attributes &attrs, const Tensor *past_state = nullptr,
+                    const Tensor *decay = nullptr, const Tensor *beta = nullptr) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 } // namespace kernel
 } // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -33,6 +33,7 @@ constexpr size_t kExpectedGRUSchemaCount = 5;
 constexpr size_t kExpectedGroupNormalizationSchemaCount = 2;
 constexpr size_t kExpectedInstanceNormalizationSchemaCount = 3;
 constexpr size_t kExpectedLayerNormalizationSchemaCount = 1;
+constexpr size_t kExpectedLinearAttentionSchemaCount = 1;
 constexpr size_t kExpectedMeanVarianceNormalizationSchemaCount = 2;
 constexpr size_t kExpectedLRNSchemaCount = 2;
 constexpr size_t kExpectedLpNormalizationSchemaCount = 2;
@@ -52,11 +53,12 @@ constexpr size_t kExpectedNnSchemaCount =
     kExpectedDropoutSchemaCount + kExpectedGlobalLpPoolSchemaCount + kExpectedFlattenSchemaCount +
     kExpectedGlobalMaxPoolSchemaCount + kExpectedGRUSchemaCount +
     kExpectedGroupNormalizationSchemaCount + kExpectedInstanceNormalizationSchemaCount +
-    kExpectedLayerNormalizationSchemaCount + kExpectedLRNSchemaCount +
-    kExpectedLpNormalizationSchemaCount + kExpectedLpPoolSchemaCount + kExpectedLSTMSchemaCount +
-    kExpectedMaxPoolSchemaCount + kExpectedMaxRoiPoolSchemaCount + kExpectedMaxUnpoolSchemaCount +
-    kExpectedMeanVarianceNormalizationSchemaCount + kExpectedRNNSchemaCount +
-    kExpectedRMSNormalizationSchemaCount + kExpectedRotaryEmbeddingSchemaCount;
+    kExpectedLayerNormalizationSchemaCount + kExpectedLinearAttentionSchemaCount +
+    kExpectedLRNSchemaCount + kExpectedLpNormalizationSchemaCount + kExpectedLpPoolSchemaCount +
+    kExpectedLSTMSchemaCount + kExpectedMaxPoolSchemaCount + kExpectedMaxRoiPoolSchemaCount +
+    kExpectedMaxUnpoolSchemaCount + kExpectedMeanVarianceNormalizationSchemaCount +
+    kExpectedRNNSchemaCount + kExpectedRMSNormalizationSchemaCount +
+    kExpectedRotaryEmbeddingSchemaCount;
 
 static const onnx_op::LightOpSchema *
 FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {

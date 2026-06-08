@@ -20,7 +20,14 @@ from typing import Any
 
 import numpy as np
 
-from ..onnx_lib import FunctionProto, GraphProto, ModelProto, TensorProto, load, numpy_helper
+from ..onnx_lib import (
+    FunctionProto,
+    GraphProto,
+    ModelProto,
+    TensorProto,
+    load,
+    numpy_helper,
+)
 from ..onnx_py._onnxpykernels import runtime as _runtime  # type: ignore[missing-import]
 
 try:

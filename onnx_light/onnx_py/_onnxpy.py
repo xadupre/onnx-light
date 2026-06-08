@@ -20,7 +20,10 @@ The original ``_onnxpy`` extension was split into five nanobind modules:
 * :mod:`onnx_light.onnx_py._onnxpyoptim` exposes the optim bindings
   (``expressions`` and ``shape_inference``).
 * :mod:`onnx_light.onnx_py._onnxkernels` exposes the ``backend``
-  deterministic pseudo-random helpers backing :mod:`onnx_light.backend`.
+  deterministic pseudo-random helpers backing :mod:`onnx_light.backend`
+  and the ``runtime`` submodule with ``RunNode`` / ``RunNodes`` /
+  ``RunGraph`` / ``RunFunction`` / ``RunModel`` plus the supporting
+  ``RuntimeContext`` / ``KernelContext`` / ``OpsetId`` types.
 * :mod:`onnx_light.onnx_py._onnxbackend` exposes the ``backend_test``
   test-case utilities.
 

@@ -69,6 +69,7 @@ TestOptimShapeInferenceBackend = make_test_class(
         "test_cc_squeeze_all_singleton.*",
         "test_if_seq.*",
         "test_scan_sum.*",
+        "test_cc_loop13_seq.*",
     ],
 )
 

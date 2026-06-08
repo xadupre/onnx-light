@@ -192,6 +192,179 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry) {
     Expect(node, {query, key, value}, {result.output, result.present_state},
            "test_cc_linear_attention_explicit_scale", {opset}, "backend-test", registry);
   }
+
+  // ---------------------------------------------------------------------------
+  // Additional cases mirroring upstream ``test_linear_attention_*`` node tests.
+  // These exist so the substring check in test_backend_test_names_onnx_vs_onnxlight
+  // covers the non-_expanded ONNX entries listed in _backend_test_known_missing.txt.
+  // ---------------------------------------------------------------------------
+
+  // Case 9: gated_per_head_decay — gated rule with per-head scalar decay (last dim = H_kv).
+  {
+    Tensor decay_perhead = Tensor::FromFloat("", {1, 2, 2}, {-0.1f, -0.2f, -0.3f, -0.05f});
+    kernel::LinearAttention::Attributes attrs;
+    attrs.update_rule = "gated";
+    attrs.q_num_heads = 2;
+    attrs.kv_num_heads = 2;
+    auto result = kernel(query, key, value, attrs, nullptr, &decay_perhead);
+    NodeProto node = MakeLinearAttentionNode({"query", "key", "value", "", "decay"},
+                                             {"output", "present_state"});
+    AddAttribute<std::string>(node, "update_rule", "gated");
+    AddAttribute<int64_t>(node, "q_num_heads", 2);
+    AddAttribute<int64_t>(node, "kv_num_heads", 2);
+    Expect(node, {query, key, value, decay_perhead}, {result.output, result.present_state},
+           "test_cc_linear_attention_gated_per_head_decay", {opset}, "backend-test", registry);
+  }
+
+  // Case 10: gated_delta_beta_scalar — gated_delta with beta last dim = 1.
+  {
+    Tensor decay = Tensor::FromFloat("", {1, 2, 4},
+                                     {-0.1f, -0.2f, -0.3f, -0.4f, -0.05f, -0.1f, -0.15f, -0.2f});
+    Tensor beta_scalar = Tensor::FromFloat("", {1, 2, 1}, {0.8f, 0.7f});
+    kernel::LinearAttention::Attributes attrs;
+    attrs.update_rule = "gated_delta";
+    attrs.q_num_heads = 2;
+    attrs.kv_num_heads = 2;
+    auto result = kernel(query, key, value, attrs, nullptr, &decay, &beta_scalar);
+    NodeProto node = MakeLinearAttentionNode({"query", "key", "value", "", "decay", "beta"},
+                                             {"output", "present_state"});
+    AddAttribute<std::string>(node, "update_rule", "gated_delta");
+    AddAttribute<int64_t>(node, "q_num_heads", 2);
+    AddAttribute<int64_t>(node, "kv_num_heads", 2);
+    Expect(node, {query, key, value, decay, beta_scalar}, {result.output, result.present_state},
+           "test_cc_linear_attention_gated_delta_beta_scalar", {opset}, "backend-test", registry);
+  }
+
+  // Case 11: gated_delta_gqa — q_num_heads=4, kv_num_heads=2 with gated_delta rule.
+  {
+    Tensor q_gqa = Tensor::FromFloat("", {1, 2, 8},
+                                     {1.0f, 0.0f, 0.5f, 0.5f, -1.0f, 1.0f, 0.2f, 0.3f, 0.0f, 1.0f,
+                                      1.0f, -1.0f, 0.5f, 0.5f, -0.5f, 0.5f});
+    Tensor decay = Tensor::FromFloat("", {1, 2, 4},
+                                     {-0.1f, -0.2f, -0.3f, -0.4f, -0.05f, -0.1f, -0.15f, -0.2f});
+    Tensor beta = Tensor::FromFloat("", {1, 2, 2}, {0.8f, 0.9f, 0.7f, 0.6f});
+    kernel::LinearAttention::Attributes attrs;
+    attrs.update_rule = "gated_delta";
+    attrs.q_num_heads = 4;
+    attrs.kv_num_heads = 2;
+    auto result = kernel(q_gqa, key, value, attrs, nullptr, &decay, &beta);
+    NodeProto node = MakeLinearAttentionNode({"query", "key", "value", "", "decay", "beta"},
+                                             {"output", "present_state"});
+    AddAttribute<std::string>(node, "update_rule", "gated_delta");
+    AddAttribute<int64_t>(node, "q_num_heads", 4);
+    AddAttribute<int64_t>(node, "kv_num_heads", 2);
+    Expect(node, {q_gqa, key, value, decay, beta}, {result.output, result.present_state},
+           "test_cc_linear_attention_gated_delta_gqa", {opset}, "backend-test", registry);
+  }
+
+  // Case 12: gated_delta_mqa — kv_num_heads=1, q_num_heads=4 with gated_delta rule.
+  {
+    Tensor q_mqa = Tensor::FromFloat("", {1, 2, 8},
+                                     {1.0f, 0.0f, 0.5f, 0.5f, -1.0f, 1.0f, 0.2f, 0.3f, 0.0f, 1.0f,
+                                      1.0f, -1.0f, 0.5f, 0.5f, -0.5f, 0.5f});
+    Tensor k_mqa = Tensor::FromFloat("", {1, 2, 2}, {1.0f, 0.0f, 0.0f, 1.0f});
+    Tensor v_mqa = Tensor::FromFloat("", {1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+    Tensor decay = Tensor::FromFloat("", {1, 2, 2}, {-0.1f, -0.2f, -0.05f, -0.1f});
+    Tensor beta = Tensor::FromFloat("", {1, 2, 1}, {0.8f, 0.7f});
+    kernel::LinearAttention::Attributes attrs;
+    attrs.update_rule = "gated_delta";
+    attrs.q_num_heads = 4;
+    attrs.kv_num_heads = 1;
+    auto result = kernel(q_mqa, k_mqa, v_mqa, attrs, nullptr, &decay, &beta);
+    NodeProto node = MakeLinearAttentionNode({"query", "key", "value", "", "decay", "beta"},
+                                             {"output", "present_state"});
+    AddAttribute<std::string>(node, "update_rule", "gated_delta");
+    AddAttribute<int64_t>(node, "q_num_heads", 4);
+    AddAttribute<int64_t>(node, "kv_num_heads", 1);
+    Expect(node, {q_mqa, k_mqa, v_mqa, decay, beta}, {result.output, result.present_state},
+           "test_cc_linear_attention_gated_delta_mqa", {opset}, "backend-test", registry);
+  }
+
+  // Case 13: decode_step — T=1 with past_state (gated_delta).
+  {
+    Tensor q1 = Tensor::FromFloat("", {1, 1, 4}, {1.0f, 0.0f, 0.5f, 0.5f});
+    Tensor k1 = Tensor::FromFloat("", {1, 1, 4}, {1.0f, 0.0f, 0.5f, 0.5f});
+    Tensor v1 = Tensor::FromFloat("", {1, 1, 4}, {1.0f, 2.0f, 0.5f, -0.5f});
+    Tensor past_state =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, -0.5f, 0.0f, 0.5f, 1.0f, 0.0f, -0.5f, 1.0f});
+    Tensor decay = Tensor::FromFloat("", {1, 1, 4}, {-0.1f, -0.2f, -0.3f, -0.4f});
+    Tensor beta = Tensor::FromFloat("", {1, 1, 2}, {0.8f, 0.9f});
+    kernel::LinearAttention::Attributes attrs;
+    attrs.update_rule = "gated_delta";
+    attrs.q_num_heads = 2;
+    attrs.kv_num_heads = 2;
+    auto result = kernel(q1, k1, v1, attrs, &past_state, &decay, &beta);
+    NodeProto node = MakeLinearAttentionNode(
+        {"query", "key", "value", "past_state", "decay", "beta"}, {"output", "present_state"});
+    AddAttribute<std::string>(node, "update_rule", "gated_delta");
+    AddAttribute<int64_t>(node, "q_num_heads", 2);
+    AddAttribute<int64_t>(node, "kv_num_heads", 2);
+    Expect(node, {q1, k1, v1, past_state, decay, beta}, {result.output, result.present_state},
+           "test_cc_linear_attention_decode_step", {opset}, "backend-test", registry);
+  }
+
+  // Case 14: prefill_with_past — T>1 with non-zero past_state (gated_delta).
+  {
+    Tensor past_state =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, -0.5f, 0.0f, 0.5f, 1.0f, 0.0f, -0.5f, 1.0f});
+    Tensor decay = Tensor::FromFloat("", {1, 2, 4},
+                                     {-0.1f, -0.2f, -0.3f, -0.4f, -0.05f, -0.1f, -0.15f, -0.2f});
+    Tensor beta = Tensor::FromFloat("", {1, 2, 2}, {0.8f, 0.9f, 0.7f, 0.6f});
+    kernel::LinearAttention::Attributes attrs;
+    attrs.update_rule = "gated_delta";
+    attrs.q_num_heads = 2;
+    attrs.kv_num_heads = 2;
+    auto result = kernel(query, key, value, attrs, &past_state, &decay, &beta);
+    NodeProto node = MakeLinearAttentionNode(
+        {"query", "key", "value", "past_state", "decay", "beta"}, {"output", "present_state"});
+    AddAttribute<std::string>(node, "update_rule", "gated_delta");
+    AddAttribute<int64_t>(node, "q_num_heads", 2);
+    AddAttribute<int64_t>(node, "kv_num_heads", 2);
+    Expect(node, {query, key, value, past_state, decay, beta},
+           {result.output, result.present_state}, "test_cc_linear_attention_prefill_with_past",
+           {opset}, "backend-test", registry);
+  }
+
+  // Case 15: no_past_explicit_zeros — past_state provided but filled with zeros (gated_delta).
+  {
+    Tensor past_zeros =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f});
+    Tensor decay = Tensor::FromFloat("", {1, 2, 4},
+                                     {-0.1f, -0.2f, -0.3f, -0.4f, -0.05f, -0.1f, -0.15f, -0.2f});
+    Tensor beta = Tensor::FromFloat("", {1, 2, 2}, {0.8f, 0.9f, 0.7f, 0.6f});
+    kernel::LinearAttention::Attributes attrs;
+    attrs.update_rule = "gated_delta";
+    attrs.q_num_heads = 2;
+    attrs.kv_num_heads = 2;
+    auto result = kernel(query, key, value, attrs, &past_zeros, &decay, &beta);
+    NodeProto node = MakeLinearAttentionNode(
+        {"query", "key", "value", "past_state", "decay", "beta"}, {"output", "present_state"});
+    AddAttribute<std::string>(node, "update_rule", "gated_delta");
+    AddAttribute<int64_t>(node, "q_num_heads", 2);
+    AddAttribute<int64_t>(node, "kv_num_heads", 2);
+    Expect(node, {query, key, value, past_zeros, decay, beta},
+           {result.output, result.present_state}, "test_cc_linear_attention_no_past_explicit_zeros",
+           {opset}, "backend-test", registry);
+  }
+
+  // Case 16: linear_t1_no_past — linear rule with T=1, no past_state.
+  {
+    Tensor q1 = Tensor::FromFloat("", {1, 1, 4}, {1.0f, 0.0f, 0.5f, 0.5f});
+    Tensor k1 = Tensor::FromFloat("", {1, 1, 4}, {1.0f, 0.0f, 0.5f, 0.5f});
+    Tensor v1 = Tensor::FromFloat("", {1, 1, 4}, {1.0f, 2.0f, 0.5f, -0.5f});
+    kernel::LinearAttention::Attributes attrs;
+    attrs.update_rule = "linear";
+    attrs.q_num_heads = 2;
+    attrs.kv_num_heads = 2;
+    auto result = kernel(q1, k1, v1, attrs);
+    NodeProto node =
+        MakeLinearAttentionNode({"query", "key", "value"}, {"output", "present_state"});
+    AddAttribute<std::string>(node, "update_rule", "linear");
+    AddAttribute<int64_t>(node, "q_num_heads", 2);
+    AddAttribute<int64_t>(node, "kv_num_heads", 2);
+    Expect(node, {q1, k1, v1}, {result.output, result.present_state},
+           "test_cc_linear_attention_linear_t1_no_past", {opset}, "backend-test", registry);
+  }
 }
 
 } // namespace onnx_backend_test

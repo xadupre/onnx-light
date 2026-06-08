@@ -15,10 +15,11 @@ namespace onnx_backend_test {
 void CollectShapeInferenceTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   if (op_type.empty() or op_type == "shape") {
     RegisterAddConcatReshapeShapeInferenceCases(registry);
-    RegisterNonZeroChainAnonShapeInferenceCases(registry);
-    RegisterShapeIdentityUnsqueezeShapeInferenceCases(registry);
     RegisterLocalFunctionAddShapeInferenceCases(registry);
+    RegisterNonZeroChainAnonShapeInferenceCases(registry);
     RegisterNestedLocalFunctionAddShapeInferenceCases(registry);
+    RegisterNonZeroChainNamedShapeInferenceCases(registry);
+    RegisterShapeIdentityUnsqueezeShapeInferenceCases(registry);
   }
 }
 

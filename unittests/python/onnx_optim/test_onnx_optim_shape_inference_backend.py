@@ -42,7 +42,7 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
 
         tests = [
             test
-            for test in collect_test_cases("Add")
+            for test in collect_test_cases("shape")
             if "test_cc_shape_inference_add_concat_reshape" == test.name
         ]
         self.assertEqual(len(tests), 1)

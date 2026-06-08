@@ -8,7 +8,8 @@ C++ libraries (also referred to as **assemblies**) instead of a single
 monolithic archive.  The goal is to let any C++ project link **only**
 what it actually needs: a program that just parses a ``ModelProto`` does
 not need operator schemas, a program that only registers schemas does
-not need shape inference, and so on.
+not need shape inference, a program that only evaluates models does not
+need the full ONNX schema / checker stack, and so on.
 
 Each library has a well defined responsibility and a minimal set of
 dependencies on the other libraries.  The full dependency graph is::
@@ -17,12 +18,16 @@ dependencies on the other libraries.  The full dependency graph is::
         ├── lib_onnx_op
         │       └── lib_onnx_optim
         ├── lib_onnx_lib
-        └── lib_onnx_backend_test
+        └── lib_onnx_kernels
+                └── lib_onnx_backend_test
 
-``lib_onnx_lib`` and ``lib_onnx_op`` are independent siblings: both link
-directly against ``lib_onnx_proto`` but neither depends on the other.
-``lib_onnx_optim`` depends on ``lib_onnx_op`` only (it does **not** pull
-in ``lib_onnx_lib``).
+``lib_onnx_lib``, ``lib_onnx_op`` and ``lib_onnx_kernels`` are independent
+siblings: each links directly against ``lib_onnx_proto`` but none of them
+depends on the others.  ``lib_onnx_optim`` depends on ``lib_onnx_op``
+only (it does **not** pull in ``lib_onnx_lib``).  ``lib_onnx_backend_test``
+depends publicly on ``lib_onnx_kernels`` (and transitively on
+``lib_onnx_proto``) because every registered test case computes its
+expected outputs by invoking the bundled C++ reference kernels.
 
 When installed (``cmake --install``) all libraries are exported under the
 ``onnx_light::`` namespace and can be consumed individually through
@@ -69,15 +74,31 @@ Summary of each library
       - Shape-inference dispatch table, expression engine for small
         tensor / backward-propagation shape inference, and graph
         optimization helpers.  Depends publicly on ``lib_onnx_op``.
+    * - ``onnx_light::onnx_kernels`` (in-tree target ``lib_onnx_kernels``):
+        ``onnx_light/onnx_kernels/``
+      - C++ **reference implementation** of the ONNX operators used to
+        evaluate models in-process.  Contains the runtime data model
+        (``struct Tensor``, ``struct Sequence``, ``RuntimeContext``,
+        ``RunGraph`` / ``RunFunction`` / ``RunModel``) and a kernel for
+        each supported operator under ``onnx_kernels/kernels/<group>/``
+        (``math``, ``logical``, ``nn``, ``tensor``, ``sequence``,
+        ``controlflow``, ``traditionalml``, ...).  Together with the
+        ``SplitMix64``-based deterministic pseudo-random helpers it
+        provides everything required to run a node or a full model
+        without depending on any third-party runtime.  Intentionally
+        **independent** from ``lib_onnx_lib`` / ``lib_onnx_op``;
+        depends publicly on ``lib_onnx_proto`` only.
     * - ``onnx_light::onnx_backend_test`` (in-tree target
         ``lib_onnx_backend_test``):
         ``onnx_light/onnx_backend_test/``
-      - Backend test infrastructure (``struct Tensor``,
-        ``struct TestCase``, ``expect()``), a registry of C++
-        operator kernels used to evaluate models in-process, and
-        deterministic pseudo-random helpers (SplitMix64).
-        Intentionally **independent** from ``lib_onnx_lib`` /
-        ``lib_onnx_op``; depends publicly on ``lib_onnx_proto`` only.
+      - Backend test infrastructure (``struct TestCase``, the
+        ``Expect`` helper and the ``CollectTestCases`` registry) plus
+        the per-operator ``RegisterXxxCases`` functions that build
+        single-node models and compute their expected outputs by
+        invoking the reference kernels from ``lib_onnx_kernels``.
+        Depends publicly on ``lib_onnx_kernels`` (and transitively on
+        ``lib_onnx_proto``); intentionally **independent** from
+        ``lib_onnx_lib`` / ``lib_onnx_op``.
 
 What to link for a given use case
 ---------------------------------
@@ -96,8 +117,14 @@ smallest set** that covers its needs.  The most common scenarios are:
 * **Shape inference and graph optimization passes** — link
   ``onnx_light::lib_onnx_optim`` (which transitively pulls
   ``lib_onnx_op`` and ``lib_onnx_proto``).
+* **Evaluate ONNX nodes / graphs / models in C++** using the bundled
+  reference kernels (runtime ``struct Tensor``, ``RunGraph`` /
+  ``RunFunction`` / ``RunModel``, ``SplitMix64`` RNG, ...) without
+  pulling in any backend-test fixtures — link
+  ``onnx_light::onnx_kernels``.
 * **Run backend tests / evaluate models in C++** using the built-in
-  reference kernels — link ``onnx_light::onnx_backend_test``.  It
+  reference kernels — link ``onnx_light::onnx_backend_test`` (which
+  transitively pulls ``lib_onnx_kernels`` and ``lib_onnx_proto``).  It
   can be combined with ``onnx_light::onnx_light`` when both schema
   validation and execution are needed.
 

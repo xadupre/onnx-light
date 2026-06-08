@@ -15,7 +15,8 @@ The kernel layer is implemented in ``onnx_light/onnx_kernels`` and built as
 * graph/node execution helpers
   (:cpp:func:`onnx::onnx_kernels::RunNode`,
   :cpp:func:`onnx::onnx_kernels::RunGraph`,
-  :cpp:func:`onnx::onnx_kernels::RunModel`).
+  :cpp:func:`onnx::onnx_kernels::RunModel`,
+  :cpp:func:`onnx::onnx_kernels::RunSubgraph`).
 
 ``lib_onnx_backend_test`` depends on this library and uses these kernels to
 compute expected outputs for backend test cases.

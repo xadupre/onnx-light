@@ -68,6 +68,9 @@ void RegisterInstanceNormalizationCases(std::vector<TestCase> &registry);
 /// Registers the ``LayerNormalization`` backend test node case(s).
 void RegisterLayerNormalizationCases(std::vector<TestCase> &registry);
 
+/// Registers the ``LinearAttention`` backend test node case(s).
+void RegisterLinearAttentionCases(std::vector<TestCase> &registry);
+
 /// Registers the ``LRN`` backend test node case(s).
 void RegisterLRNCases(std::vector<TestCase> &registry);
 

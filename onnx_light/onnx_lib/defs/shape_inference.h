@@ -253,6 +253,28 @@ inline TensorShapeProto::Dimension operator/(const TensorShapeProto::Dimension &
   return result;
 }
 
+inline TensorShapeProto::Dimension operator+(const TensorShapeProto::Dimension &dim1,
+                                             int64_t dim2) {
+  TensorShapeProto::Dimension result;
+  if (dim1.has_dim_value()) {
+    result.set_dim_value(dim1.dim_value() + dim2);
+  } else if (dim2 == 0) {
+    return dim1;
+  }
+  return result;
+}
+
+inline TensorShapeProto::Dimension operator-(const TensorShapeProto::Dimension &dim1,
+                                             int64_t dim2) {
+  TensorShapeProto::Dimension result;
+  if (dim1.has_dim_value()) {
+    result.set_dim_value(dim1.dim_value() - dim2);
+  } else if (dim2 == 0) {
+    return dim1;
+  }
+  return result;
+}
+
 // if from >= upto_exclusive, return 1.
 // Caller must make sure upto_exclusive is less than or equal to shape.size()
 // Caller must make sure from>=0
@@ -862,6 +884,27 @@ inline void unifyInputDim(const InferenceContext &ctx, size_t input_index, int d
     const Dim &input_dim = input_shape.dim(dim_index);
     // Now, unify dim and input_dim:
     unifyDim(input_dim, dim);
+  }
+}
+
+// unifyInputShape: unifies all dimensions of an input with the given dim references.
+// Requires the input to have rank exactly equal to the number of dims provided.
+inline void unifyInputShape(InferenceContext &ctx, size_t input_index,
+                            std::initializer_list<std::reference_wrapper<Dim>> dims) {
+  if (!hasInputShape(ctx, input_index)) {
+    return;
+  }
+  const auto &input_shape = getInputShape(ctx, input_index);
+  if (static_cast<size_t>(input_shape.dim_size()) != dims.size()) {
+    fail_shape_inference("Input ", input_index, " expected to have rank ", dims.size(),
+                         " but has rank ", input_shape.dim_size(), " in ", ctx.getDisplayName(),
+                         ".");
+  }
+  int i = 0;
+  for (const auto &dim_ref : dims) {
+    const Dim &input_dim = input_shape.dim(i);
+    unifyDim(input_dim, dim_ref.get());
+    ++i;
   }
 }
 

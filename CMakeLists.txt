@@ -310,7 +310,7 @@ target_link_libraries(lib_onnx_backend_test PUBLIC lib_onnx_proto lib_onnx_kerne
 # Speed up the build of lib_onnx_backend_test by precompiling the small set
 # of headers that virtually every one of the case source files in
 # onnx_light/onnx_backend_test/cases/ ends up parsing. The common base is
-# ``onnx_kernels/test_case.h`` (which transitively brings in ``onnx.h`` and
+# ``onnx_backend_test/test_case.h`` (which transitively brings in ``onnx.h`` and
 # ``simple_tensor.h``) and a handful of widely used C++ standard headers
 # (``<vector>``, ``<string>``, ``<cstdint>``, ``<stdexcept>``). Without a
 # PCH each translation unit re-parses tens of thousands of lines; with a

@@ -89,6 +89,8 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx:Clip"), table.end());
   EXPECT_NE(table.find("ai.onnx:IsInf"), table.end());
   EXPECT_NE(table.find("ai.onnx:BitShift"), table.end());
+  // Generator kernels.
+  EXPECT_NE(table.find("ai.onnx:EyeLike"), table.end());
   // Logical / bitwise kernels.
   EXPECT_NE(table.find("ai.onnx:And"), table.end());
   EXPECT_NE(table.find("ai.onnx:Or"), table.end());
@@ -175,6 +177,34 @@ TEST(RunNodes, RunNodesOnIteratorRangeFromVector) {
   const float *out = rt.tensors()["out"].AsFloat();
   ASSERT_EQ(rt.tensors()["out"].element_count(), 1);
   EXPECT_FLOAT_EQ(out[0], -3.0f);
+}
+
+TEST(RunNodes, RunNodeEyeLikeUsesAttributes) {
+  // Verify the EyeLike trampoline forwards both the ``k`` and ``dtype``
+  // attributes to ``kernel::EyeLike``. Input shape is copied (2x3) and
+  // the output uses dtype=INT64 (=7) with ones on the super-diagonal.
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {2, 3}, {0, 0, 0, 0, 0, 0});
+  NodeProto node = MakeNode("EyeLike", {"x"}, {"y"});
+  AttributeProto *attr_k = node.add_attribute();
+  attr_k->set_name("k");
+  attr_k->set_type(AttributeProto::AttributeType::INT);
+  attr_k->set_i(1);
+  AttributeProto *attr_dtype = node.add_attribute();
+  attr_dtype->set_name("dtype");
+  attr_dtype->set_type(AttributeProto::AttributeType::INT);
+  attr_dtype->set_i(7); // INT64
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, std::vector<int64_t>({2, 3}));
+  EXPECT_EQ(y.data_type, 7);
+  const int64_t *got = y.AsInt64();
+  EXPECT_EQ(got[0], 0);
+  EXPECT_EQ(got[1], 1);
+  EXPECT_EQ(got[2], 0);
+  EXPECT_EQ(got[3], 0);
+  EXPECT_EQ(got[4], 0);
+  EXPECT_EQ(got[5], 1);
 }
 
 TEST(RunNodes, RunNodeUnsupportedOpTypeThrows) {

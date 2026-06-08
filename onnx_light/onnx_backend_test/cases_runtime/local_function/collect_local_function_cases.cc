@@ -8,12 +8,11 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 void CollectLocalFunctionTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  static const OpRegisterMap kEntries = {
-      {"SquareThenAdd", &RegisterFunctionCallsFunctionAcrossDomainsCase},
-      {"Outer", &RegisterFunctionThreeLevelNestedCallsCase},
-      {"Pick", &RegisterFunctionLinkedAttributeCase},
-  };
-  DispatchRegisterByOpType(registry, op_type, kEntries);
+  if (op_type.empty() or op_type == "local_function") {
+    RegisterFunctionCallsFunctionAcrossDomainsCase(registry);
+    RegisterFunctionLinkedAttributeCase(registry);
+    RegisterFunctionThreeLevelNestedCallsCase(registry);
+  }
 }
 
 } // namespace onnx_backend_test

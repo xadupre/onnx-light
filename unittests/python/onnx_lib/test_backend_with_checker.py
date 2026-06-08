@@ -8,7 +8,6 @@ from onnx_light.backend.test.case import make_test_class
 def check_model(model: onnxl.ModelProto, *inputs):
     checker.check_model(model)
     assert len(inputs) == len(model.graph.input)
-    # No output to check here.
     return None
 
 

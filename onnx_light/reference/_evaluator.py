@@ -5,7 +5,7 @@
 """Implementation of :class:`ReferenceEvaluator`.
 
 The evaluator wraps the ``RunModel`` / ``RunGraph`` / ``RunFunction``
-dispatcher exposed by :mod:`onnx_light.onnx_py._onnxkernels` (re-exported
+dispatcher exposed by :mod:`onnx_light.onnx_py._onnxpykernels` (re-exported
 through the ``runtime`` submodule). All operator implementations come
 from the C++ ``KernelDispatchTable``; this Python class only handles
 input/output conversion between :class:`numpy.ndarray` and the runtime
@@ -20,15 +20,8 @@ from typing import Any
 
 import numpy as np
 
-from ..onnx_lib import (
-    FunctionProto,
-    GraphProto,
-    ModelProto,
-    TensorProto,
-    load,
-    numpy_helper,
-)
-from ..onnx_py._onnxkernels import runtime as _runtime  # type: ignore[missing-import]
+from ..onnx_lib import FunctionProto, GraphProto, ModelProto, TensorProto, load, numpy_helper
+from ..onnx_py._onnxpykernels import runtime as _runtime  # type: ignore[missing-import]
 
 try:
     import ml_dtypes as _ml_dtypes  # type: ignore
@@ -144,8 +137,7 @@ class ReferenceEvaluator:
     """
 
     def __init__(
-        self,
-        proto: ModelProto | GraphProto | FunctionProto | bytes | str | os.PathLike,
+        self, proto: ModelProto | GraphProto | FunctionProto | bytes | str | os.PathLike
     ) -> None:
         proto = self._load_proto(proto)
         self._model: ModelProto | None = None
@@ -195,9 +187,7 @@ class ReferenceEvaluator:
             return model
         if isinstance(proto, (str, os.PathLike)):
             return load(os.fspath(proto))
-        raise TypeError(
-            f"Unsupported input type for ReferenceEvaluator: {type(proto).__name__}."
-        )
+        raise TypeError(f"Unsupported input type for ReferenceEvaluator: {type(proto).__name__}.")
 
     # -- public properties --------------------------------------------------
 
@@ -226,9 +216,7 @@ class ReferenceEvaluator:
     # -- evaluation ---------------------------------------------------------
 
     def run(
-        self,
-        output_names: list[str] | None,
-        feed_inputs: dict[str, Any],
+        self, output_names: list[str] | None, feed_inputs: dict[str, Any]
     ) -> list[np.ndarray]:
         """Executes the wrapped graph / model / function.
 
@@ -268,9 +256,7 @@ class ReferenceEvaluator:
         version: int = int(self._opsets.get("", self._opsets.get("ai.onnx", 0)) or 0)
         if version == 0 and self._opsets:
             version = int(max(self._opsets.values()))
-        ctx = _runtime.RuntimeContext(
-            _runtime.KernelContext(_runtime.default_opset(version))
-        )
+        ctx = _runtime.RuntimeContext(_runtime.KernelContext(_runtime.default_opset(version)))
 
         for name, value in feed_inputs.items():
             ctx.set(name, _numpy_to_cpp_tensor(name, value))

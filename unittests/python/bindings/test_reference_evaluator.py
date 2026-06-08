@@ -4,7 +4,7 @@
 """Tests for :class:`onnx_light.reference.ReferenceEvaluator`.
 
 The evaluator is a thin Python layer on top of the C++ kernels Python
-API (``onnx_light.onnx_py._onnxkernels.runtime``). These tests cover
+API (``onnx_light.onnx_py._onnxpykernels.runtime``). These tests cover
 the numpy ↔ runtime ``Tensor`` round-trip, the supported input shapes
 (``ModelProto`` / ``GraphProto`` / ``FunctionProto`` / bytes / path)
 and the ``run`` calling convention.
@@ -21,7 +21,6 @@ import numpy as np
 from onnx_light.ext_test_case import ExtTestCase
 from onnx_light.onnx_lib import parser
 from onnx_light.reference import ReferenceEvaluator
-
 
 _ABS_ADD_MODEL_SRC = (
     '<ir_version: 10, opset_import: ["" : 18]>\n'
@@ -133,10 +132,7 @@ class TestReferenceEvaluator(ExtTestCase):
         with self.assertRaises(RuntimeError):
             sess.run(
                 ["nonexistent"],
-                {
-                    "x": np.zeros(3, dtype=np.float32),
-                    "z": np.zeros(3, dtype=np.float32),
-                },
+                {"x": np.zeros(3, dtype=np.float32), "z": np.zeros(3, dtype=np.float32)},
             )
 
     def test_feed_inputs_must_be_dict(self):

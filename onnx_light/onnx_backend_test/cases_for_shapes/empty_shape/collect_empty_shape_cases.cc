@@ -8,12 +8,14 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 void CollectEmptyShapeTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  static const OpRegisterMap kEntries = {
-      {"Add", &RegisterAddEmptyShapeCases},     {"Sub", &RegisterSubEmptyShapeCases},
-      {"Mul", &RegisterMulEmptyShapeCases},     {"Div", &RegisterDivEmptyShapeCases},
-      {"PRelu", &RegisterPReluEmptyShapeCases}, {"Compress", &RegisterCompressEmptyShapeCases},
-  };
-  DispatchRegisterByOpType(registry, op_type, kEntries);
+  if (op_type.empty() or op_type == "empty_shape") {
+    RegisterAddEmptyShapeCases(registry);
+    RegisterCompressEmptyShapeCases(registry);
+    RegisterDivEmptyShapeCases(registry);
+    RegisterMulEmptyShapeCases(registry);
+    RegisterPReluEmptyShapeCases(registry);
+    RegisterSubEmptyShapeCases(registry);
+  }
 }
 
 } // namespace onnx_backend_test

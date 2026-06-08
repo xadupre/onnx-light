@@ -24,7 +24,6 @@ from onnx_light.backend.test.case import make_test_class, collect_test_case
 from onnx_light.onnx import numpy_helper as onh
 from onnx_light.onnx_py._onnxpykernels import runtime as rt
 
-
 # Operators currently registered in
 # ``onnx_light/onnx_kernels/run_nodes.cc::KernelDispatchTable``. Backend
 # test cases whose top-level graph is a single node of one of these ops are
@@ -122,9 +121,7 @@ def _build_include_regex() -> list[str]:
     return [r"^" + re.escape(n) + r"$" for n in names]
 
 
-TestRunModelBackend = make_test_class(
-    run_model_backend, include_regex=_build_include_regex()
-)
+TestRunModelBackend = make_test_class(run_model_backend, include_regex=_build_include_regex())
 
 
 if __name__ == "__main__":

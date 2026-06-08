@@ -6,8 +6,8 @@
 :mod:`onnx_light.onnx_py._onnxpyprotoop`,
 :mod:`onnx_light.onnx_py._onnxpyprotolib`,
 :mod:`onnx_light.onnx_py._onnxpyoptim`,
-:mod:`onnx_light.onnx_py._onnxkernels` and
-:mod:`onnx_light.onnx_py._onnxbackend` compiled extensions into a single
+:mod:`onnx_light.onnx_py._onnxpykernels` and
+:mod:`onnx_light.onnx_py._onnxpybackend` compiled extensions into a single
 namespace.
 
 The original ``_onnxpy`` extension was split into five nanobind modules:
@@ -19,12 +19,12 @@ The original ``_onnxpy`` extension was split into five nanobind modules:
   ``version_converter``).
 * :mod:`onnx_light.onnx_py._onnxpyoptim` exposes the optim bindings
   (``expressions`` and ``shape_inference``).
-* :mod:`onnx_light.onnx_py._onnxkernels` exposes the ``backend``
+* :mod:`onnx_light.onnx_py._onnxpykernels` exposes the ``backend``
   deterministic pseudo-random helpers backing :mod:`onnx_light.backend`
   and the ``runtime`` submodule with ``RunNode`` / ``RunNodes`` /
   ``RunGraph`` / ``RunFunction`` / ``RunModel`` plus the supporting
   ``RuntimeContext`` / ``KernelContext`` / ``OpsetId`` types.
-* :mod:`onnx_light.onnx_py._onnxbackend` exposes the ``backend_test``
+* :mod:`onnx_light.onnx_py._onnxpybackend` exposes the ``backend_test``
   test-case utilities.
 
 This module re-exports every public attribute of all extensions so that
@@ -58,8 +58,8 @@ _EXTENSIONS: tuple[str, ...] = (
     "_onnxpyprotoop",
     "_onnxpyprotolib",
     "_onnxpyoptim",
-    "_onnxkernels",
-    "_onnxbackend",
+    "_onnxpykernels",
+    "_onnxpybackend",
 )
 
 # Attribute names that are exposed as submodules by more than one extension.

@@ -490,10 +490,202 @@ void RegisterMultiCarriedCase(std::vector<TestCase> &registry) {
 
 } // namespace
 
+// ---------------------------------------------------------------------------
+// Loop — opset 13 with a sequence-typed loop-carried state.
+//
+// Mirrors ONNX's ``test_loop13_seq`` in spirit: trip-count 5 with an
+// empty input sequence as loop-carried state and a body that appends a
+// per-iteration tensor via ``SequenceInsert``. Upstream uses
+// ``x[:i+1]`` (variable per-iteration shapes ``[1]..[5]``) which the
+// project's ``DataSet`` (uniform-shape ``Tensor``s) cannot represent, so
+// the C++ case appends ``Gather(x, [i])`` instead — a fixed ``FLOAT[1]``
+// element per iteration. The resulting sequence is materialized as a
+// stacked ``FLOAT[5, 1]`` tensor via ``ConcatFromSequence(new_axis=1)``
+// for byte comparison by the test harness, yielding
+// ``[[1], [2], [3], [4], [5]]``.
+//
+// The graph topology is therefore: ``SequenceEmpty`` → ``Loop`` →
+// ``ConcatFromSequence``. The body subgraph computes
+// ``seq_out = SequenceInsert(seq_in, Gather(x, Unsqueeze(iter, [0])))``
+// where ``x = [1, 2, 3, 4, 5]`` is a body-local ``Constant``.
+// ---------------------------------------------------------------------------
+namespace {
+
+// Body subgraph for the loop13_seq case. Inputs are
+// ``(iter [INT64 scalar], cond_in [BOOL scalar], seq_in [Sequence<FLOAT, [1]>])``;
+// outputs are ``(cond_out [BOOL scalar], seq_out [Sequence<FLOAT, [1]>])``.
+GraphProto BuildLoop13SeqBody() {
+  GraphProto g;
+  g.set_name("loop13_seq_body");
+
+  AddGraphInputScalar(g, "iter", TensorProto::DataType::INT64);
+  AddGraphInputScalar(g, "cond_in", TensorProto::DataType::BOOL);
+  // seq_in: Sequence<Tensor<FLOAT, [1]>>.
+  {
+    ValueInfoProto *vi = g.add_input();
+    vi->set_name("seq_in");
+    TypeProto *tp = vi->ref_type().add_sequence_type()->add_elem_type();
+    TypeProto::Tensor *tt = tp->add_tensor_type();
+    tt->set_elem_type(static_cast<int>(TensorProto::DataType::FLOAT));
+    tt->add_shape()->add_dim()->set_dim_value(1);
+  }
+
+  // cond_out = Identity(cond_in)
+  {
+    NodeProto *n = g.add_node();
+    n->set_op_type("Identity");
+    n->add_input("cond_in");
+    n->add_output("cond_out");
+  }
+  // x = Constant(value=float [1, 2, 3, 4, 5])
+  {
+    NodeProto *n = g.add_node();
+    n->set_op_type("Constant");
+    n->add_output("x");
+    AttributeProto *a = n->add_attribute();
+    a->set_name("value");
+    a->set_type(AttributeProto::AttributeType::TENSOR);
+    TensorProto *t = a->add_t();
+    t->set_data_type(TensorProto::DataType::FLOAT);
+    t->add_dims(5);
+    t->set_raw_data(utils::ByteSpan(FloatBytes({1.0f, 2.0f, 3.0f, 4.0f, 5.0f})));
+  }
+  // axes_const = Constant(value=int64 [0])
+  {
+    NodeProto *n = g.add_node();
+    n->set_op_type("Constant");
+    n->add_output("axes_const");
+    AttributeProto *a = n->add_attribute();
+    a->set_name("value");
+    a->set_type(AttributeProto::AttributeType::TENSOR);
+    TensorProto *t = a->add_t();
+    t->set_data_type(TensorProto::DataType::INT64);
+    t->add_dims(1);
+    t->set_raw_data(utils::ByteSpan(Int64Bytes(0)));
+  }
+  // iter_1d = Unsqueeze(iter, axes_const) — INT64 scalar → INT64[1].
+  // Opset 13 takes axes as an input, not an attribute.
+  {
+    NodeProto *n = g.add_node();
+    n->set_op_type("Unsqueeze");
+    n->add_input("iter");
+    n->add_input("axes_const");
+    n->add_output("iter_1d");
+  }
+  // x_i = Gather(x, iter_1d, axis=0) — FLOAT[1].
+  {
+    NodeProto *n = g.add_node();
+    n->set_op_type("Gather");
+    n->add_input("x");
+    n->add_input("iter_1d");
+    n->add_output("x_i");
+    AttributeProto *a = n->add_attribute();
+    a->set_name("axis");
+    a->set_type(AttributeProto::AttributeType::INT);
+    a->set_i(0);
+  }
+  // seq_out = SequenceInsert(seq_in, x_i)
+  {
+    NodeProto *n = g.add_node();
+    n->set_op_type("SequenceInsert");
+    n->add_input("seq_in");
+    n->add_input("x_i");
+    n->add_output("seq_out");
+  }
+
+  AddGraphOutputTensor(g, "cond_out", TensorProto::DataType::BOOL);
+  // seq_out: Sequence<Tensor<FLOAT, [1]>>.
+  {
+    ValueInfoProto *vi = g.add_output();
+    vi->set_name("seq_out");
+    TypeProto *tp = vi->ref_type().add_sequence_type()->add_elem_type();
+    TypeProto::Tensor *tt = tp->add_tensor_type();
+    tt->set_elem_type(static_cast<int>(TensorProto::DataType::FLOAT));
+    tt->add_shape()->add_dim()->set_dim_value(1);
+  }
+  return g;
+}
+
+void RegisterLoop13SeqCase(std::vector<TestCase> &registry) {
+  const std::string name = "test_cc_loop13_seq";
+  const OpsetId opset = DefaultOpset(13);
+
+  // Inputs: ``trip_count = 5`` and ``cond = true``. The empty input
+  // sequence is materialised inside the graph via ``SequenceEmpty`` so
+  // the DataSet (Tensor-only) does not need to carry a sequence value.
+  const Tensor trip_count("trip_count", DataType::INT64, {}, Int64Bytes(5));
+  const Tensor cond("cond", DataType::BOOL, {}, std::vector<uint8_t>{1});
+
+  // Expected stacked output: ``[[1], [2], [3], [4], [5]]`` of shape [5, 1].
+  Tensor stacked("res_stacked", DataType::FLOAT, {5, 1},
+                 FloatBytes({1.0f, 2.0f, 3.0f, 4.0f, 5.0f}));
+
+  TestCase tc(name, name);
+  ModelProto &model = tc.model;
+  InitModel(model, /*ir_version=*/13, {opset});
+  GraphProto *graph = model.add_graph();
+  graph->set_name(name);
+
+  // Node 1: seq_empty = SequenceEmpty(dtype=FLOAT)
+  {
+    NodeProto *n = graph->add_node();
+    n->set_op_type("SequenceEmpty");
+    n->add_output("seq_empty");
+    AttributeProto *a = n->add_attribute();
+    a->set_name("dtype");
+    a->set_type(AttributeProto::AttributeType::INT);
+    a->set_i(static_cast<int64_t>(TensorProto::DataType::FLOAT));
+  }
+  // Node 2: seq_res = Loop(trip_count, cond, seq_empty)
+  {
+    NodeProto *n = graph->add_node();
+    n->set_op_type("Loop");
+    n->add_input("trip_count");
+    n->add_input("cond");
+    n->add_input("seq_empty");
+    n->add_output("seq_res");
+    AttributeProto *a = n->add_attribute();
+    a->set_name("body");
+    a->set_type(AttributeProto::AttributeType::GRAPH);
+    *a->add_g() = BuildLoop13SeqBody();
+  }
+  // Node 3: res_stacked = ConcatFromSequence(seq_res, axis=0, new_axis=1)
+  {
+    NodeProto *n = graph->add_node();
+    n->set_op_type("ConcatFromSequence");
+    n->add_input("seq_res");
+    n->add_output("res_stacked");
+    AttributeProto *axis_attr = n->add_attribute();
+    axis_attr->set_name("axis");
+    axis_attr->set_type(AttributeProto::AttributeType::INT);
+    axis_attr->set_i(0);
+    AttributeProto *na_attr = n->add_attribute();
+    na_attr->set_name("new_axis");
+    na_attr->set_type(AttributeProto::AttributeType::INT);
+    na_attr->set_i(1);
+  }
+
+  // Graph inputs/outputs.
+  FillValueInfo(trip_count, *graph->add_input());
+  FillValueInfo(cond, *graph->add_input());
+  FillValueInfo(stacked, *graph->add_output());
+
+  DataSet ds;
+  ds.inputs.push_back(trip_count);
+  ds.inputs.push_back(cond);
+  ds.outputs.push_back(stacked);
+  tc.data_sets.emplace_back(std::move(ds));
+
+  registry.emplace_back(std::move(tc));
+}
+
+} // namespace
+
 void RegisterLoopCases(std::vector<TestCase> &registry) {
   RegisterTripCountVariants(registry);
   RegisterLoop11Case(registry);
   RegisterMultiCarriedCase(registry);
+  RegisterLoop13SeqCase(registry);
 }
 
 } // namespace onnx_backend_test

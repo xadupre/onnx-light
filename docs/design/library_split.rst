@@ -12,7 +12,21 @@ not need shape inference, a program that only evaluates models does not
 need the full ONNX schema / checker stack, and so on.
 
 Each library has a well defined responsibility and a minimal set of
-dependencies on the other libraries.  The full dependency graph is::
+dependencies on the other libraries.  The full dependency graph is
+shown below (arrows point from a library to the library it depends
+on):
+
+.. mermaid::
+
+    graph TD
+        lib_onnx_op[lib_onnx_op] --> lib_onnx_proto[lib_onnx_proto]
+        lib_onnx_optim[lib_onnx_optim] --> lib_onnx_op
+        lib_onnx_lib[lib_onnx_lib] --> lib_onnx_proto
+        lib_onnx_kernels[lib_onnx_kernels] --> lib_onnx_proto
+        lib_onnx_backend_test[lib_onnx_backend_test] --> lib_onnx_kernels
+
+The same graph as an ASCII tree (rooted at ``lib_onnx_proto``, the
+base dependency)::
 
     lib_onnx_proto
         ├── lib_onnx_op

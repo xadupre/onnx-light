@@ -54,6 +54,7 @@ Python API
     :caption: Extra tools
 
     fuzz
+    reference
     tools/index
 
 onnx

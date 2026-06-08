@@ -23,7 +23,7 @@ using onnx_kernels::Tensor;
 void AddOnnxPyBackend(nb::module_ &m);
 void AddOnnxPyBackendTest(nb::module_ &m);
 
-NB_MODULE(_onnxbackend, m) {
+NB_MODULE(_onnxpybackend, m) {
   m.doc() = "onnx_light backend bindings: deterministic pseudo-random helpers and "
             "ONNX backend-test case utilities.";
 

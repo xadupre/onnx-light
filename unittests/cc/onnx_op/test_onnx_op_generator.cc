@@ -6,6 +6,7 @@
 
 #include <gtest/gtest.h>
 
+#include <variant>
 #include <vector>
 
 #ifdef ONNX_LIGHT_NAMESPACE
@@ -24,7 +25,7 @@ constexpr size_t kExpectedRandomNormalSchemaCount = 2;
 constexpr size_t kExpectedRandomNormalLikeSchemaCount = 2;
 constexpr size_t kExpectedRandomUniformSchemaCount = 2;
 constexpr size_t kExpectedRandomUniformLikeSchemaCount = 2;
-constexpr size_t kExpectedRangeSchemaCount = 1;
+constexpr size_t kExpectedRangeSchemaCount = 2;
 constexpr size_t kExpectedMultinomialSchemaCount = 2;
 
 static const onnx_op::LightOpSchema *
@@ -364,32 +365,50 @@ TEST(OnnxOpGeneratorRegistrationTest, ReturnsRangeSchemas) {
   ASSERT_EQ(range_schemas.size(), kExpectedRangeSchemaCount);
 
   const onnx_op::LightOpSchema *const range_v11 = FindByVersion(range_schemas, 11);
+  const onnx_op::LightOpSchema *const range_v27 = FindByVersion(range_schemas, 27);
   ASSERT_NE(nullptr, range_v11);
+  ASSERT_NE(nullptr, range_v27);
 
-  EXPECT_EQ(range_v11->domain(), "ai.onnx");
-  ASSERT_EQ(range_v11->inputs().size(), 3u);
-  EXPECT_EQ(range_v11->inputs()[0].name, "start");
-  EXPECT_EQ(range_v11->inputs()[0].type, "T");
-  EXPECT_EQ(range_v11->inputs()[1].name, "limit");
-  EXPECT_EQ(range_v11->inputs()[1].type, "T");
-  EXPECT_EQ(range_v11->inputs()[2].name, "delta");
-  EXPECT_EQ(range_v11->inputs()[2].type, "T");
+  for (const onnx_op::LightOpSchema *schema : {range_v11, range_v27}) {
+    EXPECT_EQ(schema->domain(), "ai.onnx");
+    ASSERT_EQ(schema->inputs().size(), 3u);
+    EXPECT_EQ(schema->inputs()[0].name, "start");
+    EXPECT_EQ(schema->inputs()[0].type, "T");
+    EXPECT_EQ(schema->inputs()[1].name, "limit");
+    EXPECT_EQ(schema->inputs()[1].type, "T");
+    EXPECT_EQ(schema->inputs()[2].name, "delta");
+    EXPECT_EQ(schema->inputs()[2].type, "T");
 
-  ASSERT_EQ(range_v11->outputs().size(), 1u);
-  EXPECT_EQ(range_v11->outputs()[0].name, "output");
-  EXPECT_EQ(range_v11->outputs()[0].type, "T");
+    ASSERT_EQ(schema->outputs().size(), 1u);
+    EXPECT_EQ(schema->outputs()[0].name, "output");
+    EXPECT_EQ(schema->outputs()[0].type, "T");
 
-  ASSERT_EQ(range_v11->type_constraints().size(), 1u);
-  EXPECT_EQ(range_v11->type_constraints()[0].type_param_str, "T");
+    ASSERT_EQ(schema->type_constraints().size(), 1u);
+    EXPECT_EQ(schema->type_constraints()[0].type_param_str, "T");
+    EXPECT_EQ(schema->type_constraints()[0].description,
+              "Constrain input types to common numeric type tensors.");
+  }
+
   EXPECT_EQ(
       range_v11->type_constraints()[0].allowed_type_strs,
       (std::vector<onnx_op::TensorType>{onnx_op::TensorType::kFloat, onnx_op::TensorType::kDouble,
                                         onnx_op::TensorType::kInt16, onnx_op::TensorType::kInt32,
                                         onnx_op::TensorType::kInt64}));
-  EXPECT_EQ(range_v11->type_constraints()[0].description,
-            "Constrain input types to common numeric type tensors.");
-
   EXPECT_EQ(range_v11->attributes().size(), 0u);
+
+  EXPECT_EQ(
+      range_v27->type_constraints()[0].allowed_type_strs,
+      (std::vector<onnx_op::TensorType>{onnx_op::TensorType::kFloat, onnx_op::TensorType::kDouble,
+                                        onnx_op::TensorType::kInt16, onnx_op::TensorType::kInt32,
+                                        onnx_op::TensorType::kInt64, onnx_op::TensorType::kFloat16,
+                                        onnx_op::TensorType::kBfloat16}));
+
+  ASSERT_EQ(range_v27->attributes().size(), 1u);
+  EXPECT_EQ(range_v27->attributes()[0].name, "stash_type");
+  EXPECT_EQ(range_v27->attributes()[0].type, onnx_op::AttributeType::INT);
+  EXPECT_FALSE(range_v27->attributes()[0].required);
+  ASSERT_TRUE(std::holds_alternative<int64_t>(range_v27->attributes()[0].default_value));
+  EXPECT_EQ(std::get<int64_t>(range_v27->attributes()[0].default_value), 1);
 }
 
 TEST(OnnxOpGeneratorRegistrationTest, ReturnsMultinomialSchemas) {

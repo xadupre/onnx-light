@@ -107,8 +107,8 @@ TensorProto message and be valid as an output type.
 )DOC";
 }
 
-std::string MakeRangeDoc() {
-  return R"DOC(
+std::string MakeRangeDoc(int since_version) {
+  std::string doc = R"DOC(
 Generate a tensor containing a sequence of numbers that begin at `start` and extends by increments of `delta`
 up to `limit` (exclusive).
 
@@ -140,6 +140,16 @@ Inputs: start = 10, limit = 4, delta = -2
 Output: [10, 8, 6]
 ```
 )DOC";
+  if (since_version >= 27) {
+    doc += R"DOC(
+For `float16` and `bfloat16` inputs, the `stash_type` attribute controls the precision used for
+intermediate accumulation. Setting `stash_type` to `1` (float) causes `start`, `limit`, and
+`delta` to be cast to 32-bit float before the loop, with the output cast back to the original
+type. This avoids precision loss for large ranges where successive additions in float16 or
+bfloat16 would otherwise be inexact (e.g. `x + 1 == x` for large `x`).
+)DOC";
+  }
+  return doc;
 }
 
 } // namespace generator

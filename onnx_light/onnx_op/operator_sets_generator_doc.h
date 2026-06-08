@@ -86,12 +86,15 @@ std::string MakeRandomUniformDoc();
 std::string MakeRandomUniformLikeDoc();
 
 /**
- * Returns the documentation string for the Range operator. The
- * documentation has been stable since opset 11.
+ * Returns the documentation string for the Range operator at the given
+ * opset version. The documentation was stable from opset 11 through 26;
+ * opset 27 appends an explanation of the ``stash_type`` attribute used
+ * for ``float16`` and ``bfloat16`` intermediate accumulation.
  *
+ * @param since_version Opset version for which to generate the documentation.
  * @return Documentation string for the Range operator.
  */
-std::string MakeRangeDoc();
+std::string MakeRangeDoc(int since_version);
 
 } // namespace generator
 } // namespace onnx_op

@@ -540,9 +540,36 @@ LightOpSchema MakeMultinomialSchema(int since_version) {
       });
 }
 
+// Range T type-constraint set, indexed by since_version.
+// Mirrors the upstream ``onnx`` ``Range`` schema history
+// (see ``onnx_light/onnx_lib/defs/generator/{defs,old}.cc``).
+// v11 : float, double, int16, int32, int64
+// v27 : adds float16, bfloat16
+std::vector<TensorType> RangeT(int since_version) {
+  switch (since_version) {
+  case 27:
+    return {TensorType::kFloat, TensorType::kDouble,  TensorType::kInt16,   TensorType::kInt32,
+            TensorType::kInt64, TensorType::kFloat16, TensorType::kBfloat16};
+  case 11:
+    return {TensorType::kFloat, TensorType::kDouble, TensorType::kInt16, TensorType::kInt32,
+            TensorType::kInt64};
+  default:
+    throw SchemaError("Unsupported Range since_version: " + std::to_string(since_version));
+  }
+}
+
 LightOpSchema MakeRangeSchema(int since_version) {
+  std::vector<AttributeParam> attrs;
+  if (since_version >= 27) {
+    attrs.push_back(
+        {"stash_type",
+         "The data type used for intermediate computation when T is float16 or bfloat16. "
+         "Defaults to 1 (float). Has no effect for other types.",
+         AttributeType::INT, /*required=*/false,
+         /*default=*/static_cast<int64_t>(1) /* TensorProto::FLOAT */});
+  }
   return LightOpSchema(
-      "Range", kOnnxDomain, since_version, MakeRangeDoc(),
+      "Range", kOnnxDomain, since_version, MakeRangeDoc(since_version),
       {
           {"start", "Scalar. First entry for the range of output values.", "T"},
           {"limit", "Scalar. Exclusive upper limit for the range of output values.", "T"},
@@ -553,11 +580,9 @@ LightOpSchema MakeRangeSchema(int since_version) {
            "A 1-D tensor with same type as the inputs containing generated range of values.", "T"},
       },
       {
-          {"T",
-           {TensorType::kFloat, TensorType::kDouble, TensorType::kInt16, TensorType::kInt32,
-            TensorType::kInt64},
-           "Constrain input types to common numeric type tensors."},
-      });
+          {"T", RangeT(since_version), "Constrain input types to common numeric type tensors."},
+      },
+      attrs);
 }
 
 } // namespace
@@ -634,6 +659,7 @@ std::vector<LightOpSchema> GetAllOnnxOpGeneratorSchemasWithHistory(const std::st
       {"Range",
        [] {
          return std::vector<LightOpSchema>{
+             MakeRangeSchema(27),
              MakeRangeSchema(11),
          };
        }},

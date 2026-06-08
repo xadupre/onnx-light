@@ -24,6 +24,10 @@
 See also the [ONNX roadmap](https://github.com/onnx/onnx/blob/main/ROADMAP.md)
 for the upstream project's direction and priorities.
 
+> **Note:** `onnx-light` started from the upstream ONNX pull request
+> [onnx/onnx#7208](https://github.com/onnx/onnx/pull/7208), which is the
+> initial code base from which this project diverged.
+
 ## onnx without protobuf
 
 - **ONNX Files larger than 2 GB** (protobuf is limited to 2Gb)

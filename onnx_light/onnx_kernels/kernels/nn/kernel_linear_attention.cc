@@ -87,9 +87,13 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
 
   const int64_t heads_per_kv = q_num_heads / kv_num_heads;
 
-  // Compute scale
-  float scale = attrs.scale;
-  if (!attrs.has_scale || scale == 0.0f) {
+  // Compute scale: the schema's ``scale`` attribute defaults to 0.0f, which
+  // means "derive 1/sqrt(d_k)". ``has_scale`` short-circuits the same default
+  // when the caller did not set the attribute at all.
+  float scale;
+  if (attrs.has_scale && attrs.scale != 0.0f) {
+    scale = attrs.scale;
+  } else {
     scale = 1.0f / std::sqrt(static_cast<float>(d_k));
   }
 

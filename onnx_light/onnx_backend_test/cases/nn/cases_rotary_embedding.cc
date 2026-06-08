@@ -21,6 +21,16 @@ namespace onnx_backend_test {
 // test suite. Each case produces an output by invoking the local
 // ``kernel::RotaryEmbedding`` reference implementation so the recorded
 // expected output is self-consistent with this library's kernel.
+//
+// Each upstream ``test_rotary_embedding_*`` case has an ``_expanded`` sibling
+// in which the operator is replaced by its function-body decomposition
+// (Reshape/Slice/Concat/Mul/Add/...). Because the function expansion is
+// mathematically equivalent to the operator, both variants share the same
+// reference inputs and outputs; we therefore register each case twice — once
+// with the operator name and once with the ``_expanded`` suffix — so the
+// upstream name parity check in
+// ``unittests/onnxl_vs_onnx/test_backend_test_names_onnx_vs_onnxlight.py``
+// sees them as covered.
 // ---------------------------------------------------------------------------
 
 namespace {
@@ -64,6 +74,8 @@ void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry) {
     NodeProto node = MakeRotaryNode({"X", "cos_cache", "sin_cache", "position_ids"}, {"Y"});
     Expect(node, {X4, cos2, sin2, position_ids}, {Y}, "test_cc_rotary_embedding", {opset},
            "backend-test", registry);
+    Expect(node, {X4, cos2, sin2, position_ids}, {Y}, "test_cc_rotary_embedding_expanded", {opset},
+           "backend-test", registry);
   }
 
   // Case 2: interleaved=1.
@@ -75,6 +87,8 @@ void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry) {
     AddAttribute<int64_t>(node, "interleaved", 1);
     Expect(node, {X4, cos2, sin2, position_ids}, {Y}, "test_cc_rotary_embedding_interleaved",
            {opset}, "backend-test", registry);
+    Expect(node, {X4, cos2, sin2, position_ids}, {Y},
+           "test_cc_rotary_embedding_interleaved_expanded", {opset}, "backend-test", registry);
   }
 
   // Case 3: rank-3 X = (batch, seq, hidden_size = num_heads * head_size)
@@ -90,6 +104,8 @@ void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry) {
     AddAttribute<int64_t>(node, "num_heads", 2);
     Expect(node, {X3, cos2, sin2, position_ids}, {Y}, "test_cc_rotary_embedding_3d_input", {opset},
            "backend-test", registry);
+    Expect(node, {X3, cos2, sin2, position_ids}, {Y}, "test_cc_rotary_embedding_3d_input_expanded",
+           {opset}, "backend-test", registry);
   }
 
   // Case 4: no position_ids — cos/sin caches are rank-3
@@ -103,6 +119,8 @@ void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry) {
     NodeProto node = MakeRotaryNode({"X", "cos_cache", "sin_cache"}, {"Y"});
     Expect(node, {X4, cos3, sin3}, {Y}, "test_cc_rotary_embedding_no_position_ids", {opset},
            "backend-test", registry);
+    Expect(node, {X4, cos3, sin3}, {Y}, "test_cc_rotary_embedding_no_position_ids_expanded",
+           {opset}, "backend-test", registry);
   }
 
   // Case 5: no position_ids + interleaved=1.
@@ -115,6 +133,9 @@ void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry) {
     AddAttribute<int64_t>(node, "interleaved", 1);
     Expect(node, {X4, cos3, sin3}, {Y}, "test_cc_rotary_embedding_no_position_ids_interleaved",
            {opset}, "backend-test", registry);
+    Expect(node, {X4, cos3, sin3}, {Y},
+           "test_cc_rotary_embedding_no_position_ids_interleaved_expanded", {opset}, "backend-test",
+           registry);
   }
 
   // Case 6: partial rotation — rotary_embedding_dim < head_size. With
@@ -131,6 +152,8 @@ void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry) {
     AddAttribute<int64_t>(node, "rotary_embedding_dim", 2);
     Expect(node, {X4, cos_partial, sin_partial, position_ids}, {Y},
            "test_cc_rotary_embedding_with_rotary_dim", {opset}, "backend-test", registry);
+    Expect(node, {X4, cos_partial, sin_partial, position_ids}, {Y},
+           "test_cc_rotary_embedding_with_rotary_dim_expanded", {opset}, "backend-test", registry);
   }
 
   // Case 7: partial rotation + interleaved=1.
@@ -147,6 +170,9 @@ void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry) {
     Expect(node, {X4, cos_partial, sin_partial, position_ids}, {Y},
            "test_cc_rotary_embedding_with_interleaved_rotary_dim", {opset}, "backend-test",
            registry);
+    Expect(node, {X4, cos_partial, sin_partial, position_ids}, {Y},
+           "test_cc_rotary_embedding_with_interleaved_rotary_dim_expanded", {opset}, "backend-test",
+           registry);
   }
 
   // Case 8: no position_ids + partial rotation. cos/sin caches are rank-3
@@ -162,6 +188,9 @@ void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry) {
     AddAttribute<int64_t>(node, "rotary_embedding_dim", 2);
     Expect(node, {X4, cos_p3, sin_p3}, {Y}, "test_cc_rotary_embedding_no_position_ids_rotary_dim",
            {opset}, "backend-test", registry);
+    Expect(node, {X4, cos_p3, sin_p3}, {Y},
+           "test_cc_rotary_embedding_no_position_ids_rotary_dim_expanded", {opset}, "backend-test",
+           registry);
   }
 }
 

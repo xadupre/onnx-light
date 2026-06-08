@@ -5,6 +5,7 @@
 #include "onnx_backend_test/cases/reduction/include_reduction_cases.h"
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
+#include "onnx_kernels/random.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
@@ -50,58 +51,54 @@ void EmitArgReduceCase(std::vector<TestCase> &registry, const std::string &op_ty
 // Registers the eight upstream ``test_argmax_*`` / ``test_argmin_*`` example
 // scenarios for the given operator. The upstream suite registers each
 // scenario twice (a deterministic ``_example`` and a NumPy-seeded
-// ``_random`` variant). The random variants only differ in their input
-// data and add no behavioural coverage, so — following the convention in
-// ``cases_reducesum.cc`` — only the deterministic variants are ported
-// here and the ``_example`` suffix is dropped to match the ``test_cc_``
-// naming scheme.
+// ``_random`` variant). Both variants are mirrored here so that the
+// substring check in ``test_backend_test_names_onnx_vs_onnxlight`` finds a
+// matching ``onnx_light`` case for each upstream name. The ``_random``
+// variant uses larger seeded data to mirror the upstream
+// ``np.random.randn(3, 4, 5, 6)`` input shape; only the name needs to match
+// for the substring check, but the larger shape also adds meaningful
+// behavioural coverage beyond the 2x2 example.
 void RegisterArgReduceCases(std::vector<TestCase> &registry, const std::string &op_type,
                             kernel::ArgReduce::Mode mode, const std::string &name_prefix) {
-  // The upstream example input shared across every variant.
-  const std::vector<int64_t> shape = {2, 2};
-  const std::vector<float> values = {2.0f, 2.0f, 3.0f, 10.0f};
+  // The upstream example input shared across every ``_example`` variant.
+  const std::vector<int64_t> example_shape = {2, 2};
+  const std::vector<float> example_values = {2.0f, 2.0f, 3.0f, 10.0f};
 
-  // axis=1, keepdims=0
-  EmitArgReduceCase(registry, op_type, mode, "test_cc_" + name_prefix + "_no_keepdims", shape,
-                    values, /*include_axis=*/true, /*axis=*/1, /*keepdims=*/0,
-                    /*select_last_index=*/false);
+  // The upstream random input shape used for every ``_random`` variant; data
+  // are generated through the seeded ``Randn`` helper to keep the registry
+  // deterministic.
+  const std::vector<int64_t> random_shape = {3, 4, 5, 6};
+  const std::vector<float> random_values = Randn<float>(random_shape, /*seed=*/91);
 
-  // axis=1, keepdims=1
-  EmitArgReduceCase(registry, op_type, mode, "test_cc_" + name_prefix + "_keepdims", shape, values,
-                    /*include_axis=*/true, /*axis=*/1, /*keepdims=*/1,
-                    /*select_last_index=*/false);
+  struct Scenario {
+    std::string name; // suffix appended after ``_example`` / ``_random``
+    bool include_axis;
+    int64_t axis;
+    int64_t keepdims;
+  };
 
-  // default axis (omitted -> 0), keepdims=1
-  EmitArgReduceCase(registry, op_type, mode, "test_cc_" + name_prefix + "_default_axis", shape,
-                    values, /*include_axis=*/false, /*axis=*/0, /*keepdims=*/1,
-                    /*select_last_index=*/false);
+  const std::vector<Scenario> scenarios = {
+      {"no_keepdims", true, 1, 0},
+      {"keepdims", true, 1, 1},
+      {"default_axis", false, 0, 1},
+      {"negative_axis_keepdims", true, -1, 1},
+  };
 
-  // axis=-1, keepdims=1
-  EmitArgReduceCase(registry, op_type, mode, "test_cc_" + name_prefix + "_negative_axis_keepdims",
-                    shape, values,
-                    /*include_axis=*/true, /*axis=*/-1, /*keepdims=*/1,
-                    /*select_last_index=*/false);
-
-  // select_last_index variants — same axes/keepdims values as above.
-  EmitArgReduceCase(registry, op_type, mode,
-                    "test_cc_" + name_prefix + "_no_keepdims_select_last_index", shape, values,
-                    /*include_axis=*/true, /*axis=*/1, /*keepdims=*/0,
-                    /*select_last_index=*/true);
-
-  EmitArgReduceCase(registry, op_type, mode,
-                    "test_cc_" + name_prefix + "_keepdims_select_last_index", shape, values,
-                    /*include_axis=*/true, /*axis=*/1, /*keepdims=*/1,
-                    /*select_last_index=*/true);
-
-  EmitArgReduceCase(registry, op_type, mode,
-                    "test_cc_" + name_prefix + "_default_axis_select_last_index", shape, values,
-                    /*include_axis=*/false, /*axis=*/0, /*keepdims=*/1,
-                    /*select_last_index=*/true);
-
-  EmitArgReduceCase(registry, op_type, mode,
-                    "test_cc_" + name_prefix + "_negative_axis_keepdims_select_last_index", shape,
-                    values, /*include_axis=*/true, /*axis=*/-1, /*keepdims=*/1,
-                    /*select_last_index=*/true);
+  for (const Scenario &s : scenarios) {
+    for (bool select_last : {false, true}) {
+      const std::string select_suffix = select_last ? "_select_last_index" : "";
+      // ``_example`` variant.
+      EmitArgReduceCase(registry, op_type, mode,
+                        "test_cc_" + name_prefix + "_" + s.name + "_example" + select_suffix,
+                        example_shape, example_values, s.include_axis, s.axis, s.keepdims,
+                        select_last);
+      // ``_random`` variant.
+      EmitArgReduceCase(registry, op_type, mode,
+                        "test_cc_" + name_prefix + "_" + s.name + "_random" + select_suffix,
+                        random_shape, random_values, s.include_axis, s.axis, s.keepdims,
+                        select_last);
+    }
+  }
 }
 
 } // namespace

@@ -637,6 +637,12 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          logical::ComputeShapeLess(ctx, node, node.input(0).as_string().c_str(),
                                    node.input(1).as_string().c_str());
        }},
+      {"ai.onnx:LessOrEqual",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         logical::ComputeShapeLessOrEqual(ctx, node, node.input(0).as_string().c_str(),
+                                          node.input(1).as_string().c_str());
+       }},
       {"ai.onnx:LRN",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

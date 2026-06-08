@@ -160,6 +160,20 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Element-wise ``LessOrEqual`` comparison with multidirectional
+/// broadcasting. Inputs may be FLOAT, INT8, INT16, UINT8, UINT16, UINT32 or
+/// UINT64 (both inputs must share the same dtype); the output is BOOL (one
+/// byte per element, ``0`` or ``1``). Mirrors the upstream ONNX
+/// ``LessOrEqual`` reference implementation (``np.less_equal``).
+class LessOrEqual : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x, const Tensor &y) const;
+  void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Element-wise ``Equal`` comparison with multidirectional broadcasting.
 /// Inputs may be BOOL, FLOAT, DOUBLE, INT8, INT16, INT32, INT64, UINT8,
 /// UINT16, UINT32, UINT64 or STRING (both inputs must share the same dtype);

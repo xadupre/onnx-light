@@ -365,6 +365,53 @@ TEST(BackendTestCase, GreaterOrEqualBroadcastCaseHasBroadcastShapes) {
   EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
 }
 
+TEST(BackendTestCase, LessOrEqualCasesArePresent) {
+  // Local ``test_cc_*`` smoke cases registered alongside the upstream-ONNX
+  // mirrored ``test_less_equal*`` cases for every numeric input dtype
+  // supported by ``kernel::LessOrEqual`` (FLOAT, INT8, INT16, UINT8,
+  // UINT16, UINT32, UINT64) plus the float broadcast case (see
+  // ``RegisterLessOrEqualCases``).
+  auto cases = CollectTestCases();
+  for (const char *name :
+       {"test_cc_less_or_equal", "test_cc_less_or_equal_bcast", "test_less_equal",
+        "test_less_equal_int8", "test_less_equal_int16", "test_less_equal_uint8",
+        "test_less_equal_uint16", "test_less_equal_uint32", "test_less_equal_uint64",
+        "test_less_equal_bcast"}) {
+    EXPECT_NE(FindLogicalCase(cases, name), nullptr) << "Missing LessOrEqual case: " << name;
+  }
+}
+
+TEST(BackendTestCase, LessOrEqualCaseOutputsAreElementwiseLessOrEqual) {
+  auto cases = CollectTestCases("LessOrEqual");
+  const TestCase *tc = FindLogicalCase(cases, "test_less_equal");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 2u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
+  EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
+  EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{3, 4, 5}));
+  EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
+  const float *x = reinterpret_cast<const float *>(ds.inputs[0].data.data());
+  const float *y = reinterpret_cast<const float *>(ds.inputs[1].data.data());
+  const uint8_t *z = ds.outputs[0].data.data();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_EQ(z[i], x[i] <= y[i] ? 1 : 0);
+  }
+}
+
+TEST(BackendTestCase, LessOrEqualBroadcastCaseHasBroadcastShapes) {
+  auto cases = CollectTestCases("LessOrEqual");
+  const TestCase *tc = FindLogicalCase(cases, "test_less_equal_bcast");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
+  EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{5}));
+  EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
+}
+
 TEST(BackendTestCase, EqualCasesArePresent) {
   // Local ``test_cc_*`` smoke cases registered alongside the upstream-ONNX
   // mirrored ``test_equal*`` cases for every dtype covered by upstream

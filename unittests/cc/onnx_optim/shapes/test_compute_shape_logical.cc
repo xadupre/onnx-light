@@ -427,6 +427,48 @@ TEST(OnnxOptimShapesLogicalGreaterOrEqual, RejectsWrongOpType) {
 }
 
 // ---------------------------------------------------------------------------
+// LessOrEqual
+// ---------------------------------------------------------------------------
+TEST(OnnxOptimShapesLogicalLessOrEqual, PropagatesEqualShapesWithBoolDtype) {
+  NodeProto node = MakeBinaryLogicalNode("LessOrEqual");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  onnx_optim::shapes::logical::ComputeShapeLessOrEqual(ctx, node, "A", "B");
+
+  ASSERT_TRUE(ctx.Has("C"));
+  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_EQ(ctx.Get("C").Shape(), shape);
+}
+
+TEST(OnnxOptimShapesLogicalLessOrEqual, BroadcastsShapes) {
+  NodeProto node = MakeBinaryLogicalNode("LessOrEqual");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape_a{onnx_optim::OptimDim(2), onnx_optim::OptimDim(1)};
+  onnx_optim::OptimShape shape_b{onnx_optim::OptimDim(1), onnx_optim::OptimDim(3)};
+  onnx_optim::OptimShape expected{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape_a));
+  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape_b));
+
+  onnx_optim::shapes::logical::ComputeShapeLessOrEqual(ctx, node, "A", "B");
+
+  ASSERT_TRUE(ctx.Has("C"));
+  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_EQ(ctx.Get("C").Shape(), expected);
+}
+
+TEST(OnnxOptimShapesLogicalLessOrEqual, RejectsWrongOpType) {
+  NodeProto node = MakeBinaryLogicalNode("Less");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeLessOrEqual(ctx, node, "A", "B"),
+               std::invalid_argument);
+}
+
+// ---------------------------------------------------------------------------
 // Equal
 // ---------------------------------------------------------------------------
 TEST(OnnxOptimShapesLogicalEqual, PropagatesEqualShapesWithBoolDtype) {

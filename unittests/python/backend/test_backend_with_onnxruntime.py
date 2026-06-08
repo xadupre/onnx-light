@@ -130,6 +130,10 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     sub-byte / float8 / float4 types as ``QuantizeLinear`` ``y_zero_point``
 #     types ("Type 'tensor(<dtype>)' of input parameter (y_zero_point) ... is
 #     invalid"). The reference backend still exercises these cases.
+#   * ``test_cc_qlinearmatmul_{2D,3D}_{uint8,int8}_float16`` — ORT's CPU EP
+#     rejects FLOAT16 scales for ``QLinearMatMul`` ("Type 'tensor(float16)'
+#     of input parameter (a_scale) of operator (QLinearMatMul) ... is
+#     invalid"). The reference backend still exercises these cases.
 #   * ``test_cc_svmclassifier_int64_binary`` and
 #     ``test_cc_svmregressor_linear`` — ORT's ``ai.onnx.ml`` SVM kernels follow
 #     a different scoring/layout convention than the lightweight backend
@@ -306,6 +310,10 @@ ORT_EXCLUDE_REGEX = [
     r"^test_quantizelinear_uint2$",
     r"^test_quantizelinear_int2$",
     r"^test_quantizelinear_float4e2m1$",
+    r"^test_cc_qlinearmatmul_2D_uint8_float16$",
+    r"^test_cc_qlinearmatmul_2D_int8_float16$",
+    r"^test_cc_qlinearmatmul_3D_uint8_float16$",
+    r"^test_cc_qlinearmatmul_3D_int8_float16$",
     r"^test_cc_svmclassifier_int64_binary$",
     r"^test_cc_svmregressor_linear$",
     r"^test_cc_linearclassifier_int64_binary$",

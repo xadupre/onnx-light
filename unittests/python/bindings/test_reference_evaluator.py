@@ -4,7 +4,7 @@
 """Tests for :class:`onnx_light.reference.ReferenceEvaluator`.
 
 The evaluator is a thin Python layer on top of the C++ kernels Python
-API (``onnx_light.onnx_py._onnxkernels.runtime``). These tests cover
+API (``onnx_light.onnx_py._onnxpykernels.runtime``). These tests cover
 the numpy ↔ runtime ``Tensor`` round-trip, the supported input shapes
 (``ModelProto`` / ``GraphProto`` / ``FunctionProto`` / bytes / path)
 and the ``run`` calling convention.

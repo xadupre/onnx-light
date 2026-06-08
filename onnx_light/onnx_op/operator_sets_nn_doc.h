@@ -194,6 +194,13 @@ std::string MakeConvIntegerDoc(int since_version);
  */
 std::string MakeConvTransposeDoc(int since_version);
 
+/**
+ * Returns the documentation string for the LinearAttention operator at the
+ * given opset version (27). Matches the upstream ``LinearAttention_ver27_doc``
+ * string.
+ */
+std::string MakeLinearAttentionDoc(int since_version);
+
 } // namespace nn
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

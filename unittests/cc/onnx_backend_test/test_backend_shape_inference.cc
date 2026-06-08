@@ -762,4 +762,172 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeIdentityUnsqueeze) {
   ASSERT_TRUE(found) << "test_cc_shape_inference_shape_identity_unsqueeze case not registered";
 }
 
+// ---------------------------------------------------------------------------
+// onnx_optim shape inference + If subgraph
+// ---------------------------------------------------------------------------
+//
+// Verifies that the ``onnx_optim`` shape-inference pipeline correctly handles
+// an ``If`` node whose ``then_branch`` and ``else_branch`` attributes each
+// contain a sub-graph. The case used is ``test_cc_if`` (cond=true): both
+// branches return a constant FLOAT ``[2]`` tensor, so after shape inference
+// the ``If`` output ``res`` must carry dtype FLOAT and rank 1 with dim 2.
+TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeIfSubgraph) {
+  const std::vector<TestCase> cases = CollectTestCases("If");
+  bool found = false;
+  for (const TestCase &tc : cases) {
+    if (tc.name != "test_cc_if") {
+      continue;
+    }
+    found = true;
+
+    ModelProto model_copy;
+    std::string serialized;
+    tc.model.SerializeToString(serialized);
+    model_copy.ParseFromString(serialized);
+
+    // Strip the recorded output shape so optim shape inference has to
+    // recover it by walking the then_branch / else_branch subgraphs.
+    auto &outputs = model_copy.mutable_graph()->ref_output();
+    ASSERT_EQ(outputs.size(), 1u);
+    auto *tt = MutableTensorTypeOf(*outputs[0].mutable_type());
+    ASSERT_NE(tt, nullptr);
+    tt->clear_shape();
+
+    ASSERT_NO_THROW(onnx_optim::shapes::InferShapesModel(model_copy)) << "case: " << tc.name;
+
+    // Both branches produce FLOAT [2]; the merged output must be FLOAT [2].
+    const ValueInfoProto &out = model_copy.ref_graph().ref_output()[0];
+    ASSERT_TRUE(out.has_type());
+    const TypeProto::Tensor *out_tt = TensorTypeOf(out.ref_type());
+    ASSERT_NE(out_tt, nullptr);
+    EXPECT_EQ(static_cast<int32_t>(out_tt->elem_type()), 1 /* FLOAT */);
+    ASSERT_TRUE(out_tt->has_shape());
+    const auto dims = DimsOf(*out_tt);
+    ASSERT_EQ(dims.size(), 1u);
+    EXPECT_EQ(dims[0], 2);
+  }
+  ASSERT_TRUE(found) << "test_cc_if case not registered";
+}
+
+// ---------------------------------------------------------------------------
+// onnx_optim shape inference + Loop subgraph
+// ---------------------------------------------------------------------------
+//
+// Verifies that the ``onnx_optim`` shape-inference pipeline correctly handles
+// a ``Loop`` node whose ``body`` attribute is a sub-graph. The case used is
+// ``test_cc_loop_basic_trip_count``: no loop-carried states (N=0) and one
+// scan output (K=1). The body is a two-node sub-graph that produces a
+// constant INT64 ``[42]`` tensor of shape ``[1]`` each iteration.
+//
+// After shape inference the scan output ``scan_outputs`` must be INT64 with
+// rank 2: a symbolic leading axis (the trip count is a runtime value and
+// is not known statically) and a concrete trailing dim of 1 (the
+// per-iteration element shape from the body's ``Constant`` node).
+TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeLoopSubgraph) {
+  const std::vector<TestCase> cases = CollectTestCases("Loop");
+  bool found = false;
+  for (const TestCase &tc : cases) {
+    if (tc.name != "test_cc_loop_basic_trip_count") {
+      continue;
+    }
+    found = true;
+
+    ModelProto model_copy;
+    std::string serialized;
+    tc.model.SerializeToString(serialized);
+    model_copy.ParseFromString(serialized);
+
+    // Strip the recorded output shape so optim shape inference must
+    // recover it by walking the Loop body subgraph.
+    auto &outputs = model_copy.mutable_graph()->ref_output();
+    ASSERT_EQ(outputs.size(), 1u);
+    if (auto *ott = MutableTensorTypeOf(*outputs[0].mutable_type()); ott != nullptr) {
+      ott->clear_shape();
+    }
+
+    ASSERT_NO_THROW(onnx_optim::shapes::InferShapesModel(model_copy)) << "case: " << tc.name;
+
+    const auto &out_infos = model_copy.ref_graph().ref_output();
+    ASSERT_EQ(out_infos.size(), 1u);
+
+    // scan_outputs: stacked scan output, INT64 [symbolic, 1].
+    // The leading axis is symbolic (trip count is a runtime INT64 input);
+    // the trailing dim 1 comes from the body Constant node shape [1].
+    const ValueInfoProto &out = out_infos[0];
+    ASSERT_TRUE(out.has_type());
+    const TypeProto::Tensor *ott = TensorTypeOf(out.ref_type());
+    ASSERT_NE(ott, nullptr);
+    EXPECT_EQ(static_cast<int32_t>(ott->elem_type()),
+              static_cast<int32_t>(onnx_kernels::DataType::INT64));
+    ASSERT_TRUE(ott->has_shape());
+    const auto dims = DimsOf(*ott);
+    // Rank must be 2: symbolic trip-count axis + concrete [1] element shape.
+    ASSERT_EQ(dims.size(), 2u);
+    EXPECT_EQ(dims[1], 1);
+  }
+  ASSERT_TRUE(found) << "test_cc_loop_basic_trip_count case not registered";
+}
+
+// ---------------------------------------------------------------------------
+// onnx_optim shape inference + Scan subgraph
+// ---------------------------------------------------------------------------
+//
+// Verifies that the ``onnx_optim`` shape-inference pipeline correctly handles
+// a ``Scan`` node whose ``body`` attribute is a sub-graph. The case used is
+// ``test_cc_scan_basic_trip_count`` (opset 11, no state variables, one scan
+// input/output):
+//
+//   * ``X`` — FLOAT ``[3, 2]`` (scan axis 0, trip count 3).
+//   * Body: ``y_elt = Identity(x_elt)`` where ``x_elt`` is each per-iteration
+//     FLOAT ``[2]`` slice.
+//
+// After shape inference:
+//
+//   * ``Y`` — the stacked scan output — must be FLOAT ``[3, 2]``; the leading
+//     axis 3 is taken from the scan input ``X``'s scan axis (axis 0), and the
+//     trailing dim 2 comes from the per-iteration element shape ``[2]``.
+TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeScanSubgraph) {
+  const std::vector<TestCase> cases = CollectTestCases("Scan");
+  bool found = false;
+  for (const TestCase &tc : cases) {
+    if (tc.name != "test_cc_scan_basic_trip_count") {
+      continue;
+    }
+    found = true;
+
+    ModelProto model_copy;
+    std::string serialized;
+    tc.model.SerializeToString(serialized);
+    model_copy.ParseFromString(serialized);
+
+    // Strip the recorded output shape so optim shape inference must
+    // recover it by walking the Scan body subgraph.
+    auto &outputs = model_copy.mutable_graph()->ref_output();
+    ASSERT_EQ(outputs.size(), 1u);
+    if (auto *ott = MutableTensorTypeOf(*outputs[0].mutable_type()); ott != nullptr) {
+      ott->clear_shape();
+    }
+
+    ASSERT_NO_THROW(onnx_optim::shapes::InferShapesModel(model_copy)) << "case: " << tc.name;
+
+    const auto &out_infos = model_copy.ref_graph().ref_output();
+    ASSERT_EQ(out_infos.size(), 1u);
+
+    // Y: stacked scan output, FLOAT [3, 2].
+    // The trip count 3 is inferred from the scan input X's shape [3, 2]
+    // (scan axis 0), so the leading axis is concrete.
+    const ValueInfoProto &out = out_infos[0];
+    ASSERT_TRUE(out.has_type());
+    const TypeProto::Tensor *ott = TensorTypeOf(out.ref_type());
+    ASSERT_NE(ott, nullptr);
+    EXPECT_EQ(static_cast<int32_t>(ott->elem_type()), 1 /* FLOAT */);
+    ASSERT_TRUE(ott->has_shape());
+    const auto dims = DimsOf(*ott);
+    ASSERT_EQ(dims.size(), 2u);
+    EXPECT_EQ(dims[0], 3);
+    EXPECT_EQ(dims[1], 2);
+  }
+  ASSERT_TRUE(found) << "test_cc_scan_basic_trip_count case not registered";
+}
+
 } // namespace Test

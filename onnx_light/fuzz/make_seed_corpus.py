@@ -250,9 +250,7 @@ def _write_zip(path: str, entries: Mapping[str, bytes | str]) -> None:
             zf.writestr(name, entry.encode() if isinstance(entry, str) else entry)
 
 
-_USAGE = (
-    "Usage: {prog} <version_converter_out.zip> <parser_out.zip> <shape_inference_out.zip>\n"
-)
+_USAGE = "Usage: {prog} <version_converter_out.zip> <parser_out.zip> <shape_inference_out.zip>\n"
 
 
 def main() -> int:

@@ -196,6 +196,7 @@ def _transform_value(arr):
 
 def _import_python_test_case_module() -> None:
     from . import if_  # noqa: F401
+    from . import loop  # noqa: F401
 
 
 # build value infos using onnx_light helper
@@ -243,8 +244,38 @@ def expect(
     present_inputs = [x for x in node_op.input if x != ""]
     present_outputs = [x for x in node_op.output if x != ""]
 
-    inputs_vi = [_extract_vi(arr, n) for arr, n in zip(inputs, present_inputs)]
-    outputs_vi = [_extract_vi(arr, n) for arr, n in zip(outputs, present_outputs)]
+    # Optional explicit TypeProto overrides for inputs/outputs. Useful when the
+    # value alone cannot uniquely describe its type (e.g. empty sequence
+    # inputs whose element dtype cannot be inferred from the Python value).
+    input_type_protos = kwargs.pop("input_type_protos", None)
+    output_type_protos = kwargs.pop("output_type_protos", None)
+
+    def _vi_from_type_proto(name, type_proto):
+        vi = onnx.ValueInfoProto()
+        vi.name = name
+        vi.type.CopyFrom(type_proto)
+        return vi
+
+    if input_type_protos is not None:
+        assert len(input_type_protos) == len(present_inputs), (
+            f"input_type_protos length {len(input_type_protos)} does not match "
+            f"the number of present inputs {len(present_inputs)}."
+        )
+        inputs_vi = [
+            _vi_from_type_proto(n, tp) for n, tp in zip(present_inputs, input_type_protos)
+        ]
+    else:
+        inputs_vi = [_extract_vi(arr, n) for arr, n in zip(inputs, present_inputs)]
+    if output_type_protos is not None:
+        assert len(output_type_protos) == len(present_outputs), (
+            f"output_type_protos length {len(output_type_protos)} does not match "
+            f"the number of present outputs {len(present_outputs)}."
+        )
+        outputs_vi = [
+            _vi_from_type_proto(n, tp) for n, tp in zip(present_outputs, output_type_protos)
+        ]
+    else:
+        outputs_vi = [_extract_vi(arr, n) for arr, n in zip(outputs, present_outputs)]
 
     # create a model based on that specification
     if "opset_imports" not in kwargs:

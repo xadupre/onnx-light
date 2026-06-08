@@ -19,6 +19,22 @@ The :func:`~onnx_light.backend.test.case.base.make_test_class` function
 then turns those test cases into a standard :class:`unittest.TestCase`
 subclass that calls into a user-supplied runtime function.
 
+Dependencies and layering
+-------------------------
+
+The backend-test stack is split into a small Python front-end and a C++
+core:
+
+* Python side: :mod:`onnx_light.backend.test.case` (test-class generation,
+  filtering, and NumPy-based comparisons).
+* C++ side: ``lib_onnx_backend_test`` (test-case registry and model/data
+  generation) and ``lib_onnx_kernels`` (reference kernels + runtime
+  :cpp:struct:`onnx::onnx_kernels::Tensor` carrier).
+
+In other words, the Python API depends on the C++ implementation for the
+canonical registry, and downstream runtimes only need to provide one
+``model + inputs -> outputs`` callable.
+
 Defining a runtime function
 ----------------------------
 
@@ -159,12 +175,12 @@ avoid recollecting test cases on repeated lookups.
 Full example: ONNXRuntime backend
 -----------------------------------
 
-The file ``unittests/backend/test_backend_with_onnxruntime.py`` in the
+The file ``unittests/python/backend/test_backend_with_onnxruntime.py`` in the
 repository is a ready-to-run example that exercises every registered
 backend test case through
 `ONNXRuntime <https://onnxruntime.ai/>`_:
 
-.. literalinclude:: ../../unittests/backend/test_backend_with_onnxruntime.py
+.. literalinclude:: ../../unittests/python/backend/test_backend_with_onnxruntime.py
    :language: python
 
 The runtime function serialises the :class:`~onnx_light.onnx.ModelProto`
@@ -176,13 +192,13 @@ Run it with:
 
 .. code-block:: bash
 
-    python -m pytest unittests/backend/test_backend_with_onnxruntime.py -v
+    python -m pytest unittests/python/backend/test_backend_with_onnxruntime.py -v
 
 or, to run only the ``Abs`` test cases:
 
 .. code-block:: bash
 
-    python -m pytest unittests/backend/test_backend_with_onnxruntime.py -v -k abs
+    python -m pytest unittests/python/backend/test_backend_with_onnxruntime.py -v -k abs
 
 ----
 
@@ -203,6 +219,24 @@ C++ cases with the same name.
 :func:`~onnx_light.backend.test.case.base.make_test_class` calls
 :func:`~onnx_light.backend.test.case.base.collect_test_case` internally,
 so tests are always re-collected from scratch when the function is called.
+
+``TestCase`` metadata and ONNX parity
+-------------------------------------
+
+Every registered case is a ``kind="node"`` test case carrying a small
+single-node ONNX model plus expected datasets. Many cases mirror the
+official ONNX backend node tests directly; others are focused parity or
+regression cases that keep the same ONNX-style data model.
+
+Random operators keep deterministic expected outputs even though ONNX marks
+them as non-deterministic: the reference kernels use a fixed SplitMix64 +
+Irwin-Hall random stream (or an explicit seed when provided). This keeps
+the registry reproducible while avoiding large literal ``TensorProto`` blobs:
+expected values are stored as runtime ``Tensor`` byte buffers in datasets.
+
+For shape-oriented scenarios, cases can also annotate graph intermediate
+values with ``graph.value_info`` (through ``AppendValueInfo``) so shape
+inference tests can assert intermediate dimensions, not just final outputs.
 
 ----
 
@@ -271,6 +305,8 @@ See also
 --------
 
 * :ref:`l-api-backend` — Python API reference for the backend module.
+* :ref:`l-cpp-run-backend-test-ort-example` — standalone C++ example that
+  runs the same registry against ONNXRuntime.
 * :doc:`../api/cpp/onnx_kernels/index` — C++ API reference for the
   ``lib_onnx_kernels`` library (kernels and runtime data model).
 * :doc:`../api/cpp/onnx_backend_test/index` — C++ API reference for

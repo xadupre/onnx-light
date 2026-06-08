@@ -1,0 +1,117 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#include "onnx_backend_test/cases/logical/include_logical_cases.h"
+#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/logical/include_logical_kernels.h"
+#include "onnx_kernels/random.h"
+
+#include <cstdint>
+#include <string>
+#include <utility>
+#include <vector>
+
+namespace ONNX_LIGHT_NAMESPACE {
+namespace onnx_backend_test {
+
+namespace {
+
+Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
+  return Tensor::FromFloat("", shape, Randn<float>(shape, seed));
+}
+
+} // namespace
+
+// ---------------------------------------------------------------------------
+// LessOrEqual — z = x <= y, element-wise with broadcasting (since opset 12).
+// Inputs are numeric tensors of the same dtype, the output is BOOL.
+// ---------------------------------------------------------------------------
+void RegisterLessOrEqualCases(std::vector<TestCase> &registry) {
+  const OpsetId opset = DefaultOpset(16);
+  const kernel::KernelContext ctx{opset};
+  const kernel::LessOrEqual le_kernel{ctx};
+
+  // Equal-shape variant.
+  {
+    NodeProto node;
+    node.set_op_type("LessOrEqual");
+    node.add_input("x");
+    node.add_input("y");
+    node.add_output("z");
+
+    Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+    Tensor y = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 2.0f, 2.0f});
+    Tensor z = le_kernel(x, y);
+
+    Expect(node, {x, y}, {z}, "test_cc_less_or_equal", {opset}, "backend-test", registry);
+  }
+
+  // Scalar broadcast variant: z[i] = x[i] <= y (scalar).
+  {
+    NodeProto node;
+    node.set_op_type("LessOrEqual");
+    node.add_input("x");
+    node.add_input("y");
+    node.add_output("z");
+
+    Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+    Tensor y = Tensor::FromFloat("", {}, {2.5f});
+    Tensor z = le_kernel(x, y);
+
+    Expect(node, {x, y}, {z}, "test_cc_less_or_equal_bcast", {opset}, "backend-test", registry);
+  }
+
+  // Upstream ONNX backend test cases for the ``LessOrEqual`` operator
+  // (mirror the ``onnx.backend.test.case.node.less_equal.Less`` Python
+  // class). All numeric input dtypes accepted by
+  // :ref:`kernel::LessOrEqual` are covered: FLOAT, INT8, INT16, UINT8,
+  // UINT16, UINT32 and UINT64. Inputs are generated deterministically through
+  // the seeded ``Randn``/``RandInt`` helpers to match the upstream
+  // ``np.random.randn(...).astype(dtype)`` and
+  // ``np.random.randint(24, size=..., dtype=...)`` patterns; expected outputs
+  // are computed by ``kernel::LessOrEqual``.
+
+  NodeProto node;
+  node.set_op_type("LessOrEqual");
+  node.add_input("x");
+  node.add_input("y");
+  node.add_output("less_equal");
+
+  // Each upstream case is a (test_name, [x, y]) pair; the expected output is
+  // computed by ``le_kernel`` to keep the registry self-consistent.
+  const std::vector<std::pair<std::string, std::vector<Tensor>>> cases = {
+      // From Less.export() in less_equal.py:
+      {"test_less_equal",
+       {RandnFloat({3, 4, 5}, /*seed=*/221), RandnFloat({3, 4, 5}, /*seed=*/222)}},
+      {"test_less_equal_int8",
+       {Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/231)),
+        Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/232))}},
+      {"test_less_equal_int16",
+       {Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/233)),
+        Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/234))}},
+      {"test_less_equal_uint8",
+       {Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/235)),
+        Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/236))}},
+      {"test_less_equal_uint16",
+       {Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/237)),
+        Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/238))}},
+      {"test_less_equal_uint32",
+       {Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/239)),
+        Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/240))}},
+      {"test_less_equal_uint64",
+       {Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/241)),
+        Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/242))}},
+      // From Less.export_less_broadcast() in less_equal.py:
+      {"test_less_equal_bcast",
+       {RandnFloat({3, 4, 5}, /*seed=*/223), RandnFloat({5}, /*seed=*/224)}},
+  };
+
+  for (const auto &[name, inputs] : cases) {
+    Tensor z = le_kernel(inputs[0], inputs[1]);
+    Expect(node, inputs, {z}, name, {opset}, "backend-test", registry);
+  }
+}
+
+} // namespace onnx_backend_test
+} // namespace ONNX_LIGHT_NAMESPACE

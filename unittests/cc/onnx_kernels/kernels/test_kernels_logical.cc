@@ -27,6 +27,7 @@ using onnx_kernels::kernel::IsInf;
 using onnx_kernels::kernel::IsNaN;
 using onnx_kernels::kernel::KernelContext;
 using onnx_kernels::kernel::Less;
+using onnx_kernels::kernel::LessOrEqual;
 using onnx_kernels::kernel::Not;
 using onnx_kernels::kernel::Or;
 using onnx_kernels::kernel::Where;
@@ -336,6 +337,55 @@ TEST(KernelClass, GreaterOrEqualRejectsUnsupportedDtype) {
   Tensor y("", onnx_kernels::DataType::BOOL, {2}, {1, 1});
   GreaterOrEqual ge_kernel{ctx};
   EXPECT_THROW({ (void)ge_kernel(x, y); }, std::invalid_argument);
+}
+
+TEST(KernelClass, LessOrEqualClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(16)};
+  LessOrEqual le_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor y = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 2.0f, 2.0f});
+  Tensor z = le_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
+  EXPECT_EQ(z.data[0], 1); // 1 <= 2 -> true
+  EXPECT_EQ(z.data[1], 1); // 2 <= 2 -> true
+  EXPECT_EQ(z.data[2], 0); // 3 <= 2 -> false
+  EXPECT_EQ(z.data[3], 0); // 4 <= 2 -> false
+}
+
+TEST(KernelClass, LessOrEqualClassBroadcastsScalar) {
+  const KernelContext ctx{DefaultOpset(16)};
+  LessOrEqual le_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor y = Tensor::FromFloat("", {}, {2.0f});
+  Tensor z = le_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data[0], 1);
+  EXPECT_EQ(z.data[1], 1);
+  EXPECT_EQ(z.data[2], 0);
+  EXPECT_EQ(z.data[3], 0);
+}
+
+TEST(KernelClass, LessOrEqualInPlaceWritesToPreallocatedOutput) {
+  const KernelContext ctx{DefaultOpset(16)};
+  LessOrEqual le_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {4}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor y = Tensor::FromFloat("", {4}, {2.0f, 2.0f, 2.0f, 2.0f});
+  Tensor output("", onnx_kernels::DataType::BOOL, {4}, {0, 0, 0, 0});
+  le_kernel(x, y, output);
+  ASSERT_EQ(output.element_count(), 4);
+  EXPECT_EQ(output.data[0], 1);
+  EXPECT_EQ(output.data[1], 1);
+  EXPECT_EQ(output.data[2], 0);
+  EXPECT_EQ(output.data[3], 0);
+}
+
+TEST(KernelClass, LessOrEqualRejectsUnsupportedDtype) {
+  const KernelContext ctx{DefaultOpset(16)};
+  Tensor x("", onnx_kernels::DataType::BOOL, {2}, {1, 0});
+  Tensor y("", onnx_kernels::DataType::BOOL, {2}, {1, 1});
+  LessOrEqual le_kernel{ctx};
+  EXPECT_THROW({ (void)le_kernel(x, y); }, std::invalid_argument);
 }
 
 TEST(KernelClass, EqualClassMatchesReference) {

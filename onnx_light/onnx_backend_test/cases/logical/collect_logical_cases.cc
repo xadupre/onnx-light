@@ -15,6 +15,7 @@ void CollectLogicalTestCases(std::vector<TestCase> &registry, const std::string 
       {"Greater", &RegisterGreaterCases},
       {"GreaterOrEqual", &RegisterGreaterOrEqualCases},
       {"Less", &RegisterLessCases},
+      {"LessOrEqual", &RegisterLessOrEqualCases},
       {"Equal", &RegisterEqualCases},
       {"Where", &RegisterWhereCases},
       {"Not", &RegisterNotCases},

@@ -445,6 +445,7 @@ std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory(const std::stri
       {"IsInf", [] { return BuildIsInfSchemas(); }},
       {"IsNaN", [] { return BuildIsNaNSchemas(); }},
       {"Less", [] { return BuildGreaterLessSchemas("Less"); }},
+      {"LessOrEqual", [] { return BuildGreaterLessOrEqualSchemas("LessOrEqual"); }},
       {"Not",
        [] {
          std::vector<LightOpSchema> schemas;

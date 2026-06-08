@@ -2,7 +2,7 @@ name: Standalone example
 
 on:
   workflow_run:
-    workflows: ["ci-no-onnx"]
+    workflows: ["ci-1-core"]
     types: [completed]
 
 concurrency:
@@ -12,7 +12,8 @@ concurrency:
 jobs:
   standalone_example:
     name: standalone example (ubuntu)
-    # Only run if the required ci-no-onnx workflow completed successfully.
+    # Only run if the required ci-1-core workflow (which itself gates on
+    # no-onnx) completed successfully.
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15

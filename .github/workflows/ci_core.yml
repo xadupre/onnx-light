@@ -1,19 +1,18 @@
 name: ci-1-core
 
 on:
-  workflow_run:
-    workflows: ["ci-no-onnx"]
-    types: [completed]
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   changes:
     name: detect changes
-    # Only run if the required ci-no-onnx workflow completed successfully.
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -22,19 +21,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
       - name: Detect doc-only changes
         id: filter
         shell: bash
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          head_sha="${{ github.event.workflow_run.head_sha }}"
-          base_sha="$(git rev-parse "${head_sha}^" 2>/dev/null || echo '')"
+          if [ -n "${BASE_REF}" ]; then
+            base_sha="${BASE_REF}"
+          else
+            base_sha="$(git rev-parse "${HEAD_REF}^" 2>/dev/null || echo '')"
+          fi
           if [ -z "${base_sha}" ]; then
             echo "docs_only=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          changed="$(git diff --name-only "${base_sha}" "${head_sha}")"
+          changed="$(git diff --name-only "${base_sha}" "${HEAD_REF}")"
           echo "Changed files:"
           echo "${changed}"
           docs_only=true
@@ -47,18 +51,55 @@ jobs:
           done <<< "${changed}"
           echo "docs_only=${docs_only}" >> "$GITHUB_OUTPUT"
 
+  no_onnx_tests_ubuntu:
+    # Fast preflight: must pass before the heavier compilation jobs start.
+    # Mirrors .github/workflows/ci_no_onnx.yml but lives inside ci-1-core so
+    # the gate is observable as a required PR status check.
+    name: no-onnx (ubuntu-latest, py3.13)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install OpenSSL (Linux)
+        run: sudo apt-get install -y libssl-dev
+
+      - name: Set parallel build level
+        shell: bash
+        run: |
+          CMAKE_BUILD_PARALLEL_LEVEL=$(python -c 'import os; print(os.cpu_count() or 1)')
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}"
+
+      - name: Build and Install package
+        run: pip install -Cbuild-dir=build -e .[dev]
+
+      - name: uninstall onnx
+        run: pip uninstall -y onnx
+
+      - name: pip freeze
+        run: pip freeze
+
+      - name: Run tests (excluding onnxl_vs_onnx)
+        run: |
+          pytest --durations=10 unittests --ignore=unittests/onnxl_vs_onnx
+
   core_tests_ubuntu:
     name: core (ubuntu-latest, py3.13)
-    # Only run if the required ci-no-onnx workflow completed successfully.
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    needs: [no_onnx_tests_ubuntu]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
       - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
@@ -92,8 +133,8 @@ jobs:
 
   core_tests:
     name: core (${{ matrix.os }}, py${{ matrix.python-version }})
-    needs: [core_tests_ubuntu, changes]
-    if: ${{ github.event.workflow_run.conclusion == 'success' && needs.changes.outputs.docs_only != 'true' }}
+    needs: [no_onnx_tests_ubuntu, core_tests_ubuntu, changes]
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 28
     permissions:
@@ -106,8 +147,6 @@ jobs:
         python-version: ["3.13"]
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
@@ -154,16 +193,14 @@ jobs:
 
   windows_x86_build:
     name: core (windows-latest, x86 build)
-    needs: [core_tests_ubuntu, changes]
-    if: ${{ github.event.workflow_run.conclusion == 'success' && needs.changes.outputs.docs_only != 'true' }}
+    needs: [no_onnx_tests_ubuntu, core_tests_ubuntu, changes]
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: windows-latest
     timeout-minutes: 20
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Configure 32-bit CMake build
         run: |

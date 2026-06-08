@@ -112,7 +112,7 @@ projects can link only what they need:
   history), checker, inliner, shape inference and version converter.
 - ``onnx_light::lib_onnx_optim`` – shape-inference dispatch table,
   expression engine and graph optimization helpers.
-- ``onnx_light::onnx_kernels`` – C++ kernels, a C++ reference implmentation,
+- ``onnx_light::onnx_kernels`` – C++ kernels, a C++ reference implementation,
   it is used to generate the expected outputs for the backend test.
 - ``onnx_light::onnx_backend_test`` – C++ backend test
   infrastructure and reference operator kernels.

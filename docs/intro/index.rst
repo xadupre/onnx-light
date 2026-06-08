@@ -23,4 +23,3 @@ written against the standard ``onnx`` package can be ported by changing a few
 
     concepts
     python
-    converters

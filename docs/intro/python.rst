@@ -10,8 +10,7 @@ ONNX with Python
     with ``onnx`` in every ``import``. The
     `ir-py project <https://github.com/onnx/ir-py>`_ provides yet another
     set of Python APIs for creating and manipulating ONNX models, with a
-    more modern and ergonomic interface compared to the ONNX protobuf
-    APIs described here.
+    more modern and ergonomic interface compared to the APIs described here.
 
 The next sections highlight the main functions used to build an ONNX
 graph with the Python API ``onnx-light`` exposes through
@@ -173,7 +172,7 @@ for 1).
 Serialization
 =============
 
-ONNX is built on top of protobuf. It adds the necessary definitions to
+onnx-light adds the necessary definitions to
 describe a machine learning model and most of the time, ONNX is used to
 serialize or deserialize a model. The first section addresses this need.
 The second section introduces the serialization and deserialization of
@@ -182,7 +181,7 @@ data such as tensors, sparse tensors...
 Model Serialization
 -------------------
 
-The model needs to be saved to be deployed. ONNX is based on protobuf. It
+The model needs to be saved to be deployed. It
 minimizes the space needed to save the graph on disk. Every object in
 ``onnx`` can be serialized with method ``SerializeToString``. That's also
 the case for the whole model.
@@ -1182,21 +1181,8 @@ Implementation details
 Python and C++
 --------------
 
-The standard ``onnx`` package relies on protobuf to define its types.
-You would assume that a Python object is just a wrapper around a C
-pointer on the internal structure. Therefore, it should be possible to
-access internal data from a function receiving a Python object of type
-``ModelProto``. But it is not. According to
-`Protobuf 4 changes
-<https://developers.google.com/protocol-buffers/docs/news/2022-05-06>`_,
-this is no longer possible after version 4 and it is safer to assume the
-only way to get a hold on the content is to serialize the model into
-bytes, give it to the C function, then deserialize it. Functions like
-``check_model`` or ``shape_inference`` in the standard ``onnx`` package
-are calling ``SerializeToString`` then ``ParseFromString`` before
-checking the model with C code.
-
-``onnx-light`` does not depend on protobuf at all. The
+``onnx-light`` exposes what is available in C++. Python objects are wrapper
+on the top of shared pointers.
 :class:`~onnx_light.onnx_lib.ModelProto` returned by
 :func:`onnx_light.onnx.load` *is* the C++ ``ModelProto`` (bound through
 nanobind), so calls into the inliner, checker, shape inference and

@@ -1,0 +1,61 @@
+name: asan-ubsan
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sanitizer_build_ubuntu:
+    name: asan+ubsan (ubuntu-latest, py3.13)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install OpenSSL and clang (Linux)
+        run: sudo apt-get install -y libssl-dev clang
+
+      - name: Set parallel build level
+        shell: bash
+        run: |
+          CMAKE_BUILD_PARALLEL_LEVEL=$(python -c 'import os; print(os.cpu_count() or 1)')
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}"
+
+      - name: Build and install package (Debug + ASan + UBSan)
+        env:
+          CC: clang
+          CXX: clang++
+          CXXFLAGS: -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined
+          LDFLAGS: -fsanitize=address,undefined
+        run: pip install -C build-dir=build -C cmake.build-type=Debug -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -e .[dev] -v
+
+      - name: Install ONNX weekly
+        run: pip install --upgrade onnx-weekly
+
+      - name: pip freeze
+        run: pip freeze
+
+      - name: Run C++ unit tests
+        env:
+          ASAN_OPTIONS: detect_leaks=1:strict_init_order=1:check_initialization_order=1
+          UBSAN_OPTIONS: print_stacktrace=1
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Run Python unit tests
+        env:
+          ASAN_OPTIONS: detect_leaks=1:strict_init_order=1:check_initialization_order=1
+          UBSAN_OPTIONS: print_stacktrace=1
+        run: |
+          pytest --durations=10 unittests -v

@@ -18,7 +18,7 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
         self.assertEqual(len(shape_tests), 1)
         tests = [
             test
-            for test in collect_test_cases("Add")
+            for test in collect_test_cases("shape")
             if "test_cc_shape_inference_add_concat_reshape" == test.name
         ]
         self.assertEqual(len(tests), 1)
@@ -42,7 +42,7 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
 
         tests = [
             test
-            for test in collect_test_cases("Add")
+            for test in collect_test_cases("shape")
             if "test_cc_shape_inference_add_concat_reshape" == test.name
         ]
         self.assertEqual(len(tests), 1)
@@ -60,7 +60,7 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
 
         tests = [
             test
-            for test in collect_test_cases("Add")
+            for test in collect_test_cases("shape")
             if "test_cc_shape_inference_add_concat_reshape" == test.name
         ]
         self.assertEqual(len(tests), 1)
@@ -95,6 +95,29 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
 
         # outputs
         self.assertEqual(["batch", "seq", "2*d_model"], list(ctx.get("Z").shape))
+
+    @unittest.skip("broken")
+    def test_inference_shape_backend(self):
+        from onnx_light.onnx_optim.shape_inference import infer_shapes_model
+
+        tests = [
+            test
+            for test in collect_test_cases("shape")
+            if "test_cc_shape_inference_nonzero_chain_named" == test.name
+        ]
+        self.assertEqual(len(tests), 1)
+        test = tests[0]
+        model = onnxl.ModelProto()
+        model.CopyFrom(test.model)
+        model.graph.value_info.clear()
+        infer_shapes_model(model)
+        expected_info = {info.name: info for info in test.model.graph.value_info}
+        computed = {info.name: info for info in model.graph.value_info}
+        self.assertEqual(set(expected_info), set(computed))
+        for name in expected_info:
+            expected = expected_info[name]
+            inferred = computed[name]
+            self.assertEqual(expected, inferred, f"{name!r} failed\n{expected=}\n--\n{inferred=}")
 
 
 if __name__ == "__main__":

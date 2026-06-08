@@ -346,6 +346,8 @@ ORT_EXCLUDE_REGEX = [
     # Range opset 27 cases: ONNX Runtime only guarantees support up to opset 26.
     r"^test_range_float16_type_positive_delta$",
     r"^test_range_bfloat16_type_positive_delta$",
+    # LinearAttention is opset 27: ONNX Runtime only guarantees support up to opset 26.
+    r"^test_cc_linear_attention_.*$",
 ]
 
 TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_REGEX)

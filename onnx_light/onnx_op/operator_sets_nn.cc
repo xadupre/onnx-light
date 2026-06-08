@@ -1320,6 +1320,91 @@ LightOpSchema MakeCausalConvWithStateSchema(int since_version) {
                        /*has_function_implementation=*/true);
 }
 
+// --- LinearAttention ---------------------------------------------------------
+
+// Input/output descriptions reproduced verbatim from the upstream ONNX
+// LinearAttention schema (v27 in onnx_lib/defs/nn/defs.cc) so the
+// LightOpSchema parity test passes.
+
+const char *const kLinearAttentionQueryDescription =
+    "Query vectors with 3D packed shape (B, T, H_q * d_k). "
+    "Heads are packed into the last dimension.";
+
+const char *const kLinearAttentionKeyDescription =
+    "Key vectors with 3D packed shape (B, T, H_kv * d_k). "
+    "Should be L2-normalized for delta/gated_delta modes.";
+
+const char *const kLinearAttentionValueDescription =
+    "Value vectors with 3D packed shape (B, T, H_kv * d_v).";
+
+const char *const kLinearAttentionPastStateDescription =
+    "Recurrent state from previous step with shape (B, H_kv, d_k, d_v). "
+    "Always 4D. If not provided, defaults to zeros.";
+
+const char *const kLinearAttentionDecayDescription =
+    "Exponential decay gate in log-space. 3D packed shape: "
+    "(B, T, H_kv * d_k) for per-key-dimension decay (GLA/RWKV-6), or "
+    "(B, T, H_kv) for per-head scalar decay (DeltaNet/RetNet). "
+    "Required for 'gated' and 'gated_delta' modes.";
+
+const char *const kLinearAttentionBetaDescription =
+    "Update rate (sigmoid output). 3D packed shape: "
+    "(B, T, H_kv) or (B, T, 1). "
+    "Required for 'delta' and 'gated_delta' modes.";
+
+const char *const kLinearAttentionOutputDescription =
+    "Attention output with 3D packed shape (B, T, H_q * d_v).";
+
+const char *const kLinearAttentionPresentStateDescription =
+    "Updated recurrent state with shape (B, H_kv, d_k, d_v). Always 4D.";
+
+LightOpSchema MakeLinearAttentionSchema(int since_version) {
+  std::vector<FormalParameter> inputs = {
+      {"query", kLinearAttentionQueryDescription, "T"},
+      {"key", kLinearAttentionKeyDescription, "T"},
+      {"value", kLinearAttentionValueDescription, "T"},
+      {"past_state", kLinearAttentionPastStateDescription, "S"},
+      {"decay", kLinearAttentionDecayDescription, "T"},
+      {"beta", kLinearAttentionBetaDescription, "T"},
+  };
+  std::vector<FormalParameter> outputs = {
+      {"output", kLinearAttentionOutputDescription, "T"},
+      {"present_state", kLinearAttentionPresentStateDescription, "S"},
+  };
+  std::vector<AttributeParam> attrs = {
+      {"update_rule",
+       "The update rule for the linear attention recurrence. "
+       "One of: 'linear', 'gated', 'delta', 'gated_delta'. Default is 'gated_delta'.",
+       AttributeType::STRING, /*required=*/false, std::string("gated_delta")},
+      {"scale",
+       "Output scaling factor. When 0.0 (default), derives d_k = query.shape[-1] / q_num_heads "
+       "and uses 1/sqrt(d_k). Set explicitly to override.",
+       AttributeType::FLOAT, /*required=*/false, static_cast<double>(0.0f)},
+      {"q_num_heads", "Number of query heads. Always required.", AttributeType::INT,
+       /*required=*/true, std::monostate{}},
+      {"kv_num_heads", "Number of key/value heads. Always required.", AttributeType::INT,
+       /*required=*/true, std::monostate{}},
+      {"chunk_size",
+       "Chunk size for the chunk-parallel WY decomposition during prefill (T>1). "
+       "Tuning hint; does not affect output correctness.",
+       AttributeType::INT, /*required=*/false, static_cast<int64_t>(64)},
+  };
+  return LightOpSchema(
+      "LinearAttention", kOnnxDomain, since_version, MakeLinearAttentionDoc(since_version),
+      std::move(inputs), std::move(outputs),
+      {
+          {"T",
+           {TensorType::kFloat16, TensorType::kBfloat16, TensorType::kFloat},
+           "Constrain activation input and output types to float16, bfloat16, or float32 tensors."},
+          {"S",
+           {TensorType::kFloat16, TensorType::kBfloat16, TensorType::kFloat},
+           "Constrain state types to float16, bfloat16, or float32 tensors. "
+           "Should be float32 or the same as T for numerical stability on long sequences."},
+      },
+      std::move(attrs),
+      /*has_function_implementation=*/true);
+}
+
 // --- LayerNormalization ------------------------------------------------------
 
 // Input/output descriptions reproduced verbatim from the upstream ONNX
@@ -2064,6 +2149,12 @@ std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &o
        [] {
          return std::vector<LightOpSchema>{
              MakeLayerNormalizationSchema(17),
+         };
+       }},
+      {"LinearAttention",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeLinearAttentionSchema(27),
          };
        }},
       {"LSTM",

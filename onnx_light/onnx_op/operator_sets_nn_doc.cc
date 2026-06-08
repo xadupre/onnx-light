@@ -1493,6 +1493,48 @@ std::string MakeMeanVarianceNormalizationDoc(int since_version) {
   }
 }
 
+namespace {
+
+// Copied verbatim from onnx_light/onnx_lib/defs/nn/defs.cc to keep the
+// LightOpSchema parity test happy.
+constexpr const char *kLinearAttentionDocOpset27 = R"DOC(
+Unified linear attention operator for autoregressive decoding (T=1) and prefill (T>1).
+
+The query, key, value, and (where applicable) decay/beta inputs use 3D packed format
+[B, T, H*D], where heads are flattened into the last dimension; q_num_heads and
+kv_num_heads are always required and are used to unpack to 4D internally for computation.
+The optional past_state and present_state are 4D with shape (B, H_kv, d_k, d_v).
+
+Group-query attention (GQA) is supported: q_num_heads must be a positive multiple of
+kv_num_heads. When q_num_heads == kv_num_heads this reduces to multi-headed linear
+attention; when q_num_heads > kv_num_heads each KV head (and its recurrent state) is
+shared by `q_num_heads / kv_num_heads` query heads (multi-query attention is the
+special case kv_num_heads == 1).
+
+The update_rule attribute selects the recurrence type:
+- "linear": S_t = S_{t-1} + k_t ⊗ v_t; o_t = scale * q_t^T S_t
+- "gated": S_t = exp(g_t) * S_{t-1} + k_t ⊗ v_t; o_t = scale * q_t^T S_t
+- "delta": S_t = S_{t-1} + β_t * k_t ⊗ (v_t - S_{t-1}^T k_t); o_t = scale * q_t^T S_t
+- "gated_delta": S_t = exp(g_t) * S_{t-1} + β_t * k_t ⊗ (v_t - exp(g_t) * S_{t-1}^T k_t); o_t = scale * q_t^T S_t
+
+where g_t is the decay (in log-space), β_t is the update rate, and ⊗ denotes outer product.
+
+Semantics: Equivalent to running the recurrent update sequentially for each token,
+but may be implemented using chunk-parallel algorithms for GPU efficiency.
+
+)DOC";
+
+} // namespace
+
+std::string MakeLinearAttentionDoc(int since_version) {
+  switch (since_version) {
+  case 27:
+    return kLinearAttentionDocOpset27;
+  default:
+    return "";
+  }
+}
+
 } // namespace nn
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

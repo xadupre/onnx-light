@@ -5,7 +5,7 @@
 """Implementation of :class:`ReferenceEvaluator`.
 
 The evaluator wraps the ``RunModel`` / ``RunGraph`` / ``RunFunction``
-dispatcher exposed by :mod:`onnx_light.onnx_py._onnxkernels` (re-exported
+dispatcher exposed by :mod:`onnx_light.onnx_py._onnxpykernels` (re-exported
 through the ``runtime`` submodule). All operator implementations come
 from the C++ ``KernelDispatchTable``; this Python class only handles
 input/output conversion between :class:`numpy.ndarray` and the runtime
@@ -28,7 +28,7 @@ from ..onnx_lib import (
     load,
     numpy_helper,
 )
-from ..onnx_py._onnxkernels import runtime as _runtime  # type: ignore[missing-import]
+from ..onnx_py._onnxpykernels import runtime as _runtime  # type: ignore[missing-import]
 
 try:
     import ml_dtypes as _ml_dtypes  # type: ignore

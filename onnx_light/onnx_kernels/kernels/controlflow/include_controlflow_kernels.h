@@ -7,6 +7,8 @@
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/simple_tensor.h"
 
+#include <cstddef>
+#include <functional>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -138,6 +140,43 @@ public:
   operator()(const Tensor &M, const Tensor &cond, const std::vector<Tensor> &v_initial,
              const std::vector<Tensor> &final_state,
              const std::vector<std::vector<Tensor>> &scan_values_per_iter) const;
+
+  /// Body-runner callback executed by the new ``operator()`` overload once
+  /// per iteration. ``iter`` is the 0-based iteration index, ``cond_in`` is
+  /// the BOOL termination condition entering this iteration, and ``state``
+  /// is the current loop-carried state (``v_initial`` for ``iter == 0``,
+  /// otherwise the previous iteration's body outputs ``[1..1+N)``). The
+  /// callback must return ``1 + N + K`` tensors matching the ONNX ``Loop``
+  /// body output convention: the new ``cond_out`` (BOOL scalar) at index 0,
+  /// the ``N`` updated loop-carried values at indices ``[1, 1+N)``, and the
+  /// ``K`` per-iteration scan values at indices ``[1+N, 1+N+K)``.
+  using BodyRunner = std::function<std::vector<Tensor>(int64_t iter, bool cond_in,
+                                                       const std::vector<Tensor> &state)>;
+
+  /// Body-aware overload.
+  ///
+  /// Performs the full ONNX ``Loop`` semantics: honors ``M`` /
+  /// ``cond`` termination rules, invokes ``run_body`` once per
+  /// iteration, threads the loop-carried state across iterations,
+  /// collects each iteration's scan values, and assembles the
+  /// ``N + num_scan_outputs`` outputs (final loop-carried state
+  /// followed by stacked scan outputs).
+  ///
+  /// @param M                 Optional INT64 scalar maximum trip-count
+  ///                          (``empty Tensor`` means ``omitted``).
+  /// @param cond              Optional BOOL scalar initial termination
+  ///                          condition (``empty Tensor`` means
+  ///                          ``omitted``, treated as ``true``).
+  /// @param v_initial         Initial loop-carried dependency values
+  ///                          (size ``N``).
+  /// @param num_scan_outputs  Number of per-iteration scan outputs the
+  ///                          body produces (``K``).
+  /// @param run_body          Callback executed once per iteration; see
+  ///                          :type:`BodyRunner`.
+  /// @return ``N + num_scan_outputs`` tensors.
+  std::vector<Tensor> operator()(const Tensor &M, const Tensor &cond,
+                                 const std::vector<Tensor> &v_initial, std::size_t num_scan_outputs,
+                                 const BodyRunner &run_body) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };

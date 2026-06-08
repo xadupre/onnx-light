@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -148,6 +149,93 @@ Loop::operator()(const Tensor &M, const Tensor &cond, const std::vector<Tensor> 
   // K stacked scan outputs.
   for (const auto &row : scan_values_per_iter) {
     out.push_back(StackScanOutput(row, trip_count));
+  }
+  return out;
+}
+
+namespace {
+
+// Parses the INT64 scalar ``M`` (when provided) into a non-negative
+// trip-count upper bound. Returns ``INT64_MAX`` when ``M`` is omitted
+// (``data_type == UNDEFINED``).
+int64_t ParseMaxTripCount(const Tensor &M) {
+  if (M.data_type == DataType::UNDEFINED) {
+    return std::numeric_limits<int64_t>::max();
+  }
+  EXT_ENFORCE_INVALID(M.data_type == DataType::INT64,
+                      "kernel::Loop: 'M' must be an INT64 tensor when provided.");
+  EXT_ENFORCE_INVALID(M.element_count() == 1,
+                      "kernel::Loop: 'M' must contain a single element when provided.");
+  EXT_ENFORCE_INVALID(M.size_bytes() >= sizeof(int64_t),
+                      "kernel::Loop: 'M' buffer is too small to hold an INT64.");
+  int64_t m_value = 0;
+  std::memcpy(&m_value, M.bytes(), sizeof(int64_t));
+  EXT_ENFORCE_INVALID(m_value >= 0, "kernel::Loop: 'M' must be non-negative.");
+  return m_value;
+}
+
+// Parses the optional BOOL scalar ``cond`` into the initial termination
+// condition. Returns ``true`` when ``cond`` is omitted.
+bool ParseInitialCond(const Tensor &cond) {
+  if (cond.data_type == DataType::UNDEFINED) {
+    return true;
+  }
+  EXT_ENFORCE_INVALID(cond.data_type == DataType::BOOL,
+                      "kernel::Loop: 'cond' must be a BOOL tensor when provided.");
+  EXT_ENFORCE_INVALID(cond.element_count() == 1,
+                      "kernel::Loop: 'cond' must contain a single element when provided.");
+  return cond.bytes()[0] != 0;
+}
+
+} // namespace
+
+std::vector<Tensor> Loop::operator()(const Tensor &M, const Tensor &cond,
+                                     const std::vector<Tensor> &v_initial,
+                                     std::size_t num_scan_outputs,
+                                     const BodyRunner &run_body) const {
+  EXT_ENFORCE_INVALID(static_cast<bool>(run_body),
+                      "kernel::Loop: 'run_body' callback must be callable.");
+
+  const int64_t max_trip = ParseMaxTripCount(M);
+  bool cond_value = ParseInitialCond(cond);
+
+  const std::size_t n = v_initial.size();
+  std::vector<Tensor> state = v_initial;
+  std::vector<std::vector<Tensor>> scan_values(num_scan_outputs);
+
+  int64_t trip_count = 0;
+  for (int64_t iter = 0; iter < max_trip && cond_value; ++iter) {
+    std::vector<Tensor> body_outputs = run_body(iter, cond_value, state);
+    EXT_ENFORCE_INVALID(body_outputs.size() == 1 + n + num_scan_outputs,
+                        "kernel::Loop: body returned the wrong number of outputs (expected "
+                        "1 + N + num_scan_outputs).");
+    EXT_ENFORCE_INVALID(body_outputs[0].data_type == DataType::BOOL &&
+                            body_outputs[0].element_count() == 1,
+                        "kernel::Loop: body output #0 ('cond_out') must be a BOOL scalar.");
+    cond_value = body_outputs[0].bytes()[0] != 0;
+
+    std::vector<Tensor> next_state;
+    next_state.reserve(n);
+    for (std::size_t i = 0; i < n; ++i) {
+      EXT_ENFORCE_INVALID(body_outputs[1 + i].data_type == v_initial[i].data_type,
+                          "kernel::Loop: body's updated loop-carried output must keep the "
+                          "data type of the matching 'v_initial' tensor.");
+      next_state.push_back(std::move(body_outputs[1 + i]));
+    }
+    state = std::move(next_state);
+    for (std::size_t i = 0; i < num_scan_outputs; ++i) {
+      scan_values[i].push_back(std::move(body_outputs[1 + n + i]));
+    }
+    ++trip_count;
+  }
+
+  std::vector<Tensor> out;
+  out.reserve(n + num_scan_outputs);
+  for (std::size_t i = 0; i < n; ++i) {
+    out.push_back(trip_count == 0 ? v_initial[i] : state[i]);
+  }
+  for (std::size_t i = 0; i < num_scan_outputs; ++i) {
+    out.push_back(StackScanOutput(scan_values[i], trip_count));
   }
   return out;
 }

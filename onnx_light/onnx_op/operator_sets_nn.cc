@@ -1258,6 +1258,68 @@ LightOpSchema MakeRotaryEmbeddingSchema(int since_version) {
       /*has_function_implementation=*/true);
 }
 
+// --- CausalConvWithState -----------------------------------------------------
+
+// Input/output descriptions reproduced verbatim from the upstream ONNX
+// CausalConvWithState schema (v27 in onnx_lib/defs/nn/defs.cc) so the
+// LightOpSchema parity test passes.
+
+const char *const kCausalConvWithStateInputDescription =
+    "Input tensor with shape (batch_size, channels, length). Channels-first layout.";
+
+const char *const kCausalConvWithStateWeightDescription =
+    "Depthwise convolution kernel with shape (channels, 1, k) where k is the kernel size. "
+    "The middle dim of size 1 follows the ONNX `Conv` weight layout `(M, C/group, k1, ..., "
+    "kn)`: "
+    "since this op is always depthwise, `group = channels`, so `C/group = 1`. "
+    "Keeping this layout makes the weight tensor a drop-in for a depthwise "
+    "`Conv(group=channels)` "
+    "weight, so `Conv` <-> `CausalConvWithState` rewrites require no reshape.";
+
+const char *const kCausalConvWithStateBiasDescription =
+    "Optional per-channel bias with shape (channels).";
+
+const char *const kCausalConvWithStatePastStateDescription =
+    "Carry state from previous step with shape (batch_size, channels, k - 1). "
+    "If not provided, padding is zero.";
+
+const char *const kCausalConvWithStateOutputDescription =
+    "Convolution output with same shape as input.";
+
+const char *const kCausalConvWithStatePresentStateDescription =
+    "Updated carry state with shape (batch_size, channels, k - 1). "
+    "Contains the last (k - 1) values of the effective padded/concatenated "
+    "sequence along the causal axis, including any values from past_state "
+    "or zero-padding when the current input is shorter than k - 1.";
+
+LightOpSchema MakeCausalConvWithStateSchema(int since_version) {
+  std::vector<FormalParameter> inputs = {
+      {"input", kCausalConvWithStateInputDescription, "T"},
+      {"weight", kCausalConvWithStateWeightDescription, "T"},
+      {"bias", kCausalConvWithStateBiasDescription, "T"},
+      {"past_state", kCausalConvWithStatePastStateDescription, "T"},
+  };
+  std::vector<FormalParameter> outputs = {
+      {"output", kCausalConvWithStateOutputDescription, "T"},
+      {"present_state", kCausalConvWithStatePresentStateDescription, "T"},
+  };
+  std::vector<AttributeParam> attrs = {
+      {"activation",
+       "Fused activation function. One of: 'silu', 'swish', 'none'. Default is 'none'.",
+       AttributeType::STRING, /*required=*/false, std::string("none")},
+  };
+  return LightOpSchema("CausalConvWithState", kOnnxDomain, since_version,
+                       MakeCausalConvWithStateDoc(since_version), std::move(inputs),
+                       std::move(outputs),
+                       {
+                           {"T",
+                            {TensorType::kFloat, TensorType::kFloat16, TensorType::kBfloat16},
+                            "Constrain input and output types to float tensors."},
+                       },
+                       std::move(attrs),
+                       /*has_function_implementation=*/true);
+}
+
 // --- LayerNormalization ------------------------------------------------------
 
 // Input/output descriptions reproduced verbatim from the upstream ONNX
@@ -2082,6 +2144,12 @@ std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &o
        [] {
          return std::vector<LightOpSchema>{
              MakeRotaryEmbeddingSchema(23),
+         };
+       }},
+      {"CausalConvWithState",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeCausalConvWithStateSchema(27),
          };
        }},
   };

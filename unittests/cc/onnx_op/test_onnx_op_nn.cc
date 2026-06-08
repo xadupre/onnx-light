@@ -19,6 +19,7 @@ namespace Test {
 constexpr size_t kExpectedAttentionSchemaCount = 2;
 constexpr size_t kExpectedAveragePoolSchemaCount = 6;
 constexpr size_t kExpectedBatchNormalizationSchemaCount = 6;
+constexpr size_t kExpectedCausalConvWithStateSchemaCount = 1;
 constexpr size_t kExpectedCol2ImSchemaCount = 1;
 constexpr size_t kExpectedConvSchemaCount = 3;
 constexpr size_t kExpectedConvIntegerSchemaCount = 1;
@@ -46,10 +47,11 @@ constexpr size_t kExpectedRMSNormalizationSchemaCount = 1;
 constexpr size_t kExpectedRotaryEmbeddingSchemaCount = 1;
 constexpr size_t kExpectedNnSchemaCount =
     kExpectedAttentionSchemaCount + kExpectedAveragePoolSchemaCount +
-    kExpectedBatchNormalizationSchemaCount + kExpectedCol2ImSchemaCount + kExpectedConvSchemaCount +
-    kExpectedConvIntegerSchemaCount + kExpectedConvTransposeSchemaCount +
-    kExpectedDeformConvSchemaCount + kExpectedGlobalAveragePoolSchemaCount +
-    kExpectedDropoutSchemaCount + kExpectedGlobalLpPoolSchemaCount + kExpectedFlattenSchemaCount +
+    kExpectedBatchNormalizationSchemaCount + kExpectedCausalConvWithStateSchemaCount +
+    kExpectedCol2ImSchemaCount + kExpectedConvSchemaCount + kExpectedConvIntegerSchemaCount +
+    kExpectedConvTransposeSchemaCount + kExpectedDeformConvSchemaCount +
+    kExpectedGlobalAveragePoolSchemaCount + kExpectedDropoutSchemaCount +
+    kExpectedGlobalLpPoolSchemaCount + kExpectedFlattenSchemaCount +
     kExpectedGlobalMaxPoolSchemaCount + kExpectedGRUSchemaCount +
     kExpectedGroupNormalizationSchemaCount + kExpectedInstanceNormalizationSchemaCount +
     kExpectedLayerNormalizationSchemaCount + kExpectedLRNSchemaCount +

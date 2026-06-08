@@ -935,6 +935,44 @@ std::string MakeRotaryEmbeddingDoc(int since_version) {
 
 namespace {
 
+// Mirrors the upstream ``CausalConvWithState_ver27_doc`` string in
+// ``onnx_lib/defs/nn/defs.cc`` verbatim so the LightOpSchema parity test
+// passes.
+constexpr const char *kCausalConvWithStateDocOpset27 = R"DOC(
+
+Stateful causal 1D depthwise convolution.
+
+Used by Gated DeltaNet (Qwen3.5) and Mamba (Jamba, FalconMamba) as a preprocessing step.
+Replaces the 3-op pattern (Concat + Conv + Slice) with a single fused operation.
+
+The convolution is causal (looks only at current and past positions) and depthwise
+(each channel is convolved independently with its own kernel).
+
+The input, weight, past_state, output, and present_state tensors are rank-3 with
+shape (batch_size, channels, length). The optional bias input is rank-1 with
+shape (channels). For higher-dimensional data, use Reshape nodes before and
+after this operator to pack extra dimensions into the batch or channel axis.
+
+Weight layout: (channels, 1, k) for depthwise convolution.
+The carry state stores the last (k-1) positions for incremental decode.
+
+The optional activation attribute supports fused SiLU/Swish activation.
+
+)DOC";
+
+} // namespace
+
+std::string MakeCausalConvWithStateDoc(int since_version) {
+  switch (since_version) {
+  case 27:
+    return kCausalConvWithStateDocOpset27;
+  default:
+    return "";
+  }
+}
+
+namespace {
+
 constexpr const char *kRMSNormalizationDocOpset23 = R"DOC(
       This is RMS normalization defined in ONNX as function as described in the paper https://arxiv.org/pdf/1910.07467.
       The overall computation can be split into two stages. The root mean squared norm is taken over the last D dimensions,

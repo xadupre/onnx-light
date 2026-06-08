@@ -101,6 +101,9 @@ void RegisterRMSNormalizationCases(std::vector<TestCase> &registry);
 /// Registers the ``RotaryEmbedding`` backend test node case(s).
 void RegisterRotaryEmbeddingCases(std::vector<TestCase> &registry);
 
+/// Registers the ``CausalConvWithState`` backend test node case(s).
+void RegisterCausalConvWithStateCases(std::vector<TestCase> &registry);
+
 /// Collects all ``nn`` op category backend test node cases by invoking every
 /// ``Register*Cases`` helper declared in this header.
 void CollectNNTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");

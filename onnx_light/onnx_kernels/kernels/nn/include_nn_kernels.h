@@ -1016,6 +1016,50 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of ``ai.onnx::CausalConvWithState`` (v27).
+///
+/// Stateful causal 1D depthwise convolution used by Gated DeltaNet
+/// (Qwen3.5) and Mamba (Jamba, FalconMamba). Replaces the
+/// ``Concat + Conv + Slice`` pattern with a single fused operation that
+/// also supports an optional fused SiLU/Swish activation.
+///
+/// Tensors are rank-3:
+/// - ``input``: ``(batch_size, channels, length)``
+/// - ``weight``: ``(channels, 1, k)`` (depthwise: ``group = channels``)
+/// - ``bias`` (optional): ``(channels)``
+/// - ``past_state`` (optional): ``(batch_size, channels, k - 1)``;
+///   when absent the carry is implicitly zero-padding.
+/// - ``output``: same shape as ``input``
+/// - ``present_state``: ``(batch_size, channels, k - 1)`` containing the
+///   last ``k - 1`` values of the padded sequence (``[past_state, input]``)
+///   along the causal axis.
+class CausalConvWithState : public KernelBase {
+public:
+  /// Attributes carried by the ``CausalConvWithState`` operator.
+  struct Attributes {
+    /// Fused activation. Allowed values: ``"none"`` (default), ``"silu"``,
+    /// ``"swish"`` (alias for ``"silu"``).
+    std::string activation = "none";
+  };
+
+  using KernelBase::KernelBase;
+
+  /// Returning overload. ``bias`` and ``past_state`` may be
+  /// default-constructed (empty-shape) ``Tensor`` values to indicate the
+  /// optional inputs are missing.
+  std::pair<Tensor, Tensor> operator()(const Tensor &input, const Tensor &weight,
+                                       const Tensor &bias, const Tensor &past_state,
+                                       const Attributes &attrs) const;
+
+  /// In-place overload writing into caller-allocated output tensors.
+  /// ``bias`` and ``past_state`` may be ``nullptr`` for the optional inputs.
+  void operator()(const Tensor &input, const Tensor &weight, const Tensor *bias,
+                  const Tensor *past_state, const Attributes &attrs, Tensor &output,
+                  Tensor &present_state) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 } // namespace kernel
 } // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

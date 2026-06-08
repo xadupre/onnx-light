@@ -147,6 +147,13 @@ std::string MakeAttentionDoc(int since_version);
 std::string MakeRotaryEmbeddingDoc(int since_version);
 
 /**
+ * Returns the documentation string for the CausalConvWithState operator at
+ * the given opset version (27). Mirrors the upstream
+ * ``CausalConvWithState_ver27_doc`` string.
+ */
+std::string MakeCausalConvWithStateDoc(int since_version);
+
+/**
  * Returns the documentation string for the RMSNormalization operator at the
  * given opset version (23). Mirrors the upstream ``RMSNormalization_ver23_doc``
  * string.

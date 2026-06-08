@@ -350,6 +350,11 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_linear_attention_.*$",
     # CausalConvWithState is opset 27: ONNX Runtime only guarantees support up to opset 26.
     r"^test_cc_causal_conv_with_state_.*$",
+    # ORT's DFT does not support the combination ``inverse=1, onesided=1`` —
+    # it falls back to the forward one-sided transform, producing the wrong
+    # shape. The forward / inverse / forward-onesided variants are exercised
+    # separately by the other ``test_cc_dft_*`` cases.
+    r"^test_cc_dft_irfft(_opset19)?$",
 ]
 
 TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_REGEX)

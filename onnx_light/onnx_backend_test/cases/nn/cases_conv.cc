@@ -124,6 +124,54 @@ void RegisterConvCases(std::vector<TestCase> &registry) {
     Expect(node, {X, W, B}, {Y}, "test_cc_conv_with_autopad_same", {opset}, "backend-test",
            registry);
   }
+
+  // -------------------------------------------------------------------
+  // Case 5: strides=2, no padding (mirrors
+  // ``test_conv_with_strides_no_padding``). 5x7 input, 3x3 kernel.
+  {
+    std::vector<float> Xv(35);
+    for (int i = 0; i < 35; ++i) {
+      Xv[i] = static_cast<float>(i);
+    }
+    Tensor X = Tensor::FromFloat("X", {1, 1, 7, 5}, Xv);
+    Tensor W = Tensor::FromFloat("W", {1, 1, 3, 3}, std::vector<float>(9, 1.0f));
+    Tensor B;
+    kernel::Conv::Attributes attrs;
+    attrs.kernel_shape = {3, 3};
+    attrs.strides = {2, 2};
+    Tensor Y = conv(X, W, B, attrs);
+    Y.name = "Y";
+    NodeProto node = MakeConvNode({"X", "W"}, {"Y"});
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
+    AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
+    Expect(node, {X, W}, {Y}, "test_cc_conv_with_strides_no_padding", {opset}, "backend-test",
+           registry);
+  }
+
+  // -------------------------------------------------------------------
+  // Case 6: strides=2 and asymmetric padding only along the H dimension
+  // (mirrors ``test_conv_with_strides_and_asymmetric_padding``).
+  {
+    std::vector<float> Xv(35);
+    for (int i = 0; i < 35; ++i) {
+      Xv[i] = static_cast<float>(i);
+    }
+    Tensor X = Tensor::FromFloat("X", {1, 1, 7, 5}, Xv);
+    Tensor W = Tensor::FromFloat("W", {1, 1, 3, 3}, std::vector<float>(9, 1.0f));
+    Tensor B;
+    kernel::Conv::Attributes attrs;
+    attrs.kernel_shape = {3, 3};
+    attrs.pads = {1, 0, 1, 0};
+    attrs.strides = {2, 2};
+    Tensor Y = conv(X, W, B, attrs);
+    Y.name = "Y";
+    NodeProto node = MakeConvNode({"X", "W"}, {"Y"});
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
+    AddAttribute<std::vector<int64_t>>(node, "pads", {1, 0, 1, 0});
+    AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
+    Expect(node, {X, W}, {Y}, "test_cc_conv_with_strides_and_asymmetric_padding", {opset},
+           "backend-test", registry);
+  }
 }
 
 } // namespace onnx_backend_test

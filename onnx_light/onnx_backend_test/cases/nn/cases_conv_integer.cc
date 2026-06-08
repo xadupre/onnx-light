@@ -70,6 +70,22 @@ void RegisterConvIntegerCases(std::vector<TestCase> &registry) {
     Expect(node, {X, W, xzp}, {Y}, "test_cc_convinteger_with_padding", {opset}, "backend-test",
            registry);
   }
+
+  // -------------------------------------------------------------------
+  // Case 3: mirrors ONNX ``test_convinteger_without_padding`` (1x1x3x3 input,
+  // 1x1x2x2 weight, scalar x_zero_point=1, no kernel_shape attribute).
+  {
+    Tensor X = Tensor::FromUint8("X", {1, 1, 3, 3}, {2, 3, 4, 5, 6, 7, 8, 9, 10});
+    Tensor W = Tensor::FromUint8("W", {1, 1, 2, 2}, {1, 1, 1, 1});
+    Tensor xzp = Tensor::FromUint8("x_zero_point", {}, {1});
+    Tensor wzp;
+    kernel::ConvInteger::Attributes attrs;
+    Tensor Y = ci(X, W, xzp, wzp, attrs);
+    Y.name = "Y";
+    NodeProto node = MakeConvIntegerNode({"X", "W", "x_zero_point"}, {"Y"});
+    Expect(node, {X, W, xzp}, {Y}, "test_cc_convinteger_without_padding", {opset}, "backend-test",
+           registry);
+  }
 }
 
 } // namespace onnx_backend_test

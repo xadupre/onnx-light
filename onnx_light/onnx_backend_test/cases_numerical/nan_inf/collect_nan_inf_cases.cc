@@ -8,12 +8,13 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 void CollectNanInfTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  static const OpRegisterMap kEntries = {
-      {"numerical", &RegisterAddNanInfCases},   {"numerical", &RegisterSubNanInfCases},
-      {"numerical", &RegisterMulNanInfCases},   {"numerical", &RegisterDivNanInfCases},
-      {"numerical", &RegisterWhereNanInfCases},
-  };
-  DispatchRegisterByOpType(registry, op_type, kEntries);
+  if (op_type.empty() or op_type == "nan_inf") {
+    RegisterAddNanInfCases(registry);
+    RegisterSubNanInfCases(registry);
+    RegisterMulNanInfCases(registry);
+    RegisterDivNanInfCases(registry);
+    RegisterWhereNanInfCases(registry);
+  }
 }
 
 } // namespace onnx_backend_test

@@ -43,6 +43,7 @@ Python API
 
     backend_test
     fuzz
+    reference
     tools/index
 
 onnx

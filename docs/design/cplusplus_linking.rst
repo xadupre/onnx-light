@@ -141,8 +141,8 @@ The Python package ships five nanobind extension modules,
 ``onnx_light.onnx_py._onnxpyprotoop``,
 ``onnx_light.onnx_py._onnxpyprotolib``,
 ``onnx_light.onnx_py._onnxpyoptim``,
-``onnx_light.onnx_py._onnxkernels`` and
-``onnx_light.onnx_py._onnxbackend``.  All five need access to the proto
+``onnx_light.onnx_py._onnxpykernels`` and
+``onnx_light.onnx_py._onnxpybackend``.  All five need access to the proto
 classes (``ModelProto``, ``NodeProto``, ``TensorProto``, ...) defined in
 ``onnx_light/onnx_proto``.  How do the extensions agree on a single
 ``nb::class_<ModelProto>`` registration so that values can flow between
@@ -172,21 +172,21 @@ single ``std::type_info`` instance.  Consequently
 ``&typeid(ModelProto)`` evaluates to the same pointer in every
 extension, and nanobind's cross-module type registry resolves
 ``ModelProto`` references coming from ``_onnxpyoptim`` or
-``_onnxbackend`` against the
+``_onnxpybackend`` against the
 ``nb::class_<ModelProto>`` that ``_onnxpyprotoop`` registered.  In
 practice, only ``_onnxpyprotoop`` declares
 ``nb::class_<NodeProto>`` / ``nb::class_<ModelProto>`` / ...; the
-``_onnxpyprotolib``, ``_onnxpyoptim``, ``_onnxkernels`` and
-``_onnxbackend`` modules return proto values by
+``_onnxpyprotolib``, ``_onnxpyoptim``, ``_onnxpykernels`` and
+``_onnxpybackend`` modules return proto values by
 reference (for example
 ``TestCase.model``, see ``onnx_light/onnx_py/_onnxpy_backend_test.cc``)
 and let the shared registry produce a Python object backed by the same
 binding.  The package's ``onnx_light/onnx_py/_onnxpy.py`` shim imports
 ``_onnxpyprotoop`` before ``_onnxpyprotolib``, ``_onnxpyoptim``,
-``_onnxkernels`` and ``_onnxbackend`` to
+``_onnxpykernels`` and ``_onnxpybackend`` to
 guarantee that the
 ``ModelProto`` binding exists by the time any ``_onnxpyprotolib``,
-``_onnxpyoptim``, ``_onnxkernels`` or ``_onnxbackend`` accessor is used.
+``_onnxpyoptim``, ``_onnxpykernels`` or ``_onnxpybackend`` accessor is used.
 
 See also
 --------

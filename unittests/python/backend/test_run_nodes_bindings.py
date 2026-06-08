@@ -3,10 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for the Python bindings of the ``RunNode`` / ``RunGraph`` /
 ``RunFunction`` / ``RunModel`` dispatcher exposed by
-:mod:`onnx_light.onnx_py._onnxkernels`.
+:mod:`onnx_light.onnx_py._onnxpykernels`.
 
 The dispatcher is exposed as the ``runtime`` submodule of
-``_onnxkernels`` (and also surfaced through the ``_onnxpy`` shim).
+``_onnxpykernels`` (and also surfaced through the ``_onnxpy`` shim).
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ import unittest
 from onnx_light.ext_test_case import ExtTestCase
 from onnx_light.onnx_lib import parser
 from onnx_light.onnx_proto._onnxpy import TensorProto
-from onnx_light.onnx_py._onnxkernels import runtime as rt
+from onnx_light.onnx_py._onnxpykernels import runtime as rt
 
 
 def _make_float_tensor(name: str, values: list[float]):

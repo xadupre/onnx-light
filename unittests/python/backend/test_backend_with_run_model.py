@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 """Backend tests that exercise the C++-implemented ``RunModel`` dispatcher
-(exposed through ``onnx_light.onnx_py._onnxkernels.runtime``) against every
+(exposed through ``onnx_light.onnx_py._onnxpykernels.runtime``) against every
 backend test case whose top-level graph contains a single node of an op
 registered in ``KernelDispatchTable``.
 
@@ -22,7 +22,7 @@ import numpy as np
 import onnx_light.onnx as onnxl
 from onnx_light.backend.test.case import make_test_class, collect_test_case
 from onnx_light.onnx import numpy_helper as onh
-from onnx_light.onnx_py._onnxkernels import runtime as rt
+from onnx_light.onnx_py._onnxpykernels import runtime as rt
 
 # Operators currently registered in
 # ``onnx_light/onnx_kernels/run_nodes.cc::KernelDispatchTable``. Backend

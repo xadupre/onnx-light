@@ -445,7 +445,6 @@ logsoftmax_large_number_expanded
 logsoftmax_large_number_expanded_ver18
 logsoftmax_negative_axis_expanded
 logsoftmax_negative_axis_expanded_ver18
-loop13_seq
 loop16_seq_none
 max_float16
 min_float16

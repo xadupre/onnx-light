@@ -94,7 +94,7 @@ how it looks like.
     # the work is done, let's display it...
     print(onnx_model)
 
-.. image:: images/dot_linreg.png
+.. image:: images/dot_linreg.svg
 
 An empty shape (``None``) means any shape, a shape defined as
 ``[None, None]`` tells this object is a tensor with two dimensions
@@ -330,7 +330,7 @@ to convert from numpy into onnx and the other way around.
 
     print(onnx_model)
 
-.. image:: images/dot_linreg2.png
+.. image:: images/dot_linreg2.svg
 
 Again, it is possible to go through the onnx structure to check what the
 initializers look like.
@@ -411,7 +411,7 @@ named attribute in function ``make_node``.
     # the work is done, let's display it...
     print(onnx_model)
 
-.. image:: images/dot_att.png
+.. image:: images/dot_att.svg
 
 The whole list of *make* functions is the following.
 
@@ -601,7 +601,7 @@ on the sign, returns 1 or -1.
 
 The whole is easier to visualize with the following image.
 
-.. image:: images/dot_if_py.png
+.. image:: images/dot_if_py.svg
 
 Both else and then branches are very simple. Node *If* could even be
 replaced with a node *Where* and that would be faster. It becomes
@@ -829,7 +829,7 @@ followed by an operator *TopK* which extracts the *k* nearest neighbors.
 
 Visually it looks like the following:
 
-.. image:: images/dot_scan_py.png
+.. image:: images/dot_scan_py.svg
 
 The subgraph is executed by operator *Scan*. In this case, there is one
 *scan* input meaning the operator only builds one output.
@@ -847,7 +847,7 @@ second iteration, the second input of the subgraph is the second row of
 *X2*. Here is a short summary. Green is the first iteration, blue the
 second.
 
-.. image:: images/scanop.png
+.. image:: images/scanop.svg
     :width: 400
 
 Functions

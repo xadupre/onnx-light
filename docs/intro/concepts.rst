@@ -20,7 +20,7 @@ Python. It can also be represented as a graph that shows step-by-step how to
 transform the features to get a prediction. That's why a machine-learning
 model implemented with ONNX is often referenced as an **ONNX graph**.
 
-.. image:: images/linreg1.png
+.. image:: images/linreg1.svg
 
 ONNX aims at providing a common language any machine learning framework
 can use to describe its models. The first scenario is to make it easier
@@ -73,7 +73,7 @@ Visually, this graph would look like the following image. The right side
 describes operator *Add* where the second input is defined as an
 initializer.
 
-.. image:: images/linreg2.png
+.. image:: images/linreg2.svg
     :alt: Snapshot of Netron
 
 An **attribute** is a fixed parameter of an operator. Operator *Gemm* has
@@ -265,7 +265,7 @@ Those two graphs can use any result already computed in the graph and
 must produce the exact same number of outputs. These outputs will be the
 output of the operator ``If``.
 
-.. image:: images/dot_if.png
+.. image:: images/dot_if.svg
 
 .. _l-operator-scan-onnx-tutorial:
 
@@ -277,7 +277,7 @@ loops over the rows (or any other dimension) of the inputs and concatenates
 the outputs along the same axis. Let's see an example which implements
 pairwise distances: :math:`M(i,j) = \lVert X_i - X_j \rVert^2`.
 
-.. image:: images/dot_scan.png
+.. image:: images/dot_scan.svg
 
 This loop is efficient even if it is still slower than a custom
 implementation of pairwise distances. It assumes inputs and outputs are
@@ -359,7 +359,7 @@ Tools
 graphs. That's the only one without programming. The first screenshot was
 made with this tool.
 
-.. image:: images/linreg1.png
+.. image:: images/linreg1.svg
 
 `onnx2py.py
 <https://github.com/microsoft/onnxconverter-common/blob/master/onnxconverter_common/onnx2py.py>`_

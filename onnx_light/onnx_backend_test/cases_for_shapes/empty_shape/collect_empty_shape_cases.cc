@@ -10,11 +10,11 @@ namespace onnx_backend_test {
 void CollectEmptyShapeTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   if (op_type.empty() or op_type == "empty_shape") {
     RegisterAddEmptyShapeCases(registry);
-    RegisterSubEmptyShapeCases(registry);
-    RegisterMulEmptyShapeCases(registry);
-    RegisterDivEmptyShapeCases(registry);
-    RegisterPReluEmptyShapeCases(registry);
     RegisterCompressEmptyShapeCases(registry);
+    RegisterDivEmptyShapeCases(registry);
+    RegisterMulEmptyShapeCases(registry);
+    RegisterPReluEmptyShapeCases(registry);
+    RegisterSubEmptyShapeCases(registry);
   }
 }
 

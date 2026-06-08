@@ -10,9 +10,9 @@ namespace onnx_backend_test {
 void CollectNanInfTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   if (op_type.empty() or op_type == "nan_inf") {
     RegisterAddNanInfCases(registry);
-    RegisterSubNanInfCases(registry);
-    RegisterMulNanInfCases(registry);
     RegisterDivNanInfCases(registry);
+    RegisterMulNanInfCases(registry);
+    RegisterSubNanInfCases(registry);
     RegisterWhereNanInfCases(registry);
   }
 }

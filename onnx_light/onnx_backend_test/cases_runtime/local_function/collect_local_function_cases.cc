@@ -10,8 +10,8 @@ namespace onnx_backend_test {
 void CollectLocalFunctionTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   if (op_type.empty() or op_type == "local_function") {
     RegisterFunctionCallsFunctionAcrossDomainsCase(registry);
-    RegisterFunctionThreeLevelNestedCallsCase(registry);
     RegisterFunctionLinkedAttributeCase(registry);
+    RegisterFunctionThreeLevelNestedCallsCase(registry);
   }
 }
 

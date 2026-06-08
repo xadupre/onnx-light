@@ -148,7 +148,7 @@ void RegisterTreeEnsembleCases(std::vector<TestCase> &registry) {
         /*leaf_weights=*/{5.23, 12.12, -12.23, 7.21}, /*membership_values=*/{},
         /*n_targets=*/2, /*aggregate_function=*/1, /*post_transform=*/0);
 
-    Expect(node, {x}, {y}, "test_cc_treeensemble_single_tree_double", {default_opset, opset},
+    Expect(node, {x}, {y}, "test_ai_onnx_ml_tree_ensemble_single_tree", {default_opset, opset},
            "backend-test", registry);
   }
 
@@ -195,7 +195,7 @@ void RegisterTreeEnsembleCases(std::vector<TestCase> &registry) {
         /*membership_values=*/{1.2f, 3.7f, 8.0f, 9.0f, kNaN, 12.0f, 7.0f, kNaN},
         /*n_targets=*/4, /*aggregate_function=*/1, /*post_transform=*/0);
 
-    Expect(node, {x}, {y}, "test_cc_treeensemble_set_membership", {default_opset, opset},
+    Expect(node, {x}, {y}, "test_ai_onnx_ml_tree_ensemble_set_membership", {default_opset, opset},
            "backend-test", registry);
   }
 }

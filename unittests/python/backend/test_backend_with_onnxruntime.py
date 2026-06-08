@@ -74,7 +74,7 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #   * ``test_cc_binarizer_int64`` — ORT only registers a ``float`` kernel for
 #     ``ai.onnx.ml::Binarizer``, so the ``int64`` variant fails with
 #     "Could not find an implementation for Binarizer(1) node". The
-#     ``float`` variant (``test_cc_binarizer_float``) is still exercised.
+#     ``float`` variant (``test_ai_onnx_ml_binarizer``) is still exercised.
 #   * ``test_cc_scaler_int64`` — ORT only registers a ``float`` kernel for
 #     ``ai.onnx.ml::Scaler``, so the ``int64`` variant fails with
 #     "Could not find an implementation for Scaler(1) node". The

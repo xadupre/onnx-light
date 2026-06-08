@@ -46,7 +46,7 @@ void RegisterBinarizerCases(std::vector<TestCase> &registry) {
     Tensor x = Tensor::FromFloat("", {2, 4}, {0.5f, 1.0f, 1.5f, 2.0f, -1.0f, 1.0f, 3.0f, 0.9f});
     Tensor y = binarizer.operator()<float>(x, threshold);
 
-    Expect(node, {x}, {y}, "test_cc_binarizer_float", {default_opset, opset}, "backend-test",
+    Expect(node, {x}, {y}, "test_ai_onnx_ml_binarizer", {default_opset, opset}, "backend-test",
            registry);
   }
 

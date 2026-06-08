@@ -38,6 +38,19 @@ void RegisterWhereCases(std::vector<TestCase> &registry) {
     Expect(node, {condition, x, y}, {output}, "test_where_bcast", {opset}, "backend-test",
            registry);
   }
+
+  // Mirrors upstream onnx ``test_where_long_example``: int64 inputs.
+  {
+    NodeProto node = MakeNode("Where", {"condition", "x", "y"}, {"output"});
+
+    Tensor condition = Tensor::FromBool("condition", {2, 2}, {1, 0, 1, 1});
+    Tensor x = Tensor::FromInt64("x", {2, 2}, {1, 2, 3, 4});
+    Tensor y = Tensor::FromInt64("y", {2, 2}, {9, 8, 7, 6});
+    Tensor output = where_kernel(condition, x, y);
+
+    Expect(node, {condition, x, y}, {output}, "test_where_long_example", {opset}, "backend-test",
+           registry);
+  }
 }
 
 } // namespace onnx_backend_test

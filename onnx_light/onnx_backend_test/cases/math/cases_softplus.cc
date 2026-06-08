@@ -26,6 +26,18 @@ void RegisterSoftplusCases(std::vector<TestCase> &registry) {
     Tensor y = softplus_kernel(x);
     Expect(node, {x}, {y}, "test_cc_softplus", {opset}, "backend-test", registry);
   }
+
+  // Mirrors upstream onnx ``test_softplus_example``: 1-D input [-1, 0, 1].
+  {
+    NodeProto node;
+    node.set_op_type("Softplus");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
+    Tensor y = softplus_kernel(x);
+    Expect(node, {x}, {y}, "test_cc_softplus_example", {opset}, "backend-test", registry);
+  }
 }
 
 } // namespace onnx_backend_test

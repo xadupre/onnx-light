@@ -36,9 +36,7 @@ from onnx_light.reference import ReferenceEvaluator
 _IMPLEMENTED_OPS: frozenset[str] = frozenset({"Abs", "Neg", "Add", "Sub", "Mul", "Div"})
 
 
-def reference_evaluator_backend(
-    model: onnxl.ModelProto, *inputs: np.ndarray
-) -> list[np.ndarray]:
+def reference_evaluator_backend(model: onnxl.ModelProto, *inputs: np.ndarray) -> list[np.ndarray]:
     """Runs ``model`` through :class:`ReferenceEvaluator`.
 
     Mirrors the signature expected by :func:`make_test_class` (the same as
@@ -94,8 +92,7 @@ def _build_include_regex() -> list[str]:
 
 
 TestReferenceEvaluatorBackend = make_test_class(
-    reference_evaluator_backend,
-    include_regex=_build_include_regex(),
+    reference_evaluator_backend, include_regex=_build_include_regex()
 )
 
 

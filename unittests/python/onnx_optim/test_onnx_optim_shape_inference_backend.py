@@ -97,7 +97,7 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
         self.assertEqual(["batch", "seq", "2*d_model"], list(ctx.get("Z").shape))
 
     @unittest.skip("broken")
-    def test_inference_shape_backend(self):
+    def test_inference_shape_backend_constraints(self):
         from onnx_light.onnx_optim.shape_inference import infer_shapes_model
 
         tests = [
@@ -113,6 +113,30 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
         infer_shapes_model(model)
         expected_info = {info.name: info for info in test.model.graph.value_info}
         computed = {info.name: info for info in model.graph.value_info}
+        self.assertEqual(set(expected_info), set(computed))
+        for name in expected_info:
+            expected = expected_info[name]
+            inferred = computed[name]
+            self.assertEqual(expected, inferred, f"{name!r} failed\n{expected=}\n--\n{inferred=}")
+
+    def test_inference_shape_backend_16_dimension(self):
+        from onnx_light.onnx_optim.shape_inference import infer_shapes_model
+
+        tests = [
+            test
+            for test in collect_test_cases("shape")
+            if "test_cc_shape_inference_shape_identity_unsqueeze" == test.name
+        ]
+        self.assertEqual(len(tests), 1)
+        test = tests[0]
+        model = onnxl.ModelProto()
+        model.CopyFrom(test.model)
+        model.graph.value_info.clear()
+        infer_shapes_model(model)
+        expected_info = {
+            info.name: info for info in [*test.model.graph.value_info, *test.model.graph.output]
+        }
+        computed = {info.name: info for info in [*model.graph.value_info, *model.graph.output]}
         self.assertEqual(set(expected_info), set(computed))
         for name in expected_info:
             expected = expected_info[name]

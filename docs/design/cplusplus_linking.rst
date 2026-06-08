@@ -70,19 +70,37 @@ converter), link the optim target instead, which transitively pulls in
     find_package(onnx_light REQUIRED)
     target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_optim)
 
-To evaluate ONNX models in-process using the bundled reference kernels
-(backend test infrastructure: ``struct Tensor``, ``struct TestCase``,
-``expect()``, ``SplitMix64``-based deterministic RNG, ...), link:
+To evaluate ONNX nodes / graphs / models in-process using the bundled C++
+**reference implementation** of the ONNX operators (runtime
+``struct Tensor``, ``RunGraph`` / ``RunFunction`` / ``RunModel``, the
+``SplitMix64``-based deterministic RNG, ...), link the kernels target:
+
+.. code-block:: cmake
+
+    find_package(onnx_light REQUIRED)
+    target_link_libraries(my_target PRIVATE onnx_light::onnx_kernels)
+
+The kernels live under ``onnx_light/onnx_kernels/kernels/<group>/`` and
+form a self-contained runtime that only depends on
+``onnx_light::lib_onnx_proto``.  See
+:doc:`../api/cpp/onnx_kernels/index` for the full C++ API reference.
+
+To additionally pull in the backend-test infrastructure
+(``struct TestCase``, ``Expect()`` helper, per-operator
+``RegisterXxxCases`` registries used by every ``CollectTestCases``
+call), link:
 
 .. code-block:: cmake
 
     find_package(onnx_light REQUIRED)
     target_link_libraries(my_target PRIVATE onnx_light::onnx_backend_test)
 
-``onnx_light::onnx_backend_test`` is intentionally independent from
-``onnx_light::onnx_light`` / ``onnx_light::lib_onnx_op``; it can be combined
-with ``onnx_light::onnx_light`` when both schema validation and execution are
-needed in the same binary.
+``onnx_light::onnx_backend_test`` publicly depends on
+``onnx_light::onnx_kernels`` (which transitively brings in
+``onnx_light::lib_onnx_proto``) and is intentionally independent from
+``onnx_light::onnx_light`` / ``onnx_light::lib_onnx_op``; it can be
+combined with ``onnx_light::onnx_light`` when both schema validation and
+execution are needed in the same binary.
 
 This keeps downstream CMake files independent from hardcoded include paths and
 library file names. If *onnx-light* is installed to a non-standard prefix,
@@ -101,8 +119,9 @@ For monorepos or local development, a downstream CMake project can also include
     target_link_libraries(my_target PRIVATE lib_onnx_lib)
 
 Use the in-tree ``lib_onnx_proto`` target instead when only proto
-parsing/serialization is needed, or ``lib_onnx_op``, ``lib_onnx_optim`` or
-``lib_onnx_backend_test`` for the corresponding feature subset.  This uses the
+parsing/serialization is needed, or ``lib_onnx_op``, ``lib_onnx_optim``,
+``lib_onnx_kernels`` or ``lib_onnx_backend_test`` for the corresponding
+feature subset.  This uses the
 in-tree build targets directly instead of ``find_package``.
 
 Excerpt from the example project

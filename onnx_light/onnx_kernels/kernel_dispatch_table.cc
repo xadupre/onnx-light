@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernel_dispatch_table.h"
 
+#include "onnx_kernels/kernels/generator/include_generator_kernels.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 #include "onnx_kernels/node_helpers.h"
@@ -310,6 +311,23 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const int64_t detect_negative = GetAttributeIntOrDefault(node, "detect_negative", 1);
          kernel::IsInf k(rt.kernel_ctx());
          SetOutput(node, 0, k(x, detect_positive, detect_negative), rt.tensors());
+       }},
+
+      // -----------------------------------------------------------------
+      // Generator kernels.
+      // -----------------------------------------------------------------
+      // ``EyeLike``: ``k`` defaults to 0; ``dtype`` is optional and, when
+      // absent, the output element type matches the input (encoded as 0
+      // by ``kernel::EyeLike``).
+      {"ai.onnx:EyeLike",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const int64_t k = GetAttributeIntOrDefault(node, "k", 0);
+         const int64_t dtype = GetAttributeIntOrDefault(node, "dtype", 0);
+         kernel::EyeLike kernel(rt.kernel_ctx());
+         SetOutput(node, 0, kernel(x, k, static_cast<int32_t>(dtype)), rt.tensors());
        }},
 
       // -----------------------------------------------------------------

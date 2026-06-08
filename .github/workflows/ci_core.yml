@@ -51,8 +51,49 @@ jobs:
           done <<< "${changed}"
           echo "docs_only=${docs_only}" >> "$GITHUB_OUTPUT"
 
+  no_onnx_tests_ubuntu:
+    # Fast preflight: must pass before the heavier compilation jobs start.
+    # Mirrors .github/workflows/ci_no_onnx.yml but lives inside ci-1-core so
+    # the gate is observable as a required PR status check.
+    name: no-onnx (ubuntu-latest, py3.13)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install OpenSSL (Linux)
+        run: sudo apt-get install -y libssl-dev
+
+      - name: Set parallel build level
+        shell: bash
+        run: |
+          CMAKE_BUILD_PARALLEL_LEVEL=$(python -c 'import os; print(os.cpu_count() or 1)')
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}"
+
+      - name: Build and Install package
+        run: pip install -Cbuild-dir=build -e .[dev]
+
+      - name: uninstall onnx
+        run: pip uninstall -y onnx
+
+      - name: pip freeze
+        run: pip freeze
+
+      - name: Run tests (excluding onnxl_vs_onnx)
+        run: |
+          pytest --durations=10 unittests --ignore=unittests/onnxl_vs_onnx
+
   core_tests_ubuntu:
     name: core (ubuntu-latest, py3.13)
+    needs: [no_onnx_tests_ubuntu]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -92,7 +133,7 @@ jobs:
 
   core_tests:
     name: core (${{ matrix.os }}, py${{ matrix.python-version }})
-    needs: [core_tests_ubuntu, changes]
+    needs: [no_onnx_tests_ubuntu, core_tests_ubuntu, changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 28
@@ -152,7 +193,7 @@ jobs:
 
   windows_x86_build:
     name: core (windows-latest, x86 build)
-    needs: [core_tests_ubuntu, changes]
+    needs: [no_onnx_tests_ubuntu, core_tests_ubuntu, changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: windows-latest
     timeout-minutes: 20

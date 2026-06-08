@@ -39,9 +39,20 @@ Python API
 
 .. toctree::
     :maxdepth: 1
-    :caption: Extra tools
+    :caption: Kernels
+
+    kernels
+
+.. toctree::
+    :maxdepth: 1
+    :caption: Backend
 
     backend_test
+
+.. toctree::
+    :maxdepth: 1
+    :caption: Extra tools
+
     fuzz
     tools/index
 

@@ -82,6 +82,7 @@ docs/examples/core/plot*.png
 docs/sg_execution_times.rst
 docs/operators/
 docs/xml/
+docs/auto_*
 
 
 # PyBuilder

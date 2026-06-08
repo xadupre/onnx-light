@@ -112,11 +112,23 @@ projects can link only what they need:
   history), checker, inliner, shape inference and version converter.
 - ``onnx_light::lib_onnx_optim`` – shape-inference dispatch table,
   expression engine and graph optimization helpers.
+- ``onnx_light::onnx_kernels`` – C++ kernels, a C++ reference implementation,
+  it is used to generate the expected outputs for the backend test.
 - ``onnx_light::onnx_backend_test`` – C++ backend test
   infrastructure and reference operator kernels.
 
+In addition, ``onnx_light::onnx_lib`` replicates the current C++ API
+from :epkg:`onnx` package.
+
 See :ref:`l-design-library-split` for the detailed breakdown of each
 assembly and :ref:`l-design-cpp-linking` for the matching CMake usage.
+
+Kernels
++++++++
+
+It is a C++ reference implementation and used to generate the expected
+outputs for the backend tests. It is not parallelized on purpose to enforce
+reproducibility.
 
 Backend tests
 +++++++++++++

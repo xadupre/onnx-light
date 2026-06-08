@@ -26,29 +26,14 @@ for the upstream project's direction and priorities.
 
 ## onnx without protobuf
 
-- **Files larger than 2 GB** – The standard `onnx` package relies on protobuf,
-  which enforces a 2 GB message-size limit and cannot load or save models that
-  exceed that threshold. `onnx-light` bypasses protobuf entirely and supports
-  arbitrarily large ONNX files.
-- **Parallel loading and saving** – Tensor weights can be read and written in
-  parallel using multiple threads via the ``num_threads`` parameter of
-  ``onnx_light.onnx.load`` and ``onnx_light.onnx.save``. In practice loading
-  or saving large models is roughly **3 times faster with 4 threads** compared
-  to the single-threaded path (see
-  [docs/examples/core/plot_threads_load_save.py](docs/examples/core/plot_threads_load_save.py)
-  for a benchmark).
-- **Zero-copy parsing** – creates the ModelProto without any tensor copy,
-  all initializers point to the data inside ModelProto
+- **ONNX Files larger than 2 GB** (protobuf is limited to 2Gb)
+- **Parallel loading and saving**: 3 times faster with 4 threads compared
+  to the single-threaded path
+- **Zero-copy parsing** – creates the ModelProto without any tensor copy
 - **Aligned external tensor offsets** – external tensor data can be written
-  with explicit offset alignment (for example 4096-byte page alignment) through
-  `onnxl.SerializeOptions().alignment`
+  with explicit offset alignment
 - **No serialize/parse round-trip for C++ tools** – the Python `ModelProto`
-  *is* the C++ `ModelProto` (bound through nanobind), so calls into the
-  inliner, checker, shape inference or version converter operate on the
-  model directly. The standard `onnx` package must `SerializeToString` and
-  `ParseFromString` around every such call. See the
-  [differences design page](https://sdpython.github.io/doc/onnx-light/dev/design/differences.html)
-  for details.
+  *is* the C++ `ModelProto`
 
 ## Modular C++ libraries
 
@@ -57,18 +42,21 @@ can link only what it needs:
 
 - `onnx_light::lib_onnx_proto` – protobuf-compatible message types,
   parser / serializer, external data, optional AES-256 encrypted save / load.
+- `onnx_light::lib_onnx_bil` – current ONNX C++ API
 - `onnx_light::lib_onnx_op` – lightweight `LightOpSchema` registrations for
   ONNX operator domains, with no shape inference.
 - `onnx_light::onnx_light` – full ONNX-compatible schemas (with history),
   checker, inliner, shape inference and version converter.
 - `onnx_light::lib_onnx_optim` – shape-inference dispatch table, expression
   engine and graph optimization helpers.
+- `onnx_light::onnx_kernels` – C++ kernels used to generate the beckend
 - `onnx_light::onnx_backend_test` – C++ backend test infrastructure and
   reference operator kernels.
 
-See the
-[library split design page](https://sdpython.github.io/doc/onnx-light/dev/design/library_split.html)
-for the detailed breakdown.
+## Kernels
+
+- Each operator has a corresponding runtime implementation in C++,
+  it is used to generated the C++ output of the backend tests.
 
 ## Backend Tests
 

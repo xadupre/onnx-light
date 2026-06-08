@@ -60,6 +60,12 @@ a smooth replacement.
     cplusplus_linking
 
 .. toctree::
+    :caption: Kernels
+    :maxdepth: 1
+
+    kernels
+
+.. toctree::
     :caption: Backend
     :maxdepth: 1
 

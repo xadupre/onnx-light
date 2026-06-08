@@ -55,7 +55,18 @@ jobs:
 
       - name: Run Python unit tests
         env:
-          ASAN_OPTIONS: detect_leaks=1:strict_init_order=1:check_initialization_order=1
+          # Python itself is not built with sanitizers, so leak detection
+          # produces large amounts of false positives from CPython internals.
+          ASAN_OPTIONS: detect_leaks=0:strict_init_order=1:check_initialization_order=1
           UBSAN_OPTIONS: print_stacktrace=1
         run: |
+          # When loading sanitizer-instrumented .so files from a non-instrumented
+          # interpreter, the sanitizer runtime must be preloaded, otherwise the
+          # extension modules fail with undefined symbols such as
+          # __ubsan_vptr_type_cache or __asan_init.
+          ASAN_LIB=$(clang -print-file-name=libclang_rt.asan-x86_64.so)
+          UBSAN_LIB=$(clang -print-file-name=libclang_rt.ubsan_standalone-x86_64.so)
+          echo "ASAN_LIB=${ASAN_LIB}"
+          echo "UBSAN_LIB=${UBSAN_LIB}"
+          export LD_PRELOAD="${ASAN_LIB}:${UBSAN_LIB}"
           pytest --durations=10 unittests -v

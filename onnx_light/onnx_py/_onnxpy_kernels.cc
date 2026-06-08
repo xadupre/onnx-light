@@ -25,7 +25,7 @@ using onnx_kernels::kernel::OpsetId;
 void AddOnnxPyKernels(nb::module_ &m);
 void AddOnnxPyRuntime(nb::module_ &m);
 
-NB_MODULE(_onnxkernels, m) {
+NB_MODULE(_onnxpykernels, m) {
   m.doc() = "onnx_light kernels bindings: deterministic pseudo-random helpers "
             "backing onnx_light.backend, plus the RunNode/RunGraph/RunFunction/"
             "RunModel dispatcher and its supporting RuntimeContext/KernelContext "
@@ -38,9 +38,9 @@ NB_MODULE(_onnxkernels, m) {
   // extensions here guarantees the cross-module typeid registry has the
   // necessary entries by the time we register the ``runtime`` callables and
   // makes the runtime submodule usable even when consumers import
-  // ``_onnxkernels`` directly (bypassing the ``_onnxpy.py`` shim).
+  // ``_onnxpykernels`` directly (bypassing the ``_onnxpy.py`` shim).
   nb::module_::import_("onnx_light.onnx_py._onnxpyprotoop");
-  nb::module_::import_("onnx_light.onnx_py._onnxbackend");
+  nb::module_::import_("onnx_light.onnx_py._onnxpybackend");
 
   AddOnnxPyKernels(m);
   AddOnnxPyRuntime(m);

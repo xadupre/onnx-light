@@ -122,7 +122,7 @@ set(ONNX_LIGHT_LIB_ALL_SOURCES
 # Build the core C++ libraries (lib_onnx_proto / lib_onnx_lib / lib_onnx_op /
 # lib_onnx_optim / lib_onnx_kernels / lib_onnx_backend_test) as SHARED when
 # ONNX_LIGHT_BUILD_PYTHON=ON so that all Python extensions (_onnxpyprotoop,
-# _onnxpyprotolib, _onnxpyoptim, _onnxkernels and _onnxbackend) share a
+# _onnxpyprotolib, _onnxpyoptim, _onnxpykernels and _onnxpybackend) share a
 # single copy of every library's compiled code (vtables, typeid, out-of-line
 # member functions, kernel registries, ...) at runtime. This avoids
 # duplicating tens of megabytes of compiled code across the five Python
@@ -243,8 +243,8 @@ target_link_libraries(lib_onnx_optim PUBLIC lib_onnx_op)
 # operator kernel together with the minimal infrastructure they need
 # (``TestCase``, ``OpsetId``, ``Tensor``, ``RunNodes``,
 # ``RuntimeContext`` and deterministic pseudo-random helpers) and is
-# exposed to Python through ``_onnxkernels`` (and re-exported via
-# ``_onnxbackend`` transitively through ``lib_onnx_backend_test``). It
+# exposed to Python through ``_onnxpykernels`` (and re-exported via
+# ``_onnxpybackend`` transitively through ``lib_onnx_backend_test``). It
 # only depends on ``lib_onnx_proto`` for proto types.
 add_library(lib_onnx_kernels ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} ${ONNX_KERNELS_SOURCES})
 if(_onnx_light_lib_type STREQUAL "SHARED" AND WIN32)
@@ -331,7 +331,7 @@ target_precompile_headers(lib_onnx_backend_test PRIVATE
     <vector>
 )
 
-# Builds _onnxpyprotoop, _onnxpyprotolib, _onnxpyoptim, _onnxkernels and _onnxbackend libraries.
+# Builds _onnxpyprotoop, _onnxpyprotolib, _onnxpyoptim, _onnxpykernels and _onnxpybackend libraries.
 if(ONNX_LIGHT_BUILD_PYTHON)
   # _onnxpyprotoop: proto bindings + onnx_op schema bindings.
   nanobind_add_module(_onnxpyprotoop ${ONNX_PY_PROTOOP_SOURCES})
@@ -352,14 +352,14 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   target_include_directories(_onnxpyoptim PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
   target_link_libraries(_onnxpyoptim PRIVATE lib_onnx_optim)
 
-  # _onnxkernels: kernel helpers (deterministic pseudo-random helpers backing
+  # _onnxpykernels: kernel helpers (deterministic pseudo-random helpers backing
   # ``onnx_light.backend``). Links lib_onnx_kernels only and does not depend on
   # the backend-test case registries.
-  nanobind_add_module(_onnxkernels ${ONNX_PY_KERNELS_SOURCES})
-  target_include_directories(_onnxkernels PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
-  target_link_libraries(_onnxkernels PRIVATE lib_onnx_kernels)
+  nanobind_add_module(_onnxpykernels ${ONNX_PY_KERNELS_SOURCES})
+  target_include_directories(_onnxpykernels PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
+  target_link_libraries(_onnxpykernels PRIVATE lib_onnx_kernels)
 
-  # _onnxbackend: backend-test case utilities. Links lib_onnx_backend_test
+  # _onnxpybackend: backend-test case utilities. Links lib_onnx_backend_test
   # (which publicly depends on lib_onnx_kernels and lib_onnx_proto so that
   # ModelProto can be returned by reference to Python and resolved against the
   # single nb::class_<ModelProto> registered by _onnxpyprotoop).
@@ -369,23 +369,23 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # special ordering is required; in the pure C++ STATIC variant we repeat
   # ``lib_onnx_backend_test`` after ``lib_onnx_kernels`` to break the
   # circular reference between the two static archives.
-  nanobind_add_module(_onnxbackend ${ONNX_PY_BACKEND_SOURCES})
-  target_include_directories(_onnxbackend PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
+  nanobind_add_module(_onnxpybackend ${ONNX_PY_BACKEND_SOURCES})
+  target_include_directories(_onnxpybackend PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
   if(_onnx_light_lib_type STREQUAL "SHARED")
-    target_link_libraries(_onnxbackend PRIVATE lib_onnx_backend_test lib_onnx_kernels)
+    target_link_libraries(_onnxpybackend PRIVATE lib_onnx_backend_test lib_onnx_kernels)
   else()
-    target_link_libraries(_onnxbackend PRIVATE lib_onnx_backend_test lib_onnx_kernels lib_onnx_backend_test)
+    target_link_libraries(_onnxpybackend PRIVATE lib_onnx_backend_test lib_onnx_kernels lib_onnx_backend_test)
   endif()
 
   # All extensions and the shared lib_onnx_*.so are installed in the same
   # directory (onnx_light/onnx_py/). Set an $ORIGIN rpath so the dynamic loader
   # picks the colocated libraries at import time without LD_LIBRARY_PATH.
   if((_onnx_light_lib_type STREQUAL "SHARED" OR _lib_onnx_proto_type STREQUAL "SHARED") AND (UNIX AND NOT APPLE))
-    set_target_properties(_onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxkernels _onnxbackend PROPERTIES
+    set_target_properties(_onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxpykernels _onnxpybackend PROPERTIES
         BUILD_RPATH "\$ORIGIN"
         INSTALL_RPATH "\$ORIGIN")
   elseif((_onnx_light_lib_type STREQUAL "SHARED" OR _lib_onnx_proto_type STREQUAL "SHARED") AND APPLE)
-    set_target_properties(_onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxkernels _onnxbackend PROPERTIES
+    set_target_properties(_onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxpykernels _onnxpybackend PROPERTIES
         BUILD_RPATH "@loader_path"
         INSTALL_RPATH "@loader_path")
   endif()
@@ -562,7 +562,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # alongside so the $ORIGIN rpath above resolves them without
   # LD_LIBRARY_PATH and the compiled code is shared across all extensions
   # instead of being duplicated inside each .so.
-  install(TARGETS _onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxkernels _onnxbackend LIBRARY DESTINATION onnx_light/onnx_py)
+  install(TARGETS _onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxpykernels _onnxpybackend LIBRARY DESTINATION onnx_light/onnx_py)
   if(_lib_onnx_proto_type STREQUAL "SHARED")
     install(TARGETS lib_onnx_proto
         LIBRARY DESTINATION onnx_light/onnx_py

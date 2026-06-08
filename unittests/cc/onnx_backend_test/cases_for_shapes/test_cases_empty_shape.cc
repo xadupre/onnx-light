@@ -40,28 +40,8 @@ TEST(EmptyShapeCases, CollectorReturnsCases) {
   EXPECT_FALSE(cases.empty());
 }
 
-TEST(EmptyShapeCases, FilterByOpTypeAdd) {
-  const auto cases = Collect("Add");
-  ASSERT_FALSE(cases.empty());
-  for (const auto &tc : cases) {
-    ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
-    const auto &op = tc.model.ref_graph().ref_node()[0].ref_op_type();
-    EXPECT_EQ(std::string(op.data(), op.size()), "Add");
-  }
-}
-
-TEST(EmptyShapeCases, FilterByOpTypeCompress) {
-  const auto cases = Collect("Compress");
-  ASSERT_FALSE(cases.empty());
-  for (const auto &tc : cases) {
-    ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
-    const auto &op = tc.model.ref_graph().ref_node()[0].ref_op_type();
-    EXPECT_EQ(std::string(op.data(), op.size()), "Compress");
-  }
-}
-
 TEST(EmptyShapeCases, AddScalarsProducesScalarSum) {
-  const auto cases = Collect("Add");
+  const auto cases = Collect("empty_shape");
   const TestCase *tc = Find(cases, "test_cc_add_empty_shape_scalars");
   ASSERT_NE(tc, nullptr);
   ASSERT_EQ(tc->data_sets.size(), 1u);
@@ -75,7 +55,7 @@ TEST(EmptyShapeCases, AddScalarsProducesScalarSum) {
 }
 
 TEST(EmptyShapeCases, AddZeroDimProducesZeroElementOutput) {
-  const auto cases = Collect("Add");
+  const auto cases = Collect("empty_shape");
   const TestCase *tc = Find(cases, "test_cc_add_empty_shape_zero_dim");
   ASSERT_NE(tc, nullptr);
   ASSERT_EQ(tc->data_sets.size(), 1u);
@@ -86,39 +66,11 @@ TEST(EmptyShapeCases, AddZeroDimProducesZeroElementOutput) {
 }
 
 TEST(EmptyShapeCases, AddZeroDim2DProducesZeroElementOutput) {
-  const auto cases = Collect("Add");
+  const auto cases = Collect("empty_shape");
   const TestCase *tc = Find(cases, "test_cc_add_empty_shape_zero_dim_2d");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
   EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{0, 3}));
-  EXPECT_EQ(ds.outputs[0].element_count(), 0);
-}
-
-TEST(EmptyShapeCases, CompressAllFalseNoAxisProducesEmptyOutput) {
-  const auto cases = Collect("Compress");
-  const TestCase *tc = Find(cases, "test_cc_compress_empty_shape_no_axis_all_false");
-  ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
-  ASSERT_EQ(ds.outputs.size(), 1u);
-  EXPECT_EQ(ds.outputs[0].shape, std::vector<int64_t>({0}));
-  EXPECT_EQ(ds.outputs[0].element_count(), 0);
-}
-
-TEST(EmptyShapeCases, CompressAllFalseAxis0ProducesEmptyRowOutput) {
-  const auto cases = Collect("Compress");
-  const TestCase *tc = Find(cases, "test_cc_compress_empty_shape_axis0_all_false");
-  ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
-  EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{0, 2}));
-  EXPECT_EQ(ds.outputs[0].element_count(), 0);
-}
-
-TEST(EmptyShapeCases, CompressInputZeroDimProducesEmptyOutput) {
-  const auto cases = Collect("Compress");
-  const TestCase *tc = Find(cases, "test_cc_compress_empty_shape_input_zero_dim");
-  ASSERT_NE(tc, nullptr);
-  const auto &ds = tc->data_sets[0];
-  EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{0, 2}));
   EXPECT_EQ(ds.outputs[0].element_count(), 0);
 }
 

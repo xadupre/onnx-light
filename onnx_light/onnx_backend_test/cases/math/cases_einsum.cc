@@ -129,6 +129,38 @@ void RegisterEinsumCases(std::vector<TestCase> &registry) {
     Tensor z = einsum_kernel({a, b}, eq);
     Expect(node, {a, b}, {z}, "test_cc_einsum_ellipsis_matmul", {opset}, "backend-test", registry);
   }
+
+  // Batch diagonal: "...ii ->...i" — mirrors ONNX ``test_einsum_batch_diagonal``.
+  {
+    const std::string eq = "...ii ->...i";
+    NodeProto node = MakeEinsumNode(1, eq);
+    Tensor x = Tensor::FromFloat("", {2, 3, 3},
+                                 {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                  11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f});
+    Tensor z = einsum_kernel({x}, eq);
+    Expect(node, {x}, {z}, "test_cc_einsum_batch_diagonal", {opset}, "backend-test", registry);
+  }
+
+  // Implicit inner product: "i,i" — mirrors ONNX ``test_einsum_inner_prod``
+  // (no ``->`` so the scalar result is implicit).
+  {
+    const std::string eq = "i,i";
+    NodeProto node = MakeEinsumNode(2, eq);
+    Tensor a = Tensor::FromFloat("", {5}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
+    Tensor b = Tensor::FromFloat("", {5}, {6.0f, 7.0f, 8.0f, 9.0f, 10.0f});
+    Tensor z = einsum_kernel({a, b}, eq);
+    Expect(node, {a, b}, {z}, "test_cc_einsum_inner_prod", {opset}, "backend-test", registry);
+  }
+
+  // Scalar identity: "->" — mirrors ONNX ``test_einsum_scalar`` (a 0-D input
+  // is returned as-is).
+  {
+    const std::string eq = "->";
+    NodeProto node = MakeEinsumNode(1, eq);
+    Tensor x = Tensor::FromFloat("", {}, {5.0f});
+    Tensor z = einsum_kernel({x}, eq);
+    Expect(node, {x}, {z}, "test_cc_einsum_scalar", {opset}, "backend-test", registry);
+  }
 }
 
 } // namespace onnx_backend_test

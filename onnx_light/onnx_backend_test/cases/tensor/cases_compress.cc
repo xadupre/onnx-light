@@ -89,6 +89,37 @@ void RegisterCompressCases(std::vector<TestCase> &registry) {
     Expect(MakeCompressNode(0), {input, condition}, {output}, "test_cc_compress_int64", {opset},
            "backend-test", registry);
   }
+
+  // test_cc_compress_0 — mirrors ONNX ``test_compress_0`` (axis=0, condition
+  // selects the last two rows of a 3x2 matrix).
+  {
+    Tensor input = Tensor::FromFloat("input", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+    Tensor condition = Tensor::FromBool("condition", {3}, {0, 1, 1});
+    Tensor output = compress_kernel(input, condition, 0);
+    Expect(MakeCompressNode(0), {input, condition}, {output}, "test_cc_compress_0", {opset},
+           "backend-test", registry);
+  }
+
+  // test_cc_compress_1 — mirrors ONNX ``test_compress_1`` (axis=1, condition
+  // selects the last column of a 3x2 matrix).
+  {
+    Tensor input = Tensor::FromFloat("input", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+    Tensor condition = Tensor::FromBool("condition", {2}, {0, 1});
+    Tensor output = compress_kernel(input, condition, 1);
+    Expect(MakeCompressNode(1), {input, condition}, {output}, "test_cc_compress_1", {opset},
+           "backend-test", registry);
+  }
+
+  // test_cc_compress_default_axis — mirrors ONNX ``test_compress_default_axis``
+  // (no axis attribute; the input is flattened first and ``condition`` selects
+  // individual elements).
+  {
+    Tensor input = Tensor::FromFloat("input", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+    Tensor condition = Tensor::FromBool("condition", {5}, {0, 1, 0, 0, 1});
+    Tensor output = compress_kernel(input, condition, std::nullopt);
+    Expect(MakeCompressNode(std::nullopt), {input, condition}, {output},
+           "test_cc_compress_default_axis", {opset}, "backend-test", registry);
+  }
 }
 
 } // namespace onnx_backend_test

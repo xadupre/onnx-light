@@ -342,9 +342,158 @@ void RegisterTripCountVariants(std::vector<TestCase> &registry) {
 
 } // namespace
 
+// ---------------------------------------------------------------------------
+// Loop — multi loop-carried state with a scan output.
+//
+// Trip count 3, two FLOAT[1] loop-carried dependencies ``y`` (incremented
+// by 1 each iter) and ``w`` (doubled each iter), and a single FLOAT[1] scan
+// output emitting ``y`` per iteration. Starting from ``y = [0]`` and
+// ``w = [1]`` the expected outputs are:
+//
+//   res_y    = [3]
+//   res_w    = [8]
+//   res_scan = [[1], [2], [3]]
+//
+// This exercises ``N == 2`` loop-carried dependencies (the loop11 mirror
+// uses ``N == 1``).
+// ---------------------------------------------------------------------------
+namespace {
+
+// Body for the multi-carried case:
+//   inputs:  iter [INT64 scalar], cond_in [BOOL scalar],
+//            y_in [FLOAT[1]], w_in [FLOAT[1]]
+//   outputs: cond_out [BOOL scalar], y_out [FLOAT[1]],
+//            w_out [FLOAT[1]], scan_out [FLOAT[1]]
+GraphProto BuildMultiCarriedBody() {
+  GraphProto g;
+  g.set_name("loop_multi_carried_body");
+
+  AddGraphInputScalar(g, "iter", TensorProto::DataType::INT64);
+  AddGraphInputScalar(g, "cond_in", TensorProto::DataType::BOOL);
+  AddGraphInputTensor(g, "y_in", TensorProto::DataType::FLOAT, {1});
+  AddGraphInputTensor(g, "w_in", TensorProto::DataType::FLOAT, {1});
+
+  // cond_out = Identity(cond_in)
+  {
+    NodeProto *n = g.add_node();
+    n->set_op_type("Identity");
+    n->add_input("cond_in");
+    n->add_output("cond_out");
+  }
+  // one = Constant(value=float [1.0])
+  {
+    NodeProto *n = g.add_node();
+    n->set_op_type("Constant");
+    n->add_output("one");
+    AttributeProto *a = n->add_attribute();
+    a->set_name("value");
+    a->set_type(AttributeProto::AttributeType::TENSOR);
+    TensorProto *t = a->add_t();
+    t->set_data_type(TensorProto::DataType::FLOAT);
+    t->add_dims(1);
+    t->set_raw_data(utils::ByteSpan(FloatBytes(1.0f)));
+  }
+  // two = Constant(value=float [2.0])
+  {
+    NodeProto *n = g.add_node();
+    n->set_op_type("Constant");
+    n->add_output("two");
+    AttributeProto *a = n->add_attribute();
+    a->set_name("value");
+    a->set_type(AttributeProto::AttributeType::TENSOR);
+    TensorProto *t = a->add_t();
+    t->set_data_type(TensorProto::DataType::FLOAT);
+    t->add_dims(1);
+    t->set_raw_data(utils::ByteSpan(FloatBytes(2.0f)));
+  }
+  // y_out = Add(y_in, one)
+  {
+    NodeProto *n = g.add_node();
+    n->set_op_type("Add");
+    n->add_input("y_in");
+    n->add_input("one");
+    n->add_output("y_out");
+  }
+  // w_out = Mul(w_in, two)
+  {
+    NodeProto *n = g.add_node();
+    n->set_op_type("Mul");
+    n->add_input("w_in");
+    n->add_input("two");
+    n->add_output("w_out");
+  }
+  // scan_out = Identity(y_out)
+  {
+    NodeProto *n = g.add_node();
+    n->set_op_type("Identity");
+    n->add_input("y_out");
+    n->add_output("scan_out");
+  }
+
+  AddGraphOutputTensor(g, "cond_out", TensorProto::DataType::BOOL);
+  for (const char *name : {"y_out", "w_out", "scan_out"}) {
+    ValueInfoProto *vi = g.add_output();
+    vi->set_name(name);
+    TypeProto::Tensor *tt = vi->ref_type().mutable_tensor_type();
+    tt->set_elem_type(static_cast<int>(TensorProto::DataType::FLOAT));
+    tt->ref_shape().add_dim()->set_dim_value(1);
+  }
+  return g;
+}
+
+void RegisterMultiCarriedCase(std::vector<TestCase> &registry) {
+  const OpsetId opset = DefaultOpset(13);
+  const kernel::KernelContext ctx{opset};
+  const kernel::Loop loop_kernel{ctx};
+
+  const Tensor trip_count("trip_count", DataType::INT64, {}, Int64Bytes(3));
+  const Tensor cond("cond", DataType::BOOL, {}, std::vector<uint8_t>{1});
+  const Tensor y("y", DataType::FLOAT, {1}, FloatBytes(0.0f));
+  const Tensor w("w", DataType::FLOAT, {1}, FloatBytes(1.0f));
+
+  // Drive the body-runner overload so the registered expected outputs are
+  // produced by the same code path that ``RunLoopNode`` exercises at
+  // runtime.
+  kernel::Loop::BodyRunner runner = [](int64_t /*iter*/, bool cond_in,
+                                       const std::vector<Tensor> &state) -> std::vector<Tensor> {
+    const float y_in = state[0].AsFloat()[0];
+    const float w_in = state[1].AsFloat()[0];
+    const float y_out = y_in + 1.0f;
+    const float w_out = w_in * 2.0f;
+    return {Tensor("", DataType::BOOL, {}, std::vector<uint8_t>{static_cast<uint8_t>(cond_in)}),
+            Tensor("", DataType::FLOAT, {1}, FloatBytes(y_out)),
+            Tensor("", DataType::FLOAT, {1}, FloatBytes(w_out)),
+            Tensor("", DataType::FLOAT, {1}, FloatBytes(y_out))};
+  };
+
+  std::vector<Tensor> out = loop_kernel(trip_count, cond, /*v_initial=*/{y, w},
+                                        /*num_scan_outputs=*/1, runner);
+
+  NodeProto node;
+  node.set_op_type("Loop");
+  node.add_input("trip_count");
+  node.add_input("cond");
+  node.add_input("y");
+  node.add_input("w");
+  node.add_output("res_y");
+  node.add_output("res_w");
+  node.add_output("res_scan");
+
+  AttributeProto *body_attr = node.add_attribute();
+  body_attr->set_name("body");
+  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  *body_attr->add_g() = BuildMultiCarriedBody();
+
+  Expect(node, {trip_count, cond, y, w}, out, "test_cc_loop_multi_carried_state", {opset},
+         "backend-test", registry);
+}
+
+} // namespace
+
 void RegisterLoopCases(std::vector<TestCase> &registry) {
   RegisterTripCountVariants(registry);
   RegisterLoop11Case(registry);
+  RegisterMultiCarriedCase(registry);
 }
 
 } // namespace onnx_backend_test

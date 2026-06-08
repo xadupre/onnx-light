@@ -4,13 +4,12 @@
 
 #pragma once
 
+#include "onnx_kernels/kernel_dispatch_table.h"
 #include "onnx_kernels/runtime_context.h"
 #include "onnx_kernels/simple_tensor.h"
 #include "onnx_proto/onnx.h"
 
-#include <functional>
 #include <string>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -64,18 +63,12 @@ namespace onnx_kernels {
  * (constructed with ``rt.kernel_ctx()``), and insert the produced
  * outputs back into ``rt.tensors()`` under the names declared by
  * ``node.output(i)``.
+ *
+ * The alias and the table itself are now declared in
+ * ``onnx_kernels/kernel_dispatch_table.h`` (transitively included
+ * above); this file is left as a comment so the public API surface of
+ * ``run_nodes.h`` remains documented in one place.
  */
-using NodeKernelFn = std::function<void(const NodeProto &node, RuntimeContext &rt)>;
-
-/**
- * Returns the ``"<domain>:<op_type>"`` dispatch table used by
- * :cpp:func:`RunNode`. Constructed on first use and shared across
- * calls. The default ONNX domain (empty string in
- * ``NodeProto::domain()``) is normalised to ``"ai.onnx"`` before
- * lookup; adding a new operator only requires inserting one new
- * entry in this table.
- */
-const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable();
 
 /**
  * Runs the kernel registered for ``node`` and stores its outputs in

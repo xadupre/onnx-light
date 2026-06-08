@@ -109,4 +109,62 @@ TEST(BackendRunModel, Sub) { RunBackendCasesFor("Sub"); }
 TEST(BackendRunModel, Mul) { RunBackendCasesFor("Mul"); }
 TEST(BackendRunModel, Div) { RunBackendCasesFor("Div"); }
 
+// Additional unary, no-attribute math kernels registered in
+// :cpp:func:`KernelDispatchTable` alongside the original baseline.
+TEST(BackendRunModel, Acos) { RunBackendCasesFor("Acos"); }
+TEST(BackendRunModel, Acosh) { RunBackendCasesFor("Acosh"); }
+TEST(BackendRunModel, Asin) { RunBackendCasesFor("Asin"); }
+TEST(BackendRunModel, Asinh) { RunBackendCasesFor("Asinh"); }
+TEST(BackendRunModel, Atan) { RunBackendCasesFor("Atan"); }
+TEST(BackendRunModel, Atanh) { RunBackendCasesFor("Atanh"); }
+TEST(BackendRunModel, Ceil) { RunBackendCasesFor("Ceil"); }
+TEST(BackendRunModel, Cos) { RunBackendCasesFor("Cos"); }
+TEST(BackendRunModel, Cosh) { RunBackendCasesFor("Cosh"); }
+TEST(BackendRunModel, Det) { RunBackendCasesFor("Det"); }
+TEST(BackendRunModel, Erf) { RunBackendCasesFor("Erf"); }
+TEST(BackendRunModel, Exp) { RunBackendCasesFor("Exp"); }
+TEST(BackendRunModel, Floor) { RunBackendCasesFor("Floor"); }
+TEST(BackendRunModel, HardSwish) { RunBackendCasesFor("HardSwish"); }
+TEST(BackendRunModel, Log) { RunBackendCasesFor("Log"); }
+TEST(BackendRunModel, Mish) { RunBackendCasesFor("Mish"); }
+TEST(BackendRunModel, Reciprocal) { RunBackendCasesFor("Reciprocal"); }
+TEST(BackendRunModel, Relu) { RunBackendCasesFor("Relu"); }
+TEST(BackendRunModel, Round) { RunBackendCasesFor("Round"); }
+TEST(BackendRunModel, Sigmoid) { RunBackendCasesFor("Sigmoid"); }
+TEST(BackendRunModel, Sign) { RunBackendCasesFor("Sign"); }
+TEST(BackendRunModel, Sin) { RunBackendCasesFor("Sin"); }
+TEST(BackendRunModel, Sinh) { RunBackendCasesFor("Sinh"); }
+TEST(BackendRunModel, Softplus) { RunBackendCasesFor("Softplus"); }
+TEST(BackendRunModel, Softsign) { RunBackendCasesFor("Softsign"); }
+TEST(BackendRunModel, Sqrt) { RunBackendCasesFor("Sqrt"); }
+TEST(BackendRunModel, Tan) { RunBackendCasesFor("Tan"); }
+TEST(BackendRunModel, Tanh) { RunBackendCasesFor("Tanh"); }
+
+// Additional binary, no-attribute math kernels.
+TEST(BackendRunModel, MatMul) { RunBackendCasesFor("MatMul"); }
+TEST(BackendRunModel, PRelu) { RunBackendCasesFor("PRelu"); }
+TEST(BackendRunModel, Pow) { RunBackendCasesFor("Pow"); }
+
+// Variadic element-wise reducers.
+TEST(BackendRunModel, Sum) { RunBackendCasesFor("Sum"); }
+TEST(BackendRunModel, Max) { RunBackendCasesFor("Max"); }
+TEST(BackendRunModel, Min) { RunBackendCasesFor("Min"); }
+TEST(BackendRunModel, Mean) { RunBackendCasesFor("Mean"); }
+
+// Attribute-driven unary math kernels.
+TEST(BackendRunModel, Celu) { RunBackendCasesFor("Celu"); }
+TEST(BackendRunModel, Elu) { RunBackendCasesFor("Elu"); }
+TEST(BackendRunModel, LeakyRelu) { RunBackendCasesFor("LeakyRelu"); }
+TEST(BackendRunModel, Swish) { RunBackendCasesFor("Swish"); }
+TEST(BackendRunModel, ThresholdedRelu) { RunBackendCasesFor("ThresholdedRelu"); }
+TEST(BackendRunModel, Hardmax) { RunBackendCasesFor("Hardmax"); }
+TEST(BackendRunModel, LogSoftmax) { RunBackendCasesFor("LogSoftmax"); }
+TEST(BackendRunModel, Softmax) { RunBackendCasesFor("Softmax"); }
+TEST(BackendRunModel, HardSigmoid) { RunBackendCasesFor("HardSigmoid"); }
+TEST(BackendRunModel, Selu) { RunBackendCasesFor("Selu"); }
+TEST(BackendRunModel, Shrink) { RunBackendCasesFor("Shrink"); }
+TEST(BackendRunModel, Gelu) { RunBackendCasesFor("Gelu"); }
+TEST(BackendRunModel, Mod) { RunBackendCasesFor("Mod"); }
+TEST(BackendRunModel, Clip) { RunBackendCasesFor("Clip"); }
+
 } // namespace Test

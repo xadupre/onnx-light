@@ -7,7 +7,7 @@ import path (``onnx_light.backend_test``).
 The underlying objects are implemented in C++
 (``onnx_light/onnx_kernels/test_case.{h,cc}``,
 ``onnx_light/onnx_kernels/simple_tensor.{h,cc}``) and bound to
-Python via :mod:`onnx_light.onnx_py._onnxbackend`.
+Python via :mod:`onnx_light.onnx_py._onnxpybackend`.
 
 It mirrors :mod:`onnx_light.backend` (which exposes the deterministic
 pseudo-random helpers) and is what ``onnx_light.backend.test.case``

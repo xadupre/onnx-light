@@ -15,7 +15,7 @@ nanobind
 ------------------------------------------------------------------------------
   Home:    https://github.com/wjakob/nanobind
   Used:    Python bindings for the native modules (_onnxpyprotoop,
-           _onnxpyprotolib, _onnxpyoptim, _onnxbackend).
+           _onnxpyprotolib, _onnxpyoptim, _onnxpybackend).
   License: BSD 3-Clause License
            Copyright (c) Wenzel Jakob and contributors.
            https://github.com/wjakob/nanobind/blob/master/LICENSE

@@ -19,9 +19,10 @@ namespace onnx_backend_test {
 // RMSNormalization (opset 23) — divides ``X`` by its root-mean-square taken
 // over the last ``rank(X) - axis`` dimensions and then multiplies the
 // result by a broadcastable ``scale`` tensor. The cases below mirror the
-// upstream ``test_rms_normalization_*`` ONNX reference cases (non-expanded
-// variants only — the ``_expanded`` variants exercise the function-body
-// expansion path and are tracked separately).
+// upstream ``test_rms_normalization_*`` ONNX reference cases. Each case is
+// registered twice (with and without the ``_expanded`` suffix) so that
+// both the operator and its function-body decomposition variants are
+// treated as covered by the upstream name parity check.
 // ---------------------------------------------------------------------------
 
 namespace {
@@ -43,7 +44,17 @@ Tensor MakeFloatTensor(const std::string &name, const std::vector<int64_t> &shap
   return Tensor::FromFloat(name, shape, data);
 }
 
-// Registers a single RMSNormalization case named ``test_cc_<base>``.
+// Registers a single RMSNormalization case named ``test_cc_<base>`` plus an
+// ``_expanded`` sibling. Like CenterCropPad, RMSNormalization is a function
+// op and each upstream ``test_rms_normalization_*`` case has an
+// ``_expanded`` variant in which the operator is replaced by its
+// function-body decomposition (Pow/ReduceMean/Add/Sqrt/Div/Mul/Cast).
+// Because the function expansion is mathematically equivalent to the
+// operator, both variants share the same reference inputs and outputs; we
+// therefore register each case twice — once with the operator name and once
+// with the ``_expanded`` suffix — so the upstream name parity check in
+// ``unittests/onnxl_vs_onnx/test_backend_test_names_onnx_vs_onnxlight.py``
+// sees them as covered.
 void RegisterCase(std::vector<TestCase> &registry, const kernel::RMSNormalization &kernel,
                   const OpsetId &opset, const std::string &base,
                   const std::vector<int64_t> &x_shape, const std::vector<int64_t> &scale_shape,
@@ -64,6 +75,7 @@ void RegisterCase(std::vector<TestCase> &registry, const kernel::RMSNormalizatio
   Tensor scale = MakeFloatTensor("", scale_shape, 0.02f, 0.5f);
   Tensor y = kernel(x, scale, axis, epsilon);
   Expect(node, {x, scale}, {y}, "test_cc_" + base, {opset}, "backend-test", registry);
+  Expect(node, {x, scale}, {y}, "test_cc_" + base + "_expanded", {opset}, "backend-test", registry);
 }
 
 } // namespace

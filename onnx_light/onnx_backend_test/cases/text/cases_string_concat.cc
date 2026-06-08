@@ -87,6 +87,42 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry) {
     Expect(node, {x, y}, {z}, "test_cc_string_concat_utf8", {opset}, "backend-test", registry);
   }
 
+  // Broadcasting variant: mirrors upstream onnx
+  // ``test_string_concat_broadcasting`` where ``y`` is a length-1 1-D tensor
+  // broadcast across ``x`` (e.g. cats/dogs/snakes).
+  {
+    NodeProto node;
+    node.set_op_type("StringConcat");
+    node.add_input("x");
+    node.add_input("y");
+    node.add_output("z");
+
+    Tensor x = Tensor::FromStrings("", {3}, {"cat", "dog", "snake"});
+    Tensor y = Tensor::FromStrings("", {1}, {"s"});
+    Tensor z = string_concat(x, y);
+
+    Expect(node, {x, y}, {z}, "test_cc_string_concat_broadcasting", {opset}, "backend-test",
+           registry);
+  }
+
+  // Empty-string variant: mirrors upstream onnx
+  // ``test_string_concat_empty_string`` where concatenation with empty
+  // strings yields the non-empty operand unchanged.
+  {
+    NodeProto node;
+    node.set_op_type("StringConcat");
+    node.add_input("x");
+    node.add_input("y");
+    node.add_output("z");
+
+    Tensor x = Tensor::FromStrings("", {2}, {"abc", ""});
+    Tensor y = Tensor::FromStrings("", {2}, {"", "abc"});
+    Tensor z = string_concat(x, y);
+
+    Expect(node, {x, y}, {z}, "test_cc_string_concat_empty_string", {opset}, "backend-test",
+           registry);
+  }
+
   // Chained variant with 3 inputs and 1 output: w = (x + y) + z, built as
   // two StringConcat nodes in a single graph. Exercises shape inference and
   // execution across multiple StringConcat invocations.

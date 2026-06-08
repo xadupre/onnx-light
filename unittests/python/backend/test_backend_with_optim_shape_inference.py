@@ -70,6 +70,7 @@ TestOptimShapeInferenceBackend = make_test_class(
         "test_if_seq.*",
         "test_scan_sum.*",
         "test_cc_loop13_seq.*",
+        "test_cc_linear_attention.*",
     ],
 )
 

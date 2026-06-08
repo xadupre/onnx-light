@@ -1,8 +1,8 @@
 .. _l-onnx-tutorial:
 
-==================================
+====================================
 Introduction to ONNX with onnx-light
-==================================
+====================================
 
 This documentation describes the ONNX concepts (**Open Neural Network Exchange**).
 It shows how it is used with examples in Python and finally explains

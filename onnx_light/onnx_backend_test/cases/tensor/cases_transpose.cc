@@ -5,6 +5,7 @@
 #include "onnx_backend_test/cases/tensor/include_tensor_cases.h"
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
+#include "onnx_kernels/random.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
@@ -60,6 +61,26 @@ void RegisterTransposeCases(std::vector<TestCase> &registry) {
     const Tensor transposed = transpose_kernel(data, perm);
     Expect(MakeTransposeNode(perm), {data}, {transposed}, "test_cc_transpose_permuted_axes_2",
            {opset}, "backend-test", registry);
+  }
+
+  // Mirror upstream ``Transpose.export_all_permutations``: iterate over every
+  // permutation of the 3-axis input shape ``(2, 3, 4)``. The upstream test
+  // suite registers six cases ``transpose_all_permutations_{0..5}``. Each
+  // light case must contain that suffix as a substring of its name so the
+  // backend-test name comparison treats them as covered.
+  {
+    const std::vector<int64_t> shape{2, 3, 4};
+    const Tensor data = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/41));
+    const std::vector<std::vector<int64_t>> all_perms = {
+        {0, 1, 2}, {0, 2, 1}, {1, 0, 2}, {1, 2, 0}, {2, 0, 1}, {2, 1, 0},
+    };
+    for (size_t i = 0; i < all_perms.size(); ++i) {
+      const std::vector<int64_t> &perm = all_perms[i];
+      const Tensor transposed = transpose_kernel(data, perm);
+      const std::string name = "test_cc_transpose_all_permutations_" + std::to_string(i);
+      Expect(MakeTransposeNode(perm), {data}, {transposed}, name, {opset}, "backend-test",
+             registry);
+    }
   }
 }
 

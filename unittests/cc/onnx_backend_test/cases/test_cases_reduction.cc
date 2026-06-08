@@ -502,21 +502,22 @@ TEST(BackendTestCase, ArgMaxAllUpstreamCasesRegistered) {
   const auto cases = CollectTestCases();
   // Shared input [[2, 2], [3, 10]]: argmax along axis=1 is [0, 1]; along
   // axis=0 (default) is [1, 1].
-  CheckArgReduceCasePresent(cases, "test_cc_argmax_no_keepdims", "ArgMax", {2}, {0, 1});
-  CheckArgReduceCasePresent(cases, "test_cc_argmax_keepdims", "ArgMax", {2, 1}, {0, 1});
-  CheckArgReduceCasePresent(cases, "test_cc_argmax_default_axis", "ArgMax", {1, 2}, {1, 1});
-  CheckArgReduceCasePresent(cases, "test_cc_argmax_negative_axis_keepdims", "ArgMax", {2, 1},
-                            {0, 1});
+  CheckArgReduceCasePresent(cases, "test_cc_argmax_no_keepdims_example", "ArgMax", {2}, {0, 1});
+  CheckArgReduceCasePresent(cases, "test_cc_argmax_keepdims_example", "ArgMax", {2, 1}, {0, 1});
+  CheckArgReduceCasePresent(cases, "test_cc_argmax_default_axis_example", "ArgMax", {1, 2}, {1, 1});
+  CheckArgReduceCasePresent(cases, "test_cc_argmax_negative_axis_keepdims_example", "ArgMax",
+                            {2, 1}, {0, 1});
 
   // select_last_index=1 with the tie at (row 0, col 0) and (row 0, col 1):
   // axis=1 yields [1, 1] (the last index of the tied value).
-  CheckArgReduceCasePresent(cases, "test_cc_argmax_no_keepdims_select_last_index", "ArgMax", {2},
-                            {1, 1});
-  CheckArgReduceCasePresent(cases, "test_cc_argmax_keepdims_select_last_index", "ArgMax", {2, 1},
-                            {1, 1});
-  CheckArgReduceCasePresent(cases, "test_cc_argmax_default_axis_select_last_index", "ArgMax",
-                            {1, 2}, {1, 1});
-  CheckArgReduceCasePresent(cases, "test_cc_argmax_negative_axis_keepdims_select_last_index",
+  CheckArgReduceCasePresent(cases, "test_cc_argmax_no_keepdims_example_select_last_index", "ArgMax",
+                            {2}, {1, 1});
+  CheckArgReduceCasePresent(cases, "test_cc_argmax_keepdims_example_select_last_index", "ArgMax",
+                            {2, 1}, {1, 1});
+  CheckArgReduceCasePresent(cases, "test_cc_argmax_default_axis_example_select_last_index",
+                            "ArgMax", {1, 2}, {1, 1});
+  CheckArgReduceCasePresent(cases,
+                            "test_cc_argmax_negative_axis_keepdims_example_select_last_index",
                             "ArgMax", {2, 1}, {1, 1});
 }
 
@@ -524,24 +525,25 @@ TEST(BackendTestCase, ArgMinAllUpstreamCasesRegistered) {
   const auto cases = CollectTestCases();
   // Shared input [[2, 2], [3, 10]]: argmin along axis=1 is [0, 0] (first
   // occurrence); along axis=0 (default) is [0, 0].
-  CheckArgReduceCasePresent(cases, "test_cc_argmin_no_keepdims", "ArgMin", {2}, {0, 0});
-  CheckArgReduceCasePresent(cases, "test_cc_argmin_keepdims", "ArgMin", {2, 1}, {0, 0});
-  CheckArgReduceCasePresent(cases, "test_cc_argmin_default_axis", "ArgMin", {1, 2}, {0, 0});
-  CheckArgReduceCasePresent(cases, "test_cc_argmin_negative_axis_keepdims", "ArgMin", {2, 1},
-                            {0, 0});
+  CheckArgReduceCasePresent(cases, "test_cc_argmin_no_keepdims_example", "ArgMin", {2}, {0, 0});
+  CheckArgReduceCasePresent(cases, "test_cc_argmin_keepdims_example", "ArgMin", {2, 1}, {0, 0});
+  CheckArgReduceCasePresent(cases, "test_cc_argmin_default_axis_example", "ArgMin", {1, 2}, {0, 0});
+  CheckArgReduceCasePresent(cases, "test_cc_argmin_negative_axis_keepdims_example", "ArgMin",
+                            {2, 1}, {0, 0});
 
   // select_last_index=1: axis=1 yields [1, 0] — row 0 ties at 2 so the last
   // occurrence is at index 1; row 1 has a unique min at index 0.
-  CheckArgReduceCasePresent(cases, "test_cc_argmin_no_keepdims_select_last_index", "ArgMin", {2},
-                            {1, 0});
-  CheckArgReduceCasePresent(cases, "test_cc_argmin_keepdims_select_last_index", "ArgMin", {2, 1},
-                            {1, 0});
+  CheckArgReduceCasePresent(cases, "test_cc_argmin_no_keepdims_example_select_last_index", "ArgMin",
+                            {2}, {1, 0});
+  CheckArgReduceCasePresent(cases, "test_cc_argmin_keepdims_example_select_last_index", "ArgMin",
+                            {2, 1}, {1, 0});
   // Default axis=0 with select_last_index: column 0 ties at 2 (row 0) vs 3
   // (row 1) -> unique min row 0; column 1 ties at 2 (row 0) vs 10 (row 1)
   // -> unique min row 0 -> [[0, 0]].
-  CheckArgReduceCasePresent(cases, "test_cc_argmin_default_axis_select_last_index", "ArgMin",
-                            {1, 2}, {0, 0});
-  CheckArgReduceCasePresent(cases, "test_cc_argmin_negative_axis_keepdims_select_last_index",
+  CheckArgReduceCasePresent(cases, "test_cc_argmin_default_axis_example_select_last_index",
+                            "ArgMin", {1, 2}, {0, 0});
+  CheckArgReduceCasePresent(cases,
+                            "test_cc_argmin_negative_axis_keepdims_example_select_last_index",
                             "ArgMin", {2, 1}, {1, 0});
 }
 

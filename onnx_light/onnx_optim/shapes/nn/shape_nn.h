@@ -515,6 +515,32 @@ void ComputeShapeAttention(ShapesContext &ctx, const NodeProto &node, const char
 void ComputeShapeRotaryEmbedding(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor`s of a ``CausalConvWithState``
+ * node (since opset 27 in the ``ai.onnx`` domain) and stores them in ``ctx``.
+ *
+ * The first output has the same shape and dtype as the input. The second
+ * output ``present_state`` has shape ``(batch_size, channels, k - 1)`` where
+ * ``k`` is the kernel size (``weight.shape[2]``).
+ *
+ * @param ctx     In/out context. Must already contain entries for ``input``
+ *                and ``weight``; on return it also contains entries for
+ *                ``node.output(0)`` and ``node.output(1)``.
+ * @param node    The ``CausalConvWithState`` ``NodeProto``. ``node.op_type()``
+ *                must be ``"CausalConvWithState"`` and ``node`` must declare
+ *                two outputs.
+ * @param input   Name of the input data value (rank-3) to read from ``ctx``.
+ * @param weight  Name of the weight value (rank-3) to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"CausalConvWithState"``, if ``node`` declares less than two
+ *         outputs, or if the input/weight ranks are not 3.
+ * @throws std::out_of_range     if ``input`` or ``weight`` is not present
+ *                               in ``ctx``.
+ */
+void ComputeShapeCausalConvWithState(ShapesContext &ctx, const NodeProto &node, const char *input,
+                                     const char *weight);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``DeformConv`` node and
  * stores it in ``ctx``.
  *

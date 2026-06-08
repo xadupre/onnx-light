@@ -65,6 +65,7 @@ ONNX_OPTIM_SHAPE_INFERENCE_OPS: frozenset[tuple[str, str]] = frozenset(
         ("ai.onnx", "BlackmanWindow"),
         ("ai.onnx", "Cast"),
         ("ai.onnx", "CastLike"),
+        ("ai.onnx", "CausalConvWithState"),
         ("ai.onnx", "Ceil"),
         ("ai.onnx", "Celu"),
         ("ai.onnx", "CenterCropPad"),

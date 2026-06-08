@@ -44,12 +44,27 @@ TEST(BackendTestCase, FlexAttentionCasesArePresent) {
   const TestCase *gqa = FindCase(cases, "test_cc_flex_attention_gqa");
   const TestCase *prob_mod_id = FindCase(cases, "test_cc_flex_attention_prob_mod_identity");
   const TestCase *prob_mod_scale = FindCase(cases, "test_cc_flex_attention_prob_mod_scale_half");
+  const TestCase *scaled = FindCase(cases, "test_cc_flex_attention_scaled");
+  const TestCase *diff_heads = FindCase(cases, "test_cc_flex_attention_diff_head_sizes");
+  const TestCase *score_mod = FindCase(cases, "test_cc_flex_attention_score_mod");
+  const TestCase *causal = FindCase(cases, "test_cc_flex_attention_causal_mask");
+  const TestCase *soft_cap = FindCase(cases, "test_cc_flex_attention_soft_cap");
+  const TestCase *rel_pos = FindCase(cases, "test_cc_flex_attention_relative_positional");
   ASSERT_NE(basic, nullptr);
   ASSERT_NE(gqa, nullptr);
   ASSERT_NE(prob_mod_id, nullptr);
   ASSERT_NE(prob_mod_scale, nullptr);
+  ASSERT_NE(scaled, nullptr);
+  ASSERT_NE(diff_heads, nullptr);
+  ASSERT_NE(score_mod, nullptr);
+  ASSERT_NE(causal, nullptr);
+  ASSERT_NE(soft_cap, nullptr);
+  ASSERT_NE(rel_pos, nullptr);
 
-  for (const TestCase *tc : {basic, gqa, prob_mod_id, prob_mod_scale}) {
+  const std::vector<const TestCase *> all = {basic,    gqa,        prob_mod_id, prob_mod_scale,
+                                             scaled,   diff_heads, score_mod,   causal,
+                                             soft_cap, rel_pos};
+  for (const TestCase *tc : all) {
     const GraphProto &graph = tc->model.ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
@@ -87,10 +102,23 @@ TEST(BackendTestCase, FlexAttentionCasesArePresent) {
   EXPECT_EQ(basic->data_sets[0].outputs[0].shape, (std::vector<int64_t>{1, 2, 2, 2}));
   // GQA case output shape matches (B, Hq, Lq, Dv) = (1, 4, 2, 2).
   EXPECT_EQ(gqa->data_sets[0].outputs[0].shape, (std::vector<int64_t>{1, 4, 2, 2}));
+  // diff_head_sizes case output shape matches (B, Hq, Lq, Dv) = (1, 2, 2, 3).
+  EXPECT_EQ(diff_heads->data_sets[0].outputs[0].shape, (std::vector<int64_t>{1, 2, 2, 3}));
 
-  // The basic / gqa cases must not carry any modifier attributes.
+  // The basic / gqa / diff_head_sizes cases must not carry any modifier
+  // attributes.
   EXPECT_EQ(basic->model.ref_graph().ref_node()[0].ref_attribute().size(), 0u);
   EXPECT_EQ(gqa->model.ref_graph().ref_node()[0].ref_attribute().size(), 0u);
+  EXPECT_EQ(diff_heads->model.ref_graph().ref_node()[0].ref_attribute().size(), 0u);
+
+  // The scaled case carries exactly one FLOAT attribute named ``scale``.
+  {
+    const NodeProto &node = scaled->model.ref_graph().ref_node()[0];
+    ASSERT_EQ(node.ref_attribute().size(), 1u);
+    const AttributeProto &attr = node.ref_attribute()[0];
+    EXPECT_EQ(std::string(attr.ref_name().data(), attr.ref_name().size()), "scale");
+    EXPECT_EQ(attr.type(), AttributeProto::AttributeType::FLOAT);
+  }
 
   // Both prob_mod cases must carry exactly one GRAPH attribute named
   // ``prob_mod``, with a structurally non-empty body (``node_size() > 0``)
@@ -128,6 +156,36 @@ TEST(BackendTestCase, FlexAttentionCasesArePresent) {
     ASSERT_EQ(n, prob_mod_scale->data_sets[0].outputs[0].element_count());
     for (int64_t i = 0; i < n; ++i) {
       EXPECT_FLOAT_EQ(modified[i], 0.5f * baseline[i]);
+    }
+  }
+
+  // The four score_mod cases must carry exactly one GRAPH attribute named
+  // ``score_mod``, with a structurally non-empty body so the function-body
+  // builder does not skip it as an identity.
+  for (const TestCase *tc : {score_mod, causal, soft_cap, rel_pos}) {
+    const NodeProto &node = tc->model.ref_graph().ref_node()[0];
+    ASSERT_EQ(node.ref_attribute().size(), 1u) << tc->name;
+    const AttributeProto &attr = node.ref_attribute()[0];
+    EXPECT_EQ(std::string(attr.ref_name().data(), attr.ref_name().size()), "score_mod") << tc->name;
+    EXPECT_EQ(attr.type(), AttributeProto::AttributeType::GRAPH) << tc->name;
+    ASSERT_TRUE(attr.has_g()) << tc->name;
+    const GraphProto &body = attr.ref_g();
+    ASSERT_EQ(body.ref_input().size(), 1u) << tc->name;
+    ASSERT_EQ(body.ref_output().size(), 1u) << tc->name;
+    EXPECT_GT(body.ref_node().size(), 0u) << tc->name;
+  }
+
+  // The score_mod-bias case adds a constant to every score, which is a
+  // softmax no-op, so the expected output must match the un-modified
+  // baseline elementwise.
+  ASSERT_EQ(score_mod->data_sets[0].outputs[0].shape, basic->data_sets[0].outputs[0].shape);
+  {
+    const float *baseline = basic->data_sets[0].outputs[0].AsFloat();
+    const float *modified = score_mod->data_sets[0].outputs[0].AsFloat();
+    const int64_t n = basic->data_sets[0].outputs[0].element_count();
+    ASSERT_EQ(n, score_mod->data_sets[0].outputs[0].element_count());
+    for (int64_t i = 0; i < n; ++i) {
+      EXPECT_FLOAT_EQ(modified[i], baseline[i]);
     }
   }
 }

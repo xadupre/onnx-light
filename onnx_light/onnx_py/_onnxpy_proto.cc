@@ -169,7 +169,7 @@ bool HasBorrowedRawData(const ModelProto &model) {
 
 #define PYFIELD_OPTIONAL_PROTO(cls, name)                                                          \
   def_prop_rw(                                                                                     \
-      #name, [](cls & self) -> cls::name##_t * {                                                   \
+      #name, [](cls & self)->cls::name##_t * {                                                     \
         if (!self.name##_.has_value()) {                                                           \
           if (self.has_oneof_##name())                                                             \
             return nullptr;                                                                        \
@@ -189,7 +189,7 @@ bool HasBorrowedRawData(const ModelProto &model) {
       nb::rv_policy::reference_internal, cls::DOC_##name)                                          \
       .def("has_" #name, &cls::has_##name, "Tells if '" #name "' has a value.")                    \
       .def(                                                                                        \
-          "add_" #name, [](cls & self) -> cls::name##_t & {                                        \
+          "add_" #name, [](cls & self)->cls::name##_t & {                                          \
             self.name##_.set_empty_value();                                                        \
             return *self.name##_;                                                                  \
           },                                                                                       \
@@ -214,6 +214,12 @@ bool HasBorrowedRawData(const ModelProto &model) {
 
 template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> &name_inst) {
   name_inst
+      .def(
+          "Clear",
+          [](cls &self) {
+            self.CopyFrom(cls());
+          },
+          "Clears the object.")
       .def(
           "ParseFromString",
           [](cls &self, nb::bytes data, nb::object options) {

@@ -14,186 +14,26 @@
 #include <utility>
 #include <vector>
 
+#include "onnx_kernels/kernel_dispatch_table.h"
 #include "onnx_kernels/kernels/controlflow/include_controlflow_kernels.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
+#include "onnx_kernels/node_helpers.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 
 namespace {
 
-// Canonical name of the default ONNX domain. Kept locally so this
-// translation unit does not depend on onnx_op or onnx_optim just to
-// reach the same constant.
-constexpr const char *kDefaultOnnxDomain = "ai.onnx";
-
-// Normalises the empty default ONNX domain to ``ai.onnx`` so that
-// dispatch-table lookups always use a canonical key.
-std::string NormaliseDispatchDomain(const NodeProto &node) {
-  const std::string domain = node.domain().as_string();
-  return domain.empty() ? std::string(kDefaultOnnxDomain) : domain;
-}
-
-// Looks up an input by name in the tensor map; throws a descriptive
-// std::invalid_argument when the entry is missing so the caller sees
-// the offending op_type/input name pair.
-const Tensor &GetInput(const NodeProto &node, int index, const TensorMap &tensors) {
-  const std::string name = node.input(index).as_string();
-  if (name.empty()) {
-    throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() + "' input #" +
-                                std::to_string(index) + " is unset (empty name).");
-  }
-  auto it = tensors.find(name);
-  if (it == tensors.end()) {
-    throw std::invalid_argument("RunNode: input '" + name + "' of op '" +
-                                node.op_type().as_string() + "' is missing from the tensor map.");
-  }
-  return it->second;
-}
-
-// Inserts an output tensor in the map under the name declared by
-// ``node.output(index)`` and tags it so downstream nodes can find it
-// by name.
-void SetOutput(const NodeProto &node, int index, Tensor result, TensorMap &tensors) {
-  const std::string name = node.output(index).as_string();
-  if (name.empty()) {
-    throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() + "' output #" +
-                                std::to_string(index) + " is unset (empty name).");
-  }
-  result.name = name;
-  tensors[name] = std::move(result);
-}
-
-// Validates the node declares exactly ``expected`` inputs (matching
-// the per-operator class signature) and rejects unsupported variadic
-// shapes early.
-void RequireInputCount(const NodeProto &node, int expected) {
-  if (static_cast<int>(node.input_size()) != expected) {
-    throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() + "' expects " +
-                                std::to_string(expected) + " input(s), got " +
-                                std::to_string(node.input_size()) + ".");
-  }
-}
-
-// Validates the node declares exactly ``expected`` outputs.
-void RequireOutputCount(const NodeProto &node, int expected) {
-  if (static_cast<int>(node.output_size()) != expected) {
-    throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() + "' expects " +
-                                std::to_string(expected) + " output(s), got " +
-                                std::to_string(node.output_size()) + ".");
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Trampoline factories. Each helper returns a NodeKernelFn that:
-//   * validates the node's input/output count,
-//   * reads the typed inputs from ``rt.tensors`` by name,
-//   * constructs the kernel with ``rt.kernel_ctx``,
-//   * stores the produced output back in ``rt.tensors`` by name.
-// Centralising the boilerplate keeps the dispatch table compact.
-// ---------------------------------------------------------------------------
-
-template <class KernelT> NodeKernelFn MakeUnaryTrampoline() {
-  return [](const NodeProto &node, RuntimeContext &rt) {
-    RequireInputCount(node, 1);
-    RequireOutputCount(node, 1);
-    const Tensor &x = GetInput(node, 0, rt.tensors());
-    KernelT kernel(rt.kernel_ctx());
-    SetOutput(node, 0, kernel(x), rt.tensors());
-  };
-}
-
-template <class KernelT> NodeKernelFn MakeBinaryTrampoline() {
-  return [](const NodeProto &node, RuntimeContext &rt) {
-    RequireInputCount(node, 2);
-    RequireOutputCount(node, 1);
-    const Tensor &x = GetInput(node, 0, rt.tensors());
-    const Tensor &y = GetInput(node, 1, rt.tensors());
-    KernelT kernel(rt.kernel_ctx());
-    SetOutput(node, 0, kernel(x, y), rt.tensors());
-  };
-}
-
-} // namespace
-
-const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
-  static const std::unordered_map<std::string, NodeKernelFn> table = {
-      // Element-wise unary math.
-      {"ai.onnx:Abs", MakeUnaryTrampoline<kernel::Abs>()},
-      {"ai.onnx:Neg", MakeUnaryTrampoline<kernel::Neg>()},
-      // Element-wise binary math with NumPy-style broadcasting.
-      {"ai.onnx:Add", MakeBinaryTrampoline<kernel::Add>()},
-      {"ai.onnx:Sub", MakeBinaryTrampoline<kernel::Sub>()},
-      {"ai.onnx:Mul", MakeBinaryTrampoline<kernel::Mul>()},
-      {"ai.onnx:Div", MakeBinaryTrampoline<kernel::Div>()},
-  };
-  return table;
-}
-
-namespace {
-
-// Builds the canonical "<domain>:<op_type>:<overload>" key used to
-// look up model-local FunctionProto definitions in
-// ``RuntimeContext::functions``. The default ONNX domain (empty
-// ``NodeProto::domain``) is normalised to ``ai.onnx``.
-std::string FunctionLookupKey(const std::string &domain, const std::string &op_type,
-                              const std::string &overload) {
-  const std::string d = domain.empty() ? std::string(kDefaultOnnxDomain) : domain;
-  return d + ":" + op_type + ":" + overload;
-}
-
-const AttributeProto *FindAttribute(const NodeProto &node, const std::string &name) {
-  for (size_t i = 0; i < node.attribute().size(); ++i) {
-    const AttributeProto &attr = node.attribute()[i];
-    if (attr.name().as_string() == name) {
-      return &attr;
-    }
-  }
-  return nullptr;
-}
-
-const GraphProto &GetRequiredGraphAttribute(const NodeProto &node, const std::string &name) {
-  const AttributeProto *attr = FindAttribute(node, name);
-  if (attr == nullptr) {
-    throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() + "' is missing '" +
-                                name + "' graph attribute.");
-  }
-  if (attr->type() != AttributeProto::AttributeType::GRAPH) {
-    throw std::invalid_argument("RunNode: attribute '" + name + "' of op '" +
-                                node.op_type().as_string() + "' must be a GRAPH.");
-  }
-  return attr->ref_g();
-}
-
-int64_t GetAttributeIntOrDefault(const NodeProto &node, const std::string &name, int64_t fallback) {
-  const AttributeProto *attr = FindAttribute(node, name);
-  if (attr == nullptr) {
-    return fallback;
-  }
-  if (attr->type() != AttributeProto::AttributeType::INT) {
-    throw std::invalid_argument("RunNode: attribute '" + name + "' of op '" +
-                                node.op_type().as_string() + "' must be an INT.");
-  }
-  return attr->i();
-}
-
-std::vector<int64_t> GetAttributeIntsOrDefault(const NodeProto &node, const std::string &name,
-                                               const std::vector<int64_t> &fallback) {
-  const AttributeProto *attr = FindAttribute(node, name);
-  if (attr == nullptr) {
-    return fallback;
-  }
-  if (attr->type() != AttributeProto::AttributeType::INTS) {
-    throw std::invalid_argument("RunNode: attribute '" + name + "' of op '" +
-                                node.op_type().as_string() + "' must be INTS.");
-  }
-  std::vector<int64_t> values;
-  values.reserve(attr->ints().size());
-  for (size_t i = 0; i < attr->ints().size(); ++i) {
-    values.push_back(attr->ints()[i]);
-  }
-  return values;
-}
+using detail::FindAttribute;
+using detail::GetAttributeIntOrDefault;
+using detail::GetAttributeIntsOrDefault;
+using detail::GetInput;
+using detail::GetRequiredGraphAttribute;
+using detail::kDefaultOnnxDomain;
+using detail::NormaliseDispatchDomain;
+using detail::RequireInputCount;
+using detail::RequireOutputCount;
+using detail::SetOutput;
 
 int64_t ParseInt64Scalar(const Tensor &t, const std::string &where) {
   if (t.data_type != DataType::INT64 || t.element_count() != 1) {
@@ -235,6 +75,20 @@ int64_t Product(const std::vector<int64_t> &shape, size_t begin, size_t end,
     p = CheckedMulInt64(p, shape[i], where);
   }
   return p;
+}
+
+} // namespace
+
+namespace {
+
+// Builds the canonical "<domain>:<op_type>:<overload>" key used to
+// look up model-local FunctionProto definitions in
+// ``RuntimeContext::functions``. The default ONNX domain (empty
+// ``NodeProto::domain``) is normalised to ``ai.onnx``.
+std::string FunctionLookupKey(const std::string &domain, const std::string &op_type,
+                              const std::string &overload) {
+  const std::string d = domain.empty() ? std::string(kDefaultOnnxDomain) : domain;
+  return d + ":" + op_type + ":" + overload;
 }
 
 } // namespace

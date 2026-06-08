@@ -21,6 +21,9 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(ONNX_LIGHT_BUILD_TESTS "Build C++ unit tests." OFF)
 option(ONNX_LIGHT_BUILD_BENCHMARKS "Build C++ benchmarks." OFF)
+option(ONNX_LIGHT_BUILD_FUZZERS
+    "Build libFuzzer-instrumented C++ fuzz harnesses (fuzz/fuzz_*.cc). Requires Clang and adds -fsanitize=fuzzer,address."
+    OFF)
 option(ONNX_LIGHT_BENCH_GPROF "Compile benchmarks with -pg for gprof profiling." OFF)
 option(ONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX
     "Fetch and build upstream onnx (protobuf-based) to enable the side-by-side BENCH_HAS_UPSTREAM_ONNX comparison block in bench_load_file."
@@ -554,6 +557,58 @@ if(ONNX_LIGHT_BUILD_TESTS OR ONNX_LIGHT_BUILD_BENCHMARKS)
         "BENCH_HAS_UPSTREAM_ONNX will NOT be defined for bench_load_file.")
     endif()
   endforeach()
+endif()
+
+# Builds the libFuzzer-instrumented C++ harnesses under fuzz/.
+#
+# Each fuzz/fuzz_<name>.cc file exposes the standard libFuzzer entry
+# point ``LLVMFuzzerTestOneInput``. The companion fuzz/make_seed_corpus.cc
+# is built as a plain executable (no fuzzer instrumentation) and emits
+# seed inputs for OSS-Fuzz / local libFuzzer runs.
+#
+# Requires Clang because libFuzzer (-fsanitize=fuzzer,...) ships with
+# Clang. ``-fsanitize=fuzzer,address`` is the standard OSS-Fuzz
+# instrumentation; users wanting MSan/UBSan can set
+# ``ONNX_LIGHT_FUZZER_SANITIZERS`` to override the sanitizer list (the
+# ``fuzzer`` sanitizer is always added automatically).
+if(ONNX_LIGHT_BUILD_FUZZERS)
+  if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    message(FATAL_ERROR
+      "ONNX_LIGHT_BUILD_FUZZERS=ON requires Clang (CMAKE_CXX_COMPILER_ID is '${CMAKE_CXX_COMPILER_ID}'). "
+      "Re-run cmake with CC=clang CXX=clang++.")
+  endif()
+
+  set(ONNX_LIGHT_FUZZER_SANITIZERS "address"
+      CACHE STRING "Comma-separated sanitizer list for fuzz harnesses (in addition to 'fuzzer').")
+
+  file(GLOB ONNX_LIGHT_FUZZ_SOURCES CONFIGURE_DEPENDS
+       "${CMAKE_CURRENT_SOURCE_DIR}/fuzz/fuzz_*.cc")
+
+  foreach(fuzz_source IN LISTS ONNX_LIGHT_FUZZ_SOURCES)
+    get_filename_component(fuzz_target "${fuzz_source}" NAME_WE)
+    add_executable(${fuzz_target} "${fuzz_source}")
+    target_include_directories(${fuzz_target} PRIVATE
+        "${ROOT_INCLUDE_PATH}"
+        "${ONNX_PROTO_PATH}"
+    )
+    target_link_libraries(${fuzz_target} PRIVATE lib_onnx_lib lib_onnx_optim)
+    target_compile_options(${fuzz_target} PRIVATE
+        "-fsanitize=fuzzer-no-link,${ONNX_LIGHT_FUZZER_SANITIZERS}")
+    target_link_options(${fuzz_target} PRIVATE
+        "-fsanitize=fuzzer,${ONNX_LIGHT_FUZZER_SANITIZERS}")
+    set_property(TARGET ${fuzz_target} PROPERTY FOLDER "Fuzzers")
+  endforeach()
+
+  # Seed-corpus generator: a plain (non-fuzzer-instrumented) executable
+  # that writes serialized ModelProtos into the requested directories so
+  # OSS-Fuzz / libFuzzer can use them as starting inputs.
+  add_executable(make_seed_corpus "${CMAKE_CURRENT_SOURCE_DIR}/fuzz/make_seed_corpus.cc")
+  target_include_directories(make_seed_corpus PRIVATE
+      "${ROOT_INCLUDE_PATH}"
+      "${ONNX_PROTO_PATH}"
+  )
+  target_link_libraries(make_seed_corpus PRIVATE lib_onnx_lib)
+  set_property(TARGET make_seed_corpus PROPERTY FOLDER "Fuzzers")
 endif()
 
 if(ONNX_LIGHT_BUILD_PYTHON)

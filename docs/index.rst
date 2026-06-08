@@ -206,6 +206,12 @@ Load a model with parallel tensor parsing:
 
 Source code: `https://github.com/xadupre/onnx-light <https://github.com/xadupre/onnx-light>`_
 
+.. note::
+
+    ``onnx-light`` started from the upstream ONNX pull request
+    `onnx/onnx#7208 <https://github.com/onnx/onnx/pull/7208>`_, which is the
+    initial code base from which this project diverged.
+
 .. toctree::
     :maxdepth: 1
     :caption: Contents

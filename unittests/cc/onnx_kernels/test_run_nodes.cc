@@ -62,6 +62,45 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx:Div"), table.end());
   EXPECT_NE(table.find("ai.onnx:Neg"), table.end());
   EXPECT_NE(table.find("ai.onnx:Abs"), table.end());
+
+  // Spot-check the extended registration set covering the rest of the
+  // unary / binary / variadic / attribute-driven math + logical
+  // kernels (see ``onnx_kernels/kernel_dispatch_table.cc``).
+  // Unary math, no attributes.
+  EXPECT_NE(table.find("ai.onnx:Cos"), table.end());
+  EXPECT_NE(table.find("ai.onnx:Erf"), table.end());
+  EXPECT_NE(table.find("ai.onnx:Sigmoid"), table.end());
+  EXPECT_NE(table.find("ai.onnx:Tanh"), table.end());
+  // Binary math, no attributes.
+  EXPECT_NE(table.find("ai.onnx:MatMul"), table.end());
+  EXPECT_NE(table.find("ai.onnx:Pow"), table.end());
+  // Variadic reducers.
+  EXPECT_NE(table.find("ai.onnx:Sum"), table.end());
+  EXPECT_NE(table.find("ai.onnx:Max"), table.end());
+  EXPECT_NE(table.find("ai.onnx:Min"), table.end());
+  EXPECT_NE(table.find("ai.onnx:Mean"), table.end());
+  // Attribute-driven kernels.
+  EXPECT_NE(table.find("ai.onnx:Softmax"), table.end());
+  EXPECT_NE(table.find("ai.onnx:LeakyRelu"), table.end());
+  EXPECT_NE(table.find("ai.onnx:HardSigmoid"), table.end());
+  EXPECT_NE(table.find("ai.onnx:Selu"), table.end());
+  EXPECT_NE(table.find("ai.onnx:Gelu"), table.end());
+  EXPECT_NE(table.find("ai.onnx:Mod"), table.end());
+  EXPECT_NE(table.find("ai.onnx:Clip"), table.end());
+  EXPECT_NE(table.find("ai.onnx:IsInf"), table.end());
+  EXPECT_NE(table.find("ai.onnx:BitShift"), table.end());
+  // Logical / bitwise kernels.
+  EXPECT_NE(table.find("ai.onnx:And"), table.end());
+  EXPECT_NE(table.find("ai.onnx:Or"), table.end());
+  EXPECT_NE(table.find("ai.onnx:Xor"), table.end());
+  EXPECT_NE(table.find("ai.onnx:Not"), table.end());
+  EXPECT_NE(table.find("ai.onnx:Equal"), table.end());
+  EXPECT_NE(table.find("ai.onnx:Greater"), table.end());
+  EXPECT_NE(table.find("ai.onnx:Less"), table.end());
+  EXPECT_NE(table.find("ai.onnx:Where"), table.end());
+  EXPECT_NE(table.find("ai.onnx:IsNaN"), table.end());
+  EXPECT_NE(table.find("ai.onnx:BitwiseAnd"), table.end());
+  EXPECT_NE(table.find("ai.onnx:BitwiseNot"), table.end());
 }
 
 TEST(RunNodes, RunNodeSingleAdd) {

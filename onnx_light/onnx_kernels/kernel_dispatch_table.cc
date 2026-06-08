@@ -336,10 +336,10 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          RequireOutputCount(node, 1);
          const Tensor &theta = GetInput(node, 0, rt.tensors());
          const Tensor &size = GetInput(node, 1, rt.tensors());
-         kernel::AffineGrid::Attributes attrs;
-         attrs.align_corners = GetAttributeIntOrDefault(node, "align_corners", 0);
-         kernel::AffineGrid k(rt.kernel_ctx());
-         SetOutput(node, 0, k(theta, size, attrs), rt.tensors());
+         kernel::AffineGrid::Attributes affine_grid_attrs;
+         affine_grid_attrs.align_corners = GetAttributeIntOrDefault(node, "align_corners", 0);
+         kernel::AffineGrid affine_grid_kernel(rt.kernel_ctx());
+         SetOutput(node, 0, affine_grid_kernel(theta, size, affine_grid_attrs), rt.tensors());
        }},
 
       // -----------------------------------------------------------------

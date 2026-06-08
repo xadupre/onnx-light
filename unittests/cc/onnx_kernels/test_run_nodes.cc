@@ -215,10 +215,10 @@ TEST(RunNodes, RunNodeAffineGridUsesAttributes) {
   rt.tensors()["size"] = Tensor::FromInt64("size", {4}, {1, 1, 2, 2});
 
   NodeProto node = MakeNode("AffineGrid", {"theta", "size"}, {"grid"});
-  AttributeProto *align_corners = node.add_attribute();
-  align_corners->set_name("align_corners");
-  align_corners->set_type(AttributeProto::AttributeType::INT);
-  align_corners->set_i(1);
+  AttributeProto *align_corners_attr = node.add_attribute();
+  align_corners_attr->set_name("align_corners");
+  align_corners_attr->set_type(AttributeProto::AttributeType::INT);
+  align_corners_attr->set_i(1);
 
   RunNode(node, rt);
 

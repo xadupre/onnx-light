@@ -53,7 +53,6 @@ Python API
     :maxdepth: 1
     :caption: Extra tools
 
-    fuzz
     reference
     tools/index
 

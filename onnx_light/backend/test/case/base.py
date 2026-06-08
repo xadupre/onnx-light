@@ -306,6 +306,7 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
         int(onnx.TensorProto.UINT32): np.uint32,
         int(onnx.TensorProto.UINT64): np.uint64,
         int(onnx.TensorProto.FLOAT16): np.float16,
+        int(onnx.TensorProto.BFLOAT16): _ml_dtypes.bfloat16,
         int(onnx.TensorProto.FLOAT8E4M3FN): _ml_dtypes.float8_e4m3fn,
         int(onnx.TensorProto.FLOAT8E4M3FNUZ): _ml_dtypes.float8_e4m3fnuz,
         int(onnx.TensorProto.FLOAT8E5M2): _ml_dtypes.float8_e5m2,

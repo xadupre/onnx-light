@@ -270,14 +270,18 @@ public:
 };
 
 /// Reference implementation of the ONNX ``Range`` operator (since opset 11
-/// in the ``ai.onnx`` domain). Generates a 1-D tensor with values
-/// ``[start, start + delta, start + 2*delta, ...]`` up to (but excluding)
-/// ``limit``.
+/// in the ``ai.onnx`` domain, with opset 27 widening the supported types
+/// to include ``FLOAT16``/``BFLOAT16``). Generates a 1-D tensor with
+/// values ``[start, start + delta, start + 2*delta, ...]`` up to (but
+/// excluding) ``limit``.
 ///
 /// The three inputs ``start``, ``limit`` and ``delta`` must all be
 /// scalar tensors of the same element type. Supported element types are
-/// ``FLOAT``, ``DOUBLE``, ``INT16``, ``INT32`` and ``INT64`` (matching
-/// the upstream ``Range`` schema's ``T`` type-constraint).
+/// ``FLOAT``, ``DOUBLE``, ``INT16``, ``INT32``, ``INT64``, ``FLOAT16``
+/// and ``BFLOAT16`` (matching the upstream ``Range`` schema's ``T``
+/// type-constraint at opset 27). For ``FLOAT16`` and ``BFLOAT16`` the
+/// loop accumulator runs in ``float`` (the ``stash_type = 1`` default
+/// introduced at opset 27).
 ///
 /// The number of output elements is
 /// ``max(ceil((limit - start) / delta), 0)``. When the result would be

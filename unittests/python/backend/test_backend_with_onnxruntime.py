@@ -335,6 +335,9 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_maxunpool_export_with_output_shape$",
     r"^test_resize_downsample_scales_linear_align_corners$",
     r"^test_resize_downsample_scales_cubic_align_corners$",
+    # Range opset 27 cases: ONNX Runtime only guarantees support up to opset 26.
+    r"^test_range_float16_type_positive_delta$",
+    r"^test_range_bfloat16_type_positive_delta$",
 ]
 
 TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_REGEX)

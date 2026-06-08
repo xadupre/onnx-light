@@ -505,7 +505,14 @@ bool OptimTensorFromValueInfo(const ValueInfoProto &vi, OptimTensor &out);
 /// :cpp:func:`OptimTensor::ValueAsShape` annotation. Tensors beyond
 /// this threshold are not data-propagated (the dtype, shape and
 /// ``min``/``max`` bounds are still recorded normally).
-inline constexpr int64_t kOptimValueAsShapeMaxElements = 8;
+///
+/// The limit is set to ``kMaxOptimRank + 1`` so that any 1-D integer
+/// constant whose length fits within an :cpp:class:`OptimShape` (i.e., up
+/// to ``kMaxOptimRank`` elements) can have its values propagated. This
+/// enables operators like ``Unsqueeze`` to infer fully-concrete output
+/// shapes even when the ``axes`` input is a large initializer (e.g., rank
+/// 15 or 16 models).
+inline constexpr int64_t kOptimValueAsShapeMaxElements = static_cast<int64_t>(kMaxOptimRank) + 1;
 
 /**
  * Populates ``out`` from a ``TensorProto`` (typically a graph initializer).
@@ -525,10 +532,12 @@ inline constexpr int64_t kOptimValueAsShapeMaxElements = 8;
  *     (no typed field and no ``raw_data``, unsupported dtype, etc.);
  *   - the :cpp:func:`OptimTensor::ValueAsShape` annotation when the
  *     element type is integer, the rank is at most one, and the element
- *     count is strictly less than
- *     :cpp:var:`kOptimValueAsShapeMaxElements`. This mirrors the upstream
- *     ONNX shape-inference data-propagation behaviour for small integer
- *     constants.
+ *     count is strictly less than :cpp:var:`kOptimValueAsShapeMaxElements`
+ *     (``kMaxOptimRank + 1``, i.e., at most ``kMaxOptimRank`` elements).
+ *     This covers every 1-D integer constant whose values fit inside an
+ *     :cpp:class:`OptimShape`, enabling ``Reshape``, ``Unsqueeze``, and
+ *     similar operators to infer fully-concrete output shapes from
+ *     large axes or target-shape initializers.
  *
  * @param tp  ``TensorProto`` to read from.
  * @param out Tensor to overwrite on success.

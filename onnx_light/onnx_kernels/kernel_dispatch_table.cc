@@ -769,7 +769,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const std::vector<std::string> classlabels_strings =
              GetAttributeStringsOrDefault(node, "classlabels_strings", {});
          const bool use_strings = !classlabels_strings.empty();
-         if (use_strings == !classlabels_ints.empty()) {
+         const bool has_ints = !classlabels_ints.empty();
+         if (use_strings == has_ints) {
            throw std::invalid_argument(
                "RunNode: SVMClassifier requires exactly one of 'classlabels_ints' or "
                "'classlabels_strings' to be set.");

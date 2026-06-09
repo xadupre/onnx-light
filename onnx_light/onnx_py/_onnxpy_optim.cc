@@ -539,9 +539,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   // -----------------------------------------------------------------------
   shape_mod.def(
       "compute_shape_node",
-      [](onnx_shapes::ShapesContext &ctx, const NodeProto &node) {
-        onnx_shapes::ComputeShapeNode(ctx, node);
-      },
+      [](onnx_shapes::ShapesContext &ctx, const NodeProto &node) { ctx.ComputeShapeNode(node); },
       nb::arg("ctx"), nb::arg("node"),
       "Dispatches a single ``NodeProto`` to the matching per-operator "
       "``ComputeShape*`` function and stores the resulting output tensor "
@@ -551,7 +549,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   shape_mod.def(
       "check_inputs_available",
       [](const onnx_shapes::ShapesContext &ctx, const NodeProto &node) {
-        onnx_shapes::CheckInputsAvailable(ctx, node);
+        ctx.CheckInputsAvailable(node);
       },
       nb::arg("ctx"), nb::arg("node"),
       "Raises ``ValueError`` if any non-empty input name declared by ``node`` is "
@@ -560,7 +558,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   shape_mod.def(
       "check_outputs_not_available",
       [](const onnx_shapes::ShapesContext &ctx, const NodeProto &node) {
-        onnx_shapes::CheckOutputsNotAvailable(ctx, node);
+        ctx.CheckOutputsNotAvailable(node);
       },
       nb::arg("ctx"), nb::arg("node"),
       "Raises ``ValueError`` if any non-empty output name declared by ``node`` "
@@ -569,7 +567,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   shape_mod.def(
       "compute_shape_graph",
       [](onnx_shapes::ShapesContext &ctx, const GraphProto &graph) {
-        onnx_shapes::ComputeShapeGraph(ctx, graph);
+        ctx.ComputeShapeGraph(graph);
       },
       nb::arg("ctx"), nb::arg("graph"),
       "Seeds ``ctx`` from the initializers and inputs of ``graph`` and then runs "
@@ -579,7 +577,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       "compute_shape_model",
       [](onnx_shapes::ShapesContext &ctx, const ModelProto &model,
          bool prefill_with_value_info_output) {
-        onnx_shapes::ComputeShapeModel(ctx, model, prefill_with_value_info_output);
+        ctx.ComputeShapeModel(model, prefill_with_value_info_output);
       },
       nb::arg("ctx"), nb::arg("model"), nb::arg("prefill_with_value_info_output") = false,
       "Records every ``(domain, version)`` pair from ``model.opset_import`` in "
@@ -591,7 +589,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   shape_mod.def(
       "apply_inferred_shapes_to_graph",
       [](const onnx_shapes::ShapesContext &ctx, GraphProto &graph) {
-        onnx_shapes::ApplyInferredShapesToGraph(ctx, graph);
+        ctx.ApplyInferredShapesToGraph(graph);
       },
       nb::arg("ctx"), nb::arg("graph"),
       "Writes the shape and element-type descriptors stored in ``ctx`` back into "
@@ -600,7 +598,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   shape_mod.def(
       "apply_inferred_shapes_to_model",
       [](const onnx_shapes::ShapesContext &ctx, ModelProto &model) {
-        onnx_shapes::ApplyInferredShapesToModel(ctx, model);
+        ctx.ApplyInferredShapesToModel(model);
       },
       nb::arg("ctx"), nb::arg("model"),
       "Writes the shape and element-type descriptors stored in ``ctx`` back into "

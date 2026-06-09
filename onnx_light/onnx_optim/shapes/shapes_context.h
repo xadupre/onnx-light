@@ -281,6 +281,47 @@ public:
   /// Each element is a ``(lhs, rhs)`` pair with ``lhs < rhs``.
   const std::set<Constraint> &Constraints() const noexcept { return constraints_; }
 
+  // ── Shape-inference entry points ────────────────────────────────────
+  //
+  // The methods below run shape inference on a single ``NodeProto``, a
+  // sequence of nodes, a ``GraphProto`` or an entire ``ModelProto``,
+  // writing the inferred descriptors back into this context. See
+  // ``onnx_optim/shapes/shape_inference.h`` for the full per-method
+  // documentation.
+
+  /// Dispatches a single ``NodeProto`` to the matching per-operator
+  /// ``ComputeShape*`` function and stores the resulting output
+  /// :cpp:class:`OptimTensor` descriptors in ``*this``.
+  void ComputeShapeNode(const NodeProto &node);
+
+  /// Throws ``std::invalid_argument`` if any non-empty input name
+  /// declared by ``node`` is missing from ``*this``.
+  void CheckInputsAvailable(const NodeProto &node) const;
+
+  /// Throws ``std::invalid_argument`` if any non-empty output name
+  /// declared by ``node`` already has an entry in ``*this``.
+  void CheckOutputsNotAvailable(const NodeProto &node) const;
+
+  /// Runs :cpp:func:`ComputeShapeNode` on every node of ``nodes`` in
+  /// order.
+  void ComputeShapes(const utils::RepeatedProtoField<NodeProto> &nodes);
+
+  /// Seeds ``*this`` from the initializers and inputs of ``graph`` and
+  /// then runs :cpp:func:`ComputeShapes` on its nodes.
+  void ComputeShapeGraph(const GraphProto &graph);
+
+  /// Runs shape inference on ``model.graph()``, also recording opset
+  /// versions and local functions from ``model``.
+  void ComputeShapeModel(const ModelProto &model, bool prefill_with_value_info_output = false);
+
+  /// Writes the shape and element-type descriptors stored in ``*this``
+  /// back into ``graph``.
+  void ApplyInferredShapesToGraph(GraphProto &graph) const;
+
+  /// Writes the shape and element-type descriptors stored in ``*this``
+  /// back into ``model.graph()``.
+  void ApplyInferredShapesToModel(ModelProto &model) const;
+
 private:
   static std::string NormaliseDomain(const std::string &domain) {
     return domain.empty() ? std::string(kOnnxDomain) : domain;

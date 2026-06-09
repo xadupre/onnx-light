@@ -77,7 +77,7 @@ TEST(OnnxOptimShapeAdam, PropagatesShapesForSingleOptimizedTensor) {
   SeedTensor(ctx, "V1", onnx_optim::TensorType::kFloat, shape);
   SeedTensor(ctx, "H1", onnx_optim::TensorType::kFloat, shape);
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("X1_new"));
   ASSERT_TRUE(ctx.Has("V1_new"));
@@ -105,7 +105,7 @@ TEST(OnnxOptimShapeAdam, PropagatesShapesForMultipleOptimizedTensors) {
   SeedTensor(ctx, "H1", onnx_optim::TensorType::kFloat, shape_x1);
   SeedTensor(ctx, "H2", onnx_optim::TensorType::kDouble, shape_x2);
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   // Outputs are laid out as [X1_new, X2_new, V1_new, V2_new, H1_new, H2_new]
   // and each output mirrors the dtype and shape of its corresponding input.
@@ -145,7 +145,7 @@ TEST(OnnxOptimShapeAdam, RejectsInputCountNotMultipleOfFour) {
                onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
   }
 
-  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+  EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeAdam, RejectsWrongOutputCount) {
@@ -172,7 +172,7 @@ TEST(OnnxOptimShapeAdam, RejectsWrongOutputCount) {
   SeedTensor(ctx, "V1", onnx_optim::TensorType::kFloat, shape);
   SeedTensor(ctx, "H1", onnx_optim::TensorType::kFloat, shape);
 
-  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+  EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeAdam, DirectCallRejectsWrongOpType) {
@@ -253,7 +253,7 @@ TEST(OnnxOptimShapeAdagrad, PropagatesShapesForSingleOptimizedTensor) {
   SeedTensor(ctx, "G1", onnx_optim::TensorType::kFloat, shape);
   SeedTensor(ctx, "H1", onnx_optim::TensorType::kFloat, shape);
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("X1_new"));
   ASSERT_TRUE(ctx.Has("H1_new"));
@@ -277,7 +277,7 @@ TEST(OnnxOptimShapeAdagrad, PropagatesShapesForMultipleOptimizedTensors) {
   SeedTensor(ctx, "H1", onnx_optim::TensorType::kFloat, shape_x1);
   SeedTensor(ctx, "H2", onnx_optim::TensorType::kDouble, shape_x2);
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   // Outputs are laid out as [X1_new, X2_new, H1_new, H2_new] and each output
   // mirrors the dtype and shape of its corresponding input.
@@ -312,7 +312,7 @@ TEST(OnnxOptimShapeAdagrad, RejectsInputCountNotMultipleOfThree) {
                onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
   }
 
-  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+  EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeAdagrad, RejectsWrongOutputCount) {
@@ -336,7 +336,7 @@ TEST(OnnxOptimShapeAdagrad, RejectsWrongOutputCount) {
   SeedTensor(ctx, "G1", onnx_optim::TensorType::kFloat, shape);
   SeedTensor(ctx, "H1", onnx_optim::TensorType::kFloat, shape);
 
-  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+  EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeAdagrad, DirectCallRejectsWrongOpType) {
@@ -359,7 +359,7 @@ TEST(OnnxOptimShapeMomentum, PropagatesShapesForSingleOptimizedTensor) {
   SeedTensor(ctx, "G1", onnx_optim::TensorType::kFloat, shape);
   SeedTensor(ctx, "V1", onnx_optim::TensorType::kFloat, shape);
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("X1_new"));
   ASSERT_TRUE(ctx.Has("V1_new"));
@@ -383,7 +383,7 @@ TEST(OnnxOptimShapeMomentum, PropagatesShapesForMultipleOptimizedTensors) {
   SeedTensor(ctx, "V1", onnx_optim::TensorType::kFloat, shape_x1);
   SeedTensor(ctx, "V2", onnx_optim::TensorType::kDouble, shape_x2);
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   // Outputs are laid out as [X1_new, X2_new, V1_new, V2_new] and each output
   // mirrors the dtype and shape of its corresponding input.
@@ -418,7 +418,7 @@ TEST(OnnxOptimShapeMomentum, RejectsInputCountNotMultipleOfThree) {
                onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
   }
 
-  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+  EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeMomentum, RejectsWrongOutputCount) {
@@ -442,7 +442,7 @@ TEST(OnnxOptimShapeMomentum, RejectsWrongOutputCount) {
   SeedTensor(ctx, "G1", onnx_optim::TensorType::kFloat, shape);
   SeedTensor(ctx, "V1", onnx_optim::TensorType::kFloat, shape);
 
-  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+  EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeMomentum, DirectCallRejectsWrongOpType) {

@@ -18,8 +18,8 @@
  * @brief Tiny dispatcher that runs the matching backend test
  *        kernel for one ``NodeProto`` or for a list of nodes (an
  *        iterator), mirroring the per-operator
- *        :cpp:func:`onnx_optim::shapes::ComputeShapeNode` /
- *        :cpp:func:`onnx_optim::shapes::ComputeShapes` pair used
+ *        :cpp:func:`onnx_optim::shapes::ShapesContext::ComputeShapeNode` /
+ *        :cpp:func:`onnx_optim::shapes::ShapesContext::ComputeShapes` pair used
  *        by ``onnx_optim`` for shape inference.
  *
  * Inputs and outputs are exchanged through a name-keyed

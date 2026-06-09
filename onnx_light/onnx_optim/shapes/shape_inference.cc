@@ -109,7 +109,7 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
     NodeProto bound_node;
     bound_node.CopyFrom(fn_node);
     attribute_binder.VisitNode(&bound_node);
-    ComputeShapeNode(sub_ctx, bound_node);
+    sub_ctx.ComputeShapeNode(bound_node);
   }
   // Map function outputs back to caller-visible names.
   const int n_outputs = std::min(node.output_size(), func.output_size());
@@ -422,102 +422,102 @@ void PropagateAnchorConstraintsIntoContext(ShapesContext &ctx, const AnchorMap &
 
 } // namespace
 
-void CheckInputsAvailable(const ShapesContext &ctx, const NodeProto &node) {
+void ShapesContext::CheckInputsAvailable(const NodeProto &node) const {
   for (int i = 0; i < node.input_size(); ++i) {
     const std::string name = node.input(i).as_string();
     if (name.empty()) {
       continue;
     }
-    EXT_ENFORCE_INVALID(ctx.Has(name) || ctx.HasSequence(name),
+    EXT_ENFORCE_INVALID(Has(name) || HasSequence(name),
                         "CheckInputsAvailable: input '" + name + "' of op '" +
                             node.op_type().as_string() + "' is missing from ShapesContext.");
   }
 }
 
-void CheckOutputsNotAvailable(const ShapesContext &ctx, const NodeProto &node) {
+void ShapesContext::CheckOutputsNotAvailable(const NodeProto &node) const {
   for (int i = 0; i < node.output_size(); ++i) {
     const std::string name = node.output(i).as_string();
     if (name.empty()) {
       continue;
     }
-    EXT_ENFORCE_INVALID(!ctx.Has(name) && !ctx.HasSequence(name),
+    EXT_ENFORCE_INVALID(!Has(name) && !HasSequence(name),
                         "CheckOutputsNotAvailable: output '" + name + "' of op '" +
                             node.op_type().as_string() + "' is already present in ShapesContext.");
   }
 }
 
-void ComputeShapeNode(ShapesContext &ctx, const NodeProto &node) {
+void ShapesContext::ComputeShapeNode(const NodeProto &node) {
   // Model-local function calls bypass the domain check (their domain
   // is arbitrary) and the op-type dispatch table; they are expanded
   // by recursively running shape inference on the FunctionProto body.
   const std::string op_type = node.op_type().as_string();
   const std::string local_key = LocalFunctionKey(node.domain().as_string(), op_type);
-  if (const FunctionProto *func = ctx.GetLocalFunction(local_key); func != nullptr) {
-    CheckInputsAvailable(ctx, node);
-    CheckOutputsNotAvailable(ctx, node);
-    ExpandLocalFunctionCall(ctx, node, *func);
+  if (const FunctionProto *func = GetLocalFunction(local_key); func != nullptr) {
+    CheckInputsAvailable(node);
+    CheckOutputsNotAvailable(node);
+    ExpandLocalFunctionCall(*this, node, *func);
     return;
   }
   CheckOnnxDomain(node);
-  CheckInputsAvailable(ctx, node);
-  CheckOutputsNotAvailable(ctx, node);
+  CheckInputsAvailable(node);
+  CheckOutputsNotAvailable(node);
   const std::string key = NormaliseDispatchDomain(node) + ":" + op_type;
   const auto &table = DispatchTable();
   auto it = table.find(key);
   EXT_ENFORCE_INVALID(it != table.end(), "ComputeShapeNode: unsupported op_type '" + op_type +
                                              "' in domain '" + NormaliseDispatchDomain(node) +
                                              "'.");
-  it->second(ctx, node);
+  it->second(*this, node);
 }
 
-void ComputeShapes(ShapesContext &ctx, const utils::RepeatedProtoField<NodeProto> &nodes) {
+void ShapesContext::ComputeShapes(const utils::RepeatedProtoField<NodeProto> &nodes) {
   for (int i = 0; i < nodes.size(); ++i) {
-    ComputeShapeNode(ctx, nodes[i]);
+    ComputeShapeNode(nodes[i]);
   }
 }
 
-void ComputeShapeGraph(ShapesContext &ctx, const GraphProto &graph) {
+void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
   // Seed initializers first so that they shadow any duplicate input
   // (an ONNX initializer may appear both in ``graph.initializer()``
   // and ``graph.input()``; the initializer wins).
   for (int i = 0; i < graph.initializer().size(); ++i) {
     const TensorProto &init = graph.initializer()[i];
     const std::string name = init.name().as_string();
-    if (name.empty() || ctx.Has(name)) {
+    if (name.empty() || Has(name)) {
       continue;
     }
     OptimTensor tensor;
     if (OptimTensorFromTensorProto(init, tensor)) {
-      ctx.Set(name, std::move(tensor));
+      Set(name, std::move(tensor));
     }
   }
   // Then seed graph inputs (skipping those already known via the
-  // initializers or via outer-scope entries carried in ``ctx``).
+  // initializers or via outer-scope entries carried in ``*this``).
   for (int i = 0; i < graph.input().size(); ++i) {
     const ValueInfoProto &vi = graph.input()[i];
     const std::string name = vi.name().as_string();
-    if (name.empty() || ctx.Has(name) || ctx.HasSequence(name)) {
+    if (name.empty() || Has(name) || HasSequence(name)) {
       continue;
     }
     OptimTensor tensor;
     if (OptimTensorFromValueInfo(vi, tensor)) {
-      ctx.Set(name, std::move(tensor));
+      Set(name, std::move(tensor));
     }
   }
-  ComputeShapes(ctx, graph.node());
+  ComputeShapes(graph.node());
 }
 
-void ComputeShapeModel(ShapesContext &ctx, const ModelProto &model,
-                       bool prefill_with_value_info_output) {
+void ShapesContext::ComputeShapeModel(const ModelProto &model,
+                                      bool prefill_with_value_info_output) {
   for (int i = 0; i < model.opset_import().size(); ++i) {
     const OperatorSetIdProto &osi = model.opset_import()[i];
-    ctx.SetOpsetVersion(osi.domain().as_string(), static_cast<int>(osi.version()));
+    SetOpsetVersion(osi.domain().as_string(), static_cast<int>(osi.version()));
   }
   // Register every model-local function so node-level dispatch can
   // expand calls to them. The pointers reference entries owned by
   // ``model`` and remain valid for the duration of this call.
   for (int i = 0; i < model.functions().size(); ++i) {
-    ctx.SetLocalFunction(&model.functions()[i]);
+    SetLocalFunction(&model.functions()[i]);
   }
   EXT_ENFORCE_INVALID(model.has_graph(),
                       "ComputeShapeModel: the ModelProto has no graph to run shape inference on.");
@@ -525,14 +525,14 @@ void ComputeShapeModel(ShapesContext &ctx, const ModelProto &model,
   if (prefill_with_value_info_output) {
     anchors = CollectGraphAnchors(model.graph());
   }
-  ComputeShapeGraph(ctx, model.graph());
+  ComputeShapeGraph(model.graph());
   if (prefill_with_value_info_output) {
-    MergeAnchorsIntoContext(ctx, anchors);
-    PropagateAnchorConstraintsIntoContext(ctx, anchors);
+    MergeAnchorsIntoContext(*this, anchors);
+    PropagateAnchorConstraintsIntoContext(*this, anchors);
   }
 }
 
-void ApplyInferredShapesToGraph(const ShapesContext &ctx, GraphProto &graph) {
+void ShapesContext::ApplyInferredShapesToGraph(GraphProto &graph) const {
   // Names that already have authoritative type/shape information in
   // the proto and must not be overwritten.
   std::unordered_set<std::string> seeded;
@@ -548,8 +548,8 @@ void ApplyInferredShapesToGraph(const ShapesContext &ctx, GraphProto &graph) {
     ValueInfoProto &vi = *graph.mutable_output(i);
     const std::string name = vi.name().as_string();
     output_names.insert(name);
-    if (!name.empty() && ctx.Has(name)) {
-      OptimTensorToValueInfo(ctx.Get(name), vi);
+    if (!name.empty() && Has(name)) {
+      OptimTensorToValueInfo(Get(name), vi);
     }
   }
   // Track existing value_info entries to avoid creating duplicates;
@@ -559,16 +559,16 @@ void ApplyInferredShapesToGraph(const ShapesContext &ctx, GraphProto &graph) {
     ValueInfoProto &vi = *graph.mutable_value_info(i);
     const std::string name = vi.name().as_string();
     existing_value_info.insert(name);
-    if (!name.empty() && ctx.Has(name)) {
-      OptimTensorToValueInfo(ctx.Get(name), vi);
+    if (!name.empty() && Has(name)) {
+      OptimTensorToValueInfo(Get(name), vi);
     }
   }
   // Append a new value_info entry for every other inferred tensor.
   // Iteration order over the unordered map is not specified, so the
   // names are gathered and sorted to make the output deterministic.
   std::vector<std::string> new_names;
-  new_names.reserve(ctx.Tensors().size());
-  for (const auto &kv : ctx.Tensors()) {
+  new_names.reserve(Tensors().size());
+  for (const auto &kv : Tensors()) {
     const std::string &name = kv.first;
     if (name.empty() || seeded.count(name) != 0 || output_names.count(name) != 0 ||
         existing_value_info.count(name) != 0) {
@@ -578,7 +578,7 @@ void ApplyInferredShapesToGraph(const ShapesContext &ctx, GraphProto &graph) {
   }
   std::sort(new_names.begin(), new_names.end());
   for (const std::string &name : new_names) {
-    const OptimTensor &tensor = ctx.Get(name);
+    const OptimTensor &tensor = Get(name);
     if (TensorTypeToDataType(tensor.Dtype()) == TensorProto::DataType::UNDEFINED) {
       continue;
     }
@@ -588,17 +588,17 @@ void ApplyInferredShapesToGraph(const ShapesContext &ctx, GraphProto &graph) {
   }
 }
 
-void ApplyInferredShapesToModel(const ShapesContext &ctx, ModelProto &model) {
+void ShapesContext::ApplyInferredShapesToModel(ModelProto &model) const {
   EXT_ENFORCE_INVALID(
       model.has_graph(),
       "ApplyInferredShapesToModel: the ModelProto has no graph to write shape inference into.");
-  ApplyInferredShapesToGraph(ctx, *model.mutable_graph());
+  ApplyInferredShapesToGraph(*model.mutable_graph());
 }
 
 void InferShapesModel(ModelProto &model, bool prefill_with_value_info_output) {
   ShapesContext ctx;
-  ComputeShapeModel(ctx, model, prefill_with_value_info_output);
-  ApplyInferredShapesToModel(ctx, model);
+  ctx.ComputeShapeModel(model, prefill_with_value_info_output);
+  ctx.ApplyInferredShapesToModel(model);
 }
 
 } // namespace shapes

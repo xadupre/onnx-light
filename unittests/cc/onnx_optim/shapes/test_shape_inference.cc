@@ -43,7 +43,7 @@ TEST(OnnxOptimShapeInference, DispatchesAbs) {
   onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
   ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
@@ -55,7 +55,7 @@ TEST(OnnxOptimShapeInference, SupportsUtilsStringLookupForNodeOutput) {
   onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
   ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   const auto &output_name = node.output(0);
   ASSERT_TRUE(ctx.Has(output_name));
@@ -71,7 +71,7 @@ TEST(OnnxOptimShapeInference, DispatchesAddWithBroadcast) {
   ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape_a));
   ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape_b));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("C"));
   EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kFloat);
@@ -88,7 +88,7 @@ TEST(OnnxOptimShapeInference, DispatchesMulWithBroadcast) {
   ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape_a));
   ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape_b));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("C"));
   EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kFloat);
@@ -104,7 +104,7 @@ TEST(OnnxOptimShapeInference, DispatchesDivWithBroadcast) {
   ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape_a));
   ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape_b));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("C"));
   EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kFloat);
@@ -118,7 +118,7 @@ TEST(OnnxOptimShapeInference, DispatchesAnd) {
   ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, shape));
   ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, shape));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("C"));
   EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kBool);
@@ -131,7 +131,7 @@ TEST(OnnxOptimShapeInference, DispatchesAcos) {
   onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
   ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
@@ -143,7 +143,7 @@ TEST(OnnxOptimShapeInference, DispatchesAcosh) {
   onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
   ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
@@ -155,7 +155,7 @@ TEST(OnnxOptimShapeInference, DispatchesCos) {
   onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
   ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
@@ -167,7 +167,7 @@ TEST(OnnxOptimShapeInference, DispatchesCosh) {
   onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
   ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
@@ -184,7 +184,7 @@ TEST(OnnxOptimShapeInference, DispatchesConcat) {
                    nullptr, onnx_optim::TensorType::kFloat,
                    onnx_optim::OptimShape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(3)}));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("C"));
   EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kFloat);
@@ -199,7 +199,7 @@ TEST(OnnxOptimShapeInference, AcceptsExplicitAiOnnxDomain) {
                                 onnx_optim::OptimShape{onnx_optim::OptimDim(2)});
   ctx.Set("X", std::move(input));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   EXPECT_TRUE(ctx.Has("Y"));
 }
@@ -208,21 +208,21 @@ TEST(OnnxOptimShapeInference, RejectsUnknownDomain) {
   NodeProto node = MakeNode("Abs", {"X"}, {"Y"}, "com.acme");
   onnx_optim::shapes::ShapesContext ctx;
   ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
-  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+  EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeInference, RejectsUnsupportedOpType) {
   NodeProto node = MakeNode("NoSuchOp", {"X"}, {"Y"});
   onnx_optim::shapes::ShapesContext ctx;
   ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
-  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+  EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeInference, RejectsNodeWithMissingInputs) {
   NodeProto node = MakeNode("Add", {"A"}, {"C"});
   onnx_optim::shapes::ShapesContext ctx;
   ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
-  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+  EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeInference, ComputeShapesProcessesNodesInOrder) {
@@ -243,7 +243,7 @@ TEST(OnnxOptimShapeInference, ComputeShapesProcessesNodesInOrder) {
   ctx.Set("M", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, shape_bool));
   ctx.Set("N", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, shape_bool));
 
-  onnx_optim::shapes::ComputeShapes(ctx, graph.node());
+  ctx.ComputeShapes(graph.node());
 
   ASSERT_TRUE(ctx.Has("T"));
   ASSERT_TRUE(ctx.Has("U"));
@@ -259,7 +259,7 @@ TEST(OnnxOptimShapeInference, ComputeShapesProcessesNodesInOrder) {
 TEST(OnnxOptimShapeInference, ComputeShapesEmptyListIsNoOp) {
   GraphProto graph;
   onnx_optim::shapes::ShapesContext ctx;
-  EXPECT_NO_THROW(onnx_optim::shapes::ComputeShapes(ctx, graph.node()));
+  EXPECT_NO_THROW(ctx.ComputeShapes(graph.node()));
   EXPECT_TRUE(ctx.Empty());
 }
 
@@ -272,7 +272,7 @@ TEST(OnnxOptimShapeInference, ComputeShapesPropagatesErrorFromNode) {
   ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
                                        onnx_optim::OptimShape{onnx_optim::OptimDim(1)}));
 
-  EXPECT_THROW(onnx_optim::shapes::ComputeShapes(ctx, graph.node()), std::invalid_argument);
+  EXPECT_THROW(ctx.ComputeShapes(graph.node()), std::invalid_argument);
   // The first node should still have been processed before the error.
   EXPECT_TRUE(ctx.Has("Y"));
 }
@@ -284,7 +284,7 @@ TEST(OnnxOptimShapeInferenceChecks, InputsAvailableAcceptsWhenAllPresent) {
   onnx_optim::shapes::ShapesContext ctx;
   ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
   ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
-  EXPECT_NO_THROW(onnx_optim::shapes::CheckInputsAvailable(ctx, node));
+  EXPECT_NO_THROW(ctx.CheckInputsAvailable(node));
 }
 
 TEST(OnnxOptimShapeInferenceChecks, InputsAvailableSkipsEmptyOptionalInputs) {
@@ -294,21 +294,21 @@ TEST(OnnxOptimShapeInferenceChecks, InputsAvailableSkipsEmptyOptionalInputs) {
   onnx_optim::shapes::ShapesContext ctx;
   ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
   ctx.Set("C", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
-  EXPECT_NO_THROW(onnx_optim::shapes::CheckInputsAvailable(ctx, node));
+  EXPECT_NO_THROW(ctx.CheckInputsAvailable(node));
 }
 
 TEST(OnnxOptimShapeInferenceChecks, InputsAvailableThrowsWhenMissing) {
   NodeProto node = MakeNode("Add", {"A", "B"}, {"C"});
   onnx_optim::shapes::ShapesContext ctx;
   ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
-  EXPECT_THROW(onnx_optim::shapes::CheckInputsAvailable(ctx, node), std::invalid_argument);
+  EXPECT_THROW(ctx.CheckInputsAvailable(node), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeInferenceChecks, OutputsNotAvailableAcceptsWhenAllAbsent) {
   NodeProto node = MakeNode("Abs", {"X"}, {"Y"});
   onnx_optim::shapes::ShapesContext ctx;
   ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
-  EXPECT_NO_THROW(onnx_optim::shapes::CheckOutputsNotAvailable(ctx, node));
+  EXPECT_NO_THROW(ctx.CheckOutputsNotAvailable(node));
 }
 
 TEST(OnnxOptimShapeInferenceChecks, OutputsNotAvailableSkipsEmptyOptionalOutputs) {
@@ -316,14 +316,14 @@ TEST(OnnxOptimShapeInferenceChecks, OutputsNotAvailableSkipsEmptyOptionalOutputs
   // not produced by the node; the check must ignore it.
   NodeProto node = MakeNode("SomeOp", {"X"}, {"Y", ""});
   onnx_optim::shapes::ShapesContext ctx;
-  EXPECT_NO_THROW(onnx_optim::shapes::CheckOutputsNotAvailable(ctx, node));
+  EXPECT_NO_THROW(ctx.CheckOutputsNotAvailable(node));
 }
 
 TEST(OnnxOptimShapeInferenceChecks, OutputsNotAvailableThrowsWhenPresent) {
   NodeProto node = MakeNode("Abs", {"X"}, {"Y"});
   onnx_optim::shapes::ShapesContext ctx;
   ctx.Set("Y", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
-  EXPECT_THROW(onnx_optim::shapes::CheckOutputsNotAvailable(ctx, node), std::invalid_argument);
+  EXPECT_THROW(ctx.CheckOutputsNotAvailable(node), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeInferenceChecks, ComputeShapeNodeRejectsMissingInput) {
@@ -333,7 +333,7 @@ TEST(OnnxOptimShapeInferenceChecks, ComputeShapeNodeRejectsMissingInput) {
   NodeProto node = MakeNode("Add", {"A", "B"}, {"C"});
   onnx_optim::shapes::ShapesContext ctx;
   ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
-  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+  EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeInferenceChecks, ComputeShapeNodeRejectsAlreadyComputedOutput) {
@@ -343,7 +343,7 @@ TEST(OnnxOptimShapeInferenceChecks, ComputeShapeNodeRejectsAlreadyComputedOutput
                                        onnx_optim::OptimShape{onnx_optim::OptimDim(1)}));
   ctx.Set("Y", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
                                        onnx_optim::OptimShape{onnx_optim::OptimDim(1)}));
-  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+  EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeInference, DispatchesReduceSumNoAxesInputReducesAll) {
@@ -356,7 +356,7 @@ TEST(OnnxOptimShapeInference, DispatchesReduceSumNoAxesInputReducesAll) {
                    nullptr, onnx_optim::TensorType::kFloat,
                    onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
@@ -378,7 +378,7 @@ TEST(OnnxOptimShapeInference, DispatchesReduceSumWithAxesInputValueAsShape) {
   axes_tensor.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
   ctx.Set("axes", std::move(axes_tensor));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   // keepdims defaults to 1: rank preserved, axis 1 collapsed to 1.
@@ -398,7 +398,7 @@ TEST(OnnxOptimShapeInference, DispatchesReduceMaxNoAxesInputReducesAll) {
                    nullptr, onnx_optim::TensorType::kFloat,
                    onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
@@ -418,7 +418,7 @@ TEST(OnnxOptimShapeInference, DispatchesReduceMinWithAxesInputValueAsShape) {
   axes_tensor.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
   ctx.Set("axes", std::move(axes_tensor));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
@@ -445,7 +445,7 @@ TEST(OnnxOptimShapeInference, DispatchesRoiAlign) {
           onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
                                   onnx_optim::OptimShape{onnx_optim::OptimDim(5)}));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
@@ -468,7 +468,7 @@ TEST(OnnxOptimShapeInference, DispatchesAffineGrid2DWithConstantSize) {
                                                 onnx_optim::OptimDim(5), onnx_optim::OptimDim(6)});
   ctx.Set("size", std::move(size_t));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("grid"));
   EXPECT_EQ(ctx.Get("grid").Dtype(), onnx_optim::TensorType::kFloat);
@@ -550,7 +550,7 @@ TEST(OnnxOptimShapeInference, ComputeShapeModelReshapeStaticShape) {
   ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{3, 4}, /*target=*/{-1, 2});
   onnx_optim::shapes::ShapesContext ctx;
 
-  onnx_optim::shapes::ComputeShapeModel(ctx, model);
+  ctx.ComputeShapeModel(model);
 
   ASSERT_TRUE(ctx.Has("X"));
   EXPECT_EQ(ctx.Get("X").Shape(),
@@ -573,7 +573,7 @@ TEST(OnnxOptimShapeInference, ComputeShapeModelReshapeDynamicShape) {
                                                   /*symbolic_names=*/{"N"});
   onnx_optim::shapes::ShapesContext ctx;
 
-  onnx_optim::shapes::ComputeShapeModel(ctx, model);
+  ctx.ComputeShapeModel(model);
 
   ASSERT_TRUE(ctx.Has("X"));
   ASSERT_EQ(ctx.Get("X").Shape().Rank(), 2u);
@@ -594,7 +594,7 @@ TEST(OnnxOptimShapeInference, ComputeShapeModelPrefillPrefersOutputAnchor) {
                          /*shape=*/{-1, 2}, /*symbolic_names=*/{"ANCHOR"});
 
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::shapes::ComputeShapeModel(ctx, model, /*prefill_with_value_info_output=*/true);
+  ctx.ComputeShapeModel(model, /*prefill_with_value_info_output=*/true);
 
   ASSERT_TRUE(ctx.Has("Y"));
   ASSERT_EQ(ctx.Get("Y").Shape().Rank(), 2u);
@@ -622,8 +622,8 @@ TEST(OnnxOptimShapeInference, ComputeShapeModelPrefillRaisesOnDimConflict) {
                          /*shape=*/{-1, 4}, /*symbolic_names=*/{"ANCHOR"});
 
   onnx_optim::shapes::ShapesContext ctx;
-  EXPECT_THROW(onnx_optim::shapes::ComputeShapeModel(ctx, model,
-                                                     /*prefill_with_value_info_output=*/true),
+  EXPECT_THROW(ctx.ComputeShapeModel(model,
+                                     /*prefill_with_value_info_output=*/true),
                std::invalid_argument);
 }
 
@@ -653,7 +653,7 @@ TEST(OnnxOptimShapeInference, ComputeShapeModelSeedsInitializerAsShape) {
   *graph->add_node() = MakeNode("Reshape", {"X", "S"}, {"Y"});
 
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::shapes::ComputeShapeModel(ctx, model);
+  ctx.ComputeShapeModel(model);
 
   ASSERT_TRUE(ctx.Has("S"));
   EXPECT_TRUE(ctx.Get("S").HasValueAsShape());
@@ -665,7 +665,7 @@ TEST(OnnxOptimShapeInference, ComputeShapeModelSeedsInitializerAsShape) {
 TEST(OnnxOptimShapeInference, ComputeShapeModelRejectsModelWithoutGraph) {
   ModelProto model;
   onnx_optim::shapes::ShapesContext ctx;
-  EXPECT_THROW(onnx_optim::shapes::ComputeShapeModel(ctx, model), std::invalid_argument);
+  EXPECT_THROW(ctx.ComputeShapeModel(model), std::invalid_argument);
 }
 
 // ── ApplyInferredShapesTo{Graph,Model} ────────────────────────────────
@@ -677,8 +677,8 @@ TEST(OnnxOptimShapeInference, ApplyInferredShapesToModelFillsOutputAndValueInfo)
   // must appear in graph.value_info().
   ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{3, 4}, /*target=*/{-1, 2});
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::shapes::ComputeShapeModel(ctx, model);
-  onnx_optim::shapes::ApplyInferredShapesToModel(ctx, model);
+  ctx.ComputeShapeModel(model);
+  ctx.ApplyInferredShapesToModel(model);
 
   ASSERT_TRUE(model.has_graph());
   const GraphProto &graph = model.graph();
@@ -720,8 +720,8 @@ TEST(OnnxOptimShapeInference, ApplyInferredShapesToModelPreservesSymbolicDims) {
                                                   /*target=*/{-1, 2},
                                                   /*symbolic_names=*/{"N"});
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::shapes::ComputeShapeModel(ctx, model);
-  onnx_optim::shapes::ApplyInferredShapesToModel(ctx, model);
+  ctx.ComputeShapeModel(model);
+  ctx.ApplyInferredShapesToModel(model);
 
   const ValueInfoProto &out = model.graph().output(0);
   ASSERT_TRUE(out.has_type() && out.type().has_tensor_type());
@@ -736,7 +736,7 @@ TEST(OnnxOptimShapeInference, ApplyInferredShapesToModelPreservesSymbolicDims) {
 TEST(OnnxOptimShapeInference, ApplyInferredShapesToModelRejectsModelWithoutGraph) {
   ModelProto model;
   onnx_optim::shapes::ShapesContext ctx;
-  EXPECT_THROW(onnx_optim::shapes::ApplyInferredShapesToModel(ctx, model), std::invalid_argument);
+  EXPECT_THROW(ctx.ApplyInferredShapesToModel(model), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeInference, InferShapesModelEndToEnd) {
@@ -837,7 +837,7 @@ TEST(OnnxOptimShapeInference, ComputeShapeModelExpandsLocalFunctionCall) {
   ModelProto model = MakeLocalFunctionAddModel();
   onnx_optim::shapes::ShapesContext ctx;
 
-  onnx_optim::shapes::ComputeShapeModel(ctx, model);
+  ctx.ComputeShapeModel(model);
 
   ASSERT_TRUE(ctx.Has("Z"));
   EXPECT_EQ(ctx.Get("Z").Dtype(), onnx_optim::TensorType::kFloat);
@@ -868,7 +868,7 @@ TEST(OnnxOptimShapeInference, ComputeShapeNodeRejectsUnknownNonLocalFunctionDoma
   NodeProto node = MakeNode("does_not_exist", {"X"}, {"Y"}, "com.acme");
   onnx_optim::shapes::ShapesContext ctx;
   ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
-  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+  EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
 
 namespace {
@@ -937,7 +937,7 @@ TEST(OnnxOptimShapeInference, ExpandsLocalFunctionWithLinkedAttribute) {
       MakeLocalFunctionRefAttrCastModel(static_cast<int64_t>(TensorProto::DataType::INT64));
   onnx_optim::shapes::ShapesContext ctx;
 
-  onnx_optim::shapes::ComputeShapeModel(ctx, model);
+  ctx.ComputeShapeModel(model);
 
   ASSERT_TRUE(ctx.Has("Z"));
   EXPECT_EQ(ctx.Get("Z").Dtype(), onnx_optim::TensorType::kInt64);

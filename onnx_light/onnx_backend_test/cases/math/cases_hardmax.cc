@@ -57,6 +57,53 @@ void RegisterHardmaxCases(std::vector<TestCase> &registry) {
     Tensor y = hardmax_kernel(x, -2);
     Expect(node, {x}, {y}, "test_cc_hardmax_negative_axis", {opset}, "backend-test", registry);
   }
+
+  // ---------------------------------------------------------------------------
+  // Cases mirroring upstream ``test_hardmax_axis_*`` and ``test_hardmax_one_hot``
+  // node tests (``onnx.backend.test.case.node.hardmax``). The substring-based
+  // check in unittests/onnxl_vs_onnx/test_backend_test_names_onnx_vs_onnxlight
+  // matches the upstream names through these ``test_cc_*`` cases.
+  // ---------------------------------------------------------------------------
+
+  // Deterministic rank-3 input used by the three ``hardmax_axis_*`` cases.
+  Tensor x_axis = Tensor::FromFloat(
+      "", {3, 4, 5},
+      {0.0f,  1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,  10.0f, 11.0f,
+       12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f, 19.0f, 20.0f, 21.0f, 22.0f, 23.0f,
+       24.0f, 25.0f, 26.0f, 27.0f, 28.0f, 29.0f, 30.0f, 31.0f, 32.0f, 33.0f, 34.0f, 35.0f,
+       36.0f, 37.0f, 38.0f, 39.0f, 40.0f, 41.0f, 42.0f, 43.0f, 44.0f, 45.0f, 46.0f, 47.0f,
+       48.0f, 49.0f, 50.0f, 51.0f, 52.0f, 53.0f, 54.0f, 55.0f, 56.0f, 57.0f, 58.0f, 59.0f});
+
+  // test_cc_hardmax_axis_0 — explicit axis=0 on a rank-3 input.
+  {
+    NodeProto node = MakeHardmaxNode(/*axis=*/0);
+    Tensor y = hardmax_kernel(x_axis, 0);
+    Expect(node, {x_axis}, {y}, "test_cc_hardmax_axis_0", {opset}, "backend-test", registry);
+  }
+
+  // test_cc_hardmax_axis_1 — explicit axis=1 on a rank-3 input.
+  {
+    NodeProto node = MakeHardmaxNode(/*axis=*/1);
+    Tensor y = hardmax_kernel(x_axis, 1);
+    Expect(node, {x_axis}, {y}, "test_cc_hardmax_axis_1", {opset}, "backend-test", registry);
+  }
+
+  // test_cc_hardmax_axis_2 — explicit axis=2 on a rank-3 input.
+  {
+    NodeProto node = MakeHardmaxNode(/*axis=*/2);
+    Tensor y = hardmax_kernel(x_axis, 2);
+    Expect(node, {x_axis}, {y}, "test_cc_hardmax_axis_2", {opset}, "backend-test", registry);
+  }
+
+  // test_cc_hardmax_one_hot — input with repeated maxima; the first occurrence
+  // along the reduction axis is selected, mirroring upstream
+  // ``test_hardmax_one_hot``.
+  {
+    NodeProto node = MakeHardmaxNode(/*axis=*/0, /*include_axis=*/false);
+    Tensor x = Tensor::FromFloat("", {1, 4}, {3.0f, 3.0f, 3.0f, 1.0f});
+    Tensor y = hardmax_kernel(x, -1);
+    Expect(node, {x}, {y}, "test_cc_hardmax_one_hot", {opset}, "backend-test", registry);
+  }
 }
 
 } // namespace onnx_backend_test

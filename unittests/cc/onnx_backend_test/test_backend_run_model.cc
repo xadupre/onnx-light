@@ -211,6 +211,9 @@ TEST(BackendRunModel, Momentum) { RunBackendCasesFor("Momentum"); }
 // ai.onnx.ml kernels.
 TEST(BackendRunModel, SVMRegressor) { RunBackendCasesFor("SVMRegressor"); }
 TEST(BackendRunModel, SVMClassifier) { RunBackendCasesFor("SVMClassifier"); }
+TEST(BackendRunModel, TreeEnsembleRegressor) { RunBackendCasesFor("TreeEnsembleRegressor"); }
+TEST(BackendRunModel, TreeEnsembleClassifier) { RunBackendCasesFor("TreeEnsembleClassifier"); }
+TEST(BackendRunModel, TreeEnsemble) { RunBackendCasesFor("TreeEnsemble"); }
 
 // Quantization kernels.
 // The reference QuantizeLinear/DequantizeLinear kernels only support

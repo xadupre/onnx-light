@@ -109,7 +109,7 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
         model = onnxl.ModelProto()
         model.CopyFrom(test.model)
         model.graph.value_info.clear()
-        infer_shapes_model(model)
+        infer_shapes_model(model, prefill_with_value_info_output=True)
         expected_info = {
             info.name: info for info in [*test.model.graph.value_info, *test.model.graph.output]
         }

@@ -560,7 +560,14 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          RequireOutputCount(node, 1);
          const Tensor &input = GetInput(node, 0, rt.tensors());
          kernel::DepthToSpace::Attributes attrs;
-         attrs.blocksize = GetAttributeIntOrDefault(node, "blocksize", 0);
+         const AttributeProto *blocksize_attr = FindAttribute(node, "blocksize");
+         if (blocksize_attr == nullptr) {
+           throw std::invalid_argument("RunNode: DepthToSpace requires attribute 'blocksize'.");
+         }
+         if (blocksize_attr->type() != AttributeProto::AttributeType::INT) {
+           throw std::invalid_argument("RunNode: DepthToSpace attribute 'blocksize' must be INT.");
+         }
+         attrs.blocksize = blocksize_attr->i();
          attrs.mode = GetAttributeStringOrDefault(node, "mode", "DCR");
          kernel::DepthToSpace kernel(rt.kernel_ctx());
          SetOutput(node, 0, kernel(input, attrs), rt.tensors());

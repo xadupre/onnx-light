@@ -92,6 +92,28 @@ void RegisterReduceMeanCases(std::vector<TestCase> &registry) {
   EmitReduceMeanCase(registry, kernel, "test_cc_reducemean_empty_axes_input_noop", shape, values,
                      {}, /*keepdims=*/true,
                      /*noop_with_empty_axes=*/true);
+
+  // Upstream ``test_reduce_mean_*`` ONNX node tests.
+  const std::vector<float> random_values = {
+      0.9762700796f, 4.303787231f, 2.055267572f, 0.8976636529f, -1.526903987f, 2.917882204f,
+      -1.24825573f,  7.835460186f, 9.273255348f, -2.331169605f, 5.83450079f,   0.5778983831f,
+  };
+  EmitReduceMeanCase(registry, kernel, "test_reduce_mean_keepdims_example", shape, values, {1},
+                     /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+  EmitReduceMeanCase(registry, kernel, "test_reduce_mean_keepdims_random", shape, random_values,
+                     {1}, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+  EmitReduceMeanCase(registry, kernel, "test_reduce_mean_do_not_keepdims_example", shape, values,
+                     {1}, /*keepdims=*/false, /*noop_with_empty_axes=*/false);
+  EmitReduceMeanCase(registry, kernel, "test_reduce_mean_do_not_keepdims_random", shape,
+                     random_values, {1}, /*keepdims=*/false, /*noop_with_empty_axes=*/false);
+  EmitReduceMeanDefaultAxesCase(registry, kernel, "test_reduce_mean_default_axes_keepdims_example",
+                                shape, values, /*keepdims=*/true);
+  EmitReduceMeanDefaultAxesCase(registry, kernel, "test_reduce_mean_default_axes_keepdims_random",
+                                shape, random_values, /*keepdims=*/true);
+  EmitReduceMeanCase(registry, kernel, "test_reduce_mean_negative_axes_keepdims_example", shape,
+                     values, {-2}, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+  EmitReduceMeanCase(registry, kernel, "test_reduce_mean_negative_axes_keepdims_random", shape,
+                     random_values, {-2}, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
 }
 
 } // namespace onnx_backend_test

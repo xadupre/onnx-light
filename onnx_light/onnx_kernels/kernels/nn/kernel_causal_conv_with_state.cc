@@ -18,6 +18,9 @@ namespace kernel {
 
 namespace {
 
+constexpr int32_t kFloat32ExponentBias = 127;
+constexpr int32_t kFloat16ExponentBias = 15;
+
 uint16_t FloatToFloat16Bits(float f) {
   uint32_t u;
   std::memcpy(&u, &f, sizeof(u));
@@ -27,7 +30,7 @@ uint16_t FloatToFloat16Bits(float f) {
   if (e32 == 0xff) {
     return static_cast<uint16_t>(sign | 0x7c00u | (m32 != 0 ? 0x0200u : 0u));
   }
-  const int32_t e = e32 - 127 + 15;
+  const int32_t e = e32 - kFloat32ExponentBias + kFloat16ExponentBias;
   if (e >= 31) {
     return static_cast<uint16_t>(sign | 0x7c00u);
   }
@@ -68,12 +71,14 @@ float Float16BitsToFloat(uint16_t h) {
         --e;
       }
       m &= 0x3ffu;
-      f = (sign << 31) | (static_cast<uint32_t>(e + 127 + 1) << 23) | (m << 13);
+      f = (sign << 31) | (static_cast<uint32_t>(e + kFloat32ExponentBias + 1) << 23) | (m << 13);
     }
   } else if (exp == 0x1fu) {
     f = (sign << 31) | 0x7f800000u | (mant << 13);
   } else {
-    f = (sign << 31) | (static_cast<uint32_t>(exp - 15 + 127) << 23) | (mant << 13);
+    f = (sign << 31) |
+        (static_cast<uint32_t>(exp - kFloat16ExponentBias + kFloat32ExponentBias) << 23) |
+        (mant << 13);
   }
   float fv;
   std::memcpy(&fv, &f, sizeof(float));

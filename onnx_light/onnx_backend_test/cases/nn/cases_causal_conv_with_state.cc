@@ -27,6 +27,9 @@ namespace onnx_backend_test {
 
 namespace {
 
+constexpr int32_t kFloat32ExponentBias = 127;
+constexpr int32_t kFloat16ExponentBias = 15;
+
 uint16_t FloatToFloat16Bits(float f) {
   uint32_t u;
   std::memcpy(&u, &f, sizeof(u));
@@ -36,7 +39,7 @@ uint16_t FloatToFloat16Bits(float f) {
   if (e32 == 0xff) {
     return static_cast<uint16_t>(sign | 0x7c00u | (m32 != 0 ? 0x0200u : 0u));
   }
-  const int32_t e = e32 - 127 + 15;
+  const int32_t e = e32 - kFloat32ExponentBias + kFloat16ExponentBias;
   if (e >= 31) {
     return static_cast<uint16_t>(sign | 0x7c00u);
   }

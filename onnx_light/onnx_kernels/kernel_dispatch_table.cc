@@ -306,6 +306,29 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:BitwiseNot", MakeUnaryTrampoline<kernel::BitwiseNot>()},
       {"ai.onnx:BitwiseOr", MakeBinaryTrampoline<kernel::BitwiseOr>()},
       {"ai.onnx:BitwiseXor", MakeBinaryTrampoline<kernel::BitwiseXor>()},
+      {"ai.onnx:CausalConvWithState",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         if (node.input_size() < 2 || node.input_size() > 4) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects between 2 and 4 input(s), got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         RequireOutputCount(node, 2);
+         const Tensor &input = GetInput(node, 0, rt.tensors());
+         const Tensor &weight = GetInput(node, 1, rt.tensors());
+         const Tensor *bias = GetOptionalInput(node, 2, rt.tensors());
+         const Tensor *past_state = GetOptionalInput(node, 3, rt.tensors());
+
+         kernel::CausalConvWithState::Attributes attrs;
+         attrs.activation = GetAttributeStringOrDefault(node, "activation", "none");
+
+         kernel::CausalConvWithState kernel(rt.kernel_ctx());
+         auto [output, present_state] =
+             kernel(input, weight, bias != nullptr ? *bias : Tensor{},
+                    past_state != nullptr ? *past_state : Tensor{}, attrs);
+         SetOutput(node, 0, std::move(output), rt.tensors());
+         SetOutput(node, 1, std::move(present_state), rt.tensors());
+       }},
       {"ai.onnx:Ceil", MakeUnaryTrampoline<kernel::Ceil>()},
       {"ai.onnx:Celu", MakeUnaryAlphaTrampoline<kernel::Celu>("alpha", 1.0f)},
       {"ai.onnx:Clip",

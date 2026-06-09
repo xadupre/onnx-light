@@ -3418,6 +3418,38 @@ The carry state stores the last (k-1) positions for incremental decode.
 
 The optional activation attribute supports fused SiLU/Swish activation.
 
+Mathematical definition
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Let ``X`` be the input of shape ``(B, C, L)``, ``W`` the weight of shape
+``(C, 1, k)``, ``b`` the optional bias of shape ``(C)``, and ``S_past`` the
+optional carry state of shape ``(B, C, k - 1)``. Define the padded sequence
+``Xpad`` of shape ``(B, C, L + k - 1)`` as the concatenation along the last
+axis of the carry state (or zero-padding when ``past_state`` is absent) and
+the input::
+
+                  | S_past[b, c, t]              if 0 <= t < k - 1 and past_state is present
+    Xpad[b, c, t] = | 0                            if 0 <= t < k - 1 and past_state is absent
+                  | X[b, c, t - (k - 1)]         if k - 1 <= t < L + k - 1
+
+The convolution output is then::
+
+    Y[b, c, l] = sum_{j=0}^{k-1} W[c, 0, j] * Xpad[b, c, l + j]    for 0 <= l < L
+
+with the per-channel bias added when provided::
+
+    Y[b, c, l] += b[c]
+
+When ``activation`` is ``"silu"`` or ``"swish"`` the fused activation is
+applied element-wise::
+
+    Y[b, c, l] = Y[b, c, l] * sigmoid(Y[b, c, l])      where sigmoid(x) = 1 / (1 + exp(-x))
+
+The updated carry state collects the last ``k - 1`` positions of the padded
+sequence so it can be fed back as ``past_state`` on the next call::
+
+    present_state[b, c, j] = Xpad[b, c, L + j]         for 0 <= j < k - 1
+
 )DOC";
 
 ONNX_OPERATOR_SET_SCHEMA(

@@ -198,6 +198,7 @@ TEST(BackendRunModel, Attention) {
            ds.inputs[1].data_type == DataType::FLOAT && ds.inputs[2].data_type == DataType::FLOAT;
   });
 }
+TEST(BackendRunModel, CausalConvWithState) { RunBackendCasesFor("CausalConvWithState"); }
 
 // ai.onnx.preview.training optimizer kernels.
 TEST(BackendRunModel, Adagrad) { RunBackendCasesFor("Adagrad"); }

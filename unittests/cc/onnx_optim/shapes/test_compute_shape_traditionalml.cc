@@ -57,7 +57,7 @@ TEST(OnnxOptimShapeLabelEncoder, MapsStringKeysToInt64Values) {
   onnx_optim::shapes::ShapesContext ctx;
   SeedInput(ctx, onnx_optim::TensorType::kString, onnx_optim::OptimShape{onnx_optim::OptimDim(5)});
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kInt64);
@@ -78,7 +78,7 @@ TEST(OnnxOptimShapeLabelEncoder, MapsInt64KeysToStringValues) {
   SeedInput(ctx, onnx_optim::TensorType::kInt64,
             onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)});
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kString);
@@ -97,7 +97,7 @@ TEST(OnnxOptimShapeLabelEncoder, MapsFloatKeysToFloatValues) {
   onnx_optim::shapes::ShapesContext ctx;
   SeedInput(ctx, onnx_optim::TensorType::kFloat, onnx_optim::OptimShape{onnx_optim::OptimDim(4)});
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
@@ -117,7 +117,7 @@ TEST(OnnxOptimShapeLabelEncoder, UsesValuesTensorDtype) {
   onnx_optim::shapes::ShapesContext ctx;
   SeedInput(ctx, onnx_optim::TensorType::kInt64, onnx_optim::OptimShape{onnx_optim::OptimDim(7)});
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kDouble);
@@ -133,7 +133,7 @@ TEST(OnnxOptimShapeLabelEncoder, RejectsMissingValuesAttribute) {
   onnx_optim::shapes::ShapesContext ctx;
   SeedInput(ctx, onnx_optim::TensorType::kInt64, onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
 
-  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+  EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeLabelEncoder, RejectsMultipleValuesAttributes) {
@@ -145,7 +145,7 @@ TEST(OnnxOptimShapeLabelEncoder, RejectsMultipleValuesAttributes) {
   onnx_optim::shapes::ShapesContext ctx;
   SeedInput(ctx, onnx_optim::TensorType::kInt64, onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
 
-  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+  EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeLabelEncoder, DirectCallRejectsWrongOpType) {
@@ -184,7 +184,7 @@ TEST(OnnxOptimShapeArrayFeatureExtractor, ReplacesLastDimWithFlattenedIndicesCou
   ctx.Set("Y", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
                                        onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Z"));
   EXPECT_EQ(ctx.Get("Z").Dtype(), onnx_optim::TensorType::kFloat);
@@ -202,7 +202,7 @@ TEST(OnnxOptimShapeArrayFeatureExtractor, PreservesSingleSymbolicIndicesDim) {
                    nullptr, onnx_optim::TensorType::kInt64,
                    onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim("K")}));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Z"));
   EXPECT_EQ(ctx.Get("Z").Dtype(), onnx_optim::TensorType::kInt32);
@@ -253,7 +253,7 @@ TEST(OnnxOptimShapeBinarizer, PreservesInputShapeAndFloatDtype) {
             onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4),
                                    onnx_optim::OptimDim(5)});
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
@@ -269,7 +269,7 @@ TEST(OnnxOptimShapeBinarizer, PreservesInputShapeAndInt64Dtype) {
   SeedInput(ctx, onnx_optim::TensorType::kInt64,
             onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(2)});
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kInt64);
@@ -314,7 +314,7 @@ TEST(OnnxOptimShapeScaler, PreservesShapeAndForcesFloatDtypeForFloatInput) {
   SeedInput(ctx, onnx_optim::TensorType::kFloat,
             onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)});
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
@@ -329,7 +329,7 @@ TEST(OnnxOptimShapeScaler, PreservesShapeAndForcesFloatDtypeForInt64Input) {
   SeedInput(ctx, onnx_optim::TensorType::kInt64,
             onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)});
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
@@ -372,7 +372,7 @@ TEST(OnnxOptimShapeNormalizer, PreservesShapeAndForcesFloatDtypeForFloatInput) {
   SeedInput(ctx, onnx_optim::TensorType::kFloat,
             onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)});
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
@@ -387,7 +387,7 @@ TEST(OnnxOptimShapeNormalizer, PreservesShapeAndForcesFloatDtypeForInt64Input) {
   SeedInput(ctx, onnx_optim::TensorType::kInt64,
             onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)});
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
@@ -432,7 +432,7 @@ TEST(OnnxOptimShapeZipMap, UsesStringKeyOutputTypeForClasslabelsStrings) {
   SeedInput(ctx, onnx_optim::TensorType::kFloat,
             onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)});
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Z"));
   EXPECT_EQ(ctx.Get("Z").Dtype(), onnx_optim::TensorType::kSeqMapStringFloat);
@@ -448,7 +448,7 @@ TEST(OnnxOptimShapeZipMap, UsesInt64KeyOutputTypeForClasslabelsInt64s) {
   onnx_optim::shapes::ShapesContext ctx;
   SeedInput(ctx, onnx_optim::TensorType::kFloat, onnx_optim::OptimShape{onnx_optim::OptimDim(3)});
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Z"));
   EXPECT_EQ(ctx.Get("Z").Dtype(), onnx_optim::TensorType::kSeqMapInt64Float);
@@ -462,7 +462,7 @@ TEST(OnnxOptimShapeZipMap, RejectsInvalidClasslabelsConfiguration) {
 
   {
     NodeProto node = MakeZipMapNode();
-    EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+    EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
   }
 
   {
@@ -471,7 +471,7 @@ TEST(OnnxOptimShapeZipMap, RejectsInvalidClasslabelsConfiguration) {
         "c0";
     AddAttr(node, "classlabels_int64s", AttributeProto::AttributeType::INTS)
         ->add_ints(static_cast<int64_t>(0));
-    EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+    EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
   }
 }
 
@@ -499,7 +499,7 @@ TEST(OnnxOptimShapeOneHotEncoder, AppendsCategoryDimForInt64Categories) {
   onnx_optim::shapes::ShapesContext ctx;
   SeedInput(ctx, onnx_optim::TensorType::kInt64, onnx_optim::OptimShape{onnx_optim::OptimDim("N")});
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
@@ -518,7 +518,7 @@ TEST(OnnxOptimShapeOneHotEncoder, AppendsCategoryDimForStringCategories) {
   SeedInput(ctx, onnx_optim::TensorType::kString,
             onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(5)});
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
@@ -534,7 +534,7 @@ TEST(OnnxOptimShapeOneHotEncoder, RejectsInvalidCategoryAttributeConfiguration) 
   {
     // Neither attribute set.
     NodeProto node = MakeOneHotEncoderNode();
-    EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+    EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
   }
   {
     // Both attributes set.
@@ -542,7 +542,7 @@ TEST(OnnxOptimShapeOneHotEncoder, RejectsInvalidCategoryAttributeConfiguration) 
     AddAttr(node, "cats_int64s", AttributeProto::AttributeType::INTS)
         ->add_ints(static_cast<int64_t>(0));
     (*AddAttr(node, "cats_strings", AttributeProto::AttributeType::STRINGS)->add_strings()) = "a";
-    EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+    EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
   }
 }
 
@@ -592,7 +592,7 @@ TEST(OnnxOptimShapeSVMClassifier, InfersInt64LabelsAndBinaryScoreShape) {
   SeedInput(ctx, onnx_optim::TensorType::kFloat,
             onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(5)});
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   ASSERT_TRUE(ctx.Has("Z"));
@@ -614,7 +614,7 @@ TEST(OnnxOptimShapeSVMClassifier, InfersStringLabelsAndMulticlassScoreShape) {
   onnx_optim::shapes::ShapesContext ctx;
   SeedInput(ctx, onnx_optim::TensorType::kDouble, onnx_optim::OptimShape{onnx_optim::OptimDim(7)});
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   ASSERT_TRUE(ctx.Has("Z"));
@@ -630,7 +630,7 @@ TEST(OnnxOptimShapeSVMRegressor, InfersBatchByOneFloatOutput) {
   SeedInput(ctx, onnx_optim::TensorType::kInt32,
             onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)});
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
@@ -701,7 +701,7 @@ TEST(OnnxOptimShapeLinearClassifier, InfersInt64LabelsBinaryScoreShape) {
   SeedInput(ctx, onnx_optim::TensorType::kFloat,
             onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(5)});
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   ASSERT_TRUE(ctx.Has("Z"));
@@ -729,7 +729,7 @@ TEST(OnnxOptimShapeLinearClassifier, InfersStringLabelsMulticlassScoreShape) {
   onnx_optim::shapes::ShapesContext ctx;
   SeedInput(ctx, onnx_optim::TensorType::kDouble, onnx_optim::OptimShape{onnx_optim::OptimDim(7)});
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   ASSERT_TRUE(ctx.Has("Z"));
@@ -748,7 +748,7 @@ TEST(OnnxOptimShapeLinearRegressor, InfersBatchByTargetsFloatOutput) {
   SeedInput(ctx, onnx_optim::TensorType::kInt32,
             onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)});
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
@@ -761,7 +761,7 @@ TEST(OnnxOptimShapeLinearRegressor, DefaultsTargetsToOne) {
   onnx_optim::shapes::ShapesContext ctx;
   SeedInput(ctx, onnx_optim::TensorType::kFloat, onnx_optim::OptimShape{onnx_optim::OptimDim(4)});
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
@@ -832,7 +832,7 @@ TEST(OnnxOptimShapeDictVectorizer, OutputShapeIsVocabularyLengthWithStringVocab)
   onnx_optim::shapes::ShapesContext ctx;
   SeedInput(ctx, onnx_optim::TensorType::kInt64,
             onnx_optim::OptimShape{onnx_optim::OptimDim(static_cast<int64_t>(1))});
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
@@ -847,7 +847,7 @@ TEST(OnnxOptimShapeDictVectorizer, OutputShapeIsVocabularyLengthWithInt64Vocab) 
   onnx_optim::shapes::ShapesContext ctx;
   SeedInput(ctx, onnx_optim::TensorType::kFloat,
             onnx_optim::OptimShape{onnx_optim::OptimDim(static_cast<int64_t>(1))});
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
@@ -878,7 +878,7 @@ TEST(OnnxOptimShapeFeatureVectorizer, ConcatenatesFeatureDimsWhenKnown) {
                    onnx_optim::OptimShape{onnx_optim::OptimDim(static_cast<int64_t>(4)),
                                           onnx_optim::OptimDim(static_cast<int64_t>(2))}));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
@@ -903,7 +903,7 @@ TEST(OnnxOptimShapeFeatureVectorizer, UsesInputDimensionsAttributeWhenProvided) 
                    onnx_optim::OptimShape{onnx_optim::OptimDim(static_cast<int64_t>(2)),
                                           onnx_optim::OptimDim(static_cast<int64_t>(2))}));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
@@ -949,7 +949,7 @@ TEST(OnnxOptimShapeCastMap, SparseProducesShapeFromMaxMap) {
   onnx_optim::shapes::ShapesContext ctx;
   SeedInput(ctx, onnx_optim::TensorType::kInt64,
             onnx_optim::OptimShape{onnx_optim::OptimDim(static_cast<int64_t>(1))});
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kInt64);
@@ -964,7 +964,7 @@ TEST(OnnxOptimShapeCastMap, DenseProducesSymbolic1DShape) {
   onnx_optim::shapes::ShapesContext ctx;
   SeedInput(ctx, onnx_optim::TensorType::kInt64,
             onnx_optim::OptimShape{onnx_optim::OptimDim(static_cast<int64_t>(1))});
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kString);
@@ -979,7 +979,7 @@ TEST(OnnxOptimShapeCastMap, DefaultsCastToToFloat) {
   onnx_optim::shapes::ShapesContext ctx;
   SeedInput(ctx, onnx_optim::TensorType::kInt64,
             onnx_optim::OptimShape{onnx_optim::OptimDim(static_cast<int64_t>(1))});
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);

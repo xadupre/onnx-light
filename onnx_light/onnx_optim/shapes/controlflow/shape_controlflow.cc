@@ -29,7 +29,7 @@ namespace {
 // is returned.
 ShapesContext InferSubgraph(const ShapesContext &parent_ctx, const GraphProto &subgraph) {
   ShapesContext local = parent_ctx;
-  ComputeShapes(local, subgraph.node());
+  local.ComputeShapes(subgraph.node());
   return local;
 }
 
@@ -187,7 +187,7 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
     local.Set(body.input()[2 + i].name().as_string(), OptimTensor(local.Get(v_initial_name)));
   }
 
-  ComputeShapes(local, body.node());
+  local.ComputeShapes(body.node());
 
   // Validate that every body output is known in the local context.
   for (int i = 0; i < body.output().size(); ++i) {
@@ -349,7 +349,7 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
               OptimTensor(nullptr, scan_in.Dtype(), std::move(body_in_shape)));
   }
 
-  ComputeShapes(local, body.node());
+  local.ComputeShapes(body.node());
 
   for (int i = 0; i < body.output().size(); ++i) {
     const std::string body_out = body.output()[i].name().as_string();

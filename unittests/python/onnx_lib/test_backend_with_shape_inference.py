@@ -43,6 +43,7 @@ TestShapeInferenceBackend = make_test_class(
         "test_cc_shape_inference_nonzero_chain_anon.*",
         "test_cc_shape_inference_nonzero_chain_named.*",
         "test_cc_shape_inference_nonzero_plus_expression.*",
+        "test_cc_shape_inference_value_as_shape.*",
     ],
 )
 

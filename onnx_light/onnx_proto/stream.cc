@@ -1177,17 +1177,27 @@ void TwoFilesStream::ReadDelayedBlock(DelayedBlock &block) {
     // Advance past the block, draining the read-ahead buffer first.
     skip_bytes(block.size);
   } else {
-    EXT_ENFORCE(using_default_weights_location(),
-                "Parallel delayed reads are not supported for non-default external locations.");
-    thread_pool_.SubmitTask([this, block]() {
-      EXT_ENFORCE(block.offset < static_cast<offset_t>(weights_stream_.size()),
-                  "Offset for weights stream is out of bounds: ", block.offset,
-                  " >= ", weights_stream_.size());
+    // Snapshot the currently-active weights stream (default or one of the
+    // extra weights files) so the worker task always reads from the same
+    // file that the caller selected via set_active_weights_location().
+    FileStream &target_stream = active_weights_stream();
+    const int64_t target_size = target_stream.size();
 #if !defined(_WIN32)
-      ReadBlockFromFd(weights_stream_.file_descriptor_, block,
-                      "[TwoFilesStream::ReadDelayedBlock#weights]");
+    const int target_fd = target_stream.file_descriptor_;
+#endif
+    const std::string target_path = target_stream.file_path();
+    thread_pool_.SubmitTask([target_size,
+#if !defined(_WIN32)
+                             target_fd,
+#endif
+                             target_path, block]() {
+      EXT_ENFORCE(block.offset < static_cast<offset_t>(target_size),
+                  "Offset for weights stream is out of bounds: ", block.offset,
+                  " >= ", target_size);
+#if !defined(_WIN32)
+      ReadBlockFromFd(target_fd, block, "[TwoFilesStream::ReadDelayedBlock#weights]");
 #else
-      std::ifstream file_stream(this->weights_file_path(), std::ios::binary);
+      std::ifstream file_stream(target_path, std::ios::binary);
       file_stream.seekg(block.offset);
       file_stream.read(reinterpret_cast<char *>(block.data), block.size);
       EXT_ENFORCE(file_stream.gcount() == static_cast<std::streamsize>(block.size),
@@ -1195,9 +1205,9 @@ void TwoFilesStream::ReadDelayedBlock(DelayedBlock &block) {
                   ", got=", file_stream.gcount());
 #endif
     });
-    // Advance the weights stream past the block; the weights stream's read
-    // buffer is not used for structure parsing, so a direct seek is fine.
-    weights_stream_.file_stream_.seekg(block.size, std::ios::cur);
+    // Advance the active weights stream past the block; the weights stream's
+    // read buffer is not used for structure parsing, so a direct seek is fine.
+    target_stream.file_stream_.seekg(block.size, std::ios::cur);
   }
 }
 

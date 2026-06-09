@@ -63,7 +63,7 @@ TEST(OnnxOptimShapeOptional, WithInputCopiesDtypeAndShape) {
   onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
   ctx.Set("x", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
@@ -76,7 +76,7 @@ TEST(OnnxOptimShapeOptional, WithInputPreservesSymbolicDims) {
   onnx_optim::OptimShape shape{onnx_optim::OptimDim(std::string("N")), onnx_optim::OptimDim(4)};
   ctx.Set("x", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64, shape));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kInt64);
@@ -88,7 +88,7 @@ TEST(OnnxOptimShapeOptional, NoInputWithOptionalOfTensorTypeAttribute) {
   AddTypeAttr(node, TensorProto::DataType::FLOAT, {2, 3}, /*wrap_in_optional=*/true);
 
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
@@ -101,7 +101,7 @@ TEST(OnnxOptimShapeOptional, NoInputWithBareTensorTypeAttribute) {
   AddTypeAttr(node, TensorProto::DataType::INT32, {4}, /*wrap_in_optional=*/false);
 
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kInt32);
@@ -111,7 +111,7 @@ TEST(OnnxOptimShapeOptional, NoInputWithBareTensorTypeAttribute) {
 TEST(OnnxOptimShapeOptional, NoInputNoTypeAttributeThrows) {
   NodeProto node = MakeOptionalNode(/*with_input=*/false);
   onnx_optim::shapes::ShapesContext ctx;
-  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+  EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeOptional, NoInputSequenceTypeAttributeThrows) {
@@ -129,7 +129,7 @@ TEST(OnnxOptimShapeOptional, NoInputSequenceTypeAttributeThrows) {
   tt->set_elem_type(static_cast<int>(TensorProto::DataType::FLOAT));
 
   onnx_optim::shapes::ShapesContext ctx;
-  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+  EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeOptional, RejectsBadOpType) {

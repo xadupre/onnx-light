@@ -70,6 +70,14 @@ void RegisterNestedLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &re
 /// Expressions must be simplified.
 void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &registry);
 
+/// Registers the ``Shape → Shape → Concat → Add → Sub → Expand → 3 × Add →
+/// Add → Add`` value-as-shape case translated from
+/// https://github.com/xadupre/yet-another-onnx-builder/blob/main/
+/// unittests/xshape/test_value_as_shape.py. Exercises value-as-shape
+/// propagation through ``Shape``/``Concat``/``Add``/``Sub`` so the
+/// downstream ``Expand`` can recover the precise symbolic output shape.
+void RegisterValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry);
+
 /// Collects all shape-inference oriented backend test cases by invoking
 /// every ``Register*ShapeInferenceCases`` helper declared in this header.
 void CollectShapeInferenceTestCases(std::vector<TestCase> &registry,

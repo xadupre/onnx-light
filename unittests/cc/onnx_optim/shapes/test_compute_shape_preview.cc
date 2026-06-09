@@ -181,7 +181,7 @@ TEST(OnnxOptimShapesPreviewFlexAttention, DispatchesThroughComputeShapeNode) {
   onnx_optim::shapes::ShapesContext ctx;
   SetFlexInputs(ctx, Shape4(2, 4, 8, 16), Shape4(2, 4, 12, 16), Shape4(2, 4, 12, 32));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();

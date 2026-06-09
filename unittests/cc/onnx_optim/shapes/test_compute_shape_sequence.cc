@@ -151,7 +151,7 @@ TEST(OnnxOptimShapeInference, DispatchesSequenceConstruct) {
   ctx.Set("a", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
   ctx.Set("b", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.HasSequence("y"));
   EXPECT_EQ(ctx.GetSequence("y").Length().AsInt(), 2);
@@ -197,7 +197,7 @@ TEST(OnnxOptimShapeInference, DispatchesSequenceLength) {
   ctx.SetSequence(
       "s", onnx_optim::OptimSequence(onnx_optim::TensorType::kFloat, onnx_optim::OptimDim("N")));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("len"));
   const onnx_optim::OptimTensor &out = ctx.Get("len");
@@ -517,7 +517,7 @@ TEST(OnnxOptimShapeConcatFromSequence, DispatchedViaComputeShapeNode) {
                            onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(5)},
                        }));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("y"));
   const onnx_optim::OptimTensor &out = ctx.Get("y");
@@ -720,7 +720,7 @@ TEST(OnnxOptimShapeInference, DispatchesSequenceErase) {
                                                 onnx_optim::OptimShape{onnx_optim::OptimDim(3)},
                                             }));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.HasSequence("out"));
   const onnx_optim::OptimSequence &out = ctx.GetSequence("out");
@@ -737,7 +737,7 @@ TEST(OnnxOptimShapeInference, DispatchesSequenceInsert) {
   ctx.Set("x", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
                                        onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.HasSequence("out"));
   const onnx_optim::OptimSequence &out = ctx.GetSequence("out");
@@ -832,7 +832,7 @@ TEST(OnnxOptimShapeInference, DispatchesSequenceAt) {
   ctx.Set("p", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
                                        onnx_optim::OptimShape{}));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("out"));
   EXPECT_EQ(ctx.Get("out").Dtype(), onnx_optim::TensorType::kFloat);
@@ -1031,7 +1031,7 @@ TEST(OnnxOptimShapeInference, DispatchesSequenceEmpty) {
                                          /*dtype=*/static_cast<int64_t>(TensorProto::DOUBLE));
   onnx_optim::shapes::ShapesContext ctx;
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.HasSequence("out"));
   const onnx_optim::OptimSequence &out = ctx.GetSequence("out");
@@ -1226,7 +1226,7 @@ TEST(OnnxOptimShapeInference, DispatchesSplitToSequence) {
                    nullptr, onnx_optim::TensorType::kFloat,
                    onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)}));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.HasSequence("out"));
   const onnx_optim::OptimSequence &out = ctx.GetSequence("out");

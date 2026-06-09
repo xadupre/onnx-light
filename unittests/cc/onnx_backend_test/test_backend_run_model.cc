@@ -199,6 +199,9 @@ TEST(BackendRunModel, Attention) {
   });
 }
 TEST(BackendRunModel, CausalConvWithState) { RunBackendCasesFor("CausalConvWithState"); }
+TEST(BackendRunModel, Conv) { RunBackendCasesFor("Conv"); }
+TEST(BackendRunModel, ConvInteger) { RunBackendCasesFor("ConvInteger"); }
+TEST(BackendRunModel, DeformConv) { RunBackendCasesFor("DeformConv"); }
 
 // ai.onnx.preview.training optimizer kernels.
 TEST(BackendRunModel, Adagrad) { RunBackendCasesFor("Adagrad"); }
@@ -210,6 +213,9 @@ TEST(BackendRunModel, SVMRegressor) { RunBackendCasesFor("SVMRegressor"); }
 TEST(BackendRunModel, SVMClassifier) { RunBackendCasesFor("SVMClassifier"); }
 TEST(BackendRunModel, LinearRegressor) { RunBackendCasesFor("LinearRegressor"); }
 TEST(BackendRunModel, LinearClassifier) { RunBackendCasesFor("LinearClassifier"); }
+TEST(BackendRunModel, TreeEnsembleRegressor) { RunBackendCasesFor("TreeEnsembleRegressor"); }
+TEST(BackendRunModel, TreeEnsembleClassifier) { RunBackendCasesFor("TreeEnsembleClassifier"); }
+TEST(BackendRunModel, TreeEnsemble) { RunBackendCasesFor("TreeEnsemble"); }
 
 // Quantization kernels.
 // The reference QuantizeLinear/DequantizeLinear kernels only support

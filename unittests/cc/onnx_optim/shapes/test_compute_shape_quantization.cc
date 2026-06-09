@@ -182,7 +182,7 @@ TEST(OnnxOptimShapesQuantizationQuantizeLinear, DispatchesViaComputeShapeNode) {
   SetScale(ctx);
   SetZeroPoint(ctx, onnx_optim::TensorType::kUint16);
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kUint16);
@@ -323,7 +323,7 @@ TEST(OnnxOptimShapesQuantizationDequantizeLinear, DispatchesViaComputeShapeNode)
   SetScaleDeq(ctx);
   SetZeroPointDeq(ctx, onnx_optim::TensorType::kUint8);
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);

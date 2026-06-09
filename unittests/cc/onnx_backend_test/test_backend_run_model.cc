@@ -59,9 +59,14 @@ void ExpectTensorBitEqual(const Tensor &actual, const Tensor &expected) {
 // ``cases_*`` registry are themselves produced by the very same kernels that
 // :cpp:func:`RunModel` will dispatch to, so a bit-exact comparison is
 // appropriate.
-void RunBackendCasesFor(
-    const std::string &op_type, const std::function<bool(const DataSet &)> &accept_data_set =
-                                    [](const DataSet &) { return true; }) {
+//
+// The optional ``accept_test_case`` predicate is evaluated once per
+// ``TestCase`` (before any ``DataSet`` is examined); returning ``false``
+// skips the entire case. The optional ``accept_data_set`` predicate is then
+// evaluated per ``DataSet`` within an accepted case.
+void RunBackendCasesFor(const std::string &op_type,
+                        const std::function<bool(const TestCase &)> &accept_test_case,
+                        const std::function<bool(const DataSet &)> &accept_data_set) {
   const std::vector<TestCase> cases = CollectTestCases(op_type);
   ASSERT_FALSE(cases.empty()) << "No backend test cases found for op_type=" << op_type;
 
@@ -73,6 +78,9 @@ void RunBackendCasesFor(
     }
     const NodeProto &node = graph.ref_node()[0];
     if (node.ref_op_type().as_string() != op_type) {
+      continue;
+    }
+    if (!accept_test_case(tc)) {
       continue;
     }
     SCOPED_TRACE(tc.name);
@@ -102,6 +110,12 @@ void RunBackendCasesFor(
     }
   }
   EXPECT_GT(executed, 0u) << "No single-node test cases exercised for op_type=" << op_type;
+}
+
+void RunBackendCasesFor(
+    const std::string &op_type, const std::function<bool(const DataSet &)> &accept_data_set =
+                                    [](const DataSet &) { return true; }) {
+  RunBackendCasesFor(op_type, [](const TestCase &) { return true; }, accept_data_set);
 }
 
 } // namespace
@@ -264,5 +278,39 @@ TEST(BackendRunModel, DequantizeLinear) {
   });
 }
 TEST(BackendRunModel, DynamicQuantizeLinear) { RunBackendCasesFor("DynamicQuantizeLinear"); }
+
+// LinearAttention (opset 27) and FlexAttention (ai.onnx.preview) kernels.
+TEST(BackendRunModel, LinearAttention) {
+  RunBackendCasesFor("LinearAttention", [](const DataSet &ds) {
+    return ds.inputs.size() >= 3 && ds.inputs[0].data_type == DataType::FLOAT &&
+           ds.inputs[1].data_type == DataType::FLOAT && ds.inputs[2].data_type == DataType::FLOAT;
+  });
+}
+TEST(BackendRunModel, FlexAttention) {
+  // The dispatch-table kernel handles the base FlexAttention path (Q, K, V ->
+  // Y) without executing optional ``score_mod`` or ``prob_mod`` subgraphs.
+  // Skip cases that attach those attributes because their expected outputs are
+  // computed with the modifier applied and will not match the baseline kernel.
+  RunBackendCasesFor(
+      "FlexAttention",
+      [](const TestCase &tc) {
+        if (tc.model.ref_graph().ref_node().size() != 1u) {
+          return true;
+        }
+        const NodeProto &node = tc.model.ref_graph().ref_node()[0];
+        for (const auto &attr : node.ref_attribute()) {
+          const std::string name = attr.ref_name().as_string();
+          if (name == "score_mod" || name == "prob_mod") {
+            return false;
+          }
+        }
+        return true;
+      },
+      [](const DataSet &ds) {
+        return ds.inputs.size() >= 3 && ds.inputs[0].data_type == DataType::FLOAT &&
+               ds.inputs[1].data_type == DataType::FLOAT &&
+               ds.inputs[2].data_type == DataType::FLOAT;
+      });
+}
 
 } // namespace Test

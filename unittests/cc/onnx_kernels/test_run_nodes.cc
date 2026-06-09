@@ -136,9 +136,13 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx.preview.training:Adagrad"), table.end());
   EXPECT_NE(table.find("ai.onnx.preview.training:Adam"), table.end());
   EXPECT_NE(table.find("ai.onnx.preview.training:Momentum"), table.end());
+  // ai.onnx.preview kernels.
+  EXPECT_NE(table.find("ai.onnx.preview:FlexAttention"), table.end());
   // ai.onnx.ml kernels.
   EXPECT_NE(table.find("ai.onnx.ml:SVMRegressor"), table.end());
   EXPECT_NE(table.find("ai.onnx.ml:SVMClassifier"), table.end());
+  // Linear attention (opset 27).
+  EXPECT_NE(table.find("ai.onnx:LinearAttention"), table.end());
 }
 
 TEST(RunNodes, RunNodeSingleAdd) {
@@ -1742,6 +1746,52 @@ TEST(RunModel, ScanNodeRunsBodySubgraph) {
   EXPECT_FLOAT_EQ(y[0], 1.0f);
   EXPECT_FLOAT_EQ(y[1], 3.0f);
   EXPECT_FLOAT_EQ(y[2], 6.0f);
+}
+
+TEST(RunNodes, RunNodeLinearAttentionFromDispatchTable) {
+  // Minimal test: B=1, T=1, q_num_heads=1, kv_num_heads=1, d_k=d_v=2.
+  // query/key/value each have shape (1, 1, 2).
+  RuntimeContext rt(KernelContext(DefaultOpset(27)));
+  rt.tensors()["query"] = Tensor::FromFloat("query", {1, 1, 2}, {1.0f, 0.0f});
+  rt.tensors()["key"] = Tensor::FromFloat("key", {1, 1, 2}, {1.0f, 0.0f});
+  rt.tensors()["value"] = Tensor::FromFloat("value", {1, 1, 2}, {0.5f, 0.5f});
+
+  NodeProto node =
+      MakeNode("LinearAttention", {"query", "key", "value"}, {"output", "present_state"});
+  AttributeProto *rule_attr = node.add_attribute();
+  rule_attr->set_name("update_rule");
+  rule_attr->set_type(AttributeProto::AttributeType::STRING);
+  rule_attr->set_s("linear");
+  AttributeProto *qh_attr = node.add_attribute();
+  qh_attr->set_name("q_num_heads");
+  qh_attr->set_type(AttributeProto::AttributeType::INT);
+  qh_attr->set_i(1);
+  AttributeProto *kvh_attr = node.add_attribute();
+  kvh_attr->set_name("kv_num_heads");
+  kvh_attr->set_type(AttributeProto::AttributeType::INT);
+  kvh_attr->set_i(1);
+  RunNode(node, rt);
+
+  const Tensor &output = rt.tensors().at("output");
+  EXPECT_EQ(output.shape, (std::vector<int64_t>{1, 1, 2}));
+  const Tensor &present = rt.tensors().at("present_state");
+  EXPECT_EQ(present.shape, (std::vector<int64_t>{1, 1, 2, 2}));
+}
+
+TEST(RunNodes, RunNodeFlexAttentionFromDispatchTable) {
+  // Minimal test: B=1, q_num_heads=kv_num_heads=1, q_seq=kv_seq=2, head_size=2.
+  // Q/K/V each have shape (1, 1, 2, 2).
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["Q"] = Tensor::FromFloat("Q", {1, 1, 2, 2}, {1.0f, 0.0f, 0.0f, 1.0f});
+  rt.tensors()["K"] = Tensor::FromFloat("K", {1, 1, 2, 2}, {1.0f, 0.0f, 0.0f, 1.0f});
+  rt.tensors()["V"] = Tensor::FromFloat("V", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+
+  NodeProto node = MakeNode("FlexAttention", {"Q", "K", "V"}, {"Y"}, "ai.onnx.preview");
+  RunNode(node, rt);
+
+  const Tensor &Y = rt.tensors().at("Y");
+  EXPECT_EQ(Y.shape, (std::vector<int64_t>{1, 1, 2, 2}));
+  EXPECT_EQ(Y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
 }
 
 } // namespace Test

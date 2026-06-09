@@ -10,6 +10,7 @@
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 #include "onnx_kernels/kernels/object_detection/include_object_detection_kernels.h"
+#include "onnx_kernels/kernels/preview/include_preview_kernels.h"
 #include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
 #include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
@@ -700,6 +701,48 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:LeakyRelu", MakeUnaryAlphaTrampoline<kernel::LeakyRelu>("alpha", 0.01f)},
       {"ai.onnx:Less", MakeBinaryTrampoline<kernel::Less>()},
       {"ai.onnx:LessOrEqual", MakeBinaryTrampoline<kernel::LessOrEqual>()},
+      {"ai.onnx:LinearAttention",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         if (node.input_size() < 3 || node.input_size() > 6) {
+           throw std::invalid_argument("RunNode: op 'LinearAttention' expects between 3 and 6 "
+                                       "input(s), got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         if (node.output_size() < 1 || node.output_size() > 2) {
+           throw std::invalid_argument("RunNode: op 'LinearAttention' expects 1 or 2 output(s), "
+                                       "got " +
+                                       std::to_string(node.output_size()) + ".");
+         }
+         const Tensor &query = GetInput(node, 0, rt.tensors());
+         const Tensor &key = GetInput(node, 1, rt.tensors());
+         const Tensor &value = GetInput(node, 2, rt.tensors());
+         const Tensor *past_state = GetOptionalInput(node, 3, rt.tensors());
+         const Tensor *decay = GetOptionalInput(node, 4, rt.tensors());
+         const Tensor *beta = GetOptionalInput(node, 5, rt.tensors());
+
+         kernel::LinearAttention::Attributes attrs;
+         attrs.update_rule = GetAttributeStringOrDefault(node, "update_rule", "gated_delta");
+         if (FindAttribute(node, "scale") != nullptr) {
+           attrs.has_scale = true;
+           attrs.scale = GetAttributeFloatOrDefault(node, "scale", 0.0f);
+         }
+         attrs.q_num_heads = GetAttributeIntOrDefault(node, "q_num_heads", 0);
+         attrs.kv_num_heads = GetAttributeIntOrDefault(node, "kv_num_heads", 0);
+         attrs.chunk_size = GetAttributeIntOrDefault(node, "chunk_size", 64);
+
+         kernel::LinearAttention k(rt.kernel_ctx());
+         kernel::LinearAttention::Result result =
+             k(query, key, value, attrs, past_state, decay, beta);
+         SetOutput(node, 0, std::move(result.output), rt.tensors());
+
+         if (node.output_size() >= 2) {
+           const std::string present_name = node.output(1).as_string();
+           if (!present_name.empty()) {
+             result.present_state.name = present_name;
+             rt.tensors()[present_name] = std::move(result.present_state);
+           }
+         }
+       }},
       {"ai.onnx:Log", MakeUnaryTrampoline<kernel::Log>()},
       {"ai.onnx:LogSoftmax", MakeAxisTrampoline<kernel::LogSoftmax>()},
       {"ai.onnx:MatMul", MakeBinaryTrampoline<kernel::MatMul>()},
@@ -823,7 +866,27 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Where", MakeTernaryTrampoline<kernel::Where>()},
       {"ai.onnx:Xor", MakeBinaryTrampoline<kernel::Xor>()},
 
-      // ai.onnx.preview.training 
+      // ai.onnx.preview
+      {"ai.onnx.preview:FlexAttention",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 3);
+         RequireOutputCount(node, 1);
+         const Tensor &Q = GetInput(node, 0, rt.tensors());
+         const Tensor &K = GetInput(node, 1, rt.tensors());
+         const Tensor &V = GetInput(node, 2, rt.tensors());
+
+         kernel::FlexAttention flex(rt.kernel_ctx());
+         Tensor Y;
+         if (FindAttribute(node, "scale") != nullptr) {
+           const float scale = GetAttributeFloatOrDefault(node, "scale", 0.0f);
+           Y = flex(Q, K, V, scale);
+         } else {
+           Y = flex(Q, K, V);
+         }
+         SetOutput(node, 0, std::move(Y), rt.tensors());
+       }},
+
+      // ai.onnx.preview.training
       {"ai.onnx.preview.training:Adagrad",
        [](const NodeProto &node, RuntimeContext &rt) {
          if (node.input_size() < 5 || (node.input_size() - 2) % 3 != 0) {

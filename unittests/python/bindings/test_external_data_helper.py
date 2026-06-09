@@ -15,7 +15,9 @@ from onnx_light.onnx.external_data_helper import (
 
 
 def _make_model(values: np.ndarray) -> onnxl.ModelProto:
-    init = oh.make_tensor("W", onnxl.TensorProto.FLOAT, list(values.shape), values.tobytes(), raw=True)
+    init = oh.make_tensor(
+        "W", onnxl.TensorProto.FLOAT, list(values.shape), values.tobytes(), raw=True
+    )
     inp = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, list(values.shape))
     out = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, list(values.shape))
     node = oh.make_node("Add", ["X", "W"], ["Y"])
@@ -39,10 +41,7 @@ class TestExternalDataHelper(ExtTestCase):
 
             model = _make_model(values)
             convert_model_to_external_data(
-                model,
-                all_tensors_to_one_file=True,
-                location=ext_name,
-                size_threshold=0,
+                model, all_tensors_to_one_file=True, location=ext_name, size_threshold=0
             )
             init = model.graph.initializer[0]
             self.assertTrue(uses_external_data(init))
@@ -98,9 +97,7 @@ class TestExternalDataHelper(ExtTestCase):
     def test_convert_per_tensor_file(self):
         values = np.arange(64, dtype=np.float32)
         model = _make_model(values)
-        convert_model_to_external_data(
-            model, all_tensors_to_one_file=False, size_threshold=0
-        )
+        convert_model_to_external_data(model, all_tensors_to_one_file=False, size_threshold=0)
         init = model.graph.initializer[0]
         entries = {e.key: e.value for e in init.external_data}
         self.assertEqual(entries["location"], "W")

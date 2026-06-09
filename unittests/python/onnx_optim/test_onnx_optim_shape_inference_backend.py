@@ -96,7 +96,6 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
         # outputs
         self.assertEqual(["batch", "seq", "2*d_model"], list(ctx.get("Z").shape))
 
-    @unittest.skip("broken")
     def test_inference_shape_backend_constraints(self):
         from onnx_light.onnx_optim.shape_inference import infer_shapes_model
 
@@ -111,8 +110,10 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
         model.CopyFrom(test.model)
         model.graph.value_info.clear()
         infer_shapes_model(model)
-        expected_info = {info.name: info for info in test.model.graph.value_info}
-        computed = {info.name: info for info in model.graph.value_info}
+        expected_info = {
+            info.name: info for info in [*test.model.graph.value_info, *test.model.graph.output]
+        }
+        computed = {info.name: info for info in [*model.graph.value_info, *model.graph.output]}
         self.assertEqual(set(expected_info), set(computed))
         for name in expected_info:
             expected = expected_info[name]

@@ -87,7 +87,7 @@ void ComputeShapeSequenceMap(ShapesContext &ctx, const NodeProto &node) {
     }
   }
 
-  ComputeShapes(local, body.node());
+  local.ComputeShapes(body.node());
 
   // Validate that every body output is known in the local context.
   for (int i = 0; i < body.output().size(); ++i) {

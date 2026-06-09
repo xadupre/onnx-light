@@ -121,7 +121,7 @@ TEST(OnnxOptimShapeIf, BranchesAgreeOnConstantTensor) {
   onnx_optim::shapes::ShapesContext ctx;
   ctx.Set("cond", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kInt64);
@@ -307,7 +307,7 @@ TEST(OnnxOptimShapeInference, DispatchesIf) {
   ctx.Set("cond", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
   ctx.Set("x", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
@@ -454,7 +454,7 @@ TEST(OnnxOptimShapeInference, DispatchesLoop) {
   ctx.Set("cond", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
   ctx.Set("v_init", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("v_final"));
   EXPECT_EQ(ctx.Get("v_final").Shape(), shape);
@@ -575,7 +575,7 @@ TEST(OnnxOptimShapeInference, DispatchesScan) {
   onnx_optim::OptimShape x_shape{onnx_optim::OptimDim(6), onnx_optim::OptimDim(2)};
   ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, x_shape));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y").Shape(), x_shape);

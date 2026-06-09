@@ -110,7 +110,7 @@ TEST(OnnxOptimShapeRuntime, ShapeNoAttrsKnownShape) {
                                onnx_optim::OptimDim(4)};
   ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   const onnx_optim::OptimTensor &out = ctx.Get("Y");
@@ -133,7 +133,7 @@ TEST(OnnxOptimShapeRuntime, ShapeNoAttrsUnknownShapeIsEmpty) {
   onnx_optim::shapes::ShapesContext ctx;
   ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   const onnx_optim::OptimTensor &out = ctx.Get("Y");
@@ -153,7 +153,7 @@ TEST(OnnxOptimShapeRuntime, ShapeWithStartAttr) {
                                onnx_optim::OptimDim(4), onnx_optim::OptimDim(5)};
   ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   const onnx_optim::OptimTensor &out = ctx.Get("Y");
@@ -174,7 +174,7 @@ TEST(OnnxOptimShapeRuntime, ShapeWithStartEndAttrs) {
                                onnx_optim::OptimDim(4), onnx_optim::OptimDim(5)};
   ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("Y"));
   const onnx_optim::OptimTensor &out = ctx.Get("Y");
@@ -198,7 +198,7 @@ TEST(OnnxOptimShapeRuntime, ConcatTwoShapeTuples) {
   ctx.Set("a", MakeInt64ValueAsShape({onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
   ctx.Set("b", MakeInt64ValueAsShape({onnx_optim::OptimDim(4), onnx_optim::OptimDim(5)}));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("out"));
   const onnx_optim::OptimTensor &out = ctx.Get("out");
@@ -224,7 +224,7 @@ TEST(OnnxOptimShapeRuntime, AddTuplesElementWise) {
   ctx.Set("a", MakeInt64ValueAsShape({onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
   ctx.Set("b", MakeInt64ValueAsShape({onnx_optim::OptimDim(1), onnx_optim::OptimDim(4)}));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("out"));
   const onnx_optim::OptimTensor &out = ctx.Get("out");
@@ -243,7 +243,7 @@ TEST(OnnxOptimShapeRuntime, SubTuplesElementWise) {
   ctx.Set("a", MakeInt64ValueAsShape({onnx_optim::OptimDim(10)}));
   ctx.Set("b", MakeInt64ValueAsShape({onnx_optim::OptimDim(3)}));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("out"));
   const onnx_optim::OptimTensor &out = ctx.Get("out");
@@ -263,7 +263,7 @@ TEST(OnnxOptimShapeRuntime, AddBroadcastScalarToTuple) {
   ctx.Set("b", MakeInt64ValueAsShape(
                    {onnx_optim::OptimDim(2), onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)}));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("out"));
   const onnx_optim::OptimTensor &out = ctx.Get("out");
@@ -285,7 +285,7 @@ TEST(OnnxOptimShapeRuntime, AddStrAndInt) {
   ctx.Set("a", MakeInt64ValueAsShape({onnx_optim::OptimDim("batch")}));
   ctx.Set("b", MakeInt64ValueAsShape({onnx_optim::OptimDim(static_cast<int64_t>(1))}));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
 
   ASSERT_TRUE(ctx.Has("out"));
   const onnx_optim::OptimTensor &out = ctx.Get("out");

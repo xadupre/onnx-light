@@ -203,7 +203,7 @@ TEST(OnnxOptimShapeBuilder, CheckShapeComputesExpectedRankTypesAndConcreteDims) 
   *graph->add_node() = MakeNode("Reshape", {"xm", "shape3"}, {"Z"});
 
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::shapes::ComputeShapeModel(ctx, model);
+  ctx.ComputeShapeModel(model);
 
   // ── initializer ranks / types ────────────────────────────────────────────
   CheckShape(ctx, "zero", {onnx_optim::OptimDim(1)}, onnx_optim::TensorType::kInt64);
@@ -363,7 +363,7 @@ TEST(OnnxOptimShapeBuilder, ReshapeReshapePreservesRankAndPartialDims) {
   *graph->add_node() = MakeNode("Add", {"xrr", "one"}, {"Y"});
 
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::shapes::ComputeShapeModel(ctx, model);
+  ctx.ComputeShapeModel(model);
 
   // X: float[a, b, c]
   ASSERT_EQ(ctx.Get("X").Shape().Rank(), 3u);
@@ -480,7 +480,7 @@ TEST(OnnxOptimShapeBuilder, ValueAsShapeFromShapeConcatMatMulReshapeTranspose) {
   }
 
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::shapes::ComputeShapeModel(ctx, model);
+  ctx.ComputeShapeModel(model);
 
   // ── init328 ValueAsShape ─────────────────────────────────────────────────
   ASSERT_TRUE(ctx.Has("init328"));
@@ -594,7 +594,7 @@ TEST(OnnxOptimShapeBuilder, ConcatProducesSymbolicAxisDimAndAppliedToGraph) {
   *graph->add_node() = std::move(concat_node);
 
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::shapes::ComputeShapeModel(ctx, model);
+  ctx.ComputeShapeModel(model);
 
   // Z has rank 2
   ASSERT_TRUE(ctx.Has("Z"));
@@ -610,7 +610,7 @@ TEST(OnnxOptimShapeBuilder, ConcatProducesSymbolicAxisDimAndAppliedToGraph) {
   CheckIsSymbolic(ctx, "Z", 1);
 
   // ── ApplyInferredShapesToGraph writes shapes back to the proto ────────────
-  onnx_optim::shapes::ApplyInferredShapesToGraph(ctx, *model.mutable_graph());
+  ctx.ApplyInferredShapesToGraph(*model.mutable_graph());
 
   // The output Z now has a shape in the proto.
   ASSERT_EQ(model.graph().output_size(), 1);
@@ -674,7 +674,7 @@ TEST(OnnxOptimShapeBuilder, ConcatSplitApplyInferredShapesToGraph) {
   *graph->add_node() = MakeNode("Tanh", {"zs"}, {"Z"});
 
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::shapes::ComputeShapeModel(ctx, model);
+  ctx.ComputeShapeModel(model);
 
   // xy = Concat(X, Y, axis=1): rank 2
   ASSERT_TRUE(ctx.Has("xy"));
@@ -707,7 +707,7 @@ TEST(OnnxOptimShapeBuilder, ConcatSplitApplyInferredShapesToGraph) {
   CheckIsSymbolic(ctx, "Z", 1);
 
   // ── ApplyInferredShapesToGraph ────────────────────────────────────────────
-  onnx_optim::shapes::ApplyInferredShapesToGraph(ctx, *model.mutable_graph());
+  ctx.ApplyInferredShapesToGraph(*model.mutable_graph());
 
   // value_info should contain entries for the intermediate tensors:
   // xy, S1, S2, zs (not X, Y, init/output)

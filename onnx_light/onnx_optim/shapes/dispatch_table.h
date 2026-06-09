@@ -14,7 +14,7 @@
 /**
  * @file dispatch_table.h
  * @brief Per-(domain, op_type) dispatch table used by
- *        :cpp:func:`onnx_optim::shapes::ComputeShapeNode` to forward
+ *        :cpp:func:`onnx_optim::shapes::ShapesContext::ComputeShapeNode` to forward
  *        each ``NodeProto`` to the matching ``ComputeShape*``
  *        implementation.
  */

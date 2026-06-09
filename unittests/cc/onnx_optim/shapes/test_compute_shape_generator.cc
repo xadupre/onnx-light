@@ -52,7 +52,7 @@ TEST(OnnxOptimShapeConstant, ValueTensorFloat) {
   t->set_raw_data(utils::ByteSpan(raw));
 
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("y").Shape(),
@@ -72,7 +72,7 @@ TEST(OnnxOptimShapeConstant, ValueTensorSmallInt64SetsValueAsShape) {
   t->ref_int64_data().push_back(16);
 
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kInt64);
   EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
@@ -93,7 +93,7 @@ TEST(OnnxOptimShapeConstant, ValueTensorLargeInt64DoesNotSetValueAsShape) {
   }
 
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   // 8 elements is not "small" (the threshold is strictly less than 28).
   EXPECT_FALSE(ctx.Get("y").HasValueAsShape());
@@ -111,7 +111,7 @@ TEST(OnnxOptimShapeConstant, ValueTensorInt64FromRawData) {
   t->set_raw_data(utils::ByteSpan(raw));
 
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   ASSERT_TRUE(ctx.Get("y").HasValueAsShape());
   EXPECT_EQ(ctx.Get("y").ValueAsShape(),
@@ -124,7 +124,7 @@ TEST(OnnxOptimShapeConstant, ValueInt) {
   attr->set_i(42);
 
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kInt64);
   EXPECT_EQ(ctx.Get("y").Shape(), onnx_optim::OptimShape{});
@@ -140,7 +140,7 @@ TEST(OnnxOptimShapeConstant, ValueInts) {
   attr->ref_ints().push_back(3);
 
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kInt64);
   EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
@@ -156,7 +156,7 @@ TEST(OnnxOptimShapeConstant, ValueFloat) {
   attr->set_f(1.42f);
 
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("y").Shape(), onnx_optim::OptimShape{});
@@ -171,7 +171,7 @@ TEST(OnnxOptimShapeConstant, ValueFloats) {
   attr->ref_floats().push_back(1.2f);
 
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
@@ -184,7 +184,7 @@ TEST(OnnxOptimShapeConstant, ValueString) {
   attr->set_s("hello");
 
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kString);
   EXPECT_EQ(ctx.Get("y").Shape(), onnx_optim::OptimShape{});
@@ -199,7 +199,7 @@ TEST(OnnxOptimShapeConstant, ValueStrings) {
   attr->ref_strings().push_back(utils::String("x"));
 
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kString);
   EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(4)}));
@@ -215,7 +215,7 @@ TEST(OnnxOptimShapeConstant, SparseValue) {
   sp->ref_dims().push_back(100);
 
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kInt64);
   EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(100)}));
@@ -224,7 +224,7 @@ TEST(OnnxOptimShapeConstant, SparseValue) {
 TEST(OnnxOptimShapeConstant, RejectsNodeWithoutAnyValueAttribute) {
   NodeProto node = MakeConstantNode();
   onnx_optim::shapes::ShapesContext ctx;
-  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+  EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeConstant, RejectsNodeWithTwoValueAttributes) {
@@ -232,7 +232,7 @@ TEST(OnnxOptimShapeConstant, RejectsNodeWithTwoValueAttributes) {
   AddAttr(node, "value_int", AttributeProto::AttributeType::INT)->set_i(1);
   AddAttr(node, "value_float", AttributeProto::AttributeType::FLOAT)->set_f(1.0f);
   onnx_optim::shapes::ShapesContext ctx;
-  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+  EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeConstant, RejectsBadOpType) {
@@ -269,7 +269,7 @@ TEST(OnnxOptimShapeConstantOfShape, UsesShapeInputValueAndDefaultsFloatDtype) {
                                            onnx_optim::OptimDim(16)});
   ctx.Set("x", std::move(x));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("y").Shape(),
@@ -291,7 +291,7 @@ TEST(OnnxOptimShapeConstantOfShape, ValueAttributeOverridesOutputDtype) {
   x.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(10), onnx_optim::OptimDim(6)});
   ctx.Set("x", std::move(x));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kInt32);
   EXPECT_EQ(ctx.Get("y").Shape(),
@@ -308,7 +308,7 @@ TEST(OnnxOptimShapeConstantOfShape, EmptyShapeProducesScalar) {
   x.SetValueAsShape(onnx_optim::OptimShape{});
   ctx.Set("x", std::move(x));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("y").Shape(), onnx_optim::OptimShape{});
@@ -324,7 +324,7 @@ TEST(OnnxOptimShapeConstantOfShape, FallsBackToSymbolicDimsWithoutValueAsShape) 
                             onnx_optim::OptimShape{onnx_optim::OptimDim(3)});
   ctx.Set("x", std::move(x));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("y").Shape().Rank(), 3u);
@@ -367,7 +367,7 @@ TEST(OnnxOptimShapeEyeLike, DefaultsToInputTypeAndShape) {
       onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)});
   ctx.Set("x", std::move(x));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kInt32);
   EXPECT_EQ(ctx.Get("y").Shape(),
@@ -384,7 +384,7 @@ TEST(OnnxOptimShapeEyeLike, DtypeAttributeOverridesOutputType) {
       onnx_optim::OptimShape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(5)});
   ctx.Set("x", std::move(x));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kInt64);
   EXPECT_EQ(ctx.Get("y").Shape(),
@@ -398,7 +398,7 @@ TEST(OnnxOptimShapeEyeLike, RejectsNonMatrixInput) {
                             onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3),
                                                    onnx_optim::OptimDim(4)});
   ctx.Set("x", std::move(x));
-  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+  EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
 
 namespace {
@@ -423,7 +423,7 @@ TEST(OnnxOptimShapeBlackmanWindow, KnownSizeProducesConcreteDimFloatByDefault) {
   s.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(10)});
   ctx.Set("size", std::move(s));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(10)}));
@@ -439,7 +439,7 @@ TEST(OnnxOptimShapeBlackmanWindow, OutputDatatypeAttributeOverridesDtype) {
   s.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(32)});
   ctx.Set("size", std::move(s));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kDouble);
   EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(32)}));
@@ -454,7 +454,7 @@ TEST(OnnxOptimShapeBlackmanWindow, UnknownSizeFallsBackToSymbolicDim) {
   onnx_optim::OptimTensor s(nullptr, onnx_optim::TensorType::kInt64, onnx_optim::OptimShape{});
   ctx.Set("size", std::move(s));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("y").Shape().Rank(), 1u);
@@ -470,7 +470,7 @@ TEST(OnnxOptimShapeBlackmanWindow, PeriodicAttributeDoesNotAffectShape) {
   s.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(8)});
   ctx.Set("size", std::move(s));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(8)}));
@@ -517,7 +517,7 @@ TEST(OnnxOptimShapeHannWindow, KnownSizeProducesConcreteDimFloatByDefault) {
   s.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(10)});
   ctx.Set("size", std::move(s));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(10)}));
@@ -533,7 +533,7 @@ TEST(OnnxOptimShapeHannWindow, OutputDatatypeAttributeOverridesDtype) {
   s.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(32)});
   ctx.Set("size", std::move(s));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kDouble);
   EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(32)}));
@@ -546,7 +546,7 @@ TEST(OnnxOptimShapeHannWindow, UnknownSizeFallsBackToSymbolicDim) {
   onnx_optim::OptimTensor s(nullptr, onnx_optim::TensorType::kInt64, onnx_optim::OptimShape{});
   ctx.Set("size", std::move(s));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("y").Shape().Rank(), 1u);
@@ -574,7 +574,7 @@ TEST(OnnxOptimShapeHammingWindow, KnownSizeProducesConcreteDimFloatByDefault) {
   s.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(10)});
   ctx.Set("size", std::move(s));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(10)}));
@@ -590,7 +590,7 @@ TEST(OnnxOptimShapeHammingWindow, OutputDatatypeAttributeOverridesDtype) {
   s.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(32)});
   ctx.Set("size", std::move(s));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kDouble);
   EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(32)}));
@@ -603,7 +603,7 @@ TEST(OnnxOptimShapeHammingWindow, UnknownSizeFallsBackToSymbolicDim) {
   onnx_optim::OptimTensor s(nullptr, onnx_optim::TensorType::kInt64, onnx_optim::OptimShape{});
   ctx.Set("size", std::move(s));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("y").Shape().Rank(), 1u);
@@ -644,7 +644,7 @@ TEST(OnnxOptimShapeBernoulli, KeepsInputShapeAndDtypeByDefault) {
       onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)});
   ctx.Set("x", std::move(x));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("y").Shape(),
@@ -661,7 +661,7 @@ TEST(OnnxOptimShapeBernoulli, DtypeAttributeOverridesOutputDtype) {
                             onnx_optim::OptimShape{onnx_optim::OptimDim(5)});
   ctx.Set("x", std::move(x));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kInt64);
   EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(5)}));
@@ -676,7 +676,7 @@ TEST(OnnxOptimShapeBernoulli, PreservesSymbolicDims) {
       onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(7)});
   ctx.Set("x", std::move(x));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat16);
   EXPECT_EQ(ctx.Get("y").Shape().Rank(), 2u);
@@ -719,7 +719,7 @@ TEST(OnnxOptimShapeMultinomial, DefaultProducesInt32BatchBySampleSizeOne) {
       onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(5)});
   ctx.Set("x", std::move(x));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kInt32);
   EXPECT_EQ(ctx.Get("y").Shape(),
@@ -738,7 +738,7 @@ TEST(OnnxOptimShapeMultinomial, SampleSizeAndDtypeAttributesAreApplied) {
       onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)});
   ctx.Set("x", std::move(x));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kInt64);
   ASSERT_EQ(ctx.Get("y").Shape().Rank(), 2u);
@@ -768,7 +768,7 @@ TEST(OnnxOptimShapeMultinomial, RejectsNon2DInput) {
   onnx_optim::OptimTensor x(nullptr, onnx_optim::TensorType::kFloat,
                             onnx_optim::OptimShape{onnx_optim::OptimDim(4)});
   ctx.Set("x", std::move(x));
-  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+  EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
 
 namespace {
@@ -811,7 +811,7 @@ onnx_optim::OptimTensor MakeScalar(onnx_optim::TensorType dtype) {
 TEST(OnnxOptimShapeRandomNormal, UsesShapeAttributeAndDefaultsToFloat) {
   NodeProto node = MakeRandomNode("RandomNormal", {2, 3});
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("y").Shape(),
@@ -823,7 +823,7 @@ TEST(OnnxOptimShapeRandomNormal, DtypeAttributeOverridesOutputDtype) {
   AddAttr(node, "dtype", AttributeProto::AttributeType::INT)
       ->set_i(static_cast<int64_t>(TensorProto::DOUBLE));
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kDouble);
   EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(4)}));
 }
@@ -840,7 +840,7 @@ TEST(OnnxOptimShapeRandomNormal, MissingShapeAttributeThrows) {
 TEST(OnnxOptimShapeRandomUniform, UsesShapeAttributeAndDefaultsToFloat) {
   NodeProto node = MakeRandomNode("RandomUniform", {5});
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(5)}));
 }
@@ -852,7 +852,7 @@ TEST(OnnxOptimShapeRandomNormalLike, CopiesInputShapeAndDtypeByDefault) {
       nullptr, onnx_optim::TensorType::kFloat16,
       onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(8)});
   ctx.Set("x", std::move(x));
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat16);
   EXPECT_EQ(ctx.Get("y").Shape().Rank(), 2u);
   EXPECT_FALSE(ctx.Get("y").Shape()[0].IsInt());
@@ -867,7 +867,7 @@ TEST(OnnxOptimShapeRandomNormalLike, DtypeAttributeOverridesOutputDtype) {
   onnx_optim::OptimTensor x(nullptr, onnx_optim::TensorType::kFloat,
                             onnx_optim::OptimShape{onnx_optim::OptimDim(3)});
   ctx.Set("x", std::move(x));
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kDouble);
   EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
 }
@@ -879,7 +879,7 @@ TEST(OnnxOptimShapeRandomUniformLike, CopiesInputShapeAndDtypeByDefault) {
       nullptr, onnx_optim::TensorType::kFloat,
       onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(2)});
   ctx.Set("x", std::move(x));
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("y").Shape(),
             (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(2)}));
@@ -902,7 +902,7 @@ TEST(OnnxOptimShapeRange, UnknownValuesProducesSymbolicDim) {
   ctx.Set("limit", MakeScalar(onnx_optim::TensorType::kFloat));
   ctx.Set("delta", MakeScalar(onnx_optim::TensorType::kFloat));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
   ASSERT_EQ(ctx.Get("y").Shape().Rank(), 1u);
@@ -922,7 +922,7 @@ TEST(OnnxOptimShapeRange, KnownIntegerValuesProducesConcreteDim) {
   ctx.Set("limit", std::move(limit));
   ctx.Set("delta", std::move(delta));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kInt64);
   EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
@@ -941,7 +941,7 @@ TEST(OnnxOptimShapeRange, NegativeDeltaProducesConcreteDim) {
   ctx.Set("limit", std::move(limit));
   ctx.Set("delta", std::move(delta));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kInt32);
   EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
@@ -960,7 +960,7 @@ TEST(OnnxOptimShapeRange, EmptyOutputWhenStartEqualsLimit) {
   ctx.Set("limit", std::move(limit));
   ctx.Set("delta", std::move(delta));
 
-  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ctx.ComputeShapeNode(node);
   ASSERT_TRUE(ctx.Has("y"));
   EXPECT_EQ(ctx.Get("y").Shape(),
             (onnx_optim::OptimShape{onnx_optim::OptimDim(static_cast<int64_t>(0))}));

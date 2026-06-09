@@ -181,7 +181,7 @@ TEST(OnnxOptimShapeInference, ValueAsShapePropagatesThroughShapeConcatAddSubExpa
   ModelProto model = MakeValueAsShapeModel();
 
   onnx_optim::shapes::ShapesContext ctx;
-  onnx_optim::shapes::ComputeShapeModel(ctx, model);
+  ctx.ComputeShapeModel(model);
 
   // ``shape`` (= Concat([Shape(x, 0, 1), Shape(x, 1, 2)])) carries the
   // value-as-shape ``(N, 1)`` lifted from ``x``'s symbolic shape.

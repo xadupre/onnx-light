@@ -163,6 +163,37 @@ template <class KernelT> NodeKernelFn MakeReduceTrampoline() {
   };
 }
 
+// Trampoline for ``Squeeze`` / ``Unsqueeze``: both take 1 or 2 inputs where the
+// optional second input (opset 13+) is a 1-D INT64 tensor of ``axes``. For the
+// legacy opset (<13), ``axes`` is provided as an INTS attribute instead.
+template <class KernelT> NodeKernelFn MakeSqueezeLikeTrampoline(const char *op_name) {
+  return [op_name](const NodeProto &node, RuntimeContext &rt) {
+    RequireMinInputCount(node, 1);
+    if (node.input_size() > 2) {
+      throw std::invalid_argument(std::string("RunNode: op '") + op_name +
+                                  "' expects at most 2 inputs.");
+    }
+    RequireOutputCount(node, 1);
+    const Tensor &data = GetInput(node, 0, rt.tensors());
+    std::vector<int64_t> axes;
+    const Tensor *axes_input = GetOptionalInput(node, 1, rt.tensors());
+    if (axes_input != nullptr) {
+      if (axes_input->data_type != static_cast<int32_t>(DataType::INT64) ||
+          axes_input->shape.size() != 1) {
+        throw std::invalid_argument(std::string("RunNode: ") + op_name +
+                                    " 'axes' input must be a 1-D INT64 tensor.");
+      }
+      const int64_t n = axes_input->element_count();
+      const int64_t *p = axes_input->AsInt64();
+      axes.assign(p, p + n);
+    } else {
+      axes = GetAttributeIntsOrDefault(node, "axes", {});
+    }
+    KernelT k(rt.kernel_ctx());
+    SetOutput(node, 0, k(data, axes), rt.tensors());
+  };
+}
+
 template <class KernelT> NodeKernelFn MakeArgReduceTrampoline() {
   return [](const NodeProto &node, RuntimeContext &rt) {
     RequireInputCount(node, 1);
@@ -525,64 +556,14 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Softplus", MakeUnaryTrampoline<kernel::Softplus>()},
       {"ai.onnx:Softsign", MakeUnaryTrampoline<kernel::Softsign>()},
       {"ai.onnx:Sqrt", MakeUnaryTrampoline<kernel::Sqrt>()},
-      {"ai.onnx:Squeeze",
-       [](const NodeProto &node, RuntimeContext &rt) {
-         RequireMinInputCount(node, 1);
-         if (node.input_size() > 2) {
-           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
-                                       "' expects at most 2 inputs.");
-         }
-         RequireOutputCount(node, 1);
-         const Tensor &data = GetInput(node, 0, rt.tensors());
-         std::vector<int64_t> axes;
-         const Tensor *axes_input = GetOptionalInput(node, 1, rt.tensors());
-         if (axes_input != nullptr) {
-           if (axes_input->data_type != static_cast<int32_t>(DataType::INT64) ||
-               axes_input->shape.size() != 1) {
-             throw std::invalid_argument(
-                 "RunNode: Squeeze 'axes' input must be a 1-D INT64 tensor.");
-           }
-           const int64_t n = axes_input->element_count();
-           const int64_t *p = axes_input->AsInt64();
-           axes.assign(p, p + n);
-         } else {
-           axes = GetAttributeIntsOrDefault(node, "axes", {});
-         }
-         kernel::Squeeze k(rt.kernel_ctx());
-         SetOutput(node, 0, k(data, axes), rt.tensors());
-       }},
+      {"ai.onnx:Squeeze", MakeSqueezeLikeTrampoline<kernel::Squeeze>("Squeeze")},
       {"ai.onnx:Sub", MakeBinaryTrampoline<kernel::Sub>()},
       {"ai.onnx:Sum", MakeVariadicTrampoline<kernel::Sum>()},
       {"ai.onnx:Swish", MakeUnaryAlphaTrampoline<kernel::Swish>("alpha", 1.0f)},
       {"ai.onnx:Tan", MakeUnaryTrampoline<kernel::Tan>()},
       {"ai.onnx:Tanh", MakeUnaryTrampoline<kernel::Tanh>()},
       {"ai.onnx:ThresholdedRelu", MakeUnaryAlphaTrampoline<kernel::ThresholdedRelu>("alpha", 1.0f)},
-      {"ai.onnx:Unsqueeze",
-       [](const NodeProto &node, RuntimeContext &rt) {
-         RequireMinInputCount(node, 1);
-         if (node.input_size() > 2) {
-           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
-                                       "' expects at most 2 inputs.");
-         }
-         RequireOutputCount(node, 1);
-         const Tensor &data = GetInput(node, 0, rt.tensors());
-         std::vector<int64_t> axes;
-         const Tensor *axes_input = GetOptionalInput(node, 1, rt.tensors());
-         if (axes_input != nullptr) {
-           if (axes_input->data_type != static_cast<int32_t>(DataType::INT64) ||
-               axes_input->shape.size() != 1) {
-             throw std::invalid_argument(
-                 "RunNode: Unsqueeze 'axes' input must be a 1-D INT64 tensor.");
-           }
-           const int64_t n = axes_input->element_count();
-           const int64_t *p = axes_input->AsInt64();
-           axes.assign(p, p + n);
-         } else {
-           axes = GetAttributeIntsOrDefault(node, "axes", {});
-         }
-         kernel::Unsqueeze k(rt.kernel_ctx());
-         SetOutput(node, 0, k(data, axes), rt.tensors());
-       }},
+      {"ai.onnx:Unsqueeze", MakeSqueezeLikeTrampoline<kernel::Unsqueeze>("Unsqueeze")},
       {"ai.onnx:Where", MakeTernaryTrampoline<kernel::Where>()},
       {"ai.onnx:Xor", MakeBinaryTrampoline<kernel::Xor>()},
 

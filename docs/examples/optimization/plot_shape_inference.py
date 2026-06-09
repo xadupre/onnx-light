@@ -364,3 +364,11 @@ def validate_shape_inference(model_with_expected_shapes: onnxl.ModelProto):
 #     "\nTo systematically test shape inference across all backend cases, "
 #     "use make_test_class as shown above."
 # )
+
+# Quick inline demonstration: validate the model we just built.
+print("\nDemonstrating validation on the current model:")
+try:
+    validate_shape_inference(model)
+    print("  ✓ Validation succeeded (no AssertionError raised)")
+except AssertionError as e:
+    print(f"  ✗ Validation failed: {e}")

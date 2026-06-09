@@ -58,6 +58,9 @@ import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx_optim.shape_inference import infer_shapes_model
 from onnx_light.onnx_py._onnxpy import shape_inference as si
 
+# Import used in the make_test_class demonstration section below.
+from onnx_light.backend.test.case import make_test_class  # noqa: F401
+
 # Make sure the built-in operator schemas are registered before running
 # shape inference (the C++ dispatch table looks them up).
 onnxl.defs.register_onnx_operator_set_schema()
@@ -291,9 +294,6 @@ fig.savefig("plot_shape_inference.png")
 # for intermediate tensors match the expected ``value_info`` stored in each
 # test case.
 
-# Import is used in the commented example code below to demonstrate the pattern.
-from onnx_light.backend.test.case import make_test_class  # noqa: E402, F401
-
 
 def validate_shape_inference(model_with_expected_shapes: onnxl.ModelProto):
     """
@@ -308,7 +308,10 @@ def validate_shape_inference(model_with_expected_shapes: onnxl.ModelProto):
     3. Calls :func:`infer_shapes_model` to re-infer shapes.
     4. Compares the inferred shapes against the original ``value_info``.
 
-    If the inferred shapes do not match the expected shapes, an assertion
+    Note: This simple check only verifies that tensor ranks match. A production
+    test might enforce exact symbolic or numeric dimension matches.
+
+    If the inferred ranks do not match the expected ranks, an assertion
     will fail, helping you catch regressions in the shape inference logic.
     """
     # Keep a reference to the expected value_info.

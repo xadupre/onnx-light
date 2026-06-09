@@ -20,6 +20,7 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DefaultOpset;
+using onnx_kernels::DataType;
 using onnx_kernels::KernelDispatchTable;
 using onnx_kernels::RunFunction;
 using onnx_kernels::RunGraph;
@@ -108,6 +109,7 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx:NonMaxSuppression"), table.end());
   EXPECT_NE(table.find("ai.onnx:IsInf"), table.end());
   EXPECT_NE(table.find("ai.onnx:BitShift"), table.end());
+  EXPECT_NE(table.find("ai.onnx:BitCast"), table.end());
   EXPECT_NE(table.find("ai.onnx:Einsum"), table.end());
   EXPECT_NE(table.find("ai.onnx:DFT"), table.end());
   // Quantization kernels.
@@ -119,6 +121,7 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx:AffineGrid"), table.end());
   EXPECT_NE(table.find("ai.onnx:ImageDecoder"), table.end());
   // Tensor shape kernels.
+  EXPECT_NE(table.find("ai.onnx:Cast"), table.end());
   EXPECT_NE(table.find("ai.onnx:Shape"), table.end());
   // Logical / bitwise kernels.
   EXPECT_NE(table.find("ai.onnx:And"), table.end());
@@ -187,6 +190,46 @@ TEST(RunNodes, RunNodeNormalisesDefaultDomain) {
   ASSERT_EQ(rt.tensors()["y"].element_count(), 2);
   EXPECT_FLOAT_EQ(got[0], 1.5f);
   EXPECT_FLOAT_EQ(got[1], 2.5f);
+}
+
+TEST(RunNodes, RunNodeCastFromDispatchTable) {
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {3}, {-1.5f, 0.0f, 2.75f});
+  NodeProto node = MakeNode("Cast", {"x"}, {"y"});
+  AttributeProto *to = node.add_attribute();
+  to->set_name("to");
+  to->set_type(AttributeProto::INT);
+  to->set_i(static_cast<int64_t>(DataType::INT32));
+
+  RunNode(node, rt);
+
+  const Tensor &y = rt.tensors().at("y");
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(DataType::INT32));
+  EXPECT_EQ(y.shape, std::vector<int64_t>({3}));
+  const int32_t *got = y.AsInt32();
+  EXPECT_EQ(got[0], -1);
+  EXPECT_EQ(got[1], 0);
+  EXPECT_EQ(got[2], 2);
+}
+
+TEST(RunNodes, RunNodeBitCastFromDispatchTable) {
+  RuntimeContext rt(KernelContext(DefaultOpset(26)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {3}, {0.0f, 1.0f, -1.0f});
+  NodeProto node = MakeNode("BitCast", {"x"}, {"y"});
+  AttributeProto *to = node.add_attribute();
+  to->set_name("to");
+  to->set_type(AttributeProto::INT);
+  to->set_i(static_cast<int64_t>(DataType::INT32));
+
+  RunNode(node, rt);
+
+  const Tensor &y = rt.tensors().at("y");
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(DataType::INT32));
+  EXPECT_EQ(y.shape, std::vector<int64_t>({3}));
+  const int32_t *got = y.AsInt32();
+  EXPECT_EQ(got[0], 0);
+  EXPECT_EQ(got[1], 1065353216);
+  EXPECT_EQ(got[2], -1082130432);
 }
 
 TEST(RunNodes, RunNodeNonMaxSuppressionFromDispatchTable) {

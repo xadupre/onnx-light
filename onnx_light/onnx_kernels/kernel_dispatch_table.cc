@@ -440,6 +440,18 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::BitShift k(rt.kernel_ctx());
          SetOutput(node, 0, k(x, y, dir), rt.tensors());
        }},
+      {"ai.onnx:BitCast",
+       [](const NodeProto &node, RuntimeContext &rt) {
+        RequireInputCount(node, 1);
+        RequireOutputCount(node, 1);
+        const Tensor &x = GetInput(node, 0, rt.tensors());
+        const int32_t to = static_cast<int32_t>(GetAttributeIntOrDefault(node, "to", -1));
+        if (to < 0) {
+          throw std::invalid_argument("RunNode: BitCast requires INT attribute 'to'.");
+        }
+        kernel::BitCast kernel(rt.kernel_ctx());
+        SetOutput(node, 0, kernel(x, to), rt.tensors());
+       }},
       {"ai.onnx:BitwiseAnd", MakeBinaryTrampoline<kernel::BitwiseAnd>()},
       {"ai.onnx:BitwiseNot", MakeUnaryTrampoline<kernel::BitwiseNot>()},
       {"ai.onnx:BitwiseOr", MakeBinaryTrampoline<kernel::BitwiseOr>()},
@@ -466,6 +478,18 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                     past_state != nullptr ? *past_state : Tensor{}, attrs);
          SetOutput(node, 0, std::move(output), rt.tensors());
          SetOutput(node, 1, std::move(present_state), rt.tensors());
+       }},
+      {"ai.onnx:Cast",
+       [](const NodeProto &node, RuntimeContext &rt) {
+        RequireInputCount(node, 1);
+        RequireOutputCount(node, 1);
+        const Tensor &x = GetInput(node, 0, rt.tensors());
+        const int32_t to = static_cast<int32_t>(GetAttributeIntOrDefault(node, "to", -1));
+        if (to < 0) {
+          throw std::invalid_argument("RunNode: Cast requires INT attribute 'to'.");
+        }
+        kernel::Cast kernel(rt.kernel_ctx());
+        SetOutput(node, 0, kernel(x, to), rt.tensors());
        }},
       {"ai.onnx:Ceil", MakeUnaryTrampoline<kernel::Ceil>()},
       {"ai.onnx:Celu", MakeUnaryAlphaTrampoline<kernel::Celu>("alpha", 1.0f)},

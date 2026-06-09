@@ -130,6 +130,16 @@ void AppendValueInfo(ValueInfoProto &vi, const std::string &name, int32_t elem_t
                      const std::vector<DimSpec> &dims);
 
 /**
+ * Overload of :ref:`AppendValueInfo` accepting a mix of concrete
+ * (``DimSpec(int64_t)``), symbolic (``DimSpec("name")``) and unannotated
+ * (``DimSpec()``) dimensions. Used by the shape-inference cases to declare
+ * symbolic ``batch``/``seq``/``d_model``/``nnz`` dims without repeating the
+ * ``TypeProto::Tensor::add_shape()`` + ``add_dim()`` boilerplate.
+ */
+void AppendValueInfo(ValueInfoProto &vi, const std::string &name, TensorProto::DataType elem_type,
+                     const std::vector<DimSpec> &dims);
+
+/**
  * Appends a new ``DataSet`` to ``tc.data_sets`` populated with the given
  * ``inputs`` and ``outputs``. Saves the
  * ``DataSet ds; ds.inputs.push_back(...); ds.outputs.push_back(...);

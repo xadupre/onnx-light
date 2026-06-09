@@ -198,4 +198,9 @@ TEST(BackendRunModel, Attention) {
   });
 }
 
+// ai.onnx.preview.training optimizer kernels.
+TEST(BackendRunModel, Adagrad) { RunBackendCasesFor("Adagrad"); }
+TEST(BackendRunModel, Adam) { RunBackendCasesFor("Adam"); }
+TEST(BackendRunModel, Momentum) { RunBackendCasesFor("Momentum"); }
+
 } // namespace Test

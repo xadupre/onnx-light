@@ -97,6 +97,7 @@ epkg_dictionary = {
     "C++ onnx-light examples": "https://github.com/xadupre/onnx-light/tree/main/examples",
     "onnx": "https://github.com/onnx/onnx",
     "onnxruntime": "https://github.com/microsoft/onnxruntime",
+    "protobuf": "https://protobuf.dev/",
     "sphinx-datatables": "https://pypi.org/project/sphinx-datatables/",
 }
 

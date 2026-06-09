@@ -95,18 +95,81 @@ void RegisterReduceL1L2Cases(std::vector<TestCase> &registry, const std::string 
                      /*noop_with_empty_axes=*/false);
 }
 
+// Registers the nine ONNX reference backend test cases for ReduceL1 / ReduceL2
+// (non-expanded variants). The test names are chosen so that the ONNX test
+// name is a substring of the onnx-light test name, satisfying the substring
+// check in ``test_backend_test_names_onnx_vs_onnxlight.py``.
+//
+// The upstream tests come in ``_example`` / ``_random`` pairs that share the
+// same axes configuration but differ only in input values:
+//
+//   * ``_example``  — deterministic ``arange(1, 13)`` input.
+//   * ``_random``   — ``np.random.seed(0); np.random.uniform(-10, 10, (3,2,2))``
+//                     cast to float32 (same seed across all reduce-op random
+//                     variants in the upstream ONNX test suite).
+void RegisterReduceL1L2OnnxCases(std::vector<TestCase> &registry, const std::string &op_type,
+                                 const kernel::ReduceL1L2 &kernel, const std::string &onnx_prefix) {
+  const std::vector<int64_t> shape = {3, 2, 2};
+  const std::vector<float> example_values = {1.0f, 2.0f, 3.0f, 4.0f,  5.0f,  6.0f,
+                                             7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f};
+  // ``np.random.seed(0); np.random.uniform(-10, 10, (3, 2, 2)).astype(np.float32)``
+  const std::vector<float> random_values = {
+      0.9762700796f, 4.303787231f, 2.055267572f, 0.8976636529f, -1.526903987f, 2.917882204f,
+      -1.24825573f,  7.835460186f, 9.273255348f, -2.331169605f, 5.83450079f,   0.5778983831f,
+  };
+
+  // keep_dims (axis = 2, keepdims = 1)
+  EmitReduceL1L2Case(registry, op_type, kernel, "test_" + onnx_prefix + "_keep_dims_example", shape,
+                     example_values, {2},
+                     /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+  EmitReduceL1L2Case(registry, op_type, kernel, "test_" + onnx_prefix + "_keep_dims_random", shape,
+                     random_values, {2},
+                     /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+
+  // do_not_keepdims (axis = 2, keepdims = 0)
+  EmitReduceL1L2Case(registry, op_type, kernel, "test_" + onnx_prefix + "_do_not_keepdims_example",
+                     shape, example_values, {2}, /*keepdims=*/false,
+                     /*noop_with_empty_axes=*/false);
+  EmitReduceL1L2Case(registry, op_type, kernel, "test_" + onnx_prefix + "_do_not_keepdims_random",
+                     shape, random_values, {2},
+                     /*keepdims=*/false, /*noop_with_empty_axes=*/false);
+
+  // default_axes_keepdims (empty axes tensor → reduce over all dims, keepdims = 1)
+  EmitReduceL1L2Case(registry, op_type, kernel,
+                     "test_" + onnx_prefix + "_default_axes_keepdims_example", shape,
+                     example_values, {}, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+  EmitReduceL1L2Case(registry, op_type, kernel,
+                     "test_" + onnx_prefix + "_default_axes_keepdims_random", shape, random_values,
+                     {}, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+
+  // negative_axes_keep_dims (axis = -1, keepdims = 1)
+  EmitReduceL1L2Case(registry, op_type, kernel,
+                     "test_" + onnx_prefix + "_negative_axes_keep_dims_example", shape,
+                     example_values, {-1}, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+  EmitReduceL1L2Case(registry, op_type, kernel,
+                     "test_" + onnx_prefix + "_negative_axes_keep_dims_random", shape,
+                     random_values, {-1}, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+
+  // empty_set (data shape [2, 0, 4], axis = 1, keepdims = 1)
+  EmitReduceL1L2Case(registry, op_type, kernel, "test_" + onnx_prefix + "_empty_set",
+                     /*data_shape=*/{2, 0, 4}, /*data_values=*/{}, {1}, /*keepdims=*/true,
+                     /*noop_with_empty_axes=*/false);
+}
+
 } // namespace
 
 void RegisterReduceL1Cases(std::vector<TestCase> &registry) {
   const kernel::KernelContext ctx{DefaultOpset(18)};
   const kernel::ReduceL1 reduce_l1_kernel{ctx};
   RegisterReduceL1L2Cases(registry, "ReduceL1", reduce_l1_kernel, "reducel1");
+  RegisterReduceL1L2OnnxCases(registry, "ReduceL1", reduce_l1_kernel, "reduce_l1");
 }
 
 void RegisterReduceL2Cases(std::vector<TestCase> &registry) {
   const kernel::KernelContext ctx{DefaultOpset(18)};
   const kernel::ReduceL2 reduce_l2_kernel{ctx};
   RegisterReduceL1L2Cases(registry, "ReduceL2", reduce_l2_kernel, "reducel2");
+  RegisterReduceL1L2OnnxCases(registry, "ReduceL2", reduce_l2_kernel, "reduce_l2");
 }
 
 } // namespace onnx_backend_test

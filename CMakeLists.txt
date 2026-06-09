@@ -411,13 +411,28 @@ if(ONNX_LIGHT_BUILD_PYTHON)
 
   # All extensions and the shared lib_onnx_*.so are installed in the same
   # directory (onnx_light/onnx_py/). Set an $ORIGIN rpath so the dynamic loader
-  # picks the colocated libraries at import time without LD_LIBRARY_PATH.
+  # picks the colocated libraries at import time without LD_LIBRARY_PATH. The
+  # rpath must also be set on the lib_onnx_*.so libraries themselves: when
+  # auditwheel repairs the wheel it statically walks the DT_NEEDED entries of
+  # every .so and refuses to repair if a referenced library (e.g.
+  # ``liblib_onnx_proto.so`` referenced by ``liblib_onnx_kernels.so``) cannot
+  # be located via the consuming library's own rpath.
+  set(_onnxpy_rpath_targets _onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxpykernels _onnxpybackend)
+  if(_lib_onnx_proto_type STREQUAL "SHARED")
+    list(APPEND _onnxpy_rpath_targets lib_onnx_proto)
+  endif()
+  if(_onnx_light_lib_type STREQUAL "SHARED")
+    list(APPEND _onnxpy_rpath_targets lib_onnx_lib lib_onnx_op lib_onnx_optim)
+    if(ONNX_LIGHT_BUILD_KERNELS)
+      list(APPEND _onnxpy_rpath_targets lib_onnx_kernels lib_onnx_backend_test)
+    endif()
+  endif()
   if((_onnx_light_lib_type STREQUAL "SHARED" OR _lib_onnx_proto_type STREQUAL "SHARED") AND (UNIX AND NOT APPLE))
-    set_target_properties(_onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxpykernels _onnxpybackend PROPERTIES
+    set_target_properties(${_onnxpy_rpath_targets} PROPERTIES
         BUILD_RPATH "\$ORIGIN"
         INSTALL_RPATH "\$ORIGIN")
   elseif((_onnx_light_lib_type STREQUAL "SHARED" OR _lib_onnx_proto_type STREQUAL "SHARED") AND APPLE)
-    set_target_properties(_onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxpykernels _onnxpybackend PROPERTIES
+    set_target_properties(${_onnxpy_rpath_targets} PROPERTIES
         BUILD_RPATH "@loader_path"
         INSTALL_RPATH "@loader_path")
   endif()

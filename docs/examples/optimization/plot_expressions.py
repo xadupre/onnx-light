@@ -193,3 +193,70 @@ print("output shape:", output_shape)
 # When we later learn the concrete value of ``heads`` we can evaluate.
 concrete_last = evaluate_expression(str(last_dim), {"heads": 12})
 print(f"concrete last dimension (heads=12): {concrete_last}")
+
+
+#####################################
+# Plot — Expression simplification effectiveness
+# ++++++++++++++++++++++++++++++++++++++++++++++
+#
+# The chart below visualizes how :func:`simplify_expression` reduces
+# expression complexity, measured by string length (a simple proxy for
+# AST size). Bars show the character count before and after simplification
+# for a set of representative expressions.
+
+import matplotlib.pyplot as plt  # noqa: E402
+import matplotlib.patches as mpatches  # noqa: E402
+
+# Sample expressions: (original, description)
+test_cases = [
+    ("a + b - a", "identity cancel"),
+    ("2*batch//batch", "factor cancel"),
+    ("5 + x - 2 + 3", "constant fold"),
+    ("CeilToInt(b+c, 2)", "CeilToInt expand"),
+    ("1024*a//2", "large factor"),
+    ("c + b + a", "commutative sort"),
+    ("x*2 + y*3 - x*2", "cancel product"),
+    ("batch*seq_length + 0", "identity fold"),
+]
+
+originals = []
+simplified = []
+labels = []
+
+for expr, desc in test_cases:
+    result = simplify_expression(expr)
+    result_str = str(result)  # Handle int results
+    originals.append(len(expr))
+    simplified.append(len(result_str))
+    labels.append(desc)
+
+x = range(len(test_cases))
+width = 0.35
+
+fig, ax = plt.subplots(figsize=(10, 5))
+
+bars_orig = ax.barh([i - width / 2 for i in x], originals, width, label="original", color="steelblue")
+bars_simp = ax.barh([i + width / 2 for i in x], simplified, width, label="simplified", color="darkorange")
+
+ax.set_yticks(x)
+ax.set_yticklabels(labels)
+ax.set_xlabel("Expression length (characters)")
+ax.set_title("Expression simplification: character count reduction")
+ax.legend()
+ax.grid(axis="x", linestyle="--", alpha=0.6)
+
+# Add reduction percentage annotations
+for i, (orig, simp) in enumerate(zip(originals, simplified)):
+    reduction = 100 * (orig - simp) / orig if orig > 0 else 0
+    if reduction > 5:  # Only annotate meaningful reductions
+        ax.text(
+            max(orig, simp) + 1,
+            i,
+            f"−{reduction:.0f}%",
+            va="center",
+            fontsize=9,
+            color="green",
+        )
+
+fig.tight_layout()
+fig.savefig("plot_expressions.png")

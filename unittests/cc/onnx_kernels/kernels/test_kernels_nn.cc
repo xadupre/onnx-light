@@ -534,12 +534,24 @@ TEST(KernelClass, AttentionQkMatmulOutputModes) {
     EXPECT_FLOAT_EQ(r.qk_matmul_output.AsFloat()[0], 2.0f); // 1*1*2
     EXPECT_FLOAT_EQ(r.qk_matmul_output.AsFloat()[1], 0.0f); // 1*0*2
   }
-  // Mode 1: with bias = mask added.
+  // Mode 1: with softcap applied (before mask). With softcap=0 the
+  // kernel skips the tanh and ``qk_matmul_output`` equals the raw
+  // pre-mask QK.
   {
     Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 2.0f;
     attrs.qk_matmul_output_mode = 1;
+    auto r = attention(Q, K, V, attrs, &mask);
+    EXPECT_FLOAT_EQ(r.qk_matmul_output.AsFloat()[0], 2.0f);
+    EXPECT_FLOAT_EQ(r.qk_matmul_output.AsFloat()[1], 0.0f);
+  }
+  // Mode 2: includes attention mask and softcap (input to softmax).
+  {
+    Attention::Attributes attrs;
+    attrs.has_scale = true;
+    attrs.scale = 2.0f;
+    attrs.qk_matmul_output_mode = 2;
     auto r = attention(Q, K, V, attrs, &mask);
     EXPECT_FLOAT_EQ(r.qk_matmul_output.AsFloat()[0], 2.0f + 0.0f);
     EXPECT_FLOAT_EQ(r.qk_matmul_output.AsFloat()[1], 0.0f + -0.5f);

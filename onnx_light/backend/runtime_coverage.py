@@ -277,7 +277,7 @@ def compute_runtime_coverage(
             name=tc.name,
             op_type=op_type,
             domain=domain,
-            tag=getattr(tc, "tag", "") or "",
+            tag=getattr(tc, "tag", ""),
             onnxruntime_cpu=ort_diff,
             onnxruntime_error=ort_err,
             static_shape=static_ok,

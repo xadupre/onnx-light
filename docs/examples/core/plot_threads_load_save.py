@@ -151,8 +151,20 @@ rows = []
 for layout_name, model_path, data_path in LAYOUTS:
     for num_threads in THREAD_COUNTS:
 
-        def _load(path=model_path, threads=num_threads):
-            onnxl.load(path, num_threads=threads, load_external_data=True)
+        # Pass ``location`` explicitly for external-data layouts so the
+        # loader does not perform a preliminary full parse of the model
+        # just to discover the external data file (which would double the
+        # measured load time and skew the comparison with
+        # :ref:`l-example-plot-onnx-time`).
+        if data_path is None:
+
+            def _load(path=model_path, threads=num_threads):
+                onnxl.load(path, num_threads=threads)
+
+        else:
+
+            def _load(path=model_path, data=data_path, threads=num_threads):
+                onnxl.load(path, location=data, num_threads=threads)
 
         load_t = median_time(_load)
 

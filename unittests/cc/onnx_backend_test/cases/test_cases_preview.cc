@@ -40,16 +40,16 @@ const TestCase *FindCase(const std::vector<TestCase> &cases, const std::string &
 
 TEST(BackendTestCase, FlexAttentionCasesArePresent) {
   const auto cases = CollectTestCases("FlexAttention");
-  const TestCase *basic = FindCase(cases, "test_cc_flex_attention_basic");
-  const TestCase *gqa = FindCase(cases, "test_cc_flex_attention_gqa");
-  const TestCase *prob_mod_id = FindCase(cases, "test_cc_flex_attention_prob_mod_identity");
-  const TestCase *prob_mod_scale = FindCase(cases, "test_cc_flex_attention_prob_mod_scale_half");
-  const TestCase *scaled = FindCase(cases, "test_cc_flex_attention_scaled");
-  const TestCase *diff_heads = FindCase(cases, "test_cc_flex_attention_diff_head_sizes");
-  const TestCase *score_mod = FindCase(cases, "test_cc_flex_attention_score_mod");
-  const TestCase *causal = FindCase(cases, "test_cc_flex_attention_causal_mask");
-  const TestCase *soft_cap = FindCase(cases, "test_cc_flex_attention_soft_cap");
-  const TestCase *rel_pos = FindCase(cases, "test_cc_flex_attention_relative_positional");
+  const TestCase *basic = FindCase(cases, "test_cc_flexattention_basic");
+  const TestCase *gqa = FindCase(cases, "test_cc_flexattention_gqa");
+  const TestCase *prob_mod_id = FindCase(cases, "test_cc_flexattention_prob_mod_identity");
+  const TestCase *prob_mod_scale = FindCase(cases, "test_cc_flexattention_prob_mod_scale_half");
+  const TestCase *scaled = FindCase(cases, "test_cc_flexattention_scaled");
+  const TestCase *diff_heads = FindCase(cases, "test_cc_flexattention_diff_head_sizes");
+  const TestCase *score_mod = FindCase(cases, "test_cc_flexattention_score_mod");
+  const TestCase *causal = FindCase(cases, "test_cc_flexattention_causal_mask");
+  const TestCase *soft_cap = FindCase(cases, "test_cc_flexattention_soft_cap");
+  const TestCase *rel_pos = FindCase(cases, "test_cc_flexattention_relative_positional");
   ASSERT_NE(basic, nullptr);
   ASSERT_NE(gqa, nullptr);
   ASSERT_NE(prob_mod_id, nullptr);

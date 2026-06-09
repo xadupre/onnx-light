@@ -444,33 +444,33 @@ Tensor ComputeFlexAttentionExpected(const Tensor &Q, const Tensor &K, const Tens
 // ``FLOAT16``) and the ``double`` peer (``kernel::FlexAttention`` only
 // supports FLOAT today):
 //
-//   * ``test_cc_flex_attention_basic`` — Multi-Head Attention with
+//   * ``test_cc_flexattention_basic`` — Multi-Head Attention with
 //     q_num_heads == kv_num_heads. No modifier subgraphs.
-//   * ``test_cc_flex_attention_scaled`` — basic MHA shape with an
+//   * ``test_cc_flexattention_scaled`` — basic MHA shape with an
 //     explicit ``scale`` attribute overriding the default
 //     ``1 / sqrt(head_size)``.
-//   * ``test_cc_flex_attention_gqa`` — Grouped Query Attention with
+//   * ``test_cc_flexattention_gqa`` — Grouped Query Attention with
 //     q_num_heads > kv_num_heads. No modifier subgraphs.
-//   * ``test_cc_flex_attention_diff_head_sizes`` — basic MHA with the
+//   * ``test_cc_flexattention_diff_head_sizes`` — basic MHA with the
 //     value head size differing from the query/key head size.
-//   * ``test_cc_flex_attention_score_mod`` — basic MHA shape with a
+//   * ``test_cc_flexattention_score_mod`` — basic MHA shape with a
 //     ``score_mod`` subgraph that adds a scalar bias to every score.
-//   * ``test_cc_flex_attention_prob_mod_identity`` — basic MHA shape
+//   * ``test_cc_flexattention_prob_mod_identity`` — basic MHA shape
 //     with a non-empty ``prob_mod`` subgraph that is mathematically the
 //     identity (single ``Identity`` node). Exercises the
 //     function-body inlining of the modifier without changing the
 //     expected output.
-//   * ``test_cc_flex_attention_prob_mod_scale_half`` — basic MHA shape
+//   * ``test_cc_flexattention_prob_mod_scale_half`` — basic MHA shape
 //     with a non-empty ``prob_mod`` subgraph that multiplies the
 //     post-Softmax probabilities by a scalar constant ``0.5``. The
 //     expected output is ``0.5`` times the un-modified baseline.
-//   * ``test_cc_flex_attention_causal_mask`` — ``score_mod`` masks out
+//   * ``test_cc_flexattention_causal_mask`` — ``score_mod`` masks out
 //     positions where ``k_idx > q_idx`` by setting their scores to
 //     ``-inf`` (Qwen-3/Gemma-3/Llama-3 pattern).
-//   * ``test_cc_flex_attention_soft_cap`` — ``score_mod`` applies
+//   * ``test_cc_flexattention_soft_cap`` — ``score_mod`` applies
 //     ``tanh(scores / cap) * cap`` to stabilize attention scores
 //     (Gemma-2 pattern).
-//   * ``test_cc_flex_attention_relative_positional`` — ``score_mod``
+//   * ``test_cc_flexattention_relative_positional`` — ``score_mod``
 //     adds the relative positional bias ``q_idx - k_idx`` (cast to
 //     FLOAT) to the scores.
 //
@@ -534,7 +534,7 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry) {
                                  });
     Tensor Y = flex(Q, K, V);
     NodeProto node = make_node();
-    Expect(node, {Q, K, V}, {Y}, "test_cc_flex_attention_basic", {default_opset, opset},
+    Expect(node, {Q, K, V}, {Y}, "test_cc_flexattention_basic", {default_opset, opset},
            "backend-test", registry);
   }
 
@@ -603,7 +603,7 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry) {
                                  });
     Tensor Y = flex(Q, K, V);
     NodeProto node = make_node();
-    Expect(node, {Q, K, V}, {Y}, "test_cc_flex_attention_gqa", {default_opset, opset},
+    Expect(node, {Q, K, V}, {Y}, "test_cc_flexattention_gqa", {default_opset, opset},
            "backend-test", registry);
   }
 
@@ -645,7 +645,7 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry) {
     Tensor Y = flex(Q, K, V);
     NodeProto node = make_node();
     AddGraphAttribute(node, "prob_mod", BuildIdentityProbMod(modifier_shape));
-    Expect(node, {Q, K, V}, {Y}, "test_cc_flex_attention_prob_mod_identity", {default_opset, opset},
+    Expect(node, {Q, K, V}, {Y}, "test_cc_flexattention_prob_mod_identity", {default_opset, opset},
            "backend-test", registry);
   }
 
@@ -699,7 +699,7 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry) {
 
     NodeProto node = make_node();
     AddGraphAttribute(node, "prob_mod", BuildScaleProbMod(modifier_shape, kScale));
-    Expect(node, {Q, K, V}, {Y}, "test_cc_flex_attention_prob_mod_scale_half",
+    Expect(node, {Q, K, V}, {Y}, "test_cc_flexattention_prob_mod_scale_half",
            {default_opset, opset}, "backend-test", registry);
   }
 
@@ -720,7 +720,7 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry) {
     a->set_name("scale");
     a->set_type(AttributeProto::AttributeType::FLOAT);
     a->set_f(kExplicitScale);
-    Expect(node, {Q, K, V}, {Y}, "test_cc_flex_attention_scaled", {default_opset, opset},
+    Expect(node, {Q, K, V}, {Y}, "test_cc_flexattention_scaled", {default_opset, opset},
            "backend-test", registry);
   }
 
@@ -744,7 +744,7 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry) {
                                  });
     Tensor Y = flex(Q, K, V);
     NodeProto node = make_node();
-    Expect(node, {Q, K, V}, {Y}, "test_cc_flex_attention_diff_head_sizes", {default_opset, opset},
+    Expect(node, {Q, K, V}, {Y}, "test_cc_flexattention_diff_head_sizes", {default_opset, opset},
            "backend-test", registry);
   }
 
@@ -772,7 +772,7 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry) {
         [kBias](float s, int64_t, int64_t, int64_t, int64_t) { return s + kBias; });
     NodeProto node = make_node();
     AddGraphAttribute(node, "score_mod", BuildScoreModBias(modifier_shape, kBias));
-    Expect(node, {Q, K, V}, {Y}, "test_cc_flex_attention_score_mod", {default_opset, opset},
+    Expect(node, {Q, K, V}, {Y}, "test_cc_flexattention_score_mod", {default_opset, opset},
            "backend-test", registry);
   }
 
@@ -795,7 +795,7 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry) {
         });
     NodeProto node = make_node();
     AddGraphAttribute(node, "score_mod", BuildScoreModCausalMask(modifier_shape));
-    Expect(node, {Q, K, V}, {Y}, "test_cc_flex_attention_causal_mask", {default_opset, opset},
+    Expect(node, {Q, K, V}, {Y}, "test_cc_flexattention_causal_mask", {default_opset, opset},
            "backend-test", registry);
   }
 
@@ -817,7 +817,7 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry) {
         [kCap](float s, int64_t, int64_t, int64_t, int64_t) { return std::tanh(s / kCap) * kCap; });
     NodeProto node = make_node();
     AddGraphAttribute(node, "score_mod", BuildScoreModSoftCap(modifier_shape, kCap));
-    Expect(node, {Q, K, V}, {Y}, "test_cc_flex_attention_soft_cap", {default_opset, opset},
+    Expect(node, {Q, K, V}, {Y}, "test_cc_flexattention_soft_cap", {default_opset, opset},
            "backend-test", registry);
   }
 
@@ -840,7 +840,7 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry) {
                                             });
     NodeProto node = make_node();
     AddGraphAttribute(node, "score_mod", BuildScoreModRelativePositional(modifier_shape));
-    Expect(node, {Q, K, V}, {Y}, "test_cc_flex_attention_relative_positional",
+    Expect(node, {Q, K, V}, {Y}, "test_cc_flexattention_relative_positional",
            {default_opset, opset}, "backend-test", registry);
   }
 }

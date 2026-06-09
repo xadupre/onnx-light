@@ -7,6 +7,7 @@
 #include "onnx_kernels/kernels/generator/include_generator_kernels.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
+#include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 #include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_kernels/node_helpers.h"
@@ -21,6 +22,7 @@ namespace onnx_kernels {
 
 namespace {
 
+using detail::FindAttribute;
 using detail::GetAttributeFloatOrDefault;
 using detail::GetAttributeIntOrDefault;
 using detail::GetAttributeIntsOrDefault;
@@ -316,18 +318,58 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
 
       // -----------------------------------------------------------------
-      // Binary kernels with attributes.
+      // ``Attention``: supports Q/K/V, optional mask and optional past KV.
+      // Outputs: Y (+ optional present_key/present_value/qk_matmul_output).
       // -----------------------------------------------------------------
-      // ``Mod``: ``fmod`` is 0 (NumPy-style integer modulo) by default.
-      {"ai.onnx:Mod",
+      {"ai.onnx:Attention",
        [](const NodeProto &node, RuntimeContext &rt) {
-         RequireInputCount(node, 2);
-         RequireOutputCount(node, 1);
-         const Tensor &x = GetInput(node, 0, rt.tensors());
-         const Tensor &y = GetInput(node, 1, rt.tensors());
-         const int64_t fmod = GetAttributeIntOrDefault(node, "fmod", 0);
-         kernel::Mod k(rt.kernel_ctx());
-         SetOutput(node, 0, k(x, y, fmod), rt.tensors());
+         if (node.input_size() < 3 || node.input_size() > 6) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects between 3 and 6 input(s), got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         if (node.output_size() < 1 || node.output_size() > 4) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects between 1 and 4 output(s), got " +
+                                       std::to_string(node.output_size()) + ".");
+         }
+         const Tensor &q = GetInput(node, 0, rt.tensors());
+         const Tensor &k = GetInput(node, 1, rt.tensors());
+         const Tensor &v = GetInput(node, 2, rt.tensors());
+         const Tensor *attn_mask = GetOptionalInput(node, 3, rt.tensors());
+         const Tensor *past_key = GetOptionalInput(node, 4, rt.tensors());
+         const Tensor *past_value = GetOptionalInput(node, 5, rt.tensors());
+
+         kernel::Attention::Attributes attrs;
+         if (FindAttribute(node, "scale") != nullptr) {
+           attrs.has_scale = true;
+           attrs.scale = GetAttributeFloatOrDefault(node, "scale", 0.0f);
+         }
+         attrs.is_causal = GetAttributeIntOrDefault(node, "is_causal", 0) != 0;
+         attrs.softcap = GetAttributeFloatOrDefault(node, "softcap", 0.0f);
+         attrs.qk_matmul_output_mode =
+             static_cast<int>(GetAttributeIntOrDefault(node, "qk_matmul_output_mode", 0));
+         attrs.q_num_heads = GetAttributeIntOrDefault(node, "q_num_heads", 0);
+         attrs.kv_num_heads = GetAttributeIntOrDefault(node, "kv_num_heads", 0);
+
+         kernel::Attention kernel(rt.kernel_ctx());
+         kernel::Attention::Result result = kernel(q, k, v, attrs, attn_mask, past_key, past_value);
+         SetOutput(node, 0, std::move(result.Y), rt.tensors());
+
+         auto set_optional_output = [&node, &rt](int index, Tensor output) {
+           if (index >= node.output_size()) {
+             return;
+           }
+           const std::string name = node.output(index).as_string();
+           if (name.empty()) {
+             return;
+           }
+           output.name = name;
+           rt.tensors()[name] = std::move(output);
+         };
+         set_optional_output(1, std::move(result.present_key));
+         set_optional_output(2, std::move(result.present_value));
+         set_optional_output(3, std::move(result.qk_matmul_output));
        }},
 
       // -----------------------------------------------------------------
@@ -344,6 +386,21 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor *max = GetOptionalInput(node, 2, rt.tensors());
          kernel::Clip k(rt.kernel_ctx());
          SetOutput(node, 0, k(x, min, max), rt.tensors());
+       }},
+
+      // -----------------------------------------------------------------
+      // Binary kernels with attributes.
+      // -----------------------------------------------------------------
+      // ``Mod``: ``fmod`` is 0 (NumPy-style integer modulo) by default.
+      {"ai.onnx:Mod",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const Tensor &y = GetInput(node, 1, rt.tensors());
+         const int64_t fmod = GetAttributeIntOrDefault(node, "fmod", 0);
+         kernel::Mod k(rt.kernel_ctx());
+         SetOutput(node, 0, k(x, y, fmod), rt.tensors());
        }},
 
       // -----------------------------------------------------------------

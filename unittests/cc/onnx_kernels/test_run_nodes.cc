@@ -100,6 +100,7 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx:Gelu"), table.end());
   EXPECT_NE(table.find("ai.onnx:Mod"), table.end());
   EXPECT_NE(table.find("ai.onnx:Clip"), table.end());
+  EXPECT_NE(table.find("ai.onnx:Attention"), table.end());
   EXPECT_NE(table.find("ai.onnx:IsInf"), table.end());
   EXPECT_NE(table.find("ai.onnx:BitShift"), table.end());
   // Generator kernels.

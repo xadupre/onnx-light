@@ -107,7 +107,13 @@ int main(int argc, char *argv[]) {
   std::vector<double> timings_ms;
   timings_ms.reserve(iterations);
 
-  for (int i = 0; i < iterations; ++i) {
+  // Run one unmeasured warm-up iteration so the first (cold-cache) load does
+  // not skew the average/median. This mirrors the Python ``measure()`` helper
+  // in ``docs/examples/core/plot_onnx_time.py`` which discards a warmup run
+  // before timing. Without it, the C++ benchmark looked systematically slower
+  // than the Python one even though both call the same protobuf parser.
+  const int total_iterations = iterations + 1;
+  for (int i = 0; i < total_iterations; ++i) {
     try {
       const auto begin = std::chrono::steady_clock::now();
       std::ifstream input(file_path, std::ios::binary);
@@ -119,7 +125,9 @@ int main(int argc, char *argv[]) {
         throw std::runtime_error("Failed to parse ONNX model from: " + file_path);
       }
       const auto end = std::chrono::steady_clock::now();
-      timings_ms.push_back(ToMilliseconds(end - begin));
+      if (i > 0) {
+        timings_ms.push_back(ToMilliseconds(end - begin));
+      }
     } catch (const std::exception &e) {
       std::cerr << "Error loading '" << file_path << "': " << e.what() << "\n";
       return 1;

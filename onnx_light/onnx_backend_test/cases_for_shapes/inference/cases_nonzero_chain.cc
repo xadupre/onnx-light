@@ -156,7 +156,7 @@ void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &regist
                                {1.0f, 0.0f, 2.0f, 0.0f, //
                                 0.0f, 3.0f, 0.0f, 4.0f, //
                                 5.0f, 0.0f, 6.0f, 0.0f});
-  Tensor y = Tensor::FromInt64("Y", {12}, {0, 1, 0, 3, 1, 4, 1, 6, 3, 1, 3, 7});
+  Tensor y = Tensor::FromInt64("Y", {12}, {0,  0, -1, -1, -2, -2,  0, -2, -1, -3,  0, -2});
   AppendDataSet(tc, {std::move(x)}, {std::move(y)});
   registry.emplace_back(std::move(tc));
 }

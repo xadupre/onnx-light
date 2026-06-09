@@ -91,7 +91,7 @@ def convert_model_to_external_data(
     :raises ValueError: if ``location`` is an absolute path.
     :raises FileExistsError: if ``location`` already exists on disk.
     """
-    if location and (os.path.isabs(location) or location.startswith('/') or location.startswith('\\')):
+    if location and (os.path.isabs(location) or location.startswith(("/", "\\"))):
         raise ValueError(f"location must be a relative path, got: {location}")
     if location and all_tensors_to_one_file and os.path.exists(location):
         raise FileExistsError(f"External data file exists in {location}.")

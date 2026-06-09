@@ -369,6 +369,7 @@ TEST(RunNodes, RunNodeDFTOpset17InverseOnesidedAttributes) {
   const Tensor &y = rt.tensors()["y"];
   ASSERT_EQ(y.shape, expected.shape);
   ASSERT_EQ(y.data.size(), expected.data.size());
+  EXPECT_EQ(std::memcmp(y.data.data(), expected.data.data(), expected.data.size()), 0);
 }
 
 TEST(RunNodes, RunNodeAdagradFromDispatchTable) {

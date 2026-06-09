@@ -555,7 +555,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            if (axis_tensor != nullptr) {
              if (axis_tensor->element_count() != 1) {
                throw std::invalid_argument(
-                   "RunNode: DFT 'axis' input must be a 0-D (scalar) tensor.");
+                   "RunNode: DFT 'axis' input must be a scalar tensor (or a 1-D "
+                   "tensor with a single element).");
              }
              switch (axis_tensor->data_type) {
              case DataType::INT64:

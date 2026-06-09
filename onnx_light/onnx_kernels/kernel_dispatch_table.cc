@@ -424,8 +424,80 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::Clip k(rt.kernel_ctx());
          SetOutput(node, 0, k(x, min, max), rt.tensors());
        }},
+      {"ai.onnx:Conv",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 2);
+         if (node.input_size() > 3) {
+           throw std::invalid_argument("RunNode: op 'Conv' expects at most 3 inputs, got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const Tensor &w = GetInput(node, 1, rt.tensors());
+         const Tensor *b = GetOptionalInput(node, 2, rt.tensors());
+         kernel::Conv::Attributes attrs;
+         attrs.kernel_shape = GetAttributeIntsOrDefault(node, "kernel_shape", {});
+         attrs.strides = GetAttributeIntsOrDefault(node, "strides", {});
+         attrs.pads = GetAttributeIntsOrDefault(node, "pads", {});
+         attrs.dilations = GetAttributeIntsOrDefault(node, "dilations", {});
+         attrs.group = GetAttributeIntOrDefault(node, "group", 1);
+         attrs.auto_pad = GetAttributeStringOrDefault(node, "auto_pad", "NOTSET");
+         kernel::Conv k(rt.kernel_ctx());
+         SetOutput(node, 0, k(x, w, b != nullptr ? *b : Tensor{}, attrs), rt.tensors());
+       }},
+      {"ai.onnx:ConvInteger",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 2);
+         if (node.input_size() > 4) {
+           throw std::invalid_argument("RunNode: op 'ConvInteger' expects at most 4 inputs, got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const Tensor &w = GetInput(node, 1, rt.tensors());
+         const Tensor *x_zp = GetOptionalInput(node, 2, rt.tensors());
+         const Tensor *w_zp = GetOptionalInput(node, 3, rt.tensors());
+         kernel::ConvInteger::Attributes attrs;
+         attrs.kernel_shape = GetAttributeIntsOrDefault(node, "kernel_shape", {});
+         attrs.strides = GetAttributeIntsOrDefault(node, "strides", {});
+         attrs.pads = GetAttributeIntsOrDefault(node, "pads", {});
+         attrs.dilations = GetAttributeIntsOrDefault(node, "dilations", {});
+         attrs.group = GetAttributeIntOrDefault(node, "group", 1);
+         attrs.auto_pad = GetAttributeStringOrDefault(node, "auto_pad", "NOTSET");
+         kernel::ConvInteger k(rt.kernel_ctx());
+         SetOutput(node, 0,
+                   k(x, w, x_zp != nullptr ? *x_zp : Tensor{},
+                     w_zp != nullptr ? *w_zp : Tensor{}, attrs),
+                   rt.tensors());
+       }},
       {"ai.onnx:Cos", MakeUnaryTrampoline<kernel::Cos>()},
       {"ai.onnx:Cosh", MakeUnaryTrampoline<kernel::Cosh>()},
+      {"ai.onnx:DeformConv",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 3);
+         if (node.input_size() > 5) {
+           throw std::invalid_argument("RunNode: op 'DeformConv' expects at most 5 inputs, got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const Tensor &w = GetInput(node, 1, rt.tensors());
+         const Tensor &offset = GetInput(node, 2, rt.tensors());
+         const Tensor *b = GetOptionalInput(node, 3, rt.tensors());
+         const Tensor *mask = GetOptionalInput(node, 4, rt.tensors());
+         kernel::DeformConv::Attributes attrs;
+         attrs.kernel_shape = GetAttributeIntsOrDefault(node, "kernel_shape", {});
+         attrs.strides = GetAttributeIntsOrDefault(node, "strides", {});
+         attrs.pads = GetAttributeIntsOrDefault(node, "pads", {});
+         attrs.dilations = GetAttributeIntsOrDefault(node, "dilations", {});
+         attrs.group = GetAttributeIntOrDefault(node, "group", 1);
+         attrs.offset_group = GetAttributeIntOrDefault(node, "offset_group", 1);
+         kernel::DeformConv k(rt.kernel_ctx());
+         SetOutput(node, 0,
+                   k(x, w, offset, b != nullptr ? *b : Tensor{},
+                     mask != nullptr ? *mask : Tensor{}, attrs),
+                   rt.tensors());
+       }},
       {"ai.onnx:Det", MakeUnaryTrampoline<kernel::Det>()},
       {"ai.onnx:DequantizeLinear", MakeBinaryWithOptionalThirdTrampoline<kernel::DequantizeLinear>()},
       {"ai.onnx:DFT",

@@ -873,6 +873,67 @@ Calling this function serializes that model to ``dst_onnx_path`` such that:
     alignment padding; ``0`` when no new initializer needed to be written).
 )pbdoc");
 
+  m.def(
+      "convert_model_to_external_data",
+      [](ModelProto &model, bool all_tensors_to_one_file, const std::string &location,
+         int64_t size_threshold, bool convert_attribute) {
+        EXT_ENFORCE_INVALID(size_threshold >= 0, "size_threshold must be non-negative, got ",
+                            size_threshold, ".");
+        try {
+          ConvertModelToExternalData(model, all_tensors_to_one_file, location,
+                                     static_cast<size_t>(size_threshold), convert_attribute);
+        } catch (const ExternalDataLocationExistsError &e) {
+          PyErr_SetString(PyExc_FileExistsError, e.what());
+          throw nb::python_error();
+        }
+      },
+      nb::arg("model"), nb::arg("all_tensors_to_one_file") = true,
+      nb::arg("location") = std::string(), nb::arg("size_threshold") = 1024,
+      nb::arg("convert_attribute") = false,
+      R"pbdoc(Marks every initializer tensor of *model* whose ``raw_data`` is at
+least ``size_threshold`` bytes long as EXTERNAL.  The actual bytes are not
+written; they remain in ``raw_data`` and are flushed to disk by the next
+serialization call (e.g. :func:`onnx_light.onnx.save`).
+
+Mirrors :func:`onnx.external_data_helper.convert_model_to_external_data` on top
+of onnx-light's protos.
+
+:param model: ModelProto to modify in place.
+:param all_tensors_to_one_file: When True (default), every qualifying tensor
+    points at the same external file (``location`` or a generated
+    ``<uuid>.data`` name).  When False, each tensor is given its own file
+    named after the tensor.
+:param location: Relative path of the external data file.  Must be relative to
+    the model file.  Ignored when ``all_tensors_to_one_file=False``.  Empty
+    means "generate a name".
+:param size_threshold: Only tensors whose ``raw_data`` size is greater than or
+    equal to ``size_threshold`` bytes are moved to external storage.  Set to
+    ``0`` to externalize every tensor with raw data.
+:param convert_attribute: When True, also externalize tensors stored inside
+    node attributes (``AttributeProto.t`` and ``AttributeProto.tensors``).
+:raises ValueError: When ``location`` is an absolute path.
+:raises FileExistsError: When ``location`` already exists on disk.
+)pbdoc");
+
+  m.def(
+      "load_external_data_for_model",
+      [](ModelProto &model, const std::string &base_dir) {
+        LoadExternalDataForModel(model, base_dir);
+      },
+      nb::arg("model"), nb::arg("base_dir"),
+      R"pbdoc(Loads external tensor bytes into *model* in place.
+
+For every tensor whose data lives in an external file, reads the bytes from
+``base_dir`` into the tensor's ``raw_data`` and resets ``data_location`` to
+``DEFAULT``, dropping the ``external_data`` entries.
+
+Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
+
+:param model: ModelProto whose external tensors are loaded in place.
+:param base_dir: Directory that contains the external data files referenced
+    by the tensors.
+)pbdoc");
+
   nb::class_<utils::PrintOptions>(m, "PrintOptions", "Printing options for proto classes")
       .def(nb::init<>())
       .def_rw("skip_raw_data", &utils::PrintOptions::skip_raw_data,

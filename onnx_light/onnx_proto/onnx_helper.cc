@@ -6,10 +6,12 @@
 #include <array>
 #include <cerrno>
 #include <charconv>
+#include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <random>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -158,6 +160,201 @@ void ClearExternalData(ModelProto &model) {
       EXT_ENFORCE(it->has_raw_data(), "raw_data is empty, external data should not be removed.");
       it->clr_external_data();
       it->reset_data_location();
+    }
+  }
+}
+
+namespace {
+
+// Generates a UUIDv1-like 8-4-4-4-12 hex string without external dependencies.
+// Used as the fallback external_data filename when the caller does not pass one.
+std::string MakeUuidFilename() {
+  std::random_device rd;
+  std::mt19937_64 gen(rd());
+  std::uniform_int_distribution<uint64_t> dist;
+  uint64_t a = dist(gen);
+  uint64_t b = dist(gen);
+  std::array<char, 64> buf{};
+  std::snprintf(buf.data(), buf.size(), "%08x-%04x-%04x-%04x-%012llx.data",
+                static_cast<uint32_t>(a >> 32), static_cast<uint16_t>(a >> 16),
+                static_cast<uint16_t>(a), static_cast<uint16_t>(b >> 48),
+                static_cast<unsigned long long>(b & 0xFFFFFFFFFFFFULL));
+  return std::string(buf.data());
+}
+
+// Returns true when the filename contains no path-separator or otherwise illegal
+// characters; mirrors the upstream onnx.external_data_helper._sanitize_path check.
+bool IsValidExternalDataFilename(const std::string &name) {
+  if (name.empty()) {
+    return false;
+  }
+  for (char c : name) {
+    switch (c) {
+    case '<':
+    case '>':
+    case ':':
+    case ';':
+    case ',':
+    case '?':
+    case '"':
+    case '*':
+    case '|':
+    case '/':
+    case '\\':
+      return false;
+    default:
+      break;
+    }
+  }
+  return true;
+}
+
+// Sets *tensor* as EXTERNAL with a single ``location`` entry, mirroring
+// onnx.external_data_helper.set_external_data.  The tensor must currently
+// carry inline raw_data; the bytes are left untouched so they can be written
+// out by a subsequent serialization call.
+void SetExternalDataLocation(TensorProto &tensor, const std::string &location) {
+  EXT_ENFORCE(tensor.has_raw_data(), "Tensor '", tensor.ref_name().as_string(),
+              "' does not have raw_data. Cannot set external data for this tensor.");
+  tensor.clr_external_data();
+  tensor.ref_data_location() = TensorProto::DataLocation::EXTERNAL;
+  StringStringEntryProto *loc = tensor.add_external_data();
+  loc->set_key("location");
+  loc->set_value(location);
+}
+
+// Walks every initializer tensor in *graph* and recursively in any subgraph
+// nested in node attributes (AttributeProto.g / AttributeProto.graphs),
+// invoking ``fn`` on each.
+template <typename F> void ForEachInitializerTensor(GraphProto &graph, F &&fn) {
+  for (int i = 0; i < graph.ref_initializer().size(); ++i) {
+    fn(graph.ref_initializer()[i]);
+  }
+  for (int i = 0; i < graph.ref_node().size(); ++i) {
+    NodeProto &node = graph.ref_node()[i];
+    for (int j = 0; j < node.ref_attribute().size(); ++j) {
+      AttributeProto &attr = node.ref_attribute()[j];
+      if (attr.has_g()) {
+        ForEachInitializerTensor(attr.ref_g(), fn);
+      }
+      if (attr.has_graphs()) {
+        for (int k = 0; k < attr.ref_graphs().size(); ++k) {
+          ForEachInitializerTensor(attr.ref_graphs()[k], fn);
+        }
+      }
+    }
+  }
+}
+
+// Walks every TensorProto stored in node attributes (AttributeProto.t and
+// AttributeProto.tensors) of every node in *nodes*, recursing into any
+// subgraph nested in those attributes.
+template <typename Nodes, typename F> void ForEachAttributeTensorInNodes(Nodes &nodes, F &&fn);
+
+template <typename F> void ForEachAttributeTensorInGraph(GraphProto &graph, F &&fn) {
+  ForEachAttributeTensorInNodes(graph.ref_node(), fn);
+}
+
+template <typename Nodes, typename F> void ForEachAttributeTensorInNodes(Nodes &nodes, F &&fn) {
+  for (int i = 0; i < nodes.size(); ++i) {
+    NodeProto &node = nodes[i];
+    for (int j = 0; j < node.ref_attribute().size(); ++j) {
+      AttributeProto &attr = node.ref_attribute()[j];
+      if (attr.has_t()) {
+        fn(attr.ref_t());
+      }
+      if (attr.has_tensors()) {
+        for (int k = 0; k < attr.ref_tensors().size(); ++k) {
+          fn(attr.ref_tensors()[k]);
+        }
+      }
+      if (attr.has_g()) {
+        ForEachAttributeTensorInGraph(attr.ref_g(), fn);
+      }
+      if (attr.has_graphs()) {
+        for (int k = 0; k < attr.ref_graphs().size(); ++k) {
+          ForEachAttributeTensorInGraph(attr.ref_graphs()[k], fn);
+        }
+      }
+    }
+  }
+}
+
+} // namespace
+
+void ConvertModelToExternalData(ModelProto &model, bool all_tensors_to_one_file,
+                                const std::string &location, size_t size_threshold,
+                                bool convert_attribute) {
+  // Decide the target filename when every tensor goes to the same file.
+  std::string single_file_name;
+  if (all_tensors_to_one_file) {
+    if (location.empty()) {
+      single_file_name = MakeUuidFilename();
+    } else {
+      if (std::filesystem::path(location).is_absolute()) {
+        EXT_THROW_INVALID("location must be a relative path that is relative to the model path.");
+      }
+      if (std::filesystem::exists(location)) {
+        throw ExternalDataLocationExistsError(
+            onnx_light_helpers::MakeString("External data file exists in ", location, "."));
+      }
+      single_file_name = location;
+    }
+  }
+
+  auto handle_tensor = [&](TensorProto &tensor) {
+    if (!tensor.has_raw_data()) {
+      return;
+    }
+    if (tensor.ref_raw_data().size() < size_threshold) {
+      return;
+    }
+    if (all_tensors_to_one_file) {
+      SetExternalDataLocation(tensor, single_file_name);
+    } else {
+      std::string tensor_location = tensor.ref_name().as_string();
+      if (!IsValidExternalDataFilename(tensor_location)) {
+        tensor_location = MakeUuidFilename();
+      }
+      SetExternalDataLocation(tensor, tensor_location);
+    }
+  };
+
+  if (model.has_graph()) {
+    ForEachInitializerTensor(model.ref_graph(), handle_tensor);
+  }
+  if (convert_attribute) {
+    if (model.has_graph()) {
+      ForEachAttributeTensorInGraph(model.ref_graph(), handle_tensor);
+    }
+    if (model.has_functions()) {
+      for (int i = 0; i < model.ref_functions().size(); ++i) {
+        FunctionProto &fn = model.ref_functions()[i];
+        ForEachAttributeTensorInNodes(fn.ref_node(), handle_tensor);
+      }
+    }
+  }
+}
+
+void LoadExternalDataForModel(ModelProto &model, const std::string &base_dir) {
+  auto handle_tensor = [&](TensorProto &tensor) {
+    if (!tensor.has_data_location() ||
+        tensor.ref_data_location() != TensorProto::DataLocation::EXTERNAL) {
+      return;
+    }
+    tensor.LoadExternalData(base_dir);
+    tensor.ref_data_location() = TensorProto::DataLocation::DEFAULT;
+    tensor.clr_external_data();
+  };
+
+  if (model.has_graph()) {
+    ForEachInitializerTensor(model.ref_graph(), handle_tensor);
+    ForEachAttributeTensorInGraph(model.ref_graph(), handle_tensor);
+  }
+  if (model.has_functions()) {
+    for (int i = 0; i < model.ref_functions().size(); ++i) {
+      FunctionProto &fn = model.ref_functions()[i];
+      ForEachAttributeTensorInNodes(fn.ref_node(), handle_tensor);
     }
   }
 }

@@ -2,7 +2,9 @@
 #include "onnx_light_helpers.h"
 #include <atomic>
 #include <chrono>
+#include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <gtest/gtest.h>
 #include <random>
 #include <thread>
@@ -203,6 +205,131 @@ TEST(onnx_helper, IteratorTensorProto_ExternalData) {
   while (it.next()) {
     EXPECT_FALSE(it->has_external_data());
   }
+}
+
+TEST(onnx_helper, ConvertModelToExternalData_AllToOneFile) {
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+
+  TensorProto *small_w = graph->add_initializer();
+  small_w->set_name("small");
+  small_w->set_data_type(TensorProto::DataType::FLOAT);
+  small_w->ref_raw_data().resize(8);
+
+  TensorProto *big_w = graph->add_initializer();
+  big_w->set_name("big");
+  big_w->set_data_type(TensorProto::DataType::FLOAT);
+  big_w->ref_raw_data().resize(64);
+
+  ConvertModelToExternalData(model, /*all_tensors_to_one_file=*/true,
+                             /*location=*/"weights.bin", /*size_threshold=*/16,
+                             /*convert_attribute=*/false);
+
+  EXPECT_FALSE(small_w->has_external_data());
+  EXPECT_TRUE(big_w->has_external_data());
+  ASSERT_EQ(big_w->ref_external_data().size(), 1);
+  EXPECT_EQ(big_w->ref_external_data()[0].ref_key().as_string(), "location");
+  EXPECT_EQ(big_w->ref_external_data()[0].ref_value().as_string(), "weights.bin");
+  EXPECT_EQ(big_w->ref_data_location(), TensorProto::DataLocation::EXTERNAL);
+  // raw_data is preserved (the bytes are flushed by a later save call).
+  EXPECT_EQ(big_w->ref_raw_data().size(), 64u);
+}
+
+TEST(onnx_helper, ConvertModelToExternalData_PerTensorFile) {
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+
+  TensorProto *t = graph->add_initializer();
+  t->set_name("W");
+  t->set_data_type(TensorProto::DataType::FLOAT);
+  t->ref_raw_data().resize(64);
+
+  ConvertModelToExternalData(model, /*all_tensors_to_one_file=*/false,
+                             /*location=*/"", /*size_threshold=*/0,
+                             /*convert_attribute=*/false);
+
+  ASSERT_EQ(t->ref_external_data().size(), 1);
+  EXPECT_EQ(t->ref_external_data()[0].ref_value().as_string(), "W");
+}
+
+TEST(onnx_helper, ConvertModelToExternalData_AbsoluteLocationRejected) {
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+  TensorProto *t = graph->add_initializer();
+  t->set_name("W");
+  t->set_data_type(TensorProto::DataType::FLOAT);
+  t->ref_raw_data().resize(64);
+
+#if defined(_WIN32)
+  const std::string abs_location = "C:/tmp/forbidden.bin";
+#else
+  const std::string abs_location = "/tmp/forbidden.bin";
+#endif
+  EXPECT_THROW(ConvertModelToExternalData(model, true, abs_location, 0, false),
+               std::invalid_argument);
+}
+
+TEST(onnx_helper, ConvertModelToExternalData_ExistingLocationRejected) {
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+  TensorProto *t = graph->add_initializer();
+  t->set_name("W");
+  t->set_data_type(TensorProto::DataType::FLOAT);
+  t->ref_raw_data().resize(64);
+
+  std::filesystem::path tmp =
+      std::filesystem::temp_directory_path() / "onnx_light_convert_existing.bin";
+  {
+    std::ofstream out(tmp, std::ios::binary);
+    out << "x";
+  }
+  const std::string existing = tmp.string();
+  EXPECT_THROW(ConvertModelToExternalData(model, true, existing, 0, false),
+               ExternalDataLocationExistsError);
+  std::filesystem::remove(tmp);
+}
+
+TEST(onnx_helper, LoadExternalDataForModel_RoundTrip) {
+  std::filesystem::path tmpdir =
+      std::filesystem::temp_directory_path() / "onnx_light_load_external_roundtrip";
+  std::filesystem::create_directories(tmpdir);
+  const std::string ext_name = "weights.bin";
+  std::filesystem::path weights_path = tmpdir / ext_name;
+  std::vector<uint8_t> bytes{1, 2, 3, 4, 5, 6, 7, 8};
+  {
+    std::ofstream out(weights_path, std::ios::binary);
+    out.write(reinterpret_cast<const char *>(bytes.data()),
+              static_cast<std::streamsize>(bytes.size()));
+  }
+
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+  TensorProto *t = graph->add_initializer();
+  t->set_name("W");
+  t->set_data_type(TensorProto::DataType::FLOAT);
+  t->ref_raw_data().resize(bytes.size());
+  std::memcpy(t->ref_raw_data().data(), bytes.data(), bytes.size());
+
+  ConvertModelToExternalData(model, true, ext_name, 0, false);
+  EXPECT_TRUE(t->has_external_data());
+  EXPECT_EQ(t->ref_data_location(), TensorProto::DataLocation::EXTERNAL);
+
+  // Simulate post-save state: drop inline raw_data.
+  t->ref_raw_data().resize(0);
+
+  LoadExternalDataForModel(model, tmpdir.string());
+  EXPECT_FALSE(t->has_external_data());
+  EXPECT_EQ(t->ref_data_location(), TensorProto::DataLocation::DEFAULT);
+  ASSERT_EQ(t->ref_raw_data().size(), bytes.size());
+  for (size_t i = 0; i < bytes.size(); ++i) {
+    EXPECT_EQ(t->ref_raw_data().data()[i], bytes[i]);
+  }
+  std::filesystem::remove_all(tmpdir);
 }
 
 TEST(onnx_helper, SerializeModelProtoToStream) {

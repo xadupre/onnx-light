@@ -8,6 +8,7 @@
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
+#include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_kernels/node_helpers.h"
 
 #include <stdexcept>
@@ -385,6 +386,17 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const int64_t dtype = GetAttributeIntOrDefault(node, "dtype", 0);
          kernel::EyeLike kernel(rt.kernel_ctx());
          SetOutput(node, 0, kernel(x, k, static_cast<int32_t>(dtype)), rt.tensors());
+       }},
+      {"ai.onnx:AffineGrid",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         const Tensor &theta = GetInput(node, 0, rt.tensors());
+         const Tensor &size = GetInput(node, 1, rt.tensors());
+         kernel::AffineGrid::Attributes affine_grid_attrs;
+         affine_grid_attrs.align_corners = GetAttributeIntOrDefault(node, "align_corners", 0);
+         kernel::AffineGrid affine_grid_kernel(rt.kernel_ctx());
+         SetOutput(node, 0, affine_grid_kernel(theta, size, affine_grid_attrs), rt.tensors());
        }},
 
       // -----------------------------------------------------------------

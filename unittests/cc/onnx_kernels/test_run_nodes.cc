@@ -92,6 +92,7 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx:BitShift"), table.end());
   // Generator kernels.
   EXPECT_NE(table.find("ai.onnx:EyeLike"), table.end());
+  EXPECT_NE(table.find("ai.onnx:AffineGrid"), table.end());
   // Logical / bitwise kernels.
   EXPECT_NE(table.find("ai.onnx:And"), table.end());
   EXPECT_NE(table.find("ai.onnx:Or"), table.end());
@@ -206,6 +207,33 @@ TEST(RunNodes, RunNodeEyeLikeUsesAttributes) {
   EXPECT_EQ(got[3], 0);
   EXPECT_EQ(got[4], 0);
   EXPECT_EQ(got[5], 1);
+}
+
+TEST(RunNodes, RunNodeAffineGridUsesAttributes) {
+  RuntimeContext rt(KernelContext(DefaultOpset(20)));
+  rt.tensors()["theta"] =
+      Tensor::FromFloat("theta", {1, 2, 3}, {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f});
+  rt.tensors()["size"] = Tensor::FromInt64("size", {4}, {1, 1, 2, 2});
+
+  NodeProto node = MakeNode("AffineGrid", {"theta", "size"}, {"grid"});
+  AttributeProto *align_corners_attr = node.add_attribute();
+  align_corners_attr->set_name("align_corners");
+  align_corners_attr->set_type(AttributeProto::AttributeType::INT);
+  align_corners_attr->set_i(1);
+
+  RunNode(node, rt);
+
+  const Tensor &grid = rt.tensors()["grid"];
+  EXPECT_EQ(grid.shape, (std::vector<int64_t>{1, 2, 2, 2}));
+  const float *got = grid.AsFloat();
+  EXPECT_FLOAT_EQ(got[0], -1.0f);
+  EXPECT_FLOAT_EQ(got[1], -1.0f);
+  EXPECT_FLOAT_EQ(got[2], 1.0f);
+  EXPECT_FLOAT_EQ(got[3], -1.0f);
+  EXPECT_FLOAT_EQ(got[4], -1.0f);
+  EXPECT_FLOAT_EQ(got[5], 1.0f);
+  EXPECT_FLOAT_EQ(got[6], 1.0f);
+  EXPECT_FLOAT_EQ(got[7], 1.0f);
 }
 
 TEST(RunNodes, RunNodeUnsupportedOpTypeThrows) {

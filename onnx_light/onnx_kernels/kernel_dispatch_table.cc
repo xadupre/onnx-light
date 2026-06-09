@@ -17,7 +17,9 @@
 
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -208,6 +210,56 @@ template <class KernelT> NodeKernelFn MakeArgReduceTrampoline() {
     KernelT kernel(rt.kernel_ctx());
     SetOutput(node, 0, kernel(data, axis, keepdims, select_last_index), rt.tensors());
   };
+}
+
+// Shared attributes consumed by SVMRegressor and SVMClassifier.
+struct SVMCommonAttrs {
+  std::string kernel_type;
+  float gamma;
+  float coef0;
+  float degree;
+  std::vector<float> support_vectors;
+  std::vector<float> coefficients;
+  std::vector<float> rho;
+};
+
+inline SVMCommonAttrs ParseSVMCommonAttrs(const NodeProto &node, const char *op_name) {
+  SVMCommonAttrs a;
+  a.kernel_type = GetAttributeStringOrDefault(node, "kernel_type", "LINEAR");
+  const std::vector<float> kernel_params =
+      GetAttributeFloatsOrDefault(node, "kernel_params", {0.0f, 0.0f, 0.0f});
+  if (kernel_params.size() < 3) {
+    throw std::invalid_argument(std::string("RunNode: ") + op_name +
+                                " 'kernel_params' must have at least 3 floats.");
+  }
+  a.gamma = kernel_params[0];
+  a.coef0 = kernel_params[1];
+  a.degree = kernel_params[2];
+  a.support_vectors = GetAttributeFloatsOrDefault(node, "support_vectors", {});
+  a.coefficients = GetAttributeFloatsOrDefault(node, "coefficients", {});
+  a.rho = GetAttributeFloatsOrDefault(node, "rho", {});
+  return a;
+}
+
+// Dispatches ``fn`` on the element type of ``x`` for SVM* ops. ``fn`` is invoked
+// with a ``T*`` tag pointer (always null) so the caller can recover ``T`` via
+// ``std::remove_pointer_t<decltype(tag)>``.
+template <class Fn>
+auto DispatchSVMByDataType(const Tensor &x, const char *op_name,
+                           Fn &&fn) -> decltype(fn(static_cast<float *>(nullptr))) {
+  switch (x.data_type) {
+  case static_cast<int32_t>(DataType::FLOAT):
+    return fn(static_cast<float *>(nullptr));
+  case static_cast<int32_t>(DataType::DOUBLE):
+    return fn(static_cast<double *>(nullptr));
+  case static_cast<int32_t>(DataType::INT64):
+    return fn(static_cast<int64_t *>(nullptr));
+  case static_cast<int32_t>(DataType::INT32):
+    return fn(static_cast<int32_t *>(nullptr));
+  default:
+    throw std::invalid_argument(std::string("RunNode: ") + op_name +
+                                " input 'X' must be FLOAT, DOUBLE, INT32 or INT64.");
+  }
 }
 
 } // namespace
@@ -700,45 +752,14 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          RequireInputCount(node, 1);
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
-         const std::string kernel_type =
-             GetAttributeStringOrDefault(node, "kernel_type", "LINEAR");
-         const std::vector<float> kernel_params =
-             GetAttributeFloatsOrDefault(node, "kernel_params", {0.0f, 0.0f, 0.0f});
-         if (kernel_params.size() < 3) {
-           throw std::invalid_argument(
-               "RunNode: SVMRegressor 'kernel_params' must have at least 3 floats.");
-         }
-         const float gamma = kernel_params[0];
-         const float coef0 = kernel_params[1];
-         const float degree = kernel_params[2];
-         const std::vector<float> support_vectors =
-             GetAttributeFloatsOrDefault(node, "support_vectors", {});
-         const std::vector<float> coefficients =
-             GetAttributeFloatsOrDefault(node, "coefficients", {});
-         const std::vector<float> rho = GetAttributeFloatsOrDefault(node, "rho", {});
+         const SVMCommonAttrs a = ParseSVMCommonAttrs(node, "SVMRegressor");
          kernel::SVMRegressor svm(rt.kernel_ctx());
-         Tensor y;
-         switch (x.data_type) {
-         case static_cast<int32_t>(DataType::FLOAT):
-           y = svm.operator()<float>(x, support_vectors, coefficients, rho, kernel_type.c_str(),
-                                     gamma, coef0, degree);
-           break;
-         case static_cast<int32_t>(DataType::DOUBLE):
-           y = svm.operator()<double>(x, support_vectors, coefficients, rho, kernel_type.c_str(),
-                                      gamma, coef0, degree);
-           break;
-         case static_cast<int32_t>(DataType::INT64):
-           y = svm.operator()<int64_t>(x, support_vectors, coefficients, rho, kernel_type.c_str(),
-                                       gamma, coef0, degree);
-           break;
-         case static_cast<int32_t>(DataType::INT32):
-           y = svm.operator()<int32_t>(x, support_vectors, coefficients, rho, kernel_type.c_str(),
-                                       gamma, coef0, degree);
-           break;
-         default:
-           throw std::invalid_argument(
-               "RunNode: SVMRegressor input 'X' must be FLOAT, DOUBLE, INT32 or INT64.");
-         }
+         Tensor y = DispatchSVMByDataType(x, "SVMRegressor", [&](auto *tag) {
+           using T = std::remove_pointer_t<decltype(tag)>;
+           (void)tag;
+           return svm.template operator()<T>(x, a.support_vectors, a.coefficients, a.rho,
+                                             a.kernel_type.c_str(), a.gamma, a.coef0, a.degree);
+         });
          SetOutput(node, 0, std::move(y), rt.tensors());
        }},
       {"ai.onnx.ml:SVMClassifier",
@@ -746,22 +767,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          RequireInputCount(node, 1);
          RequireOutputCount(node, 2);
          const Tensor &x = GetInput(node, 0, rt.tensors());
-         const std::string kernel_type =
-             GetAttributeStringOrDefault(node, "kernel_type", "LINEAR");
-         const std::vector<float> kernel_params =
-             GetAttributeFloatsOrDefault(node, "kernel_params", {0.0f, 0.0f, 0.0f});
-         if (kernel_params.size() < 3) {
-           throw std::invalid_argument(
-               "RunNode: SVMClassifier 'kernel_params' must have at least 3 floats.");
-         }
-         const float gamma = kernel_params[0];
-         const float coef0 = kernel_params[1];
-         const float degree = kernel_params[2];
-         const std::vector<float> support_vectors =
-             GetAttributeFloatsOrDefault(node, "support_vectors", {});
-         const std::vector<float> coefficients =
-             GetAttributeFloatsOrDefault(node, "coefficients", {});
-         const std::vector<float> rho = GetAttributeFloatsOrDefault(node, "rho", {});
+         const SVMCommonAttrs a = ParseSVMCommonAttrs(node, "SVMClassifier");
          const std::vector<int64_t> vectors_per_class =
              GetAttributeIntsOrDefault(node, "vectors_per_class", {});
          const std::vector<int64_t> classlabels_ints =
@@ -776,48 +782,20 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                "'classlabels_strings' to be set.");
          }
          kernel::SVMClassifier svm(rt.kernel_ctx());
-         std::pair<Tensor, Tensor> yz;
-         switch (x.data_type) {
-         case static_cast<int32_t>(DataType::FLOAT):
-           yz = use_strings
-                    ? svm.operator()<float>(x, support_vectors, coefficients, rho,
-                                            vectors_per_class, classlabels_strings,
-                                            kernel_type.c_str(), gamma, coef0, degree)
-                    : svm.operator()<float>(x, support_vectors, coefficients, rho,
-                                            vectors_per_class, classlabels_ints,
-                                            kernel_type.c_str(), gamma, coef0, degree);
-           break;
-         case static_cast<int32_t>(DataType::DOUBLE):
-           yz = use_strings
-                    ? svm.operator()<double>(x, support_vectors, coefficients, rho,
-                                             vectors_per_class, classlabels_strings,
-                                             kernel_type.c_str(), gamma, coef0, degree)
-                    : svm.operator()<double>(x, support_vectors, coefficients, rho,
-                                             vectors_per_class, classlabels_ints,
-                                             kernel_type.c_str(), gamma, coef0, degree);
-           break;
-         case static_cast<int32_t>(DataType::INT64):
-           yz = use_strings
-                    ? svm.operator()<int64_t>(x, support_vectors, coefficients, rho,
-                                              vectors_per_class, classlabels_strings,
-                                              kernel_type.c_str(), gamma, coef0, degree)
-                    : svm.operator()<int64_t>(x, support_vectors, coefficients, rho,
-                                              vectors_per_class, classlabels_ints,
-                                              kernel_type.c_str(), gamma, coef0, degree);
-           break;
-         case static_cast<int32_t>(DataType::INT32):
-           yz = use_strings
-                    ? svm.operator()<int32_t>(x, support_vectors, coefficients, rho,
-                                              vectors_per_class, classlabels_strings,
-                                              kernel_type.c_str(), gamma, coef0, degree)
-                    : svm.operator()<int32_t>(x, support_vectors, coefficients, rho,
-                                              vectors_per_class, classlabels_ints,
-                                              kernel_type.c_str(), gamma, coef0, degree);
-           break;
-         default:
-           throw std::invalid_argument(
-               "RunNode: SVMClassifier input 'X' must be FLOAT, DOUBLE, INT32 or INT64.");
-         }
+         std::pair<Tensor, Tensor> yz =
+             DispatchSVMByDataType(x, "SVMClassifier", [&](auto *tag) {
+               using T = std::remove_pointer_t<decltype(tag)>;
+               (void)tag;
+               return use_strings
+                          ? svm.template operator()<T>(x, a.support_vectors, a.coefficients, a.rho,
+                                                       vectors_per_class, classlabels_strings,
+                                                       a.kernel_type.c_str(), a.gamma, a.coef0,
+                                                       a.degree)
+                          : svm.template operator()<T>(x, a.support_vectors, a.coefficients, a.rho,
+                                                       vectors_per_class, classlabels_ints,
+                                                       a.kernel_type.c_str(), a.gamma, a.coef0,
+                                                       a.degree);
+             });
          SetOutput(node, 0, std::move(yz.first), rt.tensors());
          SetOutput(node, 1, std::move(yz.second), rt.tensors());
        }},

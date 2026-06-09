@@ -774,4 +774,88 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeScanSubgraph) {
   ASSERT_TRUE(found) << "test_cc_scan_basic_trip_count case not registered";
 }
 
+// ---------------------------------------------------------------------------
+// onnx_optim shape inference + Scan pairwise-distance subgraph
+// ---------------------------------------------------------------------------
+//
+// Verifies that the ``onnx_optim`` shape-inference pipeline correctly handles
+// a richer ``Scan`` body that combines broadcasting (``Sub``) and a reduction
+// (``ReduceSum`` with ``axes=[1]``). The case used is
+// ``test_cc_scan_pairwise_distance`` (opset 11):
+//
+//   * ``X`` — FLOAT ``[3, 2]`` (used as both the initial state and the scan
+//     input; scan axis 0, trip count 3).
+//   * Body:
+//       state_X_out = Identity(state_X)
+//       diff        = Sub(state_X, x_row)
+//       sq          = Mul(diff, diff)
+//       dist        = ReduceSum(sq, axes=[1], keepdims=0)
+//
+// After shape inference:
+//
+//   * ``state_X_final`` — preserved state — must be FLOAT ``[3, 2]``.
+//   * ``dists`` — stacked scan output — must be FLOAT ``[3, 3]``; the
+//     leading axis 3 is the trip count derived from ``X``'s scan axis, and
+//     the trailing axis 3 is the per-iteration element shape ``[N] = [3]``
+//     produced by ``ReduceSum`` over the row of ``state_X``.
+TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapePairwiseDistanceScan) {
+  const std::vector<TestCase> cases = CollectTestCases("Scan");
+  bool found = false;
+  for (const TestCase &tc : cases) {
+    if (tc.name != "test_cc_scan_pairwise_distance") {
+      continue;
+    }
+    found = true;
+
+    ModelProto model_copy;
+    std::string serialized;
+    tc.model.SerializeToString(serialized);
+    model_copy.ParseFromString(serialized);
+
+    // Strip recorded output shapes so optim shape inference must recover
+    // them by walking the Scan body subgraph.
+    auto &outputs = model_copy.mutable_graph()->ref_output();
+    ASSERT_EQ(outputs.size(), 2u);
+    for (auto &vi : outputs) {
+      if (auto *ott = MutableTensorTypeOf(*vi.mutable_type()); ott != nullptr) {
+        ott->clear_shape();
+      }
+    }
+
+    ASSERT_NO_THROW(onnx_optim::shapes::InferShapesModel(model_copy)) << "case: " << tc.name;
+
+    const auto &out_infos = model_copy.ref_graph().ref_output();
+    ASSERT_EQ(out_infos.size(), 2u);
+
+    // state_X_final: preserved state, FLOAT [3, 2].
+    {
+      const ValueInfoProto &out = out_infos[0];
+      ASSERT_TRUE(out.has_type());
+      const TypeProto::Tensor *ott = TensorTypeOf(out.ref_type());
+      ASSERT_NE(ott, nullptr);
+      EXPECT_EQ(static_cast<int32_t>(ott->elem_type()), 1 /* FLOAT */);
+      ASSERT_TRUE(ott->has_shape());
+      const auto dims = DimsOf(*ott);
+      ASSERT_EQ(dims.size(), 2u);
+      EXPECT_EQ(dims[0], 3);
+      EXPECT_EQ(dims[1], 2);
+    }
+
+    // dists: stacked scan output, FLOAT [3, 3].
+    {
+      const ValueInfoProto &out = out_infos[1];
+      ASSERT_TRUE(out.has_type());
+      const TypeProto::Tensor *ott = TensorTypeOf(out.ref_type());
+      ASSERT_NE(ott, nullptr);
+      EXPECT_EQ(static_cast<int32_t>(ott->elem_type()), 1 /* FLOAT */);
+      ASSERT_TRUE(ott->has_shape());
+      const auto dims = DimsOf(*ott);
+      ASSERT_EQ(dims.size(), 2u);
+      EXPECT_EQ(dims[0], 3);
+      EXPECT_EQ(dims[1], 3);
+    }
+  }
+  ASSERT_TRUE(found) << "test_cc_scan_pairwise_distance case not registered";
+}
+
 } // namespace Test

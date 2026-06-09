@@ -162,6 +162,62 @@ GraphProto BuildMultiStateScanBody() {
   return g;
 }
 
+// Builds a Scan body subgraph computing the squared Euclidean distance
+// between a fixed ``[N, D]`` matrix ``state_X`` and a per-iteration ``[D]``
+// row ``x_row``:
+//
+//   state_X_out = Identity(state_X)            // state, propagated unchanged
+//   diff        = Sub(state_X, x_row)          // broadcasts to [N, D]
+//   sq          = Mul(diff, diff)              // [N, D]
+//   dist        = ReduceSum(sq, axes=[1], keepdims=0)  // [N]
+//
+// ``state_X`` is carried as a Scan state variable (its shape is left
+// unspecified so the body inherits it from the enclosing Scan node). The
+// trailing axis used by ``ReduceSum`` is fixed to 1, matching a rank-2
+// ``state_X`` shape. The body is opset-11-compatible (``axes`` is an
+// attribute on ``ReduceSum``).
+GraphProto BuildPairwiseDistanceScanBody() {
+  GraphProto g;
+  g.set_name("scan_body");
+
+  AddGraphInputTensor(g, "state_X", TensorProto::DataType::FLOAT);
+  AddGraphInputTensor(g, "x_row", TensorProto::DataType::FLOAT);
+
+  NodeProto *id = g.add_node();
+  id->set_op_type("Identity");
+  id->add_input("state_X");
+  id->add_output("state_X_out");
+
+  NodeProto *sub = g.add_node();
+  sub->set_op_type("Sub");
+  sub->add_input("state_X");
+  sub->add_input("x_row");
+  sub->add_output("diff");
+
+  NodeProto *mul = g.add_node();
+  mul->set_op_type("Mul");
+  mul->add_input("diff");
+  mul->add_input("diff");
+  mul->add_output("sq");
+
+  NodeProto *red = g.add_node();
+  red->set_op_type("ReduceSum");
+  red->add_input("sq");
+  red->add_output("dist");
+  AttributeProto *axes_attr = red->add_attribute();
+  axes_attr->set_name("axes");
+  axes_attr->set_type(AttributeProto::AttributeType::INTS);
+  axes_attr->add_ints(1);
+  AttributeProto *keepdims_attr = red->add_attribute();
+  keepdims_attr->set_name("keepdims");
+  keepdims_attr->set_type(AttributeProto::AttributeType::INT);
+  keepdims_attr->set_i(0);
+
+  AddGraphOutputTensor(g, "state_X_out", TensorProto::DataType::FLOAT);
+  AddGraphOutputTensor(g, "dist", TensorProto::DataType::FLOAT);
+  return g;
+}
+
 // Builds a ``Scan`` node from a pre-built body, the input/output names and
 // ``num_scan_inputs``.
 NodeProto MakeScanNodeWithBody(const std::vector<std::string> &inputs,
@@ -391,6 +447,49 @@ void RegisterScanCases(std::vector<TestCase> &registry) {
     const Tensor z("", DataType::FLOAT, {3, 2}, FloatBytes({1.f, 4.f, 3.f, 9.f, 6.f, 15.f}));
     Expect(node, {initial, x}, {y, z}, "test_cc_scan9_input_axis_negative", {opset9},
            "backend-test", registry);
+  }
+
+  // test_cc_scan_pairwise_distance (opset 11): computes the squared Euclidean
+  // pairwise distance matrix between the rows of a fixed ``[N, D]`` matrix
+  // ``X`` using a single ``Scan`` whose state carries ``X`` unchanged and
+  // whose per-iteration row drives a body that returns the squared distance
+  // vector to every row of ``X``.
+  //
+  //   N = 3, D = 2, X = [[1, 2], [3, 4], [5, 6]] (used as initial state and
+  //   as the scan input — the same FLOAT [3, 2] tensor is referenced twice
+  //   in the Scan node's inputs).
+  //
+  // Per iteration ``t`` the body computes ``dist[i] = sum_d (X[i,d] -
+  // X[t,d])**2``:
+  //   t=0 (x_row=[1,2]) -> dist = [0,  8, 32]
+  //   t=1 (x_row=[3,4]) -> dist = [8,  0,  8]
+  //   t=2 (x_row=[5,6]) -> dist = [32, 8,  0]
+  //
+  // Stacking ``dist`` along the leading axis yields the symmetric pairwise
+  // squared-distance matrix ``dists`` of shape ``[N, N] = [3, 3]``. The
+  // state output ``state_X_final`` keeps the original ``[N, D] = [3, 2]``
+  // shape.
+  //
+  // This is the canonical Scan body that exercises shape inference through
+  // broadcasting (``Sub``) and a reduction (``ReduceSum`` with ``axes=[1]``);
+  // it is used by ``BackendTestCaseShapeInference.OnnxOptimInfersShapePairwiseDistanceScan``
+  // to validate that the optim shape-inference pipeline correctly recovers
+  // both the preserved state shape ``[N, D]`` and the stacked scan output
+  // shape ``[N, N]`` from the body subgraph.
+  {
+    NodeProto node = MakeScanNodeWithBody({"X_state", "X_scan"}, {"state_X_final", "dists"},
+                                          BuildPairwiseDistanceScanBody(),
+                                          /*num_scan_inputs=*/1);
+    const Tensor x_state("X_state", DataType::FLOAT, {3, 2},
+                         FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f, 6.f}));
+    const Tensor x_scan("X_scan", DataType::FLOAT, {3, 2},
+                        FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f, 6.f}));
+    const Tensor state_X_final("", DataType::FLOAT, {3, 2},
+                               FloatBytes({1.f, 2.f, 3.f, 4.f, 5.f, 6.f}));
+    const Tensor dists("", DataType::FLOAT, {3, 3},
+                       FloatBytes({0.f, 8.f, 32.f, 8.f, 0.f, 8.f, 32.f, 8.f, 0.f}));
+    Expect(node, {x_state, x_scan}, {state_X_final, dists}, "test_cc_scan_pairwise_distance",
+           {opset}, "backend-test", registry);
   }
 }
 

@@ -20,9 +20,15 @@ and its public headers. The Python extension is not required:
     cmake -S . -B build-install \
           -DCMAKE_BUILD_TYPE=Release \
           -DONNX_LIGHT_BUILD_PYTHON=OFF \
+          -DONNX_LIGHT_BUILD_KERNELS=OFF \
           -DCMAKE_INSTALL_PREFIX=/usr/local
     cmake --build build-install
     cmake --install build-install
+
+``-DONNX_LIGHT_BUILD_KERNELS=OFF`` skips building ``lib_onnx_kernels`` and
+``lib_onnx_backend_test`` (the operator-kernel runtime and the backend-test
+case registry). They are not needed by this example, which only links the
+checker / shape-inference layer exposed by ``onnx_light::onnx_light``.
 
 Step 2 – Build the example
 ---------------------------

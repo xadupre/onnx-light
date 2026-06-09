@@ -103,6 +103,7 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx:Mod"), table.end());
   EXPECT_NE(table.find("ai.onnx:Clip"), table.end());
   EXPECT_NE(table.find("ai.onnx:Attention"), table.end());
+  EXPECT_NE(table.find("ai.onnx:NonMaxSuppression"), table.end());
   EXPECT_NE(table.find("ai.onnx:IsInf"), table.end());
   EXPECT_NE(table.find("ai.onnx:BitShift"), table.end());
   EXPECT_NE(table.find("ai.onnx:Einsum"), table.end());
@@ -173,6 +174,33 @@ TEST(RunNodes, RunNodeNormalisesDefaultDomain) {
   ASSERT_EQ(rt.tensors()["y"].element_count(), 2);
   EXPECT_FLOAT_EQ(got[0], 1.5f);
   EXPECT_FLOAT_EQ(got[1], 2.5f);
+}
+
+TEST(RunNodes, RunNodeNonMaxSuppressionFromDispatchTable) {
+  // NonMaxSuppression was introduced in ONNX opset 10; use opset 11 to match
+  // the other NonMaxSuppression kernel tests in this repository.
+  RuntimeContext rt(KernelContext(DefaultOpset(11)));
+  rt.tensors()["boxes"] =
+      Tensor::FromFloat("boxes", {1, 2, 4}, {0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 10.0f, 1.0f, 11.0f});
+  rt.tensors()["scores"] = Tensor::FromFloat("scores", {1, 1, 2}, {0.9f, 0.8f});
+  rt.tensors()["max_output_boxes_per_class"] =
+      Tensor::FromInt64("max_output_boxes_per_class", {1}, {10});
+  rt.tensors()["iou_threshold"] = Tensor::FromFloat("iou_threshold", {1}, {0.5f});
+  rt.tensors()["score_threshold"] = Tensor::FromFloat("score_threshold", {1}, {0.0f});
+
+  NodeProto node = MakeNode(
+      "NonMaxSuppression",
+      {"boxes", "scores", "max_output_boxes_per_class", "iou_threshold", "score_threshold"},
+      {"selected_indices"});
+  RunNode(node, rt);
+
+  const Tensor &selected = rt.tensors().at("selected_indices");
+  EXPECT_EQ(selected.shape, (std::vector<int64_t>{2, 3}));
+  const int64_t *py = selected.AsInt64();
+  const std::vector<int64_t> expected = {0, 0, 0, 0, 0, 1};
+  for (size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_EQ(py[i], expected[i]);
+  }
 }
 
 TEST(RunNodes, RunNodesOnRepeatedProtoFieldChain) {

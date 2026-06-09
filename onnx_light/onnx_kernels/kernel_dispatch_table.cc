@@ -8,6 +8,7 @@
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
+#include "onnx_kernels/kernels/object_detection/include_object_detection_kernels.h"
 #include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_kernels/kernels/training/include_training_kernels.h"
@@ -389,6 +390,29 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          set_optional_output(1, std::move(result.present_key));
          set_optional_output(2, std::move(result.present_value));
          set_optional_output(3, std::move(result.qk_matmul_output));
+       }},
+      {"ai.onnx:NonMaxSuppression",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         if (node.input_size() < 2 || node.input_size() > 5) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects between 2 and 5 inputs, got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         RequireOutputCount(node, 1);
+         const Tensor &boxes = GetInput(node, 0, rt.tensors());
+         const Tensor &scores = GetInput(node, 1, rt.tensors());
+         const Tensor *max_output_boxes_per_class = GetOptionalInput(node, 2, rt.tensors());
+         const Tensor *iou_threshold = GetOptionalInput(node, 3, rt.tensors());
+         const Tensor *score_threshold = GetOptionalInput(node, 4, rt.tensors());
+         // For ONNX NonMaxSuppression (opset 10+), this runtime path uses the
+         // single schema attribute center_point_box (default 0).
+         kernel::NonMaxSuppression::Attributes attrs;
+         attrs.center_point_box = GetAttributeIntOrDefault(node, "center_point_box", 0);
+         kernel::NonMaxSuppression k(rt.kernel_ctx());
+         SetOutput(node, 0,
+                   k(boxes, scores, max_output_boxes_per_class, iou_threshold, score_threshold,
+                     attrs),
+                   rt.tensors());
        }},
 
       // -----------------------------------------------------------------

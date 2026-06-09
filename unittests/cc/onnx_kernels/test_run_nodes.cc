@@ -117,6 +117,7 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   // Generator kernels.
   EXPECT_NE(table.find("ai.onnx:EyeLike"), table.end());
   EXPECT_NE(table.find("ai.onnx:AffineGrid"), table.end());
+  EXPECT_NE(table.find("ai.onnx:ImageDecoder"), table.end());
   // Tensor shape kernels.
   EXPECT_NE(table.find("ai.onnx:Shape"), table.end());
   // Logical / bitwise kernels.
@@ -363,6 +364,44 @@ TEST(RunNodes, RunNodeAffineGridUsesAttributes) {
   EXPECT_FLOAT_EQ(got[5], 1.0f);
   EXPECT_FLOAT_EQ(got[6], 1.0f);
   EXPECT_FLOAT_EQ(got[7], 1.0f);
+}
+
+TEST(RunNodes, RunNodeImageDecoderFromDispatchTable) {
+  // ``ImageDecoder`` was introduced in ONNX opset 20. The reference kernel
+  // does not link an image-decoding library and returns the empty
+  // ``(0, 0, C)`` matrix mandated by the schema; ``pixel_format`` drives
+  // the channel count.
+  RuntimeContext rt(KernelContext(DefaultOpset(20)));
+  rt.tensors()["encoded_stream"] =
+      Tensor::FromUint8("encoded_stream", {4}, std::vector<uint8_t>{0x00, 0x01, 0x02, 0x03});
+
+  NodeProto node = MakeNode("ImageDecoder", {"encoded_stream"}, {"image"});
+  AttributeProto *pixel_format_attr = node.add_attribute();
+  pixel_format_attr->set_name("pixel_format");
+  pixel_format_attr->set_type(AttributeProto::AttributeType::STRING);
+  pixel_format_attr->set_s("Grayscale");
+
+  RunNode(node, rt);
+
+  const Tensor &image = rt.tensors()["image"];
+  EXPECT_EQ(image.data_type, static_cast<int32_t>(onnx_kernels::DataType::UINT8));
+  EXPECT_EQ(image.shape, (std::vector<int64_t>{0, 0, 1}));
+  EXPECT_EQ(image.element_count(), 0);
+  EXPECT_TRUE(image.data.empty());
+}
+
+TEST(RunNodes, RunNodeImageDecoderDefaultsToRGB) {
+  // Without ``pixel_format`` attribute, the default ``"RGB"`` produces a
+  // 3-channel empty image.
+  RuntimeContext rt(KernelContext(DefaultOpset(20)));
+  rt.tensors()["encoded_stream"] =
+      Tensor::FromUint8("encoded_stream", {2}, std::vector<uint8_t>{0xAA, 0xBB});
+
+  NodeProto node = MakeNode("ImageDecoder", {"encoded_stream"}, {"image"});
+  RunNode(node, rt);
+
+  const Tensor &image = rt.tensors()["image"];
+  EXPECT_EQ(image.shape, (std::vector<int64_t>{0, 0, 3}));
 }
 
 TEST(RunNodes, RunNodeReshapeFromDispatchTable) {

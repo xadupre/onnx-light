@@ -5,6 +5,7 @@
 #include "onnx_kernels/kernel_dispatch_table.h"
 
 #include "onnx_kernels/kernels/generator/include_generator_kernels.h"
+#include "onnx_kernels/kernels/image/include_image_kernels.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
@@ -493,6 +494,16 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
       {"ai.onnx:HardSwish", MakeUnaryTrampoline<kernel::HardSwish>()},
       {"ai.onnx:Hardmax", MakeAxisTrampoline<kernel::Hardmax>()},
+      {"ai.onnx:ImageDecoder",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &encoded_stream = GetInput(node, 0, rt.tensors());
+         const std::string pixel_format =
+             GetAttributeStringOrDefault(node, "pixel_format", "RGB");
+         kernel::ImageDecoder image_decoder_kernel(rt.kernel_ctx());
+         SetOutput(node, 0, image_decoder_kernel(encoded_stream, pixel_format), rt.tensors());
+       }},
       {"ai.onnx:IsInf",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);

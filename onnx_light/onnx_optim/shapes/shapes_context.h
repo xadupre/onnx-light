@@ -67,6 +67,7 @@ inline constexpr const char *kOnnxDomain = "ai.onnx";
 class ShapesContext {
 public:
   using CustomComputeShapeFn = std::function<void(ShapesContext &, const NodeProto &)>;
+  using CustomShapeInferenceMap = std::unordered_map<std::string, CustomComputeShapeFn>;
 
   ShapesContext() = default;
 
@@ -268,8 +269,7 @@ public:
   }
 
   /// Read-only access to all registered custom shape-inference callbacks.
-  const std::unordered_map<std::string, CustomComputeShapeFn> &
-  CustomShapeInferenceFunctions() const noexcept {
+  const CustomShapeInferenceMap &CustomShapeInferenceFunctions() const noexcept {
     return custom_shape_inference_;
   }
 
@@ -368,7 +368,7 @@ private:
   std::unordered_map<std::string, OptimSequence> sequences_;
   std::unordered_map<std::string, int> opsets_;
   std::unordered_map<std::string, const FunctionProto *> local_functions_;
-  std::unordered_map<std::string, CustomComputeShapeFn> custom_shape_inference_;
+  CustomShapeInferenceMap custom_shape_inference_;
   std::set<Constraint> constraints_;
 };
 

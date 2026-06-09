@@ -3428,9 +3428,9 @@ optional carry state of shape ``(B, C, k - 1)``. Define the padded sequence
 axis of the carry state (or zero-padding when ``past_state`` is absent) and
 the input::
 
-                  | S_past[b, c, t]              if 0 <= t < k - 1 and past_state is present
-    Xpad[b, c, t] = | 0                            if 0 <= t < k - 1 and past_state is absent
-                  | X[b, c, t - (k - 1)]         if k - 1 <= t < L + k - 1
+    Xpad[b, c, t] = S_past[b, c, t]          if 0 <= t < k - 1 and past_state is present
+    Xpad[b, c, t] = 0                        if 0 <= t < k - 1 and past_state is absent
+    Xpad[b, c, t] = X[b, c, t - (k - 1)]     if k - 1 <= t < L + k - 1
 
 The convolution output is then::
 

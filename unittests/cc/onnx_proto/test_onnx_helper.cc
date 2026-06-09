@@ -395,6 +395,74 @@ TEST(onnx_external_ressource, SaveWithExternalDataMaxFileSize) {
   std::remove(weights_file_1.c_str());
 }
 
+TEST(onnx_external_ressource, SaveWithExternalDataMaxFileSizeParallel) {
+  // Exercise the parallel-write path with max_external_file_size > 0: the writer
+  // must pre-allocate every weights file (default + extras) and dispatch tensor
+  // writes to the thread pool.  The contents written to disk must round-trip
+  // through ParseFromStream and reproduce the original tensor data.
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("graph");
+
+  constexpr int kNumTensors = 6;
+  constexpr int64_t kTensorBytes = 4;
+  std::vector<std::vector<uint8_t>> expected(kNumTensors);
+  for (int i = 0; i < kNumTensors; ++i) {
+    expected[i] = {static_cast<uint8_t>(10 + i * 4 + 0), static_cast<uint8_t>(10 + i * 4 + 1),
+                   static_cast<uint8_t>(10 + i * 4 + 2), static_cast<uint8_t>(10 + i * 4 + 3)};
+    TensorProto *weights = graph->add_initializer();
+    weights->set_name("weights" + std::to_string(i));
+    weights->set_data_type(TensorProto::DataType::FLOAT);
+    weights->ref_dims().push_back(1);
+    weights->ref_raw_data() = expected[i];
+  }
+
+  const std::string onnx_file = "test_split_external_file_size_parallel.onnx";
+  const std::string weights_file = "test_split_external_file_size_parallel.data";
+  {
+    utils::TwoFilesWriteStream wstream(onnx_file, weights_file);
+    SerializeOptions wopts;
+    wopts.raw_data_threshold = 0;
+    // 8 bytes per file -> 2 tensors per file -> 3 weights files total.
+    wopts.max_external_file_size = kTensorBytes * 2;
+    wopts.num_threads = 4;
+    SerializeProtoToStream(model, wstream, wopts);
+  }
+
+  std::vector<std::string> expected_files = {weights_file, weights_file + ".1",
+                                             weights_file + ".2"};
+  for (const auto &f : expected_files) {
+    ASSERT_TRUE(std::filesystem::exists(f)) << "missing weights file: " << f;
+    EXPECT_EQ(std::filesystem::file_size(f), static_cast<std::uintmax_t>(kTensorBytes * 2)) << f;
+  }
+  // No extra split file should exist beyond .2.
+  EXPECT_FALSE(std::filesystem::exists(weights_file + ".3"));
+
+  // Round-trip parse and check tensor contents end-to-end.
+  ModelProto parsed;
+  {
+    utils::TwoFilesStream rstream(onnx_file, weights_file);
+    ParseOptions ropts;
+    ParseModelProtoFromStream(parsed, rstream, ropts, /*clear_external_data=*/true);
+  }
+  ASSERT_TRUE(parsed.has_graph());
+  ASSERT_EQ(parsed.ref_graph().ref_initializer().size(), kNumTensors);
+  for (int i = 0; i < kNumTensors; ++i) {
+    const TensorProto &t = parsed.ref_graph().ref_initializer()[i];
+    ASSERT_TRUE(t.has_raw_data());
+    const auto &got = t.ref_raw_data();
+    ASSERT_EQ(got.size(), expected[i].size());
+    for (size_t k = 0; k < expected[i].size(); ++k) {
+      EXPECT_EQ(static_cast<uint8_t>(got[k]), expected[i][k]) << "tensor " << i << " byte " << k;
+    }
+  }
+
+  for (const auto &f : expected_files) {
+    std::remove(f.c_str());
+  }
+  std::remove(onnx_file.c_str());
+}
+
 TEST(onnx_external_ressource, SaveWithMultipleExternalDataFiles) {
   ModelProto model;
   GraphProto *graph = model.add_graph();

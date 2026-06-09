@@ -16,6 +16,76 @@ which subset of the exported targets is needed.
 See :ref:`l-design-library-split` for the full dependency graph of the C++
 libraries and a per-target description.
 
+.. _l-design-cpp-linking-cmake-options:
+
+CMake configure-time options
+----------------------------
+
+The top-level ``CMakeLists.txt`` exposes the following options.  All of them
+can be set on the ``cmake`` command line with ``-D<NAME>=<VALUE>``.
+
+.. list-table::
+    :header-rows: 1
+    :widths: 35 10 55
+
+    * - Option
+      - Default
+      - Description
+    * - ``ONNX_LIGHT_BUILD_PYTHON``
+      - ``ON``
+      - Build the nanobind Python extensions
+        (``_onnxpyprotoop``, ``_onnxpyprotolib``, ``_onnxpyoptim``,
+        ``_onnxpykernels`` and ``_onnxpybackend``).  Turn ``OFF`` for a
+        pure C++ build; this also switches ``lib_onnx_proto`` from a
+        shared library back to a static archive.
+    * - ``ONNX_LIGHT_INSTALL``
+      - ``ON``
+      - Install the C++ libraries, headers and the exported
+        ``onnx_light`` CMake package on ``cmake --install``.  Turn ``OFF``
+        when building only for in-tree consumption (for example from a
+        parent ``add_subdirectory``).
+    * - ``ONNX_LIGHT_BUILD_KERNELS``
+      - ``ON``
+      - Build the operator-kernel runtime (``lib_onnx_kernels``) and the
+        backend-test case registry (``lib_onnx_backend_test``).  Turn
+        ``OFF`` to install only the schema / checker / shape-inference /
+        version-converter / proto libraries; incompatible with
+        ``ONNX_LIGHT_BUILD_PYTHON=ON`` and ``ONNX_LIGHT_BUILD_TESTS=ON``.
+    * - ``ONNX_ML``
+      - ``ON``
+      - Enable ``ai.onnx.ml`` (traditional ML) operator support.
+    * - ``ONNX_LIGHT_BUILD_TESTS``
+      - ``OFF``
+      - Build the C++ unit-test executable ``test_onnx_light`` and
+        register the tests with CTest.  Requires
+        ``ONNX_LIGHT_BUILD_KERNELS=ON``.
+    * - ``ONNX_LIGHT_BUILD_BENCHMARKS``
+      - ``OFF``
+      - Build the C++ benchmark executables from ``benchmarks/bench_*.cc``.
+    * - ``ONNX_LIGHT_BENCH_GPROF``
+      - ``OFF``
+      - Compile the benchmark executables with ``-pg`` for gprof
+        profiling.  Only meaningful with
+        ``ONNX_LIGHT_BUILD_BENCHMARKS=ON``.
+    * - ``ONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX``
+      - ``OFF``
+      - Fetch and build upstream ``onnx`` (the protobuf-based reference
+        implementation) via ``FetchContent`` to enable the
+        ``BENCH_HAS_UPSTREAM_ONNX`` side-by-side comparison block in
+        ``bench_load_file``.  Only meaningful with
+        ``ONNX_LIGHT_BUILD_BENCHMARKS=ON``.
+    * - ``ONNX_LIGHT_BUILD_FUZZERS``
+      - ``OFF``
+      - Build the libFuzzer-instrumented fuzz harnesses
+        (``fuzz/fuzz_*.cc``) and the ``make_seed_corpus`` helper.
+        Requires Clang and adds ``-fsanitize=fuzzer,address`` by default.
+    * - ``ONNX_LIGHT_FUZZER_SANITIZERS``
+      - ``address``
+      - Comma-separated sanitizer list passed to ``-fsanitize=`` for the
+        fuzz harnesses (the ``fuzzer`` sanitizer is always added
+        automatically).  Only meaningful with
+        ``ONNX_LIGHT_BUILD_FUZZERS=ON``.
+
 Install and link model
 ----------------------
 

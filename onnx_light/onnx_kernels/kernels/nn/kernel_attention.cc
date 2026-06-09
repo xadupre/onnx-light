@@ -345,41 +345,44 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
           }
           bias[static_cast<size_t>(j)] = b_val;
         }
-        // Build pre-softcap scores = raw + bias.
+        // qk_matmul_output_mode 0: raw QK^T * scale (no softcap, no bias).
+        if (attrs.qk_matmul_output_mode == 0) {
+          for (int64_t j = 0; j < total_kv_seq_len; ++j) {
+            QKbh[i * total_kv_seq_len + j] = static_cast<float>(qkraw[static_cast<size_t>(j)]);
+          }
+        }
+        // Apply softcap to raw QK BEFORE adding mask/bias. This matches
+        // upstream's ordering so that ``-inf`` mask values survive into
+        // softmax (yielding zero probability on masked positions). If
+        // softcap were applied after the mask, ``sc * tanh(-inf / sc)``
+        // would saturate to ``-sc`` (finite) and leak probability.
+        if (attrs.softcap > 0.0f) {
+          const double sc = static_cast<double>(attrs.softcap);
+          for (int64_t j = 0; j < total_kv_seq_len; ++j) {
+            scores[static_cast<size_t>(j)] = sc * std::tanh(qkraw[static_cast<size_t>(j)] / sc);
+          }
+        } else {
+          for (int64_t j = 0; j < total_kv_seq_len; ++j) {
+            scores[static_cast<size_t>(j)] = qkraw[static_cast<size_t>(j)];
+          }
+        }
+        // qk_matmul_output_mode 1: softcap output (before mask), or raw
+        // when no softcap is requested.
+        if (attrs.qk_matmul_output_mode == 1) {
+          for (int64_t j = 0; j < total_kv_seq_len; ++j) {
+            QKbh[i * total_kv_seq_len + j] = static_cast<float>(scores[static_cast<size_t>(j)]);
+          }
+        }
+        // Add mask/bias to the (possibly softcapped) scores.
         double max_score = -std::numeric_limits<double>::infinity();
         for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-          double s = qkraw[static_cast<size_t>(j)] + bias[static_cast<size_t>(j)];
+          const double s = scores[static_cast<size_t>(j)] + bias[static_cast<size_t>(j)];
           scores[static_cast<size_t>(j)] = s;
           if (s > max_score) {
             max_score = s;
           }
         }
-        // qk_matmul_output_mode 0: raw; 1: with bias (pre-softcap).
-        if (attrs.qk_matmul_output_mode == 0) {
-          for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-            QKbh[i * total_kv_seq_len + j] = static_cast<float>(qkraw[static_cast<size_t>(j)]);
-          }
-        } else if (attrs.qk_matmul_output_mode == 1) {
-          for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-            QKbh[i * total_kv_seq_len + j] = static_cast<float>(scores[static_cast<size_t>(j)]);
-          }
-        }
-        // Apply softcap if requested.
-        if (attrs.softcap > 0.0f) {
-          const double sc = static_cast<double>(attrs.softcap);
-          max_score = -std::numeric_limits<double>::infinity();
-          for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-            // ``sc * tanh(s / sc)`` saturates large magnitudes to ``±sc``;
-            // for ``s == -inf`` the limit is ``-sc`` (a finite value),
-            // matching upstream's ``np.tanh`` behaviour exactly.
-            const double s = sc * std::tanh(scores[static_cast<size_t>(j)] / sc);
-            scores[static_cast<size_t>(j)] = s;
-            if (s > max_score) {
-              max_score = s;
-            }
-          }
-        }
-        // qk_matmul_output_mode 2: after softcap.
+        // qk_matmul_output_mode 2: includes attention mask and softcap.
         if (attrs.qk_matmul_output_mode == 2) {
           for (int64_t j = 0; j < total_kv_seq_len; ++j) {
             QKbh[i * total_kv_seq_len + j] = static_cast<float>(scores[static_cast<size_t>(j)]);

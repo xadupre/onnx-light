@@ -651,6 +651,13 @@ public:
    *  Must be called before StartWriteThreadPool. */
   void pre_allocate_weights(int64_t total_bytes);
 
+  /** Pre-allocates the weights file associated with *location* to *total_bytes*.
+   *  If *location* refers to the default weights file, behaves like
+   *  ``pre_allocate_weights(total_bytes)``.  Otherwise creates the matching extra
+   *  ``FileWriteStream`` (if not already created) and pre-allocates it.
+   *  Must be called before StartWriteThreadPool. */
+  void pre_allocate_weights(const std::string &location, int64_t total_bytes);
+
   /** Starts a thread pool of *n_threads* workers for parallel offset-based writes.
    *  After this call write_raw_bytes_in_second_stream submits writes asynchronously. */
   void StartWriteThreadPool(int32_t n_threads);
@@ -700,6 +707,9 @@ protected:
   bool parallel_write_ = false;
   /** Tracks the sequential write position for offset validation during parallel writes. */
   int64_t virtual_write_pos_ = 0;
+  /** Per-location virtual write positions for parallel writes to extra weights files.
+   *  Key is the relative location string (the same value used in external_data.location). */
+  std::unordered_map<std::string, int64_t> extra_virtual_write_pos_;
   /** Thread pool used for parallel writes to the weights file. */
   ThreadPool write_thread_pool_;
 };

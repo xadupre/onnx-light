@@ -39,6 +39,14 @@ jobs:
         env:
           CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-* cp313t-* cp314-* cp314t-*"
           CIBW_ARCHS: ${{ matrix.arch }}
+          # The default cibuildwheel manylinux2014 image ships GCC 10, which
+          # rejects some of our recursive container templates (e.g. the
+          # n-gram trie in kernel_tf_idf_vectorizer.cc that stores an
+          # ``std::unordered_map<Key, NgramNode>`` of itself). Use
+          # manylinux_2_28 so we build with GCC 12 across all CPython
+          # versions, matching the toolchain used by the regular CI build.
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
+          CIBW_MANYLINUX_AARCH64_IMAGE: manylinux_2_28
           CIBW_ENVIRONMENT: >
             CMAKE_BUILD_PARALLEL_LEVEL=${{ steps.cpu_count.outputs.count }}
       - name: Upload artifacts

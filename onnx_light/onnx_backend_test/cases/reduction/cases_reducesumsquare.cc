@@ -105,6 +105,34 @@ void RegisterReduceSumSquareCases(std::vector<TestCase> &registry) {
                           "test_cc_reducesumsquare_empty_set_non_reduced_axis_zero",
                           /*data_shape=*/{2, 0, 4}, /*data_values=*/{}, {2}, /*keepdims=*/true,
                           /*noop_with_empty_axes=*/false);
+
+  // Upstream ``test_reduce_sum_square_*`` ONNX node tests.
+  const std::vector<float> random_values = {
+      0.9762700796f, 4.303787231f, 2.055267572f, 0.8976636529f, -1.526903987f, 2.917882204f,
+      -1.24825573f,  7.835460186f, 9.273255348f, -2.331169605f, 5.83450079f,   0.5778983831f,
+  };
+  EmitReduceSumSquareCase(registry, kernel, "test_reduce_sum_square_keepdims_example", shape,
+                          values, {1}, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+  EmitReduceSumSquareCase(registry, kernel, "test_reduce_sum_square_keepdims_random", shape,
+                          random_values, {1}, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+  EmitReduceSumSquareCase(registry, kernel, "test_reduce_sum_square_do_not_keepdims_example", shape,
+                          values, {1}, /*keepdims=*/false, /*noop_with_empty_axes=*/false);
+  EmitReduceSumSquareCase(registry, kernel, "test_reduce_sum_square_do_not_keepdims_random", shape,
+                          random_values, {1}, /*keepdims=*/false, /*noop_with_empty_axes=*/false);
+  EmitReduceSumSquareDefaultAxesCase(registry, kernel,
+                                     "test_reduce_sum_square_default_axes_keepdims_example", shape,
+                                     values, /*keepdims=*/true);
+  EmitReduceSumSquareDefaultAxesCase(registry, kernel,
+                                     "test_reduce_sum_square_default_axes_keepdims_random", shape,
+                                     random_values, /*keepdims=*/true);
+  EmitReduceSumSquareCase(registry, kernel, "test_reduce_sum_square_negative_axes_keepdims_example",
+                          shape, values, {-2}, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+  EmitReduceSumSquareCase(registry, kernel, "test_reduce_sum_square_negative_axes_keepdims_random",
+                          shape, random_values, {-2}, /*keepdims=*/true,
+                          /*noop_with_empty_axes=*/false);
+  EmitReduceSumSquareCase(registry, kernel, "test_reduce_sum_square_empty_set",
+                          /*data_shape=*/{2, 0, 4}, /*data_values=*/{}, {1}, /*keepdims=*/true,
+                          /*noop_with_empty_axes=*/false);
 }
 
 } // namespace onnx_backend_test

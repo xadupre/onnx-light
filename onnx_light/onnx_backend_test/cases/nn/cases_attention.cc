@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -1333,6 +1334,64 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
     AddFloat(node, "scale", 0.5f);
     Expect(node, {Q, K, V, mask}, {Y}, "test_cc_attention_4d_diff_heads_mask4d_padded_kv", {opset},
+           "backend-test", registry);
+  }
+
+  // -------------------------------------------------------------------
+  // Softcap + ``-inf`` mask ordering checks (mirror upstream
+  // ``test_attention_4d_softcap_neginf_mask*``). These verify the kernel
+  // applies softcap to the raw QK scores BEFORE adding mask/bias: if the
+  // order were swapped, ``sc * tanh(-inf / sc) == -sc`` (finite) would
+  // leak probability into masked positions.
+  {
+    // Shapes match upstream: (B=1, H=1, S_q=4, S_kv=6, D=8).
+    Tensor Q = MakeDeterministicFloatTensor({1, 1, 4, 8}, 0x42a1u, 0.0f, 1.0f);
+    Tensor K = MakeDeterministicFloatTensor({1, 1, 6, 8}, 0x42a2u, 0.0f, 1.0f);
+    Tensor V = MakeDeterministicFloatTensor({1, 1, 6, 8}, 0x42a3u, 0.0f, 1.0f);
+    std::vector<float> mask_data(static_cast<size_t>(4 * 6), 0.0f);
+    const float neg_inf = -std::numeric_limits<float>::infinity();
+    for (int64_t i = 0; i < 4; ++i) {
+      mask_data[static_cast<size_t>(i * 6 + 4)] = neg_inf;
+      mask_data[static_cast<size_t>(i * 6 + 5)] = neg_inf;
+    }
+    Tensor mask = Tensor::FromFloat("", {4, 6}, mask_data);
+    kernel::Attention::Attributes attrs;
+    attrs.softcap = 0.5f;
+    Tensor Y = attention(Q, K, V, attrs, &mask).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
+    AddFloat(node, "softcap", 0.5f);
+    Expect(node, {Q, K, V, mask}, {Y}, "test_cc_attention_4d_softcap_neginf_mask", {opset},
+           "backend-test", registry);
+  }
+
+  // Same as above but with "poison" values at the masked KV positions.
+  // With correct ordering the masked positions contribute zero so the
+  // output stays bounded; with wrong ordering they would dominate and
+  // the magnitude would explode.
+  {
+    Tensor Q = MakeDeterministicFloatTensor({1, 1, 4, 8}, 0x42a1u, 0.0f, 1.0f);
+    Tensor K = MakeDeterministicFloatTensor({1, 1, 6, 8}, 0x42a2u, 0.0f, 1.0f);
+    Tensor V = MakeDeterministicFloatTensor({1, 1, 6, 8}, 0x42a3u, 0.0f, 1.0f);
+    // Poison the last two KV positions with a large value.
+    float *vptr = V.AsFloat();
+    for (int64_t s = 4; s < 6; ++s) {
+      for (int64_t d = 0; d < 8; ++d) {
+        vptr[s * 8 + d] = 1000.0f;
+      }
+    }
+    std::vector<float> mask_data(static_cast<size_t>(4 * 6), 0.0f);
+    const float neg_inf = -std::numeric_limits<float>::infinity();
+    for (int64_t i = 0; i < 4; ++i) {
+      mask_data[static_cast<size_t>(i * 6 + 4)] = neg_inf;
+      mask_data[static_cast<size_t>(i * 6 + 5)] = neg_inf;
+    }
+    Tensor mask = Tensor::FromFloat("", {4, 6}, mask_data);
+    kernel::Attention::Attributes attrs;
+    attrs.softcap = 0.5f;
+    Tensor Y = attention(Q, K, V, attrs, &mask).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
+    AddFloat(node, "softcap", 0.5f);
+    Expect(node, {Q, K, V, mask}, {Y}, "test_cc_attention_4d_softcap_neginf_mask_poison", {opset},
            "backend-test", registry);
   }
 

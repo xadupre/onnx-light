@@ -1,29 +1,19 @@
 name: Documentation
 
 on:
-  push:
-    branches: ["main"]
-    paths:
-      - "docs/**"
-      - ".github/workflows/docs.yml"
-      - "onnx_light/doc.py"
-      - "**.md"
-      - "**.rst"
-  pull_request:
-    branches: ["main"]
-    paths:
-      - "docs/**"
-      - ".github/workflows/docs.yml"
-      - "onnx_light/doc.py"
-      - "**.md"
-      - "**.rst"
+  workflow_run:
+    workflows: ["ci-1-core"]
+    types: [completed]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: true
 
 jobs:
   docs:
+    # Only run if the required ci-1-core workflow (which itself gates on
+    # no-onnx) completed successfully.
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -32,6 +22,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
       - name: Set up Python
         uses: actions/setup-python@v5
         with:

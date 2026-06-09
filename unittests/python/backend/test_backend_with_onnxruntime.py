@@ -196,6 +196,28 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     additive causal bias. Both produce the same softmax outputs but differ
 #     bit-for-bit in the intermediate ``qk_matmul_output``. The reference
 #     backend still exercises these cases.
+#   * ``test_cc_attention_3d_with_past_and_present_qk_matmul_bias``,
+#     ``test_cc_attention_4d_with_qk_matmul_bias``,
+#     ``test_cc_attention_4d_with_past_and_present_qk_matmul_bias``,
+#     ``test_cc_attention_4d_with_past_and_present_qk_matmul_bias_3d_mask`` and
+#     ``test_cc_attention_4d_with_past_and_present_qk_matmul_bias_4d_mask`` —
+#     ORT's CPU ``Attention`` kernel emits ``qk_matmul_output`` with
+#     ``qk_matmul_output_mode=1`` as ``raw QK^T * scale + attn_bias`` (a legacy
+#     interpretation), whereas the ONNX schema (and the ONNX reference and the
+#     function body baked into ``defs.cc``) define mode 1 as the post-softcap,
+#     pre-mask value — i.e. plain raw ``QK^T * scale`` when no softcap is
+#     requested. The softmax outputs agree; only the exposed
+#     ``qk_matmul_output`` differs. The reference backend still exercises
+#     these cases.
+#   * ``test_cc_attention_4d_softcap_neginf_mask`` and
+#     ``test_cc_attention_4d_softcap_neginf_mask_poison`` — ORT's CPU
+#     ``Attention`` kernel applies ``softcap`` *after* the attention mask is
+#     added, so ``-inf`` mask entries saturate to ``-softcap`` (finite) and
+#     leak probability mass into masked positions (the poison variant amplifies
+#     this with ``V=1000`` at masked positions, blowing up the output). The
+#     ONNX schema and reference apply softcap *before* the mask, so ``-inf``
+#     survives into softmax and produces zero probability at masked positions.
+#     The reference backend still exercises these cases.
 # These cases remain covered by the reference backend tests.
 #   * ``test_cc_top_k_uint64`` — ORT's CPU EP has no ``TopK(11)`` kernel
 #     registered for ``uint64`` ("Could not find an implementation for
@@ -250,6 +272,13 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_image_decoder_",
     r"^test_cc_attention_4d_with_past_and_present_qk_matmul_bias_3d_mask_causal$",
     r"^test_cc_attention_4d_with_past_and_present_qk_matmul_bias_4d_mask_causal$",
+    r"^test_cc_attention_3d_with_past_and_present_qk_matmul_bias$",
+    r"^test_cc_attention_4d_with_qk_matmul_bias$",
+    r"^test_cc_attention_4d_with_past_and_present_qk_matmul_bias$",
+    r"^test_cc_attention_4d_with_past_and_present_qk_matmul_bias_3d_mask$",
+    r"^test_cc_attention_4d_with_past_and_present_qk_matmul_bias_4d_mask$",
+    r"^test_cc_attention_4d_softcap_neginf_mask$",
+    r"^test_cc_attention_4d_softcap_neginf_mask_poison$",
     r"^test_cc_adam_",
     r"^test_adam$",
     r"^test_adam_multiple$",

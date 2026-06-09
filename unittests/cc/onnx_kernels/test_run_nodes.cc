@@ -4,6 +4,7 @@
 
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/kernels/training/include_training_kernels.h"
 #include "onnx_kernels/run_nodes.h"
 #include "onnx_kernels/simple_tensor.h"
 #include "onnx_proto/onnx.h"
@@ -119,6 +120,10 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx:IsNaN"), table.end());
   EXPECT_NE(table.find("ai.onnx:BitwiseAnd"), table.end());
   EXPECT_NE(table.find("ai.onnx:BitwiseNot"), table.end());
+  // ai.onnx.preview.training optimizers.
+  EXPECT_NE(table.find("ai.onnx.preview.training:Adagrad"), table.end());
+  EXPECT_NE(table.find("ai.onnx.preview.training:Adam"), table.end());
+  EXPECT_NE(table.find("ai.onnx.preview.training:Momentum"), table.end());
 }
 
 TEST(RunNodes, RunNodeSingleAdd) {
@@ -270,6 +275,146 @@ TEST(RunNodes, RunNodeEinsumUsesEquationAttribute) {
   EXPECT_FLOAT_EQ(got[1], 64.0f);
   EXPECT_FLOAT_EQ(got[2], 139.0f);
   EXPECT_FLOAT_EQ(got[3], 154.0f);
+}
+
+TEST(RunNodes, RunNodeAdagradFromDispatchTable) {
+  // Dispatches a single-tensor Adagrad node and checks the outputs
+  // against ``kernel::Adagrad`` invoked directly.
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["R"] = Tensor::FromFloat("R", {}, {0.1f});
+  rt.tensors()["T"] = Tensor::FromInt64("T", {}, {0});
+  rt.tensors()["X"] = Tensor::FromFloat("X", {2}, {1.0f, 2.0f});
+  rt.tensors()["G"] = Tensor::FromFloat("G", {2}, {-0.5f, 0.25f});
+  rt.tensors()["H"] = Tensor::FromFloat("H", {2}, {0.1f, 0.1f});
+
+  NodeProto node = MakeNode("Adagrad", {"R", "T", "X", "G", "H"}, {"X_new", "H_new"},
+                            "ai.onnx.preview.training");
+  AttributeProto *eps = node.add_attribute();
+  eps->set_name("epsilon");
+  eps->set_type(AttributeProto::AttributeType::FLOAT);
+  eps->set_f(1e-5f);
+  AttributeProto *nc = node.add_attribute();
+  nc->set_name("norm_coefficient");
+  nc->set_type(AttributeProto::AttributeType::FLOAT);
+  nc->set_f(0.001f);
+
+  RunNode(node, rt);
+
+  onnx_kernels::kernel::Adagrad ref(rt.kernel_ctx());
+  std::vector<Tensor> expected = ref(rt.tensors()["R"], rt.tensors()["T"], {rt.tensors()["X"]},
+                                     {rt.tensors()["G"]}, {rt.tensors()["H"]}, 1e-5f, 0.0f, 0.001f);
+
+  const Tensor &x_new = rt.tensors()["X_new"];
+  const Tensor &h_new = rt.tensors()["H_new"];
+  ASSERT_EQ(x_new.shape, (std::vector<int64_t>{2}));
+  ASSERT_EQ(h_new.shape, (std::vector<int64_t>{2}));
+  EXPECT_FLOAT_EQ(x_new.AsFloat()[0], expected[0].AsFloat()[0]);
+  EXPECT_FLOAT_EQ(x_new.AsFloat()[1], expected[0].AsFloat()[1]);
+  EXPECT_FLOAT_EQ(h_new.AsFloat()[0], expected[1].AsFloat()[0]);
+  EXPECT_FLOAT_EQ(h_new.AsFloat()[1], expected[1].AsFloat()[1]);
+}
+
+TEST(RunNodes, RunNodeMomentumNesterovFromDispatchTable) {
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["R"] = Tensor::FromFloat("R", {}, {0.1f});
+  rt.tensors()["T"] = Tensor::FromInt64("T", {}, {0});
+  rt.tensors()["X"] = Tensor::FromFloat("X", {2}, {1.2f, 2.8f});
+  rt.tensors()["G"] = Tensor::FromFloat("G", {2}, {-0.94f, -2.5f});
+  rt.tensors()["V"] = Tensor::FromFloat("V", {2}, {1.7f, 3.6f});
+
+  NodeProto node = MakeNode("Momentum", {"R", "T", "X", "G", "V"}, {"X_new", "V_new"},
+                            "ai.onnx.preview.training");
+  AttributeProto *a = node.add_attribute();
+  a->set_name("alpha");
+  a->set_type(AttributeProto::AttributeType::FLOAT);
+  a->set_f(0.95f);
+  AttributeProto *b = node.add_attribute();
+  b->set_name("beta");
+  b->set_type(AttributeProto::AttributeType::FLOAT);
+  b->set_f(1.0f);
+  AttributeProto *nc = node.add_attribute();
+  nc->set_name("norm_coefficient");
+  nc->set_type(AttributeProto::AttributeType::FLOAT);
+  nc->set_f(0.01f);
+  AttributeProto *mode = node.add_attribute();
+  mode->set_name("mode");
+  mode->set_type(AttributeProto::AttributeType::STRING);
+  mode->set_s("nesterov");
+
+  RunNode(node, rt);
+
+  onnx_kernels::kernel::Momentum ref(rt.kernel_ctx());
+  std::vector<Tensor> expected =
+      ref(rt.tensors()["R"], rt.tensors()["T"], {rt.tensors()["X"]}, {rt.tensors()["G"]},
+          {rt.tensors()["V"]}, 0.95f, 1.0f, 0.01f, onnx_kernels::kernel::Momentum::Mode::kNesterov);
+
+  const Tensor &x_new = rt.tensors()["X_new"];
+  const Tensor &v_new = rt.tensors()["V_new"];
+  EXPECT_FLOAT_EQ(x_new.AsFloat()[0], expected[0].AsFloat()[0]);
+  EXPECT_FLOAT_EQ(x_new.AsFloat()[1], expected[0].AsFloat()[1]);
+  EXPECT_FLOAT_EQ(v_new.AsFloat()[0], expected[1].AsFloat()[0]);
+  EXPECT_FLOAT_EQ(v_new.AsFloat()[1], expected[1].AsFloat()[1]);
+}
+
+TEST(RunNodes, RunNodeAdamMultipleFromDispatchTable) {
+  // Dispatches a two-tensor Adam node (N=2) and checks the 3*N=6
+  // outputs against the direct kernel invocation.
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["R"] = Tensor::FromFloat("R", {}, {0.05f});
+  rt.tensors()["T"] = Tensor::FromInt64("T", {}, {5});
+  rt.tensors()["X1"] = Tensor::FromFloat("X1", {2}, {0.5f, -0.5f});
+  rt.tensors()["X2"] = Tensor::FromFloat("X2", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  rt.tensors()["G1"] = Tensor::FromFloat("G1", {2}, {0.1f, -0.2f});
+  rt.tensors()["G2"] = Tensor::FromFloat("G2", {2, 2}, {-0.5f, 0.25f, 0.75f, -1.0f});
+  rt.tensors()["V1"] = Tensor::FromFloat("V1", {2}, {0.01f, 0.02f});
+  rt.tensors()["V2"] = Tensor::FromFloat("V2", {2, 2}, {0.05f, 0.05f, -0.05f, 0.0f});
+  rt.tensors()["H1"] = Tensor::FromFloat("H1", {2}, {0.001f, 0.002f});
+  rt.tensors()["H2"] = Tensor::FromFloat("H2", {2, 2}, {0.01f, 0.02f, 0.03f, 0.04f});
+
+  NodeProto node = MakeNode("Adam", {"R", "T", "X1", "X2", "G1", "G2", "V1", "V2", "H1", "H2"},
+                            {"X1n", "X2n", "V1n", "V2n", "H1n", "H2n"}, "ai.onnx.preview.training");
+  for (const auto &kv :
+       std::vector<std::pair<std::string, float>>{{"alpha", 0.9f},
+                                                  {"beta", 0.999f},
+                                                  {"epsilon", 1e-6f},
+                                                  {"norm_coefficient", 0.0f},
+                                                  {"norm_coefficient_post", 0.0f}}) {
+    AttributeProto *a = node.add_attribute();
+    a->set_name(kv.first.c_str());
+    a->set_type(AttributeProto::AttributeType::FLOAT);
+    a->set_f(kv.second);
+  }
+
+  RunNode(node, rt);
+
+  onnx_kernels::kernel::Adam ref(rt.kernel_ctx());
+  std::vector<Tensor> expected =
+      ref(rt.tensors()["R"], rt.tensors()["T"], {rt.tensors()["X1"], rt.tensors()["X2"]},
+          {rt.tensors()["G1"], rt.tensors()["G2"]}, {rt.tensors()["V1"], rt.tensors()["V2"]},
+          {rt.tensors()["H1"], rt.tensors()["H2"]}, 0.9f, 0.999f, 1e-6f, 0.0f, 0.0f);
+
+  const std::vector<std::string> out_names = {"X1n", "X2n", "V1n", "V2n", "H1n", "H2n"};
+  for (size_t i = 0; i < out_names.size(); ++i) {
+    const Tensor &got = rt.tensors()[out_names[i]];
+    ASSERT_EQ(got.shape, expected[i].shape);
+    ASSERT_EQ(got.element_count(), expected[i].element_count());
+    for (int64_t j = 0; j < got.element_count(); ++j) {
+      EXPECT_FLOAT_EQ(got.AsFloat()[j], expected[i].AsFloat()[j])
+          << " at out=" << out_names[i] << " idx=" << j;
+    }
+  }
+}
+
+TEST(RunNodes, RunNodeMomentumRejectsBadInputCount) {
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["R"] = Tensor::FromFloat("R", {}, {0.1f});
+  rt.tensors()["T"] = Tensor::FromInt64("T", {}, {0});
+  rt.tensors()["X"] = Tensor::FromFloat("X", {1}, {1.0f});
+  rt.tensors()["G"] = Tensor::FromFloat("G", {1}, {1.0f});
+  // 2 + 2 = 4 inputs, not 2 + 3*N: should throw.
+  NodeProto node =
+      MakeNode("Momentum", {"R", "T", "X", "G"}, {"X_new"}, "ai.onnx.preview.training");
+  EXPECT_THROW(RunNode(node, rt), std::invalid_argument);
 }
 
 TEST(RunNodes, RunNodeUnsupportedOpTypeThrows) {

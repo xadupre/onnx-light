@@ -57,6 +57,22 @@ void RegisterNonZeroCases(std::vector<TestCase> &registry) {
     const Tensor y = nonzero_kernel(x);
     Expect(MakeNonZeroNode(), {x}, {y}, "test_cc_nonzero_int64", {opset}, "backend-test", registry);
   }
+
+  // test_cc_nonzero_example — mirrors upstream
+  // ``onnx.backend.test.case.node.nonzero.NonZero.export``:
+  //   condition = [[1, 0], [1, 1]] as bool
+  //   result    = [[0, 1, 1], [0, 0, 1]] (np.nonzero stacked, int64)
+  {
+    const Tensor condition = Tensor::FromBool("condition", {2, 2}, {1, 0, 1, 1});
+    Tensor result = nonzero_kernel(condition);
+    result.name = "result";
+    NodeProto node;
+    node.set_op_type("NonZero");
+    node.add_input("condition");
+    node.add_output("result");
+    Expect(node, {condition}, {result}, "test_cc_nonzero_example", {opset}, "backend-test",
+           registry);
+  }
 }
 
 } // namespace onnx_backend_test

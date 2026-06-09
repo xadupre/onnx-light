@@ -36,7 +36,7 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #   * ``test_cc_roialign_max`` and ``test_cc_roialign_mode_max`` — ORT's
 #     RoiAlign max-mode implementation does not match the ONNX reference
 #     (ORT emits a warning on session creation).
-#   * ``test_cc_flex_attention_*`` — ORT does not register the
+#   * ``test_cc_flexattention_*`` — ORT does not register the
 #     ``ai.onnx.preview`` domain, so these models fail to load with
 #     "ai.onnx.preview:FlexAttention(-1) is not a registered function/op".
 #   * ``test_cc_adam_*``, ``test_adam``, ``test_adam_multiple``,
@@ -268,7 +268,7 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 ORT_EXCLUDE_REGEX = [
     r"^test_cc_roialign_max$",
     r"^test_cc_roialign_mode_max$",
-    r"^test_cc_flex_attention_",
+    r"^test_cc_flexattention_",
     r"^test_cc_image_decoder_",
     r"^test_cc_attention_4d_with_past_and_present_qk_matmul_bias_3d_mask_causal$",
     r"^test_cc_attention_4d_with_past_and_present_qk_matmul_bias_4d_mask_causal$",

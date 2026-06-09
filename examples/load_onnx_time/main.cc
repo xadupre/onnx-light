@@ -110,12 +110,28 @@ int main(int argc, char *argv[]) {
   for (int i = 0; i < iterations; ++i) {
     try {
       const auto begin = std::chrono::steady_clock::now();
-      std::ifstream input(file_path, std::ios::binary);
+      // Read the whole file into a buffer and parse from memory. This mirrors
+      // what Python's ``onnx.load`` does (``open(f, 'rb').read()`` followed by
+      // ``ModelProto.ParseFromString(...)``) and avoids the per-byte overhead
+      // of ``ParseFromIstream``, which wraps the unbuffered ``std::ifstream``
+      // in a protobuf ``CopyingInputStreamAdaptor`` and reads byte-by-byte.
+      // Without this, the C++ benchmark unfairly looks slower than the Python
+      // one even though both rely on the same underlying protobuf parser.
+      std::ifstream input(file_path, std::ios::binary | std::ios::ate);
       if (!input.is_open()) {
         throw std::runtime_error("Failed to open file: " + file_path);
       }
+      const std::streamsize file_size = input.tellg();
+      if (file_size < 0) {
+        throw std::runtime_error("Failed to determine file size: " + file_path);
+      }
+      input.seekg(0, std::ios::beg);
+      std::string buffer(static_cast<std::size_t>(file_size), '\0');
+      if (file_size > 0 && !input.read(buffer.data(), file_size)) {
+        throw std::runtime_error("Failed to read file: " + file_path);
+      }
       onnx::ModelProto model;
-      if (!model.ParseFromIstream(&input)) {
+      if (!model.ParseFromString(buffer)) {
         throw std::runtime_error("Failed to parse ONNX model from: " + file_path);
       }
       const auto end = std::chrono::steady_clock::now();

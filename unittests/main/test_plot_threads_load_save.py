@@ -21,7 +21,7 @@ def _has_xlim_left_zero() -> bool:
 
 class TestPlotThreadsLoadSave(unittest.TestCase):
     def test_example_sets_xlim_left_to_zero(self):
-        """Ensures the thread plot example pins the x-axis lower bound to zero."""
+        """Checks that the thread plot example pins the x-axis lower bound to zero."""
         self.assertTrue(_has_xlim_left_zero())
 
 

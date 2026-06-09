@@ -414,9 +414,7 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
           }
         }
         if (row_fully_masked) {
-          for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-            scores[static_cast<size_t>(j)] = 0.0;
-          }
+          std::fill(scores.begin(), scores.end(), 0.0);
         }
         // Y[i, dv] = sum_j probs[j] * V[j, dv]
         for (int64_t dv = 0; dv < v_head_size; ++dv) {

@@ -226,7 +226,7 @@ bool AttentionAppendFunctionCausalMask(const FunctionBodyBuildContext &ctx,
   // causal frontier and attn_mask.
   const auto *const is_causal_attr = ctx.getAttribute("is_causal");
   int64_t is_causal = (is_causal_attr != nullptr) ? is_causal_attr->i() : 0;
-  const bool external_cache_offset = (is_causal == 1) && ctx.hasInput(6) && !ctx.hasInput(4);
+  const bool use_external_cache_offset = (is_causal == 1) && ctx.hasInput(6) && !ctx.hasInput(4);
   if (is_causal == 1) {
     builder.Const1D("Zero", static_cast<int64_t>(0))
         .Const1D("One", static_cast<int64_t>(1))
@@ -238,7 +238,7 @@ bool AttentionAppendFunctionCausalMask(const FunctionBodyBuildContext &ctx,
         .Add("RangeRow2D = Unsqueeze(RangeRow, One)")
         .Add("RangeCol = Range(ZeroNoDim, TotalSequenceLength, OneNoDim)")
         .Add("RangeCol2D = Unsqueeze(RangeCol, Zero)");
-    if (external_cache_offset) {
+    if (use_external_cache_offset) {
       builder.Const("Axes01", std::vector<int64_t>{0, 1})
           .Const("Axes123", std::vector<int64_t>{1, 2, 3})
           .Add("RangeRow4D = Unsqueeze(RangeRow2D, Axes01)")

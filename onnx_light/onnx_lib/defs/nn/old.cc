@@ -3577,8 +3577,9 @@ ONNX_OPERATOR_SET_SCHEMA(
     OpSchema()
         .SetDoc(Attention_ver23_doc)
         .Attr("is_causal",
-              "If set to `1`, the attention masking follows an offset-aware causal frontier where "
-              "a query index i attends keys j <= i + past_sequence_length.",
+              "If set to `1`, the attention masking is a lower triangular matrix when the mask is "
+              "a square matrix. The attention masking has the form of the upper left causal bias "
+              "due to the alignment.",
               AttributeProto::INT, static_cast<int64_t>(0))
         .Attr("scale",
               "Scaling factor applied to $Q*K^T$. Default value is `1/sqrt(head_size)`. To prevent "

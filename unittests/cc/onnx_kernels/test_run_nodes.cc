@@ -104,6 +104,7 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx:Attention"), table.end());
   EXPECT_NE(table.find("ai.onnx:IsInf"), table.end());
   EXPECT_NE(table.find("ai.onnx:BitShift"), table.end());
+  EXPECT_NE(table.find("ai.onnx:Einsum"), table.end());
   // Generator kernels.
   EXPECT_NE(table.find("ai.onnx:EyeLike"), table.end());
   EXPECT_NE(table.find("ai.onnx:AffineGrid"), table.end());
@@ -252,6 +253,28 @@ TEST(RunNodes, RunNodeAffineGridUsesAttributes) {
   EXPECT_FLOAT_EQ(got[5], 1.0f);
   EXPECT_FLOAT_EQ(got[6], 1.0f);
   EXPECT_FLOAT_EQ(got[7], 1.0f);
+}
+
+TEST(RunNodes, RunNodeEinsumUsesEquationAttribute) {
+  // Verify the Einsum trampoline forwards the variadic inputs and the
+  // ``equation`` STRING attribute to ``kernel::Einsum``. The equation
+  // ``"ij,jk->ik"`` performs a 2x3 by 3x2 matrix product.
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["a"] = Tensor::FromFloat("a", {2, 3}, {1, 2, 3, 4, 5, 6});
+  rt.tensors()["b"] = Tensor::FromFloat("b", {3, 2}, {7, 8, 9, 10, 11, 12});
+  NodeProto node = MakeNode("Einsum", {"a", "b"}, {"y"});
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name("equation");
+  attr->set_type(AttributeProto::AttributeType::STRING);
+  attr->set_s("ij,jk->ik");
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 2}));
+  const float *got = y.AsFloat();
+  EXPECT_FLOAT_EQ(got[0], 58.0f);
+  EXPECT_FLOAT_EQ(got[1], 64.0f);
+  EXPECT_FLOAT_EQ(got[2], 139.0f);
+  EXPECT_FLOAT_EQ(got[3], 154.0f);
 }
 
 TEST(RunNodes, RunNodeAdagradFromDispatchTable) {

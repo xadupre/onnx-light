@@ -298,7 +298,7 @@ Notes
 * Alignment lives on :py:class:`onnx_light.onnx.SerializeOptions`,
   :py:class:`onnx_light.onnx.ParseOptions`, :cpp:class:`onnx::SerializeOptions`,
   and :cpp:class:`onnx::ParseOptions` rather than the high-level
-  ``onnxl.save`` / ``onnxl.load`` helper keywords.  Use a power of two such as
+  :func:`~onnx_light.onnx.save` / :func:`~onnx_light.onnx.load` helper keywords.  Use a power of two such as
   ``4096`` when you want page-aligned external-data offsets.
 * The same parallel options apply to one-file and two-file I/O.  In C++, set
   ``num_threads`` on :cpp:class:`onnx::ParseOptions` or

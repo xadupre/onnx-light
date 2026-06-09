@@ -67,8 +67,8 @@ memory footprint:
    :widths: 30 35 35
 
    * - Aspect
-     - ``align_external_data_streaming``
-     - ``load`` + ``SerializeToFile``
+     - :func:`~onnx_light.onnx.align_external_data_streaming`
+     - :func:`~onnx_light.onnx.load` + ``SerializeToFile``
    * - Peak heap
      - O(metadata + ``chunk_size``)
      - O(total weights size)

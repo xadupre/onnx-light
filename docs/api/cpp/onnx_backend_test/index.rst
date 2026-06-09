@@ -16,3 +16,4 @@ and the kernel implementations used by these test cases.
     :maxdepth: 1
 
     cases/index
+    test_case

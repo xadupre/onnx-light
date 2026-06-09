@@ -1,5 +1,5 @@
 onnx\_light.tools.mermaid
-========================
+=========================
 
 Convert an ONNX model or graph to a `Mermaid <https://mermaid.js.org/>`_
 ``flowchart`` diagram.  The output is a plain string that can be
@@ -7,7 +7,7 @@ embedded in Markdown or in a Sphinx page via the ``.. mermaid::``
 directive.
 
 Example
-++++++
++++++++
 
 Building a tiny model and printing its Mermaid source — using
 ``sphinx_runpython``'s ``.. runpython:: :showcode:`` directive, which

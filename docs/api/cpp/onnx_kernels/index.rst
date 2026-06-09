@@ -21,6 +21,5 @@ exposes:
 
     simple_tensor
     simple_sequence
-    test_case
     random
     kernels/index

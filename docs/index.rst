@@ -216,6 +216,7 @@ Source code: `https://github.com/xadupre/onnx-light <https://github.com/xadupre/
     :maxdepth: 1
     :caption: Contents
 
+    intro/index
     design/index
     howto/index
     api/index

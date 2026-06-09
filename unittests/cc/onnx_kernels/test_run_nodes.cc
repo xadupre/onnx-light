@@ -113,6 +113,8 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   // Generator kernels.
   EXPECT_NE(table.find("ai.onnx:EyeLike"), table.end());
   EXPECT_NE(table.find("ai.onnx:AffineGrid"), table.end());
+  // Tensor shape kernels.
+  EXPECT_NE(table.find("ai.onnx:Shape"), table.end());
   // Logical / bitwise kernels.
   EXPECT_NE(table.find("ai.onnx:And"), table.end());
   EXPECT_NE(table.find("ai.onnx:Or"), table.end());
@@ -302,6 +304,44 @@ TEST(RunNodes, RunNodeAffineGridUsesAttributes) {
   EXPECT_FLOAT_EQ(got[5], 1.0f);
   EXPECT_FLOAT_EQ(got[6], 1.0f);
   EXPECT_FLOAT_EQ(got[7], 1.0f);
+}
+
+TEST(RunNodes, RunNodeShapeNoAttributes) {
+  // Default attributes: returns the full shape as an INT64 1-D tensor.
+  RuntimeContext rt(KernelContext(DefaultOpset(15)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {2, 3, 4}, std::vector<float>(24, 0.0f));
+  NodeProto node = MakeNode("Shape", {"x"}, {"y"});
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{3}));
+  EXPECT_EQ(y.data_type, 7); // INT64
+  const int64_t *got = y.AsInt64();
+  EXPECT_EQ(got[0], 2);
+  EXPECT_EQ(got[1], 3);
+  EXPECT_EQ(got[2], 4);
+}
+
+TEST(RunNodes, RunNodeShapeUsesStartAndEndAttributes) {
+  // Verify the Shape trampoline forwards the ``start`` and ``end``
+  // attributes to ``kernel::Shape``: ``shape[1:-1]`` of a 4-D input.
+  RuntimeContext rt(KernelContext(DefaultOpset(15)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {2, 3, 4, 5}, std::vector<float>(120, 0.0f));
+  NodeProto node = MakeNode("Shape", {"x"}, {"y"});
+  AttributeProto *attr_start = node.add_attribute();
+  attr_start->set_name("start");
+  attr_start->set_type(AttributeProto::AttributeType::INT);
+  attr_start->set_i(1);
+  AttributeProto *attr_end = node.add_attribute();
+  attr_end->set_name("end");
+  attr_end->set_type(AttributeProto::AttributeType::INT);
+  attr_end->set_i(-1);
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2}));
+  EXPECT_EQ(y.data_type, 7); // INT64
+  const int64_t *got = y.AsInt64();
+  EXPECT_EQ(got[0], 3);
+  EXPECT_EQ(got[1], 4);
 }
 
 TEST(RunNodes, RunNodeEinsumUsesEquationAttribute) {

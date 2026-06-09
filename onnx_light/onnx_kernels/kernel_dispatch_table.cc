@@ -511,6 +511,26 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
 
       // -----------------------------------------------------------------
+      // Tensor shape kernels.
+      // -----------------------------------------------------------------
+      // ``Shape``: ``start`` defaults to 0; ``end`` is optional and, when
+      // absent, the slice extends to the input rank.
+      {"ai.onnx:Shape",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &data = GetInput(node, 0, rt.tensors());
+         kernel::Shape::Attributes shape_attrs;
+         shape_attrs.start = GetAttributeIntOrDefault(node, "start", 0);
+         const AttributeProto *end_attr = FindAttribute(node, "end");
+         if (end_attr != nullptr) {
+           shape_attrs.end = end_attr->i();
+         }
+         kernel::Shape shape_kernel(rt.kernel_ctx());
+         SetOutput(node, 0, shape_kernel(data, shape_attrs), rt.tensors());
+       }},
+
+      // -----------------------------------------------------------------
       // ``BitShift``: ``direction`` is a required STRING attribute
       // (``"LEFT"`` or ``"RIGHT"``).
       // -----------------------------------------------------------------

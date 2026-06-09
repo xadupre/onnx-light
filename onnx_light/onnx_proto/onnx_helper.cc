@@ -752,8 +752,45 @@ void SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
     offset_t total_external_size = PopulateExternalData(
         model, options.raw_data_threshold, weight_path.string(), options.use_external_data_location,
         options.max_external_file_size, options.alignment);
-    if (options.is_parallel() && total_external_size > 0 && options.max_external_file_size <= 0) {
-      two_stream.pre_allocate_weights(total_external_size);
+    if (options.is_parallel() && total_external_size > 0) {
+      if (options.max_external_file_size <= 0) {
+        // Single weights file: one pre-allocation covers everything.
+        two_stream.pre_allocate_weights(total_external_size);
+      } else {
+        // Multi-file case: tensors have been distributed across several weights files by
+        // PopulateExternalData. Compute the size needed for each output file from the
+        // (offset, length) tuples stored in external_data and pre-allocate each one so the
+        // parallel writers can scatter into independent locations.
+        std::unordered_map<std::string, int64_t> per_location_size;
+        IteratorTensorProto it_chunks(&model.ref_graph());
+        while (it_chunks.next()) {
+          if (!it_chunks->has_external_data())
+            continue;
+          std::string location;
+          int64_t offset = 0;
+          int64_t length = -1;
+          for (int k = 0; k < it_chunks->ref_external_data().size(); ++k) {
+            const StringStringEntryProto &entry = it_chunks->ref_external_data()[k];
+            const utils::String &key = entry.ref_key();
+            if (key == "location") {
+              location = entry.ref_value().as_string();
+            } else if (key == "offset") {
+              offset = entry.ref_value().toint64();
+            } else if (key == "length" || key == "size") {
+              length = entry.ref_value().toint64();
+            }
+          }
+          if (length < 0)
+            length = static_cast<int64_t>(it_chunks->ref_raw_data().size());
+          int64_t end = offset + length;
+          int64_t &cur = per_location_size[location];
+          if (end > cur)
+            cur = end;
+        }
+        for (const auto &kv : per_location_size) {
+          two_stream.pre_allocate_weights(kv.first, kv.second);
+        }
+      }
       two_stream.StartWriteThreadPool(options.num_threads);
     }
   }

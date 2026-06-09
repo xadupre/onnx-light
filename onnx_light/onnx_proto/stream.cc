@@ -904,6 +904,10 @@ int64_t TwoFilesWriteStream::weights_size() const {
   auto it = extra_weights_streams_.find(active_weights_location_);
   EXT_ENFORCE(it != extra_weights_streams_.end(),
               "Unknown active weights location: ", active_weights_location_);
+  if (parallel_write_) {
+    auto pit = extra_virtual_write_pos_.find(active_weights_location_);
+    return pit == extra_virtual_write_pos_.end() ? 0 : pit->second;
+  }
   return it->second->size();
 }
 
@@ -915,6 +919,10 @@ int64_t TwoFilesWriteStream::weights_size(const std::string &location) const {
   auto it = extra_weights_streams_.find(location);
   if (it == extra_weights_streams_.end()) {
     return 0;
+  }
+  if (parallel_write_) {
+    auto pit = extra_virtual_write_pos_.find(location);
+    return pit == extra_virtual_write_pos_.end() ? 0 : pit->second;
   }
   return it->second->size();
 }
@@ -930,10 +938,29 @@ void TwoFilesWriteStream::pre_allocate_weights(int64_t total_bytes) {
   weights_stream_.pre_allocate(total_bytes);
 }
 
+void TwoFilesWriteStream::pre_allocate_weights(const std::string &location, int64_t total_bytes) {
+  EXT_ENFORCE(total_bytes >= 0, "total_bytes must be non-negative, got ", total_bytes);
+  if (total_bytes == 0)
+    return;
+  if (location.empty() || location == weights_stream_.file_path() ||
+      location == default_weights_location_) {
+    weights_stream_.pre_allocate(total_bytes);
+    return;
+  }
+  auto it = extra_weights_streams_.find(location);
+  if (it == extra_weights_streams_.end()) {
+    std::filesystem::path path = validate_external_location_is_next_to_model(file_path_, location);
+    auto stream = std::make_unique<FileWriteStream>(path.string());
+    it = extra_weights_streams_.emplace(location, std::move(stream)).first;
+  }
+  it->second->pre_allocate(total_bytes);
+}
+
 void TwoFilesWriteStream::StartWriteThreadPool(int32_t n_threads) {
   EXT_ENFORCE(!parallel_write_, "StartWriteThreadPool already called.");
   parallel_write_ = true;
   virtual_write_pos_ = 0;
+  extra_virtual_write_pos_.clear();
   write_thread_pool_.Start(n_threads);
 }
 
@@ -971,12 +998,27 @@ void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, o
     return;
   }
 
-  EXT_ENFORCE(!parallel_write_,
-              "Parallel writes are only supported for the default external weights file.");
   auto it = extra_weights_streams_.find(active_weights_location_);
   EXT_ENFORCE(it != extra_weights_streams_.end(),
               "Unknown active weights location: ", active_weights_location_);
-  it->second->write_raw_bytes(ptr, n_bytes);
+  if (parallel_write_) {
+    // Per-location virtual position; only mutated on the calling thread, same as the
+    // default-location path above.  Worker threads capture `offset` and `wpath` by value.
+    int64_t &pos = extra_virtual_write_pos_[active_weights_location_];
+    int64_t offset = pos;
+    pos += n_bytes;
+    const std::string wpath = it->second->file_path();
+    write_thread_pool_.SubmitTask([wpath, ptr, n_bytes, offset]() {
+      std::fstream f(wpath, std::ios::binary | std::ios::in | std::ios::out);
+      EXT_ENFORCE(f.is_open(), "Failed to open weights file for parallel write: ", wpath);
+      f.seekp(offset);
+      f.write(reinterpret_cast<const char *>(ptr), n_bytes);
+      EXT_ENFORCE(!f.fail(), "Write failed for weights file: ", wpath, " at offset=", offset,
+                  " n_bytes=", n_bytes);
+    });
+  } else {
+    it->second->write_raw_bytes(ptr, n_bytes);
+  }
 }
 
 void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, offset_t n_bytes,

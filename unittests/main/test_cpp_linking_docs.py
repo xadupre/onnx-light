@@ -26,6 +26,16 @@ class TestCppLinkingDocs(unittest.TestCase):
         content = page.read_text(encoding="utf-8")
         self.assertIn("onnx_light::lib_onnx_proto", content)
 
+    def test_print_proto_example_docs_link_to_real_proto_only_source(self):
+        """Verifies that the debug-print example docs point at a real proto-only source tree."""
+        page = ROOT / "docs" / "examples_cc" / "print_proto_debug_example.rst"
+        content = page.read_text(encoding="utf-8")
+        example_dir = ROOT / "examples" / "print_proto_debug"
+        self.assertIn("examples/print_proto_debug", content)
+        self.assertIn("onnx_light::lib_onnx_proto", content)
+        self.assertTrue((example_dir / "CMakeLists.txt").exists())
+        self.assertTrue((example_dir / "main.cc").exists())
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

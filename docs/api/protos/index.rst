@@ -5,83 +5,15 @@ protos
 Relations between protos
 ========================
 
-The following Mermaid graph shows containment relations between ONNX protos.
+The following graph shows containment relations between ONNX protos.
 Each edge label is the attribute name (or names) that carries the nested proto.
+The SVG below is generated from
+:download:`protos_relations.dot <_static/protos_relations.dot>` with
+``dot -Tsvg`` (Graphviz); regenerate it after editing the ``.dot`` source.
 
-.. mermaid::
-
-    %%{init: {'flowchart': {'useMaxWidth': false, 'nodeSpacing': 60, 'rankSpacing': 70}, 'themeVariables': {'fontSize': '18px'}}}%%
-    flowchart TD
-        ModelProto -->|graph| GraphProto
-        ModelProto -->|opset_import| OperatorSetIdProto
-        ModelProto -->|functions| FunctionProto
-        ModelProto -->|configuration| DeviceConfigurationProto
-        ModelProto -->|metadata_props| StringStringEntryProto
-
-        GraphProto -->|node| NodeProto
-        GraphProto -->|initializer| TensorProto
-        GraphProto -->|sparse_initializer| SparseTensorProto
-        GraphProto -->|input, output, value_info| ValueInfoProto
-        GraphProto -->|quantization_annotation| TensorAnnotation
-        GraphProto -->|metadata_props| StringStringEntryProto
-
-        FunctionProto -->|attribute_proto| AttributeProto
-        FunctionProto -->|node| NodeProto
-        FunctionProto -->|opset_import| OperatorSetIdProto
-        FunctionProto -->|value_info| ValueInfoProto
-        FunctionProto -->|metadata_props| StringStringEntryProto
-
-        NodeProto -->|attribute| AttributeProto
-        NodeProto -->|device_configurations| NodeDeviceConfigurationProto
-        NodeProto -->|metadata_props| StringStringEntryProto
-
-        NodeDeviceConfigurationProto -->|sharding_spec| ShardingSpecProto
-        NodeDeviceConfigurationProto -. configuration_id .-> DeviceConfigurationProto
-        ShardingSpecProto -->|index_to_device_group_map| IntIntListEntryProto
-        ShardingSpecProto -->|sharded_dim| ShardedDimProto
-        ShardedDimProto -->|simple_sharding| SimpleShardedDimProto
-
-        ValueInfoProto -->|type| TypeProto
-        ValueInfoProto -->|metadata_props| StringStringEntryProto
-
-        TensorShapeProto -->|dim| Dimension
-
-        TypeProto -->|tensor_type| TypeProto.Tensor
-        TypeProto -->|sparse_tensor_type| TypeProto.SparseTensor
-        TypeProto -->|sequence_type| TypeProto.Sequence
-        TypeProto -->|map_type| TypeProto.Map
-        TypeProto -->|optional_type| TypeProto.Optional
-        TypeProto.Tensor -->|shape| TensorShapeProto
-        TypeProto.SparseTensor -->|shape| TensorShapeProto
-        TypeProto.Sequence -->|elem_type| TypeProto
-        TypeProto.Optional -->|elem_type| TypeProto
-        TypeProto.Map -->|value_type| TypeProto
-
-        TensorProto -->|segment| Segment
-        TensorProto -->|external_data, metadata_props| StringStringEntryProto
-
-        SparseTensorProto -->|values, indices| TensorProto
-
-        AttributeProto -->|t, tensors| TensorProto
-        AttributeProto -->|g, graphs| GraphProto
-        AttributeProto -->|sparse_tensor, sparse_tensors| SparseTensorProto
-        AttributeProto -->|tp, type_protos| TypeProto
-
-        TensorAnnotation -->|quant_parameter_tensor_names| StringStringEntryProto
-
-        SequenceProto -->|tensor_values| TensorProto
-        SequenceProto -->|sparse_tensor_values| SparseTensorProto
-        SequenceProto -->|sequence_values| SequenceProto
-        SequenceProto -->|map_values| MapProto
-        SequenceProto -->|optional_values| OptionalProto
-
-        MapProto -->|values| SequenceProto
-
-        OptionalProto -->|tensor_value| TensorProto
-        OptionalProto -->|sparse_tensor_value| SparseTensorProto
-        OptionalProto -->|sequence_value| SequenceProto
-        OptionalProto -->|map_value| MapProto
-        OptionalProto -->|optional_value| OptionalProto
+.. image:: _static/protos_relations.svg
+   :alt: Containment relations between ONNX protos
+   :align: center
 
 Containment attributes
 ======================

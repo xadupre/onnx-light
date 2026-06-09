@@ -1,0 +1,78 @@
+digraph protos {
+    rankdir=TB;
+    nodesep=0.5;
+    ranksep=0.7;
+    node [shape=box, style="rounded,filled", fillcolor="#EAF2F8", fontname="Helvetica", fontsize=12, color="#1F618D"];
+    edge [fontname="Helvetica", fontsize=10, color="#566573"];
+
+    ModelProto -> GraphProto [label="graph"];
+    ModelProto -> OperatorSetIdProto [label="opset_import"];
+    ModelProto -> FunctionProto [label="functions"];
+    ModelProto -> DeviceConfigurationProto [label="configuration"];
+    ModelProto -> StringStringEntryProto [label="metadata_props"];
+
+    GraphProto -> NodeProto [label="node"];
+    GraphProto -> TensorProto [label="initializer"];
+    GraphProto -> SparseTensorProto [label="sparse_initializer"];
+    GraphProto -> ValueInfoProto [label="input, output, value_info"];
+    GraphProto -> TensorAnnotation [label="quantization_annotation"];
+    GraphProto -> StringStringEntryProto [label="metadata_props"];
+
+    FunctionProto -> AttributeProto [label="attribute_proto"];
+    FunctionProto -> NodeProto [label="node"];
+    FunctionProto -> OperatorSetIdProto [label="opset_import"];
+    FunctionProto -> ValueInfoProto [label="value_info"];
+    FunctionProto -> StringStringEntryProto [label="metadata_props"];
+
+    NodeProto -> AttributeProto [label="attribute"];
+    NodeProto -> NodeDeviceConfigurationProto [label="device_configurations"];
+    NodeProto -> StringStringEntryProto [label="metadata_props"];
+
+    NodeDeviceConfigurationProto -> ShardingSpecProto [label="sharding_spec"];
+    NodeDeviceConfigurationProto -> DeviceConfigurationProto [label="configuration_id", style=dashed];
+    ShardingSpecProto -> IntIntListEntryProto [label="index_to_device_group_map"];
+    ShardingSpecProto -> ShardedDimProto [label="sharded_dim"];
+    ShardedDimProto -> SimpleShardedDimProto [label="simple_sharding"];
+
+    ValueInfoProto -> TypeProto [label="type"];
+    ValueInfoProto -> StringStringEntryProto [label="metadata_props"];
+
+    TensorShapeProto -> Dimension [label="dim"];
+
+    TypeProto -> "TypeProto.Tensor" [label="tensor_type"];
+    TypeProto -> "TypeProto.SparseTensor" [label="sparse_tensor_type"];
+    TypeProto -> "TypeProto.Sequence" [label="sequence_type"];
+    TypeProto -> "TypeProto.Map" [label="map_type"];
+    TypeProto -> "TypeProto.Optional" [label="optional_type"];
+    "TypeProto.Tensor" -> TensorShapeProto [label="shape"];
+    "TypeProto.SparseTensor" -> TensorShapeProto [label="shape"];
+    "TypeProto.Sequence" -> TypeProto [label="elem_type"];
+    "TypeProto.Optional" -> TypeProto [label="elem_type"];
+    "TypeProto.Map" -> TypeProto [label="value_type"];
+
+    TensorProto -> Segment [label="segment"];
+    TensorProto -> StringStringEntryProto [label="external_data, metadata_props"];
+
+    SparseTensorProto -> TensorProto [label="values, indices"];
+
+    AttributeProto -> TensorProto [label="t, tensors"];
+    AttributeProto -> GraphProto [label="g, graphs"];
+    AttributeProto -> SparseTensorProto [label="sparse_tensor, sparse_tensors"];
+    AttributeProto -> TypeProto [label="tp, type_protos"];
+
+    TensorAnnotation -> StringStringEntryProto [label="quant_parameter_tensor_names"];
+
+    SequenceProto -> TensorProto [label="tensor_values"];
+    SequenceProto -> SparseTensorProto [label="sparse_tensor_values"];
+    SequenceProto -> SequenceProto [label="sequence_values"];
+    SequenceProto -> MapProto [label="map_values"];
+    SequenceProto -> OptionalProto [label="optional_values"];
+
+    MapProto -> SequenceProto [label="values"];
+
+    OptionalProto -> TensorProto [label="tensor_value"];
+    OptionalProto -> SparseTensorProto [label="sparse_tensor_value"];
+    OptionalProto -> SequenceProto [label="sequence_value"];
+    OptionalProto -> MapProto [label="map_value"];
+    OptionalProto -> OptionalProto [label="optional_value"];
+}

@@ -93,6 +93,7 @@ TestOptimShapeInferenceDynamicBackend = make_test_class(
         "test_cc_shape_inference_nested_local_function_add.*",
         "test_cc_linear_attention.*",
         "test_cc_shape_inference_nonzero_plus_expression.*",
+        "test_cc_shape_inference_value_as_shape.*",
     ],
 )
 

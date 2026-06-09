@@ -11,7 +11,14 @@ thin Python shim providing the upstream-compatible signatures plus the small
 """
 
 from __future__ import annotations
+
 import os
+from pathlib import PurePosixPath, PureWindowsPath
+
+from ..onnx_proto._onnxpy import (  # type: ignore
+    convert_model_to_external_data as _convert_model_to_external_data,
+    load_external_data_for_model as _load_external_data_for_model,
+)
 from . import ModelProto, TensorProto
 
 __all__ = [
@@ -91,14 +98,22 @@ def convert_model_to_external_data(
     :raises ValueError: if ``location`` is an absolute path.
     :raises FileExistsError: if ``location`` already exists on disk.
     """
-    if location and (os.path.isabs(location) or location.startswith(("/", "\\"))):
-        raise ValueError(f"location must be a relative path, got: {location}")
-    if location and all_tensors_to_one_file and os.path.exists(location):
-        raise FileExistsError(f"External data file exists in {location}.")
-    from ..onnx_proto._onnxpy import (
-        convert_model_to_external_data as _convert_model_to_external_data,
-    )
-
+    if location:
+        # Reject absolute paths using both POSIX and Windows semantics so that
+        # e.g. ``/tmp/foo.bin`` is consistently rejected on Windows runners
+        # (where ``os.path.isabs`` treats it as relative because there is no
+        # drive letter) and ``C:\foo.bin`` is rejected on POSIX runners.
+        if (
+            os.path.isabs(location)
+            or PurePosixPath(location).is_absolute()
+            or PureWindowsPath(location).is_absolute()
+        ):
+            raise ValueError(
+                f"External data location {location!r} is an absolute path; "
+                "it must be relative to the model file."
+            )
+        if all_tensors_to_one_file and os.path.exists(location):
+            raise FileExistsError(f"External data file exists in {location}.")
     _convert_model_to_external_data(
         model,
         all_tensors_to_one_file,
@@ -120,6 +135,4 @@ def load_external_data_for_model(model: ModelProto, base_dir: str) -> None:
     :param base_dir: directory that contains the external data files
         referenced by the tensors.
     """
-    from ..onnx_proto._onnxpy import load_external_data_for_model as _load_external_data_for_model
-
     _load_external_data_for_model(model, base_dir)

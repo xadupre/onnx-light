@@ -1019,7 +1019,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          if (use_strings == has_ints) {
            throw std::invalid_argument(
                "RunNode: TreeEnsembleClassifier requires exactly one of "
-               "'classlabels_ints' or 'classlabels_strings' to be set.");
+               "'classlabels_int64s' or 'classlabels_strings' to be set.");
          }
          kernel::TreeEnsembleClassifier cls(rt.kernel_ctx());
          std::pair<Tensor, Tensor> yz = DispatchTreeEnsembleClassicByDataType(

@@ -4,12 +4,6 @@ import unittest
 
 
 def _has_xlim_left_zero() -> bool:
-    """
-    Determines whether the example sets the x-axis minimum to zero.
-
-    Returns:
-        True if ``set_xlim(left=0)`` is present, otherwise False.
-    """
     root = pathlib.Path(__file__).resolve().parents[2]
     source_path = root / "docs" / "examples" / "core" / "plot_threads_load_save.py"
     tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
@@ -27,6 +21,7 @@ def _has_xlim_left_zero() -> bool:
 
 class TestPlotThreadsLoadSave(unittest.TestCase):
     def test_example_sets_xlim_left_to_zero(self):
+        """Ensures the thread plot example pins the x-axis lower bound to zero."""
         self.assertTrue(_has_xlim_left_zero())
 
 

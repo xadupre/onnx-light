@@ -153,7 +153,12 @@ int main(int argc, char *argv[]) {
   std::vector<double> timings_ms;
   timings_ms.reserve(iterations);
 
-  for (int i = 0; i < iterations; ++i) {
+  // Run one unmeasured warm-up iteration so the first (cold) save does not
+  // skew the average/median. This mirrors the Python ``measure()`` helper in
+  // ``docs/examples/core/plot_onnx_time.py`` which discards a warmup run
+  // before timing, keeping the C++ and Python benchmarks comparable.
+  const int total_iterations = iterations + 1;
+  for (int i = 0; i < total_iterations; ++i) {
     try {
       ONNX_LIGHT_NAMESPACE::SerializeOptions opts;
       opts.num_threads = num_threads;
@@ -166,7 +171,9 @@ int main(int argc, char *argv[]) {
         ONNX_LIGHT_NAMESPACE::SerializeModelProtoToStream(model, stream, opts);
       }
       const auto end = std::chrono::steady_clock::now();
-      timings_ms.push_back(ToMilliseconds(end - begin));
+      if (i > 0) {
+        timings_ms.push_back(ToMilliseconds(end - begin));
+      }
     } catch (const std::exception &e) {
       std::cerr << "Error saving to '" << out_onnx << "': " << e.what() << "\n";
       return 1;

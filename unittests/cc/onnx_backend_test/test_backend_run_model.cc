@@ -205,6 +205,10 @@ TEST(BackendRunModel, Adagrad) { RunBackendCasesFor("Adagrad"); }
 TEST(BackendRunModel, Adam) { RunBackendCasesFor("Adam"); }
 TEST(BackendRunModel, Momentum) { RunBackendCasesFor("Momentum"); }
 
+// ai.onnx.ml kernels.
+TEST(BackendRunModel, SVMRegressor) { RunBackendCasesFor("SVMRegressor"); }
+TEST(BackendRunModel, SVMClassifier) { RunBackendCasesFor("SVMClassifier"); }
+
 // Quantization kernels.
 // The reference QuantizeLinear/DequantizeLinear kernels only support
 // per-tensor quantization (scalar y_scale/x_scale) with FLOAT scales and

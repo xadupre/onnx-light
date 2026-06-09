@@ -497,7 +497,39 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           [](const onnx_shapes::ShapesContext &c) -> std::unordered_map<std::string, int> {
             return c.Opsets();
           },
-          "Returns a copy of the ``domain -> opset_version`` map.");
+          "Returns a copy of the ``domain -> opset_version`` map.")
+      // Symbolic-dimension equality constraints.
+      .def(
+          "add_constraint",
+          [](onnx_shapes::ShapesContext &c, const std::string &a, const std::string &b) {
+            return c.AddConstraint(a, b);
+          },
+          nb::arg("a"), nb::arg("b"),
+          "Records an equality constraint between two symbolic dimension names. "
+          "The pair is canonicalised so ``(a, b)`` and ``(b, a)`` are stored only "
+          "once, and ``a == a`` is dropped. Returns True when a new constraint was "
+          "inserted, False otherwise.")
+      .def(
+          "has_constraint",
+          [](const onnx_shapes::ShapesContext &c, const std::string &a, const std::string &b) {
+            return c.HasConstraint(a, b);
+          },
+          nb::arg("a"), nb::arg("b"),
+          "True when an equality constraint between ``a`` and ``b`` was recorded "
+          "(canonical order is applied before lookup; ``a == a`` always returns True).")
+      .def("constraints_size", &onnx_shapes::ShapesContext::ConstraintsSize,
+           "Number of recorded equality constraints.")
+      .def(
+          "constraints",
+          [](const onnx_shapes::ShapesContext &c) -> nb::list {
+            nb::list out;
+            for (const auto &p : c.Constraints()) {
+              out.append(nb::make_tuple(p.first, p.second));
+            }
+            return out;
+          },
+          "Returns the list of recorded equality constraints as ``(lhs, rhs)`` "
+          "tuples with ``lhs < rhs``.");
 
   shape_mod.attr("kUnknownOpsetVersion") = onnx_shapes::kUnknownOpsetVersion;
   shape_mod.attr("kOnnxDomain") = onnx_shapes::kOnnxDomain;

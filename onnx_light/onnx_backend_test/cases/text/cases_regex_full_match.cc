@@ -57,6 +57,26 @@ void RegisterRegexFullMatchCases(std::vector<TestCase> &registry) {
     Expect(node, {x}, {y}, "test_cc_regex_full_match_email", {opset}, "backend-test", registry);
   }
 
+  // Email-domain pattern mirroring upstream onnx
+  // ``test_regex_full_match_email_domain``: anchored alternation of
+  // ``yahoo``/``gmail`` ``.com`` domains on a 2-D ``[2, 2]`` input.
+  {
+    NodeProto node;
+    node.set_op_type("RegexFullMatch");
+    node.add_input("x");
+    node.add_output("y");
+    const std::string pattern = "(\\W|^)[\\w.\\-]{0,25}@(yahoo|gmail)\\.com(\\W|$)";
+    AddAttribute(node, "pattern", pattern);
+
+    Tensor x = Tensor::FromStrings(
+        "", {2, 2},
+        {"account@gmail.com", "account@hotmail.com", "not email", "account2@yahoo.com"});
+    Tensor y = regex_full_match(x, pattern);
+
+    Expect(node, {x}, {y}, "test_cc_regex_full_match_email_domain", {opset}, "backend-test",
+           registry);
+  }
+
   // Empty input tensor — the kernel must still produce a correctly
   // shaped empty BOOL output.
   {

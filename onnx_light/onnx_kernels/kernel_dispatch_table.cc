@@ -552,6 +552,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
 
       // -----------------------------------------------------------------
+      // -----------------------------------------------------------------
       // ``Reshape``: 2 inputs (``data``, ``shape``); ``allowzero`` is an
       // optional INT attribute (default 0; semantically meaningful since
       // opset 14, ignored by the kernel when 0).
@@ -625,6 +626,56 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          }
          kernel::Unsqueeze k(rt.kernel_ctx());
          SetOutput(node, 0, k(data, axes), rt.tensors());
+       }},
+
+      // -----------------------------------------------------------------
+      // ``DFT``: discrete Fourier transform.
+      //   * v17 / v19: inputs are ``(input, dft_length?)`` and ``axis``
+      //     is an INT attribute (default 1). ``inverse`` and ``onesided``
+      //     are INT attributes (default 0).
+      //   * v20+: ``axis`` becomes an optional third input (a 0-D int64
+      //     tensor, default 1). ``inverse`` and ``onesided`` remain INT
+      //     attributes.
+      // -----------------------------------------------------------------
+      {"ai.onnx:DFT",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 1);
+         if (node.input_size() > 3) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects at most 3 inputs.");
+         }
+         RequireOutputCount(node, 1);
+         const Tensor &input = GetInput(node, 0, rt.tensors());
+         const Tensor *dft_length = GetOptionalInput(node, 1, rt.tensors());
+         const bool inverse = GetAttributeIntOrDefault(node, "inverse", 0) != 0;
+         const bool onesided = GetAttributeIntOrDefault(node, "onesided", 0) != 0;
+         int64_t axis = 1;
+         const int64_t opset_version = rt.kernel_ctx().opset.version;
+         if (opset_version >= 20) {
+           const Tensor *axis_tensor = GetOptionalInput(node, 2, rt.tensors());
+           if (axis_tensor != nullptr) {
+             if (axis_tensor->element_count() != 1) {
+               throw std::invalid_argument(
+                   "RunNode: DFT 'axis' input must be a scalar tensor (or a 1-D "
+                   "tensor with a single element).");
+             }
+             switch (axis_tensor->data_type) {
+             case DataType::INT64:
+               axis = axis_tensor->AsInt64()[0];
+               break;
+             case DataType::INT32:
+               axis = static_cast<int64_t>(axis_tensor->AsInt32()[0]);
+               break;
+             default:
+               throw std::invalid_argument(
+                   "RunNode: DFT 'axis' input must be INT32 or INT64.");
+             }
+           }
+         } else {
+           axis = GetAttributeIntOrDefault(node, "axis", 1);
+         }
+         kernel::DFT k(rt.kernel_ctx());
+         SetOutput(node, 0, k(input, dft_length, axis, onesided, inverse), rt.tensors());
        }},
 
       // -----------------------------------------------------------------

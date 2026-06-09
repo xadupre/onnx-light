@@ -4,6 +4,7 @@
 
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/kernels/math/include_math_kernels.h"
 #include "onnx_kernels/kernels/training/include_training_kernels.h"
 #include "onnx_kernels/run_nodes.h"
 #include "onnx_kernels/simple_tensor.h"
@@ -12,6 +13,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <cstring>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -107,6 +109,7 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx:IsInf"), table.end());
   EXPECT_NE(table.find("ai.onnx:BitShift"), table.end());
   EXPECT_NE(table.find("ai.onnx:Einsum"), table.end());
+  EXPECT_NE(table.find("ai.onnx:DFT"), table.end());
   // Generator kernels.
   EXPECT_NE(table.find("ai.onnx:EyeLike"), table.end());
   EXPECT_NE(table.find("ai.onnx:AffineGrid"), table.end());
@@ -373,6 +376,80 @@ TEST(RunNodes, RunNodeEinsumUsesEquationAttribute) {
   EXPECT_FLOAT_EQ(got[1], 64.0f);
   EXPECT_FLOAT_EQ(got[2], 139.0f);
   EXPECT_FLOAT_EQ(got[3], 154.0f);
+}
+
+TEST(RunNodes, RunNodeDFTOpset17UsesAxisAttribute) {
+  // v17 DFT: ``axis`` / ``inverse`` / ``onesided`` are INT attributes.
+  // Inputs are ``(input, dft_length?)``.
+  RuntimeContext rt(KernelContext(DefaultOpset(17)));
+  Tensor x = Tensor::FromFloat("x", {1, 4, 1}, {1.0f, 2.0f, 3.0f, 4.0f});
+  rt.tensors()["x"] = x;
+
+  NodeProto node = MakeNode("DFT", {"x"}, {"y"});
+  AttributeProto *axis = node.add_attribute();
+  axis->set_name("axis");
+  axis->set_type(AttributeProto::AttributeType::INT);
+  axis->set_i(1);
+
+  RunNode(node, rt);
+
+  onnx_kernels::kernel::DFT ref(rt.kernel_ctx());
+  Tensor expected = ref(x, /*dft_length=*/nullptr, /*axis=*/1, /*onesided=*/false,
+                        /*inverse=*/false);
+  const Tensor &y = rt.tensors()["y"];
+  ASSERT_EQ(y.shape, expected.shape);
+  ASSERT_EQ(y.data.size(), expected.data.size());
+  EXPECT_EQ(std::memcmp(y.data.data(), expected.data.data(), expected.data.size()), 0);
+}
+
+TEST(RunNodes, RunNodeDFTOpset20UsesAxisInput) {
+  // v20 DFT: ``axis`` becomes the third (optional) input; only
+  // ``inverse`` / ``onesided`` remain attributes.
+  RuntimeContext rt(KernelContext(DefaultOpset(20)));
+  Tensor x = Tensor::FromFloat("x", {1, 4, 1}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor axis = Tensor::FromInt64("axis", {}, {1});
+  rt.tensors()["x"] = x;
+  rt.tensors()["axis"] = axis;
+
+  // ``dft_length`` is omitted by passing an empty input name.
+  NodeProto node = MakeNode("DFT", {"x", "", "axis"}, {"y"});
+
+  RunNode(node, rt);
+
+  onnx_kernels::kernel::DFT ref(rt.kernel_ctx());
+  Tensor expected = ref(x, /*dft_length=*/nullptr, /*axis=*/1, /*onesided=*/false,
+                        /*inverse=*/false);
+  const Tensor &y = rt.tensors()["y"];
+  ASSERT_EQ(y.shape, expected.shape);
+  ASSERT_EQ(y.data.size(), expected.data.size());
+  EXPECT_EQ(std::memcmp(y.data.data(), expected.data.data(), expected.data.size()), 0);
+}
+
+TEST(RunNodes, RunNodeDFTOpset17InverseOnesidedAttributes) {
+  // v17 DFT with ``inverse`` and ``onesided`` attributes set.
+  RuntimeContext rt(KernelContext(DefaultOpset(17)));
+  Tensor x = Tensor::FromFloat("x", {1, 4, 2}, {1.0f, 0.0f, 2.0f, 0.0f, 3.0f, 0.0f, 4.0f, 0.0f});
+  rt.tensors()["x"] = x;
+
+  NodeProto node = MakeNode("DFT", {"x"}, {"y"});
+  AttributeProto *axis = node.add_attribute();
+  axis->set_name("axis");
+  axis->set_type(AttributeProto::AttributeType::INT);
+  axis->set_i(1);
+  AttributeProto *inverse = node.add_attribute();
+  inverse->set_name("inverse");
+  inverse->set_type(AttributeProto::AttributeType::INT);
+  inverse->set_i(1);
+
+  RunNode(node, rt);
+
+  onnx_kernels::kernel::DFT ref(rt.kernel_ctx());
+  Tensor expected = ref(x, /*dft_length=*/nullptr, /*axis=*/1, /*onesided=*/false,
+                        /*inverse=*/true);
+  const Tensor &y = rt.tensors()["y"];
+  ASSERT_EQ(y.shape, expected.shape);
+  ASSERT_EQ(y.data.size(), expected.data.size());
+  EXPECT_EQ(std::memcmp(y.data.data(), expected.data.data(), expected.data.size()), 0);
 }
 
 TEST(RunNodes, RunNodeAdagradFromDispatchTable) {

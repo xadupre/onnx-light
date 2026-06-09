@@ -65,6 +65,32 @@ Tensor MakeGrid_2x4_Mode() {
                             -0.2f, 0.5f, 0.5f, 1.0f, 1.0f});
 }
 
+// 2x4 grid used by ``test_gridsample_*_align_corners_*_additional_1``.
+Tensor MakeGrid_2x4_Additional() {
+  return Tensor::FromFloat("Grid", {1, 2, 4, 2},
+                           {-1.0f, -0.8f, -0.6f, -0.5f, -0.1f, -0.2f, 0.7f, 0.0f, 0.0f, 0.4f, 0.2f,
+                            -0.2f, -0.3f, 0.5f, -1.0f, 1.0f});
+}
+
+// 3-D volume used by ``test_gridsample_volumetric_*``. Shape [N, C, D, H, W]
+// = [1, 1, 3, 2, 2].
+Tensor MakeX_Volumetric() {
+  return Tensor::FromFloat(
+      "X", {1, 1, 3, 2, 2},
+      {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f});
+}
+
+// 3-D sampling grid used by ``test_gridsample_volumetric_*``. Shape
+// [N, D_out, H_out, W_out, 3] = [1, 2, 4, 2, 3].
+Tensor MakeGrid_Volumetric() {
+  return Tensor::FromFloat("Grid", {1, 2, 4, 2, 3},
+                           {-1.0f, -1.0f, -1.0f, -1.0f, -0.5f, 0.3f,  -0.5f, -0.5f, -0.5f, 1.0f,
+                            -0.6f, -1.0f, -0.2f, -0.2f, -0.2f, 0.4f,  0.2f,  0.6f,  0.0f,  0.0f,
+                            0.0f,  -1.0f, 0.0f,  0.0f,  0.0f,  0.0f,  0.0f,  -1.0f, 1.0f,  0.0f,
+                            -0.2f, -0.2f, -0.2f, 1.0f,  0.4f,  -0.2f, 0.5f,  0.5f,  0.5f,  -1.0f,
+                            -0.8f, 0.8f,  1.0f,  1.0f,  1.0f,  0.4f,  0.6f,  -0.3f});
+}
+
 void AddCase(std::vector<TestCase> &registry, const OpsetId &opset, const std::string &name,
              const std::string &mode, const std::string &padding_mode, int64_t align_corners,
              const Tensor &X, const Tensor &Grid, const std::vector<int64_t> &y_shape,
@@ -131,6 +157,45 @@ void RegisterGridSampleCases(std::vector<TestCase> &registry) {
   AddCase(registry, opset, "test_gridsample_bicubic", "cubic", "", 0, MakeX_3x2(),
           MakeGrid_2x4_Mode(), {1, 1, 2, 4},
           {-0.1406f, 0.3828f, 1.7556f, 2.9688f, 2.9688f, 1.7556f, 5.1445f, 1.3906f});
+
+  // ---- additional align_corners cases -----------------------------------
+  AddCase(registry, opset, "test_gridsample_nearest_align_corners_0_additional_1", "nearest", "", 0,
+          MakeX_3x2(), MakeGrid_2x4_Additional(), {1, 1, 2, 4},
+          {0.0f, 0.0f, 2.0f, 3.0f, 4.0f, 3.0f, 4.0f, 4.0f});
+  AddCase(registry, opset, "test_gridsample_nearest_align_corners_1_additional_1", "nearest", "", 1,
+          MakeX_3x2(), MakeGrid_2x4_Additional(), {1, 1, 2, 4},
+          {0.0f, 0.0f, 2.0f, 3.0f, 2.0f, 3.0f, 4.0f, 4.0f});
+  AddCase(registry, opset, "test_gridsample_bilinear_align_corners_0_additional_1", "linear", "", 0,
+          MakeX_3x2(), MakeGrid_2x4_Additional(), {1, 1, 2, 4},
+          {0.0000f, 0.4500f, 1.8000f, 2.4000f, 3.7000f, 2.1000f, 3.7000f, 1.0000f});
+  AddCase(registry, opset, "test_gridsample_bilinear_align_corners_1_additional_1", "linear", "", 1,
+          MakeX_3x2(), MakeGrid_2x4_Additional(), {1, 1, 2, 4},
+          {0.4000f, 1.2000f, 2.0500f, 2.8500f, 3.3000f, 2.2000f, 3.3500f, 4.0000f});
+  AddCase(
+      registry, opset, "test_gridsample_bicubic_align_corners_0_additional_1", "cubic", "", 0,
+      MakeX_3x2(), MakeGrid_2x4_Additional(), {1, 1, 2, 4},
+      {-0.173250f, 0.284265f, 1.923106f, 2.568000f, 5.170375f, 2.284414f, 4.744844f, 1.046875f});
+  AddCase(registry, opset, "test_gridsample_bicubic_align_corners_1_additional_1", "cubic", "", 1,
+          MakeX_3x2(), MakeGrid_2x4_Additional(), {1, 1, 2, 4},
+          {0.304001f, 1.128750f, 2.266270f, 3.144844f, 4.531500f, 2.455360f, 4.599819f, 4.000000f});
+
+  // ---- volumetric (5-D) cases (opset 20+) -------------------------------
+  AddCase(registry, opset, "test_gridsample_volumetric_nearest_align_corners_0", "nearest", "", 0,
+          MakeX_Volumetric(), MakeGrid_Volumetric(), {1, 1, 2, 4, 2},
+          {1.0f, 5.0f, 1.0f, 0.0f, 5.0f, 12.0f, 5.0f, 5.0f, 5.0f, 0.0f, 5.0f, 0.0f, 12.0f, 9.0f,
+           0.0f, 8.0f});
+  AddCase(registry, opset, "test_gridsample_volumetric_nearest_align_corners_1", "nearest", "", 1,
+          MakeX_Volumetric(), MakeGrid_Volumetric(), {1, 1, 2, 4, 2},
+          {1.0f, 5.0f, 1.0f, 2.0f, 5.0f, 12.0f, 5.0f, 5.0f, 5.0f, 7.0f, 5.0f, 8.0f, 12.0f, 9.0f,
+           12.0f, 8.0f});
+  AddCase(registry, opset, "test_gridsample_volumetric_bilinear_align_corners_0", "linear", "", 0,
+          MakeX_Volumetric(), MakeGrid_Volumetric(), {1, 1, 2, 4, 2},
+          {0.1250f, 3.4000f, 2.0000f, 0.4500f, 4.7000f, 10.9000f, 6.5000f, 3.0000f, 6.5000f,
+           1.7500f, 4.7000f, 3.3000f, 11.0000f, 2.5200f, 1.5000f, 5.4900f});
+  AddCase(registry, opset, "test_gridsample_volumetric_bilinear_align_corners_1", "linear", "", 1,
+          MakeX_Volumetric(), MakeGrid_Volumetric(), {1, 1, 2, 4, 2},
+          {1.0000f, 6.7000f, 3.7500f, 2.4000f, 5.4000f, 9.3000f, 6.5000f, 6.0000f, 6.5000f, 7.0000f,
+           5.4000f, 6.6000f, 9.2500f, 8.4000f, 12.0000f, 6.1000f});
 }
 
 } // namespace onnx_backend_test

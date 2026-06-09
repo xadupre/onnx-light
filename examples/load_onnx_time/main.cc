@@ -107,35 +107,27 @@ int main(int argc, char *argv[]) {
   std::vector<double> timings_ms;
   timings_ms.reserve(iterations);
 
-  for (int i = 0; i < iterations; ++i) {
+  // Run one unmeasured warm-up iteration so the first (cold-cache) load does
+  // not skew the average/median. This mirrors the Python ``measure()`` helper
+  // in ``docs/examples/core/plot_onnx_time.py`` which discards a warmup run
+  // before timing. Without it, the C++ benchmark looked systematically slower
+  // than the Python one even though both call the same protobuf parser.
+  const int total_iterations = iterations + 1;
+  for (int i = 0; i < total_iterations; ++i) {
     try {
       const auto begin = std::chrono::steady_clock::now();
-      // Read the whole file into a buffer and parse from memory. This mirrors
-      // what Python's ``onnx.load`` does (``open(f, 'rb').read()`` followed by
-      // ``ModelProto.ParseFromString(...)``) and avoids the per-byte overhead
-      // of ``ParseFromIstream``, which wraps the unbuffered ``std::ifstream``
-      // in a protobuf ``CopyingInputStreamAdaptor`` and reads byte-by-byte.
-      // Without this, the C++ benchmark unfairly looks slower than the Python
-      // one even though both rely on the same underlying protobuf parser.
-      std::ifstream input(file_path, std::ios::binary | std::ios::ate);
+      std::ifstream input(file_path, std::ios::binary);
       if (!input.is_open()) {
         throw std::runtime_error("Failed to open file: " + file_path);
       }
-      const std::streamsize file_size = input.tellg();
-      if (file_size < 0) {
-        throw std::runtime_error("Failed to determine file size: " + file_path);
-      }
-      input.seekg(0, std::ios::beg);
-      std::string buffer(static_cast<std::size_t>(file_size), '\0');
-      if (file_size > 0 && !input.read(buffer.data(), file_size)) {
-        throw std::runtime_error("Failed to read file: " + file_path);
-      }
       onnx::ModelProto model;
-      if (!model.ParseFromString(buffer)) {
+      if (!model.ParseFromIstream(&input)) {
         throw std::runtime_error("Failed to parse ONNX model from: " + file_path);
       }
       const auto end = std::chrono::steady_clock::now();
-      timings_ms.push_back(ToMilliseconds(end - begin));
+      if (i > 0) {
+        timings_ms.push_back(ToMilliseconds(end - begin));
+      }
     } catch (const std::exception &e) {
       std::cerr << "Error loading '" << file_path << "': " << e.what() << "\n";
       return 1;

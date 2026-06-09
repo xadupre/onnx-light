@@ -55,10 +55,40 @@ def _detect_processor_name() -> str:
     return name or platform.machine() or "unknown"
 
 
+def _detect_physical_cores() -> int:
+    """Returns the number of physical CPU cores, or 0 if it cannot be determined."""
+    # On Linux, count unique (physical id, core id) pairs in ``/proc/cpuinfo``.
+    if os.path.exists("/proc/cpuinfo"):
+        try:
+            cores: set[tuple[str, str]] = set()
+            physical_id = ""
+            core_id = ""
+            with open("/proc/cpuinfo", encoding="utf-8") as f:
+                for line in f:
+                    if line.startswith("physical id"):
+                        physical_id = line.split(":", 1)[1].strip()
+                    elif line.startswith("core id"):
+                        core_id = line.split(":", 1)[1].strip()
+                    elif line.strip() == "":
+                        if physical_id and core_id:
+                            cores.add((physical_id, core_id))
+                        physical_id = ""
+                        core_id = ""
+            if physical_id and core_id:
+                cores.add((physical_id, core_id))
+            if cores:
+                return len(cores)
+        except OSError:
+            pass
+    return 0
+
+
 CPU_COUNT = os.cpu_count() or 1
+PHYSICAL_CORE_COUNT = _detect_physical_cores()
 PROCESSOR_NAME = _detect_processor_name()
 print(f"Processor: {PROCESSOR_NAME}")
 print(f"Logical cores: {CPU_COUNT}")
+print(f"Physical cores: {PHYSICAL_CORE_COUNT or 'unknown'}")
 
 
 def make_model(n_init: int = N_INIT, dim: int = DIM) -> onnx.ModelProto:
@@ -228,7 +258,9 @@ for ax, pivot, title in (
 
 fig.suptitle(
     f"onnx_light load/save vs num_threads — model {size_mb:.1f} MB, "
-    f"{N_INIT} initializers\n{PROCESSOR_NAME} ({CPU_COUNT} logical cores)"
+    f"{N_INIT} initializers\n{PROCESSOR_NAME} "
+    f"({CPU_COUNT} logical cores, "
+    f"{PHYSICAL_CORE_COUNT or 'unknown'} physical cores)"
 )
 fig.tight_layout()
 fig.savefig("plot_threads_load_save.png")

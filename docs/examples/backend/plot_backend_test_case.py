@@ -20,6 +20,8 @@ This example:
 * retrieves the ``test_abs`` case via ``collect_test_cases("Abs")``,
 * displays its ``ModelProto``,
 * displays the reference input and output tensors.
+
+# mentions value_info, example with make_test_class
 """
 
 from __future__ import annotations

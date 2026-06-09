@@ -112,11 +112,16 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
 
   bt_mod.def(
       "collect_test_cases",
-      [](const std::string &op_type) { return onnx_backend_test::CollectTestCases(op_type); },
-      nb::arg("op_type") = std::string(),
-      "Returns the list of C++-implemented backend test node cases. When ``op_type`` "
-      "is non-empty, only cases whose top-level graph contains a node with that "
-      "operator type are returned.");
+      [](const std::string &op_type) {
+        return onnx_backend_test::CollectTestCases(op_type_or_cat);
+      },
+      nb::arg("op_type_or_cat") = std::string(),
+      "Returns the list of C++-implemented backend test node cases. When "
+      "``op_type_or_cat`` is non-empty, only cases whose top-level graph "
+      "contains a node with that operator type are returned. It can also "
+      "be 'shape', 'inference', 'nan_inf' to get other backend tests "
+      "not testing a specific operator but a specific issues in one "
+      "algorithm.");
 
   bt_mod.def(
       "collect_test_cases_by_name",

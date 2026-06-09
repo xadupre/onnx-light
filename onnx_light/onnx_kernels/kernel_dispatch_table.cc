@@ -490,6 +490,23 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::BitShift k(rt.kernel_ctx());
          SetOutput(node, 0, k(x, y, dir), rt.tensors());
        }},
+
+      // -----------------------------------------------------------------
+      // ``Einsum``: 1+ inputs and a required STRING ``equation`` attribute.
+      // -----------------------------------------------------------------
+      {"ai.onnx:Einsum",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         std::vector<Tensor> inputs;
+         inputs.reserve(node.input_size());
+         for (int i = 0; i < node.input_size(); ++i) {
+           inputs.push_back(GetInput(node, i, rt.tensors()));
+         }
+         const std::string equation = GetRequiredAttributeString(node, "equation");
+         kernel::Einsum k(rt.kernel_ctx());
+         SetOutput(node, 0, k(inputs, equation), rt.tensors());
+       }},
   };
   return table;
 }

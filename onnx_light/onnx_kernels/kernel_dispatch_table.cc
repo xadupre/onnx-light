@@ -1000,6 +1000,26 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          SetOutput(node, 0, std::move(yz.first), rt.tensors());
          SetOutput(node, 1, std::move(yz.second), rt.tensors());
        }},
+      {"ai.onnx.ml:LinearRegressor",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const std::vector<float> coefficients =
+             GetAttributeFloatsOrDefault(node, "coefficients", {});
+         const std::vector<float> intercepts =
+             GetAttributeFloatsOrDefault(node, "intercepts", {});
+         const int64_t targets = GetAttributeIntOrDefault(node, "targets", 1);
+         const std::string post_transform =
+             GetAttributeStringOrDefault(node, "post_transform", "NONE");
+         kernel::LinearRegressor reg(rt.kernel_ctx());
+         Tensor y = DispatchSVMByDataType(x, "LinearRegressor", [&](auto *tag) {
+           using T = std::remove_pointer_t<decltype(tag)>;
+           (void)tag;
+           return reg.template operator()<T>(x, coefficients, intercepts, targets, post_transform);
+         });
+         SetOutput(node, 0, std::move(y), rt.tensors());
+       }},
       {"ai.onnx.ml:TreeEnsembleRegressor",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);
@@ -1048,6 +1068,41 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                    post_transform, base_values);
              });
          SetOutput(node, 0, std::move(y), rt.tensors());
+       }},
+      {"ai.onnx.ml:LinearClassifier",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 2);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const std::vector<float> coefficients =
+             GetAttributeFloatsOrDefault(node, "coefficients", {});
+         const std::vector<float> intercepts =
+             GetAttributeFloatsOrDefault(node, "intercepts", {});
+         const std::string post_transform =
+             GetAttributeStringOrDefault(node, "post_transform", "NONE");
+         const std::vector<int64_t> classlabels_ints =
+             GetAttributeIntsOrDefault(node, "classlabels_ints", {});
+         const std::vector<std::string> classlabels_strings =
+             GetAttributeStringsOrDefault(node, "classlabels_strings", {});
+         const bool use_strings = !classlabels_strings.empty();
+         const bool has_ints = !classlabels_ints.empty();
+         if (use_strings == has_ints) {
+           throw std::invalid_argument(
+               "RunNode: LinearClassifier requires exactly one of 'classlabels_ints' or "
+               "'classlabels_strings' to be set.");
+         }
+         kernel::LinearClassifier cls(rt.kernel_ctx());
+         std::pair<Tensor, Tensor> yz =
+             DispatchSVMByDataType(x, "LinearClassifier", [&](auto *tag) {
+               using T = std::remove_pointer_t<decltype(tag)>;
+               (void)tag;
+               return use_strings ? cls.template operator()<T>(x, coefficients, intercepts,
+                                                               classlabels_strings, post_transform)
+                                  : cls.template operator()<T>(x, coefficients, intercepts,
+                                                               classlabels_ints, post_transform);
+             });
+         SetOutput(node, 0, std::move(yz.first), rt.tensors());
+         SetOutput(node, 1, std::move(yz.second), rt.tensors());
        }},
       {"ai.onnx.ml:TreeEnsembleClassifier",
        [](const NodeProto &node, RuntimeContext &rt) {

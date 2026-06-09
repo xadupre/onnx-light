@@ -95,7 +95,7 @@ void RegisterReduceL1L2Cases(std::vector<TestCase> &registry, const std::string 
                      /*noop_with_empty_axes=*/false);
 }
 
-// Registers the nine ONNX reference backend test cases for ReduceL1 / ReduceL2
+// Registers the eighteen ONNX reference backend test cases for ReduceL1 / ReduceL2
 // (non-expanded variants). The test names are chosen so that the ONNX test
 // name is a substring of the onnx-light test name, satisfying the substring
 // check in ``test_backend_test_names_onnx_vs_onnxlight.py``.

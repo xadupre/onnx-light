@@ -11,6 +11,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -19,6 +20,7 @@ using onnx_backend_test::CollectTestCases;
 using onnx_backend_test::DataSet;
 using onnx_backend_test::DefaultOpset;
 using onnx_backend_test::TestCase;
+using onnx_kernels::DataType;
 using onnx_kernels::RunModel;
 using onnx_kernels::RuntimeContext;
 using onnx_kernels::Tensor;
@@ -57,7 +59,9 @@ void ExpectTensorBitEqual(const Tensor &actual, const Tensor &expected) {
 // ``cases_*`` registry are themselves produced by the very same kernels that
 // :cpp:func:`RunModel` will dispatch to, so a bit-exact comparison is
 // appropriate.
-void RunBackendCasesFor(const std::string &op_type) {
+void RunBackendCasesFor(
+    const std::string &op_type, const std::function<bool(const DataSet &)> &accept_data_set =
+                                    [](const DataSet &) { return true; }) {
   const std::vector<TestCase> cases = CollectTestCases(op_type);
   ASSERT_FALSE(cases.empty()) << "No backend test cases found for op_type=" << op_type;
 
@@ -73,8 +77,12 @@ void RunBackendCasesFor(const std::string &op_type) {
     }
     SCOPED_TRACE(tc.name);
 
+    bool ran_case = false;
     for (size_t ds_idx = 0; ds_idx < tc.data_sets.size(); ++ds_idx) {
       const DataSet &ds = tc.data_sets[ds_idx];
+      if (!accept_data_set(ds)) {
+        continue;
+      }
       RuntimeContext rt(KernelContext(DefaultOpset(GetDefaultOpsetVersion(tc.model))));
       for (const Tensor &t : ds.inputs) {
         rt.Set(t.name, t);
@@ -87,8 +95,11 @@ void RunBackendCasesFor(const std::string &op_type) {
             << "Missing output '" << expected.name << "' for case " << tc.name;
         ExpectTensorBitEqual(rt.Get(expected.name), expected);
       }
+      ran_case = true;
     }
-    ++executed;
+    if (ran_case) {
+      ++executed;
+    }
   }
   EXPECT_GT(executed, 0u) << "No single-node test cases exercised for op_type=" << op_type;
 }
@@ -151,6 +162,20 @@ TEST(BackendRunModel, Max) { RunBackendCasesFor("Max"); }
 TEST(BackendRunModel, Min) { RunBackendCasesFor("Min"); }
 TEST(BackendRunModel, Mean) { RunBackendCasesFor("Mean"); }
 
+// Reduction kernels.
+TEST(BackendRunModel, ArgMax) { RunBackendCasesFor("ArgMax"); }
+TEST(BackendRunModel, ArgMin) { RunBackendCasesFor("ArgMin"); }
+TEST(BackendRunModel, ReduceL1) { RunBackendCasesFor("ReduceL1"); }
+TEST(BackendRunModel, ReduceL2) { RunBackendCasesFor("ReduceL2"); }
+TEST(BackendRunModel, ReduceLogSum) { RunBackendCasesFor("ReduceLogSum"); }
+TEST(BackendRunModel, ReduceLogSumExp) { RunBackendCasesFor("ReduceLogSumExp"); }
+TEST(BackendRunModel, ReduceMax) { RunBackendCasesFor("ReduceMax"); }
+TEST(BackendRunModel, ReduceMean) { RunBackendCasesFor("ReduceMean"); }
+TEST(BackendRunModel, ReduceMin) { RunBackendCasesFor("ReduceMin"); }
+TEST(BackendRunModel, ReduceProd) { RunBackendCasesFor("ReduceProd"); }
+TEST(BackendRunModel, ReduceSum) { RunBackendCasesFor("ReduceSum"); }
+TEST(BackendRunModel, ReduceSumSquare) { RunBackendCasesFor("ReduceSumSquare"); }
+
 // Attribute-driven unary math kernels.
 TEST(BackendRunModel, Celu) { RunBackendCasesFor("Celu"); }
 TEST(BackendRunModel, Elu) { RunBackendCasesFor("Elu"); }
@@ -166,5 +191,11 @@ TEST(BackendRunModel, Shrink) { RunBackendCasesFor("Shrink"); }
 TEST(BackendRunModel, Gelu) { RunBackendCasesFor("Gelu"); }
 TEST(BackendRunModel, Mod) { RunBackendCasesFor("Mod"); }
 TEST(BackendRunModel, Clip) { RunBackendCasesFor("Clip"); }
+TEST(BackendRunModel, Attention) {
+  RunBackendCasesFor("Attention", [](const DataSet &ds) {
+    return ds.inputs.size() >= 3 && ds.inputs[0].data_type == DataType::FLOAT &&
+           ds.inputs[1].data_type == DataType::FLOAT && ds.inputs[2].data_type == DataType::FLOAT;
+  });
+}
 
 } // namespace Test

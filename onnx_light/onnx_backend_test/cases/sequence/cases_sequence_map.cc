@@ -608,19 +608,112 @@ void RegisterSequenceMapExtractShapesCase(const OpsetId &opset, std::vector<Test
   PromoteOutputToSequenceType(registry, out_elem_type, out_elem_shape);
 }
 
+// Mirrors upstream ``test_sequence_map_identity_1_sequence_1_tensor``:
+// one input sequence and one broadcast tensor fed through a
+// two-input/two-output Identity body, so the SequenceMap node produces
+// two output sequences: ``y0[i] == x0[i]`` and ``y1[i] == x1`` (the
+// broadcast tensor is the same for every iteration).
+void RegisterSequenceMapIdentity1Sequence1TensorCase(const OpsetId &opset,
+                                                     std::vector<TestCase> &registry) {
+  const std::string name = "test_cc_sequence_map_identity_1_sequence_1_tensor";
+  const kernel::KernelContext ctx{opset};
+  const std::vector<int64_t> seq_elem_shape = {5};
+  const std::vector<int64_t> tensor_shape = {4};
+  const int32_t elem_type = static_cast<int32_t>(DataType::FLOAT);
+
+  // Three per-iteration tensors of the input sequence.
+  std::vector<Tensor> x0 = {
+      Tensor::FromFloat("x0_0", seq_elem_shape, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f}),
+      Tensor::FromFloat("x0_1", seq_elem_shape, {-0.5f, -1.0f, -1.5f, -2.0f, -2.5f}),
+      Tensor::FromFloat("x0_2", seq_elem_shape, {5.0f, 6.0f, 7.0f, 8.0f, 9.0f}),
+  };
+  // The broadcast tensor (replicated once per iteration).
+  Tensor x1 = Tensor::FromFloat("x1", tensor_shape, {10.0f, 20.0f, 30.0f, 40.0f});
+
+  // Per-iteration body outputs: out0 = identity(x0[i]), out1 = identity(x1).
+  std::vector<Tensor> y0_per_iter = x0;
+  std::vector<Tensor> y1_per_iter = {x1, x1, x1};
+  for (std::size_t i = 0; i < y0_per_iter.size(); ++i) {
+    y0_per_iter[i].name = "y0_" + std::to_string(i);
+  }
+  for (std::size_t i = 0; i < y1_per_iter.size(); ++i) {
+    y1_per_iter[i].name = "y1_" + std::to_string(i);
+  }
+
+  std::vector<std::vector<Tensor>> body_outputs_per_iter = {y0_per_iter, y1_per_iter};
+  std::vector<Sequence> out_seqs = kernel::SequenceMap(ctx)(
+      kernel::SequenceConstruct(ctx).AsSequence(x0), body_outputs_per_iter);
+
+  // Materialise both output sequences as stacked tensors.
+  Tensor stacked0 =
+      kernel::SequenceConstruct(ctx)({out_seqs[0].values.begin(), out_seqs[0].values.end()});
+  stacked0.name = "y0";
+  Tensor stacked1 =
+      kernel::SequenceConstruct(ctx)({out_seqs[1].values.begin(), out_seqs[1].values.end()});
+  stacked1.name = "y1";
+
+  TestCase tc(name, name);
+  GraphProto *graph = InitSequenceMapModel(tc, name, opset);
+
+  // Node 1: SequenceConstruct the input sequence.
+  NodeProto *sc0 = graph->add_node();
+  sc0->set_op_type("SequenceConstruct");
+  for (const Tensor &t : x0) {
+    sc0->add_input(t.name);
+  }
+  sc0->add_output("x0_seq");
+
+  // Node 2: SequenceMap(x0_seq, x1, body=identity_2) → (y0, y1).
+  NodeProto *map_node = graph->add_node();
+  map_node->set_op_type("SequenceMap");
+  map_node->add_input("x0_seq");
+  map_node->add_input("x1");
+  map_node->add_output("y0");
+  map_node->add_output("y1");
+  AttributeProto *body_attr = map_node->add_attribute();
+  body_attr->set_name("body");
+  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  *body_attr->add_g() = BuildIdentity2InputsBody(elem_type, seq_elem_shape, tensor_shape);
+
+  // Graph inputs: individual tensors of x0 + the broadcast x1.
+  for (const Tensor &t : x0) {
+    FillValueInfo(t, *graph->add_input());
+  }
+  FillValueInfo(x1, *graph->add_input());
+  // Graph outputs: y0 and y1 (declared as tensor, promoted below).
+  FillValueInfo(stacked0, *graph->add_output());
+  FillValueInfo(stacked1, *graph->add_output());
+
+  DataSet ds;
+  for (const Tensor &t : x0) {
+    ds.inputs.push_back(t);
+  }
+  ds.inputs.push_back(x1);
+  ds.outputs.push_back(std::move(stacked0));
+  ds.outputs.push_back(std::move(stacked1));
+  tc.data_sets.emplace_back(std::move(ds));
+
+  registry.emplace_back(std::move(tc));
+
+  PromoteOutputToSequenceType(registry, elem_type, seq_elem_shape, /*out_index=*/0);
+  PromoteOutputToSequenceType(registry, elem_type, tensor_shape, /*out_index=*/1);
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
 // SequenceMap — applies a sub-graph to each element of a tensor sequence
 // (since opset 17 in the ai.onnx domain).
 //
-// Six cases are registered, mirroring upstream
+// Eight cases are registered, mirroring upstream
 // ``onnx/backend/test/data/node/test_sequence_map_*``:
 //
 //   * ``test_cc_sequence_map_identity_float`` / ``..._identity_int64`` —
 //     one input sequence mapped through a single-input/-output Identity
-//     body (the C++ equivalent of upstream
-//     ``test_sequence_map_identity_1_sequence``).
+//     body (legacy names kept for backward compatibility).
+//   * ``test_cc_sequence_map_identity_1_sequence`` — mirrors upstream
+//     ``test_sequence_map_identity_1_sequence``: one input sequence,
+//     Identity body, one output sequence.
 //   * ``test_cc_sequence_map_identity_2_sequences`` — two input
 //     sequences mapped through a two-input/two-output Identity body.
 //   * ``test_cc_sequence_map_add_2_sequences`` — two input sequences
@@ -628,6 +721,10 @@ void RegisterSequenceMapExtractShapesCase(const OpsetId &opset, std::vector<Test
 //     output sequence.
 //   * ``test_cc_sequence_map_add_1_sequence_1_tensor`` — one input
 //     sequence and one broadcast tensor mapped through an Add body.
+//   * ``test_cc_sequence_map_identity_1_sequence_1_tensor`` — mirrors
+//     upstream ``test_sequence_map_identity_1_sequence_1_tensor``: one
+//     input sequence and one broadcast tensor, Identity body, two
+//     output sequences.
 //   * ``test_cc_sequence_map_extract_shapes`` — one input sequence of
 //     FLOAT tensors with varying shapes mapped through a ``Shape``
 //     body, producing a sequence of INT64 shape vectors.
@@ -660,10 +757,26 @@ void RegisterSequenceMapCases(std::vector<TestCase> &registry) {
                                     static_cast<int32_t>(DataType::INT64), opset, registry);
   }
 
-  // Cases 3–6: upstream parity cases.
+  // Case 3: mirrors upstream test_sequence_map_identity_1_sequence.
+  {
+    const std::vector<int64_t> elem_shape = {10};
+    Tensor a = Tensor::FromFloat("a", elem_shape,
+                                 {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
+    Tensor b = Tensor::FromFloat(
+        "b", elem_shape, {-0.5f, -1.0f, -1.5f, -2.0f, -2.5f, -3.0f, -3.5f, -4.0f, -4.5f, -5.0f});
+    Tensor c = Tensor::FromFloat("c", elem_shape,
+                                 {0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 0.6f, 0.7f, 0.8f, 0.9f, 1.0f});
+
+    RegisterSequenceMapIdentityCase("test_cc_sequence_map_identity_1_sequence", {a, b, c},
+                                    elem_shape, static_cast<int32_t>(DataType::FLOAT), opset,
+                                    registry);
+  }
+
+  // Cases 4–7: upstream parity cases.
   RegisterSequenceMapIdentity2SequencesCase(opset, registry);
   RegisterSequenceMapAdd2SequencesCase(opset, registry);
   RegisterSequenceMapAdd1Sequence1TensorCase(opset, registry);
+  RegisterSequenceMapIdentity1Sequence1TensorCase(opset, registry);
   RegisterSequenceMapExtractShapesCase(opset, registry);
 }
 

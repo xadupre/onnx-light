@@ -131,6 +131,9 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx.preview.training:Adagrad"), table.end());
   EXPECT_NE(table.find("ai.onnx.preview.training:Adam"), table.end());
   EXPECT_NE(table.find("ai.onnx.preview.training:Momentum"), table.end());
+  // ai.onnx.ml kernels.
+  EXPECT_NE(table.find("ai.onnx.ml:SVMRegressor"), table.end());
+  EXPECT_NE(table.find("ai.onnx.ml:SVMClassifier"), table.end());
 }
 
 TEST(RunNodes, RunNodeSingleAdd) {

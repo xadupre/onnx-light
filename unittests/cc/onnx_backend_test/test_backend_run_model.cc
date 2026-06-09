@@ -204,4 +204,8 @@ TEST(BackendRunModel, Adagrad) { RunBackendCasesFor("Adagrad"); }
 TEST(BackendRunModel, Adam) { RunBackendCasesFor("Adam"); }
 TEST(BackendRunModel, Momentum) { RunBackendCasesFor("Momentum"); }
 
+// ai.onnx.ml kernels.
+TEST(BackendRunModel, SVMRegressor) { RunBackendCasesFor("SVMRegressor"); }
+TEST(BackendRunModel, SVMClassifier) { RunBackendCasesFor("SVMClassifier"); }
+
 } // namespace Test

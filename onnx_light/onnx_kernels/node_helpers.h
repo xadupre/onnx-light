@@ -166,6 +166,44 @@ inline std::vector<int64_t> GetAttributeIntsOrDefault(const NodeProto &node,
   return values;
 }
 
+inline std::vector<float> GetAttributeFloatsOrDefault(const NodeProto &node,
+                                                      const std::string &name,
+                                                      const std::vector<float> &fallback) {
+  const AttributeProto *attr = FindAttribute(node, name);
+  if (attr == nullptr) {
+    return fallback;
+  }
+  if (attr->type() != AttributeProto::AttributeType::FLOATS) {
+    throw std::invalid_argument("RunNode: attribute '" + name + "' of op '" +
+                                node.op_type().as_string() + "' must be FLOATS.");
+  }
+  std::vector<float> values;
+  values.reserve(attr->floats().size());
+  for (size_t i = 0; i < attr->floats().size(); ++i) {
+    values.push_back(attr->floats()[i]);
+  }
+  return values;
+}
+
+inline std::vector<std::string>
+GetAttributeStringsOrDefault(const NodeProto &node, const std::string &name,
+                             const std::vector<std::string> &fallback) {
+  const AttributeProto *attr = FindAttribute(node, name);
+  if (attr == nullptr) {
+    return fallback;
+  }
+  if (attr->type() != AttributeProto::AttributeType::STRINGS) {
+    throw std::invalid_argument("RunNode: attribute '" + name + "' of op '" +
+                                node.op_type().as_string() + "' must be STRINGS.");
+  }
+  std::vector<std::string> values;
+  values.reserve(attr->strings().size());
+  for (size_t i = 0; i < attr->strings().size(); ++i) {
+    values.push_back(attr->strings()[i].as_string());
+  }
+  return values;
+}
+
 inline float GetAttributeFloatOrDefault(const NodeProto &node, const std::string &name,
                                         float fallback) {
   const AttributeProto *attr = FindAttribute(node, name);

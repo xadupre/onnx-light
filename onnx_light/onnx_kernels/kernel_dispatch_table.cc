@@ -11,6 +11,7 @@
 #include "onnx_kernels/kernels/object_detection/include_object_detection_kernels.h"
 #include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
+#include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 #include "onnx_kernels/kernels/training/include_training_kernels.h"
 #include "onnx_kernels/node_helpers.h"
 
@@ -26,9 +27,11 @@ namespace {
 
 using detail::FindAttribute;
 using detail::GetAttributeFloatOrDefault;
+using detail::GetAttributeFloatsOrDefault;
 using detail::GetAttributeIntOrDefault;
 using detail::GetAttributeIntsOrDefault;
 using detail::GetAttributeStringOrDefault;
+using detail::GetAttributeStringsOrDefault;
 using detail::GetInput;
 using detail::GetOptionalInput;
 using detail::GetRequiredAttributeString;
@@ -689,6 +692,133 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            SetOutput(node, static_cast<int>(i), std::move(outs[static_cast<size_t>(i)]),
                      rt.tensors());
          }
+       }},
+
+      // ai.onnx.ml
+      {"ai.onnx.ml:SVMRegressor",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const std::string kernel_type =
+             GetAttributeStringOrDefault(node, "kernel_type", "LINEAR");
+         const std::vector<float> kernel_params =
+             GetAttributeFloatsOrDefault(node, "kernel_params", {0.0f, 0.0f, 0.0f});
+         if (kernel_params.size() < 3) {
+           throw std::invalid_argument(
+               "RunNode: SVMRegressor 'kernel_params' must have at least 3 floats.");
+         }
+         const float gamma = kernel_params[0];
+         const float coef0 = kernel_params[1];
+         const float degree = kernel_params[2];
+         const std::vector<float> support_vectors =
+             GetAttributeFloatsOrDefault(node, "support_vectors", {});
+         const std::vector<float> coefficients =
+             GetAttributeFloatsOrDefault(node, "coefficients", {});
+         const std::vector<float> rho = GetAttributeFloatsOrDefault(node, "rho", {});
+         kernel::SVMRegressor svm(rt.kernel_ctx());
+         Tensor y;
+         switch (x.data_type) {
+         case static_cast<int32_t>(DataType::FLOAT):
+           y = svm.operator()<float>(x, support_vectors, coefficients, rho, kernel_type.c_str(),
+                                     gamma, coef0, degree);
+           break;
+         case static_cast<int32_t>(DataType::DOUBLE):
+           y = svm.operator()<double>(x, support_vectors, coefficients, rho, kernel_type.c_str(),
+                                      gamma, coef0, degree);
+           break;
+         case static_cast<int32_t>(DataType::INT64):
+           y = svm.operator()<int64_t>(x, support_vectors, coefficients, rho, kernel_type.c_str(),
+                                       gamma, coef0, degree);
+           break;
+         case static_cast<int32_t>(DataType::INT32):
+           y = svm.operator()<int32_t>(x, support_vectors, coefficients, rho, kernel_type.c_str(),
+                                       gamma, coef0, degree);
+           break;
+         default:
+           throw std::invalid_argument(
+               "RunNode: SVMRegressor input 'X' must be FLOAT, DOUBLE, INT32 or INT64.");
+         }
+         SetOutput(node, 0, std::move(y), rt.tensors());
+       }},
+      {"ai.onnx.ml:SVMClassifier",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 2);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const std::string kernel_type =
+             GetAttributeStringOrDefault(node, "kernel_type", "LINEAR");
+         const std::vector<float> kernel_params =
+             GetAttributeFloatsOrDefault(node, "kernel_params", {0.0f, 0.0f, 0.0f});
+         if (kernel_params.size() < 3) {
+           throw std::invalid_argument(
+               "RunNode: SVMClassifier 'kernel_params' must have at least 3 floats.");
+         }
+         const float gamma = kernel_params[0];
+         const float coef0 = kernel_params[1];
+         const float degree = kernel_params[2];
+         const std::vector<float> support_vectors =
+             GetAttributeFloatsOrDefault(node, "support_vectors", {});
+         const std::vector<float> coefficients =
+             GetAttributeFloatsOrDefault(node, "coefficients", {});
+         const std::vector<float> rho = GetAttributeFloatsOrDefault(node, "rho", {});
+         const std::vector<int64_t> vectors_per_class =
+             GetAttributeIntsOrDefault(node, "vectors_per_class", {});
+         const std::vector<int64_t> classlabels_ints =
+             GetAttributeIntsOrDefault(node, "classlabels_ints", {});
+         const std::vector<std::string> classlabels_strings =
+             GetAttributeStringsOrDefault(node, "classlabels_strings", {});
+         const bool use_strings = !classlabels_strings.empty();
+         if (use_strings == !classlabels_ints.empty()) {
+           throw std::invalid_argument(
+               "RunNode: SVMClassifier requires exactly one of 'classlabels_ints' or "
+               "'classlabels_strings' to be set.");
+         }
+         kernel::SVMClassifier svm(rt.kernel_ctx());
+         std::pair<Tensor, Tensor> yz;
+         switch (x.data_type) {
+         case static_cast<int32_t>(DataType::FLOAT):
+           yz = use_strings
+                    ? svm.operator()<float>(x, support_vectors, coefficients, rho,
+                                            vectors_per_class, classlabels_strings,
+                                            kernel_type.c_str(), gamma, coef0, degree)
+                    : svm.operator()<float>(x, support_vectors, coefficients, rho,
+                                            vectors_per_class, classlabels_ints,
+                                            kernel_type.c_str(), gamma, coef0, degree);
+           break;
+         case static_cast<int32_t>(DataType::DOUBLE):
+           yz = use_strings
+                    ? svm.operator()<double>(x, support_vectors, coefficients, rho,
+                                             vectors_per_class, classlabels_strings,
+                                             kernel_type.c_str(), gamma, coef0, degree)
+                    : svm.operator()<double>(x, support_vectors, coefficients, rho,
+                                             vectors_per_class, classlabels_ints,
+                                             kernel_type.c_str(), gamma, coef0, degree);
+           break;
+         case static_cast<int32_t>(DataType::INT64):
+           yz = use_strings
+                    ? svm.operator()<int64_t>(x, support_vectors, coefficients, rho,
+                                              vectors_per_class, classlabels_strings,
+                                              kernel_type.c_str(), gamma, coef0, degree)
+                    : svm.operator()<int64_t>(x, support_vectors, coefficients, rho,
+                                              vectors_per_class, classlabels_ints,
+                                              kernel_type.c_str(), gamma, coef0, degree);
+           break;
+         case static_cast<int32_t>(DataType::INT32):
+           yz = use_strings
+                    ? svm.operator()<int32_t>(x, support_vectors, coefficients, rho,
+                                              vectors_per_class, classlabels_strings,
+                                              kernel_type.c_str(), gamma, coef0, degree)
+                    : svm.operator()<int32_t>(x, support_vectors, coefficients, rho,
+                                              vectors_per_class, classlabels_ints,
+                                              kernel_type.c_str(), gamma, coef0, degree);
+           break;
+         default:
+           throw std::invalid_argument(
+               "RunNode: SVMClassifier input 'X' must be FLOAT, DOUBLE, INT32 or INT64.");
+         }
+         SetOutput(node, 0, std::move(yz.first), rt.tensors());
+         SetOutput(node, 1, std::move(yz.second), rt.tensors());
        }},
   };
   return table;

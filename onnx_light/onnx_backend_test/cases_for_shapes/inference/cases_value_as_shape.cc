@@ -56,9 +56,7 @@ void RegisterValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry) {
 
   const std::string name = "test_cc_shape_inference_value_as_shape";
 
-  TestCase tc(name, name, "model", "inference");
-  tc.rtol = 1e-3;
-  tc.atol = 1e-7;
+  TestCase tc(name, name, "model", "inference", 1e-3, 1e-7);
 
   ModelProto &model = tc.model;
   InitModel(model, kDefaultIrVersion, {opset});

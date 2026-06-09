@@ -291,12 +291,12 @@ void ConvertModelToExternalData(ModelProto &model, bool all_tensors_to_one_file,
     if (location.empty()) {
       single_file_name = MakeUuidFilename();
     } else {
-      if (std::filesystem::path(location).is_absolute()) {
-        EXT_THROW_INVALID("location must be a relative path that is relative to the model path.");
-      }
       if (std::filesystem::exists(location)) {
         throw ExternalDataLocationExistsError(
             onnx_light_helpers::MakeString("External data file exists in ", location, "."));
+      }
+      if (std::filesystem::path(location).is_absolute()) {
+        EXT_THROW_INVALID("location must be a relative path that is relative to the model path.");
       }
       single_file_name = location;
     }

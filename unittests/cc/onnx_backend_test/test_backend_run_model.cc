@@ -60,10 +60,10 @@ void ExpectTensorBitEqual(const Tensor &actual, const Tensor &expected) {
 // :cpp:func:`RunModel` will dispatch to, so a bit-exact comparison is
 // appropriate.
 //
-// The optional ``accept_test_case`` predicate is evaluated once per
+// Evaluates the optional ``accept_test_case`` predicate once per
 // ``TestCase`` (before any ``DataSet`` is examined); returning ``false``
-// skips the entire case. The optional ``accept_data_set`` predicate is then
-// evaluated per ``DataSet`` within an accepted case.
+// skips the entire case. Evaluates the optional ``accept_data_set``
+// predicate per ``DataSet`` within an accepted case.
 void RunBackendCasesFor(const std::string &op_type,
                         const std::function<bool(const TestCase &)> &accept_test_case,
                         const std::function<bool(const DataSet &)> &accept_data_set) {

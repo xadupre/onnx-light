@@ -205,7 +205,6 @@ print(f"concrete last dimension (heads=12): {concrete_last}")
 # for a set of representative expressions.
 
 import matplotlib.pyplot as plt  # noqa: E402
-import matplotlib.patches as mpatches  # noqa: E402
 
 # Sample expressions: (original, description)
 test_cases = [
@@ -235,8 +234,12 @@ width = 0.35
 
 fig, ax = plt.subplots(figsize=(10, 5))
 
-bars_orig = ax.barh([i - width / 2 for i in x], originals, width, label="original", color="steelblue")
-bars_simp = ax.barh([i + width / 2 for i in x], simplified, width, label="simplified", color="darkorange")
+bars_orig = ax.barh(
+    [i - width / 2 for i in x], originals, width, label="original", color="steelblue"
+)
+bars_simp = ax.barh(
+    [i + width / 2 for i in x], simplified, width, label="simplified", color="darkorange"
+)
 
 ax.set_yticks(x)
 ax.set_yticklabels(labels)
@@ -250,12 +253,7 @@ for i, (orig, simp) in enumerate(zip(originals, simplified)):
     reduction = 100 * (orig - simp) / orig if orig > 0 else 0
     if reduction > 5:  # Only annotate meaningful reductions
         ax.text(
-            max(orig, simp) + 1,
-            i,
-            f"−{reduction:.0f}%",
-            va="center",
-            fontsize=9,
-            color="green",
+            max(orig, simp) + 1, i, f"−{reduction:.0f}%", va="center", fontsize=9, color="green"
         )
 
 fig.tight_layout()

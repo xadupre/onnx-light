@@ -443,7 +443,6 @@ TEST(onnx_external_ressource, SaveWithExternalDataMaxFileSizeParallel) {
   {
     utils::TwoFilesStream rstream(onnx_file, weights_file);
     ParseOptions ropts;
-    ropts.load_external_data = true;
     ParseModelProtoFromStream(parsed, rstream, ropts, /*clear_external_data=*/true);
   }
   ASSERT_TRUE(parsed.has_graph());

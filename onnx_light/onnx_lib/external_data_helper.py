@@ -11,13 +11,7 @@ thin Python shim providing the upstream-compatible signatures plus the small
 """
 
 from __future__ import annotations
-
 import os
-
-from ..onnx_proto._onnxpy import (  # type: ignore
-    convert_model_to_external_data as _convert_model_to_external_data,
-    load_external_data_for_model as _load_external_data_for_model,
-)
 from . import ModelProto, TensorProto
 
 __all__ = [
@@ -99,6 +93,10 @@ def convert_model_to_external_data(
     """
     if location and all_tensors_to_one_file and os.path.exists(location):
         raise FileExistsError(f"External data file exists in {location}.")
+    from ..onnx_proto._onnxpy import (
+        convert_model_to_external_data as _convert_model_to_external_data,
+    )
+
     _convert_model_to_external_data(
         model,
         all_tensors_to_one_file,
@@ -120,4 +118,6 @@ def load_external_data_for_model(model: ModelProto, base_dir: str) -> None:
     :param base_dir: directory that contains the external data files
         referenced by the tensors.
     """
+    from ..onnx_proto._onnxpy import load_external_data_for_model as _load_external_data_for_model
+
     _load_external_data_for_model(model, base_dir)

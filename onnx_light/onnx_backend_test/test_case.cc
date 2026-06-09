@@ -94,6 +94,24 @@ void AppendValueInfo(ValueInfoProto &vi, const std::string &name, int32_t elem_t
   }
 }
 
+void AppendValueInfo(ValueInfoProto &vi, const std::string &name, TensorProto::DataType elem_type,
+                     const std::vector<DimSpec> &dims) {
+  vi.set_name(name);
+  TypeProto *tp = vi.add_type();
+  TypeProto::Tensor *tt = tp->add_tensor_type();
+  tt->set_elem_type(elem_type);
+  TensorShapeProto *sh = tt->add_shape();
+  for (const auto &d : dims) {
+    auto *dim = sh->add_dim();
+    if (d.value >= 0) {
+      dim->set_dim_value(d.value);
+    } else if (!d.param.empty()) {
+      dim->set_dim_param(d.param);
+    }
+    // else: leave the dim unannotated (no dim_value, no dim_param).
+  }
+}
+
 void AppendDataSet(TestCase &tc, std::vector<Tensor> inputs, std::vector<Tensor> outputs) {
   DataSet ds;
   ds.inputs = std::move(inputs);

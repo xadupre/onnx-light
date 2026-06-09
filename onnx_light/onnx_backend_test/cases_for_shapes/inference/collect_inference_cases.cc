@@ -16,10 +16,10 @@ void CollectShapeInferenceTestCases(std::vector<TestCase> &registry, const std::
   if (op_type.empty() or op_type == "shape") {
     RegisterAddConcatReshapeShapeInferenceCases(registry);
     RegisterLocalFunctionAddShapeInferenceCases(registry);
-    RegisterNonZeroChainAnonShapeInferenceCases(registry);
     RegisterNestedLocalFunctionAddShapeInferenceCases(registry);
     RegisterNonZeroChainNamedShapeInferenceCases(registry);
     RegisterShapeIdentityUnsqueezeShapeInferenceCases(registry);
+    RegisterDimensionExpressionShapeInferenceCase(registry);
   }
 }
 

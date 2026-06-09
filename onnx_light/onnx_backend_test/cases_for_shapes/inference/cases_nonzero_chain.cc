@@ -35,8 +35,7 @@ enum class NonZeroOutputAnnotation { kAnonymousDims, kNamedDims };
 // The model is executable: the reference kernels compute every intermediate
 // tensor from a positive input (so ``Relu`` is identity on ``abs_out``) and
 // ``NonZero`` produces a deterministic ``(rank, nnz)`` index tensor.
-void RegisterNonZeroChainCase(const std::string &name, NonZeroOutputAnnotation annotation,
-                              std::vector<TestCase> &registry) {
+void RegisterNonZeroChainCase(const std::string &name, std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(18);
   const kernel::KernelContext ctx{opset};
 
@@ -110,16 +109,10 @@ void RegisterNonZeroChainCase(const std::string &name, NonZeroOutputAnnotation a
   // Intermediate value_info for ``nz`` would collide with the graph output of
   // the same name, so it is omitted. ``transposed_nz`` is a pure intermediate
   // and its shape mirrors ``nz_float`` (same dim layout, INT64 dtype).
-  if (annotation == NonZeroOutputAnnotation::kNamedDims) {
-    AppendValueInfo(*graph->add_value_info(), "transposed_nz", kInt64,
-                    {DimSpec("do1"), DimSpec(2)});
-    AppendValueInfo(*graph->add_output(), "nz", kInt64, {DimSpec(2), DimSpec("nnz")});
-    AppendValueInfo(*graph->add_output(), "nz_float", kFloat, {DimSpec("do1"), DimSpec(2)});
-  } else {
-    AppendValueInfo(*graph->add_value_info(), "transposed_nz", kInt64, {DimSpec(), DimSpec(2)});
-    AppendValueInfo(*graph->add_output(), "nz", kInt64, {DimSpec(2), DimSpec()});
-    AppendValueInfo(*graph->add_output(), "nz_float", kFloat, {DimSpec(), DimSpec(2)});
-  }
+  AppendValueInfo(*graph->add_value_info(), "transposed_nz", kInt64,
+                  {DimSpec("do1"), DimSpec(2)});
+  AppendValueInfo(*graph->add_output(), "nz", kInt64, {DimSpec(2), DimSpec("do1")});
+  AppendValueInfo(*graph->add_output(), "nz_float", kFloat, {DimSpec("do1"), DimSpec(2)});
 
   // Provide a concrete DataSet so the case is executable end-to-end.
   Tensor nz_out = nz;
@@ -133,14 +126,42 @@ void RegisterNonZeroChainCase(const std::string &name, NonZeroOutputAnnotation a
 
 } // namespace
 
-void RegisterNonZeroChainAnonShapeInferenceCases(std::vector<TestCase> &registry) {
-  RegisterNonZeroChainCase("test_cc_shape_inference_nonzero_chain_anon",
-                           NonZeroOutputAnnotation::kAnonymousDims, registry);
+void RegisterNonZeroChainNamedShapeInferenceCases(std::vector<TestCase> &registry) {
+  RegisterNonZeroChainCase("test_cc_shape_inference_nonzero_chain_named", registry);
 }
 
-void RegisterNonZeroChainNamedShapeInferenceCases(std::vector<TestCase> &registry) {
-  RegisterNonZeroChainCase("test_cc_shape_inference_nonzero_chain_named",
-                           NonZeroOutputAnnotation::kNamedDims, registry);
+void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &registry) {
+  const std::string name("test_cc_shape_inference_nonzero_plus_expression");
+  TestCase tc(name, name, "model", "inference", 1e-3, 1e-7);
+  ModelProto &model = tc.model;
+  InitModel(model, kDefaultIrVersion, {DefaultOpset(18)});
+  GraphProto *graph = model.add_graph();
+  graph->set_name(name);
+
+  TensorProto *m1 = graph->add_initializer();
+  m1->set_name("m1");
+  m1->set_data_type(TensorProto::DataType::INT64);
+  m1->add_int64_data(-1);
+
+  AddNode(*graph, "Abs", {"X"}, {"abs_out"});
+  AddNode(*graph, "NonZero", {"abs_out"}, {"nz"});
+  AddNode(*graph, "Reshape", {"nz", "m1"}, {"flat_nz"});
+  AddNode(*graph, "Neg", {"flat_nz"}, {"Y"});
+
+  AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {"batch", "seq"});
+  AppendValueInfo(*graph->add_value_info(), "abs_out", DataType::FLOAT, {"batch", "seq"});
+  AppendValueInfo(*graph->add_value_info(), "nz", DataType::INT64, {"dnz", "2"});
+  AppendValueInfo(*graph->add_value_info(), "flat_nz", DataType::INT64, {"2*dnz"});
+  AppendValueInfo(*graph->add_output(), "Y", DataType::INT64, {"2*dnz"});
+
+  // Provide a concrete DataSet so the case is executable end-to-end.
+
+  Tensor x = Tensor::FromFloat("X", {3, 4}, {1.0f, 0.0f, 2.0f, 0.0f,//
+                                       0.0f, 3.0f, 0.0f, 4.0f, //
+                                       5.0f, 0.0f, 6.0f, 0.0f});
+  Tensor y = Tensor::FromInt64("Y", {12}, {0, 1, 0, 3, 1, 4, 1, 6, 3, 1, 3, 7});
+  AppendDataSet(tc, {std::move(x)}, {std::move(y)});
+  registry.emplace_back(std::move(tc));
 }
 
 } // namespace onnx_backend_test

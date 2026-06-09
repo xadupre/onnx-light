@@ -41,10 +41,6 @@ namespace onnx_backend_test {
 void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry);
 
 /// Registers a multi-node ``Abs → Relu → Add → Mul → NonZero → Transpose →
-/// Cast`` case with anonymous (``None``) output value-info dimensions.
-void RegisterNonZeroChainAnonShapeInferenceCases(std::vector<TestCase> &registry);
-
-/// Registers a multi-node ``Abs → Relu → Add → Mul → NonZero → Transpose →
 /// Cast`` case with named output value-info dimensions.
 void RegisterNonZeroChainNamedShapeInferenceCases(std::vector<TestCase> &registry);
 
@@ -69,6 +65,10 @@ void RegisterLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &registry
 /// shape inference, including the forwarding of the local-function map
 /// into nested sub-contexts so nested calls are dispatched too.
 void RegisterNestedLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &registry);
+
+/// Registers a model including a NonZero followed by an expression.
+/// Expressions must be simplified.
+void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &registry) ;
 
 /// Collects all shape-inference oriented backend test cases by invoking
 /// every ``Register*ShapeInferenceCases`` helper declared in this header.

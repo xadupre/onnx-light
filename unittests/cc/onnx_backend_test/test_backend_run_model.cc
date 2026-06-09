@@ -199,6 +199,9 @@ TEST(BackendRunModel, Attention) {
   });
 }
 TEST(BackendRunModel, CausalConvWithState) { RunBackendCasesFor("CausalConvWithState"); }
+TEST(BackendRunModel, Conv) { RunBackendCasesFor("Conv"); }
+TEST(BackendRunModel, ConvInteger) { RunBackendCasesFor("ConvInteger"); }
+TEST(BackendRunModel, DeformConv) { RunBackendCasesFor("DeformConv"); }
 
 // ai.onnx.preview.training optimizer kernels.
 TEST(BackendRunModel, Adagrad) { RunBackendCasesFor("Adagrad"); }

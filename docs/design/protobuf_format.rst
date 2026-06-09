@@ -3,8 +3,8 @@
 Protobuf format applied to ONNX
 ================================
 
-ONNX models are serialized using `Protocol Buffers
-<https://protobuf.dev/>`_ (protobuf), Google's compact binary encoding
+ONNX models are serialized using :epkg:`Protocol Buffers` (protobuf),
+Google's compact binary encoding
 format.  An ``.onnx`` file is just the binary serialization of a
 ``ModelProto`` message defined in `onnx.proto
 <https://github.com/onnx/onnx/blob/main/onnx/onnx.proto>`_.  This page

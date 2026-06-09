@@ -360,8 +360,8 @@ def validate_shape_inference(model_with_expected_shapes: onnxl.ModelProto):
 # if __name__ == "__main__":
 #     import unittest
 #     unittest.main(verbosity=2)
-
-print(
-    "\nTo systematically test shape inference across all backend cases, "
-    "use make_test_class as shown above."
-)
+#
+# print(
+#     "\nTo systematically test shape inference across all backend cases, "
+#     "use make_test_class as shown above."
+# )

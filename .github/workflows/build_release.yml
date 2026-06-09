@@ -132,8 +132,17 @@ jobs:
         env:
           CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-* cp313t-* cp314-* cp314t-*"
           CIBW_ARCHS: ${{ matrix.arch }}
+          # Disable the optional OpenSSL dependency on macOS: the Homebrew
+          # ``openssl@3`` formula on recent runners ships a ``libcrypto.3.dylib``
+          # whose minimum deployment target (>= macOS 15) is higher than the
+          # ``macosx_11_0_*`` wheel tag cibuildwheel produces, which makes
+          # ``delocate-wheel`` fail with ``Library dependencies do not satisfy
+          # target MacOS version 11.0``. We keep the encrypted-model
+          # save/load feature available on Linux/Windows where the toolchain
+          # OpenSSL is compatible.
           CIBW_ENVIRONMENT: >
             CMAKE_BUILD_PARALLEL_LEVEL=${{ steps.cpu_count.outputs.count }}
+            CMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:

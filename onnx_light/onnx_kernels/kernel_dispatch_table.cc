@@ -10,6 +10,7 @@
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 #include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
+#include "onnx_kernels/kernels/training/include_training_kernels.h"
 #include "onnx_kernels/node_helpers.h"
 
 #include <stdexcept>
@@ -489,6 +490,140 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          }
          kernel::BitShift k(rt.kernel_ctx());
          SetOutput(node, 0, k(x, y, dir), rt.tensors());
+       }},
+
+      // -----------------------------------------------------------------
+      // ``ai.onnx.preview.training`` optimizer kernels.
+      //
+      // Variadic inputs are laid out as ``R, T, <groups of N tensors>``:
+      //   * ``Adagrad`` / ``Momentum``: 3 groups (X, G, H or X, G, V) and
+      //     2 output groups (X_new, H_new or X_new, V_new).
+      //   * ``Adam``: 4 groups (X, G, V, H) and 3 output groups
+      //     (X_new, V_new, H_new).
+      // The split is derived from the node's input/output counts as
+      // documented by the ONNX schemas.
+      // -----------------------------------------------------------------
+      {"ai.onnx.preview.training:Adagrad",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         if (node.input_size() < 5 || (node.input_size() - 2) % 3 != 0) {
+           throw std::invalid_argument(
+               "RunNode: op 'Adagrad' expects 2 + 3*N inputs (got " +
+               std::to_string(node.input_size()) + ").");
+         }
+         const int64_t n = (node.input_size() - 2) / 3;
+         if (node.output_size() != 2 * n) {
+           throw std::invalid_argument("RunNode: op 'Adagrad' expects 2*N outputs (got " +
+                                       std::to_string(node.output_size()) + " for N=" +
+                                       std::to_string(n) + ").");
+         }
+         const Tensor &R = GetInput(node, 0, rt.tensors());
+         const Tensor &T = GetInput(node, 1, rt.tensors());
+         std::vector<Tensor> Xs, Gs, Hs;
+         Xs.reserve(n);
+         Gs.reserve(n);
+         Hs.reserve(n);
+         for (int64_t i = 0; i < n; ++i) {
+           Xs.push_back(GetInput(node, static_cast<int>(2 + i), rt.tensors()));
+           Gs.push_back(GetInput(node, static_cast<int>(2 + n + i), rt.tensors()));
+           Hs.push_back(GetInput(node, static_cast<int>(2 + 2 * n + i), rt.tensors()));
+         }
+         const float epsilon = GetAttributeFloatOrDefault(node, "epsilon", 0.0f);
+         const float decay_factor = GetAttributeFloatOrDefault(node, "decay_factor", 0.0f);
+         const float norm_coefficient =
+             GetAttributeFloatOrDefault(node, "norm_coefficient", 0.0f);
+         kernel::Adagrad k(rt.kernel_ctx());
+         std::vector<Tensor> outs =
+             k(R, T, Xs, Gs, Hs, epsilon, decay_factor, norm_coefficient);
+         for (int64_t i = 0; i < 2 * n; ++i) {
+           SetOutput(node, static_cast<int>(i), std::move(outs[static_cast<size_t>(i)]),
+                     rt.tensors());
+         }
+       }},
+      {"ai.onnx.preview.training:Momentum",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         if (node.input_size() < 5 || (node.input_size() - 2) % 3 != 0) {
+           throw std::invalid_argument(
+               "RunNode: op 'Momentum' expects 2 + 3*N inputs (got " +
+               std::to_string(node.input_size()) + ").");
+         }
+         const int64_t n = (node.input_size() - 2) / 3;
+         if (node.output_size() != 2 * n) {
+           throw std::invalid_argument("RunNode: op 'Momentum' expects 2*N outputs (got " +
+                                       std::to_string(node.output_size()) + " for N=" +
+                                       std::to_string(n) + ").");
+         }
+         const Tensor &R = GetInput(node, 0, rt.tensors());
+         const Tensor &T = GetInput(node, 1, rt.tensors());
+         std::vector<Tensor> Xs, Gs, Vs;
+         Xs.reserve(n);
+         Gs.reserve(n);
+         Vs.reserve(n);
+         for (int64_t i = 0; i < n; ++i) {
+           Xs.push_back(GetInput(node, static_cast<int>(2 + i), rt.tensors()));
+           Gs.push_back(GetInput(node, static_cast<int>(2 + n + i), rt.tensors()));
+           Vs.push_back(GetInput(node, static_cast<int>(2 + 2 * n + i), rt.tensors()));
+         }
+         const float alpha = GetAttributeFloatOrDefault(node, "alpha", 0.0f);
+         const float beta = GetAttributeFloatOrDefault(node, "beta", 0.0f);
+         const float norm_coefficient =
+             GetAttributeFloatOrDefault(node, "norm_coefficient", 0.0f);
+         const std::string mode_str = GetAttributeStringOrDefault(node, "mode", "standard");
+         kernel::Momentum::Mode mode;
+         if (mode_str == "standard") {
+           mode = kernel::Momentum::Mode::kStandard;
+         } else if (mode_str == "nesterov") {
+           mode = kernel::Momentum::Mode::kNesterov;
+         } else {
+           throw std::invalid_argument(
+               "RunNode: Momentum 'mode' must be 'standard' or 'nesterov', got '" + mode_str +
+               "'.");
+         }
+         kernel::Momentum k(rt.kernel_ctx());
+         std::vector<Tensor> outs = k(R, T, Xs, Gs, Vs, alpha, beta, norm_coefficient, mode);
+         for (int64_t i = 0; i < 2 * n; ++i) {
+           SetOutput(node, static_cast<int>(i), std::move(outs[static_cast<size_t>(i)]),
+                     rt.tensors());
+         }
+       }},
+      {"ai.onnx.preview.training:Adam",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         if (node.input_size() < 6 || (node.input_size() - 2) % 4 != 0) {
+           throw std::invalid_argument("RunNode: op 'Adam' expects 2 + 4*N inputs (got " +
+                                       std::to_string(node.input_size()) + ").");
+         }
+         const int64_t n = (node.input_size() - 2) / 4;
+         if (node.output_size() != 3 * n) {
+           throw std::invalid_argument("RunNode: op 'Adam' expects 3*N outputs (got " +
+                                       std::to_string(node.output_size()) + " for N=" +
+                                       std::to_string(n) + ").");
+         }
+         const Tensor &R = GetInput(node, 0, rt.tensors());
+         const Tensor &T = GetInput(node, 1, rt.tensors());
+         std::vector<Tensor> Xs, Gs, Vs, Hs;
+         Xs.reserve(n);
+         Gs.reserve(n);
+         Vs.reserve(n);
+         Hs.reserve(n);
+         for (int64_t i = 0; i < n; ++i) {
+           Xs.push_back(GetInput(node, static_cast<int>(2 + i), rt.tensors()));
+           Gs.push_back(GetInput(node, static_cast<int>(2 + n + i), rt.tensors()));
+           Vs.push_back(GetInput(node, static_cast<int>(2 + 2 * n + i), rt.tensors()));
+           Hs.push_back(GetInput(node, static_cast<int>(2 + 3 * n + i), rt.tensors()));
+         }
+         const float alpha = GetAttributeFloatOrDefault(node, "alpha", 0.9f);
+         const float beta = GetAttributeFloatOrDefault(node, "beta", 0.999f);
+         const float epsilon = GetAttributeFloatOrDefault(node, "epsilon", 1e-6f);
+         const float norm_coefficient =
+             GetAttributeFloatOrDefault(node, "norm_coefficient", 0.0f);
+         const float norm_coefficient_post =
+             GetAttributeFloatOrDefault(node, "norm_coefficient_post", 0.0f);
+         kernel::Adam k(rt.kernel_ctx());
+         std::vector<Tensor> outs = k(R, T, Xs, Gs, Vs, Hs, alpha, beta, epsilon,
+                                      norm_coefficient, norm_coefficient_post);
+         for (int64_t i = 0; i < 3 * n; ++i) {
+           SetOutput(node, static_cast<int>(i), std::move(outs[static_cast<size_t>(i)]),
+                     rt.tensors());
+         }
        }},
   };
   return table;

@@ -42,6 +42,12 @@ class TestCaseStatus:
     name: str
     op_type: str
     domain: str
+    tag: str
+    """Free-form tag attached to the C++ test case (e.g. ``"nan_inf"``,
+    ``"local_function"``, ``"inference"``). When non-empty, the test case is
+    grouped in the coverage report under this tag rather than under its
+    principal op's :attr:`domain`."""
+
     onnxruntime_cpu: float | None
     """Maximum absolute discrepancy between reference and ORT outputs, or
     ``None`` when ORT could not load / run the model (registered op missing,
@@ -59,6 +65,16 @@ class TestCaseStatus:
     """``True`` if :func:`infer_shapes` succeeds on the symbolic-shape model."""
 
     dynamic_shapes_error: str | None
+
+    @property
+    def group(self) -> str:
+        """Group key used to bucket the test case in the coverage report.
+
+        Returns :attr:`tag` when it is set (so cases tagged with e.g.
+        ``"nan_inf"`` get their own section, separate from the regular ops of
+        the principal domain), otherwise the principal op :attr:`domain`.
+        """
+        return self.tag or self.domain
 
     @property
     def onnxruntime_ok(self) -> bool:
@@ -261,6 +277,7 @@ def compute_runtime_coverage(
             name=tc.name,
             op_type=op_type,
             domain=domain,
+            tag=getattr(tc, "tag", "") or "",
             onnxruntime_cpu=ort_diff,
             onnxruntime_error=ort_err,
             static_shape=static_ok,
@@ -273,7 +290,8 @@ def compute_runtime_coverage(
         status._rtol = tc.rtol  # type: ignore[attr-defined]
         report.statuses.append(status)
 
-        summary = report.summaries.setdefault(domain, DomainSummary(domain=domain))
+        group = status.group
+        summary = report.summaries.setdefault(group, DomainSummary(domain=group))
         summary.total += 1
         report.overall.total += 1
         if status.onnxruntime_ok:
@@ -286,8 +304,8 @@ def compute_runtime_coverage(
             summary.dynamic_shapes_ok += 1
             report.overall.dynamic_shapes_ok += 1
 
-    # Sort statuses by (domain, op_type, name) so the rendered table is stable.
-    report.statuses.sort(key=lambda s: (s.domain, s.op_type, s.name))
+    # Sort statuses by (group, op_type, name) so the rendered table is stable.
+    report.statuses.sort(key=lambda s: (s.group, s.op_type, s.name))
     return report
 
 
@@ -347,6 +365,18 @@ def render_rst_summary(report: RuntimeCoverageReport) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _group_label(group: str) -> str:
+    """Renders a human-friendly label for a coverage group.
+
+    Group keys are either an ONNX op domain (``""`` for the default
+    ``ai.onnx`` domain, ``"ai.onnx.ml"``, ``"ai.onnx.preview.training"``, ...)
+    or a free-form test-case tag (``"nan_inf"``, ``"local_function"``,
+    ``"inference"``, ...) used to bucket cases that exercise cross-cutting
+    runtime / shape-inference scenarios rather than one specific op.
+    """
+    return group or "ai.onnx (default)"
+
+
 def render_rst_domain_summary(report: RuntimeCoverageReport) -> str:
     """Renders one row per domain with its individual pass percentages."""
     lines = [
@@ -360,9 +390,9 @@ def render_rst_domain_summary(report: RuntimeCoverageReport) -> str:
         "      - Static shape",
         "      - Dynamic shapes",
     ]
-    for domain in sorted(report.summaries):
-        s = report.summaries[domain]
-        label = domain or "ai.onnx (default)"
+    for group in sorted(report.summaries):
+        s = report.summaries[group]
+        label = _group_label(group)
         lines.extend(
             [
                 f"    * - ``{label}``",
@@ -378,11 +408,14 @@ def render_rst_domain_summary(report: RuntimeCoverageReport) -> str:
 def render_rst_table_for_domain(
     report: RuntimeCoverageReport, domain: str, css_class: str | None = None, indent: str = ""
 ) -> str:
-    """Renders the per-test-case table for one ``domain`` as a reST ``list-table``.
+    """Renders the per-test-case table for one ``domain`` (or tag group) as a
+    reST ``list-table``.
 
     :param report: The runtime coverage report.
-    :param domain: ONNX operator domain to filter on (e.g. ``""`` for the
-        default ``ai.onnx`` domain).
+    :param domain: Group key to filter on. This is either an ONNX operator
+        domain (``""`` for the default ``ai.onnx`` domain) or a test-case tag
+        (e.g. ``"nan_inf"``) under which tagged cases are grouped instead of
+        their principal op's domain.
     :param css_class: When provided, a ``:class:`` option is emitted on the
         ``list-table`` directive. Pass ``"sphinx-datatable"`` to opt into the
         interactive DataTables widget.
@@ -404,7 +437,7 @@ def render_rst_table_for_domain(
     )
     body_lines: list[str] = []
     for s in report.statuses:
-        if s.domain != domain:
+        if s.group != domain:
             continue
         body_lines.extend(
             [
@@ -426,11 +459,11 @@ def render_rst_domain_sections(
 ) -> str:
     """Returns one coverage table per domain without tab-based navigation."""
     lines: list[str] = []
-    for domain in sorted(report.summaries):
-        label = domain or "ai.onnx (default)"
+    for group in sorted(report.summaries):
+        label = _group_label(group)
         lines.append(f".. rubric:: {label}")
         lines.append("")
-        table = render_rst_table_for_domain(report, domain=domain, css_class=css_class)
+        table = render_rst_table_for_domain(report, domain=group, css_class=css_class)
         lines.extend(table.splitlines())
         lines.append("")
     return "\n".join(lines) + "\n"

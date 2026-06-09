@@ -282,7 +282,6 @@ gelu_default_1_expanded
 gelu_default_2_expanded
 gelu_tanh_1_expanded
 gelu_tanh_2_expanded
-gemm_default_no_bias
 greater_equal_bcast_expanded
 greater_equal_expanded
 greater_equal_int16_expanded

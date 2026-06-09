@@ -188,3 +188,18 @@ try:
     print("  ✓ Validation succeeded (no AssertionError raised)")
 except AssertionError as e:
     print(f"  ✗ Validation failed: {e}")
+
+
+#####################################
+# Gallery thumbnail
+# +++++++++++++++++
+#
+# Render a simple text figure used as the sphinx-gallery thumbnail for this
+# example.
+
+import matplotlib.pyplot as plt  # noqa: E402
+
+fig, ax = plt.subplots(figsize=(4, 3))
+ax.text(0.5, 0.5, "Python\nBackend", ha="center", va="center", fontsize=28)
+ax.set_axis_off()
+fig.tight_layout()

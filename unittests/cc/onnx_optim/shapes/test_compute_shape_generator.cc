@@ -87,15 +87,15 @@ TEST(OnnxOptimShapeConstant, ValueTensorLargeInt64DoesNotSetValueAsShape) {
   AttributeProto *attr = AddAttr(node, "value", AttributeProto::AttributeType::TENSOR);
   TensorProto *t = attr->add_t();
   t->set_data_type(static_cast<TensorProto::DataType>(TensorProto::DataType::INT64));
-  t->add_dims(8);
-  for (int64_t i = 0; i < 8; ++i) {
+  t->add_dims(28);
+  for (int64_t i = 0; i < 28; ++i) {
     t->ref_int64_data().push_back(i);
   }
 
   onnx_optim::shapes::ShapesContext ctx;
   onnx_optim::shapes::ComputeShapeNode(ctx, node);
   ASSERT_TRUE(ctx.Has("y"));
-  // 8 elements is not "small" (the threshold is strictly less than 8).
+  // 8 elements is not "small" (the threshold is strictly less than 28).
   EXPECT_FALSE(ctx.Get("y").HasValueAsShape());
 }
 

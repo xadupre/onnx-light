@@ -40,6 +40,7 @@ Each harness is a standard libFuzzer executable:
 
 ```bash
 ./build-fuzz/fuzz_checker -runs=1000
+./build-fuzz/fuzz_model_loader -runs=1000
 ./build-fuzz/fuzz_parser -runs=1000
 ./build-fuzz/fuzz_shape_inference -runs=1000
 ./build-fuzz/fuzz_optim_shape_inference -runs=1000

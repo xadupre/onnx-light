@@ -1,8 +1,8 @@
 """
 .. _l-example-plot-shape-inference:
 
-Shape inference with ``onnx_light.onnx_optim``
-==============================================
+Optimized Shape inference
+=========================
 
 This example shows the two flavours of shape inference exposed by
 :mod:`onnx_light.onnx_optim`:

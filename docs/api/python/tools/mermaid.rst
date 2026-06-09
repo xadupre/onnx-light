@@ -1,7 +1,7 @@
 onnx\_light.tools.mermaid
 =========================
 
-Convert an ONNX model or graph to a `Mermaid <https://mermaid.js.org/>`_
+Convert an ONNX model or graph to a :epkg:`Mermaid`
 ``flowchart`` diagram.  The output is a plain string that can be
 embedded in Markdown or in a Sphinx page via the ``.. mermaid::``
 directive.
@@ -42,8 +42,8 @@ Rendering the diagram
 
 To actually display the diagram, ``sphinx_runpython`` ships a
 ``.. runmermaid::`` directive that wraps the Mermaid source into the
-HTML output (which is then rendered client-side by `mermaid.js
-<https://mermaid.js.org/>`_). It accepts a ``:script:`` option: when
+HTML output (which is then rendered client-side by :epkg:`mermaid.js`).
+It accepts a ``:script:`` option: when
 present, the directive body is executed as Python and its standard
 output is used as the Mermaid source. This pairs naturally with
 :func:`to_mermaid`, which already prints a complete ``flowchart``

@@ -3,11 +3,11 @@
 Fuzzing
 =======
 
-``onnx-light`` ships a set of `libFuzzer
-<https://llvm.org/docs/LibFuzzer.html>`_-instrumented C++ harnesses
+``onnx-light`` ships a set of :epkg:`libFuzzer`
+instrumented C++ harnesses
 that exercise the public API surface from random / malformed inputs.
 They live in the top-level ``fuzz/`` directory and are intended to be
-driven by `OSS-Fuzz <https://github.com/google/oss-fuzz>`_ for
+driven by :epkg:`OSS-Fuzz` for
 long-running coverage-guided campaigns, while a short smoke campaign
 is also run in CI to catch regressions in the harnesses themselves.
 
@@ -77,9 +77,8 @@ to override it (for example ``undefined`` or ``memory``); the
 Running a harness locally
 +++++++++++++++++++++++++
 
-Each harness takes the standard `libFuzzer command line
-<https://llvm.org/docs/LibFuzzer.html#options>`_. To run a short
-smoke campaign:
+Each harness takes the standard :epkg:`libFuzzer command line`.
+To run a short smoke campaign:
 
 .. code-block:: bash
 
@@ -148,9 +147,8 @@ cause real bugs.
 Why ``LLVMFuzzerTestOneInput``?
 -------------------------------
 
-``LLVMFuzzerTestOneInput`` is the `standard libFuzzer entry point
-<https://llvm.org/docs/LibFuzzer.html#fuzz-target>`_. Each harness
-defines it with ``extern "C"`` so libFuzzer's runtime can call it
+``LLVMFuzzerTestOneInput`` is the standard :epkg:`libFuzzer entry point.
+Each harness defines it with ``extern "C"`` so libFuzzer's runtime can call it
 directly without name mangling.
 
 Adding a new harness

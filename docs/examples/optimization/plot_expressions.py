@@ -1,8 +1,8 @@
 """
 .. _l-example-plot-expressions:
 
-Symbolic dimension expressions with ``onnx_light.onnx_optim.expressions``
-==========================================================================
+Symbolic expressions for dimensions
+===================================
 
 ONNX models frequently use *symbolic* tensor shapes: instead of a concrete
 integer such as ``128``, a dimension carries a name like ``"batch"`` or

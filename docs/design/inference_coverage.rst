@@ -14,7 +14,7 @@ the *expected* intermediate and output shapes recorded by the test author.
 For every collected case, the report:
 
 #. renders the original model — including the expected ``value_info`` and
-   output shapes — as a `Mermaid <https://mermaid.js.org/>`_ flowchart;
+   output shapes — as a :epkg:`Mermaid` flowchart;
 #. clones the model and **strips its ``graph.value_info``** so shape
    inference cannot just reuse the recorded intermediate shapes;
 #. runs :func:`onnx_light.onnx_optim.shape_inference.infer_shapes_model`

@@ -252,6 +252,7 @@ for ax, pivot, title in (
     ax.set_title(title)
     ax.set_xlabel("num_threads")
     ax.set_ylabel("time (ms, lower is better)")
+    ax.set_xlim(left=0)
     ax.set_xticks(list(THREAD_COUNTS))
     ax.grid(True, linestyle=":")
     ax.legend(title="layout")

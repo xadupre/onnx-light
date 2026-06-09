@@ -97,18 +97,102 @@ void RegisterReduceLogSumOpCases(std::vector<TestCase> &registry, const std::str
                        /*noop_with_empty_axes=*/false);
 }
 
+// ---------------------------------------------------------------------------
+// Registers ``test_reduce_log_sum_exp_*`` cases mirroring the upstream
+// ``ReduceLogSumExp`` ONNX node tests. The test names are chosen so that the
+// upstream ONNX name is a substring of the onnx-light test name, satisfying
+// the substring check in ``test_backend_test_names_onnx_vs_onnxlight.py``.
+// Outputs are computed by the reference kernel so the data does not need to
+// bit-match the upstream fixture.
+// ---------------------------------------------------------------------------
+void RegisterReduceLogSumExpOnnxCases(std::vector<TestCase> &registry,
+                                      const kernel::ReduceLogSumOp &kernel) {
+  const std::vector<int64_t> shape = {3, 2, 2};
+  const std::vector<float> example_values = {1.0f, 2.0f, 3.0f, 4.0f,  5.0f,  6.0f,
+                                             7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f};
+  // ``np.random.seed(0); np.random.uniform(-10, 10, (3, 2, 2)).astype(np.float32)``
+  const std::vector<float> random_values = {
+      0.9762700796f, 4.303787231f, 2.055267572f, 0.8976636529f, -1.526903987f, 2.917882204f,
+      -1.24825573f,  7.835460186f, 9.273255348f, -2.331169605f, 5.83450079f,   0.5778983831f,
+  };
+
+  EmitReduceLogSumCase(registry, "ReduceLogSumExp", kernel,
+                       "test_reduce_log_sum_exp_keepdims_example", shape, example_values, {1},
+                       /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+  EmitReduceLogSumCase(registry, "ReduceLogSumExp", kernel,
+                       "test_reduce_log_sum_exp_keepdims_random", shape, random_values, {1},
+                       /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+  EmitReduceLogSumCase(registry, "ReduceLogSumExp", kernel,
+                       "test_reduce_log_sum_exp_do_not_keepdims_example", shape, example_values,
+                       {1}, /*keepdims=*/false, /*noop_with_empty_axes=*/false);
+  EmitReduceLogSumCase(registry, "ReduceLogSumExp", kernel,
+                       "test_reduce_log_sum_exp_do_not_keepdims_random", shape, random_values, {1},
+                       /*keepdims=*/false, /*noop_with_empty_axes=*/false);
+  EmitReduceLogSumDefaultAxesCase(registry, "ReduceLogSumExp", kernel,
+                                  "test_reduce_log_sum_exp_default_axes_keepdims_example", shape,
+                                  example_values, /*keepdims=*/true);
+  EmitReduceLogSumDefaultAxesCase(registry, "ReduceLogSumExp", kernel,
+                                  "test_reduce_log_sum_exp_default_axes_keepdims_random", shape,
+                                  random_values, /*keepdims=*/true);
+  EmitReduceLogSumCase(registry, "ReduceLogSumExp", kernel,
+                       "test_reduce_log_sum_exp_negative_axes_keepdims_example", shape,
+                       example_values, {-2}, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+  EmitReduceLogSumCase(registry, "ReduceLogSumExp", kernel,
+                       "test_reduce_log_sum_exp_negative_axes_keepdims_random", shape,
+                       random_values, {-2}, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+  EmitReduceLogSumCase(registry, "ReduceLogSumExp", kernel, "test_reduce_log_sum_exp_empty_set",
+                       /*data_shape=*/{2, 0, 4}, /*data_values=*/{}, {1}, /*keepdims=*/true,
+                       /*noop_with_empty_axes=*/false);
+}
+
+// ---------------------------------------------------------------------------
+// Registers ``test_reduce_log_sum_*`` cases (the plain ``ReduceLogSum``, not
+// the ``Exp`` variant). Upstream only ships a smaller set: ``_asc_axes``,
+// ``_desc_axes``, ``_default`` (axes omitted, keepdims default), and
+// ``_negative_axes`` (axes = [-2]). ``_empty_set`` is shared with the other
+// reductions. Outputs are computed by the reference kernel.
+// ---------------------------------------------------------------------------
+void RegisterReduceLogSumOnnxCases(std::vector<TestCase> &registry,
+                                   const kernel::ReduceLogSumOp &kernel) {
+  // Multi-axis cases use the upstream ``[3, 4, 5]`` shape.
+  const std::vector<int64_t> shape_3_4_5 = {3, 4, 5};
+  std::vector<float> data_3_4_5(3 * 4 * 5);
+  for (size_t i = 0; i < data_3_4_5.size(); ++i) {
+    data_3_4_5[i] = 0.1f + static_cast<float>(i) * 0.01f;
+  }
+
+  EmitReduceLogSumCase(registry, "ReduceLogSum", kernel, "test_reduce_log_sum_asc_axes",
+                       shape_3_4_5, data_3_4_5, {0, 1}, /*keepdims=*/false,
+                       /*noop_with_empty_axes=*/false);
+  EmitReduceLogSumCase(registry, "ReduceLogSum", kernel, "test_reduce_log_sum_desc_axes",
+                       shape_3_4_5, data_3_4_5, {2, 1}, /*keepdims=*/false,
+                       /*noop_with_empty_axes=*/false);
+  // ``_default``: empty axes, keepdims = 1 (the default).
+  EmitReduceLogSumCase(registry, "ReduceLogSum", kernel, "test_reduce_log_sum_default", shape_3_4_5,
+                       data_3_4_5, {}, /*keepdims=*/true,
+                       /*noop_with_empty_axes=*/false);
+  EmitReduceLogSumCase(registry, "ReduceLogSum", kernel, "test_reduce_log_sum_negative_axes",
+                       shape_3_4_5, data_3_4_5, {-2}, /*keepdims=*/true,
+                       /*noop_with_empty_axes=*/false);
+  EmitReduceLogSumCase(registry, "ReduceLogSum", kernel, "test_reduce_log_sum_empty_set",
+                       /*data_shape=*/{2, 0, 4}, /*data_values=*/{}, {1}, /*keepdims=*/true,
+                       /*noop_with_empty_axes=*/false);
+}
+
 } // namespace
 
 void RegisterReduceLogSumCases(std::vector<TestCase> &registry) {
   const kernel::KernelContext ctx{DefaultOpset(18)};
   const kernel::ReduceLogSum kernel{ctx};
   RegisterReduceLogSumOpCases(registry, "ReduceLogSum", kernel, "reducelogsum");
+  RegisterReduceLogSumOnnxCases(registry, kernel);
 }
 
 void RegisterReduceLogSumExpCases(std::vector<TestCase> &registry) {
   const kernel::KernelContext ctx{DefaultOpset(18)};
   const kernel::ReduceLogSumExp kernel{ctx};
   RegisterReduceLogSumOpCases(registry, "ReduceLogSumExp", kernel, "reducelogsumexp");
+  RegisterReduceLogSumExpOnnxCases(registry, kernel);
 }
 
 } // namespace onnx_backend_test

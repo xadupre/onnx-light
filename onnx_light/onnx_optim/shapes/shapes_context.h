@@ -4,8 +4,10 @@
 
 #pragma once
 
+#include <set>
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 #include "onnx_optim/optim_sequence.h"
 #include "onnx_optim/optim_tensor.h"
@@ -108,6 +110,7 @@ public:
     sequences_.clear();
     opsets_.clear();
     local_functions_.clear();
+    constraints_.clear();
   }
 
   /// Read-only access to the underlying map (useful for iteration).
@@ -233,6 +236,51 @@ public:
     return local_functions_;
   }
 
+  // ── Symbolic-dimension constraints ──────────────────────────────────
+  //
+  // Shape inference may discover that two symbolic dimensions must be
+  // equal — for example when a graph output declares ``shape=["ANCHOR",
+  // 4]`` but node-level inference produces ``shape=["N", 4]`` for the
+  // same value. Storing such constraints lets downstream passes
+  // unify ``"ANCHOR"`` and ``"N"`` instead of silently picking one of
+  // the two names. Constraints are recorded as unordered pairs of
+  // strings: a canonical ordering (smaller first lexicographically) is
+  // used internally so that ``(a, b)`` and ``(b, a)`` are deduplicated.
+  // Self-constraints (``a == a``) are dropped.
+
+  /// Type used to store a single symbolic equality constraint.
+  using Constraint = std::pair<std::string, std::string>;
+
+  /// Records that two symbolic dimension names are equal. The pair is
+  /// canonicalised so that ``(a, b)`` and ``(b, a)`` are stored only
+  /// once, and the trivial self-equality is dropped. Returns ``true``
+  /// when a new constraint was inserted, ``false`` otherwise (either
+  /// a duplicate or a self-constraint).
+  bool AddConstraint(const std::string &a, const std::string &b) {
+    if (a == b) {
+      return false;
+    }
+    Constraint c = (a < b) ? Constraint(a, b) : Constraint(b, a);
+    return constraints_.insert(std::move(c)).second;
+  }
+
+  /// ``true`` when an equality constraint between ``a`` and ``b`` is
+  /// recorded (canonical order is applied before lookup).
+  bool HasConstraint(const std::string &a, const std::string &b) const {
+    if (a == b) {
+      return true;
+    }
+    Constraint c = (a < b) ? Constraint(a, b) : Constraint(b, a);
+    return constraints_.find(c) != constraints_.end();
+  }
+
+  /// Number of recorded constraints.
+  std::size_t ConstraintsSize() const noexcept { return constraints_.size(); }
+
+  /// Read-only access to the underlying set of equality constraints.
+  /// Each element is a ``(lhs, rhs)`` pair with ``lhs < rhs``.
+  const std::set<Constraint> &Constraints() const noexcept { return constraints_; }
+
 private:
   static std::string NormaliseDomain(const std::string &domain) {
     return domain.empty() ? std::string(kOnnxDomain) : domain;
@@ -242,6 +290,7 @@ private:
   std::unordered_map<std::string, OptimSequence> sequences_;
   std::unordered_map<std::string, int> opsets_;
   std::unordered_map<std::string, const FunctionProto *> local_functions_;
+  std::set<Constraint> constraints_;
 };
 
 } // namespace shapes

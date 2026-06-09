@@ -226,6 +226,75 @@ class TestShapesContextBindings(ExtTestCase):
         ctx_prefill = si.ShapesContext()
         si.compute_shape_model(ctx_prefill, model, prefill_with_value_info_output=True)
         self.assertEqual(list(ctx_prefill.get("Y").shape), ["ANCHOR", 4])
+        # A constraint linking the inferred symbol to the anchor symbol is
+        # recorded so downstream passes can unify them.
+        self.assertTrue(ctx_prefill.has_constraint("N", "ANCHOR"))
+        self.assertTrue(ctx_prefill.has_constraint("ANCHOR", "N"))
+        self.assertEqual(ctx_prefill.constraints_size(), 1)
+        self.assertEqual(list(ctx_prefill.constraints()), [("ANCHOR", "N")])
+
+    # ------------------------------------------------------------------
+    # Symbolic-dimension equality constraints.
+    # ------------------------------------------------------------------
+    def test_add_constraint_canonical_and_dedup(self):
+        ctx = si.ShapesContext()
+        self.assertEqual(ctx.constraints_size(), 0)
+        self.assertFalse(ctx.has_constraint("N", "M"))
+
+        self.assertTrue(ctx.add_constraint("N", "M"))
+        self.assertEqual(ctx.constraints_size(), 1)
+        # Canonical ordering: smaller first.
+        self.assertEqual(list(ctx.constraints()), [("M", "N")])
+
+        # Inserting the reversed pair is a no-op.
+        self.assertFalse(ctx.add_constraint("M", "N"))
+        self.assertEqual(ctx.constraints_size(), 1)
+
+        # Self constraint is dropped but lookup still returns True.
+        self.assertFalse(ctx.add_constraint("X", "X"))
+        self.assertEqual(ctx.constraints_size(), 1)
+        self.assertTrue(ctx.has_constraint("X", "X"))
+
+        # Lookup uses canonical order.
+        self.assertTrue(ctx.has_constraint("N", "M"))
+        self.assertTrue(ctx.has_constraint("M", "N"))
+
+        ctx.clear()
+        self.assertEqual(ctx.constraints_size(), 0)
+
+    def test_compute_shape_model_prefill_raises_on_dim_conflict(self):
+        # Reshape with target [-1, 2] applied to X[N,4] gives Y[?, 2]; the
+        # anchor declares Y[ANCHOR, 4] which carries an incompatible
+        # concrete dim (4 vs 2) → must raise.
+        target = oh.make_node(
+            "Constant",
+            inputs=[],
+            outputs=["target"],
+            value=oh.make_tensor("target", onnxl.TensorProto.INT64, [2], [-1, 2]),
+        )
+        reshape = oh.make_node("Reshape", inputs=["X", "target"], outputs=["Y"])
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["N", 4])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, ["ANCHOR", 4])
+        graph = oh.make_graph([target, reshape], "g", [x], [y])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+        model.ir_version = 8
+
+        ctx = si.ShapesContext()
+        with self.assertRaises(ValueError):
+            si.compute_shape_model(ctx, model, prefill_with_value_info_output=True)
+
+    def test_compute_shape_model_prefill_raises_on_dtype_conflict(self):
+        node = oh.make_node("Relu", inputs=["X"], outputs=["Y"])
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["N", 4])
+        # Anchor declares Y as DOUBLE, incompatible with Relu(FLOAT).
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.DOUBLE, ["N", 4])
+        graph = oh.make_graph([node], "g", [x], [y])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+        model.ir_version = 8
+
+        ctx = si.ShapesContext()
+        with self.assertRaises(ValueError):
+            si.compute_shape_model(ctx, model, prefill_with_value_info_output=True)
 
 
 if __name__ == "__main__":

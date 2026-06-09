@@ -601,6 +601,30 @@ TEST(OnnxOptimShapeInference, ComputeShapeModelPrefillPrefersOutputAnchor) {
   EXPECT_TRUE(ctx.Get("Y").Shape()[0].IsExpr());
   EXPECT_EQ(ctx.Get("Y").Shape()[0].AsExpr(), "ANCHOR");
   EXPECT_EQ(ctx.Get("Y").Shape()[1], onnx_optim::OptimDim(2));
+  // The inferred symbol and the anchor symbol "ANCHOR" are recorded
+  // as an equality constraint so downstream passes can unify them.
+  EXPECT_EQ(ctx.ConstraintsSize(), 1u);
+  const auto &constraints = ctx.Constraints();
+  // One side of the recorded pair must be the anchor symbol.
+  ASSERT_EQ(constraints.size(), 1u);
+  const auto &c = *constraints.begin();
+  EXPECT_TRUE(c.first == "ANCHOR" || c.second == "ANCHOR");
+}
+
+TEST(OnnxOptimShapeInference, ComputeShapeModelPrefillRaisesOnDimConflict) {
+  // Reshape with target [-1, 2] applied to X[N, 4] produces Y[?, 2].
+  // The anchor declares Y as ["ANCHOR", 4] — the trailing concrete dim
+  // (4 vs 2) is incompatible and must raise.
+  ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{-1, 4},
+                                                  /*target=*/{-1, 2},
+                                                  /*symbolic_names=*/{"N"});
+  SetValueInfoTensorType(*model.mutable_graph()->mutable_output(0), TensorProto::DataType::FLOAT,
+                         /*shape=*/{-1, 4}, /*symbolic_names=*/{"ANCHOR"});
+
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::ComputeShapeModel(ctx, model,
+                                                     /*prefill_with_value_info_output=*/true),
+               std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeInference, ComputeShapeModelSeedsInitializerAsShape) {

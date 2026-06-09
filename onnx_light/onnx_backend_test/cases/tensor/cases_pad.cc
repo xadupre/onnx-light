@@ -360,6 +360,21 @@ void RegisterPadCases(std::vector<TestCase> &registry) {
     Expect(MakePadNode({"x", "pads"}, "wrap"), {x, pads}, {y}, "test_cc_wrap_pad", {opset},
            "backend-test", registry);
   }
+
+  // test_cc_constant_pad_default_value - "constant" mode with the optional
+  // ``constant_value`` input omitted: the spec mandates a default fill of 0.
+  // This case has no upstream ONNX counterpart; it exercises the default-value
+  // code path that the other ``test_cc_constant_pad*`` cases do not cover
+  // (they all provide an explicit ``value`` input).
+  {
+    const Tensor x = Tensor::FromFloat("x", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+    const Tensor pads = MakeInt64Vector("pads", {1, 1, 1, 1});
+    const Tensor y = Tensor::FromFloat("y", {4, 5}, {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,
+                                                     2.0f, 3.0f, 0.0f, 0.0f, 4.0f, 5.0f, 6.0f,
+                                                     0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f});
+    Expect(MakePadNode({"x", "pads"}, "constant"), {x, pads}, {y},
+           "test_cc_constant_pad_default_value", {opset}, "backend-test", registry);
+  }
 }
 
 } // namespace onnx_backend_test

@@ -72,7 +72,8 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx:Erf"), table.end());
   EXPECT_NE(table.find("ai.onnx:Sigmoid"), table.end());
   EXPECT_NE(table.find("ai.onnx:Tanh"), table.end());
-  // Binary math, no attributes.
+  // Binary math (Gemm is attribute-driven; MatMul/Pow are not).
+  EXPECT_NE(table.find("ai.onnx:Gemm"), table.end());
   EXPECT_NE(table.find("ai.onnx:MatMul"), table.end());
   EXPECT_NE(table.find("ai.onnx:Pow"), table.end());
   // Variadic reducers.
@@ -141,6 +142,23 @@ TEST(RunNodes, RunNodeSingleAdd) {
   EXPECT_FLOAT_EQ(got[0], 11.0f);
   EXPECT_FLOAT_EQ(got[1], 22.0f);
   EXPECT_FLOAT_EQ(got[2], 33.0f);
+}
+
+TEST(RunNodes, RunNodeGemmWithoutBiasUsesSchemaDefaults) {
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.tensors()["a"] = Tensor::FromFloat("a", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  rt.tensors()["b"] = Tensor::FromFloat("b", {2, 2}, {5.0f, 6.0f, 7.0f, 8.0f});
+  NodeProto node = MakeNode("Gemm", {"a", "b"}, {"y"});
+  RunNode(node, rt);
+  ASSERT_NE(rt.tensors().find("y"), rt.tensors().end());
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, std::vector<int64_t>({2, 2}));
+  ASSERT_EQ(y.element_count(), 4);
+  const float *got = y.AsFloat();
+  EXPECT_FLOAT_EQ(got[0], 19.0f);
+  EXPECT_FLOAT_EQ(got[1], 22.0f);
+  EXPECT_FLOAT_EQ(got[2], 43.0f);
+  EXPECT_FLOAT_EQ(got[3], 50.0f);
 }
 
 TEST(RunNodes, RunNodeNormalisesDefaultDomain) {

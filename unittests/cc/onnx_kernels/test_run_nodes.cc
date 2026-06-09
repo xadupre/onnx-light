@@ -79,6 +79,19 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx:Max"), table.end());
   EXPECT_NE(table.find("ai.onnx:Min"), table.end());
   EXPECT_NE(table.find("ai.onnx:Mean"), table.end());
+  // Reduction operators.
+  EXPECT_NE(table.find("ai.onnx:ArgMax"), table.end());
+  EXPECT_NE(table.find("ai.onnx:ArgMin"), table.end());
+  EXPECT_NE(table.find("ai.onnx:ReduceL1"), table.end());
+  EXPECT_NE(table.find("ai.onnx:ReduceL2"), table.end());
+  EXPECT_NE(table.find("ai.onnx:ReduceLogSum"), table.end());
+  EXPECT_NE(table.find("ai.onnx:ReduceLogSumExp"), table.end());
+  EXPECT_NE(table.find("ai.onnx:ReduceMax"), table.end());
+  EXPECT_NE(table.find("ai.onnx:ReduceMean"), table.end());
+  EXPECT_NE(table.find("ai.onnx:ReduceMin"), table.end());
+  EXPECT_NE(table.find("ai.onnx:ReduceProd"), table.end());
+  EXPECT_NE(table.find("ai.onnx:ReduceSum"), table.end());
+  EXPECT_NE(table.find("ai.onnx:ReduceSumSquare"), table.end());
   // Attribute-driven kernels.
   EXPECT_NE(table.find("ai.onnx:Softmax"), table.end());
   EXPECT_NE(table.find("ai.onnx:LeakyRelu"), table.end());

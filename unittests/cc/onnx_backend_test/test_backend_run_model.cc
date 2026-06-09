@@ -151,6 +151,20 @@ TEST(BackendRunModel, Max) { RunBackendCasesFor("Max"); }
 TEST(BackendRunModel, Min) { RunBackendCasesFor("Min"); }
 TEST(BackendRunModel, Mean) { RunBackendCasesFor("Mean"); }
 
+// Reduction kernels.
+TEST(BackendRunModel, ArgMax) { RunBackendCasesFor("ArgMax"); }
+TEST(BackendRunModel, ArgMin) { RunBackendCasesFor("ArgMin"); }
+TEST(BackendRunModel, ReduceL1) { RunBackendCasesFor("ReduceL1"); }
+TEST(BackendRunModel, ReduceL2) { RunBackendCasesFor("ReduceL2"); }
+TEST(BackendRunModel, ReduceLogSum) { RunBackendCasesFor("ReduceLogSum"); }
+TEST(BackendRunModel, ReduceLogSumExp) { RunBackendCasesFor("ReduceLogSumExp"); }
+TEST(BackendRunModel, ReduceMax) { RunBackendCasesFor("ReduceMax"); }
+TEST(BackendRunModel, ReduceMean) { RunBackendCasesFor("ReduceMean"); }
+TEST(BackendRunModel, ReduceMin) { RunBackendCasesFor("ReduceMin"); }
+TEST(BackendRunModel, ReduceProd) { RunBackendCasesFor("ReduceProd"); }
+TEST(BackendRunModel, ReduceSum) { RunBackendCasesFor("ReduceSum"); }
+TEST(BackendRunModel, ReduceSumSquare) { RunBackendCasesFor("ReduceSumSquare"); }
+
 // Attribute-driven unary math kernels.
 TEST(BackendRunModel, Celu) { RunBackendCasesFor("Celu"); }
 TEST(BackendRunModel, Elu) { RunBackendCasesFor("Elu"); }

@@ -30,7 +30,29 @@ option(ONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX
     OFF)
 option(ONNX_LIGHT_BUILD_PYTHON "Build Python extension." ON)
 option(ONNX_LIGHT_INSTALL "Install the C++ library and headers." ON)
+option(ONNX_LIGHT_BUILD_KERNELS
+    "Build the operator-kernel runtime (lib_onnx_kernels) and the backend-test registry (lib_onnx_backend_test). Turn OFF to install only the schema / checker / shape-inference / version-converter libraries (useful for downstream projects that only need onnx_light::onnx_light or onnx_light::lib_onnx_proto)."
+    ON)
 option(ONNX_ML "Enable ai.onnx.ml support." ON)
+
+# The Python extensions and the C++ unit-test executable both link
+# lib_onnx_kernels / lib_onnx_backend_test; refuse incoherent option
+# combinations early instead of failing deep inside add_library.
+if(NOT ONNX_LIGHT_BUILD_KERNELS)
+  if(ONNX_LIGHT_BUILD_PYTHON)
+    message(FATAL_ERROR
+        "ONNX_LIGHT_BUILD_KERNELS=OFF is incompatible with "
+        "ONNX_LIGHT_BUILD_PYTHON=ON: the Python extensions "
+        "_onnxpykernels and _onnxpybackend require lib_onnx_kernels "
+        "and lib_onnx_backend_test.")
+  endif()
+  if(ONNX_LIGHT_BUILD_TESTS)
+    message(FATAL_ERROR
+        "ONNX_LIGHT_BUILD_KERNELS=OFF is incompatible with "
+        "ONNX_LIGHT_BUILD_TESTS=ON: the test_onnx_light executable "
+        "links lib_onnx_kernels and lib_onnx_backend_test.")
+  endif()
+endif()
 
 # Enable parallel compilation (file-level) on MSVC. Without /MP, cl.exe
 # compiles source files within a single project sequentially even when
@@ -249,6 +271,12 @@ target_link_libraries(lib_onnx_optim PUBLIC lib_onnx_op)
 # exposed to Python through ``_onnxpykernels`` (and re-exported via
 # ``_onnxpybackend`` transitively through ``lib_onnx_backend_test``). It
 # only depends on ``lib_onnx_proto`` for proto types.
+#
+# Guarded by ``ONNX_LIGHT_BUILD_KERNELS`` so consumers that only need the
+# schema/checker/shape-inference/version-converter libraries (for example
+# the standalone ``examples/check_onnx_light_model`` checker example) can
+# skip building this very large translation-unit set.
+if(ONNX_LIGHT_BUILD_KERNELS)
 add_library(lib_onnx_kernels ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} ${ONNX_KERNELS_SOURCES})
 if(_onnx_light_lib_type STREQUAL "SHARED" AND WIN32)
   set_target_properties(lib_onnx_kernels PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
@@ -333,6 +361,7 @@ target_precompile_headers(lib_onnx_backend_test PRIVATE
     <utility>
     <vector>
 )
+endif() # ONNX_LIGHT_BUILD_KERNELS
 
 # Builds _onnxpyprotoop, _onnxpyprotolib, _onnxpyoptim, _onnxpykernels and _onnxpybackend libraries.
 if(ONNX_LIGHT_BUILD_PYTHON)
@@ -638,13 +667,24 @@ endif()
 if(ONNX_LIGHT_INSTALL)
   include(CMakePackageConfigHelpers)
 
-  # Install the static library and export its target
-  install(TARGETS lib_onnx_proto lib_onnx_lib lib_onnx_op lib_onnx_optim lib_onnx_kernels lib_onnx_backend_test
+  # Install the static library and export its target.
+  # Splitting into two install(TARGETS) calls keeps the same exported
+  # ``onnx_lightTargets`` set when ONNX_LIGHT_BUILD_KERNELS=OFF while
+  # avoiding references to targets that were never created.
+  install(TARGETS lib_onnx_proto lib_onnx_lib lib_onnx_op lib_onnx_optim
     EXPORT onnx_lightTargets
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
   )
+  if(ONNX_LIGHT_BUILD_KERNELS)
+    install(TARGETS lib_onnx_kernels lib_onnx_backend_test
+      EXPORT onnx_lightTargets
+      ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+      LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+      RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+    )
+  endif()
 
   # Install public headers from onnx_light/onnx_helpers/include
   install(DIRECTORY "${ROOT_INCLUDE_PATH}/"
@@ -698,16 +738,18 @@ if(ONNX_LIGHT_INSTALL)
   )
 
   # Install public headers from onnx_light/onnx_backend_test
-  install(DIRECTORY "${ONNX_BACKEND_TEST_PATH}/"
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_backend_test"
-    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
-  )
+  if(ONNX_LIGHT_BUILD_KERNELS)
+    install(DIRECTORY "${ONNX_BACKEND_TEST_PATH}/"
+      DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_backend_test"
+      FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+    )
 
-  # Install public headers from onnx_light/onnx_kernels
-  install(DIRECTORY "${ONNX_KERNELS_PATH}/"
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_kernels"
-    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
-  )
+    # Install public headers from onnx_light/onnx_kernels
+    install(DIRECTORY "${ONNX_KERNELS_PATH}/"
+      DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_kernels"
+      FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+    )
+  endif()
 
   # Export the targets file
   install(EXPORT onnx_lightTargets

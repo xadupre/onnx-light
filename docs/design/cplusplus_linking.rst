@@ -30,6 +30,16 @@ From the repository root, install the C++ library with CMake:
     cmake --build build-install
     cmake --install build-install
 
+When downstream code only needs the schema / checker / shape-inference /
+version-converter / proto layer (``onnx_light::onnx_light``,
+``onnx_light::lib_onnx_op``, ``onnx_light::lib_onnx_optim``,
+``onnx_light::lib_onnx_proto``), pass
+``-DONNX_LIGHT_BUILD_KERNELS=OFF`` at configure time to skip building and
+installing the much larger ``lib_onnx_kernels`` (operator-kernel runtime)
+and ``lib_onnx_backend_test`` (backend-test case registry) libraries.
+``onnx_light::onnx_kernels`` and ``onnx_light::onnx_backend_test`` are then
+not part of the exported CMake package.
+
 Then downstream projects can rely on the exported CMake targets:
 
 .. code-block:: cmake

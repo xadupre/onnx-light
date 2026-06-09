@@ -3,6 +3,14 @@ from pathlib import Path
 from typing import Optional
 from . import FileLoadMode, ModelProto, ParseOptions, SerializeOptions
 
+# ParseOptions used by :func:`_find_external_location` to skip copying raw tensor
+# bytes when scanning a model file purely for external-data ``location`` entries.
+# Without this, the scan would parse and copy every tensor's raw data and roughly
+# double the apparent ``load`` time when a caller passes ``load_external_data=True``
+# without an explicit ``location``.
+_FIND_EXTERNAL_PARSE_OPTS = ParseOptions()
+_FIND_EXTERNAL_PARSE_OPTS.skip_raw_data = True
+
 __all__ = [
     "load",
     "load_encrypted",
@@ -32,7 +40,7 @@ def _find_external_location(model_path: str) -> str:
     from ._path_security import validate_external_data_path
 
     struct_model = ModelProto()
-    struct_model.ParseFromFile(model_path)
+    struct_model.ParseFromFile(model_path, _FIND_EXTERNAL_PARSE_OPTS)
     model_dir = os.path.dirname(os.path.abspath(model_path))
     if not struct_model.has_graph():
         return ""

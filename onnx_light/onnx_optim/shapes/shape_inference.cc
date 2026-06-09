@@ -458,6 +458,14 @@ void ShapesContext::ComputeShapeNode(const NodeProto &node) {
     ExpandLocalFunctionCall(*this, node, *func);
     return;
   }
+  if (const CustomComputeShapeFn *custom_shape_fn =
+          GetCustomShapeInferenceFunction(node.domain().as_string(), op_type);
+      custom_shape_fn != nullptr) {
+    CheckInputsAvailable(node);
+    CheckOutputsNotAvailable(node);
+    (*custom_shape_fn)(*this, node);
+    return;
+  }
   CheckOnnxDomain(node);
   CheckInputsAvailable(node);
   CheckOutputsNotAvailable(node);

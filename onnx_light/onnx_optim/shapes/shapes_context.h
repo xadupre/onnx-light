@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <functional>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -65,6 +66,8 @@ inline constexpr const char *kOnnxDomain = "ai.onnx";
  */
 class ShapesContext {
 public:
+  using CustomComputeShapeFn = std::function<void(ShapesContext &, const NodeProto &)>;
+
   ShapesContext() = default;
 
   // ── Tensor descriptors ──────────────────────────────────────────────
@@ -110,6 +113,7 @@ public:
     sequences_.clear();
     opsets_.clear();
     local_functions_.clear();
+    custom_shape_inference_.clear();
     constraints_.clear();
   }
 
@@ -236,6 +240,39 @@ public:
     return local_functions_;
   }
 
+  // ── Custom shape-inference hooks ────────────────────────────────────
+  //
+  // In addition to built-in dispatch-table entries and model-local
+  // functions, callers may register a per-(domain, op_type) callback
+  // to infer shapes for custom operators.
+
+  /// Registers or replaces a custom shape-inference callback for the
+  /// ``(domain, op_type)`` pair. ``domain == ""`` is normalized to
+  /// :cpp:var:`kOnnxDomain`.
+  void SetCustomShapeInferenceFunction(const std::string &domain, const std::string &op_type,
+                                       CustomComputeShapeFn fn) {
+    EXT_ENFORCE_INVALID(!op_type.empty(),
+                        "SetCustomShapeInferenceFunction: op_type must not be empty.");
+    EXT_ENFORCE_INVALID(static_cast<bool>(fn),
+                        "SetCustomShapeInferenceFunction: fn must not be empty.");
+    custom_shape_inference_[NormaliseDomain(domain) + ":" + op_type] = std::move(fn);
+  }
+
+  /// Returns a pointer to the custom shape-inference callback
+  /// registered for ``(domain, op_type)``, or ``nullptr`` if none is
+  /// registered. ``domain == ""`` is normalized to :cpp:var:`kOnnxDomain`.
+  const CustomComputeShapeFn *GetCustomShapeInferenceFunction(const std::string &domain,
+                                                              const std::string &op_type) const {
+    auto it = custom_shape_inference_.find(NormaliseDomain(domain) + ":" + op_type);
+    return it == custom_shape_inference_.end() ? nullptr : &it->second;
+  }
+
+  /// Read-only access to all registered custom shape-inference callbacks.
+  const std::unordered_map<std::string, CustomComputeShapeFn> &
+  CustomShapeInferenceFunctions() const noexcept {
+    return custom_shape_inference_;
+  }
+
   // ── Symbolic-dimension constraints ──────────────────────────────────
   //
   // Shape inference may discover that two symbolic dimensions must be
@@ -331,6 +368,7 @@ private:
   std::unordered_map<std::string, OptimSequence> sequences_;
   std::unordered_map<std::string, int> opsets_;
   std::unordered_map<std::string, const FunctionProto *> local_functions_;
+  std::unordered_map<std::string, CustomComputeShapeFn> custom_shape_inference_;
   std::set<Constraint> constraints_;
 };
 

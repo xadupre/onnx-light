@@ -291,6 +291,7 @@ fig.savefig("plot_shape_inference.png")
 # for intermediate tensors match the expected ``value_info`` stored in each
 # test case.
 
+# Import is used in the commented example code below to demonstrate the pattern.
 from onnx_light.backend.test.case import make_test_class  # noqa: E402, F401
 
 
@@ -344,8 +345,6 @@ def validate_shape_inference(model_with_expected_shapes: onnxl.ModelProto):
                 f"Shape mismatch for {name!r}: expected rank {len(exp_shape)}, "
                 f"got rank {len(inf_shape)}"
             )
-
-    print(f"✓ Shape inference validation passed for model: {work.graph.name}")
 
 
 # Uncomment the lines below to create a test class and run it with pytest or unittest.

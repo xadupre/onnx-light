@@ -386,6 +386,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor *max_output_boxes_per_class = GetOptionalInput(node, 2, rt.tensors());
          const Tensor *iou_threshold = GetOptionalInput(node, 3, rt.tensors());
          const Tensor *score_threshold = GetOptionalInput(node, 4, rt.tensors());
+         // For ONNX NonMaxSuppression (opset 10+), this runtime path uses the
+         // single schema attribute center_point_box (default 0).
          kernel::NonMaxSuppression::Attributes attrs;
          attrs.center_point_box = GetAttributeIntOrDefault(node, "center_point_box", 0);
          kernel::NonMaxSuppression k(rt.kernel_ctx());

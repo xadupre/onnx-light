@@ -158,6 +158,8 @@ TEST(RunNodes, RunNodeNormalisesDefaultDomain) {
 }
 
 TEST(RunNodes, RunNodeNonMaxSuppressionFromDispatchTable) {
+  // NonMaxSuppression was introduced in ONNX opset 10; use opset 11 to match
+  // the other NonMaxSuppression kernel tests in this repository.
   RuntimeContext rt(KernelContext(DefaultOpset(11)));
   rt.tensors()["boxes"] =
       Tensor::FromFloat("boxes", {1, 2, 4}, {0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 10.0f, 1.0f, 11.0f});

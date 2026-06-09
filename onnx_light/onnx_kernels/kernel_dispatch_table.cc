@@ -495,7 +495,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       // -----------------------------------------------------------------
       // ``ai.onnx.preview.training`` optimizer kernels.
       //
-      // Variadic inputs are layed out as ``R, T, <groups of N tensors>``:
+      // Variadic inputs are laid out as ``R, T, <groups of N tensors>``:
       //   * ``Adagrad`` / ``Momentum``: 3 groups (X, G, H or X, G, V) and
       //     2 output groups (X_new, H_new or X_new, V_new).
       //   * ``Adam``: 4 groups (X, G, V, H) and 3 output groups

@@ -227,7 +227,7 @@ Two renaming functions cover different use cases:
     parse error is truly unexpected.
 
 :func:`~onnx_light.onnx_optim.expressions.rename_dynamic_expression`
-    Like ``rename_expression``, but also applies a lightweight
+    Like :func:`~onnx_light.onnx_optim.expressions.rename_expression`, but also applies a lightweight
     simplification pass and silently returns the original string on parse
     failure.  Intended for best-effort renaming during shape inference
     where the expression may occasionally be a raw ONNX node name rather

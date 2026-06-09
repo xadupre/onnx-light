@@ -88,7 +88,7 @@ unchanged, but that copy is a structural deep-copy of C++ objects, not a
 serialize + parse round-trip — it is orders of magnitude cheaper than the
 protobuf path and no temporary ``bytes`` object is materialised on the
 Python side.  The same direct-call pattern is used by
-``onnx_light.onnx.checker``, ``onnx_light.onnx.shape_inference``, and the
+:mod:`onnx_light.onnx.checker`, :mod:`onnx_light.onnx.shape_inference`, and the
 version converter, so invoking any of these helpers on a model already
 loaded by ``onnx_light`` is essentially free apart from the work of the
 algorithm itself.
@@ -214,7 +214,7 @@ memory-map only the weight region.
 Saving with external data
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Pass a ``location`` argument to ``onnxl.save`` to route tensor weights to a
+Pass a ``location`` argument to :func:`onnx_light.onnx.save` to route tensor weights to a
 separate file:
 
 .. code-block:: python
@@ -237,7 +237,7 @@ Loading with external data
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 When the ``.onnx`` file already references an external data file through its
-tensor metadata, ``onnxl.load`` can discover and load the weights
+tensor metadata, :func:`onnx_light.onnx.load` can discover and load the weights
 automatically:
 
 .. code-block:: python
@@ -263,7 +263,7 @@ Splitting external data across multiple files
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 For very large models it can be useful to cap the size of each external weight
-file.  Set ``max_external_file_size`` (in bytes) and ``onnxl.save`` will
+file.  Set ``max_external_file_size`` (in bytes) and :func:`onnx_light.onnx.save` will
 automatically open a new file once the limit is reached, appending ``.1``,
 ``.2``, … suffixes to the base name:
 
@@ -346,8 +346,8 @@ object and decrypted back directly:
     # Decrypt from bytes
     model = onnxl.load_encrypted_string(blob, key="my_passphrase")
 
-The ``bytes`` object produced by :func:`save_encrypted_string` is in the
-same ``ONNXCRY1`` format as the file produced by :func:`save_encrypted`,
+The ``bytes`` object produced by :func:`onnx_light.onnx.save_encrypted_string` is in the
+same ``ONNXCRY1`` format as the file produced by :func:`onnx_light.onnx.save_encrypted`,
 so the two forms are interchangeable.
 
 C++ API

@@ -37,11 +37,28 @@ class TestRuntimeCoverage(ExtTestCase):
         self.assertIsInstance(status.name, str)
         self.assertIsInstance(status.op_type, str)
         self.assertIsInstance(status.domain, str)
+        self.assertIsInstance(status.tag, str)
+        self.assertEqual(status.group, status.tag or status.domain)
         self.assertIsInstance(status.static_shape, bool)
         self.assertIsInstance(status.dynamic_shapes, bool)
         # onnxruntime_cpu is either None (cannot run) or a non-negative float.
         if status.onnxruntime_cpu is not None:
             self.assertGreaterEqual(status.onnxruntime_cpu, 0.0)
+
+    def test_tagged_cases_have_own_group(self):
+        # C++ test cases tagged with ``nan_inf``, ``local_function`` or
+        # ``inference`` must appear in their own summary section instead of
+        # being aggregated under their principal op's domain.
+        groups = set(self.report.summaries)
+        for status in self.report.statuses:
+            if status.tag:
+                # The summary key is the tag, not the principal op's domain.
+                self.assertIn(status.tag, groups)
+                self.assertEqual(status.group, status.tag)
+        for expected_tag in ("nan_inf", "local_function", "inference"):
+            tagged = [s for s in self.report.statuses if s.tag == expected_tag]
+            if tagged:
+                self.assertIn(expected_tag, groups)
 
     def test_static_and_dynamic_shape_pass_overall(self):
         # Static and dynamic shape inference are expected to succeed on every
@@ -82,8 +99,8 @@ class TestRuntimeCoverage(ExtTestCase):
         text = render_rst_domain_sections(self.report)
         self.assertNotIn(".. tab-set::", text)
         self.assertIn(":class: sphinx-datatable", text)
-        for domain in self.report.summaries:
-            label = domain or "ai.onnx (default)"
+        for group in self.report.summaries:
+            label = group or "ai.onnx (default)"
             self.assertIn(f".. rubric:: {label}", text)
 
     def test_render_rst_domain_tabs_compat(self):

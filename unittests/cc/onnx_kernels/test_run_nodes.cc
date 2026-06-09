@@ -4,6 +4,7 @@
 
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/kernels/math/include_math_kernels.h"
 #include "onnx_kernels/kernels/training/include_training_kernels.h"
 #include "onnx_kernels/run_nodes.h"
 #include "onnx_kernels/simple_tensor.h"
@@ -12,6 +13,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <cstring>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -72,7 +74,8 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx:Erf"), table.end());
   EXPECT_NE(table.find("ai.onnx:Sigmoid"), table.end());
   EXPECT_NE(table.find("ai.onnx:Tanh"), table.end());
-  // Binary math, no attributes.
+  // Binary math (Gemm is attribute-driven; MatMul/Pow are not).
+  EXPECT_NE(table.find("ai.onnx:Gemm"), table.end());
   EXPECT_NE(table.find("ai.onnx:MatMul"), table.end());
   EXPECT_NE(table.find("ai.onnx:Pow"), table.end());
   // Variadic reducers.
@@ -102,11 +105,16 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx:Mod"), table.end());
   EXPECT_NE(table.find("ai.onnx:Clip"), table.end());
   EXPECT_NE(table.find("ai.onnx:Attention"), table.end());
+  EXPECT_NE(table.find("ai.onnx:NonMaxSuppression"), table.end());
   EXPECT_NE(table.find("ai.onnx:IsInf"), table.end());
   EXPECT_NE(table.find("ai.onnx:BitShift"), table.end());
+  EXPECT_NE(table.find("ai.onnx:Einsum"), table.end());
+  EXPECT_NE(table.find("ai.onnx:DFT"), table.end());
   // Generator kernels.
   EXPECT_NE(table.find("ai.onnx:EyeLike"), table.end());
   EXPECT_NE(table.find("ai.onnx:AffineGrid"), table.end());
+  // Tensor shape kernels.
+  EXPECT_NE(table.find("ai.onnx:Shape"), table.end());
   // Logical / bitwise kernels.
   EXPECT_NE(table.find("ai.onnx:And"), table.end());
   EXPECT_NE(table.find("ai.onnx:Or"), table.end());
@@ -142,6 +150,23 @@ TEST(RunNodes, RunNodeSingleAdd) {
   EXPECT_FLOAT_EQ(got[2], 33.0f);
 }
 
+TEST(RunNodes, RunNodeGemmWithoutBiasUsesSchemaDefaults) {
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.tensors()["a"] = Tensor::FromFloat("a", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  rt.tensors()["b"] = Tensor::FromFloat("b", {2, 2}, {5.0f, 6.0f, 7.0f, 8.0f});
+  NodeProto node = MakeNode("Gemm", {"a", "b"}, {"y"});
+  RunNode(node, rt);
+  ASSERT_NE(rt.tensors().find("y"), rt.tensors().end());
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, std::vector<int64_t>({2, 2}));
+  ASSERT_EQ(y.element_count(), 4);
+  const float *got = y.AsFloat();
+  EXPECT_FLOAT_EQ(got[0], 19.0f);
+  EXPECT_FLOAT_EQ(got[1], 22.0f);
+  EXPECT_FLOAT_EQ(got[2], 43.0f);
+  EXPECT_FLOAT_EQ(got[3], 50.0f);
+}
+
 TEST(RunNodes, RunNodeNormalisesDefaultDomain) {
   // The default ONNX domain is the empty string. The dispatcher must
   // normalise it to ``ai.onnx`` before looking up the kernel.
@@ -154,6 +179,33 @@ TEST(RunNodes, RunNodeNormalisesDefaultDomain) {
   ASSERT_EQ(rt.tensors()["y"].element_count(), 2);
   EXPECT_FLOAT_EQ(got[0], 1.5f);
   EXPECT_FLOAT_EQ(got[1], 2.5f);
+}
+
+TEST(RunNodes, RunNodeNonMaxSuppressionFromDispatchTable) {
+  // NonMaxSuppression was introduced in ONNX opset 10; use opset 11 to match
+  // the other NonMaxSuppression kernel tests in this repository.
+  RuntimeContext rt(KernelContext(DefaultOpset(11)));
+  rt.tensors()["boxes"] =
+      Tensor::FromFloat("boxes", {1, 2, 4}, {0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 10.0f, 1.0f, 11.0f});
+  rt.tensors()["scores"] = Tensor::FromFloat("scores", {1, 1, 2}, {0.9f, 0.8f});
+  rt.tensors()["max_output_boxes_per_class"] =
+      Tensor::FromInt64("max_output_boxes_per_class", {1}, {10});
+  rt.tensors()["iou_threshold"] = Tensor::FromFloat("iou_threshold", {1}, {0.5f});
+  rt.tensors()["score_threshold"] = Tensor::FromFloat("score_threshold", {1}, {0.0f});
+
+  NodeProto node = MakeNode(
+      "NonMaxSuppression",
+      {"boxes", "scores", "max_output_boxes_per_class", "iou_threshold", "score_threshold"},
+      {"selected_indices"});
+  RunNode(node, rt);
+
+  const Tensor &selected = rt.tensors().at("selected_indices");
+  EXPECT_EQ(selected.shape, (std::vector<int64_t>{2, 3}));
+  const int64_t *py = selected.AsInt64();
+  const std::vector<int64_t> expected = {0, 0, 0, 0, 0, 1};
+  for (size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_EQ(py[i], expected[i]);
+  }
 }
 
 TEST(RunNodes, RunNodesOnRepeatedProtoFieldChain) {
@@ -252,6 +304,192 @@ TEST(RunNodes, RunNodeAffineGridUsesAttributes) {
   EXPECT_FLOAT_EQ(got[5], 1.0f);
   EXPECT_FLOAT_EQ(got[6], 1.0f);
   EXPECT_FLOAT_EQ(got[7], 1.0f);
+}
+
+TEST(RunNodes, RunNodeReshapeFromDispatchTable) {
+  // Reshape with two inputs (data, shape) and the default ``allowzero`` (0).
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {2, 3}, {1, 2, 3, 4, 5, 6});
+  rt.tensors()["shape"] = Tensor::FromInt64("shape", {2}, {3, 2});
+  NodeProto node = MakeNode("Reshape", {"x", "shape"}, {"y"});
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{3, 2}));
+  const float *got = y.AsFloat();
+  EXPECT_FLOAT_EQ(got[0], 1.0f);
+  EXPECT_FLOAT_EQ(got[5], 6.0f);
+}
+
+TEST(RunNodes, RunNodeSqueezeAxesAsInput) {
+  // Opset 13+: ``axes`` is provided as the optional second INT64 input.
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {1, 3, 1, 2}, {1, 2, 3, 4, 5, 6});
+  rt.tensors()["axes"] = Tensor::FromInt64("axes", {2}, {0, 2});
+  NodeProto node = MakeNode("Squeeze", {"x", "axes"}, {"y"});
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{3, 2}));
+  EXPECT_EQ(y.element_count(), 6);
+}
+
+TEST(RunNodes, RunNodeSqueezeAxesAsAttribute) {
+  // Opset <13: ``axes`` is an INTS attribute (also accepted by the trampoline
+  // for backward compatibility).
+  RuntimeContext rt(KernelContext(DefaultOpset(11)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {1, 3, 1, 2}, {1, 2, 3, 4, 5, 6});
+  NodeProto node = MakeNode("Squeeze", {"x"}, {"y"});
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name("axes");
+  attr->set_type(AttributeProto::AttributeType::INTS);
+  attr->add_ints(static_cast<int64_t>(0));
+  attr->add_ints(static_cast<int64_t>(2));
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{3, 2}));
+}
+
+TEST(RunNodes, RunNodeUnsqueezeAxesAsInput) {
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {3, 2}, {1, 2, 3, 4, 5, 6});
+  rt.tensors()["axes"] = Tensor::FromInt64("axes", {2}, {0, 2});
+  NodeProto node = MakeNode("Unsqueeze", {"x", "axes"}, {"y"});
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{1, 3, 1, 2}));
+}
+
+TEST(RunNodes, RunNodeShapeNoAttributes) {
+  // Default attributes: returns the full shape as an INT64 1-D tensor.
+  RuntimeContext rt(KernelContext(DefaultOpset(15)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {2, 3, 4}, std::vector<float>(24, 0.0f));
+  NodeProto node = MakeNode("Shape", {"x"}, {"y"});
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{3}));
+  EXPECT_EQ(y.data_type, 7); // INT64
+  const int64_t *got = y.AsInt64();
+  EXPECT_EQ(got[0], 2);
+  EXPECT_EQ(got[1], 3);
+  EXPECT_EQ(got[2], 4);
+}
+
+TEST(RunNodes, RunNodeShapeUsesStartAndEndAttributes) {
+  // Verify the Shape trampoline forwards the ``start`` and ``end``
+  // attributes to ``kernel::Shape``: ``shape[1:-1]`` of a 4-D input.
+  RuntimeContext rt(KernelContext(DefaultOpset(15)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {2, 3, 4, 5}, std::vector<float>(120, 0.0f));
+  NodeProto node = MakeNode("Shape", {"x"}, {"y"});
+  AttributeProto *attr_start = node.add_attribute();
+  attr_start->set_name("start");
+  attr_start->set_type(AttributeProto::AttributeType::INT);
+  attr_start->set_i(1);
+  AttributeProto *attr_end = node.add_attribute();
+  attr_end->set_name("end");
+  attr_end->set_type(AttributeProto::AttributeType::INT);
+  attr_end->set_i(-1);
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2}));
+  EXPECT_EQ(y.data_type, 7); // INT64
+  const int64_t *got = y.AsInt64();
+  EXPECT_EQ(got[0], 3);
+  EXPECT_EQ(got[1], 4);
+}
+
+TEST(RunNodes, RunNodeEinsumUsesEquationAttribute) {
+  // Verify the Einsum trampoline forwards the variadic inputs and the
+  // ``equation`` STRING attribute to ``kernel::Einsum``. The equation
+  // ``"ij,jk->ik"`` performs a 2x3 by 3x2 matrix product.
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["a"] = Tensor::FromFloat("a", {2, 3}, {1, 2, 3, 4, 5, 6});
+  rt.tensors()["b"] = Tensor::FromFloat("b", {3, 2}, {7, 8, 9, 10, 11, 12});
+  NodeProto node = MakeNode("Einsum", {"a", "b"}, {"y"});
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name("equation");
+  attr->set_type(AttributeProto::AttributeType::STRING);
+  attr->set_s("ij,jk->ik");
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 2}));
+  const float *got = y.AsFloat();
+  EXPECT_FLOAT_EQ(got[0], 58.0f);
+  EXPECT_FLOAT_EQ(got[1], 64.0f);
+  EXPECT_FLOAT_EQ(got[2], 139.0f);
+  EXPECT_FLOAT_EQ(got[3], 154.0f);
+}
+
+TEST(RunNodes, RunNodeDFTOpset17UsesAxisAttribute) {
+  // v17 DFT: ``axis`` / ``inverse`` / ``onesided`` are INT attributes.
+  // Inputs are ``(input, dft_length?)``.
+  RuntimeContext rt(KernelContext(DefaultOpset(17)));
+  Tensor x = Tensor::FromFloat("x", {1, 4, 1}, {1.0f, 2.0f, 3.0f, 4.0f});
+  rt.tensors()["x"] = x;
+
+  NodeProto node = MakeNode("DFT", {"x"}, {"y"});
+  AttributeProto *axis = node.add_attribute();
+  axis->set_name("axis");
+  axis->set_type(AttributeProto::AttributeType::INT);
+  axis->set_i(1);
+
+  RunNode(node, rt);
+
+  onnx_kernels::kernel::DFT ref(rt.kernel_ctx());
+  Tensor expected = ref(x, /*dft_length=*/nullptr, /*axis=*/1, /*onesided=*/false,
+                        /*inverse=*/false);
+  const Tensor &y = rt.tensors()["y"];
+  ASSERT_EQ(y.shape, expected.shape);
+  ASSERT_EQ(y.data.size(), expected.data.size());
+  EXPECT_EQ(std::memcmp(y.data.data(), expected.data.data(), expected.data.size()), 0);
+}
+
+TEST(RunNodes, RunNodeDFTOpset20UsesAxisInput) {
+  // v20 DFT: ``axis`` becomes the third (optional) input; only
+  // ``inverse`` / ``onesided`` remain attributes.
+  RuntimeContext rt(KernelContext(DefaultOpset(20)));
+  Tensor x = Tensor::FromFloat("x", {1, 4, 1}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor axis = Tensor::FromInt64("axis", {}, {1});
+  rt.tensors()["x"] = x;
+  rt.tensors()["axis"] = axis;
+
+  // ``dft_length`` is omitted by passing an empty input name.
+  NodeProto node = MakeNode("DFT", {"x", "", "axis"}, {"y"});
+
+  RunNode(node, rt);
+
+  onnx_kernels::kernel::DFT ref(rt.kernel_ctx());
+  Tensor expected = ref(x, /*dft_length=*/nullptr, /*axis=*/1, /*onesided=*/false,
+                        /*inverse=*/false);
+  const Tensor &y = rt.tensors()["y"];
+  ASSERT_EQ(y.shape, expected.shape);
+  ASSERT_EQ(y.data.size(), expected.data.size());
+  EXPECT_EQ(std::memcmp(y.data.data(), expected.data.data(), expected.data.size()), 0);
+}
+
+TEST(RunNodes, RunNodeDFTOpset17InverseOnesidedAttributes) {
+  // v17 DFT with ``inverse`` and ``onesided`` attributes set.
+  RuntimeContext rt(KernelContext(DefaultOpset(17)));
+  Tensor x = Tensor::FromFloat("x", {1, 4, 2}, {1.0f, 0.0f, 2.0f, 0.0f, 3.0f, 0.0f, 4.0f, 0.0f});
+  rt.tensors()["x"] = x;
+
+  NodeProto node = MakeNode("DFT", {"x"}, {"y"});
+  AttributeProto *axis = node.add_attribute();
+  axis->set_name("axis");
+  axis->set_type(AttributeProto::AttributeType::INT);
+  axis->set_i(1);
+  AttributeProto *inverse = node.add_attribute();
+  inverse->set_name("inverse");
+  inverse->set_type(AttributeProto::AttributeType::INT);
+  inverse->set_i(1);
+
+  RunNode(node, rt);
+
+  onnx_kernels::kernel::DFT ref(rt.kernel_ctx());
+  Tensor expected = ref(x, /*dft_length=*/nullptr, /*axis=*/1, /*onesided=*/false,
+                        /*inverse=*/true);
+  const Tensor &y = rt.tensors()["y"];
+  ASSERT_EQ(y.shape, expected.shape);
+  ASSERT_EQ(y.data.size(), expected.data.size());
+  EXPECT_EQ(std::memcmp(y.data.data(), expected.data.data(), expected.data.size()), 0);
 }
 
 TEST(RunNodes, RunNodeAdagradFromDispatchTable) {

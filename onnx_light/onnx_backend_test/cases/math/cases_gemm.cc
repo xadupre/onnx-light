@@ -72,6 +72,16 @@ void RegisterGemmCases(std::vector<TestCase> &registry) {
     Expect(node, {a, b}, {y}, "test_cc_gemm_default", {opset}, "backend-test", registry);
   }
 
+  // test_cc_gemm_default_no_bias — Y = A * B, no bias, mirrors ONNX
+  // ``test_gemm_default_no_bias`` shapes ([2, 10] x [10, 3]).
+  {
+    NodeProto node = MakeGemmNode(/*has_bias=*/false);
+    Tensor a = Tensor::FromFloat("", {2, 10}, Randn<float>({2, 10}, /*seed=*/101));
+    Tensor b = Tensor::FromFloat("", {10, 3}, Randn<float>({10, 3}, /*seed=*/102));
+    Tensor y = gemm_kernel(a, b, nullptr, 1.0f, 1.0f, 0, 0);
+    Expect(node, {a, b}, {y}, "test_cc_gemm_default_no_bias", {opset}, "backend-test", registry);
+  }
+
   // test_cc_gemm_default_matrix_bias — Y = A * B + C (2-D bias).
   {
     NodeProto node = MakeGemmNode(/*has_bias=*/true);

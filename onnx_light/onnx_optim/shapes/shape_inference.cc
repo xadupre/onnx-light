@@ -5,15 +5,18 @@
 #include "onnx_optim/shapes/shape_inference.h"
 
 #include <algorithm>
+#include <map>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 #include "onnx_proto/onnx_helper.h"
 
 #include "onnx_lib/shape_inference/attribute_binder.h"
+#include "onnx_optim/expressions.h"
 #include "onnx_optim/shapes/dispatch_table.h"
 #include "onnx_optim/shapes/generator/shape_generator.h"
 #include "onnx_optim/shapes/preview/shape_preview.h"
@@ -322,6 +325,101 @@ void MergeAnchorsIntoContext(ShapesContext &ctx, const AnchorMap &anchors) {
   }
 }
 
+std::unordered_set<std::string> CollectAnchorSymbols(const AnchorMap &anchors) {
+  std::unordered_set<std::string> symbols;
+  for (const auto &kv : anchors) {
+    const OptimTensor &tensor = kv.second;
+    for (std::size_t i = 0; i < tensor.Shape().Rank(); ++i) {
+      const OptimDim &dim = tensor.Shape()[i];
+      if (dim.IsExpr()) {
+        symbols.insert(dim.AsExpr());
+      }
+    }
+    if (tensor.HasValueAsShape()) {
+      for (std::size_t i = 0; i < tensor.ValueAsShape().Rank(); ++i) {
+        const OptimDim &dim = tensor.ValueAsShape()[i];
+        if (dim.IsExpr()) {
+          symbols.insert(dim.AsExpr());
+        }
+      }
+    }
+  }
+  return symbols;
+}
+
+OptimShape
+RenameShapeWithReplacements(const OptimShape &shape,
+                            const std::unordered_map<std::string, std::string> &replacements) {
+  OptimShape renamed;
+  for (std::size_t i = 0; i < shape.Rank(); ++i) {
+    const OptimDim &dim = shape[i];
+    if (dim.IsInt()) {
+      renamed.PushBack(dim.AsInt());
+      continue;
+    }
+    const std::string &expr = dim.AsExpr();
+    auto it = replacements.find(expr);
+    if (it != replacements.end()) {
+      renamed.PushBack(it->second);
+      continue;
+    }
+    renamed.PushBack(expressions::rename_dynamic_expression(expr, replacements));
+  }
+  return renamed;
+}
+
+void PropagateAnchorConstraintsIntoContext(ShapesContext &ctx, const AnchorMap &anchors) {
+  if (ctx.ConstraintsSize() == 0) {
+    return;
+  }
+  const std::unordered_set<std::string> preferred = CollectAnchorSymbols(anchors);
+  if (preferred.empty()) {
+    return;
+  }
+  std::map<std::string, std::unordered_set<std::string>> constraints;
+  for (const auto &c : ctx.Constraints()) {
+    constraints[c.first].insert(c.second);
+    constraints[c.second].insert(c.first);
+  }
+  const std::map<std::string, std::string> rep =
+      expressions::rename_dynamic_dimensions(constraints, preferred);
+  if (rep.empty()) {
+    return;
+  }
+  std::unordered_map<std::string, std::string> replacements(rep.begin(), rep.end());
+
+  std::vector<std::string> names;
+  names.reserve(ctx.Tensors().size());
+  for (const auto &kv : ctx.Tensors()) {
+    names.push_back(kv.first);
+  }
+
+  for (const std::string &name : names) {
+    const OptimTensor &tensor = ctx.Get(name);
+    OptimTensor updated(tensor);
+    bool changed = false;
+
+    OptimShape renamed_shape = RenameShapeWithReplacements(tensor.Shape(), replacements);
+    if (renamed_shape != tensor.Shape()) {
+      updated.Shape() = std::move(renamed_shape);
+      changed = true;
+    }
+
+    if (tensor.HasValueAsShape()) {
+      OptimShape renamed_value_shape =
+          RenameShapeWithReplacements(tensor.ValueAsShape(), replacements);
+      if (renamed_value_shape != tensor.ValueAsShape()) {
+        updated.SetValueAsShape(std::move(renamed_value_shape));
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      ctx.Set(name, std::move(updated));
+    }
+  }
+}
+
 } // namespace
 
 void CheckInputsAvailable(const ShapesContext &ctx, const NodeProto &node) {
@@ -430,6 +528,7 @@ void ComputeShapeModel(ShapesContext &ctx, const ModelProto &model,
   ComputeShapeGraph(ctx, model.graph());
   if (prefill_with_value_info_output) {
     MergeAnchorsIntoContext(ctx, anchors);
+    PropagateAnchorConstraintsIntoContext(ctx, anchors);
   }
 }
 

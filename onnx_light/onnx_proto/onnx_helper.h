@@ -163,6 +163,63 @@ ConsolidateTensorsToBuffer(ModelProto &model,
                            const TensorBufferOptions &opts = TensorBufferOptions{});
 
 /**
+ * Thrown by :func:`ConvertModelToExternalData` when ``location`` already
+ * exists on disk.  The Python bindings translate this to
+ * :class:`FileExistsError`.
+ */
+class ExternalDataLocationExistsError : public std::runtime_error {
+public:
+  using std::runtime_error::runtime_error;
+};
+
+/**
+ * Marks every initializer tensor of *model* whose ``raw_data`` is at least
+ * ``size_threshold`` bytes long as EXTERNAL.  The actual bytes are not
+ * written; they remain in ``raw_data`` and are flushed to disk by the next
+ * serialization call (e.g. :func:`SerializeModelProtoToStream` /
+ * :func:`PopulateExternalData`).
+ *
+ * Mirrors :func:`onnx.external_data_helper.convert_model_to_external_data`
+ * on top of onnx-light's protos.
+ *
+ * @param model Model to modify in place.
+ * @param all_tensors_to_one_file When ``true`` (default), every qualifying
+ *        tensor points at the same external file (``location`` or a
+ *        generated ``<uuid>.data`` name).  When ``false``, each tensor is
+ *        given its own file named after the tensor.
+ * @param location Relative path of the external data file.  Must be
+ *        relative to the model file.  Ignored when
+ *        ``all_tensors_to_one_file=false``.  Empty means "generate a name".
+ * @param size_threshold Only tensors whose ``raw_data`` size is greater
+ *        than or equal to ``size_threshold`` bytes are moved to external
+ *        storage.  Set to ``0`` to externalize every tensor with raw data.
+ * @param convert_attribute When ``true``, also externalize tensors stored
+ *        inside node attributes (``AttributeProto.t`` and
+ *        ``AttributeProto.tensors``).
+ * @throws std::invalid_argument When ``location`` is an absolute path.
+ * @throws ExternalDataLocationExistsError When ``location`` already exists.
+ */
+void ConvertModelToExternalData(ModelProto &model, bool all_tensors_to_one_file = true,
+                                const std::string &location = "", size_t size_threshold = 1024,
+                                bool convert_attribute = false);
+
+/**
+ * Loads external tensor bytes into *model* in place.
+ *
+ * For every tensor whose data lives in an external file (i.e.
+ * ``data_location == EXTERNAL``), reads the bytes from ``base_dir`` into
+ * the tensor's ``raw_data`` field, resets ``data_location`` to ``DEFAULT``
+ * and clears the ``external_data`` entries.
+ *
+ * Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
+ *
+ * @param model Model whose external tensors are loaded in place.
+ * @param base_dir Directory that contains the external data files
+ *        referenced by the tensors.
+ */
+void LoadExternalDataForModel(ModelProto &model, const std::string &base_dir);
+
+/**
  * IteratorTensorProto is an iterator that traverses all TensorProto objects.
  */
 class IteratorTensorProto {

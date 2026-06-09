@@ -318,37 +318,6 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
 
       // -----------------------------------------------------------------
-      // Binary kernels with attributes.
-      // -----------------------------------------------------------------
-      // ``Mod``: ``fmod`` is 0 (NumPy-style integer modulo) by default.
-      {"ai.onnx:Mod",
-       [](const NodeProto &node, RuntimeContext &rt) {
-         RequireInputCount(node, 2);
-         RequireOutputCount(node, 1);
-         const Tensor &x = GetInput(node, 0, rt.tensors());
-         const Tensor &y = GetInput(node, 1, rt.tensors());
-         const int64_t fmod = GetAttributeIntOrDefault(node, "fmod", 0);
-         kernel::Mod k(rt.kernel_ctx());
-         SetOutput(node, 0, k(x, y, fmod), rt.tensors());
-       }},
-
-      // -----------------------------------------------------------------
-      // Multi-input ``Clip`` (1-3 inputs since opset 11). ``min`` and
-      // ``max`` are optional and may be absent or wired with an empty
-      // input name.
-      // -----------------------------------------------------------------
-      {"ai.onnx:Clip",
-       [](const NodeProto &node, RuntimeContext &rt) {
-         RequireMinInputCount(node, 1);
-         RequireOutputCount(node, 1);
-         const Tensor &x = GetInput(node, 0, rt.tensors());
-         const Tensor *min = GetOptionalInput(node, 1, rt.tensors());
-         const Tensor *max = GetOptionalInput(node, 2, rt.tensors());
-         kernel::Clip k(rt.kernel_ctx());
-         SetOutput(node, 0, k(x, min, max), rt.tensors());
-       }},
-
-      // -----------------------------------------------------------------
       // ``Attention``: supports Q/K/V, optional mask and optional past KV.
       // Outputs: Y (+ optional present_key/present_value/qk_matmul_output).
       // -----------------------------------------------------------------
@@ -401,6 +370,37 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          set_optional_output(1, std::move(result.present_key));
          set_optional_output(2, std::move(result.present_value));
          set_optional_output(3, std::move(result.qk_matmul_output));
+       }},
+
+      // -----------------------------------------------------------------
+      // Multi-input ``Clip`` (1-3 inputs since opset 11). ``min`` and
+      // ``max`` are optional and may be absent or wired with an empty
+      // input name.
+      // -----------------------------------------------------------------
+      {"ai.onnx:Clip",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const Tensor *min = GetOptionalInput(node, 1, rt.tensors());
+         const Tensor *max = GetOptionalInput(node, 2, rt.tensors());
+         kernel::Clip k(rt.kernel_ctx());
+         SetOutput(node, 0, k(x, min, max), rt.tensors());
+       }},
+
+      // -----------------------------------------------------------------
+      // Binary kernels with attributes.
+      // -----------------------------------------------------------------
+      // ``Mod``: ``fmod`` is 0 (NumPy-style integer modulo) by default.
+      {"ai.onnx:Mod",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const Tensor &y = GetInput(node, 1, rt.tensors());
+         const int64_t fmod = GetAttributeIntOrDefault(node, "fmod", 0);
+         kernel::Mod k(rt.kernel_ctx());
+         SetOutput(node, 0, k(x, y, fmod), rt.tensors());
        }},
 
       // -----------------------------------------------------------------

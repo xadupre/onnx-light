@@ -16,7 +16,9 @@
 #include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 #include "onnx_kernels/kernels/training/include_training_kernels.h"
 #include "onnx_kernels/node_helpers.h"
+#include "onnx_kernels/simple_tensor.h"
 
+#include <algorithm>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -288,6 +290,59 @@ auto DispatchSVMByDataType(const Tensor &x, const char *op_name,
     throw std::invalid_argument(std::string("RunNode: ") + op_name +
                                 " input 'X' must be FLOAT, DOUBLE, INT32 or INT64.");
   }
+}
+
+// Same dispatch as :func:`DispatchSVMByDataType` but used for the classic
+// TreeEnsembleRegressor/TreeEnsembleClassifier ops, which accept the same
+// set of input element types (FLOAT, DOUBLE, INT32, INT64) per the
+// ``ai.onnx.ml`` schema.
+template <class Fn>
+auto DispatchTreeEnsembleClassicByDataType(const Tensor &x, const char *op_name,
+                                           Fn &&fn) -> decltype(fn(static_cast<float *>(nullptr))) {
+  return DispatchSVMByDataType(x, op_name, std::forward<Fn>(fn));
+}
+
+// Reads a required TENSOR-valued attribute from ``node`` and converts it
+// to a :cpp:class:`Tensor`. Throws ``std::invalid_argument`` if the
+// attribute is missing or not of type TENSOR.
+inline Tensor GetRequiredAttributeTensor(const NodeProto &node, const std::string &name) {
+  const AttributeProto *attr = FindAttribute(node, name);
+  if (attr == nullptr) {
+    throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() + "' is missing '" +
+                                name + "' TENSOR attribute.");
+  }
+  if (attr->type() != AttributeProto::AttributeType::TENSOR) {
+    throw std::invalid_argument("RunNode: attribute '" + name + "' of op '" +
+                                node.op_type().as_string() + "' must be a TENSOR.");
+  }
+  return TensorFromProto(attr->t());
+}
+
+// Same as :func:`GetRequiredAttributeTensor` but returns an empty (zero-
+// element) tensor of ``fallback_dtype`` when the attribute is absent.
+inline Tensor GetAttributeTensorOrEmpty(const NodeProto &node, const std::string &name,
+                                        int32_t fallback_dtype) {
+  const AttributeProto *attr = FindAttribute(node, name);
+  if (attr == nullptr) {
+    return Tensor("", fallback_dtype, std::vector<int64_t>{0}, std::vector<uint8_t>{});
+  }
+  if (attr->type() != AttributeProto::AttributeType::TENSOR) {
+    throw std::invalid_argument("RunNode: attribute '" + name + "' of op '" +
+                                node.op_type().as_string() + "' must be a TENSOR.");
+  }
+  return TensorFromProto(attr->t());
+}
+
+// Copies the typed contents of ``t`` into a ``std::vector<T>``. Throws
+// ``std::invalid_argument`` if ``t.data_type`` does not match ``T``.
+template <typename T> std::vector<T> TensorToVector(const Tensor &t) {
+  const int64_t count = t.element_count();
+  std::vector<T> out(static_cast<size_t>(count));
+  if (count > 0) {
+    const T *src = t.As<T>();
+    std::copy(src, src + count, out.begin());
+  }
+  return out;
 }
 
 } // namespace
@@ -872,6 +927,201 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
              });
          SetOutput(node, 0, std::move(yz.first), rt.tensors());
          SetOutput(node, 1, std::move(yz.second), rt.tensors());
+       }},
+      {"ai.onnx.ml:TreeEnsembleRegressor",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const std::vector<int64_t> nodes_treeids =
+             GetAttributeIntsOrDefault(node, "nodes_treeids", {});
+         const std::vector<int64_t> nodes_nodeids =
+             GetAttributeIntsOrDefault(node, "nodes_nodeids", {});
+         const std::vector<int64_t> nodes_featureids =
+             GetAttributeIntsOrDefault(node, "nodes_featureids", {});
+         const std::vector<float> nodes_values =
+             GetAttributeFloatsOrDefault(node, "nodes_values", {});
+         const std::vector<std::string> nodes_modes =
+             GetAttributeStringsOrDefault(node, "nodes_modes", {});
+         const std::vector<int64_t> nodes_truenodeids =
+             GetAttributeIntsOrDefault(node, "nodes_truenodeids", {});
+         const std::vector<int64_t> nodes_falsenodeids =
+             GetAttributeIntsOrDefault(node, "nodes_falsenodeids", {});
+         const std::vector<int64_t> nodes_missing =
+             GetAttributeIntsOrDefault(node, "nodes_missing_value_tracks_true", {});
+         const std::vector<int64_t> target_treeids =
+             GetAttributeIntsOrDefault(node, "target_treeids", {});
+         const std::vector<int64_t> target_nodeids =
+             GetAttributeIntsOrDefault(node, "target_nodeids", {});
+         const std::vector<int64_t> target_ids =
+             GetAttributeIntsOrDefault(node, "target_ids", {});
+         const std::vector<float> target_weights =
+             GetAttributeFloatsOrDefault(node, "target_weights", {});
+         const int64_t n_targets = GetAttributeIntOrDefault(node, "n_targets", 1);
+         const std::string aggregate_function =
+             GetAttributeStringOrDefault(node, "aggregate_function", "SUM");
+         const std::string post_transform =
+             GetAttributeStringOrDefault(node, "post_transform", "NONE");
+         const std::vector<float> base_values =
+             GetAttributeFloatsOrDefault(node, "base_values", {});
+         kernel::TreeEnsembleRegressor reg(rt.kernel_ctx());
+         Tensor y =
+             DispatchTreeEnsembleClassicByDataType(x, "TreeEnsembleRegressor", [&](auto *tag) {
+               using T = std::remove_pointer_t<decltype(tag)>;
+               (void)tag;
+               return reg.template operator()<T>(
+                   x, nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values, nodes_modes,
+                   nodes_truenodeids, nodes_falsenodeids, nodes_missing, target_treeids,
+                   target_nodeids, target_ids, target_weights, n_targets, aggregate_function,
+                   post_transform, base_values);
+             });
+         SetOutput(node, 0, std::move(y), rt.tensors());
+       }},
+      {"ai.onnx.ml:TreeEnsembleClassifier",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 2);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const std::vector<int64_t> nodes_treeids =
+             GetAttributeIntsOrDefault(node, "nodes_treeids", {});
+         const std::vector<int64_t> nodes_nodeids =
+             GetAttributeIntsOrDefault(node, "nodes_nodeids", {});
+         const std::vector<int64_t> nodes_featureids =
+             GetAttributeIntsOrDefault(node, "nodes_featureids", {});
+         const std::vector<float> nodes_values =
+             GetAttributeFloatsOrDefault(node, "nodes_values", {});
+         const std::vector<std::string> nodes_modes =
+             GetAttributeStringsOrDefault(node, "nodes_modes", {});
+         const std::vector<int64_t> nodes_truenodeids =
+             GetAttributeIntsOrDefault(node, "nodes_truenodeids", {});
+         const std::vector<int64_t> nodes_falsenodeids =
+             GetAttributeIntsOrDefault(node, "nodes_falsenodeids", {});
+         const std::vector<int64_t> nodes_missing =
+             GetAttributeIntsOrDefault(node, "nodes_missing_value_tracks_true", {});
+         const std::vector<int64_t> class_treeids =
+             GetAttributeIntsOrDefault(node, "class_treeids", {});
+         const std::vector<int64_t> class_nodeids =
+             GetAttributeIntsOrDefault(node, "class_nodeids", {});
+         const std::vector<int64_t> class_ids =
+             GetAttributeIntsOrDefault(node, "class_ids", {});
+         const std::vector<float> class_weights =
+             GetAttributeFloatsOrDefault(node, "class_weights", {});
+         const std::vector<int64_t> classlabels_int64s =
+             GetAttributeIntsOrDefault(node, "classlabels_int64s", {});
+         const std::vector<std::string> classlabels_strings =
+             GetAttributeStringsOrDefault(node, "classlabels_strings", {});
+         const std::vector<float> base_values =
+             GetAttributeFloatsOrDefault(node, "base_values", {});
+         const std::string post_transform =
+             GetAttributeStringOrDefault(node, "post_transform", "NONE");
+         const bool use_strings = !classlabels_strings.empty();
+         const bool has_ints = !classlabels_int64s.empty();
+         if (use_strings == has_ints) {
+           throw std::invalid_argument(
+               "RunNode: TreeEnsembleClassifier requires exactly one of "
+               "'classlabels_ints' or 'classlabels_strings' to be set.");
+         }
+         kernel::TreeEnsembleClassifier cls(rt.kernel_ctx());
+         std::pair<Tensor, Tensor> yz = DispatchTreeEnsembleClassicByDataType(
+             x, "TreeEnsembleClassifier", [&](auto *tag) {
+               using T = std::remove_pointer_t<decltype(tag)>;
+               (void)tag;
+               return use_strings
+                          ? cls.template operator()<T>(
+                                x, nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values,
+                                nodes_modes, nodes_truenodeids, nodes_falsenodeids, nodes_missing,
+                                class_treeids, class_nodeids, class_ids, class_weights,
+                                classlabels_strings, base_values, post_transform)
+                          : cls.template operator()<T>(
+                                x, nodes_treeids, nodes_nodeids, nodes_featureids, nodes_values,
+                                nodes_modes, nodes_truenodeids, nodes_falsenodeids, nodes_missing,
+                                class_treeids, class_nodeids, class_ids, class_weights,
+                                classlabels_int64s, base_values, post_transform);
+             });
+         SetOutput(node, 0, std::move(yz.first), rt.tensors());
+         SetOutput(node, 1, std::move(yz.second), rt.tensors());
+       }},
+      {"ai.onnx.ml:TreeEnsemble",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const std::vector<int64_t> tree_roots =
+             GetAttributeIntsOrDefault(node, "tree_roots", {});
+         const std::vector<int64_t> nodes_featureids =
+             GetAttributeIntsOrDefault(node, "nodes_featureids", {});
+         const std::vector<int64_t> nodes_truenodeids =
+             GetAttributeIntsOrDefault(node, "nodes_truenodeids", {});
+         const std::vector<int64_t> nodes_falsenodeids =
+             GetAttributeIntsOrDefault(node, "nodes_falsenodeids", {});
+         const std::vector<int64_t> nodes_trueleafs =
+             GetAttributeIntsOrDefault(node, "nodes_trueleafs", {});
+         const std::vector<int64_t> nodes_falseleafs =
+             GetAttributeIntsOrDefault(node, "nodes_falseleafs", {});
+         const std::vector<int64_t> nodes_missing =
+             GetAttributeIntsOrDefault(node, "nodes_missing_value_tracks_true", {});
+         const std::vector<int64_t> leaf_targetids =
+             GetAttributeIntsOrDefault(node, "leaf_targetids", {});
+         const int64_t n_targets = GetAttributeIntOrDefault(node, "n_targets", 1);
+         const int64_t aggregate_function =
+             GetAttributeIntOrDefault(node, "aggregate_function", 1);
+         const int64_t post_transform = GetAttributeIntOrDefault(node, "post_transform", 0);
+         const Tensor nodes_splits = GetRequiredAttributeTensor(node, "nodes_splits");
+         const Tensor leaf_weights = GetRequiredAttributeTensor(node, "leaf_weights");
+         const Tensor nodes_modes_t = GetRequiredAttributeTensor(node, "nodes_modes");
+         const Tensor membership_values =
+             GetAttributeTensorOrEmpty(node, "membership_values", x.data_type);
+         if (nodes_modes_t.data_type != static_cast<int32_t>(DataType::UINT8)) {
+           throw std::invalid_argument(
+               "RunNode: TreeEnsemble attribute 'nodes_modes' must be a UINT8 tensor.");
+         }
+         if (nodes_splits.data_type != x.data_type ||
+             leaf_weights.data_type != x.data_type) {
+           throw std::invalid_argument(
+               "RunNode: TreeEnsemble attributes 'nodes_splits' and 'leaf_weights' must "
+               "have the same element type as input 'X'.");
+         }
+         if (membership_values.element_count() > 0 &&
+             membership_values.data_type != x.data_type) {
+           throw std::invalid_argument(
+               "RunNode: TreeEnsemble attribute 'membership_values' must have the same "
+               "element type as input 'X'.");
+         }
+         const std::vector<uint8_t> nodes_modes_vec = TensorToVector<uint8_t>(nodes_modes_t);
+         kernel::TreeEnsemble tree_ens(rt.kernel_ctx());
+         Tensor y;
+         switch (x.data_type) {
+         case static_cast<int32_t>(DataType::FLOAT): {
+           const std::vector<float> splits = TensorToVector<float>(nodes_splits);
+           const std::vector<float> leaves = TensorToVector<float>(leaf_weights);
+           const std::vector<float> members =
+               membership_values.element_count() > 0
+                   ? TensorToVector<float>(membership_values)
+                   : std::vector<float>{};
+           y = tree_ens.operator()<float>(x, tree_roots, nodes_featureids, splits, nodes_modes_vec,
+                                          nodes_truenodeids, nodes_falsenodeids, nodes_trueleafs,
+                                          nodes_falseleafs, nodes_missing, leaf_targetids, leaves,
+                                          members, n_targets, aggregate_function, post_transform);
+           break;
+         }
+         case static_cast<int32_t>(DataType::DOUBLE): {
+           const std::vector<double> splits = TensorToVector<double>(nodes_splits);
+           const std::vector<double> leaves = TensorToVector<double>(leaf_weights);
+           const std::vector<double> members =
+               membership_values.element_count() > 0
+                   ? TensorToVector<double>(membership_values)
+                   : std::vector<double>{};
+           y = tree_ens.operator()<double>(x, tree_roots, nodes_featureids, splits, nodes_modes_vec,
+                                           nodes_truenodeids, nodes_falsenodeids, nodes_trueleafs,
+                                           nodes_falseleafs, nodes_missing, leaf_targetids, leaves,
+                                           members, n_targets, aggregate_function, post_transform);
+           break;
+         }
+         default:
+           throw std::invalid_argument(
+               "RunNode: TreeEnsemble input 'X' must be FLOAT or DOUBLE.");
+         }
+         SetOutput(node, 0, std::move(y), rt.tensors());
        }},
   };
   return table;

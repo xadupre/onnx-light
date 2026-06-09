@@ -68,7 +68,7 @@ void RegisterNestedLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &re
 
 /// Registers a model including a NonZero followed by an expression.
 /// Expressions must be simplified.
-void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &registry) ;
+void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &registry);
 
 /// Collects all shape-inference oriented backend test cases by invoking
 /// every ``Register*ShapeInferenceCases`` helper declared in this header.

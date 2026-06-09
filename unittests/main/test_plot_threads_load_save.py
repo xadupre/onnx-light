@@ -4,7 +4,12 @@ import unittest
 
 
 def _has_xlim_left_zero() -> bool:
-    """Checks whether the example sets the x-axis minimum to zero."""
+    """
+    Determines whether the example sets the x-axis minimum to zero.
+
+    Returns:
+        True if ``set_xlim(left=0)`` is present, otherwise False.
+    """
     root = pathlib.Path(__file__).resolve().parents[2]
     source_path = root / "docs" / "examples" / "core" / "plot_threads_load_save.py"
     tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))

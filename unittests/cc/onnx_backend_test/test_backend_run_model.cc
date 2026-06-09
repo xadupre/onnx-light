@@ -208,4 +208,52 @@ TEST(BackendRunModel, Momentum) { RunBackendCasesFor("Momentum"); }
 TEST(BackendRunModel, SVMRegressor) { RunBackendCasesFor("SVMRegressor"); }
 TEST(BackendRunModel, SVMClassifier) { RunBackendCasesFor("SVMClassifier"); }
 
+// Quantization kernels.
+// The reference QuantizeLinear/DequantizeLinear kernels only support
+// per-tensor quantization (scalar y_scale/x_scale) with FLOAT scales and
+// byte-or-larger integer (or float8 for DequantizeLinear) element types.
+// Skip per-axis / sub-byte / blocked / FLOAT16-scale cases.
+TEST(BackendRunModel, QuantizeLinear) {
+  RunBackendCasesFor("QuantizeLinear", [](const DataSet &ds) {
+    if (ds.inputs.size() < 2 || ds.inputs[1].element_count() != 1) {
+      return false;
+    }
+    if (ds.inputs[1].data_type != static_cast<int32_t>(DataType::FLOAT)) {
+      return false;
+    }
+    if (ds.outputs.empty()) {
+      return false;
+    }
+    const int32_t y_dtype = ds.outputs[0].data_type;
+    return y_dtype == static_cast<int32_t>(DataType::UINT8) ||
+           y_dtype == static_cast<int32_t>(DataType::INT8) ||
+           y_dtype == static_cast<int32_t>(DataType::UINT16) ||
+           y_dtype == static_cast<int32_t>(DataType::INT16);
+  });
+}
+TEST(BackendRunModel, DequantizeLinear) {
+  RunBackendCasesFor("DequantizeLinear", [](const DataSet &ds) {
+    if (ds.inputs.size() < 2 || ds.inputs[1].element_count() != 1) {
+      return false;
+    }
+    if (ds.inputs[1].data_type != static_cast<int32_t>(DataType::FLOAT)) {
+      return false;
+    }
+    if (ds.outputs.empty() || ds.outputs[0].data_type != static_cast<int32_t>(DataType::FLOAT)) {
+      return false;
+    }
+    const int32_t x_dtype = ds.inputs[0].data_type;
+    return x_dtype == static_cast<int32_t>(DataType::UINT8) ||
+           x_dtype == static_cast<int32_t>(DataType::INT8) ||
+           x_dtype == static_cast<int32_t>(DataType::UINT16) ||
+           x_dtype == static_cast<int32_t>(DataType::INT16) ||
+           x_dtype == static_cast<int32_t>(DataType::INT32) ||
+           x_dtype == static_cast<int32_t>(DataType::FLOAT8E4M3FN) ||
+           x_dtype == static_cast<int32_t>(DataType::FLOAT8E4M3FNUZ) ||
+           x_dtype == static_cast<int32_t>(DataType::FLOAT8E5M2) ||
+           x_dtype == static_cast<int32_t>(DataType::FLOAT8E5M2FNUZ);
+  });
+}
+TEST(BackendRunModel, DynamicQuantizeLinear) { RunBackendCasesFor("DynamicQuantizeLinear"); }
+
 } // namespace Test

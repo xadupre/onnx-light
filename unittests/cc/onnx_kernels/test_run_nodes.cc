@@ -110,6 +110,10 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx:BitShift"), table.end());
   EXPECT_NE(table.find("ai.onnx:Einsum"), table.end());
   EXPECT_NE(table.find("ai.onnx:DFT"), table.end());
+  // Quantization kernels.
+  EXPECT_NE(table.find("ai.onnx:QuantizeLinear"), table.end());
+  EXPECT_NE(table.find("ai.onnx:DequantizeLinear"), table.end());
+  EXPECT_NE(table.find("ai.onnx:DynamicQuantizeLinear"), table.end());
   // Generator kernels.
   EXPECT_NE(table.find("ai.onnx:EyeLike"), table.end());
   EXPECT_NE(table.find("ai.onnx:AffineGrid"), table.end());
@@ -209,6 +213,61 @@ TEST(RunNodes, RunNodeNonMaxSuppressionFromDispatchTable) {
   for (size_t i = 0; i < expected.size(); ++i) {
     EXPECT_EQ(py[i], expected[i]);
   }
+}
+
+TEST(RunNodes, RunNodeQuantizeLinearFromDispatchTable) {
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {4}, {0.0f, 2.0f, 3.0f, 254.0f});
+  rt.tensors()["y_scale"] = Tensor::FromFloat("y_scale", {}, {2.0f});
+
+  NodeProto node = MakeNode("QuantizeLinear", {"x", "y_scale"}, {"y"});
+  RunNode(node, rt);
+
+  const Tensor &y = rt.tensors().at("y");
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::UINT8));
+  EXPECT_EQ(y.shape, std::vector<int64_t>({4}));
+  ASSERT_EQ(y.element_count(), 4);
+  const std::uint8_t *py = reinterpret_cast<const std::uint8_t *>(y.bytes());
+  EXPECT_EQ(py[0], 0);
+  EXPECT_EQ(py[1], 1);
+  EXPECT_EQ(py[2], 2);
+  EXPECT_EQ(py[3], 127);
+}
+
+TEST(RunNodes, RunNodeDequantizeLinearFromDispatchTable) {
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["x"] = Tensor::FromUint8("x", {3}, {0, 3, 128});
+  rt.tensors()["x_scale"] = Tensor::FromFloat("x_scale", {}, {2.0f});
+  rt.tensors()["x_zero_point"] = Tensor::FromUint8("x_zero_point", {}, {128});
+
+  NodeProto node = MakeNode("DequantizeLinear", {"x", "x_scale", "x_zero_point"}, {"y"});
+  RunNode(node, rt);
+
+  const Tensor &y = rt.tensors().at("y");
+  EXPECT_EQ(y.shape, std::vector<int64_t>({3}));
+  ASSERT_EQ(y.element_count(), 3);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], -256.0f);
+  EXPECT_FLOAT_EQ(py[1], -250.0f);
+  EXPECT_FLOAT_EQ(py[2], 0.0f);
+}
+
+TEST(RunNodes, RunNodeDynamicQuantizeLinearFromDispatchTable) {
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {4}, {0.0f, 2.0f, -2.0f, 4.0f});
+
+  NodeProto node = MakeNode("DynamicQuantizeLinear", {"x"}, {"y", "y_scale", "y_zero_point"});
+  RunNode(node, rt);
+
+  const Tensor &y = rt.tensors().at("y");
+  const Tensor &y_scale = rt.tensors().at("y_scale");
+  const Tensor &y_zp = rt.tensors().at("y_zero_point");
+  EXPECT_EQ(y.shape, std::vector<int64_t>({4}));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::UINT8));
+  EXPECT_EQ(y_scale.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  EXPECT_EQ(y_zp.data_type, static_cast<int32_t>(onnx_kernels::DataType::UINT8));
+  EXPECT_TRUE(y_scale.shape.empty());
+  EXPECT_TRUE(y_zp.shape.empty());
 }
 
 TEST(RunNodes, RunNodesOnRepeatedProtoFieldChain) {

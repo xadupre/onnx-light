@@ -9,6 +9,7 @@
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 #include "onnx_kernels/kernels/object_detection/include_object_detection_kernels.h"
+#include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
 #include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
@@ -72,6 +73,32 @@ template <class KernelT> NodeKernelFn MakeBinaryTrampoline() {
     const Tensor &y = GetInput(node, 1, rt.tensors());
     KernelT kernel(rt.kernel_ctx());
     SetOutput(node, 0, kernel(x, y), rt.tensors());
+  };
+}
+
+// Wraps a kernel of the form
+//   ``Tensor operator()(const Tensor&, const Tensor&)`` /
+//   ``Tensor operator()(const Tensor&, const Tensor&, const Tensor&)``
+// where the third input is optional (e.g. ``QuantizeLinear`` /
+// ``DequantizeLinear`` zero-point).
+template <class KernelT> NodeKernelFn MakeBinaryWithOptionalThirdTrampoline() {
+  return [](const NodeProto &node, RuntimeContext &rt) {
+    RequireMinInputCount(node, 2);
+    if (node.input_size() > 3) {
+      throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                  "' expects 2 or 3 inputs, got " +
+                                  std::to_string(node.input_size()) + ".");
+    }
+    RequireOutputCount(node, 1);
+    const Tensor &a = GetInput(node, 0, rt.tensors());
+    const Tensor &b = GetInput(node, 1, rt.tensors());
+    const Tensor *c = GetOptionalInput(node, 2, rt.tensors());
+    KernelT kernel(rt.kernel_ctx());
+    if (c != nullptr) {
+      SetOutput(node, 0, kernel(a, b, *c), rt.tensors());
+    } else {
+      SetOutput(node, 0, kernel(a, b), rt.tensors());
+    }
   };
 }
 
@@ -376,6 +403,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Cos", MakeUnaryTrampoline<kernel::Cos>()},
       {"ai.onnx:Cosh", MakeUnaryTrampoline<kernel::Cosh>()},
       {"ai.onnx:Det", MakeUnaryTrampoline<kernel::Det>()},
+      {"ai.onnx:DequantizeLinear", MakeBinaryWithOptionalThirdTrampoline<kernel::DequantizeLinear>()},
       {"ai.onnx:DFT",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 1);
@@ -417,6 +445,17 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          SetOutput(node, 0, k(input, dft_length, axis, onesided, inverse), rt.tensors());
        }},
       {"ai.onnx:Div", MakeBinaryTrampoline<kernel::Div>()},
+      {"ai.onnx:DynamicQuantizeLinear",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 3);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         kernel::DynamicQuantizeLinear k(rt.kernel_ctx());
+         auto out = k(x);
+         SetOutput(node, 0, std::move(std::get<0>(out)), rt.tensors());
+         SetOutput(node, 1, std::move(std::get<1>(out)), rt.tensors());
+         SetOutput(node, 2, std::move(std::get<2>(out)), rt.tensors());
+       }},
       {"ai.onnx:Einsum",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 1);
@@ -546,6 +585,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Or", MakeBinaryTrampoline<kernel::Or>()},
       {"ai.onnx:Pow", MakeBinaryTrampoline<kernel::Pow>()},
       {"ai.onnx:PRelu", MakeBinaryTrampoline<kernel::PRelu>()},
+      {"ai.onnx:QuantizeLinear", MakeBinaryWithOptionalThirdTrampoline<kernel::QuantizeLinear>()},
       {"ai.onnx:Reciprocal", MakeUnaryTrampoline<kernel::Reciprocal>()},
       {"ai.onnx:ReduceL1", MakeReduceTrampoline<kernel::ReduceL1>()},
       {"ai.onnx:ReduceL2", MakeReduceTrampoline<kernel::ReduceL2>()},

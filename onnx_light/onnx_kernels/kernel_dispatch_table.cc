@@ -7,6 +7,8 @@
 #include "onnx_kernels/kernels/generator/include_generator_kernels.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
+#include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
+#include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_kernels/node_helpers.h"
 
 #include <stdexcept>
@@ -21,6 +23,7 @@ namespace {
 
 using detail::GetAttributeFloatOrDefault;
 using detail::GetAttributeIntOrDefault;
+using detail::GetAttributeIntsOrDefault;
 using detail::GetAttributeStringOrDefault;
 using detail::GetInput;
 using detail::GetOptionalInput;
@@ -119,6 +122,56 @@ template <class KernelT> NodeKernelFn MakeAxisTrampoline(int64_t default_axis = 
   };
 }
 
+// Creates trampolines for reduction kernels of the form:
+//   ``operator()(data, keepdims, noop_with_empty_axes)``
+//   ``operator()(data, axes, keepdims, noop_with_empty_axes)``
+// where ``axes`` is either an optional second input (opset 13+/18+ depending
+// on the operator) or an ``axes`` INTS attribute (older opsets).
+template <class KernelT> NodeKernelFn MakeReduceTrampoline() {
+  return [](const NodeProto &node, RuntimeContext &rt) {
+    RequireMinInputCount(node, 1);
+    if (node.input_size() > 2) {
+      throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                  "' expects at most 2 inputs.");
+    }
+    RequireOutputCount(node, 1);
+    const Tensor &data = GetInput(node, 0, rt.tensors());
+    const bool keepdims = GetAttributeIntOrDefault(node, "keepdims", 1) != 0;
+    const bool noop_with_empty_axes =
+        GetAttributeIntOrDefault(node, "noop_with_empty_axes", 0) != 0;
+    KernelT kernel(rt.kernel_ctx());
+
+    const Tensor *axes_input = GetOptionalInput(node, 1, rt.tensors());
+    if (axes_input != nullptr) {
+      SetOutput(node, 0, kernel(data, *axes_input, keepdims, noop_with_empty_axes), rt.tensors());
+      return;
+    }
+
+    const std::vector<int64_t> axes_attr = GetAttributeIntsOrDefault(node, "axes", {});
+    if (!axes_attr.empty()) {
+      const Tensor axes =
+          Tensor::FromInt64("", {static_cast<int64_t>(axes_attr.size())}, axes_attr);
+      SetOutput(node, 0, kernel(data, axes, keepdims, noop_with_empty_axes), rt.tensors());
+      return;
+    }
+
+    SetOutput(node, 0, kernel(data, keepdims, noop_with_empty_axes), rt.tensors());
+  };
+}
+
+template <class KernelT> NodeKernelFn MakeArgReduceTrampoline() {
+  return [](const NodeProto &node, RuntimeContext &rt) {
+    RequireInputCount(node, 1);
+    RequireOutputCount(node, 1);
+    const Tensor &data = GetInput(node, 0, rt.tensors());
+    const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
+    const bool keepdims = GetAttributeIntOrDefault(node, "keepdims", 1) != 0;
+    const bool select_last_index = GetAttributeIntOrDefault(node, "select_last_index", 0) != 0;
+    KernelT kernel(rt.kernel_ctx());
+    SetOutput(node, 0, kernel(data, axis, keepdims, select_last_index), rt.tensors());
+  };
+}
+
 } // namespace
 
 const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
@@ -175,6 +228,22 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Max", MakeVariadicTrampoline<kernel::Max>()},
       {"ai.onnx:Min", MakeVariadicTrampoline<kernel::Min>()},
       {"ai.onnx:Mean", MakeVariadicTrampoline<kernel::Mean>()},
+
+      // -----------------------------------------------------------------
+      // Reduction kernels.
+      // -----------------------------------------------------------------
+      {"ai.onnx:ArgMax", MakeArgReduceTrampoline<kernel::ArgMax>()},
+      {"ai.onnx:ArgMin", MakeArgReduceTrampoline<kernel::ArgMin>()},
+      {"ai.onnx:ReduceL1", MakeReduceTrampoline<kernel::ReduceL1>()},
+      {"ai.onnx:ReduceL2", MakeReduceTrampoline<kernel::ReduceL2>()},
+      {"ai.onnx:ReduceLogSum", MakeReduceTrampoline<kernel::ReduceLogSum>()},
+      {"ai.onnx:ReduceLogSumExp", MakeReduceTrampoline<kernel::ReduceLogSumExp>()},
+      {"ai.onnx:ReduceMax", MakeReduceTrampoline<kernel::ReduceMax>()},
+      {"ai.onnx:ReduceMean", MakeReduceTrampoline<kernel::ReduceMean>()},
+      {"ai.onnx:ReduceMin", MakeReduceTrampoline<kernel::ReduceMin>()},
+      {"ai.onnx:ReduceProd", MakeReduceTrampoline<kernel::ReduceProd>()},
+      {"ai.onnx:ReduceSum", MakeReduceTrampoline<kernel::ReduceSum>()},
+      {"ai.onnx:ReduceSumSquare", MakeReduceTrampoline<kernel::ReduceSumSquare>()},
 
       // -----------------------------------------------------------------
       // Element-wise unary math with a single scalar attribute.
@@ -328,6 +397,17 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const int64_t dtype = GetAttributeIntOrDefault(node, "dtype", 0);
          kernel::EyeLike kernel(rt.kernel_ctx());
          SetOutput(node, 0, kernel(x, k, static_cast<int32_t>(dtype)), rt.tensors());
+       }},
+      {"ai.onnx:AffineGrid",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         const Tensor &theta = GetInput(node, 0, rt.tensors());
+         const Tensor &size = GetInput(node, 1, rt.tensors());
+         kernel::AffineGrid::Attributes affine_grid_attrs;
+         affine_grid_attrs.align_corners = GetAttributeIntOrDefault(node, "align_corners", 0);
+         kernel::AffineGrid affine_grid_kernel(rt.kernel_ctx());
+         SetOutput(node, 0, affine_grid_kernel(theta, size, affine_grid_attrs), rt.tensors());
        }},
 
       // -----------------------------------------------------------------

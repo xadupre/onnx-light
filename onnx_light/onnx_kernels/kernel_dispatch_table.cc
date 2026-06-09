@@ -377,7 +377,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        [](const NodeProto &node, RuntimeContext &rt) {
          if (node.input_size() < 2 || node.input_size() > 5) {
            throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
-                                       "' expects between 2 and 5 input(s), got " +
+                                       "' expects between 2 and 5 inputs, got " +
                                        std::to_string(node.input_size()) + ".");
          }
          RequireOutputCount(node, 1);

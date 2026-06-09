@@ -552,6 +552,82 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
 
       // -----------------------------------------------------------------
+      // ``Reshape``: 2 inputs (``data``, ``shape``); ``allowzero`` is an
+      // optional INT attribute (default 0; semantically meaningful since
+      // opset 14, ignored by the kernel when 0).
+      // -----------------------------------------------------------------
+      {"ai.onnx:Reshape",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         const Tensor &data = GetInput(node, 0, rt.tensors());
+         const Tensor &shape = GetInput(node, 1, rt.tensors());
+         const int64_t allowzero = GetAttributeIntOrDefault(node, "allowzero", 0);
+         kernel::Reshape k(rt.kernel_ctx());
+         SetOutput(node, 0, k(data, shape, allowzero), rt.tensors());
+       }},
+
+      // -----------------------------------------------------------------
+      // ``Squeeze`` / ``Unsqueeze``: ``axes`` is an optional second INT64
+      // input since opset 13, and an optional INTS attribute in earlier
+      // opsets. Either path is accepted; an empty ``axes`` means "squeeze
+      // all size-1 dimensions" for ``Squeeze`` (and is rejected by the
+      // kernel for ``Unsqueeze``, which requires at least one axis).
+      // -----------------------------------------------------------------
+      {"ai.onnx:Squeeze",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 1);
+         if (node.input_size() > 2) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects at most 2 inputs.");
+         }
+         RequireOutputCount(node, 1);
+         const Tensor &data = GetInput(node, 0, rt.tensors());
+         std::vector<int64_t> axes;
+         const Tensor *axes_input = GetOptionalInput(node, 1, rt.tensors());
+         if (axes_input != nullptr) {
+           if (axes_input->data_type != static_cast<int32_t>(DataType::INT64) ||
+               axes_input->shape.size() != 1) {
+             throw std::invalid_argument(
+                 "RunNode: Squeeze 'axes' input must be a 1-D INT64 tensor.");
+           }
+           const int64_t n = axes_input->element_count();
+           const int64_t *p = axes_input->AsInt64();
+           axes.assign(p, p + n);
+         } else {
+           axes = GetAttributeIntsOrDefault(node, "axes", {});
+         }
+         kernel::Squeeze k(rt.kernel_ctx());
+         SetOutput(node, 0, k(data, axes), rt.tensors());
+       }},
+      {"ai.onnx:Unsqueeze",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 1);
+         if (node.input_size() > 2) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects at most 2 inputs.");
+         }
+         RequireOutputCount(node, 1);
+         const Tensor &data = GetInput(node, 0, rt.tensors());
+         std::vector<int64_t> axes;
+         const Tensor *axes_input = GetOptionalInput(node, 1, rt.tensors());
+         if (axes_input != nullptr) {
+           if (axes_input->data_type != static_cast<int32_t>(DataType::INT64) ||
+               axes_input->shape.size() != 1) {
+             throw std::invalid_argument(
+                 "RunNode: Unsqueeze 'axes' input must be a 1-D INT64 tensor.");
+           }
+           const int64_t n = axes_input->element_count();
+           const int64_t *p = axes_input->AsInt64();
+           axes.assign(p, p + n);
+         } else {
+           axes = GetAttributeIntsOrDefault(node, "axes", {});
+         }
+         kernel::Unsqueeze k(rt.kernel_ctx());
+         SetOutput(node, 0, k(data, axes), rt.tensors());
+       }},
+
+      // -----------------------------------------------------------------
       // ``ai.onnx.preview.training`` optimizer kernels.
       //
       // Variadic inputs are laid out as ``R, T, <groups of N tensors>``:

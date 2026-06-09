@@ -301,6 +301,58 @@ TEST(RunNodes, RunNodeAffineGridUsesAttributes) {
   EXPECT_FLOAT_EQ(got[7], 1.0f);
 }
 
+TEST(RunNodes, RunNodeReshapeFromDispatchTable) {
+  // Reshape with two inputs (data, shape) and the default ``allowzero`` (0).
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {2, 3}, {1, 2, 3, 4, 5, 6});
+  rt.tensors()["shape"] = Tensor::FromInt64("shape", {2}, {3, 2});
+  NodeProto node = MakeNode("Reshape", {"x", "shape"}, {"y"});
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{3, 2}));
+  const float *got = y.AsFloat();
+  EXPECT_FLOAT_EQ(got[0], 1.0f);
+  EXPECT_FLOAT_EQ(got[5], 6.0f);
+}
+
+TEST(RunNodes, RunNodeSqueezeAxesAsInput) {
+  // Opset 13+: ``axes`` is provided as the optional second INT64 input.
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {1, 3, 1, 2}, {1, 2, 3, 4, 5, 6});
+  rt.tensors()["axes"] = Tensor::FromInt64("axes", {2}, {0, 2});
+  NodeProto node = MakeNode("Squeeze", {"x", "axes"}, {"y"});
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{3, 2}));
+  EXPECT_EQ(y.element_count(), 6);
+}
+
+TEST(RunNodes, RunNodeSqueezeAxesAsAttribute) {
+  // Opset <13: ``axes`` is an INTS attribute (also accepted by the trampoline
+  // for backward compatibility).
+  RuntimeContext rt(KernelContext(DefaultOpset(11)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {1, 3, 1, 2}, {1, 2, 3, 4, 5, 6});
+  NodeProto node = MakeNode("Squeeze", {"x"}, {"y"});
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name("axes");
+  attr->set_type(AttributeProto::AttributeType::INTS);
+  attr->add_ints(static_cast<int64_t>(0));
+  attr->add_ints(static_cast<int64_t>(2));
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{3, 2}));
+}
+
+TEST(RunNodes, RunNodeUnsqueezeAxesAsInput) {
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {3, 2}, {1, 2, 3, 4, 5, 6});
+  rt.tensors()["axes"] = Tensor::FromInt64("axes", {2}, {0, 2});
+  NodeProto node = MakeNode("Unsqueeze", {"x", "axes"}, {"y"});
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{1, 3, 1, 2}));
+}
+
 TEST(RunNodes, RunNodeEinsumUsesEquationAttribute) {
   // Verify the Einsum trampoline forwards the variadic inputs and the
   // ``equation`` STRING attribute to ``kernel::Einsum``. The equation

@@ -96,33 +96,24 @@ void RegisterValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry) {
 
   // Graph inputs use the symbolic shapes from the Python test:
   //   x : float[N, 1], y1/y2/y3 : float[1, B].
-  const int32_t kFloat = static_cast<int32_t>(DataType::FLOAT);
-  AppendValueInfo(*graph->add_input(), "x", kFloat,
-                  std::vector<DimSpec>{DimSpec("N"), DimSpec(static_cast<int64_t>(1))});
-  AppendValueInfo(*graph->add_input(), "y1", kFloat,
-                  std::vector<DimSpec>{DimSpec(static_cast<int64_t>(1)), DimSpec("B")});
-  AppendValueInfo(*graph->add_input(), "y2", kFloat,
-                  std::vector<DimSpec>{DimSpec(static_cast<int64_t>(1)), DimSpec("B")});
-  AppendValueInfo(*graph->add_input(), "y3", kFloat,
-                  std::vector<DimSpec>{DimSpec(static_cast<int64_t>(1)), DimSpec("B")});
+  AppendValueInfo(*graph->add_input(), "x", DataType::FLOAT, {"N", DimSpec(int64_t{1})});
+  AppendValueInfo(*graph->add_input(), "y1", DataType::FLOAT, {DimSpec(int64_t{1}), "B"});
+  AppendValueInfo(*graph->add_input(), "y2", DataType::FLOAT, {DimSpec(int64_t{1}), "B"});
+  AppendValueInfo(*graph->add_input(), "y3", DataType::FLOAT, {DimSpec(int64_t{1}), "B"});
 
   // Explicit intermediate value_info annotations mirror the ``value_info``
   // list in the Python test. They are stripped by
   // :cpp:func:`SnapshotAndStripValueInfo` in the
   // ``AllCollectedCasesInferOutputShapes`` test and used as the ground
   // truth that shape inference must recover.
-  AppendValueInfo(*graph->add_value_info(), "expanded", kFloat,
-                  std::vector<DimSpec>{DimSpec("N"), DimSpec(static_cast<int64_t>(1))});
-  AppendValueInfo(*graph->add_value_info(), "z1", kFloat,
-                  std::vector<DimSpec>{DimSpec("N"), DimSpec("B")});
-  AppendValueInfo(*graph->add_value_info(), "z2", kFloat,
-                  std::vector<DimSpec>{DimSpec("N"), DimSpec("B")});
-  AppendValueInfo(*graph->add_value_info(), "z3", kFloat,
-                  std::vector<DimSpec>{DimSpec("N"), DimSpec("B")});
+  AppendValueInfo(*graph->add_value_info(), "expanded", DataType::FLOAT,
+                  {"N", DimSpec(int64_t{1})});
+  AppendValueInfo(*graph->add_value_info(), "z1", DataType::FLOAT, {"N", "B"});
+  AppendValueInfo(*graph->add_value_info(), "z2", DataType::FLOAT, {"N", "B"});
+  AppendValueInfo(*graph->add_value_info(), "z3", DataType::FLOAT, {"N", "B"});
 
   // Graph output: z : float[N, B].
-  AppendValueInfo(*graph->add_output(), "z", kFloat,
-                  std::vector<DimSpec>{DimSpec("N"), DimSpec("B")});
+  AppendValueInfo(*graph->add_output(), "z", DataType::FLOAT, {"N", "B"});
 
   // Build the reference DataSet — concrete N=3, B=4 tensors and the kernels
   // chained to materialise the expected ``z`` output.

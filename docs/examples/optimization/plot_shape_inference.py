@@ -303,16 +303,17 @@ def validate_shape_inference(model_with_expected_shapes: onnxl.ModelProto):
     ``value_info`` entries that represent the "ground truth" for shape
     inference. This function:
 
-    1. Copies the model.
-    2. Clears its ``value_info`` to simulate a model with no intermediate shapes.
-    3. Calls :func:`infer_shapes_model` to re-infer shapes.
+    1. Creates a copy of the model.
+    2. Clears the copy's ``value_info`` to simulate a model with no intermediate shapes.
+    3. Invokes :func:`infer_shapes_model` to re-infer shapes.
     4. Compares the inferred shapes against the original ``value_info``.
 
     Note: This simple check only verifies that tensor ranks match. A production
     test might enforce exact symbolic or numeric dimension matches.
 
-    If the inferred ranks do not match the expected ranks, an assertion
-    will fail, helping you catch regressions in the shape inference logic.
+    Raises:
+        AssertionError: If the inferred ranks do not match the expected ranks,
+            indicating a regression in the shape inference logic.
     """
     # Keep a reference to the expected value_info.
     expected_value_info = {vi.name: vi for vi in model_with_expected_shapes.graph.value_info}

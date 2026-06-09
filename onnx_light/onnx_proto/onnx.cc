@@ -716,7 +716,8 @@ void TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
       } else {
         ref_raw_data().resize(size);
       }
-      if (options.is_parallel() && two_stream.using_default_weights_location()) {
+      if (options.is_parallel()) {
+        two_stream.set_active_weights_location(location);
         utils::DelayedBlock block;
         block.size = size;
         block.data = ref_raw_data().data();

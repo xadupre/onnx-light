@@ -481,6 +481,81 @@ TEST(onnx_threads, TwoFilesStreamParallelReadDelayedBlocksOnWeights) {
   std::remove(temp_weights.c_str());
 }
 
+// Regression test for the multi-file external-data case: parallel delayed
+// reads should also work when the active weights stream is one of the
+// extra (non-default) weights files. Prior to the fix, this triggered
+// an EXT_ENFORCE failure ("Parallel delayed reads are not supported for
+// non-default external locations.") which forced multi-file models to
+// fall back to a serial read path.
+TEST(onnx_threads, TwoFilesStreamParallelReadDelayedBlocksOnExtraWeights) {
+  std::string temp_filename = "test_tensor_file_stream_read.delayed.extra.main.tmp";
+  std::string temp_weights = "test_tensor_file_stream_read.delayed.extra.weights.tmp";
+  std::string temp_extra = "test_tensor_file_stream_read.delayed.extra.weights.1.tmp";
+
+  {
+    std::ofstream file(temp_filename, std::ios::binary);
+    file.put(0);
+  }
+  {
+    std::ofstream file(temp_weights, std::ios::binary);
+    for (size_t i = 0; i < 512; ++i) {
+      file.put(static_cast<char>(i % 251));
+    }
+  }
+  {
+    // Use a distinct byte pattern so we can tell the extra-file reads
+    // came from the right file.
+    std::ofstream file(temp_extra, std::ios::binary);
+    for (size_t i = 0; i < 512; ++i) {
+      file.put(static_cast<char>((i * 3 + 11) % 251));
+    }
+  }
+
+  std::vector<uint8_t> from_default(64), from_extra1(64), from_extra2(64);
+  {
+    utils::TwoFilesStream stream(temp_filename, temp_weights);
+    stream.StartThreadPool(3);
+
+    // First, a delayed read against the default weights file.
+    stream.set_active_weights_location(temp_weights);
+    DelayedBlock block_def;
+    block_def.size = from_default.size();
+    block_def.data = from_default.data();
+    block_def.offset = 7;
+    block_def.stream_id = 1;
+    stream.ReadDelayedBlock(block_def);
+
+    // Then switch to the extra file and issue two more delayed reads.
+    stream.set_active_weights_location(temp_extra);
+    DelayedBlock block_e1;
+    block_e1.size = from_extra1.size();
+    block_e1.data = from_extra1.data();
+    block_e1.offset = 33;
+    block_e1.stream_id = 1;
+    stream.ReadDelayedBlock(block_e1);
+
+    DelayedBlock block_e2;
+    block_e2.size = from_extra2.size();
+    block_e2.data = from_extra2.data();
+    block_e2.offset = 200;
+    block_e2.stream_id = 1;
+    stream.ReadDelayedBlock(block_e2);
+
+    stream.WaitForDelayedBlock();
+  }
+
+  for (size_t i = 0; i < from_default.size(); ++i) {
+    EXPECT_EQ(from_default[i], static_cast<uint8_t>((7 + i) % 251)) << " at index " << i;
+    EXPECT_EQ(from_extra1[i], static_cast<uint8_t>(((33 + i) * 3 + 11) % 251)) << " at index " << i;
+    EXPECT_EQ(from_extra2[i], static_cast<uint8_t>(((200 + i) * 3 + 11) % 251))
+        << " at index " << i;
+  }
+
+  std::remove(temp_filename.c_str());
+  std::remove(temp_weights.c_str());
+  std::remove(temp_extra.c_str());
+}
+
 // -----------------------------------------------------------------------
 // Parallel external-data write tests
 // -----------------------------------------------------------------------

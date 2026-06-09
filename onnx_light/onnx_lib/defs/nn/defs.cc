@@ -2987,7 +2987,9 @@ This operator also covers the 3 following variants based on the number of heads:
 
 Attention bias to be added is calculated based on `attn_mask` input and `is_causal` attribute:
 1) `attn_mask`: A boolean mask where a value of `True` indicates that the element should take part in attention or a float mask of the same type as query, key, value that is added to the attention score.
-2) If `is_causal` is set to `1`, attention scores above the diagonal are masked out, regardless of the `attn_mask` input.
+2) If `is_causal` is set to `1`, attention scores above the causal frontier are masked out. For internal cache (`past_key`) this is the standard offset from `past_sequence_length`; for external cache (`nonpad_kv_seqlen` without `past_key`) this is bottom-right aligned by `nonpad_kv_seqlen - q_sequence_length`.
+3) If both `attn_mask` and `is_causal` are set, the valid positions are the intersection of both masks.
+If a query row is fully masked after this intersection, its output row is zero.
 
 With respect to KV cache update, this operator allows the following two use cases:
 
@@ -3034,10 +3036,11 @@ ONNX_OPERATOR_SET_SCHEMA(
     OpSchema()
         .SetDoc(Attention_ver24_doc)
         .Attr("is_causal",
-              "If set to `1`, the attention masking is a lower triangular matrix when the mask is "
-              "a square matrix. "
-              "The attention masking has the form of the upper left causal bias due to the "
-              "alignment.",
+              "If set to `1`, the attention masking follows an offset-aware causal frontier. "
+              "For internal cache (`past_key`), a query index i attends keys j <= i + "
+              "past_sequence_length. For external cache (`nonpad_kv_seqlen` without `past_key`), "
+              "the frontier is bottom-right aligned with per-batch offset "
+              "`nonpad_kv_seqlen - q_sequence_length`.",
               AttributeProto::INT, static_cast<int64_t>(0))
         .Attr("scale",
               "Scaling factor applied to $Q*K^T$. Default value is `1/sqrt(head_size)`. To prevent "
@@ -3256,6 +3259,10 @@ ONNX_OPERATOR_SET_SCHEMA(
             builder.Add("present_value = Identity (PresentValue)");
           }
 
+          if (ctx.hasInput(6) && !ctx.hasInput(4)) {
+            builder.Add("CausalOffsetPerBatch = Sub(nonpad_kv_seqlen, QSeqLen)");
+          }
+
           if (!AttentionAppendFunctionCausalMask(ctx, builder, true))
             return false;
 
@@ -3385,7 +3392,13 @@ ONNX_OPERATOR_SET_SCHEMA(
             }
           }
 
-          builder.Add("YPreReshape = MatMul(SoftmaxOut, VAttentionInput)");
+          builder.Const1D("NegInfCastSrc", -std::numeric_limits<float>::infinity())
+              .Add("NegInfCast = CastLike(NegInfCastSrc, QKAttnWeightSoftcap)")
+              .Const1D("SoftmaxZero", 0.f)
+              .Add("BiasRowMax = ReduceMax <axes = [-1], keepdims = 1> (QKAttnWeightSoftcap)")
+              .Add("BiasRowFullyMasked = Equal(BiasRowMax, NegInfCast)")
+              .Add("SoftmaxOutSafe = Where(BiasRowFullyMasked, SoftmaxZero, SoftmaxOut)")
+              .Add("YPreReshape = MatMul(SoftmaxOutSafe, VAttentionInput)");
           // Reshape Y to 3D if input is a 3D tensor
           if (is_3d_input) {
             builder.Add("YTranspose = Transpose <perm = [0, 2, 1, 3]> (YPreReshape)")

@@ -569,6 +569,30 @@ TEST(KernelClass, AttentionQkMatmulOutputModes) {
   }
 }
 
+TEST(KernelClass, AttentionFullyMaskedRowYieldsZeroOutput) {
+  const Tensor Q = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 0.0f, 0.0f, 1.0f});
+  const Tensor K = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 0.0f, 0.0f, 1.0f});
+  const Tensor V = Tensor::FromFloat("", {1, 1, 2, 2}, {5.0f, 7.0f, 11.0f, 13.0f});
+  const Tensor mask = Tensor::FromBool("", {1, 1, 2, 2}, {1, 1, 0, 0});
+
+  const KernelContext ctx = AttentionKernelContext();
+  const Attention attention{ctx};
+  Attention::Attributes attrs;
+  attrs.is_causal = true;
+  attrs.qk_matmul_output_mode = 3;
+  auto r = attention(Q, K, V, attrs, &mask);
+
+  ASSERT_EQ(r.Y.shape, (std::vector<int64_t>{1, 1, 2, 2}));
+  EXPECT_TRUE(std::isfinite(r.Y.AsFloat()[0]));
+  EXPECT_TRUE(std::isfinite(r.Y.AsFloat()[1]));
+  EXPECT_FLOAT_EQ(r.Y.AsFloat()[2], 0.0f);
+  EXPECT_FLOAT_EQ(r.Y.AsFloat()[3], 0.0f);
+
+  ASSERT_EQ(r.qk_matmul_output.shape, (std::vector<int64_t>{1, 1, 2, 2}));
+  EXPECT_TRUE(std::isnan(r.qk_matmul_output.AsFloat()[2]));
+  EXPECT_TRUE(std::isnan(r.qk_matmul_output.AsFloat()[3]));
+}
+
 TEST(KernelClass, AttentionRank3FusedLayoutRoundTripMatchesRank4) {
   // Same numerical data as the rank-4 case but expressed in the
   // ``(batch, seq, num_heads * head_size)`` fused layout, with

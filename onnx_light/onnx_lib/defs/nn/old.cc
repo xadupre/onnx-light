@@ -3540,9 +3540,11 @@ This operator also covers the 3 following variants based on the number of heads:
 2) Group-query Attention (GQA): Described in the paper https://arxiv.org/pdf/2305.13245, `q_num_heads > kv_num_heads`, `q_num_heads % kv_num_heads == 0`.
 3) Multi-query Attention (MQA): Described in the paper https://arxiv.org/pdf/1911.02150, `q_num_heads > kv_num_heads`, `kv_num_heads=1`.
 
-Attention bias to be added is calculated based on `attn_mask` input and `is_causal attribute`, only one of which can be provided.
-1) If `is_causal` is set to `1`, the attention masking is a lower triangular matrix when the mask is a square matrix. The attention masking has the form of the upper left causal bias due to the alignment.
+Attention bias to be added is calculated based on `attn_mask` input and `is_causal` attribute:
+1) If `is_causal` is set to `1`, a query index i attends keys j <= i + past_sequence_length.
 2) `attn_mask`: A boolean mask where a value of `True` indicates that the element should take part in attention or a float mask of the same type as query, key, value that is added to the attention score.
+3) If both `attn_mask` and `is_causal` are set, the valid positions are the intersection of both masks.
+If a query row is fully masked after this intersection, its output row is zero.
 
 Both past and present state key/values are optional. They shall be used together, and not allowed to use only one of them.
 The following pattern is applied to the Q, K and V inputs after appropriate reshaping of K and V inputs based on sequence lengths and num heads provided:
@@ -3575,10 +3577,8 @@ ONNX_OPERATOR_SET_SCHEMA(
     OpSchema()
         .SetDoc(Attention_ver23_doc)
         .Attr("is_causal",
-              "If set to `1`, the attention masking is a lower triangular matrix when the mask is "
-              "a square matrix. "
-              "The attention masking has the form of the upper left causal bias due to the "
-              "alignment.",
+              "If set to `1`, the attention masking follows an offset-aware causal frontier where "
+              "a query index i attends keys j <= i + past_sequence_length.",
               AttributeProto::INT, static_cast<int64_t>(0))
         .Attr("scale",
               "Scaling factor applied to $Q*K^T$. Default value is `1/sqrt(head_size)`. To prevent "
@@ -3894,7 +3894,13 @@ ONNX_OPERATOR_SET_SCHEMA(
             }
           }
 
-          builder.Add("YPreReshape = MatMul(SoftmaxOut, VAttentionInput)");
+          builder.Const1D("NegInfCastSrc", -std::numeric_limits<float>::infinity())
+              .Add("NegInfCast = CastLike(NegInfCastSrc, QKAttnWeightSoftcap)")
+              .Const1D("SoftmaxZero", 0.f)
+              .Add("BiasRowMax = ReduceMax <axes = [-1], keepdims = 1> (QKAttnWeightSoftcap)")
+              .Add("BiasRowFullyMasked = Equal(BiasRowMax, NegInfCast)")
+              .Add("SoftmaxOutSafe = Where(BiasRowFullyMasked, SoftmaxZero, SoftmaxOut)")
+              .Add("YPreReshape = MatMul(SoftmaxOutSafe, VAttentionInput)");
           // Reshape Y to 3D if input is a 3D tensor
           if (is_3d_input) {
             builder.Add("YTranspose = Transpose <perm = [0, 2, 1, 3]> (YPreReshape)")

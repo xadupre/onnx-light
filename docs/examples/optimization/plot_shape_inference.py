@@ -239,7 +239,7 @@ bar_width = 30
 
 
 def render_bar(value):
-    """Return a text bar for *value* (``?`` when unresolved)."""
+    """Returns a text bar for *value* (``?`` when unresolved)."""
     if value is None:
         return "?".ljust(bar_width) + "   (unresolved)"
     length = max(1, round(value / max_val * bar_width))

@@ -109,8 +109,7 @@ void RegisterNonZeroChainCase(const std::string &name, std::vector<TestCase> &re
   // Intermediate value_info for ``nz`` would collide with the graph output of
   // the same name, so it is omitted. ``transposed_nz`` is a pure intermediate
   // and its shape mirrors ``nz_float`` (same dim layout, INT64 dtype).
-  AppendValueInfo(*graph->add_value_info(), "transposed_nz", kInt64,
-                  {DimSpec("do1"), DimSpec(2)});
+  AppendValueInfo(*graph->add_value_info(), "transposed_nz", kInt64, {DimSpec("do1"), DimSpec(2)});
   AppendValueInfo(*graph->add_output(), "nz", kInt64, {DimSpec(2), DimSpec("do1")});
   AppendValueInfo(*graph->add_output(), "nz_float", kFloat, {DimSpec("do1"), DimSpec(2)});
 
@@ -138,10 +137,7 @@ void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &regist
   GraphProto *graph = model.add_graph();
   graph->set_name(name);
 
-  TensorProto *m1 = graph->add_initializer();
-  m1->set_name("m1");
-  m1->set_data_type(TensorProto::DataType::INT64);
-  m1->add_int64_data(-1);
+  AddInitializer<int64_t>(*graph, "m1", {1}, {-1});
 
   AddNode(*graph, "Abs", {"X"}, {"abs_out"});
   AddNode(*graph, "NonZero", {"abs_out"}, {"nz"});
@@ -156,9 +152,10 @@ void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &regist
 
   // Provide a concrete DataSet so the case is executable end-to-end.
 
-  Tensor x = Tensor::FromFloat("X", {3, 4}, {1.0f, 0.0f, 2.0f, 0.0f,//
-                                       0.0f, 3.0f, 0.0f, 4.0f, //
-                                       5.0f, 0.0f, 6.0f, 0.0f});
+  Tensor x = Tensor::FromFloat("X", {3, 4},
+                               {1.0f, 0.0f, 2.0f, 0.0f, //
+                                0.0f, 3.0f, 0.0f, 4.0f, //
+                                5.0f, 0.0f, 6.0f, 0.0f});
   Tensor y = Tensor::FromInt64("Y", {12}, {0, 1, 0, 3, 1, 4, 1, 6, 3, 1, 3, 7});
   AppendDataSet(tc, {std::move(x)}, {std::move(y)});
   registry.emplace_back(std::move(tc));

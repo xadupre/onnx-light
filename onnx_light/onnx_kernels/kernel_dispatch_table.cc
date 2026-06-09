@@ -218,6 +218,24 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       // -----------------------------------------------------------------
       {"ai.onnx:Add", MakeBinaryTrampoline<kernel::Add>()},
       {"ai.onnx:Div", MakeBinaryTrampoline<kernel::Div>()},
+      {"ai.onnx:Gemm",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         if (node.input_size() < 2 || node.input_size() > 3) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects between 2 and 3 input(s), got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         RequireOutputCount(node, 1);
+         const Tensor &a = GetInput(node, 0, rt.tensors());
+         const Tensor &b = GetInput(node, 1, rt.tensors());
+         const Tensor *c = GetOptionalInput(node, 2, rt.tensors());
+         const float alpha = GetAttributeFloatOrDefault(node, "alpha", 1.0f);
+         const float beta = GetAttributeFloatOrDefault(node, "beta", 1.0f);
+         const int64_t transA = GetAttributeIntOrDefault(node, "transA", 0);
+         const int64_t transB = GetAttributeIntOrDefault(node, "transB", 0);
+         kernel::Gemm k(rt.kernel_ctx());
+         SetOutput(node, 0, k(a, b, c, alpha, beta, transA, transB), rt.tensors());
+       }},
       {"ai.onnx:MatMul", MakeBinaryTrampoline<kernel::MatMul>()},
       {"ai.onnx:Mul", MakeBinaryTrampoline<kernel::Mul>()},
       {"ai.onnx:PRelu", MakeBinaryTrampoline<kernel::PRelu>()},

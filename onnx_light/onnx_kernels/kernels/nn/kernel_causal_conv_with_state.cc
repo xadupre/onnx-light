@@ -180,12 +180,18 @@ void CausalConvWithState::operator()(const Tensor &input, const Tensor &weight, 
   float *py_f = is_float ? output.AsFloat() : nullptr;
   float *ps_f = (is_float && Km1 > 0) ? present_state.AsFloat() : nullptr;
 
-  const uint16_t *px_h = is_float16 ? input.AsUint16() : nullptr;
-  const uint16_t *pw_h = is_float16 ? weight.AsUint16() : nullptr;
-  const uint16_t *pb_h = (is_float16 && bias != nullptr) ? bias->AsUint16() : nullptr;
-  const uint16_t *pp_h = (is_float16 && past_state != nullptr) ? past_state->AsUint16() : nullptr;
-  uint16_t *py_h = is_float16 ? output.AsUint16() : nullptr;
-  uint16_t *ps_h = (is_float16 && Km1 > 0) ? present_state.AsUint16() : nullptr;
+  const uint16_t *px_h = is_float16 ? reinterpret_cast<const uint16_t *>(input.bytes()) : nullptr;
+  const uint16_t *pw_h = is_float16 ? reinterpret_cast<const uint16_t *>(weight.bytes()) : nullptr;
+  const uint16_t *pb_h =
+      (is_float16 && bias != nullptr) ? reinterpret_cast<const uint16_t *>(bias->bytes()) : nullptr;
+  const uint16_t *pp_h = (is_float16 && past_state != nullptr)
+                             ? reinterpret_cast<const uint16_t *>(past_state->bytes())
+                             : nullptr;
+  uint16_t *py_h =
+      is_float16 ? reinterpret_cast<uint16_t *>(const_cast<uint8_t *>(output.bytes())) : nullptr;
+  uint16_t *ps_h = (is_float16 && Km1 > 0)
+                       ? reinterpret_cast<uint16_t *>(const_cast<uint8_t *>(present_state.bytes()))
+                       : nullptr;
 
   auto load = [&](const float *pf, const uint16_t *ph, int64_t idx) -> float {
     return is_float ? pf[idx] : Float16BitsToFloat(ph[idx]);

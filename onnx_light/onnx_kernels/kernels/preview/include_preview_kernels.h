@@ -42,10 +42,14 @@ namespace kernel {
 /// ``floor(h / (q_num_heads / kv_num_heads))``; ``q_num_heads`` must be a
 /// multiple of ``kv_num_heads``.
 ///
-/// The optional ``score_mod`` modifier subgraph of the upstream operator
-/// is not modeled by this reference kernel — it implements the un-modified
-/// score path that backends are expected to reproduce when ``score_mod``
-/// is not provided.
+/// The optional ``score_mod`` modifier subgraph is supported via the
+/// ``ScoreModFn`` callback overload: callers that have a way to evaluate
+/// the ``score_mod`` subgraph (e.g. a graph-executor) can pass a callable
+/// that receives the pre-softmax score tensor of shape
+/// ``(batch_size, q_num_heads, q_seq_len, kv_seq_len)`` and rewrites it
+/// in place; the kernel then runs ``Softmax`` on the rewritten scores
+/// before the final ``probs @ V`` matmul. Overloads without a callback
+/// retain the baseline behavior (``score_mod`` treated as identity).
 ///
 /// The optional ``prob_mod`` modifier subgraph is supported via the
 /// ``ProbModFn`` callback overload: callers that have a way to evaluate
@@ -60,6 +64,14 @@ namespace kernel {
 class FlexAttention : public KernelBase {
 public:
   using KernelBase::KernelBase;
+
+  /// Callback used to apply the ``score_mod`` modifier subgraph to the
+  /// pre-softmax score tensor of shape
+  /// ``(batch_size, q_num_heads, q_seq_len, kv_seq_len)``. The callback
+  /// receives a mutable reference to a FLOAT tensor and must rewrite
+  /// its contents in place while preserving ``data_type`` and ``shape``;
+  /// the kernel validates these invariants after the call.
+  using ScoreModFn = std::function<void(Tensor &)>;
 
   /// Callback used to apply the ``prob_mod`` modifier subgraph to the
   /// post-softmax probability tensor of shape
@@ -86,6 +98,14 @@ public:
   Tensor operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
                     const ProbModFn &prob_mod) const;
 
+  /// Computes the attention output and applies the ``score_mod`` callback
+  /// to the pre-softmax score tensor before the softmax, and the
+  /// ``prob_mod`` callback to the post-softmax probability tensor before
+  /// computing ``Y = probs @ V``. When either callback is an empty
+  /// ``std::function`` it is treated as identity.
+  Tensor operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
+                    const ScoreModFn &score_mod, const ProbModFn &prob_mod) const;
+
   /// In-place overload writing into a caller-allocated ``output`` tensor.
   /// ``output`` must already be a FLOAT tensor whose shape equals
   /// ``(batch_size, q_num_heads, q_seq_len, v_head_size)`` and whose
@@ -99,6 +119,13 @@ public:
   /// without a callback.
   void operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
                   const ProbModFn &prob_mod, Tensor &output) const;
+
+  /// In-place overload with ``score_mod`` and ``prob_mod`` support. See
+  /// the returning overloads for the semantics of the callbacks;
+  /// ``output`` has the same preconditions as the in-place overload
+  /// without a callback.
+  void operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
+                  const ScoreModFn &score_mod, const ProbModFn &prob_mod, Tensor &output) const;
 
   /// FlexAttention computes a fresh output buffer from independent reads of
   /// Q, K, V and never aliases an input buffer.

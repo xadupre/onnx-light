@@ -47,6 +47,10 @@ Tensor GreaterOrEqual::operator()(const Tensor &x, const Tensor &y) const {
     return GreaterOrEqualAlloc<int8_t>("INT8", DataType::INT8, x, y);
   case DataType::INT16:
     return GreaterOrEqualAlloc<int16_t>("INT16", DataType::INT16, x, y);
+  case DataType::INT32:
+    return GreaterOrEqualAlloc<int32_t>("INT32", DataType::INT32, x, y);
+  case DataType::INT64:
+    return GreaterOrEqualAlloc<int64_t>("INT64", DataType::INT64, x, y);
   case DataType::UINT8:
     return GreaterOrEqualAlloc<uint8_t>("UINT8", DataType::UINT8, x, y);
   case DataType::UINT16:
@@ -57,8 +61,8 @@ Tensor GreaterOrEqual::operator()(const Tensor &x, const Tensor &y) const {
     return GreaterOrEqualAlloc<uint64_t>("UINT64", DataType::UINT64, x, y);
   default:
     throw std::invalid_argument(std::string(kGreaterOrEqualName) +
-                                " only supports FLOAT, INT8, INT16, UINT8, UINT16, UINT32 "
-                                "and UINT64 inputs.");
+                                " only supports FLOAT, INT8, INT16, INT32, INT64, UINT8, "
+                                "UINT16, UINT32 and UINT64 inputs.");
   }
 }
 
@@ -70,6 +74,10 @@ void GreaterOrEqual::operator()(const Tensor &x, const Tensor &y, Tensor &output
     return GreaterOrEqualInPlace<int8_t>("INT8", DataType::INT8, x, y, output);
   case DataType::INT16:
     return GreaterOrEqualInPlace<int16_t>("INT16", DataType::INT16, x, y, output);
+  case DataType::INT32:
+    return GreaterOrEqualInPlace<int32_t>("INT32", DataType::INT32, x, y, output);
+  case DataType::INT64:
+    return GreaterOrEqualInPlace<int64_t>("INT64", DataType::INT64, x, y, output);
   case DataType::UINT8:
     return GreaterOrEqualInPlace<uint8_t>("UINT8", DataType::UINT8, x, y, output);
   case DataType::UINT16:
@@ -80,8 +88,8 @@ void GreaterOrEqual::operator()(const Tensor &x, const Tensor &y, Tensor &output
     return GreaterOrEqualInPlace<uint64_t>("UINT64", DataType::UINT64, x, y, output);
   default:
     throw std::invalid_argument(std::string(kGreaterOrEqualName) +
-                                " only supports FLOAT, INT8, INT16, UINT8, UINT16, UINT32 "
-                                "and UINT64 inputs.");
+                                " only supports FLOAT, INT8, INT16, INT32, INT64, UINT8, "
+                                "UINT16, UINT32 and UINT64 inputs.");
   }
 }
 

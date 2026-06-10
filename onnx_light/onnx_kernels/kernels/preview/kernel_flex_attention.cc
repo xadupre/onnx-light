@@ -42,11 +42,16 @@ Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor 
 
 Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V,
                                  float scale) const {
-  return (*this)(Q, K, V, scale, ProbModFn{});
+  return (*this)(Q, K, V, scale, ScoreModFn{}, ProbModFn{});
 }
 
 Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
                                  const ProbModFn &prob_mod) const {
+  return (*this)(Q, K, V, scale, ScoreModFn{}, prob_mod);
+}
+
+Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
+                                 const ScoreModFn &score_mod, const ProbModFn &prob_mod) const {
   CheckRank4Float(Q, "Q");
   CheckRank4Float(V, "V");
   const int64_t batch_size = Q.shape[0];
@@ -56,17 +61,23 @@ Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor 
   const int64_t out_count = batch_size * q_num_heads * q_seq_len * v_head_size;
   Tensor out("", DataType::FLOAT, {batch_size, q_num_heads, q_seq_len, v_head_size},
              std::vector<uint8_t>(static_cast<size_t>(out_count) * sizeof(float)));
-  (*this)(Q, K, V, scale, prob_mod, out);
+  (*this)(Q, K, V, scale, score_mod, prob_mod, out);
   return out;
 }
 
 void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
                                Tensor &output) const {
-  (*this)(Q, K, V, scale, ProbModFn{}, output);
+  (*this)(Q, K, V, scale, ScoreModFn{}, ProbModFn{}, output);
 }
 
 void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
                                const ProbModFn &prob_mod, Tensor &output) const {
+  (*this)(Q, K, V, scale, ScoreModFn{}, prob_mod, output);
+}
+
+void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
+                               const ScoreModFn &score_mod, const ProbModFn &prob_mod,
+                               Tensor &output) const {
   CheckRank4Float(Q, "Q");
   CheckRank4Float(K, "K");
   CheckRank4Float(V, "V");
@@ -130,9 +141,10 @@ void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V
   const int64_t y_head_stride = q_seq_len * v_head_size;
   const int64_t y_batch_stride = q_num_heads * y_head_stride;
 
-  // Allocate the full (B, Hq, L, S) probability tensor so the optional
-  // ``prob_mod`` callback — which operates on the whole tensor in ONNX —
-  // can rewrite it in place before the final ``probs @ V`` matmul.
+  // Allocate the full (B, Hq, L, S) score / probability tensor so the
+  // optional ``score_mod`` and ``prob_mod`` callbacks — which operate on
+  // the whole tensor in ONNX — can rewrite it in place before the
+  // softmax and the final ``probs @ V`` matmul, respectively.
   const std::vector<int64_t> probs_shape = {batch_size, q_num_heads, q_seq_len, kv_seq_len};
   const int64_t probs_count = batch_size * q_num_heads * q_seq_len * kv_seq_len;
   Tensor probs("", DataType::FLOAT, probs_shape,
@@ -142,17 +154,16 @@ void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V
   const int64_t probs_head_stride = q_seq_len * kv_seq_len;
   const int64_t probs_batch_stride = q_num_heads * probs_head_stride;
 
-  std::vector<double> scores(static_cast<size_t>(kv_seq_len));
+  // Phase 1: scores = (Q @ K^T) * scale, written into ``probs`` so the
+  // optional ``score_mod`` callback can rewrite it in place.
   for (int64_t b = 0; b < batch_size; ++b) {
     for (int64_t h = 0; h < q_num_heads; ++h) {
       const int64_t kv_h = h / group_size;
       const float *Qbh = pQ + b * q_batch_stride + h * q_head_stride;
       const float *Kbh = pK + b * k_batch_stride + kv_h * k_head_stride;
-      float *Pbh = pProbs + b * probs_batch_stride + h * probs_head_stride;
+      float *Sbh = pProbs + b * probs_batch_stride + h * probs_head_stride;
 
       for (int64_t i = 0; i < q_seq_len; ++i) {
-        // scores[j] = sum_d Q[i, d] * K[j, d] * scale
-        double max_score = 0.0;
         for (int64_t j = 0; j < kv_seq_len; ++j) {
           double s = 0.0;
           for (int64_t d = 0; d < head_size; ++d) {
@@ -160,21 +171,62 @@ void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V
                  static_cast<double>(Kbh[j * head_size + d]);
           }
           s *= static_cast<double>(scale);
-          scores[static_cast<size_t>(j)] = s;
-          if (j == 0 || s > max_score) {
+          Sbh[i * kv_seq_len + j] = static_cast<float>(s);
+        }
+      }
+    }
+  }
+
+  // Apply the optional ``score_mod`` modifier subgraph callback. The
+  // callback may freely rewrite the score values but must preserve the
+  // FLOAT element type and the (B, Hq, L, S) shape.
+  if (score_mod) {
+    score_mod(probs);
+    EXT_ENFORCE_INVALID(probs.data_type == DataType::FLOAT,
+                        "kernel::FlexAttention: 'score_mod' callback must preserve the FLOAT "
+                        "element type of the score tensor.");
+    EXT_ENFORCE_INVALID(probs.shape == probs_shape,
+                        "kernel::FlexAttention: 'score_mod' callback must preserve the "
+                        "(batch_size, q_num_heads, q_seq_len, kv_seq_len) shape of the "
+                        "score tensor.");
+    EXT_ENFORCE_INVALID(
+        probs.data.size() == static_cast<size_t>(probs_count) * sizeof(float),
+        "kernel::FlexAttention: 'score_mod' callback must preserve the byte size of the "
+        "score tensor buffer.");
+    pProbs = probs.AsFloat();
+  }
+
+  // Phase 2: softmax over the last (kv_seq_len) axis, per (b, h, i) row.
+  // Handle the all-``-inf`` row produced by an exhaustively masked
+  // position by leaving the probabilities at zero, matching ONNX's
+  // reference semantics.
+  std::vector<double> row(static_cast<size_t>(kv_seq_len));
+  for (int64_t b = 0; b < batch_size; ++b) {
+    for (int64_t h = 0; h < q_num_heads; ++h) {
+      float *Pbh = pProbs + b * probs_batch_stride + h * probs_head_stride;
+      for (int64_t i = 0; i < q_seq_len; ++i) {
+        double max_score = static_cast<double>(Pbh[i * kv_seq_len + 0]);
+        for (int64_t j = 1; j < kv_seq_len; ++j) {
+          const double s = static_cast<double>(Pbh[i * kv_seq_len + j]);
+          if (s > max_score) {
             max_score = s;
           }
         }
-        // softmax over the last axis (kv_seq_len).
         double denom = 0.0;
-        for (int64_t j = 0; j < kv_seq_len; ++j) {
-          const double e = std::exp(scores[static_cast<size_t>(j)] - max_score);
-          scores[static_cast<size_t>(j)] = e;
-          denom += e;
+        if (std::isfinite(max_score)) {
+          for (int64_t j = 0; j < kv_seq_len; ++j) {
+            const double e = std::exp(static_cast<double>(Pbh[i * kv_seq_len + j]) - max_score);
+            row[static_cast<size_t>(j)] = e;
+            denom += e;
+          }
+        } else {
+          for (int64_t j = 0; j < kv_seq_len; ++j) {
+            row[static_cast<size_t>(j)] = 0.0;
+          }
         }
         const double inv_denom = denom != 0.0 ? 1.0 / denom : 0.0;
         for (int64_t j = 0; j < kv_seq_len; ++j) {
-          Pbh[i * kv_seq_len + j] = static_cast<float>(scores[static_cast<size_t>(j)] * inv_denom);
+          Pbh[i * kv_seq_len + j] = static_cast<float>(row[static_cast<size_t>(j)] * inv_denom);
         }
       }
     }
@@ -199,7 +251,7 @@ void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V
     pProbs = probs.AsFloat();
   }
 
-  // Y = probs @ V, per (batch, query-head, query-pos, value-dim).
+  // Phase 3: Y = probs @ V, per (batch, query-head, query-pos, value-dim).
   for (int64_t b = 0; b < batch_size; ++b) {
     for (int64_t h = 0; h < q_num_heads; ++h) {
       const int64_t kv_h = h / group_size;

@@ -1500,6 +1500,16 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        MakeRandomGenTrampoline<kernel::RandomUniform>("low", 0.0f, "high", 1.0f)},
       {"ai.onnx:RandomUniformLike",
        MakeRandomLikeTrampoline<kernel::RandomUniformLike>("low", 0.0f, "high", 1.0f)},
+      {"ai.onnx:Range",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 3);
+         RequireOutputCount(node, 1);
+         const Tensor &start = GetInput(node, 0, rt.tensors());
+         const Tensor &limit = GetInput(node, 1, rt.tensors());
+         const Tensor &delta = GetInput(node, 2, rt.tensors());
+         kernel::Range k(rt.kernel_ctx());
+         SetOutput(node, 0, k(start, limit, delta), rt);
+       }},
       {"ai.onnx:RMSNormalization", RunRMSNormalization},
       {"ai.onnx:Reciprocal", MakeUnaryTrampoline<kernel::Reciprocal>()},
       {"ai.onnx:ReduceL1", MakeReduceTrampoline<kernel::ReduceL1>()},
@@ -1774,6 +1784,23 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
 
          kernel::FlexAttention flex(rt.kernel_ctx());
          Tensor Y;
+         kernel::FlexAttention::ScoreModFn score_mod_fn;
+         kernel::FlexAttention::ProbModFn prob_mod_fn;
+         const AttributeProto *score_mod_attr = FindAttribute(node, "score_mod");
+         if (score_mod_attr != nullptr) {
+           const GraphProto &score_mod_graph = score_mod_attr->ref_g();
+           if (score_mod_graph.input().empty()) {
+             throw std::invalid_argument(
+                 "RunNode: 'score_mod' subgraph must declare at least one input.");
+           }
+           const std::string in_name = score_mod_graph.input()[0].name().as_string();
+           score_mod_fn = [&score_mod_graph, in_name, &rt](Tensor &scores) {
+             auto outputs = RunSubgraph(score_mod_graph, {{in_name, scores}}, rt);
+             if (!outputs.empty()) {
+               scores = std::move(outputs[0]);
+             }
+           };
+         }
          const AttributeProto *prob_mod_attr = FindAttribute(node, "prob_mod");
          if (prob_mod_attr != nullptr) {
            const GraphProto &prob_mod_graph = prob_mod_attr->ref_g();
@@ -1782,14 +1809,15 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                  "RunNode: 'prob_mod' subgraph must declare at least one input.");
            }
            const std::string in_name = prob_mod_graph.input()[0].name().as_string();
-           kernel::FlexAttention::ProbModFn prob_mod_fn =
-               [&prob_mod_graph, &in_name, &rt](Tensor &probs) {
-                 auto outputs = RunSubgraph(prob_mod_graph, {{in_name, probs}}, rt);
-                 if (!outputs.empty()) {
-                   probs = std::move(outputs[0]);
-                 }
-               };
-           Y = flex(Q, K, V, scale, prob_mod_fn);
+           prob_mod_fn = [&prob_mod_graph, in_name, &rt](Tensor &probs) {
+             auto outputs = RunSubgraph(prob_mod_graph, {{in_name, probs}}, rt);
+             if (!outputs.empty()) {
+               probs = std::move(outputs[0]);
+             }
+           };
+         }
+         if (score_mod_fn || prob_mod_fn) {
+           Y = flex(Q, K, V, scale, score_mod_fn, prob_mod_fn);
          } else {
            Y = flex(Q, K, V, scale);
          }

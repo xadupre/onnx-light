@@ -2169,6 +2169,40 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          });
          SetOutput(node, 0, std::move(z), rt.tensors());
        }},
+      {"ai.onnx.ml:CategoryMapper",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+
+         // ``cats_strings`` and ``cats_int64s`` are both required per the
+         // ``ai.onnx.ml::CategoryMapper`` schema and must have the same length.
+         const std::vector<std::string> cats_strings =
+             GetAttributeStringsOrDefault(node, "cats_strings", {});
+         const std::vector<int64_t> cats_int64s =
+             GetAttributeIntsOrDefault(node, "cats_int64s", {});
+         const std::string default_string =
+             GetAttributeStringOrDefault(node, "default_string", std::string("_Unused"));
+         const int64_t default_int64 =
+             GetAttributeIntOrDefault(node, "default_int64", static_cast<int64_t>(-1));
+
+         kernel::CategoryMapper category_mapper(rt.kernel_ctx());
+         Tensor y;
+         switch (x.data_type) {
+         case static_cast<int32_t>(DataType::STRING):
+           y = category_mapper.operator()<std::string, int64_t>(x, cats_strings, cats_int64s,
+                                                                default_int64);
+           break;
+         case static_cast<int32_t>(DataType::INT64):
+           y = category_mapper.operator()<int64_t, std::string>(x, cats_strings, cats_int64s,
+                                                                default_string);
+           break;
+         default:
+           throw std::invalid_argument(
+               "RunNode: CategoryMapper input X must have element type STRING or INT64.");
+         }
+         SetOutput(node, 0, std::move(y), rt.tensors());
+       }},
       {"ai.onnx.ml:LabelEncoder",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);

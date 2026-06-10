@@ -1329,6 +1329,18 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                    rt.tensors());
        }},
       {"ai.onnx:Not", MakeUnaryTrampoline<kernel::Not>()},
+      {"ai.onnx:OneHot",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 3);
+         RequireOutputCount(node, 1);
+         const Tensor &indices = GetInput(node, 0, rt.tensors());
+         const Tensor &depth = GetInput(node, 1, rt.tensors());
+         const Tensor &values = GetInput(node, 2, rt.tensors());
+         kernel::OneHot::Attributes attrs;
+         attrs.axis = GetAttributeIntOrDefault(node, "axis", -1);
+         kernel::OneHot k(rt.kernel_ctx());
+         SetOutput(node, 0, k(indices, depth, values, attrs), rt.tensors());
+       }},
       {"ai.onnx:Or", MakeBinaryTrampoline<kernel::Or>()},
       {"ai.onnx:Pad",
        [](const NodeProto &node, RuntimeContext &rt) {

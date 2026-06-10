@@ -703,6 +703,21 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Cast", MakeUnaryToTrampoline<kernel::Cast>()},
       {"ai.onnx:Ceil", MakeUnaryTrampoline<kernel::Ceil>()},
       {"ai.onnx:Celu", MakeUnaryAlphaTrampoline<kernel::Celu>("alpha", 1.0f)},
+      {"ai.onnx:CenterCropPad",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         const Tensor &input_data = GetInput(node, 0, rt.tensors());
+         const Tensor &shape = GetInput(node, 1, rt.tensors());
+         kernel::CenterCropPad::Attributes attrs;
+         const AttributeProto *axes_attr = FindAttribute(node, "axes");
+         if (axes_attr != nullptr) {
+           attrs.axes = GetAttributeIntsOrDefault(node, "axes", {});
+           attrs.axes_present = true;
+         }
+         kernel::CenterCropPad k(rt.kernel_ctx());
+         SetOutput(node, 0, k(input_data, shape, attrs), rt);
+       }},
       {"ai.onnx:Constant",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireOutputCount(node, 1);

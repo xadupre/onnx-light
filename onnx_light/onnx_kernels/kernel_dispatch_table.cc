@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -680,6 +681,20 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor *max = GetOptionalInput(node, 2, rt.tensors());
          kernel::Clip k(rt.kernel_ctx());
          SetOutput(node, 0, k(x, min, max), rt);
+       }},
+      {"ai.onnx:Compress",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         const Tensor &input = GetInput(node, 0, rt.tensors());
+         const Tensor &condition = GetInput(node, 1, rt.tensors());
+         const AttributeProto *axis_attr = FindAttribute(node, "axis");
+         std::optional<int64_t> axis;
+         if (axis_attr != nullptr) {
+           axis = axis_attr->i();
+         }
+         kernel::Compress k(rt.kernel_ctx());
+         SetOutput(node, 0, k(input, condition, axis), rt);
        }},
       {"ai.onnx:Conv",
        [](const NodeProto &node, RuntimeContext &rt) {

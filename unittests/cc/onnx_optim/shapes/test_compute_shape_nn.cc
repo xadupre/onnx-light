@@ -1947,4 +1947,33 @@ TEST(OnnxOptimShapesNnLinearAttention, RejectsWrongOpType) {
       std::invalid_argument);
 }
 
+TEST(OnnxOptimShapesNnLinearAttention, SymbolicValueLastDimGqa) {
+  // Symbolic value last dim with q_num_heads != kv_num_heads: out_last is a
+  // fresh symbolic placeholder, d_v / d_k are also symbolic placeholders.
+  NodeProto node = MakeLinearAttentionNode(/*q_num_heads=*/4, /*kv_num_heads=*/2);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("query", onnx_optim::OptimTensor(
+                       nullptr, onnx_optim::TensorType::kFloat,
+                       onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                              onnx_optim::OptimDim(std::string("H"))}));
+  ctx.Set("key", onnx_optim::OptimTensor(
+                     nullptr, onnx_optim::TensorType::kFloat,
+                     onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                            onnx_optim::OptimDim(std::string("K"))}));
+  ctx.Set("value", onnx_optim::OptimTensor(
+                       nullptr, onnx_optim::TensorType::kFloat,
+                       onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                              onnx_optim::OptimDim(std::string("V"))}));
+
+  onnx_optim::shapes::nn::ComputeShapeLinearAttention(ctx, node, "query", "key", "value");
+
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  ASSERT_EQ(out.Rank(), 3u);
+  EXPECT_FALSE(out[2].IsInt());
+  const onnx_optim::OptimShape &ps = ctx.Get("present_state").Shape();
+  ASSERT_EQ(ps.Rank(), 4u);
+  EXPECT_FALSE(ps[2].IsInt());
+  EXPECT_FALSE(ps[3].IsInt());
+}
+
 } // namespace Test

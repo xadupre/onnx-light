@@ -101,7 +101,11 @@ void ComputeShapeLinearAttention(ShapesContext &ctx, const NodeProto &node, cons
   seq_len = MergeDim(seq_len, v_shape[1], "sequence_length");
 
   // d_k = key.shape[-1] / kv_num_heads; d_v = value.shape[-1] / kv_num_heads.
+  // When the value/key last dim is symbolic we fall back to a fresh symbolic
+  // placeholder ("?") so the rank is correct even if the exact value is
+  // unknown. ``past_state`` (if provided) can refine these below.
   OptimDim d_k;
+  bool d_k_resolved = false;
   if (k_shape[2].IsInt()) {
     const int64_t hidden_k = k_shape[2].AsInt();
     if ((hidden_k % kv_num_heads) != 0) {
@@ -125,10 +129,11 @@ void ComputeShapeLinearAttention(ShapesContext &ctx, const NodeProto &node, cons
       }
     }
     d_k = OptimDim(hidden_k / kv_num_heads);
+    d_k_resolved = true;
   }
 
   OptimDim d_v;
-  OptimDim out_last;
+  bool d_v_resolved = false;
   if (v_shape[2].IsInt()) {
     const int64_t hidden_v = v_shape[2].AsInt();
     if ((hidden_v % kv_num_heads) != 0) {
@@ -136,9 +141,8 @@ void ComputeShapeLinearAttention(ShapesContext &ctx, const NodeProto &node, cons
           "ComputeShapeLinearAttention: value last dim (" + std::to_string(hidden_v) +
           ") must be divisible by kv_num_heads (" + std::to_string(kv_num_heads) + ").");
     }
-    const int64_t dv = hidden_v / kv_num_heads;
-    d_v = OptimDim(dv);
-    out_last = OptimDim(q_num_heads * dv);
+    d_v = OptimDim(hidden_v / kv_num_heads);
+    d_v_resolved = true;
   }
 
   // Cross-check / refine using past_state (B, H_kv, d_k, d_v) if present.
@@ -151,16 +155,35 @@ void ComputeShapeLinearAttention(ShapesContext &ctx, const NodeProto &node, cons
           "ComputeShapeLinearAttention: past_state dim 1 (" + std::to_string(ps_shape[1].AsInt()) +
           ") must equal kv_num_heads (" + std::to_string(kv_num_heads) + ").");
     }
-    if (d_k.IsInt()) {
+    if (d_k_resolved) {
       d_k = MergeDim(d_k, ps_shape[2], "d_k");
     } else {
       d_k = ps_shape[2];
+      d_k_resolved = ps_shape[2].IsInt();
     }
-    if (d_v.IsInt()) {
+    if (d_v_resolved) {
       d_v = MergeDim(d_v, ps_shape[3], "d_v");
     } else {
       d_v = ps_shape[3];
+      d_v_resolved = ps_shape[3].IsInt();
     }
+  }
+
+  // Compute output last dim = q_num_heads * d_v.
+  OptimDim out_last;
+  if (d_v_resolved) {
+    out_last = OptimDim(q_num_heads * d_v.AsInt());
+  } else if (q_num_heads == kv_num_heads && !v_shape[2].IsInt()) {
+    // Special case: q_num_heads * d_v = q_num_heads * (v_shape[2] / kv_num_heads) = v_shape[2].
+    out_last = v_shape[2];
+  } else {
+    out_last = OptimDim(std::string("?"));
+  }
+  if (!d_k_resolved) {
+    d_k = OptimDim(std::string("?"));
+  }
+  if (!d_v_resolved) {
+    d_v = OptimDim(std::string("?"));
   }
 
   // Output 0: output = (B, T, q_num_heads * d_v).

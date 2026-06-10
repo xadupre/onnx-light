@@ -78,6 +78,15 @@ void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &regist
 /// downstream ``Expand`` can recover the precise symbolic output shape.
 void RegisterValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry);
 
+/// Registers a single-node ``If`` model whose ``then_branch`` and
+/// ``else_branch`` each produce **two** outputs of the same rank but with
+/// *different* symbolic shapes (the leading axis differs, every trailing
+/// axis matches). Exercises the branch-merging path of
+/// :cpp:func:`onnx_optim::shapes::controlflow::ComputeShapeIf`, which must
+/// keep matching axes and synthesize a fresh ``If_<out>_d<i>`` symbolic
+/// dim for the differing one.
+void RegisterIfSymbolicShapesShapeInferenceCases(std::vector<TestCase> &registry);
+
 /// Collects all shape-inference oriented backend test cases by invoking
 /// every ``Register*ShapeInferenceCases`` helper declared in this header.
 void CollectShapeInferenceTestCases(std::vector<TestCase> &registry,

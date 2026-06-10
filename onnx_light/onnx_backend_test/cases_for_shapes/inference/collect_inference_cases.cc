@@ -21,6 +21,7 @@ void CollectShapeInferenceTestCases(std::vector<TestCase> &registry, const std::
     RegisterShapeIdentityUnsqueezeShapeInferenceCases(registry);
     RegisterDimensionExpressionShapeInferenceCase(registry);
     RegisterValueAsShapeShapeInferenceCases(registry);
+    RegisterIfSymbolicShapesShapeInferenceCases(registry);
   }
 }
 

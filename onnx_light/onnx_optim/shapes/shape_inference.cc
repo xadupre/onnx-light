@@ -325,22 +325,38 @@ void MergeAnchorsIntoContext(ShapesContext &ctx, const AnchorMap &anchors) {
   }
 }
 
+// Inserts the dim's expression as an anchor symbol, plus the individual
+// tokens it references when it is a compound expression. Anchors coming
+// from graph outputs / value_info often carry single symbolic names
+// (e.g. ``"N"``) but they may also be arithmetic expressions such as
+// ``"s0+seq_len"``. In the latter case we want both the expression and
+// its leaf tokens (``s0`` and ``seq_len``) registered as "preferred"
+// names so that ``rename_dynamic_dimensions`` can re-use them when
+// canonicalising symbols inferred elsewhere in the graph.
+void AddDimAnchorSymbols(const OptimDim &dim, std::unordered_set<std::string> &symbols) {
+  if (!dim.IsExpr()) {
+    return;
+  }
+  const std::string &expr = dim.AsExpr();
+  symbols.insert(expr);
+  const std::unordered_set<std::string> tokens = expressions::parse_expression_tokens(expr);
+  for (const std::string &token : tokens) {
+    if (!token.empty()) {
+      symbols.insert(token);
+    }
+  }
+}
+
 std::unordered_set<std::string> CollectAnchorSymbols(const AnchorMap &anchors) {
   std::unordered_set<std::string> symbols;
   for (const auto &kv : anchors) {
     const OptimTensor &tensor = kv.second;
     for (std::size_t i = 0; i < tensor.Shape().Rank(); ++i) {
-      const OptimDim &dim = tensor.Shape()[i];
-      if (dim.IsExpr()) {
-        symbols.insert(dim.AsExpr());
-      }
+      AddDimAnchorSymbols(tensor.Shape()[i], symbols);
     }
     if (tensor.HasValueAsShape()) {
       for (std::size_t i = 0; i < tensor.ValueAsShape().Rank(); ++i) {
-        const OptimDim &dim = tensor.ValueAsShape()[i];
-        if (dim.IsExpr()) {
-          symbols.insert(dim.AsExpr());
-        }
+        AddDimAnchorSymbols(tensor.ValueAsShape()[i], symbols);
       }
     }
   }

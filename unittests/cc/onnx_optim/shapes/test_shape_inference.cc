@@ -751,6 +751,34 @@ TEST(OnnxOptimShapeInference, InferShapesModelEndToEnd) {
   EXPECT_EQ(out.type().tensor_type().shape().dim()[1].dim_value(), 2);
 }
 
+TEST(OnnxOptimShapeInference, ComputeShapeModelPrefillAnchorExpressionTokens) {
+  // The output anchor declares a compound symbolic dimension ("A+B").
+  // The renaming pass must register not only the full expression but
+  // also its individual tokens ("A", "B") as preferred names, so that
+  // they survive constraint propagation instead of being substituted by
+  // unrelated inferred symbols.
+  ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{-1, 4},
+                                                  /*target=*/{-1, 2},
+                                                  /*symbolic_names=*/{"N"});
+  SetValueInfoTensorType(*model.mutable_graph()->mutable_output(0), TensorProto::DataType::FLOAT,
+                         /*shape=*/{-1, 2}, /*symbolic_names=*/{"A+B"});
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.ComputeShapeModel(model, /*prefill_with_value_info_output=*/true);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  ASSERT_EQ(ctx.Get("Y").Shape().Rank(), 2u);
+  EXPECT_TRUE(ctx.Get("Y").Shape()[0].IsExpr());
+  EXPECT_EQ(ctx.Get("Y").Shape()[0].AsExpr(), "A+B");
+  EXPECT_EQ(ctx.Get("Y").Shape()[1], onnx_optim::OptimDim(2));
+  // The input dim "N" is unrelated to the anchor tokens and must not be
+  // renamed by the propagation pass.
+  ASSERT_TRUE(ctx.Has("X"));
+  ASSERT_EQ(ctx.Get("X").Shape().Rank(), 2u);
+  EXPECT_TRUE(ctx.Get("X").Shape()[0].IsExpr());
+  EXPECT_EQ(ctx.Get("X").Shape()[0].AsExpr(), "N");
+}
+
 TEST(OnnxOptimShapeInference, InferShapesModelWithPrefillPrefersOutputAnchor) {
   ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{-1, 4},
                                                   /*target=*/{-1, 2},

@@ -11,21 +11,6 @@ class TestOnnxOpModule(ExtTestCase):
         self.assertTrue(hasattr(op, "LightOpSchema"))
         self.assertEqual(op.LightOpSchema.__name__, "LightOpSchema")
 
-    def test_module_exposes_expected_symbols(self):
-        for name in (
-            "FormalParameter",
-            "GetAllOnnxOpSchemasWithHistory",
-            "LightOpSchema",
-            "TensorType",
-            "ToTypeString",
-            "TypeConstraintParam",
-            "get_all_schemas",
-            "get_all_schemas_with_history",
-            "kOnnxDomain",
-        ):
-            self.assertIn(name, op.__all__, name)
-            self.assertTrue(hasattr(op, name), name)
-
     def test_onnx_domain_constant(self):
         self.assertEqual(op.kOnnxDomain, "ai.onnx")
 

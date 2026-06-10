@@ -2,6 +2,7 @@
 import unittest
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx as onnxl
+import onnx_light.onnx.defs as defs
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.shape_inference as shape_inference
 
@@ -9,7 +10,7 @@ import onnx_light.onnx.shape_inference as shape_inference
 class TestShapeInference(ExtTestCase):
     @classmethod
     def setUpClass(cls):
-        onnxl.defs.register_onnx_operator_set_schema()
+        defs.register_onnx_operator_set_schema()
 
     def _infer_output(
         self,
@@ -21,7 +22,7 @@ class TestShapeInference(ExtTestCase):
     ) -> onnxl.TypeProto:
         """Infers the single output type for a node."""
         node = oh.make_node(op_type, list(input_types), ["z"], **attrs)
-        schema = onnxl.defs.get_schema(op_type, 23, "")
+        schema = defs.get_schema(op_type, 23, "")
         result = shape_inference.infer_node_outputs(
             schema, node, input_types, input_data=input_data or {}
         )

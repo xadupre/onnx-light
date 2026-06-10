@@ -25,8 +25,8 @@ import unittest
 import numpy as np
 
 import onnx_light.onnx as onnxl
-from onnx_light.backend.test.case import collect_test_case, make_test_class
-from onnx_light.reference import ReferenceEvaluator
+from onnx_light.onnx_lib.backend.test.case import collect_test_case, make_test_class
+from onnx_light.onnx.reference import ReferenceEvaluator
 
 # Operators currently registered in
 # ``onnx_light/onnx_kernels/run_nodes.cc::KernelDispatchTable``. Backend

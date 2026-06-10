@@ -20,7 +20,7 @@ import unittest
 import numpy as np
 
 import onnx_light.onnx as onnxl
-from onnx_light.backend.test.case import make_test_class, collect_test_case
+from onnx_light.onnx_lib.backend.test.case import make_test_class, collect_test_case
 from onnx_light.onnx import numpy_helper as onh
 from onnx_light.onnx_py._onnxpykernels import runtime as rt
 

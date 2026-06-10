@@ -7,7 +7,7 @@ import numpy as np
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
-from onnx_light.onnx.external_data_helper import (
+from onnx_light.onnx_lib.external_data_helper import (
     convert_model_to_external_data,
     load_external_data_for_model,
     uses_external_data,

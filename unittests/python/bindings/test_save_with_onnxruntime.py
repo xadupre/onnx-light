@@ -20,6 +20,7 @@ import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 from onnx_light.ext_test_case import ExtTestCase
+from onnx_light.onnx import TensorProto
 
 
 def _make_model_with_initializers() -> (
@@ -34,7 +35,7 @@ def _make_model_with_initializers() -> (
     w = rng.standard_normal((16, 8)).astype(np.float32)
     b = rng.standard_normal((8,)).astype(np.float32)
 
-    tfloat = oh.TensorProto.FLOAT
+    tfloat = TensorProto.FLOAT
     model = oh.make_model(
         oh.make_graph(
             [oh.make_node("MatMul", ["X", "W"], ["XW"]), oh.make_node("Add", ["XW", "B"], ["Y"])],

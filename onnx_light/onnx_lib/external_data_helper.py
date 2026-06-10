@@ -15,18 +15,11 @@ from __future__ import annotations
 import os
 from pathlib import PurePosixPath, PureWindowsPath
 
-from ..onnx_proto._onnxpy import (  # type: ignore
+from ..onnx_py._onnxpyprotoop import (  # type: ignore
     convert_model_to_external_data as _convert_model_to_external_data,
     load_external_data_for_model as _load_external_data_for_model,
 )
 from . import ModelProto, TensorProto
-
-__all__ = [
-    "convert_model_to_external_data",
-    "load_external_data_for_model",
-    "set_external_data",
-    "uses_external_data",
-]
 
 
 def uses_external_data(tensor: TensorProto) -> bool:

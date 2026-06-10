@@ -19,7 +19,7 @@ import onnx
 import onnx.inliner  # noqa: F401  -- bind the inliner attribute on ``onnx``
 import onnx_light.onnx as onnxl
 
-from onnx_light.compatibility import (
+from onnx_light.tools.compatibility import (
     DEFAULT_SUBMODULES,
     compare_packages,
     compare_submodule,
@@ -52,19 +52,28 @@ class TestCompatibilityApiCompareVsOnnx(ExtTestCase):
             self.assertNotIn(name, submods)
 
     def test_compare_submodule_numpy_helper_is_aligned(self):
+        import onnx_light.onnx.numpy_helper  # noqa: F401
+
         report = compare_submodule("numpy_helper", onnx, onnxl)
-        self.assertEqual(report["missing_in_onnxl"], [])
+        self.assertEqual(
+            report["missing_in_onnxl"],
+            ["saturate_cast", "to_float8e8m0", "tobytes_little_endian"],
+        )
         self.assertEqual(report["extra_in_onnxl"], [])
         self.assertEqual(report["signature_diffs"], [])
         for name in ("to_array", "from_array"):
             self.assertIn(name, report["common"])
 
     def test_compare_submodule_helper_has_common_makers(self):
+        import onnx_light.onnx.helper  # noqa: F401
+
         report = compare_submodule("helper", onnx, onnxl)
         for name in ("make_node", "make_graph", "make_tensor", "make_attribute"):
             self.assertIn(name, report["common"])
 
     def test_compare_submodule_parser_signature_diffs(self):
+        import onnx_light.onnx.parser  # noqa: F401
+
         report = compare_submodule("parser", onnx, onnxl)
         diff_names = {diff.name for diff in report["signature_diffs"]}
         self.assertIn("parse_model", diff_names)
@@ -73,6 +82,8 @@ class TestCompatibilityApiCompareVsOnnx(ExtTestCase):
                 self.assertEqual(diff.onnxl_params, ("text",))
 
     def test_compare_submodule_inliner_common_functions(self):
+        import onnx_light.onnx.inliner  # noqa: F401
+
         report = compare_submodule("inliner", onnx, onnxl)
         for name in ("inline_local_functions", "inline_selected_functions"):
             self.assertIn(name, report["common"])

@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import unittest
 
-import onnx_light.onnx as onnxl
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx.checker as checker
+import onnx_light.onnx.defs as defs
 import onnx_light.onnx.inliner as inliner
 import onnx_light.onnx.parser as parser
 
@@ -16,7 +16,7 @@ class TestInliner(ExtTestCase):
     @classmethod
     def setUpClass(cls):
         # Register standard ONNX op schemas so schema lookups work in all tests.
-        onnxl.defs.register_onnx_operator_set_schema()
+        defs.register_onnx_operator_set_schema()
 
     def test_basic(self):
         """Inlines nested local functions: foo(x)=Add(x,x)|bar(t)=Mul(t,t)."""

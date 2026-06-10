@@ -1,14 +1,7 @@
 # source: https://github.com/onnx/onnx/blob/main/onnx/shape_inference.py
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-from ..onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
-
-__all__ = ["infer_function_output_types", "infer_node_outputs", "infer_shapes"]
-
-if TYPE_CHECKING:
-    pass
+from ..onnx_py import _onnxpyprotolib as _C  # type: ignore
 
 _shape_inference = _C.shape_inference  # type: ignore
 
@@ -74,7 +67,9 @@ def infer_node_outputs(
     if input_sparse_data is None:
         input_sparse_data = {}
     if ir_version is None:
-        ir_version = _C.IR_VERSION  # type: ignore
+        from ..onnx.defs import IR_VERSION
+
+        ir_version = IR_VERSION  # type: ignore
     return schema._infer_node_outputs(
         node, input_types, dict(input_data), dict(input_sparse_data)
     )

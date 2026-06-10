@@ -8,16 +8,13 @@ from __future__ import annotations
 import unittest
 
 from onnx_light.ext_test_case import ExtTestCase
-from onnx_light.onnx_py import _onnxpy  # type: ignore[attr-defined]
 
 
 class TestOnnxPyOp(ExtTestCase):
     def setUp(self) -> None:
-        self.mod = _onnxpy.onnx_op
+        from onnx_light.onnx_py import _onnxpyprotoop  # type: ignore[attr-defined]
 
-    def test_submodule_exposed(self) -> None:
-        self.assertTrue(hasattr(_onnxpy, "onnx_op"))
-        self.assertEqual(self.mod.kOnnxDomain, "ai.onnx")
+        self.mod = _onnxpyprotoop.onnx_op
 
     def test_tensor_type_and_to_type_string(self) -> None:
         self.assertEqual(self.mod.ToTypeString(self.mod.TensorType.kFloat), "tensor(float)")

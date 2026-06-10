@@ -2,7 +2,7 @@ import re
 import unittest
 
 from onnx_light.ext_test_case import ExtTestCase
-import onnx_light.backend_test as bt
+import onnx_light.onnx.backend as bt
 
 
 class TestCollectTestCasesByName(ExtTestCase):

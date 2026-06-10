@@ -15,8 +15,8 @@ import struct
 import unittest
 
 from onnx_light.ext_test_case import ExtTestCase
+from onnx_light.onnx import TensorProto
 from onnx_light.onnx_lib import parser
-from onnx_light.onnx_proto._onnxpy import TensorProto
 from onnx_light.onnx_py._onnxpykernels import runtime as rt
 
 
@@ -207,7 +207,7 @@ class TestRunNodesBindings(ExtTestCase):
 
     def test_run_model_without_graph_raises(self):
         # A model without a graph must be rejected by RunModel.
-        from onnx_light.onnx_proto._onnxpy import ModelProto
+        from onnx_light.onnx import ModelProto
 
         empty = ModelProto()
         empty.ir_version = 10

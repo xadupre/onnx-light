@@ -25,11 +25,10 @@ import time
 
 import matplotlib.pyplot as plt
 import numpy as np
-import onnx
-import onnx.helper as oh
-import onnx.numpy_helper as onh
 import pandas
 
+import onnx_light.onnx.helper as oh
+import onnx_light.onnx.numpy_helper as onh
 import onnx_light.onnx as onnxl
 
 N_INIT = 8 if os.environ.get("UNITTEST_GOING") == "1" else 40
@@ -91,11 +90,11 @@ print(f"Logical cores: {CPU_COUNT}")
 print(f"Physical cores: {PHYSICAL_CORE_COUNT or 'unknown'}")
 
 
-def make_model(n_init: int = N_INIT, dim: int = DIM) -> onnx.ModelProto:
+def make_model(n_init: int = N_INIT, dim: int = DIM) -> onnxl.ModelProto:
     """Builds a synthetic ONNX model with *n_init* dense ``Gemm`` weights."""
     initializers = []
     nodes = []
-    inputs = [oh.make_tensor_value_info("X", onnx.TensorProto.FLOAT, [None, dim])]
+    inputs = [oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [None, dim])]
 
     prev = "X"
     for i in range(n_init):
@@ -106,7 +105,7 @@ def make_model(n_init: int = N_INIT, dim: int = DIM) -> onnx.ModelProto:
         nodes.append(oh.make_node("Gemm", [prev, weight_name], [out_name], transB=1))
         prev = out_name
 
-    outputs = [oh.make_tensor_value_info(prev, onnx.TensorProto.FLOAT, [None, dim])]
+    outputs = [oh.make_tensor_value_info(prev, onnxl.TensorProto.FLOAT, [None, dim])]
     graph = oh.make_graph(nodes, "bench_graph", inputs, outputs, initializer=initializers)
     return oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)], ir_version=9)
 
@@ -145,7 +144,7 @@ multi_data = multi_path + ".data"
 # Build each reference file from the same in-memory ModelProto. We load
 # the freshly written single-file model back through onnx_light so the
 # external-data writers operate on an ``onnxl.ModelProto``.
-onnx.save(model, single_path)
+onnxl.save(model, single_path)
 onnxl_model = onnxl.load(single_path)
 onnxl.save(onnxl_model, two_path, location=two_data)
 

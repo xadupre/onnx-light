@@ -3,6 +3,7 @@ import unittest
 
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx as onnxl
+import onnx_light.onnx.defs as defs
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.shape_inference as shape_inference
 
@@ -12,7 +13,9 @@ _TEST_OPSET_VERSION = 23
 class TestDataPropagation(ExtTestCase):
     @classmethod
     def setUpClass(cls):
-        onnxl.defs.register_onnx_operator_set_schema()
+        import onnx_light.onnx.defs as defs
+
+        defs.register_onnx_operator_set_schema()
 
     def _infer_output(
         self,
@@ -25,7 +28,7 @@ class TestDataPropagation(ExtTestCase):
     ) -> onnxl.TypeProto:
         """Infers and returns one output type for one node."""
         node = oh.make_node(op_type, list(input_types), [output_name], **attrs)
-        schema = onnxl.defs.get_schema(op_type, _TEST_OPSET_VERSION, "")
+        schema = defs.get_schema(op_type, _TEST_OPSET_VERSION, "")
         result = shape_inference.infer_node_outputs(
             schema, node, input_types, input_data=input_data or {}
         )
@@ -63,7 +66,7 @@ class TestDataPropagation(ExtTestCase):
 
     def test_constantofshape_with_symbolic_shape(self) -> None:
         """Checks that ConstantOfShape uses a propagated shape tensor value."""
-        if not onnxl.defs.has_schema("ConstantOfShape", _TEST_OPSET_VERSION, ""):
+        if not defs.has_schema("ConstantOfShape", _TEST_OPSET_VERSION, ""):
             self.skipTest("ConstantOfShape schema is not available in this build.")
         y_type = self._infer_output(
             "ConstantOfShape",

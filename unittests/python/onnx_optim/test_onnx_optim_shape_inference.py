@@ -3,6 +3,7 @@ import unittest
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
 from onnx_light.ext_test_case import ExtTestCase
+from onnx_light.onnx import defs
 from onnx_light.onnx_optim.shape_inference import infer_shapes_model
 
 
@@ -14,7 +15,7 @@ class TestOnnxOptimShapeInferenceModel(ExtTestCase):
 
     @classmethod
     def setUpClass(cls):
-        onnxl.defs.register_onnx_operator_set_schema()
+        defs.register_onnx_operator_set_schema()
 
     @staticmethod
     def _make_reshape_with_constant_model(input_shape, target):

@@ -3,20 +3,13 @@ import unittest
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
 from onnx_light.ext_test_case import ExtTestCase
-from onnx_light.onnx_py._onnxpy import shape_inference as si
+from onnx_light.onnx_optim import shape_inference as si
 
 
 class TestShapesContextBindings(ExtTestCase):
     """Python tests for the ``ShapesContext`` and ``ComputeShapeNode``
     bindings exposed by ``onnx_light.onnx_py._onnxpy.shape_inference``."""
 
-    @classmethod
-    def setUpClass(cls):
-        onnxl.defs.register_onnx_operator_set_schema()
-
-    # ------------------------------------------------------------------
-    # OptimDim / OptimShape / OptimTensor value-type bindings.
-    # ------------------------------------------------------------------
     def test_optim_dim_int(self):
         d = si.OptimDim(5)
         self.assertTrue(d.is_int())

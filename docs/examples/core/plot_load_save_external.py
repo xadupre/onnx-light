@@ -18,10 +18,9 @@ import os
 import shutil
 
 import numpy as np
-import onnx
-import onnx.helper as oh
-import onnx.numpy_helper as onh
 
+import onnx_light.onnx.helper as oh
+import onnx_light.onnx.numpy_helper as onh
 import onnx_light.onnx as onnxl
 
 
@@ -56,8 +55,8 @@ DIM = 64 if os.environ.get("UNITTEST_GOING") == "1" else 256
 w0 = np.random.randn(DIM, DIM).astype(np.float32)
 w1 = np.random.randn(DIM, DIM).astype(np.float32)
 
-inputs = [oh.make_tensor_value_info("X", onnx.TensorProto.FLOAT, [None, DIM])]
-outputs = [oh.make_tensor_value_info("Y1", onnx.TensorProto.FLOAT, [None, DIM])]
+inputs = [oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [None, DIM])]
+outputs = [oh.make_tensor_value_info("Y1", onnxl.TensorProto.FLOAT, [None, DIM])]
 initializers = [onh.from_array(w0, name="W0"), onh.from_array(w1, name="W1")]
 nodes = [
     oh.make_node("Gemm", ["X", "W0"], ["Y0"], transB=1),
@@ -81,7 +80,7 @@ out_dir = "temp_plot_load_save_external"
 os.makedirs(out_dir, exist_ok=True)
 
 single_file_path = os.path.join(out_dir, "model_single.onnx")
-onnx.save(onnx_model, single_file_path)
+onnxl.save(onnx_model, single_file_path)
 print(f"Saved single-file model: {single_file_path}")
 
 # %%

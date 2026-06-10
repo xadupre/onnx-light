@@ -1,7 +1,7 @@
 # This module re-exports extension symbols that exist only at runtime, so Pyrefly errors are
 # suppressed here.
 # pyrefly: ignore-errors
-from ..onnx_proto._onnxpy import (  # type: ignore
+from ..onnx_py._onnxpyprotoop import (  # type: ignore
     AttributeProto,
     DeviceConfigurationProto,
     FileLoadMode,
@@ -37,11 +37,8 @@ from ..onnx_proto._onnxpy import (  # type: ignore
     save_model_with_shared_external_data,
     utils_onnx_read_varint64,
 )
-from . import defs
-from . import external_data_helper
-from . import numpy_helper
-from . import shape_inference
-from .io_helper import (
+from ..onnx_proto import _helper as helper, _numpy_helper as numpy_helper
+from ..onnx_proto._io_helper import (
     load,
     load_encrypted,
     load_encrypted_string,
@@ -49,3 +46,4 @@ from .io_helper import (
     save_encrypted,
     save_encrypted_string,
 )
+from . import defs, external_data_helper, parser, shape_inference

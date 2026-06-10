@@ -31,13 +31,14 @@ actually running the model.
 from __future__ import annotations
 
 import onnx_light.onnx as onnxl
+import onnx_light.onnx.defs as defs
 import onnx_light.onnx.helper as oh
 from onnx_light.onnx_optim.expressions import evaluate_expression
 from onnx_light.onnx_optim.shape_inference import infer_shapes_model
 
 # Built-in operator schemas must be registered before shape inference
 # (the C++ dispatch table looks them up).
-onnxl.defs.register_onnx_operator_set_schema()
+defs.register_onnx_operator_set_schema()
 
 
 #####################################

@@ -39,7 +39,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from onnx_light.kernels import runtime
+from onnx_light.onnx_py._onnxpykernels import runtime
 from onnx_light.onnx_lib import numpy_helper, parser
 from onnx_light.onnx_optim.expressions import evaluate_expression
 from onnx_light.onnx_optim.shape_inference import infer_shapes_model

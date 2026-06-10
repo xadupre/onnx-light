@@ -20,7 +20,7 @@ import numpy as np
 
 from onnx_light.ext_test_case import ExtTestCase
 from onnx_light.onnx_lib import parser
-from onnx_light.reference import ReferenceEvaluator
+from onnx_light.onnx.reference import ReferenceEvaluator
 
 _ABS_ADD_MODEL_SRC = (
     '<ir_version: 10, opset_import: ["" : 18]>\n'

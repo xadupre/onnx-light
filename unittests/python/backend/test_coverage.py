@@ -2,12 +2,12 @@ import unittest
 
 import numpy as np
 import onnx_light.onnx as onnxl
-from onnx_light.backend.coverage import (
+from onnx_light.onnx_lib.backend.coverage import (
     CoverageReport,
     OperatorCoverage,
     compute_test_case_coverage,
 )
-from onnx_light.backend.test.case.base import ALL_TESTS, TestCase
+from onnx_light.onnx_lib.backend.test.case.base import ALL_TESTS, TestCase
 from onnx_light.ext_test_case import ExtTestCase
 
 

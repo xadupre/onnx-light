@@ -2,7 +2,8 @@
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
-from onnx_light.onnx import checker, utils
+from onnx_light.onnx import checker
+from onnx_light.onnx_lib import utils
 
 
 class TestOnnxLightFunction(ExtTestCase):

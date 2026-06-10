@@ -3,16 +3,7 @@
 
 from __future__ import annotations
 
-from ..onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
-
-__all__ = [
-    "ValidationError",
-    "check_attribute",
-    "check_function_call_cycles",
-    "check_graph",
-    "check_model",
-    "check_sparse_tensor",
-]
+from ..onnx_py import _onnxpyprotoop as _P, _onnxpyprotolib as _C  # type: ignore
 
 _checker = _C.checker  # type: ignore
 
@@ -55,7 +46,7 @@ def check_attribute(attribute: _C.AttributeProto) -> None:  # type: ignore
         )
 
 
-def check_sparse_tensor(sparse_tensor: _C.SparseTensorProto) -> None:  # type: ignore
+def check_sparse_tensor(sparse_tensor: _P.SparseTensorProto) -> None:  # type: ignore
     """Checks a sparse tensor and raises checker.ValidationError on invalid content.
 
     Raises:
@@ -65,17 +56,17 @@ def check_sparse_tensor(sparse_tensor: _C.SparseTensorProto) -> None:  # type: i
         raise ValidationError(f"Only 2D sparse tensors are allowed: {tuple(sparse_tensor.dims)}")
 
 
-def check_graph(graph: _C.GraphProto) -> None:  # type: ignore
+def check_graph(graph: _P.GraphProto) -> None:  # type: ignore
     """Checks a graph and raises checker.ValidationError on invalid content.
 
     Raises:
         ValidationError: If the graph is invalid.
     """
-    if not isinstance(graph, _C.GraphProto):  # type: ignore
+    if not isinstance(graph, _P.GraphProto):  # type: ignore
         raise ValidationError(f"Expected a GraphProto, got {type(graph)}")
 
 
-def check_function_call_cycles(model: _C.ModelProto) -> None:  # type: ignore
+def check_function_call_cycles(model: _P.ModelProto) -> None:  # type: ignore
     """Checks for cycles in model-local function call graph.
 
     Raises:

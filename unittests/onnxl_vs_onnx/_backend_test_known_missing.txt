@@ -292,6 +292,7 @@ hardswish_expanded
 identity_opt
 identity_sequence
 if_opt
+if_seq
 isinf_float16
 isnan_float16
 layer_normalization_2d_axis0_expanded

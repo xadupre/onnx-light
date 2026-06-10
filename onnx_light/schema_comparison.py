@@ -351,7 +351,7 @@ class SchemaComparison:
 
 def _light_schemas_latest() -> dict[tuple[str, str], Any]:
     """Returns ``{(domain, name): schema}`` keeping only the latest version."""
-    from .onnx_py._onnxpy import onnx_op as _op  # type: ignore[attr-defined]
+    from .onnx_py._onnxpyprotoop import onnx_op as _op  # type: ignore[attr-defined]
 
     latest: dict[tuple[str, str], Any] = {}
     for s in _op.GetAllOnnxOpSchemasWithHistory():
@@ -444,7 +444,7 @@ def _count_onnx_light_backend_tests(
     ``op_type`` of the first node of the model so unusual cases still
     contribute somewhere.
     """
-    from .backend.test.case.base import collect_test_case
+    from .onnx_lib.backend.test.case.base import collect_test_case
 
     if op_keys is None:
         op_keys = set(_light_schemas_latest())

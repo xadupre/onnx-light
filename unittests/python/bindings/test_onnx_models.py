@@ -5,9 +5,10 @@ import numpy as np
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 import onnx_light.onnx as onnxl
-import onnx_light.onnx.io_helper as io_helper
+import onnx_light.onnx_proto._io_helper as io_helper
 from onnx_light.ext_test_case import ExtTestCase
-from onnx_light.backend.random import rand
+from onnx_light.onnx import TensorProto
+from onnx_light.onnx_lib.backend.random import rand
 
 
 class TestOnnxLightHelper(ExtTestCase):
@@ -74,7 +75,7 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertEqualModelProto(model, model3)
 
     def _get_model_with_initializers(self, oh, onh):
-        TFLOAT = oh.TensorProto.FLOAT
+        TFLOAT = TensorProto.FLOAT
         model = oh.make_model(
             oh.make_graph(
                 [
@@ -176,7 +177,7 @@ class TestOnnxLightHelper(ExtTestCase):
 
     def test_load_file_load_mode_invalid_string_raises(self):
         name = self.get_dump_file("test_load_file_load_mode_invalid.onnx")
-        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        model = self._get_model_with_initializers(oh, onh)
         onnxl.save(model, name)
         with self.assertRaises(ValueError):
             onnxl.load(name, file_load_mode="not-a-mode")

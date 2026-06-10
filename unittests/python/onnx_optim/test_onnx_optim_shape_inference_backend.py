@@ -2,7 +2,9 @@ import unittest
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.numpy_helper as onh
-from onnx_light.backend_test import collect_test_cases
+from onnx_light.onnx_optim.shape_inference import infer_shapes_model
+from onnx_light.onnx.backend import collect_test_cases
+from onnx_light.onnx_py._onnxpyoptim import shape_inference as si
 
 
 class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
@@ -38,8 +40,6 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
         self.assertEqual(repr(ds.outputs[0]), "Tensor(name='y', data_type=FLOAT, shape=[2, 3])")
 
     def test_inference_shape(self):
-        from onnx_light.onnx_optim.shape_inference import infer_shapes_model
-
         tests = [
             test
             for test in collect_test_cases("shape")
@@ -56,8 +56,6 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
             self.assertEqual(expected, inferred)
 
     def test_inference_by_node(self):
-        from onnx_light.onnx_py._onnxpy import shape_inference as si
-
         tests = [
             test
             for test in collect_test_cases("shape")
@@ -97,8 +95,6 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
         self.assertEqual(["batch", "seq", "2*d_model"], list(ctx.get("Z").shape))
 
     def test_inference_shape_backend_constraints(self):
-        from onnx_light.onnx_optim.shape_inference import infer_shapes_model
-
         tests = [
             test
             for test in collect_test_cases("shape")
@@ -121,8 +117,6 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
             self.assertEqual(expected, inferred, f"{name!r} failed\n{expected=}\n--\n{inferred=}")
 
     def test_inference_shape_backend_16_dimension(self):
-        from onnx_light.onnx_optim.shape_inference import infer_shapes_model
-
         tests = [
             test
             for test in collect_test_cases("shape")
@@ -146,8 +140,6 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
 
     @unittest.skip("broken")
     def test_inference_shape_backend_non_zero_expression(self):
-        from onnx_light.onnx_optim.shape_inference import infer_shapes_model
-
         tests = [
             test
             for test in collect_test_cases("shape")

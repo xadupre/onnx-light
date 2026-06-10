@@ -13,5 +13,3 @@ Currently provided helpers:
 from __future__ import annotations
 
 from .mermaid import to_mermaid, to_mermaid_graph
-
-__all__ = ["to_mermaid", "to_mermaid_graph"]

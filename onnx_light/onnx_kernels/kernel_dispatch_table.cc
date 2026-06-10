@@ -13,7 +13,9 @@
 #include "onnx_kernels/kernels/preview/include_preview_kernels.h"
 #include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
 #include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
+#include "onnx_kernels/kernels/sequence/include_sequence_kernels.h"
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
+#include "onnx_kernels/kernels/text/include_text_kernels.h"
 #include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 #include "onnx_kernels/kernels/training/include_training_kernels.h"
 #include "onnx_kernels/node_helpers.h"
@@ -22,6 +24,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -42,12 +45,14 @@ using detail::GetAttributeIntsOrDefault;
 using detail::GetAttributeStringOrDefault;
 using detail::GetAttributeStringsOrDefault;
 using detail::GetInput;
+using detail::GetInputSequence;
 using detail::GetOptionalInput;
 using detail::GetRequiredAttributeString;
 using detail::RequireInputCount;
 using detail::RequireMinInputCount;
 using detail::RequireOutputCount;
 using detail::SetOutput;
+using detail::SetOutputSequence;
 
 // ---------------------------------------------------------------------------
 // Trampoline factories. Each helper returns a NodeKernelFn that:
@@ -354,6 +359,103 @@ inline Tensor GetAttributeTensorOrEmpty(const NodeProto &node, const std::string
   return TensorFromProto(attr->t());
 }
 
+// Reads the ONNX ``seed`` attribute (declared as FLOAT in the schema for
+// the random generator and Bernoulli/Multinomial ops) and converts it to
+// the ``int64_t`` value expected by the kernel constructors. Returns
+// ``-1`` (the shared ``kNoSeed`` sentinel) when the attribute is absent.
+inline int64_t GetSeedAttr(const NodeProto &node) {
+  if (FindAttribute(node, "seed") == nullptr) {
+    return -1;
+  }
+  return static_cast<int64_t>(GetAttributeFloatOrDefault(node, "seed", 0.0f));
+}
+
+// Reads the ONNX ``dtype`` attribute (INT, default 0) shared by Bernoulli,
+// Multinomial and the four Random* generator ops.
+inline int32_t GetDtypeAttr(const NodeProto &node) {
+  return static_cast<int32_t>(GetAttributeIntOrDefault(node, "dtype", 0));
+}
+
+// Wraps a generator kernel of the form
+// ``Tensor operator()(const std::vector<int64_t>&, float, float, int64_t, int32_t)``
+// (``RandomNormal``, ``RandomUniform``): no inputs, ``shape`` INTS attribute
+// and two FLOAT attributes (``mean``/``scale`` or ``low``/``high``).
+template <class KernelT>
+NodeKernelFn MakeRandomGenTrampoline(const char *attr_a, float default_a, const char *attr_b,
+                                     float default_b) {
+  const std::string name_a(attr_a);
+  const std::string name_b(attr_b);
+  return [name_a, default_a, name_b, default_b](const NodeProto &node, RuntimeContext &rt) {
+    RequireInputCount(node, 0);
+    RequireOutputCount(node, 1);
+    const std::vector<int64_t> shape = GetAttributeIntsOrDefault(node, "shape", {});
+    const float a = GetAttributeFloatOrDefault(node, name_a, default_a);
+    const float b = GetAttributeFloatOrDefault(node, name_b, default_b);
+    KernelT kernel(rt.kernel_ctx());
+    SetOutput(node, 0, kernel(shape, a, b, GetSeedAttr(node), GetDtypeAttr(node)), rt);
+  };
+}
+
+// Wraps a generator kernel of the form
+// ``Tensor operator()(const Tensor&, float, float, int64_t, int32_t)``
+// (``RandomNormalLike``, ``RandomUniformLike``): one input and two FLOAT
+// attributes (``mean``/``scale`` or ``low``/``high``).
+template <class KernelT>
+NodeKernelFn MakeRandomLikeTrampoline(const char *attr_a, float default_a, const char *attr_b,
+                                      float default_b) {
+  const std::string name_a(attr_a);
+  const std::string name_b(attr_b);
+  return [name_a, default_a, name_b, default_b](const NodeProto &node, RuntimeContext &rt) {
+    RequireInputCount(node, 1);
+    RequireOutputCount(node, 1);
+    const Tensor &input = GetInput(node, 0, rt.tensors());
+    const float a = GetAttributeFloatOrDefault(node, name_a, default_a);
+    const float b = GetAttributeFloatOrDefault(node, name_b, default_b);
+    KernelT kernel(rt.kernel_ctx());
+    SetOutput(node, 0, kernel(input, a, b, GetSeedAttr(node), GetDtypeAttr(node)), rt);
+  };
+}
+
+// Wraps a window-generation kernel of the form
+// ``Tensor operator()(const Tensor& size, bool periodic)`` (``BlackmanWindow``,
+// ``HannWindow``, ``HammingWindow``): one INT scalar input, optional ``periodic``
+// (default 1) and ``output_datatype`` (default FLOAT=1) attributes. Only
+// ``output_datatype == FLOAT`` is supported because the underlying kernels
+// always produce FLOAT outputs.
+template <class KernelT> NodeKernelFn MakeWindowTrampoline(const char *op_name) {
+  const std::string name(op_name);
+  return [name](const NodeProto &node, RuntimeContext &rt) {
+    RequireInputCount(node, 1);
+    RequireOutputCount(node, 1);
+    const Tensor &size = GetInput(node, 0, rt.tensors());
+    const int64_t output_datatype =
+        GetAttributeIntOrDefault(node, "output_datatype", static_cast<int64_t>(DataType::FLOAT));
+    if (output_datatype != static_cast<int64_t>(DataType::FLOAT)) {
+      throw std::invalid_argument("RunNode: op '" + name +
+                                  "' only supports output_datatype=FLOAT.");
+    }
+    const bool periodic = GetAttributeIntOrDefault(node, "periodic", 1) != 0;
+    KernelT kernel(rt.kernel_ctx());
+    SetOutput(node, 0, kernel(size, periodic), rt.tensors());
+  };
+}
+
+// Trampoline for cumulative reduction ops (CumSum, CumProd) which take an
+// input tensor and an ``axis`` scalar input plus the boolean ``exclusive``
+// and ``reverse`` int attributes.
+template <class KernelT> NodeKernelFn MakeCumulativeTrampoline() {
+  return [](const NodeProto &node, RuntimeContext &rt) {
+    RequireInputCount(node, 2);
+    RequireOutputCount(node, 1);
+    const Tensor &x = GetInput(node, 0, rt.tensors());
+    const Tensor &axis = GetInput(node, 1, rt.tensors());
+    const bool exclusive = GetAttributeIntOrDefault(node, "exclusive", 0) != 0;
+    const bool reverse = GetAttributeIntOrDefault(node, "reverse", 0) != 0;
+    KernelT kernel(rt.kernel_ctx());
+    SetOutput(node, 0, kernel(x, axis, exclusive, reverse), rt);
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Normalization op helpers
 // ---------------------------------------------------------------------------
@@ -607,6 +709,15 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:BitwiseOr", MakeBinaryTrampoline<kernel::BitwiseOr>()},
       {"ai.onnx:BitwiseXor", MakeBinaryTrampoline<kernel::BitwiseXor>()},
       {"ai.onnx:BatchNormalization", RunBatchNormalization},
+      {"ai.onnx:Bernoulli",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &input = GetInput(node, 0, rt.tensors());
+         kernel::Bernoulli kernel(rt.kernel_ctx());
+         SetOutput(node, 0, kernel(input, GetSeedAttr(node), GetDtypeAttr(node)), rt);
+       }},
+      {"ai.onnx:BlackmanWindow", MakeWindowTrampoline<kernel::BlackmanWindow>("BlackmanWindow")},
       {"ai.onnx:CausalConvWithState",
        [](const NodeProto &node, RuntimeContext &rt) {
          if (node.input_size() < 2 || node.input_size() > 4) {
@@ -633,6 +744,21 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Cast", MakeUnaryToTrampoline<kernel::Cast>()},
       {"ai.onnx:Ceil", MakeUnaryTrampoline<kernel::Ceil>()},
       {"ai.onnx:Celu", MakeUnaryAlphaTrampoline<kernel::Celu>("alpha", 1.0f)},
+      {"ai.onnx:CenterCropPad",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         const Tensor &input_data = GetInput(node, 0, rt.tensors());
+         const Tensor &shape = GetInput(node, 1, rt.tensors());
+         kernel::CenterCropPad::Attributes attrs;
+         const AttributeProto *axes_attr = FindAttribute(node, "axes");
+         if (axes_attr != nullptr) {
+           attrs.axes = GetAttributeIntsOrDefault(node, "axes", {});
+           attrs.axes_present = true;
+         }
+         kernel::CenterCropPad k(rt.kernel_ctx());
+         SetOutput(node, 0, k(input_data, shape, attrs), rt);
+       }},
       {"ai.onnx:Constant",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireOutputCount(node, 1);
@@ -677,6 +803,20 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor *max = GetOptionalInput(node, 2, rt.tensors());
          kernel::Clip k(rt.kernel_ctx());
          SetOutput(node, 0, k(x, min, max), rt);
+       }},
+      {"ai.onnx:Compress",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         const Tensor &input = GetInput(node, 0, rt.tensors());
+         const Tensor &condition = GetInput(node, 1, rt.tensors());
+         const AttributeProto *axis_attr = FindAttribute(node, "axis");
+         std::optional<int64_t> axis;
+         if (axis_attr != nullptr) {
+           axis = axis_attr->i();
+         }
+         kernel::Compress k(rt.kernel_ctx());
+         SetOutput(node, 0, k(input, condition, axis), rt);
        }},
       {"ai.onnx:Conv",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -726,6 +866,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
       {"ai.onnx:Cos", MakeUnaryTrampoline<kernel::Cos>()},
       {"ai.onnx:Cosh", MakeUnaryTrampoline<kernel::Cosh>()},
+      {"ai.onnx:CumSum", MakeCumulativeTrampoline<kernel::CumSum>()},
+      {"ai.onnx:CumProd", MakeCumulativeTrampoline<kernel::CumProd>()},
       {"ai.onnx:DeformConv",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 3);
@@ -813,6 +955,63 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          SetOutput(node, 0, k(input, dft_length, axis, onesided, inverse), rt);
        }},
       {"ai.onnx:Div", MakeBinaryTrampoline<kernel::Div>()},
+      {"ai.onnx:Dropout",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputRange(node, 1, 3);
+         RequireOutputRange(node, 1, 2);
+         const Tensor &data = GetInput(node, 0, rt.tensors());
+
+         // ``ratio``: from input[1] (scalar T1) when present, else from the
+         // pre-opset-12 ``ratio`` attribute (FLOAT, default 0.5).
+         float ratio = GetAttributeFloatOrDefault(node, "ratio", 0.5f);
+         const Tensor *ratio_input = GetOptionalInput(node, 1, rt.tensors());
+         if (ratio_input != nullptr) {
+           if (ratio_input->element_count() != 1) {
+             throw std::invalid_argument(
+                 "RunNode: op 'Dropout' input 'ratio' must be a scalar tensor.");
+           }
+           switch (ratio_input->data_type) {
+           case static_cast<int32_t>(DataType::FLOAT):
+             ratio = ratio_input->AsFloat()[0];
+             break;
+           case static_cast<int32_t>(DataType::DOUBLE):
+             ratio = static_cast<float>(ratio_input->AsDouble()[0]);
+             break;
+           default:
+             throw std::invalid_argument(
+                 "RunNode: op 'Dropout' input 'ratio' must be FLOAT or DOUBLE.");
+           }
+         }
+
+         // ``training_mode``: from input[2] (scalar BOOL) when present,
+         // otherwise defaults to false (inference behaviour).
+         bool training_mode = false;
+         const Tensor *training_input = GetOptionalInput(node, 2, rt.tensors());
+         if (training_input != nullptr) {
+           if (training_input->element_count() != 1) {
+             throw std::invalid_argument(
+                 "RunNode: op 'Dropout' input 'training_mode' must be a scalar tensor.");
+           }
+           if (training_input->data_type != static_cast<int32_t>(DataType::BOOL)) {
+             throw std::invalid_argument(
+                 "RunNode: op 'Dropout' input 'training_mode' must be BOOL.");
+           }
+           training_mode = training_input->AsBool()[0] != 0;
+         }
+
+         const int64_t seed = GetAttributeIntOrDefault(node, "seed", kernel::Dropout::kNoSeed);
+
+         kernel::Dropout k(rt.kernel_ctx());
+         if (node.output_size() == 2) {
+           auto out = k(data, ratio, training_mode, seed);
+           SetOutput(node, 0, std::move(out.first), rt);
+           SetOutput(node, 1, std::move(out.second), rt);
+         } else {
+           Tensor mask("", static_cast<int32_t>(DataType::BOOL), data.shape,
+                       std::vector<uint8_t>(static_cast<std::size_t>(data.element_count()), 1));
+           SetOutput(node, 0, k(data, ratio, training_mode, mask, seed), rt);
+         }
+       }},
       {"ai.onnx:DynamicQuantizeLinear",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);
@@ -841,6 +1040,15 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Equal", MakeBinaryTrampoline<kernel::Equal>()},
       {"ai.onnx:Erf", MakeUnaryTrampoline<kernel::Erf>()},
       {"ai.onnx:Exp", MakeUnaryTrampoline<kernel::Exp>()},
+      {"ai.onnx:Expand",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         const Tensor &input = GetInput(node, 0, rt.tensors());
+         const Tensor &shape = GetInput(node, 1, rt.tensors());
+         kernel::Expand k(rt.kernel_ctx());
+         SetOutput(node, 0, k(input, shape), rt);
+       }},
       {"ai.onnx:EyeLike",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);
@@ -851,7 +1059,28 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::EyeLike kernel(rt.kernel_ctx());
          SetOutput(node, 0, kernel(x, k, static_cast<int32_t>(dtype)), rt);
        }},
+      {"ai.onnx:Flatten", MakeAxisTrampoline<kernel::Flatten>(1)},
       {"ai.onnx:Floor", MakeUnaryTrampoline<kernel::Floor>()},
+      {"ai.onnx:Gather",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         const Tensor &data = GetInput(node, 0, rt.tensors());
+         const Tensor &indices = GetInput(node, 1, rt.tensors());
+         const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
+         kernel::Gather k(rt.kernel_ctx());
+         SetOutput(node, 0, k(data, indices, axis), rt);
+       }},
+      {"ai.onnx:GatherND",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         const Tensor &data = GetInput(node, 0, rt.tensors());
+         const Tensor &indices = GetInput(node, 1, rt.tensors());
+         const int64_t batch_dims = GetAttributeIntOrDefault(node, "batch_dims", 0);
+         kernel::GatherND k(rt.kernel_ctx());
+         SetOutput(node, 0, k(data, indices, batch_dims), rt);
+       }},
       {"ai.onnx:Gelu",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);
@@ -882,6 +1111,80 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Greater", MakeBinaryTrampoline<kernel::Greater>()},
       {"ai.onnx:GreaterOrEqual", MakeBinaryTrampoline<kernel::GreaterOrEqual>()},
       {"ai.onnx:GroupNormalization", RunGroupNormalization},
+      {"ai.onnx:GRU",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         if (node.input_size() < 3 || node.input_size() > 6) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects between 3 and 6 input(s), got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         if (node.output_size() < 1 || node.output_size() > 2) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects 1 or 2 output(s), got " +
+                                       std::to_string(node.output_size()) + ".");
+         }
+
+         // Unsupported attributes: only the default ``forward`` direction
+         // with the default ``Sigmoid``/``Tanh`` activations, no
+         // ``clip``, and ``layout == 0`` are implemented.
+         const std::string direction =
+             GetAttributeStringOrDefault(node, "direction", "forward");
+         if (direction != "forward") {
+           throw std::invalid_argument(
+               "RunNode: op 'GRU' only supports direction='forward', got '" + direction + "'.");
+         }
+         if (FindAttribute(node, "activations") != nullptr) {
+           throw std::invalid_argument(
+               "RunNode: op 'GRU' does not support the 'activations' attribute.");
+         }
+         if (FindAttribute(node, "activation_alpha") != nullptr ||
+             FindAttribute(node, "activation_beta") != nullptr) {
+           throw std::invalid_argument(
+               "RunNode: op 'GRU' does not support 'activation_alpha'/'activation_beta'.");
+         }
+         if (FindAttribute(node, "clip") != nullptr) {
+           throw std::invalid_argument("RunNode: op 'GRU' does not support the 'clip' attribute.");
+         }
+         if (GetAttributeIntOrDefault(node, "layout", 0) != 0) {
+           throw std::invalid_argument("RunNode: op 'GRU' only supports layout=0.");
+         }
+
+         // ``sequence_lens`` (input #4) is not supported: it requires
+         // per-batch sequence handling that the FLOAT kernel does not
+         // implement.
+         const Tensor *sequence_lens = GetOptionalInput(node, 4, rt.tensors());
+         if (sequence_lens != nullptr) {
+           throw std::invalid_argument(
+               "RunNode: op 'GRU' does not support the optional 'sequence_lens' input.");
+         }
+
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const Tensor &w = GetInput(node, 1, rt.tensors());
+         const Tensor &r = GetInput(node, 2, rt.tensors());
+         const Tensor *b = GetOptionalInput(node, 3, rt.tensors());
+         const Tensor *initial_h = GetOptionalInput(node, 5, rt.tensors());
+
+         const int64_t linear_before_reset =
+             GetAttributeIntOrDefault(node, "linear_before_reset", 0);
+
+         kernel::GRU kernel(rt.kernel_ctx());
+         auto [y, y_h] = kernel(x, w, r, b != nullptr ? *b : Tensor{},
+                                initial_h != nullptr ? *initial_h : Tensor{}, linear_before_reset);
+
+         auto set_optional_output = [&node, &rt](int index, Tensor output) {
+           if (index >= node.output_size()) {
+             return;
+           }
+           const std::string name = node.output(index).as_string();
+           if (name.empty()) {
+             return;
+           }
+           output.name = name;
+           rt.Put(name, std::move(output), TensorEventKind::kIntermediate);
+         };
+         set_optional_output(0, std::move(y));
+         set_optional_output(1, std::move(y_h));
+       }},
       {"ai.onnx:HardSigmoid",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);
@@ -894,6 +1197,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
       {"ai.onnx:HardSwish", MakeUnaryTrampoline<kernel::HardSwish>()},
       {"ai.onnx:Hardmax", MakeAxisTrampoline<kernel::Hardmax>()},
+      {"ai.onnx:HammingWindow", MakeWindowTrampoline<kernel::HammingWindow>("HammingWindow")},
+      {"ai.onnx:HannWindow", MakeWindowTrampoline<kernel::HannWindow>("HannWindow")},
       {"ai.onnx:Identity", MakeUnaryTrampoline<kernel::Identity>()},
       {"ai.onnx:ImageDecoder",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -1008,6 +1313,15 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          SetOutput(node, 0, k(x, y, fmod), rt);
        }},
       {"ai.onnx:Mul", MakeBinaryTrampoline<kernel::Mul>()},
+      {"ai.onnx:Multinomial",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &input = GetInput(node, 0, rt.tensors());
+         const int64_t sample_size = GetAttributeIntOrDefault(node, "sample_size", 1);
+         kernel::Multinomial kernel(rt.kernel_ctx());
+         SetOutput(node, 0, kernel(input, sample_size, GetSeedAttr(node), GetDtypeAttr(node)), rt);
+       }},
       {"ai.onnx:Neg", MakeUnaryTrampoline<kernel::Neg>()},
       {"ai.onnx:NonMaxSuppression",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -1033,10 +1347,83 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                    rt.tensors());
        }},
       {"ai.onnx:Not", MakeUnaryTrampoline<kernel::Not>()},
+      {"ai.onnx:OneHot",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 3);
+         RequireOutputCount(node, 1);
+         const Tensor &indices = GetInput(node, 0, rt.tensors());
+         const Tensor &depth = GetInput(node, 1, rt.tensors());
+         const Tensor &values = GetInput(node, 2, rt.tensors());
+         kernel::OneHot::Attributes attrs;
+         attrs.axis = GetAttributeIntOrDefault(node, "axis", -1);
+         kernel::OneHot k(rt.kernel_ctx());
+         SetOutput(node, 0, k(indices, depth, values, attrs), rt.tensors());
+       }},
       {"ai.onnx:Or", MakeBinaryTrampoline<kernel::Or>()},
+      {"ai.onnx:Pad",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 1);
+         if (node.input_size() > 4) {
+           throw std::invalid_argument("RunNode: op 'Pad' expects at most 4 inputs.");
+         }
+         RequireOutputCount(node, 1);
+         const Tensor &data = GetInput(node, 0, rt.tensors());
+         const std::string mode = GetAttributeStringOrDefault(node, "mode", "constant");
+         kernel::Pad k(rt.kernel_ctx());
+
+         // Opset 11+: ``pads`` is the second input.
+         if (node.input_size() >= 2) {
+           const Tensor &pads = GetInput(node, 1, rt.tensors());
+           const Tensor *constant_value = GetOptionalInput(node, 2, rt.tensors());
+           const Tensor *axes = GetOptionalInput(node, 3, rt.tensors());
+           SetOutput(node, 0, k(data, pads, constant_value, axes, mode), rt);
+           return;
+         }
+
+         // Legacy opset (<11): ``pads`` is an INTS attribute and ``value`` is a
+         // FLOAT attribute (default 0).
+         const std::vector<int64_t> pads_attr = GetAttributeIntsOrDefault(node, "pads", {});
+         const Tensor pads =
+             Tensor::FromInt64("", {static_cast<int64_t>(pads_attr.size())}, pads_attr);
+         const float value = GetAttributeFloatOrDefault(node, "value", 0.0f);
+         if (data.data_type == static_cast<int32_t>(DataType::FLOAT)) {
+           const Tensor cv = Tensor::FromFloat("", /*shape=*/{}, {value});
+           SetOutput(node, 0, k(data, pads, &cv, /*axes=*/nullptr, mode), rt);
+         } else {
+           // For non-float dtypes the legacy form's float ``value`` attribute is
+           // ill-defined; fall back to a zero-initialized constant.
+           SetOutput(node, 0, k(data, pads, /*constant_value=*/nullptr, /*axes=*/nullptr, mode),
+                     rt);
+         }
+       }},
       {"ai.onnx:Pow", MakeBinaryTrampoline<kernel::Pow>()},
       {"ai.onnx:PRelu", MakeBinaryTrampoline<kernel::PRelu>()},
+      {"ai.onnx:QLinearMatMul",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 8);
+         RequireOutputCount(node, 1);
+         const Tensor &a = GetInput(node, 0, rt.tensors());
+         const Tensor &a_scale = GetInput(node, 1, rt.tensors());
+         const Tensor &a_zero_point = GetInput(node, 2, rt.tensors());
+         const Tensor &b = GetInput(node, 3, rt.tensors());
+         const Tensor &b_scale = GetInput(node, 4, rt.tensors());
+         const Tensor &b_zero_point = GetInput(node, 5, rt.tensors());
+         const Tensor &y_scale = GetInput(node, 6, rt.tensors());
+         const Tensor &y_zero_point = GetInput(node, 7, rt.tensors());
+         kernel::QLinearMatMul k(rt.kernel_ctx());
+         SetOutput(node, 0,
+                   k(a, a_scale, a_zero_point, b, b_scale, b_zero_point, y_scale, y_zero_point),
+                   rt);
+       }},
       {"ai.onnx:QuantizeLinear", MakeBinaryWithOptionalThirdTrampoline<kernel::QuantizeLinear>()},
+      {"ai.onnx:RandomNormal",
+       MakeRandomGenTrampoline<kernel::RandomNormal>("mean", 0.0f, "scale", 1.0f)},
+      {"ai.onnx:RandomNormalLike",
+       MakeRandomLikeTrampoline<kernel::RandomNormalLike>("mean", 0.0f, "scale", 1.0f)},
+      {"ai.onnx:RandomUniform",
+       MakeRandomGenTrampoline<kernel::RandomUniform>("low", 0.0f, "high", 1.0f)},
+      {"ai.onnx:RandomUniformLike",
+       MakeRandomLikeTrampoline<kernel::RandomUniformLike>("low", 0.0f, "high", 1.0f)},
       {"ai.onnx:RMSNormalization", RunRMSNormalization},
       {"ai.onnx:Reciprocal", MakeUnaryTrampoline<kernel::Reciprocal>()},
       {"ai.onnx:ReduceL1", MakeReduceTrampoline<kernel::ReduceL1>()},
@@ -1049,6 +1436,15 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:ReduceProd", MakeReduceTrampoline<kernel::ReduceProd>()},
       {"ai.onnx:ReduceSum", MakeReduceTrampoline<kernel::ReduceSum>()},
       {"ai.onnx:ReduceSumSquare", MakeReduceTrampoline<kernel::ReduceSumSquare>()},
+      {"ai.onnx:RegexFullMatch",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const std::string pattern = GetAttributeStringOrDefault(node, "pattern", "");
+         kernel::RegexFullMatch k(rt.kernel_ctx());
+         SetOutput(node, 0, k(x, pattern), rt);
+       }},
       {"ai.onnx:Relu", MakeUnaryTrampoline<kernel::Relu>()},
       {"ai.onnx:Reshape",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -1059,6 +1455,47 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const int64_t allowzero = GetAttributeIntOrDefault(node, "allowzero", 0);
          kernel::Reshape k(rt.kernel_ctx());
          SetOutput(node, 0, k(data, shape, allowzero), rt);
+       }},
+      {"ai.onnx:Resize",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         if (node.input_size() < 1 || node.input_size() > 4) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects between 1 and 4 input(s), got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         // Input 1 is ``roi`` (unused by this reference implementation).
+         const Tensor *roi = GetOptionalInput(node, 1, rt.tensors());
+         if (roi != nullptr) {
+           throw std::invalid_argument(
+               "RunNode: op 'Resize' does not support the optional 'roi' input "
+               "(only used by 'tf_crop_and_resize' coordinate_transformation_mode).");
+         }
+         const Tensor *scales = GetOptionalInput(node, 2, rt.tensors());
+         const Tensor *sizes = GetOptionalInput(node, 3, rt.tensors());
+         if ((scales == nullptr) == (sizes == nullptr)) {
+           throw std::invalid_argument(
+               "RunNode: op 'Resize' requires exactly one of 'scales' or 'sizes' to be "
+               "provided.");
+         }
+
+         kernel::Resize::Attributes attrs;
+         attrs.mode = GetAttributeStringOrDefault(node, "mode", attrs.mode);
+         attrs.coordinate_transformation_mode = GetAttributeStringOrDefault(
+             node, "coordinate_transformation_mode", attrs.coordinate_transformation_mode);
+         attrs.nearest_mode =
+             GetAttributeStringOrDefault(node, "nearest_mode", attrs.nearest_mode);
+         attrs.axes = GetAttributeIntsOrDefault(node, "axes", attrs.axes);
+         attrs.keep_aspect_ratio_policy = GetAttributeStringOrDefault(
+             node, "keep_aspect_ratio_policy", attrs.keep_aspect_ratio_policy);
+
+         kernel::Resize k(rt.kernel_ctx());
+         if (scales != nullptr) {
+           SetOutput(node, 0, k(x, *scales, attrs), rt);
+         } else {
+           SetOutput(node, 0, k.ResizeSizes(x, *sizes, attrs), rt);
+         }
        }},
       {"ai.onnx:Round", MakeUnaryTrampoline<kernel::Round>()},
       {"ai.onnx:Selu",
@@ -1071,6 +1508,108 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::Selu k(rt.kernel_ctx());
          SetOutput(node, 0, k(x, alpha, gamma), rt);
        }},
+
+      // Sequence operators (ai.onnx). Sequence-typed graph edges are
+      // carried in :cpp:func:`RuntimeContext::sequences`; tensor-typed
+      // inputs/outputs continue to flow through ``rt.tensors()``.
+      {"ai.onnx:ConcatFromSequence",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Sequence &input_sequence = GetInputSequence(node, 0, rt);
+         const AttributeProto *axis_attr = FindAttribute(node, "axis");
+         if (axis_attr == nullptr) {
+           throw std::invalid_argument(
+               "RunNode: op 'ConcatFromSequence' is missing required attribute 'axis'.");
+         }
+         const int64_t axis = axis_attr->i();
+         const int64_t new_axis = GetAttributeIntOrDefault(node, "new_axis", 0);
+         kernel::ConcatFromSequence k(rt.kernel_ctx());
+         SetOutput(node, 0, k(input_sequence.values, axis, new_axis), rt);
+       }},
+      {"ai.onnx:SequenceAt",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         const Sequence &input_sequence = GetInputSequence(node, 0, rt);
+         const Tensor &position = GetInput(node, 1, rt.tensors());
+         kernel::SequenceAt k(rt.kernel_ctx());
+         SetOutput(node, 0, k(input_sequence, position), rt);
+       }},
+      {"ai.onnx:SequenceConstruct",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         std::vector<Tensor> inputs;
+         inputs.reserve(node.input_size());
+         for (int i = 0; i < node.input_size(); ++i) {
+           inputs.push_back(GetInput(node, i, rt.tensors()));
+         }
+         kernel::SequenceConstruct k(rt.kernel_ctx());
+         SetOutputSequence(node, 0, k.AsSequence(inputs), rt);
+       }},
+      {"ai.onnx:SequenceEmpty",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 0);
+         RequireOutputCount(node, 1);
+         const int64_t dtype = GetAttributeIntOrDefault(node, "dtype", 0);
+         kernel::SequenceEmpty k(rt.kernel_ctx());
+         SetOutputSequence(node, 0, k(static_cast<int32_t>(dtype)), rt);
+       }},
+      {"ai.onnx:SequenceErase",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 1);
+         if (node.input_size() > 2) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects 1 or 2 inputs, got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         RequireOutputCount(node, 1);
+         const Sequence &input_sequence = GetInputSequence(node, 0, rt);
+         const Tensor *position = GetOptionalInput(node, 1, rt.tensors());
+         kernel::SequenceErase k(rt.kernel_ctx());
+         SetOutputSequence(node, 0, k(input_sequence, position), rt);
+       }},
+      {"ai.onnx:SequenceInsert",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 2);
+         if (node.input_size() > 3) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects 2 or 3 inputs, got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         RequireOutputCount(node, 1);
+         const Sequence &input_sequence = GetInputSequence(node, 0, rt);
+         const Tensor &tensor = GetInput(node, 1, rt.tensors());
+         const Tensor *position = GetOptionalInput(node, 2, rt.tensors());
+         kernel::SequenceInsert k(rt.kernel_ctx());
+         SetOutputSequence(node, 0, k(input_sequence, tensor, position), rt);
+       }},
+      {"ai.onnx:SequenceLength",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Sequence &input_sequence = GetInputSequence(node, 0, rt);
+         kernel::SequenceLength k(rt.kernel_ctx());
+         SetOutput(node, 0, k(input_sequence), rt);
+       }},
+      {"ai.onnx:SplitToSequence",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 1);
+         if (node.input_size() > 2) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects 1 or 2 inputs, got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         RequireOutputCount(node, 1);
+         const Tensor &input = GetInput(node, 0, rt.tensors());
+         const Tensor *split = GetOptionalInput(node, 1, rt.tensors());
+         const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
+         const int64_t keepdims = GetAttributeIntOrDefault(node, "keepdims", 1);
+         kernel::SplitToSequence k(rt.kernel_ctx());
+         SetOutputSequence(node, 0, k(input, split, axis, keepdims), rt);
+       }},
+
       {"ai.onnx:Shape",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);
@@ -1127,6 +1666,17 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Tanh", MakeUnaryTrampoline<kernel::Tanh>()},
       {"ai.onnx:ThresholdedRelu", MakeUnaryAlphaTrampoline<kernel::ThresholdedRelu>("alpha", 1.0f)},
       {"ai.onnx:Unsqueeze", MakeSqueezeLikeTrampoline<kernel::Unsqueeze>("Unsqueeze")},
+      {"ai.onnx:Upsample",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const Tensor &scales = GetInput(node, 1, rt.tensors());
+         kernel::Upsample::Attributes attrs;
+         attrs.mode = GetAttributeStringOrDefault(node, "mode", attrs.mode);
+         kernel::Upsample k(rt.kernel_ctx());
+         SetOutput(node, 0, k(x, scales, attrs), rt);
+       }},
       {"ai.onnx:Where", MakeTernaryTrampoline<kernel::Where>()},
       {"ai.onnx:Xor", MakeBinaryTrampoline<kernel::Xor>()},
 
@@ -1717,6 +2267,20 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                "RunNode: LabelEncoder key/value type combination is not supported.");
          }
          SetOutput(node, 0, std::move(out), rt.tensors());
+       }},
+      {"ai.onnx.ml:FeatureVectorizer",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         std::vector<Tensor> inputs;
+         inputs.reserve(node.input_size());
+         for (int i = 0; i < node.input_size(); ++i) {
+           inputs.push_back(GetInput(node, i, rt.tensors()));
+         }
+         const std::vector<int64_t> inputdimensions =
+             GetAttributeIntsOrDefault(node, "inputdimensions", {});
+         kernel::FeatureVectorizer fv(rt.kernel_ctx());
+         SetOutput(node, 0, fv(inputs, inputdimensions), rt.tensors());
        }},
       {"ai.onnx.ml:TreeEnsemble",
        [](const NodeProto &node, RuntimeContext &rt) {

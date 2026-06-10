@@ -48,22 +48,27 @@ void RegisterNonZeroChainCase(const std::string &name, std::vector<TestCase> &re
   Tensor x = Tensor::FromFloat("X", input_shape, x_values);
 
   // Reference computation:
-  //   abs_out       = |X|
-  //   relu_out      = Relu(abs_out) = abs_out (no negative entries)
-  //   double_out    = abs_out + abs_out
-  //   mul_out       = double_out * abs_out
-  //   nz            = NonZero(mul_out)   shape (2, nnz)
-  //   transposed_nz = Transpose(nz)  shape (nnz, 2)
-  //   nz_float      = Cast(transposed_nz, FLOAT)
+  //   abs_out         = |X|
+  //   relu_out        = Relu(abs_out) = abs_out (no negative entries)
+  //   double_out      = abs_out + abs_out
+  //   mul_out         = double_out * abs_out
+  //   nz_pre_abs      = NonZero(mul_out)   shape (2, nnz)
+  //   nz              = Abs(nz_pre_abs)    shape (2, nnz)
+  //   transposed_nz   = Transpose(nz)      shape (nnz, 2)
+  //   nz_float_pre_abs= Cast(transposed_nz, FLOAT)
+  //   nz_float        = Abs(nz_float_pre_abs)
   Tensor abs_out = kernel::Abs(ctx)(x);
   Tensor relu_out = abs_out;
   relu_out.name = "";
   Tensor double_out = kernel::Add(ctx)(relu_out, relu_out);
   Tensor mul_out = kernel::Mul(ctx)(double_out, relu_out);
+  // NonZero output is non-negative, so Abs is identity on it; reuse the same
+  // tensor under the post-Abs name ``nz`` directly.
   Tensor nz = kernel::NonZero(ctx)(mul_out);
   nz.name = "nz";
   Tensor transposed_nz = kernel::Transpose(ctx)(nz, /*perm=*/{});
-  Tensor nz_float = kernel::Cast(ctx)(transposed_nz, static_cast<int32_t>(DataType::FLOAT));
+  Tensor nz_float_pre_abs = kernel::Cast(ctx)(transposed_nz, static_cast<int32_t>(DataType::FLOAT));
+  Tensor nz_float = kernel::Abs(ctx)(nz_float_pre_abs);
   nz_float.name = "nz_float";
 
   TestCase tc(name, name, "model", "inference");
@@ -80,10 +85,12 @@ void RegisterNonZeroChainCase(const std::string &name, std::vector<TestCase> &re
   AddNode(*graph, "Relu", {"abs_out"}, {"relu_out"});
   AddNode(*graph, "Add", {"relu_out", "relu_out"}, {"double_out"});
   AddNode(*graph, "Mul", {"double_out", "relu_out"}, {"mul_out"});
-  AddNode(*graph, "NonZero", {"mul_out"}, {"nz"});
+  AddNode(*graph, "NonZero", {"mul_out"}, {"nz_pre_abs"});
+  AddNode(*graph, "Abs", {"nz_pre_abs"}, {"nz"});
   AddNode(*graph, "Transpose", {"nz"}, {"transposed_nz"});
-  NodeProto &cast_node = AddNode(*graph, "Cast", {"transposed_nz"}, {"nz_float"});
+  NodeProto &cast_node = AddNode(*graph, "Cast", {"transposed_nz"}, {"nz_float_pre_abs"});
   AddAttribute<int64_t>(cast_node, "to", static_cast<int64_t>(DataType::FLOAT));
+  AddNode(*graph, "Abs", {"nz_float_pre_abs"}, {"nz_float"});
 
   // Graph input X uses symbolic ``batch``/``seq`` dims; concrete sizes
   // ``[3, 4]`` are only used in the DataSet below.
@@ -92,14 +99,16 @@ void RegisterNonZeroChainCase(const std::string &name, std::vector<TestCase> &re
   const std::vector<DimSpec> symbolic_input_shape = {"batch", "seq"};
   AppendValueInfo(*graph->add_input(), "X", kFloat, symbolic_input_shape);
 
-  // Intermediate ValueInfo entries. Tensors before ``NonZero`` keep the
+  // Intermediate value_info entries. Tensors before ``NonZero`` keep the
   // input's symbolic ``[batch, seq]`` shape; ``transposed_nz`` has the same
   // data-dependent ``nnz`` dimension as ``nz``. The annotation style mirrors
-  // the graph outputs (anonymous vs named ``nnz``/``do1``).
+  // the graph outputs (anonymous vs named ``nnz``/``do1``). ``nz_pre_abs``
+  // and ``nz_float_pre_abs`` share the layout of their post-Abs counterparts.
   AppendValueInfo(*graph->add_value_info(), "abs_out", kFloat, symbolic_input_shape);
   AppendValueInfo(*graph->add_value_info(), "relu_out", kFloat, symbolic_input_shape);
   AppendValueInfo(*graph->add_value_info(), "double_out", kFloat, symbolic_input_shape);
   AppendValueInfo(*graph->add_value_info(), "mul_out", kFloat, symbolic_input_shape);
+  AppendValueInfo(*graph->add_value_info(), "nz_pre_abs", kInt64, {DimSpec(2), DimSpec("do1")});
 
   // Graph outputs: nz and nz_float. The rank dimension is always known
   // (equal to the input rank, 2), so it is declared with ``dim_value=2``.
@@ -110,6 +119,8 @@ void RegisterNonZeroChainCase(const std::string &name, std::vector<TestCase> &re
   // the same name, so it is omitted. ``transposed_nz`` is a pure intermediate
   // and its shape mirrors ``nz_float`` (same dim layout, INT64 dtype).
   AppendValueInfo(*graph->add_value_info(), "transposed_nz", kInt64, {DimSpec("do1"), DimSpec(2)});
+  AppendValueInfo(*graph->add_value_info(), "nz_float_pre_abs", kFloat,
+                  {DimSpec("do1"), DimSpec(2)});
   AppendValueInfo(*graph->add_output(), "nz", kInt64, {DimSpec(2), DimSpec("do1")});
   AppendValueInfo(*graph->add_output(), "nz_float", kFloat, {DimSpec("do1"), DimSpec(2)});
 
@@ -142,12 +153,14 @@ void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &regist
   AddNode(*graph, "Abs", {"X"}, {"abs_out"});
   AddNode(*graph, "NonZero", {"abs_out"}, {"nz"});
   AddNode(*graph, "Reshape", {"nz", "m1"}, {"flat_nz"});
-  AddNode(*graph, "Neg", {"flat_nz"}, {"Y"});
+  AddNode(*graph, "Neg", {"flat_nz"}, {"Y_pre_abs"});
+  AddNode(*graph, "Abs", {"Y_pre_abs"}, {"Y"});
 
   AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {"batch", "seq"});
   AppendValueInfo(*graph->add_value_info(), "abs_out", DataType::FLOAT, {"batch", "seq"});
   AppendValueInfo(*graph->add_value_info(), "nz", DataType::INT64, {"dnz", "2"});
   AppendValueInfo(*graph->add_value_info(), "flat_nz", DataType::INT64, {"2*dnz"});
+  AppendValueInfo(*graph->add_value_info(), "Y_pre_abs", DataType::INT64, {"2*dnz"});
   AppendValueInfo(*graph->add_output(), "Y", DataType::INT64, {"2*dnz"});
 
   // Provide a concrete DataSet so the case is executable end-to-end.
@@ -156,7 +169,10 @@ void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &regist
                                {1.0f, 0.0f, 2.0f, 0.0f, //
                                 0.0f, 3.0f, 0.0f, 4.0f, //
                                 5.0f, 0.0f, 6.0f, 0.0f});
-  Tensor y = Tensor::FromInt64("Y", {12}, {0, 0, -1, -1, -2, -2, 0, -2, -1, -3, 0, -2});
+  // ``Y_pre_abs = Neg(Reshape(NonZero(|X|), [-1]))`` is non-positive (NonZero
+  // returns indices); ``Y = Abs(Y_pre_abs)`` flips the sign back so the
+  // reference values are the original NonZero-flattened indices.
+  Tensor y = Tensor::FromInt64("Y", {12}, {0, 0, 1, 1, 2, 2, 0, 2, 1, 3, 0, 2});
   AppendDataSet(tc, {std::move(x)}, {std::move(y)});
   registry.emplace_back(std::move(tc));
 }

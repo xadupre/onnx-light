@@ -1438,6 +1438,47 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::Reshape k(rt.kernel_ctx());
          SetOutput(node, 0, k(data, shape, allowzero), rt);
        }},
+      {"ai.onnx:Resize",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         if (node.input_size() < 1 || node.input_size() > 4) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects between 1 and 4 input(s), got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         // Input 1 is ``roi`` (unused by this reference implementation).
+         const Tensor *roi = GetOptionalInput(node, 1, rt.tensors());
+         if (roi != nullptr) {
+           throw std::invalid_argument(
+               "RunNode: op 'Resize' does not support the optional 'roi' input "
+               "(only used by 'tf_crop_and_resize' coordinate_transformation_mode).");
+         }
+         const Tensor *scales = GetOptionalInput(node, 2, rt.tensors());
+         const Tensor *sizes = GetOptionalInput(node, 3, rt.tensors());
+         if ((scales == nullptr) == (sizes == nullptr)) {
+           throw std::invalid_argument(
+               "RunNode: op 'Resize' requires exactly one of 'scales' or 'sizes' to be "
+               "provided.");
+         }
+
+         kernel::Resize::Attributes attrs;
+         attrs.mode = GetAttributeStringOrDefault(node, "mode", attrs.mode);
+         attrs.coordinate_transformation_mode = GetAttributeStringOrDefault(
+             node, "coordinate_transformation_mode", attrs.coordinate_transformation_mode);
+         attrs.nearest_mode =
+             GetAttributeStringOrDefault(node, "nearest_mode", attrs.nearest_mode);
+         attrs.axes = GetAttributeIntsOrDefault(node, "axes", attrs.axes);
+         attrs.keep_aspect_ratio_policy = GetAttributeStringOrDefault(
+             node, "keep_aspect_ratio_policy", attrs.keep_aspect_ratio_policy);
+
+         kernel::Resize k(rt.kernel_ctx());
+         if (scales != nullptr) {
+           SetOutput(node, 0, k(x, *scales, attrs), rt);
+         } else {
+           SetOutput(node, 0, k.ResizeSizes(x, *sizes, attrs), rt);
+         }
+       }},
       {"ai.onnx:Round", MakeUnaryTrampoline<kernel::Round>()},
       {"ai.onnx:Selu",
        [](const NodeProto &node, RuntimeContext &rt) {

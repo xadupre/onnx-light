@@ -269,12 +269,23 @@ void RunScanNode(const NodeProto &node, RuntimeContext &rt) {
   if (num_scan_inputs <= 0) {
     throw std::invalid_argument("RunNode: Scan attribute 'num_scan_inputs' must be positive.");
   }
-  if (node.input_size() < num_scan_inputs) {
+
+  // Scan-8 (opset versions [1, 8]) prepends an optional ``sequence_lens``
+  // input and wraps every state / scan input/output in an outer batch
+  // dimension. We detect it from the model's default-domain opset version
+  // and, when active, skip the leading ``sequence_lens`` slot, run the
+  // Scan-9+ kernel once per batch element, and stack the per-batch
+  // outputs along a new leading axis.
+  const int64_t opset_version = rt.kernel_ctx().opset.version;
+  const bool is_scan8 = opset_version >= 1 && opset_version <= 8;
+  const int scan8_offset = is_scan8 ? 1 : 0;
+
+  if (node.input_size() < num_scan_inputs + scan8_offset) {
     throw std::invalid_argument(
         "RunNode: Scan does not have enough inputs for the declared num_scan_inputs.");
   }
 
-  const size_t n = static_cast<size_t>(node.input_size() - num_scan_inputs);
+  const size_t n = static_cast<size_t>(node.input_size() - num_scan_inputs - scan8_offset);
   const size_t m = static_cast<size_t>(num_scan_inputs);
   if (body.input_size() < static_cast<int>(n + m)) {
     throw std::invalid_argument("RunNode: Scan body graph does not declare enough inputs.");
@@ -287,20 +298,30 @@ void RunScanNode(const NodeProto &node, RuntimeContext &rt) {
     throw std::invalid_argument("RunNode: Scan node output count does not match body outputs.");
   }
 
+  if (is_scan8 && !node.input(0).as_string().empty()) {
+    // Per-batch sequence lengths are not yet supported; the only
+    // exercised form (e.g. backend test ``test_scan_sum``) passes an
+    // empty placeholder, meaning "use the full sequence length for
+    // every batch element".
+    throw std::invalid_argument(
+        "RunNode: Scan opset 8 with a non-empty 'sequence_lens' input is not supported.");
+  }
+
   std::vector<Tensor> initial_state;
   initial_state.reserve(n);
   for (size_t i = 0; i < n; ++i) {
-    if (node.input(static_cast<int>(i)).as_string().empty()) {
+    const int idx = static_cast<int>(scan8_offset + i);
+    if (node.input(idx).as_string().empty()) {
       throw std::invalid_argument(
           "RunNode: Scan does not support empty placeholders in state inputs.");
     }
-    initial_state.push_back(GetInput(node, static_cast<int>(i), rt.tensors()));
+    initial_state.push_back(GetInput(node, idx, rt.tensors()));
   }
 
   std::vector<Tensor> scan_inputs;
   scan_inputs.reserve(m);
   for (size_t i = 0; i < m; ++i) {
-    const int idx = static_cast<int>(n + i);
+    const int idx = static_cast<int>(scan8_offset + n + i);
     if (node.input(idx).as_string().empty()) {
       throw std::invalid_argument(
           "RunNode: Scan does not support empty placeholders in scan inputs.");
@@ -308,22 +329,97 @@ void RunScanNode(const NodeProto &node, RuntimeContext &rt) {
     scan_inputs.push_back(GetInput(node, idx, rt.tensors()));
   }
 
-  const std::vector<int64_t> scan_input_axes =
-      GetAttributeIntsOrDefault(node, "scan_input_axes", {});
-  const std::vector<int64_t> scan_input_directions =
-      GetAttributeIntsOrDefault(node, "scan_input_directions", {});
-  const std::vector<int64_t> scan_output_axes =
-      GetAttributeIntsOrDefault(node, "scan_output_axes", {});
-  const std::vector<int64_t> scan_output_directions =
-      GetAttributeIntsOrDefault(node, "scan_output_directions", {});
+  // Scan-8 attribute ``directions`` was split into
+  // ``scan_input_directions`` / ``scan_output_directions`` (the latter
+  // defaulting to all-forward) in Scan-9; ``scan_*_axes`` did not exist
+  // (the scan axis was always 1 of the batched tensor, i.e. axis 0 of
+  // each per-batch slice).
+  std::vector<int64_t> scan_input_axes;
+  std::vector<int64_t> scan_input_directions;
+  std::vector<int64_t> scan_output_axes;
+  std::vector<int64_t> scan_output_directions;
+  if (is_scan8) {
+    scan_input_directions = GetAttributeIntsOrDefault(node, "directions", {});
+  } else {
+    scan_input_axes = GetAttributeIntsOrDefault(node, "scan_input_axes", {});
+    scan_input_directions = GetAttributeIntsOrDefault(node, "scan_input_directions", {});
+    scan_output_axes = GetAttributeIntsOrDefault(node, "scan_output_axes", {});
+    scan_output_directions = GetAttributeIntsOrDefault(node, "scan_output_directions", {});
+  }
 
   // The Scan kernel now owns the iteration loop (including the body
   // subgraph evaluation): RunScanNode is reduced to validating the node
   // shape and forwarding inputs / attributes to the kernel.
   kernel::Scan scan_kernel(rt.kernel_ctx());
-  std::vector<Tensor> outputs =
-      scan_kernel(body, initial_state, scan_inputs, rt, scan_input_axes, scan_input_directions,
-                  scan_output_axes, scan_output_directions);
+  if (!is_scan8) {
+    std::vector<Tensor> outputs =
+        scan_kernel(body, initial_state, scan_inputs, rt, scan_input_axes, scan_input_directions,
+                    scan_output_axes, scan_output_directions);
+    PropagateOutputsToCaller(node, outputs, rt);
+    return;
+  }
+
+  // Scan-8: every state / scan input has a leading batch dim ``B`` and
+  // all inputs must agree on it. Run the Scan-9 kernel once per batch
+  // index on the batch-stripped slices and stack the resulting per-
+  // batch outputs along a new leading axis.
+  int64_t batch = -1;
+  auto check_batch = [&](const Tensor &t) {
+    if (t.shape.empty()) {
+      throw std::invalid_argument(
+          "RunNode: Scan opset 8 requires inputs to have a leading batch dimension.");
+    }
+    const int64_t b = t.shape[0];
+    if (batch < 0) {
+      batch = b;
+    } else if (batch != b) {
+      throw std::invalid_argument(
+          "RunNode: Scan opset 8 inputs must agree on the leading batch dimension.");
+    }
+  };
+  for (const auto &t : initial_state) {
+    check_batch(t);
+  }
+  for (const auto &t : scan_inputs) {
+    check_batch(t);
+  }
+  if (batch < 0) {
+    batch = 0;
+  }
+
+  // Slot ``o`` of ``per_output`` collects the per-batch tensors for the
+  // ``o``-th Scan-9 output, in batch order; reusing the stacking-only
+  // overload of ``kernel::Scan`` then concatenates them along a fresh
+  // leading axis to recover the batch dimension.
+  std::vector<std::vector<Tensor>> per_output(n + k);
+  for (int64_t b = 0; b < batch; ++b) {
+    std::vector<Tensor> batch_state;
+    batch_state.reserve(n);
+    for (size_t i = 0; i < n; ++i) {
+      batch_state.push_back(SliceTensorAlongAxis(initial_state[i], 0, b, "Scan"));
+    }
+    std::vector<Tensor> batch_scan;
+    batch_scan.reserve(m);
+    for (size_t i = 0; i < m; ++i) {
+      batch_scan.push_back(SliceTensorAlongAxis(scan_inputs[i], 0, b, "Scan"));
+    }
+    std::vector<Tensor> batch_outputs =
+        scan_kernel(body, batch_state, batch_scan, rt, /*scan_input_axes=*/{},
+                    scan_input_directions, /*scan_output_axes=*/{},
+                    /*scan_output_directions=*/{});
+    if (batch_outputs.size() != n + k) {
+      throw std::invalid_argument(
+          "RunNode: Scan opset 8 inner Scan-9 call produced an unexpected output count.");
+    }
+    for (size_t o = 0; o < n + k; ++o) {
+      per_output[o].push_back(std::move(batch_outputs[o]));
+    }
+  }
+
+  // Stack each output column along a new leading axis (default axis 0).
+  std::vector<Tensor> outputs = scan_kernel(batch, /*initial_state=*/{}, /*final_state=*/{},
+                                            per_output, /*scan_output_axes=*/{},
+                                            /*scan_output_directions=*/{});
   PropagateOutputsToCaller(node, outputs, rt);
 }
 

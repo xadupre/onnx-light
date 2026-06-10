@@ -15,6 +15,7 @@
 #include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
 #include "onnx_kernels/kernels/sequence/include_sequence_kernels.h"
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
+#include "onnx_kernels/kernels/text/include_text_kernels.h"
 #include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 #include "onnx_kernels/kernels/training/include_training_kernels.h"
 #include "onnx_kernels/node_helpers.h"
@@ -1186,6 +1187,15 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:ReduceProd", MakeReduceTrampoline<kernel::ReduceProd>()},
       {"ai.onnx:ReduceSum", MakeReduceTrampoline<kernel::ReduceSum>()},
       {"ai.onnx:ReduceSumSquare", MakeReduceTrampoline<kernel::ReduceSumSquare>()},
+      {"ai.onnx:RegexFullMatch",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const std::string pattern = GetAttributeStringOrDefault(node, "pattern", "");
+         kernel::RegexFullMatch k(rt.kernel_ctx());
+         SetOutput(node, 0, k(x, pattern), rt);
+       }},
       {"ai.onnx:Relu", MakeUnaryTrampoline<kernel::Relu>()},
       {"ai.onnx:Reshape",
        [](const NodeProto &node, RuntimeContext &rt) {

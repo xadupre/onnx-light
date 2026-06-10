@@ -89,7 +89,6 @@ void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry) {
   AddNode(*graph, "MatMul", {"xm1", "xm2"}, {"xm"});
   AddNode(*graph, "Reshape", {"xm", "shape3"}, {"Z"});
 
-
   // Graph inputs: X uses symbolic dims (D32, D128); Y uses a mix of symbolic
   // (batch, channel, D128, D64) dims that resolve to concrete sizes in the
   // reference DataSet.
@@ -101,14 +100,18 @@ void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry) {
   // the ``AllCollectedCasesInferOutputShapes`` test and used as the ground
   // truth.
   AppendValueInfo(*graph->add_value_info(), "xu1", DataType::FLOAT, {DimSpec(1), "D32", "D128"});
-  AppendValueInfo(*graph->add_value_info(), "xu2", DataType::FLOAT, {DimSpec(1), DimSpec(1), "D32", "D128"});
+  AppendValueInfo(*graph->add_value_info(), "xu2", DataType::FLOAT,
+                  {DimSpec(1), DimSpec(1), "D32", "D128"});
   AppendValueInfo(*graph->add_value_info(), "xm1", DataType::FLOAT, {DimSpec(1), "D32", "D128"});
-  AppendValueInfo(*graph->add_value_info(), "xm2c", DataType::FLOAT, {"batch*channel", "D128", "D64"});
-  AppendValueInfo(*graph->add_value_info(), "xm2", DataType::FLOAT, {"batch*channel", "D128", "D64"});
-  AppendValueInfo(*graph->add_value_info(), "xm", DataType::FLOAT, {"batch*channel", "D128", "D64"});
+  AppendValueInfo(*graph->add_value_info(), "xm2c", DataType::FLOAT,
+                  {"batch*channel", "D128", "D64"});
+  AppendValueInfo(*graph->add_value_info(), "xm2", DataType::FLOAT,
+                  {"batch*channel", "D128", "D64"});
+  AppendValueInfo(*graph->add_value_info(), "xm", DataType::FLOAT,
+                  {"batch*channel", "D128", "D64"});
 
   // Graph output Z — concrete dims recovered from the final Reshape.
-  AppendValueInfo(*graph->add_output(), "Z", DataType::FLOAT, {"batch", "channel", "D32", "D64");
+  AppendValueInfo(*graph->add_output(), "Z", DataType::FLOAT, {"batch", "channel", "D32", "D64"});
 
   // Build the reference DataSet — concrete D32=32, D128=128, batch=3,
   // channel=5, D64=64 tensors, then run the kernels to materialise Z.
@@ -197,8 +200,7 @@ void RegisterReshapeReshapeShapeInferenceCases(std::vector<TestCase> &registry) 
   // the symbolic leading dims here so the test framework's ground-truth
   // check is independent of how shape inference renders the symbolic
   // division.
-  AppendValueInfo(*graph->add_value_info(), "xr", DataType::FLOAT,
-                  {"a", "b", DimSpec(2), "c//2"});
+  AppendValueInfo(*graph->add_value_info(), "xr", DataType::FLOAT, {"a", "b", DimSpec(2), "c//2"});
   AppendValueInfo(*graph->add_value_info(), "xrr", DataType::FLOAT, {"a", "b", "c"});
 
   // Graph output Y — same symbolic dims as X.

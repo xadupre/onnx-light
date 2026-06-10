@@ -218,6 +218,7 @@ TEST(BackendRunModel, Attention) {
   });
 }
 TEST(BackendRunModel, Cast) { RunBackendCasesFor("Cast"); }
+TEST(BackendRunModel, CastLike) { RunBackendCasesFor("CastLike"); }
 TEST(BackendRunModel, CenterCropPad) { RunBackendCasesFor("CenterCropPad"); }
 TEST(BackendRunModel, Pad) { RunBackendCasesFor("Pad"); }
 TEST(BackendRunModel, BitCast) { RunBackendCasesFor("BitCast"); }

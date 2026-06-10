@@ -774,10 +774,6 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const Tensor &scale = GetInput(node, 1, rt.tensors());
          const Tensor &bias = GetInput(node, 2, rt.tensors());
-         if (FindAttribute(node, "num_groups") == nullptr) {
-           throw std::invalid_argument(
-               "RunNode: op 'GroupNormalization' requires INT attribute 'num_groups'.");
-         }
          const int64_t num_groups = GetAttributeIntOrDefault(node, "num_groups", 0);
          const float epsilon = GetAttributeFloatOrDefault(node, "epsilon", 1e-5f);
          kernel::GroupNormalization k(rt.kernel_ctx());

@@ -150,6 +150,15 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx.ml:LabelEncoder"), table.end());
   // Linear attention (opset 27).
   EXPECT_NE(table.find("ai.onnx:LinearAttention"), table.end());
+  // Sequence operators (opset 11+).
+  EXPECT_NE(table.find("ai.onnx:SequenceConstruct"), table.end());
+  EXPECT_NE(table.find("ai.onnx:SequenceEmpty"), table.end());
+  EXPECT_NE(table.find("ai.onnx:SequenceAt"), table.end());
+  EXPECT_NE(table.find("ai.onnx:SequenceErase"), table.end());
+  EXPECT_NE(table.find("ai.onnx:SequenceInsert"), table.end());
+  EXPECT_NE(table.find("ai.onnx:SequenceLength"), table.end());
+  EXPECT_NE(table.find("ai.onnx:ConcatFromSequence"), table.end());
+  EXPECT_NE(table.find("ai.onnx:SplitToSequence"), table.end());
 }
 
 TEST(RunNodes, RunNodeSingleAdd) {
@@ -1938,6 +1947,93 @@ TEST(RunNodes, RunNodeFlexAttentionFromDispatchTable) {
   const Tensor &Y = rt.tensors().at("Y");
   EXPECT_EQ(Y.shape, (std::vector<int64_t>{1, 1, 2, 2}));
   EXPECT_EQ(Y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+}
+
+TEST(RunNodes, RunNodeSequenceConstructAndQueriesFromDispatchTable) {
+  // Build a sequence of three tensors with SequenceConstruct, then
+  // dispatch SequenceLength, SequenceAt and ConcatFromSequence and
+  // check that the sequence-typed edge flows through the runtime
+  // context's sequence map.
+  RuntimeContext rt(KernelContext(DefaultOpset(11)));
+  rt.tensors()["a"] = Tensor::FromFloat("a", {2}, {1.0f, 2.0f});
+  rt.tensors()["b"] = Tensor::FromFloat("b", {2}, {3.0f, 4.0f});
+  rt.tensors()["c"] = Tensor::FromFloat("c", {2}, {5.0f, 6.0f});
+  rt.tensors()["pos1"] = Tensor::FromInt64("pos1", {}, {1});
+
+  RunNode(MakeNode("SequenceConstruct", {"a", "b", "c"}, {"seq"}), rt);
+  ASSERT_TRUE(rt.HasSequence("seq"));
+  EXPECT_EQ(rt.GetSequence("seq").size(), 3u);
+  EXPECT_EQ(rt.GetSequence("seq").elem_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+
+  RunNode(MakeNode("SequenceLength", {"seq"}, {"n"}), rt);
+  const Tensor &n = rt.tensors().at("n");
+  EXPECT_EQ(n.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
+  ASSERT_EQ(n.element_count(), 1);
+  EXPECT_EQ(n.AsInt64()[0], 3);
+
+  RunNode(MakeNode("SequenceAt", {"seq", "pos1"}, {"middle"}), rt);
+  const Tensor &middle = rt.tensors().at("middle");
+  EXPECT_EQ(middle.shape, std::vector<int64_t>({2}));
+  EXPECT_FLOAT_EQ(middle.AsFloat()[0], 3.0f);
+  EXPECT_FLOAT_EQ(middle.AsFloat()[1], 4.0f);
+
+  NodeProto concat = MakeNode("ConcatFromSequence", {"seq"}, {"flat"});
+  AttributeProto *axis = concat.add_attribute();
+  axis->set_name("axis");
+  axis->set_type(AttributeProto::INT);
+  axis->set_i(0);
+  RunNode(concat, rt);
+  const Tensor &flat = rt.tensors().at("flat");
+  EXPECT_EQ(flat.shape, std::vector<int64_t>({6}));
+  const float *p = flat.AsFloat();
+  for (int i = 0; i < 6; ++i) {
+    EXPECT_FLOAT_EQ(p[i], static_cast<float>(i + 1));
+  }
+}
+
+TEST(RunNodes, RunNodeSequenceEmptyInsertEraseFromDispatchTable) {
+  RuntimeContext rt(KernelContext(DefaultOpset(11)));
+  rt.tensors()["a"] = Tensor::FromFloat("a", {1}, {7.0f});
+  rt.tensors()["b"] = Tensor::FromFloat("b", {1}, {8.0f});
+
+  NodeProto empty = MakeNode("SequenceEmpty", {}, {"seq0"});
+  AttributeProto *dtype = empty.add_attribute();
+  dtype->set_name("dtype");
+  dtype->set_type(AttributeProto::INT);
+  dtype->set_i(static_cast<int64_t>(onnx_kernels::DataType::FLOAT));
+  RunNode(empty, rt);
+  ASSERT_TRUE(rt.HasSequence("seq0"));
+  EXPECT_TRUE(rt.GetSequence("seq0").empty());
+
+  RunNode(MakeNode("SequenceInsert", {"seq0", "a"}, {"seq1"}), rt);
+  EXPECT_EQ(rt.GetSequence("seq1").size(), 1u);
+  RunNode(MakeNode("SequenceInsert", {"seq1", "b"}, {"seq2"}), rt);
+  EXPECT_EQ(rt.GetSequence("seq2").size(), 2u);
+
+  RunNode(MakeNode("SequenceErase", {"seq2"}, {"seq3"}), rt);
+  EXPECT_EQ(rt.GetSequence("seq3").size(), 1u);
+  EXPECT_FLOAT_EQ(rt.GetSequence("seq3").at(0).AsFloat()[0], 7.0f);
+}
+
+TEST(RunNodes, RunNodeSplitToSequenceFromDispatchTable) {
+  RuntimeContext rt(KernelContext(DefaultOpset(11)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+
+  NodeProto split = MakeNode("SplitToSequence", {"x"}, {"out"});
+  AttributeProto *keepdims = split.add_attribute();
+  keepdims->set_name("keepdims");
+  keepdims->set_type(AttributeProto::INT);
+  keepdims->set_i(0);
+  RunNode(split, rt);
+
+  ASSERT_TRUE(rt.HasSequence("out"));
+  const auto &seq = rt.GetSequence("out");
+  EXPECT_EQ(seq.size(), 3u);
+  for (size_t i = 0; i < 3; ++i) {
+    EXPECT_EQ(seq.at(i).shape, std::vector<int64_t>({2}));
+    EXPECT_FLOAT_EQ(seq.at(i).AsFloat()[0], static_cast<float>(2 * i + 1));
+    EXPECT_FLOAT_EQ(seq.at(i).AsFloat()[1], static_cast<float>(2 * i + 2));
+  }
 }
 
 } // namespace Test

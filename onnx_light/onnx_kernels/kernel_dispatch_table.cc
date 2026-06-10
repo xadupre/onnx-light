@@ -13,6 +13,7 @@
 #include "onnx_kernels/kernels/preview/include_preview_kernels.h"
 #include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
 #include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
+#include "onnx_kernels/kernels/sequence/include_sequence_kernels.h"
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 #include "onnx_kernels/kernels/training/include_training_kernels.h"
@@ -42,12 +43,14 @@ using detail::GetAttributeIntsOrDefault;
 using detail::GetAttributeStringOrDefault;
 using detail::GetAttributeStringsOrDefault;
 using detail::GetInput;
+using detail::GetInputSequence;
 using detail::GetOptionalInput;
 using detail::GetRequiredAttributeString;
 using detail::RequireInputCount;
 using detail::RequireMinInputCount;
 using detail::RequireOutputCount;
 using detail::SetOutput;
+using detail::SetOutputSequence;
 
 // ---------------------------------------------------------------------------
 // Trampoline factories. Each helper returns a NodeKernelFn that:
@@ -1071,6 +1074,108 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::Selu k(rt.kernel_ctx());
          SetOutput(node, 0, k(x, alpha, gamma), rt);
        }},
+
+      // Sequence operators (ai.onnx). Sequence-typed graph edges are
+      // carried in :cpp:func:`RuntimeContext::sequences`; tensor-typed
+      // inputs/outputs continue to flow through ``rt.tensors()``.
+      {"ai.onnx:ConcatFromSequence",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Sequence &input_sequence = GetInputSequence(node, 0, rt);
+         const AttributeProto *axis_attr = FindAttribute(node, "axis");
+         if (axis_attr == nullptr) {
+           throw std::invalid_argument(
+               "RunNode: op 'ConcatFromSequence' is missing required attribute 'axis'.");
+         }
+         const int64_t axis = axis_attr->i();
+         const int64_t new_axis = GetAttributeIntOrDefault(node, "new_axis", 0);
+         kernel::ConcatFromSequence k(rt.kernel_ctx());
+         SetOutput(node, 0, k(input_sequence.values, axis, new_axis), rt);
+       }},
+      {"ai.onnx:SequenceAt",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         const Sequence &input_sequence = GetInputSequence(node, 0, rt);
+         const Tensor &position = GetInput(node, 1, rt.tensors());
+         kernel::SequenceAt k(rt.kernel_ctx());
+         SetOutput(node, 0, k(input_sequence, position), rt);
+       }},
+      {"ai.onnx:SequenceConstruct",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         std::vector<Tensor> inputs;
+         inputs.reserve(node.input_size());
+         for (int i = 0; i < node.input_size(); ++i) {
+           inputs.push_back(GetInput(node, i, rt.tensors()));
+         }
+         kernel::SequenceConstruct k(rt.kernel_ctx());
+         SetOutputSequence(node, 0, k.AsSequence(inputs), rt);
+       }},
+      {"ai.onnx:SequenceEmpty",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 0);
+         RequireOutputCount(node, 1);
+         const int64_t dtype = GetAttributeIntOrDefault(node, "dtype", 0);
+         kernel::SequenceEmpty k(rt.kernel_ctx());
+         SetOutputSequence(node, 0, k(static_cast<int32_t>(dtype)), rt);
+       }},
+      {"ai.onnx:SequenceErase",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 1);
+         if (node.input_size() > 2) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects 1 or 2 inputs, got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         RequireOutputCount(node, 1);
+         const Sequence &input_sequence = GetInputSequence(node, 0, rt);
+         const Tensor *position = GetOptionalInput(node, 1, rt.tensors());
+         kernel::SequenceErase k(rt.kernel_ctx());
+         SetOutputSequence(node, 0, k(input_sequence, position), rt);
+       }},
+      {"ai.onnx:SequenceInsert",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 2);
+         if (node.input_size() > 3) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects 2 or 3 inputs, got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         RequireOutputCount(node, 1);
+         const Sequence &input_sequence = GetInputSequence(node, 0, rt);
+         const Tensor &tensor = GetInput(node, 1, rt.tensors());
+         const Tensor *position = GetOptionalInput(node, 2, rt.tensors());
+         kernel::SequenceInsert k(rt.kernel_ctx());
+         SetOutputSequence(node, 0, k(input_sequence, tensor, position), rt);
+       }},
+      {"ai.onnx:SequenceLength",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Sequence &input_sequence = GetInputSequence(node, 0, rt);
+         kernel::SequenceLength k(rt.kernel_ctx());
+         SetOutput(node, 0, k(input_sequence), rt);
+       }},
+      {"ai.onnx:SplitToSequence",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 1);
+         if (node.input_size() > 2) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects 1 or 2 inputs, got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         RequireOutputCount(node, 1);
+         const Tensor &input = GetInput(node, 0, rt.tensors());
+         const Tensor *split = GetOptionalInput(node, 1, rt.tensors());
+         const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
+         const int64_t keepdims = GetAttributeIntOrDefault(node, "keepdims", 1);
+         kernel::SplitToSequence k(rt.kernel_ctx());
+         SetOutputSequence(node, 0, k(input, split, axis, keepdims), rt);
+       }},
+
       {"ai.onnx:Shape",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);

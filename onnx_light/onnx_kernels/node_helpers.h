@@ -5,6 +5,7 @@
 #pragma once
 
 #include "onnx_kernels/runtime_context.h"
+#include "onnx_kernels/simple_sequence.h"
 #include "onnx_kernels/simple_tensor.h"
 #include "onnx_proto/onnx.h"
 
@@ -97,6 +98,39 @@ inline void SetOutput(const NodeProto &node, int index, Tensor result, RuntimeCo
   }
   result.name = name;
   rt.Put(name, std::move(result), TensorEventKind::kIntermediate);
+}
+
+// Looks up the sequence-typed input at slot ``index`` in
+// ``rt.sequences()``. Throws when the input name is empty (unset
+// optional sequence input) or when no sequence with that name has been
+// produced by an earlier node / supplied by the caller.
+inline const Sequence &GetInputSequence(const NodeProto &node, int index,
+                                        const RuntimeContext &rt) {
+  const std::string name = node.input(index).as_string();
+  if (name.empty()) {
+    throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                "' sequence input #" + std::to_string(index) +
+                                " is unset (empty name).");
+  }
+  if (!rt.HasSequence(name)) {
+    throw std::invalid_argument("RunNode: sequence input '" + name + "' of op '" +
+                                node.op_type().as_string() + "' is missing from the sequence map.");
+  }
+  return rt.GetSequence(name);
+}
+
+// Routes a freshly-produced sequence to the output slot ``index`` via
+// :cpp:func:`RuntimeContext::PutSequence`. Throws when the slot's name
+// is empty.
+inline void SetOutputSequence(const NodeProto &node, int index, Sequence result,
+                              RuntimeContext &rt) {
+  const std::string name = node.output(index).as_string();
+  if (name.empty()) {
+    throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                "' sequence output #" + std::to_string(index) +
+                                " is unset (empty name).");
+  }
+  rt.PutSequence(name, std::move(result));
 }
 
 inline void RequireInputCount(const NodeProto &node, int expected) {

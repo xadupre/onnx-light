@@ -74,16 +74,22 @@ def _flush_file(path: str) -> None:
         os.fsync(stream.fileno())
 
 
-model = make_model()
-size_bytes = model.ByteSize()
-print(f"Model size: {size_bytes / 2 ** 20:.3f} MB")
+def onnx_load(onnx_path):
+    import onnx
+
+    return onnx.load(onnx_path)
+
 
 out_dir = "temp_plot_save_external_data_time"
 os.makedirs(out_dir, exist_ok=True)
-
-onnx_model = model
 onnx_input_path = os.path.join(out_dir, "bench.onnx")
-onnxl.save(onnx_model, onnx_input_path)
+
+model = make_model()
+size_bytes = model.ByteSize()
+onnxl.save(model, onnx_input_path)
+print(f"Model size: {size_bytes / 2 ** 20:.3f} MB")
+
+onnx_model = onnx_load(onnx_input_path)
 onnx_light_model = onnxl.load(onnx_input_path)
 
 results = []
@@ -99,8 +105,10 @@ onnx_external_location = "out_onnx_ext.data"
 onnx_external_data_path = os.path.join(out_dir, onnx_external_location)
 
 
-def _save_onnx_external_with_flush() -> None:
+def _save_onnx_external_with_flush(onnx_model) -> None:
     import onnx
+
+    assert isinstance(onnx_model, onnx.ModelProto), f"Unexpected type {type(onnx_model)}"
 
     onnx.save_model(
         onnx_model,
@@ -113,7 +121,11 @@ def _save_onnx_external_with_flush() -> None:
     _flush_file(onnx_external_path)
 
 
-results.append(profile_call("save/2filex1/onnx", _save_onnx_external_with_flush, repeat=1))
+results.append(
+    profile_call(
+        "save/2filex1/onnx", lambda: _save_onnx_external_with_flush(onnx_model), repeat=1
+    )
+)
 print(f"{results[-1]['name']:<35} total={results[-1]['total'] * 1e3:.1f} ms")
 
 # :func:`onnx_light.onnx.save` restores the in-memory model after the write, but we

@@ -346,18 +346,18 @@ if not os.path.exists(tmp_dir):
 def onnx_load(onnx_path):
     import onnx
 
-    onnx.load(onnx_path)
+    return onnx.load(onnx_path)
 
 
 def onnx_save(model, onnx_path):
     import onnx
 
+    assert isinstance(model, onnx.ModelProto), f"Unexpected type {type(model)}"
     onnx.save(model, onnx_path)
 
 
 if _CLI_MODEL_PATH is not None:
     onnx_path = os.path.abspath(_CLI_MODEL_PATH)
-    model = onnx_load(onnx_path)
     print(f"Using provided model: {onnx_path}")
 elif _CLI_MODEL_ID is not None:
     downloaded = _download_hf_model(_CLI_MODEL_ID, _CLI_MODEL_FILE, tmp_dir)
@@ -368,24 +368,17 @@ elif _CLI_MODEL_ID is not None:
     else:
         model = make_model()
         onnx_path = os.path.join(tmp_dir, "bench.onnx")
-        onnx_save(model, onnx_path)
+        onnxl.save(model, onnx_path)
 else:
     model = make_model()
     onnx_path = os.path.join(tmp_dir, "bench.onnx")
-    onnx_save(model, onnx_path)
+    onnxl.save(model, onnx_path)
 
 size_bytes = model.ByteSize()
 print(f"Model size: {size_bytes / 2 ** 20:.3f} MB")
 
 file_size = os.path.getsize(onnx_path)
 print(f"File size : {file_size / 2 ** 20:.3f} MB")
-
-
-def onnx_load(onnx_path):
-    import onnx
-
-    return onnx.load(onnx_path)
-
 
 onx = onnx_load(onnx_path)
 onxl = onnxl.load(onnx_path)
@@ -627,8 +620,7 @@ data = []
 if _run_scenario("load"):
     # %%
     # Load with onnx.
-
-    data.append(measure("load/1filex1/onnx", lambda: onnx.load(onnx_path)))
+    data.append(measure("load/1filex1/onnx", lambda: onnx_load(onnx_path)))
     print_stats("load/1filex1/onnx", data[-1])
 
     # %%
@@ -724,6 +716,8 @@ if _run_scenario("serialize"):
 
 def _parse_onnx() -> onnxl.ModelProto:
     """Parses ONNX bytes into a ModelProto."""
+    import onnx
+
     parsed = onnx.ModelProto()
     parsed.ParseFromString(serialized_onnx)
     return parsed

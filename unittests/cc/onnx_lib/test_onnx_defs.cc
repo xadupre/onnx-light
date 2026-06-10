@@ -503,4 +503,10 @@ TEST(onnx_defs, DocStrings_ContainExpectedContent) {
   EXPECT_NE(strstr(kDoc_MatMul_ver9, "matmul"), nullptr);
   EXPECT_NE(strstr(kDoc_GRU_ver14, "GRU"), nullptr);
   EXPECT_NE(strstr(kDoc_LSTM_ver14, "LSTM"), nullptr);
+  // The Pad doc string mirrors the upstream ONNX schema and must include the
+  // four worked examples (one per supported mode).
+  EXPECT_NE(strstr(kDoc_Pad_ver24, "Example 1 (`constant` mode)"), nullptr);
+  EXPECT_NE(strstr(kDoc_Pad_ver24, "Example 2 (`reflect` mode)"), nullptr);
+  EXPECT_NE(strstr(kDoc_Pad_ver24, "Example 3 (`edge` mode)"), nullptr);
+  EXPECT_NE(strstr(kDoc_Pad_ver24, "Example 4 (`wrap` mode)"), nullptr);
 }

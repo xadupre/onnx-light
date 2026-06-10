@@ -219,6 +219,11 @@ TEST(BackendRunModel, Conv) { RunBackendCasesFor("Conv"); }
 TEST(BackendRunModel, ConvInteger) { RunBackendCasesFor("ConvInteger"); }
 TEST(BackendRunModel, DeformConv) { RunBackendCasesFor("DeformConv"); }
 TEST(BackendRunModel, DepthToSpace) { RunBackendCasesFor("DepthToSpace"); }
+TEST(BackendRunModel, BatchNormalization) { RunBackendCasesFor("BatchNormalization"); }
+TEST(BackendRunModel, GroupNormalization) { RunBackendCasesFor("GroupNormalization"); }
+TEST(BackendRunModel, InstanceNormalization) { RunBackendCasesFor("InstanceNormalization"); }
+TEST(BackendRunModel, LayerNormalization) { RunBackendCasesFor("LayerNormalization"); }
+TEST(BackendRunModel, RMSNormalization) { RunBackendCasesFor("RMSNormalization"); }
 
 // ai.onnx.preview.training optimizer kernels.
 TEST(BackendRunModel, Adagrad) { RunBackendCasesFor("Adagrad"); }

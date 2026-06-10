@@ -749,6 +749,93 @@ The four supported `modes` are (similar to corresponding modes supported by `num
 
 4) `wrap` - wrap-around padding as if the data tensor forms a torus
 
+
+Example 1 (`constant` mode):
+
+Insert 0 pads to the beginning of the second dimension.
+
+```
+data = [
+    [1.0, 1.2],
+    [2.3, 3.4],
+    [4.5, 5.7],
+]
+
+pads = [0, 2, 0, 0]
+
+mode = 'constant'
+
+constant_value = 0.0
+
+output = [
+    [0.0, 0.0, 1.0, 1.2],
+    [0.0, 0.0, 2.3, 3.4],
+    [0.0, 0.0, 4.5, 5.7],
+]
+```
+
+Example 2 (`reflect` mode):
+
+```
+data = [
+    [1.0, 1.2],
+    [2.3, 3.4],
+    [4.5, 5.7],
+]
+
+pads = [0, 2, 0, 0]
+
+mode = 'reflect'
+
+output = [
+    [1.0, 1.2, 1.0, 1.2],
+    [2.3, 3.4, 2.3, 3.4],
+    [4.5, 5.7, 4.5, 5.7],
+]
+```
+
+Example 3 (`edge` mode):
+
+```
+data = [
+    [1.0, 1.2],
+    [2.3, 3.4],
+    [4.5, 5.7],
+]
+
+pads = [0, 2, 0, 0]
+
+mode = 'edge'
+
+output = [
+    [1.0, 1.0, 1.0, 1.2],
+    [2.3, 2.3, 2.3, 3.4],
+    [4.5, 4.5, 4.5, 5.7],
+]
+```
+
+Example 4 (`wrap` mode):
+
+```
+data = [
+    [1.0, 1.2],
+    [2.3, 3.4],
+    [4.5, 5.7],
+]
+
+pads = [2, 1, 1, 1]
+
+mode = 'wrap'
+
+output = [
+    [3.4, 2.3, 3.4, 2.3],
+    [5.7, 4.5, 5.7, 4.5],
+    [1.2, 1.0, 1.2, 1.0],
+    [3.4, 2.3, 3.4, 2.3],
+    [5.7, 4.5, 5.7, 4.5],
+    [1.2, 1.0, 1.2, 1.0],
+]
+```
 )DOC";
 
 const char kDoc_Cos_ver7[] = R"DOC(

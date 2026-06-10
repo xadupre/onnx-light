@@ -5,6 +5,7 @@
 #pragma once
 
 #include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/simple_sequence.h"
 #include "onnx_kernels/simple_tensor.h"
 #include "onnx_light_helpers.h"
 #include "onnx_proto/onnx.h"
@@ -33,6 +34,21 @@ namespace onnx_kernels {
  * every produced output under the name declared by ``node.output(i)``.
  */
 using TensorMap = std::unordered_map<std::string, Tensor>;
+
+/**
+ * Name-keyed map of sequences carrying the sequence-typed graph
+ * values produced or consumed by sequence operators
+ * (``SequenceConstruct``, ``SequenceEmpty``, ``SequenceInsert``,
+ * ``SequenceErase``, ``SequenceAt``, ``SequenceLength``,
+ * ``ConcatFromSequence``, ``SplitToSequence``, ``SequenceMap``).
+ *
+ * Sequences are stored separately from tensors because their runtime
+ * representation (:cpp:struct:`Sequence`) is a list of tensors and not
+ * a single tensor: the dispatcher therefore keeps a sibling map of
+ * sequence-typed edges, looked up by the same ``NodeProto::input`` /
+ * ``NodeProto::output`` names.
+ */
+using SequenceMap = std::unordered_map<std::string, Sequence>;
 
 /**
  * Name-keyed map of model-local :cpp:type:`FunctionProto` definitions
@@ -264,11 +280,49 @@ public:
   /// Empties the event log without otherwise touching the tensor map.
   void ClearEvents() noexcept { events_.clear(); }
 
+  /// In/out sequence map shared across every node in a chain. Only
+  /// sequence-typed graph edges are stored here; tensor-typed edges
+  /// live in :cpp:func:`tensors`.
+  SequenceMap &sequences() noexcept { return sequences_; }
+  const SequenceMap &sequences() const noexcept { return sequences_; }
+
+  /// Returns ``true`` if a sequence named ``name`` is currently held.
+  bool HasSequence(const std::string &name) const {
+    return sequences_.find(name) != sequences_.end();
+  }
+
+  /// Inserts or overwrites the sequence stored under ``name``. The
+  /// stored sequence's ``name`` field is updated to ``name``. No event
+  /// is appended to the event log: sequence values are intentionally
+  /// outside the tensor event stream.
+  void PutSequence(const std::string &name, Sequence sequence) {
+    sequence.name = name;
+    sequences_[name] = std::move(sequence);
+  }
+
+  /// Removes the sequence stored under ``name`` if present. Returns
+  /// ``true`` if an entry was erased, ``false`` otherwise.
+  bool RemoveSequence(const std::string &name) { return sequences_.erase(name) > 0; }
+
+  /**
+   * Returns the sequence stored under ``name``.
+   *
+   * @throws std::out_of_range if ``name`` is not in the sequence map.
+   */
+  const Sequence &GetSequence(const std::string &name) const {
+    auto it = sequences_.find(name);
+    if (it == sequences_.end()) {
+      throw std::out_of_range("RuntimeContext::GetSequence: no sequence named '" + name + "'.");
+    }
+    return it->second;
+  }
+
 private:
   TensorMap tensors_;
   kernel::KernelContext kernel_ctx_;
   FunctionMap functions_;
   TensorEventLog events_;
+  SequenceMap sequences_;
 };
 
 } // namespace onnx_kernels

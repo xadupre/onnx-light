@@ -5,6 +5,8 @@
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
+#include "onnx_kernels/kernels/nn/include_nn_kernels.h"
+#include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_kernels/kernels/training/include_training_kernels.h"
 #include "onnx_kernels/run_nodes.h"
 #include "onnx_kernels/simple_tensor.h"
@@ -106,6 +108,7 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx:Mod"), table.end());
   EXPECT_NE(table.find("ai.onnx:Clip"), table.end());
   EXPECT_NE(table.find("ai.onnx:Attention"), table.end());
+  EXPECT_NE(table.find("ai.onnx:GRU"), table.end());
   EXPECT_NE(table.find("ai.onnx:NonMaxSuppression"), table.end());
   EXPECT_NE(table.find("ai.onnx:IsInf"), table.end());
   EXPECT_NE(table.find("ai.onnx:BitShift"), table.end());
@@ -124,6 +127,9 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx:Cast"), table.end());
   EXPECT_NE(table.find("ai.onnx:Shape"), table.end());
   EXPECT_NE(table.find("ai.onnx:DepthToSpace"), table.end());
+  EXPECT_NE(table.find("ai.onnx:Gather"), table.end());
+  EXPECT_NE(table.find("ai.onnx:GatherND"), table.end());
+  EXPECT_NE(table.find("ai.onnx:Pad"), table.end());
   // Logical / bitwise kernels.
   EXPECT_NE(table.find("ai.onnx:And"), table.end());
   EXPECT_NE(table.find("ai.onnx:Or"), table.end());
@@ -147,9 +153,21 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx.ml:SVMClassifier"), table.end());
   EXPECT_NE(table.find("ai.onnx.ml:ArrayFeatureExtractor"), table.end());
   EXPECT_NE(table.find("ai.onnx.ml:Binarizer"), table.end());
+  EXPECT_NE(table.find("ai.onnx.ml:FeatureVectorizer"), table.end());
   EXPECT_NE(table.find("ai.onnx.ml:LabelEncoder"), table.end());
   // Linear attention (opset 27).
   EXPECT_NE(table.find("ai.onnx:LinearAttention"), table.end());
+  // Sequence operators (opset 11+).
+  EXPECT_NE(table.find("ai.onnx:SequenceConstruct"), table.end());
+  EXPECT_NE(table.find("ai.onnx:SequenceEmpty"), table.end());
+  EXPECT_NE(table.find("ai.onnx:SequenceAt"), table.end());
+  EXPECT_NE(table.find("ai.onnx:SequenceErase"), table.end());
+  EXPECT_NE(table.find("ai.onnx:SequenceInsert"), table.end());
+  EXPECT_NE(table.find("ai.onnx:SequenceLength"), table.end());
+  EXPECT_NE(table.find("ai.onnx:ConcatFromSequence"), table.end());
+  EXPECT_NE(table.find("ai.onnx:SplitToSequence"), table.end());
+  // Text kernels (ai.onnx).
+  EXPECT_NE(table.find("ai.onnx:RegexFullMatch"), table.end());
 }
 
 TEST(RunNodes, RunNodeSingleAdd) {
@@ -458,6 +476,22 @@ TEST(RunNodes, RunNodeImageDecoderDefaultsToRGB) {
   EXPECT_EQ(image.shape, (std::vector<int64_t>{0, 0, 3}));
 }
 
+TEST(RunNodes, RunNodeExpandFromDispatchTable) {
+  // Expand broadcasts a (3, 1) input to a (3, 4) shape.
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {3, 1}, {1, 2, 3});
+  rt.tensors()["shape"] = Tensor::FromInt64("shape", {2}, {3, 4});
+  NodeProto node = MakeNode("Expand", {"x", "shape"}, {"y"});
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{3, 4}));
+  const float *got = y.AsFloat();
+  EXPECT_FLOAT_EQ(got[0], 1.0f);
+  EXPECT_FLOAT_EQ(got[3], 1.0f);
+  EXPECT_FLOAT_EQ(got[4], 2.0f);
+  EXPECT_FLOAT_EQ(got[11], 3.0f);
+}
+
 TEST(RunNodes, RunNodeReshapeFromDispatchTable) {
   // Reshape with two inputs (data, shape) and the default ``allowzero`` (0).
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
@@ -470,6 +504,143 @@ TEST(RunNodes, RunNodeReshapeFromDispatchTable) {
   const float *got = y.AsFloat();
   EXPECT_FLOAT_EQ(got[0], 1.0f);
   EXPECT_FLOAT_EQ(got[5], 6.0f);
+}
+
+TEST(RunNodes, RunNodeResizeScalesFromDispatchTable) {
+  // Resize via the (X, roi="", scales) input form. Upsamples a 1x1x2x2
+  // NCHW tensor by [1, 1, 2, 3] using nearest mode and the asymmetric
+  // coordinate transformation.
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["X"] = Tensor::FromFloat("X", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  rt.tensors()["scales"] = Tensor::FromFloat("scales", {4}, {1.0f, 1.0f, 2.0f, 3.0f});
+  NodeProto node = MakeNode("Resize", {"X", "", "scales"}, {"Y"});
+  AttributeProto *coord = node.add_attribute();
+  coord->set_name("coordinate_transformation_mode");
+  coord->set_type(AttributeProto::AttributeType::STRING);
+  coord->set_s("asymmetric");
+
+  RunNode(node, rt);
+
+  const Tensor &y = rt.tensors().at("Y");
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{1, 1, 4, 6}));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+
+  // Compare against the kernel's direct output to validate dispatch-time
+  // wiring of inputs, attributes and outputs.
+  onnx_kernels::kernel::Resize::Attributes attrs;
+  attrs.coordinate_transformation_mode = "asymmetric";
+  const onnx_kernels::kernel::Resize resize_kernel(rt.kernel_ctx());
+  const Tensor y_ref = resize_kernel(rt.tensors().at("X"), rt.tensors().at("scales"), attrs);
+  ASSERT_EQ(y.element_count(), y_ref.element_count());
+  for (int64_t i = 0; i < y.element_count(); ++i) {
+    EXPECT_FLOAT_EQ(y.AsFloat()[i], y_ref.AsFloat()[i]);
+  }
+}
+
+TEST(RunNodes, RunNodeResizeSizesFromDispatchTable) {
+  // Resize via the (X, roi="", scales="", sizes) input form.
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["X"] = Tensor::FromFloat("X", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  rt.tensors()["sizes"] = Tensor::FromInt64("sizes", {4}, {1, 1, 4, 6});
+  NodeProto node = MakeNode("Resize", {"X", "", "", "sizes"}, {"Y"});
+  AttributeProto *coord = node.add_attribute();
+  coord->set_name("coordinate_transformation_mode");
+  coord->set_type(AttributeProto::AttributeType::STRING);
+  coord->set_s("asymmetric");
+
+  RunNode(node, rt);
+
+  const Tensor &y = rt.tensors().at("Y");
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{1, 1, 4, 6}));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+}
+
+TEST(RunNodes, RunNodeRegexFullMatchFromDispatchTable) {
+  RuntimeContext rt(KernelContext(DefaultOpset(20)));
+  rt.tensors()["x"] = Tensor::FromStrings("x", {3}, {"abc", "abcdef", "xyz"});
+  NodeProto node = MakeNode("RegexFullMatch", {"x"}, {"y"});
+  AttributeProto *pattern = node.add_attribute();
+  pattern->set_name("pattern");
+  pattern->set_type(AttributeProto::AttributeType::STRING);
+  pattern->set_s("abc");
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.data_type, DataType::BOOL);
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{3}));
+  const uint8_t *got = y.AsBool();
+  ASSERT_NE(got, nullptr);
+  EXPECT_EQ(got[0], 1u);
+  EXPECT_EQ(got[1], 0u);
+  EXPECT_EQ(got[2], 0u);
+}
+
+TEST(RunNodes, RunNodeGatherFromDispatchTable) {
+  // Gather along ``axis=0`` selects whole rows from ``data``.
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["data"] = Tensor::FromFloat("data", {3, 2}, {1, 2, 3, 4, 5, 6});
+  rt.tensors()["indices"] = Tensor::FromInt64("indices", {2}, {2, 0});
+  NodeProto node = MakeNode("Gather", {"data", "indices"}, {"y"});
+  AttributeProto *axis = node.add_attribute();
+  axis->set_name("axis");
+  axis->set_type(AttributeProto::AttributeType::INT);
+  axis->set_i(0);
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 2}));
+  const float *got = y.AsFloat();
+  EXPECT_FLOAT_EQ(got[0], 5.0f);
+  EXPECT_FLOAT_EQ(got[1], 6.0f);
+  EXPECT_FLOAT_EQ(got[2], 1.0f);
+  EXPECT_FLOAT_EQ(got[3], 2.0f);
+}
+
+TEST(RunNodes, RunNodeGatherFromDispatchTableDefaultAxis) {
+  // Default ``axis`` is 0; verify the dispatch entry handles a missing attribute.
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["data"] = Tensor::FromFloat("data", {3}, {10, 20, 30});
+  rt.tensors()["indices"] = Tensor::FromInt64("indices", {2}, {1, 2});
+  NodeProto node = MakeNode("Gather", {"data", "indices"}, {"y"});
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2}));
+  const float *got = y.AsFloat();
+  EXPECT_FLOAT_EQ(got[0], 20.0f);
+  EXPECT_FLOAT_EQ(got[1], 30.0f);
+}
+
+TEST(RunNodes, RunNodeGatherNDFromDispatchTable) {
+  // GatherND with ``batch_dims=0`` picks scalars from a 2-D ``data`` tensor.
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["data"] = Tensor::FromFloat("data", {2, 2}, {1, 2, 3, 4});
+  rt.tensors()["indices"] = Tensor::FromInt64("indices", {2, 2}, {0, 0, 1, 1});
+  NodeProto node = MakeNode("GatherND", {"data", "indices"}, {"y"});
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2}));
+  const float *got = y.AsFloat();
+  EXPECT_FLOAT_EQ(got[0], 1.0f);
+  EXPECT_FLOAT_EQ(got[1], 4.0f);
+}
+
+TEST(RunNodes, RunNodeGatherNDWithBatchDimsFromDispatchTable) {
+  // GatherND with ``batch_dims=1`` independently indexes each batch row.
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["data"] =
+      Tensor::FromFloat("data", {2, 3, 2}, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
+  rt.tensors()["indices"] = Tensor::FromInt64("indices", {2, 1}, {1, 0});
+  NodeProto node = MakeNode("GatherND", {"data", "indices"}, {"y"});
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name("batch_dims");
+  attr->set_type(AttributeProto::AttributeType::INT);
+  attr->set_i(1);
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 2}));
+  const float *got = y.AsFloat();
+  EXPECT_FLOAT_EQ(got[0], 3.0f);
+  EXPECT_FLOAT_EQ(got[1], 4.0f);
+  EXPECT_FLOAT_EQ(got[2], 7.0f);
+  EXPECT_FLOAT_EQ(got[3], 8.0f);
 }
 
 TEST(RunNodes, RunNodeSqueezeAxesAsInput) {
@@ -1938,6 +2109,139 @@ TEST(RunNodes, RunNodeFlexAttentionFromDispatchTable) {
   const Tensor &Y = rt.tensors().at("Y");
   EXPECT_EQ(Y.shape, (std::vector<int64_t>{1, 1, 2, 2}));
   EXPECT_EQ(Y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+}
+
+TEST(RunNodes, RunNodeGRUFromDispatchTable) {
+  // Single-step (seq_length=1) GRU with X/W/R only: requests Y_h as the
+  // only output via an empty Y output name, mirroring the ``gru_defaults``
+  // backend test case (batch=3, input=2, hidden=5).
+  RuntimeContext rt(KernelContext(DefaultOpset(14)));
+
+  constexpr int64_t kSeqLength = 1;
+  constexpr int64_t kBatch = 3;
+  constexpr int64_t kInput = 2;
+  constexpr int64_t kHidden = 5;
+  constexpr int64_t kNumGates = 3;
+  constexpr float kWeightScale = 0.1f;
+
+  rt.tensors()["X"] = Tensor::FromFloat("X", {kSeqLength, kBatch, kInput}, {1, 2, 3, 4, 5, 6});
+  std::vector<float> w_data(static_cast<size_t>(kNumGates * kHidden * kInput), kWeightScale);
+  std::vector<float> r_data(static_cast<size_t>(kNumGates * kHidden * kHidden), kWeightScale);
+  rt.tensors()["W"] = Tensor::FromFloat("W", {1, kNumGates * kHidden, kInput}, w_data);
+  rt.tensors()["R"] = Tensor::FromFloat("R", {1, kNumGates * kHidden, kHidden}, r_data);
+
+  NodeProto node = MakeNode("GRU", {"X", "W", "R"}, {"", "Y_h"});
+  AttributeProto *hs = node.add_attribute();
+  hs->set_name("hidden_size");
+  hs->set_type(AttributeProto::AttributeType::INT);
+  hs->set_i(kHidden);
+
+  RunNode(node, rt);
+
+  // Y is suppressed (empty output name) so it must not appear in the tensors map.
+  EXPECT_EQ(rt.tensors().find("Y"), rt.tensors().end());
+
+  const Tensor &y_h = rt.tensors().at("Y_h");
+  EXPECT_EQ(y_h.shape, (std::vector<int64_t>{1, kBatch, kHidden}));
+  EXPECT_EQ(y_h.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+
+  // Compare against the kernel's direct output to validate dispatch-time
+  // wiring of inputs, attributes and outputs.
+  const onnx_kernels::kernel::GRU gru_kernel(rt.kernel_ctx());
+  auto [y_ref, y_h_ref] =
+      gru_kernel(rt.tensors().at("X"), rt.tensors().at("W"), rt.tensors().at("R"));
+  (void)y_ref;
+  ASSERT_EQ(y_h.element_count(), y_h_ref.element_count());
+  for (int64_t i = 0; i < y_h.element_count(); ++i) {
+    EXPECT_FLOAT_EQ(y_h.AsFloat()[i], y_h_ref.AsFloat()[i]);
+  }
+}
+
+TEST(RunNodes, RunNodeSequenceConstructAndQueriesFromDispatchTable) {
+  // Build a sequence of three tensors with SequenceConstruct, then
+  // dispatch SequenceLength, SequenceAt and ConcatFromSequence and
+  // check that the sequence-typed edge flows through the runtime
+  // context's sequence map.
+  RuntimeContext rt(KernelContext(DefaultOpset(11)));
+  rt.tensors()["a"] = Tensor::FromFloat("a", {2}, {1.0f, 2.0f});
+  rt.tensors()["b"] = Tensor::FromFloat("b", {2}, {3.0f, 4.0f});
+  rt.tensors()["c"] = Tensor::FromFloat("c", {2}, {5.0f, 6.0f});
+  rt.tensors()["pos1"] = Tensor::FromInt64("pos1", {}, {1});
+
+  RunNode(MakeNode("SequenceConstruct", {"a", "b", "c"}, {"seq"}), rt);
+  ASSERT_TRUE(rt.HasSequence("seq"));
+  EXPECT_EQ(rt.GetSequence("seq").size(), 3u);
+  EXPECT_EQ(rt.GetSequence("seq").elem_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+
+  RunNode(MakeNode("SequenceLength", {"seq"}, {"n"}), rt);
+  const Tensor &n = rt.tensors().at("n");
+  EXPECT_EQ(n.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
+  ASSERT_EQ(n.element_count(), 1);
+  EXPECT_EQ(n.AsInt64()[0], 3);
+
+  RunNode(MakeNode("SequenceAt", {"seq", "pos1"}, {"middle"}), rt);
+  const Tensor &middle = rt.tensors().at("middle");
+  EXPECT_EQ(middle.shape, std::vector<int64_t>({2}));
+  EXPECT_FLOAT_EQ(middle.AsFloat()[0], 3.0f);
+  EXPECT_FLOAT_EQ(middle.AsFloat()[1], 4.0f);
+
+  NodeProto concat = MakeNode("ConcatFromSequence", {"seq"}, {"flat"});
+  AttributeProto *axis = concat.add_attribute();
+  axis->set_name("axis");
+  axis->set_type(AttributeProto::INT);
+  axis->set_i(0);
+  RunNode(concat, rt);
+  const Tensor &flat = rt.tensors().at("flat");
+  EXPECT_EQ(flat.shape, std::vector<int64_t>({6}));
+  const float *p = flat.AsFloat();
+  for (int i = 0; i < 6; ++i) {
+    EXPECT_FLOAT_EQ(p[i], static_cast<float>(i + 1));
+  }
+}
+
+TEST(RunNodes, RunNodeSequenceEmptyInsertEraseFromDispatchTable) {
+  RuntimeContext rt(KernelContext(DefaultOpset(11)));
+  rt.tensors()["a"] = Tensor::FromFloat("a", {1}, {7.0f});
+  rt.tensors()["b"] = Tensor::FromFloat("b", {1}, {8.0f});
+
+  NodeProto empty = MakeNode("SequenceEmpty", {}, {"seq0"});
+  AttributeProto *dtype = empty.add_attribute();
+  dtype->set_name("dtype");
+  dtype->set_type(AttributeProto::INT);
+  dtype->set_i(static_cast<int64_t>(onnx_kernels::DataType::FLOAT));
+  RunNode(empty, rt);
+  ASSERT_TRUE(rt.HasSequence("seq0"));
+  EXPECT_TRUE(rt.GetSequence("seq0").empty());
+
+  RunNode(MakeNode("SequenceInsert", {"seq0", "a"}, {"seq1"}), rt);
+  EXPECT_EQ(rt.GetSequence("seq1").size(), 1u);
+  RunNode(MakeNode("SequenceInsert", {"seq1", "b"}, {"seq2"}), rt);
+  EXPECT_EQ(rt.GetSequence("seq2").size(), 2u);
+
+  RunNode(MakeNode("SequenceErase", {"seq2"}, {"seq3"}), rt);
+  EXPECT_EQ(rt.GetSequence("seq3").size(), 1u);
+  EXPECT_FLOAT_EQ(rt.GetSequence("seq3").at(0).AsFloat()[0], 7.0f);
+}
+
+TEST(RunNodes, RunNodeSplitToSequenceFromDispatchTable) {
+  RuntimeContext rt(KernelContext(DefaultOpset(11)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+
+  NodeProto split = MakeNode("SplitToSequence", {"x"}, {"out"});
+  AttributeProto *keepdims = split.add_attribute();
+  keepdims->set_name("keepdims");
+  keepdims->set_type(AttributeProto::INT);
+  keepdims->set_i(0);
+  RunNode(split, rt);
+
+  ASSERT_TRUE(rt.HasSequence("out"));
+  const auto &seq = rt.GetSequence("out");
+  EXPECT_EQ(seq.size(), 3u);
+  for (size_t i = 0; i < 3; ++i) {
+    EXPECT_EQ(seq.at(i).shape, std::vector<int64_t>({2}));
+    EXPECT_FLOAT_EQ(seq.at(i).AsFloat()[0], static_cast<float>(2 * i + 1));
+    EXPECT_FLOAT_EQ(seq.at(i).AsFloat()[1], static_cast<float>(2 * i + 2));
+  }
 }
 
 } // namespace Test

@@ -198,6 +198,7 @@ TEST(BackendRunModel, Swish) { RunBackendCasesFor("Swish"); }
 TEST(BackendRunModel, ThresholdedRelu) { RunBackendCasesFor("ThresholdedRelu"); }
 TEST(BackendRunModel, Hardmax) { RunBackendCasesFor("Hardmax"); }
 TEST(BackendRunModel, LogSoftmax) { RunBackendCasesFor("LogSoftmax"); }
+TEST(BackendRunModel, Flatten) { RunBackendCasesFor("Flatten"); }
 TEST(BackendRunModel, Softmax) { RunBackendCasesFor("Softmax"); }
 TEST(BackendRunModel, HardSigmoid) { RunBackendCasesFor("HardSigmoid"); }
 TEST(BackendRunModel, Selu) { RunBackendCasesFor("Selu"); }
@@ -205,6 +206,9 @@ TEST(BackendRunModel, Shrink) { RunBackendCasesFor("Shrink"); }
 TEST(BackendRunModel, Gelu) { RunBackendCasesFor("Gelu"); }
 TEST(BackendRunModel, Mod) { RunBackendCasesFor("Mod"); }
 TEST(BackendRunModel, Clip) { RunBackendCasesFor("Clip"); }
+TEST(BackendRunModel, Compress) { RunBackendCasesFor("Compress"); }
+TEST(BackendRunModel, CumSum) { RunBackendCasesFor("CumSum"); }
+TEST(BackendRunModel, CumProd) { RunBackendCasesFor("CumProd"); }
 TEST(BackendRunModel, DFT) { RunBackendCasesFor("DFT"); }
 TEST(BackendRunModel, STFT) { RunBackendCasesFor("STFT"); }
 TEST(BackendRunModel, Attention) {
@@ -214,17 +218,21 @@ TEST(BackendRunModel, Attention) {
   });
 }
 TEST(BackendRunModel, Cast) { RunBackendCasesFor("Cast"); }
+TEST(BackendRunModel, CenterCropPad) { RunBackendCasesFor("CenterCropPad"); }
+TEST(BackendRunModel, Pad) { RunBackendCasesFor("Pad"); }
 TEST(BackendRunModel, BitCast) { RunBackendCasesFor("BitCast"); }
 TEST(BackendRunModel, CausalConvWithState) { RunBackendCasesFor("CausalConvWithState"); }
 TEST(BackendRunModel, Conv) { RunBackendCasesFor("Conv"); }
 TEST(BackendRunModel, ConvInteger) { RunBackendCasesFor("ConvInteger"); }
 TEST(BackendRunModel, DeformConv) { RunBackendCasesFor("DeformConv"); }
 TEST(BackendRunModel, DepthToSpace) { RunBackendCasesFor("DepthToSpace"); }
+TEST(BackendRunModel, Upsample) { RunBackendCasesFor("Upsample"); }
 TEST(BackendRunModel, BatchNormalization) { RunBackendCasesFor("BatchNormalization"); }
 TEST(BackendRunModel, GroupNormalization) { RunBackendCasesFor("GroupNormalization"); }
 TEST(BackendRunModel, InstanceNormalization) { RunBackendCasesFor("InstanceNormalization"); }
 TEST(BackendRunModel, LayerNormalization) { RunBackendCasesFor("LayerNormalization"); }
 TEST(BackendRunModel, RMSNormalization) { RunBackendCasesFor("RMSNormalization"); }
+TEST(BackendRunModel, Dropout) { RunBackendCasesFor("Dropout"); }
 TEST(BackendRunModel, AveragePool) { RunBackendCasesFor("AveragePool"); }
 TEST(BackendRunModel, MaxPool) {
   RunBackendCasesFor(
@@ -248,6 +256,19 @@ TEST(BackendRunModel, Adagrad) { RunBackendCasesFor("Adagrad"); }
 TEST(BackendRunModel, Adam) { RunBackendCasesFor("Adam"); }
 TEST(BackendRunModel, Momentum) { RunBackendCasesFor("Momentum"); }
 
+// Random / sampling kernels (ai.onnx).
+TEST(BackendRunModel, Bernoulli) { RunBackendCasesFor("Bernoulli"); }
+TEST(BackendRunModel, RandomNormal) { RunBackendCasesFor("RandomNormal"); }
+TEST(BackendRunModel, RandomNormalLike) { RunBackendCasesFor("RandomNormalLike"); }
+TEST(BackendRunModel, RandomUniform) { RunBackendCasesFor("RandomUniform"); }
+TEST(BackendRunModel, RandomUniformLike) { RunBackendCasesFor("RandomUniformLike"); }
+TEST(BackendRunModel, Multinomial) { RunBackendCasesFor("Multinomial"); }
+
+// Window-generation kernels (ai.onnx, opset 17).
+TEST(BackendRunModel, BlackmanWindow) { RunBackendCasesFor("BlackmanWindow"); }
+TEST(BackendRunModel, HannWindow) { RunBackendCasesFor("HannWindow"); }
+TEST(BackendRunModel, HammingWindow) { RunBackendCasesFor("HammingWindow"); }
+
 // ai.onnx.ml kernels.
 TEST(BackendRunModel, SVMRegressor) { RunBackendCasesFor("SVMRegressor"); }
 TEST(BackendRunModel, SVMClassifier) { RunBackendCasesFor("SVMClassifier"); }
@@ -258,6 +279,7 @@ TEST(BackendRunModel, TreeEnsembleClassifier) { RunBackendCasesFor("TreeEnsemble
 TEST(BackendRunModel, TreeEnsemble) { RunBackendCasesFor("TreeEnsemble"); }
 TEST(BackendRunModel, ArrayFeatureExtractor) { RunBackendCasesFor("ArrayFeatureExtractor"); }
 TEST(BackendRunModel, Binarizer) { RunBackendCasesFor("Binarizer"); }
+TEST(BackendRunModel, FeatureVectorizer) { RunBackendCasesFor("FeatureVectorizer"); }
 TEST(BackendRunModel, LabelEncoder) { RunBackendCasesFor("LabelEncoder"); }
 
 // Quantization kernels.
@@ -307,6 +329,19 @@ TEST(BackendRunModel, DequantizeLinear) {
   });
 }
 TEST(BackendRunModel, DynamicQuantizeLinear) { RunBackendCasesFor("DynamicQuantizeLinear"); }
+
+// The reference QLinearMatMul kernel only supports per-tensor quantization
+// (scalar scales/zero-points) with FLOAT scales. Skip FLOAT16-scale cases.
+TEST(BackendRunModel, QLinearMatMul) {
+  RunBackendCasesFor("QLinearMatMul", [](const DataSet &ds) {
+    if (ds.inputs.size() < 8 || ds.inputs[1].element_count() != 1) {
+      return false;
+    }
+    return ds.inputs[1].data_type == static_cast<int32_t>(DataType::FLOAT) &&
+           ds.inputs[4].data_type == static_cast<int32_t>(DataType::FLOAT) &&
+           ds.inputs[6].data_type == static_cast<int32_t>(DataType::FLOAT);
+  });
+}
 
 // LinearAttention (opset 27) and FlexAttention (ai.onnx.preview) kernels.
 TEST(BackendRunModel, LinearAttention) {

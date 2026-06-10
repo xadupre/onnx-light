@@ -172,6 +172,18 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 2);
          nn::ComputeShapeLayerNormalization(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:LinearAttention",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 3);
+         const std::string q_name = node.input(0).as_string();
+         const std::string k_name = node.input(1).as_string();
+         const std::string v_name = node.input(2).as_string();
+         const std::string past_state_name =
+             node.input_size() > 3 ? node.input(3).as_string() : "";
+         nn::ComputeShapeLinearAttention(
+             ctx, node, q_name.c_str(), k_name.c_str(), v_name.c_str(),
+             past_state_name.empty() ? nullptr : past_state_name.c_str());
+       }},
       {"ai.onnx:MeanVarianceNormalization",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

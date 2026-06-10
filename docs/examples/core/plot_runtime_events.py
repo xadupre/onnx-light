@@ -97,10 +97,11 @@ print(f"y = {y}")
 # ``data_type``, ``shape``, the number of element values captured
 # (``value_count``) and the first few element values themselves.
 #
-# Because the event buffer is fixed-size (capped at 8 entries),
-# tensors with more than 8 elements are summarised: ``data_type``
-# is set to ``-1`` and ``shape`` is left empty to signal the
-# truncated payload.
+# Each event stores at most a fixed number of element values
+# (currently 8) from the recorded tensor. Tensors with more
+# elements are summarised: ``data_type`` is set to ``-1`` and
+# ``shape`` is left empty to signal the truncated payload. The
+# total number of events in the log itself is unbounded.
 
 events = ctx.events()
 print(f"Recorded {len(events)} event(s):")

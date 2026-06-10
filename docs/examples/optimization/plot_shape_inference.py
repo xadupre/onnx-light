@@ -25,7 +25,7 @@ The three approaches compared here are:
   initializer *shapes* only; the ``[0, 0, -1]`` values are not
   propagated, so the Reshape output carries symbolic placeholders.
 * **node-by-node (with value propagation)** — additionally calls
-  :meth:`~onnx_light.onnx_py._onnxpy.shape_inference.OptimTensor.set_value_as_shape`
+  :meth:`~onnx_light.onnx_optim.shape_inference.OptimTensor.set_value_as_shape`
   for each initializer, enabling full resolution of ``Z``.
 
 The final plot shows the last inferred dimension for each tensor under

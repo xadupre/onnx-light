@@ -912,6 +912,63 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          SetOutput(node, 0, k(input, dft_length, axis, onesided, inverse), rt);
        }},
       {"ai.onnx:Div", MakeBinaryTrampoline<kernel::Div>()},
+      {"ai.onnx:Dropout",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputRange(node, 1, 3);
+         RequireOutputRange(node, 1, 2);
+         const Tensor &data = GetInput(node, 0, rt.tensors());
+
+         // ``ratio``: from input[1] (scalar T1) when present, else from the
+         // pre-opset-12 ``ratio`` attribute (FLOAT, default 0.5).
+         float ratio = GetAttributeFloatOrDefault(node, "ratio", 0.5f);
+         const Tensor *ratio_input = GetOptionalInput(node, 1, rt.tensors());
+         if (ratio_input != nullptr) {
+           if (ratio_input->element_count() != 1) {
+             throw std::invalid_argument(
+                 "RunNode: op 'Dropout' input 'ratio' must be a scalar tensor.");
+           }
+           switch (ratio_input->data_type) {
+           case static_cast<int32_t>(DataType::FLOAT):
+             ratio = ratio_input->AsFloat()[0];
+             break;
+           case static_cast<int32_t>(DataType::DOUBLE):
+             ratio = static_cast<float>(ratio_input->AsDouble()[0]);
+             break;
+           default:
+             throw std::invalid_argument(
+                 "RunNode: op 'Dropout' input 'ratio' must be FLOAT or DOUBLE.");
+           }
+         }
+
+         // ``training_mode``: from input[2] (scalar BOOL) when present,
+         // otherwise defaults to false (inference behaviour).
+         bool training_mode = false;
+         const Tensor *training_input = GetOptionalInput(node, 2, rt.tensors());
+         if (training_input != nullptr) {
+           if (training_input->element_count() != 1) {
+             throw std::invalid_argument(
+                 "RunNode: op 'Dropout' input 'training_mode' must be a scalar tensor.");
+           }
+           if (training_input->data_type != static_cast<int32_t>(DataType::BOOL)) {
+             throw std::invalid_argument(
+                 "RunNode: op 'Dropout' input 'training_mode' must be BOOL.");
+           }
+           training_mode = training_input->AsBool()[0] != 0;
+         }
+
+         const int64_t seed = GetAttributeIntOrDefault(node, "seed", kernel::Dropout::kNoSeed);
+
+         kernel::Dropout k(rt.kernel_ctx());
+         if (node.output_size() == 2) {
+           auto out = k(data, ratio, training_mode, seed);
+           SetOutput(node, 0, std::move(out.first), rt);
+           SetOutput(node, 1, std::move(out.second), rt);
+         } else {
+           Tensor mask("", static_cast<int32_t>(DataType::BOOL), data.shape,
+                       std::vector<uint8_t>(static_cast<std::size_t>(data.element_count()), 1));
+           SetOutput(node, 0, k(data, ratio, training_mode, mask, seed), rt);
+         }
+       }},
       {"ai.onnx:DynamicQuantizeLinear",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);

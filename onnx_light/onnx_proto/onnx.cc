@@ -550,9 +550,19 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
         has_location = true;
       } else if (entry.ref_key() == "size" || entry.ref_key() == "length") {
         int64_t size = entry.ref_value().toint64();
-        EXT_ENFORCE(size == static_cast<int64_t>(raw_data_.size()), "Size mismatch ", size,
-                    " != ", static_cast<int64_t>(raw_data_.size()), " name='",
-                    ref_name().as_string(), "'");
+        if (size != static_cast<int64_t>(raw_data_.size())) {
+          if (raw_data_.size() == 0) {
+            EXT_THROW(
+                "Tensor '", ref_name().as_string(),
+                "' is marked EXTERNAL but its raw_data is empty while serializing external data. "
+                "This usually means the model was loaded with load_external_data=False. "
+                "Reload it with load_external_data=True, call load_external_data_for_model(), "
+                "or use save_model_with_shared_external_data() to reuse the existing weights "
+                "file.");
+          }
+          EXT_THROW("Size mismatch ", size, " != ", static_cast<int64_t>(raw_data_.size()),
+                    " name='", ref_name().as_string(), "'");
+        }
         has_size = true;
       } else if (entry.ref_key() == "offset") {
         expected_offset = entry.ref_value().toint64();

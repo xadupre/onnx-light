@@ -128,6 +128,7 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx:DepthToSpace"), table.end());
   EXPECT_NE(table.find("ai.onnx:Gather"), table.end());
   EXPECT_NE(table.find("ai.onnx:GatherND"), table.end());
+  EXPECT_NE(table.find("ai.onnx:Pad"), table.end());
   // Logical / bitwise kernels.
   EXPECT_NE(table.find("ai.onnx:And"), table.end());
   EXPECT_NE(table.find("ai.onnx:Or"), table.end());

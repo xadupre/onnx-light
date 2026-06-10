@@ -74,6 +74,12 @@ void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry) {
   GraphProto *graph = model.add_graph();
   graph->set_name(name);
 
+  AddInitializer<int64_t>(*graph, "zero", {1}, {0});
+  AddInitializer<int64_t>(*graph, "un", {1}, {1});
+  AddInitializer<int64_t>(*graph, "shape1", {3}, {0, -1, 128});
+  AddInitializer<int64_t>(*graph, "shape2", {3}, {-1, 128, 64});
+  AddInitializer<int64_t>(*graph, "shape3", {4}, {3, 5, 32, 64});
+
   AddNode(*graph, "Unsqueeze", {"X", "zero"}, {"xu1"});
   AddNode(*graph, "Unsqueeze", {"xu1", "un"}, {"xu2"});
   AddNode(*graph, "Reshape", {"xu2", "shape1"}, {"xm1"});
@@ -83,11 +89,6 @@ void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry) {
   AddNode(*graph, "MatMul", {"xm1", "xm2"}, {"xm"});
   AddNode(*graph, "Reshape", {"xm", "shape3"}, {"Z"});
 
-  AddInitializer<int64_t>(*graph, "zero", {1}, {0});
-  AddInitializer<int64_t>(*graph, "un", {1}, {1});
-  AddInitializer<int64_t>(*graph, "shape1", {3}, {1, 32, 128});
-  AddInitializer<int64_t>(*graph, "shape2", {3}, {15, 128, 64});
-  AddInitializer<int64_t>(*graph, "shape3", {4}, {3, 5, 32, 64});
 
   // Graph inputs: X uses symbolic dims (D32, D128); Y uses a mix of symbolic
   // (batch, channel, D128, D64) dims that resolve to concrete sizes in the
@@ -99,23 +100,15 @@ void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry) {
   // should recover. These are stripped by ``SnapshotAndStripValueInfo`` in
   // the ``AllCollectedCasesInferOutputShapes`` test and used as the ground
   // truth.
-  AppendValueInfo(*graph->add_value_info(), "xu1", DataType::FLOAT,
-                  {DimSpec(int64_t{1}), "D32", "D128"});
-  AppendValueInfo(*graph->add_value_info(), "xu2", DataType::FLOAT,
-                  {DimSpec(int64_t{1}), DimSpec(int64_t{1}), "D32", "D128"});
-  AppendValueInfo(*graph->add_value_info(), "xm1", DataType::FLOAT,
-                  {DimSpec(int64_t{1}), DimSpec(int64_t{32}), DimSpec(int64_t{128})});
-  AppendValueInfo(*graph->add_value_info(), "xm2c", DataType::FLOAT,
-                  {DimSpec(int64_t{15}), DimSpec(int64_t{128}), DimSpec(int64_t{64})});
-  AppendValueInfo(*graph->add_value_info(), "xm2", DataType::FLOAT,
-                  {DimSpec(int64_t{15}), DimSpec(int64_t{128}), DimSpec(int64_t{64})});
-  AppendValueInfo(*graph->add_value_info(), "xm", DataType::FLOAT,
-                  {DimSpec(int64_t{15}), DimSpec(int64_t{32}), DimSpec(int64_t{64})});
+  AppendValueInfo(*graph->add_value_info(), "xu1", DataType::FLOAT, {DimSpec(1), "D32", "D128"});
+  AppendValueInfo(*graph->add_value_info(), "xu2", DataType::FLOAT, {DimSpec(1), DimSpec(1), "D32", "D128"});
+  AppendValueInfo(*graph->add_value_info(), "xm1", DataType::FLOAT, {DimSpec(1), "D32", "D128"});
+  AppendValueInfo(*graph->add_value_info(), "xm2c", DataType::FLOAT, {"batch*channel", "D128", "D64"});
+  AppendValueInfo(*graph->add_value_info(), "xm2", DataType::FLOAT, {"batch*channel", "D128", "D64"});
+  AppendValueInfo(*graph->add_value_info(), "xm", DataType::FLOAT, {"batch*channel", "D128", "D64"});
 
   // Graph output Z — concrete dims recovered from the final Reshape.
-  AppendValueInfo(
-      *graph->add_output(), "Z", DataType::FLOAT,
-      {DimSpec(int64_t{3}), DimSpec(int64_t{5}), DimSpec(int64_t{32}), DimSpec(int64_t{64})});
+  AppendValueInfo(*graph->add_output(), "Z", DataType::FLOAT, {"batch", "channel", "D32", "D64");
 
   // Build the reference DataSet — concrete D32=32, D128=128, batch=3,
   // channel=5, D64=64 tensors, then run the kernels to materialise Z.
@@ -205,7 +198,7 @@ void RegisterReshapeReshapeShapeInferenceCases(std::vector<TestCase> &registry) 
   // check is independent of how shape inference renders the symbolic
   // division.
   AppendValueInfo(*graph->add_value_info(), "xr", DataType::FLOAT,
-                  {"a", "b", DimSpec(int64_t{2}), DimSpec()});
+                  {"a", "b", DimSpec(2), "c//2"});
   AppendValueInfo(*graph->add_value_info(), "xrr", DataType::FLOAT, {"a", "b", "c"});
 
   // Graph output Y — same symbolic dims as X.
@@ -428,13 +421,13 @@ void RegisterConcatSplitShapeInferenceCases(std::vector<TestCase> &registry) {
 
   // Intermediate value_info — leave the concat axis dim unannotated; shape
   // inference renders it as a fresh symbolic dim (e.g. ``Concat_axis1``).
-  AppendValueInfo(*graph->add_value_info(), "xy", DataType::FLOAT, {"a", DimSpec()});
-  AppendValueInfo(*graph->add_value_info(), "S1", DataType::FLOAT, {"a", DimSpec()});
-  AppendValueInfo(*graph->add_value_info(), "S2", DataType::FLOAT, {"a", DimSpec()});
-  AppendValueInfo(*graph->add_value_info(), "zs", DataType::FLOAT, {"a", DimSpec()});
+  AppendValueInfo(*graph->add_value_info(), "xy", DataType::FLOAT, {"a", "b+c"});
+  AppendValueInfo(*graph->add_value_info(), "S1", DataType::FLOAT, {"a", "(b+c)//2"});
+  AppendValueInfo(*graph->add_value_info(), "S2", DataType::FLOAT, {"a", "(b+c)//2"});
+  AppendValueInfo(*graph->add_value_info(), "zs", DataType::FLOAT, {"a", "b+c"});
 
   // Graph output Z — same shape as zs.
-  AppendValueInfo(*graph->add_output(), "Z", DataType::FLOAT, {"a", "e"});
+  AppendValueInfo(*graph->add_output(), "Z", DataType::FLOAT, {"a", "b+c"});
 
   // Build the reference DataSet — concrete a=3, b=4, c=6 tensors so that
   // b + c = 10 is divisible by 2 and Split produces two (3, 5) halves.

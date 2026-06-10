@@ -850,6 +850,28 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
       {"ai.onnx:Cos", MakeUnaryTrampoline<kernel::Cos>()},
       {"ai.onnx:Cosh", MakeUnaryTrampoline<kernel::Cosh>()},
+      {"ai.onnx:CumSum",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const Tensor &axis = GetInput(node, 1, rt.tensors());
+         const bool exclusive = GetAttributeIntOrDefault(node, "exclusive", 0) != 0;
+         const bool reverse = GetAttributeIntOrDefault(node, "reverse", 0) != 0;
+         kernel::CumSum k(rt.kernel_ctx());
+         SetOutput(node, 0, k(x, axis, exclusive, reverse), rt);
+       }},
+      {"ai.onnx:CumProd",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const Tensor &axis = GetInput(node, 1, rt.tensors());
+         const bool exclusive = GetAttributeIntOrDefault(node, "exclusive", 0) != 0;
+         const bool reverse = GetAttributeIntOrDefault(node, "reverse", 0) != 0;
+         kernel::CumProd k(rt.kernel_ctx());
+         SetOutput(node, 0, k(x, axis, exclusive, reverse), rt);
+       }},
       {"ai.onnx:DeformConv",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 3);

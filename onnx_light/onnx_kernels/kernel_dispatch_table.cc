@@ -1074,8 +1074,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          RequireInputCount(node, 0);
          RequireOutputCount(node, 1);
          const std::vector<int64_t> shape = GetAttributeIntsOrDefault(node, "shape", {});
-         const double mean = GetAttributeFloatOrDefault(node, "mean", 0.0f);
-         const double scale = GetAttributeFloatOrDefault(node, "scale", 1.0f);
+         const float mean = GetAttributeFloatOrDefault(node, "mean", 0.0f);
+         const float scale = GetAttributeFloatOrDefault(node, "scale", 1.0f);
          const int64_t seed = GetSeedAttr(node);
          const int32_t dtype = static_cast<int32_t>(GetAttributeIntOrDefault(node, "dtype", 0));
          kernel::RandomNormal kernel(rt.kernel_ctx());
@@ -1086,8 +1086,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          RequireInputCount(node, 1);
          RequireOutputCount(node, 1);
          const Tensor &input = GetInput(node, 0, rt.tensors());
-         const double mean = GetAttributeFloatOrDefault(node, "mean", 0.0f);
-         const double scale = GetAttributeFloatOrDefault(node, "scale", 1.0f);
+         const float mean = GetAttributeFloatOrDefault(node, "mean", 0.0f);
+         const float scale = GetAttributeFloatOrDefault(node, "scale", 1.0f);
          const int64_t seed = GetSeedAttr(node);
          const int32_t dtype = static_cast<int32_t>(GetAttributeIntOrDefault(node, "dtype", 0));
          kernel::RandomNormalLike kernel(rt.kernel_ctx());
@@ -1098,8 +1098,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          RequireInputCount(node, 0);
          RequireOutputCount(node, 1);
          const std::vector<int64_t> shape = GetAttributeIntsOrDefault(node, "shape", {});
-         const double low = GetAttributeFloatOrDefault(node, "low", 0.0f);
-         const double high = GetAttributeFloatOrDefault(node, "high", 1.0f);
+         const float low = GetAttributeFloatOrDefault(node, "low", 0.0f);
+         const float high = GetAttributeFloatOrDefault(node, "high", 1.0f);
          const int64_t seed = GetSeedAttr(node);
          const int32_t dtype = static_cast<int32_t>(GetAttributeIntOrDefault(node, "dtype", 0));
          kernel::RandomUniform kernel(rt.kernel_ctx());
@@ -1110,8 +1110,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          RequireInputCount(node, 1);
          RequireOutputCount(node, 1);
          const Tensor &input = GetInput(node, 0, rt.tensors());
-         const double low = GetAttributeFloatOrDefault(node, "low", 0.0f);
-         const double high = GetAttributeFloatOrDefault(node, "high", 1.0f);
+         const float low = GetAttributeFloatOrDefault(node, "low", 0.0f);
+         const float high = GetAttributeFloatOrDefault(node, "high", 1.0f);
          const int64_t seed = GetSeedAttr(node);
          const int32_t dtype = static_cast<int32_t>(GetAttributeIntOrDefault(node, "dtype", 0));
          kernel::RandomUniformLike kernel(rt.kernel_ctx());

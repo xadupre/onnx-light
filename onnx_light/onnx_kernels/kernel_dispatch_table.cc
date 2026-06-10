@@ -932,6 +932,22 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Softsign", MakeUnaryTrampoline<kernel::Softsign>()},
       {"ai.onnx:Sqrt", MakeUnaryTrampoline<kernel::Sqrt>()},
       {"ai.onnx:Squeeze", MakeSqueezeLikeTrampoline<kernel::Squeeze>("Squeeze")},
+      {"ai.onnx:STFT",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 2);
+         if (node.input_size() > 4) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects at most 4 inputs.");
+         }
+         RequireOutputCount(node, 1);
+         const Tensor &signal = GetInput(node, 0, rt.tensors());
+         const Tensor &frame_step = GetInput(node, 1, rt.tensors());
+         const Tensor *window = GetOptionalInput(node, 2, rt.tensors());
+         const Tensor *frame_length = GetOptionalInput(node, 3, rt.tensors());
+         const bool onesided = GetAttributeIntOrDefault(node, "onesided", 1) != 0;
+         kernel::STFT k(rt.kernel_ctx());
+         SetOutput(node, 0, k(signal, frame_step, window, frame_length, onesided), rt.tensors());
+       }},
       {"ai.onnx:Sub", MakeBinaryTrampoline<kernel::Sub>()},
       {"ai.onnx:Sum", MakeVariadicTrampoline<kernel::Sum>()},
       {"ai.onnx:Swish", MakeUnaryAlphaTrampoline<kernel::Swish>("alpha", 1.0f)},

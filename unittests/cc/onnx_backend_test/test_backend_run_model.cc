@@ -206,6 +206,7 @@ TEST(BackendRunModel, Gelu) { RunBackendCasesFor("Gelu"); }
 TEST(BackendRunModel, Mod) { RunBackendCasesFor("Mod"); }
 TEST(BackendRunModel, Clip) { RunBackendCasesFor("Clip"); }
 TEST(BackendRunModel, DFT) { RunBackendCasesFor("DFT"); }
+TEST(BackendRunModel, STFT) { RunBackendCasesFor("STFT"); }
 TEST(BackendRunModel, Attention) {
   RunBackendCasesFor("Attention", [](const DataSet &ds) {
     return ds.inputs.size() >= 3 && ds.inputs[0].data_type == DataType::FLOAT &&

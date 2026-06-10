@@ -959,6 +959,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::EyeLike kernel(rt.kernel_ctx());
          SetOutput(node, 0, kernel(x, k, static_cast<int32_t>(dtype)), rt);
        }},
+      {"ai.onnx:Flatten", MakeAxisTrampoline<kernel::Flatten>(1)},
       {"ai.onnx:Floor", MakeUnaryTrampoline<kernel::Floor>()},
       {"ai.onnx:Gather",
        [](const NodeProto &node, RuntimeContext &rt) {

@@ -198,6 +198,7 @@ TEST(BackendRunModel, Swish) { RunBackendCasesFor("Swish"); }
 TEST(BackendRunModel, ThresholdedRelu) { RunBackendCasesFor("ThresholdedRelu"); }
 TEST(BackendRunModel, Hardmax) { RunBackendCasesFor("Hardmax"); }
 TEST(BackendRunModel, LogSoftmax) { RunBackendCasesFor("LogSoftmax"); }
+TEST(BackendRunModel, Flatten) { RunBackendCasesFor("Flatten"); }
 TEST(BackendRunModel, Softmax) { RunBackendCasesFor("Softmax"); }
 TEST(BackendRunModel, HardSigmoid) { RunBackendCasesFor("HardSigmoid"); }
 TEST(BackendRunModel, Selu) { RunBackendCasesFor("Selu"); }

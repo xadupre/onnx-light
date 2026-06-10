@@ -48,7 +48,7 @@ def rand(*shape: int, seed: int | np.integer | None = None) -> np.ndarray:
     Returns:
         A ``np.ndarray`` of float64 values with the requested shape.
     """
-    from ..onnx_py._onnxpykernels import backend as _C  # type: ignore[attr-defined]
+    from ...onnx_py._onnxpykernels import backend as _C  # type: ignore[attr-defined]
 
     normalized_shape = _normalize_size(shape)
     values = _C.rand(list(normalized_shape), _normalize_seed(seed))
@@ -75,7 +75,7 @@ def randint(
     Returns:
         A ``np.ndarray`` of integers with the requested shape.
     """
-    from ..onnx_py._onnxpykernels import backend as _C  # type: ignore[attr-defined]
+    from ...onnx_py._onnxpykernels import backend as _C  # type: ignore[attr-defined]
 
     assert size is not None, "size cannot be None"
     if high is None:
@@ -104,7 +104,7 @@ def randn(*shape: int, seed: int | np.integer | None = None) -> np.ndarray:
     Returns:
         A ``np.ndarray`` of float64 values with the requested shape.
     """
-    from ..onnx_py._onnxpykernels import backend as _C  # type: ignore[attr-defined]
+    from ...onnx_py._onnxpykernels import backend as _C  # type: ignore[attr-defined]
 
     normalized_shape = _normalize_size(shape)
     values = _C.randn(list(normalized_shape), _normalize_seed(seed))

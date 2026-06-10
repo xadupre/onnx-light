@@ -142,7 +142,7 @@ class CoverageReport:
 
 def _load_light_schemas() -> list[Any]:
     """Loads ``LightOpSchema`` objects from the C++ ``onnx_op`` extension."""
-    from ..onnx_py._onnxpyprotoop import onnx_op as _op  # type: ignore[attr-defined]
+    from ...onnx_py._onnxpyprotoop import onnx_op as _op  # type: ignore[attr-defined]
 
     return list(_op.GetAllOnnxOpSchemasWithHistory())
 
@@ -155,7 +155,7 @@ def _to_type_string(allowed_type: Any) -> str:
     """
     if isinstance(allowed_type, str):
         return allowed_type
-    from ..onnx_py._onnxpyprotoop import onnx_op as _op  # type: ignore[attr-defined]
+    from ...onnx_py._onnxpyprotoop import onnx_op as _op  # type: ignore[attr-defined]
 
     return _op.ToTypeString(allowed_type)
 

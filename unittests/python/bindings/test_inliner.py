@@ -7,7 +7,7 @@ import unittest
 
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx.checker as checker
-import onnx_light.onnx.checker as defs
+import onnx_light.onnx.defs as defs
 import onnx_light.onnx.inliner as inliner
 import onnx_light.onnx.parser as parser
 

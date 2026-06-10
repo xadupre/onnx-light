@@ -20,6 +20,17 @@ from __future__ import annotations
 
 from ..onnx_py._onnxpyoptim import shape_inference as _C  # type: ignore[attr-defined]
 
+apply_inferred_shapes_to_model = _C.apply_inferred_shapes_to_model
+check_inputs_available = _C.check_inputs_available
+compute_shape_model = _C.compute_shape_model
+compute_shape_node = _C.compute_shape_node
+kUnknownOpsetVersion = _C.kUnknownOpsetVersion
+kOnnxDomain = _C.kOnnxDomain
+OptimDim = _C.OptimDim
+OptimShape = _C.OptimShape
+OptimTensor = _C.OptimTensor
+ShapesContext = _C.ShapesContext
+
 
 def infer_shapes_model(model, prefill_with_value_info_output: bool = False) -> None:
     """Runs shape inference on a ``ModelProto`` in place.

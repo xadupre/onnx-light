@@ -85,17 +85,17 @@ print(model)
 infer_shapes_model(model)
 
 
-def _shape_of(type_proto):
+def shape_of(type_proto):
     return tuple(
         d.dim_param if d.dim_param else int(d.dim_value) for d in type_proto.tensor_type.shape.dim
     )
 
 
-inferred_shapes = {vi.name: _shape_of(vi.type) for vi in model.graph.value_info}
+inferred_shapes = {vi.name: shape_of(vi.type) for vi in model.graph.value_info}
 for inp in model.graph.input:
-    inferred_shapes[inp.name] = _shape_of(inp.type)
+    inferred_shapes[inp.name] = shape_of(inp.type)
 for out in model.graph.output:
-    inferred_shapes[out.name] = _shape_of(out.type)
+    inferred_shapes[out.name] = shape_of(out.type)
 
 print("Statically inferred shapes (may contain symbolic dimensions):")
 for name, shape in inferred_shapes.items():
@@ -118,7 +118,7 @@ context = {"N": int(x.shape[0])}
 print(f"Symbol context: {context}")
 
 
-def _resolve_shape(shape, context):
+def resolve_shape(shape, context):
     resolved = []
     for d in shape:
         if isinstance(d, int):
@@ -128,9 +128,7 @@ def _resolve_shape(shape, context):
     return tuple(resolved)
 
 
-resolved_shapes = {
-    name: _resolve_shape(shape, context) for name, shape in inferred_shapes.items()
-}
+resolved_shapes = {name: resolve_shape(shape, context) for name, shape in inferred_shapes.items()}
 print("Shapes after evaluate_expression:")
 for name, shape in resolved_shapes.items():
     print(f"  {name:<6s} -> {shape}")

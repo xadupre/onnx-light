@@ -357,6 +357,63 @@ inline Tensor GetAttributeTensorOrEmpty(const NodeProto &node, const std::string
   return TensorFromProto(attr->t());
 }
 
+// Reads the ONNX ``seed`` attribute (declared as FLOAT in the schema for
+// the random generator and Bernoulli/Multinomial ops) and converts it to
+// the ``int64_t`` value expected by the kernel constructors. Returns
+// ``-1`` (the shared ``kNoSeed`` sentinel) when the attribute is absent.
+inline int64_t GetSeedAttr(const NodeProto &node) {
+  if (FindAttribute(node, "seed") == nullptr) {
+    return -1;
+  }
+  return static_cast<int64_t>(GetAttributeFloatOrDefault(node, "seed", 0.0f));
+}
+
+// Reads the ONNX ``dtype`` attribute (INT, default 0) shared by Bernoulli,
+// Multinomial and the four Random* generator ops.
+inline int32_t GetDtypeAttr(const NodeProto &node) {
+  return static_cast<int32_t>(GetAttributeIntOrDefault(node, "dtype", 0));
+}
+
+// Wraps a generator kernel of the form
+// ``Tensor operator()(const std::vector<int64_t>&, float, float, int64_t, int32_t)``
+// (``RandomNormal``, ``RandomUniform``): no inputs, ``shape`` INTS attribute
+// and two FLOAT attributes (``mean``/``scale`` or ``low``/``high``).
+template <class KernelT>
+NodeKernelFn MakeRandomGenTrampoline(const char *attr_a, float default_a, const char *attr_b,
+                                     float default_b) {
+  const std::string name_a(attr_a);
+  const std::string name_b(attr_b);
+  return [name_a, default_a, name_b, default_b](const NodeProto &node, RuntimeContext &rt) {
+    RequireInputCount(node, 0);
+    RequireOutputCount(node, 1);
+    const std::vector<int64_t> shape = GetAttributeIntsOrDefault(node, "shape", {});
+    const float a = GetAttributeFloatOrDefault(node, name_a, default_a);
+    const float b = GetAttributeFloatOrDefault(node, name_b, default_b);
+    KernelT kernel(rt.kernel_ctx());
+    SetOutput(node, 0, kernel(shape, a, b, GetSeedAttr(node), GetDtypeAttr(node)), rt);
+  };
+}
+
+// Wraps a generator kernel of the form
+// ``Tensor operator()(const Tensor&, float, float, int64_t, int32_t)``
+// (``RandomNormalLike``, ``RandomUniformLike``): one input and two FLOAT
+// attributes (``mean``/``scale`` or ``low``/``high``).
+template <class KernelT>
+NodeKernelFn MakeRandomLikeTrampoline(const char *attr_a, float default_a, const char *attr_b,
+                                      float default_b) {
+  const std::string name_a(attr_a);
+  const std::string name_b(attr_b);
+  return [name_a, default_a, name_b, default_b](const NodeProto &node, RuntimeContext &rt) {
+    RequireInputCount(node, 1);
+    RequireOutputCount(node, 1);
+    const Tensor &input = GetInput(node, 0, rt.tensors());
+    const float a = GetAttributeFloatOrDefault(node, name_a, default_a);
+    const float b = GetAttributeFloatOrDefault(node, name_b, default_b);
+    KernelT kernel(rt.kernel_ctx());
+    SetOutput(node, 0, kernel(input, a, b, GetSeedAttr(node), GetDtypeAttr(node)), rt);
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Normalization op helpers
 // ---------------------------------------------------------------------------
@@ -610,6 +667,14 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:BitwiseOr", MakeBinaryTrampoline<kernel::BitwiseOr>()},
       {"ai.onnx:BitwiseXor", MakeBinaryTrampoline<kernel::BitwiseXor>()},
       {"ai.onnx:BatchNormalization", RunBatchNormalization},
+      {"ai.onnx:Bernoulli",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &input = GetInput(node, 0, rt.tensors());
+         kernel::Bernoulli kernel(rt.kernel_ctx());
+         SetOutput(node, 0, kernel(input, GetSeedAttr(node), GetDtypeAttr(node)), rt);
+       }},
       {"ai.onnx:CausalConvWithState",
        [](const NodeProto &node, RuntimeContext &rt) {
          if (node.input_size() < 2 || node.input_size() > 4) {
@@ -1011,6 +1076,15 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          SetOutput(node, 0, k(x, y, fmod), rt);
        }},
       {"ai.onnx:Mul", MakeBinaryTrampoline<kernel::Mul>()},
+      {"ai.onnx:Multinomial",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &input = GetInput(node, 0, rt.tensors());
+         const int64_t sample_size = GetAttributeIntOrDefault(node, "sample_size", 1);
+         kernel::Multinomial kernel(rt.kernel_ctx());
+         SetOutput(node, 0, kernel(input, sample_size, GetSeedAttr(node), GetDtypeAttr(node)), rt);
+       }},
       {"ai.onnx:Neg", MakeUnaryTrampoline<kernel::Neg>()},
       {"ai.onnx:NonMaxSuppression",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -1040,6 +1114,14 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Pow", MakeBinaryTrampoline<kernel::Pow>()},
       {"ai.onnx:PRelu", MakeBinaryTrampoline<kernel::PRelu>()},
       {"ai.onnx:QuantizeLinear", MakeBinaryWithOptionalThirdTrampoline<kernel::QuantizeLinear>()},
+      {"ai.onnx:RandomNormal",
+       MakeRandomGenTrampoline<kernel::RandomNormal>("mean", 0.0f, "scale", 1.0f)},
+      {"ai.onnx:RandomNormalLike",
+       MakeRandomLikeTrampoline<kernel::RandomNormalLike>("mean", 0.0f, "scale", 1.0f)},
+      {"ai.onnx:RandomUniform",
+       MakeRandomGenTrampoline<kernel::RandomUniform>("low", 0.0f, "high", 1.0f)},
+      {"ai.onnx:RandomUniformLike",
+       MakeRandomLikeTrampoline<kernel::RandomUniformLike>("low", 0.0f, "high", 1.0f)},
       {"ai.onnx:RMSNormalization", RunRMSNormalization},
       {"ai.onnx:Reciprocal", MakeUnaryTrampoline<kernel::Reciprocal>()},
       {"ai.onnx:ReduceL1", MakeReduceTrampoline<kernel::ReduceL1>()},

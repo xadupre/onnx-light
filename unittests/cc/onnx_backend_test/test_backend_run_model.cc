@@ -248,6 +248,14 @@ TEST(BackendRunModel, Adagrad) { RunBackendCasesFor("Adagrad"); }
 TEST(BackendRunModel, Adam) { RunBackendCasesFor("Adam"); }
 TEST(BackendRunModel, Momentum) { RunBackendCasesFor("Momentum"); }
 
+// Random / sampling kernels (ai.onnx).
+TEST(BackendRunModel, Bernoulli) { RunBackendCasesFor("Bernoulli"); }
+TEST(BackendRunModel, RandomNormal) { RunBackendCasesFor("RandomNormal"); }
+TEST(BackendRunModel, RandomNormalLike) { RunBackendCasesFor("RandomNormalLike"); }
+TEST(BackendRunModel, RandomUniform) { RunBackendCasesFor("RandomUniform"); }
+TEST(BackendRunModel, RandomUniformLike) { RunBackendCasesFor("RandomUniformLike"); }
+TEST(BackendRunModel, Multinomial) { RunBackendCasesFor("Multinomial"); }
+
 // ai.onnx.ml kernels.
 TEST(BackendRunModel, SVMRegressor) { RunBackendCasesFor("SVMRegressor"); }
 TEST(BackendRunModel, SVMClassifier) { RunBackendCasesFor("SVMClassifier"); }

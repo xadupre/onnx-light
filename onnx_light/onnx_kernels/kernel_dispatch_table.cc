@@ -1474,7 +1474,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          }
 
          int64_t default_i64 = -1;
-         float default_f32 = -0.0f;
+         float default_f32 = 0.0f;
          int16_t default_i16 = -1;
          const AttributeProto *default_int64 = FindAttribute(node, "default_int64");
          const AttributeProto *default_float = FindAttribute(node, "default_float");

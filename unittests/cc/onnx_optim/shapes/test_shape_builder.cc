@@ -811,6 +811,7 @@ TEST(OnnxOptimShapeBuilder, AddConcatReshapeComputesSymbolicShapes) {
   EXPECT_EQ(ctx.Get("Z").Dtype(), onnx_optim::TensorType::kFloat);
   CheckSymbolicDim(ctx, "Z", 0, "batch");
   CheckSymbolicDim(ctx, "Z", 1, "seq");
+  CheckSymbolicDim(ctx, "Z", 2, "2*d_model");
 }
 
 // ── attribute-helper tests ──────────────────────────────────────────────────

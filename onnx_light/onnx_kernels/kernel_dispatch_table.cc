@@ -1149,6 +1149,21 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
       {"ai.onnx:Greater", MakeBinaryTrampoline<kernel::Greater>()},
       {"ai.onnx:GreaterOrEqual", MakeBinaryTrampoline<kernel::GreaterOrEqual>()},
+      {"ai.onnx:GridSample",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const Tensor &grid = GetInput(node, 1, rt.tensors());
+         kernel::GridSample::Attributes attrs;
+         attrs.mode = GetAttributeStringOrDefault(node, "mode", attrs.mode);
+         attrs.padding_mode =
+             GetAttributeStringOrDefault(node, "padding_mode", attrs.padding_mode);
+         attrs.align_corners =
+             GetAttributeIntOrDefault(node, "align_corners", attrs.align_corners);
+         kernel::GridSample k(rt.kernel_ctx());
+         SetOutput(node, 0, k(x, grid, attrs), rt);
+       }},
       {"ai.onnx:GroupNormalization", RunGroupNormalization},
       {"ai.onnx:GRU",
        [](const NodeProto &node, RuntimeContext &rt) {

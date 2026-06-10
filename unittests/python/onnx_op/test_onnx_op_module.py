@@ -3,7 +3,7 @@
 import unittest
 
 from onnx_light.ext_test_case import ExtTestCase
-import onnx_light.onnx_py._onnxpyprotoop as op
+import onnx_light.onnx_op as op
 
 
 class TestOnnxOpModule(ExtTestCase):

@@ -9,6 +9,7 @@ from ..onnx_proto._helper import (  # noqa: F401
     make_map_type_proto,
     make_model,
     make_node,
+    make_operatorsetid,
     make_opsetid,
     make_optional,
     make_optional_type_proto,
@@ -26,4 +27,5 @@ from ..onnx_proto._helper import (  # noqa: F401
     set_metadata_props,
     set_model_props,
     tensor_dtype_to_np_dtype,
+    tensor_dtype_to_storage_tensor_dtype,
 )

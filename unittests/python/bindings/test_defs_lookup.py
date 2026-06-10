@@ -82,7 +82,7 @@ class TestDefsLookup(ExtTestCase):
         )
 
     def test_onnx_ir_version(self):
-        self.assertEqual(defs.onnx_ir_version(), onnxl.IR_VERSION)
+        self.assertEqual(defs.onnx_ir_version(), defs.IR_VERSION)
 
 
 if __name__ == "__main__":

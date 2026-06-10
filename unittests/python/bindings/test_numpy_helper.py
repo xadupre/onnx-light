@@ -6,6 +6,13 @@ import unittest
 import numpy as np
 
 from onnx_light.ext_test_case import ExtTestCase
+from onnx_light.onnx_proto._numpy_helper import (
+    _unpack_2bit,
+    _unpack_4bit,
+    _pack_4bitx2,
+    _pack_2bitx4,
+    tobytes_little_endian,
+)
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as numpy_helper
@@ -135,7 +142,7 @@ class TestNumpyHelper(ExtTestCase):
 
     def test_tobytes_little_endian(self) -> None:
         data = np.array([1, 2, 3], dtype=np.float32)
-        b = numpy_helper.tobytes_little_endian(data)
+        b = tobytes_little_endian(data)
         self.assertIsInstance(b, bytes)
         self.assertEqual(len(b), 12)
 
@@ -319,25 +326,25 @@ class TestNumpyHelper(ExtTestCase):
     def test_unpack_4bit(self) -> None:
         # Pack two values into one byte: low nibble = 3, high nibble = 7
         packed = np.array([0x73], dtype=np.uint8)
-        unpacked = numpy_helper._unpack_4bit(packed, [2])
+        unpacked = _unpack_4bit(packed, [2])
         np.testing.assert_array_equal(unpacked, [3, 7])
 
     def test_pack_4bitx2(self) -> None:
         # Pack [3, 7] -> 0x73
         data = np.array([3, 7], dtype=np.uint8)
-        packed = numpy_helper._pack_4bitx2(data)
+        packed = _pack_4bitx2(data)
         np.testing.assert_array_equal(packed, [0x73])
 
     def test_unpack_2bit(self) -> None:
         # Pack four 2-bit values: 0b11001001 = 0xC9
         # bits 0-1: 01 (1), bits 2-3: 10 (2), bits 4-5: 00 (0), bits 6-7: 11 (3)
         packed = np.array([0xC9], dtype=np.uint8)
-        unpacked = numpy_helper._unpack_2bit(packed, [4])
+        unpacked = _unpack_2bit(packed, [4])
         np.testing.assert_array_equal(unpacked, [1, 2, 0, 3])
 
     def test_pack_2bitx4(self) -> None:
         data = np.array([1, 2, 0, 3], dtype=np.uint8)
-        packed = numpy_helper._pack_2bitx4(data)
+        packed = _pack_2bitx4(data)
         expected = np.array([0xC9], dtype=np.uint8)
         np.testing.assert_array_equal(packed, expected)
 
@@ -422,7 +429,7 @@ class TestHelperExtensions(ExtTestCase):
         )
 
     def test_tensor_type_map_basic(self) -> None:
-        import onnx_light.onnx.helper as helper
+        import onnx_light.onnx_proto._helper as helper
 
         self.assertIn(onnxl.TensorProto.FLOAT, helper.TENSOR_TYPE_MAP)
         self.assertIn(onnxl.TensorProto.INT32, helper.TENSOR_TYPE_MAP)

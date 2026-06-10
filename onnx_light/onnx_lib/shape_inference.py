@@ -67,7 +67,9 @@ def infer_node_outputs(
     if input_sparse_data is None:
         input_sparse_data = {}
     if ir_version is None:
-        ir_version = _C.IR_VERSION  # type: ignore
+        from ..onnx.defs import IR_VERSION
+
+        ir_version = IR_VERSION  # type: ignore
     return schema._infer_node_outputs(
         node, input_types, dict(input_data), dict(input_sparse_data)
     )

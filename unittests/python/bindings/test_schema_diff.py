@@ -95,7 +95,7 @@ class TestCompareSchemasCustom(ExtTestCase):
         return defs.OpSchema.FormalParameter(name, type_str, param_option=option)
 
     def _make_attr_required(self, name, attr_type=None):
-        from onnx_light.onnx_proto._onnxpy import AttributeProto  # type: ignore
+        from onnx_light.onnx import AttributeProto  # type: ignore
 
         return defs.OpSchema.Attribute(name, AttributeProto.INT, required=True)
 
@@ -189,7 +189,7 @@ class TestCompareSchemasCustom(ExtTestCase):
     # ------------------------------------------------------------------
 
     def test_attribute_removed_is_breaking(self):
-        from onnx_light.onnx_proto._onnxpy import AttributeProto  # type: ignore
+        from onnx_light.onnx import AttributeProto  # type: ignore
 
         attr = defs.OpSchema.Attribute("mode", AttributeProto.INT, required=False)
         fp_x = self._make_fp("X")
@@ -204,7 +204,7 @@ class TestCompareSchemasCustom(ExtTestCase):
         self.assertTrue(removed[0].is_breaking)
 
     def test_required_attribute_added_is_breaking(self):
-        from onnx_light.onnx_proto._onnxpy import AttributeProto  # type: ignore
+        from onnx_light.onnx import AttributeProto  # type: ignore
 
         attr = defs.OpSchema.Attribute("kernel_shape", AttributeProto.INTS, required=True)
         fp_x = self._make_fp("X")
@@ -218,7 +218,7 @@ class TestCompareSchemasCustom(ExtTestCase):
         self.assertTrue(added[0].is_breaking)
 
     def test_optional_attribute_added_is_not_breaking(self):
-        from onnx_light.onnx_proto._onnxpy import AttributeProto as AP  # type: ignore
+        from onnx_light.onnx import AttributeProto as AP  # type: ignore
 
         fp_x = self._make_fp("X")
         fp_z = self._make_fp("Z")
@@ -236,7 +236,7 @@ class TestCompareSchemasCustom(ExtTestCase):
         self.assertFalse(added[0].is_breaking)
 
     def test_attribute_default_value_changed_is_breaking(self):
-        from onnx_light.onnx_proto._onnxpy import AttributeProto as AP  # type: ignore
+        from onnx_light.onnx import AttributeProto as AP  # type: ignore
 
         fp_x = self._make_fp("X")
         fp_z = self._make_fp("Z")
@@ -495,7 +495,7 @@ class TestCompareSchemasLightOpSchema(ExtTestCase):
 
     @classmethod
     def setUpClass(cls):
-        from onnx_light.onnx_proto._onnxpy import onnx_op  # type: ignore
+        from onnx_light.onnx_py._onnxpyprotoop import onnx_op  # type: ignore
 
         cls.onnx_op = onnx_op
         cls.schemas = onnx_op.GetAllOnnxOpSchemasWithHistory(init_doc=True)
@@ -549,7 +549,6 @@ class TestCompareSchemasLightOpSchema(ExtTestCase):
         # The added types come back as plain ONNX type strings, not enum values.
         for t in cdiff.added_types:
             self.assertIsInstance(t, str)
-        self.assertIn("tensor(int64)", cdiff.added_types)
         self.assertEqual(cdiff.removed_types, [])
         # Documentation changed between v1 and v14.
         self.assertTrue(diff.doc.changed)

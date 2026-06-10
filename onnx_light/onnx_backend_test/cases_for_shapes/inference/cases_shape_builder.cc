@@ -94,27 +94,27 @@ void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry) {
   AddInitializer<int64_t>(*graph, "cm1", {1}, {-1}); // literal -1 for shape
 
   // shape1 = Concat([c0, cm1, Shape(X, start=-1)], axis=0) = [0, -1, D64]
-  NodeProto &shape_x_last_node = AddNode(*graph, "Shape", {"X"}, {"x_last_dim"});
-  AddAttribute<int64_t>(shape_x_last_node, "start", -1);
+  NodeProto &x_last_dim_node = AddNode(*graph, "Shape", {"X"}, {"x_last_dim"});
+  AddAttribute<int64_t>(x_last_dim_node, "start", -1);
   NodeProto &shape1_node = AddNode(*graph, "Concat", {"c0", "cm1", "x_last_dim"}, {"shape1"});
   AddAxisAttribute(shape1_node, 0);
 
   // shape2 = Concat([cm1, Shape(X, start=-1), Shape(Y, start=2, end=3)], axis=0)
   //        = [-1, D64, D128]
-  NodeProto &shape_y_dim2_node = AddNode(*graph, "Shape", {"Y"}, {"y_dim2"});
-  AddAttribute<int64_t>(shape_y_dim2_node, "start", 2);
-  AddAttribute<int64_t>(shape_y_dim2_node, "end", 3);
+  NodeProto &y_dim2_node = AddNode(*graph, "Shape", {"Y"}, {"y_dim2"});
+  AddAttribute<int64_t>(y_dim2_node, "start", 2);
+  AddAttribute<int64_t>(y_dim2_node, "end", 3);
   NodeProto &shape2_node = AddNode(*graph, "Concat", {"cm1", "x_last_dim", "y_dim2"}, {"shape2"});
   AddAxisAttribute(shape2_node, 0);
 
   // shape3 = Concat([Shape(Y, start=0, end=2), Shape(X, start=-1),
   //                  Shape(Y, start=-1)], axis=0)
   //        = [batch, channel, D64, D64]
-  NodeProto &shape_y_first2_node = AddNode(*graph, "Shape", {"Y"}, {"y_first2"});
-  AddAttribute<int64_t>(shape_y_first2_node, "start", 0);
-  AddAttribute<int64_t>(shape_y_first2_node, "end", 2);
-  NodeProto &shape_y_last_node = AddNode(*graph, "Shape", {"Y"}, {"y_last_dim"});
-  AddAttribute<int64_t>(shape_y_last_node, "start", -1);
+  NodeProto &y_first2_node = AddNode(*graph, "Shape", {"Y"}, {"y_first2"});
+  AddAttribute<int64_t>(y_first2_node, "start", 0);
+  AddAttribute<int64_t>(y_first2_node, "end", 2);
+  NodeProto &y_last_dim_node = AddNode(*graph, "Shape", {"Y"}, {"y_last_dim"});
+  AddAttribute<int64_t>(y_last_dim_node, "start", -1);
   NodeProto &shape3_node =
       AddNode(*graph, "Concat", {"y_first2", "x_last_dim", "y_last_dim"}, {"shape3"});
   AddAxisAttribute(shape3_node, 0);

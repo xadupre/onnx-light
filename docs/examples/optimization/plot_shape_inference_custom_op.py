@@ -137,7 +137,7 @@ except ValueError as e:
 
 
 def infer_scaled_linear(ctx: si.ShapesContext, node) -> None:
-    """Shape inference callback for ``com.example::ScaledLinear``."""
+    """Infers the output shape of the ``com.example::ScaledLinear`` operator."""
     if len(node.input) != 3:
         raise ValueError(f"{CUSTOM_OP} expects 3 inputs (X, W, B), got {len(node.input)}.")
     if len(node.output) != 1:

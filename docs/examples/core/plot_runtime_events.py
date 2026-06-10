@@ -5,17 +5,18 @@ Run a model with the runtime and inspect intermediate results
 =============================================================
 
 :mod:`onnx_light` ships a C++ kernel dispatcher exposed in Python
-through :mod:`onnx_light.kernels`. Its ``runtime`` submodule owns a
-:class:`RuntimeContext` whose :meth:`events` method returns an
+through :class:`~onnx_light.reference.ReferenceEvaluator`. After each
+:meth:`~onnx_light.reference.ReferenceEvaluator.run` call the evaluator
+retains the :class:`RuntimeContext` used internally; calling
+:meth:`~onnx_light.reference.ReferenceEvaluator.events` returns an
 append-only log of every tensor map mutation: graph initializers
-seeded by :func:`run_graph`, inputs injected by the caller,
-intermediate values produced by each node kernel and outputs
-propagated back to the caller.
+seeded on entry, inputs injected by the caller, intermediate values
+produced by each node kernel and outputs propagated back to the caller.
 
 This example:
 
 * builds a small graph with a symbolic batch dimension ``N``, an
-  initializer and three operators (``Mul``, ``Add`` then ``Concat``)
+  initializer and three operators (``Mul``, ``Add`` then ``Reshape``)
   so that one of the intermediate tensors has a shape expressed as
   an arithmetic expression of ``N`` (here ``2*N``),
 * runs :func:`~onnx_light.onnx_optim.shape_inference.infer_shapes_model`
@@ -24,7 +25,8 @@ This example:
 * uses :func:`~onnx_light.onnx_optim.expressions.evaluate_expression`
   to resolve each symbolic dimension to a concrete integer given
   the actual batch size at runtime,
-* drives the runtime through :func:`run_model` while collecting
+* drives the runtime through
+  :class:`~onnx_light.reference.ReferenceEvaluator` while collecting
   the event log,
 * prints the events, illustrating how to peek at intermediate
   results without re-instrumenting the graph,
@@ -39,10 +41,10 @@ from __future__ import annotations
 
 import numpy as np
 
-from onnx_light.onnx_py._onnxpykernels import runtime
-from onnx_light.onnx_lib import numpy_helper, parser
+from onnx_light.onnx_lib import parser
 from onnx_light.onnx_optim.expressions import evaluate_expression
 from onnx_light.onnx_optim.shape_inference import infer_shapes_model
+from onnx_light.onnx.reference import ReferenceEvaluator
 
 #####################################
 # Build a small ONNX model
@@ -134,42 +136,24 @@ for name, shape in resolved_shapes.items():
     print(f"  {name:<6s} -> {shape}")
 
 #####################################
-# Prepare the runtime context
-# +++++++++++++++++++++++++++
+# Run the model with ``ReferenceEvaluator``
+# +++++++++++++++++++++++++++++++++++++++++
 #
-# :class:`RuntimeContext` owns the name-keyed tensor map shared
-# across every node. The construction-time :class:`KernelContext`
-# carries the opset version used to instantiate each per-operator
-# kernel. Inputs are inserted with :meth:`RuntimeContext.set` after
-# being converted from :class:`numpy.ndarray` to a runtime
-# ``Tensor`` via :func:`tensor_from_proto`.
+# :class:`~onnx_light.reference.ReferenceEvaluator` wraps the C++ kernel
+# dispatcher and handles all input/output conversions automatically.
+# After :meth:`~onnx_light.reference.ReferenceEvaluator.run` returns,
+# :meth:`~onnx_light.reference.ReferenceEvaluator.events` exposes the full
+# event log recorded by the internal :class:`RuntimeContext`.
 
-ctx = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(18)))
-ctx.set("x", runtime.tensor_from_proto(numpy_helper.from_array(x, name="x")))
-
-#####################################
-# Run the model
-# +++++++++++++
-#
-# :func:`run_model` registers every model-local ``FunctionProto`` in
-# the runtime's function registry and then delegates to
-# :func:`run_graph`, which seeds the context with every
-# ``TensorProto`` in ``graph.initializer`` before executing the node
-# sequence.
-
-runtime.run_model(model, ctx)
-
-y_tensor = ctx.get("y")
-y = np.frombuffer(y_tensor.raw_data(), dtype=np.float32).reshape(
-    tuple(int(d) for d in y_tensor.shape)
-)
+sess = ReferenceEvaluator(model)
+(y,) = sess.run(None, {"x": x})
 print(f"y =\n{y}")
 
 #####################################
 # Inspect the event log
 # +++++++++++++++++++++
 #
-# :meth:`RuntimeContext.events` returns a list of
+# :meth:`~onnx_light.reference.ReferenceEvaluator.events` returns a list of
 # :class:`TensorEvent` entries. Each event carries the
 # ``action`` (``"add"`` / ``"replace"`` / ``"remove"``), the
 # ``kind`` of value (``"input"``, ``"initializer"``,
@@ -183,7 +167,7 @@ print(f"y =\n{y}")
 # ``shape`` is left empty to signal the truncated payload. The
 # total number of events in the log itself is unbounded.
 
-events = ctx.events()
+events = sess.events()
 print(f"Recorded {len(events)} event(s):")
 for ev in events:
     d = ev.as_dict()

@@ -64,23 +64,32 @@ void AppendIdentityOutput(GraphProto &g, const std::string &input_name,
 // ``MergeBranchOutputs`` in
 // ``onnx_optim/shapes/controlflow/shape_controlflow.cc``).
 //
+// The ``else_branch`` deliberately includes a data-dependent ``Compress``
+// node so the differing leading axis of ``out_a`` originates from
+// ``ComputeShapeCompress`` (a ``Compress_<out>_count`` symbol) on the else
+// side and from a fixed symbolic dim (``B``) propagated through
+// ``Identity`` on the then side. The merging step therefore has to
+// reconcile two genuinely different symbolic dims of the same rank.
+//
 // Graph topology::
 //
 //   inputs:
 //     cond    : bool[]
 //     a_then  : float[A, 4]
 //     a_else  : float[B, 4]
+//     c_else  : bool[B]            # Compress condition (else-branch only)
 //     b_then  : int64[A]
 //     b_else  : int64[B]
 //
 //   out_a, out_b = If(cond,
 //                     then_branch = {
-//                       out_a = Identity(a_then)   # float[A, 4]
-//                       out_b = Identity(b_then)   # int64[A]
+//                       out_a = Identity(a_then)              # float[A, 4]
+//                       out_b = Identity(b_then)              # int64[A]
 //                     },
 //                     else_branch = {
-//                       out_a = Identity(a_else)   # float[B, 4]
-//                       out_b = Identity(b_else)   # int64[B]
+//                       out_a = Compress(a_else, c_else,
+//                                        axis=0)              # float[?, 4]
+//                       out_b = Identity(b_else)              # int64[B]
 //                     })
 //
 // Expected inferred output shapes (the differing leading axis becomes a
@@ -115,9 +124,9 @@ void RegisterIfSymbolicShapesShapeInferenceCases(std::vector<TestCase> &registry
   then_attr->set_name("then_branch");
   then_attr->set_type(AttributeProto::AttributeType::GRAPH);
   GraphProto *then_g = then_attr->add_g();
-  // Both branch outputs are wired through ``Identity`` so they pick up the
-  // outer-scope ValueInfo (and the corresponding symbolic dims) of their
-  // captured inputs.
+  // Both then-branch outputs are wired through ``Identity`` so they pick up
+  // the outer-scope ValueInfo (and the corresponding symbolic dims) of
+  // their captured inputs.
   BuildIdentityBranch(*then_g, "then_branch", "a_then", "out_a_then", DataType::FLOAT,
                       {"A", DimSpec(int64_t{4})});
   AppendIdentityOutput(*then_g, "b_then", "out_b_then", DataType::INT64, {"A"});
@@ -126,16 +135,28 @@ void RegisterIfSymbolicShapesShapeInferenceCases(std::vector<TestCase> &registry
   else_attr->set_name("else_branch");
   else_attr->set_type(AttributeProto::AttributeType::GRAPH);
   GraphProto *else_g = else_attr->add_g();
-  BuildIdentityBranch(*else_g, "else_branch", "a_else", "out_a_else", DataType::FLOAT,
-                      {"B", DimSpec(int64_t{4})});
+  else_g->set_name("else_branch");
+  // out_a_else = Compress(a_else, c_else, axis=0). The output's leading
+  // axis is data-dependent so shape inference assigns it a fresh
+  // ``Compress_out_a_else_count`` symbol; the trailing ``4`` is preserved.
+  NodeProto *compress_node = else_g->add_node();
+  compress_node->set_op_type("Compress");
+  compress_node->add_input("a_else");
+  compress_node->add_input("c_else");
+  compress_node->add_output("out_a_else");
+  AddAttribute<int64_t>(*compress_node, "axis", 0);
+  AppendValueInfo(*else_g->add_output(), "out_a_else", DataType::FLOAT,
+                  {DimSpec(), DimSpec(int64_t{4})});
   AppendIdentityOutput(*else_g, "b_else", "out_b_else", DataType::INT64, {"B"});
 
-  // Graph inputs: scalar BOOL cond, two FLOAT[A or B, 4] inputs, two INT64
-  // [A or B] inputs. Distinct symbolic dim names on the leading axis force
-  // the branch-merging path to synthesize a fresh symbolic dim.
+  // Graph inputs: scalar BOOL cond, two FLOAT[A or B, 4] inputs, the
+  // else-branch Compress condition ``c_else: bool[B]``, and two INT64
+  // [A or B] inputs. Distinct symbolic dim names on the leading axis
+  // force the branch-merging path to synthesize a fresh symbolic dim.
   AppendValueInfo(*graph->add_input(), "cond", DataType::BOOL, std::vector<DimSpec>{});
   AppendValueInfo(*graph->add_input(), "a_then", DataType::FLOAT, {"A", DimSpec(int64_t{4})});
   AppendValueInfo(*graph->add_input(), "a_else", DataType::FLOAT, {"B", DimSpec(int64_t{4})});
+  AppendValueInfo(*graph->add_input(), "c_else", DataType::BOOL, {"B"});
   AppendValueInfo(*graph->add_input(), "b_then", DataType::INT64, {"A"});
   AppendValueInfo(*graph->add_input(), "b_else", DataType::INT64, {"B"});
 
@@ -175,6 +196,11 @@ void RegisterIfSymbolicShapesShapeInferenceCases(std::vector<TestCase> &registry
   Tensor cond_tensor = Tensor::FromBool("cond", {}, {1});
   Tensor a_then = Tensor::FromFloat("a_then", {kA, kK}, a_then_values);
   Tensor a_else = Tensor::FromFloat("a_else", {kB, kK}, a_else_values);
+  // ``c_else`` is only consumed by the else-branch ``Compress`` and is
+  // therefore unused at runtime (``cond=true`` selects the then-branch);
+  // its concrete value is irrelevant but its shape ``[B]`` is recorded so
+  // the symbolic-dim propagation test resolves ``c_else.dim[0] == B``.
+  Tensor c_else = Tensor::FromBool("c_else", {kB}, {1, 0, 1, 0, 1});
   Tensor b_then = Tensor::FromInt64("b_then", {kA}, b_then_values);
   Tensor b_else = Tensor::FromInt64("b_else", {kB}, b_else_values);
 
@@ -184,8 +210,8 @@ void RegisterIfSymbolicShapesShapeInferenceCases(std::vector<TestCase> &registry
   out_b.name = "out_b";
 
   AppendDataSet(tc,
-                {std::move(cond_tensor), std::move(a_then), std::move(a_else), std::move(b_then),
-                 std::move(b_else)},
+                {std::move(cond_tensor), std::move(a_then), std::move(a_else), std::move(c_else),
+                 std::move(b_then), std::move(b_else)},
                 {std::move(out_a), std::move(out_b)});
 
   registry.emplace_back(std::move(tc));

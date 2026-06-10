@@ -823,6 +823,105 @@ TEST(RunNodes, RuntimeContextRemove) {
   EXPECT_FALSE(rt.Remove("x"));
 }
 
+TEST(RunNodes, RuntimeContextEventLogSetReplaceRemove) {
+  using onnx_kernels::TensorEventAction;
+  using onnx_kernels::TensorEventKind;
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  EXPECT_TRUE(rt.events().empty());
+
+  // Set -> add event with values populated (element_count <= 8). Default
+  // kind for Set is "input".
+  rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, -2.0f, 3.5f}));
+  ASSERT_EQ(rt.events().size(), 1u);
+  const auto &add_ev = rt.events()[0];
+  EXPECT_EQ(add_ev.action, TensorEventAction::kAdd);
+  EXPECT_EQ(add_ev.kind, TensorEventKind::kInput);
+  EXPECT_EQ(add_ev.name, "x");
+  EXPECT_EQ(add_ev.data_type, static_cast<int32_t>(DataType::FLOAT));
+  EXPECT_EQ(add_ev.shape, (std::vector<int64_t>{3}));
+  EXPECT_EQ(add_ev.value_count, 3);
+  EXPECT_FLOAT_EQ(static_cast<float>(add_ev.values[0]), 1.0f);
+  EXPECT_FLOAT_EQ(static_cast<float>(add_ev.values[1]), -2.0f);
+  EXPECT_FLOAT_EQ(static_cast<float>(add_ev.values[2]), 3.5f);
+  // Unused slots of the fixed-size buffer stay zero-initialised.
+  EXPECT_DOUBLE_EQ(add_ev.values[3], 0.0);
+  EXPECT_DOUBLE_EQ(add_ev.values[7], 0.0);
+  EXPECT_GT(add_ev.timestamp_ns, 0);
+
+  // Put on the same name -> replace event. Default kind for Put is
+  // "intermediate".
+  rt.Put("x", Tensor::FromInt32("x", {2}, {7, 8}));
+  ASSERT_EQ(rt.events().size(), 2u);
+  EXPECT_EQ(rt.events()[1].action, TensorEventAction::kReplace);
+  EXPECT_EQ(rt.events()[1].kind, TensorEventKind::kIntermediate);
+  EXPECT_EQ(rt.events()[1].data_type, static_cast<int32_t>(DataType::INT32));
+  EXPECT_EQ(rt.events()[1].value_count, 2);
+  EXPECT_DOUBLE_EQ(rt.events()[1].values[0], 7.0);
+  EXPECT_DOUBLE_EQ(rt.events()[1].values[1], 8.0);
+
+  // Remove -> remove event with empty shape and value_count = 0.
+  EXPECT_TRUE(rt.Remove("x"));
+  ASSERT_EQ(rt.events().size(), 3u);
+  EXPECT_EQ(rt.events()[2].action, TensorEventAction::kRemove);
+  EXPECT_EQ(rt.events()[2].name, "x");
+  EXPECT_TRUE(rt.events()[2].shape.empty());
+  EXPECT_EQ(rt.events()[2].value_count, 0);
+
+  // No-op remove -> no extra event.
+  EXPECT_FALSE(rt.Remove("x"));
+  EXPECT_EQ(rt.events().size(), 3u);
+
+  // Large tensor (> kTensorEventValueLimit) -> data_type = -1, empty shape,
+  // values truncated to the first kTensorEventValueLimit entries.
+  rt.Put("big", Tensor::FromInt32("big", {9}, {0, 1, 2, 3, 4, 5, 6, 7, 8}));
+  ASSERT_EQ(rt.events().size(), 4u);
+  EXPECT_EQ(rt.events()[3].action, TensorEventAction::kAdd);
+  EXPECT_EQ(rt.events()[3].data_type, -1);
+  EXPECT_TRUE(rt.events()[3].shape.empty());
+  EXPECT_EQ(rt.events()[3].value_count, 8);
+  for (int32_t i = 0; i < 8; ++i) {
+    EXPECT_DOUBLE_EQ(rt.events()[3].values[i], static_cast<double>(i));
+  }
+
+  // String tensor values land in string_values (numeric values buffer stays
+  // zero-initialised).
+  rt.Put("s", Tensor::FromStrings("s", {2}, {"a", "bc"}));
+  ASSERT_EQ(rt.events().size(), 5u);
+  EXPECT_EQ(rt.events()[4].data_type, static_cast<int32_t>(DataType::STRING));
+  EXPECT_EQ(rt.events()[4].value_count, 2);
+  EXPECT_EQ(rt.events()[4].string_values[0], "a");
+  EXPECT_EQ(rt.events()[4].string_values[1], "bc");
+  EXPECT_DOUBLE_EQ(rt.events()[4].values[0], 0.0);
+
+  rt.ClearEvents();
+  EXPECT_TRUE(rt.events().empty());
+}
+
+TEST(RunNodes, RuntimeContextEventLogCapturesRunGraphMutations) {
+  // Smoke test: running a small chain of nodes through the dispatcher
+  // populates the event log via SetOutput / Put on every produced tensor.
+  using onnx_kernels::TensorEventAction;
+  using onnx_kernels::TensorEventKind;
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
+  rt.Set("z", Tensor::FromFloat("z", {2}, {10.0f, 20.0f}));
+  rt.ClearEvents();
+
+  std::vector<NodeProto> nodes;
+  nodes.push_back(MakeNode("Abs", {"x"}, {"t"}));
+  nodes.push_back(MakeNode("Add", {"t", "z"}, {"y"}));
+  RunNodes(nodes.begin(), nodes.end(), rt);
+
+  // Exactly two "add" events tagged as intermediate values.
+  ASSERT_EQ(rt.events().size(), 2u);
+  EXPECT_EQ(rt.events()[0].name, "t");
+  EXPECT_EQ(rt.events()[0].action, TensorEventAction::kAdd);
+  EXPECT_EQ(rt.events()[0].kind, TensorEventKind::kIntermediate);
+  EXPECT_EQ(rt.events()[1].name, "y");
+  EXPECT_EQ(rt.events()[1].action, TensorEventAction::kAdd);
+  EXPECT_EQ(rt.events()[1].kind, TensorEventKind::kIntermediate);
+}
+
 // ---------------------------------------------------------------------------
 // TensorFromProto tests
 // ---------------------------------------------------------------------------

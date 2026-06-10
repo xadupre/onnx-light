@@ -81,12 +81,15 @@ GraphProto BuildRunningSumBody() {
 //   Y  = [[1, 2, 3], [5, 7, 9], [12, 15, 18], [22, 26, 30]]
 //
 // Shape-inference path exercised:
-//   * ``ComputeShapeScan`` propagates the state shape ``[D]`` from
-//     ``zero_acc`` through the body and recovers ``acc_final`` shape ``[D]``.
-//   * The trip count is taken from ``X.shape[0] = T``; the body's
-//     per-iteration scan output ``scan_out`` shape ``[D]`` is stacked to
-//     ``[T, D]`` for ``Y_pre_abs``.
-//   * ``Abs`` propagates the ``[T, D]`` shape to ``Y``.
+//   * ``ComputeShapeScan`` propagates the state shape ``[kD]`` (concrete,
+//     from the ``zero_acc`` initializer) through the body.  Because
+//     ``BroadcastDim([kD], [D-symbolic])`` returns the concrete integer (>1
+//     wins), ``acc_out`` and ``scan_out`` carry shape ``[kD]``.
+//   * ``acc_final`` is inferred as ``[kD]`` (state shape matches initializer).
+//   * The trip count is taken from ``X.shape[0] = T`` (symbolic); the body's
+//     per-iteration scan output ``scan_out`` shape ``[kD]`` is stacked to
+//     ``[T, kD]`` for ``Y_pre_abs``.
+//   * ``Abs`` propagates the ``[T, kD]`` shape to ``Y``.
 // ---------------------------------------------------------------------------
 void RegisterScanRunningSumShapeInferenceCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(18);
@@ -127,12 +130,17 @@ void RegisterScanRunningSumShapeInferenceCases(std::vector<TestCase> &registry) 
 
   // Intermediate value_info entries with the shapes that shape inference
   // should recover.
-  AppendValueInfo(*graph->add_value_info(), "acc_final", DataType::FLOAT, {DimSpec("D")});
+  // Note: zero_acc is a concrete initializer of shape [kD], so shape inference
+  // propagates D=kD as a concrete integer through Add/Identity/Scan state.
+  // acc_in=[kD] + x_t=[D-symbolic] → BroadcastDim returns [kD] (concrete wins
+  // when >1).  Therefore the stacked scan output and final output also carry
+  // the concrete kD in dim[1].
+  AppendValueInfo(*graph->add_value_info(), "acc_final", DataType::FLOAT, {DimSpec(kD)});
   AppendValueInfo(*graph->add_value_info(), "Y_pre_abs", DataType::FLOAT,
-                  {DimSpec("T"), DimSpec("D")});
+                  {DimSpec("T"), DimSpec(kD)});
 
-  // Graph output Y — same symbolic shape as Y_pre_abs.
-  AppendValueInfo(*graph->add_output(), "Y", kFloat, {DimSpec("T"), DimSpec("D")});
+  // Graph output Y — T remains symbolic (from X.shape[0]); D is concrete kD.
+  AppendValueInfo(*graph->add_output(), "Y", kFloat, {DimSpec("T"), DimSpec(kD)});
 
   // Reference DataSet: T=4, D=3.
   // X rows are consecutive integers starting at 1 so the cumulative sums

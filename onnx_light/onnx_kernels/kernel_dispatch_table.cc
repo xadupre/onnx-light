@@ -354,6 +354,110 @@ inline Tensor GetAttributeTensorOrEmpty(const NodeProto &node, const std::string
   return TensorFromProto(attr->t());
 }
 
+// ---------------------------------------------------------------------------
+// Normalization op helpers
+// ---------------------------------------------------------------------------
+// The normalization kernels (BatchNormalization, GroupNormalization,
+// InstanceNormalization, LayerNormalization, RMSNormalization) share the
+// ``epsilon`` attribute (default 1e-5f). Several also share the ``axis``
+// attribute (default -1) and the (X, scale, [bias]) input pattern. The
+// helpers below centralise that boilerplate so each per-op runner stays
+// focused on its kernel-specific glue.
+
+inline float GetEpsilon(const NodeProto &node) {
+  return GetAttributeFloatOrDefault(node, "epsilon", 1e-5f);
+}
+
+inline int64_t GetNormAxis(const NodeProto &node) {
+  return GetAttributeIntOrDefault(node, "axis", -1);
+}
+
+inline void RequireInputRange(const NodeProto &node, int min_inputs, int max_inputs) {
+  const int n = node.input_size();
+  if (n < min_inputs || n > max_inputs) {
+    throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() + "' expects " +
+                                std::to_string(min_inputs) + " to " + std::to_string(max_inputs) +
+                                " input(s), got " + std::to_string(n) + ".");
+  }
+}
+
+inline void RequireOutputRange(const NodeProto &node, int min_outputs, int max_outputs) {
+  const int n = node.output_size();
+  if (n < min_outputs || n > max_outputs) {
+    throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() + "' expects " +
+                                std::to_string(min_outputs) + " to " + std::to_string(max_outputs) +
+                                " output(s), got " + std::to_string(n) + ".");
+  }
+}
+
+void RunBatchNormalization(const NodeProto &node, RuntimeContext &rt) {
+  RequireInputCount(node, 5);
+  RequireOutputRange(node, 1, 3);
+  if (GetAttributeIntOrDefault(node, "training_mode", 0) != 0) {
+    throw std::invalid_argument(
+        "RunNode: op 'BatchNormalization' training_mode=1 is not supported.");
+  }
+  if (node.output_size() != 1) {
+    throw std::invalid_argument("RunNode: op 'BatchNormalization' only supports a single output "
+                                "(running_mean / running_var require training_mode=1).");
+  }
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &scale = GetInput(node, 1, rt.tensors());
+  const Tensor &bias = GetInput(node, 2, rt.tensors());
+  const Tensor &input_mean = GetInput(node, 3, rt.tensors());
+  const Tensor &input_var = GetInput(node, 4, rt.tensors());
+  kernel::BatchNormalization k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, scale, bias, input_mean, input_var, GetEpsilon(node)), rt.tensors());
+}
+
+void RunGroupNormalization(const NodeProto &node, RuntimeContext &rt) {
+  RequireInputCount(node, 3);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &scale = GetInput(node, 1, rt.tensors());
+  const Tensor &bias = GetInput(node, 2, rt.tensors());
+  const int64_t num_groups = GetAttributeIntOrDefault(node, "num_groups", 0);
+  kernel::GroupNormalization k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, scale, bias, num_groups, GetEpsilon(node)), rt.tensors());
+}
+
+void RunInstanceNormalization(const NodeProto &node, RuntimeContext &rt) {
+  RequireInputCount(node, 3);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &scale = GetInput(node, 1, rt.tensors());
+  const Tensor &bias = GetInput(node, 2, rt.tensors());
+  kernel::InstanceNormalization k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, scale, bias, GetEpsilon(node)), rt.tensors());
+}
+
+void RunLayerNormalization(const NodeProto &node, RuntimeContext &rt) {
+  RequireInputRange(node, 2, 3);
+  RequireOutputRange(node, 1, 3);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &scale = GetInput(node, 1, rt.tensors());
+  const Tensor *b = GetOptionalInput(node, 2, rt.tensors());
+  kernel::LayerNormalization k(rt.kernel_ctx());
+  auto [y, mean, inv_std_dev] =
+      k(x, scale, b != nullptr ? *b : Tensor{}, GetNormAxis(node), GetEpsilon(node));
+  SetOutput(node, 0, std::move(y), rt.tensors());
+  if (node.output_size() >= 2) {
+    SetOutput(node, 1, std::move(mean), rt.tensors());
+  }
+  if (node.output_size() >= 3) {
+    SetOutput(node, 2, std::move(inv_std_dev), rt.tensors());
+  }
+}
+
+void RunRMSNormalization(const NodeProto &node, RuntimeContext &rt) {
+  RequireInputCount(node, 2);
+  RequireOutputCount(node, 1);
+  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &scale = GetInput(node, 1, rt.tensors());
+  kernel::RMSNormalization k(rt.kernel_ctx());
+  SetOutput(node, 0, k(x, scale, GetNormAxis(node), GetEpsilon(node)), rt.tensors());
+}
+
 // Shared spatial pooling attributes consumed by AveragePool / MaxPool
 // (and other pool-style ops). The defaults mirror the ONNX schema.
 struct PoolCommonAttrs {
@@ -502,6 +606,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:BitwiseNot", MakeUnaryTrampoline<kernel::BitwiseNot>()},
       {"ai.onnx:BitwiseOr", MakeBinaryTrampoline<kernel::BitwiseOr>()},
       {"ai.onnx:BitwiseXor", MakeBinaryTrampoline<kernel::BitwiseXor>()},
+      {"ai.onnx:BatchNormalization", RunBatchNormalization},
       {"ai.onnx:CausalConvWithState",
        [](const NodeProto &node, RuntimeContext &rt) {
          if (node.input_size() < 2 || node.input_size() > 4) {
@@ -776,6 +881,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
       {"ai.onnx:Greater", MakeBinaryTrampoline<kernel::Greater>()},
       {"ai.onnx:GreaterOrEqual", MakeBinaryTrampoline<kernel::GreaterOrEqual>()},
+      {"ai.onnx:GroupNormalization", RunGroupNormalization},
       {"ai.onnx:HardSigmoid",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);
@@ -799,6 +905,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::ImageDecoder image_decoder_kernel(rt.kernel_ctx());
          SetOutput(node, 0, image_decoder_kernel(encoded_stream, pixel_format), rt);
        }},
+      {"ai.onnx:InstanceNormalization", RunInstanceNormalization},
       {"ai.onnx:IsInf",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);
@@ -810,6 +917,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          SetOutput(node, 0, k(x, detect_positive, detect_negative), rt);
        }},
       {"ai.onnx:IsNaN", MakeUnaryTrampoline<kernel::IsNaN>()},
+      {"ai.onnx:LayerNormalization", RunLayerNormalization},
       {"ai.onnx:LeakyRelu", MakeUnaryAlphaTrampoline<kernel::LeakyRelu>("alpha", 0.01f)},
       {"ai.onnx:Less", MakeBinaryTrampoline<kernel::Less>()},
       {"ai.onnx:LessOrEqual", MakeBinaryTrampoline<kernel::LessOrEqual>()},
@@ -929,6 +1037,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Pow", MakeBinaryTrampoline<kernel::Pow>()},
       {"ai.onnx:PRelu", MakeBinaryTrampoline<kernel::PRelu>()},
       {"ai.onnx:QuantizeLinear", MakeBinaryWithOptionalThirdTrampoline<kernel::QuantizeLinear>()},
+      {"ai.onnx:RMSNormalization", RunRMSNormalization},
       {"ai.onnx:Reciprocal", MakeUnaryTrampoline<kernel::Reciprocal>()},
       {"ai.onnx:ReduceL1", MakeReduceTrampoline<kernel::ReduceL1>()},
       {"ai.onnx:ReduceL2", MakeReduceTrampoline<kernel::ReduceL2>()},

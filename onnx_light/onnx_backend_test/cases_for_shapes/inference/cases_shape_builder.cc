@@ -140,7 +140,10 @@ void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry) {
   Tensor x = Tensor::FromFloat("X", {kD32, kD64}, x_values);
   Tensor y = Tensor::FromFloat("Y", {kBatch, kChannel, kD128, kD64}, y_values);
 
-  // shape1=[0,-1,D64], shape2=[-1,D64,D128], shape3=[batch,channel,D64,D64]
+  // Concrete resolutions of the graph-initializer patterns:
+  //   shape1 [0,-1,D64]       → [1, D32, D64]
+  //   shape2 [-1,D64,D128]    → [batch*channel, D64, D128]
+  //   shape3 [batch,ch,D64,D64]
   const Tensor shape1 = Tensor::FromInt64("", {3}, {1, kD32, kD64});
   const Tensor shape2 = Tensor::FromInt64("", {3}, {kBatch * kChannel, kD64, kD128});
   const Tensor shape3 = Tensor::FromInt64("", {4}, {kBatch, kChannel, kD64, kD64});

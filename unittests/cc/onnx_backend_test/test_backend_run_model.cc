@@ -233,6 +233,9 @@ TEST(BackendRunModel, LinearClassifier) { RunBackendCasesFor("LinearClassifier")
 TEST(BackendRunModel, TreeEnsembleRegressor) { RunBackendCasesFor("TreeEnsembleRegressor"); }
 TEST(BackendRunModel, TreeEnsembleClassifier) { RunBackendCasesFor("TreeEnsembleClassifier"); }
 TEST(BackendRunModel, TreeEnsemble) { RunBackendCasesFor("TreeEnsemble"); }
+TEST(BackendRunModel, ArrayFeatureExtractor) { RunBackendCasesFor("ArrayFeatureExtractor"); }
+TEST(BackendRunModel, Binarizer) { RunBackendCasesFor("Binarizer"); }
+TEST(BackendRunModel, LabelEncoder) { RunBackendCasesFor("LabelEncoder"); }
 
 // Quantization kernels.
 // The reference QuantizeLinear/DequantizeLinear kernels only support

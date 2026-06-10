@@ -41,22 +41,28 @@ constexpr int64_t kDefaultIrVersion = 10;
 // Exercises shape inference through rank-changing ``Unsqueeze``/``Reshape``
 // and through ``MatMul`` of two 3-D tensors with the leading dim broadcast.
 //
-//   xu1  = Unsqueeze(X,   zero)          # axes=[0]  → (1, D32, D128)
-//   xu2  = Unsqueeze(xu1, un)            # axes=[1]  → (1, 1, D32, D128)
-//   xm1  = Reshape(xu2,   shape1=[1,32,128])      # (1, 32, 128)
-//   xm2c = Reshape(Y,     shape2=[15,128,64])     # (15, 128, 64)
-//   xm2  = Cast(xm2c, to=FLOAT)                   # (15, 128, 64)
-//   xm   = MatMul(xm1,  xm2)                      # (15, 32, 64)
-//   Z    = Reshape(xm,  shape3=[3,5,32,64])       # (3, 5, 32, 64)
+// Shape initializers are defined symbolically in terms of input shapes:
+//   shape1 = [0, -1, X.shape[-1]]
+//   shape2 = [-1, X.shape[-1], Y.shape[2]]
+//   shape3 = [*Y.shape[:2], X.shape[-1], Y.shape[-1]]
+//
+//   xu1  = Unsqueeze(X,   zero)   # axes=[0]  → (1, D32, D64)
+//   xu2  = Unsqueeze(xu1, un)     # axes=[1]  → (1, 1, D32, D64)
+//   xm1  = Reshape(xu2,  shape1)  # (1, D32, D64)
+//   xm2c = Reshape(Y,    shape2)  # (batch*channel, D64, D128)
+//   xm2  = Cast(xm2c, to=FLOAT)  # (batch*channel, D64, D128)
+//   xm   = MatMul(xm1, xm2)      # (batch*channel, D32, D128)
+//   Z    = Reshape(xm,  shape3)   # (batch, channel, D64, D64)
 //
 // Inputs:
-//   X : float[D32, D128]
+//   X : float[D32, D64]
 //   Y : float[batch, channel, D128, D64]
 // Output:
-//   Z : float[batch, channel, D32, 64]   (declared symbolic; inferred concrete)
+//   Z : float[batch, channel, D64, D64]
 //
-// The reference DataSet uses concrete sizes ``D32=32, D128=128, batch=3,
-// channel=5, D64=64`` so the case is executable.
+// The reference DataSet uses concrete sizes ``D32=32, D64=64, D128=128,
+// batch=3, channel=5`` (note: D32*D128 == D64**2 == 4096 ensures the final
+// Reshape volume balances) so the case is executable.
 // ---------------------------------------------------------------------------
 void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(18);
@@ -74,11 +80,14 @@ void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry) {
   GraphProto *graph = model.add_graph();
   graph->set_name(name);
 
+  // shape1 = [0, -1, X.shape[-1]]          → [0, -1, D64]
+  // shape2 = [-1, X.shape[-1], Y.shape[2]] → [-1, D64, D128]
+  // shape3 = [*Y.shape[:2], X.shape[-1], Y.shape[-1]] → [batch, channel, D64, D64]
   AddInitializer<int64_t>(*graph, "zero", {1}, {0});
   AddInitializer<int64_t>(*graph, "un", {1}, {1});
-  AddInitializer<int64_t>(*graph, "shape1", {3}, {0, -1, 128});
-  AddInitializer<int64_t>(*graph, "shape2", {3}, {-1, 128, 64});
-  AddInitializer<int64_t>(*graph, "shape3", {4}, {3, 5, 32, 64});
+  AddInitializer<int64_t>(*graph, "shape1", {3}, {0, -1, 64});
+  AddInitializer<int64_t>(*graph, "shape2", {3}, {-1, 64, 128});
+  AddInitializer<int64_t>(*graph, "shape3", {4}, {3, 5, 64, 64});
 
   AddNode(*graph, "Unsqueeze", {"X", "zero"}, {"xu1"});
   AddNode(*graph, "Unsqueeze", {"xu1", "un"}, {"xu2"});
@@ -89,38 +98,38 @@ void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry) {
   AddNode(*graph, "MatMul", {"xm1", "xm2"}, {"xm"});
   AddNode(*graph, "Reshape", {"xm", "shape3"}, {"Z"});
 
-  // Graph inputs: X uses symbolic dims (D32, D128); Y uses a mix of symbolic
+  // Graph inputs: X uses symbolic dims (D32, D64); Y uses a mix of symbolic
   // (batch, channel, D128, D64) dims that resolve to concrete sizes in the
   // reference DataSet.
-  AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {"D32", "D128"});
+  AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {"D32", "D64"});
   AppendValueInfo(*graph->add_input(), "Y", DataType::FLOAT, {"batch", "channel", "D128", "D64"});
 
   // Intermediate value_info entries with the shapes that shape inference
   // should recover. These are stripped by ``SnapshotAndStripValueInfo`` in
   // the ``AllCollectedCasesInferOutputShapes`` test and used as the ground
   // truth.
-  AppendValueInfo(*graph->add_value_info(), "xu1", DataType::FLOAT, {DimSpec(1), "D32", "D128"});
+  AppendValueInfo(*graph->add_value_info(), "xu1", DataType::FLOAT, {DimSpec(1), "D32", "D64"});
   AppendValueInfo(*graph->add_value_info(), "xu2", DataType::FLOAT,
-                  {DimSpec(1), DimSpec(1), "D32", "D128"});
-  AppendValueInfo(*graph->add_value_info(), "xm1", DataType::FLOAT, {DimSpec(1), "D32", "D128"});
+                  {DimSpec(1), DimSpec(1), "D32", "D64"});
+  AppendValueInfo(*graph->add_value_info(), "xm1", DataType::FLOAT, {DimSpec(1), "D32", "D64"});
   AppendValueInfo(*graph->add_value_info(), "xm2c", DataType::FLOAT,
-                  {"batch*channel", "D128", "D64"});
+                  {"batch*channel", "D64", "D128"});
   AppendValueInfo(*graph->add_value_info(), "xm2", DataType::FLOAT,
-                  {"batch*channel", "D128", "D64"});
+                  {"batch*channel", "D64", "D128"});
   AppendValueInfo(*graph->add_value_info(), "xm", DataType::FLOAT,
-                  {"batch*channel", "D128", "D64"});
+                  {"batch*channel", "D32", "D128"});
 
-  // Graph output Z — concrete dims recovered from the final Reshape.
-  AppendValueInfo(*graph->add_output(), "Z", DataType::FLOAT, {"batch", "channel", "D32", "D64"});
+  // Graph output Z — dims recovered from the final Reshape.
+  AppendValueInfo(*graph->add_output(), "Z", DataType::FLOAT, {"batch", "channel", "D64", "D64"});
 
-  // Build the reference DataSet — concrete D32=32, D128=128, batch=3,
-  // channel=5, D64=64 tensors, then run the kernels to materialise Z.
+  // Build the reference DataSet — concrete D32=32, D64=64, D128=128, batch=3,
+  // channel=5 tensors, then run the kernels to materialise Z.
   constexpr int64_t kD32 = 32;
+  constexpr int64_t kD64 = 64;
   constexpr int64_t kD128 = 128;
   constexpr int64_t kBatch = 3;
   constexpr int64_t kChannel = 5;
-  constexpr int64_t kD64 = 64;
-  std::vector<float> x_values(static_cast<size_t>(kD32 * kD128));
+  std::vector<float> x_values(static_cast<size_t>(kD32 * kD64));
   for (size_t i = 0; i < x_values.size(); ++i) {
     x_values[i] = static_cast<float>(i) * 0.001f;
   }
@@ -128,12 +137,13 @@ void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry) {
   for (size_t i = 0; i < y_values.size(); ++i) {
     y_values[i] = static_cast<float>(i) * 0.0001f + 1.0f;
   }
-  Tensor x = Tensor::FromFloat("X", {kD32, kD128}, x_values);
+  Tensor x = Tensor::FromFloat("X", {kD32, kD64}, x_values);
   Tensor y = Tensor::FromFloat("Y", {kBatch, kChannel, kD128, kD64}, y_values);
 
-  const Tensor shape1 = Tensor::FromInt64("", {3}, {1, 32, 128});
-  const Tensor shape2 = Tensor::FromInt64("", {3}, {15, 128, 64});
-  const Tensor shape3 = Tensor::FromInt64("", {4}, {3, 5, 32, 64});
+  // shape1=[0,-1,D64], shape2=[-1,D64,D128], shape3=[batch,channel,D64,D64]
+  const Tensor shape1 = Tensor::FromInt64("", {3}, {1, kD32, kD64});
+  const Tensor shape2 = Tensor::FromInt64("", {3}, {kBatch * kChannel, kD64, kD128});
+  const Tensor shape3 = Tensor::FromInt64("", {4}, {kBatch, kChannel, kD64, kD64});
   Tensor xu1 = kernel::Unsqueeze(ctx)(x, /*axes=*/{0});
   Tensor xu2 = kernel::Unsqueeze(ctx)(xu1, /*axes=*/{1});
   Tensor xm1 = kernel::Reshape(ctx)(xu2, shape1);

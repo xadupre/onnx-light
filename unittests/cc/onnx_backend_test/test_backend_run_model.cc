@@ -219,6 +219,23 @@ TEST(BackendRunModel, Conv) { RunBackendCasesFor("Conv"); }
 TEST(BackendRunModel, ConvInteger) { RunBackendCasesFor("ConvInteger"); }
 TEST(BackendRunModel, DeformConv) { RunBackendCasesFor("DeformConv"); }
 TEST(BackendRunModel, DepthToSpace) { RunBackendCasesFor("DepthToSpace"); }
+TEST(BackendRunModel, AveragePool) { RunBackendCasesFor("AveragePool"); }
+TEST(BackendRunModel, MaxPool) {
+  RunBackendCasesFor(
+      "MaxPool",
+      [](const TestCase &tc) {
+        const NodeProto &node = tc.model.ref_graph().ref_node()[0];
+        for (const auto &attr : node.ref_attribute()) {
+          if (attr.ref_name().as_string() == "storage_order" && attr.i() != 0) {
+            return false;
+          }
+        }
+        return true;
+      },
+      [](const DataSet &ds) {
+        return !ds.inputs.empty() && ds.inputs[0].data_type == DataType::FLOAT;
+      });
+}
 
 // ai.onnx.preview.training optimizer kernels.
 TEST(BackendRunModel, Adagrad) { RunBackendCasesFor("Adagrad"); }

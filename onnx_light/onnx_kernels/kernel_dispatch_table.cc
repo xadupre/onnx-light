@@ -354,6 +354,28 @@ inline Tensor GetAttributeTensorOrEmpty(const NodeProto &node, const std::string
   return TensorFromProto(attr->t());
 }
 
+// Shared spatial pooling attributes consumed by AveragePool / MaxPool
+// (and other pool-style ops). The defaults mirror the ONNX schema.
+struct PoolCommonAttrs {
+  std::vector<int64_t> kernel_shape;
+  std::vector<int64_t> strides;
+  std::vector<int64_t> pads;
+  std::vector<int64_t> dilations;
+  bool ceil_mode;
+  std::string auto_pad;
+};
+
+inline PoolCommonAttrs ParsePoolCommonAttrs(const NodeProto &node) {
+  PoolCommonAttrs a;
+  a.kernel_shape = GetAttributeIntsOrDefault(node, "kernel_shape", {});
+  a.strides = GetAttributeIntsOrDefault(node, "strides", {});
+  a.pads = GetAttributeIntsOrDefault(node, "pads", {});
+  a.dilations = GetAttributeIntsOrDefault(node, "dilations", {});
+  a.ceil_mode = GetAttributeIntOrDefault(node, "ceil_mode", 0) != 0;
+  a.auto_pad = GetAttributeStringOrDefault(node, "auto_pad", "NOTSET");
+  return a;
+}
+
 // Copies the typed contents of ``t`` into a ``std::vector<T>``. Throws
 // ``std::invalid_argument`` if ``t.data_type`` does not match ``T``.
 template <typename T> std::vector<T> TensorToVector(const Tensor &t) {
@@ -441,6 +463,20 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          set_optional_output(1, std::move(result.present_key));
          set_optional_output(2, std::move(result.present_value));
          set_optional_output(3, std::move(result.qk_matmul_output));
+       }},
+      {"ai.onnx:AveragePool",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const PoolCommonAttrs a = ParsePoolCommonAttrs(node);
+         const bool count_include_pad =
+             GetAttributeIntOrDefault(node, "count_include_pad", 0) != 0;
+         kernel::AveragePool k(rt.kernel_ctx());
+         SetOutput(node, 0,
+                   k(x, a.kernel_shape, a.strides, a.pads, a.ceil_mode, count_include_pad,
+                     a.dilations, a.auto_pad),
+                   rt.tensors());
        }},
       {"ai.onnx:BitShift",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -823,6 +859,33 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:LogSoftmax", MakeAxisTrampoline<kernel::LogSoftmax>()},
       {"ai.onnx:MatMul", MakeBinaryTrampoline<kernel::MatMul>()},
       {"ai.onnx:Max", MakeVariadicTrampoline<kernel::Max>()},
+      {"ai.onnx:MaxPool",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         if (node.output_size() < 1 || node.output_size() > 2) {
+           throw std::invalid_argument("RunNode: op 'MaxPool' expects 1 or 2 output(s), got " +
+                                       std::to_string(node.output_size()) + ".");
+         }
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const PoolCommonAttrs a = ParsePoolCommonAttrs(node);
+         const int64_t storage_order = GetAttributeIntOrDefault(node, "storage_order", 0);
+         kernel::MaxPool k(rt.kernel_ctx());
+         const bool need_indices =
+             node.output_size() == 2 && !node.output(1).as_string().empty();
+         if (need_indices) {
+           auto result = k.WithIndices(x, a.kernel_shape, a.strides, a.pads, a.ceil_mode,
+                                       a.dilations, storage_order, a.auto_pad);
+           SetOutput(node, 0, std::move(result.first), rt.tensors());
+           const std::string indices_name = node.output(1).as_string();
+           result.second.name = indices_name;
+           rt.tensors()[indices_name] = std::move(result.second);
+         } else {
+           SetOutput(node, 0,
+                     k(x, a.kernel_shape, a.strides, a.pads, a.ceil_mode, a.dilations,
+                       storage_order, a.auto_pad),
+                     rt.tensors());
+         }
+       }},
       {"ai.onnx:Mean", MakeVariadicTrampoline<kernel::Mean>()},
       {"ai.onnx:Min", MakeVariadicTrampoline<kernel::Min>()},
       {"ai.onnx:Mish", MakeUnaryTrampoline<kernel::Mish>()},

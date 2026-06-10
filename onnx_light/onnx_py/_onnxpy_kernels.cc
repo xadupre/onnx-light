@@ -192,7 +192,9 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "(``int`` nanoseconds since the Unix epoch), ``name``, ``data_type`` "
           "(``TensorProto.DataType`` integer), ``shape``, and the element values "
           "when the tensor holds at most 8 elements (``values`` for numeric "
-          "dtypes, ``string_values`` for ``STRING``).")
+          "dtypes, ``string_values`` for ``STRING``). For tensors with more than "
+          "8 elements ``data_type`` is set to ``-1`` and ``shape`` / ``values`` / "
+          "``string_values`` are empty so the log stays bounded.")
       .def("clear_events", &RuntimeContext::ClearEvents,
            "Empties the event log without otherwise touching the tensor map.");
 

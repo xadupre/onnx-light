@@ -51,9 +51,10 @@ using FunctionMap = std::unordered_map<std::string, const FunctionProto *>;
 
 /**
  * Maximum element_count for which :cpp:class:`TensorEvent` captures the
- * tensor values inline. Tensors with more elements still emit an event,
- * but ``TensorEvent::values`` / ``TensorEvent::string_values`` are left
- * empty so the event log stays bounded for large activations.
+ * tensor type, shape and values inline. Tensors with more elements still
+ * emit an event, but the event's ``data_type`` is set to ``-1`` and
+ * ``shape`` / ``values`` / ``string_values`` are left empty so the log
+ * stays bounded for large activations.
  */
 inline constexpr int64_t kTensorEventValueLimit = 8;
 
@@ -87,8 +88,9 @@ const char *TensorEventActionName(TensorEventAction action) noexcept;
  * For tensors whose ``element_count`` is at most
  * :cpp:var:`kTensorEventValueLimit`, the element values are also captured
  * inline (in ``values`` for numeric dtypes, in ``string_values`` for
- * ``DataType::STRING``). For larger tensors both fields are left empty so
- * the log stays bounded.
+ * ``DataType::STRING``). For larger tensors ``data_type`` is set to ``-1``
+ * and ``shape`` / ``values`` / ``string_values`` are left empty so the log
+ * stays bounded.
  *
  * ``kRemove`` events always set ``data_type = DataType::UNDEFINED``,
  * leave ``shape`` empty and do not populate ``values`` / ``string_values``;
@@ -105,10 +107,15 @@ struct TensorEvent {
   std::string name;
   /// Element data type of the tensor at the moment of the event, encoded
   /// as a ``TensorProto::DataType`` integer value. Set to
-  /// ``DataType::UNDEFINED`` for ``kRemove`` events.
+  /// ``DataType::UNDEFINED`` for ``kRemove`` events, and to ``-1`` for
+  /// ``kAdd`` / ``kReplace`` events whose tensor has more than
+  /// :cpp:var:`kTensorEventValueLimit` elements (the type/shape/values
+  /// payload is then elided).
   int32_t data_type = 0;
-  /// Tensor shape at the moment of the event. Empty for ``kRemove`` and
-  /// for scalar tensors (``element_count == 1``).
+  /// Tensor shape at the moment of the event. Empty for ``kRemove``, for
+  /// scalar tensors (``element_count == 1``), and for ``kAdd`` /
+  /// ``kReplace`` events whose tensor exceeds
+  /// :cpp:var:`kTensorEventValueLimit` elements.
   std::vector<int64_t> shape;
   /// Numeric values of the tensor (coerced to ``double``), captured only
   /// when ``data_type`` is numeric and ``element_count <= kTensorEventValueLimit``.

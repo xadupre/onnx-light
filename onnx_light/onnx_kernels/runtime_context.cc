@@ -100,15 +100,20 @@ TensorEvent MakeAddOrReplaceEvent(TensorEventAction action, const std::string &n
   ev.action = action;
   ev.timestamp_ns = NowNanos();
   ev.name = name;
+  const int64_t count = tensor.element_count();
+  if (count > kTensorEventValueLimit) {
+    // Large tensors: keep the log bounded by recording only the action,
+    // name and timestamp. Signal the elided payload with data_type = -1
+    // and leave shape / values / string_values empty.
+    ev.data_type = -1;
+    return ev;
+  }
   ev.data_type = tensor.data_type;
   ev.shape = tensor.shape;
-  const int64_t count = tensor.element_count();
-  if (count <= kTensorEventValueLimit) {
-    if (static_cast<DataType>(tensor.data_type) == DataType::STRING) {
-      ev.string_values = tensor.string_data;
-    } else if (tensor.bytes() != nullptr && tensor.size_bytes() > 0) {
-      DecodeNumericValues(tensor.data_type, tensor.bytes(), count, ev.values);
-    }
+  if (static_cast<DataType>(tensor.data_type) == DataType::STRING) {
+    ev.string_values = tensor.string_data;
+  } else if (tensor.bytes() != nullptr && tensor.size_bytes() > 0) {
+    DecodeNumericValues(tensor.data_type, tensor.bytes(), count, ev.values);
   }
   return ev;
 }

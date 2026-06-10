@@ -854,11 +854,13 @@ TEST(RunNodes, RuntimeContextEventLogSetReplaceRemove) {
   EXPECT_FALSE(rt.Remove("x"));
   EXPECT_EQ(rt.events().size(), 3u);
 
-  // Large tensor -> event recorded but values not inlined.
+  // Large tensor (> kTensorEventValueLimit) -> event recorded with the
+  // type/shape/values payload elided: data_type = -1, empty shape/values.
   rt.Put("big", Tensor::FromInt32("big", {9}, {0, 1, 2, 3, 4, 5, 6, 7, 8}));
   ASSERT_EQ(rt.events().size(), 4u);
   EXPECT_EQ(rt.events()[3].action, TensorEventAction::kAdd);
-  EXPECT_EQ(rt.events()[3].shape, (std::vector<int64_t>{9}));
+  EXPECT_EQ(rt.events()[3].data_type, -1);
+  EXPECT_TRUE(rt.events()[3].shape.empty());
   EXPECT_TRUE(rt.events()[3].values.empty());
 
   // String tensor values land in string_values.

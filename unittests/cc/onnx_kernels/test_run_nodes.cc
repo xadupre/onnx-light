@@ -153,6 +153,7 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx.ml:SVMClassifier"), table.end());
   EXPECT_NE(table.find("ai.onnx.ml:ArrayFeatureExtractor"), table.end());
   EXPECT_NE(table.find("ai.onnx.ml:Binarizer"), table.end());
+  EXPECT_NE(table.find("ai.onnx.ml:FeatureVectorizer"), table.end());
   EXPECT_NE(table.find("ai.onnx.ml:LabelEncoder"), table.end());
   // Linear attention (opset 27).
   EXPECT_NE(table.find("ai.onnx:LinearAttention"), table.end());

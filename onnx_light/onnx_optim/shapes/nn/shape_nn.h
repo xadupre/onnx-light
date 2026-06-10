@@ -491,6 +491,56 @@ void ComputeShapeAttention(ShapesContext &ctx, const NodeProto &node, const char
                            const char *past_value = nullptr);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor`(s) of a ``LinearAttention``
+ * node (since opset 27 in the ``ai.onnx`` domain) and stores them in ``ctx``.
+ *
+ * ``LinearAttention`` takes 3 to 6 inputs (``query``, ``key``, ``value`` and
+ * the optional ``past_state``, ``decay``, ``beta``) in rank-3 packed format
+ * ``(batch_size, sequence_length, num_heads * head_size)``, plus the
+ * required attributes ``q_num_heads`` and ``kv_num_heads``. It produces one
+ * or two outputs (``output`` and the optional ``present_state``).
+ *
+ * Inferred shapes are:
+ *
+ *   - ``output``: ``(batch_size, sequence_length, q_num_heads * d_v)``
+ *     with dtype matching ``query``, where ``d_v = value.shape[-1] /
+ *     kv_num_heads``.
+ *   - ``present_state``: ``(batch_size, kv_num_heads, d_k, d_v)`` where
+ *     ``d_k = key.shape[-1] / kv_num_heads``. The dtype matches
+ *     ``past_state`` when provided, otherwise ``query``.
+ *
+ * ``q_num_heads`` must be a positive multiple of ``kv_num_heads`` (Grouped
+ * Query Attention). Symbolic dimensions propagate symbolically.
+ *
+ * @param ctx         In/out context. Must already contain entries for
+ *                    ``query``, ``key`` and ``value``; on return it also
+ *                    contains an entry for each declared output of ``node``.
+ * @param node        The ``LinearAttention`` ``NodeProto`` whose outputs
+ *                    should be described. ``node.op_type()`` must be
+ *                    ``"LinearAttention"`` and ``node`` must declare at
+ *                    least one output and the ``q_num_heads`` /
+ *                    ``kv_num_heads`` attributes.
+ * @param query       Name of the query input value (rank 3).
+ * @param key         Name of the key input value (rank 3).
+ * @param value       Name of the value input value (rank 3).
+ * @param past_state  Optional name of the past_state input (rank 4). When
+ *                    not ``nullptr`` and present in ``ctx``, refines the
+ *                    inferred ``d_k`` / ``d_v`` dimensions and sets the
+ *                    dtype of ``present_state``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"LinearAttention"``, if ``node`` has no output, if
+ *         ``q_num_heads`` / ``kv_num_heads`` is missing or invalid, if
+ *         any of ``query``/``key``/``value`` has rank other than 3, or
+ *         if static shapes are inconsistent.
+ * @throws std::out_of_range     if ``query``/``key``/``value`` is not
+ *                               present in ``ctx``.
+ */
+void ComputeShapeLinearAttention(ShapesContext &ctx, const NodeProto &node, const char *query,
+                                 const char *key, const char *value,
+                                 const char *past_state = nullptr);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``RotaryEmbedding`` node
  * (since opset 23 in the ``ai.onnx`` domain) and stores it in ``ctx``.
  *

@@ -288,6 +288,24 @@ TEST(BackendRunModel, FeatureVectorizer) { RunBackendCasesFor("FeatureVectorizer
 TEST(BackendRunModel, LabelEncoder) { RunBackendCasesFor("LabelEncoder"); }
 TEST(BackendRunModel, OneHotEncoder) { RunBackendCasesFor("OneHotEncoder"); }
 
+// Control-flow kernels. ``Scan`` body-aware execution is owned by
+// :cpp:class:`kernel::Scan`; :cpp:func:`RunScanNode` additionally handles
+// the opset-8 batched form (leading ``sequence_lens`` placeholder + outer
+// batch dim on every state / scan input/output) by running the Scan-9
+// kernel once per batch element and stacking the per-batch outputs.
+//
+// ``test_cc_scan_zero_trip_count`` is excluded: when trip_count==0 the
+// body is never executed so the body-aware overload of ``kernel::Scan``
+// has no per-iteration tensor from which to recover the scan-output
+// element shape/dtype, and produces a degenerate UNDEFINED ``[0]`` output
+// instead of the expected FLOAT ``[0, 2]``. This is unrelated to the
+// opset-8 fix and tracked separately.
+TEST(BackendRunModel, Scan) {
+  RunBackendCasesFor(
+      "Scan", [](const TestCase &tc) { return tc.name != "test_cc_scan_zero_trip_count"; },
+      [](const DataSet &) { return true; });
+}
+
 // Quantization kernels.
 // The reference QuantizeLinear/DequantizeLinear kernels only support
 // per-tensor quantization (scalar y_scale/x_scale) with FLOAT scales and

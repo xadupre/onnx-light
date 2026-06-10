@@ -2065,6 +2065,80 @@ TEST(RunModel, ScanNodeRunsBodySubgraph) {
   EXPECT_FLOAT_EQ(y[2], 6.0f);
 }
 
+// Mirrors backend test ``test_scan_sum``: opset 8 batched form of Scan
+// where every state and scan input/output carries an outer batch dim of
+// size 1 and the (always-empty here) ``sequence_lens`` placeholder
+// occupies node.input(0).
+//
+//   sum_in = Add(sum_in, next), scan_out = Identity(sum_out)
+//   initial=[[0,0]] [1,2], x=[[[1,2],[3,4],[5,6]]] [1,3,2]
+//   y=[[9,12]] [1,2], z=[[[1,2],[4,6],[9,12]]] [1,3,2]
+TEST(RunModel, ScanOpset8NodeRunsBodySubgraphWithBatchDim) {
+  ModelProto model;
+  model.set_ir_version(3);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(8);
+
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *scan = g->add_node();
+  scan->set_op_type("Scan");
+  // Empty placeholder for sequence_lens, then initial state, then scan input.
+  scan->add_input("");
+  scan->add_input("initial");
+  scan->add_input("x");
+  scan->add_output("y");
+  scan->add_output("z");
+  AttributeProto *num_attr = scan->add_attribute();
+  num_attr->set_name("num_scan_inputs");
+  num_attr->set_type(AttributeProto::AttributeType::INT);
+  num_attr->set_i(1);
+
+  AttributeProto *body_attr = scan->add_attribute();
+  body_attr->set_name("body");
+  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  GraphProto *body = body_attr->add_g();
+  body->set_name("scan_body");
+  body->add_input()->set_name("sum_in");
+  body->add_input()->set_name("next");
+  NodeProto *add = body->add_node();
+  add->set_op_type("Add");
+  add->add_input("sum_in");
+  add->add_input("next");
+  add->add_output("sum_out");
+  NodeProto *id = body->add_node();
+  id->set_op_type("Identity");
+  id->add_input("sum_out");
+  id->add_output("scan_out");
+  body->add_output()->set_name("sum_out");
+  body->add_output()->set_name("scan_out");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(8)));
+  rt.Set("initial", Tensor::FromFloat("initial", {1, 2}, {0.0f, 0.0f}));
+  rt.Set("x", Tensor::FromFloat("x", {1, 3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}));
+
+  RunModel(model, rt);
+
+  ASSERT_TRUE(rt.Has("y"));
+  ASSERT_TRUE(rt.Has("z"));
+
+  const Tensor &y = rt.Get("y");
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 2}));
+  const float *y_ptr = y.AsFloat();
+  EXPECT_FLOAT_EQ(y_ptr[0], 9.0f);
+  EXPECT_FLOAT_EQ(y_ptr[1], 12.0f);
+
+  const Tensor &z = rt.Get("z");
+  ASSERT_EQ(z.shape, (std::vector<int64_t>{1, 3, 2}));
+  const float *z_ptr = z.AsFloat();
+  EXPECT_FLOAT_EQ(z_ptr[0], 1.0f);
+  EXPECT_FLOAT_EQ(z_ptr[1], 2.0f);
+  EXPECT_FLOAT_EQ(z_ptr[2], 4.0f);
+  EXPECT_FLOAT_EQ(z_ptr[3], 6.0f);
+  EXPECT_FLOAT_EQ(z_ptr[4], 9.0f);
+  EXPECT_FLOAT_EQ(z_ptr[5], 12.0f);
+}
+
 TEST(RunNodes, RunNodeLinearAttentionFromDispatchTable) {
   // Minimal test: B=1, T=1, q_num_heads=1, kv_num_heads=1, d_k=d_v=2.
   // query/key/value each have shape (1, 1, 2).

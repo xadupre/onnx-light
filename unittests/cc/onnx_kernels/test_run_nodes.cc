@@ -469,6 +469,22 @@ TEST(RunNodes, RunNodeImageDecoderDefaultsToRGB) {
   EXPECT_EQ(image.shape, (std::vector<int64_t>{0, 0, 3}));
 }
 
+TEST(RunNodes, RunNodeExpandFromDispatchTable) {
+  // Expand broadcasts a (3, 1) input to a (3, 4) shape.
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {3, 1}, {1, 2, 3});
+  rt.tensors()["shape"] = Tensor::FromInt64("shape", {2}, {3, 4});
+  NodeProto node = MakeNode("Expand", {"x", "shape"}, {"y"});
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{3, 4}));
+  const float *got = y.AsFloat();
+  EXPECT_FLOAT_EQ(got[0], 1.0f);
+  EXPECT_FLOAT_EQ(got[3], 1.0f);
+  EXPECT_FLOAT_EQ(got[4], 2.0f);
+  EXPECT_FLOAT_EQ(got[11], 3.0f);
+}
+
 TEST(RunNodes, RunNodeReshapeFromDispatchTable) {
   // Reshape with two inputs (data, shape) and the default ``allowzero`` (0).
   RuntimeContext rt(KernelContext(DefaultOpset(18)));

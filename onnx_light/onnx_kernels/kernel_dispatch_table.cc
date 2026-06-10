@@ -924,6 +924,15 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Equal", MakeBinaryTrampoline<kernel::Equal>()},
       {"ai.onnx:Erf", MakeUnaryTrampoline<kernel::Erf>()},
       {"ai.onnx:Exp", MakeUnaryTrampoline<kernel::Exp>()},
+      {"ai.onnx:Expand",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         const Tensor &input = GetInput(node, 0, rt.tensors());
+         const Tensor &shape = GetInput(node, 1, rt.tensors());
+         kernel::Expand k(rt.kernel_ctx());
+         SetOutput(node, 0, k(input, shape), rt);
+       }},
       {"ai.onnx:EyeLike",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);

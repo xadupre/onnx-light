@@ -20,7 +20,6 @@ from onnx_light.compatibility import (
     compare_signatures,
     compare_submodule,
     list_public_functions,
-    list_submodules,
 )
 from onnx_light.ext_test_case import ExtTestCase
 
@@ -42,24 +41,6 @@ class TestCompatibilityApiCompare(ExtTestCase):
             "inliner",
         ):
             self.assertIn(name, DEFAULT_SUBMODULES)
-
-    def test_list_submodules_onnxl(self):
-        submods = list_submodules(onnxl)
-        for name in (
-            "helper",
-            "numpy_helper",
-            "checker",
-            "defs",
-            "parser",
-            "shape_inference",
-            "version_converter",
-            "compose",
-            "utils",
-            "inliner",
-            "io_helper",
-        ):
-            self.assertIn(name, submods)
-        self.assertNotIn("sys", submods)
 
     def test_list_public_functions_filters_reexports(self):
         helper_funcs = list_public_functions(onnxl.helper)

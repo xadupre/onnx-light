@@ -1,14 +1,7 @@
 # source: https://github.com/onnx/onnx/blob/main/onnx/shape_inference.py
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-from ..onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
-
-__all__ = ["infer_function_output_types", "infer_node_outputs", "infer_shapes"]
-
-if TYPE_CHECKING:
-    pass
+from ..onnx_py import _onnxpyprotolib as _C  # type: ignore[missing-module-attribute]
 
 _shape_inference = _C.shape_inference  # type: ignore
 

@@ -4,9 +4,7 @@
 
 from __future__ import annotations
 
-from ..onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
-
-__all__ = ["parse_function", "parse_graph", "parse_model", "parse_node"]
+from ..onnx_py import _onnxpyprotolib as _C  # type: ignore[missing-module-attribute]
 
 _parser = _C.parser  # type: ignore
 

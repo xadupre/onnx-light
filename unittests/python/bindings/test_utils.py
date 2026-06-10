@@ -13,7 +13,7 @@ import unittest
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
 from onnx_light.ext_test_case import ExtTestCase
-from onnx_light.onnx import utils
+from onnx_light.onnx_lib import utils
 
 
 class TestUtilityFunctions(ExtTestCase):

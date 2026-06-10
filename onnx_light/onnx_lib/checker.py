@@ -3,16 +3,7 @@
 
 from __future__ import annotations
 
-from ..onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
-
-__all__ = [
-    "ValidationError",
-    "check_attribute",
-    "check_function_call_cycles",
-    "check_graph",
-    "check_model",
-    "check_sparse_tensor",
-]
+from ..onnx_py import _onnxpyprotolib as _C  # type: ignore[missing-module-attribute]
 
 _checker = _C.checker  # type: ignore
 

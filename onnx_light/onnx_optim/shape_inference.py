@@ -18,7 +18,7 @@ The module is exposed as ``onnx_light.onnx_optim.shape_inference``.
 
 from __future__ import annotations
 
-from ..onnx_py._onnxpy import shape_inference as _C  # type: ignore[attr-defined]
+from ..onnx_py._onnxpyoptim import shape_inference as _C  # type: ignore[attr-defined]
 
 
 def infer_shapes_model(model, prefill_with_value_info_output: bool = False) -> None:
@@ -39,6 +39,3 @@ def infer_shapes_model(model, prefill_with_value_info_output: bool = False) -> N
         has no graph.
     """
     _C.infer_shapes_model(model, prefill_with_value_info_output)
-
-
-__all__ = ["infer_shapes_model"]

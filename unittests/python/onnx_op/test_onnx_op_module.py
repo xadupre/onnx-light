@@ -3,28 +3,13 @@
 import unittest
 
 from onnx_light.ext_test_case import ExtTestCase
-import onnx_light.onnx_op as op
+import onnx_light.onnx_py._onnxpyprotoop as op
 
 
 class TestOnnxOpModule(ExtTestCase):
     def test_light_op_schema_exposed(self):
         self.assertTrue(hasattr(op, "LightOpSchema"))
         self.assertEqual(op.LightOpSchema.__name__, "LightOpSchema")
-
-    def test_module_exposes_expected_symbols(self):
-        for name in (
-            "FormalParameter",
-            "GetAllOnnxOpSchemasWithHistory",
-            "LightOpSchema",
-            "TensorType",
-            "ToTypeString",
-            "TypeConstraintParam",
-            "get_all_schemas",
-            "get_all_schemas_with_history",
-            "kOnnxDomain",
-        ):
-            self.assertIn(name, op.__all__, name)
-            self.assertTrue(hasattr(op, name), name)
 
     def test_onnx_domain_constant(self):
         self.assertEqual(op.kOnnxDomain, "ai.onnx")

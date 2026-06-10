@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from typing import Optional
-from . import FileLoadMode, ModelProto, ParseOptions, SerializeOptions
+from ..onnx_py._onnxpyprotoop import FileLoadMode, ModelProto, ParseOptions, SerializeOptions
 
 # ParseOptions used by :func:`_find_external_location` to skip copying raw tensor
 # bytes when scanning a model file purely for external-data ``location`` entries.
@@ -10,15 +10,6 @@ from . import FileLoadMode, ModelProto, ParseOptions, SerializeOptions
 # without an explicit ``location``.
 _FIND_EXTERNAL_PARSE_OPTS = ParseOptions()
 _FIND_EXTERNAL_PARSE_OPTS.skip_raw_data = True
-
-__all__ = [
-    "load",
-    "load_encrypted",
-    "load_encrypted_string",
-    "save",
-    "save_encrypted",
-    "save_encrypted_string",
-]
 
 
 def _find_external_location(model_path: str) -> str:

@@ -17,17 +17,10 @@ builds higher-level helpers on top of.
 from __future__ import annotations
 
 import re
-from typing import Any, Pattern, Union
+from typing import Pattern, Union, TYPE_CHECKING
 
-from ..onnx_py._onnxpy import backend_test as _C  # type: ignore[attr-defined]
-
-# Core data model.
-DataSet: Any = _C.DataSet
-Tensor: Any = _C.Tensor
-TestCase: Any = _C.TestCase
-
-# Helper that collects every C++-registered backend test case.
-collect_test_cases = _C.collect_test_cases
+if TYPE_CHECKING:
+    from ..onnx_py._onnxpybackend.backend_test import TestCase
 
 
 def collect_test_cases_by_name(pattern: Union[str, Pattern[str]]) -> list[TestCase]:
@@ -61,7 +54,6 @@ def collect_test_cases_by_name(pattern: Union[str, Pattern[str]]) -> list[TestCa
         raise TypeError(
             "pattern must be a str or a compiled re.Pattern, got {type(pattern).__name__}."
         )
+    from ..onnx_py._onnxpybackend import backend_test as _C  # type: ignore[attr-defined]
+
     return _C.collect_test_cases_by_name(source)
-
-
-__all__ = ["DataSet", "Tensor", "TestCase", "collect_test_cases", "collect_test_cases_by_name"]

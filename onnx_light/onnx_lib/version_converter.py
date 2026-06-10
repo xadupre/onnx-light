@@ -3,9 +3,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
-
-__all__ = ["convert_version"]
+from ..onnx_py import _onnxpyprotolib as _C  # type: ignore[missing-module-attribute]
 
 if TYPE_CHECKING:
     from . import ModelProto

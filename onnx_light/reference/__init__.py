@@ -15,5 +15,3 @@ delegating every operator evaluation to the static
 from __future__ import annotations
 
 from ._evaluator import ReferenceEvaluator
-
-__all__ = ["ReferenceEvaluator"]

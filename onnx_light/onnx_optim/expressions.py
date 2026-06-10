@@ -42,7 +42,7 @@ The module is exposed as ``onnx_light.onnx_optim.expressions``.
 
 from __future__ import annotations
 
-from ..onnx_py._onnxpy import expressions as _C  # type: ignore[attr-defined]
+from ..onnx_py._onnxpyoptim import expressions as _C  # type: ignore[attr-defined]
 
 
 def simplify_expression(expr: "str | int") -> "str | int":
@@ -396,21 +396,3 @@ def dim_min(a: "int | str", b: "int | str") -> "int | str":
         3
     """
     return _C.dim_min(a, b)
-
-
-__all__ = [
-    "dim_add",
-    "dim_div",
-    "dim_max",
-    "dim_min",
-    "dim_mod",
-    "dim_mul",
-    "dim_multi_mul",
-    "dim_sub",
-    "evaluate_expression",
-    "parse_expression_tokens",
-    "rename_dynamic_expression",
-    "rename_expression",
-    "simplify_expression",
-    "simplify_two_expressions",
-]

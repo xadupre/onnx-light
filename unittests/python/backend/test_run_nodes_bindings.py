@@ -15,8 +15,8 @@ import struct
 import unittest
 
 from onnx_light.ext_test_case import ExtTestCase
+from onnx_light.onnx import TensorProto
 from onnx_light.onnx_lib import parser
-from onnx_light.onnx_proto._onnxpy import TensorProto
 from onnx_light.onnx_py._onnxpykernels import runtime as rt
 
 

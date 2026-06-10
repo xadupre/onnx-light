@@ -9,8 +9,6 @@ from __future__ import annotations
 import os
 from pathlib import PurePosixPath, PureWindowsPath
 
-__all__ = ["validate_external_data_path"]
-
 
 def _is_relative_and_contained(location: str) -> bool:
     """Checks whether *location* is a relative path that does not escape its parent.

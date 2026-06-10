@@ -67,7 +67,7 @@ import difflib
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
+from ..onnx_py import _onnxpyprotolib as _C  # type: ignore[missing-module-attribute]
 
 _OpSchema = _C.defs.OpSchema  # type: ignore
 

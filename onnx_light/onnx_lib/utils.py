@@ -10,9 +10,7 @@ from typing import TYPE_CHECKING
 
 from . import helper
 from . import checker as _checker_mod
-from .io_helper import load, save
-
-__all__ = ["MAXIMUM_PROTOBUF", "Extractor", "extract_model"]
+from . import load, save
 
 if TYPE_CHECKING:
     from . import FunctionProto, ModelProto, NodeProto, TensorProto, ValueInfoProto

@@ -25,5 +25,3 @@ kernel layer.
 from __future__ import annotations
 
 from ..onnx_py._onnxpykernels import backend, runtime  # type: ignore[missing-import]
-
-__all__ = ["backend", "runtime"]

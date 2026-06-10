@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..onnx_py._onnxpy import onnx_op as _C  # type: ignore[attr-defined]
+from ..onnx_py._onnxpyprotoop import onnx_op as _C  # type: ignore[attr-defined]
 
 # Constants
 kOnnxDomain = _C.kOnnxDomain
@@ -65,18 +65,3 @@ def get_all_schemas() -> list[Any]:
         if key not in latest or s.since_version > latest[key].since_version:
             latest[key] = s
     return list(latest.values())
-
-
-__all__ = [
-    "AttributeParam",
-    "AttributeType",
-    "FormalParameter",
-    "GetAllOnnxOpSchemasWithHistory",
-    "LightOpSchema",
-    "TensorType",
-    "ToTypeString",
-    "TypeConstraintParam",
-    "get_all_schemas",
-    "get_all_schemas_with_history",
-    "kOnnxDomain",
-]

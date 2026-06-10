@@ -8,12 +8,9 @@ import shutil
 import subprocess
 import tempfile
 import unittest
-
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
-import onnx_light.onnx_lib.helper as onnxlh
-
 from onnx_light.ext_test_case import ExtTestCase
 from unittest.mock import patch
 
@@ -347,7 +344,7 @@ def _load_print_model_stats():
         if isinstance(node, ast.FunctionDef) and node.name == "print_model_stats"
     )
     module = ast.Module(body=[tensor_bytes_node, function_node], type_ignores=[])
-    namespace = {"onnx": onnxl, "os": os, "math": __import__("math"), "onnxlh": onnxlh}
+    namespace = {"onnx": onnxl, "os": os, "math": __import__("math")}
     exec(compile(module, str(source_path), "exec"), namespace)  # noqa: S102
     return namespace["print_model_stats"]
 

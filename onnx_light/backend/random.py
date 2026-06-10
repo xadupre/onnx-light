@@ -10,8 +10,6 @@ from typing import Iterable
 
 import numpy as np
 
-from ..onnx_py._onnxpy import backend as _C  # type: ignore[attr-defined]
-
 _UINT64_MASK = (1 << 64) - 1
 
 
@@ -50,6 +48,8 @@ def rand(*shape: int, seed: int | np.integer | None = None) -> np.ndarray:
     Returns:
         A ``np.ndarray`` of float64 values with the requested shape.
     """
+    from ..onnx_py._onnxpykernels import backend as _C  # type: ignore[attr-defined]
+
     normalized_shape = _normalize_size(shape)
     values = _C.rand(list(normalized_shape), _normalize_seed(seed))
     return np.asarray(values, dtype=np.float64).reshape(normalized_shape)
@@ -75,6 +75,8 @@ def randint(
     Returns:
         A ``np.ndarray`` of integers with the requested shape.
     """
+    from ..onnx_py._onnxpykernels import backend as _C  # type: ignore[attr-defined]
+
     assert size is not None, "size cannot be None"
     if high is None:
         high = low
@@ -102,6 +104,8 @@ def randn(*shape: int, seed: int | np.integer | None = None) -> np.ndarray:
     Returns:
         A ``np.ndarray`` of float64 values with the requested shape.
     """
+    from ..onnx_py._onnxpykernels import backend as _C  # type: ignore[attr-defined]
+
     normalized_shape = _normalize_size(shape)
     values = _C.randn(list(normalized_shape), _normalize_seed(seed))
     return np.asarray(values, dtype=np.float64).reshape(normalized_shape)

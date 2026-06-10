@@ -5,7 +5,7 @@ import numpy as np
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 import onnx_light.onnx as onnxl
-import onnx_light.onnx.io_helper as io_helper
+import onnx_light.onnx_proto._io_helper as io_helper
 from onnx_light.ext_test_case import ExtTestCase
 from onnx_light.backend.random import rand
 

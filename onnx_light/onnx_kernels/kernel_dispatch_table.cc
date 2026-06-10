@@ -440,6 +440,22 @@ template <class KernelT> NodeKernelFn MakeWindowTrampoline(const char *op_name) 
   };
 }
 
+// Trampoline for cumulative reduction ops (CumSum, CumProd) which take an
+// input tensor and an ``axis`` scalar input plus the boolean ``exclusive``
+// and ``reverse`` int attributes.
+template <class KernelT> NodeKernelFn MakeCumulativeTrampoline() {
+  return [](const NodeProto &node, RuntimeContext &rt) {
+    RequireInputCount(node, 2);
+    RequireOutputCount(node, 1);
+    const Tensor &x = GetInput(node, 0, rt.tensors());
+    const Tensor &axis = GetInput(node, 1, rt.tensors());
+    const bool exclusive = GetAttributeIntOrDefault(node, "exclusive", 0) != 0;
+    const bool reverse = GetAttributeIntOrDefault(node, "reverse", 0) != 0;
+    KernelT kernel(rt.kernel_ctx());
+    SetOutput(node, 0, kernel(x, axis, exclusive, reverse), rt);
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Normalization op helpers
 // ---------------------------------------------------------------------------
@@ -850,28 +866,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
       {"ai.onnx:Cos", MakeUnaryTrampoline<kernel::Cos>()},
       {"ai.onnx:Cosh", MakeUnaryTrampoline<kernel::Cosh>()},
-      {"ai.onnx:CumSum",
-       [](const NodeProto &node, RuntimeContext &rt) {
-         RequireInputCount(node, 2);
-         RequireOutputCount(node, 1);
-         const Tensor &x = GetInput(node, 0, rt.tensors());
-         const Tensor &axis = GetInput(node, 1, rt.tensors());
-         const bool exclusive = GetAttributeIntOrDefault(node, "exclusive", 0) != 0;
-         const bool reverse = GetAttributeIntOrDefault(node, "reverse", 0) != 0;
-         kernel::CumSum k(rt.kernel_ctx());
-         SetOutput(node, 0, k(x, axis, exclusive, reverse), rt);
-       }},
-      {"ai.onnx:CumProd",
-       [](const NodeProto &node, RuntimeContext &rt) {
-         RequireInputCount(node, 2);
-         RequireOutputCount(node, 1);
-         const Tensor &x = GetInput(node, 0, rt.tensors());
-         const Tensor &axis = GetInput(node, 1, rt.tensors());
-         const bool exclusive = GetAttributeIntOrDefault(node, "exclusive", 0) != 0;
-         const bool reverse = GetAttributeIntOrDefault(node, "reverse", 0) != 0;
-         kernel::CumProd k(rt.kernel_ctx());
-         SetOutput(node, 0, k(x, axis, exclusive, reverse), rt);
-       }},
+      {"ai.onnx:CumSum", MakeCumulativeTrampoline<kernel::CumSum>()},
+      {"ai.onnx:CumProd", MakeCumulativeTrampoline<kernel::CumProd>()},
       {"ai.onnx:DeformConv",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 3);

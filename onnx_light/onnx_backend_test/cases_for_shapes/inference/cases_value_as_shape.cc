@@ -87,7 +87,8 @@ void RegisterValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry) {
   AddNode(*graph, "Add", {"expanded", "y3"}, {"z3"});
 
   AddNode(*graph, "Add", {"z1", "z2"}, {"z12"});
-  AddNode(*graph, "Add", {"z12", "z3"}, {"z"});
+  AddNode(*graph, "Add", {"z12", "z3"}, {"z_pre_abs"});
+  AddNode(*graph, "Abs", {"z_pre_abs"}, {"z"});
 
   // Initializer ``one`` : int64[1] = [1].
   AddInitializer<int64_t>(*graph, "one", {1}, {1});
@@ -109,6 +110,7 @@ void RegisterValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry) {
   AppendValueInfo(*graph->add_value_info(), "z1", DataType::FLOAT, {"N", "B"});
   AppendValueInfo(*graph->add_value_info(), "z2", DataType::FLOAT, {"N", "B"});
   AppendValueInfo(*graph->add_value_info(), "z3", DataType::FLOAT, {"N", "B"});
+  AppendValueInfo(*graph->add_value_info(), "z_pre_abs", DataType::FLOAT, {"N", "B"});
 
   // Graph output: z : float[N, B].
   AppendValueInfo(*graph->add_output(), "z", DataType::FLOAT, {"N", "B"});
@@ -142,7 +144,8 @@ void RegisterValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry) {
   Tensor z2 = kernel::Add(ctx)(expanded, y2);
   Tensor z3 = kernel::Add(ctx)(expanded, y3);
   Tensor z12 = kernel::Add(ctx)(z1, z2);
-  Tensor z = kernel::Add(ctx)(z12, z3);
+  Tensor z_pre_abs = kernel::Add(ctx)(z12, z3);
+  Tensor z = kernel::Abs(ctx)(z_pre_abs);
   z.name = "z";
 
   AppendDataSet(tc, {std::move(x), std::move(y1), std::move(y2), std::move(y3)}, {std::move(z)});

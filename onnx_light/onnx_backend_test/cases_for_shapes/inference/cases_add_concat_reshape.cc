@@ -62,7 +62,8 @@ void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry
   AddNode(*graph, "Add", {"X", "Y"}, {"added"});
   NodeProto &concat_node = AddNode(*graph, "Concat", {"added", "X"}, {"concat_out"});
   AddAxisAttribute(concat_node, 2);
-  AddNode(*graph, "Reshape", {"concat_out", "reshape_shape"}, {"Z"});
+  AddNode(*graph, "Reshape", {"concat_out", "reshape_shape"}, {"Z_pre_abs"});
+  AddNode(*graph, "Abs", {"Z_pre_abs"}, {"Z"});
 
   TensorProto &tensor = *graph->add_initializer();
   tensor.set_name("reshape_shape");
@@ -85,6 +86,10 @@ void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry
   // dedicated symbolic name (``two_d_model``) instead of leaving the dim
   // unannotated. The reference DataSet uses ``2 * d_model = 16``.
   const std::vector<DimSpec> concat_shape = {"batch", "seq", "2*d_model"};
+  // ``value_info`` entries are ordered to match the alphabetical ordering
+  // returned by ``infer_shapes_model`` (which the Python test
+  // ``test_inference_shape`` checks positionally).
+  AppendValueInfo(*graph->add_value_info(), "Z_pre_abs", kFloat, concat_shape);
   AppendValueInfo(*graph->add_value_info(), "added", kFloat, input_shape);
   AppendValueInfo(*graph->add_value_info(), "concat_out", kFloat, concat_shape);
 
@@ -105,8 +110,9 @@ void RegisterAddConcatReshapeShapeInferenceCases(std::vector<TestCase> &registry
   Tensor x = Tensor::FromFloat("X", data_shape, x_values);
   Tensor y = Tensor::FromFloat("Y", data_shape, y_values);
   const Tensor new_shape = Tensor::FromInt64("", {3}, {0, 0, -1});
-  Tensor z =
+  Tensor z_pre_abs =
       kernel::Reshape(ctx)(kernel::Concat(ctx)({kernel::Add(ctx)(x, y), x}, /*axis=*/2), new_shape);
+  Tensor z = kernel::Abs(ctx)(z_pre_abs);
   z.name = "Z";
 
   AppendDataSet(tc, {x, y}, {z});

@@ -358,7 +358,7 @@ def onnx_save(model, onnx_path):
 
 
 def _maybe_import_onnx_ir():
-    """Imports the optional ``onnx_ir`` module when it is installed."""
+    """Attempts to import the optional ``onnx_ir`` module."""
     try:
         return importlib.import_module("onnx_ir")
     except ImportError:

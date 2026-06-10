@@ -14,6 +14,7 @@ SCRIPT = os.path.join(ROOT, "docs", "examples", "core", "plot_onnx_time.py")
 
 class TestPlotOnnxTime(ExtTestCase):
     def _run_plot_onnx_time(self, tmp: str) -> subprocess.CompletedProcess[str]:
+        """Runs ``plot_onnx_time.py`` in a subprocess with test settings."""
         env = os.environ.copy()
         env["UNITTEST_GOING"] = "1"
         env["MPLBACKEND"] = "Agg"

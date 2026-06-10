@@ -677,6 +677,21 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::Bernoulli kernel(rt.kernel_ctx());
          SetOutput(node, 0, kernel(input, GetSeedAttr(node), GetDtypeAttr(node)), rt);
        }},
+      {"ai.onnx:BlackmanWindow",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &size = GetInput(node, 0, rt.tensors());
+         const int64_t output_datatype = GetAttributeIntOrDefault(
+             node, "output_datatype", static_cast<int64_t>(DataType::FLOAT));
+         if (output_datatype != static_cast<int64_t>(DataType::FLOAT)) {
+           throw std::invalid_argument(
+               "RunNode: op 'BlackmanWindow' only supports output_datatype=FLOAT (1).");
+         }
+         const bool periodic = GetAttributeIntOrDefault(node, "periodic", 1) != 0;
+         kernel::BlackmanWindow k(rt.kernel_ctx());
+         SetOutput(node, 0, k(size, periodic), rt.tensors());
+       }},
       {"ai.onnx:CausalConvWithState",
        [](const NodeProto &node, RuntimeContext &rt) {
          if (node.input_size() < 2 || node.input_size() > 4) {
@@ -1022,6 +1037,36 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
       {"ai.onnx:HardSwish", MakeUnaryTrampoline<kernel::HardSwish>()},
       {"ai.onnx:Hardmax", MakeAxisTrampoline<kernel::Hardmax>()},
+      {"ai.onnx:HammingWindow",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &size = GetInput(node, 0, rt.tensors());
+         const int64_t output_datatype = GetAttributeIntOrDefault(
+             node, "output_datatype", static_cast<int64_t>(DataType::FLOAT));
+         if (output_datatype != static_cast<int64_t>(DataType::FLOAT)) {
+           throw std::invalid_argument(
+               "RunNode: op 'HammingWindow' only supports output_datatype=FLOAT (1).");
+         }
+         const bool periodic = GetAttributeIntOrDefault(node, "periodic", 1) != 0;
+         kernel::HammingWindow k(rt.kernel_ctx());
+         SetOutput(node, 0, k(size, periodic), rt.tensors());
+       }},
+      {"ai.onnx:HannWindow",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &size = GetInput(node, 0, rt.tensors());
+         const int64_t output_datatype = GetAttributeIntOrDefault(
+             node, "output_datatype", static_cast<int64_t>(DataType::FLOAT));
+         if (output_datatype != static_cast<int64_t>(DataType::FLOAT)) {
+           throw std::invalid_argument(
+               "RunNode: op 'HannWindow' only supports output_datatype=FLOAT (1).");
+         }
+         const bool periodic = GetAttributeIntOrDefault(node, "periodic", 1) != 0;
+         kernel::HannWindow k(rt.kernel_ctx());
+         SetOutput(node, 0, k(size, periodic), rt.tensors());
+       }},
       {"ai.onnx:Identity", MakeUnaryTrampoline<kernel::Identity>()},
       {"ai.onnx:ImageDecoder",
        [](const NodeProto &node, RuntimeContext &rt) {

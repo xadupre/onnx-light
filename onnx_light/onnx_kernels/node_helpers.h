@@ -96,7 +96,7 @@ inline void SetOutput(const NodeProto &node, int index, Tensor result, RuntimeCo
                                 std::to_string(index) + " is unset (empty name).");
   }
   result.name = name;
-  rt.Put(name, std::move(result));
+  rt.Put(name, std::move(result), TensorEventKind::kIntermediate);
 }
 
 inline void RequireInputCount(const NodeProto &node, int expected) {

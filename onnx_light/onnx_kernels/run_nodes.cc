@@ -154,7 +154,7 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
   child.functions() = rt.functions();
   child.tensors() = rt.tensors();
   for (const auto &kv : bindings) {
-    child.Put(kv.first, kv.second);
+    child.Put(kv.first, kv.second, TensorEventKind::kInput);
   }
   RunGraph(graph, child);
 
@@ -190,7 +190,7 @@ void PropagateOutputsToCaller(const NodeProto &node, const std::vector<Tensor> &
     }
     Tensor t = outputs[i];
     t.name = caller_name;
-    rt.Put(caller_name, std::move(t));
+    rt.Put(caller_name, std::move(t), TensorEventKind::kOutput);
   }
 }
 
@@ -417,7 +417,7 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
     }
     Tensor bound = it->second;
     bound.name = param_name;
-    child.Put(param_name, std::move(bound));
+    child.Put(param_name, std::move(bound), TensorEventKind::kInput);
   }
 
   // Resolve attribute references (``ref_attr_name``) inside the
@@ -460,7 +460,7 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
     }
     Tensor result = std::move(it->second);
     result.name = caller_name;
-    rt.Put(caller_name, std::move(result));
+    rt.Put(caller_name, std::move(result), TensorEventKind::kOutput);
   }
 }
 
@@ -520,7 +520,7 @@ void RunGraph(const GraphProto &graph, RuntimeContext &rt) {
     // Only insert if the caller has not already provided a value for this
     // name (i.e. runtime overrides of initializers are respected).
     if (!rt.Has(init_name)) {
-      rt.Set(init_name, TensorFromProto(tp));
+      rt.Set(init_name, TensorFromProto(tp), TensorEventKind::kInitializer);
     }
   }
   RunNodes(graph.node(), rt);

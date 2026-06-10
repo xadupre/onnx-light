@@ -228,6 +228,7 @@ TEST(BackendRunModel, GroupNormalization) { RunBackendCasesFor("GroupNormalizati
 TEST(BackendRunModel, InstanceNormalization) { RunBackendCasesFor("InstanceNormalization"); }
 TEST(BackendRunModel, LayerNormalization) { RunBackendCasesFor("LayerNormalization"); }
 TEST(BackendRunModel, RMSNormalization) { RunBackendCasesFor("RMSNormalization"); }
+TEST(BackendRunModel, Dropout) { RunBackendCasesFor("Dropout"); }
 TEST(BackendRunModel, AveragePool) { RunBackendCasesFor("AveragePool"); }
 TEST(BackendRunModel, MaxPool) {
   RunBackendCasesFor(

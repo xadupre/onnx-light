@@ -49,14 +49,15 @@ For systematic testing of shape inference across many test cases using
 from __future__ import annotations
 
 import onnx_light.onnx as onnxl
+import onnx_light.onnx.defs as defs
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx_optim.shape_inference import infer_shapes_model
-from onnx_light.onnx_py._onnxpy import shape_inference as si
+from onnx_light.onnx_py._onnxpyoptim import shape_inference as si
 
 # Make sure the built-in operator schemas are registered before running
 # shape inference (the C++ dispatch table looks them up).
-onnxl.defs.register_onnx_operator_set_schema()
+defs.register_onnx_operator_set_schema()
 
 
 #####################################

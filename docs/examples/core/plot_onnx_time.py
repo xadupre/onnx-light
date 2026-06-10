@@ -117,7 +117,7 @@ _ort_sess_opts = ort.SessionOptions()
 _ort_sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
 
 import onnx_light.onnx as onnxl
-import onnx_light.onnx_lib.helper as onnxlh
+import onnx_light.onnx.helper as onnxlh
 from onnx_light.doc import (
     find_standalone_executable,
     get_cpu_topology,

@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from onnx_light.backend_test import collect_test_cases
+from onnx_light.onnx.backend import collect_test_cases
 
 #####################################
 # Retrieve a backend test case

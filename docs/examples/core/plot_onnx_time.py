@@ -358,7 +358,7 @@ def onnx_save(model, onnx_path):
 
 
 def _maybe_import_onnx_ir():
-    """Attempts to import the optional ``onnx_ir`` module."""
+    """Imports the optional ``onnx_ir`` module when available."""
     try:
         return importlib.import_module("onnx_ir")
     except ImportError:
@@ -395,7 +395,7 @@ onxl_x4 = onnxl.load(onnx_path, num_threads=4)
 onnx_ir_module = _maybe_import_onnx_ir()
 onx_ir = (
     onnx_ir_module.load(onnx_path)
-    if onnx_ir_module is not None and _run_scenario("save")
+    if onnx_ir_module is not None and (_run_scenario("load") or _run_scenario("save"))
     else None
 )
 
@@ -885,12 +885,12 @@ if _run_scenario("save"):
         out_irpy_ext_location = "out_irpy_ext.data"
         out_irpy_ext_data = os.path.join(tmp_dir, out_irpy_ext_location)
 
-        def _save_irpy_external_with_flush() -> None:
+        def _save_ir_py_external_with_flush() -> None:
             onnx_ir_module.save(onx_ir, out_irpy_ext, external_data=out_irpy_ext_location)
             _flush_file(out_irpy_ext_data)
             _flush_file(out_irpy_ext)
 
-        data.append(measure("save/2filex1/ir-py", _save_irpy_external_with_flush, n=1, warmup=0))
+        data.append(measure("save/2filex1/ir-py", _save_ir_py_external_with_flush, n=1, warmup=0))
         print_stats("save/2filex1/ir-py", data[-1])
     else:
         print("onnx_ir is not installed, skipping ir-py save benchmarks.")

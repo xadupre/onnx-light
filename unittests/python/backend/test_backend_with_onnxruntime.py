@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 import onnxruntime as ort
-from onnx_light.backend.test.case import make_test_class
+from onnx_light.onnx.backend import make_test_class
 
 
 def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:

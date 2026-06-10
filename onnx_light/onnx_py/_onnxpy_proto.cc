@@ -1266,7 +1266,28 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
           nb::arg("base_dir") = std::string(),
           "Loads the raw bytes of this tensor from the external file described by its "
           "``external_data`` field into ``raw_data``. The ``external_data`` and ``data_location`` "
-          "fields are preserved.");
+          "fields are preserved.")
+      .def("HasField", [](const TensorProto &self, const std::string &field_name) {
+        if (field_name == "data_location")
+          return self.has_data_location();
+        if (field_name == "external_data")
+          return self.has_external_data();
+        if (field_name == "double_data")
+          return self.has_double_data();
+        if (field_name == "float_data")
+          return self.has_float_data();
+        if (field_name == "int64_data")
+          return self.has_int64_data();
+        if (field_name == "int32_data")
+          return self.has_int32_data();
+        if (field_name == "uint64_data")
+          return self.has_uint64_data();
+        if (field_name == "raw_data")
+          return self.raw_data_.size() > 0;
+        if (field_name == "metadata_props")
+          return self.has_metadata_props();
+        return true;
+      });
   PYADD_PROTO_SERIALIZATION(TensorProto);
   DECLARE_REPEATED_FIELD_PROTO(TensorProto, rep_tp);
   define_repeated_field_type_proto(rep_tp, rep_tp_proto);

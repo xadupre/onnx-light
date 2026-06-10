@@ -800,7 +800,7 @@ def _load_backend_test_cases() -> dict[str, Any]:
     """Returns the dictionary of backend test cases, collected at most once."""
     global _BACKEND_TEST_CASES_CACHE
     if _BACKEND_TEST_CASES_CACHE is None:
-        from .backend.test.case.base import collect_test_case
+        from .onnx_lib.backend.test.case.base import collect_test_case
 
         _BACKEND_TEST_CASES_CACHE = collect_test_case()
     return _BACKEND_TEST_CASES_CACHE
@@ -887,7 +887,7 @@ def _examples_section_lines(schema: Any, domain: str) -> list[str]:
     ``.. code-block:: text`` block.  When no backend test exists for the
     operator/opset, an empty list is returned and no section is emitted.
     """
-    from .backend.test.case.base import get_test_cases_for_op
+    from .onnx_lib.backend.test.case.base import get_test_cases_for_op
 
     all_tests = _load_backend_test_cases()
     if not all_tests:
@@ -1005,7 +1005,7 @@ def _differences_section_lines(prev_schema: Any, current_schema: Any) -> list[st
     """
     # Local import to avoid a hard dependency on the C-extension at import
     # time of this module (the schema diff module pulls _onnxpy).
-    from .compatibility.schema_diff import compare_schemas
+    from .tools.compatibility.schema_diff import compare_schemas
 
     diff = compare_schemas(prev_schema, current_schema)
     title = f"Differences with previous version ({prev_schema.since_version})"
@@ -1444,8 +1444,8 @@ def generate_operators_doc(
 from . import onnx as onnxl  # noqa: E402
 from .onnx_optim.shape_inference import infer_shapes_model  # noqa: E402
 from .tools import to_mermaid  # noqa: E402
-from .backend.test.case import collect_test_case  # noqa: E402
-from .backend.test.case.base import TestCase  # noqa: E402
+from .onnx_lib.backend.test.case import collect_test_case  # noqa: E402
+from .onnx_lib.backend.test.case.base import TestCase  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Data model

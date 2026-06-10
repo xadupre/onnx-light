@@ -3,7 +3,7 @@ from onnx_light.ext_test_case import ExtTestCase
 import numpy as np
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.defs as defs
-from onnx_light.backend.test.case.base import (
+from onnx_light.onnx_lib.backend.test.case.base import (
     ALL_TESTS,
     TestCase,
     collect_test_case,

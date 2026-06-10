@@ -4,7 +4,7 @@ from onnx_light.ext_test_case import ExtTestCase
 
 import numpy
 
-from onnx_light.backend.random import rand, randint, randn
+from onnx_light.onnx_lib.backend.random import rand, randint, randn
 
 
 class TestCustomRandom(ExtTestCase):

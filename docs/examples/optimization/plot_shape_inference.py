@@ -52,8 +52,13 @@ import onnx_light.onnx as onnxl
 import onnx_light.onnx.defs as defs
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
-from onnx_light.onnx_optim.shape_inference import infer_shapes_model
-from onnx_light.onnx_py._onnxpyoptim import shape_inference as si
+from onnx_light.onnx_optim.shape_inference import (
+    check_inputs_available,
+    compute_shape_node,
+    infer_shapes_model,
+    OptimTensor,
+    ShapesContext,
+)
 
 # Make sure the built-in operator schemas are registered before running
 # shape inference (the C++ dispatch table looks them up).
@@ -145,7 +150,7 @@ for name in TRACKED:
 
 def run_node_by_node(model, propagate_values: bool) -> dict:
     """Walk the graph and return ``{name: shape}`` for every tracked tensor."""
-    ctx = si.ShapesContext()
+    ctx = ShapesContext()
     for opset in model.opset_import:
         ctx.set_opset_version(opset.domain, opset.version)
 
@@ -153,11 +158,11 @@ def run_node_by_node(model, propagate_values: bool) -> dict:
     for inp in model.graph.input:
         tt = inp.type.tensor_type
         dims = [d.dim_value if d.dim_value else d.dim_param for d in tt.shape.dim]
-        ctx.set(inp.name, si.OptimTensor(tt.elem_type, dims))
+        ctx.set(inp.name, OptimTensor(tt.elem_type, dims))
 
     # Seed initializers, optionally propagating their values.
     for init in model.graph.initializer:
-        t = si.OptimTensor(init.data_type, list(init.dims))
+        t = OptimTensor(init.data_type, list(init.dims))
         if propagate_values:
             values = [int(v) for v in onh.to_array(init).flat]
             t.set_value_as_shape(values)
@@ -165,8 +170,8 @@ def run_node_by_node(model, propagate_values: bool) -> dict:
 
     results = {}
     for node in model.graph.node:
-        si.check_inputs_available(ctx, node)
-        si.compute_shape_node(ctx, node)
+        check_inputs_available(ctx, node)
+        compute_shape_node(ctx, node)
         for out_name in node.output:
             if not out_name:
                 continue

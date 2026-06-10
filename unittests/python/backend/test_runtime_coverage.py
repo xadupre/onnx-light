@@ -2,7 +2,7 @@
 
 import unittest
 
-from onnx_light.backend.runtime_coverage import (
+from onnx_light.onnx_lib.backend.runtime_coverage import (
     DomainSummary,
     RuntimeCoverageReport,
     TestCaseStatus,

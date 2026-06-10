@@ -107,9 +107,9 @@ import urllib.request
 
 import numpy as np
 import pandas
-import onnx
-import onnx.helper as oh
-import onnx.numpy_helper as onh
+
+import onnx_light.onnx.helper as oh
+import onnx_light.onnx.numpy_helper as onh
 
 import onnxruntime as ort
 
@@ -262,7 +262,7 @@ def _run_scenario(name: str) -> bool:
     return name in SELECTED_SCENARIOS
 
 
-def make_model(n_init: int = N_INIT, dim: int = DIM) -> onnx.ModelProto:
+def make_model(n_init: int = N_INIT, dim: int = DIM) -> onnxl.ModelProto:
     """Returns a synthetic ONNX model with *n_init* Gemm initializers of size *dim*."""
     initializers = []
     nodes = []
@@ -283,7 +283,7 @@ def make_model(n_init: int = N_INIT, dim: int = DIM) -> onnx.ModelProto:
     return model
 
 
-def _tensor_data_bytes(tensor: onnx.TensorProto) -> int:
+def _tensor_data_bytes(tensor: onnxl.TensorProto) -> int:
     """Returns the in-memory byte count of a TensorProto's stored data.
 
     Uses :func:`onnx_light.onnx_lib.helper.tensor_dtype_to_np_dtype` to map
@@ -302,7 +302,7 @@ def _tensor_data_bytes(tensor: onnx.TensorProto) -> int:
     return int(np_dtype.itemsize * n_elements)
 
 
-def print_model_stats(model: onnx.ModelProto, file_path: str | None = None) -> None:
+def print_model_stats(model: onnxl.ModelProto, file_path: str | None = None) -> None:
     """Prints summary statistics for *model* to stdout.
 
     Args:
@@ -342,24 +342,37 @@ tmp_dir = "temp_plot_onnx_time"
 if not os.path.exists(tmp_dir):
     os.mkdir(tmp_dir)
 
+
+def onnx_load(onnx_path):
+    import onnx
+
+    onnx.load(onnx_path)
+
+
+def onnx_save(model, onnx_path):
+    import onnx
+
+    onnx.save(model, onnx_path)
+
+
 if _CLI_MODEL_PATH is not None:
     onnx_path = os.path.abspath(_CLI_MODEL_PATH)
-    model = onnx.load(onnx_path)
+    model = onnx_load(onnx_path)
     print(f"Using provided model: {onnx_path}")
 elif _CLI_MODEL_ID is not None:
     downloaded = _download_hf_model(_CLI_MODEL_ID, _CLI_MODEL_FILE, tmp_dir)
     if downloaded is not None:
         onnx_path = downloaded
-        model = onnx.load(onnx_path)
+        model = onnx_load(onnx_path)
         print(f"Using model from Hugging Face id {_CLI_MODEL_ID!r}: {onnx_path}")
     else:
         model = make_model()
         onnx_path = os.path.join(tmp_dir, "bench.onnx")
-        onnx.save(model, onnx_path)
+        onnx_save(model, onnx_path)
 else:
     model = make_model()
     onnx_path = os.path.join(tmp_dir, "bench.onnx")
-    onnx.save(model, onnx_path)
+    onnx_save(model, onnx_path)
 
 size_bytes = model.ByteSize()
 print(f"Model size: {size_bytes / 2 ** 20:.3f} MB")
@@ -367,7 +380,14 @@ print(f"Model size: {size_bytes / 2 ** 20:.3f} MB")
 file_size = os.path.getsize(onnx_path)
 print(f"File size : {file_size / 2 ** 20:.3f} MB")
 
-onx = onnx.load(onnx_path)
+
+def onnx_load(onnx_path):
+    import onnx
+
+    return onnx.load(onnx_path)
+
+
+onx = onnx_load(onnx_path)
 onxl = onnxl.load(onnx_path)
 onxl_x4 = onnxl.load(onnx_path, num_threads=4)
 
@@ -702,7 +722,7 @@ if _run_scenario("serialize"):
 # ParseFromString comparison between ``onnx`` and ``onnx_light.onnx``.
 
 
-def _parse_onnx() -> onnx.ModelProto:
+def _parse_onnx() -> onnxl.ModelProto:
     """Parses ONNX bytes into a ModelProto."""
     parsed = onnx.ModelProto()
     parsed.ParseFromString(serialized_onnx)
@@ -801,6 +821,7 @@ if _run_scenario("parse"):
 if _run_scenario("save"):
     # %%
     # Save with ``onnx``.
+    import onnx
 
     out_onnx = os.path.join(tmp_dir, "out_onnx.onnx")
     data.append(measure("save/1filex1/onnx", lambda: onnx.save(onx, out_onnx)))
@@ -989,7 +1010,7 @@ if _run_scenario("cpp"):
 
 if _run_scenario("load"):
     data.append(
-        measure("load/2filex1/onnx", lambda: onnx.load(ext_load_onnx, load_external_data=True))
+        measure("load/2filex1/onnx", lambda: onnxl.load(ext_load_onnx, load_external_data=True))
     )
     print_stats("load/2filex1/onnx", data[-1])
 

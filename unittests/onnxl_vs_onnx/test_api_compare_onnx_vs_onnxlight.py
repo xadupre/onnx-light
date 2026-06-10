@@ -19,7 +19,7 @@ import onnx
 import onnx.inliner  # noqa: F401  -- bind the inliner attribute on ``onnx``
 import onnx_light.onnx as onnxl
 
-from onnx_light.compatibility import (
+from onnx_light.tools.compatibility import (
     DEFAULT_SUBMODULES,
     compare_packages,
     compare_submodule,

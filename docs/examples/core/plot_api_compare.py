@@ -41,8 +41,8 @@ import onnx.inliner  # noqa: F401  -- ensure the inliner sub-module is bound on 
 from onnx.backend.test import BackendTest
 
 import onnx_light.onnx as onnxl
-from onnx_light.backend.test.case.base import collect_test_case
-from onnx_light.compatibility import DEFAULT_SUBMODULES, compare_packages
+from onnx_light.onnx.backend import collect_test_case
+from onnx_light.tools.compatibility import DEFAULT_SUBMODULES, compare_packages
 
 #####################################
 # Run the comparison

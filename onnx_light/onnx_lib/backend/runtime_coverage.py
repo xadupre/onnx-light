@@ -26,8 +26,8 @@ from typing import Iterable
 
 import numpy as np
 
-from .. import onnx as onnxl
-from ..onnx_lib.shape_inference import infer_shapes
+from ... import onnx as onnxl
+from ...onnx_lib.shape_inference import infer_shapes
 from .test.case import collect_test_case
 from .test.case.base import TestCase
 

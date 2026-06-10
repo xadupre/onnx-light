@@ -2,7 +2,7 @@ import unittest
 
 import onnx_light.onnx as onnxl
 import onnx_light.onnx_optim.shape_inference as shape_inference
-from onnx_light.backend.test.case import make_test_class
+from onnx_light.onnx_lib.backend.test.case import make_test_class
 
 
 def _inputs(inputs):

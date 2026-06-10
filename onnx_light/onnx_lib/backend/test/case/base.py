@@ -1,11 +1,11 @@
 import re
 from typing import Any, Callable, Sequence, TypeAlias
 import numpy as np
-from .... import onnx
-from ....onnx import helper as onnx_helper
-from ....onnx_py._onnxpybackend import backend_test as _backend_test_cc
-from ....onnx_py._onnxpyprotoop import onnx_op as _onnx_op  # type: ignore[attr-defined]
-from ....ext_test_case import ExtTestCase
+from ..... import onnx
+from .....onnx import helper as onnx_helper
+from .....onnx_py._onnxpybackend import backend_test as _backend_test_cc
+from .....onnx_py._onnxpyprotoop import onnx_op as _onnx_op  # type: ignore[attr-defined]
+from .....ext_test_case import ExtTestCase
 
 _LIGHT_SINCE_VERSION_CACHE: dict[tuple[str, str], int] = {}
 # Backend test inputs/outputs are usually ndarrays, but ONNX sequence cases use
@@ -287,7 +287,7 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
     """
     import ml_dtypes as _ml_dtypes
 
-    from ....onnx_py._onnxpybackend import backend_test as _backend_test_cc  # type: ignore[attr-defined]
+    from .....onnx_py._onnxpybackend import backend_test as _backend_test_cc  # type: ignore[attr-defined]
 
     _DTYPE_TO_NP = {
         int(onnx.TensorProto.FLOAT): np.float32,

@@ -4,7 +4,7 @@ import unittest
 
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx.defs as defs
-from onnx_light.compatibility import ConstraintDiff, DocDiff, SchemaDiff, compare_schemas
+from onnx_light.tools.compatibility import ConstraintDiff, DocDiff, SchemaDiff, compare_schemas
 
 
 class TestCompareSchemasBuiltin(ExtTestCase):

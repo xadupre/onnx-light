@@ -18,22 +18,21 @@ import pstats
 
 import matplotlib.patches as mpatches
 import numpy as np
-import onnx
-import onnx.helper as oh
-import onnx.numpy_helper as onh
 import pandas
 
+import onnx_light.onnx.helper as oh
+import onnx_light.onnx.numpy_helper as onh
 import onnx_light.onnx as onnxl
 
 N_INIT = 40
 DIM = 256 if os.environ.get("UNITTEST_GOING") == "1" else 3072
 
 
-def make_model(n_init: int = N_INIT, dim: int = DIM) -> onnx.ModelProto:
+def make_model(n_init: int = N_INIT, dim: int = DIM) -> onnxl.ModelProto:
     """Creates a synthetic ONNX model with large initializers."""
     initializers = []
     nodes = []
-    inputs = [oh.make_tensor_value_info("X", onnx.TensorProto.FLOAT, [None, dim])]
+    inputs = [oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [None, dim])]
 
     prev = "X"
     for i in range(n_init):
@@ -44,7 +43,7 @@ def make_model(n_init: int = N_INIT, dim: int = DIM) -> onnx.ModelProto:
         nodes.append(oh.make_node("Gemm", [prev, weight_name], [out_name], transB=1))
         prev = out_name
 
-    outputs = [oh.make_tensor_value_info(prev, onnx.TensorProto.FLOAT, [None, dim])]
+    outputs = [oh.make_tensor_value_info(prev, onnxl.TensorProto.FLOAT, [None, dim])]
     graph = oh.make_graph(nodes, "bench_graph", inputs, outputs, initializer=initializers)
     return oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)], ir_version=9)
 
@@ -84,7 +83,7 @@ os.makedirs(out_dir, exist_ok=True)
 
 onnx_model = model
 onnx_input_path = os.path.join(out_dir, "bench.onnx")
-onnx.save(onnx_model, onnx_input_path)
+onnxl.save(onnx_model, onnx_input_path)
 onnx_light_model = onnxl.load(onnx_input_path)
 
 results = []
@@ -101,6 +100,8 @@ onnx_external_data_path = os.path.join(out_dir, onnx_external_location)
 
 
 def _save_onnx_external_with_flush() -> None:
+    import onnx
+
     onnx.save_model(
         onnx_model,
         onnx_external_path,

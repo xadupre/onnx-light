@@ -14,7 +14,7 @@ import unittest
 
 import onnx_light.onnx as onnxl
 
-from onnx_light.compatibility import (
+from onnx_light.tools.compatibility import (
     DEFAULT_SUBMODULES,
     SignatureDiff,
     compare_signatures,

@@ -5,10 +5,13 @@ Run a model with the runtime and inspect intermediate results
 =============================================================
 
 :mod:`onnx_light` ships a C++ kernel dispatcher exposed in Python
-through :mod:`onnx_light.kernels`. Its ``runtime`` submodule owns a
-:class:`RuntimeContext` whose :meth:`events` method returns an
+through :mod:`onnx_light.onnx_py._onnxpykernels.runtime`. This module owns a
+:class:`~onnx_light.onnx_py._onnxpykernels.runtime.RuntimeContext` whose
+:meth:`~onnx_light.onnx_py._onnxpykernels.runtime.RuntimeContext.events` method returns an
 append-only log of every tensor map mutation: graph initializers
-seeded by :func:`run_graph`, inputs injected by the caller,
+seeded by
+:func:`~onnx_light.onnx_py._onnxpykernels.runtime.run_graph`, inputs injected by
+the caller,
 intermediate values produced by each node kernel and outputs
 propagated back to the caller.
 
@@ -24,7 +27,8 @@ This example:
 * uses :func:`~onnx_light.onnx_optim.expressions.evaluate_expression`
   to resolve each symbolic dimension to a concrete integer given
   the actual batch size at runtime,
-* drives the runtime through :func:`run_model` while collecting
+* drives the runtime through :func:`~onnx_light.onnx_py._onnxpykernels.runtime.run_model`
+  while collecting
   the event log,
 * prints the events, illustrating how to peek at intermediate
   results without re-instrumenting the graph,
@@ -137,12 +141,14 @@ for name, shape in resolved_shapes.items():
 # Prepare the runtime context
 # +++++++++++++++++++++++++++
 #
-# :class:`RuntimeContext` owns the name-keyed tensor map shared
-# across every node. The construction-time :class:`KernelContext`
+# :class:`~onnx_light.onnx_py._onnxpykernels.runtime.RuntimeContext` owns the
+# name-keyed tensor map shared across every node. The construction-time
+# :class:`~onnx_light.onnx_py._onnxpykernels.runtime.KernelContext`
 # carries the opset version used to instantiate each per-operator
-# kernel. Inputs are inserted with :meth:`RuntimeContext.set` after
+# kernel. Inputs are inserted with
+# :meth:`~onnx_light.onnx_py._onnxpykernels.runtime.RuntimeContext.set` after
 # being converted from :class:`numpy.ndarray` to a runtime
-# ``Tensor`` via :func:`tensor_from_proto`.
+# ``Tensor`` via :func:`~onnx_light.onnx_py._onnxpykernels.runtime.tensor_from_proto`.
 
 ctx = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(18)))
 ctx.set("x", runtime.tensor_from_proto(numpy_helper.from_array(x, name="x")))
@@ -151,9 +157,11 @@ ctx.set("x", runtime.tensor_from_proto(numpy_helper.from_array(x, name="x")))
 # Run the model
 # +++++++++++++
 #
-# :func:`run_model` registers every model-local ``FunctionProto`` in
+# :func:`~onnx_light.onnx_py._onnxpykernels.runtime.run_model` registers every
+# model-local ``FunctionProto`` in
 # the runtime's function registry and then delegates to
-# :func:`run_graph`, which seeds the context with every
+# :func:`~onnx_light.onnx_py._onnxpykernels.runtime.run_graph`, which seeds the
+# context with every
 # ``TensorProto`` in ``graph.initializer`` before executing the node
 # sequence.
 
@@ -169,8 +177,10 @@ print(f"y =\n{y}")
 # Inspect the event log
 # +++++++++++++++++++++
 #
-# :meth:`RuntimeContext.events` returns a list of
-# :class:`TensorEvent` entries. Each event carries the
+# :meth:`~onnx_light.onnx_py._onnxpykernels.runtime.RuntimeContext.events`
+# returns a list of
+# :class:`~onnx_light.onnx_py._onnxpykernels.runtime.TensorEvent` entries. Each
+# event carries the
 # ``action`` (``"add"`` / ``"replace"`` / ``"remove"``), the
 # ``kind`` of value (``"input"``, ``"initializer"``,
 # ``"intermediate"`` or ``"output"``), the tensor ``name``,

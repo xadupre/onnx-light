@@ -47,7 +47,7 @@ void RegisterCastMapCases(std::vector<TestCase> &registry) {
   // the operator must sort them ascending in the output.
   //
   // The map is represented at runtime as two tensor inputs: "x_keys" (INT64)
-  // and "x_values" (FLOAT).
+  // and "x_values" (FLOAT or STRING depending on the test case).
   {
     NodeProto node;
     node.set_op_type("CastMap");

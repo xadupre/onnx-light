@@ -1957,6 +1957,11 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const std::string cast_to = GetAttributeStringOrDefault(node, "cast_to", "TO_FLOAT");
          const std::string map_form = GetAttributeStringOrDefault(node, "map_form", "DENSE");
          const int64_t max_map = GetAttributeIntOrDefault(node, "max_map", 0);
+         if (cast_to != "TO_FLOAT" && cast_to != "TO_INT64" && cast_to != "TO_STRING") {
+           throw std::invalid_argument(
+               "RunNode: CastMap attribute 'cast_to' must be 'TO_FLOAT', 'TO_INT64', or "
+               "'TO_STRING'.");
+         }
          kernel::CastMap cast_map(rt.kernel_ctx());
          Tensor y;
          switch (x_values.data_type) {
@@ -1966,12 +1971,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
              y = cast_map.operator()<float, float>(keys, values, cast_to, map_form, max_map);
            } else if (cast_to == "TO_INT64") {
              y = cast_map.operator()<float, int64_t>(keys, values, cast_to, map_form, max_map);
-           } else if (cast_to == "TO_STRING") {
-             y = cast_map.operator()<float, std::string>(keys, values, cast_to, map_form, max_map);
            } else {
-             throw std::invalid_argument(
-                 "RunNode: CastMap attribute 'cast_to' must be 'TO_FLOAT', 'TO_INT64', or "
-                 "'TO_STRING'.");
+             y = cast_map.operator()<float, std::string>(keys, values, cast_to, map_form, max_map);
            }
            break;
          }
@@ -1982,13 +1983,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            } else if (cast_to == "TO_INT64") {
              y = cast_map.operator()<std::string, int64_t>(keys, values, cast_to, map_form,
                                                             max_map);
-           } else if (cast_to == "TO_STRING") {
+           } else {
              y = cast_map.operator()<std::string, std::string>(keys, values, cast_to, map_form,
                                                                 max_map);
-           } else {
-             throw std::invalid_argument(
-                 "RunNode: CastMap attribute 'cast_to' must be 'TO_FLOAT', 'TO_INT64', or "
-                 "'TO_STRING'.");
            }
            break;
          }

@@ -281,6 +281,7 @@ TEST(BackendRunModel, ArrayFeatureExtractor) { RunBackendCasesFor("ArrayFeatureE
 TEST(BackendRunModel, Binarizer) { RunBackendCasesFor("Binarizer"); }
 TEST(BackendRunModel, FeatureVectorizer) { RunBackendCasesFor("FeatureVectorizer"); }
 TEST(BackendRunModel, LabelEncoder) { RunBackendCasesFor("LabelEncoder"); }
+TEST(BackendRunModel, OneHotEncoder) { RunBackendCasesFor("OneHotEncoder"); }
 
 // Quantization kernels.
 // The reference QuantizeLinear/DequantizeLinear kernels only support

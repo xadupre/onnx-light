@@ -7,7 +7,9 @@ This page documents ``examples/check_onnx_light_model``
 (`view on GitHub <https://github.com/xadupre/onnx-light/tree/main/examples/check_onnx_light_model>`_),
 a self-contained
 CMake project that demonstrates linking with *onnx-light* and running
-:cpp:func:`onnx::checker::check_model` from C++.
+:cpp:func:`onnx::checker::check_model` from C++. The same program also
+demonstrates calling :cpp:func:`onnx_optim::shapes::InferShapesModel` —
+the onnx_optim shape-inference entry point — on the loaded model.
 
 Step 1 – Install the C++ library
 ---------------------------------
@@ -47,10 +49,16 @@ Step 3 – Run the example
 
 .. code-block:: bash
 
-    ./build-check-onnx-light-model/check_onnx_light_model path/to/model.onnx 1
+    ./build-check-onnx-light-model/check_onnx_light_model path/to/model.onnx 1 1
 
 The optional ``full_check`` argument accepts ``0`` (default) or ``1``.
 When ``full_check=1``, checker runs additional shape-inference validation.
+
+The optional ``infer_shapes`` argument accepts ``0`` (default) or ``1``.
+When ``infer_shapes=1``, the example loads the model into a ``ModelProto``
+and calls :cpp:func:`onnx_optim::shapes::InferShapesModel` to populate
+``graph.value_info`` and refine ``graph.output`` shapes in place, then
+reports how many entries each list contains.
 
 Example output:
 
@@ -58,12 +66,16 @@ Example output:
 
     Model is valid: path/to/model.onnx
       full_check: true
+      shape inference: ok
+        graph.value_info entries: 12
+        graph.output entries:     1
 
 CMakeLists.txt
 --------------
 
 The example uses ``find_package`` and links against the exported
-``onnx_light::onnx_light`` target:
+``onnx_light::onnx_light`` target. ``onnx_light::lib_onnx_optim`` is also
+linked so the program can call onnx_optim shape inference:
 
 .. code-block:: cmake
 
@@ -76,35 +88,20 @@ The example uses ``find_package`` and links against the exported
     find_package(onnx_light REQUIRED)
 
     add_executable(check_onnx_light_model main.cc)
-    target_link_libraries(check_onnx_light_model PRIVATE onnx_light::onnx_light)
+    target_link_libraries(check_onnx_light_model
+      PRIVATE onnx_light::onnx_light onnx_light::lib_onnx_optim)
 
 main.cc
 --------
 
 The program calls the path-based checker API and handles validation failures
-using :cpp:class:`onnx::checker::ValidationError`.
+using :cpp:class:`onnx::checker::ValidationError`. When ``infer_shapes=1`` it
+also loads the model with :cpp:func:`LoadProtoFromPath` and runs
+:cpp:func:`onnx_optim::shapes::InferShapesModel` on the resulting
+``ModelProto``.
 
-.. code-block:: cpp
-
-    #include "onnx_lib/checker.h"
-
-    #include <iostream>
-
-    int main(int argc, char *argv[]) {
-      if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <model.onnx> [full_check]\n";
-        return 1;
-      }
-
-      try {
-        ONNX_LIGHT_NAMESPACE::checker::check_model(argv[1], false);
-        std::cout << "Model is valid: " << argv[1] << "\n";
-      } catch (const ONNX_LIGHT_NAMESPACE::checker::ValidationError &e) {
-        std::cerr << "Validation error:\n" << e.what() << "\n";
-        return 2;
-      }
-      return 0;
-    }
+.. literalinclude:: ../../examples/check_onnx_light_model/main.cc
+    :language: cpp
 
 See also
 --------

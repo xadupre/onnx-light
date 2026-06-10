@@ -97,6 +97,37 @@ void RegisterValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry);
 /// dim for the differing one.
 void RegisterIfSymbolicShapesShapeInferenceCases(std::vector<TestCase> &registry);
 
+/// Registers an ``Unsqueeze → Unsqueeze → Reshape → Reshape → Cast →
+/// MatMul → Reshape`` case translated from the ``test_check_shape`` example
+/// in https://github.com/xadupre/yet-another-onnx-builder/blob/main/
+/// unittests/xshape/test_shape_builder.py. Exercises shape inference through
+/// rank-changing ``Unsqueeze`` / ``Reshape`` and through ``MatMul`` of two
+/// 3-D tensors.
+void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry);
+
+/// Registers a ``Reshape → Reshape → Add`` case translated from the
+/// ``test_reshape_reshape`` example in https://github.com/xadupre/
+/// yet-another-onnx-builder/blob/main/unittests/xshape/test_shape_builder.py.
+/// Exercises shape inference through chained reshapes with the ``[0, 0, …]``
+/// "carry-over" pattern.
+void RegisterReshapeReshapeShapeInferenceCases(std::vector<TestCase> &registry);
+
+/// Registers a ``Shape → Concat → 3 × MatMul → 3 × Reshape → 3 × Transpose``
+/// case translated from the ``test_value_as_shape`` example in
+/// https://github.com/xadupre/yet-another-onnx-builder/blob/main/
+/// unittests/xshape/test_shape_builder.py. Exercises value-as-shape
+/// propagation: ``new_shape`` is built at graph-runtime from a ``Shape``
+/// node + a constant ``[32, 8]`` initializer and is then consumed by
+/// ``Reshape``.
+void RegisterValueAsShapeBuilderShapeInferenceCases(std::vector<TestCase> &registry);
+
+/// Registers a ``Concat → Split → Concat → Relu`` case translated from the
+/// ``test_concat_split`` example in https://github.com/xadupre/
+/// yet-another-onnx-builder/blob/main/unittests/xshape/test_shape_builder.py.
+/// Exercises Concat / Split shape propagation when the concat axis dims
+/// are symbolic.
+void RegisterConcatSplitShapeInferenceCases(std::vector<TestCase> &registry);
+
 /// Collects all shape-inference oriented backend test cases by invoking
 /// every ``Register*ShapeInferenceCases`` helper declared in this header.
 void CollectShapeInferenceTestCases(std::vector<TestCase> &registry,

@@ -79,7 +79,8 @@ print(model)
 # writes the inferred element type and shape of every intermediate
 # tensor to ``graph.value_info``. For symbolic dimensions the
 # inferred shape can contain arithmetic expressions over the input
-# parameters (e.g. ``2*N`` for the ``Concat`` along axis 0).
+# parameters (e.g. ``2*N`` for the ``Reshape`` output where the
+# ``-1`` placeholder resolves to ``(N * 4) // 2``).
 
 infer_shapes_model(model)
 

@@ -6,6 +6,7 @@
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
+#include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_kernels/kernels/training/include_training_kernels.h"
 #include "onnx_kernels/run_nodes.h"
 #include "onnx_kernels/simple_tensor.h"
@@ -501,6 +502,55 @@ TEST(RunNodes, RunNodeReshapeFromDispatchTable) {
   const float *got = y.AsFloat();
   EXPECT_FLOAT_EQ(got[0], 1.0f);
   EXPECT_FLOAT_EQ(got[5], 6.0f);
+}
+
+TEST(RunNodes, RunNodeResizeScalesFromDispatchTable) {
+  // Resize via the (X, roi="", scales) input form. Upsamples a 1x1x2x2
+  // NCHW tensor by [1, 1, 2, 3] using nearest mode and the asymmetric
+  // coordinate transformation.
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["X"] = Tensor::FromFloat("X", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  rt.tensors()["scales"] = Tensor::FromFloat("scales", {4}, {1.0f, 1.0f, 2.0f, 3.0f});
+  NodeProto node = MakeNode("Resize", {"X", "", "scales"}, {"Y"});
+  AttributeProto *coord = node.add_attribute();
+  coord->set_name("coordinate_transformation_mode");
+  coord->set_type(AttributeProto::AttributeType::STRING);
+  coord->set_s("asymmetric");
+
+  RunNode(node, rt);
+
+  const Tensor &y = rt.tensors().at("Y");
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{1, 1, 4, 6}));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+
+  // Compare against the kernel's direct output to validate dispatch-time
+  // wiring of inputs, attributes and outputs.
+  onnx_kernels::kernel::Resize::Attributes attrs;
+  attrs.coordinate_transformation_mode = "asymmetric";
+  const onnx_kernels::kernel::Resize resize_kernel(rt.kernel_ctx());
+  const Tensor y_ref = resize_kernel(rt.tensors().at("X"), rt.tensors().at("scales"), attrs);
+  ASSERT_EQ(y.element_count(), y_ref.element_count());
+  for (int64_t i = 0; i < y.element_count(); ++i) {
+    EXPECT_FLOAT_EQ(y.AsFloat()[i], y_ref.AsFloat()[i]);
+  }
+}
+
+TEST(RunNodes, RunNodeResizeSizesFromDispatchTable) {
+  // Resize via the (X, roi="", scales="", sizes) input form.
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["X"] = Tensor::FromFloat("X", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  rt.tensors()["sizes"] = Tensor::FromInt64("sizes", {4}, {1, 1, 4, 6});
+  NodeProto node = MakeNode("Resize", {"X", "", "", "sizes"}, {"Y"});
+  AttributeProto *coord = node.add_attribute();
+  coord->set_name("coordinate_transformation_mode");
+  coord->set_type(AttributeProto::AttributeType::STRING);
+  coord->set_s("asymmetric");
+
+  RunNode(node, rt);
+
+  const Tensor &y = rt.tensors().at("Y");
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{1, 1, 4, 6}));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
 }
 
 TEST(RunNodes, RunNodeRegexFullMatchFromDispatchTable) {

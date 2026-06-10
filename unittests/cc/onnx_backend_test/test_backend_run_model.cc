@@ -262,6 +262,11 @@ TEST(BackendRunModel, RandomUniform) { RunBackendCasesFor("RandomUniform"); }
 TEST(BackendRunModel, RandomUniformLike) { RunBackendCasesFor("RandomUniformLike"); }
 TEST(BackendRunModel, Multinomial) { RunBackendCasesFor("Multinomial"); }
 
+// Window-generation kernels (ai.onnx, opset 17).
+TEST(BackendRunModel, BlackmanWindow) { RunBackendCasesFor("BlackmanWindow"); }
+TEST(BackendRunModel, HannWindow) { RunBackendCasesFor("HannWindow"); }
+TEST(BackendRunModel, HammingWindow) { RunBackendCasesFor("HammingWindow"); }
+
 // ai.onnx.ml kernels.
 TEST(BackendRunModel, SVMRegressor) { RunBackendCasesFor("SVMRegressor"); }
 TEST(BackendRunModel, SVMClassifier) { RunBackendCasesFor("SVMClassifier"); }

@@ -416,6 +416,30 @@ NodeKernelFn MakeRandomLikeTrampoline(const char *attr_a, float default_a, const
   };
 }
 
+// Wraps a window-generation kernel of the form
+// ``Tensor operator()(const Tensor& size, bool periodic)`` (``BlackmanWindow``,
+// ``HannWindow``, ``HammingWindow``): one INT scalar input, optional ``periodic``
+// (default 1) and ``output_datatype`` (default FLOAT=1) attributes. Only
+// ``output_datatype == FLOAT`` is supported because the underlying kernels
+// always produce FLOAT outputs.
+template <class KernelT> NodeKernelFn MakeWindowTrampoline(const char *op_name) {
+  const std::string name(op_name);
+  return [name](const NodeProto &node, RuntimeContext &rt) {
+    RequireInputCount(node, 1);
+    RequireOutputCount(node, 1);
+    const Tensor &size = GetInput(node, 0, rt.tensors());
+    const int64_t output_datatype =
+        GetAttributeIntOrDefault(node, "output_datatype", static_cast<int64_t>(DataType::FLOAT));
+    if (output_datatype != static_cast<int64_t>(DataType::FLOAT)) {
+      throw std::invalid_argument("RunNode: op '" + name +
+                                  "' only supports output_datatype=FLOAT.");
+    }
+    const bool periodic = GetAttributeIntOrDefault(node, "periodic", 1) != 0;
+    KernelT kernel(rt.kernel_ctx());
+    SetOutput(node, 0, kernel(size, periodic), rt.tensors());
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Normalization op helpers
 // ---------------------------------------------------------------------------
@@ -677,6 +701,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::Bernoulli kernel(rt.kernel_ctx());
          SetOutput(node, 0, kernel(input, GetSeedAttr(node), GetDtypeAttr(node)), rt);
        }},
+      {"ai.onnx:BlackmanWindow", MakeWindowTrampoline<kernel::BlackmanWindow>("BlackmanWindow")},
       {"ai.onnx:CausalConvWithState",
        [](const NodeProto &node, RuntimeContext &rt) {
          if (node.input_size() < 2 || node.input_size() > 4) {
@@ -1154,6 +1179,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
       {"ai.onnx:HardSwish", MakeUnaryTrampoline<kernel::HardSwish>()},
       {"ai.onnx:Hardmax", MakeAxisTrampoline<kernel::Hardmax>()},
+      {"ai.onnx:HammingWindow", MakeWindowTrampoline<kernel::HammingWindow>("HammingWindow")},
+      {"ai.onnx:HannWindow", MakeWindowTrampoline<kernel::HannWindow>("HannWindow")},
       {"ai.onnx:Identity", MakeUnaryTrampoline<kernel::Identity>()},
       {"ai.onnx:ImageDecoder",
        [](const NodeProto &node, RuntimeContext &rt) {

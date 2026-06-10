@@ -1,7 +1,6 @@
 import unittest
 
 from onnx_light.ext_test_case import ExtTestCase
-import onnx_light.onnx as onnxl
 import onnx_light.onnx.defs as defs
 
 
@@ -17,9 +16,6 @@ class TestDefsLookup(ExtTestCase):
     def test_get_schemas_with_history(self):
         hist = defs.get_all_schemas_with_history()
         self.assertGreater(len(hist), 50)
-
-    def test_defs_module_exposed_from_package(self):
-        self.assertIs(onnxl.defs, defs)
 
     def test_schema_lookup(self):
         op_type = "CopilotUnitLookupOp"

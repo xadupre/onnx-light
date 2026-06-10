@@ -1,5 +1,3 @@
-"""Tests for :mod:`onnx_light.backend.runtime_coverage`."""
-
 import unittest
 
 from onnx_light.onnx_lib.backend.runtime_coverage import (

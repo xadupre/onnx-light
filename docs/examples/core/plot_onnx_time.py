@@ -266,7 +266,7 @@ def make_model(n_init: int = N_INIT, dim: int = DIM) -> onnxl.ModelProto:
     """Returns a synthetic ONNX model with *n_init* Gemm initializers of size *dim*."""
     initializers = []
     nodes = []
-    inputs = [oh.make_tensor_value_info("X", onnx.TensorProto.FLOAT, [None, dim])]
+    inputs = [oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [None, dim])]
 
     prev = "X"
     for i in range(n_init):
@@ -277,7 +277,7 @@ def make_model(n_init: int = N_INIT, dim: int = DIM) -> onnxl.ModelProto:
         nodes.append(oh.make_node("Gemm", [prev, weight_name], [out_name], transB=1))
         prev = out_name
 
-    outputs = [oh.make_tensor_value_info(prev, onnx.TensorProto.FLOAT, [None, dim])]
+    outputs = [oh.make_tensor_value_info(prev, onnxl.TensorProto.FLOAT, [None, dim])]
     graph = oh.make_graph(nodes, "bench_graph", inputs, outputs, initializer=initializers)
     model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)], ir_version=9)
     return model

@@ -48,7 +48,7 @@ onnx_kernels::TensorEventKind ParseTensorEventKind(const std::string &kind) {
 
 NB_MODULE(_onnxpykernels, m) {
   m.doc() = "onnx_light kernels bindings: deterministic pseudo-random helpers "
-            "backing onnx_light.backend, plus the RunNode/RunGraph/RunFunction/"
+            "backing _onnxpybackend_test, plus the RunNode/RunGraph/RunFunction/"
             "RunModel dispatcher and its supporting RuntimeContext/KernelContext "
             "types.";
 

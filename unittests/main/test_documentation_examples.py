@@ -11,6 +11,15 @@ VERBOSE = 0
 ROOT = os.path.realpath(os.path.abspath(os.path.join(onnxl_file, "..", "..")))
 
 
+def has_onnx():
+    try:
+        import onnx  # noqa: F401
+
+        return True
+    except:  # noqa: E722
+        return False
+
+
 def import_source(module_file_path, module_name):
     if not os.path.exists(module_file_path):
         raise FileNotFoundError(module_file_path)
@@ -77,6 +86,13 @@ class TestDocumentationExamples(ExtTestCase):
         _has_dot = int(os.environ.get("UNITTEST_DOT", "0"))
         for fold, name in found:
             reason = None
+
+            if (
+                not reason
+                and not has_onnx()
+                and name in {"plot_save_external_data_time.py", "plot_onnx_time.py"}
+            ):
+                reason = "onnx is missing"
 
             if reason:
 

@@ -314,8 +314,6 @@ target_precompile_headers(lib_onnx_kernels PRIVATE
 # (e.g. ModelProto) in its headers and sources.
 # It exposes a small infrastructure (struct Tensor, struct TestCase,
 # expect()) and a registry of C++-implemented backend test node cases.
-# It also bundles deterministic pseudo-random helpers (SplitMix64) used
-# to back ``onnx_light.backend``.
 #
 # The operator kernel implementations themselves live in the separate
 # ``lib_onnx_kernels`` target (built from ``onnx_kernels/kernels``)
@@ -385,7 +383,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   target_link_libraries(_onnxpyoptim PRIVATE lib_onnx_optim)
 
   # _onnxpykernels: kernel helpers (deterministic pseudo-random helpers backing
-  # ``onnx_light.backend``). Links lib_onnx_kernels only and does not depend on
+  # ``onnx_backend_test``). Links lib_onnx_kernels only and does not depend on
   # the backend-test case registries.
   nanobind_add_module(_onnxpykernels ${ONNX_PY_KERNELS_SOURCES})
   target_include_directories(_onnxpykernels PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")

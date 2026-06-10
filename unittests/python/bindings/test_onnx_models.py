@@ -177,7 +177,7 @@ class TestOnnxLightHelper(ExtTestCase):
 
     def test_load_file_load_mode_invalid_string_raises(self):
         name = self.get_dump_file("test_load_file_load_mode_invalid.onnx")
-        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        model = self._get_model_with_initializers(oh, onh)
         onnxl.save(model, name)
         with self.assertRaises(ValueError):
             onnxl.load(name, file_load_mode="not-a-mode")

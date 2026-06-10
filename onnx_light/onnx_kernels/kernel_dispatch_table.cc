@@ -1113,6 +1113,23 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Or", MakeBinaryTrampoline<kernel::Or>()},
       {"ai.onnx:Pow", MakeBinaryTrampoline<kernel::Pow>()},
       {"ai.onnx:PRelu", MakeBinaryTrampoline<kernel::PRelu>()},
+      {"ai.onnx:QLinearMatMul",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 8);
+         RequireOutputCount(node, 1);
+         const Tensor &a = GetInput(node, 0, rt.tensors());
+         const Tensor &a_scale = GetInput(node, 1, rt.tensors());
+         const Tensor &a_zero_point = GetInput(node, 2, rt.tensors());
+         const Tensor &b = GetInput(node, 3, rt.tensors());
+         const Tensor &b_scale = GetInput(node, 4, rt.tensors());
+         const Tensor &b_zero_point = GetInput(node, 5, rt.tensors());
+         const Tensor &y_scale = GetInput(node, 6, rt.tensors());
+         const Tensor &y_zero_point = GetInput(node, 7, rt.tensors());
+         kernel::QLinearMatMul k(rt.kernel_ctx());
+         SetOutput(node, 0,
+                   k(a, a_scale, a_zero_point, b, b_scale, b_zero_point, y_scale, y_zero_point),
+                   rt);
+       }},
       {"ai.onnx:QuantizeLinear", MakeBinaryWithOptionalThirdTrampoline<kernel::QuantizeLinear>()},
       {"ai.onnx:RandomNormal",
        MakeRandomGenTrampoline<kernel::RandomNormal>("mean", 0.0f, "scale", 1.0f)},

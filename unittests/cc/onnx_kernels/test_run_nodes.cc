@@ -120,6 +120,7 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx:ImageDecoder"), table.end());
   // Tensor shape kernels.
   EXPECT_NE(table.find("ai.onnx:Shape"), table.end());
+  EXPECT_NE(table.find("ai.onnx:DepthToSpace"), table.end());
   // Logical / bitwise kernels.
   EXPECT_NE(table.find("ai.onnx:And"), table.end());
   EXPECT_NE(table.find("ai.onnx:Or"), table.end());

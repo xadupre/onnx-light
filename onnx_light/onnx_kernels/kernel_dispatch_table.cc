@@ -554,6 +554,24 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                    rt.tensors());
        }},
       {"ai.onnx:Det", MakeUnaryTrampoline<kernel::Det>()},
+      {"ai.onnx:DepthToSpace",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &input = GetInput(node, 0, rt.tensors());
+         kernel::DepthToSpace::Attributes attrs;
+         const AttributeProto *blocksize_attr = FindAttribute(node, "blocksize");
+         if (blocksize_attr == nullptr) {
+           throw std::invalid_argument("RunNode: DepthToSpace requires attribute 'blocksize'.");
+         }
+         if (blocksize_attr->type() != AttributeProto::AttributeType::INT) {
+           throw std::invalid_argument("RunNode: DepthToSpace attribute 'blocksize' must be INT.");
+         }
+         attrs.blocksize = blocksize_attr->i();
+         attrs.mode = GetAttributeStringOrDefault(node, "mode", "DCR");
+         kernel::DepthToSpace kernel(rt.kernel_ctx());
+         SetOutput(node, 0, kernel(input, attrs), rt.tensors());
+       }},
       {"ai.onnx:DequantizeLinear", MakeBinaryWithOptionalThirdTrampoline<kernel::DequantizeLinear>()},
       {"ai.onnx:DFT",
        [](const NodeProto &node, RuntimeContext &rt) {

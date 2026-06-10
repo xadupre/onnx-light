@@ -437,14 +437,15 @@ void RegisterValueAsShapeBuilderShapeInferenceCases(std::vector<TestCase> &regis
 // is executable (``b + c = 10`` is even and divisible by 2 so Split produces
 // two equal halves).
 // ---------------------------------------------------------------------------
-void RegisterConcatSplitShapeInferenceCases(std::vector<TestCase> &registry) {
+void RegisterConcatSplitShapeInferenceCases(std::vector<TestCase> &registry, bool even) {
   // Opset 18 is required for Split's ``num_outputs`` attribute; the older
   // IR version 9 used in the original split-out file remains compatible.
   constexpr int64_t kConcatSplitIrVersion = 9;
   const OpsetId opset = DefaultOpset(18);
   const kernel::KernelContext ctx{opset};
 
-  const std::string name = "test_cc_shape_inference_concat_split";
+  const std::string name = even ? "test_cc_shape_inference_concat_split_even"
+                                : "test_cc_shape_inference_concat_split_odd";
 
   TestCase tc(name, name, "model", "inference");
   tc.rtol = 1e-3;
@@ -469,18 +470,33 @@ void RegisterConcatSplitShapeInferenceCases(std::vector<TestCase> &registry) {
   AddNode(*graph, "Relu", {"zs"}, {"Z"});
 
   // Graph inputs: X = float[a, b], Y = float[a, c].
-  AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {"a", "b"});
-  AppendValueInfo(*graph->add_input(), "Y", DataType::FLOAT, {"a", "c"});
+  if (even) {
+    AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {"a", "2*b"});
+    AppendValueInfo(*graph->add_input(), "Y", DataType::FLOAT, {"a", "2*c"});
 
-  // Intermediate value_info — leave the concat axis dim unannotated; shape
-  // inference renders it as a fresh symbolic dim (e.g. ``Concat_axis1``).
-  AppendValueInfo(*graph->add_value_info(), "xy", DataType::FLOAT, {"a", "b+c"});
-  AppendValueInfo(*graph->add_value_info(), "S1", DataType::FLOAT, {"a", "(b+c)//2"});
-  AppendValueInfo(*graph->add_value_info(), "S2", DataType::FLOAT, {"a", "(1+b+c)//2"});
-  AppendValueInfo(*graph->add_value_info(), "zs", DataType::FLOAT, {"a", "b+c"});
+    // Intermediate value_info — leave the concat axis dim unannotated; shape
+    // inference renders it as a fresh symbolic dim (e.g. ``Concat_axis1``).
+    AppendValueInfo(*graph->add_value_info(), "xy", DataType::FLOAT, {"a", "2*b+2*c)"});
+    AppendValueInfo(*graph->add_value_info(), "S1", DataType::FLOAT, {"a", "b+c"});
+    AppendValueInfo(*graph->add_value_info(), "S2", DataType::FLOAT, {"a", "b+c"});
+    AppendValueInfo(*graph->add_value_info(), "zs", DataType::FLOAT, {"a", "2*b+2*c"});
 
-  // Graph output Z — same shape as zs.
-  AppendValueInfo(*graph->add_output(), "Z", DataType::FLOAT, {"a", "b+c"});
+    // Graph output Z — same shape as zs.
+    AppendValueInfo(*graph->add_output(), "Z", DataType::FLOAT, {"a", "2*b+2*c"});
+  } else {
+    AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {"a", "b"});
+    AppendValueInfo(*graph->add_input(), "Y", DataType::FLOAT, {"a", "c"});
+
+    // Intermediate value_info — leave the concat axis dim unannotated; shape
+    // inference renders it as a fresh symbolic dim (e.g. ``Concat_axis1``).
+    AppendValueInfo(*graph->add_value_info(), "xy", DataType::FLOAT, {"a", "b+c"});
+    AppendValueInfo(*graph->add_value_info(), "S1", DataType::FLOAT, {"a", "(b+c)//2"});
+    AppendValueInfo(*graph->add_value_info(), "S2", DataType::FLOAT, {"a", "(1+b+c)//2"});
+    AppendValueInfo(*graph->add_value_info(), "zs", DataType::FLOAT, {"a", "b+c"});
+
+    // Graph output Z — same shape as zs.
+    AppendValueInfo(*graph->add_output(), "Z", DataType::FLOAT, {"a", "b+c"});
+  }
 
   // Build the reference DataSet — concrete a=3, b=4, c=6 tensors so that
   // b + c = 10 is divisible by 2 and Split produces two (3, 5) halves.

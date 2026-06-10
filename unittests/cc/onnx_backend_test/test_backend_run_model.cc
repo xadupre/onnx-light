@@ -206,6 +206,7 @@ TEST(BackendRunModel, Gelu) { RunBackendCasesFor("Gelu"); }
 TEST(BackendRunModel, Mod) { RunBackendCasesFor("Mod"); }
 TEST(BackendRunModel, Clip) { RunBackendCasesFor("Clip"); }
 TEST(BackendRunModel, DFT) { RunBackendCasesFor("DFT"); }
+TEST(BackendRunModel, STFT) { RunBackendCasesFor("STFT"); }
 TEST(BackendRunModel, Attention) {
   RunBackendCasesFor("Attention", [](const DataSet &ds) {
     return ds.inputs.size() >= 3 && ds.inputs[0].data_type == DataType::FLOAT &&
@@ -224,6 +225,23 @@ TEST(BackendRunModel, GroupNormalization) { RunBackendCasesFor("GroupNormalizati
 TEST(BackendRunModel, InstanceNormalization) { RunBackendCasesFor("InstanceNormalization"); }
 TEST(BackendRunModel, LayerNormalization) { RunBackendCasesFor("LayerNormalization"); }
 TEST(BackendRunModel, RMSNormalization) { RunBackendCasesFor("RMSNormalization"); }
+TEST(BackendRunModel, AveragePool) { RunBackendCasesFor("AveragePool"); }
+TEST(BackendRunModel, MaxPool) {
+  RunBackendCasesFor(
+      "MaxPool",
+      [](const TestCase &tc) {
+        const NodeProto &node = tc.model.ref_graph().ref_node()[0];
+        for (const auto &attr : node.ref_attribute()) {
+          if (attr.ref_name().as_string() == "storage_order" && attr.i() != 0) {
+            return false;
+          }
+        }
+        return true;
+      },
+      [](const DataSet &ds) {
+        return !ds.inputs.empty() && ds.inputs[0].data_type == DataType::FLOAT;
+      });
+}
 
 // ai.onnx.preview.training optimizer kernels.
 TEST(BackendRunModel, Adagrad) { RunBackendCasesFor("Adagrad"); }
@@ -238,6 +256,9 @@ TEST(BackendRunModel, LinearClassifier) { RunBackendCasesFor("LinearClassifier")
 TEST(BackendRunModel, TreeEnsembleRegressor) { RunBackendCasesFor("TreeEnsembleRegressor"); }
 TEST(BackendRunModel, TreeEnsembleClassifier) { RunBackendCasesFor("TreeEnsembleClassifier"); }
 TEST(BackendRunModel, TreeEnsemble) { RunBackendCasesFor("TreeEnsemble"); }
+TEST(BackendRunModel, ArrayFeatureExtractor) { RunBackendCasesFor("ArrayFeatureExtractor"); }
+TEST(BackendRunModel, Binarizer) { RunBackendCasesFor("Binarizer"); }
+TEST(BackendRunModel, LabelEncoder) { RunBackendCasesFor("LabelEncoder"); }
 
 // Quantization kernels.
 // The reference QuantizeLinear/DequantizeLinear kernels only support

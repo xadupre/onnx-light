@@ -130,6 +130,7 @@ ONNX_OPTIM_SHAPE_INFERENCE_OPS: frozenset[tuple[str, str]] = frozenset(
         ("ai.onnx", "LeakyRelu"),
         ("ai.onnx", "Less"),
         ("ai.onnx", "LessOrEqual"),
+        ("ai.onnx", "LinearAttention"),
         ("ai.onnx", "Loop"),
         ("ai.onnx", "Log"),
         ("ai.onnx", "LogSoftmax"),

@@ -70,6 +70,16 @@ void RegisterNestedLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &re
 /// Expressions must be simplified.
 void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &registry);
 
+/// Registers a ``Loop`` case that computes the pairwise Euclidean distance
+/// matrix of an input ``X`` of shape ``[N, D]``. The Loop iterates ``N``
+/// times: each iteration gathers one row of the outer-scope ``X`` and emits
+/// the row of distances to every other row as a FLOAT ``[N]`` scan output.
+/// Stacking the per-iteration scan outputs across the ``N`` iterations
+/// produces the ``[N, N]`` distance matrix. Exercises shape inference
+/// through a non-trivial ``Loop`` body, including outer-scope reference
+/// from inside the body subgraph.
+void RegisterLoopPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Shape → Shape → Concat → Add → Sub → Expand → 3 × Add →
 /// Add → Add`` value-as-shape case translated from
 /// https://github.com/xadupre/yet-another-onnx-builder/blob/main/
@@ -77,6 +87,15 @@ void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &regist
 /// propagation through ``Shape``/``Concat``/``Add``/``Sub`` so the
 /// downstream ``Expand`` can recover the precise symbolic output shape.
 void RegisterValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry);
+
+/// Registers a single-node ``If`` model whose ``then_branch`` and
+/// ``else_branch`` each produce **two** outputs of the same rank but with
+/// *different* symbolic shapes (the leading axis differs, every trailing
+/// axis matches). Exercises the branch-merging path of
+/// :cpp:func:`onnx_optim::shapes::controlflow::ComputeShapeIf`, which must
+/// keep matching axes and synthesize a fresh ``If_<out>_d<i>`` symbolic
+/// dim for the differing one.
+void RegisterIfSymbolicShapesShapeInferenceCases(std::vector<TestCase> &registry);
 
 /// Collects all shape-inference oriented backend test cases by invoking
 /// every ``Register*ShapeInferenceCases`` helper declared in this header.

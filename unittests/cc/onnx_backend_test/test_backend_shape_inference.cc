@@ -858,4 +858,67 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapePairwiseDistanceScan) {
   ASSERT_TRUE(found) << "test_cc_scan_pairwise_distance case not registered";
 }
 
+// ---------------------------------------------------------------------------
+// onnx_optim shape inference + Loop pairwise-distance subgraph
+// ---------------------------------------------------------------------------
+//
+// Verifies that the ``onnx_optim`` shape-inference pipeline correctly handles
+// a richer ``Loop`` body which references the outer-scope input ``X`` and
+// combines :cpp:`Unsqueeze`/``Gather``/``Sub``/``Mul``/``ReduceSum``/``Sqrt``
+// to compute one row of the pairwise-distance matrix per iteration. The case
+// used is ``test_cc_shape_inference_loop_pairwise_distance``:
+//
+//   * Main graph input ``X`` — FLOAT ``[N, D]`` (symbolic dims).
+//   * ``Loop`` body produces ``scan_out`` of shape ``[N]`` per iteration.
+//   * Trip count is ``Shape(X)[0]`` (= ``N``).
+//
+// After shape inference:
+//
+//   * ``Y`` — the stacked scan output — must be FLOAT rank 2 with the
+//     per-iteration trailing dim propagated from the body's ``ReduceSum``
+//     output and a symbolic leading axis (the trip count is a runtime
+//     INT64 value, not a static dim).
+TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeLoopPairwiseDistance) {
+  const std::vector<TestCase> cases = CollectTestCases();
+  bool found = false;
+  for (const TestCase &tc : cases) {
+    if (tc.name != "test_cc_shape_inference_loop_pairwise_distance") {
+      continue;
+    }
+    found = true;
+
+    ModelProto model_copy;
+    std::string serialized;
+    tc.model.SerializeToString(serialized);
+    model_copy.ParseFromString(serialized);
+
+    // Strip the recorded output shape so optim shape inference must
+    // recover it by walking the Loop body subgraph.
+    auto &outputs = model_copy.mutable_graph()->ref_output();
+    ASSERT_EQ(outputs.size(), 1u);
+    if (auto *ott = MutableTensorTypeOf(*outputs[0].mutable_type()); ott != nullptr) {
+      ott->clear_shape();
+    }
+
+    ASSERT_NO_THROW(onnx_optim::shapes::InferShapesModel(model_copy)) << "case: " << tc.name;
+
+    const auto &out_infos = model_copy.ref_graph().ref_output();
+    ASSERT_EQ(out_infos.size(), 1u);
+
+    // Y: stacked scan output, FLOAT rank 2. The leading axis is the Loop
+    // trip count (runtime INT64 input, so the dim is symbolic); the
+    // trailing dim is the per-iteration ``[N]`` element shape from the
+    // body's ``ReduceSum`` over the squared-difference rows.
+    const ValueInfoProto &out = out_infos[0];
+    ASSERT_TRUE(out.has_type());
+    const TypeProto::Tensor *ott = TensorTypeOf(out.ref_type());
+    ASSERT_NE(ott, nullptr);
+    EXPECT_EQ(static_cast<int32_t>(ott->elem_type()), 1 /* FLOAT */);
+    ASSERT_TRUE(ott->has_shape());
+    const auto dims = DimsOf(*ott);
+    ASSERT_EQ(dims.size(), 2u);
+  }
+  ASSERT_TRUE(found) << "test_cc_shape_inference_loop_pairwise_distance case not registered";
+}
+
 } // namespace Test

@@ -331,7 +331,7 @@ void MergeAnchorsIntoContext(ShapesContext &ctx, const AnchorMap &anchors) {
 // (e.g. ``"N"``) but they may also be arithmetic expressions such as
 // ``"s0+seq_len"``. In the latter case we want both the expression and
 // its leaf tokens (``s0`` and ``seq_len``) registered as "preferred"
-// names so that ``rename_dynamic_dimensions`` can re-use them when
+// names so that ``rename_dynamic_dimensions`` can reuse them when
 // canonicalising symbols inferred elsewhere in the graph.
 void AddDimAnchorSymbols(const OptimDim &dim, std::unordered_set<std::string> &symbols) {
   if (!dim.IsExpr()) {

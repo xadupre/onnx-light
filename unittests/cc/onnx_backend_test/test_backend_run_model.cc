@@ -277,6 +277,7 @@ TEST(BackendRunModel, TreeEnsembleClassifier) { RunBackendCasesFor("TreeEnsemble
 TEST(BackendRunModel, TreeEnsemble) { RunBackendCasesFor("TreeEnsemble"); }
 TEST(BackendRunModel, ArrayFeatureExtractor) { RunBackendCasesFor("ArrayFeatureExtractor"); }
 TEST(BackendRunModel, Binarizer) { RunBackendCasesFor("Binarizer"); }
+TEST(BackendRunModel, FeatureVectorizer) { RunBackendCasesFor("FeatureVectorizer"); }
 TEST(BackendRunModel, LabelEncoder) { RunBackendCasesFor("LabelEncoder"); }
 
 // Quantization kernels.

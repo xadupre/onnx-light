@@ -2197,6 +2197,20 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          }
          SetOutput(node, 0, std::move(out), rt.tensors());
        }},
+      {"ai.onnx.ml:FeatureVectorizer",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         std::vector<Tensor> inputs;
+         inputs.reserve(node.input_size());
+         for (int i = 0; i < node.input_size(); ++i) {
+           inputs.push_back(GetInput(node, i, rt.tensors()));
+         }
+         const std::vector<int64_t> inputdimensions =
+             GetAttributeIntsOrDefault(node, "inputdimensions", {});
+         kernel::FeatureVectorizer fv(rt.kernel_ctx());
+         SetOutput(node, 0, fv(inputs, inputdimensions), rt.tensors());
+       }},
       {"ai.onnx.ml:TreeEnsemble",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);

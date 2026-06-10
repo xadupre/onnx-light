@@ -265,9 +265,16 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     and copies that region into the top-left corner of ``output_shape``
 #     (see ``onnx/reference/ops/op_max_unpool.py``). The reference backend
 #     still exercises this case.
+#   * ``test_cc_stft_complex_batched`` — this case is the regression test
+#     ported from microsoft/onnxruntime#28961 and exists precisely to lock
+#     in the cross-batch pointer-arithmetic fix for complex-valued STFT
+#     inputs. ORT versions on the CI runners (≤ 1.26.0) predate that fix
+#     and emit ``NaN`` for every frame past the first batch. The reference
+#     backend still exercises this case to keep the regression coverage.
 ORT_EXCLUDE_REGEX = [
     r"^test_cc_roialign_max$",
     r"^test_cc_roialign_mode_max$",
+    r"^test_cc_stft_complex_batched$",
     r"^test_cc_flexattention_",
     r"^test_cc_image_decoder_",
     r"^test_cc_attention_4d_with_past_and_present_qk_matmul_bias_3d_mask_causal$",

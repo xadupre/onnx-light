@@ -41,7 +41,7 @@ class TestPlotOnnxTime(ExtTestCase):
     def test_plot_onnx_time_runs_ir_py_benchmarks_when_module_is_available(self):
         with tempfile.TemporaryDirectory() as tmp:
             with open(os.path.join(tmp, "onnx_ir.py"), "w", encoding="utf-8") as f:
-                f.write(textwrap.dedent("""
+                f.write(textwrap.dedent("""\
                         import onnx
 
 

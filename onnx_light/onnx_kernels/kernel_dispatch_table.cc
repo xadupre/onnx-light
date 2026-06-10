@@ -1942,6 +1942,62 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
 
       // ai.onnx.ml
+      {"ai.onnx.ml:CastMap",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         // Input 0: INT64 keys tensor; input 1: FLOAT or STRING values tensor.
+         const Tensor &x_keys = GetInput(node, 0, rt.tensors());
+         const Tensor &x_values = GetInput(node, 1, rt.tensors());
+         if (x_keys.data_type != static_cast<int32_t>(DataType::INT64)) {
+           throw std::invalid_argument(
+               "RunNode: CastMap input 0 (keys) must be an INT64 tensor.");
+         }
+         const std::vector<int64_t> keys = TensorToVector<int64_t>(x_keys);
+         const std::string cast_to = GetAttributeStringOrDefault(node, "cast_to", "TO_FLOAT");
+         const std::string map_form = GetAttributeStringOrDefault(node, "map_form", "DENSE");
+         const int64_t max_map = GetAttributeIntOrDefault(node, "max_map", 0);
+         kernel::CastMap cast_map(rt.kernel_ctx());
+         Tensor y;
+         switch (x_values.data_type) {
+         case static_cast<int32_t>(DataType::FLOAT): {
+           const std::vector<float> values = TensorToVector<float>(x_values);
+           if (cast_to == "TO_FLOAT") {
+             y = cast_map.operator()<float, float>(keys, values, cast_to, map_form, max_map);
+           } else if (cast_to == "TO_INT64") {
+             y = cast_map.operator()<float, int64_t>(keys, values, cast_to, map_form, max_map);
+           } else if (cast_to == "TO_STRING") {
+             y = cast_map.operator()<float, std::string>(keys, values, cast_to, map_form, max_map);
+           } else {
+             throw std::invalid_argument(
+                 "RunNode: CastMap attribute 'cast_to' must be 'TO_FLOAT', 'TO_INT64', or "
+                 "'TO_STRING'.");
+           }
+           break;
+         }
+         case static_cast<int32_t>(DataType::STRING): {
+           const std::vector<std::string> &values = x_values.AsStrings();
+           if (cast_to == "TO_FLOAT") {
+             y = cast_map.operator()<std::string, float>(keys, values, cast_to, map_form, max_map);
+           } else if (cast_to == "TO_INT64") {
+             y = cast_map.operator()<std::string, int64_t>(keys, values, cast_to, map_form,
+                                                            max_map);
+           } else if (cast_to == "TO_STRING") {
+             y = cast_map.operator()<std::string, std::string>(keys, values, cast_to, map_form,
+                                                                max_map);
+           } else {
+             throw std::invalid_argument(
+                 "RunNode: CastMap attribute 'cast_to' must be 'TO_FLOAT', 'TO_INT64', or "
+                 "'TO_STRING'.");
+           }
+           break;
+         }
+         default:
+           throw std::invalid_argument(
+               "RunNode: CastMap input 1 (values) must be a FLOAT or STRING tensor.");
+         }
+         SetOutput(node, 0, std::move(y), rt);
+       }},
       {"ai.onnx.ml:SVMRegressor",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);

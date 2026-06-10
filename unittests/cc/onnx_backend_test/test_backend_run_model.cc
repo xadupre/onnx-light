@@ -278,6 +278,7 @@ TEST(BackendRunModel, HannWindow) { RunBackendCasesFor("HannWindow"); }
 TEST(BackendRunModel, HammingWindow) { RunBackendCasesFor("HammingWindow"); }
 
 // ai.onnx.ml kernels.
+TEST(BackendRunModel, CastMap) { RunBackendCasesFor("CastMap"); }
 TEST(BackendRunModel, SVMRegressor) { RunBackendCasesFor("SVMRegressor"); }
 TEST(BackendRunModel, SVMClassifier) { RunBackendCasesFor("SVMClassifier"); }
 TEST(BackendRunModel, LinearRegressor) { RunBackendCasesFor("LinearRegressor"); }

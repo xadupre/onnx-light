@@ -15,20 +15,6 @@ namespace onnx_backend_test {
 
 namespace {
 
-// Promote the single input ValueInfoProto from its placeholder tensor type to
-// the actual map(int64, value_type) type expected by the CastMap schema.
-// Mirrors the helper used by ``cases_dict_and_feature_vectorizer.cc``.
-void PromoteInputToMapType(std::vector<TestCase> &registry, int32_t value_type) {
-  GraphProto &graph = registry.back().model.ref_graph();
-  ValueInfoProto &in_vi = *graph.mutable_input(0);
-  TypeProto &in_tp = in_vi.ref_type();
-  TypeProto::Map *in_map = in_tp.mutable_map_type();
-  in_map->set_key_type(static_cast<int32_t>(DataType::INT64));
-  TypeProto *map_value_type = in_map->mutable_value_type();
-  map_value_type->mutable_tensor_type()->set_elem_type(value_type);
-  in_tp.reset_tensor_type();
-}
-
 void AddStringAttr(NodeProto &node, const char *name, const std::string &value) {
   AttributeProto *attr = node.add_attribute();
   attr->set_name(name);
@@ -59,23 +45,27 @@ void RegisterCastMapCases(std::vector<TestCase> &registry) {
 
   // DENSE map(int64, float) -> tensor(float). Keys are not sorted on input;
   // the operator must sort them ascending in the output.
+  //
+  // The map is represented at runtime as two tensor inputs: "x_keys" (INT64)
+  // and "x_values" (FLOAT).
   {
     NodeProto node;
     node.set_op_type("CastMap");
     node.set_domain("ai.onnx.ml");
-    node.add_input("x");
+    node.add_input("x_keys");
+    node.add_input("x_values");
     node.add_output("y");
     AddStringAttr(node, "cast_to", "TO_FLOAT");
     AddStringAttr(node, "map_form", "DENSE");
 
     const std::vector<int64_t> keys{2, 0, 1};
     const std::vector<float> values{2.5f, 0.5f, 1.5f};
-    Tensor x = Tensor::FromInt64("", {1}, {0}); // placeholder; promoted below.
+    Tensor x_keys = Tensor::FromInt64("", {static_cast<int64_t>(keys.size())}, keys);
+    Tensor x_values = Tensor::FromFloat("", {static_cast<int64_t>(values.size())}, values);
     Tensor y = cast_map.operator()<float, float>(keys, values, "TO_FLOAT", "DENSE", 0);
 
-    Expect(node, {x}, {y}, "test_cc_cast_map_int64_float_dense", {default_opset, opset},
-           "backend-test", registry);
-    PromoteInputToMapType(registry, static_cast<int32_t>(DataType::FLOAT));
+    Expect(node, {x_keys, x_values}, {y}, "test_cc_cast_map_int64_float_dense",
+           {default_opset, opset}, "backend-test", registry);
   }
 
   // SPARSE map(int64, float) -> tensor(float). Missing positions are zero.
@@ -83,7 +73,8 @@ void RegisterCastMapCases(std::vector<TestCase> &registry) {
     NodeProto node;
     node.set_op_type("CastMap");
     node.set_domain("ai.onnx.ml");
-    node.add_input("x");
+    node.add_input("x_keys");
+    node.add_input("x_values");
     node.add_output("y");
     AddStringAttr(node, "cast_to", "TO_FLOAT");
     AddStringAttr(node, "map_form", "SPARSE");
@@ -91,12 +82,12 @@ void RegisterCastMapCases(std::vector<TestCase> &registry) {
 
     const std::vector<int64_t> keys{1, 3};
     const std::vector<float> values{10.0f, 30.0f};
-    Tensor x = Tensor::FromInt64("", {1}, {0});
+    Tensor x_keys = Tensor::FromInt64("", {static_cast<int64_t>(keys.size())}, keys);
+    Tensor x_values = Tensor::FromFloat("", {static_cast<int64_t>(values.size())}, values);
     Tensor y = cast_map.operator()<float, float>(keys, values, "TO_FLOAT", "SPARSE", 5);
 
-    Expect(node, {x}, {y}, "test_cc_cast_map_int64_float_sparse", {default_opset, opset},
-           "backend-test", registry);
-    PromoteInputToMapType(registry, static_cast<int32_t>(DataType::FLOAT));
+    Expect(node, {x_keys, x_values}, {y}, "test_cc_cast_map_int64_float_sparse",
+           {default_opset, opset}, "backend-test", registry);
   }
 
   // DENSE map(int64, string) -> tensor(string).
@@ -104,19 +95,20 @@ void RegisterCastMapCases(std::vector<TestCase> &registry) {
     NodeProto node;
     node.set_op_type("CastMap");
     node.set_domain("ai.onnx.ml");
-    node.add_input("x");
+    node.add_input("x_keys");
+    node.add_input("x_values");
     node.add_output("y");
     AddStringAttr(node, "cast_to", "TO_STRING");
     AddStringAttr(node, "map_form", "DENSE");
 
     const std::vector<int64_t> keys{1, 0};
     const std::vector<std::string> values{"b", "a"};
-    Tensor x = Tensor::FromInt64("", {1}, {0});
+    Tensor x_keys = Tensor::FromInt64("", {static_cast<int64_t>(keys.size())}, keys);
+    Tensor x_values = Tensor::FromStrings("", {static_cast<int64_t>(values.size())}, values);
     Tensor y = cast_map.operator()<std::string, std::string>(keys, values, "TO_STRING", "DENSE", 0);
 
-    Expect(node, {x}, {y}, "test_cc_cast_map_int64_string_dense", {default_opset, opset},
-           "backend-test", registry);
-    PromoteInputToMapType(registry, static_cast<int32_t>(DataType::STRING));
+    Expect(node, {x_keys, x_values}, {y}, "test_cc_cast_map_int64_string_dense",
+           {default_opset, opset}, "backend-test", registry);
   }
 }
 

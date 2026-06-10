@@ -67,8 +67,7 @@ void RegisterNonZeroChainCase(const std::string &name, std::vector<TestCase> &re
   Tensor nz = kernel::NonZero(ctx)(mul_out);
   nz.name = "nz";
   Tensor transposed_nz = kernel::Transpose(ctx)(nz, /*perm=*/{});
-  Tensor nz_float_pre_abs =
-      kernel::Cast(ctx)(transposed_nz, static_cast<int32_t>(DataType::FLOAT));
+  Tensor nz_float_pre_abs = kernel::Cast(ctx)(transposed_nz, static_cast<int32_t>(DataType::FLOAT));
   Tensor nz_float = kernel::Abs(ctx)(nz_float_pre_abs);
   nz_float.name = "nz_float";
 
@@ -109,8 +108,7 @@ void RegisterNonZeroChainCase(const std::string &name, std::vector<TestCase> &re
   AppendValueInfo(*graph->add_value_info(), "relu_out", kFloat, symbolic_input_shape);
   AppendValueInfo(*graph->add_value_info(), "double_out", kFloat, symbolic_input_shape);
   AppendValueInfo(*graph->add_value_info(), "mul_out", kFloat, symbolic_input_shape);
-  AppendValueInfo(*graph->add_value_info(), "nz_pre_abs", kInt64,
-                  {DimSpec(2), DimSpec("do1")});
+  AppendValueInfo(*graph->add_value_info(), "nz_pre_abs", kInt64, {DimSpec(2), DimSpec("do1")});
 
   // Graph outputs: nz and nz_float. The rank dimension is always known
   // (equal to the input rank, 2), so it is declared with ``dim_value=2``.

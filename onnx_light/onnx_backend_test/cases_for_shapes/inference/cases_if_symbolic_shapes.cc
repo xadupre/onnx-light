@@ -75,21 +75,21 @@ void AppendIdentityOutput(GraphProto &g, const std::string &input_name,
 //
 //   inputs:
 //     cond    : bool[]
-//     a_then  : float[A, 4]
-//     a_else  : float[B, 4]
-//     c_else  : bool[B]            # Compress condition (else-branch only)
-//     b_then  : int64[A]
-//     b_else  : int64[B]
+//     a_then  : float[3, 4]
+//     a_else  : float[5, 4]
+//     c_else  : bool[5]            # Compress condition (else-branch only)
+//     b_then  : int64[3]
+//     b_else  : int64[5]
 //
 //   out_a, out_b = If(cond,
 //                     then_branch = {
-//                       out_a = Identity(a_then)              # float[A, 4]
-//                       out_b = Identity(b_then)              # int64[A]
+//                       out_a = Identity(a_then)              # float[3, 4]
+//                       out_b = Identity(b_then)              # int64[3]
 //                     },
 //                     else_branch = {
 //                       out_a = Compress(a_else, c_else,
 //                                        axis=0)              # float[?, 4]
-//                       out_b = Identity(b_else)              # int64[B]
+//                       out_b = Identity(b_else)              # int64[5]
 //                     })
 //
 // Expected inferred output shapes (the differing leading axis becomes a
@@ -99,9 +99,13 @@ void AppendIdentityOutput(GraphProto &g, const std::string &input_name,
 //     out_a : float[If_out_a_d0, 4]
 //     out_b : int64[If_out_b_d0]
 //
-// The reference :cpp:class:`DataSet` selects the then-branch
-// (``cond = true``) and uses concrete sizes ``A=3, B=5`` so the case is
-// executable end-to-end by ``BackendTestCaseRunModel``.
+// Input shapes are declared with concrete ``dim_value``s (not ``dim_param``s)
+// so the dynamic shape-inference backend test
+// (``test_backend_with_optim_shape_inference_dynamic``) — which remaps each
+// concrete input dim to a fresh ``dim_param`` before running inference — can
+// exercise this case as well. The reference :cpp:class:`DataSet` selects the
+// then-branch (``cond = true``) so the case is executable end-to-end by
+// ``BackendTestCaseRunModel``.
 // ---------------------------------------------------------------------------
 void RegisterIfSymbolicShapesShapeInferenceCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(13);
@@ -125,11 +129,11 @@ void RegisterIfSymbolicShapesShapeInferenceCases(std::vector<TestCase> &registry
   then_attr->set_type(AttributeProto::AttributeType::GRAPH);
   GraphProto *then_g = then_attr->add_g();
   // Both then-branch outputs are wired through ``Identity`` so they pick up
-  // the outer-scope ValueInfo (and the corresponding symbolic dims) of
-  // their captured inputs.
+  // the outer-scope ValueInfo (and the corresponding shapes) of their
+  // captured inputs.
   BuildIdentityBranch(*then_g, "then_branch", "a_then", "out_a_then", DataType::FLOAT,
-                      {"A", DimSpec(int64_t{4})});
-  AppendIdentityOutput(*then_g, "b_then", "out_b_then", DataType::INT64, {"A"});
+                      {DimSpec(int64_t{3}), DimSpec(int64_t{4})});
+  AppendIdentityOutput(*then_g, "b_then", "out_b_then", DataType::INT64, {DimSpec(int64_t{3})});
 
   AttributeProto *else_attr = if_node.add_attribute();
   else_attr->set_name("else_branch");
@@ -147,18 +151,20 @@ void RegisterIfSymbolicShapesShapeInferenceCases(std::vector<TestCase> &registry
   AddAttribute<int64_t>(*compress_node, "axis", 0);
   AppendValueInfo(*else_g->add_output(), "out_a_else", DataType::FLOAT,
                   {DimSpec(), DimSpec(int64_t{4})});
-  AppendIdentityOutput(*else_g, "b_else", "out_b_else", DataType::INT64, {"B"});
+  AppendIdentityOutput(*else_g, "b_else", "out_b_else", DataType::INT64, {DimSpec(int64_t{5})});
 
-  // Graph inputs: scalar BOOL cond, two FLOAT[A or B, 4] inputs, the
-  // else-branch Compress condition ``c_else: bool[B]``, and two INT64
-  // [A or B] inputs. Distinct symbolic dim names on the leading axis
-  // force the branch-merging path to synthesize a fresh symbolic dim.
+  // Graph inputs: scalar BOOL cond, two FLOAT[*, 4] inputs, the
+  // else-branch Compress condition ``c_else: bool[5]``, and two INT64[*]
+  // inputs. Distinct concrete leading dims (``3`` vs ``5``) force the
+  // branch-merging path to synthesize a fresh symbolic dim.
   AppendValueInfo(*graph->add_input(), "cond", DataType::BOOL, std::vector<DimSpec>{});
-  AppendValueInfo(*graph->add_input(), "a_then", DataType::FLOAT, {"A", DimSpec(int64_t{4})});
-  AppendValueInfo(*graph->add_input(), "a_else", DataType::FLOAT, {"B", DimSpec(int64_t{4})});
-  AppendValueInfo(*graph->add_input(), "c_else", DataType::BOOL, {"B"});
-  AppendValueInfo(*graph->add_input(), "b_then", DataType::INT64, {"A"});
-  AppendValueInfo(*graph->add_input(), "b_else", DataType::INT64, {"B"});
+  AppendValueInfo(*graph->add_input(), "a_then", DataType::FLOAT,
+                  {DimSpec(int64_t{3}), DimSpec(int64_t{4})});
+  AppendValueInfo(*graph->add_input(), "a_else", DataType::FLOAT,
+                  {DimSpec(int64_t{5}), DimSpec(int64_t{4})});
+  AppendValueInfo(*graph->add_input(), "c_else", DataType::BOOL, {DimSpec(int64_t{5})});
+  AppendValueInfo(*graph->add_input(), "b_then", DataType::INT64, {DimSpec(int64_t{3})});
+  AppendValueInfo(*graph->add_input(), "b_else", DataType::INT64, {DimSpec(int64_t{5})});
 
   // Graph outputs: the merged shapes recorded as ground truth for the
   // ``AllCollectedCasesInferOutputShapes`` test. ``CheckValueInfoMatches``

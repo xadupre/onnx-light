@@ -1327,6 +1327,209 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          SetOutput(node, 0, std::move(yz.first), rt.tensors());
          SetOutput(node, 1, std::move(yz.second), rt.tensors());
        }},
+      {"ai.onnx.ml:Binarizer",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const float threshold = GetAttributeFloatOrDefault(node, "threshold", 0.0f);
+         kernel::Binarizer binarizer(rt.kernel_ctx());
+         Tensor y = DispatchSVMByDataType(x, "Binarizer", [&](auto *tag) {
+           using T = std::remove_pointer_t<decltype(tag)>;
+           (void)tag;
+           return binarizer.template operator()<T>(x, static_cast<T>(threshold));
+         });
+         SetOutput(node, 0, std::move(y), rt.tensors());
+       }},
+      {"ai.onnx.ml:ArrayFeatureExtractor",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const Tensor &y = GetInput(node, 1, rt.tensors());
+         kernel::ArrayFeatureExtractor afe(rt.kernel_ctx());
+         Tensor z = DispatchSVMByDataType(x, "ArrayFeatureExtractor", [&](auto *tag) {
+           using T = std::remove_pointer_t<decltype(tag)>;
+           (void)tag;
+           return afe.template operator()<T>(x, y);
+         });
+         SetOutput(node, 0, std::move(z), rt.tensors());
+       }},
+      {"ai.onnx.ml:LabelEncoder",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+
+         // Identify the key source (exactly one of keys_int64s, keys_floats,
+         // keys_strings, keys_tensor must be present per the ONNX spec).
+         const AttributeProto *keys_int64s = FindAttribute(node, "keys_int64s");
+         const AttributeProto *keys_floats = FindAttribute(node, "keys_floats");
+         const AttributeProto *keys_strings = FindAttribute(node, "keys_strings");
+         const AttributeProto *keys_tensor = FindAttribute(node, "keys_tensor");
+         const int n_keys = (keys_int64s != nullptr) + (keys_floats != nullptr) +
+                            (keys_strings != nullptr) + (keys_tensor != nullptr);
+         if (n_keys != 1) {
+           throw std::invalid_argument(
+               "RunNode: LabelEncoder requires exactly one of 'keys_int64s', "
+               "'keys_floats', 'keys_strings' or 'keys_tensor' to be set.");
+         }
+
+         // Identify the value source.
+         const AttributeProto *values_int64s = FindAttribute(node, "values_int64s");
+         const AttributeProto *values_floats = FindAttribute(node, "values_floats");
+         const AttributeProto *values_strings = FindAttribute(node, "values_strings");
+         const AttributeProto *values_tensor = FindAttribute(node, "values_tensor");
+         const int n_values = (values_int64s != nullptr) + (values_floats != nullptr) +
+                              (values_strings != nullptr) + (values_tensor != nullptr);
+         if (n_values != 1) {
+           throw std::invalid_argument(
+               "RunNode: LabelEncoder requires exactly one of 'values_int64s', "
+               "'values_floats', 'values_strings' or 'values_tensor' to be set.");
+         }
+
+         // Resolve KeyT.
+         enum class KeyKind { Int64, Float, String };
+         KeyKind key_kind;
+         std::vector<int64_t> keys_i64;
+         std::vector<float> keys_f32;
+         std::vector<std::string> keys_str;
+         if (keys_int64s != nullptr) {
+           key_kind = KeyKind::Int64;
+           for (int64_t v : keys_int64s->ints()) {
+             keys_i64.push_back(v);
+           }
+         } else if (keys_floats != nullptr) {
+           key_kind = KeyKind::Float;
+           for (float v : keys_floats->floats()) {
+             keys_f32.push_back(v);
+           }
+         } else if (keys_strings != nullptr) {
+           key_kind = KeyKind::String;
+           for (const auto &v : keys_strings->strings()) {
+             keys_str.push_back(v.as_string());
+           }
+         } else {
+           const Tensor kt = TensorFromProto(keys_tensor->t());
+           switch (kt.data_type) {
+           case static_cast<int32_t>(DataType::INT64):
+             key_kind = KeyKind::Int64;
+             keys_i64 = TensorToVector<int64_t>(kt);
+             break;
+           case static_cast<int32_t>(DataType::FLOAT):
+             key_kind = KeyKind::Float;
+             keys_f32 = TensorToVector<float>(kt);
+             break;
+           case static_cast<int32_t>(DataType::STRING):
+             key_kind = KeyKind::String;
+             keys_str = kt.AsStrings();
+             break;
+           default:
+             throw std::invalid_argument(
+                 "RunNode: LabelEncoder 'keys_tensor' must have element type "
+                 "INT64, FLOAT or STRING.");
+           }
+         }
+
+         // Resolve ValueT and look up the (optional) default attribute.
+         enum class ValueKind { Int64, Float, Int16 };
+         ValueKind value_kind;
+         std::vector<int64_t> values_i64;
+         std::vector<float> values_f32;
+         std::vector<int16_t> values_i16;
+         if (values_int64s != nullptr) {
+           value_kind = ValueKind::Int64;
+           for (int64_t v : values_int64s->ints()) {
+             values_i64.push_back(v);
+           }
+         } else if (values_floats != nullptr) {
+           value_kind = ValueKind::Float;
+           for (float v : values_floats->floats()) {
+             values_f32.push_back(v);
+           }
+         } else if (values_strings != nullptr) {
+           throw std::invalid_argument(
+               "RunNode: LabelEncoder with 'values_strings' is not supported "
+               "by this kernel registration.");
+         } else {
+           const Tensor vt = TensorFromProto(values_tensor->t());
+           switch (vt.data_type) {
+           case static_cast<int32_t>(DataType::INT64):
+             value_kind = ValueKind::Int64;
+             values_i64 = TensorToVector<int64_t>(vt);
+             break;
+           case static_cast<int32_t>(DataType::FLOAT):
+             value_kind = ValueKind::Float;
+             values_f32 = TensorToVector<float>(vt);
+             break;
+           case static_cast<int32_t>(DataType::INT16):
+             value_kind = ValueKind::Int16;
+             values_i16 = TensorToVector<int16_t>(vt);
+             break;
+           default:
+             throw std::invalid_argument(
+                 "RunNode: LabelEncoder 'values_tensor' must have element "
+                 "type INT64, FLOAT or INT16.");
+           }
+         }
+
+         int64_t default_i64 = -1;
+         float default_f32 = -0.0f;
+         int16_t default_i16 = -1;
+         const AttributeProto *default_int64 = FindAttribute(node, "default_int64");
+         const AttributeProto *default_float = FindAttribute(node, "default_float");
+         const AttributeProto *default_tensor_attr = FindAttribute(node, "default_tensor");
+         if (default_int64 != nullptr) {
+           default_i64 = default_int64->i();
+         }
+         if (default_float != nullptr) {
+           default_f32 = default_float->f();
+         }
+         if (default_tensor_attr != nullptr) {
+           const Tensor dt = TensorFromProto(default_tensor_attr->t());
+           if (dt.element_count() != 1) {
+             throw std::invalid_argument(
+                 "RunNode: LabelEncoder 'default_tensor' must contain exactly one element.");
+           }
+           switch (dt.data_type) {
+           case static_cast<int32_t>(DataType::INT64):
+             default_i64 = dt.AsInt64()[0];
+             break;
+           case static_cast<int32_t>(DataType::FLOAT):
+             default_f32 = dt.AsFloat()[0];
+             break;
+           case static_cast<int32_t>(DataType::INT16):
+             default_i16 = dt.AsInt16()[0];
+             break;
+           default:
+             throw std::invalid_argument(
+                 "RunNode: LabelEncoder 'default_tensor' must have element "
+                 "type INT64, FLOAT or INT16.");
+           }
+         }
+
+         kernel::LabelEncoder label_encoder(rt.kernel_ctx());
+         Tensor out;
+         if (key_kind == KeyKind::Int64 && value_kind == ValueKind::Int64) {
+           out = label_encoder.operator()<int64_t, int64_t>(x, keys_i64, values_i64, default_i64);
+         } else if (key_kind == KeyKind::Int64 && value_kind == ValueKind::Float) {
+           out = label_encoder.operator()<int64_t, float>(x, keys_i64, values_f32, default_f32);
+         } else if (key_kind == KeyKind::Float && value_kind == ValueKind::Int64) {
+           out = label_encoder.operator()<float, int64_t>(x, keys_f32, values_i64, default_i64);
+         } else if (key_kind == KeyKind::Float && value_kind == ValueKind::Float) {
+           out = label_encoder.operator()<float, float>(x, keys_f32, values_f32, default_f32);
+         } else if (key_kind == KeyKind::String && value_kind == ValueKind::Int64) {
+           out =
+               label_encoder.operator()<std::string, int64_t>(x, keys_str, values_i64, default_i64);
+         } else if (key_kind == KeyKind::String && value_kind == ValueKind::Int16) {
+           out =
+               label_encoder.operator()<std::string, int16_t>(x, keys_str, values_i16, default_i16);
+         } else {
+           throw std::invalid_argument(
+               "RunNode: LabelEncoder key/value type combination is not supported.");
+         }
+         SetOutput(node, 0, std::move(out), rt.tensors());
+       }},
       {"ai.onnx.ml:TreeEnsemble",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);

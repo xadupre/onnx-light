@@ -2155,6 +2155,20 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          });
          SetOutput(node, 0, std::move(y), rt.tensors());
        }},
+      {"ai.onnx.ml:Normalizer",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const std::string norm = GetAttributeStringOrDefault(node, "norm", "MAX");
+         kernel::Normalizer normalizer(rt.kernel_ctx());
+         Tensor y = DispatchSVMByDataType(x, "Normalizer", [&](auto *tag) {
+           using T = std::remove_pointer_t<decltype(tag)>;
+           (void)tag;
+           return normalizer.template operator()<T>(x, norm);
+         });
+         SetOutput(node, 0, std::move(y), rt.tensors());
+       }},
       {"ai.onnx.ml:ArrayFeatureExtractor",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 2);

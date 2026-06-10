@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
-from ..onnx_py import _onnxpyprotolib as _C  # type: ignore[missing-module-attribute]
+from ..onnx_py import _onnxpyprotolib as _C  # type: ignore
 
 _inliner = _C.inliner  # type: ignore
 # UntypedModelProto aliases _onnxpy.ModelProto, which is runtime-only for type checkers.

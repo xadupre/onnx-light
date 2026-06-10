@@ -444,7 +444,7 @@ def _count_onnx_light_backend_tests(
     ``op_type`` of the first node of the model so unusual cases still
     contribute somewhere.
     """
-    from .backend.test.case.base import collect_test_case
+    from .onnx_lib.backend.test.case.base import collect_test_case
 
     if op_keys is None:
         op_keys = set(_light_schemas_latest())

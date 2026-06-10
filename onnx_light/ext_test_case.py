@@ -87,7 +87,7 @@ def ignore_errors(errors: Union[Exception, Tuple[Exception]]) -> Callable:
         def call_f(self):
             try:
                 return fct(self)
-            except errors as e:
+            except errors as e:  # type: ignore
                 raise unittest.SkipTest(  # noqa: B904
                     f"expecting error {e.__class__.__name__}: {e}"
                 )

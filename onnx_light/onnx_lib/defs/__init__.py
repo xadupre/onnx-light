@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ...onnx_py import _onnxpyprotolib as _C  # type: ignore[missing-module-attribute]
+from ...onnx_py import _onnxpyprotolib as _C  # type: ignore
 
 ONNX_DOMAIN = ""
 ONNX_ML_DOMAIN = "ai.onnx.ml"
@@ -33,7 +33,7 @@ def onnx_ir_version() -> int:
     Returns:
         The ONNX IR version.
     """
-    from ...onnx_py._onnxpyprotoop import IR_VERSION
+    from ...onnx_py._onnxpyprotoop import IR_VERSION  # type: ignore
 
     return IR_VERSION  # type: ignore
 

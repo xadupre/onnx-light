@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from typing import Optional
-from ..onnx_py._onnxpyprotoop import FileLoadMode, ModelProto, ParseOptions, SerializeOptions
+from ..onnx_py._onnxpyprotoop import FileLoadMode, ModelProto, ParseOptions, SerializeOptions  # type: ignore
 
 # ParseOptions used by :func:`_find_external_location` to skip copying raw tensor
 # bytes when scanning a model file purely for external-data ``location`` entries.

@@ -1,7 +1,7 @@
 # source: https://github.com/onnx/onnx/blob/main/onnx/shape_inference.py
 from __future__ import annotations
 
-from ..onnx_py import _onnxpyprotolib as _C  # type: ignore[missing-module-attribute]
+from ..onnx_py import _onnxpyprotolib as _C  # type: ignore
 
 _shape_inference = _C.shape_inference  # type: ignore
 

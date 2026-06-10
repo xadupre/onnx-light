@@ -7,7 +7,7 @@ from typing import Any, NamedTuple, Optional, Sequence
 
 import ml_dtypes as _ml_dtypes
 import numpy as np
-from ..onnx_py._onnxpyprotoop import (
+from ..onnx_py._onnxpyprotoop import (  # type: ignore
     AttributeProto,
     FunctionProto,
     GraphProto,

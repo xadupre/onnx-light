@@ -1,7 +1,7 @@
 import re
 from typing import Pattern, Union
-from ..onnx_py._onnxpybackend.backend_test import TestCase, collect_test_cases  # noqa: F401
-from ..onnx_lib.backend.test.case import collect_test_case, make_test_class  # noqa: F401
+from ..onnx_py._onnxpybackend.backend_test import TestCase, collect_test_cases  # type: ignore # noqa: F401
+from ..onnx_lib.backend.test.case import collect_test_case, make_test_class  # type: ignore # noqa: F401
 
 
 def collect_test_cases_by_name(pattern: Union[str, Pattern[str]]) -> list[TestCase]:

@@ -9,7 +9,7 @@ import ml_dtypes as _ml_dtypes
 import numpy as np
 import numpy.typing as npt
 
-from ..onnx_py._onnxpyprotoop import MapProto, OptionalProto, SequenceProto, TensorProto
+from ..onnx_py._onnxpyprotoop import MapProto, OptionalProto, SequenceProto, TensorProto  # type: ignore
 from . import _helper as helper
 
 if TYPE_CHECKING:

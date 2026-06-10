@@ -3,8 +3,7 @@
 
 from __future__ import annotations
 
-from ..onnx_py import _onnxpyprotoop as _P
-from ..onnx_py import _onnxpyprotolib as _C  # type: ignore[missing-module-attribute]
+from ..onnx_py import _onnxpyprotoop as _P, _onnxpyprotolib as _C  # type: ignore
 
 _checker = _C.checker  # type: ignore
 

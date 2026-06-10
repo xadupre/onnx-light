@@ -288,9 +288,10 @@ TEST(BackendRunModel, LinearAttention) {
 }
 TEST(BackendRunModel, FlexAttention) {
   // The dispatch-table kernel handles the base FlexAttention path (Q, K, V ->
-  // Y) without executing optional ``score_mod`` or ``prob_mod`` subgraphs.
-  // Skip cases that attach those attributes because their expected outputs are
+  // Y) without executing optional ``score_mod`` subgraphs.
+  // Skip cases that attach that attribute because their expected outputs are
   // computed with the modifier applied and will not match the baseline kernel.
+  // The ``prob_mod`` subgraph is now executed via RunSubgraph.
   RunBackendCasesFor(
       "FlexAttention",
       [](const TestCase &tc) {
@@ -300,7 +301,7 @@ TEST(BackendRunModel, FlexAttention) {
         const NodeProto &node = tc.model.ref_graph().ref_node()[0];
         for (const auto &attr : node.ref_attribute()) {
           const std::string name = attr.ref_name().as_string();
-          if (name == "score_mod" || name == "prob_mod") {
+          if (name == "score_mod") {
             return false;
           }
         }

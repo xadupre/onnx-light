@@ -17,9 +17,11 @@
 #include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 #include "onnx_kernels/kernels/training/include_training_kernels.h"
 #include "onnx_kernels/node_helpers.h"
+#include "onnx_kernels/run_nodes.h"
 #include "onnx_kernels/simple_tensor.h"
 
 #include <algorithm>
+#include <cmath>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -470,6 +472,41 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
       {"ai.onnx:Ceil", MakeUnaryTrampoline<kernel::Ceil>()},
       {"ai.onnx:Celu", MakeUnaryAlphaTrampoline<kernel::Celu>("alpha", 1.0f)},
+      {"ai.onnx:Constant",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireOutputCount(node, 1);
+         kernel::Constant k(rt.kernel_ctx());
+         Tensor y;
+         if (FindAttribute(node, "value") != nullptr) {
+           y = k(GetRequiredAttributeTensor(node, "value"));
+         } else if (FindAttribute(node, "value_float") != nullptr) {
+           const float v = GetAttributeFloatOrDefault(node, "value_float", 0.0f);
+           y = Tensor::FromFloat("", /*shape=*/{}, {v});
+         } else if (FindAttribute(node, "value_floats") != nullptr) {
+           const std::vector<float> vs =
+               GetAttributeFloatsOrDefault(node, "value_floats", {});
+           y = Tensor::FromFloat("", {static_cast<int64_t>(vs.size())}, vs);
+         } else if (FindAttribute(node, "value_int") != nullptr) {
+           const int64_t v = GetAttributeIntOrDefault(node, "value_int", 0);
+           y = Tensor::FromInt64("", /*shape=*/{}, {v});
+         } else if (FindAttribute(node, "value_ints") != nullptr) {
+           const std::vector<int64_t> vs =
+               GetAttributeIntsOrDefault(node, "value_ints", {});
+           y = Tensor::FromInt64("", {static_cast<int64_t>(vs.size())}, vs);
+         } else if (FindAttribute(node, "value_string") != nullptr) {
+           const std::string v = GetAttributeStringOrDefault(node, "value_string", "");
+           y = Tensor::FromStrings("", /*shape=*/{}, {v});
+         } else if (FindAttribute(node, "value_strings") != nullptr) {
+           const std::vector<std::string> vs =
+               GetAttributeStringsOrDefault(node, "value_strings", {});
+           y = Tensor::FromStrings("", {static_cast<int64_t>(vs.size())}, vs);
+         } else {
+           throw std::invalid_argument(
+               "RunNode: op 'Constant' requires one of: value, value_float, "
+               "value_floats, value_int, value_ints, value_string, value_strings.");
+         }
+         SetOutput(node, 0, std::move(y), rt.tensors());
+       }},
       {"ai.onnx:Clip",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 1);
@@ -677,6 +714,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
       {"ai.onnx:HardSwish", MakeUnaryTrampoline<kernel::HardSwish>()},
       {"ai.onnx:Hardmax", MakeAxisTrampoline<kernel::Hardmax>()},
+      {"ai.onnx:Identity", MakeUnaryTrampoline<kernel::Identity>()},
       {"ai.onnx:ImageDecoder",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);
@@ -875,13 +913,33 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor &K = GetInput(node, 1, rt.tensors());
          const Tensor &V = GetInput(node, 2, rt.tensors());
 
+         // Resolve the scale once: use the explicit attribute if present, otherwise
+         // fall back to 1/sqrt(head_size) — matching the kernel's own default.
+         const float scale =
+             FindAttribute(node, "scale") != nullptr
+                 ? GetAttributeFloatOrDefault(node, "scale", 1.0f)
+                 : 1.0f / std::sqrt(static_cast<float>(Q.shape[3]));
+
          kernel::FlexAttention flex(rt.kernel_ctx());
          Tensor Y;
-         if (FindAttribute(node, "scale") != nullptr) {
-           const float scale = GetAttributeFloatOrDefault(node, "scale", 0.0f);
-           Y = flex(Q, K, V, scale);
+         const AttributeProto *prob_mod_attr = FindAttribute(node, "prob_mod");
+         if (prob_mod_attr != nullptr) {
+           const GraphProto &prob_mod_graph = prob_mod_attr->ref_g();
+           if (prob_mod_graph.input().empty()) {
+             throw std::invalid_argument(
+                 "RunNode: 'prob_mod' subgraph must declare at least one input.");
+           }
+           const std::string in_name = prob_mod_graph.input()[0].name().as_string();
+           kernel::FlexAttention::ProbModFn prob_mod_fn =
+               [&prob_mod_graph, &in_name, &rt](Tensor &probs) {
+                 auto outputs = RunSubgraph(prob_mod_graph, {{in_name, probs}}, rt);
+                 if (!outputs.empty()) {
+                   probs = std::move(outputs[0]);
+                 }
+               };
+           Y = flex(Q, K, V, scale, prob_mod_fn);
          } else {
-           Y = flex(Q, K, V);
+           Y = flex(Q, K, V, scale);
          }
          SetOutput(node, 0, std::move(Y), rt.tensors());
        }},

@@ -27,6 +27,7 @@
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DefaultOpset;
 using onnx_kernels::kernel::Abs;
+using onnx_kernels::kernel::Adagrad;
 using onnx_kernels::kernel::Adam;
 using onnx_kernels::kernel::Add;
 using onnx_kernels::kernel::And;
@@ -45,6 +46,7 @@ using onnx_kernels::kernel::KernelContext;
 using onnx_kernels::kernel::LabelEncoder;
 using onnx_kernels::kernel::LinearClassifier;
 using onnx_kernels::kernel::LinearRegressor;
+using onnx_kernels::kernel::Momentum;
 using onnx_kernels::kernel::Normalizer;
 using onnx_kernels::kernel::Or;
 using onnx_kernels::kernel::QuantizeLinear;
@@ -96,7 +98,9 @@ TEST(KernelClass, CanRunInPlaceReportsKernelCapability) {
   EXPECT_TRUE(OptionalKernel::CanRunInPlace());
 
   // Output buffer fundamentally cannot equal any input buffer for these.
+  EXPECT_FALSE(Adagrad::CanRunInPlace());
   EXPECT_FALSE(Adam::CanRunInPlace());
+  EXPECT_FALSE(Momentum::CanRunInPlace());
   EXPECT_FALSE(ArrayFeatureExtractor::CanRunInPlace());
   EXPECT_FALSE(AveragePool::CanRunInPlace());
   EXPECT_FALSE(BlackmanWindow::CanRunInPlace());

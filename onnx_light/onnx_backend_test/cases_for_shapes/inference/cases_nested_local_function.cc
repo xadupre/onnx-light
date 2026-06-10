@@ -109,7 +109,10 @@ void RegisterNestedLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &re
   graph->set_name(name);
 
   // Single node in the main graph: a call into the outer local function.
-  AddNode(*graph, kFuncOuterName, {"X", "Y"}, {"Z"}, kLocalDomain);
+  // An ``Abs`` node is appended so the model's final output is computed by
+  // an Abs of the nested-function result.
+  AddNode(*graph, kFuncOuterName, {"X", "Y"}, {"Z_pre_abs"}, kLocalDomain);
+  AddNode(*graph, "Abs", {"Z_pre_abs"}, {"Z"});
 
   // Symbolic graph inputs / outputs. Equal symbolic dims across X, Y and Z
   // ensure that the symbolic-dim propagation pass also exercises shape
@@ -118,6 +121,7 @@ void RegisterNestedLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &re
   const std::vector<DimSpec> sym_shape = {"batch", "d_model"};
   AppendValueInfo(*graph->add_input(), "X", kFloat, sym_shape);
   AppendValueInfo(*graph->add_input(), "Y", kFloat, sym_shape);
+  AppendValueInfo(*graph->add_value_info(), "Z_pre_abs", kFloat, sym_shape);
   AppendValueInfo(*graph->add_output(), "Z", kFloat, sym_shape);
 
   // Reference DataSet with concrete (``batch=2, d_model=4``) tensors. The
@@ -133,7 +137,8 @@ void RegisterNestedLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &re
   }
   Tensor x = Tensor::FromFloat("X", data_shape, x_values);
   Tensor y = Tensor::FromFloat("Y", data_shape, y_values);
-  Tensor z = kernel::Add(kctx)(x, y);
+  Tensor z_pre_abs = kernel::Add(kctx)(x, y);
+  Tensor z = kernel::Abs(kctx)(z_pre_abs);
   z.name = "Z";
 
   AppendDataSet(tc, {x, y}, {z});

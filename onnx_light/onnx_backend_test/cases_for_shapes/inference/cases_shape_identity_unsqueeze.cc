@@ -78,7 +78,8 @@ void RegisterShapeIdentityUnsqueezeShapeInferenceCases(std::vector<TestCase> &re
 
   AddNode(*graph, "Shape", {"input"}, {"shape_out"});
   AddNode(*graph, "Identity", {"shape_out"}, {"identity_out"});
-  AddNode(*graph, "Unsqueeze", {"identity_out", "unsq_axes"}, {"output"});
+  AddNode(*graph, "Unsqueeze", {"identity_out", "unsq_axes"}, {"output_pre_abs"});
+  AddNode(*graph, "Abs", {"output_pre_abs"}, {"output"});
 
   // Register ``unsq_axes`` as an actual initializer (not just a graph input)
   // so shape inference's data-propagation pass sees the concrete INT64 axes
@@ -107,6 +108,16 @@ void RegisterShapeIdentityUnsqueezeShapeInferenceCases(std::vector<TestCase> &re
                   {DimSpec(static_cast<int64_t>(kAxisCount))});
   AppendValueInfo(*graph->add_value_info(), "identity_out", kInt64,
                   {DimSpec(static_cast<int64_t>(kAxisCount))});
+
+  // ``output_pre_abs`` mirrors the post-Abs ``output`` shape: rank
+  // ``kAxisCount + 1`` (``kAxisCount`` leading 1s + trailing ``kAxisCount``).
+  std::vector<DimSpec> pre_abs_dims;
+  pre_abs_dims.reserve(static_cast<size_t>(kAxisCount) + 1);
+  for (int64_t i = 0; i < kAxisCount; ++i) {
+    pre_abs_dims.emplace_back(static_cast<int64_t>(1));
+  }
+  pre_abs_dims.emplace_back(static_cast<int64_t>(kAxisCount));
+  AppendValueInfo(*graph->add_value_info(), "output_pre_abs", kInt64, pre_abs_dims);
 
   // Expected output: rank ``kAxisCount + 1`` (16 leading 1s + trailing
   // ``kAxisCount``). Shape inference must recover this fully from the

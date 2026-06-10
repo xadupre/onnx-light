@@ -156,11 +156,16 @@ void RegisterLoopPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &regi
   NodeProto &gather_trip = AddNode(*graph, "Gather", {"shape_X", "zero_idx"}, {"trip_count"});
   AddAxisAttribute(gather_trip, 0);
 
-  NodeProto &loop_node = AddNode(*graph, "Loop", {"trip_count", "cond_init"}, {"Y"});
+  NodeProto &loop_node = AddNode(*graph, "Loop", {"trip_count", "cond_init"}, {"Y_pre_abs"});
   AttributeProto *body_attr = loop_node.add_attribute();
   body_attr->set_name("body");
   body_attr->set_type(AttributeProto::AttributeType::GRAPH);
   *body_attr->add_g() = BuildPairwiseDistanceBody();
+
+  // Append an ``Abs`` so the model's final output is computed by an Abs of
+  // the Loop's stacked scan output. The pairwise distances are non-negative
+  // so the recorded reference values are unchanged.
+  AddNode(*graph, "Abs", {"Y_pre_abs"}, {"Y"});
 
   // Initializers — index ``[0]`` for the trip-count Gather, the BOOL
   // ``cond`` constant, and the axes vectors referenced from the body via

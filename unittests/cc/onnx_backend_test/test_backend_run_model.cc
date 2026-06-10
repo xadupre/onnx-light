@@ -308,6 +308,19 @@ TEST(BackendRunModel, DequantizeLinear) {
 }
 TEST(BackendRunModel, DynamicQuantizeLinear) { RunBackendCasesFor("DynamicQuantizeLinear"); }
 
+// The reference QLinearMatMul kernel only supports per-tensor quantization
+// (scalar scales/zero-points) with FLOAT scales. Skip FLOAT16-scale cases.
+TEST(BackendRunModel, QLinearMatMul) {
+  RunBackendCasesFor("QLinearMatMul", [](const DataSet &ds) {
+    if (ds.inputs.size() < 7 || ds.inputs[1].element_count() != 1) {
+      return false;
+    }
+    return ds.inputs[1].data_type == static_cast<int32_t>(DataType::FLOAT) &&
+           ds.inputs[4].data_type == static_cast<int32_t>(DataType::FLOAT) &&
+           ds.inputs[6].data_type == static_cast<int32_t>(DataType::FLOAT);
+  });
+}
+
 // LinearAttention (opset 27) and FlexAttention (ai.onnx.preview) kernels.
 TEST(BackendRunModel, LinearAttention) {
   RunBackendCasesFor("LinearAttention", [](const DataSet &ds) {

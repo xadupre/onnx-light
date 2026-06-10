@@ -36,15 +36,20 @@ constexpr int64_t kDefaultIrVersion = 10;
 } // namespace
 
 // ---------------------------------------------------------------------------
-// ``Unsqueeze → Unsqueeze → Reshape → Reshape → Cast → MatMul → Reshape`` —
+// ``Shape/Concat shape computation → Unsqueeze → Unsqueeze → Reshape →
+// Reshape → Cast → MatMul → Reshape`` —
 // mirrors the ``test_check_shape`` example from yet-another-onnx-builder.
-// Exercises shape inference through rank-changing ``Unsqueeze``/``Reshape``
-// and through ``MatMul`` of two 3-D tensors with the leading dim broadcast.
+// Exercises shape inference through value-as-shape propagation, rank-changing
+// ``Unsqueeze``/``Reshape``, and ``MatMul`` of two 3-D tensors.
 //
-// Shape initializers are defined symbolically in terms of input shapes:
-//   shape1 = [0, -1, X.shape[-1]]
-//   shape2 = [-1, X.shape[-1], Y.shape[2]]
-//   shape3 = [*Y.shape[:2], X.shape[-1], Y.shape[-1]]
+// Shape tensors are computed at runtime from the input shapes via Shape/Concat:
+//   shape1 = Concat([c0, cm1, Shape(X, start=-1)], axis=0)
+//          = [0, -1, X.shape[-1]]
+//   shape2 = Concat([cm1, Shape(X, start=-1), Shape(Y, start=2, end=3)], axis=0)
+//          = [-1, X.shape[-1], Y.shape[2]]
+//   shape3 = Concat([Shape(Y, start=0, end=2), Shape(X, start=-1),
+//                    Shape(Y, start=-1)], axis=0)
+//          = [*Y.shape[:2], X.shape[-1], Y.shape[-1]]
 //
 //   xu1  = Unsqueeze(X,   zero)   # axes=[0]  → (1, D32, D64)
 //   xu2  = Unsqueeze(xu1, un)     # axes=[1]  → (1, 1, D32, D64)
@@ -62,7 +67,9 @@ constexpr int64_t kDefaultIrVersion = 10;
 //
 // The reference DataSet uses concrete sizes ``D32=32, D64=64, D128=128,
 // batch=3, channel=5`` (note: D32*D128 == D64**2 == 4096 ensures the final
-// Reshape volume balances) so the case is executable.
+// Reshape volume balances). Because Shape/Concat are not in the kernel
+// dispatch table, the concrete shape tensors are resolved manually in the
+// DataSet builder below.
 // ---------------------------------------------------------------------------
 void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(18);
@@ -80,15 +87,39 @@ void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry) {
   GraphProto *graph = model.add_graph();
   graph->set_name(name);
 
-  // shape1 = [0, -1, X.shape[-1]]          → [0, -1, D64]
-  // shape2 = [-1, X.shape[-1], Y.shape[2]] → [-1, D64, D128]
-  // shape3 = [*Y.shape[:2], X.shape[-1], Y.shape[-1]] → [batch, channel, D64, D64]
-  AddInitializer<int64_t>(*graph, "zero", {1}, {0});
-  AddInitializer<int64_t>(*graph, "un", {1}, {1});
-  AddInitializer<int64_t>(*graph, "shape1", {3}, {0, -1, 64});
-  AddInitializer<int64_t>(*graph, "shape2", {3}, {-1, 64, 128});
-  AddInitializer<int64_t>(*graph, "shape3", {4}, {3, 5, 64, 64});
+  // Scalar-like int64 initializers.
+  AddInitializer<int64_t>(*graph, "zero", {1}, {0}); // Unsqueeze axis 0
+  AddInitializer<int64_t>(*graph, "un", {1}, {1});   // Unsqueeze axis 1
+  AddInitializer<int64_t>(*graph, "c0", {1}, {0});   // literal 0 for shape
+  AddInitializer<int64_t>(*graph, "cm1", {1}, {-1}); // literal -1 for shape
 
+  // shape1 = Concat([c0, cm1, Shape(X, start=-1)], axis=0) = [0, -1, D64]
+  NodeProto &shape_x_last_node = AddNode(*graph, "Shape", {"X"}, {"x_last_dim"});
+  AddAttribute<int64_t>(shape_x_last_node, "start", -1);
+  NodeProto &shape1_node = AddNode(*graph, "Concat", {"c0", "cm1", "x_last_dim"}, {"shape1"});
+  AddAxisAttribute(shape1_node, 0);
+
+  // shape2 = Concat([cm1, Shape(X, start=-1), Shape(Y, start=2, end=3)], axis=0)
+  //        = [-1, D64, D128]
+  NodeProto &shape_y_dim2_node = AddNode(*graph, "Shape", {"Y"}, {"y_dim2"});
+  AddAttribute<int64_t>(shape_y_dim2_node, "start", 2);
+  AddAttribute<int64_t>(shape_y_dim2_node, "end", 3);
+  NodeProto &shape2_node = AddNode(*graph, "Concat", {"cm1", "x_last_dim", "y_dim2"}, {"shape2"});
+  AddAxisAttribute(shape2_node, 0);
+
+  // shape3 = Concat([Shape(Y, start=0, end=2), Shape(X, start=-1),
+  //                  Shape(Y, start=-1)], axis=0)
+  //        = [batch, channel, D64, D64]
+  NodeProto &shape_y_first2_node = AddNode(*graph, "Shape", {"Y"}, {"y_first2"});
+  AddAttribute<int64_t>(shape_y_first2_node, "start", 0);
+  AddAttribute<int64_t>(shape_y_first2_node, "end", 2);
+  NodeProto &shape_y_last_node = AddNode(*graph, "Shape", {"Y"}, {"y_last_dim"});
+  AddAttribute<int64_t>(shape_y_last_node, "start", -1);
+  NodeProto &shape3_node =
+      AddNode(*graph, "Concat", {"y_first2", "x_last_dim", "y_last_dim"}, {"shape3"});
+  AddAxisAttribute(shape3_node, 0);
+
+  // Main computation.
   AddNode(*graph, "Unsqueeze", {"X", "zero"}, {"xu1"});
   AddNode(*graph, "Unsqueeze", {"xu1", "un"}, {"xu2"});
   AddNode(*graph, "Reshape", {"xu2", "shape1"}, {"xm1"});
@@ -104,10 +135,18 @@ void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry) {
   AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {"D32", "D64"});
   AppendValueInfo(*graph->add_input(), "Y", DataType::FLOAT, {"batch", "channel", "D128", "D64"});
 
+  // Intermediate value_info for the shape-computation outputs (INT64).
+  AppendValueInfo(*graph->add_value_info(), "x_last_dim", DataType::INT64, {DimSpec(1)});
+  AppendValueInfo(*graph->add_value_info(), "y_dim2", DataType::INT64, {DimSpec(1)});
+  AppendValueInfo(*graph->add_value_info(), "y_first2", DataType::INT64, {DimSpec(2)});
+  AppendValueInfo(*graph->add_value_info(), "y_last_dim", DataType::INT64, {DimSpec(1)});
+  AppendValueInfo(*graph->add_value_info(), "shape1", DataType::INT64, {DimSpec(3)});
+  AppendValueInfo(*graph->add_value_info(), "shape2", DataType::INT64, {DimSpec(3)});
+  AppendValueInfo(*graph->add_value_info(), "shape3", DataType::INT64, {DimSpec(4)});
+
   // Intermediate value_info entries with the shapes that shape inference
   // should recover. These are stripped by ``SnapshotAndStripValueInfo`` in
-  // the ``AllCollectedCasesInferOutputShapes`` test and used as the ground
-  // truth.
+  // the ``AllCollectedCasesInferOutputShapes`` test and used as the ground truth.
   AppendValueInfo(*graph->add_value_info(), "xu1", DataType::FLOAT, {DimSpec(1), "D32", "D64"});
   AppendValueInfo(*graph->add_value_info(), "xu2", DataType::FLOAT,
                   {DimSpec(1), DimSpec(1), "D32", "D64"});
@@ -124,6 +163,8 @@ void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry) {
 
   // Build the reference DataSet — concrete D32=32, D64=64, D128=128, batch=3,
   // channel=5 tensors, then run the kernels to materialise Z.
+  // Shape/Concat nodes are not in the kernel dispatch table so the concrete
+  // shape tensors are resolved manually here.
   constexpr int64_t kD32 = 32;
   constexpr int64_t kD64 = 64;
   constexpr int64_t kD128 = 128;
@@ -140,10 +181,7 @@ void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry) {
   Tensor x = Tensor::FromFloat("X", {kD32, kD64}, x_values);
   Tensor y = Tensor::FromFloat("Y", {kBatch, kChannel, kD128, kD64}, y_values);
 
-  // Concrete resolutions of the graph-initializer patterns:
-  //   shape1 [0,-1,D64]       → [1, D32, D64]
-  //   shape2 [-1,D64,D128]    → [batch*channel, D64, D128]
-  //   shape3 [batch,ch,D64,D64]
+  // Concrete resolutions of shape1/shape2/shape3 for the reference kernel calls.
   const Tensor shape1 = Tensor::FromInt64("", {3}, {1, kD32, kD64});
   const Tensor shape2 = Tensor::FromInt64("", {3}, {kBatch * kChannel, kD64, kD128});
   const Tensor shape3 = Tensor::FromInt64("", {4}, {kBatch, kChannel, kD64, kD64});

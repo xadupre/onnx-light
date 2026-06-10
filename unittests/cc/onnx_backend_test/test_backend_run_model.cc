@@ -234,6 +234,10 @@ TEST(BackendRunModel, LayerNormalization) { RunBackendCasesFor("LayerNormalizati
 TEST(BackendRunModel, RMSNormalization) { RunBackendCasesFor("RMSNormalization"); }
 TEST(BackendRunModel, Dropout) { RunBackendCasesFor("Dropout"); }
 TEST(BackendRunModel, AveragePool) { RunBackendCasesFor("AveragePool"); }
+TEST(BackendRunModel, GlobalAveragePool) { RunBackendCasesFor("GlobalAveragePool"); }
+TEST(BackendRunModel, GlobalMaxPool) { RunBackendCasesFor("GlobalMaxPool"); }
+TEST(BackendRunModel, GlobalLpPool) { RunBackendCasesFor("GlobalLpPool"); }
+TEST(BackendRunModel, LpPool) { RunBackendCasesFor("LpPool"); }
 TEST(BackendRunModel, MaxPool) {
   RunBackendCasesFor(
       "MaxPool",

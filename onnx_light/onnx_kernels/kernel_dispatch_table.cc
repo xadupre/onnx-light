@@ -1108,6 +1108,31 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::Gemm k(rt.kernel_ctx());
          SetOutput(node, 0, k(a, b, c, alpha, beta, transA, transB), rt);
        }},
+      {"ai.onnx:GlobalAveragePool",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         kernel::GlobalAveragePool k(rt.kernel_ctx());
+         SetOutput(node, 0, k(x), rt.tensors());
+       }},
+      {"ai.onnx:GlobalLpPool",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const int64_t p = GetAttributeIntOrDefault(node, "p", 2);
+         kernel::GlobalLpPool k(rt.kernel_ctx());
+         SetOutput(node, 0, k(x, p), rt.tensors());
+       }},
+      {"ai.onnx:GlobalMaxPool",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         kernel::GlobalMaxPool k(rt.kernel_ctx());
+         SetOutput(node, 0, k(x), rt.tensors());
+       }},
       {"ai.onnx:Greater", MakeBinaryTrampoline<kernel::Greater>()},
       {"ai.onnx:GreaterOrEqual", MakeBinaryTrampoline<kernel::GreaterOrEqual>()},
       {"ai.onnx:GroupNormalization", RunGroupNormalization},
@@ -1270,6 +1295,18 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
       {"ai.onnx:Log", MakeUnaryTrampoline<kernel::Log>()},
       {"ai.onnx:LogSoftmax", MakeAxisTrampoline<kernel::LogSoftmax>()},
+      {"ai.onnx:LpPool",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const PoolCommonAttrs a = ParsePoolCommonAttrs(node);
+         const int64_t p = GetAttributeIntOrDefault(node, "p", 2);
+         kernel::LpPool k(rt.kernel_ctx());
+         SetOutput(node, 0,
+                   k(x, a.kernel_shape, a.strides, a.pads, p, a.ceil_mode, a.dilations, a.auto_pad),
+                   rt.tensors());
+       }},
       {"ai.onnx:MatMul", MakeBinaryTrampoline<kernel::MatMul>()},
       {"ai.onnx:Max", MakeVariadicTrampoline<kernel::Max>()},
       {"ai.onnx:MaxPool",

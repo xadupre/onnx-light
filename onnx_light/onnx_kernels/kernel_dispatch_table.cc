@@ -804,6 +804,20 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::Clip k(rt.kernel_ctx());
          SetOutput(node, 0, k(x, min, max), rt);
        }},
+      {"ai.onnx:Col2Im",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 3);
+         RequireOutputCount(node, 1);
+         const Tensor &input = GetInput(node, 0, rt.tensors());
+         const Tensor &image_shape = GetInput(node, 1, rt.tensors());
+         const Tensor &block_shape = GetInput(node, 2, rt.tensors());
+         kernel::Col2Im::Attributes attrs;
+         attrs.dilations = GetAttributeIntsOrDefault(node, "dilations", {});
+         attrs.pads = GetAttributeIntsOrDefault(node, "pads", {});
+         attrs.strides = GetAttributeIntsOrDefault(node, "strides", {});
+         kernel::Col2Im k(rt.kernel_ctx());
+         SetOutput(node, 0, k(input, image_shape, block_shape, attrs), rt);
+       }},
       {"ai.onnx:Compress",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 2);

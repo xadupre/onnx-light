@@ -156,6 +156,30 @@ class TestShapesContextBindings(ExtTestCase):
         self.assertEqual(ctx.opset_version(si.kOnnxDomain), 18)
         self.assertEqual(ctx.opsets()[si.kOnnxDomain], 18)
 
+    def test_compute_shape_node_custom_domain_callback(self):
+        ctx = si.ShapesContext()
+        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, [2, "N"]))
+        node = oh.make_node("CustomIdentity", inputs=["X"], outputs=["Y"], domain="com.acme")
+
+        self.assertFalse(ctx.has_custom_shape_inference_function("com.acme", "CustomIdentity"))
+        with self.assertRaises(ValueError):
+            si.compute_shape_node(ctx, node)
+
+        def _infer_custom_identity(c, n):
+            x = c.get(str(n.input[0]))
+            c.set(str(n.output[0]), si.OptimTensor(x.dtype, list(x.shape)))
+
+        ctx.set_custom_shape_inference_function(
+            "com.acme", "CustomIdentity", _infer_custom_identity
+        )
+        self.assertTrue(ctx.has_custom_shape_inference_function("com.acme", "CustomIdentity"))
+        self.assertIn("com.acme:CustomIdentity", list(ctx.custom_shape_inference_keys()))
+
+        si.compute_shape_node(ctx, node)
+        y = ctx.get("Y")
+        self.assertEqual(y.dtype, onnxl.TensorProto.FLOAT)
+        self.assertEqual(list(y.shape), [2, "N"])
+
     # ------------------------------------------------------------------
     # compute_shape_node / compute_shape_graph / compute_shape_model.
     # ------------------------------------------------------------------

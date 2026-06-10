@@ -1420,6 +1420,20 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          SetOutput(node, 0, kernel(input, sample_size, GetSeedAttr(node), GetDtypeAttr(node)), rt);
        }},
       {"ai.onnx:Neg", MakeUnaryTrampoline<kernel::Neg>()},
+      {"ai.onnx:NegativeLogLikelihoodLoss",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputRange(node, 2, 3);
+         RequireOutputCount(node, 1);
+         const Tensor &input = GetInput(node, 0, rt.tensors());
+         const Tensor &target = GetInput(node, 1, rt.tensors());
+         const Tensor *weight = GetOptionalInput(node, 2, rt.tensors());
+         const std::string reduction = GetAttributeStringOrDefault(node, "reduction", "mean");
+         const bool has_ignore_index = FindAttribute(node, "ignore_index") != nullptr;
+         const int64_t ignore_index = GetAttributeIntOrDefault(node, "ignore_index", 0);
+         kernel::NegativeLogLikelihoodLoss k(rt.kernel_ctx());
+         SetOutput(node, 0, k(input, target, weight, reduction, has_ignore_index, ignore_index),
+                   rt);
+       }},
       {"ai.onnx:NonMaxSuppression",
        [](const NodeProto &node, RuntimeContext &rt) {
          if (node.input_size() < 2 || node.input_size() > 5) {
@@ -1736,6 +1750,24 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Sin", MakeUnaryTrampoline<kernel::Sin>()},
       {"ai.onnx:Sinh", MakeUnaryTrampoline<kernel::Sinh>()},
       {"ai.onnx:Softmax", MakeAxisTrampoline<kernel::Softmax>()},
+      {"ai.onnx:SoftmaxCrossEntropyLoss",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputRange(node, 2, 3);
+         RequireOutputRange(node, 1, 2);
+         const Tensor &scores = GetInput(node, 0, rt.tensors());
+         const Tensor &labels = GetInput(node, 1, rt.tensors());
+         const Tensor *weights = GetOptionalInput(node, 2, rt.tensors());
+         const std::string reduction = GetAttributeStringOrDefault(node, "reduction", "mean");
+         const bool has_ignore_index = FindAttribute(node, "ignore_index") != nullptr;
+         const int64_t ignore_index = GetAttributeIntOrDefault(node, "ignore_index", 0);
+         kernel::SoftmaxCrossEntropyLoss k(rt.kernel_ctx());
+         auto [loss, log_prob] =
+             k(scores, labels, weights, reduction, has_ignore_index, ignore_index);
+         SetOutput(node, 0, std::move(loss), rt);
+         if (node.output_size() >= 2) {
+           SetOutput(node, 1, std::move(log_prob), rt);
+         }
+       }},
       {"ai.onnx:Softplus", MakeUnaryTrampoline<kernel::Softplus>()},
       {"ai.onnx:Softsign", MakeUnaryTrampoline<kernel::Softsign>()},
       {"ai.onnx:Sqrt", MakeUnaryTrampoline<kernel::Sqrt>()},

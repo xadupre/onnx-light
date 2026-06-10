@@ -50,23 +50,29 @@ def shape_inference_check(model: onnxl.ModelProto, *inputs):
         work.graph.value_info.clear()
     for o in work.graph.output:
         o.type.Clear()
+    # Build a mapping from every distinct numeric input dim_value to a fresh
+    # dim_param symbol so that identical numeric values across the graph
+    # inputs share the same symbol. Existing dim_param dimensions are kept
+    # verbatim so that test cases already authored with symbolic input shapes
+    # remain exercised end-to-end by this "all dynamic" pass.
     mapping = {}
     for i in work.graph.input:
         if i.name in {"axis", "axes"}:
             continue
         shape = i.type.tensor_type.shape
         for di, d in enumerate(shape.dim):
+            if d.dim_param:
+                continue
             if d.dim_value not in mapping:
-                assert not d.dim_param, f"Unexpected input dimension in {i}"
                 mapping[int(d.dim_value)] = f"{i.name}_{di}"
     for i in work.graph.input:
         if i.name in {"axis", "axes"}:
             continue
         shape = i.type.tensor_type.shape
-        new_shape = [mapping[d.dim_value] for d in shape.dim]
-        for i in range(len(shape.dim)):
-            shape.dim[i].Clear()
-            shape.dim[i].dim_param = new_shape[i]
+        new_shape = [d.dim_param or mapping[d.dim_value] for d in shape.dim]
+        for di in range(len(shape.dim)):
+            shape.dim[di].Clear()
+            shape.dim[di].dim_param = new_shape[di]
 
     shape_inference.infer_shapes_model(work)
     _check_match(model.graph.input, model.graph.value_info, work.graph.value_info)
@@ -89,12 +95,8 @@ TestOptimShapeInferenceDynamicBackend = make_test_class(
         "test_if_seq.*",
         "test_scan_sum.*",
         "test_cc_loop13_seq.*",
-        "test_cc_shape_inference_local_function_add.*",
-        "test_cc_shape_inference_nested_local_function_add.*",
         "test_cc_linear_attention.*",
         "test_cc_shape_inference_nonzero_plus_expression.*",
-        "test_cc_shape_inference_value_as_shape.*",
-        "test_cc_shape_inference_check_shape.*",
         "test_cc_shape_inference_concat_split.*",
         "test_cc_shape_inference_reshape_reshape.*",
     ],

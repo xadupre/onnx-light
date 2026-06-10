@@ -124,6 +124,8 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx:Cast"), table.end());
   EXPECT_NE(table.find("ai.onnx:Shape"), table.end());
   EXPECT_NE(table.find("ai.onnx:DepthToSpace"), table.end());
+  EXPECT_NE(table.find("ai.onnx:Gather"), table.end());
+  EXPECT_NE(table.find("ai.onnx:GatherND"), table.end());
   // Logical / bitwise kernels.
   EXPECT_NE(table.find("ai.onnx:And"), table.end());
   EXPECT_NE(table.find("ai.onnx:Or"), table.end());
@@ -479,6 +481,75 @@ TEST(RunNodes, RunNodeReshapeFromDispatchTable) {
   const float *got = y.AsFloat();
   EXPECT_FLOAT_EQ(got[0], 1.0f);
   EXPECT_FLOAT_EQ(got[5], 6.0f);
+}
+
+TEST(RunNodes, RunNodeGatherFromDispatchTable) {
+  // Gather along ``axis=0`` selects whole rows from ``data``.
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["data"] = Tensor::FromFloat("data", {3, 2}, {1, 2, 3, 4, 5, 6});
+  rt.tensors()["indices"] = Tensor::FromInt64("indices", {2}, {2, 0});
+  NodeProto node = MakeNode("Gather", {"data", "indices"}, {"y"});
+  AttributeProto *axis = node.add_attribute();
+  axis->set_name("axis");
+  axis->set_type(AttributeProto::AttributeType::INT);
+  axis->set_i(0);
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 2}));
+  const float *got = y.AsFloat();
+  EXPECT_FLOAT_EQ(got[0], 5.0f);
+  EXPECT_FLOAT_EQ(got[1], 6.0f);
+  EXPECT_FLOAT_EQ(got[2], 1.0f);
+  EXPECT_FLOAT_EQ(got[3], 2.0f);
+}
+
+TEST(RunNodes, RunNodeGatherFromDispatchTableDefaultAxis) {
+  // Default ``axis`` is 0; verify the dispatch entry handles a missing attribute.
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["data"] = Tensor::FromFloat("data", {3}, {10, 20, 30});
+  rt.tensors()["indices"] = Tensor::FromInt64("indices", {2}, {1, 2});
+  NodeProto node = MakeNode("Gather", {"data", "indices"}, {"y"});
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2}));
+  const float *got = y.AsFloat();
+  EXPECT_FLOAT_EQ(got[0], 20.0f);
+  EXPECT_FLOAT_EQ(got[1], 30.0f);
+}
+
+TEST(RunNodes, RunNodeGatherNDFromDispatchTable) {
+  // GatherND with ``batch_dims=0`` picks scalars from a 2-D ``data`` tensor.
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["data"] = Tensor::FromFloat("data", {2, 2}, {1, 2, 3, 4});
+  rt.tensors()["indices"] = Tensor::FromInt64("indices", {2, 2}, {0, 0, 1, 1});
+  NodeProto node = MakeNode("GatherND", {"data", "indices"}, {"y"});
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2}));
+  const float *got = y.AsFloat();
+  EXPECT_FLOAT_EQ(got[0], 1.0f);
+  EXPECT_FLOAT_EQ(got[1], 4.0f);
+}
+
+TEST(RunNodes, RunNodeGatherNDWithBatchDimsFromDispatchTable) {
+  // GatherND with ``batch_dims=1`` independently indexes each batch row.
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["data"] =
+      Tensor::FromFloat("data", {2, 3, 2}, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
+  rt.tensors()["indices"] = Tensor::FromInt64("indices", {2, 1}, {1, 0});
+  NodeProto node = MakeNode("GatherND", {"data", "indices"}, {"y"});
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name("batch_dims");
+  attr->set_type(AttributeProto::AttributeType::INT);
+  attr->set_i(1);
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 2}));
+  const float *got = y.AsFloat();
+  EXPECT_FLOAT_EQ(got[0], 3.0f);
+  EXPECT_FLOAT_EQ(got[1], 4.0f);
+  EXPECT_FLOAT_EQ(got[2], 7.0f);
+  EXPECT_FLOAT_EQ(got[3], 8.0f);
 }
 
 TEST(RunNodes, RunNodeSqueezeAxesAsInput) {

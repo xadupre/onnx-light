@@ -855,6 +855,26 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          SetOutput(node, 0, kernel(x, k, static_cast<int32_t>(dtype)), rt);
        }},
       {"ai.onnx:Floor", MakeUnaryTrampoline<kernel::Floor>()},
+      {"ai.onnx:Gather",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         const Tensor &data = GetInput(node, 0, rt.tensors());
+         const Tensor &indices = GetInput(node, 1, rt.tensors());
+         const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
+         kernel::Gather k(rt.kernel_ctx());
+         SetOutput(node, 0, k(data, indices, axis), rt);
+       }},
+      {"ai.onnx:GatherND",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         const Tensor &data = GetInput(node, 0, rt.tensors());
+         const Tensor &indices = GetInput(node, 1, rt.tensors());
+         const int64_t batch_dims = GetAttributeIntOrDefault(node, "batch_dims", 0);
+         kernel::GatherND k(rt.kernel_ctx());
+         SetOutput(node, 0, k(data, indices, batch_dims), rt);
+       }},
       {"ai.onnx:Gelu",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);

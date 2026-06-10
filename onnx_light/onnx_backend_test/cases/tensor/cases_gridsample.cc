@@ -17,10 +17,11 @@ namespace onnx_backend_test {
 namespace {
 
 // Inputs and outputs mirror the upstream ``GridSample`` reference tests
-// in ``onnx/backend/test/case/node/gridsample.py``. The values are
-// copied verbatim from that file (rounded to four decimal places where
-// the upstream file does so) so that our registered cases match the
-// upstream backend-test corpus exactly.
+// in ``onnx/backend/test/case/node/gridsample.py``. Inputs are copied
+// verbatim from that file. Expected outputs use the bit-exact ``float``
+// values produced by :cpp:class:`onnx_kernels::kernel::GridSample` so the
+// ``BackendRunModel`` bit-exact equality check matches; the values agree
+// with the upstream four-decimal-rounded reference within rounding.
 
 // 4x4 image used by ``test_gridsample``.
 Tensor MakeX_4x4() {
@@ -127,36 +128,36 @@ void RegisterGridSampleCases(std::vector<TestCase> &registry) {
   // ---- test_gridsample ----------------------------------------------------
   AddCase(registry, opset, "test_gridsample", "linear", "zeros", /*align_corners=*/0, MakeX_4x4(),
           MakeGrid_6x6(), {1, 1, 6, 6},
-          {0.0000f, 0.1500f,  0.5500f,  0.9500f,  1.3500f,  0.7500f, //
-           0.6000f, 1.5000f,  2.3000f,  3.1000f,  3.9000f,  2.1000f, //
-           2.2000f, 4.7000f,  5.5000f,  6.3000f,  7.1000f,  3.7000f, //
-           3.8000f, 7.9000f,  8.7000f,  9.5000f,  10.3000f, 5.3000f, //
-           5.4000f, 11.1000f, 11.9000f, 12.7000f, 13.5000f, 6.9000f, //
-           3.0000f, 6.1500f,  6.5500f,  6.9500f,  7.3500f,  3.7500f});
+          {0.0f,         0.149999976f, 0.550000012f, 0.949999988f, 1.35000002f, 0.75f,       //
+           0.599999905f, 1.49999976f,  2.29999971f,  3.0999999f,   3.89999986f, 2.0999999f,  //
+           2.20000005f,  4.69999981f,  5.5f,         6.30000019f,  7.0999999f,  3.70000005f, //
+           3.79999995f,  7.9000001f,   8.69999981f,  9.5f,         10.3000002f, 5.30000019f, //
+           5.4000001f,   11.1000004f,  11.9000006f,  12.6999998f,  13.5f,       6.9000001f,  //
+           3.0f,         6.1500001f,   6.55000019f,  6.94999981f,  7.3499999f,  3.75f});
 
   // ---- padding-mode cases (test_gridsample_*_padding) --------------------
   AddCase(registry, opset, "test_gridsample_zeros_padding", "", "zeros", 0, MakeX_3x2(),
           MakeGrid_2x4_Pad(), {1, 1, 2, 4},
-          {0.0000f, 0.0000f, 1.7000f, 0.0000f, 0.0000f, 1.7000f, 0.0000f, 0.0000f});
+          {0.0f, 0.0f, 1.70000005f, 0.0f, 0.0f, 1.70000005f, 0.0f, 0.0f});
   AddCase(registry, opset, "test_gridsample_border_padding", "", "border", 0, MakeX_3x2(),
           MakeGrid_2x4_Pad(), {1, 1, 2, 4},
-          {0.0000f, 0.0000f, 1.7000f, 5.0000f, 5.0000f, 1.7000f, 5.0000f, 5.0000f});
+          {0.0f, 0.0f, 1.70000005f, 5.0f, 5.0f, 1.70000005f, 5.0f, 5.0f});
   AddCase(registry, opset, "test_gridsample_reflection_padding", "", "reflection", 0, MakeX_3x2(),
           MakeGrid_2x4_Pad(), {1, 1, 2, 4},
-          {2.5000f, 0.0000f, 1.7000f, 2.5000f, 2.5000f, 1.7000f, 5.0000f, 2.5000f});
+          {2.5f, 0.0f, 1.70000005f, 2.5f, 2.5f, 1.70000005f, 5.0f, 2.5f});
 
   // ---- mode / align_corners cases ----------------------------------------
   AddCase(registry, opset, "test_gridsample_bilinear", "linear", "", 0, MakeX_3x2(),
           MakeGrid_2x4_Mode(), {1, 1, 2, 4},
-          {0.0000f, 0.5000f, 1.7000f, 2.5000f, 2.5000f, 1.7000f, 4.5000f, 1.2500f});
+          {0.0f, 0.5f, 1.70000005f, 2.5f, 2.5f, 1.70000005f, 4.5f, 1.25f});
   AddCase(registry, opset, "test_gridsample_aligncorners_true", "linear", "", 1, MakeX_3x2(),
-          MakeGrid_2x4_Mode(), {1, 1, 2, 4},
-          {0.0000f, 1.2500f, 2.0000f, 2.5000f, 2.5000f, 2.0000f, 3.7500f, 5.0000f});
+          MakeGrid_2x4_Mode(), {1, 1, 2, 4}, {0.0f, 1.25f, 2.0f, 2.5f, 2.5f, 2.0f, 3.75f, 5.0f});
   AddCase(registry, opset, "test_gridsample_nearest", "nearest", "", 0, MakeX_3x2(),
           MakeGrid_2x4_Mode(), {1, 1, 2, 4}, {0.0f, 0.0f, 2.0f, 2.0f, 2.0f, 2.0f, 5.0f, 0.0f});
   AddCase(registry, opset, "test_gridsample_bicubic", "cubic", "", 0, MakeX_3x2(),
           MakeGrid_2x4_Mode(), {1, 1, 2, 4},
-          {-0.1406f, 0.3828f, 1.7556f, 2.9688f, 2.9688f, 1.7556f, 5.1445f, 1.3906f});
+          {-0.140625f, 0.3828125f, 1.75555158f, 2.96875f, 2.96875f, 1.75555158f, 5.14453125f,
+           1.390625f});
 
   // ---- additional align_corners cases -----------------------------------
   AddCase(registry, opset, "test_gridsample_nearest_align_corners_0_additional_1", "nearest", "", 0,
@@ -165,19 +166,22 @@ void RegisterGridSampleCases(std::vector<TestCase> &registry) {
   AddCase(registry, opset, "test_gridsample_nearest_align_corners_1_additional_1", "nearest", "", 1,
           MakeX_3x2(), MakeGrid_2x4_Additional(), {1, 1, 2, 4},
           {0.0f, 0.0f, 2.0f, 3.0f, 2.0f, 3.0f, 4.0f, 4.0f});
-  AddCase(registry, opset, "test_gridsample_bilinear_align_corners_0_additional_1", "linear", "", 0,
-          MakeX_3x2(), MakeGrid_2x4_Additional(), {1, 1, 2, 4},
-          {0.0000f, 0.4500f, 1.8000f, 2.4000f, 3.7000f, 2.1000f, 3.7000f, 1.0000f});
+  AddCase(
+      registry, opset, "test_gridsample_bilinear_align_corners_0_additional_1", "linear", "", 0,
+      MakeX_3x2(), MakeGrid_2x4_Additional(), {1, 1, 2, 4},
+      {0.0f, 0.449999988f, 1.79999995f, 2.4000001f, 3.70000005f, 2.0999999f, 3.70000005f, 1.0f});
   AddCase(registry, opset, "test_gridsample_bilinear_align_corners_1_additional_1", "linear", "", 1,
           MakeX_3x2(), MakeGrid_2x4_Additional(), {1, 1, 2, 4},
-          {0.4000f, 1.2000f, 2.0500f, 2.8500f, 3.3000f, 2.2000f, 3.3500f, 4.0000f});
-  AddCase(
-      registry, opset, "test_gridsample_bicubic_align_corners_0_additional_1", "cubic", "", 0,
-      MakeX_3x2(), MakeGrid_2x4_Additional(), {1, 1, 2, 4},
-      {-0.173250f, 0.284265f, 1.923106f, 2.568000f, 5.170375f, 2.284414f, 4.744844f, 1.046875f});
+          {0.399999976f, 1.20000005f, 2.04999995f, 2.8499999f, 3.29999995f, 2.20000005f, 3.3499999f,
+           4.0f});
+  AddCase(registry, opset, "test_gridsample_bicubic_align_corners_0_additional_1", "cubic", "", 0,
+          MakeX_3x2(), MakeGrid_2x4_Additional(), {1, 1, 2, 4},
+          {-0.173250005f, 0.284264624f, 1.923105f, 2.56800008f, 5.17037487f, 2.28441286f,
+           4.74484348f, 1.046875f});
   AddCase(registry, opset, "test_gridsample_bicubic_align_corners_1_additional_1", "cubic", "", 1,
           MakeX_3x2(), MakeGrid_2x4_Additional(), {1, 1, 2, 4},
-          {0.304001f, 1.128750f, 2.266270f, 3.144844f, 4.531500f, 2.455360f, 4.599819f, 4.000000f});
+          {0.30399999f, 1.12874997f, 2.26626992f, 3.14484382f, 4.53149986f, 2.45535994f,
+           4.59981918f, 4.0f});
 
   // ---- volumetric (5-D) cases (opset 20+) -------------------------------
   AddCase(registry, opset, "test_gridsample_volumetric_nearest_align_corners_0", "nearest", "", 0,
@@ -190,12 +194,12 @@ void RegisterGridSampleCases(std::vector<TestCase> &registry) {
            12.0f, 8.0f});
   AddCase(registry, opset, "test_gridsample_volumetric_bilinear_align_corners_0", "linear", "", 0,
           MakeX_Volumetric(), MakeGrid_Volumetric(), {1, 1, 2, 4, 2},
-          {0.1250f, 3.4000f, 2.0000f, 0.4500f, 4.7000f, 10.9000f, 6.5000f, 3.0000f, 6.5000f,
-           1.7500f, 4.7000f, 3.3000f, 11.0000f, 2.5200f, 1.5000f, 5.4900f});
+          {0.125f, 3.4000001f, 2.0f, 0.449999988f, 4.69999981f, 10.9000006f, 6.5f, 3.0f, 6.5f,
+           1.75f, 4.69999981f, 3.29999995f, 11.0f, 2.51999998f, 1.5f, 5.48999977f});
   AddCase(registry, opset, "test_gridsample_volumetric_bilinear_align_corners_1", "linear", "", 1,
           MakeX_Volumetric(), MakeGrid_Volumetric(), {1, 1, 2, 4, 2},
-          {1.0000f, 6.7000f, 3.7500f, 2.4000f, 5.4000f, 9.3000f, 6.5000f, 6.0000f, 6.5000f, 7.0000f,
-           5.4000f, 6.6000f, 9.2500f, 8.4000f, 12.0000f, 6.1000f});
+          {1.0f, 6.69999981f, 3.75f, 2.4000001f, 5.4000001f, 9.30000019f, 6.5f, 6.0f, 6.5f, 7.0f,
+           5.4000001f, 6.5999999f, 9.25f, 8.39999962f, 12.0f, 6.0999999f});
 }
 
 } // namespace onnx_backend_test

@@ -161,6 +161,24 @@ template <class KernelT> NodeKernelFn MakeAxisTrampoline(int64_t default_axis = 
   };
 }
 
+// Wraps a kernel of the form ``Tensor operator()(const Tensor&, int32_t to)``
+// where ``to`` is the required ONNX INT attribute naming the target data type
+// (for example ``Cast`` and ``BitCast``).
+template <class KernelT> NodeKernelFn MakeUnaryToTrampoline() {
+  return [](const NodeProto &node, RuntimeContext &rt) {
+    RequireInputCount(node, 1);
+    RequireOutputCount(node, 1);
+    const Tensor &x = GetInput(node, 0, rt.tensors());
+    const int32_t to = static_cast<int32_t>(GetAttributeIntOrDefault(node, "to", -1));
+    if (to < 0) {
+      throw std::invalid_argument("RunNode: " + node.op_type().as_string() +
+                                  " requires INT attribute 'to'.");
+    }
+    KernelT kernel(rt.kernel_ctx());
+    SetOutput(node, 0, kernel(x, to), rt.tensors());
+  };
+}
+
 // Creates trampolines for reduction kernels of the form:
 //   ``operator()(data, keepdims, noop_with_empty_axes)``
 //   ``operator()(data, axes, keepdims, noop_with_empty_axes)``
@@ -440,6 +458,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::BitShift k(rt.kernel_ctx());
          SetOutput(node, 0, k(x, y, dir), rt.tensors());
        }},
+      {"ai.onnx:BitCast", MakeUnaryToTrampoline<kernel::BitCast>()},
       {"ai.onnx:BitwiseAnd", MakeBinaryTrampoline<kernel::BitwiseAnd>()},
       {"ai.onnx:BitwiseNot", MakeUnaryTrampoline<kernel::BitwiseNot>()},
       {"ai.onnx:BitwiseOr", MakeBinaryTrampoline<kernel::BitwiseOr>()},
@@ -467,6 +486,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          SetOutput(node, 0, std::move(output), rt.tensors());
          SetOutput(node, 1, std::move(present_state), rt.tensors());
        }},
+      {"ai.onnx:Cast", MakeUnaryToTrampoline<kernel::Cast>()},
       {"ai.onnx:Ceil", MakeUnaryTrampoline<kernel::Ceil>()},
       {"ai.onnx:Celu", MakeUnaryAlphaTrampoline<kernel::Celu>("alpha", 1.0f)},
       {"ai.onnx:Clip",

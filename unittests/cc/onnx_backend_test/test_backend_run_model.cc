@@ -239,6 +239,7 @@ TEST(BackendRunModel, GlobalAveragePool) { RunBackendCasesFor("GlobalAveragePool
 TEST(BackendRunModel, GlobalMaxPool) { RunBackendCasesFor("GlobalMaxPool"); }
 TEST(BackendRunModel, GlobalLpPool) { RunBackendCasesFor("GlobalLpPool"); }
 TEST(BackendRunModel, LpPool) { RunBackendCasesFor("LpPool"); }
+TEST(BackendRunModel, LpNormalization) { RunBackendCasesFor("LpNormalization"); }
 TEST(BackendRunModel, MaxPool) {
   RunBackendCasesFor(
       "MaxPool",

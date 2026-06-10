@@ -1309,6 +1309,16 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
       {"ai.onnx:Log", MakeUnaryTrampoline<kernel::Log>()},
       {"ai.onnx:LogSoftmax", MakeAxisTrampoline<kernel::LogSoftmax>()},
+      {"ai.onnx:LpNormalization",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const int64_t axis = GetAttributeIntOrDefault(node, "axis", -1);
+         const int64_t p = GetAttributeIntOrDefault(node, "p", 2);
+         kernel::LpNormalization k(rt.kernel_ctx());
+         SetOutput(node, 0, k(x, axis, p), rt.tensors());
+       }},
       {"ai.onnx:LpPool",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);

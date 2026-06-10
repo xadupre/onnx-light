@@ -438,7 +438,7 @@ void RegisterConcatSplitShapeInferenceCases(std::vector<TestCase> &registry) {
   // inference renders it as a fresh symbolic dim (e.g. ``Concat_axis1``).
   AppendValueInfo(*graph->add_value_info(), "xy", DataType::FLOAT, {"a", "b+c"});
   AppendValueInfo(*graph->add_value_info(), "S1", DataType::FLOAT, {"a", "(b+c)//2"});
-  AppendValueInfo(*graph->add_value_info(), "S2", DataType::FLOAT, {"a", "(b+c)//2"});
+  AppendValueInfo(*graph->add_value_info(), "S2", DataType::FLOAT, {"a", "(1+b+c)//2"});
   AppendValueInfo(*graph->add_value_info(), "zs", DataType::FLOAT, {"a", "b+c"});
 
   // Graph output Z — same shape as zs.

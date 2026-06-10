@@ -816,6 +816,83 @@ TEST(RunNodes, RuntimeContextRemove) {
   EXPECT_FALSE(rt.Remove("x"));
 }
 
+TEST(RunNodes, RuntimeContextEventLogSetReplaceRemove) {
+  using onnx_kernels::TensorEventAction;
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  EXPECT_TRUE(rt.events().empty());
+
+  // Set -> add event with values inlined (element_count <= 8).
+  rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, -2.0f, 3.5f}));
+  ASSERT_EQ(rt.events().size(), 1u);
+  const auto &add_ev = rt.events()[0];
+  EXPECT_EQ(add_ev.action, TensorEventAction::kAdd);
+  EXPECT_EQ(add_ev.name, "x");
+  EXPECT_EQ(add_ev.data_type, static_cast<int32_t>(DataType::FLOAT));
+  EXPECT_EQ(add_ev.shape, (std::vector<int64_t>{3}));
+  ASSERT_EQ(add_ev.values.size(), 3u);
+  EXPECT_FLOAT_EQ(static_cast<float>(add_ev.values[0]), 1.0f);
+  EXPECT_FLOAT_EQ(static_cast<float>(add_ev.values[1]), -2.0f);
+  EXPECT_FLOAT_EQ(static_cast<float>(add_ev.values[2]), 3.5f);
+  EXPECT_GT(add_ev.timestamp_ns, 0);
+
+  // Put on the same name -> replace event.
+  rt.Put("x", Tensor::FromInt32("x", {2}, {7, 8}));
+  ASSERT_EQ(rt.events().size(), 2u);
+  EXPECT_EQ(rt.events()[1].action, TensorEventAction::kReplace);
+  EXPECT_EQ(rt.events()[1].data_type, static_cast<int32_t>(DataType::INT32));
+  EXPECT_EQ(rt.events()[1].values, (std::vector<double>{7.0, 8.0}));
+
+  // Remove -> remove event with empty shape / values.
+  EXPECT_TRUE(rt.Remove("x"));
+  ASSERT_EQ(rt.events().size(), 3u);
+  EXPECT_EQ(rt.events()[2].action, TensorEventAction::kRemove);
+  EXPECT_EQ(rt.events()[2].name, "x");
+  EXPECT_TRUE(rt.events()[2].shape.empty());
+  EXPECT_TRUE(rt.events()[2].values.empty());
+
+  // No-op remove -> no extra event.
+  EXPECT_FALSE(rt.Remove("x"));
+  EXPECT_EQ(rt.events().size(), 3u);
+
+  // Large tensor -> event recorded but values not inlined.
+  rt.Put("big", Tensor::FromInt32("big", {9}, {0, 1, 2, 3, 4, 5, 6, 7, 8}));
+  ASSERT_EQ(rt.events().size(), 4u);
+  EXPECT_EQ(rt.events()[3].action, TensorEventAction::kAdd);
+  EXPECT_EQ(rt.events()[3].shape, (std::vector<int64_t>{9}));
+  EXPECT_TRUE(rt.events()[3].values.empty());
+
+  // String tensor values land in string_values.
+  rt.Put("s", Tensor::FromStrings("s", {2}, {"a", "bc"}));
+  ASSERT_EQ(rt.events().size(), 5u);
+  EXPECT_EQ(rt.events()[4].data_type, static_cast<int32_t>(DataType::STRING));
+  EXPECT_EQ(rt.events()[4].string_values, (std::vector<std::string>{"a", "bc"}));
+  EXPECT_TRUE(rt.events()[4].values.empty());
+
+  rt.ClearEvents();
+  EXPECT_TRUE(rt.events().empty());
+}
+
+TEST(RunNodes, RuntimeContextEventLogCapturesRunGraphMutations) {
+  // Smoke test: running a small chain of nodes through the dispatcher
+  // populates the event log via SetOutput / Put on every produced tensor.
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
+  rt.Set("z", Tensor::FromFloat("z", {2}, {10.0f, 20.0f}));
+  rt.ClearEvents();
+
+  std::vector<NodeProto> nodes;
+  nodes.push_back(MakeNode("Abs", {"x"}, {"t"}));
+  nodes.push_back(MakeNode("Add", {"t", "z"}, {"y"}));
+  RunNodes(nodes.begin(), nodes.end(), rt);
+
+  // Exactly two "add" events for the two produced intermediates.
+  ASSERT_EQ(rt.events().size(), 2u);
+  EXPECT_EQ(rt.events()[0].name, "t");
+  EXPECT_EQ(rt.events()[0].action, onnx_kernels::TensorEventAction::kAdd);
+  EXPECT_EQ(rt.events()[1].name, "y");
+  EXPECT_EQ(rt.events()[1].action, onnx_kernels::TensorEventAction::kAdd);
+}
+
 // ---------------------------------------------------------------------------
 // TensorFromProto tests
 // ---------------------------------------------------------------------------

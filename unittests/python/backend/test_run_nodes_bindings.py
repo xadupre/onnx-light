@@ -79,6 +79,50 @@ class TestRunNodesBindings(ExtTestCase):
         self.assertFalse(ctx.has("x"))
         self.assertFalse(ctx.remove("x"))
 
+    def test_runtime_context_event_log_records_add_replace_remove(self):
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        self.assertEqual(ctx.events(), [])
+
+        ctx.set("x", _make_float_tensor("x", [1.0, -2.0]))
+        ctx.put("x", _make_float_tensor("x", [3.0]))  # replace
+        ctx.remove("x")
+        ctx.remove("missing")  # no-op, does not log
+
+        events = ctx.events()
+        self.assertEqual([e["action"] for e in events], ["add", "replace", "remove"])
+        self.assertEqual([e["name"] for e in events], ["x", "x", "x"])
+        # timestamps are non-decreasing nanoseconds since the Unix epoch.
+        self.assertTrue(all(isinstance(e["timestamp_ns"], int) for e in events))
+        self.assertTrue(all(e["timestamp_ns"] > 0 for e in events))
+        self.assertLessEqual(events[0]["timestamp_ns"], events[1]["timestamp_ns"])
+        self.assertLessEqual(events[1]["timestamp_ns"], events[2]["timestamp_ns"])
+
+        # Values are inlined when element_count <= 8.
+        self.assertEqual(events[0]["data_type"], int(TensorProto.FLOAT))
+        self.assertEqual(events[0]["shape"], [2])
+        self.assertEqual(events[0]["values"], [1.0, -2.0])
+        self.assertEqual(events[1]["values"], [3.0])
+        # Remove events leave the data/shape fields empty.
+        self.assertEqual(events[2]["data_type"], int(TensorProto.UNDEFINED))
+        self.assertEqual(events[2]["shape"], [])
+        self.assertEqual(events[2]["values"], [])
+
+        ctx.clear_events()
+        self.assertEqual(ctx.events(), [])
+
+    def test_runtime_context_events_capture_run_model_intermediates(self):
+        model = parser.parse_model(_MODEL_SRC)
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        ctx.set("x", _make_float_tensor("x", [-1.0, 2.0, -3.5]))
+        ctx.set("z", _make_float_tensor("z", [10.0, 20.0, 30.0]))
+        ctx.clear_events()
+        rt.run_model(model, ctx)
+
+        events = ctx.events()
+        # The graph produces two intermediates (``t`` and ``y``).
+        produced = [(e["action"], e["name"]) for e in events]
+        self.assertEqual(produced, [("add", "t"), ("add", "y")])
+
     def test_run_model_abs_then_add(self):
         model = parser.parse_model(_MODEL_SRC)
         ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))

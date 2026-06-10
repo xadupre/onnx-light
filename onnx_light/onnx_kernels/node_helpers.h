@@ -87,6 +87,18 @@ inline void SetOutput(const NodeProto &node, int index, Tensor result, TensorMap
   tensors[name] = std::move(result);
 }
 
+// Overload that routes the assignment through :cpp:func:`RuntimeContext::Put`
+// so the tensor map mutation is recorded in the context's event log.
+inline void SetOutput(const NodeProto &node, int index, Tensor result, RuntimeContext &rt) {
+  const std::string name = node.output(index).as_string();
+  if (name.empty()) {
+    throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() + "' output #" +
+                                std::to_string(index) + " is unset (empty name).");
+  }
+  result.name = name;
+  rt.Put(name, std::move(result));
+}
+
 inline void RequireInputCount(const NodeProto &node, int expected) {
   if (static_cast<int>(node.input_size()) != expected) {
     throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() + "' expects " +

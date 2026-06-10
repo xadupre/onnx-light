@@ -145,7 +145,11 @@ void AddOnnxPyRuntime(nb::module_ &m) {
            "Removes the tensor stored under ``name`` if present. Returns ``True`` if "
            "an entry was erased.")
       .def("set", &RuntimeContext::Set, nb::arg("name"), nb::arg("tensor"),
-           "Inserts ``tensor`` under ``name``. Raises if ``name`` already exists.")
+           "Inserts ``tensor`` under ``name``. Raises if ``name`` already exists. "
+           "Records an ``add`` event in :func:`events`.")
+      .def("put", &RuntimeContext::Put, nb::arg("name"), nb::arg("tensor"),
+           "Inserts or overwrites the tensor stored under ``name``. Records an ``add`` "
+           "or ``replace`` event in :func:`events`.")
       .def(
           "get",
           [](RuntimeContext &rt, const std::string &name) -> Tensor & { return rt.Get(name); },
@@ -161,7 +165,36 @@ void AddOnnxPyRuntime(nb::module_ &m) {
             }
             return out;
           },
-          "Returns the list of tensor names currently held by the context.");
+          "Returns the list of tensor names currently held by the context.")
+      .def(
+          "events",
+          [](const RuntimeContext &rt) {
+            // Each event is materialised as a plain Python ``dict`` so the log
+            // can be consumed without any extra binding (and trivially
+            // serialised, filtered or rendered as a table on the Python side).
+            nb::list out;
+            for (const auto &ev : rt.events()) {
+              nb::dict d;
+              d["action"] = onnx_kernels::TensorEventActionName(ev.action);
+              d["timestamp_ns"] = ev.timestamp_ns;
+              d["name"] = ev.name;
+              d["data_type"] = ev.data_type;
+              d["shape"] = ev.shape;
+              d["values"] = ev.values;
+              d["string_values"] = ev.string_values;
+              out.append(std::move(d));
+            }
+            return out;
+          },
+          "Returns the append-only log of tensor map mutations (add/replace/remove) "
+          "as a list of ``dict`` entries. Each entry carries ``action`` "
+          "(``\"add\"`` / ``\"replace\"`` / ``\"remove\"``), ``timestamp_ns`` "
+          "(``int`` nanoseconds since the Unix epoch), ``name``, ``data_type`` "
+          "(``TensorProto.DataType`` integer), ``shape``, and the element values "
+          "when the tensor holds at most 8 elements (``values`` for numeric "
+          "dtypes, ``string_values`` for ``STRING``).")
+      .def("clear_events", &RuntimeContext::ClearEvents,
+           "Empties the event log without otherwise touching the tensor map.");
 
   // Top-level run helpers.
   rt_mod.def(

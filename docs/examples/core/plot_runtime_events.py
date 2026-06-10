@@ -14,17 +14,23 @@ propagated back to the caller.
 
 This example:
 
-* builds a small graph with an initializer and two operators
-  (``Mul`` then ``Add``),
+* builds a small graph with a symbolic batch dimension ``N``, an
+  initializer and three operators (``Mul``, ``Add`` then ``Concat``)
+  so that one of the intermediate tensors has a shape expressed as
+  an arithmetic expression of ``N`` (here ``2*N``),
 * runs :func:`~onnx_light.onnx_optim.shape_inference.infer_shapes_model`
   on it so the expected shape of each intermediate tensor is
   recorded in ``graph.value_info``,
+* uses :func:`~onnx_light.onnx_optim.expressions.evaluate_expression`
+  to resolve each symbolic dimension to a concrete integer given
+  the actual batch size at runtime,
 * drives the runtime through :func:`run_model` while collecting
   the event log,
 * prints the events, illustrating how to peek at intermediate
   results without re-instrumenting the graph,
 * cross-checks the runtime-observed shape of every intermediate
-  tensor against the statically inferred shape,
+  tensor against the statically inferred (and expression-evaluated)
+  shape,
 * renders a compact table of the recorded events for visual
   inspection.
 """
@@ -35,22 +41,31 @@ import numpy as np
 
 from onnx_light.kernels import runtime
 from onnx_light.onnx_lib import numpy_helper, parser
+from onnx_light.onnx_optim.expressions import evaluate_expression
 from onnx_light.onnx_optim.shape_inference import infer_shapes_model
 
 #####################################
 # Build a small ONNX model
 # ++++++++++++++++++++++++
 #
-# The graph multiplies its input by an initializer ``two`` and adds
-# the original input back. The two intermediate values we expect to
-# see in the event log are ``z = x * two`` and ``y = z + x``.
+# The graph multiplies its input by an initializer ``two``, adds
+# the original input back and finally reshapes the result to a
+# 2-column matrix using a ``-1`` placeholder. The intermediate
+# tensors we expect to see in the event log are ``z = x * two``,
+# ``w = z + x`` and ``y = Reshape(w, [-1, 2])``. Because the input
+# has the symbolic batch dimension ``N``, shape inference resolves
+# the ``-1`` placeholder of ``Reshape`` to the arithmetic
+# expression ``2*N`` (input has ``N * 4`` elements, divided by the
+# fixed inner dimension ``2``).
 
 model = parser.parse_model(
     '<ir_version: 10, opset_import: ["" : 18]>'
-    "agraph (float[3] x) => (float[3] y) <float two = {2.0}>"
+    "agraph (float[N,4] x) => (float[M,2] y) "
+    "<float two = {2.0}, int64[2] target_shape = {-1, 2}>"
     "{"
     "  z = Mul(x, two)"
-    "  y = Add(z, x)"
+    "  w = Add(z, x)"
+    "  y = Reshape(w, target_shape)"
     "}"
 )
 print(model)
@@ -62,9 +77,9 @@ print(model)
 # :func:`infer_shapes_model` walks the graph in topological order,
 # applies the shape-inference rule registered for each operator and
 # writes the inferred element type and shape of every intermediate
-# tensor to ``graph.value_info``. We collect those inferred shapes
-# in a dictionary so they can be compared against the shapes
-# observed at runtime.
+# tensor to ``graph.value_info``. For symbolic dimensions the
+# inferred shape can contain arithmetic expressions over the input
+# parameters (e.g. ``2*N`` for the ``Concat`` along axis 0).
 
 infer_shapes_model(model)
 
@@ -81,8 +96,42 @@ for inp in model.graph.input:
 for out in model.graph.output:
     inferred_shapes[out.name] = _shape_of(out.type)
 
-print("Statically inferred shapes:")
+print("Statically inferred shapes (may contain symbolic dimensions):")
 for name, shape in inferred_shapes.items():
+    print(f"  {name:<6s} -> {shape}")
+
+#####################################
+# Resolve symbolic dimensions with ``evaluate_expression``
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#
+# Once the actual input shape is known, we can resolve every
+# symbolic dimension by binding the input parameters to integers
+# and feeding the resulting context to
+# :func:`~onnx_light.onnx_optim.expressions.evaluate_expression`.
+# It supports the arithmetic expressions produced by shape
+# inference (``+``, ``-``, ``*``, ``//``, ``%``, ``CeilToInt`` …)
+# as well as plain integer literals and variable references.
+
+x = np.arange(8, dtype=np.float32).reshape(2, 4)
+context = {"N": int(x.shape[0])}
+print(f"Symbol context: {context}")
+
+
+def _resolve_shape(shape, context):
+    resolved = []
+    for d in shape:
+        if isinstance(d, int):
+            resolved.append(d)
+        else:
+            resolved.append(evaluate_expression(d, context))
+    return tuple(resolved)
+
+
+resolved_shapes = {
+    name: _resolve_shape(shape, context) for name, shape in inferred_shapes.items()
+}
+print("Shapes after evaluate_expression:")
+for name, shape in resolved_shapes.items():
     print(f"  {name:<6s} -> {shape}")
 
 #####################################
@@ -97,8 +146,6 @@ for name, shape in inferred_shapes.items():
 # ``Tensor`` via :func:`tensor_from_proto`.
 
 ctx = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(18)))
-
-x = np.array([1.0, 2.0, 3.0], dtype=np.float32)
 ctx.set("x", runtime.tensor_from_proto(numpy_helper.from_array(x, name="x")))
 
 #####################################
@@ -117,7 +164,7 @@ y_tensor = ctx.get("y")
 y = np.frombuffer(y_tensor.raw_data(), dtype=np.float32).reshape(
     tuple(int(d) for d in y_tensor.shape)
 )
-print(f"y = {y}")
+print(f"y =\n{y}")
 
 #####################################
 # Inspect the event log
@@ -163,10 +210,11 @@ for ev in events:
         continue
     runtime_shape = tuple(d["shape"])
     inferred = inferred_shapes.get(d["name"])
-    match = "OK" if inferred == runtime_shape else "MISMATCH"
+    resolved = resolved_shapes.get(d["name"])
+    match = "OK" if resolved == runtime_shape else "MISMATCH"
     print(
-        f"  {d['name']:<6s} runtime={runtime_shape} inferred={inferred} [{match}]"
-        f"  values={d.get('values')}"
+        f"  {d['name']:<6s} runtime={runtime_shape} inferred={inferred} "
+        f"resolved={resolved} [{match}]  values={d.get('values')}"
     )
 
 #####################################
@@ -191,15 +239,24 @@ for ev in events:
             d["name"],
             str(tuple(d["shape"])),
             str(inferred_shapes.get(d["name"], "")),
+            str(resolved_shapes.get(d["name"], "")),
             str(values),
         ]
     )
 
-fig, ax = plt.subplots(figsize=(8, 1.6 + 0.3 * len(rows)))
+fig, ax = plt.subplots(figsize=(9, 1.6 + 0.3 * len(rows)))
 ax.set_axis_off()
 table = ax.table(
     cellText=rows,
-    colLabels=["action", "kind", "name", "runtime shape", "inferred shape", "values"],
+    colLabels=[
+        "action",
+        "kind",
+        "name",
+        "runtime shape",
+        "inferred shape",
+        "resolved shape",
+        "values",
+    ],
     loc="center",
     cellLoc="left",
     colLoc="left",

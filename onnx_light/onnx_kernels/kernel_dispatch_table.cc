@@ -794,6 +794,18 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          }
          SetOutput(node, 0, std::move(y), rt.tensors());
        }},
+      {"ai.onnx:ConstantOfShape",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &shape = GetInput(node, 0, rt.tensors());
+         Tensor value;
+         if (FindAttribute(node, "value") != nullptr) {
+           value = GetRequiredAttributeTensor(node, "value");
+         }
+         kernel::ConstantOfShape k(rt.kernel_ctx());
+         SetOutput(node, 0, k(shape, value), rt);
+       }},
       {"ai.onnx:Clip",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 1);

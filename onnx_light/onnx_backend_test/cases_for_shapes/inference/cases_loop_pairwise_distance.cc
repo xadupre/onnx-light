@@ -173,19 +173,21 @@ void RegisterLoopPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &regi
   cond_tensor.set_data_type(TensorProto::DataType::BOOL);
   cond_tensor.set_raw_data(utils::ByteSpan(BoolBytes(true)));
 
-  // Graph input X uses symbolic ``N``/``D`` dims; concrete sizes ``[3, 3]``
-  // are only used in the DataSet below.
+  // Graph input X uses the concrete ``[3, 3]`` shape that matches the
+  // reference DataSet. The dynamic-shape backend test rewrites these
+  // ``dim_value`` entries to fresh ``dim_param`` names before re-running
+  // shape inference, so input dims must be concrete here.
   const int32_t kFloat = static_cast<int32_t>(DataType::FLOAT);
-  AppendValueInfo(*graph->add_input(), "X", kFloat, {DimSpec("N"), DimSpec("D")});
+  AppendValueInfo(*graph->add_input(), "X", kFloat, {DimSpec(3), DimSpec(3)});
 
-  // Intermediate value_info entries with symbolic dim names. ``trip_count``
-  // is the INT64 ``[1]`` slice of ``Shape(X)`` extracting the leading dim
-  // ``N``.
+  // Intermediate value_info entries. ``shape_X`` is the 1-D INT64 shape
+  // vector of ``X`` (length 2 = rank of ``X``); ``trip_count`` is the
+  // INT64 ``[1]`` slice extracting the leading dim.
   AppendValueInfo(*graph->add_value_info(), "shape_X", DataType::INT64, {DimSpec(2)});
   AppendValueInfo(*graph->add_value_info(), "trip_count", DataType::INT64, {DimSpec(1)});
 
-  // Output Y — the stacked pairwise distance matrix of shape ``[N, N]``.
-  AppendValueInfo(*graph->add_output(), "Y", kFloat, {DimSpec("N"), DimSpec("N")});
+  // Output Y — the stacked pairwise distance matrix of shape ``[3, 3]``.
+  AppendValueInfo(*graph->add_output(), "Y", kFloat, {DimSpec(3), DimSpec(3)});
 
   // Reference DataSet with concrete ``[3, 3]`` input. Rows are on the axes
   // of an integer grid so the pairwise distances are integers and exact.

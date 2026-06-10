@@ -9,8 +9,11 @@
 #include "onnx_light_helpers.h"
 #include "onnx_proto/onnx.h"
 
+#include <array>
+#include <cstdint>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 /**
  * @file runtime_context.h
@@ -46,6 +49,133 @@ using TensorMap = std::unordered_map<std::string, Tensor>;
  * outlives the runtime context.
  */
 using FunctionMap = std::unordered_map<std::string, const FunctionProto *>;
+
+/**
+ * Maximum number of element values captured inline by
+ * :cpp:class:`TensorEvent`. The event always carries a fixed-size buffer
+ * of ``kTensorEventValueLimit`` entries; for tensors with more elements
+ * the buffer holds only the first ``kTensorEventValueLimit`` values
+ * (the remainder is truncated). When the element count exceeds the
+ * limit the event's ``data_type`` is also set to ``-1`` to signal the
+ * truncation, and ``shape`` is left empty so the log stays bounded for
+ * large activations.
+ */
+inline constexpr int64_t kTensorEventValueLimit = 8;
+
+/**
+ * Kind of tensor map mutation recorded in the :cpp:class:`RuntimeContext`
+ * event log.
+ *
+ *  * ``kAdd``     — a new entry was inserted (e.g. via :cpp:func:`RuntimeContext::Set`
+ *                   or :cpp:func:`RuntimeContext::Put` on a previously absent name).
+ *  * ``kReplace`` — an existing entry was overwritten via
+ *                   :cpp:func:`RuntimeContext::Put`.
+ *  * ``kRemove``  — an entry was erased via :cpp:func:`RuntimeContext::Remove`.
+ */
+enum class TensorEventAction : int32_t { kAdd = 0, kReplace = 1, kRemove = 2 };
+
+/**
+ * Role of the tensor at the moment the event was recorded. Set by the
+ * call site that performs the mutation; not derived from the tensor map
+ * itself.
+ *
+ *  * ``kUnknown``      — origin not specified.
+ *  * ``kInitializer``  — a graph initializer seeded by :cpp:func:`RunGraph`.
+ *  * ``kInput``        — a graph / function / subgraph input binding, or a
+ *                        value injected by the caller before running.
+ *  * ``kIntermediate`` — an intermediate value produced by a node kernel.
+ *  * ``kOutput``       — a subgraph / function output propagated back to
+ *                        the caller's tensor map.
+ */
+enum class TensorEventKind : int32_t {
+  kUnknown = 0,
+  kInitializer = 1,
+  kInput = 2,
+  kIntermediate = 3,
+  kOutput = 4,
+};
+
+/**
+ * Returns a short lowercase label for ``action`` (``"add"``, ``"replace"``,
+ * ``"remove"``). Useful for human-readable rendering of the event log.
+ */
+const char *TensorEventActionName(TensorEventAction action) noexcept;
+
+/**
+ * Returns a short lowercase label for ``kind`` (``"unknown"``,
+ * ``"initializer"``, ``"input"``, ``"intermediate"``, ``"output"``).
+ */
+const char *TensorEventKindName(TensorEventKind kind) noexcept;
+
+/**
+ * Single entry of the :cpp:class:`RuntimeContext` event log.
+ *
+ * Each mutation of the underlying ``TensorMap`` performed through
+ * :cpp:func:`RuntimeContext::Set`, :cpp:func:`RuntimeContext::Put` or
+ * :cpp:func:`RuntimeContext::Remove` produces one ``TensorEvent`` capturing
+ * the action, the role (``kind``), the name of the tensor, the wall-clock
+ * timestamp (nanoseconds since the Unix epoch), and a snapshot of the
+ * tensor's type and shape.
+ *
+ * The element values are captured into a fixed-size buffer of
+ * :cpp:var:`kTensorEventValueLimit` entries (``values`` for numeric dtypes,
+ * ``string_values`` for ``DataType::STRING``); ``value_count`` records how
+ * many slots are populated (``min(element_count, kTensorEventValueLimit)``).
+ * When the tensor has more than :cpp:var:`kTensorEventValueLimit` elements
+ * the buffer holds only the first ``kTensorEventValueLimit`` values
+ * (the remainder is truncated), ``data_type`` is set to ``-1`` to signal
+ * the truncation and ``shape`` is left empty.
+ *
+ * ``kRemove`` events always set ``data_type = DataType::UNDEFINED``,
+ * ``value_count = 0``, leave ``shape`` empty and do not populate
+ * ``values`` / ``string_values``; they only record the name, kind and
+ * timestamp of the removal.
+ */
+struct TensorEvent {
+  /// Kind of mutation recorded by this entry.
+  TensorEventAction action = TensorEventAction::kAdd;
+  /// Role of the tensor at the moment of the event (see
+  /// :cpp:enum:`TensorEventKind`).
+  TensorEventKind kind = TensorEventKind::kUnknown;
+  /// Wall-clock timestamp of the event, in nanoseconds since the Unix
+  /// epoch (``std::chrono::system_clock``).
+  int64_t timestamp_ns = 0;
+  /// Name under which the tensor is (or was) stored in the
+  /// :cpp:class:`RuntimeContext` tensor map.
+  std::string name;
+  /// Element data type of the tensor at the moment of the event, encoded
+  /// as a ``TensorProto::DataType`` integer value. Set to
+  /// ``DataType::UNDEFINED`` for ``kRemove`` events, and to ``-1`` for
+  /// ``kAdd`` / ``kReplace`` events whose tensor has more than
+  /// :cpp:var:`kTensorEventValueLimit` elements (the values buffer is
+  /// then truncated to the first ``kTensorEventValueLimit`` entries and
+  /// ``shape`` is left empty).
+  int32_t data_type = 0;
+  /// Tensor shape at the moment of the event. Empty for ``kRemove``, for
+  /// scalar tensors (``element_count == 1``), and for ``kAdd`` /
+  /// ``kReplace`` events whose tensor exceeds
+  /// :cpp:var:`kTensorEventValueLimit` elements (truncated payload).
+  std::vector<int64_t> shape;
+  /// Number of populated entries in ``values`` / ``string_values``
+  /// (``min(element_count, kTensorEventValueLimit)``). Zero for
+  /// ``kRemove`` events.
+  int32_t value_count = 0;
+  /// Fixed-size buffer holding the first ``value_count`` numeric values
+  /// of the tensor (coerced to ``double``). Boolean values are recorded
+  /// as ``0.0`` / ``1.0``. Unused slots are zero-initialised. Always
+  /// empty for ``DataType::STRING`` and ``kRemove`` events.
+  std::array<double, kTensorEventValueLimit> values{};
+  /// Fixed-size buffer holding the first ``value_count`` string values
+  /// of the tensor when ``data_type`` is ``DataType::STRING``. Unused
+  /// slots are empty strings.
+  std::array<std::string, kTensorEventValueLimit> string_values{};
+};
+
+/**
+ * Append-only log of tensor map mutations recorded by
+ * :cpp:class:`RuntimeContext`.
+ */
+using TensorEventLog = std::vector<TensorEvent>;
 
 /**
  * Per-invocation runtime state passed to :cpp:func:`RunNode` /
@@ -92,15 +222,30 @@ public:
   bool Has(const std::string &name) const { return tensors_.find(name) != tensors_.end(); }
 
   /// Removes the tensor stored under ``name`` if present. Returns
-  /// ``true`` if an entry was erased, ``false`` otherwise.
-  bool Remove(const std::string &name) { return tensors_.erase(name) > 0; }
+  /// ``true`` if an entry was erased, ``false`` otherwise. When an entry
+  /// is erased a :cpp:class:`TensorEvent` with action
+  /// :cpp:enumerator:`TensorEventAction::kRemove` is appended to the
+  /// event log; nothing is logged when ``name`` is not present.
+  bool Remove(const std::string &name);
 
   /// Inserts the tensor under ``name``. The name must not already
-  /// be present in the map; use ``tensors()`` directly to overwrite.
-  void Set(const std::string &name, Tensor tensor) {
-    EXT_ENFORCE(!Has(name), "RuntimeContext::Set: a tensor named '", name, "' already exists.");
-    tensors_[name] = std::move(tensor);
-  }
+  /// be present in the map; use :cpp:func:`Put` (or ``tensors()``
+  /// directly) to overwrite. A :cpp:class:`TensorEvent` with action
+  /// :cpp:enumerator:`TensorEventAction::kAdd` and the supplied ``kind``
+  /// is appended to the event log on successful insertion. ``kind``
+  /// defaults to :cpp:enumerator:`TensorEventKind::kInput`, which is
+  /// the typical role of values seeded by the caller before running.
+  void Set(const std::string &name, Tensor tensor, TensorEventKind kind = TensorEventKind::kInput);
+
+  /// Inserts or overwrites the tensor stored under ``name``. Appends a
+  /// :cpp:class:`TensorEvent` describing the new state with action
+  /// :cpp:enumerator:`TensorEventAction::kAdd` when ``name`` was absent
+  /// and :cpp:enumerator:`TensorEventAction::kReplace` when an existing
+  /// entry was overwritten. ``kind`` defaults to
+  /// :cpp:enumerator:`TensorEventKind::kIntermediate`, the typical role
+  /// of values written by node kernels through :cpp:func:`SetOutput`.
+  void Put(const std::string &name, Tensor tensor,
+           TensorEventKind kind = TensorEventKind::kIntermediate);
 
   /**
    * Returns the tensor stored under ``name``.
@@ -110,10 +255,20 @@ public:
   const Tensor &Get(const std::string &name) const;
   Tensor &Get(const std::string &name);
 
+  /// Append-only log of every tensor map mutation performed through
+  /// :cpp:func:`Set`, :cpp:func:`Put` and :cpp:func:`Remove`. See
+  /// :cpp:class:`TensorEvent` for the captured fields.
+  const TensorEventLog &events() const noexcept { return events_; }
+  TensorEventLog &events() noexcept { return events_; }
+
+  /// Empties the event log without otherwise touching the tensor map.
+  void ClearEvents() noexcept { events_.clear(); }
+
 private:
   TensorMap tensors_;
   kernel::KernelContext kernel_ctx_;
   FunctionMap functions_;
+  TensorEventLog events_;
 };
 
 } // namespace onnx_kernels

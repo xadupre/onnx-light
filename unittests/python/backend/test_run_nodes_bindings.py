@@ -30,6 +30,16 @@ def _make_float_tensor(name: str, values: list[float]):
     return rt.tensor_from_proto(tp)
 
 
+def _make_int32_tensor(name: str, values: list[int]):
+    """Builds an owned :class:`Tensor` of dtype ``INT32`` from ``values``."""
+    tp = TensorProto()
+    tp.name = name
+    tp.dims.append(len(values))
+    tp.data_type = int(TensorProto.INT32)
+    tp.raw_data = struct.pack(f"<{len(values)}i", *values)
+    return rt.tensor_from_proto(tp)
+
+
 def _unpack_floats(tensor) -> tuple[float, ...]:
     return struct.unpack(f"<{tensor.element_count()}f", tensor.raw_data())
 
@@ -78,6 +88,80 @@ class TestRunNodesBindings(ExtTestCase):
         self.assertTrue(ctx.remove("x"))
         self.assertFalse(ctx.has("x"))
         self.assertFalse(ctx.remove("x"))
+
+    def test_runtime_context_event_log_records_add_replace_remove(self):
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        self.assertEqual(ctx.events(), [])
+
+        ctx.set("x", _make_float_tensor("x", [1.0, -2.0]))
+        ctx.put("x", _make_float_tensor("x", [3.0]))  # replace
+        ctx.remove("x")
+        ctx.remove("missing")  # no-op, does not log
+
+        events = ctx.events()
+        self.assertEqual([e.action for e in events], ["add", "replace", "remove"])
+        self.assertEqual([e.name for e in events], ["x", "x", "x"])
+        # ``set`` defaults to kind ``"input"``, ``put`` to ``"intermediate"``;
+        # ``remove`` records ``"unknown"``.
+        self.assertEqual([e.kind for e in events], ["input", "intermediate", "unknown"])
+        # timestamps are non-decreasing nanoseconds since the Unix epoch.
+        self.assertTrue(all(isinstance(e.timestamp_ns, int) for e in events))
+        self.assertTrue(all(e.timestamp_ns > 0 for e in events))
+        self.assertLessEqual(events[0].timestamp_ns, events[1].timestamp_ns)
+        self.assertLessEqual(events[1].timestamp_ns, events[2].timestamp_ns)
+
+        # Values are exposed as a list of length ``value_count`` (truncated
+        # prefix of the fixed-size buffer).
+        self.assertEqual(events[0].data_type, int(TensorProto.FLOAT))
+        self.assertEqual(events[0].shape, [2])
+        self.assertEqual(events[0].value_count, 2)
+        self.assertEqual(events[0].values, [1.0, -2.0])
+        self.assertEqual(events[1].value_count, 1)
+        self.assertEqual(events[1].values, [3.0])
+        # Remove events leave the data/shape/value_count fields empty.
+        self.assertEqual(events[2].data_type, int(TensorProto.UNDEFINED))
+        self.assertEqual(events[2].shape, [])
+        self.assertEqual(events[2].value_count, 0)
+        self.assertEqual(events[2].values, [])
+
+        # ``as_dict`` exposes the same fields as a plain ``dict``.
+        d0 = events[0].as_dict()
+        self.assertEqual(d0["action"], "add")
+        self.assertEqual(d0["kind"], "input")
+        self.assertEqual(d0["name"], "x")
+        self.assertEqual(d0["data_type"], int(TensorProto.FLOAT))
+        self.assertEqual(d0["shape"], [2])
+        self.assertEqual(d0["value_count"], 2)
+        self.assertEqual(d0["values"], [1.0, -2.0])
+        self.assertEqual(d0["string_values"], [])
+        self.assertEqual(d0["timestamp_ns"], events[0].timestamp_ns)
+
+        ctx.clear_events()
+        self.assertEqual(ctx.events(), [])
+
+    def test_runtime_context_event_log_truncates_large_tensors(self):
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        # 9-element tensor: the buffer keeps only the first 8 entries,
+        # data_type is set to -1 and shape is emptied to flag the truncation.
+        ctx.put("big", _make_int32_tensor("big", list(range(9))))
+        ev = ctx.events()[0]
+        self.assertEqual(ev.data_type, -1)
+        self.assertEqual(ev.shape, [])
+        self.assertEqual(ev.value_count, 8)
+        self.assertEqual(ev.values, [float(i) for i in range(8)])
+
+    def test_runtime_context_events_capture_run_model_intermediates(self):
+        model = parser.parse_model(_MODEL_SRC)
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        ctx.set("x", _make_float_tensor("x", [-1.0, 2.0, -3.5]))
+        ctx.set("z", _make_float_tensor("z", [10.0, 20.0, 30.0]))
+        ctx.clear_events()
+        rt.run_model(model, ctx)
+
+        events = ctx.events()
+        # The graph produces two intermediates (``t`` and ``y``).
+        produced = [(e.action, e.name, e.kind) for e in events]
+        self.assertEqual(produced, [("add", "t", "intermediate"), ("add", "y", "intermediate")])
 
     def test_run_model_abs_then_add(self):
         model = parser.parse_model(_MODEL_SRC)

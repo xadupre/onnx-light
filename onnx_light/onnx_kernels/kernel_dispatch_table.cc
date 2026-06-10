@@ -1366,6 +1366,17 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Tanh", MakeUnaryTrampoline<kernel::Tanh>()},
       {"ai.onnx:ThresholdedRelu", MakeUnaryAlphaTrampoline<kernel::ThresholdedRelu>("alpha", 1.0f)},
       {"ai.onnx:Unsqueeze", MakeSqueezeLikeTrampoline<kernel::Unsqueeze>("Unsqueeze")},
+      {"ai.onnx:Upsample",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const Tensor &scales = GetInput(node, 1, rt.tensors());
+         kernel::Upsample::Attributes attrs;
+         attrs.mode = GetAttributeStringOrDefault(node, "mode", attrs.mode);
+         kernel::Upsample k(rt.kernel_ctx());
+         SetOutput(node, 0, k(x, scales, attrs), rt);
+       }},
       {"ai.onnx:Where", MakeTernaryTrampoline<kernel::Where>()},
       {"ai.onnx:Xor", MakeBinaryTrampoline<kernel::Xor>()},
 

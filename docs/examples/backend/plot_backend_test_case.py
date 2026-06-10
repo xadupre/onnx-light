@@ -104,7 +104,7 @@ for ds_idx, ds in enumerate(tc.data_sets):
 
 import onnx_light.onnx as onnxl  # noqa: E402
 from onnx_light.onnx_optim.shape_inference import infer_shapes_model  # noqa: E402
-from onnx_light.backend.test.case import make_test_class  # noqa: F401, E402
+from onnx_light.onnx.backend import make_test_class  # noqa: F401, E402
 
 
 def validate_shape_inference(model_with_expected_shapes: onnxl.ModelProto):

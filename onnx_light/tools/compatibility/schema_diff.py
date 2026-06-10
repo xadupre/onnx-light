@@ -146,7 +146,7 @@ def _attr_default_value_repr(attr: Any) -> str:
     dv = attr._default_value
     at = dv.type
     # Import here to avoid a circular dependency at module load time.
-    from ..onnx_py._onnxpyprotoop import AttributeProto  # type: ignore[attr-defined]
+    from ...onnx_py._onnxpyprotoop import AttributeProto  # type: ignore[attr-defined]
 
     if at == AttributeProto.UNDEFINED:
         return "UNDEFINED"

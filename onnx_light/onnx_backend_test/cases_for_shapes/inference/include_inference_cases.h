@@ -135,8 +135,9 @@ void RegisterValueAsShapeBuilderShapeInferenceCases(std::vector<TestCase> &regis
 /// ``test_concat_split`` example in https://github.com/xadupre/
 /// yet-another-onnx-builder/blob/main/unittests/xshape/test_shape_builder.py.
 /// Exercises Concat / Split shape propagation when the concat axis dims
-/// are symbolic.
-void RegisterConcatSplitShapeInferenceCases(std::vector<TestCase> &registry);
+/// are symbolic. When ``even`` is ``true``, the split sizes are equal;
+/// when ``false``, the split sizes differ.
+void RegisterConcatSplitShapeInferenceCases(std::vector<TestCase> &registry, bool even);
 
 /// Collects all shape-inference oriented backend test cases by invoking
 /// every ``Register*ShapeInferenceCases`` helper declared in this header.

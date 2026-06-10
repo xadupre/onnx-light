@@ -351,7 +351,7 @@ class SchemaComparison:
 
 def _light_schemas_latest() -> dict[tuple[str, str], Any]:
     """Returns ``{(domain, name): schema}`` keeping only the latest version."""
-    from .onnx_py import _onnxpyprotoop as _op  # type: ignore[attr-defined]
+    from .onnx_py._onnxpyprotoop import onnx_op as _op  # type: ignore[attr-defined]
 
     latest: dict[tuple[str, str], Any] = {}
     for s in _op.GetAllOnnxOpSchemasWithHistory():

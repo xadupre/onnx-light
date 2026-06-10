@@ -354,6 +354,17 @@ inline Tensor GetAttributeTensorOrEmpty(const NodeProto &node, const std::string
   return TensorFromProto(attr->t());
 }
 
+// Reads the ONNX ``seed`` attribute (declared as FLOAT in the schema for
+// the random generator and Bernoulli/Multinomial ops) and converts it to
+// the ``int64_t`` value expected by the kernel constructors. Returns
+// ``-1`` (the shared ``kNoSeed`` sentinel) when the attribute is absent.
+inline int64_t GetSeedAttr(const NodeProto &node) {
+  if (FindAttribute(node, "seed") == nullptr) {
+    return -1;
+  }
+  return static_cast<int64_t>(GetAttributeFloatOrDefault(node, "seed", 0.0f));
+}
+
 // ---------------------------------------------------------------------------
 // Normalization op helpers
 // ---------------------------------------------------------------------------
@@ -607,6 +618,16 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:BitwiseOr", MakeBinaryTrampoline<kernel::BitwiseOr>()},
       {"ai.onnx:BitwiseXor", MakeBinaryTrampoline<kernel::BitwiseXor>()},
       {"ai.onnx:BatchNormalization", RunBatchNormalization},
+      {"ai.onnx:Bernoulli",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &input = GetInput(node, 0, rt.tensors());
+         const int64_t seed = GetSeedAttr(node);
+         const int32_t dtype = static_cast<int32_t>(GetAttributeIntOrDefault(node, "dtype", 0));
+         kernel::Bernoulli kernel(rt.kernel_ctx());
+         SetOutput(node, 0, kernel(input, seed, dtype), rt);
+       }},
       {"ai.onnx:CausalConvWithState",
        [](const NodeProto &node, RuntimeContext &rt) {
          if (node.input_size() < 2 || node.input_size() > 4) {
@@ -1008,6 +1029,17 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          SetOutput(node, 0, k(x, y, fmod), rt);
        }},
       {"ai.onnx:Mul", MakeBinaryTrampoline<kernel::Mul>()},
+      {"ai.onnx:Multinomial",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &input = GetInput(node, 0, rt.tensors());
+         const int64_t sample_size = GetAttributeIntOrDefault(node, "sample_size", 1);
+         const int64_t seed = GetSeedAttr(node);
+         const int32_t dtype = static_cast<int32_t>(GetAttributeIntOrDefault(node, "dtype", 0));
+         kernel::Multinomial kernel(rt.kernel_ctx());
+         SetOutput(node, 0, kernel(input, sample_size, seed, dtype), rt);
+       }},
       {"ai.onnx:Neg", MakeUnaryTrampoline<kernel::Neg>()},
       {"ai.onnx:NonMaxSuppression",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -1037,6 +1069,54 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Pow", MakeBinaryTrampoline<kernel::Pow>()},
       {"ai.onnx:PRelu", MakeBinaryTrampoline<kernel::PRelu>()},
       {"ai.onnx:QuantizeLinear", MakeBinaryWithOptionalThirdTrampoline<kernel::QuantizeLinear>()},
+      {"ai.onnx:RandomNormal",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 0);
+         RequireOutputCount(node, 1);
+         const std::vector<int64_t> shape = GetAttributeIntsOrDefault(node, "shape", {});
+         const double mean = GetAttributeFloatOrDefault(node, "mean", 0.0f);
+         const double scale = GetAttributeFloatOrDefault(node, "scale", 1.0f);
+         const int64_t seed = GetSeedAttr(node);
+         const int32_t dtype = static_cast<int32_t>(GetAttributeIntOrDefault(node, "dtype", 0));
+         kernel::RandomNormal kernel(rt.kernel_ctx());
+         SetOutput(node, 0, kernel(shape, mean, scale, seed, dtype), rt);
+       }},
+      {"ai.onnx:RandomNormalLike",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &input = GetInput(node, 0, rt.tensors());
+         const double mean = GetAttributeFloatOrDefault(node, "mean", 0.0f);
+         const double scale = GetAttributeFloatOrDefault(node, "scale", 1.0f);
+         const int64_t seed = GetSeedAttr(node);
+         const int32_t dtype = static_cast<int32_t>(GetAttributeIntOrDefault(node, "dtype", 0));
+         kernel::RandomNormalLike kernel(rt.kernel_ctx());
+         SetOutput(node, 0, kernel(input, mean, scale, seed, dtype), rt);
+       }},
+      {"ai.onnx:RandomUniform",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 0);
+         RequireOutputCount(node, 1);
+         const std::vector<int64_t> shape = GetAttributeIntsOrDefault(node, "shape", {});
+         const double low = GetAttributeFloatOrDefault(node, "low", 0.0f);
+         const double high = GetAttributeFloatOrDefault(node, "high", 1.0f);
+         const int64_t seed = GetSeedAttr(node);
+         const int32_t dtype = static_cast<int32_t>(GetAttributeIntOrDefault(node, "dtype", 0));
+         kernel::RandomUniform kernel(rt.kernel_ctx());
+         SetOutput(node, 0, kernel(shape, low, high, seed, dtype), rt);
+       }},
+      {"ai.onnx:RandomUniformLike",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &input = GetInput(node, 0, rt.tensors());
+         const double low = GetAttributeFloatOrDefault(node, "low", 0.0f);
+         const double high = GetAttributeFloatOrDefault(node, "high", 1.0f);
+         const int64_t seed = GetSeedAttr(node);
+         const int32_t dtype = static_cast<int32_t>(GetAttributeIntOrDefault(node, "dtype", 0));
+         kernel::RandomUniformLike kernel(rt.kernel_ctx());
+         SetOutput(node, 0, kernel(input, low, high, seed, dtype), rt);
+       }},
       {"ai.onnx:RMSNormalization", RunRMSNormalization},
       {"ai.onnx:Reciprocal", MakeUnaryTrampoline<kernel::Reciprocal>()},
       {"ai.onnx:ReduceL1", MakeReduceTrampoline<kernel::ReduceL1>()},

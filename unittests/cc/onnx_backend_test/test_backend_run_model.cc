@@ -59,9 +59,14 @@ void ExpectTensorBitEqual(const Tensor &actual, const Tensor &expected) {
 // ``cases_*`` registry are themselves produced by the very same kernels that
 // :cpp:func:`RunModel` will dispatch to, so a bit-exact comparison is
 // appropriate.
-void RunBackendCasesFor(
-    const std::string &op_type, const std::function<bool(const DataSet &)> &accept_data_set =
-                                    [](const DataSet &) { return true; }) {
+//
+// Evaluates the optional ``accept_test_case`` predicate once per
+// ``TestCase`` (before any ``DataSet`` is examined); returning ``false``
+// skips the entire case. Evaluates the optional ``accept_data_set``
+// predicate per ``DataSet`` within an accepted case.
+void RunBackendCasesFor(const std::string &op_type,
+                        const std::function<bool(const TestCase &)> &accept_test_case,
+                        const std::function<bool(const DataSet &)> &accept_data_set) {
   const std::vector<TestCase> cases = CollectTestCases(op_type);
   ASSERT_FALSE(cases.empty()) << "No backend test cases found for op_type=" << op_type;
 
@@ -73,6 +78,9 @@ void RunBackendCasesFor(
     }
     const NodeProto &node = graph.ref_node()[0];
     if (node.ref_op_type().as_string() != op_type) {
+      continue;
+    }
+    if (!accept_test_case(tc)) {
       continue;
     }
     SCOPED_TRACE(tc.name);
@@ -102,6 +110,12 @@ void RunBackendCasesFor(
     }
   }
   EXPECT_GT(executed, 0u) << "No single-node test cases exercised for op_type=" << op_type;
+}
+
+void RunBackendCasesFor(
+    const std::string &op_type, const std::function<bool(const DataSet &)> &accept_data_set =
+                                    [](const DataSet &) { return true; }) {
+  RunBackendCasesFor(op_type, [](const TestCase &) { return true; }, accept_data_set);
 }
 
 } // namespace
@@ -198,10 +212,13 @@ TEST(BackendRunModel, Attention) {
            ds.inputs[1].data_type == DataType::FLOAT && ds.inputs[2].data_type == DataType::FLOAT;
   });
 }
+TEST(BackendRunModel, Cast) { RunBackendCasesFor("Cast"); }
+TEST(BackendRunModel, BitCast) { RunBackendCasesFor("BitCast"); }
 TEST(BackendRunModel, CausalConvWithState) { RunBackendCasesFor("CausalConvWithState"); }
 TEST(BackendRunModel, Conv) { RunBackendCasesFor("Conv"); }
 TEST(BackendRunModel, ConvInteger) { RunBackendCasesFor("ConvInteger"); }
 TEST(BackendRunModel, DeformConv) { RunBackendCasesFor("DeformConv"); }
+TEST(BackendRunModel, DepthToSpace) { RunBackendCasesFor("DepthToSpace"); }
 
 // ai.onnx.preview.training optimizer kernels.
 TEST(BackendRunModel, Adagrad) { RunBackendCasesFor("Adagrad"); }
@@ -264,5 +281,40 @@ TEST(BackendRunModel, DequantizeLinear) {
   });
 }
 TEST(BackendRunModel, DynamicQuantizeLinear) { RunBackendCasesFor("DynamicQuantizeLinear"); }
+
+// LinearAttention (opset 27) and FlexAttention (ai.onnx.preview) kernels.
+TEST(BackendRunModel, LinearAttention) {
+  RunBackendCasesFor("LinearAttention", [](const DataSet &ds) {
+    return ds.inputs.size() >= 3 && ds.inputs[0].data_type == DataType::FLOAT &&
+           ds.inputs[1].data_type == DataType::FLOAT && ds.inputs[2].data_type == DataType::FLOAT;
+  });
+}
+TEST(BackendRunModel, FlexAttention) {
+  // The dispatch-table kernel handles the base FlexAttention path (Q, K, V ->
+  // Y) without executing optional ``score_mod`` subgraphs.
+  // Skip cases that attach that attribute because their expected outputs are
+  // computed with the modifier applied and will not match the baseline kernel.
+  // The ``prob_mod`` subgraph is now executed via RunSubgraph.
+  RunBackendCasesFor(
+      "FlexAttention",
+      [](const TestCase &tc) {
+        if (tc.model.ref_graph().ref_node().size() != 1u) {
+          return true;
+        }
+        const NodeProto &node = tc.model.ref_graph().ref_node()[0];
+        for (const auto &attr : node.ref_attribute()) {
+          const std::string name = attr.ref_name().as_string();
+          if (name == "score_mod") {
+            return false;
+          }
+        }
+        return true;
+      },
+      [](const DataSet &ds) {
+        return ds.inputs.size() >= 3 && ds.inputs[0].data_type == DataType::FLOAT &&
+               ds.inputs[1].data_type == DataType::FLOAT &&
+               ds.inputs[2].data_type == DataType::FLOAT;
+      });
+}
 
 } // namespace Test

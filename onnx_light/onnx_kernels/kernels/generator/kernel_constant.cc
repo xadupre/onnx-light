@@ -12,7 +12,7 @@ namespace onnx_kernels {
 namespace kernel {
 
 Tensor Constant::operator()(const Tensor &value) const {
-  Tensor out("", value.data_type, value.shape, std::vector<uint8_t>(value.data.size()));
+  Tensor out("", value.data_type, value.shape, std::vector<uint8_t>(value.size_bytes()));
   (*this)(value, out);
   return out;
 }

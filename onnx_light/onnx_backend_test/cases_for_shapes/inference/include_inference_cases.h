@@ -70,6 +70,16 @@ void RegisterNestedLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &re
 /// Expressions must be simplified.
 void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &registry);
 
+/// Registers a ``Loop`` case that computes the pairwise Euclidean distance
+/// matrix of an input ``X`` of shape ``[N, D]``. The Loop iterates ``N``
+/// times: each iteration gathers one row of the outer-scope ``X`` and emits
+/// the row of distances to every other row as a FLOAT ``[N]`` scan output.
+/// Stacking the per-iteration scan outputs across the ``N`` iterations
+/// produces the ``[N, N]`` distance matrix. Exercises shape inference
+/// through a non-trivial ``Loop`` body, including outer-scope reference
+/// from inside the body subgraph.
+void RegisterLoopPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Shape → Shape → Concat → Add → Sub → Expand → 3 × Add →
 /// Add → Add`` value-as-shape case translated from
 /// https://github.com/xadupre/yet-another-onnx-builder/blob/main/

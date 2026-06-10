@@ -871,6 +871,30 @@ TEST(OnnxOptimShapeInference, ComputeShapeNodeRejectsUnknownNonLocalFunctionDoma
   EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
 
+TEST(OnnxOptimShapeInference, ComputeShapeNodeUsesRegisteredCustomDomainCallback) {
+  NodeProto node = MakeNode("CustomIdentity", {"X"}, {"Y"}, "com.acme");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       {onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+
+  bool called = false;
+  ctx.SetCustomShapeInferenceFunction(
+      "com.acme", "CustomIdentity",
+      [&called](onnx_optim::shapes::ShapesContext &inner_ctx, const NodeProto &inner_node) {
+        called = true;
+        const std::string input_name = inner_node.input(0).as_string();
+        const std::string output_name = inner_node.output(0).as_string();
+        inner_ctx.Set(output_name, onnx_optim::OptimTensor(inner_ctx.Get(input_name)));
+      });
+
+  EXPECT_NO_THROW(ctx.ComputeShapeNode(node));
+  EXPECT_TRUE(called);
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+}
+
 namespace {
 
 // Builds a model whose local function body uses ``ref_attr_name`` to

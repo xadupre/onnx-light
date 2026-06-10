@@ -3,6 +3,7 @@
 #include "onnx_optim/shapes/shape_inference.h"
 #include "onnx_optim/shapes/shapes_context.h"
 #include <algorithm>
+#include <nanobind/nanobind.h>
 #include <nanobind/operators.h>
 #include <nanobind/stl/map.h>
 #include <nanobind/stl/string.h>
@@ -498,6 +499,40 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
             return c.Opsets();
           },
           "Returns a copy of the ``domain -> opset_version`` map.")
+      // Custom shape-inference callbacks.
+      .def(
+          "set_custom_shape_inference_function",
+          [](onnx_shapes::ShapesContext &c, const std::string &domain, const std::string &op_type,
+             nb::callable fn) {
+            c.SetCustomShapeInferenceFunction(
+                domain, op_type,
+                [py_fn = std::move(fn)](onnx_shapes::ShapesContext &ctx, const NodeProto &node) {
+                  nb::gil_scoped_acquire lock;
+                  py_fn(nb::cast(&ctx, nb::rv_policy::reference),
+                        nb::cast(&node, nb::rv_policy::reference));
+                });
+          },
+          nb::arg("domain"), nb::arg("op_type"), nb::arg("fn"),
+          "Registers a Python callback for ``(domain, op_type)``. The callback receives "
+          "``(ctx, node)`` and can populate output descriptors in ``ctx``. An empty "
+          "``domain`` is normalised to ``ai.onnx``.")
+      .def(
+          "has_custom_shape_inference_function",
+          [](const onnx_shapes::ShapesContext &c, const std::string &domain,
+             const std::string &op_type) {
+            return c.GetCustomShapeInferenceFunction(domain, op_type) != nullptr;
+          },
+          nb::arg("domain"), nb::arg("op_type"),
+          "True when a custom callback is registered for ``(domain, op_type)``.")
+      .def(
+          "custom_shape_inference_keys",
+          [](const onnx_shapes::ShapesContext &c) -> nb::list {
+            nb::list out;
+            for (const auto &kv : c.CustomShapeInferenceFunctions())
+              out.append(kv.first);
+            return out;
+          },
+          "Returns registered custom callback keys as ``\"<domain>:<op_type>\"``.")
       // Symbolic-dimension equality constraints.
       .def(
           "add_constraint",

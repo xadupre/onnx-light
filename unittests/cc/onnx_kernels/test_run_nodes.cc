@@ -20,6 +20,7 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DefaultOpset;
+using onnx_kernels::DataType;
 using onnx_kernels::KernelDispatchTable;
 using onnx_kernels::RunFunction;
 using onnx_kernels::RunGraph;
@@ -108,6 +109,7 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx:NonMaxSuppression"), table.end());
   EXPECT_NE(table.find("ai.onnx:IsInf"), table.end());
   EXPECT_NE(table.find("ai.onnx:BitShift"), table.end());
+  EXPECT_NE(table.find("ai.onnx:BitCast"), table.end());
   EXPECT_NE(table.find("ai.onnx:Einsum"), table.end());
   EXPECT_NE(table.find("ai.onnx:DFT"), table.end());
   // Quantization kernels.
@@ -119,7 +121,9 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx:AffineGrid"), table.end());
   EXPECT_NE(table.find("ai.onnx:ImageDecoder"), table.end());
   // Tensor shape kernels.
+  EXPECT_NE(table.find("ai.onnx:Cast"), table.end());
   EXPECT_NE(table.find("ai.onnx:Shape"), table.end());
+  EXPECT_NE(table.find("ai.onnx:DepthToSpace"), table.end());
   // Logical / bitwise kernels.
   EXPECT_NE(table.find("ai.onnx:And"), table.end());
   EXPECT_NE(table.find("ai.onnx:Or"), table.end());
@@ -136,9 +140,13 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx.preview.training:Adagrad"), table.end());
   EXPECT_NE(table.find("ai.onnx.preview.training:Adam"), table.end());
   EXPECT_NE(table.find("ai.onnx.preview.training:Momentum"), table.end());
+  // ai.onnx.preview kernels.
+  EXPECT_NE(table.find("ai.onnx.preview:FlexAttention"), table.end());
   // ai.onnx.ml kernels.
   EXPECT_NE(table.find("ai.onnx.ml:SVMRegressor"), table.end());
   EXPECT_NE(table.find("ai.onnx.ml:SVMClassifier"), table.end());
+  // Linear attention (opset 27).
+  EXPECT_NE(table.find("ai.onnx:LinearAttention"), table.end());
 }
 
 TEST(RunNodes, RunNodeSingleAdd) {
@@ -187,6 +195,46 @@ TEST(RunNodes, RunNodeNormalisesDefaultDomain) {
   ASSERT_EQ(rt.tensors()["y"].element_count(), 2);
   EXPECT_FLOAT_EQ(got[0], 1.5f);
   EXPECT_FLOAT_EQ(got[1], 2.5f);
+}
+
+TEST(RunNodes, RunNodeCastFromDispatchTable) {
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {3}, {-1.5f, 0.0f, 2.75f});
+  NodeProto node = MakeNode("Cast", {"x"}, {"y"});
+  AttributeProto *to = node.add_attribute();
+  to->set_name("to");
+  to->set_type(AttributeProto::INT);
+  to->set_i(static_cast<int64_t>(DataType::INT32));
+
+  RunNode(node, rt);
+
+  const Tensor &y = rt.tensors().at("y");
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(DataType::INT32));
+  EXPECT_EQ(y.shape, std::vector<int64_t>({3}));
+  const int32_t *got = y.AsInt32();
+  EXPECT_EQ(got[0], -1);
+  EXPECT_EQ(got[1], 0);
+  EXPECT_EQ(got[2], 2);
+}
+
+TEST(RunNodes, RunNodeBitCastFromDispatchTable) {
+  RuntimeContext rt(KernelContext(DefaultOpset(26)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {3}, {0.0f, 1.0f, -1.0f});
+  NodeProto node = MakeNode("BitCast", {"x"}, {"y"});
+  AttributeProto *to = node.add_attribute();
+  to->set_name("to");
+  to->set_type(AttributeProto::INT);
+  to->set_i(static_cast<int64_t>(DataType::INT32));
+
+  RunNode(node, rt);
+
+  const Tensor &y = rt.tensors().at("y");
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(DataType::INT32));
+  EXPECT_EQ(y.shape, std::vector<int64_t>({3}));
+  const int32_t *got = y.AsInt32();
+  EXPECT_EQ(got[0], 0);
+  EXPECT_EQ(got[1], 1065353216);
+  EXPECT_EQ(got[2], -1082130432);
 }
 
 TEST(RunNodes, RunNodeNonMaxSuppressionFromDispatchTable) {
@@ -1742,6 +1790,52 @@ TEST(RunModel, ScanNodeRunsBodySubgraph) {
   EXPECT_FLOAT_EQ(y[0], 1.0f);
   EXPECT_FLOAT_EQ(y[1], 3.0f);
   EXPECT_FLOAT_EQ(y[2], 6.0f);
+}
+
+TEST(RunNodes, RunNodeLinearAttentionFromDispatchTable) {
+  // Minimal test: B=1, T=1, q_num_heads=1, kv_num_heads=1, d_k=d_v=2.
+  // query/key/value each have shape (1, 1, 2).
+  RuntimeContext rt(KernelContext(DefaultOpset(27)));
+  rt.tensors()["query"] = Tensor::FromFloat("query", {1, 1, 2}, {1.0f, 0.0f});
+  rt.tensors()["key"] = Tensor::FromFloat("key", {1, 1, 2}, {1.0f, 0.0f});
+  rt.tensors()["value"] = Tensor::FromFloat("value", {1, 1, 2}, {0.5f, 0.5f});
+
+  NodeProto node =
+      MakeNode("LinearAttention", {"query", "key", "value"}, {"output", "present_state"});
+  AttributeProto *rule_attr = node.add_attribute();
+  rule_attr->set_name("update_rule");
+  rule_attr->set_type(AttributeProto::AttributeType::STRING);
+  rule_attr->set_s("linear");
+  AttributeProto *qh_attr = node.add_attribute();
+  qh_attr->set_name("q_num_heads");
+  qh_attr->set_type(AttributeProto::AttributeType::INT);
+  qh_attr->set_i(1);
+  AttributeProto *kvh_attr = node.add_attribute();
+  kvh_attr->set_name("kv_num_heads");
+  kvh_attr->set_type(AttributeProto::AttributeType::INT);
+  kvh_attr->set_i(1);
+  RunNode(node, rt);
+
+  const Tensor &output = rt.tensors().at("output");
+  EXPECT_EQ(output.shape, (std::vector<int64_t>{1, 1, 2}));
+  const Tensor &present = rt.tensors().at("present_state");
+  EXPECT_EQ(present.shape, (std::vector<int64_t>{1, 1, 2, 2}));
+}
+
+TEST(RunNodes, RunNodeFlexAttentionFromDispatchTable) {
+  // Minimal test: B=1, q_num_heads=kv_num_heads=1, q_seq=kv_seq=2, head_size=2.
+  // Q/K/V each have shape (1, 1, 2, 2).
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["Q"] = Tensor::FromFloat("Q", {1, 1, 2, 2}, {1.0f, 0.0f, 0.0f, 1.0f});
+  rt.tensors()["K"] = Tensor::FromFloat("K", {1, 1, 2, 2}, {1.0f, 0.0f, 0.0f, 1.0f});
+  rt.tensors()["V"] = Tensor::FromFloat("V", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+
+  NodeProto node = MakeNode("FlexAttention", {"Q", "K", "V"}, {"Y"}, "ai.onnx.preview");
+  RunNode(node, rt);
+
+  const Tensor &Y = rt.tensors().at("Y");
+  EXPECT_EQ(Y.shape, (std::vector<int64_t>{1, 1, 2, 2}));
+  EXPECT_EQ(Y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
 }
 
 } // namespace Test

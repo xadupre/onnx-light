@@ -1,14 +1,23 @@
 /**
  * main.cc — Standalone example: validate an ONNX model with the onnx_light
- * checker API.
+ * checker API and optionally run onnx_optim shape inference on it.
  *
  * Usage:
- *   ./check_onnx_light_model <model.onnx> [full_check]
+ *   ./check_onnx_light_model <model.onnx> [full_check] [infer_shapes]
+ *
+ * When ``infer_shapes`` is set to 1, the model is loaded into a ``ModelProto``
+ * and passed to :cpp:func:`onnx_optim::shapes::InferShapesModel`, which
+ * mutates the graph in place so that its outputs and value_info entries carry
+ * the inferred shapes. The example then prints how many value_info entries
+ * the inferred graph contains.
  *
  * See CMakeLists.txt for build instructions.
  */
 
 #include "onnx_lib/checker.h"
+#include "onnx_lib/common/file_utils.h"
+#include "onnx_optim/shapes/shape_inference.h"
+#include "onnx_proto/onnx.h"
 
 #include <charconv>
 #include <iostream>
@@ -37,15 +46,22 @@ bool ParseZeroOrOne(const char *text, bool &value) {
 } // namespace
 
 int main(int argc, char *argv[]) {
-  if (argc < 2 || argc > 3) {
-    std::cerr << "Usage: " << argv[0] << " <model.onnx> [full_check]\n";
-    std::cerr << "  full_check: 0 (default) or 1\n";
+  if (argc < 2 || argc > 4) {
+    std::cerr << "Usage: " << argv[0] << " <model.onnx> [full_check] [infer_shapes]\n";
+    std::cerr << "  full_check:   0 (default) or 1\n";
+    std::cerr << "  infer_shapes: 0 (default) or 1 — runs onnx_optim shape inference\n";
     return 1;
   }
 
   bool full_check = false;
-  if (argc == 3 && !ParseZeroOrOne(argv[2], full_check)) {
+  if (argc >= 3 && !ParseZeroOrOne(argv[2], full_check)) {
     std::cerr << "Invalid full_check value: " << argv[2] << " (expected 0 or 1)\n";
+    return 1;
+  }
+
+  bool infer_shapes = false;
+  if (argc == 4 && !ParseZeroOrOne(argv[3], infer_shapes)) {
+    std::cerr << "Invalid infer_shapes value: " << argv[3] << " (expected 0 or 1)\n";
     return 1;
   }
 
@@ -53,11 +69,20 @@ int main(int argc, char *argv[]) {
     ONNX_LIGHT_NAMESPACE::checker::check_model(argv[1], full_check);
     std::cout << "Model is valid: " << argv[1] << "\n";
     std::cout << "  full_check: " << (full_check ? "true" : "false") << "\n";
+
+    if (infer_shapes) {
+      ONNX_LIGHT_NAMESPACE::ModelProto model;
+      ONNX_LIGHT_NAMESPACE::LoadProtoFromPath(argv[1], model);
+      ONNX_LIGHT_NAMESPACE::onnx_optim::shapes::InferShapesModel(model);
+      std::cout << "  shape inference: ok\n";
+      std::cout << "    graph.value_info entries: " << model.graph().value_info_size() << "\n";
+      std::cout << "    graph.output entries:     " << model.graph().output_size() << "\n";
+    }
   } catch (const ONNX_LIGHT_NAMESPACE::checker::ValidationError &e) {
     std::cerr << "Validation error in '" << argv[1] << "':\n" << e.what() << "\n";
     return 2;
   } catch (const std::exception &e) {
-    std::cerr << "Error while checking '" << argv[1] << "': " << e.what() << "\n";
+    std::cerr << "Error while processing '" << argv[1] << "': " << e.what() << "\n";
     return 1;
   }
 

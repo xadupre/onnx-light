@@ -405,6 +405,17 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
             QKbh[i * total_kv_seq_len + j] = static_cast<float>(scores[static_cast<size_t>(j)]);
           }
         }
+        bool row_fully_masked = true;
+        for (int64_t j = 0; j < total_kv_seq_len; ++j) {
+          const double b = bias[static_cast<size_t>(j)];
+          if (!(std::isinf(b) && b < 0.0)) {
+            row_fully_masked = false;
+            break;
+          }
+        }
+        if (row_fully_masked) {
+          std::fill(scores.begin(), scores.end(), 0.0);
+        }
         // Y[i, dv] = sum_j probs[j] * V[j, dv]
         for (int64_t dv = 0; dv < v_head_size; ++dv) {
           double y = 0.0;

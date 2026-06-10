@@ -161,6 +161,8 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx:SequenceLength"), table.end());
   EXPECT_NE(table.find("ai.onnx:ConcatFromSequence"), table.end());
   EXPECT_NE(table.find("ai.onnx:SplitToSequence"), table.end());
+  // Text kernels (ai.onnx).
+  EXPECT_NE(table.find("ai.onnx:RegexFullMatch"), table.end());
 }
 
 TEST(RunNodes, RunNodeSingleAdd) {
@@ -481,6 +483,25 @@ TEST(RunNodes, RunNodeReshapeFromDispatchTable) {
   const float *got = y.AsFloat();
   EXPECT_FLOAT_EQ(got[0], 1.0f);
   EXPECT_FLOAT_EQ(got[5], 6.0f);
+}
+
+TEST(RunNodes, RunNodeRegexFullMatchFromDispatchTable) {
+  RuntimeContext rt(KernelContext(DefaultOpset(20)));
+  rt.tensors()["x"] = Tensor::FromStrings("x", {3}, {"abc", "abcdef", "xyz"});
+  NodeProto node = MakeNode("RegexFullMatch", {"x"}, {"y"});
+  AttributeProto *pattern = node.add_attribute();
+  pattern->set_name("pattern");
+  pattern->set_type(AttributeProto::AttributeType::STRING);
+  pattern->set_s("abc");
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.data_type, DataType::BOOL);
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{3}));
+  const uint8_t *got = y.AsBool();
+  ASSERT_NE(got, nullptr);
+  EXPECT_EQ(got[0], 1u);
+  EXPECT_EQ(got[1], 0u);
+  EXPECT_EQ(got[2], 0u);
 }
 
 TEST(RunNodes, RunNodeGatherFromDispatchTable) {

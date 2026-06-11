@@ -52,8 +52,8 @@ def _make_test_case(
         model=model,
         data_sets=[(list(inputs), list(outputs))],
         kind="node",
-        rtol=1e-3,
         atol=1e-7,
+        rtol=1e-3,
     )
 
 
@@ -161,8 +161,8 @@ class TestCoverage(ExtTestCase):
             model=model,
             data_sets=[([a], [np.abs(a)])],
             kind="node",
-            rtol=1e-3,
             atol=1e-7,
+            rtol=1e-3,
         )
         report = compute_test_case_coverage({"test_multi": tc})
         ident = next(

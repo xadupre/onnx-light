@@ -142,7 +142,7 @@ void RegisterNonZeroChainNamedShapeInferenceCases(std::vector<TestCase> &registr
 
 void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &registry) {
   const std::string name("test_cc_shape_inference_nonzero_plus_expression");
-  TestCase tc(name, name, "model", "inference", 1e-3, 1e-7);
+  TestCase tc(name, name, "model", "inference", 1e-7, 1e-3);
   ModelProto &model = tc.model;
   InitModel(model, kDefaultIrVersion, {DefaultOpset(18)});
   GraphProto *graph = model.add_graph();

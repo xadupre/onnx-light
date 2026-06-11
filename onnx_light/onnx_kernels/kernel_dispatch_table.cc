@@ -853,6 +853,24 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::Compress k(rt.kernel_ctx());
          SetOutput(node, 0, k(input, condition, axis), rt);
        }},
+      {"ai.onnx:Concat",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         std::vector<Tensor> inputs;
+         inputs.reserve(node.input_size());
+         for (int i = 0; i < node.input_size(); ++i) {
+           inputs.push_back(GetInput(node, i, rt.tensors()));
+         }
+         const AttributeProto *axis_attr = FindAttribute(node, "axis");
+         if (axis_attr == nullptr) {
+           throw std::invalid_argument(
+               "RunNode: op 'Concat' is missing required attribute 'axis'.");
+         }
+         const int64_t axis = axis_attr->i();
+         kernel::Concat k(rt.kernel_ctx());
+         SetOutput(node, 0, k(inputs, axis), rt);
+       }},
       {"ai.onnx:Conv",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 2);

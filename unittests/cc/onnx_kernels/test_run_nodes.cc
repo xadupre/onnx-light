@@ -110,6 +110,7 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx:Attention"), table.end());
   EXPECT_NE(table.find("ai.onnx:GRU"), table.end());
   EXPECT_NE(table.find("ai.onnx:NonMaxSuppression"), table.end());
+  EXPECT_NE(table.find("ai.onnx:NonZero"), table.end());
   EXPECT_NE(table.find("ai.onnx:IsInf"), table.end());
   EXPECT_NE(table.find("ai.onnx:BitShift"), table.end());
   EXPECT_NE(table.find("ai.onnx:BitCast"), table.end());
@@ -285,6 +286,22 @@ TEST(RunNodes, RunNodeNonMaxSuppressionFromDispatchTable) {
   EXPECT_EQ(selected.shape, (std::vector<int64_t>{2, 3}));
   const int64_t *py = selected.AsInt64();
   const std::vector<int64_t> expected = {0, 0, 0, 0, 0, 1};
+  for (size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_EQ(py[i], expected[i]);
+  }
+}
+
+TEST(RunNodes, RunNodeNonZeroFromDispatchTable) {
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {2, 3}, {1.0f, 0.0f, 2.0f, 0.0f, 3.0f, 0.0f});
+
+  NodeProto node = MakeNode("NonZero", {"x"}, {"y"});
+  RunNode(node, rt);
+
+  const Tensor &y = rt.tensors().at("y");
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
+  const int64_t *py = y.AsInt64();
+  const std::vector<int64_t> expected = {0, 0, 1, 0, 2, 1};
   for (size_t i = 0; i < expected.size(); ++i) {
     EXPECT_EQ(py[i], expected[i]);
   }

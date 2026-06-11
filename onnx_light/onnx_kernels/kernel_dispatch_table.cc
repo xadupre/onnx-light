@@ -1562,6 +1562,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                      attrs),
                    rt.tensors());
        }},
+      {"ai.onnx:NonZero", MakeUnaryTrampoline<kernel::NonZero>()},
       {"ai.onnx:Not", MakeUnaryTrampoline<kernel::Not>()},
       {"ai.onnx:OneHot",
        [](const NodeProto &node, RuntimeContext &rt) {

@@ -118,7 +118,46 @@ class TestReferenceEvaluator(ExtTestCase):
         (y,) = sess.run(None, {"x": np.array([0.0, 0.0, 0.0], dtype=np.float32)})
         np.testing.assert_array_equal(y, np.array([1.0, 2.0, 3.0], dtype=np.float32))
 
-    def test_missing_input_raises(self):
+    def test_events_empty_before_run(self):
+        model = parser.parse_model(_ABS_ADD_MODEL_SRC)
+        sess = ReferenceEvaluator(model)
+        self.assertEqual(sess.events(), [])
+
+    def test_events_after_run(self):
+        # After run, events() should return a non-empty list whose entries
+        # have an as_dict() method with the expected keys.
+        model = parser.parse_model(_ABS_ADD_MODEL_SRC)
+        sess = ReferenceEvaluator(model)
+        x = np.array([-1.0, 2.0, -3.5], dtype=np.float32)
+        z = np.array([10.0, 20.0, 30.0], dtype=np.float32)
+        sess.run(None, {"x": x, "z": z})
+        events = sess.events()
+        self.assertGreater(len(events), 0)
+        for ev in events:
+            d = ev.as_dict()
+            for key in ("action", "kind", "name", "data_type", "shape"):
+                self.assertIn(key, d)
+
+    def test_events_contain_intermediate(self):
+        # The intermediate tensor ``t = Abs(x)`` must appear in the event log.
+        model = parser.parse_model(_ABS_ADD_MODEL_SRC)
+        sess = ReferenceEvaluator(model)
+        sess.run(None, {"x": np.zeros(3, dtype=np.float32), "z": np.zeros(3, dtype=np.float32)})
+        names = [ev.as_dict()["name"] for ev in sess.events()]
+        self.assertIn("t", names)
+
+    def test_events_reset_on_new_run(self):
+        # Each run() overwrites the stored context, so events() always reflects
+        # the most recent execution.
+        model = parser.parse_model(_ABS_ADD_MODEL_SRC)
+        sess = ReferenceEvaluator(model)
+        x = np.zeros(3, dtype=np.float32)
+        z = np.zeros(3, dtype=np.float32)
+        sess.run(None, {"x": x, "z": z})
+        first_count = len(sess.events())
+        sess.run(None, {"x": x, "z": z})
+        self.assertEqual(len(sess.events()), first_count)
+
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)
         sess = ReferenceEvaluator(model)
         with self.assertRaises(ValueError) as ctx:

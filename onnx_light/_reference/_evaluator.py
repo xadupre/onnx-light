@@ -143,6 +143,7 @@ class ReferenceEvaluator:
         self._model: ModelProto | None = None
         self._graph: GraphProto | None = None
         self._function: FunctionProto | None = None
+        self._last_ctx: Any = None
 
         if isinstance(proto, ModelProto):
             self._model = proto
@@ -215,6 +216,20 @@ class ReferenceEvaluator:
 
     # -- evaluation ---------------------------------------------------------
 
+    def events(self) -> list[Any]:
+        """Returns the event log from the most recent :meth:`run` call.
+
+        Each entry is a ``TensorEvent`` object with an :meth:`as_dict` method
+        that returns a dictionary with the keys ``"action"``, ``"kind"``,
+        ``"name"``, ``"data_type"``, ``"shape"``, ``"value_count"``,
+        ``"values"`` and ``"string_values"``.
+
+        Returns an empty list if :meth:`run` has not been called yet.
+        """
+        if self._last_ctx is None:
+            return []
+        return self._last_ctx.events()
+
     def run(
         self, output_names: list[str] | None, feed_inputs: dict[str, Any]
     ) -> list[np.ndarray]:
@@ -268,6 +283,8 @@ class ReferenceEvaluator:
         else:
             assert self._graph is not None
             _runtime.run_graph(self._graph, ctx)
+
+        self._last_ctx = ctx
 
         results: list[np.ndarray] = []
         for name in output_names:

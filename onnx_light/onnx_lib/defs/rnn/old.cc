@@ -220,7 +220,7 @@ ONNX_OPERATOR_SET_SCHEMA(
         .Input(7, "P",
                "The weight tensor for peepholes. Concatenation of `P[iof]` and "
                "`PB[iof]` (if bidirectional) along dimension 0. It has shape "
-               "`[num_directions, 3*hidden_size]`. Optional: If not specified - "
+               "`[num_directions, 3*hidde_size]`. Optional: If not specified - "
                "assumed to be 0.",
                "T", OpSchema::Optional, true, 1, OpSchema::Differentiable)
         .FillUsing(RNNDocGenerator_opset14("LSTM"))
@@ -769,7 +769,7 @@ ONNX_OPERATOR_SET_SCHEMA(
         .Input(7, "P",
                "The weight tensor for peepholes. Concatenation of `P[iof]` and "
                "`PB[iof]` (if bidirectional) along dimension 0. It has shape "
-               "`[num_directions, 3*hidden_size]`. Optional: If not specified - "
+               "`[num_directions, 3*hidde_size]`. Optional: If not specified - "
                "assumed to be 0.",
                "T", OpSchema::Optional)
         .FillUsing(RNNDocGenerator_opset1_to_6("LSTM"))
@@ -1195,7 +1195,7 @@ ONNX_OPERATOR_SET_SCHEMA(
         .Input(7, "P",
                "The weight tensor for peepholes. Concatenation of `P[iof]` and "
                "`PB[iof]` (if bidirectional) along dimension 0. It has shape "
-               "`[num_directions, 3*hidden_size]`. Optional: If not specified - "
+               "`[num_directions, 3*hidde_size]`. Optional: If not specified - "
                "assumed to be 0.",
                "T", OpSchema::Optional)
         .FillUsing(RNNDocGenerator_opset7_to_13("LSTM"))

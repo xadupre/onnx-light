@@ -4,8 +4,8 @@
 
 #include "onnx_backend_test/cases/math/include_math_cases.h"
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/math/include_math_kernels.h"
 #include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_kernels/kernels/math/include_math_kernels.h"
 
 #include <cstdint>
 #include <cstring>

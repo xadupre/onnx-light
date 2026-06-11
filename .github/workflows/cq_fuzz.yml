@@ -1,4 +1,4 @@
-name: cq - fuzz
+name: acq - fuzz
 
 on:
   schedule:

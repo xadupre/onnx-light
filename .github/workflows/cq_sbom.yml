@@ -1,4 +1,4 @@
-name: SBOM
+name: acq - SBOM
 
 on:
   push:

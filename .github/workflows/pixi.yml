@@ -61,8 +61,4 @@ jobs:
         env:
           UNITTEST_GOING: "1"
         run: |
-          if [ "${{ matrix.environment }}" = "dev-no-onnx" ]; then
-            pixi run -e ${{ matrix.environment }} pytest --durations=10 unittests --ignore=unittests/onnxl_vs_onnx
-          else
-            pixi run -e ${{ matrix.environment }} pytest --durations=10 unittests
-          fi
+          pixi run -e ${{ matrix.environment }} pytest --durations=10 unittests --ignore=unittests/onnxl_vs_onnx

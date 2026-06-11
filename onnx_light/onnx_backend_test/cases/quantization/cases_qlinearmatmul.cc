@@ -110,6 +110,9 @@ Tensor MakeQuantTensor(const std::string &name, DataType dtype, const std::vecto
 //     quantized matrix multiplication with FLOAT / FLOAT16 scales.
 //   * ``test_cc_qlinearmatmul_3D_{uint8,int8}_{float32,float16}`` — 3-D
 //     batched quantized matrix multiplication.
+//   * ``test_cc_qlinearmatmul_{overflow,underflow}_{uint8,int8}`` — saturation
+//     of values that exceed the output dtype range (mirrors upstream
+//     ``QLinearMatMul.export_overflow`` / ``export_underflow``).
 //
 // FLOAT32 expected outputs are computed by the reference
 // ``kernel::QLinearMatMul``. The kernel only accepts FLOAT scales, so the
@@ -212,6 +215,52 @@ void RegisterQLinearMatMulCases(std::vector<TestCase> &registry) {
 
   register_variant(DataType::UINT8, "uint8", /*is_int8=*/false);
   register_variant(DataType::INT8, "int8", /*is_int8=*/true);
+
+  // -------------------------------------------------------------------------
+  // Overflow / underflow saturation cases (mirroring upstream
+  // ``QLinearMatMul.export_overflow`` / ``export_underflow`` in
+  // ``onnx.backend.test.case.node.qlinearmatmul``). These exercise the
+  // saturation step that clips the rounded result to the output dtype's
+  // representable range before downcasting.
+  //
+  // For the UINT8 underflow case, upstream relies on numpy 1.x silently
+  // wrapping ``np.array([[-100]], dtype=np.uint8)`` to ``156``, which under
+  // numpy 2.x raises ``OverflowError``. The C++ kernel always interprets the
+  // underlying byte as unsigned, so to genuinely exercise the "result clipped
+  // to 0" path we use a non-zero ``a_zero_point`` that drives the unscaled
+  // accumulator negative — equivalent in spirit to the upstream test.
+  // -------------------------------------------------------------------------
+  auto register_saturation_case = [&](const std::string &name, DataType dtype, int32_t a_byte,
+                                      int32_t b_byte, int32_t a_zp_val, int32_t b_zp_val, float a_s,
+                                      float b_s, float y_s, int32_t y_zp_val,
+                                      int32_t expected_byte) {
+    Tensor a_t = MakeQuantTensor("a", dtype, {1, 1}, {a_byte});
+    Tensor b_t = MakeQuantTensor("b", dtype, {1, 1}, {b_byte});
+    Tensor a_scale_t = Tensor::FromFloat("a_scale", {}, {a_s});
+    Tensor b_scale_t = Tensor::FromFloat("b_scale", {}, {b_s});
+    Tensor y_scale_t = Tensor::FromFloat("y_scale", {}, {y_s});
+    Tensor a_zp_t = MakeQuantScalar("a_zero_point", dtype, a_zp_val);
+    Tensor b_zp_t = MakeQuantScalar("b_zero_point", dtype, b_zp_val);
+    Tensor y_zp_t = MakeQuantScalar("y_zero_point", dtype, y_zp_val);
+    Tensor y_t = MakeQuantTensor("y", dtype, {1, 1}, {expected_byte});
+
+    NodeProto node = MakeQLinearMatMulNode();
+    Expect(node, {a_t, a_scale_t, a_zp_t, b_t, b_scale_t, b_zp_t, y_scale_t, y_zp_t}, {y_t}, name,
+           {opset}, "backend-test", registry);
+  };
+
+  // uint8 overflow: 100 * 100 / 0.2 = 50000 → clipped to 255.
+  register_saturation_case("test_cc_qlinearmatmul_overflow_uint8", DataType::UINT8, 100, 100, 0, 0,
+                           1.0f, 1.0f, 0.2f, 0, 255);
+  // int8 overflow: 100 * 100 / 0.5 = 20000 → clipped to 127.
+  register_saturation_case("test_cc_qlinearmatmul_overflow_int8", DataType::INT8, 100, 100, 0, 0,
+                           1.0f, 1.0f, 0.5f, 0, 127);
+  // uint8 underflow: (0 - 100) * 100 = -10000 → clipped to 0.
+  register_saturation_case("test_cc_qlinearmatmul_underflow_uint8", DataType::UINT8, 0, 100, 100, 0,
+                           1.0f, 1.0f, 1.0f, 0, 0);
+  // int8 underflow: -100 * 100 / 0.5 = -20000 → clipped to -128.
+  register_saturation_case("test_cc_qlinearmatmul_underflow_int8", DataType::INT8, -100, 100, 0, 0,
+                           1.0f, 1.0f, 0.5f, 0, -128);
 }
 
 } // namespace onnx_backend_test

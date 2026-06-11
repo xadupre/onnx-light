@@ -1540,6 +1540,25 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                      rt.tensors());
          }
        }},
+      {"ai.onnx:MaxUnpool",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputRange(node, 2, 3);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const Tensor &indices = GetInput(node, 1, rt.tensors());
+         const std::vector<int64_t> kernel_shape =
+             GetAttributeIntsOrDefault(node, "kernel_shape", {});
+         const std::vector<int64_t> strides = GetAttributeIntsOrDefault(node, "strides", {});
+         const std::vector<int64_t> pads = GetAttributeIntsOrDefault(node, "pads", {});
+         kernel::MaxUnpool k(rt.kernel_ctx());
+         const Tensor *output_shape = GetOptionalInput(node, 2, rt.tensors());
+         if (output_shape != nullptr) {
+           SetOutput(node, 0, k(x, indices, *output_shape, kernel_shape, strides, pads),
+                     rt.tensors());
+         } else {
+           SetOutput(node, 0, k(x, indices, kernel_shape, strides, pads), rt.tensors());
+         }
+       }},
       {"ai.onnx:Mean", MakeVariadicTrampoline<kernel::Mean>()},
       {"ai.onnx:MelWeightMatrix",
        [](const NodeProto &node, RuntimeContext &rt) {

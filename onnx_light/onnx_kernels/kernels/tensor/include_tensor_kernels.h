@@ -955,7 +955,7 @@ public:
 /// ``roi`` input and ``antialias`` are not implemented. The supported
 /// element types are the same whole-byte types as :cpp:func:`ElementSize`
 /// for ``"nearest"`` mode; ``"linear"`` and ``"cubic"`` modes require a
-/// floating-point input (``FLOAT16``/``FLOAT``/``DOUBLE``).
+/// floating-point input (``FLOAT`` or ``DOUBLE``).
 class Resize : public KernelBase {
 public:
   /// Attributes carried by the ONNX ``Resize`` operator.

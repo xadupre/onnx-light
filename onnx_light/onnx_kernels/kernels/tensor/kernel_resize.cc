@@ -300,13 +300,23 @@ void NeighborIndices(double x, int64_t n, int64_t in_dim, std::vector<int64_t> &
 // output position ``out_coord``, using the coordinate transformation ``mode``
 // and the per-mode coefficient generator (linear: 2 taps; cubic: 4 taps).
 // Mirrors ``_interpolate_1d_with_x`` from the upstream Python reference.
+//
+// ``is_cubic`` selects which coefficient generator (and tap count) to use.
+// A boolean is passed instead of re-checking ``interp_mode`` here because
+// this function runs in the inner resize loop.
 double Interpolate1D(const std::vector<double> &data, int64_t in_dim, int64_t out_dim,
-                     int64_t out_coord, double scale, const std::string &coord_mode,
-                     const std::string &interp_mode, double cubic_a, bool exclude_outside,
-                     std::vector<int64_t> &idx_scratch) {
+                     int64_t out_coord, double scale, const std::string &coord_mode, bool is_cubic,
+                     double cubic_a, bool exclude_outside, std::vector<int64_t> &idx_scratch) {
   const double x_ori = TransformCoord(out_coord, in_dim, out_dim, scale, coord_mode);
   const double x_ori_floor = std::floor(x_ori);
   const bool is_integer = (x_ori - x_ori_floor) == 0.0;
+  // When ``x_ori`` is an integer the upstream reference forces ``ratio = 1``
+  // (see ``onnx/reference/ops/op_resize.py::_interpolate_1d_with_x``). This
+  // pairs with :cpp:func:`NeighborIndices`, which prefers indices smaller
+  // than ``x_ori`` for ties: for linear (2 taps) the chosen neighbours are
+  // ``[x_ori - 1, x_ori]`` with coefficients ``[0, 1]``, recovering
+  // ``data[x_ori]`` exactly. Keeping this convention is required for
+  // bit-exact agreement with the upstream Python reference.
   double ratio;
   if (is_integer) {
     ratio = 1.0;
@@ -316,12 +326,12 @@ double Interpolate1D(const std::vector<double> &data, int64_t in_dim, int64_t ou
 
   double coeffs[4];
   int64_t n;
-  if (interp_mode == "linear") {
-    n = 2;
-    LinearCoeffs(ratio, coeffs);
-  } else {
+  if (is_cubic) {
     n = 4;
     CubicCoeffs(ratio, cubic_a, coeffs);
+  } else {
+    n = 2;
+    LinearCoeffs(ratio, coeffs);
   }
 
   NeighborIndices(x_ori, n, in_dim, idx_scratch);
@@ -368,6 +378,10 @@ void ResizeSeparable(const Tensor &input, const std::vector<float> &scales,
   const std::size_t rank = out_shape.size();
   EXT_ENFORCE_INVALID(input.shape.size() == rank,
                       "kernel::Resize: input rank must equal output rank.");
+  // Resolve the interpolation mode once, outside the inner loop, so
+  // :cpp:func:`Interpolate1D` can dispatch via a boolean without re-parsing
+  // the attribute string for every output element.
+  const bool is_cubic = IsCubicMode(interp_mode);
 
   // Start from a double-precision copy of the input. We then interpolate
   // axis-by-axis, replacing the working buffer at each step.
@@ -419,7 +433,7 @@ void ResizeSeparable(const Tensor &input, const std::vector<float> &scales,
         for (int64_t k = 0; k < out_dim; ++k) {
           const double v =
               Interpolate1D(line, in_dim, out_dim, k, static_cast<double>(scales[axis]), coord_mode,
-                            interp_mode, cubic_a, exclude_outside, idx_scratch);
+                            is_cubic, cubic_a, exclude_outside, idx_scratch);
           next[static_cast<std::size_t>((o * out_dim + k) * inner + in)] = v;
         }
       }

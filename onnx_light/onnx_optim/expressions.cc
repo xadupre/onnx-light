@@ -1266,7 +1266,12 @@ rename_dynamic_dimensions(const std::map<std::string, std::unordered_set<std::st
       if (!ban_prefix.empty() && by.size() >= ban_prefix.size() &&
           by.substr(0, ban_prefix.size()) == ban_prefix)
         continue;
-      replacements[k] = by;
+      // Preferred names keep their identity mapping. Without this guard, two
+      // preferred names linked by a constraint would be swapped (each
+      // overwriting the other's identity), which destroys both names instead
+      // of leaving them alone.
+      if (!original.count(k))
+        replacements[k] = by;
       for (const auto &vv : v)
         if (!replacements.count(vv))
           replacements[vv] = by;

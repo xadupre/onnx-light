@@ -363,6 +363,40 @@ std::unordered_set<std::string> CollectAnchorSymbols(const AnchorMap &anchors) {
   return symbols;
 }
 
+// Collects the symbolic dim names attached to graph inputs (and the leaf
+// tokens of any compound expressions). These names are user-provided and
+// must not be renamed by anchor-driven propagation: if an output anchor
+// declares ``Y`` as ``[ANCHOR, 4]`` while ``X`` is declared as ``[N, 4]``
+// and ``Y = Relu(X)``, the merge records the equality ``N == ANCHOR`` but
+// the renaming pass should keep ``X`` as ``[N, 4]`` (and ``Y`` as
+// ``[ANCHOR, 4]``) instead of forcing one symbol to become the other.
+void AddGraphInputSymbols(const GraphProto &graph, std::unordered_set<std::string> &symbols) {
+  for (int i = 0; i < graph.input_size(); ++i) {
+    const ValueInfoProto &vi = graph.input(i);
+    if (!vi.has_type() || !vi.type().has_tensor_type()) {
+      continue;
+    }
+    const auto &shape = vi.type().tensor_type().shape();
+    for (int j = 0; j < shape.dim_size(); ++j) {
+      const auto &dim = shape.dim(j);
+      if (!dim.has_dim_param()) {
+        continue;
+      }
+      const std::string param = dim.dim_param().as_string();
+      if (param.empty()) {
+        continue;
+      }
+      symbols.insert(param);
+      const std::unordered_set<std::string> tokens = expressions::parse_expression_tokens(param);
+      for (const std::string &token : tokens) {
+        if (!token.empty()) {
+          symbols.insert(token);
+        }
+      }
+    }
+  }
+}
+
 OptimShape
 RenameShapeWithReplacements(const OptimShape &shape,
                             const std::unordered_map<std::string, std::string> &replacements) {
@@ -384,11 +418,13 @@ RenameShapeWithReplacements(const OptimShape &shape,
   return renamed;
 }
 
-void PropagateAnchorConstraintsIntoContext(ShapesContext &ctx, const AnchorMap &anchors) {
+void PropagateAnchorConstraintsIntoContext(ShapesContext &ctx, const AnchorMap &anchors,
+                                           const GraphProto &graph) {
   if (ctx.ConstraintsSize() == 0) {
     return;
   }
-  const std::unordered_set<std::string> preferred = CollectAnchorSymbols(anchors);
+  std::unordered_set<std::string> preferred = CollectAnchorSymbols(anchors);
+  AddGraphInputSymbols(graph, preferred);
   if (preferred.empty()) {
     return;
   }
@@ -552,7 +588,7 @@ void ShapesContext::ComputeShapeModel(const ModelProto &model,
   ComputeShapeGraph(model.graph());
   if (prefill_with_value_info_output) {
     MergeAnchorsIntoContext(*this, anchors);
-    PropagateAnchorConstraintsIntoContext(*this, anchors);
+    PropagateAnchorConstraintsIntoContext(*this, anchors, model.graph());
   }
 }
 

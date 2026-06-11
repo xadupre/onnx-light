@@ -1722,6 +1722,31 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            SetOutput(node, 0, k.ResizeSizes(x, *sizes, attrs), rt);
          }
        }},
+      {"ai.onnx:RoiAlign",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 3);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const Tensor &rois = GetInput(node, 1, rt.tensors());
+         const Tensor &batch_indices = GetInput(node, 2, rt.tensors());
+         kernel::RoiAlign::Attributes attrs;
+         attrs.mode = GetAttributeStringOrDefault(node, "mode", attrs.mode);
+         attrs.output_height = GetAttributeIntOrDefault(node, "output_height", attrs.output_height);
+         attrs.output_width = GetAttributeIntOrDefault(node, "output_width", attrs.output_width);
+         attrs.sampling_ratio =
+             GetAttributeIntOrDefault(node, "sampling_ratio", attrs.sampling_ratio);
+         attrs.spatial_scale =
+             GetAttributeFloatOrDefault(node, "spatial_scale", attrs.spatial_scale);
+         // Opset 10 has no ``coordinate_transformation_mode`` attribute and
+         // behaves like ``output_half_pixel``; opset 16+ defaults to
+         // ``half_pixel``.
+         const std::string default_ctm =
+             rt.kernel_ctx().opset.version < 16 ? "output_half_pixel" : "half_pixel";
+         attrs.coordinate_transformation_mode =
+             GetAttributeStringOrDefault(node, "coordinate_transformation_mode", default_ctm);
+         kernel::RoiAlign k(rt.kernel_ctx());
+         SetOutput(node, 0, k(x, rois, batch_indices, attrs), rt);
+       }},
       {"ai.onnx:Round", MakeUnaryTrampoline<kernel::Round>()},
       {"ai.onnx:Selu",
        [](const NodeProto &node, RuntimeContext &rt) {

@@ -1972,14 +1972,31 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       // ai.onnx.ml
       {"ai.onnx.ml:CastMap",
        [](const NodeProto &node, RuntimeContext &rt) {
-         RequireInputCount(node, 2);
+         RequireInputCount(node, 1);
          RequireOutputCount(node, 1);
-         // Input 0: INT64 keys tensor; input 1: FLOAT or STRING values tensor.
-         const Tensor &x_keys = GetInput(node, 0, rt.tensors());
-         const Tensor &x_values = GetInput(node, 1, rt.tensors());
+         // CastMap's map(int64, T) input is represented at runtime as two
+         // tensors in the RuntimeContext named "<input>_keys" (INT64) and
+         // "<input>_values" (FLOAT or STRING), where <input> is the node's
+         // formal input name (e.g. "x" -> "x_keys" and "x_values").
+         const std::string map_input = node.input(0).as_string();
+         const std::string keys_name = map_input + "_keys";
+         const std::string values_name = map_input + "_values";
+         auto keys_it = rt.tensors().find(keys_name);
+         auto values_it = rt.tensors().find(values_name);
+         if (keys_it == rt.tensors().end()) {
+           throw std::invalid_argument("RunNode: CastMap map input '" + map_input +
+                                       "' requires tensor '" + keys_name + "' (INT64 keys).");
+         }
+         if (values_it == rt.tensors().end()) {
+           throw std::invalid_argument("RunNode: CastMap map input '" + map_input +
+                                       "' requires tensor '" + values_name +
+                                       "' (FLOAT or STRING values).");
+         }
+         const Tensor &x_keys = keys_it->second;
+         const Tensor &x_values = values_it->second;
          if (x_keys.data_type != static_cast<int32_t>(DataType::INT64)) {
-           throw std::invalid_argument(
-               "RunNode: CastMap input 0 (keys) must be an INT64 tensor.");
+           throw std::invalid_argument("RunNode: CastMap '" + keys_name +
+                                       "' must be an INT64 tensor.");
          }
          const std::vector<int64_t> keys = TensorToVector<int64_t>(x_keys);
          const std::string cast_to = GetAttributeStringOrDefault(node, "cast_to", "TO_FLOAT");
@@ -2018,8 +2035,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            break;
          }
          default:
-           throw std::invalid_argument(
-               "RunNode: CastMap input 1 (values) must be a FLOAT or STRING tensor.");
+           throw std::invalid_argument("RunNode: CastMap '" + values_name +
+                                       "' must be a FLOAT or STRING tensor.");
          }
          SetOutput(node, 0, std::move(y), rt);
        }},

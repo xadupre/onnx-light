@@ -655,6 +655,100 @@ public:
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// DistributeFloorDivOverAddTransformer
+// Distributes a floor-division by an integer constant over additive terms
+// when every term is exactly divisible by the divisor, e.g.
+//   (2*b + 2*c) // 2 → b + c
+//   (4*a - 2*b) // 2 → 2*a - b
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+// Attempts to exactly divide the expression rooted at `x` by the positive
+// integer `d`. Returns the resulting expression on success, or nullptr if
+// the division cannot be performed exactly without introducing a residue.
+NodePtr try_exact_divide(const Node &x, int64_t d) {
+  if (d == 1)
+    return x.clone();
+  if (const auto *c = dynamic_cast<const Constant *>(&x)) {
+    if (c->value % d != 0)
+      return nullptr;
+    return std::make_unique<Constant>(c->value / d);
+  }
+  if (const auto *b = dynamic_cast<const BinOp *>(&x)) {
+    if (b->op == BinOpKind::Add || b->op == BinOpKind::Sub) {
+      auto l = try_exact_divide(*b->left, d);
+      if (!l)
+        return nullptr;
+      auto r = try_exact_divide(*b->right, d);
+      if (!r)
+        return nullptr;
+      return std::make_unique<BinOp>(std::move(l), b->op, std::move(r));
+    }
+    if (b->op == BinOpKind::Mult) {
+      if (const auto *cl = dynamic_cast<const Constant *>(b->left.get())) {
+        if (cl->value % d == 0) {
+          int64_t nc = cl->value / d;
+          if (nc == 1)
+            return b->right->clone();
+          return std::make_unique<BinOp>(std::make_unique<Constant>(nc), BinOpKind::Mult,
+                                         b->right->clone());
+        }
+      }
+      if (const auto *cr = dynamic_cast<const Constant *>(b->right.get())) {
+        if (cr->value % d == 0) {
+          int64_t nc = cr->value / d;
+          if (nc == 1)
+            return b->left->clone();
+          return std::make_unique<BinOp>(b->left->clone(), BinOpKind::Mult,
+                                         std::make_unique<Constant>(nc));
+        }
+      }
+      // Recurse into sub-multiplications (e.g. 2*(b+c) under a chain).
+      if (auto l = try_exact_divide(*b->left, d))
+        return std::make_unique<BinOp>(std::move(l), BinOpKind::Mult, b->right->clone());
+      if (auto r = try_exact_divide(*b->right, d))
+        return std::make_unique<BinOp>(b->left->clone(), BinOpKind::Mult, std::move(r));
+    }
+  }
+  if (const auto *u = dynamic_cast<const UnaryOp *>(&x)) {
+    if (u->op == UnaryOpKind::USub) {
+      auto o = try_exact_divide(*u->operand, d);
+      if (!o)
+        return nullptr;
+      return std::make_unique<UnaryOp>(UnaryOpKind::USub, std::move(o));
+    }
+    if (u->op == UnaryOpKind::UAdd) {
+      auto o = try_exact_divide(*u->operand, d);
+      if (!o)
+        return nullptr;
+      return std::make_unique<UnaryOp>(UnaryOpKind::UAdd, std::move(o));
+    }
+  }
+  return nullptr;
+}
+
+} // namespace
+
+class DistributeFloorDivOverAddTransformer : public Transformer {
+public:
+  NodePtr visit_BinOp(std::unique_ptr<BinOp> n) override {
+    n = std::unique_ptr<BinOp>(static_cast<BinOp *>(generic_visit(std::move(n)).release()));
+    if (n->op != BinOpKind::FloorDiv)
+      return n;
+    const auto *dc = dynamic_cast<const Constant *>(n->right.get());
+    if (!dc || dc->value == 0)
+      return n;
+    int64_t d = dc->value;
+    if (d < 0)
+      return n;
+    if (auto r = try_exact_divide(*n->left, d))
+      return r;
+    return n;
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // MaxToXorTransformer: max(a,b) / Max(a,b) → a^b
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -946,6 +1040,7 @@ static NodePtr apply_pipeline(NodePtr node) {
   SimpleSimplifyTransformer simple_tr;
   MulDivCancellerTransformer muldiv_tr;
   ExactMulDivConstantFolderTransformer fold_tr;
+  DistributeFloorDivOverAddTransformer distrib_tr;
   MaxToXorTransformer max_tr;
   ReorderCommutativeOpsTransformer reorder_tr;
   MaxIntTransformer maxint_tr;
@@ -957,6 +1052,7 @@ static NodePtr apply_pipeline(NodePtr node) {
     node = muldiv_tr.visit(std::move(node));
     node = fold_tr.visit(std::move(node));
     node = muldiv_tr.visit(std::move(node));
+    node = distrib_tr.visit(std::move(node));
     node = max_tr.visit(std::move(node));
     // SimplifyParensTransformer is a no-op; omitted
     node = reorder_tr.visit(std::move(node));

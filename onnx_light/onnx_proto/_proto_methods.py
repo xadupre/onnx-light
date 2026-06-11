@@ -230,6 +230,8 @@ GraphProto.add_node = _graph_add_node  # type: ignore[attr-defined]
 
 def _function_add_input(self: FunctionProto, name: str) -> str:
     """Appends an input name to *self*."""
+    # extend([name]) rather than append(name) because the bound RepeatedFieldString
+    # only accepts the C++ ``String`` type via append, but coerces Python str via extend.
     self.input.extend([name])
     return name
 
@@ -325,12 +327,12 @@ ModelProto.add_metadata = _model_add_metadata  # type: ignore[attr-defined]
 
 # The same metadata helper is useful on the other protos that carry
 # ``metadata_props``; expose it consistently.
+def _proto_add_metadata(self, key: str, value: str) -> StringStringEntryProto:
+    """Sets metadata property ``key`` to ``value`` on *self*."""
+    return _metadata_add(self.metadata_props, key, value)
+
+
 for _cls in (NodeProto, GraphProto, FunctionProto):
-
-    def _add_metadata(self, key: str, value: str, _cls=_cls) -> StringStringEntryProto:
-        """Sets metadata property ``key`` to ``value`` on *self*."""
-        return _metadata_add(self.metadata_props, key, value)
-
-    _cls.add_metadata = _add_metadata  # type: ignore[attr-defined]
+    _cls.add_metadata = _proto_add_metadata  # type: ignore[attr-defined]
 
 del _cls

@@ -244,6 +244,9 @@ TEST(BackendRunModel, RoiAlign) { RunBackendCasesFor("RoiAlign"); }
 TEST(BackendRunModel, InstanceNormalization) { RunBackendCasesFor("InstanceNormalization"); }
 TEST(BackendRunModel, LayerNormalization) { RunBackendCasesFor("LayerNormalization"); }
 TEST(BackendRunModel, RMSNormalization) { RunBackendCasesFor("RMSNormalization"); }
+TEST(BackendRunModel, MeanVarianceNormalization) {
+  RunBackendCasesFor("MeanVarianceNormalization");
+}
 TEST(BackendRunModel, Dropout) { RunBackendCasesFor("Dropout"); }
 TEST(BackendRunModel, AveragePool) { RunBackendCasesFor("AveragePool"); }
 TEST(BackendRunModel, GlobalAveragePool) { RunBackendCasesFor("GlobalAveragePool"); }

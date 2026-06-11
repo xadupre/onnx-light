@@ -2196,6 +2196,19 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Swish", MakeUnaryAlphaTrampoline<kernel::Swish>("alpha", 1.0f)},
       {"ai.onnx:Tan", MakeUnaryTrampoline<kernel::Tan>()},
       {"ai.onnx:Tanh", MakeUnaryTrampoline<kernel::Tanh>()},
+      {"ai.onnx:TensorScatter",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputRange(node, 2, 3);
+         RequireOutputCount(node, 1);
+         const Tensor &past_cache = GetInput(node, 0, rt.tensors());
+         const Tensor &update = GetInput(node, 1, rt.tensors());
+         const Tensor *write_indices = GetOptionalInput(node, 2, rt.tensors());
+         kernel::TensorScatter::Attributes attrs;
+         attrs.axis = GetAttributeIntOrDefault(node, "axis", -2);
+         attrs.mode = GetAttributeStringOrDefault(node, "mode", "linear");
+         kernel::TensorScatter kernel(rt.kernel_ctx());
+         SetOutput(node, 0, kernel(past_cache, update, write_indices, attrs), rt);
+       }},
       {"ai.onnx:ThresholdedRelu", MakeUnaryAlphaTrampoline<kernel::ThresholdedRelu>("alpha", 1.0f)},
       {"ai.onnx:TopK",
        [](const NodeProto &node, RuntimeContext &rt) {

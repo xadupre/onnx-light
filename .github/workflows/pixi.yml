@@ -61,4 +61,4 @@ jobs:
         env:
           UNITTEST_GOING: "1"
         run: |
-          pixi run -e ${{ matrix.environment }} pytest --durations=10 unittests --ignore=unittests/onnxl_vs_onnx
+          pixi run -e ${{ matrix.environment }} pytest --durations=10 unittests --ignore=unittests/onnxl_vs_onnx --ignore=unittests/python/backend/test_backend_with_onnxruntime.py

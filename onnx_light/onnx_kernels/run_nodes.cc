@@ -5,6 +5,7 @@
 #include "onnx_kernels/run_nodes.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <limits>
@@ -566,6 +567,29 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
   const std::string op_type = node.op_type().as_string();
   const std::string domain = NormaliseDispatchDomain(node);
 
+  // Capture the dispatch start time (system clock for ``timestamp_ns``)
+  // and a high-resolution start point (steady clock for the measured
+  // duration). A single ``run_node`` event is appended to the event log
+  // once the kernel returns so callers can profile per-node execution
+  // from the same stream as the tensor add/replace/remove records.
+  const int64_t start_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                    std::chrono::system_clock::now().time_since_epoch())
+                                    .count();
+  const auto t0 = std::chrono::steady_clock::now();
+
+  std::vector<std::string> inputs;
+  inputs.reserve(static_cast<size_t>(node.input_size()));
+  for (size_t i = 0; i < static_cast<size_t>(node.input_size()); ++i) {
+    inputs.push_back(node.input(i).as_string());
+  }
+
+  auto emit_event = [&]() {
+    const int64_t duration_ns =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0)
+            .count();
+    rt.AppendRunNodeEvent(domain, op_type, std::move(inputs), start_time_ns, duration_ns);
+  };
+
   // A node referring to a model-local FunctionProto (registered by
   // ``RunModel`` from ``ModelProto::functions()``) takes priority over
   // the built-in kernel dispatch table so that user-defined functions
@@ -575,19 +599,23 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
   auto fit = rt.functions().find(fkey);
   if (fit != rt.functions().end()) {
     CallModelLocalFunction(node, *fit->second, rt);
+    emit_event();
     return;
   }
 
   if (domain == kDefaultOnnxDomain && op_type == "If") {
     RunIfNode(node, rt);
+    emit_event();
     return;
   }
   if (domain == kDefaultOnnxDomain && op_type == "Loop") {
     RunLoopNode(node, rt);
+    emit_event();
     return;
   }
   if (domain == kDefaultOnnxDomain && op_type == "Scan") {
     RunScanNode(node, rt);
+    emit_event();
     return;
   }
 
@@ -599,6 +627,7 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
                                 domain + "'.");
   }
   it->second(node, rt);
+  emit_event();
 }
 
 void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext &rt) {

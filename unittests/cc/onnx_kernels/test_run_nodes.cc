@@ -1071,7 +1071,8 @@ TEST(RunNodes, RuntimeContextEventLogSetReplaceRemove) {
 
 TEST(RunNodes, RuntimeContextEventLogCapturesRunGraphMutations) {
   // Smoke test: running a small chain of nodes through the dispatcher
-  // populates the event log via SetOutput / Put on every produced tensor.
+  // populates the event log via SetOutput / Put on every produced tensor
+  // and also appends one ``kRunNode`` event per dispatched node.
   using onnx_kernels::TensorEventAction;
   using onnx_kernels::TensorEventKind;
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
@@ -1084,14 +1085,25 @@ TEST(RunNodes, RuntimeContextEventLogCapturesRunGraphMutations) {
   nodes.push_back(MakeNode("Add", {"t", "z"}, {"y"}));
   RunNodes(nodes.begin(), nodes.end(), rt);
 
-  // Exactly two "add" events tagged as intermediate values.
-  ASSERT_EQ(rt.events().size(), 2u);
+  // Each node produces one tensor ``add`` event tagged as an
+  // intermediate plus one ``run_node`` event summarising the dispatch.
+  ASSERT_EQ(rt.events().size(), 4u);
   EXPECT_EQ(rt.events()[0].name, "t");
   EXPECT_EQ(rt.events()[0].action, TensorEventAction::kAdd);
   EXPECT_EQ(rt.events()[0].kind, TensorEventKind::kIntermediate);
-  EXPECT_EQ(rt.events()[1].name, "y");
-  EXPECT_EQ(rt.events()[1].action, TensorEventAction::kAdd);
-  EXPECT_EQ(rt.events()[1].kind, TensorEventKind::kIntermediate);
+  EXPECT_EQ(rt.events()[1].action, TensorEventAction::kRunNode);
+  EXPECT_EQ(rt.events()[1].op_domain, "ai.onnx");
+  EXPECT_EQ(rt.events()[1].op_type, "Abs");
+  EXPECT_EQ(rt.events()[1].inputs, (std::vector<std::string>{"x"}));
+  EXPECT_GE(rt.events()[1].duration_ns, 0);
+  EXPECT_EQ(rt.events()[2].name, "y");
+  EXPECT_EQ(rt.events()[2].action, TensorEventAction::kAdd);
+  EXPECT_EQ(rt.events()[2].kind, TensorEventKind::kIntermediate);
+  EXPECT_EQ(rt.events()[3].action, TensorEventAction::kRunNode);
+  EXPECT_EQ(rt.events()[3].op_domain, "ai.onnx");
+  EXPECT_EQ(rt.events()[3].op_type, "Add");
+  EXPECT_EQ(rt.events()[3].inputs, (std::vector<std::string>{"t", "z"}));
+  EXPECT_GE(rt.events()[3].duration_ns, 0);
 }
 
 // ---------------------------------------------------------------------------

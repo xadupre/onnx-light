@@ -235,6 +235,7 @@ TEST(BackendRunModel, Upsample) { RunBackendCasesFor("Upsample"); }
 TEST(BackendRunModel, BatchNormalization) { RunBackendCasesFor("BatchNormalization"); }
 TEST(BackendRunModel, GroupNormalization) { RunBackendCasesFor("GroupNormalization"); }
 TEST(BackendRunModel, GridSample) { RunBackendCasesFor("GridSample"); }
+TEST(BackendRunModel, RoiAlign) { RunBackendCasesFor("RoiAlign"); }
 TEST(BackendRunModel, InstanceNormalization) { RunBackendCasesFor("InstanceNormalization"); }
 TEST(BackendRunModel, LayerNormalization) { RunBackendCasesFor("LayerNormalization"); }
 TEST(BackendRunModel, RMSNormalization) { RunBackendCasesFor("RMSNormalization"); }

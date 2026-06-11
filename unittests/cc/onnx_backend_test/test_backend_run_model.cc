@@ -304,6 +304,9 @@ TEST(BackendRunModel, Imputer) { RunBackendCasesFor("Imputer"); }
 TEST(BackendRunModel, LabelEncoder) { RunBackendCasesFor("LabelEncoder"); }
 TEST(BackendRunModel, OneHotEncoder) { RunBackendCasesFor("OneHotEncoder"); }
 
+// Text kernels.
+TEST(BackendRunModel, StringNormalizer) { RunBackendCasesFor("StringNormalizer"); }
+
 // Control-flow kernels. ``Scan`` body-aware execution is owned by
 // :cpp:class:`kernel::Scan`; :cpp:func:`RunScanNode` additionally handles
 // the opset-8 batched form (leading ``sequence_lens`` placeholder + outer

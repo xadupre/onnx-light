@@ -2062,6 +2062,23 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::STFT k(rt.kernel_ctx());
          SetOutput(node, 0, k(signal, frame_step, window, frame_length, onesided), rt.tensors());
        }},
+      {"ai.onnx:StringNormalizer",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const std::string case_change_action_attr =
+             GetAttributeStringOrDefault(node, "case_change_action", "NONE");
+         const bool is_case_sensitive =
+             GetAttributeIntOrDefault(node, "is_case_sensitive", 0) != 0;
+         const std::vector<std::string> stopwords =
+             GetAttributeStringsOrDefault(node, "stopwords", {});
+         kernel::StringNormalizer k(rt.kernel_ctx());
+         SetOutput(node, 0,
+                   k(x, kernel::StringNormalizer::ParseCaseChangeAction(case_change_action_attr),
+                     is_case_sensitive, stopwords),
+                   rt);
+       }},
       {"ai.onnx:Sub", MakeBinaryTrampoline<kernel::Sub>()},
       {"ai.onnx:Sum", MakeVariadicTrampoline<kernel::Sum>()},
       {"ai.onnx:Swish", MakeUnaryAlphaTrampoline<kernel::Swish>("alpha", 1.0f)},

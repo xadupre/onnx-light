@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
 #include "onnx_kernels/kernels/tensor/cast_float8.h"
+#include "onnx_kernels/kernels/tensor/cast_helper.h"
 
 #include <cstdint>
 #include <cstring>
@@ -26,12 +27,35 @@ inline void RequireScalar(const Tensor &t, const char *name) {
                                   " must be a scalar (per-tensor dequantization).");
 }
 
+inline bool IsSupportedScaleDType(int32_t dtype) {
+  return dtype == static_cast<int32_t>(DataType::FLOAT) ||
+         dtype == static_cast<int32_t>(DataType::FLOAT16);
+}
+
+// Decodes the scalar ``x_scale`` to a float32 regardless of whether it is
+// stored as FLOAT or FLOAT16.
+inline float ReadScalarScale(const Tensor &x_scale) {
+  if (x_scale.data_type == static_cast<int32_t>(DataType::FLOAT16)) {
+    uint16_t bits;
+    std::memcpy(&bits, x_scale.bytes(), sizeof(uint16_t));
+    return Float16BitsToFloat(bits);
+  }
+  return x_scale.AsFloat()[0];
+}
+
 template <typename XT>
 void DequantizeLoop(const Tensor &x, float x_scale, XT x_zero_point, Tensor &output) {
   const XT *px = reinterpret_cast<const XT *>(x.bytes());
-  float *py = output.AsFloat();
   const int64_t n = x.element_count();
   const float zp = static_cast<float>(x_zero_point);
+  if (output.data_type == static_cast<int32_t>(DataType::FLOAT16)) {
+    uint16_t *py = reinterpret_cast<uint16_t *>(output.data.data());
+    for (int64_t i = 0; i < n; ++i) {
+      py[i] = FloatToFloat16Bits((static_cast<float>(px[i]) - zp) * x_scale);
+    }
+    return;
+  }
+  float *py = output.AsFloat();
   for (int64_t i = 0; i < n; ++i) {
     py[i] = (static_cast<float>(px[i]) - zp) * x_scale;
   }
@@ -60,8 +84,15 @@ inline Float8Decoder Float8DecoderFor(int32_t dtype) noexcept {
 inline void DequantizeFloat8Loop(const Tensor &x, float x_scale, float x_zero_point,
                                  Float8Decoder decode, Tensor &output) {
   const std::uint8_t *px = x.bytes();
-  float *py = output.AsFloat();
   const int64_t n = x.element_count();
+  if (output.data_type == static_cast<int32_t>(DataType::FLOAT16)) {
+    uint16_t *py = reinterpret_cast<uint16_t *>(output.data.data());
+    for (int64_t i = 0; i < n; ++i) {
+      py[i] = FloatToFloat16Bits((decode(px[i]) - x_zero_point) * x_scale);
+    }
+    return;
+  }
+  float *py = output.AsFloat();
   for (int64_t i = 0; i < n; ++i) {
     py[i] = (decode(px[i]) - x_zero_point) * x_scale;
   }
@@ -70,24 +101,33 @@ inline void DequantizeFloat8Loop(const Tensor &x, float x_scale, float x_zero_po
 } // namespace
 
 Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale) const {
-  Tensor out("", static_cast<int32_t>(DataType::FLOAT), x.shape,
-             std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * sizeof(float)));
+  // The output element type matches ``x_scale``'s element type (FLOAT or
+  // FLOAT16). Both encodings occupy known fixed-size storage so the buffer
+  // can be sized up-front.
+  EXT_ENFORCE_INVALID(IsSupportedScaleDType(x_scale.data_type),
+                      "kernel::DequantizeLinear: x_scale must be FLOAT or FLOAT16.");
+  const size_t elem_size = x_scale.data_type == static_cast<int32_t>(DataType::FLOAT16)
+                               ? sizeof(uint16_t)
+                               : sizeof(float);
+  Tensor out("", x_scale.data_type, x.shape,
+             std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * elem_size));
   (*this)(x, x_scale, out);
   return out;
 }
 
 void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, Tensor &output) const {
-  EXT_ENFORCE_INVALID(x_scale.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      "kernel::DequantizeLinear: x_scale must be FLOAT.");
+  EXT_ENFORCE_INVALID(IsSupportedScaleDType(x_scale.data_type),
+                      "kernel::DequantizeLinear: x_scale must be FLOAT or FLOAT16.");
   RequireScalar(x_scale, "x_scale");
-  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      "kernel::DequantizeLinear: output (no x_zero_point) must be FLOAT.");
+  EXT_ENFORCE_INVALID(
+      output.data_type == x_scale.data_type,
+      "kernel::DequantizeLinear: output (no x_zero_point) dtype must match x_scale.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::DequantizeLinear preallocated output shape must match x shape.");
   EXT_ENFORCE_INVALID(
       output.data.size() == static_cast<size_t>(x.element_count()) * output.element_size(),
       "kernel::DequantizeLinear preallocated output buffer has unexpected size in bytes.");
-  const float scale = x_scale.AsFloat()[0];
+  const float scale = ReadScalarScale(x_scale);
   switch (x.data_type) {
   case static_cast<int32_t>(DataType::UINT8):
     DequantizeLoop<uint8_t>(x, scale, /*x_zero_point=*/0, output);
@@ -119,28 +159,33 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, Tensor
 
 Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
                                     const Tensor &x_zero_point) const {
-  Tensor out("", static_cast<int32_t>(DataType::FLOAT), x.shape,
-             std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * sizeof(float)));
+  EXT_ENFORCE_INVALID(IsSupportedScaleDType(x_scale.data_type),
+                      "kernel::DequantizeLinear: x_scale must be FLOAT or FLOAT16.");
+  const size_t elem_size = x_scale.data_type == static_cast<int32_t>(DataType::FLOAT16)
+                               ? sizeof(uint16_t)
+                               : sizeof(float);
+  Tensor out("", x_scale.data_type, x.shape,
+             std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * elem_size));
   (*this)(x, x_scale, x_zero_point, out);
   return out;
 }
 
 void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
                                   const Tensor &x_zero_point, Tensor &output) const {
-  EXT_ENFORCE_INVALID(x_scale.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      "kernel::DequantizeLinear: x_scale must be FLOAT.");
+  EXT_ENFORCE_INVALID(IsSupportedScaleDType(x_scale.data_type),
+                      "kernel::DequantizeLinear: x_scale must be FLOAT or FLOAT16.");
   RequireScalar(x_scale, "x_scale");
   RequireScalar(x_zero_point, "x_zero_point");
   EXT_ENFORCE_INVALID(x.data_type == x_zero_point.data_type,
                       "kernel::DequantizeLinear: x_zero_point data_type must match x.");
-  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      "kernel::DequantizeLinear: output must be FLOAT.");
+  EXT_ENFORCE_INVALID(output.data_type == x_scale.data_type,
+                      "kernel::DequantizeLinear: output dtype must match x_scale.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::DequantizeLinear preallocated output shape must match x shape.");
   EXT_ENFORCE_INVALID(
       output.data.size() == static_cast<size_t>(x.element_count()) * output.element_size(),
       "kernel::DequantizeLinear preallocated output buffer has unexpected size in bytes.");
-  const float scale = x_scale.AsFloat()[0];
+  const float scale = ReadScalarScale(x_scale);
   switch (x.data_type) {
   case static_cast<int32_t>(DataType::UINT8):
     DequantizeLoop<uint8_t>(x, scale, static_cast<uint8_t>(x_zero_point.bytes()[0]), output);

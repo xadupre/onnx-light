@@ -261,6 +261,32 @@ TEST(KernelClass, DequantizeLinearFloat8E4M3FNWithZeroPoint) {
   EXPECT_FLOAT_EQ(y.AsFloat()[4], -208.0f);
 }
 
+TEST(KernelClass, DequantizeLinearFloat8E4M3FNFloat16Scale) {
+  // Mirrors test_dequantizelinear_e4m3fn_float16: FLOAT8E4M3FN input with a
+  // scalar FLOAT16 x_scale=2.0 yields a FLOAT16 output.
+  const KernelContext ctx{DefaultOpset(21)};
+  DequantizeLinear d{ctx};
+  const std::vector<float> fvals = {0.0f, 0.5f, 1.0f, 448.0f, -104.0f};
+  std::vector<uint8_t> bytes(fvals.size());
+  for (size_t i = 0; i < fvals.size(); ++i) {
+    bytes[i] = onnx_kernels::kernel::FloatToFloat8E4M3FNBits(fvals[i]);
+  }
+  const Tensor x("", static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E4M3FN), {5}, bytes);
+  // Bit pattern 0x4000 = 2.0 in IEEE-754 binary16.
+  Tensor scale("", static_cast<int32_t>(onnx_kernels::DataType::FLOAT16), {},
+               std::vector<uint8_t>{0x00, 0x40});
+  Tensor y = d(x, scale);
+  ASSERT_EQ(y.element_count(), 5);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16));
+  ASSERT_EQ(y.data.size(), 5u * sizeof(uint16_t));
+  // Expected FLOAT16 bit patterns for {0, 1, 2, 896, -208}.
+  const std::vector<uint16_t> expected_bits = {0x0000, 0x3c00, 0x4000, 0x6300, 0xda80};
+  const uint16_t *py = reinterpret_cast<const uint16_t *>(y.data.data());
+  for (size_t i = 0; i < expected_bits.size(); ++i) {
+    EXPECT_EQ(py[i], expected_bits[i]) << "index " << i;
+  }
+}
+
 TEST(KernelClass, DynamicQuantizeLinearStraddleZero) {
   // Mirrors the upstream ``DynamicQuantizeLinear.export()`` test:
   // expected scale 0.0196078438 and zero point 153.

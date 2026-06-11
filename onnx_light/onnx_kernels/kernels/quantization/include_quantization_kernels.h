@@ -46,9 +46,10 @@ namespace kernel {
 // ``DequantizeLinear`` mirrors the ONNX ``DequantizeLinear`` operator
 // restricted to the per-tensor case: an integer or float8 input ``x``
 // (UINT8, INT8, UINT16, INT16, INT32, FLOAT8E4M3FN, FLOAT8E4M3FNUZ,
-// FLOAT8E5M2 or FLOAT8E5M2FNUZ), a scalar FLOAT ``x_scale`` and an
+// FLOAT8E5M2 or FLOAT8E5M2FNUZ), a scalar FLOAT or FLOAT16 ``x_scale`` and an
 // optional scalar ``x_zero_point`` of the same element type as ``x``. The
-// output ``y`` is FLOAT with the same shape as ``x``:
+// output ``y`` has the same element type as ``x_scale`` (FLOAT or FLOAT16)
+// and the same shape as ``x``:
 // ``y = (x - x_zero_point) * x_scale``. When ``x_zero_point`` is omitted
 // the zero point defaults to 0.
 //

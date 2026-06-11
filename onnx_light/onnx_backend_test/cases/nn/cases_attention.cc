@@ -5,6 +5,7 @@
 #include "onnx_backend_test/cases/nn/include_nn_cases.h"
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
+#include "onnx_kernels/kernels/tensor/cast_helper.h"
 
 #include <cmath>
 #include <cstdint>
@@ -53,108 +54,10 @@ NodeProto MakeAttentionNode(const std::vector<std::string> &inputs,
   return node;
 }
 
-// IEEE-754 binary32 -> binary16 conversion with round-to-nearest-even. Handles
-// normals, zeros, subnormals, infinities and NaNs. Only used by the rank-4
-// ``test_cc_attention_4d_fp16*`` cases so the helper is intentionally local.
-uint16_t FloatToFloat16Bits(float f) {
-  uint32_t x;
-  std::memcpy(&x, &f, sizeof(float));
-  const uint32_t sign = (x >> 16) & 0x8000u;
-  const int32_t e32 = static_cast<int32_t>((x >> 23) & 0xffu);
-  const uint32_t m32 = x & 0x007fffffu;
-  if (e32 == 0xff) {
-    // Inf or NaN — preserve sign; collapse the mantissa to a quiet-NaN
-    // marker when it was non-zero.
-    return static_cast<uint16_t>(sign | 0x7c00u | (m32 != 0 ? 0x0200u : 0u));
-  }
-  const int32_t e = e32 - 127 + 15;
-  if (e >= 31) {
-    return static_cast<uint16_t>(sign | 0x7c00u); // overflow -> +/-inf
-  }
-  if (e <= 0) {
-    if (e < -10) {
-      return static_cast<uint16_t>(sign); // too small -> +/-0
-    }
-    // Subnormal: build the implicit leading bit then shift.
-    uint32_t m = (m32 | 0x00800000u) >> static_cast<uint32_t>(1 - e);
-    const uint32_t round_bit = (m >> 12) & 1u;
-    const uint32_t sticky = m & 0x00000fffu;
-    uint16_t h = static_cast<uint16_t>(sign | (m >> 13));
-    if (round_bit && (sticky != 0 || (h & 1))) {
-      h = static_cast<uint16_t>(h + 1);
-    }
-    return h;
-  }
-  // Normal: pack exponent + truncated mantissa, then round-to-nearest-even.
-  const uint32_t low = m32 & 0x1fffu;
-  uint16_t h = static_cast<uint16_t>(sign | (static_cast<uint32_t>(e) << 10) | (m32 >> 13));
-  if (low > 0x1000u || (low == 0x1000u && (h & 1u))) {
-    h = static_cast<uint16_t>(h + 1); // mantissa carry naturally bumps exponent
-  }
-  return h;
-}
-
-// Inverse of ``FloatToFloat16Bits`` — decodes an IEEE-754 binary16 bit
-// pattern into the corresponding ``float`` value. Matches the FLOAT16 -> FLOAT
-// path used by ``kernel::Bernoulli``.
-float Float16BitsToFloat(uint16_t h) {
-  const uint32_t sign = (static_cast<uint32_t>(h) >> 15) & 0x1u;
-  const uint32_t exp = (static_cast<uint32_t>(h) >> 10) & 0x1fu;
-  const uint32_t mant = static_cast<uint32_t>(h) & 0x3ffu;
-  uint32_t f;
-  if (exp == 0) {
-    if (mant == 0) {
-      f = sign << 31;
-    } else {
-      uint32_t m = mant;
-      int32_t e = -1;
-      while ((m & 0x400u) == 0) {
-        m <<= 1;
-        --e;
-      }
-      m &= 0x3ffu;
-      f = (sign << 31) | (static_cast<uint32_t>(e + 127 + 1) << 23) | (m << 13);
-    }
-  } else if (exp == 0x1fu) {
-    f = (sign << 31) | 0x7f800000u | (mant << 13);
-  } else {
-    f = (sign << 31) | (static_cast<uint32_t>(exp - 15 + 127) << 23) | (mant << 13);
-  }
-  float fv;
-  std::memcpy(&fv, &f, sizeof(float));
-  return fv;
-}
-
-// Encodes a FLOAT tensor as a FLOAT16 tensor by round-tripping every element
-// through ``FloatToFloat16Bits``. Caller-provided ``name`` becomes the
-// tensor name on the resulting ``Tensor``.
-Tensor FloatToFloat16Tensor(const std::string &name, const Tensor &f) {
-  EXT_ENFORCE_INVALID(f.data_type == DataType::FLOAT, "FloatToFloat16Tensor: input must be FLOAT.");
-  const int64_t n = f.element_count();
-  std::vector<uint16_t> bits(static_cast<size_t>(n));
-  const float *src = f.AsFloat();
-  for (int64_t i = 0; i < n; ++i) {
-    bits[static_cast<size_t>(i)] = FloatToFloat16Bits(src[i]);
-  }
-  Tensor t = Tensor::FromUint16(name, f.shape, bits);
-  t.data_type = static_cast<int32_t>(DataType::FLOAT16);
-  return t;
-}
-
-// Round-trips every element through ``FloatToFloat16Bits`` / decode and
-// returns a fresh FLOAT tensor reflecting the FP16 storage precision. Used
-// to simulate the input-side rounding that happens when FLOAT16 tensors are
-// fed into a backend that internally promotes to FLOAT.
-Tensor RoundToFloat16(const Tensor &f) {
-  EXT_ENFORCE_INVALID(f.data_type == DataType::FLOAT, "RoundToFloat16: input must be FLOAT.");
-  const int64_t n = f.element_count();
-  std::vector<float> rounded(static_cast<size_t>(n));
-  const float *src = f.AsFloat();
-  for (int64_t i = 0; i < n; ++i) {
-    rounded[static_cast<size_t>(i)] = Float16BitsToFloat(FloatToFloat16Bits(src[i]));
-  }
-  return Tensor::FromFloat(f.name, f.shape, rounded);
-}
+// IEEE-754 binary16 ↔ binary32 conversions and the ``FloatToFloat16Tensor``
+// / ``RoundToFloat16`` helpers are provided by
+// ``onnx_kernels/kernels/tensor/cast_helper.h`` as
+// ``kernel::FloatToFloat16Tensor`` / ``kernel::RoundToFloat16``.
 
 // Builds a small deterministic FLOAT tensor of the requested shape. Values
 // are derived from a simple LCG seeded by ``seed`` and then mapped into
@@ -1576,14 +1479,14 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
     Tensor Q32 = MakeDeterministicFloatTensor({2, 3, 4, 8}, 0x1234u, 0.0f, 1.0f);
     Tensor K32 = MakeDeterministicFloatTensor({2, 3, 6, 8}, 0x5678u, 0.0f, 1.0f);
     Tensor V32 = MakeDeterministicFloatTensor({2, 3, 6, 8}, 0x9abcu, 0.0f, 1.0f);
-    Tensor Q_in = RoundToFloat16(Q32);
-    Tensor K_in = RoundToFloat16(K32);
-    Tensor V_in = RoundToFloat16(V32);
+    Tensor Q_in = kernel::RoundToFloat16(Q32);
+    Tensor K_in = kernel::RoundToFloat16(K32);
+    Tensor V_in = kernel::RoundToFloat16(V32);
     Tensor Y32 = attention(Q_in, K_in, V_in);
-    Tensor Q = FloatToFloat16Tensor("", Q_in);
-    Tensor K = FloatToFloat16Tensor("", K_in);
-    Tensor V = FloatToFloat16Tensor("", V_in);
-    Tensor Y = FloatToFloat16Tensor("", Y32);
+    Tensor Q = kernel::FloatToFloat16Tensor("", Q_in);
+    Tensor K = kernel::FloatToFloat16Tensor("", K_in);
+    Tensor V = kernel::FloatToFloat16Tensor("", V_in);
+    Tensor Y = kernel::FloatToFloat16Tensor("", Y32);
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     Expect(node, {Q, K, V}, {Y}, "test_cc_attention_4d_fp16", {opset}, "backend-test", registry);
     registry.back().atol = 5e-3;
@@ -1598,23 +1501,23 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
     Tensor mask32 = MakeDeterministicFloatTensor({4, 18}, 0xcafeu, 0.0f, 1.0f);
     Tensor pk32 = MakeDeterministicFloatTensor({2, 3, 12, 8}, 0xface, 0.0f, 1.0f);
     Tensor pv32 = MakeDeterministicFloatTensor({2, 3, 12, 8}, 0xb16bu, 0.0f, 1.0f);
-    Tensor Q_in = RoundToFloat16(Q32);
-    Tensor K_in = RoundToFloat16(K32);
-    Tensor V_in = RoundToFloat16(V32);
-    Tensor mask_in = RoundToFloat16(mask32);
-    Tensor pk_in = RoundToFloat16(pk32);
-    Tensor pv_in = RoundToFloat16(pv32);
+    Tensor Q_in = kernel::RoundToFloat16(Q32);
+    Tensor K_in = kernel::RoundToFloat16(K32);
+    Tensor V_in = kernel::RoundToFloat16(V32);
+    Tensor mask_in = kernel::RoundToFloat16(mask32);
+    Tensor pk_in = kernel::RoundToFloat16(pk32);
+    Tensor pv_in = kernel::RoundToFloat16(pv32);
     kernel::Attention::Attributes attrs;
     auto r = attention(Q_in, K_in, V_in, attrs, &mask_in, &pk_in, &pv_in);
-    Tensor Q = FloatToFloat16Tensor("", Q_in);
-    Tensor K = FloatToFloat16Tensor("", K_in);
-    Tensor V = FloatToFloat16Tensor("", V_in);
-    Tensor mask = FloatToFloat16Tensor("", mask_in);
-    Tensor pk = FloatToFloat16Tensor("", pk_in);
-    Tensor pv = FloatToFloat16Tensor("", pv_in);
-    Tensor Y = FloatToFloat16Tensor("", r.Y);
-    Tensor present_key = FloatToFloat16Tensor("", r.present_key);
-    Tensor present_value = FloatToFloat16Tensor("", r.present_value);
+    Tensor Q = kernel::FloatToFloat16Tensor("", Q_in);
+    Tensor K = kernel::FloatToFloat16Tensor("", K_in);
+    Tensor V = kernel::FloatToFloat16Tensor("", V_in);
+    Tensor mask = kernel::FloatToFloat16Tensor("", mask_in);
+    Tensor pk = kernel::FloatToFloat16Tensor("", pk_in);
+    Tensor pv = kernel::FloatToFloat16Tensor("", pv_in);
+    Tensor Y = kernel::FloatToFloat16Tensor("", r.Y);
+    Tensor present_key = kernel::FloatToFloat16Tensor("", r.present_key);
+    Tensor present_value = kernel::FloatToFloat16Tensor("", r.present_value);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask", "past_key", "past_value"},
                                        {"Y", "present_key", "present_value"});
     Expect(node, {Q, K, V, mask, pk, pv}, {Y, present_key, present_value},

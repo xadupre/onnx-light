@@ -5,6 +5,7 @@
 #include "onnx_backend_test/cases/quantization/include_quantization_cases.h"
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
+#include "onnx_kernels/kernels/tensor/cast_helper.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
@@ -32,50 +33,9 @@ NodeProto MakeQLinearMatMulNode() {
   return node;
 }
 
-// Encodes an IEEE-754 binary32 value as an IEEE-754 binary16 bit pattern
-// using round-to-nearest-even. Mirrors the helper used by
-// ``cases_dequantizelinear`` / ``cases_attention``; duplicated here to keep
-// this case file self-contained.
-uint16_t FloatToFloat16Bits(float f) {
-  uint32_t u;
-  std::memcpy(&u, &f, sizeof(u));
-  const uint32_t sign = (u >> 16) & 0x8000u;
-  const int32_t e = static_cast<int32_t>((u >> 23) & 0xffu) - 127 + 15;
-  const uint32_t m32 = u & 0x7fffffu;
-  if (e >= 0x1f) {
-    if (((u >> 23) & 0xffu) == 0xffu) {
-      const uint16_t mant = m32 ? static_cast<uint16_t>((m32 >> 13) | 0x200u) : 0u;
-      return static_cast<uint16_t>(sign | 0x7c00u | mant);
-    }
-    return static_cast<uint16_t>(sign | 0x7c00u);
-  }
-  if (e <= 0) {
-    if (e < -10) {
-      return static_cast<uint16_t>(sign);
-    }
-    const uint32_t m = (m32 | 0x800000u) >> static_cast<uint32_t>(1 - e);
-    const uint32_t round_bit = m & 0x00001000u;
-    const uint32_t sticky = m & 0x00000fffu;
-    uint16_t h = static_cast<uint16_t>(sign | (m >> 13));
-    if (round_bit && (sticky != 0 || (h & 1))) {
-      h = static_cast<uint16_t>(h + 1);
-    }
-    return h;
-  }
-  const uint32_t low = m32 & 0x1fffu;
-  uint16_t h = static_cast<uint16_t>(sign | (static_cast<uint32_t>(e) << 10) | (m32 >> 13));
-  if (low > 0x1000u || (low == 0x1000u && (h & 1u))) {
-    h = static_cast<uint16_t>(h + 1);
-  }
-  return h;
-}
-
-// Builds a FLOAT16 scalar tensor from a float32 value.
-Tensor MakeFloat16Scalar(const std::string &name, float value) {
-  Tensor t = Tensor::FromUint16(name, {}, {FloatToFloat16Bits(value)});
-  t.data_type = static_cast<int32_t>(DataType::FLOAT16);
-  return t;
-}
+// The IEEE-754 binary16 encoder and FLOAT16 scalar builder are provided by
+// ``onnx_kernels/kernels/tensor/cast_helper.h`` as ``kernel::FloatToFloat16Bits``
+// and ``kernel::MakeFloat16Scalar``.
 
 // Builds an INT8/UINT8 scalar tensor (used for zero points). ``dtype`` must be
 // ``DataType::INT8`` or ``DataType::UINT8``; ``value`` is reinterpreted as the
@@ -147,9 +107,9 @@ void RegisterQLinearMatMulCases(std::vector<TestCase> &registry) {
     Tensor a_scale_f = Tensor::FromFloat("a_scale", {}, {0.0066f});
     Tensor b_scale_f = Tensor::FromFloat("b_scale", {}, {0.00705f});
     Tensor y_scale_f = Tensor::FromFloat("y_scale", {}, {0.0107f});
-    Tensor a_scale_h = MakeFloat16Scalar("a_scale", 0.0066f);
-    Tensor b_scale_h = MakeFloat16Scalar("b_scale", 0.00705f);
-    Tensor y_scale_h = MakeFloat16Scalar("y_scale", 0.0107f);
+    Tensor a_scale_h = kernel::MakeFloat16Scalar("a_scale", 0.0066f);
+    Tensor b_scale_h = kernel::MakeFloat16Scalar("b_scale", 0.00705f);
+    Tensor y_scale_h = kernel::MakeFloat16Scalar("y_scale", 0.0107f);
 
     Tensor a_zp = MakeQuantScalar("a_zero_point", dtype, a_zp_val);
     Tensor b_zp_2d = MakeQuantScalar("b_zero_point", dtype, b_zp_val_2d);

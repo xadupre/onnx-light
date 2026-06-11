@@ -6,6 +6,7 @@
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
 #include "onnx_kernels/kernels/tensor/cast_float8.h"
+#include "onnx_kernels/kernels/tensor/cast_helper.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cmath>
@@ -19,148 +20,12 @@ namespace onnx_backend_test {
 
 namespace {
 
-Tensor MakeScalarTensor(int32_t data_type, const std::vector<uint8_t> &bytes) {
-  return Tensor("", data_type, /*shape=*/{}, bytes);
-}
-
-Tensor Uint16ZeroPoint(uint16_t value) {
-  std::vector<uint8_t> bytes(sizeof(uint16_t));
-  std::memcpy(bytes.data(), &value, sizeof(uint16_t));
-  return MakeScalarTensor(static_cast<int32_t>(DataType::UINT16), bytes);
-}
-
-Tensor Int16ZeroPoint(int16_t value) {
-  std::vector<uint8_t> bytes(sizeof(int16_t));
-  std::memcpy(bytes.data(), &value, sizeof(int16_t));
-  return MakeScalarTensor(static_cast<int32_t>(DataType::INT16), bytes);
-}
-
-// Builds a 1-D float8 tensor from the float32 sample values in *values*.
-// ``encode`` is the saturating ``FloatToFloat8*Bits`` encoder declared in
-// ``cast_float8.h``. Mirrors the way upstream ``onnx.helper.make_tensor``
-// stores float8 scalars (one raw byte per element).
-Tensor MakeFloat8Tensor(DataType dtype, const std::vector<int64_t> &shape,
-                        const std::vector<float> &values, std::uint8_t (*encode)(float) noexcept) {
-  std::vector<uint8_t> bytes(values.size());
-  for (size_t i = 0; i < values.size(); ++i) {
-    bytes[i] = encode(values[i]);
-  }
-  return Tensor("", static_cast<int32_t>(dtype), shape, std::move(bytes));
-}
-
-// Packs ``values`` (one element per ``int8_t`` entry, range checked by the
-// caller) into a 4-bit-per-element little-endian buffer matching the ONNX
-// sub-byte layout (low nibble first per byte, trailing slot zero-padded).
-std::vector<uint8_t> Pack4Bit(const std::vector<int8_t> &values) {
-  std::vector<uint8_t> bytes((values.size() + 1) / 2, 0);
-  for (size_t i = 0; i < values.size(); ++i) {
-    const uint8_t nibble = static_cast<uint8_t>(values[i]) & 0x0F;
-    bytes[i / 2] |= static_cast<uint8_t>(nibble << (4 * (i % 2)));
-  }
-  return bytes;
-}
-
-// Packs ``values`` (one element per ``int8_t`` entry) into a 2-bit-per-element
-// little-endian buffer matching the ONNX sub-byte layout (lowest pair first
-// per byte, trailing slots zero-padded).
-std::vector<uint8_t> Pack2Bit(const std::vector<int8_t> &values) {
-  std::vector<uint8_t> bytes((values.size() + 3) / 4, 0);
-  for (size_t i = 0; i < values.size(); ++i) {
-    const uint8_t pair = static_cast<uint8_t>(values[i]) & 0x03;
-    bytes[i / 4] |= static_cast<uint8_t>(pair << (2 * (i % 4)));
-  }
-  return bytes;
-}
-
-// Builds a sub-byte tensor with the supplied ``dtype`` and ``shape`` from a
-// flattened list of element values. ``bits`` is 4 or 2.
-Tensor MakeSubByteTensor(DataType dtype, const std::vector<int64_t> &shape,
-                         const std::vector<int8_t> &values, int bits) {
-  std::vector<uint8_t> bytes = (bits == 4) ? Pack4Bit(values) : Pack2Bit(values);
-  return Tensor("", static_cast<int32_t>(dtype), shape, std::move(bytes));
-}
-
-// Encodes a single float into FLOAT4E2M1 (4-bit float with 2 exponent bits
-// and 1 mantissa bit). The format supports the values
-// ``{+/-0, +/-0.5, +/-1, +/-1.5, +/-2, +/-3, +/-4, +/-6}``; the upstream
-// backend test only uses these exact values so a small lookup is sufficient
-// (no rounding is required).
-uint8_t FloatToFloat4E2M1Nibble(float v) {
-  struct Entry {
-    float value;
-    uint8_t bits;
-  };
-  static const Entry kTable[] = {
-      {0.0f, 0x0},  {0.5f, 0x1},  {1.0f, 0x2},  {1.5f, 0x3},  {2.0f, 0x4},  {3.0f, 0x5},
-      {4.0f, 0x6},  {6.0f, 0x7},  {-0.0f, 0x8}, {-0.5f, 0x9}, {-1.0f, 0xA}, {-1.5f, 0xB},
-      {-2.0f, 0xC}, {-3.0f, 0xD}, {-4.0f, 0xE}, {-6.0f, 0xF},
-  };
-  for (const auto &e : kTable) {
-    if (e.value == v && std::signbit(e.value) == std::signbit(v)) {
-      return e.bits;
-    }
-  }
-  throw std::invalid_argument("FloatToFloat4E2M1Nibble: value not representable in FLOAT4E2M1.");
-}
-
-Tensor MakeFloat4E2M1Tensor(const std::vector<int64_t> &shape, const std::vector<float> &values) {
-  std::vector<uint8_t> bytes((values.size() + 1) / 2, 0);
-  for (size_t i = 0; i < values.size(); ++i) {
-    const uint8_t nibble = FloatToFloat4E2M1Nibble(values[i]);
-    bytes[i / 2] |= static_cast<uint8_t>(nibble << (4 * (i % 2)));
-  }
-  return Tensor("", static_cast<int32_t>(DataType::FLOAT4E2M1), shape, std::move(bytes));
-}
-
-// Encodes an IEEE-754 binary32 value as an IEEE-754 binary16 bit pattern
-// using round-to-nearest-even. Mirrors the helper used by ``cases_attention``;
-// duplicated here to keep the case file self-contained.
-uint16_t FloatToFloat16Bits(float f) {
-  uint32_t u;
-  std::memcpy(&u, &f, sizeof(u));
-  const uint32_t sign = (u >> 16) & 0x8000u;
-  const int32_t e = static_cast<int32_t>((u >> 23) & 0xffu) - 127 + 15;
-  const uint32_t m32 = u & 0x7fffffu;
-  if (e >= 0x1f) {
-    // Inf / NaN or overflow to Inf.
-    if (((u >> 23) & 0xffu) == 0xffu) {
-      const uint16_t mant = m32 ? static_cast<uint16_t>((m32 >> 13) | 0x200u) : 0u;
-      return static_cast<uint16_t>(sign | 0x7c00u | mant);
-    }
-    return static_cast<uint16_t>(sign | 0x7c00u);
-  }
-  if (e <= 0) {
-    if (e < -10) {
-      return static_cast<uint16_t>(sign);
-    }
-    const uint32_t m = (m32 | 0x800000u) >> static_cast<uint32_t>(1 - e);
-    const uint32_t round_bit = m & 0x00001000u;
-    const uint32_t sticky = m & 0x00000fffu;
-    uint16_t h = static_cast<uint16_t>(sign | (m >> 13));
-    if (round_bit && (sticky != 0 || (h & 1))) {
-      h = static_cast<uint16_t>(h + 1);
-    }
-    return h;
-  }
-  const uint32_t low = m32 & 0x1fffu;
-  uint16_t h = static_cast<uint16_t>(sign | (static_cast<uint32_t>(e) << 10) | (m32 >> 13));
-  if (low > 0x1000u || (low == 0x1000u && (h & 1u))) {
-    h = static_cast<uint16_t>(h + 1);
-  }
-  return h;
-}
-
-// Builds a FLOAT16 tensor with the supplied ``shape`` from a flattened list
-// of float32 sample values rounded via ``FloatToFloat16Bits``.
-Tensor MakeFloat16Tensor(const std::vector<int64_t> &shape, const std::vector<float> &values) {
-  std::vector<uint16_t> bits(values.size());
-  for (size_t i = 0; i < values.size(); ++i) {
-    bits[i] = FloatToFloat16Bits(values[i]);
-  }
-  Tensor t = Tensor::FromUint16("", shape, bits);
-  t.data_type = static_cast<int32_t>(DataType::FLOAT16);
-  return t;
-}
+// Tensor builders and bit packing helpers are provided by
+// ``onnx_kernels/kernels/tensor/cast_helper.h`` (kernel::Uint16ZeroPoint,
+// kernel::Int16ZeroPoint, kernel::MakeFloat8Tensor, kernel::Pack2Bit,
+// kernel::Pack4Bit, kernel::MakeSubByteTensor,
+// kernel::FloatToFloat4E2M1Nibble, kernel::MakeFloat4E2M1Tensor,
+// kernel::FloatToFloat16Bits, kernel::MakeFloat16Tensor).
 
 } // namespace
 
@@ -281,7 +146,7 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
   {
     Tensor x = Tensor::FromUint16("", {4}, {30000, 31000, 32768, 33000});
     Tensor x_scale = Tensor::FromFloat("", {}, {2.0f});
-    const Tensor x_zero_point = Uint16ZeroPoint(32767);
+    const Tensor x_zero_point = kernel::Uint16ZeroPoint(32767);
     Tensor y = dequantize_kernel(x, x_scale, x_zero_point);
     Expect(node, {x, x_scale, x_zero_point}, {y}, "test_dequantizelinear_uint16", {opset},
            "backend-test", registry);
@@ -291,7 +156,7 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
   {
     Tensor x = Tensor::FromInt16("", {4}, {-300, -30, -1025, 1270});
     Tensor x_scale = Tensor::FromFloat("", {}, {2.0f});
-    const Tensor x_zero_point = Int16ZeroPoint(-1024);
+    const Tensor x_zero_point = kernel::Int16ZeroPoint(-1024);
     Tensor y = dequantize_kernel(x, x_scale, x_zero_point);
     Expect(node, {x, x_scale, x_zero_point}, {y}, "test_dequantizelinear_int16", {opset},
            "backend-test", registry);
@@ -314,8 +179,8 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
     e4m3fn_node.add_output("y");
     AddAttribute<int64_t>(e4m3fn_node, "axis", 0);
 
-    Tensor x = MakeFloat8Tensor(DataType::FLOAT8E4M3FN, f8_shape, f8_values,
-                                &kernel::FloatToFloat8E4M3FNBits);
+    Tensor x = kernel::MakeFloat8Tensor(DataType::FLOAT8E4M3FN, f8_shape, f8_values,
+                                        &kernel::FloatToFloat8E4M3FNBits);
     Tensor x_scale = Tensor::FromFloat("", {}, {2.0f});
     Tensor y = dequantize_kernel(x, x_scale);
     Expect(e4m3fn_node, {x, x_scale}, {y}, "test_dequantizelinear_e4m3fn", {opset}, "backend-test",
@@ -332,8 +197,8 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
     AddAttribute<int64_t>(e5m2_node, "axis", 0);
 
     const std::vector<float> e5m2_values = {0.0f, 0.5f, 1.0f, 49152.0f, -96.0f};
-    Tensor x = MakeFloat8Tensor(DataType::FLOAT8E5M2, f8_shape, e5m2_values,
-                                &kernel::FloatToFloat8E5M2Bits);
+    Tensor x = kernel::MakeFloat8Tensor(DataType::FLOAT8E5M2, f8_shape, e5m2_values,
+                                        &kernel::FloatToFloat8E5M2Bits);
     Tensor x_scale = Tensor::FromFloat("", {}, {2.0f});
     Tensor y = dequantize_kernel(x, x_scale);
     Expect(e5m2_node, {x, x_scale}, {y}, "test_dequantizelinear_e5m2", {opset}, "backend-test",
@@ -351,8 +216,8 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
     e4m3fn_zp_node.add_output("y");
     AddAttribute<int64_t>(e4m3fn_zp_node, "axis", 0);
 
-    Tensor x = MakeFloat8Tensor(DataType::FLOAT8E4M3FN, f8_shape, f8_values,
-                                &kernel::FloatToFloat8E4M3FNBits);
+    Tensor x = kernel::MakeFloat8Tensor(DataType::FLOAT8E4M3FN, f8_shape, f8_values,
+                                        &kernel::FloatToFloat8E4M3FNBits);
     Tensor x_scale = Tensor::FromFloat("", {}, {2.0f});
     // Upstream uses ``make_tensor("zero_point", FLOAT8E4M3FN, [1], [0])``
     // (a 1-D one-element tensor) for the zero point.
@@ -427,10 +292,10 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
     f16_node.add_output("y");
     AddAttribute<int64_t>(f16_node, "axis", 0);
 
-    Tensor x = MakeFloat8Tensor(DataType::FLOAT8E4M3FN, f8_shape, f8_values,
-                                &kernel::FloatToFloat8E4M3FNBits);
-    Tensor x_scale = MakeFloat16Tensor({}, {2.0f});
-    Tensor y = MakeFloat16Tensor(f8_shape, {0.0f, 1.0f, 2.0f, 896.0f, -208.0f});
+    Tensor x = kernel::MakeFloat8Tensor(DataType::FLOAT8E4M3FN, f8_shape, f8_values,
+                                        &kernel::FloatToFloat8E4M3FNBits);
+    Tensor x_scale = kernel::MakeFloat16Tensor("", {}, {2.0f});
+    Tensor y = kernel::MakeFloat16Tensor("", f8_shape, {0.0f, 1.0f, 2.0f, 896.0f, -208.0f});
     Expect(f16_node, {x, x_scale}, {y}, "test_dequantizelinear_e4m3fn_float16", {opset_v21},
            "backend-test", registry);
   }
@@ -451,8 +316,8 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
 
   // From DequantizeLinear.export_uint4().
   {
-    Tensor x = MakeSubByteTensor(DataType::UINT4, {5}, {0, 1, 7, 10, 15}, /*bits=*/4);
-    Tensor x_zero_point = MakeSubByteTensor(DataType::UINT4, {1}, {1}, /*bits=*/4);
+    Tensor x = kernel::MakeSubByteTensor(DataType::UINT4, {5}, {0, 1, 7, 10, 15}, /*bits=*/4);
+    Tensor x_zero_point = kernel::MakeSubByteTensor(DataType::UINT4, {1}, {1}, /*bits=*/4);
     Tensor y = Tensor::FromFloat("", {5}, {-2.0f, 0.0f, 12.0f, 18.0f, 28.0f});
     Expect(sub_byte_node, {x, sub_byte_scale, x_zero_point}, {y}, "test_dequantizelinear_uint4",
            {opset_v21}, "backend-test", registry);
@@ -460,8 +325,8 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
 
   // From DequantizeLinear.export_int4().
   {
-    Tensor x = MakeSubByteTensor(DataType::INT4, {5}, {0, 1, 7, -4, -8}, /*bits=*/4);
-    Tensor x_zero_point = MakeSubByteTensor(DataType::INT4, {1}, {1}, /*bits=*/4);
+    Tensor x = kernel::MakeSubByteTensor(DataType::INT4, {5}, {0, 1, 7, -4, -8}, /*bits=*/4);
+    Tensor x_zero_point = kernel::MakeSubByteTensor(DataType::INT4, {1}, {1}, /*bits=*/4);
     Tensor y = Tensor::FromFloat("", {5}, {-2.0f, 0.0f, 12.0f, -10.0f, -18.0f});
     Expect(sub_byte_node, {x, sub_byte_scale, x_zero_point}, {y}, "test_dequantizelinear_int4",
            {opset_v21}, "backend-test", registry);
@@ -469,8 +334,8 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
 
   // From DequantizeLinear.export_uint2().
   {
-    Tensor x = MakeSubByteTensor(DataType::UINT2, {4}, {0, 1, 2, 3}, /*bits=*/2);
-    Tensor x_zero_point = MakeSubByteTensor(DataType::UINT2, {1}, {1}, /*bits=*/2);
+    Tensor x = kernel::MakeSubByteTensor(DataType::UINT2, {4}, {0, 1, 2, 3}, /*bits=*/2);
+    Tensor x_zero_point = kernel::MakeSubByteTensor(DataType::UINT2, {1}, {1}, /*bits=*/2);
     Tensor y = Tensor::FromFloat("", {4}, {-2.0f, 0.0f, 2.0f, 4.0f});
     Expect(sub_byte_node, {x, sub_byte_scale, x_zero_point}, {y}, "test_dequantizelinear_uint2",
            {opset_v23}, "backend-test", registry);
@@ -478,8 +343,8 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
 
   // From DequantizeLinear.export_int2().
   {
-    Tensor x = MakeSubByteTensor(DataType::INT2, {4}, {0, 1, -1, -2}, /*bits=*/2);
-    Tensor x_zero_point = MakeSubByteTensor(DataType::INT2, {1}, {1}, /*bits=*/2);
+    Tensor x = kernel::MakeSubByteTensor(DataType::INT2, {4}, {0, 1, -1, -2}, /*bits=*/2);
+    Tensor x_zero_point = kernel::MakeSubByteTensor(DataType::INT2, {1}, {1}, /*bits=*/2);
     Tensor y = Tensor::FromFloat("", {4}, {-2.0f, 0.0f, -4.0f, -6.0f});
     Expect(sub_byte_node, {x, sub_byte_scale, x_zero_point}, {y}, "test_dequantizelinear_int2",
            {opset_v23}, "backend-test", registry);
@@ -487,8 +352,8 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
 
   // From DequantizeLinear.export_float4e2m1().
   {
-    Tensor x = MakeFloat4E2M1Tensor({5}, {0.0f, 1.0f, -1.0f, 1.5f, -4.0f});
-    Tensor x_zero_point = MakeFloat4E2M1Tensor({1}, {0.0f});
+    Tensor x = kernel::MakeFloat4E2M1Tensor({5}, {0.0f, 1.0f, -1.0f, 1.5f, -4.0f});
+    Tensor x_zero_point = kernel::MakeFloat4E2M1Tensor({1}, {0.0f});
     Tensor y = Tensor::FromFloat("", {5}, {0.0f, 2.0f, -2.0f, 3.0f, -8.0f});
     Expect(sub_byte_node, {x, sub_byte_scale, x_zero_point}, {y},
            "test_dequantizelinear_float4e2m1", {opset_v23}, "backend-test", registry);

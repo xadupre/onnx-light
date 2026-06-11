@@ -79,7 +79,7 @@ def _format_string(value: Any) -> str:
 
 
 def _format_tensor(tensor: Any) -> str:
-    """Return a compact textual representation of a :class:`TensorProto`."""
+    """Returns a compact textual representation of a :class:`TensorProto`."""
 
     if tensor is None:
         return "<tensor>"
@@ -167,7 +167,7 @@ def _format_name(value: Any) -> str:
 
 
 def pretty_print_node(node: Any) -> str:
-    """Return a one-line textual representation of a ``NodeProto``."""
+    """Returns a one-line textual representation of a ``NodeProto``."""
 
     inputs = ", ".join(_format_name(i) for i in getattr(node, "input", []) or [])
     outputs = ", ".join(_format_name(o) for o in getattr(node, "output", []) or [])
@@ -201,7 +201,7 @@ def _format_initializer(tensor: Any) -> str:
 
 
 def pretty_print_graph(graph: Any, indent: str = "") -> str:
-    """Return a multi-line textual representation of a ``GraphProto``."""
+    """Returns a multi-line textual representation of a ``GraphProto``."""
 
     inputs = list(getattr(graph, "input", []) or [])
     outputs = list(getattr(graph, "output", []) or [])
@@ -256,7 +256,7 @@ def _format_function(fn: Any) -> str:
 
 
 def pretty_print(model_or_graph: Any) -> str:
-    """Return a human-readable text representation of an ONNX object.
+    """Returns a human-readable text representation of an ONNX object.
 
     The argument may be a ``ModelProto``, a ``GraphProto``, a
     ``FunctionProto`` or a ``NodeProto``; any other object is rendered by

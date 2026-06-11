@@ -73,15 +73,15 @@ ValueInfoProto MakeValueInfoForPy(nb::object name_or_proto, nb::object elem_type
 }
 
 // Build a NodeProto via helper.make_node (forwards **attrs kwargs) and append
-// it to the given repeated node field, using the matching ``add_node`` method
-// on the proto class.
-template <typename FieldT>
-NodeProto &AddNodeImpl(FieldT &node_field, nb::object op_type, nb::object inputs,
-                       nb::object outputs, const nb::kwargs &kwargs) {
+// it to the given repeated node field via the macro-generated ``add_node``
+// pointer overload, then return a reference to the stored node.
+template <typename ProtoT>
+NodeProto &AddNodeImpl(ProtoT &proto, nb::object op_type, nb::object inputs, nb::object outputs,
+                       const nb::kwargs &kwargs) {
   nb::module_ helper = ImportHelper();
   nb::object built = helper.attr("make_node")(op_type, inputs, outputs, **kwargs);
-  node_field.push_back(nb::cast<NodeProto &>(built));
-  return node_field.back();
+  NodeProto *stored = proto.add_node(nb::cast<const NodeProto &>(built));
+  return *stored;
 }
 
 bool HasBorrowedRawData(const ModelProto &model) {
@@ -1644,7 +1644,7 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
           "add_node",
           [](GraphProto &self, nb::object op_type, nb::object inputs, nb::object outputs,
              nb::kwargs kwargs) -> NodeProto & {
-            return AddNodeImpl(self.node_, op_type, inputs, outputs, kwargs);
+            return AddNodeImpl(self, op_type, inputs, outputs, kwargs);
           },
           nb::rv_policy::reference_internal,
           "Builds a :class:`NodeProto` via ``onnx_light.onnx.helper.make_node`` (extra keyword "
@@ -1686,7 +1686,7 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
           "add_node",
           [](FunctionProto &self, nb::object op_type, nb::object inputs, nb::object outputs,
              nb::kwargs kwargs) -> NodeProto & {
-            return AddNodeImpl(self.node_, op_type, inputs, outputs, kwargs);
+            return AddNodeImpl(self, op_type, inputs, outputs, kwargs);
           },
           nb::rv_policy::reference_internal,
           "Builds a :class:`NodeProto` via ``onnx_light.onnx.helper.make_node`` (extra keyword "

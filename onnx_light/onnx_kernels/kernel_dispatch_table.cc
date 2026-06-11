@@ -1345,6 +1345,92 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
       {"ai.onnx:Log", MakeUnaryTrampoline<kernel::Log>()},
       {"ai.onnx:LogSoftmax", MakeAxisTrampoline<kernel::LogSoftmax>()},
+      {"ai.onnx:LSTM",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         if (node.input_size() < 3 || node.input_size() > 8) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects between 3 and 8 input(s), got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         if (node.output_size() < 1 || node.output_size() > 3) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects between 1 and 3 output(s), got " +
+                                       std::to_string(node.output_size()) + ".");
+         }
+
+         // Unsupported attributes: only the default ``forward`` direction
+         // with the default ``Sigmoid``/``Tanh``/``Tanh`` activations, no
+         // ``clip``, ``input_forget == 0``, and ``layout == 0`` are
+         // implemented.
+         const std::string direction =
+             GetAttributeStringOrDefault(node, "direction", "forward");
+         if (direction != "forward") {
+           throw std::invalid_argument(
+               "RunNode: op 'LSTM' only supports direction='forward', got '" + direction + "'.");
+         }
+         if (FindAttribute(node, "activations") != nullptr) {
+           throw std::invalid_argument(
+               "RunNode: op 'LSTM' does not support the 'activations' attribute.");
+         }
+         if (FindAttribute(node, "activation_alpha") != nullptr ||
+             FindAttribute(node, "activation_beta") != nullptr) {
+           throw std::invalid_argument(
+               "RunNode: op 'LSTM' does not support 'activation_alpha'/'activation_beta'.");
+         }
+         if (FindAttribute(node, "clip") != nullptr) {
+           throw std::invalid_argument("RunNode: op 'LSTM' does not support the 'clip' attribute.");
+         }
+         if (GetAttributeIntOrDefault(node, "input_forget", 0) != 0) {
+           throw std::invalid_argument("RunNode: op 'LSTM' only supports input_forget=0.");
+         }
+         if (GetAttributeIntOrDefault(node, "layout", 0) != 0) {
+           throw std::invalid_argument("RunNode: op 'LSTM' only supports layout=0.");
+         }
+
+         // ``sequence_lens`` (input #4) is not supported: it requires
+         // per-batch sequence handling that the FLOAT kernel does not
+         // implement.
+         const Tensor *sequence_lens = GetOptionalInput(node, 4, rt.tensors());
+         if (sequence_lens != nullptr) {
+           throw std::invalid_argument(
+               "RunNode: op 'LSTM' does not support the optional 'sequence_lens' input.");
+         }
+
+         // The current kernel only produces (Y, Y_h); the optional third
+         // output ``Y_c`` (final cell state) is not implemented.
+         if (node.output_size() >= 3 && !node.output(2).as_string().empty()) {
+           throw std::invalid_argument(
+               "RunNode: op 'LSTM' does not support the optional third output 'Y_c'.");
+         }
+
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const Tensor &w = GetInput(node, 1, rt.tensors());
+         const Tensor &r = GetInput(node, 2, rt.tensors());
+         const Tensor *b = GetOptionalInput(node, 3, rt.tensors());
+         const Tensor *initial_h = GetOptionalInput(node, 5, rt.tensors());
+         const Tensor *initial_c = GetOptionalInput(node, 6, rt.tensors());
+         const Tensor *p = GetOptionalInput(node, 7, rt.tensors());
+
+         kernel::LSTM kernel(rt.kernel_ctx());
+         auto [y, y_h] = kernel(x, w, r, b != nullptr ? *b : Tensor{},
+                                initial_h != nullptr ? *initial_h : Tensor{},
+                                initial_c != nullptr ? *initial_c : Tensor{},
+                                p != nullptr ? *p : Tensor{});
+
+         auto set_optional_output = [&node, &rt](int index, Tensor output) {
+           if (index >= node.output_size()) {
+             return;
+           }
+           const std::string name = node.output(index).as_string();
+           if (name.empty()) {
+             return;
+           }
+           output.name = name;
+           rt.Put(name, std::move(output), TensorEventKind::kIntermediate);
+         };
+         set_optional_output(0, std::move(y));
+         set_optional_output(1, std::move(y_h));
+       }},
       {"ai.onnx:LpNormalization",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);

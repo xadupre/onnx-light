@@ -91,6 +91,14 @@ class TestSimplifyExpressions(ExtTestCase):
         self.assertEqual("a+b", simplify_expression("1024*(a+b)//1024"))
         self.assertEqual("2*a+2*b", simplify_expression("1024*(a+b)//1024*2"))
 
+    def test_simplify_function_floordiv_distribute(self):
+        self.assertEqual("b+c", simplify_expression("(2*b+2*c)//2"))
+        self.assertEqual("2*b+c", simplify_expression("(4*b+2*c)//2"))
+        self.assertEqual("a-b", simplify_expression("(2*a-2*b)//2"))
+        # When at least one term is not divisible by the divisor the
+        # expression must not be rewritten.
+        self.assertEqual("(1+2*b+2*c)//2", simplify_expression("(2*b+2*c+1)//2"))
+
     def test_simplify_expression_negation(self):
         self.assertEqual("length", simplify_expression("-1+1+length"))
         self.assertEqual("x-1", simplify_expression("-1+x"))

@@ -82,6 +82,15 @@ TEST(SimplifyExpressions, SimplifyExpression_bracket) {
   EXPECT_EQ(get_str(simplify_expression("((c)//(2))")), "c//2");
 }
 
+TEST(SimplifyExpressions, SimplifyExpression_distribute_floordiv) {
+  EXPECT_EQ(get_str(simplify_expression("(2*b+2*c)//2")), "b+c");
+  EXPECT_EQ(get_str(simplify_expression("(4*a+2*b)//2")), "2*a+b");
+  EXPECT_EQ(get_str(simplify_expression("(2*a-2*b)//2")), "a-b");
+  EXPECT_EQ(get_str(simplify_expression("(2*a+4*b+6*c)//2")), "2*b+3*c+a");
+  EXPECT_EQ(get_str(simplify_expression("(2*b+2*c+1)//2")), "(1+2*b+2*c)//2");
+  EXPECT_EQ(get_str(simplify_expression("(2*b+3*c)//2")), "(2*b+3*c)//2");
+}
+
 TEST(SimplifyExpressions, SimplifyExpression_bracket_max) {
   EXPECT_EQ(get_str(simplify_expression("(x)^(y+1)")), "x^1+y");
   EXPECT_EQ(get_str(simplify_expression("(x+1)^(y)")), "1+x^y");

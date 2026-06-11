@@ -141,7 +141,7 @@ On the C++ side the thread pool is implemented in ``thread_pool.h`` /
 ``thread_pool.cc``.  Each worker independently parses (or writes) a slice
 of the initializer list, so wall-clock load and save time scales with the
 number of hardware threads available.  In practice loading or saving a
-large model is roughly **3 times faster with 4 threads** than with the
+large model is significantly faster than with the
 single-threaded path (see
 :ref:`l-example-plot-threads-load-save` for a detailed benchmark).
 The standard ``onnx`` package is single-threaded; it offers no built-in

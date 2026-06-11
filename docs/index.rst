@@ -48,7 +48,7 @@ onnx without protobuf and more freedom
   natively in C++.
 - **Parallel loading and saving** – 
   :func:`onnx_light.onnx.load` and :func:`onnx_light.onnx.save` are parallelized.
-  In practice loading or saving large models is roughly **3 times faster with 4 threads**
+  In practice loading or saving large models is significantly faster
   (see the :ref:`threads benchmark example <l-example-plot-threads-load-save>`).
 - **Zero-copy parsing** – When parsing from an in-memory bytes buffer, the
   ``no_copy=True`` option makes each tensor's ``raw_data`` point directly into
@@ -105,7 +105,6 @@ Every output is generated with a C++ implementation of the operator.
     :caption: Contents
 
     getting_started
-    intro/index
     design/index
     howto/index
     api/index

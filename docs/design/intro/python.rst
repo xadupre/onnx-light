@@ -29,10 +29,10 @@ thing is to implement a function with ONNX operators. ONNX is strongly
 typed: shape and type must be defined for both inputs and outputs of the
 function. We need four functions to build the graph:
 
-* ``make_tensor_value_info``: declares a variable (input or output)
-  given its shape and type;
-* ``make_node``: creates a node defined by an operation (an operator
-  type), its inputs and outputs;
+* :func:`make_tensor_value_info <onnx_light.onnx.helper.make_tensor_value_info>``:
+  declares a variable (input or output) given its shape and type;
+* :func:`make_node <onnx_light.onnx.helper.make_node>`:
+  creates a node defined by an operation (an operator type), its inputs and outputs;
 * ``make_graph``: a function to create an ONNX graph with the objects
   created by the two previous functions;
 * ``make_model``: a last function which merges the graph and additional

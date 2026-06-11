@@ -43,10 +43,12 @@ In Details
 It replicates the same Python API and the same C++ API to enable
 a smooth replacement.
 
+
 .. toctree::
     :caption: No protobuf
     :maxdepth: 1
 
+    intro/index
     differences
     protobuf_format
     no_copy_ownership
@@ -60,15 +62,10 @@ a smooth replacement.
     cplusplus_linking
 
 .. toctree::
-    :caption: Kernels
+    :caption: Kernels and Backend Tests
     :maxdepth: 1
 
     kernels
-
-.. toctree::
-    :caption: Backend
-    :maxdepth: 1
-
     backend_tests
     test_coverage
     runtime_coverage

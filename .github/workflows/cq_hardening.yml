@@ -75,4 +75,4 @@ jobs:
         run: ctest --test-dir build --output-on-failure
 
       - name: Run Python unit tests
-        run: pytest --durations=10 unittests
+        run: UNITTEST_GOING=1 ytest --durations=10 unittests

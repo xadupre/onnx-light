@@ -329,9 +329,11 @@ TEST(BackendRunModel, Scan) {
 
 // Quantization kernels.
 // The reference QuantizeLinear/DequantizeLinear kernels only support
-// per-tensor quantization (scalar y_scale/x_scale) with FLOAT scales and
+// per-tensor quantization (scalar y_scale/x_scale) with FLOAT scales for
+// QuantizeLinear and FLOAT or FLOAT16 scales for DequantizeLinear, and
 // byte-or-larger integer (or float8 for DequantizeLinear) element types.
-// Skip per-axis / sub-byte / blocked / FLOAT16-scale cases.
+// Skip per-axis / sub-byte / blocked cases (and FLOAT16-scale cases for
+// QuantizeLinear).
 TEST(BackendRunModel, QuantizeLinear) {
   RunBackendCasesFor("QuantizeLinear", [](const DataSet &ds) {
     if (ds.inputs.size() < 2 || ds.inputs[1].element_count() != 1) {
@@ -355,10 +357,12 @@ TEST(BackendRunModel, DequantizeLinear) {
     if (ds.inputs.size() < 2 || ds.inputs[1].element_count() != 1) {
       return false;
     }
-    if (ds.inputs[1].data_type != static_cast<int32_t>(DataType::FLOAT)) {
+    const int32_t scale_dtype = ds.inputs[1].data_type;
+    if (scale_dtype != static_cast<int32_t>(DataType::FLOAT) &&
+        scale_dtype != static_cast<int32_t>(DataType::FLOAT16)) {
       return false;
     }
-    if (ds.outputs.empty() || ds.outputs[0].data_type != static_cast<int32_t>(DataType::FLOAT)) {
+    if (ds.outputs.empty() || ds.outputs[0].data_type != scale_dtype) {
       return false;
     }
     const int32_t x_dtype = ds.inputs[0].data_type;

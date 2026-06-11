@@ -183,7 +183,7 @@ void RegisterLoopPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &regi
   // ``dim_value`` entries to fresh ``dim_param`` names before re-running
   // shape inference, so input dims must be concrete here.
   const int32_t kFloat = static_cast<int32_t>(DataType::FLOAT);
-  AppendValueInfo(*graph->add_input(), "X", kFloat, {DimSpec(3), DimSpec(3)});
+  AppendValueInfo(*graph->add_input(), "X", kFloat, {DimSpec("batch"), DimSpec("feat")});
 
   // Intermediate value_info entries. ``shape_X`` is the 1-D INT64 shape
   // vector of ``X`` (length 2 = rank of ``X``); ``trip_count`` is the
@@ -192,7 +192,7 @@ void RegisterLoopPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &regi
   AppendValueInfo(*graph->add_value_info(), "trip_count", DataType::INT64, {DimSpec(1)});
 
   // Output Y — the stacked pairwise distance matrix of shape ``[3, 3]``.
-  AppendValueInfo(*graph->add_output(), "Y", kFloat, {DimSpec(3), DimSpec(3)});
+  AppendValueInfo(*graph->add_output(), "Y", kFloat, {DimSpec("batch"), DimSpec("batch")});
 
   // Reference DataSet with concrete ``[3, 3]`` input. Rows are on the axes
   // of an integer grid so the pairwise distances are integers and exact.

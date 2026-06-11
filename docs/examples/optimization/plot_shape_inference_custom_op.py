@@ -14,7 +14,7 @@ inference of a custom operator. The callback receives the current
 :class:`ShapesContext` and the node, and is responsible for setting an
 :class:`OptimTensor` for every output. Once registered, the callback is
 invoked automatically by
-:func:`~onnx_light.onnx_py._onnxpy.shape_inference.compute_shape_node`
+:func:`~onnx_light.onnx_optim.shape_inference.compute_shape_node`
 (and by the graph/model variants) whenever a node with the matching
 ``(domain, op_type)`` is encountered.
 

@@ -2132,6 +2132,17 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::Transpose k(rt.kernel_ctx());
          SetOutput(node, 0, k(data, perm), rt);
        }},
+      {"ai.onnx:Trilu",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputRange(node, 1, 2);
+         RequireOutputCount(node, 1);
+         const Tensor &input = GetInput(node, 0, rt.tensors());
+         const Tensor *k = GetOptionalInput(node, 1, rt.tensors());
+         kernel::Trilu::Attributes attrs;
+         attrs.upper = GetAttributeIntOrDefault(node, "upper", 1);
+         kernel::Trilu kernel(rt.kernel_ctx());
+         SetOutput(node, 0, kernel(input, k, attrs), rt);
+       }},
       {"ai.onnx:Unique",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);

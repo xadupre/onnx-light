@@ -33,6 +33,84 @@ ModelProto MakeOwnedModelProtoCopy(const ModelProto &model) {
   return owned;
 }
 
+// --------------------------------------------------------------------------
+// Convenience builder helpers exposed as proto methods. The Python-level
+// type inference for attributes/tensors lives in ``onnx_light.onnx_proto._helper``
+// and ``._numpy_helper``; these wrappers import those modules on demand so we
+// don't duplicate the (rich) inference logic in C++ while still exposing the
+// helpers as native methods on the bound proto classes.
+// --------------------------------------------------------------------------
+
+inline nb::module_ ImportHelper() { return nb::module_::import_("onnx_light.onnx_proto._helper"); }
+
+inline nb::module_ ImportNumpyHelper() {
+  return nb::module_::import_("onnx_light.onnx_proto._numpy_helper");
+}
+
+// Build a ValueInfoProto from either an existing ValueInfoProto, a bare name,
+// or a (name, elem_type, shape) triple via helper.make_tensor_value_info.
+ValueInfoProto MakeValueInfoForPy(nb::object name_or_proto, nb::object elem_type, nb::object shape,
+                                  nb::object doc_string) {
+  if (nb::isinstance<ValueInfoProto>(name_or_proto)) {
+    if (!elem_type.is_none() || !shape.is_none()) {
+      throw nb::value_error("elem_type and shape must be None when a ValueInfoProto is passed.");
+    }
+    return nb::cast<ValueInfoProto>(name_or_proto);
+  }
+  if (elem_type.is_none()) {
+    ValueInfoProto vi;
+    vi.set_name(nb::cast<std::string>(name_or_proto));
+    if (!doc_string.is_none()) {
+      vi.set_doc_string(nb::cast<std::string>(doc_string));
+    }
+    return vi;
+  }
+  nb::module_ helper = ImportHelper();
+  nb::object py_doc = doc_string.is_none() ? nb::cast(std::string()) : doc_string;
+  nb::object built = helper.attr("make_tensor_value_info")(name_or_proto, elem_type, shape,
+                                                           nb::arg("doc_string") = py_doc);
+  return nb::cast<ValueInfoProto>(built);
+}
+
+// Append (or replace, on key collision) a metadata_props entry on any proto
+// exposing the metadata_props_ field.
+template <typename ProtoT>
+StringStringEntryProto &AddMetadataImpl(ProtoT &self, const std::string &key,
+                                        const std::string &value) {
+  for (size_t i = 0; i < self.metadata_props_.size(); ++i) {
+    if (self.metadata_props_[i].ref_key().as_string() == key) {
+      self.metadata_props_[i].set_value(value);
+      return self.metadata_props_[i];
+    }
+  }
+  StringStringEntryProto entry;
+  entry.set_key(key);
+  entry.set_value(value);
+  self.metadata_props_.push_back(entry);
+  return self.metadata_props_.back();
+}
+
+// Append a (domain, version) opset import on any proto exposing opset_import_.
+template <typename ProtoT>
+OperatorSetIdProto &AddOpsetImpl(ProtoT &self, const std::string &domain, int64_t version) {
+  OperatorSetIdProto opset;
+  opset.set_domain(domain);
+  opset.set_version(version);
+  self.opset_import_.push_back(opset);
+  return self.opset_import_.back();
+}
+
+// Build a NodeProto via helper.make_node (forwards **attrs kwargs) and append
+// it to the given repeated node field.
+template <typename FieldT>
+NodeProto &AddNodeImpl(FieldT &node_field, nb::object op_type, nb::object inputs,
+                       nb::object outputs, const nb::kwargs &kwargs) {
+  nb::module_ helper = ImportHelper();
+  nb::object built = helper.attr("make_node")(op_type, inputs, outputs, **kwargs);
+  node_field.push_back(nb::cast<NodeProto &>(built));
+  return node_field.back();
+}
+
 bool HasBorrowedRawData(const ModelProto &model) {
   if (!model.has_graph()) {
     return false;
@@ -1497,6 +1575,35 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD(NodeProto, device_configurations);
   PYADD_PROTO_SERIALIZATION(NodeProto);
   nb_NodeProto.def("__repr__", [](NodeProto &self) { return proto_repr_with_short_line(self); });
+  nb_NodeProto
+      .def(
+          "set_attribute",
+          [](NodeProto &self, const std::string &name, nb::object value, nb::object attr_type,
+             nb::object doc_string) -> AttributeProto & {
+            nb::module_ helper = ImportHelper();
+            nb::object built = helper.attr("make_attribute")(
+                name, value, nb::arg("doc_string") = doc_string, nb::arg("attr_type") = attr_type);
+            AttributeProto new_attr = nb::cast<AttributeProto>(built);
+            for (size_t i = 0; i < self.attribute_.size(); ++i) {
+              if (self.attribute_[i].ref_name().as_string() == name) {
+                self.attribute_[i] = new_attr;
+                return self.attribute_[i];
+              }
+            }
+            self.attribute_.push_back(new_attr);
+            return self.attribute_.back();
+          },
+          nb::arg("name"), nb::arg("value"), nb::arg("attr_type") = nb::none(),
+          nb::arg("doc_string") = nb::none(), nb::rv_policy::reference_internal,
+          "Sets attribute *name* on this node to *value*, replacing an existing attribute with "
+          "the same name in place. The attribute type is inferred from *value* via "
+          "``onnx_light.onnx.helper.make_attribute``; pass *attr_type* to disambiguate.")
+      .def(
+          "add_metadata",
+          [](NodeProto &self, const std::string &key, const std::string &value)
+              -> StringStringEntryProto & { return AddMetadataImpl(self, key, value); },
+          nb::arg("key"), nb::arg("value"), nb::rv_policy::reference_internal,
+          "Sets metadata property *key* to *value*, updating an existing entry in place.");
   DECLARE_REPEATED_FIELD_PROTO(NodeProto, rep_node);
   define_repeated_field_type_proto(rep_node, rep_node_proto);
 
@@ -1512,6 +1619,80 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD(GraphProto, quantization_annotation)
       .PYFIELD(GraphProto, metadata_props);
   PYADD_PROTO_SERIALIZATION(GraphProto);
+  nb_GraphProto
+      .def(
+          "add_input",
+          [](GraphProto &self, nb::object name_or_proto, nb::object elem_type, nb::object shape,
+             nb::object doc_string) -> ValueInfoProto & {
+            self.input_.push_back(MakeValueInfoForPy(name_or_proto, elem_type, shape, doc_string));
+            return self.input_.back();
+          },
+          nb::arg("name_or_proto"), nb::arg("elem_type") = nb::none(),
+          nb::arg("shape") = nb::none(), nb::arg("doc_string") = nb::none(),
+          nb::rv_policy::reference_internal,
+          "Appends a new input and returns it. Accepts either a prebuilt ``ValueInfoProto`` or "
+          "``(name, elem_type, shape)``.")
+      .def(
+          "add_output",
+          [](GraphProto &self, nb::object name_or_proto, nb::object elem_type, nb::object shape,
+             nb::object doc_string) -> ValueInfoProto & {
+            self.output_.push_back(MakeValueInfoForPy(name_or_proto, elem_type, shape, doc_string));
+            return self.output_.back();
+          },
+          nb::arg("name_or_proto"), nb::arg("elem_type") = nb::none(),
+          nb::arg("shape") = nb::none(), nb::arg("doc_string") = nb::none(),
+          nb::rv_policy::reference_internal,
+          "Appends a new output and returns it. See :meth:`add_input`.")
+      .def(
+          "add_value_info",
+          [](GraphProto &self, nb::object name_or_proto, nb::object elem_type, nb::object shape,
+             nb::object doc_string) -> ValueInfoProto & {
+            self.value_info_.push_back(
+                MakeValueInfoForPy(name_or_proto, elem_type, shape, doc_string));
+            return self.value_info_.back();
+          },
+          nb::arg("name_or_proto"), nb::arg("elem_type") = nb::none(),
+          nb::arg("shape") = nb::none(), nb::arg("doc_string") = nb::none(),
+          nb::rv_policy::reference_internal,
+          "Appends a new intermediate value_info entry and returns it.")
+      .def(
+          "add_initializer",
+          [](GraphProto &self, nb::object name_or_proto, nb::object array) -> TensorProto & {
+            if (nb::isinstance<TensorProto>(name_or_proto)) {
+              if (!array.is_none()) {
+                throw nb::value_error("array must be None when a TensorProto is passed.");
+              }
+              self.initializer_.push_back(nb::cast<TensorProto>(name_or_proto));
+            } else {
+              if (array.is_none()) {
+                throw nb::value_error("array is required when a name is passed.");
+              }
+              nb::module_ numpy_helper = ImportNumpyHelper();
+              nb::object built =
+                  numpy_helper.attr("from_array")(array, nb::arg("name") = name_or_proto);
+              self.initializer_.push_back(nb::cast<TensorProto>(built));
+            }
+            return self.initializer_.back();
+          },
+          nb::arg("name_or_proto"), nb::arg("array") = nb::none(),
+          nb::rv_policy::reference_internal,
+          "Appends a new initializer and returns it. Accepts either a prebuilt ``TensorProto`` "
+          "or ``(name, numpy_array)``.")
+      .def(
+          "add_node",
+          [](GraphProto &self, nb::object op_type, nb::object inputs, nb::object outputs,
+             nb::kwargs kwargs) -> NodeProto & {
+            return AddNodeImpl(self.node_, op_type, inputs, outputs, kwargs);
+          },
+          nb::rv_policy::reference_internal,
+          "Builds a :class:`NodeProto` via ``onnx_light.onnx.helper.make_node`` (extra keyword "
+          "arguments become node attributes) and appends it.")
+      .def(
+          "add_metadata",
+          [](GraphProto &self, const std::string &key, const std::string &value)
+              -> StringStringEntryProto & { return AddMetadataImpl(self, key, value); },
+          nb::arg("key"), nb::arg("value"), nb::rv_policy::reference_internal,
+          "Sets metadata property *key* to *value*, updating an existing entry in place.");
   DECLARE_REPEATED_FIELD_PROTO(GraphProto, rep_graph);
   define_repeated_field_type_proto(rep_graph, rep_graph_proto);
 
@@ -1529,6 +1710,40 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD(FunctionProto, value_info)
       .PYFIELD(FunctionProto, metadata_props);
   PYADD_PROTO_SERIALIZATION(FunctionProto);
+  nb_FunctionProto
+      .def(
+          "add_input",
+          [](FunctionProto &self, const std::string &name) {
+            self.input_.push_back(utils::String(name));
+          },
+          nb::arg("name"), "Appends an input name to the function.")
+      .def(
+          "add_output",
+          [](FunctionProto &self, const std::string &name) {
+            self.output_.push_back(utils::String(name));
+          },
+          nb::arg("name"), "Appends an output name to the function.")
+      .def(
+          "add_node",
+          [](FunctionProto &self, nb::object op_type, nb::object inputs, nb::object outputs,
+             nb::kwargs kwargs) -> NodeProto & {
+            return AddNodeImpl(self.node_, op_type, inputs, outputs, kwargs);
+          },
+          nb::rv_policy::reference_internal,
+          "Builds a :class:`NodeProto` via ``onnx_light.onnx.helper.make_node`` (extra keyword "
+          "arguments become node attributes) and appends it.")
+      .def(
+          "add_opset",
+          [](FunctionProto &self, const std::string &domain, int64_t version)
+              -> OperatorSetIdProto & { return AddOpsetImpl(self, domain, version); },
+          nb::arg("domain"), nb::arg("version"), nb::rv_policy::reference_internal,
+          "Appends an opset import ``(domain, version)``.")
+      .def(
+          "add_metadata",
+          [](FunctionProto &self, const std::string &key, const std::string &value)
+              -> StringStringEntryProto & { return AddMetadataImpl(self, key, value); },
+          nb::arg("key"), nb::arg("value"), nb::rv_policy::reference_internal,
+          "Sets metadata property *key* to *value*, updating an existing entry in place.");
   DECLARE_REPEATED_FIELD_PROTO(FunctionProto, rep_function);
   define_repeated_field_type_proto(rep_function, rep_function_proto);
 
@@ -1546,6 +1761,28 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD(ModelProto, configuration);
   PYADD_PROTO_SERIALIZATION(ModelProto);
   nb_ModelProto.def("__repr__", [](ModelProto &self) { return proto_repr_with_short_line(self); });
+  nb_ModelProto
+      .def(
+          "add_function",
+          [](ModelProto &self, const FunctionProto &function) -> FunctionProto & {
+            self.functions_.push_back(function);
+            return self.functions_.back();
+          },
+          nb::arg("function"), nb::rv_policy::reference_internal,
+          "Appends a :class:`FunctionProto` and returns it.")
+      .def(
+          "add_opset",
+          [](ModelProto &self, const std::string &domain, int64_t version) -> OperatorSetIdProto & {
+            return AddOpsetImpl(self, domain, version);
+          },
+          nb::arg("domain"), nb::arg("version"), nb::rv_policy::reference_internal,
+          "Appends an opset import ``(domain, version)``.")
+      .def(
+          "add_metadata",
+          [](ModelProto &self, const std::string &key, const std::string &value)
+              -> StringStringEntryProto & { return AddMetadataImpl(self, key, value); },
+          nb::arg("key"), nb::arg("value"), nb::rv_policy::reference_internal,
+          "Sets metadata property *key* to *value*, updating an existing entry in place.");
 #ifdef ONNX_LIGHT_HAS_OPENSSL
   nb_ModelProto
       .def(

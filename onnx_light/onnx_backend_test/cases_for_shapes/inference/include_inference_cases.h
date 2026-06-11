@@ -80,6 +80,16 @@ void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &regist
 /// from inside the body subgraph.
 void RegisterLoopPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &registry);
 
+/// Registers a ``Scan`` case that computes the running (cumulative) row sum
+/// of an input ``X`` of shape ``[T, D]``. Each Scan iteration accumulates
+/// one row into a running state (initially zeros) and emits the accumulated
+/// sum as a per-iteration scan output. Stacking the ``T`` outputs produces
+/// the cumulative-sum matrix ``Y_pre_abs`` of shape ``[T, D]``; the final
+/// output ``Y = Abs(Y_pre_abs)`` exercises shape propagation through one
+/// node after the ``Scan``. Exercises :cpp:func:`ComputeShapeScan` state
+/// propagation and scan-output stacking.
+void RegisterScanRunningSumShapeInferenceCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Shape → Shape → Concat → Add → Sub → Expand → 3 × Add →
 /// Add → Add`` value-as-shape case translated from
 /// https://github.com/xadupre/yet-another-onnx-builder/blob/main/
@@ -125,8 +135,9 @@ void RegisterValueAsShapeBuilderShapeInferenceCases(std::vector<TestCase> &regis
 /// ``test_concat_split`` example in https://github.com/xadupre/
 /// yet-another-onnx-builder/blob/main/unittests/xshape/test_shape_builder.py.
 /// Exercises Concat / Split shape propagation when the concat axis dims
-/// are symbolic.
-void RegisterConcatSplitShapeInferenceCases(std::vector<TestCase> &registry);
+/// are symbolic. When ``even`` is ``true``, the split sizes are equal;
+/// when ``false``, the split sizes differ.
+void RegisterConcatSplitShapeInferenceCases(std::vector<TestCase> &registry, bool even);
 
 /// Collects all shape-inference oriented backend test cases by invoking
 /// every ``Register*ShapeInferenceCases`` helper declared in this header.

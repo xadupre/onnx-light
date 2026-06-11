@@ -1543,6 +1543,23 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          }
        }},
       {"ai.onnx:Mean", MakeVariadicTrampoline<kernel::Mean>()},
+      {"ai.onnx:MelWeightMatrix",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 5);
+         RequireOutputCount(node, 1);
+         const Tensor &num_mel_bins = GetInput(node, 0, rt.tensors());
+         const Tensor &dft_length = GetInput(node, 1, rt.tensors());
+         const Tensor &sample_rate = GetInput(node, 2, rt.tensors());
+         const Tensor &lower_edge_hertz = GetInput(node, 3, rt.tensors());
+         const Tensor &upper_edge_hertz = GetInput(node, 4, rt.tensors());
+         const DataType output_dtype = static_cast<DataType>(GetAttributeIntOrDefault(
+             node, "output_datatype", static_cast<int64_t>(DataType::FLOAT)));
+         kernel::MelWeightMatrix k(rt.kernel_ctx());
+         SetOutput(node, 0,
+                   k(num_mel_bins, dft_length, sample_rate, lower_edge_hertz, upper_edge_hertz,
+                     output_dtype),
+                   rt.tensors());
+       }},
       {"ai.onnx:Min", MakeVariadicTrampoline<kernel::Min>()},
       {"ai.onnx:Mish", MakeUnaryTrampoline<kernel::Mish>()},
       {"ai.onnx:Mod",

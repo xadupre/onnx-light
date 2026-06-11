@@ -934,25 +934,31 @@ public:
 /// scales[i])`` when ``scales`` is used and ``sizes[i]`` when ``sizes`` is
 /// used.
 ///
-/// Only the ``"nearest"`` mode of the ``mode`` attribute is supported. The
-/// input coordinate of an output position is computed according to
-/// ``coordinate_transformation_mode`` (``half_pixel`` -- the default --
-/// ``half_pixel_symmetric``, ``pytorch_half_pixel``, ``align_corners`` and
-/// ``asymmetric``), rounded according to ``nearest_mode`` and clamped to
-/// ``[0, in_dim - 1]``. All four ONNX ``nearest_mode`` values
-/// (``round_prefer_floor`` -- the default -- ``round_prefer_ceil``,
-/// ``floor``, ``ceil``) are supported. The optional ``axes`` attribute
-/// (opset 18) selects the subset of axes ``scales``/``sizes`` refer to, and
-/// ``keep_aspect_ratio_policy`` (``"stretch"`` -- the default --
-/// ``"not_larger"``, ``"not_smaller"``) is honoured when ``sizes`` is used.
-/// The ``"tf_crop_and_resize"`` coordinate transformation, the ``roi``
-/// input, ``exclude_outside``, ``antialias`` and the ``linear``/``cubic``
-/// interpolation modes are not implemented. The supported element types
-/// are the same whole-byte types as :cpp:func:`ElementSize`.
+/// The ``"nearest"``, ``"linear"`` and ``"cubic"`` modes of the ``mode``
+/// attribute are supported. The input coordinate of an output position is
+/// computed according to ``coordinate_transformation_mode`` (``half_pixel``
+/// -- the default -- ``half_pixel_symmetric``, ``pytorch_half_pixel``,
+/// ``align_corners`` and ``asymmetric``). In ``"nearest"`` mode it is
+/// rounded according to ``nearest_mode`` and clamped to ``[0, in_dim - 1]``;
+/// all four ONNX ``nearest_mode`` values (``round_prefer_floor`` -- the
+/// default -- ``round_prefer_ceil``, ``floor``, ``ceil``) are supported.
+/// In ``"linear"`` and ``"cubic"`` mode, the output is computed as a
+/// separable per-axis weighted sum of neighbouring input samples (2 taps
+/// for ``"linear"``, 4 taps for ``"cubic"``); the ``cubic_coeff_a``
+/// attribute (default ``-0.75``) tunes the cubic kernel and
+/// ``exclude_outside`` (default ``0``) renormalises the coefficients when
+/// the support window falls outside the input range. The optional ``axes``
+/// attribute (opset 18) selects the subset of axes ``scales``/``sizes``
+/// refer to, and ``keep_aspect_ratio_policy`` (``"stretch"`` -- the default
+/// -- ``"not_larger"``, ``"not_smaller"``) is honoured when ``sizes`` is
+/// used. The ``"tf_crop_and_resize"`` coordinate transformation, the
+/// ``roi`` input and ``antialias`` are not implemented. The supported
+/// element types are the same whole-byte types as :cpp:func:`ElementSize`
+/// for ``"nearest"`` mode; ``"linear"`` and ``"cubic"`` modes require a
+/// floating-point input (``FLOAT`` or ``DOUBLE``).
 class Resize : public KernelBase {
 public:
-  /// Attributes carried by the ONNX ``Resize`` operator. Only the ``mode``
-  /// attribute is interpreted by this reference implementation.
+  /// Attributes carried by the ONNX ``Resize`` operator.
   struct Attributes {
     std::string mode = "nearest";
     std::string coordinate_transformation_mode = "half_pixel";
@@ -965,6 +971,14 @@ public:
     /// that the resulting output is not larger / smaller than ``sizes`` on
     /// any of the selected ``axes`` (other axes are left untouched).
     std::string keep_aspect_ratio_policy = "stretch";
+    /// Coefficient ``A`` of the cubic interpolation kernel (used only when
+    /// ``mode == "cubic"``). Defaults to ``-0.75`` to match the ONNX spec.
+    float cubic_coeff_a = -0.75f;
+    /// When non-zero (and ``mode`` is ``"linear"`` or ``"cubic"``),
+    /// coefficients corresponding to neighbours that fall outside the
+    /// input range are zeroed and the remaining coefficients are
+    /// renormalised to sum to 1.
+    int64_t exclude_outside = 0;
   };
 
   using KernelBase::KernelBase;

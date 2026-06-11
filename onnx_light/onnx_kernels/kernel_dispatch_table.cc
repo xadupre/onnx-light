@@ -1868,6 +1868,10 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          attrs.axes = GetAttributeIntsOrDefault(node, "axes", attrs.axes);
          attrs.keep_aspect_ratio_policy = GetAttributeStringOrDefault(
              node, "keep_aspect_ratio_policy", attrs.keep_aspect_ratio_policy);
+         attrs.cubic_coeff_a =
+             GetAttributeFloatOrDefault(node, "cubic_coeff_a", attrs.cubic_coeff_a);
+         attrs.exclude_outside =
+             GetAttributeIntOrDefault(node, "exclude_outside", attrs.exclude_outside);
 
          kernel::Resize k(rt.kernel_ctx());
          if (scales != nullptr) {

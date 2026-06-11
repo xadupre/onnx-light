@@ -5,7 +5,7 @@
 #include "onnx_backend_test/cases/math/include_math_cases.h"
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
-#include "onnx_kernels/kernels/tensor/cast_helper.h"
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 
 #include <cstdint>
 #include <cstring>
@@ -47,7 +47,7 @@ std::vector<int32_t> Arange30() {
 
 // IEEE-754 binary16 encoder (round-to-nearest-even) and the FLOAT16 tensor
 // builder ``kernel::MakeFloat16Tensor`` are provided by
-// ``onnx_kernels/kernels/tensor/cast_helper.h``.
+// ``onnx_kernels/kernels/_helpers/cast_helper.h``.
 
 } // namespace
 

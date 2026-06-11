@@ -5,7 +5,7 @@
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
-#include "onnx_kernels/kernels/tensor/cast_float8.h"
+#include "onnx_kernels/kernels/_helpers/cast_float8.h"
 
 #include <gtest/gtest.h>
 

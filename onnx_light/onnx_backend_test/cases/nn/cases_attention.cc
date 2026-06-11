@@ -5,7 +5,7 @@
 #include "onnx_backend_test/cases/nn/include_nn_cases.h"
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
-#include "onnx_kernels/kernels/tensor/cast_helper.h"
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 
 #include <cmath>
 #include <cstdint>
@@ -56,7 +56,7 @@ NodeProto MakeAttentionNode(const std::vector<std::string> &inputs,
 
 // IEEE-754 binary16 ↔ binary32 conversions and the ``FloatToFloat16Tensor``
 // / ``RoundToFloat16`` helpers are provided by
-// ``onnx_kernels/kernels/tensor/cast_helper.h`` as
+// ``onnx_kernels/kernels/_helpers/cast_helper.h`` as
 // ``kernel::FloatToFloat16Tensor`` / ``kernel::RoundToFloat16``.
 
 // Builds a small deterministic FLOAT tensor of the requested shape. Values

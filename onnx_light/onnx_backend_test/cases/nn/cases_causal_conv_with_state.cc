@@ -5,7 +5,7 @@
 #include "onnx_backend_test/cases/nn/include_nn_cases.h"
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
-#include "onnx_kernels/kernels/tensor/cast_helper.h"
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
@@ -29,7 +29,7 @@ namespace onnx_backend_test {
 namespace {
 
 // The FLOAT16 tensor builder is provided by
-// ``onnx_kernels/kernels/tensor/cast_helper.h`` as ``kernel::MakeFloat16Tensor``.
+// ``onnx_kernels/kernels/_helpers/cast_helper.h`` as ``kernel::MakeFloat16Tensor``.
 
 NodeProto MakeCausalConvNode(const std::vector<std::string> &inputs,
                              const std::vector<std::string> &outputs) {

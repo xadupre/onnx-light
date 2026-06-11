@@ -5,7 +5,7 @@
 #include "onnx_backend_test/cases/generator/include_generator_cases.h"
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/generator/include_generator_kernels.h"
-#include "onnx_kernels/kernels/tensor/cast_helper.h"
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 
 #include <cstdint>
 #include <cstring>
@@ -17,7 +17,7 @@ namespace onnx_backend_test {
 namespace {
 
 // IEEE-754 binary16 / bfloat16 encoders are provided by
-// ``onnx_kernels/kernels/tensor/cast_helper.h``; the scalar tensor builders
+// ``onnx_kernels/kernels/_helpers/cast_helper.h``; the scalar tensor builders
 // ``kernel::MakeFloat16Scalar`` / ``kernel::MakeBfloat16Scalar`` are used
 // directly by the case registrations below.
 

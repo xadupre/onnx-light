@@ -79,6 +79,15 @@ void ComputeShapeSplit(ShapesContext &ctx, const NodeProto &node) {
   // to a fresh symbolic placeholder.
   std::vector<int64_t> sizes;
 
+  // When the input is 1-D and carries a ``ValueAsShape``, the axis dimension
+  // is exactly ``ValueAsShape().Rank()`` even if the declared input shape is
+  // symbolic — the annotation *is* the value of the tensor.
+  const bool vas_gives_axis_dim = resolved_axis == 0 && rank == 1 && input.HasValueAsShape();
+  const int64_t effective_axis_dim =
+      in_shape[axis].IsInt()
+          ? in_shape[axis].AsInt()
+          : (vas_gives_axis_dim ? static_cast<int64_t>(input.ValueAsShape().Rank()) : int64_t{-1});
+
   // 1) Opset 13+ takes ``split`` as an optional input; opset 1/2/11 carry it
   //    as an INTS attribute.
   if (node.input_size() >= 2 && !node.input(1).empty()) {
@@ -90,15 +99,17 @@ void ComputeShapeSplit(ShapesContext &ctx, const NodeProto &node) {
     std::vector<int64_t> attr_split;
     if (GetAttributeInts(node, "split", attr_split)) {
       sizes = std::move(attr_split);
-    } else if (in_shape[axis].IsInt()) {
+    } else if (effective_axis_dim >= 0) {
       // 2) Fall back to ``num_outputs`` (opset 18+) or to the declared number
       //    of outputs (older opsets require the input axis dim to be evenly
-      //    divisible by the output count).
-      const int64_t axis_dim = in_shape[axis].AsInt();
+      //    divisible by the output count). The axis dim is taken from the
+      //    declared shape when concrete, or from the input's
+      //    ``ValueAsShape().Rank()`` (a 1-D, axis-0 special case) when the
+      //    declared dim is symbolic but the value-as-shape is known.
       const int64_t num_outputs =
           GetAttributeOr<int64_t>(node, "num_outputs", static_cast<int64_t>(num_outputs_decl));
       if (num_outputs > 0) {
-        sizes = SplitByNumOutputs(axis_dim, num_outputs);
+        sizes = SplitByNumOutputs(effective_axis_dim, num_outputs);
       }
     }
   }

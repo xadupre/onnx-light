@@ -274,6 +274,24 @@ class TestReferenceEvaluator(ExtTestCase):
         self.assertEqual(got[0].shape, outputs[0].shape)
         np.testing.assert_array_equal(got[0], outputs[0])
 
+    def test_image_decoder_decode_bmp_rgb(self):
+        # Regression test for ``test_cc_image_decoder_decode_bmp_rgb``: the
+        # ``ImageDecoder`` kernel must decode the BMP bytestream and return
+        # the correct ``(32, 32, 3)`` uint8 tensor rather than the empty-matrix
+        # fallback ``(0, 0, 3)`` returned by earlier versions of the kernel.
+        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+
+        tc = collect_test_case().get("test_cc_image_decoder_decode_bmp_rgb")
+        self.assertIsNotNone(tc)
+        inputs, outputs = tc.data_sets[0]
+        sess = ReferenceEvaluator(tc.model)
+        got = sess.run(None, dict(zip(sess.input_names, inputs)))
+        self.assertEqual(len(got), 1)
+        self.assertEqual(got[0].dtype, np.uint8)
+        self.assertEqual(got[0].shape, (32, 32, 3))
+        self.assertEqual(got[0].shape, outputs[0].shape)
+        np.testing.assert_array_equal(got[0], outputs[0])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

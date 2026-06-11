@@ -2089,6 +2089,15 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          SetOutput(node, 0, std::move(out.first), rt);
          SetOutput(node, 1, std::move(out.second), rt);
        }},
+      {"ai.onnx:Transpose",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &data = GetInput(node, 0, rt.tensors());
+         const std::vector<int64_t> perm = GetAttributeIntsOrDefault(node, "perm", {});
+         kernel::Transpose k(rt.kernel_ctx());
+         SetOutput(node, 0, k(data, perm), rt);
+       }},
       {"ai.onnx:Unique",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);

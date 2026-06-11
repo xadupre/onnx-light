@@ -85,6 +85,23 @@ can be set on the ``cmake`` command line with ``-D<NAME>=<VALUE>``.
         fuzz harnesses (the ``fuzzer`` sanitizer is always added
         automatically).  Only meaningful with
         ``ONNX_LIGHT_BUILD_FUZZERS=ON``.
+    * - ``ONNX_HARDENING``
+      - ``OFF``
+      - Opt in to the `OpenSSF Compiler Options Hardening Guide for C and
+        C++ <https://best.openssf.org/Compiler-Hardening-Guides/Compiler-Options-Hardening-Guide-for-C-and-C++.html>`_
+        baseline.  When ``ON``, every onnx-light library, Python extension,
+        test, and benchmark target receives the recommended compile and
+        link flags (``_FORTIFY_SOURCE=3``, ``_GLIBCXX_ASSERTIONS``,
+        ``-fstack-protector-strong``, ``-fstack-clash-protection``,
+        ``-fcf-protection=full``, ``-fstrict-flex-arrays=3``,
+        ``-ftrivial-auto-var-init=zero``, ``-Wformat=2``,
+        ``-Werror=format-security``, ``-z noexecstack``, ``-z relro``,
+        ``-z now``, ``-z nodlopen`` on GCC/Clang and ``/GS``,
+        ``/guard:cf``, ``/Qspectre``, ``/sdl``, ``/DYNAMICBASE``,
+        ``/NXCOMPAT``, ``/CETCOMPAT`` on MSVC).  Each flag is probed by
+        the configure step and silently skipped when the active toolchain
+        does not accept it.  See ``cmake/Hardening.cmake`` for the full
+        list.
 
 Install and link model
 ----------------------

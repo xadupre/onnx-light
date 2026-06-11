@@ -207,6 +207,53 @@ class TestReferenceEvaluator(ExtTestCase):
         self.assertEqual(y0.dtype, np.int16)
         self.assertEqual(y1.dtype, np.uint8)
 
+    def test_lstm_layout1_matches_layout0(self):
+        # Regression test for ``test_cc_lstm_batchwise``: the LSTM kernel
+        # itself only implements ``layout=0`` so the dispatch table
+        # permutes X / initial_h / initial_c on the way in and Y / Y_h on
+        # the way out when ``layout=1`` is requested. Running both
+        # layouts on the same logical inputs must produce the same
+        # outputs (modulo the axis permutation).
+        from onnx_light.onnx import TensorProto, helper
+
+        batch, seq, inp, hid = 2, 3, 4, 5
+        rng = np.random.default_rng(0)
+        weights = rng.standard_normal((1, 4 * hid, inp), dtype=np.float32) * 0.1
+        recur = rng.standard_normal((1, 4 * hid, hid), dtype=np.float32) * 0.1
+        x_layout0 = rng.standard_normal((seq, batch, inp), dtype=np.float32)
+        x_layout1 = np.transpose(x_layout0, (1, 0, 2)).copy()
+
+        def build_model(layout: int, x_shape: list[int]):
+            node = helper.make_node(
+                "LSTM", ["X", "W", "R"], ["Y", "Y_h"], hidden_size=hid, layout=layout
+            )
+            graph = helper.make_graph(
+                [node],
+                "g",
+                [
+                    helper.make_tensor_value_info("X", TensorProto.FLOAT, x_shape),
+                    helper.make_tensor_value_info("W", TensorProto.FLOAT, [1, 4 * hid, inp]),
+                    helper.make_tensor_value_info("R", TensorProto.FLOAT, [1, 4 * hid, hid]),
+                ],
+                [
+                    helper.make_tensor_value_info("Y", TensorProto.FLOAT, None),
+                    helper.make_tensor_value_info("Y_h", TensorProto.FLOAT, None),
+                ],
+            )
+            return helper.make_model(graph, opset_imports=[helper.make_opsetid("", 22)])
+
+        sess0 = ReferenceEvaluator(build_model(0, [seq, batch, inp]))
+        sess1 = ReferenceEvaluator(build_model(1, [batch, seq, inp]))
+        y0, y_h0 = sess0.run(None, {"X": x_layout0, "W": weights, "R": recur})
+        y1, y_h1 = sess1.run(None, {"X": x_layout1, "W": weights, "R": recur})
+
+        self.assertEqual(y0.shape, (seq, 1, batch, hid))
+        self.assertEqual(y1.shape, (batch, seq, 1, hid))
+        self.assertEqual(y_h0.shape, (1, batch, hid))
+        self.assertEqual(y_h1.shape, (batch, 1, hid))
+        np.testing.assert_allclose(np.transpose(y0, (2, 0, 1, 3)), y1, rtol=1e-5, atol=1e-6)
+        np.testing.assert_allclose(np.transpose(y_h0, (1, 0, 2)), y_h1, rtol=1e-5, atol=1e-6)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

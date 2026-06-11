@@ -1425,9 +1425,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          if (GetAttributeIntOrDefault(node, "input_forget", 0) != 0) {
            throw std::invalid_argument("RunNode: op 'LSTM' only supports input_forget=0.");
          }
-         if (GetAttributeIntOrDefault(node, "layout", 0) != 0) {
-           throw std::invalid_argument("RunNode: op 'LSTM' only supports layout=0.");
-         }
+         const int64_t layout = GetAttributeIntOrDefault(node, "layout", 0);
 
          // ``sequence_lens`` (input #4) is not supported: it requires
          // per-batch sequence handling that the FLOAT kernel does not
@@ -1457,7 +1455,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          auto [y, y_h] = kernel(x, w, r, b != nullptr ? *b : Tensor{},
                                 initial_h != nullptr ? *initial_h : Tensor{},
                                 initial_c != nullptr ? *initial_c : Tensor{},
-                                p != nullptr ? *p : Tensor{});
+                                p != nullptr ? *p : Tensor{}, layout);
 
          auto set_optional_output = [&node, &rt](int index, Tensor output) {
            if (index >= node.output_size()) {

@@ -29,7 +29,7 @@ to deploy a machine learning model in production. An ONNX interpreter
 in the environment where it is deployed. With ONNX, it is possible to build
 a unique process to deploy a model in production and independent from the
 learning framework used to build the model. ``onnx-light`` ships a
-lightweight :class:`~onnx_light.reference.ReferenceEvaluator` backed by C++
+lightweight :class:`~onnx_light.onnx.reference.ReferenceEvaluator` backed by C++
 kernels that can be used to evaluate ONNX models and individual ONNX ops to
 clarify their semantics and to help debug ONNX tools and converters. It is
 not intended to be used for production and performance is not a goal.

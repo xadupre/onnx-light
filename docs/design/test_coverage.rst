@@ -19,7 +19,7 @@ constraints defines a list of supported types. Every
 
 The *covered signatures* are the signatures for which at least one backend
 test case — collected via
-:func:`onnx_light.backend.test.case.base.collect_test_case` — exists whose
+:func:`onnx_light.onnx_lib.backend.test.case.collect_test_case` — exists whose
 single-node model uses that operator and that ONNX type on one of its typed
 graph inputs or outputs.
 
@@ -29,16 +29,16 @@ total number of signatures.
 Computing the report
 --------------------
 
-The function :func:`onnx_light.backend.coverage.compute_test_case_coverage`
+The function :func:`onnx_light.onnx_lib.backend.coverage.compute_test_case_coverage`
 collects every available test case (Python-registered cases from
-:class:`~onnx_light.backend.test.case.base.Base` subclasses and the
+:class:`~onnx_light.onnx_lib.backend.test.case.Base` subclasses and the
 canonical C++ cases from ``lib_onnx_backend_test``) and produces a
-:class:`~onnx_light.backend.coverage.CoverageReport`:
+:class:`~onnx_light.onnx_lib.backend.coverage.CoverageReport`:
 
 .. runpython::
     :showcode:
 
-    from onnx_light.backend.coverage import compute_test_case_coverage
+    from onnx_light.onnx_lib.backend.coverage import compute_test_case_coverage
 
     report = compute_test_case_coverage()
     print(report)

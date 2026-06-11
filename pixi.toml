@@ -20,16 +20,18 @@ scikit-build-core = ">=0.3.3"
 nanobind = ">=1.3.2"
 pip = "*"
 
-[feature.dev.dependencies]
+[feature.dev-no-onnx.dependencies]
 black = "*"
 matplotlib-base = "*"
-onnx = ">=1.17"
-onnxruntime = "*"
 pandas = "*"
 pytest = ">=7"
 pytest-cov = "*"
 pytest-subtests = "*"
 ruff = "*"
+
+[feature.dev-onnx.dependencies]
+onnx = ">=1.17"
+onnxruntime = "*"
 
 [feature.docs.dependencies]
 black = "*"
@@ -48,5 +50,6 @@ sphinxcontrib-mermaid = "*"
 
 [environments]
 default = { solve-group = "default" }
-dev = { features = ["dev"], solve-group = "default" }
+dev-no-onnx = { features = ["dev-no-onnx"], solve-group = "default" }
+dev = { features = ["dev-no-onnx", "dev-onnx"], solve-group = "default" }
 docs = { features = ["docs"], solve-group = "default" }

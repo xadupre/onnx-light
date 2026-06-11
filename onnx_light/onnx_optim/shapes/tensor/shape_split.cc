@@ -125,19 +125,54 @@ void ComputeShapeSplit(ShapesContext &ctx, const NodeProto &node) {
         ") does not match the number of node outputs (" + std::to_string(num_outputs_decl) + ").");
   }
 
+  // Propagate ``ValueAsShape`` when splitting along axis 0 of a 1-D tensor
+  // that already carries a ``ValueAsShape`` annotation and the split sizes
+  // are known. Each output's ``ValueAsShape`` is the corresponding contiguous
+  // slice of the input's ``ValueAsShape``. This mirrors :cpp:func:`Concat`'s
+  // inverse propagation and keeps downstream consumers (e.g. ``Expand``,
+  // ``Reshape``) able to recover concrete/symbolic dimensions through
+  // ``Split`` nodes used in shape arithmetic.
+  const bool propagate_vas =
+      resolved_axis == 0 && rank == 1 && input.HasValueAsShape() && !sizes.empty();
+  const OptimShape *in_vas = propagate_vas ? &input.ValueAsShape() : nullptr;
+  // The ``ValueAsShape`` length must agree with the resolved axis dimension
+  // when both are known; if not, skip propagation rather than producing a
+  // misaligned slice.
+  size_t vas_total = 0;
+  if (propagate_vas) {
+    for (int64_t s : sizes) {
+      vas_total += static_cast<size_t>(s);
+    }
+    if (vas_total != in_vas->Rank()) {
+      in_vas = nullptr;
+    }
+  }
+
+  size_t vas_offset = 0;
   for (int i = 0; i < num_outputs_decl; ++i) {
     const std::string &name = node.output(i).as_string();
+    const int64_t size_i = sizes.empty() ? int64_t{0} : sizes[static_cast<size_t>(i)];
     if (name.empty()) {
+      vas_offset += static_cast<size_t>(size_i);
       continue;
     }
     OptimShape out_shape = in_shape;
     if (!sizes.empty()) {
-      out_shape[axis] = OptimDim(sizes[static_cast<size_t>(i)]);
+      out_shape[axis] = OptimDim(size_i);
     } else {
       out_shape[axis] =
           OptimDim("Split_axis" + std::to_string(resolved_axis) + "_out" + std::to_string(i));
     }
-    ctx.Set(name, OptimTensor(nullptr, input.Dtype(), std::move(out_shape)));
+    OptimTensor out_tensor(nullptr, input.Dtype(), std::move(out_shape));
+    if (in_vas != nullptr) {
+      OptimShape out_vas;
+      for (size_t j = 0; j < static_cast<size_t>(size_i); ++j) {
+        out_vas.PushBack((*in_vas)[vas_offset + j]);
+      }
+      out_tensor.SetValueAsShape(std::move(out_vas));
+    }
+    vas_offset += static_cast<size_t>(size_i);
+    ctx.Set(name, std::move(out_tensor));
   }
 }
 

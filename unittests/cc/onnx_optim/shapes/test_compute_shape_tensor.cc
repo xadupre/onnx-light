@@ -2031,6 +2031,91 @@ TEST(OnnxOptimShapesTensorSplit, RejectsWrongOpType) {
   EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeSplit(ctx, node), std::invalid_argument);
 }
 
+TEST(OnnxOptimShapesTensorSplit, PropagatesValueAsShapeViaSplitAttribute) {
+  // ``X = [N, 1, B]`` (value-as-shape) split into ``[2, 1]`` along axis 0 must
+  // yield per-output value-as-shape annotations ``[N, 1]`` and ``[B]``.
+  NodeProto node;
+  node.set_op_type("Split");
+  node.add_input("X");
+  node.add_output("Y0");
+  node.add_output("Y1");
+  AddAttribute<int64_t>(node, "axis", 0);
+  AddAttribute<std::vector<int64_t>>(node, "split", {2, 1});
+
+  onnx_optim::OptimTensor x(nullptr, onnx_optim::TensorType::kInt64,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(3)});
+  x.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(1),
+                                           onnx_optim::OptimDim("B")});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", std::move(x));
+
+  onnx_optim::shapes::tensor::ComputeShapeSplit(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y0"));
+  ASSERT_TRUE(ctx.Get("Y0").HasValueAsShape());
+  EXPECT_EQ(ctx.Get("Y0").ValueAsShape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(1)}));
+
+  ASSERT_TRUE(ctx.Has("Y1"));
+  ASSERT_TRUE(ctx.Get("Y1").HasValueAsShape());
+  EXPECT_EQ(ctx.Get("Y1").ValueAsShape(), (onnx_optim::OptimShape{onnx_optim::OptimDim("B")}));
+}
+
+TEST(OnnxOptimShapesTensorSplit, PropagatesValueAsShapeViaNumOutputs) {
+  // ``X = [N, B, 1, 2]`` (value-as-shape) split into 2 even chunks along
+  // axis 0 must yield value-as-shape ``[N, B]`` and ``[1, 2]``.
+  NodeProto node;
+  node.set_op_type("Split");
+  node.add_input("X");
+  node.add_output("Y0");
+  node.add_output("Y1");
+  AddAttribute<int64_t>(node, "axis", 0);
+  AddAttribute<int64_t>(node, "num_outputs", 2);
+
+  onnx_optim::OptimTensor x(nullptr, onnx_optim::TensorType::kInt64,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(4)});
+  x.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim("B"),
+                                           onnx_optim::OptimDim(1), onnx_optim::OptimDim(2)});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", std::move(x));
+
+  onnx_optim::shapes::tensor::ComputeShapeSplit(ctx, node);
+
+  ASSERT_TRUE(ctx.Get("Y0").HasValueAsShape());
+  EXPECT_EQ(ctx.Get("Y0").ValueAsShape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim("B")}));
+  ASSERT_TRUE(ctx.Get("Y1").HasValueAsShape());
+  EXPECT_EQ(ctx.Get("Y1").ValueAsShape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(2)}));
+}
+
+TEST(OnnxOptimShapesTensorSplit, DoesNotPropagateValueAsShapeAlongNonZeroAxis) {
+  // ``X`` is rank 2 and ``axis != 0``; even when it carries a value-as-shape
+  // we do not slice it (the annotation only makes sense along axis 0).
+  NodeProto node;
+  node.set_op_type("Split");
+  node.add_input("X");
+  node.add_output("Y0");
+  node.add_output("Y1");
+  AddAttribute<int64_t>(node, "axis", 1);
+  AddAttribute<std::vector<int64_t>>(node, "split", {2, 2});
+
+  onnx_optim::OptimTensor x(
+      nullptr, onnx_optim::TensorType::kInt64,
+      onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)});
+  // A value-as-shape on a rank-2 tensor isn't meaningful but the propagation
+  // must still refuse to slice it.
+  x.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim("a"), onnx_optim::OptimDim("b"),
+                                           onnx_optim::OptimDim("c"), onnx_optim::OptimDim("d")});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", std::move(x));
+
+  onnx_optim::shapes::tensor::ComputeShapeSplit(ctx, node);
+
+  EXPECT_FALSE(ctx.Get("Y0").HasValueAsShape());
+  EXPECT_FALSE(ctx.Get("Y1").HasValueAsShape());
+}
+
 // ---------------------------------------------------------------------------
 // TensorScatter shape-inference tests
 // ---------------------------------------------------------------------------

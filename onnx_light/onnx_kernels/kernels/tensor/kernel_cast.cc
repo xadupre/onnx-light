@@ -10,8 +10,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -259,23 +259,34 @@ void StoreFromDouble(Tensor &output, int64_t i, double v) {
   }
 }
 
+// Formats a finite floating-point value using the ``%.8g`` printf format
+// (8 significant digits, matching NumPy's default and onnxruntime's
+// ``CastToString`` behaviour). NaN and +/-infinity follow onnxruntime's
+// uppercase ``NaN`` / ``INF`` / ``-INF`` spellings so cast-to-string
+// round-trips through external reference implementations.
+std::string FloatToOrtString(double v) {
+  if (std::isnan(v)) {
+    return "NaN";
+  }
+  if (std::isinf(v)) {
+    return v < 0.0 ? "-INF" : "INF";
+  }
+  char buffer[64];
+  std::snprintf(buffer, sizeof(buffer), "%.8g", v);
+  return std::string(buffer);
+}
+
 // Converts one numeric element of ``x`` to its canonical decimal string
-// representation. Floating-point values use a stream-default representation
-// (matching upstream reference behaviour closely enough for the
-// deterministic backend test inputs registered here); ``BOOL`` becomes
-// "1" or "0" so it round-trips through the numeric parse path.
+// representation. Floating-point values use ``%.8g`` (NumPy default /
+// onnxruntime-compatible) with ``NaN``/``INF``/``-INF`` for the
+// non-finite cases; ``BOOL`` becomes "1" or "0" so it round-trips
+// through the numeric parse path.
 std::string ElementToString(const Tensor &x, int64_t i) {
   switch (static_cast<DataType>(x.data_type)) {
-  case DataType::FLOAT: {
-    std::ostringstream os;
-    os << x.AsFloat()[i];
-    return os.str();
-  }
-  case DataType::DOUBLE: {
-    std::ostringstream os;
-    os << x.AsDouble()[i];
-    return os.str();
-  }
+  case DataType::FLOAT:
+    return FloatToOrtString(static_cast<double>(x.AsFloat()[i]));
+  case DataType::DOUBLE:
+    return FloatToOrtString(x.AsDouble()[i]);
   case DataType::INT32:
     return std::to_string(x.AsInt32()[i]);
   case DataType::INT64:

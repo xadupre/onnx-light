@@ -57,7 +57,7 @@ jobs:
     # the gate is observable as a required PR status check.
     name: no-onnx (ubuntu-latest, py3.13)
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:

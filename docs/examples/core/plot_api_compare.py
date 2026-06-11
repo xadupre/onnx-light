@@ -8,7 +8,7 @@ This example walks the public Python API exposed by the upstream
 :mod:`onnx` package and by :mod:`onnx_light.onnx` and reports the
 discrepancies between the two.
 
-It relies on :mod:`onnx_light.compatibility`, a small sub-package
+It relies on :mod:`onnx_light.tools.compatibility`, a small sub-package
 dedicated to checking whether a Python package is compatible with
 :mod:`onnx_light`.  The same helpers are used by the unit test
 ``unittests/main/test_plot_api_compare.py``.
@@ -30,7 +30,7 @@ It also compares the *top-level* public functions of both packages
 
 Finally, it lists the ONNX node-level backend tests (exposed by
 :mod:`onnx.backend.test`) that do not yet have a counterpart in
-:mod:`onnx_light.backend.test`.
+:mod:`onnx_light.onnx.backend`.
 """
 
 from __future__ import annotations
@@ -157,7 +157,7 @@ print(f"  total signature mismatches : {total_diffs}")
 #
 # ``onnx.backend.test`` exposes one node-level test case per operator
 # scenario.  ``onnx_light`` reimplements the same backend test
-# infrastructure under :mod:`onnx_light.backend.test`.  This section
+# infrastructure under :mod:`onnx_light.onnx.backend`.  This section
 # lists the ONNX node-level backend tests that do **not** yet have a
 # counterpart in :mod:`onnx_light` (i.e. there is no ``onnx_light``
 # backend test whose name contains the stripped ONNX test name).

@@ -109,6 +109,7 @@ void RegisterValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry) {
                   {"N", DimSpec(int64_t{1})});
   AppendValueInfo(*graph->add_value_info(), "z1", DataType::FLOAT, {"N", "B"});
   AppendValueInfo(*graph->add_value_info(), "z2", DataType::FLOAT, {"N", "B"});
+  AppendValueInfo(*graph->add_value_info(), "z12", DataType::FLOAT, {"N", "B"});
   AppendValueInfo(*graph->add_value_info(), "z3", DataType::FLOAT, {"N", "B"});
   AppendValueInfo(*graph->add_value_info(), "z_pre_abs", DataType::FLOAT, {"N", "B"});
 

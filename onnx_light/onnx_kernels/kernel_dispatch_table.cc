@@ -1360,7 +1360,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
 
          // Unsupported attributes: only the default ``forward`` direction
          // with the default ``Sigmoid``/``Tanh``/``Tanh`` activations, no
-         // ``clip``, no ``input_forget``, and ``layout == 0`` are
+         // ``clip``, ``input_forget == 0``, and ``layout == 0`` are
          // implemented.
          const std::string direction =
              GetAttributeStringOrDefault(node, "direction", "forward");

@@ -1104,11 +1104,11 @@ The ONNX standard allows frameworks to export trained models in ONNX
 format and enables inference using any backend that supports the ONNX
 format. *onnxruntime* is one efficient option. It is available on many
 platforms and is optimized for fast inference.
-``onnx-light`` ships its own
+``onnx-light`` ships its own reference runtime
+(:doc:`../../api/python/onnx/reference`) with
 :class:`~onnx_light.onnx.reference.ReferenceEvaluator` backed by C++ kernels;
 it is useful to help understand a model and to validate the C++ kernels.
-It is not intended to be used for production and performance is not a
-goal.
+It is not intended to be used for production and performance is not a goal.
 
 Evaluation of a linear regression
 ---------------------------------

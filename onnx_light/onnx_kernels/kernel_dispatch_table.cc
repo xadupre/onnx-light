@@ -1148,6 +1148,16 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::Gather k(rt.kernel_ctx());
          SetOutput(node, 0, k(data, indices, axis), rt);
        }},
+      {"ai.onnx:GatherElements",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         const Tensor &data = GetInput(node, 0, rt.tensors());
+         const Tensor &indices = GetInput(node, 1, rt.tensors());
+         const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
+         kernel::GatherElements k(rt.kernel_ctx());
+         SetOutput(node, 0, k(data, indices, axis), rt);
+       }},
       {"ai.onnx:GatherND",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 2);

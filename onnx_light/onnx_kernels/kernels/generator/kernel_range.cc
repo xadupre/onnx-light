@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_kernels/kernels/generator/include_generator_kernels.h"
+#include "onnx_kernels/kernels/tensor/cast_helper.h"
 
 #include <algorithm>
 #include <cmath>
@@ -93,41 +94,8 @@ float ReadBfloat16Scalar(const Tensor &t, const char *name) {
   return out;
 }
 
-// IEEE-754 binary16 encoder (round-to-nearest-even). Duplicated locally
-// to keep this kernel self-contained.
-uint16_t FloatToFloat16Bits(float f) {
-  uint32_t u;
-  std::memcpy(&u, &f, sizeof(u));
-  const uint32_t sign = (u >> 16) & 0x8000u;
-  const int32_t e32 = static_cast<int32_t>((u >> 23) & 0xffu);
-  const uint32_t m32 = u & 0x007fffffu;
-  if (e32 == 0xff) {
-    return static_cast<uint16_t>(sign | 0x7c00u | (m32 != 0 ? 0x0200u : 0u));
-  }
-  const int32_t e = e32 - 127 + 15;
-  if (e >= 31) {
-    return static_cast<uint16_t>(sign | 0x7c00u);
-  }
-  if (e <= 0) {
-    if (e < -10) {
-      return static_cast<uint16_t>(sign);
-    }
-    const uint32_t m = (m32 | 0x00800000u) >> static_cast<uint32_t>(1 - e);
-    const uint32_t round_bit = (m >> 12) & 1u;
-    const uint32_t sticky = m & 0x00000fffu;
-    uint16_t h = static_cast<uint16_t>(sign | (m >> 13));
-    if (round_bit && (sticky != 0 || (h & 1))) {
-      h = static_cast<uint16_t>(h + 1);
-    }
-    return h;
-  }
-  const uint32_t low = m32 & 0x1fffu;
-  uint16_t h = static_cast<uint16_t>(sign | (static_cast<uint32_t>(e) << 10) | (m32 >> 13));
-  if (low > 0x1000u || (low == 0x1000u && (h & 1u))) {
-    h = static_cast<uint16_t>(h + 1);
-  }
-  return h;
-}
+// IEEE-754 binary16 encoder (round-to-nearest-even) is provided by
+// ``onnx_kernels/kernels/tensor/cast_helper.h`` as ``FloatToFloat16Bits``.
 
 // Round-to-nearest-even ``float`` -> ``bfloat16`` encoder. Matches the
 // behaviour of the upstream ``onnx.helper`` bfloat16 helpers.

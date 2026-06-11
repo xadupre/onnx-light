@@ -6,6 +6,7 @@
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
 #include "onnx_kernels/kernels/tensor/cast_float8.h"
+#include "onnx_kernels/kernels/tensor/cast_helper.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cmath>
@@ -113,49 +114,15 @@ Tensor MakeFloat4E2M1Tensor(const std::vector<int64_t> &shape, const std::vector
 }
 
 // Encodes an IEEE-754 binary32 value as an IEEE-754 binary16 bit pattern
-// using round-to-nearest-even. Mirrors the helper used by ``cases_attention``;
-// duplicated here to keep the case file self-contained.
-uint16_t FloatToFloat16Bits(float f) {
-  uint32_t u;
-  std::memcpy(&u, &f, sizeof(u));
-  const uint32_t sign = (u >> 16) & 0x8000u;
-  const int32_t e = static_cast<int32_t>((u >> 23) & 0xffu) - 127 + 15;
-  const uint32_t m32 = u & 0x7fffffu;
-  if (e >= 0x1f) {
-    // Inf / NaN or overflow to Inf.
-    if (((u >> 23) & 0xffu) == 0xffu) {
-      const uint16_t mant = m32 ? static_cast<uint16_t>((m32 >> 13) | 0x200u) : 0u;
-      return static_cast<uint16_t>(sign | 0x7c00u | mant);
-    }
-    return static_cast<uint16_t>(sign | 0x7c00u);
-  }
-  if (e <= 0) {
-    if (e < -10) {
-      return static_cast<uint16_t>(sign);
-    }
-    const uint32_t m = (m32 | 0x800000u) >> static_cast<uint32_t>(1 - e);
-    const uint32_t round_bit = m & 0x00001000u;
-    const uint32_t sticky = m & 0x00000fffu;
-    uint16_t h = static_cast<uint16_t>(sign | (m >> 13));
-    if (round_bit && (sticky != 0 || (h & 1))) {
-      h = static_cast<uint16_t>(h + 1);
-    }
-    return h;
-  }
-  const uint32_t low = m32 & 0x1fffu;
-  uint16_t h = static_cast<uint16_t>(sign | (static_cast<uint32_t>(e) << 10) | (m32 >> 13));
-  if (low > 0x1000u || (low == 0x1000u && (h & 1u))) {
-    h = static_cast<uint16_t>(h + 1);
-  }
-  return h;
-}
+// using round-to-nearest-even: provided by
+// ``onnx_kernels/kernels/tensor/cast_helper.h`` as ``kernel::FloatToFloat16Bits``.
 
 // Builds a FLOAT16 tensor with the supplied ``shape`` from a flattened list
 // of float32 sample values rounded via ``FloatToFloat16Bits``.
 Tensor MakeFloat16Tensor(const std::vector<int64_t> &shape, const std::vector<float> &values) {
   std::vector<uint16_t> bits(values.size());
   for (size_t i = 0; i < values.size(); ++i) {
-    bits[i] = FloatToFloat16Bits(values[i]);
+    bits[i] = kernel::FloatToFloat16Bits(values[i]);
   }
   Tensor t = Tensor::FromUint16("", shape, bits);
   t.data_type = static_cast<int32_t>(DataType::FLOAT16);

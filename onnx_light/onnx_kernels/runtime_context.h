@@ -87,8 +87,14 @@ inline constexpr int64_t kTensorEventValueLimit = 8;
  *  * ``kReplace`` — an existing entry was overwritten via
  *                   :cpp:func:`RuntimeContext::Put`.
  *  * ``kRemove``  — an entry was erased via :cpp:func:`RuntimeContext::Remove`.
+ *  * ``kRunNode`` — a kernel was dispatched for a single
+ *                   :cpp:class:`NodeProto`. The event records the node's
+ *                   ``op_domain`` / ``op_type``, the list of ``inputs``
+ *                   it consumed, and the wall-clock ``duration_ns`` of
+ *                   the dispatch (start time stored in ``timestamp_ns``).
+ *                   Does not mutate the tensor map by itself.
  */
-enum class TensorEventAction : int32_t { kAdd = 0, kReplace = 1, kRemove = 2 };
+enum class TensorEventAction : int32_t { kAdd = 0, kReplace = 1, kRemove = 2, kRunNode = 3 };
 
 /**
  * Role of the tensor at the moment the event was recorded. Set by the
@@ -113,7 +119,8 @@ enum class TensorEventKind : int32_t {
 
 /**
  * Returns a short lowercase label for ``action`` (``"add"``, ``"replace"``,
- * ``"remove"``). Useful for human-readable rendering of the event log.
+ * ``"remove"``, ``"run_node"``). Useful for human-readable rendering of the
+ * event log.
  */
 const char *TensorEventActionName(TensorEventAction action) noexcept;
 
@@ -185,6 +192,21 @@ struct TensorEvent {
   /// of the tensor when ``data_type`` is ``DataType::STRING``. Unused
   /// slots are empty strings.
   std::array<std::string, kTensorEventValueLimit> string_values{};
+  /// For ``kRunNode`` events: ONNX op domain of the node that was
+  /// dispatched, normalised so the default domain is reported as
+  /// ``"ai.onnx"``. Empty for all other event actions.
+  std::string op_domain;
+  /// For ``kRunNode`` events: ONNX ``op_type`` of the node that was
+  /// dispatched. Empty for all other event actions.
+  std::string op_type;
+  /// For ``kRunNode`` events: ordered list of input names consumed by
+  /// the node, matching ``NodeProto::input``. Empty for all other event
+  /// actions.
+  std::vector<std::string> inputs;
+  /// For ``kRunNode`` events: wall-clock duration of the kernel
+  /// dispatch in nanoseconds (``std::chrono::steady_clock``). Zero for
+  /// all other event actions.
+  int64_t duration_ns = 0;
 };
 
 /**
@@ -279,6 +301,18 @@ public:
 
   /// Empties the event log without otherwise touching the tensor map.
   void ClearEvents() noexcept { events_.clear(); }
+
+  /// Appends a :cpp:class:`TensorEvent` with action
+  /// :cpp:enumerator:`TensorEventAction::kRunNode` summarising the
+  /// dispatch of a single ``NodeProto``. ``timestamp_ns`` is set to the
+  /// wall-clock time at which the dispatch started and ``duration_ns``
+  /// to its measured wall-clock duration in nanoseconds. Inserted by
+  /// :cpp:func:`RunNode` for every kernel call so callers can profile
+  /// per-node execution from the event log alongside the tensor
+  /// add/replace/remove records.
+  void AppendRunNodeEvent(const std::string &op_domain, const std::string &op_type,
+                          std::vector<std::string> inputs, int64_t start_time_ns,
+                          int64_t duration_ns);
 
   /// In/out sequence map shared across every node in a chain. Only
   /// sequence-typed graph edges are stored here; tensor-typed edges

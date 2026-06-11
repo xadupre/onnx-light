@@ -153,6 +153,8 @@ const char *TensorEventActionName(TensorEventAction action) noexcept {
     return "replace";
   case TensorEventAction::kRemove:
     return "remove";
+  case TensorEventAction::kRunNode:
+    return "run_node";
   }
   return "unknown";
 }
@@ -208,6 +210,22 @@ Tensor &RuntimeContext::Get(const std::string &name) {
     throw std::out_of_range("RuntimeContext::Get: no tensor named '" + name + "'.");
   }
   return it->second;
+}
+
+void RuntimeContext::AppendRunNodeEvent(const std::string &op_domain, const std::string &op_type,
+                                        std::vector<std::string> inputs, int64_t start_time_ns,
+                                        int64_t duration_ns) {
+  TensorEvent ev;
+  ev.action = TensorEventAction::kRunNode;
+  ev.kind = TensorEventKind::kUnknown;
+  ev.timestamp_ns = start_time_ns;
+  ev.data_type = static_cast<int32_t>(DataType::UNDEFINED);
+  ev.value_count = 0;
+  ev.op_domain = op_domain;
+  ev.op_type = op_type;
+  ev.inputs = std::move(inputs);
+  ev.duration_ns = duration_ns;
+  events_.push_back(std::move(ev));
 }
 
 } // namespace onnx_kernels

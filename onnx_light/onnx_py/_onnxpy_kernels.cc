@@ -185,7 +185,21 @@ void AddOnnxPyRuntime(nb::module_ &m) {
               "Tensor shape, or empty list when truncated / for ``remove`` events.")
       .def_ro("value_count", &onnx_kernels::TensorEvent::value_count,
               "Number of populated entries in :attr:`values` / :attr:`string_values` "
-              "(``min(element_count, 8)``, ``0`` for ``remove`` events).")
+              "(``min(element_count, 8)``, ``0`` for ``remove`` and ``run_node`` events).")
+      .def_ro("op_domain", &onnx_kernels::TensorEvent::op_domain,
+              "For ``run_node`` events: normalised ONNX op domain of the dispatched "
+              "node (default domain reported as ``\"ai.onnx\"``). Empty for other "
+              "event actions.")
+      .def_ro("op_type", &onnx_kernels::TensorEvent::op_type,
+              "For ``run_node`` events: ONNX ``op_type`` of the dispatched node. "
+              "Empty for other event actions.")
+      .def_ro("inputs", &onnx_kernels::TensorEvent::inputs,
+              "For ``run_node`` events: ordered list of input names consumed by the "
+              "node (matching ``NodeProto.input``). Empty for other event actions.")
+      .def_ro("duration_ns", &onnx_kernels::TensorEvent::duration_ns,
+              "For ``run_node`` events: wall-clock duration of the kernel dispatch in "
+              "nanoseconds (``std::chrono::steady_clock``). ``0`` for other event "
+              "actions.")
       .def_prop_ro(
           "values",
           [](const onnx_kernels::TensorEvent &ev) {
@@ -225,6 +239,10 @@ void AddOnnxPyRuntime(nb::module_ &m) {
             d["data_type"] = ev.data_type;
             d["shape"] = ev.shape;
             d["value_count"] = ev.value_count;
+            d["op_domain"] = ev.op_domain;
+            d["op_type"] = ev.op_type;
+            d["inputs"] = ev.inputs;
+            d["duration_ns"] = ev.duration_ns;
             const int32_t n = ev.value_count;
             if (static_cast<onnx_kernels::DataType>(ev.data_type) ==
                 onnx_kernels::DataType::STRING) {

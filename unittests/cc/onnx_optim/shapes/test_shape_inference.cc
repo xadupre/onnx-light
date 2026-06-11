@@ -611,6 +611,51 @@ TEST(OnnxOptimShapeInference, ComputeShapeModelPrefillPrefersOutputAnchor) {
   EXPECT_TRUE(c.first == "ANCHOR" || c.second == "ANCHOR");
 }
 
+TEST(OnnxOptimShapeInference, ComputeShapeModelPrefillPreservesGraphInputSymbol) {
+  // Regression test: when an output anchor uses a different symbolic name
+  // than the input ("ANCHOR" vs "N"), the prefill+propagate pass must not
+  // rename the graph input dim from "N" to "ANCHOR". Both names are
+  // user-provided and authoritative for their own value.
+  //
+  // ``Y = Relu(X)`` keeps the input shape, so the inferred Y has dim
+  // ``N`` and the anchor declares ``ANCHOR`` for the same position. The
+  // merge records the equality ``N == ANCHOR``; the propagation step
+  // must privilege the anchor on Y but leave X alone.
+  ModelProto model;
+  model.set_ir_version(8);
+  OperatorSetIdProto *osi = model.add_opset_import();
+  osi->set_domain("");
+  osi->set_version(18);
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+  ValueInfoProto *in = graph->add_input();
+  in->set_name("X");
+  SetValueInfoTensorType(*in, TensorProto::DataType::FLOAT, /*shape=*/{-1, 4},
+                         /*symbolic_names=*/{"N"});
+  ValueInfoProto *out = graph->add_output();
+  out->set_name("Y");
+  SetValueInfoTensorType(*out, TensorProto::DataType::FLOAT, /*shape=*/{-1, 4},
+                         /*symbolic_names=*/{"ANCHOR"});
+  *graph->add_node() = MakeNode("Relu", {"X"}, {"Y"});
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.ComputeShapeModel(model, /*prefill_with_value_info_output=*/true);
+
+  // Y adopts the anchor symbol.
+  ASSERT_TRUE(ctx.Has("Y"));
+  ASSERT_EQ(ctx.Get("Y").Shape().Rank(), 2u);
+  EXPECT_TRUE(ctx.Get("Y").Shape()[0].IsExpr());
+  EXPECT_EQ(ctx.Get("Y").Shape()[0].AsExpr(), "ANCHOR");
+  EXPECT_EQ(ctx.Get("Y").Shape()[1], onnx_optim::OptimDim(4));
+  // The graph-input symbol "N" survives propagation untouched, even
+  // though the constraint ``N == ANCHOR`` was recorded.
+  ASSERT_TRUE(ctx.Has("X"));
+  ASSERT_EQ(ctx.Get("X").Shape().Rank(), 2u);
+  EXPECT_TRUE(ctx.Get("X").Shape()[0].IsExpr());
+  EXPECT_EQ(ctx.Get("X").Shape()[0].AsExpr(), "N");
+  EXPECT_EQ(ctx.Get("X").Shape()[1], onnx_optim::OptimDim(4));
+}
+
 TEST(OnnxOptimShapeInference, ComputeShapeModelPrefillRaisesOnDimConflict) {
   // Reshape with target [-1, 2] applied to X[N, 4] produces Y[?, 2].
   // The anchor declares Y as ["ANCHOR", 4] — the trailing concrete dim

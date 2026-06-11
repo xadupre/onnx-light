@@ -4,6 +4,7 @@
 
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/kernels/sequence/include_sequence_kernels.h"
 #include "onnx_kernels/run_nodes.h"
 #include "onnx_kernels/runtime_context.h"
 #include "onnx_kernels/simple_tensor.h"
@@ -430,6 +431,51 @@ TEST(BackendRunModel, FlexAttention) {
                ds.inputs[1].data_type == DataType::FLOAT &&
                ds.inputs[2].data_type == DataType::FLOAT;
       });
+}
+
+// SequenceMap is a sequence-typed control-flow op: its outputs are
+// :cpp:struct:`Sequence` values held in ``RuntimeContext::sequences``,
+// not :cpp:struct:`Tensor` values in ``RuntimeContext::tensors``, and
+// every backend test case wraps the SequenceMap node in a 2-node
+// graph (``SequenceConstruct`` + ``SequenceMap``). The single-node
+// ``RunBackendCasesFor`` helper therefore does not apply; instead the
+// per-case expected stacked tensor (registered in
+// ``cases_sequence_map.cc``) is compared against the actual output
+// sequence by re-stacking the latter through
+// :cpp:class:`kernel::SequenceConstruct`.
+TEST(BackendRunModel, SequenceMap) {
+  const std::vector<TestCase> cases = CollectTestCases("SequenceMap");
+  ASSERT_FALSE(cases.empty()) << "No backend test cases found for SequenceMap";
+
+  std::size_t executed = 0;
+  for (const TestCase &tc : cases) {
+    SCOPED_TRACE(tc.name);
+    const onnx_kernels::kernel::KernelContext kctx(DefaultOpset(GetDefaultOpsetVersion(tc.model)));
+
+    for (const DataSet &ds : tc.data_sets) {
+      RuntimeContext rt(kctx);
+      for (const Tensor &t : ds.inputs) {
+        rt.Set(t.name, t);
+      }
+      ASSERT_NO_THROW(RunModel(tc.model, rt)) << "RunModel threw for case " << tc.name;
+
+      // Each expected output is the stacked-tensor materialisation of
+      // the corresponding output sequence (see
+      // ``cases_sequence_map.cc``); re-stack the actual sequence and
+      // compare bit-exactly.
+      for (const Tensor &expected : ds.outputs) {
+        ASSERT_TRUE(rt.HasSequence(expected.name))
+            << "Missing output sequence '" << expected.name << "' for case " << tc.name;
+        const auto &out_seq = rt.GetSequence(expected.name);
+        const std::vector<Tensor> values(out_seq.values.begin(), out_seq.values.end());
+        Tensor actual = onnx_kernels::kernel::SequenceConstruct(kctx)(values);
+        actual.name = expected.name;
+        ExpectTensorBitEqual(actual, expected);
+      }
+      ++executed;
+    }
+  }
+  EXPECT_GT(executed, 0u) << "No SequenceMap test cases exercised.";
 }
 
 } // namespace Test

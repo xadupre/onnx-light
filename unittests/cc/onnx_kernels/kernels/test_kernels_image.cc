@@ -167,9 +167,10 @@ TEST(KernelClass, ImageDecoderDecodesBmpGrayscale) {
   const std::vector<int64_t> expected_shape = {2, 2, 1};
   EXPECT_EQ(out.shape, expected_shape);
   ASSERT_EQ(out.element_count(), 4);
-  // Display row 0: R=255 → grey=(299*255+0+0+500)/1000=76, B=0,G=0,R=0 → grey=0
-  // Display row 1: B=255,G=0,R=0 → grey=(0+0+114*255+500)/1000=29
-  //                B=0,G=255,R=0 → grey=(0+587*255+0+500)/1000=150
+  // Display row 0, col 0: B=0,G=0,R=255 → grey=(299*255+0+0+500)/1000=76
+  // Display row 0, col 1: B=0,G=0,R=0   → grey=0
+  // Display row 1, col 0: B=255,G=0,R=0 → grey=(0+0+114*255+500)/1000=29
+  // Display row 1, col 1: B=0,G=255,R=0 → grey=(0+587*255+0+500)/1000=150
   const uint8_t r255 = static_cast<uint8_t>((299 * 255 + 500) / 1000);
   const uint8_t b255 = static_cast<uint8_t>((114 * 255 + 500) / 1000);
   const uint8_t g255 = static_cast<uint8_t>((587 * 255 + 500) / 1000);

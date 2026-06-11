@@ -127,7 +127,6 @@ else()
       "LINKER:-z,noexecstack"
       "LINKER:-z,relro"
       "LINKER:-z,now"
-      "LINKER:-z,nodlopen"
       "LINKER:--as-needed"
       "LINKER:--no-copy-dt-needed-entries"
   )

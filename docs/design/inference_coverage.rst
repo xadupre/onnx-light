@@ -7,7 +7,7 @@ Shape-inference coverage (onnx_optim)
 .. role:: red
 
 This page reports, for every backend test case **tagged**
-``"inference"`` (see :attr:`onnx_light.backend.test.case.base.TestCase.tag`),
+``"inference"`` (see :attr:`onnx_light.onnx.backend.TestCase.tag`),
 the outcome of running the ``onnx_optim`` shape-inference pipeline against
 the *expected* intermediate and output shapes recorded by the test author.
 

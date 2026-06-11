@@ -286,7 +286,7 @@ def make_model(n_init: int = N_INIT, dim: int = DIM) -> onnxl.ModelProto:
 def _tensor_data_bytes(tensor: onnxl.TensorProto) -> int:
     """Returns the in-memory byte count of a TensorProto's stored data.
 
-    Uses :func:`onnx_light.onnx_lib.helper.tensor_dtype_to_np_dtype` to map
+    Uses :func:`onnx_light.onnx.helper.tensor_dtype_to_np_dtype` to map
     the element type to a numpy dtype and derives the byte count from the
     tensor dimensions, avoiding a full array materialisation.
 

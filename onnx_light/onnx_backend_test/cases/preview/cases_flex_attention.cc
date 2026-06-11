@@ -416,7 +416,11 @@ Tensor ComputeFlexAttentionExpected(const Tensor &Q, const Tensor &K, const Tens
           if (prob_mod) {
             p = static_cast<double>(prob_mod(static_cast<float>(p), b, h, i, j));
           }
-          scores[static_cast<size_t>(j)] = p;
+          // Mirror ``kernel::FlexAttention`` which materializes the
+          // post-softmax probabilities through a FLOAT tensor before the
+          // ``probs @ V`` matmul; rounding here keeps the reference
+          // bit-exact with the kernel output.
+          scores[static_cast<size_t>(j)] = static_cast<double>(static_cast<float>(p));
         }
 
         for (int64_t dv = 0; dv < v_head_size; ++dv) {

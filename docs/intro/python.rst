@@ -49,7 +49,7 @@ how it looks like.
     # imports
 
     from onnx_light.onnx_lib import TensorProto
-    from onnx_light.onnx_lib.helper import (
+    from onnx_light.onnx.helper import (
         make_model, make_node, make_graph,
         make_tensor_value_info)
     from onnx_light.onnx_lib.checker import check_model
@@ -105,7 +105,7 @@ looking into the fields of each object of the graph.
     :showcode:
 
     from onnx_light.onnx_lib import TensorProto
-    from onnx_light.onnx_lib.helper import (
+    from onnx_light.onnx.helper import (
         make_model, make_node, make_graph,
         make_tensor_value_info)
     from onnx_light.onnx_lib.checker import check_model
@@ -156,7 +156,7 @@ looking into the fields of each object of the graph.
             node.name, node.op_type, node.input, node.output))
 
 The tensor type is an integer value (=1 for ``FLOAT``). The helper
-function :func:`onnx_light.onnx_lib.helper.tensor_dtype_to_np_dtype`
+function :func:`onnx_light.onnx.helper.tensor_dtype_to_np_dtype`
 converts the integer to its corresponding numpy data type (``float32``
 for 1).
 
@@ -164,7 +164,7 @@ for 1).
     :showcode:
 
     from onnx_light.onnx_lib import TensorProto
-    from onnx_light.onnx_lib.helper import tensor_dtype_to_np_dtype
+    from onnx_light.onnx.helper import tensor_dtype_to_np_dtype
 
     np_dtype = tensor_dtype_to_np_dtype(TensorProto.FLOAT)
     print(f"The converted numpy dtype for TensorProto.FLOAT is {np_dtype}.")
@@ -190,7 +190,7 @@ the case for the whole model.
     :showcode:
 
     from onnx_light.onnx_lib import TensorProto
-    from onnx_light.onnx_lib.helper import (
+    from onnx_light.onnx.helper import (
         make_model, make_node, make_graph,
         make_tensor_value_info)
     from onnx_light.onnx_lib.checker import check_model
@@ -242,7 +242,7 @@ The serialization of tensors usually happens like the following:
     :showcode:
 
     import numpy
-    from onnx_light.onnx_lib.numpy_helper import from_array
+    from onnx_light.onnx.numpy_helper import from_array
 
     numpy_tensor = numpy.array([0, 1, 4, 5, 3], dtype=numpy.float32)
     print(type(numpy_tensor))
@@ -262,7 +262,7 @@ And the deserialization like:
     :showcode:
 
     from onnx_light.onnx_lib import TensorProto
-    from onnx_light.onnx_lib.numpy_helper import to_array
+    from onnx_light.onnx.numpy_helper import to_array
 
     with open("saved_tensor.pb", "rb") as f:
         serialized_tensor = f.read()
@@ -297,9 +297,9 @@ semantics. The next example modifies the previous one to change inputs
 ``A`` and ``B`` into initializers. The package implements two functions
 to convert from numpy into onnx and the other way around.
 
-* ``onnx_light.onnx_lib.numpy_helper.to_array``: converts from onnx to
+* ``onnx_light.onnx.numpy_helper.to_array``: converts from onnx to
   numpy;
-* ``onnx_light.onnx_lib.numpy_helper.from_array``: converts from numpy
+* ``onnx_light.onnx.numpy_helper.from_array``: converts from numpy
   to onnx.
 
 .. runpython::
@@ -307,7 +307,7 @@ to convert from numpy into onnx and the other way around.
 
     import numpy
     from onnx_light.onnx_lib import numpy_helper, TensorProto
-    from onnx_light.onnx_lib.helper import (
+    from onnx_light.onnx.helper import (
         make_model, make_node, make_graph,
         make_tensor_value_info)
     from onnx_light.onnx_lib.checker import check_model
@@ -340,7 +340,7 @@ initializers look like.
 
     import numpy
     from onnx_light.onnx_lib import numpy_helper, TensorProto
-    from onnx_light.onnx_lib.helper import (
+    from onnx_light.onnx.helper import (
         make_model, make_node, make_graph,
         make_tensor_value_info)
     from onnx_light.onnx_lib.checker import check_model
@@ -384,7 +384,7 @@ named attribute in function ``make_node``.
     :showcode:
 
     from onnx_light.onnx_lib import TensorProto
-    from onnx_light.onnx_lib.helper import (
+    from onnx_light.onnx.helper import (
         make_model, make_node, make_graph,
         make_tensor_value_info)
     from onnx_light.onnx_lib.checker import check_model
@@ -524,9 +524,9 @@ on the sign, returns 1 or -1.
 
     import numpy
     from onnx_light import onnx_lib
-    from onnx_light.onnx_lib.helper import (
+    from onnx_light.onnx.helper import (
         make_node, make_graph, make_model, make_tensor_value_info)
-    from onnx_light.onnx_lib.numpy_helper import from_array
+    from onnx_light.onnx.numpy_helper import from_array
     from onnx_light.onnx_lib.checker import check_model
 
     # initializers
@@ -626,7 +626,7 @@ followed by an operator *TopK* which extracts the *k* nearest neighbors.
 
     import numpy
     from onnx_light.onnx_lib import numpy_helper, TensorProto
-    from onnx_light.onnx_lib.helper import (
+    from onnx_light.onnx.helper import (
         make_model, make_node, set_model_props, make_tensor, make_graph,
         make_tensor_value_info)
     from onnx_light.onnx_lib.checker import check_model
@@ -873,7 +873,7 @@ known at execution time.
     :showcode:
 
     from onnx_light.onnx_lib import TensorProto
-    from onnx_light.onnx_lib.helper import (
+    from onnx_light.onnx.helper import (
         make_model, make_node, make_graph,
         make_tensor_value_info, make_opsetid, make_function)
     from onnx_light.onnx_lib.checker import check_model
@@ -933,7 +933,7 @@ result. It is linked to the argument with the attribute
     :showcode:
 
     from onnx_light.onnx_lib import TensorProto, AttributeProto
-    from onnx_light.onnx_lib.helper import (
+    from onnx_light.onnx.helper import (
         make_model, make_node, make_tensor,
         make_graph, make_tensor_value_info, make_opsetid, make_function)
     from onnx_light.onnx_lib.checker import check_model
@@ -1105,7 +1105,7 @@ format and enables inference using any backend that supports the ONNX
 format. *onnxruntime* is one efficient option. It is available on many
 platforms and is optimized for fast inference.
 ``onnx-light`` ships its own
-:class:`~onnx_light.reference.ReferenceEvaluator` backed by C++ kernels;
+:class:`~onnx_light.onnx.reference.ReferenceEvaluator` backed by C++ kernels;
 it is useful to help understand a model and to validate the C++ kernels.
 It is not intended to be used for production and performance is not a
 goal.
@@ -1122,10 +1122,10 @@ dictionary.
 
     import numpy
     from onnx_light.onnx_lib import TensorProto
-    from onnx_light.onnx_lib.helper import (
+    from onnx_light.onnx.helper import (
         make_model, make_node, make_graph, make_tensor_value_info)
     from onnx_light.onnx_lib.checker import check_model
-    from onnx_light.reference import ReferenceEvaluator
+    from onnx_light.onnx.reference import ReferenceEvaluator
 
     X = make_tensor_value_info('X', TensorProto.FLOAT, [None, None])
     A = make_tensor_value_info('A', TensorProto.FLOAT, [None, None])
@@ -1158,9 +1158,9 @@ a specific input.
 
     import numpy
     from onnx_light.onnx_lib import TensorProto
-    from onnx_light.onnx_lib.helper import (
+    from onnx_light.onnx.helper import (
         make_node, make_graph, make_model, make_tensor_value_info)
-    from onnx_light.reference import ReferenceEvaluator
+    from onnx_light.onnx.reference import ReferenceEvaluator
 
     X = make_tensor_value_info('X', TensorProto.FLOAT, [None, None])
     Y = make_tensor_value_info('Y', TensorProto.FLOAT, [None, None])
@@ -1210,11 +1210,11 @@ valid graph for every dimension? This case is still puzzling.
 
     import numpy
     from onnx_light.onnx_lib import TensorProto
-    from onnx_light.onnx_lib.helper import (
+    from onnx_light.onnx.helper import (
         make_model, make_node, make_graph,
         make_tensor_value_info, make_opsetid)
     from onnx_light.onnx_lib.checker import check_model
-    from onnx_light.reference import ReferenceEvaluator
+    from onnx_light.onnx.reference import ReferenceEvaluator
 
     def create_model(shapes):
         new_domain = 'custom'

@@ -183,7 +183,7 @@ For example:
 Dimension operations
 --------------------
 
-The :class:`~onnx_light.onnx_optim.expressions.DimType` type represents a tensor
+The ``DimType`` type represents a tensor
 dimension as either a concrete ``int`` or a symbolic ``str``.  The dimension
 operation functions (:func:`~onnx_light.onnx_optim.expressions.dim_add`,
 :func:`~onnx_light.onnx_optim.expressions.dim_sub`,
@@ -233,7 +233,7 @@ Two renaming functions cover different use cases:
     where the expression may occasionally be a raw ONNX node name rather
     than a real expression.
 
-:func:`~onnx_light.onnx_optim.expressions.rename_dynamic_dimensions`
+``rename_dynamic_dimensions``
     Higher-level helper: given a set of equivalence classes (dimension
     names that are known to be equal to each other) and a set of
     user-visible preferred names, it produces a mapping from all internal

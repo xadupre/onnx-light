@@ -18,6 +18,7 @@
 #include "onnx_kernels/kernel_dispatch_table.h"
 #include "onnx_kernels/kernels/controlflow/include_controlflow_kernels.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
+#include "onnx_kernels/kernels/sequence/include_sequence_kernels.h"
 #include "onnx_kernels/node_helpers.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -29,12 +30,14 @@ using detail::FindAttribute;
 using detail::GetAttributeIntOrDefault;
 using detail::GetAttributeIntsOrDefault;
 using detail::GetInput;
+using detail::GetInputSequence;
 using detail::GetRequiredGraphAttribute;
 using detail::kDefaultOnnxDomain;
 using detail::NormaliseDispatchDomain;
 using detail::RequireInputCount;
 using detail::RequireOutputCount;
 using detail::SetOutput;
+using detail::SetOutputSequence;
 
 int64_t ParseInt64Scalar(const Tensor &t, const std::string &where) {
   if (t.data_type != DataType::INT64 || t.element_count() != 1) {
@@ -453,6 +456,115 @@ void RunScanNode(const NodeProto &node, RuntimeContext &rt) {
   PropagateOutputsToCaller(node, outputs, rt);
 }
 
+void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt) {
+  // ai.onnx::SequenceMap (since opset 17): applies a sub-graph (``body``)
+  // to each element of the first input sequence. Additional inputs are
+  // either further sequences (which must have the same length as the
+  // first one and are iterated element-wise) or tensors (which are
+  // broadcast unchanged to every iteration). The body produces ``M``
+  // tensors per iteration which are assembled into ``M`` output
+  // sequences via :cpp:class:`kernel::SequenceMap`.
+  if (node.input_size() < 1) {
+    throw std::invalid_argument(
+        "RunNode: SequenceMap expects at least 1 input (the input sequence).");
+  }
+  const GraphProto &body = GetRequiredGraphAttribute(node, "body");
+
+  // The first input must always be a sequence; its length sets ``N``.
+  const Sequence &input_sequence = GetInputSequence(node, 0, rt);
+  const std::size_t n = input_sequence.size();
+
+  // Classify every additional input as either a sequence input (must
+  // have length ``N``) or a broadcast tensor input.
+  const std::size_t num_additional = static_cast<std::size_t>(node.input_size() - 1);
+  std::vector<const Sequence *> additional_sequences(num_additional, nullptr);
+  std::vector<const Tensor *> additional_tensors(num_additional, nullptr);
+  for (std::size_t k = 0; k < num_additional; ++k) {
+    const int idx = static_cast<int>(1 + k);
+    const std::string name = node.input(idx).as_string();
+    if (name.empty()) {
+      throw std::invalid_argument(
+          "RunNode: SequenceMap does not support empty placeholders in additional inputs.");
+    }
+    if (rt.HasSequence(name)) {
+      const Sequence &seq = rt.GetSequence(name);
+      if (seq.size() != n) {
+        throw std::invalid_argument("RunNode: SequenceMap additional sequence input '" + name +
+                                    "' has length " + std::to_string(seq.size()) + ", expected " +
+                                    std::to_string(n) +
+                                    " (matching the first input sequence length).");
+      }
+      additional_sequences[k] = &seq;
+    } else {
+      additional_tensors[k] = &GetInput(node, idx, rt.tensors());
+    }
+  }
+
+  // ``body`` must declare one input per SequenceMap input.
+  if (static_cast<std::size_t>(body.input_size()) != 1u + num_additional) {
+    throw std::invalid_argument("RunNode: SequenceMap body graph declares " +
+                                std::to_string(body.input_size()) + " input(s), expected " +
+                                std::to_string(1u + num_additional) + ".");
+  }
+
+  const std::size_t m = static_cast<std::size_t>(body.output_size());
+  if (m == 0u) {
+    throw std::invalid_argument("RunNode: SequenceMap body graph must declare at least 1 output.");
+  }
+  if (static_cast<std::size_t>(node.output_size()) != m) {
+    throw std::invalid_argument(
+        "RunNode: SequenceMap node declares " + std::to_string(node.output_size()) +
+        " output(s), but the body graph produces " + std::to_string(m) + ".");
+  }
+
+  // ``body_outputs_per_iter[k][i]`` = body output ``k`` for iteration ``i``.
+  std::vector<std::vector<Tensor>> body_outputs_per_iter(m);
+  for (std::size_t k = 0; k < m; ++k) {
+    body_outputs_per_iter[k].reserve(n);
+  }
+
+  for (std::size_t i = 0; i < n; ++i) {
+    std::vector<std::pair<std::string, Tensor>> bindings;
+    bindings.reserve(1u + num_additional);
+
+    Tensor elem0 = input_sequence.values[i];
+    elem0.name = body.input(0).name().as_string();
+    bindings.emplace_back(elem0.name, std::move(elem0));
+
+    for (std::size_t k = 0; k < num_additional; ++k) {
+      const std::string param_name = body.input(static_cast<int>(1 + k)).name().as_string();
+      Tensor t;
+      if (additional_sequences[k] != nullptr) {
+        t = additional_sequences[k]->values[i];
+      } else {
+        t = *additional_tensors[k];
+      }
+      t.name = param_name;
+      bindings.emplace_back(param_name, std::move(t));
+    }
+
+    std::vector<Tensor> iter_outputs = RunSubgraph(body, bindings, rt);
+    if (iter_outputs.size() != m) {
+      throw std::invalid_argument("RunNode: SequenceMap body produced " +
+                                  std::to_string(iter_outputs.size()) + " output(s) at iteration " +
+                                  std::to_string(i) + ", expected " + std::to_string(m) + ".");
+    }
+    for (std::size_t k = 0; k < m; ++k) {
+      body_outputs_per_iter[k].push_back(std::move(iter_outputs[k]));
+    }
+  }
+
+  kernel::SequenceMap seq_map_kernel(rt.kernel_ctx());
+  std::vector<Sequence> outputs = seq_map_kernel(input_sequence, body_outputs_per_iter);
+  if (outputs.size() != m) {
+    throw std::invalid_argument("RunNode: kernel::SequenceMap returned an unexpected number of "
+                                "output sequences.");
+  }
+  for (std::size_t k = 0; k < m; ++k) {
+    SetOutputSequence(node, static_cast<int>(k), std::move(outputs[k]), rt);
+  }
+}
+
 // Replaces every attribute of ``node`` (and recursively in any
 // sub-graph attribute) carrying a non-empty ``ref_attr_name`` with the
 // corresponding entry from ``attr_map``. When the call-site does not
@@ -630,6 +742,8 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
     RunLoopNode(node, rt);
   } else if (domain == kDefaultOnnxDomain && op_type == "Scan") {
     RunScanNode(node, rt);
+  } else if (domain == kDefaultOnnxDomain && op_type == "SequenceMap") {
+    RunSequenceMapNode(node, rt);
   } else {
     const std::string key = domain + ":" + op_type;
     const auto &table = KernelDispatchTable();

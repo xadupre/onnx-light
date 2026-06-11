@@ -1,4 +1,4 @@
-name: cq - hardening
+name: acq - hardening
 
 on:
   schedule:

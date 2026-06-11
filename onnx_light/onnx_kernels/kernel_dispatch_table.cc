@@ -2076,6 +2076,14 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Sign", MakeUnaryTrampoline<kernel::Sign>()},
       {"ai.onnx:Sin", MakeUnaryTrampoline<kernel::Sin>()},
       {"ai.onnx:Sinh", MakeUnaryTrampoline<kernel::Sinh>()},
+      {"ai.onnx:Size",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &data = GetInput(node, 0, rt.tensors());
+         kernel::Size k(rt.kernel_ctx());
+         SetOutput(node, 0, k(data), rt);
+       }},
       {"ai.onnx:Slice",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 3);

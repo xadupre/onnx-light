@@ -128,6 +128,7 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   // Tensor shape kernels.
   EXPECT_NE(table.find("ai.onnx:Cast"), table.end());
   EXPECT_NE(table.find("ai.onnx:Shape"), table.end());
+  EXPECT_NE(table.find("ai.onnx:Size"), table.end());
   EXPECT_NE(table.find("ai.onnx:DepthToSpace"), table.end());
   EXPECT_NE(table.find("ai.onnx:Gather"), table.end());
   EXPECT_NE(table.find("ai.onnx:GatherND"), table.end());

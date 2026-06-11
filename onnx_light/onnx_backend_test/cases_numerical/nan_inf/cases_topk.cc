@@ -4,7 +4,6 @@
 
 #include "onnx_backend_test/cases_numerical/nan_inf/include_nan_inf_cases.h"
 #include "onnx_backend_test/test_case.h"
-#include "onnx_kernels/kernels/math/include_math_kernels.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
@@ -55,10 +54,7 @@ NodeProto MakeTopKNode(int64_t axis, int64_t largest, int64_t sorted_attr) {
 // ---------------------------------------------------------------------------
 void RegisterTopKNanInfCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(11);
-  const kernel::KernelContext ctx{opset};
-  const kernel::TopK topk_kernel{ctx};
 
-  constexpr float kNan = std::numeric_limits<float>::quiet_NaN();
   constexpr float kPosInf = std::numeric_limits<float>::infinity();
   constexpr float kNegInf = -std::numeric_limits<float>::infinity();
 
@@ -101,20 +97,13 @@ void RegisterTopKNanInfCases(std::vector<TestCase> &registry) {
            {opset}, "backend-test", registry, "nan_inf");
   }
 
-  // test_cc_top_k_nan — NaN-propagation case. The expected outputs are
-  // produced by the in-tree kernel so the comparison stays self-
-  // consistent; what we really verify here is that running the same node
-  // through the backend yields a bit-identical result and that NaN is
-  // surfaced unchanged in the values tensor when it ends up among the
-  // selected entries.
-  {
-    NodeProto node = MakeTopKNode(/*axis=*/0, /*largest=*/1, /*sorted_attr=*/1);
-    Tensor x = Tensor::FromFloat("x", {5}, {1.0f, kNan, 3.0f, kNan, 2.0f});
-    Tensor k = Tensor::FromInt64("k", {1}, {3});
-    auto [values, indices] = topk_kernel(x, 3, /*axis=*/0, /*largest=*/true, /*sorted=*/true);
-    Expect(node, {x, k}, {std::move(values), std::move(indices)}, "test_cc_top_k_nan", {opset},
-           "backend-test", registry, "nan_inf");
-  }
+  // NaN is intentionally not exercised in a value-comparison case: NaN
+  // breaks strict weak ordering for the comparator, the ONNX schema does
+  // not specify where NaN must land in the result, and different
+  // backends (e.g. the reference kernel vs. onnxruntime) legitimately
+  // place NaN in different positions of the sorted output. Asserting on
+  // any particular placement would therefore be backend-specific and is
+  // out of scope for these cross-backend tests.
 }
 
 } // namespace onnx_backend_test

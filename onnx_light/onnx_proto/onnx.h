@@ -628,6 +628,39 @@ FIELD_REPEATED(StringStringEntryProto, metadata_props, 9,
                "Named metadata values; keys should be distinct.")
 FIELD_REPEATED(NodeDeviceConfigurationProto, device_configurations, 10,
                "Configuration of multi-device annotations.")
+/**
+ * Replaces an existing attribute with the same name in place, or appends
+ * *attr* to ``attribute`` if no entry with that name exists yet, and returns
+ * a reference to the stored attribute.
+ */
+inline AttributeProto &set_attribute(const AttributeProto &attr) {
+  const std::string name = attr.ref_name().as_string();
+  for (size_t i = 0; i < attribute_.size(); ++i) {
+    if (attribute_[i].ref_name().as_string() == name) {
+      attribute_[i] = attr;
+      return attribute_[i];
+    }
+  }
+  attribute_.push_back(attr);
+  return attribute_.back();
+}
+/**
+ * Sets metadata property *key* to *value*, updating an existing entry with
+ * the same key in place, and returns a reference to the stored entry.
+ */
+inline StringStringEntryProto &add_metadata(const std::string &key, const std::string &value) {
+  for (size_t i = 0; i < metadata_props_.size(); ++i) {
+    if (metadata_props_[i].ref_key().as_string() == key) {
+      metadata_props_[i].set_value(value);
+      return metadata_props_[i];
+    }
+  }
+  StringStringEntryProto entry;
+  entry.set_key(key);
+  entry.set_value(value);
+  metadata_props_.push_back(entry);
+  return metadata_props_.back();
+}
 END_PROTO()
 
 // GraphProto
@@ -670,6 +703,23 @@ FIELD_REPEATED(
     "'a_zero_point' are scale and zero point of tensor 'a' in the model.")
 FIELD_REPEATED(StringStringEntryProto, metadata_props, 16,
                "Named metadata values; keys should be distinct.")
+/**
+ * Sets metadata property *key* to *value*, updating an existing entry with
+ * the same key in place, and returns a reference to the stored entry.
+ */
+inline StringStringEntryProto &add_metadata(const std::string &key, const std::string &value) {
+  for (size_t i = 0; i < metadata_props_.size(); ++i) {
+    if (metadata_props_[i].ref_key().as_string() == key) {
+      metadata_props_[i].set_value(value);
+      return metadata_props_[i];
+    }
+  }
+  StringStringEntryProto entry;
+  entry.set_key(key);
+  entry.set_value(value);
+  metadata_props_.push_back(entry);
+  return metadata_props_.back();
+}
 END_PROTO()
 
 inline const char *AttributeProto_AttributeType_Name(AttributeProto::AttributeType t) {
@@ -712,6 +762,34 @@ FIELD_REPEATED_PROTO(
     "It is optional for a value to appear in value_info list.")
 FIELD_REPEATED(StringStringEntryProto, metadata_props, 14,
                "Named metadata values; keys should be distinct.")
+/**
+ * Appends an opset import ``(domain, version)`` and returns a reference to
+ * the newly added entry.
+ */
+inline OperatorSetIdProto &add_opset(const std::string &domain, int64_t version) {
+  OperatorSetIdProto opset;
+  opset.set_domain(domain);
+  opset.set_version(version);
+  opset_import_.push_back(opset);
+  return opset_import_.back();
+}
+/**
+ * Sets metadata property *key* to *value*, updating an existing entry with
+ * the same key in place, and returns a reference to the stored entry.
+ */
+inline StringStringEntryProto &add_metadata(const std::string &key, const std::string &value) {
+  for (size_t i = 0; i < metadata_props_.size(); ++i) {
+    if (metadata_props_[i].ref_key().as_string() == key) {
+      metadata_props_[i].set_value(value);
+      return metadata_props_[i];
+    }
+  }
+  StringStringEntryProto entry;
+  entry.set_key(key);
+  entry.set_value(value);
+  metadata_props_.push_back(entry);
+  return metadata_props_.back();
+}
 END_PROTO()
 
 // ModelProto
@@ -772,6 +850,42 @@ FIELD_REPEATED_PROTO(
 FIELD_REPEATED(DeviceConfigurationProto, configuration, 26,
                "Describes different target configurations for a multi-device use case. A model MAY "
                "describe multiple multi-device configurations for execution.")
+/**
+ * Appends *function* to the model's ``functions`` field and returns a
+ * reference to the stored copy.
+ */
+inline FunctionProto &add_function(const FunctionProto &function) {
+  functions_.push_back(function);
+  return functions_.back();
+}
+/**
+ * Appends an opset import ``(domain, version)`` and returns a reference to
+ * the newly added entry.
+ */
+inline OperatorSetIdProto &add_opset(const std::string &domain, int64_t version) {
+  OperatorSetIdProto opset;
+  opset.set_domain(domain);
+  opset.set_version(version);
+  opset_import_.push_back(opset);
+  return opset_import_.back();
+}
+/**
+ * Sets metadata property *key* to *value*, updating an existing entry with
+ * the same key in place, and returns a reference to the stored entry.
+ */
+inline StringStringEntryProto &add_metadata(const std::string &key, const std::string &value) {
+  for (size_t i = 0; i < metadata_props_.size(); ++i) {
+    if (metadata_props_[i].ref_key().as_string() == key) {
+      metadata_props_[i].set_value(value);
+      return metadata_props_[i];
+    }
+  }
+  StringStringEntryProto entry;
+  entry.set_key(key);
+  entry.set_value(value);
+  metadata_props_.push_back(entry);
+  return metadata_props_.back();
+}
 /**
  * Serializes the proto into *out* and external weight payloads into *external_files*.
  * External files are split so each file size is at most *max_external_file_size*.

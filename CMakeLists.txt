@@ -34,6 +34,11 @@ option(ONNX_LIGHT_BUILD_KERNELS
     "Build the operator-kernel runtime (lib_onnx_kernels) and the backend-test registry (lib_onnx_backend_test). Turn OFF to install only the schema / checker / shape-inference / version-converter libraries (useful for downstream projects that only need onnx_light::onnx_light or onnx_light::lib_onnx_proto)."
     ON)
 option(ONNX_ML "Enable ai.onnx.ml support." ON)
+option(ONNX_HARDENING
+    "Enable OpenSSF Compiler Hardening Guide flags for C/C++ targets. \
+See cmake/Hardening.cmake and \
+https://best.openssf.org/Compiler-Hardening-Guides/Compiler-Options-Hardening-Guide-for-C-and-C++.html"
+    OFF)
 
 # The Python extensions and the C++ unit-test executable both link
 # lib_onnx_kernels / lib_onnx_backend_test; refuse incoherent option
@@ -63,6 +68,17 @@ if(MSVC)
 endif()
 
 include(GNUInstallDirs)
+
+# Optional OpenSSF compiler hardening flags. Resolves the list of supported
+# flags up front so each target definition can call onnx_light_apply_hardening
+# unconditionally.
+if(ONNX_HARDENING)
+  list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+  include(Hardening)
+else()
+  function(onnx_light_apply_hardening target)
+  endfunction()
+endif()
 
 if(ONNX_LIGHT_BUILD_PYTHON)
   # Find Python
@@ -808,3 +824,28 @@ if(ONNX_LIGHT_INSTALL)
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/onnx"
   )
 endif()
+
+# Apply OpenSSF compiler hardening flags to onnx-light targets when
+# ONNX_HARDENING=ON. When the option is OFF the helper is a no-op so the
+# loop has no effect.
+set(_onnx_light_hardening_targets
+    lib_onnx_proto
+    lib_onnx_lib
+    lib_onnx_op
+    lib_onnx_optim
+)
+if(ONNX_LIGHT_BUILD_KERNELS)
+  list(APPEND _onnx_light_hardening_targets lib_onnx_kernels lib_onnx_backend_test)
+endif()
+if(ONNX_LIGHT_BUILD_PYTHON)
+  list(APPEND _onnx_light_hardening_targets
+      _onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxpykernels _onnxpybackend)
+endif()
+if(ONNX_LIGHT_BUILD_TESTS)
+  list(APPEND _onnx_light_hardening_targets test_onnx_light_helpers test_onnx_light)
+endif()
+foreach(_t IN LISTS _onnx_light_hardening_targets)
+  if(TARGET ${_t})
+    onnx_light_apply_hardening(${_t})
+  endif()
+endforeach()

@@ -172,3 +172,6 @@ cmake_install.cmake
 *.onnx
 *.data
 *.pb
+
+# Pixi environment directory
+.pixi/

@@ -267,6 +267,7 @@ TEST(BackendRunModel, MaxPool) {
         return !ds.inputs.empty() && ds.inputs[0].data_type == DataType::FLOAT;
       });
 }
+TEST(BackendRunModel, MaxUnpool) { RunBackendCasesFor("MaxUnpool"); }
 
 // ai.onnx.preview.training optimizer kernels.
 TEST(BackendRunModel, Adagrad) { RunBackendCasesFor("Adagrad"); }

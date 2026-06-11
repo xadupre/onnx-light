@@ -1425,8 +1425,10 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          if (GetAttributeIntOrDefault(node, "input_forget", 0) != 0) {
            throw std::invalid_argument("RunNode: op 'LSTM' only supports input_forget=0.");
          }
-         if (GetAttributeIntOrDefault(node, "layout", 0) != 0) {
-           throw std::invalid_argument("RunNode: op 'LSTM' only supports layout=0.");
+         const int64_t layout = GetAttributeIntOrDefault(node, "layout", 0);
+         if (layout != 0 && layout != 1) {
+           throw std::invalid_argument("RunNode: op 'LSTM' only supports layout in {0, 1}, got " +
+                                       std::to_string(layout) + ".");
          }
 
          // ``sequence_lens`` (input #4) is not supported: it requires
@@ -1445,19 +1447,122 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                "RunNode: op 'LSTM' does not support the optional third output 'Y_c'.");
          }
 
-         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const Tensor &x_in = GetInput(node, 0, rt.tensors());
          const Tensor &w = GetInput(node, 1, rt.tensors());
          const Tensor &r = GetInput(node, 2, rt.tensors());
          const Tensor *b = GetOptionalInput(node, 3, rt.tensors());
-         const Tensor *initial_h = GetOptionalInput(node, 5, rt.tensors());
-         const Tensor *initial_c = GetOptionalInput(node, 6, rt.tensors());
+         const Tensor *initial_h_in = GetOptionalInput(node, 5, rt.tensors());
+         const Tensor *initial_c_in = GetOptionalInput(node, 6, rt.tensors());
          const Tensor *p = GetOptionalInput(node, 7, rt.tensors());
 
+         // ``layout == 1`` permutes batch and time/direction axes on a
+         // subset of inputs/outputs. The kernel itself only supports
+         // ``layout == 0`` so we permute on the way in and back on the
+         // way out. ``num_directions`` is always 1 (only ``forward`` is
+         // implemented) which keeps the state-tensor permutations to a
+         // pure reshape on contiguous storage.
+         auto permute_x_batchwise_to_timewise = [](const Tensor &t) {
+           EXT_ENFORCE_INVALID(t.shape.size() == 3u,
+                               "kernel::LSTM: X must have rank 3 for layout=1.");
+           const int64_t batch_size = t.shape[0];
+           const int64_t seq_length = t.shape[1];
+           const int64_t input_size = t.shape[2];
+           std::vector<float> out_data(static_cast<size_t>(batch_size * seq_length * input_size));
+           const float *src = t.AsFloat();
+           for (int64_t n = 0; n < batch_size; ++n) {
+             for (int64_t s = 0; s < seq_length; ++s) {
+               for (int64_t k = 0; k < input_size; ++k) {
+                 const size_t src_idx =
+                     static_cast<size_t>((n * seq_length + s) * input_size + k);
+                 const size_t dst_idx =
+                     static_cast<size_t>((s * batch_size + n) * input_size + k);
+                 out_data[dst_idx] = src[src_idx];
+               }
+             }
+           }
+           return Tensor::FromFloat("", {seq_length, batch_size, input_size},
+                                    std::move(out_data));
+         };
+         auto reshape_initial_state_batchwise_to_timewise = [](const Tensor &t) {
+           // [batch_size, num_directions, hidden_size] -> [num_directions,
+           // batch_size, hidden_size]. ``num_directions`` is always 1 so
+           // the underlying buffer is unchanged; only the shape header
+           // is rewritten.
+           EXT_ENFORCE_INVALID(
+               t.shape.size() == 3u && t.shape[1] == 1,
+               "kernel::LSTM: initial_h/initial_c must have shape "
+               "[batch_size, num_directions=1, hidden_size] for layout=1.");
+           return Tensor::FromFloat("", {1, t.shape[0], t.shape[2]},
+                                    std::vector<float>(t.AsFloat(),
+                                                       t.AsFloat() + (t.size_bytes() /
+                                                                      sizeof(float))));
+         };
+         auto permute_y_timewise_to_batchwise = [](Tensor &&t) {
+           // [seq_length, num_directions=1, batch_size, hidden_size] ->
+           // [batch_size, seq_length, num_directions=1, hidden_size].
+           EXT_ENFORCE_INVALID(t.shape.size() == 4u && t.shape[1] == 1,
+                               "kernel::LSTM: Y must have shape [seq, 1, batch, hidden].");
+           const int64_t seq_length = t.shape[0];
+           const int64_t batch_size = t.shape[2];
+           const int64_t hidden_size = t.shape[3];
+           std::vector<float> out_data(static_cast<size_t>(seq_length * batch_size * hidden_size));
+           const float *src = t.AsFloat();
+           for (int64_t s = 0; s < seq_length; ++s) {
+             for (int64_t n = 0; n < batch_size; ++n) {
+               for (int64_t h = 0; h < hidden_size; ++h) {
+                 const size_t src_idx =
+                     static_cast<size_t>((s * batch_size + n) * hidden_size + h);
+                 const size_t dst_idx =
+                     static_cast<size_t>((n * seq_length + s) * hidden_size + h);
+                 out_data[dst_idx] = src[src_idx];
+               }
+             }
+           }
+           return Tensor::FromFloat(t.name, {batch_size, seq_length, 1, hidden_size},
+                                    std::move(out_data));
+         };
+         auto reshape_y_h_timewise_to_batchwise = [](Tensor &&t) {
+           // [num_directions=1, batch_size, hidden_size] -> [batch_size,
+           // num_directions=1, hidden_size]. ``num_directions`` is 1 so
+           // only the shape header changes.
+           EXT_ENFORCE_INVALID(t.shape.size() == 3u && t.shape[0] == 1,
+                               "kernel::LSTM: Y_h must have shape [1, batch, hidden].");
+           const int64_t batch_size = t.shape[1];
+           const int64_t hidden_size = t.shape[2];
+           return Tensor::FromFloat(
+               t.name, {batch_size, 1, hidden_size},
+               std::vector<float>(t.AsFloat(), t.AsFloat() + (t.size_bytes() / sizeof(float))));
+         };
+
+         Tensor x_layout0_storage;
+         Tensor initial_h_layout0_storage;
+         Tensor initial_c_layout0_storage;
+         const Tensor *x_ptr = &x_in;
+         const Tensor *initial_h_ptr = initial_h_in;
+         const Tensor *initial_c_ptr = initial_c_in;
+         if (layout == 1) {
+           x_layout0_storage = permute_x_batchwise_to_timewise(x_in);
+           x_ptr = &x_layout0_storage;
+           if (initial_h_in != nullptr) {
+             initial_h_layout0_storage = reshape_initial_state_batchwise_to_timewise(*initial_h_in);
+             initial_h_ptr = &initial_h_layout0_storage;
+           }
+           if (initial_c_in != nullptr) {
+             initial_c_layout0_storage = reshape_initial_state_batchwise_to_timewise(*initial_c_in);
+             initial_c_ptr = &initial_c_layout0_storage;
+           }
+         }
+
          kernel::LSTM kernel(rt.kernel_ctx());
-         auto [y, y_h] = kernel(x, w, r, b != nullptr ? *b : Tensor{},
-                                initial_h != nullptr ? *initial_h : Tensor{},
-                                initial_c != nullptr ? *initial_c : Tensor{},
+         auto [y, y_h] = kernel(*x_ptr, w, r, b != nullptr ? *b : Tensor{},
+                                initial_h_ptr != nullptr ? *initial_h_ptr : Tensor{},
+                                initial_c_ptr != nullptr ? *initial_c_ptr : Tensor{},
                                 p != nullptr ? *p : Tensor{});
+
+         if (layout == 1) {
+           y = permute_y_timewise_to_batchwise(std::move(y));
+           y_h = reshape_y_h_timewise_to_batchwise(std::move(y_h));
+         }
 
          auto set_optional_output = [&node, &rt](int index, Tensor output) {
            if (index >= node.output_size()) {

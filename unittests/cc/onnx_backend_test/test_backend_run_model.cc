@@ -197,6 +197,7 @@ TEST(BackendRunModel, Elu) { RunBackendCasesFor("Elu"); }
 TEST(BackendRunModel, LeakyRelu) { RunBackendCasesFor("LeakyRelu"); }
 TEST(BackendRunModel, Swish) { RunBackendCasesFor("Swish"); }
 TEST(BackendRunModel, ThresholdedRelu) { RunBackendCasesFor("ThresholdedRelu"); }
+TEST(BackendRunModel, TopK) { RunBackendCasesFor("TopK"); }
 TEST(BackendRunModel, Hardmax) { RunBackendCasesFor("Hardmax"); }
 TEST(BackendRunModel, LogSoftmax) { RunBackendCasesFor("LogSoftmax"); }
 TEST(BackendRunModel, Flatten) { RunBackendCasesFor("Flatten"); }

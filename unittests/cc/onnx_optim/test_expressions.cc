@@ -87,7 +87,12 @@ TEST(SimplifyExpressions, SimplifyExpression_distribute_floordiv) {
   EXPECT_EQ(get_str(simplify_expression("(4*a+2*b)//2")), "2*a+b");
   EXPECT_EQ(get_str(simplify_expression("(2*a-2*b)//2")), "a-b");
   EXPECT_EQ(get_str(simplify_expression("(2*a+4*b+6*c)//2")), "2*b+3*c+a");
-  EXPECT_EQ(get_str(simplify_expression("(2*b+2*c+1)//2")), "(1+2*b+2*c)//2");
+  // Constant residual smaller than divisor: 1//2 == 0, so (1+2b+2c)//2 → b+c.
+  EXPECT_EQ(get_str(simplify_expression("(2*b+2*c+1)//2")), "b+c");
+  EXPECT_EQ(get_str(simplify_expression("(1+2*b+2*c)//2")), "b+c");
+  // Constant residual equal to or greater than divisor folds into an
+  // additive integer constant.
+  EXPECT_EQ(get_str(simplify_expression("(2*b+2*c+3)//2")), "b+c+1");
   EXPECT_EQ(get_str(simplify_expression("(2*b+3*c)//2")), "(2*b+3*c)//2");
 }
 

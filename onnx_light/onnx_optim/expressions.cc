@@ -728,6 +728,60 @@ NodePtr try_exact_divide(const Node &x, int64_t d) {
   return nullptr;
 }
 
+// Splits an expression `x` into a divisible quotient `q` and an integer
+// residual `r` such that `x == q * d + r`, where every multiplicative term
+// inside `q` is exactly divisible by `d`. Constant leaves that are not
+// divisible by `d` are folded into `r`. Returns false if the expression
+// cannot be split this way (e.g. a non-divisible symbolic factor).
+bool try_split_for_division(const Node &x, int64_t d, NodePtr &quotient, int64_t &residual) {
+  if (auto q = try_exact_divide(x, d)) {
+    quotient = std::move(q);
+    residual = 0;
+    return true;
+  }
+  if (const auto *c = dynamic_cast<const Constant *>(&x)) {
+    quotient = std::make_unique<Constant>(0);
+    residual = c->value;
+    return true;
+  }
+  if (const auto *b = dynamic_cast<const BinOp *>(&x)) {
+    if (b->op == BinOpKind::Add || b->op == BinOpKind::Sub) {
+      NodePtr lq, rq;
+      int64_t lr = 0, rr = 0;
+      if (!try_split_for_division(*b->left, d, lq, lr))
+        return false;
+      if (!try_split_for_division(*b->right, d, rq, rr))
+        return false;
+      quotient = std::make_unique<BinOp>(std::move(lq), b->op, std::move(rq));
+      residual = (b->op == BinOpKind::Add) ? (lr + rr) : (lr - rr);
+      return true;
+    }
+  }
+  if (const auto *u = dynamic_cast<const UnaryOp *>(&x)) {
+    if (u->op == UnaryOpKind::USub) {
+      NodePtr q;
+      int64_t r = 0;
+      if (!try_split_for_division(*u->operand, d, q, r))
+        return false;
+      quotient = std::make_unique<UnaryOp>(UnaryOpKind::USub, std::move(q));
+      residual = -r;
+      return true;
+    }
+    if (u->op == UnaryOpKind::UAdd)
+      return try_split_for_division(*u->operand, d, quotient, residual);
+  }
+  return false;
+}
+
+// Python-style floor division for int64 (rounds toward negative infinity).
+int64_t floor_div_i64(int64_t a, int64_t b) {
+  int64_t q = a / b;
+  int64_t r = a % b;
+  if ((r != 0) && ((r < 0) != (b < 0)))
+    --q;
+  return q;
+}
+
 } // namespace
 
 class DistributeFloorDivOverAddTransformer : public Transformer {
@@ -744,6 +798,17 @@ public:
       return n;
     if (auto r = try_exact_divide(*n->left, d))
       return r;
+    // Fallback: split numerator into (quotient * d) + constant_residual.
+    // Then floor((q*d + r) / d) == q + floor(r/d), valid because every
+    // non-constant term in the numerator is an exact multiple of d.
+    NodePtr q;
+    int64_t r = 0;
+    if (try_split_for_division(*n->left, d, q, r)) {
+      int64_t add = floor_div_i64(r, d);
+      if (add == 0)
+        return q;
+      return std::make_unique<BinOp>(std::move(q), BinOpKind::Add, std::make_unique<Constant>(add));
+    }
     return n;
   }
 };

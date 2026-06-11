@@ -15,7 +15,7 @@ namespace onnx_backend_test {
 
 namespace {
 
-// Promote the single input ValueInfoProto from its placeholder tensor type to
+// Promotes the single input ValueInfoProto from its placeholder tensor type to
 // the actual map(int64, value_type) type expected by the CastMap schema.
 // Mirrors the helper used by ``cases_dict_and_feature_vectorizer.cc``.
 void PromoteInputToMapType(std::vector<TestCase> &registry, int32_t value_type) {
@@ -50,6 +50,16 @@ void AddIntAttr(NodeProto &node, const char *name, int64_t value) {
 // length is either the number of keys (``DENSE``) or ``max_map`` (``SPARSE``).
 // The output element type is controlled by the ``cast_to`` attribute. Mirrors
 // the upstream ONNX ``ai.onnx.ml::CastMap`` operator (since opset 1).
+//
+// Runtime map representation
+// ---------------------------
+// Because onnx-light's runtime is tensor-only, the ``map(int64, T)`` input
+// is represented as **two tensors** in the RuntimeContext:
+//   * ``"<input>_keys"``   — INT64 tensor of keys
+//   * ``"<input>_values"`` — FLOAT or STRING tensor of values
+// where ``<input>`` is the name of the node's single formal input (here "x").
+// The test-case DataSets store these two tensors; the dispatch table looks
+// them up by the same naming convention.
 // ---------------------------------------------------------------------------
 void RegisterCastMapCases(std::vector<TestCase> &registry) {
   const OpsetId opset("ai.onnx.ml", 1);
@@ -70,12 +80,21 @@ void RegisterCastMapCases(std::vector<TestCase> &registry) {
 
     const std::vector<int64_t> keys{2, 0, 1};
     const std::vector<float> values{2.5f, 0.5f, 1.5f};
-    Tensor x = Tensor::FromInt64("", {1}, {0}); // placeholder; promoted below.
+    // Placeholder tensor for the formal input; the ValueInfo is promoted to
+    // map(int64, float) by PromoteInputToMapType so the ONNX checker passes.
+    Tensor x = Tensor::FromInt64("", {1}, {0});
     Tensor y = cast_map.operator()<float, float>(keys, values, "TO_FLOAT", "DENSE", 0);
 
     Expect(node, {x}, {y}, "test_cc_cast_map_int64_float_dense", {default_opset, opset},
            "backend-test", registry);
     PromoteInputToMapType(registry, static_cast<int32_t>(DataType::FLOAT));
+
+    // Replace the placeholder DataSet input with the real runtime tensors
+    // following the "x_keys" / "x_values" naming convention.
+    registry.back().data_sets[0].inputs = {
+        Tensor::FromInt64("x_keys", {static_cast<int64_t>(keys.size())}, keys),
+        Tensor::FromFloat("x_values", {static_cast<int64_t>(values.size())}, values),
+    };
   }
 
   // SPARSE map(int64, float) -> tensor(float). Missing positions are zero.
@@ -97,6 +116,11 @@ void RegisterCastMapCases(std::vector<TestCase> &registry) {
     Expect(node, {x}, {y}, "test_cc_cast_map_int64_float_sparse", {default_opset, opset},
            "backend-test", registry);
     PromoteInputToMapType(registry, static_cast<int32_t>(DataType::FLOAT));
+
+    registry.back().data_sets[0].inputs = {
+        Tensor::FromInt64("x_keys", {static_cast<int64_t>(keys.size())}, keys),
+        Tensor::FromFloat("x_values", {static_cast<int64_t>(values.size())}, values),
+    };
   }
 
   // DENSE map(int64, string) -> tensor(string).
@@ -117,6 +141,11 @@ void RegisterCastMapCases(std::vector<TestCase> &registry) {
     Expect(node, {x}, {y}, "test_cc_cast_map_int64_string_dense", {default_opset, opset},
            "backend-test", registry);
     PromoteInputToMapType(registry, static_cast<int32_t>(DataType::STRING));
+
+    registry.back().data_sets[0].inputs = {
+        Tensor::FromInt64("x_keys", {static_cast<int64_t>(keys.size())}, keys),
+        Tensor::FromStrings("x_values", {static_cast<int64_t>(values.size())}, values),
+    };
   }
 }
 

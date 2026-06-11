@@ -2002,6 +2002,76 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
 
       // ai.onnx.ml
+      {"ai.onnx.ml:CastMap",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         // CastMap's map(int64, T) input is represented at runtime as two
+         // tensors in the RuntimeContext named "<input>_keys" (INT64) and
+         // "<input>_values" (FLOAT or STRING), where <input> is the node's
+         // formal input name (e.g. "x" -> "x_keys" and "x_values").
+         const std::string map_input = node.input(0).as_string();
+         const std::string keys_name = map_input + "_keys";
+         const std::string values_name = map_input + "_values";
+         auto keys_it = rt.tensors().find(keys_name);
+         auto values_it = rt.tensors().find(values_name);
+         if (keys_it == rt.tensors().end()) {
+           throw std::invalid_argument("RunNode: CastMap map input '" + map_input +
+                                       "' requires tensor '" + keys_name + "' (INT64 keys).");
+         }
+         if (values_it == rt.tensors().end()) {
+           throw std::invalid_argument("RunNode: CastMap map input '" + map_input +
+                                       "' requires tensor '" + values_name +
+                                       "' (FLOAT or STRING values).");
+         }
+         const Tensor &x_keys = keys_it->second;
+         const Tensor &x_values = values_it->second;
+         if (x_keys.data_type != static_cast<int32_t>(DataType::INT64)) {
+           throw std::invalid_argument("RunNode: CastMap '" + keys_name +
+                                       "' must be an INT64 tensor.");
+         }
+         const std::vector<int64_t> keys = TensorToVector<int64_t>(x_keys);
+         const std::string cast_to = GetAttributeStringOrDefault(node, "cast_to", "TO_FLOAT");
+         const std::string map_form = GetAttributeStringOrDefault(node, "map_form", "DENSE");
+         const int64_t max_map = GetAttributeIntOrDefault(node, "max_map", 0);
+         if (cast_to != "TO_FLOAT" && cast_to != "TO_INT64" && cast_to != "TO_STRING") {
+           throw std::invalid_argument(
+               "RunNode: CastMap attribute 'cast_to' must be 'TO_FLOAT', 'TO_INT64', or "
+               "'TO_STRING'.");
+         }
+         kernel::CastMap cast_map(rt.kernel_ctx());
+         Tensor y;
+         switch (x_values.data_type) {
+         case static_cast<int32_t>(DataType::FLOAT): {
+           const std::vector<float> values = TensorToVector<float>(x_values);
+           if (cast_to == "TO_FLOAT") {
+             y = cast_map.operator()<float, float>(keys, values, cast_to, map_form, max_map);
+           } else if (cast_to == "TO_INT64") {
+             y = cast_map.operator()<float, int64_t>(keys, values, cast_to, map_form, max_map);
+           } else {
+             y = cast_map.operator()<float, std::string>(keys, values, cast_to, map_form, max_map);
+           }
+           break;
+         }
+         case static_cast<int32_t>(DataType::STRING): {
+           const std::vector<std::string> &values = x_values.AsStrings();
+           if (cast_to == "TO_FLOAT") {
+             y = cast_map.operator()<std::string, float>(keys, values, cast_to, map_form, max_map);
+           } else if (cast_to == "TO_INT64") {
+             y = cast_map.operator()<std::string, int64_t>(keys, values, cast_to, map_form,
+                                                            max_map);
+           } else {
+             y = cast_map.operator()<std::string, std::string>(keys, values, cast_to, map_form,
+                                                                max_map);
+           }
+           break;
+         }
+         default:
+           throw std::invalid_argument("RunNode: CastMap '" + values_name +
+                                       "' must be a FLOAT or STRING tensor.");
+         }
+         SetOutput(node, 0, std::move(y), rt);
+       }},
       {"ai.onnx.ml:SVMRegressor",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);

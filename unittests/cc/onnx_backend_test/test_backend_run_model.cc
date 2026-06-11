@@ -316,6 +316,7 @@ TEST(BackendRunModel, OneHotEncoder) { RunBackendCasesFor("OneHotEncoder"); }
 
 // Text kernels.
 TEST(BackendRunModel, StringNormalizer) { RunBackendCasesFor("StringNormalizer"); }
+TEST(BackendRunModel, TfIdfVectorizer) { RunBackendCasesFor("TfIdfVectorizer"); }
 
 // Control-flow kernels. ``Scan`` body-aware execution is owned by
 // :cpp:class:`kernel::Scan`; :cpp:func:`RunScanNode` additionally handles

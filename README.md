@@ -11,6 +11,7 @@
 [![Build Release Wheels](https://github.com/xadupre/onnx-light/actions/workflows/build_release.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/build_release.yml)
 [![asan-ubsan](https://github.com/xadupre/onnx-light/actions/workflows/asan_ubsan.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/asan_ubsan.yml)
 [![fuzz](https://github.com/xadupre/onnx-light/actions/workflows/fuzz.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/fuzz.yml)
+[![hardening](https://github.com/xadupre/onnx-light/actions/workflows/cq_hardening.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/cq_hardening.yml)
 [![mypy](https://github.com/xadupre/onnx-light/actions/workflows/mypy.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/mypy.yml)
 [![Documentation](https://github.com/xadupre/onnx-light/actions/workflows/docs.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/docs.yml)
 [![Style](https://github.com/xadupre/onnx-light/actions/workflows/style.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/style.yml)

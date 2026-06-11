@@ -52,6 +52,7 @@ jobs:
           CIBW_MANYLINUX_AARCH64_IMAGE: manylinux_2_28
           CIBW_ENVIRONMENT: >
             CMAKE_BUILD_PARALLEL_LEVEL=${{ steps.cpu_count.outputs.count }}
+            CMAKE_ARGS=-DONNX_HARDENING=ON
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -94,6 +95,7 @@ jobs:
           CIBW_ARCHS: ${{ matrix.arch }}
           CIBW_ENVIRONMENT: >
             CMAKE_BUILD_PARALLEL_LEVEL=${{ steps.cpu_count.outputs.count }}
+            CMAKE_ARGS=-DONNX_HARDENING=ON
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -143,6 +145,7 @@ jobs:
           CIBW_ENVIRONMENT: >
             CMAKE_BUILD_PARALLEL_LEVEL=${{ steps.cpu_count.outputs.count }}
             CMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON
+            CMAKE_ARGS=-DONNX_HARDENING=ON
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:

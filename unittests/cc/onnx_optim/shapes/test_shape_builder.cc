@@ -682,8 +682,10 @@ TEST(OnnxOptimShapeBuilder, ConcatSplitApplyInferredShapesToGraph) {
   EXPECT_EQ(ctx.Get("xy").Dtype(), onnx_optim::TensorType::kFloat);
   // non-concat dim (axis=0) comes from both X and Y which both have "a"
   CheckSymbolicDim(ctx, "xy", 0, "a");
-  // concat axis: symbolic (b + c cannot be summed symbolically in C++)
-  CheckIsSymbolic(ctx, "xy", 1);
+  // concat axis: symbolic — ComputeShapeConcat sums the symbolic
+  // dims with ``dim_add`` so the axis dim is the simplified
+  // expression ``b+c``.
+  CheckSymbolicDim(ctx, "xy", 1, "b+c");
 
   // S1, S2: each has rank 2; the non-concat dim is "a"; axis dim is symbolic
   for (const std::string &name : {"S1", "S2"}) {

@@ -208,6 +208,7 @@ TEST(BackendRunModel, Gelu) { RunBackendCasesFor("Gelu"); }
 TEST(BackendRunModel, Mod) { RunBackendCasesFor("Mod"); }
 TEST(BackendRunModel, Clip) { RunBackendCasesFor("Clip"); }
 TEST(BackendRunModel, Compress) { RunBackendCasesFor("Compress"); }
+TEST(BackendRunModel, Unique) { RunBackendCasesFor("Unique"); }
 TEST(BackendRunModel, Concat) { RunBackendCasesFor("Concat"); }
 TEST(BackendRunModel, CumSum) { RunBackendCasesFor("CumSum"); }
 TEST(BackendRunModel, CumProd) { RunBackendCasesFor("CumProd"); }
@@ -228,6 +229,7 @@ TEST(BackendRunModel, BitCast) { RunBackendCasesFor("BitCast"); }
 TEST(BackendRunModel, CausalConvWithState) { RunBackendCasesFor("CausalConvWithState"); }
 TEST(BackendRunModel, Conv) { RunBackendCasesFor("Conv"); }
 TEST(BackendRunModel, ConvInteger) { RunBackendCasesFor("ConvInteger"); }
+TEST(BackendRunModel, ConvTranspose) { RunBackendCasesFor("ConvTranspose"); }
 TEST(BackendRunModel, Col2Im) { RunBackendCasesFor("Col2Im"); }
 TEST(BackendRunModel, DeformConv) { RunBackendCasesFor("DeformConv"); }
 TEST(BackendRunModel, DepthToSpace) { RunBackendCasesFor("DepthToSpace"); }
@@ -235,6 +237,7 @@ TEST(BackendRunModel, Upsample) { RunBackendCasesFor("Upsample"); }
 TEST(BackendRunModel, BatchNormalization) { RunBackendCasesFor("BatchNormalization"); }
 TEST(BackendRunModel, GroupNormalization) { RunBackendCasesFor("GroupNormalization"); }
 TEST(BackendRunModel, GridSample) { RunBackendCasesFor("GridSample"); }
+TEST(BackendRunModel, RoiAlign) { RunBackendCasesFor("RoiAlign"); }
 TEST(BackendRunModel, InstanceNormalization) { RunBackendCasesFor("InstanceNormalization"); }
 TEST(BackendRunModel, LayerNormalization) { RunBackendCasesFor("LayerNormalization"); }
 TEST(BackendRunModel, RMSNormalization) { RunBackendCasesFor("RMSNormalization"); }

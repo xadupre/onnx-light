@@ -10,6 +10,7 @@
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 #include "onnx_kernels/kernels/object_detection/include_object_detection_kernels.h"
+#include "onnx_kernels/kernels/optional/include_optional_kernels.h"
 #include "onnx_kernels/kernels/preview/include_preview_kernels.h"
 #include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
 #include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
@@ -917,6 +918,29 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                      w_zp != nullptr ? *w_zp : Tensor{}, attrs),
                    rt.tensors());
        }},
+      {"ai.onnx:ConvTranspose",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 2);
+         if (node.input_size() > 3) {
+           throw std::invalid_argument("RunNode: op 'ConvTranspose' expects at most 3 inputs, got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const Tensor &w = GetInput(node, 1, rt.tensors());
+         const Tensor *b = GetOptionalInput(node, 2, rt.tensors());
+         kernel::ConvTranspose::Attributes attrs;
+         attrs.kernel_shape = GetAttributeIntsOrDefault(node, "kernel_shape", {});
+         attrs.strides = GetAttributeIntsOrDefault(node, "strides", {});
+         attrs.pads = GetAttributeIntsOrDefault(node, "pads", {});
+         attrs.dilations = GetAttributeIntsOrDefault(node, "dilations", {});
+         attrs.output_padding = GetAttributeIntsOrDefault(node, "output_padding", {});
+         attrs.output_shape = GetAttributeIntsOrDefault(node, "output_shape", {});
+         attrs.group = GetAttributeIntOrDefault(node, "group", 1);
+         attrs.auto_pad = GetAttributeStringOrDefault(node, "auto_pad", "NOTSET");
+         kernel::ConvTranspose k(rt.kernel_ctx());
+         SetOutput(node, 0, k(x, w, b != nullptr ? *b : Tensor{}, attrs), rt);
+       }},
       {"ai.onnx:Cos", MakeUnaryTrampoline<kernel::Cos>()},
       {"ai.onnx:Cosh", MakeUnaryTrampoline<kernel::Cosh>()},
       {"ai.onnx:CumSum", MakeCumulativeTrampoline<kernel::CumSum>()},
@@ -1561,6 +1585,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                      attrs),
                    rt.tensors());
        }},
+      {"ai.onnx:NonZero", MakeUnaryTrampoline<kernel::NonZero>()},
       {"ai.onnx:Not", MakeUnaryTrampoline<kernel::Not>()},
       {"ai.onnx:OneHot",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -1575,6 +1600,64 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          SetOutput(node, 0, k(indices, depth, values, attrs), rt.tensors());
        }},
       {"ai.onnx:Or", MakeBinaryTrampoline<kernel::Or>()},
+      // ai.onnx Optional / OptionalGetElement / OptionalHasElement
+      // (since opset 15; opset 18 widens the supported input types).
+      // The runtime models Optional<Tensor> / Optional<Sequence> as a
+      // simple passthrough — see ``kernels/optional/`` for details.
+      {"ai.onnx:Optional",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const std::string input_name = node.input(0).as_string();
+         if (rt.HasSequence(input_name)) {
+           // Sequence-typed input: passthrough into the optional-of-sequence
+           // output. The Optional kernel itself has no sequence overload
+           // because the runtime ``Sequence`` already models the value, so
+           // we copy the input sequence into the output slot directly.
+           SetOutputSequence(node, 0, rt.GetSequence(input_name), rt);
+         } else {
+           const Tensor &input = GetInput(node, 0, rt.tensors());
+           kernel::Optional k(rt.kernel_ctx());
+           SetOutput(node, 0, k(input), rt);
+         }
+       }},
+      {"ai.onnx:OptionalGetElement",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const std::string input_name = node.input(0).as_string();
+         kernel::OptionalGetElement k(rt.kernel_ctx());
+         if (rt.HasSequence(input_name)) {
+           const Sequence &input_seq = GetInputSequence(node, 0, rt);
+           SetOutputSequence(node, 0, k(input_seq), rt);
+         } else {
+           const Tensor &input = GetInput(node, 0, rt.tensors());
+           SetOutput(node, 0, k(input), rt);
+         }
+       }},
+      {"ai.onnx:OptionalHasElement",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         if (node.input_size() > 1) {
+           throw std::invalid_argument(
+               "RunNode: op 'OptionalHasElement' expects 0 or 1 inputs, got " +
+               std::to_string(node.input_size()) + ".");
+         }
+         RequireOutputCount(node, 1);
+         kernel::OptionalHasElement k(rt.kernel_ctx());
+         if (node.input_size() == 0 || node.input(0).as_string().empty()) {
+           // Opset 18 omitted-input flavour: scalar ``false``.
+           SetOutput(node, 0, k(), rt);
+           return;
+         }
+         const std::string input_name = node.input(0).as_string();
+         if (rt.HasSequence(input_name)) {
+           const Sequence &input_seq = GetInputSequence(node, 0, rt);
+           SetOutput(node, 0, k(input_seq), rt);
+         } else {
+           const Tensor &input = GetInput(node, 0, rt.tensors());
+           SetOutput(node, 0, k(input), rt);
+         }
+       }},
       {"ai.onnx:Pad",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 1);
@@ -1721,6 +1804,31 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          } else {
            SetOutput(node, 0, k.ResizeSizes(x, *sizes, attrs), rt);
          }
+       }},
+      {"ai.onnx:RoiAlign",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 3);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const Tensor &rois = GetInput(node, 1, rt.tensors());
+         const Tensor &batch_indices = GetInput(node, 2, rt.tensors());
+         kernel::RoiAlign::Attributes attrs;
+         attrs.mode = GetAttributeStringOrDefault(node, "mode", attrs.mode);
+         attrs.output_height = GetAttributeIntOrDefault(node, "output_height", attrs.output_height);
+         attrs.output_width = GetAttributeIntOrDefault(node, "output_width", attrs.output_width);
+         attrs.sampling_ratio =
+             GetAttributeIntOrDefault(node, "sampling_ratio", attrs.sampling_ratio);
+         attrs.spatial_scale =
+             GetAttributeFloatOrDefault(node, "spatial_scale", attrs.spatial_scale);
+         // Opset 10 has no ``coordinate_transformation_mode`` attribute and
+         // behaves like ``output_half_pixel``; opset 16+ defaults to
+         // ``half_pixel``.
+         const std::string default_ctm =
+             rt.kernel_ctx().opset.version < 16 ? "output_half_pixel" : "half_pixel";
+         attrs.coordinate_transformation_mode =
+             GetAttributeStringOrDefault(node, "coordinate_transformation_mode", default_ctm);
+         kernel::RoiAlign k(rt.kernel_ctx());
+         SetOutput(node, 0, k(x, rois, batch_indices, attrs), rt);
        }},
       {"ai.onnx:Round", MakeUnaryTrampoline<kernel::Round>()},
       {"ai.onnx:Selu",
@@ -1962,6 +2070,30 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          auto out = kernel(x, k, axis, largest, sorted);
          SetOutput(node, 0, std::move(out.first), rt);
          SetOutput(node, 1, std::move(out.second), rt);
+       }},
+      {"ai.onnx:Unique",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputRange(node, 1, 4);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         kernel::Unique::Attributes attrs;
+         attrs.sorted = GetAttributeIntOrDefault(node, "sorted", 1) != 0;
+         const AttributeProto *axis_attr = FindAttribute(node, "axis");
+         if (axis_attr != nullptr) {
+           attrs.axis = axis_attr->i();
+         }
+         kernel::Unique k(rt.kernel_ctx());
+         auto out = k(x, attrs);
+         SetOutput(node, 0, std::move(out.y), rt);
+         if (node.output_size() >= 2) {
+           SetOutput(node, 1, std::move(out.indices), rt);
+         }
+         if (node.output_size() >= 3) {
+           SetOutput(node, 2, std::move(out.inverse_indices), rt);
+         }
+         if (node.output_size() >= 4) {
+           SetOutput(node, 3, std::move(out.counts), rt);
+         }
        }},
       {"ai.onnx:Unsqueeze", MakeSqueezeLikeTrampoline<kernel::Unsqueeze>("Unsqueeze")},
       {"ai.onnx:Upsample",

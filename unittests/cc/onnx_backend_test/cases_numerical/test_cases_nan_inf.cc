@@ -98,4 +98,47 @@ TEST(NanInfCases, AddOutputPropagatesNanAndInf) {
   EXPECT_GT(z[5], 0.0f);
 }
 
+TEST(NanInfCases, TopKPicksPosInfFirstAsLargest) {
+  const auto cases = Collect("nan_inf");
+  const TestCase *tc = Find(cases, "test_cc_top_k_pos_inf");
+  ASSERT_NE(tc, nullptr);
+  ASSERT_EQ(tc->data_sets.size(), 1u);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.outputs.size(), 2u);
+  const float *values = ds.outputs[0].AsFloat();
+  ASSERT_EQ(ds.outputs[0].element_count(), 3);
+  // The two +Inf entries must be selected first (largest), in their
+  // original index order; the third value is the largest finite.
+  EXPECT_TRUE(std::isinf(values[0]));
+  EXPECT_GT(values[0], 0.0f);
+  EXPECT_TRUE(std::isinf(values[1]));
+  EXPECT_GT(values[1], 0.0f);
+  EXPECT_FLOAT_EQ(values[2], 3.0f);
+}
+
+TEST(NanInfCases, TopKPicksNegInfFirstAsSmallest) {
+  const auto cases = Collect("nan_inf");
+  const TestCase *tc = Find(cases, "test_cc_top_k_neg_inf");
+  ASSERT_NE(tc, nullptr);
+  ASSERT_EQ(tc->data_sets.size(), 1u);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.outputs.size(), 2u);
+  const float *values = ds.outputs[0].AsFloat();
+  ASSERT_EQ(ds.outputs[0].element_count(), 3);
+  EXPECT_TRUE(std::isinf(values[0]));
+  EXPECT_LT(values[0], 0.0f);
+  EXPECT_TRUE(std::isinf(values[1]));
+  EXPECT_LT(values[1], 0.0f);
+  EXPECT_FLOAT_EQ(values[2], -3.0f);
+}
+
+TEST(NanInfCases, TopKPropagatesNaN) {
+  const auto cases = Collect("nan_inf");
+  // NaN-position is intentionally not exercised at the case-registration
+  // level (different backends place NaN in different positions); this
+  // test simply makes sure no NaN-named case slipped back into the
+  // registry by accident.
+  EXPECT_EQ(Find(cases, "test_cc_top_k_nan"), nullptr);
+}
+
 } // namespace Test

@@ -2203,6 +2203,18 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                      is_case_sensitive, stopwords),
                    rt);
        }},
+      {"ai.onnx:StringSplit",
+       [](const NodeProto &node, RuntimeContext &rt) {
+        RequireInputCount(node, 1);
+        RequireOutputCount(node, 2);
+        const Tensor &x = GetInput(node, 0, rt.tensors());
+        const std::string delimiter = GetAttributeStringOrDefault(node, "delimiter", "");
+        const int64_t maxsplit = GetAttributeIntOrDefault(node, "maxsplit", -1);
+        kernel::StringSplit k(rt.kernel_ctx());
+        auto out = k(x, delimiter, maxsplit);
+        SetOutput(node, 0, std::move(out.first), rt);
+        SetOutput(node, 1, std::move(out.second), rt);
+       }},
       {"ai.onnx:Sub", MakeBinaryTrampoline<kernel::Sub>()},
       {"ai.onnx:Sum", MakeVariadicTrampoline<kernel::Sum>()},
       {"ai.onnx:Swish", MakeUnaryAlphaTrampoline<kernel::Swish>("alpha", 1.0f)},

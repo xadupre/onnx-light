@@ -1,0 +1,155 @@
+# Tests for the convenience methods added to proto classes
+# (see onnx_light/onnx_proto/_proto_methods.py).
+import unittest
+
+import numpy as np
+
+import onnx_light.onnx.helper as oh
+from onnx_light.ext_test_case import ExtTestCase
+from onnx_light.onnx_lib import (
+    AttributeProto,
+    FunctionProto,
+    GraphProto,
+    ModelProto,
+    NodeProto,
+    TensorProto,
+    ValueInfoProto,
+)
+
+
+class TestProtoMethods(ExtTestCase):
+    def test_node_set_attribute_scalar(self):
+        node = NodeProto()
+        node.op_type = "Conv"
+        node.set_attribute("axis", 1)
+        node.set_attribute("alpha", 0.5)
+        node.set_attribute("mode", "constant")
+        node.set_attribute("pads", [1, 1, 2, 2])
+
+        self.assertEqual(len(node.attribute), 4)
+        by_name = {a.name: a for a in node.attribute}
+        self.assertEqual(by_name["axis"].type, AttributeProto.INT)
+        self.assertEqual(by_name["axis"].i, 1)
+        self.assertEqual(by_name["alpha"].type, AttributeProto.FLOAT)
+        self.assertEqual(by_name["alpha"].f, 0.5)
+        self.assertEqual(by_name["mode"].type, AttributeProto.STRING)
+        self.assertEqual(by_name["mode"].s, b"constant")
+        self.assertEqual(by_name["pads"].type, AttributeProto.INTS)
+        self.assertEqual(list(by_name["pads"].ints), [1, 1, 2, 2])
+
+    def test_node_set_attribute_replace(self):
+        node = NodeProto()
+        node.set_attribute("axis", 1)
+        node.set_attribute("axis", 2)
+        self.assertEqual(len(node.attribute), 1)
+        self.assertEqual(node.attribute[0].i, 2)
+
+    def test_graph_add_input_output(self):
+        g = GraphProto()
+        vi = g.add_input("X", TensorProto.FLOAT, [None, 3])
+        self.assertIsInstance(vi, ValueInfoProto)
+        self.assertEqual(vi.name, "X")
+        g.add_output("Y", TensorProto.FLOAT, [None, 3])
+        self.assertEqual([v.name for v in g.input], ["X"])
+        self.assertEqual([v.name for v in g.output], ["Y"])
+
+    def test_graph_add_input_accepts_value_info(self):
+        g = GraphProto()
+        vi = oh.make_tensor_value_info("a", TensorProto.FLOAT, [1])
+        g.add_input(vi)
+        self.assertEqual(g.input[0].name, "a")
+
+    def test_graph_add_initializer_from_array(self):
+        g = GraphProto()
+        arr = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32)
+        t = g.add_initializer("W", arr)
+        self.assertEqual(t.name, "W")
+        self.assertEqual(list(t.dims), [2, 2])
+        self.assertEqual(t.data_type, int(TensorProto.FLOAT))
+
+    def test_graph_add_initializer_from_tensor(self):
+        g = GraphProto()
+        t = oh.make_tensor("c", TensorProto.INT64, [2], [3, 4])
+        g.add_initializer(t)
+        self.assertEqual(g.initializer[0].name, "c")
+        self.assertEqual(list(g.initializer[0].dims), [2])
+
+    def test_graph_add_node_with_attributes(self):
+        g = GraphProto()
+        node = g.add_node("Concat", ["a", "b"], ["c"], name="concat0", axis=0)
+        self.assertIsInstance(node, NodeProto)
+        self.assertEqual(node.op_type, "Concat")
+        self.assertEqual(list(node.input), ["a", "b"])
+        self.assertEqual(list(node.output), ["c"])
+        self.assertEqual(node.name, "concat0")
+        self.assertEqual(len(node.attribute), 1)
+        self.assertEqual(node.attribute[0].name, "axis")
+        self.assertEqual(node.attribute[0].i, 0)
+
+    def test_function_add_helpers(self):
+        f = FunctionProto()
+        f.name = "MyFunc"
+        f.add_input("x")
+        f.add_input("a")
+        f.add_output("y")
+        f.add_node("Relu", ["x"], ["y"])
+        f.add_opset("", 18)
+        self.assertEqual(list(f.input), ["x", "a"])
+        self.assertEqual(list(f.output), ["y"])
+        self.assertEqual(f.node[0].op_type, "Relu")
+        self.assertEqual(f.opset_import[0].domain, "")
+        self.assertEqual(f.opset_import[0].version, 18)
+
+    def test_model_add_function_opset_metadata(self):
+        m = ModelProto()
+        m.add_opset("", 18)
+        m.add_opset("ai.onnx.ml", 4)
+        m.add_metadata("author", "alice")
+        # Replace existing metadata entry.
+        m.add_metadata("author", "bob")
+        m.add_metadata("version", "1")
+
+        f = FunctionProto()
+        f.name = "F"
+        m.add_function(f)
+
+        self.assertEqual(
+            [(o.domain, o.version) for o in m.opset_import], [("", 18), ("ai.onnx.ml", 4)]
+        )
+        self.assertEqual(
+            [(p.key, p.value) for p in m.metadata_props], [("author", "bob"), ("version", "1")]
+        )
+        self.assertEqual([fn.name for fn in m.functions], ["F"])
+
+    def test_model_add_function_type_check(self):
+        m = ModelProto()
+        with self.assertRaises(TypeError):
+            m.add_function("not-a-function")
+
+    def test_end_to_end_round_trip(self):
+        g = GraphProto()
+        g.name = "main"
+        g.add_input("X", TensorProto.FLOAT, [None, 3])
+        g.add_output("Y", TensorProto.FLOAT, [None, 3])
+        g.add_initializer("W", np.eye(3, dtype=np.float32))
+        g.add_node("MatMul", ["X", "W"], ["Y"])
+
+        m = ModelProto()
+        m.graph.CopyFrom(g)
+        m.add_opset("", 18)
+        m.ir_version = 10
+        m.add_metadata("producer", "demo")
+
+        buf = m.SerializeToString()
+        m2 = ModelProto()
+        m2.ParseFromString(buf)
+        self.assertEqual([vi.name for vi in m2.graph.input], ["X"])
+        self.assertEqual([vi.name for vi in m2.graph.output], ["Y"])
+        self.assertEqual(m2.graph.initializer[0].name, "W")
+        self.assertEqual(m2.graph.node[0].op_type, "MatMul")
+        self.assertEqual(m2.opset_import[0].version, 18)
+        self.assertEqual(m2.metadata_props[0].key, "producer")
+
+
+if __name__ == "__main__":
+    unittest.main()

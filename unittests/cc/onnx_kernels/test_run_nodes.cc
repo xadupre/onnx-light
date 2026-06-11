@@ -1071,7 +1071,8 @@ TEST(RunNodes, RuntimeContextEventLogSetReplaceRemove) {
 
 TEST(RunNodes, RuntimeContextEventLogCapturesRunGraphMutations) {
   // Smoke test: running a small chain of nodes through the dispatcher
-  // populates the event log via SetOutput / Put on every produced tensor.
+  // populates the event log via SetOutput / Put on every produced tensor
+  // and also appends one ``kRunNode`` event per dispatched node.
   using onnx_kernels::TensorEventAction;
   using onnx_kernels::TensorEventKind;
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
@@ -1084,14 +1085,25 @@ TEST(RunNodes, RuntimeContextEventLogCapturesRunGraphMutations) {
   nodes.push_back(MakeNode("Add", {"t", "z"}, {"y"}));
   RunNodes(nodes.begin(), nodes.end(), rt);
 
-  // Exactly two "add" events tagged as intermediate values.
-  ASSERT_EQ(rt.events().size(), 2u);
+  // Each node produces one tensor ``add`` event tagged as an
+  // intermediate plus one ``run_node`` event summarising the dispatch.
+  ASSERT_EQ(rt.events().size(), 4u);
   EXPECT_EQ(rt.events()[0].name, "t");
   EXPECT_EQ(rt.events()[0].action, TensorEventAction::kAdd);
   EXPECT_EQ(rt.events()[0].kind, TensorEventKind::kIntermediate);
-  EXPECT_EQ(rt.events()[1].name, "y");
-  EXPECT_EQ(rt.events()[1].action, TensorEventAction::kAdd);
-  EXPECT_EQ(rt.events()[1].kind, TensorEventKind::kIntermediate);
+  EXPECT_EQ(rt.events()[1].action, TensorEventAction::kRunNode);
+  EXPECT_EQ(rt.events()[1].op_domain, "ai.onnx");
+  EXPECT_EQ(rt.events()[1].op_type, "Abs");
+  EXPECT_EQ(rt.events()[1].inputs, (std::vector<std::string>{"x"}));
+  EXPECT_GE(rt.events()[1].duration_ns, 0);
+  EXPECT_EQ(rt.events()[2].name, "y");
+  EXPECT_EQ(rt.events()[2].action, TensorEventAction::kAdd);
+  EXPECT_EQ(rt.events()[2].kind, TensorEventKind::kIntermediate);
+  EXPECT_EQ(rt.events()[3].action, TensorEventAction::kRunNode);
+  EXPECT_EQ(rt.events()[3].op_domain, "ai.onnx");
+  EXPECT_EQ(rt.events()[3].op_type, "Add");
+  EXPECT_EQ(rt.events()[3].inputs, (std::vector<std::string>{"t", "z"}));
+  EXPECT_GE(rt.events()[3].duration_ns, 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -2225,6 +2237,52 @@ TEST(RunNodes, RunNodeGRUFromDispatchTable) {
   const onnx_kernels::kernel::GRU gru_kernel(rt.kernel_ctx());
   auto [y_ref, y_h_ref] =
       gru_kernel(rt.tensors().at("X"), rt.tensors().at("W"), rt.tensors().at("R"));
+  (void)y_ref;
+  ASSERT_EQ(y_h.element_count(), y_h_ref.element_count());
+  for (int64_t i = 0; i < y_h.element_count(); ++i) {
+    EXPECT_FLOAT_EQ(y_h.AsFloat()[i], y_h_ref.AsFloat()[i]);
+  }
+}
+
+TEST(RunNodes, RunNodeLSTMFromDispatchTable) {
+  // Single-step (seq_length=1) LSTM with X/W/R only: requests Y_h as the
+  // only output via an empty Y output name, mirroring the ``lstm_defaults``
+  // backend test case (batch=3, input=2, hidden=3).
+  RuntimeContext rt(KernelContext(DefaultOpset(14)));
+
+  constexpr int64_t kSeqLength = 1;
+  constexpr int64_t kBatch = 3;
+  constexpr int64_t kInput = 2;
+  constexpr int64_t kHidden = 3;
+  constexpr int64_t kNumGates = 4;
+  constexpr float kWeightScale = 0.1f;
+
+  rt.tensors()["X"] = Tensor::FromFloat("X", {kSeqLength, kBatch, kInput}, {1, 2, 3, 4, 5, 6});
+  std::vector<float> w_data(static_cast<size_t>(kNumGates * kHidden * kInput), kWeightScale);
+  std::vector<float> r_data(static_cast<size_t>(kNumGates * kHidden * kHidden), kWeightScale);
+  rt.tensors()["W"] = Tensor::FromFloat("W", {1, kNumGates * kHidden, kInput}, w_data);
+  rt.tensors()["R"] = Tensor::FromFloat("R", {1, kNumGates * kHidden, kHidden}, r_data);
+
+  NodeProto node = MakeNode("LSTM", {"X", "W", "R"}, {"", "Y_h"});
+  AttributeProto *hs = node.add_attribute();
+  hs->set_name("hidden_size");
+  hs->set_type(AttributeProto::AttributeType::INT);
+  hs->set_i(kHidden);
+
+  RunNode(node, rt);
+
+  // Y is suppressed (empty output name) so it must not appear in the tensors map.
+  EXPECT_EQ(rt.tensors().find("Y"), rt.tensors().end());
+
+  const Tensor &y_h = rt.tensors().at("Y_h");
+  EXPECT_EQ(y_h.shape, (std::vector<int64_t>{1, kBatch, kHidden}));
+  EXPECT_EQ(y_h.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+
+  // Compare against the kernel's direct output to validate dispatch-time
+  // wiring of inputs, attributes and outputs.
+  const onnx_kernels::kernel::LSTM lstm_kernel(rt.kernel_ctx());
+  auto [y_ref, y_h_ref] =
+      lstm_kernel(rt.tensors().at("X"), rt.tensors().at("W"), rt.tensors().at("R"));
   (void)y_ref;
   ASSERT_EQ(y_h.element_count(), y_h_ref.element_count());
   for (int64_t i = 0; i < y_h.element_count(); ++i) {

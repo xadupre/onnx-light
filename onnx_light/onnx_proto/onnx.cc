@@ -1493,4 +1493,103 @@ void OptionalProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &o
       NAME_EXIST_VALUE(map_value), NAME_EXIST_VALUE(optional_value));
 }
 
+// Convenience builder methods for proto classes.
+// These keep the proto-native overloads (replace-by-name for attributes,
+// idempotent-by-key for metadata, ``(domain, version)`` for opsets).
+
+namespace {
+
+// Sets metadata property *key* to *value* on a metadata_props field, updating
+// an existing entry with the same key in place, and returns a reference to it.
+template <typename RepeatedT>
+StringStringEntryProto &SetOrAddMetadataEntry(RepeatedT &metadata_props, const std::string &key,
+                                              const std::string &value) {
+  for (size_t i = 0; i < metadata_props.size(); ++i) {
+    if (metadata_props[i].ref_key().as_string() == key) {
+      metadata_props[i].set_value(value);
+      return metadata_props[i];
+    }
+  }
+  StringStringEntryProto entry;
+  entry.set_key(key);
+  entry.set_value(value);
+  metadata_props.push_back(entry);
+  return metadata_props.back();
+}
+
+// Appends an OperatorSetIdProto ``(domain, version)`` to *opset_import* and
+// returns a reference to the new entry.
+template <typename RepeatedT>
+OperatorSetIdProto &AddOpsetEntry(RepeatedT &opset_import, const std::string &domain,
+                                  int64_t version) {
+  OperatorSetIdProto opset;
+  opset.set_domain(domain);
+  opset.set_version(version);
+  opset_import.push_back(opset);
+  return opset_import.back();
+}
+
+} // namespace
+
+AttributeProto &NodeProto::set_attribute(const AttributeProto &attr) {
+  const std::string name = attr.ref_name().as_string();
+  for (size_t i = 0; i < attribute_.size(); ++i) {
+    if (attribute_[i].ref_name().as_string() == name) {
+      attribute_[i] = attr;
+      return attribute_[i];
+    }
+  }
+  attribute_.push_back(attr);
+  return attribute_.back();
+}
+
+StringStringEntryProto &NodeProto::add_metadata(const std::string &key, const std::string &value) {
+  return SetOrAddMetadataEntry(metadata_props_, key, value);
+}
+
+NodeProto &GraphProto::add_node(const std::string &op_type, const std::vector<std::string> &inputs,
+                                const std::vector<std::string> &outputs, const std::string &domain,
+                                const std::string &name) {
+  node_.push_back(MakeNode(op_type.c_str(), inputs, outputs,
+                           domain.empty() ? nullptr : domain.c_str(),
+                           name.empty() ? nullptr : name.c_str()));
+  return node_.back();
+}
+
+StringStringEntryProto &GraphProto::add_metadata(const std::string &key, const std::string &value) {
+  return SetOrAddMetadataEntry(metadata_props_, key, value);
+}
+
+NodeProto &FunctionProto::add_node(const std::string &op_type,
+                                   const std::vector<std::string> &inputs,
+                                   const std::vector<std::string> &outputs,
+                                   const std::string &domain, const std::string &name) {
+  node_.push_back(MakeNode(op_type.c_str(), inputs, outputs,
+                           domain.empty() ? nullptr : domain.c_str(),
+                           name.empty() ? nullptr : name.c_str()));
+  return node_.back();
+}
+
+OperatorSetIdProto &FunctionProto::add_opset(const std::string &domain, int64_t version) {
+  return AddOpsetEntry(opset_import_, domain, version);
+}
+
+StringStringEntryProto &FunctionProto::add_metadata(const std::string &key,
+                                                    const std::string &value) {
+  return SetOrAddMetadataEntry(metadata_props_, key, value);
+}
+
+FunctionProto &ModelProto::add_function(const FunctionProto &function) {
+  functions_.push_back(function);
+  return functions_.back();
+}
+
+OperatorSetIdProto &ModelProto::add_opset(const std::string &domain, int64_t version) {
+  return AddOpsetEntry(opset_import_, domain, version);
+}
+
+StringStringEntryProto &ModelProto::add_metadata(const std::string &key, const std::string &value) {
+  return SetOrAddMetadataEntry(metadata_props_, key, value);
+}
+
 } // namespace ONNX_LIGHT_NAMESPACE

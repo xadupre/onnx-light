@@ -8,7 +8,10 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
+#include <limits>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -254,6 +257,43 @@ TEST(KernelClass, CastInPlaceRejectsDtypeMismatch) {
   Tensor wrong_out("", onnx_kernels::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float)));
   EXPECT_THROW(cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::INT32), wrong_out),
                std::invalid_argument);
+}
+
+// Cast-to-STRING uses the ``%.8g`` printf format for floating-point values
+// (matching NumPy's default and onnxruntime's ``CastToString``) and the
+// uppercase ``NaN`` / ``INF`` / ``-INF`` spellings for non-finite inputs.
+TEST(KernelClass, CastClassFloatToStringMatchesOrtFormat) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Cast cast_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {7},
+                               {0.47892547f, 1000000.0f, 1e-7f, std::nanf(""),
+                                std::numeric_limits<float>::infinity(),
+                                -std::numeric_limits<float>::infinity(), 0.0f});
+  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::STRING));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::STRING));
+  const std::vector<std::string> &ys = y.AsStrings();
+  ASSERT_EQ(ys.size(), 7u);
+  EXPECT_EQ(ys[0], "0.47892547");
+  EXPECT_EQ(ys[1], "1000000");
+  EXPECT_EQ(ys[2], "1e-07");
+  EXPECT_EQ(ys[3], "NaN");
+  EXPECT_EQ(ys[4], "INF");
+  EXPECT_EQ(ys[5], "-INF");
+  EXPECT_EQ(ys[6], "0");
+}
+
+TEST(KernelClass, CastClassDoubleToStringMatchesOrtFormat) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Cast cast_kernel{ctx};
+  Tensor x = Tensor::FromDouble("", {4},
+                                {0.123456789, std::nan(""), std::numeric_limits<double>::infinity(),
+                                 -std::numeric_limits<double>::infinity()});
+  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::STRING));
+  const std::vector<std::string> &ys = y.AsStrings();
+  EXPECT_EQ(ys[0], "0.12345679");
+  EXPECT_EQ(ys[1], "NaN");
+  EXPECT_EQ(ys[2], "INF");
+  EXPECT_EQ(ys[3], "-INF");
 }
 
 // ---------------------------------------------------------------------------

@@ -67,12 +67,12 @@ class TestCase(_backend_test_cc.TestCase):
         model: onnx.ModelProto | None,
         data_sets: BackendTestDataSets | None,
         kind: str,
-        rtol: float,
         atol: float,
+        rtol: float,
         tag: str = "",
     ) -> None:
         super().__init__(
-            name=name, model_name=model_name, kind=kind, tag=tag, rtol=rtol, atol=atol
+            name=name, model_name=model_name, kind=kind, tag=tag, atol=atol, rtol=rtol
         )
         self.url = url
         self.model_dir = model_dir
@@ -270,8 +270,8 @@ def expect(
         model=model,
         data_sets=[(list(inputs_dict.values()), list(outputs_dict.values()))],
         kind="node",
-        rtol=1e-3,
         atol=1e-7,
+        rtol=1e-3,
     )
 
 
@@ -370,6 +370,11 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
     for tc in _backend_test_cc.collect_test_cases():
         if tc.name.startswith("test_cc_zipmap_"):
             continue
+        # CastMap uses a two-tensor runtime representation (``x_keys`` /
+        # ``x_values``) for its map(int64, T) input, so the dataset has 2
+        # entries while the formal graph input count is 1.
+        if tc.name.startswith("test_cc_cast_map_"):
+            continue
         data_sets = [
             ([_tensor_to_np(x) for x in ds.inputs], [_tensor_to_np(y) for y in ds.outputs])
             for ds in tc.data_sets
@@ -382,8 +387,8 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
             model=tc.model,
             data_sets=data_sets,
             kind=tc.kind,
-            rtol=tc.rtol,
             atol=tc.atol,
+            rtol=tc.rtol,
             tag=tc.tag,
         )
     return result

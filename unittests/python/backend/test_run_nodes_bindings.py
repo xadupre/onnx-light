@@ -159,9 +159,32 @@ class TestRunNodesBindings(ExtTestCase):
         rt.run_model(model, ctx)
 
         events = ctx.events()
-        # The graph produces two intermediates (``t`` and ``y``).
+        # The graph produces two intermediates (``t`` and ``y``), each
+        # paired with a ``run_node`` event summarising the kernel
+        # dispatch (domain, op_type, inputs, duration).
         produced = [(e.action, e.name, e.kind) for e in events]
-        self.assertEqual(produced, [("add", "t", "intermediate"), ("add", "y", "intermediate")])
+        self.assertEqual(
+            produced,
+            [
+                ("add", "t", "intermediate"),
+                ("run_node", "", "unknown"),
+                ("add", "y", "intermediate"),
+                ("run_node", "", "unknown"),
+            ],
+        )
+        run_node_events = [e for e in events if e.action == "run_node"]
+        self.assertEqual([e.op_type for e in run_node_events], ["Abs", "Add"])
+        self.assertEqual([e.op_domain for e in run_node_events], ["ai.onnx", "ai.onnx"])
+        self.assertEqual([e.inputs for e in run_node_events], [["x"], ["t", "z"]])
+        self.assertTrue(all(e.duration_ns >= 0 for e in run_node_events))
+
+        # ``as_dict`` exposes the new run_node fields.
+        d = run_node_events[0].as_dict()
+        self.assertEqual(d["action"], "run_node")
+        self.assertEqual(d["op_type"], "Abs")
+        self.assertEqual(d["op_domain"], "ai.onnx")
+        self.assertEqual(d["inputs"], ["x"])
+        self.assertEqual(d["duration_ns"], run_node_events[0].duration_ns)
 
     def test_run_model_abs_then_add(self):
         model = parser.parse_model(_MODEL_SRC)

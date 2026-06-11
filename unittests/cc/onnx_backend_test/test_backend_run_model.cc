@@ -207,6 +207,7 @@ TEST(BackendRunModel, Gelu) { RunBackendCasesFor("Gelu"); }
 TEST(BackendRunModel, Mod) { RunBackendCasesFor("Mod"); }
 TEST(BackendRunModel, Clip) { RunBackendCasesFor("Clip"); }
 TEST(BackendRunModel, Compress) { RunBackendCasesFor("Compress"); }
+TEST(BackendRunModel, Concat) { RunBackendCasesFor("Concat"); }
 TEST(BackendRunModel, CumSum) { RunBackendCasesFor("CumSum"); }
 TEST(BackendRunModel, CumProd) { RunBackendCasesFor("CumProd"); }
 TEST(BackendRunModel, DFT) { RunBackendCasesFor("DFT"); }
@@ -221,6 +222,7 @@ TEST(BackendRunModel, Cast) { RunBackendCasesFor("Cast"); }
 TEST(BackendRunModel, CastLike) { RunBackendCasesFor("CastLike"); }
 TEST(BackendRunModel, CenterCropPad) { RunBackendCasesFor("CenterCropPad"); }
 TEST(BackendRunModel, Pad) { RunBackendCasesFor("Pad"); }
+TEST(BackendRunModel, Slice) { RunBackendCasesFor("Slice"); }
 TEST(BackendRunModel, BitCast) { RunBackendCasesFor("BitCast"); }
 TEST(BackendRunModel, CausalConvWithState) { RunBackendCasesFor("CausalConvWithState"); }
 TEST(BackendRunModel, Conv) { RunBackendCasesFor("Conv"); }
@@ -278,6 +280,7 @@ TEST(BackendRunModel, HannWindow) { RunBackendCasesFor("HannWindow"); }
 TEST(BackendRunModel, HammingWindow) { RunBackendCasesFor("HammingWindow"); }
 
 // ai.onnx.ml kernels.
+TEST(BackendRunModel, CastMap) { RunBackendCasesFor("CastMap"); }
 TEST(BackendRunModel, SVMRegressor) { RunBackendCasesFor("SVMRegressor"); }
 TEST(BackendRunModel, SVMClassifier) { RunBackendCasesFor("SVMClassifier"); }
 TEST(BackendRunModel, LinearRegressor) { RunBackendCasesFor("LinearRegressor"); }

@@ -853,6 +853,24 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::Compress k(rt.kernel_ctx());
          SetOutput(node, 0, k(input, condition, axis), rt);
        }},
+      {"ai.onnx:Concat",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         std::vector<Tensor> inputs;
+         inputs.reserve(node.input_size());
+         for (int i = 0; i < node.input_size(); ++i) {
+           inputs.push_back(GetInput(node, i, rt.tensors()));
+         }
+         const AttributeProto *axis_attr = FindAttribute(node, "axis");
+         if (axis_attr == nullptr) {
+           throw std::invalid_argument(
+               "RunNode: op 'Concat' is missing required attribute 'axis'.");
+         }
+         const int64_t axis = axis_attr->i();
+         kernel::Concat k(rt.kernel_ctx());
+         SetOutput(node, 0, k(inputs, axis), rt);
+       }},
       {"ai.onnx:Conv",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 2);
@@ -1345,6 +1363,92 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
       {"ai.onnx:Log", MakeUnaryTrampoline<kernel::Log>()},
       {"ai.onnx:LogSoftmax", MakeAxisTrampoline<kernel::LogSoftmax>()},
+      {"ai.onnx:LSTM",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         if (node.input_size() < 3 || node.input_size() > 8) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects between 3 and 8 input(s), got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         if (node.output_size() < 1 || node.output_size() > 3) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects between 1 and 3 output(s), got " +
+                                       std::to_string(node.output_size()) + ".");
+         }
+
+         // Unsupported attributes: only the default ``forward`` direction
+         // with the default ``Sigmoid``/``Tanh``/``Tanh`` activations, no
+         // ``clip``, ``input_forget == 0``, and ``layout == 0`` are
+         // implemented.
+         const std::string direction =
+             GetAttributeStringOrDefault(node, "direction", "forward");
+         if (direction != "forward") {
+           throw std::invalid_argument(
+               "RunNode: op 'LSTM' only supports direction='forward', got '" + direction + "'.");
+         }
+         if (FindAttribute(node, "activations") != nullptr) {
+           throw std::invalid_argument(
+               "RunNode: op 'LSTM' does not support the 'activations' attribute.");
+         }
+         if (FindAttribute(node, "activation_alpha") != nullptr ||
+             FindAttribute(node, "activation_beta") != nullptr) {
+           throw std::invalid_argument(
+               "RunNode: op 'LSTM' does not support 'activation_alpha'/'activation_beta'.");
+         }
+         if (FindAttribute(node, "clip") != nullptr) {
+           throw std::invalid_argument("RunNode: op 'LSTM' does not support the 'clip' attribute.");
+         }
+         if (GetAttributeIntOrDefault(node, "input_forget", 0) != 0) {
+           throw std::invalid_argument("RunNode: op 'LSTM' only supports input_forget=0.");
+         }
+         if (GetAttributeIntOrDefault(node, "layout", 0) != 0) {
+           throw std::invalid_argument("RunNode: op 'LSTM' only supports layout=0.");
+         }
+
+         // ``sequence_lens`` (input #4) is not supported: it requires
+         // per-batch sequence handling that the FLOAT kernel does not
+         // implement.
+         const Tensor *sequence_lens = GetOptionalInput(node, 4, rt.tensors());
+         if (sequence_lens != nullptr) {
+           throw std::invalid_argument(
+               "RunNode: op 'LSTM' does not support the optional 'sequence_lens' input.");
+         }
+
+         // The current kernel only produces (Y, Y_h); the optional third
+         // output ``Y_c`` (final cell state) is not implemented.
+         if (node.output_size() >= 3 && !node.output(2).as_string().empty()) {
+           throw std::invalid_argument(
+               "RunNode: op 'LSTM' does not support the optional third output 'Y_c'.");
+         }
+
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const Tensor &w = GetInput(node, 1, rt.tensors());
+         const Tensor &r = GetInput(node, 2, rt.tensors());
+         const Tensor *b = GetOptionalInput(node, 3, rt.tensors());
+         const Tensor *initial_h = GetOptionalInput(node, 5, rt.tensors());
+         const Tensor *initial_c = GetOptionalInput(node, 6, rt.tensors());
+         const Tensor *p = GetOptionalInput(node, 7, rt.tensors());
+
+         kernel::LSTM kernel(rt.kernel_ctx());
+         auto [y, y_h] = kernel(x, w, r, b != nullptr ? *b : Tensor{},
+                                initial_h != nullptr ? *initial_h : Tensor{},
+                                initial_c != nullptr ? *initial_c : Tensor{},
+                                p != nullptr ? *p : Tensor{});
+
+         auto set_optional_output = [&node, &rt](int index, Tensor output) {
+           if (index >= node.output_size()) {
+             return;
+           }
+           const std::string name = node.output(index).as_string();
+           if (name.empty()) {
+             return;
+           }
+           output.name = name;
+           rt.Put(name, std::move(output), TensorEventKind::kIntermediate);
+         };
+         set_optional_output(0, std::move(y));
+         set_optional_output(1, std::move(y_h));
+       }},
       {"ai.onnx:LpNormalization",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);
@@ -1759,6 +1863,23 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Sign", MakeUnaryTrampoline<kernel::Sign>()},
       {"ai.onnx:Sin", MakeUnaryTrampoline<kernel::Sin>()},
       {"ai.onnx:Sinh", MakeUnaryTrampoline<kernel::Sinh>()},
+      {"ai.onnx:Slice",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 3);
+         if (node.input_size() > 5) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects between 3 and 5 input(s), got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         RequireOutputCount(node, 1);
+         const Tensor &data = GetInput(node, 0, rt.tensors());
+         const Tensor &starts = GetInput(node, 1, rt.tensors());
+         const Tensor &ends = GetInput(node, 2, rt.tensors());
+         const Tensor *axes = GetOptionalInput(node, 3, rt.tensors());
+         const Tensor *steps = GetOptionalInput(node, 4, rt.tensors());
+         kernel::Slice k(rt.kernel_ctx());
+         SetOutput(node, 0, k(data, starts, ends, axes, steps), rt);
+       }},
       {"ai.onnx:Softmax", MakeAxisTrampoline<kernel::Softmax>()},
       {"ai.onnx:SoftmaxCrossEntropyLoss",
        [](const NodeProto &node, RuntimeContext &rt) {
@@ -2002,6 +2123,76 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
 
       // ai.onnx.ml
+      {"ai.onnx.ml:CastMap",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         // CastMap's map(int64, T) input is represented at runtime as two
+         // tensors in the RuntimeContext named "<input>_keys" (INT64) and
+         // "<input>_values" (FLOAT or STRING), where <input> is the node's
+         // formal input name (e.g. "x" -> "x_keys" and "x_values").
+         const std::string map_input = node.input(0).as_string();
+         const std::string keys_name = map_input + "_keys";
+         const std::string values_name = map_input + "_values";
+         auto keys_it = rt.tensors().find(keys_name);
+         auto values_it = rt.tensors().find(values_name);
+         if (keys_it == rt.tensors().end()) {
+           throw std::invalid_argument("RunNode: CastMap map input '" + map_input +
+                                       "' requires tensor '" + keys_name + "' (INT64 keys).");
+         }
+         if (values_it == rt.tensors().end()) {
+           throw std::invalid_argument("RunNode: CastMap map input '" + map_input +
+                                       "' requires tensor '" + values_name +
+                                       "' (FLOAT or STRING values).");
+         }
+         const Tensor &x_keys = keys_it->second;
+         const Tensor &x_values = values_it->second;
+         if (x_keys.data_type != static_cast<int32_t>(DataType::INT64)) {
+           throw std::invalid_argument("RunNode: CastMap '" + keys_name +
+                                       "' must be an INT64 tensor.");
+         }
+         const std::vector<int64_t> keys = TensorToVector<int64_t>(x_keys);
+         const std::string cast_to = GetAttributeStringOrDefault(node, "cast_to", "TO_FLOAT");
+         const std::string map_form = GetAttributeStringOrDefault(node, "map_form", "DENSE");
+         const int64_t max_map = GetAttributeIntOrDefault(node, "max_map", 0);
+         if (cast_to != "TO_FLOAT" && cast_to != "TO_INT64" && cast_to != "TO_STRING") {
+           throw std::invalid_argument(
+               "RunNode: CastMap attribute 'cast_to' must be 'TO_FLOAT', 'TO_INT64', or "
+               "'TO_STRING'.");
+         }
+         kernel::CastMap cast_map(rt.kernel_ctx());
+         Tensor y;
+         switch (x_values.data_type) {
+         case static_cast<int32_t>(DataType::FLOAT): {
+           const std::vector<float> values = TensorToVector<float>(x_values);
+           if (cast_to == "TO_FLOAT") {
+             y = cast_map.operator()<float, float>(keys, values, cast_to, map_form, max_map);
+           } else if (cast_to == "TO_INT64") {
+             y = cast_map.operator()<float, int64_t>(keys, values, cast_to, map_form, max_map);
+           } else {
+             y = cast_map.operator()<float, std::string>(keys, values, cast_to, map_form, max_map);
+           }
+           break;
+         }
+         case static_cast<int32_t>(DataType::STRING): {
+           const std::vector<std::string> &values = x_values.AsStrings();
+           if (cast_to == "TO_FLOAT") {
+             y = cast_map.operator()<std::string, float>(keys, values, cast_to, map_form, max_map);
+           } else if (cast_to == "TO_INT64") {
+             y = cast_map.operator()<std::string, int64_t>(keys, values, cast_to, map_form,
+                                                            max_map);
+           } else {
+             y = cast_map.operator()<std::string, std::string>(keys, values, cast_to, map_form,
+                                                                max_map);
+           }
+           break;
+         }
+         default:
+           throw std::invalid_argument("RunNode: CastMap '" + values_name +
+                                       "' must be a FLOAT or STRING tensor.");
+         }
+         SetOutput(node, 0, std::move(y), rt);
+       }},
       {"ai.onnx.ml:SVMRegressor",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);

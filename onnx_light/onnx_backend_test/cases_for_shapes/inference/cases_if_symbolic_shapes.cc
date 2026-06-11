@@ -112,7 +112,7 @@ void RegisterIfSymbolicShapesShapeInferenceCases(std::vector<TestCase> &registry
 
   const std::string name = "test_cc_shape_inference_if_symbolic_shapes";
 
-  TestCase tc(name, name, "model", "inference", 1e-3, 1e-7);
+  TestCase tc(name, name, "model", "inference", 1e-7, 1e-3);
 
   ModelProto &model = tc.model;
   InitModel(model, kDefaultIrVersion, {opset});

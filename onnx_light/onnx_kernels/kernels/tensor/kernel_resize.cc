@@ -201,6 +201,240 @@ void ResizeNearest(const Tensor &input, const std::vector<float> &scales,
 
 bool IsNearestMode(const std::string &mode) { return mode == "nearest"; }
 
+bool IsLinearMode(const std::string &mode) { return mode == "linear" || mode == "bilinear"; }
+
+bool IsCubicMode(const std::string &mode) { return mode == "cubic"; }
+
+// Loads element ``idx`` of a floating-point tensor as a double. Only FLOAT and
+// DOUBLE are supported here -- linear / cubic resize requires real arithmetic.
+double LoadFloat(const Tensor &t, int64_t idx) {
+  const uint8_t *const base = t.bytes();
+  switch (t.data_type) {
+  case DataType::FLOAT: {
+    float v;
+    std::memcpy(&v, base + static_cast<std::size_t>(idx) * sizeof(float), sizeof(float));
+    return static_cast<double>(v);
+  }
+  case DataType::DOUBLE: {
+    double v;
+    std::memcpy(&v, base + static_cast<std::size_t>(idx) * sizeof(double), sizeof(double));
+    return v;
+  }
+  default:
+    throw std::invalid_argument(
+        "kernel::Resize: linear/cubic modes only support FLOAT/DOUBLE input types.");
+  }
+}
+
+void StoreFloat(Tensor &t, int64_t idx, double value) {
+  uint8_t *const base = t.data.data();
+  switch (t.data_type) {
+  case DataType::FLOAT: {
+    float v = static_cast<float>(value);
+    std::memcpy(base + static_cast<std::size_t>(idx) * sizeof(float), &v, sizeof(float));
+    return;
+  }
+  case DataType::DOUBLE: {
+    std::memcpy(base + static_cast<std::size_t>(idx) * sizeof(double), &value, sizeof(double));
+    return;
+  }
+  default:
+    throw std::invalid_argument(
+        "kernel::Resize: linear/cubic modes only support FLOAT/DOUBLE output types.");
+  }
+}
+
+// 1-D linear interpolation coefficients (2 taps) for the upstream-reference
+// fractional position ``ratio`` in ``[0, 1]``.
+void LinearCoeffs(double ratio, double coeffs[2]) {
+  coeffs[0] = 1.0 - ratio;
+  coeffs[1] = ratio;
+}
+
+// 1-D cubic interpolation coefficients (4 taps). Mirrors
+// ``onnx/reference/ops/op_resize.py::_cubic_coeffs``.
+void CubicCoeffs(double ratio, double A, double coeffs[4]) {
+  const double r1 = ratio + 1.0;
+  const double r2 = ratio;
+  const double r3 = 1.0 - ratio;
+  const double r4 = (1.0 - ratio) + 1.0;
+  coeffs[0] = ((A * r1 - 5.0 * A) * r1 + 8.0 * A) * r1 - 4.0 * A;
+  coeffs[1] = ((A + 2.0) * r2 - (A + 3.0)) * r2 * r2 + 1.0;
+  coeffs[2] = ((A + 2.0) * r3 - (A + 3.0)) * r3 * r3 + 1.0;
+  coeffs[3] = ((A * r4 - 5.0 * A) * r4 + 8.0 * A) * r4 - 4.0 * A;
+}
+
+// Reproduces ``_get_neighbor_idxes``/``_get_neighbor`` from the upstream
+// reference: returns the ``n`` indices nearest to ``x`` in ``[-pad, in_dim +
+// pad)`` (preferring smaller indices for ties), sorted ascending. The
+// returned indices may be negative or ``>= in_dim``; callers should clamp
+// them before indexing the data array, since ``_get_neighbor`` itself does
+// "edge"-mode padding.
+void NeighborIndices(double x, int64_t n, int64_t in_dim, std::vector<int64_t> &out) {
+  const int64_t pad_width = (n + 1) / 2; // ceil(n / 2)
+  const int64_t limit = in_dim + 2 * pad_width;
+  const double shifted = x + static_cast<double>(pad_width);
+  // Equivalent to: sorted(range(limit), key=lambda i: (abs(shifted - i), i))[:n]
+  // For our use cases, ``n`` is 2 or 4, so a small partial-sort suffices.
+  std::vector<int64_t> idxes(static_cast<std::size_t>(limit));
+  for (int64_t i = 0; i < limit; ++i) {
+    idxes[static_cast<std::size_t>(i)] = i;
+  }
+  std::partial_sort(idxes.begin(), idxes.begin() + n, idxes.end(), [shifted](int64_t a, int64_t b) {
+    const double da = std::abs(shifted - static_cast<double>(a));
+    const double db = std::abs(shifted - static_cast<double>(b));
+    if (da != db) {
+      return da < db;
+    }
+    return a < b;
+  });
+  out.assign(idxes.begin(), idxes.begin() + n);
+  std::sort(out.begin(), out.end());
+  // Map back to the original (unpadded) index space.
+  for (int64_t &v : out) {
+    v -= pad_width;
+  }
+}
+
+// Interpolates ``data`` (a contiguous 1-D buffer of ``in_dim`` doubles) at
+// output position ``out_coord``, using the coordinate transformation ``mode``
+// and the per-mode coefficient generator (linear: 2 taps; cubic: 4 taps).
+// Mirrors ``_interpolate_1d_with_x`` from the upstream Python reference.
+double Interpolate1D(const std::vector<double> &data, int64_t in_dim, int64_t out_dim,
+                     int64_t out_coord, double scale, const std::string &coord_mode,
+                     const std::string &interp_mode, double cubic_a, bool exclude_outside,
+                     std::vector<int64_t> &idx_scratch) {
+  const double x_ori = TransformCoord(out_coord, in_dim, out_dim, scale, coord_mode);
+  const double x_ori_floor = std::floor(x_ori);
+  const bool is_integer = (x_ori - x_ori_floor) == 0.0;
+  double ratio;
+  if (is_integer) {
+    ratio = 1.0;
+  } else {
+    ratio = x_ori - x_ori_floor;
+  }
+
+  double coeffs[4];
+  int64_t n;
+  if (interp_mode == "linear") {
+    n = 2;
+    LinearCoeffs(ratio, coeffs);
+  } else {
+    n = 4;
+    CubicCoeffs(ratio, cubic_a, coeffs);
+  }
+
+  NeighborIndices(x_ori, n, in_dim, idx_scratch);
+
+  if (exclude_outside) {
+    double sum = 0.0;
+    for (int64_t i = 0; i < n; ++i) {
+      if (idx_scratch[static_cast<std::size_t>(i)] < 0 ||
+          idx_scratch[static_cast<std::size_t>(i)] >= in_dim) {
+        coeffs[i] = 0.0;
+      }
+      sum += coeffs[i];
+    }
+    if (sum != 0.0) {
+      for (int64_t i = 0; i < n; ++i) {
+        coeffs[i] /= sum;
+      }
+    }
+  }
+
+  double acc = 0.0;
+  for (int64_t i = 0; i < n; ++i) {
+    int64_t idx = idx_scratch[static_cast<std::size_t>(i)];
+    // ``_get_neighbor`` returns edge-padded values for out-of-range indices.
+    if (idx < 0) {
+      idx = 0;
+    } else if (idx >= in_dim) {
+      idx = in_dim - 1;
+    }
+    acc += coeffs[i] * data[static_cast<std::size_t>(idx)];
+  }
+  return acc;
+}
+
+// Separable per-axis resize for ``"linear"`` and ``"cubic"`` modes. Processes
+// each axis independently using :cpp:func:`Interpolate1D`, writing
+// intermediate results into a scratch buffer. The result matches the
+// upstream reference's fully-nested 1-D interpolation because the operation
+// is a tensor product of per-axis linear combinations.
+void ResizeSeparable(const Tensor &input, const std::vector<float> &scales,
+                     const std::vector<int64_t> &out_shape, const std::string &coord_mode,
+                     const std::string &interp_mode, double cubic_a, bool exclude_outside,
+                     Tensor &output) {
+  const std::size_t rank = out_shape.size();
+  EXT_ENFORCE_INVALID(input.shape.size() == rank,
+                      "kernel::Resize: input rank must equal output rank.");
+
+  // Start from a double-precision copy of the input. We then interpolate
+  // axis-by-axis, replacing the working buffer at each step.
+  std::vector<int64_t> cur_shape(input.shape.begin(), input.shape.end());
+  int64_t cur_elems = 1;
+  for (int64_t d : cur_shape) {
+    cur_elems *= d;
+  }
+  std::vector<double> cur(static_cast<std::size_t>(cur_elems));
+  for (int64_t i = 0; i < cur_elems; ++i) {
+    cur[static_cast<std::size_t>(i)] = LoadFloat(input, i);
+  }
+
+  std::vector<int64_t> idx_scratch;
+  std::vector<double> line;
+  for (std::size_t axis = 0; axis < rank; ++axis) {
+    const int64_t in_dim = cur_shape[axis];
+    const int64_t out_dim = out_shape[axis];
+    if (in_dim == out_dim && static_cast<double>(scales[axis]) == 1.0) {
+      // Skip axes that are not actually being resized.
+      continue;
+    }
+    // Compute outer/inner stride sizes around ``axis``.
+    int64_t outer = 1;
+    for (std::size_t k = 0; k < axis; ++k) {
+      outer *= cur_shape[k];
+    }
+    int64_t inner = 1;
+    for (std::size_t k = axis + 1; k < rank; ++k) {
+      inner *= cur_shape[k];
+    }
+    std::vector<int64_t> new_shape = cur_shape;
+    new_shape[axis] = out_dim;
+    int64_t new_elems = 1;
+    for (int64_t d : new_shape) {
+      new_elems *= d;
+    }
+    std::vector<double> next(static_cast<std::size_t>(new_elems));
+    line.assign(static_cast<std::size_t>(in_dim), 0.0);
+
+    for (int64_t o = 0; o < outer; ++o) {
+      for (int64_t in = 0; in < inner; ++in) {
+        // Gather the 1-D line along ``axis`` at outer position ``o`` and
+        // inner position ``in``.
+        for (int64_t k = 0; k < in_dim; ++k) {
+          line[static_cast<std::size_t>(k)] =
+              cur[static_cast<std::size_t>((o * in_dim + k) * inner + in)];
+        }
+        for (int64_t k = 0; k < out_dim; ++k) {
+          const double v =
+              Interpolate1D(line, in_dim, out_dim, k, static_cast<double>(scales[axis]), coord_mode,
+                            interp_mode, cubic_a, exclude_outside, idx_scratch);
+          next[static_cast<std::size_t>((o * out_dim + k) * inner + in)] = v;
+        }
+      }
+    }
+    cur = std::move(next);
+    cur_shape = new_shape;
+  }
+
+  EXT_ENFORCE_INVALID(cur_shape == out_shape,
+                      "kernel::Resize: separable resize produced an unexpected shape.");
+  for (std::size_t i = 0; i < cur.size(); ++i) {
+    StoreFloat(output, static_cast<int64_t>(i), cur[i]);
+  }
+}
+
 // Applies ``keep_aspect_ratio_policy`` to a per-axis ``sizes`` request and
 // returns the effective target output size for each resized axis.
 std::vector<int64_t> ApplyKeepAspectRatioPolicy(const std::vector<int64_t> &requested_sizes,
@@ -245,16 +479,29 @@ std::vector<int64_t> ApplyKeepAspectRatioPolicy(const std::vector<int64_t> &requ
 }
 
 void CheckSupportedAttrs(const Resize::Attributes &attrs) {
-  if (!IsNearestMode(attrs.mode)) {
-    throw std::invalid_argument("kernel::Resize: only 'nearest' interpolation mode is supported "
-                                "in this reference implementation; got '" +
-                                attrs.mode + "'.");
+  if (!IsNearestMode(attrs.mode) && !IsLinearMode(attrs.mode) && !IsCubicMode(attrs.mode)) {
+    throw std::invalid_argument("kernel::Resize: unsupported interpolation mode '" + attrs.mode +
+                                "'. Supported modes: 'nearest', 'linear'/'bilinear', 'cubic'.");
   }
   if (attrs.coordinate_transformation_mode == "tf_crop_and_resize") {
     throw std::invalid_argument(
         "kernel::Resize: 'tf_crop_and_resize' coordinate_transformation_mode is not supported "
         "in this reference implementation.");
   }
+}
+
+// Dispatches to the nearest or separable (linear/cubic) implementation
+// according to ``attrs.mode``.
+void RunResize(const Tensor &X, const std::vector<float> &scales_vec,
+               const std::vector<int64_t> &out_shape, const Resize::Attributes &attrs,
+               Tensor &output) {
+  if (IsNearestMode(attrs.mode)) {
+    ResizeNearest(X, scales_vec, out_shape, attrs.nearest_mode,
+                  attrs.coordinate_transformation_mode, output);
+    return;
+  }
+  ResizeSeparable(X, scales_vec, out_shape, attrs.coordinate_transformation_mode, attrs.mode,
+                  static_cast<double>(attrs.cubic_coeff_a), attrs.exclude_outside != 0, output);
 }
 
 } // namespace
@@ -298,8 +545,7 @@ void Resize::operator()(const Tensor &X, const Tensor &scales, const Attributes 
   EXT_ENFORCE_INVALID(output.shape == out_shape,
                       "kernel::Resize: preallocated output shape mismatch.");
 
-  ResizeNearest(X, scales_vec, out_shape, attrs.nearest_mode, attrs.coordinate_transformation_mode,
-                output);
+  RunResize(X, scales_vec, out_shape, attrs, output);
 }
 
 Tensor Resize::ResizeSizes(const Tensor &X, const Tensor &sizes, const Attributes &attrs) const {
@@ -335,8 +581,7 @@ Tensor Resize::ResizeSizes(const Tensor &X, const Tensor &sizes, const Attribute
   }
   Tensor output("", X.data_type, out_shape,
                 std::vector<uint8_t>(PackedByteSize(X.data_type, total_elements)));
-  ResizeNearest(X, scales_vec, out_shape, attrs.nearest_mode, attrs.coordinate_transformation_mode,
-                output);
+  RunResize(X, scales_vec, out_shape, attrs, output);
   return output;
 }
 

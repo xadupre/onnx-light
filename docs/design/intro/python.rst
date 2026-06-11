@@ -33,10 +33,11 @@ function. We need four functions to build the graph:
   declares a variable (input or output) given its shape and type;
 * :func:`make_node <onnx_light.onnx.helper.make_node>`:
   creates a node defined by an operation (an operator type), its inputs and outputs;
-* ``make_graph``: a function to create an ONNX graph with the objects
+* :func:`make_graph <onnx_light.onnx.helper.make_graph>`: a function to create
+  an ONNX graph with the objects
   created by the two previous functions;
-* ``make_model``: a last function which merges the graph and additional
-  metadata.
+* :func:`make_model <onnx_light.onnx.helper.make_model>`: a last function
+  which merges the graph and additional metadata.
 
 All along the creation, we need to give a name to every input, output of
 every node of the graph. Inputs and outputs of the graph are defined by

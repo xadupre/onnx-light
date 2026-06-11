@@ -228,7 +228,22 @@ void ComputeShapeReshape(ShapesContext &ctx, const NodeProto &node) {
     out_shape[neg_one_index] = InferredOrFallbackDim(data_shape, out_shape, neg_one_index);
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, dtype, std::move(out_shape)));
+  OptimTensor out_tensor(nullptr, dtype, std::move(out_shape));
+
+  // Propagate ``ValueAsShape`` when the input ``data`` already carries one
+  // and the output is 1-D with the same number of elements. ``ValueAsShape``
+  // represents the flattened sequence of (symbolic or concrete) values held
+  // by the tensor, so a 1-D ``Reshape`` that preserves the element count
+  // simply forwards the same sequence. This keeps downstream consumers
+  // (``Expand``, ``ConstantOfShape``, another ``Reshape``, …) able to
+  // recover concrete/symbolic dimensions through ``Reshape`` nodes used in
+  // shape arithmetic.
+  if (data.HasValueAsShape() && out_tensor.Shape().Rank() == 1 && out_tensor.Shape()[0].IsInt() &&
+      static_cast<std::size_t>(out_tensor.Shape()[0].AsInt()) == data.ValueAsShape().Rank()) {
+    out_tensor.SetValueAsShape(data.ValueAsShape());
+  }
+
+  ctx.Set(node.output(0), std::move(out_tensor));
 }
 
 } // namespace tensor

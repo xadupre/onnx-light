@@ -418,6 +418,45 @@ TEST(OnnxOptimShapesTensorReshape, RejectsWrongOpType) {
   EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeReshape(ctx, node), std::invalid_argument);
 }
 
+TEST(OnnxOptimShapesTensorReshape, PropagatesValueAsShapeWhenOutputIs1D) {
+  // Reshape of a 1-D shape tensor to ``[-1]`` (or to its own length) must
+  // forward the ``ValueAsShape`` annotation so downstream consumers can
+  // recover the per-element symbolic/concrete values.
+  NodeProto node = MakeReshapeNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor data(
+      nullptr, onnx_optim::TensorType::kInt64,
+      onnx_optim::OptimShape{onnx_optim::OptimDim(static_cast<int64_t>(3))});
+  data.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4),
+                                              onnx_optim::OptimDim("M")});
+  ctx.Set("X", std::move(data));
+  ctx.Set("S", MakeShapeInput({-1}));
+
+  onnx_optim::shapes::tensor::ComputeShapeReshape(ctx, node);
+
+  ASSERT_TRUE(ctx.Get("Y").HasValueAsShape());
+  EXPECT_EQ(ctx.Get("Y").ValueAsShape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4),
+                                    onnx_optim::OptimDim("M")}));
+  EXPECT_EQ(ctx.Get("Y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+}
+
+TEST(OnnxOptimShapesTensorReshape, DoesNotPropagateValueAsShapeWhenOutputRankNot1) {
+  NodeProto node = MakeReshapeNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor data(
+      nullptr, onnx_optim::TensorType::kInt64,
+      onnx_optim::OptimShape{onnx_optim::OptimDim(static_cast<int64_t>(4))});
+  data.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3),
+                                              onnx_optim::OptimDim(4), onnx_optim::OptimDim(5)});
+  ctx.Set("X", std::move(data));
+  ctx.Set("S", MakeShapeInput({2, 2}));
+
+  onnx_optim::shapes::tensor::ComputeShapeReshape(ctx, node);
+
+  EXPECT_FALSE(ctx.Get("Y").HasValueAsShape());
+}
+
 TEST(OnnxOptimShapesTensorReshape, ThrowsWhenInputMissingFromContext) {
   NodeProto node = MakeReshapeNode();
   onnx_optim::shapes::ShapesContext ctx;

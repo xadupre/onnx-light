@@ -115,6 +115,7 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx:BitCast"), table.end());
   EXPECT_NE(table.find("ai.onnx:Einsum"), table.end());
   EXPECT_NE(table.find("ai.onnx:DFT"), table.end());
+  EXPECT_NE(table.find("ai.onnx:TopK"), table.end());
   // Quantization kernels.
   EXPECT_NE(table.find("ai.onnx:QuantizeLinear"), table.end());
   EXPECT_NE(table.find("ai.onnx:DequantizeLinear"), table.end());

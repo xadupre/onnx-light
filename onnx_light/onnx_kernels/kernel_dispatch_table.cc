@@ -1925,6 +1925,44 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Tan", MakeUnaryTrampoline<kernel::Tan>()},
       {"ai.onnx:Tanh", MakeUnaryTrampoline<kernel::Tanh>()},
       {"ai.onnx:ThresholdedRelu", MakeUnaryAlphaTrampoline<kernel::ThresholdedRelu>("alpha", 1.0f)},
+      {"ai.onnx:TopK",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireOutputCount(node, 2);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const int64_t axis = GetAttributeIntOrDefault(node, "axis", -1);
+         const bool largest = GetAttributeIntOrDefault(node, "largest", 1) != 0;
+         const bool sorted = GetAttributeIntOrDefault(node, "sorted", 1) != 0;
+
+         // ``k``: from input[1] (1-D INT64 tensor of size 1) for opset >= 10,
+         // otherwise from the pre-opset-10 ``k`` INT attribute (required).
+         int64_t k = 0;
+         const int64_t opset_version = rt.kernel_ctx().opset.version;
+         if (opset_version >= 10) {
+           RequireInputCount(node, 2);
+           const Tensor &k_tensor = GetInput(node, 1, rt.tensors());
+           if (k_tensor.element_count() != 1) {
+             throw std::invalid_argument(
+                 "RunNode: op 'TopK' input 'K' must be a 1-D tensor with a single element.");
+           }
+           if (k_tensor.data_type != static_cast<int32_t>(DataType::INT64)) {
+             throw std::invalid_argument("RunNode: op 'TopK' input 'K' must be INT64.");
+           }
+           k = k_tensor.AsInt64()[0];
+         } else {
+           RequireInputCount(node, 1);
+           const AttributeProto *k_attr = FindAttribute(node, "k");
+           if (k_attr == nullptr) {
+             throw std::invalid_argument(
+                 "RunNode: op 'TopK' requires the 'k' attribute for opset < 10.");
+           }
+           k = k_attr->i();
+         }
+
+         kernel::TopK kernel(rt.kernel_ctx());
+         auto out = kernel(x, k, axis, largest, sorted);
+         SetOutput(node, 0, std::move(out.first), rt);
+         SetOutput(node, 1, std::move(out.second), rt);
+       }},
       {"ai.onnx:Unsqueeze", MakeSqueezeLikeTrampoline<kernel::Unsqueeze>("Unsqueeze")},
       {"ai.onnx:Upsample",
        [](const NodeProto &node, RuntimeContext &rt) {

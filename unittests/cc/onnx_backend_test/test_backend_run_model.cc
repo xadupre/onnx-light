@@ -231,6 +231,7 @@ TEST(BackendRunModel, CausalConvWithState) { RunBackendCasesFor("CausalConvWithS
 TEST(BackendRunModel, Conv) { RunBackendCasesFor("Conv"); }
 TEST(BackendRunModel, ConvInteger) { RunBackendCasesFor("ConvInteger"); }
 TEST(BackendRunModel, ConvTranspose) { RunBackendCasesFor("ConvTranspose"); }
+TEST(BackendRunModel, Transpose) { RunBackendCasesFor("Transpose"); }
 TEST(BackendRunModel, Col2Im) { RunBackendCasesFor("Col2Im"); }
 TEST(BackendRunModel, DeformConv) { RunBackendCasesFor("DeformConv"); }
 TEST(BackendRunModel, DepthToSpace) { RunBackendCasesFor("DepthToSpace"); }

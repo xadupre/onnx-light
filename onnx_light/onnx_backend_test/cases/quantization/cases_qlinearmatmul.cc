@@ -33,16 +33,9 @@ NodeProto MakeQLinearMatMulNode() {
   return node;
 }
 
-// Encodes an IEEE-754 binary32 value as an IEEE-754 binary16 bit pattern
-// using round-to-nearest-even: provided by
-// ``onnx_kernels/kernels/tensor/cast_helper.h`` as ``kernel::FloatToFloat16Bits``.
-
-// Builds a FLOAT16 scalar tensor from a float32 value.
-Tensor MakeFloat16Scalar(const std::string &name, float value) {
-  Tensor t = Tensor::FromUint16(name, {}, {kernel::FloatToFloat16Bits(value)});
-  t.data_type = static_cast<int32_t>(DataType::FLOAT16);
-  return t;
-}
+// The IEEE-754 binary16 encoder and FLOAT16 scalar builder are provided by
+// ``onnx_kernels/kernels/tensor/cast_helper.h`` as ``kernel::FloatToFloat16Bits``
+// and ``kernel::MakeFloat16Scalar``.
 
 // Builds an INT8/UINT8 scalar tensor (used for zero points). ``dtype`` must be
 // ``DataType::INT8`` or ``DataType::UINT8``; ``value`` is reinterpreted as the
@@ -114,9 +107,9 @@ void RegisterQLinearMatMulCases(std::vector<TestCase> &registry) {
     Tensor a_scale_f = Tensor::FromFloat("a_scale", {}, {0.0066f});
     Tensor b_scale_f = Tensor::FromFloat("b_scale", {}, {0.00705f});
     Tensor y_scale_f = Tensor::FromFloat("y_scale", {}, {0.0107f});
-    Tensor a_scale_h = MakeFloat16Scalar("a_scale", 0.0066f);
-    Tensor b_scale_h = MakeFloat16Scalar("b_scale", 0.00705f);
-    Tensor y_scale_h = MakeFloat16Scalar("y_scale", 0.0107f);
+    Tensor a_scale_h = kernel::MakeFloat16Scalar("a_scale", 0.0066f);
+    Tensor b_scale_h = kernel::MakeFloat16Scalar("b_scale", 0.00705f);
+    Tensor y_scale_h = kernel::MakeFloat16Scalar("y_scale", 0.0107f);
 
     Tensor a_zp = MakeQuantScalar("a_zero_point", dtype, a_zp_val);
     Tensor b_zp_2d = MakeQuantScalar("b_zero_point", dtype, b_zp_val_2d);

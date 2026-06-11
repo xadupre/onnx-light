@@ -16,33 +16,10 @@ namespace onnx_backend_test {
 
 namespace {
 
-// IEEE-754 binary16 encoder (round-to-nearest-even) is provided by
-// ``onnx_kernels/kernels/tensor/cast_helper.h`` as ``kernel::FloatToFloat16Bits``.
-
-// ``float`` -> ``bfloat16`` round-to-nearest-even encoder.
-uint16_t FloatToBfloat16Bits(float f) {
-  uint32_t u;
-  std::memcpy(&u, &f, sizeof(u));
-  if ((u & 0x7f800000u) == 0x7f800000u && (u & 0x007fffffu) != 0u) {
-    return static_cast<uint16_t>((u >> 16) | 0x0040u);
-  }
-  const uint32_t rounding_bias = 0x00007fffu + ((u >> 16) & 1u);
-  return static_cast<uint16_t>((u + rounding_bias) >> 16);
-}
-
-// Builds a FLOAT16 scalar tensor from a ``float`` sample value.
-Tensor MakeFloat16Scalar(const std::string &name, float value) {
-  Tensor t = Tensor::FromUint16(name, {}, {kernel::FloatToFloat16Bits(value)});
-  t.data_type = static_cast<int32_t>(DataType::FLOAT16);
-  return t;
-}
-
-// Builds a BFLOAT16 scalar tensor from a ``float`` sample value.
-Tensor MakeBfloat16Scalar(const std::string &name, float value) {
-  Tensor t = Tensor::FromUint16(name, {}, {FloatToBfloat16Bits(value)});
-  t.data_type = static_cast<int32_t>(DataType::BFLOAT16);
-  return t;
-}
+// IEEE-754 binary16 / bfloat16 encoders are provided by
+// ``onnx_kernels/kernels/tensor/cast_helper.h``; the scalar tensor builders
+// ``kernel::MakeFloat16Scalar`` / ``kernel::MakeBfloat16Scalar`` are used
+// directly by the case registrations below.
 
 } // namespace
 
@@ -98,9 +75,9 @@ void RegisterRangeCases(std::vector<TestCase> &registry) {
     node.add_input("delta");
     node.add_output("output");
 
-    const Tensor start = MakeFloat16Scalar("start", 1.0f);
-    const Tensor limit = MakeFloat16Scalar("limit", 5.0f);
-    const Tensor delta = MakeFloat16Scalar("delta", 2.0f);
+    const Tensor start = kernel::MakeFloat16Scalar("start", 1.0f);
+    const Tensor limit = kernel::MakeFloat16Scalar("limit", 5.0f);
+    const Tensor delta = kernel::MakeFloat16Scalar("delta", 2.0f);
     const Tensor output = kernel::Range(ctx_v27)(start, limit, delta);
     Expect(node, {start, limit, delta}, {output}, "test_range_float16_type_positive_delta",
            {opset_v27}, "backend-test", registry);
@@ -116,9 +93,9 @@ void RegisterRangeCases(std::vector<TestCase> &registry) {
     node.add_input("delta");
     node.add_output("output");
 
-    const Tensor start = MakeBfloat16Scalar("start", 1.0f);
-    const Tensor limit = MakeBfloat16Scalar("limit", 5.0f);
-    const Tensor delta = MakeBfloat16Scalar("delta", 2.0f);
+    const Tensor start = kernel::MakeBfloat16Scalar("start", 1.0f);
+    const Tensor limit = kernel::MakeBfloat16Scalar("limit", 5.0f);
+    const Tensor delta = kernel::MakeBfloat16Scalar("delta", 2.0f);
     const Tensor output = kernel::Range(ctx_v27)(start, limit, delta);
     Expect(node, {start, limit, delta}, {output}, "test_range_bfloat16_type_positive_delta",
            {opset_v27}, "backend-test", registry);

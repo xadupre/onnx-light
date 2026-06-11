@@ -45,20 +45,9 @@ std::vector<int32_t> Arange30() {
   return values;
 }
 
-// IEEE-754 binary16 encoder (round-to-nearest-even) is provided by
-// ``onnx_kernels/kernels/tensor/cast_helper.h`` as ``kernel::FloatToFloat16Bits``.
-
-// Builds a FLOAT16 tensor of the requested shape from a flattened list of
-// float32 sample values rounded via ``FloatToFloat16Bits``.
-Tensor MakeFloat16Tensor(const std::vector<int64_t> &shape, const std::vector<float> &values) {
-  std::vector<uint16_t> bits(values.size());
-  for (size_t i = 0; i < values.size(); ++i) {
-    bits[i] = kernel::FloatToFloat16Bits(values[i]);
-  }
-  Tensor t = Tensor::FromUint16("", shape, bits);
-  t.data_type = static_cast<int32_t>(DataType::FLOAT16);
-  return t;
-}
+// IEEE-754 binary16 encoder (round-to-nearest-even) and the FLOAT16 tensor
+// builder ``kernel::MakeFloat16Tensor`` are provided by
+// ``onnx_kernels/kernels/tensor/cast_helper.h``.
 
 } // namespace
 
@@ -78,8 +67,8 @@ void RegisterModCases(std::vector<TestCase> &registry) {
   // From Mod.export_mod_mixed_sign_float32() / _float64().
   {
     NodeProto node = MakeModNode(/*fmod=*/1);
-    Tensor x = MakeFloat16Tensor({6}, {-4.3f, 7.2f, 5.0f, 4.3f, -7.2f, 8.0f});
-    Tensor y = MakeFloat16Tensor({6}, {2.1f, -3.4f, 8.0f, -2.1f, 3.4f, 5.0f});
+    Tensor x = kernel::MakeFloat16Tensor("", {6}, {-4.3f, 7.2f, 5.0f, 4.3f, -7.2f, 8.0f});
+    Tensor y = kernel::MakeFloat16Tensor("", {6}, {2.1f, -3.4f, 8.0f, -2.1f, 3.4f, 5.0f});
     Tensor z = mod_kernel(x, y, /*fmod=*/1);
     Expect(node, {x, y}, {z}, "test_mod_mixed_sign_float16", {opset}, "backend-test", registry);
   }

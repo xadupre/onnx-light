@@ -33,7 +33,9 @@ from onnx_light.onnx.reference import ReferenceEvaluator
 # test cases whose graph(s) only use these ops are the only ones
 # :class:`ReferenceEvaluator` can execute today. The set mirrors
 # ``_IMPLEMENTED_OPS`` in ``test_backend_with_run_model.py``.
-_IMPLEMENTED_OPS: frozenset[str] = frozenset({"Abs", "Neg", "Add", "Sub", "Mul", "Div"})
+_IMPLEMENTED_OPS: frozenset[str] = frozenset(
+    {"Abs", "Adagrad", "Adam", "Add", "Div", "Momentum", "Mul", "Neg", "Sub"}
+)
 
 
 def reference_evaluator_backend(model: onnxl.ModelProto, *inputs: np.ndarray) -> list[np.ndarray]:

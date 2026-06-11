@@ -28,7 +28,9 @@ from onnx_light.onnx_py._onnxpykernels import runtime as rt
 # ``onnx_light/onnx_kernels/run_nodes.cc::KernelDispatchTable``. Backend
 # test cases whose top-level graph is a single node of one of these ops are
 # the only ones ``RunModel`` can execute today.
-_IMPLEMENTED_OPS: frozenset[str] = frozenset({"Abs", "Neg", "Add", "Sub", "Mul", "Div"})
+_IMPLEMENTED_OPS: frozenset[str] = frozenset(
+    {"Abs", "Adagrad", "Adam", "Add", "Div", "Momentum", "Mul", "Neg", "Sub"}
+)
 
 
 def _default_opset_version(model: onnxl.ModelProto) -> int:

@@ -1496,6 +1496,24 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                    rt.tensors());
        }},
       {"ai.onnx:MatMul", MakeBinaryTrampoline<kernel::MatMul>()},
+      {"ai.onnx:MatMulInteger",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 2);
+         if (node.input_size() > 4) {
+           throw std::invalid_argument("RunNode: op 'MatMulInteger' expects at most 4 inputs, got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         RequireOutputCount(node, 1);
+         const Tensor &a = GetInput(node, 0, rt.tensors());
+         const Tensor &b = GetInput(node, 1, rt.tensors());
+         const Tensor *a_zp = GetOptionalInput(node, 2, rt.tensors());
+         const Tensor *b_zp = GetOptionalInput(node, 3, rt.tensors());
+         kernel::MatMulInteger k(rt.kernel_ctx());
+         SetOutput(node, 0,
+                   k(a, b, a_zp != nullptr ? *a_zp : Tensor{},
+                     b_zp != nullptr ? *b_zp : Tensor{}),
+                   rt.tensors());
+       }},
       {"ai.onnx:Max", MakeVariadicTrampoline<kernel::Max>()},
       {"ai.onnx:MaxPool",
        [](const NodeProto &node, RuntimeContext &rt) {

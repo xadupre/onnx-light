@@ -167,6 +167,7 @@ TEST(BackendRunModel, Tanh) { RunBackendCasesFor("Tanh"); }
 
 // Additional binary, no-attribute math kernels.
 TEST(BackendRunModel, MatMul) { RunBackendCasesFor("MatMul"); }
+TEST(BackendRunModel, MatMulInteger) { RunBackendCasesFor("MatMulInteger"); }
 TEST(BackendRunModel, PRelu) { RunBackendCasesFor("PRelu"); }
 TEST(BackendRunModel, Pow) { RunBackendCasesFor("Pow"); }
 

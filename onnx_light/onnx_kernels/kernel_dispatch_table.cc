@@ -1876,6 +1876,18 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            SetOutput(node, 0, k.ResizeSizes(x, *sizes, attrs), rt);
          }
        }},
+      {"ai.onnx:ReverseSequence",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         const Tensor &input = GetInput(node, 0, rt.tensors());
+         const Tensor &sequence_lens = GetInput(node, 1, rt.tensors());
+         kernel::ReverseSequence::Attributes attrs;
+         attrs.time_axis = GetAttributeIntOrDefault(node, "time_axis", attrs.time_axis);
+         attrs.batch_axis = GetAttributeIntOrDefault(node, "batch_axis", attrs.batch_axis);
+         kernel::ReverseSequence k(rt.kernel_ctx());
+         SetOutput(node, 0, k(input, sequence_lens, attrs), rt);
+       }},
       {"ai.onnx:RoiAlign",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 3);

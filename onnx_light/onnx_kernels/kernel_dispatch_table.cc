@@ -1961,6 +1961,49 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::SequenceLength k(rt.kernel_ctx());
          SetOutput(node, 0, k(input_sequence), rt);
        }},
+      {"ai.onnx:Split",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 1);
+         if (node.input_size() > 2) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects 1 or 2 inputs, got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         if (node.output_size() < 1) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects at least 1 output, got 0.");
+         }
+         const Tensor &input = GetInput(node, 0, rt.tensors());
+         const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
+
+         // Resolve ``split``: from the optional 2nd input (opset >= 13), from the
+         // legacy ``split`` attribute (opset <= 12), or unspecified.
+         std::vector<int64_t> split;
+         const Tensor *split_input = GetOptionalInput(node, 1, rt.tensors());
+         if (split_input != nullptr) {
+           split = TensorToVector<int64_t>(*split_input);
+         } else {
+           split = GetAttributeIntsOrDefault(node, "split", {});
+         }
+
+         // ``num_outputs`` (opset >= 18) defaults to the number of outputs of the
+         // node when neither ``split`` nor the attribute is provided.
+         int64_t num_outputs = GetAttributeIntOrDefault(node, "num_outputs", 0);
+         if (split.empty() && num_outputs <= 0) {
+           num_outputs = static_cast<int64_t>(node.output_size());
+         }
+
+         kernel::Split k(rt.kernel_ctx());
+         std::vector<Tensor> outputs = k(input, axis, split, num_outputs);
+         if (static_cast<int>(outputs.size()) != node.output_size()) {
+           throw std::invalid_argument(
+               "RunNode: op 'Split' produced " + std::to_string(outputs.size()) +
+               " outputs but node declares " + std::to_string(node.output_size()) + ".");
+         }
+         for (int i = 0; i < node.output_size(); ++i) {
+           SetOutput(node, i, std::move(outputs[static_cast<size_t>(i)]), rt);
+         }
+       }},
       {"ai.onnx:SplitToSequence",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 1);

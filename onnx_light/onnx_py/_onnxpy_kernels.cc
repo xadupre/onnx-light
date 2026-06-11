@@ -324,6 +324,27 @@ void AddOnnxPyRuntime(nb::module_ &m) {
             return out;
           },
           "Returns the list of tensor names currently held by the context.")
+      .def("has_sequence", &RuntimeContext::HasSequence, nb::arg("name"),
+           "Returns ``True`` if a sequence named ``name`` is currently held.")
+      .def(
+          "sequence_names",
+          [](const RuntimeContext &rt) {
+            std::vector<std::string> out;
+            out.reserve(rt.sequences().size());
+            for (const auto &kv : rt.sequences()) {
+              out.push_back(kv.first);
+            }
+            return out;
+          },
+          "Returns the list of sequence names currently held by the context.")
+      .def(
+          "get_sequence",
+          [](const RuntimeContext &rt, const std::string &name) {
+            return rt.GetSequence(name).values;
+          },
+          nb::arg("name"),
+          "Returns the tensors in the sequence stored under ``name`` as a list of "
+          ":class:`Tensor` objects. Raises ``std::out_of_range`` if absent.")
       .def(
           "events",
           [](const RuntimeContext &rt) {

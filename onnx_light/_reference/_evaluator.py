@@ -232,7 +232,7 @@ class ReferenceEvaluator:
 
     def run(
         self, output_names: list[str] | None, feed_inputs: dict[str, Any]
-    ) -> list[np.ndarray]:
+    ) -> list[np.ndarray | list]:
         """Executes the wrapped graph / model / function.
 
         Parameters
@@ -246,9 +246,11 @@ class ReferenceEvaluator:
 
         Returns
         -------
-        list of :class:`numpy.ndarray`
-            One array per name in ``output_names`` (defaults to
-            :attr:`output_names`), in the requested order.
+        list of :class:`numpy.ndarray` or list
+            One entry per name in ``output_names`` (defaults to
+            :attr:`output_names`), in the requested order. Tensor-typed
+            outputs are returned as :class:`numpy.ndarray`; sequence-typed
+            outputs are returned as a ``list`` of :class:`numpy.ndarray`.
         """
         if output_names is None:
             output_names = list(self._output_names)
@@ -286,12 +288,16 @@ class ReferenceEvaluator:
 
         self._last_ctx = ctx
 
-        results: list[np.ndarray] = []
+        results: list[np.ndarray | list] = []
         for name in output_names:
-            if not ctx.has(name):
+            if ctx.has(name):
+                results.append(_cpp_tensor_to_numpy(ctx.get(name)))
+            elif ctx.has_sequence(name):
+                results.append([_cpp_tensor_to_numpy(t) for t in ctx.get_sequence(name)])
+            else:
+                all_names = sorted(ctx.names() + ctx.sequence_names())
                 raise RuntimeError(
                     f"Output {name!r} was not produced by the graph. "
-                    f"Available names after execution: {sorted(ctx.names())}."
+                    f"Available names after execution: {all_names}."
                 )
-            results.append(_cpp_tensor_to_numpy(ctx.get(name)))
         return results

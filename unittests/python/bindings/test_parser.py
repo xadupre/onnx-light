@@ -37,6 +37,21 @@ class TestParser(ExtTestCase):
         node = parser.parse_node("y = Identity(x)")
         self.assertEqual(node.op_type, "Identity")
 
+    def test_parse_float_attribute_from_int_literal(self):
+        from onnx_light.onnx import AttributeProto
+
+        model = parser.parse_model("""
+            <ir_version: 9, opset_import: ["" : 18, "custom_domain" : 1]>
+            agraph (float[N] x) => (float[N] out) {
+                out = custom_domain.Foo<ord: float = 2>(x)
+            }
+            """)
+        attr = model.graph.node[0].attribute[0]
+        self.assertEqual(attr.type, AttributeProto.FLOAT)
+        self.assertTrue(attr.has_f())
+        self.assertFalse(attr.has_i())
+        self.assertEqual(attr.f, 2.0)
+
     def test_parse_model_error(self):
         with self.assertRaises(ValueError) as cm:
             parser.parse_model("not a valid model")

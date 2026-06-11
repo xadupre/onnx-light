@@ -185,9 +185,9 @@ def validate_shape_inference(model_with_expected_shapes: onnxl.ModelProto):
 print("\nDemonstrating validation on the test_abs model:")
 try:
     validate_shape_inference(tc.model)
-    print("  ✓ Validation succeeded (no AssertionError raised)")
+    print("  Validation succeeded (no AssertionError raised)")
 except AssertionError as e:
-    print(f"  ✗ Validation failed: {e}")
+    print(f"  Validation failed: {e}")
 
 
 #####################################

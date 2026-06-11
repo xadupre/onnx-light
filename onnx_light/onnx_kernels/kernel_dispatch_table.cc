@@ -1759,6 +1759,23 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Sign", MakeUnaryTrampoline<kernel::Sign>()},
       {"ai.onnx:Sin", MakeUnaryTrampoline<kernel::Sin>()},
       {"ai.onnx:Sinh", MakeUnaryTrampoline<kernel::Sinh>()},
+      {"ai.onnx:Slice",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 3);
+         if (node.input_size() > 5) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects between 3 and 5 input(s), got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         RequireOutputCount(node, 1);
+         const Tensor &data = GetInput(node, 0, rt.tensors());
+         const Tensor &starts = GetInput(node, 1, rt.tensors());
+         const Tensor &ends = GetInput(node, 2, rt.tensors());
+         const Tensor *axes = GetOptionalInput(node, 3, rt.tensors());
+         const Tensor *steps = GetOptionalInput(node, 4, rt.tensors());
+         kernel::Slice k(rt.kernel_ctx());
+         SetOutput(node, 0, k(data, starts, ends, axes, steps), rt);
+       }},
       {"ai.onnx:Softmax", MakeAxisTrampoline<kernel::Softmax>()},
       {"ai.onnx:SoftmaxCrossEntropyLoss",
        [](const NodeProto &node, RuntimeContext &rt) {

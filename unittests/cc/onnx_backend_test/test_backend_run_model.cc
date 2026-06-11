@@ -221,6 +221,7 @@ TEST(BackendRunModel, Cast) { RunBackendCasesFor("Cast"); }
 TEST(BackendRunModel, CastLike) { RunBackendCasesFor("CastLike"); }
 TEST(BackendRunModel, CenterCropPad) { RunBackendCasesFor("CenterCropPad"); }
 TEST(BackendRunModel, Pad) { RunBackendCasesFor("Pad"); }
+TEST(BackendRunModel, Slice) { RunBackendCasesFor("Slice"); }
 TEST(BackendRunModel, BitCast) { RunBackendCasesFor("BitCast"); }
 TEST(BackendRunModel, CausalConvWithState) { RunBackendCasesFor("CausalConvWithState"); }
 TEST(BackendRunModel, Conv) { RunBackendCasesFor("Conv"); }

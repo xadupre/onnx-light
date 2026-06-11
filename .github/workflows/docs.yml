@@ -46,7 +46,7 @@ jobs:
         run: |
           warnings_file="$(mktemp)"
           set +e
-          sphinx-build -b html docs dist/html -W -w "${warnings_file}"
+          UNITTEST_GOING=1 sphinx-build -b html docs dist/html -W -w "${warnings_file}"
           status=$?
           set -e
           if [ "${status}" -eq 0 ]; then

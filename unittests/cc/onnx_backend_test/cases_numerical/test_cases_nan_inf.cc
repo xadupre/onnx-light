@@ -120,6 +120,7 @@ TEST(NanInfCases, TopKPicksNegInfFirstAsSmallest) {
   const auto cases = Collect("nan_inf");
   const TestCase *tc = Find(cases, "test_cc_top_k_neg_inf");
   ASSERT_NE(tc, nullptr);
+  ASSERT_EQ(tc->data_sets.size(), 1u);
   const auto &ds = tc->data_sets[0];
   ASSERT_EQ(ds.outputs.size(), 2u);
   const float *values = ds.outputs[0].AsFloat();
@@ -135,6 +136,7 @@ TEST(NanInfCases, TopKPropagatesNaN) {
   const auto cases = Collect("nan_inf");
   const TestCase *tc = Find(cases, "test_cc_top_k_nan");
   ASSERT_NE(tc, nullptr);
+  ASSERT_EQ(tc->data_sets.size(), 1u);
   const auto &ds = tc->data_sets[0];
   ASSERT_EQ(ds.inputs.size(), 2u);
   ASSERT_EQ(ds.outputs.size(), 2u);

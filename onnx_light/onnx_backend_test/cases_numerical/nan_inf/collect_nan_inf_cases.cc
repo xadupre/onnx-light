@@ -13,6 +13,7 @@ void CollectNanInfTestCases(std::vector<TestCase> &registry, const std::string &
     RegisterDivNanInfCases(registry);
     RegisterMulNanInfCases(registry);
     RegisterSubNanInfCases(registry);
+    RegisterTopKNanInfCases(registry);
     RegisterWhereNanInfCases(registry);
   }
 }

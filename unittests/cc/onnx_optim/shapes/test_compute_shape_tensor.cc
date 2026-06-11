@@ -2205,15 +2205,16 @@ TEST(OnnxOptimShapesTensorSplit, SymbolicAxisDimViaNumOutputsTwo) {
 
   onnx_optim::shapes::tensor::ComputeShapeSplit(ctx, node);
 
-  EXPECT_EQ(ctx.Get("Y0").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim("(d+1)/2")}));
-  EXPECT_EQ(ctx.Get("Y1").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim("(d)/2")}));
+  EXPECT_EQ(ctx.Get("Y0").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim("(1+d)//2")}));
+  EXPECT_EQ(ctx.Get("Y1").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim("d//2")}));
   EXPECT_FALSE(ctx.Get("Y0").HasValueAsShape());
   EXPECT_FALSE(ctx.Get("Y1").HasValueAsShape());
 }
 
 TEST(OnnxOptimShapesTensorSplit, SymbolicAxisDimViaNumOutputsThree) {
-  // ``num_outputs=3`` with symbolic ``d`` yields ``[(d+2)/3, (d+2)/3,
-  // d - 2*((d+2)/3)]`` for the per-output axis dims.
+  // ``num_outputs=3`` with symbolic ``d`` yields ``[(d+2)//3, (d+2)//3,
+  // d - 2*((d+2)//3)]`` for the per-output axis dims (after canonical
+  // alphabetical reordering by ``simplify_expression``).
   NodeProto node;
   node.set_op_type("Split");
   node.add_input("X");
@@ -2230,10 +2231,10 @@ TEST(OnnxOptimShapesTensorSplit, SymbolicAxisDimViaNumOutputsThree) {
 
   onnx_optim::shapes::tensor::ComputeShapeSplit(ctx, node);
 
-  EXPECT_EQ(ctx.Get("Y0").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim("(d+2)/3")}));
-  EXPECT_EQ(ctx.Get("Y1").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim("(d+2)/3")}));
+  EXPECT_EQ(ctx.Get("Y0").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim("(2+d)//3")}));
+  EXPECT_EQ(ctx.Get("Y1").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim("(2+d)//3")}));
   EXPECT_EQ(ctx.Get("Y2").Shape(),
-            (onnx_optim::OptimShape{onnx_optim::OptimDim("(d)-2*((d+2)/3)")}));
+            (onnx_optim::OptimShape{onnx_optim::OptimDim("d-2*((2+d)//3)")}));
 }
 
 TEST(OnnxOptimShapesTensorSplit, SymbolicAxisDimViaOutputCountNoNumOutputs) {
@@ -2254,8 +2255,8 @@ TEST(OnnxOptimShapesTensorSplit, SymbolicAxisDimViaOutputCountNoNumOutputs) {
 
   onnx_optim::shapes::tensor::ComputeShapeSplit(ctx, node);
 
-  EXPECT_EQ(ctx.Get("Y0").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim("(d+1)/2")}));
-  EXPECT_EQ(ctx.Get("Y1").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim("(d)/2")}));
+  EXPECT_EQ(ctx.Get("Y0").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim("(1+d)//2")}));
+  EXPECT_EQ(ctx.Get("Y1").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim("d//2")}));
 }
 
 // ---------------------------------------------------------------------------

@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+#include "onnx_optim/expressions.h"
 #include "onnx_optim/optim_tensor.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
@@ -52,30 +53,44 @@ std::vector<int64_t> SplitByNumOutputs(int64_t axis_dim, int64_t num_outputs) {
   return sizes;
 }
 
+// Wraps :cpp:func:`expressions::simplify_expression` and converts its variant
+// result into an ``OptimDim``: integer alternatives become concrete dims,
+// strings become symbolic dims.
+OptimDim SimplifyToDim(const std::string &expr) {
+  expressions::SimplifyResult r = expressions::simplify_expression(expr);
+  if (std::holds_alternative<int64_t>(r)) {
+    return OptimDim(std::get<int64_t>(r));
+  }
+  return OptimDim(std::get<std::string>(r));
+}
+
 // Builds per-output symbolic axis dims for ``Split(d, num_outputs=n)`` when
 // ``d`` is purely symbolic. Mirrors the integer-arithmetic resolution in
 // :func:`SplitByNumOutputs`: the first ``n - 1`` outputs each get
-// ``ceil(d/n) = (d + n - 1) / n``, and the last output absorbs the remainder
+// ``ceil(d/n) = (d + n - 1) // n``, and the last output absorbs the remainder
 // ``d - (n - 1) * ceil(d/n)``. For ``n == 2`` the remainder simplifies to
-// ``d / 2`` (integer arithmetic for ``d >= 0``).
+// ``d // 2`` (integer arithmetic for ``d >= 0``). Each generated expression
+// is run through :cpp:func:`expressions::simplify_expression` so that
+// constant subexpressions collapse and the canonical form is preserved.
 std::vector<OptimDim> SymbolicSplitByNumOutputs(const std::string &d, int64_t num_outputs) {
   std::vector<OptimDim> result;
   result.reserve(static_cast<size_t>(num_outputs));
   if (num_outputs == 1) {
-    result.emplace_back(d);
+    result.push_back(SimplifyToDim(d));
     return result;
   }
   const std::string ns = std::to_string(num_outputs);
   const std::string nm1 = std::to_string(num_outputs - 1);
-  const std::string chunk = "(" + d + "+" + nm1 + ")/" + ns;
+  const std::string chunk_expr = "(" + d + "+" + nm1 + ")//" + ns;
+  const OptimDim chunk_dim = SimplifyToDim(chunk_expr);
   for (int64_t i = 0; i < num_outputs - 1; ++i) {
-    result.emplace_back(chunk);
+    result.push_back(chunk_dim);
   }
   if (num_outputs == 2) {
-    // ``d - (d + 1) / 2 == d / 2`` in integer arithmetic for ``d >= 0``.
-    result.emplace_back("(" + d + ")/2");
+    // ``d - (d + 1) // 2 == d // 2`` in integer arithmetic for ``d >= 0``.
+    result.push_back(SimplifyToDim("(" + d + ")//2"));
   } else {
-    result.emplace_back("(" + d + ")-" + nm1 + "*(" + chunk + ")");
+    result.push_back(SimplifyToDim("(" + d + ")-" + nm1 + "*(" + chunk_expr + ")"));
   }
   return result;
 }

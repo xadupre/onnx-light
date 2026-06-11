@@ -917,6 +917,29 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                      w_zp != nullptr ? *w_zp : Tensor{}, attrs),
                    rt.tensors());
        }},
+      {"ai.onnx:ConvTranspose",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 2);
+         if (node.input_size() > 3) {
+           throw std::invalid_argument("RunNode: op 'ConvTranspose' expects at most 3 inputs, got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const Tensor &w = GetInput(node, 1, rt.tensors());
+         const Tensor *b = GetOptionalInput(node, 2, rt.tensors());
+         kernel::ConvTranspose::Attributes attrs;
+         attrs.kernel_shape = GetAttributeIntsOrDefault(node, "kernel_shape", {});
+         attrs.strides = GetAttributeIntsOrDefault(node, "strides", {});
+         attrs.pads = GetAttributeIntsOrDefault(node, "pads", {});
+         attrs.dilations = GetAttributeIntsOrDefault(node, "dilations", {});
+         attrs.output_padding = GetAttributeIntsOrDefault(node, "output_padding", {});
+         attrs.output_shape = GetAttributeIntsOrDefault(node, "output_shape", {});
+         attrs.group = GetAttributeIntOrDefault(node, "group", 1);
+         attrs.auto_pad = GetAttributeStringOrDefault(node, "auto_pad", "NOTSET");
+         kernel::ConvTranspose k(rt.kernel_ctx());
+         SetOutput(node, 0, k(x, w, b != nullptr ? *b : Tensor{}, attrs), rt);
+       }},
       {"ai.onnx:Cos", MakeUnaryTrampoline<kernel::Cos>()},
       {"ai.onnx:Cosh", MakeUnaryTrampoline<kernel::Cosh>()},
       {"ai.onnx:CumSum", MakeCumulativeTrampoline<kernel::CumSum>()},

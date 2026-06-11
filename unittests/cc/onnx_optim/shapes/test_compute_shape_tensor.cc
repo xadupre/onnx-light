@@ -2031,6 +2031,234 @@ TEST(OnnxOptimShapesTensorSplit, RejectsWrongOpType) {
   EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeSplit(ctx, node), std::invalid_argument);
 }
 
+TEST(OnnxOptimShapesTensorSplit, PropagatesValueAsShapeViaSplitAttribute) {
+  // ``X = [N, 1, B]`` (value-as-shape) split into ``[2, 1]`` along axis 0 must
+  // yield per-output value-as-shape annotations ``[N, 1]`` and ``[B]``.
+  NodeProto node;
+  node.set_op_type("Split");
+  node.add_input("X");
+  node.add_output("Y0");
+  node.add_output("Y1");
+  AddAttribute<int64_t>(node, "axis", 0);
+  AddAttribute<std::vector<int64_t>>(node, "split", {2, 1});
+
+  onnx_optim::OptimTensor x(nullptr, onnx_optim::TensorType::kInt64,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(3)});
+  x.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(1),
+                                           onnx_optim::OptimDim("B")});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", std::move(x));
+
+  onnx_optim::shapes::tensor::ComputeShapeSplit(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y0"));
+  ASSERT_TRUE(ctx.Get("Y0").HasValueAsShape());
+  EXPECT_EQ(ctx.Get("Y0").ValueAsShape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(1)}));
+
+  ASSERT_TRUE(ctx.Has("Y1"));
+  ASSERT_TRUE(ctx.Get("Y1").HasValueAsShape());
+  EXPECT_EQ(ctx.Get("Y1").ValueAsShape(), (onnx_optim::OptimShape{onnx_optim::OptimDim("B")}));
+}
+
+TEST(OnnxOptimShapesTensorSplit, PropagatesValueAsShapeViaNumOutputs) {
+  // ``X = [N, B, 1, 2]`` (value-as-shape) split into 2 even chunks along
+  // axis 0 must yield value-as-shape ``[N, B]`` and ``[1, 2]``.
+  NodeProto node;
+  node.set_op_type("Split");
+  node.add_input("X");
+  node.add_output("Y0");
+  node.add_output("Y1");
+  AddAttribute<int64_t>(node, "axis", 0);
+  AddAttribute<int64_t>(node, "num_outputs", 2);
+
+  onnx_optim::OptimTensor x(nullptr, onnx_optim::TensorType::kInt64,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(4)});
+  x.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim("B"),
+                                           onnx_optim::OptimDim(1), onnx_optim::OptimDim(2)});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", std::move(x));
+
+  onnx_optim::shapes::tensor::ComputeShapeSplit(ctx, node);
+
+  ASSERT_TRUE(ctx.Get("Y0").HasValueAsShape());
+  EXPECT_EQ(ctx.Get("Y0").ValueAsShape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim("B")}));
+  ASSERT_TRUE(ctx.Get("Y1").HasValueAsShape());
+  EXPECT_EQ(ctx.Get("Y1").ValueAsShape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(2)}));
+}
+
+TEST(OnnxOptimShapesTensorSplit, PropagatesValueAsShapeViaNumOutputsWithSymbolicAxis) {
+  // The declared input shape has a symbolic axis dim, but the
+  // ``ValueAsShape`` is known (5 entries). ``num_outputs=2`` must derive
+  // sizes ``[(d+1)/2, d/2] = [3, 2]`` from the VAS rank and slice it
+  // accordingly.
+  NodeProto node;
+  node.set_op_type("Split");
+  node.add_input("X");
+  node.add_output("Y0");
+  node.add_output("Y1");
+  AddAttribute<int64_t>(node, "axis", 0);
+  AddAttribute<int64_t>(node, "num_outputs", 2);
+
+  onnx_optim::OptimTensor x(nullptr, onnx_optim::TensorType::kInt64,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim("D")});
+  x.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim("a"), onnx_optim::OptimDim("b"),
+                                           onnx_optim::OptimDim("c"), onnx_optim::OptimDim(4),
+                                           onnx_optim::OptimDim(5)});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", std::move(x));
+
+  onnx_optim::shapes::tensor::ComputeShapeSplit(ctx, node);
+
+  // Y0 takes (5+1)/2 = 3 entries: a, b, c.
+  ASSERT_TRUE(ctx.Get("Y0").HasValueAsShape());
+  EXPECT_EQ(ctx.Get("Y0").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+  EXPECT_EQ(ctx.Get("Y0").ValueAsShape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim("a"), onnx_optim::OptimDim("b"),
+                                    onnx_optim::OptimDim("c")}));
+  // Y1 takes 5/2 = 2 entries: 4, 5.
+  ASSERT_TRUE(ctx.Get("Y1").HasValueAsShape());
+  EXPECT_EQ(ctx.Get("Y1").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+  EXPECT_EQ(ctx.Get("Y1").ValueAsShape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(5)}));
+}
+
+TEST(OnnxOptimShapesTensorSplit, PropagatesValueAsShapeViaNumOutputsThreeWayUneven) {
+  // ``num_outputs=3`` on a length-7 ``ValueAsShape`` must yield sizes
+  // ``[3, 3, 1]`` (chunk = ceil(7/3) = 3; last absorbs the remainder).
+  NodeProto node;
+  node.set_op_type("Split");
+  node.add_input("X");
+  node.add_output("Y0");
+  node.add_output("Y1");
+  node.add_output("Y2");
+  AddAttribute<int64_t>(node, "axis", 0);
+  AddAttribute<int64_t>(node, "num_outputs", 3);
+
+  onnx_optim::OptimTensor x(nullptr, onnx_optim::TensorType::kInt64,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(7)});
+  x.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(2),
+                                           onnx_optim::OptimDim(3), onnx_optim::OptimDim(4),
+                                           onnx_optim::OptimDim(5), onnx_optim::OptimDim(6),
+                                           onnx_optim::OptimDim(7)});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", std::move(x));
+
+  onnx_optim::shapes::tensor::ComputeShapeSplit(ctx, node);
+
+  ASSERT_TRUE(ctx.Get("Y0").HasValueAsShape());
+  EXPECT_EQ(ctx.Get("Y0").ValueAsShape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(2),
+                                    onnx_optim::OptimDim(3)}));
+  ASSERT_TRUE(ctx.Get("Y1").HasValueAsShape());
+  EXPECT_EQ(ctx.Get("Y1").ValueAsShape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(5),
+                                    onnx_optim::OptimDim(6)}));
+  ASSERT_TRUE(ctx.Get("Y2").HasValueAsShape());
+  EXPECT_EQ(ctx.Get("Y2").ValueAsShape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(7)}));
+}
+
+TEST(OnnxOptimShapesTensorSplit, DoesNotPropagateValueAsShapeAlongNonZeroAxis) {
+  // ``X`` is rank 2 and ``axis != 0``; even when it carries a value-as-shape
+  // we do not slice it (the annotation only makes sense along axis 0).
+  NodeProto node;
+  node.set_op_type("Split");
+  node.add_input("X");
+  node.add_output("Y0");
+  node.add_output("Y1");
+  AddAttribute<int64_t>(node, "axis", 1);
+  AddAttribute<std::vector<int64_t>>(node, "split", {2, 2});
+
+  onnx_optim::OptimTensor x(
+      nullptr, onnx_optim::TensorType::kInt64,
+      onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)});
+  // A value-as-shape on a rank-2 tensor isn't meaningful but the propagation
+  // must still refuse to slice it.
+  x.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim("a"), onnx_optim::OptimDim("b"),
+                                           onnx_optim::OptimDim("c"), onnx_optim::OptimDim("d")});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", std::move(x));
+
+  onnx_optim::shapes::tensor::ComputeShapeSplit(ctx, node);
+
+  EXPECT_FALSE(ctx.Get("Y0").HasValueAsShape());
+  EXPECT_FALSE(ctx.Get("Y1").HasValueAsShape());
+}
+
+TEST(OnnxOptimShapesTensorSplit, SymbolicAxisDimViaNumOutputsTwo) {
+  // ``X`` has a purely symbolic axis dim ``d`` and no ``ValueAsShape``.
+  // ``num_outputs=2`` must derive symbolic sizes ``[(d+1)/2, d/2]``.
+  NodeProto node;
+  node.set_op_type("Split");
+  node.add_input("X");
+  node.add_output("Y0");
+  node.add_output("Y1");
+  AddAttribute<int64_t>(node, "axis", 0);
+  AddAttribute<int64_t>(node, "num_outputs", 2);
+
+  onnx_optim::OptimTensor x(nullptr, onnx_optim::TensorType::kFloat,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim("d")});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", std::move(x));
+
+  onnx_optim::shapes::tensor::ComputeShapeSplit(ctx, node);
+
+  EXPECT_EQ(ctx.Get("Y0").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim("(1+d)//2")}));
+  EXPECT_EQ(ctx.Get("Y1").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim("d//2")}));
+  EXPECT_FALSE(ctx.Get("Y0").HasValueAsShape());
+  EXPECT_FALSE(ctx.Get("Y1").HasValueAsShape());
+}
+
+TEST(OnnxOptimShapesTensorSplit, SymbolicAxisDimViaNumOutputsThree) {
+  // ``num_outputs=3`` with symbolic ``d`` yields ``[(d+2)//3, (d+2)//3,
+  // d - 2*((d+2)//3)]`` for the per-output axis dims (after canonical
+  // alphabetical reordering by ``simplify_expression``).
+  NodeProto node;
+  node.set_op_type("Split");
+  node.add_input("X");
+  node.add_output("Y0");
+  node.add_output("Y1");
+  node.add_output("Y2");
+  AddAttribute<int64_t>(node, "axis", 0);
+  AddAttribute<int64_t>(node, "num_outputs", 3);
+
+  onnx_optim::OptimTensor x(nullptr, onnx_optim::TensorType::kFloat,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim("d")});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", std::move(x));
+
+  onnx_optim::shapes::tensor::ComputeShapeSplit(ctx, node);
+
+  EXPECT_EQ(ctx.Get("Y0").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim("(2+d)//3")}));
+  EXPECT_EQ(ctx.Get("Y1").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim("(2+d)//3")}));
+  EXPECT_EQ(ctx.Get("Y2").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim("d-2*((2+d)//3)")}));
+}
+
+TEST(OnnxOptimShapesTensorSplit, SymbolicAxisDimViaOutputCountNoNumOutputs) {
+  // Older opsets: no ``split`` and no ``num_outputs`` — the per-output count
+  // comes from the declared number of outputs. Symbolic ``d`` still yields
+  // chunking expressions rather than fresh placeholders.
+  NodeProto node;
+  node.set_op_type("Split");
+  node.add_input("X");
+  node.add_output("Y0");
+  node.add_output("Y1");
+  AddAttribute<int64_t>(node, "axis", 0);
+
+  onnx_optim::OptimTensor x(nullptr, onnx_optim::TensorType::kFloat,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim("d")});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", std::move(x));
+
+  onnx_optim::shapes::tensor::ComputeShapeSplit(ctx, node);
+
+  EXPECT_EQ(ctx.Get("Y0").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim("(1+d)//2")}));
+  EXPECT_EQ(ctx.Get("Y1").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim("d//2")}));
+}
+
 // ---------------------------------------------------------------------------
 // TensorScatter shape-inference tests
 // ---------------------------------------------------------------------------

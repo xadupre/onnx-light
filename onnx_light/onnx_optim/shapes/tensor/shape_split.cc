@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+#include "onnx_optim/expressions.h"
 #include "onnx_optim/optim_tensor.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
@@ -52,6 +53,48 @@ std::vector<int64_t> SplitByNumOutputs(int64_t axis_dim, int64_t num_outputs) {
   return sizes;
 }
 
+// Wraps :cpp:func:`expressions::simplify_expression` and converts its variant
+// result into an ``OptimDim``: integer alternatives become concrete dims,
+// strings become symbolic dims.
+OptimDim SimplifyToDim(const std::string &expr) {
+  expressions::SimplifyResult r = expressions::simplify_expression(expr);
+  if (std::holds_alternative<int64_t>(r)) {
+    return OptimDim(std::get<int64_t>(r));
+  }
+  return OptimDim(std::get<std::string>(r));
+}
+
+// Builds per-output symbolic axis dims for ``Split(d, num_outputs=n)`` when
+// ``d`` is purely symbolic. Mirrors the integer-arithmetic resolution in
+// :func:`SplitByNumOutputs`: the first ``n - 1`` outputs each get
+// ``ceil(d/n) = (d + n - 1) // n``, and the last output absorbs the remainder
+// ``d - (n - 1) * ceil(d/n)``. For ``n == 2`` the remainder simplifies to
+// ``d // 2`` (integer arithmetic for ``d >= 0``). Each generated expression
+// is run through :cpp:func:`expressions::simplify_expression` so that
+// constant subexpressions collapse and the canonical form is preserved.
+std::vector<OptimDim> SymbolicSplitByNumOutputs(const std::string &d, int64_t num_outputs) {
+  std::vector<OptimDim> result;
+  result.reserve(static_cast<size_t>(num_outputs));
+  if (num_outputs == 1) {
+    result.push_back(SimplifyToDim(d));
+    return result;
+  }
+  const std::string ns = std::to_string(num_outputs);
+  const std::string nm1 = std::to_string(num_outputs - 1);
+  const std::string chunk_expr = "(" + d + "+" + nm1 + ")//" + ns;
+  const OptimDim chunk_dim = SimplifyToDim(chunk_expr);
+  for (int64_t i = 0; i < num_outputs - 1; ++i) {
+    result.push_back(chunk_dim);
+  }
+  if (num_outputs == 2) {
+    // ``d - (d + 1) // 2 == d // 2`` in integer arithmetic for ``d >= 0``.
+    result.push_back(SimplifyToDim("(" + d + ")//2"));
+  } else {
+    result.push_back(SimplifyToDim("(" + d + ")-" + nm1 + "*(" + chunk_expr + ")"));
+  }
+  return result;
+}
+
 } // namespace
 
 void ComputeShapeSplit(ShapesContext &ctx, const NodeProto &node) {
@@ -78,6 +121,20 @@ void ComputeShapeSplit(ShapesContext &ctx, const NodeProto &node) {
   // cannot be determined, in which case the per-output axis dimension is set
   // to a fresh symbolic placeholder.
   std::vector<int64_t> sizes;
+  // Symbolic per-output axis dims, used when the axis dim is purely
+  // symbolic (no concrete value, no ``ValueAsShape``) but ``num_outputs`` is
+  // still known. Each entry, when present, takes precedence over the fresh
+  // placeholder fallback.
+  std::vector<OptimDim> symbolic_sizes;
+
+  // When the input is 1-D and carries a ``ValueAsShape``, the axis dimension
+  // is exactly ``ValueAsShape().Rank()`` even if the declared input shape is
+  // symbolic — the annotation *is* the value of the tensor.
+  const bool vas_gives_axis_dim = resolved_axis == 0 && rank == 1 && input.HasValueAsShape();
+  const int64_t effective_axis_dim =
+      in_shape[axis].IsInt()
+          ? in_shape[axis].AsInt()
+          : (vas_gives_axis_dim ? static_cast<int64_t>(input.ValueAsShape().Rank()) : int64_t{-1});
 
   // 1) Opset 13+ takes ``split`` as an optional input; opset 1/2/11 carry it
   //    as an INTS attribute.
@@ -90,15 +147,27 @@ void ComputeShapeSplit(ShapesContext &ctx, const NodeProto &node) {
     std::vector<int64_t> attr_split;
     if (GetAttributeInts(node, "split", attr_split)) {
       sizes = std::move(attr_split);
-    } else if (in_shape[axis].IsInt()) {
+    } else if (effective_axis_dim >= 0) {
       // 2) Fall back to ``num_outputs`` (opset 18+) or to the declared number
       //    of outputs (older opsets require the input axis dim to be evenly
-      //    divisible by the output count).
-      const int64_t axis_dim = in_shape[axis].AsInt();
+      //    divisible by the output count). The axis dim is taken from the
+      //    declared shape when concrete, or from the input's
+      //    ``ValueAsShape().Rank()`` (a 1-D, axis-0 special case) when the
+      //    declared dim is symbolic but the value-as-shape is known.
       const int64_t num_outputs =
           GetAttributeOr<int64_t>(node, "num_outputs", static_cast<int64_t>(num_outputs_decl));
       if (num_outputs > 0) {
-        sizes = SplitByNumOutputs(axis_dim, num_outputs);
+        sizes = SplitByNumOutputs(effective_axis_dim, num_outputs);
+      }
+    } else if (in_shape[axis].IsExpr()) {
+      // 3) The axis dim is purely symbolic and ``ValueAsShape`` is unknown,
+      //    so concrete sizes can't be resolved. ``num_outputs`` (or the
+      //    declared output count) is still enough to build per-output
+      //    symbolic axis dims using integer-arithmetic chunking.
+      const int64_t num_outputs =
+          GetAttributeOr<int64_t>(node, "num_outputs", static_cast<int64_t>(num_outputs_decl));
+      if (num_outputs > 0) {
+        symbolic_sizes = SymbolicSplitByNumOutputs(in_shape[axis].AsExpr(), num_outputs);
       }
     }
   }
@@ -124,20 +193,63 @@ void ComputeShapeSplit(ShapesContext &ctx, const NodeProto &node) {
         "ComputeShapeSplit: number of resolved split sizes (" + std::to_string(sizes.size()) +
         ") does not match the number of node outputs (" + std::to_string(num_outputs_decl) + ").");
   }
+  if (!symbolic_sizes.empty() && static_cast<int>(symbolic_sizes.size()) != num_outputs_decl) {
+    throw std::invalid_argument("ComputeShapeSplit: number of resolved symbolic split sizes (" +
+                                std::to_string(symbolic_sizes.size()) +
+                                ") does not match the number of node outputs (" +
+                                std::to_string(num_outputs_decl) + ").");
+  }
 
+  // Propagate ``ValueAsShape`` when splitting along axis 0 of a 1-D tensor
+  // that already carries a ``ValueAsShape`` annotation and the split sizes
+  // are known. Each output's ``ValueAsShape`` is the corresponding contiguous
+  // slice of the input's ``ValueAsShape``. This mirrors :cpp:func:`Concat`'s
+  // inverse propagation and keeps downstream consumers (e.g. ``Expand``,
+  // ``Reshape``) able to recover concrete/symbolic dimensions through
+  // ``Split`` nodes used in shape arithmetic.
+  const bool propagate_vas =
+      resolved_axis == 0 && rank == 1 && input.HasValueAsShape() && !sizes.empty();
+  const OptimShape *in_vas = propagate_vas ? &input.ValueAsShape() : nullptr;
+  // The ``ValueAsShape`` length must agree with the resolved axis dimension
+  // when both are known; if not, skip propagation rather than producing a
+  // misaligned slice.
+  size_t vas_total = 0;
+  if (propagate_vas) {
+    for (int64_t s : sizes) {
+      vas_total += static_cast<size_t>(s);
+    }
+    if (vas_total != in_vas->Rank()) {
+      in_vas = nullptr;
+    }
+  }
+
+  size_t vas_offset = 0;
   for (int i = 0; i < num_outputs_decl; ++i) {
     const std::string &name = node.output(i).as_string();
+    const int64_t size_i = sizes.empty() ? int64_t{0} : sizes[static_cast<size_t>(i)];
     if (name.empty()) {
+      vas_offset += static_cast<size_t>(size_i);
       continue;
     }
     OptimShape out_shape = in_shape;
     if (!sizes.empty()) {
-      out_shape[axis] = OptimDim(sizes[static_cast<size_t>(i)]);
+      out_shape[axis] = OptimDim(size_i);
+    } else if (!symbolic_sizes.empty()) {
+      out_shape[axis] = symbolic_sizes[static_cast<size_t>(i)];
     } else {
       out_shape[axis] =
           OptimDim("Split_axis" + std::to_string(resolved_axis) + "_out" + std::to_string(i));
     }
-    ctx.Set(name, OptimTensor(nullptr, input.Dtype(), std::move(out_shape)));
+    OptimTensor out_tensor(nullptr, input.Dtype(), std::move(out_shape));
+    if (in_vas != nullptr) {
+      OptimShape out_vas;
+      for (size_t j = 0; j < static_cast<size_t>(size_i); ++j) {
+        out_vas.PushBack((*in_vas)[vas_offset + j]);
+      }
+      out_tensor.SetValueAsShape(std::move(out_vas));
+    }
+    vas_offset += static_cast<size_t>(size_i);
+    ctx.Set(name, std::move(out_tensor));
   }
 }
 

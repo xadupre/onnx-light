@@ -8,19 +8,14 @@ Currently provided helpers:
 
 * :func:`onnx_light.tools.to_mermaid` -- render a model or a graph as a
   `Mermaid <https://mermaid.js.org/>`_ flowchart.
-* :func:`onnx_light.tools.pretty_print` -- render a model, graph,
-  function or node as human-readable text.
+* :func:`onnx_light.tools.pretty_onnx` -- render any ONNX proto
+  (model, graph, function, node, attribute, value info, tensor) as a
+  compact human-readable string.
 """
 
 from __future__ import annotations
 
 from .mermaid import to_mermaid, to_mermaid_graph
-from .pretty_print import pretty_print, pretty_print_graph, pretty_print_node
+from .pretty_print import pretty_onnx
 
-__all__ = [
-    "pretty_print",
-    "pretty_print_graph",
-    "pretty_print_node",
-    "to_mermaid",
-    "to_mermaid_graph",
-]
+__all__ = ["pretty_onnx", "to_mermaid", "to_mermaid_graph"]

@@ -10,6 +10,7 @@
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 #include "onnx_kernels/kernels/object_detection/include_object_detection_kernels.h"
+#include "onnx_kernels/kernels/optional/include_optional_kernels.h"
 #include "onnx_kernels/kernels/preview/include_preview_kernels.h"
 #include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
 #include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
@@ -1575,6 +1576,64 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          SetOutput(node, 0, k(indices, depth, values, attrs), rt.tensors());
        }},
       {"ai.onnx:Or", MakeBinaryTrampoline<kernel::Or>()},
+      // ai.onnx Optional / OptionalGetElement / OptionalHasElement
+      // (since opset 15; opset 18 widens the supported input types).
+      // The runtime models Optional<Tensor> / Optional<Sequence> as a
+      // simple passthrough — see ``kernels/optional/`` for details.
+      {"ai.onnx:Optional",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const std::string input_name = node.input(0).as_string();
+         if (rt.HasSequence(input_name)) {
+           // Sequence-typed input: passthrough into the optional-of-sequence
+           // output. The Optional kernel itself has no sequence overload
+           // because the runtime ``Sequence`` already models the value, so
+           // we copy the input sequence into the output slot directly.
+           SetOutputSequence(node, 0, rt.GetSequence(input_name), rt);
+         } else {
+           const Tensor &input = GetInput(node, 0, rt.tensors());
+           kernel::Optional k(rt.kernel_ctx());
+           SetOutput(node, 0, k(input), rt);
+         }
+       }},
+      {"ai.onnx:OptionalGetElement",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const std::string input_name = node.input(0).as_string();
+         kernel::OptionalGetElement k(rt.kernel_ctx());
+         if (rt.HasSequence(input_name)) {
+           const Sequence &input_seq = GetInputSequence(node, 0, rt);
+           SetOutputSequence(node, 0, k(input_seq), rt);
+         } else {
+           const Tensor &input = GetInput(node, 0, rt.tensors());
+           SetOutput(node, 0, k(input), rt);
+         }
+       }},
+      {"ai.onnx:OptionalHasElement",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         if (node.input_size() > 1) {
+           throw std::invalid_argument(
+               "RunNode: op 'OptionalHasElement' expects 0 or 1 inputs, got " +
+               std::to_string(node.input_size()) + ".");
+         }
+         RequireOutputCount(node, 1);
+         kernel::OptionalHasElement k(rt.kernel_ctx());
+         if (node.input_size() == 0 || node.input(0).as_string().empty()) {
+           // Opset 18 omitted-input flavour: scalar ``false``.
+           SetOutput(node, 0, k(), rt);
+           return;
+         }
+         const std::string input_name = node.input(0).as_string();
+         if (rt.HasSequence(input_name)) {
+           const Sequence &input_seq = GetInputSequence(node, 0, rt);
+           SetOutput(node, 0, k(input_seq), rt);
+         } else {
+           const Tensor &input = GetInput(node, 0, rt.tensors());
+           SetOutput(node, 0, k(input), rt);
+         }
+       }},
       {"ai.onnx:Pad",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 1);

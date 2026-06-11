@@ -167,6 +167,10 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx:SequenceLength"), table.end());
   EXPECT_NE(table.find("ai.onnx:ConcatFromSequence"), table.end());
   EXPECT_NE(table.find("ai.onnx:SplitToSequence"), table.end());
+  // Optional kernels (opset 15+).
+  EXPECT_NE(table.find("ai.onnx:Optional"), table.end());
+  EXPECT_NE(table.find("ai.onnx:OptionalGetElement"), table.end());
+  EXPECT_NE(table.find("ai.onnx:OptionalHasElement"), table.end());
   // Text kernels (ai.onnx).
   EXPECT_NE(table.find("ai.onnx:RegexFullMatch"), table.end());
 }

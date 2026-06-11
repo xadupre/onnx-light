@@ -106,7 +106,6 @@ Every output is generated with a C++ implementation of the operator.
 
     getting_started
     design/index
-    howto/index
     api/index
     operators/index
     examples

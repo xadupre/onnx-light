@@ -1,0 +1,78 @@
+name: cq - hardening
+
+on:
+  schedule:
+    # Run weekly on Mondays at 06:30 UTC (30 min after fuzz.yml to stagger).
+    - cron: "30 6 * * 1"
+  workflow_dispatch:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "cmake/Hardening.cmake"
+      - ".github/workflows/hardening.yml"
+      - "CMakeLists.txt"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hardening_tests:
+    name: hardening (${{ matrix.os }}, ${{ matrix.compiler }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            compiler: gcc
+            cc: gcc
+            cxx: g++
+          - os: ubuntu-latest
+            compiler: clang
+            cc: clang
+            cxx: clang++
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install build dependencies (Linux)
+        run: sudo apt-get install -y libssl-dev clang ninja-build
+
+      - name: Set parallel build level
+        shell: bash
+        run: |
+          CMAKE_BUILD_PARALLEL_LEVEL=$(python -c 'import os; print(os.cpu_count() or 1)')
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
+
+      - name: Build and install package (Release + ONNX_HARDENING=ON)
+        env:
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
+        run: |
+          pip install \
+            -C build-dir=build \
+            -C cmake.build-type=Release \
+            -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON \
+            -C cmake.define.ONNX_HARDENING=ON \
+            -e .[dev] -v
+
+      - name: Install ONNX weekly
+        run: pip install --upgrade onnx-weekly
+
+      - name: pip freeze
+        run: pip freeze
+
+      - name: Run C++ unit tests
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Run Python unit tests
+        run: pytest --durations=10 unittests

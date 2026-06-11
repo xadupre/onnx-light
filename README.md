@@ -35,8 +35,7 @@ for the upstream project's direction and priorities.
 ## onnx without protobuf
 
 - **ONNX Files larger than 2 GB** (protobuf is limited to 2Gb)
-- **Parallel loading and saving**: 3 times faster with 4 threads compared
-  to the single-threaded path
+- **Parallel loading and saving**: significantly faster compared to the single-threaded path
 - **Zero-copy parsing** – creates the ModelProto without any tensor copy
 - **Aligned external tensor offsets** – external tensor data can be written
   with explicit offset alignment

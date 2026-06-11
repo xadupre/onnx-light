@@ -29,14 +29,15 @@ thing is to implement a function with ONNX operators. ONNX is strongly
 typed: shape and type must be defined for both inputs and outputs of the
 function. We need four functions to build the graph:
 
-* ``make_tensor_value_info``: declares a variable (input or output)
-  given its shape and type;
-* ``make_node``: creates a node defined by an operation (an operator
-  type), its inputs and outputs;
-* ``make_graph``: a function to create an ONNX graph with the objects
+* :func:`make_tensor_value_info <onnx_light.onnx.helper.make_tensor_value_info>``:
+  declares a variable (input or output) given its shape and type;
+* :func:`make_node <onnx_light.onnx.helper.make_node>`:
+  creates a node defined by an operation (an operator type), its inputs and outputs;
+* :func:`make_graph <onnx_light.onnx.helper.make_graph>`: a function to create
+  an ONNX graph with the objects
   created by the two previous functions;
-* ``make_model``: a last function which merges the graph and additional
-  metadata.
+* :func:`make_model <onnx_light.onnx.helper.make_model>`: a last function
+  which merges the graph and additional metadata.
 
 All along the creation, we need to give a name to every input, output of
 every node of the graph. Inputs and outputs of the graph are defined by
@@ -1104,11 +1105,11 @@ The ONNX standard allows frameworks to export trained models in ONNX
 format and enables inference using any backend that supports the ONNX
 format. *onnxruntime* is one efficient option. It is available on many
 platforms and is optimized for fast inference.
-``onnx-light`` ships its own
+``onnx-light`` ships its own reference runtime
+(:doc:`../../api/python/onnx/reference`) with
 :class:`~onnx_light.onnx.reference.ReferenceEvaluator` backed by C++ kernels;
 it is useful to help understand a model and to validate the C++ kernels.
-It is not intended to be used for production and performance is not a
-goal.
+It is not intended to be used for production and performance is not a goal.
 
 Evaluation of a linear regression
 ---------------------------------

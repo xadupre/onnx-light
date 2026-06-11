@@ -207,6 +207,7 @@ TEST(BackendRunModel, Gelu) { RunBackendCasesFor("Gelu"); }
 TEST(BackendRunModel, Mod) { RunBackendCasesFor("Mod"); }
 TEST(BackendRunModel, Clip) { RunBackendCasesFor("Clip"); }
 TEST(BackendRunModel, Compress) { RunBackendCasesFor("Compress"); }
+TEST(BackendRunModel, Concat) { RunBackendCasesFor("Concat"); }
 TEST(BackendRunModel, CumSum) { RunBackendCasesFor("CumSum"); }
 TEST(BackendRunModel, CumProd) { RunBackendCasesFor("CumProd"); }
 TEST(BackendRunModel, DFT) { RunBackendCasesFor("DFT"); }

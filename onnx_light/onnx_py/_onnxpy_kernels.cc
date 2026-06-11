@@ -325,7 +325,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           },
           "Returns the list of tensor names currently held by the context.")
       .def("has_sequence", &RuntimeContext::HasSequence, nb::arg("name"),
-           "Returns ``True`` if a sequence named ``name`` is currently held.")
+           "Returns ``True`` if a sequence named ``name`` is currently held by the context.")
       .def(
           "sequence_names",
           [](const RuntimeContext &rt) {

@@ -246,11 +246,12 @@ class ReferenceEvaluator:
 
         Returns
         -------
-        list of :class:`numpy.ndarray` or list
+        list of :class:`numpy.ndarray` or list of :class:`numpy.ndarray`
             One entry per name in ``output_names`` (defaults to
             :attr:`output_names`), in the requested order. Tensor-typed
             outputs are returned as :class:`numpy.ndarray`; sequence-typed
-            outputs are returned as a ``list`` of :class:`numpy.ndarray`.
+            outputs are returned as a ``list`` of :class:`numpy.ndarray`
+            (one array per sequence element).
         """
         if output_names is None:
             output_names = list(self._output_names)

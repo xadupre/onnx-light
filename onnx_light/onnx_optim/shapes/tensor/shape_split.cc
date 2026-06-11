@@ -52,6 +52,34 @@ std::vector<int64_t> SplitByNumOutputs(int64_t axis_dim, int64_t num_outputs) {
   return sizes;
 }
 
+// Builds per-output symbolic axis dims for ``Split(d, num_outputs=n)`` when
+// ``d`` is purely symbolic. Mirrors the integer-arithmetic resolution in
+// :func:`SplitByNumOutputs`: the first ``n - 1`` outputs each get
+// ``ceil(d/n) = (d + n - 1) / n``, and the last output absorbs the remainder
+// ``d - (n - 1) * ceil(d/n)``. For ``n == 2`` the remainder simplifies to
+// ``d / 2`` (integer arithmetic for ``d >= 0``).
+std::vector<OptimDim> SymbolicSplitByNumOutputs(const std::string &d, int64_t num_outputs) {
+  std::vector<OptimDim> result;
+  result.reserve(static_cast<size_t>(num_outputs));
+  if (num_outputs == 1) {
+    result.emplace_back(d);
+    return result;
+  }
+  const std::string ns = std::to_string(num_outputs);
+  const std::string nm1 = std::to_string(num_outputs - 1);
+  const std::string chunk = "(" + d + "+" + nm1 + ")/" + ns;
+  for (int64_t i = 0; i < num_outputs - 1; ++i) {
+    result.emplace_back(chunk);
+  }
+  if (num_outputs == 2) {
+    // ``d - (d + 1) / 2 == d / 2`` in integer arithmetic for ``d >= 0``.
+    result.emplace_back("(" + d + ")/2");
+  } else {
+    result.emplace_back("(" + d + ")-" + nm1 + "*(" + chunk + ")");
+  }
+  return result;
+}
+
 } // namespace
 
 void ComputeShapeSplit(ShapesContext &ctx, const NodeProto &node) {
@@ -78,6 +106,11 @@ void ComputeShapeSplit(ShapesContext &ctx, const NodeProto &node) {
   // cannot be determined, in which case the per-output axis dimension is set
   // to a fresh symbolic placeholder.
   std::vector<int64_t> sizes;
+  // Symbolic per-output axis dims, used when the axis dim is purely
+  // symbolic (no concrete value, no ``ValueAsShape``) but ``num_outputs`` is
+  // still known. Each entry, when present, takes precedence over the fresh
+  // placeholder fallback.
+  std::vector<OptimDim> symbolic_sizes;
 
   // When the input is 1-D and carries a ``ValueAsShape``, the axis dimension
   // is exactly ``ValueAsShape().Rank()`` even if the declared input shape is
@@ -111,6 +144,16 @@ void ComputeShapeSplit(ShapesContext &ctx, const NodeProto &node) {
       if (num_outputs > 0) {
         sizes = SplitByNumOutputs(effective_axis_dim, num_outputs);
       }
+    } else if (in_shape[axis].IsExpr()) {
+      // 3) The axis dim is purely symbolic and ``ValueAsShape`` is unknown,
+      //    so concrete sizes can't be resolved. ``num_outputs`` (or the
+      //    declared output count) is still enough to build per-output
+      //    symbolic axis dims using integer-arithmetic chunking.
+      const int64_t num_outputs =
+          GetAttributeOr<int64_t>(node, "num_outputs", static_cast<int64_t>(num_outputs_decl));
+      if (num_outputs > 0) {
+        symbolic_sizes = SymbolicSplitByNumOutputs(in_shape[axis].AsExpr(), num_outputs);
+      }
     }
   }
 
@@ -134,6 +177,12 @@ void ComputeShapeSplit(ShapesContext &ctx, const NodeProto &node) {
     throw std::invalid_argument(
         "ComputeShapeSplit: number of resolved split sizes (" + std::to_string(sizes.size()) +
         ") does not match the number of node outputs (" + std::to_string(num_outputs_decl) + ").");
+  }
+  if (!symbolic_sizes.empty() && static_cast<int>(symbolic_sizes.size()) != num_outputs_decl) {
+    throw std::invalid_argument("ComputeShapeSplit: number of resolved symbolic split sizes (" +
+                                std::to_string(symbolic_sizes.size()) +
+                                ") does not match the number of node outputs (" +
+                                std::to_string(num_outputs_decl) + ").");
   }
 
   // Propagate ``ValueAsShape`` when splitting along axis 0 of a 1-D tensor
@@ -170,6 +219,8 @@ void ComputeShapeSplit(ShapesContext &ctx, const NodeProto &node) {
     OptimShape out_shape = in_shape;
     if (!sizes.empty()) {
       out_shape[axis] = OptimDim(size_i);
+    } else if (!symbolic_sizes.empty()) {
+      out_shape[axis] = symbolic_sizes[static_cast<size_t>(i)];
     } else {
       out_shape[axis] =
           OptimDim("Split_axis" + std::to_string(resolved_axis) + "_out" + std::to_string(i));

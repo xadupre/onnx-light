@@ -154,6 +154,7 @@ TEST(BackendRunModel, Log) { RunBackendCasesFor("Log"); }
 TEST(BackendRunModel, Mish) { RunBackendCasesFor("Mish"); }
 TEST(BackendRunModel, Reciprocal) { RunBackendCasesFor("Reciprocal"); }
 TEST(BackendRunModel, Relu) { RunBackendCasesFor("Relu"); }
+TEST(BackendRunModel, ReverseSequence) { RunBackendCasesFor("ReverseSequence"); }
 TEST(BackendRunModel, Round) { RunBackendCasesFor("Round"); }
 TEST(BackendRunModel, Sigmoid) { RunBackendCasesFor("Sigmoid"); }
 TEST(BackendRunModel, Sign) { RunBackendCasesFor("Sign"); }

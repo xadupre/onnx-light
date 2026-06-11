@@ -71,6 +71,10 @@ class TestDocumentationExamples(ExtTestCase):
             print(f"{dt:.3f}: run {name!r}")
         return 1
 
+    def test_check_unittest_going_is_true(self):
+        self.assertIn("UNITTEST_GOING", os.environ)
+        self.assertEqual(os.environ["UNITTEST_GOING"], "1")
+
     @classmethod
     def add_test_methods(cls):
         this = os.path.abspath(os.path.dirname(__file__))

@@ -261,6 +261,35 @@ void RunLoopNode(const NodeProto &node, RuntimeContext &rt) {
 
   kernel::Loop loop_kernel(rt.kernel_ctx());
   std::vector<Tensor> outputs = loop_kernel(m_tensor, cond_tensor, v_initial, k, run_body);
+
+  // When the loop runs zero iterations the kernel produces UNDEFINED-typed
+  // empty scan outputs (it has no template to seed dtype/shape from). Patch
+  // each scan output using the body's declared output value-info so the
+  // downstream pipeline (ReferenceEvaluator, numpy conversion, ...) sees a
+  // well-typed empty tensor of the expected element type and per-iteration
+  // trailing shape.
+  for (size_t i = 0; i < k; ++i) {
+    Tensor &t = outputs[n + i];
+    if (t.data_type != static_cast<int32_t>(DataType::UNDEFINED)) {
+      continue;
+    }
+    const auto &vi = body.output(static_cast<int>(1 + n + i));
+    if (!vi.has_type() || !vi.type().has_tensor_type()) {
+      continue;
+    }
+    const auto &tt = vi.type().tensor_type();
+    t.data_type = static_cast<int32_t>(tt.elem_type());
+    std::vector<int64_t> per_iter_shape;
+    if (tt.has_shape()) {
+      per_iter_shape.reserve(tt.shape().dim().size());
+      for (int d = 0; d < tt.shape().dim().size(); ++d) {
+        const auto &dim = tt.shape().dim()[d];
+        per_iter_shape.push_back(dim.has_dim_value() ? static_cast<int64_t>(dim.dim_value()) : 0);
+      }
+    }
+    t.shape.assign(1, 0);
+    t.shape.insert(t.shape.end(), per_iter_shape.begin(), per_iter_shape.end());
+  }
   PropagateOutputsToCaller(node, outputs, rt);
 }
 

@@ -254,6 +254,26 @@ class TestReferenceEvaluator(ExtTestCase):
         np.testing.assert_allclose(np.transpose(y0, (2, 0, 1, 3)), y1, rtol=1e-5, atol=1e-6)
         np.testing.assert_allclose(np.transpose(y_h0, (1, 0, 2)), y_h1, rtol=1e-5, atol=1e-6)
 
+    def test_loop_zero_trip_count(self):
+        # Regression test for ``test_cc_loop_zero_trip_count``: when ``M = 0``
+        # the loop runs zero iterations and the scan output is empty along
+        # its leading axis. The kernel has no per-iteration template to seed
+        # the dtype/shape from, so ``RunLoopNode`` must patch the empty scan
+        # output's dtype/trailing shape from the body's declared output
+        # value-info; otherwise the downstream numpy conversion raises
+        # ``"The element type in the input tensor is UNDEFINED."``.
+        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+
+        tc = collect_test_case().get("test_cc_loop_zero_trip_count")
+        self.assertIsNotNone(tc)
+        inputs, outputs = tc.data_sets[0]
+        sess = ReferenceEvaluator(tc.model)
+        got = sess.run(None, dict(zip(sess.input_names, inputs)))
+        self.assertEqual(len(got), 1)
+        self.assertEqual(got[0].dtype, outputs[0].dtype)
+        self.assertEqual(got[0].shape, outputs[0].shape)
+        np.testing.assert_array_equal(got[0], outputs[0])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

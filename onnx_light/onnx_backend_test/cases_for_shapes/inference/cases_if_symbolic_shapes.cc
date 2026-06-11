@@ -132,8 +132,9 @@ void RegisterIfSymbolicShapesShapeInferenceCases(std::vector<TestCase> &registry
   // the outer-scope ValueInfo (and the corresponding shapes) of their
   // captured inputs.
   BuildIdentityBranch(*then_g, "then_branch", "a_then", "out_a_then", DataType::FLOAT,
-                      {DimSpec(int64_t{3}), DimSpec(int64_t{4})});
-  AppendIdentityOutput(*then_g, "b_then", "out_b_then", DataType::INT64, {DimSpec(int64_t{3})});
+                      {DimSpec("D3"), DimSpec("D4")});
+  AppendIdentityOutput(*then_g, "b_then", "out_b_then", DataType::INT64,
+                       {DimSpec("D3"), DimSpec("D4")});
 
   AttributeProto *else_attr = if_node.add_attribute();
   else_attr->set_name("else_branch");

@@ -7,7 +7,7 @@ Runtime test coverage (onnxruntime and shape_inference)
 .. role:: red
 
 This page reports, for every backend test case collected by
-:func:`onnx_light.backend.test.case.base.collect_test_case`, the outcome of
+:func:`onnx_light.onnx_lib.backend.test.case.collect_test_case`, the outcome of
 three independent scenarios:
 
 * **onnxruntime (CPU)** — the model is executed with :epkg:`onnxruntime` on
@@ -34,7 +34,7 @@ Global pass rates across all collected test cases:
 .. runpython::
     :rst:
 
-    from onnx_light.backend.runtime_coverage import (
+    from onnx_light.onnx_lib.backend.runtime_coverage import (
         compute_runtime_coverage,
         render_rst_summary,
     )
@@ -47,7 +47,7 @@ Per-domain pass rates:
 .. runpython::
     :rst:
 
-    from onnx_light.backend.runtime_coverage import (
+    from onnx_light.onnx_lib.backend.runtime_coverage import (
         compute_runtime_coverage,
         render_rst_domain_summary,
     )
@@ -67,7 +67,7 @@ column header to sort.
 .. runpython::
     :rst:
 
-    from onnx_light.backend.runtime_coverage import (
+    from onnx_light.onnx_lib.backend.runtime_coverage import (
         compute_runtime_coverage,
         render_rst_domain_sections,
     )

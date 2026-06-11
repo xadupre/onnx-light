@@ -382,24 +382,20 @@ TEST(BackendRunModel, LinearAttention) {
 }
 TEST(BackendRunModel, FlexAttention) {
   // The dispatch-table kernel handles the base FlexAttention path (Q, K, V ->
-  // Y) without executing optional ``score_mod`` subgraphs.
-  // Skip cases that attach that attribute because their expected outputs are
-  // computed with the modifier applied and will not match the baseline kernel.
-  // The ``prob_mod`` subgraph is now executed via RunSubgraph.
+  // Y) including the optional ``score_mod`` and ``prob_mod`` modifier
+  // subgraphs (executed via RunSubgraph). Some score_mod cases use ops
+  // (e.g. ``Sub`` / ``Cast`` over INT64 indices) not yet wired through the
+  // dispatch table; skip those by case name.
   RunBackendCasesFor(
       "FlexAttention",
       [](const TestCase &tc) {
-        if (tc.model.ref_graph().ref_node().size() != 1u) {
-          return true;
-        }
-        const NodeProto &node = tc.model.ref_graph().ref_node()[0];
-        for (const auto &attr : node.ref_attribute()) {
-          const std::string name = attr.ref_name().as_string();
-          if (name == "score_mod") {
-            return false;
-          }
-        }
-        return true;
+        // ``test_cc_flexattention_relative_positional`` uses Sub/Cast on
+        // INT64 indices which are not yet registered in the dispatch
+        // table. ``test_cc_flexattention_soft_cap`` uses Constant/Div/Tanh
+        // chains in its score_mod subgraph; some of those paths are not
+        // yet covered either.
+        return tc.name != "test_cc_flexattention_relative_positional" &&
+               tc.name != "test_cc_flexattention_soft_cap";
       },
       [](const DataSet &ds) {
         return ds.inputs.size() >= 3 && ds.inputs[0].data_type == DataType::FLOAT &&

@@ -516,6 +516,20 @@ class TestOnnxLightHelper(ExtTestCase):
         reload = onnxl.load(name)
         self.assertEqual(len(reload.graph.initializer), len(model.graph.initializer))
 
+    def test_save_external_data_after_metadata_only_load_raises_clear_error(self):
+        onnx_path = self.get_dump_file("test_save_ext_metadata_only_src.onnx")
+        name = self.get_dump_file("test_save_ext_metadata_only_dst.onnx")
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        onnxl.save(model, onnx_path, save_as_external_data=True)
+
+        proto = onnxl.load(onnx_path, load_external_data=False)
+        with self.assertRaises(RuntimeError) as cm:
+            onnxl.save(proto, name, save_as_external_data=True)
+        msg = str(cm.exception)
+        self.assertIn("load_external_data=False", msg)
+        self.assertIn("load_external_data=True", msg)
+        self.assertIn("save_model_with_shared_external_data()", msg)
+
     def test_save_external_data_does_not_mutate_modelproto(self):
         # Verifies that saving to two files (model + external data) does not
         # modify the in-memory onnx_light ModelProto.

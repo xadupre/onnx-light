@@ -1925,6 +1925,30 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Tan", MakeUnaryTrampoline<kernel::Tan>()},
       {"ai.onnx:Tanh", MakeUnaryTrampoline<kernel::Tanh>()},
       {"ai.onnx:ThresholdedRelu", MakeUnaryAlphaTrampoline<kernel::ThresholdedRelu>("alpha", 1.0f)},
+      {"ai.onnx:Unique",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputRange(node, 1, 4);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         kernel::Unique::Attributes attrs;
+         attrs.sorted = GetAttributeIntOrDefault(node, "sorted", 1) != 0;
+         const AttributeProto *axis_attr = FindAttribute(node, "axis");
+         if (axis_attr != nullptr) {
+           attrs.axis = axis_attr->i();
+         }
+         kernel::Unique k(rt.kernel_ctx());
+         auto out = k(x, attrs);
+         SetOutput(node, 0, std::move(out.y), rt);
+         if (node.output_size() >= 2) {
+           SetOutput(node, 1, std::move(out.indices), rt);
+         }
+         if (node.output_size() >= 3) {
+           SetOutput(node, 2, std::move(out.inverse_indices), rt);
+         }
+         if (node.output_size() >= 4) {
+           SetOutput(node, 3, std::move(out.counts), rt);
+         }
+       }},
       {"ai.onnx:Unsqueeze", MakeSqueezeLikeTrampoline<kernel::Unsqueeze>("Unsqueeze")},
       {"ai.onnx:Upsample",
        [](const NodeProto &node, RuntimeContext &rt) {

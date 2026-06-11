@@ -1570,6 +1570,15 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          }
        }},
       {"ai.onnx:Mean", MakeVariadicTrampoline<kernel::Mean>()},
+      {"ai.onnx:MeanVarianceNormalization",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const std::vector<int64_t> axes = GetAttributeIntsOrDefault(node, "axes", {0, 2, 3});
+         kernel::MeanVarianceNormalization k(rt.kernel_ctx());
+         SetOutput(node, 0, k(x, axes), rt.tensors());
+       }},
       {"ai.onnx:MelWeightMatrix",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 5);

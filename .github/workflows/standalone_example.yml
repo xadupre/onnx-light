@@ -58,5 +58,5 @@ jobs:
 
       - name: Smoke-run standalone load_onnx_light_time example
         run: |
-          ./build/load-onnx-light-time-example/load_onnx_light_time \
+          UNITTEST_GOING=1 ./build/load-onnx-light-time-example/load_onnx_light_time \
             ./unittests/cc/onnx_proto/data/test_softmax_example_expanded.onnx

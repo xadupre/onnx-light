@@ -89,7 +89,7 @@ jobs:
 
       - name: Run tests (excluding onnxl_vs_onnx)
         run: |
-          pytest --durations=10 unittests --ignore=unittests/onnxl_vs_onnx
+          UNITTEST_GOING=1 pytest --durations=10 unittests --ignore=unittests/onnxl_vs_onnx
 
   core_tests_ubuntu:
     name: core (ubuntu-latest, py3.13)
@@ -129,7 +129,7 @@ jobs:
 
       - name: Run tests
         run: |
-          pytest --durations=10 unittests
+          UNITTEST_GOING=1 pytest --durations=10 unittests
 
   core_tests:
     name: core (${{ matrix.os }}, py${{ matrix.python-version }})
@@ -189,7 +189,7 @@ jobs:
 
       - name: Run tests
         run: |
-          pytest --cov=onnx_light --cov-report=xml --durations=10 unittests
+          UNITTEST_GOING=1 pytest --cov=onnx_light --cov-report=xml --durations=10 unittests
 
   windows_x86_build:
     name: core (windows-latest, x86 build)

@@ -1,4 +1,4 @@
-name: cq - asan-ubsan
+name: acq - asan-ubsan
 
 on:
   workflow_dispatch:

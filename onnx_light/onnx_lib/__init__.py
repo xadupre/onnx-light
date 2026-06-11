@@ -38,6 +38,9 @@ from ..onnx_py._onnxpyprotoop import (  # type: ignore
     utils_onnx_read_varint64,
 )
 from ..onnx_proto import _helper as helper, _numpy_helper as numpy_helper
+from ..onnx_proto import (
+    _proto_methods as _proto_methods,
+)  # noqa: F401  bolts add_* helpers on proto classes
 from ..onnx_proto._io_helper import (
     load,
     load_encrypted,

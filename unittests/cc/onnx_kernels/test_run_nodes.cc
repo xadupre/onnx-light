@@ -3023,4 +3023,44 @@ TEST(RunNodes, RunGraphReleaseIntermediatesRemovesUnusedAndEmitsEvent) {
   EXPECT_TRUE(rt2.Has("y"));
 }
 
+TEST(RunNodes, ExecutionPlanIsCachedAcrossRunGraphInvocations) {
+  // GetExecutionPlan returns the same instance on subsequent calls for
+  // the same GraphProto, so the release analysis is paid only once.
+  GraphProto graph;
+  ValueInfoProto vi_x;
+  vi_x.set_name("x");
+  ValueInfoProto vi_y;
+  vi_y.set_name("y");
+  graph.ref_input().push_back(vi_x);
+  graph.ref_output().push_back(vi_y);
+  graph.ref_node().push_back(MakeNode("Abs", {"x"}, {"t"}));
+  graph.ref_node().push_back(MakeNode("Neg", {"t"}, {"y"}));
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_release_intermediates(true);
+  const onnx_kernels::ExecutionPlan &plan1 = rt.GetExecutionPlan(graph);
+  const onnx_kernels::ExecutionPlan &plan2 = rt.GetExecutionPlan(graph);
+  EXPECT_EQ(&plan1, &plan2);
+  EXPECT_EQ(plan1.num_nodes(), 2u);
+  // "t" is releasable after node 1, "x" / "y" are in keep (input/output).
+  EXPECT_TRUE(plan1.releasable()[0].empty());
+  ASSERT_EQ(plan1.releasable()[1].size(), 1u);
+  EXPECT_EQ(plan1.releasable()[1][0], "t");
+  EXPECT_TRUE(plan1.keep().count("x"));
+  EXPECT_TRUE(plan1.keep().count("y"));
+
+  // Two successive RunGraph calls both reuse the cached plan.
+  rt.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
+  RunGraph(graph, rt);
+  EXPECT_FALSE(rt.Has("t"));
+  EXPECT_TRUE(rt.Has("y"));
+  rt.Remove("y");
+  rt.Put("x", Tensor::FromFloat("x", {2}, {-3.0f, 4.0f}));
+  RunGraph(graph, rt);
+  EXPECT_FALSE(rt.Has("t"));
+  EXPECT_TRUE(rt.Has("y"));
+  // Cached plan still the same instance after both runs.
+  EXPECT_EQ(&rt.GetExecutionPlan(graph), &plan1);
+}
+
 } // namespace Test

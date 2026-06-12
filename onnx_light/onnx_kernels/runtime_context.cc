@@ -415,5 +415,67 @@ RuntimeContext::ComputeReleasableInputs(const std::vector<NodeProto> &nodes,
   return ComputeReleasableInputsImpl(nodes, keep);
 }
 
+ExecutionPlan::ExecutionPlan(const utils::RepeatedProtoField<NodeProto> &nodes,
+                             std::unordered_set<std::string> keep)
+    : keep_(std::move(keep)), releasable_(RuntimeContext::ComputeReleasableInputs(nodes, keep_)) {}
+
+ExecutionPlan::ExecutionPlan(const GraphProto &graph) {
+  for (size_t i = 0; i < graph.input().size(); ++i) {
+    const std::string name = graph.input()[i].name().as_string();
+    if (!name.empty()) {
+      keep_.insert(name);
+    }
+  }
+  for (size_t i = 0; i < graph.initializer().size(); ++i) {
+    const std::string name = graph.initializer()[i].name().as_string();
+    if (!name.empty()) {
+      keep_.insert(name);
+    }
+  }
+  for (size_t i = 0; i < graph.output().size(); ++i) {
+    const std::string name = graph.output()[i].name().as_string();
+    if (!name.empty()) {
+      keep_.insert(name);
+    }
+  }
+  releasable_ = RuntimeContext::ComputeReleasableInputs(graph.node(), keep_);
+}
+
+ExecutionPlan::ExecutionPlan(const FunctionProto &func) {
+  for (size_t i = 0; i < func.input_size(); ++i) {
+    const std::string name = func.input(i).as_string();
+    if (!name.empty()) {
+      keep_.insert(name);
+    }
+  }
+  for (size_t i = 0; i < func.output_size(); ++i) {
+    const std::string name = func.output(i).as_string();
+    if (!name.empty()) {
+      keep_.insert(name);
+    }
+  }
+  releasable_ = RuntimeContext::ComputeReleasableInputs(func.node(), keep_);
+}
+
+const ExecutionPlan &RuntimeContext::GetExecutionPlan(const GraphProto &graph) {
+  const void *key = static_cast<const void *>(&graph);
+  auto it = execution_plans_.find(key);
+  if (it == execution_plans_.end()) {
+    it = execution_plans_.emplace(key, ExecutionPlan(graph)).first;
+  }
+  return it->second;
+}
+
+const ExecutionPlan &RuntimeContext::GetExecutionPlan(const FunctionProto &func) {
+  const void *key = static_cast<const void *>(&func);
+  auto it = execution_plans_.find(key);
+  if (it == execution_plans_.end()) {
+    it = execution_plans_.emplace(key, ExecutionPlan(func)).first;
+  }
+  return it->second;
+}
+
+void RuntimeContext::ClearExecutionPlans() noexcept { execution_plans_.clear(); }
+
 } // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

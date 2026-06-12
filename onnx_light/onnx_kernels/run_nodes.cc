@@ -984,6 +984,29 @@ void SeedKeepFromContext(const RuntimeContext &rt, std::unordered_set<std::strin
   }
 }
 
+// Collects every name currently held by ``rt`` (tensor or sequence)
+// that is *not* part of ``structural_keep`` — i.e. values the caller
+// seeded into the context on top of the graph's declared inputs /
+// initializers / outputs (intermediate overrides, extra tensors used
+// by downstream nodes, etc.). These must be preserved by the release
+// loop even though the cached :cpp:class:`ExecutionPlan` does not know
+// about them.
+std::unordered_set<std::string>
+CollectExtraKeep(const RuntimeContext &rt, const std::unordered_set<std::string> &structural_keep) {
+  std::unordered_set<std::string> extra;
+  for (const auto &kv : rt.tensors()) {
+    if (!structural_keep.count(kv.first)) {
+      extra.insert(kv.first);
+    }
+  }
+  for (const auto &kv : rt.sequences()) {
+    if (!structural_keep.count(kv.first)) {
+      extra.insert(kv.first);
+    }
+  }
+  return extra;
+}
+
 // Runs every node of ``nodes`` in order and, after each node, removes
 // from ``rt`` every name in the matching ``releasable[i]`` slot. Both
 // the tensor map and the sequence map are consulted: ``Remove`` is a
@@ -992,10 +1015,14 @@ void SeedKeepFromContext(const RuntimeContext &rt, std::unordered_set<std::strin
 // the tensor event stream).
 template <class NodeRange>
 void RunNodesAndRelease(const NodeRange &nodes, RuntimeContext &rt,
-                        const std::vector<std::vector<std::string>> &releasable) {
+                        const std::vector<std::vector<std::string>> &releasable,
+                        const std::unordered_set<std::string> &extra_keep) {
   for (size_t i = 0; i < nodes.size(); ++i) {
     RunNode(nodes[i], rt);
     for (const auto &name : releasable[i]) {
+      if (extra_keep.count(name)) {
+        continue;
+      }
       rt.Remove(name);
       rt.RemoveSequence(name);
     }
@@ -1017,9 +1044,14 @@ void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext 
   // Names already populated in ``rt`` before ``RunNodes`` is invoked
   // (graph inputs, initializers, outputs the caller wants to read back,
   // ...) are preserved by adding them to the ``keep`` set.
+  //
+  // No graph / function structural context is available here, so the
+  // plan is built inline and not cached; the cached path is taken by
+  // :cpp:func:`RunGraph` / :cpp:func:`RunFunction`.
   std::unordered_set<std::string> keep;
   SeedKeepFromContext(rt, keep);
-  RunNodesAndRelease(nodes, rt, RuntimeContext::ComputeReleasableInputs(nodes, keep));
+  ExecutionPlan plan(nodes, std::move(keep));
+  RunNodesAndRelease(nodes, rt, plan.releasable(), /*extra_keep=*/{});
 }
 
 void RunGraph(const GraphProto &graph, RuntimeContext &rt) {
@@ -1038,18 +1070,14 @@ void RunGraph(const GraphProto &graph, RuntimeContext &rt) {
     RunNodes(graph.node(), rt);
     return;
   }
-  // Build the "keep" set so the graph's declared outputs (and every
-  // name already in the runtime context — graph inputs, initializers,
-  // values seeded by the caller) survive the per-node release loop.
-  std::unordered_set<std::string> keep;
-  SeedKeepFromContext(rt, keep);
-  for (size_t i = 0; i < graph.output().size(); ++i) {
-    const std::string out_name = graph.output()[i].name().as_string();
-    if (!out_name.empty()) {
-      keep.insert(out_name);
-    }
-  }
-  RunNodesAndRelease(graph.node(), rt, RuntimeContext::ComputeReleasableInputs(graph.node(), keep));
+  // Reuse the cached :cpp:class:`ExecutionPlan` for ``graph`` (built
+  // on first use) so the release analysis is paid only once across
+  // every invocation of the same model. The plan's ``keep`` covers
+  // every declared input / initializer / output; caller-seeded extras
+  // (e.g. runtime overrides of intermediates) are picked up by
+  // :cpp:func:`CollectExtraKeep` and excluded from the release loop.
+  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
+  RunNodesAndRelease(graph.node(), rt, plan.releasable(), CollectExtraKeep(rt, plan.keep()));
 }
 
 void RunFunction(const FunctionProto &func, RuntimeContext &rt) {
@@ -1057,15 +1085,8 @@ void RunFunction(const FunctionProto &func, RuntimeContext &rt) {
     RunNodes(func.node(), rt);
     return;
   }
-  std::unordered_set<std::string> keep;
-  SeedKeepFromContext(rt, keep);
-  for (size_t i = 0; i < func.output().size(); ++i) {
-    const std::string out_name = func.output()[i].as_string();
-    if (!out_name.empty()) {
-      keep.insert(out_name);
-    }
-  }
-  RunNodesAndRelease(func.node(), rt, RuntimeContext::ComputeReleasableInputs(func.node(), keep));
+  const ExecutionPlan &plan = rt.GetExecutionPlan(func);
+  RunNodesAndRelease(func.node(), rt, plan.releasable(), CollectExtraKeep(rt, plan.keep()));
 }
 
 void RunModel(const ModelProto &model, RuntimeContext &rt) {

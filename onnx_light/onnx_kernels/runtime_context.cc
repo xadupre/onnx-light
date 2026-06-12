@@ -417,7 +417,11 @@ RuntimeContext::ComputeReleasableInputs(const std::vector<NodeProto> &nodes,
 
 ExecutionPlan::ExecutionPlan(const utils::RepeatedProtoField<NodeProto> &nodes,
                              std::unordered_set<std::string> keep)
-    : keep_(std::move(keep)), releasable_(RuntimeContext::ComputeReleasableInputs(nodes, keep_)) {}
+    : keep_(std::move(keep)), releasable_(RuntimeContext::ComputeReleasableInputs(nodes, keep_)) {
+  for (size_t i = 0; i < nodes.size(); ++i) {
+    node_index_.emplace(&nodes[i], i);
+  }
+}
 
 ExecutionPlan::ExecutionPlan(const GraphProto &graph) {
   for (size_t i = 0; i < graph.input().size(); ++i) {
@@ -439,6 +443,9 @@ ExecutionPlan::ExecutionPlan(const GraphProto &graph) {
     }
   }
   releasable_ = RuntimeContext::ComputeReleasableInputs(graph.node(), keep_);
+  for (size_t i = 0; i < graph.node().size(); ++i) {
+    node_index_.emplace(&graph.node()[i], i);
+  }
 }
 
 ExecutionPlan::ExecutionPlan(const FunctionProto &func) {
@@ -455,6 +462,20 @@ ExecutionPlan::ExecutionPlan(const FunctionProto &func) {
     }
   }
   releasable_ = RuntimeContext::ComputeReleasableInputs(func.node(), keep_);
+  for (size_t i = 0; i < func.node().size(); ++i) {
+    node_index_.emplace(&func.node()[i], i);
+  }
+}
+
+void ExecutionPlan::ReleaseAfter(const NodeProto &node, RuntimeContext &rt) const {
+  auto it = node_index_.find(&node);
+  if (it == node_index_.end()) {
+    return;
+  }
+  for (const auto &name : releasable_[it->second]) {
+    rt.Remove(name);
+    rt.RemoveSequence(name);
+  }
 }
 
 const ExecutionPlan &RuntimeContext::GetExecutionPlan(const GraphProto &graph) {

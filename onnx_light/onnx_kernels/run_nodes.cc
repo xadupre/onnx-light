@@ -12,7 +12,6 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -971,48 +970,14 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
 
 namespace {
 
-// Collects every name currently held by ``rt`` (tensor or sequence)
-// that is *not* part of ``structural_keep`` — i.e. values the caller
-// seeded into the context on top of the graph's declared inputs /
-// initializers / outputs (intermediate overrides, extra tensors used
-// by downstream nodes, etc.). These must be preserved by the release
-// loop even though the cached :cpp:class:`ExecutionPlan` does not know
-// about them.
-std::unordered_set<std::string>
-CollectExtraKeep(const RuntimeContext &rt, const std::unordered_set<std::string> &structural_keep) {
-  std::unordered_set<std::string> extra;
-  for (const auto &kv : rt.tensors()) {
-    if (!structural_keep.count(kv.first)) {
-      extra.insert(kv.first);
-    }
-  }
-  for (const auto &kv : rt.sequences()) {
-    if (!structural_keep.count(kv.first)) {
-      extra.insert(kv.first);
-    }
-  }
-  return extra;
-}
-
-// Runs every node of ``nodes`` in order and, after each node, removes
-// from ``rt`` every name in the matching ``plan.releasable()[i]`` slot.
-// Both the tensor map and the sequence map are consulted: ``Remove`` is
-// a no-op if absent and emits a ``kRemove`` event when event logging is
-// on; sequence removals don't emit events (sequence values live outside
-// the tensor event stream).
+// Runs every node of ``nodes`` in order and, after each node, delegates
+// to :cpp:func:`ExecutionPlan::ReleaseAfter` to free any intermediates
+// the plan has scheduled for release at that node.
 template <class NodeRange>
-void RunNodesAndRelease(const NodeRange &nodes, RuntimeContext &rt, const ExecutionPlan &plan,
-                        const std::unordered_set<std::string> &extra_keep) {
-  const auto &releasable = plan.releasable();
+void RunNodesAndRelease(const NodeRange &nodes, RuntimeContext &rt, const ExecutionPlan &plan) {
   for (size_t i = 0; i < nodes.size(); ++i) {
     RunNode(nodes[i], rt);
-    for (const auto &name : releasable[i]) {
-      if (extra_keep.count(name)) {
-        continue;
-      }
-      rt.Remove(name);
-      rt.RemoveSequence(name);
-    }
+    plan.ReleaseAfter(nodes[i], rt);
   }
 }
 
@@ -1026,7 +991,7 @@ void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext 
 
 void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext &rt,
               const ExecutionPlan &plan) {
-  RunNodesAndRelease(nodes, rt, plan, CollectExtraKeep(rt, plan.keep()));
+  RunNodesAndRelease(nodes, rt, plan);
 }
 
 void RunGraph(const GraphProto &graph, RuntimeContext &rt) {

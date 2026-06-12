@@ -575,9 +575,21 @@ public:
   /// Number of nodes covered by this plan (``releasable().size()``).
   size_t num_nodes() const noexcept { return releasable_.size(); }
 
+  /// Releases from ``rt`` every name in the ``releasable()`` slot
+  /// associated with ``node``. ``node`` must be one of the
+  /// :cpp:class:`NodeProto` instances the plan was built from
+  /// (lookup is by address); if it is not, this is a no-op. Each
+  /// removal is performed on both the tensor map and the sequence
+  /// map: :cpp:func:`RuntimeContext::Remove` is a no-op if the name
+  /// is absent and emits a :cpp:enumerator:`TensorEventAction::kRemove`
+  /// event when event logging is on; sequence removals do not emit
+  /// events (sequence values live outside the tensor event stream).
+  void ReleaseAfter(const NodeProto &node, RuntimeContext &rt) const;
+
 private:
   std::unordered_set<std::string> keep_;
   std::vector<std::vector<std::string>> releasable_;
+  std::unordered_map<const NodeProto *, size_t> node_index_;
 };
 
 } // namespace onnx_kernels

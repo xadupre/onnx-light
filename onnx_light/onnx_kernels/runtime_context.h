@@ -314,6 +314,28 @@ public:
                           std::vector<std::string> inputs, int64_t start_time_ns,
                           int64_t duration_ns);
 
+  /**
+   * Returns the list of input names referenced by ``nodes`` that are
+   * not produced as outputs by any node in the same list — i.e. the
+   * external dependencies of the node set.
+   *
+   * Subgraph attributes (``GRAPH`` / ``GRAPHS``) are inspected
+   * recursively: for every subgraph, names read by the subgraph's
+   * nodes that are neither produced inside the subgraph (formal
+   * inputs, initializers, intermediate node outputs) nor produced by
+   * the outer ``nodes`` are appended to the result, mirroring the
+   * captured-value semantics of ONNX control-flow operators.
+   *
+   * The returned list preserves the order in which each external
+   * name is first encountered and contains no duplicates. Empty
+   * input names (optional inputs left unbound) are skipped.
+   */
+  static std::vector<std::string>
+  CollectExternalInputs(const utils::RepeatedProtoField<NodeProto> &nodes);
+
+  /// ``std::vector``-overload of :cpp:func:`CollectExternalInputs`.
+  static std::vector<std::string> CollectExternalInputs(const std::vector<NodeProto> &nodes);
+
   /// In/out sequence map shared across every node in a chain. Only
   /// sequence-typed graph edges are stored here; tensor-typed edges
   /// live in :cpp:func:`tensors`.

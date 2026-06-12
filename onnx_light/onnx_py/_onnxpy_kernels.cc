@@ -369,7 +369,21 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           ":meth:`TensorEvent.as_dict` to convert an individual entry to a "
           "plain Python ``dict``.")
       .def("clear_events", &RuntimeContext::ClearEvents,
-           "Empties the event log without otherwise touching the tensor map.");
+           "Empties the event log without otherwise touching the tensor map.")
+      .def_static(
+          "collect_external_inputs",
+          [](const std::vector<NodeProto> &nodes) {
+            return RuntimeContext::CollectExternalInputs(nodes);
+          },
+          nb::arg("nodes"),
+          "Returns the list of input names referenced by ``nodes`` that are not "
+          "produced as outputs by any node in the same list. Names captured by "
+          "subgraph attributes (``GRAPH`` / ``GRAPHS``) are inspected recursively: "
+          "for every subgraph, names read by its nodes that are neither produced "
+          "inside the subgraph (formal inputs, initializers, intermediate node "
+          "outputs) nor produced by the outer ``nodes`` are appended. The returned "
+          "list preserves first-seen order and contains no duplicates; empty input "
+          "names (optional inputs left unbound) are skipped.");
 
   // Top-level run helpers.
   rt_mod.def(

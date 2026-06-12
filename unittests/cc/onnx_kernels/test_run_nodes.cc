@@ -2400,6 +2400,146 @@ TEST(RunNodes, RunNodeSplitToSequenceFromDispatchTable) {
   }
 }
 
+TEST(RuntimeContextCollectExternalInputs, FlatNodes) {
+  std::vector<NodeProto> nodes;
+  nodes.push_back(MakeNode("Mul", {"x", "y"}, {"t"}));
+  nodes.push_back(MakeNode("Sub", {"t", "z"}, {"out"}));
+  nodes.push_back(MakeNode("Add", {"out", "x"}, {"final"}));
+
+  auto inputs = RuntimeContext::CollectExternalInputs(nodes);
+  EXPECT_EQ(inputs, std::vector<std::string>({"x", "y", "z"}));
+}
+
+TEST(RuntimeContextCollectExternalInputs, EmptyNodes) {
+  std::vector<NodeProto> nodes;
+  EXPECT_TRUE(RuntimeContext::CollectExternalInputs(nodes).empty());
+}
+
+TEST(RuntimeContextCollectExternalInputs, SkipsEmptyAndProducedNames) {
+  std::vector<NodeProto> nodes;
+  // Optional input "" must be ignored; output "t" produced internally
+  // must not be reported as external.
+  nodes.push_back(MakeNode("Resize", {"X", "", "scales"}, {"t"}));
+  nodes.push_back(MakeNode("Abs", {"t"}, {"Y"}));
+
+  auto inputs = RuntimeContext::CollectExternalInputs(nodes);
+  EXPECT_EQ(inputs, std::vector<std::string>({"X", "scales"}));
+}
+
+TEST(RuntimeContextCollectExternalInputs, SubgraphCapturesOuterValues) {
+  // Build an If node whose then_branch reads "cap1" from the outer
+  // scope and whose else_branch reads "cap2"; "cond" feeds the If
+  // input and "produced" is produced by an earlier node in the set.
+  GraphProto then_branch;
+  *then_branch.add_node() = MakeNode("Add", {"cap1", "produced"}, {"then_out"});
+  then_branch.add_output()->set_name("then_out");
+
+  GraphProto else_branch;
+  *else_branch.add_node() = MakeNode("Add", {"cap2", "produced"}, {"else_out"});
+  else_branch.add_output()->set_name("else_out");
+
+  NodeProto if_node = MakeNode("If", {"cond"}, {"y"});
+  AttributeProto *attr_then = if_node.add_attribute();
+  attr_then->set_name("then_branch");
+  attr_then->set_type(AttributeProto::AttributeType::GRAPH);
+  *attr_then->mutable_g() = then_branch;
+  AttributeProto *attr_else = if_node.add_attribute();
+  attr_else->set_name("else_branch");
+  attr_else->set_type(AttributeProto::AttributeType::GRAPH);
+  *attr_else->mutable_g() = else_branch;
+
+  std::vector<NodeProto> nodes;
+  nodes.push_back(MakeNode("Identity", {"x"}, {"produced"}));
+  nodes.push_back(if_node);
+
+  auto inputs = RuntimeContext::CollectExternalInputs(nodes);
+  // "produced" is produced by the outer set and must not be reported.
+  // Order is first-seen.
+  EXPECT_EQ(inputs, std::vector<std::string>({"x", "cond", "cap1", "cap2"}));
+}
+
+TEST(RuntimeContextCollectExternalInputs, SubgraphLocalNamesShadowOuter) {
+  // Subgraph defines its own formal input "x", an initializer "k",
+  // and produces "tmp" internally — none of these should be reported.
+  // It additionally reads "outer_only" from the outer scope.
+  GraphProto body;
+  body.add_input()->set_name("x");
+  TensorProto *init = body.add_initializer();
+  init->set_name("k");
+  init->set_data_type(static_cast<int32_t>(DataType::FLOAT));
+  *body.add_node() = MakeNode("Add", {"x", "k"}, {"tmp"});
+  *body.add_node() = MakeNode("Mul", {"tmp", "outer_only"}, {"body_out"});
+  body.add_output()->set_name("body_out");
+
+  NodeProto loop = MakeNode("Loop", {"M", "cond"}, {"y"});
+  AttributeProto *attr = loop.add_attribute();
+  attr->set_name("body");
+  attr->set_type(AttributeProto::AttributeType::GRAPH);
+  *attr->mutable_g() = body;
+
+  std::vector<NodeProto> nodes = {loop};
+  auto inputs = RuntimeContext::CollectExternalInputs(nodes);
+  EXPECT_EQ(inputs, std::vector<std::string>({"M", "cond", "outer_only"}));
+}
+
+TEST(RuntimeContextCollectExternalInputs, NestedSubgraphCaptures) {
+  // Outer If holds an inner If whose then_branch reads "deep".
+  GraphProto inner_then;
+  *inner_then.add_node() = MakeNode("Identity", {"deep"}, {"inner_out"});
+  inner_then.add_output()->set_name("inner_out");
+  GraphProto inner_else;
+  *inner_else.add_node() = MakeNode("Identity", {"deep"}, {"inner_out"});
+  inner_else.add_output()->set_name("inner_out");
+
+  NodeProto inner_if = MakeNode("If", {"inner_cond"}, {"middle"});
+  AttributeProto *a1 = inner_if.add_attribute();
+  a1->set_name("then_branch");
+  a1->set_type(AttributeProto::AttributeType::GRAPH);
+  *a1->mutable_g() = inner_then;
+  AttributeProto *a2 = inner_if.add_attribute();
+  a2->set_name("else_branch");
+  a2->set_type(AttributeProto::AttributeType::GRAPH);
+  *a2->mutable_g() = inner_else;
+
+  GraphProto outer_then;
+  *outer_then.add_node() = inner_if;
+  *outer_then.add_node() = MakeNode("Identity", {"middle"}, {"outer_out"});
+  outer_then.add_output()->set_name("outer_out");
+  GraphProto outer_else;
+  *outer_else.add_node() = MakeNode("Identity", {"middle"}, {"outer_out"});
+  outer_else.add_output()->set_name("outer_out");
+
+  NodeProto outer_if = MakeNode("If", {"outer_cond"}, {"y"});
+  AttributeProto *b1 = outer_if.add_attribute();
+  b1->set_name("then_branch");
+  b1->set_type(AttributeProto::AttributeType::GRAPH);
+  *b1->mutable_g() = outer_then;
+  AttributeProto *b2 = outer_if.add_attribute();
+  b2->set_name("else_branch");
+  b2->set_type(AttributeProto::AttributeType::GRAPH);
+  *b2->mutable_g() = outer_else;
+
+  std::vector<NodeProto> nodes = {outer_if};
+  auto inputs = RuntimeContext::CollectExternalInputs(nodes);
+  // outer_cond is read by the outer If node itself.
+  // Inside outer_then: inner_if introduces inner_cond, and its branches
+  // capture "deep" from above.
+  // Inside outer_else: the lone Identity reads "middle", which is not
+  // produced anywhere in outer_else (only in outer_then via inner_if),
+  // so it is captured from the outer scope.
+  EXPECT_EQ(inputs, std::vector<std::string>({"outer_cond", "inner_cond", "deep", "middle"}));
+}
+
+TEST(RuntimeContextCollectExternalInputs, DeduplicatesOrdering) {
+  std::vector<NodeProto> nodes;
+  nodes.push_back(MakeNode("Add", {"a", "b"}, {"u"}));
+  nodes.push_back(MakeNode("Mul", {"a", "u"}, {"v"})); // re-references "a"
+  nodes.push_back(MakeNode("Sub", {"b", "v"}, {"w"})); // re-references "b"
+
+  auto inputs = RuntimeContext::CollectExternalInputs(nodes);
+  EXPECT_EQ(inputs, std::vector<std::string>({"a", "b"}));
+}
+
 // ---------------------------------------------------------------------------
 // RuntimeContext isolation invariants when running a local function or a
 // subgraph. See issue #2157.

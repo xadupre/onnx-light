@@ -7,7 +7,6 @@
 
 #include <cmath>
 #include <cstdint>
-#include <cstring>
 #include <stdexcept>
 #include <vector>
 
@@ -48,20 +47,16 @@ void IsNaN::operator()(const Tensor &x, Tensor &output) const {
     return;
   }
   case DataType::FLOAT16: {
-    const uint8_t *raw = x.data.data();
+    const uint16_t *px = reinterpret_cast<const uint16_t *>(x.data.data());
     for (int64_t i = 0; i < n; ++i) {
-      uint16_t bits;
-      std::memcpy(&bits, raw + static_cast<size_t>(i) * 2u, 2u);
-      py[static_cast<size_t>(i)] = std::isnan(Float16BitsToFloat(bits)) ? 1u : 0u;
+      py[static_cast<size_t>(i)] = std::isnan(Float16BitsToFloat(px[i])) ? 1u : 0u;
     }
     return;
   }
   case DataType::BFLOAT16: {
-    const uint8_t *raw = x.data.data();
+    const uint16_t *px = reinterpret_cast<const uint16_t *>(x.data.data());
     for (int64_t i = 0; i < n; ++i) {
-      uint16_t bits;
-      std::memcpy(&bits, raw + static_cast<size_t>(i) * 2u, 2u);
-      py[static_cast<size_t>(i)] = std::isnan(Bfloat16BitsToFloat(bits)) ? 1u : 0u;
+      py[static_cast<size_t>(i)] = std::isnan(Bfloat16BitsToFloat(px[i])) ? 1u : 0u;
     }
     return;
   }

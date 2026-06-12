@@ -1973,6 +1973,30 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          SetOutput(node, 0, k(x, rois, batch_indices, attrs), rt);
        }},
       {"ai.onnx:Round", MakeUnaryTrampoline<kernel::Round>()},
+      {"ai.onnx:RotaryEmbedding",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         if (node.input_size() < 3 || node.input_size() > 4) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects between 3 and 4 input(s), got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const Tensor &cos_cache = GetInput(node, 1, rt.tensors());
+         const Tensor &sin_cache = GetInput(node, 2, rt.tensors());
+         const Tensor *position_ids = GetOptionalInput(node, 3, rt.tensors());
+
+         kernel::RotaryEmbedding::Attributes attrs;
+         attrs.interleaved = GetAttributeIntOrDefault(node, "interleaved", 0) != 0;
+         attrs.rotary_embedding_dim =
+             GetAttributeIntOrDefault(node, "rotary_embedding_dim", 0);
+         attrs.num_heads = GetAttributeIntOrDefault(node, "num_heads", 0);
+
+         kernel::RotaryEmbedding kernel(rt.kernel_ctx());
+         static const Tensor kEmpty;
+         const Tensor &pos = (position_ids != nullptr) ? *position_ids : kEmpty;
+         SetOutput(node, 0, kernel(x, cos_cache, sin_cache, pos, attrs), rt.tensors());
+       }},
       {"ai.onnx:ScatterElements",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 3);

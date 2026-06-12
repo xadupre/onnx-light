@@ -2400,4 +2400,191 @@ TEST(RunNodes, RunNodeSplitToSequenceFromDispatchTable) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// RuntimeContext isolation invariants when running a local function or a
+// subgraph. See issue #2157.
+// ---------------------------------------------------------------------------
+
+// A model-local function must be invoked with an isolated tensor map: only
+// its formal inputs (bound to the caller's actuals) are visible inside the
+// function body. Names that exist in the caller's tensor map but are not
+// passed as a function input must NOT be visible from inside the function.
+// The construction-time ``kernel_ctx()`` is still shared so the function's
+// nodes are dispatched against the same opset as the caller.
+TEST(RunModel, LocalFunctionStartsWithEmptyTensorMap) {
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+  OperatorSetIdProto *custom_os = model.add_opset_import();
+  custom_os->set_domain("custom");
+  custom_os->set_version(1);
+
+  // Function "F" has a single formal input "x" and a node that references
+  // a name ("leak") which exists in the caller's tensor map but is NOT a
+  // declared function input. Because the function runs in an isolated
+  // child RuntimeContext that starts empty (then gets only "x" bound),
+  // dispatching the body must fail: "leak" cannot be resolved.
+  FunctionProto *func = model.add_functions();
+  func->set_name("F");
+  func->set_domain("custom");
+  func->add_input("x");
+  func->add_output("out");
+  NodeProto *fn = func->add_node();
+  fn->set_op_type("Add");
+  fn->add_input("x");
+  fn->add_input("leak"); // not a function input -> must be invisible.
+  fn->add_output("out");
+
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *call = g->add_node();
+  call->set_op_type("F");
+  call->set_domain("custom");
+  call->add_input("x");
+  call->add_output("y");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {2}, {1.0f, 2.0f}));
+  rt.Set("leak", Tensor::FromFloat("leak", {2}, {100.0f, 200.0f}));
+
+  // The function body references "leak" which is not bound as a formal
+  // input. With proper isolation the lookup throws.
+  EXPECT_THROW(RunModel(model, rt), std::invalid_argument);
+
+  // The caller's tensor map is untouched: "leak" is still there and the
+  // function's formal output "out" did not leak in either.
+  EXPECT_TRUE(rt.Has("leak"));
+  EXPECT_FALSE(rt.Has("out"));
+}
+
+// Companion to the test above: the same model with "leak" passed as the
+// function's formal input "x" succeeds, demonstrating that the function
+// body sees only what was explicitly bound and that ``kernel_ctx()`` is
+// shared (the Add kernel is dispatched against the caller's opset).
+TEST(RunModel, LocalFunctionSharesKernelContextOnlyWithEmptyTensorMap) {
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+  OperatorSetIdProto *custom_os = model.add_opset_import();
+  custom_os->set_domain("custom");
+  custom_os->set_version(1);
+
+  FunctionProto *func = model.add_functions();
+  func->set_name("Twice");
+  func->set_domain("custom");
+  func->add_input("v");
+  func->add_output("out");
+  NodeProto *fn = func->add_node();
+  fn->set_op_type("Add");
+  fn->add_input("v");
+  fn->add_input("v");
+  fn->add_output("internal_tmp"); // an intermediate inside the function.
+  NodeProto *fn2 = func->add_node();
+  fn2->set_op_type("Identity");
+  fn2->add_input("internal_tmp");
+  fn2->add_output("out");
+
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *call = g->add_node();
+  call->set_op_type("Twice");
+  call->set_domain("custom");
+  call->add_input("a");
+  call->add_output("y");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("a", Tensor::FromFloat("a", {2}, {3.0f, 4.0f}));
+  // Pre-populate the caller's tensor map with a name that collides with
+  // a function-local intermediate. The function must not see or
+  // overwrite this caller-side value; after the call the caller's
+  // value must still be there.
+  rt.Set("internal_tmp", Tensor::FromFloat("internal_tmp", {1}, {-1.0f}));
+
+  RunModel(model, rt);
+
+  ASSERT_TRUE(rt.Has("y"));
+  EXPECT_FLOAT_EQ(rt.Get("y").AsFloat()[0], 6.0f);
+  EXPECT_FLOAT_EQ(rt.Get("y").AsFloat()[1], 8.0f);
+  // The function intermediate must not leak back to the caller: the
+  // caller's pre-existing "internal_tmp" is preserved unchanged.
+  ASSERT_TRUE(rt.Has("internal_tmp"));
+  ASSERT_EQ(rt.Get("internal_tmp").shape, (std::vector<int64_t>{1}));
+  EXPECT_FLOAT_EQ(rt.Get("internal_tmp").AsFloat()[0], -1.0f);
+}
+
+// A local subgraph (e.g. the body of an If/Loop/Scan node) must start
+// with a *copy* of the caller's tensor map so it can reference outer-scope
+// names. Intermediates produced inside the subgraph must NOT be propagated
+// back to the caller's tensor map: only the values declared as subgraph
+// outputs are visible to the caller (under the node's output names).
+TEST(RunModel, LocalSubgraphCopiesCallerTensorsButHidesIntermediates) {
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *if_node = g->add_node();
+  if_node->set_op_type("If");
+  if_node->add_input("cond");
+  if_node->add_output("out");
+
+  // ``then_branch`` references an outer-scope tensor ``outer`` (only
+  // present in the caller's tensor map) via an Add node, and produces a
+  // subgraph-local intermediate ``branch_tmp`` that must not leak back.
+  AttributeProto *then_attr = if_node->add_attribute();
+  then_attr->set_name("then_branch");
+  then_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  GraphProto *then_g = then_attr->add_g();
+  then_g->set_name("then_graph");
+  NodeProto *then_add = then_g->add_node();
+  then_add->set_op_type("Add");
+  then_add->add_input("outer");
+  then_add->add_input("outer");
+  then_add->add_output("branch_tmp");
+  NodeProto *then_id = then_g->add_node();
+  then_id->set_op_type("Identity");
+  then_id->add_input("branch_tmp");
+  then_id->add_output("z");
+  then_g->add_output()->set_name("z");
+
+  // Minimal else_branch, never taken in this test.
+  AttributeProto *else_attr = if_node->add_attribute();
+  else_attr->set_name("else_branch");
+  else_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  GraphProto *else_g = else_attr->add_g();
+  else_g->set_name("else_graph");
+  NodeProto *else_id = else_g->add_node();
+  else_id->set_op_type("Identity");
+  else_id->add_input("outer");
+  else_id->add_output("z");
+  else_g->add_output()->set_name("z");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  rt.Set("outer", Tensor::FromFloat("outer", {2}, {5.0f, 7.0f}));
+
+  RunModel(model, rt);
+
+  // The subgraph can see ``outer`` (caller's tensor map was copied into
+  // the child) and produced the declared output.
+  ASSERT_TRUE(rt.Has("out"));
+  ASSERT_EQ(rt.Get("out").shape, (std::vector<int64_t>{2}));
+  EXPECT_FLOAT_EQ(rt.Get("out").AsFloat()[0], 10.0f);
+  EXPECT_FLOAT_EQ(rt.Get("out").AsFloat()[1], 14.0f);
+
+  // The caller's pre-existing tensors are preserved.
+  EXPECT_TRUE(rt.Has("cond"));
+  EXPECT_TRUE(rt.Has("outer"));
+
+  // Subgraph intermediates do NOT leak into the caller's tensor map.
+  EXPECT_FALSE(rt.Has("branch_tmp"));
+  // The subgraph's formal output name ``z`` (distinct from the node's
+  // output name ``out``) likewise stays inside the child context.
+  EXPECT_FALSE(rt.Has("z"));
+}
+
 } // namespace Test

@@ -5650,3 +5650,58 @@ TEST(onnx_stream_security, StringStreamLimitToNextRejectsHugeLength) {
   EXPECT_THROW(stream.LimitToNext(static_cast<uint64_t>(INT64_MAX) + 1), std::exception);
   EXPECT_THROW(stream.LimitToNext(UINT64_MAX), std::exception);
 }
+
+TEST(onnx_proto, ParseFromZeroCopyStream_StringStream) {
+  // Build a small ModelProto and serialize it.
+  ModelProto model;
+  model.set_ir_version(7);
+  GraphProto *graph = model.add_graph();
+  graph->set_name("zero_copy_graph");
+  std::string serialized;
+  model.SerializeToString(serialized);
+
+  // Parse it back through ParseFromZeroCopyStream using a StringStream
+  // (an in-memory zero-copy BinaryStream).
+  utils::StringStream stream(reinterpret_cast<const uint8_t *>(serialized.data()),
+                             static_cast<int64_t>(serialized.size()));
+  ModelProto parsed;
+  parsed.ParseFromZeroCopyStream(&stream);
+
+  EXPECT_EQ(parsed.ir_version(), 7);
+  ASSERT_TRUE(parsed.has_graph());
+  EXPECT_EQ(parsed.graph().ref_name(), "zero_copy_graph");
+}
+
+TEST(onnx_proto, ParseFromZeroCopyStream_WithOptions) {
+  TensorProto tensor;
+  tensor.set_name("zc_tensor");
+  tensor.set_data_type(static_cast<int32_t>(TensorProto::FLOAT));
+  tensor.add_dims(2);
+  tensor.add_dims(3);
+  for (int i = 0; i < 6; ++i) {
+    tensor.add_float_data(static_cast<float>(i));
+  }
+  std::string serialized;
+  tensor.SerializeToString(serialized);
+
+  utils::StringStream stream(reinterpret_cast<const uint8_t *>(serialized.data()),
+                             static_cast<int64_t>(serialized.size()));
+  TensorProto parsed;
+  ParseOptions opts;
+  parsed.ParseFromZeroCopyStream(&stream, opts);
+
+  EXPECT_EQ(parsed.ref_name(), "zc_tensor");
+  EXPECT_EQ(parsed.data_type(), static_cast<int32_t>(TensorProto::FLOAT));
+  ASSERT_EQ(parsed.float_data().size(), 6u);
+  for (int i = 0; i < 6; ++i) {
+    EXPECT_FLOAT_EQ(parsed.float_data()[i], static_cast<float>(i));
+  }
+}
+
+TEST(onnx_proto, ParseFromZeroCopyStream_NullStreamThrows) {
+  ModelProto model;
+  utils::BinaryStream *null_stream = nullptr;
+  EXPECT_THROW(model.ParseFromZeroCopyStream(null_stream), std::exception);
+  ParseOptions opts;
+  EXPECT_THROW(model.ParseFromZeroCopyStream(null_stream, opts), std::exception);
+}

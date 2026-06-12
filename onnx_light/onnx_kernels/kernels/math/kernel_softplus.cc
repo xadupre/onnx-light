@@ -49,7 +49,7 @@ void Softplus::operator()(const Tensor &x, Tensor &output) const {
     const double *px = x.AsDouble();
     double *py = output.AsDouble();
     for (int64_t i = 0; i < n; ++i) {
-      py[i] = std::log(1.0 + std::exp(px[i]));
+      py[i] = std::log1p(std::exp(-std::fabs(px[i]))) + std::fmax(px[i], 0.0);
     }
     return;
   }

@@ -16,6 +16,7 @@ input/output conversion between :class:`numpy.ndarray` and the runtime
 from __future__ import annotations
 
 import os
+import sys
 from typing import Any
 
 import numpy as np
@@ -62,6 +63,11 @@ if _ml_dtypes is not None:
         }
     )
 
+# Reverse mapping: numpy dtype -> TensorProto.DataType int (for fast input path).
+_NP_TO_DTYPE: dict[Any, int] = {v: k for k, v in _DTYPE_TO_NP.items()}
+
+_IS_BIG_ENDIAN = sys.byteorder == "big"
+
 
 def _cpp_tensor_to_proto(t: Any) -> TensorProto:
     """Materializes a :class:`TensorProto` from a runtime ``Tensor``.
@@ -86,20 +92,43 @@ def _cpp_tensor_to_proto(t: Any) -> TensorProto:
 def _cpp_tensor_to_numpy(t: Any) -> np.ndarray:
     """Converts a runtime ``Tensor`` to a :class:`numpy.ndarray`.
 
-    Delegates to :func:`numpy_helper.to_array`, which already handles
-    sub-byte packed types (INT4/UINT4/INT2/UINT2/FLOAT4E2M1) and string
-    tensors.
+    For standard fixed-width dtypes (float32, int64, etc.) the conversion
+    is done directly via :func:`numpy.frombuffer` on the raw bytes,
+    bypassing the intermediate :class:`TensorProto` construction.
+    Sub-byte packed types and STRING tensors fall back to the full
+    :func:`numpy_helper.to_array` path.
     """
+    dt = int(t.data_type)
+    np_dtype = _DTYPE_TO_NP.get(dt)
+    if np_dtype is not None:
+        raw = bytes(t.raw_data())
+        if _IS_BIG_ENDIAN:  # pragma: no cover
+            raw = np.frombuffer(raw, dtype=np_dtype).byteswap().tobytes()
+        shape = t.shape
+        return np.frombuffer(raw, dtype=np_dtype).reshape(shape)
+    # Fallback for sub-byte types (INT4/UINT4/INT2/UINT2/FLOAT4E2M1) and STRING.
     return numpy_helper.to_array(_cpp_tensor_to_proto(t))
 
 
 def _numpy_to_cpp_tensor(name: str, arr: np.ndarray) -> Any:
-    """Converts a :class:`numpy.ndarray` to a runtime ``Tensor``."""
-    if isinstance(arr, np.ndarray):
-        np_arr = arr
-    else:
-        np_arr = np.asarray(arr)
-    tp = numpy_helper.from_array(np_arr, name=name)
+    """Converts a :class:`numpy.ndarray` to a runtime ``Tensor``.
+
+    For standard fixed-width dtypes, builds a minimal :class:`TensorProto`
+    with only ``raw_data``, ``data_type`` and ``dims`` populated, avoiding
+    the overhead of the full :func:`numpy_helper.from_array` path.
+    """
+    if not isinstance(arr, np.ndarray):
+        arr = np.asarray(arr)
+    onnx_dtype = _NP_TO_DTYPE.get(arr.dtype.type)
+    if onnx_dtype is not None:
+        tp = TensorProto()
+        tp.name = name
+        tp.data_type = onnx_dtype
+        tp.dims.extend(arr.shape)
+        tp.raw_data = arr.tobytes()
+        return _runtime.tensor_from_proto(tp)
+    # Fallback for strings, sub-byte types, and exotic dtypes.
+    tp = numpy_helper.from_array(arr, name=name)
     return _runtime.tensor_from_proto(tp)
 
 
@@ -172,7 +201,15 @@ class ReferenceEvaluator:
         # Inputs that are also initializers (a legal but uncommon pattern)
         # do not need to be supplied by the caller.
         self._input_names: list[str] = [n for n in inputs if n not in initializers]
+        self._input_names_set: frozenset[str] = frozenset(self._input_names)
         self._output_names: list[str] = list(outputs)
+
+        # Pre-compute the opset version and KernelContext once at construction
+        # time instead of rebuilding them on every run() call.
+        version: int = int(self._opsets.get("", self._opsets.get("ai.onnx", 0)) or 0)
+        if version == 0 and self._opsets:
+            version = int(max(self._opsets.values()))
+        self._kernel_ctx = _runtime.KernelContext(_runtime.default_opset(version))
 
     # -- proto loading ------------------------------------------------------
 
@@ -251,7 +288,7 @@ class ReferenceEvaluator:
             :attr:`output_names`), in the requested order.
         """
         if output_names is None:
-            output_names = list(self._output_names)
+            output_names = self._output_names
 
         if not isinstance(feed_inputs, dict):
             raise TypeError(
@@ -259,19 +296,15 @@ class ReferenceEvaluator:
                 f"{type(feed_inputs).__name__}."
             )
 
-        missing = [n for n in self._input_names if n not in feed_inputs]
+        # Fast missing-input check using frozenset difference.
+        missing = self._input_names_set - feed_inputs.keys()
         if missing:
             raise ValueError(
-                f"Missing input(s) for ReferenceEvaluator.run: {missing}. "
+                f"Missing input(s) for ReferenceEvaluator.run: {sorted(missing)}. "
                 f"Expected: {self._input_names}, got: {list(feed_inputs)}."
             )
 
-        # Pick the opset version of the default ai.onnx domain (falls back
-        # to the highest version declared otherwise, then to 0).
-        version: int = int(self._opsets.get("", self._opsets.get("ai.onnx", 0)) or 0)
-        if version == 0 and self._opsets:
-            version = int(max(self._opsets.values()))
-        ctx = _runtime.RuntimeContext(_runtime.KernelContext(_runtime.default_opset(version)))
+        ctx = _runtime.RuntimeContext(self._kernel_ctx)
 
         for name, value in feed_inputs.items():
             ctx.set(name, _numpy_to_cpp_tensor(name, value))
@@ -281,7 +314,6 @@ class ReferenceEvaluator:
         elif self._function is not None:
             _runtime.run_function(self._function, ctx)
         else:
-            assert self._graph is not None
             _runtime.run_graph(self._graph, ctx)
 
         self._last_ctx = ctx

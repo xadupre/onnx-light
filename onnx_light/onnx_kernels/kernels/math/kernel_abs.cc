@@ -7,6 +7,7 @@
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
 #include <cmath>
+#include <cstdlib>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -60,9 +61,42 @@ void Abs::operator()(const Tensor &x, Tensor &output) const {
     kernel::detail::UnaryHalfElementwise(x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits,
                                          [](float v) { return std::fabs(v); });
     return;
+  case DataType::INT8: {
+    const int8_t *px = x.AsInt8();
+    int8_t *py = output.AsInt8();
+    for (int64_t i = 0; i < n; ++i) {
+      py[i] = static_cast<int8_t>(std::abs(static_cast<int>(px[i])));
+    }
+    return;
+  }
+  case DataType::INT16: {
+    const int16_t *px = x.AsInt16();
+    int16_t *py = output.AsInt16();
+    for (int64_t i = 0; i < n; ++i) {
+      py[i] = static_cast<int16_t>(std::abs(static_cast<int>(px[i])));
+    }
+    return;
+  }
+  case DataType::INT32: {
+    const int32_t *px = x.AsInt32();
+    int32_t *py = output.AsInt32();
+    for (int64_t i = 0; i < n; ++i) {
+      py[i] = std::abs(px[i]);
+    }
+    return;
+  }
+  case DataType::INT64: {
+    const int64_t *px = x.AsInt64();
+    int64_t *py = output.AsInt64();
+    for (int64_t i = 0; i < n; ++i) {
+      py[i] = std::abs(px[i]);
+    }
+    return;
+  }
   default:
-    throw std::invalid_argument(std::string(kName) +
-                                " only supports FLOAT, DOUBLE, FLOAT16, and BFLOAT16 tensors.");
+    throw std::invalid_argument(
+        std::string(kName) +
+        " only supports FLOAT, DOUBLE, FLOAT16, BFLOAT16, INT8, INT16, INT32, and INT64 tensors.");
   }
 }
 

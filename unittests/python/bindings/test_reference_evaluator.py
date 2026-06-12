@@ -398,6 +398,42 @@ class TestReferenceEvaluator(ExtTestCase):
         self.assertEqual(got[0].shape, outputs[0].shape)
         np.testing.assert_array_equal(got[0], outputs[0])
 
+    def _check_image_decoder_jpeg(self, test_name, expected_shape, expected_channels):
+        # Regression test for the JPEG variants of ``test_cc_image_decoder_*``:
+        # earlier versions of the ``ImageDecoder`` kernel returned the
+        # empty-matrix fallback ``(0, 0, C)`` for any non-BMP bytestream.
+        # The baseline JFIF decoder must return the correct shape and pixel
+        # values that closely match the upstream Pillow reference (small
+        # integer rounding differences are tolerated since the reference is
+        # produced by libjpeg-turbo).
+        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+
+        tc = collect_test_case().get(test_name)
+        self.assertIsNotNone(tc)
+        inputs, outputs = tc.data_sets[0]
+        sess = ReferenceEvaluator(tc.model)
+        got = sess.run(None, dict(zip(sess.input_names, inputs)))
+        self.assertEqual(len(got), 1)
+        self.assertEqual(got[0].dtype, np.uint8)
+        self.assertEqual(got[0].shape, expected_shape)
+        self.assertEqual(got[0].shape[-1], expected_channels)
+        self.assertEqual(got[0].shape, outputs[0].shape)
+        diff = np.abs(got[0].astype(np.int32) - outputs[0].astype(np.int32))
+        # Allow at most a handful of unit-level differences caused by the
+        # integer YCbCr→RGB conversion and chroma upsampling rounding.
+        self.assertLessEqual(int(diff.max()), 2)
+
+    def test_image_decoder_decode_jpeg_rgb(self):
+        self._check_image_decoder_jpeg("test_cc_image_decoder_decode_jpeg_rgb", (32, 32, 3), 3)
+
+    def test_image_decoder_decode_jpeg_bgr(self):
+        self._check_image_decoder_jpeg("test_cc_image_decoder_decode_jpeg_bgr", (32, 32, 3), 3)
+
+    def test_image_decoder_decode_jpeg_grayscale(self):
+        self._check_image_decoder_jpeg(
+            "test_cc_image_decoder_decode_jpeg_grayscale", (32, 32, 1), 1
+        )
+
 
 class TestReferenceEvaluatorCustomKernels(ExtTestCase):
     """Tests for :meth:`ReferenceEvaluator.register_custom_kernel`."""

@@ -5,7 +5,7 @@ This module bundles the small C++ library ``lib_onnx_backend_test`` that
 mirrors the backend test node-case infrastructure from
 ``onnx_light.onnx_lib.backend.test.case`` in pure C++. It depends on
 ``lib_onnx_proto`` and ``lib_onnx_kernels`` (for the runtime
-:cpp:struct:`onnx::onnx_kernels::TestCase` and the operator kernel
+:cpp:struct:`onnx_light::onnx_backend_test::TestCase` and the operator kernel
 implementations) and provides the per-operator test-case registries
 under ``onnx_backend_test/cases/``.
 

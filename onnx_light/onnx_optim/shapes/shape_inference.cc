@@ -279,6 +279,13 @@ std::optional<OptimTensor> MergeWithAnchor(ShapesContext &ctx, const std::string
   for (std::size_t i = 0; i < inferred.Shape().Rank(); ++i) {
     const OptimDim &di = inferred.Shape()[i];
     const OptimDim &da = anchor.Shape()[i];
+    // An empty-string symbolic anchor dim means the ValueInfoProto did
+    // not declare a name nor a value for this position, so it carries
+    // no constraint: keep the inferred dim.
+    if (da.IsExpr() && da.AsExpr().empty()) {
+      merged_shape.PushBack(di);
+      continue;
+    }
     if (di == da) {
       merged_shape.PushBack(di);
     } else if (di.IsInt() && da.IsInt()) {
@@ -341,6 +348,10 @@ std::optional<OptimTensor> MergeWithAnchor(ShapesContext &ctx, const std::string
     for (std::size_t i = 0; i < a.Rank(); ++i) {
       const OptimDim &di = a[i];
       const OptimDim &da = b[i];
+      if (da.IsExpr() && da.AsExpr().empty()) {
+        merged_vas.PushBack(di);
+        continue;
+      }
       if (di == da) {
         merged_vas.PushBack(di);
       } else if (di.IsInt() && da.IsInt()) {

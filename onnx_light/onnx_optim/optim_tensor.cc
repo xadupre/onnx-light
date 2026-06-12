@@ -591,7 +591,7 @@ namespace {
 // Builds an OptimShape from a TensorShapeProto, preserving symbolic
 // dimensions: ``dim_value`` becomes a concrete int dim, ``dim_param``
 // becomes a symbolic dim with the same name, and an unset dim becomes
-// a fresh ``"?"`` placeholder. Mirrors the historical helper that
+// an empty-string placeholder. Mirrors the historical helper that
 // lived in shape_inference.cc.
 OptimShape ShapeFromTensorShapeProto(const TensorShapeProto &sp) {
   OptimShape shape;
@@ -602,7 +602,7 @@ OptimShape ShapeFromTensorShapeProto(const TensorShapeProto &sp) {
     } else if (d.has_dim_param()) {
       shape.PushBack(OptimDim(std::string(d.dim_param().data(), d.dim_param().size())));
     } else {
-      shape.PushBack(OptimDim(std::string("?")));
+      shape.PushBack(OptimDim(std::string()));
     }
   }
   return shape;

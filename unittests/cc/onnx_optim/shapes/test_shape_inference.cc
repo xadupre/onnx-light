@@ -495,8 +495,10 @@ void SetValueInfoTensorType(ValueInfoProto &vi, TensorProto::DataType dtype,
   for (std::size_t i = 0; i < shape.size(); ++i) {
     TensorShapeProto::Dimension *d = sp->add_dim();
     if (shape[i] < 0) {
-      d->set_dim_param(i < symbolic_names.size() ? symbolic_names[i]
-                                                 : (name + "_d" + std::to_string(i)));
+      if (i < symbolic_names.size() && !symbolic_names[i].empty()) {
+        d->set_dim_param(symbolic_names[i]);
+      }
+      // Otherwise leave the dim unset (no name information).
     } else {
       d->set_dim_value(shape[i]);
     }

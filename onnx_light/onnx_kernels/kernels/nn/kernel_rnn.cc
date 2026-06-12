@@ -22,8 +22,8 @@ const float *AsFloatOrNull(const Tensor &t, const char *role) {
   if (t.shape.empty() && t.size_bytes() == 0) {
     return nullptr;
   }
-  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      std::string("kernel::RNN: ") + role + " must be FLOAT.");
+  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT), "kernel::RNN: ", role,
+                      " must be FLOAT.");
   return t.AsFloat();
 }
 
@@ -32,8 +32,8 @@ const float *AsFloatOrNull(const Tensor &t, const char *role) {
 std::pair<Tensor, Tensor> RNN::operator()(const Tensor &x_in, const Tensor &w, const Tensor &r,
                                           const Tensor &b, const Tensor &initial_h_in,
                                           int64_t layout) const {
-  EXT_ENFORCE_INVALID(layout == 0 || layout == 1,
-                      "kernel::RNN: layout must be 0 or 1, got " + std::to_string(layout) + ".");
+  EXT_ENFORCE_INVALID(layout == 0 || layout == 1, "kernel::RNN: layout must be 0 or 1, got ",
+                      std::to_string(layout), ".");
   EXT_ENFORCE_INVALID(x_in.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::RNN: X must be FLOAT.");
   EXT_ENFORCE_INVALID(w.data_type == static_cast<int32_t>(DataType::FLOAT),

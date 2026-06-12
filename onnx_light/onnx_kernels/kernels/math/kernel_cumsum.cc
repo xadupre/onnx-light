@@ -23,14 +23,12 @@ constexpr const char *kCumProdName = "kernel::CumProd";
 // ``[-rank, rank - 1]``) to a non-negative axis.
 int64_t ResolveAxis(const char *op_name, int64_t axis, int64_t rank) {
   const int64_t resolved = axis < 0 ? axis + rank : axis;
-  EXT_ENFORCE_INVALID(resolved >= 0 && resolved < rank,
-                      std::string(op_name) + ": axis is out of range.");
+  EXT_ENFORCE_INVALID(resolved >= 0 && resolved < rank, op_name, ": axis is out of range.");
   return resolved;
 }
 
 int64_t ReadAxisScalar(const char *op_name, const Tensor &axis) {
-  EXT_ENFORCE_INVALID(axis.element_count() == 1,
-                      std::string(op_name) + ": axis must be a 0-D tensor.");
+  EXT_ENFORCE_INVALID(axis.element_count() == 1, op_name, ": axis must be a 0-D tensor.");
   switch (axis.data_type) {
   case DataType::INT32:
     return static_cast<int64_t>(axis.AsInt32()[0]);
@@ -117,12 +115,11 @@ template <typename T> Tensor CumAlloc(const Tensor &x) {
 }
 
 void ValidateOutput(const char *op_name, const Tensor &x, const Tensor &output) {
-  EXT_ENFORCE_INVALID(output.data_type == x.data_type,
-                      std::string(op_name) + ": output dtype must match input dtype.");
-  EXT_ENFORCE_INVALID(output.shape == x.shape,
-                      std::string(op_name) + ": output shape must match input shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == x.data.size(),
-                      std::string(op_name) + ": output buffer size mismatch.");
+  EXT_ENFORCE_INVALID(output.data_type == x.data_type, op_name,
+                      ": output dtype must match input dtype.");
+  EXT_ENFORCE_INVALID(output.shape == x.shape, op_name, ": output shape must match input shape.");
+  EXT_ENFORCE_INVALID(output.data.size() == x.data.size(), op_name,
+                      ": output buffer size mismatch.");
 }
 
 template <typename Op>
@@ -165,7 +162,7 @@ struct ProdOp {
 
 Tensor CumSum::operator()(const Tensor &x, const Tensor &axis, bool exclusive, bool reverse) const {
   const int64_t rank = static_cast<int64_t>(x.shape.size());
-  EXT_ENFORCE_INVALID(rank >= 1, std::string(kCumSumName) + " requires a non-scalar input.");
+  EXT_ENFORCE_INVALID(rank >= 1, kCumSumName, " requires a non-scalar input.");
   const int64_t a = ResolveAxis(kCumSumName, ReadAxisScalar(kCumSumName, axis), rank);
   Tensor out;
   switch (x.data_type) {
@@ -192,7 +189,7 @@ Tensor CumSum::operator()(const Tensor &x, const Tensor &axis, bool exclusive, b
 void CumSum::operator()(const Tensor &x, const Tensor &axis, bool exclusive, bool reverse,
                         Tensor &output) const {
   const int64_t rank = static_cast<int64_t>(x.shape.size());
-  EXT_ENFORCE_INVALID(rank >= 1, std::string(kCumSumName) + " requires a non-scalar input.");
+  EXT_ENFORCE_INVALID(rank >= 1, kCumSumName, " requires a non-scalar input.");
   const int64_t a = ResolveAxis(kCumSumName, ReadAxisScalar(kCumSumName, axis), rank);
   ValidateOutput(kCumSumName, x, output);
   DispatchCumulative(kCumSumName, x, a, exclusive, reverse, output, SumOp{});
@@ -201,7 +198,7 @@ void CumSum::operator()(const Tensor &x, const Tensor &axis, bool exclusive, boo
 Tensor CumProd::operator()(const Tensor &x, const Tensor &axis, bool exclusive,
                            bool reverse) const {
   const int64_t rank = static_cast<int64_t>(x.shape.size());
-  EXT_ENFORCE_INVALID(rank >= 1, std::string(kCumProdName) + " requires a non-scalar input.");
+  EXT_ENFORCE_INVALID(rank >= 1, kCumProdName, " requires a non-scalar input.");
   const int64_t a = ResolveAxis(kCumProdName, ReadAxisScalar(kCumProdName, axis), rank);
   Tensor out;
   switch (x.data_type) {
@@ -228,7 +225,7 @@ Tensor CumProd::operator()(const Tensor &x, const Tensor &axis, bool exclusive,
 void CumProd::operator()(const Tensor &x, const Tensor &axis, bool exclusive, bool reverse,
                          Tensor &output) const {
   const int64_t rank = static_cast<int64_t>(x.shape.size());
-  EXT_ENFORCE_INVALID(rank >= 1, std::string(kCumProdName) + " requires a non-scalar input.");
+  EXT_ENFORCE_INVALID(rank >= 1, kCumProdName, " requires a non-scalar input.");
   const int64_t a = ResolveAxis(kCumProdName, ReadAxisScalar(kCumProdName, axis), rank);
   ValidateOutput(kCumProdName, x, output);
   DispatchCumulative(kCumProdName, x, a, exclusive, reverse, output, ProdOp{});

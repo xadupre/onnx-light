@@ -18,8 +18,8 @@ template <typename T>
 std::vector<int64_t> ValidateAndComputeOutputShape(const Tensor &x,
                                                    const std::vector<T> &class_labels) {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      "kernel::ZipMap expects a float input tensor, got data_type=" +
-                          std::to_string(x.data_type) + ".");
+                      "kernel::ZipMap expects a float input tensor, got data_type=",
+                      std::to_string(x.data_type), ".");
   EXT_ENFORCE_INVALID(!class_labels.empty(), "kernel::ZipMap expects non-empty class labels.");
   EXT_ENFORCE_INVALID(x.shape.size() == 1 || x.shape.size() == 2,
                       "kernel::ZipMap expects input rank 1 or 2.");
@@ -29,9 +29,9 @@ std::vector<int64_t> ValidateAndComputeOutputShape(const Tensor &x,
 
   const int64_t class_count = x.shape.back();
   EXT_ENFORCE_INVALID(class_count == static_cast<int64_t>(class_labels.size()),
-                      "kernel::ZipMap class labels size must match input class dimension, got " +
-                          std::to_string(class_labels.size()) + " labels for class dimension " +
-                          std::to_string(class_count) + ".");
+                      "kernel::ZipMap class labels size must match input class dimension, got ",
+                      std::to_string(class_labels.size()), " labels for class dimension ",
+                      std::to_string(class_count), ".");
 
   if (x.shape.size() == 1) {
     return std::vector<int64_t>{1, class_count};

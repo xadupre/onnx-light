@@ -82,10 +82,9 @@ std::vector<int64_t> ResolveSplitSizes(int64_t axis_dim, const Tensor *split) {
     EXT_ENFORCE_INVALID(s >= 0, "kernel::SplitToSequence: 'split' entries must be non-negative.");
     total += s;
   }
-  EXT_ENFORCE_INVALID(total == axis_dim, "kernel::SplitToSequence: sum of 'split' (" +
-                                             std::to_string(total) +
-                                             ") does not match the input dim on 'axis' (" +
-                                             std::to_string(axis_dim) + ").");
+  EXT_ENFORCE_INVALID(total == axis_dim, "kernel::SplitToSequence: sum of 'split' (",
+                      std::to_string(total), ") does not match the input dim on 'axis' (",
+                      std::to_string(axis_dim), ").");
   return values;
 }
 

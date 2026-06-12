@@ -80,9 +80,8 @@ std::vector<Tensor> If::operator()(const Tensor &cond, const GraphProto &then_br
     const std::string out_name = branch.output()[i].name().as_string();
     EXT_ENFORCE_INVALID(!out_name.empty(), "kernel::If: a subgraph output has an empty name.");
     auto it = child.tensors().find(out_name);
-    EXT_ENFORCE_INVALID(it != child.tensors().end(),
-                        "kernel::If: subgraph output '" + out_name +
-                            "' was not produced by the selected branch.");
+    EXT_ENFORCE_INVALID(it != child.tensors().end(), "kernel::If: subgraph output '", out_name,
+                        "' was not produced by the selected branch.");
     outputs.push_back(std::move(it->second));
   }
   return outputs;

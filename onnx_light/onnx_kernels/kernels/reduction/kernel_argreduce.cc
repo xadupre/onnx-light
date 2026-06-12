@@ -43,12 +43,12 @@ std::vector<int64_t> ArgReduceOutputShape(const std::vector<int64_t> &in_shape, 
 
 void ValidateFloat(const Tensor &t, const char *name) {
   EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      std::string("kernel::ArgReduce: ") + name + " must be a FLOAT tensor.");
+                      "kernel::ArgReduce: ", name, " must be a FLOAT tensor.");
 }
 
 void ValidateInt64(const Tensor &t, const char *name) {
   EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::INT64),
-                      std::string("kernel::ArgReduce: ") + name + " must be an INT64 tensor.");
+                      "kernel::ArgReduce: ", name, " must be an INT64 tensor.");
 }
 
 } // namespace

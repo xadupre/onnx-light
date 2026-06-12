@@ -71,12 +71,12 @@ std::vector<int64_t> BroadcastPrefix(const std::vector<int64_t> &a_prefix,
 
 std::vector<int64_t> ComputeMatMulOutputShape(const std::vector<int64_t> &a_shape,
                                               const std::vector<int64_t> &b_shape) {
-  EXT_ENFORCE_INVALID(!a_shape.empty() && !b_shape.empty(),
-                      std::string(kMatMulName) + " does not accept rank-0 inputs.");
+  EXT_ENFORCE_INVALID(!a_shape.empty() && !b_shape.empty(), kMatMulName,
+                      " does not accept rank-0 inputs.");
   const std::vector<int64_t> a2 = PromoteMatMulShape(a_shape, true);
   const std::vector<int64_t> b2 = PromoteMatMulShape(b_shape, false);
-  EXT_ENFORCE_INVALID(a2[a2.size() - 1] == b2[b2.size() - 2],
-                      std::string(kMatMulName) + " got incompatible inner dimensions.");
+  EXT_ENFORCE_INVALID(a2[a2.size() - 1] == b2[b2.size() - 2], kMatMulName,
+                      " got incompatible inner dimensions.");
 
   const std::vector<int64_t> a_prefix(a2.begin(), a2.end() - 2);
   const std::vector<int64_t> b_prefix(b2.begin(), b2.end() - 2);
@@ -97,8 +97,7 @@ template <typename T> void MatMulCompute(const Tensor &a, const Tensor &b, Tenso
   const int64_t m = a2[a2.size() - 2];
   const int64_t k = a2[a2.size() - 1];
   const int64_t n = b2[b2.size() - 1];
-  EXT_ENFORCE_INVALID(k == b2[b2.size() - 2],
-                      std::string(kMatMulName) + " got incompatible inner dimensions.");
+  EXT_ENFORCE_INVALID(k == b2[b2.size() - 2], kMatMulName, " got incompatible inner dimensions.");
 
   const std::vector<int64_t> a_prefix(a2.begin(), a2.end() - 2);
   const std::vector<int64_t> b_prefix(b2.begin(), b2.end() - 2);
@@ -181,23 +180,21 @@ template <typename T> Tensor MatMulAlloc(const Tensor &a, const Tensor &b) {
 
 template <typename T> void MatMulInPlace(const Tensor &a, const Tensor &b, Tensor &output) {
   const std::vector<int64_t> out_shape = ComputeMatMulOutputShape(a.shape, b.shape);
-  EXT_ENFORCE_INVALID(output.data_type == a.data_type,
-                      std::string(kMatMulName) +
-                          " preallocated output must have the same dtype as input A.");
-  EXT_ENFORCE_INVALID(output.shape == out_shape,
-                      std::string(kMatMulName) + " preallocated output has an invalid shape.");
+  EXT_ENFORCE_INVALID(output.data_type == a.data_type, kMatMulName,
+                      " preallocated output must have the same dtype as input A.");
+  EXT_ENFORCE_INVALID(output.shape == out_shape, kMatMulName,
+                      " preallocated output has an invalid shape.");
   const size_t expected_bytes = static_cast<size_t>(NumElements(out_shape)) * sizeof(T);
-  EXT_ENFORCE_INVALID(output.data.size() == expected_bytes,
-                      std::string(kMatMulName) +
-                          " preallocated output buffer size does not match its shape.");
+  EXT_ENFORCE_INVALID(output.data.size() == expected_bytes, kMatMulName,
+                      " preallocated output buffer size does not match its shape.");
   MatMulCompute<T>(a, b, output);
 }
 
 } // namespace
 
 Tensor MatMul::operator()(const Tensor &a, const Tensor &b) const {
-  EXT_ENFORCE_INVALID(a.data_type == b.data_type,
-                      std::string(kMatMulName) + " inputs must share the same dtype.");
+  EXT_ENFORCE_INVALID(a.data_type == b.data_type, kMatMulName,
+                      " inputs must share the same dtype.");
   switch (a.data_type) {
   case DataType::FLOAT:
     return MatMulAlloc<float>(a, b);
@@ -224,8 +221,8 @@ Tensor MatMul::operator()(const Tensor &a, const Tensor &b) const {
 }
 
 void MatMul::operator()(const Tensor &a, const Tensor &b, Tensor &output) const {
-  EXT_ENFORCE_INVALID(a.data_type == b.data_type,
-                      std::string(kMatMulName) + " inputs must share the same dtype.");
+  EXT_ENFORCE_INVALID(a.data_type == b.data_type, kMatMulName,
+                      " inputs must share the same dtype.");
   switch (a.data_type) {
   case DataType::FLOAT:
     return MatMulInPlace<float>(a, b, output);

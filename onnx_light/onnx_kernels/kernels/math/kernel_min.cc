@@ -44,10 +44,10 @@ std::vector<int64_t> BroadcastShape(const std::vector<int64_t> &a, const std::ve
 
 std::vector<int64_t> ValidateAndBroadcastShape(const std::vector<Tensor> &inputs,
                                                const char *dtype_name, int32_t expected_dtype) {
-  EXT_ENFORCE_INVALID(!inputs.empty(), std::string(kMinName) + " requires at least one input.");
+  EXT_ENFORCE_INVALID(!inputs.empty(), kMinName, " requires at least one input.");
   for (size_t i = 0; i < inputs.size(); ++i) {
-    EXT_ENFORCE_INVALID(inputs[i].data_type == expected_dtype,
-                        std::string(kMinName) + " only supports " + dtype_name + " tensors.");
+    EXT_ENFORCE_INVALID(inputs[i].data_type == expected_dtype, kMinName, " only supports ",
+                        dtype_name, " tensors.");
   }
   std::vector<int64_t> shape = inputs[0].shape;
   for (size_t i = 1; i < inputs.size(); ++i) {
@@ -120,7 +120,7 @@ void MinInPlace(const char *dtype_name, int32_t dtype, const std::vector<Tensor>
 } // namespace
 
 Tensor Min::operator()(const std::vector<Tensor> &inputs) const {
-  EXT_ENFORCE_INVALID(!inputs.empty(), std::string(kMinName) + " requires at least one input.");
+  EXT_ENFORCE_INVALID(!inputs.empty(), kMinName, " requires at least one input.");
   switch (inputs[0].data_type) {
 #define ONNX_LIGHT_MIN_CASE_ALLOC(ENUM, CPP, NAME)                                                 \
   case DataType::ENUM:                                                                             \
@@ -133,7 +133,7 @@ Tensor Min::operator()(const std::vector<Tensor> &inputs) const {
 }
 
 void Min::operator()(const std::vector<Tensor> &inputs, Tensor &output) const {
-  EXT_ENFORCE_INVALID(!inputs.empty(), std::string(kMinName) + " requires at least one input.");
+  EXT_ENFORCE_INVALID(!inputs.empty(), kMinName, " requires at least one input.");
   switch (inputs[0].data_type) {
 #define ONNX_LIGHT_MIN_CASE_INPLACE(ENUM, CPP, NAME)                                               \
   case DataType::ENUM:                                                                             \

@@ -98,12 +98,11 @@ void GemmInPlace(const Tensor &a, const Tensor &b, const Tensor *c, float alpha,
                  int64_t transA, int64_t transB, Tensor &output) {
   const int64_t m = transA ? a.shape[1] : a.shape[0];
   const int64_t n = transB ? b.shape[0] : b.shape[1];
-  EXT_ENFORCE_INVALID(output.data_type == a.data_type,
-                      std::string(kGemmName) +
-                          " preallocated output must have the same dtype as input A.");
+  EXT_ENFORCE_INVALID(output.data_type == a.data_type, kGemmName,
+                      " preallocated output must have the same dtype as input A.");
   EXT_ENFORCE_INVALID(output.shape.size() == 2 && output.shape[0] == m && output.shape[1] == n,
-                      std::string(kGemmName) + " preallocated output shape must be [" +
-                          std::to_string(m) + ", " + std::to_string(n) + "].");
+                      kGemmName, " preallocated output shape must be [", std::to_string(m), ", ",
+                      std::to_string(n), "].");
   std::vector<T> result;
   GemmCompute<T>(a, b, c, alpha, beta, transA, transB, result);
   std::memcpy(output.data.data(), result.data(), result.size() * sizeof(T));

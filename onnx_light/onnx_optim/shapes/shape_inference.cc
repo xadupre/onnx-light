@@ -39,8 +39,8 @@ void CheckOnnxDomain(const NodeProto &node) {
                           node.domain() == traditionalml::kOnnxMlDomain ||
                           node.domain() == preview::kOnnxPreviewDomain ||
                           node.domain() == training::kOnnxPreviewTrainingDomain,
-                      "ComputeShapeNode: unsupported domain '" + node.domain().as_string() +
-                          "' for op '" + node.op_type().as_string() + "'.");
+                      "ComputeShapeNode: unsupported domain '", node.domain().as_string(),
+                      "' for op '", node.op_type().as_string(), "'.");
 }
 
 // Returns the ``"<domain>:<name>"`` identifier used as a key in
@@ -229,16 +229,16 @@ OptimTensor MergeWithAnchor(ShapesContext &ctx, const std::string &name,
   // dtype: both known and different → conflict.
   if (inferred.Dtype() != TensorType::kUndefined && anchor.Dtype() != TensorType::kUndefined &&
       inferred.Dtype() != anchor.Dtype()) {
-    EXT_ENFORCE_INVALID(
-        false, "MergeWithAnchor: incompatible element type for '" + name +
-                   "': inferred has dtype " + std::to_string(static_cast<int>(inferred.Dtype())) +
-                   ", anchor has dtype " + std::to_string(static_cast<int>(anchor.Dtype())) + ".");
+    EXT_ENFORCE_INVALID(false, "MergeWithAnchor: incompatible element type for '", name,
+                        "': inferred has dtype ",
+                        std::to_string(static_cast<int>(inferred.Dtype())), ", anchor has dtype ",
+                        std::to_string(static_cast<int>(anchor.Dtype())), ".");
   }
   // Rank check.
   EXT_ENFORCE_INVALID(inferred.Shape().Rank() == anchor.Shape().Rank(),
-                      "MergeWithAnchor: incompatible rank for '" + name + "': inferred has rank " +
-                          std::to_string(inferred.Shape().Rank()) + ", anchor has rank " +
-                          std::to_string(anchor.Shape().Rank()) + ".");
+                      "MergeWithAnchor: incompatible rank for '", name, "': inferred has rank ",
+                      std::to_string(inferred.Shape().Rank()), ", anchor has rank ",
+                      std::to_string(anchor.Shape().Rank()), ".");
   // Per-dim merge.
   OptimShape merged_shape;
   for (std::size_t i = 0; i < inferred.Shape().Rank(); ++i) {
@@ -247,9 +247,9 @@ OptimTensor MergeWithAnchor(ShapesContext &ctx, const std::string &name,
     if (di == da) {
       merged_shape.PushBack(di);
     } else if (di.IsInt() && da.IsInt()) {
-      EXT_ENFORCE_INVALID(false, "MergeWithAnchor: incompatible dim " + std::to_string(i) +
-                                     " for '" + name + "': inferred=" + std::to_string(di.AsInt()) +
-                                     ", anchor=" + std::to_string(da.AsInt()) + ".");
+      EXT_ENFORCE_INVALID(false, "MergeWithAnchor: incompatible dim ", std::to_string(i), " for '",
+                          name, "': inferred=", std::to_string(di.AsInt()),
+                          ", anchor=", std::to_string(da.AsInt()), ".");
     } else if (di.IsInt()) {
       // anchor is symbolic, inferred is concrete: keep the concrete one
       // but still record the anchor symbol equals the concrete value.
@@ -280,7 +280,7 @@ OptimTensor MergeWithAnchor(ShapesContext &ctx, const std::string &name,
   if (anchor.GetDevice() != Device::kUndefined) {
     EXT_ENFORCE_INVALID(inferred.GetDevice() == Device::kUndefined ||
                             inferred.GetDevice() == anchor.GetDevice(),
-                        "MergeWithAnchor: incompatible device for '" + name + "'.");
+                        "MergeWithAnchor: incompatible device for '", name, "'.");
     merged_device = anchor.GetDevice();
   }
   if (merged_device != Device::kUndefined) {
@@ -291,7 +291,7 @@ OptimTensor MergeWithAnchor(ShapesContext &ctx, const std::string &name,
     const OptimShape &a = inferred.ValueAsShape();
     const OptimShape &b = anchor.ValueAsShape();
     EXT_ENFORCE_INVALID(a.Rank() == b.Rank(),
-                        "MergeWithAnchor: incompatible value_as_shape rank for '" + name + "'.");
+                        "MergeWithAnchor: incompatible value_as_shape rank for '", name, "'.");
     OptimShape merged_vas;
     for (std::size_t i = 0; i < a.Rank(); ++i) {
       const OptimDim &di = a[i];
@@ -299,8 +299,8 @@ OptimTensor MergeWithAnchor(ShapesContext &ctx, const std::string &name,
       if (di == da) {
         merged_vas.PushBack(di);
       } else if (di.IsInt() && da.IsInt()) {
-        EXT_ENFORCE_INVALID(false,
-                            "MergeWithAnchor: incompatible value_as_shape dim for '" + name + "'.");
+        EXT_ENFORCE_INVALID(false, "MergeWithAnchor: incompatible value_as_shape dim for '", name,
+                            "'.");
       } else if (di.IsInt()) {
         ctx.AddConstraint(da.AsExpr(), std::to_string(di.AsInt()));
         merged_vas.PushBack(di);
@@ -337,7 +337,7 @@ OptimTensor MergeWithAnchor(ShapesContext &ctx, const std::string &name,
   }
   if (merged_min.has_value() && merged_max.has_value()) {
     EXT_ENFORCE_INVALID(*merged_min <= *merged_max,
-                        "MergeWithAnchor: incompatible min/max bounds for '" + name + "'.");
+                        "MergeWithAnchor: incompatible min/max bounds for '", name, "'.");
     out.SetMinMax(*merged_min, *merged_max);
   } else {
     if (merged_min.has_value()) {
@@ -532,9 +532,9 @@ void ShapesContext::CheckInputsAvailable(const NodeProto &node) const {
     if (name.empty()) {
       continue;
     }
-    EXT_ENFORCE_INVALID(Has(name) || HasSequence(name),
-                        "CheckInputsAvailable: input '" + name + "' of op '" +
-                            node.op_type().as_string() + "' is missing from ShapesContext.");
+    EXT_ENFORCE_INVALID(Has(name) || HasSequence(name), "CheckInputsAvailable: input '", name,
+                        "' of op '", node.op_type().as_string(),
+                        "' is missing from ShapesContext.");
   }
 }
 
@@ -544,9 +544,9 @@ void ShapesContext::CheckOutputsNotAvailable(const NodeProto &node) const {
     if (name.empty()) {
       continue;
     }
-    EXT_ENFORCE_INVALID(!Has(name) && !HasSequence(name),
-                        "CheckOutputsNotAvailable: output '" + name + "' of op '" +
-                            node.op_type().as_string() + "' is already present in ShapesContext.");
+    EXT_ENFORCE_INVALID(!Has(name) && !HasSequence(name), "CheckOutputsNotAvailable: output '",
+                        name, "' of op '", node.op_type().as_string(),
+                        "' is already present in ShapesContext.");
   }
 }
 
@@ -576,9 +576,8 @@ void ShapesContext::ComputeShapeNode(const NodeProto &node) {
   const std::string key = NormaliseDispatchDomain(node) + ":" + op_type;
   const auto &table = DispatchTable();
   auto it = table.find(key);
-  EXT_ENFORCE_INVALID(it != table.end(), "ComputeShapeNode: unsupported op_type '" + op_type +
-                                             "' in domain '" + NormaliseDispatchDomain(node) +
-                                             "'.");
+  EXT_ENFORCE_INVALID(it != table.end(), "ComputeShapeNode: unsupported op_type '", op_type,
+                      "' in domain '", NormaliseDispatchDomain(node), "'.");
   it->second(*this, node);
 }
 

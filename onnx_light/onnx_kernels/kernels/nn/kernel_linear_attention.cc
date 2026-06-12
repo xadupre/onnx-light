@@ -17,10 +17,10 @@ namespace {
 
 // Validates a 3D packed FLOAT tensor and returns its shape components.
 void Check3DFloat(const Tensor &t, const char *label, int64_t &B, int64_t &T, int64_t &last) {
-  EXT_ENFORCE_INVALID(t.data_type == DataType::FLOAT,
-                      std::string("kernel::LinearAttention: '") + label + "' must be FLOAT.");
-  EXT_ENFORCE_INVALID(t.shape.size() == 3,
-                      std::string("kernel::LinearAttention: '") + label + "' must be rank-3.");
+  EXT_ENFORCE_INVALID(t.data_type == DataType::FLOAT, "kernel::LinearAttention: '", label,
+                      "' must be FLOAT.");
+  EXT_ENFORCE_INVALID(t.shape.size() == 3, "kernel::LinearAttention: '", label,
+                      "' must be rank-3.");
   B = t.shape[0];
   T = t.shape[1];
   last = t.shape[2];
@@ -255,8 +255,7 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
             }
           }
         } else {
-          EXT_ENFORCE_INVALID(false,
-                              "kernel::LinearAttention: unknown update_rule '" + rule + "'.");
+          EXT_ENFORCE_INVALID(false, "kernel::LinearAttention: unknown update_rule '", rule, "'.");
         }
 
         // Compute output for each query head that shares this KV head

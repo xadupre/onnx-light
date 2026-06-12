@@ -933,6 +933,9 @@ std::shared_ptr<uint8_t[]> ConsolidateTensorsToBuffer(ModelProto &model,
 
 void SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &stream,
                                  SerializeOptions &options, bool clear_external_data) {
+  EXT_ENFORCE(options.format == SerializeFormat::kOnnx,
+              "SerializeModelProtoToStream: SerializeFormat::kOrtFlatbuffers is not "
+              "implemented yet. Use SerializeFormat::kOnnx for now.");
   if (options.is_parallel())
     stream.StartThreadPool(options.num_threads);
   if (stream.ExternalWeights()) {
@@ -1009,6 +1012,9 @@ void SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
 
 void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
                                ParseOptions &options, bool clear_external_data) {
+  EXT_ENFORCE(options.format == SerializeFormat::kOnnx,
+              "ParseModelProtoFromStream: SerializeFormat::kOrtFlatbuffers is not "
+              "implemented yet. Use SerializeFormat::kOnnx for now.");
   // Mirror SerializeModelProtoToStream: start the thread pool when requested and
   // wait for all delayed reads once parsing is complete.
   if (options.is_parallel() && !stream.HasParallelizationStarted())

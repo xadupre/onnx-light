@@ -33,7 +33,7 @@ void Ceil::operator()(const Tensor &x, Tensor &output) const {
                       std::string(kName) + ": output dtype must match input dtype.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       std::string(kName) + ": output shape must match input shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == x.data.size(),
+  EXT_ENFORCE_INVALID(output.size_bytes() == x.size_bytes(),
                       std::string(kName) + ": output buffer size mismatch.");
   const int64_t n = x.element_count();
   switch (static_cast<DataType>(x.data_type)) {

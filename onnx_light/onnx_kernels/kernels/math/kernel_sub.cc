@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
@@ -32,14 +33,17 @@ void SubInPlace(const char *dtype_name, int32_t dtype, const Tensor &x, const Te
                                   [](T a, T b) -> T { return a - b; });
 }
 
-constexpr const char *kUnsupportedMsg =
-    " only supports FLOAT, INT8, INT16, UINT8, UINT16, UINT32 and UINT64 inputs.";
+constexpr const char *kSupportedSubTypesMsg =
+    " only supports FLOAT, DOUBLE, FLOAT16, BFLOAT16, INT8, INT16, UINT8, UINT16, UINT32 and "
+    "UINT64 inputs.";
 } // namespace
 
 Tensor Sub::operator()(const Tensor &x, const Tensor &y) const {
   switch (x.data_type) {
   case DataType::FLOAT:
     return SubAlloc<float>("FLOAT", DataType::FLOAT, x, y);
+  case DataType::DOUBLE:
+    return SubAlloc<double>("DOUBLE", DataType::DOUBLE, x, y);
   case DataType::INT8:
     return SubAlloc<int8_t>("INT8", DataType::INT8, x, y);
   case DataType::INT16:
@@ -52,8 +56,16 @@ Tensor Sub::operator()(const Tensor &x, const Tensor &y) const {
     return SubAlloc<uint32_t>("UINT32", DataType::UINT32, x, y);
   case DataType::UINT64:
     return SubAlloc<uint64_t>("UINT64", DataType::UINT64, x, y);
+  case DataType::FLOAT16:
+    return detail::BinaryHalfElementwiseAlloc(kSubName, "FLOAT16", DataType::FLOAT16, x, y,
+                                              Float16BitsToFloat, FloatToFloat16Bits,
+                                              [](float a, float b) { return a - b; });
+  case DataType::BFLOAT16:
+    return detail::BinaryHalfElementwiseAlloc(kSubName, "BFLOAT16", DataType::BFLOAT16, x, y,
+                                              Bfloat16BitsToFloat, FloatToBfloat16Bits,
+                                              [](float a, float b) { return a - b; });
   default:
-    throw std::invalid_argument(std::string(kSubName) + kUnsupportedMsg);
+    throw std::invalid_argument(std::string(kSubName) + kSupportedSubTypesMsg);
   }
 }
 
@@ -61,6 +73,8 @@ void Sub::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
   switch (x.data_type) {
   case DataType::FLOAT:
     return SubInPlace<float>("FLOAT", DataType::FLOAT, x, y, output);
+  case DataType::DOUBLE:
+    return SubInPlace<double>("DOUBLE", DataType::DOUBLE, x, y, output);
   case DataType::INT8:
     return SubInPlace<int8_t>("INT8", DataType::INT8, x, y, output);
   case DataType::INT16:
@@ -73,8 +87,16 @@ void Sub::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
     return SubInPlace<uint32_t>("UINT32", DataType::UINT32, x, y, output);
   case DataType::UINT64:
     return SubInPlace<uint64_t>("UINT64", DataType::UINT64, x, y, output);
+  case DataType::FLOAT16:
+    return detail::BinaryHalfElementwise(kSubName, "FLOAT16", DataType::FLOAT16, x, y, output,
+                                         Float16BitsToFloat, FloatToFloat16Bits,
+                                         [](float a, float b) { return a - b; });
+  case DataType::BFLOAT16:
+    return detail::BinaryHalfElementwise(kSubName, "BFLOAT16", DataType::BFLOAT16, x, y, output,
+                                         Bfloat16BitsToFloat, FloatToBfloat16Bits,
+                                         [](float a, float b) { return a - b; });
   default:
-    throw std::invalid_argument(std::string(kSubName) + kUnsupportedMsg);
+    throw std::invalid_argument(std::string(kSubName) + kSupportedSubTypesMsg);
   }
 }
 

@@ -4,9 +4,11 @@
 
 #include "onnx_backend_test/cases/math/include_math_cases.h"
 #include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 #include "onnx_kernels/random.h"
 
+#include <cstdint>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -70,6 +72,34 @@ void RegisterSqrtCases(std::vector<TestCase> &registry) {
     Tensor x = NonNegativeRandFloat({3, 4, 5}, /*seed=*/1);
     Tensor y = sqrt_kernel(x);
     Expect(node, {x}, {y}, "test_sqrt", {opset}, "backend-test", registry);
+  }
+  // FLOAT16
+  {
+    NodeProto node;
+    node.set_op_type("Sqrt");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {0.0f, 0.25f, 1.0f, 2.25f, 4.0f, 9.0f});
+    Tensor y = sqrt_kernel(x);
+    Expect(node, {x}, {y}, "test_cc_sqrt_float16", {opset}, "backend-test", registry);
+  }
+
+  // BFLOAT16
+  {
+    NodeProto node;
+    node.set_op_type("Sqrt");
+    node.add_input("x");
+    node.add_output("y");
+
+    std::vector<float> vals = {0.0f, 0.25f, 1.0f, 2.25f, 4.0f, 9.0f};
+    std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
+    auto *dst = reinterpret_cast<uint16_t *>(raw.data());
+    for (size_t i = 0; i < vals.size(); ++i)
+      dst[i] = kernel::FloatToBfloat16Bits(vals[i]);
+    Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {2, 3}, std::move(raw));
+    Tensor y = sqrt_kernel(x);
+    Expect(node, {x}, {y}, "test_cc_sqrt_bfloat16", {opset}, "backend-test", registry);
   }
 }
 

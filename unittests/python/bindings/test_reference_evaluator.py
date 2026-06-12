@@ -274,6 +274,27 @@ class TestReferenceEvaluator(ExtTestCase):
         self.assertEqual(got[0].shape, outputs[0].shape)
         np.testing.assert_array_equal(got[0], outputs[0])
 
+    def test_sequence_erase_pos1_returns_list(self):
+        # Regression test for test_cc_sequence_erase_pos1: the graph output
+        # is a SequenceType, so ReferenceEvaluator.run() must return a list
+        # of numpy arrays rather than raise "Output was not produced".
+        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+
+        tc = collect_test_case().get("test_cc_sequence_erase_pos1")
+        self.assertIsNotNone(tc)
+        inputs, outputs = tc.data_sets[0]
+        sess = ReferenceEvaluator(tc.model)
+        got = sess.run(None, dict(zip(sess.input_names, inputs)))
+        self.assertEqual(len(got), 1)
+        # Sequence output is a list of numpy arrays.
+        self.assertIsInstance(got[0], list)
+        # Erasing position 1 from [a, b, c] leaves [a, c], so 2 elements.
+        self.assertEqual(len(got[0]), 2)
+        # The expected value in the data set is the stacked tensor [a, c].
+        expected_stacked = outputs[0]
+        np.testing.assert_allclose(got[0][0], expected_stacked[0], rtol=tc.rtol, atol=tc.atol)
+        np.testing.assert_allclose(got[0][1], expected_stacked[1], rtol=tc.rtol, atol=tc.atol)
+
     def test_image_decoder_decode_bmp_rgb(self):
         # Regression test for ``test_cc_image_decoder_decode_bmp_rgb``: the
         # ``ImageDecoder`` kernel must decode the BMP bytestream and return

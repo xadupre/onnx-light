@@ -4,7 +4,7 @@ Custom kernels for ReferenceEvaluator
 =====================================
 
 The C++ runtime in ``onnx_light/onnx_kernels`` dispatches every
-``NodeProto`` against a static :cpp:func:`onnx::onnx_kernels::KernelDispatchTable`.
+:class:`~onnx_light.onnx_lib.NodeProto` against a static :cpp:func:`onnx::onnx_kernels::KernelDispatchTable`.
 Any operator that is not built in — typically an operator from a
 user-defined domain, an experimental op, or a stand-in for one not yet
 implemented — would otherwise fail with ``unsupported op_type``.
@@ -28,11 +28,11 @@ precedence so existing graphs are unaffected.
 Dispatch precedence
 -------------------
 
-For each ``NodeProto`` evaluated by ``RunNode``:
+For each :class:`~onnx_light.onnx_lib.NodeProto` evaluated by ``RunNode``:
 
 #. ``If`` / ``Loop`` / ``Scan`` / ``SequenceMap`` are routed to their
    dedicated subgraph runners.
-#. Model-local ``FunctionProto`` definitions found on the
+#. Model-local :class:`~onnx_light.onnx_lib.FunctionProto` definitions found on the
    :cpp:class:`RuntimeContext` are inlined.
 #. The custom-kernel map is consulted by the ``"<domain>:<op_type>"``
    key (the empty default ONNX domain is normalised to ``"ai.onnx"``).
@@ -89,7 +89,7 @@ The empty domain is normalised to ``"ai.onnx"``, so registering
 
 The same mechanism is the entry point for C++ extension modules: a
 shared library exposing additional kernels can register them on a
-``RuntimeContext`` (either directly, or through the Python binding
+:class:`~onnx_light.onnx.reference.RuntimeContext` (either directly, or through the Python binding
 when loaded as a Python module) without rebuilding ``lib_onnx_kernels``.
 
 Low-level Python binding

@@ -25,6 +25,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -1899,13 +1900,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          }
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
-         // Input 1 is ``roi`` (unused by this reference implementation).
          const Tensor *roi = GetOptionalInput(node, 1, rt.tensors());
-         if (roi != nullptr) {
-           throw std::invalid_argument(
-               "RunNode: op 'Resize' does not support the optional 'roi' input "
-               "(only used by 'tf_crop_and_resize' coordinate_transformation_mode).");
-         }
          const Tensor *scales = GetOptionalInput(node, 2, rt.tensors());
          const Tensor *sizes = GetOptionalInput(node, 3, rt.tensors());
          if ((scales == nullptr) == (sizes == nullptr)) {
@@ -1927,6 +1922,23 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
              GetAttributeFloatOrDefault(node, "cubic_coeff_a", attrs.cubic_coeff_a);
          attrs.exclude_outside =
              GetAttributeIntOrDefault(node, "exclude_outside", attrs.exclude_outside);
+         attrs.extrapolation_value = GetAttributeFloatOrDefault(
+             node, "extrapolation_value", attrs.extrapolation_value);
+         if (roi != nullptr) {
+           if (roi->data_type != DataType::FLOAT) {
+             throw std::invalid_argument(
+                 "RunNode: op 'Resize' 'roi' input must be a FLOAT tensor.");
+           }
+           if (roi->shape.size() != 1) {
+             throw std::invalid_argument("RunNode: op 'Resize' 'roi' input must be 1-D.");
+           }
+           const int64_t n = roi->shape[0];
+           attrs.roi.assign(static_cast<std::size_t>(n), 0.0f);
+           if (n > 0) {
+             std::memcpy(attrs.roi.data(), roi->bytes(),
+                         static_cast<std::size_t>(n) * sizeof(float));
+           }
+         }
 
          kernel::Resize k(rt.kernel_ctx());
          if (scales != nullptr) {

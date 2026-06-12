@@ -115,10 +115,10 @@ int64_t ApplyNearestMode(double x, const std::string &nearest_mode) {
 
 // Computes the real-valued input coordinate for a given output position
 // according to ``coordinate_transformation_mode``. Mirrors the formulas in
-// ``onnx/reference/ops/op_resize.py`` for the modes that do not require the
-// ``roi`` input.
+// ``onnx/reference/ops/op_resize.py``. ``roi_start``/``roi_end`` are used
+// only by ``"tf_crop_and_resize"`` and ignored for every other mode.
 double TransformCoord(int64_t out_coord, int64_t in_dim, int64_t out_dim, double scale,
-                      const std::string &mode) {
+                      const std::string &mode, double roi_start, double roi_end) {
   const double x = static_cast<double>(out_coord);
   if (mode == "asymmetric") {
     return x / scale;
@@ -142,6 +142,14 @@ double TransformCoord(int64_t out_coord, int64_t in_dim, int64_t out_dim, double
     const double offset = center * (1.0 - adjustment);
     return offset + (x + 0.5) / scale - 0.5;
   }
+  if (mode == "tf_crop_and_resize") {
+    const double length_original = static_cast<double>(in_dim);
+    if (out_dim == 1) {
+      return (roi_start + roi_end) * (length_original - 1.0) / 2.0;
+    }
+    return roi_start * (length_original - 1.0) +
+           x * (roi_end - roi_start) * (length_original - 1.0) / static_cast<double>(out_dim - 1);
+  }
   // Default: "half_pixel" (the schema default since opset 13).
   EXT_ENFORCE_INVALID(mode == "half_pixel",
                       "kernel::Resize: unsupported coordinate_transformation_mode.");
@@ -151,12 +159,17 @@ double TransformCoord(int64_t out_coord, int64_t in_dim, int64_t out_dim, double
 // Nearest-neighbor resize for any rank, byte-element-wise copy. Combines the
 // per-axis ``scales`` and ``coordinate_transformation_mode`` to compute the
 // real-valued input coordinate, then rounds it via ``nearest_mode`` and
-// clamps the result to ``[0, in_dim - 1]``.
+// clamps the result to ``[0, in_dim - 1]``. When ``coord_mode`` is
+// ``"tf_crop_and_resize"`` and the real-valued coordinate falls outside
+// ``[0, in_dim - 1]`` on any axis, the output element is set to
+// ``extrapolation_value`` rather than clamped.
 void ResizeNearest(const Tensor &input, const std::vector<float> &scales,
                    const std::vector<int64_t> &out_shape, const std::string &nearest_mode,
-                   const std::string &coord_mode, Tensor &output) {
+                   const std::string &coord_mode, const std::vector<double> &roi_start,
+                   const std::vector<double> &roi_end, double extrapolation_value, Tensor &output) {
   const std::size_t elem_size = ElementSize(input.data_type);
   const std::size_t rank = out_shape.size();
+  const bool is_tf_crop = coord_mode == "tf_crop_and_resize";
 
   int64_t total_elements = 1;
   for (int64_t d : out_shape) {
@@ -177,14 +190,26 @@ void ResizeNearest(const Tensor &input, const std::vector<float> &scales,
   const uint8_t *const in_ptr = input.bytes();
   uint8_t *const out_ptr = output.data.data();
 
+  // Pre-encoded ``extrapolation_value`` for FLOAT/DOUBLE outputs; for other
+  // (whole-byte) types ``tf_crop_and_resize`` extrapolation is not defined
+  // by the spec, so we fall back to clamping.
+  float extrap_f = static_cast<float>(extrapolation_value);
+  double extrap_d = extrapolation_value;
+
   for (int64_t out_idx = 0; out_idx < total_elements; ++out_idx) {
     int64_t in_idx = 0;
     int64_t remaining = out_idx;
+    bool extrapolate = false;
     for (std::size_t k = 0; k < rank; ++k) {
       const int64_t out_coord = remaining / out_strides[k];
       remaining %= out_strides[k];
-      const double x_ori = TransformCoord(out_coord, input.shape[k], out_shape[k],
-                                          static_cast<double>(scales[k]), coord_mode);
+      const double x_ori =
+          TransformCoord(out_coord, input.shape[k], out_shape[k], static_cast<double>(scales[k]),
+                         coord_mode, roi_start[k], roi_end[k]);
+      if (is_tf_crop && (x_ori < 0.0 || x_ori > static_cast<double>(input.shape[k] - 1))) {
+        extrapolate = true;
+        break;
+      }
       int64_t in_coord = ApplyNearestMode(x_ori, nearest_mode);
       if (in_coord >= input.shape[k]) {
         in_coord = input.shape[k] - 1;
@@ -194,8 +219,21 @@ void ResizeNearest(const Tensor &input, const std::vector<float> &scales,
       }
       in_idx += in_coord * in_strides[k];
     }
-    std::memcpy(out_ptr + static_cast<std::size_t>(out_idx) * elem_size,
-                in_ptr + static_cast<std::size_t>(in_idx) * elem_size, elem_size);
+    if (extrapolate) {
+      if (input.data_type == DataType::FLOAT) {
+        std::memcpy(out_ptr + static_cast<std::size_t>(out_idx) * elem_size, &extrap_f, elem_size);
+      } else if (input.data_type == DataType::DOUBLE) {
+        std::memcpy(out_ptr + static_cast<std::size_t>(out_idx) * elem_size, &extrap_d, elem_size);
+      } else {
+        // For non-floating-point dtypes, zero-fill the element as a
+        // best-effort extrapolation (the ONNX spec only defines
+        // ``extrapolation_value`` for floating-point outputs).
+        std::memset(out_ptr + static_cast<std::size_t>(out_idx) * elem_size, 0, elem_size);
+      }
+    } else {
+      std::memcpy(out_ptr + static_cast<std::size_t>(out_idx) * elem_size,
+                  in_ptr + static_cast<std::size_t>(in_idx) * elem_size, elem_size);
+    }
   }
 }
 
@@ -305,9 +343,15 @@ void NeighborIndices(double x, int64_t n, int64_t in_dim, std::vector<int64_t> &
 // A boolean is passed instead of re-checking ``interp_mode`` here because
 // this function runs in the inner resize loop.
 double Interpolate1D(const std::vector<double> &data, int64_t in_dim, int64_t out_dim,
-                     int64_t out_coord, double scale, const std::string &coord_mode, bool is_cubic,
-                     double cubic_a, bool exclude_outside, std::vector<int64_t> &idx_scratch) {
-  const double x_ori = TransformCoord(out_coord, in_dim, out_dim, scale, coord_mode);
+                     int64_t out_coord, double scale, const std::string &coord_mode,
+                     double roi_start, double roi_end, bool is_cubic, double cubic_a,
+                     bool exclude_outside, bool use_extrapolation, double extrapolation_value,
+                     std::vector<int64_t> &idx_scratch) {
+  const double x_ori =
+      TransformCoord(out_coord, in_dim, out_dim, scale, coord_mode, roi_start, roi_end);
+  if (use_extrapolation && (x_ori < 0.0 || x_ori > static_cast<double>(in_dim - 1))) {
+    return extrapolation_value;
+  }
   const double x_ori_floor = std::floor(x_ori);
   const bool is_integer = (x_ori - x_ori_floor) == 0.0;
   // When ``x_ori`` is an integer the upstream reference forces ``ratio = 1``
@@ -373,8 +417,9 @@ double Interpolate1D(const std::vector<double> &data, int64_t in_dim, int64_t ou
 // is a tensor product of per-axis linear combinations.
 void ResizeSeparable(const Tensor &input, const std::vector<float> &scales,
                      const std::vector<int64_t> &out_shape, const std::string &coord_mode,
+                     const std::vector<double> &roi_start, const std::vector<double> &roi_end,
                      const std::string &interp_mode, double cubic_a, bool exclude_outside,
-                     Tensor &output) {
+                     double extrapolation_value, Tensor &output) {
   const std::size_t rank = out_shape.size();
   EXT_ENFORCE_INVALID(input.shape.size() == rank,
                       "kernel::Resize: input rank must equal output rank.");
@@ -382,6 +427,7 @@ void ResizeSeparable(const Tensor &input, const std::vector<float> &scales,
   // :cpp:func:`Interpolate1D` can dispatch via a boolean without re-parsing
   // the attribute string for every output element.
   const bool is_cubic = IsCubicMode(interp_mode);
+  const bool use_extrapolation = coord_mode == "tf_crop_and_resize";
 
   // Start from a double-precision copy of the input. We then interpolate
   // axis-by-axis, replacing the working buffer at each step.
@@ -433,7 +479,8 @@ void ResizeSeparable(const Tensor &input, const std::vector<float> &scales,
         for (int64_t k = 0; k < out_dim; ++k) {
           const double v =
               Interpolate1D(line, in_dim, out_dim, k, static_cast<double>(scales[axis]), coord_mode,
-                            is_cubic, cubic_a, exclude_outside, idx_scratch);
+                            roi_start[axis], roi_end[axis], is_cubic, cubic_a, exclude_outside,
+                            use_extrapolation, extrapolation_value, idx_scratch);
           next[static_cast<std::size_t>((o * out_dim + k) * inner + in)] = v;
         }
       }
@@ -497,25 +544,47 @@ void CheckSupportedAttrs(const Resize::Attributes &attrs) {
     throw std::invalid_argument("kernel::Resize: unsupported interpolation mode '" + attrs.mode +
                                 "'. Supported modes: 'nearest', 'linear'/'bilinear', 'cubic'.");
   }
-  if (attrs.coordinate_transformation_mode == "tf_crop_and_resize") {
-    throw std::invalid_argument(
-        "kernel::Resize: 'tf_crop_and_resize' coordinate_transformation_mode is not supported "
-        "in this reference implementation.");
+}
+
+// Builds per-axis ``roi_start``/``roi_end`` vectors (length ``rank``) from
+// the user-supplied ``attrs.roi`` and ``axes``. For axes not listed in
+// ``axes`` (or when no ROI was provided), defaults to the full
+// ``[0.0, 1.0]`` range so that the ``"tf_crop_and_resize"`` formula
+// reduces to identity.
+void BuildRoi(const Resize::Attributes &attrs, const std::vector<int64_t> &axes, std::size_t rank,
+              std::vector<double> &roi_start, std::vector<double> &roi_end) {
+  roi_start.assign(rank, 0.0);
+  roi_end.assign(rank, 1.0);
+  if (attrs.coordinate_transformation_mode != "tf_crop_and_resize") {
+    return;
+  }
+  EXT_ENFORCE_INVALID(attrs.roi.size() == 2 * axes.size(),
+                      "kernel::Resize: 'roi' length must equal 2 * number of resized axes for "
+                      "'tf_crop_and_resize' coordinate_transformation_mode; got roi length ",
+                      attrs.roi.size(), ", expected ", 2 * axes.size(), ".");
+  for (std::size_t i = 0; i < axes.size(); ++i) {
+    const std::size_t k = static_cast<std::size_t>(axes[i]);
+    roi_start[k] = static_cast<double>(attrs.roi[i]);
+    roi_end[k] = static_cast<double>(attrs.roi[i + axes.size()]);
   }
 }
 
 // Dispatches to the nearest or separable (linear/cubic) implementation
 // according to ``attrs.mode``.
 void RunResize(const Tensor &X, const std::vector<float> &scales_vec,
-               const std::vector<int64_t> &out_shape, const Resize::Attributes &attrs,
+               const std::vector<int64_t> &out_shape, const std::vector<double> &roi_start,
+               const std::vector<double> &roi_end, const Resize::Attributes &attrs,
                Tensor &output) {
   if (IsNearestMode(attrs.mode)) {
     ResizeNearest(X, scales_vec, out_shape, attrs.nearest_mode,
-                  attrs.coordinate_transformation_mode, output);
+                  attrs.coordinate_transformation_mode, roi_start, roi_end,
+                  static_cast<double>(attrs.extrapolation_value), output);
     return;
   }
-  ResizeSeparable(X, scales_vec, out_shape, attrs.coordinate_transformation_mode, attrs.mode,
-                  static_cast<double>(attrs.cubic_coeff_a), attrs.exclude_outside != 0, output);
+  ResizeSeparable(X, scales_vec, out_shape, attrs.coordinate_transformation_mode, roi_start,
+                  roi_end, attrs.mode, static_cast<double>(attrs.cubic_coeff_a),
+                  attrs.exclude_outside != 0, static_cast<double>(attrs.extrapolation_value),
+                  output);
 }
 
 } // namespace
@@ -559,7 +628,10 @@ void Resize::operator()(const Tensor &X, const Tensor &scales, const Attributes 
   EXT_ENFORCE_INVALID(output.shape == out_shape,
                       "kernel::Resize: preallocated output shape mismatch.");
 
-  RunResize(X, scales_vec, out_shape, attrs, output);
+  std::vector<double> roi_start;
+  std::vector<double> roi_end;
+  BuildRoi(attrs, axes, rank, roi_start, roi_end);
+  RunResize(X, scales_vec, out_shape, roi_start, roi_end, attrs, output);
 }
 
 Tensor Resize::ResizeSizes(const Tensor &X, const Tensor &sizes, const Attributes &attrs) const {
@@ -595,7 +667,10 @@ Tensor Resize::ResizeSizes(const Tensor &X, const Tensor &sizes, const Attribute
   }
   Tensor output("", X.data_type, out_shape,
                 std::vector<uint8_t>(PackedByteSize(X.data_type, total_elements)));
-  RunResize(X, scales_vec, out_shape, attrs, output);
+  std::vector<double> roi_start;
+  std::vector<double> roi_end;
+  BuildRoi(attrs, axes, rank, roi_start, roi_end);
+  RunResize(X, scales_vec, out_shape, roi_start, roi_end, attrs, output);
   return output;
 }
 

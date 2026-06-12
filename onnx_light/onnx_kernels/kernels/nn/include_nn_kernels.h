@@ -429,7 +429,9 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
-/// N-D max pooling on a FLOAT tensor laid out as ``(N, C, D1, ..., Dk)``.
+/// N-D max pooling on a numeric tensor laid out as ``(N, C, D1, ..., Dk)``.
+/// Supported element types are ``FLOAT``, ``DOUBLE``, ``INT8`` and ``UINT8``;
+/// the output type matches the input type.
 /// Implements the ONNX ``MaxPool`` operator restricted to ``storage_order=0``
 /// (row-major). ``kernel_shape`` must have ``k`` entries; ``strides``,
 /// ``pads`` and ``dilations`` (lengths ``k``, ``2 * k`` and ``k``
@@ -446,7 +448,8 @@ class MaxPool : public KernelBase {
 public:
   using KernelBase::KernelBase;
 
-  /// Returns the primary output ``Y`` (FLOAT tensor of the pooled values).
+  /// Returns the primary output ``Y`` (tensor of the pooled values; same
+  /// element type as ``x``).
   Tensor operator()(const Tensor &x, const std::vector<int64_t> &kernel_shape,
                     const std::vector<int64_t> &strides = {}, const std::vector<int64_t> &pads = {},
                     bool ceil_mode = false, const std::vector<int64_t> &dilations = {},

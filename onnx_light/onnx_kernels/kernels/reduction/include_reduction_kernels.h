@@ -206,7 +206,7 @@ public:
       : ReduceL1L2(ctx, ReduceL1L2::Mode::kSumSquare) {}
 };
 
-/// Shared FLOAT kernel for ``ReduceLogSum`` and ``ReduceLogSumExp``.
+/// Shared FLOAT/DOUBLE kernel for ``ReduceLogSum`` and ``ReduceLogSumExp``.
 ///
 /// ``ReduceLogSum`` computes ``y = log(sum(x, axes))``.
 /// ``ReduceLogSumExp`` computes ``y = log(sum(exp(x), axes))`` using the

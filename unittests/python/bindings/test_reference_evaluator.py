@@ -385,6 +385,26 @@ class TestReferenceEvaluator(ExtTestCase):
         self.assertEqual(got[0].shape, outputs[0].shape)
         np.testing.assert_array_equal(got[0], outputs[0])
 
+    def test_flexattention_relative_positional(self):
+        # Regression test for ``test_cc_flexattention_relative_positional``:
+        # the ``score_mod`` subgraph computes ``q_idx - k_idx`` on INT64
+        # index tensors produced by ``Range``/``Reshape``. Earlier
+        # versions of :cpp:class:`kernel::Sub` rejected INT64 inputs with
+        # ``kernel::Sub only supports FLOAT, INT8, INT16, UINT8, UINT16,
+        # UINT32 and UINT64 inputs.``, which broke the FlexAttention path
+        # whenever a ``score_mod`` subgraph subtracted query/key indices.
+        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+
+        tc = collect_test_case().get("test_cc_flexattention_relative_positional")
+        self.assertIsNotNone(tc)
+        inputs, outputs = tc.data_sets[0]
+        sess = ReferenceEvaluator(tc.model)
+        got = sess.run(None, dict(zip(sess.input_names, inputs)))
+        self.assertEqual(len(got), 1)
+        self.assertEqual(got[0].dtype, outputs[0].dtype)
+        self.assertEqual(got[0].shape, outputs[0].shape)
+        np.testing.assert_allclose(got[0], outputs[0], rtol=tc.rtol, atol=tc.atol)
+
     def test_sequence_erase_pos1_returns_list(self):
         # Regression test for test_cc_sequence_erase_pos1: the graph output
         # is a SequenceType, so ReferenceEvaluator.run() must return a list
@@ -477,6 +497,31 @@ class TestReferenceEvaluator(ExtTestCase):
         self.assertEqual(got[0].shape, (32, 32, 3))
         self.assertEqual(got[0].shape, outputs[0].shape)
         np.testing.assert_array_equal(got[0], outputs[0])
+
+    def _check_resize_backend_case(self, test_name):
+        # Regression test for the ``Resize`` ``align_corners`` downsample
+        # variants: the ONNX reference uses ``output_width = scale *
+        # input_width`` (a float) in the denominator of the coordinate
+        # transformation, so sample positions land on non-integer indices
+        # when ``scale * input_width`` is fractional. The C++ ``Resize``
+        # kernel mirrors that convention; this test locks in bit-exact
+        # agreement with the upstream backend reference outputs.
+        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+
+        tc = collect_test_case().get(test_name)
+        self.assertIsNotNone(tc)
+        inputs, outputs = tc.data_sets[0]
+        sess = ReferenceEvaluator(tc.model)
+        got = sess.run(None, dict(zip(sess.input_names, inputs)))
+        self.assertEqual(len(got), 1)
+        self.assertEqual(got[0].shape, outputs[0].shape)
+        np.testing.assert_allclose(got[0], outputs[0], rtol=tc.rtol, atol=tc.atol)
+
+    def test_resize_downsample_scales_linear_align_corners(self):
+        self._check_resize_backend_case("test_resize_downsample_scales_linear_align_corners")
+
+    def test_resize_downsample_scales_cubic_align_corners(self):
+        self._check_resize_backend_case("test_resize_downsample_scales_cubic_align_corners")
 
 
 class TestReferenceEvaluatorCustomKernels(ExtTestCase):

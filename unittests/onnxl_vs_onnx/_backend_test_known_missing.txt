@@ -1,4 +1,8 @@
 
+affine_grid_2d_align_corners_expanded
+affine_grid_2d_expanded
+affine_grid_3d_align_corners_expanded
+affine_grid_3d_expanded
 attention_3d_attn_mask_expanded
 attention_3d_causal_expanded
 attention_3d_diff_heads_sizes_attn_mask_expanded

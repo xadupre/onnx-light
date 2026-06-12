@@ -90,17 +90,7 @@ void RegisterAffineGridCases(std::vector<TestCase> &registry) {
     attrs.align_corners = align_corners;
     Tensor grid = ag_kernel(theta, size, attrs);
 
-    // Register both the plain variant and the ``_expanded`` variant so that
-    // the ONNX backend test name ``<base>_expanded`` (which exercises the
-    // function-body expansion upstream) is covered as a substring by
-    // ``test_backend_test_names_onnx_vs_onnxlight.py``. The kernel itself is
-    // identical for both — onnx-light dispatches AffineGrid to its native
-    // kernel rather than expanding the function body.
-    for (const char *suffix : {"", "_expanded"}) {
-      Tensor grid_copy = grid;
-      Expect(node, {theta, size}, {std::move(grid_copy)}, case_name + suffix, {opset},
-             "backend-test", registry);
-    }
+    Expect(node, {theta, size}, {grid}, case_name, {opset}, "backend-test", registry);
   };
 
   // Upstream ``test_affine_grid_2d`` cases: theta=(2,2,3), size=(N=2, C=3,

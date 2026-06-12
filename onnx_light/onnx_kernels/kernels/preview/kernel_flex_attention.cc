@@ -25,13 +25,12 @@ namespace {
 void CheckRank4Float(const Tensor &t, const char *label) {
   EXT_ENFORCE_INVALID(t.data_type == DataType::FLOAT || t.data_type == DataType::FLOAT16 ||
                           t.data_type == DataType::BFLOAT16,
-                      std::string("kernel::FlexAttention: '") + label +
-                          "' must be a FLOAT, FLOAT16 or BFLOAT16 tensor.");
-  EXT_ENFORCE_INVALID(t.shape.size() == 4, std::string("kernel::FlexAttention: '") + label +
-                                               "' must be a rank-4 tensor.");
+                      "kernel::FlexAttention: '", label,
+                      "' must be a FLOAT, FLOAT16 or BFLOAT16 tensor.");
+  EXT_ENFORCE_INVALID(t.shape.size() == 4, "kernel::FlexAttention: '", label,
+                      "' must be a rank-4 tensor.");
   for (int64_t d : t.shape) {
-    EXT_ENFORCE_INVALID(d >= 0, std::string("kernel::FlexAttention: '") + label +
-                                    "' has a negative dimension.");
+    EXT_ENFORCE_INVALID(d >= 0, "kernel::FlexAttention: '", label, "' has a negative dimension.");
   }
 }
 

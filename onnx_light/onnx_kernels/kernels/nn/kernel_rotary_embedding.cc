@@ -25,8 +25,8 @@ namespace {
 // FLOAT16, and BFLOAT16, but cos and sin must match ``X``.
 void CheckCacheShape(const Tensor &cache, const char *which, int64_t batch, int64_t sequence_length,
                      int64_t rotary_dim_half, bool has_position_ids, int32_t x_dtype) {
-  EXT_ENFORCE_INVALID(cache.data_type == x_dtype, std::string("kernel::RotaryEmbedding: ") + which +
-                                                      " must have the same dtype as X.");
+  EXT_ENFORCE_INVALID(cache.data_type == x_dtype, "kernel::RotaryEmbedding: ", which,
+                      " must have the same dtype as X.");
   if (has_position_ids) {
     EXT_ENFORCE_INVALID(cache.shape.size() == 2,
                         std::string("kernel::RotaryEmbedding: ") + which +

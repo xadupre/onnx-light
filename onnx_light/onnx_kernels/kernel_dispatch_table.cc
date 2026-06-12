@@ -3093,6 +3093,21 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          });
          SetOutput(node, 0, std::move(y), rt.tensors());
        }},
+      {"ai.onnx.ml:Scaler",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const std::vector<float> offset = GetAttributeFloatsOrDefault(node, "offset", {});
+         const std::vector<float> scale = GetAttributeFloatsOrDefault(node, "scale", {});
+         kernel::Scaler scaler(rt.kernel_ctx());
+         Tensor y = DispatchSVMByDataType(x, "Scaler", [&](auto *tag) {
+           using T = std::remove_pointer_t<decltype(tag)>;
+           (void)tag;
+           return scaler.template operator()<T>(x, offset, scale);
+         });
+         SetOutput(node, 0, std::move(y), rt.tensors());
+       }},
       {"ai.onnx.ml:ArrayFeatureExtractor",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 2);

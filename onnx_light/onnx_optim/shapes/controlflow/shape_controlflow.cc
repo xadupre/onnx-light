@@ -11,6 +11,7 @@
 
 #include "onnx_proto/onnx_helper.h"
 
+#include "onnx_optim/expressions.h"
 #include "onnx_optim/optim_tensor.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_optim/shapes/shape_inference.h"
@@ -21,6 +22,13 @@ namespace shapes {
 namespace controlflow {
 
 namespace {
+
+expressions::DimType ToDimType(const OptimDim &d) {
+  if (d.IsInt()) {
+    return expressions::DimType{d.AsInt()};
+  }
+  return expressions::DimType{d.AsExpr()};
+}
 
 // Runs shape inference on the body of ``subgraph`` using a copy of
 // ``parent_ctx`` so that outer-scope values referenced from inside the
@@ -53,9 +61,13 @@ const OptimTensor &GetSubgraphOutput(const ShapesContext &local_ctx, const Graph
 
 // Merges two output descriptors coming from the ``then_branch`` and
 // ``else_branch`` sub-graphs into a single OptimTensor describing the
-// corresponding output of the ``If`` node.
-OptimTensor MergeBranchOutputs(const OptimTensor &then_t, const OptimTensor &else_t,
-                               const std::string &if_output_name) {
+// corresponding output of the ``If`` node. When a merged dimension is
+// made fully symbolic (because the two branches disagree on that
+// dimension), an upper-bound constraint ``merged_dim <= max(then_dim,
+// else_dim)`` is recorded into ``ctx`` so downstream passes know the
+// merged dim cannot exceed either branch's value.
+OptimTensor MergeBranchOutputs(ShapesContext &ctx, const OptimTensor &then_t,
+                               const OptimTensor &else_t, const std::string &if_output_name) {
   const TensorType dtype =
       (then_t.Dtype() == else_t.Dtype()) ? then_t.Dtype() : TensorType::kUndefined;
 
@@ -77,7 +89,13 @@ OptimTensor MergeBranchOutputs(const OptimTensor &then_t, const OptimTensor &els
     if (then_shape[i] == else_shape[i]) {
       merged.PushBack(then_shape[i]);
     } else {
-      merged.PushBack(OptimDim(std::string("If_") + if_output_name + "_d" + std::to_string(i)));
+      const std::string sym = std::string("If_") + if_output_name + "_d" + std::to_string(i);
+      // The merged dim equals one of the two branch dims at runtime, so
+      // it is upper-bounded by their maximum.
+      const expressions::DimType bound =
+          expressions::dim_max(ToDimType(then_shape[i]), ToDimType(else_shape[i]));
+      ctx.AddLessEqualConstraint(sym, expressions::dim_to_string(bound));
+      merged.PushBack(OptimDim(sym));
     }
   }
   return OptimTensor(nullptr, dtype, std::move(merged));
@@ -117,7 +135,7 @@ void ComputeShapeIf(ShapesContext &ctx, const NodeProto &node) {
         GetSubgraphOutput(then_ctx, then_branch, "then_branch", i, n_outputs);
     const OptimTensor &else_t =
         GetSubgraphOutput(else_ctx, else_branch, "else_branch", i, n_outputs);
-    ctx.Set(out_name, MergeBranchOutputs(then_t, else_t, out_name));
+    ctx.Set(out_name, MergeBranchOutputs(ctx, then_t, else_t, out_name));
   }
 }
 

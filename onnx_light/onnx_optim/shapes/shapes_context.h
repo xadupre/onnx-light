@@ -318,6 +318,60 @@ public:
   /// Each element is a ``(lhs, rhs)`` pair with ``lhs < rhs``.
   const std::set<Constraint> &Constraints() const noexcept { return constraints_; }
 
+  // ── Symbolic-dimension upper-bound constraints ──────────────────────
+  //
+  // Some operators produce a symbolic output dimension whose runtime
+  // value is unknown but is guaranteed to be **less than or equal to**
+  // an expression of other dimensions. Two examples:
+  //
+  //   - ``NonZero(X)`` produces ``Y`` with shape ``(rank(X), nnz)``
+  //     where ``nnz`` is bounded above by ``prod(shape(X))``.
+  //   - ``Compress(X, cond, axis=k)`` produces an output whose ``k``-th
+  //     dimension ``count`` is bounded above by ``X.shape[k]``.
+  //   - ``If(...)`` merges two branches; when the matching dims of the
+  //     two branches differ the merged dim is bounded above by the
+  //     ``max`` of the two branch expressions.
+  //
+  // Such inequalities are recorded as ordered ``(lhs, rhs)`` pairs
+  // meaning ``lhs <= rhs`` where ``lhs`` is a symbolic dimension name
+  // and ``rhs`` is an arbitrary (integer-string or symbolic) expression.
+  // The trivial case ``lhs == rhs`` is dropped.
+
+  /// Type used to store a single symbolic ``<=`` (less-or-equal)
+  /// upper-bound constraint. The first element is the bounded symbol,
+  /// the second is an arbitrary dimension expression that upper-bounds
+  /// it.
+  using LessEqualConstraint = std::pair<std::string, std::string>;
+
+  /// Records that the symbolic dimension named ``lhs`` is
+  /// less-than-or-equal-to the expression ``rhs``. The trivial
+  /// self-bound is dropped. Returns ``true`` when a new constraint was
+  /// inserted, ``false`` otherwise (duplicate or self-bound).
+  bool AddLessEqualConstraint(const std::string &lhs, const std::string &rhs) {
+    if (lhs == rhs || lhs.empty() || rhs.empty()) {
+      return false;
+    }
+    return le_constraints_.insert(LessEqualConstraint(lhs, rhs)).second;
+  }
+
+  /// ``true`` when a ``lhs <= rhs`` constraint is recorded.
+  /// ``lhs == rhs`` always returns ``true``.
+  bool HasLessEqualConstraint(const std::string &lhs, const std::string &rhs) const {
+    if (lhs == rhs) {
+      return true;
+    }
+    return le_constraints_.find(LessEqualConstraint(lhs, rhs)) != le_constraints_.end();
+  }
+
+  /// Number of recorded ``<=`` constraints.
+  std::size_t LessEqualConstraintsSize() const noexcept { return le_constraints_.size(); }
+
+  /// Read-only access to the underlying set of ``<=`` constraints. Each
+  /// element is an ordered ``(lhs, rhs)`` pair meaning ``lhs <= rhs``.
+  const std::set<LessEqualConstraint> &LessEqualConstraints() const noexcept {
+    return le_constraints_;
+  }
+
   // ── Shape-inference entry points ────────────────────────────────────
   //
   // The methods below run shape inference on a single ``NodeProto``, a
@@ -370,6 +424,7 @@ private:
   std::unordered_map<std::string, const FunctionProto *> local_functions_;
   CustomShapeInferenceMap custom_shape_inference_;
   std::set<Constraint> constraints_;
+  std::set<LessEqualConstraint> le_constraints_;
 };
 
 } // namespace shapes

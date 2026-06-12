@@ -1796,6 +1796,107 @@ TEST(OnnxOptimShapesTensorNonZero, RejectsWrongOpType) {
   EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeNonZero(ctx, node), std::invalid_argument);
 }
 
+TEST(OnnxOptimShapesTensorNonZero, RecordsNnzUpperBoundFromInputShape) {
+  NodeProto node = MakeNonZeroNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeNonZero(ctx, node);
+
+  // The number of non-zero elements ``nnz`` is upper-bounded by the
+  // product of the input dimensions, i.e. ``4*N``.
+  EXPECT_EQ(ctx.LessEqualConstraintsSize(), 1u);
+  EXPECT_TRUE(ctx.HasLessEqualConstraint("NonZero_Y_nnz", "4*N"));
+}
+
+TEST(OnnxOptimShapesTensorNonZero, ScalarInputRecordsNoConstraint) {
+  NodeProto node = MakeNonZeroNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool,
+                                       onnx_optim::OptimShape{}));
+
+  onnx_optim::shapes::tensor::ComputeShapeNonZero(ctx, node);
+
+  EXPECT_EQ(ctx.LessEqualConstraintsSize(), 0u);
+}
+
+// ---------------------------------------------------------------------------
+// Compress shape-inference tests
+// ---------------------------------------------------------------------------
+
+namespace {
+
+NodeProto MakeCompressNode(const std::optional<int64_t> &axis = std::nullopt,
+                           const std::string &input = "X", const std::string &cond = "C",
+                           const std::string &out = "Y") {
+  NodeProto node;
+  node.set_op_type("Compress");
+  node.add_input(input);
+  node.add_input(cond);
+  node.add_output(out);
+  if (axis.has_value()) {
+    AddAttribute<int64_t>(node, "axis", *axis);
+  }
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesTensorCompress, NoAxisRecordsFlattenedUpperBound) {
+  NodeProto node = MakeCompressNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim("N")}));
+  ctx.Set("C", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim("M")}));
+
+  onnx_optim::shapes::tensor::ComputeShapeCompress(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  ASSERT_EQ(ctx.Get("Y").Shape().Rank(), 1u);
+  EXPECT_TRUE(ctx.Get("Y").Shape()[0].IsExpr());
+  EXPECT_EQ(ctx.Get("Y").Shape()[0].AsExpr(), "Compress_Y_count");
+  EXPECT_EQ(ctx.LessEqualConstraintsSize(), 1u);
+  EXPECT_TRUE(ctx.HasLessEqualConstraint("Compress_Y_count", "3*N"));
+}
+
+TEST(OnnxOptimShapesTensorCompress, AxisRecordsInputDimUpperBound) {
+  NodeProto node = MakeCompressNode(/*axis=*/1);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim("N")}));
+  ctx.Set("C", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim("M")}));
+
+  onnx_optim::shapes::tensor::ComputeShapeCompress(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  ASSERT_EQ(ctx.Get("Y").Shape().Rank(), 2u);
+  EXPECT_EQ(ctx.Get("Y").Shape()[0], onnx_optim::OptimDim(3));
+  EXPECT_TRUE(ctx.Get("Y").Shape()[1].IsExpr());
+  EXPECT_EQ(ctx.Get("Y").Shape()[1].AsExpr(), "Compress_Y_count");
+  EXPECT_EQ(ctx.LessEqualConstraintsSize(), 1u);
+  EXPECT_TRUE(ctx.HasLessEqualConstraint("Compress_Y_count", "N"));
+}
+
+TEST(OnnxOptimShapesTensorCompress, AxisIntegerInputDimRecordsIntegerUpperBound) {
+  NodeProto node = MakeCompressNode(/*axis=*/0);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(7), onnx_optim::OptimDim("N")}));
+  ctx.Set("C", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(7)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeCompress(ctx, node);
+
+  EXPECT_TRUE(ctx.HasLessEqualConstraint("Compress_Y_count", "7"));
+}
+
 // ---------------------------------------------------------------------------
 // Trilu shape-inference tests
 // ---------------------------------------------------------------------------

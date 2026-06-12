@@ -185,6 +185,39 @@ TEST(OnnxOptimShapeIf, DifferingDimsBecomeSymbolic) {
   EXPECT_EQ(ctx.Get("y").Shape()[0].AsInt(), 2);
   ASSERT_TRUE(ctx.Get("y").Shape()[1].IsExpr());
   EXPECT_EQ(ctx.Get("y").Shape()[1].AsExpr(), "If_y_d1");
+  // The merged dim is upper-bounded by max(3, 5) == 5.
+  EXPECT_TRUE(ctx.HasLessEqualConstraint("If_y_d1", "5"));
+}
+
+TEST(OnnxOptimShapeIf, DifferingSymbolicDimsRecordsMaxUpperBound) {
+  // Branches disagree on a symbolic dim: the merged dim is bounded
+  // above by ``max(then_dim, else_dim)``.
+  GraphProto then_b = MakeUnaryBranch("Abs", "a", "y_then");
+  GraphProto else_b = MakeUnaryBranch("Abs", "b", "y_else");
+  NodeProto node = MakeIfNode("cond", {"y"}, then_b, else_b);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("cond", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
+  ctx.Set("a", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim("N")}));
+  ctx.Set("b", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim("M")}));
+
+  onnx_optim::shapes::controlflow::ComputeShapeIf(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("y"));
+  ASSERT_EQ(ctx.Get("y").Shape().Rank(), 1u);
+  EXPECT_TRUE(ctx.Get("y").Shape()[0].IsExpr());
+  EXPECT_EQ(ctx.Get("y").Shape()[0].AsExpr(), "If_y_d0");
+  EXPECT_EQ(ctx.LessEqualConstraintsSize(), 1u);
+  const auto &cs = ctx.LessEqualConstraints();
+  ASSERT_EQ(cs.size(), 1u);
+  const auto &c = *cs.begin();
+  EXPECT_EQ(c.first, "If_y_d0");
+  // The recorded upper bound expresses ``max(M, N)`` (encoded with ``^``).
+  EXPECT_TRUE(c.second.find('^') != std::string::npos);
+  EXPECT_TRUE(c.second.find('M') != std::string::npos);
+  EXPECT_TRUE(c.second.find('N') != std::string::npos);
 }
 
 TEST(OnnxOptimShapeIf, RankMismatchThrows) {

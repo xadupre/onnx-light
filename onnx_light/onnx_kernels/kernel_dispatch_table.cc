@@ -2468,6 +2468,15 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                    rt);
        }},
       {"ai.onnx:ThresholdedRelu", MakeUnaryAlphaTrampoline<kernel::ThresholdedRelu>("alpha", 1.0f)},
+      {"ai.onnx:Tile",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         const Tensor &input = GetInput(node, 0, rt.tensors());
+         const Tensor &repeats = GetInput(node, 1, rt.tensors());
+         kernel::Tile k(rt.kernel_ctx());
+         SetOutput(node, 0, k(input, repeats), rt);
+       }},
       {"ai.onnx:TopK",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireOutputCount(node, 2);

@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_kernels/kernels/_helpers/cast_float8.h"
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
-#include "onnx_kernels/kernels/tensor/cast_float8.h"
-#include "onnx_kernels/kernels/tensor/cast_helper.h"
 
 #include <cstdint>
 #include <cstring>

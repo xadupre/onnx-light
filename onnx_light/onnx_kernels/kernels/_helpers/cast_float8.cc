@@ -6,7 +6,7 @@
 // ``include/onnxruntime/core/common/float8.h`` in the Microsoft ONNX
 // Runtime project (Copyright (c) Microsoft Corporation, MIT License).
 
-#include "onnx_kernels/kernels/tensor/cast_float8.h"
+#include "onnx_kernels/kernels/_helpers/cast_float8.h"
 
 #include <cstdint>
 #include <cstring>

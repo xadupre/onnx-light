@@ -4,8 +4,8 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
-#include "onnx_kernels/kernels/tensor/cast_float8.h"
-#include "onnx_kernels/kernels/tensor/cast_sub_byte.h"
+#include "onnx_kernels/kernels/_helpers/cast_float8.h"
+#include "onnx_kernels/kernels/_helpers/cast_sub_byte.h"
 
 #include <algorithm>
 #include <cmath>

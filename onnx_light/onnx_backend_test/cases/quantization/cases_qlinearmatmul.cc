@@ -4,8 +4,8 @@
 
 #include "onnx_backend_test/cases/quantization/include_quantization_cases.h"
 #include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
-#include "onnx_kernels/kernels/tensor/cast_helper.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
@@ -34,7 +34,7 @@ NodeProto MakeQLinearMatMulNode() {
 }
 
 // The IEEE-754 binary16 encoder and FLOAT16 scalar builder are provided by
-// ``onnx_kernels/kernels/tensor/cast_helper.h`` as ``kernel::FloatToFloat16Bits``
+// ``onnx_kernels/kernels/_helpers/cast_helper.h`` as ``kernel::FloatToFloat16Bits``
 // and ``kernel::MakeFloat16Scalar``.
 
 // Builds an INT8/UINT8 scalar tensor (used for zero points). ``dtype`` must be

@@ -4,6 +4,8 @@
 
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_kernels/kernels/_helpers/float16_promote.h"
+
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -17,7 +19,7 @@ namespace {
 
 constexpr const char *kMatMulName = "kernel::MatMul";
 constexpr const char *kSupportedMatMulTypesMsg =
-    " only supports FLOAT, DOUBLE, INT32, INT64, UINT32 and UINT64 inputs.";
+    " only supports FLOAT, DOUBLE, FLOAT16, BFLOAT16, INT32, INT64, UINT32 and UINT64 inputs.";
 
 int64_t NumElements(const std::vector<int64_t> &shape) {
   int64_t n = 1;
@@ -209,6 +211,13 @@ Tensor MatMul::operator()(const Tensor &a, const Tensor &b) const {
     return MatMulAlloc<uint32_t>(a, b);
   case DataType::UINT64:
     return MatMulAlloc<uint64_t>(a, b);
+  case DataType::FLOAT16:
+  case DataType::BFLOAT16: {
+    const Tensor a_f = PromoteToFloat32(a);
+    const Tensor b_f = PromoteToFloat32(b);
+    Tensor y = MatMulAlloc<float>(a_f, b_f);
+    return DemoteFromFloat32(y, a.data_type);
+  }
   default:
     throw std::invalid_argument(std::string(kMatMulName) + kSupportedMatMulTypesMsg);
   }
@@ -230,6 +239,20 @@ void MatMul::operator()(const Tensor &a, const Tensor &b, Tensor &output) const 
     return MatMulInPlace<uint32_t>(a, b, output);
   case DataType::UINT64:
     return MatMulInPlace<uint64_t>(a, b, output);
+  case DataType::FLOAT16:
+  case DataType::BFLOAT16: {
+    EXT_ENFORCE_INVALID(output.data_type == a.data_type,
+                        std::string(kMatMulName) +
+                            " preallocated output must have the same dtype as input A.");
+    Tensor y = (*this)(a, b);
+    EXT_ENFORCE_INVALID(output.shape == y.shape,
+                        std::string(kMatMulName) + " preallocated output has an invalid shape.");
+    EXT_ENFORCE_INVALID(output.data.size() == y.data.size(),
+                        std::string(kMatMulName) +
+                            " preallocated output buffer size does not match its shape.");
+    std::memcpy(output.data.data(), y.data.data(), y.data.size());
+    return;
+  }
   default:
     throw std::invalid_argument(std::string(kMatMulName) + kSupportedMatMulTypesMsg);
   }

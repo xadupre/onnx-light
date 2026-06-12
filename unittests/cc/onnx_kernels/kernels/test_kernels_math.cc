@@ -1857,8 +1857,6 @@ TEST(KernelClass, GemmHalfPrecisionMatchesFloatReference) {
     // Compare via the matching half rounding of the FLOAT reference.
     const Tensor expected =
         onnx_kernels::DemoteFromFloat32(onnx_kernels::PromoteToFloat32(ref), target);
-    Tensor _placeholder;
-    (void)_placeholder;
     // Bit-for-bit equality is too strict because the inner computation is
     // performed in FLOAT32 — compare numerical values after promoting both.
     const std::vector<float> got = DecodeHalfTensor(y_h);

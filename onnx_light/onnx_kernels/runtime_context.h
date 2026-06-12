@@ -15,6 +15,7 @@
 #include <functional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 /**
@@ -390,6 +391,58 @@ public:
   /// ``std::vector``-overload of :cpp:func:`CollectExternalInputs`.
   static std::vector<std::string> CollectExternalInputs(const std::vector<NodeProto> &nodes);
 
+  /**
+   * Returns the full list of tensor / sequence names a single ``node``
+   * depends on at runtime.
+   *
+   * The result is the union of:
+   *  * the names referenced by ``node.input()`` (skipping empty
+   *    optional-input slots), and
+   *  * every external input of the subgraph attributes
+   *    (``GRAPH`` / ``GRAPHS``) attached to ``node`` — i.e. the
+   *    captured names a subgraph reads from the enclosing scope, as
+   *    computed recursively by :cpp:func:`CollectExternalInputs`.
+   *
+   * The returned list preserves the order in which each name is first
+   * encountered and contains no duplicates.
+   */
+  static std::vector<std::string> CollectNodeInputs(const NodeProto &node);
+
+  /**
+   * Returns, for each node in ``nodes``, the list of input names that
+   * become unused once that node has finished executing — i.e. names
+   * whose last reference (per :cpp:func:`CollectNodeInputs`) appears at
+   * that node and that do not appear in ``keep``.
+   *
+   * Empty names (optional inputs left unbound) are skipped. The
+   * returned vector has exactly ``nodes.size()`` entries; each inner
+   * vector preserves the order in which the corresponding names were
+   * first encountered in the input list of the producing/consuming
+   * node.
+   */
+  static std::vector<std::vector<std::string>>
+  ComputeReleasableInputs(const utils::RepeatedProtoField<NodeProto> &nodes,
+                          const std::unordered_set<std::string> &keep);
+
+  /// ``std::vector``-overload of :cpp:func:`ComputeReleasableInputs`.
+  static std::vector<std::vector<std::string>>
+  ComputeReleasableInputs(const std::vector<NodeProto> &nodes,
+                          const std::unordered_set<std::string> &keep);
+
+  /// Enables or disables the per-node release of unused intermediates
+  /// performed by :cpp:func:`RunNodes` / :cpp:func:`RunGraph` /
+  /// :cpp:func:`RunFunction` / :cpp:func:`RunModel`. When enabled, a
+  /// name whose last reference (declared input of a node, or captured
+  /// input of a subgraph attribute) appears at node ``i`` is removed
+  /// from :cpp:func:`tensors` (and :cpp:func:`sequences`) right after
+  /// node ``i`` finishes — emitting a
+  /// :cpp:enumerator:`TensorEventAction::kRemove` event when event
+  /// logging is on. Graph / function outputs are always preserved.
+  /// Disabled by default to keep intermediate values observable after
+  /// the run (e.g. so callers can fetch any node output by name).
+  void set_release_intermediates(bool enabled) noexcept { release_intermediates_ = enabled; }
+  bool release_intermediates() const noexcept { return release_intermediates_; }
+
   /// In/out sequence map shared across every node in a chain. Only
   /// sequence-typed graph edges are stored here; tensor-typed edges
   /// live in :cpp:func:`tensors`.
@@ -435,6 +488,7 @@ private:
   TensorEventLog events_;
   SequenceMap sequences_;
   bool events_enabled_ = false;
+  bool release_intermediates_ = false;
 };
 
 } // namespace onnx_kernels

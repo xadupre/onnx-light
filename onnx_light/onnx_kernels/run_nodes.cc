@@ -12,6 +12,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -968,10 +969,57 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
   }
 }
 
-void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext &rt) {
+namespace {
+
+// Populates ``keep`` with the names of every tensor and sequence
+// currently held by ``rt``. Used by the release loop to ensure that
+// values seeded by the caller before a run (graph inputs, initializers,
+// any caller-provided override) are never garbage-collected.
+void SeedKeepFromContext(const RuntimeContext &rt, std::unordered_set<std::string> &keep) {
+  for (const auto &kv : rt.tensors()) {
+    keep.insert(kv.first);
+  }
+  for (const auto &kv : rt.sequences()) {
+    keep.insert(kv.first);
+  }
+}
+
+// Runs every node of ``nodes`` in order and, after each node, removes
+// from ``rt`` every name in the matching ``releasable[i]`` slot. Both
+// the tensor map and the sequence map are consulted: ``Remove`` is a
+// no-op if absent and emits a ``kRemove`` event when event logging is
+// on; sequence removals don't emit events (sequence values live outside
+// the tensor event stream).
+template <class NodeRange>
+void RunNodesAndRelease(const NodeRange &nodes, RuntimeContext &rt,
+                        const std::vector<std::vector<std::string>> &releasable) {
   for (size_t i = 0; i < nodes.size(); ++i) {
     RunNode(nodes[i], rt);
+    for (const auto &name : releasable[i]) {
+      rt.Remove(name);
+      rt.RemoveSequence(name);
+    }
   }
+}
+
+} // namespace
+
+void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext &rt) {
+  if (!rt.release_intermediates()) {
+    for (size_t i = 0; i < nodes.size(); ++i) {
+      RunNode(nodes[i], rt);
+    }
+    return;
+  }
+  // When release is opted-in, intermediates whose last reference is at
+  // node ``i`` (and that are not present in the caller-seeded tensor
+  // map at run start) are removed right after node ``i`` finishes.
+  // Names already populated in ``rt`` before ``RunNodes`` is invoked
+  // (graph inputs, initializers, outputs the caller wants to read back,
+  // ...) are preserved by adding them to the ``keep`` set.
+  std::unordered_set<std::string> keep;
+  SeedKeepFromContext(rt, keep);
+  RunNodesAndRelease(nodes, rt, RuntimeContext::ComputeReleasableInputs(nodes, keep));
 }
 
 void RunGraph(const GraphProto &graph, RuntimeContext &rt) {
@@ -986,10 +1034,39 @@ void RunGraph(const GraphProto &graph, RuntimeContext &rt) {
       rt.Set(init_name, TensorFromProto(tp), TensorEventKind::kInitializer);
     }
   }
-  RunNodes(graph.node(), rt);
+  if (!rt.release_intermediates()) {
+    RunNodes(graph.node(), rt);
+    return;
+  }
+  // Build the "keep" set so the graph's declared outputs (and every
+  // name already in the runtime context — graph inputs, initializers,
+  // values seeded by the caller) survive the per-node release loop.
+  std::unordered_set<std::string> keep;
+  SeedKeepFromContext(rt, keep);
+  for (size_t i = 0; i < graph.output().size(); ++i) {
+    const std::string out_name = graph.output()[i].name().as_string();
+    if (!out_name.empty()) {
+      keep.insert(out_name);
+    }
+  }
+  RunNodesAndRelease(graph.node(), rt, RuntimeContext::ComputeReleasableInputs(graph.node(), keep));
 }
 
-void RunFunction(const FunctionProto &func, RuntimeContext &rt) { RunNodes(func.node(), rt); }
+void RunFunction(const FunctionProto &func, RuntimeContext &rt) {
+  if (!rt.release_intermediates()) {
+    RunNodes(func.node(), rt);
+    return;
+  }
+  std::unordered_set<std::string> keep;
+  SeedKeepFromContext(rt, keep);
+  for (size_t i = 0; i < func.output().size(); ++i) {
+    const std::string out_name = func.output()[i].as_string();
+    if (!out_name.empty()) {
+      keep.insert(out_name);
+    }
+  }
+  RunNodesAndRelease(func.node(), rt, RuntimeContext::ComputeReleasableInputs(func.node(), keep));
+}
 
 void RunModel(const ModelProto &model, RuntimeContext &rt) {
   if (!model.has_graph()) {

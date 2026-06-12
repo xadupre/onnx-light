@@ -170,6 +170,7 @@ class ReferenceEvaluator:
         proto: ModelProto | GraphProto | FunctionProto | bytes | str | os.PathLike,
         *,
         events_enabled: bool = False,
+        release_intermediates: bool = False,
     ) -> None:
         proto = self._load_proto(proto)
         self._model: ModelProto | None = None
@@ -177,6 +178,7 @@ class ReferenceEvaluator:
         self._function: FunctionProto | None = None
         self._last_ctx: Any = None
         self._events_enabled = events_enabled
+        self._release_intermediates = release_intermediates
 
         if isinstance(proto, ModelProto):
             self._model = proto
@@ -389,6 +391,7 @@ class ReferenceEvaluator:
 
         ctx = _runtime.RuntimeContext(self._kernel_ctx)
         ctx.events_enabled = self._events_enabled
+        ctx.release_intermediates = self._release_intermediates
 
         for domain, op_type, wrapper in self._custom_kernels.values():
             ctx.register_custom_kernel(domain, op_type, wrapper)

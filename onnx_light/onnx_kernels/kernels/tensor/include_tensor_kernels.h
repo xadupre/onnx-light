@@ -951,11 +951,13 @@ public:
 /// attribute (opset 18) selects the subset of axes ``scales``/``sizes``
 /// refer to, and ``keep_aspect_ratio_policy`` (``"stretch"`` -- the default
 /// -- ``"not_larger"``, ``"not_smaller"``) is honoured when ``sizes`` is
-/// used. The ``"tf_crop_and_resize"`` coordinate transformation, the
-/// ``roi`` input and ``antialias`` are not implemented. The supported
-/// element types are the same whole-byte types as :cpp:func:`ElementSize`
-/// for ``"nearest"`` mode; ``"linear"`` and ``"cubic"`` modes require a
-/// floating-point input (``FLOAT`` or ``DOUBLE``).
+/// used. The ``"tf_crop_and_resize"`` coordinate transformation is
+/// supported (using the ``roi`` argument provided through
+/// :cpp:member:`Attributes::roi` and the ``extrapolation_value`` attribute);
+/// ``antialias`` is not implemented. The supported element types are the
+/// same whole-byte types as :cpp:func:`ElementSize` for ``"nearest"`` mode;
+/// ``"linear"`` and ``"cubic"`` modes require a floating-point input
+/// (``FLOAT`` or ``DOUBLE``).
 class Resize : public KernelBase {
 public:
   /// Attributes carried by the ONNX ``Resize`` operator.
@@ -979,6 +981,17 @@ public:
     /// input range are zeroed and the remaining coefficients are
     /// renormalised to sum to 1.
     int64_t exclude_outside = 0;
+    /// Value used when ``coordinate_transformation_mode`` is
+    /// ``"tf_crop_and_resize"`` and the transformed coordinate falls outside
+    /// ``[0, input_dim - 1]``. Ignored for every other coordinate
+    /// transformation mode.
+    float extrapolation_value = 0.0f;
+    /// Region of interest (used only by the ``"tf_crop_and_resize"``
+    /// coordinate transformation). Stored as ``[start_axis_0, ...,
+    /// start_axis_{N-1}, end_axis_0, ..., end_axis_{N-1}]``, where ``N`` is
+    /// the number of resized axes (i.e. ``axes.size()`` when ``axes`` is
+    /// non-empty, otherwise the input rank).
+    std::vector<float> roi;
   };
 
   using KernelBase::KernelBase;

@@ -20,8 +20,7 @@ namespace {
 constexpr const char *kSTFTName = "kernel::STFT";
 
 int64_t ReadInt32OrInt64Scalar(const Tensor &t, const char *field) {
-  EXT_ENFORCE_INVALID(t.element_count() == 1,
-                      std::string(kSTFTName) + ": " + field + " must be a 0-D tensor.");
+  EXT_ENFORCE_INVALID(t.element_count() == 1, kSTFTName, ": ", field, " must be a 0-D tensor.");
   switch (t.data_type) {
   case DataType::INT32:
     return static_cast<int64_t>(t.AsInt32()[0]);
@@ -86,48 +85,42 @@ void StftCompute(const T *signal, const T *window, T *out, int64_t batch_size,
 Tensor STFT::operator()(const Tensor &signal, const Tensor &frame_step, const Tensor *window,
                         const Tensor *frame_length, bool onesided) const {
   const int64_t rank = static_cast<int64_t>(signal.shape.size());
-  EXT_ENFORCE_INVALID(rank == 3, std::string(kSTFTName) +
-                                     ": signal must have rank 3 ([batch_size, signal_length, 1]"
-                                     " or [batch_size, signal_length, 2]).");
+  EXT_ENFORCE_INVALID(rank == 3, kSTFTName,
+                      ": signal must have rank 3 ([batch_size, signal_length, 1]"
+                      " or [batch_size, signal_length, 2]).");
   const int64_t batch_size = signal.shape[0];
   const int64_t signal_length = signal.shape[1];
   const int64_t in_last = signal.shape[2];
-  EXT_ENFORCE_INVALID(in_last == 1 || in_last == 2,
-                      std::string(kSTFTName) +
-                          ": the last dimension of signal must be 1 (real) or 2 (complex).");
+  EXT_ENFORCE_INVALID(in_last == 1 || in_last == 2, kSTFTName,
+                      ": the last dimension of signal must be 1 (real) or 2 (complex).");
   if (in_last == 2) {
-    EXT_ENFORCE_INVALID(!onesided, std::string(kSTFTName) +
-                                       ": onesided is not supported for complex-valued input.");
+    EXT_ENFORCE_INVALID(!onesided, kSTFTName,
+                        ": onesided is not supported for complex-valued input.");
   }
 
   const int64_t frame_step_value = ReadInt32OrInt64Scalar(frame_step, "frame_step");
-  EXT_ENFORCE_INVALID(frame_step_value > 0,
-                      std::string(kSTFTName) + ": frame_step must be positive.");
+  EXT_ENFORCE_INVALID(frame_step_value > 0, kSTFTName, ": frame_step must be positive.");
 
   // Determine frame_length from inputs.
   int64_t frame_length_value = -1;
   if (frame_length != nullptr) {
     frame_length_value = ReadInt32OrInt64Scalar(*frame_length, "frame_length");
-    EXT_ENFORCE_INVALID(frame_length_value > 0,
-                        std::string(kSTFTName) + ": frame_length must be positive.");
+    EXT_ENFORCE_INVALID(frame_length_value > 0, kSTFTName, ": frame_length must be positive.");
   }
   if (window != nullptr) {
-    EXT_ENFORCE_INVALID(window->shape.size() == 1,
-                        std::string(kSTFTName) + ": window must be 1-D.");
+    EXT_ENFORCE_INVALID(window->shape.size() == 1, kSTFTName, ": window must be 1-D.");
     const int64_t window_length = window->shape[0];
     if (frame_length_value < 0) {
       frame_length_value = window_length;
     } else {
-      EXT_ENFORCE_INVALID(window_length == frame_length_value,
-                          std::string(kSTFTName) +
-                              ": window length must match frame_length when both are given.");
+      EXT_ENFORCE_INVALID(window_length == frame_length_value, kSTFTName,
+                          ": window length must match frame_length when both are given.");
     }
   }
-  EXT_ENFORCE_INVALID(frame_length_value > 0,
-                      std::string(kSTFTName) +
-                          ": at least one of window or frame_length must be provided.");
-  EXT_ENFORCE_INVALID(frame_length_value <= signal_length,
-                      std::string(kSTFTName) + ": frame_length must not exceed signal_length.");
+  EXT_ENFORCE_INVALID(frame_length_value > 0, kSTFTName,
+                      ": at least one of window or frame_length must be provided.");
+  EXT_ENFORCE_INVALID(frame_length_value <= signal_length, kSTFTName,
+                      ": frame_length must not exceed signal_length.");
 
   const int64_t dft_unique_bins = onesided ? ((frame_length_value / 2) + 1) : frame_length_value;
   const int64_t n_frames = (signal_length - frame_length_value) / frame_step_value + 1;
@@ -139,8 +132,8 @@ Tensor STFT::operator()(const Tensor &signal, const Tensor &frame_step, const Te
       std::vector<uint8_t>(static_cast<std::size_t>(out_total) * ElementSize(signal.data_type)));
 
   if (window != nullptr) {
-    EXT_ENFORCE_INVALID(window->data_type == signal.data_type,
-                        std::string(kSTFTName) + ": window dtype must match signal dtype.");
+    EXT_ENFORCE_INVALID(window->data_type == signal.data_type, kSTFTName,
+                        ": window dtype must match signal dtype.");
   }
 
   switch (signal.data_type) {
@@ -164,12 +157,12 @@ Tensor STFT::operator()(const Tensor &signal, const Tensor &frame_step, const Te
 void STFT::operator()(const Tensor &signal, const Tensor &frame_step, const Tensor *window,
                       const Tensor *frame_length, bool onesided, Tensor &output) const {
   Tensor produced = (*this)(signal, frame_step, window, frame_length, onesided);
-  EXT_ENFORCE_INVALID(output.data_type == produced.data_type,
-                      std::string(kSTFTName) + ": preallocated output dtype must match.");
-  EXT_ENFORCE_INVALID(output.shape == produced.shape,
-                      std::string(kSTFTName) + ": preallocated output shape mismatch.");
-  EXT_ENFORCE_INVALID(output.data.size() == produced.data.size(),
-                      std::string(kSTFTName) + ": preallocated output buffer size mismatch.");
+  EXT_ENFORCE_INVALID(output.data_type == produced.data_type, kSTFTName,
+                      ": preallocated output dtype must match.");
+  EXT_ENFORCE_INVALID(output.shape == produced.shape, kSTFTName,
+                      ": preallocated output shape mismatch.");
+  EXT_ENFORCE_INVALID(output.data.size() == produced.data.size(), kSTFTName,
+                      ": preallocated output buffer size mismatch.");
   if (!produced.data.empty()) {
     std::memcpy(output.data.data(), produced.data.data(), produced.data.size());
   }

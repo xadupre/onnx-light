@@ -5705,3 +5705,76 @@ TEST(onnx_proto, ParseFromZeroCopyStream_NullStreamThrows) {
   ParseOptions opts;
   EXPECT_THROW(model.ParseFromZeroCopyStream(null_stream, opts), std::exception);
 }
+
+// Tests for SerializeFormat option.
+TEST(onnx_proto, SerializeFormat_DefaultIsOnnx) {
+  ParseOptions popts;
+  SerializeOptions sopts;
+  EXPECT_EQ(popts.format, SerializeFormat::kOnnx);
+  EXPECT_EQ(sopts.format, SerializeFormat::kOnnx);
+}
+
+TEST(onnx_proto, SerializeFormat_OrtFlatbuffersSerializeToStringThrows) {
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g_ort_serialize");
+  SerializeOptions sopts;
+  sopts.format = SerializeFormat::kOrtFlatbuffers;
+  std::string out;
+  EXPECT_THROW(model.SerializeToString(out, sopts), std::exception);
+}
+
+TEST(onnx_proto, SerializeFormat_OrtFlatbuffersParseFromStringThrows) {
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g_ort_parse");
+  std::string serialized;
+  model.SerializeToString(serialized);
+
+  ModelProto parsed;
+  ParseOptions popts;
+  popts.format = SerializeFormat::kOrtFlatbuffers;
+  EXPECT_THROW(parsed.ParseFromString(serialized, popts), std::exception);
+}
+
+TEST(onnx_proto, SerializeFormat_OrtFlatbuffersSerializeModelProtoToStreamThrows) {
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g_ort_stream");
+  SerializeOptions sopts;
+  sopts.format = SerializeFormat::kOrtFlatbuffers;
+  utils::StringWriteStream stream;
+  EXPECT_THROW(SerializeModelProtoToStream(model, stream, sopts), std::exception);
+}
+
+TEST(onnx_proto, SerializeFormat_OrtFlatbuffersParseModelProtoFromStreamThrows) {
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g_ort_pstream");
+  std::string serialized;
+  model.SerializeToString(serialized);
+  utils::StringStream stream(reinterpret_cast<const uint8_t *>(serialized.data()),
+                             static_cast<int64_t>(serialized.size()));
+  ModelProto parsed;
+  ParseOptions popts;
+  popts.format = SerializeFormat::kOrtFlatbuffers;
+  EXPECT_THROW(ParseModelProtoFromStream(parsed, stream, popts), std::exception);
+}
+
+TEST(onnx_proto, SerializeFormat_OnnxRoundTripWorks) {
+  // The default kOnnx path must remain unchanged.
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g_onnx_rt");
+  SerializeOptions sopts;
+  sopts.format = SerializeFormat::kOnnx;
+  std::string serialized;
+  model.SerializeToString(serialized, sopts);
+
+  ModelProto parsed;
+  ParseOptions popts;
+  popts.format = SerializeFormat::kOnnx;
+  parsed.ParseFromString(serialized, popts);
+  EXPECT_TRUE(parsed.has_graph());
+  EXPECT_EQ(parsed.ref_graph().ref_name(), "g_onnx_rt");
+}

@@ -37,16 +37,15 @@ int32_t ReadOptionalScalarZP(const Tensor &t, int32_t expected_dtype, const char
   if (t.shape.empty() && t.size_bytes() == 0) {
     return 0;
   }
-  EXT_ENFORCE_INVALID(t.data_type == expected_dtype,
-                      std::string(kName) + ": '" + name + "' dtype must match its data input.");
+  EXT_ENFORCE_INVALID(t.data_type == expected_dtype, kName, ": '", name,
+                      "' dtype must match its data input.");
   int64_t numel = 1;
   for (int64_t d : t.shape) {
     numel *= d;
   }
-  EXT_ENFORCE_INVALID(numel == 1,
-                      std::string(kName) + ": '" + name +
-                          "' must be a scalar or a one-element 1-D tensor in this reference "
-                          "implementation.");
+  EXT_ENFORCE_INVALID(numel == 1, kName, ": '", name,
+                      "' must be a scalar or a one-element 1-D tensor in this reference "
+                      "implementation.");
   return ReadIntElem(t, 0);
 }
 
@@ -92,12 +91,12 @@ std::vector<int64_t> BroadcastPrefix(const std::vector<int64_t> &a_prefix,
 
 std::vector<int64_t> ComputeOutputShape(const std::vector<int64_t> &a_shape,
                                         const std::vector<int64_t> &b_shape) {
-  EXT_ENFORCE_INVALID(!a_shape.empty() && !b_shape.empty(),
-                      std::string(kName) + ": rank-0 inputs are not accepted.");
+  EXT_ENFORCE_INVALID(!a_shape.empty() && !b_shape.empty(), kName,
+                      ": rank-0 inputs are not accepted.");
   const std::vector<int64_t> a2 = PromoteMatMulShape(a_shape, true);
   const std::vector<int64_t> b2 = PromoteMatMulShape(b_shape, false);
-  EXT_ENFORCE_INVALID(a2[a2.size() - 1] == b2[b2.size() - 2],
-                      std::string(kName) + ": incompatible inner dimensions.");
+  EXT_ENFORCE_INVALID(a2[a2.size() - 1] == b2[b2.size() - 2], kName,
+                      ": incompatible inner dimensions.");
   const std::vector<int64_t> a_prefix(a2.begin(), a2.end() - 2);
   const std::vector<int64_t> b_prefix(b2.begin(), b2.end() - 2);
   std::vector<int64_t> out_shape = BroadcastPrefix(a_prefix, b_prefix);
@@ -195,10 +194,8 @@ void RunMatMulInteger(const Tensor &a, int32_t a_zp, const Tensor &b, int32_t b_
 
 Tensor MatMulInteger::operator()(const Tensor &a, const Tensor &b, const Tensor &a_zero_point,
                                  const Tensor &b_zero_point) const {
-  EXT_ENFORCE_INVALID(IsInt8OrUint8(a.data_type),
-                      std::string(kName) + ": A must be INT8 or UINT8.");
-  EXT_ENFORCE_INVALID(IsInt8OrUint8(b.data_type),
-                      std::string(kName) + ": B must be INT8 or UINT8.");
+  EXT_ENFORCE_INVALID(IsInt8OrUint8(a.data_type), kName, ": A must be INT8 or UINT8.");
+  EXT_ENFORCE_INVALID(IsInt8OrUint8(b.data_type), kName, ": B must be INT8 or UINT8.");
 
   const std::vector<int64_t> out_shape = ComputeOutputShape(a.shape, b.shape);
   int64_t total = 1;
@@ -213,23 +210,19 @@ Tensor MatMulInteger::operator()(const Tensor &a, const Tensor &b, const Tensor 
 
 void MatMulInteger::operator()(const Tensor &a, const Tensor &b, const Tensor &a_zero_point,
                                const Tensor &b_zero_point, Tensor &output) const {
-  EXT_ENFORCE_INVALID(IsInt8OrUint8(a.data_type),
-                      std::string(kName) + ": A must be INT8 or UINT8.");
-  EXT_ENFORCE_INVALID(IsInt8OrUint8(b.data_type),
-                      std::string(kName) + ": B must be INT8 or UINT8.");
-  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::INT32),
-                      std::string(kName) + ": output dtype must be INT32.");
+  EXT_ENFORCE_INVALID(IsInt8OrUint8(a.data_type), kName, ": A must be INT8 or UINT8.");
+  EXT_ENFORCE_INVALID(IsInt8OrUint8(b.data_type), kName, ": B must be INT8 or UINT8.");
+  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::INT32), kName,
+                      ": output dtype must be INT32.");
 
   const std::vector<int64_t> out_shape = ComputeOutputShape(a.shape, b.shape);
-  EXT_ENFORCE_INVALID(output.shape == out_shape,
-                      std::string(kName) + ": preallocated output has invalid shape.");
+  EXT_ENFORCE_INVALID(output.shape == out_shape, kName, ": preallocated output has invalid shape.");
   int64_t total = 1;
   for (int64_t d : out_shape) {
     total *= d;
   }
-  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(total) * sizeof(int32_t),
-                      std::string(kName) +
-                          ": preallocated output buffer size does not match its shape.");
+  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(total) * sizeof(int32_t), kName,
+                      ": preallocated output buffer size does not match its shape.");
 
   const int32_t a_zp = ReadOptionalScalarZP(a_zero_point, a.data_type, "a_zero_point");
   const int32_t b_zp = ReadOptionalScalarZP(b_zero_point, b.data_type, "b_zero_point");

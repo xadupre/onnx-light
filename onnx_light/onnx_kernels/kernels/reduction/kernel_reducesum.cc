@@ -96,7 +96,7 @@ void SumReduce(const Tensor &data, const std::vector<bool> &is_reduced,
 
 void ValidateFloat(const Tensor &t, const char *name) {
   EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      std::string("kernel::ReduceSum: ") + name + " must be a FLOAT tensor.");
+                      "kernel::ReduceSum: ", name, " must be a FLOAT tensor.");
 }
 
 } // namespace

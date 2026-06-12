@@ -212,6 +212,9 @@ template <typename cls> void _ParseFromString(cls &self, const std::string &raw)
 
 template <typename cls>
 void _ParseFromString(cls &self, const std::string &raw, ParseOptions &opts) {
+  EXT_ENFORCE(opts.format == SerializeFormat::kOnnx,
+              "ParseFromString: SerializeFormat::kOrtFlatbuffers is not implemented yet. "
+              "Use SerializeFormat::kOnnx for now.");
   const uint8_t *ptr = reinterpret_cast<const uint8_t *>(raw.data());
   ONNX_LIGHT_NAMESPACE::utils::StringStream st(ptr, raw.size());
   if (opts.is_parallel())
@@ -246,6 +249,9 @@ template <typename cls> void _SerializeToString(cls &self, std::string &out) {
 
 template <typename cls>
 void _SerializeToString(cls &self, std::string &out, SerializeOptions &opts) {
+  EXT_ENFORCE(opts.format == SerializeFormat::kOnnx,
+              "SerializeToString: SerializeFormat::kOrtFlatbuffers is not implemented yet. "
+              "Use SerializeFormat::kOnnx for now.");
   ONNX_LIGHT_NAMESPACE::utils::StringWriteStream size_buf;
   // Two-pass approach: compute the total serialized size first so we can
   // resize the output string exactly once, then write directly into it via

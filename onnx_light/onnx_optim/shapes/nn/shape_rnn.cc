@@ -59,10 +59,10 @@ bool IsRecurrentOp(const std::string &op_type) {
 void ComputeShapeRNN(ShapesContext &ctx, const NodeProto &node, const char *x, const char *r) {
   const std::string op_type = node.op_type().as_string();
   EXT_ENFORCE_INVALID(IsRecurrentOp(op_type),
-                      "ComputeShapeRNN: node.op_type() must be one of RNN, GRU or LSTM, got '" +
-                          op_type + "'.");
-  EXT_ENFORCE_INVALID(node.output_size() > 0,
-                      "ComputeShapeRNN: node '" + op_type + "' must declare at least one output.");
+                      "ComputeShapeRNN: node.op_type() must be one of RNN, GRU or LSTM, got '",
+                      op_type, "'.");
+  EXT_ENFORCE_INVALID(node.output_size() > 0, "ComputeShapeRNN: node '", op_type,
+                      "' must declare at least one output.");
 
   const OptimTensor &input = ctx.Get(x);
   const OptimShape &x_shape = input.Shape();

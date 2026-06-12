@@ -146,8 +146,8 @@ link just the lighter proto target:
     find_package(onnx_light REQUIRED)
     target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_proto)
 
-That is sufficient when the program only manipulates ``ModelProto`` /
-``GraphProto`` data and does not need any notion of operators.
+That is sufficient when the program only manipulates :class:`~onnx_light.onnx_lib.ModelProto` /
+:class:`~onnx_light.onnx_lib.GraphProto` data and does not need any notion of operators.
 
 For manual registration of lightweight math operator schemas without shape
 inference support, downstream code can link:
@@ -240,7 +240,7 @@ The Python package ships five nanobind extension modules,
 ``onnx_light.onnx_py._onnxpyoptim``,
 ``onnx_light.onnx_py._onnxpykernels`` and
 ``onnx_light.onnx_py._onnxpybackend``.  All five need access to the proto
-classes (``ModelProto``, ``NodeProto``, ``TensorProto``, ...) defined in
+classes (:class:`~onnx_light.onnx_lib.ModelProto`, :class:`~onnx_light.onnx_lib.NodeProto`, :class:`~onnx_light.onnx_lib.TensorProto`, ...) defined in
 ``onnx_light/onnx_proto``.  How do the extensions agree on a single
 ``nb::class_<ModelProto>`` registration so that values can flow between
 them without a serialise/parse round-trip?
@@ -268,7 +268,7 @@ proto classes have a single set of out-of-line member definitions and a
 single ``std::type_info`` instance.  Consequently
 ``&typeid(ModelProto)`` evaluates to the same pointer in every
 extension, and nanobind's cross-module type registry resolves
-``ModelProto`` references coming from ``_onnxpyoptim`` or
+:class:`~onnx_light.onnx_lib.ModelProto` references coming from ``_onnxpyoptim`` or
 ``_onnxpybackend`` against the
 ``nb::class_<ModelProto>`` that ``_onnxpyprotoop`` registered.  In
 practice, only ``_onnxpyprotoop`` declares
@@ -282,7 +282,7 @@ binding.  The package's ``onnx_light/onnx_py/_onnxpy.py`` shim imports
 ``_onnxpyprotoop`` before ``_onnxpyprotolib``, ``_onnxpyoptim``,
 ``_onnxpykernels`` and ``_onnxpybackend`` to
 guarantee that the
-``ModelProto`` binding exists by the time any ``_onnxpyprotolib``,
+:class:`~onnx_light.onnx_lib.ModelProto` binding exists by the time any ``_onnxpyprotolib``,
 ``_onnxpyoptim``, ``_onnxpykernels`` or ``_onnxpybackend`` accessor is used.
 
 See also

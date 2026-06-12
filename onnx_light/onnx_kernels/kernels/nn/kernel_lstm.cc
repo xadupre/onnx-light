@@ -22,8 +22,8 @@ const float *AsFloatOrNull(const Tensor &t, const char *role) {
   if (t.shape.empty() && t.size_bytes() == 0) {
     return nullptr;
   }
-  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      std::string("kernel::LSTM: ") + role + " must be FLOAT.");
+  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT), "kernel::LSTM: ", role,
+                      " must be FLOAT.");
   return t.AsFloat();
 }
 
@@ -35,8 +35,8 @@ std::pair<Tensor, Tensor> LSTM::operator()(const Tensor &x_in, const Tensor &w, 
                                            const Tensor &b, const Tensor &initial_h_in,
                                            const Tensor &initial_c_in, const Tensor &p,
                                            int64_t layout) const {
-  EXT_ENFORCE_INVALID(layout == 0 || layout == 1,
-                      "kernel::LSTM: layout must be 0 or 1, got " + std::to_string(layout) + ".");
+  EXT_ENFORCE_INVALID(layout == 0 || layout == 1, "kernel::LSTM: layout must be 0 or 1, got ",
+                      std::to_string(layout), ".");
   EXT_ENFORCE_INVALID(x_in.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::LSTM: X must be FLOAT.");
   EXT_ENFORCE_INVALID(w.data_type == static_cast<int32_t>(DataType::FLOAT),
@@ -81,9 +81,8 @@ std::pair<Tensor, Tensor> LSTM::operator()(const Tensor &x_in, const Tensor &w, 
 
     auto reshape_initial_state = [](const Tensor &t, const char *role) {
       EXT_ENFORCE_INVALID(
-          t.shape.size() == 3u && t.shape[1] == 1,
-          std::string("kernel::LSTM: ") + role +
-              " must have shape [batch_size, num_directions=1, hidden_size] for layout=1.");
+          t.shape.size() == 3u && t.shape[1] == 1, "kernel::LSTM: ", role,
+          " must have shape [batch_size, num_directions=1, hidden_size] for layout=1.");
       return Tensor::FromFloat(
           "", {1, t.shape[0], t.shape[2]},
           std::vector<float>(t.AsFloat(), t.AsFloat() + (t.size_bytes() / sizeof(float))));

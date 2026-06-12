@@ -33,10 +33,9 @@ namespace {
 
 // Verifies the node declares at least `expected` inputs.
 void RequireInputs(const NodeProto &node, int expected) {
-  EXT_ENFORCE_INVALID(node.input_size() >= expected,
-                      "ComputeShapeNode: op '" + node.op_type().as_string() +
-                          "' expects at least " + std::to_string(expected) + " input(s), got " +
-                          std::to_string(node.input_size()) + ".");
+  EXT_ENFORCE_INVALID(node.input_size() >= expected, "ComputeShapeNode: op '",
+                      node.op_type().as_string(), "' expects at least ", std::to_string(expected),
+                      " input(s), got ", std::to_string(node.input_size()), ".");
 }
 
 } // namespace

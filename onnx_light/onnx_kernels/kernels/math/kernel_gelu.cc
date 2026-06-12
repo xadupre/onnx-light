@@ -109,17 +109,15 @@ void Dispatch(const Tensor &x, const std::string &approximate, Tensor &output) {
 }
 
 void ValidateOutput(const Tensor &x, const Tensor &output) {
-  EXT_ENFORCE_INVALID(output.data_type == x.data_type,
-                      std::string(kName) + ": output dtype must match input dtype.");
-  EXT_ENFORCE_INVALID(output.shape == x.shape,
-                      std::string(kName) + ": output shape must match input shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == x.data.size(),
-                      std::string(kName) + ": output buffer size mismatch.");
+  EXT_ENFORCE_INVALID(output.data_type == x.data_type, kName,
+                      ": output dtype must match input dtype.");
+  EXT_ENFORCE_INVALID(output.shape == x.shape, kName, ": output shape must match input shape.");
+  EXT_ENFORCE_INVALID(output.data.size() == x.data.size(), kName, ": output buffer size mismatch.");
 }
 
 void ValidateAttribute(const std::string &approximate) {
-  EXT_ENFORCE_INVALID(approximate == "none" || approximate == "tanh",
-                      std::string(kName) + ": 'approximate' must be 'none' or 'tanh'.");
+  EXT_ENFORCE_INVALID(approximate == "none" || approximate == "tanh", kName,
+                      ": 'approximate' must be 'none' or 'tanh'.");
 }
 
 } // namespace

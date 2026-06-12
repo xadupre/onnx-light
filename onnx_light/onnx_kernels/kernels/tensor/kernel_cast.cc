@@ -363,11 +363,11 @@ double ParseAsDouble(const std::string &s) {
 } // namespace
 
 Tensor Cast::operator()(const Tensor &x, int32_t to) const {
-  EXT_ENFORCE_INVALID(IsSupportedCastDtype(to),
-                      "kernel::Cast: unsupported 'to' dtype " + std::to_string(to) +
-                          " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
-                          "INT16, UINT16, BOOL, STRING, FLOAT16, BFLOAT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
-                          "FLOAT8E5M2, FLOAT8E5M2FNUZ).");
+  EXT_ENFORCE_INVALID(IsSupportedCastDtype(to), "kernel::Cast: unsupported 'to' dtype ",
+                      std::to_string(to),
+                      " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
+                      "INT16, UINT16, BOOL, STRING, FLOAT16, BFLOAT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
+                      "FLOAT8E5M2, FLOAT8E5M2FNUZ).");
   if (static_cast<DataType>(to) == DataType::STRING) {
     Tensor out = Tensor::MakeString(
         "", x.shape, std::vector<std::string>(static_cast<size_t>(x.element_count())));
@@ -381,16 +381,16 @@ Tensor Cast::operator()(const Tensor &x, int32_t to) const {
 }
 
 void Cast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
-  EXT_ENFORCE_INVALID(IsSupportedCastDtype(x.data_type),
-                      "kernel::Cast: unsupported input dtype " + std::to_string(x.data_type) +
-                          " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
-                          "INT16, UINT16, BOOL, STRING, FLOAT16, BFLOAT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
-                          "FLOAT8E5M2, FLOAT8E5M2FNUZ).");
-  EXT_ENFORCE_INVALID(IsSupportedCastDtype(to),
-                      "kernel::Cast: unsupported 'to' dtype " + std::to_string(to) +
-                          " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
-                          "INT16, UINT16, BOOL, STRING, FLOAT16, BFLOAT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
-                          "FLOAT8E5M2, FLOAT8E5M2FNUZ).");
+  EXT_ENFORCE_INVALID(IsSupportedCastDtype(x.data_type), "kernel::Cast: unsupported input dtype ",
+                      std::to_string(x.data_type),
+                      " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
+                      "INT16, UINT16, BOOL, STRING, FLOAT16, BFLOAT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
+                      "FLOAT8E5M2, FLOAT8E5M2FNUZ).");
+  EXT_ENFORCE_INVALID(IsSupportedCastDtype(to), "kernel::Cast: unsupported 'to' dtype ",
+                      std::to_string(to),
+                      " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
+                      "INT16, UINT16, BOOL, STRING, FLOAT16, BFLOAT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
+                      "FLOAT8E5M2, FLOAT8E5M2FNUZ).");
   EXT_ENFORCE_INVALID(output.data_type == to,
                       "kernel::Cast preallocated output dtype must match 'to'.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,

@@ -183,9 +183,9 @@ class TestReferenceEvaluator(ExtTestCase):
         self.assertNotIn("y", removed_names)
 
     def test_release_intermediates_disabled_keeps_intermediates(self):
-        # Default behaviour: every intermediate stays observable after the run.
+        # With release_intermediates=False, every intermediate stays observable after the run.
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)
-        sess = ReferenceEvaluator(model, events_enabled=True)
+        sess = ReferenceEvaluator(model, events_enabled=True, release_intermediates=False)
         sess.run(None, {"x": np.zeros(3, dtype=np.float32), "z": np.zeros(3, dtype=np.float32)})
         actions = [ev.as_dict() for ev in sess.events()]
         removed_names = [d["name"] for d in actions if d["action"] == "remove"]

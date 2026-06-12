@@ -170,7 +170,7 @@ class ReferenceEvaluator:
         proto: ModelProto | GraphProto | FunctionProto | bytes | str | os.PathLike,
         *,
         events_enabled: bool = False,
-        release_intermediates: bool = False,
+        release_intermediates: bool = True,
     ) -> None:
         proto = self._load_proto(proto)
         self._model: ModelProto | None = None

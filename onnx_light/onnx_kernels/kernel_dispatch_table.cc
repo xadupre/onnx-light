@@ -1932,7 +1932,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            if (roi->shape.size() != 1) {
              throw std::invalid_argument("RunNode: op 'Resize' 'roi' input must be 1-D.");
            }
-           const int64_t n = roi->shape.empty() ? 0 : roi->shape[0];
+           const int64_t n = roi->shape[0];
            attrs.roi.assign(static_cast<std::size_t>(n), 0.0f);
            if (n > 0) {
              std::memcpy(attrs.roi.data(), roi->bytes(),

@@ -559,8 +559,9 @@ void BuildRoi(const Resize::Attributes &attrs, const std::vector<int64_t> &axes,
     return;
   }
   EXT_ENFORCE_INVALID(attrs.roi.size() == 2 * axes.size(),
-                      "kernel::Resize: 'roi' input length must equal 2 * number of resized axes "
-                      "for 'tf_crop_and_resize' coordinate_transformation_mode.");
+                      "kernel::Resize: 'roi' length must equal 2 * number of resized axes for "
+                      "'tf_crop_and_resize' coordinate_transformation_mode; got roi length ",
+                      attrs.roi.size(), ", expected ", 2 * axes.size(), ".");
   for (std::size_t i = 0; i < axes.size(); ++i) {
     const std::size_t k = static_cast<std::size_t>(axes[i]);
     roi_start[k] = static_cast<double>(attrs.roi[i]);

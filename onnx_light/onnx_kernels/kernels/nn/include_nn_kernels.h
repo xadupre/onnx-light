@@ -537,11 +537,14 @@ public:
 ///
 ///   ``H_t = tanh(X_t @ W^T + W_b + H_{t-1} @ R^T + R_b)``
 ///
-/// for ``layout=0`` only (``X.shape = [seq_length, batch_size,
+/// for ``layout=0``, with ``X.shape = [seq_length, batch_size,
 /// input_size]``; ``W.shape = [1, hidden_size, input_size]``;
 /// ``R.shape = [1, hidden_size, hidden_size]``; optional ``B.shape =
 /// [1, 2 * hidden_size]`` (``[Wb, Rb]``); optional ``initial_h.shape =
-/// [1, batch_size, hidden_size]``, defaulting to zeros). The ``activations``
+/// [1, batch_size, hidden_size]``, defaulting to zeros. ``layout=1``
+/// (batch-major) is also supported: the kernel transposes
+/// ``X``/``initial_h`` on entry and the outputs on exit so the core
+/// time-major loop is unchanged. The ``activations``
 /// attribute, if present, must be either empty or the single value
 /// ``"Tanh"``; ``direction`` must be ``"forward"`` (the default);
 /// ``sequence_lens`` is not supported (every batch must share the same
@@ -557,10 +560,14 @@ public:
 
   /// Returns the pair ``(Y, Y_h)``. ``b`` may be a default-constructed
   /// (empty-shape) ``Tensor`` to indicate the optional ``B`` input is
-  /// missing; same convention for ``initial_h``.
+  /// missing; same convention for ``initial_h``. ``layout`` may be ``0``
+  /// (time-major, the default) or ``1`` (batch-major); for ``layout=1``
+  /// the kernel transposes ``X``/``initial_h`` on entry and the outputs
+  /// on exit so the core time-major loop is unchanged.
   std::pair<Tensor, Tensor> operator()(const Tensor &x, const Tensor &w, const Tensor &r,
                                        const Tensor &b = Tensor{},
-                                       const Tensor &initial_h = Tensor{}) const;
+                                       const Tensor &initial_h = Tensor{},
+                                       int64_t layout = 0) const;
 
   /// Output shape generally differs from the input shape, so storage
   /// cannot in general be shared.

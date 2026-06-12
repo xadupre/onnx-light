@@ -114,8 +114,10 @@ jobs:
         include:
           - arch: arm64
             runs-on: macos-latest
+            macosx_deployment_target: "15.0"
           - arch: x86_64
             runs-on: macos-13
+            macosx_deployment_target: "13.0"
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -134,18 +136,17 @@ jobs:
         env:
           CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-* cp313t-* cp314-* cp314t-*"
           CIBW_ARCHS: ${{ matrix.arch }}
-          # Disable the optional OpenSSL dependency on macOS: the Homebrew
-          # ``openssl@3`` formula on recent runners ships a ``libcrypto.3.dylib``
-          # whose minimum deployment target (>= macOS 15) is higher than the
-          # ``macosx_11_0_*`` wheel tag cibuildwheel produces, which makes
-          # ``delocate-wheel`` fail with ``Library dependencies do not satisfy
-          # target MacOS version 11.0``. We keep the encrypted-model
-          # save/load feature available on Linux/Windows where the toolchain
-          # OpenSSL is compatible.
+          # Bump the macOS deployment target high enough to satisfy the
+          # minimum target of Homebrew's ``libcrypto.3.dylib`` (which is
+          # vendored into the wheel via ``delocate-wheel``). Without this,
+          # the wheel is tagged ``macosx_11_0_*`` but ships a dylib that
+          # requires a newer macOS, causing ``delocate-wheel`` to fail with
+          # ``Library dependencies do not satisfy target MacOS version``.
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macosx_deployment_target }}
           CIBW_ENVIRONMENT: >
             CMAKE_BUILD_PARALLEL_LEVEL=${{ steps.cpu_count.outputs.count }}
-            CMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON
-            CMAKE_ARGS=-DONNX_HARDENING=ON
+            MACOSX_DEPLOYMENT_TARGET=${{ matrix.macosx_deployment_target }}
+            CMAKE_ARGS='-DONNX_HARDENING=ON -DCMAKE_OSX_DEPLOYMENT_TARGET=${{ matrix.macosx_deployment_target }}'
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:

@@ -1767,6 +1767,36 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
       {"ai.onnx:Pow", MakeBinaryTrampoline<kernel::Pow>()},
       {"ai.onnx:PRelu", MakeBinaryTrampoline<kernel::PRelu>()},
+      {"ai.onnx:QLinearConv",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 8);
+         if (node.input_size() > 9) {
+           throw std::invalid_argument("RunNode: op 'QLinearConv' expects at most 9 inputs, got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const Tensor &x_scale = GetInput(node, 1, rt.tensors());
+         const Tensor &x_zero_point = GetInput(node, 2, rt.tensors());
+         const Tensor &w = GetInput(node, 3, rt.tensors());
+         const Tensor &w_scale = GetInput(node, 4, rt.tensors());
+         const Tensor &w_zero_point = GetInput(node, 5, rt.tensors());
+         const Tensor &y_scale = GetInput(node, 6, rt.tensors());
+         const Tensor &y_zero_point = GetInput(node, 7, rt.tensors());
+         const Tensor *b = GetOptionalInput(node, 8, rt.tensors());
+         kernel::QLinearConv::Attributes attrs;
+         attrs.kernel_shape = GetAttributeIntsOrDefault(node, "kernel_shape", {});
+         attrs.strides = GetAttributeIntsOrDefault(node, "strides", {});
+         attrs.pads = GetAttributeIntsOrDefault(node, "pads", {});
+         attrs.dilations = GetAttributeIntsOrDefault(node, "dilations", {});
+         attrs.group = GetAttributeIntOrDefault(node, "group", 1);
+         attrs.auto_pad = GetAttributeStringOrDefault(node, "auto_pad", "NOTSET");
+         kernel::QLinearConv k(rt.kernel_ctx());
+         SetOutput(node, 0,
+                   k(x, x_scale, x_zero_point, w, w_scale, w_zero_point, y_scale, y_zero_point,
+                     b != nullptr ? *b : Tensor{}, attrs),
+                   rt);
+       }},
       {"ai.onnx:QLinearMatMul",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 8);

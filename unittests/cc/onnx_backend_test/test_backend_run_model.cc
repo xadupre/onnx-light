@@ -243,6 +243,7 @@ TEST(BackendRunModel, TensorScatter) { RunBackendCasesFor("TensorScatter"); }
 TEST(BackendRunModel, Col2Im) { RunBackendCasesFor("Col2Im"); }
 TEST(BackendRunModel, DeformConv) { RunBackendCasesFor("DeformConv"); }
 TEST(BackendRunModel, DepthToSpace) { RunBackendCasesFor("DepthToSpace"); }
+TEST(BackendRunModel, SpaceToDepth) { RunBackendCasesFor("SpaceToDepth"); }
 TEST(BackendRunModel, Upsample) { RunBackendCasesFor("Upsample"); }
 TEST(BackendRunModel, BatchNormalization) { RunBackendCasesFor("BatchNormalization"); }
 TEST(BackendRunModel, GroupNormalization) { RunBackendCasesFor("GroupNormalization"); }

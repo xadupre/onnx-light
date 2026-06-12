@@ -35,6 +35,8 @@ import os
 import tempfile
 import unittest
 
+import onnxruntime as ort
+
 import onnx_light.onnx as onnxl
 from onnx_light.onnx.backend import make_test_class
 
@@ -71,8 +73,6 @@ def _save_with_onnxruntime_ort(src_path: str, dst_path: str) -> None:
     optimized (== original) model at ``dst_path`` using the ORT flatbuffer
     format.
     """
-    import onnxruntime as ort
-
     so = ort.SessionOptions()
     so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
     so.optimized_model_filepath = dst_path

@@ -71,15 +71,25 @@ void RegisterDictVectorizerCases(std::vector<TestCase> &registry) {
     const std::vector<std::string> vocab{"a", "c", "b", "z"};
     AddStringsAttr(node, "string_vocabulary", vocab);
 
+    const std::vector<std::string> keys{"a", "c"};
+    const std::vector<int64_t> values{4, 8};
     // Placeholder input tensor (its bytes are unused by the runtime; the
     // ValueInfo is rewritten below to declare a map(string, int64) input).
     Tensor x = Tensor::FromInt64("", {1}, {0});
-    Tensor y = dict.operator()<std::string, int64_t>({"a", "c"}, {4, 8}, vocab);
+    Tensor y = dict.operator()<std::string, int64_t>(keys, values, vocab);
 
     Expect(node, {x}, {y}, "test_cc_dict_vectorizer_string_int64", {default_opset, opset},
            "backend-test", registry);
     PromoteInputToMapType(registry, static_cast<int32_t>(DataType::STRING),
                           static_cast<int32_t>(DataType::INT64));
+
+    // Replace the placeholder DataSet input with the real runtime tensors
+    // following the "x_keys" / "x_values" naming convention. Mirrors the
+    // CastMap dispatch convention in kernel_dispatch_table.cc.
+    registry.back().data_sets[0].inputs = {
+        Tensor::FromStrings("x_keys", {static_cast<int64_t>(keys.size())}, keys),
+        Tensor::FromInt64("x_values", {static_cast<int64_t>(values.size())}, values),
+    };
   }
 
   // int64 -> float dictionary with int64 vocabulary.
@@ -93,13 +103,20 @@ void RegisterDictVectorizerCases(std::vector<TestCase> &registry) {
     const std::vector<int64_t> vocab{10, 20, 30};
     AddIntsAttr(node, "int64_vocabulary", vocab);
 
+    const std::vector<int64_t> keys{10, 30};
+    const std::vector<float> values{1.5f, 2.5f};
     Tensor x = Tensor::FromInt64("", {1}, {0});
-    Tensor y = dict.operator()<int64_t, float>({10, 30}, {1.5f, 2.5f}, vocab);
+    Tensor y = dict.operator()<int64_t, float>(keys, values, vocab);
 
     Expect(node, {x}, {y}, "test_cc_dict_vectorizer_int64_float", {default_opset, opset},
            "backend-test", registry);
     PromoteInputToMapType(registry, static_cast<int32_t>(DataType::INT64),
                           static_cast<int32_t>(DataType::FLOAT));
+
+    registry.back().data_sets[0].inputs = {
+        Tensor::FromInt64("x_keys", {static_cast<int64_t>(keys.size())}, keys),
+        Tensor::FromFloat("x_values", {static_cast<int64_t>(values.size())}, values),
+    };
   }
 }
 

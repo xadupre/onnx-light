@@ -2613,6 +2613,109 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          }
          SetOutput(node, 0, std::move(y), rt);
        }},
+      {"ai.onnx.ml:DictVectorizer",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         // DictVectorizer's map(K, V) input is represented at runtime as two
+         // tensors in the RuntimeContext named "<input>_keys" (INT64 or
+         // STRING) and "<input>_values" (INT64, FLOAT, DOUBLE, or STRING),
+         // where <input> is the node's formal input name (e.g. "x" ->
+         // "x_keys" and "x_values"). Mirrors the CastMap convention above.
+         const std::string map_input = node.input(0).as_string();
+         const std::string keys_name = map_input + "_keys";
+         const std::string values_name = map_input + "_values";
+         auto keys_it = rt.tensors().find(keys_name);
+         auto values_it = rt.tensors().find(values_name);
+         if (keys_it == rt.tensors().end()) {
+           throw std::invalid_argument("RunNode: DictVectorizer map input '" + map_input +
+                                       "' requires tensor '" + keys_name + "' (INT64 or STRING keys).");
+         }
+         if (values_it == rt.tensors().end()) {
+           throw std::invalid_argument("RunNode: DictVectorizer map input '" + map_input +
+                                       "' requires tensor '" + values_name +
+                                       "' (INT64, FLOAT, DOUBLE, or STRING values).");
+         }
+         const Tensor &x_keys = keys_it->second;
+         const Tensor &x_values = values_it->second;
+         const AttributeProto *str_vocab = FindAttribute(node, "string_vocabulary");
+         const AttributeProto *int_vocab = FindAttribute(node, "int64_vocabulary");
+         const bool has_str = str_vocab != nullptr && str_vocab->strings_size() > 0;
+         const bool has_int = int_vocab != nullptr && int_vocab->ints_size() > 0;
+         if (has_str == has_int) {
+           throw std::invalid_argument(
+               "RunNode: DictVectorizer requires exactly one of 'string_vocabulary' or "
+               "'int64_vocabulary' to be specified and non-empty.");
+         }
+         kernel::DictVectorizer dict(rt.kernel_ctx());
+         Tensor y;
+         if (has_str) {
+           if (x_keys.data_type != static_cast<int32_t>(DataType::STRING)) {
+             throw std::invalid_argument("RunNode: DictVectorizer '" + keys_name +
+                                         "' must be a STRING tensor when 'string_vocabulary' is set.");
+           }
+           const std::vector<std::string> &keys = x_keys.AsStrings();
+           std::vector<std::string> vocab;
+           vocab.reserve(str_vocab->strings_size());
+           for (size_t i = 0; i < str_vocab->strings_size(); ++i) {
+             vocab.emplace_back(str_vocab->strings(i).as_string());
+           }
+           switch (x_values.data_type) {
+           case static_cast<int32_t>(DataType::INT64): {
+             const std::vector<int64_t> values = TensorToVector<int64_t>(x_values);
+             y = dict.operator()<std::string, int64_t>(keys, values, vocab);
+             break;
+           }
+           case static_cast<int32_t>(DataType::FLOAT): {
+             const std::vector<float> values = TensorToVector<float>(x_values);
+             y = dict.operator()<std::string, float>(keys, values, vocab);
+             break;
+           }
+           case static_cast<int32_t>(DataType::DOUBLE): {
+             const std::vector<double> values = TensorToVector<double>(x_values);
+             y = dict.operator()<std::string, double>(keys, values, vocab);
+             break;
+           }
+           default:
+             throw std::invalid_argument("RunNode: DictVectorizer '" + values_name +
+                                         "' must be INT64, FLOAT, or DOUBLE when "
+                                         "'string_vocabulary' is set.");
+           }
+         } else {
+           if (x_keys.data_type != static_cast<int32_t>(DataType::INT64)) {
+             throw std::invalid_argument("RunNode: DictVectorizer '" + keys_name +
+                                         "' must be an INT64 tensor when 'int64_vocabulary' is set.");
+           }
+           const std::vector<int64_t> keys = TensorToVector<int64_t>(x_keys);
+           std::vector<int64_t> vocab;
+           vocab.reserve(int_vocab->ints_size());
+           for (size_t i = 0; i < int_vocab->ints_size(); ++i) {
+             vocab.push_back(int_vocab->ints(i));
+           }
+           switch (x_values.data_type) {
+           case static_cast<int32_t>(DataType::FLOAT): {
+             const std::vector<float> values = TensorToVector<float>(x_values);
+             y = dict.operator()<int64_t, float>(keys, values, vocab);
+             break;
+           }
+           case static_cast<int32_t>(DataType::DOUBLE): {
+             const std::vector<double> values = TensorToVector<double>(x_values);
+             y = dict.operator()<int64_t, double>(keys, values, vocab);
+             break;
+           }
+           case static_cast<int32_t>(DataType::STRING): {
+             const std::vector<std::string> &values = x_values.AsStrings();
+             y = dict.operator()<int64_t, std::string>(keys, values, vocab);
+             break;
+           }
+           default:
+             throw std::invalid_argument("RunNode: DictVectorizer '" + values_name +
+                                         "' must be FLOAT, DOUBLE, or STRING when "
+                                         "'int64_vocabulary' is set.");
+           }
+         }
+         SetOutput(node, 0, std::move(y), rt);
+       }},
       {"ai.onnx.ml:SVMRegressor",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);

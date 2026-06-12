@@ -66,10 +66,11 @@ void RegisterAddCases(std::vector<TestCase> &registry) {
   // Upstream ONNX backend test cases for the ``Add`` operator (mirror the
   // ``onnx.backend.test.case.node.add.Add`` Python class). All numeric input
   // dtypes accepted by :ref:`kernel::Add` are covered: FLOAT, INT8, INT16,
-  // UINT8, UINT16, UINT32 and UINT64. Inputs are generated deterministically
-  // through the seeded ``Randn``/``RandnInt``/``RandUint`` helpers to mirror
-  // the upstream ``np.random.randn(...)`` and ``np.random.randint(...)``
-  // patterns; expected outputs are computed by ``kernel::Add``.
+  // INT32, INT64, UINT8, UINT16, UINT32 and UINT64. Inputs are generated
+  // deterministically through the seeded ``Randn``/``RandnInt``/``RandUint``
+  // helpers to mirror the upstream ``np.random.randn(...)`` and
+  // ``np.random.randint(...)`` patterns; expected outputs are computed by
+  // ``kernel::Add``.
 
   NodeProto node;
   node.set_op_type("Add");
@@ -86,6 +87,12 @@ void RegisterAddCases(std::vector<TestCase> &registry) {
       {"test_add_int16",
        {Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/43)),
         Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/44))}},
+      {"test_add_int32",
+       {Tensor::FromInt32("", {3, 4, 5}, RandnInt<int32_t>({3, 4, 5}, /*seed=*/141)),
+        Tensor::FromInt32("", {3, 4, 5}, RandnInt<int32_t>({3, 4, 5}, /*seed=*/142))}},
+      {"test_add_int64",
+       {Tensor::FromInt64("", {3, 4, 5}, RandnInt<int64_t>({3, 4, 5}, /*seed=*/143)),
+        Tensor::FromInt64("", {3, 4, 5}, RandnInt<int64_t>({3, 4, 5}, /*seed=*/144))}},
       {"test_add_uint8",
        {Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/45)),
         Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/46))}},

@@ -104,8 +104,8 @@ void RegisterDivCases(std::vector<TestCase> &registry) {
   // ``onnx.backend.test.case.node.div.Div`` Python class). All numeric input
   // dtypes accepted by :ref:`kernel::Div` are covered: FLOAT, INT8, INT16,
   // INT32 (the ``test_div_int32_trunc`` fixed-vector case exercising
-  // truncating signed division), UINT8, UINT16, UINT32 and UINT64. The
-  // divisor for the integer variants is shifted by ``+1`` to mirror the
+  // truncating signed division), INT64, UINT8, UINT16, UINT32 and UINT64.
+  // The divisor for the integer variants is shifted by ``+1`` to mirror the
   // upstream ``np.random.randint(24, ...) + 1`` pattern, which guarantees a
   // non-zero divisor.
 
@@ -131,6 +131,9 @@ void RegisterDivCases(std::vector<TestCase> &registry) {
       // exercises truncation toward zero (e.g. ``-3 / 2 == -1``).
       {"test_div_int32_trunc",
        {Tensor::FromInt32("", {4}, {-3, 3, -3, 3}), Tensor::FromInt32("", {4}, {2, 2, -2, -2})}},
+      {"test_div_int64",
+       {Tensor::FromInt64("", {3, 4, 5}, RandnInt<int64_t>({3, 4, 5}, /*seed=*/163)),
+        Tensor::FromInt64("", {3, 4, 5}, RandnIntNonZero<int64_t>({3, 4, 5}, /*seed=*/164))}},
       {"test_div_uint8",
        {Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/65)),
         Tensor::FromUint8("", {3, 4, 5}, RandUintNonZero<uint8_t>(24, {3, 4, 5}, /*seed=*/66))}},

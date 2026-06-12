@@ -18,10 +18,9 @@ namespace {
 
 // Reads a 1-D INT64 tensor into a ``std::vector<int64_t>``.
 std::vector<int64_t> ReadInt64Vector(const Tensor &t, const std::string &name) {
-  EXT_ENFORCE_INVALID(t.data_type == DataType::INT64,
-                      "kernel::Pad: '" + name + "' input must be INT64.");
-  EXT_ENFORCE_INVALID(t.shape.size() == 1,
-                      "kernel::Pad: '" + name + "' input must be a 1-D tensor.");
+  EXT_ENFORCE_INVALID(t.data_type == DataType::INT64, "kernel::Pad: '", name,
+                      "' input must be INT64.");
+  EXT_ENFORCE_INVALID(t.shape.size() == 1, "kernel::Pad: '", name, "' input must be a 1-D tensor.");
   const std::size_t n = static_cast<std::size_t>(t.shape[0]);
   std::vector<int64_t> out(n);
   if (n > 0) {

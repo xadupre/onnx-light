@@ -51,9 +51,9 @@ void ComputeShapeQLinearMatMul(ShapesContext &ctx, const NodeProto &node, const 
 
   if (k_left.IsInt() && k_right.IsInt()) {
     EXT_ENFORCE_INVALID(k_left.AsInt() == k_right.AsInt(),
-                        "ComputeShapeQLinearMatMul: incompatible inner dimensions " +
-                            std::to_string(k_left.AsInt()) + " and " +
-                            std::to_string(k_right.AsInt()) + ".");
+                        "ComputeShapeQLinearMatMul: incompatible inner dimensions ",
+                        std::to_string(k_left.AsInt()), " and ", std::to_string(k_right.AsInt()),
+                        ".");
   }
 
   std::vector<OptimDim> a_prefix_dims;

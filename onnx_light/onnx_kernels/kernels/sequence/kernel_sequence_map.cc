@@ -23,12 +23,11 @@ SequenceMap::operator()(const Sequence &input_sequence,
 
   for (std::size_t k = 0; k < body_outputs_per_iter.size(); ++k) {
     const std::vector<Tensor> &row = body_outputs_per_iter[k];
-    EXT_ENFORCE_INVALID(row.size() == n, "kernel::SequenceMap: body output #" + std::to_string(k) +
-                                             " has " + std::to_string(row.size()) +
-                                             " per-iteration tensors, expected " +
-                                             std::to_string(n) +
-                                             " (one per input sequence "
-                                             "element).");
+    EXT_ENFORCE_INVALID(row.size() == n, "kernel::SequenceMap: body output #", std::to_string(k),
+                        " has ", std::to_string(row.size()), " per-iteration tensors, expected ",
+                        std::to_string(n),
+                        " (one per input sequence "
+                        "element).");
 
     // All per-iteration tensors of a given output must share a common
     // data type. The schema permits per-iteration shape variation, so
@@ -37,9 +36,9 @@ SequenceMap::operator()(const Sequence &input_sequence,
     if (!row.empty()) {
       elem_type = row.front().data_type;
       for (std::size_t i = 1; i < row.size(); ++i) {
-        EXT_ENFORCE_INVALID(row[i].data_type == elem_type,
-                            "kernel::SequenceMap: body output #" + std::to_string(k) +
-                                " has tensors with mismatched data types across iterations.");
+        EXT_ENFORCE_INVALID(row[i].data_type == elem_type, "kernel::SequenceMap: body output #",
+                            std::to_string(k),
+                            " has tensors with mismatched data types across iterations.");
       }
     }
 

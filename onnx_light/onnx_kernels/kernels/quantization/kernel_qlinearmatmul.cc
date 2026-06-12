@@ -33,14 +33,12 @@ int32_t ReadIntElem(const Tensor &t, int64_t idx) {
 }
 
 int32_t ReadScalarInt(const Tensor &t, const char *name) {
-  EXT_ENFORCE_INVALID(t.element_count() == 1,
-                      std::string(kName) + ": '" + name + "' must be a scalar.");
+  EXT_ENFORCE_INVALID(t.element_count() == 1, kName, ": '", name, "' must be a scalar.");
   return ReadIntElem(t, 0);
 }
 
 float ReadScalarFloat(const Tensor &t, const char *name) {
-  EXT_ENFORCE_INVALID(t.element_count() == 1,
-                      std::string(kName) + ": '" + name + "' must be a scalar.");
+  EXT_ENFORCE_INVALID(t.element_count() == 1, kName, ": '", name, "' must be a scalar.");
   if (t.data_type == static_cast<int32_t>(DataType::FLOAT)) {
     return t.AsFloat()[0];
   }
@@ -93,12 +91,12 @@ std::vector<int64_t> BroadcastPrefix(const std::vector<int64_t> &a_prefix,
 
 std::vector<int64_t> ComputeOutputShape(const std::vector<int64_t> &a_shape,
                                         const std::vector<int64_t> &b_shape) {
-  EXT_ENFORCE_INVALID(!a_shape.empty() && !b_shape.empty(),
-                      std::string(kName) + ": rank-0 inputs are not accepted.");
+  EXT_ENFORCE_INVALID(!a_shape.empty() && !b_shape.empty(), kName,
+                      ": rank-0 inputs are not accepted.");
   const std::vector<int64_t> a2 = PromoteMatMulShape(a_shape, true);
   const std::vector<int64_t> b2 = PromoteMatMulShape(b_shape, false);
-  EXT_ENFORCE_INVALID(a2[a2.size() - 1] == b2[b2.size() - 2],
-                      std::string(kName) + ": incompatible inner dimensions.");
+  EXT_ENFORCE_INVALID(a2[a2.size() - 1] == b2[b2.size() - 2], kName,
+                      ": incompatible inner dimensions.");
   const std::vector<int64_t> a_prefix(a2.begin(), a2.end() - 2);
   const std::vector<int64_t> b_prefix(b2.begin(), b2.end() - 2);
   std::vector<int64_t> out_shape = BroadcastPrefix(a_prefix, b_prefix);
@@ -218,12 +216,10 @@ void RunQLinearMatMul(const Tensor &a, int32_t a_zp, float a_scale, const Tensor
 Tensor QLinearMatMul::operator()(const Tensor &a, const Tensor &a_scale, const Tensor &a_zero_point,
                                  const Tensor &b, const Tensor &b_scale, const Tensor &b_zero_point,
                                  const Tensor &y_scale, const Tensor &y_zero_point) const {
-  EXT_ENFORCE_INVALID(IsInt8OrUint8(a.data_type),
-                      std::string(kName) + ": a must be INT8 or UINT8.");
-  EXT_ENFORCE_INVALID(IsInt8OrUint8(b.data_type),
-                      std::string(kName) + ": b must be INT8 or UINT8.");
-  EXT_ENFORCE_INVALID(IsInt8OrUint8(y_zero_point.data_type),
-                      std::string(kName) + ": y_zero_point must be INT8 or UINT8.");
+  EXT_ENFORCE_INVALID(IsInt8OrUint8(a.data_type), kName, ": a must be INT8 or UINT8.");
+  EXT_ENFORCE_INVALID(IsInt8OrUint8(b.data_type), kName, ": b must be INT8 or UINT8.");
+  EXT_ENFORCE_INVALID(IsInt8OrUint8(y_zero_point.data_type), kName,
+                      ": y_zero_point must be INT8 or UINT8.");
 
   const std::vector<int64_t> out_shape = ComputeOutputShape(a.shape, b.shape);
   int64_t total = 1;
@@ -240,20 +236,17 @@ void QLinearMatMul::operator()(const Tensor &a, const Tensor &a_scale, const Ten
                                const Tensor &b, const Tensor &b_scale, const Tensor &b_zero_point,
                                const Tensor &y_scale, const Tensor &y_zero_point,
                                Tensor &output) const {
-  EXT_ENFORCE_INVALID(IsInt8OrUint8(a.data_type),
-                      std::string(kName) + ": a must be INT8 or UINT8.");
-  EXT_ENFORCE_INVALID(IsInt8OrUint8(b.data_type),
-                      std::string(kName) + ": b must be INT8 or UINT8.");
-  EXT_ENFORCE_INVALID(a_zero_point.data_type == a.data_type,
-                      std::string(kName) + ": a_zero_point dtype must match a.");
-  EXT_ENFORCE_INVALID(b_zero_point.data_type == b.data_type,
-                      std::string(kName) + ": b_zero_point dtype must match b.");
-  EXT_ENFORCE_INVALID(output.data_type == y_zero_point.data_type,
-                      std::string(kName) + ": output dtype must match y_zero_point.");
+  EXT_ENFORCE_INVALID(IsInt8OrUint8(a.data_type), kName, ": a must be INT8 or UINT8.");
+  EXT_ENFORCE_INVALID(IsInt8OrUint8(b.data_type), kName, ": b must be INT8 or UINT8.");
+  EXT_ENFORCE_INVALID(a_zero_point.data_type == a.data_type, kName,
+                      ": a_zero_point dtype must match a.");
+  EXT_ENFORCE_INVALID(b_zero_point.data_type == b.data_type, kName,
+                      ": b_zero_point dtype must match b.");
+  EXT_ENFORCE_INVALID(output.data_type == y_zero_point.data_type, kName,
+                      ": output dtype must match y_zero_point.");
 
   const std::vector<int64_t> out_shape = ComputeOutputShape(a.shape, b.shape);
-  EXT_ENFORCE_INVALID(output.shape == out_shape,
-                      std::string(kName) + ": preallocated output has invalid shape.");
+  EXT_ENFORCE_INVALID(output.shape == out_shape, kName, ": preallocated output has invalid shape.");
 
   const int32_t a_zp = ReadScalarInt(a_zero_point, "a_zero_point");
   const int32_t b_zp = ReadScalarInt(b_zero_point, "b_zero_point");
@@ -261,7 +254,7 @@ void QLinearMatMul::operator()(const Tensor &a, const Tensor &a_scale, const Ten
   const float a_s = ReadScalarFloat(a_scale, "a_scale");
   const float b_s = ReadScalarFloat(b_scale, "b_scale");
   const float y_s = ReadScalarFloat(y_scale, "y_scale");
-  EXT_ENFORCE_INVALID(y_s != 0.0f, std::string(kName) + ": y_scale must be non-zero.");
+  EXT_ENFORCE_INVALID(y_s != 0.0f, kName, ": y_scale must be non-zero.");
 
   RunQLinearMatMul(a, a_zp, a_s, b, b_zp, b_s, y_s, y_zp, output);
 }

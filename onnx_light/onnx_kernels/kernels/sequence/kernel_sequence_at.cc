@@ -30,9 +30,8 @@ Tensor SequenceAt::operator()(const Sequence &input_sequence, const Tensor &posi
   if (idx < 0) {
     idx += n;
   }
-  EXT_ENFORCE_INVALID(idx >= 0 && idx < n, "kernel::SequenceAt: position " + std::to_string(idx) +
-                                               " is out of range for sequence of length " +
-                                               std::to_string(n) + ".");
+  EXT_ENFORCE_INVALID(idx >= 0 && idx < n, "kernel::SequenceAt: position ", std::to_string(idx),
+                      " is out of range for sequence of length ", std::to_string(n), ".");
   return input_sequence.values[static_cast<std::size_t>(idx)];
 }
 

@@ -45,10 +45,10 @@ std::vector<int64_t> BroadcastShape(const std::vector<int64_t> &a, const std::ve
 // be non-empty and all tensors must share ``expected_dtype``.
 std::vector<int64_t> ValidateAndBroadcastShape(const std::vector<Tensor> &inputs,
                                                const char *dtype_name, int32_t expected_dtype) {
-  EXT_ENFORCE_INVALID(!inputs.empty(), std::string(kMeanName) + " requires at least one input.");
+  EXT_ENFORCE_INVALID(!inputs.empty(), kMeanName, " requires at least one input.");
   for (size_t i = 0; i < inputs.size(); ++i) {
-    EXT_ENFORCE_INVALID(inputs[i].data_type == expected_dtype,
-                        std::string(kMeanName) + " only supports " + dtype_name + " tensors.");
+    EXT_ENFORCE_INVALID(inputs[i].data_type == expected_dtype, kMeanName, " only supports ",
+                        dtype_name, " tensors.");
   }
   std::vector<int64_t> shape = inputs[0].shape;
   for (size_t i = 1; i < inputs.size(); ++i) {
@@ -115,7 +115,7 @@ void MeanInPlace(const char *dtype_name, int32_t dtype, const std::vector<Tensor
 } // namespace
 
 Tensor Mean::operator()(const std::vector<Tensor> &inputs) const {
-  EXT_ENFORCE_INVALID(!inputs.empty(), std::string(kMeanName) + " requires at least one input.");
+  EXT_ENFORCE_INVALID(!inputs.empty(), kMeanName, " requires at least one input.");
   switch (inputs[0].data_type) {
   case DataType::FLOAT:
     return MeanAlloc<float>("FLOAT", DataType::FLOAT, inputs);
@@ -127,7 +127,7 @@ Tensor Mean::operator()(const std::vector<Tensor> &inputs) const {
 }
 
 void Mean::operator()(const std::vector<Tensor> &inputs, Tensor &output) const {
-  EXT_ENFORCE_INVALID(!inputs.empty(), std::string(kMeanName) + " requires at least one input.");
+  EXT_ENFORCE_INVALID(!inputs.empty(), kMeanName, " requires at least one input.");
   switch (inputs[0].data_type) {
   case DataType::FLOAT:
     return MeanInPlace<float>("FLOAT", DataType::FLOAT, inputs, output);

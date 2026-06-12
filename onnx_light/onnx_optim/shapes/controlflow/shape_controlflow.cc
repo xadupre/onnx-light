@@ -42,14 +42,12 @@ ShapesContext InferSubgraph(const ShapesContext &parent_ctx, const GraphProto &s
 // value is unknown / is a sequence rather than a tensor.
 const OptimTensor &GetSubgraphOutput(const ShapesContext &local_ctx, const GraphProto &subgraph,
                                      const char *branch_name, int output_index, int expected) {
-  EXT_ENFORCE_INVALID(subgraph.output().size() == expected,
-                      std::string("ComputeShapeIf: sub-graph '") + branch_name + "' declares " +
-                          std::to_string(subgraph.output().size()) + " output(s), expected " +
-                          std::to_string(expected) + ".");
+  EXT_ENFORCE_INVALID(subgraph.output().size() == expected, "ComputeShapeIf: sub-graph '",
+                      branch_name, "' declares ", std::to_string(subgraph.output().size()),
+                      " output(s), expected ", std::to_string(expected), ".");
   const std::string name = subgraph.output()[output_index].name().as_string();
-  EXT_ENFORCE_INVALID(local_ctx.Has(name), std::string("ComputeShapeIf: output '") + name +
-                                               "' of sub-graph '" + branch_name +
-                                               "' is missing from the inferred context.");
+  EXT_ENFORCE_INVALID(local_ctx.Has(name), "ComputeShapeIf: output '", name, "' of sub-graph '",
+                      branch_name, "' is missing from the inferred context.");
   return local_ctx.Get(name);
 }
 
@@ -72,11 +70,10 @@ OptimTensor MergeBranchOutputs(ShapesContext &ctx, const OptimTensor &then_t,
     return OptimTensor(nullptr, dtype, then_shape);
   }
   EXT_ENFORCE_INVALID(then_shape.Rank() == else_shape.Rank(),
-                      std::string("ComputeShapeIf: rank mismatch between branches for output '") +
-                          if_output_name + "': then_branch has rank " +
-                          std::to_string(then_shape.Rank()) + ", else_branch has rank " +
-                          std::to_string(else_shape.Rank()) +
-                          ". This is not supposed to happen for a well-formed If node.");
+                      "ComputeShapeIf: rank mismatch between branches for output '", if_output_name,
+                      "': then_branch has rank ", std::to_string(then_shape.Rank()),
+                      ", else_branch has rank ", std::to_string(else_shape.Rank()),
+                      ". This is not supposed to happen for a well-formed If node.");
 
   OptimShape merged;
   for (std::size_t i = 0; i < then_shape.Rank(); ++i) {
@@ -101,21 +98,21 @@ void ComputeShapeIf(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "If", "ComputeShapeIf");
 
   EXT_ENFORCE_INVALID(node.input_size() == 1,
-                      "ComputeShapeIf: op 'If' expects exactly one input (cond), got " +
-                          std::to_string(node.input_size()) + ".");
+                      "ComputeShapeIf: op 'If' expects exactly one input (cond), got ",
+                      std::to_string(node.input_size()), ".");
 
   const GraphProto &then_branch = FindGraphAttribute(node, "then_branch", "ComputeShapeIf");
   const GraphProto &else_branch = FindGraphAttribute(node, "else_branch", "ComputeShapeIf");
 
   const int n_outputs = node.output_size();
   EXT_ENFORCE_INVALID(then_branch.output().size() == n_outputs,
-                      "ComputeShapeIf: 'then_branch' sub-graph declares " +
-                          std::to_string(then_branch.output().size()) + " output(s), expected " +
-                          std::to_string(n_outputs) + ".");
+                      "ComputeShapeIf: 'then_branch' sub-graph declares ",
+                      std::to_string(then_branch.output().size()), " output(s), expected ",
+                      std::to_string(n_outputs), ".");
   EXT_ENFORCE_INVALID(else_branch.output().size() == n_outputs,
-                      "ComputeShapeIf: 'else_branch' sub-graph declares " +
-                          std::to_string(else_branch.output().size()) + " output(s), expected " +
-                          std::to_string(n_outputs) + ".");
+                      "ComputeShapeIf: 'else_branch' sub-graph declares ",
+                      std::to_string(else_branch.output().size()), " output(s), expected ",
+                      std::to_string(n_outputs), ".");
 
   const ShapesContext then_ctx = InferSubgraph(ctx, then_branch);
   const ShapesContext else_ctx = InferSubgraph(ctx, else_branch);
@@ -152,8 +149,8 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Loop", "ComputeShapeLoop");
 
   EXT_ENFORCE_INVALID(node.input_size() >= 2,
-                      "ComputeShapeLoop: op 'Loop' expects at least two inputs (M, cond), got " +
-                          std::to_string(node.input_size()) + ".");
+                      "ComputeShapeLoop: op 'Loop' expects at least two inputs (M, cond), got ",
+                      std::to_string(node.input_size()), ".");
 
   const GraphProto &body = FindGraphAttribute(node, "body", "ComputeShapeLoop");
 
@@ -163,20 +160,20 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
   const int n_carried = node.input_size() - 2;
   EXT_ENFORCE_INVALID(n_carried >= 0,
                       "ComputeShapeLoop: invalid number of loop-carried dependencies.");
-  EXT_ENFORCE_INVALID(node.output_size() >= n_carried,
-                      "ComputeShapeLoop: Loop node declares " + std::to_string(node.output_size()) +
-                          " output(s), expected at least N=" + std::to_string(n_carried) +
-                          " loop-carried outputs.");
+  EXT_ENFORCE_INVALID(node.output_size() >= n_carried, "ComputeShapeLoop: Loop node declares ",
+                      std::to_string(node.output_size()),
+                      " output(s), expected at least N=", std::to_string(n_carried),
+                      " loop-carried outputs.");
   const int k_scan = node.output_size() - n_carried;
 
   EXT_ENFORCE_INVALID(body.input().size() == n_carried + 2,
-                      "ComputeShapeLoop: 'body' sub-graph declares " +
-                          std::to_string(body.input().size()) +
-                          " input(s), expected 2 + N = " + std::to_string(n_carried + 2) + ".");
+                      "ComputeShapeLoop: 'body' sub-graph declares ",
+                      std::to_string(body.input().size()),
+                      " input(s), expected 2 + N = ", std::to_string(n_carried + 2), ".");
   EXT_ENFORCE_INVALID(
       body.output().size() == n_carried + k_scan + 1,
-      "ComputeShapeLoop: 'body' sub-graph declares " + std::to_string(body.output().size()) +
-          " output(s), expected 1 + N + K = " + std::to_string(n_carried + k_scan + 1) + ".");
+      "ComputeShapeLoop: 'body' sub-graph declares ", std::to_string(body.output().size()),
+      " output(s), expected 1 + N + K = ", std::to_string(n_carried + k_scan + 1), ".");
 
   // Seed a child context with the body's formal input descriptors so that
   // shape inference can walk the body. The first two body inputs are the
@@ -191,11 +188,10 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
             OptimTensor(nullptr, TensorType::kBool, OptimShape{}));
   for (int i = 0; i < n_carried; ++i) {
     const std::string v_initial_name = node.input(2 + i).as_string();
-    EXT_ENFORCE_INVALID(!v_initial_name.empty(), "ComputeShapeLoop: 'v_initial' input #" +
-                                                     std::to_string(i) + " has an empty name.");
-    EXT_ENFORCE_INVALID(local.Has(v_initial_name), "ComputeShapeLoop: 'v_initial' input '" +
-                                                       v_initial_name +
-                                                       "' is missing from the inferred context.");
+    EXT_ENFORCE_INVALID(!v_initial_name.empty(), "ComputeShapeLoop: 'v_initial' input #",
+                        std::to_string(i), " has an empty name.");
+    EXT_ENFORCE_INVALID(local.Has(v_initial_name), "ComputeShapeLoop: 'v_initial' input '",
+                        v_initial_name, "' is missing from the inferred context.");
     local.Set(body.input()[2 + i].name().as_string(), OptimTensor(local.Get(v_initial_name)));
   }
 
@@ -204,8 +200,8 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
   // Validate that every body output is known in the local context.
   for (int i = 0; i < body.output().size(); ++i) {
     const std::string body_out = body.output()[i].name().as_string();
-    EXT_ENFORCE_INVALID(local.Has(body_out), "ComputeShapeLoop: body output '" + body_out +
-                                                 "' is missing from the inferred context.");
+    EXT_ENFORCE_INVALID(local.Has(body_out), "ComputeShapeLoop: body output '", body_out,
+                        "' is missing from the inferred context.");
   }
 
   // N loop-carried outputs: dtype is taken from ``v_out`` and validated
@@ -220,9 +216,9 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
     }
     const OptimTensor &v_initial = ctx.Get(node.input(2 + i).as_string());
     const OptimTensor &v_out = local.Get(body.output()[1 + i].name().as_string());
-    EXT_ENFORCE_INVALID(v_out.Dtype() == v_initial.Dtype(),
-                        "ComputeShapeLoop: body output #" + std::to_string(1 + i) +
-                            " has a different element type than the matching 'v_initial' input.");
+    EXT_ENFORCE_INVALID(v_out.Dtype() == v_initial.Dtype(), "ComputeShapeLoop: body output #",
+                        std::to_string(1 + i),
+                        " has a different element type than the matching 'v_initial' input.");
     OptimShape out_shape = (v_out.Shape() == v_initial.Shape())
                                ? v_initial.Shape()
                                : SymbolicShape(v_out.Shape().Rank(), "Loop_" + node_out);
@@ -251,12 +247,10 @@ namespace {
 // Returns the value of an INT scalar attribute or throws if absent.
 int64_t RequireIntAttribute(const NodeProto &node, const char *name) {
   const AttributeProto *attr = FindAttribute(node, name);
-  EXT_ENFORCE_INVALID(attr != nullptr,
-                      std::string("ComputeShapeScan: missing required INT attribute '") + name +
-                          "'.");
+  EXT_ENFORCE_INVALID(attr != nullptr, "ComputeShapeScan: missing required INT attribute '", name,
+                      "'.");
   EXT_ENFORCE_INVALID(attr->type() == AttributeProto::AttributeType::INT,
-                      std::string("ComputeShapeScan: attribute '") + name +
-                          "' must be of type INT.");
+                      "ComputeShapeScan: attribute '", name, "' must be of type INT.");
   return attr->i();
 }
 
@@ -266,9 +260,8 @@ int64_t NormalizeAxis(int64_t axis, std::size_t rank, const char *attr_name) {
   if (axis < 0) {
     axis += r;
   }
-  EXT_ENFORCE_INVALID(axis >= 0 && axis <= r, std::string("ComputeShapeScan: '") + attr_name +
-                                                  "' out of range for rank " +
-                                                  std::to_string(rank) + ".");
+  EXT_ENFORCE_INVALID(axis >= 0 && axis <= r, "ComputeShapeScan: '", attr_name,
+                      "' out of range for rank ", std::to_string(rank), ".");
   return axis;
 }
 
@@ -280,29 +273,28 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
   const GraphProto &body = FindGraphAttribute(node, "body", "ComputeShapeScan");
   const int64_t num_scan_inputs64 = RequireIntAttribute(node, "num_scan_inputs");
   EXT_ENFORCE_INVALID(num_scan_inputs64 > 0,
-                      "ComputeShapeScan: 'num_scan_inputs' must be strictly positive, got " +
-                          std::to_string(num_scan_inputs64) + ".");
+                      "ComputeShapeScan: 'num_scan_inputs' must be strictly positive, got ",
+                      std::to_string(num_scan_inputs64), ".");
   const int num_scan_inputs = static_cast<int>(num_scan_inputs64);
   EXT_ENFORCE_INVALID(
-      node.input_size() >= num_scan_inputs,
-      "ComputeShapeScan: 'Scan' node declares " + std::to_string(node.input_size()) +
-          " input(s), expected at least num_scan_inputs = " + std::to_string(num_scan_inputs) +
-          ".");
+      node.input_size() >= num_scan_inputs, "ComputeShapeScan: 'Scan' node declares ",
+      std::to_string(node.input_size()),
+      " input(s), expected at least num_scan_inputs = ", std::to_string(num_scan_inputs), ".");
   const int n_state = node.input_size() - num_scan_inputs;
-  EXT_ENFORCE_INVALID(node.output_size() >= n_state,
-                      "ComputeShapeScan: Scan node declares " + std::to_string(node.output_size()) +
-                          " output(s), expected at least N=" + std::to_string(n_state) +
-                          " state outputs.");
+  EXT_ENFORCE_INVALID(node.output_size() >= n_state, "ComputeShapeScan: Scan node declares ",
+                      std::to_string(node.output_size()),
+                      " output(s), expected at least N=", std::to_string(n_state),
+                      " state outputs.");
   const int k_scan = node.output_size() - n_state;
 
   EXT_ENFORCE_INVALID(
       body.input().size() == n_state + num_scan_inputs,
-      "ComputeShapeScan: 'body' sub-graph declares " + std::to_string(body.input().size()) +
-          " input(s), expected N + M = " + std::to_string(n_state + num_scan_inputs) + ".");
+      "ComputeShapeScan: 'body' sub-graph declares ", std::to_string(body.input().size()),
+      " input(s), expected N + M = ", std::to_string(n_state + num_scan_inputs), ".");
   EXT_ENFORCE_INVALID(body.output().size() == n_state + k_scan,
-                      "ComputeShapeScan: 'body' sub-graph declares " +
-                          std::to_string(body.output().size()) +
-                          " output(s), expected N + K = " + std::to_string(n_state + k_scan) + ".");
+                      "ComputeShapeScan: 'body' sub-graph declares ",
+                      std::to_string(body.output().size()),
+                      " output(s), expected N + K = ", std::to_string(n_state + k_scan), ".");
 
   // Optional scan_input_axes attribute (per scan input).
   std::vector<int64_t> scan_input_axes;
@@ -326,9 +318,8 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
   ShapesContext local = ctx;
   for (int i = 0; i < n_state; ++i) {
     const std::string state_in_name = node.input(i).as_string();
-    EXT_ENFORCE_INVALID(local.Has(state_in_name), "ComputeShapeScan: state input '" +
-                                                      state_in_name +
-                                                      "' is missing from the inferred context.");
+    EXT_ENFORCE_INVALID(local.Has(state_in_name), "ComputeShapeScan: state input '", state_in_name,
+                        "' is missing from the inferred context.");
     local.Set(body.input()[i].name().as_string(), OptimTensor(local.Get(state_in_name)));
   }
 
@@ -338,13 +329,13 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
 
   for (int m = 0; m < num_scan_inputs; ++m) {
     const std::string scan_in_name = node.input(n_state + m).as_string();
-    EXT_ENFORCE_INVALID(local.Has(scan_in_name), "ComputeShapeScan: scan input '" + scan_in_name +
-                                                     "' is missing from the inferred context.");
+    EXT_ENFORCE_INVALID(local.Has(scan_in_name), "ComputeShapeScan: scan input '", scan_in_name,
+                        "' is missing from the inferred context.");
     const OptimTensor &scan_in = local.Get(scan_in_name);
     const int64_t axis_raw = scan_input_axes.empty() ? 0 : scan_input_axes[m];
     const int64_t axis = NormalizeAxis(axis_raw, scan_in.Shape().Rank(), "scan_input_axes");
-    EXT_ENFORCE_INVALID(scan_in.Shape().Rank() >= 1,
-                        "ComputeShapeScan: scan input '" + scan_in_name + "' must have rank >= 1.");
+    EXT_ENFORCE_INVALID(scan_in.Shape().Rank() >= 1, "ComputeShapeScan: scan input '", scan_in_name,
+                        "' must have rank >= 1.");
     if (m == 0) {
       trip_count_dim = scan_in.Shape()[static_cast<std::size_t>(axis)];
       trip_count_known = true;
@@ -365,8 +356,8 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
 
   for (int i = 0; i < body.output().size(); ++i) {
     const std::string body_out = body.output()[i].name().as_string();
-    EXT_ENFORCE_INVALID(local.Has(body_out), "ComputeShapeScan: body output '" + body_out +
-                                                 "' is missing from the inferred context.");
+    EXT_ENFORCE_INVALID(local.Has(body_out), "ComputeShapeScan: body output '", body_out,
+                        "' is missing from the inferred context.");
   }
 
   // N state outputs: dtype/shape are taken from the body's v_out (and
@@ -378,9 +369,9 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
     }
     const OptimTensor &state_in = ctx.Get(node.input(i).as_string());
     const OptimTensor &v_out = local.Get(body.output()[i].name().as_string());
-    EXT_ENFORCE_INVALID(v_out.Dtype() == state_in.Dtype(),
-                        "ComputeShapeScan: body output #" + std::to_string(i) +
-                            " has a different element type than the matching state input.");
+    EXT_ENFORCE_INVALID(v_out.Dtype() == state_in.Dtype(), "ComputeShapeScan: body output #",
+                        std::to_string(i),
+                        " has a different element type than the matching state input.");
     OptimShape out_shape = (v_out.Shape() == state_in.Shape())
                                ? state_in.Shape()
                                : SymbolicShape(v_out.Shape().Rank(), "Scan_" + node_out);

@@ -35,9 +35,9 @@ Sequence SequenceErase::operator()(const Sequence &input_sequence, const Tensor 
     if (idx < 0) {
       idx += n;
     }
-    EXT_ENFORCE_INVALID(idx >= 0 && idx < n,
-                        "kernel::SequenceErase: position " + std::to_string(idx) +
-                            " is out of range for sequence of length " + std::to_string(n) + ".");
+    EXT_ENFORCE_INVALID(idx >= 0 && idx < n, "kernel::SequenceErase: position ",
+                        std::to_string(idx), " is out of range for sequence of length ",
+                        std::to_string(n), ".");
   }
 
   // Build output sequence omitting element at idx.

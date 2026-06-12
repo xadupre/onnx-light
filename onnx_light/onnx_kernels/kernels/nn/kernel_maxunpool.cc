@@ -80,10 +80,9 @@ Tensor RunMaxUnpool(const Tensor &x, const Tensor &indices,
   const int64_t *pi = indices.AsInt64();
   for (int64_t i = 0; i < x_total; ++i) {
     const int64_t idx = pi[i];
-    EXT_ENFORCE_INVALID(idx >= 0 && idx < inferred_total,
-                        "kernel::MaxUnpool: indices entry " + std::to_string(idx) +
-                            " out of range for inferred output of " +
-                            std::to_string(inferred_total) + " elements.");
+    EXT_ENFORCE_INVALID(idx >= 0 && idx < inferred_total, "kernel::MaxUnpool: indices entry ",
+                        std::to_string(idx), " out of range for inferred output of ",
+                        std::to_string(inferred_total), " elements.");
     y_inferred[static_cast<size_t>(idx)] = px[i];
   }
 

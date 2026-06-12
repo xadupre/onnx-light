@@ -84,8 +84,8 @@ std::vector<double> ReadLogits(const Tensor &input, int64_t batch_size, int64_t 
     break;
   }
   default:
-    EXT_ENFORCE_INVALID(false, "kernel::Multinomial: unsupported input dtype " +
-                                   std::to_string(input.data_type) + ".");
+    EXT_ENFORCE_INVALID(false, "kernel::Multinomial: unsupported input dtype ",
+                        std::to_string(input.data_type), ".");
   }
   return logits;
 }
@@ -98,8 +98,8 @@ std::size_t OutputElementSize(int32_t dtype) {
   case DataType::INT64:
     return sizeof(int64_t);
   default:
-    EXT_ENFORCE_INVALID(false, "kernel::Multinomial: unsupported output dtype " +
-                                   std::to_string(dtype) + "; only INT32 and INT64 are supported.");
+    EXT_ENFORCE_INVALID(false, "kernel::Multinomial: unsupported output dtype ",
+                        std::to_string(dtype), "; only INT32 and INT64 are supported.");
   }
   return 0;
 }
@@ -119,8 +119,8 @@ void StoreSample(int32_t dtype, std::vector<uint8_t> &out, int64_t i, int64_t sa
     break;
   }
   default:
-    EXT_ENFORCE_INVALID(false, "kernel::Multinomial: unsupported output dtype " +
-                                   std::to_string(dtype) + ".");
+    EXT_ENFORCE_INVALID(false, "kernel::Multinomial: unsupported output dtype ",
+                        std::to_string(dtype), ".");
   }
 }
 
@@ -132,8 +132,8 @@ Tensor Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t
                       "kernel::Multinomial: input must be a 2-D tensor of shape "
                       "[batch_size, class_size].");
   EXT_ENFORCE_INVALID(sample_size >= 0,
-                      "kernel::Multinomial: sample_size must be non-negative, got " +
-                          std::to_string(sample_size) + ".");
+                      "kernel::Multinomial: sample_size must be non-negative, got ",
+                      std::to_string(sample_size), ".");
 
   const int64_t batch_size = input.shape[0];
   const int64_t class_size = input.shape[1];
@@ -175,8 +175,8 @@ Tensor Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t
       sum += p;
       cdf[static_cast<std::size_t>(c)] = sum;
     }
-    EXT_ENFORCE_INVALID(sum > 0.0, "kernel::Multinomial: row " + std::to_string(b) +
-                                       " produced an all-zero probability distribution.");
+    EXT_ENFORCE_INVALID(sum > 0.0, "kernel::Multinomial: row ", std::to_string(b),
+                        " produced an all-zero probability distribution.");
     // Normalize the CDF to end at exactly 1.0.
     for (int64_t c = 0; c < class_size; ++c) {
       cdf[static_cast<std::size_t>(c)] /= sum;

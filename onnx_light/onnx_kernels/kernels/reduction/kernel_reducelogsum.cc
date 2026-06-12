@@ -52,7 +52,7 @@ std::vector<int64_t> RowMajorStrides(const std::vector<int64_t> &shape) {
 
 void ValidateFloat(const Tensor &t, const char *name) {
   EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      std::string("kernel::ReduceLogSumOp: ") + name + " must be a FLOAT tensor.");
+                      "kernel::ReduceLogSumOp: ", name, " must be a FLOAT tensor.");
 }
 
 // Computes ``y = log(sum(x, axes))`` (kLogSum) or the numerically-stable

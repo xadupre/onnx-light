@@ -23,8 +23,8 @@ inline void RequireScalar(const Tensor &t, const char *name) {
   // single element. Both are accepted for the per-tensor case to mirror
   // QuantizeLinear's behaviour.
   const int64_t n = t.element_count();
-  EXT_ENFORCE_INVALID(n == 1, std::string("kernel::DequantizeLinear: ") + name +
-                                  " must be a scalar (per-tensor dequantization).");
+  EXT_ENFORCE_INVALID(n == 1, "kernel::DequantizeLinear: ", name,
+                      " must be a scalar (per-tensor dequantization).");
 }
 
 inline bool IsSupportedScaleDType(int32_t dtype) {

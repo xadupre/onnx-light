@@ -31,9 +31,9 @@ void ComputeShapeLogSoftmax(ShapesContext &ctx, const NodeProto &node, const cha
   const int64_t default_axis = opset >= 13 ? int64_t{-1} : int64_t{1};
   const int64_t axis = GetAttributeOr<int64_t>(node, "axis", default_axis);
   const int64_t resolved_axis = axis < 0 ? axis + rank : axis;
-  EXT_ENFORCE_INVALID(resolved_axis >= 0 && resolved_axis < rank,
-                      "ComputeShapeLogSoftmax: axis " + std::to_string(axis) +
-                          " is out of range for rank " + std::to_string(rank) + ".");
+  EXT_ENFORCE_INVALID(resolved_axis >= 0 && resolved_axis < rank, "ComputeShapeLogSoftmax: axis ",
+                      std::to_string(axis), " is out of range for rank ", std::to_string(rank),
+                      ".");
 
   ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), input.Shape()));
 }

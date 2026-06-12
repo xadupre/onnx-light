@@ -103,8 +103,8 @@ void CausalConvWithState::operator()(const Tensor &input, const Tensor &weight, 
 
   const bool use_silu = attrs.activation == "silu" || attrs.activation == "swish";
   EXT_ENFORCE_INVALID(use_silu || attrs.activation == "none",
-                      "kernel::CausalConvWithState: unsupported activation '" + attrs.activation +
-                          "'. Allowed: 'none', 'silu', 'swish'.");
+                      "kernel::CausalConvWithState: unsupported activation '", attrs.activation,
+                      "'. Allowed: 'none', 'silu', 'swish'.");
 
   const float *px_f = is_float ? input.AsFloat() : nullptr;
   const float *pw_f = is_float ? weight.AsFloat() : nullptr;

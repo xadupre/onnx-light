@@ -91,6 +91,7 @@ class TestRunNodesBindings(ExtTestCase):
 
     def test_runtime_context_event_log_records_add_replace_remove(self):
         ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        ctx.events_enabled = True
         self.assertEqual(ctx.events(), [])
 
         ctx.set("x", _make_float_tensor("x", [1.0, -2.0]))
@@ -141,6 +142,7 @@ class TestRunNodesBindings(ExtTestCase):
 
     def test_runtime_context_event_log_truncates_large_tensors(self):
         ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        ctx.events_enabled = True
         # 9-element tensor: the buffer keeps only the first 8 entries,
         # data_type is set to -1 and shape is emptied to flag the truncation.
         ctx.put("big", _make_int32_tensor("big", list(range(9))))
@@ -153,6 +155,7 @@ class TestRunNodesBindings(ExtTestCase):
     def test_runtime_context_events_capture_run_model_intermediates(self):
         model = parser.parse_model(_MODEL_SRC)
         ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        ctx.events_enabled = True
         ctx.set("x", _make_float_tensor("x", [-1.0, 2.0, -3.5]))
         ctx.set("z", _make_float_tensor("z", [10.0, 20.0, 30.0]))
         ctx.clear_events()

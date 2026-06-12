@@ -32,8 +32,8 @@ void SubInPlace(const char *dtype_name, int32_t dtype, const Tensor &x, const Te
                                   [](T a, T b) -> T { return a - b; });
 }
 
-constexpr const char *kUnsupportedMsg =
-    " only supports FLOAT, INT8, INT16, UINT8, UINT16, UINT32 and UINT64 inputs.";
+constexpr const char *kUnsupportedMsg = " only supports FLOAT, INT8, INT16, INT32, INT64, UINT8, "
+                                        "UINT16, UINT32 and UINT64 inputs.";
 } // namespace
 
 Tensor Sub::operator()(const Tensor &x, const Tensor &y) const {
@@ -44,6 +44,10 @@ Tensor Sub::operator()(const Tensor &x, const Tensor &y) const {
     return SubAlloc<int8_t>("INT8", DataType::INT8, x, y);
   case DataType::INT16:
     return SubAlloc<int16_t>("INT16", DataType::INT16, x, y);
+  case DataType::INT32:
+    return SubAlloc<int32_t>("INT32", DataType::INT32, x, y);
+  case DataType::INT64:
+    return SubAlloc<int64_t>("INT64", DataType::INT64, x, y);
   case DataType::UINT8:
     return SubAlloc<uint8_t>("UINT8", DataType::UINT8, x, y);
   case DataType::UINT16:
@@ -65,6 +69,10 @@ void Sub::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
     return SubInPlace<int8_t>("INT8", DataType::INT8, x, y, output);
   case DataType::INT16:
     return SubInPlace<int16_t>("INT16", DataType::INT16, x, y, output);
+  case DataType::INT32:
+    return SubInPlace<int32_t>("INT32", DataType::INT32, x, y, output);
+  case DataType::INT64:
+    return SubInPlace<int64_t>("INT64", DataType::INT64, x, y, output);
   case DataType::UINT8:
     return SubInPlace<uint8_t>("UINT8", DataType::UINT8, x, y, output);
   case DataType::UINT16:

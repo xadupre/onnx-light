@@ -271,6 +271,15 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     inputs. ORT versions on the CI runners (≤ 1.26.0) predate that fix
 #     and emit ``NaN`` for every frame past the first batch. The reference
 #     backend still exercises this case to keep the regression coverage.
+#   * ``test_cc_squeeze_empty_axes_name`` — ORT's CPU ``Squeeze`` kernel
+#     rejects an unconnected optional ``axes`` input encoded with an empty
+#     input name ("axes_tensor != nullptr was false. Axes input is null").
+#     Per the ONNX opset 13+ schema ``axes`` is optional and a missing
+#     optional input may be expressed by either omitting the slot or using
+#     an empty name; both forms must squeeze every unit dimension. The
+#     "slot omitted entirely" form (``test_cc_squeeze_no_axes_input``) is
+#     accepted by ORT and the reference backend continues to exercise the
+#     empty-name form.
 ORT_EXCLUDE_REGEX = [
     r"^test_cc_roialign_max$",
     r"^test_cc_roialign_mode_max$",
@@ -391,6 +400,8 @@ ORT_EXCLUDE_REGEX = [
     # shape. The forward / inverse / forward-onesided variants are exercised
     # separately by the other ``test_cc_dft_*`` cases.
     r"^test_cc_dft_irfft(_opset19)?$",
+    # See note above on the ``Squeeze`` optional ``axes`` input.
+    r"^test_cc_squeeze_empty_axes_name$",
 ]
 
 TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_REGEX)

@@ -31,8 +31,8 @@ void MulInPlace(const char *dtype_name, int32_t dtype, const Tensor &x, const Te
 }
 
 constexpr const char *kSupportedMulTypesMsg =
-    " only supports FLOAT, DOUBLE, FLOAT16, BFLOAT16, INT8, INT16, UINT8, UINT16, UINT32 and "
-    "UINT64 inputs.";
+    " only supports FLOAT, DOUBLE, FLOAT16, BFLOAT16, INT8, INT16, INT32, INT64, UINT8, UINT16, "
+    "UINT32 and UINT64 inputs.";
 } // namespace
 
 Tensor Mul::operator()(const Tensor &x, const Tensor &y) const {
@@ -45,6 +45,10 @@ Tensor Mul::operator()(const Tensor &x, const Tensor &y) const {
     return MulAlloc<int8_t>("INT8", DataType::INT8, x, y);
   case DataType::INT16:
     return MulAlloc<int16_t>("INT16", DataType::INT16, x, y);
+  case DataType::INT32:
+    return MulAlloc<int32_t>("INT32", DataType::INT32, x, y);
+  case DataType::INT64:
+    return MulAlloc<int64_t>("INT64", DataType::INT64, x, y);
   case DataType::UINT8:
     return MulAlloc<uint8_t>("UINT8", DataType::UINT8, x, y);
   case DataType::UINT16:
@@ -76,6 +80,10 @@ void Mul::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
     return MulInPlace<int8_t>("INT8", DataType::INT8, x, y, output);
   case DataType::INT16:
     return MulInPlace<int16_t>("INT16", DataType::INT16, x, y, output);
+  case DataType::INT32:
+    return MulInPlace<int32_t>("INT32", DataType::INT32, x, y, output);
+  case DataType::INT64:
+    return MulInPlace<int64_t>("INT64", DataType::INT64, x, y, output);
   case DataType::UINT8:
     return MulInPlace<uint8_t>("UINT8", DataType::UINT8, x, y, output);
   case DataType::UINT16:

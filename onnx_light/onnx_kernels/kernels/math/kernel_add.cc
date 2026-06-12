@@ -31,8 +31,8 @@ void AddInPlace(const char *dtype_name, int32_t dtype, const Tensor &x, const Te
 }
 
 constexpr const char *kSupportedAddTypesMsg =
-    " only supports FLOAT, DOUBLE, FLOAT16, BFLOAT16, INT8, INT16, UINT8, UINT16, UINT32 and "
-    "UINT64 inputs.";
+    " only supports FLOAT, DOUBLE, FLOAT16, BFLOAT16, INT8, INT16, INT32, INT64, UINT8, UINT16, "
+    "UINT32 and UINT64 inputs.";
 } // namespace
 
 Tensor Add::operator()(const Tensor &x, const Tensor &y) const {
@@ -45,6 +45,10 @@ Tensor Add::operator()(const Tensor &x, const Tensor &y) const {
     return AddAlloc<int8_t>("INT8", DataType::INT8, x, y);
   case DataType::INT16:
     return AddAlloc<int16_t>("INT16", DataType::INT16, x, y);
+  case DataType::INT32:
+    return AddAlloc<int32_t>("INT32", DataType::INT32, x, y);
+  case DataType::INT64:
+    return AddAlloc<int64_t>("INT64", DataType::INT64, x, y);
   case DataType::UINT8:
     return AddAlloc<uint8_t>("UINT8", DataType::UINT8, x, y);
   case DataType::UINT16:
@@ -76,6 +80,10 @@ void Add::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
     return AddInPlace<int8_t>("INT8", DataType::INT8, x, y, output);
   case DataType::INT16:
     return AddInPlace<int16_t>("INT16", DataType::INT16, x, y, output);
+  case DataType::INT32:
+    return AddInPlace<int32_t>("INT32", DataType::INT32, x, y, output);
+  case DataType::INT64:
+    return AddInPlace<int64_t>("INT64", DataType::INT64, x, y, output);
   case DataType::UINT8:
     return AddInPlace<uint8_t>("UINT8", DataType::UINT8, x, y, output);
   case DataType::UINT16:

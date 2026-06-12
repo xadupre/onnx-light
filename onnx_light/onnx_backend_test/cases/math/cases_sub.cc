@@ -65,9 +65,9 @@ void RegisterSubCases(std::vector<TestCase> &registry) {
   // Upstream ONNX backend test cases for the ``Sub`` operator (mirror the
   // ``onnx.backend.test.case.node.sub.Sub`` Python class). All numeric input
   // dtypes accepted by :ref:`kernel::Sub` are covered: FLOAT, INT8, INT16,
-  // UINT8, UINT16, UINT32 and UINT64. Inputs are generated deterministically
-  // through the seeded ``Randn``/``RandnInt``/``RandUint`` helpers to match
-  // the upstream ``np.random.randn(...).astype(dtype)`` and
+  // INT32, INT64, UINT8, UINT16, UINT32 and UINT64. Inputs are generated
+  // deterministically through the seeded ``Randn``/``RandnInt``/``RandUint``
+  // helpers to match the upstream ``np.random.randn(...).astype(dtype)`` and
   // ``np.random.randint(..., dtype=...)`` patterns; expected outputs are
   // computed by ``kernel::Sub``.
 
@@ -103,6 +103,12 @@ void RegisterSubCases(std::vector<TestCase> &registry) {
       {"test_sub_int16",
        {Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/13)),
         Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/14))}},
+      {"test_sub_int32",
+       {Tensor::FromInt32("", {3, 4, 5}, RandnInt<int32_t>({3, 4, 5}, /*seed=*/113)),
+        Tensor::FromInt32("", {3, 4, 5}, RandnInt<int32_t>({3, 4, 5}, /*seed=*/114))}},
+      {"test_sub_int64",
+       {Tensor::FromInt64("", {3, 4, 5}, RandnInt<int64_t>({3, 4, 5}, /*seed=*/115)),
+        Tensor::FromInt64("", {3, 4, 5}, RandnInt<int64_t>({3, 4, 5}, /*seed=*/116))}},
       {"test_sub_uint8",
        {Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/15)),
         Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(12, {3, 4, 5}, /*seed=*/16))}},

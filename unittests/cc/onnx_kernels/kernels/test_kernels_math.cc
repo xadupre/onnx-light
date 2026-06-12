@@ -575,6 +575,36 @@ TEST(KernelClass, AddClassBroadcastsScalar) {
   EXPECT_FLOAT_EQ(pz[3], 4.5f);
 }
 
+TEST(KernelClass, AddClassMatchesReferenceInt32) {
+  const KernelContext ctx{DefaultOpset(14)};
+  Add add_kernel{ctx};
+  Tensor x = Tensor::FromInt32("", {4}, {10, 0, -3, 7});
+  Tensor y = Tensor::FromInt32("", {4}, {3, 0, 2, -1});
+  Tensor z = add_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
+  const int32_t *pz = z.AsInt32();
+  EXPECT_EQ(pz[0], 13);
+  EXPECT_EQ(pz[1], 0);
+  EXPECT_EQ(pz[2], -1);
+  EXPECT_EQ(pz[3], 6);
+}
+
+TEST(KernelClass, AddClassMatchesReferenceInt64) {
+  const KernelContext ctx{DefaultOpset(14)};
+  Add add_kernel{ctx};
+  Tensor x = Tensor::FromInt64("", {4}, {10, 0, -3, 7});
+  Tensor y = Tensor::FromInt64("", {4}, {3, 0, 2, -1});
+  Tensor z = add_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
+  const int64_t *pz = z.AsInt64();
+  EXPECT_EQ(pz[0], 13);
+  EXPECT_EQ(pz[1], 0);
+  EXPECT_EQ(pz[2], -1);
+  EXPECT_EQ(pz[3], 6);
+}
+
 TEST(KernelClass, BlackmanWindowPeriodicLength) {
   const KernelContext ctx{DefaultOpset(17)};
   BlackmanWindow blackman_kernel{ctx};
@@ -840,6 +870,34 @@ TEST(KernelClass, MulInPlaceWritesToPreallocatedOutput) {
   EXPECT_FLOAT_EQ(pz[3], 12.0f);
 }
 
+TEST(KernelClass, MulClassMatchesReferenceInt32) {
+  const KernelContext ctx{DefaultOpset(14)};
+  Mul mul_kernel{ctx};
+  Tensor x = Tensor::FromInt32("", {3}, {1, -2, 3});
+  Tensor y = Tensor::FromInt32("", {3}, {4, 5, -6});
+  Tensor z = mul_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 3);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
+  const int32_t *pz = z.AsInt32();
+  EXPECT_EQ(pz[0], 4);
+  EXPECT_EQ(pz[1], -10);
+  EXPECT_EQ(pz[2], -18);
+}
+
+TEST(KernelClass, MulClassMatchesReferenceInt64) {
+  const KernelContext ctx{DefaultOpset(14)};
+  Mul mul_kernel{ctx};
+  Tensor x = Tensor::FromInt64("", {3}, {1, -2, 3});
+  Tensor y = Tensor::FromInt64("", {3}, {4, 5, -6});
+  Tensor z = mul_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 3);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
+  const int64_t *pz = z.AsInt64();
+  EXPECT_EQ(pz[0], 4);
+  EXPECT_EQ(pz[1], -10);
+  EXPECT_EQ(pz[2], -18);
+}
+
 TEST(KernelClass, DivClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(14)};
   Div div_kernel{ctx};
@@ -952,6 +1010,16 @@ TEST(KernelClass, DivClassSupportsIntegerTypesWithTruncation) {
     EXPECT_EQ(pz[0], 3);
     EXPECT_EQ(pz[1], 4);
     EXPECT_EQ(pz[2], 1);
+  }
+  {
+    Tensor x = Tensor::FromInt64("", {4}, {-3, 3, -3, 3});
+    Tensor y = Tensor::FromInt64("", {4}, {2, 2, -2, -2});
+    Tensor z = div_kernel(x, y);
+    const int64_t *pz = z.AsInt64();
+    EXPECT_EQ(pz[0], -1);
+    EXPECT_EQ(pz[1], 1);
+    EXPECT_EQ(pz[2], 1);
+    EXPECT_EQ(pz[3], -1);
   }
 }
 

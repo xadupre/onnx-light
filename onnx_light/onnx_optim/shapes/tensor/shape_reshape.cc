@@ -10,8 +10,10 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
+#include "onnx_optim/expressions.h"
 #include "onnx_optim/optim_tensor.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
@@ -23,73 +25,56 @@ namespace tensor {
 
 namespace {
 
-// Tries to infer the Reshape ``-1`` dimension from ``data_shape`` and already
-// materialized ``out_shape`` dimensions by:
-// 1) multiplying concrete integer factors on both sides,
-// 2) cancelling matching symbolic factors present in ``out_shape`` from the
-//    symbolic factors of ``data_shape``,
-// 3) returning the remaining symbolic/integer product when exactly derivable.
-// Returns ``std::nullopt`` when inference is ambiguous or incompatible.
-std::optional<OptimDim> InferNegOneFromFactors(const OptimShape &data_shape,
-                                               const OptimShape &out_shape, int neg_one_dim_index) {
-  int64_t input_int_product = 1;
-  std::vector<OptimDim> input_symbolic_factors;
-  for (const OptimDim &dim : data_shape.Dims()) {
+// Builds the symbolic expression representing the product of ``dims``.
+// Integer entries are emitted as their numeric value; symbolic entries are
+// parenthesised to preserve precedence. Returns ``"1"`` for an empty product.
+std::string BuildProductExpr(const std::vector<OptimDim> &dims) {
+  std::string expr;
+  for (const OptimDim &dim : dims) {
+    if (!expr.empty()) {
+      expr += "*";
+    }
     if (dim.IsInt()) {
-      input_int_product *= dim.AsInt();
+      expr += std::to_string(dim.AsInt());
     } else {
-      input_symbolic_factors.push_back(dim);
+      expr += "(" + dim.AsExpr() + ")";
     }
   }
+  return expr.empty() ? std::string("1") : expr;
+}
 
-  int64_t output_int_product = 1;
-  std::vector<OptimDim> output_symbolic_factors;
+// Tries to infer the Reshape ``-1`` dimension by building the symbolic
+// expression ``(product of input dims) // (product of out_shape dims excluding
+// the -1 position)`` and running it through
+// :cpp:func:`expressions::simplify_expression`. This handles purely concrete
+// inputs (returns an int), purely symbolic inputs (returns a clean symbolic
+// expression such as ``"c//2"``) and mixed cases. Returns ``std::nullopt``
+// when any output dim is concrete zero — division by zero is not meaningful
+// and the caller already rejects that case explicitly.
+std::optional<OptimDim> InferNegOneFromFactors(const OptimShape &data_shape,
+                                               const OptimShape &out_shape, int neg_one_dim_index) {
+  std::vector<OptimDim> input_factors(data_shape.Dims());
+
+  std::vector<OptimDim> output_factors;
+  output_factors.reserve(out_shape.Rank());
   for (int i = 0; i < static_cast<int>(out_shape.Rank()); ++i) {
     if (i == neg_one_dim_index) {
       continue;
     }
     const OptimDim &dim = out_shape[i];
-    if (dim.IsInt()) {
-      output_int_product *= dim.AsInt();
-    } else {
-      output_symbolic_factors.push_back(dim);
-    }
-  }
-
-  for (const OptimDim &factor : output_symbolic_factors) {
-    auto it = std::find(input_symbolic_factors.begin(), input_symbolic_factors.end(), factor);
-    if (it == input_symbolic_factors.end()) {
+    if (dim.IsInt() && dim.AsInt() == 0) {
       return std::nullopt;
     }
-    input_symbolic_factors.erase(it);
+    output_factors.push_back(dim);
   }
 
-  if (output_int_product == 0) {
-    return std::nullopt;
+  const std::string expr =
+      "(" + BuildProductExpr(input_factors) + ")//(" + BuildProductExpr(output_factors) + ")";
+  expressions::SimplifyResult result = expressions::simplify_expression(expr);
+  if (std::holds_alternative<int64_t>(result)) {
+    return OptimDim(std::get<int64_t>(result));
   }
-  if (input_int_product % output_int_product != 0) {
-    return std::nullopt;
-  }
-  const int64_t remaining_int = input_int_product / output_int_product;
-
-  if (input_symbolic_factors.empty()) {
-    return OptimDim(remaining_int);
-  }
-  if (remaining_int == 1 && input_symbolic_factors.size() == 1) {
-    return input_symbolic_factors.front();
-  }
-
-  std::string expr;
-  if (remaining_int != 1) {
-    expr = std::to_string(remaining_int);
-  }
-  for (const OptimDim &factor : input_symbolic_factors) {
-    if (!expr.empty()) {
-      expr += "*";
-    }
-    expr += factor.AsExpr();
-  }
-  return OptimDim(std::move(expr));
+  return OptimDim(std::get<std::string>(result));
 }
 
 // Wraps ``InferNegOneFromFactors`` and falls back to a stable symbolic

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/_helpers/float16_promote.h"
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
@@ -24,6 +25,7 @@ using onnx_kernels::kernel::KernelContext;
 using onnx_kernels::kernel::MaxPool;
 using onnx_kernels::kernel::MaxUnpool;
 using onnx_kernels::kernel::MeanVarianceNormalization;
+using onnx_kernels::kernel::RotaryEmbedding;
 
 namespace Test {
 
@@ -835,6 +837,87 @@ TEST(KernelClass, MaxUnpoolWithOutputShape) {
   EXPECT_FLOAT_EQ(py[8], 6.0f);
   EXPECT_FLOAT_EQ(py[16], 7.0f);
   EXPECT_FLOAT_EQ(py[18], 8.0f);
+}
+
+namespace {
+
+// Demotes a FLOAT tensor to the requested half-precision dtype (FLOAT16 or
+// BFLOAT16). The tensor name is cleared so it can be used directly as a
+// kernel input.
+Tensor DemoteToHalf(const Tensor &f, int32_t target_dtype) {
+  return onnx_kernels::DemoteFromFloat32(f, target_dtype);
+}
+
+// Promotes a half-precision tensor to FLOAT and returns the decoded values
+// as a std::vector<float>.
+std::vector<float> DecodeHalf(const Tensor &t) {
+  Tensor f = onnx_kernels::PromoteToFloat32(t);
+  const float *p = f.AsFloat();
+  return std::vector<float>(p, p + f.element_count());
+}
+
+} // namespace
+
+// Verifies that ``kernel::Attention`` accepts FLOAT16 / BFLOAT16 Q, K, V and
+// returns a half-precision output whose values match the FLOAT path rounded
+// through the same dtype.
+TEST(KernelClass, AttentionHalfPrecisionMatchesFloatReference) {
+  const Tensor Q = Tensor::FromFloat("", {1, 1, 1, 2}, {1.0f, 0.0f});
+  const Tensor K = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 0.0f, 0.0f, 1.0f});
+  const Tensor V = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+
+  const KernelContext ctx = AttentionKernelContext();
+  const Attention attention{ctx};
+  const Tensor ref = attention(Q, K, V);
+
+  for (int32_t target : {static_cast<int32_t>(onnx_kernels::DataType::FLOAT16),
+                         static_cast<int32_t>(onnx_kernels::DataType::BFLOAT16)}) {
+    const Tensor Qh = DemoteToHalf(Q, target);
+    const Tensor Kh = DemoteToHalf(K, target);
+    const Tensor Vh = DemoteToHalf(V, target);
+    const Tensor Yh = attention(Qh, Kh, Vh);
+    ASSERT_EQ(Yh.data_type, target);
+    ASSERT_EQ(Yh.shape, ref.shape);
+    const std::vector<float> got = DecodeHalf(Yh);
+    const float tol =
+        target == static_cast<int32_t>(onnx_kernels::DataType::FLOAT16) ? 1e-2f : 5e-2f;
+    for (int64_t i = 0; i < ref.element_count(); ++i) {
+      EXPECT_NEAR(got[static_cast<size_t>(i)], ref.AsFloat()[i], tol) << "i=" << i;
+    }
+  }
+}
+
+// Verifies that ``kernel::RotaryEmbedding`` supports FLOAT16 / BFLOAT16
+// inputs and produces a half-precision output that matches the FLOAT path
+// rounded through the same dtype.
+TEST(KernelClass, RotaryEmbeddingHalfPrecisionMatchesFloatReference) {
+  // batch=1, num_heads=1, seq=2, head_size=4, no position_ids, interleaved=false.
+  const Tensor X =
+      Tensor::FromFloat("", {1, 1, 2, 4}, {1.0f, 0.5f, -0.5f, 0.25f, 0.0f, -1.0f, 2.0f, -2.0f});
+  const Tensor cos_cache = Tensor::FromFloat("", {1, 2, 2}, {1.0f, 1.0f, 0.0f, 1.0f});
+  const Tensor sin_cache = Tensor::FromFloat("", {1, 2, 2}, {0.0f, 0.0f, 1.0f, 0.0f});
+
+  const KernelContext ctx{DefaultOpset(23)};
+  RotaryEmbedding rope{ctx};
+  RotaryEmbedding::Attributes attrs;
+  const Tensor empty;
+  const Tensor ref = rope(X, cos_cache, sin_cache, empty, attrs);
+
+  for (int32_t target : {static_cast<int32_t>(onnx_kernels::DataType::FLOAT16),
+                         static_cast<int32_t>(onnx_kernels::DataType::BFLOAT16)}) {
+    const Tensor Xh = DemoteToHalf(X, target);
+    const Tensor cos_h = DemoteToHalf(cos_cache, target);
+    const Tensor sin_h = DemoteToHalf(sin_cache, target);
+    const Tensor Yh = rope(Xh, cos_h, sin_h, empty, attrs);
+    ASSERT_EQ(Yh.data_type, target);
+    ASSERT_EQ(Yh.shape, ref.shape);
+    const std::vector<float> got = DecodeHalf(Yh);
+    const float tol =
+        target == static_cast<int32_t>(onnx_kernels::DataType::FLOAT16) ? 1e-2f : 5e-2f;
+    for (int64_t i = 0; i < ref.element_count(); ++i) {
+      EXPECT_NEAR(got[static_cast<size_t>(i)], ref.AsFloat()[i], tol) << "i=" << i;
+    }
+  }
 }
 
 } // namespace Test

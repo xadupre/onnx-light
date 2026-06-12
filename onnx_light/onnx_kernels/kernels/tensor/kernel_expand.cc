@@ -45,9 +45,9 @@ std::vector<int64_t> BroadcastOutputShape(const std::vector<int64_t> &in_shape,
     const bool has_t = k + rt >= r;
     const int64_t di = has_i ? in_shape[k - (r - ri)] : int64_t{1};
     const int64_t dt = has_t ? target[k - (r - rt)] : int64_t{1};
-    EXT_ENFORCE_INVALID(di == dt || di == 1 || dt == 1,
-                        "kernel::Expand: incompatible dimensions " + std::to_string(di) + " and " +
-                            std::to_string(dt) + " at axis " + std::to_string(k) + ".");
+    EXT_ENFORCE_INVALID(di == dt || di == 1 || dt == 1, "kernel::Expand: incompatible dimensions ",
+                        std::to_string(di), " and ", std::to_string(dt), " at axis ",
+                        std::to_string(k), ".");
     out[k] = std::max(di, dt);
   }
   return out;

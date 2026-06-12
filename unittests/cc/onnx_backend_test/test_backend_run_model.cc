@@ -252,6 +252,8 @@ TEST(BackendRunModel, MaxRoiPool) { RunBackendCasesFor("MaxRoiPool"); }
 TEST(BackendRunModel, InstanceNormalization) { RunBackendCasesFor("InstanceNormalization"); }
 TEST(BackendRunModel, LayerNormalization) { RunBackendCasesFor("LayerNormalization"); }
 TEST(BackendRunModel, RMSNormalization) { RunBackendCasesFor("RMSNormalization"); }
+TEST(BackendRunModel, RNN) { RunBackendCasesFor("RNN"); }
+TEST(BackendRunModel, RotaryEmbedding) { RunBackendCasesFor("RotaryEmbedding"); }
 TEST(BackendRunModel, MeanVarianceNormalization) {
   RunBackendCasesFor("MeanVarianceNormalization");
 }
@@ -317,6 +319,7 @@ TEST(BackendRunModel, FeatureVectorizer) { RunBackendCasesFor("FeatureVectorizer
 TEST(BackendRunModel, Imputer) { RunBackendCasesFor("Imputer"); }
 TEST(BackendRunModel, LabelEncoder) { RunBackendCasesFor("LabelEncoder"); }
 TEST(BackendRunModel, OneHotEncoder) { RunBackendCasesFor("OneHotEncoder"); }
+TEST(BackendRunModel, Scaler) { RunBackendCasesFor("Scaler"); }
 
 // Text kernels.
 TEST(BackendRunModel, StringNormalizer) { RunBackendCasesFor("StringNormalizer"); }
@@ -431,18 +434,14 @@ TEST(BackendRunModel, FlexAttention) {
   // The dispatch-table kernel handles the base FlexAttention path (Q, K, V ->
   // Y) including the optional ``score_mod`` and ``prob_mod`` modifier
   // subgraphs (executed via RunSubgraph). Some score_mod cases use ops
-  // (e.g. ``Sub`` / ``Cast`` over INT64 indices) not yet wired through the
-  // dispatch table; skip those by case name.
+  // not yet wired through the dispatch table; skip those by case name.
   RunBackendCasesFor(
       "FlexAttention",
       [](const TestCase &tc) {
-        // ``test_cc_flexattention_relative_positional`` uses Sub/Cast on
-        // INT64 indices which are not yet registered in the dispatch
-        // table. ``test_cc_flexattention_soft_cap`` uses Constant/Div/Tanh
+        // ``test_cc_flexattention_soft_cap`` uses Constant/Div/Tanh
         // chains in its score_mod subgraph; some of those paths are not
-        // yet covered either.
-        return tc.name != "test_cc_flexattention_relative_positional" &&
-               tc.name != "test_cc_flexattention_soft_cap";
+        // yet covered.
+        return tc.name != "test_cc_flexattention_soft_cap";
       },
       [](const DataSet &ds) {
         return ds.inputs.size() >= 3 && ds.inputs[0].data_type == DataType::FLOAT &&

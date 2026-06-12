@@ -25,6 +25,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -1438,15 +1439,6 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          }
          const int64_t layout = GetAttributeIntOrDefault(node, "layout", 0);
 
-         // ``sequence_lens`` (input #4) is not supported: it requires
-         // per-batch sequence handling that the FLOAT kernel does not
-         // implement.
-         const Tensor *sequence_lens = GetOptionalInput(node, 4, rt.tensors());
-         if (sequence_lens != nullptr) {
-           throw std::invalid_argument(
-               "RunNode: op 'LSTM' does not support the optional 'sequence_lens' input.");
-         }
-
          // The current kernel only produces (Y, Y_h); the optional third
          // output ``Y_c`` (final cell state) is not implemented.
          if (node.output_size() >= 3 && !node.output(2).as_string().empty()) {
@@ -1461,6 +1453,33 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor *initial_h = GetOptionalInput(node, 5, rt.tensors());
          const Tensor *initial_c = GetOptionalInput(node, 6, rt.tensors());
          const Tensor *p = GetOptionalInput(node, 7, rt.tensors());
+
+         // ``sequence_lens`` (input #4) requires per-batch sequence
+         // handling that the FLOAT kernel does not implement; accept it
+         // only when it degenerates to a no-op (every batch row uses the
+         // full ``seq_length`` so masking would not change the output).
+         // ``seq_length`` is read from ``X`` at axis 0 for ``layout=0``
+         // and axis 1 for ``layout=1``.
+         const Tensor *sequence_lens = GetOptionalInput(node, 4, rt.tensors());
+         if (sequence_lens != nullptr) {
+           if (sequence_lens->data_type !=
+               static_cast<int32_t>(DataType::INT32)) {
+             throw std::invalid_argument(
+                 "RunNode: op 'LSTM' expects 'sequence_lens' to be INT32.");
+           }
+           const size_t seq_axis = layout == 1 ? 1u : 0u;
+           const int64_t seq_length = x.shape.size() > seq_axis ? x.shape[seq_axis] : 0;
+           const int64_t n = sequence_lens->element_count();
+           const int32_t *seq_data = sequence_lens->AsInt32();
+           for (int64_t i = 0; i < n; ++i) {
+             if (static_cast<int64_t>(seq_data[i]) != seq_length) {
+               throw std::invalid_argument(
+                   "RunNode: op 'LSTM' does not support the optional 'sequence_lens' "
+                   "input unless every entry equals the full seq_length.");
+             }
+           }
+         }
+
 
          kernel::LSTM kernel(rt.kernel_ctx());
          auto [y, y_h] = kernel(x, w, r, b != nullptr ? *b : Tensor{},
@@ -1899,13 +1918,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          }
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
-         // Input 1 is ``roi`` (unused by this reference implementation).
          const Tensor *roi = GetOptionalInput(node, 1, rt.tensors());
-         if (roi != nullptr) {
-           throw std::invalid_argument(
-               "RunNode: op 'Resize' does not support the optional 'roi' input "
-               "(only used by 'tf_crop_and_resize' coordinate_transformation_mode).");
-         }
          const Tensor *scales = GetOptionalInput(node, 2, rt.tensors());
          const Tensor *sizes = GetOptionalInput(node, 3, rt.tensors());
          if ((scales == nullptr) == (sizes == nullptr)) {
@@ -1927,6 +1940,23 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
              GetAttributeFloatOrDefault(node, "cubic_coeff_a", attrs.cubic_coeff_a);
          attrs.exclude_outside =
              GetAttributeIntOrDefault(node, "exclude_outside", attrs.exclude_outside);
+         attrs.extrapolation_value = GetAttributeFloatOrDefault(
+             node, "extrapolation_value", attrs.extrapolation_value);
+         if (roi != nullptr) {
+           if (roi->data_type != DataType::FLOAT) {
+             throw std::invalid_argument(
+                 "RunNode: op 'Resize' 'roi' input must be a FLOAT tensor.");
+           }
+           if (roi->shape.size() != 1) {
+             throw std::invalid_argument("RunNode: op 'Resize' 'roi' input must be 1-D.");
+           }
+           const int64_t n = roi->shape[0];
+           attrs.roi.assign(static_cast<std::size_t>(n), 0.0f);
+           if (n > 0) {
+             std::memcpy(attrs.roi.data(), roi->bytes(),
+                         static_cast<std::size_t>(n) * sizeof(float));
+           }
+         }
 
          kernel::Resize k(rt.kernel_ctx());
          if (scales != nullptr) {
@@ -1973,6 +2003,104 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          SetOutput(node, 0, k(x, rois, batch_indices, attrs), rt);
        }},
       {"ai.onnx:Round", MakeUnaryTrampoline<kernel::Round>()},
+      {"ai.onnx:RNN",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         if (node.input_size() < 3 || node.input_size() > 6) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects between 3 and 6 input(s), got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         if (node.output_size() < 1 || node.output_size() > 2) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects 1 or 2 output(s), got " +
+                                       std::to_string(node.output_size()) + ".");
+         }
+
+         // Unsupported attributes: only the default ``forward`` direction
+         // with the default ``Tanh`` activation and no ``clip`` are
+         // implemented; ``layout=0`` and ``layout=1`` are both supported.
+         const std::string direction =
+             GetAttributeStringOrDefault(node, "direction", "forward");
+         if (direction != "forward") {
+           throw std::invalid_argument(
+               "RunNode: op 'RNN' only supports direction='forward', got '" + direction + "'.");
+         }
+         if (const AttributeProto *activations = FindAttribute(node, "activations");
+             activations != nullptr) {
+           const std::vector<std::string> values =
+               GetAttributeStringsOrDefault(node, "activations", {});
+           if (values.size() != 1 || values[0] != "Tanh") {
+             throw std::invalid_argument(
+                 "RunNode: op 'RNN' only supports the default activations=['Tanh'].");
+           }
+         }
+         if (FindAttribute(node, "activation_alpha") != nullptr ||
+             FindAttribute(node, "activation_beta") != nullptr) {
+           throw std::invalid_argument(
+               "RunNode: op 'RNN' does not support 'activation_alpha'/'activation_beta'.");
+         }
+         if (FindAttribute(node, "clip") != nullptr) {
+           throw std::invalid_argument("RunNode: op 'RNN' does not support the 'clip' attribute.");
+         }
+         const int64_t layout = GetAttributeIntOrDefault(node, "layout", 0);
+
+         // ``sequence_lens`` (input #4) is not supported: it requires
+         // per-batch sequence handling that the FLOAT kernel does not
+         // implement.
+         const Tensor *sequence_lens = GetOptionalInput(node, 4, rt.tensors());
+         if (sequence_lens != nullptr) {
+           throw std::invalid_argument(
+               "RunNode: op 'RNN' does not support the optional 'sequence_lens' input.");
+         }
+
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const Tensor &w = GetInput(node, 1, rt.tensors());
+         const Tensor &r = GetInput(node, 2, rt.tensors());
+         const Tensor *b = GetOptionalInput(node, 3, rt.tensors());
+         const Tensor *initial_h = GetOptionalInput(node, 5, rt.tensors());
+
+         kernel::RNN kernel(rt.kernel_ctx());
+         auto [y, y_h] = kernel(x, w, r, b != nullptr ? *b : Tensor{},
+                                initial_h != nullptr ? *initial_h : Tensor{}, layout);
+
+         auto set_optional_output = [&node, &rt](int index, Tensor output) {
+           if (index >= node.output_size()) {
+             return;
+           }
+           const std::string name = node.output(index).as_string();
+           if (name.empty()) {
+             return;
+           }
+           output.name = name;
+           rt.Put(name, std::move(output), TensorEventKind::kIntermediate);
+         };
+         set_optional_output(0, std::move(y));
+         set_optional_output(1, std::move(y_h));
+       }},
+      {"ai.onnx:RotaryEmbedding",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         if (node.input_size() < 3 || node.input_size() > 4) {
+           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+                                       "' expects between 3 and 4 input(s), got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const Tensor &cos_cache = GetInput(node, 1, rt.tensors());
+         const Tensor &sin_cache = GetInput(node, 2, rt.tensors());
+         const Tensor *position_ids = GetOptionalInput(node, 3, rt.tensors());
+
+         kernel::RotaryEmbedding::Attributes attrs;
+         attrs.interleaved = GetAttributeIntOrDefault(node, "interleaved", 0) != 0;
+         attrs.rotary_embedding_dim =
+             GetAttributeIntOrDefault(node, "rotary_embedding_dim", 0);
+         attrs.num_heads = GetAttributeIntOrDefault(node, "num_heads", 0);
+
+         kernel::RotaryEmbedding kernel(rt.kernel_ctx());
+         const Tensor empty;
+         const Tensor &pos = (position_ids != nullptr) ? *position_ids : empty;
+         SetOutput(node, 0, kernel(x, cos_cache, sin_cache, pos, attrs), rt.tensors());
+       }},
       {"ai.onnx:ScatterElements",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 3);
@@ -3016,6 +3144,21 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            using T = std::remove_pointer_t<decltype(tag)>;
            (void)tag;
            return normalizer.template operator()<T>(x, norm);
+         });
+         SetOutput(node, 0, std::move(y), rt.tensors());
+       }},
+      {"ai.onnx.ml:Scaler",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const std::vector<float> offset = GetAttributeFloatsOrDefault(node, "offset", {});
+         const std::vector<float> scale = GetAttributeFloatsOrDefault(node, "scale", {});
+         kernel::Scaler scaler(rt.kernel_ctx());
+         Tensor y = DispatchSVMByDataType(x, "Scaler", [&](auto *tag) {
+           using T = std::remove_pointer_t<decltype(tag)>;
+           (void)tag;
+           return scaler.template operator()<T>(x, offset, scale);
          });
          SetOutput(node, 0, std::move(y), rt.tensors());
        }},

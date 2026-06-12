@@ -36,8 +36,15 @@ namespace kernel {
 //   * **BMP** — 24-bit uncompressed (BI_RGB, BITMAPINFOHEADER): fully
 //     decoded to ``(H, W, C)`` uint8 output in the requested
 //     ``pixel_format``.
+//   * **JPEG** — baseline JFIF (SOF0, 8-bit precision, 1 or 3
+//     components, horizontal/vertical sampling factors in ``{1, 2}``,
+//     optional restart intervals): fully decoded to ``(H, W, C)`` uint8
+//     output in the requested ``pixel_format`` after applying the
+//     standard JFIF YCbCr → RGB conversion (ITU-R BT.601, full range).
+//     Non-baseline JPEGs (progressive, arithmetic-coded, 12-bit
+//     precision, lossless) fall through to the empty-matrix path.
 //
-// For all other formats (JPEG, JPEG2000, PNG, TIFF, WebP, PNM) the kernel
+// For all other formats (JPEG2000, PNG, TIFF, WebP, PNM) the kernel
 // falls back to the behavior documented by the ONNX schema:
 //
 //     "If it can't decode for any reason (e.g. corrupted encoded stream,
@@ -62,9 +69,11 @@ namespace kernel {
 /// returned as a ``(H, W, C)`` ``tensor(uint8)`` in channel-last
 /// layout.
 ///
-/// BMP (24-bit uncompressed, BI_RGB) images are decoded natively
-/// without any external library dependency. All other formats
-/// (JPEG, JPEG2000, PNG, TIFF, WebP, PNM) fall back to returning
+/// BMP (24-bit uncompressed, BI_RGB) and baseline-sequential JPEG
+/// (JFIF, SOF0, 8-bit precision, 1 or 3 components, sampling factors
+/// in ``{1, 2}``, optional restart intervals) images are decoded
+/// natively without any external library dependency. All other formats
+/// (JPEG2000, PNG, TIFF, WebP, PNM) fall back to returning
 /// an empty matrix (``(0, 0, C)`` ``tensor(uint8)``). Invalid inputs
 /// or attribute values throw ``std::invalid_argument``.
 class ImageDecoder : public KernelBase {

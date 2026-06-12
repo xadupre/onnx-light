@@ -50,7 +50,7 @@ std::vector<int64_t> RowMajorStrides(const std::vector<int64_t> &shape) {
 
 void ValidateFloat(const Tensor &t, const char *name) {
   EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      std::string("kernel::ReduceProd: ") + name + " must be a FLOAT tensor.");
+                      "kernel::ReduceProd: ", name, " must be a FLOAT tensor.");
 }
 
 // Multiplies elements of ``data`` into the output buffer. The empty-set

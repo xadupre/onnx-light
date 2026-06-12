@@ -274,6 +274,9 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
                                                              static_cast<int64_t>(data.size()));
             if (nb::isinstance<ParseOptions &>(options)) {
               ParseOptions &parse_options = nb::cast<ParseOptions &>(options);
+              EXT_ENFORCE(parse_options.format == SerializeFormat::kOnnx,
+                          "ParseFromString: SerializeFormat::kOrtFlatbuffers is not "
+                          "implemented yet. Use SerializeFormat::kOnnx for now.");
               if (parse_options.is_parallel()) {
                 stream.StartThreadPool(parse_options.num_threads);
               }
@@ -735,6 +738,15 @@ void AddOnnxPyProto(nb::module_ &m) {
       .value("MMAP", FileLoadMode::kMmap, "Force MmapFileStream (memory-mapped file).")
       .value("IFSTREAM", FileLoadMode::kFileStream, "Force FileStream (buffered std::ifstream).");
 
+  nb::enum_<SerializeFormat>(m, "SerializeFormat",
+                             "Selects the on-disk serialization format used when parsing or "
+                             "serializing a ModelProto.")
+      .value("ONNX", SerializeFormat::kOnnx, "Default ONNX protobuf wire format.")
+      .value("ORT_FLATBUFFERS", SerializeFormat::kOrtFlatbuffers,
+             "Flatbuffer-based format used by onnxruntime (``.ort`` files). "
+             "Not implemented yet; setting this format raises an error when "
+             "parsing or serializing.");
+
   nb::class_<TensorBufferOptions>(m, "TensorBufferOptions",
                                   "Common options for tensor buffer operations: in-place "
                                   "consolidation, serialization, and parsing.")
@@ -780,7 +792,13 @@ void AddOnnxPyProto(nb::module_ &m) {
               "FileLoadMode.AUTO (default) picks mmap unless no_copy=True is set on a "
               "single-file model, FileLoadMode.MMAP forces MmapFileStream, and "
               "FileLoadMode.IFSTREAM forces the buffered std::ifstream-based FileStream. "
-              "Ignored when parsing from bytes or when an external_data_file is provided.");
+              "Ignored when parsing from bytes or when an external_data_file is provided.")
+      .def_rw("format", &ParseOptions::format,
+              "Selects the on-disk serialization format expected when parsing. "
+              "SerializeFormat.ONNX (default) parses the ONNX protobuf wire format; "
+              "SerializeFormat.ORT_FLATBUFFERS parses the onnxruntime flatbuffer format "
+              "(``.ort`` files). The flatbuffer path is not implemented yet and raises "
+              "an error when used.");
 
   nb::class_<SerializeOptions, TensorBufferOptions>(m, "SerializeOptions",
                                                     "Serializing options for proto classes")
@@ -805,7 +823,13 @@ void AddOnnxPyProto(nb::module_ &m) {
               "external_data.location; this allows serialization into one or more weights files.")
       .def_rw("max_external_file_size", &SerializeOptions::max_external_file_size,
               "maximum size in bytes for one external weights file when writing external data; "
-              "0 means no limit");
+              "0 means no limit")
+      .def_rw("format", &SerializeOptions::format,
+              "Selects the on-disk serialization format produced when serializing. "
+              "SerializeFormat.ONNX (default) writes the ONNX protobuf wire format; "
+              "SerializeFormat.ORT_FLATBUFFERS writes the onnxruntime flatbuffer format "
+              "(``.ort`` files). The flatbuffer path is not implemented yet and raises "
+              "an error when used.");
 
   nb::class_<SerializeSizeResult>(m, "SerializeSizeResult",
                                   "Splits serialized bytes between proto data and tensor content.")

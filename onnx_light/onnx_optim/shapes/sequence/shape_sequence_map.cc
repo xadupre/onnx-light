@@ -51,16 +51,16 @@ void ComputeShapeSequenceMap(ShapesContext &ctx, const NodeProto &node) {
   const GraphProto &body = FindGraphAttribute(node, "body", "ComputeShapeSequenceMap");
 
   EXT_ENFORCE_INVALID(body.input().size() == node.input_size(),
-                      "ComputeShapeSequenceMap: 'body' sub-graph declares " +
-                          std::to_string(body.input().size()) + " input(s), expected " +
-                          std::to_string(node.input_size()) +
-                          " (one per SequenceMap input: the per-iteration element of "
-                          "input_sequence followed by the additional inputs).");
+                      "ComputeShapeSequenceMap: 'body' sub-graph declares ",
+                      std::to_string(body.input().size()), " input(s), expected ",
+                      std::to_string(node.input_size()),
+                      " (one per SequenceMap input: the per-iteration element of "
+                      "input_sequence followed by the additional inputs).");
   EXT_ENFORCE_INVALID(body.output().size() == node.output_size(),
-                      "ComputeShapeSequenceMap: 'body' sub-graph declares " +
-                          std::to_string(body.output().size()) + " output(s), expected " +
-                          std::to_string(node.output_size()) +
-                          " (one per SequenceMap output sequence).");
+                      "ComputeShapeSequenceMap: 'body' sub-graph declares ",
+                      std::to_string(body.output().size()), " output(s), expected ",
+                      std::to_string(node.output_size()),
+                      " (one per SequenceMap output sequence).");
 
   // Seed a child context with the body's formal inputs: the first body
   // input represents one element of the input sequence; the remaining
@@ -80,9 +80,8 @@ void ComputeShapeSequenceMap(ShapesContext &ctx, const NodeProto &node) {
     if (ctx.HasSequence(outer_name)) {
       local.SetSequence(body_in_name, OptimSequence(ctx.GetSequence(outer_name)));
     } else {
-      EXT_ENFORCE_INVALID(ctx.Has(outer_name), "ComputeShapeSequenceMap: additional input '" +
-                                                   outer_name +
-                                                   "' is missing from the inferred context.");
+      EXT_ENFORCE_INVALID(ctx.Has(outer_name), "ComputeShapeSequenceMap: additional input '",
+                          outer_name, "' is missing from the inferred context.");
       local.Set(body_in_name, OptimTensor(ctx.Get(outer_name)));
     }
   }
@@ -92,8 +91,8 @@ void ComputeShapeSequenceMap(ShapesContext &ctx, const NodeProto &node) {
   // Validate that every body output is known in the local context.
   for (int i = 0; i < body.output().size(); ++i) {
     const std::string body_out = body.output()[i].name().as_string();
-    EXT_ENFORCE_INVALID(local.Has(body_out), "ComputeShapeSequenceMap: body output '" + body_out +
-                                                 "' is missing from the inferred context.");
+    EXT_ENFORCE_INVALID(local.Has(body_out), "ComputeShapeSequenceMap: body output '", body_out,
+                        "' is missing from the inferred context.");
   }
 
   // Each output sequence has its element dtype equal to the body output

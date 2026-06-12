@@ -37,7 +37,20 @@ from onnx_light.onnx.reference import ReferenceEvaluator
 # ``STRING`` / sub-byte tensor outputs that ``run_model_backend`` cannot
 # yet convert back to numpy).
 _IMPLEMENTED_OPS: frozenset[str] = frozenset(
-    {"Abs", "Adagrad", "Adam", "Add", "Cast", "Div", "Momentum", "Mul", "Neg", "Sub"}
+    {
+        "Abs",
+        "Adagrad",
+        "Adam",
+        "Add",
+        "Cast",
+        "CastMap",
+        "DictVectorizer",
+        "Div",
+        "Momentum",
+        "Mul",
+        "Neg",
+        "Sub",
+    }
 )
 
 

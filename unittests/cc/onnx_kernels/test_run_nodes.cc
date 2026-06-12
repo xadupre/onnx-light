@@ -18,6 +18,7 @@
 #include <cstring>
 #include <stdexcept>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -2295,6 +2296,58 @@ TEST(RunNodes, RunNodeGRUFromDispatchTable) {
   }
 }
 
+TEST(RunNodes, RunNodeLSTMFromDispatchTableUniformSequenceLens) {
+  // ``sequence_lens`` is accepted when every entry equals ``seq_length``
+  // (no-op masking); the dispatch must produce the same outputs as the
+  // 3-input form above. This mirrors the ``test_cc_lstm_with_peepholes``
+  // backend case (which passes a uniform ``sequence_lens``).
+  RuntimeContext rt(KernelContext(DefaultOpset(14)));
+
+  constexpr int64_t kSeqLength = 1;
+  constexpr int64_t kBatch = 2;
+  constexpr int64_t kInput = 4;
+  constexpr int64_t kHidden = 3;
+  constexpr int64_t kNumGates = 4;
+  constexpr int64_t kNumPeepholes = 3;
+  constexpr float kWeightScale = 0.1f;
+
+  rt.tensors()["X"] =
+      Tensor::FromFloat("X", {kSeqLength, kBatch, kInput}, {1, 2, 3, 4, 5, 6, 7, 8});
+  std::vector<float> w_data(static_cast<size_t>(kNumGates * kHidden * kInput), kWeightScale);
+  std::vector<float> r_data(static_cast<size_t>(kNumGates * kHidden * kHidden), kWeightScale);
+  std::vector<float> b_data(static_cast<size_t>(2 * kNumGates * kHidden), 0.0f);
+  std::vector<float> h0_data(static_cast<size_t>(kBatch * kHidden), 0.0f);
+  std::vector<float> c0_data(static_cast<size_t>(kBatch * kHidden), 0.0f);
+  std::vector<float> p_data(static_cast<size_t>(kNumPeepholes * kHidden), kWeightScale);
+  rt.tensors()["W"] = Tensor::FromFloat("W", {1, kNumGates * kHidden, kInput}, w_data);
+  rt.tensors()["R"] = Tensor::FromFloat("R", {1, kNumGates * kHidden, kHidden}, r_data);
+  rt.tensors()["B"] = Tensor::FromFloat("B", {1, 2 * kNumGates * kHidden}, b_data);
+  rt.tensors()["sequence_lens"] =
+      Tensor::FromInt32("sequence_lens", {kBatch},
+                        {static_cast<int32_t>(kSeqLength), static_cast<int32_t>(kSeqLength)});
+  rt.tensors()["initial_h"] = Tensor::FromFloat("initial_h", {1, kBatch, kHidden}, h0_data);
+  rt.tensors()["initial_c"] = Tensor::FromFloat("initial_c", {1, kBatch, kHidden}, c0_data);
+  rt.tensors()["P"] = Tensor::FromFloat("P", {1, kNumPeepholes * kHidden}, p_data);
+
+  NodeProto node = MakeNode(
+      "LSTM", {"X", "W", "R", "B", "sequence_lens", "initial_h", "initial_c", "P"}, {"", "Y_h"});
+  AttributeProto *hs = node.add_attribute();
+  hs->set_name("hidden_size");
+  hs->set_type(AttributeProto::AttributeType::INT);
+  hs->set_i(kHidden);
+
+  RunNode(node, rt);
+
+  const Tensor &y_h = rt.tensors().at("Y_h");
+  EXPECT_EQ(y_h.shape, (std::vector<int64_t>{1, kBatch, kHidden}));
+  EXPECT_EQ(y_h.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+
+  // Non-uniform ``sequence_lens`` is still rejected.
+  rt.tensors()["sequence_lens"] =
+      Tensor::FromInt32("sequence_lens", {kBatch}, {static_cast<int32_t>(kSeqLength), 0});
+  EXPECT_THROW(RunNode(node, rt), std::invalid_argument);
+}
+
 TEST(RunNodes, RunNodeLSTMFromDispatchTable) {
   // Single-step (seq_length=1) LSTM with X/W/R only: requests Y_h as the
   // only output via an empty Y output name, mirroring the ``lstm_defaults``
@@ -2894,6 +2947,172 @@ TEST(RunNodes, RunNodeUnknownOpWithoutCustomKernelThrows) {
   rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}));
   NodeProto node = MakeNode("Scale", {"x"}, {"y"}, "my.domain");
   EXPECT_THROW(RunNode(node, rt), std::invalid_argument);
+}
+
+// ---------------------------------------------------------------------------
+// Release-unused-intermediates tests
+// ---------------------------------------------------------------------------
+
+TEST(RunNodes, CollectNodeInputsPlainNode) {
+  NodeProto node = MakeNode("Add", {"x", "y"}, {"z"});
+  auto inputs = RuntimeContext::CollectNodeInputs(node);
+  EXPECT_EQ(inputs, (std::vector<std::string>{"x", "y"}));
+}
+
+TEST(RunNodes, CollectNodeInputsSkipsEmptyAndDedups) {
+  NodeProto node = MakeNode("Add", {"x", "", "x"}, {"z"});
+  auto inputs = RuntimeContext::CollectNodeInputs(node);
+  EXPECT_EQ(inputs, (std::vector<std::string>{"x"}));
+}
+
+TEST(RunNodes, CollectNodeInputsIncludesSubgraphCaptures) {
+  // ``If`` node with then/else subgraphs each capturing an outer name.
+  NodeProto node;
+  node.set_op_type("If");
+  node.add_input("cond");
+
+  auto add_subgraph = [](NodeProto &n, const std::string &attr_name,
+                         const std::string &captured_name, const std::string &out_name) {
+    AttributeProto attr;
+    attr.set_name(attr_name);
+    attr.set_type(AttributeProto::AttributeType::GRAPH);
+    GraphProto &g = attr.ref_g();
+    // Body: out_name = Identity(captured_name)
+    NodeProto inner;
+    inner.set_op_type("Identity");
+    inner.add_input(captured_name);
+    inner.add_output(out_name);
+    g.ref_node().push_back(inner);
+    ValueInfoProto vi;
+    vi.set_name(out_name);
+    g.ref_output().push_back(vi);
+    n.ref_attribute().push_back(attr);
+  };
+  add_subgraph(node, "then_branch", "a", "y");
+  add_subgraph(node, "else_branch", "b", "y");
+
+  auto inputs = RuntimeContext::CollectNodeInputs(node);
+  EXPECT_EQ(inputs, (std::vector<std::string>{"cond", "a", "b"}));
+}
+
+TEST(RunNodes, ComputeReleasableInputsLastUse) {
+  // x -> Abs -> t ; (t, z) -> Add -> y
+  // "x" last-used at node 0, "t" last-used at node 1, "z" last-used at node 1.
+  // With keep = {"y"}, after node 0 we can release "x"; after node 1 we can
+  // release "t" and "z".
+  std::vector<NodeProto> nodes;
+  nodes.push_back(MakeNode("Abs", {"x"}, {"t"}));
+  nodes.push_back(MakeNode("Add", {"t", "z"}, {"y"}));
+
+  std::unordered_set<std::string> keep{"y"};
+  auto rel = RuntimeContext::ComputeReleasableInputs(nodes, keep);
+  ASSERT_EQ(rel.size(), 2u);
+  EXPECT_EQ(rel[0], (std::vector<std::string>{"x"}));
+  EXPECT_EQ(rel[1], (std::vector<std::string>{"t", "z"}));
+}
+
+TEST(RunNodes, ComputeReleasableInputsKeepIsPreserved) {
+  // Reuse the same intermediate: pretend "x" is also a declared graph output
+  // (i.e. caller wants to keep "x" after the run). It must NOT be released.
+  std::vector<NodeProto> nodes;
+  nodes.push_back(MakeNode("Abs", {"x"}, {"t"}));
+  std::unordered_set<std::string> keep{"x", "t"};
+  auto rel = RuntimeContext::ComputeReleasableInputs(nodes, keep);
+  ASSERT_EQ(rel.size(), 1u);
+  EXPECT_TRUE(rel[0].empty());
+}
+
+TEST(RunNodes, RunGraphReleaseIntermediatesRemovesUnusedAndEmitsEvent) {
+  // y = Add(Abs(x), z) — after running, "t" (the intermediate) must be gone
+  // from the context, "y" (declared output) must remain, and "x" / "z"
+  // (graph inputs already in the context) must also remain.
+  using onnx_kernels::TensorEventAction;
+
+  GraphProto graph;
+  ValueInfoProto vi_x;
+  vi_x.set_name("x");
+  ValueInfoProto vi_z;
+  vi_z.set_name("z");
+  ValueInfoProto vi_y;
+  vi_y.set_name("y");
+  graph.ref_input().push_back(vi_x);
+  graph.ref_input().push_back(vi_z);
+  graph.ref_output().push_back(vi_y);
+  graph.ref_node().push_back(MakeNode("Abs", {"x"}, {"t"}));
+  graph.ref_node().push_back(MakeNode("Add", {"t", "z"}, {"y"}));
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_events_enabled(true);
+  rt.set_release_intermediates(true);
+  rt.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
+  rt.Set("z", Tensor::FromFloat("z", {2}, {10.0f, 20.0f}));
+
+  RunGraph(graph, rt);
+
+  // "t" was released, "y" / "x" / "z" survived.
+  EXPECT_FALSE(rt.Has("t"));
+  EXPECT_TRUE(rt.Has("y"));
+  EXPECT_TRUE(rt.Has("x"));
+  EXPECT_TRUE(rt.Has("z"));
+
+  // At least one kRemove event was emitted for "t".
+  bool saw_remove_t = false;
+  for (const auto &ev : rt.events()) {
+    if (ev.action == TensorEventAction::kRemove && ev.name == "t") {
+      saw_remove_t = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(saw_remove_t);
+
+  // Default behaviour (release disabled) keeps the intermediate around so
+  // callers can still fetch it after run.
+  RuntimeContext rt2(KernelContext(DefaultOpset(18)));
+  rt2.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
+  rt2.Set("z", Tensor::FromFloat("z", {2}, {10.0f, 20.0f}));
+  RunGraph(graph, rt2);
+  EXPECT_TRUE(rt2.Has("t"));
+  EXPECT_TRUE(rt2.Has("y"));
+}
+
+TEST(RunNodes, ExecutionPlanIsCachedAcrossRunGraphInvocations) {
+  // GetExecutionPlan returns the same instance on subsequent calls for
+  // the same GraphProto, so the release analysis is paid only once.
+  GraphProto graph;
+  ValueInfoProto vi_x;
+  vi_x.set_name("x");
+  ValueInfoProto vi_y;
+  vi_y.set_name("y");
+  graph.ref_input().push_back(vi_x);
+  graph.ref_output().push_back(vi_y);
+  graph.ref_node().push_back(MakeNode("Abs", {"x"}, {"t"}));
+  graph.ref_node().push_back(MakeNode("Neg", {"t"}, {"y"}));
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_release_intermediates(true);
+  const onnx_kernels::ExecutionPlan &plan1 = rt.GetExecutionPlan(graph);
+  const onnx_kernels::ExecutionPlan &plan2 = rt.GetExecutionPlan(graph);
+  EXPECT_EQ(&plan1, &plan2);
+  EXPECT_EQ(plan1.num_nodes(), 2u);
+  // "t" is releasable after node 1, "x" / "y" are in keep (input/output).
+  EXPECT_TRUE(plan1.releasable()[0].empty());
+  ASSERT_EQ(plan1.releasable()[1].size(), 1u);
+  EXPECT_EQ(plan1.releasable()[1][0], "t");
+  EXPECT_TRUE(plan1.keep().count("x"));
+  EXPECT_TRUE(plan1.keep().count("y"));
+
+  // Two successive RunGraph calls both reuse the cached plan.
+  rt.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
+  RunGraph(graph, rt);
+  EXPECT_FALSE(rt.Has("t"));
+  EXPECT_TRUE(rt.Has("y"));
+  rt.Remove("y");
+  rt.Put("x", Tensor::FromFloat("x", {2}, {-3.0f, 4.0f}));
+  RunGraph(graph, rt);
+  EXPECT_FALSE(rt.Has("t"));
+  EXPECT_TRUE(rt.Has("y"));
+  // Cached plan still the same instance after both runs.
+  EXPECT_EQ(&rt.GetExecutionPlan(graph), &plan1);
 }
 
 } // namespace Test

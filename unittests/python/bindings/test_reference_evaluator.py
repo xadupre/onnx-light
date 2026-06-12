@@ -19,6 +19,7 @@ import unittest
 import numpy as np
 
 from onnx_light.ext_test_case import ExtTestCase
+import onnx_light.onnx as onnxl
 from onnx_light.onnx_lib import parser
 from onnx_light.onnx.reference import ReferenceEvaluator
 
@@ -165,6 +166,32 @@ class TestReferenceEvaluator(ExtTestCase):
         self.assertIn("Missing input", str(ctx.exception))
         self.assertIn("z", str(ctx.exception))
 
+    def test_release_intermediates_removes_unused_and_logs_event(self):
+        # With release_intermediates=True, the intermediate "t" is removed
+        # from the runtime context as soon as the last node that references
+        # it (Add) finishes. The graph output "y" is preserved.
+        model = parser.parse_model(_ABS_ADD_MODEL_SRC)
+        sess = ReferenceEvaluator(model, events_enabled=True, release_intermediates=True)
+        x = np.array([-1.0, 2.0, -3.0], dtype=np.float32)
+        z = np.array([10.0, 20.0, 30.0], dtype=np.float32)
+        (y,) = sess.run(["y"], {"x": x, "z": z})
+        np.testing.assert_array_equal(y, np.array([11.0, 22.0, 33.0], dtype=np.float32))
+
+        actions = [ev.as_dict() for ev in sess.events()]
+        removed_names = [d["name"] for d in actions if d["action"] == "remove"]
+        self.assertIn("t", removed_names)
+        # "y" (graph output) must NOT have been removed.
+        self.assertNotIn("y", removed_names)
+
+    def test_release_intermediates_disabled_keeps_intermediates(self):
+        # With release_intermediates=False, every intermediate stays observable after the run.
+        model = parser.parse_model(_ABS_ADD_MODEL_SRC)
+        sess = ReferenceEvaluator(model, events_enabled=True, release_intermediates=False)
+        sess.run(None, {"x": np.zeros(3, dtype=np.float32), "z": np.zeros(3, dtype=np.float32)})
+        actions = [ev.as_dict() for ev in sess.events()]
+        removed_names = [d["name"] for d in actions if d["action"] == "remove"]
+        self.assertEqual(removed_names, [])
+
     def test_unknown_output_raises(self):
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)
         sess = ReferenceEvaluator(model)
@@ -206,6 +233,44 @@ class TestReferenceEvaluator(ExtTestCase):
         np.testing.assert_array_equal(y1, b0 + b1)
         self.assertEqual(y0.dtype, np.int16)
         self.assertEqual(y1.dtype, np.uint8)
+
+    def test_dict_vectorizer_int64_float_dict_feed(self):
+        # ``ai.onnx.ml::DictVectorizer`` consumes a ``map(int64, float)``
+        # graph input through the runtime's two-tensor convention
+        # (``x_keys`` / ``x_values``); ReferenceEvaluator accepts a Python
+        # ``dict`` for the map-typed input and splits it transparently.
+        model = onnxl.ModelProto()
+        model.ir_version = 10
+        op = model.opset_import.add()
+        op.domain = ""
+        op.version = 13
+        op_ml = model.opset_import.add()
+        op_ml.domain = "ai.onnx.ml"
+        op_ml.version = 1
+        graph = model.graph
+        graph.name = "dv"
+        x = graph.input.add()
+        x.name = "x"
+        mt = x.type.map_type
+        mt.key_type = int(onnxl.TensorProto.INT64)
+        mt.value_type.tensor_type.elem_type = int(onnxl.TensorProto.FLOAT)
+        y = graph.output.add()
+        y.name = "y"
+        y.type.tensor_type.elem_type = int(onnxl.TensorProto.FLOAT)
+        node = graph.node.add()
+        node.op_type = "DictVectorizer"
+        node.domain = "ai.onnx.ml"
+        node.input.append("x")
+        node.output.append("y")
+        attr = node.attribute.add()
+        attr.name = "int64_vocabulary"
+        attr.type = onnxl.AttributeProto.INTS
+        attr.ints.extend([10, 20, 30])
+
+        sess = ReferenceEvaluator(model)
+        self.assertEqual(sess.input_names, ["x"])
+        (out,) = sess.run(None, {"x": {10: 1.5, 30: 2.5}})
+        np.testing.assert_array_equal(out, np.array([1.5, 0.0, 2.5], dtype=np.float32))
 
     def test_lstm_layout1_matches_layout0(self):
         # Regression test for ``test_cc_lstm_batchwise``: the LSTM kernel
@@ -358,6 +423,42 @@ class TestReferenceEvaluator(ExtTestCase):
         self.assertEqual(got[0].shape, (32, 32, 3))
         self.assertEqual(got[0].shape, outputs[0].shape)
         np.testing.assert_array_equal(got[0], outputs[0])
+
+    def _check_image_decoder_jpeg(self, test_name, expected_shape, expected_channels):
+        # Regression test for the JPEG variants of ``test_cc_image_decoder_*``:
+        # earlier versions of the ``ImageDecoder`` kernel returned the
+        # empty-matrix fallback ``(0, 0, C)`` for any non-BMP bytestream.
+        # The baseline JFIF decoder must return the correct shape and pixel
+        # values that closely match the upstream Pillow reference (small
+        # integer rounding differences are tolerated since the reference is
+        # produced by libjpeg-turbo).
+        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+
+        tc = collect_test_case().get(test_name)
+        self.assertIsNotNone(tc)
+        inputs, outputs = tc.data_sets[0]
+        sess = ReferenceEvaluator(tc.model)
+        got = sess.run(None, dict(zip(sess.input_names, inputs)))
+        self.assertEqual(len(got), 1)
+        self.assertEqual(got[0].dtype, np.uint8)
+        self.assertEqual(got[0].shape, expected_shape)
+        self.assertEqual(got[0].shape[-1], expected_channels)
+        self.assertEqual(got[0].shape, outputs[0].shape)
+        diff = np.abs(got[0].astype(np.int32) - outputs[0].astype(np.int32))
+        # Allow at most a handful of unit-level differences caused by the
+        # integer YCbCr→RGB conversion and chroma upsampling rounding.
+        self.assertLessEqual(int(diff.max()), 2)
+
+    def test_image_decoder_decode_jpeg_rgb(self):
+        self._check_image_decoder_jpeg("test_cc_image_decoder_decode_jpeg_rgb", (32, 32, 3), 3)
+
+    def test_image_decoder_decode_jpeg_bgr(self):
+        self._check_image_decoder_jpeg("test_cc_image_decoder_decode_jpeg_bgr", (32, 32, 3), 3)
+
+    def test_image_decoder_decode_jpeg_grayscale(self):
+        self._check_image_decoder_jpeg(
+            "test_cc_image_decoder_decode_jpeg_grayscale", (32, 32, 1), 1
+        )
 
 
 class TestReferenceEvaluatorCustomKernels(ExtTestCase):

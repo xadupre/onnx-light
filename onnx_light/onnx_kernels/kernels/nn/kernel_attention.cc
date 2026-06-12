@@ -4,10 +4,13 @@
 
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_kernels/kernels/_helpers/float16_promote.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -19,16 +22,18 @@ namespace kernel {
 
 namespace {
 
-// Validates that ``t`` is a rank-4 FLOAT tensor. The caller is identified by
-// ``label`` for clearer error messages.
+// Validates that ``t`` is a rank-4 tensor whose element type is supported
+// by the Attention kernel (FLOAT, FLOAT16, or BFLOAT16). The caller is
+// identified by ``label`` for clearer error messages.
 void CheckRank4Float(const Tensor &t, const char *label) {
-  EXT_ENFORCE_INVALID(t.data_type == DataType::FLOAT,
-                      std::string("kernel::Attention: '") + label + "' must be a FLOAT tensor.");
-  EXT_ENFORCE_INVALID(t.shape.size() == 4,
-                      std::string("kernel::Attention: '") + label + "' must be a rank-4 tensor.");
+  EXT_ENFORCE_INVALID(t.data_type == DataType::FLOAT || t.data_type == DataType::FLOAT16 ||
+                          t.data_type == DataType::BFLOAT16,
+                      "kernel::Attention: '", label,
+                      "' must be a FLOAT, FLOAT16 or BFLOAT16 tensor.");
+  EXT_ENFORCE_INVALID(t.shape.size() == 4, "kernel::Attention: '", label,
+                      "' must be a rank-4 tensor.");
   for (int64_t d : t.shape) {
-    EXT_ENFORCE_INVALID(d >= 0, std::string("kernel::Attention: '") + label +
-                                    "' has a negative dimension.");
+    EXT_ENFORCE_INVALID(d >= 0, "kernel::Attention: '", label, "' has a negative dimension.");
   }
 }
 
@@ -37,18 +42,16 @@ void CheckRank4Float(const Tensor &t, const char *label) {
 // internal kernel. Returns the promoted tensor; ``num_heads`` must divide
 // ``hidden_size``.
 Tensor PromoteRank3(const Tensor &t, int64_t num_heads, const char *label) {
-  EXT_ENFORCE_INVALID(t.data_type == DataType::FLOAT,
-                      std::string("kernel::Attention: '") + label + "' must be a FLOAT tensor.");
-  EXT_ENFORCE_INVALID(t.shape.size() == 3,
-                      std::string("kernel::Attention: '") + label + "' must be rank-3.");
+  EXT_ENFORCE_INVALID(t.data_type == DataType::FLOAT, "kernel::Attention: '", label,
+                      "' must be a FLOAT tensor.");
+  EXT_ENFORCE_INVALID(t.shape.size() == 3, "kernel::Attention: '", label, "' must be rank-3.");
   const int64_t batch = t.shape[0];
   const int64_t seq = t.shape[1];
   const int64_t hidden = t.shape[2];
-  EXT_ENFORCE_INVALID(num_heads > 0, std::string("kernel::Attention: '") + label +
-                                         "' needs a positive ``num_heads`` to promote rank-3.");
-  EXT_ENFORCE_INVALID(hidden % num_heads == 0,
-                      std::string("kernel::Attention: '") + label +
-                          "' hidden_size must be a multiple of ``num_heads``.");
+  EXT_ENFORCE_INVALID(num_heads > 0, "kernel::Attention: '", label,
+                      "' needs a positive ``num_heads`` to promote rank-3.");
+  EXT_ENFORCE_INVALID(hidden % num_heads == 0, "kernel::Attention: '", label,
+                      "' hidden_size must be a multiple of ``num_heads``.");
   const int64_t head_size = hidden / num_heads;
   Tensor out("", DataType::FLOAT, {batch, num_heads, seq, head_size},
              std::vector<uint8_t>(t.size_bytes()));
@@ -223,8 +226,8 @@ void Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, fl
   attrs.has_scale = true;
   attrs.scale = scale;
   Result r = (*this)(Q, K, V, attrs, attn_mask);
-  EXT_ENFORCE_INVALID(output.data_type == DataType::FLOAT,
-                      "kernel::Attention preallocated output must be a FLOAT tensor.");
+  EXT_ENFORCE_INVALID(output.data_type == Q.data_type,
+                      "kernel::Attention preallocated output must share Q's element type.");
   EXT_ENFORCE_INVALID(output.shape == r.Y.shape,
                       "kernel::Attention preallocated output shape must be (batch_size, "
                       "q_num_heads, q_seq_len, v_head_size).");
@@ -236,6 +239,45 @@ void Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, fl
 Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V,
                                         const Attributes &attrs, const Tensor *attn_mask,
                                         const Tensor *past_key, const Tensor *past_value) const {
+  // ----- Half-precision fast path ----------------------------------------
+  // FLOAT16 / BFLOAT16 inputs are promoted to FLOAT32 here, the reference
+  // implementation runs in float32, and the result tensors are demoted
+  // back to the original element type. ``attn_mask`` may be FLOAT or BOOL
+  // (or a matching half-precision dtype); BOOL masks are forwarded as-is.
+  if (IsHalfPrecision(Q.data_type)) {
+    EXT_ENFORCE_INVALID(K.data_type == Q.data_type && V.data_type == Q.data_type,
+                        "kernel::Attention: Q, K, V must share the same dtype.");
+    const int32_t target_dtype = Q.data_type;
+    const Tensor Q_f = PromoteToFloat32(Q);
+    const Tensor K_f = PromoteToFloat32(K);
+    const Tensor V_f = PromoteToFloat32(V);
+    Tensor attn_mask_f;
+    const Tensor *attn_mask_ptr = attn_mask;
+    if (attn_mask != nullptr && IsHalfPrecision(attn_mask->data_type)) {
+      attn_mask_f = PromoteToFloat32(*attn_mask);
+      attn_mask_ptr = &attn_mask_f;
+    }
+    Tensor past_key_f;
+    const Tensor *past_key_ptr = past_key;
+    if (past_key != nullptr && IsHalfPrecision(past_key->data_type)) {
+      past_key_f = PromoteToFloat32(*past_key);
+      past_key_ptr = &past_key_f;
+    }
+    Tensor past_value_f;
+    const Tensor *past_value_ptr = past_value;
+    if (past_value != nullptr && IsHalfPrecision(past_value->data_type)) {
+      past_value_f = PromoteToFloat32(*past_value);
+      past_value_ptr = &past_value_f;
+    }
+    Result r_f = (*this)(Q_f, K_f, V_f, attrs, attn_mask_ptr, past_key_ptr, past_value_ptr);
+    Result r;
+    r.Y = DemoteFromFloat32(r_f.Y, target_dtype);
+    r.present_key = DemoteFromFloat32(r_f.present_key, target_dtype);
+    r.present_value = DemoteFromFloat32(r_f.present_value, target_dtype);
+    r.qk_matmul_output = DemoteFromFloat32(r_f.qk_matmul_output, target_dtype);
+    return r;
+  }
+
   // ----- Normalize Q/K/V to rank-4 ---------------------------------------
   EXT_ENFORCE_INVALID(Q.shape.size() == K.shape.size() && Q.shape.size() == V.shape.size(),
                       "kernel::Attention: Q, K, V must all share the same rank.");

@@ -39,8 +39,8 @@ void CheckOnnxDomain(const NodeProto &node) {
                           node.domain() == traditionalml::kOnnxMlDomain ||
                           node.domain() == preview::kOnnxPreviewDomain ||
                           node.domain() == training::kOnnxPreviewTrainingDomain,
-                      "ComputeShapeNode: unsupported domain '" + node.domain().as_string() +
-                          "' for op '" + node.op_type().as_string() + "'.");
+                      "ComputeShapeNode: unsupported domain '", node.domain().as_string(),
+                      "' for op '", node.op_type().as_string(), "'.");
 }
 
 // Returns the ``"<domain>:<name>"`` identifier used as a key in
@@ -279,14 +279,6 @@ std::optional<OptimTensor> MergeWithAnchor(ShapesContext &ctx, const std::string
   for (std::size_t i = 0; i < inferred.Shape().Rank(); ++i) {
     const OptimDim &di = inferred.Shape()[i];
     const OptimDim &da = anchor.Shape()[i];
-    // ``?`` is the wildcard placeholder used when a ValueInfoProto
-    // declares a dim with neither a ``dim_value`` nor a ``dim_param``;
-    // it carries no information so the inferred dim wins and no
-    // constraint is recorded.
-    if (da.IsExpr() && (da.AsExpr() == "?" || da.AsExpr().empty())) {
-      merged_shape.PushBack(di);
-      continue;
-    }
     if (di == da) {
       merged_shape.PushBack(di);
     } else if (di.IsInt() && da.IsInt()) {
@@ -349,10 +341,6 @@ std::optional<OptimTensor> MergeWithAnchor(ShapesContext &ctx, const std::string
     for (std::size_t i = 0; i < a.Rank(); ++i) {
       const OptimDim &di = a[i];
       const OptimDim &da = b[i];
-      if (da.IsExpr() && (da.AsExpr() == "?" || da.AsExpr().empty())) {
-        merged_vas.PushBack(di);
-        continue;
-      }
       if (di == da) {
         merged_vas.PushBack(di);
       } else if (di.IsInt() && da.IsInt()) {
@@ -455,7 +443,7 @@ void AddDimAnchorSymbols(const OptimDim &dim, std::unordered_set<std::string> &s
     return;
   }
   const std::string &expr = dim.AsExpr();
-  if (expr.empty() || expr == "?") {
+  if (expr.empty()) {
     return;
   }
   symbols.insert(expr);
@@ -682,9 +670,9 @@ void ShapesContext::CheckInputsAvailable(const NodeProto &node) const {
     if (name.empty()) {
       continue;
     }
-    EXT_ENFORCE_INVALID(Has(name) || HasSequence(name),
-                        "CheckInputsAvailable: input '" + name + "' of op '" +
-                            node.op_type().as_string() + "' is missing from ShapesContext.");
+    EXT_ENFORCE_INVALID(Has(name) || HasSequence(name), "CheckInputsAvailable: input '", name,
+                        "' of op '", node.op_type().as_string(),
+                        "' is missing from ShapesContext.");
   }
 }
 
@@ -694,9 +682,9 @@ void ShapesContext::CheckOutputsNotAvailable(const NodeProto &node) const {
     if (name.empty()) {
       continue;
     }
-    EXT_ENFORCE_INVALID(!Has(name) && !HasSequence(name),
-                        "CheckOutputsNotAvailable: output '" + name + "' of op '" +
-                            node.op_type().as_string() + "' is already present in ShapesContext.");
+    EXT_ENFORCE_INVALID(!Has(name) && !HasSequence(name), "CheckOutputsNotAvailable: output '",
+                        name, "' of op '", node.op_type().as_string(),
+                        "' is already present in ShapesContext.");
   }
 }
 
@@ -726,9 +714,8 @@ void ShapesContext::ComputeShapeNode(const NodeProto &node) {
   const std::string key = NormaliseDispatchDomain(node) + ":" + op_type;
   const auto &table = DispatchTable();
   auto it = table.find(key);
-  EXT_ENFORCE_INVALID(it != table.end(), "ComputeShapeNode: unsupported op_type '" + op_type +
-                                             "' in domain '" + NormaliseDispatchDomain(node) +
-                                             "'.");
+  EXT_ENFORCE_INVALID(it != table.end(), "ComputeShapeNode: unsupported op_type '", op_type,
+                      "' in domain '", NormaliseDispatchDomain(node), "'.");
   it->second(*this, node);
 }
 

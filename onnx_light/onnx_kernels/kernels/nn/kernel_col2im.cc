@@ -38,10 +38,9 @@ void ResolveAttributes(size_t n_spatial, Col2Im::Attributes &attrs) {
 // Reads a 1-D INT64 tensor into a vector of int64s. Throws if the dtype or
 // rank are wrong.
 std::vector<int64_t> ReadInt64Vector(const Tensor &t, const char *name) {
-  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::INT64),
-                      std::string("kernel::Col2Im: '") + name + "' must be INT64.");
-  EXT_ENFORCE_INVALID(t.shape.size() == 1,
-                      std::string("kernel::Col2Im: '") + name + "' must be a 1-D tensor.");
+  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::INT64), "kernel::Col2Im: '",
+                      name, "' must be INT64.");
+  EXT_ENFORCE_INVALID(t.shape.size() == 1, "kernel::Col2Im: '", name, "' must be a 1-D tensor.");
   const int64_t n = t.shape[0];
   std::vector<int64_t> out(static_cast<size_t>(n));
   const int64_t *src = t.AsInt64();

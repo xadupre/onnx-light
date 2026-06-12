@@ -18,7 +18,7 @@ namespace kernel {
 namespace {
 
 std::vector<int64_t> ReadIntInput(const Tensor &t, const std::string &name) {
-  EXT_ENFORCE_INVALID(t.shape.size() <= 1, "kernel::Slice: '" + name + "' input must be 1-D.");
+  EXT_ENFORCE_INVALID(t.shape.size() <= 1, "kernel::Slice: '", name, "' input must be 1-D.");
   const int64_t n = t.shape.empty() ? 0 : t.shape[0];
   std::vector<int64_t> out(static_cast<std::size_t>(n));
   if (n == 0) {
@@ -28,8 +28,8 @@ std::vector<int64_t> ReadIntInput(const Tensor &t, const std::string &name) {
     std::memcpy(out.data(), t.bytes(), static_cast<std::size_t>(n) * sizeof(int64_t));
     return out;
   }
-  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::INT32),
-                      "kernel::Slice: '" + name + "' input must be INT32 or INT64.");
+  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::INT32), "kernel::Slice: '",
+                      name, "' input must be INT32 or INT64.");
   const int32_t *p = reinterpret_cast<const int32_t *>(t.bytes());
   for (int64_t i = 0; i < n; ++i) {
     out[static_cast<std::size_t>(i)] = static_cast<int64_t>(p[i]);

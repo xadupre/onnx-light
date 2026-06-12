@@ -30,7 +30,7 @@ Core objects and where ownership lives
 --------------------------------------
 
 Every tensor stores bytes in ``TensorProto::raw_data`` (type ``utils::ByteSpan``).
-That ``ByteSpan`` object is a member of the ``TensorProto`` instance, so its
+That ``ByteSpan`` object is a member of the :class:`~onnx_light.onnx_lib.TensorProto` instance, so its
 lifetime is tied to the model object graph (``ModelProto -> GraphProto -> TensorProto``).
 ``ByteSpan`` has two storage modes:
 
@@ -39,7 +39,7 @@ lifetime is tied to the model object graph (``ModelProto -> GraphProto -> Tensor
   owner token.
 
 When the borrowed mode also carries a shared owner token, the backing storage
-remains alive as long as the corresponding ``TensorProto`` (or a copy of it) is
+remains alive as long as the corresponding :class:`~onnx_light.onnx_lib.TensorProto` (or a copy of it) is
 alive.
 
 When ownership is assigned during parsing
@@ -135,15 +135,15 @@ Loading scenarios summary
    * - ``onnxl.load("model.onnx")`` (single-file)
      - ``False`` (default)
      - Owned copy
-     - ``TensorProto`` / model
+     - :class:`~onnx_light.onnx_lib.TensorProto` / model
    * - ``onnxl.load("model.onnx", no_copy=True)`` (single-file)
      - ``True``
      - Owned copy (file stream cannot borrow inline payload)
-     - ``TensorProto`` / model
+     - :class:`~onnx_light.onnx_lib.TensorProto` / model
    * - ``onnxl.load(model_bytes, no_copy=False)``
      - ``False``
      - Owned copy
-     - ``TensorProto`` / model
+     - :class:`~onnx_light.onnx_lib.TensorProto` / model
    * - ``onnxl.load(model_bytes, no_copy=True)``
      - ``True``
      - Borrowed pointer into ``model_bytes``
@@ -151,7 +151,7 @@ Loading scenarios summary
    * - ``onnxl.load("model.onnx", load_external_data=True, no_copy=False)``
      - ``False``
      - Owned copy
-     - ``TensorProto`` / model
+     - :class:`~onnx_light.onnx_lib.TensorProto` / model
    * - ``onnxl.load("model.onnx", load_external_data=True, no_copy=True)``
      - ``True``
      - Borrowed pointer + shared owner token

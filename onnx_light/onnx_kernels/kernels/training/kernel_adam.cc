@@ -24,29 +24,28 @@ constexpr const char *kAdamName = "kernel::Adam";
 int64_t ShapeElementCount(const std::vector<int64_t> &shape, const char *label) {
   int64_t count = 1;
   for (int64_t d : shape) {
-    EXT_ENFORCE_INVALID(d >= 0,
-                        std::string(kAdamName) + ": '" + label + "' has a negative dimension.");
+    EXT_ENFORCE_INVALID(d >= 0, kAdamName, ": '", label, "' has a negative dimension.");
     count *= d;
   }
   return count;
 }
 
 void CheckFloatTensor(const Tensor &t, const char *label) {
-  EXT_ENFORCE_INVALID(t.data_type == DataType::FLOAT,
-                      std::string(kAdamName) + ": '" + label + "' must be a FLOAT tensor.");
+  EXT_ENFORCE_INVALID(t.data_type == DataType::FLOAT, kAdamName, ": '", label,
+                      "' must be a FLOAT tensor.");
 }
 
 void CheckScalar(const Tensor &t, const char *label) {
   // ONNX scalars may be encoded either with an empty shape or with a
   // single-element shape; accept both for the sake of test robustness.
   const int64_t count = ShapeElementCount(t.shape, label);
-  EXT_ENFORCE_INVALID(count == 1, std::string(kAdamName) + ": '" + label +
-                                      "' must be a scalar (single-element) tensor.");
+  EXT_ENFORCE_INVALID(count == 1, kAdamName, ": '", label,
+                      "' must be a scalar (single-element) tensor.");
 }
 
 void CheckSameShape(const Tensor &a, const Tensor &b, const char *label_a, const char *label_b) {
-  EXT_ENFORCE_INVALID(a.shape == b.shape, std::string(kAdamName) + ": '" + label_a + "' and '" +
-                                              label_b + "' must have the same shape.");
+  EXT_ENFORCE_INVALID(a.shape == b.shape, kAdamName, ": '", label_a, "' and '", label_b,
+                      "' must have the same shape.");
 }
 
 } // namespace
@@ -56,11 +55,9 @@ std::vector<Tensor> Adam::operator()(const Tensor &R, const Tensor &T,
                                      const std::vector<Tensor> &Vs, const std::vector<Tensor> &Hs,
                                      float alpha, float beta, float epsilon, float norm_coefficient,
                                      float norm_coefficient_post) const {
-  EXT_ENFORCE_INVALID(!Xs.empty(),
-                      std::string(kAdamName) + ": at least one optimized tensor is required.");
+  EXT_ENFORCE_INVALID(!Xs.empty(), kAdamName, ": at least one optimized tensor is required.");
   EXT_ENFORCE_INVALID(Xs.size() == Gs.size() && Xs.size() == Vs.size() && Xs.size() == Hs.size(),
-                      std::string(kAdamName) +
-                          ": 'Xs', 'Gs', 'Vs' and 'Hs' must have the same length.");
+                      kAdamName, ": 'Xs', 'Gs', 'Vs' and 'Hs' must have the same length.");
 
   std::vector<Tensor> outputs;
   outputs.reserve(Xs.size() * 3);
@@ -84,20 +81,16 @@ void Adam::operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor
                       const std::vector<Tensor> &Hs, std::vector<Tensor> &outputs, float alpha,
                       float beta, float epsilon, float norm_coefficient,
                       float norm_coefficient_post) const {
-  EXT_ENFORCE_INVALID(!Xs.empty(),
-                      std::string(kAdamName) + ": at least one optimized tensor is required.");
+  EXT_ENFORCE_INVALID(!Xs.empty(), kAdamName, ": at least one optimized tensor is required.");
   EXT_ENFORCE_INVALID(Xs.size() == Gs.size() && Xs.size() == Vs.size() && Xs.size() == Hs.size(),
-                      std::string(kAdamName) +
-                          ": 'Xs', 'Gs', 'Vs' and 'Hs' must have the same length.");
+                      kAdamName, ": 'Xs', 'Gs', 'Vs' and 'Hs' must have the same length.");
   const size_t n = Xs.size();
-  EXT_ENFORCE_INVALID(outputs.size() == 3 * n,
-                      std::string(kAdamName) +
-                          " preallocated outputs vector must contain exactly 3 * N tensors.");
+  EXT_ENFORCE_INVALID(outputs.size() == 3 * n, kAdamName,
+                      " preallocated outputs vector must contain exactly 3 * N tensors.");
 
   CheckFloatTensor(R, "R");
   CheckScalar(R, "R");
-  EXT_ENFORCE_INVALID(T.data_type == DataType::INT64,
-                      std::string(kAdamName) + ": 'T' must be an INT64 tensor.");
+  EXT_ENFORCE_INVALID(T.data_type == DataType::INT64, kAdamName, ": 'T' must be an INT64 tensor.");
   CheckScalar(T, "T");
 
   const float R_val = *R.AsFloat();
@@ -139,17 +132,17 @@ void Adam::operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor
     CheckFloatTensor(X_out, "X_new");
     CheckFloatTensor(V_out, "V_new");
     CheckFloatTensor(H_out, "H_new");
-    EXT_ENFORCE_INVALID(X_out.shape == X.shape,
-                        std::string(kAdamName) + " preallocated 'X_new' shape must match 'X'.");
-    EXT_ENFORCE_INVALID(V_out.shape == V.shape,
-                        std::string(kAdamName) + " preallocated 'V_new' shape must match 'V'.");
-    EXT_ENFORCE_INVALID(H_out.shape == H.shape,
-                        std::string(kAdamName) + " preallocated 'H_new' shape must match 'H'.");
+    EXT_ENFORCE_INVALID(X_out.shape == X.shape, kAdamName,
+                        " preallocated 'X_new' shape must match 'X'.");
+    EXT_ENFORCE_INVALID(V_out.shape == V.shape, kAdamName,
+                        " preallocated 'V_new' shape must match 'V'.");
+    EXT_ENFORCE_INVALID(H_out.shape == H.shape, kAdamName,
+                        " preallocated 'H_new' shape must match 'H'.");
     const int64_t count = ShapeElementCount(X.shape, "X");
     const size_t bytes = static_cast<size_t>(count) * sizeof(float);
-    EXT_ENFORCE_INVALID(
-        X_out.data.size() == bytes && V_out.data.size() == bytes && H_out.data.size() == bytes,
-        std::string(kAdamName) + " preallocated output buffers have unexpected size in bytes.");
+    EXT_ENFORCE_INVALID(X_out.data.size() == bytes && V_out.data.size() == bytes &&
+                            H_out.data.size() == bytes,
+                        kAdamName, " preallocated output buffers have unexpected size in bytes.");
 
     const float *pX = X.AsFloat();
     const float *pG = G.AsFloat();

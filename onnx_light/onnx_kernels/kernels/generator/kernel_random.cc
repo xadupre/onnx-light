@@ -25,8 +25,7 @@ namespace {
 int64_t CheckShape(const std::vector<int64_t> &shape, const char *op_name) {
   int64_t count = 1;
   for (int64_t dim : shape) {
-    EXT_ENFORCE_INVALID(dim >= 0, std::string("kernel::") + op_name +
-                                      ": shape must not contain negative dims.");
+    EXT_ENFORCE_INVALID(dim >= 0, "kernel::", op_name, ": shape must not contain negative dims.");
     count *= dim;
   }
   return count;
@@ -42,9 +41,8 @@ int32_t ResolveOutputDtype(int32_t requested, int32_t default_dtype, const char 
   case DataType::DOUBLE:
     return out_dtype;
   default:
-    EXT_ENFORCE_INVALID(false, std::string("kernel::") + op_name + ": unsupported output dtype " +
-                                   std::to_string(out_dtype) +
-                                   "; only FLOAT and DOUBLE are supported.");
+    EXT_ENFORCE_INVALID(false, "kernel::", op_name, ": unsupported output dtype ",
+                        std::to_string(out_dtype), "; only FLOAT and DOUBLE are supported.");
   }
   return out_dtype;
 }
@@ -107,15 +105,12 @@ Tensor MakeNormal(const std::vector<int64_t> &shape, double mean, double scale,
 }
 
 void CopyIntoOutput(const Tensor &produced, Tensor &output, const char *op_name) {
-  EXT_ENFORCE_INVALID(output.data_type == produced.data_type,
-                      std::string("kernel::") + op_name +
-                          " preallocated output must have the expected dtype.");
-  EXT_ENFORCE_INVALID(output.shape == produced.shape,
-                      std::string("kernel::") + op_name +
-                          " preallocated output shape must match the produced tensor shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == produced.data.size(),
-                      std::string("kernel::") + op_name +
-                          " preallocated output buffer has unexpected size in bytes.");
+  EXT_ENFORCE_INVALID(output.data_type == produced.data_type, "kernel::", op_name,
+                      " preallocated output must have the expected dtype.");
+  EXT_ENFORCE_INVALID(output.shape == produced.shape, "kernel::", op_name,
+                      " preallocated output shape must match the produced tensor shape.");
+  EXT_ENFORCE_INVALID(output.data.size() == produced.data.size(), "kernel::", op_name,
+                      " preallocated output buffer has unexpected size in bytes.");
   if (!produced.data.empty()) {
     std::memcpy(output.data.data(), produced.data.data(), produced.data.size());
   }

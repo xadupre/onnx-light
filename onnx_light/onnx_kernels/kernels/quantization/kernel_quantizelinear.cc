@@ -31,8 +31,8 @@ inline void RequireScalar(const Tensor &t, const char *name) {
   // quantization along a degenerate axis but is also commonly produced by
   // tooling for the per-tensor case.
   const int64_t n = t.element_count();
-  EXT_ENFORCE_INVALID(n == 1, std::string("kernel::QuantizeLinear: ") + name +
-                                  " must be a scalar (per-tensor quantization).");
+  EXT_ENFORCE_INVALID(n == 1, "kernel::QuantizeLinear: ", name,
+                      " must be a scalar (per-tensor quantization).");
 }
 
 template <typename ZP>

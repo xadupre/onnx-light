@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
@@ -36,19 +37,24 @@ void DivInPlace(const char *dtype_name, int32_t dtype, const Tensor &x, const Te
 }
 
 constexpr const char *kSupportedDivTypesMsg =
-    " only supports FLOAT, INT8, INT16, INT32, UINT8, UINT16, UINT32 and UINT64 inputs.";
+    " only supports FLOAT, DOUBLE, FLOAT16, BFLOAT16, INT8, INT16, INT32, INT64, UINT8, UINT16, "
+    "UINT32 and UINT64 inputs.";
 } // namespace
 
 Tensor Div::operator()(const Tensor &x, const Tensor &y) const {
   switch (x.data_type) {
   case DataType::FLOAT:
     return DivAlloc<float>("FLOAT", DataType::FLOAT, x, y);
+  case DataType::DOUBLE:
+    return DivAlloc<double>("DOUBLE", DataType::DOUBLE, x, y);
   case DataType::INT8:
     return DivAlloc<int8_t>("INT8", DataType::INT8, x, y);
   case DataType::INT16:
     return DivAlloc<int16_t>("INT16", DataType::INT16, x, y);
   case DataType::INT32:
     return DivAlloc<int32_t>("INT32", DataType::INT32, x, y);
+  case DataType::INT64:
+    return DivAlloc<int64_t>("INT64", DataType::INT64, x, y);
   case DataType::UINT8:
     return DivAlloc<uint8_t>("UINT8", DataType::UINT8, x, y);
   case DataType::UINT16:
@@ -57,6 +63,14 @@ Tensor Div::operator()(const Tensor &x, const Tensor &y) const {
     return DivAlloc<uint32_t>("UINT32", DataType::UINT32, x, y);
   case DataType::UINT64:
     return DivAlloc<uint64_t>("UINT64", DataType::UINT64, x, y);
+  case DataType::FLOAT16:
+    return detail::BinaryHalfElementwiseAlloc(kDivName, "FLOAT16", DataType::FLOAT16, x, y,
+                                              Float16BitsToFloat, FloatToFloat16Bits,
+                                              [](float a, float b) { return a / b; });
+  case DataType::BFLOAT16:
+    return detail::BinaryHalfElementwiseAlloc(kDivName, "BFLOAT16", DataType::BFLOAT16, x, y,
+                                              Bfloat16BitsToFloat, FloatToBfloat16Bits,
+                                              [](float a, float b) { return a / b; });
   default:
     throw std::invalid_argument(std::string(kDivName) + kSupportedDivTypesMsg);
   }
@@ -66,12 +80,16 @@ void Div::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
   switch (x.data_type) {
   case DataType::FLOAT:
     return DivInPlace<float>("FLOAT", DataType::FLOAT, x, y, output);
+  case DataType::DOUBLE:
+    return DivInPlace<double>("DOUBLE", DataType::DOUBLE, x, y, output);
   case DataType::INT8:
     return DivInPlace<int8_t>("INT8", DataType::INT8, x, y, output);
   case DataType::INT16:
     return DivInPlace<int16_t>("INT16", DataType::INT16, x, y, output);
   case DataType::INT32:
     return DivInPlace<int32_t>("INT32", DataType::INT32, x, y, output);
+  case DataType::INT64:
+    return DivInPlace<int64_t>("INT64", DataType::INT64, x, y, output);
   case DataType::UINT8:
     return DivInPlace<uint8_t>("UINT8", DataType::UINT8, x, y, output);
   case DataType::UINT16:
@@ -80,6 +98,14 @@ void Div::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
     return DivInPlace<uint32_t>("UINT32", DataType::UINT32, x, y, output);
   case DataType::UINT64:
     return DivInPlace<uint64_t>("UINT64", DataType::UINT64, x, y, output);
+  case DataType::FLOAT16:
+    return detail::BinaryHalfElementwise(kDivName, "FLOAT16", DataType::FLOAT16, x, y, output,
+                                         Float16BitsToFloat, FloatToFloat16Bits,
+                                         [](float a, float b) { return a / b; });
+  case DataType::BFLOAT16:
+    return detail::BinaryHalfElementwise(kDivName, "BFLOAT16", DataType::BFLOAT16, x, y, output,
+                                         Bfloat16BitsToFloat, FloatToBfloat16Bits,
+                                         [](float a, float b) { return a / b; });
   default:
     throw std::invalid_argument(std::string(kDivName) + kSupportedDivTypesMsg);
   }

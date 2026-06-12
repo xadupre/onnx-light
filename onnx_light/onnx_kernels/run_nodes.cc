@@ -968,10 +968,30 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
   }
 }
 
+namespace {
+
+// Runs every node of ``nodes`` in order and, after each node, delegates
+// to :cpp:func:`ExecutionPlan::ReleaseAfter` to free any intermediates
+// the plan has scheduled for release at that node.
+template <class NodeRange>
+void RunNodesAndRelease(const NodeRange &nodes, RuntimeContext &rt, const ExecutionPlan &plan) {
+  for (size_t i = 0; i < nodes.size(); ++i) {
+    RunNode(nodes[i], rt);
+    plan.ReleaseAfter(nodes[i], rt);
+  }
+}
+
+} // namespace
+
 void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext &rt) {
   for (size_t i = 0; i < nodes.size(); ++i) {
     RunNode(nodes[i], rt);
   }
+}
+
+void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext &rt,
+              const ExecutionPlan &plan) {
+  RunNodesAndRelease(nodes, rt, plan);
 }
 
 void RunGraph(const GraphProto &graph, RuntimeContext &rt) {
@@ -986,10 +1006,23 @@ void RunGraph(const GraphProto &graph, RuntimeContext &rt) {
       rt.Set(init_name, TensorFromProto(tp), TensorEventKind::kInitializer);
     }
   }
-  RunNodes(graph.node(), rt);
+  if (!rt.release_intermediates()) {
+    RunNodes(graph.node(), rt);
+    return;
+  }
+  // Reuse the cached :cpp:class:`ExecutionPlan` for ``graph`` (built
+  // on first use) so the release analysis is paid only once across
+  // every invocation of the same model.
+  RunNodes(graph.node(), rt, rt.GetExecutionPlan(graph));
 }
 
-void RunFunction(const FunctionProto &func, RuntimeContext &rt) { RunNodes(func.node(), rt); }
+void RunFunction(const FunctionProto &func, RuntimeContext &rt) {
+  if (!rt.release_intermediates()) {
+    RunNodes(func.node(), rt);
+    return;
+  }
+  RunNodes(func.node(), rt, rt.GetExecutionPlan(func));
+}
 
 void RunModel(const ModelProto &model, RuntimeContext &rt) {
   if (!model.has_graph()) {

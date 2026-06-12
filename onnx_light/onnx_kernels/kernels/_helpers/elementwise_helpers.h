@@ -197,6 +197,88 @@ Tensor BinaryElementwiseAllocInOut(const char *op_name, const char *in_dtype_nam
   return z;
 }
 
+// ---------------------------------------------------------------------------
+// Half-precision (FLOAT16 / BFLOAT16) element-wise helpers
+//
+// These perform decode → float32 op → encode in a single pass without
+// intermediate tensor allocations. They reuse the broadcast machinery
+// (BroadcastInfo / CheckBinaryBroadcast) but iterate with uint16_t pointers,
+// calling the provided decode/encode functions per element.
+// ---------------------------------------------------------------------------
+
+using HalfDecodeFunc = float (*)(uint16_t);
+using HalfEncodeFunc = uint16_t (*)(float);
+
+/// In-place half-precision binary element-wise kernel.
+template <typename Op>
+void BinaryHalfElementwise(const char *op_name, const char *dtype_name, int32_t dtype,
+                           const Tensor &x, const Tensor &y, Tensor &output, HalfDecodeFunc decode,
+                           HalfEncodeFunc encode, Op op) {
+  const BroadcastInfo bi = CheckBinaryBroadcast(op_name, dtype_name, dtype, x, y);
+  const size_t expected_bytes = static_cast<size_t>(bi.element_count) * sizeof(uint16_t);
+  CheckPreallocatedOutput(op_name, dtype_name, dtype, bi.shape, expected_bytes, output);
+
+  const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
+  const uint16_t *py = reinterpret_cast<const uint16_t *>(y.bytes());
+  uint16_t *pz = reinterpret_cast<uint16_t *>(output.data.data());
+
+  if (x.shape == y.shape) {
+    for (int64_t i = 0; i < bi.element_count; ++i) {
+      pz[static_cast<size_t>(i)] = encode(op(decode(px[i]), decode(py[i])));
+    }
+    return;
+  }
+  if (bi.nx == 1 || bi.ny == 1) {
+    for (int64_t i = 0; i < bi.element_count; ++i) {
+      const float a = bi.nx == 1 ? decode(px[0]) : decode(px[i]);
+      const float b = bi.ny == 1 ? decode(py[0]) : decode(py[i]);
+      pz[static_cast<size_t>(i)] = encode(op(a, b));
+    }
+    return;
+  }
+
+  const size_t rank = bi.shape.size();
+  std::vector<int64_t> idx(rank, 0);
+  for (int64_t flat = 0; flat < bi.element_count; ++flat) {
+    int64_t ox = 0, oy = 0;
+    for (size_t d = 0; d < rank; ++d) {
+      ox += idx[d] * bi.strides_x[d];
+      oy += idx[d] * bi.strides_y[d];
+    }
+    pz[static_cast<size_t>(flat)] = encode(op(decode(px[ox]), decode(py[oy])));
+    for (size_t d = rank; d-- > 0;) {
+      if (++idx[d] < bi.shape[d]) {
+        break;
+      }
+      idx[d] = 0;
+    }
+  }
+}
+
+/// Allocating half-precision binary element-wise kernel.
+template <typename Op>
+Tensor BinaryHalfElementwiseAlloc(const char *op_name, const char *dtype_name, int32_t dtype,
+                                  const Tensor &x, const Tensor &y, HalfDecodeFunc decode,
+                                  HalfEncodeFunc encode, Op op) {
+  const BroadcastInfo bi = CheckBinaryBroadcast(op_name, dtype_name, dtype, x, y);
+  Tensor z("", dtype, bi.shape,
+           std::vector<uint8_t>(static_cast<size_t>(bi.element_count) * sizeof(uint16_t)));
+  BinaryHalfElementwise(op_name, dtype_name, dtype, x, y, z, decode, encode, op);
+  return z;
+}
+
+/// Unary half-precision element-wise kernel (single-pass, no allocation).
+template <typename Op>
+void UnaryHalfElementwise(const Tensor &x, Tensor &output, HalfDecodeFunc decode,
+                          HalfEncodeFunc encode, Op op) {
+  const int64_t n = x.element_count();
+  const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
+  uint16_t *py = reinterpret_cast<uint16_t *>(output.data.data());
+  for (int64_t i = 0; i < n; ++i) {
+    py[i] = encode(op(decode(px[i])));
+  }
+}
+
 } // namespace detail
 } // namespace kernel
 } // namespace onnx_kernels

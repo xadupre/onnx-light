@@ -4,6 +4,8 @@
 
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+
 #include <cmath>
 #include <cstdint>
 #include <stdexcept>
@@ -35,7 +37,6 @@ template <typename T> void ComputeTanh(const Tensor &x, Tensor &output) {
   const int64_t n = x.element_count();
   const T *px = reinterpret_cast<const T *>(x.bytes());
   T *py = reinterpret_cast<T *>(output.data.data());
-  // sqrt(2/pi)
   const T sqrt_2_over_pi = static_cast<T>(0.7978845608028654L);
   const T c0 = static_cast<T>(0.044715);
   const T half = static_cast<T>(0.5);
@@ -44,6 +45,33 @@ template <typename T> void ComputeTanh(const Tensor &x, Tensor &output) {
     const T v = px[i];
     const T inner = sqrt_2_over_pi * (v + c0 * v * v * v);
     py[i] = half * v * (one + std::tanh(inner));
+  }
+}
+
+using DecodeFunc = float (*)(uint16_t);
+using EncodeFunc = uint16_t (*)(float);
+
+void ComputeHalfExact(const Tensor &x, Tensor &output, DecodeFunc decode, EncodeFunc encode) {
+  const int64_t n = x.element_count();
+  const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
+  uint16_t *py = reinterpret_cast<uint16_t *>(output.data.data());
+  constexpr float inv_sqrt2 = 1.0f / 1.4142135623730951f;
+  for (int64_t i = 0; i < n; ++i) {
+    const float v = decode(px[i]);
+    py[i] = encode(0.5f * v * (1.0f + std::erf(v * inv_sqrt2)));
+  }
+}
+
+void ComputeHalfTanh(const Tensor &x, Tensor &output, DecodeFunc decode, EncodeFunc encode) {
+  const int64_t n = x.element_count();
+  const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
+  uint16_t *py = reinterpret_cast<uint16_t *>(output.data.data());
+  constexpr float sqrt_2_over_pi = 0.7978845608028654f;
+  constexpr float c0 = 0.044715f;
+  for (int64_t i = 0; i < n; ++i) {
+    const float v = decode(px[i]);
+    const float inner = sqrt_2_over_pi * (v + c0 * v * v * v);
+    py[i] = encode(0.5f * v * (1.0f + std::tanh(inner)));
   }
 }
 
@@ -62,23 +90,34 @@ void Dispatch(const Tensor &x, const std::string &approximate, Tensor &output) {
     else
       ComputeExact<double>(x, output);
     return;
+  case DataType::FLOAT16:
+    if (tanh_approx)
+      ComputeHalfTanh(x, output, Float16BitsToFloat, FloatToFloat16Bits);
+    else
+      ComputeHalfExact(x, output, Float16BitsToFloat, FloatToFloat16Bits);
+    return;
+  case DataType::BFLOAT16:
+    if (tanh_approx)
+      ComputeHalfTanh(x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits);
+    else
+      ComputeHalfExact(x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits);
+    return;
   default:
-    throw std::invalid_argument(std::string(kName) + " only supports FLOAT and DOUBLE tensors.");
+    throw std::invalid_argument(std::string(kName) +
+                                " only supports FLOAT, DOUBLE, FLOAT16, and BFLOAT16 tensors.");
   }
 }
 
 void ValidateOutput(const Tensor &x, const Tensor &output) {
-  EXT_ENFORCE_INVALID(output.data_type == x.data_type,
-                      std::string(kName) + ": output dtype must match input dtype.");
-  EXT_ENFORCE_INVALID(output.shape == x.shape,
-                      std::string(kName) + ": output shape must match input shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == x.data.size(),
-                      std::string(kName) + ": output buffer size mismatch.");
+  EXT_ENFORCE_INVALID(output.data_type == x.data_type, kName,
+                      ": output dtype must match input dtype.");
+  EXT_ENFORCE_INVALID(output.shape == x.shape, kName, ": output shape must match input shape.");
+  EXT_ENFORCE_INVALID(output.data.size() == x.data.size(), kName, ": output buffer size mismatch.");
 }
 
 void ValidateAttribute(const std::string &approximate) {
-  EXT_ENFORCE_INVALID(approximate == "none" || approximate == "tanh",
-                      std::string(kName) + ": 'approximate' must be 'none' or 'tanh'.");
+  EXT_ENFORCE_INVALID(approximate == "none" || approximate == "tanh", kName,
+                      ": 'approximate' must be 'none' or 'tanh'.");
 }
 
 } // namespace

@@ -22,6 +22,7 @@ from ..onnx_py._onnxpyprotoop import (  # type: ignore # noqa: F401
     ParseOptions,
     PrintOptions,
     SequenceProto,
+    SerializeFormat,
     SerializeOptions,
     ShardedDimProto,
     ShardingSpecProto,

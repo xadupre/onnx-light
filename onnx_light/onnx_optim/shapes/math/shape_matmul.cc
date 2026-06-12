@@ -48,10 +48,9 @@ void ComputeShapeMatMul(ShapesContext &ctx, const NodeProto &node, const char *a
   const OptimDim k_right = b2[b2.Rank() - 2];
 
   if (k_left.IsInt() && k_right.IsInt()) {
-    EXT_ENFORCE_INVALID(k_left.AsInt() == k_right.AsInt(),
-                        "ComputeShapeMatMul: incompatible inner dimensions " +
-                            std::to_string(k_left.AsInt()) + " and " +
-                            std::to_string(k_right.AsInt()) + ".");
+    EXT_ENFORCE_INVALID(
+        k_left.AsInt() == k_right.AsInt(), "ComputeShapeMatMul: incompatible inner dimensions ",
+        std::to_string(k_left.AsInt()), " and ", std::to_string(k_right.AsInt()), ".");
   }
 
   std::vector<OptimDim> a_prefix_dims;

@@ -15,6 +15,7 @@
 #include <functional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 /**
@@ -390,6 +391,79 @@ public:
   /// ``std::vector``-overload of :cpp:func:`CollectExternalInputs`.
   static std::vector<std::string> CollectExternalInputs(const std::vector<NodeProto> &nodes);
 
+  /**
+   * Returns the full list of tensor / sequence names a single ``node``
+   * depends on at runtime.
+   *
+   * The result is the union of:
+   *  * the names referenced by ``node.input()`` (skipping empty
+   *    optional-input slots), and
+   *  * every external input of the subgraph attributes
+   *    (``GRAPH`` / ``GRAPHS``) attached to ``node`` — i.e. the
+   *    captured names a subgraph reads from the enclosing scope, as
+   *    computed recursively by :cpp:func:`CollectExternalInputs`.
+   *
+   * The returned list preserves the order in which each name is first
+   * encountered and contains no duplicates.
+   */
+  static std::vector<std::string> CollectNodeInputs(const NodeProto &node);
+
+  /**
+   * Returns, for each node in ``nodes``, the list of input names that
+   * become unused once that node has finished executing — i.e. names
+   * whose last reference (per :cpp:func:`CollectNodeInputs`) appears at
+   * that node and that do not appear in ``keep``.
+   *
+   * Empty names (optional inputs left unbound) are skipped. The
+   * returned vector has exactly ``nodes.size()`` entries; each inner
+   * vector preserves the order in which the corresponding names were
+   * first encountered in the input list of the producing/consuming
+   * node.
+   */
+  static std::vector<std::vector<std::string>>
+  ComputeReleasableInputs(const utils::RepeatedProtoField<NodeProto> &nodes,
+                          const std::unordered_set<std::string> &keep);
+
+  /// ``std::vector``-overload of :cpp:func:`ComputeReleasableInputs`.
+  static std::vector<std::vector<std::string>>
+  ComputeReleasableInputs(const std::vector<NodeProto> &nodes,
+                          const std::unordered_set<std::string> &keep);
+
+  /// Returns the cached :cpp:class:`ExecutionPlan` for ``graph``,
+  /// building it on first use. The plan precomputes, for every node in
+  /// ``graph``, the list of input names whose last reference falls at
+  /// that node and that are not declared inputs / initializers /
+  /// outputs of ``graph`` — i.e. the intermediates that may be removed
+  /// from this context as soon as the node has finished executing.
+  /// The plan is keyed by the address of ``graph`` and reused across
+  /// subsequent runs of the same model, so the analysis is paid only
+  /// once for the lifetime of this :cpp:class:`RuntimeContext`.
+  const class ExecutionPlan &GetExecutionPlan(const GraphProto &graph);
+
+  /// Returns the cached :cpp:class:`ExecutionPlan` for ``func``,
+  /// building it on first use. Same caching semantics as the
+  /// :cpp:class:`GraphProto` overload — the structural keep set
+  /// consists of the function's declared inputs and outputs.
+  const class ExecutionPlan &GetExecutionPlan(const FunctionProto &func);
+
+  /// Clears every cached :cpp:class:`ExecutionPlan`. Useful when the
+  /// owning model has been mutated in place (rare).
+  void ClearExecutionPlans() noexcept;
+
+  /// Enables or disables the per-node release of unused intermediates
+  /// performed by :cpp:func:`RunNodes` / :cpp:func:`RunGraph` /
+  /// :cpp:func:`RunFunction` / :cpp:func:`RunModel`. When enabled, a
+  /// name whose last reference (declared input of a node, or captured
+  /// input of a subgraph attribute) appears at node ``i`` is removed
+  /// from :cpp:func:`tensors` (and :cpp:func:`sequences`) right after
+  /// node ``i`` finishes — emitting a
+  /// :cpp:enumerator:`TensorEventAction::kRemove` event when event
+  /// logging is on. Graph / function outputs are always preserved.
+  /// Disabled by default to keep intermediate values observable after
+  /// the run (e.g. so callers can fetch any node output by name).
+  void set_release_intermediates(bool enabled) noexcept { release_intermediates_ = enabled; }
+  bool release_intermediates() const noexcept { return release_intermediates_; }
+
   /// In/out sequence map shared across every node in a chain. Only
   /// sequence-typed graph edges are stored here; tensor-typed edges
   /// live in :cpp:func:`tensors`.
@@ -435,6 +509,87 @@ private:
   TensorEventLog events_;
   SequenceMap sequences_;
   bool events_enabled_ = false;
+  bool release_intermediates_ = false;
+  /// Lazily-populated cache of :cpp:class:`ExecutionPlan` instances
+  /// keyed by the address of the :cpp:class:`GraphProto` /
+  /// :cpp:class:`FunctionProto` they describe. Built on first use by
+  /// :cpp:func:`GetExecutionPlan` and reused across subsequent runs of
+  /// the same model.
+  std::unordered_map<const void *, class ExecutionPlan> execution_plans_;
+};
+
+/**
+ * Precomputed per-graph release schedule used by
+ * :cpp:func:`RunGraph` / :cpp:func:`RunFunction` /
+ * :cpp:func:`RunNodes` when
+ * :cpp:func:`RuntimeContext::release_intermediates` is enabled.
+ *
+ * An :cpp:class:`ExecutionPlan` captures two complementary pieces of
+ * information for a given node sequence:
+ *
+ *  * ``keep`` — the *structural* set of names that must never be
+ *    released by the per-node release loop. For a :cpp:class:`GraphProto`
+ *    this is the union of declared inputs, initializers, and declared
+ *    outputs; for a :cpp:class:`FunctionProto` it is the union of
+ *    declared inputs and outputs.
+ *  * ``releasable[i]`` — the list of names whose last reference (per
+ *    :cpp:func:`RuntimeContext::CollectNodeInputs`) falls at node ``i``
+ *    and that are not in ``keep`` — i.e. the intermediates that may be
+ *    removed from the tensor / sequence map right after node ``i``
+ *    finishes.
+ *
+ * The analysis depends only on the graph topology and not on any
+ * runtime value, so a single plan can be reused across every
+ * invocation of the same model. :cpp:func:`RuntimeContext::GetExecutionPlan`
+ * builds and caches one plan per graph / function for that reason.
+ */
+class ExecutionPlan {
+public:
+  ExecutionPlan() = default;
+
+  /// Builds the plan for ``graph``. ``keep`` is seeded with the graph's
+  /// declared inputs, initializers and declared outputs; ``releasable``
+  /// is computed by :cpp:func:`RuntimeContext::ComputeReleasableInputs`.
+  explicit ExecutionPlan(const GraphProto &graph);
+
+  /// Builds the plan for ``func``. ``keep`` is seeded with the
+  /// function's declared inputs and outputs.
+  explicit ExecutionPlan(const FunctionProto &func);
+
+  /// Builds the plan for a free-standing node range. ``keep`` is the
+  /// user-supplied set of names that must never be released (typically
+  /// the names already populated in the runtime context at run start
+  /// plus any graph / function outputs).
+  ExecutionPlan(const utils::RepeatedProtoField<NodeProto> &nodes,
+                std::unordered_set<std::string> keep);
+
+  /// Structural set of names that must never be released. See the
+  /// class-level documentation for the exact contents.
+  const std::unordered_set<std::string> &keep() const noexcept { return keep_; }
+
+  /// For each node ``i`` in the underlying node range, the list of
+  /// names whose last reference falls at ``i`` and that are not in
+  /// :cpp:func:`keep`.
+  const std::vector<std::vector<std::string>> &releasable() const noexcept { return releasable_; }
+
+  /// Number of nodes covered by this plan (``releasable().size()``).
+  size_t num_nodes() const noexcept { return releasable_.size(); }
+
+  /// Releases from ``rt`` every name in the ``releasable()`` slot
+  /// associated with ``node``. ``node`` must be one of the
+  /// :cpp:class:`NodeProto` instances the plan was built from
+  /// (lookup is by address); if it is not, this is a no-op. Each
+  /// removal is performed on both the tensor map and the sequence
+  /// map: :cpp:func:`RuntimeContext::Remove` is a no-op if the name
+  /// is absent and emits a :cpp:enumerator:`TensorEventAction::kRemove`
+  /// event when event logging is on; sequence removals do not emit
+  /// events (sequence values live outside the tensor event stream).
+  void ReleaseAfter(const NodeProto &node, RuntimeContext &rt) const;
+
+private:
+  std::unordered_set<std::string> keep_;
+  std::vector<std::vector<std::string>> releasable_;
+  std::unordered_map<const NodeProto *, size_t> node_index_;
 };
 
 } // namespace onnx_kernels

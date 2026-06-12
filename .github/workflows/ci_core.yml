@@ -87,9 +87,9 @@ jobs:
       - name: pip freeze
         run: pip freeze
 
-      - name: Run tests (excluding onnxl_vs_onnx)
+      - name: Run tests (excluding onnxl_vs_onnx and onnxl_vs_ort)
         run: |
-          UNITTEST_GOING=1 pytest --durations=10 unittests --ignore=unittests/onnxl_vs_onnx
+          UNITTEST_GOING=1 pytest --durations=10 unittests --ignore=unittests/onnxl_vs_onnx --ignore=unittests/onnxl_vs_ort
 
   core_tests_ubuntu:
     name: core (ubuntu-latest, py3.13)

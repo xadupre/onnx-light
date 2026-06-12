@@ -32,6 +32,7 @@ a smooth replacement.
     backend_tests
     test_coverage
     runtime_coverage
+    custom_kernels
 
 .. toctree::
     :caption: Shape Inference

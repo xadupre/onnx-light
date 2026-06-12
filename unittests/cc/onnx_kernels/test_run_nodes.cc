@@ -2727,4 +2727,145 @@ TEST(RunModel, LocalSubgraphCopiesCallerTensorsButHidesIntermediates) {
   EXPECT_FALSE(rt.Has("z"));
 }
 
+// ---------------------------------------------------------------------------
+// Custom kernel registration through RuntimeContext::RegisterCustomKernel.
+// ---------------------------------------------------------------------------
+
+// A custom kernel registered for an op outside the built-in dispatch table
+// is invoked by RunNode; its output is written back to the RuntimeContext.
+TEST(RunNodes, RunNodeDispatchesCustomKernelForUnknownOp) {
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}));
+
+  int call_count = 0;
+  rt.RegisterCustomKernel("my.domain", "Scale",
+                          [&call_count](const NodeProto &node, RuntimeContext &ctx) {
+                            ++call_count;
+                            // Read the "factor" attribute (default 1.0f).
+                            float factor = 1.0f;
+                            for (int i = 0; i < node.attribute_size(); ++i) {
+                              const AttributeProto &a = node.attribute(i);
+                              if (a.name() == "factor") {
+                                factor = a.f();
+                              }
+                            }
+                            const Tensor &in = ctx.Get(node.input(0).as_string());
+                            std::vector<float> out(static_cast<size_t>(in.element_count()));
+                            const float *src = in.AsFloat();
+                            for (size_t i = 0; i < out.size(); ++i) {
+                              out[i] = src[i] * factor;
+                            }
+                            ctx.Put(node.output(0).as_string(),
+                                    Tensor::FromFloat(node.output(0).as_string(), in.shape, out));
+                          });
+
+  NodeProto node = MakeNode("Scale", {"x"}, {"y"}, "my.domain");
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name("factor");
+  attr->set_type(AttributeProto::AttributeType::FLOAT);
+  attr->set_f(3.0f);
+
+  RunNode(node, rt);
+  EXPECT_EQ(call_count, 1);
+  const Tensor &y = rt.tensors().at("y");
+  ASSERT_EQ(y.element_count(), 3);
+  const float *yp = y.AsFloat();
+  EXPECT_FLOAT_EQ(yp[0], 3.0f);
+  EXPECT_FLOAT_EQ(yp[1], 6.0f);
+  EXPECT_FLOAT_EQ(yp[2], 9.0f);
+}
+
+// A custom kernel registered under the default ONNX domain overrides the
+// built-in dispatch-table entry with the same key.
+TEST(RunNodes, RunNodeCustomKernelOverridesBuiltin) {
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {3}, {-1.0f, -2.0f, -3.0f}));
+
+  // Replace Abs with negation: a custom override must take precedence over
+  // the entry that KernelDispatchTable() would otherwise resolve.
+  rt.RegisterCustomKernel("", "Abs", [](const NodeProto &node, RuntimeContext &ctx) {
+    const Tensor &in = ctx.Get(node.input(0).as_string());
+    std::vector<float> out(static_cast<size_t>(in.element_count()));
+    const float *src = in.AsFloat();
+    for (size_t i = 0; i < out.size(); ++i) {
+      out[i] = -src[i];
+    }
+    ctx.Put(node.output(0).as_string(),
+            Tensor::FromFloat(node.output(0).as_string(), in.shape, out));
+  });
+
+  NodeProto node = MakeNode("Abs", {"x"}, {"y"});
+  RunNode(node, rt);
+
+  const Tensor &y = rt.tensors().at("y");
+  ASSERT_EQ(y.element_count(), 3);
+  const float *yp = y.AsFloat();
+  EXPECT_FLOAT_EQ(yp[0], 1.0f);
+  EXPECT_FLOAT_EQ(yp[1], 2.0f);
+  EXPECT_FLOAT_EQ(yp[2], 3.0f);
+}
+
+// RunModel chains a built-in kernel and a custom kernel together; the
+// CustomKernelMap survives across nodes within the same context.
+TEST(RunModel, CustomKernelChainsWithBuiltinKernels) {
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+  OperatorSetIdProto *custom_os = model.add_opset_import();
+  custom_os->set_domain("my.domain");
+  custom_os->set_version(1);
+
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *n1 = g->add_node();
+  n1->set_op_type("Abs");
+  n1->add_input("x");
+  n1->add_output("a");
+  NodeProto *n2 = g->add_node();
+  n2->set_op_type("Scale");
+  n2->set_domain("my.domain");
+  n2->add_input("a");
+  n2->add_output("y");
+  AttributeProto *attr = n2->add_attribute();
+  attr->set_name("factor");
+  attr->set_type(AttributeProto::AttributeType::FLOAT);
+  attr->set_f(2.0f);
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {3}, {-1.0f, -2.0f, -3.0f}));
+  rt.RegisterCustomKernel("my.domain", "Scale", [](const NodeProto &node, RuntimeContext &ctx) {
+    float factor = 1.0f;
+    for (int i = 0; i < node.attribute_size(); ++i) {
+      if (node.attribute(i).name() == "factor") {
+        factor = node.attribute(i).f();
+      }
+    }
+    const Tensor &in = ctx.Get(node.input(0).as_string());
+    std::vector<float> out(static_cast<size_t>(in.element_count()));
+    const float *src = in.AsFloat();
+    for (size_t i = 0; i < out.size(); ++i) {
+      out[i] = src[i] * factor;
+    }
+    ctx.Put(node.output(0).as_string(),
+            Tensor::FromFloat(node.output(0).as_string(), in.shape, out));
+  });
+
+  RunModel(model, rt);
+  const Tensor &y = rt.tensors().at("y");
+  ASSERT_EQ(y.element_count(), 3);
+  const float *yp = y.AsFloat();
+  EXPECT_FLOAT_EQ(yp[0], 2.0f);
+  EXPECT_FLOAT_EQ(yp[1], 4.0f);
+  EXPECT_FLOAT_EQ(yp[2], 6.0f);
+}
+
+// Without a registered custom kernel, an unknown op fails as before.
+TEST(RunNodes, RunNodeUnknownOpWithoutCustomKernelThrows) {
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}));
+  NodeProto node = MakeNode("Scale", {"x"}, {"y"}, "my.domain");
+  EXPECT_THROW(RunNode(node, rt), std::invalid_argument);
+}
+
 } // namespace Test

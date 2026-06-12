@@ -55,7 +55,7 @@ void Softplus::operator()(const Tensor &x, Tensor &output) const {
   }
   case DataType::FLOAT16:
     kernel::detail::UnaryHalfElementwise(x, output, Float16BitsToFloat, FloatToFloat16Bits,
-                                         [](float v) { return std::log(1.0f + std::exp(v)); });
+                                         [](float v) { return std::log1p(std::exp(-std::fabs(v))) + std::fmax(v, 0.0f); });
     return;
   case DataType::BFLOAT16:
     kernel::detail::UnaryHalfElementwise(x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits,

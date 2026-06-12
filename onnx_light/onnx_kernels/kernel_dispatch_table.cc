@@ -2373,6 +2373,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::STFT k(rt.kernel_ctx());
          SetOutput(node, 0, k(signal, frame_step, window, frame_length, onesided), rt.tensors());
        }},
+      {"ai.onnx:StringConcat", MakeBinaryTrampoline<kernel::StringConcat>()},
       {"ai.onnx:StringNormalizer",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);

@@ -30,9 +30,15 @@ namespace kernel {
 //
 // To keep the lightweight C++ kernel library free of third-party image
 // decoding dependencies (``libjpeg``, ``libpng``, ``libwebp``, etc.) the
-// reference kernel performs full attribute and input validation and then,
-// when an actual decoded image cannot be produced, falls back to the
-// behavior documented by the ONNX schema:
+// reference kernel implements only the subset of image formats that can be
+// decoded without external libraries:
+//
+//   * **BMP** — 24-bit uncompressed (BI_RGB, BITMAPINFOHEADER): fully
+//     decoded to ``(H, W, C)`` uint8 output in the requested
+//     ``pixel_format``.
+//
+// For all other formats (JPEG, JPEG2000, PNG, TIFF, WebP, PNM) the kernel
+// falls back to the behavior documented by the ONNX schema:
 //
 //     "If it can't decode for any reason (e.g. corrupted encoded stream,
 //      invalid format), it will return an empty matrix."
@@ -56,12 +62,11 @@ namespace kernel {
 /// returned as a ``(H, W, C)`` ``tensor(uint8)`` in channel-last
 /// layout.
 ///
-/// The lightweight reference implementation does not link against any
-/// image-decoding library and therefore cannot actually decode the
-/// bytestream. Per the ONNX schema, the kernel falls back to returning
-/// an empty matrix --- a ``(0, 0, C)`` ``tensor(uint8)`` --- whenever
-/// it cannot produce a decoded image. Invalid inputs or attribute
-/// values throw ``std::invalid_argument``.
+/// BMP (24-bit uncompressed, BI_RGB) images are decoded natively
+/// without any external library dependency. All other formats
+/// (JPEG, JPEG2000, PNG, TIFF, WebP, PNM) fall back to returning
+/// an empty matrix (``(0, 0, C)`` ``tensor(uint8)``). Invalid inputs
+/// or attribute values throw ``std::invalid_argument``.
 class ImageDecoder : public KernelBase {
 public:
   using KernelBase::KernelBase;
@@ -72,16 +77,16 @@ public:
   static int64_t ChannelCount(const std::string &pixel_format);
 
   /// Allocating overload. ``pixel_format`` defaults to ``"RGB"`` (the
-  /// schema default). Returns a fresh ``tensor(uint8)`` of shape
-  /// ``(0, 0, C)`` containing no decoded pixels.
+  /// schema default). Decodes BMP (24-bit uncompressed) to ``(H, W, C)``
+  /// uint8. Falls back to ``(0, 0, C)`` for unsupported/unrecognised formats.
   Tensor operator()(const Tensor &encoded_stream, const std::string &pixel_format = "RGB") const;
 
   /// In-place overload. ``output`` must already be a ``tensor(uint8)``
   /// whose last dimension matches the channel count derived from
   /// ``pixel_format`` (``output.shape == {H, W, C}`` with ``C ==
-  /// ChannelCount(pixel_format)``) and whose ``data`` buffer is sized
-  /// accordingly. The kernel writes the (possibly empty) decoded image
-  /// into ``output.data``; when the kernel falls back to the
+  /// ChannelCount(pixel_format)``). When the bytestream is a supported BMP
+  /// the decoded pixels are written into ``output.data`` and the shape must
+  /// match the decoded image dimensions; when decoding falls back to the
   /// empty-matrix path, ``output`` must have shape ``(0, 0, C)``.
   void operator()(const Tensor &encoded_stream, const std::string &pixel_format,
                   Tensor &output) const;

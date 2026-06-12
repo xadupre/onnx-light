@@ -19,6 +19,7 @@ import unittest
 import numpy as np
 
 from onnx_light.ext_test_case import ExtTestCase
+import onnx_light.onnx as onnxl
 from onnx_light.onnx_lib import parser
 from onnx_light.onnx.reference import ReferenceEvaluator
 
@@ -206,6 +207,44 @@ class TestReferenceEvaluator(ExtTestCase):
         np.testing.assert_array_equal(y1, b0 + b1)
         self.assertEqual(y0.dtype, np.int16)
         self.assertEqual(y1.dtype, np.uint8)
+
+    def test_dict_vectorizer_int64_float_dict_feed(self):
+        # ``ai.onnx.ml::DictVectorizer`` consumes a ``map(int64, float)``
+        # graph input through the runtime's two-tensor convention
+        # (``x_keys`` / ``x_values``); ReferenceEvaluator accepts a Python
+        # ``dict`` for the map-typed input and splits it transparently.
+        model = onnxl.ModelProto()
+        model.ir_version = 10
+        op = model.opset_import.add()
+        op.domain = ""
+        op.version = 13
+        op_ml = model.opset_import.add()
+        op_ml.domain = "ai.onnx.ml"
+        op_ml.version = 1
+        graph = model.graph
+        graph.name = "dv"
+        x = graph.input.add()
+        x.name = "x"
+        mt = x.type.map_type
+        mt.key_type = int(onnxl.TensorProto.INT64)
+        mt.value_type.tensor_type.elem_type = int(onnxl.TensorProto.FLOAT)
+        y = graph.output.add()
+        y.name = "y"
+        y.type.tensor_type.elem_type = int(onnxl.TensorProto.FLOAT)
+        node = graph.node.add()
+        node.op_type = "DictVectorizer"
+        node.domain = "ai.onnx.ml"
+        node.input.append("x")
+        node.output.append("y")
+        attr = node.attribute.add()
+        attr.name = "int64_vocabulary"
+        attr.type = onnxl.AttributeProto.INTS
+        attr.ints.extend([10, 20, 30])
+
+        sess = ReferenceEvaluator(model)
+        self.assertEqual(sess.input_names, ["x"])
+        (out,) = sess.run(None, {"x": {10: 1.5, 30: 2.5}})
+        np.testing.assert_array_equal(out, np.array([1.5, 0.0, 2.5], dtype=np.float32))
 
     def test_lstm_layout1_matches_layout0(self):
         # Regression test for ``test_cc_lstm_batchwise``: the LSTM kernel

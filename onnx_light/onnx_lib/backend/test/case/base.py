@@ -366,20 +366,49 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
         arr = np.frombuffer(t.raw_data(), dtype=dtype)
         return arr.reshape(tuple(int(d) for d in t.shape))
 
+    def _ds_inputs_to_python(tc) -> list[list]:
+        """Returns per-DataSet positional inputs for ``tc``.
+
+        For graph inputs declared with ``map(K, V)`` type (used by
+        ``ai.onnx.ml::DictVectorizer`` and ``ai.onnx.ml::CastMap``), the
+        DataSet inputs are exposed as two runtime tensors named
+        ``<name>_keys`` / ``<name>_values`` while the graph still has a
+        single formal input. Collapse the pair back into a single Python
+        ``dict`` so the backend harness (which positionally feeds graph
+        inputs) can pass it through map-aware backends.
+        """
+        graph_inputs = list(tc.model.graph.input)
+        data_sets: list[list] = []
+        for ds in tc.data_sets:
+            by_name = {t.name: _tensor_to_np(t) for t in ds.inputs}
+            inputs: list = []
+            for gi in graph_inputs:
+                if gi.type.has_map_type():
+                    keys_arr = by_name.get(f"{gi.name}_keys")
+                    values_arr = by_name.get(f"{gi.name}_values")
+                    if keys_arr is None or values_arr is None:
+                        # Fall back to whatever the DataSet provides under
+                        # the graph-input name if the convention is not
+                        # followed for this case.
+                        inputs.append(by_name.get(gi.name))
+                        continue
+                    # ``np.ndarray.tolist`` yields native Python scalars
+                    # (str for STRING tensors, int for INT64, float for
+                    # FLOAT/DOUBLE) which produce hashable dict keys.
+                    inputs.append(dict(zip(keys_arr.tolist(), values_arr.tolist())))
+                else:
+                    inputs.append(by_name.get(gi.name))
+            data_sets.append(inputs)
+        return data_sets
+
     result: dict[str, TestCase] = {}
     for tc in _backend_test_cc.collect_test_cases():
         if tc.name.startswith("test_cc_zipmap_"):
             continue
-        # CastMap and DictVectorizer use a two-tensor runtime representation
-        # (``x_keys`` / ``x_values``) for their map(K, V) input, so the
-        # dataset has 2 entries while the formal graph input count is 1.
-        if tc.name.startswith("test_cc_cast_map_"):
-            continue
-        if tc.name.startswith("test_cc_dict_vectorizer_"):
-            continue
+        py_inputs = _ds_inputs_to_python(tc)
         data_sets = [
-            ([_tensor_to_np(x) for x in ds.inputs], [_tensor_to_np(y) for y in ds.outputs])
-            for ds in tc.data_sets
+            (py_inputs[i], [_tensor_to_np(y) for y in ds.outputs])
+            for i, ds in enumerate(tc.data_sets)
         ]
         result[tc.name] = TestCase(
             name=tc.name,

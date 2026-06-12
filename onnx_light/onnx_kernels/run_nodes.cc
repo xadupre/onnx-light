@@ -938,13 +938,21 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
     RunSequenceMapNode(node, rt);
   } else {
     const std::string key = domain + ":" + op_type;
-    const auto &table = KernelDispatchTable();
-    auto it = table.find(key);
-    if (it == table.end()) {
-      throw std::invalid_argument("RunNode: unsupported op_type '" + op_type + "' in domain '" +
-                                  domain + "'.");
+    // User-registered custom kernels take precedence over built-in
+    // kernel dispatch table entries so callers can override (or
+    // extend) the runtime with their own implementations.
+    auto ckit = rt.custom_kernels().find(key);
+    if (ckit != rt.custom_kernels().end()) {
+      ckit->second(node, rt);
+    } else {
+      const auto &table = KernelDispatchTable();
+      auto it = table.find(key);
+      if (it == table.end()) {
+        throw std::invalid_argument("RunNode: unsupported op_type '" + op_type + "' in domain '" +
+                                    domain + "'.");
+      }
+      it->second(node, rt);
     }
-    it->second(node, rt);
   }
 
   if (logging) {

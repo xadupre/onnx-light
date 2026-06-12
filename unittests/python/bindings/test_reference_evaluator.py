@@ -314,5 +314,105 @@ class TestReferenceEvaluator(ExtTestCase):
         np.testing.assert_array_equal(got[0], outputs[0])
 
 
+class TestReferenceEvaluatorCustomKernels(ExtTestCase):
+    """Tests for :meth:`ReferenceEvaluator.register_custom_kernel`."""
+
+    _CUSTOM_MODEL_SRC = (
+        '<ir_version: 10, opset_import: ["" : 18, "my.domain" : 1]>\n'
+        "agraph (float[3] x) => (float[3] y) {\n"
+        "  y = my.domain.Square(x)\n"
+        "}\n"
+    )
+
+    def test_custom_kernel_basic(self):
+        model = parser.parse_model(self._CUSTOM_MODEL_SRC)
+        sess = ReferenceEvaluator(model)
+        sess.register_custom_kernel("my.domain", "Square", lambda node, x: x * x)
+        x = np.array([-1.0, 2.0, -3.5], dtype=np.float32)
+        (y,) = sess.run(None, {"x": x})
+        np.testing.assert_array_equal(y, x * x)
+
+    def test_custom_kernel_called_each_run(self):
+        # The custom kernel is dispatched on every run() call; verify by
+        # using a stateful counter callable.
+        model = parser.parse_model(self._CUSTOM_MODEL_SRC)
+        sess = ReferenceEvaluator(model)
+        calls = []
+
+        def kernel(node, x):
+            calls.append(x.shape)
+            return x + 1
+
+        sess.register_custom_kernel("my.domain", "Square", kernel)
+        sess.run(None, {"x": np.zeros(3, dtype=np.float32)})
+        sess.run(None, {"x": np.zeros(3, dtype=np.float32)})
+        self.assertEqual(len(calls), 2)
+
+    def test_custom_kernel_overrides_builtin(self):
+        # Registering a custom kernel for an existing built-in op overrides it.
+        src = (
+            '<ir_version: 10, opset_import: ["" : 18]>\n'
+            "agraph (float[3] x) => (float[3] y) { y = Abs(x) }\n"
+        )
+        sess = ReferenceEvaluator(parser.parse_model(src))
+        sess.register_custom_kernel("", "Abs", lambda node, x: x + 100.0)
+        (y,) = sess.run(None, {"x": np.array([-1.0, 2.0, -3.5], dtype=np.float32)})
+        np.testing.assert_array_equal(y, np.array([99.0, 102.0, 96.5], dtype=np.float32))
+
+    def test_custom_kernel_multi_output(self):
+        src = (
+            '<ir_version: 10, opset_import: ["" : 18, "my.domain" : 1]>\n'
+            "agraph (float[3] x) => (float[3] a, float[3] b) {\n"
+            "  a, b = my.domain.Split2(x)\n"
+            "}\n"
+        )
+        sess = ReferenceEvaluator(parser.parse_model(src))
+        sess.register_custom_kernel("my.domain", "Split2", lambda node, x: (x + 1, x - 1))
+        a, b = sess.run(None, {"x": np.array([1.0, 2.0, 3.0], dtype=np.float32)})
+        np.testing.assert_array_equal(a, np.array([2.0, 3.0, 4.0], dtype=np.float32))
+        np.testing.assert_array_equal(b, np.array([0.0, 1.0, 2.0], dtype=np.float32))
+
+    def test_custom_kernel_reads_attributes(self):
+        # The callback receives the NodeProto, so it can inspect attributes.
+        src = (
+            '<ir_version: 10, opset_import: ["" : 18, "my.domain" : 1]>\n'
+            "agraph (float[3] x) => (float[3] y) {\n"
+            "  y = my.domain.Scale<factor = 3.0>(x)\n"
+            "}\n"
+        )
+        sess = ReferenceEvaluator(parser.parse_model(src))
+
+        def scale(node, x):
+            attr = next(a for a in node.attribute if str(a.name) == "factor")
+            return x * float(attr.f)
+
+        sess.register_custom_kernel("my.domain", "Scale", scale)
+        (y,) = sess.run(None, {"x": np.array([1.0, 2.0, 3.0], dtype=np.float32)})
+        np.testing.assert_array_equal(y, np.array([3.0, 6.0, 9.0], dtype=np.float32))
+
+    def test_custom_kernel_wrong_output_count_raises(self):
+        model = parser.parse_model(self._CUSTOM_MODEL_SRC)
+        sess = ReferenceEvaluator(model)
+        sess.register_custom_kernel("my.domain", "Square", lambda node, x: (x, x))
+        with self.assertRaises(ValueError) as ctx:
+            sess.run(None, {"x": np.zeros(3, dtype=np.float32)})
+        self.assertIn("returned 2 output", str(ctx.exception))
+
+    def test_custom_kernel_chained_with_builtins(self):
+        # Mix a custom op with built-in ops in the same graph.
+        src = (
+            '<ir_version: 10, opset_import: ["" : 18, "my.domain" : 1]>\n'
+            "agraph (float[3] x) => (float[3] y) {\n"
+            "  t = my.domain.Square(x)\n"
+            "  y = Add(t, x)\n"
+            "}\n"
+        )
+        sess = ReferenceEvaluator(parser.parse_model(src))
+        sess.register_custom_kernel("my.domain", "Square", lambda node, x: x * x)
+        x = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+        (y,) = sess.run(None, {"x": x})
+        np.testing.assert_array_equal(y, x * x + x)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

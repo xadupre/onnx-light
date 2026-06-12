@@ -241,6 +241,62 @@ class TestRunNodesBindings(ExtTestCase):
         with self.assertRaises((ValueError, RuntimeError)):
             rt.run_model(empty, ctx)
 
+    def test_register_custom_kernel(self):
+        # Register a Python custom kernel for a node in an unknown domain
+        # and verify RunNode dispatches to it.
+        model_src = (
+            '<ir_version: 10, opset_import: ["" : 18, "my.domain" : 1]>\n'
+            "agraph (float[3] x) => (float[3] y) {\n"
+            "  y = my.domain.Triple(x)\n"
+            "}\n"
+        )
+        model = parser.parse_model(model_src)
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        ctx.set("x", _make_float_tensor("x", [1.0, 2.0, 3.0]))
+
+        called = []
+
+        def triple(node, c):
+            called.append(str(node.op_type))
+            x = c.get(str(node.input[0]))
+            # Materialize a 3*x tensor via a TensorProto round-trip.
+            tp = TensorProto()
+            tp.name = str(node.output[0])
+            tp.dims.append(3)
+            tp.data_type = int(TensorProto.FLOAT)
+            vals = struct.unpack("<3f", bytes(x.raw_data()))
+            tp.raw_data = struct.pack("<3f", *(v * 3.0 for v in vals))
+            c.put(tp.name, rt.tensor_from_proto(tp), "output")
+
+        ctx.register_custom_kernel("my.domain", "Triple", triple)
+        rt.run_model(model, ctx)
+        self.assertEqual(called, ["Triple"])
+        self.assertEqual(_unpack_floats(ctx.get("y")), (3.0, 6.0, 9.0))
+
+    def test_register_custom_kernel_overrides_builtin(self):
+        # Custom kernels registered on the runtime context override the
+        # built-in dispatch table.
+        model = parser.parse_model(_MODEL_SRC)
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        ctx.set("x", _make_float_tensor("x", [-1.0, -2.0, -3.0]))
+        ctx.set("z", _make_float_tensor("z", [0.0, 0.0, 0.0]))
+
+        def fake_abs(node, c):
+            # Replace Abs with negation to prove the override applies.
+            x = c.get(str(node.input[0]))
+            vals = struct.unpack("<3f", bytes(x.raw_data()))
+            tp = TensorProto()
+            tp.name = str(node.output[0])
+            tp.dims.append(3)
+            tp.data_type = int(TensorProto.FLOAT)
+            tp.raw_data = struct.pack("<3f", *(-v for v in vals))
+            c.put(tp.name, rt.tensor_from_proto(tp), "output")
+
+        ctx.register_custom_kernel("", "Abs", fake_abs)
+        rt.run_nodes(list(model.graph.node), ctx)
+        # Abs replaced by negation: -(-1) = 1, -(-2) = 2, -(-3) = 3, +0.
+        self.assertEqual(_unpack_floats(ctx.get("y")), (1.0, 2.0, 3.0))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/_helpers/float16_promote.h"
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/preview/include_preview_kernels.h"
 
@@ -214,6 +215,35 @@ TEST(KernelClass, FlexAttentionProbModMustPreserveShapeAndType) {
 
   auto retype = [](Tensor &probs) { probs.data_type = onnx_kernels::DataType::DOUBLE; };
   EXPECT_THROW(flex(Q, K, V, scale, retype), std::invalid_argument);
+}
+
+// Verifies that ``kernel::FlexAttention`` supports FLOAT16 / BFLOAT16 Q, K, V
+// and returns a half-precision output whose values match the FLOAT path
+// rounded through the same dtype.
+TEST(KernelClass, FlexAttentionHalfPrecisionMatchesFloatReference) {
+  const Tensor Q = Tensor::FromFloat("", {1, 1, 1, 2}, {1.0f, 0.0f});
+  const Tensor K = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 0.0f, 0.0f, 1.0f});
+  const Tensor V = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+
+  const KernelContext ctx = PreviewKernelContext();
+  const FlexAttention flex{ctx};
+  const Tensor ref = flex(Q, K, V);
+
+  for (int32_t target : {static_cast<int32_t>(onnx_kernels::DataType::FLOAT16),
+                         static_cast<int32_t>(onnx_kernels::DataType::BFLOAT16)}) {
+    const Tensor Qh = onnx_kernels::DemoteFromFloat32(Q, target);
+    const Tensor Kh = onnx_kernels::DemoteFromFloat32(K, target);
+    const Tensor Vh = onnx_kernels::DemoteFromFloat32(V, target);
+    const Tensor Yh = flex(Qh, Kh, Vh);
+    ASSERT_EQ(Yh.data_type, target);
+    ASSERT_EQ(Yh.shape, ref.shape);
+    const Tensor Yh_decoded = onnx_kernels::PromoteToFloat32(Yh);
+    const float tol =
+        target == static_cast<int32_t>(onnx_kernels::DataType::FLOAT16) ? 1e-2f : 5e-2f;
+    for (int64_t i = 0; i < ref.element_count(); ++i) {
+      EXPECT_NEAR(Yh_decoded.AsFloat()[i], ref.AsFloat()[i], tol) << "i=" << i;
+    }
+  }
 }
 
 } // namespace Test

@@ -4,9 +4,12 @@
 
 #include "onnx_kernels/kernels/preview/include_preview_kernels.h"
 
+#include "onnx_kernels/kernels/_helpers/float16_promote.h"
+
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <stdexcept>
 #include <vector>
 
@@ -16,18 +19,24 @@ namespace kernel {
 
 namespace {
 
-// Validates that ``t`` is a rank-4 FLOAT tensor and returns its shape as
-// ``(B, H, L, D)``. The caller is identified by ``label`` for clearer error
-// messages.
+// Validates that ``t`` is a rank-4 tensor with a supported element type
+// (FLOAT, FLOAT16, or BFLOAT16). The caller is identified by ``label`` for
+// clearer error messages.
 void CheckRank4Float(const Tensor &t, const char *label) {
-  EXT_ENFORCE_INVALID(t.data_type == DataType::FLOAT, std::string("kernel::FlexAttention: '") +
-                                                          label + "' must be a FLOAT tensor.");
-  EXT_ENFORCE_INVALID(t.shape.size() == 4, std::string("kernel::FlexAttention: '") + label +
-                                               "' must be a rank-4 tensor.");
+  EXT_ENFORCE_INVALID(t.data_type == DataType::FLOAT || t.data_type == DataType::FLOAT16 ||
+                          t.data_type == DataType::BFLOAT16,
+                      "kernel::FlexAttention: '", label,
+                      "' must be a FLOAT, FLOAT16 or BFLOAT16 tensor.");
+  EXT_ENFORCE_INVALID(t.shape.size() == 4, "kernel::FlexAttention: '", label,
+                      "' must be a rank-4 tensor.");
   for (int64_t d : t.shape) {
-    EXT_ENFORCE_INVALID(d >= 0, std::string("kernel::FlexAttention: '") + label +
-                                    "' has a negative dimension.");
+    EXT_ENFORCE_INVALID(d >= 0, "kernel::FlexAttention: '", label, "' has a negative dimension.");
   }
+}
+
+// Returns the per-element byte size for a FLOAT/FLOAT16/BFLOAT16 element type.
+size_t HalfOrFloatBytes(int32_t dtype) {
+  return dtype == static_cast<int32_t>(DataType::FLOAT) ? sizeof(float) : sizeof(uint16_t);
 }
 
 } // namespace
@@ -59,8 +68,8 @@ Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor 
   const int64_t q_seq_len = Q.shape[2];
   const int64_t v_head_size = V.shape[3];
   const int64_t out_count = batch_size * q_num_heads * q_seq_len * v_head_size;
-  Tensor out("", DataType::FLOAT, {batch_size, q_num_heads, q_seq_len, v_head_size},
-             std::vector<uint8_t>(static_cast<size_t>(out_count) * sizeof(float)));
+  Tensor out("", Q.data_type, {batch_size, q_num_heads, q_seq_len, v_head_size},
+             std::vector<uint8_t>(static_cast<size_t>(out_count) * HalfOrFloatBytes(Q.data_type)));
   (*this)(Q, K, V, scale, score_mod, prob_mod, out);
   return out;
 }
@@ -78,6 +87,49 @@ void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V
 void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
                                const ScoreModFn &score_mod, const ProbModFn &prob_mod,
                                Tensor &output) const {
+  // Half-precision fast path: promote Q/K/V to FLOAT32, run the reference
+  // implementation, then demote the output back. ``score_mod`` and
+  // ``prob_mod`` callbacks (if any) are wrapped so they see tensors in the
+  // original element type while the inner kernel operates on FLOAT32.
+  if (IsHalfPrecision(Q.data_type)) {
+    EXT_ENFORCE_INVALID(K.data_type == Q.data_type && V.data_type == Q.data_type,
+                        "kernel::FlexAttention: 'Q', 'K', 'V' must share the same dtype.");
+    EXT_ENFORCE_INVALID(output.data_type == Q.data_type,
+                        "kernel::FlexAttention preallocated output must share Q's element type.");
+    const int32_t target_dtype = Q.data_type;
+    const Tensor Q_f = PromoteToFloat32(Q);
+    const Tensor K_f = PromoteToFloat32(K);
+    const Tensor V_f = PromoteToFloat32(V);
+
+    auto wrap_callback = [target_dtype](const ScoreModFn &cb) -> ScoreModFn {
+      if (!cb) {
+        return ScoreModFn{};
+      }
+      return [cb, target_dtype](Tensor &scores_f) {
+        Tensor scores_half = DemoteFromFloat32(scores_f, target_dtype);
+        cb(scores_half);
+        scores_f = PromoteToFloat32(scores_half);
+      };
+    };
+    ScoreModFn score_mod_wrapped = wrap_callback(score_mod);
+    ProbModFn prob_mod_wrapped = wrap_callback(prob_mod);
+
+    const std::vector<int64_t> out_shape = {Q.shape[0], Q.shape[1], Q.shape[2], V.shape[3]};
+    const int64_t out_count = out_shape[0] * out_shape[1] * out_shape[2] * out_shape[3];
+    Tensor out_f("", static_cast<int32_t>(DataType::FLOAT), out_shape,
+                 std::vector<uint8_t>(static_cast<size_t>(out_count) * sizeof(float), 0));
+    (*this)(Q_f, K_f, V_f, scale, score_mod_wrapped, prob_mod_wrapped, out_f);
+    Tensor demoted = DemoteFromFloat32(out_f, target_dtype);
+    EXT_ENFORCE_INVALID(output.shape == demoted.shape,
+                        "kernel::FlexAttention preallocated output shape must be (batch_size, "
+                        "q_num_heads, q_seq_len, v_head_size).");
+    EXT_ENFORCE_INVALID(output.data.size() == demoted.data.size(),
+                        "kernel::FlexAttention preallocated output buffer has unexpected size "
+                        "in bytes.");
+    std::memcpy(output.data.data(), demoted.data.data(), demoted.data.size());
+    return;
+  }
+
   CheckRank4Float(Q, "Q");
   CheckRank4Float(K, "K");
   CheckRank4Float(V, "V");

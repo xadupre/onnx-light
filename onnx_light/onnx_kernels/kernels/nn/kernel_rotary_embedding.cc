@@ -4,6 +4,8 @@
 
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_kernels/kernels/_helpers/float16_promote.h"
+
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -18,11 +20,13 @@ namespace kernel {
 namespace {
 
 // Verifies that the cos/sin caches have the expected shapes given the
-// input layout and the (possibly partial) rotation dimension.
+// input layout and the (possibly partial) rotation dimension. The dtype
+// must equal ``x_dtype`` (the dtype of ``X``); the kernel supports FLOAT,
+// FLOAT16, and BFLOAT16, but cos and sin must match ``X``.
 void CheckCacheShape(const Tensor &cache, const char *which, int64_t batch, int64_t sequence_length,
-                     int64_t rotary_dim_half, bool has_position_ids) {
-  EXT_ENFORCE_INVALID(cache.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      std::string("kernel::RotaryEmbedding: ") + which + " must be FLOAT.");
+                     int64_t rotary_dim_half, bool has_position_ids, int32_t x_dtype) {
+  EXT_ENFORCE_INVALID(cache.data_type == x_dtype, "kernel::RotaryEmbedding: ", which,
+                      " must have the same dtype as X.");
   if (has_position_ids) {
     EXT_ENFORCE_INVALID(cache.shape.size() == 2,
                         std::string("kernel::RotaryEmbedding: ") + which +
@@ -65,8 +69,30 @@ Tensor RotaryEmbedding::operator()(const Tensor &X, const Tensor &cos_cache,
 void RotaryEmbedding::operator()(const Tensor &X, const Tensor &cos_cache, const Tensor &sin_cache,
                                  const Tensor *position_ids, const Attributes &attrs,
                                  Tensor &output) const {
-  EXT_ENFORCE_INVALID(X.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      "kernel::RotaryEmbedding: X must be FLOAT.");
+  EXT_ENFORCE_INVALID(X.data_type == static_cast<int32_t>(DataType::FLOAT) ||
+                          X.data_type == static_cast<int32_t>(DataType::FLOAT16) ||
+                          X.data_type == static_cast<int32_t>(DataType::BFLOAT16),
+                      "kernel::RotaryEmbedding: X must be FLOAT, FLOAT16 or BFLOAT16.");
+
+  // Half-precision fast path: promote inputs to FLOAT32, compute, then
+  // demote the result back into ``output``.
+  if (IsHalfPrecision(X.data_type)) {
+    EXT_ENFORCE_INVALID(output.data_type == X.data_type && output.shape == X.shape,
+                        "kernel::RotaryEmbedding: output buffer has mismatched type or shape.");
+    const int32_t target_dtype = X.data_type;
+    const Tensor X_f = PromoteToFloat32(X);
+    const Tensor cos_f = PromoteToFloat32(cos_cache);
+    const Tensor sin_f = PromoteToFloat32(sin_cache);
+    Tensor out_f("", static_cast<int32_t>(DataType::FLOAT), X.shape,
+                 std::vector<uint8_t>(static_cast<size_t>(X.element_count()) * sizeof(float), 0));
+    (*this)(X_f, cos_f, sin_f, position_ids, attrs, out_f);
+    Tensor demoted = DemoteFromFloat32(out_f, target_dtype);
+    EXT_ENFORCE_INVALID(output.data.size() == demoted.data.size(),
+                        "kernel::RotaryEmbedding: output buffer has wrong byte size.");
+    std::memcpy(output.data.data(), demoted.data.data(), demoted.data.size());
+    return;
+  }
+
   EXT_ENFORCE_INVALID(X.shape.size() == 3 || X.shape.size() == 4,
                       "kernel::RotaryEmbedding: X must have rank 3 or 4.");
 
@@ -111,10 +137,10 @@ void RotaryEmbedding::operator()(const Tensor &X, const Tensor &cos_cache, const
                             position_ids->shape[1] == sequence_length,
                         "kernel::RotaryEmbedding: position_ids must have shape (batch, seq).");
   }
-  CheckCacheShape(cos_cache, "cos_cache", batch, sequence_length, rotary_dim_half,
-                  has_position_ids);
-  CheckCacheShape(sin_cache, "sin_cache", batch, sequence_length, rotary_dim_half,
-                  has_position_ids);
+  CheckCacheShape(cos_cache, "cos_cache", batch, sequence_length, rotary_dim_half, has_position_ids,
+                  X.data_type);
+  CheckCacheShape(sin_cache, "sin_cache", batch, sequence_length, rotary_dim_half, has_position_ids,
+                  X.data_type);
 
   EXT_ENFORCE_INVALID(output.data_type == X.data_type && output.shape == X.shape,
                       "kernel::RotaryEmbedding: output buffer has mismatched type or shape.");

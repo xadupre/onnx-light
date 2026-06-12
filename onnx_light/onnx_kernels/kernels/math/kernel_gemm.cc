@@ -4,7 +4,10 @@
 
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_kernels/kernels/_helpers/float16_promote.h"
+
 #include <cstdint>
+#include <cstring>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -106,7 +109,13 @@ void GemmInPlace(const Tensor &a, const Tensor &b, const Tensor *c, float alpha,
   std::memcpy(output.data.data(), result.data(), result.size() * sizeof(T));
 }
 
-constexpr const char *kSupportedGemmTypesMsg = " only supports FLOAT and DOUBLE inputs.";
+constexpr const char *kSupportedGemmTypesMsg =
+    " only supports FLOAT, DOUBLE, FLOAT16 and BFLOAT16 inputs.";
+
+// Promotes a (possibly half-precision) Gemm input to FLOAT32, leaving FLOAT/
+// DOUBLE tensors untouched. Used by the half-precision fast paths so the
+// reference computation can run in float32 and then be demoted back.
+Tensor PromoteGemmInput(const Tensor &t) { return PromoteToFloat32(t); }
 
 } // namespace
 
@@ -117,6 +126,23 @@ Tensor Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float
     return GemmAlloc<float>(a, b, c, alpha, beta, transA, transB);
   case DataType::DOUBLE:
     return GemmAlloc<double>(a, b, c, alpha, beta, transA, transB);
+  case DataType::FLOAT16:
+  case DataType::BFLOAT16: {
+    EXT_ENFORCE_INVALID(b.data_type == a.data_type, kGemmName,
+                        " inputs A and B must share the same dtype.");
+    const Tensor a_f = PromoteGemmInput(a);
+    const Tensor b_f = PromoteGemmInput(b);
+    Tensor c_f;
+    const Tensor *c_ptr = nullptr;
+    if (c != nullptr) {
+      EXT_ENFORCE_INVALID(c->data_type == a.data_type, kGemmName,
+                          " input C must share dtype with A and B.");
+      c_f = PromoteGemmInput(*c);
+      c_ptr = &c_f;
+    }
+    Tensor y = GemmAlloc<float>(a_f, b_f, c_ptr, alpha, beta, transA, transB);
+    return DemoteFromFloat32(y, a.data_type);
+  }
   default:
     throw std::invalid_argument(std::string(kGemmName) + kSupportedGemmTypesMsg);
   }
@@ -129,6 +155,18 @@ void Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float a
     return GemmInPlace<float>(a, b, c, alpha, beta, transA, transB, output);
   case DataType::DOUBLE:
     return GemmInPlace<double>(a, b, c, alpha, beta, transA, transB, output);
+  case DataType::FLOAT16:
+  case DataType::BFLOAT16: {
+    EXT_ENFORCE_INVALID(output.data_type == a.data_type, kGemmName,
+                        " preallocated output must have the same dtype as input A.");
+    Tensor y = (*this)(a, b, c, alpha, beta, transA, transB);
+    EXT_ENFORCE_INVALID(output.shape == y.shape, kGemmName,
+                        " preallocated output has an invalid shape.");
+    EXT_ENFORCE_INVALID(output.data.size() == y.data.size(), kGemmName,
+                        " preallocated output buffer size does not match its shape.");
+    std::memcpy(output.data.data(), y.data.data(), y.data.size());
+    return;
+  }
   default:
     throw std::invalid_argument(std::string(kGemmName) + kSupportedGemmTypesMsg);
   }

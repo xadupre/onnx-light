@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_kernels/kernels/_helpers/float16_promote.h"
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
@@ -37,6 +39,7 @@ using onnx_kernels::kernel::Einsum;
 using onnx_kernels::kernel::Erf;
 using onnx_kernels::kernel::Exp;
 using onnx_kernels::kernel::Floor;
+using onnx_kernels::kernel::Gemm;
 using onnx_kernels::kernel::HammingWindow;
 using onnx_kernels::kernel::HannWindow;
 using onnx_kernels::kernel::Hardmax;
@@ -1802,6 +1805,118 @@ TEST(KernelClass, ShrinkClassRejectsUnsupportedDtype) {
   Shrink shrink_kernel{ctx};
   Tensor x = Tensor::FromUint8("", {2}, {1u, 2u});
   EXPECT_THROW(shrink_kernel(x), std::invalid_argument);
+}
+
+namespace {
+
+// Builds a half-precision tensor (FLOAT16 or BFLOAT16) from a flattened list
+// of float32 sample values by promoting/demoting through
+// :cpp:func:`DemoteFromFloat32`.
+Tensor MakeHalfTensor(int32_t target_dtype, const std::vector<int64_t> &shape,
+                      const std::vector<float> &values) {
+  Tensor f = Tensor::FromFloat("", shape, values);
+  return onnx_kernels::DemoteFromFloat32(f, target_dtype);
+}
+
+// Decodes a half-precision tensor back into a std::vector<float> by promoting
+// to FLOAT32. Used to verify the bit-pattern of kernel outputs against the
+// equivalent FLOAT computation rounded to the same half-precision dtype.
+std::vector<float> DecodeHalfTensor(const Tensor &t) {
+  Tensor f = onnx_kernels::PromoteToFloat32(t);
+  const float *p = f.AsFloat();
+  return std::vector<float>(p, p + f.element_count());
+}
+
+} // namespace
+
+// Verifies that the half-precision path of ``kernel::Gemm`` matches the
+// FLOAT path rounded through the same half-precision dtype, for both
+// FLOAT16 and BFLOAT16 inputs (with and without the optional ``C`` bias).
+TEST(KernelClass, GemmHalfPrecisionMatchesFloatReference) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Gemm gemm_kernel{ctx};
+  const std::vector<float> a_vals = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
+  const std::vector<float> b_vals = {0.5f, -1.0f, 1.5f, 2.0f, -0.5f, 0.25f};
+  const std::vector<float> c_vals = {0.125f, -0.5f};
+  const Tensor a_f = Tensor::FromFloat("", {2, 3}, a_vals);
+  const Tensor b_f = Tensor::FromFloat("", {3, 2}, b_vals);
+  const Tensor c_f = Tensor::FromFloat("", {2}, c_vals);
+  const float alpha = 0.5f;
+  const float beta = 1.5f;
+  const Tensor ref = gemm_kernel(a_f, b_f, &c_f, alpha, beta, 0, 0);
+  ASSERT_EQ(ref.shape, (std::vector<int64_t>{2, 2}));
+
+  for (int32_t target : {static_cast<int32_t>(onnx_kernels::DataType::FLOAT16),
+                         static_cast<int32_t>(onnx_kernels::DataType::BFLOAT16)}) {
+    const Tensor a_h = MakeHalfTensor(target, {2, 3}, a_vals);
+    const Tensor b_h = MakeHalfTensor(target, {3, 2}, b_vals);
+    const Tensor c_h = MakeHalfTensor(target, {2}, c_vals);
+    const Tensor y_h = gemm_kernel(a_h, b_h, &c_h, alpha, beta, 0, 0);
+    ASSERT_EQ(y_h.data_type, target);
+    ASSERT_EQ(y_h.shape, ref.shape);
+    // Compare via the matching half rounding of the FLOAT reference.
+    const Tensor expected =
+        onnx_kernels::DemoteFromFloat32(onnx_kernels::PromoteToFloat32(ref), target);
+    // Bit-for-bit equality is too strict because the inner computation is
+    // performed in FLOAT32 — compare numerical values after promoting both.
+    const std::vector<float> got = DecodeHalfTensor(y_h);
+    const std::vector<float> exp = DecodeHalfTensor(expected);
+    ASSERT_EQ(got.size(), exp.size());
+    const float tol =
+        target == static_cast<int32_t>(onnx_kernels::DataType::FLOAT16) ? 1e-2f : 5e-2f;
+    for (std::size_t i = 0; i < got.size(); ++i) {
+      EXPECT_NEAR(got[i], exp[i], tol) << "i=" << i;
+    }
+  }
+
+  // In-place overload preserves the half-precision dtype of the output.
+  const Tensor a_h =
+      MakeHalfTensor(static_cast<int32_t>(onnx_kernels::DataType::FLOAT16), {2, 3}, a_vals);
+  const Tensor b_h =
+      MakeHalfTensor(static_cast<int32_t>(onnx_kernels::DataType::FLOAT16), {3, 2}, b_vals);
+  Tensor y_h("", onnx_kernels::DataType::FLOAT16, {2, 2},
+             std::vector<uint8_t>(4 * sizeof(uint16_t)));
+  gemm_kernel(a_h, b_h, /*c=*/nullptr, 1.0f, 0.0f, 0, 0, y_h);
+  EXPECT_EQ(y_h.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16));
+}
+
+// Verifies that ``kernel::MatMul`` produces FLOAT16 / BFLOAT16 outputs that
+// numerically match the FLOAT computation rounded through the same dtype.
+TEST(KernelClass, MatMulHalfPrecisionMatchesFloatReference) {
+  const KernelContext ctx{DefaultOpset(13)};
+  MatMul matmul_kernel{ctx};
+  const std::vector<float> a_vals = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
+  const std::vector<float> b_vals = {7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f};
+  const Tensor a_f = Tensor::FromFloat("", {2, 3}, a_vals);
+  const Tensor b_f = Tensor::FromFloat("", {3, 2}, b_vals);
+  const Tensor ref = matmul_kernel(a_f, b_f);
+
+  for (int32_t target : {static_cast<int32_t>(onnx_kernels::DataType::FLOAT16),
+                         static_cast<int32_t>(onnx_kernels::DataType::BFLOAT16)}) {
+    const Tensor a_h = MakeHalfTensor(target, {2, 3}, a_vals);
+    const Tensor b_h = MakeHalfTensor(target, {3, 2}, b_vals);
+    const Tensor y_h = matmul_kernel(a_h, b_h);
+    ASSERT_EQ(y_h.data_type, target);
+    ASSERT_EQ(y_h.shape, ref.shape);
+    const std::vector<float> got = DecodeHalfTensor(y_h);
+    const std::vector<float> exp = DecodeHalfTensor(
+        onnx_kernels::DemoteFromFloat32(onnx_kernels::PromoteToFloat32(ref), target));
+    ASSERT_EQ(got.size(), exp.size());
+    const float tol = target == static_cast<int32_t>(onnx_kernels::DataType::FLOAT16) ? 1.0f : 4.0f;
+    for (std::size_t i = 0; i < got.size(); ++i) {
+      EXPECT_NEAR(got[i], exp[i], tol) << "i=" << i;
+    }
+  }
+
+  // In-place overload preserves the half-precision dtype.
+  const Tensor a_h =
+      MakeHalfTensor(static_cast<int32_t>(onnx_kernels::DataType::BFLOAT16), {2, 3}, a_vals);
+  const Tensor b_h =
+      MakeHalfTensor(static_cast<int32_t>(onnx_kernels::DataType::BFLOAT16), {3, 2}, b_vals);
+  Tensor y_h("", onnx_kernels::DataType::BFLOAT16, {2, 2},
+             std::vector<uint8_t>(4 * sizeof(uint16_t)));
+  matmul_kernel(a_h, b_h, y_h);
+  EXPECT_EQ(y_h.data_type, static_cast<int32_t>(onnx_kernels::DataType::BFLOAT16));
 }
 
 } // namespace Test

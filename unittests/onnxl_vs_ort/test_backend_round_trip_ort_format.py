@@ -39,9 +39,9 @@ from onnx_light.ext_test_case import ExtTestCase
 from onnx_light.onnx.backend import collect_test_cases
 
 try:
-    import onnxruntime as ort  # noqa: F401
+    import onnxruntime
 
-    HAS_ORT = True
+    HAS_ORT = onnxruntime is not None
 except ImportError:  # pragma: no cover - exercised only in no-ORT envs
     HAS_ORT = False
 

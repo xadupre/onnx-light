@@ -1439,15 +1439,6 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          }
          const int64_t layout = GetAttributeIntOrDefault(node, "layout", 0);
 
-         // ``sequence_lens`` (input #4) is not supported: it requires
-         // per-batch sequence handling that the FLOAT kernel does not
-         // implement.
-         const Tensor *sequence_lens = GetOptionalInput(node, 4, rt.tensors());
-         if (sequence_lens != nullptr) {
-           throw std::invalid_argument(
-               "RunNode: op 'LSTM' does not support the optional 'sequence_lens' input.");
-         }
-
          // The current kernel only produces (Y, Y_h); the optional third
          // output ``Y_c`` (final cell state) is not implemented.
          if (node.output_size() >= 3 && !node.output(2).as_string().empty()) {
@@ -1462,6 +1453,33 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor *initial_h = GetOptionalInput(node, 5, rt.tensors());
          const Tensor *initial_c = GetOptionalInput(node, 6, rt.tensors());
          const Tensor *p = GetOptionalInput(node, 7, rt.tensors());
+
+         // ``sequence_lens`` (input #4) requires per-batch sequence
+         // handling that the FLOAT kernel does not implement; accept it
+         // only when it degenerates to a no-op (every batch row uses the
+         // full ``seq_length`` so masking would not change the output).
+         // ``seq_length`` is read from ``X`` at axis 0 for ``layout=0``
+         // and axis 1 for ``layout=1``.
+         const Tensor *sequence_lens = GetOptionalInput(node, 4, rt.tensors());
+         if (sequence_lens != nullptr) {
+           if (sequence_lens->data_type !=
+               static_cast<int32_t>(DataType::INT32)) {
+             throw std::invalid_argument(
+                 "RunNode: op 'LSTM' expects 'sequence_lens' to be INT32.");
+           }
+           const size_t seq_axis = layout == 1 ? 1u : 0u;
+           const int64_t seq_length = x.shape.size() > seq_axis ? x.shape[seq_axis] : 0;
+           const int64_t n = sequence_lens->element_count();
+           const int32_t *seq_data = sequence_lens->AsInt32();
+           for (int64_t i = 0; i < n; ++i) {
+             if (static_cast<int64_t>(seq_data[i]) != seq_length) {
+               throw std::invalid_argument(
+                   "RunNode: op 'LSTM' does not support the optional 'sequence_lens' "
+                   "input unless every entry equals the full seq_length.");
+             }
+           }
+         }
+
 
          kernel::LSTM kernel(rt.kernel_ctx());
          auto [y, y_h] = kernel(x, w, r, b != nullptr ? *b : Tensor{},

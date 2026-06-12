@@ -20,6 +20,12 @@
   void cls::ParseFromString(const std::string &raw, ParseOptions &opts) {                          \
     _ParseFromString(*this, raw, opts);                                                            \
   }                                                                                                \
+  void cls::ParseFromZeroCopyStream(utils::BinaryStream *stream) {                                 \
+    _ParseFromZeroCopyStream(*this, stream);                                                       \
+  }                                                                                                \
+  void cls::ParseFromZeroCopyStream(utils::BinaryStream *stream, ParseOptions &opts) {             \
+    _ParseFromZeroCopyStream(*this, stream, opts);                                                 \
+  }                                                                                                \
   void cls::SerializeToString(std::string &out) const { _SerializeToString(*this, out); }          \
   void cls::SerializeToString(std::string &out, SerializeOptions &opts) const {                    \
     _SerializeToString(*this, out, opts);                                                          \
@@ -213,6 +219,24 @@ void _ParseFromString(cls &self, const std::string &raw, ParseOptions &opts) {
   self.ParseFromStream(st, opts);
   if (opts.is_parallel())
     st.WaitForDelayedBlock();
+}
+
+template <typename cls>
+void _ParseFromZeroCopyStream(cls &self, ONNX_LIGHT_NAMESPACE::utils::BinaryStream *stream) {
+  EXT_ENFORCE(stream != nullptr, "ParseFromZeroCopyStream: stream pointer must not be null.");
+  ParseOptions opts;
+  self.ParseFromStream(*stream, opts);
+}
+
+template <typename cls>
+void _ParseFromZeroCopyStream(cls &self, ONNX_LIGHT_NAMESPACE::utils::BinaryStream *stream,
+                              ParseOptions &opts) {
+  EXT_ENFORCE(stream != nullptr, "ParseFromZeroCopyStream: stream pointer must not be null.");
+  if (opts.is_parallel())
+    stream->StartThreadPool(opts.num_threads);
+  self.ParseFromStream(*stream, opts);
+  if (opts.is_parallel())
+    stream->WaitForDelayedBlock();
 }
 
 template <typename cls> void _SerializeToString(cls &self, std::string &out) {

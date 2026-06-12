@@ -345,8 +345,11 @@ public:
 
   /// Records that the symbolic dimension named ``lhs`` is
   /// less-than-or-equal-to the expression ``rhs``. The trivial
-  /// self-bound is dropped. Returns ``true`` when a new constraint was
-  /// inserted, ``false`` otherwise (duplicate or self-bound).
+  /// self-bound (``lhs == rhs``) is dropped, and empty operands are
+  /// rejected (they cannot designate a valid dimension name nor a
+  /// well-formed bound expression). Returns ``true`` when a new
+  /// constraint was inserted, ``false`` otherwise (duplicate,
+  /// self-bound, or empty operand).
   bool AddLessEqualConstraint(const std::string &lhs, const std::string &rhs) {
     if (lhs == rhs || lhs.empty() || rhs.empty()) {
       return false;

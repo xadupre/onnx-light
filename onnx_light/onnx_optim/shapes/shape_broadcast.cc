@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "onnx_optim/expressions.h"
+#include "onnx_optim/shapes/_helpers/shape_helpers.h"
 #include "onnx_optim/shapes/shape_check.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -106,17 +107,6 @@ void ComputeShapeBinaryBroadcast(ShapesContext &ctx, const NodeProto &node, cons
 }
 
 namespace {
-
-// Bridges :cpp:class:`OptimDim` (used by ``onnx_optim``) and
-// :cpp:type:`expressions::DimType` (used by the symbolic dim
-// arithmetic helpers). Both are ``std::variant<int64_t, std::string>``
-// but the C++ type system requires an explicit conversion.
-expressions::DimType ToDimType(const OptimDim &d) {
-  if (d.IsInt()) {
-    return expressions::DimType{d.AsInt()};
-  }
-  return expressions::DimType{d.AsExpr()};
-}
 
 OptimDim FromDimType(const expressions::DimType &d) {
   if (std::holds_alternative<int64_t>(d)) {

@@ -13,6 +13,7 @@
 
 #include "onnx_optim/expressions.h"
 #include "onnx_optim/optim_tensor.h"
+#include "onnx_optim/shapes/_helpers/shape_helpers.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_optim/shapes/shape_inference.h"
 
@@ -22,13 +23,6 @@ namespace shapes {
 namespace controlflow {
 
 namespace {
-
-expressions::DimType ToDimType(const OptimDim &d) {
-  if (d.IsInt()) {
-    return expressions::DimType{d.AsInt()};
-  }
-  return expressions::DimType{d.AsExpr()};
-}
 
 // Runs shape inference on the body of ``subgraph`` using a copy of
 // ``parent_ctx`` so that outer-scope values referenced from inside the

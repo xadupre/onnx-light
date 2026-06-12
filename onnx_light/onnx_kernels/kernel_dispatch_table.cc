@@ -1253,8 +1253,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          }
 
          // Unsupported attributes: only the default ``forward`` direction
-         // with the default ``Sigmoid``/``Tanh`` activations, no
-         // ``clip``, and ``layout == 0`` are implemented.
+         // with the default ``Sigmoid``/``Tanh`` activations and no
+         // ``clip`` are implemented; ``layout=0`` and ``layout=1`` are
+         // both supported.
          const std::string direction =
              GetAttributeStringOrDefault(node, "direction", "forward");
          if (direction != "forward") {
@@ -1273,9 +1274,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          if (FindAttribute(node, "clip") != nullptr) {
            throw std::invalid_argument("RunNode: op 'GRU' does not support the 'clip' attribute.");
          }
-         if (GetAttributeIntOrDefault(node, "layout", 0) != 0) {
-           throw std::invalid_argument("RunNode: op 'GRU' only supports layout=0.");
-         }
+         const int64_t layout = GetAttributeIntOrDefault(node, "layout", 0);
 
          // ``sequence_lens`` (input #4) is not supported: it requires
          // per-batch sequence handling that the FLOAT kernel does not
@@ -1297,7 +1296,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
 
          kernel::GRU kernel(rt.kernel_ctx());
          auto [y, y_h] = kernel(x, w, r, b != nullptr ? *b : Tensor{},
-                                initial_h != nullptr ? *initial_h : Tensor{}, linear_before_reset);
+                                initial_h != nullptr ? *initial_h : Tensor{},
+                                linear_before_reset, layout);
 
          auto set_optional_output = [&node, &rt](int index, Tensor output) {
            if (index >= node.output_size()) {

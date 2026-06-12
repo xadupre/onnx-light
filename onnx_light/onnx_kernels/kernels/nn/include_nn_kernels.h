@@ -579,20 +579,25 @@ public:
 ///       (``linear_before_reset != 0``)
 ///   ``H_t = (1 - z_t) (.) h_t + z_t (.) H_{t-1}``
 ///
-/// for ``layout=0`` only (``X.shape = [seq_length, batch_size,
-/// input_size]``; ``W.shape = [1, 3 * hidden_size, input_size]``;
+/// for both ``layout=0`` (``X.shape = [seq_length, batch_size,
+/// input_size]``; optional ``initial_h.shape = [1, batch_size,
+/// hidden_size]``) and ``layout=1`` (``X.shape = [batch_size, seq_length,
+/// input_size]``; optional ``initial_h.shape = [batch_size, 1,
+/// hidden_size]``). ``W.shape = [1, 3 * hidden_size, input_size]``;
 /// ``R.shape = [1, 3 * hidden_size, hidden_size]``; optional ``B.shape =
 /// [1, 6 * hidden_size]`` (``[Wb, Rb]`` each with 3 gate blocks in the
-/// ONNX gate order ``z, r, h``); optional ``initial_h.shape =
-/// [1, batch_size, hidden_size]``, defaulting to zeros). ``sequence_lens``
-/// is not supported (every batch must share the same sequence length);
-/// ``activations``, ``clip`` and non-``forward`` ``direction`` are not
-/// supported.
+/// ONNX gate order ``z, r, h``); ``initial_h`` defaults to zeros.
+/// ``sequence_lens`` is not supported (every batch must share the same
+/// sequence length); ``activations``, ``clip`` and non-``forward``
+/// ``direction`` are not supported.
 ///
-/// The two outputs are produced together: ``Y`` has shape
+/// The two outputs are produced together: for ``layout=0``, ``Y`` has shape
 /// ``[seq_length, 1, batch_size, hidden_size]`` and is the concatenation of
 /// every per-time-step hidden state; ``Y_h`` has shape
-/// ``[1, batch_size, hidden_size]`` and equals the last time step of ``Y``.
+/// ``[1, batch_size, hidden_size]`` and equals the last time step of
+/// ``Y``. For ``layout=1`` the corresponding shapes are
+/// ``[batch_size, seq_length, 1, hidden_size]`` and
+/// ``[batch_size, 1, hidden_size]``.
 class GRU : public KernelBase {
 public:
   using KernelBase::KernelBase;
@@ -601,10 +606,12 @@ public:
   /// (empty-shape) ``Tensor`` to indicate the optional ``B`` input is
   /// missing; same convention for ``initial_h``. ``linear_before_reset``
   /// matches the ONNX attribute of the same name (default ``0``).
+  /// ``layout`` matches the ONNX attribute of the same name (default
+  /// ``0``).
   std::pair<Tensor, Tensor> operator()(const Tensor &x, const Tensor &w, const Tensor &r,
                                        const Tensor &b = Tensor{},
                                        const Tensor &initial_h = Tensor{},
-                                       int64_t linear_before_reset = 0) const;
+                                       int64_t linear_before_reset = 0, int64_t layout = 0) const;
 
   /// Output shape generally differs from the input shape, so storage
   /// cannot in general be shared.

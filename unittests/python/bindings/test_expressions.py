@@ -74,6 +74,18 @@ class TestSimplifyExpressions(ExtTestCase):
     def test_simplify_add_sub(self):
         self.assertEqual("b+c", simplify_expression("b+c-CeilToInt(b+c,2)+CeilToInt(b+c,2)"))
 
+    def test_simplify_floordiv_add_ring(self):
+        # sum_{i=0..n-1} floor((y + i) / n) == y (for integer y)
+        self.assertEqual("b+c", simplify_expression("(1+b+c)//2+(b+c)//2"))
+        self.assertEqual("a", simplify_expression("a//2+(a+1)//2"))
+        self.assertEqual("x", simplify_expression("x//3+(x+1)//3+(x+2)//3"))
+        self.assertEqual("x+5", simplify_expression("(x+5)//3+(x+6)//3+(x+7)//3"))
+        self.assertEqual("a+b", simplify_expression("a//2+(a+1)//2+b"))
+        self.assertEqual("b+c", simplify_expression("CeilToInt(b+c, 2)+(b+c)//2"))
+        # Insufficient terms / non-contiguous offsets must be preserved.
+        self.assertEqual("(1+x)//3+x//3", simplify_expression("x//3+(x+1)//3"))
+        self.assertEqual("(2+a)//2+a//2", simplify_expression("a//2+(a+2)//2"))
+
     def test_simplify_function(self):
         self.assertEqual("(1+b+c)//2", simplify_expression("CeilToInt(b+c,2)"))
 

@@ -289,6 +289,19 @@ inline std::string GetRequiredAttributeString(const NodeProto &node, const std::
   return attr->s().as_string();
 }
 
+inline int64_t GetRequiredAttributeInt(const NodeProto &node, const std::string &name) {
+  const AttributeProto *attr = FindAttribute(node, name);
+  if (attr == nullptr) {
+    throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() + "' is missing '" +
+                                name + "' INT attribute.");
+  }
+  if (attr->type() != AttributeProto::AttributeType::INT) {
+    throw std::invalid_argument("RunNode: attribute '" + name + "' of op '" +
+                                node.op_type().as_string() + "' must be an INT.");
+  }
+  return attr->i();
+}
+
 } // namespace detail
 } // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

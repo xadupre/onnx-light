@@ -14,6 +14,8 @@
   SerializeSizeResult SerializeSize() const;                                                       \
   void ParseFromString(const std::string &raw);                                                    \
   void ParseFromString(const std::string &raw, ParseOptions &opts);                                \
+  void ParseFromZeroCopyStream(utils::BinaryStream *stream);                                       \
+  void ParseFromZeroCopyStream(utils::BinaryStream *stream, ParseOptions &opts);                   \
   void SerializeToString(std::string &out) const;                                                  \
   void SerializeToString(std::string &out, SerializeOptions &opts) const;                          \
   SerializeSizeResult SerializeSize(utils::BinaryWriteStream &stream, SerializeOptions &opts)      \

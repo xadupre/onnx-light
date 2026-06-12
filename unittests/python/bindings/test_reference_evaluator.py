@@ -166,6 +166,32 @@ class TestReferenceEvaluator(ExtTestCase):
         self.assertIn("Missing input", str(ctx.exception))
         self.assertIn("z", str(ctx.exception))
 
+    def test_release_intermediates_removes_unused_and_logs_event(self):
+        # With release_intermediates=True, the intermediate "t" is removed
+        # from the runtime context as soon as the last node that references
+        # it (Add) finishes. The graph output "y" is preserved.
+        model = parser.parse_model(_ABS_ADD_MODEL_SRC)
+        sess = ReferenceEvaluator(model, events_enabled=True, release_intermediates=True)
+        x = np.array([-1.0, 2.0, -3.0], dtype=np.float32)
+        z = np.array([10.0, 20.0, 30.0], dtype=np.float32)
+        (y,) = sess.run(["y"], {"x": x, "z": z})
+        np.testing.assert_array_equal(y, np.array([11.0, 22.0, 33.0], dtype=np.float32))
+
+        actions = [ev.as_dict() for ev in sess.events()]
+        removed_names = [d["name"] for d in actions if d["action"] == "remove"]
+        self.assertIn("t", removed_names)
+        # "y" (graph output) must NOT have been removed.
+        self.assertNotIn("y", removed_names)
+
+    def test_release_intermediates_disabled_keeps_intermediates(self):
+        # With release_intermediates=False, every intermediate stays observable after the run.
+        model = parser.parse_model(_ABS_ADD_MODEL_SRC)
+        sess = ReferenceEvaluator(model, events_enabled=True, release_intermediates=False)
+        sess.run(None, {"x": np.zeros(3, dtype=np.float32), "z": np.zeros(3, dtype=np.float32)})
+        actions = [ev.as_dict() for ev in sess.events()]
+        removed_names = [d["name"] for d in actions if d["action"] == "remove"]
+        self.assertEqual(removed_names, [])
+
     def test_unknown_output_raises(self):
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)
         sess = ReferenceEvaluator(model)

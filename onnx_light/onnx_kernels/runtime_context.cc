@@ -340,5 +340,163 @@ RuntimeContext::CollectExternalInputs(const std::vector<NodeProto> &nodes) {
   return CollectExternalInputsImpl(nodes);
 }
 
+std::vector<std::string> RuntimeContext::CollectNodeInputs(const NodeProto &node) {
+  std::vector<std::string> out;
+  std::unordered_set<std::string> seen;
+  for (size_t i = 0; i < node.input().size(); ++i) {
+    const std::string name = node.input()[i].as_string();
+    if (name.empty()) {
+      continue;
+    }
+    if (seen.insert(name).second) {
+      out.push_back(name);
+    }
+  }
+  // Recursively collect every captured input of subgraph attributes
+  // (``GRAPH`` / ``GRAPHS``). Outer-produced names are intentionally
+  // empty: from the perspective of a single ``node``, only the names
+  // referenced by its subgraphs are part of its data dependencies.
+  std::unordered_set<std::string> empty_outer;
+  for (size_t a = 0; a < node.attribute().size(); ++a) {
+    const AttributeProto &attr = node.attribute()[a];
+    if (attr.type() == AttributeProto::AttributeType::GRAPH && attr.has_g()) {
+      CollectGraphExternalInputs(attr.g(), out, seen, empty_outer);
+    } else if (attr.type() == AttributeProto::AttributeType::GRAPHS) {
+      for (size_t k = 0; k < attr.graphs().size(); ++k) {
+        CollectGraphExternalInputs(attr.graphs()[k], out, seen, empty_outer);
+      }
+    }
+  }
+  return out;
+}
+
+namespace {
+
+template <class NodeRange>
+std::vector<std::vector<std::string>>
+ComputeReleasableInputsImpl(const NodeRange &nodes, const std::unordered_set<std::string> &keep) {
+  const size_t n = nodes.size();
+  std::vector<std::vector<std::string>> per_node_inputs;
+  per_node_inputs.reserve(n);
+  std::unordered_map<std::string, size_t> last_use;
+  for (size_t i = 0; i < n; ++i) {
+    std::vector<std::string> inputs = RuntimeContext::CollectNodeInputs(nodes[i]);
+    for (const auto &name : inputs) {
+      last_use[name] = i;
+    }
+    per_node_inputs.push_back(std::move(inputs));
+  }
+  std::vector<std::vector<std::string>> out(n);
+  for (size_t i = 0; i < n; ++i) {
+    for (const auto &name : per_node_inputs[i]) {
+      if (keep.count(name)) {
+        continue;
+      }
+      auto it = last_use.find(name);
+      if (it != last_use.end() && it->second == i) {
+        out[i].push_back(name);
+      }
+    }
+  }
+  return out;
+}
+
+} // namespace
+
+std::vector<std::vector<std::string>>
+RuntimeContext::ComputeReleasableInputs(const utils::RepeatedProtoField<NodeProto> &nodes,
+                                        const std::unordered_set<std::string> &keep) {
+  return ComputeReleasableInputsImpl(nodes, keep);
+}
+
+std::vector<std::vector<std::string>>
+RuntimeContext::ComputeReleasableInputs(const std::vector<NodeProto> &nodes,
+                                        const std::unordered_set<std::string> &keep) {
+  return ComputeReleasableInputsImpl(nodes, keep);
+}
+
+ExecutionPlan::ExecutionPlan(const utils::RepeatedProtoField<NodeProto> &nodes,
+                             std::unordered_set<std::string> keep)
+    : keep_(std::move(keep)), releasable_(RuntimeContext::ComputeReleasableInputs(nodes, keep_)) {
+  for (size_t i = 0; i < nodes.size(); ++i) {
+    node_index_.emplace(&nodes[i], i);
+  }
+}
+
+ExecutionPlan::ExecutionPlan(const GraphProto &graph) {
+  for (size_t i = 0; i < graph.input().size(); ++i) {
+    const std::string name = graph.input()[i].name().as_string();
+    if (!name.empty()) {
+      keep_.insert(name);
+    }
+  }
+  for (size_t i = 0; i < graph.initializer().size(); ++i) {
+    const std::string name = graph.initializer()[i].name().as_string();
+    if (!name.empty()) {
+      keep_.insert(name);
+    }
+  }
+  for (size_t i = 0; i < graph.output().size(); ++i) {
+    const std::string name = graph.output()[i].name().as_string();
+    if (!name.empty()) {
+      keep_.insert(name);
+    }
+  }
+  releasable_ = RuntimeContext::ComputeReleasableInputs(graph.node(), keep_);
+  for (size_t i = 0; i < graph.node().size(); ++i) {
+    node_index_.emplace(&graph.node()[i], i);
+  }
+}
+
+ExecutionPlan::ExecutionPlan(const FunctionProto &func) {
+  for (size_t i = 0; i < func.input_size(); ++i) {
+    const std::string name = func.input(i).as_string();
+    if (!name.empty()) {
+      keep_.insert(name);
+    }
+  }
+  for (size_t i = 0; i < func.output_size(); ++i) {
+    const std::string name = func.output(i).as_string();
+    if (!name.empty()) {
+      keep_.insert(name);
+    }
+  }
+  releasable_ = RuntimeContext::ComputeReleasableInputs(func.node(), keep_);
+  for (size_t i = 0; i < func.node().size(); ++i) {
+    node_index_.emplace(&func.node()[i], i);
+  }
+}
+
+void ExecutionPlan::ReleaseAfter(const NodeProto &node, RuntimeContext &rt) const {
+  auto it = node_index_.find(&node);
+  if (it == node_index_.end()) {
+    return;
+  }
+  for (const auto &name : releasable_[it->second]) {
+    rt.Remove(name);
+    rt.RemoveSequence(name);
+  }
+}
+
+const ExecutionPlan &RuntimeContext::GetExecutionPlan(const GraphProto &graph) {
+  const void *key = static_cast<const void *>(&graph);
+  auto it = execution_plans_.find(key);
+  if (it == execution_plans_.end()) {
+    it = execution_plans_.emplace(key, ExecutionPlan(graph)).first;
+  }
+  return it->second;
+}
+
+const ExecutionPlan &RuntimeContext::GetExecutionPlan(const FunctionProto &func) {
+  const void *key = static_cast<const void *>(&func);
+  auto it = execution_plans_.find(key);
+  if (it == execution_plans_.end()) {
+    it = execution_plans_.emplace(key, ExecutionPlan(func)).first;
+  }
+  return it->second;
+}
+
+void RuntimeContext::ClearExecutionPlans() noexcept { execution_plans_.clear(); }
+
 } // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

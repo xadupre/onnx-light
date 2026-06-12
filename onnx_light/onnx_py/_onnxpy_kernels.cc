@@ -290,6 +290,17 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "Default is ``False`` for maximum throughput; enable only when profiling "
           "is required.")
       .def_prop_rw(
+          "release_intermediates",
+          [](const RuntimeContext &rt) { return rt.release_intermediates(); },
+          [](RuntimeContext &rt, bool v) { rt.set_release_intermediates(v); },
+          "When ``True``, :func:`run_nodes` / :func:`run_graph` / :func:`run_function` / "
+          ":func:`run_model` remove an intermediate tensor (or sequence) from the runtime "
+          "context as soon as the last node that references it has finished — emitting a "
+          "``kRemove`` event when :attr:`events_enabled` is ``True``. Graph / function "
+          "outputs and names already present in the context before the run are always "
+          "preserved. Default is ``False`` so that intermediate values stay observable "
+          "after the run.")
+      .def_prop_rw(
           "kernel_ctx", [](RuntimeContext &rt) -> KernelContext & { return rt.kernel_ctx(); },
           [](RuntimeContext &rt, KernelContext k) { rt.kernel_ctx() = std::move(k); },
           nb::rv_policy::reference_internal, "Kernel construction context (opset).")

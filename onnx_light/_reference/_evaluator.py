@@ -170,6 +170,7 @@ class ReferenceEvaluator:
         proto: ModelProto | GraphProto | FunctionProto | bytes | str | os.PathLike,
         *,
         events_enabled: bool = False,
+        release_intermediates: bool = True,
     ) -> None:
         proto = self._load_proto(proto)
         self._model: ModelProto | None = None
@@ -177,6 +178,7 @@ class ReferenceEvaluator:
         self._function: FunctionProto | None = None
         self._last_ctx: Any = None
         self._events_enabled = events_enabled
+        self._release_intermediates = release_intermediates
 
         # ``_map_inputs`` records graph inputs declared with a ``map(K, V)``
         # type. The C++ kernels for ``ai.onnx.ml::DictVectorizer`` and
@@ -446,6 +448,15 @@ class ReferenceEvaluator:
 
         ctx = _runtime.RuntimeContext(self._kernel_ctx)
         ctx.events_enabled = self._events_enabled
+        # Releasing intermediates would drop any requested output that is
+        # not a declared graph/function output before the caller can fetch
+        # it. Disable the per-run release in that case so callers can still
+        # observe arbitrary intermediate values via ``run([name], ...)``.
+        declared_outputs = frozenset(self._output_names)
+        release = self._release_intermediates and all(
+            name in declared_outputs for name in output_names
+        )
+        ctx.release_intermediates = release
 
         for domain, op_type, wrapper in self._custom_kernels.values():
             ctx.register_custom_kernel(domain, op_type, wrapper)

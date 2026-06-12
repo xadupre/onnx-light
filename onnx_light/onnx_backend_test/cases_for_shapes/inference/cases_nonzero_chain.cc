@@ -158,7 +158,8 @@ void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &regist
 
   AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {"batch", "seq"});
   AppendValueInfo(*graph->add_value_info(), "abs_out", DataType::FLOAT, {"batch", "seq"});
-  AppendValueInfo(*graph->add_value_info(), "nz", DataType::INT64, {"dnz", "2"});
+  AppendValueInfo(*graph->add_value_info(), "nz", DataType::INT64,
+                  {DimSpec(int64_t{2}), DimSpec("dnz")});
   AppendValueInfo(*graph->add_value_info(), "flat_nz", DataType::INT64, {"2*dnz"});
   AppendValueInfo(*graph->add_value_info(), "Y_pre_abs", DataType::INT64, {"2*dnz"});
   AppendValueInfo(*graph->add_output(), "Y", DataType::INT64, {"2*dnz"});

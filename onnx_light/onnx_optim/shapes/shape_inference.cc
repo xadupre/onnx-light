@@ -136,6 +136,46 @@ std::string NormaliseDispatchDomain(const NodeProto &node) {
 
 using AnchorMap = std::unordered_map<std::string, OptimTensor>;
 
+// Records ``a == b`` (a constraint between two symbolic expressions) and,
+// when their algebraic difference reduces to ``c*x - c*y`` (a coefficient
+// map with exactly two non-zero entries of equal magnitude and opposite
+// signs), also records the implied leaf-level equality ``x == y``. This
+// lets output anchors like ``Y: [2*dnz]`` propagate down to intermediate
+// tensors whose inferred shape uses a scaled symbol such as
+// ``[2*NonZero_nz_nnz]`` — without the derived ``dnz == NonZero_nz_nnz``
+// constraint, the canonicalisation pass would only rename the compound
+// expression and leave the leaf occurrence of ``NonZero_nz_nnz``
+// untouched.
+void AddSymbolicConstraintWithLeafDerivation(ShapesContext &ctx, const std::string &a,
+                                             const std::string &b) {
+  ctx.AddConstraint(a, b);
+  if (a == b) {
+    return;
+  }
+  std::map<std::string, int64_t> diff;
+  try {
+    diff = expressions::simplify_two_expressions(a, b);
+  } catch (const std::runtime_error &) {
+    return;
+  }
+  if (diff.size() != 2) {
+    return;
+  }
+  auto it = diff.begin();
+  const std::string &name1 = it->first;
+  const int64_t coeff1 = it->second;
+  ++it;
+  const std::string &name2 = it->first;
+  const int64_t coeff2 = it->second;
+  if (coeff1 + coeff2 != 0) {
+    return;
+  }
+  if (name1.empty() || name2.empty() || name1 == name2) {
+    return;
+  }
+  ctx.AddConstraint(name1, name2);
+}
+
 void AddValueInfoAsAnchor(const ValueInfoProto &vi, AnchorMap &anchors) {
   const std::string name = vi.name().as_string();
   if (name.empty()) {
@@ -223,7 +263,7 @@ OptimTensor MergeWithAnchor(ShapesContext &ctx, const std::string &name,
     } else {
       // Both symbolic and different: record the equality and privilege
       // the anchor's symbol.
-      ctx.AddConstraint(di.AsExpr(), da.AsExpr());
+      AddSymbolicConstraintWithLeafDerivation(ctx, di.AsExpr(), da.AsExpr());
       merged_shape.PushBack(da);
     }
   }

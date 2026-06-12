@@ -138,7 +138,6 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
             inferred = computed[name]
             self.assertEqual(expected, inferred, f"{name!r} failed\n{expected=}\n--\n{inferred=}")
 
-    @unittest.skip("broken")
     def test_inference_shape_backend_non_zero_expression(self):
         tests = [
             test
@@ -150,7 +149,7 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
         model = onnxl.ModelProto()
         model.CopyFrom(test.model)
         model.graph.value_info.clear()
-        infer_shapes_model(model)
+        infer_shapes_model(model, prefill_with_value_info_output=True)
         expected_info = {
             info.name: info for info in [*test.model.graph.value_info, *test.model.graph.output]
         }

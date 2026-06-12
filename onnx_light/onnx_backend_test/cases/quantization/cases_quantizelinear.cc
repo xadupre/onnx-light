@@ -4,9 +4,9 @@
 
 #include "onnx_backend_test/cases/quantization/include_quantization_cases.h"
 #include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/_helpers/cast_float8.h"
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
-#include "onnx_kernels/kernels/tensor/cast_float8.h"
-#include "onnx_kernels/kernels/tensor/cast_helper.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cmath>
@@ -21,7 +21,7 @@ namespace onnx_backend_test {
 namespace {
 
 // Tensor builders and bit packing helpers are provided by
-// ``onnx_kernels/kernels/tensor/cast_helper.h`` (kernel::Uint16ZeroPoint,
+// ``onnx_kernels/kernels/_helpers/cast_helper.h`` (kernel::Uint16ZeroPoint,
 // kernel::Int16ZeroPoint, kernel::MakeFloat8Tensor, kernel::Pack2Bit,
 // kernel::Pack4Bit, kernel::MakeSubByteTensor,
 // kernel::FloatToFloat4E2M1Nibble, kernel::MakeFloat4E2M1Tensor).

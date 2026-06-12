@@ -21,16 +21,25 @@ ONNX model that stores its weights as external data:
    boundary.  This loads the full set of weights into memory before
    re-writing them.
 
-The example reports wall-clock time and peak Python-tracked heap usage
-(measured via :mod:`tracemalloc`) for each approach.  At equal alignment
-the two outputs are byte-equivalent for the tensor payloads — only the
-peak memory footprint differs.
+The example reports wall-clock time and peak process-resident memory
+usage for each approach.  At equal alignment the two outputs are
+byte-equivalent for the tensor payloads — only the peak memory
+footprint differs.
+
+.. note::
+    Peak memory is sampled from the process's resident set size (RSS),
+    not from :mod:`tracemalloc`.  ``tracemalloc`` only tracks the
+    Python allocator (``pymalloc``), so it misses the C++-owned buffers
+    where onnx-light stores tensor ``raw_data`` — making both approaches
+    appear similarly small and hiding the very overhead this example
+    is meant to illustrate.  RSS captures both Python and C++
+    allocations.
 """
 
 import os
 import shutil
+import threading
 import time
-import tracemalloc
 
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
@@ -109,22 +118,74 @@ print(f"Source weights size   : {os.path.getsize(src_data) / 2 ** 20:.2f} MB")
 # -------
 #
 # Each benchmark is wrapped in a function that returns the elapsed wall
-# time and the peak Python-tracked allocation reported by
-# :mod:`tracemalloc`.  ``tracemalloc`` only accounts for Python-side
-# allocations, but the in-memory branch materialises every tensor as
-# Python-owned ``raw_data`` bytes during the load, which is exactly the
-# overhead the streaming variant avoids.
+# time and the peak process-resident memory (RSS) observed while the
+# function runs.  RSS is sampled from ``/proc/self/statm`` (Linux) on a
+# background thread; on platforms where ``/proc`` is unavailable the
+# sampler falls back to :func:`resource.getrusage` (Unix) or reports
+# ``0``.  Unlike :mod:`tracemalloc`, RSS includes the C++-owned buffers
+# where onnx-light stores tensor ``raw_data`` during an in-memory load
+# — which is exactly the overhead the streaming variant avoids.
+
+
+_PAGE_SIZE = os.sysconf("SC_PAGE_SIZE") if hasattr(os, "sysconf") else 4096
+
+
+def _read_rss_bytes() -> int:
+    """Returns the current process resident set size in bytes (0 if unknown)."""
+    try:
+        with open("/proc/self/statm", encoding="ascii") as stream:
+            return int(stream.read().split()[1]) * _PAGE_SIZE
+    except OSError:
+        pass
+    try:
+        import resource
+
+        ru = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        # Linux reports KiB, macOS reports bytes; both branches are >= our usage scale.
+        return ru * 1024 if ru < 2**40 else ru
+    except (ImportError, OSError):
+        return 0
+
+
+class _PeakRssSampler:
+    """Samples process RSS on a background thread and records the peak observed."""
+
+    def __init__(self, interval: float = 0.001):
+        self._interval = interval
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self.baseline = 0
+        self.peak = 0
+
+    def __enter__(self):
+        self.baseline = _read_rss_bytes()
+        self.peak = self.baseline
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join()
+        cur = _read_rss_bytes()
+        if cur > self.peak:
+            self.peak = cur
+
+    def _run(self) -> None:
+        while not self._stop.wait(self._interval):
+            cur = _read_rss_bytes()
+            if cur > self.peak:
+                self.peak = cur
 
 
 def measure(name: str, fn) -> dict:
-    """Runs *fn*, returns elapsed time (s) and peak allocation (MB)."""
-    tracemalloc.start()
-    t0 = time.perf_counter()
-    fn()
-    elapsed = time.perf_counter() - t0
-    _, peak = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
-    peak_mb = peak / 2**20
+    """Runs *fn* and returns elapsed time (s) and peak RSS delta (MB)."""
+    with _PeakRssSampler() as sampler:
+        t0 = time.perf_counter()
+        fn()
+        elapsed = time.perf_counter() - t0
+    peak_mb = max(sampler.peak - sampler.baseline, 0) / 2**20
     print(f"{name:<40} time={elapsed * 1e3:8.1f} ms   peak={peak_mb:7.2f} MB")
     return {"name": name, "time_s": elapsed, "peak_mb": peak_mb}
 
@@ -245,8 +306,8 @@ ax_time.set_xlabel("seconds")
 ax_time.grid(axis="x")
 
 ax_mem.barh(row_names, df["peak_mb"], color=colors)
-ax_mem.set_title("Peak Python heap (MB, lower is better)")
-ax_mem.set_xlabel("MB (tracemalloc)")
+ax_mem.set_title("Peak RSS delta (MB, lower is better)")
+ax_mem.set_xlabel("MB (resident set size)")
 ax_mem.grid(axis="x")
 
 fig.suptitle(

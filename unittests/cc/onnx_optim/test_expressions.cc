@@ -105,6 +105,20 @@ TEST(SimplifyExpressions, SimplifyAddSub) {
   EXPECT_EQ(get_str(simplify_expression("b+c-CeilToInt(b+c,2)+CeilToInt(b+c,2)")), "b+c");
 }
 
+TEST(SimplifyExpressions, SimplifyExpression_floordiv_add_ring) {
+  // floor(y/n) + floor((y+1)/n) + ... + floor((y+n-1)/n) == y (for integer y).
+  EXPECT_EQ(get_str(simplify_expression("(1+b+c)//2+(b+c)//2")), "b+c");
+  EXPECT_EQ(get_str(simplify_expression("(b+c+1)//2+(b+c)//2")), "b+c");
+  EXPECT_EQ(get_str(simplify_expression("a//2+(a+1)//2")), "a");
+  EXPECT_EQ(get_str(simplify_expression("x//3+(x+1)//3+(x+2)//3")), "x");
+  EXPECT_EQ(get_str(simplify_expression("(x+5)//3+(x+6)//3+(x+7)//3")), "x+5");
+  EXPECT_EQ(get_str(simplify_expression("a//2+(a+1)//2+b")), "a+b");
+  EXPECT_EQ(get_str(simplify_expression("CeilToInt(b+c, 2)+(b+c)//2")), "b+c");
+  // Negative cases: not enough terms, or offsets do not span all residues.
+  EXPECT_EQ(get_str(simplify_expression("x//3+(x+1)//3")), "(1+x)//3+x//3");
+  EXPECT_EQ(get_str(simplify_expression("a//2+(a+2)//2")), "(2+a)//2+a//2");
+}
+
 TEST(SimplifyExpressions, SimplifyFunction) {
   EXPECT_EQ(get_str(simplify_expression("CeilToInt(b+c,2)")), "(1+b+c)//2");
 }

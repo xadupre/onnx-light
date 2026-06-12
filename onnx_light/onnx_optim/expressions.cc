@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cctype>
+#include <functional>
 #include <map>
 #include <numeric>
 #include <sstream>
@@ -876,6 +877,178 @@ public:
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// FloorDivAddRingTransformer
+// Recognises sums of floor-divisions sharing the same denominator ``n`` whose
+// numerators only differ by a contiguous range of integer constants of length
+// ``n``.  The identity
+//
+//   sum_{i=0..n-1} floor((y + i) / n) = y          (for integer y)
+//
+// lets us collapse such a group to ``s + k`` where ``s`` is the common
+// symbolic part and ``k`` is the smallest of the integer offsets.
+//
+// Example: ``(b + c) // 2 + (1 + b + c) // 2  →  b + c``.
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+// Splits an expression into a symbolic part and an additive integer offset
+// such that ``node == symbolic + offset``.  Walks Add/Sub chains and folds
+// every numeric leaf into ``offset``; the remaining symbolic terms are
+// reassembled into ``symbolic`` preserving their original signs.  When the
+// expression is a pure constant, ``symbolic`` is set to ``Constant(0)``.
+void split_const_offset(const Node &node, NodePtr &symbolic, int64_t &offset) {
+  std::vector<std::pair<NodePtr, int>> sym_terms; // (cloned node, sign)
+  offset = 0;
+  std::function<void(const Node &, int)> walk = [&](const Node &n, int sign) {
+    if (const auto *c = dynamic_cast<const Constant *>(&n)) {
+      offset += sign * c->value;
+      return;
+    }
+    if (const auto *b = dynamic_cast<const BinOp *>(&n)) {
+      if (b->op == BinOpKind::Add) {
+        walk(*b->left, sign);
+        walk(*b->right, sign);
+        return;
+      }
+      if (b->op == BinOpKind::Sub) {
+        walk(*b->left, sign);
+        walk(*b->right, -sign);
+        return;
+      }
+    }
+    if (const auto *u = dynamic_cast<const UnaryOp *>(&n)) {
+      if (u->op == UnaryOpKind::UAdd) {
+        walk(*u->operand, sign);
+        return;
+      }
+      if (u->op == UnaryOpKind::USub) {
+        walk(*u->operand, -sign);
+        return;
+      }
+    }
+    sym_terms.emplace_back(n.clone(), sign);
+  };
+  walk(node, 1);
+
+  if (sym_terms.empty()) {
+    symbolic = std::make_unique<Constant>(0);
+    return;
+  }
+  // Reassemble.  Sort by unparse so that semantically-equal symbolic parts
+  // produce identical keys regardless of source ordering.
+  std::sort(sym_terms.begin(), sym_terms.end(),
+            [](const std::pair<NodePtr, int> &a, const std::pair<NodePtr, int> &b) {
+              return unparse(*a.first) < unparse(*b.first);
+            });
+  NodePtr res;
+  if (sym_terms[0].second >= 0)
+    res = std::move(sym_terms[0].first);
+  else
+    res = std::make_unique<UnaryOp>(UnaryOpKind::USub, std::move(sym_terms[0].first));
+  for (size_t i = 1; i < sym_terms.size(); ++i) {
+    BinOpKind op = (sym_terms[i].second >= 0) ? BinOpKind::Add : BinOpKind::Sub;
+    res = std::make_unique<BinOp>(std::move(res), op, std::move(sym_terms[i].first));
+  }
+  symbolic = std::move(res);
+}
+
+} // namespace
+
+class FloorDivAddRingTransformer : public Transformer {
+public:
+  NodePtr visit_BinOp(std::unique_ptr<BinOp> n) override {
+    n = std::unique_ptr<BinOp>(static_cast<BinOp *>(generic_visit(std::move(n)).release()));
+    if (n->op != BinOpKind::Add)
+      return n;
+
+    std::vector<NodePtr> terms;
+    flatten_chain(*n, BinOpKind::Add, terms);
+
+    while (try_combine_ring(terms)) {
+      // keep combining
+    }
+
+    if (terms.size() == 1)
+      return std::move(terms[0]);
+    return rebuild_chain(terms, BinOpKind::Add);
+  }
+
+private:
+  // Identifies a floor-div ring group within ``terms`` and replaces it with
+  // its collapsed form.  Returns true when a replacement was performed.
+  static bool try_combine_ring(std::vector<NodePtr> &terms) {
+    struct FDInfo {
+      size_t idx;          // position in ``terms``
+      int64_t denom;       // floor-div denominator
+      NodePtr symbolic;    // symbolic part of the numerator
+      int64_t offset;      // integer offset of the numerator
+      std::string sym_key; // unparse(symbolic) for grouping
+    };
+    std::vector<FDInfo> infos;
+    for (size_t i = 0; i < terms.size(); ++i) {
+      const auto *b = dynamic_cast<const BinOp *>(terms[i].get());
+      if (!b || b->op != BinOpKind::FloorDiv)
+        continue;
+      const auto *c = dynamic_cast<const Constant *>(b->right.get());
+      if (!c || c->value <= 1)
+        continue;
+      NodePtr sym;
+      int64_t off = 0;
+      split_const_offset(*b->left, sym, off);
+      std::string key = unparse(*sym);
+      infos.push_back({i, c->value, std::move(sym), off, std::move(key)});
+    }
+    if (infos.empty())
+      return false;
+
+    std::map<std::pair<int64_t, std::string>, std::vector<size_t>> groups;
+    for (size_t j = 0; j < infos.size(); ++j)
+      groups[{infos[j].denom, infos[j].sym_key}].push_back(j);
+
+    for (auto &kv : groups) {
+      int64_t denom = kv.first.first;
+      auto &list = kv.second;
+      if (static_cast<int64_t>(list.size()) < denom)
+        continue;
+      std::sort(list.begin(), list.end(),
+                [&](size_t a, size_t b) { return infos[a].offset < infos[b].offset; });
+      for (size_t start = 0; start + static_cast<size_t>(denom) <= list.size(); ++start) {
+        int64_t base = infos[list[start]].offset;
+        bool ok = true;
+        for (int64_t i = 1; i < denom; ++i) {
+          if (infos[list[start + static_cast<size_t>(i)]].offset != base + i) {
+            ok = false;
+            break;
+          }
+        }
+        if (!ok)
+          continue;
+        // Collect original indices and erase them (largest first).
+        std::vector<size_t> orig;
+        orig.reserve(static_cast<size_t>(denom));
+        for (int64_t i = 0; i < denom; ++i)
+          orig.push_back(infos[list[start + static_cast<size_t>(i)]].idx);
+        std::sort(orig.begin(), orig.end(), std::greater<size_t>());
+        NodePtr sym_clone = infos[list[start]].symbolic->clone();
+        NodePtr replacement;
+        if (base == 0) {
+          replacement = std::move(sym_clone);
+        } else {
+          replacement = std::make_unique<BinOp>(std::move(sym_clone), BinOpKind::Add,
+                                                std::make_unique<Constant>(base));
+        }
+        for (size_t oi : orig)
+          terms.erase(terms.begin() + static_cast<std::ptrdiff_t>(oi));
+        terms.push_back(std::move(replacement));
+        return true;
+      }
+    }
+    return false;
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // MaxIntTransformer: integer_constant ^ integer_constant → max result
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -1109,6 +1282,7 @@ static NodePtr apply_pipeline(NodePtr node) {
   MaxToXorTransformer max_tr;
   ReorderCommutativeOpsTransformer reorder_tr;
   MaxIntTransformer maxint_tr;
+  FloorDivAddRingTransformer fd_ring_tr;
 
   // Apply pipeline twice (matches the Python implementation)
   for (int pass = 0; pass < 2; ++pass) {
@@ -1123,6 +1297,7 @@ static NodePtr apply_pipeline(NodePtr node) {
     node = reorder_tr.visit(std::move(node));
     // StringToIntTransformer converts string constants to ints (not applicable here)
     node = maxint_tr.visit(std::move(node));
+    node = fd_ring_tr.visit(std::move(node));
   }
   return node;
 }

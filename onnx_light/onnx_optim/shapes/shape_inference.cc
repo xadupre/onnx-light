@@ -279,6 +279,14 @@ std::optional<OptimTensor> MergeWithAnchor(ShapesContext &ctx, const std::string
   for (std::size_t i = 0; i < inferred.Shape().Rank(); ++i) {
     const OptimDim &di = inferred.Shape()[i];
     const OptimDim &da = anchor.Shape()[i];
+    // ``?`` is the wildcard placeholder used when a ValueInfoProto
+    // declares a dim with neither a ``dim_value`` nor a ``dim_param``;
+    // it carries no information so the inferred dim wins and no
+    // constraint is recorded.
+    if (da.IsExpr() && (da.AsExpr() == "?" || da.AsExpr().empty())) {
+      merged_shape.PushBack(di);
+      continue;
+    }
     if (di == da) {
       merged_shape.PushBack(di);
     } else if (di.IsInt() && da.IsInt()) {
@@ -341,6 +349,10 @@ std::optional<OptimTensor> MergeWithAnchor(ShapesContext &ctx, const std::string
     for (std::size_t i = 0; i < a.Rank(); ++i) {
       const OptimDim &di = a[i];
       const OptimDim &da = b[i];
+      if (da.IsExpr() && (da.AsExpr() == "?" || da.AsExpr().empty())) {
+        merged_vas.PushBack(di);
+        continue;
+      }
       if (di == da) {
         merged_vas.PushBack(di);
       } else if (di.IsInt() && da.IsInt()) {
@@ -443,6 +455,9 @@ void AddDimAnchorSymbols(const OptimDim &dim, std::unordered_set<std::string> &s
     return;
   }
   const std::string &expr = dim.AsExpr();
+  if (expr.empty() || expr == "?") {
+    return;
+  }
   symbols.insert(expr);
   const std::unordered_set<std::string> tokens = expressions::parse_expression_tokens(expr);
   for (const std::string &token : tokens) {
@@ -557,6 +572,39 @@ void PropagateAnchorConstraintsIntoContext(ShapesContext &ctx, const AnchorMap &
   }
   std::unordered_map<std::string, std::string> replacements(rep.begin(), rep.end());
 
+  // Drop replacement entries whose key is a compound expression made
+  // exclusively of leaf tokens that are themselves graph-declared
+  // anchor symbols. These expressions (e.g. ``b+c`` when ``b`` and
+  // ``c`` are graph inputs) are already authoritative, and rewriting
+  // them to a sibling output anchor (e.g. ``e``) would erase the
+  // user-meaningful expression.
+  for (auto it = replacements.begin(); it != replacements.end();) {
+    const std::string &key = it->first;
+    if (preferred.count(key) != 0) {
+      ++it;
+      continue;
+    }
+    const std::unordered_set<std::string> tokens = expressions::parse_expression_tokens(key);
+    if (tokens.empty() || tokens.size() == 1) {
+      ++it;
+      continue;
+    }
+    bool all_preferred = true;
+    for (const std::string &token : tokens) {
+      if (preferred.count(token) == 0) {
+        all_preferred = false;
+        break;
+      }
+    }
+    if (all_preferred) {
+      it = replacements.erase(it);
+    } else {
+      ++it;
+    }
+  }
+  if (replacements.empty()) {
+    return;
+  }
   std::vector<std::string> names;
   names.reserve(ctx.Tensors().size());
   for (const auto &kv : ctx.Tensors()) {

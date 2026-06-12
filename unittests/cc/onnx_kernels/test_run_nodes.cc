@@ -1022,6 +1022,7 @@ TEST(RunNodes, RuntimeContextEventLogSetReplaceRemove) {
   using onnx_kernels::TensorEventAction;
   using onnx_kernels::TensorEventKind;
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_events_enabled(true);
   EXPECT_TRUE(rt.events().empty());
 
   // Set -> add event with values populated (element_count <= 8). Default
@@ -1099,6 +1100,7 @@ TEST(RunNodes, RuntimeContextEventLogCapturesRunGraphMutations) {
   using onnx_kernels::TensorEventAction;
   using onnx_kernels::TensorEventKind;
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_events_enabled(true);
   rt.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
   rt.Set("z", Tensor::FromFloat("z", {2}, {10.0f, 20.0f}));
   rt.ClearEvents();

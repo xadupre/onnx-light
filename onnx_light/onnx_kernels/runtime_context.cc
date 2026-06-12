@@ -178,20 +178,24 @@ const char *TensorEventKindName(TensorEventKind kind) noexcept {
 
 void RuntimeContext::Set(const std::string &name, Tensor tensor, TensorEventKind kind) {
   EXT_ENFORCE(!Has(name), "RuntimeContext::Set: a tensor named '", name, "' already exists.");
-  events_.push_back(MakeAddOrReplaceEvent(TensorEventAction::kAdd, kind, name, tensor));
+  if (events_enabled_) {
+    events_.push_back(MakeAddOrReplaceEvent(TensorEventAction::kAdd, kind, name, tensor));
+  }
   tensors_[name] = std::move(tensor);
 }
 
 void RuntimeContext::Put(const std::string &name, Tensor tensor, TensorEventKind kind) {
-  const TensorEventAction action =
-      Has(name) ? TensorEventAction::kReplace : TensorEventAction::kAdd;
-  events_.push_back(MakeAddOrReplaceEvent(action, kind, name, tensor));
+  if (events_enabled_) {
+    const TensorEventAction action =
+        Has(name) ? TensorEventAction::kReplace : TensorEventAction::kAdd;
+    events_.push_back(MakeAddOrReplaceEvent(action, kind, name, tensor));
+  }
   tensors_[name] = std::move(tensor);
 }
 
 bool RuntimeContext::Remove(const std::string &name) {
   const bool erased = tensors_.erase(name) > 0;
-  if (erased) {
+  if (erased && events_enabled_) {
     events_.push_back(MakeRemoveEvent(TensorEventKind::kUnknown, name));
   }
   return erased;

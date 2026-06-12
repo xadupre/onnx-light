@@ -127,7 +127,7 @@ class TestReferenceEvaluator(ExtTestCase):
         # After run, events() should return a non-empty list whose entries
         # have an as_dict() method with the expected keys.
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)
-        sess = ReferenceEvaluator(model)
+        sess = ReferenceEvaluator(model, events_enabled=True)
         x = np.array([-1.0, 2.0, -3.5], dtype=np.float32)
         z = np.array([10.0, 20.0, 30.0], dtype=np.float32)
         sess.run(None, {"x": x, "z": z})
@@ -141,7 +141,7 @@ class TestReferenceEvaluator(ExtTestCase):
     def test_events_contain_intermediate(self):
         # The intermediate tensor ``t = Abs(x)`` must appear in the event log.
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)
-        sess = ReferenceEvaluator(model)
+        sess = ReferenceEvaluator(model, events_enabled=True)
         sess.run(None, {"x": np.zeros(3, dtype=np.float32), "z": np.zeros(3, dtype=np.float32)})
         names = [ev.as_dict()["name"] for ev in sess.events()]
         self.assertIn("t", names)

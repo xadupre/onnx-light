@@ -69,7 +69,7 @@ typedef int64_t offset_t;
  *  ZigZag maps signed integers to unsigned values so that small negative numbers
  *  have a short varint encoding: 0 -> 0, -1 -> 1, 1 -> 2, -2 -> 3, ... */
 inline int64_t decodeZigZag64(uint64_t n) {
-  return static_cast<int64_t>((n >> 1) ^ (~(n & 1) + 1));
+  return static_cast<int64_t>(n >> 1) ^ -static_cast<int64_t>(n & 1);
 }
 
 /** Encodes a signed 64-bit integer using ZigZag encoding.

@@ -361,7 +361,8 @@ bool TryDecodeTiff(const uint8_t *data, size_t size, const std::string &pixel_fo
   const size_t total_pixels = static_cast<size_t>(image_length) * static_cast<size_t>(image_width);
   out_pixels.assign(total_pixels * static_cast<size_t>(channels), 0);
 
-  const uint32_t row_bytes = image_width * samples_per_pixel;
+  const uint64_t row_bytes =
+      static_cast<uint64_t>(image_width) * static_cast<uint64_t>(samples_per_pixel);
   uint32_t next_row = 0;
   for (size_t s = 0; s < strip_offsets.size(); ++s) {
     const uint32_t strip_off = strip_offsets[s];
@@ -381,20 +382,20 @@ bool TryDecodeTiff(const uint8_t *data, size_t size, const std::string &pixel_fo
       for (uint32_t c = 0; c < image_width; ++c) {
         uint8_t *dst = dst_row + static_cast<size_t>(c) * channels;
         if (is_rgb) {
-          const uint8_t r0 = src_row[c * 3 + 0];
-          const uint8_t g0 = src_row[c * 3 + 1];
-          const uint8_t b0 = src_row[c * 3 + 2];
+          const uint8_t r = src_row[c * 3 + 0];
+          const uint8_t g = src_row[c * 3 + 1];
+          const uint8_t b = src_row[c * 3 + 2];
           if (pixel_format == "RGB") {
-            dst[0] = r0;
-            dst[1] = g0;
-            dst[2] = b0;
+            dst[0] = r;
+            dst[1] = g;
+            dst[2] = b;
           } else if (pixel_format == "BGR") {
-            dst[0] = b0;
-            dst[1] = g0;
-            dst[2] = r0;
+            dst[0] = b;
+            dst[1] = g;
+            dst[2] = r;
           } else {
             // Grayscale: ITU-R BT.601 luminance.
-            dst[0] = static_cast<uint8_t>((299 * r0 + 587 * g0 + 114 * b0 + 500) / 1000);
+            dst[0] = static_cast<uint8_t>((299 * r + 587 * g + 114 * b + 500) / 1000);
           }
         } else {
           // Grayscale source.

@@ -391,7 +391,15 @@ class ReferenceEvaluator:
 
         ctx = _runtime.RuntimeContext(self._kernel_ctx)
         ctx.events_enabled = self._events_enabled
-        ctx.release_intermediates = self._release_intermediates
+        # Releasing intermediates would drop any requested output that is
+        # not a declared graph/function output before the caller can fetch
+        # it. Disable the per-run release in that case so callers can still
+        # observe arbitrary intermediate values via ``run([name], ...)``.
+        declared_outputs = frozenset(self._output_names)
+        release = self._release_intermediates and all(
+            name in declared_outputs for name in output_names
+        )
+        ctx.release_intermediates = release
 
         for domain, op_type, wrapper in self._custom_kernels.values():
             ctx.register_custom_kernel(domain, op_type, wrapper)

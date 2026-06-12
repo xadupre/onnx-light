@@ -517,6 +517,22 @@ TEST(RunNodes, RunNodeExpandFromDispatchTable) {
   EXPECT_FLOAT_EQ(got[11], 3.0f);
 }
 
+TEST(RunNodes, RunNodeTileFromDispatchTable) {
+  // Tile repeats a (2, 2) input by (2, 2) to produce a (4, 4) output.
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {2, 2}, {0.0f, 1.0f, 2.0f, 3.0f});
+  rt.tensors()["repeats"] = Tensor::FromInt64("repeats", {2}, {2, 2});
+  NodeProto node = MakeNode("Tile", {"x", "repeats"}, {"y"});
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{4, 4}));
+  const float *got = y.AsFloat();
+  const std::vector<float> expected = {0, 1, 0, 1, 2, 3, 2, 3, 0, 1, 0, 1, 2, 3, 2, 3};
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_FLOAT_EQ(got[i], expected[i]);
+  }
+}
+
 TEST(RunNodes, RunNodeReshapeFromDispatchTable) {
   // Reshape with two inputs (data, shape) and the default ``allowzero`` (0).
   RuntimeContext rt(KernelContext(DefaultOpset(18)));

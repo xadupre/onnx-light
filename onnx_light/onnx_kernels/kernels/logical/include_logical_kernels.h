@@ -86,7 +86,7 @@ public:
 /// Element-wise ``IsNaN``: returns a BOOL tensor with the same shape as the
 /// input, where each element is ``true`` iff the corresponding input value
 /// is NaN. Mirrors the upstream ONNX ``IsNaN`` reference implementation
-/// (``np.isnan``). Only the FLOAT input dtype is supported.
+/// (``np.isnan``). Supports FLOAT, DOUBLE, FLOAT16 and BFLOAT16 inputs.
 class IsNaN : public KernelBase {
 public:
   using KernelBase::KernelBase;

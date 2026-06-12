@@ -386,7 +386,7 @@ ORT_EXCLUDE_REGEX = [
     r"^test_min_int16$",
     r"^test_min_uint16$",
     # ORT CPU does not register these bfloat16 kernels.
-    r"^test_cc_(abs|add|ceil|div|elu|erf|exp|floor|gelu_default|log|mul|neg|reciprocal|relu|sigmoid|sign|softplus|softsign|sqrt|sub|tanh)_bfloat16$",
+    r"^test_cc_(abs|add|ceil|div|elu|erf|exp|floor|gelu_default|isnan|log|mul|neg|reciprocal|relu|sigmoid|sign|softplus|softsign|sqrt|sub|tanh)_bfloat16$",
     r"^test_cc_maxunpool_export_with_output_shape$",
     r"^test_resize_downsample_scales_linear_align_corners$",
     r"^test_resize_downsample_scales_cubic_align_corners$",

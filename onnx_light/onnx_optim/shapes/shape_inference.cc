@@ -246,32 +246,33 @@ AnchorMap CollectGraphAnchors(const GraphProto &graph) {
 //   - min/max bounds: a known bound is kept; when both are known the
 //     tighter bound wins (higher min, lower max). Provably disjoint
 //     intervals are a conflict.
-// Returns std::nullopt when ``strict`` is false and a conflict is
-// detected (incompatible dtype/rank/dim/device/bounds). When ``strict``
-// is true, conflicts trigger EXT_ENFORCE_INVALID as before.
+// Returns std::nullopt when a conflict is detected
+// (incompatible dtype/rank/dim/device/bounds). When ``error_out`` is
+// non-null, a human-readable description of the conflict is written
+// to it. Callers that require strict merging can promote the failure
+// into an exception themselves; this function never throws on
+// conflicts.
 std::optional<OptimTensor> MergeWithAnchor(ShapesContext &ctx, const std::string &name,
                                            const OptimTensor &inferred, const OptimTensor &anchor,
-                                           bool strict = true) {
+                                           std::string *error_out = nullptr) {
   // dtype: both known and different → conflict.
   if (inferred.Dtype() != TensorType::kUndefined && anchor.Dtype() != TensorType::kUndefined &&
       inferred.Dtype() != anchor.Dtype()) {
-    if (!strict) {
-      return std::nullopt;
-    }
-    EXT_ENFORCE_INVALID(
-        false, "MergeWithAnchor: incompatible element type for '" + name +
+    if (error_out != nullptr) {
+      *error_out = "MergeWithAnchor: incompatible element type for '" + name +
                    "': inferred has dtype " + std::to_string(static_cast<int>(inferred.Dtype())) +
-                   ", anchor has dtype " + std::to_string(static_cast<int>(anchor.Dtype())) + ".");
+                   ", anchor has dtype " + std::to_string(static_cast<int>(anchor.Dtype())) + ".";
+    }
+    return std::nullopt;
   }
   // Rank check.
   if (inferred.Shape().Rank() != anchor.Shape().Rank()) {
-    if (!strict) {
-      return std::nullopt;
+    if (error_out != nullptr) {
+      *error_out = "MergeWithAnchor: incompatible rank for '" + name + "': inferred has rank " +
+                   std::to_string(inferred.Shape().Rank()) + ", anchor has rank " +
+                   std::to_string(anchor.Shape().Rank()) + ".";
     }
-    EXT_ENFORCE_INVALID(false, "MergeWithAnchor: incompatible rank for '" + name +
-                                   "': inferred has rank " +
-                                   std::to_string(inferred.Shape().Rank()) + ", anchor has rank " +
-                                   std::to_string(anchor.Shape().Rank()) + ".");
+    return std::nullopt;
   }
   // Per-dim merge.
   OptimShape merged_shape;
@@ -281,12 +282,12 @@ std::optional<OptimTensor> MergeWithAnchor(ShapesContext &ctx, const std::string
     if (di == da) {
       merged_shape.PushBack(di);
     } else if (di.IsInt() && da.IsInt()) {
-      if (!strict) {
-        return std::nullopt;
+      if (error_out != nullptr) {
+        *error_out = "MergeWithAnchor: incompatible dim " + std::to_string(i) + " for '" + name +
+                     "': inferred=" + std::to_string(di.AsInt()) +
+                     ", anchor=" + std::to_string(da.AsInt()) + ".";
       }
-      EXT_ENFORCE_INVALID(false, "MergeWithAnchor: incompatible dim " + std::to_string(i) +
-                                     " for '" + name + "': inferred=" + std::to_string(di.AsInt()) +
-                                     ", anchor=" + std::to_string(da.AsInt()) + ".");
+      return std::nullopt;
     } else if (di.IsInt()) {
       // anchor is symbolic, inferred is concrete: keep the concrete one
       // but still record the anchor symbol equals the concrete value.
@@ -316,10 +317,10 @@ std::optional<OptimTensor> MergeWithAnchor(ShapesContext &ctx, const std::string
   Device merged_device = inferred.GetDevice();
   if (anchor.GetDevice() != Device::kUndefined) {
     if (inferred.GetDevice() != Device::kUndefined && inferred.GetDevice() != anchor.GetDevice()) {
-      if (!strict) {
-        return std::nullopt;
+      if (error_out != nullptr) {
+        *error_out = "MergeWithAnchor: incompatible device for '" + name + "'.";
       }
-      EXT_ENFORCE_INVALID(false, "MergeWithAnchor: incompatible device for '" + name + "'.");
+      return std::nullopt;
     }
     merged_device = anchor.GetDevice();
   }
@@ -331,11 +332,10 @@ std::optional<OptimTensor> MergeWithAnchor(ShapesContext &ctx, const std::string
     const OptimShape &a = inferred.ValueAsShape();
     const OptimShape &b = anchor.ValueAsShape();
     if (a.Rank() != b.Rank()) {
-      if (!strict) {
-        return std::nullopt;
+      if (error_out != nullptr) {
+        *error_out = "MergeWithAnchor: incompatible value_as_shape rank for '" + name + "'.";
       }
-      EXT_ENFORCE_INVALID(false,
-                          "MergeWithAnchor: incompatible value_as_shape rank for '" + name + "'.");
+      return std::nullopt;
     }
     OptimShape merged_vas;
     for (std::size_t i = 0; i < a.Rank(); ++i) {
@@ -344,11 +344,10 @@ std::optional<OptimTensor> MergeWithAnchor(ShapesContext &ctx, const std::string
       if (di == da) {
         merged_vas.PushBack(di);
       } else if (di.IsInt() && da.IsInt()) {
-        if (!strict) {
-          return std::nullopt;
+        if (error_out != nullptr) {
+          *error_out = "MergeWithAnchor: incompatible value_as_shape dim for '" + name + "'.";
         }
-        EXT_ENFORCE_INVALID(false,
-                            "MergeWithAnchor: incompatible value_as_shape dim for '" + name + "'.");
+        return std::nullopt;
       } else if (di.IsInt()) {
         ctx.AddConstraint(da.AsExpr(), std::to_string(di.AsInt()));
         merged_vas.PushBack(di);
@@ -385,11 +384,10 @@ std::optional<OptimTensor> MergeWithAnchor(ShapesContext &ctx, const std::string
   }
   if (merged_min.has_value() && merged_max.has_value()) {
     if (*merged_min > *merged_max) {
-      if (!strict) {
-        return std::nullopt;
+      if (error_out != nullptr) {
+        *error_out = "MergeWithAnchor: incompatible min/max bounds for '" + name + "'.";
       }
-      EXT_ENFORCE_INVALID(false,
-                          "MergeWithAnchor: incompatible min/max bounds for '" + name + "'.");
+      return std::nullopt;
     }
     out.SetMinMax(*merged_min, *merged_max);
   } else {
@@ -411,25 +409,24 @@ void MergeAnchorsIntoContext(ShapesContext &ctx, const AnchorMap &anchors, bool 
       ctx.Set(name, OptimTensor(anchor));
       continue;
     }
-    if (strict) {
-      std::optional<OptimTensor> merged =
-          MergeWithAnchor(ctx, name, ctx.Get(name), anchor, /*strict=*/true);
-      if (merged.has_value() && *merged != ctx.Get(name)) {
+    std::string error;
+    std::optional<OptimTensor> merged = MergeWithAnchor(ctx, name, ctx.Get(name), anchor, &error);
+    if (merged.has_value()) {
+      if (*merged != ctx.Get(name)) {
         ctx.Set(name, std::move(*merged));
       }
-    } else {
-      // Lenient mode: the inferred shape may legitimately disagree
-      // with the anchor (e.g. ``Resize`` has historically reported a
-      // smaller output shape than the model declares). Skip the
-      // anchor on conflict instead of aborting the whole pipeline so
-      // that the well-formed anchors still drive constraint
-      // propagation downstream.
-      std::optional<OptimTensor> merged =
-          MergeWithAnchor(ctx, name, ctx.Get(name), anchor, /*strict=*/false);
-      if (merged.has_value() && *merged != ctx.Get(name)) {
-        ctx.Set(name, std::move(*merged));
-      }
+      continue;
     }
+    // Conflict between the inferred shape and the anchor.
+    if (strict) {
+      EXT_ENFORCE_INVALID(false, error);
+    }
+    // Lenient mode: the inferred shape may legitimately disagree
+    // with the anchor (e.g. ``Resize`` has historically reported a
+    // smaller output shape than the model declares). Skip the
+    // anchor on conflict instead of aborting the whole pipeline so
+    // that the well-formed anchors still drive constraint
+    // propagation downstream.
   }
 }
 

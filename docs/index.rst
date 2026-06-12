@@ -57,8 +57,8 @@ onnx without protobuf and more freedom
 - **Encrypted save / load** – Models can be encrypted with AES-256-CBC
   (PBKDF2-HMAC-SHA256 key derivation) and saved to a single self-contained
   ``.onnxc`` file, or serialized to an in-memory ``bytes`` object.
-- **No serialize/parse round-trip for C++ tools** – the Python ``ModelProto``
-  exposed by ``onnx_light.onnx`` *is* the C++ ``ModelProto`` (bound through
+- **No serialize/parse round-trip for C++ tools** – the Python :class:`~onnx_light.onnx_lib.ModelProto`
+  exposed by ``onnx_light.onnx`` *is* the C++ :class:`~onnx_light.onnx_lib.ModelProto` (bound through
   nanobind). No serialization is need from Python to C++.
 
 See :ref:`l-design-differences` for more details.

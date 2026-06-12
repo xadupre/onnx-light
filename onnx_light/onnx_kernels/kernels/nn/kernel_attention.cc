@@ -42,18 +42,16 @@ void CheckRank4Float(const Tensor &t, const char *label) {
 // internal kernel. Returns the promoted tensor; ``num_heads`` must divide
 // ``hidden_size``.
 Tensor PromoteRank3(const Tensor &t, int64_t num_heads, const char *label) {
-  EXT_ENFORCE_INVALID(t.data_type == DataType::FLOAT,
-                      std::string("kernel::Attention: '") + label + "' must be a FLOAT tensor.");
-  EXT_ENFORCE_INVALID(t.shape.size() == 3,
-                      std::string("kernel::Attention: '") + label + "' must be rank-3.");
+  EXT_ENFORCE_INVALID(t.data_type == DataType::FLOAT, "kernel::Attention: '", label,
+                      "' must be a FLOAT tensor.");
+  EXT_ENFORCE_INVALID(t.shape.size() == 3, "kernel::Attention: '", label, "' must be rank-3.");
   const int64_t batch = t.shape[0];
   const int64_t seq = t.shape[1];
   const int64_t hidden = t.shape[2];
-  EXT_ENFORCE_INVALID(num_heads > 0, std::string("kernel::Attention: '") + label +
-                                         "' needs a positive ``num_heads`` to promote rank-3.");
-  EXT_ENFORCE_INVALID(hidden % num_heads == 0,
-                      std::string("kernel::Attention: '") + label +
-                          "' hidden_size must be a multiple of ``num_heads``.");
+  EXT_ENFORCE_INVALID(num_heads > 0, "kernel::Attention: '", label,
+                      "' needs a positive ``num_heads`` to promote rank-3.");
+  EXT_ENFORCE_INVALID(hidden % num_heads == 0, "kernel::Attention: '", label,
+                      "' hidden_size must be a multiple of ``num_heads``.");
   const int64_t head_size = hidden / num_heads;
   Tensor out("", DataType::FLOAT, {batch, num_heads, seq, head_size},
              std::vector<uint8_t>(t.size_bytes()));

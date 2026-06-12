@@ -37,14 +37,14 @@ kernel classes for that group.
 Runtime model
 -------------
 
-``RunNode`` executes one ``NodeProto`` against a
+``RunNode`` executes one :class:`~onnx_light.onnx_lib.NodeProto` against a
 :cpp:type:`onnx::onnx_kernels::TensorMap` stored in
 :cpp:class:`onnx::onnx_kernels::RuntimeContext`:
 
 * inputs are looked up by tensor name,
 * outputs are written back by output name,
 * dispatch is keyed by ``(domain, op_type)``,
-* model-local ``FunctionProto`` definitions are resolved from
+* model-local :class:`~onnx_light.onnx_lib.FunctionProto` definitions are resolved from
   ``RuntimeContext::functions``.
 
 Control-flow operators (``If``, ``Loop``, ``Scan``) are handled by dedicated

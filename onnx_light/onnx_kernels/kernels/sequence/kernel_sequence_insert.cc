@@ -39,9 +39,9 @@ Sequence SequenceInsert::operator()(const Sequence &input_sequence, const Tensor
     if (idx < 0) {
       idx += n;
     }
-    EXT_ENFORCE_INVALID(idx >= 0 && idx <= n,
-                        "kernel::SequenceInsert: position " + std::to_string(idx) +
-                            " is out of range for sequence of length " + std::to_string(n) + ".");
+    EXT_ENFORCE_INVALID(idx >= 0 && idx <= n, "kernel::SequenceInsert: position ",
+                        std::to_string(idx), " is out of range for sequence of length ",
+                        std::to_string(n), ".");
   }
 
   std::vector<Tensor> out_values = input_sequence.values;

@@ -242,8 +242,12 @@ template <class KernelT> NodeKernelFn MakeSqueezeLikeTrampoline(const char *op_n
     std::vector<int64_t> axes;
     const Tensor *axes_input = GetOptionalInput(node, 1, rt.tensors());
     if (axes_input != nullptr) {
+      // The schema requires a 1-D INT64 tensor, but the ai.onnx::AffineGrid
+      // function body (and other upstream function bodies) feed a 0-D INT64
+      // scalar here. The upstream reference evaluator accepts scalars too,
+      // so for compatibility we treat a scalar as a 1-element 1-D tensor.
       if (axes_input->data_type != static_cast<int32_t>(DataType::INT64) ||
-          axes_input->shape.size() != 1) {
+          axes_input->shape.size() > 1) {
         throw std::invalid_argument(std::string("RunNode: ") + op_name +
                                     " 'axes' input must be a 1-D INT64 tensor.");
       }
@@ -990,6 +994,23 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          attrs.blocksize = blocksize_attr->i();
          attrs.mode = GetAttributeStringOrDefault(node, "mode", "DCR");
          kernel::DepthToSpace kernel(rt.kernel_ctx());
+         SetOutput(node, 0, kernel(input, attrs), rt);
+       }},
+      {"ai.onnx:SpaceToDepth",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &input = GetInput(node, 0, rt.tensors());
+         kernel::SpaceToDepth::Attributes attrs;
+         const AttributeProto *blocksize_attr = FindAttribute(node, "blocksize");
+         if (blocksize_attr == nullptr) {
+           throw std::invalid_argument("RunNode: SpaceToDepth requires attribute 'blocksize'.");
+         }
+         if (blocksize_attr->type() != AttributeProto::AttributeType::INT) {
+           throw std::invalid_argument("RunNode: SpaceToDepth attribute 'blocksize' must be INT.");
+         }
+         attrs.blocksize = blocksize_attr->i();
+         kernel::SpaceToDepth kernel(rt.kernel_ctx());
          SetOutput(node, 0, kernel(input, attrs), rt);
        }},
       {"ai.onnx:DequantizeLinear", MakeBinaryWithOptionalThirdTrampoline<kernel::DequantizeLinear>()},
@@ -2373,6 +2394,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::STFT k(rt.kernel_ctx());
          SetOutput(node, 0, k(signal, frame_step, window, frame_length, onesided), rt.tensors());
        }},
+      {"ai.onnx:StringConcat", MakeBinaryTrampoline<kernel::StringConcat>()},
       {"ai.onnx:StringNormalizer",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);
@@ -2446,6 +2468,15 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                    rt);
        }},
       {"ai.onnx:ThresholdedRelu", MakeUnaryAlphaTrampoline<kernel::ThresholdedRelu>("alpha", 1.0f)},
+      {"ai.onnx:Tile",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         const Tensor &input = GetInput(node, 0, rt.tensors());
+         const Tensor &repeats = GetInput(node, 1, rt.tensors());
+         kernel::Tile k(rt.kernel_ctx());
+         SetOutput(node, 0, k(input, repeats), rt);
+       }},
       {"ai.onnx:TopK",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireOutputCount(node, 2);

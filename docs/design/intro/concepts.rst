@@ -348,8 +348,8 @@ knowing the input shape for every standard operator. It cannot obviously
 do that for any custom operator outside of the official list.
 ``onnx-light`` re-exposes shape inference under
 :func:`onnx_light.onnx_lib.shape_inference.infer_shapes` and runs it on the
-in-memory C++ ``ModelProto`` directly, without the
-``SerializeToString`` / ``ParseFromString`` round-trip required by the
+in-memory C++ :class:`~onnx_light.onnx_lib.ModelProto` directly, without the
+:meth:`SerializeToString` / :meth:`ParseFromString` round-trip required by the
 standard ``onnx`` package.
 
 Tools

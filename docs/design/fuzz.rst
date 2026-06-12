@@ -35,7 +35,7 @@ Harnesses
       - ``ModelProto::ParseFromString`` + top-level graph walk + :cpp:func:`onnx_light::checker::check_model`
       - Raw bytes → protobuf parser
     * - ``fuzz/fuzz_parser.cc``
-      - :cpp:func:`onnx_light::OnnxParser::Parse` (``ModelProto`` overload)
+      - :cpp:func:`onnx_light::OnnxParser::Parse` (:class:`~onnx_light.onnx_lib.ModelProto` overload)
       - UTF-8 text (ONNX text format)
     * - ``fuzz/fuzz_shape_inference.cc``
       - :cpp:func:`onnx_light::shape_inference::InferShapes`

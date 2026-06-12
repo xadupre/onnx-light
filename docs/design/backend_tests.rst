@@ -55,7 +55,7 @@ where
 * the return value is a list of :class:`numpy.ndarray` objects
   corresponding to the model's graph outputs in order.
 
-The runtime may serialize the ``ModelProto`` to bytes, pass it to any
+The runtime may serialize the :class:`~onnx_light.onnx_lib.ModelProto` to bytes, pass it to any
 ONNX-compatible engine, and return the results.
 
 ----
@@ -231,7 +231,7 @@ regression cases that keep the same ONNX-style data model.
 Random operators keep deterministic expected outputs even though ONNX marks
 them as non-deterministic: the reference kernels use a fixed SplitMix64 +
 Irwin-Hall random stream (or an explicit seed when provided). This keeps
-the registry reproducible while avoiding large literal ``TensorProto`` blobs:
+the registry reproducible while avoiding large literal :class:`~onnx_light.onnx_lib.TensorProto` blobs:
 expected values are stored as runtime ``Tensor`` byte buffers in datasets.
 
 For shape-oriented scenarios, cases can also annotate graph intermediate

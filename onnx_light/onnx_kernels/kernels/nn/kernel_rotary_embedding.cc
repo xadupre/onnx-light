@@ -28,22 +28,19 @@ void CheckCacheShape(const Tensor &cache, const char *which, int64_t batch, int6
   EXT_ENFORCE_INVALID(cache.data_type == x_dtype, "kernel::RotaryEmbedding: ", which,
                       " must have the same dtype as X.");
   if (has_position_ids) {
-    EXT_ENFORCE_INVALID(cache.shape.size() == 2,
-                        std::string("kernel::RotaryEmbedding: ") + which +
-                            " must be rank-2 when position_ids is provided.");
-    EXT_ENFORCE_INVALID(cache.shape[1] == rotary_dim_half,
-                        std::string("kernel::RotaryEmbedding: last dim of ") + which + " (" +
-                            std::to_string(cache.shape[1]) +
-                            ") must equal rotary_embedding_dim/2 (" +
-                            std::to_string(rotary_dim_half) + ").");
+    EXT_ENFORCE_INVALID(cache.shape.size() == 2, "kernel::RotaryEmbedding: ", which,
+                        " must be rank-2 when position_ids is provided.");
+    EXT_ENFORCE_INVALID(cache.shape[1] == rotary_dim_half, "kernel::RotaryEmbedding: last dim of ",
+                        which, " (", std::to_string(cache.shape[1]),
+                        ") must equal rotary_embedding_dim/2 (", std::to_string(rotary_dim_half),
+                        ").");
   } else {
-    EXT_ENFORCE_INVALID(cache.shape.size() == 3,
-                        std::string("kernel::RotaryEmbedding: ") + which +
-                            " must be rank-3 when position_ids is omitted.");
+    EXT_ENFORCE_INVALID(cache.shape.size() == 3, "kernel::RotaryEmbedding: ", which,
+                        " must be rank-3 when position_ids is omitted.");
     EXT_ENFORCE_INVALID(cache.shape[0] == batch && cache.shape[1] == sequence_length &&
                             cache.shape[2] == rotary_dim_half,
-                        std::string("kernel::RotaryEmbedding: ") + which +
-                            " has unexpected shape; expected (batch, seq, rotary_dim/2).");
+                        "kernel::RotaryEmbedding: ", which,
+                        " has unexpected shape; expected (batch, seq, rotary_dim/2).");
   }
   (void)batch;
   (void)sequence_length;

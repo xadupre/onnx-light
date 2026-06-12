@@ -243,6 +243,7 @@ TEST(BackendRunModel, TensorScatter) { RunBackendCasesFor("TensorScatter"); }
 TEST(BackendRunModel, Col2Im) { RunBackendCasesFor("Col2Im"); }
 TEST(BackendRunModel, DeformConv) { RunBackendCasesFor("DeformConv"); }
 TEST(BackendRunModel, DepthToSpace) { RunBackendCasesFor("DepthToSpace"); }
+TEST(BackendRunModel, SpaceToDepth) { RunBackendCasesFor("SpaceToDepth"); }
 TEST(BackendRunModel, Upsample) { RunBackendCasesFor("Upsample"); }
 TEST(BackendRunModel, BatchNormalization) { RunBackendCasesFor("BatchNormalization"); }
 TEST(BackendRunModel, GroupNormalization) { RunBackendCasesFor("GroupNormalization"); }
@@ -322,6 +323,7 @@ TEST(BackendRunModel, OneHotEncoder) { RunBackendCasesFor("OneHotEncoder"); }
 TEST(BackendRunModel, Scaler) { RunBackendCasesFor("Scaler"); }
 
 // Text kernels.
+TEST(BackendRunModel, StringConcat) { RunBackendCasesFor("StringConcat"); }
 TEST(BackendRunModel, StringNormalizer) { RunBackendCasesFor("StringNormalizer"); }
 TEST(BackendRunModel, StringSplit) { RunBackendCasesFor("StringSplit"); }
 TEST(BackendRunModel, TfIdfVectorizer) { RunBackendCasesFor("TfIdfVectorizer"); }

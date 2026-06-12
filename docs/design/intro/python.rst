@@ -184,7 +184,7 @@ Model Serialization
 
 The model needs to be saved to be deployed. It
 minimizes the space needed to save the graph on disk. Every object in
-``onnx`` can be serialized with method ``SerializeToString``. That's also
+``onnx`` can be serialized with method :meth:`SerializeToString`. That's also
 the case for the whole model.
 
 .. runpython::
@@ -213,8 +213,8 @@ the case for the whole model.
     # display
     print(onnx_model)
 
-The graph can be restored with function ``load``. ``onnx-light`` exposes
-its own loader at :func:`onnx_light.onnx.load` (which supports parallel
+The graph can be restored with function :func:`onnx_light.onnx.load`.
+``onnx-light`` exposes its own loader (which supports parallel
 tensor parsing, zero-copy buffers and external data; see
 :ref:`l-design-loading-saving-scenarios`).
 
@@ -298,9 +298,9 @@ semantics. The next example modifies the previous one to change inputs
 ``A`` and ``B`` into initializers. The package implements two functions
 to convert from numpy into onnx and the other way around.
 
-* ``onnx_light.onnx.numpy_helper.to_array``: converts from onnx to
+* :func:`onnx_light.onnx.numpy_helper.to_array`: converts from onnx to
   numpy;
-* ``onnx_light.onnx.numpy_helper.from_array``: converts from numpy
+* :func:`onnx_light.onnx.numpy_helper.from_array`: converts from numpy
   to onnx.
 
 .. runpython::
@@ -379,7 +379,7 @@ Some operators need attributes such as the *Transpose* operator. Let's
 build the graph for expression :math:`y = XA' + B` or
 ``y = Add(MatMul(X, Transpose(A)) + B)``. *Transpose* needs an attribute
 defining the permutation of axes: ``perm=[1, 0]``. It is added as a
-named attribute in function ``make_node``.
+named attribute in function :func:`~onnx_light.onnx.helper.make_node`.
 
 .. runpython::
     :showcode:
@@ -860,7 +860,7 @@ running predictions to be faster, if there exists a specific
 implementation of this function. If it is not the case, the runtime can
 still use the default implementation based on existing operators.
 
-Function ``make_function`` is used to define a function. It works like a
+Function :func:`~onnx_light.onnx.helper.make_function` is used to define a function. It works like a
 graph with fewer types. It is more like a template. This API may evolve.
 It does not include initializers either.
 
@@ -1055,7 +1055,7 @@ allowed.
     except Exception as e:
         print(e)
 
-``check_model`` raises an error due to that inconsistency. This works for
+:func:`~onnx_light.onnx_lib.checker.check_model` raises an error due to that inconsistency. This works for
 all operators defined in the main domain or the ML domain. It remains
 silent for any custom operator not defined in any specification.
 
@@ -1093,9 +1093,9 @@ works if the shape is constant. If not constant, the shape cannot be
 easily inferred unless the following nodes expect a specific shape.
 
 Unlike the standard ``onnx`` package, ``onnx-light`` does **not** need a
-``SerializeToString`` / ``ParseFromString`` round-trip to call the
+:meth:`SerializeToString` / :meth:`ParseFromString` round-trip to call the
 checker or shape inference: the C++ implementation operates directly on
-the in-memory ``ModelProto`` exposed by ``onnx_light.onnx_lib``. See
+the in-memory :class:`~onnx_light.onnx_lib.ModelProto` exposed by ``onnx_light.onnx_lib``. See
 :ref:`l-design-differences` for more details.
 
 Evaluation and Runtime
@@ -1114,8 +1114,8 @@ It is not intended to be used for production and performance is not a goal.
 Evaluation of a linear regression
 ---------------------------------
 
-The class takes a model (a ``ModelProto``, a filename, ...). Method
-``run`` returns the outputs for a given set of inputs specified in a
+The class takes a model (a :class:`~onnx_light.onnx_lib.ModelProto`, a filename, ...). Method
+:meth:`run` returns the outputs for a given set of inputs specified in a
 dictionary.
 
 .. runpython::
@@ -1151,7 +1151,7 @@ Evaluation of a node
 --------------------
 
 The evaluator can also evaluate a single node, wrapped in a small
-``GraphProto`` or ``FunctionProto``, to check how an operator behaves on
+:class:`~onnx_light.onnx_lib.GraphProto` or :class:`~onnx_light.onnx_lib.FunctionProto`, to check how an operator behaves on
 a specific input.
 
 .. runpython::
@@ -1185,7 +1185,7 @@ Python and C++
 ``onnx-light`` exposes what is available in C++. Python objects are wrapper
 on the top of shared pointers.
 :class:`~onnx_light.onnx_lib.ModelProto` returned by
-:func:`onnx_light.onnx.load` *is* the C++ ``ModelProto`` (bound through
+:func:`onnx_light.onnx.load` *is* the C++ :class:`~onnx_light.onnx_lib.ModelProto` (bound through
 nanobind), so calls into the inliner, checker, shape inference and
 version converter operate on the model directly without that round-trip.
 See :ref:`l-design-differences` for more details.

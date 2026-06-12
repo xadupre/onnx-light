@@ -100,9 +100,9 @@ void ComputeShapeMaxPool(ShapesContext &ctx, const NodeProto &node, const char *
   const std::string auto_pad = GetAttributeOr<std::string>(node, "auto_pad", std::string("NOTSET"));
   EXT_ENFORCE_INVALID(auto_pad == "NOTSET" || auto_pad == "VALID" || auto_pad == "SAME_UPPER" ||
                           auto_pad == "SAME_LOWER",
-                      "ComputeShapeMaxPool: auto_pad='" + auto_pad +
-                          "' is not supported; must be one of NOTSET, SAME_UPPER, SAME_LOWER "
-                          "or VALID.");
+                      "ComputeShapeMaxPool: auto_pad='", auto_pad,
+                      "' is not supported; must be one of NOTSET, SAME_UPPER, SAME_LOWER "
+                      "or VALID.");
   const bool use_auto_pad = auto_pad != "NOTSET";
 
   const bool ceil_mode = GetAttributeOr<int64_t>(node, "ceil_mode", 0) != 0;

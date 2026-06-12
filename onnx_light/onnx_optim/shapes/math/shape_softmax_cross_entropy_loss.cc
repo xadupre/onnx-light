@@ -24,8 +24,8 @@ void ComputeShapeSoftmaxCrossEntropyLoss(ShapesContext &ctx, const NodeProto &no
   const OptimShape &scores_shape = scores_tensor.Shape();
   const int64_t scores_rank = static_cast<int64_t>(scores_shape.Rank());
   EXT_ENFORCE_INVALID(scores_rank >= 2,
-                      "ComputeShapeSoftmaxCrossEntropyLoss: scores rank must be >= 2 (got " +
-                          std::to_string(scores_rank) + ").");
+                      "ComputeShapeSoftmaxCrossEntropyLoss: scores rank must be >= 2 (got ",
+                      std::to_string(scores_rank), ").");
 
   const OptimTensor &labels_tensor = ctx.Get(labels);
   const OptimShape &labels_shape = labels_tensor.Shape();
@@ -33,14 +33,14 @@ void ComputeShapeSoftmaxCrossEntropyLoss(ShapesContext &ctx, const NodeProto &no
   EXT_ENFORCE_INVALID(
       labels_rank == scores_rank - 1,
       "ComputeShapeSoftmaxCrossEntropyLoss: labels rank must equal scores rank - 1 (got "
-      "scores_rank=" +
-          std::to_string(scores_rank) + ", labels_rank=" + std::to_string(labels_rank) + ").");
+      "scores_rank=",
+      std::to_string(scores_rank), ", labels_rank=", std::to_string(labels_rank), ").");
 
   if (weights != nullptr && weights[0] != '\0') {
     const OptimTensor &weights_tensor = ctx.Get(weights);
     EXT_ENFORCE_INVALID(weights_tensor.Shape().Rank() == 1u,
-                        "ComputeShapeSoftmaxCrossEntropyLoss: weights rank must be 1 (got " +
-                            std::to_string(weights_tensor.Shape().Rank()) + ").");
+                        "ComputeShapeSoftmaxCrossEntropyLoss: weights rank must be 1 (got ",
+                        std::to_string(weights_tensor.Shape().Rank()), ").");
   }
 
   const std::string reduction = GetAttributeOr<std::string>(node, "reduction", std::string("mean"));

@@ -19,8 +19,7 @@ namespace {
 constexpr const char *kClipName = "kernel::Clip";
 
 template <typename T> T ReadScalar(const Tensor &t) {
-  EXT_ENFORCE_INVALID(t.element_count() == 1,
-                      std::string(kClipName) + ": min/max must be 0-D (scalar) tensors.");
+  EXT_ENFORCE_INVALID(t.element_count() == 1, kClipName, ": min/max must be 0-D (scalar) tensors.");
   return *reinterpret_cast<const T *>(t.bytes());
 }
 
@@ -45,16 +44,16 @@ void ClipInPlace(const Tensor &x, const Tensor *min, const Tensor *max, Tensor &
 
 void ValidateBounds(const Tensor &x, const Tensor *min, const Tensor *max) {
   if (min != nullptr) {
-    EXT_ENFORCE_INVALID(min->data_type == x.data_type,
-                        std::string(kClipName) + ": min dtype must match input dtype.");
-    EXT_ENFORCE_INVALID(min->element_count() == 1,
-                        std::string(kClipName) + ": min must be a 0-D (scalar) tensor.");
+    EXT_ENFORCE_INVALID(min->data_type == x.data_type, kClipName,
+                        ": min dtype must match input dtype.");
+    EXT_ENFORCE_INVALID(min->element_count() == 1, kClipName,
+                        ": min must be a 0-D (scalar) tensor.");
   }
   if (max != nullptr) {
-    EXT_ENFORCE_INVALID(max->data_type == x.data_type,
-                        std::string(kClipName) + ": max dtype must match input dtype.");
-    EXT_ENFORCE_INVALID(max->element_count() == 1,
-                        std::string(kClipName) + ": max must be a 0-D (scalar) tensor.");
+    EXT_ENFORCE_INVALID(max->data_type == x.data_type, kClipName,
+                        ": max dtype must match input dtype.");
+    EXT_ENFORCE_INVALID(max->element_count() == 1, kClipName,
+                        ": max must be a 0-D (scalar) tensor.");
   }
 }
 
@@ -64,12 +63,11 @@ Tensor AllocLike(const Tensor &x) {
 }
 
 void ValidateOutput(const Tensor &x, const Tensor &output) {
-  EXT_ENFORCE_INVALID(output.data_type == x.data_type,
-                      std::string(kClipName) + ": output dtype must match input dtype.");
-  EXT_ENFORCE_INVALID(output.shape == x.shape,
-                      std::string(kClipName) + ": output shape must match input shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == x.data.size(),
-                      std::string(kClipName) + ": output buffer size mismatch.");
+  EXT_ENFORCE_INVALID(output.data_type == x.data_type, kClipName,
+                      ": output dtype must match input dtype.");
+  EXT_ENFORCE_INVALID(output.shape == x.shape, kClipName, ": output shape must match input shape.");
+  EXT_ENFORCE_INVALID(output.data.size() == x.data.size(), kClipName,
+                      ": output buffer size mismatch.");
 }
 
 void Dispatch(const Tensor &x, const Tensor *min, const Tensor *max, Tensor &output) {

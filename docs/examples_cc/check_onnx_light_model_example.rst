@@ -54,8 +54,8 @@ Step 3 – Run the example
 The optional ``full_check`` argument accepts ``0`` (default) or ``1``.
 When ``full_check=1``, checker runs additional shape-inference validation.
 
-The optional ``infer_shapes`` argument accepts ``0`` (default) or ``1``.
-When ``infer_shapes=1``, the example loads the model into a ``ModelProto``
+The optional :func:`~onnx_light.onnx_lib.shape_inference.infer_shapes` argument accepts ``0`` (default) or ``1``.
+When ``infer_shapes=1``, the example loads the model into a :class:`~onnx_light.onnx_lib.ModelProto`
 and calls :cpp:func:`onnx_optim::shapes::InferShapesModel` to populate
 ``graph.value_info`` and refine ``graph.output`` shapes in place, then
 reports how many entries each list contains.

@@ -21,11 +21,11 @@ void ComputeShapeGemm(ShapesContext &ctx, const NodeProto &node, const char *a, 
   const OptimTensor &tensor_b = ctx.Get(b);
 
   EXT_ENFORCE_INVALID(tensor_a.Shape().Rank() == 2,
-                      "ComputeShapeGemm: input A must have rank 2, got rank " +
-                          std::to_string(tensor_a.Shape().Rank()) + ".");
+                      "ComputeShapeGemm: input A must have rank 2, got rank ",
+                      std::to_string(tensor_a.Shape().Rank()), ".");
   EXT_ENFORCE_INVALID(tensor_b.Shape().Rank() == 2,
-                      "ComputeShapeGemm: input B must have rank 2, got rank " +
-                          std::to_string(tensor_b.Shape().Rank()) + ".");
+                      "ComputeShapeGemm: input B must have rank 2, got rank ",
+                      std::to_string(tensor_b.Shape().Rank()), ".");
 
   const int64_t transA = GetAttributeOr<int64_t>(node, "transA", int64_t{0});
   const int64_t transB = GetAttributeOr<int64_t>(node, "transB", int64_t{0});

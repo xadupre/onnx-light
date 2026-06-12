@@ -45,10 +45,10 @@ std::vector<int64_t> BroadcastShape(const std::vector<int64_t> &a, const std::ve
 // be non-empty and all tensors must share ``expected_dtype``.
 std::vector<int64_t> ValidateAndBroadcastShape(const std::vector<Tensor> &inputs,
                                                const char *dtype_name, int32_t expected_dtype) {
-  EXT_ENFORCE_INVALID(!inputs.empty(), std::string(kSumName) + " requires at least one input.");
+  EXT_ENFORCE_INVALID(!inputs.empty(), kSumName, " requires at least one input.");
   for (size_t i = 0; i < inputs.size(); ++i) {
-    EXT_ENFORCE_INVALID(inputs[i].data_type == expected_dtype,
-                        std::string(kSumName) + " only supports " + dtype_name + " tensors.");
+    EXT_ENFORCE_INVALID(inputs[i].data_type == expected_dtype, kSumName, " only supports ",
+                        dtype_name, " tensors.");
   }
   std::vector<int64_t> shape = inputs[0].shape;
   for (size_t i = 1; i < inputs.size(); ++i) {
@@ -116,7 +116,7 @@ void SumInPlace(const char *dtype_name, int32_t dtype, const std::vector<Tensor>
 } // namespace
 
 Tensor Sum::operator()(const std::vector<Tensor> &inputs) const {
-  EXT_ENFORCE_INVALID(!inputs.empty(), std::string(kSumName) + " requires at least one input.");
+  EXT_ENFORCE_INVALID(!inputs.empty(), kSumName, " requires at least one input.");
   switch (inputs[0].data_type) {
   case DataType::FLOAT:
     return SumAlloc<float>("FLOAT", DataType::FLOAT, inputs);
@@ -128,7 +128,7 @@ Tensor Sum::operator()(const std::vector<Tensor> &inputs) const {
 }
 
 void Sum::operator()(const std::vector<Tensor> &inputs, Tensor &output) const {
-  EXT_ENFORCE_INVALID(!inputs.empty(), std::string(kSumName) + " requires at least one input.");
+  EXT_ENFORCE_INVALID(!inputs.empty(), kSumName, " requires at least one input.");
   switch (inputs[0].data_type) {
   case DataType::FLOAT:
     return SumInPlace<float>("FLOAT", DataType::FLOAT, inputs, output);

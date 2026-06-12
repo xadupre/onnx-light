@@ -164,6 +164,17 @@ Tensor MakeFloat16Scalar(const std::string &name, float value) {
   return t;
 }
 
+Tensor MakeBfloat16Tensor(const std::string &name, const std::vector<int64_t> &shape,
+                          const std::vector<float> &values) {
+  std::vector<std::uint16_t> bits(values.size());
+  for (std::size_t i = 0; i < values.size(); ++i) {
+    bits[i] = FloatToBfloat16Bits(values[i]);
+  }
+  Tensor t = Tensor::FromUint16(name, shape, bits);
+  t.data_type = static_cast<std::int32_t>(DataType::BFLOAT16);
+  return t;
+}
+
 Tensor MakeBfloat16Scalar(const std::string &name, float value) {
   Tensor t = Tensor::FromUint16(name, {}, {FloatToBfloat16Bits(value)});
   t.data_type = static_cast<std::int32_t>(DataType::BFLOAT16);

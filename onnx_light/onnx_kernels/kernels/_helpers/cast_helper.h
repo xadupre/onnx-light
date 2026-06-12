@@ -76,6 +76,11 @@ Tensor MakeFloat16Tensor(const std::string &name, const std::vector<int64_t> &sh
 // Builds a FLOAT16 scalar tensor from a ``float`` sample value.
 Tensor MakeFloat16Scalar(const std::string &name, float value);
 
+// Builds a BFLOAT16 tensor of the requested shape from a flattened list of
+// float32 sample values rounded via :cpp:func:`FloatToBfloat16Bits`.
+Tensor MakeBfloat16Tensor(const std::string &name, const std::vector<int64_t> &shape,
+                          const std::vector<float> &values);
+
 // Builds a BFLOAT16 scalar tensor from a ``float`` sample value.
 Tensor MakeBfloat16Scalar(const std::string &name, float value);
 

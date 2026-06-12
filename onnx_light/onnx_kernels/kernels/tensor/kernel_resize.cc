@@ -127,7 +127,14 @@ double TransformCoord(int64_t out_coord, int64_t in_dim, int64_t out_dim, double
     if (out_dim == 1) {
       return 0.0;
     }
-    return x * static_cast<double>(in_dim - 1) / static_cast<double>(out_dim - 1);
+    // Upstream ``onnx/reference/ops/op_resize.py::_interpolate_1d_with_x``
+    // computes the denominator from ``output_width = scale * input_width``
+    // (a float), not the integer ``out_dim``. The two only differ when
+    // ``scale * in_dim`` is non-integer (typically downsampling with a
+    // fractional scale), but in that case using the integer ``out_dim``
+    // lands sample positions exactly on input grid points and breaks
+    // bit-exact agreement with the upstream reference.
+    return x * static_cast<double>(in_dim - 1) / (static_cast<double>(in_dim) * scale - 1.0);
   }
   if (mode == "pytorch_half_pixel") {
     if (out_dim == 1) {

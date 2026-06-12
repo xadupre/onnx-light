@@ -209,6 +209,167 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
   PropagateOutputsToCaller(node, outputs, rt);
 }
 
+// Runs ``body`` as a Loop iteration body where loop-carried state may
+// contain sequence-typed values in addition to tensors. Used by
+// :func:`RunLoopNode` to support the ``test_cc_loop13_seq``-style case
+// (``SequenceEmpty`` -> ``Loop`` with a sequence-typed loop-carried
+// state). The orchestration is performed directly here because
+// :class:`kernel::Loop` only operates on tensor state.
+void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, const Tensor &m_tensor,
+                              const Tensor &cond_tensor, const std::vector<bool> &is_seq_state,
+                              std::vector<Tensor> tensor_state,
+                              std::vector<Sequence> sequence_state, std::size_t k,
+                              RuntimeContext &rt) {
+  const std::size_t n = is_seq_state.size();
+
+  int64_t max_trip = std::numeric_limits<int64_t>::max();
+  if (m_tensor.data_type != DataType::UNDEFINED) {
+    max_trip = ParseInt64Scalar(m_tensor, "Loop input 'M'");
+    if (max_trip < 0) {
+      throw std::invalid_argument("RunNode: Loop input 'M' must be non-negative.");
+    }
+  }
+  bool cond_value = true;
+  if (cond_tensor.data_type != DataType::UNDEFINED) {
+    cond_value = ParseBoolScalar(cond_tensor, "Loop input 'cond'");
+  }
+
+  std::vector<std::vector<Tensor>> scan_values(k);
+  int64_t trip_count = 0;
+  for (int64_t iter = 0; iter < max_trip && cond_value; ++iter) {
+    RuntimeContext child(rt.kernel_ctx());
+    child.functions() = rt.functions();
+    child.tensors() = rt.tensors();
+    child.sequences() = rt.sequences();
+
+    const std::string &iter_name = body.input(0).name().as_string();
+    const std::string &cond_name = body.input(1).name().as_string();
+    child.Put(iter_name, MakeInt64Scalar(iter_name, iter), TensorEventKind::kInput);
+    child.Put(cond_name, MakeBoolScalar(cond_name, cond_value), TensorEventKind::kInput);
+    for (std::size_t i = 0; i < n; ++i) {
+      const std::string &bname = body.input(static_cast<int>(2 + i)).name().as_string();
+      if (is_seq_state[i]) {
+        child.PutSequence(bname, sequence_state[i]);
+      } else {
+        Tensor t = tensor_state[i];
+        t.name = bname;
+        child.Put(bname, std::move(t), TensorEventKind::kInput);
+      }
+    }
+    RunGraph(body, child);
+
+    const std::string &cond_out_name = body.output(0).name().as_string();
+    auto cond_it = child.tensors().find(cond_out_name);
+    if (cond_it == child.tensors().end()) {
+      throw std::invalid_argument("RunNode: Loop body did not produce 'cond_out' output '" +
+                                  cond_out_name + "'.");
+    }
+    cond_value = ParseBoolScalar(cond_it->second, "Loop body output 'cond_out'");
+
+    for (std::size_t i = 0; i < n; ++i) {
+      const std::string &oname = body.output(static_cast<int>(1 + i)).name().as_string();
+      if (is_seq_state[i]) {
+        if (!child.HasSequence(oname)) {
+          throw std::invalid_argument(
+              "RunNode: Loop body did not produce sequence-typed loop-carried output '" + oname +
+              "'.");
+        }
+        sequence_state[i] = child.GetSequence(oname);
+      } else {
+        auto it = child.tensors().find(oname);
+        if (it == child.tensors().end()) {
+          throw std::invalid_argument(
+              "RunNode: Loop body did not produce tensor-typed loop-carried output '" + oname +
+              "'.");
+        }
+        tensor_state[i] = it->second;
+      }
+    }
+    for (std::size_t j = 0; j < k; ++j) {
+      const std::string &oname = body.output(static_cast<int>(1 + n + j)).name().as_string();
+      auto it = child.tensors().find(oname);
+      if (it == child.tensors().end()) {
+        throw std::invalid_argument("RunNode: Loop body did not produce scan output '" + oname +
+                                    "'.");
+      }
+      scan_values[j].push_back(it->second);
+    }
+    ++trip_count;
+  }
+
+  // Propagate loop-carried outputs (sequence- or tensor-typed) to caller.
+  for (std::size_t i = 0; i < n; ++i) {
+    const std::string caller_name = node.output(static_cast<int>(i)).as_string();
+    if (caller_name.empty()) {
+      continue;
+    }
+    if (is_seq_state[i]) {
+      rt.PutSequence(caller_name, sequence_state[i]);
+    } else {
+      Tensor t = tensor_state[i];
+      t.name = caller_name;
+      rt.Put(caller_name, std::move(t), TensorEventKind::kOutput);
+    }
+  }
+
+  // Stack scan outputs along a new leading axis and propagate to caller.
+  for (std::size_t j = 0; j < k; ++j) {
+    const std::string caller_name = node.output(static_cast<int>(n + j)).as_string();
+    if (caller_name.empty()) {
+      continue;
+    }
+    const auto &row = scan_values[j];
+    int32_t dtype = static_cast<int32_t>(DataType::UNDEFINED);
+    std::vector<int64_t> base_shape;
+    std::size_t elem_bytes = 0;
+    if (!row.empty()) {
+      const Tensor &first = row[0];
+      dtype = first.data_type;
+      base_shape = first.shape;
+      elem_bytes = first.element_count() == 0 ? 0 : first.size_bytes() / first.element_count();
+    }
+    std::vector<int64_t> stacked_shape;
+    stacked_shape.reserve(base_shape.size() + 1);
+    stacked_shape.push_back(trip_count);
+    stacked_shape.insert(stacked_shape.end(), base_shape.begin(), base_shape.end());
+
+    std::vector<uint8_t> stacked_data;
+    if (trip_count > 0 && elem_bytes > 0 && row[0].size_bytes() > 0) {
+      stacked_data.reserve(static_cast<std::size_t>(trip_count) * row[0].size_bytes());
+      for (int64_t t = 0; t < trip_count; ++t) {
+        const Tensor &it = row[static_cast<std::size_t>(t)];
+        stacked_data.insert(stacked_data.end(), it.bytes(), it.bytes() + it.size_bytes());
+      }
+    }
+    Tensor stacked(caller_name, dtype, std::move(stacked_shape), std::move(stacked_data));
+
+    // When the loop runs zero iterations the kernel has no template to seed
+    // dtype/shape from. Patch using the body's declared output value-info so
+    // the downstream pipeline (ReferenceEvaluator, numpy conversion, ...)
+    // sees a well-typed empty tensor of the expected element type and
+    // per-iteration trailing shape.
+    if (stacked.data_type == static_cast<int32_t>(DataType::UNDEFINED)) {
+      const auto &vi = body.output(static_cast<int>(1 + n + j));
+      if (vi.has_type() && vi.type().has_tensor_type()) {
+        const auto &tt = vi.type().tensor_type();
+        stacked.data_type = static_cast<int32_t>(tt.elem_type());
+        std::vector<int64_t> per_iter_shape;
+        if (tt.has_shape()) {
+          per_iter_shape.reserve(tt.shape().dim().size());
+          for (int d = 0; d < tt.shape().dim().size(); ++d) {
+            const auto &dim = tt.shape().dim()[d];
+            per_iter_shape.push_back(dim.has_dim_value() ? static_cast<int64_t>(dim.dim_value())
+                                                         : 0);
+          }
+        }
+        stacked.shape.assign(1, 0);
+        stacked.shape.insert(stacked.shape.end(), per_iter_shape.begin(), per_iter_shape.end());
+      }
+    }
+    rt.Put(caller_name, std::move(stacked), TensorEventKind::kOutput);
+  }
+}
+
 void RunLoopNode(const NodeProto &node, RuntimeContext &rt) {
   if (node.input_size() < 2) {
     throw std::invalid_argument("RunNode: op 'Loop' expects at least 2 inputs (M, cond).");
@@ -224,27 +385,50 @@ void RunLoopNode(const NodeProto &node, RuntimeContext &rt) {
     cond_tensor = GetInput(node, 1, rt.tensors());
   }
 
-  std::vector<Tensor> v_initial;
-  v_initial.reserve(static_cast<size_t>(node.input_size() - 2));
-  for (int i = 2; i < node.input_size(); ++i) {
-    if (node.input(i).as_string().empty()) {
+  // Classify each loop-carried input as either sequence-typed (looked up
+  // in ``rt.sequences()``) or tensor-typed (in ``rt.tensors()``). When
+  // any state slot is sequence-typed we route through a dispatcher-local
+  // orchestrator since :class:`kernel::Loop` only operates on tensors.
+  const std::size_t n_inputs = static_cast<std::size_t>(node.input_size() - 2);
+  std::vector<bool> is_seq_state(n_inputs, false);
+  std::vector<Tensor> tensor_state(n_inputs);
+  std::vector<Sequence> sequence_state(n_inputs);
+  bool any_sequence_state = false;
+  for (std::size_t i = 0; i < n_inputs; ++i) {
+    const int idx = static_cast<int>(2 + i);
+    if (node.input(idx).as_string().empty()) {
       throw std::invalid_argument(
           "RunNode: Loop does not support empty placeholders in loop-carried inputs.");
     }
-    v_initial.push_back(GetInput(node, i, rt.tensors()));
+    const std::string name = node.input(idx).as_string();
+    if (rt.HasSequence(name)) {
+      is_seq_state[i] = true;
+      sequence_state[i] = rt.GetSequence(name);
+      any_sequence_state = true;
+    } else {
+      tensor_state[i] = GetInput(node, idx, rt.tensors());
+    }
   }
 
-  if (body.input_size() < static_cast<int>(2 + v_initial.size())) {
+  if (body.input_size() < static_cast<int>(2 + n_inputs)) {
     throw std::invalid_argument("RunNode: Loop body graph does not declare enough inputs.");
   }
-  const size_t n = v_initial.size();
-  if (body.output_size() < static_cast<int>(1 + n)) {
+  if (body.output_size() < static_cast<int>(1 + n_inputs)) {
     throw std::invalid_argument("RunNode: Loop body graph does not declare enough outputs.");
   }
-  const size_t k = body.output_size() - 1 - n;
-  if (node.output_size() != static_cast<int>(n + k)) {
+  const std::size_t k = body.output_size() - 1 - n_inputs;
+  if (node.output_size() != static_cast<int>(n_inputs + k)) {
     throw std::invalid_argument("RunNode: Loop node output count does not match body outputs.");
   }
+
+  if (any_sequence_state) {
+    RunLoopWithSequenceState(node, body, m_tensor, cond_tensor, is_seq_state,
+                             std::move(tensor_state), std::move(sequence_state), k, rt);
+    return;
+  }
+
+  const std::size_t n = n_inputs;
+  std::vector<Tensor> v_initial = std::move(tensor_state);
 
   auto run_body = [&](int64_t iter, bool cond_in,
                       const std::vector<Tensor> &state) -> std::vector<Tensor> {

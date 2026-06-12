@@ -48,6 +48,7 @@ using detail::GetAttributeStringsOrDefault;
 using detail::GetInput;
 using detail::GetInputSequence;
 using detail::GetOptionalInput;
+using detail::GetRequiredAttributeInt;
 using detail::GetRequiredAttributeString;
 using detail::RequireInputCount;
 using detail::RequireMinInputCount;
@@ -1486,7 +1487,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          RequireInputCount(node, 1);
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
-         const int64_t size = GetAttributeIntOrDefault(node, "size", 0);
+         const int64_t size = GetRequiredAttributeInt(node, "size");
          const float alpha = GetAttributeFloatOrDefault(node, "alpha", 0.0001f);
          const float beta = GetAttributeFloatOrDefault(node, "beta", 0.75f);
          const float bias = GetAttributeFloatOrDefault(node, "bias", 1.0f);

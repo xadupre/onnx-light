@@ -117,6 +117,27 @@ void RunNode(const NodeProto &node, RuntimeContext &rt);
 void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext &rt);
 
 /**
+ * Release-aware overload of :cpp:func:`RunNodes`. Runs every node of
+ * ``nodes`` in order and, after each node, frees from ``rt`` every
+ * intermediate whose last reference has been reached according to
+ * ``plan``. Names that the caller seeded into ``rt`` on top of
+ * ``plan.keep()`` (graph inputs / initializers / outputs already
+ * covered by the plan) are preserved automatically — they are
+ * detected at run start and excluded from the release loop.
+ *
+ * The plan is *not* built here: callers (typically
+ * :cpp:func:`RunGraph` / :cpp:func:`RunFunction`) obtain it via
+ * :cpp:func:`RuntimeContext::GetExecutionPlan` so the analysis is
+ * paid only once per model and reused across every subsequent run.
+ *
+ * @param nodes The list of nodes to execute, in topological order.
+ * @param rt    In/out runtime context.
+ * @param plan  Precomputed release schedule covering ``nodes``.
+ */
+void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext &rt,
+              const ExecutionPlan &plan);
+
+/**
  * Generic iterator overload of :cpp:func:`RunNodes`. Accepts any
  * input-iterator range whose ``value_type`` (after dereferencing) is
  * convertible to ``const NodeProto &``, so callers can drive the

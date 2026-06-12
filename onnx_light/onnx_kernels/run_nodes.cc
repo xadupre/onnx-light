@@ -971,19 +971,6 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
 
 namespace {
 
-// Populates ``keep`` with the names of every tensor and sequence
-// currently held by ``rt``. Used by the release loop to ensure that
-// values seeded by the caller before a run (graph inputs, initializers,
-// any caller-provided override) are never garbage-collected.
-void SeedKeepFromContext(const RuntimeContext &rt, std::unordered_set<std::string> &keep) {
-  for (const auto &kv : rt.tensors()) {
-    keep.insert(kv.first);
-  }
-  for (const auto &kv : rt.sequences()) {
-    keep.insert(kv.first);
-  }
-}
-
 // Collects every name currently held by ``rt`` (tensor or sequence)
 // that is *not* part of ``structural_keep`` — i.e. values the caller
 // seeded into the context on top of the graph's declared inputs /
@@ -1008,9 +995,9 @@ CollectExtraKeep(const RuntimeContext &rt, const std::unordered_set<std::string>
 }
 
 // Runs every node of ``nodes`` in order and, after each node, removes
-// from ``rt`` every name in the matching ``releasable[i]`` slot. Both
-// the tensor map and the sequence map are consulted: ``Remove`` is a
-// no-op if absent and emits a ``kRemove`` event when event logging is
+// from ``rt`` every name in the matching ``plan.releasable()[i]`` slot.
+// Both the tensor map and the sequence map are consulted: ``Remove`` is
+// a no-op if absent and emits a ``kRemove`` event when event logging is
 // on; sequence removals don't emit events (sequence values live outside
 // the tensor event stream).
 template <class NodeRange>
@@ -1032,26 +1019,14 @@ void RunNodesAndRelease(const NodeRange &nodes, RuntimeContext &rt, const Execut
 } // namespace
 
 void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext &rt) {
-  if (!rt.release_intermediates()) {
-    for (size_t i = 0; i < nodes.size(); ++i) {
-      RunNode(nodes[i], rt);
-    }
-    return;
+  for (size_t i = 0; i < nodes.size(); ++i) {
+    RunNode(nodes[i], rt);
   }
-  // When release is opted-in, intermediates whose last reference is at
-  // node ``i`` (and that are not present in the caller-seeded tensor
-  // map at run start) are removed right after node ``i`` finishes.
-  // Names already populated in ``rt`` before ``RunNodes`` is invoked
-  // (graph inputs, initializers, outputs the caller wants to read back,
-  // ...) are preserved by adding them to the ``keep`` set.
-  //
-  // No graph / function structural context is available here, so the
-  // plan is built inline and not cached; the cached path is taken by
-  // :cpp:func:`RunGraph` / :cpp:func:`RunFunction`.
-  std::unordered_set<std::string> keep;
-  SeedKeepFromContext(rt, keep);
-  ExecutionPlan plan(nodes, std::move(keep));
-  RunNodesAndRelease(nodes, rt, plan, /*extra_keep=*/{});
+}
+
+void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext &rt,
+              const ExecutionPlan &plan) {
+  RunNodesAndRelease(nodes, rt, plan, CollectExtraKeep(rt, plan.keep()));
 }
 
 void RunGraph(const GraphProto &graph, RuntimeContext &rt) {
@@ -1072,12 +1047,8 @@ void RunGraph(const GraphProto &graph, RuntimeContext &rt) {
   }
   // Reuse the cached :cpp:class:`ExecutionPlan` for ``graph`` (built
   // on first use) so the release analysis is paid only once across
-  // every invocation of the same model. The plan's ``keep`` covers
-  // every declared input / initializer / output; caller-seeded extras
-  // (e.g. runtime overrides of intermediates) are picked up by
-  // :cpp:func:`CollectExtraKeep` and excluded from the release loop.
-  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
-  RunNodesAndRelease(graph.node(), rt, plan, CollectExtraKeep(rt, plan.keep()));
+  // every invocation of the same model.
+  RunNodes(graph.node(), rt, rt.GetExecutionPlan(graph));
 }
 
 void RunFunction(const FunctionProto &func, RuntimeContext &rt) {
@@ -1085,8 +1056,7 @@ void RunFunction(const FunctionProto &func, RuntimeContext &rt) {
     RunNodes(func.node(), rt);
     return;
   }
-  const ExecutionPlan &plan = rt.GetExecutionPlan(func);
-  RunNodesAndRelease(func.node(), rt, plan, CollectExtraKeep(rt, plan.keep()));
+  RunNodes(func.node(), rt, rt.GetExecutionPlan(func));
 }
 
 void RunModel(const ModelProto &model, RuntimeContext &rt) {

@@ -144,8 +144,7 @@ jobs:
           # OpenSSL is compatible.
           CIBW_ENVIRONMENT: >
             CMAKE_BUILD_PARALLEL_LEVEL=${{ steps.cpu_count.outputs.count }}
-            CMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON
-            CMAKE_ARGS=-DONNX_HARDENING=ON
+            CMAKE_ARGS='-DONNX_HARDENING=ON -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON'
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:

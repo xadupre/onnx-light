@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+#include <memory>
 #include <nanobind/make_iterator.h>
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/pair.h>
@@ -306,7 +307,7 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           "ParseFromFile",
           [](cls &self, const std::string &file_path, nb::object options,
              const std::string &external_data_file) {
-            utils::BinaryStream *stream;
+            std::unique_ptr<utils::BinaryStream> stream;
             const bool has_opts = nb::isinstance<ParseOptions &>(options);
             const bool wants_no_copy = has_opts && nb::cast<ParseOptions &>(options).no_copy;
             const FileLoadMode mode =
@@ -315,7 +316,7 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
               EXT_ENFORCE(mode == FileLoadMode::kAuto,
                           "ParseFromFile: file_load_mode is not supported when an "
                           "external_data_file is provided (TwoFilesStream is always used).");
-              stream = new utils::TwoFilesStream(file_path, external_data_file);
+              stream.reset(new utils::TwoFilesStream(file_path, external_data_file));
             } else if (mode == FileLoadMode::kMmap) {
               EXT_ENFORCE(!wants_no_copy,
                           "ParseFromFile: file_load_mode=MMAP with no_copy=True on a "
@@ -323,20 +324,20 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
                           "released when ParseFromFile returns. Either set no_copy=False or "
                           "use file_load_mode=AUTO (which falls back to FileStream when "
                           "no_copy=True so inline raw_data is copied into owned buffers).");
-              stream = new utils::MmapFileStream(file_path);
+              stream.reset(new utils::MmapFileStream(file_path));
             } else if (mode == FileLoadMode::kFileStream ||
                        (mode == FileLoadMode::kAuto && wants_no_copy)) {
               // FileStream::CanNoCopy() is false, so no_copy=True silently falls back to
               // copying inline raw_data. Keep that behavior here so the borrowed pointers
               // exposed by an mmap-backed stream do not outlive the stream object below.
-              stream = new utils::FileStream(file_path);
+              stream.reset(new utils::FileStream(file_path));
             } else {
               // Default path: the file is mmap'd and parsed via StringStream-derived
               // MmapFileStream. This avoids the FileStream double-buffer (4 KB read_buf_
               // on top of std::ifstream's streambuf) and the seek-to-invalidate path
               // taken on large tensor payloads, closing most of the gap with protobuf's
               // hand-tuned ParseFromIstream.
-              stream = new utils::MmapFileStream(file_path);
+              stream.reset(new utils::MmapFileStream(file_path));
             }
             if (nb::isinstance<ParseOptions &>(options)) {
               ParseOptions &coptions = nb::cast<ParseOptions &>(options);
@@ -351,7 +352,6 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
               ParseOptions opts;
               ParseProtoFromStream(self, *stream, opts);
             }
-            delete stream;
           },
           nb::arg("name"), nb::arg("options") = nb::none(), nb::arg("external_data_file") = "",
           "Parses a binary file to fill this instance.")
@@ -394,10 +394,12 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
                 to_write = &(*owned_copy);
               }
             }
-            utils::BinaryWriteStream *stream =
+            std::unique_ptr<utils::BinaryWriteStream> stream =
                 external_data_file.empty()
-                    ? new utils::FileWriteStream(file_path)
-                    : new utils::TwoFilesWriteStream(file_path, external_data_file);
+                    ? std::unique_ptr<utils::BinaryWriteStream>(
+                          new utils::FileWriteStream(file_path))
+                    : std::unique_ptr<utils::BinaryWriteStream>(
+                          new utils::TwoFilesWriteStream(file_path, external_data_file));
             if (nb::isinstance<SerializeOptions &>(options)) {
               SerializeProtoToStream(*to_write, *stream, nb::cast<SerializeOptions &>(options),
                                      !external_data_file.empty());
@@ -405,7 +407,6 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
               SerializeOptions opts;
               SerializeProtoToStream(*to_write, *stream, opts, !external_data_file.empty());
             }
-            delete stream;
           },
           nb::arg("name"), nb::arg("options") = nb::none(), nb::arg("external_data_file") = "",
           "Serializes this instance into a file. If ``external_data_size`` is not empty, big "

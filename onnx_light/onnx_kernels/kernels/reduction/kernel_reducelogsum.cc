@@ -60,8 +60,7 @@ void ValidateFloatOrDouble(const Tensor &t, const char *name) {
 template <typename T>
 void LogSumReduceT(const T *px, T *py, int64_t out_count, int64_t total, int64_t rank,
                    const std::vector<int64_t> &data_shape, const std::vector<bool> &is_reduced,
-                   const std::vector<int64_t> &output_shape_noreduce,
-                   ReduceLogSumOp::Mode mode) {
+                   const std::vector<int64_t> &output_shape_noreduce, ReduceLogSumOp::Mode mode) {
   const std::vector<int64_t> out_strides = RowMajorStrides(output_shape_noreduce);
 
   int64_t reduced_count = 1;
@@ -225,9 +224,8 @@ Tensor ReduceLogSumOp::operator()(const Tensor &data, bool keepdims,
   for (int64_t d : out_shape) {
     out_count *= d;
   }
-  const size_t elem_size = (data.data_type == static_cast<int32_t>(DataType::DOUBLE))
-                               ? sizeof(double)
-                               : sizeof(float);
+  const size_t elem_size =
+      (data.data_type == static_cast<int32_t>(DataType::DOUBLE)) ? sizeof(double) : sizeof(float);
   Tensor out("", data.data_type, out_shape,
              std::vector<uint8_t>(static_cast<size_t>(out_count) * elem_size, 0u));
   (*this)(data, keepdims, noop_with_empty_axes, out);
@@ -250,9 +248,8 @@ void ReduceLogSumOp::operator()(const Tensor &data, bool keepdims, bool noop_wit
       output.shape == expected_out_shape,
       "kernel::ReduceLogSumOp preallocated output shape does not match expected shape.");
   const int64_t out_count = output.element_count();
-  const size_t elem_size = (data.data_type == static_cast<int32_t>(DataType::DOUBLE))
-                               ? sizeof(double)
-                               : sizeof(float);
+  const size_t elem_size =
+      (data.data_type == static_cast<int32_t>(DataType::DOUBLE)) ? sizeof(double) : sizeof(float);
   EXT_ENFORCE_INVALID(
       output.data.size() == static_cast<size_t>(out_count) * elem_size,
       "kernel::ReduceLogSumOp preallocated output buffer has unexpected size in bytes.");
@@ -290,9 +287,8 @@ Tensor ReduceLogSumOp::operator()(const Tensor &data, const Tensor &axes, bool k
   for (int64_t d : out_shape) {
     out_count *= d;
   }
-  const size_t elem_size = (data.data_type == static_cast<int32_t>(DataType::DOUBLE))
-                               ? sizeof(double)
-                               : sizeof(float);
+  const size_t elem_size =
+      (data.data_type == static_cast<int32_t>(DataType::DOUBLE)) ? sizeof(double) : sizeof(float);
   Tensor out("", data.data_type, out_shape,
              std::vector<uint8_t>(static_cast<size_t>(out_count) * elem_size, 0u));
   (*this)(data, axes, keepdims, noop_with_empty_axes, out);
@@ -327,9 +323,8 @@ void ReduceLogSumOp::operator()(const Tensor &data, const Tensor &axes, bool kee
       output.shape == expected_out_shape,
       "kernel::ReduceLogSumOp preallocated output shape does not match expected shape.");
   const int64_t out_count = output.element_count();
-  const size_t elem_size = (data.data_type == static_cast<int32_t>(DataType::DOUBLE))
-                               ? sizeof(double)
-                               : sizeof(float);
+  const size_t elem_size =
+      (data.data_type == static_cast<int32_t>(DataType::DOUBLE)) ? sizeof(double) : sizeof(float);
   EXT_ENFORCE_INVALID(
       output.data.size() == static_cast<size_t>(out_count) * elem_size,
       "kernel::ReduceLogSumOp preallocated output buffer has unexpected size in bytes.");

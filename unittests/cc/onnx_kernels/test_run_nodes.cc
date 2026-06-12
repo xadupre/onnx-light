@@ -732,6 +732,21 @@ TEST(RunNodes, RunNodeUnsqueezeAxesAsInput) {
   EXPECT_EQ(y.shape, (std::vector<int64_t>{1, 3, 1, 2}));
 }
 
+TEST(RunNodes, RunNodeUnsqueezeScalarAxesInput) {
+  // Some upstream function bodies (e.g. ai.onnx::AffineGrid) feed the
+  // Unsqueeze ``axes`` input with a 0-D INT64 scalar instead of the 1-D
+  // tensor required by the schema. For compatibility with those models
+  // (which the upstream reference evaluator also accepts) the trampoline
+  // tolerates a rank-0 axes tensor.
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {3, 2}, {1, 2, 3, 4, 5, 6});
+  rt.tensors()["axes"] = Tensor::FromInt64("axes", {}, {-1});
+  NodeProto node = MakeNode("Unsqueeze", {"x", "axes"}, {"y"});
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{3, 2, 1}));
+}
+
 TEST(RunNodes, RunNodeShapeNoAttributes) {
   // Default attributes: returns the full shape as an INT64 1-D tensor.
   RuntimeContext rt(KernelContext(DefaultOpset(15)));

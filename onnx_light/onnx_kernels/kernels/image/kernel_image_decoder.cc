@@ -306,13 +306,14 @@ inline int32_t JpegExtend(int32_t value, int n) {
 // Operates on dequantized coefficients in natural row-major order.
 void IdctBlock(const std::array<double, 64> &in, std::array<uint8_t, 64> &out) {
   static const double inv_sqrt2 = 1.0 / std::sqrt(2.0);
+  constexpr double kPi = 3.14159265358979323846;
   std::array<double, 64> tmp{};
   for (int x = 0; x < 8; ++x) {
     for (int y = 0; y < 8; ++y) {
       double sum = 0.0;
       for (int u = 0; u < 8; ++u) {
         const double cu = u == 0 ? inv_sqrt2 : 1.0;
-        sum += cu * in[u * 8 + x] * std::cos((2 * y + 1) * u * M_PI / 16.0);
+        sum += cu * in[u * 8 + x] * std::cos((2 * y + 1) * u * kPi / 16.0);
       }
       tmp[y * 8 + x] = sum;
     }
@@ -322,7 +323,7 @@ void IdctBlock(const std::array<double, 64> &in, std::array<uint8_t, 64> &out) {
       double sum = 0.0;
       for (int v = 0; v < 8; ++v) {
         const double cv = v == 0 ? inv_sqrt2 : 1.0;
-        sum += cv * tmp[y * 8 + v] * std::cos((2 * x + 1) * v * M_PI / 16.0);
+        sum += cv * tmp[y * 8 + v] * std::cos((2 * x + 1) * v * kPi / 16.0);
       }
       const double value = sum * 0.25 + 128.0;
       const int32_t r = static_cast<int32_t>(std::lround(value));

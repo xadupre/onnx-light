@@ -242,8 +242,12 @@ template <class KernelT> NodeKernelFn MakeSqueezeLikeTrampoline(const char *op_n
     std::vector<int64_t> axes;
     const Tensor *axes_input = GetOptionalInput(node, 1, rt.tensors());
     if (axes_input != nullptr) {
+      // The schema requires a 1-D INT64 tensor, but the ai.onnx::AffineGrid
+      // function body (and other upstream function bodies) feed a 0-D INT64
+      // scalar here. The upstream reference evaluator accepts scalars too,
+      // so for compatibility we treat a scalar as a 1-element 1-D tensor.
       if (axes_input->data_type != static_cast<int32_t>(DataType::INT64) ||
-          axes_input->shape.size() != 1) {
+          axes_input->shape.size() > 1) {
         throw std::invalid_argument(std::string("RunNode: ") + op_name +
                                     " 'axes' input must be a 1-D INT64 tensor.");
       }

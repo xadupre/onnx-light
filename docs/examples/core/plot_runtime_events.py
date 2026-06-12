@@ -145,7 +145,7 @@ for name, shape in resolved_shapes.items():
 # :meth:`~onnx_light.reference.ReferenceEvaluator.events` exposes the full
 # event log recorded by the internal :class:`RuntimeContext`.
 
-sess = ReferenceEvaluator(model)
+sess = ReferenceEvaluator(model, events_enabled=True)
 (y,) = sess.run(None, {"x": x})
 print(f"y =\n{y}")
 

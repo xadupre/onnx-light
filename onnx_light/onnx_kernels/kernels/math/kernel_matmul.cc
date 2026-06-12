@@ -241,15 +241,13 @@ void MatMul::operator()(const Tensor &a, const Tensor &b, Tensor &output) const 
     return MatMulInPlace<uint64_t>(a, b, output);
   case DataType::FLOAT16:
   case DataType::BFLOAT16: {
-    EXT_ENFORCE_INVALID(output.data_type == a.data_type,
-                        std::string(kMatMulName) +
-                            " preallocated output must have the same dtype as input A.");
+    EXT_ENFORCE_INVALID(output.data_type == a.data_type, kMatMulName,
+                        " preallocated output must have the same dtype as input A.");
     Tensor y = (*this)(a, b);
-    EXT_ENFORCE_INVALID(output.shape == y.shape,
-                        std::string(kMatMulName) + " preallocated output has an invalid shape.");
-    EXT_ENFORCE_INVALID(output.data.size() == y.data.size(),
-                        std::string(kMatMulName) +
-                            " preallocated output buffer size does not match its shape.");
+    EXT_ENFORCE_INVALID(output.shape == y.shape, kMatMulName,
+                        " preallocated output has an invalid shape.");
+    EXT_ENFORCE_INVALID(output.data.size() == y.data.size(), kMatMulName,
+                        " preallocated output buffer size does not match its shape.");
     std::memcpy(output.data.data(), y.data.data(), y.data.size());
     return;
   }

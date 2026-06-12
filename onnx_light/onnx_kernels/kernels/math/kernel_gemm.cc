@@ -128,15 +128,15 @@ Tensor Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float
     return GemmAlloc<double>(a, b, c, alpha, beta, transA, transB);
   case DataType::FLOAT16:
   case DataType::BFLOAT16: {
-    EXT_ENFORCE_INVALID(b.data_type == a.data_type,
-                        std::string(kGemmName) + " inputs A and B must share the same dtype.");
+    EXT_ENFORCE_INVALID(b.data_type == a.data_type, kGemmName,
+                        " inputs A and B must share the same dtype.");
     const Tensor a_f = PromoteGemmInput(a);
     const Tensor b_f = PromoteGemmInput(b);
     Tensor c_f;
     const Tensor *c_ptr = nullptr;
     if (c != nullptr) {
-      EXT_ENFORCE_INVALID(c->data_type == a.data_type,
-                          std::string(kGemmName) + " input C must share dtype with A and B.");
+      EXT_ENFORCE_INVALID(c->data_type == a.data_type, kGemmName,
+                          " input C must share dtype with A and B.");
       c_f = PromoteGemmInput(*c);
       c_ptr = &c_f;
     }
@@ -157,15 +157,13 @@ void Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float a
     return GemmInPlace<double>(a, b, c, alpha, beta, transA, transB, output);
   case DataType::FLOAT16:
   case DataType::BFLOAT16: {
-    EXT_ENFORCE_INVALID(output.data_type == a.data_type,
-                        std::string(kGemmName) +
-                            " preallocated output must have the same dtype as input A.");
+    EXT_ENFORCE_INVALID(output.data_type == a.data_type, kGemmName,
+                        " preallocated output must have the same dtype as input A.");
     Tensor y = (*this)(a, b, c, alpha, beta, transA, transB);
-    EXT_ENFORCE_INVALID(output.shape == y.shape,
-                        std::string(kGemmName) + " preallocated output has an invalid shape.");
-    EXT_ENFORCE_INVALID(output.data.size() == y.data.size(),
-                        std::string(kGemmName) +
-                            " preallocated output buffer size does not match its shape.");
+    EXT_ENFORCE_INVALID(output.shape == y.shape, kGemmName,
+                        " preallocated output has an invalid shape.");
+    EXT_ENFORCE_INVALID(output.data.size() == y.data.size(), kGemmName,
+                        " preallocated output buffer size does not match its shape.");
     std::memcpy(output.data.data(), y.data.data(), y.data.size());
     return;
   }

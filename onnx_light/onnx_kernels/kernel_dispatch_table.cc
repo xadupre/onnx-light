@@ -2122,6 +2122,18 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor &pos = (position_ids != nullptr) ? *position_ids : empty;
          SetOutput(node, 0, kernel(x, cos_cache, sin_cache, pos, attrs), rt.tensors());
        }},
+      {"ai.onnx:Scatter",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 3);
+         RequireOutputCount(node, 1);
+         const Tensor &data = GetInput(node, 0, rt.tensors());
+         const Tensor &indices = GetInput(node, 1, rt.tensors());
+         const Tensor &updates = GetInput(node, 2, rt.tensors());
+         kernel::Scatter::Attributes attrs;
+         attrs.axis = GetAttributeIntOrDefault(node, "axis", 0);
+         kernel::Scatter k(rt.kernel_ctx());
+         SetOutput(node, 0, k(data, indices, updates, attrs), rt);
+       }},
       {"ai.onnx:ScatterElements",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 3);

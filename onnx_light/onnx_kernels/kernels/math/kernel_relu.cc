@@ -4,6 +4,8 @@
 
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -27,6 +29,26 @@ template <typename T> void ComputeInPlace(const Tensor &x, Tensor &output) {
   }
 }
 
+void ComputeFloat16(const Tensor &x, Tensor &output) {
+  const int64_t n = x.element_count();
+  const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
+  uint16_t *py = reinterpret_cast<uint16_t *>(output.data.data());
+  for (int64_t i = 0; i < n; ++i) {
+    const float v = Float16BitsToFloat(px[i]);
+    py[i] = FloatToFloat16Bits(v > 0.0f ? v : 0.0f);
+  }
+}
+
+void ComputeBfloat16(const Tensor &x, Tensor &output) {
+  const int64_t n = x.element_count();
+  const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
+  uint16_t *py = reinterpret_cast<uint16_t *>(output.data.data());
+  for (int64_t i = 0; i < n; ++i) {
+    const float v = Bfloat16BitsToFloat(px[i]);
+    py[i] = FloatToBfloat16Bits(v > 0.0f ? v : 0.0f);
+  }
+}
+
 void Dispatch(const Tensor &x, Tensor &output) {
   switch (static_cast<DataType>(x.data_type)) {
   case DataType::FLOAT:
@@ -47,9 +69,16 @@ void Dispatch(const Tensor &x, Tensor &output) {
   case DataType::INT64:
     ComputeInPlace<int64_t>(x, output);
     return;
+  case DataType::FLOAT16:
+    ComputeFloat16(x, output);
+    return;
+  case DataType::BFLOAT16:
+    ComputeBfloat16(x, output);
+    return;
   default:
-    throw std::invalid_argument(std::string(kName) +
-                                " only supports FLOAT, DOUBLE and signed integer tensors.");
+    throw std::invalid_argument(
+        std::string(kName) +
+        " only supports FLOAT, DOUBLE, FLOAT16, BFLOAT16, and signed integer tensors.");
   }
 }
 

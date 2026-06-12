@@ -113,7 +113,8 @@ def _build_include_regex() -> list[str]:
     names: list[str] = []
     for name, tc in collect_test_case().items():
         op = _single_node_op_type(tc)
-        if op is not None and op in _IMPLEMENTED_OPS:
+        # run_model_backend currently has no BFLOAT16 -> numpy conversion path.
+        if op is not None and op in _IMPLEMENTED_OPS and not name.endswith("_bfloat16"):
             names.append(name)
     if not names:
         # Fallback: keep a regex that matches nothing so ``make_test_class``

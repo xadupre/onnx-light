@@ -285,7 +285,7 @@ class TestReferenceEvaluator(ExtTestCase):
         # ``TypeError`` instead of the cryptic numpy_helper error.
         model_plain = parser.parse_model(_ABS_ADD_MODEL_SRC)
         sess_plain = ReferenceEvaluator(model_plain)
-        with self.assertRaises(TypeError):
+        with self.assertRaisesRegex(TypeError, r"not declared as a map"):
             sess_plain.run(
                 None, {"x": {0: 1.0}, "z": np.array([0.0, 0.0, 0.0], dtype=np.float32)}
             )

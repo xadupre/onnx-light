@@ -695,6 +695,32 @@ TEST(RunNodes, RunNodeSqueezeAxesAsAttribute) {
   EXPECT_EQ(y.shape, (std::vector<int64_t>{3, 2}));
 }
 
+TEST(RunNodes, RunNodeSqueezeAxesMissingInput) {
+  // Opset 13+: ``axes`` is an optional input. When the node is declared with
+  // only the ``data`` input (the optional ``axes`` slot is omitted entirely),
+  // the kernel squeezes every dimension equal to 1, matching the ONNX spec.
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {1, 3, 1, 2}, {1, 2, 3, 4, 5, 6});
+  NodeProto node = MakeNode("Squeeze", {"x"}, {"y"});
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{3, 2}));
+  EXPECT_EQ(y.element_count(), 6);
+}
+
+TEST(RunNodes, RunNodeSqueezeAxesEmptyName) {
+  // Opset 13+: a missing optional input is conventionally encoded as an empty
+  // input name. The kernel must treat this the same as omitting the slot
+  // entirely and squeeze all unit dimensions.
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {1, 3, 1, 2}, {1, 2, 3, 4, 5, 6});
+  NodeProto node = MakeNode("Squeeze", {"x", ""}, {"y"});
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{3, 2}));
+  EXPECT_EQ(y.element_count(), 6);
+}
+
 TEST(RunNodes, RunNodeUnsqueezeAxesAsInput) {
   RuntimeContext rt(KernelContext(DefaultOpset(13)));
   rt.tensors()["x"] = Tensor::FromFloat("x", {3, 2}, {1, 2, 3, 4, 5, 6});

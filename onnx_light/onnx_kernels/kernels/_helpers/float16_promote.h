@@ -23,9 +23,8 @@ inline bool IsHalfPrecision(int32_t data_type) {
          data_type == static_cast<int32_t>(DataType::BFLOAT16);
 }
 
-/// Promotes a FLOAT16 or BFLOAT16 tensor to FLOAT32.
-/// Returns a new Tensor with data_type == FLOAT and the same shape/name.
-/// If the input is already FLOAT or DOUBLE, returns a copy unchanged.
+/// Converts a FLOAT16 or BFLOAT16 tensor to FLOAT32.
+/// If the input is already FLOAT or DOUBLE, returns a copy unchanged (no conversion).
 Tensor PromoteToFloat32(const Tensor &src);
 
 /// Demotes a FLOAT32 tensor back to FLOAT16 or BFLOAT16.

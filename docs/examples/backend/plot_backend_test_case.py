@@ -11,13 +11,26 @@ a ``ModelProto`` plus one or more ``DataSet`` (lists of reference
 input / output ``Tensor`` instances).
 
 :func:`onnx_light.onnx.backend.collect_test_cases` returns the C++
-test cases as a ``list``. When called with an operator type it
-returns only the cases whose top-level graph contains a node with
-that ``op_type``.
+test cases as a ``list``. When called without any argument (or with
+an empty string) it returns *every* registered backend test case.
+When called with an operator type, or one of the special category
+strings ``"shape"``, ``"inference"`` or ``"nan_inf"``, it returns
+only the cases whose top-level graph contains a node with that
+``op_type`` (or that belong to the requested category).
+
+To filter cases by their *name* (rather than by op type), use
+:func:`onnx_light.onnx.backend.collect_test_cases_by_name`, which
+accepts an ECMAScript regular expression matched against
+:attr:`TestCase.name` with ``std::regex_search`` semantics
+(substring match unless anchored with ``^...$``).
 
 This example:
 
+* lists how many backend test cases are registered in total via
+  ``collect_test_cases()`` without argument,
 * retrieves the ``test_abs`` case via ``collect_test_cases("Abs")``,
+* demonstrates ``collect_test_cases_by_name`` to fetch cases by a
+  regular expression on the test case name,
 * displays its ``ModelProto``,
 * displays the reference input and output tensors,
 * demonstrates how to use :func:`make_test_class` from
@@ -29,7 +42,20 @@ from __future__ import annotations
 
 import numpy as np
 
-from onnx_light.onnx.backend import collect_test_cases
+from onnx_light.onnx.backend import collect_test_cases, collect_test_cases_by_name
+
+#####################################
+# All backend test cases
+# ++++++++++++++++++++++
+#
+# Calling ``collect_test_cases()`` without any argument (or with an
+# empty string) returns every registered backend test case. This is
+# useful to discover what is shipped with ``onnx-light`` and to drive
+# parametrized tests over the full suite.
+
+all_cases = collect_test_cases()
+print(f"Total number of backend test cases: {len(all_cases)}")
+print(f"First five names                  : {[tc.name for tc in all_cases[:5]]}")
 
 #####################################
 # Retrieve a backend test case
@@ -48,6 +74,32 @@ print(f"name      : {tc.name}")
 print(f"model_name: {tc.model_name}")
 print(f"kind      : {tc.kind}")
 print(f"rtol/atol : {tc.rtol} / {tc.atol}")
+
+#####################################
+# Filter by name with collect_test_cases_by_name
+# ++++++++++++++++++++++++++++++++++++++++++++++
+#
+# ``collect_test_cases_by_name`` accepts an ECMAScript regular
+# expression matched against the ``TestCase.name`` field. The match
+# uses ``std::regex_search`` semantics, so the pattern is treated as
+# a substring match unless it is anchored with ``^`` and ``$``.
+#
+# A few useful patterns:
+#
+# * ``"test_abs"`` matches any case whose name contains ``test_abs``
+#   (substring match), including variants such as ``test_abs_<suffix>``.
+# * ``"^test_abs$"`` requires an exact match on the name.
+# * ``"^test_add"`` matches every case whose name starts with
+#   ``test_add`` (e.g. ``test_add``, ``test_add_bcast``, ...).
+# * An empty pattern returns every registered case, exactly like
+#   ``collect_test_cases()`` without argument.
+
+named_cases = collect_test_cases_by_name("^test_add")
+print(f"Number of cases matching '^test_add': {len(named_cases)}")
+print(f"Names                                : {[c.name for c in named_cases]}")
+
+exact_abs = collect_test_cases_by_name("^test_abs$")
+print(f"Names matching '^test_abs$' exactly  : {[c.name for c in exact_abs]}")
 
 #####################################
 # Display the model

@@ -253,6 +253,7 @@ TEST(BackendRunModel, InstanceNormalization) { RunBackendCasesFor("InstanceNorma
 TEST(BackendRunModel, LayerNormalization) { RunBackendCasesFor("LayerNormalization"); }
 TEST(BackendRunModel, RMSNormalization) { RunBackendCasesFor("RMSNormalization"); }
 TEST(BackendRunModel, RNN) { RunBackendCasesFor("RNN"); }
+TEST(BackendRunModel, RotaryEmbedding) { RunBackendCasesFor("RotaryEmbedding"); }
 TEST(BackendRunModel, MeanVarianceNormalization) {
   RunBackendCasesFor("MeanVarianceNormalization");
 }

@@ -2295,6 +2295,58 @@ TEST(RunNodes, RunNodeGRUFromDispatchTable) {
   }
 }
 
+TEST(RunNodes, RunNodeLSTMFromDispatchTableUniformSequenceLens) {
+  // ``sequence_lens`` is accepted when every entry equals ``seq_length``
+  // (no-op masking); the dispatch must produce the same outputs as the
+  // 3-input form above. This mirrors the ``test_cc_lstm_with_peepholes``
+  // backend case (which passes a uniform ``sequence_lens``).
+  RuntimeContext rt(KernelContext(DefaultOpset(14)));
+
+  constexpr int64_t kSeqLength = 1;
+  constexpr int64_t kBatch = 2;
+  constexpr int64_t kInput = 4;
+  constexpr int64_t kHidden = 3;
+  constexpr int64_t kNumGates = 4;
+  constexpr int64_t kNumPeepholes = 3;
+  constexpr float kWeightScale = 0.1f;
+
+  rt.tensors()["X"] =
+      Tensor::FromFloat("X", {kSeqLength, kBatch, kInput}, {1, 2, 3, 4, 5, 6, 7, 8});
+  std::vector<float> w_data(static_cast<size_t>(kNumGates * kHidden * kInput), kWeightScale);
+  std::vector<float> r_data(static_cast<size_t>(kNumGates * kHidden * kHidden), kWeightScale);
+  std::vector<float> b_data(static_cast<size_t>(2 * kNumGates * kHidden), 0.0f);
+  std::vector<float> h0_data(static_cast<size_t>(kBatch * kHidden), 0.0f);
+  std::vector<float> c0_data(static_cast<size_t>(kBatch * kHidden), 0.0f);
+  std::vector<float> p_data(static_cast<size_t>(kNumPeepholes * kHidden), kWeightScale);
+  rt.tensors()["W"] = Tensor::FromFloat("W", {1, kNumGates * kHidden, kInput}, w_data);
+  rt.tensors()["R"] = Tensor::FromFloat("R", {1, kNumGates * kHidden, kHidden}, r_data);
+  rt.tensors()["B"] = Tensor::FromFloat("B", {1, 2 * kNumGates * kHidden}, b_data);
+  rt.tensors()["sequence_lens"] =
+      Tensor::FromInt32("sequence_lens", {kBatch},
+                        {static_cast<int32_t>(kSeqLength), static_cast<int32_t>(kSeqLength)});
+  rt.tensors()["initial_h"] = Tensor::FromFloat("initial_h", {1, kBatch, kHidden}, h0_data);
+  rt.tensors()["initial_c"] = Tensor::FromFloat("initial_c", {1, kBatch, kHidden}, c0_data);
+  rt.tensors()["P"] = Tensor::FromFloat("P", {1, kNumPeepholes * kHidden}, p_data);
+
+  NodeProto node = MakeNode(
+      "LSTM", {"X", "W", "R", "B", "sequence_lens", "initial_h", "initial_c", "P"}, {"", "Y_h"});
+  AttributeProto *hs = node.add_attribute();
+  hs->set_name("hidden_size");
+  hs->set_type(AttributeProto::AttributeType::INT);
+  hs->set_i(kHidden);
+
+  RunNode(node, rt);
+
+  const Tensor &y_h = rt.tensors().at("Y_h");
+  EXPECT_EQ(y_h.shape, (std::vector<int64_t>{1, kBatch, kHidden}));
+  EXPECT_EQ(y_h.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+
+  // Non-uniform ``sequence_lens`` is still rejected.
+  rt.tensors()["sequence_lens"] =
+      Tensor::FromInt32("sequence_lens", {kBatch}, {static_cast<int32_t>(kSeqLength), 0});
+  EXPECT_THROW(RunNode(node, rt), std::invalid_argument);
+}
+
 TEST(RunNodes, RunNodeLSTMFromDispatchTable) {
   // Single-step (seq_length=1) LSTM with X/W/R only: requests Y_h as the
   // only output via an empty Y output name, mirroring the ``lstm_defaults``

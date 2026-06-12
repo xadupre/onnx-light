@@ -211,6 +211,82 @@ class ReferenceEvaluator:
             version = int(max(self._opsets.values()))
         self._kernel_ctx = _runtime.KernelContext(_runtime.default_opset(version))
 
+        # Mapping ``"<domain>:<op_type>" -> low-level callback``. A
+        # low-level callback has the signature
+        # ``fn(node: NodeProto, ctx: RuntimeContext) -> None`` and is
+        # registered as-is on every freshly constructed RuntimeContext
+        # in :meth:`run`. The higher-level :meth:`register_custom_kernel`
+        # API installs a numpy-friendly wrapper that delegates to the
+        # user-provided callable.
+        self._custom_kernels: dict[str, Any] = {}
+
+    # -- custom kernels -----------------------------------------------------
+
+    def register_custom_kernel(self, domain: str, op_type: str, fn: Any) -> None:
+        """Registers a Python custom kernel for ``(domain, op_type)``.
+
+        The kernel is invoked on every :meth:`run` call whenever a node
+        matches the registered ``(domain, op_type)`` pair. Custom
+        kernels override any built-in onnx-light kernel with the same
+        key (model-local functions and the built-in control-flow
+        operators ``If`` / ``Loop`` / ``Scan`` / ``SequenceMap`` still
+        take precedence).
+
+        Parameters
+        ----------
+        domain:
+            Operator domain. The empty string is treated as
+            ``ai.onnx``.
+        op_type:
+            Operator name (``NodeProto.op_type``).
+        fn:
+            Python callable invoked as ``fn(node, *inputs)`` where
+            ``node`` is the matching :class:`NodeProto` and ``inputs``
+            are the input tensors converted to :class:`numpy.ndarray`.
+            The callable must return either a single
+            :class:`numpy.ndarray` (for single-output kernels) or a
+            tuple / list of arrays (for multi-output kernels), in the
+            same order as the node's declared outputs.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            def square(node, x):
+                return x * x
+
+            sess.register_custom_kernel("my.domain", "Square", square)
+        """
+
+        def _wrapper(node: Any, ctx: Any) -> None:
+            inputs: list[Any] = []
+            for raw_name in node.input:
+                name = str(raw_name)
+                if not name:
+                    inputs.append(None)
+                else:
+                    inputs.append(_cpp_tensor_to_numpy(ctx.get(name)))
+            result = fn(node, *inputs)
+            if isinstance(result, (list, tuple)):
+                outputs = list(result)
+            else:
+                outputs = [result]
+            output_names = [str(n) for n in node.output]
+            expected = len(output_names)
+            if len(outputs) != expected:
+                raise ValueError(
+                    f"Custom kernel for {domain!r}:{op_type!r} returned "
+                    f"{len(outputs)} output(s) but the node declares {expected} "
+                    f"output(s)."
+                )
+            for i, value in enumerate(outputs):
+                name = output_names[i]
+                if not name:
+                    continue
+                ctx.put(name, _numpy_to_cpp_tensor(name, value), "output")
+
+        self._custom_kernels[f"{domain or 'ai.onnx'}:{op_type}"] = (domain, op_type, _wrapper)
+
     # -- proto loading ------------------------------------------------------
 
     @staticmethod
@@ -308,6 +384,9 @@ class ReferenceEvaluator:
             )
 
         ctx = _runtime.RuntimeContext(self._kernel_ctx)
+
+        for domain, op_type, wrapper in self._custom_kernels.values():
+            ctx.register_custom_kernel(domain, op_type, wrapper)
 
         for name, value in feed_inputs.items():
             ctx.set(name, _numpy_to_cpp_tensor(name, value))

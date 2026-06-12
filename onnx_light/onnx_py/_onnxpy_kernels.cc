@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/function.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/string.h>
@@ -370,6 +371,35 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "plain Python ``dict``.")
       .def("clear_events", &RuntimeContext::ClearEvents,
            "Empties the event log without otherwise touching the tensor map.")
+      .def(
+          "register_custom_kernel",
+          [](RuntimeContext &rt, const std::string &domain, const std::string &op_type,
+             nb::callable fn) {
+            // Wrap the Python callable in a CustomKernelFn. We capture
+            // the callable in a ``nb::callable`` which keeps a Python
+            // reference alive until the registration is replaced or the
+            // RuntimeContext is destroyed. The GIL is reacquired before
+            // invoking the callable so that it is safe to call from the
+            // RunNode dispatcher (which may be invoked without the GIL
+            // held in the future).
+            rt.RegisterCustomKernel(domain, op_type,
+                                    [fn](const NodeProto &node, RuntimeContext &ctx) {
+                                      nb::gil_scoped_acquire gil;
+                                      fn(nb::cast(&node, nb::rv_policy::reference),
+                                         nb::cast(&ctx, nb::rv_policy::reference));
+                                    });
+          },
+          nb::arg("domain"), nb::arg("op_type"), nb::arg("fn"),
+          "Registers a custom kernel for ``(domain, op_type)``. The empty domain "
+          "is normalised to ``ai.onnx``. ``fn`` is a Python callable invoked as "
+          "``fn(node, ctx)`` where ``node`` is the :class:`NodeProto` being "
+          "dispatched and ``ctx`` is this :class:`RuntimeContext`. The callable "
+          "must read its inputs from ``ctx`` (via :meth:`get` / :meth:`get_sequence`) "
+          "and write its outputs back into ``ctx`` (via :meth:`put` / "
+          ":meth:`put_sequence`) under the names declared by ``node.output``. "
+          "Custom kernels override any built-in entry with the same key, but "
+          "model-local functions and the built-in control-flow operators "
+          "(``If``, ``Loop``, ``Scan``, ``SequenceMap``) still take precedence.")
       .def_static(
           "collect_external_inputs",
           [](const std::vector<NodeProto> &nodes) {

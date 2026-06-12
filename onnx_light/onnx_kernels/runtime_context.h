@@ -12,6 +12,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -65,6 +66,31 @@ using SequenceMap = std::unordered_map<std::string, Sequence>;
  * outlives the runtime context.
  */
 using FunctionMap = std::unordered_map<std::string, const FunctionProto *>;
+
+/**
+ * Signature of a user-provided custom kernel callback. Mirrors
+ * :cpp:type:`onnx_kernels::NodeKernelFn`: implementations read their
+ * inputs from ``rt.tensors()`` (or ``rt.sequences()``) by name and
+ * insert produced outputs under the names declared by ``node.output(i)``.
+ *
+ * Custom kernels are looked up by the canonical
+ * ``"<domain>:<op_type>"`` key (the default ONNX domain — the empty
+ * ``NodeProto::domain()`` — is normalised to ``"ai.onnx"``).
+ */
+using CustomKernelFn = std::function<void(const NodeProto &, class RuntimeContext &)>;
+
+/**
+ * Name-keyed map of user-provided custom kernels consulted by
+ * :cpp:func:`RunNode` before the built-in
+ * :cpp:func:`KernelDispatchTable`. Allows callers to extend the
+ * runtime with operators implemented either in C++ (any callable
+ * compatible with :cpp:type:`CustomKernelFn`) or in Python (through
+ * the ``RuntimeContext.register_custom_kernel`` binding) without
+ * touching the static dispatch table. Keys are
+ * ``"<domain>:<op_type>"``; a custom registration overrides any
+ * built-in entry with the same key.
+ */
+using CustomKernelMap = std::unordered_map<std::string, CustomKernelFn>;
 
 /**
  * Maximum number of element values captured inline by
@@ -256,6 +282,25 @@ public:
   FunctionMap &functions() noexcept { return functions_; }
   const FunctionMap &functions() const noexcept { return functions_; }
 
+  /// User-provided custom kernel registry consulted by
+  /// :cpp:func:`RunNode` before the built-in :cpp:func:`KernelDispatchTable`.
+  /// Keys are the canonical ``"<domain>:<op_type>"`` pair (the default
+  /// ONNX domain — the empty ``NodeProto::domain()`` — is normalised
+  /// to ``"ai.onnx"``). A custom registration overrides any built-in
+  /// entry with the same key, but model-local functions and the
+  /// built-in control-flow operators (``If``, ``Loop``, ``Scan``,
+  /// ``SequenceMap``) still take precedence.
+  CustomKernelMap &custom_kernels() noexcept { return custom_kernels_; }
+  const CustomKernelMap &custom_kernels() const noexcept { return custom_kernels_; }
+
+  /// Registers or replaces a custom kernel for ``(domain, op_type)``.
+  /// The empty domain is normalised to ``"ai.onnx"``.
+  void RegisterCustomKernel(const std::string &domain, const std::string &op_type,
+                            CustomKernelFn fn) {
+    const std::string d = domain.empty() ? std::string("ai.onnx") : domain;
+    custom_kernels_[d + ":" + op_type] = std::move(fn);
+  }
+
   /// Returns ``true`` if a tensor named ``name`` is currently held.
   bool Has(const std::string &name) const { return tensors_.find(name) != tensors_.end(); }
 
@@ -377,6 +422,7 @@ private:
   TensorMap tensors_;
   kernel::KernelContext kernel_ctx_;
   FunctionMap functions_;
+  CustomKernelMap custom_kernels_;
   TensorEventLog events_;
   SequenceMap sequences_;
 };

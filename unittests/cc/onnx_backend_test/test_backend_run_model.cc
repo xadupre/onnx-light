@@ -317,6 +317,7 @@ TEST(BackendRunModel, FeatureVectorizer) { RunBackendCasesFor("FeatureVectorizer
 TEST(BackendRunModel, Imputer) { RunBackendCasesFor("Imputer"); }
 TEST(BackendRunModel, LabelEncoder) { RunBackendCasesFor("LabelEncoder"); }
 TEST(BackendRunModel, OneHotEncoder) { RunBackendCasesFor("OneHotEncoder"); }
+TEST(BackendRunModel, Scaler) { RunBackendCasesFor("Scaler"); }
 
 // Text kernels.
 TEST(BackendRunModel, StringNormalizer) { RunBackendCasesFor("StringNormalizer"); }

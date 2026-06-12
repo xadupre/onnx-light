@@ -551,10 +551,20 @@ void define_repeated_field_type_extend(nb::class_<utils::RepeatedField<utils::St
   nbcls
       .def(
           "append",
-          [](utils::RepeatedField<utils::String> &self, const utils::String &v) {
-            self.push_back(v);
+          [](utils::RepeatedField<utils::String> &self, nb::handle item) {
+            if (nb::isinstance<utils::String>(item)) {
+              self.push_back(nb::cast<utils::String &>(item));
+            } else if (nb::isinstance<nb::bytes>(item)) {
+              nanobind::bytes bytes_obj = nb::borrow<nb::bytes>(item);
+              std::string st(static_cast<const char *>(bytes_obj.data()), bytes_obj.size());
+              self.push_back(utils::String(st));
+            } else {
+              self.push_back(utils::String(nb::cast<std::string>(item)));
+            }
           },
-          nb::arg("item"), "Append one element to the list of values.")
+          nb::arg("item"),
+          "Append one element to the list of values. Accepts ``str``, ``bytes`` or "
+          ":class:`String`.")
       .def(
           "extend",
           [](utils::RepeatedField<utils::String> &self, nb::iterable iterable) {

@@ -426,7 +426,7 @@ TEST(OnnxOptimShapeLoop, PropagatesCarriedShapeAndScanShape) {
   EXPECT_EQ(ctx.Get("scan_out").Dtype(), onnx_optim::TensorType::kFloat);
   ASSERT_EQ(ctx.Get("scan_out").Shape().Rank(), 3u);
   ASSERT_TRUE(ctx.Get("scan_out").Shape()[0].IsExpr());
-  EXPECT_EQ(ctx.Get("scan_out").Shape()[0].AsExpr(), "Loop_scan_out_d0");
+  EXPECT_EQ(ctx.Get("scan_out").Shape()[0].AsExpr(), "Loop_trip");
   EXPECT_EQ(ctx.Get("scan_out").Shape()[1].AsInt(), 2);
   EXPECT_EQ(ctx.Get("scan_out").Shape()[2].AsInt(), 3);
 }
@@ -446,6 +446,35 @@ TEST(OnnxOptimShapeLoop, AcceptsOmittedMAndCond) {
   EXPECT_EQ(ctx.Get("v_final").Dtype(), onnx_optim::TensorType::kDouble);
   EXPECT_EQ(ctx.Get("v_final").Shape(), shape);
   ASSERT_EQ(ctx.Get("scan_out").Shape().Rank(), 2u);
+}
+
+TEST(OnnxOptimShapeLoop, UsesTripCountFromValueAsShape) {
+  // When M has a ValueAsShape with one element, that element should be
+  // used as the leading dimension of scan outputs.
+  GraphProto body = BuildLoopBodyIdentityCarry();
+  NodeProto node = MakeLoopNode({"M", "cond", "v_init"}, {"v_final", "scan_out"}, body);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  // M is a [1] INT64 tensor with ValueAsShape = [N] (symbolic trip count).
+  onnx_optim::OptimTensor m_tensor(nullptr, onnx_optim::TensorType::kInt64,
+                                   onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+  onnx_optim::OptimShape m_vas;
+  m_vas.PushBack(onnx_optim::OptimDim("N"));
+  m_tensor.SetValueAsShape(std::move(m_vas));
+  ctx.Set("M", std::move(m_tensor));
+  ctx.Set("cond", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
+  ctx.Set("v_init", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  onnx_optim::shapes::controlflow::ComputeShapeLoop(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("scan_out"));
+  ASSERT_EQ(ctx.Get("scan_out").Shape().Rank(), 3u);
+  // The leading dim should be "N" from M's ValueAsShape, not a generic symbol.
+  ASSERT_TRUE(ctx.Get("scan_out").Shape()[0].IsExpr());
+  EXPECT_EQ(ctx.Get("scan_out").Shape()[0].AsExpr(), "N");
+  EXPECT_EQ(ctx.Get("scan_out").Shape()[1].AsInt(), 2);
+  EXPECT_EQ(ctx.Get("scan_out").Shape()[2].AsInt(), 3);
 }
 
 TEST(OnnxOptimShapeLoop, RejectsWrongOpType) {

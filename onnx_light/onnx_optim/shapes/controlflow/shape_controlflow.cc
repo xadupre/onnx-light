@@ -226,7 +226,25 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
   }
 
   // K scan outputs: dtype is taken from the body's scan output; shape is
-  // the body's shape prefixed by a symbolic leading axis (the trip count).
+  // the body's shape prefixed by the trip count dimension. When M's
+  // ValueAsShape carries a single element (the symbolic or concrete trip
+  // count), that element is used as the leading axis; otherwise a fresh
+  // symbolic dim is introduced.
+  OptimDim trip_dim;
+  {
+    const std::string m_name = node.input(0).as_string();
+    bool resolved = false;
+    if (!m_name.empty() && ctx.Has(m_name)) {
+      const OptimTensor &m_tensor = ctx.Get(m_name);
+      if (m_tensor.HasValueAsShape() && m_tensor.ValueAsShape().Rank() == 1) {
+        trip_dim = m_tensor.ValueAsShape()[0];
+        resolved = true;
+      }
+    }
+    if (!resolved) {
+      trip_dim = OptimDim("Loop_trip");
+    }
+  }
   for (int k = 0; k < k_scan; ++k) {
     const std::string node_out = node.output(n_carried + k).as_string();
     if (node_out.empty()) {
@@ -234,7 +252,7 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
     }
     const OptimTensor &scan_out = local.Get(body.output()[1 + n_carried + k].name().as_string());
     OptimShape stacked;
-    stacked.PushBack(OptimDim("Loop_" + node_out + "_d0"));
+    stacked.PushBack(trip_dim);
     for (std::size_t d = 0; d < scan_out.Shape().Rank(); ++d) {
       stacked.PushBack(scan_out.Shape()[d]);
     }

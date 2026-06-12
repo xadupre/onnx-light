@@ -56,8 +56,7 @@ std::vector<float> Range1ToN(int64_t n) {
 //   * ``test_cc_maxpool_3d_dilations``
 //   * ``test_cc_maxpool_3d_dilations_use_ref_impl``
 //   * ``test_cc_maxpool_3d_dilations_use_ref_impl_large``
-//   * ``test_cc_maxpool_2d_uint8`` — UINT8 ramp; expected output is
-//     hardcoded because :cpp:class:`kernel::MaxPool` only consumes FLOAT.
+//   * ``test_cc_maxpool_2d_uint8`` — UINT8 ramp.
 //   * ``test_cc_maxpool_with_argmax_2d_precomputed_pads`` — second output
 //     ``Indices`` is verified.
 //   * ``test_cc_maxpool_with_argmax_2d_precomputed_strides`` — second output
@@ -389,9 +388,8 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry) {
   }
 
   // 5x5 kernel, pads (2, 2, 2, 2) on a 1x1x5x5 ``1..25`` ramp stored as
-  // UINT8. The expected output mirrors ``test_cc_maxpool_2d_precomputed_pads``
-  // but in UINT8; it is hardcoded because :cpp:class:`kernel::MaxPool` only
-  // accepts FLOAT inputs.
+  // UINT8. Mirrors ``test_cc_maxpool_2d_precomputed_pads`` but with UINT8
+  // element type; the expected output is computed by the kernel itself.
   {
     NodeProto node;
     node.set_op_type("MaxPool");
@@ -406,9 +404,8 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry) {
       xv.push_back(static_cast<uint8_t>(v));
     }
     Tensor x = Tensor::FromUint8("", {1, 1, 5, 5}, xv);
-    Tensor y =
-        Tensor::FromUint8("", {1, 1, 5, 5}, {13, 14, 15, 15, 15, 18, 19, 20, 20, 20, 23, 24, 25,
-                                             25, 25, 23, 24, 25, 25, 25, 23, 24, 25, 25, 25});
+    Tensor y = maxpool_kernel(x, /*kernel_shape=*/{5, 5}, /*strides=*/{},
+                              /*pads=*/{2, 2, 2, 2});
 
     Expect(node, {x}, {y}, "test_cc_maxpool_2d_uint8", {opset}, "backend-test", registry);
   }

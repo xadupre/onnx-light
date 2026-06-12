@@ -72,6 +72,89 @@ void ResolveAutoPadAxis(const std::string &auto_pad, int64_t in_dim, int64_t ker
   }
 }
 
+// Per-type lowest representable value used as the initial ``best`` accumulator
+// when scanning a pooling window. For floating point types we use ``-inf`` to
+// match the upstream ONNX reference; for integer types we use the minimum of
+// the type so that any in-window value wins on the first comparison.
+template <typename T> constexpr T MaxPoolInitial() {
+  if constexpr (std::numeric_limits<T>::has_infinity) {
+    return -std::numeric_limits<T>::infinity();
+  } else {
+    return std::numeric_limits<T>::lowest();
+  }
+}
+
+// Core pooling loop templated on the element type. Reads ``px`` and writes
+// ``py``/``pi`` in row-major order using the strides/shapes already resolved
+// by the caller. ``produce_indices`` controls whether ``pi`` is populated.
+template <typename T>
+void MaxPoolLoop(const T *px, T *py, int64_t *pi, bool produce_indices, int64_t N, int64_t C,
+                 const std::vector<int64_t> &x_shape, const std::vector<int64_t> &in_strides,
+                 const std::vector<int64_t> &out_strides, const std::vector<int64_t> &out_spatial,
+                 const std::vector<int64_t> &kernel_shape, const std::vector<int64_t> &strides,
+                 const std::vector<int64_t> &dilations, const std::vector<int64_t> &pads) {
+  const size_t k = kernel_shape.size();
+  int64_t spatial_out_count = 1;
+  for (int64_t d : out_spatial) {
+    spatial_out_count *= d;
+  }
+  int64_t kernel_volume = 1;
+  for (size_t i = 0; i < k; ++i) {
+    kernel_volume *= kernel_shape[i];
+  }
+  std::vector<int64_t> out_idx(k);
+  std::vector<int64_t> kidx(k);
+  for (int64_t n = 0; n < N; ++n) {
+    for (int64_t c = 0; c < C; ++c) {
+      const int64_t in_base = n * in_strides[0] + c * in_strides[1];
+      const int64_t out_base = n * out_strides[0] + c * out_strides[1];
+      for (int64_t flat = 0; flat < spatial_out_count; ++flat) {
+        int64_t rem = flat;
+        for (size_t i = k; i-- > 0;) {
+          out_idx[i] = rem % out_spatial[i];
+          rem /= out_spatial[i];
+        }
+        T best = MaxPoolInitial<T>();
+        int64_t best_in_offset = -1;
+        bool any = false;
+        for (int64_t kflat = 0; kflat < kernel_volume; ++kflat) {
+          int64_t krem = kflat;
+          for (size_t i = k; i-- > 0;) {
+            kidx[i] = krem % kernel_shape[i];
+            krem /= kernel_shape[i];
+          }
+          int64_t in_offset = in_base;
+          bool in_input = true;
+          for (size_t i = 0; i < k; ++i) {
+            const int64_t p = out_idx[i] * strides[i] + kidx[i] * dilations[i] - pads[i];
+            if (p < 0 || p >= x_shape[i + 2]) {
+              in_input = false;
+              break;
+            }
+            in_offset += p * in_strides[i + 2];
+          }
+          if (in_input) {
+            const T v = px[in_offset];
+            if (!any || v > best) {
+              best = v;
+              best_in_offset = in_offset;
+              any = true;
+            }
+          }
+        }
+        int64_t out_offset = out_base;
+        for (size_t i = 0; i < k; ++i) {
+          out_offset += out_idx[i] * out_strides[i + 2];
+        }
+        py[out_offset] = any ? best : MaxPoolInitial<T>();
+        if (produce_indices) {
+          pi[out_offset] = best_in_offset;
+        }
+      }
+    }
+  }
+}
+
 // Validates inputs and resolves output spatial shape and effective pads,
 // producing both Y and (optionally) Indices. ``produce_indices`` controls
 // whether the second output buffer is allocated and populated.
@@ -81,8 +164,11 @@ std::pair<Tensor, Tensor> RunMaxPool(const Tensor &x, const std::vector<int64_t>
                                      const std::vector<int64_t> &dilations_in,
                                      int64_t storage_order, const std::string &auto_pad,
                                      bool produce_indices) {
-  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      "kernel::MaxPool: x must be FLOAT.");
+  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT) ||
+                          x.data_type == static_cast<int32_t>(DataType::DOUBLE) ||
+                          x.data_type == static_cast<int32_t>(DataType::INT8) ||
+                          x.data_type == static_cast<int32_t>(DataType::UINT8),
+                      "kernel::MaxPool: x must be FLOAT, DOUBLE, INT8 or UINT8.");
   EXT_ENFORCE_INVALID(!kernel_shape.empty(), "kernel::MaxPool: kernel_shape must be non-empty.");
   EXT_ENFORCE_INVALID(
       x.shape.size() == kernel_shape.size() + 2,
@@ -144,17 +230,14 @@ std::pair<Tensor, Tensor> RunMaxPool(const Tensor &x, const std::vector<int64_t>
   for (int64_t d : out_shape) {
     n_out *= d;
   }
-  Tensor y("", static_cast<int32_t>(DataType::FLOAT), out_shape,
-           std::vector<uint8_t>(static_cast<size_t>(n_out) * sizeof(float)));
+  const size_t elem_size = ElementSize(x.data_type);
+  Tensor y("", x.data_type, out_shape,
+           std::vector<uint8_t>(static_cast<size_t>(n_out) * elem_size));
   Tensor indices;
   if (produce_indices) {
     indices = Tensor("", static_cast<int32_t>(DataType::INT64), out_shape,
                      std::vector<uint8_t>(static_cast<size_t>(n_out) * sizeof(int64_t)));
   }
-
-  const float *px = x.AsFloat();
-  float *py = reinterpret_cast<float *>(y.data.data());
-  int64_t *pi = produce_indices ? reinterpret_cast<int64_t *>(indices.data.data()) : nullptr;
 
   const std::vector<int64_t> in_strides = RowMajorStrides(x.shape);
   const std::vector<int64_t> out_strides = RowMajorStrides(out_shape);
@@ -166,65 +249,32 @@ std::pair<Tensor, Tensor> RunMaxPool(const Tensor &x, const std::vector<int64_t>
   for (size_t i = 0; i < k; ++i) {
     out_spatial[i] = out_shape[i + 2];
   }
-  int64_t spatial_out_count = 1;
-  for (int64_t d : out_spatial) {
-    spatial_out_count *= d;
-  }
-  int64_t kernel_volume = 1;
-  for (size_t i = 0; i < k; ++i) {
-    kernel_volume *= kernel_shape[i];
-  }
 
-  std::vector<int64_t> out_idx(k);
-  std::vector<int64_t> kidx(k);
-  for (int64_t n = 0; n < N; ++n) {
-    for (int64_t c = 0; c < C; ++c) {
-      const int64_t in_base = n * in_strides[0] + c * in_strides[1];
-      const int64_t out_base = n * out_strides[0] + c * out_strides[1];
-      for (int64_t flat = 0; flat < spatial_out_count; ++flat) {
-        int64_t rem = flat;
-        for (size_t i = k; i-- > 0;) {
-          out_idx[i] = rem % out_spatial[i];
-          rem /= out_spatial[i];
-        }
-        float best = -std::numeric_limits<float>::infinity();
-        int64_t best_in_offset = -1;
-        bool any = false;
-        for (int64_t kflat = 0; kflat < kernel_volume; ++kflat) {
-          int64_t krem = kflat;
-          for (size_t i = k; i-- > 0;) {
-            kidx[i] = krem % kernel_shape[i];
-            krem /= kernel_shape[i];
-          }
-          int64_t in_offset = in_base;
-          bool in_input = true;
-          for (size_t i = 0; i < k; ++i) {
-            const int64_t p = out_idx[i] * strides[i] + kidx[i] * dilations[i] - pads[i];
-            if (p < 0 || p >= x.shape[i + 2]) {
-              in_input = false;
-              break;
-            }
-            in_offset += p * in_strides[i + 2];
-          }
-          if (in_input) {
-            const float v = px[in_offset];
-            if (!any || v > best) {
-              best = v;
-              best_in_offset = in_offset;
-              any = true;
-            }
-          }
-        }
-        int64_t out_offset = out_base;
-        for (size_t i = 0; i < k; ++i) {
-          out_offset += out_idx[i] * out_strides[i + 2];
-        }
-        py[out_offset] = any ? best : -std::numeric_limits<float>::infinity();
-        if (produce_indices) {
-          pi[out_offset] = best_in_offset;
-        }
-      }
-    }
+  int64_t *pi = produce_indices ? reinterpret_cast<int64_t *>(indices.data.data()) : nullptr;
+
+  switch (static_cast<DataType>(x.data_type)) {
+  case DataType::FLOAT:
+    MaxPoolLoop<float>(x.AsFloat(), reinterpret_cast<float *>(y.data.data()), pi, produce_indices,
+                       N, C, x.shape, in_strides, out_strides, out_spatial, kernel_shape, strides,
+                       dilations, pads);
+    break;
+  case DataType::DOUBLE:
+    MaxPoolLoop<double>(x.AsDouble(), reinterpret_cast<double *>(y.data.data()), pi,
+                        produce_indices, N, C, x.shape, in_strides, out_strides, out_spatial,
+                        kernel_shape, strides, dilations, pads);
+    break;
+  case DataType::INT8:
+    MaxPoolLoop<int8_t>(x.AsInt8(), reinterpret_cast<int8_t *>(y.data.data()), pi, produce_indices,
+                        N, C, x.shape, in_strides, out_strides, out_spatial, kernel_shape, strides,
+                        dilations, pads);
+    break;
+  case DataType::UINT8:
+    MaxPoolLoop<uint8_t>(x.AsUint8(), reinterpret_cast<uint8_t *>(y.data.data()), pi,
+                         produce_indices, N, C, x.shape, in_strides, out_strides, out_spatial,
+                         kernel_shape, strides, dilations, pads);
+    break;
+  default:
+    EXT_ENFORCE_INVALID(false, "kernel::MaxPool: unsupported element type.");
   }
   return {std::move(y), std::move(indices)};
 }

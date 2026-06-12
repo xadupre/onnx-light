@@ -1481,6 +1481,18 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          set_optional_output(0, std::move(y));
          set_optional_output(1, std::move(y_h));
        }},
+      {"ai.onnx:LRN",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const int64_t size = GetAttributeIntOrDefault(node, "size", 0);
+         const float alpha = GetAttributeFloatOrDefault(node, "alpha", 0.0001f);
+         const float beta = GetAttributeFloatOrDefault(node, "beta", 0.75f);
+         const float bias = GetAttributeFloatOrDefault(node, "bias", 1.0f);
+         kernel::LRN k(rt.kernel_ctx());
+         SetOutput(node, 0, k(x, size, alpha, beta, bias), rt.tensors());
+       }},
       {"ai.onnx:LpNormalization",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);

@@ -116,7 +116,9 @@ for name, shape in inferred_shapes.items():
 # as well as plain integer literals and variable references.
 
 x = np.arange(8, dtype=np.float32).reshape(2, 4)
-context = {"N": int(x.shape[0])}
+# ``M`` is the user-declared output dim; shape inference anchors it to
+# the Reshape result ``2*N``, so it must be bound alongside ``N`` here.
+context = {"N": int(x.shape[0]), "M": 2 * int(x.shape[0])}
 print(f"Symbol context: {context}")
 
 

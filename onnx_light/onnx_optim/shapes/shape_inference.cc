@@ -176,9 +176,21 @@ void AddSymbolicConstraintWithLeafDerivation(ShapesContext &ctx, const std::stri
   ctx.AddConstraint(name1, name2);
 }
 
+// Returns ``true`` when ``vi`` carries a tensor type with a non-empty
+// ``shape`` field. ValueInfo entries that only declare an element type
+// (no shape annotation at all) produce a rank-0 ``OptimTensor`` which
+// would conflict with every non-scalar inferred shape, so they must be
+// skipped when building the anchor set.
+bool ValueInfoHasTensorShape(const ValueInfoProto &vi) {
+  if (!vi.has_type() || !vi.type().has_tensor_type()) {
+    return false;
+  }
+  return vi.type().tensor_type().has_shape();
+}
+
 void AddValueInfoAsAnchor(const ValueInfoProto &vi, AnchorMap &anchors) {
   const std::string name = vi.name().as_string();
-  if (name.empty()) {
+  if (name.empty() || !ValueInfoHasTensorShape(vi)) {
     return;
   }
   OptimTensor tensor;
@@ -188,13 +200,23 @@ void AddValueInfoAsAnchor(const ValueInfoProto &vi, AnchorMap &anchors) {
   anchors.try_emplace(name, std::move(tensor));
 }
 
-AnchorMap CollectGraphAnchors(const GraphProto &graph) {
+// Collects anchors from ``graph.output`` only. Used for the
+// "always-anchor outputs" pass that runs unconditionally so that user-
+// declared output shape expressions (e.g. ``Y: [2*dnz]``) propagate
+// into intermediate tensors via ``PropagateAnchorConstraintsIntoContext``
+// regardless of whether ``prefill_with_value_info_output`` was set.
+AnchorMap CollectGraphOutputAnchors(const GraphProto &graph) {
   AnchorMap anchors;
-  // Outputs are considered more authoritative than value_info for the
-  // same name (first insert wins).
   for (int i = 0; i < graph.output_size(); ++i) {
     AddValueInfoAsAnchor(graph.output(i), anchors);
   }
+  return anchors;
+}
+
+AnchorMap CollectGraphAnchors(const GraphProto &graph) {
+  AnchorMap anchors = CollectGraphOutputAnchors(graph);
+  // Outputs are considered more authoritative than value_info for the
+  // same name (first insert wins).
   for (int i = 0; i < graph.value_info_size(); ++i) {
     AddValueInfoAsAnchor(graph.value_info(i), anchors);
   }
@@ -224,32 +246,55 @@ AnchorMap CollectGraphAnchors(const GraphProto &graph) {
 //   - min/max bounds: a known bound is kept; when both are known the
 //     tighter bound wins (higher min, lower max). Provably disjoint
 //     intervals are a conflict.
-OptimTensor MergeWithAnchor(ShapesContext &ctx, const std::string &name,
-                            const OptimTensor &inferred, const OptimTensor &anchor) {
+// Returns std::nullopt when a conflict is detected
+// (incompatible dtype/rank/dim/device/bounds). When ``error_out`` is
+// non-null, a human-readable description of the conflict is written
+// to it. Callers that require strict merging can promote the failure
+// into an exception themselves; this function never throws on
+// conflicts.
+std::optional<OptimTensor> MergeWithAnchor(ShapesContext &ctx, const std::string &name,
+                                           const OptimTensor &inferred, const OptimTensor &anchor,
+                                           std::string *error_out = nullptr) {
   // dtype: both known and different → conflict.
   if (inferred.Dtype() != TensorType::kUndefined && anchor.Dtype() != TensorType::kUndefined &&
       inferred.Dtype() != anchor.Dtype()) {
-    EXT_ENFORCE_INVALID(false, "MergeWithAnchor: incompatible element type for '", name,
-                        "': inferred has dtype ",
-                        std::to_string(static_cast<int>(inferred.Dtype())), ", anchor has dtype ",
-                        std::to_string(static_cast<int>(anchor.Dtype())), ".");
+    if (error_out != nullptr) {
+      *error_out = "MergeWithAnchor: incompatible element type for '" + name +
+                   "': inferred has dtype " + std::to_string(static_cast<int>(inferred.Dtype())) +
+                   ", anchor has dtype " + std::to_string(static_cast<int>(anchor.Dtype())) + ".";
+    }
+    return std::nullopt;
   }
   // Rank check.
-  EXT_ENFORCE_INVALID(inferred.Shape().Rank() == anchor.Shape().Rank(),
-                      "MergeWithAnchor: incompatible rank for '", name, "': inferred has rank ",
-                      std::to_string(inferred.Shape().Rank()), ", anchor has rank ",
-                      std::to_string(anchor.Shape().Rank()), ".");
+  if (inferred.Shape().Rank() != anchor.Shape().Rank()) {
+    if (error_out != nullptr) {
+      *error_out = "MergeWithAnchor: incompatible rank for '" + name + "': inferred has rank " +
+                   std::to_string(inferred.Shape().Rank()) + ", anchor has rank " +
+                   std::to_string(anchor.Shape().Rank()) + ".";
+    }
+    return std::nullopt;
+  }
   // Per-dim merge.
   OptimShape merged_shape;
   for (std::size_t i = 0; i < inferred.Shape().Rank(); ++i) {
     const OptimDim &di = inferred.Shape()[i];
     const OptimDim &da = anchor.Shape()[i];
+    // An empty-string symbolic anchor dim means the ValueInfoProto did
+    // not declare a name nor a value for this position, so it carries
+    // no constraint: keep the inferred dim.
+    if (da.IsExpr() && da.AsExpr().empty()) {
+      merged_shape.PushBack(di);
+      continue;
+    }
     if (di == da) {
       merged_shape.PushBack(di);
     } else if (di.IsInt() && da.IsInt()) {
-      EXT_ENFORCE_INVALID(false, "MergeWithAnchor: incompatible dim ", std::to_string(i), " for '",
-                          name, "': inferred=", std::to_string(di.AsInt()),
-                          ", anchor=", std::to_string(da.AsInt()), ".");
+      if (error_out != nullptr) {
+        *error_out = "MergeWithAnchor: incompatible dim " + std::to_string(i) + " for '" + name +
+                     "': inferred=" + std::to_string(di.AsInt()) +
+                     ", anchor=" + std::to_string(da.AsInt()) + ".";
+      }
+      return std::nullopt;
     } else if (di.IsInt()) {
       // anchor is symbolic, inferred is concrete: keep the concrete one
       // but still record the anchor symbol equals the concrete value.
@@ -278,9 +323,12 @@ OptimTensor MergeWithAnchor(ShapesContext &ctx, const std::string &name,
   OptimTensor out(inferred.Data(), merged_dtype, std::move(merged_shape));
   Device merged_device = inferred.GetDevice();
   if (anchor.GetDevice() != Device::kUndefined) {
-    EXT_ENFORCE_INVALID(inferred.GetDevice() == Device::kUndefined ||
-                            inferred.GetDevice() == anchor.GetDevice(),
-                        "MergeWithAnchor: incompatible device for '", name, "'.");
+    if (inferred.GetDevice() != Device::kUndefined && inferred.GetDevice() != anchor.GetDevice()) {
+      if (error_out != nullptr) {
+        *error_out = "MergeWithAnchor: incompatible device for '" + name + "'.";
+      }
+      return std::nullopt;
+    }
     merged_device = anchor.GetDevice();
   }
   if (merged_device != Device::kUndefined) {
@@ -290,17 +338,27 @@ OptimTensor MergeWithAnchor(ShapesContext &ctx, const std::string &name,
   if (inferred.HasValueAsShape() && anchor.HasValueAsShape()) {
     const OptimShape &a = inferred.ValueAsShape();
     const OptimShape &b = anchor.ValueAsShape();
-    EXT_ENFORCE_INVALID(a.Rank() == b.Rank(),
-                        "MergeWithAnchor: incompatible value_as_shape rank for '", name, "'.");
+    if (a.Rank() != b.Rank()) {
+      if (error_out != nullptr) {
+        *error_out = "MergeWithAnchor: incompatible value_as_shape rank for '" + name + "'.";
+      }
+      return std::nullopt;
+    }
     OptimShape merged_vas;
     for (std::size_t i = 0; i < a.Rank(); ++i) {
       const OptimDim &di = a[i];
       const OptimDim &da = b[i];
+      if (da.IsExpr() && da.AsExpr().empty()) {
+        merged_vas.PushBack(di);
+        continue;
+      }
       if (di == da) {
         merged_vas.PushBack(di);
       } else if (di.IsInt() && da.IsInt()) {
-        EXT_ENFORCE_INVALID(false, "MergeWithAnchor: incompatible value_as_shape dim for '", name,
-                            "'.");
+        if (error_out != nullptr) {
+          *error_out = "MergeWithAnchor: incompatible value_as_shape dim for '" + name + "'.";
+        }
+        return std::nullopt;
       } else if (di.IsInt()) {
         ctx.AddConstraint(da.AsExpr(), std::to_string(di.AsInt()));
         merged_vas.PushBack(di);
@@ -336,8 +394,12 @@ OptimTensor MergeWithAnchor(ShapesContext &ctx, const std::string &name,
     merged_max = anchor.Max();
   }
   if (merged_min.has_value() && merged_max.has_value()) {
-    EXT_ENFORCE_INVALID(*merged_min <= *merged_max,
-                        "MergeWithAnchor: incompatible min/max bounds for '", name, "'.");
+    if (*merged_min > *merged_max) {
+      if (error_out != nullptr) {
+        *error_out = "MergeWithAnchor: incompatible min/max bounds for '" + name + "'.";
+      }
+      return std::nullopt;
+    }
     out.SetMinMax(*merged_min, *merged_max);
   } else {
     if (merged_min.has_value()) {
@@ -350,7 +412,7 @@ OptimTensor MergeWithAnchor(ShapesContext &ctx, const std::string &name,
   return out;
 }
 
-void MergeAnchorsIntoContext(ShapesContext &ctx, const AnchorMap &anchors) {
+void MergeAnchorsIntoContext(ShapesContext &ctx, const AnchorMap &anchors, bool strict = true) {
   for (const auto &kv : anchors) {
     const std::string &name = kv.first;
     const OptimTensor &anchor = kv.second;
@@ -358,10 +420,24 @@ void MergeAnchorsIntoContext(ShapesContext &ctx, const AnchorMap &anchors) {
       ctx.Set(name, OptimTensor(anchor));
       continue;
     }
-    OptimTensor merged = MergeWithAnchor(ctx, name, ctx.Get(name), anchor);
-    if (merged != ctx.Get(name)) {
-      ctx.Set(name, std::move(merged));
+    std::string error;
+    std::optional<OptimTensor> merged = MergeWithAnchor(ctx, name, ctx.Get(name), anchor, &error);
+    if (merged.has_value()) {
+      if (*merged != ctx.Get(name)) {
+        ctx.Set(name, std::move(*merged));
+      }
+      continue;
     }
+    // Conflict between the inferred shape and the anchor.
+    if (strict) {
+      EXT_ENFORCE_INVALID(false, error);
+    }
+    // Lenient mode: the inferred shape may legitimately disagree
+    // with the anchor (e.g. ``Resize`` has historically reported a
+    // smaller output shape than the model declares). Skip the
+    // anchor on conflict instead of aborting the whole pipeline so
+    // that the well-formed anchors still drive constraint
+    // propagation downstream.
   }
 }
 
@@ -378,6 +454,9 @@ void AddDimAnchorSymbols(const OptimDim &dim, std::unordered_set<std::string> &s
     return;
   }
   const std::string &expr = dim.AsExpr();
+  if (expr.empty()) {
+    return;
+  }
   symbols.insert(expr);
   const std::unordered_set<std::string> tokens = expressions::parse_expression_tokens(expr);
   for (const std::string &token : tokens) {
@@ -492,6 +571,39 @@ void PropagateAnchorConstraintsIntoContext(ShapesContext &ctx, const AnchorMap &
   }
   std::unordered_map<std::string, std::string> replacements(rep.begin(), rep.end());
 
+  // Drop replacement entries whose key is a compound expression made
+  // exclusively of leaf tokens that are themselves graph-declared
+  // anchor symbols. These expressions (e.g. ``b+c`` when ``b`` and
+  // ``c`` are graph inputs) are already authoritative, and rewriting
+  // them to a sibling output anchor (e.g. ``e``) would erase the
+  // user-meaningful expression.
+  for (auto it = replacements.begin(); it != replacements.end();) {
+    const std::string &key = it->first;
+    if (preferred.count(key) != 0) {
+      ++it;
+      continue;
+    }
+    const std::unordered_set<std::string> tokens = expressions::parse_expression_tokens(key);
+    if (tokens.empty() || tokens.size() == 1) {
+      ++it;
+      continue;
+    }
+    bool all_preferred = true;
+    for (const std::string &token : tokens) {
+      if (preferred.count(token) == 0) {
+        all_preferred = false;
+        break;
+      }
+    }
+    if (all_preferred) {
+      it = replacements.erase(it);
+    } else {
+      ++it;
+    }
+  }
+  if (replacements.empty()) {
+    return;
+  }
   std::vector<std::string> names;
   names.reserve(ctx.Tensors().size());
   for (const auto &kv : ctx.Tensors()) {
@@ -520,6 +632,43 @@ void PropagateAnchorConstraintsIntoContext(ShapesContext &ctx, const AnchorMap &
 
     if (changed) {
       ctx.Set(name, std::move(updated));
+    }
+  }
+
+  // Final verification pass. Assuming outputs (and the leaf tokens of
+  // their dim expressions) are registered as anchors, before returning
+  // we double-check that every dim expression and every token inside
+  // such an expression has been replaced by its equivalent anchor
+  // wherever the ``replacements`` map provides one. The first rewrite
+  // pass above can leave a shape stale when one of its dims was newly
+  // populated by an earlier iteration over ``names`` (for example a
+  // ``value_as_shape`` entry copied verbatim from another tensor), so
+  // we repeat the rewrite until ``ctx`` reaches a fixed point.
+  bool dirty = true;
+  int max_iters = 4;
+  while (dirty && max_iters-- > 0) {
+    dirty = false;
+    for (const std::string &name : names) {
+      const OptimTensor &tensor = ctx.Get(name);
+      OptimTensor updated(tensor);
+      bool changed = false;
+      OptimShape renamed_shape = RenameShapeWithReplacements(tensor.Shape(), replacements);
+      if (renamed_shape != tensor.Shape()) {
+        updated.Shape() = std::move(renamed_shape);
+        changed = true;
+      }
+      if (tensor.HasValueAsShape()) {
+        OptimShape renamed_value_shape =
+            RenameShapeWithReplacements(tensor.ValueAsShape(), replacements);
+        if (renamed_value_shape != tensor.ValueAsShape()) {
+          updated.SetValueAsShape(std::move(renamed_value_shape));
+          changed = true;
+        }
+      }
+      if (changed) {
+        ctx.Set(name, std::move(updated));
+        dirty = true;
+      }
     }
   }
 }
@@ -632,13 +781,21 @@ void ShapesContext::ComputeShapeModel(const ModelProto &model,
   }
   EXT_ENFORCE_INVALID(model.has_graph(),
                       "ComputeShapeModel: the ModelProto has no graph to run shape inference on.");
-  AnchorMap anchors;
-  if (prefill_with_value_info_output) {
-    anchors = CollectGraphAnchors(model.graph());
-  }
+  // Graph outputs are always registered as anchors so that the
+  // user-authored output dim expressions (for example ``Y: [2*dnz]``)
+  // are propagated back into the intermediate tensors via the symbolic
+  // constraint solver. Output anchors are merged leniently: a shape
+  // mismatch between an output anchor and the freshly inferred shape
+  // is treated as a pre-existing inference imperfection and silently
+  // skipped instead of aborting the whole pass. When
+  // ``prefill_with_value_info_output`` is set, ``value_info`` entries
+  // are additionally registered as anchors and the full anchor set is
+  // merged strictly, matching the long-standing prefill contract.
+  AnchorMap anchors = prefill_with_value_info_output ? CollectGraphAnchors(model.graph())
+                                                     : CollectGraphOutputAnchors(model.graph());
   ComputeShapeGraph(model.graph());
-  if (prefill_with_value_info_output) {
-    MergeAnchorsIntoContext(*this, anchors);
+  if (!anchors.empty()) {
+    MergeAnchorsIntoContext(*this, anchors, /*strict=*/prefill_with_value_info_output);
     PropagateAnchorConstraintsIntoContext(*this, anchors, model.graph());
   }
 }

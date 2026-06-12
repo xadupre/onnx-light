@@ -236,9 +236,15 @@ class TestShapesContextBindings(ExtTestCase):
         model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
         model.ir_version = 8
 
+        # Graph outputs are always registered as anchors, even without
+        # ``prefill_with_value_info_output``, so the user-authored
+        # ``Y: [ANCHOR, 4]`` annotation overrides the symbolic ``N``
+        # that inference would otherwise produce.
         ctx_no_prefill = si.ShapesContext()
         si.compute_shape_model(ctx_no_prefill, model)
-        self.assertEqual(list(ctx_no_prefill.get("Y").shape), ["N", 4])
+        self.assertEqual(list(ctx_no_prefill.get("Y").shape), ["ANCHOR", 4])
+        self.assertTrue(ctx_no_prefill.has_constraint("N", "ANCHOR"))
+        self.assertEqual(list(ctx_no_prefill.constraints()), [("ANCHOR", "N")])
 
         ctx_prefill = si.ShapesContext()
         si.compute_shape_model(ctx_prefill, model, prefill_with_value_info_output=True)

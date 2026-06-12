@@ -1360,6 +1360,9 @@ void ModelProto::SerializeToString(std::string &out,
                                    size_t max_external_file_size,
                                    const std::string &external_file_prefix,
                                    const SerializeOptions &opts) const {
+  EXT_ENFORCE(opts.format == SerializeFormat::kOnnx,
+              "ModelProto::SerializeToString: SerializeFormat::kOrtFlatbuffers is not "
+              "implemented yet. Use SerializeFormat::kOnnx for now.");
   ModelProto copy;
   copy.CopyFrom(*this);
   SerializeOptions local_opts = opts;

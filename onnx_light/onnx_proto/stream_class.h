@@ -299,10 +299,24 @@ enum class FileLoadMode : int32_t {
   kFileStream = 2,
 };
 
+/** Selects the on-disk serialization format used when parsing or serializing a
+ *  ``ModelProto``. ``kOnnx`` is the default ONNX protobuf format. ``kOrtFlatbuffers``
+ *  selects the flatbuffer-based format used by ``onnxruntime`` (``*.ort`` files). */
+enum class SerializeFormat : int32_t {
+  kOnnx = 0,
+  kOrtFlatbuffers = 1,
+};
+
 /** Controls behavior when parsing ONNX protobuf messages from a stream or string. */
 struct ParseOptions : TensorBufferOptions {
   /** Constructs a ParseOptions instance with the default raw_data_threshold of 1024 bytes. */
   ParseOptions() { raw_data_threshold = 1024; }
+  /** Selects the on-disk serialization format expected when parsing.
+   *  ``SerializeFormat::kOnnx`` (default) parses the ONNX protobuf wire format;
+   *  ``SerializeFormat::kOrtFlatbuffers`` parses the onnxruntime flatbuffer
+   *  format (``.ort`` files). The flatbuffer path is not yet implemented and
+   *  raises an error when used. */
+  SerializeFormat format = SerializeFormat::kOnnx;
   /** if true, raw data will not be read but skipped, tensors are not valid in that case  but the
    * model structure is still available */
   bool skip_raw_data = false;
@@ -342,6 +356,12 @@ struct ParseOptions : TensorBufferOptions {
 struct SerializeOptions : TensorBufferOptions {
   /** Constructs a SerializeOptions instance with the default raw_data_threshold. */
   SerializeOptions() { raw_data_threshold = kSmallTensorDataThresholdBytes; }
+  /** Selects the on-disk serialization format produced when serializing.
+   *  ``SerializeFormat::kOnnx`` (default) writes the ONNX protobuf wire format;
+   *  ``SerializeFormat::kOrtFlatbuffers`` writes the onnxruntime flatbuffer
+   *  format (``.ort`` files). The flatbuffer path is not yet implemented and
+   *  raises an error when used. */
+  SerializeFormat format = SerializeFormat::kOnnx;
   /** if true, raw data will not be written but skipped, tensors are not valid in that case but the
    * model structure is still available */
   bool skip_raw_data = false;

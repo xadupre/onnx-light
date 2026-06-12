@@ -1014,9 +1014,9 @@ CollectExtraKeep(const RuntimeContext &rt, const std::unordered_set<std::string>
 // on; sequence removals don't emit events (sequence values live outside
 // the tensor event stream).
 template <class NodeRange>
-void RunNodesAndRelease(const NodeRange &nodes, RuntimeContext &rt,
-                        const std::vector<std::vector<std::string>> &releasable,
+void RunNodesAndRelease(const NodeRange &nodes, RuntimeContext &rt, const ExecutionPlan &plan,
                         const std::unordered_set<std::string> &extra_keep) {
+  const auto &releasable = plan.releasable();
   for (size_t i = 0; i < nodes.size(); ++i) {
     RunNode(nodes[i], rt);
     for (const auto &name : releasable[i]) {
@@ -1051,7 +1051,7 @@ void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext 
   std::unordered_set<std::string> keep;
   SeedKeepFromContext(rt, keep);
   ExecutionPlan plan(nodes, std::move(keep));
-  RunNodesAndRelease(nodes, rt, plan.releasable(), /*extra_keep=*/{});
+  RunNodesAndRelease(nodes, rt, plan, /*extra_keep=*/{});
 }
 
 void RunGraph(const GraphProto &graph, RuntimeContext &rt) {
@@ -1077,7 +1077,7 @@ void RunGraph(const GraphProto &graph, RuntimeContext &rt) {
   // (e.g. runtime overrides of intermediates) are picked up by
   // :cpp:func:`CollectExtraKeep` and excluded from the release loop.
   const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
-  RunNodesAndRelease(graph.node(), rt, plan.releasable(), CollectExtraKeep(rt, plan.keep()));
+  RunNodesAndRelease(graph.node(), rt, plan, CollectExtraKeep(rt, plan.keep()));
 }
 
 void RunFunction(const FunctionProto &func, RuntimeContext &rt) {
@@ -1086,7 +1086,7 @@ void RunFunction(const FunctionProto &func, RuntimeContext &rt) {
     return;
   }
   const ExecutionPlan &plan = rt.GetExecutionPlan(func);
-  RunNodesAndRelease(func.node(), rt, plan.releasable(), CollectExtraKeep(rt, plan.keep()));
+  RunNodesAndRelease(func.node(), rt, plan, CollectExtraKeep(rt, plan.keep()));
 }
 
 void RunModel(const ModelProto &model, RuntimeContext &rt) {

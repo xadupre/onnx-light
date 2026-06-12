@@ -1993,8 +1993,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          attrs.num_heads = GetAttributeIntOrDefault(node, "num_heads", 0);
 
          kernel::RotaryEmbedding kernel(rt.kernel_ctx());
-         static const Tensor kEmpty;
-         const Tensor &pos = (position_ids != nullptr) ? *position_ids : kEmpty;
+         const Tensor empty;
+         const Tensor &pos = (position_ids != nullptr) ? *position_ids : empty;
          SetOutput(node, 0, kernel(x, cos_cache, sin_cache, pos, attrs), rt.tensors());
        }},
       {"ai.onnx:ScatterElements",

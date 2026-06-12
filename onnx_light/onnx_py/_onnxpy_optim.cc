@@ -564,7 +564,39 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
             return out;
           },
           "Returns the list of recorded equality constraints as ``(lhs, rhs)`` "
-          "tuples with ``lhs < rhs``.");
+          "tuples with ``lhs < rhs``.")
+      // Symbolic-dimension upper-bound (less-or-equal) constraints.
+      .def(
+          "add_less_equal_constraint",
+          [](onnx_shapes::ShapesContext &c, const std::string &lhs, const std::string &rhs) {
+            return c.AddLessEqualConstraint(lhs, rhs);
+          },
+          nb::arg("lhs"), nb::arg("rhs"),
+          "Records that the symbolic dimension ``lhs`` is less than or equal to "
+          "the dimension expression ``rhs``. ``lhs == rhs`` and empty operands "
+          "are dropped. Returns True when a new constraint was inserted, False "
+          "otherwise.")
+      .def(
+          "has_less_equal_constraint",
+          [](const onnx_shapes::ShapesContext &c, const std::string &lhs, const std::string &rhs) {
+            return c.HasLessEqualConstraint(lhs, rhs);
+          },
+          nb::arg("lhs"), nb::arg("rhs"),
+          "True when a ``lhs <= rhs`` constraint was recorded "
+          "(``lhs == rhs`` always returns True).")
+      .def("less_equal_constraints_size", &onnx_shapes::ShapesContext::LessEqualConstraintsSize,
+           "Number of recorded ``<=`` constraints.")
+      .def(
+          "less_equal_constraints",
+          [](const onnx_shapes::ShapesContext &c) -> nb::list {
+            nb::list out;
+            for (const auto &p : c.LessEqualConstraints()) {
+              out.append(nb::make_tuple(p.first, p.second));
+            }
+            return out;
+          },
+          "Returns the list of recorded ``<=`` constraints as ordered "
+          "``(lhs, rhs)`` tuples meaning ``lhs <= rhs``.");
 
   shape_mod.attr("kUnknownOpsetVersion") = onnx_shapes::kUnknownOpsetVersion;
   shape_mod.attr("kOnnxDomain") = onnx_shapes::kOnnxDomain;

@@ -1042,4 +1042,28 @@ TEST(OnnxOptimShapeInference, ExpandsLocalFunctionWithLinkedAttribute) {
             (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
 }
 
+TEST(OnnxOptimShapesContextLessEqualConstraint, AddAndQuery) {
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_EQ(ctx.LessEqualConstraintsSize(), 0u);
+  // Self-bound is dropped.
+  EXPECT_FALSE(ctx.AddLessEqualConstraint("a", "a"));
+  // Empty operands are dropped.
+  EXPECT_FALSE(ctx.AddLessEqualConstraint("", "rhs"));
+  EXPECT_FALSE(ctx.AddLessEqualConstraint("a", ""));
+  EXPECT_EQ(ctx.LessEqualConstraintsSize(), 0u);
+
+  EXPECT_TRUE(ctx.AddLessEqualConstraint("a", "b"));
+  EXPECT_TRUE(ctx.HasLessEqualConstraint("a", "b"));
+  // Constraint is ordered: ``b <= a`` is *not* recorded.
+  EXPECT_FALSE(ctx.HasLessEqualConstraint("b", "a"));
+  // Re-inserting the same pair is a no-op.
+  EXPECT_FALSE(ctx.AddLessEqualConstraint("a", "b"));
+  EXPECT_EQ(ctx.LessEqualConstraintsSize(), 1u);
+  // ``a <= a`` always reports true.
+  EXPECT_TRUE(ctx.HasLessEqualConstraint("a", "a"));
+
+  EXPECT_TRUE(ctx.AddLessEqualConstraint("a", "N*M"));
+  EXPECT_EQ(ctx.LessEqualConstraintsSize(), 2u);
+}
+
 } // namespace Test

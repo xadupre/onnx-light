@@ -8,8 +8,11 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
 
+#include "onnx_optim/expressions.h"
 #include "onnx_optim/optim_tensor.h"
+#include "onnx_optim/shapes/_helpers/shape_helpers.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -37,9 +40,18 @@ void ComputeShapeCompress(ShapesContext &ctx, const NodeProto &node) {
   const AttributeProto *axis_attr = FindAttribute(node, "axis");
   if (axis_attr == nullptr) {
     // No axis: input is flattened and individual elements are selected.
-    // Output is 1-D with a symbolic (unknown) length.
+    // Output is 1-D with a symbolic (unknown) length. The count is
+    // bounded above by the number of elements in the input.
     OptimShape out_shape;
     out_shape.PushBack(OptimDim(sym));
+    if (rank > 0) {
+      std::vector<expressions::DimType> dims;
+      dims.reserve(in_shape.Rank());
+      for (std::size_t d = 0; d < in_shape.Rank(); ++d) {
+        dims.push_back(ToDimType(in_shape[d]));
+      }
+      ctx.AddLessEqualConstraint(sym, expressions::dim_to_string(expressions::dim_multi_mul(dims)));
+    }
     ctx.Set(node.output(0), OptimTensor(nullptr, dtype, std::move(out_shape)));
     return;
   }
@@ -64,6 +76,12 @@ void ComputeShapeCompress(ShapesContext &ctx, const NodeProto &node) {
     } else {
       out_shape.PushBack(in_shape[static_cast<std::size_t>(d)]);
     }
+  }
+  // The selected count along ``axis`` is bounded above by the input
+  // dimension at ``axis``: record ``count <= input.shape[axis]``.
+  if (rank > 0) {
+    ctx.AddLessEqualConstraint(
+        sym, expressions::dim_to_string(ToDimType(in_shape[static_cast<std::size_t>(axis)])));
   }
   ctx.Set(node.output(0), OptimTensor(nullptr, dtype, std::move(out_shape)));
 }

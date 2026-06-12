@@ -1550,6 +1550,18 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                      rt.tensors());
          }
        }},
+      {"ai.onnx:MaxRoiPool",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 2);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const Tensor &rois = GetInput(node, 1, rt.tensors());
+         kernel::MaxRoiPool::Attributes attrs;
+         attrs.pooled_shape = GetAttributeIntsOrDefault(node, "pooled_shape", {});
+         attrs.spatial_scale = GetAttributeFloatOrDefault(node, "spatial_scale", 1.0f);
+         kernel::MaxRoiPool k(rt.kernel_ctx());
+         SetOutput(node, 0, k(x, rois, attrs), rt.tensors());
+       }},
       {"ai.onnx:MaxUnpool",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputRange(node, 2, 3);

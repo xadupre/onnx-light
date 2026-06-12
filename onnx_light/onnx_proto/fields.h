@@ -149,6 +149,22 @@ public:
       values_.emplace_back(std::forward<Args>(args)...);
     }
   }
+  /** Returns a pointer to the underlying data array. */
+  inline T *data() { return values_.data(); }
+  /** Returns a const pointer to the underlying data array. */
+  inline const T *data() const { return values_.data(); }
+  /** Resizes the field to n elements, filling new slots with value. */
+  inline void Resize(size_t n, const T &value) { values_.resize(n, value); }
+  /** Resizes the field to n elements, default-constructing new slots. */
+  inline void resize(size_t n) { values_.resize(n); }
+  /** Assigns the contents from an iterator range. */
+  template <typename InputIt> inline void Assign(InputIt first, InputIt last) {
+    values_.assign(first, last);
+  }
+  /** Copies all elements from another RepeatedField. */
+  inline void CopyFrom(const RepeatedField<T> &other) { values_ = other.values_; }
+  /** Returns the number of elements as int (protobuf compat). */
+  inline int size_int() const { return static_cast<int>(values_.size()); }
   /** Returns a vector of string representations of the contained values. */
   std::vector<std::string> PrintToVectorString(PrintOptions &options) const;
 

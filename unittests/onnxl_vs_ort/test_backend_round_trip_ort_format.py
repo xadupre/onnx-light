@@ -38,13 +38,6 @@ import unittest
 import onnx_light.onnx as onnxl
 from onnx_light.onnx.backend import make_test_class
 
-try:
-    import onnxruntime
-
-    HAS_ORT = onnxruntime is not None
-except ImportError:  # pragma: no cover - exercised only in no-ORT envs
-    HAS_ORT = False
-
 
 def _onnx_bytes(model: onnxl.ModelProto) -> bytes:
     """Returns the canonical ONNX-protobuf serialization of *model*."""
@@ -126,8 +119,7 @@ def ort_round_trip_check(model: onnxl.ModelProto, *_inputs) -> None:
         ), "onnxruntime → onnx-light ORT_FLATBUFFERS round-trip changed the model bytes"
 
 
-if HAS_ORT:
-    TestBackendRoundTripOrtFormat = make_test_class(ort_round_trip_check)
+TestBackendRoundTripOrtFormat = make_test_class(ort_round_trip_check)
 
 
 if __name__ == "__main__":

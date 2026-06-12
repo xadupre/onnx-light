@@ -246,21 +246,33 @@ AnchorMap CollectGraphAnchors(const GraphProto &graph) {
 //   - min/max bounds: a known bound is kept; when both are known the
 //     tighter bound wins (higher min, lower max). Provably disjoint
 //     intervals are a conflict.
-OptimTensor MergeWithAnchor(ShapesContext &ctx, const std::string &name,
-                            const OptimTensor &inferred, const OptimTensor &anchor) {
+// Returns std::nullopt when ``strict`` is false and a conflict is
+// detected (incompatible dtype/rank/dim/device/bounds). When ``strict``
+// is true, conflicts trigger EXT_ENFORCE_INVALID as before.
+std::optional<OptimTensor> MergeWithAnchor(ShapesContext &ctx, const std::string &name,
+                                           const OptimTensor &inferred, const OptimTensor &anchor,
+                                           bool strict = true) {
   // dtype: both known and different → conflict.
   if (inferred.Dtype() != TensorType::kUndefined && anchor.Dtype() != TensorType::kUndefined &&
       inferred.Dtype() != anchor.Dtype()) {
+    if (!strict) {
+      return std::nullopt;
+    }
     EXT_ENFORCE_INVALID(
         false, "MergeWithAnchor: incompatible element type for '" + name +
                    "': inferred has dtype " + std::to_string(static_cast<int>(inferred.Dtype())) +
                    ", anchor has dtype " + std::to_string(static_cast<int>(anchor.Dtype())) + ".");
   }
   // Rank check.
-  EXT_ENFORCE_INVALID(inferred.Shape().Rank() == anchor.Shape().Rank(),
-                      "MergeWithAnchor: incompatible rank for '" + name + "': inferred has rank " +
-                          std::to_string(inferred.Shape().Rank()) + ", anchor has rank " +
-                          std::to_string(anchor.Shape().Rank()) + ".");
+  if (inferred.Shape().Rank() != anchor.Shape().Rank()) {
+    if (!strict) {
+      return std::nullopt;
+    }
+    EXT_ENFORCE_INVALID(false, "MergeWithAnchor: incompatible rank for '" + name +
+                                   "': inferred has rank " +
+                                   std::to_string(inferred.Shape().Rank()) + ", anchor has rank " +
+                                   std::to_string(anchor.Shape().Rank()) + ".");
+  }
   // Per-dim merge.
   OptimShape merged_shape;
   for (std::size_t i = 0; i < inferred.Shape().Rank(); ++i) {
@@ -269,6 +281,9 @@ OptimTensor MergeWithAnchor(ShapesContext &ctx, const std::string &name,
     if (di == da) {
       merged_shape.PushBack(di);
     } else if (di.IsInt() && da.IsInt()) {
+      if (!strict) {
+        return std::nullopt;
+      }
       EXT_ENFORCE_INVALID(false, "MergeWithAnchor: incompatible dim " + std::to_string(i) +
                                      " for '" + name + "': inferred=" + std::to_string(di.AsInt()) +
                                      ", anchor=" + std::to_string(da.AsInt()) + ".");
@@ -300,9 +315,12 @@ OptimTensor MergeWithAnchor(ShapesContext &ctx, const std::string &name,
   OptimTensor out(inferred.Data(), merged_dtype, std::move(merged_shape));
   Device merged_device = inferred.GetDevice();
   if (anchor.GetDevice() != Device::kUndefined) {
-    EXT_ENFORCE_INVALID(inferred.GetDevice() == Device::kUndefined ||
-                            inferred.GetDevice() == anchor.GetDevice(),
-                        "MergeWithAnchor: incompatible device for '" + name + "'.");
+    if (inferred.GetDevice() != Device::kUndefined && inferred.GetDevice() != anchor.GetDevice()) {
+      if (!strict) {
+        return std::nullopt;
+      }
+      EXT_ENFORCE_INVALID(false, "MergeWithAnchor: incompatible device for '" + name + "'.");
+    }
     merged_device = anchor.GetDevice();
   }
   if (merged_device != Device::kUndefined) {
@@ -312,8 +330,13 @@ OptimTensor MergeWithAnchor(ShapesContext &ctx, const std::string &name,
   if (inferred.HasValueAsShape() && anchor.HasValueAsShape()) {
     const OptimShape &a = inferred.ValueAsShape();
     const OptimShape &b = anchor.ValueAsShape();
-    EXT_ENFORCE_INVALID(a.Rank() == b.Rank(),
-                        "MergeWithAnchor: incompatible value_as_shape rank for '" + name + "'.");
+    if (a.Rank() != b.Rank()) {
+      if (!strict) {
+        return std::nullopt;
+      }
+      EXT_ENFORCE_INVALID(false,
+                          "MergeWithAnchor: incompatible value_as_shape rank for '" + name + "'.");
+    }
     OptimShape merged_vas;
     for (std::size_t i = 0; i < a.Rank(); ++i) {
       const OptimDim &di = a[i];
@@ -321,6 +344,9 @@ OptimTensor MergeWithAnchor(ShapesContext &ctx, const std::string &name,
       if (di == da) {
         merged_vas.PushBack(di);
       } else if (di.IsInt() && da.IsInt()) {
+        if (!strict) {
+          return std::nullopt;
+        }
         EXT_ENFORCE_INVALID(false,
                             "MergeWithAnchor: incompatible value_as_shape dim for '" + name + "'.");
       } else if (di.IsInt()) {
@@ -358,8 +384,13 @@ OptimTensor MergeWithAnchor(ShapesContext &ctx, const std::string &name,
     merged_max = anchor.Max();
   }
   if (merged_min.has_value() && merged_max.has_value()) {
-    EXT_ENFORCE_INVALID(*merged_min <= *merged_max,
-                        "MergeWithAnchor: incompatible min/max bounds for '" + name + "'.");
+    if (*merged_min > *merged_max) {
+      if (!strict) {
+        return std::nullopt;
+      }
+      EXT_ENFORCE_INVALID(false,
+                          "MergeWithAnchor: incompatible min/max bounds for '" + name + "'.");
+    }
     out.SetMinMax(*merged_min, *merged_max);
   } else {
     if (merged_min.has_value()) {
@@ -381,9 +412,10 @@ void MergeAnchorsIntoContext(ShapesContext &ctx, const AnchorMap &anchors, bool 
       continue;
     }
     if (strict) {
-      OptimTensor merged = MergeWithAnchor(ctx, name, ctx.Get(name), anchor);
-      if (merged != ctx.Get(name)) {
-        ctx.Set(name, std::move(merged));
+      std::optional<OptimTensor> merged =
+          MergeWithAnchor(ctx, name, ctx.Get(name), anchor, /*strict=*/true);
+      if (merged.has_value() && *merged != ctx.Get(name)) {
+        ctx.Set(name, std::move(*merged));
       }
     } else {
       // Lenient mode: the inferred shape may legitimately disagree
@@ -392,13 +424,10 @@ void MergeAnchorsIntoContext(ShapesContext &ctx, const AnchorMap &anchors, bool 
       // anchor on conflict instead of aborting the whole pipeline so
       // that the well-formed anchors still drive constraint
       // propagation downstream.
-      try {
-        OptimTensor merged = MergeWithAnchor(ctx, name, ctx.Get(name), anchor);
-        if (merged != ctx.Get(name)) {
-          ctx.Set(name, std::move(merged));
-        }
-      } catch (const std::invalid_argument &) {
-        // Conflicting anchor: drop it silently.
+      std::optional<OptimTensor> merged =
+          MergeWithAnchor(ctx, name, ctx.Get(name), anchor, /*strict=*/false);
+      if (merged.has_value() && *merged != ctx.Get(name)) {
+        ctx.Set(name, std::move(*merged));
       }
     }
   }

@@ -156,12 +156,14 @@ std::uint8_t FloatRoundToFloat4E2M1Nibble(float v) noexcept {
   const float *vals = (v > 0.0f) ? kPos : kNeg;
   const std::uint8_t *nibbles = (v > 0.0f) ? kPosN : kNegN;
 
+  // Linear scan for the nearest representable value with round-half-to-even
+  // tie-breaking. In the FLOAT4E2M1 encoding the mantissa bit is the LSB of
+  // the nibble (0 = even, 1 = odd), so we prefer the candidate whose LSB is 0
+  // when two candidates are equidistant from ``v``.
   std::uint8_t best = nibbles[0];
   float best_dist = std::abs(v - vals[0]);
   for (int i = 1; i < 7; ++i) {
     const float d = std::abs(v - vals[i]);
-    // Prefer the candidate if it is strictly closer, or if equidistant and
-    // has even mantissa (nibble LSB = 0) while the current best has odd.
     if (d < best_dist || (d == best_dist && (nibbles[i] & 1u) == 0u && (best & 1u) != 0u)) {
       best = nibbles[i];
       best_dist = d;

@@ -311,14 +311,12 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
   case static_cast<int32_t>(DataType::FLOAT8E5M2):
   case static_cast<int32_t>(DataType::FLOAT8E5M2FNUZ): {
     const float zp = ReadFloat8ScalarZP(y_zero_point);
-    const std::uint8_t *px = reinterpret_cast<const std::uint8_t *>(x.bytes());
     std::uint8_t *py = output.data.data();
     const float *pxf = x.AsFloat();
     const int64_t n = x.element_count();
     for (int64_t i = 0; i < n; ++i) {
       py[i] = FloatToFloat8(pxf[i] / scale + zp, output.data_type);
     }
-    (void)px;
     break;
   }
   case static_cast<int32_t>(DataType::INT4):

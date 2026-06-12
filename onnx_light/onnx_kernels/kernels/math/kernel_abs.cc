@@ -7,7 +7,6 @@
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
 #include <cmath>
-#include <cstdlib>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -65,7 +64,8 @@ void Abs::operator()(const Tensor &x, Tensor &output) const {
     const int8_t *px = x.AsInt8();
     int8_t *py = output.AsInt8();
     for (int64_t i = 0; i < n; ++i) {
-      py[i] = static_cast<int8_t>(std::abs(static_cast<int>(px[i])));
+      const int32_t v = static_cast<int32_t>(px[i]);
+      py[i] = static_cast<int8_t>(v < 0 ? -v : v);
     }
     return;
   }
@@ -73,7 +73,8 @@ void Abs::operator()(const Tensor &x, Tensor &output) const {
     const int16_t *px = x.AsInt16();
     int16_t *py = output.AsInt16();
     for (int64_t i = 0; i < n; ++i) {
-      py[i] = static_cast<int16_t>(std::abs(static_cast<int>(px[i])));
+      const int32_t v = static_cast<int32_t>(px[i]);
+      py[i] = static_cast<int16_t>(v < 0 ? -v : v);
     }
     return;
   }
@@ -81,7 +82,8 @@ void Abs::operator()(const Tensor &x, Tensor &output) const {
     const int32_t *px = x.AsInt32();
     int32_t *py = output.AsInt32();
     for (int64_t i = 0; i < n; ++i) {
-      py[i] = std::abs(px[i]);
+      const int64_t v = static_cast<int64_t>(px[i]);
+      py[i] = static_cast<int32_t>(v < 0 ? -v : v);
     }
     return;
   }
@@ -89,7 +91,8 @@ void Abs::operator()(const Tensor &x, Tensor &output) const {
     const int64_t *px = x.AsInt64();
     int64_t *py = output.AsInt64();
     for (int64_t i = 0; i < n; ++i) {
-      py[i] = std::abs(px[i]);
+      const uint64_t u = static_cast<uint64_t>(px[i]);
+      py[i] = static_cast<int64_t>(px[i] < 0 ? (~u + 1) : u);
     }
     return;
   }

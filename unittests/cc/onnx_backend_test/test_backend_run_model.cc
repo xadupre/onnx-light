@@ -323,6 +323,7 @@ TEST(BackendRunModel, OneHotEncoder) { RunBackendCasesFor("OneHotEncoder"); }
 TEST(BackendRunModel, Scaler) { RunBackendCasesFor("Scaler"); }
 
 // Text kernels.
+TEST(BackendRunModel, StringConcat) { RunBackendCasesFor("StringConcat"); }
 TEST(BackendRunModel, StringNormalizer) { RunBackendCasesFor("StringNormalizer"); }
 TEST(BackendRunModel, StringSplit) { RunBackendCasesFor("StringSplit"); }
 TEST(BackendRunModel, TfIdfVectorizer) { RunBackendCasesFor("TfIdfVectorizer"); }

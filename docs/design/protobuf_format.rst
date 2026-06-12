@@ -6,7 +6,7 @@ Protobuf format applied to ONNX
 ONNX models are serialized using :epkg:`Protocol Buffers` (protobuf),
 Google's compact binary encoding
 format.  An ``.onnx`` file is just the binary serialization of a
-``ModelProto`` message defined in `onnx.proto
+:class:`~onnx_light.onnx_lib.ModelProto` message defined in `onnx.proto
 <https://github.com/onnx/onnx/blob/main/onnx/onnx.proto>`_.  This page
 explains the relevant subset of the protobuf wire format and how it maps
 to ONNX message types.  It is meant to help readers understand the
@@ -123,7 +123,7 @@ For wire type ``LEN`` the encoder writes a varint *length* followed by
 
 * UTF-8 strings (``string``);
 * arbitrary byte blobs (``bytes``), including tensor ``raw_data``;
-* nested messages (such as ``GraphProto`` inside ``ModelProto``);
+* nested messages (such as :class:`~onnx_light.onnx_lib.GraphProto` inside :class:`~onnx_light.onnx_lib.ModelProto`);
 * packed repeated fields of scalar types.
 
 Embedded messages are simply written out as their own bytestream and
@@ -167,7 +167,7 @@ How ONNX uses the wire format
 -----------------------------
 
 ONNX defines its messages in ``onnx.proto``.  The top-level
-``ModelProto`` aggregates metadata (``ir_version``,
+:class:`~onnx_light.onnx_lib.ModelProto` aggregates metadata (``ir_version``,
 ``producer_name``, ...), the opset imports, and the model graph.
 A simplified view of the layout for a tiny model is:
 
@@ -193,7 +193,7 @@ payloads in parallel using a thread pool.
 Tensors and ``raw_data``
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-``TensorProto`` is the central message used everywhere a tensor value
+:class:`~onnx_light.onnx_lib.TensorProto` is the central message used everywhere a tensor value
 appears: graph initializers, attribute defaults of type ``TENSOR``,
 constant nodes, and external-data references.  Its on-wire layout
 illustrates almost every feature of the protobuf format described
@@ -322,16 +322,16 @@ little-endian regardless of the host byte order, and sub-byte types
 (``BOOL``, ``INT4``, ``UINT4``, the ``FLOAT4E2M1`` family) are
 packed two values per byte in the order specified by ``onnx.proto``.
 
-Sparse tensors are carried by ``SparseTensorProto`` (used in
+Sparse tensors are carried by :class:`~onnx_light.onnx_lib.SparseTensorProto` (used in
 ``GraphProto.sparse_initializer``), which simply embeds two
-``TensorProto`` substreams — one for the non-zero values and one for
+:class:`~onnx_light.onnx_lib.TensorProto` substreams — one for the non-zero values and one for
 the coordinate indices — alongside the dense ``dims``.
 
 External data
 ~~~~~~~~~~~~~
 
 For models larger than a few gigabytes, ONNX supports storing tensor
-payloads in companion files referenced from ``TensorProto`` via the
+payloads in companion files referenced from :class:`~onnx_light.onnx_lib.TensorProto` via the
 ``external_data`` field (a repeated ``StringStringEntryProto``) and
 the ``data_location`` enum.  The ``.onnx`` file then only carries the
 metadata (shape, type, ``location``, ``offset``, ``length``, ...) for

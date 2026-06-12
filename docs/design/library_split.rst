@@ -6,7 +6,7 @@ How the C++ libraries are split
 *onnx-light* is intentionally split into several small static (or shared)
 C++ libraries (also referred to as **assemblies**) instead of a single
 monolithic archive.  The goal is to let any C++ project link **only**
-what it actually needs: a program that just parses a ``ModelProto`` does
+what it actually needs: a program that just parses a :class:`~onnx_light.onnx_lib.ModelProto` does
 not need operator schemas, a program that only registers schemas does
 not need shape inference, a program that only evaluates models does not
 need the full ONNX schema / checker stack, and so on.
@@ -59,8 +59,8 @@ Summary of each library
     * - ``onnx_light::lib_onnx_proto``:
         ``onnx_light/onnx_proto/``,
         ``onnx_light/onnx_helpers/onnx_light_helpers.cc``
-      - Protobuf-compatible message types (``ModelProto``,
-        ``GraphProto``, ``NodeProto``, ``TensorProto``, ...), parser /
+      - Protobuf-compatible message types (:class:`~onnx_light.onnx_lib.ModelProto`,
+        :class:`~onnx_light.onnx_lib.GraphProto`, :class:`~onnx_light.onnx_lib.NodeProto`, :class:`~onnx_light.onnx_lib.TensorProto`, ...), parser /
         serializer, external data and (optional) AES-256 encrypted
         save / load.  Built as **SHARED** when
         ``ONNX_LIGHT_BUILD_PYTHON=ON`` so that every Python extension
@@ -92,7 +92,7 @@ Summary of each library
         ``onnx_light/onnx_kernels/``
       - C++ **reference implementation** of the ONNX operators used to
         evaluate models in-process.  Contains the runtime data model
-        (``struct Tensor``, ``struct Sequence``, ``RuntimeContext``,
+        (``struct Tensor``, ``struct Sequence``, :class:`~onnx_light.onnx.reference.RuntimeContext`,
         ``RunGraph`` / ``RunFunction`` / ``RunModel``) and a kernel for
         each supported operator under ``onnx_kernels/kernels/<group>/``
         (``math``, ``logical``, ``nn``, ``tensor``, ``sequence``,

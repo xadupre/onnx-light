@@ -73,7 +73,6 @@ TestOptimShapeInferenceBackend = make_test_class(
         "test_scan_sum.*",
         "test_cc_loop13_seq.*",
         "test_cc_linear_attention.*",
-        "test_cc_shape_inference_nonzero_plus_expression.*",
         "test_cc_shape_inference_concat_split.*",
         "test_cc_shape_inference_check_shape.*",
         "test_cc_shape_inference_scan_running_sum.*",

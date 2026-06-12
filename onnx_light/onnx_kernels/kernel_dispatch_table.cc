@@ -1879,7 +1879,25 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                    k(a, a_scale, a_zero_point, b, b_scale, b_zero_point, y_scale, y_zero_point),
                    rt);
        }},
-      {"ai.onnx:QuantizeLinear", MakeBinaryWithOptionalThirdTrampoline<kernel::QuantizeLinear>()},
+      {"ai.onnx:QuantizeLinear",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 2);
+         if (node.input_size() > 3) {
+           throw std::invalid_argument("RunNode: op 'QuantizeLinear' expects 2 or 3 inputs, got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const Tensor &y_scale = GetInput(node, 1, rt.tensors());
+         const Tensor *y_zero_point = GetOptionalInput(node, 2, rt.tensors());
+         const int64_t axis = GetAttributeIntOrDefault(node, "axis", 1);
+         kernel::QuantizeLinear k(rt.kernel_ctx());
+         if (y_zero_point != nullptr) {
+           SetOutput(node, 0, k(x, y_scale, *y_zero_point, axis), rt);
+         } else {
+           SetOutput(node, 0, k(x, y_scale), rt);
+         }
+       }},
       {"ai.onnx:RandomNormal",
        MakeRandomGenTrampoline<kernel::RandomNormal>("mean", 0.0f, "scale", 1.0f)},
       {"ai.onnx:RandomNormalLike",

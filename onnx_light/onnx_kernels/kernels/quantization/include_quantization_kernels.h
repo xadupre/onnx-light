@@ -33,15 +33,15 @@ namespace kernel {
 //     match the operator's expected output; the kernel validates these
 //     attributes and throws ``std::invalid_argument`` on mismatch.
 //
-// ``QuantizeLinear`` mirrors the ONNX ``QuantizeLinear`` operator restricted
-// to its most widely supported case: per-tensor (scalar ``y_scale`` and
-// optional scalar ``y_zero_point``) quantization of a FLOAT input ``x`` to an
-// integer output ``y`` whose element type is taken from
-// ``y_zero_point`` (UINT8, INT8, UINT16 or INT16). When ``y_zero_point`` is
-// omitted the output defaults to UINT8 with a zero point of 0, matching the
-// ONNX default. The
-// kernel implements the saturating round-half-to-even rule used by ONNX:
-// ``y = saturate(round(x / y_scale) + y_zero_point)``.
+// ``QuantizeLinear`` mirrors the ONNX ``QuantizeLinear`` operator for both
+// per-tensor (scalar ``y_scale`` and optional scalar ``y_zero_point``) and
+// per-axis (vector ``y_scale``/``y_zero_point``) quantization of a FLOAT
+// input ``x`` to an output ``y`` whose element type is taken from
+// ``y_zero_point`` (UINT8, INT8, UINT16, INT16, FLOAT8E4M3FN, FLOAT8E5M2,
+// INT4, UINT4, INT2, UINT2, or FLOAT4E2M1). When ``y_zero_point`` is omitted
+// the output defaults to UINT8 with a zero point of 0, matching the ONNX
+// default. The kernel implements the saturating round-half-to-even rule used
+// by ONNX: ``y = saturate(round(x / y_scale) + y_zero_point)``.
 //
 // ``DequantizeLinear`` mirrors the ONNX ``DequantizeLinear`` operator
 // restricted to the per-tensor case: an integer or float8 input ``x``
@@ -60,10 +60,11 @@ namespace kernel {
 // with an input.
 // ---------------------------------------------------------------------------
 
-/// Per-tensor linear quantization of a FLOAT input ``x`` to an integer
-/// output. The output element type is taken from ``y_zero_point`` (UINT8,
-/// INT8, UINT16 or INT16); if ``y_zero_point`` is omitted the output defaults
-/// to UINT8 with a zero point of 0.
+/// Per-tensor and per-axis linear quantization of a FLOAT input ``x`` to an
+/// integer or sub-byte output. The output element type is taken from
+/// ``y_zero_point`` (UINT8, INT8, UINT16, INT16, FLOAT8E4M3FN, FLOAT8E5M2,
+/// INT4, UINT4, INT2, UINT2, or FLOAT4E2M1); if ``y_zero_point`` is omitted
+/// the output defaults to UINT8 with a zero point of 0.
 class QuantizeLinear : public KernelBase {
 public:
   using KernelBase::KernelBase;
@@ -73,8 +74,17 @@ public:
   void operator()(const Tensor &x, const Tensor &y_scale, Tensor &output) const;
 
   /// Explicit ``y_zero_point``: its data_type drives the output element type.
+  /// Per-tensor (scalar ``y_scale``) quantization.
   Tensor operator()(const Tensor &x, const Tensor &y_scale, const Tensor &y_zero_point) const;
   void operator()(const Tensor &x, const Tensor &y_scale, const Tensor &y_zero_point,
+                  Tensor &output) const;
+
+  /// Per-axis quantization: ``y_scale`` (and ``y_zero_point``) may have one
+  /// entry per slice along ``axis``.  When ``y_scale.element_count() == 1``
+  /// the call is forwarded to the scalar overload above.
+  Tensor operator()(const Tensor &x, const Tensor &y_scale, const Tensor &y_zero_point,
+                    int64_t axis) const;
+  void operator()(const Tensor &x, const Tensor &y_scale, const Tensor &y_zero_point, int64_t axis,
                   Tensor &output) const;
 
   /// Output element type differs from the FLOAT input element type, so storage

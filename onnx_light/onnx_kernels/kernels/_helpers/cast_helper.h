@@ -54,6 +54,15 @@ float Bfloat16BitsToFloat(std::uint16_t b) noexcept;
 // this set raise ``std::invalid_argument``.
 std::uint8_t FloatToFloat4E2M1Nibble(float v);
 
+// Decodes a single FLOAT4E2M1 nibble to a ``float32`` value. The nibble is
+// interpreted using the same bit layout as :func:`FloatToFloat4E2M1Nibble`.
+float Float4E2M1NibbleToFloat(std::uint8_t nibble) noexcept;
+
+// Encodes a ``float`` to the nearest representable FLOAT4E2M1 nibble, using
+// round-half-to-even tie-breaking. Values outside the representable range
+// ``[-6, 6]`` are saturated to ``+/-6``; ``NaN`` maps to ``+0``.
+std::uint8_t FloatRoundToFloat4E2M1Nibble(float v) noexcept;
+
 // Packs ``values`` (one element per ``int8_t`` entry, range checked by the
 // caller) into a 4-bit-per-element little-endian buffer matching the ONNX
 // sub-byte layout (low nibble first per byte, trailing slot zero-padded).

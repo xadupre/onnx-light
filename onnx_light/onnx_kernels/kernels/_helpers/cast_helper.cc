@@ -129,6 +129,47 @@ std::uint8_t FloatToFloat4E2M1Nibble(float v) {
   throw std::invalid_argument("FloatToFloat4E2M1Nibble: value not representable in FLOAT4E2M1.");
 }
 
+float Float4E2M1NibbleToFloat(std::uint8_t nibble) noexcept {
+  // Canonical FLOAT4E2M1 value table indexed by nibble (0x0..0xF).
+  static const float kValues[16] = {0.0f,  0.5f,  1.0f,  1.5f,  2.0f,  3.0f,  4.0f,  6.0f,
+                                    -0.0f, -0.5f, -1.0f, -1.5f, -2.0f, -3.0f, -4.0f, -6.0f};
+  return kValues[nibble & 0x0Fu];
+}
+
+std::uint8_t FloatRoundToFloat4E2M1Nibble(float v) noexcept {
+  if (std::isnan(v))
+    return 0x0u;
+  // Saturate to representable range and handle ±0 sign preservation.
+  if (v > 6.0f)
+    return 0x7u;
+  if (v < -6.0f)
+    return 0xFu;
+  if (v == 0.0f)
+    return std::signbit(v) ? 0x8u : 0x0u;
+
+  // Search the same-sign half (skipping ±0 since that was handled above).
+  // Positive: nibbles 0x1..0x7  Negative: nibbles 0x9..0xF
+  static const float kPos[7] = {0.5f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f, 6.0f};
+  static const std::uint8_t kPosN[7] = {0x1u, 0x2u, 0x3u, 0x4u, 0x5u, 0x6u, 0x7u};
+  static const float kNeg[7] = {-0.5f, -1.0f, -1.5f, -2.0f, -3.0f, -4.0f, -6.0f};
+  static const std::uint8_t kNegN[7] = {0x9u, 0xAu, 0xBu, 0xCu, 0xDu, 0xEu, 0xFu};
+  const float *vals = (v > 0.0f) ? kPos : kNeg;
+  const std::uint8_t *nibbles = (v > 0.0f) ? kPosN : kNegN;
+
+  std::uint8_t best = nibbles[0];
+  float best_dist = std::abs(v - vals[0]);
+  for (int i = 1; i < 7; ++i) {
+    const float d = std::abs(v - vals[i]);
+    // Prefer the candidate if it is strictly closer, or if equidistant and
+    // has even mantissa (nibble LSB = 0) while the current best has odd.
+    if (d < best_dist || (d == best_dist && (nibbles[i] & 1u) == 0u && (best & 1u) != 0u)) {
+      best = nibbles[i];
+      best_dist = d;
+    }
+  }
+  return best;
+}
+
 std::vector<std::uint8_t> Pack4Bit(const std::vector<std::int8_t> &values) {
   std::vector<std::uint8_t> bytes((values.size() + 1) / 2, 0);
   for (std::size_t i = 0; i < values.size(); ++i) {

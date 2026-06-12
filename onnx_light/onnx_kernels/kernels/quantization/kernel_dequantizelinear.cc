@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/_helpers/cast_float8.h"
 #include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_kernels/kernels/_helpers/cast_sub_byte.h"
 #include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
 
 #include <cstdint>
@@ -98,6 +99,60 @@ inline void DequantizeFloat8Loop(const Tensor &x, float x_scale, float x_zero_po
   }
 }
 
+// Dequantize INT4-packed input to float output.
+void DequantizeInt4Loop(const Tensor &x, float x_scale, float zp, bool is_signed, Tensor &output) {
+  const std::uint8_t *px = x.bytes();
+  const int64_t n = x.element_count();
+  float *py = output.AsFloat();
+  for (int64_t i = 0; i < n; ++i) {
+    const std::uint8_t nibble = Read4BitElement(px, i);
+    const float val = is_signed ? static_cast<float>(Int4NibbleToInt8(nibble))
+                                : static_cast<float>(Uint4NibbleToUint8(nibble));
+    py[i] = (val - zp) * x_scale;
+  }
+}
+
+// Dequantize INT2-packed input to float output.
+void DequantizeInt2Loop(const Tensor &x, float x_scale, float zp, bool is_signed, Tensor &output) {
+  const std::uint8_t *px = x.bytes();
+  const int64_t n = x.element_count();
+  float *py = output.AsFloat();
+  for (int64_t i = 0; i < n; ++i) {
+    const std::uint8_t bits = Read2BitElement(px, i);
+    const float val = is_signed ? static_cast<float>(Int2BitsToInt8(bits))
+                                : static_cast<float>(Uint2BitsToUint8(bits));
+    py[i] = (val - zp) * x_scale;
+  }
+}
+
+// Dequantize FLOAT4E2M1-packed input to float output.
+void DequantizeFloat4E2M1Loop(const Tensor &x, float x_scale, float zp, Tensor &output) {
+  const std::uint8_t *px = x.bytes();
+  const int64_t n = x.element_count();
+  float *py = output.AsFloat();
+  for (int64_t i = 0; i < n; ++i) {
+    const float val = Float4E2M1NibbleToFloat(Read4BitElement(px, i));
+    py[i] = (val - zp) * x_scale;
+  }
+}
+
+// Reads the zero-point nibble from a sub-byte packed tensor (ZP has 1 element).
+inline float ReadSubByteScalarZP(const Tensor &x_zero_point) {
+  const int32_t dtype = x_zero_point.data_type;
+  if (dtype == static_cast<int32_t>(DataType::INT4)) {
+    return static_cast<float>(Int4NibbleToInt8(Read4BitElement(x_zero_point.bytes(), 0)));
+  } else if (dtype == static_cast<int32_t>(DataType::UINT4)) {
+    return static_cast<float>(Uint4NibbleToUint8(Read4BitElement(x_zero_point.bytes(), 0)));
+  } else if (dtype == static_cast<int32_t>(DataType::INT2)) {
+    return static_cast<float>(Int2BitsToInt8(Read2BitElement(x_zero_point.bytes(), 0)));
+  } else if (dtype == static_cast<int32_t>(DataType::UINT2)) {
+    return static_cast<float>(Uint2BitsToUint8(Read2BitElement(x_zero_point.bytes(), 0)));
+  } else if (dtype == static_cast<int32_t>(DataType::FLOAT4E2M1)) {
+    return Float4E2M1NibbleToFloat(Read4BitElement(x_zero_point.bytes(), 0));
+  }
+  return 0.0f;
+}
+
 } // namespace
 
 Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale) const {
@@ -150,10 +205,26 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, Tensor
   case static_cast<int32_t>(DataType::FLOAT8E5M2FNUZ):
     DequantizeFloat8Loop(x, scale, /*x_zero_point=*/0.0f, Float8DecoderFor(x.data_type), output);
     break;
+  case static_cast<int32_t>(DataType::INT4):
+    DequantizeInt4Loop(x, scale, /*zp=*/0.0f, /*is_signed=*/true, output);
+    break;
+  case static_cast<int32_t>(DataType::UINT4):
+    DequantizeInt4Loop(x, scale, /*zp=*/0.0f, /*is_signed=*/false, output);
+    break;
+  case static_cast<int32_t>(DataType::INT2):
+    DequantizeInt2Loop(x, scale, /*zp=*/0.0f, /*is_signed=*/true, output);
+    break;
+  case static_cast<int32_t>(DataType::UINT2):
+    DequantizeInt2Loop(x, scale, /*zp=*/0.0f, /*is_signed=*/false, output);
+    break;
+  case static_cast<int32_t>(DataType::FLOAT4E2M1):
+    DequantizeFloat4E2M1Loop(x, scale, /*zp=*/0.0f, output);
+    break;
   default:
-    throw std::invalid_argument("kernel::DequantizeLinear: only UINT8, INT8, UINT16, INT16, "
-                                "INT32, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, FLOAT8E5M2 and "
-                                "FLOAT8E5M2FNUZ inputs are supported.");
+    throw std::invalid_argument(
+        "kernel::DequantizeLinear: only UINT8, INT8, UINT16, INT16, INT32, FLOAT8E4M3FN, "
+        "FLOAT8E4M3FNUZ, FLOAT8E5M2, FLOAT8E5M2FNUZ, INT4, UINT4, INT2, UINT2 and FLOAT4E2M1 "
+        "inputs are supported.");
   }
 }
 
@@ -220,10 +291,26 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
     DequantizeFloat8Loop(x, scale, zp, decode, output);
     break;
   }
+  case static_cast<int32_t>(DataType::INT4):
+    DequantizeInt4Loop(x, scale, ReadSubByteScalarZP(x_zero_point), /*is_signed=*/true, output);
+    break;
+  case static_cast<int32_t>(DataType::UINT4):
+    DequantizeInt4Loop(x, scale, ReadSubByteScalarZP(x_zero_point), /*is_signed=*/false, output);
+    break;
+  case static_cast<int32_t>(DataType::INT2):
+    DequantizeInt2Loop(x, scale, ReadSubByteScalarZP(x_zero_point), /*is_signed=*/true, output);
+    break;
+  case static_cast<int32_t>(DataType::UINT2):
+    DequantizeInt2Loop(x, scale, ReadSubByteScalarZP(x_zero_point), /*is_signed=*/false, output);
+    break;
+  case static_cast<int32_t>(DataType::FLOAT4E2M1):
+    DequantizeFloat4E2M1Loop(x, scale, ReadSubByteScalarZP(x_zero_point), output);
+    break;
   default:
-    throw std::invalid_argument("kernel::DequantizeLinear: only UINT8, INT8, UINT16, INT16, "
-                                "INT32, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, FLOAT8E5M2 and "
-                                "FLOAT8E5M2FNUZ inputs are supported.");
+    throw std::invalid_argument(
+        "kernel::DequantizeLinear: only UINT8, INT8, UINT16, INT16, INT32, FLOAT8E4M3FN, "
+        "FLOAT8E4M3FNUZ, FLOAT8E5M2, FLOAT8E5M2FNUZ, INT4, UINT4, INT2, UINT2 and FLOAT4E2M1 "
+        "inputs are supported.");
   }
 }
 

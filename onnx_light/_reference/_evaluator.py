@@ -166,13 +166,17 @@ class ReferenceEvaluator:
     """
 
     def __init__(
-        self, proto: ModelProto | GraphProto | FunctionProto | bytes | str | os.PathLike
+        self,
+        proto: ModelProto | GraphProto | FunctionProto | bytes | str | os.PathLike,
+        *,
+        events_enabled: bool = False,
     ) -> None:
         proto = self._load_proto(proto)
         self._model: ModelProto | None = None
         self._graph: GraphProto | None = None
         self._function: FunctionProto | None = None
         self._last_ctx: Any = None
+        self._events_enabled = events_enabled
 
         if isinstance(proto, ModelProto):
             self._model = proto
@@ -305,6 +309,7 @@ class ReferenceEvaluator:
             )
 
         ctx = _runtime.RuntimeContext(self._kernel_ctx)
+        ctx.events_enabled = self._events_enabled
 
         for name, value in feed_inputs.items():
             ctx.set(name, _numpy_to_cpp_tensor(name, value))

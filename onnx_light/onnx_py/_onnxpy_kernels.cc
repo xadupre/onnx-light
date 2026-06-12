@@ -282,6 +282,13 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def(nb::init<>())
       .def(nb::init<KernelContext>(), nb::arg("kernel_ctx"))
       .def_prop_rw(
+          "events_enabled", [](const RuntimeContext &rt) { return rt.events_enabled(); },
+          [](RuntimeContext &rt, bool v) { rt.set_events_enabled(v); },
+          "When ``True``, :func:`set` / :func:`put` / :func:`remove` and "
+          ":func:`run_node` record events (incl. clock reads and value decoding). "
+          "Default is ``False`` for maximum throughput; enable only when profiling "
+          "is required.")
+      .def_prop_rw(
           "kernel_ctx", [](RuntimeContext &rt) -> KernelContext & { return rt.kernel_ctx(); },
           [](RuntimeContext &rt, KernelContext k) { rt.kernel_ctx() = std::move(k); },
           nb::rv_policy::reference_internal, "Kernel construction context (opset).")

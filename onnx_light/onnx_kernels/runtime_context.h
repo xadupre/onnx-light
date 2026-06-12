@@ -243,6 +243,15 @@ public:
   RuntimeContext(kernel::KernelContext kernel_ctx, TensorMap tensors)
       : tensors_(std::move(tensors)), kernel_ctx_(std::move(kernel_ctx)) {}
 
+  /// Enables or disables event logging. When disabled (the default),
+  /// :cpp:func:`Set`, :cpp:func:`Put`, :cpp:func:`Remove` and
+  /// :cpp:func:`RunNode` skip all event construction, clock reads, and
+  /// value decoding — eliminating the profiling overhead from the hot
+  /// path. Call ``set_events_enabled(true)`` before running if per-node
+  /// profiling is required.
+  void set_events_enabled(bool enabled) noexcept { events_enabled_ = enabled; }
+  bool events_enabled() const noexcept { return events_enabled_; }
+
   /// In/out tensor map shared across every node in a chain.
   TensorMap &tensors() noexcept { return tensors_; }
   const TensorMap &tensors() const noexcept { return tensors_; }
@@ -357,6 +366,7 @@ private:
   FunctionMap functions_;
   TensorEventLog events_;
   SequenceMap sequences_;
+  bool events_enabled_ = false;
 };
 
 } // namespace onnx_kernels

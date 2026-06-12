@@ -708,35 +708,43 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
   const std::string op_type = node.op_type().as_string();
   const std::string domain = NormaliseDispatchDomain(node);
 
-  std::vector<std::string> inputs;
-  inputs.reserve(static_cast<size_t>(node.input_size()));
-  for (size_t i = 0; i < static_cast<size_t>(node.input_size()); ++i) {
-    inputs.push_back(node.input(i).as_string());
+  // Only capture timing and input names when event logging is active.
+  const bool logging = rt.events_enabled();
+  int64_t start_time_ns = 0;
+  std::chrono::steady_clock::time_point t0;
+  if (logging) {
+    start_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::system_clock::now().time_since_epoch())
+                        .count();
+    t0 = std::chrono::steady_clock::now();
   }
-
-  // Capture the dispatch start time (system clock for ``timestamp_ns``)
-  // and a high-resolution start point (steady clock for the measured
-  // duration). A single ``run_node`` event is appended to the event log
-  // once the kernel returns so callers can profile per-node execution
-  // from the same stream as the tensor add/replace/remove records. The
-  // event is intentionally not appended when the kernel throws,
-  // mirroring how ``RuntimeContext::Set`` / ``::Put`` only log
-  // successful mutations.
-  const int64_t start_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                                    std::chrono::system_clock::now().time_since_epoch())
-                                    .count();
-  const auto t0 = std::chrono::steady_clock::now();
 
   // A node referring to a model-local FunctionProto (registered by
   // ``RunModel`` from ``ModelProto::functions()``) takes priority over
   // the built-in kernel dispatch table so that user-defined functions
   // override same-named built-ins, matching the ONNX runtime semantics
   // for model-local functions.
-  const std::string fkey = FunctionLookupKey(domain, op_type, node.overload().as_string());
-  auto fit = rt.functions().find(fkey);
-  if (fit != rt.functions().end()) {
-    CallModelLocalFunction(node, *fit->second, rt);
-  } else if (domain == kDefaultOnnxDomain && op_type == "If") {
+  if (!rt.functions().empty()) {
+    const std::string fkey = FunctionLookupKey(domain, op_type, node.overload().as_string());
+    auto fit = rt.functions().find(fkey);
+    if (fit != rt.functions().end()) {
+      CallModelLocalFunction(node, *fit->second, rt);
+      if (logging) {
+        const int64_t duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                        std::chrono::steady_clock::now() - t0)
+                                        .count();
+        std::vector<std::string> inputs;
+        inputs.reserve(static_cast<size_t>(node.input_size()));
+        for (size_t i = 0; i < static_cast<size_t>(node.input_size()); ++i) {
+          inputs.push_back(node.input(i).as_string());
+        }
+        rt.AppendRunNodeEvent(domain, op_type, std::move(inputs), start_time_ns, duration_ns);
+      }
+      return;
+    }
+  }
+
+  if (domain == kDefaultOnnxDomain && op_type == "If") {
     RunIfNode(node, rt);
   } else if (domain == kDefaultOnnxDomain && op_type == "Loop") {
     RunLoopNode(node, rt);
@@ -755,10 +763,17 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
     it->second(node, rt);
   }
 
-  const int64_t duration_ns =
-      std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0)
-          .count();
-  rt.AppendRunNodeEvent(domain, op_type, std::move(inputs), start_time_ns, duration_ns);
+  if (logging) {
+    const int64_t duration_ns =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0)
+            .count();
+    std::vector<std::string> inputs;
+    inputs.reserve(static_cast<size_t>(node.input_size()));
+    for (size_t i = 0; i < static_cast<size_t>(node.input_size()); ++i) {
+      inputs.push_back(node.input(i).as_string());
+    }
+    rt.AppendRunNodeEvent(domain, op_type, std::move(inputs), start_time_ns, duration_ns);
+  }
 }
 
 void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext &rt) {

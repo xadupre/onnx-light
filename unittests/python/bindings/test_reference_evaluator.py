@@ -234,11 +234,11 @@ class TestReferenceEvaluator(ExtTestCase):
         self.assertEqual(y0.dtype, np.int16)
         self.assertEqual(y1.dtype, np.uint8)
 
-    def test_dict_vectorizer_int64_float_dict_feed(self):
+    def test_dict_vectorizer_int64_float(self):
         # ``ai.onnx.ml::DictVectorizer`` consumes a ``map(int64, float)``
         # graph input through the runtime's two-tensor convention
-        # (``x_keys`` / ``x_values``); ReferenceEvaluator accepts a Python
-        # ``dict`` for the map-typed input and splits it transparently.
+        # (``x_keys`` / ``x_values``). ReferenceEvaluator exposes those
+        # names directly in ``input_names`` so all map logic stays in C++.
         model = onnxl.ModelProto()
         model.ir_version = 10
         op = model.opset_import.add()
@@ -268,27 +268,11 @@ class TestReferenceEvaluator(ExtTestCase):
         attr.ints.extend([10, 20, 30])
 
         sess = ReferenceEvaluator(model)
-        self.assertEqual(sess.input_names, ["x"])
-        (out,) = sess.run(None, {"x": {10: 1.5, 30: 2.5}})
+        self.assertEqual(sess.input_names, ["x_keys", "x_values"])
+        x_keys = np.array([10, 30], dtype=np.int64)
+        x_values = np.array([1.5, 2.5], dtype=np.float32)
+        (out,) = sess.run(None, {"x_keys": x_keys, "x_values": x_values})
         np.testing.assert_array_equal(out, np.array([1.5, 0.0, 2.5], dtype=np.float32))
-
-        # Regression: callers that normalise feed values via ``np.asarray``
-        # wrap the dict into a 0-d numpy object array. The evaluator must
-        # unwrap such arrays instead of failing with
-        # "Unrecognized object in the object array, expect a string, or
-        # array of bytes: <class 'dict'>".
-        wrapped = np.asarray({10: 1.5, 30: 2.5}, dtype=object)
-        (out_wrapped,) = sess.run(None, {"x": wrapped})
-        np.testing.assert_array_equal(out_wrapped, np.array([1.5, 0.0, 2.5], dtype=np.float32))
-
-        # Feeding a dict for a non-map input now raises an informative
-        # ``TypeError`` instead of the cryptic numpy_helper error.
-        model_plain = parser.parse_model(_ABS_ADD_MODEL_SRC)
-        sess_plain = ReferenceEvaluator(model_plain)
-        with self.assertRaisesRegex(TypeError, r"not declared as a map"):
-            sess_plain.run(
-                None, {"x": {0: 1.0}, "z": np.array([0.0, 0.0, 0.0], dtype=np.float32)}
-            )
 
     def test_lstm_layout1_matches_layout0(self):
         # Regression test for ``test_cc_lstm_batchwise``: the LSTM kernel

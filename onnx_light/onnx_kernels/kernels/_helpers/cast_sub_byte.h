@@ -46,6 +46,43 @@ std::uint8_t FloatToUint2Bits(float v) noexcept;
 std::int8_t Int2BitsToInt8(std::uint8_t bits) noexcept;
 std::uint8_t Uint2BitsToUint8(std::uint8_t bits) noexcept;
 
+// ---------------------------------------------------------------------------
+// Packed sub-byte element read/write helpers shared across kernels.
+//
+// The packing layout matches the ONNX TensorProto convention:
+//   * INT4 / UINT4 / FLOAT4E2M1 — two 4-bit elements per byte, low nibble
+//     holds the even-indexed element (flat index 2*i), high nibble holds the
+//     odd-indexed element (flat index 2*i + 1).
+//   * INT2 / UINT2 — four 2-bit elements per byte, packed least-significant
+//     pair first (flat index 4*i in bits 0–1, 4*i+1 in bits 2–3, etc.).
+// ---------------------------------------------------------------------------
+inline std::uint8_t Read4BitElement(const std::uint8_t *data, int64_t i) noexcept {
+  const std::uint8_t byte = data[i / 2];
+  return static_cast<std::uint8_t>((i % 2 == 0) ? (byte & 0x0F) : ((byte >> 4) & 0x0F));
+}
+
+inline void Write4BitElement(std::uint8_t *data, int64_t i, std::uint8_t nibble) noexcept {
+  std::uint8_t &byte = data[i / 2];
+  if (i % 2 == 0) {
+    byte = static_cast<std::uint8_t>((byte & 0xF0) | (nibble & 0x0F));
+  } else {
+    byte = static_cast<std::uint8_t>((byte & 0x0F) | ((nibble & 0x0F) << 4));
+  }
+}
+
+inline std::uint8_t Read2BitElement(const std::uint8_t *data, int64_t i) noexcept {
+  const std::uint8_t byte = data[i / 4];
+  const int shift = static_cast<int>((i % 4) * 2);
+  return static_cast<std::uint8_t>((byte >> shift) & 0x03);
+}
+
+inline void Write2BitElement(std::uint8_t *data, int64_t i, std::uint8_t bits) noexcept {
+  std::uint8_t &byte = data[i / 4];
+  const int shift = static_cast<int>((i % 4) * 2);
+  const std::uint8_t mask = static_cast<std::uint8_t>(0x03u << shift);
+  byte = static_cast<std::uint8_t>((byte & ~mask) | (((bits & 0x03) << shift) & mask));
+}
+
 } // namespace kernel
 } // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

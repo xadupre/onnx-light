@@ -113,10 +113,12 @@ TEST(KernelClass, NegInPlaceWritesToPreallocatedOutput) {
   EXPECT_FLOAT_EQ(py[1], -2.0f);
 }
 
-TEST(KernelClass, NegRejectsNonFloatTensors) {
+TEST(KernelClass, NegRejectsUnsupportedDtype) {
+  // UINT8 is not in Neg's supported set (FLOAT/DOUBLE/FLOAT16/BFLOAT16/
+  // INT8/INT16/INT32/INT64), so the kernel must reject it.
   const KernelContext ctx{DefaultOpset(13)};
   Neg neg_kernel{ctx};
-  Tensor x = Tensor::FromInt32("", {2}, {-1, 2});
+  Tensor x = Tensor::FromUint8("", {2}, {1, 2});
   EXPECT_THROW((void)neg_kernel(x), std::invalid_argument);
 }
 

@@ -274,6 +274,24 @@ class TestReferenceEvaluator(ExtTestCase):
         (out,) = sess.run(None, {"x_keys": x_keys, "x_values": x_values})
         np.testing.assert_array_equal(out, np.array([1.5, 0.0, 2.5], dtype=np.float32))
 
+        # Regression: callers that normalise feed values via ``np.asarray``
+        # wrap the dict into a 0-d numpy object array. The evaluator must
+        # unwrap such arrays instead of failing with
+        # "Unrecognized object in the object array, expect a string, or
+        # array of bytes: <class 'dict'>".
+        wrapped = np.asarray({10: 1.5, 30: 2.5}, dtype=object)
+        (out_wrapped,) = sess.run(None, {"x": wrapped})
+        np.testing.assert_array_equal(out_wrapped, np.array([1.5, 0.0, 2.5], dtype=np.float32))
+
+        # Feeding a dict for a non-map input now raises an informative
+        # ``TypeError`` instead of the cryptic numpy_helper error.
+        model_plain = parser.parse_model(_ABS_ADD_MODEL_SRC)
+        sess_plain = ReferenceEvaluator(model_plain)
+        with self.assertRaisesRegex(TypeError, r"not declared as a map"):
+            sess_plain.run(
+                None, {"x": {0: 1.0}, "z": np.array([0.0, 0.0, 0.0], dtype=np.float32)}
+            )
+
     def test_lstm_layout1_matches_layout0(self):
         # Regression test for ``test_cc_lstm_batchwise``: the LSTM kernel
         # itself only implements ``layout=0`` so the dispatch table
@@ -481,6 +499,43 @@ class TestReferenceEvaluator(ExtTestCase):
         self._check_image_decoder_jpeg(
             "test_cc_image_decoder_decode_jpeg_grayscale", (32, 32, 1), 1
         )
+
+    def test_image_decoder_decode_tiff_rgb(self):
+        # Regression test for ``test_cc_image_decoder_decode_tiff_rgb``: the
+        # baseline TIFF decoder must produce the same ``(32, 32, 3)`` uint8
+        # tensor as the upstream reference (uncompressed, chunky, 8-bit per
+        # sample TIFF) rather than the empty-matrix fallback ``(0, 0, 3)``.
+        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+
+        tc = collect_test_case().get("test_cc_image_decoder_decode_tiff_rgb")
+        self.assertIsNotNone(tc)
+        inputs, outputs = tc.data_sets[0]
+        sess = ReferenceEvaluator(tc.model)
+        got = sess.run(None, dict(zip(sess.input_names, inputs)))
+        self.assertEqual(len(got), 1)
+        self.assertEqual(got[0].dtype, np.uint8)
+        self.assertEqual(got[0].shape, (32, 32, 3))
+        self.assertEqual(got[0].shape, outputs[0].shape)
+        np.testing.assert_array_equal(got[0], outputs[0])
+
+    def test_image_decoder_decode_png_rgb(self):
+        # Regression test for ``test_cc_image_decoder_decode_png_rgb``: the
+        # ``ImageDecoder`` kernel must inflate the PNG bytestream (deflate +
+        # PNG filters) and return the correct ``(32, 32, 3)`` uint8 tensor
+        # rather than the empty-matrix fallback ``(0, 0, 3)`` returned by
+        # earlier versions of the kernel that lacked a PNG decoder.
+        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+
+        tc = collect_test_case().get("test_cc_image_decoder_decode_png_rgb")
+        self.assertIsNotNone(tc)
+        inputs, outputs = tc.data_sets[0]
+        sess = ReferenceEvaluator(tc.model)
+        got = sess.run(None, dict(zip(sess.input_names, inputs)))
+        self.assertEqual(len(got), 1)
+        self.assertEqual(got[0].dtype, np.uint8)
+        self.assertEqual(got[0].shape, (32, 32, 3))
+        self.assertEqual(got[0].shape, outputs[0].shape)
+        np.testing.assert_array_equal(got[0], outputs[0])
 
     def _check_resize_backend_case(self, test_name):
         # Regression test for the ``Resize`` ``align_corners`` downsample

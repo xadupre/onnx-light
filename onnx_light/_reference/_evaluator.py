@@ -462,7 +462,24 @@ class ReferenceEvaluator:
             ctx.register_custom_kernel(domain, op_type, wrapper)
 
         for name, value in feed_inputs.items():
-            if name in self._map_inputs and isinstance(value, dict):
+            # ``map(K, V)``-typed feeds may arrive as a bare ``dict`` or as a
+            # numpy object array of size 1 wrapping a ``dict`` (e.g. when a
+            # caller normalises every feed value with ``np.asarray`` before
+            # dispatch). Unwrap the latter so the dispatch below sees a plain
+            # ``dict`` instead of falling through to ``_numpy_to_cpp_tensor``,
+            # which would then fail with "Unrecognized object in the object
+            # array, expect a string, or array of bytes: <class 'dict'>".
+            if isinstance(value, np.ndarray) and value.dtype == object and value.size == 1:
+                unwrapped = value.item()
+                if isinstance(unwrapped, dict):
+                    value = unwrapped
+            if isinstance(value, dict):
+                if name not in self._map_inputs:
+                    raise TypeError(
+                        f"ReferenceEvaluator.run: input {name!r} received a "
+                        f"dict feed but is not declared as a map(K, V) input. "
+                        f"Map-typed inputs are: {sorted(self._map_inputs)}."
+                    )
                 key_type, value_type = self._map_inputs[name]
                 keys_arr, values_arr = self._dict_to_key_value_arrays(
                     name, value, key_type, value_type

@@ -272,6 +272,24 @@ class TestReferenceEvaluator(ExtTestCase):
         (out,) = sess.run(None, {"x": {10: 1.5, 30: 2.5}})
         np.testing.assert_array_equal(out, np.array([1.5, 0.0, 2.5], dtype=np.float32))
 
+        # Regression: callers that normalise feed values via ``np.asarray``
+        # wrap the dict into a 0-d numpy object array. The evaluator must
+        # unwrap such arrays instead of failing with
+        # "Unrecognized object in the object array, expect a string, or
+        # array of bytes: <class 'dict'>".
+        wrapped = np.asarray({10: 1.5, 30: 2.5}, dtype=object)
+        (out_wrapped,) = sess.run(None, {"x": wrapped})
+        np.testing.assert_array_equal(out_wrapped, np.array([1.5, 0.0, 2.5], dtype=np.float32))
+
+        # Feeding a dict for a non-map input now raises an informative
+        # ``TypeError`` instead of the cryptic numpy_helper error.
+        model_plain = parser.parse_model(_ABS_ADD_MODEL_SRC)
+        sess_plain = ReferenceEvaluator(model_plain)
+        with self.assertRaisesRegex(TypeError, r"not declared as a map"):
+            sess_plain.run(
+                None, {"x": {0: 1.0}, "z": np.array([0.0, 0.0, 0.0], dtype=np.float32)}
+            )
+
     def test_lstm_layout1_matches_layout0(self):
         # Regression test for ``test_cc_lstm_batchwise``: the LSTM kernel
         # itself only implements ``layout=0`` so the dispatch table

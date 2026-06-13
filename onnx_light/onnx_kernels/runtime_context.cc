@@ -27,7 +27,7 @@ int64_t NowNanos() noexcept {
 // written. Returns 0 for dtypes that are not representable as ``double``
 // here.
 int32_t DecodeNumericValues(int32_t dtype, const uint8_t *ptr, int64_t element_count,
-                            int32_t capacity, std::array<double, kTensorEventValueLimit> &out) {
+                            int32_t capacity, std::array<double, kRuntimeEventValueLimit> &out) {
   const int32_t n =
       static_cast<int32_t>(std::min<int64_t>(static_cast<int64_t>(capacity), element_count));
   out.fill(0.0);
@@ -98,18 +98,35 @@ int32_t DecodeNumericValues(int32_t dtype, const uint8_t *ptr, int64_t element_c
   }
 }
 
-TensorEvent MakeAddOrReplaceEvent(TensorEventAction action, TensorEventKind kind,
-                                  const std::string &name, const Tensor &tensor) {
-  TensorEvent ev;
+// Resolves the node_index recorded on an event from its kind and the index
+// of the node currently executing: ``-1`` for graph inputs, ``-2`` for
+// initializers, and the producing node index for intermediate / output
+// tensors.
+int64_t ResolveNodeIndex(RuntimeEventKind kind, int64_t current_node_index) noexcept {
+  switch (kind) {
+  case RuntimeEventKind::kInput:
+    return -1;
+  case RuntimeEventKind::kInitializer:
+    return -2;
+  default:
+    return current_node_index;
+  }
+}
+
+RuntimeEvent MakeAddOrReplaceEvent(RuntimeEventAction action, RuntimeEventKind kind,
+                                  const std::string &name, const Tensor &tensor,
+                                  int64_t current_node_index) {
+  RuntimeEvent ev;
   ev.action = action;
   ev.kind = kind;
   ev.timestamp_ns = NowNanos();
   ev.name = name;
+  ev.node_index = ResolveNodeIndex(kind, current_node_index);
   const int64_t count = tensor.element_count();
-  const int32_t capacity = static_cast<int32_t>(kTensorEventValueLimit);
+  const int32_t capacity = static_cast<int32_t>(kRuntimeEventValueLimit);
   const int32_t truncated_count = static_cast<int32_t>(std::min<int64_t>(count, capacity));
   // Always populate the fixed-size value buffer with the first
-  // min(element_count, kTensorEventValueLimit) entries; truncate the
+  // min(element_count, kRuntimeEventValueLimit) entries; truncate the
   // remainder.
   if (static_cast<DataType>(tensor.data_type) == DataType::STRING) {
     for (int32_t i = 0; i < truncated_count && static_cast<size_t>(i) < tensor.string_data.size();
@@ -134,9 +151,9 @@ TensorEvent MakeAddOrReplaceEvent(TensorEventAction action, TensorEventKind kind
   return ev;
 }
 
-TensorEvent MakeRemoveEvent(TensorEventKind kind, const std::string &name) {
-  TensorEvent ev;
-  ev.action = TensorEventAction::kRemove;
+RuntimeEvent MakeRemoveEvent(RuntimeEventKind kind, const std::string &name) {
+  RuntimeEvent ev;
+  ev.action = RuntimeEventAction::kRemove;
   ev.kind = kind;
   ev.timestamp_ns = NowNanos();
   ev.name = name;
@@ -147,49 +164,50 @@ TensorEvent MakeRemoveEvent(TensorEventKind kind, const std::string &name) {
 
 } // namespace
 
-const char *TensorEventActionName(TensorEventAction action) noexcept {
+const char *RuntimeEventActionName(RuntimeEventAction action) noexcept {
   switch (action) {
-  case TensorEventAction::kAdd:
+  case RuntimeEventAction::kAdd:
     return "add";
-  case TensorEventAction::kReplace:
+  case RuntimeEventAction::kReplace:
     return "replace";
-  case TensorEventAction::kRemove:
+  case RuntimeEventAction::kRemove:
     return "remove";
-  case TensorEventAction::kRunNode:
+  case RuntimeEventAction::kRunNode:
     return "run_node";
   }
   return "unknown";
 }
 
-const char *TensorEventKindName(TensorEventKind kind) noexcept {
+const char *RuntimeEventKindName(RuntimeEventKind kind) noexcept {
   switch (kind) {
-  case TensorEventKind::kUnknown:
+  case RuntimeEventKind::kUnknown:
     return "unknown";
-  case TensorEventKind::kInitializer:
+  case RuntimeEventKind::kInitializer:
     return "initializer";
-  case TensorEventKind::kInput:
+  case RuntimeEventKind::kInput:
     return "input";
-  case TensorEventKind::kIntermediate:
+  case RuntimeEventKind::kIntermediate:
     return "intermediate";
-  case TensorEventKind::kOutput:
+  case RuntimeEventKind::kOutput:
     return "output";
   }
   return "unknown";
 }
 
-void RuntimeContext::Set(const std::string &name, Tensor tensor, TensorEventKind kind) {
+void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKind kind) {
   EXT_ENFORCE(!Has(name), "RuntimeContext::Set: a tensor named '", name, "' already exists.");
   if (events_enabled_) {
-    events_.push_back(MakeAddOrReplaceEvent(TensorEventAction::kAdd, kind, name, tensor));
+    events_.push_back(
+        MakeAddOrReplaceEvent(RuntimeEventAction::kAdd, kind, name, tensor, current_node_index_));
   }
   tensors_[name] = std::move(tensor);
 }
 
-void RuntimeContext::Put(const std::string &name, Tensor tensor, TensorEventKind kind) {
+void RuntimeContext::Put(const std::string &name, Tensor tensor, RuntimeEventKind kind) {
   if (events_enabled_) {
-    const TensorEventAction action =
-        Has(name) ? TensorEventAction::kReplace : TensorEventAction::kAdd;
-    events_.push_back(MakeAddOrReplaceEvent(action, kind, name, tensor));
+    const RuntimeEventAction action =
+        Has(name) ? RuntimeEventAction::kReplace : RuntimeEventAction::kAdd;
+    events_.push_back(MakeAddOrReplaceEvent(action, kind, name, tensor, current_node_index_));
   }
   tensors_[name] = std::move(tensor);
 }
@@ -197,7 +215,7 @@ void RuntimeContext::Put(const std::string &name, Tensor tensor, TensorEventKind
 bool RuntimeContext::Remove(const std::string &name) {
   const bool erased = tensors_.erase(name) > 0;
   if (erased && events_enabled_) {
-    events_.push_back(MakeRemoveEvent(TensorEventKind::kUnknown, name));
+    events_.push_back(MakeRemoveEvent(RuntimeEventKind::kUnknown, name));
   }
   return erased;
 }
@@ -221,12 +239,13 @@ Tensor &RuntimeContext::Get(const std::string &name) {
 void RuntimeContext::AppendRunNodeEvent(const std::string &op_domain, const std::string &op_type,
                                         std::vector<std::string> inputs, int64_t start_time_ns,
                                         int64_t duration_ns) {
-  TensorEvent ev;
-  ev.action = TensorEventAction::kRunNode;
-  ev.kind = TensorEventKind::kUnknown;
+  RuntimeEvent ev;
+  ev.action = RuntimeEventAction::kRunNode;
+  ev.kind = RuntimeEventKind::kUnknown;
   ev.timestamp_ns = start_time_ns;
   ev.data_type = static_cast<int32_t>(DataType::UNDEFINED);
   ev.value_count = 0;
+  ev.node_index = current_node_index_;
   ev.op_domain = op_domain;
   ev.op_type = op_type;
   ev.inputs = std::move(inputs);

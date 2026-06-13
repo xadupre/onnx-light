@@ -1116,8 +1116,8 @@ TEST(RunNodes, RuntimeContextRemove) {
 }
 
 TEST(RunNodes, RuntimeContextEventLogSetReplaceRemove) {
-  using onnx_kernels::TensorEventAction;
-  using onnx_kernels::TensorEventKind;
+  using onnx_kernels::RuntimeEventAction;
+  using onnx_kernels::RuntimeEventKind;
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.set_events_enabled(true);
   EXPECT_TRUE(rt.events().empty());
@@ -1127,8 +1127,8 @@ TEST(RunNodes, RuntimeContextEventLogSetReplaceRemove) {
   rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, -2.0f, 3.5f}));
   ASSERT_EQ(rt.events().size(), 1u);
   const auto &add_ev = rt.events()[0];
-  EXPECT_EQ(add_ev.action, TensorEventAction::kAdd);
-  EXPECT_EQ(add_ev.kind, TensorEventKind::kInput);
+  EXPECT_EQ(add_ev.action, RuntimeEventAction::kAdd);
+  EXPECT_EQ(add_ev.kind, RuntimeEventKind::kInput);
   EXPECT_EQ(add_ev.name, "x");
   EXPECT_EQ(add_ev.data_type, static_cast<int32_t>(DataType::FLOAT));
   EXPECT_EQ(add_ev.shape, (std::vector<int64_t>{3}));
@@ -1145,8 +1145,8 @@ TEST(RunNodes, RuntimeContextEventLogSetReplaceRemove) {
   // "intermediate".
   rt.Put("x", Tensor::FromInt32("x", {2}, {7, 8}));
   ASSERT_EQ(rt.events().size(), 2u);
-  EXPECT_EQ(rt.events()[1].action, TensorEventAction::kReplace);
-  EXPECT_EQ(rt.events()[1].kind, TensorEventKind::kIntermediate);
+  EXPECT_EQ(rt.events()[1].action, RuntimeEventAction::kReplace);
+  EXPECT_EQ(rt.events()[1].kind, RuntimeEventKind::kIntermediate);
   EXPECT_EQ(rt.events()[1].data_type, static_cast<int32_t>(DataType::INT32));
   EXPECT_EQ(rt.events()[1].value_count, 2);
   EXPECT_DOUBLE_EQ(rt.events()[1].values[0], 7.0);
@@ -1155,7 +1155,7 @@ TEST(RunNodes, RuntimeContextEventLogSetReplaceRemove) {
   // Remove -> remove event with empty shape and value_count = 0.
   EXPECT_TRUE(rt.Remove("x"));
   ASSERT_EQ(rt.events().size(), 3u);
-  EXPECT_EQ(rt.events()[2].action, TensorEventAction::kRemove);
+  EXPECT_EQ(rt.events()[2].action, RuntimeEventAction::kRemove);
   EXPECT_EQ(rt.events()[2].name, "x");
   EXPECT_TRUE(rt.events()[2].shape.empty());
   EXPECT_EQ(rt.events()[2].value_count, 0);
@@ -1164,11 +1164,11 @@ TEST(RunNodes, RuntimeContextEventLogSetReplaceRemove) {
   EXPECT_FALSE(rt.Remove("x"));
   EXPECT_EQ(rt.events().size(), 3u);
 
-  // Large tensor (> kTensorEventValueLimit) -> data_type = -1, empty shape,
-  // values truncated to the first kTensorEventValueLimit entries.
+  // Large tensor (> kRuntimeEventValueLimit) -> data_type = -1, empty shape,
+  // values truncated to the first kRuntimeEventValueLimit entries.
   rt.Put("big", Tensor::FromInt32("big", {9}, {0, 1, 2, 3, 4, 5, 6, 7, 8}));
   ASSERT_EQ(rt.events().size(), 4u);
-  EXPECT_EQ(rt.events()[3].action, TensorEventAction::kAdd);
+  EXPECT_EQ(rt.events()[3].action, RuntimeEventAction::kAdd);
   EXPECT_EQ(rt.events()[3].data_type, -1);
   EXPECT_TRUE(rt.events()[3].shape.empty());
   EXPECT_EQ(rt.events()[3].value_count, 8);
@@ -1194,8 +1194,8 @@ TEST(RunNodes, RuntimeContextEventLogCapturesRunGraphMutations) {
   // Smoke test: running a small chain of nodes through the dispatcher
   // populates the event log via SetOutput / Put on every produced tensor
   // and also appends one ``kRunNode`` event per dispatched node.
-  using onnx_kernels::TensorEventAction;
-  using onnx_kernels::TensorEventKind;
+  using onnx_kernels::RuntimeEventAction;
+  using onnx_kernels::RuntimeEventKind;
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.set_events_enabled(true);
   rt.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
@@ -1211,17 +1211,17 @@ TEST(RunNodes, RuntimeContextEventLogCapturesRunGraphMutations) {
   // intermediate plus one ``run_node`` event summarising the dispatch.
   ASSERT_EQ(rt.events().size(), 4u);
   EXPECT_EQ(rt.events()[0].name, "t");
-  EXPECT_EQ(rt.events()[0].action, TensorEventAction::kAdd);
-  EXPECT_EQ(rt.events()[0].kind, TensorEventKind::kIntermediate);
-  EXPECT_EQ(rt.events()[1].action, TensorEventAction::kRunNode);
+  EXPECT_EQ(rt.events()[0].action, RuntimeEventAction::kAdd);
+  EXPECT_EQ(rt.events()[0].kind, RuntimeEventKind::kIntermediate);
+  EXPECT_EQ(rt.events()[1].action, RuntimeEventAction::kRunNode);
   EXPECT_EQ(rt.events()[1].op_domain, "ai.onnx");
   EXPECT_EQ(rt.events()[1].op_type, "Abs");
   EXPECT_EQ(rt.events()[1].inputs, (std::vector<std::string>{"x"}));
   EXPECT_GE(rt.events()[1].duration_ns, 0);
   EXPECT_EQ(rt.events()[2].name, "y");
-  EXPECT_EQ(rt.events()[2].action, TensorEventAction::kAdd);
-  EXPECT_EQ(rt.events()[2].kind, TensorEventKind::kIntermediate);
-  EXPECT_EQ(rt.events()[3].action, TensorEventAction::kRunNode);
+  EXPECT_EQ(rt.events()[2].action, RuntimeEventAction::kAdd);
+  EXPECT_EQ(rt.events()[2].kind, RuntimeEventKind::kIntermediate);
+  EXPECT_EQ(rt.events()[3].action, RuntimeEventAction::kRunNode);
   EXPECT_EQ(rt.events()[3].op_domain, "ai.onnx");
   EXPECT_EQ(rt.events()[3].op_type, "Add");
   EXPECT_EQ(rt.events()[3].inputs, (std::vector<std::string>{"t", "z"}));
@@ -3096,7 +3096,7 @@ TEST(RunNodes, RunGraphReleaseIntermediatesRemovesUnusedAndEmitsEvent) {
   // y = Add(Abs(x), z) — after running, "t" (the intermediate) must be gone
   // from the context, "y" (declared output) must remain, and "x" / "z"
   // (graph inputs already in the context) must also remain.
-  using onnx_kernels::TensorEventAction;
+  using onnx_kernels::RuntimeEventAction;
 
   GraphProto graph;
   ValueInfoProto vi_x;
@@ -3128,7 +3128,7 @@ TEST(RunNodes, RunGraphReleaseIntermediatesRemovesUnusedAndEmitsEvent) {
   // At least one kRemove event was emitted for "t".
   bool saw_remove_t = false;
   for (const auto &ev : rt.events()) {
-    if (ev.action == TensorEventAction::kRemove && ev.name == "t") {
+    if (ev.action == RuntimeEventAction::kRemove && ev.name == "t") {
       saw_remove_t = true;
       break;
     }

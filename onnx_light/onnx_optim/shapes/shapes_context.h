@@ -48,7 +48,7 @@ inline constexpr const char *kOnnxDomain = "ai.onnx";
 /**
  * Kind of shape-inference event recorded in the
  * :cpp:class:`ShapesContext` event log. Mirrors the runtime
- * :cpp:enum:`onnx_kernels::TensorEventAction` design.
+ * :cpp:enum:`onnx_kernels::RuntimeEventAction` design.
  *
  *  * ``kAdd``         — a new tensor descriptor was inserted via
  *                       :cpp:func:`ShapesContext::Set` on a previously

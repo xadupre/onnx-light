@@ -97,7 +97,7 @@ inline void SetOutput(const NodeProto &node, int index, Tensor result, RuntimeCo
                                 std::to_string(index) + " is unset (empty name).");
   }
   result.name = name;
-  rt.Put(name, std::move(result), TensorEventKind::kIntermediate);
+  rt.Put(name, std::move(result), RuntimeEventKind::kIntermediate);
 }
 
 // Looks up the sequence-typed input at slot ``index`` in

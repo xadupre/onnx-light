@@ -355,7 +355,7 @@ class ReferenceEvaluator:
     def events(self) -> list[Any]:
         """Returns the event log from the most recent :meth:`run` call.
 
-        Each entry is a ``TensorEvent`` object with an :meth:`as_dict` method
+        Each entry is a ``RuntimeEvent`` object with an :meth:`as_dict` method
         that returns a dictionary with the keys ``"action"``, ``"kind"``,
         ``"name"``, ``"data_type"``, ``"shape"``, ``"value_count"``,
         ``"values"`` and ``"string_values"``.

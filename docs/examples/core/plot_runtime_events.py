@@ -165,7 +165,7 @@ print(f"y =\n{y}")
 # +++++++++++++++++++++
 #
 # :meth:`~onnx_light.reference.ReferenceEvaluator.events` returns a list of
-# :class:`TensorEvent` entries. Each event carries the
+# :class:`RuntimeEvent` entries. Each event carries the
 # ``action`` (``"add"`` / ``"replace"`` / ``"remove"``), the
 # ``kind`` of value (``"input"``, ``"initializer"``,
 # ``"intermediate"`` or ``"output"``), the tensor ``name``,

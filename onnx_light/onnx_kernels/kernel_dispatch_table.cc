@@ -671,7 +671,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
              return;
            }
            output.name = name;
-           rt.Put(name, std::move(output), TensorEventKind::kIntermediate);
+           rt.Put(name, std::move(output), RuntimeEventKind::kIntermediate);
          };
          set_optional_output(1, std::move(result.present_key));
          set_optional_output(2, std::move(result.present_value));
@@ -1348,7 +1348,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
              return;
            }
            output.name = name;
-           rt.Put(name, std::move(output), TensorEventKind::kIntermediate);
+           rt.Put(name, std::move(output), RuntimeEventKind::kIntermediate);
          };
          set_optional_output(0, std::move(y));
          set_optional_output(1, std::move(y_h));
@@ -1535,7 +1535,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
              return;
            }
            output.name = name;
-           rt.Put(name, std::move(output), TensorEventKind::kIntermediate);
+           rt.Put(name, std::move(output), RuntimeEventKind::kIntermediate);
          };
          set_optional_output(0, std::move(y));
          set_optional_output(1, std::move(y_h));
@@ -2129,7 +2129,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
              return;
            }
            output.name = name;
-           rt.Put(name, std::move(output), TensorEventKind::kIntermediate);
+           rt.Put(name, std::move(output), RuntimeEventKind::kIntermediate);
          };
          set_optional_output(0, std::move(y));
          set_optional_output(1, std::move(y_h));

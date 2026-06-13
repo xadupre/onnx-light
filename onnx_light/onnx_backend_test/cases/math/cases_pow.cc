@@ -4,6 +4,8 @@
 
 #include "onnx_backend_test/cases/math/include_math_cases.h"
 #include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_kernels/kernels/math/include_math_kernels.h"
 
 #include <vector>
 
@@ -12,6 +14,8 @@ namespace onnx_backend_test {
 
 void RegisterPowCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(14);
+  const kernel::KernelContext ctx{opset};
+  const kernel::Pow pow_kernel{ctx};
 
   NodeProto node;
   node.set_op_type("Pow");
@@ -95,6 +99,24 @@ void RegisterPowCases(std::vector<TestCase> &registry) {
     Tensor y = Tensor::FromInt32("", {3}, {4, 5, 6});
     Tensor z = Tensor::FromInt32("", {3}, {1, 32, 729});
     Expect(node, {x, y}, {z}, "test_pow_types_int32_int32", {opset}, "backend-test", registry);
+  }
+
+  // FLOAT16 base with FLOAT exponent.
+  {
+    Tensor x = kernel::MakeFloat16Tensor("", {3}, {1.0f, 2.0f, 3.0f});
+    Tensor y = Tensor::FromFloat("", {3}, {2.0f, 3.0f, 4.0f});
+    Tensor z = pow_kernel(x, y);
+    Expect(node, {x, y}, {z}, "test_cc_pow_types_float16_float32", {opset}, "backend-test",
+           registry);
+  }
+
+  // BFLOAT16 base with FLOAT exponent.
+  {
+    Tensor x = kernel::MakeBfloat16Tensor("", {3}, {1.0f, 2.0f, 3.0f});
+    Tensor y = Tensor::FromFloat("", {3}, {2.0f, 3.0f, 4.0f});
+    Tensor z = pow_kernel(x, y);
+    Expect(node, {x, y}, {z}, "test_cc_pow_types_bfloat16_float32", {opset}, "backend-test",
+           registry);
   }
 }
 

@@ -114,6 +114,14 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     operand types ("Type 'tensor(float8e4m3fn)' of input parameter
 #     (input) of operator (CastLike) ... is invalid"). The reference
 #     backend still exercises these conversions byte-for-byte.
+#   * ``test_cc_equal_bfloat16``, ``test_cc_greater_bfloat16``,
+#     ``test_cc_greater_or_equal_bfloat16``, ``test_cc_less_bfloat16``,
+#     ``test_cc_less_or_equal_bfloat16``, ``test_mod_mixed_sign_bfloat16``
+#     and ``test_cc_pow_types_bfloat16_float32`` — ORT's CPU EP does not
+#     register ``bfloat16`` kernels for these comparison, modulo, and power
+#     operators ("Could not find an implementation for Equal(19) / Greater(13) /
+#     Less(13) / Mod(13) / Pow(13) node"). The reference backend still
+#     exercises these cases.
 #   * ``test_cc_zipmap_*`` — ORT returns Python ``list[dict]`` for ZipMap
 #     outputs while the lightweight backend-test carrier materializes ZipMap
 #     expected outputs as float tensors containing map values.
@@ -412,7 +420,9 @@ ORT_EXCLUDE_REGEX = [
     r"^test_min_int16$",
     r"^test_min_uint16$",
     # ORT CPU does not register these bfloat16 kernels.
-    r"^test_cc_(abs|add|ceil|div|elu|erf|exp|floor|gelu_default|isnan|log|mul|neg|reciprocal|relu|sigmoid|sign|softplus|softsign|sqrt|sub|tanh)_bfloat16$",
+    r"^test_cc_(abs|add|ceil|div|elu|equal|erf|exp|floor|gelu_default|greater|greater_or_equal|isnan|less|less_or_equal|log|mul|neg|reciprocal|relu|sigmoid|sign|softplus|softsign|sqrt|sub|tanh)_bfloat16$",
+    r"^test_mod_mixed_sign_bfloat16$",
+    r"^test_cc_pow_types_bfloat16_float32$",
     r"^test_cc_maxunpool_export_with_output_shape$",
     r"^test_resize_downsample_scales_linear_align_corners$",
     r"^test_resize_downsample_scales_cubic_align_corners$",

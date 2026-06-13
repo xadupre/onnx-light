@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 
@@ -54,10 +55,18 @@ Tensor Greater::operator()(const Tensor &x, const Tensor &y) const {
     return GreaterAlloc<uint32_t>("UINT32", DataType::UINT32, x, y);
   case DataType::UINT64:
     return GreaterAlloc<uint64_t>("UINT64", DataType::UINT64, x, y);
+  case DataType::FLOAT16:
+    return detail::BinaryHalfCompareElementwiseAlloc(
+        kGreaterName, "FLOAT16", DataType::FLOAT16, x, y, Float16BitsToFloat,
+        [](float a, float b) -> uint8_t { return a > b ? 1 : 0; });
+  case DataType::BFLOAT16:
+    return detail::BinaryHalfCompareElementwiseAlloc(
+        kGreaterName, "BFLOAT16", DataType::BFLOAT16, x, y, Bfloat16BitsToFloat,
+        [](float a, float b) -> uint8_t { return a > b ? 1 : 0; });
   default:
     throw std::invalid_argument(std::string(kGreaterName) +
-                                " only supports FLOAT, INT8, INT16, UINT8, UINT16, UINT32 "
-                                "and UINT64 inputs.");
+                                " only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, UINT8, "
+                                "UINT16, UINT32 and UINT64 inputs.");
   }
 }
 
@@ -77,10 +86,18 @@ void Greater::operator()(const Tensor &x, const Tensor &y, Tensor &output) const
     return GreaterInPlace<uint32_t>("UINT32", DataType::UINT32, x, y, output);
   case DataType::UINT64:
     return GreaterInPlace<uint64_t>("UINT64", DataType::UINT64, x, y, output);
+  case DataType::FLOAT16:
+    return detail::BinaryHalfCompareElementwise(
+        kGreaterName, "FLOAT16", DataType::FLOAT16, x, y, output, Float16BitsToFloat,
+        [](float a, float b) -> uint8_t { return a > b ? 1 : 0; });
+  case DataType::BFLOAT16:
+    return detail::BinaryHalfCompareElementwise(
+        kGreaterName, "BFLOAT16", DataType::BFLOAT16, x, y, output, Bfloat16BitsToFloat,
+        [](float a, float b) -> uint8_t { return a > b ? 1 : 0; });
   default:
     throw std::invalid_argument(std::string(kGreaterName) +
-                                " only supports FLOAT, INT8, INT16, UINT8, UINT16, UINT32 "
-                                "and UINT64 inputs.");
+                                " only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, UINT8, "
+                                "UINT16, UINT32 and UINT64 inputs.");
   }
 }
 

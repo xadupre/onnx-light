@@ -113,9 +113,24 @@ void ModInPlaceFloat16(const Tensor &x, const Tensor &y, Tensor &output) {
       });
 }
 
+Tensor ModAllocBfloat16(const Tensor &x, const Tensor &y) {
+  return detail::BinaryElementwiseAlloc<uint16_t, uint16_t>(
+      kModName, "BFLOAT16", DataType::BFLOAT16, x, y, [](uint16_t a, uint16_t b) -> uint16_t {
+        return FloatToBfloat16Bits(std::fmod(Bfloat16BitsToFloat(a), Bfloat16BitsToFloat(b)));
+      });
+}
+
+void ModInPlaceBfloat16(const Tensor &x, const Tensor &y, Tensor &output) {
+  detail::BinaryElementwise<uint16_t, uint16_t>(
+      kModName, "BFLOAT16", DataType::BFLOAT16, x, y, output,
+      [](uint16_t a, uint16_t b) -> uint16_t {
+        return FloatToBfloat16Bits(std::fmod(Bfloat16BitsToFloat(a), Bfloat16BitsToFloat(b)));
+      });
+}
+
 constexpr const char *kSupportedModTypesMsg =
-    " only supports FLOAT16, FLOAT, DOUBLE, INT8, INT16, INT32, INT64, UINT8, UINT16, UINT32 and "
-    "UINT64 inputs.";
+    " only supports FLOAT16, BFLOAT16, FLOAT, DOUBLE, INT8, INT16, INT32, INT64, UINT8, UINT16, "
+    "UINT32 and UINT64 inputs.";
 
 constexpr const char *kFmodRequiredForFloatMsg =
     " requires attribute ``fmod`` set to 1 for floating-point inputs.";
@@ -128,6 +143,11 @@ Tensor Mod::operator()(const Tensor &x, const Tensor &y, int64_t fmod) const {
       throw std::invalid_argument(std::string(kModName) + kFmodRequiredForFloatMsg);
     }
     return ModAllocFloat16(x, y);
+  case DataType::BFLOAT16:
+    if (fmod != 1) {
+      throw std::invalid_argument(std::string(kModName) + kFmodRequiredForFloatMsg);
+    }
+    return ModAllocBfloat16(x, y);
   case DataType::FLOAT:
     if (fmod != 1) {
       throw std::invalid_argument(std::string(kModName) + kFmodRequiredForFloatMsg);
@@ -166,6 +186,11 @@ void Mod::operator()(const Tensor &x, const Tensor &y, int64_t fmod, Tensor &out
       throw std::invalid_argument(std::string(kModName) + kFmodRequiredForFloatMsg);
     }
     return ModInPlaceFloat16(x, y, output);
+  case DataType::BFLOAT16:
+    if (fmod != 1) {
+      throw std::invalid_argument(std::string(kModName) + kFmodRequiredForFloatMsg);
+    }
+    return ModInPlaceBfloat16(x, y, output);
   case DataType::FLOAT:
     if (fmod != 1) {
       throw std::invalid_argument(std::string(kModName) + kFmodRequiredForFloatMsg);

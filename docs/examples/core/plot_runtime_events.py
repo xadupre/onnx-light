@@ -201,7 +201,7 @@ for ev in events:
 # removed right after ``Add`` consumes it and ``w`` right after
 # ``Reshape`` consumes it, while the graph output ``y`` is preserved.
 
-removed = [ev.as_dict() for ev in events if ev.as_dict()["action"] == "remove"]
+removed = [d for d in (ev.as_dict() for ev in events) if d["action"] == "remove"]
 print(f"Recorded {len(removed)} removal event(s):")
 for d in removed:
     print(f"  {d['name']:<6s} ({d['kind']}) released from the runtime tensor map")

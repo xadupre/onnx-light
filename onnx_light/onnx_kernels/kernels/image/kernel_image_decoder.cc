@@ -1596,8 +1596,8 @@ bool TryDecodeWebp(const uint8_t *data, size_t size, const std::string &pixel_fo
 
   const int64_t channels = ImageDecoder::ChannelCount(pixel_format);
   const size_t pixel_count = static_cast<size_t>(width) * static_cast<size_t>(height);
-  if (pixel_count > (std::numeric_limits<size_t>::max() / 3u) ||
-      pixel_count > (std::numeric_limits<size_t>::max() / static_cast<size_t>(channels))) {
+  if (pixel_count > ((std::numeric_limits<size_t>::max)() / 3u) ||
+      pixel_count > ((std::numeric_limits<size_t>::max)() / static_cast<size_t>(channels))) {
     return false;
   }
 

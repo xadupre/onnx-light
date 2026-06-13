@@ -173,6 +173,13 @@ TEST(BackendRunModel, MatMulInteger) { RunBackendCasesFor("MatMulInteger"); }
 TEST(BackendRunModel, PRelu) { RunBackendCasesFor("PRelu"); }
 TEST(BackendRunModel, Pow) { RunBackendCasesFor("Pow"); }
 
+// Comparison / logical kernels.
+TEST(BackendRunModel, Equal) { RunBackendCasesFor("Equal"); }
+TEST(BackendRunModel, Greater) { RunBackendCasesFor("Greater"); }
+TEST(BackendRunModel, GreaterOrEqual) { RunBackendCasesFor("GreaterOrEqual"); }
+TEST(BackendRunModel, Less) { RunBackendCasesFor("Less"); }
+TEST(BackendRunModel, LessOrEqual) { RunBackendCasesFor("LessOrEqual"); }
+
 // Variadic element-wise reducers.
 TEST(BackendRunModel, Sum) { RunBackendCasesFor("Sum"); }
 TEST(BackendRunModel, Max) { RunBackendCasesFor("Max"); }

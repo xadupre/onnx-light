@@ -224,12 +224,30 @@ TEST(BackendTestCase, GreaterLessCasesArePresent) {
   // INT16, UINT8, UINT16, UINT32, UINT64) plus the float broadcast cases
   // (see ``RegisterGreaterCases``/``RegisterLessCases``).
   auto cases = CollectTestCases();
-  for (const char *name :
-       {"test_cc_greater",     "test_cc_greater_bcast", "test_cc_less",        "test_cc_less_bcast",
-        "test_greater",        "test_greater_int8",     "test_greater_int16",  "test_greater_uint8",
-        "test_greater_uint16", "test_greater_uint32",   "test_greater_uint64", "test_greater_bcast",
-        "test_less",           "test_less_int8",        "test_less_int16",     "test_less_uint8",
-        "test_less_uint16",    "test_less_uint32",      "test_less_uint64",    "test_less_bcast"}) {
+  for (const char *name : {"test_cc_greater",
+                           "test_cc_greater_bcast",
+                           "test_cc_greater_float16",
+                           "test_cc_greater_bfloat16",
+                           "test_cc_less",
+                           "test_cc_less_bcast",
+                           "test_cc_less_float16",
+                           "test_cc_less_bfloat16",
+                           "test_greater",
+                           "test_greater_int8",
+                           "test_greater_int16",
+                           "test_greater_uint8",
+                           "test_greater_uint16",
+                           "test_greater_uint32",
+                           "test_greater_uint64",
+                           "test_greater_bcast",
+                           "test_less",
+                           "test_less_int8",
+                           "test_less_int16",
+                           "test_less_uint8",
+                           "test_less_uint16",
+                           "test_less_uint32",
+                           "test_less_uint64",
+                           "test_less_bcast"}) {
     EXPECT_NE(FindLogicalCase(cases, name), nullptr) << "Missing Greater/Less case: " << name;
   }
 }
@@ -326,10 +344,11 @@ TEST(BackendTestCase, GreaterOrEqualCasesArePresent) {
   // ``RegisterGreaterOrEqualCases``).
   auto cases = CollectTestCases();
   for (const char *name :
-       {"test_cc_greater_or_equal", "test_cc_greater_or_equal_bcast", "test_greater_equal",
-        "test_greater_equal_int8", "test_greater_equal_int16", "test_greater_equal_uint8",
-        "test_greater_equal_uint16", "test_greater_equal_uint32", "test_greater_equal_uint64",
-        "test_greater_equal_bcast"}) {
+       {"test_cc_greater_or_equal", "test_cc_greater_or_equal_bcast",
+        "test_cc_greater_or_equal_float16", "test_cc_greater_or_equal_bfloat16",
+        "test_greater_equal", "test_greater_equal_int8", "test_greater_equal_int16",
+        "test_greater_equal_uint8", "test_greater_equal_uint16", "test_greater_equal_uint32",
+        "test_greater_equal_uint64", "test_greater_equal_bcast"}) {
     EXPECT_NE(FindLogicalCase(cases, name), nullptr) << "Missing GreaterOrEqual case: " << name;
   }
 }
@@ -373,10 +392,10 @@ TEST(BackendTestCase, LessOrEqualCasesArePresent) {
   // ``RegisterLessOrEqualCases``).
   auto cases = CollectTestCases();
   for (const char *name :
-       {"test_cc_less_or_equal", "test_cc_less_or_equal_bcast", "test_less_equal",
-        "test_less_equal_int8", "test_less_equal_int16", "test_less_equal_uint8",
-        "test_less_equal_uint16", "test_less_equal_uint32", "test_less_equal_uint64",
-        "test_less_equal_bcast"}) {
+       {"test_cc_less_or_equal", "test_cc_less_or_equal_bcast", "test_cc_less_or_equal_float16",
+        "test_cc_less_or_equal_bfloat16", "test_less_equal", "test_less_equal_int8",
+        "test_less_equal_int16", "test_less_equal_uint8", "test_less_equal_uint16",
+        "test_less_equal_uint32", "test_less_equal_uint64", "test_less_equal_bcast"}) {
     EXPECT_NE(FindLogicalCase(cases, name), nullptr) << "Missing LessOrEqual case: " << name;
   }
 }
@@ -421,9 +440,10 @@ TEST(BackendTestCase, EqualCasesArePresent) {
   // ``RegisterEqualCases``.
   auto cases = CollectTestCases("Equal");
   for (const char *name :
-       {"test_cc_equal", "test_cc_equal_bcast", "test_equal", "test_equal_int8", "test_equal_int16",
-        "test_equal_uint8", "test_equal_uint16", "test_equal_uint32", "test_equal_uint64",
-        "test_equal_bcast", "test_equal_string", "test_equal_string_broadcast"}) {
+       {"test_cc_equal", "test_cc_equal_bcast", "test_cc_equal_float16", "test_cc_equal_bfloat16",
+        "test_equal", "test_equal_int8", "test_equal_int16", "test_equal_uint8",
+        "test_equal_uint16", "test_equal_uint32", "test_equal_uint64", "test_equal_bcast",
+        "test_equal_string", "test_equal_string_broadcast"}) {
     EXPECT_NE(FindLogicalCase(cases, name), nullptr) << "Missing Equal case: " << name;
   }
 }

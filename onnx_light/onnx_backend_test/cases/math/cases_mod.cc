@@ -74,6 +74,13 @@ void RegisterModCases(std::vector<TestCase> &registry) {
   }
   {
     NodeProto node = MakeModNode(/*fmod=*/1);
+    Tensor x = kernel::MakeBfloat16Tensor("", {6}, {-4.0f, 7.0f, 5.0f, 4.0f, -7.0f, 8.0f});
+    Tensor y = kernel::MakeBfloat16Tensor("", {6}, {2.0f, -3.0f, 8.0f, -2.0f, 3.0f, 5.0f});
+    Tensor z = mod_kernel(x, y, /*fmod=*/1);
+    Expect(node, {x, y}, {z}, "test_mod_mixed_sign_bfloat16", {opset}, "backend-test", registry);
+  }
+  {
+    NodeProto node = MakeModNode(/*fmod=*/1);
     Tensor x = Tensor::FromFloat("", {6}, {-4.3f, 7.2f, 5.0f, 4.3f, -7.2f, 8.0f});
     Tensor y = Tensor::FromFloat("", {6}, {2.1f, -3.4f, 8.0f, -2.1f, 3.4f, 5.0f});
     Tensor z = mod_kernel(x, y, /*fmod=*/1);

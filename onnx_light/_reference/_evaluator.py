@@ -220,7 +220,8 @@ class ReferenceEvaluator:
                 else:
                     inputs.append(vi.name)
         else:
-            inputs = list(proto.input)  # type: ignore[union-attr]
+            assert self._function is not None
+            inputs = list(self._function.input)
 
         self._input_names: list[str] = inputs
         self._input_names_set: frozenset[str] = frozenset(self._input_names)

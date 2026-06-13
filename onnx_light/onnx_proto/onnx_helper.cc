@@ -1025,9 +1025,24 @@ void SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
 
 void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
                                ParseOptions &options, bool clear_external_data) {
-  EXT_ENFORCE(options.format == SerializeFormat::kOnnx,
-              "ParseModelProtoFromStream: SerializeFormat::kOrtFlatbuffers is not "
+  if (options.format == SerializeFormat::kOrtFlatbuffers) {
+    // Recursion-OOM guard: validate the depth limit before any parsing begins
+    // so that a maliciously crafted .ort file cannot exhaust the call stack
+    // once the flatbuffer reader is implemented.
+    EXT_ENFORCE(options.max_recursion_depth > 0,
+                "ParseModelProtoFromStream: ParseOptions::max_recursion_depth must be > 0 "
+                "(got ",
+                options.max_recursion_depth,
+                "). "
+                "The ORT flatbuffer parser uses this limit to reject models "
+                "nested more deeply than the configured value, preventing stack "
+                "overflow on adversarially deep inputs.");
+    EXT_THROW("ParseModelProtoFromStream: SerializeFormat::kOrtFlatbuffers is not "
               "implemented yet. Use SerializeFormat::kOnnx for now.");
+  }
+  EXT_ENFORCE(options.format == SerializeFormat::kOnnx,
+              "ParseModelProtoFromStream: unrecognised SerializeFormat value ",
+              static_cast<int>(options.format), "; only kOnnx is currently supported.");
   // Mirror SerializeModelProtoToStream: start the thread pool when requested and
   // wait for all delayed reads once parsing is complete.
   if (options.is_parallel() && !stream.HasParallelizationStarted())

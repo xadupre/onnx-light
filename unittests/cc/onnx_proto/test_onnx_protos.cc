@@ -5847,3 +5847,49 @@ TEST(onnx_proto, ParserRecursionLimitIsConfigurable) {
   popts.max_recursion_depth = 5;
   EXPECT_THROW(parsed.ParseFromString(nested, popts), std::exception);
 }
+
+TEST(onnx_proto, OrtFlatbuffersParseFromStringZeroRecursionDepthThrows) {
+  // max_recursion_depth must be > 0 for the ORT flatbuffer path.
+  // The recursion-OOM guard fires before the "not implemented" stub so that
+  // once the real parser lands the protection is already wired up.
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g_depth0");
+  std::string serialized;
+  model.SerializeToString(serialized);
+  ModelProto parsed;
+  ParseOptions popts;
+  popts.format = SerializeFormat::kOrtFlatbuffers;
+  popts.max_recursion_depth = 0;
+  EXPECT_THROW(parsed.ParseFromString(serialized, popts), std::runtime_error);
+}
+
+TEST(onnx_proto, OrtFlatbuffersParseFromStringNegativeRecursionDepthThrows) {
+  // A negative max_recursion_depth must also be rejected.
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g_depth_neg");
+  std::string serialized;
+  model.SerializeToString(serialized);
+  ModelProto parsed;
+  ParseOptions popts;
+  popts.format = SerializeFormat::kOrtFlatbuffers;
+  popts.max_recursion_depth = -1;
+  EXPECT_THROW(parsed.ParseFromString(serialized, popts), std::runtime_error);
+}
+
+TEST(onnx_proto, OrtFlatbuffersParseModelProtoFromStreamZeroRecursionDepthThrows) {
+  // ParseModelProtoFromStream also enforces max_recursion_depth > 0.
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g_stream_depth0");
+  std::string serialized;
+  model.SerializeToString(serialized);
+  utils::StringStream stream(reinterpret_cast<const uint8_t *>(serialized.data()),
+                             static_cast<int64_t>(serialized.size()));
+  ModelProto parsed;
+  ParseOptions popts;
+  popts.format = SerializeFormat::kOrtFlatbuffers;
+  popts.max_recursion_depth = 0;
+  EXPECT_THROW(ParseModelProtoFromStream(parsed, stream, popts), std::runtime_error);
+}

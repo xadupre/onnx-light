@@ -275,9 +275,25 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
                                                              static_cast<int64_t>(data.size()));
             if (nb::isinstance<ParseOptions &>(options)) {
               ParseOptions &parse_options = nb::cast<ParseOptions &>(options);
-              EXT_ENFORCE(parse_options.format == SerializeFormat::kOnnx,
-                          "ParseFromString: SerializeFormat::kOrtFlatbuffers is not "
+              if (parse_options.format == SerializeFormat::kOrtFlatbuffers) {
+                // Recursion-OOM guard: validate the depth limit before any
+                // parsing begins so that a maliciously crafted .ort file cannot
+                // exhaust the call stack once the flatbuffer reader is
+                // implemented.
+                EXT_ENFORCE(parse_options.max_recursion_depth > 0,
+                            "ParseFromString: ParseOptions::max_recursion_depth must be > 0 "
+                            "(got ",
+                            parse_options.max_recursion_depth,
+                            "). "
+                            "The ORT flatbuffer parser uses this limit to reject models "
+                            "nested more deeply than the configured value, preventing stack "
+                            "overflow on adversarially deep inputs.");
+                EXT_THROW("ParseFromString: SerializeFormat::kOrtFlatbuffers is not "
                           "implemented yet. Use SerializeFormat::kOnnx for now.");
+              }
+              EXT_ENFORCE(parse_options.format == SerializeFormat::kOnnx,
+                          "ParseFromString: unrecognised SerializeFormat value ",
+                          static_cast<int>(parse_options.format));
               if (parse_options.is_parallel()) {
                 stream.StartThreadPool(parse_options.num_threads);
               }

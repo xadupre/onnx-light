@@ -149,9 +149,7 @@ class TestSerializeFormat(ExtTestCase):
                 with self.assertRaises(RuntimeError):
                     model.SerializeToString(sopts)
 
-    def test_ort_flatbuffers_serialize_to_string_raises_with_parallel_and_alignment(
-        self,
-    ) -> None:
+    def test_ort_flatbuffers_serialize_to_string_raises_with_parallel_and_alignment(self) -> None:
         # Both knobs together must still surface the format guard.
         model, _, _ = _make_simple_model()
         sopts = onnxl.SerializeOptions()
@@ -187,9 +185,7 @@ class TestSerializeFormat(ExtTestCase):
                 with self.assertRaises(RuntimeError):
                     model.SerializeToFile(path, sopts)
 
-    def test_ort_flatbuffers_serialize_to_file_raises_with_parallel_and_alignment(
-        self,
-    ) -> None:
+    def test_ort_flatbuffers_serialize_to_file_raises_with_parallel_and_alignment(self) -> None:
         model, _, _ = _make_simple_model()
         path = self.get_dump_file("test_ort_serialize_to_file_unimpl_parallel_align.ort")
         sopts = onnxl.SerializeOptions()
@@ -224,6 +220,42 @@ class TestSerializeFormat(ExtTestCase):
                 parsed = onnxl.ModelProto()
                 with self.assertRaises(RuntimeError):
                     parsed.ParseFromString(data, popts)
+
+    def test_ort_flatbuffers_parse_from_string_zero_recursion_depth_raises(self) -> None:
+        # max_recursion_depth must be > 0 for the ORT flatbuffer path.  The
+        # guard fires before the "not implemented" stub so that when the real
+        # parser lands the protection is already wired up.
+        model, _, _ = _make_simple_model()
+        data = model.SerializeToString()
+        popts = onnxl.ParseOptions()
+        popts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+        popts.max_recursion_depth = 0
+        parsed = onnxl.ModelProto()
+        with self.assertRaisesRegex(RuntimeError, "max_recursion_depth"):
+            parsed.ParseFromString(data, popts)
+
+    def test_ort_flatbuffers_parse_from_string_negative_recursion_depth_raises(self) -> None:
+        # A negative max_recursion_depth is also rejected.
+        model, _, _ = _make_simple_model()
+        data = model.SerializeToString()
+        popts = onnxl.ParseOptions()
+        popts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+        popts.max_recursion_depth = -1
+        parsed = onnxl.ModelProto()
+        with self.assertRaisesRegex(RuntimeError, "max_recursion_depth"):
+            parsed.ParseFromString(data, popts)
+
+    def test_ort_flatbuffers_parse_from_file_zero_recursion_depth_raises(self) -> None:
+        # ParseFromFile path enforces max_recursion_depth > 0 too.
+        model, _, _ = _make_simple_model()
+        path = self.get_dump_file("test_ort_parse_from_file_depth0.onnx")
+        model.SerializeToFile(path)
+        popts = onnxl.ParseOptions()
+        popts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+        popts.max_recursion_depth = 0
+        parsed = onnxl.ModelProto()
+        with self.assertRaisesRegex(RuntimeError, "max_recursion_depth"):
+            parsed.ParseFromFile(path, popts)
 
     @unittest.skip(
         "Saving to onnxruntime flatbuffer format is not implemented yet; "

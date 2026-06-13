@@ -1130,6 +1130,9 @@ TEST(RunNodes, RuntimeContextEventLogSetReplaceRemove) {
   EXPECT_EQ(add_ev.action, RuntimeEventAction::kAdd);
   EXPECT_EQ(add_ev.kind, RuntimeEventKind::kInput);
   EXPECT_EQ(add_ev.name, "x");
+  // Inputs report node_index = -1 and the CPU device (-1).
+  EXPECT_EQ(add_ev.node_index, -1);
+  EXPECT_EQ(add_ev.device, -1);
   EXPECT_EQ(add_ev.data_type, static_cast<int32_t>(DataType::FLOAT));
   EXPECT_EQ(add_ev.shape, (std::vector<int64_t>{3}));
   EXPECT_EQ(add_ev.value_count, 3);
@@ -1213,19 +1216,24 @@ TEST(RunNodes, RuntimeContextEventLogCapturesRunGraphMutations) {
   EXPECT_EQ(rt.events()[0].name, "t");
   EXPECT_EQ(rt.events()[0].action, RuntimeEventAction::kAdd);
   EXPECT_EQ(rt.events()[0].kind, RuntimeEventKind::kIntermediate);
+  EXPECT_EQ(rt.events()[0].node_index, 0);
+  EXPECT_EQ(rt.events()[0].device, -1);
   EXPECT_EQ(rt.events()[1].action, RuntimeEventAction::kRunNode);
   EXPECT_EQ(rt.events()[1].op_domain, "ai.onnx");
   EXPECT_EQ(rt.events()[1].op_type, "Abs");
   EXPECT_EQ(rt.events()[1].inputs, (std::vector<std::string>{"x"}));
   EXPECT_GE(rt.events()[1].duration_ns, 0);
+  EXPECT_EQ(rt.events()[1].node_index, 0);
   EXPECT_EQ(rt.events()[2].name, "y");
   EXPECT_EQ(rt.events()[2].action, RuntimeEventAction::kAdd);
   EXPECT_EQ(rt.events()[2].kind, RuntimeEventKind::kIntermediate);
+  EXPECT_EQ(rt.events()[2].node_index, 1);
   EXPECT_EQ(rt.events()[3].action, RuntimeEventAction::kRunNode);
   EXPECT_EQ(rt.events()[3].op_domain, "ai.onnx");
   EXPECT_EQ(rt.events()[3].op_type, "Add");
   EXPECT_EQ(rt.events()[3].inputs, (std::vector<std::string>{"t", "z"}));
   EXPECT_GE(rt.events()[3].duration_ns, 0);
+  EXPECT_EQ(rt.events()[3].node_index, 1);
 }
 
 // ---------------------------------------------------------------------------

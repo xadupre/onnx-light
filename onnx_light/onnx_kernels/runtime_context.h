@@ -346,7 +346,8 @@ public:
   /// is appended to the event log on successful insertion. ``kind``
   /// defaults to :cpp:enumerator:`RuntimeEventKind::kInput`, which is
   /// the typical role of values seeded by the caller before running.
-  void Set(const std::string &name, Tensor tensor, RuntimeEventKind kind = RuntimeEventKind::kInput);
+  void Set(const std::string &name, Tensor tensor,
+           RuntimeEventKind kind = RuntimeEventKind::kInput);
 
   /// Inserts or overwrites the tensor stored under ``name``. Appends a
   /// :cpp:class:`RuntimeEvent` describing the new state with action

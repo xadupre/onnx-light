@@ -114,8 +114,8 @@ int64_t ResolveNodeIndex(RuntimeEventKind kind, int64_t current_node_index) noex
 }
 
 RuntimeEvent MakeAddOrReplaceEvent(RuntimeEventAction action, RuntimeEventKind kind,
-                                  const std::string &name, const Tensor &tensor,
-                                  int64_t current_node_index) {
+                                   const std::string &name, const Tensor &tensor,
+                                   int64_t current_node_index) {
   RuntimeEvent ev;
   ev.action = action;
   ev.kind = kind;

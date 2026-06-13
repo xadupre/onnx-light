@@ -225,6 +225,12 @@ void _ParseFromString(cls &self, const std::string &raw, ParseOptions &opts) {
                 "The ORT flatbuffer parser uses this limit to reject models "
                 "nested more deeply than the configured value, preventing stack "
                 "overflow on adversarially deep inputs.");
+    // Tensor-size OOM guard: max_tensor_size_bytes must be >= 0.
+    EXT_ENFORCE(opts.max_tensor_size_bytes >= 0,
+                "ParseFromString: ParseOptions::max_tensor_size_bytes must be >= 0 "
+                "(got ",
+                opts.max_tensor_size_bytes,
+                "). Use 0 to disable the limit or a positive value to cap tensor allocations.");
     EXT_THROW("ParseFromString: SerializeFormat::kOrtFlatbuffers is not implemented yet. "
               "Use SerializeFormat::kOnnx for now.");
   } else {

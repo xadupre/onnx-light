@@ -5878,6 +5878,113 @@ TEST(onnx_proto, OrtFlatbuffersParseFromStringNegativeRecursionDepthThrows) {
   EXPECT_THROW(parsed.ParseFromString(serialized, popts), std::runtime_error);
 }
 
+TEST(onnx_proto, MaxTensorSizeBytesDefaultIsZero) {
+  // Default must be 0 (no limit) for backward compatibility.
+  ParseOptions opts;
+  EXPECT_EQ(opts.max_tensor_size_bytes, 0);
+}
+
+TEST(onnx_proto, MaxTensorSizeBytesRawDataThrows) {
+  // Parsing a TensorProto whose raw_data exceeds the configured limit must
+  // raise an error before any allocation is attempted.
+  TensorProto tp;
+  tp.set_data_type(static_cast<TensorProto::DataType>(1)); // FLOAT
+  tp.add_dims(5);
+  std::string raw(20, '\x01'); // 5 floats = 20 bytes
+  for (char c : raw)
+    tp.ref_raw_data().push_back(static_cast<uint8_t>(c));
+  std::string serialized;
+  SerializeOptions sopts;
+  tp.SerializeToString(serialized, sopts);
+
+  TensorProto parsed;
+  ParseOptions popts;
+  popts.max_tensor_size_bytes = 10; // Smaller than the 20-byte raw_data payload.
+  EXPECT_THROW(parsed.ParseFromString(serialized, popts), std::runtime_error);
+}
+
+TEST(onnx_proto, MaxTensorSizeBytesRawDataExactLimitAllowed) {
+  // Parsing a TensorProto whose raw_data equals the limit exactly must succeed.
+  TensorProto tp;
+  tp.set_data_type(static_cast<TensorProto::DataType>(1)); // FLOAT
+  tp.add_dims(5);
+  for (int i = 0; i < 20; ++i)
+    tp.ref_raw_data().push_back(0);
+  std::string serialized;
+  SerializeOptions sopts;
+  tp.SerializeToString(serialized, sopts);
+
+  TensorProto parsed;
+  ParseOptions popts;
+  popts.max_tensor_size_bytes = 20; // Exactly the raw_data size — must pass.
+  EXPECT_NO_THROW(parsed.ParseFromString(serialized, popts));
+  EXPECT_EQ(parsed.ref_raw_data().size(), 20u);
+}
+
+TEST(onnx_proto, MaxTensorSizeBytesZeroMeansNoLimit) {
+  // max_tensor_size_bytes == 0 disables the limit entirely.
+  TensorProto tp;
+  tp.set_data_type(static_cast<TensorProto::DataType>(1)); // FLOAT
+  tp.add_dims(100);
+  for (int i = 0; i < 400; ++i)
+    tp.ref_raw_data().push_back(0);
+  std::string serialized;
+  SerializeOptions sopts;
+  tp.SerializeToString(serialized, sopts);
+
+  TensorProto parsed;
+  ParseOptions popts;
+  popts.max_tensor_size_bytes = 0; // No limit.
+  EXPECT_NO_THROW(parsed.ParseFromString(serialized, popts));
+}
+
+TEST(onnx_proto, MaxTensorSizeBytesPackedFloatDataThrows) {
+  // The limit also applies to packed float_data (non-raw_data path).
+  TensorProto tp;
+  tp.set_data_type(static_cast<TensorProto::DataType>(1)); // FLOAT
+  tp.add_dims(5);
+  for (int i = 0; i < 5; ++i)
+    tp.ref_float_data().push_back(static_cast<float>(i));
+  std::string serialized;
+  SerializeOptions sopts;
+  tp.SerializeToString(serialized, sopts);
+
+  TensorProto parsed;
+  ParseOptions popts;
+  popts.max_tensor_size_bytes = 4; // Each float is 4 bytes; 5 floats = 20 bytes total.
+  EXPECT_THROW(parsed.ParseFromString(serialized, popts), std::runtime_error);
+}
+
+TEST(onnx_proto, OrtFlatbuffersNegativeMaxTensorSizeBytesThrows) {
+  // A negative max_tensor_size_bytes must be rejected for the ORT flatbuffer path.
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g_tensor_neg");
+  std::string serialized;
+  model.SerializeToString(serialized);
+  ModelProto parsed;
+  ParseOptions popts;
+  popts.format = SerializeFormat::kOrtFlatbuffers;
+  popts.max_tensor_size_bytes = -1;
+  EXPECT_THROW(parsed.ParseFromString(serialized, popts), std::runtime_error);
+}
+
+TEST(onnx_proto, OrtFlatbuffersParseModelProtoFromStreamNegativeMaxTensorSizeBytesThrows) {
+  // ParseModelProtoFromStream also enforces max_tensor_size_bytes >= 0.
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g_stream_tensor_neg");
+  std::string serialized;
+  model.SerializeToString(serialized);
+  utils::StringStream stream(reinterpret_cast<const uint8_t *>(serialized.data()),
+                             static_cast<int64_t>(serialized.size()));
+  ModelProto parsed;
+  ParseOptions popts;
+  popts.format = SerializeFormat::kOrtFlatbuffers;
+  popts.max_tensor_size_bytes = -1;
+  EXPECT_THROW(ParseModelProtoFromStream(parsed, stream, popts), std::runtime_error);
+}
+
 TEST(onnx_proto, OrtFlatbuffersParseModelProtoFromStreamZeroRecursionDepthThrows) {
   // ParseModelProtoFromStream also enforces max_recursion_depth > 0.
   ModelProto model;

@@ -57,6 +57,31 @@ private:
   ParseOptions &options_;
 };
 
+/**
+ * @brief Raises an error when the requested byte count exceeds the configured
+ *        per-tensor allocation limit.
+ *
+ * Called immediately before any large heap allocation during parsing to
+ * prevent OOM from maliciously or accidentally large size prefixes in the wire
+ * format.  The check is a no-op when
+ * ``ParseOptions::max_tensor_size_bytes == 0`` (the default).
+ *
+ * @param len      Byte count that is about to be allocated.
+ * @param options  Active parse options carrying the limit.
+ * @param name     Field name, included in the error message for diagnostics.
+ * @param location Short description of the call site, e.g. "read_field<ByteSpan>".
+ */
+inline void CheckAllocationLimit(uint64_t len, const ParseOptions &options, const char *name,
+                                 const char *location) {
+  if (options.max_tensor_size_bytes > 0 &&
+      len > static_cast<uint64_t>(options.max_tensor_size_bytes)) {
+    EXT_THROW(
+        location, ": tensor field '", name, "' requests ", len,
+        " bytes which exceeds ParseOptions::max_tensor_size_bytes=", options.max_tensor_size_bytes,
+        ". Increase max_tensor_size_bytes or set it to 0 to disable the limit.");
+  }
+}
+
 template <typename T>
 void read_next_field_in_shortended_stream(utils::BinaryStream &stream, const char *,
                                           ParseOptions &options, T &field) {
@@ -175,22 +200,24 @@ void read_field(utils::BinaryStream &stream, int wire_type, double &field, const
 
 template <>
 void read_field(utils::BinaryStream &stream, int wire_type, std::vector<uint8_t> &field,
-                const char *name, ParseOptions &) {
+                const char *name, ParseOptions &options) {
   EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
               name, "' at position '", stream.tell_around(), "'");
   uint64_t len = stream.next_uint64();
   stream.CanRead(len, "[read_field<vector<uint8_t>>] length exceeds stream bounds");
+  CheckAllocationLimit(len, options, name, "read_field<vector<uint8_t>>");
   field.resize(len);
   stream.read_bytes(len, field.data());
 }
 
 template <>
 void read_field(utils::BinaryStream &stream, int wire_type, utils::ByteSpan &field,
-                const char *name, ParseOptions &) {
+                const char *name, ParseOptions &options) {
   EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
               name, "' at position '", stream.tell_around(), "'");
   uint64_t len = stream.next_uint64();
   stream.CanRead(len, "[read_field<ByteSpan>] length exceeds stream bounds");
+  CheckAllocationLimit(len, options, name, "read_field<ByteSpan>");
   field.resize(len);
   stream.read_bytes(len, field.data());
 }
@@ -206,6 +233,7 @@ void read_field_limit_parallel(utils::BinaryStream &stream, int wire_type,
     uint64_t len = stream.next_uint64();
     stream.CanRead(len, "[read_field_limit_parallel] length exceeds stream bounds");
     if (!options.skip_raw_data || static_cast<int64_t>(len) < options.raw_data_threshold) {
+      CheckAllocationLimit(len, options, name, "read_field_limit_parallel");
       field.resize(len);
       if (options.is_parallel() && static_cast<int64_t>(len) >= options.min_parallel_block_size) {
         utils::DelayedBlock block;
@@ -245,6 +273,7 @@ void read_field_limit_parallel_nc(utils::BinaryStream &stream, int wire_type,
   uint64_t len = stream.next_uint64();
   stream.CanRead(len, "[read_field_limit_parallel_nc] length exceeds stream bounds");
   if (!options.skip_raw_data || static_cast<int64_t>(len) < options.raw_data_threshold) {
+    CheckAllocationLimit(len, options, name, "read_field_limit_parallel_nc");
     if (use_zero_copy) {
       if (options.alignment > 1) {
         const utils::offset_t raw_data_offset = stream.tell();
@@ -384,7 +413,7 @@ READ_UNPACKED_NUMBER_INT(int32_t)
 template <typename T>
 void read_repeated_field_packed_numerical_float(utils::BinaryStream &stream, int wire_type,
                                                 std::vector<T> &field, const char *name, bool,
-                                                ParseOptions &) {
+                                                ParseOptions &options) {
   DEBUG_PRINT2("    read packed", name);
   EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
               name, "' at position '", stream.tell_around(), "'");
@@ -393,6 +422,7 @@ void read_repeated_field_packed_numerical_float(utils::BinaryStream &stream, int
               typeid(T).name(), ") for field '", name, "' at position '", stream.tell_around(),
               "'");
   stream.CanRead(size, "[read_repeated_field_packed_numerical_float] length exceeds stream bounds");
+  CheckAllocationLimit(size, options, name, "read_repeated_field_packed_numerical_float");
   size /= sizeof(T);
   field.resize(size);
   // Bulk read: a single read_bytes call replaces per-element virtual dispatch.
@@ -406,13 +436,14 @@ void read_repeated_field_packed_numerical_float(utils::BinaryStream &stream, int
 template <typename T>
 void read_repeated_field_packed_numerical_int(utils::BinaryStream &stream, int wire_type,
                                               std::vector<T> &field, const char *name, bool,
-                                              ParseOptions &) {
+                                              ParseOptions &options) {
   DEBUG_PRINT2("    read packed", name);
   EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
               name, "' at position '", stream.tell_around(), "'");
 
   uint64_t length = stream.next_uint64();
   stream.CanRead(length, "[read_repeated_field_packed_numerical_int] length exceeds stream bounds");
+  CheckAllocationLimit(length, options, name, "read_repeated_field_packed_numerical_int");
   // Each varint encodes at least 1 byte, so `length` is a strict upper bound
   // on the element count. Pre-reserving avoids the O(log n) reallocations
   // a plain push_back loop would cause on large packed tensors (shapes,

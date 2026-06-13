@@ -365,6 +365,18 @@ struct ParseOptions : TensorBufferOptions {
    *  not a user-facing setting and is reset to 0 once a top-level parse
    *  completes. */
   int32_t _recursion_depth = 0;
+  /** Maximum number of bytes that may be allocated for a single tensor's raw
+   *  data (or packed repeated-field payload) during parsing.  This guards
+   *  against OOM caused by maliciously or accidentally large size prefixes in
+   *  the wire format.
+   *  - ``0`` (default): no limit — any allocation is allowed.
+   *  - ``> 0``: parsing raises an error when the declared byte count for a
+   *    single tensor allocation exceeds this value.
+   *  The check fires before the allocation, so the process is never asked to
+   *  commit memory larger than this threshold.  Set this to a value comfortably
+   *  above the largest legitimate tensor you expect, e.g. 2 GB for most models:
+   *  ``options.max_tensor_size_bytes = 2LL * 1024 * 1024 * 1024;`` */
+  int64_t max_tensor_size_bytes = 0;
 };
 
 /** Controls behavior when serializing ONNX protobuf messages to a stream or string. */

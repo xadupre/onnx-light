@@ -288,6 +288,12 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
                             "The ORT flatbuffer parser uses this limit to reject models "
                             "nested more deeply than the configured value, preventing stack "
                             "overflow on adversarially deep inputs.");
+                EXT_ENFORCE(parse_options.max_tensor_size_bytes >= 0,
+                            "ParseFromString: ParseOptions::max_tensor_size_bytes must be "
+                            ">= 0 (got ",
+                            parse_options.max_tensor_size_bytes,
+                            "). Use 0 to disable the limit or a positive value to cap "
+                            "tensor allocations.");
                 EXT_THROW("ParseFromString: SerializeFormat::kOrtFlatbuffers is not "
                           "implemented yet. Use SerializeFormat::kOnnx for now.");
               } else {
@@ -823,7 +829,15 @@ void AddOnnxPyProto(nb::module_ &m) {
               "nested messages; parsing raises an error when a message nests deeper than "
               "this value. The default is more conservative than protobuf's limit of 100 "
               "because the parser uses large per-message stack frames (especially in debug "
-              "builds), while still allowing far deeper nesting than any realistic model.");
+              "builds), while still allowing far deeper nesting than any realistic model.")
+      .def_rw("max_tensor_size_bytes", &ParseOptions::max_tensor_size_bytes,
+              "Maximum number of bytes that may be allocated for a single tensor's raw "
+              "data (or packed repeated-field payload) during parsing (default 0 = no limit). "
+              "Protects against OOM from maliciously or accidentally large size prefixes in "
+              "the wire format: parsing raises an error when the declared byte count for any "
+              "single tensor allocation exceeds this value. The check fires before the "
+              "allocation. Set to 0 to disable (default) or to a value comfortably above the "
+              "largest legitimate tensor you expect, e.g. 2 * 1024 ** 3 for a 2 GB cap.");
 
   nb::class_<SerializeOptions, TensorBufferOptions>(m, "SerializeOptions",
                                                     "Serializing options for proto classes")

@@ -65,10 +65,9 @@ void ValidateBitCast(int32_t from, int32_t to) {
                       "); string or undefined types are not allowed.");
   }
   if (from_bits != to_bits) {
-    EXT_THROW_INVALID(
-        "kernel::BitCast: input and output types must have the same bit-width, but "
-        "input has ",
-        from_bits, " bits and output has ", to_bits, " bits.");
+    EXT_THROW_INVALID("kernel::BitCast: input and output types must have the same bit-width, but "
+                      "input has ",
+                      from_bits, " bits and output has ", to_bits, " bits.");
   }
 }
 
@@ -90,12 +89,10 @@ void BitCast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
                       " must match ``to`` (", to, ").");
   }
   if (output.shape != x.shape) {
-    EXT_THROW_INVALID(
-        "kernel::BitCast: preallocated output shape must match input shape.");
+    EXT_THROW_INVALID("kernel::BitCast: preallocated output shape must match input shape.");
   }
   if (output.data.size() != x.size_bytes()) {
-    EXT_THROW_INVALID(
-        "kernel::BitCast: preallocated output buffer has unexpected size in bytes.");
+    EXT_THROW_INVALID("kernel::BitCast: preallocated output buffer has unexpected size in bytes.");
   }
   // Byte-wise copy keeps the bit pattern intact on little-endian hosts
   // (the only ABI exercised by the backend test library).

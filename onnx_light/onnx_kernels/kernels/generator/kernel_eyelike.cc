@@ -106,9 +106,8 @@ std::vector<uint8_t> OneElementBytes(int32_t dtype) {
     return one;
   }
   default:
-    EXT_THROW_INVALID(
-        "unsupported data type ", dtype,
-        ", ", "kernel::EyeLike: unsupported output dtype.");
+    EXT_THROW_INVALID("unsupported data type ", dtype, ", ",
+                      "kernel::EyeLike: unsupported output dtype.");
   }
 }
 

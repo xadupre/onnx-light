@@ -60,9 +60,8 @@ void Tanh::operator()(const Tensor &x, Tensor &output) const {
                                          [](float v) { return std::tanh(v); });
     return;
   default:
-    EXT_THROW_INVALID(
-        kName, ": unsupported data type ", x.data_type,
-        ", only supports FLOAT, DOUBLE, FLOAT16, and BFLOAT16 tensors.");
+    EXT_THROW_INVALID(kName, ": unsupported data type ", x.data_type,
+                      ", only supports FLOAT, DOUBLE, FLOAT16, and BFLOAT16 tensors.");
   }
 }
 

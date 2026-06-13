@@ -434,9 +434,8 @@ Tensor Einsum::operator()(const std::vector<Tensor> &inputs, const std::string &
   case DataType::DOUBLE:
     return EinsumAlloc<double>(inputs, equation, DataType::DOUBLE);
   default:
-    EXT_THROW_INVALID(
-        kEinsumName, ": unsupported data type ", inputs[0].data_type,
-        ", only supports FLOAT and DOUBLE inputs.");
+    EXT_THROW_INVALID(kEinsumName, ": unsupported data type ", inputs[0].data_type,
+                      ", only supports FLOAT and DOUBLE inputs.");
   }
 }
 
@@ -449,9 +448,8 @@ void Einsum::operator()(const std::vector<Tensor> &inputs, const std::string &eq
   case DataType::DOUBLE:
     return EinsumInPlace<double>(inputs, equation, DataType::DOUBLE, output);
   default:
-    EXT_THROW_INVALID(
-        kEinsumName, ": unsupported data type ", inputs[0].data_type,
-        ", only supports FLOAT and DOUBLE inputs.");
+    EXT_THROW_INVALID(kEinsumName, ": unsupported data type ", inputs[0].data_type,
+                      ", only supports FLOAT and DOUBLE inputs.");
   }
 }
 

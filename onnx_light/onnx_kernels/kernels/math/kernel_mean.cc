@@ -122,9 +122,8 @@ Tensor Mean::operator()(const std::vector<Tensor> &inputs) const {
   case DataType::DOUBLE:
     return MeanAlloc<double>("DOUBLE", DataType::DOUBLE, inputs);
   default:
-    EXT_THROW_INVALID(
-        kMeanName, ": unsupported data type ", inputs[0].data_type,
-        kSupportedMeanTypesMsg);
+    EXT_THROW_INVALID(kMeanName, ": unsupported data type ", inputs[0].data_type,
+                      kSupportedMeanTypesMsg);
   }
 }
 
@@ -136,9 +135,8 @@ void Mean::operator()(const std::vector<Tensor> &inputs, Tensor &output) const {
   case DataType::DOUBLE:
     return MeanInPlace<double>("DOUBLE", DataType::DOUBLE, inputs, output);
   default:
-    EXT_THROW_INVALID(
-        kMeanName, ": unsupported data type ", inputs[0].data_type,
-        kSupportedMeanTypesMsg);
+    EXT_THROW_INVALID(kMeanName, ": unsupported data type ", inputs[0].data_type,
+                      kSupportedMeanTypesMsg);
   }
 }
 

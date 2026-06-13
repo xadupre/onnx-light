@@ -66,9 +66,7 @@ Tensor Add::operator()(const Tensor &x, const Tensor &y) const {
                                               Bfloat16BitsToFloat, FloatToBfloat16Bits,
                                               [](float a, float b) { return a + b; });
   default:
-    EXT_THROW_INVALID(
-        kAddName, ": unsupported data type ", x.data_type,
-        kSupportedAddTypesMsg);
+    EXT_THROW_INVALID(kAddName, ": unsupported data type ", x.data_type, kSupportedAddTypesMsg);
   }
 }
 
@@ -103,9 +101,7 @@ void Add::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
                                          Bfloat16BitsToFloat, FloatToBfloat16Bits,
                                          [](float a, float b) { return a + b; });
   default:
-    EXT_THROW_INVALID(
-        kAddName, ": unsupported data type ", x.data_type,
-        kSupportedAddTypesMsg);
+    EXT_THROW_INVALID(kAddName, ": unsupported data type ", x.data_type, kSupportedAddTypesMsg);
   }
 }
 

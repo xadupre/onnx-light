@@ -43,9 +43,8 @@ void Dispatch(const Tensor &x, float bias, float lambd, Tensor &output) {
     ComputeInPlace<double>(x, static_cast<double>(bias), static_cast<double>(lambd), output);
     return;
   default:
-    EXT_THROW_INVALID(
-        kName, ": unsupported data type ", x.data_type,
-        ", only supports FLOAT and DOUBLE tensors.");
+    EXT_THROW_INVALID(kName, ": unsupported data type ", x.data_type,
+                      ", only supports FLOAT and DOUBLE tensors.");
   }
 }
 

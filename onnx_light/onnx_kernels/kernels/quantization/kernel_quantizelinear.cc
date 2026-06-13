@@ -98,9 +98,8 @@ inline std::uint8_t FloatToFloat8(float v, int32_t dtype) {
   case DataType::FLOAT8E5M2FNUZ:
     return FloatToFloat8E5M2FNUZBits(v);
   default:
-    EXT_THROW_INVALID(
-        "unsupported data type ", dtype,
-        ", ", "kernel::QuantizeLinear: unsupported float8 dtype.");
+    EXT_THROW_INVALID("unsupported data type ", dtype, ", ",
+                      "kernel::QuantizeLinear: unsupported float8 dtype.");
   }
 }
 
@@ -266,8 +265,9 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, Tensor &
     break;
   default:
     EXT_THROW_INVALID(
-        "unsupported data type ", output.data_type,
-        ", ", "kernel::QuantizeLinear: only UINT8, INT8, UINT16 and INT16 outputs are supported " "(no-zero-point overload).");
+        "unsupported data type ", output.data_type, ", ",
+        "kernel::QuantizeLinear: only UINT8, INT8, UINT16 and INT16 outputs are supported "
+        "(no-zero-point overload).");
   }
 }
 
@@ -375,8 +375,10 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
   }
   default:
     EXT_THROW_INVALID(
-        "unsupported data type ", output.data_type,
-        ", ", "kernel::QuantizeLinear: only UINT8, INT8, UINT16, INT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, " "FLOAT8E5M2, FLOAT8E5M2FNUZ, INT4, UINT4, INT2, UINT2 and FLOAT4E2M1 outputs are " "supported.");
+        "unsupported data type ", output.data_type, ", ",
+        "kernel::QuantizeLinear: only UINT8, INT8, UINT16, INT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
+        "FLOAT8E5M2, FLOAT8E5M2FNUZ, INT4, UINT4, INT2, UINT2 and FLOAT4E2M1 outputs are "
+        "supported.");
   }
 }
 
@@ -463,9 +465,8 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
     QuantizeAxisFloat4E2M1Loop(x, scales, zp_bytes, inner_stride, axis_size, output);
     break;
   default:
-    EXT_THROW_INVALID(
-        "unsupported data type ", output.data_type,
-        ", ", "kernel::QuantizeLinear (per-axis): unsupported output dtype.");
+    EXT_THROW_INVALID("unsupported data type ", output.data_type, ", ",
+                      "kernel::QuantizeLinear (per-axis): unsupported output dtype.");
   }
 }
 

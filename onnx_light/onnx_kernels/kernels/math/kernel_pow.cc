@@ -131,8 +131,7 @@ void PowHalfLoop(const detail::BroadcastInfo &bi, const uint16_t *px, const TExp
                  detail::HalfDecodeFunc decode, detail::HalfEncodeFunc encode) {
   if (bi.shape_x == bi.shape_y) {
     for (int64_t i = 0; i < bi.element_count; ++i) {
-      pz[static_cast<size_t>(i)] =
-          encode(std::pow(decode(px[i]), static_cast<float>(py[i])));
+      pz[static_cast<size_t>(i)] = encode(std::pow(decode(px[i]), static_cast<float>(py[i])));
     }
     return;
   }
@@ -152,8 +151,7 @@ void PowHalfLoop(const detail::BroadcastInfo &bi, const uint16_t *px, const TExp
       ox += idx[d] * bi.strides_x[d];
       oy += idx[d] * bi.strides_y[d];
     }
-    pz[static_cast<size_t>(flat)] =
-        encode(std::pow(decode(px[ox]), static_cast<float>(py[oy])));
+    pz[static_cast<size_t>(flat)] = encode(std::pow(decode(px[ox]), static_cast<float>(py[oy])));
     for (size_t d = rank; d-- > 0;) {
       if (++idx[d] < bi.shape[d]) {
         break;
@@ -227,9 +225,8 @@ void PowDispatchBase(const Tensor &x, const Tensor &y, Tensor &output,
   case DataType::UINT64:
     return PowDispatchExp<TBase, uint64_t>(x, y, output, bi);
   default:
-    EXT_THROW_INVALID(
-        kPowName, ": unsupported data type ", y.data_type,
-        kSupportedExponentTypesMsg);
+    EXT_THROW_INVALID(kPowName, ": unsupported data type ", y.data_type,
+                      kSupportedExponentTypesMsg);
   }
 }
 
@@ -245,9 +242,7 @@ size_t BaseDtypeSize(int32_t dtype) {
   case DataType::BFLOAT16:
     return sizeof(uint16_t);
   default:
-    EXT_THROW_INVALID(
-        kPowName, ": unsupported data type ", dtype,
-        kSupportedBaseTypesMsg);
+    EXT_THROW_INVALID(kPowName, ": unsupported data type ", dtype, kSupportedBaseTypesMsg);
   }
 }
 
@@ -264,9 +259,7 @@ const char *BaseDtypeName(int32_t dtype) {
   case DataType::BFLOAT16:
     return "BFLOAT16";
   default:
-    EXT_THROW_INVALID(
-        kPowName, ": unsupported data type ", dtype,
-        kSupportedBaseTypesMsg);
+    EXT_THROW_INVALID(kPowName, ": unsupported data type ", dtype, kSupportedBaseTypesMsg);
   }
 }
 
@@ -284,9 +277,7 @@ void PowDispatch(const Tensor &x, const Tensor &y, Tensor &output,
   case DataType::BFLOAT16:
     return PowDispatchHalfBase(x, y, output, bi, Bfloat16BitsToFloat, FloatToBfloat16Bits);
   default:
-    EXT_THROW_INVALID(
-        kPowName, ": unsupported data type ", x.data_type,
-        kSupportedBaseTypesMsg);
+    EXT_THROW_INVALID(kPowName, ": unsupported data type ", x.data_type, kSupportedBaseTypesMsg);
   }
 }
 } // namespace

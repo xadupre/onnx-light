@@ -140,30 +140,26 @@ Tensor Mod::operator()(const Tensor &x, const Tensor &y, int64_t fmod) const {
   switch (x.data_type) {
   case DataType::FLOAT16:
     if (fmod != 1) {
-      EXT_THROW_INVALID(
-          kModName, ": unsupported data type ", x.data_type,
-          kFmodRequiredForFloatMsg);
+      EXT_THROW_INVALID(kModName, ": unsupported data type ", x.data_type,
+                        kFmodRequiredForFloatMsg);
     }
     return ModAllocFloat16(x, y);
   case DataType::BFLOAT16:
     if (fmod != 1) {
-      EXT_THROW_INVALID(
-          kModName, ": unsupported data type ", x.data_type,
-          kFmodRequiredForFloatMsg);
+      EXT_THROW_INVALID(kModName, ": unsupported data type ", x.data_type,
+                        kFmodRequiredForFloatMsg);
     }
     return ModAllocBfloat16(x, y);
   case DataType::FLOAT:
     if (fmod != 1) {
-      EXT_THROW_INVALID(
-          kModName, ": unsupported data type ", x.data_type,
-          kFmodRequiredForFloatMsg);
+      EXT_THROW_INVALID(kModName, ": unsupported data type ", x.data_type,
+                        kFmodRequiredForFloatMsg);
     }
     return ModAllocFloat<float>("FLOAT", DataType::FLOAT, x, y);
   case DataType::DOUBLE:
     if (fmod != 1) {
-      EXT_THROW_INVALID(
-          kModName, ": unsupported data type ", x.data_type,
-          kFmodRequiredForFloatMsg);
+      EXT_THROW_INVALID(kModName, ": unsupported data type ", x.data_type,
+                        kFmodRequiredForFloatMsg);
     }
     return ModAllocFloat<double>("DOUBLE", DataType::DOUBLE, x, y);
   case DataType::INT8:
@@ -183,9 +179,7 @@ Tensor Mod::operator()(const Tensor &x, const Tensor &y, int64_t fmod) const {
   case DataType::UINT64:
     return ModAllocInt<uint64_t>("UINT64", DataType::UINT64, x, y, fmod);
   default:
-    EXT_THROW_INVALID(
-        kModName, ": unsupported data type ", x.data_type,
-        kSupportedModTypesMsg);
+    EXT_THROW_INVALID(kModName, ": unsupported data type ", x.data_type, kSupportedModTypesMsg);
   }
 }
 
@@ -193,30 +187,26 @@ void Mod::operator()(const Tensor &x, const Tensor &y, int64_t fmod, Tensor &out
   switch (x.data_type) {
   case DataType::FLOAT16:
     if (fmod != 1) {
-      EXT_THROW_INVALID(
-          kModName, ": unsupported data type ", x.data_type,
-          kFmodRequiredForFloatMsg);
+      EXT_THROW_INVALID(kModName, ": unsupported data type ", x.data_type,
+                        kFmodRequiredForFloatMsg);
     }
     return ModInPlaceFloat16(x, y, output);
   case DataType::BFLOAT16:
     if (fmod != 1) {
-      EXT_THROW_INVALID(
-          kModName, ": unsupported data type ", x.data_type,
-          kFmodRequiredForFloatMsg);
+      EXT_THROW_INVALID(kModName, ": unsupported data type ", x.data_type,
+                        kFmodRequiredForFloatMsg);
     }
     return ModInPlaceBfloat16(x, y, output);
   case DataType::FLOAT:
     if (fmod != 1) {
-      EXT_THROW_INVALID(
-          kModName, ": unsupported data type ", x.data_type,
-          kFmodRequiredForFloatMsg);
+      EXT_THROW_INVALID(kModName, ": unsupported data type ", x.data_type,
+                        kFmodRequiredForFloatMsg);
     }
     return ModInPlaceFloat<float>("FLOAT", DataType::FLOAT, x, y, output);
   case DataType::DOUBLE:
     if (fmod != 1) {
-      EXT_THROW_INVALID(
-          kModName, ": unsupported data type ", x.data_type,
-          kFmodRequiredForFloatMsg);
+      EXT_THROW_INVALID(kModName, ": unsupported data type ", x.data_type,
+                        kFmodRequiredForFloatMsg);
     }
     return ModInPlaceFloat<double>("DOUBLE", DataType::DOUBLE, x, y, output);
   case DataType::INT8:
@@ -236,9 +226,7 @@ void Mod::operator()(const Tensor &x, const Tensor &y, int64_t fmod, Tensor &out
   case DataType::UINT64:
     return ModInPlaceInt<uint64_t>("UINT64", DataType::UINT64, x, y, fmod, output);
   default:
-    EXT_THROW_INVALID(
-        kModName, ": unsupported data type ", x.data_type,
-        kSupportedModTypesMsg);
+    EXT_THROW_INVALID(kModName, ": unsupported data type ", x.data_type, kSupportedModTypesMsg);
   }
 }
 

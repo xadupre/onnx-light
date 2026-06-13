@@ -58,9 +58,7 @@ Tensor PRelu::operator()(const Tensor &x, const Tensor &slope) const {
   case DataType::UINT64:
     return PReluAlloc<uint64_t>("UINT64", DataType::UINT64, x, slope);
   default:
-    EXT_THROW_INVALID(
-        kPReluName, ": unsupported data type ", x.data_type,
-        kSupportedPReluTypesMsg);
+    EXT_THROW_INVALID(kPReluName, ": unsupported data type ", x.data_type, kSupportedPReluTypesMsg);
   }
 }
 
@@ -79,9 +77,7 @@ void PRelu::operator()(const Tensor &x, const Tensor &slope, Tensor &output) con
   case DataType::UINT64:
     return PReluInPlace<uint64_t>("UINT64", DataType::UINT64, x, slope, output);
   default:
-    EXT_THROW_INVALID(
-        kPReluName, ": unsupported data type ", x.data_type,
-        kSupportedPReluTypesMsg);
+    EXT_THROW_INVALID(kPReluName, ": unsupported data type ", x.data_type, kSupportedPReluTypesMsg);
   }
 }
 

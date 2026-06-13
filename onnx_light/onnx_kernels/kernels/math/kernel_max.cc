@@ -131,9 +131,8 @@ Tensor Max::operator()(const std::vector<Tensor> &inputs) const {
     ONNX_LIGHT_MAX_DISPATCH(ONNX_LIGHT_MAX_CASE_ALLOC)
 #undef ONNX_LIGHT_MAX_CASE_ALLOC
   default:
-    EXT_THROW_INVALID(
-        kMaxName, ": unsupported data type ", inputs[0].data_type,
-        kSupportedMaxTypesMsg);
+    EXT_THROW_INVALID(kMaxName, ": unsupported data type ", inputs[0].data_type,
+                      kSupportedMaxTypesMsg);
   }
 }
 
@@ -146,9 +145,8 @@ void Max::operator()(const std::vector<Tensor> &inputs, Tensor &output) const {
     ONNX_LIGHT_MAX_DISPATCH(ONNX_LIGHT_MAX_CASE_INPLACE)
 #undef ONNX_LIGHT_MAX_CASE_INPLACE
   default:
-    EXT_THROW_INVALID(
-        kMaxName, ": unsupported data type ", inputs[0].data_type,
-        kSupportedMaxTypesMsg);
+    EXT_THROW_INVALID(kMaxName, ": unsupported data type ", inputs[0].data_type,
+                      kSupportedMaxTypesMsg);
   }
 }
 

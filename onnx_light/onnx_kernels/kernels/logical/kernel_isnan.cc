@@ -61,9 +61,8 @@ void IsNaN::operator()(const Tensor &x, Tensor &output) const {
     return;
   }
   default:
-    EXT_THROW_INVALID(
-        "unsupported data type ", x.data_type,
-        ", ", "kernel::IsNaN only supports FLOAT, DOUBLE, FLOAT16 and BFLOAT16 tensors.");
+    EXT_THROW_INVALID("unsupported data type ", x.data_type, ", ",
+                      "kernel::IsNaN only supports FLOAT, DOUBLE, FLOAT16 and BFLOAT16 tensors.");
   }
 }
 

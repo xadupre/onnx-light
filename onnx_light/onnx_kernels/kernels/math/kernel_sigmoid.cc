@@ -60,9 +60,8 @@ void Sigmoid::operator()(const Tensor &x, Tensor &output) const {
                                          [](float v) { return 1.0f / (1.0f + std::exp(-v)); });
     return;
   default:
-    EXT_THROW_INVALID(
-        kName, ": unsupported data type ", x.data_type,
-        ", only supports FLOAT, DOUBLE, FLOAT16, and BFLOAT16 tensors.");
+    EXT_THROW_INVALID(kName, ": unsupported data type ", x.data_type,
+                      ", only supports FLOAT, DOUBLE, FLOAT16, and BFLOAT16 tensors.");
   }
 }
 

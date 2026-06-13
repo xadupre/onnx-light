@@ -316,8 +316,8 @@ Tensor BinaryHalfCompareElementwiseAlloc(const char *op_name, const char *dtype_
 /// float32, applies a comparison op, writes into preallocated BOOL output.
 template <typename Op>
 void BinaryHalfCompareElementwise(const char *op_name, const char *dtype_name, int32_t dtype,
-                                   const Tensor &x, const Tensor &y, Tensor &output,
-                                   HalfDecodeFunc decode, Op op) {
+                                  const Tensor &x, const Tensor &y, Tensor &output,
+                                  HalfDecodeFunc decode, Op op) {
   const BroadcastInfo bi = CheckBinaryBroadcastInOut(op_name, dtype_name, dtype, x, y);
   const size_t expected_bytes = static_cast<size_t>(bi.element_count);
   CheckPreallocatedOutput(op_name, "BOOL", DataType::BOOL, bi.shape, expected_bytes, output);

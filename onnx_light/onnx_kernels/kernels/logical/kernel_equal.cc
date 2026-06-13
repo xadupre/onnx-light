@@ -123,18 +123,17 @@ Tensor Equal::operator()(const Tensor &x, const Tensor &y) const {
                         "kernel::Equal inputs must share the same dtype.");
     return EqualStringAlloc(x, y);
   case DataType::FLOAT16:
-    return detail::BinaryHalfCompareElementwiseAlloc(
-        kEqualName, "FLOAT16", DataType::FLOAT16, x, y, Float16BitsToFloat,
-        [](float a, float b) { return a == b; });
+    return detail::BinaryHalfCompareElementwiseAlloc(kEqualName, "FLOAT16", DataType::FLOAT16, x, y,
+                                                     Float16BitsToFloat,
+                                                     [](float a, float b) { return a == b; });
   case DataType::BFLOAT16:
-    return detail::BinaryHalfCompareElementwiseAlloc(
-        kEqualName, "BFLOAT16", DataType::BFLOAT16, x, y, Bfloat16BitsToFloat,
-        [](float a, float b) { return a == b; });
+    return detail::BinaryHalfCompareElementwiseAlloc(kEqualName, "BFLOAT16", DataType::BFLOAT16, x,
+                                                     y, Bfloat16BitsToFloat,
+                                                     [](float a, float b) { return a == b; });
   default:
-    EXT_THROW_INVALID(
-        kEqualName, ": unsupported data type ", x.data_type,
-        ", only supports BOOL, FLOAT, FLOAT16, BFLOAT16, DOUBLE, INT8, INT16, INT32, "
-        "INT64, UINT8, UINT16, UINT32, UINT64 and STRING inputs.");
+    EXT_THROW_INVALID(kEqualName, ": unsupported data type ", x.data_type,
+                      ", only supports BOOL, FLOAT, FLOAT16, BFLOAT16, DOUBLE, INT8, INT16, INT32, "
+                      "INT64, UINT8, UINT16, UINT32, UINT64 and STRING inputs.");
   }
 }
 
@@ -167,18 +166,17 @@ void Equal::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
                         "kernel::Equal inputs must share the same dtype.");
     return EqualStringInPlace(x, y, output);
   case DataType::FLOAT16:
-    return detail::BinaryHalfCompareElementwise(
-        kEqualName, "FLOAT16", DataType::FLOAT16, x, y, output, Float16BitsToFloat,
-        [](float a, float b) { return a == b; });
+    return detail::BinaryHalfCompareElementwise(kEqualName, "FLOAT16", DataType::FLOAT16, x, y,
+                                                output, Float16BitsToFloat,
+                                                [](float a, float b) { return a == b; });
   case DataType::BFLOAT16:
-    return detail::BinaryHalfCompareElementwise(
-        kEqualName, "BFLOAT16", DataType::BFLOAT16, x, y, output, Bfloat16BitsToFloat,
-        [](float a, float b) { return a == b; });
+    return detail::BinaryHalfCompareElementwise(kEqualName, "BFLOAT16", DataType::BFLOAT16, x, y,
+                                                output, Bfloat16BitsToFloat,
+                                                [](float a, float b) { return a == b; });
   default:
-    EXT_THROW_INVALID(
-        kEqualName, ": unsupported data type ", x.data_type,
-        ", only supports BOOL, FLOAT, FLOAT16, BFLOAT16, DOUBLE, INT8, INT16, INT32, "
-        "INT64, UINT8, UINT16, UINT32, UINT64 and STRING inputs.");
+    EXT_THROW_INVALID(kEqualName, ": unsupported data type ", x.data_type,
+                      ", only supports BOOL, FLOAT, FLOAT16, BFLOAT16, DOUBLE, INT8, INT16, INT32, "
+                      "INT64, UINT8, UINT16, UINT32, UINT64 and STRING inputs.");
   }
 }
 

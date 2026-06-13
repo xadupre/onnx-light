@@ -938,7 +938,7 @@ LightOpSchema MakeUpsampleSchema(int since_version) {
         });
   }
   // v9 and v10 (v10 deprecated): same signature.
-  return LightOpSchema(
+  LightOpSchema schema(
       "Upsample", kOnnxDomain, since_version, MakeUpsampleDoc(since_version),
       {
           {"X", "N-D tensor", "T"},
@@ -959,6 +959,10 @@ LightOpSchema MakeUpsampleSchema(int since_version) {
            "trilinear, etc)",
            AttributeType::STRING, /*required=*/false, std::string("nearest")},
       });
+  if (since_version == 10) {
+    schema.set_deprecated(true);
+  }
+  return schema;
 }
 
 namespace {

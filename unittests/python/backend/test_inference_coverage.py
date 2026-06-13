@@ -75,7 +75,7 @@ class TestInferenceCoverage(ExtTestCase):
         case = self.report.cases[0]
         text = render_rst_case(case)
         self.assertIn(case.name, text)
-        self.assertIn("runmermaid", text)
+        self.assertIn("mermaid", text)
         # Either the comparison table or the warning block must be present.
         self.assertTrue(("list-table" in text) or ("warning" in text))
 

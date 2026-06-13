@@ -1,0 +1,110 @@
+// Click-to-zoom for diagrams tagged with the "zoomable-svg" class.
+// Opens the image in a full-screen overlay where the mouse wheel zooms and
+// dragging pans, so large SVGs (such as the proto relations graph) can be
+// inspected closely. No external dependencies are required.
+(function () {
+    "use strict";
+
+    function createOverlay(src, alt) {
+        var overlay = document.createElement("div");
+        overlay.className = "svg-zoom-overlay";
+
+        var stage = document.createElement("div");
+        stage.className = "svg-zoom-stage";
+
+        var image = document.createElement("img");
+        image.src = src;
+        image.alt = alt || "";
+        image.className = "svg-zoom-image";
+
+        var scale = 1;
+        var translateX = 0;
+        var translateY = 0;
+
+        function applyTransform() {
+            image.style.transform =
+                "translate(" + translateX + "px, " + translateY + "px) scale(" + scale + ")";
+        }
+
+        stage.addEventListener("wheel", function (event) {
+            event.preventDefault();
+            var factor = event.deltaY < 0 ? 1.1 : 1 / 1.1;
+            scale = Math.min(20, Math.max(0.2, scale * factor));
+            applyTransform();
+        });
+
+        var dragging = false;
+        var lastX = 0;
+        var lastY = 0;
+
+        stage.addEventListener("mousedown", function (event) {
+            dragging = true;
+            lastX = event.clientX;
+            lastY = event.clientY;
+            event.preventDefault();
+        });
+
+        window.addEventListener("mouseup", function () {
+            dragging = false;
+        });
+
+        window.addEventListener("mousemove", function (event) {
+            if (!dragging) {
+                return;
+            }
+            translateX += event.clientX - lastX;
+            translateY += event.clientY - lastY;
+            lastX = event.clientX;
+            lastY = event.clientY;
+            applyTransform();
+        });
+
+        var hint = document.createElement("div");
+        hint.className = "svg-zoom-hint";
+        hint.textContent =
+            "Scroll to zoom, drag to pan, press Esc or click the background to close.";
+
+        function onKeyDown(event) {
+            if (event.key === "Escape") {
+                close();
+            }
+        }
+
+        function close() {
+            document.removeEventListener("keydown", onKeyDown);
+            if (overlay.parentNode) {
+                overlay.parentNode.removeChild(overlay);
+            }
+        }
+
+        overlay.addEventListener("click", function (event) {
+            if (event.target === overlay) {
+                close();
+            }
+        });
+        document.addEventListener("keydown", onKeyDown);
+
+        stage.appendChild(image);
+        overlay.appendChild(stage);
+        overlay.appendChild(hint);
+        applyTransform();
+        return overlay;
+    }
+
+    function enableZoom(image) {
+        image.style.cursor = "zoom-in";
+        if (!image.title) {
+            image.title = "Click to zoom";
+        }
+        image.addEventListener("click", function () {
+            document.body.appendChild(createOverlay(image.src, image.alt));
+        });
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+        var images = document.querySelectorAll("img.zoomable-svg");
+        for (var i = 0; i < images.length; i++) {
+            enableZoom(images[i]);
+        }
+    });
+})();

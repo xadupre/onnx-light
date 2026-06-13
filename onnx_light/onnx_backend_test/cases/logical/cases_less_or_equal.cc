@@ -142,6 +142,34 @@ void RegisterLessOrEqualCases(std::vector<TestCase> &registry) {
     Tensor z = le_kernel(inputs[0], inputs[1]);
     Expect(node, inputs, {z}, name, {opset}, "backend-test", registry);
   }
+
+  // FLOAT16
+  {
+    NodeProto n16;
+    n16.set_op_type("LessOrEqual");
+    n16.add_input("x");
+    n16.add_input("y");
+    n16.add_output("z");
+
+    Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {1.0f, 4.0f, 3.0f, 6.0f, 5.0f, 2.0f});
+    Tensor y = kernel::MakeFloat16Tensor("", {2, 3}, {2.0f, 3.0f, 3.0f, 5.0f, 6.0f, 1.0f});
+    Tensor z = le_kernel(x, y);
+    Expect(n16, {x, y}, {z}, "test_cc_less_or_equal_float16", {opset}, "backend-test", registry);
+  }
+
+  // BFLOAT16
+  {
+    NodeProto nbf;
+    nbf.set_op_type("LessOrEqual");
+    nbf.add_input("x");
+    nbf.add_input("y");
+    nbf.add_output("z");
+
+    Tensor x = kernel::MakeBfloat16Tensor("", {2, 3}, {1.0f, 4.0f, 3.0f, 6.0f, 5.0f, 2.0f});
+    Tensor y = kernel::MakeBfloat16Tensor("", {2, 3}, {2.0f, 3.0f, 3.0f, 5.0f, 6.0f, 1.0f});
+    Tensor z = le_kernel(x, y);
+    Expect(nbf, {x, y}, {z}, "test_cc_less_or_equal_bfloat16", {opset}, "backend-test", registry);
+  }
 }
 
 } // namespace onnx_backend_test

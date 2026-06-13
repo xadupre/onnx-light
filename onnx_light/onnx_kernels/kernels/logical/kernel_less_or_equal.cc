@@ -44,6 +44,14 @@ Tensor LessOrEqual::operator()(const Tensor &x, const Tensor &y) const {
   switch (x.data_type) {
   case DataType::FLOAT:
     return LessOrEqualAlloc<float>("FLOAT", DataType::FLOAT, x, y);
+  case DataType::FLOAT16:
+    return detail::BinaryHalfCompareElementwiseAlloc(
+        kLessOrEqualName, "FLOAT16", DataType::FLOAT16, x, y, Float16BitsToFloat,
+        [](float a, float b) -> uint8_t { return a <= b ? 1 : 0; });
+  case DataType::BFLOAT16:
+    return detail::BinaryHalfCompareElementwiseAlloc(
+        kLessOrEqualName, "BFLOAT16", DataType::BFLOAT16, x, y, Bfloat16BitsToFloat,
+        [](float a, float b) -> uint8_t { return a <= b ? 1 : 0; });
   case DataType::INT8:
     return LessOrEqualAlloc<int8_t>("INT8", DataType::INT8, x, y);
   case DataType::INT16:
@@ -56,14 +64,6 @@ Tensor LessOrEqual::operator()(const Tensor &x, const Tensor &y) const {
     return LessOrEqualAlloc<uint32_t>("UINT32", DataType::UINT32, x, y);
   case DataType::UINT64:
     return LessOrEqualAlloc<uint64_t>("UINT64", DataType::UINT64, x, y);
-  case DataType::FLOAT16:
-    return detail::BinaryHalfCompareElementwiseAlloc(
-        kLessOrEqualName, "FLOAT16", DataType::FLOAT16, x, y, Float16BitsToFloat,
-        [](float a, float b) -> uint8_t { return a <= b ? 1 : 0; });
-  case DataType::BFLOAT16:
-    return detail::BinaryHalfCompareElementwiseAlloc(
-        kLessOrEqualName, "BFLOAT16", DataType::BFLOAT16, x, y, Bfloat16BitsToFloat,
-        [](float a, float b) -> uint8_t { return a <= b ? 1 : 0; });
   default:
     EXT_THROW_INVALID(kLessOrEqualName, ": unsupported data type ", x.data_type,
                       ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, UINT8, "
@@ -75,6 +75,14 @@ void LessOrEqual::operator()(const Tensor &x, const Tensor &y, Tensor &output) c
   switch (x.data_type) {
   case DataType::FLOAT:
     return LessOrEqualInPlace<float>("FLOAT", DataType::FLOAT, x, y, output);
+  case DataType::FLOAT16:
+    return detail::BinaryHalfCompareElementwise(
+        kLessOrEqualName, "FLOAT16", DataType::FLOAT16, x, y, output, Float16BitsToFloat,
+        [](float a, float b) -> uint8_t { return a <= b ? 1 : 0; });
+  case DataType::BFLOAT16:
+    return detail::BinaryHalfCompareElementwise(
+        kLessOrEqualName, "BFLOAT16", DataType::BFLOAT16, x, y, output, Bfloat16BitsToFloat,
+        [](float a, float b) -> uint8_t { return a <= b ? 1 : 0; });
   case DataType::INT8:
     return LessOrEqualInPlace<int8_t>("INT8", DataType::INT8, x, y, output);
   case DataType::INT16:
@@ -87,14 +95,6 @@ void LessOrEqual::operator()(const Tensor &x, const Tensor &y, Tensor &output) c
     return LessOrEqualInPlace<uint32_t>("UINT32", DataType::UINT32, x, y, output);
   case DataType::UINT64:
     return LessOrEqualInPlace<uint64_t>("UINT64", DataType::UINT64, x, y, output);
-  case DataType::FLOAT16:
-    return detail::BinaryHalfCompareElementwise(
-        kLessOrEqualName, "FLOAT16", DataType::FLOAT16, x, y, output, Float16BitsToFloat,
-        [](float a, float b) -> uint8_t { return a <= b ? 1 : 0; });
-  case DataType::BFLOAT16:
-    return detail::BinaryHalfCompareElementwise(
-        kLessOrEqualName, "BFLOAT16", DataType::BFLOAT16, x, y, output, Bfloat16BitsToFloat,
-        [](float a, float b) -> uint8_t { return a <= b ? 1 : 0; });
   default:
     EXT_THROW_INVALID(kLessOrEqualName, ": unsupported data type ", x.data_type,
                       ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, UINT8, "

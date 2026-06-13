@@ -69,6 +69,66 @@ void RegisterReluCases(std::vector<TestCase> &registry) {
     Tensor y = relu_kernel(x);
     Expect(node, {x}, {y}, "test_cc_relu_bfloat16", {opset}, "backend-test", registry);
   }
+
+  // DOUBLE
+  {
+    NodeProto node;
+    node.set_op_type("Relu");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor x = Tensor::FromDouble("", {2, 3}, {-2.0, -0.5, 0.0, 0.5, 1.5, 3.0});
+    Tensor y = relu_kernel(x);
+    Expect(node, {x}, {y}, "test_cc_relu_double", {opset}, "backend-test", registry);
+  }
+
+  // INT8
+  {
+    NodeProto node;
+    node.set_op_type("Relu");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor x = Tensor::FromInt8("", {2, 3}, {-5, -1, 0, 1, 3, 127});
+    Tensor y = relu_kernel(x);
+    Expect(node, {x}, {y}, "test_cc_relu_int8", {opset}, "backend-test", registry);
+  }
+
+  // INT16
+  {
+    NodeProto node;
+    node.set_op_type("Relu");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor x = Tensor::FromInt16("", {2, 3}, {-500, -1, 0, 1, 300, 1000});
+    Tensor y = relu_kernel(x);
+    Expect(node, {x}, {y}, "test_cc_relu_int16", {opset}, "backend-test", registry);
+  }
+
+  // INT32
+  {
+    NodeProto node;
+    node.set_op_type("Relu");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor x = Tensor::FromInt32("", {2, 3}, {-100000, -1, 0, 1, 42, 100000});
+    Tensor y = relu_kernel(x);
+    Expect(node, {x}, {y}, "test_cc_relu_int32", {opset}, "backend-test", registry);
+  }
+
+  // INT64
+  {
+    NodeProto node;
+    node.set_op_type("Relu");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor x = Tensor::FromInt64("", {2, 3}, {-1000000000000LL, -1, 0, 1, 42, 1000000000000LL});
+    Tensor y = relu_kernel(x);
+    Expect(node, {x}, {y}, "test_cc_relu_int64", {opset}, "backend-test", registry);
+  }
 }
 
 } // namespace onnx_backend_test

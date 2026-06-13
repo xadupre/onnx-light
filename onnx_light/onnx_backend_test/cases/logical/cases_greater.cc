@@ -63,36 +63,6 @@ void RegisterGreaterCases(std::vector<TestCase> &registry) {
     Expect(node, {x, y}, {z}, "test_cc_greater_bcast", {opset}, "backend-test", registry);
   }
 
-  // FLOAT16 variant: z = (x > y) on half-precision inputs.
-  {
-    NodeProto node;
-    node.set_op_type("Greater");
-    node.add_input("x");
-    node.add_input("y");
-    node.add_output("z");
-
-    Tensor x = kernel::MakeFloat16Tensor("", {4}, {1.0f, 3.0f, 2.0f, 5.0f});
-    Tensor y = kernel::MakeFloat16Tensor("", {4}, {2.0f, 2.0f, 2.0f, 2.0f});
-    Tensor z = greater_kernel(x, y);
-
-    Expect(node, {x, y}, {z}, "test_cc_greater_float16", {opset}, "backend-test", registry);
-  }
-
-  // BFLOAT16 variant: z = (x > y) on brain-float inputs.
-  {
-    NodeProto node;
-    node.set_op_type("Greater");
-    node.add_input("x");
-    node.add_input("y");
-    node.add_output("z");
-
-    Tensor x = kernel::MakeBfloat16Tensor("", {4}, {1.0f, 3.0f, 2.0f, 5.0f});
-    Tensor y = kernel::MakeBfloat16Tensor("", {4}, {2.0f, 2.0f, 2.0f, 2.0f});
-    Tensor z = greater_kernel(x, y);
-
-    Expect(node, {x, y}, {z}, "test_cc_greater_bfloat16", {opset}, "backend-test", registry);
-  }
-
   // Upstream ONNX backend test cases for the ``Greater`` operator (mirror the
   // ``onnx.backend.test.case.node.greater.Greater`` Python class). All numeric
   // input dtypes accepted by :ref:`kernel::Greater` are covered: FLOAT,
@@ -138,6 +108,34 @@ void RegisterGreaterCases(std::vector<TestCase> &registry) {
   for (const auto &[name, inputs] : cases) {
     Tensor z = greater_kernel(inputs[0], inputs[1]);
     Expect(node, inputs, {z}, name, {opset}, "backend-test", registry);
+  }
+
+  // FLOAT16
+  {
+    NodeProto n16;
+    n16.set_op_type("Greater");
+    n16.add_input("x");
+    n16.add_input("y");
+    n16.add_output("z");
+
+    Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {1.0f, 4.0f, 3.0f, 6.0f, 5.0f, 2.0f});
+    Tensor y = kernel::MakeFloat16Tensor("", {2, 3}, {2.0f, 3.0f, 3.0f, 5.0f, 6.0f, 1.0f});
+    Tensor z = greater_kernel(x, y);
+    Expect(n16, {x, y}, {z}, "test_cc_greater_float16", {opset}, "backend-test", registry);
+  }
+
+  // BFLOAT16
+  {
+    NodeProto nbf;
+    nbf.set_op_type("Greater");
+    nbf.add_input("x");
+    nbf.add_input("y");
+    nbf.add_output("z");
+
+    Tensor x = kernel::MakeBfloat16Tensor("", {2, 3}, {1.0f, 4.0f, 3.0f, 6.0f, 5.0f, 2.0f});
+    Tensor y = kernel::MakeBfloat16Tensor("", {2, 3}, {2.0f, 3.0f, 3.0f, 5.0f, 6.0f, 1.0f});
+    Tensor z = greater_kernel(x, y);
+    Expect(nbf, {x, y}, {z}, "test_cc_greater_bfloat16", {opset}, "backend-test", registry);
   }
 }
 

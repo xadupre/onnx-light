@@ -171,6 +171,15 @@ void RegisterModCases(std::vector<TestCase> &registry) {
     Tensor z = mod_kernel(x, y);
     Expect(node, {x, y}, {z}, "test_mod_broadcast", {opset}, "backend-test", registry);
   }
+
+  // BFLOAT16 with fmod=1
+  {
+    NodeProto node = MakeModNode(/*fmod=*/1);
+    Tensor x = kernel::MakeBfloat16Tensor("", {3}, {4.5f, -4.5f, 7.0f});
+    Tensor y = kernel::MakeBfloat16Tensor("", {3}, {3.0f, 3.0f, 2.5f});
+    Tensor z = mod_kernel(x, y, /*fmod=*/1);
+    Expect(node, {x, y}, {z}, "test_cc_mod_bfloat16_fmod", {opset}, "backend-test", registry);
+  }
 }
 
 } // namespace onnx_backend_test

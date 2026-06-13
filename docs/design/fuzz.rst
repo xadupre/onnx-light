@@ -46,6 +46,9 @@ Harnesses
     * - ``fuzz/fuzz_version_converter.cc``
       - :cpp:func:`onnx_light::version_conversion::ConvertVersion`
       - Raw bytes → protobuf parser
+    * - ``fuzz/fuzz_ort_flatbuffers.cc``
+      - ``ModelProto::ParseFromString`` with ``SerializeFormat::kOrtFlatbuffers``
+      - Raw bytes → ORT flatbuffer parser
     * - ``fuzz/make_seed_corpus.cc``
       - *(seed generator, not a fuzzer)*
       - Writes seed files for OSS-Fuzz / libFuzzer
@@ -67,7 +70,8 @@ because libFuzzer (``-fsanitize=fuzzer,...``) ships with Clang.
 The build produces one executable per ``fuzz/fuzz_*.cc`` source file
 (``fuzz_checker``, ``fuzz_model_loader``, ``fuzz_parser``,
 ``fuzz_shape_inference``, ``fuzz_optim_shape_inference``,
-``fuzz_version_converter``) plus the ``make_seed_corpus`` helper.
+``fuzz_version_converter``, ``fuzz_ort_flatbuffers``) plus the
+``make_seed_corpus`` helper.
 
 The default sanitizer set is ``address`` (so the actual link line is
 ``-fsanitize=fuzzer,address``). Pass ``-DONNX_LIGHT_FUZZER_SANITIZERS=...``
@@ -88,6 +92,7 @@ To run a short smoke campaign:
     ./build-fuzz/fuzz_shape_inference -runs=1000
     ./build-fuzz/fuzz_optim_shape_inference -runs=1000
     ./build-fuzz/fuzz_version_converter -runs=1000
+    ./build-fuzz/fuzz_ort_flatbuffers -runs=1000
 
 To generate the seed corpora that OSS-Fuzz uses as starting inputs:
 

@@ -64,9 +64,9 @@ Tensor Greater::operator()(const Tensor &x, const Tensor &y) const {
   case DataType::UINT64:
     return GreaterAlloc<uint64_t>("UINT64", DataType::UINT64, x, y);
   default:
-    throw std::invalid_argument(std::string(kGreaterName) +
-                                " only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, UINT8, "
-                                "UINT16, UINT32 and UINT64 inputs.");
+    EXT_THROW_INVALID(kGreaterName, ": unsupported data type ", x.data_type,
+                      ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, UINT8, "
+                      "UINT16, UINT32 and UINT64 inputs.");
   }
 }
 
@@ -95,9 +95,9 @@ void Greater::operator()(const Tensor &x, const Tensor &y, Tensor &output) const
   case DataType::UINT64:
     return GreaterInPlace<uint64_t>("UINT64", DataType::UINT64, x, y, output);
   default:
-    throw std::invalid_argument(std::string(kGreaterName) +
-                                " only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, UINT8, "
-                                "UINT16, UINT32 and UINT64 inputs.");
+    EXT_THROW_INVALID(kGreaterName, ": unsupported data type ", x.data_type,
+                      ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, UINT8, "
+                      "UINT16, UINT32 and UINT64 inputs.");
   }
 }
 

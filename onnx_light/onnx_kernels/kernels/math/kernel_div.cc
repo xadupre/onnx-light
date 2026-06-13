@@ -72,7 +72,7 @@ Tensor Div::operator()(const Tensor &x, const Tensor &y) const {
                                               Bfloat16BitsToFloat, FloatToBfloat16Bits,
                                               [](float a, float b) { return a / b; });
   default:
-    throw std::invalid_argument(std::string(kDivName) + kSupportedDivTypesMsg);
+    EXT_THROW_INVALID(kDivName, ": unsupported data type ", x.data_type, kSupportedDivTypesMsg);
   }
 }
 
@@ -107,7 +107,7 @@ void Div::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
                                          Bfloat16BitsToFloat, FloatToBfloat16Bits,
                                          [](float a, float b) { return a / b; });
   default:
-    throw std::invalid_argument(std::string(kDivName) + kSupportedDivTypesMsg);
+    EXT_THROW_INVALID(kDivName, ": unsupported data type ", x.data_type, kSupportedDivTypesMsg);
   }
 }
 

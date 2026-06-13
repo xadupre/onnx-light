@@ -76,9 +76,9 @@ void Dispatch(const Tensor &x, Tensor &output) {
     ComputeBfloat16(x, output);
     return;
   default:
-    throw std::invalid_argument(
-        std::string(kName) +
-        " only supports FLOAT, DOUBLE, FLOAT16, BFLOAT16, and signed integer tensors.");
+    EXT_THROW_INVALID(
+        kName, ": unsupported data type ", x.data_type,
+        ", only supports FLOAT, DOUBLE, FLOAT16, BFLOAT16, and signed integer tensors.");
   }
 }
 

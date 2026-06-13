@@ -384,6 +384,74 @@ float Float8E5M2FNUZBitsToFloat(std::uint8_t val) noexcept {
   return BitcastU32ToFloat(res);
 }
 
+// ---------------------------------------------------------------------------
+// FLOAT8E8M0 — 8-bit unsigned biased exponent, no mantissa, no sign.
+//
+// Bit layout (one byte): ``EEEEEEEE``. Decoded value: ``2^(E - 127)`` for
+// ``E`` in ``[0, 254]``, and ``NaN`` when ``E == 255 (0xFF)``. The format
+// cannot represent zero, negative numbers or non-power-of-two values, so the
+// reference encoder implements the spec's default behaviour
+// (``round_mode="up"`` and ``saturate=1``):
+//
+// * ``NaN`` input or negative input (incl. ``-infinity`` and ``-0``)
+//   → ``0xFF`` (canonical NaN). The spec calls negative inputs
+//   "undefined"; we follow the ml_dtypes convention of mapping them to NaN
+//   so the encoder is deterministic and total.
+// * ``+infinity`` or finite positive values strictly above ``2^127``
+//   → ``0xFE`` (largest finite magnitude, saturation).
+// * Positive finite values at or below ``2^-127`` (including ``+0``)
+//   → ``0x00`` (smallest finite magnitude, saturation).
+// * Other positive finite values are rounded *up* to the nearest power of
+//   two: ``2^E`` → ``E + 127``; values in the open interval
+//   ``(2^E, 2^(E+1))`` round to ``2^(E+1)``, i.e. ``E + 128``.
+// ---------------------------------------------------------------------------
+std::uint8_t FloatToFloat8E8M0Bits(float v) noexcept {
+  const std::uint32_t b = BitcastFloatToU32(v);
+  const std::uint32_t sign = b & 0x80000000u;
+  const std::uint32_t exp = (b & 0x7F800000u) >> 23;
+  const std::uint32_t mant = b & 0x007FFFFFu;
+  // NaN -> canonical NaN.
+  if (exp == 0xFFu && mant != 0u) {
+    return 0xFFu;
+  }
+  // Negative inputs (incl. -infinity and -0): spec leaves this case
+  // undefined; map to NaN for a deterministic, total encoder.
+  if (sign != 0u) {
+    return 0xFFu;
+  }
+  // +infinity -> saturate to largest finite (2^127, i.e. bits=254).
+  if (exp == 0xFFu) {
+    return 0xFEu;
+  }
+  // Finite positive values, including +0 and subnormals.
+  // Treat +0 / subnormals (exp == 0) as below 2^-127 -> bits=0.
+  if (exp == 0u) {
+    return 0x00u;
+  }
+  // Normal range. exp is the IEEE-754 biased exponent (1..254 -> unbiased
+  // -126..127). Round mode is "up": exact powers of two keep their
+  // exponent; anything with a non-zero mantissa rounds up by 1.
+  std::uint32_t bits = exp;
+  if (mant != 0u) {
+    bits += 1u;
+  }
+  // Saturate above 2^127: bits=255 is reserved for NaN.
+  if (bits >= 0xFFu) {
+    return 0xFEu;
+  }
+  return static_cast<std::uint8_t>(bits);
+}
+
+float Float8E8M0BitsToFloat(std::uint8_t bits) noexcept {
+  if (bits == 0xFFu) {
+    // Canonical NaN: build a quiet NaN with sign 0.
+    return BitcastU32ToFloat(0x7FC00000u);
+  }
+  // Value = 2^(bits - 127). Construct the float by placing ``bits`` in
+  // the IEEE-754 binary32 exponent field with sign=0 and mantissa=0.
+  return BitcastU32ToFloat(static_cast<std::uint32_t>(bits) << 23);
+}
+
 } // namespace kernel
 } // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

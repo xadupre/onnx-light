@@ -131,10 +131,9 @@ Tensor Equal::operator()(const Tensor &x, const Tensor &y) const {
                         "kernel::Equal inputs must share the same dtype.");
     return EqualStringAlloc(x, y);
   default:
-    throw std::invalid_argument(std::string(kEqualName) +
-                                " only supports BOOL, FLOAT, DOUBLE, FLOAT16, BFLOAT16, INT8, "
-                                "INT16, INT32, INT64, UINT8, UINT16, UINT32, UINT64 and "
-                                "STRING inputs.");
+    EXT_THROW_INVALID(kEqualName, ": unsupported data type ", x.data_type,
+                      ", only supports BOOL, FLOAT, FLOAT16, BFLOAT16, DOUBLE, INT8, INT16, INT32, "
+                      "INT64, UINT8, UINT16, UINT32, UINT64 and STRING inputs.");
   }
 }
 
@@ -175,10 +174,9 @@ void Equal::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
                         "kernel::Equal inputs must share the same dtype.");
     return EqualStringInPlace(x, y, output);
   default:
-    throw std::invalid_argument(std::string(kEqualName) +
-                                " only supports BOOL, FLOAT, DOUBLE, FLOAT16, BFLOAT16, INT8, "
-                                "INT16, INT32, INT64, UINT8, UINT16, UINT32, UINT64 and "
-                                "STRING inputs.");
+    EXT_THROW_INVALID(kEqualName, ": unsupported data type ", x.data_type,
+                      ", only supports BOOL, FLOAT, FLOAT16, BFLOAT16, DOUBLE, INT8, INT16, INT32, "
+                      "INT64, UINT8, UINT16, UINT32, UINT64 and STRING inputs.");
   }
 }
 

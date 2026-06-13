@@ -82,7 +82,7 @@ std::vector<TensorType> FeatureVectorizerInputTypes() {
 }
 
 LightOpSchema MakeTreeEnsembleClassifierSchema(int since_version) {
-  return LightOpSchema(
+  LightOpSchema schema(
       "TreeEnsembleClassifier", "ai.onnx.ml", since_version,
       MakeTreeEnsembleClassifierDoc(since_version),
       {
@@ -100,10 +100,14 @@ LightOpSchema MakeTreeEnsembleClassifierSchema(int since_version) {
            "The output type will be a tensor of strings or integers, depending on which of the "
            "classlabels_* attributes is used."},
       });
+  if (since_version == 5) {
+    schema.set_deprecated(true);
+  }
+  return schema;
 }
 
 LightOpSchema MakeTreeEnsembleRegressorSchema(int since_version) {
-  return LightOpSchema("TreeEnsembleRegressor", "ai.onnx.ml", since_version,
+  LightOpSchema schema("TreeEnsembleRegressor", "ai.onnx.ml", since_version,
                        MakeTreeEnsembleRegressorDoc(since_version),
                        {
                            {"X", "Input of shape [N,F]", "T"},
@@ -115,6 +119,10 @@ LightOpSchema MakeTreeEnsembleRegressorSchema(int since_version) {
                            {"T", TreeEnsembleClassicNumericTypes(),
                             "The input type must be a tensor of a numeric type."},
                        });
+  if (since_version == 5) {
+    schema.set_deprecated(true);
+  }
+  return schema;
 }
 
 std::vector<TensorType> LinearClassifierLabelTypes() {

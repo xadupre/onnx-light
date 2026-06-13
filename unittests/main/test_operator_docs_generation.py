@@ -547,6 +547,41 @@ class TestGenOperators(ExtTestCase):
         content = "\n".join(doc_module._schema_section_lines(schema))
         self.assertNotIn("Between", content)
 
+    def _deprecation_schema(self, name, deprecated):
+        return SimpleNamespace(
+            name=name,
+            domain="",
+            since_version=10,
+            doc="Some documentation.",
+            inputs=[],
+            outputs=[],
+            attributes={},
+            type_constraints=[],
+            min_output=0,
+            max_output=0,
+            deprecated=deprecated,
+        )
+
+    def test_schema_to_rst_emits_deprecation_warning(self):
+        content = doc_module._schema_to_rst(self._deprecation_schema("Foo", deprecated=True))
+        self.assertIn(".. warning::", content)
+        self.assertIn("This operator is **deprecated**.", content)
+
+    def test_schema_to_rst_omits_deprecation_warning_when_not_deprecated(self):
+        content = doc_module._schema_to_rst(self._deprecation_schema("Foo", deprecated=False))
+        self.assertNotIn("This operator is **deprecated**.", content)
+
+    def test_domain_page_table_reports_deprecation_status(self):
+        schemas = [
+            self._deprecation_schema("Deprecated", deprecated=True),
+            self._deprecation_schema("Current", deprecated=False),
+        ]
+        content = doc_module._domain_page_rst("", schemas, schemas)
+        self.assertIn("- Deprecated", content)
+        # The deprecated operator row reports ``Yes`` and the current one ``No``.
+        self.assertIn("     - Yes", content)
+        self.assertIn("     - No", content)
+
     def test_format_doc_strips_trailing_underscore_in_words(self):
         # Words ending with a single ``_`` (e.g. ``nodes_``) would be parsed by
         # RST as unresolved hyperlink references. The formatter strips the

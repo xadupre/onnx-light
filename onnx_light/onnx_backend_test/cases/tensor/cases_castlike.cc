@@ -4,10 +4,13 @@
 
 #include "onnx_backend_test/cases/tensor/include_tensor_cases.h"
 #include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include <cmath>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -122,6 +125,114 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry) {
       Expect(node, {input, target_type}, {output},
              std::string("test_cc_castlike_") + from.name + "_to_" + to.name, {opset},
              "backend-test", registry);
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // FLOAT/FLOAT16 ↔ FLOAT8* / FLOAT4E2M1 cases.
+  //
+  // Mirrors the upstream ``test_castlike_<FROM>_to_FLOAT8*`` /
+  // ``test_castlike_<FROM>_to_FLOAT4E2M1`` node tests (and their
+  // reverses). The kernel forwards directly to :ref:`kernel::Cast`,
+  // so the inputs follow the same vectors used by the corresponding
+  // ``Cast`` backend test cases.
+  // ---------------------------------------------------------------------
+  const std::vector<int64_t> f8_shape = {3, 5};
+  const std::vector<float> f8_fp32_values = {
+      0.47892547f,
+      0.48033667f,
+      0.49968487f,
+      0.81910545f,
+      0.47031248f,
+      0.7229038f,
+      1000000.0f,
+      1e-7f,
+      std::nanf(""),
+      std::numeric_limits<float>::infinity(),
+      std::numeric_limits<float>::infinity(),
+      -std::numeric_limits<float>::infinity(),
+      -1e-7f,
+      1e-7f,
+      -1000000.0f,
+  };
+  struct LowPrecisionVariant {
+    DataType dtype;
+    const char *name;
+    std::vector<int64_t> shape;
+    std::vector<float> values;
+  };
+  const std::vector<float> f4_fp32_values = {
+      0.48f,
+      0.25f,
+      1.05f,
+      -3.5f,
+      -8.0f,
+      9.0f,
+      1000000.0f,
+      1e-7f,
+      std::nanf(""),
+      std::numeric_limits<float>::infinity(),
+      std::numeric_limits<float>::infinity(),
+      -std::numeric_limits<float>::infinity(),
+      -4.0f,
+      0.01f,
+      -0.0f,
+  };
+  const std::vector<int64_t> e8m0_shape = {2, 4};
+  const std::vector<float> e8m0_fp32_values = {0.0f, 0.124f, 0.25f, 0.5f, 1.1f, 2.0f, 4.0f, 8.0f};
+  const std::vector<LowPrecisionVariant> kVariants = {
+      {DataType::FLOAT8E4M3FN, "FLOAT8E4M3FN", f8_shape, f8_fp32_values},
+      {DataType::FLOAT8E4M3FNUZ, "FLOAT8E4M3FNUZ", f8_shape, f8_fp32_values},
+      {DataType::FLOAT8E5M2, "FLOAT8E5M2", f8_shape, f8_fp32_values},
+      {DataType::FLOAT8E5M2FNUZ, "FLOAT8E5M2FNUZ", f8_shape, f8_fp32_values},
+      {DataType::FLOAT8E8M0, "FLOAT8E8M0", e8m0_shape, e8m0_fp32_values},
+      {DataType::FLOAT4E2M1, "FLOAT4E2M1", {3, 5}, f4_fp32_values},
+  };
+
+  const kernel::Cast cast_kernel{ctx};
+  for (const auto &v : kVariants) {
+    // Build a 1-element target_type tensor of the destination dtype. Its
+    // content is irrelevant; only its data_type is read by CastLike.
+    Tensor low_target("target_type", static_cast<int32_t>(v.dtype), {1},
+                      std::vector<uint8_t>(PackedByteSize(static_cast<int32_t>(v.dtype), 1)));
+    Tensor float_target = Tensor::FromFloat("target_type", {1}, {0.0f});
+    Tensor float16_target = kernel::MakeFloat16Tensor("target_type", {1}, {0.0f});
+
+    // FLOAT -> v.dtype
+    {
+      NodeProto node = MakeCastLikeNode();
+      Tensor input = Tensor::FromFloat("input", v.shape, v.values);
+      Tensor output = castlike_kernel(input, low_target);
+      Expect(node, {input, low_target}, {output},
+             std::string("test_cc_castlike_FLOAT_to_") + v.name, {opset}, "backend-test", registry);
+    }
+    // v.dtype -> FLOAT (input is the packed/encoded form of the FP32 vector).
+    Tensor encoded =
+        cast_kernel(Tensor::FromFloat("input", v.shape, v.values), static_cast<int32_t>(v.dtype));
+    Tensor packed_input("input", static_cast<int32_t>(v.dtype), v.shape, encoded.data);
+    {
+      NodeProto node = MakeCastLikeNode();
+      Tensor output = castlike_kernel(packed_input, float_target);
+      Expect(node, {packed_input, float_target}, {output},
+             std::string("test_cc_castlike_") + v.name + "_to_FLOAT", {opset}, "backend-test",
+             registry);
+    }
+    // FLOAT16 -> v.dtype
+    {
+      NodeProto node = MakeCastLikeNode();
+      Tensor input = kernel::MakeFloat16Tensor("input", v.shape, v.values);
+      Tensor output = castlike_kernel(input, low_target);
+      Expect(node, {input, low_target}, {output},
+             std::string("test_cc_castlike_FLOAT16_to_") + v.name, {opset}, "backend-test",
+             registry);
+    }
+    // v.dtype -> FLOAT16
+    {
+      NodeProto node = MakeCastLikeNode();
+      Tensor output = castlike_kernel(packed_input, float16_target);
+      Expect(node, {packed_input, float16_target}, {output},
+             std::string("test_cc_castlike_") + v.name + "_to_FLOAT16", {opset}, "backend-test",
+             registry);
     }
   }
 }

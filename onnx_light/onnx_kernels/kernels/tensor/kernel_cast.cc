@@ -47,15 +47,16 @@ bool IsSupportedNumericCastDtype(int32_t dtype) {
 }
 
 // Float8 element types currently supported by ``kernel::Cast``. These types
-// only round-trip against ``FLOAT`` (matching what the upstream ONNX
-// ``test_cast_<FROM>_to_<TO>`` node tests exercise for the floating-point
-// 8-bit variants).
+// only round-trip against ``FLOAT`` / ``FLOAT16`` / ``BFLOAT16`` (matching
+// what the upstream ONNX ``test_cast_<FROM>_to_<TO>`` node tests exercise
+// for the floating-point 8-bit variants).
 bool IsFloat8CastDtype(int32_t dtype) {
   switch (static_cast<DataType>(dtype)) {
   case DataType::FLOAT8E4M3FN:
   case DataType::FLOAT8E4M3FNUZ:
   case DataType::FLOAT8E5M2:
   case DataType::FLOAT8E5M2FNUZ:
+  case DataType::FLOAT8E8M0:
     return true;
   default:
     return false;
@@ -63,10 +64,10 @@ bool IsFloat8CastDtype(int32_t dtype) {
 }
 
 // Packed sub-byte dtypes currently supported by ``kernel::Cast``. INT4 / UINT4
-// pack two elements per byte, INT2 / UINT2 four. Each type only round-trips
-// against ``FLOAT`` and its companion whole-byte integer (``INT8`` for the
-// signed variants, ``UINT8`` for the unsigned variants), mirroring the
-// upstream ONNX ``test_cast_<FROM>_to_<TO>`` coverage for these dtypes.
+// and the 4-bit floating-point variant FLOAT4E2M1 pack two elements per byte,
+// INT2 / UINT2 four. Each type only round-trips against its supported
+// partners (see :ref:`IsSupportedSubBytePair`), mirroring the upstream ONNX
+// ``test_cast_<FROM>_to_<TO>`` coverage for these dtypes.
 bool IsInt4CastDtype(int32_t dtype) {
   return static_cast<DataType>(dtype) == DataType::INT4 ||
          static_cast<DataType>(dtype) == DataType::UINT4;
@@ -77,7 +78,13 @@ bool IsInt2CastDtype(int32_t dtype) {
          static_cast<DataType>(dtype) == DataType::UINT2;
 }
 
-bool IsSubByteCastDtype(int32_t dtype) { return IsInt4CastDtype(dtype) || IsInt2CastDtype(dtype); }
+bool IsFloat4CastDtype(int32_t dtype) {
+  return static_cast<DataType>(dtype) == DataType::FLOAT4E2M1;
+}
+
+bool IsSubByteCastDtype(int32_t dtype) {
+  return IsInt4CastDtype(dtype) || IsInt2CastDtype(dtype) || IsFloat4CastDtype(dtype);
+}
 
 bool IsSupportedCastDtype(int32_t dtype) {
   if (IsSupportedNumericCastDtype(dtype))
@@ -101,6 +108,8 @@ std::uint8_t FloatToFloat8Bits(float v, int32_t to) {
     return FloatToFloat8E5M2Bits(v);
   case DataType::FLOAT8E5M2FNUZ:
     return FloatToFloat8E5M2FNUZBits(v);
+  case DataType::FLOAT8E8M0:
+    return FloatToFloat8E8M0Bits(v);
   default:
     throw std::invalid_argument("kernel::Cast: unsupported float8 'to' dtype.");
   }
@@ -116,14 +125,17 @@ float Float8BitsToFloat(std::uint8_t bits, int32_t from) {
     return Float8E5M2BitsToFloat(bits);
   case DataType::FLOAT8E5M2FNUZ:
     return Float8E5M2FNUZBitsToFloat(bits);
+  case DataType::FLOAT8E8M0:
+    return Float8E8M0BitsToFloat(bits);
   default:
     throw std::invalid_argument("kernel::Cast: unsupported float8 'from' dtype.");
   }
 }
 
 // Returns true when ``(from, to)`` matches one of the supported sub-byte
-// cast pairs: FLOAT/FLOAT16/BFLOAT16 ↔ {INT4,UINT4,INT2,UINT2} and INT4 ↔ INT8 /
-// UINT4 ↔ UINT8 / INT2 ↔ INT8 / UINT2 ↔ UINT8.
+// cast pairs: FLOAT/FLOAT16/BFLOAT16 ↔ {INT4,UINT4,INT2,UINT2,FLOAT4E2M1}
+// and INT4 ↔ INT8 / UINT4 ↔ UINT8 / INT2 ↔ INT8 / UINT2 ↔ UINT8.
+// FLOAT4E2M1 only round-trips against the floating-point partners.
 bool IsSupportedSubBytePair(int32_t from, int32_t to) {
   const bool from_sub = IsSubByteCastDtype(from);
   const bool to_sub = IsSubByteCastDtype(to);
@@ -327,7 +339,7 @@ Tensor Cast::operator()(const Tensor &x, int32_t to) const {
       IsSupportedCastDtype(to), "kernel::Cast: unsupported 'to' dtype ", std::to_string(to),
       " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
       "INT16, UINT16, BOOL, STRING, FLOAT16, BFLOAT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
-      "FLOAT8E5M2, FLOAT8E5M2FNUZ).");
+      "FLOAT8E5M2, FLOAT8E5M2FNUZ, FLOAT8E8M0, FLOAT4E2M1, INT4, UINT4, INT2, UINT2).");
   if (static_cast<DataType>(to) == DataType::STRING) {
     Tensor out = Tensor::MakeString(
         "", x.shape, std::vector<std::string>(static_cast<size_t>(x.element_count())));
@@ -346,12 +358,12 @@ void Cast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
       std::to_string(x.data_type),
       " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
       "INT16, UINT16, BOOL, STRING, FLOAT16, BFLOAT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
-      "FLOAT8E5M2, FLOAT8E5M2FNUZ).");
+      "FLOAT8E5M2, FLOAT8E5M2FNUZ, FLOAT8E8M0, FLOAT4E2M1, INT4, UINT4, INT2, UINT2).");
   EXT_ENFORCE_INVALID(
       IsSupportedCastDtype(to), "kernel::Cast: unsupported 'to' dtype ", std::to_string(to),
       " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
       "INT16, UINT16, BOOL, STRING, FLOAT16, BFLOAT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
-      "FLOAT8E5M2, FLOAT8E5M2FNUZ).");
+      "FLOAT8E5M2, FLOAT8E5M2FNUZ, FLOAT8E8M0, FLOAT4E2M1, INT4, UINT4, INT2, UINT2).");
   EXT_ENFORCE_INVALID(output.data_type == to,
                       "kernel::Cast preallocated output dtype must match 'to'.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
@@ -407,6 +419,10 @@ void Cast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
             v = FloatToUint2Bits(src_v);
             Write2BitElement(dst, i, v);
             break;
+          case DataType::FLOAT4E2M1:
+            v = FloatRoundToFloat4E2M1Nibble(src_v);
+            Write4BitElement(dst, i, v);
+            break;
           default:
             throw std::invalid_argument("kernel::Cast: unsupported sub-byte 'to' dtype.");
           }
@@ -445,6 +461,25 @@ void Cast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
       const uint8_t *src = x.bytes();
       const auto from_dt = static_cast<DataType>(x.data_type);
       const auto to_dt = static_cast<DataType>(to);
+      // FLOAT4E2M1 decodes to a non-integer real value; route through a
+      // separate float path so 0.5/1.5/etc. survive the conversion.
+      if (from_dt == DataType::FLOAT4E2M1) {
+        for (int64_t i = 0; i < n; ++i) {
+          const float fv = Float4E2M1NibbleToFloat(Read4BitElement(src, i));
+          switch (to_dt) {
+          case DataType::FLOAT:
+            output.AsFloat()[i] = fv;
+            break;
+          case DataType::FLOAT16:
+          case DataType::BFLOAT16:
+            StoreFromDouble(output, i, static_cast<double>(fv));
+            break;
+          default:
+            throw std::invalid_argument("kernel::Cast: unsupported 'to' dtype from FLOAT4E2M1.");
+          }
+        }
+        return;
+      }
       for (int64_t i = 0; i < n; ++i) {
         // Read the unpacked sub-byte value (sign-extended into ``int``).
         int value = 0;

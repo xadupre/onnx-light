@@ -27,7 +27,8 @@ int64_t ReadInt32OrInt64Scalar(const Tensor &t, const char *field) {
   case DataType::INT64:
     return t.AsInt64()[0];
   default:
-    throw std::invalid_argument(std::string(kSTFTName) + ": " + field + " must be INT32 or INT64.");
+    EXT_THROW_INVALID(kSTFTName, ": unsupported data type ", t.data_type, " for ", field,
+                      ", must be INT32 or INT64.");
   }
 }
 
@@ -148,8 +149,8 @@ Tensor STFT::operator()(const Tensor &signal, const Tensor &frame_step, const Te
                         frame_step_value, frame_length_value, dft_unique_bins, onesided);
     break;
   default:
-    throw std::invalid_argument(std::string(kSTFTName) +
-                                " only supports FLOAT and DOUBLE signal tensors.");
+    EXT_THROW_INVALID(kSTFTName, ": unsupported data type ", signal.data_type,
+                      ", only supports FLOAT and DOUBLE signal tensors.");
   }
   return output;
 }

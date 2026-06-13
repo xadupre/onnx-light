@@ -38,7 +38,8 @@ void Dispatch(const Tensor &x, float alpha, Tensor &output) {
     ComputeInPlace(x, alpha, output);
     return;
   default:
-    throw std::invalid_argument(std::string(kName) + " only supports FLOAT tensors.");
+    EXT_THROW_INVALID(kName, ": unsupported data type ", x.data_type,
+                      ", only supports FLOAT tensors.");
   }
 }
 

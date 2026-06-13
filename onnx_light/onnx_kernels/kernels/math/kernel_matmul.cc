@@ -216,7 +216,8 @@ Tensor MatMul::operator()(const Tensor &a, const Tensor &b) const {
     return DemoteFromFloat32(y, a.data_type);
   }
   default:
-    throw std::invalid_argument(std::string(kMatMulName) + kSupportedMatMulTypesMsg);
+    EXT_THROW_INVALID(kMatMulName, ": unsupported data type ", a.data_type,
+                      kSupportedMatMulTypesMsg);
   }
 }
 
@@ -249,7 +250,8 @@ void MatMul::operator()(const Tensor &a, const Tensor &b, Tensor &output) const 
     return;
   }
   default:
-    throw std::invalid_argument(std::string(kMatMulName) + kSupportedMatMulTypesMsg);
+    EXT_THROW_INVALID(kMatMulName, ": unsupported data type ", a.data_type,
+                      kSupportedMatMulTypesMsg);
   }
 }
 

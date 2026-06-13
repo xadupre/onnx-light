@@ -35,7 +35,8 @@ int64_t ReadAxisScalar(const char *op_name, const Tensor &axis) {
   case DataType::INT64:
     return axis.AsInt64()[0];
   default:
-    throw std::invalid_argument(std::string(op_name) + ": axis must be INT32 or INT64.");
+    EXT_THROW_INVALID(op_name, ": unsupported data type ", axis.data_type,
+                      ", : axis must be INT32 or INT64.");
   }
 }
 
@@ -143,8 +144,8 @@ void DispatchCumulative(const char *op_name, const Tensor &x, int64_t axis, bool
                                Op::template Identity<int64_t>(), Op{});
     return;
   default:
-    throw std::invalid_argument(std::string(op_name) +
-                                " only supports FLOAT, DOUBLE, INT32 and INT64 tensors.");
+    EXT_THROW_INVALID(op_name, ": unsupported data type ", x.data_type,
+                      ", only supports FLOAT, DOUBLE, INT32 and INT64 tensors.");
   }
 }
 
@@ -179,8 +180,8 @@ Tensor CumSum::operator()(const Tensor &x, const Tensor &axis, bool exclusive, b
     out = CumAlloc<int64_t>(x);
     break;
   default:
-    throw std::invalid_argument(std::string(kCumSumName) +
-                                " only supports FLOAT, DOUBLE, INT32 and INT64 tensors.");
+    EXT_THROW_INVALID(kCumSumName, ": unsupported data type ", x.data_type,
+                      ", only supports FLOAT, DOUBLE, INT32 and INT64 tensors.");
   }
   DispatchCumulative(kCumSumName, x, a, exclusive, reverse, out, SumOp{});
   return out;
@@ -215,8 +216,8 @@ Tensor CumProd::operator()(const Tensor &x, const Tensor &axis, bool exclusive,
     out = CumAlloc<int64_t>(x);
     break;
   default:
-    throw std::invalid_argument(std::string(kCumProdName) +
-                                " only supports FLOAT, DOUBLE, INT32 and INT64 tensors.");
+    EXT_THROW_INVALID(kCumProdName, ": unsupported data type ", x.data_type,
+                      ", only supports FLOAT, DOUBLE, INT32 and INT64 tensors.");
   }
   DispatchCumulative(kCumProdName, x, a, exclusive, reverse, out, ProdOp{});
   return out;

@@ -128,7 +128,8 @@ Tensor Min::operator()(const std::vector<Tensor> &inputs) const {
     ONNX_LIGHT_MIN_DISPATCH(ONNX_LIGHT_MIN_CASE_ALLOC)
 #undef ONNX_LIGHT_MIN_CASE_ALLOC
   default:
-    throw std::invalid_argument(std::string(kMinName) + kSupportedMinTypesMsg);
+    EXT_THROW_INVALID(kMinName, ": unsupported data type ", inputs[0].data_type,
+                      kSupportedMinTypesMsg);
   }
 }
 
@@ -141,7 +142,8 @@ void Min::operator()(const std::vector<Tensor> &inputs, Tensor &output) const {
     ONNX_LIGHT_MIN_DISPATCH(ONNX_LIGHT_MIN_CASE_INPLACE)
 #undef ONNX_LIGHT_MIN_CASE_INPLACE
   default:
-    throw std::invalid_argument(std::string(kMinName) + kSupportedMinTypesMsg);
+    EXT_THROW_INVALID(kMinName, ": unsupported data type ", inputs[0].data_type,
+                      kSupportedMinTypesMsg);
   }
 }
 

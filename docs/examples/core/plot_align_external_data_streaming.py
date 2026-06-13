@@ -36,6 +36,7 @@ footprint differs.
     allocations.
 """
 
+import gc
 import os
 import shutil
 import threading
@@ -103,15 +104,21 @@ src_onnx = os.path.join(out_dir, "src.onnx")
 src_data = src_onnx + ".data"
 
 
-def _save_source() -> None:
+def _save_source(proto: onnxl.ModelProto) -> None:
     """Writes the synthetic model to a two-file ``(.onnx, .data)`` pair."""
-    onnxl.save(model, src_onnx, location=src_data)
+    onnxl.save(proto, src_onnx, location=src_data)
 
 
-_save_source()
+_save_source(model)
 print(f"Source two-file model : {src_onnx} + {src_data}")
 print(f"Source weights size   : {os.path.getsize(src_data) / 2 ** 20:.2f} MB")
 
+# Release the in-memory model now that the source files are on disk.
+# Keeping ``model`` alive would inflate the RSS baseline for both benchmarks,
+# making the streaming variant appear to use more memory than it actually does.
+# After this point all benchmarks start from a clean low-memory baseline.
+del model
+gc.collect()
 
 # %%
 # Helpers
@@ -312,7 +319,7 @@ ax_mem.grid(axis="x")
 
 fig.suptitle(
     f"Alignment={ALIGNMENT}B   weights={total_weight_bytes / 2 ** 20:.1f} MB"
-    f"   #initializers={len(model.graph.initializer)}"
+    f"   #initializers={N_INIT}"
 )
 fig.legend(
     handles=[

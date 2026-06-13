@@ -103,8 +103,8 @@ void Dispatch(const Tensor &x, const Tensor *min, const Tensor *max, Tensor &out
     ClipInPlace<uint64_t>(x, min, max, output);
     return;
   default:
-    throw std::invalid_argument(std::string(kClipName) +
-                                " only supports FLOAT, DOUBLE and (U)INT8/16/32/64 tensors.");
+    EXT_THROW_INVALID(kClipName, ": unsupported data type ", x.data_type,
+                      ", only supports FLOAT, DOUBLE and (U)INT8/16/32/64 tensors.");
   }
 }
 

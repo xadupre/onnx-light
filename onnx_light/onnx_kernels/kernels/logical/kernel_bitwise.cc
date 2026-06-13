@@ -25,10 +25,10 @@ constexpr const char *kBitwiseOrName = "kernel::BitwiseOr";
 constexpr const char *kBitwiseXorName = "kernel::BitwiseXor";
 constexpr const char *kBitwiseNotName = "kernel::BitwiseNot";
 
-[[noreturn]] void ThrowUnsupportedBitwise(const char *op_name) {
-  throw std::invalid_argument(std::string(op_name) +
-                              " only supports INT8, INT16, INT32, INT64, UINT8, UINT16, "
-                              "UINT32 and UINT64 inputs.");
+[[noreturn]] void ThrowUnsupportedBitwise(const char *op_name, int32_t data_type) {
+  EXT_THROW_INVALID(op_name, ": unsupported data type ", data_type,
+                    ", only supports INT8, INT16, INT32, INT64, UINT8, UINT16, "
+                    "UINT32 and UINT64 inputs.");
 }
 
 // Allocating binary bitwise dispatcher: routes ``x.data_type`` to a
@@ -50,7 +50,7 @@ Tensor BitwiseBinAllocDispatch(const char *op_name, const Tensor &x, const Tenso
     ONNX_LIGHT_BITWISE_DISPATCH_CASE(UINT32, "UINT32", uint32_t);
     ONNX_LIGHT_BITWISE_DISPATCH_CASE(UINT64, "UINT64", uint64_t);
   default:
-    ThrowUnsupportedBitwise(op_name);
+    ThrowUnsupportedBitwise(op_name, x.data_type);
   }
 #undef ONNX_LIGHT_BITWISE_DISPATCH_CASE
 }
@@ -76,7 +76,7 @@ void BitwiseBinInPlaceDispatch(const char *op_name, const Tensor &x, const Tenso
     ONNX_LIGHT_BITWISE_DISPATCH_CASE(UINT32, "UINT32", uint32_t);
     ONNX_LIGHT_BITWISE_DISPATCH_CASE(UINT64, "UINT64", uint64_t);
   default:
-    ThrowUnsupportedBitwise(op_name);
+    ThrowUnsupportedBitwise(op_name, x.data_type);
   }
 #undef ONNX_LIGHT_BITWISE_DISPATCH_CASE
 }
@@ -183,7 +183,7 @@ Tensor BitwiseNot::operator()(const Tensor &x) const {
   case DataType::UINT64:
     return BitwiseNotAlloc<uint64_t>("UINT64", DataType::UINT64, x);
   default:
-    ThrowUnsupportedBitwise(kBitwiseNotName);
+    ThrowUnsupportedBitwise(kBitwiseNotName, x.data_type);
   }
 }
 
@@ -206,7 +206,7 @@ void BitwiseNot::operator()(const Tensor &x, Tensor &output) const {
   case DataType::UINT64:
     return BitwiseNotImpl<uint64_t>("UINT64", DataType::UINT64, x, output);
   default:
-    ThrowUnsupportedBitwise(kBitwiseNotName);
+    ThrowUnsupportedBitwise(kBitwiseNotName, x.data_type);
   }
 }
 

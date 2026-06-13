@@ -27,7 +27,8 @@ int64_t ReadDFTLength(const Tensor &len) {
   case DataType::INT64:
     return len.AsInt64()[0];
   default:
-    throw std::invalid_argument(std::string(kDFTName) + ": dft_length must be INT32 or INT64.");
+    EXT_THROW_INVALID(kDFTName, ": unsupported data type ", len.data_type,
+                      ", : dft_length must be INT32 or INT64.");
   }
 }
 
@@ -173,8 +174,8 @@ Tensor DFT::operator()(const Tensor &input, const Tensor *dft_length, int64_t ax
                        last_dim, out_last, n_dft, inverse, onesided);
     break;
   default:
-    throw std::invalid_argument(std::string(kDFTName) +
-                                " only supports FLOAT and DOUBLE input tensors.");
+    EXT_THROW_INVALID(kDFTName, ": unsupported data type ", input.data_type,
+                      ", only supports FLOAT and DOUBLE input tensors.");
   }
   return output;
 }

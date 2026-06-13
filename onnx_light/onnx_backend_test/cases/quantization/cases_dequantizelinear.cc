@@ -121,6 +121,26 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
            "backend-test", registry);
   }
 
+  // Per-axis UINT8 dequantization with ``x_zero_point`` omitted (defaults to
+  // 0). Exercises the per-axis code path through the no-zero-point overload.
+  {
+    NodeProto node;
+    node.set_op_type("DequantizeLinear");
+    node.add_input("x");
+    node.add_input("x_scale");
+    node.add_output("y");
+    AddAttribute<int64_t>(node, "axis", 1);
+
+    Tensor x = Tensor::FromUint8(
+        "", {1, 3, 3, 2},
+        {3, 89, 34, 200, 74, 59, 5, 24, 24, 87, 32, 13, 245, 99, 4, 142, 121, 102});
+    Tensor x_scale = Tensor::FromFloat("", {3}, {2.0f, 4.0f, 5.0f});
+    Tensor y = dequantize_kernel(x, x_scale, /*axis=*/1);
+
+    Expect(node, {x, x_scale}, {y}, "test_cc_dequantizelinear_axis_no_zero_point", {opset},
+           "backend-test", registry);
+  }
+
   // Upstream ONNX backend test cases for the ``DequantizeLinear`` operator
   // (mirror the ``onnx.backend.test.case.node.dequantizelinear`` Python
   // module) for the dtypes supported by ``kernel::DequantizeLinear``.

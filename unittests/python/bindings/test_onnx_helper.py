@@ -540,6 +540,14 @@ class TestOnnxLightHelper(ExtTestCase):
         )
         self.assertIsInstance(m, onnxl.MapProto)
 
+    def test_collect_external_inputs_binding(self) -> None:
+        nodes = [
+            oh.make_node("Mul", ["x", "y"], ["t"]),
+            oh.make_node("Sub", ["t", "z"], ["out"]),
+            oh.make_node("Add", ["out", "x"], ["final"]),
+        ]
+        self.assertEqual(onnxl.collect_external_inputs(nodes), ["x", "y", "z"])
+
 
 class TestAlignExternalDataStreaming(ExtTestCase):
     @staticmethod

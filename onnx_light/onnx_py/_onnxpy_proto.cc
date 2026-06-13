@@ -1,4 +1,5 @@
 #include "_onnxpyprotoop.h"
+#include "common_functions.h"
 #include "onnx.h"
 #include "onnx_crypt.h"
 #include "onnx_helper.h"
@@ -746,6 +747,16 @@ void AddOnnxPyProto(nb::module_ &m) {
 :param data: bytes
 :return: 2-tuple, value and number of read bytes
 )pbdoc");
+
+  m.def(
+      "collect_external_inputs",
+      [](const std::vector<NodeProto> &nodes) { return CollectExternalInputs(nodes); },
+      nb::arg("nodes"),
+      "Returns the list of input names referenced by ``nodes`` that are not "
+      "produced as outputs by any node in the same list. Names captured by "
+      "subgraph attributes (``GRAPH`` / ``GRAPHS``) are inspected recursively. "
+      "The returned list preserves first-seen order and contains no duplicates; "
+      "empty input names are skipped.");
 
   nb::enum_<FileLoadMode>(m, "FileLoadMode",
                           "Selects the file-backed stream implementation used when parsing "

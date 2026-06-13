@@ -316,10 +316,11 @@ TEST(KernelClass, ImageDecoderDecodesBmpGrayscale) {
   EXPECT_EQ(out.data, expected_pixels);
 }
 
-// Baseline 8-bit non-interlaced PNG bytestreams (encoded by zlib/Pillow)
-// together with their expected decoded images. The deflate-compressed IDAT
-// payload is decoded inline by the kernel without any external libpng/zlib
-// dependency, mirroring the BMP and JPEG regression tests above.
+// Baseline 8-bit non-interlaced PNG bytestreams together with their expected
+// decoded images. The test fixtures were produced ahead of time with Pillow
+// and embedded as static byte arrays; at run time the deflate-compressed IDAT
+// payload is decoded inline by the kernel itself, which has no dependency on
+// libpng/zlib, mirroring the BMP and JPEG regression tests above.
 
 TEST(KernelClass, ImageDecoderDecodesPngRgb) {
   // 2x2 truecolor (color type 2, 8-bit) PNG with display pixels:

@@ -146,9 +146,10 @@ const unsigned char k_jpeg_gray_ref[256] = {
 };
 // clang-format on
 
-int MaxAbsDiff(const std::vector<uint8_t> &actual, const unsigned char *expected, size_t count) {
+int MaxAbsDiff(const std::vector<uint8_t> &actual, const unsigned char *expected,
+               size_t num_elements) {
   int max_diff = 0;
-  for (size_t i = 0; i < count; ++i) {
+  for (size_t i = 0; i < num_elements; ++i) {
     const int diff = std::abs(static_cast<int>(actual[i]) - static_cast<int>(expected[i]));
     if (diff > max_diff) {
       max_diff = diff;

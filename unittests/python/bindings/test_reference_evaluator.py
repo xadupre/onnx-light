@@ -480,6 +480,24 @@ class TestReferenceEvaluator(ExtTestCase):
             "test_cc_image_decoder_decode_jpeg_grayscale", (32, 32, 1), 1
         )
 
+    def test_image_decoder_decode_tiff_rgb(self):
+        # Regression test for ``test_cc_image_decoder_decode_tiff_rgb``: the
+        # baseline TIFF decoder must produce the same ``(32, 32, 3)`` uint8
+        # tensor as the upstream reference (uncompressed, chunky, 8-bit per
+        # sample TIFF) rather than the empty-matrix fallback ``(0, 0, 3)``.
+        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+
+        tc = collect_test_case().get("test_cc_image_decoder_decode_tiff_rgb")
+        self.assertIsNotNone(tc)
+        inputs, outputs = tc.data_sets[0]
+        sess = ReferenceEvaluator(tc.model)
+        got = sess.run(None, dict(zip(sess.input_names, inputs)))
+        self.assertEqual(len(got), 1)
+        self.assertEqual(got[0].dtype, np.uint8)
+        self.assertEqual(got[0].shape, (32, 32, 3))
+        self.assertEqual(got[0].shape, outputs[0].shape)
+        np.testing.assert_array_equal(got[0], outputs[0])
+
     def _check_resize_backend_case(self, test_name):
         # Regression test for the ``Resize`` ``align_corners`` downsample
         # variants: the ONNX reference uses ``output_width = scale *

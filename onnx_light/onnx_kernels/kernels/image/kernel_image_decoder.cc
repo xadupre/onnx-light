@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/image/include_image_kernels.h"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -133,6 +134,295 @@ bool TryDecodeBmp(const uint8_t *data, size_t size, const std::string &pixel_for
 
   out_height = static_cast<int64_t>(height);
   out_width = static_cast<int64_t>(width);
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Baseline TIFF decoder
+//
+// Decodes an uncompressed baseline TIFF bytestream (8-bit per sample,
+// chunky / interleaved planar configuration) for the backend test data.
+// Both little-endian (``II``) and big-endian (``MM``) byte orders are
+// supported; multiple strips with arbitrary row counts are concatenated
+// in scan order. Compressed and tiled TIFFs fall through to the
+// empty-matrix path handled by the caller.
+// ---------------------------------------------------------------------------
+inline uint16_t ReadU16BE(const uint8_t *p) {
+  return static_cast<uint16_t>((static_cast<uint16_t>(p[0]) << 8) | static_cast<uint16_t>(p[1]));
+}
+
+inline uint32_t ReadU32BE(const uint8_t *p) {
+  return (static_cast<uint32_t>(p[0]) << 24) | (static_cast<uint32_t>(p[1]) << 16) |
+         (static_cast<uint32_t>(p[2]) << 8) | static_cast<uint32_t>(p[3]);
+}
+
+bool TryDecodeTiff(const uint8_t *data, size_t size, const std::string &pixel_format,
+                   int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels) {
+  // Minimum header: 2 bytes byte order + 2 bytes magic + 4 bytes IFD offset.
+  if (size < 8) {
+    return false;
+  }
+  bool little_endian;
+  if (data[0] == 0x49 && data[1] == 0x49) {
+    little_endian = true;
+  } else if (data[0] == 0x4D && data[1] == 0x4D) {
+    little_endian = false;
+  } else {
+    return false;
+  }
+
+  auto rd_u16 = [little_endian](const uint8_t *p) {
+    return little_endian ? ReadU16LE(p) : ReadU16BE(p);
+  };
+  auto rd_u32 = [little_endian](const uint8_t *p) {
+    return little_endian ? ReadU32LE(p) : ReadU32BE(p);
+  };
+
+  if (rd_u16(data + 2) != 42u) {
+    return false;
+  }
+
+  const uint32_t ifd_offset = rd_u32(data + 4);
+  if (ifd_offset == 0 || static_cast<uint64_t>(ifd_offset) + 2u > size) {
+    return false;
+  }
+  const uint16_t entry_count = rd_u16(data + ifd_offset);
+  const uint64_t entries_end = static_cast<uint64_t>(ifd_offset) + 2u + 12ull * entry_count;
+  if (entries_end > size) {
+    return false;
+  }
+
+  // Sizes (in bytes) of TIFF field types we understand. Other types are
+  // not used by the supported feature subset.
+  auto type_size = [](uint16_t t) -> uint32_t {
+    switch (t) {
+    case 1: // BYTE
+    case 2: // ASCII
+    case 6: // SBYTE
+    case 7: // UNDEFINED
+      return 1u;
+    case 3: // SHORT
+    case 8: // SSHORT
+      return 2u;
+    case 4:  // LONG
+    case 9:  // SLONG
+    case 11: // FLOAT
+      return 4u;
+    case 5:  // RATIONAL
+    case 10: // SRATIONAL
+    case 12: // DOUBLE
+      return 8u;
+    default:
+      return 0u;
+    }
+  };
+
+  // Defaults from TIFF 6.0 baseline.
+  uint32_t image_width = 0;
+  uint32_t image_length = 0;
+  uint32_t compression = 1; // none
+  uint32_t photometric = 0xFFFFFFFFu;
+  uint32_t samples_per_pixel = 1;
+  uint32_t rows_per_strip = 0xFFFFFFFFu;
+  uint32_t planar_config = 1; // chunky
+  std::vector<uint32_t> bits_per_sample;
+  std::vector<uint32_t> strip_offsets;
+  std::vector<uint32_t> strip_byte_counts;
+
+  auto read_uint_array = [&](uint16_t type, uint32_t count, const uint8_t *value_field,
+                             std::vector<uint32_t> &out) -> bool {
+    const uint32_t ts = type_size(type);
+    if (ts == 0 || (type != 1 && type != 3 && type != 4)) {
+      return false;
+    }
+    const uint64_t total = static_cast<uint64_t>(ts) * count;
+    const uint8_t *src;
+    if (total <= 4u) {
+      src = value_field;
+    } else {
+      const uint32_t off = rd_u32(value_field);
+      if (static_cast<uint64_t>(off) + total > size) {
+        return false;
+      }
+      src = data + off;
+    }
+    out.resize(count);
+    for (uint32_t i = 0; i < count; ++i) {
+      const uint8_t *p = src + static_cast<size_t>(i) * ts;
+      if (type == 1) {
+        out[i] = p[0];
+      } else if (type == 3) {
+        out[i] = rd_u16(p);
+      } else {
+        out[i] = rd_u32(p);
+      }
+    }
+    return true;
+  };
+
+  for (uint16_t i = 0; i < entry_count; ++i) {
+    const uint8_t *entry = data + ifd_offset + 2u + 12u * i;
+    const uint16_t tag = rd_u16(entry);
+    const uint16_t type = rd_u16(entry + 2);
+    const uint32_t count = rd_u32(entry + 4);
+    const uint8_t *value_field = entry + 8;
+
+    auto read_scalar_uint = [&](uint32_t &dst) -> bool {
+      std::vector<uint32_t> tmp;
+      if (!read_uint_array(type, count, value_field, tmp) || tmp.size() != 1u) {
+        return false;
+      }
+      dst = tmp[0];
+      return true;
+    };
+
+    switch (tag) {
+    case 256: // ImageWidth
+      if (!read_scalar_uint(image_width))
+        return false;
+      break;
+    case 257: // ImageLength
+      if (!read_scalar_uint(image_length))
+        return false;
+      break;
+    case 258: // BitsPerSample
+      if (!read_uint_array(type, count, value_field, bits_per_sample))
+        return false;
+      break;
+    case 259: // Compression
+      if (!read_scalar_uint(compression))
+        return false;
+      break;
+    case 262: // PhotometricInterpretation
+      if (!read_scalar_uint(photometric))
+        return false;
+      break;
+    case 273: // StripOffsets
+      if (!read_uint_array(type, count, value_field, strip_offsets))
+        return false;
+      break;
+    case 277: // SamplesPerPixel
+      if (!read_scalar_uint(samples_per_pixel))
+        return false;
+      break;
+    case 278: // RowsPerStrip
+      if (!read_scalar_uint(rows_per_strip))
+        return false;
+      break;
+    case 279: // StripByteCounts
+      if (!read_uint_array(type, count, value_field, strip_byte_counts))
+        return false;
+      break;
+    case 284: // PlanarConfiguration
+      if (!read_scalar_uint(planar_config))
+        return false;
+      break;
+    default:
+      break;
+    }
+  }
+
+  // Only uncompressed, chunky, 8-bit per sample TIFFs are supported.
+  if (compression != 1 || planar_config != 1) {
+    return false;
+  }
+  if (image_width == 0 || image_length == 0 || samples_per_pixel == 0) {
+    return false;
+  }
+  if (bits_per_sample.size() != samples_per_pixel) {
+    return false;
+  }
+  for (uint32_t b : bits_per_sample) {
+    if (b != 8u) {
+      return false;
+    }
+  }
+  if (strip_offsets.empty() || strip_offsets.size() != strip_byte_counts.size()) {
+    return false;
+  }
+  if (rows_per_strip == 0xFFFFFFFFu) {
+    rows_per_strip = image_length;
+  }
+  if (rows_per_strip == 0) {
+    return false;
+  }
+
+  // Photometric: 1 = BlackIsZero (Grayscale), 2 = RGB. Default to RGB if missing.
+  if (photometric == 0xFFFFFFFFu) {
+    photometric = (samples_per_pixel == 1) ? 1u : 2u;
+  }
+  const bool is_rgb = (photometric == 2u && samples_per_pixel == 3u);
+  const bool is_gray = (photometric == 1u && samples_per_pixel == 1u);
+  if (!is_rgb && !is_gray) {
+    return false;
+  }
+
+  const int64_t channels = ImageDecoder::ChannelCount(pixel_format);
+  const size_t total_pixels = static_cast<size_t>(image_length) * static_cast<size_t>(image_width);
+  out_pixels.assign(total_pixels * static_cast<size_t>(channels), 0);
+
+  const uint64_t row_bytes =
+      static_cast<uint64_t>(image_width) * static_cast<uint64_t>(samples_per_pixel);
+  uint32_t next_row = 0;
+  for (size_t s = 0; s < strip_offsets.size(); ++s) {
+    const uint32_t strip_off = strip_offsets[s];
+    const uint32_t strip_size = strip_byte_counts[s];
+    if (static_cast<uint64_t>(strip_off) + strip_size > size) {
+      return false;
+    }
+    const uint32_t rows_in_strip = std::min<uint32_t>(rows_per_strip, image_length - next_row);
+    if (static_cast<uint64_t>(rows_in_strip) * row_bytes > strip_size) {
+      return false;
+    }
+    const uint8_t *src = data + strip_off;
+    for (uint32_t r = 0; r < rows_in_strip; ++r) {
+      const uint8_t *src_row = src + static_cast<size_t>(r) * row_bytes;
+      uint8_t *dst_row = out_pixels.data() + (static_cast<size_t>(next_row + r) * image_width) *
+                                                 static_cast<size_t>(channels);
+      for (uint32_t c = 0; c < image_width; ++c) {
+        uint8_t *dst = dst_row + static_cast<size_t>(c) * channels;
+        if (is_rgb) {
+          const uint8_t r = src_row[c * 3 + 0];
+          const uint8_t g = src_row[c * 3 + 1];
+          const uint8_t b = src_row[c * 3 + 2];
+          if (pixel_format == "RGB") {
+            dst[0] = r;
+            dst[1] = g;
+            dst[2] = b;
+          } else if (pixel_format == "BGR") {
+            dst[0] = b;
+            dst[1] = g;
+            dst[2] = r;
+          } else {
+            // Grayscale: ITU-R BT.601 luminance.
+            dst[0] = static_cast<uint8_t>((299 * r + 587 * g + 114 * b + 500) / 1000);
+          }
+        } else {
+          // Grayscale source.
+          const uint8_t v = src_row[c];
+          if (pixel_format == "Grayscale") {
+            dst[0] = v;
+          } else {
+            // Replicate luminance to RGB / BGR channels.
+            dst[0] = v;
+            dst[1] = v;
+            dst[2] = v;
+          }
+        }
+      }
+    }
+    next_row += rows_in_strip;
+    if (next_row >= image_length) {
+      break;
+    }
+  }
+
+  if (next_row != image_length) {
+    return false;
+  }
+
+  out_height = static_cast<int64_t>(image_length);
+  out_width = static_cast<int64_t>(image_width);
   return true;
 }
 
@@ -790,7 +1080,8 @@ Tensor ImageDecoder::operator()(const Tensor &encoded_stream,
   int64_t width = 0;
   std::vector<uint8_t> pixels;
   if (TryDecodeBmp(raw, raw_size, pixel_format, height, width, pixels) ||
-      TryDecodeJpeg(raw, raw_size, pixel_format, height, width, pixels)) {
+      TryDecodeJpeg(raw, raw_size, pixel_format, height, width, pixels) ||
+      TryDecodeTiff(raw, raw_size, pixel_format, height, width, pixels)) {
     return Tensor::FromUint8("", {height, width, channels}, std::move(pixels));
   }
 
@@ -822,7 +1113,8 @@ void ImageDecoder::operator()(const Tensor &encoded_stream, const std::string &p
   int64_t width = 0;
   std::vector<uint8_t> pixels;
   if (TryDecodeBmp(raw, raw_size, pixel_format, height, width, pixels) ||
-      TryDecodeJpeg(raw, raw_size, pixel_format, height, width, pixels)) {
+      TryDecodeJpeg(raw, raw_size, pixel_format, height, width, pixels) ||
+      TryDecodeTiff(raw, raw_size, pixel_format, height, width, pixels)) {
     EXT_ENFORCE_INVALID(output.shape[0] == height && output.shape[1] == width,
                         "kernel::ImageDecoder preallocated output shape does not match the decoded "
                         "image dimensions.");

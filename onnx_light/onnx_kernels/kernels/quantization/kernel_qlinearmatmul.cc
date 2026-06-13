@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
 
 #include <algorithm>
@@ -42,11 +43,12 @@ float ReadScalarFloat(const Tensor &t, const char *name) {
   if (t.data_type == static_cast<int32_t>(DataType::FLOAT)) {
     return t.AsFloat()[0];
   }
-  // Best-effort fallback for FLOAT16 / BFLOAT16: convert via the raw bytes.
-  // We only need scalar precision for the QLinearMatMul reference and the
-  // test cases always supply FLOAT scales, so this branch is defensive.
+  if (t.data_type == static_cast<int32_t>(DataType::FLOAT16)) {
+    const uint16_t bits = *reinterpret_cast<const uint16_t *>(t.bytes());
+    return Float16BitsToFloat(bits);
+  }
   throw std::invalid_argument(std::string(kName) + ": '" + name +
-                              "' must be a FLOAT scalar for the reference kernel.");
+                              "' must be a FLOAT or FLOAT16 scalar for the reference kernel.");
 }
 
 std::vector<int64_t> PromoteMatMulShape(const std::vector<int64_t> &shape, bool is_left) {

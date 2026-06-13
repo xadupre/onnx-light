@@ -19,6 +19,26 @@ namespace {
 
 constexpr const char *kName = "kernel::Sign";
 
+// sign(x) for unsigned types: 0 when x == 0, 1 otherwise.
+template <typename T> void SignUnsigned(const Tensor &x, Tensor &output) {
+  const int64_t n = x.element_count();
+  const T *px = reinterpret_cast<const T *>(x.bytes());
+  T *py = reinterpret_cast<T *>(output.data.data());
+  for (int64_t i = 0; i < n; ++i) {
+    py[i] = px[i] > T{0} ? T{1} : T{0};
+  }
+}
+
+// sign(x) for signed types: -1, 0, or 1.
+template <typename T> void SignSigned(const Tensor &x, Tensor &output) {
+  const int64_t n = x.element_count();
+  const T *px = reinterpret_cast<const T *>(x.bytes());
+  T *py = reinterpret_cast<T *>(output.data.data());
+  for (int64_t i = 0; i < n; ++i) {
+    py[i] = px[i] > T{0} ? T{1} : (px[i] < T{0} ? T{-1} : T{0});
+  }
+}
+
 } // namespace
 
 Tensor Sign::operator()(const Tensor &x) const {
@@ -61,10 +81,34 @@ void Sign::operator()(const Tensor &x, Tensor &output) const {
         x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits,
         [](float v) { return (v > 0.0f) ? 1.0f : (v < 0.0f ? -1.0f : 0.0f); });
     return;
+  case DataType::UINT8:
+    SignUnsigned<uint8_t>(x, output);
+    return;
+  case DataType::UINT16:
+    SignUnsigned<uint16_t>(x, output);
+    return;
+  case DataType::UINT32:
+    SignUnsigned<uint32_t>(x, output);
+    return;
+  case DataType::UINT64:
+    SignUnsigned<uint64_t>(x, output);
+    return;
+  case DataType::INT8:
+    SignSigned<int8_t>(x, output);
+    return;
+  case DataType::INT16:
+    SignSigned<int16_t>(x, output);
+    return;
+  case DataType::INT32:
+    SignSigned<int32_t>(x, output);
+    return;
+  case DataType::INT64:
+    SignSigned<int64_t>(x, output);
+    return;
   default:
-    EXT_THROW_INVALID(
-        kName, ": unsupported data type ", x.data_type,
-        ", only supports FLOAT, DOUBLE, FLOAT16, and BFLOAT16 tensors.");
+    EXT_THROW_INVALID(kName, ": unsupported data type ", x.data_type,
+                      ", only supports FLOAT, DOUBLE, FLOAT16, BFLOAT16, UINT8, UINT16, UINT32, "
+                      "UINT64, INT8, INT16, INT32, and INT64 tensors.");
   }
 }
 

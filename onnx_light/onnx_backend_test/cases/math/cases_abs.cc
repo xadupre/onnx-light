@@ -71,6 +71,54 @@ void RegisterAbsCases(std::vector<TestCase> &registry) {
     Tensor y = abs_kernel(x);
     Expect(node, {x}, {y}, "test_cc_abs_bfloat16", {opset}, "backend-test", registry);
   }
+
+  // INT8
+  {
+    NodeProto node;
+    node.set_op_type("Abs");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor x = Tensor::FromInt8("", {2, 3}, {-1, 0, 2, -127, 3, -5});
+    Tensor y = abs_kernel(x);
+    Expect(node, {x}, {y}, "test_cc_abs_int8", {opset}, "backend-test", registry);
+  }
+
+  // INT16
+  {
+    NodeProto node;
+    node.set_op_type("Abs");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor x = Tensor::FromInt16("", {2, 3}, {-1, 0, 2, -1000, 3, -5});
+    Tensor y = abs_kernel(x);
+    Expect(node, {x}, {y}, "test_cc_abs_int16", {opset}, "backend-test", registry);
+  }
+
+  // INT32
+  {
+    NodeProto node;
+    node.set_op_type("Abs");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor x = Tensor::FromInt32("", {2, 3}, {-1, 0, 2, -100000, 3, -5});
+    Tensor y = abs_kernel(x);
+    Expect(node, {x}, {y}, "test_cc_abs_int32", {opset}, "backend-test", registry);
+  }
+
+  // INT64
+  {
+    NodeProto node;
+    node.set_op_type("Abs");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor x = Tensor::FromInt64("", {2, 3}, {-1, 0, 2, -1000000000000LL, 3, -5});
+    Tensor y = abs_kernel(x);
+    Expect(node, {x}, {y}, "test_cc_abs_int64", {opset}, "backend-test", registry);
+  }
 }
 
 } // namespace onnx_backend_test

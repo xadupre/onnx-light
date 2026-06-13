@@ -14,16 +14,13 @@ need the full ONNX schema / checker stack, and so on.
 Each library has a well defined responsibility and a minimal set of
 dependencies on the other libraries.  The full dependency graph is
 shown below (arrows point from a library to the library it depends
-on):
+on).  The SVG below is generated from
+:download:`library_split.dot <_static/library_split.dot>` with
+``dot -Tsvg`` (Graphviz); regenerate it after editing the ``.dot`` source.
 
-.. mermaid::
-
-    graph TD
-        lib_onnx_op[lib_onnx_op] --> lib_onnx_proto[lib_onnx_proto]
-        lib_onnx_optim[lib_onnx_optim] --> lib_onnx_op
-        lib_onnx_lib[lib_onnx_lib] --> lib_onnx_proto
-        lib_onnx_kernels[lib_onnx_kernels] --> lib_onnx_proto
-        lib_onnx_backend_test[lib_onnx_backend_test] --> lib_onnx_kernels
+.. image:: _static/library_split.svg
+   :alt: Dependency graph between the onnx-light C++ libraries
+   :align: center
 
 The same graph as an ASCII tree (rooted at ``lib_onnx_proto``, the
 base dependency)::

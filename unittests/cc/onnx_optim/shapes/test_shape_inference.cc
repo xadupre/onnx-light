@@ -1069,4 +1069,83 @@ TEST(OnnxOptimShapesContextLessEqualConstraint, AddAndQuery) {
   EXPECT_EQ(ctx.LessEqualConstraintsSize(), 2u);
 }
 
+TEST(OnnxOptimShapesContextEventLog, DisabledByDefault) {
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_FALSE(ctx.events_enabled());
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+  // No events are recorded while logging is disabled.
+  EXPECT_TRUE(ctx.Events().empty());
+}
+
+TEST(OnnxOptimShapesContextEventLog, SetRecordsAddAndReplace) {
+  using onnx_optim::shapes::ShapeEventAction;
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.set_events_enabled(true);
+  EXPECT_TRUE(ctx.Events().empty());
+
+  // First Set on an absent name -> add event with the descriptor snapshot.
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim("N")}));
+  ASSERT_EQ(ctx.Events().size(), 1u);
+  const auto &add_ev = ctx.Events()[0];
+  EXPECT_EQ(add_ev.action, ShapeEventAction::kAdd);
+  EXPECT_EQ(add_ev.name, "X");
+  EXPECT_EQ(add_ev.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  EXPECT_EQ(add_ev.shape, (std::vector<std::string>{"2", "N"}));
+  EXPECT_GT(add_ev.timestamp_ns, 0);
+  EXPECT_TRUE(add_ev.op_type.empty());
+  EXPECT_EQ(add_ev.duration_ns, 0);
+
+  // Second Set on the same name -> replace event with the new dtype/shape.
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(5)}));
+  ASSERT_EQ(ctx.Events().size(), 2u);
+  EXPECT_EQ(ctx.Events()[1].action, ShapeEventAction::kReplace);
+  EXPECT_EQ(ctx.Events()[1].name, "X");
+  EXPECT_EQ(ctx.Events()[1].data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+  EXPECT_EQ(ctx.Events()[1].shape, (std::vector<std::string>{"5"}));
+
+  ctx.ClearEvents();
+  EXPECT_TRUE(ctx.Events().empty());
+}
+
+TEST(OnnxOptimShapesContextEventLog, ComputeShapeNodeRecordsComputeNodeEvent) {
+  using onnx_optim::shapes::ShapeEventAction;
+  NodeProto node = MakeNode("Abs", {"X"}, {"Y"});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.set_events_enabled(true);
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+  ctx.ClearEvents();
+
+  ctx.ComputeShapeNode(node);
+
+  // The Abs kernel writes the output descriptor (one add event) and the
+  // dispatch itself appends one compute_node event summarising the node.
+  ASSERT_EQ(ctx.Events().size(), 2u);
+  EXPECT_EQ(ctx.Events()[0].action, ShapeEventAction::kAdd);
+  EXPECT_EQ(ctx.Events()[0].name, "Y");
+  EXPECT_EQ(ctx.Events()[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  EXPECT_EQ(ctx.Events()[0].shape, (std::vector<std::string>{"2", "3"}));
+
+  const auto &node_ev = ctx.Events()[1];
+  EXPECT_EQ(node_ev.action, ShapeEventAction::kComputeNode);
+  EXPECT_EQ(node_ev.op_domain, "ai.onnx");
+  EXPECT_EQ(node_ev.op_type, "Abs");
+  EXPECT_EQ(node_ev.inputs, (std::vector<std::string>{"X"}));
+  EXPECT_EQ(node_ev.data_type, static_cast<int32_t>(TensorProto::DataType::UNDEFINED));
+  EXPECT_TRUE(node_ev.shape.empty());
+  EXPECT_GT(node_ev.timestamp_ns, 0);
+}
+
+TEST(OnnxOptimShapesContextEventLog, ActionNames) {
+  using onnx_optim::shapes::ShapeEventAction;
+  using onnx_optim::shapes::ShapeEventActionName;
+  EXPECT_STREQ(ShapeEventActionName(ShapeEventAction::kAdd), "add");
+  EXPECT_STREQ(ShapeEventActionName(ShapeEventAction::kReplace), "replace");
+  EXPECT_STREQ(ShapeEventActionName(ShapeEventAction::kComputeNode), "compute_node");
+}
+
 } // namespace Test

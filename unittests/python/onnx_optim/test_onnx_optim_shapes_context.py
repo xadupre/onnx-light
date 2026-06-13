@@ -320,5 +320,89 @@ class TestShapesContextBindings(ExtTestCase):
             si.compute_shape_model(ctx, model, prefill_with_value_info_output=True)
 
 
+class TestShapesContextEventLog(ExtTestCase):
+    """Python tests for the opt-in shape-inference event log exposed by
+    ``ShapesContext`` (``events_enabled`` / ``events`` / ``clear_events``)."""
+
+    def test_events_disabled_by_default(self):
+        ctx = si.ShapesContext()
+        self.assertFalse(ctx.events_enabled)
+        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, [2, 3]))
+        self.assertEqual(ctx.events(), [])
+
+    def test_set_records_add_and_replace(self):
+        ctx = si.ShapesContext()
+        ctx.events_enabled = True
+        self.assertEqual(ctx.events(), [])
+
+        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, [2, "N"]))
+        ctx.set("X", si.OptimTensor(onnxl.TensorProto.INT64, [5]))
+
+        events = ctx.events()
+        self.assertEqual([e.action for e in events], ["add", "replace"])
+        self.assertEqual([e.name for e in events], ["X", "X"])
+        self.assertEqual(events[0].data_type, onnxl.TensorProto.FLOAT)
+        self.assertEqual(events[0].shape, ["2", "N"])
+        self.assertEqual(events[1].data_type, onnxl.TensorProto.INT64)
+        self.assertEqual(events[1].shape, ["5"])
+        self.assertGreater(events[0].timestamp_ns, 0)
+
+        ctx.clear_events()
+        self.assertEqual(ctx.events(), [])
+
+    def test_compute_shape_node_records_compute_node_event(self):
+        ctx = si.ShapesContext()
+        ctx.events_enabled = True
+        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, [2, 3]))
+        ctx.clear_events()
+
+        node = oh.make_node("Relu", inputs=["X"], outputs=["Y"])
+        si.compute_shape_node(ctx, node)
+
+        events = ctx.events()
+        # One ``add`` event for the produced output descriptor plus one
+        # ``compute_node`` event summarising the dispatch.
+        self.assertEqual([e.action for e in events], ["add", "compute_node"])
+        self.assertEqual(events[0].name, "Y")
+        self.assertEqual(events[0].shape, ["2", "3"])
+
+        node_ev = events[1]
+        self.assertEqual(node_ev.op_domain, "ai.onnx")
+        self.assertEqual(node_ev.op_type, "Relu")
+        self.assertEqual(node_ev.inputs, ["X"])
+        self.assertEqual(node_ev.shape, [])
+        self.assertGreater(node_ev.timestamp_ns, 0)
+
+    def test_event_as_dict(self):
+        ctx = si.ShapesContext()
+        ctx.events_enabled = True
+        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, [2, "N"]))
+        d = ctx.events()[0].as_dict()
+        self.assertEqual(d["action"], "add")
+        self.assertEqual(d["name"], "X")
+        self.assertEqual(d["data_type"], onnxl.TensorProto.FLOAT)
+        self.assertEqual(d["shape"], ["2", "N"])
+        self.assertEqual(d["op_type"], "")
+        self.assertEqual(d["inputs"], [])
+
+    def test_compute_shape_model_records_events(self):
+        node = oh.make_node("Relu", inputs=["X"], outputs=["Y"])
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["N", 4])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
+        graph = oh.make_graph([node], "g", [x], [y])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+        model.ir_version = 8
+
+        ctx = si.ShapesContext()
+        ctx.events_enabled = True
+        si.compute_shape_model(ctx, model)
+
+        actions = [e.action for e in ctx.events()]
+        # At least one descriptor mutation and one node dispatch were logged.
+        self.assertIn("compute_node", actions)
+        node_events = [e for e in ctx.events() if e.action == "compute_node"]
+        self.assertEqual([e.op_type for e in node_events], ["Relu"])
+
+
 if __name__ == "__main__":
     unittest.main()

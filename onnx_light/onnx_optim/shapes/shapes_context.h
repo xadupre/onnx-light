@@ -4,11 +4,13 @@
 
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <set>
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "onnx_optim/optim_sequence.h"
 #include "onnx_optim/optim_tensor.h"
@@ -44,6 +46,91 @@ inline constexpr int kUnknownOpsetVersion = -1;
 inline constexpr const char *kOnnxDomain = "ai.onnx";
 
 /**
+ * Kind of shape-inference event recorded in the
+ * :cpp:class:`ShapesContext` event log. Mirrors the runtime
+ * :cpp:enum:`onnx_kernels::TensorEventAction` design.
+ *
+ *  * ``kAdd``         — a new tensor descriptor was inserted via
+ *                       :cpp:func:`ShapesContext::Set` on a previously
+ *                       absent name.
+ *  * ``kReplace``     — an existing tensor descriptor was overwritten
+ *                       via :cpp:func:`ShapesContext::Set`.
+ *  * ``kComputeNode`` — shape inference was dispatched for a single
+ *                       :cpp:class:`NodeProto`. The event records the
+ *                       node's ``op_domain`` / ``op_type``, the list of
+ *                       ``inputs`` it consumed and the wall-clock
+ *                       ``duration_ns`` of the dispatch. It does not
+ *                       mutate the tensor map by itself.
+ */
+enum class ShapeEventAction : int32_t { kAdd = 0, kReplace = 1, kComputeNode = 2 };
+
+/**
+ * Returns a short lowercase label for ``action`` (``"add"``,
+ * ``"replace"``, ``"compute_node"``). Useful for human-readable
+ * rendering of the event log.
+ */
+const char *ShapeEventActionName(ShapeEventAction action) noexcept;
+
+/**
+ * Single entry of the :cpp:class:`ShapesContext` event log.
+ *
+ * Each insertion or replacement of a tensor descriptor performed
+ * through :cpp:func:`ShapesContext::Set` produces one ``ShapeEvent``
+ * capturing the action, the name of the value, the wall-clock
+ * timestamp (nanoseconds since the Unix epoch) and a snapshot of the
+ * descriptor's element type and shape. Because shape inference works on
+ * descriptors rather than data, no element values are captured; the
+ * ``shape`` is recorded as a list of per-dimension strings so symbolic
+ * dimensions (``"N"``, ``"2*N"``) are preserved alongside concrete
+ * integer dimensions.
+ *
+ * :cpp:enumerator:`ShapeEventAction::kComputeNode` events instead
+ * summarise the dispatch of a single ``NodeProto``: they carry the
+ * node's ``op_domain`` / ``op_type``, the list of ``inputs`` consumed
+ * and the measured ``duration_ns``; ``data_type`` is set to
+ * ``DataType::UNDEFINED`` and ``shape`` is left empty.
+ */
+struct ShapeEvent {
+  /// Kind of event recorded by this entry.
+  ShapeEventAction action = ShapeEventAction::kAdd;
+  /// Wall-clock timestamp of the event, in nanoseconds since the Unix
+  /// epoch (``std::chrono::system_clock``).
+  int64_t timestamp_ns = 0;
+  /// Name of the value targeted by the event.
+  std::string name;
+  /// Element data type of the descriptor at the moment of the event,
+  /// encoded as a ``TensorProto::DataType`` integer value. Set to
+  /// ``DataType::UNDEFINED`` for ``kComputeNode`` events.
+  int32_t data_type = 0;
+  /// Descriptor shape at the moment of the event, with each dimension
+  /// rendered as a string (a decimal integer for concrete dims, the
+  /// symbolic expression otherwise). Empty for ``kComputeNode`` events.
+  std::vector<std::string> shape;
+  /// For ``kComputeNode`` events: ONNX op domain of the dispatched
+  /// node, normalised so the default domain is reported as
+  /// ``"ai.onnx"``. Empty for ``kAdd`` / ``kReplace`` events.
+  std::string op_domain;
+  /// For ``kComputeNode`` events: ONNX ``op_type`` of the dispatched
+  /// node. Empty for ``kAdd`` / ``kReplace`` events.
+  std::string op_type;
+  /// For ``kComputeNode`` events: ordered list of input names consumed
+  /// by the node, matching ``NodeProto::input``. Empty for ``kAdd`` /
+  /// ``kReplace`` events.
+  std::vector<std::string> inputs;
+  /// For ``kComputeNode`` events: wall-clock duration of the
+  /// shape-inference dispatch in nanoseconds
+  /// (``std::chrono::steady_clock``). Zero for ``kAdd`` / ``kReplace``
+  /// events.
+  int64_t duration_ns = 0;
+};
+
+/**
+ * Append-only log of shape-inference events recorded by
+ * :cpp:class:`ShapesContext`.
+ */
+using ShapeEventLog = std::vector<ShapeEvent>;
+
+/**
  * Lightweight container shared by the per-operator ``ComputeShape*``
  * shape-inference functions. ``ShapesContext`` carries two pieces of
  * information:
@@ -74,17 +161,25 @@ public:
   // ── Tensor descriptors ──────────────────────────────────────────────
 
   /// Inserts or replaces the descriptor for ``name``. ``tensor`` is
-  /// consumed; callers must pass an rvalue (use ``std::move``).
-  void Set(const std::string &name, OptimTensor &&tensor) { tensors_[name] = std::move(tensor); }
+  /// consumed; callers must pass an rvalue (use ``std::move``). When
+  /// event logging is enabled (see :cpp:func:`set_events_enabled`) a
+  /// :cpp:class:`ShapeEvent` describing the new state is appended to the
+  /// event log — with action :cpp:enumerator:`ShapeEventAction::kAdd`
+  /// when ``name`` was absent and
+  /// :cpp:enumerator:`ShapeEventAction::kReplace` otherwise.
+  void Set(const std::string &name, OptimTensor &&tensor) {
+    if (events_enabled_) {
+      LogSetEvent(name, tensor);
+    }
+    tensors_[name] = std::move(tensor);
+  }
 
   /// Overload: ``name`` given as a null-terminated C string.
-  void Set(const char *name, OptimTensor &&tensor) {
-    tensors_[std::string(name)] = std::move(tensor);
-  }
+  void Set(const char *name, OptimTensor &&tensor) { Set(std::string(name), std::move(tensor)); }
 
   /// Overload: ``name`` given as a :cpp:class:`utils::String`.
   void Set(const utils::String &name, OptimTensor &&tensor) {
-    tensors_[std::string(name.data(), name.size())] = std::move(tensor);
+    Set(std::string(name.data(), name.size()), std::move(tensor));
   }
 
   /// Returns ``true`` when an entry exists for ``name``.
@@ -416,10 +511,52 @@ public:
   /// back into ``model.graph()``.
   void ApplyInferredShapesToModel(ModelProto &model) const;
 
+  // ── Event logging ───────────────────────────────────────────────────
+  //
+  // Mirrors the opt-in event log of :cpp:class:`onnx_kernels::RuntimeContext`.
+  // When disabled (the default), :cpp:func:`Set` and
+  // :cpp:func:`ComputeShapeNode` skip all event construction and clock
+  // reads, eliminating the profiling overhead from the hot path.
+
+  /// Enables or disables event logging. When disabled (the default),
+  /// :cpp:func:`Set` and :cpp:func:`ComputeShapeNode` skip all event
+  /// construction and clock reads. Call ``set_events_enabled(true)``
+  /// before running shape inference if per-node profiling or descriptor
+  /// tracing is required.
+  void set_events_enabled(bool enabled) noexcept { events_enabled_ = enabled; }
+  bool events_enabled() const noexcept { return events_enabled_; }
+
+  /// Append-only log of every tensor descriptor mutation performed
+  /// through :cpp:func:`Set` and every node dispatched through
+  /// :cpp:func:`ComputeShapeNode`. See :cpp:class:`ShapeEvent` for the
+  /// captured fields.
+  const ShapeEventLog &Events() const noexcept { return events_; }
+  ShapeEventLog &Events() noexcept { return events_; }
+
+  /// Empties the event log without otherwise touching the context.
+  void ClearEvents() noexcept { events_.clear(); }
+
+  /// Appends a :cpp:class:`ShapeEvent` with action
+  /// :cpp:enumerator:`ShapeEventAction::kComputeNode` summarising the
+  /// shape-inference dispatch of a single ``NodeProto``.
+  /// ``start_time_ns`` is the wall-clock time at which the dispatch
+  /// started and ``duration_ns`` its measured wall-clock duration in
+  /// nanoseconds. Appended by :cpp:func:`ComputeShapeNode` for every
+  /// dispatched node when event logging is enabled.
+  void AppendComputeNodeEvent(const std::string &op_domain, const std::string &op_type,
+                              std::vector<std::string> inputs, int64_t start_time_ns,
+                              int64_t duration_ns);
+
 private:
   static std::string NormaliseDomain(const std::string &domain) {
     return domain.empty() ? std::string(kOnnxDomain) : domain;
   }
+
+  /// Appends a :cpp:enumerator:`ShapeEventAction::kAdd` /
+  /// :cpp:enumerator:`ShapeEventAction::kReplace` event for ``name``
+  /// describing ``tensor`` (the descriptor about to be stored). Only
+  /// called by :cpp:func:`Set` when event logging is enabled.
+  void LogSetEvent(const std::string &name, const OptimTensor &tensor);
 
   std::unordered_map<std::string, OptimTensor> tensors_;
   std::unordered_map<std::string, OptimSequence> sequences_;
@@ -428,6 +565,8 @@ private:
   CustomShapeInferenceMap custom_shape_inference_;
   std::set<Constraint> constraints_;
   std::set<LessEqualConstraint> le_constraints_;
+  ShapeEventLog events_;
+  bool events_enabled_ = false;
 };
 
 } // namespace shapes

@@ -29,6 +29,7 @@ kOnnxDomain = _C.kOnnxDomain
 OptimDim = _C.OptimDim
 OptimShape = _C.OptimShape
 OptimTensor = _C.OptimTensor
+ShapeEvent = _C.ShapeEvent
 ShapesContext = _C.ShapesContext
 
 

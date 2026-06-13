@@ -116,7 +116,8 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     backend still exercises these conversions byte-for-byte.
 #   * ``test_cc_equal_bfloat16``, ``test_cc_greater_bfloat16``,
 #     ``test_cc_greater_or_equal_bfloat16``, ``test_cc_less_bfloat16``,
-#     ``test_cc_less_or_equal_bfloat16``, ``test_mod_mixed_sign_bfloat16``
+#     ``test_cc_less_or_equal_bfloat16``, ``test_mod_mixed_sign_bfloat16``,
+#     ``test_cc_mod_bfloat16_fmod``
 #     and ``test_cc_pow_types_bfloat16_float32`` — ORT's CPU EP does not
 #     register ``bfloat16`` kernels for these comparison, modulo, and power
 #     operators ("Could not find an implementation for Equal(19) / Greater(13) /
@@ -269,6 +270,10 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     ``Min(13)`` with ``int16``/``uint16`` inputs ("Could not find an
 #     implementation for Max(13) node" / "Could not find an implementation
 #     for Min(13) node"). The reference backend still exercises these cases.
+#   * ``test_cc_relu_int16`` and ``test_cc_relu_int64`` — ORT's CPU EP has no
+#     kernel registered for ``Relu(14)`` with ``int16``/``int64`` inputs
+#     ("Could not find an implementation for Relu(14) node"). The reference
+#     backend still exercises these cases.
 #   * ``test_resize_downsample_scales_linear_align_corners`` and
 #     ``test_resize_downsample_scales_cubic_align_corners`` — when
 #     downsampling with ``coordinate_transformation_mode="align_corners"``
@@ -419,9 +424,13 @@ ORT_EXCLUDE_REGEX = [
     r"^test_max_uint16$",
     r"^test_min_int16$",
     r"^test_min_uint16$",
+    # ORT CPU does not register int16/int64 kernels for Relu(14).
+    r"^test_cc_relu_int16$",
+    r"^test_cc_relu_int64$",
     # ORT CPU does not register these bfloat16 kernels.
     r"^test_cc_(abs|add|ceil|div|elu|equal|erf|exp|floor|gelu_default|greater|greater_or_equal|isnan|less|less_or_equal|log|mul|neg|reciprocal|relu|sigmoid|sign|softplus|softsign|sqrt|sub|tanh)_bfloat16$",
     r"^test_mod_mixed_sign_bfloat16$",
+    r"^test_cc_mod_bfloat16_fmod$",
     r"^test_cc_pow_types_bfloat16_float32$",
     r"^test_cc_maxunpool_export_with_output_shape$",
     r"^test_resize_downsample_scales_linear_align_corners$",

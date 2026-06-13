@@ -63,6 +63,36 @@ void RegisterLessCases(std::vector<TestCase> &registry) {
     Expect(node, {x, y}, {z}, "test_cc_less_bcast", {opset}, "backend-test", registry);
   }
 
+  // FLOAT16 variant: z = (x < y) on half-precision inputs.
+  {
+    NodeProto node;
+    node.set_op_type("Less");
+    node.add_input("x");
+    node.add_input("y");
+    node.add_output("z");
+
+    Tensor x = kernel::MakeFloat16Tensor("", {4}, {1.0f, 3.0f, 2.0f, 5.0f});
+    Tensor y = kernel::MakeFloat16Tensor("", {4}, {2.0f, 2.0f, 2.0f, 2.0f});
+    Tensor z = less_kernel(x, y);
+
+    Expect(node, {x, y}, {z}, "test_cc_less_float16", {opset}, "backend-test", registry);
+  }
+
+  // BFLOAT16 variant: z = (x < y) on brain-float inputs.
+  {
+    NodeProto node;
+    node.set_op_type("Less");
+    node.add_input("x");
+    node.add_input("y");
+    node.add_output("z");
+
+    Tensor x = kernel::MakeBfloat16Tensor("", {4}, {1.0f, 3.0f, 2.0f, 5.0f});
+    Tensor y = kernel::MakeBfloat16Tensor("", {4}, {2.0f, 2.0f, 2.0f, 2.0f});
+    Tensor z = less_kernel(x, y);
+
+    Expect(node, {x, y}, {z}, "test_cc_less_bfloat16", {opset}, "backend-test", registry);
+  }
+
   // Upstream ONNX backend test cases for the ``Less`` operator (mirror the
   // ``onnx.backend.test.case.node.less.Less`` Python class). All numeric
   // input dtypes accepted by :ref:`kernel::Less` are covered: FLOAT, INT8,

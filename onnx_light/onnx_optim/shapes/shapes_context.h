@@ -4,11 +4,13 @@
 
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <set>
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "onnx_optim/optim_sequence.h"
 #include "onnx_optim/optim_tensor.h"
@@ -44,6 +46,104 @@ inline constexpr int kUnknownOpsetVersion = -1;
 inline constexpr const char *kOnnxDomain = "ai.onnx";
 
 /**
+ * Kind of shape-inference event recorded in the
+ * :cpp:class:`ShapesContext` event log. Mirrors the runtime
+ * :cpp:enum:`onnx_kernels::TensorEventAction` design.
+ *
+ *  * ``kAdd``         — a new tensor descriptor was inserted via
+ *                       :cpp:func:`ShapesContext::Set` on a previously
+ *                       absent name.
+ *  * ``kReplace``     — an existing tensor descriptor was overwritten
+ *                       via :cpp:func:`ShapesContext::Set`.
+ *  * ``kComputeNode`` — shape inference was dispatched for a single
+ *                       :cpp:class:`NodeProto`. The event records the
+ *                       node's ``op_domain`` / ``op_type`` and the list
+ *                       of ``inputs`` it consumed. It does not mutate the
+ *                       tensor map by itself.
+ *  * ``kConstraint``  — a new symbolic-dimension equality constraint
+ *                       (``a == b``) was recorded via
+ *                       :cpp:func:`ShapesContext::AddConstraint`. The two
+ *                       operands are stored in ``inputs``.
+ *  * ``kConstraintMax`` — a new symbolic-dimension upper-bound constraint
+ *                       (``lhs <= rhs``) was recorded via
+ *                       :cpp:func:`ShapesContext::AddLessEqualConstraint`.
+ *                       The two operands are stored in ``inputs``.
+ */
+enum class ShapeEventAction : int32_t {
+  kAdd = 0,
+  kReplace = 1,
+  kComputeNode = 2,
+  kConstraint = 3,
+  kConstraintMax = 4
+};
+
+/**
+ * Returns a short lowercase label for ``action`` (``"add"``,
+ * ``"replace"``, ``"compute_node"``). Useful for human-readable
+ * rendering of the event log.
+ */
+const char *ShapeEventActionName(ShapeEventAction action) noexcept;
+
+/**
+ * Single entry of the :cpp:class:`ShapesContext` event log.
+ *
+ * Each insertion or replacement of a tensor descriptor performed
+ * through :cpp:func:`ShapesContext::Set` produces one ``ShapeEvent``
+ * capturing the action, the name of the value and a snapshot of the
+ * descriptor's element type and shape. Because shape inference works on
+ * descriptors rather than data, no element values are captured; the
+ * ``shape`` is recorded as a list of per-dimension strings so symbolic
+ * dimensions (``"N"``, ``"2*N"``) are preserved alongside concrete
+ * integer dimensions.
+ *
+ * :cpp:enumerator:`ShapeEventAction::kComputeNode` events instead
+ * summarise the dispatch of a single ``NodeProto``: they carry the
+ * node's ``op_domain`` / ``op_type`` and the list of ``inputs``
+ * consumed; ``data_type`` is set to ``DataType::UNDEFINED`` and
+ * ``shape`` is left empty.
+ *
+ * :cpp:enumerator:`ShapeEventAction::kConstraint` /
+ * :cpp:enumerator:`ShapeEventAction::kConstraintMax` events record a
+ * newly inserted symbolic-dimension constraint; the two operands are
+ * stored in ``inputs`` (``{a, b}`` for an equality ``a == b``,
+ * ``{lhs, rhs}`` for an upper bound ``lhs <= rhs``).
+ */
+struct ShapeEvent {
+  /// Kind of event recorded by this entry.
+  ShapeEventAction action = ShapeEventAction::kAdd;
+  /// Name of the value targeted by the event.
+  std::string name;
+  /// Element data type of the descriptor at the moment of the event,
+  /// encoded as a ``TensorProto::DataType`` integer value. Set to
+  /// ``DataType::UNDEFINED`` for ``kComputeNode`` / ``kConstraint`` /
+  /// ``kConstraintMax`` events.
+  int32_t data_type = 0;
+  /// Descriptor shape at the moment of the event, with each dimension
+  /// rendered as a string (a decimal integer for concrete dims, the
+  /// symbolic expression otherwise). Empty for ``kComputeNode`` /
+  /// ``kConstraint`` / ``kConstraintMax`` events.
+  std::vector<std::string> shape;
+  /// For ``kComputeNode`` events: ONNX op domain of the dispatched
+  /// node, normalised so the default domain is reported as
+  /// ``"ai.onnx"``. Empty for other events.
+  std::string op_domain;
+  /// For ``kComputeNode`` events: ONNX ``op_type`` of the dispatched
+  /// node. Empty for other events.
+  std::string op_type;
+  /// For ``kComputeNode`` events: ordered list of input names consumed
+  /// by the node, matching ``NodeProto::input``. For ``kConstraint`` /
+  /// ``kConstraintMax`` events: the two constraint operands (``{a, b}``
+  /// or ``{lhs, rhs}``). Empty for ``kAdd`` / ``kReplace`` events.
+  std::vector<std::string> inputs;
+};
+
+/**
+ * Append-only log of shape-inference events recorded by
+ * :cpp:class:`ShapesContext`.
+ */
+using ShapeEventLog = std::vector<ShapeEvent>;
+
+/**
  * Lightweight container shared by the per-operator ``ComputeShape*``
  * shape-inference functions. ``ShapesContext`` carries two pieces of
  * information:
@@ -74,17 +174,25 @@ public:
   // ── Tensor descriptors ──────────────────────────────────────────────
 
   /// Inserts or replaces the descriptor for ``name``. ``tensor`` is
-  /// consumed; callers must pass an rvalue (use ``std::move``).
-  void Set(const std::string &name, OptimTensor &&tensor) { tensors_[name] = std::move(tensor); }
+  /// consumed; callers must pass an rvalue (use ``std::move``). When
+  /// event logging is enabled (see :cpp:func:`set_events_enabled`) a
+  /// :cpp:class:`ShapeEvent` describing the new state is appended to the
+  /// event log — with action :cpp:enumerator:`ShapeEventAction::kAdd`
+  /// when ``name`` was absent and
+  /// :cpp:enumerator:`ShapeEventAction::kReplace` otherwise.
+  void Set(const std::string &name, OptimTensor &&tensor) {
+    if (events_enabled_) {
+      LogSetEvent(name, tensor);
+    }
+    tensors_[name] = std::move(tensor);
+  }
 
   /// Overload: ``name`` given as a null-terminated C string.
-  void Set(const char *name, OptimTensor &&tensor) {
-    tensors_[std::string(name)] = std::move(tensor);
-  }
+  void Set(const char *name, OptimTensor &&tensor) { Set(std::string(name), std::move(tensor)); }
 
   /// Overload: ``name`` given as a :cpp:class:`utils::String`.
   void Set(const utils::String &name, OptimTensor &&tensor) {
-    tensors_[std::string(name.data(), name.size())] = std::move(tensor);
+    Set(std::string(name.data(), name.size()), std::move(tensor));
   }
 
   /// Returns ``true`` when an entry exists for ``name``.
@@ -298,7 +406,11 @@ public:
       return false;
     }
     Constraint c = (a < b) ? Constraint(a, b) : Constraint(b, a);
-    return constraints_.insert(std::move(c)).second;
+    const bool inserted = constraints_.insert(c).second;
+    if (inserted && events_enabled_) {
+      LogConstraintEvent(ShapeEventAction::kConstraint, c.first, c.second);
+    }
+    return inserted;
   }
 
   /// ``true`` when an equality constraint between ``a`` and ``b`` is
@@ -354,7 +466,11 @@ public:
     if (lhs == rhs || lhs.empty() || rhs.empty()) {
       return false;
     }
-    return le_constraints_.insert(LessEqualConstraint(lhs, rhs)).second;
+    const bool inserted = le_constraints_.insert(LessEqualConstraint(lhs, rhs)).second;
+    if (inserted && events_enabled_) {
+      LogConstraintEvent(ShapeEventAction::kConstraintMax, lhs, rhs);
+    }
+    return inserted;
   }
 
   /// ``true`` when a ``lhs <= rhs`` constraint is recorded.
@@ -416,10 +532,60 @@ public:
   /// back into ``model.graph()``.
   void ApplyInferredShapesToModel(ModelProto &model) const;
 
+  // ── Event logging ───────────────────────────────────────────────────
+  //
+  // Mirrors the opt-in event log of :cpp:class:`onnx_kernels::RuntimeContext`.
+  // When disabled (the default), :cpp:func:`Set`,
+  // :cpp:func:`ComputeShapeNode`, :cpp:func:`AddConstraint` and
+  // :cpp:func:`AddLessEqualConstraint` skip all event construction,
+  // eliminating the bookkeeping overhead from the hot path.
+
+  /// Enables or disables event logging. When disabled (the default),
+  /// :cpp:func:`Set`, :cpp:func:`ComputeShapeNode`,
+  /// :cpp:func:`AddConstraint` and :cpp:func:`AddLessEqualConstraint`
+  /// skip all event construction. Call ``set_events_enabled(true)``
+  /// before running shape inference if descriptor or constraint tracing
+  /// is required.
+  void set_events_enabled(bool enabled) noexcept { events_enabled_ = enabled; }
+  bool events_enabled() const noexcept { return events_enabled_; }
+
+  /// Append-only log of every tensor descriptor mutation performed
+  /// through :cpp:func:`Set`, every node dispatched through
+  /// :cpp:func:`ComputeShapeNode` and every constraint recorded through
+  /// :cpp:func:`AddConstraint` / :cpp:func:`AddLessEqualConstraint`. See
+  /// :cpp:class:`ShapeEvent` for the captured fields.
+  const ShapeEventLog &Events() const noexcept { return events_; }
+  ShapeEventLog &Events() noexcept { return events_; }
+
+  /// Empties the event log without otherwise touching the context.
+  void ClearEvents() noexcept { events_.clear(); }
+
+  /// Appends a :cpp:class:`ShapeEvent` with action
+  /// :cpp:enumerator:`ShapeEventAction::kComputeNode` summarising the
+  /// shape-inference dispatch of a single ``NodeProto`` (its
+  /// ``op_domain`` / ``op_type`` and the ``inputs`` it consumed).
+  /// Appended by :cpp:func:`ComputeShapeNode` for every dispatched node
+  /// when event logging is enabled.
+  void AppendComputeNodeEvent(const std::string &op_domain, const std::string &op_type,
+                              std::vector<std::string> inputs);
+
 private:
   static std::string NormaliseDomain(const std::string &domain) {
     return domain.empty() ? std::string(kOnnxDomain) : domain;
   }
+
+  /// Appends a :cpp:enumerator:`ShapeEventAction::kAdd` /
+  /// :cpp:enumerator:`ShapeEventAction::kReplace` event for ``name``
+  /// describing ``tensor`` (the descriptor about to be stored). Only
+  /// called by :cpp:func:`Set` when event logging is enabled.
+  void LogSetEvent(const std::string &name, const OptimTensor &tensor);
+
+  /// Appends a :cpp:enumerator:`ShapeEventAction::kConstraint` /
+  /// :cpp:enumerator:`ShapeEventAction::kConstraintMax` event recording
+  /// the two operands of a newly inserted constraint in ``inputs``. Only
+  /// called by :cpp:func:`AddConstraint` /
+  /// :cpp:func:`AddLessEqualConstraint` when event logging is enabled.
+  void LogConstraintEvent(ShapeEventAction action, const std::string &lhs, const std::string &rhs);
 
   std::unordered_map<std::string, OptimTensor> tensors_;
   std::unordered_map<std::string, OptimSequence> sequences_;
@@ -428,6 +594,8 @@ private:
   CustomShapeInferenceMap custom_shape_inference_;
   std::set<Constraint> constraints_;
   std::set<LessEqualConstraint> le_constraints_;
+  ShapeEventLog events_;
+  bool events_enabled_ = false;
 };
 
 } // namespace shapes

@@ -1757,7 +1757,7 @@ def render_rst_case(case: InferenceCaseReport) -> str:
 
     The section contains:
 
-    * a ``.. runmermaid::`` block rendering the original model;
+    * a ``.. mermaid::`` block rendering the original model;
     * either an error admonition (when shape inference raised) or a
       ``list-table`` contrasting expected and computed shapes for every
       input, intermediate and output value.
@@ -1766,8 +1766,12 @@ def render_rst_case(case: InferenceCaseReport) -> str:
     lines: list[str] = [title, "+" * len(title), ""]
 
     # Mermaid graph (raw form: the body of the directive is the Mermaid
-    # source itself, which is exactly what ``to_mermaid`` returns).
-    lines.append(".. runmermaid::")
+    # source itself, which is exactly what ``to_mermaid`` returns). The
+    # ``.. mermaid::`` directive (from ``sphinxcontrib.mermaid``) is used
+    # rather than ``.. runmermaid::``: the latter crashes when emitted from a
+    # ``runpython`` ``:rst:`` block because it cannot resolve the source path
+    # of the dynamically generated content.
+    lines.append(".. mermaid::")
     lines.append("")
     for ml in case.mermaid.splitlines():
         lines.append(f"    {ml}" if ml else "")

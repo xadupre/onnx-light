@@ -371,11 +371,10 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
 
         For graph inputs declared with ``map(K, V)`` type (used by
         ``ai.onnx.ml::DictVectorizer`` and ``ai.onnx.ml::CastMap``), the
-        DataSet inputs are exposed as two runtime tensors named
-        ``<name>_keys`` / ``<name>_values`` while the graph still has a
-        single formal input. Collapse the pair back into a single Python
-        ``dict`` so the backend harness (which positionally feeds graph
-        inputs) can pass it through map-aware backends.
+        DataSet inputs are two runtime tensors named ``<name>_keys`` /
+        ``<name>_values``.  These are returned as two consecutive positional
+        items so the backend harness (which zips them against
+        ``sess.input_names``) receives them under the correct names.
         """
         graph_inputs = list(tc.model.graph.input)
         data_sets: list[list] = []
@@ -392,10 +391,8 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
                         # followed for this case.
                         inputs.append(by_name.get(gi.name))
                         continue
-                    # ``np.ndarray.tolist`` yields native Python scalars
-                    # (str for STRING tensors, int for INT64, float for
-                    # FLOAT/DOUBLE) which produce hashable dict keys.
-                    inputs.append(dict(zip(keys_arr.tolist(), values_arr.tolist())))
+                    inputs.append(keys_arr)
+                    inputs.append(values_arr)
                 else:
                     inputs.append(by_name.get(gi.name))
             data_sets.append(inputs)

@@ -7,7 +7,10 @@ from onnx_light.onnx_lib.backend.test.case import make_test_class
 
 def check_model(model: onnxl.ModelProto, *inputs):
     checker.check_model(model)
-    assert len(inputs) == len(model.graph.input)
+    # Map-typed graph inputs are expanded to a (keys, values) tensor pair by
+    # the backend harness, so count them as 2 rather than 1.
+    expected = sum(2 if gi.type.has_map_type() else 1 for gi in model.graph.input)
+    assert len(inputs) == expected
     return None
 
 

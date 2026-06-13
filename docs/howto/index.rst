@@ -1,7 +1,7 @@
 .. _l-how-to:
 
-How-to
-======
+How-to Python / C++
+===================
 
 .. toctree::
     :maxdepth: 1

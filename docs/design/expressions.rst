@@ -130,23 +130,33 @@ Each transformer is a pure tree-to-tree rewrite that produces a new
      - What it does
    * - ``CeilToIntTransformer``
      - Rewrites ``CeilToInt(x, n)`` → ``(x + n - 1) // n``.
-   * - ``MaxToXorTransformer``
-     - Rewrites ``Max(a, b)`` and ``max(a, b)`` → ``a ^ b``.
    * - ``SimpleSimplifyTransformer``
      - Folds identities: ``x ^ x → x``, ``x + 0 → x``, ``x * 1 → x``,
        ``0 * x → 0``, ``x * 0 → 0``, etc.
    * - ``MulDivCancellerTransformer``
      - Collects all factors in a ``*`` / ``//`` chain and cancels common
-       symbolic sub-expressions (e.g. ``2*x//x → 2``).
+       symbolic sub-expressions (e.g. ``2*x//x → 2``).  Applied twice, before
+       and after ``ExactMulDivConstantFolderTransformer``.
    * - ``ExactMulDivConstantFolderTransformer``
      - Folds integer constants in ``*`` / ``//`` chains when the division
        is exact (e.g. ``1024*a//2 → 512*a``).
+   * - ``DistributeFloorDivOverAddTransformer``
+     - Distributes a floor division over an addition when every non-constant
+       term in the numerator is an exact multiple of the denominator
+       (e.g. ``(2*x + 4) // 2 → x + 2``).
+   * - ``MaxToXorTransformer``
+     - Rewrites ``Max(a, b)`` and ``max(a, b)`` → ``a ^ b``.
    * - ``ReorderCommutativeOpsTransformer``
      - Sorts operands of ``+`` and ``*`` alphabetically so that
        ``"b + a"`` and ``"a + b"`` reduce to the same canonical form.
    * - ``MaxIntTransformer``
      - Evaluates ``int_const ^ int_const`` at compile time (returns the
        larger of the two constants).
+   * - ``FloorDivAddRingTransformer``
+     - Collapses a complete ring of consecutive floor divisions that share a
+       denominator ``d`` and symbolic numerator, summing the ``d`` terms with
+       offsets ``0 .. d-1`` back to the symbolic part
+       (e.g. ``x//2 + (x + 1)//2 → x``).
 
 After two passes of this pipeline, a final
 ``ExpressionSimplifierAddVisitor`` walks the tree and collects a linear

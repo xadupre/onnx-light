@@ -68,6 +68,14 @@ Tensor GreaterOrEqual::operator()(const Tensor &x, const Tensor &y) const {
     return GreaterOrEqualAlloc<uint32_t>("UINT32", DataType::UINT32, x, y);
   case DataType::UINT64:
     return GreaterOrEqualAlloc<uint64_t>("UINT64", DataType::UINT64, x, y);
+  case DataType::FLOAT16:
+    return detail::BinaryHalfCompareElementwiseAlloc(
+        kGreaterOrEqualName, "FLOAT16", DataType::FLOAT16, x, y, Float16BitsToFloat,
+        [](float a, float b) -> uint8_t { return a >= b ? 1 : 0; });
+  case DataType::BFLOAT16:
+    return detail::BinaryHalfCompareElementwiseAlloc(
+        kGreaterOrEqualName, "BFLOAT16", DataType::BFLOAT16, x, y, Bfloat16BitsToFloat,
+        [](float a, float b) -> uint8_t { return a >= b ? 1 : 0; });
   default:
     throw std::invalid_argument(std::string(kGreaterOrEqualName) +
                                 " only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, INT32, "
@@ -103,6 +111,14 @@ void GreaterOrEqual::operator()(const Tensor &x, const Tensor &y, Tensor &output
     return GreaterOrEqualInPlace<uint32_t>("UINT32", DataType::UINT32, x, y, output);
   case DataType::UINT64:
     return GreaterOrEqualInPlace<uint64_t>("UINT64", DataType::UINT64, x, y, output);
+  case DataType::FLOAT16:
+    return detail::BinaryHalfCompareElementwise(
+        kGreaterOrEqualName, "FLOAT16", DataType::FLOAT16, x, y, output, Float16BitsToFloat,
+        [](float a, float b) -> uint8_t { return a >= b ? 1 : 0; });
+  case DataType::BFLOAT16:
+    return detail::BinaryHalfCompareElementwise(
+        kGreaterOrEqualName, "BFLOAT16", DataType::BFLOAT16, x, y, output, Bfloat16BitsToFloat,
+        [](float a, float b) -> uint8_t { return a >= b ? 1 : 0; });
   default:
     throw std::invalid_argument(std::string(kGreaterOrEqualName) +
                                 " only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, INT32, "

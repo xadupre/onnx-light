@@ -14,6 +14,8 @@ namespace onnx_backend_test {
 
 void RegisterPowCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(14);
+  const kernel::KernelContext ctx{opset};
+  const kernel::Pow pow_kernel{ctx};
 
   NodeProto node;
   node.set_op_type("Pow");
@@ -99,38 +101,22 @@ void RegisterPowCases(std::vector<TestCase> &registry) {
     Expect(node, {x, y}, {z}, "test_pow_types_int32_int32", {opset}, "backend-test", registry);
   }
 
-  // FLOAT16 base with FLOAT16 exponent
+  // FLOAT16 base with FLOAT exponent.
   {
-    const kernel::KernelContext ctx{opset};
-    const kernel::Pow pow_kernel{ctx};
-
-    NodeProto n16;
-    n16.set_op_type("Pow");
-    n16.add_input("x");
-    n16.add_input("y");
-    n16.add_output("z");
-
-    Tensor x = kernel::MakeFloat16Tensor("", {3}, {2.0f, 3.0f, 4.0f});
-    Tensor y = kernel::MakeFloat16Tensor("", {3}, {2.0f, 3.0f, 0.5f});
+    Tensor x = kernel::MakeFloat16Tensor("", {3}, {1.0f, 2.0f, 3.0f});
+    Tensor y = Tensor::FromFloat("", {3}, {2.0f, 3.0f, 4.0f});
     Tensor z = pow_kernel(x, y);
-    Expect(n16, {x, y}, {z}, "test_cc_pow_float16", {opset}, "backend-test", registry);
+    Expect(node, {x, y}, {z}, "test_cc_pow_types_float16_float32", {opset}, "backend-test",
+           registry);
   }
 
-  // BFLOAT16 base with BFLOAT16 exponent
+  // BFLOAT16 base with FLOAT exponent.
   {
-    const kernel::KernelContext ctx{opset};
-    const kernel::Pow pow_kernel{ctx};
-
-    NodeProto nbf;
-    nbf.set_op_type("Pow");
-    nbf.add_input("x");
-    nbf.add_input("y");
-    nbf.add_output("z");
-
-    Tensor x = kernel::MakeBfloat16Tensor("", {3}, {2.0f, 3.0f, 4.0f});
-    Tensor y = kernel::MakeBfloat16Tensor("", {3}, {2.0f, 3.0f, 0.5f});
+    Tensor x = kernel::MakeBfloat16Tensor("", {3}, {1.0f, 2.0f, 3.0f});
+    Tensor y = Tensor::FromFloat("", {3}, {2.0f, 3.0f, 4.0f});
     Tensor z = pow_kernel(x, y);
-    Expect(nbf, {x, y}, {z}, "test_cc_pow_bfloat16", {opset}, "backend-test", registry);
+    Expect(node, {x, y}, {z}, "test_cc_pow_types_bfloat16_float32", {opset}, "backend-test",
+           registry);
   }
 }
 

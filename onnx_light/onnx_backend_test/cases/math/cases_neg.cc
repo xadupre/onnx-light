@@ -139,6 +139,18 @@ void RegisterNegCases(std::vector<TestCase> &registry) {
     Tensor y = neg_kernel(x);
     Expect(node, {x}, {y}, "test_cc_neg_int64", {opset}, "backend-test", registry);
   }
+
+  // DOUBLE
+  {
+    NodeProto node;
+    node.set_op_type("Neg");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor x = Tensor::FromDouble("", {2, 3}, {-1.0, 0.0, 1.5, -2.25, 3.5, -4.75});
+    Tensor y = neg_kernel(x);
+    Expect(node, {x}, {y}, "test_cc_neg_double", {opset}, "backend-test", registry);
+  }
 }
 
 } // namespace onnx_backend_test

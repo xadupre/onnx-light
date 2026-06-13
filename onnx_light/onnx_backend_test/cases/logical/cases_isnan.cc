@@ -71,6 +71,16 @@ void RegisterIsNaNCases(std::vector<TestCase> &registry) {
     Tensor y = isnan_kernel(x);
     Expect(node, {x}, {y}, "test_cc_isnan_bfloat16", {opset}, "backend-test", registry);
   }
+
+  // DOUBLE
+  {
+    NodeProto node = MakeNode("IsNaN", {"x"}, {"y"});
+    const double nan_d = std::numeric_limits<double>::quiet_NaN();
+    const double inf_d = std::numeric_limits<double>::infinity();
+    Tensor x = Tensor::FromDouble("", {6}, {-1.2, nan_d, inf_d, 2.8, -inf_d, nan_d});
+    Tensor y = isnan_kernel(x);
+    Expect(node, {x}, {y}, "test_cc_isnan_double", {opset}, "backend-test", registry);
+  }
 }
 
 } // namespace onnx_backend_test

@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 
@@ -43,6 +44,14 @@ Tensor GreaterOrEqual::operator()(const Tensor &x, const Tensor &y) const {
   switch (x.data_type) {
   case DataType::FLOAT:
     return GreaterOrEqualAlloc<float>("FLOAT", DataType::FLOAT, x, y);
+  case DataType::FLOAT16:
+    return detail::BinaryHalfElementwiseAllocInOut<uint8_t>(
+        kGreaterOrEqualName, "FLOAT16", DataType::FLOAT16, kBoolName, DataType::BOOL, x, y,
+        Float16BitsToFloat, [](float a, float b) -> uint8_t { return a >= b ? 1 : 0; });
+  case DataType::BFLOAT16:
+    return detail::BinaryHalfElementwiseAllocInOut<uint8_t>(
+        kGreaterOrEqualName, "BFLOAT16", DataType::BFLOAT16, kBoolName, DataType::BOOL, x, y,
+        Bfloat16BitsToFloat, [](float a, float b) -> uint8_t { return a >= b ? 1 : 0; });
   case DataType::INT8:
     return GreaterOrEqualAlloc<int8_t>("INT8", DataType::INT8, x, y);
   case DataType::INT16:
@@ -61,8 +70,8 @@ Tensor GreaterOrEqual::operator()(const Tensor &x, const Tensor &y) const {
     return GreaterOrEqualAlloc<uint64_t>("UINT64", DataType::UINT64, x, y);
   default:
     throw std::invalid_argument(std::string(kGreaterOrEqualName) +
-                                " only supports FLOAT, INT8, INT16, INT32, INT64, UINT8, "
-                                "UINT16, UINT32 and UINT64 inputs.");
+                                " only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, INT32, "
+                                "INT64, UINT8, UINT16, UINT32 and UINT64 inputs.");
   }
 }
 
@@ -70,6 +79,14 @@ void GreaterOrEqual::operator()(const Tensor &x, const Tensor &y, Tensor &output
   switch (x.data_type) {
   case DataType::FLOAT:
     return GreaterOrEqualInPlace<float>("FLOAT", DataType::FLOAT, x, y, output);
+  case DataType::FLOAT16:
+    return detail::BinaryHalfElementwiseInOut<uint8_t>(
+        kGreaterOrEqualName, "FLOAT16", DataType::FLOAT16, kBoolName, DataType::BOOL, x, y, output,
+        Float16BitsToFloat, [](float a, float b) -> uint8_t { return a >= b ? 1 : 0; });
+  case DataType::BFLOAT16:
+    return detail::BinaryHalfElementwiseInOut<uint8_t>(
+        kGreaterOrEqualName, "BFLOAT16", DataType::BFLOAT16, kBoolName, DataType::BOOL, x, y,
+        output, Bfloat16BitsToFloat, [](float a, float b) -> uint8_t { return a >= b ? 1 : 0; });
   case DataType::INT8:
     return GreaterOrEqualInPlace<int8_t>("INT8", DataType::INT8, x, y, output);
   case DataType::INT16:
@@ -88,8 +105,8 @@ void GreaterOrEqual::operator()(const Tensor &x, const Tensor &y, Tensor &output
     return GreaterOrEqualInPlace<uint64_t>("UINT64", DataType::UINT64, x, y, output);
   default:
     throw std::invalid_argument(std::string(kGreaterOrEqualName) +
-                                " only supports FLOAT, INT8, INT16, INT32, INT64, UINT8, "
-                                "UINT16, UINT32 and UINT64 inputs.");
+                                " only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, INT32, "
+                                "INT64, UINT8, UINT16, UINT32 and UINT64 inputs.");
   }
 }
 

@@ -56,6 +56,18 @@ void RegisterSigmoidCases(std::vector<TestCase> &registry) {
     Tensor y = sigmoid_kernel(x);
     Expect(node, {x}, {y}, "test_cc_sigmoid_bfloat16", {opset}, "backend-test", registry);
   }
+
+  // DOUBLE
+  {
+    NodeProto node;
+    node.set_op_type("Sigmoid");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor x = Tensor::FromDouble("", {2, 3}, {-2.0, -1.0, 0.0, 0.5, 1.0, 2.0});
+    Tensor y = sigmoid_kernel(x);
+    Expect(node, {x}, {y}, "test_cc_sigmoid_double", {opset}, "backend-test", registry);
+  }
 }
 
 } // namespace onnx_backend_test

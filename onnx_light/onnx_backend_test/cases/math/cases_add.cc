@@ -150,6 +150,20 @@ void RegisterAddCases(std::vector<TestCase> &registry) {
     Tensor z = add_kernel(x, y);
     Expect(nbf, {x, y}, {z}, "test_cc_add_bfloat16", {opset}, "backend-test", registry);
   }
+
+  // DOUBLE
+  {
+    NodeProto nd;
+    nd.set_op_type("Add");
+    nd.add_input("x");
+    nd.add_input("y");
+    nd.add_output("z");
+
+    Tensor x = Tensor::FromDouble("", {2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+    Tensor y = Tensor::FromDouble("", {2, 3}, {10.0, 20.0, 30.0, 40.0, 50.0, 60.0});
+    Tensor z = add_kernel(x, y);
+    Expect(nd, {x, y}, {z}, "test_cc_add_double", {opset}, "backend-test", registry);
+  }
 }
 
 } // namespace onnx_backend_test

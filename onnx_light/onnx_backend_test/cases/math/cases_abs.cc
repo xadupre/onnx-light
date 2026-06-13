@@ -119,6 +119,18 @@ void RegisterAbsCases(std::vector<TestCase> &registry) {
     Tensor y = abs_kernel(x);
     Expect(node, {x}, {y}, "test_cc_abs_int64", {opset}, "backend-test", registry);
   }
+
+  // DOUBLE
+  {
+    NodeProto node;
+    node.set_op_type("Abs");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor x = Tensor::FromDouble("", {2, 3}, {-1.0, 0.0, 1.5, -2.25, 3.5, -4.75});
+    Tensor y = abs_kernel(x);
+    Expect(node, {x}, {y}, "test_cc_abs_double", {opset}, "backend-test", registry);
+  }
 }
 
 } // namespace onnx_backend_test

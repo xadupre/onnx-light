@@ -220,16 +220,34 @@ TEST(BackendTestCase, OrXorBroadcastCasesHaveBroadcastShapes) {
 TEST(BackendTestCase, GreaterLessCasesArePresent) {
   // Local ``test_cc_*`` smoke cases registered alongside the upstream-ONNX
   // mirrored ``test_greater``/``test_less`` cases for every numeric input
-  // dtype supported by ``kernel::Greater``/``kernel::Less`` (FLOAT, INT8,
-  // INT16, UINT8, UINT16, UINT32, UINT64) plus the float broadcast cases
-  // (see ``RegisterGreaterCases``/``RegisterLessCases``).
+  // dtype supported by ``kernel::Greater``/``kernel::Less`` (FLOAT, FLOAT16,
+  // BFLOAT16, INT8, INT16, UINT8, UINT16, UINT32, UINT64) plus the float
+  // broadcast cases (see ``RegisterGreaterCases``/``RegisterLessCases``).
   auto cases = CollectTestCases();
-  for (const char *name :
-       {"test_cc_greater",     "test_cc_greater_bcast", "test_cc_less",        "test_cc_less_bcast",
-        "test_greater",        "test_greater_int8",     "test_greater_int16",  "test_greater_uint8",
-        "test_greater_uint16", "test_greater_uint32",   "test_greater_uint64", "test_greater_bcast",
-        "test_less",           "test_less_int8",        "test_less_int16",     "test_less_uint8",
-        "test_less_uint16",    "test_less_uint32",      "test_less_uint64",    "test_less_bcast"}) {
+  for (const char *name : {"test_cc_greater",
+                           "test_cc_greater_bcast",
+                           "test_cc_greater_float16",
+                           "test_cc_greater_bfloat16",
+                           "test_cc_less",
+                           "test_cc_less_bcast",
+                           "test_cc_less_float16",
+                           "test_cc_less_bfloat16",
+                           "test_greater",
+                           "test_greater_int8",
+                           "test_greater_int16",
+                           "test_greater_uint8",
+                           "test_greater_uint16",
+                           "test_greater_uint32",
+                           "test_greater_uint64",
+                           "test_greater_bcast",
+                           "test_less",
+                           "test_less_int8",
+                           "test_less_int16",
+                           "test_less_uint8",
+                           "test_less_uint16",
+                           "test_less_uint32",
+                           "test_less_uint64",
+                           "test_less_bcast"}) {
     EXPECT_NE(FindLogicalCase(cases, name), nullptr) << "Missing Greater/Less case: " << name;
   }
 }
@@ -318,18 +336,45 @@ TEST(BackendTestCase, GreaterLessIntegerCasesUseRequestedDtype) {
   }
 }
 
+TEST(BackendTestCase, GreaterLessHalfCasesUseRequestedDtype) {
+  auto cases = CollectTestCases();
+  struct Expected {
+    const char *name;
+    int32_t dtype;
+  };
+  for (const Expected &e : {
+           Expected{"test_cc_greater_float16", onnx_kernels::DataType::FLOAT16},
+           Expected{"test_cc_greater_bfloat16", onnx_kernels::DataType::BFLOAT16},
+           Expected{"test_cc_less_float16", onnx_kernels::DataType::FLOAT16},
+           Expected{"test_cc_less_bfloat16", onnx_kernels::DataType::BFLOAT16},
+       }) {
+    const TestCase *tc = FindLogicalCase(cases, e.name);
+    ASSERT_NE(tc, nullptr) << e.name;
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 2u) << e.name;
+    EXPECT_EQ(ds.inputs[0].data_type, e.dtype) << e.name;
+    EXPECT_EQ(ds.inputs[1].data_type, e.dtype) << e.name;
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL))
+        << e.name;
+    EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{2, 3})) << e.name;
+    EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{2, 3})) << e.name;
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{2, 3})) << e.name;
+  }
+}
+
 TEST(BackendTestCase, GreaterOrEqualCasesArePresent) {
   // Local ``test_cc_*`` smoke cases registered alongside the upstream-ONNX
   // mirrored ``test_greater_equal*`` cases for every numeric input dtype
-  // supported by ``kernel::GreaterOrEqual`` (FLOAT, INT8, INT16, UINT8,
-  // UINT16, UINT32, UINT64) plus the float broadcast case (see
-  // ``RegisterGreaterOrEqualCases``).
+  // supported by ``kernel::GreaterOrEqual`` (FLOAT, FLOAT16, BFLOAT16, INT8,
+  // INT16, UINT8, UINT16, UINT32, UINT64) plus the float broadcast case
+  // (see ``RegisterGreaterOrEqualCases``).
   auto cases = CollectTestCases();
   for (const char *name :
-       {"test_cc_greater_or_equal", "test_cc_greater_or_equal_bcast", "test_greater_equal",
-        "test_greater_equal_int8", "test_greater_equal_int16", "test_greater_equal_uint8",
-        "test_greater_equal_uint16", "test_greater_equal_uint32", "test_greater_equal_uint64",
-        "test_greater_equal_bcast"}) {
+       {"test_cc_greater_or_equal", "test_cc_greater_or_equal_bcast",
+        "test_cc_greater_or_equal_float16", "test_cc_greater_or_equal_bfloat16",
+        "test_greater_equal", "test_greater_equal_int8", "test_greater_equal_int16",
+        "test_greater_equal_uint8", "test_greater_equal_uint16", "test_greater_equal_uint32",
+        "test_greater_equal_uint64", "test_greater_equal_bcast"}) {
     EXPECT_NE(FindLogicalCase(cases, name), nullptr) << "Missing GreaterOrEqual case: " << name;
   }
 }
@@ -368,15 +413,15 @@ TEST(BackendTestCase, GreaterOrEqualBroadcastCaseHasBroadcastShapes) {
 TEST(BackendTestCase, LessOrEqualCasesArePresent) {
   // Local ``test_cc_*`` smoke cases registered alongside the upstream-ONNX
   // mirrored ``test_less_equal*`` cases for every numeric input dtype
-  // supported by ``kernel::LessOrEqual`` (FLOAT, INT8, INT16, UINT8,
-  // UINT16, UINT32, UINT64) plus the float broadcast case (see
-  // ``RegisterLessOrEqualCases``).
+  // supported by ``kernel::LessOrEqual`` (FLOAT, FLOAT16, BFLOAT16, INT8,
+  // INT16, UINT8, UINT16, UINT32, UINT64) plus the float broadcast case
+  // (see ``RegisterLessOrEqualCases``).
   auto cases = CollectTestCases();
   for (const char *name :
-       {"test_cc_less_or_equal", "test_cc_less_or_equal_bcast", "test_less_equal",
-        "test_less_equal_int8", "test_less_equal_int16", "test_less_equal_uint8",
-        "test_less_equal_uint16", "test_less_equal_uint32", "test_less_equal_uint64",
-        "test_less_equal_bcast"}) {
+       {"test_cc_less_or_equal", "test_cc_less_or_equal_bcast", "test_cc_less_or_equal_float16",
+        "test_cc_less_or_equal_bfloat16", "test_less_equal", "test_less_equal_int8",
+        "test_less_equal_int16", "test_less_equal_uint8", "test_less_equal_uint16",
+        "test_less_equal_uint32", "test_less_equal_uint64", "test_less_equal_bcast"}) {
     EXPECT_NE(FindLogicalCase(cases, name), nullptr) << "Missing LessOrEqual case: " << name;
   }
 }
@@ -416,14 +461,16 @@ TEST(BackendTestCase, EqualCasesArePresent) {
   // Local ``test_cc_*`` smoke cases registered alongside the upstream-ONNX
   // mirrored ``test_equal*`` cases for every dtype covered by upstream
   // ``Equal.export()`` (INT32, INT8, INT16, UINT8, UINT16, UINT32, UINT64),
-  // the broadcast variant, and the two STRING variants from
-  // ``Equal.export_equal_string``/``export_equal_string_broadcast`` — see
-  // ``RegisterEqualCases``.
+  // the local FLOAT16/BFLOAT16/DOUBLE/INT64 smoke cases, the broadcast
+  // variant, and the two STRING variants from ``Equal.export_equal_string``/
+  // ``export_equal_string_broadcast`` — see ``RegisterEqualCases``.
   auto cases = CollectTestCases("Equal");
   for (const char *name :
-       {"test_cc_equal", "test_cc_equal_bcast", "test_equal", "test_equal_int8", "test_equal_int16",
-        "test_equal_uint8", "test_equal_uint16", "test_equal_uint32", "test_equal_uint64",
-        "test_equal_bcast", "test_equal_string", "test_equal_string_broadcast"}) {
+       {"test_cc_equal", "test_cc_equal_bcast", "test_cc_equal_float16", "test_cc_equal_bfloat16",
+        "test_cc_equal_double", "test_cc_equal_int64", "test_equal", "test_equal_int8",
+        "test_equal_int16", "test_equal_uint8", "test_equal_uint16", "test_equal_uint32",
+        "test_equal_uint64", "test_equal_bcast", "test_equal_string",
+        "test_equal_string_broadcast"}) {
     EXPECT_NE(FindLogicalCase(cases, name), nullptr) << "Missing Equal case: " << name;
   }
 }
@@ -485,6 +532,33 @@ TEST(BackendTestCase, EqualIntegerCasesUseRequestedDtype) {
     EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5})) << e.name;
     EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{3, 4, 5})) << e.name;
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5})) << e.name;
+  }
+}
+
+TEST(BackendTestCase, EqualAdditionalCasesUseRequestedDtype) {
+  auto cases = CollectTestCases("Equal");
+  struct Expected {
+    const char *name;
+    int32_t dtype;
+    std::vector<int64_t> shape;
+  };
+  for (const Expected &e : {
+           Expected{"test_cc_equal_float16", onnx_kernels::DataType::FLOAT16, {2, 3}},
+           Expected{"test_cc_equal_bfloat16", onnx_kernels::DataType::BFLOAT16, {2, 3}},
+           Expected{"test_cc_equal_double", onnx_kernels::DataType::DOUBLE, {3}},
+           Expected{"test_cc_equal_int64", onnx_kernels::DataType::INT64, {3}},
+       }) {
+    const TestCase *tc = FindLogicalCase(cases, e.name);
+    ASSERT_NE(tc, nullptr) << e.name;
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 2u) << e.name;
+    EXPECT_EQ(ds.inputs[0].data_type, e.dtype) << e.name;
+    EXPECT_EQ(ds.inputs[1].data_type, e.dtype) << e.name;
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL))
+        << e.name;
+    EXPECT_EQ(ds.inputs[0].shape, e.shape) << e.name;
+    EXPECT_EQ(ds.inputs[1].shape, e.shape) << e.name;
+    EXPECT_EQ(ds.outputs[0].shape, e.shape) << e.name;
   }
 }
 

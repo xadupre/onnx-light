@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
@@ -19,9 +20,10 @@ namespace kernel {
 namespace {
 constexpr const char *kPowName = "kernel::Pow";
 
-constexpr const char *kSupportedBaseTypesMsg = " only supports FLOAT, INT32 and INT64 base inputs.";
+constexpr const char *kSupportedBaseTypesMsg =
+    " only supports FLOAT, FLOAT16, BFLOAT16, INT32 and INT64 base inputs.";
 constexpr const char *kSupportedExponentTypesMsg =
-    " only supports FLOAT, INT32, INT64, UINT32 and UINT64 exponent inputs.";
+    " only supports FLOAT, FLOAT16, BFLOAT16, INT32, INT64, UINT32 and UINT64 exponent inputs.";
 
 // Evaluate ``base ^ exp`` honouring the output dtype semantics of ONNX Pow.
 //   * Floating-point base: use ``std::pow`` directly (with the exponent cast
@@ -124,6 +126,53 @@ detail::BroadcastInfo BroadcastShape(const Tensor &x, const Tensor &y) {
   return bi;
 }
 
+// Half-precision Pow: decode inputs to float, compute std::pow, encode back.
+// Both base and exponent must share the same half-precision type.
+void PowHalf(const Tensor &x, const Tensor &y, Tensor &output, const detail::BroadcastInfo &bi,
+             bool is_bfloat16) {
+  const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
+  const uint16_t *py = reinterpret_cast<const uint16_t *>(y.bytes());
+  uint16_t *pz = reinterpret_cast<uint16_t *>(output.data.data());
+
+  auto decode = [is_bfloat16](uint16_t bits) -> float {
+    return is_bfloat16 ? Bfloat16BitsToFloat(bits) : Float16BitsToFloat(bits);
+  };
+  auto encode = [is_bfloat16](float val) -> uint16_t {
+    return is_bfloat16 ? FloatToBfloat16Bits(val) : FloatToFloat16Bits(val);
+  };
+
+  if (bi.shape_x == bi.shape_y) {
+    for (int64_t i = 0; i < bi.element_count; ++i) {
+      pz[i] = encode(std::pow(decode(px[i]), decode(py[i])));
+    }
+    return;
+  }
+  if (bi.nx == 1 || bi.ny == 1) {
+    for (int64_t i = 0; i < bi.element_count; ++i) {
+      float a = decode(bi.nx == 1 ? px[0] : px[i]);
+      float b = decode(bi.ny == 1 ? py[0] : py[i]);
+      pz[i] = encode(std::pow(a, b));
+    }
+    return;
+  }
+  const size_t rank = bi.shape.size();
+  std::vector<int64_t> idx(rank, 0);
+  for (int64_t flat = 0; flat < bi.element_count; ++flat) {
+    int64_t ox = 0, oy = 0;
+    for (size_t d = 0; d < rank; ++d) {
+      ox += idx[d] * bi.strides_x[d];
+      oy += idx[d] * bi.strides_y[d];
+    }
+    pz[flat] = encode(std::pow(decode(px[ox]), decode(py[oy])));
+    for (size_t d = rank; d-- > 0;) {
+      if (++idx[d] < bi.shape[d]) {
+        break;
+      }
+      idx[d] = 0;
+    }
+  }
+}
+
 template <typename TBase, typename TExp>
 void PowDispatchExp(const Tensor &x, const Tensor &y, Tensor &output,
                     const detail::BroadcastInfo &bi) {
@@ -156,6 +205,9 @@ size_t BaseDtypeSize(int32_t dtype) {
   switch (dtype) {
   case DataType::FLOAT:
     return sizeof(float);
+  case DataType::FLOAT16:
+  case DataType::BFLOAT16:
+    return sizeof(uint16_t);
   case DataType::INT32:
     return sizeof(int32_t);
   case DataType::INT64:
@@ -169,6 +221,10 @@ const char *BaseDtypeName(int32_t dtype) {
   switch (dtype) {
   case DataType::FLOAT:
     return "FLOAT";
+  case DataType::FLOAT16:
+    return "FLOAT16";
+  case DataType::BFLOAT16:
+    return "BFLOAT16";
   case DataType::INT32:
     return "INT32";
   case DataType::INT64:
@@ -187,6 +243,10 @@ void PowDispatch(const Tensor &x, const Tensor &y, Tensor &output,
     return PowDispatchBase<int32_t>(x, y, output, bi);
   case DataType::INT64:
     return PowDispatchBase<int64_t>(x, y, output, bi);
+  case DataType::FLOAT16:
+    return PowHalf(x, y, output, bi, /*is_bfloat16=*/false);
+  case DataType::BFLOAT16:
+    return PowHalf(x, y, output, bi, /*is_bfloat16=*/true);
   default:
     throw std::invalid_argument(std::string(kPowName) + kSupportedBaseTypesMsg);
   }

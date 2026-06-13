@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 #include "onnx_light_helpers.h"
@@ -99,6 +100,14 @@ Tensor Equal::operator()(const Tensor &x, const Tensor &y) const {
     return EqualAlloc<uint8_t>("BOOL", DataType::BOOL, x, y);
   case DataType::FLOAT:
     return EqualAlloc<float>("FLOAT", DataType::FLOAT, x, y);
+  case DataType::FLOAT16:
+    return detail::BinaryHalfElementwiseAllocInOut<uint8_t>(
+        kEqualName, "FLOAT16", DataType::FLOAT16, kBoolName, DataType::BOOL, x, y,
+        Float16BitsToFloat, [](float a, float b) -> uint8_t { return a == b ? 1 : 0; });
+  case DataType::BFLOAT16:
+    return detail::BinaryHalfElementwiseAllocInOut<uint8_t>(
+        kEqualName, "BFLOAT16", DataType::BFLOAT16, kBoolName, DataType::BOOL, x, y,
+        Bfloat16BitsToFloat, [](float a, float b) -> uint8_t { return a == b ? 1 : 0; });
   case DataType::DOUBLE:
     return EqualAlloc<double>("DOUBLE", DataType::DOUBLE, x, y);
   case DataType::INT8:
@@ -122,9 +131,10 @@ Tensor Equal::operator()(const Tensor &x, const Tensor &y) const {
                         "kernel::Equal inputs must share the same dtype.");
     return EqualStringAlloc(x, y);
   default:
-    throw std::invalid_argument(std::string(kEqualName) +
-                                " only supports BOOL, FLOAT, DOUBLE, INT8, INT16, INT32, "
-                                "INT64, UINT8, UINT16, UINT32, UINT64 and STRING inputs.");
+    throw std::invalid_argument(
+        std::string(kEqualName) +
+        " only supports BOOL, FLOAT, FLOAT16, BFLOAT16, DOUBLE, INT8, "
+        "INT16, INT32, INT64, UINT8, UINT16, UINT32, UINT64 and STRING inputs.");
   }
 }
 
@@ -134,6 +144,14 @@ void Equal::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
     return EqualInPlace<uint8_t>("BOOL", DataType::BOOL, x, y, output);
   case DataType::FLOAT:
     return EqualInPlace<float>("FLOAT", DataType::FLOAT, x, y, output);
+  case DataType::FLOAT16:
+    return detail::BinaryHalfElementwiseInOut<uint8_t>(
+        kEqualName, "FLOAT16", DataType::FLOAT16, kBoolName, DataType::BOOL, x, y, output,
+        Float16BitsToFloat, [](float a, float b) -> uint8_t { return a == b ? 1 : 0; });
+  case DataType::BFLOAT16:
+    return detail::BinaryHalfElementwiseInOut<uint8_t>(
+        kEqualName, "BFLOAT16", DataType::BFLOAT16, kBoolName, DataType::BOOL, x, y, output,
+        Bfloat16BitsToFloat, [](float a, float b) -> uint8_t { return a == b ? 1 : 0; });
   case DataType::DOUBLE:
     return EqualInPlace<double>("DOUBLE", DataType::DOUBLE, x, y, output);
   case DataType::INT8:
@@ -157,9 +175,10 @@ void Equal::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
                         "kernel::Equal inputs must share the same dtype.");
     return EqualStringInPlace(x, y, output);
   default:
-    throw std::invalid_argument(std::string(kEqualName) +
-                                " only supports BOOL, FLOAT, DOUBLE, INT8, INT16, INT32, "
-                                "INT64, UINT8, UINT16, UINT32, UINT64 and STRING inputs.");
+    throw std::invalid_argument(
+        std::string(kEqualName) +
+        " only supports BOOL, FLOAT, FLOAT16, BFLOAT16, DOUBLE, INT8, "
+        "INT16, INT32, INT64, UINT8, UINT16, UINT32, UINT64 and STRING inputs.");
   }
 }
 

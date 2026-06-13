@@ -192,6 +192,20 @@ void RegisterDivCases(std::vector<TestCase> &registry) {
     Tensor z = div_kernel(x, y);
     Expect(nbf, {x, y}, {z}, "test_cc_div_bfloat16", {opset}, "backend-test", registry);
   }
+
+  // DOUBLE
+  {
+    NodeProto nd;
+    nd.set_op_type("Div");
+    nd.add_input("x");
+    nd.add_input("y");
+    nd.add_output("z");
+
+    Tensor x = Tensor::FromDouble("", {2, 3}, {10.0, 20.0, 30.0, 40.0, 50.0, 60.0});
+    Tensor y = Tensor::FromDouble("", {2, 3}, {2.0, 4.0, 5.0, 8.0, 10.0, 12.0});
+    Tensor z = div_kernel(x, y);
+    Expect(nd, {x, y}, {z}, "test_cc_div_double", {opset}, "backend-test", registry);
+  }
 }
 
 } // namespace onnx_backend_test

@@ -91,6 +91,18 @@ void RegisterTanhCases(std::vector<TestCase> &registry) {
     Tensor y = tanh_kernel(x);
     Expect(node, {x}, {y}, "test_cc_tanh_bfloat16", {opset}, "backend-test", registry);
   }
+
+  // DOUBLE
+  {
+    NodeProto node;
+    node.set_op_type("Tanh");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor x = Tensor::FromDouble("", {2, 3}, {-2.0, -1.0, 0.0, 0.5, 1.0, 2.0});
+    Tensor y = tanh_kernel(x);
+    Expect(node, {x}, {y}, "test_cc_tanh_double", {opset}, "backend-test", registry);
+  }
 }
 
 } // namespace onnx_backend_test

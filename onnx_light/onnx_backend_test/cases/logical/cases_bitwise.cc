@@ -77,6 +77,45 @@ void RegisterBitwiseBinUint8Case(const std::string &name, const char *op,
   Expect(node, {x, y}, {z}, name, {opset}, "backend-test", registry);
 }
 
+template <typename TKernel>
+void RegisterBitwiseBinInt8Case(const std::string &name, const char *op,
+                                const std::vector<int64_t> &x_shape, uint64_t x_seed,
+                                const std::vector<int64_t> &y_shape, uint64_t y_seed,
+                                const TKernel &k, const OpsetId &opset,
+                                std::vector<TestCase> &registry) {
+  NodeProto node = MakeNode(op, {"x", "y"}, {"z"});
+  Tensor x = Tensor::FromInt8("", x_shape, RandnInt<int8_t>(x_shape, x_seed));
+  Tensor y = Tensor::FromInt8("", y_shape, RandnInt<int8_t>(y_shape, y_seed));
+  Tensor z = k(x, y);
+  Expect(node, {x, y}, {z}, name, {opset}, "backend-test", registry);
+}
+
+template <typename TKernel>
+void RegisterBitwiseBinInt64Case(const std::string &name, const char *op,
+                                 const std::vector<int64_t> &x_shape, uint64_t x_seed,
+                                 const std::vector<int64_t> &y_shape, uint64_t y_seed,
+                                 const TKernel &k, const OpsetId &opset,
+                                 std::vector<TestCase> &registry) {
+  NodeProto node = MakeNode(op, {"x", "y"}, {"z"});
+  Tensor x = Tensor::FromInt64("", x_shape, RandnInt<int64_t>(x_shape, x_seed));
+  Tensor y = Tensor::FromInt64("", y_shape, RandnInt<int64_t>(y_shape, y_seed));
+  Tensor z = k(x, y);
+  Expect(node, {x, y}, {z}, name, {opset}, "backend-test", registry);
+}
+
+template <typename TKernel>
+void RegisterBitwiseBinUint32Case(const std::string &name, const char *op,
+                                  const std::vector<int64_t> &x_shape, uint64_t x_seed,
+                                  const std::vector<int64_t> &y_shape, uint64_t y_seed,
+                                  const TKernel &k, const OpsetId &opset,
+                                  std::vector<TestCase> &registry) {
+  NodeProto node = MakeNode(op, {"x", "y"}, {"z"});
+  Tensor x = Tensor::FromUint32("", x_shape, RandUint<uint32_t>(1 << 16, x_shape, x_seed));
+  Tensor y = Tensor::FromUint32("", y_shape, RandUint<uint32_t>(1 << 16, y_shape, y_seed));
+  Tensor z = k(x, y);
+  Expect(node, {x, y}, {z}, name, {opset}, "backend-test", registry);
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -110,6 +149,12 @@ void RegisterBitwiseAndCases(std::vector<TestCase> &registry) {
                                {5}, 1006, k, opset, registry);
   RegisterBitwiseBinUint8Case("test_bitwise_and_ui8_bcast_4v3d", "BitwiseAnd", {3, 4, 5, 6}, 1007,
                               {4, 5, 6}, 1008, k, opset, registry);
+  RegisterBitwiseBinInt8Case("test_cc_bitwise_and_i8_2d", "BitwiseAnd", {3, 4}, 1009, {3, 4}, 1010,
+                             k, opset, registry);
+  RegisterBitwiseBinInt64Case("test_cc_bitwise_and_i64_2d", "BitwiseAnd", {3, 4}, 1011, {3, 4},
+                              1012, k, opset, registry);
+  RegisterBitwiseBinUint32Case("test_cc_bitwise_and_ui32_2d", "BitwiseAnd", {3, 4}, 1013, {3, 4},
+                              1014, k, opset, registry);
 }
 
 // ---------------------------------------------------------------------------
@@ -140,6 +185,12 @@ void RegisterBitwiseOrCases(std::vector<TestCase> &registry) {
                                1106, k, opset, registry);
   RegisterBitwiseBinUint8Case("test_bitwise_or_ui8_bcast_4v3d", "BitwiseOr", {3, 4, 5, 6}, 1107,
                               {4, 5, 6}, 1108, k, opset, registry);
+  RegisterBitwiseBinInt8Case("test_cc_bitwise_or_i8_2d", "BitwiseOr", {3, 4}, 1109, {3, 4}, 1110, k,
+                             opset, registry);
+  RegisterBitwiseBinInt64Case("test_cc_bitwise_or_i64_2d", "BitwiseOr", {3, 4}, 1111, {3, 4}, 1112,
+                              k, opset, registry);
+  RegisterBitwiseBinUint32Case("test_cc_bitwise_or_ui32_2d", "BitwiseOr", {3, 4}, 1113, {3, 4},
+                              1114, k, opset, registry);
 }
 
 // ---------------------------------------------------------------------------
@@ -170,6 +221,12 @@ void RegisterBitwiseXorCases(std::vector<TestCase> &registry) {
                                {5}, 1206, k, opset, registry);
   RegisterBitwiseBinUint8Case("test_bitwise_xor_ui8_bcast_4v3d", "BitwiseXor", {3, 4, 5, 6}, 1207,
                               {4, 5, 6}, 1208, k, opset, registry);
+  RegisterBitwiseBinInt8Case("test_cc_bitwise_xor_i8_2d", "BitwiseXor", {3, 4}, 1209, {3, 4}, 1210,
+                             k, opset, registry);
+  RegisterBitwiseBinInt64Case("test_cc_bitwise_xor_i64_2d", "BitwiseXor", {3, 4}, 1211, {3, 4},
+                              1212, k, opset, registry);
+  RegisterBitwiseBinUint32Case("test_cc_bitwise_xor_ui32_2d", "BitwiseXor", {3, 4}, 1213, {3, 4},
+                              1214, k, opset, registry);
 }
 
 // ---------------------------------------------------------------------------

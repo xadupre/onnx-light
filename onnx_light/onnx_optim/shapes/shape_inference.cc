@@ -5,7 +5,6 @@
 #include "onnx_optim/shapes/shape_inference.h"
 
 #include <algorithm>
-#include <chrono>
 #include <map>
 #include <optional>
 #include <stdexcept>
@@ -29,14 +28,6 @@ namespace onnx_optim {
 namespace shapes {
 
 namespace {
-
-// Returns the current wall-clock time in nanoseconds since the Unix
-// epoch, matching ``onnx_kernels`` event timestamps.
-int64_t NowNanos() noexcept {
-  return std::chrono::duration_cast<std::chrono::nanoseconds>(
-             std::chrono::system_clock::now().time_since_epoch())
-      .count();
-}
 
 // Checks the node belongs to a supported domain: the default ONNX
 // domain (empty string or "ai.onnx") or the traditional ML domain
@@ -728,6 +719,10 @@ const char *ShapeEventActionName(ShapeEventAction action) noexcept {
     return "replace";
   case ShapeEventAction::kComputeNode:
     return "compute_node";
+  case ShapeEventAction::kConstraint:
+    return "constraint";
+  case ShapeEventAction::kConstraintMax:
+    return "constraint_max";
   }
   return "unknown";
 }
@@ -735,7 +730,6 @@ const char *ShapeEventActionName(ShapeEventAction action) noexcept {
 void ShapesContext::LogSetEvent(const std::string &name, const OptimTensor &tensor) {
   ShapeEvent ev;
   ev.action = Has(name) ? ShapeEventAction::kReplace : ShapeEventAction::kAdd;
-  ev.timestamp_ns = NowNanos();
   ev.name = name;
   ev.data_type = static_cast<int32_t>(TensorTypeToDataType(tensor.Dtype()));
   const OptimShape &shape = tensor.Shape();
@@ -747,17 +741,23 @@ void ShapesContext::LogSetEvent(const std::string &name, const OptimTensor &tens
   events_.push_back(std::move(ev));
 }
 
+void ShapesContext::LogConstraintEvent(ShapeEventAction action, const std::string &lhs,
+                                       const std::string &rhs) {
+  ShapeEvent ev;
+  ev.action = action;
+  ev.data_type = static_cast<int32_t>(TensorProto::DataType::UNDEFINED);
+  ev.inputs = {lhs, rhs};
+  events_.push_back(std::move(ev));
+}
+
 void ShapesContext::AppendComputeNodeEvent(const std::string &op_domain, const std::string &op_type,
-                                           std::vector<std::string> inputs, int64_t start_time_ns,
-                                           int64_t duration_ns) {
+                                           std::vector<std::string> inputs) {
   ShapeEvent ev;
   ev.action = ShapeEventAction::kComputeNode;
-  ev.timestamp_ns = start_time_ns;
   ev.data_type = static_cast<int32_t>(TensorProto::DataType::UNDEFINED);
   ev.op_domain = op_domain;
   ev.op_type = op_type;
   ev.inputs = std::move(inputs);
-  ev.duration_ns = duration_ns;
   events_.push_back(std::move(ev));
 }
 
@@ -786,30 +786,21 @@ void ShapesContext::CheckOutputsNotAvailable(const NodeProto &node) const {
 }
 
 void ShapesContext::ComputeShapeNode(const NodeProto &node) {
-  // Only capture timing and input names when event logging is active so
-  // that the default path stays free of profiling overhead, mirroring
+  // Only capture input names when event logging is active so that the
+  // default path stays free of bookkeeping overhead, mirroring
   // ``onnx_kernels::RunNode``.
   const bool logging = events_enabled_;
-  int64_t start_time_ns = 0;
-  std::chrono::steady_clock::time_point t0;
-  if (logging) {
-    start_time_ns = NowNanos();
-    t0 = std::chrono::steady_clock::now();
-  }
 
   DispatchComputeShapeNode(*this, node);
 
   if (logging) {
-    const int64_t duration_ns =
-        std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0)
-            .count();
     std::vector<std::string> inputs;
     inputs.reserve(static_cast<size_t>(node.input_size()));
     for (int i = 0; i < node.input_size(); ++i) {
       inputs.push_back(node.input(i).as_string());
     }
     AppendComputeNodeEvent(NormaliseDispatchDomain(node), node.op_type().as_string(),
-                           std::move(inputs), start_time_ns, duration_ns);
+                           std::move(inputs));
   }
 }
 

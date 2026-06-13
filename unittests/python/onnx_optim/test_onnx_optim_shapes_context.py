@@ -345,7 +345,6 @@ class TestShapesContextEventLog(ExtTestCase):
         self.assertEqual(events[0].shape, ["2", "N"])
         self.assertEqual(events[1].data_type, onnxl.TensorProto.INT64)
         self.assertEqual(events[1].shape, ["5"])
-        self.assertGreater(events[0].timestamp_ns, 0)
 
         ctx.clear_events()
         self.assertEqual(ctx.events(), [])
@@ -371,7 +370,29 @@ class TestShapesContextEventLog(ExtTestCase):
         self.assertEqual(node_ev.op_type, "Relu")
         self.assertEqual(node_ev.inputs, ["X"])
         self.assertEqual(node_ev.shape, [])
-        self.assertGreater(node_ev.timestamp_ns, 0)
+
+    def test_constraints_record_events(self):
+        ctx = si.ShapesContext()
+        ctx.events_enabled = True
+
+        self.assertTrue(ctx.add_constraint("N", "M"))
+        # Duplicate / self constraints do not append events.
+        self.assertFalse(ctx.add_constraint("M", "N"))
+        self.assertFalse(ctx.add_constraint("N", "N"))
+        self.assertTrue(ctx.add_less_equal_constraint("nnz", "2*N"))
+
+        events = ctx.events()
+        self.assertEqual([e.action for e in events], ["constraint", "constraint_max"])
+        # Operands are stored in ``inputs`` (equality pair is canonicalised).
+        self.assertEqual(events[0].inputs, ["M", "N"])
+        self.assertEqual(events[1].inputs, ["nnz", "2*N"])
+        self.assertEqual(events[0].data_type, onnxl.TensorProto.UNDEFINED)
+
+    def test_constraints_disabled_by_default(self):
+        ctx = si.ShapesContext()
+        self.assertTrue(ctx.add_constraint("N", "M"))
+        self.assertTrue(ctx.add_less_equal_constraint("nnz", "2*N"))
+        self.assertEqual(ctx.events(), [])
 
     def test_event_as_dict(self):
         ctx = si.ShapesContext()

@@ -1094,9 +1094,7 @@ TEST(OnnxOptimShapesContextEventLog, SetRecordsAddAndReplace) {
   EXPECT_EQ(add_ev.name, "X");
   EXPECT_EQ(add_ev.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
   EXPECT_EQ(add_ev.shape, (std::vector<std::string>{"2", "N"}));
-  EXPECT_GT(add_ev.timestamp_ns, 0);
   EXPECT_TRUE(add_ev.op_type.empty());
-  EXPECT_EQ(add_ev.duration_ns, 0);
 
   // Second Set on the same name -> replace event with the new dtype/shape.
   ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
@@ -1137,7 +1135,43 @@ TEST(OnnxOptimShapesContextEventLog, ComputeShapeNodeRecordsComputeNodeEvent) {
   EXPECT_EQ(node_ev.inputs, (std::vector<std::string>{"X"}));
   EXPECT_EQ(node_ev.data_type, static_cast<int32_t>(TensorProto::DataType::UNDEFINED));
   EXPECT_TRUE(node_ev.shape.empty());
-  EXPECT_GT(node_ev.timestamp_ns, 0);
+}
+
+TEST(OnnxOptimShapesContextEventLog, ConstraintsRecordEvents) {
+  using onnx_optim::shapes::ShapeEventAction;
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.set_events_enabled(true);
+
+  // A new equality constraint records a kConstraint event with the
+  // canonicalised operands in ``inputs``.
+  EXPECT_TRUE(ctx.AddConstraint("N", "M"));
+  ASSERT_EQ(ctx.Events().size(), 1u);
+  const auto &eq_ev = ctx.Events()[0];
+  EXPECT_EQ(eq_ev.action, ShapeEventAction::kConstraint);
+  EXPECT_EQ(eq_ev.inputs, (std::vector<std::string>{"M", "N"}));
+  EXPECT_EQ(eq_ev.data_type, static_cast<int32_t>(TensorProto::DataType::UNDEFINED));
+
+  // Duplicate / self constraints do not append events.
+  EXPECT_FALSE(ctx.AddConstraint("M", "N"));
+  EXPECT_FALSE(ctx.AddConstraint("N", "N"));
+  EXPECT_EQ(ctx.Events().size(), 1u);
+
+  // A new upper-bound constraint records a kConstraintMax event.
+  EXPECT_TRUE(ctx.AddLessEqualConstraint("nnz", "2*N"));
+  ASSERT_EQ(ctx.Events().size(), 2u);
+  const auto &le_ev = ctx.Events()[1];
+  EXPECT_EQ(le_ev.action, ShapeEventAction::kConstraintMax);
+  EXPECT_EQ(le_ev.inputs, (std::vector<std::string>{"nnz", "2*N"}));
+
+  EXPECT_FALSE(ctx.AddLessEqualConstraint("nnz", "2*N"));
+  EXPECT_EQ(ctx.Events().size(), 2u);
+}
+
+TEST(OnnxOptimShapesContextEventLog, ConstraintsDoNotRecordWhenDisabled) {
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_TRUE(ctx.AddConstraint("N", "M"));
+  EXPECT_TRUE(ctx.AddLessEqualConstraint("nnz", "2*N"));
+  EXPECT_TRUE(ctx.Events().empty());
 }
 
 TEST(OnnxOptimShapesContextEventLog, ActionNames) {
@@ -1146,6 +1180,8 @@ TEST(OnnxOptimShapesContextEventLog, ActionNames) {
   EXPECT_STREQ(ShapeEventActionName(ShapeEventAction::kAdd), "add");
   EXPECT_STREQ(ShapeEventActionName(ShapeEventAction::kReplace), "replace");
   EXPECT_STREQ(ShapeEventActionName(ShapeEventAction::kComputeNode), "compute_node");
+  EXPECT_STREQ(ShapeEventActionName(ShapeEventAction::kConstraint), "constraint");
+  EXPECT_STREQ(ShapeEventActionName(ShapeEventAction::kConstraintMax), "constraint_max");
 }
 
 } // namespace Test

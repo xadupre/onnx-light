@@ -48,13 +48,3 @@ from ..onnx_proto._io_helper import (  # noqa: F401
     save_encrypted,
     save_encrypted_string,
 )
-
-from . import (  # noqa: F401
-    checker,
-    defs,
-    external_data_helper,
-    helper,
-    parser,
-    printer,
-    shape_inference,
-)

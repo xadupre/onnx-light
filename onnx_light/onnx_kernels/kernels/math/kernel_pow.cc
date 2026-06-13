@@ -159,8 +159,7 @@ void PowHalfLoop(const detail::BroadcastInfo &bi, const uint16_t *px, const TExp
                  detail::HalfDecodeFunc decode, detail::HalfEncodeFunc encode) {
   if (bi.shape_x == bi.shape_y) {
     for (int64_t i = 0; i < bi.element_count; ++i) {
-      pz[static_cast<size_t>(i)] =
-          encode(std::pow(decode(px[i]), static_cast<float>(py[i])));
+      pz[static_cast<size_t>(i)] = encode(std::pow(decode(px[i]), static_cast<float>(py[i])));
     }
     return;
   }
@@ -180,8 +179,7 @@ void PowHalfLoop(const detail::BroadcastInfo &bi, const uint16_t *px, const TExp
       ox += idx[d] * bi.strides_x[d];
       oy += idx[d] * bi.strides_y[d];
     }
-    pz[static_cast<size_t>(flat)] =
-        encode(std::pow(decode(px[ox]), static_cast<float>(py[oy])));
+    pz[static_cast<size_t>(flat)] = encode(std::pow(decode(px[ox]), static_cast<float>(py[oy])));
     for (size_t d = rank; d-- > 0;) {
       if (++idx[d] < bi.shape[d]) {
         break;

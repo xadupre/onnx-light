@@ -23,9 +23,45 @@ using namespace onnx_light_helpers;
 
 namespace ONNX_LIGHT_NAMESPACE {
 
+/**
+ * @brief Scoped guard that tracks protobuf sub-message nesting depth.
+ *
+ * Increments ParseOptions::_recursion_depth on construction and enforces that
+ * it stays within ParseOptions::max_recursion_depth, throwing otherwise. The
+ * counter is decremented on destruction so the depth is restored even when an
+ * exception unwinds through the parser. This protects the parser against stack
+ * overflow / out-of-memory from deeply nested messages.
+ */
+class RecursionGuard {
+public:
+  explicit RecursionGuard(ParseOptions &options) : options_(options) {
+    ++options_._recursion_depth;
+  }
+  ~RecursionGuard() { --options_._recursion_depth; }
+  RecursionGuard(const RecursionGuard &) = delete;
+  RecursionGuard &operator=(const RecursionGuard &) = delete;
+
+  /// Throws when the current nesting depth exceeds the configured limit. Kept
+  /// separate from the constructor so that, if it throws, this fully constructed
+  /// guard's destructor still runs and restores the depth counter while the
+  /// exception unwinds the parser.
+  void validate() const {
+    EXT_ENFORCE(options_._recursion_depth <= options_.max_recursion_depth,
+                "Protobuf message nesting depth (", options_._recursion_depth,
+                ") exceeds the maximum allowed recursion depth (", options_.max_recursion_depth,
+                "); the message is nested too deeply. Increase "
+                "ParseOptions::max_recursion_depth if this nesting is intentional.");
+  }
+
+private:
+  ParseOptions &options_;
+};
+
 template <typename T>
 void read_next_field_in_shortended_stream(utils::BinaryStream &stream, const char *,
                                           ParseOptions &options, T &field) {
+  RecursionGuard recursion_guard(options);
+  recursion_guard.validate();
   uint64_t length = stream.next_uint64();
   stream.LimitToNext(length);
   try {

@@ -5778,3 +5778,71 @@ TEST(onnx_proto, SerializeFormat_OnnxRoundTripWorks) {
   EXPECT_TRUE(parsed.has_graph());
   EXPECT_EQ(parsed.ref_graph().ref_name(), "g_onnx_rt");
 }
+
+namespace {
+// Encodes a value as a base-128 varint (protobuf wire format).
+std::string EncodeVarint(uint64_t value) {
+  std::string out;
+  while (value >= 0x80) {
+    out.push_back(static_cast<char>((value & 0x7F) | 0x80));
+    value >>= 7;
+  }
+  out.push_back(static_cast<char>(value));
+  return out;
+}
+
+// Wraps payload as a length-delimited (wire type 2) field with the given number.
+std::string WrapLengthDelimitedField(int field_number, const std::string &payload) {
+  uint64_t tag = (static_cast<uint64_t>(field_number) << 3) | 2;
+  std::string out = EncodeVarint(tag);
+  out += EncodeVarint(payload.size());
+  out += payload;
+  return out;
+}
+
+// Builds the wire bytes of a TypeProto nested `levels` deep through the
+// self-recursive TypeProto.sequence_type (field 4) -> Sequence.elem_type
+// (field 1) -> TypeProto chain. Each level adds two sub-message parses.
+std::string BuildNestedTypeProto(int levels) {
+  std::string inner; // innermost empty TypeProto
+  for (int i = 0; i < levels; ++i) {
+    std::string sequence = WrapLengthDelimitedField(1, inner); // Sequence.elem_type
+    inner = WrapLengthDelimitedField(4, sequence);             // TypeProto.sequence_type
+  }
+  return inner;
+}
+} // namespace
+
+TEST(onnx_proto, ParserRecursionLimitRejectsDeeplyNestedMessages) {
+  // Each level adds two sub-message parses; 200 levels reaches depth 400, well
+  // beyond the default recursion limit of 100, and must be rejected rather than
+  // overflowing the stack / exhausting memory.
+  std::string deep = BuildNestedTypeProto(200);
+  TypeProto parsed;
+  ParseOptions popts;
+  EXPECT_EQ(popts.max_recursion_depth, 100);
+  EXPECT_THROW(parsed.ParseFromString(deep, popts), std::exception);
+  // The recursion counter must be fully unwound even after a rejected parse so
+  // the options object can be safely reused.
+  EXPECT_EQ(popts._recursion_depth, 0);
+}
+
+TEST(onnx_proto, ParserRecursionLimitAcceptsShallowNesting) {
+  // 10 levels reaches depth 20, comfortably within the default limit.
+  std::string shallow = BuildNestedTypeProto(10);
+  TypeProto parsed;
+  ParseOptions popts;
+  EXPECT_NO_THROW(parsed.ParseFromString(shallow, popts));
+  EXPECT_TRUE(parsed.has_sequence_type());
+  // The recursion counter must return to 0 once parsing completes.
+  EXPECT_EQ(popts._recursion_depth, 0);
+}
+
+TEST(onnx_proto, ParserRecursionLimitIsConfigurable) {
+  // Lowering the limit rejects messages that the default would accept.
+  std::string nested = BuildNestedTypeProto(10); // depth 20
+  TypeProto parsed;
+  ParseOptions popts;
+  popts.max_recursion_depth = 5;
+  EXPECT_THROW(parsed.ParseFromString(nested, popts), std::exception);
+}

@@ -350,6 +350,17 @@ struct ParseOptions : TensorBufferOptions {
    *  from a file path (e.g. ``ModelProto::ParseFromFile``).  See ``FileLoadMode``
    *  for the semantics of each value.  Ignored when parsing from bytes/streams. */
   FileLoadMode file_load_mode = FileLoadMode::kAuto;
+  /** Maximum nesting depth of protobuf sub-messages accepted while parsing.
+   *  Mirrors protobuf's default recursion limit and protects the parser against
+   *  stack overflow / out-of-memory caused by maliciously or accidentally deeply
+   *  nested messages. Parsing raises an error when a message nests deeper than
+   *  this value. */
+  int32_t max_recursion_depth = 100;
+  /** Internal counter tracking the current sub-message nesting depth while
+   *  parsing. Managed automatically by the parser through a scoped guard; it is
+   *  not a user-facing setting and is reset to 0 once a top-level parse
+   *  completes. */
+  int32_t _recursion_depth = 0;
 };
 
 /** Controls behavior when serializing ONNX protobuf messages to a stream or string. */

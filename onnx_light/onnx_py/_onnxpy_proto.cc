@@ -799,7 +799,12 @@ void AddOnnxPyProto(nb::module_ &m) {
               "SerializeFormat.ONNX (default) parses the ONNX protobuf wire format; "
               "SerializeFormat.ORT_FLATBUFFERS parses the onnxruntime flatbuffer format "
               "(``.ort`` files). The flatbuffer path is not implemented yet and raises "
-              "an error when used.");
+              "an error when used.")
+      .def_rw("max_recursion_depth", &ParseOptions::max_recursion_depth,
+              "Maximum nesting depth of protobuf sub-messages accepted while parsing "
+              "(default 100, mirroring protobuf's recursion limit). Protects against stack "
+              "overflow / out-of-memory from deeply nested messages; parsing raises an error "
+              "when a message nests deeper than this value.");
 
   nb::class_<SerializeOptions, TensorBufferOptions>(m, "SerializeOptions",
                                                     "Serializing options for proto classes")

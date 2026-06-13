@@ -70,6 +70,7 @@ exclude_patterns = ["build"]
 html_theme = "pydata_sphinx_theme"
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
+html_js_files = ["svg_zoom.js"]
 html_logo = "_static/logo.svg"
 html_favicon = "_static/logo.svg"
 html_theme_options = {

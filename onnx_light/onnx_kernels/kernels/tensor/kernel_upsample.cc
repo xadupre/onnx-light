@@ -111,8 +111,8 @@ double LoadFloat(const Tensor &input, int64_t idx) {
     return v;
   }
   default:
-    throw std::invalid_argument(
-        "kernel::Upsample: linear mode only supports FLOAT/DOUBLE input types.");
+    EXT_THROW_INVALID("unsupported data type ", input.data_type, ", ",
+                      "kernel::Upsample: linear mode only supports FLOAT/DOUBLE input types.");
   }
 }
 
@@ -129,8 +129,8 @@ void StoreFloat(Tensor &output, int64_t idx, double value) {
     return;
   }
   default:
-    throw std::invalid_argument(
-        "kernel::Upsample: linear mode only supports FLOAT/DOUBLE output types.");
+    EXT_THROW_INVALID("unsupported data type ", output.data_type, ", ",
+                      "kernel::Upsample: linear mode only supports FLOAT/DOUBLE output types.");
   }
 }
 

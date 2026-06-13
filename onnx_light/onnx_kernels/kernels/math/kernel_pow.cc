@@ -23,7 +23,7 @@ constexpr const char *kPowName = "kernel::Pow";
 constexpr const char *kSupportedBaseTypesMsg =
     " only supports FLOAT, FLOAT16, BFLOAT16, INT32 and INT64 base inputs.";
 constexpr const char *kSupportedExponentTypesMsg =
-    " only supports FLOAT, INT32, INT64, UINT32 and UINT64 exponent inputs.";
+    " only supports FLOAT, FLOAT16, BFLOAT16, INT32, INT64, UINT32 and UINT64 exponent inputs.";
 
 // Evaluate ``base ^ exp`` honouring the output dtype semantics of ONNX Pow.
 //   * Floating-point base: use ``std::pow`` directly (with the exponent cast
@@ -126,34 +126,6 @@ detail::BroadcastInfo BroadcastShape(const Tensor &x, const Tensor &y) {
   return bi;
 }
 
-template <typename TBase, typename TExp>
-void PowDispatchExp(const Tensor &x, const Tensor &y, Tensor &output,
-                    const detail::BroadcastInfo &bi) {
-  const TBase *px = reinterpret_cast<const TBase *>(x.bytes());
-  const TExp *py = reinterpret_cast<const TExp *>(y.bytes());
-  TBase *pz = reinterpret_cast<TBase *>(output.data.data());
-  PowLoop<TBase, TExp>(bi, px, py, pz);
-}
-
-template <typename TBase>
-void PowDispatchBase(const Tensor &x, const Tensor &y, Tensor &output,
-                     const detail::BroadcastInfo &bi) {
-  switch (y.data_type) {
-  case DataType::FLOAT:
-    return PowDispatchExp<TBase, float>(x, y, output, bi);
-  case DataType::INT32:
-    return PowDispatchExp<TBase, int32_t>(x, y, output, bi);
-  case DataType::INT64:
-    return PowDispatchExp<TBase, int64_t>(x, y, output, bi);
-  case DataType::UINT32:
-    return PowDispatchExp<TBase, uint32_t>(x, y, output, bi);
-  case DataType::UINT64:
-    return PowDispatchExp<TBase, uint64_t>(x, y, output, bi);
-  default:
-    throw std::invalid_argument(std::string(kPowName) + kSupportedExponentTypesMsg);
-  }
-}
-
 template <typename TExp>
 void PowHalfLoop(const detail::BroadcastInfo &bi, const uint16_t *px, const TExp *py, uint16_t *pz,
                  detail::HalfDecodeFunc decode, detail::HalfEncodeFunc encode) {
@@ -189,6 +161,35 @@ void PowHalfLoop(const detail::BroadcastInfo &bi, const uint16_t *px, const TExp
   }
 }
 
+template <typename TBase, typename TExp>
+void PowDispatchExp(const Tensor &x, const Tensor &y, Tensor &output,
+                    const detail::BroadcastInfo &bi) {
+  const TBase *px = reinterpret_cast<const TBase *>(x.bytes());
+  const TExp *py = reinterpret_cast<const TExp *>(y.bytes());
+  TBase *pz = reinterpret_cast<TBase *>(output.data.data());
+  PowLoop<TBase, TExp>(bi, px, py, pz);
+}
+
+template <typename TBase>
+void PowDispatchBase(const Tensor &x, const Tensor &y, Tensor &output,
+                     const detail::BroadcastInfo &bi) {
+  switch (y.data_type) {
+  case DataType::FLOAT:
+    return PowDispatchExp<TBase, float>(x, y, output, bi);
+  case DataType::INT32:
+    return PowDispatchExp<TBase, int32_t>(x, y, output, bi);
+  case DataType::INT64:
+    return PowDispatchExp<TBase, int64_t>(x, y, output, bi);
+  case DataType::UINT32:
+    return PowDispatchExp<TBase, uint32_t>(x, y, output, bi);
+  case DataType::UINT64:
+    return PowDispatchExp<TBase, uint64_t>(x, y, output, bi);
+  default:
+    EXT_THROW_INVALID(kPowName, ": unsupported data type ", y.data_type,
+                      kSupportedExponentTypesMsg);
+  }
+}
+
 template <typename TExp>
 void PowDispatchHalfExp(const Tensor &x, const Tensor &y, Tensor &output,
                         const detail::BroadcastInfo &bi, detail::HalfDecodeFunc decode,
@@ -205,6 +206,26 @@ void PowDispatchHalfBase(const Tensor &x, const Tensor &y, Tensor &output,
   switch (y.data_type) {
   case DataType::FLOAT:
     return PowDispatchHalfExp<float>(x, y, output, bi, decode, encode);
+  case DataType::FLOAT16: {
+    const int64_t ny = y.element_count();
+    std::vector<float> fy(static_cast<size_t>(ny));
+    const uint16_t *raw_py = reinterpret_cast<const uint16_t *>(y.bytes());
+    for (int64_t i = 0; i < ny; ++i)
+      fy[static_cast<size_t>(i)] = Float16BitsToFloat(raw_py[i]);
+    const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
+    uint16_t *pz = reinterpret_cast<uint16_t *>(output.data.data());
+    return PowHalfLoop<float>(bi, px, fy.data(), pz, decode, encode);
+  }
+  case DataType::BFLOAT16: {
+    const int64_t ny = y.element_count();
+    std::vector<float> fy(static_cast<size_t>(ny));
+    const uint16_t *raw_py = reinterpret_cast<const uint16_t *>(y.bytes());
+    for (int64_t i = 0; i < ny; ++i)
+      fy[static_cast<size_t>(i)] = Bfloat16BitsToFloat(raw_py[i]);
+    const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
+    uint16_t *pz = reinterpret_cast<uint16_t *>(output.data.data());
+    return PowHalfLoop<float>(bi, px, fy.data(), pz, decode, encode);
+  }
   case DataType::INT32:
     return PowDispatchHalfExp<int32_t>(x, y, output, bi, decode, encode);
   case DataType::INT64:
@@ -214,7 +235,8 @@ void PowDispatchHalfBase(const Tensor &x, const Tensor &y, Tensor &output,
   case DataType::UINT64:
     return PowDispatchHalfExp<uint64_t>(x, y, output, bi, decode, encode);
   default:
-    throw std::invalid_argument(std::string(kPowName) + kSupportedExponentTypesMsg);
+    EXT_THROW_INVALID(kPowName, ": unsupported data type ", y.data_type,
+                      kSupportedExponentTypesMsg);
   }
 }
 
@@ -231,7 +253,7 @@ size_t BaseDtypeSize(int32_t dtype) {
   case DataType::INT64:
     return sizeof(int64_t);
   default:
-    throw std::invalid_argument(std::string(kPowName) + kSupportedBaseTypesMsg);
+    EXT_THROW_INVALID(kPowName, ": unsupported data type ", dtype, kSupportedBaseTypesMsg);
   }
 }
 
@@ -248,7 +270,7 @@ const char *BaseDtypeName(int32_t dtype) {
   case DataType::INT64:
     return "INT64";
   default:
-    throw std::invalid_argument(std::string(kPowName) + kSupportedBaseTypesMsg);
+    EXT_THROW_INVALID(kPowName, ": unsupported data type ", dtype, kSupportedBaseTypesMsg);
   }
 }
 
@@ -266,7 +288,7 @@ void PowDispatch(const Tensor &x, const Tensor &y, Tensor &output,
   case DataType::BFLOAT16:
     return PowDispatchHalfBase(x, y, output, bi, Bfloat16BitsToFloat, FloatToBfloat16Bits);
   default:
-    throw std::invalid_argument(std::string(kPowName) + kSupportedBaseTypesMsg);
+    EXT_THROW_INVALID(kPowName, ": unsupported data type ", x.data_type, kSupportedBaseTypesMsg);
   }
 }
 } // namespace

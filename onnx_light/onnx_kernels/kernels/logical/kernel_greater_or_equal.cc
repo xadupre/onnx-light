@@ -69,9 +69,9 @@ Tensor GreaterOrEqual::operator()(const Tensor &x, const Tensor &y) const {
         kGreaterOrEqualName, "BFLOAT16", DataType::BFLOAT16, x, y, Bfloat16BitsToFloat,
         [](float a, float b) -> uint8_t { return a >= b ? 1 : 0; });
   default:
-    throw std::invalid_argument(std::string(kGreaterOrEqualName) +
-                                " only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, INT32, "
-                                "INT64, UINT8, UINT16, UINT32 and UINT64 inputs.");
+    EXT_THROW_INVALID(kGreaterOrEqualName, ": unsupported data type ", x.data_type,
+                      ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, INT32, "
+                      "INT64, UINT8, UINT16, UINT32 and UINT64 inputs.");
   }
 }
 
@@ -104,9 +104,9 @@ void GreaterOrEqual::operator()(const Tensor &x, const Tensor &y, Tensor &output
         kGreaterOrEqualName, "BFLOAT16", DataType::BFLOAT16, x, y, output, Bfloat16BitsToFloat,
         [](float a, float b) -> uint8_t { return a >= b ? 1 : 0; });
   default:
-    throw std::invalid_argument(std::string(kGreaterOrEqualName) +
-                                " only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, INT32, "
-                                "INT64, UINT8, UINT16, UINT32 and UINT64 inputs.");
+    EXT_THROW_INVALID(kGreaterOrEqualName, ": unsupported data type ", x.data_type,
+                      ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, INT32, "
+                      "INT64, UINT8, UINT16, UINT32 and UINT64 inputs.");
   }
 }
 

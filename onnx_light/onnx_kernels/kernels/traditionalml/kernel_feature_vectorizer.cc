@@ -63,8 +63,9 @@ void DispatchCopyRowAsFloat(const Tensor &t, int64_t row, int64_t declared_featu
     CopyRowAsFloat<int64_t>(t, row, declared_features, out_row, out_feature_offset);
     return;
   default:
-    throw std::invalid_argument("kernel::FeatureVectorizer: input element type must be one of "
-                                "float/double/int32/int64.");
+    EXT_THROW_INVALID("unsupported data type ", t.data_type, ", ",
+                      "kernel::FeatureVectorizer: input element type must be one of "
+                      "float/double/int32/int64.");
   }
 }
 

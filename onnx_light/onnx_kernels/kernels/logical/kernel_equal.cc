@@ -131,10 +131,9 @@ Tensor Equal::operator()(const Tensor &x, const Tensor &y) const {
         kEqualName, "BFLOAT16", DataType::BFLOAT16, x, y, Bfloat16BitsToFloat,
         [](float a, float b) -> uint8_t { return a == b ? 1 : 0; });
   default:
-    throw std::invalid_argument(std::string(kEqualName) +
-                                " only supports BOOL, FLOAT, DOUBLE, FLOAT16, BFLOAT16, INT8, "
-                                "INT16, INT32, INT64, UINT8, UINT16, UINT32, UINT64 and "
-                                "STRING inputs.");
+    EXT_THROW_INVALID(kEqualName, ": unsupported data type ", x.data_type,
+                      ", only supports BOOL, FLOAT, FLOAT16, BFLOAT16, DOUBLE, INT8, INT16, INT32, "
+                      "INT64, UINT8, UINT16, UINT32, UINT64 and STRING inputs.");
   }
 }
 
@@ -175,10 +174,9 @@ void Equal::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
         kEqualName, "BFLOAT16", DataType::BFLOAT16, x, y, output, Bfloat16BitsToFloat,
         [](float a, float b) -> uint8_t { return a == b ? 1 : 0; });
   default:
-    throw std::invalid_argument(std::string(kEqualName) +
-                                " only supports BOOL, FLOAT, DOUBLE, FLOAT16, BFLOAT16, INT8, "
-                                "INT16, INT32, INT64, UINT8, UINT16, UINT32, UINT64 and "
-                                "STRING inputs.");
+    EXT_THROW_INVALID(kEqualName, ": unsupported data type ", x.data_type,
+                      ", only supports BOOL, FLOAT, FLOAT16, BFLOAT16, DOUBLE, INT8, INT16, INT32, "
+                      "INT64, UINT8, UINT16, UINT32, UINT64 and STRING inputs.");
   }
 }
 

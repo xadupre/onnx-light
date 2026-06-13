@@ -1037,6 +1037,12 @@ void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
                 "The ORT flatbuffer parser uses this limit to reject models "
                 "nested more deeply than the configured value, preventing stack "
                 "overflow on adversarially deep inputs.");
+    // Tensor-size OOM guard: max_tensor_size_bytes must be >= 0.
+    EXT_ENFORCE(options.max_tensor_size_bytes >= 0,
+                "ParseModelProtoFromStream: ParseOptions::max_tensor_size_bytes must be >= 0 "
+                "(got ",
+                options.max_tensor_size_bytes,
+                "). Use 0 to disable the limit or a positive value to cap tensor allocations.");
     EXT_THROW("ParseModelProtoFromStream: SerializeFormat::kOrtFlatbuffers is not "
               "implemented yet. Use SerializeFormat::kOnnx for now.");
   } else {

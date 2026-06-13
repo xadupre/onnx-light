@@ -257,6 +257,60 @@ class TestSerializeFormat(ExtTestCase):
         with self.assertRaisesRegex(RuntimeError, "max_recursion_depth"):
             parsed.ParseFromFile(path, popts)
 
+    def test_parse_options_max_tensor_size_bytes_default_is_zero(self) -> None:
+        # Default value for max_tensor_size_bytes must be 0 (no limit).
+        popts = onnxl.ParseOptions()
+        self.assertEqual(popts.max_tensor_size_bytes, 0)
+
+    def test_max_tensor_size_bytes_raw_data_throws(self) -> None:
+        # Parsing a TensorProto whose raw_data exceeds the limit must raise.
+        import numpy as np
+
+        w = np.ones((5,), dtype=np.float32)  # 20 bytes
+        tp = onh.from_array(w, name="w")
+        data = tp.SerializeToString()
+        popts = onnxl.ParseOptions()
+        popts.max_tensor_size_bytes = 10  # 10 bytes < 20 bytes
+        parsed = onnxl.TensorProto()
+        with self.assertRaisesRegex(RuntimeError, "max_tensor_size_bytes"):
+            parsed.ParseFromString(data, popts)
+
+    def test_max_tensor_size_bytes_raw_data_exact_limit_allowed(self) -> None:
+        # Parsing a TensorProto whose raw_data equals the limit must succeed.
+        import numpy as np
+
+        w = np.ones((5,), dtype=np.float32)  # 20 bytes
+        tp = onh.from_array(w, name="w")
+        data = tp.SerializeToString()
+        popts = onnxl.ParseOptions()
+        popts.max_tensor_size_bytes = 20  # Exactly the raw_data size — must pass.
+        parsed = onnxl.TensorProto()
+        parsed.ParseFromString(data, popts)
+        np.testing.assert_array_equal(onh.to_array(parsed), w)
+
+    def test_max_tensor_size_bytes_zero_means_no_limit(self) -> None:
+        # max_tensor_size_bytes == 0 disables the limit.
+        import numpy as np
+
+        w = np.ones((100,), dtype=np.float32)  # 400 bytes
+        tp = onh.from_array(w, name="w")
+        data = tp.SerializeToString()
+        popts = onnxl.ParseOptions()
+        popts.max_tensor_size_bytes = 0  # No limit.
+        parsed = onnxl.TensorProto()
+        parsed.ParseFromString(data, popts)  # Must not raise.
+
+    def test_ort_flatbuffers_negative_max_tensor_size_bytes_raises(self) -> None:
+        # A negative max_tensor_size_bytes must be rejected for the ORT flatbuffer path.
+        model, _, _ = _make_simple_model()
+        data = model.SerializeToString()
+        popts = onnxl.ParseOptions()
+        popts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+        popts.max_tensor_size_bytes = -1
+        parsed = onnxl.ModelProto()
+        with self.assertRaisesRegex(RuntimeError, "max_tensor_size_bytes"):
+            parsed.ParseFromString(data, popts)
+
     @unittest.skip(
         "Saving to onnxruntime flatbuffer format is not implemented yet; "
         "this test will be enabled once SerializeFormat.ORT_FLATBUFFERS produces "

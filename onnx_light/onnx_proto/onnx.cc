@@ -700,6 +700,13 @@ void TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
     }
     EXT_ENFORCE(offset >= 0 && size > 0, "External data offset and size must be specified, name='",
                 ref_name().as_string(), "'");
+    if (options.max_tensor_size_bytes > 0 &&
+        static_cast<int64_t>(size) > options.max_tensor_size_bytes) {
+      EXT_THROW("TensorProto::ParseFromStream (external data): tensor '", ref_name().as_string(),
+                "' requests ", size, " bytes which exceeds ParseOptions::max_tensor_size_bytes=",
+                options.max_tensor_size_bytes,
+                ". Increase max_tensor_size_bytes or set it to 0 to disable the limit.");
+    }
     onnx_light_helpers::ValidateAlignmentOption(options.alignment, "ParseOptions.alignment");
     if (options.alignment > 1 && offset % options.alignment != 0) {
       std::ostringstream oss;

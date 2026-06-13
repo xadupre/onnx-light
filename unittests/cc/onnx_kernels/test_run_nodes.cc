@@ -14,6 +14,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
@@ -162,6 +163,8 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx.ml:LabelEncoder"), table.end());
   // Linear attention (opset 27).
   EXPECT_NE(table.find("ai.onnx:LinearAttention"), table.end());
+  // Normalization kernels.
+  EXPECT_NE(table.find("ai.onnx:BatchNormalization"), table.end());
   // Sequence operators (opset 11+).
   EXPECT_NE(table.find("ai.onnx:SequenceConstruct"), table.end());
   EXPECT_NE(table.find("ai.onnx:SequenceEmpty"), table.end());
@@ -461,6 +464,42 @@ TEST(RunNodes, RunNodeAffineGridUsesAttributes) {
   EXPECT_FLOAT_EQ(got[5], 1.0f);
   EXPECT_FLOAT_EQ(got[6], 1.0f);
   EXPECT_FLOAT_EQ(got[7], 1.0f);
+}
+
+TEST(RunNodes, RunNodeBatchNormalizationFromDispatchTable) {
+  // Verifies that the ``BatchNormalization`` trampoline routes through the
+  // dispatch table, picks up the ``epsilon`` attribute, and produces the
+  // inference-mode output ``Y = (X - mean) / sqrt(var + epsilon) * scale + B``
+  // for a 1x2x1x3 input with per-channel parameters.
+  RuntimeContext rt(KernelContext(DefaultOpset(15)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {1, 2, 1, 3}, {-1.0f, 0.0f, 1.0f, 2.0f, 3.0f, 4.0f});
+  rt.tensors()["scale"] = Tensor::FromFloat("scale", {2}, {1.0f, 1.5f});
+  rt.tensors()["bias"] = Tensor::FromFloat("bias", {2}, {0.0f, 1.0f});
+  rt.tensors()["mean"] = Tensor::FromFloat("mean", {2}, {0.0f, 3.0f});
+  rt.tensors()["var"] = Tensor::FromFloat("var", {2}, {1.0f, 1.5f});
+
+  NodeProto node = MakeNode("BatchNormalization", {"x", "scale", "bias", "mean", "var"}, {"y"});
+  AttributeProto *epsilon_attr = node.add_attribute();
+  epsilon_attr->set_name("epsilon");
+  epsilon_attr->set_type(AttributeProto::AttributeType::FLOAT);
+  epsilon_attr->set_f(1e-2f);
+
+  RunNode(node, rt);
+
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{1, 2, 1, 3}));
+  ASSERT_EQ(y.element_count(), 6);
+  const float *got = y.AsFloat();
+  // Channel 0: (x - 0) / sqrt(1 + 1e-2) * 1 + 0
+  const float inv0 = 1.0f / std::sqrt(1.0f + 1e-2f);
+  EXPECT_FLOAT_EQ(got[0], -1.0f * inv0);
+  EXPECT_FLOAT_EQ(got[1], 0.0f);
+  EXPECT_FLOAT_EQ(got[2], 1.0f * inv0);
+  // Channel 1: (x - 3) / sqrt(1.5 + 1e-2) * 1.5 + 1
+  const float inv1 = 1.0f / std::sqrt(1.5f + 1e-2f);
+  EXPECT_NEAR(got[3], (2.0f - 3.0f) * inv1 * 1.5f + 1.0f, 1e-6f);
+  EXPECT_NEAR(got[4], (3.0f - 3.0f) * inv1 * 1.5f + 1.0f, 1e-6f);
+  EXPECT_NEAR(got[5], (4.0f - 3.0f) * inv1 * 1.5f + 1.0f, 1e-6f);
 }
 
 TEST(RunNodes, RunNodeImageDecoderFromDispatchTable) {

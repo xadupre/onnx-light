@@ -290,16 +290,17 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
                             "overflow on adversarially deep inputs.");
                 EXT_THROW("ParseFromString: SerializeFormat::kOrtFlatbuffers is not "
                           "implemented yet. Use SerializeFormat::kOnnx for now.");
-              }
-              EXT_ENFORCE(parse_options.format == SerializeFormat::kOnnx,
-                          "ParseFromString: unrecognised SerializeFormat value ",
-                          static_cast<int>(parse_options.format));
-              if (parse_options.is_parallel()) {
-                stream.StartThreadPool(parse_options.num_threads);
-              }
-              self.ParseFromStream(stream, parse_options);
-              if (parse_options.is_parallel()) {
-                stream.WaitForDelayedBlock();
+              } else {
+                EXT_ENFORCE(parse_options.format == SerializeFormat::kOnnx,
+                            "ParseFromString: unrecognised SerializeFormat value ",
+                            static_cast<int>(parse_options.format));
+                if (parse_options.is_parallel()) {
+                  stream.StartThreadPool(parse_options.num_threads);
+                }
+                self.ParseFromStream(stream, parse_options);
+                if (parse_options.is_parallel()) {
+                  stream.WaitForDelayedBlock();
+                }
               }
             } else {
               ParseOptions opts;

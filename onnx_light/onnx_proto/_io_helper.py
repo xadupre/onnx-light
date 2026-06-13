@@ -163,6 +163,7 @@ def load(
     no_copy: bool = False,
     touch_raw_data_pages: bool = False,
     file_load_mode: FileLoadMode | str = FileLoadMode.AUTO,
+    format: Optional[str] = None,
 ) -> ModelProto:
     """
     Loads a serialized ModelProto into memory.
@@ -233,6 +234,10 @@ def load(
     :return: Loaded in-memory ModelProto.
     """
     assert isinstance(f, (str, bytes, Path)), f"Unexpected type {type(f)} for f."
+    if format is not None and format not in ("protobuf", None):
+        raise ValueError(
+            f"Unsupported format={format!r}; onnx-light only supports 'protobuf' format."
+        )
     if isinstance(file_load_mode, str):
         try:
             file_load_mode = FileLoadMode.__members__[file_load_mode.upper()]
@@ -251,9 +256,10 @@ def load(
     ), f"'load_external_data' must be True if location={location!r}"
     if isinstance(f, Path):
         f = str(f)
-    assert not isinstance(f, str) or os.path.splitext(f)[-1] in {
-        ".onnx"
-    }, f"File name must have the extension .onnx to be loaded but f={f!r}"
+    if format is None:
+        assert not isinstance(f, str) or os.path.splitext(f)[-1] in {
+            ".onnx"
+        }, f"File name must have the extension .onnx to be loaded but f={f!r}"
     if load_external_data and not location and isinstance(f, str):
         location = _find_external_location(f)
     model = ModelProto()

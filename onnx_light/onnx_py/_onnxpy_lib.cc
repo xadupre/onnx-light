@@ -1,6 +1,7 @@
 #include "onnx.h"
 #include "onnx_lib/checker.h"
 #include "onnx_lib/defs/parser.h"
+#include "onnx_lib/defs/printer.h"
 #include "onnx_lib/defs/schema.h"
 #include "onnx_lib/defs/shape_inference.h"
 #include "onnx_lib/inliner/inliner.h"
@@ -89,6 +90,24 @@ void AddOnnxPyLib(nb::module_ &m) {
     const std::string &error_msg = status.ErrorMessage();
     return nb::make_tuple(status.IsOK(), error_msg, std::move(proto));
   });
+
+  // -----------------------------------------------------------------------
+  // Submodule `printer`
+  // -----------------------------------------------------------------------
+  auto printer_mod = m.def_submodule("printer");
+  printer_mod.doc() = "Printer submodule – converts proto objects to ONNX text format";
+
+  printer_mod.def(
+      "model_to_text", [](const ModelProto &model) -> std::string { return ProtoToString(model); },
+      nb::arg("model"), "Converts a ModelProto to ONNX textual representation.");
+
+  printer_mod.def(
+      "graph_to_text", [](const GraphProto &graph) -> std::string { return ProtoToString(graph); },
+      nb::arg("graph"), "Converts a GraphProto to ONNX textual representation.");
+
+  printer_mod.def(
+      "function_to_text", [](const FunctionProto &fn) -> std::string { return ProtoToString(fn); },
+      nb::arg("fn"), "Converts a FunctionProto to ONNX textual representation.");
 
   // -----------------------------------------------------------------------
   // Submodule `shape_inference`

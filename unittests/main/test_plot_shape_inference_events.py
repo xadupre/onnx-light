@@ -2,8 +2,10 @@ import ast
 import pathlib
 import unittest
 
+NONZERO_CHAIN_TEST_CASE_NAME = "test_cc_shape_inference_nonzero_chain_named"
 
-def _example_mentions_nonzero_shape_events() -> bool:
+
+def _example_has_nonzero_chain_event_logging() -> bool:
     root = pathlib.Path(__file__).resolve().parents[2]
     source_path = root / "docs" / "examples" / "optimization" / "plot_shape_inference.py"
     tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
@@ -13,10 +15,7 @@ def _example_mentions_nonzero_shape_events() -> bool:
     has_compute_shape_model_call = False
 
     for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.Constant)
-            and node.value == "test_cc_shape_inference_nonzero_chain_named"
-        ):
+        if isinstance(node, ast.Constant) and node.value == NONZERO_CHAIN_TEST_CASE_NAME:
             has_case_name = True
         if isinstance(node, ast.Assign):
             for target in node.targets:
@@ -31,8 +30,8 @@ def _example_mentions_nonzero_shape_events() -> bool:
 
 
 class TestPlotShapeInferenceEvents(unittest.TestCase):
-    def test_example_contains_nonzero_shape_inference_events_section(self):
-        self.assertTrue(_example_mentions_nonzero_shape_events())
+    def test_nonzero_events_section_present(self):
+        self.assertTrue(_example_has_nonzero_chain_event_logging())
 
 
 if __name__ == "__main__":

@@ -234,10 +234,14 @@ for name in TRACKED:
 #   is stored in the context,
 # * one ``compute_node`` entry per processed node with operator metadata.
 
+NONZERO_CHAIN_TEST_CASE_NAME = "test_cc_shape_inference_nonzero_chain_named"
 shape_cases = collect_test_cases("shape")
-nonzero_case = next(
-    tc for tc in shape_cases if tc.name == "test_cc_shape_inference_nonzero_chain_named"
-)
+nonzero_case = next((tc for tc in shape_cases if tc.name == NONZERO_CHAIN_TEST_CASE_NAME), None)
+if nonzero_case is None:
+    raise RuntimeError(
+        f"Unable to find backend test case {NONZERO_CHAIN_TEST_CASE_NAME!r}. "
+        "Check collect_test_cases('shape') output and test case registration."
+    )
 case_model = onnxl.ModelProto()
 case_model.CopyFrom(nonzero_case.model)
 
@@ -247,12 +251,13 @@ compute_shape_model(events_ctx, case_model, prefill_with_value_info_output=True)
 
 shape_events = events_ctx.events()
 compute_events = [ev for ev in shape_events if ev.action == "compute_node"]
+max_displayed_events = 8
 
-print("\nShape-inference events for test_cc_shape_inference_nonzero_chain_named:")
+print(f"\nShape-inference events for {NONZERO_CHAIN_TEST_CASE_NAME}:")
 print(f"  total events      : {len(shape_events)}")
 print(f"  compute_node count: {len(compute_events)}")
 print("  first events:")
-for ev in shape_events[:8]:
+for ev in shape_events[:max_displayed_events]:
     d = ev.as_dict()
     op = f"{d['op_domain']}::{d['op_type']}" if d["op_type"] else "-"
     print(f"    {d['action']:<12s} name={d['name']:<16s} shape={d['shape']!s:<16s} op={op}")

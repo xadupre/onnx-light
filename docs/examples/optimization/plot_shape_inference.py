@@ -52,8 +52,10 @@ import onnx_light.onnx as onnxl
 import onnx_light.onnx.defs as defs
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
+from onnx_light.onnx.backend import collect_test_cases
 from onnx_light.onnx_optim.shape_inference import (
     check_inputs_available,
+    compute_shape_model,
     compute_shape_node,
     infer_shapes_model,
     OptimTensor,
@@ -216,6 +218,44 @@ for name in TRACKED:
     n = last_dim_int(naive_shapes.get(name) or [])
     e = last_dim_int(enhanced_shapes.get(name) or [])
     print(f"  {name:<15} {str(m):>15} {str(n):>15} {str(e):>15}")
+
+#####################################
+# Shape-inference events on a backend test case
+# +++++++++++++++++++++++++++++++++++++++++++++
+#
+# ``ShapesContext`` can record shape-inference events when
+# ``events_enabled`` is set to ``True``. The following snippet retrieves
+# the backend test case ``test_cc_shape_inference_nonzero_chain_named``
+# and runs model-level shape inference while capturing the event log.
+#
+# The log contains:
+#
+# * descriptor mutations (``add`` / ``replace``) each time a tensor shape
+#   is stored in the context,
+# * one ``compute_node`` entry per processed node with operator metadata.
+
+shape_cases = collect_test_cases("shape")
+nonzero_case = next(
+    tc for tc in shape_cases if tc.name == "test_cc_shape_inference_nonzero_chain_named"
+)
+case_model = onnxl.ModelProto()
+case_model.CopyFrom(nonzero_case.model)
+
+events_ctx = ShapesContext()
+events_ctx.events_enabled = True
+compute_shape_model(events_ctx, case_model, prefill_with_value_info_output=True)
+
+shape_events = events_ctx.events()
+compute_events = [ev for ev in shape_events if ev.action == "compute_node"]
+
+print("\nShape-inference events for test_cc_shape_inference_nonzero_chain_named:")
+print(f"  total events      : {len(shape_events)}")
+print(f"  compute_node count: {len(compute_events)}")
+print("  first events:")
+for ev in shape_events[:8]:
+    d = ev.as_dict()
+    op = f"{d['op_domain']}::{d['op_type']}" if d["op_type"] else "-"
+    print(f"    {d['action']:<12s} name={d['name']:<16s} shape={d['shape']!s:<16s} op={op}")
 
 
 #####################################

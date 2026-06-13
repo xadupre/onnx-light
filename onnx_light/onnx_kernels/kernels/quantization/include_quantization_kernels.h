@@ -118,6 +118,11 @@ public:
   void operator()(const Tensor &x, const Tensor &x_scale, const Tensor &x_zero_point, int64_t axis,
                   Tensor &output) const;
 
+  /// Per-axis overloads with the ``x_zero_point`` omitted (defaults to 0).
+  /// Delegates to the per-tensor overload when ``x_scale`` is scalar.
+  Tensor operator()(const Tensor &x, const Tensor &x_scale, int64_t axis) const;
+  void operator()(const Tensor &x, const Tensor &x_scale, int64_t axis, Tensor &output) const;
+
   /// Output element type (FLOAT) differs from the integer/float8 input
   /// element type, so storage can never be shared with an input.
   static constexpr bool CanRunInPlace() noexcept { return false; }

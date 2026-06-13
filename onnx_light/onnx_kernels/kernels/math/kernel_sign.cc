@@ -19,6 +19,26 @@ namespace {
 
 constexpr const char *kName = "kernel::Sign";
 
+// sign(x) for unsigned types: 0 when x == 0, 1 otherwise.
+template <typename T> void SignUnsigned(const Tensor &x, Tensor &output) {
+  const int64_t n = x.element_count();
+  const T *px = reinterpret_cast<const T *>(x.bytes());
+  T *py = reinterpret_cast<T *>(output.data.data());
+  for (int64_t i = 0; i < n; ++i) {
+    py[i] = px[i] > T{0} ? T{1} : T{0};
+  }
+}
+
+// sign(x) for signed types: -1, 0, or 1.
+template <typename T> void SignSigned(const Tensor &x, Tensor &output) {
+  const int64_t n = x.element_count();
+  const T *px = reinterpret_cast<const T *>(x.bytes());
+  T *py = reinterpret_cast<T *>(output.data.data());
+  for (int64_t i = 0; i < n; ++i) {
+    py[i] = px[i] > T{0} ? T{1} : (px[i] < T{0} ? T{-1} : T{0});
+  }
+}
+
 } // namespace
 
 Tensor Sign::operator()(const Tensor &x) const {
@@ -61,70 +81,30 @@ void Sign::operator()(const Tensor &x, Tensor &output) const {
         x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits,
         [](float v) { return (v > 0.0f) ? 1.0f : (v < 0.0f ? -1.0f : 0.0f); });
     return;
-  case DataType::UINT8: {
-    const uint8_t *px = x.AsUint8();
-    uint8_t *py = output.AsUint8();
-    for (int64_t i = 0; i < n; ++i) {
-      py[i] = static_cast<uint8_t>(px[i] > 0 ? 1 : 0);
-    }
+  case DataType::UINT8:
+    SignUnsigned<uint8_t>(x, output);
     return;
-  }
-  case DataType::UINT16: {
-    const uint16_t *px = x.AsUint16();
-    uint16_t *py = output.AsUint16();
-    for (int64_t i = 0; i < n; ++i) {
-      py[i] = static_cast<uint16_t>(px[i] > 0 ? 1 : 0);
-    }
+  case DataType::UINT16:
+    SignUnsigned<uint16_t>(x, output);
     return;
-  }
-  case DataType::UINT32: {
-    const uint32_t *px = x.AsUint32();
-    uint32_t *py = output.AsUint32();
-    for (int64_t i = 0; i < n; ++i) {
-      py[i] = static_cast<uint32_t>(px[i] > 0 ? 1 : 0);
-    }
+  case DataType::UINT32:
+    SignUnsigned<uint32_t>(x, output);
     return;
-  }
-  case DataType::UINT64: {
-    const uint64_t *px = x.AsUint64();
-    uint64_t *py = output.AsUint64();
-    for (int64_t i = 0; i < n; ++i) {
-      py[i] = static_cast<uint64_t>(px[i] > 0 ? 1 : 0);
-    }
+  case DataType::UINT64:
+    SignUnsigned<uint64_t>(x, output);
     return;
-  }
-  case DataType::INT8: {
-    const int8_t *px = x.AsInt8();
-    int8_t *py = output.AsInt8();
-    for (int64_t i = 0; i < n; ++i) {
-      py[i] = static_cast<int8_t>(px[i] > 0 ? 1 : (px[i] < 0 ? -1 : 0));
-    }
+  case DataType::INT8:
+    SignSigned<int8_t>(x, output);
     return;
-  }
-  case DataType::INT16: {
-    const int16_t *px = x.AsInt16();
-    int16_t *py = output.AsInt16();
-    for (int64_t i = 0; i < n; ++i) {
-      py[i] = static_cast<int16_t>(px[i] > 0 ? 1 : (px[i] < 0 ? -1 : 0));
-    }
+  case DataType::INT16:
+    SignSigned<int16_t>(x, output);
     return;
-  }
-  case DataType::INT32: {
-    const int32_t *px = x.AsInt32();
-    int32_t *py = output.AsInt32();
-    for (int64_t i = 0; i < n; ++i) {
-      py[i] = px[i] > 0 ? 1 : (px[i] < 0 ? -1 : 0);
-    }
+  case DataType::INT32:
+    SignSigned<int32_t>(x, output);
     return;
-  }
-  case DataType::INT64: {
-    const int64_t *px = x.AsInt64();
-    int64_t *py = output.AsInt64();
-    for (int64_t i = 0; i < n; ++i) {
-      py[i] = px[i] > 0 ? 1 : (px[i] < 0 ? -1 : 0);
-    }
+  case DataType::INT64:
+    SignSigned<int64_t>(x, output);
     return;
-  }
   default:
     throw std::invalid_argument(std::string(kName) +
                                 " only supports FLOAT, DOUBLE, FLOAT16, BFLOAT16, UINT8, UINT16, "

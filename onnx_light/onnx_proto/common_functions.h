@@ -20,7 +20,7 @@ namespace ONNX_LIGHT_NAMESPACE {
  */
 std::vector<std::string> CollectExternalInputs(const utils::RepeatedProtoField<NodeProto> &nodes);
 
-/// ``std::vector``-overload of :cpp:func:`CollectExternalInputs`.
+/// ``std::vector`` overload of :cpp:func:`CollectExternalInputs`.
 std::vector<std::string> CollectExternalInputs(const std::vector<NodeProto> &nodes);
 
 /**

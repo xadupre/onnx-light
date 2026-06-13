@@ -49,7 +49,10 @@ _IMPLEMENTED_OPS: frozenset[str] = frozenset(
         "Momentum",
         "Mul",
         "Neg",
+        "NonZero",
+        "Relu",
         "Sub",
+        "Transpose",
     }
 )
 

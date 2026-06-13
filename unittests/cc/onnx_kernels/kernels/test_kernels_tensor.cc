@@ -244,8 +244,8 @@ TEST(KernelClass, CastClassRejectsUnsupportedTo) {
   const KernelContext ctx{DefaultOpset(13)};
   Cast cast_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {1}, {1.0f});
-  // FLOAT4E2M1 is not in the supported set for the kernel today.
-  EXPECT_THROW((void)cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::FLOAT4E2M1)),
+  // UINT32 is not in the supported set for the kernel today.
+  EXPECT_THROW((void)cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::UINT32)),
                std::invalid_argument);
 }
 

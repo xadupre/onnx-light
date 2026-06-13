@@ -47,6 +47,20 @@ float Float8E5M2BitsToFloat(std::uint8_t bits) noexcept;
 std::uint8_t FloatToFloat8E5M2FNUZBits(float v) noexcept;
 float Float8E5M2FNUZBitsToFloat(std::uint8_t bits) noexcept;
 
+// Saturating conversion to FLOAT8E8M0 (8-bit unsigned exponent, no mantissa,
+// no sign). The encoded byte stores the biased exponent ``E`` such that the
+// decoded value is ``2^(E - 127)``; ``E == 0xFF`` denotes ``NaN``. Negative
+// inputs (the spec calls this case "undefined") and ``NaN`` inputs map to
+// the canonical ``NaN`` bit pattern ``0xFF``. With saturate semantics
+// (the only mode this reference kernel implements) ``+infinity`` and finite
+// values above ``2^127`` are clamped to the largest finite magnitude
+// (``0xFE``, i.e. ``2^127``), and positive values below ``2^-127`` are
+// clamped to ``0x00`` (i.e. ``2^-127``). The default ``round_mode`` for
+// FLOAT8E8M0 is ``"up"``: positive values that are not exact powers of two
+// are rounded up to the next representable power of two.
+std::uint8_t FloatToFloat8E8M0Bits(float v) noexcept;
+float Float8E8M0BitsToFloat(std::uint8_t bits) noexcept;
+
 } // namespace kernel
 } // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

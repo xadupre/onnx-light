@@ -307,6 +307,7 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
         int(onnx.TensorProto.FLOAT8E4M3FNUZ): _ml_dtypes.float8_e4m3fnuz,
         int(onnx.TensorProto.FLOAT8E5M2): _ml_dtypes.float8_e5m2,
         int(onnx.TensorProto.FLOAT8E5M2FNUZ): _ml_dtypes.float8_e5m2fnuz,
+        int(onnx.TensorProto.FLOAT8E8M0): _ml_dtypes.float8_e8m0fnu,
     }
 
     # Sub-byte packed integer dtypes: ONNX stores these row-major with the

@@ -26,6 +26,7 @@ size_t ElementSize(int32_t dtype) {
   case DataType::FLOAT8E4M3FNUZ:
   case DataType::FLOAT8E5M2:
   case DataType::FLOAT8E5M2FNUZ:
+  case DataType::FLOAT8E8M0:
     return 1;
   case DataType::UINT16:
   case DataType::INT16:

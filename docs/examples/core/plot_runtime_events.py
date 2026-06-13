@@ -174,7 +174,7 @@ print(f"Recorded {len(events)} event(s):")
 for ev in events:
     d = ev.as_dict()
     print(
-        f"  [{d['action']:<7s} {d['kind']:<12s}] {d['name']:<6s} "
+        f"  [{d['action']:<8s} {d['kind']:<12s}] {d['name']:<6s} "
         f"dtype={d['data_type']:<3d} shape={d['shape']} "
         f"values={d.get('values') or d.get('string_values')}"
     )
@@ -198,7 +198,7 @@ for ev in events:
     resolved = resolved_shapes.get(d["name"])
     match = "OK" if resolved == runtime_shape else "MISMATCH"
     print(
-        f"  {d['name']:<6s} runtime={runtime_shape} inferred={inferred} "
+        f"  {d['name']:<8s} runtime={runtime_shape} inferred={inferred} "
         f"resolved={resolved} [{match}]  values={d.get('values')}"
     )
 

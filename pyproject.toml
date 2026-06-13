@@ -33,6 +33,7 @@ dev-no-onnx = [
 docs = [
     "black",
     "breathe",
+    "ir-py",
     "matplotlib",
     "onnx>=1.17",
     "onnxruntime",

@@ -1,4 +1,4 @@
-Optimization examples
+Optimization Examples
 =====================
 
 Examples demonstrating the optimization features of *onnx-light*

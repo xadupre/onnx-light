@@ -1025,39 +1025,55 @@ void SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
 
 void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
                                ParseOptions &options, bool clear_external_data) {
-  EXT_ENFORCE(options.format == SerializeFormat::kOnnx,
-              "ParseModelProtoFromStream: SerializeFormat::kOrtFlatbuffers is not "
+  if (options.format == SerializeFormat::kOrtFlatbuffers) {
+    // Recursion-OOM guard: validate the depth limit before any parsing begins
+    // so that a maliciously crafted .ort file cannot exhaust the call stack
+    // once the flatbuffer reader is implemented.
+    EXT_ENFORCE(options.max_recursion_depth > 0,
+                "ParseModelProtoFromStream: ParseOptions::max_recursion_depth must be > 0 "
+                "(got ",
+                options.max_recursion_depth,
+                "). "
+                "The ORT flatbuffer parser uses this limit to reject models "
+                "nested more deeply than the configured value, preventing stack "
+                "overflow on adversarially deep inputs.");
+    EXT_THROW("ParseModelProtoFromStream: SerializeFormat::kOrtFlatbuffers is not "
               "implemented yet. Use SerializeFormat::kOnnx for now.");
-  // Mirror SerializeModelProtoToStream: start the thread pool when requested and
-  // wait for all delayed reads once parsing is complete.
-  if (options.is_parallel() && !stream.HasParallelizationStarted())
-    stream.StartThreadPool(options.num_threads);
-  if (stream.ExternalWeights()) {
-    // no_copy ownership model:
-    // - External-data tensors borrow slices from TwoFilesStream shared weights buffers.
-    //   TensorProto::raw_data stores a shared_ptr owner (ByteSpan::owner_) so those
-    //   mmap-backed buffers stay alive as long as the parsed model keeps borrowed tensors.
-    // - Inline protobuf raw_data borrowed from an input bytes buffer is different:
-    //   the caller must keep the original bytes object alive for the model lifetime.
-    utils::TwoFilesStream &two_stream = dynamic_cast<utils::TwoFilesStream &>(stream);
-    std::filesystem::path parent_path = two_stream.file_path();
-    parent_path = parent_path.parent_path();
-    std::filesystem::path weight_path = two_stream.weights_file_path();
-    weight_path = std::filesystem::relative(weight_path, parent_path);
-    if (weight_path.empty()) {
-      // If the relative path is empty, it means the weight file is in the same directory as the
-      // model.
-      weight_path = two_stream.weights_file_path();
+  } else {
+    EXT_ENFORCE(options.format == SerializeFormat::kOnnx,
+                "ParseModelProtoFromStream: unrecognised SerializeFormat value ",
+                static_cast<int>(options.format), "; only kOnnx is currently supported.");
+    // Mirror SerializeModelProtoToStream: start the thread pool when requested and
+    // wait for all delayed reads once parsing is complete.
+    if (options.is_parallel() && !stream.HasParallelizationStarted())
+      stream.StartThreadPool(options.num_threads);
+    if (stream.ExternalWeights()) {
+      // no_copy ownership model:
+      // - External-data tensors borrow slices from TwoFilesStream shared weights buffers.
+      //   TensorProto::raw_data stores a shared_ptr owner (ByteSpan::owner_) so those
+      //   mmap-backed buffers stay alive as long as the parsed model keeps borrowed tensors.
+      // - Inline protobuf raw_data borrowed from an input bytes buffer is different:
+      //   the caller must keep the original bytes object alive for the model lifetime.
+      utils::TwoFilesStream &two_stream = dynamic_cast<utils::TwoFilesStream &>(stream);
+      std::filesystem::path parent_path = two_stream.file_path();
+      parent_path = parent_path.parent_path();
+      std::filesystem::path weight_path = two_stream.weights_file_path();
+      weight_path = std::filesystem::relative(weight_path, parent_path);
+      if (weight_path.empty()) {
+        // If the relative path is empty, it means the weight file is in the same directory as the
+        // model.
+        weight_path = two_stream.weights_file_path();
+      }
     }
+    model.ParseFromStream(stream, options);
+    if (options.is_parallel())
+      stream.WaitForDelayedBlock();
+    if (options._touch_raw_data_pages) {
+      (void)TouchesAllModelRawDataPages(model);
+    }
+    if (stream.ExternalWeights() && clear_external_data)
+      ClearExternalData(model);
   }
-  model.ParseFromStream(stream, options);
-  if (options.is_parallel())
-    stream.WaitForDelayedBlock();
-  if (options._touch_raw_data_pages) {
-    (void)TouchesAllModelRawDataPages(model);
-  }
-  if (stream.ExternalWeights() && clear_external_data)
-    ClearExternalData(model);
 }
 
 // Extracts the integer values of ``tensor_proto`` into ``out``. Reads

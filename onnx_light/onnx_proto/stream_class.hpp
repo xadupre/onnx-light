@@ -212,16 +212,33 @@ template <typename cls> void _ParseFromString(cls &self, const std::string &raw)
 
 template <typename cls>
 void _ParseFromString(cls &self, const std::string &raw, ParseOptions &opts) {
-  EXT_ENFORCE(opts.format == SerializeFormat::kOnnx,
-              "ParseFromString: SerializeFormat::kOrtFlatbuffers is not implemented yet. "
+  if (opts.format == SerializeFormat::kOrtFlatbuffers) {
+    // Recursion-OOM guard: validate the depth limit before any parsing begins.
+    // When the flatbuffer reader is fully implemented this limit will be
+    // threaded through the recursive table traversal at each nesting level so
+    // that a maliciously crafted .ort file cannot exhaust the call stack.
+    EXT_ENFORCE(opts.max_recursion_depth > 0,
+                "ParseFromString: ParseOptions::max_recursion_depth must be > 0 "
+                "(got ",
+                opts.max_recursion_depth,
+                "). "
+                "The ORT flatbuffer parser uses this limit to reject models "
+                "nested more deeply than the configured value, preventing stack "
+                "overflow on adversarially deep inputs.");
+    EXT_THROW("ParseFromString: SerializeFormat::kOrtFlatbuffers is not implemented yet. "
               "Use SerializeFormat::kOnnx for now.");
-  const uint8_t *ptr = reinterpret_cast<const uint8_t *>(raw.data());
-  ONNX_LIGHT_NAMESPACE::utils::StringStream st(ptr, raw.size());
-  if (opts.is_parallel())
-    st.StartThreadPool(opts.num_threads);
-  self.ParseFromStream(st, opts);
-  if (opts.is_parallel())
-    st.WaitForDelayedBlock();
+  } else {
+    EXT_ENFORCE(opts.format == SerializeFormat::kOnnx,
+                "ParseFromString: unrecognised SerializeFormat value ",
+                static_cast<int>(opts.format), "; only kOnnx is currently supported.");
+    const uint8_t *ptr = reinterpret_cast<const uint8_t *>(raw.data());
+    ONNX_LIGHT_NAMESPACE::utils::StringStream st(ptr, raw.size());
+    if (opts.is_parallel())
+      st.StartThreadPool(opts.num_threads);
+    self.ParseFromStream(st, opts);
+    if (opts.is_parallel())
+      st.WaitForDelayedBlock();
+  }
 }
 
 template <typename cls>

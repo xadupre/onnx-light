@@ -35,15 +35,36 @@ Convert an ``.onnx`` file to ``.ort`` with onnxruntime
 Planned onnx-light API
 ----------------------
 
-Once the C++ writer ships, the equivalent one-liner in onnx-light will be:
+Once the C++ writer ships, the one-liner is the same in Python and C++:
+flip ``SerializeOptions::format`` to ``ORT_FLATBUFFERS`` and serialize as
+usual.
 
-.. code-block:: python
+.. tab-set::
 
-    import onnx_light.onnx as onnxl
+   .. tab-item:: Python
+      :sync: python
 
-    sopts = onnxl.SerializeOptions()
-    sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
-    model.SerializeToFile("model.ort", sopts)
+      .. code-block:: python
+
+          import onnx_light.onnx as onnxl
+
+          sopts = onnxl.SerializeOptions()
+          sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+          model.SerializeToFile("model.ort", sopts)
+
+   .. tab-item:: C++
+      :sync: cpp
+
+      .. code-block:: cpp
+
+          #include "onnx.h"
+          #include "onnx_helper.h"
+          #include "stream.h"
+
+          onnx::SerializeOptions options;
+          options.format = onnx::SerializeFormat::kOrtFlatbuffers;
+          onnx::utils::FileWriteStream stream("model.ort");
+          onnx::SerializeModelProtoToStream(model, stream, options);
 
 See also
 --------

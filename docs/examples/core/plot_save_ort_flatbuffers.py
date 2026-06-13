@@ -13,7 +13,8 @@ the runtime and avoids a protobuf parsing step.
 :py:class:`onnx_light.onnx.SerializeFormat`, but the C++ writer for
 ``ORT_FLATBUFFERS`` is not implemented yet (calls raise ``RuntimeError``).
 Until it lands, this example uses :epkg:`onnxruntime` itself to produce
-the ``.ort`` file and then compares the on-disk sizes of the two formats.
+the ``.ort`` file and then compares the on-disk sizes of the two formats
+as the number of nodes in the graph grows.
 
 See :ref:`l-howto-save-ort-flatbuffers` for the short recipe.
 """
@@ -21,6 +22,7 @@ See :ref:`l-howto-save-ort-flatbuffers` for the short recipe.
 import os
 import shutil
 
+import matplotlib.pyplot as plt
 import numpy as np
 import onnxruntime
 
@@ -29,75 +31,104 @@ import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 
 # %%
-# Build a tiny synthetic ONNX model
-# ---------------------------------
+# Build a chain of ``Gemm`` nodes
+# -------------------------------
 #
-# The graph holds two ``Gemm`` nodes with float32 weight matrices so that
-# the saved files have a non-trivial size. ``DIM`` is intentionally small
-# when the example runs in the documentation build (``UNITTEST_GOING=1``).
+# A small helper builds a model with ``num_nodes`` chained ``Gemm`` nodes
+# (one float32 weight matrix per node) so the saved files have a
+# non-trivial size that scales linearly with ``num_nodes``. ``DIM``
+# shrinks when the example runs in the documentation build
+# (``UNITTEST_GOING=1``) so the build stays cheap.
 
-DIM = 64 if os.environ.get("UNITTEST_GOING") == "1" else 256
+DIM = 32 if os.environ.get("UNITTEST_GOING") == "1" else 128
 
-w0 = np.random.randn(DIM, DIM).astype(np.float32)
-w1 = np.random.randn(DIM, DIM).astype(np.float32)
 
-inputs = [oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [None, DIM])]
-outputs = [oh.make_tensor_value_info("Y1", onnxl.TensorProto.FLOAT, [None, DIM])]
-initializers = [onh.from_array(w0, name="W0"), onh.from_array(w1, name="W1")]
-nodes = [
-    oh.make_node("Gemm", ["X", "W0"], ["Y0"], transB=1),
-    oh.make_node("Gemm", ["Y0", "W1"], ["Y1"], transB=1),
-]
-graph = oh.make_graph(nodes, "demo_graph", inputs, outputs, initializer=initializers)
-onnx_model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)], ir_version=9)
+def build_model(num_nodes: int, dim: int = DIM) -> onnxl.ModelProto:
+    """Builds an ONNX model with *num_nodes* chained ``Gemm`` nodes."""
+    rng = np.random.default_rng(0)
+    inputs = [oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [None, dim])]
+    outputs = [
+        oh.make_tensor_value_info(f"Y{num_nodes - 1}", onnxl.TensorProto.FLOAT, [None, dim])
+    ]
+    initializers = []
+    nodes = []
+    prev = "X"
+    for i in range(num_nodes):
+        w = rng.standard_normal((dim, dim)).astype(np.float32)
+        w_name = f"W{i}"
+        out_name = f"Y{i}"
+        initializers.append(onh.from_array(w, name=w_name))
+        nodes.append(oh.make_node("Gemm", [prev, w_name], [out_name], transB=1))
+        prev = out_name
+    graph = oh.make_graph(nodes, "demo_graph", inputs, outputs, initializer=initializers)
+    return oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)], ir_version=9)
+
 
 # %%
-# Save in the standard ONNX protobuf format
-# -----------------------------------------
+# Save helpers
+# ------------
+#
+# The ``.onnx`` file is written by :func:`onnx_light.onnx.save`. The
+# ``.ort`` file is produced by :epkg:`onnxruntime`: disable graph
+# optimizations so that the serialized graph stays structurally
+# equivalent to the input, and set ``session.save_model_format=ORT`` so
+# the optimized-model dump uses the flatbuffer format.
+
+
+def save_as_ort(onnx_path: str, ort_path: str) -> None:
+    """Saves the model at *onnx_path* as an ORT flatbuffer at *ort_path*."""
+    session_options = onnxruntime.SessionOptions()
+    session_options.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_DISABLE_ALL
+    session_options.optimized_model_filepath = ort_path
+    session_options.add_session_config_entry("session.save_model_format", "ORT")
+    # Creating the session triggers the optimized-model dump.
+    onnxruntime.InferenceSession(onnx_path, session_options, providers=["CPUExecutionProvider"])
+
+
+# %%
+# Measure sizes for a range of node counts
+# ----------------------------------------
 
 out_dir = "temp_plot_save_ort_flatbuffers"
 os.makedirs(out_dir, exist_ok=True)
 
-onnx_path = os.path.join(out_dir, "model.onnx")
-onnxl.save(onnx_model, onnx_path)
+node_counts = [1, 2, 4, 8, 16, 32]
+onnx_sizes = []
+ort_sizes = []
+
+for n in node_counts:
+    model = build_model(n)
+    onnx_path = os.path.join(out_dir, f"model_{n}.onnx")
+    ort_path = os.path.join(out_dir, f"model_{n}.ort")
+    onnxl.save(model, onnx_path)
+    save_as_ort(onnx_path, ort_path)
+    onnx_sizes.append(os.path.getsize(onnx_path))
+    ort_sizes.append(os.path.getsize(ort_path))
+
+print(f"{'nodes':>6} {'.onnx (KB)':>12} {'.ort (KB)':>12} {'ratio':>8}")
+print("-" * 42)
+for n, s_onnx, s_ort in zip(node_counts, onnx_sizes, ort_sizes):
+    print(f"{n:>6} {s_onnx / 1024:>12.1f} {s_ort / 1024:>12.1f} {s_ort / s_onnx:>8.3f}")
 
 # %%
-# Save in the ORT flatbuffer format via onnxruntime
-# -------------------------------------------------
+# Plot file sizes vs. number of nodes
+# -----------------------------------
 #
-# Disable graph optimizations so that the serialized graph stays
-# structurally equivalent to the input. Setting
-# ``session.save_model_format=ORT`` tells onnxruntime to dump the
-# (un)optimized model as a ``.ort`` flatbuffer file at the path given by
-# ``optimized_model_filepath``.
-
-ort_path = os.path.join(out_dir, "model.ort")
-
-session_options = onnxruntime.SessionOptions()
-session_options.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_DISABLE_ALL
-session_options.optimized_model_filepath = ort_path
-session_options.add_session_config_entry("session.save_model_format", "ORT")
-
-# Creating the session triggers the optimized-model dump in ORT format.
-onnxruntime.InferenceSession(onnx_path, session_options, providers=["CPUExecutionProvider"])
-
-# %%
-# Compare the on-disk sizes
-# -------------------------
-#
-# The flatbuffer payload is comparable to the protobuf one for this small
-# graph. On much larger models the ``.ort`` file is typically a bit bigger
-# because it embeds runtime-specific metadata, but it loads faster because
-# onnxruntime memory-maps it directly without going through protobuf
+# The flatbuffer payload is comparable to the protobuf one and both grow
+# linearly with the number of weight matrices. On much larger models the
+# ``.ort`` file is typically a bit bigger because it embeds runtime
+# metadata; the trade-off is mmap-friendly loading without protobuf
 # parsing.
 
-onnx_size = os.path.getsize(onnx_path)
-ort_size = os.path.getsize(ort_path)
-
-print(f"{'format':<8} {'size (bytes)':>14}  {'ratio vs .onnx':>16}")
-print("-" * 42)
-print(f"{'.onnx':<8} {onnx_size:>14}  {1.0:>16.3f}")
-print(f"{'.ort':<8} {ort_size:>14}  {ort_size / onnx_size:>16.3f}")
+fig, ax = plt.subplots(figsize=(7, 4.5))
+ax.plot(node_counts, np.array(onnx_sizes) / 1024, marker="o", label=".onnx (protobuf)")
+ax.plot(node_counts, np.array(ort_sizes) / 1024, marker="s", label=".ort (flatbuffer)")
+ax.set_xlabel("Number of Gemm nodes")
+ax.set_ylabel("File size (KB)")
+ax.set_title(f"ONNX vs ORT flatbuffer file size (DIM={DIM})")
+ax.grid(True, alpha=0.3)
+ax.legend()
+fig.tight_layout()
 
 # %%
 # Cleanup

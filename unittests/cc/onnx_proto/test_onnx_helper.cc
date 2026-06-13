@@ -332,6 +332,107 @@ TEST(onnx_helper, LoadExternalDataForModel_RoundTrip) {
   std::filesystem::remove_all(tmpdir);
 }
 
+TEST(onnx_helper, LoadExternalDataForModel_SymlinkRejected) {
+#if !defined(_WIN32)
+  namespace fs = std::filesystem;
+  fs::path tmpdir = fs::temp_directory_path() / "onnx_light_load_external_symlink";
+  fs::remove_all(tmpdir);
+  fs::create_directories(tmpdir);
+
+  // Create a real target file and a symlink pointing to it inside tmpdir.
+  std::vector<uint8_t> bytes{1, 2, 3, 4, 5, 6, 7, 8};
+  fs::path target_path = tmpdir / "target.bin";
+  {
+    std::ofstream out(target_path, std::ios::binary);
+    out.write(reinterpret_cast<const char *>(bytes.data()),
+              static_cast<std::streamsize>(bytes.size()));
+  }
+  const std::string ext_name = "weights.bin";
+  fs::create_symlink(target_path, tmpdir / ext_name);
+
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+  TensorProto *t = graph->add_initializer();
+  t->set_name("W");
+  t->set_data_type(TensorProto::DataType::FLOAT);
+  t->ref_raw_data().resize(bytes.size());
+  std::memcpy(t->ref_raw_data().data(), bytes.data(), bytes.size());
+
+  ConvertModelToExternalData(model, true, ext_name, 0, false);
+  t->ref_raw_data().resize(0);
+
+  // The external data location is a symbolic link and must be rejected.
+  try {
+    LoadExternalDataForModel(model, tmpdir.string());
+    FAIL() << "Expected LoadExternalDataForModel to reject the symbolic link.";
+  } catch (const std::runtime_error &ex) {
+    EXPECT_NE(std::string(ex.what()).find("symbolic link"), std::string::npos)
+        << "Unexpected error message: " << ex.what();
+  }
+
+  fs::remove_all(tmpdir);
+#endif
+}
+
+TEST(onnx_helper, LoadExternalDataForModel_ParentDirSymlinkRejected) {
+#if !defined(_WIN32)
+  namespace fs = std::filesystem;
+  fs::path tmpdir = fs::temp_directory_path() / "onnx_light_load_external_parent_symlink";
+  fs::remove_all(tmpdir);
+  fs::create_directories(tmpdir);
+
+  // Create a target directory outside tmpdir holding sensitive data.
+  fs::path outside = fs::temp_directory_path() / "onnx_light_load_external_outside";
+  fs::remove_all(outside);
+  fs::create_directories(outside);
+  std::vector<uint8_t> bytes{9, 8, 7, 6};
+  {
+    std::ofstream out(outside / "secret.bin", std::ios::binary);
+    out.write(reinterpret_cast<const char *>(bytes.data()),
+              static_cast<std::streamsize>(bytes.size()));
+  }
+
+  // A directory symlink inside tmpdir that points outside.
+  fs::create_directory_symlink(outside, tmpdir / "subdir");
+
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+  TensorProto *t = graph->add_initializer();
+  t->set_name("W");
+  t->set_data_type(TensorProto::DataType::FLOAT);
+  t->ref_raw_data().resize(bytes.size());
+  std::memcpy(t->ref_raw_data().data(), bytes.data(), bytes.size());
+
+  // "subdir/secret.bin" resolves outside tmpdir through the parent symlink.
+  // Set the external_data metadata directly to exercise LoadExternalData's
+  // canonical containment check with a directory component.
+  t->ref_raw_data().resize(0);
+  t->ref_data_location() = TensorProto::DataLocation::EXTERNAL;
+  StringStringEntryProto *loc = t->add_external_data();
+  loc->set_key("location");
+  loc->set_value("subdir/secret.bin");
+  StringStringEntryProto *off = t->add_external_data();
+  off->set_key("offset");
+  off->set_value("0");
+  StringStringEntryProto *len = t->add_external_data();
+  len->set_key("length");
+  len->set_value("4");
+
+  try {
+    LoadExternalDataForModel(model, tmpdir.string());
+    FAIL() << "Expected LoadExternalDataForModel to reject the parent-dir symlink escape.";
+  } catch (const std::runtime_error &ex) {
+    EXPECT_NE(std::string(ex.what()).find("outside the base directory"), std::string::npos)
+        << "Unexpected error message: " << ex.what();
+  }
+
+  fs::remove_all(tmpdir);
+  fs::remove_all(outside);
+#endif
+}
+
 TEST(onnx_helper, SerializeModelProtoToStream) {
   ModelProto model;
 

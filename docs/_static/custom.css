@@ -41,3 +41,38 @@ div.pst-scrollable-table-container:has(> table.howto-side-by-side) {
     color: #cf222e;
     font-weight: 600;
 }
+
+/* Click-to-zoom overlay for diagrams tagged with .zoomable-svg (svg_zoom.js). */
+.svg-zoom-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.8);
+}
+
+.svg-zoom-stage {
+    flex: 1 1 auto;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    cursor: grab;
+}
+
+.svg-zoom-image {
+    max-width: 95vw;
+    max-height: 90vh;
+    transform-origin: center center;
+    background: #fff;
+}
+
+.svg-zoom-hint {
+    color: #fff;
+    padding: 0.5rem 0.5rem 1rem;
+    font-size: 0.85rem;
+}

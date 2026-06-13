@@ -70,6 +70,7 @@ exclude_patterns = ["build"]
 html_theme = "pydata_sphinx_theme"
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
+html_js_files = ["svg_zoom.js"]
 html_logo = "_static/logo.svg"
 html_favicon = "_static/logo.svg"
 html_theme_options = {
@@ -100,14 +101,42 @@ epkg_dictionary = {
     "libFuzzer": "https://llvm.org/docs/LibFuzzer.html",
     "libFuzzer command line": "https://llvm.org/docs/LibFuzzer.html#options",
     "libFuzzer entry point": "https://llvm.org/docs/LibFuzzer.html#fuzz-target",
+    "lib_onnx_backend_test": (
+        "https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_backend_test"
+    ),
+    "lib_onnx_kernels": (
+        "https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_kernels"
+    ),
     "Mermaid": "https://mermaid.js.org/",
     "mermaid.js": "https://mermaid.js.org/",
     "onnx": "https://github.com/onnx/onnx",
+    "onnx_light/onnx_backend_test/cases": (
+        "https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_backend_test/cases"
+    ),
+    "onnx_light/onnx_kernels": (
+        "https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_kernels"
+    ),
+    "onnx_light/onnx_kernels/kernels": (
+        "https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_kernels/kernels"
+    ),
+    "onnx_light/onnx_kernels/run_nodes.cc": (
+        "https://github.com/xadupre/onnx-light/blob/main/onnx_light/onnx_kernels/run_nodes.cc"
+    ),
     "onnxruntime": "https://github.com/microsoft/onnxruntime",
     "OSS-Fuzz": "https://github.com/google/oss-fuzz",
     "protobuf": "https://protobuf.dev/",
     "Protocol Buffers": "https://protobuf.dev/",
     "sphinx-datatables": "https://pypi.org/project/sphinx-datatables/",
+    "unittests/cc/onnx_backend_test": (
+        "https://github.com/xadupre/onnx-light/tree/main/unittests/cc/onnx_backend_test"
+    ),
+    "unittests/cc/onnx_kernels": (
+        "https://github.com/xadupre/onnx-light/tree/main/unittests/cc/onnx_kernels"
+    ),
+    "unittests/onnxl_vs_ort/test_backend_with_onnxruntime.py": (
+        "https://github.com/xadupre/onnx-light/blob/main/unittests/onnxl_vs_ort/"
+        "test_backend_with_onnxruntime.py"
+    ),
 }
 
 

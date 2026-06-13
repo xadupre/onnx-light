@@ -673,7 +673,93 @@ void PropagateAnchorConstraintsIntoContext(ShapesContext &ctx, const AnchorMap &
   }
 }
 
+// Dispatches a single ``NodeProto`` to the matching shape-inference
+// implementation (model-local function expansion, custom callback, or
+// built-in dispatch-table entry) and stores the resulting output
+// descriptors in ``ctx``. Shared by :cpp:func:`ShapesContext::ComputeShapeNode`,
+// which wraps this with optional event logging.
+void DispatchComputeShapeNode(ShapesContext &ctx, const NodeProto &node) {
+  // Model-local function calls bypass the domain check (their domain
+  // is arbitrary) and the op-type dispatch table; they are expanded
+  // by recursively running shape inference on the FunctionProto body.
+  const std::string op_type = node.op_type().as_string();
+  const std::string local_key = LocalFunctionKey(node.domain().as_string(), op_type);
+  if (const FunctionProto *func = ctx.GetLocalFunction(local_key); func != nullptr) {
+    ctx.CheckInputsAvailable(node);
+    ctx.CheckOutputsNotAvailable(node);
+    ExpandLocalFunctionCall(ctx, node, *func);
+    return;
+  }
+  if (const ShapesContext::CustomComputeShapeFn *custom_shape_fn =
+          ctx.GetCustomShapeInferenceFunction(node.domain().as_string(), op_type);
+      custom_shape_fn != nullptr) {
+    ctx.CheckInputsAvailable(node);
+    ctx.CheckOutputsNotAvailable(node);
+    (*custom_shape_fn)(ctx, node);
+    return;
+  }
+  CheckOnnxDomain(node);
+  ctx.CheckInputsAvailable(node);
+  ctx.CheckOutputsNotAvailable(node);
+  const std::string key = NormaliseDispatchDomain(node) + ":" + op_type;
+  const auto &table = DispatchTable();
+  auto it = table.find(key);
+  EXT_ENFORCE_INVALID(it != table.end(), "ComputeShapeNode: unsupported op_type '", op_type,
+                      "' in domain '", NormaliseDispatchDomain(node), "'.");
+  it->second(ctx, node);
+}
+
 } // namespace
+
+const char *ShapeEventActionName(ShapeEventAction action) noexcept {
+  switch (action) {
+  case ShapeEventAction::kAdd:
+    return "add";
+  case ShapeEventAction::kReplace:
+    return "replace";
+  case ShapeEventAction::kComputeNode:
+    return "compute_node";
+  case ShapeEventAction::kConstraint:
+    return "constraint";
+  case ShapeEventAction::kConstraintMax:
+    return "constraint_max";
+  }
+  return "unknown";
+}
+
+void ShapesContext::LogSetEvent(const std::string &name, const OptimTensor &tensor) {
+  ShapeEvent ev;
+  ev.action = Has(name) ? ShapeEventAction::kReplace : ShapeEventAction::kAdd;
+  ev.name = name;
+  ev.data_type = static_cast<int32_t>(TensorTypeToDataType(tensor.Dtype()));
+  const OptimShape &shape = tensor.Shape();
+  ev.shape.reserve(shape.Rank());
+  for (std::size_t i = 0; i < shape.Rank(); ++i) {
+    const OptimDim &d = shape[i];
+    ev.shape.push_back(d.IsInt() ? std::to_string(d.AsInt()) : d.AsExpr());
+  }
+  events_.push_back(std::move(ev));
+}
+
+void ShapesContext::LogConstraintEvent(ShapeEventAction action, const std::string &lhs,
+                                       const std::string &rhs) {
+  ShapeEvent ev;
+  ev.action = action;
+  ev.data_type = static_cast<int32_t>(TensorProto::DataType::UNDEFINED);
+  ev.inputs = {lhs, rhs};
+  events_.push_back(std::move(ev));
+}
+
+void ShapesContext::AppendComputeNodeEvent(const std::string &op_domain, const std::string &op_type,
+                                           std::vector<std::string> inputs) {
+  ShapeEvent ev;
+  ev.action = ShapeEventAction::kComputeNode;
+  ev.data_type = static_cast<int32_t>(TensorProto::DataType::UNDEFINED);
+  ev.op_domain = op_domain;
+  ev.op_type = op_type;
+  ev.inputs = std::move(inputs);
+  events_.push_back(std::move(ev));
+}
 
 void ShapesContext::CheckInputsAvailable(const NodeProto &node) const {
   for (int i = 0; i < node.input_size(); ++i) {
@@ -700,34 +786,22 @@ void ShapesContext::CheckOutputsNotAvailable(const NodeProto &node) const {
 }
 
 void ShapesContext::ComputeShapeNode(const NodeProto &node) {
-  // Model-local function calls bypass the domain check (their domain
-  // is arbitrary) and the op-type dispatch table; they are expanded
-  // by recursively running shape inference on the FunctionProto body.
-  const std::string op_type = node.op_type().as_string();
-  const std::string local_key = LocalFunctionKey(node.domain().as_string(), op_type);
-  if (const FunctionProto *func = GetLocalFunction(local_key); func != nullptr) {
-    CheckInputsAvailable(node);
-    CheckOutputsNotAvailable(node);
-    ExpandLocalFunctionCall(*this, node, *func);
-    return;
+  // Only capture input names when event logging is active so that the
+  // default path stays free of bookkeeping overhead, mirroring
+  // ``onnx_kernels::RunNode``.
+  const bool logging = events_enabled_;
+
+  DispatchComputeShapeNode(*this, node);
+
+  if (logging) {
+    std::vector<std::string> inputs;
+    inputs.reserve(static_cast<size_t>(node.input_size()));
+    for (int i = 0; i < node.input_size(); ++i) {
+      inputs.push_back(node.input(i).as_string());
+    }
+    AppendComputeNodeEvent(NormaliseDispatchDomain(node), node.op_type().as_string(),
+                           std::move(inputs));
   }
-  if (const CustomComputeShapeFn *custom_shape_fn =
-          GetCustomShapeInferenceFunction(node.domain().as_string(), op_type);
-      custom_shape_fn != nullptr) {
-    CheckInputsAvailable(node);
-    CheckOutputsNotAvailable(node);
-    (*custom_shape_fn)(*this, node);
-    return;
-  }
-  CheckOnnxDomain(node);
-  CheckInputsAvailable(node);
-  CheckOutputsNotAvailable(node);
-  const std::string key = NormaliseDispatchDomain(node) + ":" + op_type;
-  const auto &table = DispatchTable();
-  auto it = table.find(key);
-  EXT_ENFORCE_INVALID(it != table.end(), "ComputeShapeNode: unsupported op_type '", op_type,
-                      "' in domain '", NormaliseDispatchDomain(node), "'.");
-  it->second(*this, node);
 }
 
 void ShapesContext::ComputeShapes(const utils::RepeatedProtoField<NodeProto> &nodes) {

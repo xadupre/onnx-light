@@ -377,6 +377,70 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           "descriptor equality.");
 
   // -----------------------------------------------------------------------
+  // ShapeEvent — append-only log entry for a single shape-inference event.
+  // Mirrors :cpp:class:`onnx_optim::shapes::ShapeEvent`; ``shape`` is exposed
+  // as a list of per-dimension strings so symbolic dims are preserved.
+  // -----------------------------------------------------------------------
+  nb::class_<onnx_shapes::ShapeEvent>(
+      shape_mod, "ShapeEvent",
+      "One entry of the :meth:`ShapesContext.events` log. ``add`` / ``replace`` "
+      "events describe a tensor descriptor mutation performed through "
+      "``ShapesContext.set`` and carry the descriptor ``name``, ``data_type`` "
+      "(a ``TensorProto.DataType`` integer) and ``shape`` (a list of per-dimension "
+      "strings, preserving symbolic dims). ``compute_node`` events summarise the "
+      "shape-inference dispatch of a single node and carry ``op_domain``, "
+      "``op_type`` and ``inputs`` instead. ``constraint`` / ``constraint_max`` "
+      "events record a newly inserted symbolic-dimension constraint and carry its "
+      "two operands in ``inputs``.")
+      .def_prop_ro(
+          "action",
+          [](const onnx_shapes::ShapeEvent &ev) {
+            return std::string(onnx_shapes::ShapeEventActionName(ev.action));
+          },
+          "Event kind: ``\"add\"``, ``\"replace\"``, ``\"compute_node\"``, "
+          "``\"constraint\"`` or ``\"constraint_max\"``.")
+      .def_ro("name", &onnx_shapes::ShapeEvent::name,
+              "Value name targeted by the mutation. Empty for ``compute_node`` / "
+              "``constraint`` / ``constraint_max`` events.")
+      .def_ro("data_type", &onnx_shapes::ShapeEvent::data_type,
+              "``TensorProto.DataType`` integer of the descriptor, or ``UNDEFINED`` (0) "
+              "for ``compute_node`` / ``constraint`` / ``constraint_max`` events.")
+      .def_ro("shape", &onnx_shapes::ShapeEvent::shape,
+              "Descriptor shape as a list of per-dimension strings (decimal integers for "
+              "concrete dims, symbolic expressions otherwise). Empty for ``compute_node`` / "
+              "``constraint`` / ``constraint_max`` events.")
+      .def_ro("op_domain", &onnx_shapes::ShapeEvent::op_domain,
+              "For ``compute_node`` events: normalised ONNX op domain of the dispatched "
+              "node (default domain reported as ``\"ai.onnx\"``). Empty otherwise.")
+      .def_ro("op_type", &onnx_shapes::ShapeEvent::op_type,
+              "For ``compute_node`` events: ONNX ``op_type`` of the dispatched node. "
+              "Empty otherwise.")
+      .def_ro("inputs", &onnx_shapes::ShapeEvent::inputs,
+              "For ``compute_node`` events: ordered list of input names consumed by the "
+              "node (matching ``NodeProto.input``). For ``constraint`` / ``constraint_max`` "
+              "events: the two constraint operands. Empty otherwise.")
+      .def(
+          "as_dict",
+          [](const onnx_shapes::ShapeEvent &ev) {
+            nb::dict d;
+            d["action"] = std::string(onnx_shapes::ShapeEventActionName(ev.action));
+            d["name"] = ev.name;
+            d["data_type"] = ev.data_type;
+            d["shape"] = ev.shape;
+            d["op_domain"] = ev.op_domain;
+            d["op_type"] = ev.op_type;
+            d["inputs"] = ev.inputs;
+            return d;
+          },
+          "Returns the event fields as a plain Python ``dict`` (trivially "
+          "renderable as a table, serialisable, etc.).")
+      .def("__repr__", [](const onnx_shapes::ShapeEvent &ev) {
+        return std::string("ShapeEvent(action='") + onnx_shapes::ShapeEventActionName(ev.action) +
+               "', name='" + ev.name + "', op_type='" + ev.op_type +
+               "', data_type=" + std::to_string(ev.data_type) + ")";
+      });
+
+  // -----------------------------------------------------------------------
   // ShapesContext
   // -----------------------------------------------------------------------
   nb::class_<onnx_shapes::ShapesContext>(
@@ -410,6 +474,29 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       .def("empty", &onnx_shapes::ShapesContext::Empty, "True when no entries are stored.")
       .def("clear", &onnx_shapes::ShapesContext::Clear,
            "Removes every entry (tensors, sequences and opset versions).")
+      // Event logging (opt-in; mirrors ``RuntimeContext.events``).
+      .def_prop_rw(
+          "events_enabled", [](const onnx_shapes::ShapesContext &c) { return c.events_enabled(); },
+          [](onnx_shapes::ShapesContext &c, bool v) { c.set_events_enabled(v); },
+          "When ``True``, ``set`` records ``add`` / ``replace`` events, "
+          "``compute_shape_node`` records a ``compute_node`` event per dispatched "
+          "node, and ``add_constraint`` / ``add_less_equal_constraint`` record "
+          "``constraint`` / ``constraint_max`` events. Default is ``False`` for "
+          "maximum throughput; enable only when tracing shape inference.")
+      .def(
+          "events",
+          [](const onnx_shapes::ShapesContext &c) -> nb::list {
+            nb::list out;
+            for (const auto &ev : c.Events())
+              out.append(nb::cast(ev));
+            return out;
+          },
+          "Returns the append-only shape-inference event log as a list of "
+          ":class:`ShapeEvent` instances. Empty unless ``events_enabled`` was set "
+          "before running shape inference.")
+      .def(
+          "clear_events", [](onnx_shapes::ShapesContext &c) { c.ClearEvents(); },
+          "Empties the event log without otherwise touching the context.")
       .def(
           "__repr__",
           [](const onnx_shapes::ShapesContext &c) {

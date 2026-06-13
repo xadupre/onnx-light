@@ -44,11 +44,11 @@
             event.preventDefault();
         });
 
-        window.addEventListener("mouseup", function () {
+        function onMouseUp() {
             dragging = false;
-        });
+        }
 
-        window.addEventListener("mousemove", function (event) {
+        function onMouseMove(event) {
             if (!dragging) {
                 return;
             }
@@ -57,21 +57,41 @@
             lastX = event.clientX;
             lastY = event.clientY;
             applyTransform();
-        });
+        }
+
+        window.addEventListener("mouseup", onMouseUp);
+        window.addEventListener("mousemove", onMouseMove);
 
         var hint = document.createElement("div");
         hint.className = "svg-zoom-hint";
         hint.textContent =
-            "Scroll to zoom, drag to pan, press Esc or click the background to close.";
+            "Scroll to zoom, drag or use arrow keys to pan, press Esc or click the background to close.";
 
         function onKeyDown(event) {
             if (event.key === "Escape") {
                 close();
+                return;
             }
+            var step = 40;
+            if (event.key === "ArrowLeft") {
+                translateX += step;
+            } else if (event.key === "ArrowRight") {
+                translateX -= step;
+            } else if (event.key === "ArrowUp") {
+                translateY += step;
+            } else if (event.key === "ArrowDown") {
+                translateY -= step;
+            } else {
+                return;
+            }
+            event.preventDefault();
+            applyTransform();
         }
 
         function close() {
             document.removeEventListener("keydown", onKeyDown);
+            window.removeEventListener("mouseup", onMouseUp);
+            window.removeEventListener("mousemove", onMouseMove);
             if (overlay.parentNode) {
                 overlay.parentNode.removeChild(overlay);
             }

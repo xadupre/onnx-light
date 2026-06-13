@@ -234,11 +234,11 @@ class TestReferenceEvaluator(ExtTestCase):
         self.assertEqual(y0.dtype, np.int16)
         self.assertEqual(y1.dtype, np.uint8)
 
-    def test_dict_vectorizer_int64_float_dict_feed(self):
+    def test_dict_vectorizer_int64_float(self):
         # ``ai.onnx.ml::DictVectorizer`` consumes a ``map(int64, float)``
         # graph input through the runtime's two-tensor convention
-        # (``x_keys`` / ``x_values``); ReferenceEvaluator accepts a Python
-        # ``dict`` for the map-typed input and splits it transparently.
+        # (``x_keys`` / ``x_values``). ReferenceEvaluator exposes those
+        # names directly in ``input_names`` so all map logic stays in C++.
         model = onnxl.ModelProto()
         model.ir_version = 10
         op = model.opset_import.add()
@@ -268,8 +268,10 @@ class TestReferenceEvaluator(ExtTestCase):
         attr.ints.extend([10, 20, 30])
 
         sess = ReferenceEvaluator(model)
-        self.assertEqual(sess.input_names, ["x"])
-        (out,) = sess.run(None, {"x": {10: 1.5, 30: 2.5}})
+        self.assertEqual(sess.input_names, ["x_keys", "x_values"])
+        x_keys = np.array([10, 30], dtype=np.int64)
+        x_values = np.array([1.5, 2.5], dtype=np.float32)
+        (out,) = sess.run(None, {"x_keys": x_keys, "x_values": x_values})
         np.testing.assert_array_equal(out, np.array([1.5, 0.0, 2.5], dtype=np.float32))
 
     def test_lstm_layout1_matches_layout0(self):

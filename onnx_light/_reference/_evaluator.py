@@ -180,32 +180,22 @@ class ReferenceEvaluator:
         self._events_enabled = events_enabled
         self._release_intermediates = release_intermediates
 
-        # ``_map_inputs`` records graph inputs declared with a ``map(K, V)``
-        # type. The C++ kernels for ``ai.onnx.ml::DictVectorizer`` and
-        # ``ai.onnx.ml::CastMap`` consume such inputs through a two-tensor
-        # runtime representation (``<name>_keys`` / ``<name>_values``), so
-        # :meth:`run` accepts a Python ``dict`` value for these names and
-        # splits it into those tensors before invoking the runtime.
-        self._map_inputs: dict[str, tuple[int, int]] = {}
-
         if isinstance(proto, ModelProto):
             self._model = proto
             self._graph = proto.graph
-            inputs = [vi.name for vi in self._graph.input]
+            graph_inputs = list(self._graph.input)
             outputs = [vi.name for vi in self._graph.output]
             initializers = {init.name for init in self._graph.initializer}
             self._opsets = {op.domain: op.version for op in proto.opset_import}
-            self._collect_map_inputs(self._graph)
         elif isinstance(proto, GraphProto):
             self._graph = proto
-            inputs = [vi.name for vi in proto.input]
+            graph_inputs = list(proto.input)
             outputs = [vi.name for vi in proto.output]
             initializers = {init.name for init in proto.initializer}
             self._opsets = {}
-            self._collect_map_inputs(proto)
         elif isinstance(proto, FunctionProto):
             self._function = proto
-            inputs = list(proto.input)
+            graph_inputs = None
             outputs = list(proto.output)
             initializers = set()
             self._opsets = {op.domain: op.version for op in proto.opset_import}
@@ -214,9 +204,25 @@ class ReferenceEvaluator:
                 f"Unsupported proto type for ReferenceEvaluator: {type(proto).__name__}."
             )
 
-        # Inputs that are also initializers (a legal but uncommon pattern)
-        # do not need to be supplied by the caller.
-        self._input_names: list[str] = [n for n in inputs if n not in initializers]
+        # Map-typed graph inputs (``map(K, V)``) are consumed by the C++ kernels
+        # for ``ai.onnx.ml::DictVectorizer`` and ``ai.onnx.ml::CastMap`` through a
+        # two-tensor naming convention: ``<name>_keys`` / ``<name>_values``.
+        # Expand these inputs so callers feed (and the runtime receives) the tensors
+        # directly by those names, keeping all map-handling logic in C++.
+        if graph_inputs is not None:
+            inputs: list[str] = []
+            for vi in graph_inputs:
+                if vi.name in initializers:
+                    continue
+                if vi.type.has_map_type():
+                    inputs.append(f"{vi.name}_keys")
+                    inputs.append(f"{vi.name}_values")
+                else:
+                    inputs.append(vi.name)
+        else:
+            inputs = list(proto.input)  # type: ignore[union-attr]
+
+        self._input_names: list[str] = inputs
         self._input_names_set: frozenset[str] = frozenset(self._input_names)
         self._output_names: list[str] = list(outputs)
 
@@ -235,53 +241,6 @@ class ReferenceEvaluator:
         # API installs a numpy-friendly wrapper that delegates to the
         # user-provided callable.
         self._custom_kernels: dict[str, Any] = {}
-
-    # -- map-typed input handling ------------------------------------------
-
-    def _collect_map_inputs(self, graph: GraphProto) -> None:
-        """Records every ``map(K, V)``-typed graph input.
-
-        The two ``int`` values stored are ``TensorProto`` enum values for the
-        map's key dtype and value dtype respectively.
-        """
-        for vi in graph.input:
-            if vi.type.has_map_type():
-                mt = vi.type.map_type
-                self._map_inputs[vi.name] = (
-                    int(mt.key_type),
-                    int(mt.value_type.tensor_type.elem_type),
-                )
-
-    @staticmethod
-    def _dict_to_key_value_arrays(
-        name: str, mapping: dict, key_type: int, value_type: int
-    ) -> tuple[np.ndarray, np.ndarray]:
-        """Converts a Python ``dict`` feed into the ``(keys, values)`` numpy
-        arrays expected by the C++ runtime for ``map(K, V)``-typed inputs.
-        """
-        keys_list = list(mapping.keys())
-        values_list = list(mapping.values())
-        if key_type == int(TensorProto.STRING):
-            keys_arr = np.array(keys_list, dtype=object)
-        else:
-            keys_dtype = _DTYPE_TO_NP.get(key_type)
-            if keys_dtype is None:
-                raise NotImplementedError(
-                    f"ReferenceEvaluator: unsupported map key dtype {key_type} "
-                    f"for input {name!r}."
-                )
-            keys_arr = np.array(keys_list, dtype=keys_dtype)
-        if value_type == int(TensorProto.STRING):
-            values_arr = np.array(values_list, dtype=object)
-        else:
-            values_dtype = _DTYPE_TO_NP.get(value_type)
-            if values_dtype is None:
-                raise NotImplementedError(
-                    f"ReferenceEvaluator: unsupported map value dtype "
-                    f"{value_type} for input {name!r}."
-                )
-            values_arr = np.array(values_list, dtype=values_dtype)
-        return keys_arr, values_arr
 
     # -- custom kernels -----------------------------------------------------
 
@@ -462,17 +421,7 @@ class ReferenceEvaluator:
             ctx.register_custom_kernel(domain, op_type, wrapper)
 
         for name, value in feed_inputs.items():
-            if name in self._map_inputs and isinstance(value, dict):
-                key_type, value_type = self._map_inputs[name]
-                keys_arr, values_arr = self._dict_to_key_value_arrays(
-                    name, value, key_type, value_type
-                )
-                keys_name = f"{name}_keys"
-                values_name = f"{name}_values"
-                ctx.set(keys_name, _numpy_to_cpp_tensor(keys_name, keys_arr))
-                ctx.set(values_name, _numpy_to_cpp_tensor(values_name, values_arr))
-            else:
-                ctx.set(name, _numpy_to_cpp_tensor(name, value))
+            ctx.set(name, _numpy_to_cpp_tensor(name, value))
 
         if self._model is not None:
             _runtime.run_model(self._model, ctx)

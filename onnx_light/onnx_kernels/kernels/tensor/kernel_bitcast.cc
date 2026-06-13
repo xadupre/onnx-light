@@ -61,14 +61,14 @@ void ValidateBitCast(int32_t from, int32_t to) {
   const int from_bits = BitCastBitSize(from);
   const int to_bits = BitCastBitSize(to);
   if (from_bits == 0 || to_bits == 0) {
-    throw std::invalid_argument("kernel::BitCast: unsupported data_type "
-                                "(string or undefined types are not allowed).");
+    EXT_THROW_INVALID("kernel::BitCast: unsupported data type (from=", from, ", to=", to,
+                      "); string or undefined types are not allowed.");
   }
   if (from_bits != to_bits) {
-    throw std::invalid_argument(
+    EXT_THROW_INVALID(
         "kernel::BitCast: input and output types must have the same bit-width, but "
-        "input has " +
-        std::to_string(from_bits) + " bits and output has " + std::to_string(to_bits) + " bits.");
+        "input has ",
+        from_bits, " bits and output has ", to_bits, " bits.");
   }
 }
 
@@ -86,14 +86,15 @@ Tensor BitCast::operator()(const Tensor &x, int32_t to) const {
 void BitCast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
   ValidateBitCast(x.data_type, to);
   if (output.data_type != to) {
-    throw std::invalid_argument("kernel::BitCast: preallocated output dtype must match ``to``.");
+    EXT_THROW_INVALID("kernel::BitCast: preallocated output dtype ", output.data_type,
+                      " must match ``to`` (", to, ").");
   }
   if (output.shape != x.shape) {
-    throw std::invalid_argument(
+    EXT_THROW_INVALID(
         "kernel::BitCast: preallocated output shape must match input shape.");
   }
   if (output.data.size() != x.size_bytes()) {
-    throw std::invalid_argument(
+    EXT_THROW_INVALID(
         "kernel::BitCast: preallocated output buffer has unexpected size in bytes.");
   }
   // Byte-wise copy keeps the bit pattern intact on little-endian hosts

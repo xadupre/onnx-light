@@ -123,7 +123,9 @@ Tensor Sum::operator()(const std::vector<Tensor> &inputs) const {
   case DataType::DOUBLE:
     return SumAlloc<double>("DOUBLE", DataType::DOUBLE, inputs);
   default:
-    throw std::invalid_argument(std::string(kSumName) + kSupportedSumTypesMsg);
+    EXT_THROW_INVALID(
+        kSumName, ": unsupported data type ", inputs[0].data_type,
+        kSupportedSumTypesMsg);
   }
 }
 
@@ -135,7 +137,9 @@ void Sum::operator()(const std::vector<Tensor> &inputs, Tensor &output) const {
   case DataType::DOUBLE:
     return SumInPlace<double>("DOUBLE", DataType::DOUBLE, inputs, output);
   default:
-    throw std::invalid_argument(std::string(kSumName) + kSupportedSumTypesMsg);
+    EXT_THROW_INVALID(
+        kSumName, ": unsupported data type ", inputs[0].data_type,
+        kSupportedSumTypesMsg);
   }
 }
 

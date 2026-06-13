@@ -59,8 +59,9 @@ void Dispatch(const Tensor &x, float alpha, Tensor &output) {
     ComputeHalf(x, alpha, output, Bfloat16BitsToFloat, FloatToBfloat16Bits);
     return;
   default:
-    throw std::invalid_argument(std::string(kName) +
-                                " only supports FLOAT, DOUBLE, FLOAT16, and BFLOAT16 tensors.");
+    EXT_THROW_INVALID(
+        kName, ": unsupported data type ", x.data_type,
+        ", only supports FLOAT, DOUBLE, FLOAT16, and BFLOAT16 tensors.");
   }
 }
 

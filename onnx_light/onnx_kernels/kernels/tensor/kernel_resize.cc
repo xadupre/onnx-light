@@ -266,8 +266,9 @@ double LoadFloat(const Tensor &t, int64_t idx) {
     return v;
   }
   default:
-    throw std::invalid_argument(
-        "kernel::Resize: linear/cubic modes only support FLOAT/DOUBLE input types.");
+    EXT_THROW_INVALID(
+        "unsupported data type ", t.data_type,
+        ", ", "kernel::Resize: linear/cubic modes only support FLOAT/DOUBLE input types.");
   }
 }
 
@@ -284,8 +285,9 @@ void StoreFloat(Tensor &t, int64_t idx, double value) {
     return;
   }
   default:
-    throw std::invalid_argument(
-        "kernel::Resize: linear/cubic modes only support FLOAT/DOUBLE output types.");
+    EXT_THROW_INVALID(
+        "unsupported data type ", t.data_type,
+        ", ", "kernel::Resize: linear/cubic modes only support FLOAT/DOUBLE output types.");
   }
 }
 

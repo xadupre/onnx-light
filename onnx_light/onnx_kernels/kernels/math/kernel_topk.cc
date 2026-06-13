@@ -142,7 +142,9 @@ void RunTopK(const Tensor &x, int64_t k, int64_t axis, bool largest, bool sorted
     DispatchTopK<uint64_t>(x, k, axis, largest, sorted, values, indices);
     return;
   default:
-    throw std::invalid_argument(std::string(kTopKName) + kSupportedTopKTypesMsg);
+    EXT_THROW_INVALID(
+        kTopKName, ": unsupported data type ", x.data_type,
+        kSupportedTopKTypesMsg);
   }
 }
 

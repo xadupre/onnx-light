@@ -143,7 +143,9 @@ Tensor Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float
     return DemoteFromFloat32(y, a.data_type);
   }
   default:
-    throw std::invalid_argument(std::string(kGemmName) + kSupportedGemmTypesMsg);
+    EXT_THROW_INVALID(
+        kGemmName, ": unsupported data type ", a.data_type,
+        kSupportedGemmTypesMsg);
   }
 }
 
@@ -167,7 +169,9 @@ void Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float a
     return;
   }
   default:
-    throw std::invalid_argument(std::string(kGemmName) + kSupportedGemmTypesMsg);
+    EXT_THROW_INVALID(
+        kGemmName, ": unsupported data type ", a.data_type,
+        kSupportedGemmTypesMsg);
   }
 }
 

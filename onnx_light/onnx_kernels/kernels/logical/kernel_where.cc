@@ -242,9 +242,9 @@ Tensor Where::operator()(const Tensor &condition, const Tensor &x, const Tensor 
   case DataType::STRING:
     return WhereAllocString(condition, x, y);
   default:
-    throw std::invalid_argument(std::string(kWhereName) +
-                                " only supports BOOL, FLOAT, DOUBLE, INT8, INT16, INT32, "
-                                "INT64, UINT8, UINT16, UINT32, UINT64 and STRING x/y inputs.");
+    EXT_THROW_INVALID(
+        kWhereName, ": unsupported data type ", x.data_type,
+        ", only supports BOOL, FLOAT, DOUBLE, INT8, INT16, INT32, " "INT64, UINT8, UINT16, UINT32, UINT64 and STRING x/y inputs.");
   }
 }
 
@@ -276,9 +276,9 @@ void Where::operator()(const Tensor &condition, const Tensor &x, const Tensor &y
   case DataType::STRING:
     return WhereInPlaceString(condition, x, y, output);
   default:
-    throw std::invalid_argument(std::string(kWhereName) +
-                                " only supports BOOL, FLOAT, DOUBLE, INT8, INT16, INT32, "
-                                "INT64, UINT8, UINT16, UINT32, UINT64 and STRING x/y inputs.");
+    EXT_THROW_INVALID(
+        kWhereName, ": unsupported data type ", x.data_type,
+        ", only supports BOOL, FLOAT, DOUBLE, INT8, INT16, INT32, " "INT64, UINT8, UINT16, UINT32, UINT64 and STRING x/y inputs.");
   }
 }
 

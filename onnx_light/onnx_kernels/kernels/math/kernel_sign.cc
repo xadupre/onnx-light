@@ -62,8 +62,9 @@ void Sign::operator()(const Tensor &x, Tensor &output) const {
         [](float v) { return (v > 0.0f) ? 1.0f : (v < 0.0f ? -1.0f : 0.0f); });
     return;
   default:
-    throw std::invalid_argument(std::string(kName) +
-                                " only supports FLOAT, DOUBLE, FLOAT16, and BFLOAT16 tensors.");
+    EXT_THROW_INVALID(
+        kName, ": unsupported data type ", x.data_type,
+        ", only supports FLOAT, DOUBLE, FLOAT16, and BFLOAT16 tensors.");
   }
 }
 

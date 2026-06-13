@@ -62,8 +62,9 @@ void Softplus::operator()(const Tensor &x, Tensor &output) const {
         [](float v) { return std::log1p(std::exp(-std::fabs(v))) + std::fmax(v, 0.0f); });
     return;
   default:
-    throw std::invalid_argument(std::string(kName) +
-                                " only supports FLOAT, DOUBLE, FLOAT16, and BFLOAT16 tensors.");
+    EXT_THROW_INVALID(
+        kName, ": unsupported data type ", x.data_type,
+        ", only supports FLOAT, DOUBLE, FLOAT16, and BFLOAT16 tensors.");
   }
 }
 

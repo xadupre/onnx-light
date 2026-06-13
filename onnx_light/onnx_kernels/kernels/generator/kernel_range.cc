@@ -114,7 +114,9 @@ Tensor Range::operator()(const Tensor &start, const Tensor &limit, const Tensor 
     return ComputeRangeHalf(start, limit, delta, start.data_type, &ReadBfloat16Scalar,
                             &FloatToBfloat16Bits);
   default:
-    throw std::invalid_argument("kernel::Range: unsupported input dtype.");
+    EXT_THROW_INVALID(
+        "unsupported data type ", start.data_type,
+        ", ", "kernel::Range: unsupported input dtype.");
   }
 }
 

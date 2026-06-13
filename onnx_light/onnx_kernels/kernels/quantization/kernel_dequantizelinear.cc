@@ -221,10 +221,9 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, Tensor
     DequantizeFloat4E2M1Loop(x, scale, /*zp=*/0.0f, output);
     break;
   default:
-    throw std::invalid_argument(
-        "kernel::DequantizeLinear: only UINT8, INT8, UINT16, INT16, INT32, FLOAT8E4M3FN, "
-        "FLOAT8E4M3FNUZ, FLOAT8E5M2, FLOAT8E5M2FNUZ, INT4, UINT4, INT2, UINT2 and FLOAT4E2M1 "
-        "inputs are supported.");
+    EXT_THROW_INVALID(
+        "unsupported data type ", x.data_type,
+        ", ", "kernel::DequantizeLinear: only UINT8, INT8, UINT16, INT16, INT32, FLOAT8E4M3FN, " "FLOAT8E4M3FNUZ, FLOAT8E5M2, FLOAT8E5M2FNUZ, INT4, UINT4, INT2, UINT2 and FLOAT4E2M1 " "inputs are supported.");
   }
 }
 
@@ -307,10 +306,9 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
     DequantizeFloat4E2M1Loop(x, scale, ReadSubByteScalarZP(x_zero_point), output);
     break;
   default:
-    throw std::invalid_argument(
-        "kernel::DequantizeLinear: only UINT8, INT8, UINT16, INT16, INT32, FLOAT8E4M3FN, "
-        "FLOAT8E4M3FNUZ, FLOAT8E5M2, FLOAT8E5M2FNUZ, INT4, UINT4, INT2, UINT2 and FLOAT4E2M1 "
-        "inputs are supported.");
+    EXT_THROW_INVALID(
+        "unsupported data type ", x.data_type,
+        ", ", "kernel::DequantizeLinear: only UINT8, INT8, UINT16, INT16, INT32, FLOAT8E4M3FN, " "FLOAT8E4M3FNUZ, FLOAT8E5M2, FLOAT8E5M2FNUZ, INT4, UINT4, INT2, UINT2 and FLOAT4E2M1 " "inputs are supported.");
   }
 }
 

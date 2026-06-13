@@ -316,6 +316,108 @@ TEST(KernelClass, ImageDecoderDecodesBmpGrayscale) {
   EXPECT_EQ(out.data, expected_pixels);
 }
 
+// Baseline 8-bit non-interlaced PNG bytestreams (encoded by zlib/Pillow)
+// together with their expected decoded images. The deflate-compressed IDAT
+// payload is decoded inline by the kernel without any external libpng/zlib
+// dependency, mirroring the BMP and JPEG regression tests above.
+
+TEST(KernelClass, ImageDecoderDecodesPngRgb) {
+  // 2x2 truecolor (color type 2, 8-bit) PNG with display pixels:
+  //   row 0: (90,80,70) (120,110,100)
+  //   row 1: (30,20,10) (60,50,40)
+  // clang-format off
+  const std::vector<uint8_t> png_bytes = {
+    137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 2, 0, 0, 0, 2, 8, 2,
+    0, 0, 0, 253, 212, 154, 115, 0, 0, 0, 22, 73, 68, 65, 84, 120, 156, 99, 140, 10, 112, 147,
+    147, 147, 99, 148, 19, 225, 146, 147, 147, 3, 0, 16, 149, 1, 227, 30, 13, 52, 10, 0, 0, 0,
+    0, 73, 69, 78, 68, 174, 66, 96, 130,
+  };
+  // clang-format on
+  const KernelContext ctx{DefaultOpset(20)};
+  const ImageDecoder decoder{ctx};
+  Tensor encoded = Tensor::FromUint8("", {static_cast<int64_t>(png_bytes.size())}, png_bytes);
+
+  Tensor out = decoder(encoded, "RGB");
+
+  EXPECT_EQ(out.data_type, static_cast<int32_t>(DataType::UINT8));
+  const std::vector<int64_t> expected_shape = {2, 2, 3};
+  EXPECT_EQ(out.shape, expected_shape);
+  ASSERT_EQ(out.element_count(), 12);
+  const std::vector<uint8_t> expected_pixels = {90, 80, 70, 120, 110, 100, 30, 20, 10, 60, 50, 40};
+  EXPECT_EQ(out.data, expected_pixels);
+}
+
+TEST(KernelClass, ImageDecoderDecodesPngBgr) {
+  // Same truecolor PNG as above but pixel_format="BGR" swaps the channel order.
+  // clang-format off
+  const std::vector<uint8_t> png_bytes = {
+    137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 2, 0, 0, 0, 2, 8, 2,
+    0, 0, 0, 253, 212, 154, 115, 0, 0, 0, 22, 73, 68, 65, 84, 120, 156, 99, 140, 10, 112, 147,
+    147, 147, 99, 148, 19, 225, 146, 147, 147, 3, 0, 16, 149, 1, 227, 30, 13, 52, 10, 0, 0, 0,
+    0, 73, 69, 78, 68, 174, 66, 96, 130,
+  };
+  // clang-format on
+  const KernelContext ctx{DefaultOpset(20)};
+  const ImageDecoder decoder{ctx};
+  Tensor encoded = Tensor::FromUint8("", {static_cast<int64_t>(png_bytes.size())}, png_bytes);
+
+  Tensor out = decoder(encoded, "BGR");
+
+  const std::vector<int64_t> expected_shape = {2, 2, 3};
+  EXPECT_EQ(out.shape, expected_shape);
+  const std::vector<uint8_t> expected_pixels = {70, 80, 90, 100, 110, 120, 10, 20, 30, 40, 50, 60};
+  EXPECT_EQ(out.data, expected_pixels);
+}
+
+TEST(KernelClass, ImageDecoderDecodesPngGrayscaleFromRgb) {
+  // The same truecolor PNG decoded to Grayscale using the ITU-R BT.601
+  // luminance formula grey = (299*R + 587*G + 114*B + 500) / 1000.
+  // clang-format off
+  const std::vector<uint8_t> png_bytes = {
+    137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 2, 0, 0, 0, 2, 8, 2,
+    0, 0, 0, 253, 212, 154, 115, 0, 0, 0, 22, 73, 68, 65, 84, 120, 156, 99, 140, 10, 112, 147,
+    147, 147, 99, 148, 19, 225, 146, 147, 147, 3, 0, 16, 149, 1, 227, 30, 13, 52, 10, 0, 0, 0,
+    0, 73, 69, 78, 68, 174, 66, 96, 130,
+  };
+  // clang-format on
+  const KernelContext ctx{DefaultOpset(20)};
+  const ImageDecoder decoder{ctx};
+  Tensor encoded = Tensor::FromUint8("", {static_cast<int64_t>(png_bytes.size())}, png_bytes);
+
+  Tensor out = decoder(encoded, "Grayscale");
+
+  const std::vector<int64_t> expected_shape = {2, 2, 1};
+  EXPECT_EQ(out.shape, expected_shape);
+  ASSERT_EQ(out.element_count(), 4);
+  // (90,80,70)->82, (120,110,100)->112, (30,20,10)->22, (60,50,40)->52.
+  const std::vector<uint8_t> expected_pixels = {82, 112, 22, 52};
+  EXPECT_EQ(out.data, expected_pixels);
+}
+
+TEST(KernelClass, ImageDecoderDecodesPngGrayscale) {
+  // 2x2 grayscale (color type 0, 8-bit) PNG with display pixels:
+  //   row 0: 10 200
+  //   row 1: 100 255
+  // clang-format off
+  const std::vector<uint8_t> png_bytes = {
+    137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 2, 0, 0, 0, 2, 8, 0,
+    0, 0, 0, 87, 221, 82, 248, 0, 0, 0, 14, 73, 68, 65, 84, 120, 156, 99, 224, 58, 193, 144,
+    242, 31, 0, 5, 31, 2, 54, 131, 148, 64, 10, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+  };
+  // clang-format on
+  const KernelContext ctx{DefaultOpset(20)};
+  const ImageDecoder decoder{ctx};
+  Tensor encoded = Tensor::FromUint8("", {static_cast<int64_t>(png_bytes.size())}, png_bytes);
+
+  Tensor out = decoder(encoded, "Grayscale");
+
+  const std::vector<int64_t> expected_shape = {2, 2, 1};
+  EXPECT_EQ(out.shape, expected_shape);
+  ASSERT_EQ(out.element_count(), 4);
+  const std::vector<uint8_t> expected_pixels = {10, 200, 100, 255};
+  EXPECT_EQ(out.data, expected_pixels);
+}
+
 TEST(KernelClass, ImageDecoderRejectsNonUint8Input) {
   const KernelContext ctx{DefaultOpset(20)};
   const ImageDecoder decoder{ctx};

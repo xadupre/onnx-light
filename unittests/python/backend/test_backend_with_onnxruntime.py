@@ -100,6 +100,20 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     Type. bfloat16" on output, "Numpy_type 256 can't be converted to
 #     MLDataType" on input). The reference backend still exercises these
 #     conversions byte-for-byte.
+#   * ``test_cc_cast_*FLOAT4E2M1*`` and ``test_cc_cast_*FLOAT8E8M0*``
+#     (including the ``test_cc_cast_e8m0_*`` variants) — ORT's CPU EP
+#     rejects ``float4e2m1`` / ``float8e8m0`` as ``Cast`` operand types
+#     ("Type 'tensor(float4e2m1)' of input parameter ... is invalid",
+#     "MLDataType for: tensor(float8e8m0) is not currently registered or
+#     supported"). The reference backend still exercises these
+#     conversions byte-for-byte.
+#   * ``test_cc_castlike_*FLOAT8E4M3*``, ``test_cc_castlike_*FLOAT8E5M2*``,
+#     ``test_cc_castlike_*FLOAT8E8M0*`` and
+#     ``test_cc_castlike_*FLOAT4E2M1*`` — ORT's CPU EP rejects these
+#     float8 / float4 dtypes as ``CastLike`` ``input`` / ``target_type``
+#     operand types ("Type 'tensor(float8e4m3fn)' of input parameter
+#     (input) of operator (CastLike) ... is invalid"). The reference
+#     backend still exercises these conversions byte-for-byte.
 #   * ``test_cc_zipmap_*`` — ORT returns Python ``list[dict]`` for ZipMap
 #     outputs while the lightweight backend-test carrier materializes ZipMap
 #     expected outputs as float tensors containing map values.
@@ -334,6 +348,12 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_scaler_int64$",
     r"^test_cc_cast_.*FLOAT8E4M3.*$",
     r"^test_cc_cast_.*FLOAT8E5M2.*$",
+    r"^test_cc_cast_.*FLOAT8E8M0.*$",
+    r"^test_cc_cast_.*FLOAT4E2M1.*$",
+    r"^test_cc_castlike_.*FLOAT8E4M3.*$",
+    r"^test_cc_castlike_.*FLOAT8E5M2.*$",
+    r"^test_cc_castlike_.*FLOAT8E8M0.*$",
+    r"^test_cc_castlike_.*FLOAT4E2M1.*$",
     r"^test_cc_cast_.*UINT4.*$",
     r"^test_cc_cast_.*UINT2.*$",
     r"^test_cc_cast_.*INT4.*$",

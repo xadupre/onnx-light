@@ -100,12 +100,15 @@ epkg_dictionary = {
     "libFuzzer": "https://llvm.org/docs/LibFuzzer.html",
     "libFuzzer command line": "https://llvm.org/docs/LibFuzzer.html#options",
     "libFuzzer entry point": "https://llvm.org/docs/LibFuzzer.html#fuzz-target",
+    "lib_onnx_backend_test": (
+        "https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_backend_test"
+    ),
+    "lib_onnx_kernels": (
+        "https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_kernels"
+    ),
     "Mermaid": "https://mermaid.js.org/",
     "mermaid.js": "https://mermaid.js.org/",
     "onnx": "https://github.com/onnx/onnx",
-    "onnx_light/onnx_backend_test": (
-        "https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_backend_test"
-    ),
     "onnx_light/onnx_backend_test/cases": (
         "https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_backend_test/cases"
     ),

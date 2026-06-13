@@ -5,7 +5,7 @@ C++ Kernels
 
 The kernel layer is implemented in
 :epkg:`onnx_light/onnx_kernels`
-and built as ``lib_onnx_kernels``. It contains:
+and built as :epkg:`lib_onnx_kernels`. It contains:
 
 * runtime tensor/container types used by the backend runtime
   (:cpp:struct:`onnx::onnx_kernels::Tensor`,
@@ -19,7 +19,7 @@ and built as ``lib_onnx_kernels``. It contains:
   :cpp:func:`onnx::onnx_kernels::RunModel`,
   :cpp:func:`onnx::onnx_kernels::RunSubgraph`).
 
-``lib_onnx_backend_test`` depends on this library and uses these kernels to
+:epkg:`lib_onnx_backend_test` depends on this library and uses these kernels to
 compute expected outputs for backend test cases.
 
 Kernel organization

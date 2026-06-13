@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 #include "onnx_light_helpers.h"
@@ -121,10 +122,19 @@ Tensor Equal::operator()(const Tensor &x, const Tensor &y) const {
     EXT_ENFORCE_INVALID(y.data_type == static_cast<int32_t>(DataType::STRING),
                         "kernel::Equal inputs must share the same dtype.");
     return EqualStringAlloc(x, y);
+  case DataType::FLOAT16:
+    return detail::BinaryHalfCompareElementwiseAlloc(
+        kEqualName, "FLOAT16", DataType::FLOAT16, x, y, Float16BitsToFloat,
+        [](float a, float b) -> uint8_t { return a == b ? 1 : 0; });
+  case DataType::BFLOAT16:
+    return detail::BinaryHalfCompareElementwiseAlloc(
+        kEqualName, "BFLOAT16", DataType::BFLOAT16, x, y, Bfloat16BitsToFloat,
+        [](float a, float b) -> uint8_t { return a == b ? 1 : 0; });
   default:
     throw std::invalid_argument(std::string(kEqualName) +
-                                " only supports BOOL, FLOAT, DOUBLE, INT8, INT16, INT32, "
-                                "INT64, UINT8, UINT16, UINT32, UINT64 and STRING inputs.");
+                                " only supports BOOL, FLOAT, DOUBLE, FLOAT16, BFLOAT16, INT8, "
+                                "INT16, INT32, INT64, UINT8, UINT16, UINT32, UINT64 and "
+                                "STRING inputs.");
   }
 }
 
@@ -156,10 +166,19 @@ void Equal::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
     EXT_ENFORCE_INVALID(y.data_type == static_cast<int32_t>(DataType::STRING),
                         "kernel::Equal inputs must share the same dtype.");
     return EqualStringInPlace(x, y, output);
+  case DataType::FLOAT16:
+    return detail::BinaryHalfCompareElementwise(
+        kEqualName, "FLOAT16", DataType::FLOAT16, x, y, output, Float16BitsToFloat,
+        [](float a, float b) -> uint8_t { return a == b ? 1 : 0; });
+  case DataType::BFLOAT16:
+    return detail::BinaryHalfCompareElementwise(
+        kEqualName, "BFLOAT16", DataType::BFLOAT16, x, y, output, Bfloat16BitsToFloat,
+        [](float a, float b) -> uint8_t { return a == b ? 1 : 0; });
   default:
     throw std::invalid_argument(std::string(kEqualName) +
-                                " only supports BOOL, FLOAT, DOUBLE, INT8, INT16, INT32, "
-                                "INT64, UINT8, UINT16, UINT32, UINT64 and STRING inputs.");
+                                " only supports BOOL, FLOAT, DOUBLE, FLOAT16, BFLOAT16, INT8, "
+                                "INT16, INT32, INT64, UINT8, UINT16, UINT32, UINT64 and "
+                                "STRING inputs.");
   }
 }
 

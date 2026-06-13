@@ -4,6 +4,7 @@
 
 #include "onnx_backend_test/cases/logical/include_logical_cases.h"
 #include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 #include "onnx_kernels/random.h"
 
@@ -60,6 +61,36 @@ void RegisterLessOrEqualCases(std::vector<TestCase> &registry) {
     Tensor z = le_kernel(x, y);
 
     Expect(node, {x, y}, {z}, "test_cc_less_or_equal_bcast", {opset}, "backend-test", registry);
+  }
+
+  // FLOAT16 variant: z = (x <= y) on half-precision inputs.
+  {
+    NodeProto node;
+    node.set_op_type("LessOrEqual");
+    node.add_input("x");
+    node.add_input("y");
+    node.add_output("z");
+
+    Tensor x = kernel::MakeFloat16Tensor("", {4}, {1.0f, 2.0f, 3.0f, 4.0f});
+    Tensor y = kernel::MakeFloat16Tensor("", {4}, {2.0f, 2.0f, 2.0f, 2.0f});
+    Tensor z = le_kernel(x, y);
+
+    Expect(node, {x, y}, {z}, "test_cc_less_or_equal_float16", {opset}, "backend-test", registry);
+  }
+
+  // BFLOAT16 variant: z = (x <= y) on brain-float inputs.
+  {
+    NodeProto node;
+    node.set_op_type("LessOrEqual");
+    node.add_input("x");
+    node.add_input("y");
+    node.add_output("z");
+
+    Tensor x = kernel::MakeBfloat16Tensor("", {4}, {1.0f, 2.0f, 3.0f, 4.0f});
+    Tensor y = kernel::MakeBfloat16Tensor("", {4}, {2.0f, 2.0f, 2.0f, 2.0f});
+    Tensor z = le_kernel(x, y);
+
+    Expect(node, {x, y}, {z}, "test_cc_less_or_equal_bfloat16", {opset}, "backend-test", registry);
   }
 
   // Upstream ONNX backend test cases for the ``LessOrEqual`` operator

@@ -85,7 +85,7 @@ After extraction the directory looks like this::
 
     ~/.local/onnx-light/
     ├── include/
-    │   └── onnx_light/
+    │   └── onnx_light/      ← CMake target include dir; #include "onnx.h" not "onnx_light/onnx.h"
     │       ├── onnx.h
     │       ├── stream.h
     │       └── ...

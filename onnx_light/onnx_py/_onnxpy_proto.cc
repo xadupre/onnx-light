@@ -753,10 +753,11 @@ void AddOnnxPyProto(nb::module_ &m) {
       [](const std::vector<NodeProto> &nodes) { return CollectExternalInputs(nodes); },
       nb::arg("nodes"),
       "Returns the list of input names referenced by ``nodes`` that are not "
-      "produced as outputs by any node in the same list. Names captured by "
-      "subgraph attributes (``GRAPH`` / ``GRAPHS``) are inspected recursively. "
+      "produced as outputs by any node in the same list. The function "
+      "recursively inspects names captured by subgraph attributes "
+      "(``GRAPH`` / ``GRAPHS``). "
       "The returned list preserves first-seen order and contains no duplicates; "
-      "empty input names are skipped.");
+      "it skips empty input names.");
 
   nb::enum_<FileLoadMode>(m, "FileLoadMode",
                           "Selects the file-backed stream implementation used when parsing "

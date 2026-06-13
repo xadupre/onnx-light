@@ -363,7 +363,13 @@ TEST(onnx_helper, LoadExternalDataForModel_SymlinkRejected) {
   t->ref_raw_data().resize(0);
 
   // The external data location is a symbolic link and must be rejected.
-  EXPECT_THROW(LoadExternalDataForModel(model, tmpdir.string()), std::runtime_error);
+  try {
+    LoadExternalDataForModel(model, tmpdir.string());
+    FAIL() << "Expected LoadExternalDataForModel to reject the symbolic link.";
+  } catch (const std::runtime_error &ex) {
+    EXPECT_NE(std::string(ex.what()).find("symbolic link"), std::string::npos)
+        << "Unexpected error message: " << ex.what();
+  }
 
   fs::remove_all(tmpdir);
 #endif
@@ -414,7 +420,13 @@ TEST(onnx_helper, LoadExternalDataForModel_ParentDirSymlinkRejected) {
   len->set_key("length");
   len->set_value("4");
 
-  EXPECT_THROW(LoadExternalDataForModel(model, tmpdir.string()), std::runtime_error);
+  try {
+    LoadExternalDataForModel(model, tmpdir.string());
+    FAIL() << "Expected LoadExternalDataForModel to reject the parent-dir symlink escape.";
+  } catch (const std::runtime_error &ex) {
+    EXPECT_NE(std::string(ex.what()).find("outside the base directory"), std::string::npos)
+        << "Unexpected error message: " << ex.what();
+  }
 
   fs::remove_all(tmpdir);
   fs::remove_all(outside);

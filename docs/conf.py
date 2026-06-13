@@ -103,11 +103,36 @@ epkg_dictionary = {
     "Mermaid": "https://mermaid.js.org/",
     "mermaid.js": "https://mermaid.js.org/",
     "onnx": "https://github.com/onnx/onnx",
+    "onnx_light/onnx_backend_test": (
+        "https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_backend_test"
+    ),
+    "onnx_light/onnx_backend_test/cases": (
+        "https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_backend_test/cases"
+    ),
+    "onnx_light/onnx_kernels": (
+        "https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_kernels"
+    ),
+    "onnx_light/onnx_kernels/kernels": (
+        "https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_kernels/kernels"
+    ),
+    "onnx_light/onnx_kernels/run_nodes.cc": (
+        "https://github.com/xadupre/onnx-light/blob/main/onnx_light/onnx_kernels/run_nodes.cc"
+    ),
     "onnxruntime": "https://github.com/microsoft/onnxruntime",
     "OSS-Fuzz": "https://github.com/google/oss-fuzz",
     "protobuf": "https://protobuf.dev/",
     "Protocol Buffers": "https://protobuf.dev/",
     "sphinx-datatables": "https://pypi.org/project/sphinx-datatables/",
+    "unittests/cc/onnx_backend_test": (
+        "https://github.com/xadupre/onnx-light/tree/main/unittests/cc/onnx_backend_test"
+    ),
+    "unittests/cc/onnx_kernels": (
+        "https://github.com/xadupre/onnx-light/tree/main/unittests/cc/onnx_kernels"
+    ),
+    "unittests/onnxl_vs_ort/test_backend_with_onnxruntime.py": (
+        "https://github.com/xadupre/onnx-light/blob/main/unittests/onnxl_vs_ort/"
+        "test_backend_with_onnxruntime.py"
+    ),
 }
 
 

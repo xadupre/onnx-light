@@ -69,6 +69,9 @@ usual.
 See also
 --------
 
+* :ref:`l-design-ort-flatbuffer-format` - whether the ``.ort`` format
+  supports parallelization and alignment, and what that implies for the
+  onnx-light reader/writer.
 * :ref:`l-example-plot-save-ort-flatbuffers` - end-to-end example that saves
   the same model in both formats and compares the resulting file sizes.
 * :ref:`l-howto-load-save-onnx-files` - load/save recipes for the regular

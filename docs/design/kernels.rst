@@ -88,6 +88,21 @@ Typical workflow:
    ``ctest -R Backend --output-on-failure`` after configuring with
    ``ONNX_LIGHT_BUILD_TESTS=ON``).
 
+Parallelization
+---------------
+
+Kernel implementations are allowed to parallelize their computation (for
+example across the elements or rows of a tensor) when it speeds up the
+operator, **except for reduction operators**. Reductions must keep a
+deterministic accumulation order so the C++ kernels produce bit-stable
+results: they are used as the reference implementation that generates the
+expected values of the backend test suite, and parallel floating-point
+accumulation would make those expected values depend on the number of
+threads. Reduction kernels (``ReduceSum``, ``ReduceMean``, ``ReduceProd``,
+``ReduceMax``, ``ReduceMin``, ``ReduceL1``, ``ReduceL2``,
+``ReduceSumSquare``, ``ReduceLogSum``, ``ReduceLogSumExp``, ``ArgMax`` and
+``ArgMin``) must therefore stay sequential.
+
 See also
 --------
 

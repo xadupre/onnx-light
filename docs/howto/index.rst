@@ -12,3 +12,4 @@ How-to Python / C++
     save_model_with_shared_external_data
     save_ort_flatbuffers
     collect_backend_test_cases
+    use_custom_kernel

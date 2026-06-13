@@ -175,12 +175,12 @@ avoid recollecting test cases on repeated lookups.
 Full example: ONNXRuntime backend
 -----------------------------------
 
-The file ``unittests/python/backend/test_backend_with_onnxruntime.py`` in the
+The file ``unittests/onnxl_vs_ort/test_backend_with_onnxruntime.py`` in the
 repository is a ready-to-run example that exercises every registered
 backend test case through
 `ONNXRuntime <https://onnxruntime.ai/>`_:
 
-.. literalinclude:: ../../unittests/python/backend/test_backend_with_onnxruntime.py
+.. literalinclude:: ../../unittests/onnxl_vs_ort/test_backend_with_onnxruntime.py
    :language: python
 
 The runtime function serialises the :class:`~onnx_light.onnx.ModelProto`
@@ -192,13 +192,13 @@ Run it with:
 
 .. code-block:: bash
 
-    python -m pytest unittests/python/backend/test_backend_with_onnxruntime.py -v
+    python -m pytest unittests/onnxl_vs_ort/test_backend_with_onnxruntime.py -v
 
 or, to run only the ``Abs`` test cases:
 
 .. code-block:: bash
 
-    python -m pytest unittests/python/backend/test_backend_with_onnxruntime.py -v -k abs
+    python -m pytest unittests/onnxl_vs_ort/test_backend_with_onnxruntime.py -v -k abs
 
 ----
 

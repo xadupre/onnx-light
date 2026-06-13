@@ -9,6 +9,7 @@
 #include <cmath>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -18,6 +19,18 @@ namespace kernel {
 namespace {
 
 constexpr const char *kName = "kernel::Neg";
+
+// Negates a signed integer tensor using unsigned two's complement arithmetic so
+// that the minimum-value edge case (e.g. -INT8_MIN) wraps correctly without UB.
+template <typename T> void NegInt(const Tensor &x, Tensor &output) {
+  using U = std::make_unsigned_t<T>;
+  const int64_t n = x.element_count();
+  const T *px = reinterpret_cast<const T *>(x.bytes());
+  T *py = reinterpret_cast<T *>(output.data.data());
+  for (int64_t i = 0; i < n; ++i) {
+    py[i] = static_cast<T>(U{0} - static_cast<U>(px[i]));
+  }
+}
 
 } // namespace
 
@@ -59,9 +72,22 @@ void Neg::operator()(const Tensor &x, Tensor &output) const {
     kernel::detail::UnaryHalfElementwise(x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits,
                                          [](float v) { return -v; });
     return;
+  case DataType::INT8:
+    NegInt<int8_t>(x, output);
+    return;
+  case DataType::INT16:
+    NegInt<int16_t>(x, output);
+    return;
+  case DataType::INT32:
+    NegInt<int32_t>(x, output);
+    return;
+  case DataType::INT64:
+    NegInt<int64_t>(x, output);
+    return;
   default:
-    throw std::invalid_argument(std::string(kName) +
-                                " only supports FLOAT, DOUBLE, FLOAT16, and BFLOAT16 tensors.");
+    throw std::invalid_argument(
+        std::string(kName) +
+        " only supports FLOAT, DOUBLE, FLOAT16, BFLOAT16, INT8, INT16, INT32, and INT64 tensors.");
   }
 }
 

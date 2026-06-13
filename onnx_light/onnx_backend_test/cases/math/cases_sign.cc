@@ -74,6 +74,103 @@ void RegisterSignCases(std::vector<TestCase> &registry) {
     Tensor y = sign_kernel(x);
     Expect(node, {x}, {y}, "test_cc_sign_bfloat16", {opset}, "backend-test", registry);
   }
+
+  // UINT8
+  {
+    NodeProto node;
+    node.set_op_type("Sign");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor x = Tensor::FromUint8("", {2, 3}, {0, 1, 2, 0, 5, 255});
+    Tensor y = sign_kernel(x);
+    Expect(node, {x}, {y}, "test_cc_sign_uint8", {opset}, "backend-test", registry);
+  }
+
+  // UINT16
+  {
+    NodeProto node;
+    node.set_op_type("Sign");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor x = Tensor::FromUint16("", {2, 3}, {0, 1, 1000, 0, 5, 65535});
+    Tensor y = sign_kernel(x);
+    Expect(node, {x}, {y}, "test_cc_sign_uint16", {opset}, "backend-test", registry);
+  }
+
+  // UINT32
+  {
+    NodeProto node;
+    node.set_op_type("Sign");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor x = Tensor::FromUint32("", {2, 3}, {0, 1, 1000000, 0, 5, 4294967295u});
+    Tensor y = sign_kernel(x);
+    Expect(node, {x}, {y}, "test_cc_sign_uint32", {opset}, "backend-test", registry);
+  }
+
+  // UINT64
+  {
+    NodeProto node;
+    node.set_op_type("Sign");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor x =
+        Tensor::FromUint64("", {2, 3}, {0, 1, 1000000000000ULL, 0, 5, 18446744073709551615ULL});
+    Tensor y = sign_kernel(x);
+    Expect(node, {x}, {y}, "test_cc_sign_uint64", {opset}, "backend-test", registry);
+  }
+
+  // INT8
+  {
+    NodeProto node;
+    node.set_op_type("Sign");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor x = Tensor::FromInt8("", {2, 3}, {-1, 0, 2, -127, 3, -5});
+    Tensor y = sign_kernel(x);
+    Expect(node, {x}, {y}, "test_cc_sign_int8", {opset}, "backend-test", registry);
+  }
+
+  // INT16
+  {
+    NodeProto node;
+    node.set_op_type("Sign");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor x = Tensor::FromInt16("", {2, 3}, {-1, 0, 2, -1000, 3, -5});
+    Tensor y = sign_kernel(x);
+    Expect(node, {x}, {y}, "test_cc_sign_int16", {opset}, "backend-test", registry);
+  }
+
+  // INT32
+  {
+    NodeProto node;
+    node.set_op_type("Sign");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor x = Tensor::FromInt32("", {2, 3}, {-1, 0, 2, -100000, 3, -5});
+    Tensor y = sign_kernel(x);
+    Expect(node, {x}, {y}, "test_cc_sign_int32", {opset}, "backend-test", registry);
+  }
+
+  // INT64
+  {
+    NodeProto node;
+    node.set_op_type("Sign");
+    node.add_input("x");
+    node.add_output("y");
+
+    Tensor x = Tensor::FromInt64("", {2, 3}, {-1, 0, 2, -1000000000000LL, 3, -5});
+    Tensor y = sign_kernel(x);
+    Expect(node, {x}, {y}, "test_cc_sign_int64", {opset}, "backend-test", registry);
+  }
 }
 
 } // namespace onnx_backend_test

@@ -197,8 +197,8 @@ void RegisterReduceLogSumCases(std::vector<TestCase> &registry) {
     node.add_output("reduced");
     AddAttribute<int64_t>(node, "keepdims", 1);
 
-    Tensor data = Tensor::FromDouble("", {3, 2, 2},
-                                     {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0});
+    Tensor data = Tensor::FromDouble(
+        "", {3, 2, 2}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0});
     Tensor axes = Tensor::FromInt64("", {1}, {1});
     Tensor reduced = kernel(data, axes, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
     Expect(node, {data, axes}, {reduced}, "test_cc_reducelogsum_double", {opset}, "backend-test",
@@ -222,8 +222,8 @@ void RegisterReduceLogSumExpCases(std::vector<TestCase> &registry) {
     node.add_output("reduced");
     AddAttribute<int64_t>(node, "keepdims", 1);
 
-    Tensor data = Tensor::FromDouble("", {3, 2, 2},
-                                     {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0});
+    Tensor data = Tensor::FromDouble(
+        "", {3, 2, 2}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0});
     Tensor axes = Tensor::FromInt64("", {1}, {1});
     Tensor reduced = kernel(data, axes, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
     Expect(node, {data, axes}, {reduced}, "test_cc_reducelogsumexp_double", {opset}, "backend-test",

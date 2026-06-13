@@ -154,7 +154,7 @@ void RegisterBitwiseAndCases(std::vector<TestCase> &registry) {
   RegisterBitwiseBinInt64Case("test_cc_bitwise_and_i64_2d", "BitwiseAnd", {3, 4}, 1011, {3, 4},
                               1012, k, opset, registry);
   RegisterBitwiseBinUint32Case("test_cc_bitwise_and_ui32_2d", "BitwiseAnd", {3, 4}, 1013, {3, 4},
-                              1014, k, opset, registry);
+                               1014, k, opset, registry);
 }
 
 // ---------------------------------------------------------------------------
@@ -190,7 +190,7 @@ void RegisterBitwiseOrCases(std::vector<TestCase> &registry) {
   RegisterBitwiseBinInt64Case("test_cc_bitwise_or_i64_2d", "BitwiseOr", {3, 4}, 1111, {3, 4}, 1112,
                               k, opset, registry);
   RegisterBitwiseBinUint32Case("test_cc_bitwise_or_ui32_2d", "BitwiseOr", {3, 4}, 1113, {3, 4},
-                              1114, k, opset, registry);
+                               1114, k, opset, registry);
 }
 
 // ---------------------------------------------------------------------------
@@ -226,7 +226,7 @@ void RegisterBitwiseXorCases(std::vector<TestCase> &registry) {
   RegisterBitwiseBinInt64Case("test_cc_bitwise_xor_i64_2d", "BitwiseXor", {3, 4}, 1211, {3, 4},
                               1212, k, opset, registry);
   RegisterBitwiseBinUint32Case("test_cc_bitwise_xor_ui32_2d", "BitwiseXor", {3, 4}, 1213, {3, 4},
-                              1214, k, opset, registry);
+                               1214, k, opset, registry);
 }
 
 // ---------------------------------------------------------------------------

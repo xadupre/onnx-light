@@ -72,10 +72,10 @@ namespace {
 //   * ``test_dequantizelinear_float4e2m1`` — FLOAT4E2M1 per-axis case
 //     (``DequantizeLinear.export_float4e2m1``).
 //
-// Expected outputs for the per-axis, blocked, sub-byte and FLOAT16 cases are
-// computed offline because the reference ``kernel::DequantizeLinear`` only
-// supports the per-tensor scalar form with FLOAT output for byte-sized
-// integer or float8 inputs.
+// Expected outputs for the per-axis, blocked, and FLOAT16 cases are
+// computed offline. The reference ``kernel::DequantizeLinear`` supports
+// per-tensor scalar form with FLOAT output for byte-sized integer, float8,
+// and sub-byte (INT4/UINT4/INT2/UINT2/FLOAT4E2M1) inputs.
 // ---------------------------------------------------------------------------
 void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(13);

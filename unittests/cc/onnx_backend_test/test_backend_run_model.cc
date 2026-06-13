@@ -347,15 +347,13 @@ TEST(BackendRunModel, Scan) {
 }
 
 // Quantization kernels.
-// The reference QuantizeLinear/DequantizeLinear kernels only support
-// per-tensor quantization (scalar y_scale/x_scale) with FLOAT scales for
-// QuantizeLinear and FLOAT or FLOAT16 scales for DequantizeLinear, and
-// byte-or-larger integer (or float8 for DequantizeLinear) element types.
-// Skip per-axis / sub-byte / blocked cases (and FLOAT16-scale cases for
-// QuantizeLinear).
+// The reference QuantizeLinear/DequantizeLinear kernels support per-tensor and
+// per-axis quantization with FLOAT scales, covering integer (UINT8/INT8/UINT16/
+// INT16), float8, and sub-byte (INT4/UINT4/INT2/UINT2/FLOAT4E2M1) output types.
+// Skip blocked / FLOAT16-scale cases which are not yet implemented.
 TEST(BackendRunModel, QuantizeLinear) {
   RunBackendCasesFor("QuantizeLinear", [](const DataSet &ds) {
-    if (ds.inputs.size() < 2 || ds.inputs[1].element_count() != 1) {
+    if (ds.inputs.size() < 2) {
       return false;
     }
     if (ds.inputs[1].data_type != static_cast<int32_t>(DataType::FLOAT)) {
@@ -368,7 +366,16 @@ TEST(BackendRunModel, QuantizeLinear) {
     return y_dtype == static_cast<int32_t>(DataType::UINT8) ||
            y_dtype == static_cast<int32_t>(DataType::INT8) ||
            y_dtype == static_cast<int32_t>(DataType::UINT16) ||
-           y_dtype == static_cast<int32_t>(DataType::INT16);
+           y_dtype == static_cast<int32_t>(DataType::INT16) ||
+           y_dtype == static_cast<int32_t>(DataType::FLOAT8E4M3FN) ||
+           y_dtype == static_cast<int32_t>(DataType::FLOAT8E4M3FNUZ) ||
+           y_dtype == static_cast<int32_t>(DataType::FLOAT8E5M2) ||
+           y_dtype == static_cast<int32_t>(DataType::FLOAT8E5M2FNUZ) ||
+           y_dtype == static_cast<int32_t>(DataType::INT4) ||
+           y_dtype == static_cast<int32_t>(DataType::UINT4) ||
+           y_dtype == static_cast<int32_t>(DataType::INT2) ||
+           y_dtype == static_cast<int32_t>(DataType::UINT2) ||
+           y_dtype == static_cast<int32_t>(DataType::FLOAT4E2M1);
   });
 }
 TEST(BackendRunModel, DequantizeLinear) {
@@ -393,7 +400,12 @@ TEST(BackendRunModel, DequantizeLinear) {
            x_dtype == static_cast<int32_t>(DataType::FLOAT8E4M3FN) ||
            x_dtype == static_cast<int32_t>(DataType::FLOAT8E4M3FNUZ) ||
            x_dtype == static_cast<int32_t>(DataType::FLOAT8E5M2) ||
-           x_dtype == static_cast<int32_t>(DataType::FLOAT8E5M2FNUZ);
+           x_dtype == static_cast<int32_t>(DataType::FLOAT8E5M2FNUZ) ||
+           x_dtype == static_cast<int32_t>(DataType::INT4) ||
+           x_dtype == static_cast<int32_t>(DataType::UINT4) ||
+           x_dtype == static_cast<int32_t>(DataType::INT2) ||
+           x_dtype == static_cast<int32_t>(DataType::UINT2) ||
+           x_dtype == static_cast<int32_t>(DataType::FLOAT4E2M1);
   });
 }
 TEST(BackendRunModel, DynamicQuantizeLinear) { RunBackendCasesFor("DynamicQuantizeLinear"); }

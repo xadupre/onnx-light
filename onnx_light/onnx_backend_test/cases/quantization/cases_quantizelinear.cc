@@ -219,11 +219,7 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry) {
 
   // The remaining upstream cases (UINT4/INT4/UINT2/INT2/FLOAT4E2M1) all use
   // per-axis quantization (``axis=0``) and a 3-element scale/zero point with
-  // pre-computed sub-byte expected outputs. The reference
-  // ``kernel::QuantizeLinear`` does not support those dtypes nor the
-  // per-axis form so the expected outputs are encoded here from the upstream
-  // values in
-  // ``onnx.backend.test.case.node.quantizelinear.QuantizeLinear``.
+  // pre-computed sub-byte expected outputs.
   NodeProto sub_byte_node;
   sub_byte_node.set_op_type("QuantizeLinear");
   sub_byte_node.add_input("x");

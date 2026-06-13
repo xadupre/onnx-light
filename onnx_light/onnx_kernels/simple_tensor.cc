@@ -55,6 +55,7 @@ size_t PackedByteSize(int32_t dtype, int64_t element_count) {
   switch (static_cast<DataType>(dtype)) {
   case DataType::INT4:
   case DataType::UINT4:
+  case DataType::FLOAT4E2M1:
     // Two 4-bit elements packed per byte (low nibble first).
     return static_cast<size_t>((element_count + 1) / 2);
   case DataType::INT2:

@@ -92,16 +92,28 @@ Parallelization
 ---------------
 
 Kernel implementations are allowed to parallelize their computation (for
-example across the elements or rows of a tensor) when it speeds up the
-operator, **except for reduction operators**. Reductions must keep a
-deterministic accumulation order so the C++ kernels produce bit-stable
-results: they are used as the reference implementation that generates the
-expected values of the backend test suite, and parallel floating-point
-accumulation would make those expected values depend on the number of
-threads. Reduction kernels (``ReduceSum``, ``ReduceMean``, ``ReduceProd``,
-``ReduceMax``, ``ReduceMin``, ``ReduceL1``, ``ReduceL2``,
-``ReduceSumSquare``, ``ReduceLogSum``, ``ReduceLogSumExp``, ``ArgMax`` and
-``ArgMin``) must therefore stay sequential.
+example across independent elements or rows of a tensor) when it speeds up
+the operator, **except where it would change the order of floating-point
+accumulation**. The C++ kernels are the reference implementation that
+generates the expected values of the backend test suite, so their results
+must stay bit-stable and independent of the number of threads. Parallel
+floating-point accumulation is not associative and would make those
+expected values depend on the thread count.
+
+Concretely, any operator that accumulates values internally must keep a
+deterministic accumulation order and therefore stay sequential on the
+reduced/accumulated axis. This includes (non-exhaustively):
+
+* the reduction operators (``ReduceSum``, ``ReduceMean``, ``ReduceProd``,
+  ``ReduceMax``, ``ReduceMin``, ``ReduceL1``, ``ReduceL2``,
+  ``ReduceSumSquare``, ``ReduceLogSum``, ``ReduceLogSumExp``, ``ArgMax``
+  and ``ArgMin``),
+* operators with hidden accumulation such as ``MatMul``, ``Gemm``,
+  ``Conv``, ``Attention``, ``Einsum``, ``LRN`` and similar dot-product or
+  pooling style kernels.
+
+Operators without such accumulation (purely element-wise or
+independent-row computations) may be parallelized freely.
 
 See also
 --------

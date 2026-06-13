@@ -60,9 +60,46 @@ void Abs::operator()(const Tensor &x, Tensor &output) const {
     kernel::detail::UnaryHalfElementwise(x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits,
                                          [](float v) { return std::fabs(v); });
     return;
+  case DataType::INT8: {
+    const int8_t *px = x.AsInt8();
+    int8_t *py = output.AsInt8();
+    for (int64_t i = 0; i < n; ++i) {
+      const int32_t v = static_cast<int32_t>(px[i]);
+      py[i] = static_cast<int8_t>(v < 0 ? -v : v);
+    }
+    return;
+  }
+  case DataType::INT16: {
+    const int16_t *px = x.AsInt16();
+    int16_t *py = output.AsInt16();
+    for (int64_t i = 0; i < n; ++i) {
+      const int32_t v = static_cast<int32_t>(px[i]);
+      py[i] = static_cast<int16_t>(v < 0 ? -v : v);
+    }
+    return;
+  }
+  case DataType::INT32: {
+    const int32_t *px = x.AsInt32();
+    int32_t *py = output.AsInt32();
+    for (int64_t i = 0; i < n; ++i) {
+      const int64_t v = static_cast<int64_t>(px[i]);
+      py[i] = static_cast<int32_t>(v < 0 ? -v : v);
+    }
+    return;
+  }
+  case DataType::INT64: {
+    const int64_t *px = x.AsInt64();
+    int64_t *py = output.AsInt64();
+    for (int64_t i = 0; i < n; ++i) {
+      const uint64_t u = static_cast<uint64_t>(px[i]);
+      py[i] = static_cast<int64_t>(px[i] < 0 ? (~u + 1) : u);
+    }
+    return;
+  }
   default:
-    throw std::invalid_argument(std::string(kName) +
-                                " only supports FLOAT, DOUBLE, FLOAT16, and BFLOAT16 tensors.");
+    throw std::invalid_argument(
+        std::string(kName) +
+        " only supports FLOAT, DOUBLE, FLOAT16, BFLOAT16, INT8, INT16, INT32, and INT64 tensors.");
   }
 }
 

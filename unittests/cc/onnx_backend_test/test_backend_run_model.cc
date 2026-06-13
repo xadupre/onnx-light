@@ -388,10 +388,19 @@ TEST(BackendRunModel, QuantizeLinear) {
 }
 TEST(BackendRunModel, DequantizeLinear) {
   RunBackendCasesFor("DequantizeLinear", [](const DataSet &ds) {
-    if (ds.inputs.size() < 2 || ds.inputs[1].element_count() != 1) {
+    if (ds.inputs.size() < 2) {
       return false;
     }
     const int32_t scale_dtype = ds.inputs[1].data_type;
+    const int64_t scale_count = ds.inputs[1].element_count();
+    const bool is_scalar_scale = scale_count == 1;
+    // Per-axis: 1-D x_scale with multiple elements; FLOAT only (no FLOAT16
+    // per-axis). Skip blocked cases where x_scale has more than 1 dimension.
+    const bool is_per_axis_scale = scale_count > 1 && ds.inputs[1].shape.size() == 1 &&
+                                   scale_dtype == static_cast<int32_t>(DataType::FLOAT);
+    if (!is_scalar_scale && !is_per_axis_scale) {
+      return false;
+    }
     if (scale_dtype != static_cast<int32_t>(DataType::FLOAT) &&
         scale_dtype != static_cast<int32_t>(DataType::FLOAT16)) {
       return false;

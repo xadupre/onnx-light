@@ -1013,7 +1013,25 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::SpaceToDepth kernel(rt.kernel_ctx());
          SetOutput(node, 0, kernel(input, attrs), rt);
        }},
-      {"ai.onnx:DequantizeLinear", MakeBinaryWithOptionalThirdTrampoline<kernel::DequantizeLinear>()},
+      {"ai.onnx:DequantizeLinear",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireMinInputCount(node, 2);
+         if (node.input_size() > 3) {
+           throw std::invalid_argument("RunNode: op 'DequantizeLinear' expects 2 or 3 inputs, got " +
+                                       std::to_string(node.input_size()) + ".");
+         }
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const Tensor &x_scale = GetInput(node, 1, rt.tensors());
+         const Tensor *x_zero_point = GetOptionalInput(node, 2, rt.tensors());
+         const int64_t axis = GetAttributeIntOrDefault(node, "axis", 1);
+         kernel::DequantizeLinear k(rt.kernel_ctx());
+         if (x_zero_point != nullptr) {
+           SetOutput(node, 0, k(x, x_scale, *x_zero_point, axis), rt);
+         } else {
+           SetOutput(node, 0, k(x, x_scale), rt);
+         }
+       }},
       {"ai.onnx:DFT",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 1);

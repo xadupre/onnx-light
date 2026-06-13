@@ -72,10 +72,10 @@ namespace {
 //   * ``test_dequantizelinear_float4e2m1`` — FLOAT4E2M1 per-axis case
 //     (``DequantizeLinear.export_float4e2m1``).
 //
-// Expected outputs for the per-axis, blocked, and FLOAT16 cases are
+// Expected outputs for the blocked and FLOAT16 cases are
 // computed offline. The reference ``kernel::DequantizeLinear`` supports
-// per-tensor scalar form with FLOAT output for byte-sized integer, float8,
-// and sub-byte (INT4/UINT4/INT2/UINT2/FLOAT4E2M1) inputs.
+// per-tensor scalar and per-axis FLOAT scale with FLOAT output for byte-sized
+// integer, float8, and sub-byte (INT4/UINT4/INT2/UINT2/FLOAT4E2M1) inputs.
 // ---------------------------------------------------------------------------
 void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(13);
@@ -230,9 +230,7 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
 
   // From DequantizeLinear.export_axis(): per-axis UINT8 dequantization with
   // ``axis=1`` and a 3-element ``x_scale``/``x_zero_point`` (one entry per
-  // channel along axis 1). Expected outputs are pre-computed because the
-  // reference ``kernel::DequantizeLinear`` only supports the per-tensor scalar
-  // form.
+  // channel along axis 1).
   {
     NodeProto axis_node;
     axis_node.set_op_type("DequantizeLinear");
@@ -246,10 +244,7 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
         {3, 89, 34, 200, 74, 59, 5, 24, 24, 87, 32, 13, 245, 99, 4, 142, 121, 102});
     Tensor x_scale = Tensor::FromFloat("", {3}, {2.0f, 4.0f, 5.0f});
     Tensor x_zero_point = Tensor::FromUint8("", {3}, {84, 24, 196});
-    Tensor y = Tensor::FromFloat("", {1, 3, 3, 2},
-                                 {-162.0f, 10.0f, -100.0f, 232.0f, -20.0f, -50.0f, -76.0f, 0.0f,
-                                  0.0f, 252.0f, 32.0f, -44.0f, 245.0f, -485.0f, -960.0f, -270.0f,
-                                  -375.0f, -470.0f});
+    Tensor y = dequantize_kernel(x, x_scale, x_zero_point, /*axis=*/1);
     Expect(axis_node, {x, x_scale, x_zero_point}, {y}, "test_dequantizelinear_axis", {opset},
            "backend-test", registry);
   }

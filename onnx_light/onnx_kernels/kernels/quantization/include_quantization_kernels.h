@@ -92,9 +92,11 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
-/// Per-tensor linear dequantization of an integer or float8 input ``x`` to a
-/// FLOAT output ``y`` using ``y = (x - x_zero_point) * x_scale``. When
-/// ``x_zero_point`` is omitted the zero point defaults to 0.
+/// Per-tensor or per-axis linear dequantization of an integer or float8 input
+/// ``x`` to a FLOAT output ``y`` using ``y = (x - x_zero_point) * x_scale``.
+/// When ``x_zero_point`` is omitted the zero point defaults to 0.  When
+/// ``x_scale`` has more than one element, per-axis dequantization is performed
+/// along ``axis`` (only FLOAT ``x_scale`` is supported for per-axis).
 class DequantizeLinear : public KernelBase {
 public:
   using KernelBase::KernelBase;
@@ -106,6 +108,14 @@ public:
   /// Explicit ``x_zero_point``: must have the same element type as ``x``.
   Tensor operator()(const Tensor &x, const Tensor &x_scale, const Tensor &x_zero_point) const;
   void operator()(const Tensor &x, const Tensor &x_scale, const Tensor &x_zero_point,
+                  Tensor &output) const;
+
+  /// Per-axis overloads: ``x_scale`` and ``x_zero_point`` have one entry per
+  /// slice along ``axis``.  Delegates to the per-tensor overload when
+  /// ``x_scale`` is scalar.
+  Tensor operator()(const Tensor &x, const Tensor &x_scale, const Tensor &x_zero_point,
+                    int64_t axis) const;
+  void operator()(const Tensor &x, const Tensor &x_scale, const Tensor &x_zero_point, int64_t axis,
                   Tensor &output) const;
 
   /// Output element type (FLOAT) differs from the integer/float8 input

@@ -153,6 +153,95 @@ inline float ReadSubByteScalarZP(const Tensor &x_zero_point) {
   return 0.0f;
 }
 
+// Computes the stride of elements inner to ``axis`` for ``shape``.
+inline int64_t ComputeInnerStride(const std::vector<int64_t> &shape, int64_t axis) {
+  int64_t stride = 1;
+  for (int64_t d = axis + 1; d < static_cast<int64_t>(shape.size()); ++d) {
+    stride *= shape[static_cast<std::size_t>(d)];
+  }
+  return stride;
+}
+
+// Per-axis dequantization for whole-byte integer input types.
+template <typename XT>
+void DequantizeAxisLoop(const Tensor &x, const float *scales, const XT *zp_data,
+                        int64_t inner_stride, int64_t axis_size, Tensor &output) {
+  const XT *px = reinterpret_cast<const XT *>(x.bytes());
+  const int64_t n = x.element_count();
+  float *py = output.AsFloat();
+  for (int64_t i = 0; i < n; ++i) {
+    const int64_t axis_idx = (i / inner_stride) % axis_size;
+    py[i] = (static_cast<float>(px[i]) - static_cast<float>(zp_data[axis_idx])) * scales[axis_idx];
+  }
+}
+
+// Per-axis dequantization for float8 byte-per-element input types.
+void DequantizeAxisFloat8Loop(const Tensor &x, const float *scales, const std::uint8_t *zp_bytes,
+                              Float8Decoder decode, int64_t inner_stride, int64_t axis_size,
+                              Tensor &output) {
+  const std::uint8_t *px = x.bytes();
+  const int64_t n = x.element_count();
+  float *py = output.AsFloat();
+  for (int64_t i = 0; i < n; ++i) {
+    const int64_t axis_idx = (i / inner_stride) % axis_size;
+    const float zp = decode(zp_bytes[axis_idx]);
+    py[i] = (decode(px[i]) - zp) * scales[axis_idx];
+  }
+}
+
+// Per-axis dequantization for INT4/UINT4 sub-byte packed input.
+void DequantizeAxisInt4Loop(const Tensor &x, const float *scales, const std::uint8_t *zp_bytes,
+                            bool is_signed, int64_t inner_stride, int64_t axis_size,
+                            Tensor &output) {
+  const std::uint8_t *px = x.bytes();
+  const int64_t n = x.element_count();
+  float *py = output.AsFloat();
+  for (int64_t i = 0; i < n; ++i) {
+    const int64_t axis_idx = (i / inner_stride) % axis_size;
+    const std::uint8_t zp_nibble = Read4BitElement(zp_bytes, axis_idx);
+    const float zp = is_signed ? static_cast<float>(Int4NibbleToInt8(zp_nibble))
+                               : static_cast<float>(Uint4NibbleToUint8(zp_nibble));
+    const std::uint8_t nibble = Read4BitElement(px, i);
+    const float val = is_signed ? static_cast<float>(Int4NibbleToInt8(nibble))
+                                : static_cast<float>(Uint4NibbleToUint8(nibble));
+    py[i] = (val - zp) * scales[axis_idx];
+  }
+}
+
+// Per-axis dequantization for INT2/UINT2 sub-byte packed input.
+void DequantizeAxisInt2Loop(const Tensor &x, const float *scales, const std::uint8_t *zp_bytes,
+                            bool is_signed, int64_t inner_stride, int64_t axis_size,
+                            Tensor &output) {
+  const std::uint8_t *px = x.bytes();
+  const int64_t n = x.element_count();
+  float *py = output.AsFloat();
+  for (int64_t i = 0; i < n; ++i) {
+    const int64_t axis_idx = (i / inner_stride) % axis_size;
+    const std::uint8_t zp_bits = Read2BitElement(zp_bytes, axis_idx);
+    const float zp = is_signed ? static_cast<float>(Int2BitsToInt8(zp_bits))
+                               : static_cast<float>(Uint2BitsToUint8(zp_bits));
+    const std::uint8_t bits = Read2BitElement(px, i);
+    const float val = is_signed ? static_cast<float>(Int2BitsToInt8(bits))
+                                : static_cast<float>(Uint2BitsToUint8(bits));
+    py[i] = (val - zp) * scales[axis_idx];
+  }
+}
+
+// Per-axis dequantization for FLOAT4E2M1 sub-byte packed input.
+void DequantizeAxisFloat4E2M1Loop(const Tensor &x, const float *scales,
+                                  const std::uint8_t *zp_bytes, int64_t inner_stride,
+                                  int64_t axis_size, Tensor &output) {
+  const std::uint8_t *px = x.bytes();
+  const int64_t n = x.element_count();
+  float *py = output.AsFloat();
+  for (int64_t i = 0; i < n; ++i) {
+    const int64_t axis_idx = (i / inner_stride) % axis_size;
+    const float zp = Float4E2M1NibbleToFloat(Read4BitElement(zp_bytes, axis_idx));
+    const float val = Float4E2M1NibbleToFloat(Read4BitElement(px, i));
+    py[i] = (val - zp) * scales[axis_idx];
+  }
+}
+
 } // namespace
 
 Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale) const {
@@ -313,6 +402,117 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
         "kernel::DequantizeLinear: only UINT8, INT8, UINT16, INT16, INT32, FLOAT8E4M3FN, "
         "FLOAT8E4M3FNUZ, FLOAT8E5M2, FLOAT8E5M2FNUZ, INT4, UINT4, INT2, UINT2 and FLOAT4E2M1 "
         "inputs are supported.");
+  }
+}
+
+Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
+                                    const Tensor &x_zero_point, int64_t axis) const {
+  if (x_scale.element_count() == 1) {
+    return (*this)(x, x_scale, x_zero_point);
+  }
+  EXT_ENFORCE_INVALID(IsSupportedScaleDType(x_scale.data_type),
+                      "kernel::DequantizeLinear: x_scale must be FLOAT or FLOAT16.");
+  const size_t elem_size = x_scale.data_type == static_cast<int32_t>(DataType::FLOAT16)
+                               ? sizeof(uint16_t)
+                               : sizeof(float);
+  Tensor out("", x_scale.data_type, x.shape,
+             std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * elem_size));
+  (*this)(x, x_scale, x_zero_point, axis, out);
+  return out;
+}
+
+void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
+                                  const Tensor &x_zero_point, int64_t axis, Tensor &output) const {
+  if (x_scale.element_count() == 1) {
+    return (*this)(x, x_scale, x_zero_point, output);
+  }
+  EXT_ENFORCE_INVALID(x_scale.data_type == static_cast<int32_t>(DataType::FLOAT),
+                      "kernel::DequantizeLinear: x_scale must be FLOAT for per-axis "
+                      "dequantization.");
+  EXT_ENFORCE_INVALID(x.data_type == x_zero_point.data_type,
+                      "kernel::DequantizeLinear: x_zero_point data_type must match x.");
+  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::FLOAT),
+                      "kernel::DequantizeLinear: output dtype must be FLOAT for per-axis "
+                      "dequantization.");
+  EXT_ENFORCE_INVALID(output.shape == x.shape,
+                      "kernel::DequantizeLinear preallocated output shape must match x shape.");
+  EXT_ENFORCE_INVALID(
+      output.data.size() == static_cast<size_t>(x.element_count()) * output.element_size(),
+      "kernel::DequantizeLinear preallocated output buffer has unexpected size in bytes.");
+  EXT_ENFORCE_INVALID(axis >= 0 && axis < static_cast<int64_t>(x.shape.size()),
+                      "kernel::DequantizeLinear: axis out of range.");
+  const int64_t axis_size = x.shape[static_cast<std::size_t>(axis)];
+  EXT_ENFORCE_INVALID(x_scale.element_count() == axis_size,
+                      "kernel::DequantizeLinear: x_scale element count must equal axis dimension.");
+  EXT_ENFORCE_INVALID(
+      x_zero_point.element_count() == axis_size,
+      "kernel::DequantizeLinear: x_zero_point element count must equal axis dimension.");
+  const float *scales = x_scale.AsFloat();
+  const std::uint8_t *zp_bytes = x_zero_point.bytes();
+  const int64_t inner_stride = ComputeInnerStride(x.shape, axis);
+
+  switch (x.data_type) {
+  case static_cast<int32_t>(DataType::UINT8):
+    DequantizeAxisLoop<uint8_t>(x, scales, reinterpret_cast<const uint8_t *>(zp_bytes),
+                                inner_stride, axis_size, output);
+    break;
+  case static_cast<int32_t>(DataType::INT8):
+    DequantizeAxisLoop<int8_t>(x, scales, reinterpret_cast<const int8_t *>(zp_bytes), inner_stride,
+                               axis_size, output);
+    break;
+  case static_cast<int32_t>(DataType::UINT16): {
+    const int64_t n_zp = x_zero_point.element_count();
+    std::vector<uint16_t> zp_vec(static_cast<std::size_t>(n_zp));
+    std::memcpy(zp_vec.data(), zp_bytes, static_cast<std::size_t>(n_zp) * sizeof(uint16_t));
+    DequantizeAxisLoop<uint16_t>(x, scales, zp_vec.data(), inner_stride, axis_size, output);
+    break;
+  }
+  case static_cast<int32_t>(DataType::INT16): {
+    const int64_t n_zp = x_zero_point.element_count();
+    std::vector<int16_t> zp_vec(static_cast<std::size_t>(n_zp));
+    std::memcpy(zp_vec.data(), zp_bytes, static_cast<std::size_t>(n_zp) * sizeof(int16_t));
+    DequantizeAxisLoop<int16_t>(x, scales, zp_vec.data(), inner_stride, axis_size, output);
+    break;
+  }
+  case static_cast<int32_t>(DataType::INT32): {
+    const int64_t n_zp = x_zero_point.element_count();
+    std::vector<int32_t> zp_vec(static_cast<std::size_t>(n_zp));
+    std::memcpy(zp_vec.data(), zp_bytes, static_cast<std::size_t>(n_zp) * sizeof(int32_t));
+    DequantizeAxisLoop<int32_t>(x, scales, zp_vec.data(), inner_stride, axis_size, output);
+    break;
+  }
+  case static_cast<int32_t>(DataType::FLOAT8E4M3FN):
+  case static_cast<int32_t>(DataType::FLOAT8E4M3FNUZ):
+  case static_cast<int32_t>(DataType::FLOAT8E5M2):
+  case static_cast<int32_t>(DataType::FLOAT8E5M2FNUZ):
+    DequantizeAxisFloat8Loop(x, scales, zp_bytes, Float8DecoderFor(x.data_type), inner_stride,
+                             axis_size, output);
+    break;
+  case static_cast<int32_t>(DataType::INT4):
+    DequantizeAxisInt4Loop(x, scales, zp_bytes, /*is_signed=*/true, inner_stride, axis_size,
+                           output);
+    break;
+  case static_cast<int32_t>(DataType::UINT4):
+    DequantizeAxisInt4Loop(x, scales, zp_bytes, /*is_signed=*/false, inner_stride, axis_size,
+                           output);
+    break;
+  case static_cast<int32_t>(DataType::INT2):
+    DequantizeAxisInt2Loop(x, scales, zp_bytes, /*is_signed=*/true, inner_stride, axis_size,
+                           output);
+    break;
+  case static_cast<int32_t>(DataType::UINT2):
+    DequantizeAxisInt2Loop(x, scales, zp_bytes, /*is_signed=*/false, inner_stride, axis_size,
+                           output);
+    break;
+  case static_cast<int32_t>(DataType::FLOAT4E2M1):
+    DequantizeAxisFloat4E2M1Loop(x, scales, zp_bytes, inner_stride, axis_size, output);
+    break;
+  default:
+    EXT_THROW_INVALID(
+        "unsupported data type ", x.data_type, ", ",
+        "kernel::DequantizeLinear (per-axis): only UINT8, INT8, UINT16, INT16, INT32, "
+        "FLOAT8E4M3FN, FLOAT8E4M3FNUZ, FLOAT8E5M2, FLOAT8E5M2FNUZ, INT4, UINT4, INT2, UINT2 "
+        "and FLOAT4E2M1 inputs are supported.");
   }
 }
 

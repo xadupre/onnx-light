@@ -121,6 +121,110 @@ class TestSerializeFormat(ExtTestCase):
         with self.assertRaises(RuntimeError):
             parsed.ParseFromFile(path, popts)
 
+    def test_ort_flatbuffers_serialize_to_string_raises_with_parallelization(self) -> None:
+        # Combining the unimplemented ORT flatbuffer writer with parallel writing
+        # must still produce a clean RuntimeError: the format guard is expected
+        # to fire before any thread pool is spun up. This prevents silently
+        # falling back to a parallel ONNX-protobuf write while the user asked
+        # for the flatbuffer format.
+        model, _, _ = _make_simple_model()
+        for num_threads in (2, 4, -1):
+            with self.subTest(num_threads=num_threads):
+                sopts = onnxl.SerializeOptions()
+                sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+                sopts.num_threads = num_threads
+                with self.assertRaises(RuntimeError):
+                    model.SerializeToString(sopts)
+
+    def test_ort_flatbuffers_serialize_to_string_raises_with_alignment(self) -> None:
+        # Same contract for the alignment knob: the format guard takes
+        # precedence so the user gets a clear "format not implemented" error
+        # instead of an aligned ONNX-protobuf payload.
+        model, _, _ = _make_simple_model()
+        for alignment in (16, 64, 4096):
+            with self.subTest(alignment=alignment):
+                sopts = onnxl.SerializeOptions()
+                sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+                sopts.alignment = alignment
+                with self.assertRaises(RuntimeError):
+                    model.SerializeToString(sopts)
+
+    def test_ort_flatbuffers_serialize_to_string_raises_with_parallel_and_alignment(
+        self,
+    ) -> None:
+        # Both knobs together must still surface the format guard.
+        model, _, _ = _make_simple_model()
+        sopts = onnxl.SerializeOptions()
+        sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+        sopts.num_threads = 4
+        sopts.alignment = 4096
+        with self.assertRaises(RuntimeError):
+            model.SerializeToString(sopts)
+
+    def test_ort_flatbuffers_serialize_to_file_raises_with_parallelization(self) -> None:
+        model, _, _ = _make_simple_model()
+        for num_threads in (2, 4, -1):
+            with self.subTest(num_threads=num_threads):
+                path = self.get_dump_file(
+                    f"test_ort_serialize_to_file_unimpl_threads_{num_threads}.ort"
+                )
+                sopts = onnxl.SerializeOptions()
+                sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+                sopts.num_threads = num_threads
+                with self.assertRaises(RuntimeError):
+                    model.SerializeToFile(path, sopts)
+
+    def test_ort_flatbuffers_serialize_to_file_raises_with_alignment(self) -> None:
+        model, _, _ = _make_simple_model()
+        for alignment in (16, 64, 4096):
+            with self.subTest(alignment=alignment):
+                path = self.get_dump_file(
+                    f"test_ort_serialize_to_file_unimpl_align_{alignment}.ort"
+                )
+                sopts = onnxl.SerializeOptions()
+                sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+                sopts.alignment = alignment
+                with self.assertRaises(RuntimeError):
+                    model.SerializeToFile(path, sopts)
+
+    def test_ort_flatbuffers_serialize_to_file_raises_with_parallel_and_alignment(
+        self,
+    ) -> None:
+        model, _, _ = _make_simple_model()
+        path = self.get_dump_file("test_ort_serialize_to_file_unimpl_parallel_align.ort")
+        sopts = onnxl.SerializeOptions()
+        sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+        sopts.num_threads = 4
+        sopts.alignment = 4096
+        with self.assertRaises(RuntimeError):
+            model.SerializeToFile(path, sopts)
+
+    def test_ort_flatbuffers_parse_from_string_raises_with_parallelization(self) -> None:
+        # Symmetric coverage for the parser: combining the unimplemented
+        # ORT flatbuffer reader with parallel reading must raise cleanly too.
+        model, _, _ = _make_simple_model()
+        data = model.SerializeToString()
+        for num_threads in (2, 4, -1):
+            with self.subTest(num_threads=num_threads):
+                popts = onnxl.ParseOptions()
+                popts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+                popts.num_threads = num_threads
+                parsed = onnxl.ModelProto()
+                with self.assertRaises(RuntimeError):
+                    parsed.ParseFromString(data, popts)
+
+    def test_ort_flatbuffers_parse_from_string_raises_with_alignment(self) -> None:
+        model, _, _ = _make_simple_model()
+        data = model.SerializeToString()
+        for alignment in (16, 64, 4096):
+            with self.subTest(alignment=alignment):
+                popts = onnxl.ParseOptions()
+                popts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+                popts.alignment = alignment
+                parsed = onnxl.ModelProto()
+                with self.assertRaises(RuntimeError):
+                    parsed.ParseFromString(data, popts)
+
     @unittest.skip(
         "Saving to onnxruntime flatbuffer format is not implemented yet; "
         "this test will be enabled once SerializeFormat.ORT_FLATBUFFERS produces "

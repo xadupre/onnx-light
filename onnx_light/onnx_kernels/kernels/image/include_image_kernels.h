@@ -28,10 +28,10 @@ namespace kernel {
 // the channel-last layout selected by the ``pixel_format`` attribute
 // (``"RGB"``, ``"BGR"`` or ``"Grayscale"``).
 //
-// To keep the lightweight C++ kernel library free of third-party image
-// decoding dependencies (``libjpeg``, ``libpng``, ``libwebp``, etc.) the
-// reference kernel implements only the subset of image formats that can be
-// decoded without external libraries:
+// To keep the lightweight C++ kernel library free of build-time third-party
+// image decoding dependencies (``libjpeg``, ``libpng``, ``libwebp``, etc.) the
+// reference kernel implements most decoders inline and uses ``libwebp`` only
+// when it is available at runtime:
 //
 //   * **BMP** — 24-bit uncompressed (BI_RGB, BITMAPINFOHEADER): fully
 //     decoded to ``(H, W, C)`` uint8 output in the requested
@@ -50,8 +50,10 @@ namespace kernel {
 //     implemented inline so no external ``libpng`` / ``zlib`` dependency
 //     is required. Palette, alpha (color types 3/4/6), 16-bit depth and
 //     interlaced PNGs fall through to the empty-matrix path.
+//   * **WebP** — decoded via dynamically loaded ``libwebp`` (if present at
+//     runtime), then converted to ``pixel_format``.
 //
-// For all other formats (JPEG2000, TIFF, WebP, PNM) the kernel
+// For all other formats (JPEG2000, PNM) the kernel
 // falls back to the behavior documented by the ONNX schema:
 //
 //     "If it can't decode for any reason (e.g. corrupted encoded stream,
@@ -80,8 +82,9 @@ namespace kernel {
 /// (JFIF, SOF0, 8-bit precision, 1 or 3 components, sampling factors
 /// in ``{1, 2}``, optional restart intervals) images, as well as 8-bit
 /// non-interlaced grayscale/truecolor PNG (color types 0 and 2), are
-/// decoded natively without any external library dependency. All other
-/// formats (JPEG2000, TIFF, WebP, PNM) fall back to returning
+/// decoded natively without any external library dependency. WebP is
+/// decoded through ``libwebp`` when available at runtime. All other
+/// formats (JPEG2000, PNM) fall back to returning
 /// an empty matrix (``(0, 0, C)`` ``tensor(uint8)``). Invalid inputs
 /// or attribute values throw ``std::invalid_argument``.
 class ImageDecoder : public KernelBase {

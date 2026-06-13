@@ -10,9 +10,16 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
+
+#if defined(_WIN32)
+#include <windows.h>
+#elif defined(__APPLE__) || defined(__linux__) || defined(__unix__)
+#include <dlfcn.h>
+#endif
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
@@ -1515,6 +1522,116 @@ bool TryDecodePng(const uint8_t *data, size_t size, const std::string &pixel_for
   return true;
 }
 
+bool TryDecodeWebp(const uint8_t *data, size_t size, const std::string &pixel_format,
+                   int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels) {
+  using GetInfoFn = int (*)(const uint8_t *, size_t, int *, int *);
+  using DecodeRgbIntoFn = uint8_t *(*)(const uint8_t *, size_t, uint8_t *, size_t, int);
+
+  struct WebPApi {
+#if defined(_WIN32)
+    HMODULE handle = nullptr;
+#else
+    void *handle = nullptr;
+#endif
+    GetInfoFn get_info = nullptr;
+    DecodeRgbIntoFn decode_rgb_into = nullptr;
+  };
+
+  const auto load_webp_api = []() -> WebPApi {
+    WebPApi api{};
+#if defined(_WIN32)
+    api.handle = LoadLibraryA("libwebp.dll");
+    if (!api.handle) {
+      api.handle = LoadLibraryA("webp.dll");
+    }
+    if (!api.handle) {
+      return api;
+    }
+    api.get_info = reinterpret_cast<GetInfoFn>(GetProcAddress(api.handle, "WebPGetInfo"));
+    api.decode_rgb_into =
+        reinterpret_cast<DecodeRgbIntoFn>(GetProcAddress(api.handle, "WebPDecodeRGBInto"));
+#elif defined(__APPLE__)
+    api.handle = dlopen("libwebp.dylib", RTLD_LAZY | RTLD_LOCAL);
+    if (!api.handle) {
+      return api;
+    }
+    api.get_info = reinterpret_cast<GetInfoFn>(dlsym(api.handle, "WebPGetInfo"));
+    api.decode_rgb_into = reinterpret_cast<DecodeRgbIntoFn>(dlsym(api.handle, "WebPDecodeRGBInto"));
+#else
+    api.handle = dlopen("libwebp.so.7", RTLD_LAZY | RTLD_LOCAL);
+    if (!api.handle) {
+      api.handle = dlopen("libwebp.so", RTLD_LAZY | RTLD_LOCAL);
+    }
+    if (!api.handle) {
+      return api;
+    }
+    api.get_info = reinterpret_cast<GetInfoFn>(dlsym(api.handle, "WebPGetInfo"));
+    api.decode_rgb_into = reinterpret_cast<DecodeRgbIntoFn>(dlsym(api.handle, "WebPDecodeRGBInto"));
+#endif
+    if (!api.get_info || !api.decode_rgb_into) {
+#if defined(_WIN32)
+      if (api.handle) {
+        FreeLibrary(api.handle);
+      }
+#else
+      if (api.handle) {
+        dlclose(api.handle);
+      }
+#endif
+      return WebPApi{};
+    }
+    return api;
+  };
+
+  static const WebPApi s_webp_api = load_webp_api();
+  if (!s_webp_api.get_info || !s_webp_api.decode_rgb_into) {
+    return false;
+  }
+
+  int width = 0;
+  int height = 0;
+  if (s_webp_api.get_info(data, size, &width, &height) == 0 || width <= 0 || height <= 0) {
+    return false;
+  }
+
+  const int64_t channels = ImageDecoder::ChannelCount(pixel_format);
+  const size_t pixel_count = static_cast<size_t>(width) * static_cast<size_t>(height);
+  if (pixel_count > ((std::numeric_limits<size_t>::max)() / 3u) ||
+      pixel_count > ((std::numeric_limits<size_t>::max)() / static_cast<size_t>(channels))) {
+    return false;
+  }
+
+  std::vector<uint8_t> rgb(pixel_count * 3u);
+  const int rgb_stride = width * 3;
+  const uint8_t *decoded =
+      s_webp_api.decode_rgb_into(data, size, rgb.data(), rgb.size(), rgb_stride);
+  if (decoded != rgb.data()) {
+    return false;
+  }
+
+  out_pixels.resize(pixel_count * static_cast<size_t>(channels));
+  for (size_t i = 0; i < pixel_count; ++i) {
+    const uint8_t r = rgb[i * 3u + 0u];
+    const uint8_t g = rgb[i * 3u + 1u];
+    const uint8_t b = rgb[i * 3u + 2u];
+    if (pixel_format == "RGB") {
+      out_pixels[i * 3u + 0u] = r;
+      out_pixels[i * 3u + 1u] = g;
+      out_pixels[i * 3u + 2u] = b;
+    } else if (pixel_format == "BGR") {
+      out_pixels[i * 3u + 0u] = b;
+      out_pixels[i * 3u + 1u] = g;
+      out_pixels[i * 3u + 2u] = r;
+    } else {
+      out_pixels[i] = static_cast<uint8_t>((299 * r + 587 * g + 114 * b + 500) / 1000);
+    }
+  }
+
+  out_height = static_cast<int64_t>(height);
+  out_width = static_cast<int64_t>(width);
+  return true;
+}
+
 } // namespace
 
 int64_t ImageDecoder::ChannelCount(const std::string &pixel_format) {
@@ -1542,7 +1659,8 @@ Tensor ImageDecoder::operator()(const Tensor &encoded_stream,
   if (TryDecodePng(raw, raw_size, pixel_format, height, width, pixels) ||
       TryDecodeBmp(raw, raw_size, pixel_format, height, width, pixels) ||
       TryDecodeJpeg(raw, raw_size, pixel_format, height, width, pixels) ||
-      TryDecodeTiff(raw, raw_size, pixel_format, height, width, pixels)) {
+      TryDecodeTiff(raw, raw_size, pixel_format, height, width, pixels) ||
+      TryDecodeWebp(raw, raw_size, pixel_format, height, width, pixels)) {
     return Tensor::FromUint8("", {height, width, channels}, std::move(pixels));
   }
 
@@ -1576,7 +1694,8 @@ void ImageDecoder::operator()(const Tensor &encoded_stream, const std::string &p
   if (TryDecodePng(raw, raw_size, pixel_format, height, width, pixels) ||
       TryDecodeBmp(raw, raw_size, pixel_format, height, width, pixels) ||
       TryDecodeJpeg(raw, raw_size, pixel_format, height, width, pixels) ||
-      TryDecodeTiff(raw, raw_size, pixel_format, height, width, pixels)) {
+      TryDecodeTiff(raw, raw_size, pixel_format, height, width, pixels) ||
+      TryDecodeWebp(raw, raw_size, pixel_format, height, width, pixels)) {
     EXT_ENFORCE_INVALID(output.shape[0] == height && output.shape[1] == width,
                         "kernel::ImageDecoder preallocated output shape does not match the decoded "
                         "image dimensions.");

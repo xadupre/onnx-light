@@ -5815,12 +5815,13 @@ std::string BuildNestedTypeProto(int levels) {
 
 TEST(onnx_proto, ParserRecursionLimitRejectsDeeplyNestedMessages) {
   // Each level adds two sub-message parses; 200 levels reaches depth 400, well
-  // beyond the default recursion limit of 100, and must be rejected rather than
-  // overflowing the stack / exhausting memory.
+  // beyond the default recursion limit of 50, and must be rejected rather than
+  // overflowing the stack / exhausting memory. The guard fires at depth
+  // limit + 1, so the parser never recurses past the default limit.
   std::string deep = BuildNestedTypeProto(200);
   TypeProto parsed;
   ParseOptions popts;
-  EXPECT_EQ(popts.max_recursion_depth, 100);
+  EXPECT_EQ(popts.max_recursion_depth, 50);
   EXPECT_THROW(parsed.ParseFromString(deep, popts), std::exception);
   // The recursion counter must be fully unwound even after a rejected parse so
   // the options object can be safely reused.
@@ -5828,7 +5829,7 @@ TEST(onnx_proto, ParserRecursionLimitRejectsDeeplyNestedMessages) {
 }
 
 TEST(onnx_proto, ParserRecursionLimitAcceptsShallowNesting) {
-  // 10 levels reaches depth 20, comfortably within the default limit.
+  // 10 levels reaches depth 20, comfortably within the default limit of 50.
   std::string shallow = BuildNestedTypeProto(10);
   TypeProto parsed;
   ParseOptions popts;

@@ -768,6 +768,32 @@ void TensorProto::LoadExternalData(const std::string &base_dir) {
               "' must be a relative path that does not escape the base directory.");
   std::filesystem::path data_path =
       base_dir.empty() ? loc_normal : std::filesystem::path(base_dir) / loc_normal;
+  // Reject symlinks: external data must be a regular file, never a symbolic
+  // link, otherwise a malicious model could read arbitrary files on disk.
+  EXT_ENFORCE(!std::filesystem::is_symlink(data_path),
+              "TensorProto::LoadExternalData: external data file '", data_path.string(),
+              "' is a symbolic link, which is not allowed, for tensor '", ref_name().as_string(),
+              "'.");
+  // Verify canonical containment to catch symlinks in any parent component
+  // that would resolve outside the base directory.
+  if (!base_dir.empty()) {
+    std::error_code ec;
+    std::filesystem::path canonical_data = std::filesystem::weakly_canonical(data_path, ec);
+    EXT_ENFORCE(!ec, "TensorProto::LoadExternalData: external data path '", data_path.string(),
+                "' could not be canonicalized: ", ec.message());
+    std::filesystem::path canonical_base =
+        std::filesystem::weakly_canonical(std::filesystem::path(base_dir), ec);
+    EXT_ENFORCE(!ec, "TensorProto::LoadExternalData: base directory '", base_dir,
+                "' could not be canonicalized: ", ec.message());
+    std::filesystem::path::string_type base_str = canonical_base.native();
+    if (!base_str.empty() && base_str.back() != std::filesystem::path::preferred_separator) {
+      base_str += std::filesystem::path::preferred_separator;
+    }
+    EXT_ENFORCE(canonical_data.native().find(base_str) == 0 || canonical_data == canonical_base,
+                "TensorProto::LoadExternalData: external data '", data_path.string(),
+                "' resolves outside the base directory '", base_dir, "' for tensor '",
+                ref_name().as_string(), "'.");
+  }
   std::ifstream file(data_path, std::ios::binary);
   EXT_ENFORCE(file.is_open(), "TensorProto::LoadExternalData unable to open external data file '",
               data_path.string(), "' for tensor '", ref_name().as_string(), "'.");

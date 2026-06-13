@@ -175,7 +175,9 @@ avoid recollecting test cases on repeated lookups.
 Full example: ONNXRuntime backend
 -----------------------------------
 
-The file ``unittests/onnxl_vs_ort/test_backend_with_onnxruntime.py`` in the
+The file
+`unittests/onnxl_vs_ort/test_backend_with_onnxruntime.py <https://github.com/xadupre/onnx-light/blob/main/unittests/onnxl_vs_ort/test_backend_with_onnxruntime.py>`__
+in the
 repository is a ready-to-run example that exercises every registered
 backend test case through
 `ONNXRuntime <https://onnxruntime.ai/>`_:
@@ -245,9 +247,10 @@ Running backend tests in C++
 
 The exact same node test cases are also available directly from C++ via
 the ``lib_onnx_backend_test`` static library, with no dependency on
-Python. The library lives in ``onnx_light/onnx_backend_test/`` and
+Python. The library lives in
+`onnx_light/onnx_backend_test/ <https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_backend_test>`__ and
 publicly links the ``lib_onnx_kernels`` static library (under
-``onnx_light/onnx_kernels/``) which provides the runtime data model
+`onnx_light/onnx_kernels/ <https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_kernels>`__) which provides the runtime data model
 and reference kernel implementations. Together they expose:
 
 * a runtime :cpp:struct:`onnx::onnx_kernels::Tensor` (distinct from
@@ -262,10 +265,10 @@ and reference kernel implementations. Together they expose:
   ``onnx_light.onnx_py._onnxpybackend.backend_test``).
 
 Per-operator cases are organised under
-``onnx_light/onnx_backend_test/cases/<group>/`` (``math``, ``logical``,
+`onnx_light/onnx_backend_test/cases <https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_backend_test/cases>`__\ ``/<group>/`` (``math``, ``logical``,
 ``nn``, ``tensor``, …) and the expected outputs are computed with the
 reference kernels under
-``onnx_light/onnx_kernels/kernels/<group>/`` so the registry is
+`onnx_light/onnx_kernels/kernels <https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_kernels/kernels>`__\ ``/<group>/`` so the registry is
 fully self-contained and deterministic.
 
 A minimal C++ runtime evaluator therefore looks like:
@@ -286,7 +289,8 @@ A minimal C++ runtime evaluator therefore looks like:
     }
 
 The library ships its own GoogleTest-based unit tests under
-``unittests/cc/onnx_kernels/`` and ``unittests/cc/onnx_backend_test/``.
+`unittests/cc/onnx_kernels/ <https://github.com/xadupre/onnx-light/tree/main/unittests/cc/onnx_kernels>`__ and
+`unittests/cc/onnx_backend_test/ <https://github.com/xadupre/onnx-light/tree/main/unittests/cc/onnx_backend_test>`__.
 To build and run them, configure
 the project with ``ONNX_LIGHT_BUILD_TESTS=ON`` and use ``ctest``:
 

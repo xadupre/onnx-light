@@ -3,15 +3,16 @@
 C++ Kernels
 ===========
 
-The kernel layer is implemented in ``onnx_light/onnx_kernels`` and built as
-``lib_onnx_kernels``. It contains:
+The kernel layer is implemented in
+`onnx_light/onnx_kernels <https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_kernels>`__
+and built as ``lib_onnx_kernels``. It contains:
 
 * runtime tensor/container types used by the backend runtime
   (:cpp:struct:`onnx::onnx_kernels::Tensor`,
   :cpp:struct:`onnx::onnx_kernels::Sequence`,
   :cpp:class:`onnx::onnx_kernels::RuntimeContext`),
 * operator kernel implementations under
-  ``onnx_light/onnx_kernels/kernels/<domain>/``,
+  `onnx_light/onnx_kernels/kernels <https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_kernels/kernels>`__\ ``/<domain>/``,
 * graph/node execution helpers
   (:cpp:func:`onnx::onnx_kernels::RunNode`,
   :cpp:func:`onnx::onnx_kernels::RunGraph`,
@@ -57,7 +58,9 @@ paths that evaluate subgraphs through :cpp:func:`onnx::onnx_kernels::RunSubgraph
 How backend tests use kernels
 -----------------------------
 
-Backend test cases in ``onnx_light/onnx_backend_test/cases/`` create ONNX nodes
+Backend test cases in
+`onnx_light/onnx_backend_test/cases <https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_backend_test/cases>`__
+create ONNX nodes
 and compute expected outputs with C++ kernels, then register them with
 :cpp:func:`onnx::onnx_backend_test::Expect`.
 
@@ -71,14 +74,15 @@ Adding or extending a kernel
 Typical workflow:
 
 #. Implement/extend the kernel class in
-   ``onnx_light/onnx_kernels/kernels/<family>/`` and export it from the
+   `onnx_light/onnx_kernels/kernels <https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_kernels/kernels>`__\ ``/<family>/`` and export it from the
    corresponding ``include_<family>_kernels.h``.
 #. Add or update C++ backend test cases in
-   ``onnx_light/onnx_backend_test/cases/<family>/``; compute expected outputs
+   `onnx_light/onnx_backend_test/cases <https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_backend_test/cases>`__\ ``/<family>/``; compute expected outputs
    through the kernel and register them with
    :cpp:func:`onnx::onnx_backend_test::Expect`.
 #. If the operator should be executable through ``RunNode``/``RunModel``, add a
-   trampoline/dispatch-table entry in ``onnx_light/onnx_kernels/run_nodes.cc``
+   trampoline/dispatch-table entry in
+   `onnx_light/onnx_kernels/run_nodes.cc <https://github.com/xadupre/onnx-light/blob/main/onnx_light/onnx_kernels/run_nodes.cc>`__
    (or a dedicated path for control-flow style operators).
 #. Run the C++ tests (for example ``ctest -R OnnxOp`` or
    ``ctest -R Backend --output-on-failure`` after configuring with

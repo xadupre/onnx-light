@@ -13,3 +13,4 @@ How-to Python / C++
     save_ort_flatbuffers
     collect_backend_test_cases
     use_custom_kernel
+    use_custom_shape_inference

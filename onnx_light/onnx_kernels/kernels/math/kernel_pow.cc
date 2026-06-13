@@ -161,46 +161,6 @@ void PowHalfLoop(const detail::BroadcastInfo &bi, const uint16_t *px, const TExp
   }
 }
 
-void PowDispatchHalfBase(const Tensor &x, const Tensor &y, Tensor &output,
-                         const detail::BroadcastInfo &bi, detail::HalfDecodeFunc decode,
-                         detail::HalfEncodeFunc encode) {
-  const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
-  uint16_t *pz = reinterpret_cast<uint16_t *>(output.data.data());
-  switch (y.data_type) {
-  case DataType::FLOAT: {
-    const float *py = reinterpret_cast<const float *>(y.bytes());
-    return PowHalfLoop<float>(bi, px, py, pz, decode, encode);
-  }
-  case DataType::FLOAT16: {
-    const int64_t ny = y.element_count();
-    std::vector<float> fy(static_cast<size_t>(ny));
-    const uint16_t *raw_py = reinterpret_cast<const uint16_t *>(y.bytes());
-    for (int64_t i = 0; i < ny; ++i)
-      fy[static_cast<size_t>(i)] = Float16BitsToFloat(raw_py[i]);
-    return PowHalfLoop<float>(bi, px, fy.data(), pz, decode, encode);
-  }
-  case DataType::BFLOAT16: {
-    const int64_t ny = y.element_count();
-    std::vector<float> fy(static_cast<size_t>(ny));
-    const uint16_t *raw_py = reinterpret_cast<const uint16_t *>(y.bytes());
-    for (int64_t i = 0; i < ny; ++i)
-      fy[static_cast<size_t>(i)] = Bfloat16BitsToFloat(raw_py[i]);
-    return PowHalfLoop<float>(bi, px, fy.data(), pz, decode, encode);
-  }
-  case DataType::INT32: {
-    const int32_t *py = reinterpret_cast<const int32_t *>(y.bytes());
-    return PowHalfLoop<int32_t>(bi, px, py, pz, decode, encode);
-  }
-  case DataType::INT64: {
-    const int64_t *py = reinterpret_cast<const int64_t *>(y.bytes());
-    return PowHalfLoop<int64_t>(bi, px, py, pz, decode, encode);
-  }
-  default:
-    EXT_THROW_INVALID(kPowName, ": unsupported data type ", y.data_type,
-                      kSupportedExponentTypesMsg);
-  }
-}
-
 template <typename TBase, typename TExp>
 void PowDispatchExp(const Tensor &x, const Tensor &y, Tensor &output,
                     const detail::BroadcastInfo &bi) {
@@ -231,41 +191,6 @@ void PowDispatchBase(const Tensor &x, const Tensor &y, Tensor &output,
 }
 
 template <typename TExp>
-void PowHalfLoop(const detail::BroadcastInfo &bi, const uint16_t *px, const TExp *py, uint16_t *pz,
-                 detail::HalfDecodeFunc decode, detail::HalfEncodeFunc encode) {
-  if (bi.shape_x == bi.shape_y) {
-    for (int64_t i = 0; i < bi.element_count; ++i) {
-      pz[static_cast<size_t>(i)] = encode(std::pow(decode(px[i]), static_cast<float>(py[i])));
-    }
-    return;
-  }
-  if (bi.nx == 1 || bi.ny == 1) {
-    for (int64_t i = 0; i < bi.element_count; ++i) {
-      const float a = bi.nx == 1 ? decode(px[0]) : decode(px[i]);
-      const float b = static_cast<float>(bi.ny == 1 ? py[0] : py[i]);
-      pz[static_cast<size_t>(i)] = encode(std::pow(a, b));
-    }
-    return;
-  }
-  const size_t rank = bi.shape.size();
-  std::vector<int64_t> idx(rank, 0);
-  for (int64_t flat = 0; flat < bi.element_count; ++flat) {
-    int64_t ox = 0, oy = 0;
-    for (size_t d = 0; d < rank; ++d) {
-      ox += idx[d] * bi.strides_x[d];
-      oy += idx[d] * bi.strides_y[d];
-    }
-    pz[static_cast<size_t>(flat)] = encode(std::pow(decode(px[ox]), static_cast<float>(py[oy])));
-    for (size_t d = rank; d-- > 0;) {
-      if (++idx[d] < bi.shape[d]) {
-        break;
-      }
-      idx[d] = 0;
-    }
-  }
-}
-
-template <typename TExp>
 void PowDispatchHalfExp(const Tensor &x, const Tensor &y, Tensor &output,
                         const detail::BroadcastInfo &bi, detail::HalfDecodeFunc decode,
                         detail::HalfEncodeFunc encode) {
@@ -281,6 +206,26 @@ void PowDispatchHalfBase(const Tensor &x, const Tensor &y, Tensor &output,
   switch (y.data_type) {
   case DataType::FLOAT:
     return PowDispatchHalfExp<float>(x, y, output, bi, decode, encode);
+  case DataType::FLOAT16: {
+    const int64_t ny = y.element_count();
+    std::vector<float> fy(static_cast<size_t>(ny));
+    const uint16_t *raw_py = reinterpret_cast<const uint16_t *>(y.bytes());
+    for (int64_t i = 0; i < ny; ++i)
+      fy[static_cast<size_t>(i)] = Float16BitsToFloat(raw_py[i]);
+    const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
+    uint16_t *pz = reinterpret_cast<uint16_t *>(output.data.data());
+    return PowHalfLoop<float>(bi, px, fy.data(), pz, decode, encode);
+  }
+  case DataType::BFLOAT16: {
+    const int64_t ny = y.element_count();
+    std::vector<float> fy(static_cast<size_t>(ny));
+    const uint16_t *raw_py = reinterpret_cast<const uint16_t *>(y.bytes());
+    for (int64_t i = 0; i < ny; ++i)
+      fy[static_cast<size_t>(i)] = Bfloat16BitsToFloat(raw_py[i]);
+    const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
+    uint16_t *pz = reinterpret_cast<uint16_t *>(output.data.data());
+    return PowHalfLoop<float>(bi, px, fy.data(), pz, decode, encode);
+  }
   case DataType::INT32:
     return PowDispatchHalfExp<int32_t>(x, y, output, bi, decode, encode);
   case DataType::INT64:
@@ -290,7 +235,8 @@ void PowDispatchHalfBase(const Tensor &x, const Tensor &y, Tensor &output,
   case DataType::UINT64:
     return PowDispatchHalfExp<uint64_t>(x, y, output, bi, decode, encode);
   default:
-    throw std::invalid_argument(std::string(kPowName) + kSupportedExponentTypesMsg);
+    EXT_THROW_INVALID(kPowName, ": unsupported data type ", y.data_type,
+                      kSupportedExponentTypesMsg);
   }
 }
 
@@ -306,9 +252,6 @@ size_t BaseDtypeSize(int32_t dtype) {
     return sizeof(int32_t);
   case DataType::INT64:
     return sizeof(int64_t);
-  case DataType::FLOAT16:
-  case DataType::BFLOAT16:
-    return sizeof(uint16_t);
   default:
     EXT_THROW_INVALID(kPowName, ": unsupported data type ", dtype, kSupportedBaseTypesMsg);
   }
@@ -326,10 +269,6 @@ const char *BaseDtypeName(int32_t dtype) {
     return "INT32";
   case DataType::INT64:
     return "INT64";
-  case DataType::FLOAT16:
-    return "FLOAT16";
-  case DataType::BFLOAT16:
-    return "BFLOAT16";
   default:
     EXT_THROW_INVALID(kPowName, ": unsupported data type ", dtype, kSupportedBaseTypesMsg);
   }

@@ -301,7 +301,7 @@ class TestReferenceEvaluator(ExtTestCase):
         np.testing.assert_array_equal(out_dict, np.array([1.5, 0.0, 2.5], dtype=np.float32))
 
         # A size-1 numpy object array wrapping the dict is unwrapped too
-        # (1-D shape-(1,) variant).
+        # (1-D shape-(1,) variant; see also the 0-D variant below).
         (out_obj,) = sess.run(None, {"x": np.array([{10: 1.5, 30: 2.5}], dtype=object)})
         np.testing.assert_array_equal(out_obj, np.array([1.5, 0.0, 2.5], dtype=np.float32))
 

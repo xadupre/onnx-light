@@ -70,6 +70,14 @@ jobs:
         uses: pypa/cibuildwheel@v2.23.2
         env:
           CIBW_BUILD: "cp312-*"
+          # The default cibuildwheel manylinux2014 image ships GCC 10, which
+          # rejects some of our recursive container templates (e.g. the
+          # std::unordered_map<const void*, class ExecutionPlan> cache in
+          # onnx_kernels/runtime_context.h, whose value type is only
+          # forward-declared at the point of use). Use manylinux_2_28 so we
+          # build with GCC 12, matching the toolchain used by the regular CI
+          # build and the Build Release Wheels workflow.
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
           CIBW_ENVIRONMENT: >
             CMAKE_BUILD_PARALLEL_LEVEL=${{ steps.cpu_count.outputs.count }}
           CIBW_BEFORE_BUILD_LINUX: >

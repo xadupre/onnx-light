@@ -300,9 +300,19 @@ class TestReferenceEvaluator(ExtTestCase):
         (out_dict,) = sess.run(None, {"x": {10: 1.5, 30: 2.5}})
         np.testing.assert_array_equal(out_dict, np.array([1.5, 0.0, 2.5], dtype=np.float32))
 
-        # A size-1 numpy object array wrapping the dict is unwrapped too.
+        # A size-1 numpy object array wrapping the dict is unwrapped too
+        # (1-D shape-(1,) variant).
         (out_obj,) = sess.run(None, {"x": np.array([{10: 1.5, 30: 2.5}], dtype=object)})
         np.testing.assert_array_equal(out_obj, np.array([1.5, 0.0, 2.5], dtype=np.float32))
+
+        # Regression test for issue #2577: a 0-D numpy object array produced
+        # by ``np.asarray(some_dict, dtype=object)`` must also be unwrapped and
+        # accepted, rather than raising
+        # "Missing input(s) for ReferenceEvaluator.run: ['x_keys', 'x_values'].
+        #  Expected: ['x_keys', 'x_values'], got: ['x']."
+        wrapped_0d = np.asarray({10: 1.5, 30: 2.5}, dtype=object)
+        (out_0d,) = sess.run(None, {"x": wrapped_0d})
+        np.testing.assert_array_equal(out_0d, np.array([1.5, 0.0, 2.5], dtype=np.float32))
 
     def test_cast_map_int64_float_dense_dict_feed(self):
         # Regression test for issue #2576: a ``map(int64, float)`` input fed to

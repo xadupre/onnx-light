@@ -58,9 +58,9 @@ void CollectGraphExternalInputs(const GraphProto &graph, std::vector<std::string
 }
 
 template <class NodeRange>
-std::vector<std::string> CollectExternalInputsImpl(const NodeRange &nodes) {
+std::vector<std::string> CollectExternalInputsImpl(const NodeRange &nodes, size_t start = 0) {
   std::unordered_set<std::string> produced;
-  for (size_t i = 0; i < nodes.size(); ++i) {
+  for (size_t i = start; i < nodes.size(); ++i) {
     const NodeProto &nd = nodes[i];
     for (size_t j = 0; j < nd.output().size(); ++j) {
       const std::string name = nd.output()[j].as_string();
@@ -71,7 +71,7 @@ std::vector<std::string> CollectExternalInputsImpl(const NodeRange &nodes) {
   }
   std::vector<std::string> out;
   std::unordered_set<std::string> seen;
-  for (size_t i = 0; i < nodes.size(); ++i) {
+  for (size_t i = start; i < nodes.size(); ++i) {
     const NodeProto &nd = nodes[i];
     for (size_t j = 0; j < nd.input().size(); ++j) {
       const std::string name = nd.input()[j].as_string();
@@ -96,6 +96,16 @@ std::vector<std::string> CollectExternalInputsImpl(const NodeRange &nodes) {
   return out;
 }
 
+template <class NodeRange>
+std::vector<std::vector<std::string>> CollectRemainingInputsImpl(const NodeRange &nodes) {
+  std::vector<std::vector<std::string>> out;
+  out.reserve(nodes.size());
+  for (size_t i = 0; i < nodes.size(); ++i) {
+    out.push_back(CollectExternalInputsImpl(nodes, i));
+  }
+  return out;
+}
+
 } // namespace
 
 std::vector<std::string> CollectExternalInputs(const utils::RepeatedProtoField<NodeProto> &nodes) {
@@ -104,6 +114,16 @@ std::vector<std::string> CollectExternalInputs(const utils::RepeatedProtoField<N
 
 std::vector<std::string> CollectExternalInputs(const std::vector<NodeProto> &nodes) {
   return CollectExternalInputsImpl(nodes);
+}
+
+std::vector<std::vector<std::string>>
+CollectRemainingInputs(const utils::RepeatedProtoField<NodeProto> &nodes) {
+  return CollectRemainingInputsImpl(nodes);
+}
+
+std::vector<std::vector<std::string>>
+CollectRemainingInputs(const std::vector<NodeProto> &nodes) {
+  return CollectRemainingInputsImpl(nodes);
 }
 
 std::vector<std::string> CollectNodeInputs(const NodeProto &node) {

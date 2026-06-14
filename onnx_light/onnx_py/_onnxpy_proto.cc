@@ -765,6 +765,18 @@ void AddOnnxPyProto(nb::module_ &m) {
       "The returned list preserves first-seen order and contains no duplicates; "
       "it skips empty input names.");
 
+  m.def(
+      "collect_remaining_inputs",
+      [](const std::vector<NodeProto> &nodes) { return CollectRemainingInputs(nodes); },
+      nb::arg("nodes"),
+      "Returns, for every node in ``nodes``, the list of input names needed by "
+      "that node and all the nodes that follow it. For index ``i`` the result is "
+      "the set of names referenced by ``nodes[i:]`` (including names captured by "
+      "subgraph attributes ``GRAPH`` / ``GRAPHS``) that are not produced as "
+      "outputs by any node in that same sub-list. The result is a list with one "
+      "entry per node; each entry preserves first-seen order, contains no "
+      "duplicates and skips empty input names.");
+
   nb::enum_<FileLoadMode>(m, "FileLoadMode",
                           "Selects the file-backed stream implementation used when parsing "
                           "a model from a file path.")

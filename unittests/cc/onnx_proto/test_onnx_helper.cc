@@ -229,6 +229,40 @@ TEST(onnx_helper, CollectExternalInputs) {
   EXPECT_EQ(inputs, std::vector<std::string>({"x", "y", "z"}));
 }
 
+TEST(onnx_helper, CollectRemainingInputs) {
+  std::vector<NodeProto> nodes(3);
+  nodes[0].set_op_type("Mul");
+  nodes[0].add_input("x");
+  nodes[0].add_input("y");
+  nodes[0].add_output("t");
+
+  nodes[1].set_op_type("Sub");
+  nodes[1].add_input("t");
+  nodes[1].add_input("z");
+  nodes[1].add_output("out");
+
+  nodes[2].set_op_type("Add");
+  nodes[2].add_input("out");
+  nodes[2].add_input("x");
+  nodes[2].add_output("final");
+
+  auto remaining = CollectRemainingInputs(nodes);
+  ASSERT_EQ(remaining.size(), 3u);
+  // From node 0 onward every external input is still needed.
+  EXPECT_EQ(remaining[0], std::vector<std::string>({"x", "y", "z"}));
+  // From node 1 onward: ``t`` is produced by node 0 (outside the suffix) and
+  // still read by node 1, ``z`` is read by node 1 and ``x`` by node 2; ``y`` is
+  // no longer needed.
+  EXPECT_EQ(remaining[1], std::vector<std::string>({"t", "z", "x"}));
+  // Only node 2 remains: it reads ``out`` (produced by node 1) and ``x``.
+  EXPECT_EQ(remaining[2], std::vector<std::string>({"out", "x"}));
+}
+
+TEST(onnx_helper, CollectRemainingInputsEmpty) {
+  std::vector<NodeProto> nodes;
+  EXPECT_TRUE(CollectRemainingInputs(nodes).empty());
+}
+
 TEST(onnx_helper, ConvertModelToExternalData_AllToOneFile) {
   ModelProto model;
   GraphProto *graph = model.add_graph();

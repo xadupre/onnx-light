@@ -55,6 +55,10 @@ Tensor Greater::operator()(const Tensor &x, const Tensor &y) const {
     return GreaterAlloc<int8_t>("INT8", DataType::INT8, x, y);
   case DataType::INT16:
     return GreaterAlloc<int16_t>("INT16", DataType::INT16, x, y);
+  case DataType::INT32:
+    return GreaterAlloc<int32_t>("INT32", DataType::INT32, x, y);
+  case DataType::INT64:
+    return GreaterAlloc<int64_t>("INT64", DataType::INT64, x, y);
   case DataType::UINT8:
     return GreaterAlloc<uint8_t>("UINT8", DataType::UINT8, x, y);
   case DataType::UINT16:
@@ -65,8 +69,8 @@ Tensor Greater::operator()(const Tensor &x, const Tensor &y) const {
     return GreaterAlloc<uint64_t>("UINT64", DataType::UINT64, x, y);
   default:
     EXT_THROW_INVALID(kGreaterName, ": unsupported data type ", x.data_type,
-                      ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, UINT8, "
-                      "UINT16, UINT32 and UINT64 inputs.");
+                      ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, INT32, "
+                      "INT64, UINT8, UINT16, UINT32 and UINT64 inputs.");
   }
 }
 
@@ -86,6 +90,10 @@ void Greater::operator()(const Tensor &x, const Tensor &y, Tensor &output) const
     return GreaterInPlace<int8_t>("INT8", DataType::INT8, x, y, output);
   case DataType::INT16:
     return GreaterInPlace<int16_t>("INT16", DataType::INT16, x, y, output);
+  case DataType::INT32:
+    return GreaterInPlace<int32_t>("INT32", DataType::INT32, x, y, output);
+  case DataType::INT64:
+    return GreaterInPlace<int64_t>("INT64", DataType::INT64, x, y, output);
   case DataType::UINT8:
     return GreaterInPlace<uint8_t>("UINT8", DataType::UINT8, x, y, output);
   case DataType::UINT16:
@@ -96,8 +104,8 @@ void Greater::operator()(const Tensor &x, const Tensor &y, Tensor &output) const
     return GreaterInPlace<uint64_t>("UINT64", DataType::UINT64, x, y, output);
   default:
     EXT_THROW_INVALID(kGreaterName, ": unsupported data type ", x.data_type,
-                      ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, UINT8, "
-                      "UINT16, UINT32 and UINT64 inputs.");
+                      ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, INT32, "
+                      "INT64, UINT8, UINT16, UINT32 and UINT64 inputs.");
   }
 }
 

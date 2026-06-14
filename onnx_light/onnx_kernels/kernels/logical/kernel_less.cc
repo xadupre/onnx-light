@@ -50,6 +50,10 @@ Tensor Less::operator()(const Tensor &x, const Tensor &y) const {
     return LessAlloc<int8_t>("INT8", DataType::INT8, x, y);
   case DataType::INT16:
     return LessAlloc<int16_t>("INT16", DataType::INT16, x, y);
+  case DataType::INT32:
+    return LessAlloc<int32_t>("INT32", DataType::INT32, x, y);
+  case DataType::INT64:
+    return LessAlloc<int64_t>("INT64", DataType::INT64, x, y);
   case DataType::UINT8:
     return LessAlloc<uint8_t>("UINT8", DataType::UINT8, x, y);
   case DataType::UINT16:
@@ -60,8 +64,8 @@ Tensor Less::operator()(const Tensor &x, const Tensor &y) const {
     return LessAlloc<uint64_t>("UINT64", DataType::UINT64, x, y);
   default:
     EXT_THROW_INVALID(kLessName, ": unsupported data type ", x.data_type,
-                      ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, UINT8, "
-                      "UINT16, UINT32 and UINT64 inputs.");
+                      ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, INT32, "
+                      "INT64, UINT8, UINT16, UINT32 and UINT64 inputs.");
   }
 }
 
@@ -81,6 +85,10 @@ void Less::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
     return LessInPlace<int8_t>("INT8", DataType::INT8, x, y, output);
   case DataType::INT16:
     return LessInPlace<int16_t>("INT16", DataType::INT16, x, y, output);
+  case DataType::INT32:
+    return LessInPlace<int32_t>("INT32", DataType::INT32, x, y, output);
+  case DataType::INT64:
+    return LessInPlace<int64_t>("INT64", DataType::INT64, x, y, output);
   case DataType::UINT8:
     return LessInPlace<uint8_t>("UINT8", DataType::UINT8, x, y, output);
   case DataType::UINT16:
@@ -91,8 +99,8 @@ void Less::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
     return LessInPlace<uint64_t>("UINT64", DataType::UINT64, x, y, output);
   default:
     EXT_THROW_INVALID(kLessName, ": unsupported data type ", x.data_type,
-                      ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, UINT8, "
-                      "UINT16, UINT32 and UINT64 inputs.");
+                      ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, INT32, "
+                      "INT64, UINT8, UINT16, UINT32 and UINT64 inputs.");
   }
 }
 

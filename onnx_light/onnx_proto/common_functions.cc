@@ -121,8 +121,7 @@ CollectRemainingInputs(const utils::RepeatedProtoField<NodeProto> &nodes) {
   return CollectRemainingInputsImpl(nodes);
 }
 
-std::vector<std::vector<std::string>>
-CollectRemainingInputs(const std::vector<NodeProto> &nodes) {
+std::vector<std::vector<std::string>> CollectRemainingInputs(const std::vector<NodeProto> &nodes) {
   return CollectRemainingInputsImpl(nodes);
 }
 

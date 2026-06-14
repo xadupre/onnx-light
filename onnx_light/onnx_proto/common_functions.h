@@ -44,8 +44,7 @@ std::vector<std::vector<std::string>>
 CollectRemainingInputs(const utils::RepeatedProtoField<NodeProto> &nodes);
 
 /// ``std::vector`` overload of :cpp:func:`CollectRemainingInputs`.
-std::vector<std::vector<std::string>>
-CollectRemainingInputs(const std::vector<NodeProto> &nodes);
+std::vector<std::vector<std::string>> CollectRemainingInputs(const std::vector<NodeProto> &nodes);
 
 /**
  * Returns the full list of tensor / sequence names a single ``node`` depends on

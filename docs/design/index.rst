@@ -14,6 +14,7 @@ a smooth replacement.
     intro/index
     differences
     protobuf_format
+    ort_flatbuffer_format
     no_copy_ownership
     loading_saving_scenarios
 

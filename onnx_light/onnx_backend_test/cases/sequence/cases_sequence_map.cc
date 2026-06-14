@@ -19,25 +19,6 @@ namespace {
 // IR version used by the manually-built models below.
 constexpr int64_t kDefaultIrVersion = 13;
 
-// Promotes the output value-info at ``out_index`` of the most recently
-// appended test case so that it is declared as a
-// ``SequenceType<Tensor<elem_type, elem_shape>>``.
-void PromoteOutputToSequenceType(std::vector<TestCase> &registry, int32_t elem_type,
-                                 const std::vector<int64_t> &elem_shape, int out_index = 0) {
-  GraphProto &graph = registry.back().model.ref_graph();
-  ValueInfoProto &out_vi = *graph.mutable_output(out_index);
-  TypeProto &out_tp = out_vi.ref_type();
-  TypeProto::Sequence *out_seq = out_tp.add_sequence_type();
-  TypeProto *out_elem = out_seq->add_elem_type();
-  TypeProto::Tensor *out_tensor = out_elem->add_tensor_type();
-  out_tensor->set_elem_type(static_cast<int>(elem_type));
-  TensorShapeProto *out_shape = out_tensor->add_shape();
-  for (int64_t d : elem_shape) {
-    out_shape->add_dim()->set_dim_value(d);
-  }
-  out_tp.reset_tensor_type();
-}
-
 // Appends a tensor-typed value-info to ``g`` with the given name, element
 // type and shape (used to declare body subgraph inputs/outputs).
 void AddBodyTensorIO(ValueInfoProto *vi, const std::string &name, int32_t elem_type,
@@ -250,8 +231,9 @@ void RegisterSequenceMapIdentityCase(const std::string &name, const std::vector<
     FillValueInfo(t, *graph->add_input());
   }
 
-  // Graph output: ``output_sequence`` declared as tensor (promoted below).
-  FillValueInfo(stacked, *graph->add_output());
+  // Graph output: ``output_sequence`` declared as a SequenceType.
+  AppendValueInfo(*graph->add_output(), stacked.name,
+                  SequenceTypeSpec(TensorTypeSpec(elem_type, elem_shape)));
 
   // DataSet: feed the original tensors, expect the stacked output.
   DataSet ds;
@@ -262,9 +244,6 @@ void RegisterSequenceMapIdentityCase(const std::string &name, const std::vector<
   tc.data_sets.emplace_back(std::move(ds));
 
   registry.emplace_back(std::move(tc));
-
-  // Promote the output value-info to SequenceType.
-  PromoteOutputToSequenceType(registry, elem_type, elem_shape);
 }
 
 // Mirrors upstream ``test_sequence_map_identity_2_sequences``: two
@@ -340,9 +319,11 @@ void RegisterSequenceMapIdentity2SequencesCase(const OpsetId &opset,
   for (const Tensor &t : x1) {
     FillValueInfo(t, *graph->add_input());
   }
-  // Graph outputs: y0 and y1 (declared as tensor, promoted below).
-  FillValueInfo(stacked0, *graph->add_output());
-  FillValueInfo(stacked1, *graph->add_output());
+  // Graph outputs: y0 and y1 declared as SequenceTypes.
+  AppendValueInfo(*graph->add_output(), stacked0.name,
+                  SequenceTypeSpec(TensorTypeSpec(elem_type, shape0)));
+  AppendValueInfo(*graph->add_output(), stacked1.name,
+                  SequenceTypeSpec(TensorTypeSpec(elem_type, shape1)));
 
   DataSet ds;
   for (const Tensor &t : x0) {
@@ -356,9 +337,6 @@ void RegisterSequenceMapIdentity2SequencesCase(const OpsetId &opset,
   tc.data_sets.emplace_back(std::move(ds));
 
   registry.emplace_back(std::move(tc));
-
-  PromoteOutputToSequenceType(registry, elem_type, shape0, /*out_index=*/0);
-  PromoteOutputToSequenceType(registry, elem_type, shape1, /*out_index=*/1);
 }
 
 // Mirrors upstream ``test_sequence_map_add_2_sequences``: two input
@@ -434,7 +412,8 @@ void RegisterSequenceMapAdd2SequencesCase(const OpsetId &opset, std::vector<Test
   for (const Tensor &t : x1) {
     FillValueInfo(t, *graph->add_input());
   }
-  FillValueInfo(stacked, *graph->add_output());
+  AppendValueInfo(*graph->add_output(), stacked.name,
+                  SequenceTypeSpec(TensorTypeSpec(elem_type, elem_shape)));
 
   DataSet ds;
   for (const Tensor &t : x0) {
@@ -447,8 +426,6 @@ void RegisterSequenceMapAdd2SequencesCase(const OpsetId &opset, std::vector<Test
   tc.data_sets.emplace_back(std::move(ds));
 
   registry.emplace_back(std::move(tc));
-
-  PromoteOutputToSequenceType(registry, elem_type, elem_shape);
 }
 
 // Mirrors upstream ``test_sequence_map_add_1_sequence_1_tensor``: one
@@ -514,7 +491,8 @@ void RegisterSequenceMapAdd1Sequence1TensorCase(const OpsetId &opset,
     FillValueInfo(t, *graph->add_input());
   }
   FillValueInfo(x1, *graph->add_input());
-  FillValueInfo(stacked, *graph->add_output());
+  AppendValueInfo(*graph->add_output(), stacked.name,
+                  SequenceTypeSpec(TensorTypeSpec(elem_type, elem_shape)));
 
   DataSet ds;
   for (const Tensor &t : x0) {
@@ -525,8 +503,6 @@ void RegisterSequenceMapAdd1Sequence1TensorCase(const OpsetId &opset,
   tc.data_sets.emplace_back(std::move(ds));
 
   registry.emplace_back(std::move(tc));
-
-  PromoteOutputToSequenceType(registry, elem_type, elem_shape);
 }
 
 // Mirrors upstream ``test_sequence_map_extract_shapes``: one input
@@ -594,7 +570,8 @@ void RegisterSequenceMapExtractShapesCase(const OpsetId &opset, std::vector<Test
   for (const Tensor &t : x) {
     FillValueInfo(t, *graph->add_input());
   }
-  FillValueInfo(stacked, *graph->add_output());
+  AppendValueInfo(*graph->add_output(), stacked.name,
+                  SequenceTypeSpec(TensorTypeSpec(out_elem_type, out_elem_shape)));
 
   DataSet ds;
   for (const Tensor &t : x) {
@@ -604,8 +581,6 @@ void RegisterSequenceMapExtractShapesCase(const OpsetId &opset, std::vector<Test
   tc.data_sets.emplace_back(std::move(ds));
 
   registry.emplace_back(std::move(tc));
-
-  PromoteOutputToSequenceType(registry, out_elem_type, out_elem_shape);
 }
 
 // Mirrors upstream ``test_sequence_map_identity_1_sequence_1_tensor``:
@@ -680,9 +655,11 @@ void RegisterSequenceMapIdentity1Sequence1TensorCase(const OpsetId &opset,
     FillValueInfo(t, *graph->add_input());
   }
   FillValueInfo(x1, *graph->add_input());
-  // Graph outputs: y0 and y1 (declared as tensor, promoted below).
-  FillValueInfo(stacked0, *graph->add_output());
-  FillValueInfo(stacked1, *graph->add_output());
+  // Graph outputs: y0 and y1 declared as SequenceTypes.
+  AppendValueInfo(*graph->add_output(), stacked0.name,
+                  SequenceTypeSpec(TensorTypeSpec(elem_type, seq_elem_shape)));
+  AppendValueInfo(*graph->add_output(), stacked1.name,
+                  SequenceTypeSpec(TensorTypeSpec(elem_type, tensor_shape)));
 
   DataSet ds;
   for (const Tensor &t : x0) {
@@ -694,9 +671,6 @@ void RegisterSequenceMapIdentity1Sequence1TensorCase(const OpsetId &opset,
   tc.data_sets.emplace_back(std::move(ds));
 
   registry.emplace_back(std::move(tc));
-
-  PromoteOutputToSequenceType(registry, elem_type, seq_elem_shape, /*out_index=*/0);
-  PromoteOutputToSequenceType(registry, elem_type, tensor_shape, /*out_index=*/1);
 }
 
 } // namespace

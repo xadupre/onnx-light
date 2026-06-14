@@ -113,27 +113,6 @@ void RegisterTensorInputCase(const std::string &name, const std::string &op_type
   Expect(node, {input}, {expected_output}, name, {opset}, "backend-test", registry);
 }
 
-// Promotes the most recently appended test case so that its single graph
-// output is declared as a ``SequenceType<Tensor<elem_type, elem_shape>>``.
-// Used by the sequence-output ``OptionalGetElement`` cases below so the
-// model's output value-info matches the actual runtime type produced by
-// the chained ``SequenceConstruct``.
-void PromoteOutputToSequenceType(std::vector<TestCase> &registry, int32_t elem_type,
-                                 const std::vector<int64_t> &elem_shape) {
-  GraphProto &graph = registry.back().model.ref_graph();
-  ValueInfoProto &out_vi = *graph.mutable_output(0);
-  TypeProto &out_tp = out_vi.ref_type();
-  TypeProto::Sequence *out_seq = out_tp.add_sequence_type();
-  TypeProto *out_elem = out_seq->add_elem_type();
-  TypeProto::Tensor *out_tensor = out_elem->add_tensor_type();
-  out_tensor->set_elem_type(static_cast<int>(elem_type));
-  TensorShapeProto *out_shape = out_tensor->add_shape();
-  for (int64_t d : elem_shape) {
-    out_shape->add_dim()->set_dim_value(d);
-  }
-  out_tp.reset_tensor_type();
-}
-
 // Builds a model that exercises ``OptionalGetElement`` on a sequence-typed
 // input. The graph contains either:
 //
@@ -224,8 +203,9 @@ void RegisterOptionalGetElementSequenceCase(const std::string &name, bool with_o
     FillValueInfo(t, *graph->add_input());
   }
 
-  // Graph output: ``output_sequence`` declared as tensor (promoted below).
-  FillValueInfo(stacked, *graph->add_output());
+  // Graph output: ``output_sequence`` declared as a SequenceType.
+  AppendValueInfo(*graph->add_output(), stacked.name,
+                  SequenceTypeSpec(TensorTypeSpec(elem_type, elem_shape)));
 
   DataSet ds;
   for (const Tensor &t : inputs) {
@@ -235,8 +215,6 @@ void RegisterOptionalGetElementSequenceCase(const std::string &name, bool with_o
   tc.data_sets.emplace_back(std::move(ds));
 
   registry.emplace_back(std::move(tc));
-
-  PromoteOutputToSequenceType(registry, elem_type, elem_shape);
 }
 
 // Builds and registers a single ``OptionalHasElement`` test case for the

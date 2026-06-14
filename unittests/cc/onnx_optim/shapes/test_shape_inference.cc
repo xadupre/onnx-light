@@ -1184,4 +1184,67 @@ TEST(OnnxOptimShapesContextEventLog, ActionNames) {
   EXPECT_STREQ(ShapeEventActionName(ShapeEventAction::kConstraintMax), "constraint_max");
 }
 
+TEST(OnnxOptimShapesContextEventLog, NodeIndexTagsInputsInitializersAndNodes) {
+  using onnx_optim::shapes::ShapeEvent;
+  using onnx_optim::shapes::ShapeEventAction;
+  // Graph: input X (float [3,4]), initializer S (int64 [2]) and a single
+  // Reshape node producing Y. Inputs are tagged with node_index -1,
+  // initializers with -2, and descriptors / compute_node events produced by
+  // node 0 with 0.
+  ModelProto model;
+  model.set_ir_version(8);
+  OperatorSetIdProto *osi = model.add_opset_import();
+  osi->set_domain("");
+  osi->set_version(18);
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+  ValueInfoProto *in = graph->add_input();
+  in->set_name("X");
+  SetValueInfoTensorType(*in, TensorProto::DataType::FLOAT, /*shape=*/{3, 4});
+  ValueInfoProto *out = graph->add_output();
+  out->set_name("Y");
+  TensorProto *init = graph->add_initializer();
+  init->set_name("S");
+  init->set_data_type(TensorProto::DataType::INT64);
+  init->add_dims(std::vector<uint64_t>{2});
+  init->add_int64_data(std::vector<int64_t>{-1, 2});
+  *graph->add_node() = MakeNode("Reshape", {"X", "S"}, {"Y"});
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.set_events_enabled(true);
+  ctx.ComputeShapeModel(model);
+
+  auto first_event = [&](ShapeEventAction action, const std::string &name) -> const ShapeEvent * {
+    for (const auto &ev : ctx.Events()) {
+      if (ev.action == action && ev.name == name) {
+        return &ev;
+      }
+    }
+    return nullptr;
+  };
+
+  const ShapeEvent *x_ev = first_event(ShapeEventAction::kAdd, "X");
+  ASSERT_NE(x_ev, nullptr);
+  EXPECT_EQ(x_ev->node_index, -1);
+
+  const ShapeEvent *s_ev = first_event(ShapeEventAction::kAdd, "S");
+  ASSERT_NE(s_ev, nullptr);
+  EXPECT_EQ(s_ev->node_index, -2);
+
+  const ShapeEvent *y_ev = first_event(ShapeEventAction::kAdd, "Y");
+  ASSERT_NE(y_ev, nullptr);
+  EXPECT_EQ(y_ev->node_index, 0);
+
+  const ShapeEvent *node_ev = nullptr;
+  for (const auto &ev : ctx.Events()) {
+    if (ev.action == ShapeEventAction::kComputeNode) {
+      node_ev = &ev;
+      break;
+    }
+  }
+  ASSERT_NE(node_ev, nullptr);
+  EXPECT_EQ(node_ev->op_type, "Reshape");
+  EXPECT_EQ(node_ev->node_index, 0);
+}
+
 } // namespace Test

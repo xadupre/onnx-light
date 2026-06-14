@@ -135,6 +135,13 @@ struct ShapeEvent {
   /// ``kConstraintMax`` events: the two constraint operands (``{a, b}``
   /// or ``{lhs, rhs}``). Empty for ``kAdd`` / ``kReplace`` events.
   std::vector<std::string> inputs;
+  /// Index of the node this event is associated with. For graph inputs it is
+  /// ``-1`` and for initializers it is ``-2``. For intermediate / output
+  /// descriptors and for ``kComputeNode`` / ``kConstraint`` /
+  /// ``kConstraintMax`` events it is the position (``>= 0``) of the producing
+  /// / dispatched node in its graph node list. ``-1`` when no producing node
+  /// is known.
+  int64_t node_index = -1;
 };
 
 /**
@@ -549,6 +556,15 @@ public:
   void set_events_enabled(bool enabled) noexcept { events_enabled_ = enabled; }
   bool events_enabled() const noexcept { return events_enabled_; }
 
+  /// Index of the node currently being processed, used to tag the
+  /// :cpp:var:`ShapeEvent::node_index` of descriptors and events recorded
+  /// during its shape-inference dispatch. Set by :cpp:func:`ComputeShapes`
+  /// before each :cpp:func:`ComputeShapeNode` call, ``-2`` while seeding
+  /// initializers and ``-1`` while seeding graph inputs (or when no node is
+  /// being processed).
+  void set_current_node_index(int64_t index) noexcept { current_node_index_ = index; }
+  int64_t current_node_index() const noexcept { return current_node_index_; }
+
   /// Append-only log of every tensor descriptor mutation performed
   /// through :cpp:func:`Set`, every node dispatched through
   /// :cpp:func:`ComputeShapeNode` and every constraint recorded through
@@ -596,6 +612,7 @@ private:
   std::set<LessEqualConstraint> le_constraints_;
   ShapeEventLog events_;
   bool events_enabled_ = false;
+  int64_t current_node_index_ = -1;
 };
 
 } // namespace shapes

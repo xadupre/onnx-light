@@ -419,6 +419,10 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
               "For ``compute_node`` events: ordered list of input names consumed by the "
               "node (matching ``NodeProto.input``). For ``constraint`` / ``constraint_max`` "
               "events: the two constraint operands. Empty otherwise.")
+      .def_ro("node_index", &onnx_shapes::ShapeEvent::node_index,
+              "Index of the node this event is associated with: ``-1`` for graph inputs, "
+              "``-2`` for initializers, and the position (``>= 0``) of the producing / "
+              "dispatched node otherwise (``-1`` when no producing node is known).")
       .def(
           "as_dict",
           [](const onnx_shapes::ShapeEvent &ev) {
@@ -430,6 +434,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
             d["op_domain"] = ev.op_domain;
             d["op_type"] = ev.op_type;
             d["inputs"] = ev.inputs;
+            d["node_index"] = ev.node_index;
             return d;
           },
           "Returns the event fields as a plain Python ``dict`` (trivially "
@@ -437,7 +442,8 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       .def("__repr__", [](const onnx_shapes::ShapeEvent &ev) {
         return std::string("ShapeEvent(action='") + onnx_shapes::ShapeEventActionName(ev.action) +
                "', name='" + ev.name + "', op_type='" + ev.op_type +
-               "', data_type=" + std::to_string(ev.data_type) + ")";
+               "', data_type=" + std::to_string(ev.data_type) +
+               ", node_index=" + std::to_string(ev.node_index) + ")";
       });
 
   // -----------------------------------------------------------------------

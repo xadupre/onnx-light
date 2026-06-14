@@ -732,6 +732,7 @@ void ShapesContext::LogSetEvent(const std::string &name, const OptimTensor &tens
   ev.action = Has(name) ? ShapeEventAction::kReplace : ShapeEventAction::kAdd;
   ev.name = name;
   ev.data_type = static_cast<int32_t>(TensorTypeToDataType(tensor.Dtype()));
+  ev.node_index = current_node_index_;
   const OptimShape &shape = tensor.Shape();
   ev.shape.reserve(shape.Rank());
   for (std::size_t i = 0; i < shape.Rank(); ++i) {
@@ -747,6 +748,7 @@ void ShapesContext::LogConstraintEvent(ShapeEventAction action, const std::strin
   ev.action = action;
   ev.data_type = static_cast<int32_t>(TensorProto::DataType::UNDEFINED);
   ev.inputs = {lhs, rhs};
+  ev.node_index = current_node_index_;
   events_.push_back(std::move(ev));
 }
 
@@ -758,6 +760,7 @@ void ShapesContext::AppendComputeNodeEvent(const std::string &op_domain, const s
   ev.op_domain = op_domain;
   ev.op_type = op_type;
   ev.inputs = std::move(inputs);
+  ev.node_index = current_node_index_;
   events_.push_back(std::move(ev));
 }
 
@@ -806,14 +809,17 @@ void ShapesContext::ComputeShapeNode(const NodeProto &node) {
 
 void ShapesContext::ComputeShapes(const utils::RepeatedProtoField<NodeProto> &nodes) {
   for (int i = 0; i < nodes.size(); ++i) {
+    current_node_index_ = static_cast<int64_t>(i);
     ComputeShapeNode(nodes[i]);
   }
+  current_node_index_ = -1;
 }
 
 void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
   // Seed initializers first so that they shadow any duplicate input
   // (an ONNX initializer may appear both in ``graph.initializer()``
   // and ``graph.input()``; the initializer wins).
+  current_node_index_ = -2;
   for (int i = 0; i < graph.initializer().size(); ++i) {
     const TensorProto &init = graph.initializer()[i];
     const std::string name = init.name().as_string();
@@ -827,6 +833,7 @@ void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
   }
   // Then seed graph inputs (skipping those already known via the
   // initializers or via outer-scope entries carried in ``*this``).
+  current_node_index_ = -1;
   for (int i = 0; i < graph.input().size(); ++i) {
     const ValueInfoProto &vi = graph.input()[i];
     const std::string name = vi.name().as_string();

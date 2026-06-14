@@ -36,6 +36,17 @@ ShapesContext InferSubgraph(ShapesContext &parent_ctx, const std::string &branch
                             const GraphProto &subgraph) {
   ShapesContext local = parent_ctx;
   local.set_current_subgraph(local.current_node_index(), branch_name);
+  for (int i = 0; i < subgraph.initializer().size(); ++i) {
+    const TensorProto &init = subgraph.initializer()[i];
+    const std::string name = init.name().as_string();
+    if (name.empty() || local.Has(name)) {
+      continue;
+    }
+    OptimTensor tensor;
+    if (OptimTensorFromTensorProto(init, tensor)) {
+      local.Set(name, std::move(tensor));
+    }
+  }
   const size_t events_before = local.Events().size();
   local.ComputeShapes(subgraph.node());
   if (parent_ctx.events_enabled()) {
@@ -195,6 +206,17 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
   // descriptor.
   ShapesContext local = ctx;
   local.set_current_subgraph(local.current_node_index(), "body");
+  for (int i = 0; i < body.initializer().size(); ++i) {
+    const TensorProto &init = body.initializer()[i];
+    const std::string name = init.name().as_string();
+    if (name.empty() || local.Has(name)) {
+      continue;
+    }
+    OptimTensor tensor;
+    if (OptimTensorFromTensorProto(init, tensor)) {
+      local.Set(name, std::move(tensor));
+    }
+  }
   local.Set(body.input()[0].name().as_string(),
             OptimTensor(nullptr, TensorType::kInt64, OptimShape{}));
   local.Set(body.input()[1].name().as_string(),
@@ -355,6 +377,17 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
   // the scan axis from the matching scan_input shape.
   ShapesContext local = ctx;
   local.set_current_subgraph(local.current_node_index(), "body");
+  for (int i = 0; i < body.initializer().size(); ++i) {
+    const TensorProto &init = body.initializer()[i];
+    const std::string name = init.name().as_string();
+    if (name.empty() || local.Has(name)) {
+      continue;
+    }
+    OptimTensor tensor;
+    if (OptimTensorFromTensorProto(init, tensor)) {
+      local.Set(name, std::move(tensor));
+    }
+  }
   for (int i = 0; i < n_state; ++i) {
     const std::string state_in_name = node.input(i).as_string();
     EXT_ENFORCE_INVALID(local.Has(state_in_name), "ComputeShapeScan: state input '", state_in_name,

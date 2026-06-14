@@ -114,6 +114,16 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     operand types ("Type 'tensor(float8e4m3fn)' of input parameter
 #     (input) of operator (CastLike) ... is invalid"). The reference
 #     backend still exercises these conversions byte-for-byte.
+#   * ``test_cc_castlike_*UINT4*``, ``test_cc_castlike_*UINT2*``,
+#     ``test_cc_castlike_*INT4*`` and ``test_cc_castlike_*INT2*`` — ORT's
+#     CPU EP rejects these packed sub-byte dtypes as ``CastLike``
+#     ``input`` / ``target_type`` operand types ("Type 'tensor(int4)' of
+#     input parameter ... of operator (CastLike) ... is invalid"). The
+#     reference backend still exercises these conversions byte-for-byte.
+#   * ``test_cc_castlike_*BFLOAT16*`` — ORT's Python bindings have no numpy
+#     mapping for ``bfloat16`` ("Numpy_type 256 can't be converted to
+#     MLDataType"). The reference backend still exercises these conversions
+#     byte-for-byte.
 #   * ``test_cc_equal_bfloat16``, ``test_cc_greater_bfloat16``,
 #     ``test_cc_greater_or_equal_bfloat16``, ``test_cc_less_bfloat16``,
 #     ``test_cc_less_or_equal_bfloat16``, ``test_mod_mixed_sign_bfloat16``,
@@ -372,6 +382,11 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_cast_.*INT4.*$",
     r"^test_cc_cast_.*INT2.*$",
     r"^test_cc_cast_.*BFLOAT16.*$",
+    r"^test_cc_castlike_.*UINT4.*$",
+    r"^test_cc_castlike_.*UINT2.*$",
+    r"^test_cc_castlike_.*INT4.*$",
+    r"^test_cc_castlike_.*INT2.*$",
+    r"^test_cc_castlike_.*BFLOAT16.*$",
     r"^test_cc_zipmap_",
     r"^test_dequantizelinear_int16$",
     r"^test_dequantizelinear_uint16$",

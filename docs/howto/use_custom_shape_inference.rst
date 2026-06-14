@@ -56,7 +56,7 @@ Write the callback
 ------------------
 
 The callback must have the signature ``fn(ctx, node) -> None`` in Python and
-``void(ShapesContext &ctx, const NodeProto &node)`` in C++.
+``void fn(ShapesContext &ctx, const NodeProto &node)`` in C++.
 
 * ``ctx`` is the current :class:`~onnx_light.onnx_optim.shape_inference.ShapesContext`.
   Call :meth:`~onnx_light.onnx_optim.shape_inference.ShapesContext.get` to read

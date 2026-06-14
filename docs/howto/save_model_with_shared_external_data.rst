@@ -109,8 +109,8 @@ secondary weights file at ``<dst_onnx_path>.data``, at aligned offsets.
           onnx::ModelProto second;
           onnx::GraphProto *graph = second.add_graph();
           graph->set_name("g");
-          for (const auto &init : first.ref_graph().ref_initializer()) {
-            *graph->add_initializer() = init;
+          for (const auto &reused_init : first.ref_graph().ref_initializer()) {
+            *graph->add_initializer() = reused_init;
           }
           std::vector<float> new_arr(5, 7.0f);
           onnx::TensorProto *new_init = graph->add_initializer();

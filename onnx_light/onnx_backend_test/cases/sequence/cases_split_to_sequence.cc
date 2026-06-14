@@ -19,24 +19,6 @@ namespace {
 // IR version used by the manually-built models below.
 constexpr int64_t kDefaultIrVersion = 13;
 
-// Promotes the most recently appended test case so that its single graph
-// output is declared as a ``SequenceType<Tensor<elem_type, elem_shape>>``.
-void PromoteOutputToSequenceType(std::vector<TestCase> &registry, int32_t elem_type,
-                                 const std::vector<int64_t> &elem_shape) {
-  GraphProto &graph = registry.back().model.ref_graph();
-  ValueInfoProto &out_vi = *graph.mutable_output(0);
-  TypeProto &out_tp = out_vi.ref_type();
-  TypeProto::Sequence *out_seq = out_tp.add_sequence_type();
-  TypeProto *out_elem = out_seq->add_elem_type();
-  TypeProto::Tensor *out_tensor = out_elem->add_tensor_type();
-  out_tensor->set_elem_type(static_cast<int>(elem_type));
-  TensorShapeProto *out_shape = out_tensor->add_shape();
-  for (int64_t d : elem_shape) {
-    out_shape->add_dim()->set_dim_value(d);
-  }
-  out_tp.reset_tensor_type();
-}
-
 // Registers a single SplitToSequence test case. The model graph contains
 // one ``SplitToSequence`` node consuming ``input`` (and optionally a
 // ``split`` initializer). The expected sequence output is materialised
@@ -97,8 +79,10 @@ void RegisterSplitToSequenceCase(const std::string &name, const Tensor &input, c
     FillValueInfo(*split, *graph->add_input());
   }
 
-  // Graph output: ``output_sequence`` declared as tensor (promoted below).
-  FillValueInfo(stacked, *graph->add_output());
+  // Graph output: ``output_sequence`` declared as a SequenceType.
+  AppendValueInfo(
+      *graph->add_output(), stacked.name,
+      SequenceTypeSpec(TensorTypeSpec(static_cast<int32_t>(out_seq.elem_type), elem_shape)));
 
   // DataSet: feed the data tensor (and split if provided).
   DataSet ds;
@@ -110,9 +94,6 @@ void RegisterSplitToSequenceCase(const std::string &name, const Tensor &input, c
   tc.data_sets.emplace_back(std::move(ds));
 
   registry.emplace_back(std::move(tc));
-
-  // Promote the output value-info to SequenceType<Tensor<elem_type, elem_shape>>.
-  PromoteOutputToSequenceType(registry, static_cast<int32_t>(out_seq.elem_type), elem_shape);
 }
 
 } // namespace

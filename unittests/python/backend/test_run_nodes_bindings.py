@@ -14,6 +14,8 @@ from __future__ import annotations
 import struct
 import unittest
 
+import numpy as np
+
 from onnx_light.ext_test_case import ExtTestCase
 from onnx_light.onnx import TensorProto
 from onnx_light.onnx_lib import parser
@@ -64,6 +66,7 @@ class TestRunNodesBindings(ExtTestCase):
             "default_opset",
             "tensor_from_proto",
             "tensor_to_proto",
+            "tensor_to_numpy",
             "run_node",
             "run_nodes",
             "run_graph",
@@ -343,6 +346,30 @@ class TestTensorToProto(ExtTestCase):
         tp = rt.tensor_to_proto(t)
         self.assertEqual(int(tp.data_type), int(TensorProto.STRING))
         self.assertEqual(list(tp.string_data), [b"abc", b"de"])
+
+
+class TestTensorToNumpy(ExtTestCase):
+    def test_tensor_to_numpy_returns_raw_uint8_view(self):
+        t = _make_float_tensor("x", [1.0, 2.0, 3.0])
+        raw = rt.tensor_to_numpy(t)
+        self.assertEqual(raw.dtype, np.uint8)
+        self.assertEqual(raw.ndim, 1)
+        self.assertEqual(raw.shape, (12,))
+        self.assertEqual(struct.unpack("<3f", raw.view(np.float32).tobytes()), (1.0, 2.0, 3.0))
+
+    def test_tensor_to_numpy_is_zero_copy(self):
+        # The returned uint8 view borrows the tensor's bytes: it must not own
+        # its data (``base`` is set) so no copy was made.
+        t = _make_int32_tensor("v", [7, 8, 9])
+        raw = rt.tensor_to_numpy(t)
+        self.assertIsNotNone(raw.base)
+        np.testing.assert_array_equal(raw.view(np.int32), np.array([7, 8, 9], np.int32))
+
+    def test_tensor_to_numpy_keeps_source_alive(self):
+        # Dropping the Python tensor handle must not invalidate the borrowed
+        # view: the array keeps the source tensor alive through its ``base``.
+        arr = rt.tensor_to_numpy(_make_int32_tensor("v", [7, 8, 9])).view(np.int32)
+        np.testing.assert_array_equal(arr, np.array([7, 8, 9], np.int32))
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
 #include <nanobind/stl/function.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/pair.h>
@@ -546,4 +547,22 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       "tensors the proto's ``raw_data`` borrows the tensor's byte buffer (zero-copy); "
       "the source tensor is kept alive for the lifetime of the returned proto so the "
       "borrowed view never dangles. ``STRING`` tensors are written to ``string_data``.");
+
+  rt_mod.def(
+      "tensor_to_numpy",
+      [](nb::handle t_obj) {
+        // Zero-copy 1-D ``uint8`` view over the tensor's raw byte buffer. The
+        // tensor's Python wrapper (``t_obj``) is passed as the array's owner so
+        // NumPy borrows the bytes (no copy) while keeping the source tensor
+        // alive for as long as the view (or any array derived from it) lives.
+        const Tensor &t = nb::cast<const Tensor &>(t_obj);
+        const size_t n = t.size_bytes();
+        return nb::ndarray<nb::numpy, const uint8_t, nb::ndim<1>>(t.bytes(), {n}, t_obj);
+      },
+      nb::arg("t"),
+      "Returns a zero-copy 1-D ``uint8`` NumPy view over the runtime tensor's raw "
+      "little-endian byte buffer. The source tensor is kept alive for the lifetime "
+      "of the returned array (it is the array's ``base``) so the borrowed view never "
+      "dangles. Callers reinterpret the bytes via ``ndarray.view(dtype).reshape(shape)``. "
+      "``STRING`` tensors have no raw buffer and must go through :func:`tensor_to_proto`.");
 }

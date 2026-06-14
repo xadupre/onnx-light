@@ -72,20 +72,23 @@ _IS_BIG_ENDIAN = sys.byteorder == "big"
 def _cpp_tensor_to_numpy(t: Any) -> np.ndarray:
     """Converts a runtime ``Tensor`` to a :class:`numpy.ndarray`.
 
-    For standard fixed-width dtypes (float32, int64, etc.) the conversion
-    is done directly via :func:`numpy.frombuffer` on the raw bytes,
-    bypassing the intermediate :class:`TensorProto` construction.
+    For standard fixed-width dtypes (float32, int64, etc.) the array is a
+    zero-copy view over the tensor's raw byte buffer obtained from
+    :func:`_runtime.tensor_to_numpy`; the source tensor is kept alive for the
+    lifetime of the returned array so the borrowed view never dangles.
     Sub-byte packed types and STRING tensors fall back to the full
     :func:`numpy_helper.to_array` path.
     """
     dt = int(t.data_type)
     np_dtype = _DTYPE_TO_NP.get(dt)
     if np_dtype is not None:
-        raw = bytes(t.raw_data())
+        # ``tensor_to_numpy`` returns a 1-D uint8 view borrowing the tensor's
+        # bytes (no copy); reinterpret it as ``np_dtype`` and reshape.
+        raw = _runtime.tensor_to_numpy(t)
+        arr = raw.view(np_dtype)
         if _IS_BIG_ENDIAN:  # pragma: no cover
-            raw = np.frombuffer(raw, dtype=np_dtype).byteswap().tobytes()
-        shape = t.shape
-        return np.frombuffer(raw, dtype=np_dtype).reshape(shape)
+            arr = arr.byteswap()
+        return arr.reshape(t.shape)
     # Fallback for sub-byte types (INT4/UINT4/INT2/UINT2/FLOAT4E2M1) and STRING.
     return numpy_helper.to_array(_runtime.tensor_to_proto(t))
 

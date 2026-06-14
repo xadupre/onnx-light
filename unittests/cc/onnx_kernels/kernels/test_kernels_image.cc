@@ -537,4 +537,67 @@ TEST(KernelClass, ImageDecoderDecodesWebpRgbWhenRuntimeAvailable) {
   EXPECT_LE(MaxAbsDiff(out.data, expected.data.data(), expected.data.size()), 2);
 }
 
+TEST(KernelClass, ImageDecoderDecodesPnmRgb) {
+  const KernelContext ctx{DefaultOpset(20)};
+  const ImageDecoder decoder{ctx};
+  const auto cases =
+      onnx_backend_test::CollectTestCasesByName("^test_cc_image_decoder_decode_pnm_rgb$");
+  ASSERT_EQ(cases.size(), 1u);
+  ASSERT_EQ(cases[0].data_sets.size(), 1u);
+  ASSERT_EQ(cases[0].data_sets[0].inputs.size(), 1u);
+  ASSERT_EQ(cases[0].data_sets[0].outputs.size(), 1u);
+
+  const Tensor &encoded = cases[0].data_sets[0].inputs[0];
+  const Tensor &expected = cases[0].data_sets[0].outputs[0];
+  Tensor out = decoder(encoded, "RGB");
+
+  EXPECT_EQ(out.data_type, static_cast<int32_t>(DataType::UINT8));
+  EXPECT_EQ(out.shape, expected.shape);
+  ASSERT_EQ(out.data.size(), expected.data.size());
+  EXPECT_EQ(out.data, expected.data);
+}
+
+TEST(KernelClass, ImageDecoderDecodesPnmBinaryPpmAndConvertsToBgrAndGrayscale) {
+  // Minimal 2x1 binary pixmap (P6): pixels (10, 20, 30) and (40, 50, 60).
+  const KernelContext ctx{DefaultOpset(20)};
+  const ImageDecoder decoder{ctx};
+  const std::vector<uint8_t> header = {'P', '6', '\n', '2', ' ', '1', '\n', '2', '5', '5', '\n'};
+  std::vector<uint8_t> ppm = header;
+  const std::vector<uint8_t> body = {10, 20, 30, 40, 50, 60};
+  ppm.insert(ppm.end(), body.begin(), body.end());
+  Tensor encoded = Tensor::FromUint8("", {static_cast<int64_t>(ppm.size())}, ppm);
+
+  Tensor rgb = decoder(encoded, "RGB");
+  const std::vector<int64_t> rgb_shape = {1, 2, 3};
+  EXPECT_EQ(rgb.shape, rgb_shape);
+  EXPECT_EQ(rgb.data, body);
+
+  Tensor bgr = decoder(encoded, "BGR");
+  const std::vector<uint8_t> expected_bgr = {30, 20, 10, 60, 50, 40};
+  EXPECT_EQ(bgr.data, expected_bgr);
+
+  Tensor gray = decoder(encoded, "Grayscale");
+  const std::vector<int64_t> gray_shape = {1, 2, 1};
+  EXPECT_EQ(gray.shape, gray_shape);
+  const std::vector<uint8_t> expected_gray = {
+      static_cast<uint8_t>((299 * 10 + 587 * 20 + 114 * 30 + 500) / 1000),
+      static_cast<uint8_t>((299 * 40 + 587 * 50 + 114 * 60 + 500) / 1000)};
+  EXPECT_EQ(gray.data, expected_gray);
+}
+
+TEST(KernelClass, ImageDecoderDecodesAsciiPgmGraymap) {
+  // 2x2 ASCII graymap (P2) with a comment line and maxval 255.
+  const KernelContext ctx{DefaultOpset(20)};
+  const ImageDecoder decoder{ctx};
+  const std::string pgm = "P2\n# sample graymap\n2 2\n255\n0 64\n128 255\n";
+  std::vector<uint8_t> bytes(pgm.begin(), pgm.end());
+  Tensor encoded = Tensor::FromUint8("", {static_cast<int64_t>(bytes.size())}, bytes);
+
+  Tensor out = decoder(encoded, "Grayscale");
+  const std::vector<int64_t> expected_shape = {2, 2, 1};
+  EXPECT_EQ(out.shape, expected_shape);
+  const std::vector<uint8_t> expected_pixels = {0, 64, 128, 255};
+  EXPECT_EQ(out.data, expected_pixels);
+}
+
 } // namespace Test

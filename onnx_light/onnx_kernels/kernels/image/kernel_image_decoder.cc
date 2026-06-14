@@ -1632,6 +1632,195 @@ bool TryDecodeWebp(const uint8_t *data, size_t size, const std::string &pixel_fo
   return true;
 }
 
+// ---------------------------------------------------------------------------
+// PNM decoder (Portable AnyMap: PBM/PGM/PPM)
+//
+// Decodes the Netpbm family of bytestreams without any external dependency:
+//   * ``P1`` ASCII bitmap, ``P4`` binary bitmap (1 bit per pixel),
+//   * ``P2`` ASCII graymap, ``P5`` binary graymap (8-bit samples),
+//   * ``P3`` ASCII pixmap, ``P6`` binary pixmap (8-bit RGB samples).
+//
+// Only 8-bit (``maxval <= 255``) graymaps and pixmaps are supported; 16-bit
+// samples fall through to the empty-matrix path handled by the caller. The
+// decoded pixels are converted to the requested ``RGB`` / ``BGR`` /
+// ``Grayscale`` channel-last layout.
+// ---------------------------------------------------------------------------
+
+inline bool PnmIsWhitespace(uint8_t c) {
+  return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v';
+}
+
+// Advances ``pos`` past any PNM whitespace and ``#`` comments (a comment runs
+// to the end of its line).
+void PnmSkipWhitespaceAndComments(const uint8_t *data, size_t size, size_t &pos) {
+  while (pos < size) {
+    const uint8_t c = data[pos];
+    if (c == '#') {
+      while (pos < size && data[pos] != '\n') {
+        ++pos;
+      }
+    } else if (PnmIsWhitespace(c)) {
+      ++pos;
+    } else {
+      break;
+    }
+  }
+}
+
+// Skips PNM header whitespace and ``#`` comments, then reads one unsigned
+// decimal token. Returns false when no decimal token is available.
+bool PnmReadUint(const uint8_t *data, size_t size, size_t &pos, long &value) {
+  PnmSkipWhitespaceAndComments(data, size, pos);
+  if (pos >= size || data[pos] < '0' || data[pos] > '9') {
+    return false;
+  }
+  long v = 0;
+  while (pos < size && data[pos] >= '0' && data[pos] <= '9') {
+    v = v * 10 + static_cast<long>(data[pos] - '0');
+    if (v > 0x7FFFFFFFL) {
+      return false;
+    }
+    ++pos;
+  }
+  value = v;
+  return true;
+}
+
+bool TryDecodePnm(const uint8_t *data, size_t size, const std::string &pixel_format,
+                  int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels) {
+  if (size < 2 || data[0] != 'P') {
+    return false;
+  }
+  const uint8_t magic = data[1];
+  if (magic < '1' || magic > '6') {
+    return false;
+  }
+
+  size_t pos = 2;
+  long width = 0;
+  long height = 0;
+  long maxval = 1;
+  if (!PnmReadUint(data, size, pos, width) || !PnmReadUint(data, size, pos, height)) {
+    return false;
+  }
+  const bool is_bitmap = (magic == '1' || magic == '4');
+  if (!is_bitmap) {
+    if (!PnmReadUint(data, size, pos, maxval)) {
+      return false;
+    }
+    // Only 8-bit samples are supported; 16-bit graymaps/pixmaps fall back.
+    if (maxval < 1 || maxval > 255) {
+      return false;
+    }
+  }
+  if (width <= 0 || height <= 0) {
+    return false;
+  }
+
+  const int src_channels = (magic == '3' || magic == '6') ? 3 : 1;
+  const size_t w = static_cast<size_t>(width);
+  const size_t h = static_cast<size_t>(height);
+  if (w > ((std::numeric_limits<size_t>::max)() / h)) {
+    return false;
+  }
+  const size_t pixel_count = w * h;
+  if (pixel_count > ((std::numeric_limits<size_t>::max)() / static_cast<size_t>(src_channels))) {
+    return false;
+  }
+  const size_t sample_count = pixel_count * static_cast<size_t>(src_channels);
+
+  std::vector<uint8_t> src(sample_count);
+  const bool is_binary = (magic == '4' || magic == '5' || magic == '6');
+  if (is_binary) {
+    // Exactly one whitespace byte separates the header from the binary data.
+    if (pos >= size || !PnmIsWhitespace(data[pos])) {
+      return false;
+    }
+    ++pos;
+    if (magic == '4') {
+      // Packed bitmap: 8 pixels per byte, MSB first, rows padded to a byte.
+      const size_t row_bytes = (w + 7u) / 8u;
+      if (row_bytes > ((std::numeric_limits<size_t>::max)() / h) || pos + row_bytes * h > size) {
+        return false;
+      }
+      for (size_t y = 0; y < h; ++y) {
+        const uint8_t *row = data + pos + y * row_bytes;
+        for (size_t x = 0; x < w; ++x) {
+          const uint8_t bit = (row[x >> 3] >> (7u - (x & 7u))) & 1u;
+          // In PBM a set bit means black; map to 0 (black) / 255 (white).
+          src[y * w + x] = bit ? 0u : 255u;
+        }
+      }
+    } else {
+      if (pos + sample_count > size) {
+        return false;
+      }
+      std::memcpy(src.data(), data + pos, sample_count);
+    }
+  } else if (magic == '1') {
+    // ASCII bitmap: each pixel is a single ``0`` or ``1`` digit, optionally
+    // separated by whitespace or comments.
+    size_t idx = 0;
+    while (idx < pixel_count) {
+      PnmSkipWhitespaceAndComments(data, size, pos);
+      if (pos >= size || (data[pos] != '0' && data[pos] != '1')) {
+        return false;
+      }
+      src[idx++] = (data[pos] == '1') ? 0u : 255u;
+      ++pos;
+    }
+  } else {
+    // ASCII graymap/pixmap: whitespace-separated decimal samples.
+    for (size_t i = 0; i < sample_count; ++i) {
+      long v = 0;
+      if (!PnmReadUint(data, size, pos, v)) {
+        return false;
+      }
+      if (v > maxval) {
+        v = maxval;
+      }
+      src[i] = static_cast<uint8_t>(v);
+    }
+  }
+
+  // Scale 8-bit samples from ``[0, maxval]`` to ``[0, 255]`` when needed.
+  if (!is_bitmap && maxval != 255) {
+    for (uint8_t &s : src) {
+      s = static_cast<uint8_t>((static_cast<int>(s) * 255 + maxval / 2) / maxval);
+    }
+  }
+
+  const int64_t channels = ImageDecoder::ChannelCount(pixel_format);
+  out_pixels.resize(pixel_count * static_cast<size_t>(channels));
+  for (size_t i = 0; i < pixel_count; ++i) {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+    if (src_channels == 3) {
+      r = src[i * 3u + 0u];
+      g = src[i * 3u + 1u];
+      b = src[i * 3u + 2u];
+    } else {
+      r = g = b = src[i];
+    }
+    if (pixel_format == "RGB") {
+      out_pixels[i * 3u + 0u] = r;
+      out_pixels[i * 3u + 1u] = g;
+      out_pixels[i * 3u + 2u] = b;
+    } else if (pixel_format == "BGR") {
+      out_pixels[i * 3u + 0u] = b;
+      out_pixels[i * 3u + 1u] = g;
+      out_pixels[i * 3u + 2u] = r;
+    } else {
+      out_pixels[i] = static_cast<uint8_t>((299 * r + 587 * g + 114 * b + 500) / 1000);
+    }
+  }
+
+  out_height = static_cast<int64_t>(height);
+  out_width = static_cast<int64_t>(width);
+  return true;
+}
+
 } // namespace
 
 int64_t ImageDecoder::ChannelCount(const std::string &pixel_format) {
@@ -1660,7 +1849,8 @@ Tensor ImageDecoder::operator()(const Tensor &encoded_stream,
       TryDecodeBmp(raw, raw_size, pixel_format, height, width, pixels) ||
       TryDecodeJpeg(raw, raw_size, pixel_format, height, width, pixels) ||
       TryDecodeTiff(raw, raw_size, pixel_format, height, width, pixels) ||
-      TryDecodeWebp(raw, raw_size, pixel_format, height, width, pixels)) {
+      TryDecodeWebp(raw, raw_size, pixel_format, height, width, pixels) ||
+      TryDecodePnm(raw, raw_size, pixel_format, height, width, pixels)) {
     return Tensor::FromUint8("", {height, width, channels}, std::move(pixels));
   }
 
@@ -1695,7 +1885,8 @@ void ImageDecoder::operator()(const Tensor &encoded_stream, const std::string &p
       TryDecodeBmp(raw, raw_size, pixel_format, height, width, pixels) ||
       TryDecodeJpeg(raw, raw_size, pixel_format, height, width, pixels) ||
       TryDecodeTiff(raw, raw_size, pixel_format, height, width, pixels) ||
-      TryDecodeWebp(raw, raw_size, pixel_format, height, width, pixels)) {
+      TryDecodeWebp(raw, raw_size, pixel_format, height, width, pixels) ||
+      TryDecodePnm(raw, raw_size, pixel_format, height, width, pixels)) {
     EXT_ENFORCE_INVALID(output.shape[0] == height && output.shape[1] == width,
                         "kernel::ImageDecoder preallocated output shape does not match the decoded "
                         "image dimensions.");

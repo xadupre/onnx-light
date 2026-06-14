@@ -513,4 +513,34 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       "``raw_data`` field; ``STRING`` tensors are read from ``string_data``. The "
       "returned tensor owns its bytes, so it remains valid after ``tp`` is "
       "garbage-collected.");
+
+  rt_mod.def(
+      "tensor_to_proto",
+      [](const Tensor &t) {
+        // Materializes a ``TensorProto`` from a runtime ``Tensor``. For the
+        // raw-data path the proto's ``raw_data`` borrows the tensor's byte
+        // buffer (zero-copy) instead of copying it; ``nb::keep_alive<0, 1>``
+        // ties the source tensor's lifetime to the returned proto so the
+        // borrowed view never dangles.
+        TensorProto tp;
+        if (!t.name.empty())
+          tp.set_name(t.name);
+        tp.set_data_type(t.data_type);
+        tp.ref_dims().reserve(t.shape.size());
+        for (int64_t d : t.shape)
+          tp.ref_dims().push_back(static_cast<uint64_t>(d));
+        if (static_cast<TensorProto::DataType>(t.data_type) == TensorProto::DataType::STRING) {
+          tp.ref_string_data().reserve(t.string_data.size());
+          for (const std::string &s : t.string_data)
+            tp.add_string_data(utils::String(s));
+        } else {
+          tp.ref_raw_data().assign_borrowed(t.bytes(), t.size_bytes());
+        }
+        return tp;
+      },
+      nb::keep_alive<0, 1>(), nb::arg("t"),
+      "Converts a runtime :class:`Tensor` to a ``TensorProto``. For non-``STRING`` "
+      "tensors the proto's ``raw_data`` borrows the tensor's byte buffer (zero-copy); "
+      "the source tensor is kept alive for the lifetime of the returned proto so the "
+      "borrowed view never dangles. ``STRING`` tensors are written to ``string_data``.");
 }

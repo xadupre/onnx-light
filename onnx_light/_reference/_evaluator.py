@@ -72,21 +72,13 @@ _IS_BIG_ENDIAN = sys.byteorder == "big"
 def _cpp_tensor_to_proto(t: Any) -> TensorProto:
     """Materializes a :class:`TensorProto` from a runtime ``Tensor``.
 
-    The returned proto carries an owned copy of the tensor bytes (or string
-    data) and is suitable input for :func:`numpy_helper.to_array`.
+    For non-``STRING`` tensors the returned proto's ``raw_data`` borrows the
+    tensor's byte buffer (zero-copy); the source tensor is kept alive for the
+    lifetime of the proto so the borrowed view never dangles. ``STRING``
+    tensors are written to ``string_data``. The result is suitable input for
+    :func:`numpy_helper.to_array`.
     """
-    tp = TensorProto()
-    if t.name:
-        tp.name = t.name
-    tp.data_type = int(t.data_type)
-    for d in t.shape:
-        tp.dims.append(int(d))
-    if int(t.data_type) == int(TensorProto.STRING):
-        for s in t.string_data():
-            tp.string_data.append(s.encode("utf-8") if isinstance(s, str) else s)
-    else:
-        tp.raw_data = bytes(t.raw_data())
-    return tp
+    return _runtime.tensor_to_proto(t)
 
 
 def _cpp_tensor_to_numpy(t: Any) -> np.ndarray:

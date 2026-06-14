@@ -63,6 +63,7 @@ class TestRunNodesBindings(ExtTestCase):
             "RuntimeContext",
             "default_opset",
             "tensor_from_proto",
+            "tensor_to_proto",
             "run_node",
             "run_nodes",
             "run_graph",
@@ -313,6 +314,35 @@ class TestRunNodesBindings(ExtTestCase):
         rt.run_nodes(list(model.graph.node), ctx)
         # Abs replaced by negation: -(-1) = 1, -(-2) = 2, -(-3) = 3, +0.
         self.assertEqual(_unpack_floats(ctx.get("y")), (1.0, 2.0, 3.0))
+
+
+class TestTensorToProto(ExtTestCase):
+    def test_tensor_to_proto_numeric_roundtrip(self):
+        t = _make_float_tensor("x", [1.0, 2.0, 3.0])
+        tp = rt.tensor_to_proto(t)
+        self.assertEqual(tp.name, "x")
+        self.assertEqual(int(tp.data_type), int(TensorProto.FLOAT))
+        self.assertEqual(list(tp.dims), [3])
+        self.assertEqual(struct.unpack("<3f", bytes(tp.raw_data)), (1.0, 2.0, 3.0))
+
+    def test_tensor_to_proto_keeps_source_alive(self):
+        # ``raw_data`` borrows the tensor's byte buffer (zero-copy); the
+        # ``keep_alive`` policy must keep the source tensor alive so the
+        # borrowed view stays valid after the Python handle is dropped.
+        tp = rt.tensor_to_proto(_make_int32_tensor("v", [7, 8, 9]))
+        self.assertEqual(struct.unpack("<3i", bytes(tp.raw_data)), (7, 8, 9))
+
+    def test_tensor_to_proto_string_tensor(self):
+        sp = TensorProto()
+        sp.name = "s"
+        sp.dims.append(2)
+        sp.data_type = int(TensorProto.STRING)
+        sp.string_data.append(b"abc")
+        sp.string_data.append(b"de")
+        t = rt.tensor_from_proto(sp)
+        tp = rt.tensor_to_proto(t)
+        self.assertEqual(int(tp.data_type), int(TensorProto.STRING))
+        self.assertEqual(list(tp.string_data), [b"abc", b"de"])
 
 
 if __name__ == "__main__":

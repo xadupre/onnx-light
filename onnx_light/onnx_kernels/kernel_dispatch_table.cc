@@ -3286,8 +3286,11 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
              return imputer.template operator()<T>(x, imputed_values,
                                                    static_cast<T>(replaced_value_float));
            } else {
-             std::vector<T> imputed_values(imputed_value_int64s.begin(),
-                                           imputed_value_int64s.end());
+             std::vector<T> imputed_values;
+             imputed_values.reserve(imputed_value_int64s.size());
+             for (int64_t value : imputed_value_int64s) {
+               imputed_values.push_back(static_cast<T>(value));
+             }
              return imputer.template operator()<T>(x, imputed_values,
                                                    static_cast<T>(replaced_value_int64));
            }

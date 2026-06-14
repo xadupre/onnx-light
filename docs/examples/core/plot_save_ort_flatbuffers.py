@@ -111,21 +111,24 @@ for n, s_onnx, s_ort in zip(node_counts, onnx_sizes, ort_sizes):
     print(f"{n:>6} {s_onnx / 1024:>12.1f} {s_ort / 1024:>12.1f} {s_ort / s_onnx:>8.3f}")
 
 # %%
-# Plot file sizes vs. number of nodes
-# -----------------------------------
+# Plot the size ratio vs. number of nodes
+# ---------------------------------------
 #
 # The flatbuffer payload is comparable to the protobuf one and both grow
 # linearly with the number of weight matrices. On much larger models the
 # ``.ort`` file is typically a bit bigger because it embeds runtime
 # metadata; the trade-off is mmap-friendly loading without protobuf
-# parsing.
+# parsing. Plotting the ``.ort`` / ``.onnx`` size ratio makes the relative
+# overhead easier to read than the raw sizes.
+
+size_ratios = np.array(ort_sizes) / np.array(onnx_sizes)
 
 fig, ax = plt.subplots(figsize=(7, 4.5))
-ax.plot(node_counts, np.array(onnx_sizes) / 1024, marker="o", label=".onnx (protobuf)")
-ax.plot(node_counts, np.array(ort_sizes) / 1024, marker="s", label=".ort (flatbuffer)")
+ax.plot(node_counts, size_ratios, marker="o", label=".ort / .onnx")
+ax.axhline(1.0, color="gray", linestyle="--", alpha=0.5)
 ax.set_xlabel("Number of Gemm nodes")
-ax.set_ylabel("File size (KB)")
-ax.set_title(f"ONNX vs ORT flatbuffer file size (DIM={DIM})")
+ax.set_ylabel("Size ratio (.ort / .onnx)")
+ax.set_title(f"ONNX vs ORT flatbuffer file size ratio (DIM={DIM})")
 ax.grid(True, alpha=0.3)
 ax.legend()
 fig.tight_layout()

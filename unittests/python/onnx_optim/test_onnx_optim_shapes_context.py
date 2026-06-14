@@ -405,6 +405,7 @@ class TestShapesContextEventLog(ExtTestCase):
         self.assertEqual(d["shape"], ["2", "N"])
         self.assertEqual(d["op_type"], "")
         self.assertEqual(d["inputs"], [])
+        self.assertEqual(d["node_index"], -1)
 
     def test_compute_shape_model_records_events(self):
         node = oh.make_node("Relu", inputs=["X"], outputs=["Y"])
@@ -423,6 +424,35 @@ class TestShapesContextEventLog(ExtTestCase):
         self.assertIn("compute_node", actions)
         node_events = [e for e in ctx.events() if e.action == "compute_node"]
         self.assertEqual([e.op_type for e in node_events], ["Relu"])
+
+    def test_compute_shape_model_records_node_index(self):
+        # ``node_index`` tags graph inputs with -1, initializers with -2 and
+        # descriptors / compute_node events with the producing node index.
+        node = oh.make_node("Reshape", inputs=["X", "S"], outputs=["Y"])
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [3, 4])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
+        s = oh.make_tensor("S", onnxl.TensorProto.INT64, [2], [-1, 2])
+        graph = oh.make_graph([node], "g", [x], [y], initializer=[s])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+        model.ir_version = 8
+
+        ctx = si.ShapesContext()
+        ctx.events_enabled = True
+        si.compute_shape_model(ctx, model)
+
+        events = ctx.events()
+
+        def first(action, name):
+            return next(
+                (e for e in events if e.action == action and e.name == name), None
+            )
+
+        self.assertEqual(first("add", "X").node_index, -1)
+        self.assertEqual(first("add", "S").node_index, -2)
+        self.assertEqual(first("add", "Y").node_index, 0)
+        node_ev = next(e for e in events if e.action == "compute_node")
+        self.assertEqual(node_ev.op_type, "Reshape")
+        self.assertEqual(node_ev.node_index, 0)
 
 
 if __name__ == "__main__":

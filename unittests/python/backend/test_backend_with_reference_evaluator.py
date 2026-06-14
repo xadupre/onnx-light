@@ -33,8 +33,9 @@ from onnx_light.onnx.reference import ReferenceEvaluator
 # test cases whose graph(s) only use these ops are the only ones
 # :class:`ReferenceEvaluator` can execute today. Mirrors
 # ``_IMPLEMENTED_OPS`` in ``test_backend_with_run_model.py`` with the
-# addition of ``Cast`` (the Python ``ReferenceEvaluator`` facade handles
-# ``STRING`` / sub-byte tensor outputs that ``run_model_backend`` cannot
+# addition of ``Cast``, ``QuantizeLinear`` and ``DequantizeLinear`` (the
+# Python ``ReferenceEvaluator`` facade handles ``STRING`` / sub-byte tensor
+# outputs -- such as ``FLOAT4E2M1`` -- that ``run_model_backend`` cannot
 # yet convert back to numpy).
 _IMPLEMENTED_OPS: frozenset[str] = frozenset(
     {
@@ -44,12 +45,14 @@ _IMPLEMENTED_OPS: frozenset[str] = frozenset(
         "Add",
         "Cast",
         "CastMap",
+        "DequantizeLinear",
         "DictVectorizer",
         "Div",
         "Momentum",
         "Mul",
         "Neg",
         "NonZero",
+        "QuantizeLinear",
         "Relu",
         "SequenceConstruct",
         "Sub",

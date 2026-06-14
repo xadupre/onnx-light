@@ -399,13 +399,29 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
             data_sets.append(inputs)
         return data_sets
 
+    def _expected_output_to_python(t, sequence_outputs):
+        """Returns the Python expected value for a DataSet output ``Tensor``.
+
+        Sequence-typed graph outputs are materialized by the C++ test cases as a
+        single stacked tensor whose outer (axis 0) dimension is the sequence
+        length. Splits such a tensor back into a list of per-element arrays so it
+        matches the sequence value (a list of arrays) produced by the runtime,
+        instead of a single stacked array that would mismatch as
+        "sequence vs non-sequence".
+        """
+        arr = _tensor_to_np(t)
+        if t.name in sequence_outputs:
+            return [arr[i] for i in range(arr.shape[0])]
+        return arr
+
     result: dict[str, TestCase] = {}
     for tc in _backend_test_cc.collect_test_cases():
         if tc.name.startswith("test_cc_zipmap_"):
             continue
+        sequence_outputs = {o.name for o in tc.model.graph.output if o.type.has_sequence_type()}
         py_inputs = _ds_inputs_to_python(tc)
         data_sets = [
-            (py_inputs[i], [_tensor_to_np(y) for y in ds.outputs])
+            (py_inputs[i], [_expected_output_to_python(y, sequence_outputs) for y in ds.outputs])
             for i, ds in enumerate(tc.data_sets)
         ]
         result[tc.name] = TestCase(

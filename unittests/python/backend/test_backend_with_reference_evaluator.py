@@ -51,6 +51,7 @@ _IMPLEMENTED_OPS: frozenset[str] = frozenset(
         "Neg",
         "NonZero",
         "Relu",
+        "SequenceConstruct",
         "Sub",
         "Transpose",
     }

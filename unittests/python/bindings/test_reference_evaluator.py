@@ -647,6 +647,18 @@ class TestReferenceEvaluator(ExtTestCase):
     def test_resize_downsample_scales_cubic_align_corners(self):
         self._check_resize_backend_case("test_resize_downsample_scales_cubic_align_corners")
 
+    def test_resize_downsample_scales_linear_antialias(self):
+        self._check_resize_backend_case("test_resize_downsample_scales_linear_antialias")
+
+    def test_resize_downsample_scales_cubic_antialias(self):
+        self._check_resize_backend_case("test_resize_downsample_scales_cubic_antialias")
+
+    def test_resize_downsample_sizes_linear_antialias(self):
+        self._check_resize_backend_case("test_resize_downsample_sizes_linear_antialias")
+
+    def test_resize_downsample_sizes_cubic_antialias(self):
+        self._check_resize_backend_case("test_resize_downsample_sizes_cubic_antialias")
+
 
 class TestReferenceEvaluatorCustomKernels(ExtTestCase):
     """Tests for :meth:`ReferenceEvaluator.register_custom_kernel`."""

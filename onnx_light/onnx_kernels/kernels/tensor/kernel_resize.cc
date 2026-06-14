@@ -309,6 +309,71 @@ void CubicCoeffs(double ratio, double A, double coeffs[4]) {
   coeffs[3] = ((A * r4 - 5.0 * A) * r4 + 8.0 * A) * r4 - 4.0 * A;
 }
 
+// Anti-aliased 1-D linear interpolation coefficients. Mirrors
+// ``onnx/reference/ops/op_resize.py::_linear_coeffs_antialias``. When
+// downsampling (``scale < 1``) the triangular kernel is stretched by
+// ``scale`` so it spans a wider footprint, low-pass filtering the input. The
+// number of taps (returned value) grows as ``scale`` shrinks; the resulting
+// coefficients are written to ``coeffs`` and normalised to sum to 1.
+int64_t LinearCoeffsAntialias(double ratio, double scale, std::vector<double> &coeffs) {
+  if (scale > 1.0) {
+    scale = 1.0;
+  }
+  const int64_t start = static_cast<int64_t>(std::floor(-1.0 / scale) + 1.0);
+  const int64_t footprint = 2 - 2 * start;
+  coeffs.assign(static_cast<std::size_t>(footprint), 0.0);
+  double sum = 0.0;
+  for (int64_t i = 0; i < footprint; ++i) {
+    const double arg = (static_cast<double>(start + i) - ratio) * scale;
+    double c = 1.0 - std::abs(arg);
+    if (c < 0.0) {
+      c = 0.0;
+    } else if (c > 1.0) {
+      c = 1.0;
+    }
+    coeffs[static_cast<std::size_t>(i)] = c;
+    sum += c;
+  }
+  for (int64_t i = 0; i < footprint; ++i) {
+    coeffs[static_cast<std::size_t>(i)] /= sum;
+  }
+  return footprint;
+}
+
+// Anti-aliased 1-D cubic interpolation coefficients. Mirrors
+// ``onnx/reference/ops/op_resize.py::_cubic_coeffs_antialias``. Like
+// :cpp:func:`LinearCoeffsAntialias`, the cubic kernel is stretched by
+// ``scale`` when downsampling, yielding a variable number of taps.
+int64_t CubicCoeffsAntialias(double ratio, double scale, double A, std::vector<double> &coeffs) {
+  if (scale > 1.0) {
+    scale = 1.0;
+  }
+  const int64_t i_start = static_cast<int64_t>(std::floor(-2.0 / scale) + 1.0);
+  const int64_t i_end = 2 - i_start;
+  const int64_t n = i_end - i_start;
+  coeffs.assign(static_cast<std::size_t>(n), 0.0);
+  double sum = 0.0;
+  for (int64_t i = 0; i < n; ++i) {
+    const double x = std::abs(scale * (static_cast<double>(i_start + i) - ratio));
+    const double x2 = x * x;
+    const double x3 = x * x2;
+    double c;
+    if (x <= 1.0) {
+      c = (A + 2.0) * x3 - (A + 3.0) * x2 + 1.0;
+    } else if (x < 2.0) {
+      c = A * x3 - 5.0 * A * x2 + 8.0 * A * x - 4.0 * A;
+    } else {
+      c = 0.0;
+    }
+    coeffs[static_cast<std::size_t>(i)] = c;
+    sum += c;
+  }
+  for (int64_t i = 0; i < n; ++i) {
+    coeffs[static_cast<std::size_t>(i)] /= sum;
+  }
+  return n;
+}
+
 // Reproduces ``_get_neighbor_idxes``/``_get_neighbor`` from the upstream
 // reference: returns the ``n`` indices nearest to ``x`` in ``[-pad, in_dim +
 // pad)`` (preferring smaller indices for ties), sorted ascending. The
@@ -352,8 +417,9 @@ void NeighborIndices(double x, int64_t n, int64_t in_dim, std::vector<int64_t> &
 double Interpolate1D(const std::vector<double> &data, int64_t in_dim, int64_t out_dim,
                      int64_t out_coord, double scale, const std::string &coord_mode,
                      double roi_start, double roi_end, bool is_cubic, double cubic_a,
-                     bool exclude_outside, bool use_extrapolation, double extrapolation_value,
-                     std::vector<int64_t> &idx_scratch) {
+                     bool exclude_outside, bool antialias, bool use_extrapolation,
+                     double extrapolation_value, std::vector<int64_t> &idx_scratch,
+                     std::vector<double> &coeff_scratch) {
   const double x_ori =
       TransformCoord(out_coord, in_dim, out_dim, scale, coord_mode, roi_start, roi_end);
   if (use_extrapolation && (x_ori < 0.0 || x_ori > static_cast<double>(in_dim - 1))) {
@@ -375,32 +441,52 @@ double Interpolate1D(const std::vector<double> &data, int64_t in_dim, int64_t ou
     ratio = x_ori - x_ori_floor;
   }
 
-  double coeffs[4];
+  // ``coeff_scratch`` holds the (possibly variable-length, antialias) taps;
+  // ``fixed`` holds the 2-tap linear / 4-tap cubic coefficients used in the
+  // non-antialias path, avoiding a heap allocation per element.
+  double fixed[4];
+  const double *coeffs;
   int64_t n;
-  if (is_cubic) {
-    n = 4;
-    CubicCoeffs(ratio, cubic_a, coeffs);
+  if (antialias) {
+    if (is_cubic) {
+      n = CubicCoeffsAntialias(ratio, scale, cubic_a, coeff_scratch);
+    } else {
+      n = LinearCoeffsAntialias(ratio, scale, coeff_scratch);
+    }
+    coeffs = coeff_scratch.data();
   } else {
-    n = 2;
-    LinearCoeffs(ratio, coeffs);
+    if (is_cubic) {
+      n = 4;
+      CubicCoeffs(ratio, cubic_a, fixed);
+    } else {
+      n = 2;
+      LinearCoeffs(ratio, fixed);
+    }
+    coeffs = fixed;
   }
 
   NeighborIndices(x_ori, n, in_dim, idx_scratch);
 
   if (exclude_outside) {
+    // ``exclude_outside`` renormalisation must mutate the coefficients, so
+    // ensure they live in the (writable) scratch buffer first.
+    if (coeffs != coeff_scratch.data()) {
+      coeff_scratch.assign(coeffs, coeffs + n);
+    }
     double sum = 0.0;
     for (int64_t i = 0; i < n; ++i) {
       if (idx_scratch[static_cast<std::size_t>(i)] < 0 ||
           idx_scratch[static_cast<std::size_t>(i)] >= in_dim) {
-        coeffs[i] = 0.0;
+        coeff_scratch[static_cast<std::size_t>(i)] = 0.0;
       }
-      sum += coeffs[i];
+      sum += coeff_scratch[static_cast<std::size_t>(i)];
     }
     if (sum != 0.0) {
       for (int64_t i = 0; i < n; ++i) {
-        coeffs[i] /= sum;
+        coeff_scratch[static_cast<std::size_t>(i)] /= sum;
       }
     }
+    coeffs = coeff_scratch.data();
   }
 
   double acc = 0.0;
@@ -426,7 +512,7 @@ void ResizeSeparable(const Tensor &input, const std::vector<float> &scales,
                      const std::vector<int64_t> &out_shape, const std::string &coord_mode,
                      const std::vector<double> &roi_start, const std::vector<double> &roi_end,
                      const std::string &interp_mode, double cubic_a, bool exclude_outside,
-                     double extrapolation_value, Tensor &output) {
+                     bool antialias, double extrapolation_value, Tensor &output) {
   const std::size_t rank = out_shape.size();
   EXT_ENFORCE_INVALID(input.shape.size() == rank,
                       "kernel::Resize: input rank must equal output rank.");
@@ -449,6 +535,7 @@ void ResizeSeparable(const Tensor &input, const std::vector<float> &scales,
   }
 
   std::vector<int64_t> idx_scratch;
+  std::vector<double> coeff_scratch;
   std::vector<double> line;
   for (std::size_t axis = 0; axis < rank; ++axis) {
     const int64_t in_dim = cur_shape[axis];
@@ -484,10 +571,10 @@ void ResizeSeparable(const Tensor &input, const std::vector<float> &scales,
               cur[static_cast<std::size_t>((o * in_dim + k) * inner + in)];
         }
         for (int64_t k = 0; k < out_dim; ++k) {
-          const double v =
-              Interpolate1D(line, in_dim, out_dim, k, static_cast<double>(scales[axis]), coord_mode,
-                            roi_start[axis], roi_end[axis], is_cubic, cubic_a, exclude_outside,
-                            use_extrapolation, extrapolation_value, idx_scratch);
+          const double v = Interpolate1D(
+              line, in_dim, out_dim, k, static_cast<double>(scales[axis]), coord_mode,
+              roi_start[axis], roi_end[axis], is_cubic, cubic_a, exclude_outside, antialias,
+              use_extrapolation, extrapolation_value, idx_scratch, coeff_scratch);
           next[static_cast<std::size_t>((o * out_dim + k) * inner + in)] = v;
         }
       }
@@ -590,8 +677,8 @@ void RunResize(const Tensor &X, const std::vector<float> &scales_vec,
   }
   ResizeSeparable(X, scales_vec, out_shape, attrs.coordinate_transformation_mode, roi_start,
                   roi_end, attrs.mode, static_cast<double>(attrs.cubic_coeff_a),
-                  attrs.exclude_outside != 0, static_cast<double>(attrs.extrapolation_value),
-                  output);
+                  attrs.exclude_outside != 0, attrs.antialias != 0,
+                  static_cast<double>(attrs.extrapolation_value), output);
 }
 
 } // namespace

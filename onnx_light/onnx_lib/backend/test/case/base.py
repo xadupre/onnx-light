@@ -400,7 +400,7 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
         return data_sets
 
     def _expected_output_to_python(t, sequence_outputs):
-        """Returns the Python expected value for a DataSet output ``Tensor``.
+        """Converts a DataSet output ``Tensor`` to its Python expected value.
 
         Sequence-typed graph outputs are materialized by the C++ test cases as a
         single stacked tensor whose outer (axis 0) dimension is the sequence
@@ -408,6 +408,10 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
         matches the sequence value (a list of arrays) produced by the runtime,
         instead of a single stacked array that would mismatch as
         "sequence vs non-sequence".
+
+        Returns:
+            A list of per-element ``numpy.ndarray`` when ``t`` names a
+            sequence-typed graph output, otherwise the single ``numpy.ndarray``.
         """
         arr = _tensor_to_np(t)
         if t.name in sequence_outputs:

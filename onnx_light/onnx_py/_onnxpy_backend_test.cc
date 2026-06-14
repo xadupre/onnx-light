@@ -88,13 +88,15 @@ nb::dlpack::dtype DLPackDtypeFromOnnx(int32_t data_type) {
 
 /// Builds a zero-copy DLPack-capable ``nb::ndarray`` view over ``owner``'s
 /// element bytes. ``owner`` is the Python ``Tensor`` wrapper; passing it as the
-/// array owner keeps the source tensor alive for as long as the view lives.
+/// array owner keeps the source tensor alive for as long as the view lives. The
+/// view is read-only because the tensor's byte buffer is logically immutable
+/// (and may be a borrowed/non-owning span).
 nb::object MakeTensorNdarray(nb::handle owner) {
   const Tensor &t = nb::cast<const Tensor &>(owner);
   nb::dlpack::dtype dtype = DLPackDtypeFromOnnx(t.data_type);
   std::vector<size_t> shape(t.shape.begin(), t.shape.end());
-  nb::ndarray<> array(const_cast<uint8_t *>(t.bytes()), shape.size(), shape.data(), owner,
-                      /*strides=*/nullptr, dtype, nb::device::cpu::value, /*device_id=*/0);
+  nb::ndarray<nb::ro> array(t.bytes(), shape.size(), shape.data(), owner,
+                            /*strides=*/nullptr, dtype, nb::device::cpu::value, /*device_id=*/0);
   return nb::cast(std::move(array));
 }
 

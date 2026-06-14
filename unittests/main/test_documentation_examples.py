@@ -25,7 +25,7 @@ def has_onnxruntime():
         import onnxruntime  # noqa: F401
 
         return True
-    except:  # noqa: E722
+    except ImportError:
         return False
 
 

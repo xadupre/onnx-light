@@ -12,6 +12,7 @@ from onnx_light.onnx_lib.external_data_helper import (
     load_external_data_for_model,
     uses_external_data,
 )
+from onnx_light.onnx.external_data_helper import ExternalDataInfo
 
 
 def _make_model(values: np.ndarray) -> onnxl.ModelProto:
@@ -101,6 +102,53 @@ class TestExternalDataHelper(ExtTestCase):
         init = model.graph.initializer[0]
         entries = {e.key: e.value for e in init.external_data}
         self.assertEqual(entries["location"], "W")
+
+    def test_external_data_info_parses_location(self):
+        """Tests that ExternalDataInfo parses the location field."""
+        tensor = onnxl.TensorProto()
+        tensor.name = "test_tensor"
+        tensor.data_type = onnxl.TensorProto.FLOAT
+        tensor.data_location = onnxl.TensorProto.EXTERNAL
+        entry = tensor.external_data.add()
+        entry.key = "location"
+        entry.value = "weights.bin"
+
+        info = ExternalDataInfo(tensor)
+        self.assertEqual(info.location, "weights.bin")
+        self.assertIsNone(info.offset)
+        self.assertIsNone(info.length)
+
+    def test_external_data_info_parses_offset_and_length(self):
+        """Tests that ExternalDataInfo parses offset and length fields."""
+        tensor = onnxl.TensorProto()
+        tensor.name = "test_tensor"
+        tensor.data_type = onnxl.TensorProto.FLOAT
+        tensor.data_location = onnxl.TensorProto.EXTERNAL
+        entry1 = tensor.external_data.add()
+        entry1.key = "location"
+        entry1.value = "data.bin"
+        entry2 = tensor.external_data.add()
+        entry2.key = "offset"
+        entry2.value = "1024"
+        entry3 = tensor.external_data.add()
+        entry3.key = "length"
+        entry3.value = "512"
+
+        info = ExternalDataInfo(tensor)
+        self.assertEqual(info.location, "data.bin")
+        self.assertEqual(info.offset, 1024)
+        self.assertEqual(info.length, 512)
+
+    def test_external_data_info_empty_tensor(self):
+        """Tests that ExternalDataInfo handles tensors with no external data."""
+        tensor = onnxl.TensorProto()
+        tensor.name = "inline_tensor"
+        tensor.data_type = onnxl.TensorProto.FLOAT
+
+        info = ExternalDataInfo(tensor)
+        self.assertEqual(info.location, "")
+        self.assertIsNone(info.offset)
+        self.assertIsNone(info.length)
 
 
 if __name__ == "__main__":

@@ -56,6 +56,31 @@ class TestIOModel(ExtTestCase):
             loaded_proto = onnxl.load(model_path)
             self.assertEqual(proto, loaded_proto)
 
+    def test_load_model_with_format_protobuf(self) -> None:
+        """Tests that load() accepts format='protobuf' parameter."""
+        proto = _simple_model()
+        proto_bytes = proto.SerializeToString()
+        loaded_proto = onnxl.load(proto_bytes, format="protobuf")
+        self.assertEqual(proto, loaded_proto)
+
+    def test_load_model_with_format_none(self) -> None:
+        """Tests that load() accepts format=None parameter."""
+        proto = _simple_model()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            model_path = os.path.join(temp_dir, "model.onnx")
+            onnxl.save(proto, model_path)
+            loaded_proto = onnxl.load(model_path, format=None)
+            self.assertEqual(proto, loaded_proto)
+
+    def test_load_model_with_unsupported_format_raises(self) -> None:
+        """Tests that load() raises ValueError for unsupported formats."""
+        proto = _simple_model()
+        proto_bytes = proto.SerializeToString()
+        with self.assertRaises(ValueError) as ctx:
+            onnxl.load(proto_bytes, format="ort")
+        self.assertIn("Unsupported format", str(ctx.exception))
+        self.assertIn("onnx-light only supports 'protobuf'", str(ctx.exception))
+
 
 class TestIOTensor(ExtTestCase):
     """Tests for saving and loading TensorProto (protobuf format only)."""

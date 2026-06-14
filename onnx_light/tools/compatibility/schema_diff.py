@@ -53,6 +53,7 @@ any other modification.  Examples of breaking changes:
 * Adding a new required input (existing models do not supply it).
 * Changing an attribute's type or making an optional attribute required.
 * Narrowing a type constraint (removing previously allowed types).
+* Marking a previously active operator as deprecated.
 
 Non-breaking examples:
 
@@ -609,6 +610,55 @@ class DocDiff:
 
 
 @dataclass
+class DeprecationDiff:
+    """Records a change in an operator's deprecation status.
+
+    :param old_deprecated: Whether the old schema is marked deprecated.
+    :param new_deprecated: Whether the new schema is marked deprecated.
+    :param is_breaking: ``True`` if the change is a breaking change.  Newly
+        deprecating an operator is treated as breaking, because models relying
+        on the operator are expected to migrate away from it.
+    """
+
+    old_deprecated: bool = False
+    new_deprecated: bool = False
+    is_breaking: bool = False
+
+    @property
+    def changed(self) -> bool:
+        """Returns ``True`` if the deprecation status changed."""
+        return self.old_deprecated != self.new_deprecated
+
+    def __str__(self) -> str:
+        """Returns a one-line human-readable description of this deprecation diff.
+
+        :returns: A formatted string with an optional ``[BREAKING]`` prefix.
+        :rtype: str
+        """
+        tag = "[BREAKING] " if self.is_breaking else ""
+        return f"{tag}deprecated {self.old_deprecated} -> {self.new_deprecated}"
+
+    @classmethod
+    def compare(cls, schema_old: Any, schema_new: Any) -> DeprecationDiff:
+        """Compares the deprecation status of two schemas.
+
+        Both the full :class:`OpSchema` and the lightweight ``LightOpSchema``
+        expose a ``deprecated`` property; schemas missing it are treated as
+        not deprecated.
+
+        :param schema_old: The reference (typically older) schema.
+        :param schema_new: The schema compared against (typically newer).
+        :returns: A :class:`DeprecationDiff` describing the change (if any).
+        :rtype: DeprecationDiff
+        """
+        old_dep = bool(getattr(schema_old, "deprecated", False))
+        new_dep = bool(getattr(schema_new, "deprecated", False))
+        # Newly deprecating an operator is breaking; un-deprecating is not.
+        is_breaking = (not old_dep) and new_dep
+        return cls(old_deprecated=old_dep, new_deprecated=new_dep, is_breaking=is_breaking)
+
+
+@dataclass
 class SchemaDiff:
     """Summarizes the differences between two versions of an operator schema.
 
@@ -623,6 +673,7 @@ class SchemaDiff:
     :param attributes: Differences in attributes.
     :param constraints: Differences in type constraints.
     :param doc: Line-level diff of the operator documentation strings.
+    :param deprecation: Change in the operator's deprecation status.
     :param is_breaking: ``True`` if any individual change is breaking.
     :param breaking_reasons: Human-readable list of reasons why the change is breaking.
     """
@@ -636,6 +687,7 @@ class SchemaDiff:
     attributes: list[AttributeDiff] = field(default_factory=list)
     constraints: list[ConstraintDiff] = field(default_factory=list)
     doc: DocDiff = field(default_factory=DocDiff)
+    deprecation: DeprecationDiff = field(default_factory=DeprecationDiff)
     is_breaking: bool = False
     breaking_reasons: list[str] = field(default_factory=list)
 
@@ -655,6 +707,9 @@ class SchemaDiff:
             lines.append("  Breaking reasons:")
             for r in self.breaking_reasons:
                 lines.append(f"    - {r}")
+        if self.deprecation.changed:
+            lines.append("  Deprecation:")
+            lines.append(f"    {self.deprecation}")
         if self.inputs:
             lines.append("  Inputs:")
             for di in self.inputs:
@@ -706,6 +761,11 @@ class SchemaDiff:
             lines.append("")
             for r in self.breaking_reasons:
                 lines.append(f"* {r}")
+        if self.deprecation.changed:
+            lines.append("")
+            lines.append("**Deprecation:**")
+            lines.append("")
+            lines.append(f"* {self.deprecation}")
         if self.inputs:
             lines.append("")
             lines.append("**Inputs:**")
@@ -897,6 +957,13 @@ def compare_schemas(schema_old: Any, schema_new: Any) -> SchemaDiff:
                 f"type constraint '{dc.name}' ({dc.kind}): {'; '.join(dc.details)}"
             )
 
+    deprecation_diff = DeprecationDiff.compare(schema_old, schema_new)
+    if deprecation_diff.is_breaking:
+        breaking_reasons.append(
+            f"operator deprecated: {deprecation_diff.old_deprecated} -> "
+            f"{deprecation_diff.new_deprecated}"
+        )
+
     doc_diff = DocDiff.compare(
         getattr(schema_old, "doc", "") or "",
         getattr(schema_new, "doc", "") or "",
@@ -914,6 +981,7 @@ def compare_schemas(schema_old: Any, schema_new: Any) -> SchemaDiff:
         attributes=attr_diffs,
         constraints=constraint_diffs,
         doc=doc_diff,
+        deprecation=deprecation_diff,
         is_breaking=bool(breaking_reasons),
         breaking_reasons=breaking_reasons,
     )

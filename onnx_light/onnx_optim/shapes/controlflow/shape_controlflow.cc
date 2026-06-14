@@ -30,11 +30,12 @@ namespace {
 // inherited entries and the new ones produced by the sub-graph nodes)
 // is returned. When event logging is enabled on ``parent_ctx``, events
 // produced during the subgraph inference are propagated back to
-// ``parent_ctx`` with ``graph_name`` set to ``branch_name``.
+// ``parent_ctx`` with ``subgraph_node_index`` and ``subgraph_attr_name``
+// set to ``branch_name``.
 ShapesContext InferSubgraph(ShapesContext &parent_ctx, const std::string &branch_name,
                             const GraphProto &subgraph) {
   ShapesContext local = parent_ctx;
-  local.set_current_graph_name(branch_name);
+  local.set_current_subgraph(local.current_node_index(), branch_name);
   const size_t events_before = local.Events().size();
   local.ComputeShapes(subgraph.node());
   if (parent_ctx.events_enabled()) {
@@ -193,7 +194,7 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
   // dependency values, inherited from the matching ``v_initial`` outer
   // descriptor.
   ShapesContext local = ctx;
-  local.set_current_graph_name("body");
+  local.set_current_subgraph(local.current_node_index(), "body");
   local.Set(body.input()[0].name().as_string(),
             OptimTensor(nullptr, TensorType::kInt64, OptimShape{}));
   local.Set(body.input()[1].name().as_string(),
@@ -353,7 +354,7 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
   // remaining M are per-iteration scan-input slices, obtained by dropping
   // the scan axis from the matching scan_input shape.
   ShapesContext local = ctx;
-  local.set_current_graph_name("body");
+  local.set_current_subgraph(local.current_node_index(), "body");
   for (int i = 0; i < n_state; ++i) {
     const std::string state_in_name = node.input(i).as_string();
     EXT_ENFORCE_INVALID(local.Has(state_in_name), "ComputeShapeScan: state input '", state_in_name,

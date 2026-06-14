@@ -466,8 +466,9 @@ class TestTensorDLPack(ExtTestCase):
 
 class TestSubgraphEventGraphName(ExtTestCase):
     """Verify that events produced inside subgraphs carry the correct
-    ``graph_name`` field, and that top-level events have an empty
-    ``graph_name``."""
+    ``subgraph_node_index`` and ``subgraph_attr_name`` fields, and that
+    top-level events have ``subgraph_node_index == -1`` and an empty
+    ``subgraph_attr_name``."""
 
     def _build_loop_model(self) -> object:
         """Builds a Loop model: Loop(M=2, cond=true, s_init=0.0) -> s_final.
@@ -540,8 +541,8 @@ class TestSubgraphEventGraphName(ExtTestCase):
         model.ir_version = 10
         return model
 
-    def test_top_level_events_have_empty_graph_name(self):
-        """A plain model without subgraphs has all events with empty graph_name."""
+    def test_top_level_events_have_empty_subgraph_attr_name(self):
+        """A plain model without subgraphs has all events with empty subgraph_attr_name."""
         model = parser.parse_model(_MODEL_SRC)
         ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
         ctx.events_enabled = True
@@ -552,13 +553,15 @@ class TestSubgraphEventGraphName(ExtTestCase):
 
         for ev in ctx.events():
             self.assertEqual(
-                ev.graph_name,
+                ev.subgraph_attr_name,
                 "",
-                f"Expected empty graph_name for top-level event, got: {ev.graph_name!r}",
+                f"Expected empty subgraph_attr_name for top-level event, "
+                f"got: {ev.subgraph_attr_name!r}",
             )
+            self.assertEqual(ev.subgraph_node_index, -1)
 
-    def test_loop_subgraph_events_carry_body_graph_name(self):
-        """At least one event from a Loop body carries graph_name='body'."""
+    def test_loop_subgraph_events_carry_body_attr_name(self):
+        """At least one event from a Loop body carries subgraph_attr_name='body'."""
         import struct
 
         model = self._build_loop_model()
@@ -582,11 +585,13 @@ class TestSubgraphEventGraphName(ExtTestCase):
         ctx.clear_events()
         rt.run_model(model, ctx)
 
-        body_events = [ev for ev in ctx.events() if ev.graph_name == "body"]
-        self.assertGreater(len(body_events), 0, "No event with graph_name='body' found")
+        body_events = [ev for ev in ctx.events() if ev.subgraph_attr_name == "body"]
+        self.assertGreater(len(body_events), 0, "No event with subgraph_attr_name='body' found")
+        # The Loop node is node 0 in the main graph.
+        self.assertTrue(all(ev.subgraph_node_index == 0 for ev in body_events))
 
-    def test_if_then_branch_events_carry_graph_name(self):
-        """Events from the then_branch of an If must carry graph_name='then_branch'."""
+    def test_if_then_branch_events_carry_attr_name(self):
+        """Events from the then_branch of an If must carry subgraph_attr_name='then_branch'."""
         model = self._build_if_model()
         ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
         ctx.events_enabled = True
@@ -601,11 +606,14 @@ class TestSubgraphEventGraphName(ExtTestCase):
         ctx.clear_events()
         rt.run_model(model, ctx)
 
-        then_events = [ev for ev in ctx.events() if ev.graph_name == "then_branch"]
-        self.assertGreater(len(then_events), 0, "No event with graph_name='then_branch' found")
+        then_events = [ev for ev in ctx.events() if ev.subgraph_attr_name == "then_branch"]
+        self.assertGreater(
+            len(then_events), 0, "No event with subgraph_attr_name='then_branch' found"
+        )
+        self.assertTrue(all(ev.subgraph_node_index == 0 for ev in then_events))
 
-    def test_if_else_branch_events_carry_graph_name(self):
-        """Events from the else_branch of an If must carry graph_name='else_branch'."""
+    def test_if_else_branch_events_carry_attr_name(self):
+        """Events from the else_branch of an If must carry subgraph_attr_name='else_branch'."""
         model = self._build_if_model()
         ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
         ctx.events_enabled = True
@@ -620,11 +628,14 @@ class TestSubgraphEventGraphName(ExtTestCase):
         ctx.clear_events()
         rt.run_model(model, ctx)
 
-        else_events = [ev for ev in ctx.events() if ev.graph_name == "else_branch"]
-        self.assertGreater(len(else_events), 0, "No event with graph_name='else_branch' found")
+        else_events = [ev for ev in ctx.events() if ev.subgraph_attr_name == "else_branch"]
+        self.assertGreater(
+            len(else_events), 0, "No event with subgraph_attr_name='else_branch' found"
+        )
+        self.assertTrue(all(ev.subgraph_node_index == 0 for ev in else_events))
 
-    def test_graph_name_exposed_in_as_dict(self):
-        """The ``graph_name`` field must be present in ``as_dict()``."""
+    def test_subgraph_fields_exposed_in_as_dict(self):
+        """The ``subgraph_node_index`` and ``subgraph_attr_name`` fields must be in as_dict()."""
         model = parser.parse_model(_MODEL_SRC)
         ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
         ctx.events_enabled = True
@@ -635,8 +646,10 @@ class TestSubgraphEventGraphName(ExtTestCase):
 
         for ev in ctx.events():
             d = ev.as_dict()
-            self.assertIn("graph_name", d)
-            self.assertEqual(d["graph_name"], "")
+            self.assertIn("subgraph_node_index", d)
+            self.assertIn("subgraph_attr_name", d)
+            self.assertEqual(d["subgraph_node_index"], -1)
+            self.assertEqual(d["subgraph_attr_name"], "")
 
 
 if __name__ == "__main__":

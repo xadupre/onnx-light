@@ -3229,7 +3229,8 @@ TEST(RunNodes, ExecutionPlanIsCachedAcrossRunGraphInvocations) {
 
 // ---------------------------------------------------------------------------
 // SubgraphEventGraphName tests
-// Verify that events produced inside subgraphs carry the correct graph_name.
+// Verify that events produced inside subgraphs carry the correct
+// subgraph_node_index and subgraph_attr_name.
 // ---------------------------------------------------------------------------
 
 // Helper: build a minimal Loop body that adds a scalar ``one`` initializer to
@@ -3285,21 +3286,21 @@ TEST(SubgraphEventGraphName, LoopSubgraphEventsCarryBodyGraphName) {
 
   RunModel(model, rt);
 
-  // All events from the loop body subgraph must be tagged with graph_name
-  // "body". Events from the outer graph (e.g. writing s_final / scan) must
-  // have an empty graph_name.
+  // All events from the loop body subgraph must be tagged with
+  // subgraph_attr_name "body". Events from the outer graph must have an
+  // empty subgraph_attr_name.
   bool found_body_event = false;
   for (const auto &ev : rt.events()) {
-    if (ev.graph_name == "body") {
+    if (ev.subgraph_attr_name == "body") {
       found_body_event = true;
       break;
     }
   }
-  EXPECT_TRUE(found_body_event) << "No event with graph_name='body' found";
+  EXPECT_TRUE(found_body_event) << "No event with subgraph_attr_name='body' found";
 
-  // Top-level events must have an empty graph_name.
+  // Top-level events must have an empty subgraph_attr_name.
   for (const auto &ev : rt.events()) {
-    if (ev.graph_name.empty()) {
+    if (ev.subgraph_attr_name.empty()) {
       // At least one outer-graph event should exist (output tensors).
       break;
     }
@@ -3341,12 +3342,12 @@ TEST(SubgraphEventGraphName, IfSubgraphEventsCarryBranchGraphName) {
 
   bool found_then = false;
   for (const auto &ev : rt_true.events()) {
-    if (ev.graph_name == "then_branch") {
+    if (ev.subgraph_attr_name == "then_branch") {
       found_then = true;
       break;
     }
   }
-  EXPECT_TRUE(found_then) << "No event with graph_name='then_branch' found";
+  EXPECT_TRUE(found_then) << "No event with subgraph_attr_name='then_branch' found";
 
   // Run with cond = false: the else_branch executes.
   RuntimeContext rt_false(KernelContext(DefaultOpset(18)));
@@ -3357,12 +3358,12 @@ TEST(SubgraphEventGraphName, IfSubgraphEventsCarryBranchGraphName) {
 
   bool found_else = false;
   for (const auto &ev : rt_false.events()) {
-    if (ev.graph_name == "else_branch") {
+    if (ev.subgraph_attr_name == "else_branch") {
       found_else = true;
       break;
     }
   }
-  EXPECT_TRUE(found_else) << "No event with graph_name='else_branch' found";
+  EXPECT_TRUE(found_else) << "No event with subgraph_attr_name='else_branch' found";
 }
 
 TEST(SubgraphEventGraphName, ScanSubgraphEventsCarryBodyGraphName) {
@@ -3411,17 +3412,17 @@ TEST(SubgraphEventGraphName, ScanSubgraphEventsCarryBodyGraphName) {
 
   bool found_body = false;
   for (const auto &ev : rt.events()) {
-    if (ev.graph_name == "body") {
+    if (ev.subgraph_attr_name == "body") {
       found_body = true;
       break;
     }
   }
-  EXPECT_TRUE(found_body) << "No event with graph_name='body' found";
+  EXPECT_TRUE(found_body) << "No event with subgraph_attr_name='body' found";
 }
 
 TEST(SubgraphEventGraphName, TopLevelEventsHaveEmptyGraphName) {
   // A plain two-node graph (no subgraphs) must produce only events
-  // with an empty graph_name.
+  // with an empty subgraph_attr_name.
   using onnx_kernels::RuntimeEventAction;
 
   ModelProto model;
@@ -3442,8 +3443,8 @@ TEST(SubgraphEventGraphName, TopLevelEventsHaveEmptyGraphName) {
   RunModel(model, rt);
 
   for (const auto &ev : rt.events()) {
-    EXPECT_TRUE(ev.graph_name.empty())
-        << "Expected empty graph_name for top-level event, got: " << ev.graph_name;
+    EXPECT_TRUE(ev.subgraph_attr_name.empty())
+        << "Expected empty subgraph_attr_name for top-level event, got: " << ev.subgraph_attr_name;
   }
 }
 

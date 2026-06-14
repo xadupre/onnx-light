@@ -74,7 +74,7 @@ std::vector<Tensor> If::operator()(const Tensor &cond, const GraphProto &then_br
   child.functions() = rt.functions();
   child.tensors() = rt.tensors();
   child.set_events_enabled(rt.events_enabled());
-  child.set_current_graph_name(branch_name);
+  child.set_current_subgraph(rt.current_node_index(), branch_name);
   RunGraph(branch, child);
 
   if (rt.events_enabled()) {

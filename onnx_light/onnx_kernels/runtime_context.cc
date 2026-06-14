@@ -115,14 +115,16 @@ int64_t ResolveNodeIndex(RuntimeEventKind kind, int64_t current_node_index) noex
 
 RuntimeEvent MakeAddOrReplaceEvent(RuntimeEventAction action, RuntimeEventKind kind,
                                    const std::string &name, const Tensor &tensor,
-                                   int64_t current_node_index, const std::string &graph_name) {
+                                   int64_t current_node_index, int64_t subgraph_node_index,
+                                   const std::string &subgraph_attr_name) {
   RuntimeEvent ev;
   ev.action = action;
   ev.kind = kind;
   ev.timestamp_ns = NowNanos();
   ev.name = name;
   ev.node_index = ResolveNodeIndex(kind, current_node_index);
-  ev.graph_name = graph_name;
+  ev.subgraph_node_index = subgraph_node_index;
+  ev.subgraph_attr_name = subgraph_attr_name;
   const int64_t count = tensor.element_count();
   const int32_t capacity = static_cast<int32_t>(kRuntimeEventValueLimit);
   const int32_t truncated_count = static_cast<int32_t>(std::min<int64_t>(count, capacity));
@@ -153,7 +155,7 @@ RuntimeEvent MakeAddOrReplaceEvent(RuntimeEventAction action, RuntimeEventKind k
 }
 
 RuntimeEvent MakeRemoveEvent(RuntimeEventKind kind, const std::string &name,
-                             const std::string &graph_name) {
+                             int64_t subgraph_node_index, const std::string &subgraph_attr_name) {
   RuntimeEvent ev;
   ev.action = RuntimeEventAction::kRemove;
   ev.kind = kind;
@@ -161,7 +163,8 @@ RuntimeEvent MakeRemoveEvent(RuntimeEventKind kind, const std::string &name,
   ev.name = name;
   ev.data_type = static_cast<int32_t>(DataType::UNDEFINED);
   ev.value_count = 0;
-  ev.graph_name = graph_name;
+  ev.subgraph_node_index = subgraph_node_index;
+  ev.subgraph_attr_name = subgraph_attr_name;
   return ev;
 }
 
@@ -201,7 +204,8 @@ void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKin
   EXT_ENFORCE(!Has(name), "RuntimeContext::Set: a tensor named '", name, "' already exists.");
   if (events_enabled_) {
     events_.push_back(MakeAddOrReplaceEvent(RuntimeEventAction::kAdd, kind, name, tensor,
-                                            current_node_index_, current_graph_name_));
+                                            current_node_index_, current_subgraph_node_index_,
+                                            current_subgraph_attr_name_));
   }
   tensors_[name] = std::move(tensor);
 }
@@ -211,7 +215,8 @@ void RuntimeContext::Put(const std::string &name, Tensor tensor, RuntimeEventKin
     const RuntimeEventAction action =
         Has(name) ? RuntimeEventAction::kReplace : RuntimeEventAction::kAdd;
     events_.push_back(MakeAddOrReplaceEvent(action, kind, name, tensor, current_node_index_,
-                                            current_graph_name_));
+                                            current_subgraph_node_index_,
+                                            current_subgraph_attr_name_));
   }
   tensors_[name] = std::move(tensor);
 }
@@ -219,7 +224,8 @@ void RuntimeContext::Put(const std::string &name, Tensor tensor, RuntimeEventKin
 bool RuntimeContext::Remove(const std::string &name) {
   const bool erased = tensors_.erase(name) > 0;
   if (erased && events_enabled_) {
-    events_.push_back(MakeRemoveEvent(RuntimeEventKind::kUnknown, name, current_graph_name_));
+    events_.push_back(MakeRemoveEvent(RuntimeEventKind::kUnknown, name,
+                                      current_subgraph_node_index_, current_subgraph_attr_name_));
   }
   return erased;
 }
@@ -254,7 +260,8 @@ void RuntimeContext::AppendRunNodeEvent(const std::string &op_domain, const std:
   ev.op_type = op_type;
   ev.inputs = std::move(inputs);
   ev.duration_ns = duration_ns;
-  ev.graph_name = current_graph_name_;
+  ev.subgraph_node_index = current_subgraph_node_index_;
+  ev.subgraph_attr_name = current_subgraph_attr_name_;
   events_.push_back(std::move(ev));
 }
 

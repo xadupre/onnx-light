@@ -153,14 +153,12 @@ Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
 
 std::vector<Tensor> RunSubgraph(const GraphProto &graph,
                                 const std::vector<std::pair<std::string, Tensor>> &bindings,
-                                RuntimeContext &rt, const std::string &graph_name) {
-  const std::string effective_name = graph_name.empty() ? graph.name().as_string() : graph_name;
-
+                                RuntimeContext &rt, const std::string &attr_name) {
   RuntimeContext child(rt.kernel_ctx());
   child.functions() = rt.functions();
   child.tensors() = rt.tensors();
   child.set_events_enabled(rt.events_enabled());
-  child.set_current_graph_name(effective_name);
+  child.set_current_subgraph(rt.current_node_index(), attr_name);
   for (const auto &kv : bindings) {
     child.Put(kv.first, kv.second, RuntimeEventKind::kInput);
   }
@@ -252,7 +250,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
     child.tensors() = rt.tensors();
     child.sequences() = rt.sequences();
     child.set_events_enabled(rt.events_enabled());
-    child.set_current_graph_name("body");
+    child.set_current_subgraph(rt.current_node_index(), "body");
 
     const std::string &iter_name = body.input(0).name().as_string();
     const std::string &cond_name = body.input(1).name().as_string();

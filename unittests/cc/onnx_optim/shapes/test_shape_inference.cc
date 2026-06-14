@@ -1248,7 +1248,7 @@ TEST(OnnxOptimShapesContextEventLog, NodeIndexTagsInputsInitializersAndNodes) {
 }
 
 TEST(OnnxOptimShapesContextEventLog, TopLevelEventsHaveEmptyGraphName) {
-  // A model with no subgraphs: all events must have an empty graph_name.
+  // A model with no subgraphs: all events must have an empty subgraph_attr_name.
   NodeProto node = MakeNode("Relu", {"X"}, {"Y"});
   ModelProto model;
   model.set_ir_version(8);
@@ -1269,16 +1269,16 @@ TEST(OnnxOptimShapesContextEventLog, TopLevelEventsHaveEmptyGraphName) {
   ctx.ComputeShapeModel(model);
 
   for (const auto &ev : ctx.Events()) {
-    EXPECT_TRUE(ev.graph_name.empty())
-        << "Expected empty graph_name for top-level event, got: " << ev.graph_name;
+    EXPECT_TRUE(ev.subgraph_attr_name.empty())
+        << "Expected empty subgraph_attr_name for top-level event, got: " << ev.subgraph_attr_name;
   }
 }
 
 TEST(OnnxOptimShapesContextEventLog, IfSubgraphEventsCarryBranchGraphName) {
   // Build a simple If model: branches each produce Abs(X).
-  // Events from then_branch must carry graph_name="then_branch" and from
-  // else_branch graph_name="else_branch"; outer events must have empty
-  // graph_name.
+  // Events from then_branch must carry subgraph_attr_name="then_branch" and
+  // from else_branch subgraph_attr_name="else_branch"; outer events must have
+  // empty subgraph_attr_name.
   using onnx_optim::shapes::ShapeEvent;
   ModelProto model;
   model.set_ir_version(8);
@@ -1328,15 +1328,15 @@ TEST(OnnxOptimShapesContextEventLog, IfSubgraphEventsCarryBranchGraphName) {
   bool found_then = false;
   bool found_else = false;
   for (const auto &ev : ctx.Events()) {
-    if (ev.graph_name == "then_branch") {
+    if (ev.subgraph_attr_name == "then_branch") {
       found_then = true;
     }
-    if (ev.graph_name == "else_branch") {
+    if (ev.subgraph_attr_name == "else_branch") {
       found_else = true;
     }
   }
-  EXPECT_TRUE(found_then) << "No event with graph_name='then_branch' found";
-  EXPECT_TRUE(found_else) << "No event with graph_name='else_branch' found";
+  EXPECT_TRUE(found_then) << "No event with subgraph_attr_name='then_branch' found";
+  EXPECT_TRUE(found_else) << "No event with subgraph_attr_name='else_branch' found";
 }
 
 TEST(OnnxOptimShapesContextEventLog, LoopSubgraphEventsCarryBodyGraphName) {
@@ -1397,12 +1397,12 @@ TEST(OnnxOptimShapesContextEventLog, LoopSubgraphEventsCarryBodyGraphName) {
 
   bool found_body = false;
   for (const auto &ev : ctx.Events()) {
-    if (ev.graph_name == "body") {
+    if (ev.subgraph_attr_name == "body") {
       found_body = true;
       break;
     }
   }
-  EXPECT_TRUE(found_body) << "No event with graph_name='body' found";
+  EXPECT_TRUE(found_body) << "No event with subgraph_attr_name='body' found";
 }
 
 } // namespace Test

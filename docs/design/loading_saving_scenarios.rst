@@ -14,8 +14,8 @@ addition of two dedicated helpers:
 
 Both helpers share a common goal: **manipulate large two-file (or
 multi-file) ONNX models without paying the cost of materialising the full
-set of weights in RAM** — a constraint that the standard ``load`` /
-``save`` pair cannot satisfy for very large models, and that the
+set of weights in RAM** — a constraint that the standard :func:`onnx_light.onnx.load` /
+:func:`onnx_light.onnx.save` pair cannot satisfy for very large models, and that the
 protobuf-free design of *onnx-light* makes natural to implement.
 
 Scenario 1 — Re-align external weights without loading them
@@ -30,7 +30,7 @@ weights file to be aligned to a power-of-two boundary, typically
 memory to load the full set of weights just to re-serialize them.
 
 **Naive approach.**  ``load(load_external_data=True)`` followed by
-``SerializeToFile`` with :attr:`SerializeOptions.alignment` set to the
+:meth:`SerializeToFile` with :attr:`SerializeOptions.alignment` set to the
 desired boundary.  This works but requires the full weights payload to
 fit in RAM during the round-trip.
 

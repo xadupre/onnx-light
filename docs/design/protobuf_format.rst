@@ -65,7 +65,7 @@ The wire types relevant to ONNX are:
 Wire types 3 and 4 (start-group / end-group) are deprecated and not
 used by ONNX.
 The decoding side appears in ``onnx_light/onnx_proto/stream.cc``: the
-function ``BinaryStream::next_field()`` reads the tag varint and splits
+function :cpp:func:`~onnx_light::utils::BinaryStream::next_field` reads the tag varint and splits
 it into ``field_number = tag >> 3`` and ``wire_type = tag & 0x07``.
 
 Varints
@@ -110,7 +110,7 @@ values:
       ...
 
 It is implemented in ``onnx_light/onnx_proto/stream.h`` by
-``encodeZigZag64`` / ``decodeZigZag64``.  Note that the plain
+:cpp:func:`~onnx_light::utils::encodeZigZag64` / :cpp:func:`~onnx_light::utils::decodeZigZag64`.  Note that the plain
 ``int32`` and ``int64`` ONNX fields do **not** use ZigZag; they use the
 two's-complement representation directly, which is why a negative
 ``int64`` always takes 10 bytes.
@@ -129,7 +129,7 @@ For wire type ``LEN`` the encoder writes a varint *length* followed by
 Embedded messages are simply written out as their own bytestream and
 prefixed by their total size, so the parser can either descend into
 the substream or skip the whole region.  ``onnx_light`` exposes this
-pattern through ``BinaryStream::LimitToNext()`` and ``Restore()``,
+pattern through :cpp:func:`~onnx_light::utils::BinaryStream::LimitToNext` and :cpp:func:`~onnx_light::utils::BinaryStream::Restore`,
 which push and pop a temporary read limit corresponding to the
 length-prefixed substream.
 

@@ -38,7 +38,7 @@ kernel classes for that group.
 Runtime model
 -------------
 
-``RunNode`` executes one :class:`~onnx_light.onnx_lib.NodeProto` against a
+:cpp:func:`~onnx::onnx_kernels::RunNode` executes one :class:`~onnx_light.onnx_lib.NodeProto` against a
 :cpp:type:`onnx::onnx_kernels::TensorMap` stored in
 :cpp:class:`onnx::onnx_kernels::RuntimeContext`:
 
@@ -51,8 +51,8 @@ Runtime model
 Control-flow operators (``If``, ``Loop``, ``Scan``) are handled by dedicated
 paths that evaluate subgraphs through :cpp:func:`onnx::onnx_kernels::RunSubgraph`.
 
-``RunGraph`` seeds initializers and executes nodes in topological order.
-``RunModel`` additionally registers ``ModelProto::functions`` before evaluating
+:cpp:func:`~onnx::onnx_kernels::RunGraph` seeds initializers and executes nodes in topological order.
+:cpp:func:`~onnx::onnx_kernels::RunModel` additionally registers ``ModelProto::functions`` before evaluating
 ``model.graph``.
 
 How backend tests use kernels
@@ -80,7 +80,7 @@ Typical workflow:
    :epkg:`onnx_light/onnx_backend_test/cases`\ ``/<family>/``; compute expected outputs
    through the kernel and register them with
    :cpp:func:`onnx::onnx_backend_test::Expect`.
-#. If the operator should be executable through ``RunNode``/``RunModel``, add a
+#. If the operator should be executable through :cpp:func:`~onnx::onnx_kernels::RunNode`/:cpp:func:`~onnx::onnx_kernels::RunModel`, add a
    trampoline/dispatch-table entry in
    :epkg:`onnx_light/onnx_kernels/run_nodes.cc`
    (or a dedicated path for control-flow style operators).

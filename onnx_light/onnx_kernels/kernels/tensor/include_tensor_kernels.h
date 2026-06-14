@@ -954,10 +954,12 @@ public:
 /// used. The ``"tf_crop_and_resize"`` coordinate transformation is
 /// supported (using the ``roi`` argument provided through
 /// :cpp:member:`Attributes::roi` and the ``extrapolation_value`` attribute);
-/// ``antialias`` is not implemented. The supported element types are the
-/// same whole-byte types as :cpp:func:`ElementSize` for ``"nearest"`` mode;
-/// ``"linear"`` and ``"cubic"`` modes require a floating-point input
-/// (``FLOAT`` or ``DOUBLE``).
+/// ``antialias`` is supported for ``"linear"`` and ``"cubic"`` modes (when
+/// non-zero, the interpolation kernel is widened by the resize scale while
+/// downsampling to act as an anti-aliasing filter). The supported element
+/// types are the same whole-byte types as :cpp:func:`ElementSize` for
+/// ``"nearest"`` mode; ``"linear"`` and ``"cubic"`` modes require a
+/// floating-point input (``FLOAT`` or ``DOUBLE``).
 class Resize : public KernelBase {
 public:
   /// Attributes carried by the ONNX ``Resize`` operator.
@@ -992,6 +994,11 @@ public:
     /// the number of resized axes (i.e. ``axes.size()`` when ``axes`` is
     /// non-empty, otherwise the input rank).
     std::vector<float> roi;
+    /// When non-zero (and ``mode`` is ``"linear"`` or ``"cubic"``), the
+    /// interpolation kernel is stretched by the resize scale when
+    /// downsampling so that it acts as an anti-aliasing low-pass filter.
+    /// Ignored for ``"nearest"`` mode and for upsampling (scale >= 1).
+    int64_t antialias = 0;
   };
 
   using KernelBase::KernelBase;

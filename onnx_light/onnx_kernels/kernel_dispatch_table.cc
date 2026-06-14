@@ -1997,6 +1997,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
              GetAttributeFloatOrDefault(node, "cubic_coeff_a", attrs.cubic_coeff_a);
          attrs.exclude_outside =
              GetAttributeIntOrDefault(node, "exclude_outside", attrs.exclude_outside);
+         attrs.antialias = GetAttributeIntOrDefault(node, "antialias", attrs.antialias);
          attrs.extrapolation_value = GetAttributeFloatOrDefault(
              node, "extrapolation_value", attrs.extrapolation_value);
          if (roi != nullptr) {

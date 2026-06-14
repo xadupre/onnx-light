@@ -382,5 +382,85 @@ class TestTensorToNumpy(ExtTestCase):
             rt.tensor_to_numpy(t)
 
 
+class TestTensorDLPack(ExtTestCase):
+    def _make_tensor(self, dtype_enum, array: np.ndarray):
+        tp = TensorProto()
+        tp.name = "x"
+        tp.data_type = int(dtype_enum)
+        tp.dims.extend(array.shape)
+        tp.raw_data = array.tobytes()
+        return rt.tensor_from_proto(tp)
+
+    def test_dlpack_device_is_cpu(self):
+        t = _make_float_tensor("x", [1.0, 2.0, 3.0])
+        self.assertEqual(t.__dlpack_device__(), (1, 0))
+
+    def test_dlpack_returns_capsule(self):
+        t = _make_float_tensor("x", [1.0, 2.0, 3.0])
+        capsule = t.__dlpack__()
+        self.assertEqual(type(capsule).__name__, "PyCapsule")
+
+    def test_from_dlpack_float(self):
+        expected = np.arange(6, dtype=np.float32).reshape(2, 3)
+        out = np.from_dlpack(self._make_tensor(TensorProto.FLOAT, expected))
+        self.assertEqual(out.dtype, np.float32)
+        self.assertEqual(out.shape, (2, 3))
+        np.testing.assert_array_equal(out, expected)
+
+    def test_from_dlpack_is_zero_copy(self):
+        # The exported buffer is shared with the source tensor: the resulting
+        # array must not own its data (``base`` is set) so no copy was made.
+        out = np.from_dlpack(_make_int32_tensor("v", [7, 8, 9]))
+        self.assertIsNotNone(out.base)
+        np.testing.assert_array_equal(out, np.array([7, 8, 9], np.int32))
+
+    def test_from_dlpack_keeps_source_alive(self):
+        # Dropping the Python tensor handle must not invalidate the shared
+        # buffer: the array keeps the source tensor alive through the capsule.
+        out = np.from_dlpack(_make_int32_tensor("v", [7, 8, 9]))
+        np.testing.assert_array_equal(out, np.array([7, 8, 9], np.int32))
+
+    def test_from_dlpack_various_dtypes(self):
+        cases = [
+            (TensorProto.DOUBLE, np.array([1.5, 2.5], dtype=np.float64)),
+            (TensorProto.FLOAT16, np.array([1.5, 2.5], dtype=np.float16)),
+            (TensorProto.INT8, np.array([-1, 2, 3], dtype=np.int8)),
+            (TensorProto.UINT8, np.array([1, 2, 3], dtype=np.uint8)),
+            (TensorProto.INT16, np.array([1, -2], dtype=np.int16)),
+            (TensorProto.UINT16, np.array([1, 2], dtype=np.uint16)),
+            (TensorProto.INT32, np.array([1, -2], dtype=np.int32)),
+            (TensorProto.UINT32, np.array([1, 2], dtype=np.uint32)),
+            (TensorProto.INT64, np.array([[1, 2], [3, 4]], dtype=np.int64)),
+            (TensorProto.UINT64, np.array([1, 2], dtype=np.uint64)),
+        ]
+        for dtype_enum, array in cases:
+            with self.subTest(dtype=dtype_enum):
+                out = np.from_dlpack(self._make_tensor(dtype_enum, array))
+                self.assertEqual(out.dtype, array.dtype)
+                np.testing.assert_array_equal(out, array)
+
+    def test_from_dlpack_bool(self):
+        expected = np.array([True, False, True])
+        out = np.from_dlpack(self._make_tensor(TensorProto.BOOL, expected))
+        np.testing.assert_array_equal(out.astype(bool), expected)
+
+    def test_from_dlpack_scalar(self):
+        out = np.from_dlpack(self._make_tensor(TensorProto.INT32, np.array(7, dtype=np.int32)))
+        self.assertEqual(out.shape, ())
+        self.assertEqual(int(out), 7)
+
+    def test_dlpack_string_tensor_raises(self):
+        sp = TensorProto()
+        sp.name = "s"
+        sp.dims.append(1)
+        sp.data_type = int(TensorProto.STRING)
+        sp.string_data.append(b"abc")
+        t = rt.tensor_from_proto(sp)
+        with self.assertRaises(ValueError):
+            t.__dlpack__()
+        with self.assertRaises(ValueError):
+            t.__dlpack_device__()
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

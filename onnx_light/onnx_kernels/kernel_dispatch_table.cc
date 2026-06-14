@@ -1029,7 +1029,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          if (x_zero_point != nullptr) {
            SetOutput(node, 0, k(x, x_scale, *x_zero_point, axis), rt);
          } else {
-           SetOutput(node, 0, k(x, x_scale), rt);
+           SetOutput(node, 0, k(x, x_scale, axis), rt);
          }
        }},
       {"ai.onnx:DFT",

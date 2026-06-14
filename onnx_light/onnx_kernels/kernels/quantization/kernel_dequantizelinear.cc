@@ -516,6 +516,38 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
   }
 }
 
+Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, int64_t axis) const {
+  if (x_scale.element_count() == 1) {
+    return (*this)(x, x_scale);
+  }
+  EXT_ENFORCE_INVALID(IsSupportedScaleDType(x_scale.data_type),
+                      "kernel::DequantizeLinear: x_scale must be FLOAT or FLOAT16.");
+  const size_t elem_size = x_scale.data_type == static_cast<int32_t>(DataType::FLOAT16)
+                               ? sizeof(uint16_t)
+                               : sizeof(float);
+  Tensor out("", x_scale.data_type, x.shape,
+             std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * elem_size));
+  (*this)(x, x_scale, axis, out);
+  return out;
+}
+
+void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, int64_t axis,
+                                  Tensor &output) const {
+  if (x_scale.element_count() == 1) {
+    return (*this)(x, x_scale, output);
+  }
+  EXT_ENFORCE_INVALID(axis >= 0 && axis < static_cast<int64_t>(x.shape.size()),
+                      "kernel::DequantizeLinear: axis out of range.");
+  // A zero-filled buffer decodes to a zero point of 0 for every supported
+  // input element type (whole-byte integers, float8 and sub-byte packed
+  // types), so the per-axis dequantization can reuse the explicit-zero-point
+  // overload.
+  const int64_t axis_size = x.shape[static_cast<std::size_t>(axis)];
+  Tensor zero_zero_point("", x.data_type, {axis_size},
+                         std::vector<uint8_t>(PackedByteSize(x.data_type, axis_size), 0));
+  (*this)(x, x_scale, zero_zero_point, axis, output);
+}
+
 } // namespace kernel
 } // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

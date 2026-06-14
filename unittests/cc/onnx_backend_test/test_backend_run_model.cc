@@ -342,17 +342,11 @@ TEST(BackendRunModel, TfIdfVectorizer) { RunBackendCasesFor("TfIdfVectorizer"); 
 // batch dim on every state / scan input/output) by running the Scan-9
 // kernel once per batch element and stacking the per-batch outputs.
 //
-// ``test_cc_scan_zero_trip_count`` is excluded: when trip_count==0 the
-// body is never executed so the body-aware overload of ``kernel::Scan``
-// has no per-iteration tensor from which to recover the scan-output
-// element shape/dtype, and produces a degenerate UNDEFINED ``[0]`` output
-// instead of the expected FLOAT ``[0, 2]``. This is unrelated to the
-// opset-8 fix and tracked separately.
-TEST(BackendRunModel, Scan) {
-  RunBackendCasesFor(
-      "Scan", [](const TestCase &tc) { return tc.name != "test_cc_scan_zero_trip_count"; },
-      [](const DataSet &) { return true; });
-}
+// ``test_cc_scan_zero_trip_count`` is included: when trip_count==0 the body
+// is run once with zero-filled dummy slices so the body-aware overload can
+// recover the scan-output element type/shape and emit the expected FLOAT
+// ``[0, 2]`` output (instead of a degenerate UNDEFINED ``[0]`` tensor).
+TEST(BackendRunModel, Scan) { RunBackendCasesFor("Scan"); }
 
 // Quantization kernels.
 // The reference QuantizeLinear/DequantizeLinear kernels support per-tensor and

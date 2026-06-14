@@ -355,7 +355,7 @@ class TestTensorToNumpy(ExtTestCase):
         self.assertEqual(raw.dtype, np.uint8)
         self.assertEqual(raw.ndim, 1)
         self.assertEqual(raw.shape, (12,))
-        self.assertEqual(struct.unpack("<3f", raw.view(np.float32).tobytes()), (1.0, 2.0, 3.0))
+        np.testing.assert_array_equal(raw.view(np.float32), np.array([1.0, 2.0, 3.0], np.float32))
 
     def test_tensor_to_numpy_is_zero_copy(self):
         # The returned uint8 view borrows the tensor's bytes: it must not own
@@ -370,6 +370,16 @@ class TestTensorToNumpy(ExtTestCase):
         # view: the array keeps the source tensor alive through its ``base``.
         arr = rt.tensor_to_numpy(_make_int32_tensor("v", [7, 8, 9])).view(np.int32)
         np.testing.assert_array_equal(arr, np.array([7, 8, 9], np.int32))
+
+    def test_tensor_to_numpy_string_tensor_raises(self):
+        sp = TensorProto()
+        sp.name = "s"
+        sp.dims.append(1)
+        sp.data_type = int(TensorProto.STRING)
+        sp.string_data.append(b"abc")
+        t = rt.tensor_from_proto(sp)
+        with self.assertRaises(ValueError):
+            rt.tensor_to_numpy(t)
 
 
 if __name__ == "__main__":

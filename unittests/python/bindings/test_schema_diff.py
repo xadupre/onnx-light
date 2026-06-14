@@ -4,7 +4,13 @@ import unittest
 
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx.defs as defs
-from onnx_light.tools.compatibility import ConstraintDiff, DocDiff, SchemaDiff, compare_schemas
+from onnx_light.tools.compatibility import (
+    ConstraintDiff,
+    DeprecationDiff,
+    DocDiff,
+    SchemaDiff,
+    compare_schemas,
+)
 
 
 class TestCompareSchemasBuiltin(ExtTestCase):
@@ -574,6 +580,90 @@ class TestCompareSchemasLightOpSchema(ExtTestCase):
         for cdiff in diff.constraints:
             for t in cdiff.added_types + cdiff.removed_types:
                 self.assertIsInstance(t, str)
+
+
+class TestDeprecationDiff(ExtTestCase):
+    """Tests for :class:`DeprecationDiff` (operator deprecation status diff)."""
+
+    class _Stub:
+        """Minimal schema-like object exposing only ``deprecated``."""
+
+        def __init__(self, deprecated):
+            self.deprecated = deprecated
+
+    def test_unchanged_not_deprecated(self):
+        d = DeprecationDiff.compare(self._Stub(False), self._Stub(False))
+        self.assertFalse(d.changed)
+        self.assertFalse(d.is_breaking)
+
+    def test_unchanged_deprecated(self):
+        d = DeprecationDiff.compare(self._Stub(True), self._Stub(True))
+        self.assertFalse(d.changed)
+        self.assertFalse(d.is_breaking)
+
+    def test_newly_deprecated_is_breaking(self):
+        d = DeprecationDiff.compare(self._Stub(False), self._Stub(True))
+        self.assertTrue(d.changed)
+        self.assertTrue(d.is_breaking)
+        self.assertIn("[BREAKING]", str(d))
+        self.assertIn("False -> True", str(d))
+
+    def test_undeprecated_is_not_breaking(self):
+        d = DeprecationDiff.compare(self._Stub(True), self._Stub(False))
+        self.assertTrue(d.changed)
+        self.assertFalse(d.is_breaking)
+
+    def test_missing_attribute_defaults_to_not_deprecated(self):
+        d = DeprecationDiff.compare(object(), object())
+        self.assertFalse(d.changed)
+        self.assertFalse(d.is_breaking)
+
+
+class TestCompareSchemasDeprecation(ExtTestCase):
+    """Tests that :func:`compare_schemas` reports a deprecation change."""
+
+    @classmethod
+    def setUpClass(cls):
+        from collections import defaultdict
+
+        from onnx_light.onnx_py._onnxpyprotoop import onnx_op  # type: ignore
+
+        cls.schemas = onnx_op.GetAllOnnxOpSchemasWithHistory(init_doc=True)
+        by_name: dict = defaultdict(list)
+        for s in cls.schemas:
+            by_name[(s.domain, s.name)].append(s)
+        for v in by_name.values():
+            v.sort(key=lambda s: s.since_version)
+        cls.by_name = by_name
+
+    def _find_deprecated_pair(self):
+        for versions in self.by_name.values():
+            deprecated = [s for s in versions if getattr(s, "deprecated", False)]
+            active = [s for s in versions if not getattr(s, "deprecated", False)]
+            if deprecated and active:
+                return active[0], deprecated[-1]
+        return None
+
+    def test_no_deprecation_change_is_not_reported(self):
+        s = next(iter(self.by_name.values()))[0]
+        diff = compare_schemas(s, s)
+        self.assertIsInstance(diff.deprecation, DeprecationDiff)
+        self.assertFalse(diff.deprecation.changed)
+        self.assertNotIn("Deprecation", str(diff))
+
+    def test_newly_deprecated_operator_is_breaking(self):
+        pair = self._find_deprecated_pair()
+        if pair is None:
+            self.skipTest("No operator with both active and deprecated versions.")
+        old, new = pair
+        diff = compare_schemas(old, new)
+        self.assertTrue(diff.deprecation.changed)
+        self.assertTrue(diff.deprecation.is_breaking)
+        self.assertTrue(diff.is_breaking)
+        self.assertTrue(any("deprecated" in r for r in diff.breaking_reasons))
+        # Both plain text and RST renderings surface the deprecation change.
+        self.assertIn("Deprecation", str(diff))
+        self.assertIn("**Deprecation:**", diff.to_rst())
 
 
 if __name__ == "__main__":

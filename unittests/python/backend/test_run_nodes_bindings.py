@@ -541,7 +541,7 @@ class TestSubgraphEventGraphName(ExtTestCase):
         return model
 
     def test_top_level_events_have_empty_graph_name(self):
-        """A plain model without subgraphs must produce only empty graph_name."""
+        """A plain model without subgraphs has all events with empty graph_name."""
         model = parser.parse_model(_MODEL_SRC)
         ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
         ctx.events_enabled = True
@@ -558,7 +558,7 @@ class TestSubgraphEventGraphName(ExtTestCase):
             )
 
     def test_loop_subgraph_events_carry_body_graph_name(self):
-        """Events produced inside a Loop body must carry graph_name='body'."""
+        """At least one event from a Loop body carries graph_name='body'."""
         import struct
 
         model = self._build_loop_model()

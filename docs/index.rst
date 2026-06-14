@@ -102,6 +102,8 @@ Backend tests
 
 They are fully written in C++. They can be called from any language.
 Every output is generated with a C++ implementation of the operator.
+Kernels can be used without the backend tests but the backend tests rely
+on the kernels to produce the expected outputs.
 
 .. toctree::
     :maxdepth: 1

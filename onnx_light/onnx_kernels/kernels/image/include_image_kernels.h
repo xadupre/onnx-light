@@ -30,8 +30,8 @@ namespace kernel {
 //
 // To keep the lightweight C++ kernel library free of build-time third-party
 // image decoding dependencies (``libjpeg``, ``libpng``, ``libwebp``, etc.) the
-// reference kernel implements most decoders inline and uses ``libwebp`` only
-// when it is available at runtime:
+// reference kernel implements most decoders inline and uses ``libwebp`` /
+// ``libopenjp2`` only when they are available at runtime:
 //
 //   * **BMP** — 24-bit uncompressed (BI_RGB, BITMAPINFOHEADER): fully
 //     decoded to ``(H, W, C)`` uint8 output in the requested
@@ -52,14 +52,18 @@ namespace kernel {
 //     interlaced PNGs fall through to the empty-matrix path.
 //   * **WebP** — decoded via dynamically loaded ``libwebp`` (if present at
 //     runtime), then converted to ``pixel_format``.
+//   * **JPEG2000** — the JP2 file format and the raw J2K codestream are
+//     decoded via dynamically loaded ``libopenjp2`` (OpenJPEG, if present
+//     at runtime), then converted to ``pixel_format``.
 //   * **PNM** — the Netpbm family (``P1``/``P4`` bitmaps, ``P2``/``P5``
 //     graymaps, ``P3``/``P6`` pixmaps) with 8-bit samples
 //     (``maxval <= 255``): fully decoded inline to ``(H, W, C)`` uint8
 //     output in the requested ``pixel_format``. 16-bit (``maxval > 255``)
 //     graymaps/pixmaps fall through to the empty-matrix path.
 //
-// For all other formats (JPEG2000) the kernel
-// falls back to the behavior documented by the ONNX schema:
+// When a bytestream cannot be decoded (e.g. an unsupported variant, or a
+// JPEG2000/WebP input while the corresponding runtime library is absent) the
+// kernel falls back to the behavior documented by the ONNX schema:
 //
 //     "If it can't decode for any reason (e.g. corrupted encoded stream,
 //      invalid format), it will return an empty matrix."
@@ -88,9 +92,10 @@ namespace kernel {
 /// in ``{1, 2}``, optional restart intervals) images, as well as 8-bit
 /// non-interlaced grayscale/truecolor PNG (color types 0 and 2), are
 /// decoded natively without any external library dependency. WebP is
-/// decoded through ``libwebp`` when available at runtime. The Netpbm
-/// family (``P1``-``P6`` with 8-bit samples) is also decoded natively.
-/// All other formats (JPEG2000) fall back to returning
+/// decoded through ``libwebp`` and JPEG2000 (JP2 / raw J2K codestream)
+/// through ``libopenjp2`` (OpenJPEG) when available at runtime. The
+/// Netpbm family (``P1``-``P6`` with 8-bit samples) is also decoded
+/// natively. Bytestreams that cannot be decoded fall back to returning
 /// an empty matrix (``(0, 0, C)`` ``tensor(uint8)``). Invalid inputs
 /// or attribute values throw ``std::invalid_argument``.
 class ImageDecoder : public KernelBase {

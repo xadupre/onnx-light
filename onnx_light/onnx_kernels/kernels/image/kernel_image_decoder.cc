@@ -1821,6 +1821,339 @@ bool TryDecodePnm(const uint8_t *data, size_t size, const std::string &pixel_for
   return true;
 }
 
+// ---------------------------------------------------------------------------
+// JPEG2000 decoder
+//
+// Decodes the JP2 file format and the raw J2K codestream through the OpenJPEG
+// library (``libopenjp2``) when it is available at runtime. The library is
+// loaded lazily via ``dlopen`` / ``LoadLibrary`` so onnx-light keeps no build
+// or link dependency on OpenJPEG; when the library (or any required symbol) is
+// missing the function returns false and the caller falls back to the
+// empty-matrix path documented by the ONNX schema.
+//
+// Only the struct fields that are read back (image and component geometry,
+// precision, signedness and the per-component sample buffers) are mirrored
+// below. ``opj_dparameters_t`` is treated opaquely: a generously sized buffer
+// is default-initialized by the library itself and passed straight back to
+// ``opj_setup_decoder``, so the exact layout never needs to be replicated.
+// ---------------------------------------------------------------------------
+
+// Layout-compatible mirror of ``opj_image_comp`` from OpenJPEG 2.x.
+struct OpjImageComp {
+  uint32_t dx;
+  uint32_t dy;
+  uint32_t w;
+  uint32_t h;
+  uint32_t x0;
+  uint32_t y0;
+  uint32_t prec;
+  uint32_t bpp;
+  uint32_t sgnd;
+  uint32_t resno_decoded;
+  uint32_t factor;
+  int32_t *data;
+  uint16_t alpha;
+};
+
+// Layout-compatible mirror of ``opj_image`` from OpenJPEG 2.x.
+struct OpjImage {
+  uint32_t x0;
+  uint32_t y0;
+  uint32_t x1;
+  uint32_t y1;
+  uint32_t numcomps;
+  int32_t color_space;
+  OpjImageComp *comps;
+  uint8_t *icc_profile_buf;
+  uint32_t icc_profile_len;
+};
+
+// Cursor over the in-memory bytestream used by the OpenJPEG stream callbacks.
+struct OpjMemStream {
+  const uint8_t *data;
+  size_t size;
+  size_t pos;
+};
+
+extern "C" {
+using OpjStreamReadFn = size_t (*)(void *, size_t, void *);
+using OpjStreamSkipFn = int64_t (*)(int64_t, void *);
+using OpjStreamSeekFn = int32_t (*)(int64_t, void *);
+}
+
+size_t OpjMemRead(void *buffer, size_t nb_bytes, void *user_data) {
+  auto *m = static_cast<OpjMemStream *>(user_data);
+  if (m->pos >= m->size) {
+    return static_cast<size_t>(-1);
+  }
+  size_t avail = m->size - m->pos;
+  if (nb_bytes > avail) {
+    nb_bytes = avail;
+  }
+  std::memcpy(buffer, m->data + m->pos, nb_bytes);
+  m->pos += nb_bytes;
+  return nb_bytes;
+}
+
+int64_t OpjMemSkip(int64_t nb_bytes, void *user_data) {
+  auto *m = static_cast<OpjMemStream *>(user_data);
+  if (nb_bytes < 0) {
+    return -1;
+  }
+  size_t avail = m->size - m->pos;
+  size_t skip = static_cast<size_t>(nb_bytes);
+  if (skip > avail) {
+    skip = avail;
+  }
+  m->pos += skip;
+  return static_cast<int64_t>(skip);
+}
+
+int32_t OpjMemSeek(int64_t nb_bytes, void *user_data) {
+  auto *m = static_cast<OpjMemStream *>(user_data);
+  if (nb_bytes < 0 || static_cast<size_t>(nb_bytes) > m->size) {
+    return 0;
+  }
+  m->pos = static_cast<size_t>(nb_bytes);
+  return 1;
+}
+
+bool TryDecodeJpeg2000(const uint8_t *data, size_t size, const std::string &pixel_format,
+                       int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels) {
+  // OpenJPEG codec identifiers (``OPJ_CODEC_FORMAT``).
+  constexpr int kCodecJ2k = 0;
+  constexpr int kCodecJp2 = 2;
+
+  static const uint8_t kJp2Signature[12] = {0x00, 0x00, 0x00, 0x0C, 0x6A, 0x50,
+                                            0x20, 0x20, 0x0D, 0x0A, 0x87, 0x0A};
+  static const uint8_t kJ2kSignature[4] = {0xFF, 0x4F, 0xFF, 0x51};
+
+  int codec_format = -1;
+  if (size >= sizeof(kJp2Signature) &&
+      std::memcmp(data, kJp2Signature, sizeof(kJp2Signature)) == 0) {
+    codec_format = kCodecJp2;
+  } else if (size >= sizeof(kJ2kSignature) &&
+             std::memcmp(data, kJ2kSignature, sizeof(kJ2kSignature)) == 0) {
+    codec_format = kCodecJ2k;
+  } else {
+    return false;
+  }
+
+  using CreateDecompressFn = void *(*)(int);
+  using SetDefaultParamsFn = void (*)(void *);
+  using SetupDecoderFn = int32_t (*)(void *, void *);
+  using StreamDefaultCreateFn = void *(*)(int32_t);
+  using StreamSetReadFn = void (*)(void *, OpjStreamReadFn);
+  using StreamSetSkipFn = void (*)(void *, OpjStreamSkipFn);
+  using StreamSetSeekFn = void (*)(void *, OpjStreamSeekFn);
+  using StreamSetUserDataFn = void (*)(void *, void *, void *);
+  using StreamSetUserDataLenFn = void (*)(void *, uint64_t);
+  using ReadHeaderFn = int32_t (*)(void *, void *, OpjImage **);
+  using DecodeFn = int32_t (*)(void *, void *, OpjImage *);
+  using EndDecompressFn = int32_t (*)(void *, void *);
+  using DestroyCodecFn = void (*)(void *);
+  using StreamDestroyFn = void (*)(void *);
+  using ImageDestroyFn = void (*)(OpjImage *);
+
+  struct OpenJpegApi {
+#if defined(_WIN32)
+    HMODULE handle = nullptr;
+#else
+    void *handle = nullptr;
+#endif
+    CreateDecompressFn create_decompress = nullptr;
+    SetDefaultParamsFn set_default_params = nullptr;
+    SetupDecoderFn setup_decoder = nullptr;
+    StreamDefaultCreateFn stream_default_create = nullptr;
+    StreamSetReadFn stream_set_read = nullptr;
+    StreamSetSkipFn stream_set_skip = nullptr;
+    StreamSetSeekFn stream_set_seek = nullptr;
+    StreamSetUserDataFn stream_set_user_data = nullptr;
+    StreamSetUserDataLenFn stream_set_user_data_length = nullptr;
+    ReadHeaderFn read_header = nullptr;
+    DecodeFn decode = nullptr;
+    EndDecompressFn end_decompress = nullptr;
+    DestroyCodecFn destroy_codec = nullptr;
+    StreamDestroyFn stream_destroy = nullptr;
+    ImageDestroyFn image_destroy = nullptr;
+
+    bool complete() const {
+      return create_decompress && set_default_params && setup_decoder && stream_default_create &&
+             stream_set_read && stream_set_skip && stream_set_seek && stream_set_user_data &&
+             stream_set_user_data_length && read_header && decode && end_decompress &&
+             destroy_codec && stream_destroy && image_destroy;
+    }
+  };
+
+  const auto load_openjpeg_api = []() -> OpenJpegApi {
+    OpenJpegApi api{};
+#if defined(_WIN32)
+    api.handle = LoadLibraryA("libopenjp2.dll");
+    if (!api.handle) {
+      api.handle = LoadLibraryA("openjp2.dll");
+    }
+    if (!api.handle) {
+      return api;
+    }
+    const auto sym = [&api](const char *name) -> void * {
+      return reinterpret_cast<void *>(GetProcAddress(api.handle, name));
+    };
+#elif defined(__APPLE__)
+    api.handle = dlopen("libopenjp2.dylib", RTLD_LAZY | RTLD_LOCAL);
+    if (!api.handle) {
+      api.handle = dlopen("libopenjp2.7.dylib", RTLD_LAZY | RTLD_LOCAL);
+    }
+    if (!api.handle) {
+      return api;
+    }
+    const auto sym = [&api](const char *name) -> void * { return dlsym(api.handle, name); };
+#else
+    api.handle = dlopen("libopenjp2.so.7", RTLD_LAZY | RTLD_LOCAL);
+    if (!api.handle) {
+      api.handle = dlopen("libopenjp2.so", RTLD_LAZY | RTLD_LOCAL);
+    }
+    if (!api.handle) {
+      return api;
+    }
+    const auto sym = [&api](const char *name) -> void * { return dlsym(api.handle, name); };
+#endif
+    api.create_decompress = reinterpret_cast<CreateDecompressFn>(sym("opj_create_decompress"));
+    api.set_default_params =
+        reinterpret_cast<SetDefaultParamsFn>(sym("opj_set_default_decoder_parameters"));
+    api.setup_decoder = reinterpret_cast<SetupDecoderFn>(sym("opj_setup_decoder"));
+    api.stream_default_create =
+        reinterpret_cast<StreamDefaultCreateFn>(sym("opj_stream_default_create"));
+    api.stream_set_read = reinterpret_cast<StreamSetReadFn>(sym("opj_stream_set_read_function"));
+    api.stream_set_skip = reinterpret_cast<StreamSetSkipFn>(sym("opj_stream_set_skip_function"));
+    api.stream_set_seek = reinterpret_cast<StreamSetSeekFn>(sym("opj_stream_set_seek_function"));
+    api.stream_set_user_data =
+        reinterpret_cast<StreamSetUserDataFn>(sym("opj_stream_set_user_data"));
+    api.stream_set_user_data_length =
+        reinterpret_cast<StreamSetUserDataLenFn>(sym("opj_stream_set_user_data_length"));
+    api.read_header = reinterpret_cast<ReadHeaderFn>(sym("opj_read_header"));
+    api.decode = reinterpret_cast<DecodeFn>(sym("opj_decode"));
+    api.end_decompress = reinterpret_cast<EndDecompressFn>(sym("opj_end_decompress"));
+    api.destroy_codec = reinterpret_cast<DestroyCodecFn>(sym("opj_destroy_codec"));
+    api.stream_destroy = reinterpret_cast<StreamDestroyFn>(sym("opj_stream_destroy"));
+    api.image_destroy = reinterpret_cast<ImageDestroyFn>(sym("opj_image_destroy"));
+    if (!api.complete()) {
+#if defined(_WIN32)
+      if (api.handle) {
+        FreeLibrary(api.handle);
+      }
+#else
+      if (api.handle) {
+        dlclose(api.handle);
+      }
+#endif
+      return OpenJpegApi{};
+    }
+    return api;
+  };
+
+  static const OpenJpegApi s_api = load_openjpeg_api();
+  if (!s_api.complete()) {
+    return false;
+  }
+
+  void *codec = s_api.create_decompress(codec_format);
+  if (!codec) {
+    return false;
+  }
+  void *stream = s_api.stream_default_create(/*is_input=*/1);
+  if (!stream) {
+    s_api.destroy_codec(codec);
+    return false;
+  }
+
+  bool ok = false;
+  OpjImage *image = nullptr;
+  OpjMemStream mem{data, size, 0};
+  // ``opj_dparameters_t`` is large (over 8 KiB) and version-dependent. Default
+  // initialize it through the library and pass it straight back, so its layout
+  // never has to be mirrored here.
+  std::vector<unsigned char> params(16384, 0);
+
+  s_api.set_default_params(params.data());
+  s_api.stream_set_read(stream, &OpjMemRead);
+  s_api.stream_set_skip(stream, &OpjMemSkip);
+  s_api.stream_set_seek(stream, &OpjMemSeek);
+  s_api.stream_set_user_data(stream, &mem, nullptr);
+  s_api.stream_set_user_data_length(stream, static_cast<uint64_t>(size));
+
+  if (s_api.setup_decoder(codec, params.data()) && s_api.read_header(stream, codec, &image) &&
+      image != nullptr && s_api.decode(codec, stream, image) &&
+      s_api.end_decompress(codec, stream)) {
+    const int64_t channels = ImageDecoder::ChannelCount(pixel_format);
+    const uint32_t numcomps = image->numcomps;
+    const bool want_color = channels == 3;
+    if (numcomps >= 1 && (!want_color || numcomps >= 3)) {
+      const OpjImageComp *comps = image->comps;
+      const uint32_t width = comps[0].w;
+      const uint32_t height = comps[0].h;
+      const uint32_t used = want_color ? 3u : 1u;
+      bool geometry_ok = width > 0 && height > 0;
+      for (uint32_t c = 0; c < used && geometry_ok; ++c) {
+        geometry_ok = comps[c].w == width && comps[c].h == height && comps[c].data != nullptr;
+      }
+      if (geometry_ok) {
+        const size_t pixel_count = static_cast<size_t>(width) * static_cast<size_t>(height);
+        // ``c`` indexes the source component used for each output channel; the
+        // codestream's color transform already yields RGB-ordered components.
+        const auto sample = [comps](uint32_t comp, size_t i) -> uint8_t {
+          const OpjImageComp &cc = comps[comp];
+          int32_t v = cc.data[i];
+          if (cc.sgnd) {
+            v += 1 << (cc.prec - 1);
+          }
+          const int shift = static_cast<int>(cc.prec) - 8;
+          if (shift > 0) {
+            v >>= shift;
+          } else if (shift < 0) {
+            v <<= -shift;
+          }
+          if (v < 0) {
+            v = 0;
+          } else if (v > 255) {
+            v = 255;
+          }
+          return static_cast<uint8_t>(v);
+        };
+
+        out_pixels.resize(pixel_count * static_cast<size_t>(channels));
+        for (size_t i = 0; i < pixel_count; ++i) {
+          if (pixel_format == "RGB") {
+            out_pixels[i * 3u + 0u] = sample(0, i);
+            out_pixels[i * 3u + 1u] = sample(1, i);
+            out_pixels[i * 3u + 2u] = sample(2, i);
+          } else if (pixel_format == "BGR") {
+            out_pixels[i * 3u + 0u] = sample(2, i);
+            out_pixels[i * 3u + 1u] = sample(1, i);
+            out_pixels[i * 3u + 2u] = sample(0, i);
+          } else if (numcomps >= 3) {
+            const uint8_t r = sample(0, i);
+            const uint8_t g = sample(1, i);
+            const uint8_t b = sample(2, i);
+            out_pixels[i] = static_cast<uint8_t>((299 * r + 587 * g + 114 * b + 500) / 1000);
+          } else {
+            out_pixels[i] = sample(0, i);
+          }
+        }
+        out_height = static_cast<int64_t>(height);
+        out_width = static_cast<int64_t>(width);
+        ok = true;
+      }
+    }
+  }
+
+  if (image) {
+    s_api.image_destroy(image);
+  }
+  s_api.stream_destroy(stream);
+  s_api.destroy_codec(codec);
+  return ok;
+}
+
 } // namespace
 
 int64_t ImageDecoder::ChannelCount(const std::string &pixel_format) {
@@ -1850,7 +2183,8 @@ Tensor ImageDecoder::operator()(const Tensor &encoded_stream,
       TryDecodeJpeg(raw, raw_size, pixel_format, height, width, pixels) ||
       TryDecodeTiff(raw, raw_size, pixel_format, height, width, pixels) ||
       TryDecodeWebp(raw, raw_size, pixel_format, height, width, pixels) ||
-      TryDecodePnm(raw, raw_size, pixel_format, height, width, pixels)) {
+      TryDecodePnm(raw, raw_size, pixel_format, height, width, pixels) ||
+      TryDecodeJpeg2000(raw, raw_size, pixel_format, height, width, pixels)) {
     return Tensor::FromUint8("", {height, width, channels}, std::move(pixels));
   }
 
@@ -1886,7 +2220,8 @@ void ImageDecoder::operator()(const Tensor &encoded_stream, const std::string &p
       TryDecodeJpeg(raw, raw_size, pixel_format, height, width, pixels) ||
       TryDecodeTiff(raw, raw_size, pixel_format, height, width, pixels) ||
       TryDecodeWebp(raw, raw_size, pixel_format, height, width, pixels) ||
-      TryDecodePnm(raw, raw_size, pixel_format, height, width, pixels)) {
+      TryDecodePnm(raw, raw_size, pixel_format, height, width, pixels) ||
+      TryDecodeJpeg2000(raw, raw_size, pixel_format, height, width, pixels)) {
     EXT_ENFORCE_INVALID(output.shape[0] == height && output.shape[1] == width,
                         "kernel::ImageDecoder preallocated output shape does not match the decoded "
                         "image dimensions.");

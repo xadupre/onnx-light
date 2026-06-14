@@ -765,6 +765,23 @@ void AddOnnxPyProto(nb::module_ &m) {
       "The returned list preserves first-seen order and contains no duplicates; "
       "it skips empty input names.");
 
+  m.def(
+      "collect_remaining_inputs",
+      [](const std::vector<NodeProto> &nodes, const std::vector<std::string> &outputs) {
+        return CollectRemainingInputs(nodes, outputs);
+      },
+      nb::arg("nodes"), nb::arg("outputs"),
+      "Returns, for every node in ``nodes``, the list of input names that must "
+      "already be available before that node runs in order to eventually produce "
+      "the requested ``outputs``. Starting from ``outputs``, a backward "
+      "reachability analysis determines their ancestors; for index ``i`` only the "
+      "nodes of ``nodes[i:]`` that contribute to ``outputs`` are kept (unrelated "
+      "branches are pruned) and the names they read (including names captured by "
+      "subgraph attributes ``GRAPH`` / ``GRAPHS``) that are not produced within "
+      "that suffix are reported. ``nodes`` is expected to be in topological "
+      "order. The result is a list with one entry per node; each entry preserves "
+      "first-seen order, contains no duplicates and skips empty input names.");
+
   nb::enum_<FileLoadMode>(m, "FileLoadMode",
                           "Selects the file-backed stream implementation used when parsing "
                           "a model from a file path.")

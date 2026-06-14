@@ -37,6 +37,7 @@ from ..onnx_py._onnxpyprotoop import (  # type: ignore # noqa: F401
     ValueInfoProto,
     align_external_data_streaming,
     collect_external_inputs,
+    collect_remaining_inputs,
     consolidate_tensors_to_buffer,
     save_model_with_shared_external_data,
     utils_onnx_read_varint64,

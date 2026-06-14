@@ -20,15 +20,6 @@ def has_onnx():
         return False
 
 
-def has_onnxruntime():
-    try:
-        import onnxruntime  # noqa: F401
-
-        return True
-    except ImportError:
-        return False
-
-
 def import_source(module_file_path, module_name):
     if not os.path.exists(module_file_path):
         raise FileNotFoundError(module_file_path)
@@ -106,9 +97,6 @@ class TestDocumentationExamples(ExtTestCase):
                 and name in {"plot_save_external_data_time.py", "plot_onnx_time.py"}
             ):
                 reason = "onnx is missing"
-
-            if not reason and not has_onnxruntime() and name in {"plot_save_ort_flatbuffers.py"}:
-                reason = "onnxruntime is missing"
 
             if reason:
 

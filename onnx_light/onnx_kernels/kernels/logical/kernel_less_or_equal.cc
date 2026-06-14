@@ -56,6 +56,10 @@ Tensor LessOrEqual::operator()(const Tensor &x, const Tensor &y) const {
     return LessOrEqualAlloc<int8_t>("INT8", DataType::INT8, x, y);
   case DataType::INT16:
     return LessOrEqualAlloc<int16_t>("INT16", DataType::INT16, x, y);
+  case DataType::INT32:
+    return LessOrEqualAlloc<int32_t>("INT32", DataType::INT32, x, y);
+  case DataType::INT64:
+    return LessOrEqualAlloc<int64_t>("INT64", DataType::INT64, x, y);
   case DataType::UINT8:
     return LessOrEqualAlloc<uint8_t>("UINT8", DataType::UINT8, x, y);
   case DataType::UINT16:
@@ -66,8 +70,8 @@ Tensor LessOrEqual::operator()(const Tensor &x, const Tensor &y) const {
     return LessOrEqualAlloc<uint64_t>("UINT64", DataType::UINT64, x, y);
   default:
     EXT_THROW_INVALID(kLessOrEqualName, ": unsupported data type ", x.data_type,
-                      ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, UINT8, "
-                      "UINT16, UINT32 and UINT64 inputs.");
+                      ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, INT32, "
+                      "INT64, UINT8, UINT16, UINT32 and UINT64 inputs.");
   }
 }
 
@@ -87,6 +91,10 @@ void LessOrEqual::operator()(const Tensor &x, const Tensor &y, Tensor &output) c
     return LessOrEqualInPlace<int8_t>("INT8", DataType::INT8, x, y, output);
   case DataType::INT16:
     return LessOrEqualInPlace<int16_t>("INT16", DataType::INT16, x, y, output);
+  case DataType::INT32:
+    return LessOrEqualInPlace<int32_t>("INT32", DataType::INT32, x, y, output);
+  case DataType::INT64:
+    return LessOrEqualInPlace<int64_t>("INT64", DataType::INT64, x, y, output);
   case DataType::UINT8:
     return LessOrEqualInPlace<uint8_t>("UINT8", DataType::UINT8, x, y, output);
   case DataType::UINT16:
@@ -97,8 +105,8 @@ void LessOrEqual::operator()(const Tensor &x, const Tensor &y, Tensor &output) c
     return LessOrEqualInPlace<uint64_t>("UINT64", DataType::UINT64, x, y, output);
   default:
     EXT_THROW_INVALID(kLessOrEqualName, ": unsupported data type ", x.data_type,
-                      ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, UINT8, "
-                      "UINT16, UINT32 and UINT64 inputs.");
+                      ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, INT32, "
+                      "INT64, UINT8, UINT16, UINT32 and UINT64 inputs.");
   }
 }
 

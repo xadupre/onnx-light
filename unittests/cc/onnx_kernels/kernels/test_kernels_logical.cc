@@ -215,6 +215,20 @@ TEST(KernelClass, GreaterClassMatchesReferenceUint32) {
   EXPECT_EQ(z.data[3], 1);
 }
 
+TEST(KernelClass, GreaterClassMatchesReferenceInt64) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Greater greater_kernel{ctx};
+  Tensor x = Tensor::FromInt64("", {4}, {-2, 0, 3, 7});
+  Tensor y = Tensor::FromInt64("", {4}, {-1, 0, 1, 9});
+  Tensor z = greater_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
+  EXPECT_EQ(z.data[0], 0); // -2 > -1
+  EXPECT_EQ(z.data[1], 0); //  0 >  0
+  EXPECT_EQ(z.data[2], 1); //  3 >  1
+  EXPECT_EQ(z.data[3], 0); //  7 >  9
+}
+
 TEST(KernelClass, LessClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(13)};
   Less less_kernel{ctx};
@@ -289,6 +303,33 @@ TEST(KernelClass, LessClassMatchesReferenceUint64) {
   EXPECT_EQ(z.data[1], 0);
   EXPECT_EQ(z.data[2], 0);
   EXPECT_EQ(z.data[3], 0);
+}
+
+TEST(KernelClass, LessClassMatchesReferenceInt64) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Less less_kernel{ctx};
+  Tensor x = Tensor::FromInt64("", {4}, {-2, 0, 3, 7});
+  Tensor y = Tensor::FromInt64("", {4}, {-1, 0, 1, 9});
+  Tensor z = less_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
+  EXPECT_EQ(z.data[0], 1); // -2 < -1
+  EXPECT_EQ(z.data[1], 0); //  0 <  0
+  EXPECT_EQ(z.data[2], 0); //  3 <  1
+  EXPECT_EQ(z.data[3], 1); //  7 <  9
+}
+
+TEST(KernelClass, LessClassMatchesReferenceInt32) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Less less_kernel{ctx};
+  Tensor x = Tensor::FromInt32("", {4}, {-2, 0, 3, 7});
+  Tensor y = Tensor::FromInt32("", {4}, {-1, 0, 1, 9});
+  Tensor z = less_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data[0], 1);
+  EXPECT_EQ(z.data[1], 0);
+  EXPECT_EQ(z.data[2], 0);
+  EXPECT_EQ(z.data[3], 1);
 }
 
 TEST(KernelClass, GreaterOrEqualClassMatchesReference) {
@@ -387,6 +428,20 @@ TEST(KernelClass, LessOrEqualRejectsUnsupportedDtype) {
   Tensor y("", onnx_kernels::DataType::BOOL, {2}, {1, 1});
   LessOrEqual le_kernel{ctx};
   EXPECT_THROW({ (void)le_kernel(x, y); }, std::invalid_argument);
+}
+
+TEST(KernelClass, LessOrEqualClassMatchesReferenceInt64) {
+  const KernelContext ctx{DefaultOpset(16)};
+  LessOrEqual le_kernel{ctx};
+  Tensor x = Tensor::FromInt64("", {4}, {-2, 0, 3, 7});
+  Tensor y = Tensor::FromInt64("", {4}, {-1, 0, 1, 9});
+  Tensor z = le_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
+  EXPECT_EQ(z.data[0], 1); // -2 <= -1
+  EXPECT_EQ(z.data[1], 1); //  0 <=  0
+  EXPECT_EQ(z.data[2], 0); //  3 <=  1
+  EXPECT_EQ(z.data[3], 1); //  7 <=  9
 }
 
 TEST(KernelClass, EqualClassMatchesReference) {

@@ -42,9 +42,9 @@ List every test case
 Filter by operator type or category
 -----------------------------------
 
-``collect_test_cases`` accepts an operator type (for example ``"Add"``)
-or one of the special category strings ``"shape"``, ``"inference"``, or
-``"nan_inf"`` to narrow down the result.
+:func:`~onnx_light.onnx.backend.collect_test_cases` accepts an operator type
+(for example ``"Add"``) or one of the special category strings ``"shape"``,
+``"inference"``, or ``"nan_inf"`` to narrow down the result.
 
 .. tab-set::
 
@@ -72,8 +72,8 @@ Collect a test case by name
 ---------------------------
 
 Use :func:`onnx_light.onnx.backend.collect_test_cases_by_name` (or
-``onnx_backend_test::CollectTestCasesByName`` in C++) to look up one or
-more cases by their ``name``.  The pattern is matched with
+:cpp:func:`onnx_light::onnx_backend_test::CollectTestCasesByName` in C++) to
+look up one or more cases by their ``name``.  The pattern is matched with
 ``std::regex_search`` ECMAScript semantics, so a plain string acts as a
 substring match; anchor it with ``^...$`` for a full match.
 
@@ -128,7 +128,8 @@ Notes
 * The C++ overload throws ``std::regex_error`` for an invalid pattern.
 * An empty ``name_regex`` matches every case and is equivalent to
   calling :func:`~onnx_light.onnx.backend.collect_test_cases` /
-  ``CollectTestCases`` with no arguments.
+  :cpp:func:`onnx_light::onnx_backend_test::CollectTestCases` with no
+  arguments.
 * :class:`TestCase` exposes ``name``, ``kind``, ``tag``, ``rtol``,
   ``atol``, ``data_sets``, and a lazily resolved ``model``
   (:class:`onnx_light.onnx.ModelProto`), so a case retrieved by name can

@@ -7,14 +7,15 @@ How to use a custom kernel
 
 :class:`~onnx_light.onnx.reference.ReferenceEvaluator` dispatches every
 :class:`~onnx_light.onnx_lib.NodeProto` against the static C++
-``KernelDispatchTable``. An operator that is not built in — typically an
-operator from a user-defined domain, an experimental op, or a stand-in for
-one that is not yet implemented — would otherwise fail with
-``unsupported op_type``.
+:cpp:func:`onnx::onnx_kernels::KernelDispatchTable`. An operator that is not
+built in — typically an operator from a user-defined domain, an experimental
+op, or a stand-in for one that is not yet implemented — would otherwise fail
+with ``unsupported op_type``.
 
 This page shows how to plug a custom kernel into the runtime so such a
-graph runs. The hook is exposed at three layers; pick the one that matches
-your use case.
+graph runs, in Python and in C++. The hook is exposed at three layers; pick
+the one that matches your use case.  All three share the single C++ entry
+point :cpp:func:`onnx::onnx_kernels::RuntimeContext::RegisterCustomKernel`.
 
 Register a numpy kernel (recommended)
 -------------------------------------
@@ -25,29 +26,76 @@ wrapper is the easiest entry point. The callable is invoked as
 ``fn(node, *numpy_inputs)`` and returns either a single
 :class:`numpy.ndarray` or a tuple/list of arrays for multi-output ops. It
 receives the :class:`~onnx_light.onnx_lib.NodeProto` first, so it can read
-attributes.
+attributes.  The C++ counterpart registers a
+:cpp:type:`onnx::onnx_kernels::CustomKernelFn` that reads its inputs from
+the :cpp:class:`onnx::onnx_kernels::RuntimeContext` and writes the outputs
+back through :cpp:func:`onnx::onnx_kernels::RuntimeContext::Put`.
 
-.. code-block:: python
+.. tab-set::
 
-    import numpy as np
-    from onnx_light.onnx_lib import parser
-    from onnx_light.onnx.reference import ReferenceEvaluator
+   .. tab-item:: Python
+      :sync: python
 
-    model = parser.parse_model(
-        '<ir_version: 10, opset_import: ["" : 18, "my.domain" : 1]>'
-        "agraph (float[3] x) => (float[3] y) {"
-        "  y = my.domain.Scale<factor=3.0>(x)"
-        "}"
-    )
+      .. code-block:: python
 
-    def scale(node, x):
-        factor = next(a for a in node.attribute if str(a.name) == "factor").f
-        return x * float(factor)
+          import numpy as np
+          from onnx_light.onnx_lib import parser
+          from onnx_light.onnx.reference import ReferenceEvaluator
 
-    sess = ReferenceEvaluator(model)
-    sess.register_custom_kernel("my.domain", "Scale", scale)
-    (y,) = sess.run(None, {"x": np.array([1.0, 2.0, 3.0], dtype=np.float32)})
-    # y == [3., 6., 9.]
+          model = parser.parse_model(
+              '<ir_version: 10, opset_import: ["" : 18, "my.domain" : 1]>'
+              "agraph (float[3] x) => (float[3] y) {"
+              "  y = my.domain.Scale<factor=3.0>(x)"
+              "}"
+          )
+
+          def scale(node, x):
+              factor = next(a for a in node.attribute if str(a.name) == "factor").f
+              return x * float(factor)
+
+          sess = ReferenceEvaluator(model)
+          sess.register_custom_kernel("my.domain", "Scale", scale)
+          (y,) = sess.run(None, {"x": np.array([1.0, 2.0, 3.0], dtype=np.float32)})
+          # y == [3., 6., 9.]
+
+   .. tab-item:: C++
+      :sync: cpp
+
+      .. code-block:: cpp
+
+          #include "onnx_kernels/run_nodes.h"
+          #include "onnx_kernels/runtime_context.h"
+
+          #include <vector>
+
+          using namespace onnx::onnx_kernels;
+
+          RuntimeContext rt(KernelContext(/*opset=*/18));
+          rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}));
+
+          // Register a "my.domain.Scale" kernel that multiplies its single
+          // input by the "factor" attribute.
+          rt.RegisterCustomKernel(
+              "my.domain", "Scale",
+              [](const NodeProto &node, RuntimeContext &ctx) {
+                float factor = 1.0f;
+                for (int i = 0; i < node.attribute_size(); ++i) {
+                  if (node.attribute(i).name() == "factor") {
+                    factor = node.attribute(i).f();
+                  }
+                }
+                const Tensor &in = ctx.Get(node.input(0));
+                std::vector<float> out(static_cast<size_t>(in.element_count()));
+                const float *src = in.AsFloat();
+                for (size_t i = 0; i < out.size(); ++i) {
+                  out[i] = src[i] * factor;
+                }
+                ctx.Put(node.output(0),
+                        Tensor::FromFloat(node.output(0), in.shape, out));
+              });
+
+          // node has op_type="Scale", domain="my.domain", input "x", output "y".
+          RunNode(node, rt);  // y == [3., 6., 9.]
 
 Registrations are stored on the evaluator and reapplied to the fresh
 :class:`RuntimeContext` built on every
@@ -59,21 +107,51 @@ Override a built-in kernel
 
 The empty default ONNX domain is normalised to ``"ai.onnx"``, so
 registering a kernel under the default domain takes precedence over the
-entry that ``KernelDispatchTable`` would otherwise dispatch. This is
-convenient to instrument or replace a specific kernel without patching the
-C++ runtime.
+entry that :cpp:func:`onnx::onnx_kernels::KernelDispatchTable` would
+otherwise dispatch. This is convenient to instrument or replace a specific
+kernel without patching the C++ runtime.
 
-.. code-block:: python
+.. tab-set::
 
-    sess = ReferenceEvaluator(
-        parser.parse_model(
-            '<ir_version: 10, opset_import: ["" : 18]>'
-            "agraph (float[3] x) => (float[3] y) { y = Abs(x) }"
-        )
-    )
-    sess.register_custom_kernel("", "Abs", lambda node, x: -x)
-    (y,) = sess.run(None, {"x": np.array([-1.0, -2.0, -3.0], dtype=np.float32)})
-    # Abs replaced by negation: y == [1., 2., 3.]
+   .. tab-item:: Python
+      :sync: python
+
+      .. code-block:: python
+
+          sess = ReferenceEvaluator(
+              parser.parse_model(
+                  '<ir_version: 10, opset_import: ["" : 18]>'
+                  "agraph (float[3] x) => (float[3] y) { y = Abs(x) }"
+              )
+          )
+          sess.register_custom_kernel("", "Abs", lambda node, x: -x)
+          (y,) = sess.run(None, {"x": np.array([-1.0, -2.0, -3.0], dtype=np.float32)})
+          # Abs replaced by negation: y == [1., 2., 3.]
+
+   .. tab-item:: C++
+      :sync: cpp
+
+      .. code-block:: cpp
+
+          using namespace onnx::onnx_kernels;
+
+          RuntimeContext rt(KernelContext(/*opset=*/18));
+          rt.Set("x", Tensor::FromFloat("x", {3}, {-1.0f, -2.0f, -3.0f}));
+
+          // The empty domain is normalised to "ai.onnx", so this overrides
+          // the built-in Abs entry with a negation.
+          rt.RegisterCustomKernel(
+              "", "Abs", [](const NodeProto &node, RuntimeContext &ctx) {
+                const Tensor &in = ctx.Get(node.input(0));
+                std::vector<float> out(static_cast<size_t>(in.element_count()));
+                const float *src = in.AsFloat();
+                for (size_t i = 0; i < out.size(); ++i) {
+                  out[i] = -src[i];
+                }
+                ctx.Put(node.output(0),
+                        Tensor::FromFloat(node.output(0), in.shape, out));
+              });
+          // Abs replaced by negation: y == [1., 2., 3.]
 
 Use the low-level context binding
 ---------------------------------
@@ -82,26 +160,54 @@ For kernels that need direct access to the runtime context — for example
 to read sequences or to participate in the event log — use the low-level
 :class:`RuntimeContext` binding. The callback receives the raw
 :class:`NodeProto` and :class:`RuntimeContext` and is responsible for any
-tensor encoding/decoding.
+tensor encoding/decoding.  This Python binding mirrors the C++
+:cpp:class:`onnx::onnx_kernels::RuntimeContext` one-to-one.
 
-.. code-block:: python
+.. tab-set::
 
-    from onnx_light.onnx_py._onnxpykernels import runtime as rt
+   .. tab-item:: Python
+      :sync: python
 
-    ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
-    ctx.set("x", ...)
+      .. code-block:: python
 
-    def scale(node, c):
-        x = c.get(str(node.input[0]))
-        ...
-        c.put(str(node.output[0]), ..., "output")
+          from onnx_light.onnx_py._onnxpykernels import runtime as rt
 
-    ctx.register_custom_kernel("my.domain", "Scale", scale)
-    rt.run_model(model, ctx)
+          ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+          ctx.set("x", ...)
 
-The same mechanism is available in C++ through
-:cpp:func:`onnx::onnx_kernels::RuntimeContext::RegisterCustomKernel`, which
-is the entry point for C++ extension modules that ship additional kernels
+          def scale(node, c):
+              x = c.get(str(node.input[0]))
+              ...
+              c.put(str(node.output[0]), ..., "output")
+
+          ctx.register_custom_kernel("my.domain", "Scale", scale)
+          rt.run_model(model, ctx)
+
+   .. tab-item:: C++
+      :sync: cpp
+
+      .. code-block:: cpp
+
+          #include "onnx_kernels/run_nodes.h"
+          #include "onnx_kernels/runtime_context.h"
+
+          using namespace onnx::onnx_kernels;
+
+          RuntimeContext ctx(KernelContext(/*opset=*/18));
+          ctx.Set("x", /* Tensor */ ...);
+
+          ctx.RegisterCustomKernel(
+              "my.domain", "Scale",
+              [](const NodeProto &node, RuntimeContext &c) {
+                const Tensor &x = c.Get(node.input(0));
+                // ...
+                c.Put(node.output(0), /* Tensor */ ...);
+              });
+          RunModel(model, ctx);
+
+The low-level binding and the C++ tab above are two faces of the same
+:cpp:func:`onnx::onnx_kernels::RuntimeContext::RegisterCustomKernel` entry
+point, which is also how C++ extension modules ship additional kernels
 without rebuilding ``lib_onnx_kernels``.
 
 See also

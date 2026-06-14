@@ -453,7 +453,7 @@ class TestShapesContextEventLog(ExtTestCase):
         self.assertEqual(node_ev.node_index, 0)
 
     def test_top_level_events_have_empty_graph_name(self):
-        """Events from a model with no subgraphs must have empty graph_name."""
+        """Events from a model with no subgraphs must have empty subgraph_attr_name."""
         node = oh.make_node("Relu", inputs=["X"], outputs=["Y"])
         x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 3])
         y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
@@ -467,11 +467,14 @@ class TestShapesContextEventLog(ExtTestCase):
 
         for ev in ctx.events():
             self.assertEqual(
-                ev.graph_name, "", f"Expected empty graph_name, got: {ev.graph_name!r}"
+                ev.subgraph_attr_name,
+                "",
+                f"Expected empty subgraph_attr_name, got: {ev.subgraph_attr_name!r}",
             )
+            self.assertEqual(ev.subgraph_node_index, -1)
 
     def test_if_subgraph_events_carry_branch_graph_name(self):
-        """Events inside If branches must carry then_branch / else_branch graph_name."""
+        """Events inside If branches must carry then_branch / else_branch in subgraph_attr_name."""
         # then_branch: Abs(X) -> Y;  else_branch: Neg(X) -> Y
         then_branch = oh.make_graph(
             [oh.make_node("Abs", ["X"], ["Y_then"])],
@@ -500,12 +503,12 @@ class TestShapesContextEventLog(ExtTestCase):
         ctx.events_enabled = True
         si.compute_shape_model(ctx, model)
 
-        graph_names = {ev.graph_name for ev in ctx.events()}
-        self.assertIn("then_branch", graph_names)
-        self.assertIn("else_branch", graph_names)
+        attr_names = {ev.subgraph_attr_name for ev in ctx.events()}
+        self.assertIn("then_branch", attr_names)
+        self.assertIn("else_branch", attr_names)
 
     def test_graph_name_in_event_as_dict(self):
-        """graph_name must appear in event.as_dict() for shape events."""
+        """subgraph_node_index and subgraph_attr_name must appear in event.as_dict() for shape events."""
         ctx = si.ShapesContext()
         ctx.events_enabled = True
         ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, [2, 3]))
@@ -513,8 +516,10 @@ class TestShapesContextEventLog(ExtTestCase):
         events = ctx.events()
         self.assertEqual(len(events), 1)
         d = events[0].as_dict()
-        self.assertIn("graph_name", d)
-        self.assertEqual(d["graph_name"], "")
+        self.assertIn("subgraph_node_index", d)
+        self.assertIn("subgraph_attr_name", d)
+        self.assertEqual(d["subgraph_node_index"], -1)
+        self.assertEqual(d["subgraph_attr_name"], "")
 
 
 if __name__ == "__main__":

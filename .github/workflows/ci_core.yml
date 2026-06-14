@@ -133,7 +133,10 @@ jobs:
 
   core_tests:
     name: core (${{ matrix.os }}, py${{ matrix.python-version }})
-    needs: [no_onnx_tests_ubuntu, core_tests_ubuntu, changes]
+    # Gated only on the fast no-onnx preflight so the slow Windows/macOS builds
+    # run in parallel with core_tests_ubuntu instead of waiting for it. This
+    # avoids serializing the long Windows job behind the Ubuntu core build.
+    needs: [no_onnx_tests_ubuntu, changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 28
@@ -191,11 +194,11 @@ jobs:
         env:
           UNITTEST_GOING: "1"
         run: |
-          pytest --cov=onnx_light --cov-report=xml --durations=10 unittests
+          pytest --durations=10 unittests
 
   windows_x86_build:
     name: core (windows-latest, x86 build)
-    needs: [no_onnx_tests_ubuntu, core_tests_ubuntu, changes]
+    needs: [no_onnx_tests_ubuntu, changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: windows-latest
     timeout-minutes: 20

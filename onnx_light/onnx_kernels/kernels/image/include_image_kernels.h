@@ -52,8 +52,13 @@ namespace kernel {
 //     interlaced PNGs fall through to the empty-matrix path.
 //   * **WebP** — decoded via dynamically loaded ``libwebp`` (if present at
 //     runtime), then converted to ``pixel_format``.
+//   * **PNM** — the Netpbm family (``P1``/``P4`` bitmaps, ``P2``/``P5``
+//     graymaps, ``P3``/``P6`` pixmaps) with 8-bit samples
+//     (``maxval <= 255``): fully decoded inline to ``(H, W, C)`` uint8
+//     output in the requested ``pixel_format``. 16-bit (``maxval > 255``)
+//     graymaps/pixmaps fall through to the empty-matrix path.
 //
-// For all other formats (JPEG2000, PNM) the kernel
+// For all other formats (JPEG2000) the kernel
 // falls back to the behavior documented by the ONNX schema:
 //
 //     "If it can't decode for any reason (e.g. corrupted encoded stream,
@@ -83,8 +88,9 @@ namespace kernel {
 /// in ``{1, 2}``, optional restart intervals) images, as well as 8-bit
 /// non-interlaced grayscale/truecolor PNG (color types 0 and 2), are
 /// decoded natively without any external library dependency. WebP is
-/// decoded through ``libwebp`` when available at runtime. All other
-/// formats (JPEG2000, PNM) fall back to returning
+/// decoded through ``libwebp`` when available at runtime. The Netpbm
+/// family (``P1``-``P6`` with 8-bit samples) is also decoded natively.
+/// All other formats (JPEG2000) fall back to returning
 /// an empty matrix (``(0, 0, C)`` ``tensor(uint8)``). Invalid inputs
 /// or attribute values throw ``std::invalid_argument``.
 class ImageDecoder : public KernelBase {

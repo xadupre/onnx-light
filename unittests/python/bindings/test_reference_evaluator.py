@@ -274,6 +274,69 @@ class TestReferenceEvaluator(ExtTestCase):
         (out,) = sess.run(None, {"x_keys": x_keys, "x_values": x_values})
         np.testing.assert_array_equal(out, np.array([1.5, 0.0, 2.5], dtype=np.float32))
 
+        # As a convenience, the same map(int64, float) input may be fed as a
+        # single Python ``dict`` under its original name ``x``; the evaluator
+        # splits it into the ``x_keys`` / ``x_values`` tensors internally.
+        (out_dict,) = sess.run(None, {"x": {10: 1.5, 30: 2.5}})
+        np.testing.assert_array_equal(out_dict, np.array([1.5, 0.0, 2.5], dtype=np.float32))
+
+        # A size-1 numpy object array wrapping the dict is unwrapped too.
+        (out_obj,) = sess.run(None, {"x": np.array([{10: 1.5, 30: 2.5}], dtype=object)})
+        np.testing.assert_array_equal(out_obj, np.array([1.5, 0.0, 2.5], dtype=np.float32))
+
+    def test_cast_map_int64_float_dense_dict_feed(self):
+        # Regression test for issue #2576: a ``map(int64, float)`` input fed to
+        # ``ai.onnx.ml::CastMap`` as a single Python ``dict`` under its original
+        # name ``x`` must be accepted (and split into ``x_keys`` / ``x_values``)
+        # rather than raising "Missing input(s) ... ['x_keys', 'x_values']".
+        model = onnxl.ModelProto()
+        model.ir_version = 10
+        op = model.opset_import.add()
+        op.domain = ""
+        op.version = 13
+        op_ml = model.opset_import.add()
+        op_ml.domain = "ai.onnx.ml"
+        op_ml.version = 1
+        graph = model.graph
+        graph.name = "cm"
+        x = graph.input.add()
+        x.name = "x"
+        mt = x.type.map_type
+        mt.key_type = int(onnxl.TensorProto.INT64)
+        mt.value_type.tensor_type.elem_type = int(onnxl.TensorProto.FLOAT)
+        y = graph.output.add()
+        y.name = "y"
+        y.type.tensor_type.elem_type = int(onnxl.TensorProto.FLOAT)
+        node = graph.node.add()
+        node.op_type = "CastMap"
+        node.domain = "ai.onnx.ml"
+        node.input.append("x")
+        node.output.append("y")
+        cast_to = node.attribute.add()
+        cast_to.name = "cast_to"
+        cast_to.type = onnxl.AttributeProto.STRING
+        cast_to.s = b"TO_FLOAT"
+        map_form = node.attribute.add()
+        map_form.name = "map_form"
+        map_form.type = onnxl.AttributeProto.STRING
+        map_form.s = b"DENSE"
+
+        sess = ReferenceEvaluator(model)
+        self.assertEqual(sess.input_names, ["x_keys", "x_values"])
+        # Keys are deliberately unsorted; CastMap DENSE sorts them ascending.
+        (out,) = sess.run(None, {"x": {2: 2.5, 0: 0.5, 1: 1.5}})
+        np.testing.assert_array_equal(out, np.array([0.5, 1.5, 2.5], dtype=np.float32))
+
+        # The explicit two-tensor convention still works.
+        (out2,) = sess.run(
+            None,
+            {
+                "x_keys": np.array([2, 0, 1], dtype=np.int64),
+                "x_values": np.array([2.5, 0.5, 1.5], dtype=np.float32),
+            },
+        )
+        np.testing.assert_array_equal(out2, np.array([0.5, 1.5, 2.5], dtype=np.float32))
+
     def test_lstm_layout1_matches_layout0(self):
         # Regression test for ``test_cc_lstm_batchwise``: the LSTM kernel
         # itself only implements ``layout=0`` so the dispatch table

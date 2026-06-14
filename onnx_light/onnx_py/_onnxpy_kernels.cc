@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
 #include <nanobind/stl/function.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/pair.h>
@@ -513,4 +514,59 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       "``raw_data`` field; ``STRING`` tensors are read from ``string_data``. The "
       "returned tensor owns its bytes, so it remains valid after ``tp`` is "
       "garbage-collected.");
+
+  rt_mod.def(
+      "tensor_to_proto",
+      [](const Tensor &t) {
+        // Materializes a ``TensorProto`` from a runtime ``Tensor``. For the
+        // raw-data path the proto's ``raw_data`` borrows the tensor's byte
+        // buffer (zero-copy) instead of copying it; ``nb::keep_alive<0, 1>``
+        // ties the source tensor's lifetime to the returned proto so the
+        // borrowed view never dangles.
+        TensorProto tp;
+        if (!t.name.empty())
+          tp.set_name(t.name);
+        tp.set_data_type(t.data_type);
+        tp.ref_dims().reserve(t.shape.size());
+        for (int64_t d : t.shape)
+          tp.ref_dims().push_back(static_cast<uint64_t>(d));
+        if (static_cast<TensorProto::DataType>(t.data_type) == TensorProto::DataType::STRING) {
+          tp.ref_string_data().reserve(t.string_data.size());
+          for (const std::string &s : t.string_data)
+            tp.add_string_data(utils::String(s));
+        } else {
+          // ``assign_borrowed`` stores a non-owning view over the tensor's
+          // bytes; ``nb::keep_alive<0, 1>`` (below) keeps the source tensor
+          // alive for the proto's lifetime so the view never dangles.
+          tp.ref_raw_data().assign_borrowed(t.bytes(), t.size_bytes());
+        }
+        return tp;
+      },
+      nb::keep_alive<0, 1>(), nb::arg("t"),
+      "Converts a runtime :class:`Tensor` to a ``TensorProto``. For non-``STRING`` "
+      "tensors the proto's ``raw_data`` borrows the tensor's byte buffer (zero-copy); "
+      "the source tensor is kept alive for the lifetime of the returned proto so the "
+      "borrowed view never dangles. ``STRING`` tensors are written to ``string_data``.");
+
+  rt_mod.def(
+      "tensor_to_numpy",
+      [](nb::handle t_obj) {
+        // Zero-copy 1-D ``uint8`` view over the tensor's raw byte buffer. The
+        // tensor's Python wrapper (``t_obj``) is passed as the array's owner so
+        // NumPy borrows the bytes (no copy) while keeping the source tensor
+        // alive for as long as the view (or any array derived from it) lives.
+        const Tensor &t = nb::cast<const Tensor &>(t_obj);
+        if (static_cast<TensorProto::DataType>(t.data_type) == TensorProto::DataType::STRING)
+          throw std::invalid_argument(
+              "tensor_to_numpy: STRING tensors have no raw byte buffer; use "
+              "tensor_to_proto instead.");
+        const size_t n = t.size_bytes();
+        return nb::ndarray<nb::numpy, const uint8_t, nb::ndim<1>>(t.bytes(), {n}, t_obj);
+      },
+      nb::arg("t"),
+      "Returns a zero-copy 1-D ``uint8`` NumPy view over the runtime tensor's raw "
+      "little-endian byte buffer. The source tensor is kept alive for the lifetime "
+      "of the returned array (it is the array's ``base``) so the borrowed view never "
+      "dangles. Callers reinterpret the bytes via ``ndarray.view(dtype).reshape(shape)``. "
+      "``STRING`` tensors have no raw buffer and must go through :func:`tensor_to_proto`.");
 }

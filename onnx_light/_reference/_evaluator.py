@@ -36,7 +36,7 @@ except ImportError:  # pragma: no cover - ml_dtypes is a runtime dependency
 
 # Mapping ``TensorProto.DataType`` -> numpy dtype for fixed-width element
 # types. Sub-byte types (INT4, UINT4, INT2, UINT2, FLOAT4E2M1) and the
-# string type are handled out-of-band: see ``_cpp_tensor_to_proto``.
+# string type are handled out-of-band: see ``_runtime.tensor_to_proto``.
 _DTYPE_TO_NP: dict[int, Any] = {
     int(TensorProto.FLOAT): np.float32,
     int(TensorProto.DOUBLE): np.float64,
@@ -69,18 +69,6 @@ _NP_TO_DTYPE: dict[Any, int] = {v: k for k, v in _DTYPE_TO_NP.items()}
 _IS_BIG_ENDIAN = sys.byteorder == "big"
 
 
-def _cpp_tensor_to_proto(t: Any) -> TensorProto:
-    """Materializes a :class:`TensorProto` from a runtime ``Tensor``.
-
-    For non-``STRING`` tensors the returned proto's ``raw_data`` borrows the
-    tensor's byte buffer (zero-copy); the source tensor is kept alive for the
-    lifetime of the proto so the borrowed view never dangles. ``STRING``
-    tensors are written to ``string_data``. The result is suitable input for
-    :func:`numpy_helper.to_array`.
-    """
-    return _runtime.tensor_to_proto(t)
-
-
 def _cpp_tensor_to_numpy(t: Any) -> np.ndarray:
     """Converts a runtime ``Tensor`` to a :class:`numpy.ndarray`.
 
@@ -99,7 +87,7 @@ def _cpp_tensor_to_numpy(t: Any) -> np.ndarray:
         shape = t.shape
         return np.frombuffer(raw, dtype=np_dtype).reshape(shape)
     # Fallback for sub-byte types (INT4/UINT4/INT2/UINT2/FLOAT4E2M1) and STRING.
-    return numpy_helper.to_array(_cpp_tensor_to_proto(t))
+    return numpy_helper.to_array(_runtime.tensor_to_proto(t))
 
 
 def _numpy_to_cpp_tensor(name: str, arr: np.ndarray) -> Any:

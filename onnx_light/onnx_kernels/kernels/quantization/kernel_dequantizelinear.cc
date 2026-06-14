@@ -166,8 +166,10 @@ inline int64_t ComputeInnerStride(const std::vector<int64_t> &shape, int64_t axi
 // zero-point) value that governs it. For per-axis dequantization the scale is a
 // 1-D tensor indexed by the coordinate along ``axis``. For blocked
 // dequantization the scale has the same rank as ``x`` and a coarser ``axis``
-// dimension; ``block_size`` consecutive elements along ``axis`` share one scale.
-// This mirrors the upstream ``np.repeat`` expansion of the scale tensor.
+// dimension; the block size is derived per dimension as ``x_shape[d] /
+// scale_shape[d]`` (it is not passed in), so consecutive elements along ``axis``
+// share one scale. This mirrors the upstream ``np.repeat`` expansion of the
+// scale tensor.
 std::vector<int64_t> ComputeScaleIndex(const Tensor &x, const Tensor &x_scale, int64_t axis) {
   const std::vector<int64_t> &x_shape = x.shape;
   const std::size_t rank = x_shape.size();

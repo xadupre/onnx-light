@@ -376,6 +376,21 @@ public:
   /// Empties the event log without otherwise touching the tensor map.
   void ClearEvents() noexcept { events_.clear(); }
 
+  /// Resets the per-invocation state so the context can be reused for a
+  /// fresh run: clears the tensor map, the sequence map and the event
+  /// log, and resets :cpp:func:`current_node_index` to ``-1``. The kernel
+  /// context, registered model-local functions and custom kernels, the
+  /// cached :cpp:class:`ExecutionPlan` instances and the
+  /// :cpp:func:`events_enabled` / :cpp:func:`release_intermediates`
+  /// settings are intentionally preserved, so the execution-plan cache
+  /// is amortised across repeated runs of the same model.
+  void Clear() noexcept {
+    tensors_.clear();
+    sequences_.clear();
+    events_.clear();
+    current_node_index_ = -1;
+  }
+
   /// Appends a :cpp:class:`RuntimeEvent` with action
   /// :cpp:enumerator:`RuntimeEventAction::kRunNode` summarising the
   /// dispatch of a single ``NodeProto``. ``timestamp_ns`` is set to the

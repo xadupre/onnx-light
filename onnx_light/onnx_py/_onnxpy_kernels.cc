@@ -534,6 +534,9 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           for (const std::string &s : t.string_data)
             tp.add_string_data(utils::String(s));
         } else {
+          // ``assign_borrowed`` stores a non-owning view over the tensor's
+          // bytes; ``nb::keep_alive<0, 1>`` (below) keeps the source tensor
+          // alive for the proto's lifetime so the view never dangles.
           tp.ref_raw_data().assign_borrowed(t.bytes(), t.size_bytes());
         }
         return tp;

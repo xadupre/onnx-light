@@ -393,6 +393,7 @@ class TestTensorDLPack(ExtTestCase):
 
     def test_dlpack_device_is_cpu(self):
         t = _make_float_tensor("x", [1.0, 2.0, 3.0])
+        # DLPack device tuple is (device_type, device_id); 1 == kDLCPU.
         self.assertEqual(t.__dlpack_device__(), (1, 0))
 
     def test_dlpack_returns_capsule(self):
@@ -442,7 +443,8 @@ class TestTensorDLPack(ExtTestCase):
     def test_from_dlpack_bool(self):
         expected = np.array([True, False, True])
         out = np.from_dlpack(self._make_tensor(TensorProto.BOOL, expected))
-        np.testing.assert_array_equal(out.astype(bool), expected)
+        self.assertEqual(out.dtype, np.bool_)
+        np.testing.assert_array_equal(out, expected)
 
     def test_from_dlpack_scalar(self):
         out = np.from_dlpack(self._make_tensor(TensorProto.INT32, np.array(7, dtype=np.int32)))

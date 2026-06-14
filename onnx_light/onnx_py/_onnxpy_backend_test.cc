@@ -136,7 +136,7 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
           "``data_type == TensorProto::DataType::STRING``).")
       .def(
           "__dlpack__",
-          [](nb::handle self, nb::kwargs) {
+          [](nb::handle self, nb::kwargs /*kwargs*/) {
             // Export a zero-copy DLPack capsule so consumers such as NumPy or
             // PyTorch can adopt the tensor's buffer via ``from_dlpack``. The
             // nanobind ndarray view (built with the framework-agnostic export

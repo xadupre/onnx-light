@@ -24,27 +24,32 @@ std::vector<std::string> CollectExternalInputs(const utils::RepeatedProtoField<N
 std::vector<std::string> CollectExternalInputs(const std::vector<NodeProto> &nodes);
 
 /**
- * Returns, for every node in ``nodes``, the list of input names that are
- * needed by that node and all the nodes that follow it in the list.
+ * Returns, for every node in ``nodes``, the list of input names that must
+ * already be available before that node runs in order to eventually produce
+ * the requested ``outputs``.
  *
- * For each index ``i`` the result is the set of names referenced by the
- * sub-list ``nodes[i..]`` (including names captured by subgraph attributes,
- * ``GRAPH`` / ``GRAPHS``) that are not produced as outputs by any node in
- * that same sub-list — i.e. the external inputs of the remaining nodes, as
- * computed by :cpp:func:`CollectExternalInputs` on the suffix.
+ * The algorithm performs a backward reachability analysis: starting from the
+ * requested ``outputs``, it determines the ancestors (the nodes and tensors the
+ * outputs transitively depend on). For each index ``i`` it considers the suffix
+ * ``nodes[i..]``, keeps only the nodes of that suffix that are ancestors of
+ * ``outputs`` (branches that do not contribute to ``outputs`` are pruned), and
+ * reports the names those relevant nodes read — including names captured by
+ * subgraph attributes ``GRAPH`` / ``GRAPHS`` — that are not produced within the
+ * suffix. Those are the tensors that need to be kept alive before running node
+ * ``i``.
  *
- * The returned vector has exactly ``nodes.size()`` entries. Each inner list
- * preserves first-seen order and contains no duplicates; empty input names
- * are skipped. Because every name produced earlier in the list has been
- * consumed or is no longer required once it disappears from these lists, the
- * result can be used to decide which tensors still need to be kept alive
- * before running node ``i``.
+ * ``nodes`` is expected to be in topological order. The returned vector has
+ * exactly ``nodes.size()`` entries. Each inner list preserves first-seen order
+ * and contains no duplicates; empty input names are skipped.
  */
 std::vector<std::vector<std::string>>
-CollectRemainingInputs(const utils::RepeatedProtoField<NodeProto> &nodes);
+CollectRemainingInputs(const utils::RepeatedProtoField<NodeProto> &nodes,
+                       const std::vector<std::string> &outputs);
 
 /// ``std::vector`` overload of :cpp:func:`CollectRemainingInputs`.
-std::vector<std::vector<std::string>> CollectRemainingInputs(const std::vector<NodeProto> &nodes);
+std::vector<std::vector<std::string>>
+CollectRemainingInputs(const std::vector<NodeProto> &nodes,
+                       const std::vector<std::string> &outputs);
 
 /**
  * Returns the full list of tensor / sequence names a single ``node`` depends on

@@ -555,10 +555,28 @@ class TestOnnxLightHelper(ExtTestCase):
             oh.make_node("Add", ["out", "x"], ["final"]),
         ]
         self.assertEqual(
-            onnxl.collect_remaining_inputs(nodes),
+            onnxl.collect_remaining_inputs(nodes, ["final"]),
             [["x", "y", "z"], ["t", "z", "x"], ["out", "x"]],
         )
-        self.assertEqual(onnxl.collect_remaining_inputs([]), [])
+        self.assertEqual(onnxl.collect_remaining_inputs([], ["final"]), [])
+
+    def test_collect_remaining_inputs_prunes_dead_branches(self) -> None:
+        nodes = [
+            oh.make_node("Mul", ["x", "y"], ["t"]),
+            oh.make_node("Sub", ["t", "z"], ["out"]),
+            oh.make_node("Neg", ["w"], ["dead"]),
+            oh.make_node("Add", ["out", "x"], ["final"]),
+        ]
+        # ``w`` never appears because the ``Neg`` node does not feed ``final``.
+        self.assertEqual(
+            onnxl.collect_remaining_inputs(nodes, ["final"]),
+            [["x", "y", "z"], ["t", "z", "x"], ["out", "x"], ["out", "x"]],
+        )
+        # Requesting both outputs keeps the ``Neg`` branch alive.
+        self.assertEqual(
+            onnxl.collect_remaining_inputs(nodes, ["final", "dead"]),
+            [["x", "y", "z", "w"], ["t", "z", "w", "x"], ["w", "out", "x"], ["out", "x"]],
+        )
 
 
 class TestAlignExternalDataStreaming(ExtTestCase):

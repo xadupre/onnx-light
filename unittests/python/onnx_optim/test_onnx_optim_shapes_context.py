@@ -474,7 +474,7 @@ class TestShapesContextEventLog(ExtTestCase):
             self.assertEqual(ev.subgraph_node_index, -1)
 
     def test_if_subgraph_events_carry_branch_graph_name(self):
-        """Events inside If branches must carry then_branch / else_branch in subgraph_attr_name."""
+        """Events inside If branches must carry then_branch / else_branch."""
         # then_branch: Abs(X) -> Y;  else_branch: Neg(X) -> Y
         then_branch = oh.make_graph(
             [oh.make_node("Abs", ["X"], ["Y_then"])],
@@ -508,7 +508,7 @@ class TestShapesContextEventLog(ExtTestCase):
         self.assertIn("else_branch", attr_names)
 
     def test_graph_name_in_event_as_dict(self):
-        """subgraph_node_index and subgraph_attr_name must appear in event.as_dict() for shape events."""
+        """subgraph_node_index and subgraph_attr_name must appear in event.as_dict()."""
         ctx = si.ShapesContext()
         ctx.events_enabled = True
         ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, [2, 3]))

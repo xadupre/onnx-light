@@ -165,6 +165,7 @@ inline uint32_t ReadU32BE(const uint8_t *p) {
          (static_cast<uint32_t>(p[2]) << 8) | static_cast<uint32_t>(p[3]);
 }
 
+#if defined(ONNX_LIGHT_HAS_IMAGE_CODECS)
 bool TryDecodeTiff(const uint8_t *data, size_t size, const std::string &pixel_format,
                    int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels) {
   // Minimum header: 2 bytes byte order + 2 bytes magic + 4 bytes IFD offset.
@@ -434,6 +435,7 @@ bool TryDecodeTiff(const uint8_t *data, size_t size, const std::string &pixel_fo
   out_width = static_cast<int64_t>(image_width);
   return true;
 }
+#endif // ONNX_LIGHT_HAS_IMAGE_CODECS
 
 // ---------------------------------------------------------------------------
 // Baseline JPEG (JFIF, SOF0) decoder
@@ -1522,6 +1524,7 @@ bool TryDecodePng(const uint8_t *data, size_t size, const std::string &pixel_for
   return true;
 }
 
+#if defined(ONNX_LIGHT_HAS_IMAGE_CODECS)
 bool TryDecodeWebp(const uint8_t *data, size_t size, const std::string &pixel_format,
                    int64_t &out_height, int64_t &out_width, std::vector<uint8_t> &out_pixels) {
   using GetInfoFn = int (*)(const uint8_t *, size_t, int *, int *);
@@ -1631,6 +1634,7 @@ bool TryDecodeWebp(const uint8_t *data, size_t size, const std::string &pixel_fo
   out_width = static_cast<int64_t>(width);
   return true;
 }
+#endif // ONNX_LIGHT_HAS_IMAGE_CODECS
 
 // ---------------------------------------------------------------------------
 // PNM decoder (Portable AnyMap: PBM/PGM/PPM)
@@ -1821,6 +1825,7 @@ bool TryDecodePnm(const uint8_t *data, size_t size, const std::string &pixel_for
   return true;
 }
 
+#if defined(ONNX_LIGHT_HAS_IMAGE_CODECS)
 // ---------------------------------------------------------------------------
 // JPEG2000 decoder
 //
@@ -2153,6 +2158,7 @@ bool TryDecodeJpeg2000(const uint8_t *data, size_t size, const std::string &pixe
   s_api.destroy_codec(codec);
   return ok;
 }
+#endif // ONNX_LIGHT_HAS_IMAGE_CODECS
 
 } // namespace
 
@@ -2181,10 +2187,15 @@ Tensor ImageDecoder::operator()(const Tensor &encoded_stream,
   if (TryDecodePng(raw, raw_size, pixel_format, height, width, pixels) ||
       TryDecodeBmp(raw, raw_size, pixel_format, height, width, pixels) ||
       TryDecodeJpeg(raw, raw_size, pixel_format, height, width, pixels) ||
+#if defined(ONNX_LIGHT_HAS_IMAGE_CODECS)
       TryDecodeTiff(raw, raw_size, pixel_format, height, width, pixels) ||
       TryDecodeWebp(raw, raw_size, pixel_format, height, width, pixels) ||
-      TryDecodePnm(raw, raw_size, pixel_format, height, width, pixels) ||
-      TryDecodeJpeg2000(raw, raw_size, pixel_format, height, width, pixels)) {
+#endif
+      TryDecodePnm(raw, raw_size, pixel_format, height, width, pixels)
+#if defined(ONNX_LIGHT_HAS_IMAGE_CODECS)
+      || TryDecodeJpeg2000(raw, raw_size, pixel_format, height, width, pixels)
+#endif
+  ) {
     return Tensor::FromUint8("", {height, width, channels}, std::move(pixels));
   }
 
@@ -2218,10 +2229,15 @@ void ImageDecoder::operator()(const Tensor &encoded_stream, const std::string &p
   if (TryDecodePng(raw, raw_size, pixel_format, height, width, pixels) ||
       TryDecodeBmp(raw, raw_size, pixel_format, height, width, pixels) ||
       TryDecodeJpeg(raw, raw_size, pixel_format, height, width, pixels) ||
+#if defined(ONNX_LIGHT_HAS_IMAGE_CODECS)
       TryDecodeTiff(raw, raw_size, pixel_format, height, width, pixels) ||
       TryDecodeWebp(raw, raw_size, pixel_format, height, width, pixels) ||
-      TryDecodePnm(raw, raw_size, pixel_format, height, width, pixels) ||
-      TryDecodeJpeg2000(raw, raw_size, pixel_format, height, width, pixels)) {
+#endif
+      TryDecodePnm(raw, raw_size, pixel_format, height, width, pixels)
+#if defined(ONNX_LIGHT_HAS_IMAGE_CODECS)
+      || TryDecodeJpeg2000(raw, raw_size, pixel_format, height, width, pixels)
+#endif
+  ) {
     EXT_ENFORCE_INVALID(output.shape[0] == height && output.shape[1] == width,
                         "kernel::ImageDecoder preallocated output shape does not match the decoded "
                         "image dimensions.");

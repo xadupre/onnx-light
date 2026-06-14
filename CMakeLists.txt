@@ -33,6 +33,9 @@ option(ONNX_LIGHT_INSTALL "Install the C++ library and headers." ON)
 option(ONNX_LIGHT_BUILD_KERNELS
     "Build the operator-kernel runtime (lib_onnx_kernels) and the backend-test registry (lib_onnx_backend_test). Turn OFF to install only the schema / checker / shape-inference / version-converter libraries (useful for downstream projects that only need onnx_light::onnx_light or onnx_light::lib_onnx_proto)."
     ON)
+option(ONNX_LIGHT_BUILD_IMAGE_CODECS
+    "Build the TIFF, WebP and JPEG2000 decoders in the ImageDecoder kernel. Turn OFF to compile a lighter kernel library: those three formats then fall back to the empty-matrix path while BMP, JPEG, PNG and PNM remain decoded natively."
+    ON)
 option(ONNX_ML "Enable ai.onnx.ml support." ON)
 option(ONNX_HARDENING
     "Enable OpenSSF Compiler Hardening Guide flags for C/C++ targets. \
@@ -311,6 +314,14 @@ set_property(TARGET lib_onnx_kernels PROPERTY POSITION_INDEPENDENT_CODE ON)
 set_target_properties(lib_onnx_kernels PROPERTIES EXPORT_NAME onnx_kernels)
 target_compile_features(lib_onnx_kernels PUBLIC cxx_std_20)
 target_link_libraries(lib_onnx_kernels PUBLIC lib_onnx_proto)
+# Optional heavier image decoders (TIFF, WebP, JPEG2000). When
+# ONNX_LIGHT_BUILD_IMAGE_CODECS=OFF these formats are compiled out of the
+# ImageDecoder kernel and fall back to the empty-matrix path. The definition
+# is PUBLIC so downstream consumers (and the test executable) observe the
+# same behavior the kernel library was built with.
+if(ONNX_LIGHT_BUILD_IMAGE_CODECS)
+  target_compile_definitions(lib_onnx_kernels PUBLIC ONNX_LIGHT_HAS_IMAGE_CODECS)
+endif()
 # Same PCH rationale as ``lib_onnx_backend_test``: kernel translation
 # units all pull in ``test_case.h`` (via ``kernel_context.h``) and the
 # usual standard-library headers.

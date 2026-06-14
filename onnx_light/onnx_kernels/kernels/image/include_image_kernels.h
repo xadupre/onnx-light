@@ -31,7 +31,12 @@ namespace kernel {
 // To keep the lightweight C++ kernel library free of build-time third-party
 // image decoding dependencies (``libjpeg``, ``libpng``, ``libwebp``, etc.) the
 // reference kernel implements most decoders inline and uses ``libwebp`` /
-// ``libopenjp2`` only when they are available at runtime:
+// ``libopenjp2`` only when they are available at runtime. The TIFF, WebP and
+// JPEG2000 decoders are additionally gated behind the
+// ``ONNX_LIGHT_BUILD_IMAGE_CODECS`` CMake option (defining
+// ``ONNX_LIGHT_HAS_IMAGE_CODECS``): when it is turned ``OFF`` those three
+// formats are compiled out and fall back to the empty-matrix path, leaving
+// only the dependency-free BMP / JPEG / PNG / PNM decoders:
 //
 //   * **BMP** — 24-bit uncompressed (BI_RGB, BITMAPINFOHEADER): fully
 //     decoded to ``(H, W, C)`` uint8 output in the requested

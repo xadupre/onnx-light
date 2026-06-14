@@ -61,15 +61,13 @@ can link only what it needs:
 - `onnx_light::onnx_backend_test` – C++ backend test infrastructure and
   reference operator kernels.
 
-## Kernels
+## Kernels and Backend Tests
 
 - Each operator has a corresponding runtime implementation in C++,
   it is used to generated the C++ output of the backend tests.
-
-## Backend Tests
-
 - Fully written in C++, it can be used in any language.
-- Output are always generated with a C++ kernel.
+- Outputs are always generated with a C++ kernel.
+- The kernels can be used without the backend tests.
 
 ## Software Bill of Materials (SBOM)
 

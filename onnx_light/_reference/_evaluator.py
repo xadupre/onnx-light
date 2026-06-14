@@ -263,9 +263,24 @@ class ReferenceEvaluator:
     ) -> tuple[np.ndarray, np.ndarray]:
         """Converts a Python ``dict`` feed into the ``(keys, values)`` arrays.
 
-        The returned NumPy arrays are the two tensors expected by the C++
-        runtime for a ``map(K, V)``-typed input fed under its original name
-        (the ``<name>_keys`` / ``<name>_values`` convention).
+        Parameters
+        ----------
+        name:
+            Name of the map-typed graph input the ``dict`` is fed under;
+            used only for error messages.
+        mapping:
+            The ``dict`` feed, mapping map keys to map values.
+        key_type:
+            ``TensorProto`` enum value of the map's key dtype.
+        value_type:
+            ``TensorProto`` enum value of the map's value dtype.
+
+        Returns
+        -------
+        tuple of :class:`numpy.ndarray`
+            The ``(keys, values)`` tensors expected by the C++ runtime for a
+            ``map(K, V)``-typed input fed under its original name (the
+            ``<name>_keys`` / ``<name>_values`` convention).
         """
         keys_list = list(mapping.keys())
         values_list = list(mapping.values())
@@ -297,8 +312,20 @@ class ReferenceEvaluator:
         A ``map(K, V)``-typed input may be fed either directly through its
         ``<name>_keys`` / ``<name>_values`` tensors or, as a convenience,
         through a single Python ``dict`` (optionally wrapped in a size-1 numpy
-        object array) under the original input name. Returns a new feed mapping
-        where every such ``dict`` has been split into the expected tensors.
+        object array) under the original input name.
+
+        Parameters
+        ----------
+        feed_inputs:
+            The raw ``name -> value`` feed mapping passed to :meth:`run`.
+
+        Returns
+        -------
+        dict
+            A new feed mapping where every ``dict`` fed under a map-typed
+            input name has been split into the expected ``<name>_keys`` /
+            ``<name>_values`` tensors; all other entries are passed through
+            unchanged.
         """
         if not self._map_inputs:
             return feed_inputs

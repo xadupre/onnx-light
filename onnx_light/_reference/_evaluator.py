@@ -539,9 +539,8 @@ class ReferenceEvaluator:
         ctx = self._ctx
         # Reset the per-invocation tensor / sequence / event state from any
         # previous run while preserving the cached execution plans, registered
-        # custom kernels and kernel context.
+        # custom kernels, kernel context and the ``events_enabled`` setting.
         ctx.clear()
-        ctx.events_enabled = self._events_enabled
         # Releasing intermediates would drop any requested output that is
         # not a declared graph/function output before the caller can fetch
         # it. Disable the per-run release in that case so callers can still

@@ -25,11 +25,15 @@ class TestNoSymlinks(unittest.TestCase):
         )
 
     def test_no_symlinks_on_disk(self):
-        """Checks that no symlink exists on disk outside the .git directory."""
+        """Checks that no symlink exists on disk outside ignored directories."""
+        # ``.git`` holds git's own internal symlinks and ``.pixi`` holds the
+        # conda environments materialized by ``pixi install`` (whose packages
+        # legitimately ship symlinks); neither is part of the repository.
+        ignored = {".git", ".pixi"}
         symlinks = [
             str(path.relative_to(self.root))
             for path in self.root.rglob("*")
-            if ".git" not in path.parts and path.is_symlink()
+            if ignored.isdisjoint(path.parts) and path.is_symlink()
         ]
         self.assertEqual(
             symlinks, [], f"The repository must not contain any symlink, found: {symlinks}"

@@ -1646,21 +1646,31 @@ bool TryDecodeWebp(const uint8_t *data, size_t size, const std::string &pixel_fo
 // ``Grayscale`` channel-last layout.
 // ---------------------------------------------------------------------------
 
-// Skips PNM header whitespace and ``#`` comments, then reads one unsigned
-// decimal token. Returns false when no decimal token is available.
-bool PnmReadUint(const uint8_t *data, size_t size, size_t &pos, long &value) {
+inline bool PnmIsWhitespace(uint8_t c) {
+  return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v';
+}
+
+// Advances ``pos`` past any PNM whitespace and ``#`` comments (a comment runs
+// to the end of its line).
+void PnmSkipWhitespaceAndComments(const uint8_t *data, size_t size, size_t &pos) {
   while (pos < size) {
     const uint8_t c = data[pos];
     if (c == '#') {
       while (pos < size && data[pos] != '\n') {
         ++pos;
       }
-    } else if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v') {
+    } else if (PnmIsWhitespace(c)) {
       ++pos;
     } else {
       break;
     }
   }
+}
+
+// Skips PNM header whitespace and ``#`` comments, then reads one unsigned
+// decimal token. Returns false when no decimal token is available.
+bool PnmReadUint(const uint8_t *data, size_t size, size_t &pos, long &value) {
+  PnmSkipWhitespaceAndComments(data, size, pos);
   if (pos >= size || data[pos] < '0' || data[pos] > '9') {
     return false;
   }
@@ -1674,10 +1684,6 @@ bool PnmReadUint(const uint8_t *data, size_t size, size_t &pos, long &value) {
   }
   value = v;
   return true;
-}
-
-inline bool PnmIsWhitespace(uint8_t c) {
-  return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v';
 }
 
 bool TryDecodePnm(const uint8_t *data, size_t size, const std::string &pixel_format,
@@ -1756,18 +1762,7 @@ bool TryDecodePnm(const uint8_t *data, size_t size, const std::string &pixel_for
     // separated by whitespace or comments.
     size_t idx = 0;
     while (idx < pixel_count) {
-      while (pos < size) {
-        const uint8_t c = data[pos];
-        if (c == '#') {
-          while (pos < size && data[pos] != '\n') {
-            ++pos;
-          }
-        } else if (PnmIsWhitespace(c)) {
-          ++pos;
-        } else {
-          break;
-        }
-      }
+      PnmSkipWhitespaceAndComments(data, size, pos);
       if (pos >= size || (data[pos] != '0' && data[pos] != '1')) {
         return false;
       }

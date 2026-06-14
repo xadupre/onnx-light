@@ -246,11 +246,20 @@ class ReferenceEvaluator:
             version = int(max(self._opsets.values()))
         self._kernel_ctx = _runtime.KernelContext(_runtime.default_opset(version))
 
+        # Build the RuntimeContext once at construction time and reuse it for
+        # every :meth:`run` call. Keeping a single context alive across runs
+        # amortises the per-model ExecutionPlan analysis (cached inside the
+        # context, keyed by graph/function address) instead of rebuilding it on
+        # every call. The per-invocation tensor / sequence / event state is
+        # reset via ``RuntimeContext.clear`` at the start of each :meth:`run`.
+        self._ctx = _runtime.RuntimeContext(self._kernel_ctx)
+        self._ctx.events_enabled = self._events_enabled
+
         # Mapping ``"<domain>:<op_type>" -> low-level callback``. A
         # low-level callback has the signature
         # ``fn(node: NodeProto, ctx: RuntimeContext) -> None`` and is
-        # registered as-is on every freshly constructed RuntimeContext
-        # in :meth:`run`. The higher-level :meth:`register_custom_kernel`
+        # registered directly on the persistent RuntimeContext when the
+        # higher-level :meth:`register_custom_kernel` API is called. That
         # API installs a numpy-friendly wrapper that delegates to the
         # user-provided callable.
         self._custom_kernels: dict[str, Any] = {}
@@ -421,6 +430,10 @@ class ReferenceEvaluator:
                 ctx.put(name, _numpy_to_cpp_tensor(name, value), "output")
 
         self._custom_kernels[f"{domain or 'ai.onnx'}:{op_type}"] = (domain, op_type, _wrapper)
+        # Register the wrapper directly on the persistent RuntimeContext. A
+        # later registration for the same (domain, op_type) overwrites the
+        # previous one, matching the dict-based bookkeeping above.
+        self._ctx.register_custom_kernel(domain, op_type, _wrapper)
 
     # -- proto loading ------------------------------------------------------
 
@@ -523,8 +536,11 @@ class ReferenceEvaluator:
                 f"Expected: {self._input_names}, got: {list(feed_inputs)}."
             )
 
-        ctx = _runtime.RuntimeContext(self._kernel_ctx)
-        ctx.events_enabled = self._events_enabled
+        ctx = self._ctx
+        # Reset the per-invocation tensor / sequence / event state from any
+        # previous run while preserving the cached execution plans, registered
+        # custom kernels, kernel context and the ``events_enabled`` setting.
+        ctx.clear()
         # Releasing intermediates would drop any requested output that is
         # not a declared graph/function output before the caller can fetch
         # it. Disable the per-run release in that case so callers can still
@@ -534,9 +550,6 @@ class ReferenceEvaluator:
             name in declared_outputs for name in output_names
         )
         ctx.release_intermediates = release
-
-        for domain, op_type, wrapper in self._custom_kernels.values():
-            ctx.register_custom_kernel(domain, op_type, wrapper)
 
         for name, value in feed_inputs.items():
             ctx.set(name, _numpy_to_cpp_tensor(name, value))

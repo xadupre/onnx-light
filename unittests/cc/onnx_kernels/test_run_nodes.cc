@@ -199,6 +199,40 @@ TEST(RunNodes, RunNodeSingleAdd) {
   EXPECT_FLOAT_EQ(got[2], 33.0f);
 }
 
+TEST(RunNodes, RunNodeClearResetsStateButKeepsSettings) {
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_events_enabled(true);
+  rt.set_release_intermediates(true);
+  rt.tensors()["x"] = Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f});
+  rt.tensors()["y"] = Tensor::FromFloat("y", {3}, {10.0f, 20.0f, 30.0f});
+  NodeProto node = MakeNode("Add", {"x", "y"}, {"z"});
+  RunNode(node, rt);
+  ASSERT_FALSE(rt.tensors().empty());
+  ASSERT_FALSE(rt.events().empty());
+
+  rt.Clear();
+
+  // Tensor map, sequence map and event log are reset.
+  EXPECT_TRUE(rt.tensors().empty());
+  EXPECT_TRUE(rt.sequences().empty());
+  EXPECT_TRUE(rt.events().empty());
+  EXPECT_EQ(rt.current_node_index(), -1);
+  // Settings survive the reset.
+  EXPECT_TRUE(rt.events_enabled());
+  EXPECT_TRUE(rt.release_intermediates());
+
+  // The context can be reused for a fresh run after clearing.
+  rt.tensors()["x"] = Tensor::FromFloat("x", {3}, {4.0f, 5.0f, 6.0f});
+  rt.tensors()["y"] = Tensor::FromFloat("y", {3}, {40.0f, 50.0f, 60.0f});
+  RunNode(node, rt);
+  ASSERT_NE(rt.tensors().find("z"), rt.tensors().end());
+  const float *got = rt.tensors()["z"].AsFloat();
+  ASSERT_EQ(rt.tensors()["z"].element_count(), 3);
+  EXPECT_FLOAT_EQ(got[0], 44.0f);
+  EXPECT_FLOAT_EQ(got[1], 55.0f);
+  EXPECT_FLOAT_EQ(got[2], 66.0f);
+}
+
 TEST(RunNodes, RunNodeGemmWithoutBiasUsesSchemaDefaults) {
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.tensors()["a"] = Tensor::FromFloat("a", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});

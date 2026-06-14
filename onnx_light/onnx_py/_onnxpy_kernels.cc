@@ -400,6 +400,14 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "plain Python ``dict``.")
       .def("clear_events", &RuntimeContext::ClearEvents,
            "Empties the event log without otherwise touching the tensor map.")
+      .def("clear", &RuntimeContext::Clear,
+           "Resets the per-invocation state so the context can be reused for a fresh "
+           "run: clears the tensor map, the sequence map and the event log, and resets "
+           "the current node index. The kernel context, registered model-local "
+           "functions and custom kernels, the cached execution plans and the "
+           ":attr:`events_enabled` / :attr:`release_intermediates` settings are "
+           "preserved, so the execution-plan cache is amortised across repeated runs "
+           "of the same model.")
       .def(
           "register_custom_kernel",
           [](RuntimeContext &rt, const std::string &domain, const std::string &op_type,

@@ -55,6 +55,7 @@ _IMPLEMENTED_OPS: frozenset[str] = frozenset(
         "QuantizeLinear",
         "Relu",
         "SequenceConstruct",
+        "SplitToSequence",
         "Sub",
         "Transpose",
     }

@@ -28,10 +28,21 @@ namespace {
 // ``parent_ctx`` so that outer-scope values referenced from inside the
 // sub-graph remain visible. The resulting context (containing both the
 // inherited entries and the new ones produced by the sub-graph nodes)
-// is returned.
-ShapesContext InferSubgraph(const ShapesContext &parent_ctx, const GraphProto &subgraph) {
+// is returned. When event logging is enabled on ``parent_ctx``, events
+// produced during the subgraph inference are propagated back to
+// ``parent_ctx`` with ``graph_name`` set to ``branch_name``.
+ShapesContext InferSubgraph(ShapesContext &parent_ctx, const std::string &branch_name,
+                            const GraphProto &subgraph) {
   ShapesContext local = parent_ctx;
+  local.set_current_graph_name(branch_name);
+  const size_t events_before = local.Events().size();
   local.ComputeShapes(subgraph.node());
+  if (parent_ctx.events_enabled()) {
+    const auto &local_events = local.Events();
+    for (size_t i = events_before; i < local_events.size(); ++i) {
+      parent_ctx.Events().push_back(local_events[i]);
+    }
+  }
   return local;
 }
 
@@ -114,8 +125,8 @@ void ComputeShapeIf(ShapesContext &ctx, const NodeProto &node) {
                       std::to_string(else_branch.output().size()), " output(s), expected ",
                       std::to_string(n_outputs), ".");
 
-  const ShapesContext then_ctx = InferSubgraph(ctx, then_branch);
-  const ShapesContext else_ctx = InferSubgraph(ctx, else_branch);
+  const ShapesContext then_ctx = InferSubgraph(ctx, "then_branch", then_branch);
+  const ShapesContext else_ctx = InferSubgraph(ctx, "else_branch", else_branch);
 
   for (int i = 0; i < n_outputs; ++i) {
     const std::string out_name = node.output(i).as_string();
@@ -182,6 +193,7 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
   // dependency values, inherited from the matching ``v_initial`` outer
   // descriptor.
   ShapesContext local = ctx;
+  local.set_current_graph_name("body");
   local.Set(body.input()[0].name().as_string(),
             OptimTensor(nullptr, TensorType::kInt64, OptimShape{}));
   local.Set(body.input()[1].name().as_string(),
@@ -195,7 +207,14 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
     local.Set(body.input()[2 + i].name().as_string(), OptimTensor(local.Get(v_initial_name)));
   }
 
+  const size_t events_before = local.Events().size();
   local.ComputeShapes(body.node());
+  if (ctx.events_enabled()) {
+    const auto &local_events = local.Events();
+    for (size_t i = events_before; i < local_events.size(); ++i) {
+      ctx.Events().push_back(local_events[i]);
+    }
+  }
 
   // Validate that every body output is known in the local context.
   for (int i = 0; i < body.output().size(); ++i) {
@@ -334,6 +353,7 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
   // remaining M are per-iteration scan-input slices, obtained by dropping
   // the scan axis from the matching scan_input shape.
   ShapesContext local = ctx;
+  local.set_current_graph_name("body");
   for (int i = 0; i < n_state; ++i) {
     const std::string state_in_name = node.input(i).as_string();
     EXT_ENFORCE_INVALID(local.Has(state_in_name), "ComputeShapeScan: state input '", state_in_name,
@@ -370,7 +390,14 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
               OptimTensor(nullptr, scan_in.Dtype(), std::move(body_in_shape)));
   }
 
+  const size_t events_before_scan = local.Events().size();
   local.ComputeShapes(body.node());
+  if (ctx.events_enabled()) {
+    const auto &local_events = local.Events();
+    for (size_t i = events_before_scan; i < local_events.size(); ++i) {
+      ctx.Events().push_back(local_events[i]);
+    }
+  }
 
   for (int i = 0; i < body.output().size(); ++i) {
     const std::string body_out = body.output()[i].name().as_string();

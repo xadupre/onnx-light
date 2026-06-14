@@ -1247,4 +1247,162 @@ TEST(OnnxOptimShapesContextEventLog, NodeIndexTagsInputsInitializersAndNodes) {
   EXPECT_EQ(node_ev->node_index, 0);
 }
 
+TEST(OnnxOptimShapesContextEventLog, TopLevelEventsHaveEmptyGraphName) {
+  // A model with no subgraphs: all events must have an empty graph_name.
+  NodeProto node = MakeNode("Relu", {"X"}, {"Y"});
+  ModelProto model;
+  model.set_ir_version(8);
+  OperatorSetIdProto *osi = model.add_opset_import();
+  osi->set_domain("");
+  osi->set_version(18);
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+  ValueInfoProto *in = graph->add_input();
+  in->set_name("X");
+  SetValueInfoTensorType(*in, TensorProto::DataType::FLOAT, /*shape=*/{2, 3});
+  ValueInfoProto *out = graph->add_output();
+  out->set_name("Y");
+  *graph->add_node() = node;
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.set_events_enabled(true);
+  ctx.ComputeShapeModel(model);
+
+  for (const auto &ev : ctx.Events()) {
+    EXPECT_TRUE(ev.graph_name.empty())
+        << "Expected empty graph_name for top-level event, got: " << ev.graph_name;
+  }
+}
+
+TEST(OnnxOptimShapesContextEventLog, IfSubgraphEventsCarryBranchGraphName) {
+  // Build a simple If model: branches each produce Abs(X).
+  // Events from then_branch must carry graph_name="then_branch" and from
+  // else_branch graph_name="else_branch"; outer events must have empty
+  // graph_name.
+  using onnx_optim::shapes::ShapeEvent;
+  ModelProto model;
+  model.set_ir_version(8);
+  OperatorSetIdProto *osi = model.add_opset_import();
+  osi->set_domain("");
+  osi->set_version(18);
+  GraphProto *graph = model.add_graph();
+  graph->set_name("main");
+  // Inputs
+  ValueInfoProto *cond_vi = graph->add_input();
+  cond_vi->set_name("cond");
+  SetValueInfoTensorType(*cond_vi, TensorProto::DataType::BOOL, {});
+  ValueInfoProto *x_vi = graph->add_input();
+  x_vi->set_name("X");
+  SetValueInfoTensorType(*x_vi, TensorProto::DataType::FLOAT, {2, 3});
+  ValueInfoProto *out = graph->add_output();
+  out->set_name("Z");
+
+  NodeProto *if_node = graph->add_node();
+  if_node->set_op_type("If");
+  if_node->add_input("cond");
+  if_node->add_output("Z");
+
+  // then_branch: Z_then = Abs(X)
+  {
+    AttributeProto *attr = if_node->add_attribute();
+    attr->set_name("then_branch");
+    attr->set_type(AttributeProto::AttributeType::GRAPH);
+    GraphProto *tb = attr->mutable_g();
+    *tb->add_node() = MakeNode("Abs", {"X"}, {"Z_then"});
+    tb->add_output()->set_name("Z_then");
+  }
+  // else_branch: Z_else = Neg(X)
+  {
+    AttributeProto *attr = if_node->add_attribute();
+    attr->set_name("else_branch");
+    attr->set_type(AttributeProto::AttributeType::GRAPH);
+    GraphProto *eb = attr->mutable_g();
+    *eb->add_node() = MakeNode("Neg", {"X"}, {"Z_else"});
+    eb->add_output()->set_name("Z_else");
+  }
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.set_events_enabled(true);
+  ctx.ComputeShapeModel(model);
+
+  bool found_then = false;
+  bool found_else = false;
+  for (const auto &ev : ctx.Events()) {
+    if (ev.graph_name == "then_branch") {
+      found_then = true;
+    }
+    if (ev.graph_name == "else_branch") {
+      found_else = true;
+    }
+  }
+  EXPECT_TRUE(found_then) << "No event with graph_name='then_branch' found";
+  EXPECT_TRUE(found_else) << "No event with graph_name='else_branch' found";
+}
+
+TEST(OnnxOptimShapesContextEventLog, LoopSubgraphEventsCarryBodyGraphName) {
+  // Build a Loop model: sum = Loop(M, cond, init) with a body that adds 1.
+  using onnx_optim::shapes::ShapeEvent;
+
+  ModelProto model;
+  model.set_ir_version(8);
+  OperatorSetIdProto *osi = model.add_opset_import();
+  osi->set_domain("");
+  osi->set_version(18);
+  GraphProto *graph = model.add_graph();
+  graph->set_name("main");
+
+  // Graph inputs
+  ValueInfoProto *m_vi = graph->add_input();
+  m_vi->set_name("M");
+  SetValueInfoTensorType(*m_vi, TensorProto::DataType::INT64, {});
+  ValueInfoProto *cond_vi = graph->add_input();
+  cond_vi->set_name("cond");
+  SetValueInfoTensorType(*cond_vi, TensorProto::DataType::BOOL, {});
+  ValueInfoProto *init_vi = graph->add_input();
+  init_vi->set_name("s_init");
+  SetValueInfoTensorType(*init_vi, TensorProto::DataType::FLOAT, {});
+  graph->add_output()->set_name("s_final");
+  graph->add_output()->set_name("scan_out");
+
+  NodeProto *loop_node = graph->add_node();
+  loop_node->set_op_type("Loop");
+  loop_node->add_input("M");
+  loop_node->add_input("cond");
+  loop_node->add_input("s_init");
+  loop_node->add_output("s_final");
+  loop_node->add_output("scan_out");
+
+  // body subgraph: s_out = Add(s_in, one_init)
+  AttributeProto *body_attr = loop_node->add_attribute();
+  body_attr->set_name("body");
+  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  GraphProto *body = body_attr->mutable_g();
+  body->set_name("loop_body");
+  body->add_input()->set_name("iter");
+  body->add_input()->set_name("cond_in");
+  body->add_input()->set_name("s_in");
+  // initializer ``one``
+  TensorProto *one = body->add_initializer();
+  one->set_name("one");
+  one->set_data_type(TensorProto::DataType::FLOAT);
+  one->add_float_data(1.0f);
+  *body->add_node() = MakeNode("Add", {"s_in", "one"}, {"s_out"});
+  body->add_output()->set_name("cond_in");
+  body->add_output()->set_name("s_out");
+  body->add_output()->set_name("s_out");
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.set_events_enabled(true);
+  ctx.ComputeShapeModel(model);
+
+  bool found_body = false;
+  for (const auto &ev : ctx.Events()) {
+    if (ev.graph_name == "body") {
+      found_body = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(found_body) << "No event with graph_name='body' found";
+}
+
 } // namespace Test

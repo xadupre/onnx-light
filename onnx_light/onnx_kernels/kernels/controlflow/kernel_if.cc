@@ -64,6 +64,7 @@ std::vector<Tensor> If::operator()(const Tensor &cond, const GraphProto &then_br
 
   const bool taken = cond.bytes()[0] != 0;
   const GraphProto &branch = taken ? then_branch : else_branch;
+  const std::string branch_name = taken ? "then_branch" : "else_branch";
 
   // Run the selected subgraph in a fresh child context whose tensor map and
   // model-local function registry are inherited from the caller's context
@@ -72,7 +73,15 @@ std::vector<Tensor> If::operator()(const Tensor &cond, const GraphProto &then_br
   RuntimeContext child(rt.kernel_ctx());
   child.functions() = rt.functions();
   child.tensors() = rt.tensors();
+  child.set_events_enabled(rt.events_enabled());
+  child.set_current_graph_name(branch_name);
   RunGraph(branch, child);
+
+  if (rt.events_enabled()) {
+    for (auto &ev : child.events()) {
+      rt.events().push_back(std::move(ev));
+    }
+  }
 
   std::vector<Tensor> outputs;
   outputs.reserve(static_cast<size_t>(branch.output_size()));

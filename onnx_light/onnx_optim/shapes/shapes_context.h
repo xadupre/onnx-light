@@ -142,6 +142,12 @@ struct ShapeEvent {
   /// / dispatched node in its graph node list. ``-1`` when no producing node
   /// is known.
   int64_t node_index = -1;
+  /// Name of the graph this event was produced in. Empty for events from the
+  /// top-level graph. Non-empty for events originating from a subgraph
+  /// (control-flow body): the value is the attribute name of the subgraph
+  /// (e.g. ``"body"`` for :onnx:`Loop` / :onnx:`Scan`,
+  /// ``"then_branch"`` or ``"else_branch"`` for :onnx:`If`).
+  std::string graph_name;
 };
 
 /**
@@ -556,6 +562,14 @@ public:
   void set_events_enabled(bool enabled) noexcept { events_enabled_ = enabled; }
   bool events_enabled() const noexcept { return events_enabled_; }
 
+  /// Name of the graph currently being inferred. Empty for the top-level
+  /// graph. Set to the attribute name of the subgraph (e.g. ``"body"``,
+  /// ``"then_branch"``, ``"else_branch"``) when inferring shapes for a
+  /// control-flow body so that events recorded inside the subgraph carry
+  /// the name in :cpp:var:`ShapeEvent::graph_name`.
+  void set_current_graph_name(const std::string &name) { current_graph_name_ = name; }
+  const std::string &current_graph_name() const noexcept { return current_graph_name_; }
+
   /// Index of the node currently being processed, used to tag the
   /// :cpp:var:`ShapeEvent::node_index` of descriptors and events recorded
   /// during its shape-inference dispatch. Set by :cpp:func:`ComputeShapes`
@@ -613,6 +627,11 @@ private:
   ShapeEventLog events_;
   bool events_enabled_ = false;
   int64_t current_node_index_ = -1;
+  /// Name of the graph currently being inferred (see
+  /// :cpp:func:`set_current_graph_name`). Empty for the top-level graph;
+  /// set to the subgraph attribute name (``"body"``, ``"then_branch"``,
+  /// etc.) when running shape inference for a control-flow body subgraph.
+  std::string current_graph_name_;
 };
 
 } // namespace shapes

@@ -423,6 +423,12 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
               "Index of the node this event is associated with: ``-1`` for graph inputs, "
               "``-2`` for initializers, and the position (``>= 0``) of the producing / "
               "dispatched node otherwise (``-1`` when no producing node is known).")
+      .def_ro("graph_name", &onnx_shapes::ShapeEvent::graph_name,
+              "Name of the (sub)graph this event was produced in. Empty for events "
+              "from the top-level graph. For events from control-flow subgraphs "
+              "(``Loop``, ``Scan``, ``If``) this is the attribute name of the "
+              "subgraph (e.g. ``\"body\"``, ``\"then_branch\"``, "
+              "``\"else_branch\"``).")
       .def(
           "as_dict",
           [](const onnx_shapes::ShapeEvent &ev) {
@@ -435,6 +441,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
             d["op_type"] = ev.op_type;
             d["inputs"] = ev.inputs;
             d["node_index"] = ev.node_index;
+            d["graph_name"] = ev.graph_name;
             return d;
           },
           "Returns the event fields as a plain Python ``dict`` (trivially "
@@ -443,7 +450,8 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
         return std::string("ShapeEvent(action='") + onnx_shapes::ShapeEventActionName(ev.action) +
                "', name='" + ev.name + "', op_type='" + ev.op_type +
                "', data_type=" + std::to_string(ev.data_type) +
-               ", node_index=" + std::to_string(ev.node_index) + ")";
+               ", node_index=" + std::to_string(ev.node_index) + ", graph_name='" + ev.graph_name +
+               "')";
       });
 
   // -----------------------------------------------------------------------

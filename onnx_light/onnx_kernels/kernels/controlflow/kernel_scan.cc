@@ -245,7 +245,7 @@ std::vector<Tensor> Scan::operator()(const GraphProto &body,
       bindings.emplace_back(slice.name, std::move(slice));
     }
 
-    const std::vector<Tensor> body_outputs = RunSubgraph(body, bindings, rt);
+    const std::vector<Tensor> body_outputs = RunSubgraph(body, bindings, rt, "body");
     EXT_ENFORCE_INVALID(body_outputs.size() == n + k,
                         "kernel::Scan: body produced an unexpected number of outputs.");
     state.assign(body_outputs.begin(), body_outputs.begin() + static_cast<std::ptrdiff_t>(n));
@@ -285,7 +285,7 @@ std::vector<Tensor> Scan::operator()(const GraphProto &body,
       bindings.emplace_back(slice.name, std::move(slice));
     }
 
-    const std::vector<Tensor> body_outputs = RunSubgraph(body, bindings, rt);
+    const std::vector<Tensor> body_outputs = RunSubgraph(body, bindings, rt, "body");
     EXT_ENFORCE_INVALID(body_outputs.size() == n + k,
                         "kernel::Scan: body produced an unexpected number of outputs.");
     for (std::size_t i = 0; i < k; ++i) {

@@ -733,6 +733,7 @@ void ShapesContext::LogSetEvent(const std::string &name, const OptimTensor &tens
   ev.name = name;
   ev.data_type = static_cast<int32_t>(TensorTypeToDataType(tensor.Dtype()));
   ev.node_index = current_node_index_;
+  ev.graph_name = current_graph_name_;
   const OptimShape &shape = tensor.Shape();
   ev.shape.reserve(shape.Rank());
   for (std::size_t i = 0; i < shape.Rank(); ++i) {
@@ -749,6 +750,7 @@ void ShapesContext::LogConstraintEvent(ShapeEventAction action, const std::strin
   ev.data_type = static_cast<int32_t>(TensorProto::DataType::UNDEFINED);
   ev.inputs = {lhs, rhs};
   ev.node_index = current_node_index_;
+  ev.graph_name = current_graph_name_;
   events_.push_back(std::move(ev));
 }
 
@@ -761,6 +763,7 @@ void ShapesContext::AppendComputeNodeEvent(const std::string &op_domain, const s
   ev.op_type = op_type;
   ev.inputs = std::move(inputs);
   ev.node_index = current_node_index_;
+  ev.graph_name = current_graph_name_;
   events_.push_back(std::move(ev));
 }
 

@@ -245,6 +245,12 @@ struct RuntimeEvent {
   /// CPU and ``0``–``8192`` for a GPU device index. The CPU reference runtime
   /// always reports ``-1``.
   int32_t device = -1;
+  /// Name of the graph this event was produced in. Empty for events from the
+  /// top-level graph. Non-empty for events originating from a subgraph
+  /// (control-flow body): the value is the attribute name of the subgraph
+  /// (e.g. ``"body"`` for :onnx:`Loop` / :onnx:`Scan` / :onnx:`SequenceMap`,
+  /// ``"then_branch"`` or ``"else_branch"`` for :onnx:`If`).
+  std::string graph_name;
 };
 
 /**
@@ -289,6 +295,14 @@ public:
   /// profiling is required.
   void set_events_enabled(bool enabled) noexcept { events_enabled_ = enabled; }
   bool events_enabled() const noexcept { return events_enabled_; }
+
+  /// Name of the graph currently being evaluated. Empty for the top-level
+  /// graph. Set to the attribute name of the subgraph (e.g. ``"body"``,
+  /// ``"then_branch"``, ``"else_branch"``) when executing a control-flow
+  /// body so that events recorded inside the subgraph carry the name in
+  /// :cpp:var:`RuntimeEvent::graph_name`.
+  void set_current_graph_name(const std::string &name) { current_graph_name_ = name; }
+  const std::string &current_graph_name() const noexcept { return current_graph_name_; }
 
   /// Index of the node currently being executed, used to tag the
   /// :cpp:var:`RuntimeEvent::node_index` of intermediate / output tensors
@@ -545,6 +559,11 @@ private:
   bool events_enabled_ = false;
   bool release_intermediates_ = false;
   int64_t current_node_index_ = -1;
+  /// Name of the graph currently being evaluated (see
+  /// :cpp:func:`set_current_graph_name`). Empty for the top-level graph;
+  /// set to the subgraph attribute name (``"body"``, ``"then_branch"``,
+  /// etc.) when running a control-flow body subgraph.
+  std::string current_graph_name_;
   /// Lazily-populated cache of :cpp:class:`ExecutionPlan` instances
   /// keyed by the address of the :cpp:class:`GraphProto` /
   /// :cpp:class:`FunctionProto` they describe. Built on first use by

@@ -110,7 +110,7 @@ models of arbitrary size are supported.
 Buffered file I/O
 -----------------
 
-For file-based loading, ``onnx_light`` uses ``FileStream``
+For file-based loading, ``onnx_light`` uses :cpp:class:`~onnx_light::utils::FileStream`
 (``stream.h`` / ``stream.cc``), a buffered binary reader that opens the
 file with ``std::ifstream`` and reads ahead in 4096-byte chunks.  On
 POSIX platforms a second file descriptor is opened for parallel block reads
@@ -164,7 +164,7 @@ normally be used to copy each tensor's raw data into an owned buffer:
     model = onnxl.load(serialized, no_copy=True)
     # tensor.raw_data now points directly into 'serialized'
 
-Internally, each :class:`~onnx_light.onnx_lib.TensorProto` stores a non-owning ``ByteSpan`` (from
+Internally, each :class:`~onnx_light.onnx_lib.TensorProto` stores a non-owning :cpp:class:`~onnx_light::utils::ByteSpan` (from
 ``simple_span.h``) that borrows the bytes from the source buffer.  The
 borrowed span's ``is_borrowed()`` predicate can be used to check whether raw
 data is owned or borrowed.
@@ -188,7 +188,7 @@ defined in ``stream_class.h``:
 * ``BEGIN_PROTO(cls, doc)`` / ``END_PROTO()`` — open/close a message class.
 * ``FIELD(type, name, order, doc)`` — declare a scalar field with typed
   accessors ``ref_<name>()``, ``has_<name>()``, ``set_<name>()``.
-* ``FIELD_STR(name, order, doc)`` — shorthand for ``utils::String`` fields
+* ``FIELD_STR(name, order, doc)`` — shorthand for :cpp:class:`~onnx_light::utils::String` fields
   that also accepts ``std::string``.
 * ``FIELD_REPEATED(type, name, order, doc)`` — declare a repeated (list)
   field.
@@ -282,8 +282,8 @@ automatically open a new file once the limit is reached, appending ``.1``,
 When loading, only the primary location (``model.onnx.data``) needs to be
 specified; the loader automatically opens ``model.onnx.data.1``,
 ``model.onnx.data.2``, … as required.
-All I/O is performed in C++ via ``TwoFilesWriteStream`` /
-``TwoFilesStream``, so no Python overhead is incurred per tensor.
+All I/O is performed in C++ via :cpp:class:`~onnx_light::utils::TwoFilesWriteStream` /
+:cpp:class:`~onnx_light::utils::TwoFilesStream`, so no Python overhead is incurred per tensor.
 
 ----
 

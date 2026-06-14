@@ -7,7 +7,7 @@ This page explains exactly who owns tensor ``raw_data`` when ``no_copy=True`` is
 enabled, when ownership is transferred, and when memory is released.  It also
 documents the in-place tensor consolidation function
 :func:`onnx_light.onnx.consolidate_tensors_to_buffer`
-(C++: ``ConsolidateTensorsToBuffer``) that produces the same kind of shared-buffer
+(C++: :cpp:func:`~onnx_light::ConsolidateTensorsToBuffer`) that produces the same kind of shared-buffer
 ownership after loading.
 
 Options class hierarchy
@@ -16,23 +16,23 @@ Options class hierarchy
 Buffer-related options (alignment, size threshold) are shared across several
 operations and are factored into a common base class:
 
-* ``TensorBufferOptions`` – base class with ``raw_data_threshold`` (default: 0)
+* :cpp:struct:`~onnx_light::TensorBufferOptions` – base class with ``raw_data_threshold`` (default: 0)
   and ``alignment`` (default: 0).
-* ``ParseOptions`` inherits ``TensorBufferOptions``; its ``raw_data_threshold``
+* :cpp:struct:`~onnx_light::ParseOptions` inherits :cpp:struct:`~onnx_light::TensorBufferOptions`; its ``raw_data_threshold``
   defaults to 1024 bytes.
-* ``SerializeOptions`` inherits ``TensorBufferOptions``; its ``raw_data_threshold``
+* :cpp:struct:`~onnx_light::SerializeOptions` inherits :cpp:struct:`~onnx_light::TensorBufferOptions`; its ``raw_data_threshold``
   defaults to ``kSmallTensorDataThresholdBytes`` (64 bytes).
 
-Any function that accepts a ``TensorBufferOptions`` reference also accepts
-``ParseOptions`` or ``SerializeOptions`` objects.
+Any function that accepts a :cpp:struct:`~onnx_light::TensorBufferOptions` reference also accepts
+:cpp:struct:`~onnx_light::ParseOptions` or :cpp:struct:`~onnx_light::SerializeOptions` objects.
 
 Core objects and where ownership lives
 --------------------------------------
 
-Every tensor stores bytes in ``TensorProto::raw_data`` (type ``utils::ByteSpan``).
-That ``ByteSpan`` object is a member of the :class:`~onnx_light.onnx_lib.TensorProto` instance, so its
+Every tensor stores bytes in ``TensorProto::raw_data`` (type :cpp:class:`~onnx_light::utils::ByteSpan`).
+That :cpp:class:`~onnx_light::utils::ByteSpan` object is a member of the :class:`~onnx_light.onnx_lib.TensorProto` instance, so its
 lifetime is tied to the model object graph (``ModelProto -> GraphProto -> TensorProto``).
-``ByteSpan`` has two storage modes:
+:cpp:class:`~onnx_light::utils::ByteSpan` has two storage modes:
 
 * **Owned mode**: it owns an internal byte buffer.
 * **Borrowed mode**: it stores a pointer plus an optional ``std::shared_ptr<void>``
@@ -49,16 +49,16 @@ Ownership is assigned while parsing each tensor:
 
 * Inline ``raw_data`` in the protobuf payload:
 
-  * ``no_copy=False``: bytes are copied into ``ByteSpan`` owned mode.
-  * ``no_copy=True`` (from in-memory bytes): ``ByteSpan`` borrows from the input bytes buffer.
+  * ``no_copy=False``: bytes are copied into :cpp:class:`~onnx_light::utils::ByteSpan` owned mode.
+  * ``no_copy=True`` (from in-memory bytes): :cpp:class:`~onnx_light::utils::ByteSpan` borrows from the input bytes buffer.
     No shared owner token is attached, so the caller owns the input bytes lifetime.
 
 * External-data tensors (``data_location=EXTERNAL``):
 
-  * ``no_copy=False``: bytes are copied into ``ByteSpan`` owned mode.
-  * ``no_copy=True``: ``TwoFilesStream`` memory-maps (or file-maps on Windows) the
+  * ``no_copy=False``: bytes are copied into :cpp:class:`~onnx_light::utils::ByteSpan` owned mode.
+  * ``no_copy=True``: :cpp:class:`~onnx_light::utils::TwoFilesStream` memory-maps (or file-maps on Windows) the
     weights file once, returns a slice pointer and a ``shared_ptr`` owner, and
-    ``ByteSpan`` stores both in borrowed mode.
+    :cpp:class:`~onnx_light::utils::ByteSpan` stores both in borrowed mode.
 
 In other words, external-data no-copy transfers lifetime management to shared
 ownership held by each tensor, while inline-bytes no-copy keeps lifetime
@@ -155,32 +155,32 @@ Loading scenarios summary
    * - ``onnxl.load("model.onnx", load_external_data=True, no_copy=True)``
      - ``True``
      - Borrowed pointer + shared owner token
-     - Shared ownership via ``ByteSpan`` in model tensors
+     - Shared ownership via :cpp:class:`~onnx_light::utils::ByteSpan` in model tensors
    * - ``onnxl.consolidate_tensors_to_buffer(model)`` (post-load)
      - n/a
      - Borrowed pointer + shared owner token
-     - Shared ownership via ``ByteSpan`` in model tensors
+     - Shared ownership via :cpp:class:`~onnx_light::utils::ByteSpan` in model tensors
 
 When memory is released
 -----------------------
 
-* Owned mode memory is released when ``ByteSpan`` is destroyed.
+* Owned mode memory is released when :cpp:class:`~onnx_light::utils::ByteSpan` is destroyed.
 * **Copy scenarios** (``no_copy=False``) always use owned storage; memory is
-  released when each ``ByteSpan`` is destroyed with the model/tensor object.
+  released when each :cpp:class:`~onnx_light::utils::ByteSpan` is destroyed with the model/tensor object.
 * **No-copy + external-data** stores borrowed pointers with a shared owner
   token; mapped/shared weights are released only when the last referencing
-  ``ByteSpan`` is destroyed.
+  :cpp:class:`~onnx_light::utils::ByteSpan` is destroyed.
 * **No-copy + inline bytes** stores borrowed pointers without owner token;
   tensors are valid only while the caller-managed input bytes object exists.
 * **ConsolidateTensorsToBuffer** creates a single shared buffer and stores a
-  shared owner token in each tensor's ``ByteSpan``; the buffer is released when
-  all referencing ``ByteSpan`` objects (and any external ``shared_ptr`` returned
+  shared owner token in each tensor's :cpp:class:`~onnx_light::utils::ByteSpan`; the buffer is released when
+  all referencing :cpp:class:`~onnx_light::utils::ByteSpan` objects (and any external ``shared_ptr`` returned
   by the C++ function) are destroyed.
 
 Model copy/move behavior
 ------------------------
 
-Moving model/tensor objects preserves ``ByteSpan`` ownership state:
+Moving model/tensor objects preserves :cpp:class:`~onnx_light::utils::ByteSpan` ownership state:
 
 * owned buffers remain owned by the destination object,
 * borrowed pointers remain borrowed,
@@ -190,7 +190,7 @@ This means:
 
 * In **copy scenarios**, model data remains owned by model objects.
 * In **no-copy external-data scenarios**, data remains valid after the
-  ``TwoFilesStream`` parser object is destroyed because each tensor keeps a
+  :cpp:class:`~onnx_light::utils::TwoFilesStream` parser object is destroyed because each tensor keeps a
   shared owner token for the mapped buffer.
 * In **no-copy inline-bytes scenarios**, tensors still depend on the original
   caller-provided bytes object lifetime.

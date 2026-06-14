@@ -285,7 +285,8 @@ TEST(onnx_helper, CollectRemainingInputsPrunesDeadBranches) {
   // ``w`` never appears because the ``Neg`` node does not contribute to ``final``.
   EXPECT_EQ(remaining[0], std::vector<std::string>({"x", "y", "z"}));
   EXPECT_EQ(remaining[1], std::vector<std::string>({"t", "z", "x"}));
-  // The dead node itself is not relevant, so nothing is required before it.
+  // Before the dead ``Neg`` node, the inputs still required are those of the
+  // remaining relevant nodes (the final ``Add``), not of the dead node itself.
   EXPECT_EQ(remaining[2], std::vector<std::string>({"out", "x"}));
   EXPECT_EQ(remaining[3], std::vector<std::string>({"out", "x"}));
 }

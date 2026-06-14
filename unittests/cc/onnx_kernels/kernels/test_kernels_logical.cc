@@ -326,6 +326,7 @@ TEST(KernelClass, LessClassMatchesReferenceInt32) {
   Tensor y = Tensor::FromInt32("", {4}, {-1, 0, 1, 9});
   Tensor z = less_kernel(x, y);
   ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
   EXPECT_EQ(z.data[0], 1);
   EXPECT_EQ(z.data[1], 0);
   EXPECT_EQ(z.data[2], 0);

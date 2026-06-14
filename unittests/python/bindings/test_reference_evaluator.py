@@ -166,6 +166,26 @@ class TestReferenceEvaluator(ExtTestCase):
         self.assertIn("Missing input", str(ctx.exception))
         self.assertIn("z", str(ctx.exception))
 
+    def test_run_reuses_context_across_calls(self):
+        # The RuntimeContext is built once in the constructor and reused for
+        # every run(). Repeated runs with different inputs must therefore
+        # produce independent, correct results (the per-run state is reset).
+        model = parser.parse_model(_ABS_ADD_MODEL_SRC)
+        sess = ReferenceEvaluator(model)
+        x1 = np.array([-1.0, 2.0, -3.0], dtype=np.float32)
+        z1 = np.array([10.0, 20.0, 30.0], dtype=np.float32)
+        (y1,) = sess.run(None, {"x": x1, "z": z1})
+        self.assertEqualArray(y1, np.abs(x1) + z1)
+
+        x2 = np.array([4.0, -5.0, 6.0], dtype=np.float32)
+        z2 = np.array([-1.0, -2.0, -3.0], dtype=np.float32)
+        (y2,) = sess.run(None, {"x": x2, "z": z2})
+        self.assertEqualArray(y2, np.abs(x2) + z2)
+
+        # Running the first feed again still yields the original result.
+        (y1b,) = sess.run(None, {"x": x1, "z": z1})
+        self.assertEqualArray(y1b, np.abs(x1) + z1)
+
     def test_release_intermediates_removes_unused_and_logs_event(self):
         # With release_intermediates=True, the intermediate "t" is removed
         # from the runtime context as soon as the last node that references

@@ -136,6 +136,11 @@ class TestRunNodesBindings(ExtTestCase):
         self.assertEqual(d0["values"], [1.0, -2.0])
         self.assertEqual(d0["string_values"], [])
         self.assertEqual(d0["timestamp_ns"], events[0].timestamp_ns)
+        # ``set`` defaults to the ``input`` kind: node_index = -1, CPU device.
+        self.assertEqual(d0["node_index"], -1)
+        self.assertEqual(d0["device"], -1)
+        self.assertEqual(events[0].node_index, -1)
+        self.assertEqual(events[0].device, -1)
 
         ctx.clear_events()
         self.assertEqual(ctx.events(), [])
@@ -188,6 +193,18 @@ class TestRunNodesBindings(ExtTestCase):
         self.assertEqual(d["op_domain"], "ai.onnx")
         self.assertEqual(d["inputs"], ["x"])
         self.assertEqual(d["duration_ns"], run_node_events[0].duration_ns)
+
+        # ``node_index`` tags inputs with ``-1`` and intermediates / run_node
+        # events with the index of the producing node; ``device`` is ``-1``
+        # (CPU) for the reference runtime.
+        node_indices = [(e.action, e.name, e.node_index) for e in events]
+        self.assertEqual(
+            node_indices,
+            [("add", "t", 0), ("run_node", "", 0), ("add", "y", 1), ("run_node", "", 1)],
+        )
+        self.assertTrue(all(e.device == -1 for e in events))
+        self.assertEqual(d["node_index"], 0)
+        self.assertEqual(d["device"], -1)
 
     def test_run_model_abs_then_add(self):
         model = parser.parse_model(_MODEL_SRC)

@@ -158,7 +158,7 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
   child.functions() = rt.functions();
   child.tensors() = rt.tensors();
   for (const auto &kv : bindings) {
-    child.Put(kv.first, kv.second, TensorEventKind::kInput);
+    child.Put(kv.first, kv.second, RuntimeEventKind::kInput);
   }
   RunGraph(graph, child);
 
@@ -194,7 +194,7 @@ void PropagateOutputsToCaller(const NodeProto &node, const std::vector<Tensor> &
     }
     Tensor t = outputs[i];
     t.name = caller_name;
-    rt.Put(caller_name, std::move(t), TensorEventKind::kOutput);
+    rt.Put(caller_name, std::move(t), RuntimeEventKind::kOutput);
   }
 }
 
@@ -244,8 +244,8 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
 
     const std::string &iter_name = body.input(0).name().as_string();
     const std::string &cond_name = body.input(1).name().as_string();
-    child.Put(iter_name, MakeInt64Scalar(iter_name, iter), TensorEventKind::kInput);
-    child.Put(cond_name, MakeBoolScalar(cond_name, cond_value), TensorEventKind::kInput);
+    child.Put(iter_name, MakeInt64Scalar(iter_name, iter), RuntimeEventKind::kInput);
+    child.Put(cond_name, MakeBoolScalar(cond_name, cond_value), RuntimeEventKind::kInput);
     for (std::size_t i = 0; i < n; ++i) {
       const std::string &bname = body.input(static_cast<int>(2 + i)).name().as_string();
       if (is_seq_state[i]) {
@@ -253,7 +253,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
       } else {
         Tensor t = tensor_state[i];
         t.name = bname;
-        child.Put(bname, std::move(t), TensorEventKind::kInput);
+        child.Put(bname, std::move(t), RuntimeEventKind::kInput);
       }
     }
     RunGraph(body, child);
@@ -308,7 +308,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
     } else {
       Tensor t = tensor_state[i];
       t.name = caller_name;
-      rt.Put(caller_name, std::move(t), TensorEventKind::kOutput);
+      rt.Put(caller_name, std::move(t), RuntimeEventKind::kOutput);
     }
   }
 
@@ -366,7 +366,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
         stacked.shape.insert(stacked.shape.end(), per_iter_shape.begin(), per_iter_shape.end());
       }
     }
-    rt.Put(caller_name, std::move(stacked), TensorEventKind::kOutput);
+    rt.Put(caller_name, std::move(stacked), RuntimeEventKind::kOutput);
   }
 }
 
@@ -839,7 +839,7 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
     }
     Tensor bound = it->second;
     bound.name = param_name;
-    child.Put(param_name, std::move(bound), TensorEventKind::kInput);
+    child.Put(param_name, std::move(bound), RuntimeEventKind::kInput);
   }
 
   // Resolve attribute references (``ref_attr_name``) inside the
@@ -882,7 +882,7 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
     }
     Tensor result = std::move(it->second);
     result.name = caller_name;
-    rt.Put(caller_name, std::move(result), TensorEventKind::kOutput);
+    rt.Put(caller_name, std::move(result), RuntimeEventKind::kOutput);
   }
 }
 
@@ -976,17 +976,21 @@ namespace {
 template <class NodeRange>
 void RunNodesAndRelease(const NodeRange &nodes, RuntimeContext &rt, const ExecutionPlan &plan) {
   for (size_t i = 0; i < nodes.size(); ++i) {
+    rt.set_current_node_index(static_cast<int64_t>(i));
     RunNode(nodes[i], rt);
     plan.ReleaseAfter(nodes[i], rt);
   }
+  rt.set_current_node_index(-1);
 }
 
 } // namespace
 
 void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext &rt) {
   for (size_t i = 0; i < nodes.size(); ++i) {
+    rt.set_current_node_index(static_cast<int64_t>(i));
     RunNode(nodes[i], rt);
   }
+  rt.set_current_node_index(-1);
 }
 
 void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext &rt,
@@ -1003,7 +1007,7 @@ void RunGraph(const GraphProto &graph, RuntimeContext &rt) {
     // Only insert if the caller has not already provided a value for this
     // name (i.e. runtime overrides of initializers are respected).
     if (!rt.Has(init_name)) {
-      rt.Set(init_name, TensorFromProto(tp), TensorEventKind::kInitializer);
+      rt.Set(init_name, TensorFromProto(tp), RuntimeEventKind::kInitializer);
     }
   }
   if (!rt.release_intermediates()) {

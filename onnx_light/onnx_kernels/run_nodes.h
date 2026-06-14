@@ -145,9 +145,12 @@ void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext 
  * or any other container — not only ``RepeatedProtoField``.
  */
 template <class InputIt> void RunNodes(InputIt first, InputIt last, RuntimeContext &rt) {
-  for (auto it = first; it != last; ++it) {
+  int64_t index = 0;
+  for (auto it = first; it != last; ++it, ++index) {
+    rt.set_current_node_index(index);
     RunNode(*it, rt);
   }
+  rt.set_current_node_index(-1);
 }
 
 /**

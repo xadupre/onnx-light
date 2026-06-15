@@ -4,6 +4,8 @@ This replicates the current Python API of the onnx package.
 
 from __future__ import annotations
 
+from .. import __version__  # noqa: F401
+
 from ..onnx_py._onnxpyprotoop import (  # type: ignore # noqa: F401
     AttributeProto,
     DeviceConfigurationProto,

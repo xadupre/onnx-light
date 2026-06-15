@@ -40,13 +40,10 @@ jobs:
             runs-on: windows-11-arm
             archive_ext: zip
           # ── macOS ──────────────────────────────────────────────────────────
-          - artifact_suffix: macos-arm64
+          - artifact_suffix: macos-universal2
             runs-on: macos-latest
-            macosx_deployment_target: "15.0"
-            archive_ext: tar.gz
-          - artifact_suffix: macos-x86_64
-            runs-on: macos-13
             macosx_deployment_target: "13.0"
+            macosx_architectures: "arm64;x86_64"
             archive_ext: tar.gz
 
     steps:
@@ -66,10 +63,14 @@ jobs:
         shell: bash
         env:
           MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macosx_deployment_target || '' }}
+          MACOSX_ARCHITECTURES: ${{ matrix.macosx_architectures || '' }}
         run: |
           extra_args=""
           if [ -n "${MACOSX_DEPLOYMENT_TARGET}" ]; then
             extra_args="-DCMAKE_OSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET}"
+          fi
+          if [ -n "${MACOSX_ARCHITECTURES}" ]; then
+            extra_args="${extra_args} -DCMAKE_OSX_ARCHITECTURES=${MACOSX_ARCHITECTURES}"
           fi
           cmake -S . -B build/cpp \
             -DCMAKE_BUILD_TYPE=Release \

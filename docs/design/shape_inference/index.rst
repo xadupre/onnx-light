@@ -15,6 +15,7 @@ expectations.
 
     expressions
     constraints
+    events
     inference_coverage
 
 Overview
@@ -117,6 +118,16 @@ the context. Constraints let the final renaming pass unify the symbols
 emitted by per-operator inference with the names the model author
 declared on the graph boundary. The constraint store and its propagation
 are described in :ref:`l-design-shape-constraints`.
+
+Tracing inference
+-----------------
+
+:cpp:class:`ShapesContext` carries an opt-in event log: when
+``events_enabled`` is set, every descriptor insertion/replacement, every
+node dispatch and every recorded constraint is appended as a
+:cpp:class:`ShapeEvent`. Replaying that log is the easiest way to see
+which node produced a given dimension or where an inference error
+originates. The log is described in :ref:`l-design-shape-events`.
 
 Coverage
 --------

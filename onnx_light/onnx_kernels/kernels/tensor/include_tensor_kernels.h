@@ -73,7 +73,9 @@ class Cast : public KernelBase {
 public:
   using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, int32_t to) const;
+  Tensor operator()(const Tensor &x, int32_t to, bool saturate) const;
   void operator()(const Tensor &x, int32_t to, Tensor &output) const;
+  void operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output) const;
 
   /// Output element type may differ from the input element type, so storage
   /// can not be shared in general.

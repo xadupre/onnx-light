@@ -748,7 +748,19 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          SetOutput(node, 0, std::move(output), rt);
          SetOutput(node, 1, std::move(present_state), rt);
        }},
-      {"ai.onnx:Cast", MakeUnaryToTrampoline<kernel::Cast>()},
+      {"ai.onnx:Cast",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const int32_t to = static_cast<int32_t>(GetAttributeIntOrDefault(node, "to", -1));
+         if (to < 0) {
+           throw std::invalid_argument("RunNode: Cast requires INT attribute 'to'.");
+         }
+         const bool saturate = GetAttributeIntOrDefault(node, "saturate", 1) != 0;
+         kernel::Cast kernel(rt.kernel_ctx());
+         SetOutput(node, 0, kernel(x, to, saturate), rt);
+       }},
       {"ai.onnx:CastLike",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 2);

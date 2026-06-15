@@ -61,6 +61,18 @@ float Float8E5M2FNUZBitsToFloat(std::uint8_t bits) noexcept;
 std::uint8_t FloatToFloat8E8M0Bits(float v) noexcept;
 float Float8E8M0BitsToFloat(std::uint8_t bits) noexcept;
 
+// -------------------------------------------------------------------------
+// Non-saturating variants.
+//
+// When ``saturate=0``, values that overflow the destination range (or
+// +/-infinity for FN/FNUZ types) become NaN (for types without infinity)
+// or +/-infinity (for E5M2 which supports it).
+// -------------------------------------------------------------------------
+std::uint8_t FloatToFloat8E4M3FNBitsNoSaturate(float v) noexcept;
+std::uint8_t FloatToFloat8E4M3FNUZBitsNoSaturate(float v) noexcept;
+std::uint8_t FloatToFloat8E5M2BitsNoSaturate(float v) noexcept;
+std::uint8_t FloatToFloat8E5M2FNUZBitsNoSaturate(float v) noexcept;
+
 } // namespace kernel
 } // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

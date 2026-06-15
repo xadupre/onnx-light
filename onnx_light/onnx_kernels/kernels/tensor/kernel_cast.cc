@@ -96,22 +96,40 @@ bool IsSupportedCastDtype(int32_t dtype) {
   return static_cast<DataType>(dtype) == DataType::STRING;
 }
 
-// Float ↔ float8 round-trip. ``saturate`` semantics are hard-coded to ``true``
-// to match the default ``Cast`` attribute used by the registered cases.
-std::uint8_t FloatToFloat8Bits(float v, int32_t to) {
-  switch (static_cast<DataType>(to)) {
-  case DataType::FLOAT8E4M3FN:
-    return FloatToFloat8E4M3FNBits(v);
-  case DataType::FLOAT8E4M3FNUZ:
-    return FloatToFloat8E4M3FNUZBits(v);
-  case DataType::FLOAT8E5M2:
-    return FloatToFloat8E5M2Bits(v);
-  case DataType::FLOAT8E5M2FNUZ:
-    return FloatToFloat8E5M2FNUZBits(v);
-  case DataType::FLOAT8E8M0:
-    return FloatToFloat8E8M0Bits(v);
-  default:
-    throw std::invalid_argument("kernel::Cast: unsupported float8 'to' dtype.");
+// Float ↔ float8 round-trip. When ``saturate`` is true (default Cast
+// attribute), overflow maps to the largest finite magnitude. When false,
+// overflow maps to NaN (FN/FNUZ types) or infinity (E5M2).
+std::uint8_t FloatToFloat8Bits(float v, int32_t to, bool saturate) {
+  if (saturate) {
+    switch (static_cast<DataType>(to)) {
+    case DataType::FLOAT8E4M3FN:
+      return FloatToFloat8E4M3FNBits(v);
+    case DataType::FLOAT8E4M3FNUZ:
+      return FloatToFloat8E4M3FNUZBits(v);
+    case DataType::FLOAT8E5M2:
+      return FloatToFloat8E5M2Bits(v);
+    case DataType::FLOAT8E5M2FNUZ:
+      return FloatToFloat8E5M2FNUZBits(v);
+    case DataType::FLOAT8E8M0:
+      return FloatToFloat8E8M0Bits(v);
+    default:
+      throw std::invalid_argument("kernel::Cast: unsupported float8 'to' dtype.");
+    }
+  } else {
+    switch (static_cast<DataType>(to)) {
+    case DataType::FLOAT8E4M3FN:
+      return FloatToFloat8E4M3FNBitsNoSaturate(v);
+    case DataType::FLOAT8E4M3FNUZ:
+      return FloatToFloat8E4M3FNUZBitsNoSaturate(v);
+    case DataType::FLOAT8E5M2:
+      return FloatToFloat8E5M2BitsNoSaturate(v);
+    case DataType::FLOAT8E5M2FNUZ:
+      return FloatToFloat8E5M2FNUZBitsNoSaturate(v);
+    case DataType::FLOAT8E8M0:
+      return FloatToFloat8E8M0Bits(v); // E8M0 has no non-saturate variant
+    default:
+      throw std::invalid_argument("kernel::Cast: unsupported float8 'to' dtype.");
+    }
   }
 }
 
@@ -334,7 +352,9 @@ double ParseAsDouble(const std::string &s) {
 
 } // namespace
 
-Tensor Cast::operator()(const Tensor &x, int32_t to) const {
+Tensor Cast::operator()(const Tensor &x, int32_t to) const { return (*this)(x, to, true); }
+
+Tensor Cast::operator()(const Tensor &x, int32_t to, bool saturate) const {
   EXT_ENFORCE_INVALID(
       IsSupportedCastDtype(to), "kernel::Cast: unsupported 'to' dtype ", std::to_string(to),
       " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
@@ -343,16 +363,20 @@ Tensor Cast::operator()(const Tensor &x, int32_t to) const {
   if (static_cast<DataType>(to) == DataType::STRING) {
     Tensor out = Tensor::MakeString(
         "", x.shape, std::vector<std::string>(static_cast<size_t>(x.element_count())));
-    (*this)(x, to, out);
+    (*this)(x, to, saturate, out);
     return out;
   }
   const size_t out_bytes = PackedByteSize(to, x.element_count());
   Tensor out("", to, x.shape, std::vector<uint8_t>(out_bytes));
-  (*this)(x, to, out);
+  (*this)(x, to, saturate, out);
   return out;
 }
 
 void Cast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
+  (*this)(x, to, true, output);
+}
+
+void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output) const {
   EXT_ENFORCE_INVALID(
       IsSupportedCastDtype(x.data_type), "kernel::Cast: unsupported input dtype ",
       std::to_string(x.data_type),
@@ -538,7 +562,7 @@ void Cast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
       uint8_t *dst = output.data.data();
       for (int64_t i = 0; i < n; ++i) {
         const float v = static_cast<float>(LoadAsDouble(x, i));
-        dst[i] = FloatToFloat8Bits(v, to);
+        dst[i] = FloatToFloat8Bits(v, to, saturate);
       }
     } else {
       const uint8_t *src = x.bytes();

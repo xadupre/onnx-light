@@ -792,12 +792,39 @@ TEST(KernelClass, MaxPoolWithIndices) {
   EXPECT_EQ(pi[24], 24);
 }
 
-TEST(KernelClass, MaxPoolRejectsNonRowMajorStorageOrder) {
+TEST(KernelClass, MaxPoolWithIndicesColumnMajorStorageOrder) {
+  // mirrors test_maxpool_with_argmax_2d_precomputed_strides (storage_order=1).
+  const KernelContext ctx{DefaultOpset(22)};
+  MaxPool pool{ctx};
+  Tensor x = Tensor::FromFloat("", {1, 1, 5, 5},
+                               {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
+                                10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f,
+                                19.0f, 20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f});
+  auto yz = pool.WithIndices(x, /*kernel_shape=*/{2, 2}, /*strides=*/{2, 2}, /*pads=*/{},
+                             /*ceil_mode=*/false, /*dilations=*/{}, /*storage_order=*/1);
+  const Tensor &y = yz.first;
+  const Tensor &indices = yz.second;
+  const std::vector<int64_t> expected_shape = {1, 1, 2, 2};
+  EXPECT_EQ(y.shape, expected_shape);
+  EXPECT_EQ(indices.shape, expected_shape);
+  ASSERT_EQ(indices.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
+  const float *py = y.AsFloat();
+  const int64_t *pi = indices.AsInt64();
+  const std::vector<float> expected_y = {7.0f, 9.0f, 17.0f, 19.0f};
+  // Column-major flat indices into the 5x5 plane: col * height + row.
+  const std::vector<int64_t> expected_i = {6, 16, 8, 18};
+  for (size_t i = 0; i < expected_y.size(); ++i) {
+    EXPECT_FLOAT_EQ(py[i], expected_y[i]);
+    EXPECT_EQ(pi[i], expected_i[i]);
+  }
+}
+
+TEST(KernelClass, MaxPoolRejectsInvalidStorageOrder) {
   const KernelContext ctx{DefaultOpset(22)};
   MaxPool pool{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   EXPECT_THROW(pool(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
-                    /*ceil_mode=*/false, /*dilations=*/{}, /*storage_order=*/1),
+                    /*ceil_mode=*/false, /*dilations=*/{}, /*storage_order=*/2),
                std::invalid_argument);
 }
 

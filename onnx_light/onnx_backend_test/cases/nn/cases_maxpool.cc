@@ -61,8 +61,7 @@ std::vector<float> Range1ToN(int64_t n) {
 //     ``Indices`` is verified.
 //   * ``test_cc_maxpool_with_argmax_2d_precomputed_strides`` — second output
 //     ``Indices`` is verified for ``storage_order = 1`` (column-major flat
-//     indices). Expected values are hardcoded because
-//     :cpp:class:`kernel::MaxPool` only supports row-major indices.
+//     indices), which :cpp:class:`kernel::MaxPool` now supports.
 //
 // Inputs that are deterministic in the reference suite (the precomputed
 // cases and the small ceil/dilations cases) reuse the same ``1..N`` ramp;
@@ -411,9 +410,7 @@ void RegisterMaxPoolCases(std::vector<TestCase> &registry) {
   }
 
   // 2x2 kernel, strides (2, 2), ``storage_order = 1`` (column-major
-  // indices), ``Indices`` second output verified. Expected values are
-  // hardcoded since :cpp:class:`kernel::MaxPool` only supports row-major
-  // indices.
+  // indices), ``Indices`` second output verified.
   {
     NodeProto node;
     node.set_op_type("MaxPool");

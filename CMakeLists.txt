@@ -768,6 +768,12 @@ if(ONNX_LIGHT_INSTALL)
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
   )
 
+  # Install public headers from onnx_light/onnx_lib/shape_inference
+  install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/shape_inference/"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_lib/shape_inference"
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+  )
+
   # Install public headers from onnx_light/onnx_op
   install(DIRECTORY "${ONNX_OP_PATH}/"
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_op"

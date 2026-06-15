@@ -184,10 +184,8 @@ LightOpSchema MakeAffineGridSchema(int since_version) {
       },
       {
           {"align_corners",
-           "if align_corners=1, consider -1 and 1 to refer to the centers of the corner "
-           "pixels. "
-           "if align_corners=0, consider -1 and 1 to refer to the outer edge the corner "
-           "pixels.",
+           "if align_corners=1, consider -1 and 1 to refer to the centers of the corner pixels. "
+           "if align_corners=0, consider -1 and 1 to refer to the outer edge the corner pixels.",
            AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)},
       },
       /*has_function_implementation=*/true);

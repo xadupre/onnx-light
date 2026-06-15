@@ -296,6 +296,44 @@ void QuantizeBlockLoop(const Tensor &x, const float *scales, const ZP *zp_data,
   }
 }
 
+// Per-block quantization for INT2/UINT2 packed output.
+void QuantizeBlockInt2Loop(const Tensor &x, const float *scales, const std::uint8_t *zp_bytes,
+                           int32_t out_dtype, const int64_t *scale_index, Tensor &output) {
+  const float *px = x.AsFloat();
+  std::uint8_t *py = output.data.data();
+  const int64_t n = x.element_count();
+  const bool is_signed = (static_cast<DataType>(out_dtype) == DataType::INT2);
+  const float kMin = is_signed ? -2.0f : 0.0f;
+  const float kMax = is_signed ? 1.0f : 3.0f;
+  for (int64_t i = 0; i < n; ++i) {
+    const int64_t si = scale_index[i];
+    const std::uint8_t zp_bits = Read2BitElement(zp_bytes, si);
+    const float zp = is_signed ? static_cast<float>(Int2BitsToInt8(zp_bits))
+                               : static_cast<float>(Uint2BitsToUint8(zp_bits));
+    float v = RoundHalfToEven(px[i] / scales[si]) + zp;
+    if (v < kMin) {
+      v = kMin;
+    } else if (v > kMax) {
+      v = kMax;
+    }
+    Write2BitElement(py, i, static_cast<std::uint8_t>(static_cast<int32_t>(v)) & 0x03u);
+  }
+}
+
+// Per-block quantization for FLOAT4E2M1 packed output.
+void QuantizeBlockFloat4E2M1Loop(const Tensor &x, const float *scales, const std::uint8_t *zp_bytes,
+                                 const int64_t *scale_index, Tensor &output) {
+  const float *px = x.AsFloat();
+  std::uint8_t *py = output.data.data();
+  const int64_t n = x.element_count();
+  for (int64_t i = 0; i < n; ++i) {
+    const int64_t si = scale_index[i];
+    const float zp = Float4E2M1NibbleToFloat(Read4BitElement(zp_bytes, si));
+    const float v = px[i] / scales[si] + zp;
+    Write4BitElement(py, i, FloatRoundToFloat4E2M1Nibble(v));
+  }
+}
+
 // Per-block quantization for INT4/UINT4 packed output.
 void QuantizeBlockInt4Loop(const Tensor &x, const float *scales, const std::uint8_t *zp_bytes,
                            int32_t out_dtype, const int64_t *scale_index, Tensor &output) {
@@ -574,6 +612,13 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
   case static_cast<int32_t>(DataType::INT4):
   case static_cast<int32_t>(DataType::UINT4):
     QuantizeBlockInt4Loop(x, scales, zp_bytes, output.data_type, idx, output);
+    break;
+  case static_cast<int32_t>(DataType::INT2):
+  case static_cast<int32_t>(DataType::UINT2):
+    QuantizeBlockInt2Loop(x, scales, zp_bytes, output.data_type, idx, output);
+    break;
+  case static_cast<int32_t>(DataType::FLOAT4E2M1):
+    QuantizeBlockFloat4E2M1Loop(x, scales, zp_bytes, idx, output);
     break;
   default:
     EXT_THROW_INVALID("unsupported data type ", output.data_type, ", ",

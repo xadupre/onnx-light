@@ -80,6 +80,7 @@ instance/
 # Sphinx documentation
 docs/_build/
 docs/auto_examples
+docs/examples/backend/plot*.png
 docs/examples/core/plot*.png
 docs/sg_execution_times.rst
 docs/operators/

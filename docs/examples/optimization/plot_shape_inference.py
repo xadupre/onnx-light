@@ -61,6 +61,7 @@ from onnx_light.onnx_optim.shape_inference import (
     OptimTensor,
     ShapesContext,
 )
+from onnx_light.tools import pretty_onnx
 
 # Make sure the built-in operator schemas are registered before running
 # shape inference (the C++ dispatch table looks them up).
@@ -99,6 +100,11 @@ model = oh.make_model(
 
 # Ordered list of intermediate / output tensors to track.
 TRACKED = ["added", "concat_out", "Z"]
+
+# %%
+# The model.
+
+print(pretty_onnx(model))
 
 
 # ---------------------------------------------------------------------------
@@ -247,6 +253,13 @@ if nonzero_case is None:
 case_model = onnxl.ModelProto()
 case_model.CopyFrom(nonzero_case.model)
 
+# %%
+# Prints the model.
+print(pretty_onnx(case_model))
+
+# %%
+# Shape inference now.
+
 events_ctx = ShapesContext()
 events_ctx.events_enabled = True
 compute_shape_model(events_ctx, case_model, prefill_with_value_info_output=True)
@@ -261,7 +274,10 @@ print("  first events:")
 for ev in shape_events:
     d = ev.as_dict()
     op = f"{d['op_domain']}::{d['op_type']}" if d["op_type"] else "-"
-    print(f"    {d['action']:<12s} name={d['name']:<16s} shape={d['shape']!s:<16s} op={op}")
+    print(
+        f"    {d['node_index']:<2d}:{d['action']:<12s} "
+        f"name={d['name']:<16s} shape={d['shape']!s:<16s} op={op}"
+    )
 
 
 #####################################

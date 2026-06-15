@@ -474,6 +474,13 @@ ORT_EXCLUDE_REGEX = [
     # shape. The forward / inverse / forward-onesided variants are exercised
     # separately by the other ``test_cc_dft_*`` cases.
     r"^test_cc_dft_irfft(_opset19|_roundtrip|_roundtrip_opset19)?$",
+    # ORT does not support Optional loop-carried state in this graph structure.
+    r"^test_cc_loop16_seq_none$",
+    # ORT does not support these Sequence/Optional graph patterns.
+    r"^test_cc_identity_sequence$",
+    r"^test_cc_identity_opt$",
+    r"^test_cc_if_seq$",
+    r"^test_cc_if_opt$",
     # See note above on the ``Squeeze`` optional ``axes`` input.
     r"^test_cc_squeeze_empty_axes_name$",
 ]

@@ -52,7 +52,7 @@ jobs:
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
 
       - name: Build and install package in pixi environment
-        run: pixi run -e ${{ matrix.environment }} pip install --no-build-isolation -e .
+        run: pixi run -e ${{ matrix.environment }} pip install --no-build-isolation -e . -v
 
       - name: pip freeze
         run: pixi run -e ${{ matrix.environment }} pip freeze

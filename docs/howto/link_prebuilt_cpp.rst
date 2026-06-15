@@ -53,12 +53,9 @@ Where ``<platform>-<arch>`` is one of:
     * - ``windows-ARM64.zip``
       - Windows ARM64
       - Built with MSVC, ``.lib`` static archives
-    * - ``macos-arm64.tar.gz``
-      - macOS Apple Silicon
-      - Built on macOS 15 (Clang, static libs)
-    * - ``macos-x86_64.tar.gz``
-      - macOS Intel
-      - Built on macOS 13 (Clang, static libs)
+    * - ``macos-universal2.tar.gz``
+      - macOS Apple Silicon & Intel
+      - Universal binary (arm64 + x86_64), built on macOS (Clang, static libs)
 
 Step 1 – Download and extract
 ------------------------------

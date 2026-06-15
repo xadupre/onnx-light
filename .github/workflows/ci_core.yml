@@ -79,7 +79,7 @@ jobs:
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}"
 
       - name: Build and Install package
-        run: pip install -Cbuild-dir=build -e .[dev]
+        run: pip install -Cbuild-dir=build -e .[dev] -v
 
       - name: uninstall onnx
         run: pip uninstall -y onnx

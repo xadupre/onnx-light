@@ -9,6 +9,18 @@ onnx-light
     :target: https://github.com/xadupre/onnx-light/actions/workflows/build.yml
     :alt: build
 
+.. image:: https://github.com/xadupre/onnx-light/actions/workflows/release_cpp_artifacts.yml/badge.svg
+    :target: https://github.com/xadupre/onnx-light/actions/workflows/release_cpp_artifacts.yml
+    :alt: Build C++ Release Artifacts
+
+.. image:: https://github.com/xadupre/onnx-light/actions/workflows/cq_asan_ubsan.yml/badge.svg
+    :target: https://github.com/xadupre/onnx-light/actions/workflows/cq_asan_ubsan.yml
+    :alt: asan-ubsan
+
+.. image:: https://github.com/xadupre/onnx-light/actions/workflows/cq_fuzz.yml/badge.svg
+    :target: https://github.com/xadupre/onnx-light/actions/workflows/cq_fuzz.yml
+    :alt: fuzz
+
 .. image:: https://github.com/xadupre/onnx-light/actions/workflows/mypy.yml/badge.svg
     :target: https://github.com/xadupre/onnx-light/actions/workflows/mypy.yml
     :alt: mypy

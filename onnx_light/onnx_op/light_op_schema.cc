@@ -474,7 +474,8 @@ std::vector<LightOpSchema> StripDocs(const std::vector<LightOpSchema> &schemas) 
                            /*init_doc=*/false);
     stripped.set_min_output(s.min_output())
         .set_max_output(s.max_output())
-        .set_deprecated(s.deprecated());
+        .set_deprecated(s.deprecated())
+        .set_node_determinism(s.node_determinism());
     result.emplace_back(std::move(stripped));
   }
   return result;

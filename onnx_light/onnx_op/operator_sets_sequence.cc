@@ -182,20 +182,22 @@ std::vector<LightOpSchema> GetAllOnnxOpSequenceSchemasWithHistory(const std::str
        }},
       {"SequenceMap",
        [] {
-         return std::vector<LightOpSchema>{LightOpSchema(
-             "SequenceMap", kOnnxDomain, 17, MakeSequenceMapDoc(),
-             {
-                 {"input_sequence", "Input sequence.", "S"},
-                 {"additional_inputs", "Additional inputs to the graph", "V"},
-             },
-             {
-                 {"out_sequence", "Output sequence(s)", "S"},
-             },
-             {
-                 {"S", AllTensorSequenceTypes(), "Constrain input types to any sequence type."},
-                 {"V", AllTensorOrSequenceTypes(), "Constrain to any tensor or sequence type."},
-             },
-             /*has_function_implementation=*/true)};
+         return std::vector<LightOpSchema>{
+             LightOpSchema(
+                 "SequenceMap", kOnnxDomain, 17, MakeSequenceMapDoc(),
+                 {
+                     {"input_sequence", "Input sequence.", "S"},
+                     {"additional_inputs", "Additional inputs to the graph", "V"},
+                 },
+                 {
+                     {"out_sequence", "Output sequence(s)", "S"},
+                 },
+                 {
+                     {"S", AllTensorSequenceTypes(), "Constrain input types to any sequence type."},
+                     {"V", AllTensorOrSequenceTypes(), "Constrain to any tensor or sequence type."},
+                 },
+                 /*has_function_implementation=*/true)
+                 .set_node_determinism(LightOpSchema::NodeDeterminism::NonDeterministic)};
        }},
       {"SplitToSequence",
        [] {

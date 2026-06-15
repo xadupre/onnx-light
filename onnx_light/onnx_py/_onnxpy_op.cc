@@ -207,10 +207,19 @@ void AddOnnxPyOp(nb::module_ &m) {
         return os.str();
       });
 
-  nb::class_<onnx_op::LightOpSchema>(
+  auto light_op_schema = nb::class_<onnx_op::LightOpSchema>(
       onnx_op_mod, "LightOpSchema",
       "Lightweight read-only description of an ONNX operator schema at one specific "
-      "opset version.")
+      "opset version.");
+
+  nb::enum_<onnx_op::LightOpSchema::NodeDeterminism>(
+      light_op_schema, "NodeDeterminism",
+      "Whether evaluating the operator produces deterministic outputs.")
+      .value("Unknown", onnx_op::LightOpSchema::NodeDeterminism::Unknown)
+      .value("NonDeterministic", onnx_op::LightOpSchema::NodeDeterminism::NonDeterministic)
+      .value("Deterministic", onnx_op::LightOpSchema::NodeDeterminism::Deterministic);
+
+  light_op_schema
       .def(nb::init<std::string, std::string, int, std::string,
                     std::vector<onnx_op::FormalParameter>, std::vector<onnx_op::FormalParameter>,
                     std::vector<onnx_op::TypeConstraintParam>, bool>(),
@@ -241,6 +250,11 @@ void AddOnnxPyOp(nb::module_ &m) {
                    "``INT_MAX`` for unbounded variadic outputs).")
       .def_prop_ro("deprecated", &onnx_op::LightOpSchema::deprecated,
                    "True if this versioned operator is deprecated.")
+      .def_prop_ro("node_determinism", &onnx_op::LightOpSchema::node_determinism,
+                   "Node determinism of the operator (``NodeDeterminism.Unknown`` when "
+                   "unspecified).")
+      .def_prop_ro("non_deterministic", &onnx_op::LightOpSchema::non_deterministic,
+                   "True if the operator is explicitly marked non-deterministic.")
       .def("set_min_output", &onnx_op::LightOpSchema::set_min_output, nb::arg("value"),
            nb::rv_policy::reference_internal,
            "Sets the minimum number of outputs and returns ``self``.")
@@ -250,6 +264,9 @@ void AddOnnxPyOp(nb::module_ &m) {
       .def("set_deprecated", &onnx_op::LightOpSchema::set_deprecated, nb::arg("value") = true,
            nb::rv_policy::reference_internal,
            "Marks this operator as deprecated and returns ``self``.")
+      .def("set_node_determinism", &onnx_op::LightOpSchema::set_node_determinism, nb::arg("value"),
+           nb::rv_policy::reference_internal,
+           "Sets the operator's node determinism and returns ``self``.")
       .def("__repr__", [](const onnx_op::LightOpSchema &s) {
         const auto list_repr = [](const auto &items) {
           std::ostringstream os;
@@ -262,6 +279,16 @@ void AddOnnxPyOp(nb::module_ &m) {
           os << "]";
           return os.str();
         };
+        const auto determinism_name = [](onnx_op::LightOpSchema::NodeDeterminism nd) {
+          switch (nd) {
+          case onnx_op::LightOpSchema::NodeDeterminism::NonDeterministic:
+            return "NonDeterministic";
+          case onnx_op::LightOpSchema::NodeDeterminism::Deterministic:
+            return "Deterministic";
+          default:
+            return "Unknown";
+          }
+        };
         std::ostringstream os;
         os << "LightOpSchema(name=" << ToPythonRepr(s.name())
            << ", domain=" << ToPythonRepr(s.domain()) << ", since_version=" << s.since_version()
@@ -270,7 +297,9 @@ void AddOnnxPyOp(nb::module_ &m) {
            << ", attributes=" << list_repr(s.attributes()) << ", has_function_implementation="
            << (s.has_function_implementation() ? "True" : "False")
            << ", min_output=" << s.min_output() << ", max_output=" << s.max_output()
-           << ", deprecated=" << (s.deprecated() ? "True" : "False") << ")";
+           << ", deprecated=" << (s.deprecated() ? "True" : "False")
+           << ", node_determinism=NodeDeterminism." << determinism_name(s.node_determinism())
+           << ")";
         return os.str();
       });
 

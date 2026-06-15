@@ -32,7 +32,10 @@ hot path. Enable it on the context before running inference:
     ctx = ShapesContext()
     ctx.events_enabled = True
     ctx.compute_shape_model(model, prefill_with_value_info_output=True)
-    ctx.apply_inferred_shapes_to_model(model)
+    # Next method populates the original model with the inferred shapes.
+    # ctx.apply_inferred_shapes_to_model(model)
+    # But that's not needed to get the event series.
+    # Shapes are available with ``ctx.get(name)``
 
     for ev in ctx.events():
         print(ev)

@@ -118,6 +118,11 @@ steps.
             tensor = ctx.get(name)  # OptimTensor: element type + shape
         # ctx.apply_inferred_shapes_to_model(model)  # optional value_info write-back
 
+This bascially implements function :func:`onnx_light.onnx_optim.shape_inference.infer_shapes_model`
+which does not return a context but populates missing ``value_info`` in the original model.
+Class :class:`~onnx_light.onnx_optim.shape_inference` provides accessors to access the shapes
+without modifying the original model.
+
 Symbolic dimensions
 -------------------
 

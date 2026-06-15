@@ -57,15 +57,16 @@ std::vector<int64_t> RowMajorStrides(const std::vector<int64_t> &shape) {
 // ``is_reduced[d]`` is true. ``output`` is laid out with the non-reduced
 // dimensions only (i.e. ``keepdims == false``); callers that want the
 // keepdims layout reshape the same byte buffer afterwards.
-void SumReduce(const Tensor &data, const std::vector<bool> &is_reduced,
-               const std::vector<int64_t> &output_shape_noreduce, Tensor &output) {
+template <typename T>
+void SumReduceT(const Tensor &data, const std::vector<bool> &is_reduced,
+                const std::vector<int64_t> &output_shape_noreduce, Tensor &output) {
   const std::vector<int64_t> out_strides = RowMajorStrides(output_shape_noreduce);
 
   // Zero-initialize the output bytes so we can accumulate into it.
   std::memset(output.data.data(), 0, output.data.size());
 
-  const float *px = data.AsFloat();
-  float *py = output.AsFloat();
+  const T *px = reinterpret_cast<const T *>(data.bytes());
+  T *py = reinterpret_cast<T *>(output.data.data());
 
   // Iterate over every element of the input using a multi-dimensional index.
   const int64_t rank = static_cast<int64_t>(data.shape.size());
@@ -94,16 +95,28 @@ void SumReduce(const Tensor &data, const std::vector<bool> &is_reduced,
   }
 }
 
-void ValidateFloat(const Tensor &t, const char *name) {
-  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      "kernel::ReduceSum: ", name, " must be a FLOAT tensor.");
+void SumReduce(const Tensor &data, const std::vector<bool> &is_reduced,
+               const std::vector<int64_t> &output_shape_noreduce, Tensor &output) {
+  if (data.data_type == static_cast<int32_t>(DataType::DOUBLE)) {
+    SumReduceT<double>(data, is_reduced, output_shape_noreduce, output);
+  } else {
+    SumReduceT<float>(data, is_reduced, output_shape_noreduce, output);
+  }
+}
+
+void ValidateFloatOrDouble(const Tensor &t, const char *name) {
+  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT) ||
+                          t.data_type == static_cast<int32_t>(DataType::DOUBLE),
+                      "kernel::ReduceSum: ", name, " must be a FLOAT or DOUBLE tensor.");
 }
 
 } // namespace
 
 Tensor ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes) const {
-  ValidateFloat(data, "data");
+  ValidateFloatOrDouble(data, "data");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
+  const size_t elem_size =
+      data.data_type == static_cast<int32_t>(DataType::DOUBLE) ? sizeof(double) : sizeof(float);
 
   std::vector<bool> is_reduced(static_cast<size_t>(rank), false);
   if (!noop_with_empty_axes) {
@@ -119,16 +132,18 @@ Tensor ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_e
     }
     return n;
   }();
-  Tensor out("", static_cast<int32_t>(DataType::FLOAT), out_shape,
-             std::vector<uint8_t>(static_cast<size_t>(out_count) * sizeof(float), 0u));
+  Tensor out("", data.data_type, out_shape,
+             std::vector<uint8_t>(static_cast<size_t>(out_count) * elem_size, 0u));
   (*this)(data, keepdims, noop_with_empty_axes, out);
   return out;
 }
 
 void ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
                            Tensor &output) const {
-  ValidateFloat(data, "data");
-  ValidateFloat(output, "output");
+  ValidateFloatOrDouble(data, "data");
+  ValidateFloatOrDouble(output, "output");
+  const size_t elem_size =
+      data.data_type == static_cast<int32_t>(DataType::DOUBLE) ? sizeof(double) : sizeof(float);
   const int64_t rank = static_cast<int64_t>(data.shape.size());
 
   std::vector<bool> is_reduced(static_cast<size_t>(rank), false);
@@ -141,19 +156,14 @@ void ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_emp
   EXT_ENFORCE_INVALID(output.shape == expected_out_shape,
                       "kernel::ReduceSum preallocated output shape does not match expected shape.");
   const int64_t out_count = output.element_count();
-  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(out_count) * sizeof(float),
+  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(out_count) * elem_size,
                       "kernel::ReduceSum preallocated output buffer has unexpected size in bytes.");
 
   if (noop_with_empty_axes) {
-    // Identity: copy input bytes verbatim.
     std::memcpy(output.data.data(), data.bytes(), data.size_bytes());
     return;
   }
 
-  // Layout used by the inner loop is the "no-keepdims" shape (i.e. the list
-  // of non-reduced dimensions). When ``keepdims`` is true the output's shape
-  // vector contains 1's for the reduced dims but the byte buffer is identical
-  // because the element count and row-major layout are preserved.
   const std::vector<int64_t> out_shape_noreduce =
       ComputeOutputShape(data.shape, is_reduced, /*keepdims=*/false);
   SumReduce(data, is_reduced, out_shape_noreduce, output);
@@ -161,10 +171,12 @@ void ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_emp
 
 Tensor ReduceSum::operator()(const Tensor &data, const Tensor &axes, bool keepdims,
                              bool noop_with_empty_axes) const {
-  ValidateFloat(data, "data");
+  ValidateFloatOrDouble(data, "data");
   EXT_ENFORCE_INVALID(axes.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::ReduceSum: axes must be an INT64 tensor.");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
+  const size_t elem_size =
+      data.data_type == static_cast<int32_t>(DataType::DOUBLE) ? sizeof(double) : sizeof(float);
 
   std::vector<bool> is_reduced(static_cast<size_t>(rank), false);
   const int64_t naxes = axes.element_count();
@@ -185,19 +197,21 @@ Tensor ReduceSum::operator()(const Tensor &data, const Tensor &axes, bool keepdi
   for (int64_t d : out_shape) {
     out_count *= d;
   }
-  Tensor out("", static_cast<int32_t>(DataType::FLOAT), out_shape,
-             std::vector<uint8_t>(static_cast<size_t>(out_count) * sizeof(float), 0u));
+  Tensor out("", data.data_type, out_shape,
+             std::vector<uint8_t>(static_cast<size_t>(out_count) * elem_size, 0u));
   (*this)(data, axes, keepdims, noop_with_empty_axes, out);
   return out;
 }
 
 void ReduceSum::operator()(const Tensor &data, const Tensor &axes, bool keepdims,
                            bool noop_with_empty_axes, Tensor &output) const {
-  ValidateFloat(data, "data");
-  ValidateFloat(output, "output");
+  ValidateFloatOrDouble(data, "data");
+  ValidateFloatOrDouble(output, "output");
   EXT_ENFORCE_INVALID(axes.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::ReduceSum: axes must be an INT64 tensor.");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
+  const size_t elem_size =
+      data.data_type == static_cast<int32_t>(DataType::DOUBLE) ? sizeof(double) : sizeof(float);
 
   std::vector<bool> is_reduced(static_cast<size_t>(rank), false);
   const int64_t naxes = axes.element_count();
@@ -218,7 +232,7 @@ void ReduceSum::operator()(const Tensor &data, const Tensor &axes, bool keepdims
   EXT_ENFORCE_INVALID(output.shape == expected_out_shape,
                       "kernel::ReduceSum preallocated output shape does not match expected shape.");
   const int64_t out_count = output.element_count();
-  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(out_count) * sizeof(float),
+  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(out_count) * elem_size,
                       "kernel::ReduceSum preallocated output buffer has unexpected size in bytes.");
 
   if (naxes == 0 && noop_with_empty_axes) {

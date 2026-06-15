@@ -106,8 +106,9 @@ from onnx_light.onnx.backend import make_test_class  # noqa: E402
 def reference_runtime(model, *inputs: np.ndarray) -> list[np.ndarray]:
     """Runs *model* on *inputs* with the reference runtime.
 
-    Returns the model outputs as a list of numpy arrays, in graph-output
-    order, as expected by :func:`make_test_class`.
+    Returns:
+        The model outputs as a list of numpy arrays, in graph-output
+        order, as expected by :func:`make_test_class`.
     """
     sess = ReferenceEvaluator(model)
     feeds = {i.name: arr for i, arr in zip(model.graph.input, inputs)}

@@ -19,6 +19,15 @@ def is_apple() -> bool:
     return sys.platform == "darwin"
 
 
+def has_onnxruntime() -> bool:
+    "Tells if onnxruntime is installed."
+    try:
+        import onnxruntime
+        return hasattr(onnxruntime, "__version__")
+    except ImportError:
+        return False
+
+
 def skipif_ci_windows(msg) -> Callable:
     """Skips a unit test if it runs on Windows."""
     if is_windows():

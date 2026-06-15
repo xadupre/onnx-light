@@ -542,6 +542,31 @@ class TestReferenceEvaluator(ExtTestCase):
         np.testing.assert_allclose(got[0][0], expected_stacked[0], rtol=tc.rtol, atol=tc.atol)
         np.testing.assert_allclose(got[0][1], expected_stacked[1], rtol=tc.rtol, atol=tc.atol)
 
+    def test_split_to_sequence_1_returns_list(self):
+        # Regression test for test_cc_split_to_sequence_1: the graph output of
+        # SplitToSequence is a SequenceType, so ReferenceEvaluator.run() must
+        # return a list of numpy arrays rather than raise "Output was not
+        # produced". The scalar 'split' input (value 2) splits the [3, 6] data
+        # along axis=1 into three [3, 2] chunks.
+        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+
+        tc = collect_test_case().get("test_cc_split_to_sequence_1")
+        self.assertIsNotNone(tc)
+        inputs, outputs = tc.data_sets[0]
+        sess = ReferenceEvaluator(tc.model)
+        got = sess.run(None, dict(zip(sess.input_names, inputs)))
+        self.assertEqual(len(got), 1)
+        # Sequence output is a list of numpy arrays.
+        self.assertIsInstance(got[0], list)
+        # Splitting [3, 6] by the scalar 2 along axis=1 yields three [3, 2] chunks.
+        self.assertEqual(len(got[0]), 3)
+        # The expected value in the data set is the sequence [c0, c1, c2].
+        expected_chunks = outputs[0]
+        self.assertEqual(len(expected_chunks), 3)
+        for got_chunk, expected_chunk in zip(got[0], expected_chunks):
+            self.assertEqual(got_chunk.shape, (3, 2))
+            np.testing.assert_allclose(got_chunk, expected_chunk, rtol=tc.rtol, atol=tc.atol)
+
     def test_image_decoder_decode_bmp_rgb(self):
         # Regression test for ``test_cc_image_decoder_decode_bmp_rgb``: the
         # ``ImageDecoder`` kernel must decode the BMP bytestream and return

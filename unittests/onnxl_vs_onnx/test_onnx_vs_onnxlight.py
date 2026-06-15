@@ -12,11 +12,14 @@ import onnx_light.onnx as onnxl
 
 class TestOnnx(ExtTestCase):
     def test_onnx_version_compatibility(self):
-        # onnx_light.onnx mirrors a specific onnx release. Downstream code using
-        # onnx.__version__ for compatibility checks must observe the same base
-        # version whether it imports onnx or onnx_light.onnx. The installed onnx
-        # may be a development build (e.g. "1.22.0.dev20260615"), so the dev/pre
-        # release suffix is stripped before comparing.
+        """Checks that onnx_light.onnx mirrors the installed onnx version.
+
+        Downstream code using ``onnx.__version__`` for compatibility checks must
+        observe the same base version whether it imports ``onnx`` or
+        ``onnx_light.onnx``. The installed onnx may be a development build (for
+        example ``1.22.0.dev20260615``), so the dev/pre-release suffix is
+        stripped before comparing.
+        """
         match = re.match(r"\d+(?:\.\d+)*", onnx.__version__)
         self.assertIsNotNone(match)
         base_version = match.group(0)

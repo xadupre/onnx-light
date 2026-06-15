@@ -60,6 +60,7 @@ from onnx_light.onnx_optim.shape_inference import (
     compute_shape_node,
     infer_shapes_model,
     OptimTensor,
+    ShapeEventAction,
     ShapesContext,
 )
 from onnx_light.tools import pretty_onnx
@@ -272,7 +273,7 @@ compute_shape_model(events_ctx, case_model, prefill_with_value_info_output=True)
 apply_inferred_shapes_to_model(events_ctx, case_model)
 
 shape_events = events_ctx.events()
-compute_events = [ev for ev in shape_events if ev.action == "compute_node"]
+compute_events = [ev for ev in shape_events if ev.action == ShapeEventAction.kComputeNode]
 
 print(f"\nShape-inference events for {NONZERO_CHAIN_TEST_CASE_NAME}:")
 print(f"  total events      : {len(shape_events)}")

@@ -415,12 +415,10 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       "events record a newly inserted symbolic-dimension constraint and carry its "
       "two operands in ``inputs``.")
       .def_prop_ro(
-          "action",
-          [](const onnx_shapes::ShapeEvent &ev) {
-            return std::string(onnx_shapes::ShapeEventActionName(ev.action));
-          },
-          "Event kind: ``\"add\"``, ``\"replace\"``, ``\"compute_node\"``, "
-          "``\"constraint\"`` or ``\"constraint_max\"``.")
+          "action", [](const onnx_shapes::ShapeEvent &ev) { return ev.action; },
+          ":class:`ShapeEventAction` member describing the event kind: "
+          "``kAdd``, ``kReplace``, ``kComputeNode``, ``kConstraint`` or "
+          "``kConstraintMax``.")
       .def_ro("name", &onnx_shapes::ShapeEvent::name,
               "Value name targeted by the mutation. Empty for ``compute_node`` / "
               "``constraint`` / ``constraint_max`` events.")

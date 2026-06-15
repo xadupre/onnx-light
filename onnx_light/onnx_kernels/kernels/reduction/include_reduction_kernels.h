@@ -88,7 +88,7 @@ public:
   explicit ArgMin(const KernelContext &ctx) : ArgReduce(ctx, ArgReduce::Mode::kMin) {}
 };
 
-/// Sum reduction of a FLOAT input ``data`` along the dimensions listed in the
+/// Sum reduction of a FLOAT or DOUBLE input ``data`` along the dimensions listed in the
 /// optional ``axes`` int64 tensor. If ``axes`` is omitted (or empty), the
 /// kernel reduces over all dimensions unless ``noop_with_empty_axes`` is true
 /// in which case it performs an identity copy.

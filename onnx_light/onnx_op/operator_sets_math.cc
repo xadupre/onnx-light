@@ -1979,8 +1979,7 @@ std::vector<LightOpSchema> BuildBlackmanWindowSchemas() {
                {TensorType::kInt32, TensorType::kInt64},
                "Constrain the input size to int32_t or int64_t."},
               {"T2", AllNumericTypesIr4(), "Constrain output types to numeric tensors."},
-          })
-          .set_node_determinism(LightOpSchema::NodeDeterminism::NonDeterministic),
+          }),
   };
 }
 
@@ -2000,8 +1999,7 @@ std::vector<LightOpSchema> BuildHannWindowSchemas() {
                {TensorType::kInt32, TensorType::kInt64},
                "Constrain the input size to int32_t or int64_t."},
               {"T2", AllNumericTypesIr4(), "Constrain output types to numeric tensors."},
-          })
-          .set_node_determinism(LightOpSchema::NodeDeterminism::NonDeterministic),
+          }),
   };
 }
 
@@ -2021,8 +2019,7 @@ std::vector<LightOpSchema> BuildHammingWindowSchemas() {
                {TensorType::kInt32, TensorType::kInt64},
                "Constrain the input size to int32_t or int64_t."},
               {"T2", AllNumericTypesIr4(), "Constrain output types to numeric tensors."},
-          })
-          .set_node_determinism(LightOpSchema::NodeDeterminism::NonDeterministic),
+          }),
   };
 }
 

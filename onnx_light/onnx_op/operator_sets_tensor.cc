@@ -164,38 +164,33 @@ std::vector<TensorType> IdentityTypesVer25() {
 
 LightOpSchema MakeAffineGridSchema(int since_version) {
   return LightOpSchema(
-             "AffineGrid", kOnnxDomain, since_version, MakeAffineGridDoc(since_version),
-             {
-                 {"theta",
-                  "input batch of affine matrices with shape (N, 2, 3) for 2D or (N, 3, 4) for 3D",
-                  "T1"},
-                 {"size",
-                  "the target output image size (N, C, H, W) for 2D or (N, C, D, H, W) for 3D",
-                  "T2"},
-             },
-             {
-                 {"grid",
-                  "output tensor of shape (N, H, W, 2) of 2D sample coordinates or (N, D, H, W, 3) "
-                  "of 3D sample coordinates.",
-                  "T1"},
-             },
-             {
-                 {"T1", AffineGridFloatTypes(),
-                  MakeAffineGridGridTypeConstraintDescription(since_version)},
-                 {"T2",
-                  {TensorType::kInt64},
-                  MakeAffineGridSizeTypeConstraintDescription(since_version)},
-             },
-             {
-                 {"align_corners",
-                  "if align_corners=1, consider -1 and 1 to refer to the centers of the corner "
-                  "pixels. "
-                  "if align_corners=0, consider -1 and 1 to refer to the outer edge the corner "
-                  "pixels.",
-                  AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)},
-             },
-             /*has_function_implementation=*/true)
-      .set_node_determinism(LightOpSchema::NodeDeterminism::NonDeterministic);
+      "AffineGrid", kOnnxDomain, since_version, MakeAffineGridDoc(since_version),
+      {
+          {"theta",
+           "input batch of affine matrices with shape (N, 2, 3) for 2D or (N, 3, 4) for 3D", "T1"},
+          {"size", "the target output image size (N, C, H, W) for 2D or (N, C, D, H, W) for 3D",
+           "T2"},
+      },
+      {
+          {"grid",
+           "output tensor of shape (N, H, W, 2) of 2D sample coordinates or (N, D, H, W, 3) "
+           "of 3D sample coordinates.",
+           "T1"},
+      },
+      {
+          {"T1", AffineGridFloatTypes(),
+           MakeAffineGridGridTypeConstraintDescription(since_version)},
+          {"T2", {TensorType::kInt64}, MakeAffineGridSizeTypeConstraintDescription(since_version)},
+      },
+      {
+          {"align_corners",
+           "if align_corners=1, consider -1 and 1 to refer to the centers of the corner "
+           "pixels. "
+           "if align_corners=0, consider -1 and 1 to refer to the outer edge the corner "
+           "pixels.",
+           AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)},
+      },
+      /*has_function_implementation=*/true);
 }
 
 LightOpSchema MakeGridSampleSchema(int since_version, const std::vector<TensorType> &x_types,

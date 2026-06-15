@@ -748,7 +748,9 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           "already has an entry in ``self``.")
       .def(
           "compute_shape_graph",
-          [](onnx_shapes::ShapesContext &c, const GraphProto &graph) { c.ComputeShapeGraph(graph); },
+          [](onnx_shapes::ShapesContext &c, const GraphProto &graph) {
+            c.ComputeShapeGraph(graph);
+          },
           nb::arg("graph"),
           "Seeds ``self`` from the initializers and inputs of ``graph`` and then runs "
           "``compute_shape_node`` on every node in topological order.")

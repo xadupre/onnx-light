@@ -85,6 +85,12 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     Python bindings have no numpy mapping for the output type
 #     ("No corresponding Numpy type for Tensor Type. Float8E5M2"). The
 #     reference backend still exercises these conversions byte-for-byte.
+#   * ``test_cast_no_saturate_*FLOAT8*`` — same ORT limitation: the float8
+#     output tensors cannot be mapped to a numpy type ("No corresponding
+#     Numpy type for Tensor Type. Float8E4M3FNUZ") and for FLOAT8E4M3FN the
+#     comparison fails because ORT returns raw uint8 bytes instead of a
+#     typed float8 array. The reference backend still exercises these
+#     conversions byte-for-byte.
 #   * ``test_cc_cast_*UINT4*`` and ``test_cc_cast_*UINT2*`` — ORT's CPU EP
 #     rejects ``uint4``/``uint2`` as ``Cast`` operand types
 #     ("Type 'tensor(uint4)' of input parameter ... is invalid"). The
@@ -114,6 +120,10 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     operand types ("Type 'tensor(float8e4m3fn)' of input parameter
 #     (input) of operator (CastLike) ... is invalid"). The reference
 #     backend still exercises these conversions byte-for-byte.
+#   * ``test_castlike_no_saturate_*FLOAT8*`` — same ORT limitation: ORT's
+#     Python bindings cannot map the float8 input type to an MLDataType
+#     ("Numpy_type 260/261/262/263 can't be converted to MLDataType").
+#     The reference backend still exercises these conversions byte-for-byte.
 #   * ``test_cc_castlike_*UINT4*``, ``test_cc_castlike_*UINT2*``,
 #     ``test_cc_castlike_*INT4*`` and ``test_cc_castlike_*INT2*`` — ORT's
 #     CPU EP rejects these packed sub-byte dtypes as ``CastLike``
@@ -373,10 +383,12 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_cast_.*FLOAT8E5M2.*$",
     r"^test_cc_cast_.*FLOAT8E8M0.*$",
     r"^test_cc_cast_.*FLOAT4E2M1.*$",
+    r"^test_cast_no_saturate_.*FLOAT8.*$",
     r"^test_cc_castlike_.*FLOAT8E4M3.*$",
     r"^test_cc_castlike_.*FLOAT8E5M2.*$",
     r"^test_cc_castlike_.*FLOAT8E8M0.*$",
     r"^test_cc_castlike_.*FLOAT4E2M1.*$",
+    r"^test_castlike_no_saturate_.*FLOAT8.*$",
     r"^test_cc_cast_.*UINT4.*$",
     r"^test_cc_cast_.*UINT2.*$",
     r"^test_cc_cast_.*INT4.*$",

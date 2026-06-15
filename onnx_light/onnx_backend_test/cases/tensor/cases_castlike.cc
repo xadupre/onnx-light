@@ -6,6 +6,7 @@
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
+#include "onnx_proto/onnx_helper.h"
 
 #include <cmath>
 #include <cstdint>
@@ -355,6 +356,60 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry) {
         Expect(node, {packed_input, float16_target}, {output},
                std::string("test_cc_castlike_") + v.name + "_to_FLOAT16", {opset}, "backend-test",
                registry);
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // CastLike no_saturate cases — FLOAT/FLOAT16 → FLOAT8* with saturate=0.
+  //
+  // Mirrors the upstream ``test_castlike_no_saturate_<FROM>_to_<TO>`` tests.
+  // When saturate is 0, out-of-range values produce NaN instead of being
+  // clamped to the maximum representable magnitude.
+  // ---------------------------------------------------------------------
+  {
+    const OpsetId opset_19 = DefaultOpset(19);
+    struct Float8Only {
+      DataType dtype;
+      const char *name;
+    };
+    const Float8Only kFloat8Variants[] = {
+        {DataType::FLOAT8E4M3FN, "FLOAT8E4M3FN"},
+        {DataType::FLOAT8E4M3FNUZ, "FLOAT8E4M3FNUZ"},
+        {DataType::FLOAT8E5M2, "FLOAT8E5M2"},
+        {DataType::FLOAT8E5M2FNUZ, "FLOAT8E5M2FNUZ"},
+    };
+    const kernel::Cast cast_k{ctx};
+    for (const auto &v : kFloat8Variants) {
+      Tensor low_target("target_type", static_cast<int32_t>(v.dtype), {1},
+                        std::vector<uint8_t>(1, 0u));
+      // FLOAT -> FLOAT8* (no_saturate)
+      {
+        NodeProto node;
+        node.set_op_type("CastLike");
+        node.add_input("input");
+        node.add_input("target_type");
+        node.add_output("output");
+        AddAttribute<int64_t>(node, "saturate", 0);
+        Tensor input = Tensor::FromFloat("input", f8_shape, f8_fp32_values);
+        Tensor output = cast_k(input, static_cast<int32_t>(v.dtype), /*saturate=*/false);
+        Expect(node, {input, low_target}, {output},
+               std::string("test_castlike_no_saturate_FLOAT_to_") + v.name, {opset_19},
+               "backend-test", registry);
+      }
+      // FLOAT16 -> FLOAT8* (no_saturate)
+      {
+        NodeProto node;
+        node.set_op_type("CastLike");
+        node.add_input("input");
+        node.add_input("target_type");
+        node.add_output("output");
+        AddAttribute<int64_t>(node, "saturate", 0);
+        Tensor input = kernel::MakeFloat16Tensor("input", f8_shape, f8_fp32_values);
+        Tensor output = cast_k(input, static_cast<int32_t>(v.dtype), /*saturate=*/false);
+        Expect(node, {input, low_target}, {output},
+               std::string("test_castlike_no_saturate_FLOAT16_to_") + v.name, {opset_19},
+               "backend-test", registry);
       }
     }
   }

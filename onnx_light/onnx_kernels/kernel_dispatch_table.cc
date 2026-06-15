@@ -776,8 +776,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const Tensor &target_type = GetInput(node, 1, rt.tensors());
+         const bool saturate = GetAttributeIntOrDefault(node, "saturate", 1) != 0;
          kernel::CastLike k(rt.kernel_ctx());
-         SetOutput(node, 0, k(x, target_type), rt);
+         SetOutput(node, 0, k(x, target_type, saturate), rt);
        }},
       {"ai.onnx:Ceil", MakeUnaryTrampoline<kernel::Ceil>()},
       {"ai.onnx:Celu", MakeUnaryAlphaTrampoline<kernel::Celu>("alpha", 1.0f)},

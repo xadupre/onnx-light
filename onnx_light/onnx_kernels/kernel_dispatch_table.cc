@@ -502,20 +502,29 @@ inline void RequireOutputRange(const NodeProto &node, int min_outputs, int max_o
 void RunBatchNormalization(const NodeProto &node, RuntimeContext &rt) {
   RequireInputCount(node, 5);
   RequireOutputRange(node, 1, 3);
-  if (GetAttributeIntOrDefault(node, "training_mode", 0) != 0) {
-    throw std::invalid_argument(
-        "RunNode: op 'BatchNormalization' training_mode=1 is not supported.");
-  }
-  if (node.output_size() != 1) {
-    throw std::invalid_argument("RunNode: op 'BatchNormalization' only supports a single output "
-                                "(running_mean / running_var require training_mode=1).");
-  }
   const Tensor &x = GetInput(node, 0, rt.tensors());
   const Tensor &scale = GetInput(node, 1, rt.tensors());
   const Tensor &bias = GetInput(node, 2, rt.tensors());
   const Tensor &input_mean = GetInput(node, 3, rt.tensors());
   const Tensor &input_var = GetInput(node, 4, rt.tensors());
   kernel::BatchNormalization k(rt.kernel_ctx());
+  if (GetAttributeIntOrDefault(node, "training_mode", 0) != 0) {
+    const float momentum = GetAttributeFloatOrDefault(node, "momentum", 0.9f);
+    auto [y, running_mean, running_var] =
+        k.TrainingForward(x, scale, bias, input_mean, input_var, GetEpsilon(node), momentum);
+    SetOutput(node, 0, std::move(y), rt.tensors());
+    if (node.output_size() >= 2) {
+      SetOutput(node, 1, std::move(running_mean), rt.tensors());
+    }
+    if (node.output_size() >= 3) {
+      SetOutput(node, 2, std::move(running_var), rt.tensors());
+    }
+    return;
+  }
+  if (node.output_size() != 1) {
+    throw std::invalid_argument("RunNode: op 'BatchNormalization' only supports a single output "
+                                "(running_mean / running_var require training_mode=1).");
+  }
   SetOutput(node, 0, k(x, scale, bias, input_mean, input_var, GetEpsilon(node)), rt.tensors());
 }
 
@@ -748,7 +757,19 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          SetOutput(node, 0, std::move(output), rt);
          SetOutput(node, 1, std::move(present_state), rt);
        }},
-      {"ai.onnx:Cast", MakeUnaryToTrampoline<kernel::Cast>()},
+      {"ai.onnx:Cast",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const int32_t to = static_cast<int32_t>(GetAttributeIntOrDefault(node, "to", -1));
+         if (to < 0) {
+           throw std::invalid_argument("RunNode: Cast requires INT attribute 'to'.");
+         }
+         const bool saturate = GetAttributeIntOrDefault(node, "saturate", 1) != 0;
+         kernel::Cast kernel(rt.kernel_ctx());
+         SetOutput(node, 0, kernel(x, to, saturate), rt);
+       }},
       {"ai.onnx:CastLike",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 2);

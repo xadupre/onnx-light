@@ -51,6 +51,25 @@ void ReadSample(const T *data, const std::vector<int64_t> &strides, int64_t axis
   im = (last_dim == 2) ? static_cast<double>(data[off + 1]) : 0.0;
 }
 
+// Read one sample for the IRFFT path, applying Hermitian symmetry.
+// Input contains bins 0..in_axis-1 (one-sided). For frequency index n >= in_axis,
+// the value is conj(X[n_dft - n]).
+template <typename T>
+void ReadSampleIRFFT(const T *data, const std::vector<int64_t> &strides, int64_t in_axis,
+                     int64_t outer, int64_t inner, int64_t outer_idx, int64_t freq_idx,
+                     int64_t inner_idx, int64_t last_dim, int64_t n_dft, double &re, double &im) {
+  int64_t idx = freq_idx;
+  bool conjugate = false;
+  if (idx >= in_axis) {
+    idx = n_dft - idx;
+    conjugate = true;
+  }
+  ReadSample<T>(data, strides, in_axis, outer, inner, outer_idx, idx, inner_idx, last_dim, re, im);
+  if (conjugate) {
+    im = -im;
+  }
+}
+
 template <typename T>
 void DftCompute(const T *in, T *out, int64_t outer, int64_t in_axis, int64_t out_axis,
                 int64_t inner, int64_t in_last, int64_t out_last, int64_t n_dft, bool inverse,
@@ -66,13 +85,20 @@ void DftCompute(const T *in, T *out, int64_t outer, int64_t in_axis, int64_t out
   const double norm = inverse ? (1.0 / static_cast<double>(n_dft)) : 1.0;
   const double two_pi = 2.0 * 3.14159265358979323846;
 
+  const bool irfft = onesided && inverse;
+
   for (int64_t o = 0; o < outer; ++o) {
     for (int64_t i = 0; i < inner; ++i) {
       for (int64_t k = 0; k < out_axis; ++k) {
         double acc_re = 0.0, acc_im = 0.0;
         for (int64_t n = 0; n < n_dft; ++n) {
           double xr = 0.0, xi = 0.0;
-          ReadSample<T>(in, in_strides, in_axis, outer, inner, o, n, i, in_last, xr, xi);
+          if (irfft) {
+            ReadSampleIRFFT<T>(in, in_strides, in_axis, outer, inner, o, n, i, in_last, n_dft, xr,
+                               xi);
+          } else {
+            ReadSample<T>(in, in_strides, in_axis, outer, inner, o, n, i, in_last, xr, xi);
+          }
           const double theta = sign * two_pi * static_cast<double>(k) * static_cast<double>(n) /
                                static_cast<double>(n_dft);
           const double c = std::cos(theta);
@@ -89,7 +115,6 @@ void DftCompute(const T *in, T *out, int64_t outer, int64_t in_axis, int64_t out
           out[base + 1] = static_cast<T>(acc_im);
         } else {
           // IRFFT: take the real part only.
-          (void)onesided;
           out[base] = static_cast<T>(acc_re);
         }
       }

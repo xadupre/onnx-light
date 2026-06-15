@@ -461,7 +461,7 @@ ORT_EXCLUDE_REGEX = [
     # it falls back to the forward one-sided transform, producing the wrong
     # shape. The forward / inverse / forward-onesided variants are exercised
     # separately by the other ``test_cc_dft_*`` cases.
-    r"^test_cc_dft_irfft(_opset19)?$",
+    r"^test_cc_dft_irfft(_opset19|_roundtrip|_roundtrip_opset19)?$",
     # See note above on the ``Squeeze`` optional ``axes`` input.
     r"^test_cc_squeeze_empty_axes_name$",
 ]

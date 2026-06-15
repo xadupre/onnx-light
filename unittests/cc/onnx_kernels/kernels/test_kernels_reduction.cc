@@ -185,6 +185,37 @@ TEST(KernelClass, ReduceMinMaxRejectsBadInputs) {
   EXPECT_THROW(reduce_max(data, oob_axes), std::invalid_argument);
 }
 
+TEST(KernelClass, ReduceMaxBoolInputsIsLogicalOr) {
+  const KernelContext ctx{DefaultOpset(18)};
+  ReduceMax reduce_max{ctx};
+  // shape (4, 2): [[T,T],[T,F],[F,T],[F,F]]
+  Tensor data = Tensor::FromBool("", {4, 2}, {1, 1, 1, 0, 0, 1, 0, 0});
+  Tensor axes = Tensor::FromInt64("", {1}, {1});
+  Tensor y = reduce_max(data, axes, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{4, 1}));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
+  const uint8_t *py = y.AsBool();
+  EXPECT_EQ(py[0], 1); // T OR T = T
+  EXPECT_EQ(py[1], 1); // T OR F = T
+  EXPECT_EQ(py[2], 1); // F OR T = T
+  EXPECT_EQ(py[3], 0); // F OR F = F
+}
+
+TEST(KernelClass, ReduceMinBoolInputsIsLogicalAnd) {
+  const KernelContext ctx{DefaultOpset(18)};
+  ReduceMin reduce_min{ctx};
+  Tensor data = Tensor::FromBool("", {4, 2}, {1, 1, 1, 0, 0, 1, 0, 0});
+  Tensor axes = Tensor::FromInt64("", {1}, {1});
+  Tensor y = reduce_min(data, axes, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{4, 1}));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
+  const uint8_t *py = y.AsBool();
+  EXPECT_EQ(py[0], 1); // T AND T = T
+  EXPECT_EQ(py[1], 0); // T AND F = F
+  EXPECT_EQ(py[2], 0); // F AND T = F
+  EXPECT_EQ(py[3], 0); // F AND F = F
+}
+
 // ── ReduceL1 / ReduceL2 kernels ───────────────────────────────────────────
 
 TEST(KernelClass, ReduceL1ExplicitAxisSumsAbsoluteValues) {

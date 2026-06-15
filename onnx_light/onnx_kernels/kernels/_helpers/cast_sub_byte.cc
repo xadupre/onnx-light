@@ -34,7 +34,7 @@ inline std::uint8_t ClampToUint4(double t) noexcept {
     return 0x0;
   if (t >= 15.0)
     return 0xF;
-  return static_cast<std::uint8_t>(static_cast<unsigned>(t) & 0x0Fu);
+  return static_cast<std::uint8_t>(static_cast<int>(t) & 0x0F);
 }
 
 inline std::uint8_t ClampToInt2(double t) noexcept {
@@ -52,7 +52,7 @@ inline std::uint8_t ClampToUint2(double t) noexcept {
     return 0x0;
   if (t >= 3.0)
     return 0x3;
-  return static_cast<std::uint8_t>(static_cast<unsigned>(t) & 0x03u);
+  return static_cast<std::uint8_t>(static_cast<int>(t) & 0x03);
 }
 
 } // namespace

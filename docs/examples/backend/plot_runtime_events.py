@@ -49,6 +49,7 @@ from onnx_light.onnx_lib import parser
 from onnx_light.onnx_optim.expressions import evaluate_expression
 from onnx_light.onnx_optim.shape_inference import infer_shapes_model
 from onnx_light.onnx.reference import ReferenceEvaluator
+from onnx_light.tools import pretty_onnx
 
 #####################################
 # Build a small ONNX model
@@ -74,7 +75,7 @@ model = parser.parse_model(
     "  y = Reshape(w, target_shape)"
     "}"
 )
-print(model)
+print(pretty_onnx(model))
 
 #####################################
 # Infer the shapes of every intermediate tensor

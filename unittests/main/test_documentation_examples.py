@@ -98,11 +98,7 @@ class TestDocumentationExamples(ExtTestCase):
             ):
                 reason = "onnx is missing"
 
-            if (
-                not reason
-                and not has_onnxruntime()
-                and name in {"plot_save_ort_flatbuffers.py"}
-            ):
+            if not reason and not has_onnxruntime() and name in {"plot_save_ort_flatbuffers.py"}:
                 reason = "onnxruntime is missing"
 
             if reason:

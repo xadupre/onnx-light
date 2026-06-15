@@ -23,6 +23,7 @@ def has_onnxruntime() -> bool:
     "Tells if onnxruntime is installed."
     try:
         import onnxruntime
+
         return hasattr(onnxruntime, "__version__")
     except ImportError:
         return False

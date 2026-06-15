@@ -324,6 +324,13 @@ class TestShapesContextEventLog(ExtTestCase):
     """Python tests for the opt-in shape-inference event log exposed by
     ``ShapesContext`` (``events_enabled`` / ``events`` / ``clear_events``)."""
 
+    def test_shape_event_action_enum_values(self):
+        self.assertEqual(int(si.ShapeEventAction.kAdd), 0)
+        self.assertEqual(int(si.ShapeEventAction.kReplace), 1)
+        self.assertEqual(int(si.ShapeEventAction.kComputeNode), 2)
+        self.assertEqual(int(si.ShapeEventAction.kConstraint), 3)
+        self.assertEqual(int(si.ShapeEventAction.kConstraintMax), 4)
+
     def test_events_disabled_by_default(self):
         ctx = si.ShapesContext()
         self.assertFalse(ctx.events_enabled)
@@ -339,7 +346,9 @@ class TestShapesContextEventLog(ExtTestCase):
         ctx.set("X", si.OptimTensor(onnxl.TensorProto.INT64, [5]))
 
         events = ctx.events()
-        self.assertEqual([e.action for e in events], ["add", "replace"])
+        self.assertEqual(
+            [e.action for e in events], [si.ShapeEventAction.kAdd, si.ShapeEventAction.kReplace]
+        )
         self.assertEqual([e.name for e in events], ["X", "X"])
         self.assertEqual(events[0].data_type, onnxl.TensorProto.FLOAT)
         self.assertEqual(events[0].shape, ["2", "N"])
@@ -361,7 +370,10 @@ class TestShapesContextEventLog(ExtTestCase):
         events = ctx.events()
         # One ``add`` event for the produced output descriptor plus one
         # ``compute_node`` event summarising the dispatch.
-        self.assertEqual([e.action for e in events], ["add", "compute_node"])
+        self.assertEqual(
+            [e.action for e in events],
+            [si.ShapeEventAction.kAdd, si.ShapeEventAction.kComputeNode],
+        )
         self.assertEqual(events[0].name, "Y")
         self.assertEqual(events[0].shape, ["2", "3"])
 
@@ -382,7 +394,10 @@ class TestShapesContextEventLog(ExtTestCase):
         self.assertTrue(ctx.add_less_equal_constraint("nnz", "2*N"))
 
         events = ctx.events()
-        self.assertEqual([e.action for e in events], ["constraint", "constraint_max"])
+        self.assertEqual(
+            [e.action for e in events],
+            [si.ShapeEventAction.kConstraint, si.ShapeEventAction.kConstraintMax],
+        )
         # Operands are stored in ``inputs`` (equality pair is canonicalised).
         self.assertEqual(events[0].inputs, ["M", "N"])
         self.assertEqual(events[1].inputs, ["nnz", "2*N"])
@@ -421,8 +436,8 @@ class TestShapesContextEventLog(ExtTestCase):
 
         actions = [e.action for e in ctx.events()]
         # At least one descriptor mutation and one node dispatch were logged.
-        self.assertIn("compute_node", actions)
-        node_events = [e for e in ctx.events() if e.action == "compute_node"]
+        self.assertIn(si.ShapeEventAction.kComputeNode, actions)
+        node_events = [e for e in ctx.events() if e.action == si.ShapeEventAction.kComputeNode]
         self.assertEqual([e.op_type for e in node_events], ["Relu"])
 
     def test_compute_shape_model_records_node_index(self):
@@ -445,10 +460,10 @@ class TestShapesContextEventLog(ExtTestCase):
         def first(action, name):
             return next((e for e in events if e.action == action and e.name == name), None)
 
-        self.assertEqual(first("add", "X").node_index, -1)
-        self.assertEqual(first("add", "S").node_index, -2)
-        self.assertEqual(first("add", "Y").node_index, 0)
-        node_ev = next(e for e in events if e.action == "compute_node")
+        self.assertEqual(first(si.ShapeEventAction.kAdd, "X").node_index, -1)
+        self.assertEqual(first(si.ShapeEventAction.kAdd, "S").node_index, -2)
+        self.assertEqual(first(si.ShapeEventAction.kAdd, "Y").node_index, 0)
+        node_ev = next(e for e in events if e.action == si.ShapeEventAction.kComputeNode)
         self.assertEqual(node_ev.op_type, "Reshape")
         self.assertEqual(node_ev.node_index, 0)
 

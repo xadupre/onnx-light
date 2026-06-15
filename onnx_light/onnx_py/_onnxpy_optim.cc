@@ -377,6 +377,28 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           "descriptor equality.");
 
   // -----------------------------------------------------------------------
+  // ShapeEventAction — enum classifying a ShapeEvent record.
+  // Mirrors :cpp:enum:`onnx_optim::shapes::ShapeEventAction`.
+  // -----------------------------------------------------------------------
+  nb::enum_<onnx_shapes::ShapeEventAction>(shape_mod, "ShapeEventAction", nb::is_arithmetic(),
+                                           "Action kind recorded in a :class:`ShapeEvent`. "
+                                           "``kAdd`` / ``kReplace`` mark tensor-descriptor "
+                                           "mutations; ``kComputeNode`` marks the dispatch of "
+                                           "a single shape-inference node; ``kConstraint`` / "
+                                           "``kConstraintMax`` mark newly inserted symbolic "
+                                           "dimension constraints.")
+      .value("kAdd", onnx_shapes::ShapeEventAction::kAdd,
+             "A new tensor descriptor was added to the context.")
+      .value("kReplace", onnx_shapes::ShapeEventAction::kReplace,
+             "An existing tensor descriptor was replaced.")
+      .value("kComputeNode", onnx_shapes::ShapeEventAction::kComputeNode,
+             "Shape inference was dispatched for a node.")
+      .value("kConstraint", onnx_shapes::ShapeEventAction::kConstraint,
+             "A new equality constraint between two symbolic dimensions was inserted.")
+      .value("kConstraintMax", onnx_shapes::ShapeEventAction::kConstraintMax,
+             "A new less-than-or-equal constraint between two symbolic dimensions was inserted.");
+
+  // -----------------------------------------------------------------------
   // ShapeEvent — append-only log entry for a single shape-inference event.
   // Mirrors :cpp:class:`onnx_optim::shapes::ShapeEvent`; ``shape`` is exposed
   // as a list of per-dimension strings so symbolic dims are preserved.
@@ -393,12 +415,10 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       "events record a newly inserted symbolic-dimension constraint and carry its "
       "two operands in ``inputs``.")
       .def_prop_ro(
-          "action",
-          [](const onnx_shapes::ShapeEvent &ev) {
-            return std::string(onnx_shapes::ShapeEventActionName(ev.action));
-          },
-          "Event kind: ``\"add\"``, ``\"replace\"``, ``\"compute_node\"``, "
-          "``\"constraint\"`` or ``\"constraint_max\"``.")
+          "action", [](const onnx_shapes::ShapeEvent &ev) { return ev.action; },
+          ":class:`ShapeEventAction` member describing the event kind: "
+          "``kAdd``, ``kReplace``, ``kComputeNode``, ``kConstraint`` or "
+          "``kConstraintMax``.")
       .def_ro("name", &onnx_shapes::ShapeEvent::name,
               "Value name targeted by the mutation. Empty for ``compute_node`` / "
               "``constraint`` / ``constraint_max`` events.")

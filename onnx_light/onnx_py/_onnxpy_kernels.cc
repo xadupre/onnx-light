@@ -149,6 +149,22 @@ void AddOnnxPyRuntime(nb::module_ &m) {
                "', version=" + std::to_string(k.opset.version) + "))";
       });
 
+  // RuntimeEventAction — enum classifying a RuntimeEvent record.
+  // Mirrors :cpp:enum:`onnx_kernels::RuntimeEventAction`.
+  nb::enum_<onnx_kernels::RuntimeEventAction>(rt_mod, "RuntimeEventAction", nb::is_arithmetic(),
+                                              "Action kind recorded in a :class:`RuntimeEvent`. "
+                                              "``kAdd`` / ``kReplace`` / ``kRemove`` mark tensor "
+                                              "map mutations; ``kRunNode`` marks the dispatch of "
+                                              "a single kernel.")
+      .value("kAdd", onnx_kernels::RuntimeEventAction::kAdd,
+             "A new tensor was inserted into the runtime tensor map.")
+      .value("kReplace", onnx_kernels::RuntimeEventAction::kReplace,
+             "An existing tensor in the runtime map was replaced.")
+      .value("kRemove", onnx_kernels::RuntimeEventAction::kRemove,
+             "A tensor was removed from the runtime tensor map.")
+      .value("kRunNode", onnx_kernels::RuntimeEventAction::kRunNode,
+             "A kernel was dispatched for a node.");
+
   // RuntimeEvent — append-only log entry for a single tensor map mutation.
   // Mirrors :cpp:class:`onnx_kernels::RuntimeEvent`; ``values`` / ``string_values``
   // expose the populated prefix of the underlying fixed-size buffer as Python
@@ -165,11 +181,9 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       "truncated payload. ``remove`` events carry ``data_type = UNDEFINED``, "
       "empty ``shape`` and ``value_count = 0`` (the tensor is already gone).")
       .def_prop_ro(
-          "action",
-          [](const onnx_kernels::RuntimeEvent &ev) {
-            return std::string(onnx_kernels::RuntimeEventActionName(ev.action));
-          },
-          "Mutation kind: ``\"add\"``, ``\"replace\"`` or ``\"remove\"``.")
+          "action", [](const onnx_kernels::RuntimeEvent &ev) { return ev.action; },
+          ":class:`RuntimeEventAction` member describing the mutation kind: "
+          "``kAdd``, ``kReplace``, ``kRemove`` or ``kRunNode``.")
       .def_prop_ro(
           "kind",
           [](const onnx_kernels::RuntimeEvent &ev) {
@@ -396,9 +410,9 @@ void AddOnnxPyRuntime(nb::module_ &m) {
             // for serialisation or tabular rendering).
             return rt.events();
           },
-          "Returns the append-only log of tensor map mutations (add/replace/remove) "
+          "Returns the append-only log of tensor map mutations and node dispatches "
           "as a list of :class:`RuntimeEvent` instances. Each entry carries "
-          "``action`` (``\"add\"`` / ``\"replace\"`` / ``\"remove\"``), ``kind`` "
+          "``action`` (:class:`RuntimeEventAction` enum), ``kind`` "
           "(``\"unknown\"`` / ``\"initializer\"`` / ``\"input\"`` / "
           "``\"intermediate\"`` / ``\"output\"``), ``timestamp_ns`` "
           "(``int`` nanoseconds since the Unix epoch), ``name``, ``data_type`` "

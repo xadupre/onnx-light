@@ -43,6 +43,7 @@ from __future__ import annotations
 import numpy as np
 
 from onnx_light.onnx.backend import collect_test_cases, collect_test_cases_by_name
+from onnx_light.tools import pretty_onnx
 
 #####################################
 # All backend test cases
@@ -109,7 +110,7 @@ print(f"Names matching '^test_abs$' exactly  : {[c.name for c in exact_abs]}")
 # representation lists the opset imports and the graph (inputs,
 # outputs, nodes).
 
-print(tc.model)
+print(pretty_onnx(tc.model))
 
 #####################################
 # Display the inputs and outputs

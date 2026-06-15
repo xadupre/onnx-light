@@ -54,13 +54,16 @@ import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx.backend import collect_test_cases
 from onnx_light.onnx_optim.shape_inference import (
+    apply_inferred_shapes_to_model,
     check_inputs_available,
     compute_shape_model,
     compute_shape_node,
     infer_shapes_model,
     OptimTensor,
+    ShapeEventAction,
     ShapesContext,
 )
+from onnx_light.tools import pretty_onnx
 
 # Make sure the built-in operator schemas are registered before running
 # shape inference (the C++ dispatch table looks them up).
@@ -99,6 +102,11 @@ model = oh.make_model(
 
 # Ordered list of intermediate / output tensors to track.
 TRACKED = ["added", "concat_out", "Z"]
+
+# %%
+# The model.
+
+print(pretty_onnx(model))
 
 
 # ---------------------------------------------------------------------------
@@ -247,22 +255,54 @@ if nonzero_case is None:
 case_model = onnxl.ModelProto()
 case_model.CopyFrom(nonzero_case.model)
 
+# %%
+# Prints the model.
+print(pretty_onnx(case_model))
+
+# %%
+# We need to clear the existing value_info in the model since
+# they define the expected values for the model.
+case_model.graph.value_info.clear()
+
+# %%
+# Shape inference now.
+
 events_ctx = ShapesContext()
 events_ctx.events_enabled = True
 compute_shape_model(events_ctx, case_model, prefill_with_value_info_output=True)
+apply_inferred_shapes_to_model(events_ctx, case_model)
 
 shape_events = events_ctx.events()
-compute_events = [ev for ev in shape_events if ev.action == "compute_node"]
+compute_events = [ev for ev in shape_events if ev.action == ShapeEventAction.kComputeNode]
 
 print(f"\nShape-inference events for {NONZERO_CHAIN_TEST_CASE_NAME}:")
 print(f"  total events      : {len(shape_events)}")
 print(f"  compute_node count: {len(compute_events)}")
 print("  first events:")
 for ev in shape_events:
+    if ev.action == ShapeEventAction.kComputeNode:
+        continue
     d = ev.as_dict()
-    op = f"{d['op_domain']}::{d['op_type']}" if d["op_type"] else "-"
-    print(f"    {d['action']:<12s} name={d['name']:<16s} shape={d['shape']!s:<16s} op={op}")
+    if ev.action in (ShapeEventAction.kAdd, ShapeEventAction.kReplace):
+        op = f"{d['op_domain']}::{d['op_type']}" if d["op_type"] else "-"
+        print(
+            f"    {d['node_index']:<2d}:{d['action']:<16s} "
+            f"name={d['name']:<16s} shape={d['shape']!s:<16s} op={op}"
+        )
+    else:
+        op = f"{d['op_domain']}::{d['op_type']}" if d["op_type"] else "-"
+        print(f"    {d['node_index']:<2d}:{d['action']:<16s} inputs={d['inputs']}")
 
+
+# %%
+# The results compared to the expected values.
+expected_values = {i.name: i for i in nonzero_case.model.graph.value_info}
+case_values = {i.name: i for i in case_model.graph.value_info}
+for expected in nonzero_case.model.graph.value_info:
+    print(
+        f"expected: {pretty_onnx(expected):<35s} "
+        f"computed: {pretty_onnx(case_values[expected.name]):<35s}"
+    )
 
 #####################################
 # Text plot

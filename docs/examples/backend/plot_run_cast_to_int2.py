@@ -35,6 +35,7 @@ import numpy as np
 
 from onnx_light.onnx.backend import collect_test_case
 from onnx_light.onnx.reference import ReferenceEvaluator
+from onnx_light.tools import pretty_onnx
 
 #####################################
 # Retrieve the float-to-int2 cast case
@@ -60,7 +61,7 @@ print(f"kind      : {tc.kind}")
 # the ONNX ``TensorProto.INT2`` data type. The graph output is declared
 # with ``elem_type: 26`` accordingly.
 
-print(tc.model)
+print(pretty_onnx(tc.model))
 
 #####################################
 # Run the model with the reference runtime
@@ -80,6 +81,7 @@ print("input (float32):")
 print(x.ravel())
 
 output = session.run(None, {"input": x})[0]
+print(f"output type: {type(output)}")
 print(f"output dtype: {output.dtype}")
 print(f"output shape: {output.shape}")
 print("output (int2, saturated to [-2, 1]):")

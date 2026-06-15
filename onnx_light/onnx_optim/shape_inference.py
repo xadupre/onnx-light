@@ -30,6 +30,7 @@ OptimDim = _C.OptimDim
 OptimShape = _C.OptimShape
 OptimTensor = _C.OptimTensor
 ShapeEvent = _C.ShapeEvent
+ShapeEventAction = _C.ShapeEventAction
 ShapesContext = _C.ShapesContext
 
 

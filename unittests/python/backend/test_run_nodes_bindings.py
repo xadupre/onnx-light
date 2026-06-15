@@ -63,6 +63,8 @@ class TestRunNodesBindings(ExtTestCase):
             "OpsetId",
             "KernelContext",
             "RuntimeContext",
+            "RuntimeEvent",
+            "RuntimeEventAction",
             "default_opset",
             "tensor_from_proto",
             "tensor_to_proto",
@@ -74,6 +76,12 @@ class TestRunNodesBindings(ExtTestCase):
             "run_model",
         ]:
             self.assertTrue(hasattr(rt, name), name)
+
+    def test_runtime_event_action_enum_values(self):
+        self.assertEqual(int(rt.RuntimeEventAction.kAdd), 0)
+        self.assertEqual(int(rt.RuntimeEventAction.kReplace), 1)
+        self.assertEqual(int(rt.RuntimeEventAction.kRemove), 2)
+        self.assertEqual(int(rt.RuntimeEventAction.kRunNode), 3)
 
     def test_default_opset_and_kernel_context(self):
         opset = rt.default_opset(18)
@@ -104,7 +112,14 @@ class TestRunNodesBindings(ExtTestCase):
         ctx.remove("missing")  # no-op, does not log
 
         events = ctx.events()
-        self.assertEqual([e.action for e in events], ["add", "replace", "remove"])
+        self.assertEqual(
+            [e.action for e in events],
+            [
+                rt.RuntimeEventAction.kAdd,
+                rt.RuntimeEventAction.kReplace,
+                rt.RuntimeEventAction.kRemove,
+            ],
+        )
         self.assertEqual([e.name for e in events], ["x", "x", "x"])
         # ``set`` defaults to kind ``"input"``, ``put`` to ``"intermediate"``;
         # ``remove`` records ``"unknown"``.
@@ -178,13 +193,13 @@ class TestRunNodesBindings(ExtTestCase):
         self.assertEqual(
             produced,
             [
-                ("add", "t", "intermediate"),
-                ("run_node", "", "unknown"),
-                ("add", "y", "intermediate"),
-                ("run_node", "", "unknown"),
+                (rt.RuntimeEventAction.kAdd, "t", "intermediate"),
+                (rt.RuntimeEventAction.kRunNode, "", "unknown"),
+                (rt.RuntimeEventAction.kAdd, "y", "intermediate"),
+                (rt.RuntimeEventAction.kRunNode, "", "unknown"),
             ],
         )
-        run_node_events = [e for e in events if e.action == "run_node"]
+        run_node_events = [e for e in events if e.action == rt.RuntimeEventAction.kRunNode]
         self.assertEqual([e.op_type for e in run_node_events], ["Abs", "Add"])
         self.assertEqual([e.op_domain for e in run_node_events], ["ai.onnx", "ai.onnx"])
         self.assertEqual([e.inputs for e in run_node_events], [["x"], ["t", "z"]])
@@ -204,7 +219,12 @@ class TestRunNodesBindings(ExtTestCase):
         node_indices = [(e.action, e.name, e.node_index) for e in events]
         self.assertEqual(
             node_indices,
-            [("add", "t", 0), ("run_node", "", 0), ("add", "y", 1), ("run_node", "", 1)],
+            [
+                (rt.RuntimeEventAction.kAdd, "t", 0),
+                (rt.RuntimeEventAction.kRunNode, "", 0),
+                (rt.RuntimeEventAction.kAdd, "y", 1),
+                (rt.RuntimeEventAction.kRunNode, "", 1),
+            ],
         )
         self.assertTrue(all(e.device == -1 for e in events))
         self.assertEqual(d["node_index"], 0)

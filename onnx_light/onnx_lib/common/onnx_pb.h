@@ -36,6 +36,13 @@
 #define ONNX_LIGHT_NAMESPACE onnx_light
 #endif
 
+/// @brief Backwards-compatible alias so that code referencing
+///        ``ONNX_NAMESPACE`` (the macro used in the standard onnx package)
+///        resolves to the same namespace as ``ONNX_LIGHT_NAMESPACE``.
+#ifndef ONNX_NAMESPACE
+#define ONNX_NAMESPACE ONNX_LIGHT_NAMESPACE
+#endif
+
 /// @brief Alias that makes onnx-light headers compatible with code that
 ///        references ``ONNX_LIGHT_NAMESPACE`` (the macro used in the standard onnx
 ///        package).

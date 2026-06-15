@@ -4,6 +4,8 @@ This replicates the current Python API of the onnx package.
 
 from __future__ import annotations
 
+from .. import __version__  # noqa: F401
+
 from ..onnx_py._onnxpyprotoop import (  # type: ignore # noqa: F401
     AttributeProto,
     DeviceConfigurationProto,
@@ -50,3 +52,7 @@ from ..onnx_proto._io_helper import (  # noqa: F401
     save_encrypted,
     save_encrypted_string,
 )
+
+# Aliases matching the upstream onnx API.
+load_model = load
+save_model = save

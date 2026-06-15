@@ -5,7 +5,7 @@ import importlib.util
 import subprocess
 import time
 from onnx_light import __file__ as onnxl_file
-from onnx_light.ext_test_case import ExtTestCase, is_windows, ignore_errors
+from onnx_light.ext_test_case import ExtTestCase, has_onnxruntime, is_windows, ignore_errors
 
 VERBOSE = 0
 ROOT = os.path.realpath(os.path.abspath(os.path.join(onnxl_file, "..", "..")))
@@ -97,6 +97,13 @@ class TestDocumentationExamples(ExtTestCase):
                 and name in {"plot_save_external_data_time.py", "plot_onnx_time.py"}
             ):
                 reason = "onnx is missing"
+
+            if (
+                not reason
+                and not has_onnxruntime()
+                and name in {"plot_save_ort_flatbuffers.py"}
+            ):
+                reason = "onnxruntime is missing"
 
             if reason:
 

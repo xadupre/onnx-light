@@ -13,6 +13,9 @@ from ..onnx_lib.external_data_helper import (  # noqa: F401
     set_external_data,
     uses_external_data,
 )
+from ..onnx_proto._numpy_helper import (  # noqa: F401
+    _load_external_data_for_tensor as load_external_data_for_tensor,
+)
 from . import TensorProto
 
 

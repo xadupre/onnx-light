@@ -99,6 +99,25 @@ steps.
     inferred tensor that has a known element type. Graph inputs and
     initializers keep their authoritative annotations.
 
+    This write-back is **not mandatory**. Populating ``value_info`` is a
+    convenience for callers that want the inferred shapes serialised on the
+    ``ModelProto``; the descriptors themselves live on the
+    :cpp:class:`ShapesContext` and can be read directly without ever
+    touching the model. The context exposes ``names`` (every inferred
+    tensor name), ``has(name)`` and ``get(name)`` (the
+    :cpp:class:`OptimTensor` descriptor, with its element type and shape)
+    so the full result is accessible programmatically:
+
+    .. code-block:: python
+
+        from onnx_light.onnx_optim.shape_inference import ShapesContext
+
+        ctx = ShapesContext()
+        ctx.compute_shape_model(model)
+        for name in ctx.names():
+            tensor = ctx.get(name)  # OptimTensor: element type + shape
+        # ctx.apply_inferred_shapes_to_model(model)  # optional value_info write-back
+
 Symbolic dimensions
 -------------------
 

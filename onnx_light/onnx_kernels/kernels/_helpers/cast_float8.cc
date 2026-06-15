@@ -452,6 +452,98 @@ float Float8E8M0BitsToFloat(std::uint8_t bits) noexcept {
   return BitcastU32ToFloat(static_cast<std::uint32_t>(bits) << 23);
 }
 
+// ---------------------------------------------------------------------------
+// Non-saturating variants.
+// ---------------------------------------------------------------------------
+
+std::uint8_t FloatToFloat8E4M3FNBitsNoSaturate(float v) noexcept {
+  const std::uint32_t b = BitcastFloatToU32(v);
+  const std::uint8_t sign = static_cast<std::uint8_t>((b & 0x80000000u) >> 24);
+  // +/- infinity or NaN -> NaN (sign-preserving: 0x7F or 0xFF).
+  if ((b & 0x7F800000u) == 0x7F800000u) {
+    return sign | 0x7F;
+  }
+  // For finite values, delegate to the saturating path and check for overflow.
+  std::uint8_t val = FloatToFloat8E4M3FNBits(v);
+  // The saturating path maps overflow to 0x7E/0xFE (max finite). In
+  // non-saturating mode, overflow must become NaN instead.
+  if ((val & 0x7F) == 0x7E) {
+    // Check if the original was actually at max magnitude (448.0) or
+    // below: if so it's legitimate, otherwise it overflowed.
+    const std::uint32_t abs_bits = b & 0x7FFFFFFFu;
+    // 448.0 = 0x43E00000
+    if (abs_bits > 0x43E00000u) {
+      return sign | 0x7F; // NaN
+    }
+  }
+  return val;
+}
+
+std::uint8_t FloatToFloat8E4M3FNUZBitsNoSaturate(float v) noexcept {
+  const std::uint32_t b = BitcastFloatToU32(v);
+  // +/- infinity or NaN -> NaN (0x80).
+  if ((b & 0x7F800000u) == 0x7F800000u) {
+    return 0x80;
+  }
+  // For finite values, delegate to the saturating path and check for overflow.
+  std::uint8_t val = FloatToFloat8E4M3FNUZBits(v);
+  // The saturating path maps overflow to sign|0x7F (max finite). In
+  // non-saturating mode, overflow must become NaN (0x80).
+  if ((val & 0x7F) == 0x7F && val != 0x80) {
+    const std::uint32_t abs_bits = b & 0x7FFFFFFFu;
+    // Max finite for E4M3FNUZ is 240.0 = 0x43700000.
+    if (abs_bits > 0x43700000u) {
+      return 0x80; // NaN
+    }
+  }
+  return val;
+}
+
+std::uint8_t FloatToFloat8E5M2BitsNoSaturate(float v) noexcept {
+  const std::uint32_t b = BitcastFloatToU32(v);
+  const std::uint8_t sign = static_cast<std::uint8_t>((b & 0x80000000u) >> 24);
+  // NaN -> NaN (sign-preserving).
+  if ((b & 0x7F800000u) == 0x7F800000u && (b & 0x007FFFFFu) != 0) {
+    return sign | 0x7E; // canonical NaN pattern
+  }
+  // +/- infinity -> +/- infinity (E5M2 has infinity representation).
+  if ((b & 0x7FFFFFFFu) == 0x7F800000u) {
+    return sign | 0x7C; // infinity in E5M2
+  }
+  // For finite values, delegate to saturating path and check for overflow.
+  std::uint8_t val = FloatToFloat8E5M2Bits(v);
+  // The saturating path maps overflow to 0x7B/0xFB (max finite). In
+  // non-saturating mode, overflow must become +/-infinity.
+  if ((val & 0x7F) == 0x7B) {
+    const std::uint32_t abs_bits = b & 0x7FFFFFFFu;
+    // Max finite for E5M2 is 57344.0 = 0x47600000.
+    if (abs_bits > 0x47600000u) {
+      return sign | 0x7C; // infinity
+    }
+  }
+  return val;
+}
+
+std::uint8_t FloatToFloat8E5M2FNUZBitsNoSaturate(float v) noexcept {
+  const std::uint32_t b = BitcastFloatToU32(v);
+  // +/- infinity or NaN -> NaN (0x80).
+  if ((b & 0x7F800000u) == 0x7F800000u) {
+    return 0x80;
+  }
+  // For finite values, delegate to saturating path and check for overflow.
+  std::uint8_t val = FloatToFloat8E5M2FNUZBits(v);
+  // The saturating path maps overflow to sign|0x7F (max finite). In
+  // non-saturating mode, overflow must become NaN (0x80).
+  if ((val & 0x7F) == 0x7F && val != 0x80) {
+    const std::uint32_t abs_bits = b & 0x7FFFFFFFu;
+    // Max finite for E5M2FNUZ is 57344.0 = 0x47600000.
+    if (abs_bits > 0x47600000u) {
+      return 0x80; // NaN
+    }
+  }
+  return val;
+}
+
 } // namespace kernel
 } // namespace onnx_kernels
 } // namespace ONNX_LIGHT_NAMESPACE

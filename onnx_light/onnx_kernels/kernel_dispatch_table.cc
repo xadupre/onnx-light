@@ -308,8 +308,8 @@ inline SVMCommonAttrs ParseSVMCommonAttrs(const NodeProto &node, const char *op_
 // with a ``T*`` tag pointer (always null) so the caller can recover ``T`` via
 // ``std::remove_pointer_t<decltype(tag)>``.
 template <class Fn>
-auto DispatchSVMByDataType(const Tensor &x, const char *op_name,
-                           Fn &&fn) -> decltype(fn(static_cast<float *>(nullptr))) {
+auto DispatchSVMByDataType(const Tensor &x, const char *op_name, Fn &&fn)
+    -> decltype(fn(static_cast<float *>(nullptr))) {
   switch (x.data_type) {
   case static_cast<int32_t>(DataType::FLOAT):
     return fn(static_cast<float *>(nullptr));
@@ -330,8 +330,8 @@ auto DispatchSVMByDataType(const Tensor &x, const char *op_name,
 // set of input element types (FLOAT, DOUBLE, INT32, INT64) per the
 // ``ai.onnx.ml`` schema.
 template <class Fn>
-auto DispatchTreeEnsembleClassicByDataType(const Tensor &x, const char *op_name,
-                                           Fn &&fn) -> decltype(fn(static_cast<float *>(nullptr))) {
+auto DispatchTreeEnsembleClassicByDataType(const Tensor &x, const char *op_name, Fn &&fn)
+    -> decltype(fn(static_cast<float *>(nullptr))) {
   return DispatchSVMByDataType(x, op_name, std::forward<Fn>(fn));
 }
 
@@ -748,7 +748,19 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          SetOutput(node, 0, std::move(output), rt);
          SetOutput(node, 1, std::move(present_state), rt);
        }},
-      {"ai.onnx:Cast", MakeUnaryToTrampoline<kernel::Cast>()},
+      {"ai.onnx:Cast",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const Tensor &x = GetInput(node, 0, rt.tensors());
+         const int32_t to = static_cast<int32_t>(GetAttributeIntOrDefault(node, "to", -1));
+         if (to < 0) {
+           throw std::invalid_argument("RunNode: Cast requires INT attribute 'to'.");
+         }
+         const bool saturate = GetAttributeIntOrDefault(node, "saturate", 1) != 0;
+         kernel::Cast kernel(rt.kernel_ctx());
+         SetOutput(node, 0, kernel(x, to, saturate), rt);
+       }},
       {"ai.onnx:CastLike",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 2);

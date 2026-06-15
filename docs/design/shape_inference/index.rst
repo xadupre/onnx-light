@@ -15,6 +15,7 @@ expectations.
 
     expressions
     constraints
+    sequences_and_subgraphs
     events
     inference_coverage
 
@@ -72,7 +73,9 @@ steps.
 
     Before each dispatch the engine checks that all declared inputs are
     already known and that the outputs are not yet defined, so missing
-    inputs or duplicate definitions are reported early.
+    inputs or duplicate definitions are reported early. Sequence- and
+    map-typed values and the nested graphs of control-flow operators are
+    handled here too; see :ref:`l-design-shape-sequences`.
 
 4. Merge anchors
     ``MergeAnchorsIntoContext`` reconciles each anchor with the inferred
@@ -132,6 +135,14 @@ Dynamic dimensions are represented as symbolic expression strings such as
 evaluates and renames these expressions so that symbolic arithmetic stays
 canonical throughout inference. It is described in
 :ref:`l-design-expressions`.
+
+Sequences, maps and subgraphs
+-----------------------------
+
+Besides tensors, the engine tracks sequence- and map-typed values and
+infers the nested graphs of control-flow operators (``If`` / ``Loop`` /
+``Scan``) and model-local functions in child contexts. These richer
+values and nested graphs are described in :ref:`l-design-shape-sequences`.
 
 Constraints
 -----------

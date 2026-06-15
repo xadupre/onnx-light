@@ -72,9 +72,11 @@ defs.register_onnx_operator_set_schema()
 # +++++++++++++++
 #
 # The graph computes ``Z = Reshape(Concat(Add(X, Y), X, axis=2), [0, 0, -1])``.
-# Both ``X`` and ``Y`` are 3-D float inputs with concrete dimensions
-# ``[2, 5, 8]``.  The Reshape target shape is stored as an INT64
-# initializer ``reshape_shape = [0, 0, -1]``.
+# Both ``X`` and ``Y`` are 3-D float inputs with symbolic dimensions
+# ``["batch", "seq", 8]``: the batch size and sequence length are dynamic
+# (symbolic) while the model dimension ``d_model = 8`` is concrete.  The
+# Reshape target shape is stored as an INT64 initializer
+# ``reshape_shape = [0, 0, -1]``.
 
 model = oh.make_model(
     oh.make_graph(
@@ -85,8 +87,8 @@ model = oh.make_model(
         ],
         "shape_inference_demo",
         inputs=[
-            oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 5, 8]),
-            oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2, 5, 8]),
+            oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["batch", "seq", 8]),
+            oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, ["batch", "seq", 8]),
         ],
         outputs=[oh.make_tensor_value_info("Z", onnxl.TensorProto.FLOAT, None)],
         initializer=[oh.make_tensor("reshape_shape", onnxl.TensorProto.INT64, [3], [0, 0, -1])],
@@ -119,7 +121,7 @@ def last_dim_int(shape):
 # types and shapes back into ``model.graph.output`` and
 # ``model.graph.value_info``.  Internally it reads the *values* of every
 # initializer, which lets it fully resolve the ``[0, 0, -1]`` target and
-# derive ``Z = [2, 5, 16]``.
+# derive ``Z = ["batch", "seq", 16]``.
 
 infer_shapes_model(model)
 
@@ -195,7 +197,7 @@ for name in TRACKED:
 # Calling :meth:`OptimTensor.set_value_as_shape` on ``reshape_shape``
 # mirrors what :func:`infer_shapes_model` does internally. The Reshape
 # shape function can now read ``[0, 0, -1]`` and derive
-# ``Z = [2, 5, 16]``.
+# ``Z = ["batch", "seq", 16]``.
 
 enhanced_shapes = run_node_by_node(model, propagate_values=True)
 print("\nEnhanced node-by-node shapes:")
@@ -207,7 +209,7 @@ for name in TRACKED:
 # Comparison table
 # ++++++++++++++++
 #
-# Model-level and enhanced node-by-node agree: ``Z = [2, 5, 16]``.
+# Model-level and enhanced node-by-node agree: ``Z = ["batch", "seq", 16]``.
 # The naïve approach cannot resolve the ``Reshape`` output because the
 # shape values ``[0, 0, -1]`` are not available in the context.
 

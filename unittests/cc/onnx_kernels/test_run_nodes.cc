@@ -536,6 +536,48 @@ TEST(RunNodes, RunNodeBatchNormalizationFromDispatchTable) {
   EXPECT_NEAR(got[5], (4.0f - 3.0f) * inv1 * 1.5f + 1.0f, 1e-6f);
 }
 
+TEST(RunNodes, RunNodeBatchNormalizationTrainingModeFromDispatchTable) {
+  // Verifies that ``training_mode = 1`` routes through the dispatch table and
+  // produces the three training-mode outputs (Y, running_mean, running_var).
+  RuntimeContext rt(KernelContext(DefaultOpset(15)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {1, 2, 1, 3}, {-1.0f, 0.0f, 1.0f, 2.0f, 3.0f, 4.0f});
+  rt.tensors()["scale"] = Tensor::FromFloat("scale", {2}, {1.0f, 1.5f});
+  rt.tensors()["bias"] = Tensor::FromFloat("bias", {2}, {0.0f, 1.0f});
+  rt.tensors()["mean"] = Tensor::FromFloat("mean", {2}, {0.5f, 2.0f});
+  rt.tensors()["var"] = Tensor::FromFloat("var", {2}, {1.0f, 2.0f});
+
+  NodeProto node = MakeNode("BatchNormalization", {"x", "scale", "bias", "mean", "var"},
+                            {"y", "running_mean", "running_var"});
+  AttributeProto *training_attr = node.add_attribute();
+  training_attr->set_name("training_mode");
+  training_attr->set_type(AttributeProto::AttributeType::INT);
+  training_attr->set_i(1);
+
+  RunNode(node, rt);
+
+  const float momentum = 0.9f;
+  const float saved_mean0 = 0.0f, saved_mean1 = 3.0f;
+  const float saved_var = 2.0f / 3.0f;
+
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{1, 2, 1, 3}));
+  const float *got = y.AsFloat();
+  const float inv = 1.0f / std::sqrt(saved_var + 1e-5f);
+  EXPECT_NEAR(got[0], (-1.0f - saved_mean0) * inv, 1e-4f);
+  EXPECT_NEAR(got[3], (2.0f - saved_mean1) * inv * 1.5f + 1.0f, 1e-4f);
+
+  const Tensor &rm = rt.tensors()["running_mean"];
+  const Tensor &rv = rt.tensors()["running_var"];
+  EXPECT_EQ(rm.shape, (std::vector<int64_t>{2}));
+  EXPECT_EQ(rv.shape, (std::vector<int64_t>{2}));
+  const float *prm = rm.AsFloat();
+  const float *prv = rv.AsFloat();
+  EXPECT_NEAR(prm[0], 0.5f * momentum + saved_mean0 * (1.0f - momentum), 1e-5f);
+  EXPECT_NEAR(prm[1], 2.0f * momentum + saved_mean1 * (1.0f - momentum), 1e-5f);
+  EXPECT_NEAR(prv[0], 1.0f * momentum + saved_var * (1.0f - momentum), 1e-5f);
+  EXPECT_NEAR(prv[1], 2.0f * momentum + saved_var * (1.0f - momentum), 1e-5f);
+}
+
 TEST(RunNodes, RunNodeImageDecoderFromDispatchTable) {
   // ``ImageDecoder`` was introduced in ONNX opset 20. The reference kernel
   // does not link an image-decoding library and returns the empty

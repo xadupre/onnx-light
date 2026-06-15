@@ -170,9 +170,9 @@ public:
 /// ``C``. The kernel implements the inference formula
 /// ``Y = (X - input_mean) / sqrt(input_var + epsilon) * scale + B``
 /// using NumPy-style broadcasting along the channel axis. Training mode
-/// (``training_mode = 1``, opset 14+) is not supported because the
-/// reference backend test cases registered today exercise only the
-/// inference path.
+/// (``training_mode = 1``, opset 14+) is also supported via
+/// ``TrainingForward``: it normalizes ``X`` with the per-channel batch
+/// statistics and returns the updated running mean / variance.
 class BatchNormalization : public KernelBase {
 public:
   using KernelBase::KernelBase;
@@ -185,6 +185,18 @@ public:
   void operator()(const Tensor &x, const Tensor &scale, const Tensor &bias,
                   const Tensor &input_mean, const Tensor &input_var, Tensor &output,
                   float epsilon = 1e-5f) const;
+
+  /// Returns the training-mode outputs ``(Y, running_mean, running_var)``
+  /// for ``training_mode = 1`` (opset 14+). The per-channel batch ``mean``
+  /// and (population) ``var`` are computed over every axis except the
+  /// channel axis, ``Y`` is normalized with those batch statistics, and the
+  /// running estimates are updated as
+  /// ``running = input * momentum + saved * (1 - momentum)``. ``momentum``
+  /// defaults to 0.9f and ``epsilon`` to 1e-5f, the upstream defaults.
+  std::tuple<Tensor, Tensor, Tensor> TrainingForward(const Tensor &x, const Tensor &scale,
+                                                     const Tensor &bias, const Tensor &input_mean,
+                                                     const Tensor &input_var, float epsilon = 1e-5f,
+                                                     float momentum = 0.9f) const;
 
   /// Output ``Y`` has the same shape as ``X`` so the output buffer may
   /// alias the input ``X`` buffer.

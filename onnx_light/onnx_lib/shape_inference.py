@@ -90,3 +90,33 @@ def infer_shapes(model):
     """
     _shape_inference.infer_shapes(model)
     return model
+
+
+def infer_shapes_path(
+    model_path: str,
+    output_path: str = "",
+    check_type: bool = False,
+    strict_mode: bool = False,
+    data_prop: bool = False,
+) -> None:
+    """Runs shape inference on a model file and saves the result.
+
+    Loads the model from *model_path*, runs shape inference, and writes the
+    result to *output_path* (or overwrites *model_path* when *output_path* is
+    empty).
+
+    This avoids loading the full model into Python memory twice and mirrors
+    the upstream ``onnx.shape_inference.infer_shapes_path`` API.
+
+    :param model_path: Path to the input ONNX model.
+    :param output_path: Path to write the inferred model.  When empty,
+        the input file is overwritten.
+    :param check_type: Unused, kept for API compatibility.
+    :param strict_mode: Unused, kept for API compatibility.
+    :param data_prop: Unused, kept for API compatibility.
+    """
+    from ..onnx_proto._io_helper import load, save
+
+    model = load(model_path)
+    _shape_inference.infer_shapes(model)
+    save(model, output_path or model_path)

@@ -182,10 +182,6 @@ hardsigmoid_default_expanded_ver18
 hardsigmoid_example_expanded_ver18
 hardsigmoid_expanded_ver18
 hardswish_expanded
-identity_opt
-identity_sequence
-if_opt
-if_seq
 isinf_float16
 layer_normalization_2d_axis0_expanded
 layer_normalization_2d_axis0_expanded_ver18

@@ -79,8 +79,7 @@ void RegisterIdentityCases(std::vector<TestCase> &registry) {
 
     Tensor a = Tensor::FromFloat("a", {1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
     Tensor b = Tensor::FromFloat("b", {1, 2, 2}, {2.0f, 3.0f, 1.0f, 5.0f});
-    Tensor stacked("res", DataType::FLOAT, {2, 1, 2, 2},
-                   {});  // fill below
+    Tensor stacked("res", DataType::FLOAT, {2, 1, 2, 2}, {}); // fill below
     {
       // Expected: stack [a, b] along new axis 0 → [2, 1, 2, 2].
       std::vector<uint8_t> data;

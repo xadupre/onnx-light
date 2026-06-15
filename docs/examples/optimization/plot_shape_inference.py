@@ -251,13 +251,12 @@ compute_shape_model(events_ctx, case_model, prefill_with_value_info_output=True)
 
 shape_events = events_ctx.events()
 compute_events = [ev for ev in shape_events if ev.action == "compute_node"]
-max_displayed_events = 8
 
 print(f"\nShape-inference events for {NONZERO_CHAIN_TEST_CASE_NAME}:")
 print(f"  total events      : {len(shape_events)}")
 print(f"  compute_node count: {len(compute_events)}")
 print("  first events:")
-for ev in shape_events[:max_displayed_events]:
+for ev in shape_events:
     d = ev.as_dict()
     op = f"{d['op_domain']}::{d['op_type']}" if d["op_type"] else "-"
     print(f"    {d['action']:<12s} name={d['name']:<16s} shape={d['shape']!s:<16s} op={op}")

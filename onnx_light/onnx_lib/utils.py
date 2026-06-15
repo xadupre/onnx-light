@@ -15,6 +15,7 @@ from . import load, save
 if TYPE_CHECKING:
     from . import FunctionProto, ModelProto, NodeProto, TensorProto, ValueInfoProto
 
+#: Legacy, onnx-light does not have such limit.
 #: Maximum protobuf size in bytes (2 GB).
 MAXIMUM_PROTOBUF = 2 * 1024**3
 

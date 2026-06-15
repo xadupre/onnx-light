@@ -50,3 +50,7 @@ from ..onnx_proto._io_helper import (  # noqa: F401
     save_encrypted,
     save_encrypted_string,
 )
+
+# Aliases matching the upstream onnx API.
+load_model = load
+save_model = save

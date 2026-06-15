@@ -424,16 +424,19 @@ TEST(BackendRunModel, DequantizeLinear) {
 }
 TEST(BackendRunModel, DynamicQuantizeLinear) { RunBackendCasesFor("DynamicQuantizeLinear"); }
 
-// The reference QLinearMatMul kernel only supports per-tensor quantization
-// (scalar scales/zero-points) with FLOAT scales. Skip FLOAT16-scale cases.
+// The reference QLinearMatMul kernel supports per-tensor quantization
+// (scalar scales/zero-points) with FLOAT or FLOAT16 scales.
 TEST(BackendRunModel, QLinearMatMul) {
   RunBackendCasesFor("QLinearMatMul", [](const DataSet &ds) {
     if (ds.inputs.size() < 8 || ds.inputs[1].element_count() != 1) {
       return false;
     }
-    return ds.inputs[1].data_type == static_cast<int32_t>(DataType::FLOAT) &&
-           ds.inputs[4].data_type == static_cast<int32_t>(DataType::FLOAT) &&
-           ds.inputs[6].data_type == static_cast<int32_t>(DataType::FLOAT);
+    auto is_float_scale = [](int32_t dt) {
+      return dt == static_cast<int32_t>(DataType::FLOAT) ||
+             dt == static_cast<int32_t>(DataType::FLOAT16);
+    };
+    return is_float_scale(ds.inputs[1].data_type) && is_float_scale(ds.inputs[4].data_type) &&
+           is_float_scale(ds.inputs[6].data_type);
   });
 }
 

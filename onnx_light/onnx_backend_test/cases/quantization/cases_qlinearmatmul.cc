@@ -75,12 +75,11 @@ Tensor MakeQuantTensor(const std::string &name, DataType dtype, const std::vecto
 //     ``QLinearMatMul.export_overflow`` / ``export_underflow``).
 //
 // FLOAT32 expected outputs are computed by the reference
-// ``kernel::QLinearMatMul``. The kernel only accepts FLOAT scales, so the
-// FLOAT16 variants reuse the FLOAT-derived expected outputs except for the
-// 3-D INT8 case where upstream encodes a one-ULP rounding difference
-// (``117/120`` vs ``116/119`` in the first row of each batch); that variation
-// is encoded explicitly so the cases match
-// ``onnx.backend.test.case.node.qlinearmatmul`` byte-for-byte.
+// ``kernel::QLinearMatMul``. The kernel evaluates the combined scale in
+// FLOAT32, and for these inputs the FLOAT16 scales round-trip to the same
+// result, so the FLOAT16 variants reuse the FLOAT-derived expected outputs.
+// This keeps the cases matching ``onnx.backend.test.case.node.qlinearmatmul``
+// byte-for-byte.
 // ---------------------------------------------------------------------------
 void RegisterQLinearMatMulCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(10);
@@ -157,17 +156,14 @@ void RegisterQLinearMatMulCases(std::vector<TestCase> &registry) {
              registry);
     }
 
-    // FLOAT16 3-D variant: UINT8 matches the FLOAT32 output exactly; INT8
-    // encodes upstream's one-ULP rounding difference (first row of each
-    // batch: ``-86, 116, 119`` instead of ``-86, 117, 120``).
-    Tensor y_3d_f16 = y_3d_f32;
-    if (is_int8) {
-      y_3d_f16 = MakeQuantTensor("y", dtype, {2, 2, 3},
-                                 {-86, 116, 119, 115, 39, -121, -86, 116, 119, 115, 39, -121});
-    }
+    // FLOAT16 3-D variant: the FLOAT16 scales round-trip to the same combined
+    // scale as the FLOAT32 ones for these inputs, so the expected output is
+    // identical to the FLOAT32 case for both UINT8 and INT8. This matches
+    // ``onnx.backend.test.case.node.qlinearmatmul`` byte-for-byte (the INT8 3-D
+    // output is ``[[-86, -128, -128], [115, 39, -121]]`` per batch).
     {
       NodeProto node = MakeQLinearMatMulNode();
-      Expect(node, {a_3d, a_scale_h, a_zp, b_3d, b_scale_h, b_zp_3d, y_scale_h, y_zp}, {y_3d_f16},
+      Expect(node, {a_3d, a_scale_h, a_zp, b_3d, b_scale_h, b_zp_3d, y_scale_h, y_zp}, {y_3d_f32},
              "test_cc_qlinearmatmul_3D_" + dtype_suffix + "_float16", {opset}, "backend-test",
              registry);
     }

@@ -308,8 +308,8 @@ inline SVMCommonAttrs ParseSVMCommonAttrs(const NodeProto &node, const char *op_
 // with a ``T*`` tag pointer (always null) so the caller can recover ``T`` via
 // ``std::remove_pointer_t<decltype(tag)>``.
 template <class Fn>
-auto DispatchSVMByDataType(const Tensor &x, const char *op_name,
-                           Fn &&fn) -> decltype(fn(static_cast<float *>(nullptr))) {
+auto DispatchSVMByDataType(const Tensor &x, const char *op_name, Fn &&fn)
+    -> decltype(fn(static_cast<float *>(nullptr))) {
   switch (x.data_type) {
   case static_cast<int32_t>(DataType::FLOAT):
     return fn(static_cast<float *>(nullptr));
@@ -330,8 +330,8 @@ auto DispatchSVMByDataType(const Tensor &x, const char *op_name,
 // set of input element types (FLOAT, DOUBLE, INT32, INT64) per the
 // ``ai.onnx.ml`` schema.
 template <class Fn>
-auto DispatchTreeEnsembleClassicByDataType(const Tensor &x, const char *op_name,
-                                           Fn &&fn) -> decltype(fn(static_cast<float *>(nullptr))) {
+auto DispatchTreeEnsembleClassicByDataType(const Tensor &x, const char *op_name, Fn &&fn)
+    -> decltype(fn(static_cast<float *>(nullptr))) {
   return DispatchSVMByDataType(x, op_name, std::forward<Fn>(fn));
 }
 
@@ -776,8 +776,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const Tensor &target_type = GetInput(node, 1, rt.tensors());
+         const bool saturate = GetAttributeIntOrDefault(node, "saturate", 1) != 0;
          kernel::CastLike k(rt.kernel_ctx());
-         SetOutput(node, 0, k(x, target_type), rt);
+         SetOutput(node, 0, k(x, target_type, saturate), rt);
        }},
       {"ai.onnx:Ceil", MakeUnaryTrampoline<kernel::Ceil>()},
       {"ai.onnx:Celu", MakeUnaryAlphaTrampoline<kernel::Celu>("alpha", 1.0f)},

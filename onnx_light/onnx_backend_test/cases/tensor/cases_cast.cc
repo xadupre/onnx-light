@@ -55,6 +55,16 @@ NodeProto MakeCastNode(int64_t to) {
   return node;
 }
 
+NodeProto MakeCastNodeNoSaturate(int64_t to) {
+  NodeProto node;
+  node.set_op_type("Cast");
+  node.add_input("input");
+  node.add_output("output");
+  AddAttribute<int64_t>(node, "to", to);
+  AddAttribute<int64_t>(node, "saturate", 0);
+  return node;
+}
+
 struct CastDtype {
   DataType dtype;
   const char *name;
@@ -203,6 +213,37 @@ void RegisterCastCases(std::vector<TestCase> &registry) {
       Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
       Expect(node, {input}, {output}, std::string("test_cc_cast_") + v.name + "_to_FLOAT16",
              {opset}, "backend-test", registry);
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Cast no_saturate cases — FLOAT/FLOAT16 → FLOAT8* with saturate=0.
+  //
+  // Mirrors the upstream ``test_cast_no_saturate_<FROM>_to_<TO>`` tests.
+  // When saturate is 0, out-of-range values produce NaN instead of being
+  // clamped to the maximum representable magnitude.
+  // ---------------------------------------------------------------------
+  {
+    const OpsetId opset_19 = DefaultOpset(19);
+    for (const auto &v : kFloat8Variants) {
+      // FLOAT -> FLOAT8* (no_saturate)
+      {
+        const int64_t to_attr = static_cast<int64_t>(v.dtype);
+        NodeProto node = MakeCastNodeNoSaturate(to_attr);
+        Tensor input = Tensor::FromFloat("", f8_shape, f8_fp32_values);
+        Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr), /*saturate=*/false);
+        Expect(node, {input}, {output}, std::string("test_cast_no_saturate_FLOAT_to_") + v.name,
+               {opset_19}, "backend-test", registry);
+      }
+      // FLOAT16 -> FLOAT8* (no_saturate)
+      {
+        const int64_t to_attr = static_cast<int64_t>(v.dtype);
+        NodeProto node = MakeCastNodeNoSaturate(to_attr);
+        Tensor input = kernel::MakeFloat16Tensor("", f8_shape, f8_fp32_values);
+        Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr), /*saturate=*/false);
+        Expect(node, {input}, {output}, std::string("test_cast_no_saturate_FLOAT16_to_") + v.name,
+               {opset_19}, "backend-test", registry);
+      }
     }
   }
 

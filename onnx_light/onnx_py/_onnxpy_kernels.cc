@@ -410,7 +410,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
             // for serialisation or tabular rendering).
             return rt.events();
           },
-          "Returns the append-only log of tensor map mutations (add/replace/remove) "
+          "Returns the append-only log of tensor map mutations and node dispatches "
           "as a list of :class:`RuntimeEvent` instances. Each entry carries "
           "``action`` (:class:`RuntimeEventAction` enum), ``kind`` "
           "(``\"unknown\"`` / ``\"initializer\"`` / ``\"input\"`` / "

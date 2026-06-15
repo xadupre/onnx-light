@@ -229,6 +229,111 @@ inline int64_t ComputeInnerStride(const std::vector<int64_t> &shape, int64_t axi
   return stride;
 }
 
+// Computes, for every element of ``x``, the flat index of the scale/ZP value
+// that governs it. Supports both per-axis (1-D scale) and blocked (N-D scale).
+std::vector<int64_t> ComputeScaleIndex(const Tensor &x, const Tensor &y_scale, int64_t axis) {
+  const std::vector<int64_t> &x_shape = x.shape;
+  const std::size_t rank = x_shape.size();
+  const int64_t n = x.element_count();
+  std::vector<int64_t> scale_index(static_cast<std::size_t>(n));
+
+  if (y_scale.shape.size() == rank) {
+    // Blocked: scale shape matches x rank, each scale dim divides x dim.
+    const std::vector<int64_t> &s_shape = y_scale.shape;
+    std::vector<int64_t> repeats(rank);
+    std::vector<int64_t> s_strides(rank);
+    int64_t stride = 1;
+    for (std::size_t d = rank; d-- > 0;) {
+      s_strides[d] = stride;
+      stride *= s_shape[d];
+      repeats[d] = s_shape[d] != 0 ? x_shape[d] / s_shape[d] : 1;
+    }
+    std::vector<int64_t> coord(rank, 0);
+    for (int64_t i = 0; i < n; ++i) {
+      int64_t si = 0;
+      for (std::size_t d = 0; d < rank; ++d) {
+        si += (coord[d] / repeats[d]) * s_strides[d];
+      }
+      scale_index[static_cast<std::size_t>(i)] = si;
+      for (std::size_t d = rank; d-- > 0;) {
+        if (++coord[d] < x_shape[d]) {
+          break;
+        }
+        coord[d] = 0;
+      }
+    }
+    return scale_index;
+  }
+
+  // Per-axis: 1-D scale indexed by the coordinate along ``axis``.
+  const int64_t inner_stride = ComputeInnerStride(x_shape, axis);
+  const int64_t axis_size = x_shape[static_cast<std::size_t>(axis)];
+  for (int64_t i = 0; i < n; ++i) {
+    scale_index[static_cast<std::size_t>(i)] = (i / inner_stride) % axis_size;
+  }
+  return scale_index;
+}
+
+// Per-block quantization for whole-byte integer output types.
+template <typename ZP>
+void QuantizeBlockLoop(const Tensor &x, const float *scales, const ZP *zp_data,
+                       const int64_t *scale_index, Tensor &output) {
+  const float *px = x.AsFloat();
+  ZP *py = reinterpret_cast<ZP *>(output.data.data());
+  const int64_t n = x.element_count();
+  constexpr float kMin = static_cast<float>(std::numeric_limits<ZP>::min());
+  constexpr float kMax = static_cast<float>(std::numeric_limits<ZP>::max());
+  for (int64_t i = 0; i < n; ++i) {
+    const int64_t si = scale_index[i];
+    const float zp = static_cast<float>(zp_data[si]);
+    float v = RoundHalfToEven(px[i] / scales[si]) + zp;
+    if (v < kMin) {
+      v = kMin;
+    } else if (v > kMax) {
+      v = kMax;
+    }
+    py[i] = static_cast<ZP>(v);
+  }
+}
+
+// Per-block quantization for INT4/UINT4 packed output.
+void QuantizeBlockInt4Loop(const Tensor &x, const float *scales, const std::uint8_t *zp_bytes,
+                           int32_t out_dtype, const int64_t *scale_index, Tensor &output) {
+  const float *px = x.AsFloat();
+  std::uint8_t *py = output.data.data();
+  const int64_t n = x.element_count();
+  const bool is_signed = (static_cast<DataType>(out_dtype) == DataType::INT4);
+  const float kMin = is_signed ? -8.0f : 0.0f;
+  const float kMax = is_signed ? 7.0f : 15.0f;
+  for (int64_t i = 0; i < n; ++i) {
+    const int64_t si = scale_index[i];
+    const std::uint8_t zp_nibble = Read4BitElement(zp_bytes, si);
+    const float zp = is_signed ? static_cast<float>(Int4NibbleToInt8(zp_nibble))
+                               : static_cast<float>(Uint4NibbleToUint8(zp_nibble));
+    float v = RoundHalfToEven(px[i] / scales[si]) + zp;
+    if (v < kMin) {
+      v = kMin;
+    } else if (v > kMax) {
+      v = kMax;
+    }
+    Write4BitElement(py, i, static_cast<std::uint8_t>(static_cast<int32_t>(v)) & 0x0Fu);
+  }
+}
+
+// Per-block quantization for float8 byte-per-element output.
+void QuantizeBlockFloat8Loop(const Tensor &x, const float *scales, const std::uint8_t *zp_bytes,
+                             int32_t out_dtype, const int64_t *scale_index, Tensor &output) {
+  const float *px = x.AsFloat();
+  std::uint8_t *py = output.data.data();
+  const int64_t n = x.element_count();
+  for (int64_t i = 0; i < n; ++i) {
+    const int64_t si = scale_index[i];
+    const float zp = Float8BitsToFloat(zp_bytes[si], out_dtype);
+    const float v = px[i] / scales[si] + zp;
+    py[i] = FloatToFloat8(v, out_dtype);
+  }
+}
+
 } // namespace
 
 Tensor QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale) const {
@@ -413,60 +518,140 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
       "kernel::QuantizeLinear preallocated output buffer has unexpected size in bytes.");
   EXT_ENFORCE_INVALID(axis >= 0 && axis < static_cast<int64_t>(x.shape.size()),
                       "kernel::QuantizeLinear: axis out of range.");
-  const int64_t axis_size = x.shape[static_cast<std::size_t>(axis)];
-  EXT_ENFORCE_INVALID(y_scale.element_count() == axis_size,
-                      "kernel::QuantizeLinear: y_scale element count must equal axis dimension.");
-  EXT_ENFORCE_INVALID(y_zero_point.element_count() == axis_size,
-                      "kernel::QuantizeLinear: y_zero_point element count must equal axis "
-                      "dimension.");
+  EXT_ENFORCE_INVALID(y_scale.shape == y_zero_point.shape,
+                      "kernel::QuantizeLinear: y_scale and y_zero_point must have the same shape.");
+
+  // Detect blocked vs per-axis layout.
+  const bool blocked = (y_scale.shape.size() == x.shape.size());
+  if (blocked) {
+    for (std::size_t d = 0; d < x.shape.size(); ++d) {
+      const int64_t s_dim = y_scale.shape[d];
+      EXT_ENFORCE_INVALID(s_dim > 0 && x.shape[d] % s_dim == 0,
+                          "kernel::QuantizeLinear: blocked y_scale dimension must divide the "
+                          "matching x dimension.");
+      EXT_ENFORCE_INVALID(static_cast<int64_t>(d) == axis || s_dim == x.shape[d],
+                          "kernel::QuantizeLinear: blocked y_scale may only differ from x along "
+                          "the quantization axis.");
+    }
+  } else {
+    const int64_t axis_size = x.shape[static_cast<std::size_t>(axis)];
+    EXT_ENFORCE_INVALID(y_scale.element_count() == axis_size,
+                        "kernel::QuantizeLinear: y_scale element count must equal axis dimension.");
+  }
+
+  const std::vector<int64_t> scale_index = ComputeScaleIndex(x, y_scale, axis);
+  const int64_t *idx = scale_index.data();
   const float *scales = y_scale.AsFloat();
   const std::uint8_t *zp_bytes = y_zero_point.bytes();
-  const int64_t inner_stride = ComputeInnerStride(x.shape, axis);
 
   switch (output.data_type) {
   case static_cast<int32_t>(DataType::UINT8):
-    QuantizeAxisLoop<uint8_t>(x, scales, reinterpret_cast<const uint8_t *>(y_zero_point.bytes()),
-                              inner_stride, axis_size, output);
+    QuantizeBlockLoop<uint8_t>(x, scales, reinterpret_cast<const uint8_t *>(zp_bytes), idx, output);
     break;
   case static_cast<int32_t>(DataType::INT8):
-    QuantizeAxisLoop<int8_t>(x, scales, reinterpret_cast<const int8_t *>(y_zero_point.bytes()),
-                             inner_stride, axis_size, output);
+    QuantizeBlockLoop<int8_t>(x, scales, reinterpret_cast<const int8_t *>(zp_bytes), idx, output);
     break;
   case static_cast<int32_t>(DataType::UINT16): {
-    // 16-bit ZP values are stored as raw bytes; read pairs.
     const int64_t n_zp = y_zero_point.element_count();
     std::vector<uint16_t> zp_vec(static_cast<std::size_t>(n_zp));
     std::memcpy(zp_vec.data(), zp_bytes, static_cast<std::size_t>(n_zp) * sizeof(uint16_t));
-    QuantizeAxisLoop<uint16_t>(x, scales, zp_vec.data(), inner_stride, axis_size, output);
+    QuantizeBlockLoop<uint16_t>(x, scales, zp_vec.data(), idx, output);
     break;
   }
   case static_cast<int32_t>(DataType::INT16): {
     const int64_t n_zp = y_zero_point.element_count();
     std::vector<int16_t> zp_vec(static_cast<std::size_t>(n_zp));
     std::memcpy(zp_vec.data(), zp_bytes, static_cast<std::size_t>(n_zp) * sizeof(int16_t));
-    QuantizeAxisLoop<int16_t>(x, scales, zp_vec.data(), inner_stride, axis_size, output);
+    QuantizeBlockLoop<int16_t>(x, scales, zp_vec.data(), idx, output);
     break;
   }
   case static_cast<int32_t>(DataType::FLOAT8E4M3FN):
   case static_cast<int32_t>(DataType::FLOAT8E4M3FNUZ):
   case static_cast<int32_t>(DataType::FLOAT8E5M2):
   case static_cast<int32_t>(DataType::FLOAT8E5M2FNUZ):
-    QuantizeAxisFloat8Loop(x, scales, zp_bytes, output.data_type, inner_stride, axis_size, output);
+    QuantizeBlockFloat8Loop(x, scales, zp_bytes, output.data_type, idx, output);
     break;
   case static_cast<int32_t>(DataType::INT4):
   case static_cast<int32_t>(DataType::UINT4):
-    QuantizeAxisInt4Loop(x, scales, zp_bytes, output.data_type, inner_stride, axis_size, output);
-    break;
-  case static_cast<int32_t>(DataType::INT2):
-  case static_cast<int32_t>(DataType::UINT2):
-    QuantizeAxisInt2Loop(x, scales, zp_bytes, output.data_type, inner_stride, axis_size, output);
-    break;
-  case static_cast<int32_t>(DataType::FLOAT4E2M1):
-    QuantizeAxisFloat4E2M1Loop(x, scales, zp_bytes, inner_stride, axis_size, output);
+    QuantizeBlockInt4Loop(x, scales, zp_bytes, output.data_type, idx, output);
     break;
   default:
     EXT_THROW_INVALID("unsupported data type ", output.data_type, ", ",
-                      "kernel::QuantizeLinear (per-axis): unsupported output dtype.");
+                      "kernel::QuantizeLinear (per-axis/blocked): unsupported output dtype.");
+  }
+}
+
+Tensor QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, int64_t axis,
+                                  int32_t output_dtype) const {
+  Tensor out("", output_dtype, x.shape,
+             std::vector<uint8_t>(PackedByteSize(output_dtype, x.element_count())));
+  (*this)(x, y_scale, axis, output_dtype, out);
+  return out;
+}
+
+void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, int64_t axis,
+                                int32_t output_dtype, Tensor &output) const {
+  if (y_scale.element_count() == 1) {
+    return (*this)(x, y_scale, output);
+  }
+  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
+                      "kernel::QuantizeLinear: x must be FLOAT.");
+  EXT_ENFORCE_INVALID(y_scale.data_type == static_cast<int32_t>(DataType::FLOAT),
+                      "kernel::QuantizeLinear: y_scale must be FLOAT.");
+  EXT_ENFORCE_INVALID(output.data_type == output_dtype,
+                      "kernel::QuantizeLinear: output data_type must match output_dtype.");
+  EXT_ENFORCE_INVALID(output.shape == x.shape,
+                      "kernel::QuantizeLinear preallocated output shape must match x shape.");
+  EXT_ENFORCE_INVALID(axis >= 0 && axis < static_cast<int64_t>(x.shape.size()),
+                      "kernel::QuantizeLinear: axis out of range.");
+
+  const bool blocked = (y_scale.shape.size() == x.shape.size());
+  if (blocked) {
+    for (std::size_t d = 0; d < x.shape.size(); ++d) {
+      const int64_t s_dim = y_scale.shape[d];
+      EXT_ENFORCE_INVALID(s_dim > 0 && x.shape[d] % s_dim == 0,
+                          "kernel::QuantizeLinear: blocked y_scale dimension must divide the "
+                          "matching x dimension.");
+      EXT_ENFORCE_INVALID(static_cast<int64_t>(d) == axis || s_dim == x.shape[d],
+                          "kernel::QuantizeLinear: blocked y_scale may only differ from x along "
+                          "the quantization axis.");
+    }
+  } else {
+    const int64_t axis_size = x.shape[static_cast<std::size_t>(axis)];
+    EXT_ENFORCE_INVALID(y_scale.element_count() == axis_size,
+                        "kernel::QuantizeLinear: y_scale element count must equal axis dimension.");
+  }
+
+  const std::vector<int64_t> scale_index = ComputeScaleIndex(x, y_scale, axis);
+  const int64_t *idx = scale_index.data();
+  const float *scales = y_scale.AsFloat();
+
+  // Zero ZP buffer (all zeros) for the symmetric case.
+  const int64_t n_scale = y_scale.element_count();
+  switch (output.data_type) {
+  case static_cast<int32_t>(DataType::UINT8): {
+    std::vector<uint8_t> zp(static_cast<std::size_t>(n_scale), 0);
+    QuantizeBlockLoop<uint8_t>(x, scales, zp.data(), idx, output);
+    break;
+  }
+  case static_cast<int32_t>(DataType::INT8): {
+    std::vector<int8_t> zp(static_cast<std::size_t>(n_scale), 0);
+    QuantizeBlockLoop<int8_t>(x, scales, zp.data(), idx, output);
+    break;
+  }
+  case static_cast<int32_t>(DataType::UINT16): {
+    std::vector<uint16_t> zp(static_cast<std::size_t>(n_scale), 0);
+    QuantizeBlockLoop<uint16_t>(x, scales, zp.data(), idx, output);
+    break;
+  }
+  case static_cast<int32_t>(DataType::INT16): {
+    std::vector<int16_t> zp(static_cast<std::size_t>(n_scale), 0);
+    QuantizeBlockLoop<int16_t>(x, scales, zp.data(), idx, output);
+    break;
+  }
+  default:
+    EXT_THROW_INVALID("unsupported data type ", output.data_type, ", ",
+                      "kernel::QuantizeLinear (symmetric blocked): unsupported output dtype.");
   }
 }
 

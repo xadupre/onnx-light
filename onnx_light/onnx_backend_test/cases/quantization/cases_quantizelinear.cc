@@ -291,6 +291,53 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry) {
     Expect(sub_byte_node, {x, sub_byte_scale, y_zero_point}, {y}, "test_quantizelinear_float4e2m1",
            {opset}, "backend-test", registry);
   }
+
+  // --- Blocked quantization (opset 21+) ---
+  const OpsetId opset_v21 = DefaultOpset(21);
+
+  // ``test_quantizelinear_blocked_asymmetric``: blocked per-axis with ZP.
+  // x=(3,4), y_scale=(3,2), y_zero_point=(3,2), axis=1, block_size=2.
+  {
+    NodeProto node;
+    node.set_op_type("QuantizeLinear");
+    node.add_input("x");
+    node.add_input("y_scale");
+    node.add_input("y_zero_point");
+    node.add_output("y");
+    AddAttribute<int64_t>(node, "axis", 1);
+    AddAttribute<int64_t>(node, "block_size", 2);
+
+    Tensor x = Tensor::FromFloat(
+        "", {3, 4}, {6.0f, 12.0f, 50.0f, 5.0f, 1.0f, 8.0f, 4.0f, 5.0f, 0.0f, 20.0f, 10.0f, 4.0f});
+    Tensor y_scale = Tensor::FromFloat("", {3, 2}, {1.5f, 2.5f, 3.0f, 4.9f, 5.1f, 6.9f});
+    Tensor y_zp = Tensor::FromUint8("", {3, 2}, {0, 1, 1, 0, 2, 3});
+    Tensor y = Tensor::FromUint8("", {3, 4}, {4, 8, 21, 3, 1, 4, 1, 1, 2, 6, 4, 4});
+    Expect(node, {x, y_scale, y_zp}, {y}, "test_quantizelinear_blocked_asymmetric", {opset_v21},
+           "backend-test", registry);
+  }
+
+  // ``test_quantizelinear_blocked_symmetric``: blocked per-axis without ZP.
+  // x=(3,4), y_scale=(3,2), axis=1, block_size=2, output_dtype=INT16(5).
+  {
+    NodeProto node;
+    node.set_op_type("QuantizeLinear");
+    node.add_input("x");
+    node.add_input("y_scale");
+    node.add_output("y");
+    AddAttribute<int64_t>(node, "axis", 1);
+    AddAttribute<int64_t>(node, "block_size", 2);
+    AddAttribute<int64_t>(node, "output_dtype", 5);
+
+    Tensor x = Tensor::FromFloat(
+        "", {3, 4}, {6.0f, -8.0f, -10.0f, 5.0f, 1.0f, 8.0f, 4.0f, 5.0f, 0.0f, 20.0f, 10.0f, 4.0f});
+    Tensor y_scale = Tensor::FromFloat("", {3, 2}, {1.5f, 2.5f, 3.0f, 4.9f, 5.1f, 6.9f});
+    Tensor y =
+        Tensor::FromInt16("", {3, 4},
+                          {int16_t{4}, int16_t{-5}, int16_t{-4}, int16_t{2}, int16_t{0}, int16_t{3},
+                           int16_t{1}, int16_t{1}, int16_t{0}, int16_t{4}, int16_t{1}, int16_t{1}});
+    Expect(node, {x, y_scale}, {y}, "test_quantizelinear_blocked_symmetric", {opset_v21},
+           "backend-test", registry);
+  }
 }
 
 } // namespace onnx_backend_test

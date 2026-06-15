@@ -87,6 +87,13 @@ public:
   void operator()(const Tensor &x, const Tensor &y_scale, const Tensor &y_zero_point, int64_t axis,
                   Tensor &output) const;
 
+  /// Per-axis/blocked quantization without explicit ``y_zero_point``.
+  /// ``output_dtype`` specifies the output element type; zero point is 0.
+  Tensor operator()(const Tensor &x, const Tensor &y_scale, int64_t axis,
+                    int32_t output_dtype) const;
+  void operator()(const Tensor &x, const Tensor &y_scale, int64_t axis, int32_t output_dtype,
+                  Tensor &output) const;
+
   /// Output element type differs from the FLOAT input element type, so storage
   /// can never be shared with an input.
   static constexpr bool CanRunInPlace() noexcept { return false; }

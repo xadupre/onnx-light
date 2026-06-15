@@ -42,7 +42,7 @@ With ``pip install``:
 
 .. code-block:: bash
 
-    pip install -C build-dir=build -C cmake.build-type=Debug -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -e .[dev]
+    pip install -C build-dir=build -C cmake.build-type=Debug -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -e .[dev] -v
     ctest --test-dir build --output-on-failure
 
 With ``setup.py``:

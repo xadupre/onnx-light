@@ -257,6 +257,83 @@ class TestShapesContextBindings(ExtTestCase):
         self.assertEqual(list(ctx_prefill.constraints()), [("ANCHOR", "N")])
 
     # ------------------------------------------------------------------
+    # Method forms exposed directly on ShapesContext.
+    # ------------------------------------------------------------------
+    def test_compute_shape_node_method(self):
+        ctx = si.ShapesContext()
+        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, [2, 3]))
+        node = oh.make_node("Relu", inputs=["X"], outputs=["Y"])
+        ctx.compute_shape_node(node)
+        self.assertTrue(ctx.has("Y"))
+        y = ctx.get("Y")
+        self.assertEqual(y.dtype, onnxl.TensorProto.FLOAT)
+        self.assertEqual(list(y.shape), [2, 3])
+
+    def test_check_inputs_available_method(self):
+        ctx = si.ShapesContext()
+        node = oh.make_node("Relu", inputs=["X"], outputs=["Y"])
+        with self.assertRaises(ValueError):
+            ctx.check_inputs_available(node)
+        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, [1]))
+        ctx.check_inputs_available(node)  # should not raise
+
+    def test_check_outputs_not_available_method(self):
+        ctx = si.ShapesContext()
+        node = oh.make_node("Relu", inputs=["X"], outputs=["Y"])
+        ctx.check_outputs_not_available(node)  # should not raise
+        ctx.set("Y", si.OptimTensor(onnxl.TensorProto.FLOAT, [1]))
+        with self.assertRaises(ValueError):
+            ctx.check_outputs_not_available(node)
+
+    def test_compute_shape_graph_method(self):
+        node = oh.make_node("Relu", inputs=["X"], outputs=["Y"])
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["N", 4])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
+        graph = oh.make_graph([node], "g", [x], [y])
+
+        ctx = si.ShapesContext()
+        ctx.set_opset_version("", 18)
+        ctx.compute_shape_graph(graph)
+        self.assertTrue(ctx.has("X"))
+        self.assertTrue(ctx.has("Y"))
+        self.assertEqual(list(ctx.get("Y").shape), ["N", 4])
+
+    def test_compute_shape_model_and_apply_methods(self):
+        node = oh.make_node("Relu", inputs=["X"], outputs=["Y"])
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["N", 4])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
+        graph = oh.make_graph([node], "g", [x], [y])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+        model.ir_version = 8
+
+        ctx = si.ShapesContext()
+        ctx.compute_shape_model(model)
+        self.assertTrue(ctx.has("Y"))
+        self.assertEqual(ctx.opset_version(""), 18)
+        self.assertEqual(list(ctx.get("Y").shape), ["N", 4])
+
+        ctx.apply_inferred_shapes_to_model(model)
+        out_dims = list(model.graph.output[0].type.tensor_type.shape.dim)
+        self.assertEqual(len(out_dims), 2)
+        self.assertEqual(out_dims[0].dim_param, "N")
+        self.assertEqual(out_dims[1].dim_value, 4)
+
+    def test_apply_inferred_shapes_to_graph_method(self):
+        node = oh.make_node("Relu", inputs=["X"], outputs=["Y"])
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["N", 4])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
+        graph = oh.make_graph([node], "g", [x], [y])
+
+        ctx = si.ShapesContext()
+        ctx.set_opset_version("", 18)
+        ctx.compute_shape_graph(graph)
+        ctx.apply_inferred_shapes_to_graph(graph)
+        out_dims = list(graph.output[0].type.tensor_type.shape.dim)
+        self.assertEqual(len(out_dims), 2)
+        self.assertEqual(out_dims[0].dim_param, "N")
+        self.assertEqual(out_dims[1].dim_value, 4)
+
+    # ------------------------------------------------------------------
     # Symbolic-dimension equality constraints.
     # ------------------------------------------------------------------
     def test_add_constraint_canonical_and_dedup(self):

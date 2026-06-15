@@ -720,7 +720,68 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
             return out;
           },
           "Returns the list of recorded ``<=`` constraints as ordered "
-          "``(lhs, rhs)`` tuples meaning ``lhs <= rhs``.");
+          "``(lhs, rhs)`` tuples meaning ``lhs <= rhs``.")
+      // Shape-inference drivers (also exposed as module-level free functions).
+      .def(
+          "compute_shape_node",
+          [](onnx_shapes::ShapesContext &c, const NodeProto &node) { c.ComputeShapeNode(node); },
+          nb::arg("node"),
+          "Dispatches a single ``NodeProto`` to the matching per-operator "
+          "``ComputeShape*`` function and stores the resulting output tensor "
+          "descriptors in ``self``. The node's input descriptors must already be "
+          "present in ``self``.")
+      .def(
+          "check_inputs_available",
+          [](const onnx_shapes::ShapesContext &c, const NodeProto &node) {
+            c.CheckInputsAvailable(node);
+          },
+          nb::arg("node"),
+          "Raises ``ValueError`` if any non-empty input name declared by ``node`` is "
+          "missing from ``self``.")
+      .def(
+          "check_outputs_not_available",
+          [](const onnx_shapes::ShapesContext &c, const NodeProto &node) {
+            c.CheckOutputsNotAvailable(node);
+          },
+          nb::arg("node"),
+          "Raises ``ValueError`` if any non-empty output name declared by ``node`` "
+          "already has an entry in ``self``.")
+      .def(
+          "compute_shape_graph",
+          [](onnx_shapes::ShapesContext &c, const GraphProto &graph) {
+            c.ComputeShapeGraph(graph);
+          },
+          nb::arg("graph"),
+          "Seeds ``self`` from the initializers and inputs of ``graph`` and then runs "
+          "``compute_shape_node`` on every node in topological order.")
+      .def(
+          "compute_shape_model",
+          [](onnx_shapes::ShapesContext &c, const ModelProto &model,
+             bool prefill_with_value_info_output) {
+            c.ComputeShapeModel(model, prefill_with_value_info_output);
+          },
+          nb::arg("model"), nb::arg("prefill_with_value_info_output") = false,
+          "Records every ``(domain, version)`` pair from ``model.opset_import`` in "
+          "``self`` and delegates to ``compute_shape_graph``. When "
+          "``prefill_with_value_info_output`` is true, tensor descriptors from "
+          "``model.graph.value_info`` and ``model.graph.output`` are added as "
+          "anchors and preferred when there is a non-conflicting choice at the end.")
+      .def(
+          "apply_inferred_shapes_to_graph",
+          [](const onnx_shapes::ShapesContext &c, GraphProto &graph) {
+            c.ApplyInferredShapesToGraph(graph);
+          },
+          nb::arg("graph"),
+          "Writes the shape and element-type descriptors stored in ``self`` back into "
+          "``graph.output`` and ``graph.value_info``.")
+      .def(
+          "apply_inferred_shapes_to_model",
+          [](const onnx_shapes::ShapesContext &c, ModelProto &model) {
+            c.ApplyInferredShapesToModel(model);
+          },
+          nb::arg("model"),
+          "Writes the shape and element-type descriptors stored in ``self`` back into "
+          "``model.graph``.");
 
   shape_mod.attr("kUnknownOpsetVersion") = onnx_shapes::kUnknownOpsetVersion;
   shape_mod.attr("kOnnxDomain") = onnx_shapes::kOnnxDomain;

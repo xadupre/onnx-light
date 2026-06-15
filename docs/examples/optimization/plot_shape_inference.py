@@ -54,10 +54,6 @@ import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx.backend import collect_test_cases
 from onnx_light.onnx_optim.shape_inference import (
-    apply_inferred_shapes_to_model,
-    check_inputs_available,
-    compute_shape_model,
-    compute_shape_node,
     infer_shapes_model,
     OptimTensor,
     ShapeEventAction,
@@ -182,8 +178,8 @@ def run_node_by_node(model, propagate_values: bool) -> dict:
 
     results = {}
     for node in model.graph.node:
-        check_inputs_available(ctx, node)
-        compute_shape_node(ctx, node)
+        ctx.check_inputs_available(node)
+        ctx.compute_shape_node(node)
         for out_name in node.output:
             if not out_name:
                 continue
@@ -269,8 +265,8 @@ case_model.graph.value_info.clear()
 
 events_ctx = ShapesContext()
 events_ctx.events_enabled = True
-compute_shape_model(events_ctx, case_model, prefill_with_value_info_output=True)
-apply_inferred_shapes_to_model(events_ctx, case_model)
+events_ctx.compute_shape_model(case_model, prefill_with_value_info_output=True)
+events_ctx.apply_inferred_shapes_to_model(case_model)
 
 shape_events = events_ctx.events()
 compute_events = [ev for ev in shape_events if ev.action == ShapeEventAction.kComputeNode]

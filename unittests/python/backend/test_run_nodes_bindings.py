@@ -63,6 +63,8 @@ class TestRunNodesBindings(ExtTestCase):
             "OpsetId",
             "KernelContext",
             "RuntimeContext",
+            "RuntimeEvent",
+            "RuntimeEventAction",
             "default_opset",
             "tensor_from_proto",
             "tensor_to_proto",
@@ -74,6 +76,12 @@ class TestRunNodesBindings(ExtTestCase):
             "run_model",
         ]:
             self.assertTrue(hasattr(rt, name), name)
+
+    def test_runtime_event_action_enum_values(self):
+        self.assertEqual(int(rt.RuntimeEventAction.kAdd), 0)
+        self.assertEqual(int(rt.RuntimeEventAction.kReplace), 1)
+        self.assertEqual(int(rt.RuntimeEventAction.kRemove), 2)
+        self.assertEqual(int(rt.RuntimeEventAction.kRunNode), 3)
 
     def test_default_opset_and_kernel_context(self):
         opset = rt.default_opset(18)

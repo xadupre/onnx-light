@@ -324,6 +324,13 @@ class TestShapesContextEventLog(ExtTestCase):
     """Python tests for the opt-in shape-inference event log exposed by
     ``ShapesContext`` (``events_enabled`` / ``events`` / ``clear_events``)."""
 
+    def test_shape_event_action_enum_values(self):
+        self.assertEqual(int(si.ShapeEventAction.kAdd), 0)
+        self.assertEqual(int(si.ShapeEventAction.kReplace), 1)
+        self.assertEqual(int(si.ShapeEventAction.kComputeNode), 2)
+        self.assertEqual(int(si.ShapeEventAction.kConstraint), 3)
+        self.assertEqual(int(si.ShapeEventAction.kConstraintMax), 4)
+
     def test_events_disabled_by_default(self):
         ctx = si.ShapesContext()
         self.assertFalse(ctx.events_enabled)

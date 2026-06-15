@@ -280,12 +280,19 @@ print(f"  total events      : {len(shape_events)}")
 print(f"  compute_node count: {len(compute_events)}")
 print("  first events:")
 for ev in shape_events:
+    if ev.action == ShapeEventAction.kComputeNode:
+        continue
     d = ev.as_dict()
-    op = f"{d['op_domain']}::{d['op_type']}" if d["op_type"] else "-"
-    print(
-        f"    {d['node_index']:<2d}:{d['action']:<12s} "
-        f"name={d['name']:<16s} shape={d['shape']!s:<16s} op={op}"
-    )
+    if ev.action in (ShapeEventAction.kAdd, ShapeEventAction.kReplace):
+        op = f"{d['op_domain']}::{d['op_type']}" if d["op_type"] else "-"
+        print(
+            f"    {d['node_index']:<2d}:{d['action']:<16s} "
+            f"name={d['name']:<16s} shape={d['shape']!s:<16s} op={op}"
+        )
+    else:
+        op = f"{d['op_domain']}::{d['op_type']}" if d["op_type"] else "-"
+        print(f"    {d['node_index']:<2d}:{d['action']:<16s} inputs={d['inputs']}")
+
 
 # %%
 # The results compared to the expected values.

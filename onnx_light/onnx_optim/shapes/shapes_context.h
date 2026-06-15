@@ -305,11 +305,12 @@ public:
   /// for :onnx:`If`).
   using SubgraphContextKey = std::pair<int64_t, std::string>;
 
-  /// Retains a copy of the child context ``context`` produced while
-  /// inferring the subgraph ``attr_name`` of the control-flow node at
-  /// ``node_index`` so that the subgraph's internal descriptors stay
-  /// inspectable once the parent inference has completed. Any context
-  /// previously registered for the same key is replaced.
+  /// Retains the child context ``context`` produced while inferring the
+  /// subgraph ``attr_name`` of the control-flow node at ``node_index`` so
+  /// that the subgraph's internal descriptors stay inspectable once the
+  /// parent inference has completed. ``context`` is consumed (moved into
+  /// the store). Any context previously registered for the same key is
+  /// replaced.
   void RegisterSubgraphContext(int64_t node_index, const std::string &attr_name,
                                ShapesContext context) {
     subgraph_contexts_[SubgraphContextKey(node_index, attr_name)] =
@@ -339,8 +340,9 @@ public:
     return subgraph_contexts_;
   }
 
-  /// Empties the retained child-context map without otherwise touching
-  /// the context.
+  /// Empties the retained child-context map without modifying other
+  /// context state (tensor / sequence descriptors, opsets, constraints,
+  /// events, ...).
   void ClearSubgraphContexts() noexcept { subgraph_contexts_.clear(); }
 
   // ── Opset versions ──────────────────────────────────────────────────

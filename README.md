@@ -111,7 +111,7 @@ Alternatively, when installing with pip, you can control parallel builds using
 the ``CMAKE_BUILD_PARALLEL_LEVEL`` environment variable:
 
 ```bash
-CMAKE_BUILD_PARALLEL_LEVEL=8 pip install -e .[dev]
+CMAKE_BUILD_PARALLEL_LEVEL=8 pip install -e .[dev] -v
 ```
 
 Run a quick check:

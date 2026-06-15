@@ -312,10 +312,7 @@ public:
   /// the store). Any context previously registered for the same key is
   /// replaced.
   void RegisterSubgraphContext(int64_t node_index, const std::string &attr_name,
-                               ShapesContext context) {
-    subgraph_contexts_[SubgraphContextKey(node_index, attr_name)] =
-        std::make_shared<ShapesContext>(std::move(context));
-  }
+                               ShapesContext context);
 
   /// Returns ``true`` when a child context was registered for the
   /// subgraph ``attr_name`` of the control-flow node at ``node_index``.

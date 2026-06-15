@@ -55,6 +55,9 @@ ShapesContext InferSubgraph(ShapesContext &parent_ctx, const std::string &branch
       parent_ctx.Events().push_back(local_events[i]);
     }
   }
+  // Retain the child context on the parent so the subgraph internals stay
+  // inspectable once the parent inference has completed.
+  parent_ctx.RegisterSubgraphContext(parent_ctx.current_node_index(), branch_name, local);
   return local;
 }
 
@@ -139,11 +142,6 @@ void ComputeShapeIf(ShapesContext &ctx, const NodeProto &node) {
 
   const ShapesContext then_ctx = InferSubgraph(ctx, "then_branch", then_branch);
   const ShapesContext else_ctx = InferSubgraph(ctx, "else_branch", else_branch);
-
-  // Retain the child contexts so the subgraph internals stay inspectable
-  // once the parent inference has completed.
-  ctx.RegisterSubgraphContext(ctx.current_node_index(), "then_branch", then_ctx);
-  ctx.RegisterSubgraphContext(ctx.current_node_index(), "else_branch", else_ctx);
 
   for (int i = 0; i < n_outputs; ++i) {
     const std::string out_name = node.output(i).as_string();

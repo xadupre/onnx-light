@@ -12,25 +12,25 @@ makes a previously-missing entry stale).
 """
 
 import os
+import tempfile
 import unittest
+from unittest.mock import patch
 
-import onnx.backend.base
-from onnx.backend.test import BackendTest
-
-from onnx_light.onnx_lib.backend.test.case.base import collect_test_case
 from onnx_light.ext_test_case import ExtTestCase
 
 _KNOWN_MISSING_FILE = os.path.join(os.path.dirname(__file__), "_backend_test_known_missing.txt")
 
 
-class _DummyBackend(onnx.backend.base.Backend):
-    @classmethod
-    def supports_device(cls, device):  # pragma: no cover - trivial
-        return True
-
-
 def _onnx_node_cpu_test_names() -> list[str]:
     """Returns all ONNX node-level backend test method names ending in ``_cpu``."""
+    import onnx.backend.base
+    from onnx.backend.test import BackendTest
+
+    class _DummyBackend(onnx.backend.base.Backend):
+        @classmethod
+        def supports_device(cls, device):  # pragma: no cover - trivial
+            return True
+
     bt = BackendTest(_DummyBackend, "dummy")
     cls = bt.test_cases["OnnxBackendNodeModelTest"]
     return sorted(
@@ -42,13 +42,47 @@ def _onnx_node_cpu_test_names() -> list[str]:
 
 def _load_known_missing() -> set[str]:
     with open(_KNOWN_MISSING_FILE, encoding="utf-8") as f:
-        return {line.strip() for line in f if line.strip()}
+        return {
+            line.strip()
+            for line in f
+            if line.strip() and not _should_exclude_backend_test_name(line.strip())
+        }
+
+
+def _should_exclude_backend_test_name(test_name: str) -> bool:
+    """Returns whether a backend test name should be excluded from comparison."""
+    return "_expanded" in test_name
+
+
+class TestBackendTestNameHelpers(ExtTestCase):
+    """Checks helper behavior for backend test name comparison."""
+
+    def test_should_exclude_backend_test_name(self):
+        self.assertTrue(_should_exclude_backend_test_name("elu_example_expanded_ver18"))
+        self.assertTrue(_should_exclude_backend_test_name("bernoulli_expanded"))
+        self.assertFalse(_should_exclude_backend_test_name("linear_attention_fp16"))
+
+    def test_load_known_missing_excludes_expanded_names(self):
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as f:
+            f.write("bernoulli_expanded\n")
+            f.write("linear_attention_fp16\n")
+            path = f.name
+        try:
+            with patch(
+                "unittests.onnxl_vs_onnx.test_backend_test_names_onnx_vs_onnxlight._KNOWN_MISSING_FILE",
+                path,
+            ):
+                self.assertEqual(_load_known_missing(), {"linear_attention_fp16"})
+        finally:
+            os.unlink(path)
 
 
 class TestBackendTestNamesOnnxVsOnnxLight(ExtTestCase):
     """Ensures ONNX node backend tests have a counterpart in ``onnx_light``."""
 
     def test_onnx_backend_test_names_found_in_onnx_light(self):
+        from onnx_light.onnx_lib.backend.test.case.base import collect_test_case
+
         light_names = set(collect_test_case().keys())
         self.assertGreater(len(light_names), 0)
 
@@ -57,6 +91,8 @@ class TestBackendTestNamesOnnxVsOnnxLight(ExtTestCase):
             # The ``_cuda`` variants are excluded by construction.
             assert not method_name.endswith("_cuda")
             stripped = method_name[len("test_") : -len("_cpu")]
+            if _should_exclude_backend_test_name(stripped):
+                continue
             if not any(stripped in light_name for light_name in light_names):
                 missing.append(stripped)
 

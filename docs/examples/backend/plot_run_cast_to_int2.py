@@ -18,7 +18,7 @@ visible in the runtime output below.
 This example:
 
 * retrieves the ``test_cc_cast_FLOAT_to_INT2`` case via
-  :func:`onnx_light.onnx.backend.collect_test_cases_by_name`,
+  :func:`onnx_light.onnx.backend.collect_test_case`,
 * displays its single-node ``Cast`` ``ModelProto``,
 * runs the model with
   :class:`onnx_light.onnx.reference.ReferenceEvaluator` and prints the
@@ -32,22 +32,21 @@ from __future__ import annotations
 
 import numpy as np
 
-from onnx_light.onnx.backend import collect_test_cases_by_name
+from onnx_light.onnx.backend import collect_test_case
 from onnx_light.onnx.reference import ReferenceEvaluator
 
 #####################################
 # Retrieve the float-to-int2 cast case
 # ++++++++++++++++++++++++++++++++++++
 #
-# ``collect_test_cases_by_name`` filters the registered backend test
-# cases by a regular expression matched against ``TestCase.name``. We
-# anchor the pattern with ``^...$`` to select the single
-# ``test_cc_cast_FLOAT_to_INT2`` case.
+# ``collect_test_case`` returns every registered backend test case as a
+# ``dict`` mapping each case name to its ``TestCase``. We pick the
+# ``test_cc_cast_FLOAT_to_INT2`` entry from it.
 
-cases = collect_test_cases_by_name("^test_cc_cast_FLOAT_to_INT2$")
-print(f"Number of matching cases: {len(cases)}")
+all_cases = collect_test_case()
+print(f"Total number of backend test cases: {len(all_cases)}")
 
-tc = cases[0]
+tc = all_cases["test_cc_cast_FLOAT_to_INT2"]
 print(f"name      : {tc.name}")
 print(f"model_name: {tc.model_name}")
 print(f"kind      : {tc.kind}")

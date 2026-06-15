@@ -39,8 +39,7 @@ a smooth replacement.
     :caption: Shape Inference
     :maxdepth: 1
 
-    expressions
-    inference_coverage
+    shape_inference/index
 
 .. toctree::
     :caption: Fuzzing

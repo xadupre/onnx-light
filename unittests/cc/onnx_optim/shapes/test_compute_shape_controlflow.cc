@@ -347,6 +347,35 @@ TEST(OnnxOptimShapeInference, DispatchesIf) {
   EXPECT_EQ(ctx.Get("y").Shape(), shape);
 }
 
+TEST(OnnxOptimShapeIf, RetainsBranchSubgraphContexts) {
+  // ComputeShapeIf should retain the child contexts it builds for both
+  // branches so the subgraph internals stay inspectable afterwards.
+  GraphProto then_b = MakeUnaryBranch("Abs", "x", "y_then");
+  GraphProto else_b = MakeUnaryBranch("Abs", "x", "y_else");
+  NodeProto node = MakeIfNode("cond", {"y"}, then_b, else_b);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("cond", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
+  ctx.Set("x", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  // current_node_index() is -1 when ComputeShapeIf is called directly.
+  onnx_optim::shapes::controlflow::ComputeShapeIf(ctx, node);
+
+  EXPECT_EQ(ctx.SubgraphContextsSize(), 2u);
+  ASSERT_TRUE(ctx.HasSubgraphContext(-1, "then_branch"));
+  ASSERT_TRUE(ctx.HasSubgraphContext(-1, "else_branch"));
+  EXPECT_FALSE(ctx.HasSubgraphContext(-1, "body"));
+
+  const onnx_optim::shapes::ShapesContext &then_ctx = ctx.GetSubgraphContext(-1, "then_branch");
+  ASSERT_TRUE(then_ctx.Has("y_then"));
+  EXPECT_EQ(then_ctx.Get("y_then").Shape(), shape);
+
+  const onnx_optim::shapes::ShapesContext &else_ctx = ctx.GetSubgraphContext(-1, "else_branch");
+  ASSERT_TRUE(else_ctx.Has("y_else"));
+  EXPECT_EQ(else_ctx.Get("y_else").Shape(), shape);
+}
+
 } // namespace Test
 
 namespace Test {
@@ -429,6 +458,24 @@ TEST(OnnxOptimShapeLoop, PropagatesCarriedShapeAndScanShape) {
   EXPECT_EQ(ctx.Get("scan_out").Shape()[0].AsExpr(), "Loop_trip");
   EXPECT_EQ(ctx.Get("scan_out").Shape()[1].AsInt(), 2);
   EXPECT_EQ(ctx.Get("scan_out").Shape()[2].AsInt(), 3);
+}
+
+TEST(OnnxOptimShapeLoop, RetainsBodySubgraphContext) {
+  GraphProto body = BuildLoopBodyIdentityCarry();
+  NodeProto node = MakeLoopNode({"M", "cond", "v_init"}, {"v_final", "scan_out"}, body);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("M", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64, {}));
+  ctx.Set("cond", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
+  ctx.Set("v_init", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  onnx_optim::shapes::controlflow::ComputeShapeLoop(ctx, node);
+
+  ASSERT_TRUE(ctx.HasSubgraphContext(-1, "body"));
+  const onnx_optim::shapes::ShapesContext &body_ctx = ctx.GetSubgraphContext(-1, "body");
+  ASSERT_TRUE(body_ctx.Has("v_out"));
+  EXPECT_EQ(body_ctx.Get("v_out").Shape(), shape);
 }
 
 TEST(OnnxOptimShapeLoop, AcceptsOmittedMAndCond) {
@@ -641,6 +688,24 @@ TEST(OnnxOptimShapeInference, DispatchesScan) {
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y").Shape(), x_shape);
+}
+
+TEST(OnnxOptimShapeScan, RetainsBodySubgraphContext) {
+  GraphProto body = BuildScanBodyIdentity();
+  NodeProto node = MakeScanNode({"X"}, {"Y"}, body, /*num_scan_inputs=*/1);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape x_shape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(3)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, x_shape));
+
+  onnx_optim::shapes::controlflow::ComputeShapeScan(ctx, node);
+
+  ASSERT_TRUE(ctx.HasSubgraphContext(-1, "body"));
+  const onnx_optim::shapes::ShapesContext &body_ctx = ctx.GetSubgraphContext(-1, "body");
+  // The per-iteration scan-input slice drops the trip-count axis: [3].
+  ASSERT_TRUE(body_ctx.Has("y_elt"));
+  ASSERT_EQ(body_ctx.Get("y_elt").Shape().Rank(), 1u);
+  EXPECT_EQ(body_ctx.Get("y_elt").Shape()[0].AsInt(), 3);
 }
 
 } // namespace Test

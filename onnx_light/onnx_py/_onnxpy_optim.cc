@@ -607,6 +607,34 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
             return out;
           },
           "Returns the list of names of stored sequence descriptors.")
+      // Child contexts retained for control-flow subgraphs.
+      .def(
+          "has_subgraph_context",
+          [](const onnx_shapes::ShapesContext &c, int64_t node_index,
+             const std::string &attr_name) { return c.HasSubgraphContext(node_index, attr_name); },
+          nb::arg("node_index"), nb::arg("attr_name"),
+          "True when a child context was retained for the subgraph ``attr_name`` of the "
+          "control-flow node at ``node_index``.")
+      .def(
+          "subgraph_context",
+          [](const onnx_shapes::ShapesContext &c, int64_t node_index,
+             const std::string &attr_name) -> const onnx_shapes::ShapesContext & {
+            return c.GetSubgraphContext(node_index, attr_name);
+          },
+          nb::arg("node_index"), nb::arg("attr_name"), nb::rv_policy::reference_internal,
+          "Returns the child :class:`ShapesContext` retained for the subgraph ``attr_name`` of "
+          "the control-flow node at ``node_index``. Raises ``IndexError`` if absent.")
+      .def("subgraph_contexts_size", &onnx_shapes::ShapesContext::SubgraphContextsSize,
+           "Number of retained child contexts.")
+      .def(
+          "subgraph_context_keys",
+          [](const onnx_shapes::ShapesContext &c) -> nb::list {
+            nb::list out;
+            for (const auto &kv : c.SubgraphContexts())
+              out.append(nb::make_tuple(kv.first.first, kv.first.second));
+            return out;
+          },
+          "Returns retained child-context keys as ``(node_index, attr_name)`` tuples.")
       // Opset versions
       .def("set_opset_version", &onnx_shapes::ShapesContext::SetOpsetVersion, nb::arg("domain"),
            nb::arg("opset_version"),

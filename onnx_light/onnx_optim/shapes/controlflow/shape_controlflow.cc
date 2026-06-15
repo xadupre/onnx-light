@@ -55,6 +55,9 @@ ShapesContext InferSubgraph(ShapesContext &parent_ctx, const std::string &branch
       parent_ctx.Events().push_back(local_events[i]);
     }
   }
+  // Retain the child context on the parent so the subgraph internals stay
+  // inspectable once the parent inference has completed.
+  parent_ctx.RegisterSubgraphContext(parent_ctx.current_node_index(), branch_name, local);
   return local;
 }
 
@@ -300,6 +303,10 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
     }
     ctx.Set(node_out, OptimTensor(nullptr, scan_out.Dtype(), std::move(stacked)));
   }
+
+  // Retain the body's child context so its internals stay inspectable
+  // once the parent inference has completed.
+  ctx.RegisterSubgraphContext(ctx.current_node_index(), "body", std::move(local));
 }
 
 namespace {
@@ -484,6 +491,10 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
     }
     ctx.Set(node_out, OptimTensor(nullptr, scan_out_elt.Dtype(), std::move(stacked)));
   }
+
+  // Retain the body's child context so its internals stay inspectable
+  // once the parent inference has completed.
+  ctx.RegisterSubgraphContext(ctx.current_node_index(), "body", std::move(local));
 }
 
 } // namespace controlflow

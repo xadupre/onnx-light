@@ -727,6 +727,12 @@ const char *ShapeEventActionName(ShapeEventAction action) noexcept {
   return "unknown";
 }
 
+void ShapesContext::RegisterSubgraphContext(int64_t node_index, const std::string &attr_name,
+                                            ShapesContext context) {
+  subgraph_contexts_[SubgraphContextKey(node_index, attr_name)] =
+      std::make_shared<ShapesContext>(std::move(context));
+}
+
 void ShapesContext::LogSetEvent(const std::string &name, const OptimTensor &tensor) {
   ShapeEvent ev;
   ev.action = Has(name) ? ShapeEventAction::kReplace : ShapeEventAction::kAdd;

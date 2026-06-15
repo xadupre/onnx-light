@@ -423,6 +423,13 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
               "Index of the node this event is associated with: ``-1`` for graph inputs, "
               "``-2`` for initializers, and the position (``>= 0``) of the producing / "
               "dispatched node otherwise (``-1`` when no producing node is known).")
+      .def_ro("subgraph_node_index", &onnx_shapes::ShapeEvent::subgraph_node_index,
+              "Index of the control-flow node in the parent graph whose attribute subgraph "
+              "produced this event. ``-1`` for top-level-graph events.")
+      .def_ro("subgraph_attr_name", &onnx_shapes::ShapeEvent::subgraph_attr_name,
+              "Attribute name of the subgraph within the owning control-flow node "
+              "(``\"body\"``, ``\"then_branch\"``, ``\"else_branch\"``, etc.). "
+              "Empty for top-level-graph events.")
       .def(
           "as_dict",
           [](const onnx_shapes::ShapeEvent &ev) {
@@ -435,6 +442,8 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
             d["op_type"] = ev.op_type;
             d["inputs"] = ev.inputs;
             d["node_index"] = ev.node_index;
+            d["subgraph_node_index"] = ev.subgraph_node_index;
+            d["subgraph_attr_name"] = ev.subgraph_attr_name;
             return d;
           },
           "Returns the event fields as a plain Python ``dict`` (trivially "
@@ -443,7 +452,9 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
         return std::string("ShapeEvent(action='") + onnx_shapes::ShapeEventActionName(ev.action) +
                "', name='" + ev.name + "', op_type='" + ev.op_type +
                "', data_type=" + std::to_string(ev.data_type) +
-               ", node_index=" + std::to_string(ev.node_index) + ")";
+               ", node_index=" + std::to_string(ev.node_index) +
+               ", subgraph_node_index=" + std::to_string(ev.subgraph_node_index) +
+               ", subgraph_attr_name='" + ev.subgraph_attr_name + "')";
       });
 
   // -----------------------------------------------------------------------

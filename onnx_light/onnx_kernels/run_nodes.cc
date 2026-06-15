@@ -153,14 +153,22 @@ Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
 
 std::vector<Tensor> RunSubgraph(const GraphProto &graph,
                                 const std::vector<std::pair<std::string, Tensor>> &bindings,
-                                RuntimeContext &rt) {
+                                RuntimeContext &rt, const std::string &attr_name) {
   RuntimeContext child(rt.kernel_ctx());
   child.functions() = rt.functions();
   child.tensors() = rt.tensors();
+  child.set_events_enabled(rt.events_enabled());
+  child.set_current_subgraph(rt.current_node_index(), attr_name);
   for (const auto &kv : bindings) {
     child.Put(kv.first, kv.second, RuntimeEventKind::kInput);
   }
   RunGraph(graph, child);
+
+  if (rt.events_enabled()) {
+    for (auto &ev : child.events()) {
+      rt.events().push_back(std::move(ev));
+    }
+  }
 
   std::vector<Tensor> outputs;
   outputs.reserve(graph.output().size());
@@ -241,6 +249,8 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
     child.functions() = rt.functions();
     child.tensors() = rt.tensors();
     child.sequences() = rt.sequences();
+    child.set_events_enabled(rt.events_enabled());
+    child.set_current_subgraph(rt.current_node_index(), "body");
 
     const std::string &iter_name = body.input(0).name().as_string();
     const std::string &cond_name = body.input(1).name().as_string();
@@ -257,6 +267,12 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
       }
     }
     RunGraph(body, child);
+
+    if (rt.events_enabled()) {
+      for (auto &ev : child.events()) {
+        rt.events().push_back(std::move(ev));
+      }
+    }
 
     const std::string &cond_out_name = body.output(0).name().as_string();
     auto cond_it = child.tensors().find(cond_out_name);
@@ -443,7 +459,7 @@ void RunLoopNode(const NodeProto &node, RuntimeContext &rt) {
       t.name = body.input(2 + i).name().as_string();
       bindings.emplace_back(t.name, std::move(t));
     }
-    return RunSubgraph(body, bindings, rt);
+    return RunSubgraph(body, bindings, rt, "body");
   };
 
   kernel::Loop loop_kernel(rt.kernel_ctx());
@@ -727,7 +743,7 @@ void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt) {
       bindings.emplace_back(param_name, std::move(t));
     }
 
-    std::vector<Tensor> iter_outputs = RunSubgraph(body, bindings, rt);
+    std::vector<Tensor> iter_outputs = RunSubgraph(body, bindings, rt, "body");
     if (iter_outputs.size() != m) {
       throw std::invalid_argument("RunNode: SequenceMap body produced " +
                                   std::to_string(iter_outputs.size()) + " output(s) at iteration " +

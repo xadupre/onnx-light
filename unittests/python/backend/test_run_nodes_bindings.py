@@ -464,5 +464,193 @@ class TestTensorDLPack(ExtTestCase):
             t.__dlpack_device__()
 
 
+class TestSubgraphEventGraphName(ExtTestCase):
+    """Verify that events produced inside subgraphs carry the correct
+    ``subgraph_node_index`` and ``subgraph_attr_name`` fields, and that
+    top-level events have ``subgraph_node_index == -1`` and an empty
+    ``subgraph_attr_name``."""
+
+    def _build_loop_model(self) -> object:
+        """Builds a Loop model: Loop(M=2, cond=true, s_init=0.0) -> s_final.
+
+        The body adds 1.0 to s_in each iteration.
+        """
+        from onnx_light.onnx import helper, TensorProto
+
+        one_init = helper.make_tensor("one", TensorProto.FLOAT, [], [1.0])
+        add = helper.make_node("Add", ["s_in", "one"], ["s_out"])
+        body = helper.make_graph(
+            [add],
+            "loop_body",
+            [
+                helper.make_tensor_value_info("iter", TensorProto.INT64, []),
+                helper.make_tensor_value_info("cond_in", TensorProto.BOOL, []),
+                helper.make_tensor_value_info("s_in", TensorProto.FLOAT, []),
+            ],
+            [
+                helper.make_tensor_value_info("cond_in", TensorProto.BOOL, []),
+                helper.make_tensor_value_info("s_out", TensorProto.FLOAT, []),
+                helper.make_tensor_value_info("s_out", TensorProto.FLOAT, []),
+            ],
+            initializer=[one_init],
+        )
+        loop_node = helper.make_node("Loop", ["M", "cond", "s_init"], ["s_final", "scan_out"])
+        loop_node.attribute.append(helper.make_attribute("body", body))
+        graph = helper.make_graph(
+            [loop_node],
+            "main",
+            [
+                helper.make_tensor_value_info("M", TensorProto.INT64, []),
+                helper.make_tensor_value_info("cond", TensorProto.BOOL, []),
+                helper.make_tensor_value_info("s_init", TensorProto.FLOAT, []),
+            ],
+            [
+                helper.make_tensor_value_info("s_final", TensorProto.FLOAT, []),
+                helper.make_tensor_value_info("scan_out", TensorProto.FLOAT, None),
+            ],
+        )
+        model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 18)])
+        model.ir_version = 10
+        return model
+
+    def _build_if_model(self) -> object:
+        """Builds an If model: cond -> If(then_branch, else_branch)."""
+        from onnx_light.onnx import helper, TensorProto
+
+        def _const_branch(name: str, val: float) -> object:
+            init = helper.make_tensor(name, TensorProto.FLOAT, [], [val])
+            add = helper.make_node("Add", [name, name], ["out"])
+            return helper.make_graph(
+                [add],
+                name + "_g",
+                [],
+                [helper.make_tensor_value_info("out", TensorProto.FLOAT, [])],
+                initializer=[init],
+            )
+
+        if_node = helper.make_node("If", ["cond"], ["z"])
+        if_node.attribute.append(helper.make_attribute("then_branch", _const_branch("t", 1.0)))
+        if_node.attribute.append(helper.make_attribute("else_branch", _const_branch("e", 2.0)))
+        graph = helper.make_graph(
+            [if_node],
+            "main",
+            [helper.make_tensor_value_info("cond", TensorProto.BOOL, [])],
+            [helper.make_tensor_value_info("z", TensorProto.FLOAT, [])],
+        )
+        model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 18)])
+        model.ir_version = 10
+        return model
+
+    def test_top_level_events_have_empty_subgraph_attr_name(self):
+        """A plain model without subgraphs has all events with empty subgraph_attr_name."""
+        model = parser.parse_model(_MODEL_SRC)
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        ctx.events_enabled = True
+        ctx.set("x", _make_float_tensor("x", [-1.0, 2.0, -3.5]))
+        ctx.set("z", _make_float_tensor("z", [10.0, 20.0, 30.0]))
+        ctx.clear_events()
+        rt.run_model(model, ctx)
+
+        for ev in ctx.events():
+            self.assertEqual(
+                ev.subgraph_attr_name,
+                "",
+                f"Expected empty subgraph_attr_name for top-level event, "
+                f"got: {ev.subgraph_attr_name!r}",
+            )
+            self.assertEqual(ev.subgraph_node_index, -1)
+
+    def test_loop_subgraph_events_carry_body_attr_name(self):
+        """At least one event from a Loop body carries subgraph_attr_name='body'."""
+        import struct
+
+        model = self._build_loop_model()
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        ctx.events_enabled = True
+
+        # Set inputs
+        m_tp = TensorProto()
+        m_tp.name = "M"
+        m_tp.data_type = int(TensorProto.INT64)
+        m_tp.raw_data = struct.pack("<q", 2)
+        ctx.set("M", rt.tensor_from_proto(m_tp))
+
+        cond_tp = TensorProto()
+        cond_tp.name = "cond"
+        cond_tp.data_type = int(TensorProto.BOOL)
+        cond_tp.raw_data = struct.pack("B", 1)
+        ctx.set("cond", rt.tensor_from_proto(cond_tp))
+
+        ctx.set("s_init", _make_float_tensor("s_init", [0.0]))
+        ctx.clear_events()
+        rt.run_model(model, ctx)
+
+        body_events = [ev for ev in ctx.events() if ev.subgraph_attr_name == "body"]
+        self.assertGreater(len(body_events), 0, "No event with subgraph_attr_name='body' found")
+        # The Loop node is node 0 in the main graph.
+        self.assertTrue(all(ev.subgraph_node_index == 0 for ev in body_events))
+
+    def test_if_then_branch_events_carry_attr_name(self):
+        """Events from the then_branch of an If must carry subgraph_attr_name='then_branch'."""
+        model = self._build_if_model()
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        ctx.events_enabled = True
+
+        cond_tp = TensorProto()
+        cond_tp.name = "cond"
+        cond_tp.data_type = int(TensorProto.BOOL)
+        import struct
+
+        cond_tp.raw_data = struct.pack("B", 1)  # true
+        ctx.set("cond", rt.tensor_from_proto(cond_tp))
+        ctx.clear_events()
+        rt.run_model(model, ctx)
+
+        then_events = [ev for ev in ctx.events() if ev.subgraph_attr_name == "then_branch"]
+        self.assertGreater(
+            len(then_events), 0, "No event with subgraph_attr_name='then_branch' found"
+        )
+        self.assertTrue(all(ev.subgraph_node_index == 0 for ev in then_events))
+
+    def test_if_else_branch_events_carry_attr_name(self):
+        """Events from the else_branch of an If must carry subgraph_attr_name='else_branch'."""
+        model = self._build_if_model()
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        ctx.events_enabled = True
+
+        cond_tp = TensorProto()
+        cond_tp.name = "cond"
+        cond_tp.data_type = int(TensorProto.BOOL)
+        import struct
+
+        cond_tp.raw_data = struct.pack("B", 0)  # false
+        ctx.set("cond", rt.tensor_from_proto(cond_tp))
+        ctx.clear_events()
+        rt.run_model(model, ctx)
+
+        else_events = [ev for ev in ctx.events() if ev.subgraph_attr_name == "else_branch"]
+        self.assertGreater(
+            len(else_events), 0, "No event with subgraph_attr_name='else_branch' found"
+        )
+        self.assertTrue(all(ev.subgraph_node_index == 0 for ev in else_events))
+
+    def test_subgraph_fields_exposed_in_as_dict(self):
+        """The ``subgraph_node_index`` and ``subgraph_attr_name`` fields must be in as_dict()."""
+        model = parser.parse_model(_MODEL_SRC)
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        ctx.events_enabled = True
+        ctx.set("x", _make_float_tensor("x", [-1.0, 2.0, -3.5]))
+        ctx.set("z", _make_float_tensor("z", [10.0, 20.0, 30.0]))
+        ctx.clear_events()
+        rt.run_model(model, ctx)
+
+        for ev in ctx.events():
+            d = ev.as_dict()
+            self.assertIn("subgraph_node_index", d)
+            self.assertIn("subgraph_attr_name", d)
+            self.assertEqual(d["subgraph_node_index"], -1)
+            self.assertEqual(d["subgraph_attr_name"], "")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

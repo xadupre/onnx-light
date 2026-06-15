@@ -209,6 +209,13 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def_ro("device", &onnx_kernels::RuntimeEvent::device,
               "Device the tensor lives on: ``-1`` for the CPU and ``0``–``8192`` for "
               "a GPU device index. The CPU reference runtime always reports ``-1``.")
+      .def_ro("subgraph_node_index", &onnx_kernels::RuntimeEvent::subgraph_node_index,
+              "Index of the control-flow node in the parent graph whose attribute subgraph "
+              "produced this event. ``-1`` for top-level-graph events.")
+      .def_ro("subgraph_attr_name", &onnx_kernels::RuntimeEvent::subgraph_attr_name,
+              "Attribute name of the subgraph within the owning control-flow node "
+              "(``\"body\"``, ``\"then_branch\"``, ``\"else_branch\"``, etc.). "
+              "Empty for top-level-graph events.")
       .def_prop_ro(
           "values",
           [](const onnx_kernels::RuntimeEvent &ev) {
@@ -254,6 +261,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
             d["duration_ns"] = ev.duration_ns;
             d["node_index"] = ev.node_index;
             d["device"] = ev.device;
+            d["subgraph_node_index"] = ev.subgraph_node_index;
+            d["subgraph_attr_name"] = ev.subgraph_attr_name;
             const int32_t n = ev.value_count;
             if (static_cast<onnx_kernels::DataType>(ev.data_type) ==
                 onnx_kernels::DataType::STRING) {
@@ -282,7 +291,9 @@ void AddOnnxPyRuntime(nb::module_ &m) {
                "', data_type=" + std::to_string(ev.data_type) +
                ", value_count=" + std::to_string(ev.value_count) +
                ", node_index=" + std::to_string(ev.node_index) +
-               ", device=" + std::to_string(ev.device) + ")";
+               ", device=" + std::to_string(ev.device) +
+               ", subgraph_node_index=" + std::to_string(ev.subgraph_node_index) +
+               ", subgraph_attr_name='" + ev.subgraph_attr_name + "')";
       });
 
   // RuntimeContext — name-keyed tensor map + kernel context + function registry.

@@ -245,6 +245,16 @@ struct RuntimeEvent {
   /// CPU and ``0``–``8192`` for a GPU device index. The CPU reference runtime
   /// always reports ``-1``.
   int32_t device = -1;
+  /// Index of the control-flow node in the **parent** graph whose attribute
+  /// subgraph produced this event. ``-1`` for events from the top-level graph.
+  /// Combined with :cpp:var:`subgraph_attr_name` this uniquely identifies
+  /// which operator and which attribute subgraph an event originated from.
+  int64_t subgraph_node_index = -1;
+  /// Attribute name of the subgraph within the control-flow node identified
+  /// by :cpp:var:`subgraph_node_index`: ``"body"`` for :onnx:`Loop` /
+  /// :onnx:`Scan` / :onnx:`SequenceMap`, ``"then_branch"`` or
+  /// ``"else_branch"`` for :onnx:`If`. Empty for top-level-graph events.
+  std::string subgraph_attr_name;
 };
 
 /**
@@ -367,6 +377,21 @@ public:
   /// profiling is required.
   void set_events_enabled(bool enabled) noexcept { events_enabled_ = enabled; }
   bool events_enabled() const noexcept { return events_enabled_; }
+
+  /// Index of the control-flow node in the parent graph currently being
+  /// executed. Set before running a subgraph so that events recorded inside
+  /// carry :cpp:var:`RuntimeEvent::subgraph_node_index` and
+  /// :cpp:var:`RuntimeEvent::subgraph_attr_name`. ``-1`` for the top-level
+  /// graph. Use :cpp:func:`set_current_subgraph` to update both the index
+  /// and the attribute name atomically.
+  void set_current_subgraph(int64_t node_index, const std::string &attr_name) {
+    current_subgraph_node_index_ = node_index;
+    current_subgraph_attr_name_ = attr_name;
+  }
+  int64_t current_subgraph_node_index() const noexcept { return current_subgraph_node_index_; }
+  const std::string &current_subgraph_attr_name() const noexcept {
+    return current_subgraph_attr_name_;
+  }
 
   /// Index of the node currently being executed, used to tag the
   /// :cpp:var:`RuntimeEvent::node_index` of intermediate / output tensors
@@ -623,6 +648,15 @@ private:
   bool events_enabled_ = false;
   bool release_intermediates_ = false;
   int64_t current_node_index_ = -1;
+  /// Index of the control-flow node in the parent graph currently being
+  /// executed (see :cpp:func:`set_current_subgraph`). ``-1`` for the
+  /// top-level graph.
+  int64_t current_subgraph_node_index_ = -1;
+  /// Attribute name of the subgraph currently being executed (see
+  /// :cpp:func:`set_current_subgraph`). Empty for the top-level graph;
+  /// set to ``"body"``, ``"then_branch"``, ``"else_branch"``, etc. when
+  /// running a control-flow body subgraph.
+  std::string current_subgraph_attr_name_;
   /// Lazily-populated cache of :cpp:class:`ExecutionPlan` instances
   /// keyed by the address of the :cpp:class:`GraphProto` /
   /// :cpp:class:`FunctionProto` they describe. Built on first use by

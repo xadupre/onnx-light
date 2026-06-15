@@ -2652,7 +2652,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            }
            const std::string in_name = score_mod_graph.input()[0].name().as_string();
            score_mod_fn = [&score_mod_graph, in_name, &rt](Tensor &scores) {
-             auto outputs = RunSubgraph(score_mod_graph, {{in_name, scores}}, rt);
+             auto outputs = RunSubgraph(score_mod_graph, {{in_name, scores}}, rt, "score_mod");
              if (!outputs.empty()) {
                scores = std::move(outputs[0]);
              }
@@ -2667,7 +2667,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            }
            const std::string in_name = prob_mod_graph.input()[0].name().as_string();
            prob_mod_fn = [&prob_mod_graph, in_name, &rt](Tensor &probs) {
-             auto outputs = RunSubgraph(prob_mod_graph, {{in_name, probs}}, rt);
+             auto outputs = RunSubgraph(prob_mod_graph, {{in_name, probs}}, rt, "prob_mod");
              if (!outputs.empty()) {
                probs = std::move(outputs[0]);
              }

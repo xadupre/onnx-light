@@ -443,9 +443,7 @@ class TestShapesContextEventLog(ExtTestCase):
         events = ctx.events()
 
         def first(action, name):
-            return next(
-                (e for e in events if e.action == action and e.name == name), None
-            )
+            return next((e for e in events if e.action == action and e.name == name), None)
 
         self.assertEqual(first("add", "X").node_index, -1)
         self.assertEqual(first("add", "S").node_index, -2)
@@ -453,6 +451,75 @@ class TestShapesContextEventLog(ExtTestCase):
         node_ev = next(e for e in events if e.action == "compute_node")
         self.assertEqual(node_ev.op_type, "Reshape")
         self.assertEqual(node_ev.node_index, 0)
+
+    def test_top_level_events_have_empty_graph_name(self):
+        """Events from a model with no subgraphs must have empty subgraph_attr_name."""
+        node = oh.make_node("Relu", inputs=["X"], outputs=["Y"])
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 3])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
+        graph = oh.make_graph([node], "g", [x], [y])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+        model.ir_version = 8
+
+        ctx = si.ShapesContext()
+        ctx.events_enabled = True
+        si.compute_shape_model(ctx, model)
+
+        for ev in ctx.events():
+            self.assertEqual(
+                ev.subgraph_attr_name,
+                "",
+                f"Expected empty subgraph_attr_name, got: {ev.subgraph_attr_name!r}",
+            )
+            self.assertEqual(ev.subgraph_node_index, -1)
+
+    def test_if_subgraph_events_carry_branch_graph_name(self):
+        """Events inside If branches must carry then_branch / else_branch."""
+        # then_branch: Abs(X) -> Y;  else_branch: Neg(X) -> Y
+        then_branch = oh.make_graph(
+            [oh.make_node("Abs", ["X"], ["Y_then"])],
+            "then_g",
+            [],
+            [oh.make_tensor_value_info("Y_then", onnxl.TensorProto.FLOAT, None)],
+        )
+        else_branch = oh.make_graph(
+            [oh.make_node("Neg", ["X"], ["Y_else"])],
+            "else_g",
+            [],
+            [oh.make_tensor_value_info("Y_else", onnxl.TensorProto.FLOAT, None)],
+        )
+        if_node = oh.make_node("If", inputs=["cond"], outputs=["Z"])
+        if_node.attribute.append(oh.make_attribute("then_branch", then_branch))
+        if_node.attribute.append(oh.make_attribute("else_branch", else_branch))
+
+        cond_vi = oh.make_tensor_value_info("cond", onnxl.TensorProto.BOOL, [])
+        x_vi = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 3])
+        z_vi = oh.make_tensor_value_info("Z", onnxl.TensorProto.FLOAT, None)
+        graph = oh.make_graph([if_node], "main", [cond_vi, x_vi], [z_vi])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+        model.ir_version = 8
+
+        ctx = si.ShapesContext()
+        ctx.events_enabled = True
+        si.compute_shape_model(ctx, model)
+
+        attr_names = {ev.subgraph_attr_name for ev in ctx.events()}
+        self.assertIn("then_branch", attr_names)
+        self.assertIn("else_branch", attr_names)
+
+    def test_graph_name_in_event_as_dict(self):
+        """subgraph_node_index and subgraph_attr_name must appear in event.as_dict()."""
+        ctx = si.ShapesContext()
+        ctx.events_enabled = True
+        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, [2, 3]))
+
+        events = ctx.events()
+        self.assertEqual(len(events), 1)
+        d = events[0].as_dict()
+        self.assertIn("subgraph_node_index", d)
+        self.assertIn("subgraph_attr_name", d)
+        self.assertEqual(d["subgraph_node_index"], -1)
+        self.assertEqual(d["subgraph_attr_name"], "")
 
 
 if __name__ == "__main__":

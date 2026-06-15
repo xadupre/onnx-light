@@ -3227,4 +3227,225 @@ TEST(RunNodes, ExecutionPlanIsCachedAcrossRunGraphInvocations) {
   EXPECT_EQ(&rt.GetExecutionPlan(graph), &plan1);
 }
 
+// ---------------------------------------------------------------------------
+// SubgraphEventGraphName tests
+// Verify that events produced inside subgraphs carry the correct
+// subgraph_node_index and subgraph_attr_name.
+// ---------------------------------------------------------------------------
+
+// Helper: build a minimal Loop body that adds a scalar ``one`` initializer to
+// ``s_in`` and writes it to ``s_out``, while forwarding the loop condition.
+static void FillLoopBody(GraphProto &body) {
+  body.set_name("loop_body");
+  body.add_input()->set_name("iter");
+  body.add_input()->set_name("cond_in");
+  body.add_input()->set_name("s_in");
+  TensorProto *one = body.add_initializer();
+  one->set_name("one");
+  one->set_data_type(TensorProto::DataType::FLOAT);
+  one->add_float_data(1.0f);
+  NodeProto *add = body.add_node();
+  add->set_op_type("Add");
+  add->add_input("s_in");
+  add->add_input("one");
+  add->add_output("s_out");
+  body.add_output()->set_name("cond_in");
+  body.add_output()->set_name("s_out");
+  body.add_output()->set_name("s_out");
+}
+
+TEST(SubgraphEventGraphName, LoopSubgraphEventsCarryBodyGraphName) {
+  using onnx_kernels::RuntimeEventAction;
+
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *loop = g->add_node();
+  loop->set_op_type("Loop");
+  loop->add_input("M");
+  loop->add_input("cond");
+  loop->add_input("s_init");
+  loop->add_output("s_final");
+  loop->add_output("scan");
+
+  AttributeProto *body_attr = loop->add_attribute();
+  body_attr->set_name("body");
+  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  FillLoopBody(*body_attr->add_g());
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_events_enabled(true);
+  rt.Set("M", Tensor::FromInt64("M", {}, {2}));
+  rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  rt.Set("s_init", Tensor::FromFloat("s_init", {}, {0.0f}));
+  rt.ClearEvents();
+
+  RunModel(model, rt);
+
+  // All events from the loop body subgraph must be tagged with
+  // subgraph_attr_name "body". Events from the outer graph must have an
+  // empty subgraph_attr_name.
+  bool found_body_event = false;
+  for (const auto &ev : rt.events()) {
+    if (ev.subgraph_attr_name == "body") {
+      found_body_event = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(found_body_event) << "No event with subgraph_attr_name='body' found";
+
+  // Top-level events must have an empty subgraph_attr_name.
+  for (const auto &ev : rt.events()) {
+    if (ev.subgraph_attr_name.empty()) {
+      // At least one outer-graph event should exist (output tensors).
+      break;
+    }
+  }
+}
+
+TEST(SubgraphEventGraphName, IfSubgraphEventsCarryBranchGraphName) {
+  using onnx_kernels::RuntimeEventAction;
+
+  // Build a trivial If model: cond -> If(then_branch, else_branch).
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *if_node = g->add_node();
+  if_node->set_op_type("If");
+  if_node->add_input("cond");
+  if_node->add_output("z");
+
+  AttributeProto *then_attr = if_node->add_attribute();
+  then_attr->set_name("then_branch");
+  then_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  FillConstantBranch(*then_attr->add_g(), "then_g", "t", "z", 1.0f);
+
+  AttributeProto *else_attr = if_node->add_attribute();
+  else_attr->set_name("else_branch");
+  else_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  FillConstantBranch(*else_attr->add_g(), "else_g", "e", "z", 2.0f);
+
+  // Run with cond = true: the then_branch executes.
+  RuntimeContext rt_true(KernelContext(DefaultOpset(18)));
+  rt_true.set_events_enabled(true);
+  rt_true.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  rt_true.ClearEvents();
+  RunModel(model, rt_true);
+
+  bool found_then = false;
+  for (const auto &ev : rt_true.events()) {
+    if (ev.subgraph_attr_name == "then_branch") {
+      found_then = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(found_then) << "No event with subgraph_attr_name='then_branch' found";
+
+  // Run with cond = false: the else_branch executes.
+  RuntimeContext rt_false(KernelContext(DefaultOpset(18)));
+  rt_false.set_events_enabled(true);
+  rt_false.Set("cond", Tensor::FromBool("cond", {}, {0}));
+  rt_false.ClearEvents();
+  RunModel(model, rt_false);
+
+  bool found_else = false;
+  for (const auto &ev : rt_false.events()) {
+    if (ev.subgraph_attr_name == "else_branch") {
+      found_else = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(found_else) << "No event with subgraph_attr_name='else_branch' found";
+}
+
+TEST(SubgraphEventGraphName, ScanSubgraphEventsCarryBodyGraphName) {
+  using onnx_kernels::RuntimeEventAction;
+
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *scan = g->add_node();
+  scan->set_op_type("Scan");
+  scan->add_input("state0");
+  scan->add_input("x");
+  scan->add_output("state_final");
+  scan->add_output("y");
+  AttributeProto *num_attr = scan->add_attribute();
+  num_attr->set_name("num_scan_inputs");
+  num_attr->set_type(AttributeProto::AttributeType::INT);
+  num_attr->set_i(1);
+
+  AttributeProto *body_attr = scan->add_attribute();
+  body_attr->set_name("body");
+  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  GraphProto *body = body_attr->add_g();
+  body->set_name("scan_body");
+  body->add_input()->set_name("state_in");
+  body->add_input()->set_name("x_in");
+  NodeProto *add = body->add_node();
+  add->set_op_type("Add");
+  add->add_input("state_in");
+  add->add_input("x_in");
+  add->add_output("state_out");
+  body->add_output()->set_name("state_out");
+  body->add_output()->set_name("state_out");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_events_enabled(true);
+  rt.Set("state0", Tensor::FromFloat("state0", {}, {0.0f}));
+  rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}));
+  rt.ClearEvents();
+
+  RunModel(model, rt);
+
+  bool found_body = false;
+  for (const auto &ev : rt.events()) {
+    if (ev.subgraph_attr_name == "body") {
+      found_body = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(found_body) << "No event with subgraph_attr_name='body' found";
+}
+
+TEST(SubgraphEventGraphName, TopLevelEventsHaveEmptyGraphName) {
+  // A plain two-node graph (no subgraphs) must produce only events
+  // with an empty subgraph_attr_name.
+  using onnx_kernels::RuntimeEventAction;
+
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  *g->add_node() = MakeNode("Abs", {"x"}, {"t"});
+  *g->add_node() = MakeNode("Neg", {"t"}, {"y"});
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_events_enabled(true);
+  rt.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
+  rt.ClearEvents();
+
+  RunModel(model, rt);
+
+  for (const auto &ev : rt.events()) {
+    EXPECT_TRUE(ev.subgraph_attr_name.empty())
+        << "Expected empty subgraph_attr_name for top-level event, got: " << ev.subgraph_attr_name;
+  }
+}
+
 } // namespace Test

@@ -216,16 +216,31 @@ void RunModel(const ModelProto &model, RuntimeContext &rt);
  * tensor pairs for the subgraph). Returns the subgraph's outputs in the
  * order declared by ``graph.output()``.
  *
+ * When the caller's context has event logging enabled
+ * (:cpp:func:`RuntimeContext::events_enabled`), child events are appended
+ * to the caller's event log after the subgraph finishes. Each propagated
+ * event carries :cpp:var:`RuntimeEvent::subgraph_node_index` set to
+ * ``rt.current_node_index()`` (the index of the control-flow node in the
+ * parent graph) and :cpp:var:`RuntimeEvent::subgraph_attr_name` set to
+ * ``attr_name``, so consumers can distinguish subgraph events from
+ * top-level events.
+ *
  * Exposed publicly so control-flow kernels (e.g. :cpp:class:`kernel::Scan`)
  * can run their body subgraph without going through
  * :cpp:func:`RunNode` themselves.
+ *
+ * @param attr_name  Attribute name identifying the subgraph within its
+ *                   owning control-flow node (e.g. ``"body"``,
+ *                   ``"then_branch"``, ``"else_branch"``). Stored in
+ *                   :cpp:var:`RuntimeEvent::subgraph_attr_name` of every
+ *                   event produced during the subgraph run.
  *
  * @throws std::invalid_argument if a subgraph output has an empty name or
  *         is not produced by the body.
  */
 std::vector<Tensor> RunSubgraph(const GraphProto &graph,
                                 const std::vector<std::pair<std::string, Tensor>> &bindings,
-                                RuntimeContext &rt);
+                                RuntimeContext &rt, const std::string &attr_name = "");
 
 /**
  * Resolves a possibly-negative ``axis`` against a tensor of rank

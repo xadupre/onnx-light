@@ -455,9 +455,11 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
         const int8_t *src = x.AsInt8();
         for (int64_t i = 0; i < n; ++i) {
           if (to_dt == DataType::INT4) {
-            Write4BitElement(dst, i, static_cast<std::uint8_t>(src[i] & 0x0F));
+            const int v = std::max(-8, std::min(7, static_cast<int>(src[i])));
+            Write4BitElement(dst, i, static_cast<std::uint8_t>(v & 0x0F));
           } else if (to_dt == DataType::INT2) {
-            Write2BitElement(dst, i, static_cast<std::uint8_t>(src[i] & 0x03));
+            const int v = std::max(-2, std::min(1, static_cast<int>(src[i])));
+            Write2BitElement(dst, i, static_cast<std::uint8_t>(v & 0x03));
           } else {
             throw std::invalid_argument("kernel::Cast: unsupported sub-byte 'to' dtype from INT8.");
           }
@@ -466,9 +468,11 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
         const uint8_t *src = x.AsUint8();
         for (int64_t i = 0; i < n; ++i) {
           if (to_dt == DataType::UINT4) {
-            Write4BitElement(dst, i, static_cast<std::uint8_t>(src[i] & 0x0Fu));
+            const unsigned v = std::min(15u, static_cast<unsigned>(src[i]));
+            Write4BitElement(dst, i, static_cast<std::uint8_t>(v & 0x0Fu));
           } else if (to_dt == DataType::UINT2) {
-            Write2BitElement(dst, i, static_cast<std::uint8_t>(src[i] & 0x03u));
+            const unsigned v = std::min(3u, static_cast<unsigned>(src[i]));
+            Write2BitElement(dst, i, static_cast<std::uint8_t>(v & 0x03u));
           } else {
             throw std::invalid_argument(
                 "kernel::Cast: unsupported sub-byte 'to' dtype from UINT8.");

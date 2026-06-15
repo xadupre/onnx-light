@@ -22,8 +22,11 @@ def _example_has_nonzero_chain_event_logging() -> bool:
                 if isinstance(target, ast.Attribute) and target.attr == "events_enabled":
                     if isinstance(node.value, ast.Constant) and node.value.value is True:
                         has_events_enabled = True
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            if node.func.id == "compute_shape_model":
+        if isinstance(node, ast.Call):
+            func = node.func
+            if isinstance(func, ast.Name) and func.id == "compute_shape_model":
+                has_compute_shape_model_call = True
+            elif isinstance(func, ast.Attribute) and func.attr == "compute_shape_model":
                 has_compute_shape_model_call = True
 
     return has_case_name and has_events_enabled and has_compute_shape_model_call

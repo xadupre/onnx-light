@@ -88,6 +88,16 @@ Control-flow operators embed graphs in their attributes: ``then_branch``
    symbol bounded above by the ``max`` of the two branch expressions);
    ``Loop`` / ``Scan`` reshape the body outputs into the loop-carried and
    scan-output shapes.
+#. The child context is **retained** on the parent through
+   :cpp:func:`ShapesContext::RegisterSubgraphContext`, keyed by the owning
+   node index and the attribute name, so the descriptors inferred *inside*
+   the subgraph stay inspectable once the control-flow node has been
+   processed. They are reachable through
+   :cpp:func:`ShapesContext::HasSubgraphContext`,
+   :cpp:func:`ShapesContext::GetSubgraphContext` and
+   :cpp:func:`ShapesContext::SubgraphContexts` (exposed in Python as
+   ``has_subgraph_context`` / ``subgraph_context`` /
+   ``subgraph_context_keys`` / ``subgraph_contexts_size``).
 
 Local functions
 ---------------
@@ -113,13 +123,15 @@ caller-visible output names.
 
 .. note::
 
-   Each subgraph and local-function call currently builds a child
-   :cpp:class:`ShapesContext` that is discarded once its outputs have been
-   merged back into the parent. A natural extension is for the parent
-   context to **retain** these child contexts in a container keyed by node
-   index / attribute name, so the inferred descriptors *inside* a
-   subgraph or function body remain inspectable (and traceable through the
+   Each ``If`` / ``Loop`` / ``Scan`` node retains the child
+   :cpp:class:`ShapesContext` it builds for every attribute subgraph
+   (``then_branch`` / ``else_branch`` / ``body``) on its parent context,
+   keyed by ``(node_index, attr_name)``, so the inferred descriptors
+   *inside* the subgraph remain inspectable (and traceable through the
    :ref:`event log <l-design-shape-events>`) after inference completes.
+   Local-function calls still build a child context that is discarded once
+   its outputs have been merged back; extending the same retention to
+   ``ExpandLocalFunctionCall`` is a natural follow-up.
 
 API reference
 -------------

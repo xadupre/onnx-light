@@ -6,6 +6,8 @@
 
 #include <cstdint>
 #include <functional>
+#include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -241,6 +243,7 @@ public:
     local_functions_.clear();
     custom_shape_inference_.clear();
     constraints_.clear();
+    subgraph_contexts_.clear();
   }
 
   /// Read-only access to the underlying map (useful for iteration).
@@ -291,6 +294,54 @@ public:
   const std::unordered_map<std::string, OptimSequence> &Sequences() const noexcept {
     return sequences_;
   }
+
+  // ── Child contexts for control-flow subgraphs ───────────────────────
+
+  /// Key identifying a child :cpp:class:`ShapesContext` retained while
+  /// inferring a control-flow node's attribute subgraph: the index of
+  /// the control-flow node in this context's graph paired with the name
+  /// of the attribute carrying the subgraph (``"body"`` for
+  /// :onnx:`Loop` / :onnx:`Scan`, ``"then_branch"`` / ``"else_branch"``
+  /// for :onnx:`If`).
+  using SubgraphContextKey = std::pair<int64_t, std::string>;
+
+  /// Retains a copy of the child context ``context`` produced while
+  /// inferring the subgraph ``attr_name`` of the control-flow node at
+  /// ``node_index`` so that the subgraph's internal descriptors stay
+  /// inspectable once the parent inference has completed. Any context
+  /// previously registered for the same key is replaced.
+  void RegisterSubgraphContext(int64_t node_index, const std::string &attr_name,
+                               ShapesContext context) {
+    subgraph_contexts_[SubgraphContextKey(node_index, attr_name)] =
+        std::make_shared<ShapesContext>(std::move(context));
+  }
+
+  /// Returns ``true`` when a child context was registered for the
+  /// subgraph ``attr_name`` of the control-flow node at ``node_index``.
+  bool HasSubgraphContext(int64_t node_index, const std::string &attr_name) const {
+    return subgraph_contexts_.find(SubgraphContextKey(node_index, attr_name)) !=
+           subgraph_contexts_.end();
+  }
+
+  /// Returns the child context registered for the subgraph ``attr_name``
+  /// of the control-flow node at ``node_index``. Throws
+  /// ``std::out_of_range`` if no such context exists.
+  const ShapesContext &GetSubgraphContext(int64_t node_index, const std::string &attr_name) const {
+    return *subgraph_contexts_.at(SubgraphContextKey(node_index, attr_name));
+  }
+
+  /// Number of retained child contexts.
+  std::size_t SubgraphContextsSize() const noexcept { return subgraph_contexts_.size(); }
+
+  /// Read-only access to the retained child-context map (useful for iteration).
+  const std::map<SubgraphContextKey, std::shared_ptr<ShapesContext>> &
+  SubgraphContexts() const noexcept {
+    return subgraph_contexts_;
+  }
+
+  /// Empties the retained child-context map without otherwise touching
+  /// the context.
+  void ClearSubgraphContexts() noexcept { subgraph_contexts_.clear(); }
 
   // ── Opset versions ──────────────────────────────────────────────────
 
@@ -635,6 +686,7 @@ private:
   CustomShapeInferenceMap custom_shape_inference_;
   std::set<Constraint> constraints_;
   std::set<LessEqualConstraint> le_constraints_;
+  std::map<SubgraphContextKey, std::shared_ptr<ShapesContext>> subgraph_contexts_;
   ShapeEventLog events_;
   bool events_enabled_ = false;
   int64_t current_node_index_ = -1;

@@ -613,6 +613,59 @@ class TestShapesContextEventLog(ExtTestCase):
         self.assertEqual(d["subgraph_node_index"], -1)
         self.assertEqual(d["subgraph_attr_name"], "")
 
+    # ------------------------------------------------------------------
+    # Retained child contexts for control-flow subgraphs.
+    # ------------------------------------------------------------------
+    def test_if_retains_branch_subgraph_contexts(self):
+        """ComputeShapeIf must register the child contexts it builds for
+        ``then_branch`` / ``else_branch`` and expose them through the
+        ``subgraph_context`` accessors."""
+        then_branch = oh.make_graph(
+            [oh.make_node("Abs", ["X"], ["Y_then"])],
+            "then_g",
+            [],
+            [oh.make_tensor_value_info("Y_then", onnxl.TensorProto.FLOAT, None)],
+        )
+        else_branch = oh.make_graph(
+            [oh.make_node("Neg", ["X"], ["Y_else"])],
+            "else_g",
+            [],
+            [oh.make_tensor_value_info("Y_else", onnxl.TensorProto.FLOAT, None)],
+        )
+        if_node = oh.make_node("If", inputs=["cond"], outputs=["Z"])
+        if_node.attribute.append(oh.make_attribute("then_branch", then_branch))
+        if_node.attribute.append(oh.make_attribute("else_branch", else_branch))
+
+        cond_vi = oh.make_tensor_value_info("cond", onnxl.TensorProto.BOOL, [])
+        x_vi = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 3])
+        z_vi = oh.make_tensor_value_info("Z", onnxl.TensorProto.FLOAT, None)
+        graph = oh.make_graph([if_node], "main", [cond_vi, x_vi], [z_vi])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+        model.ir_version = 8
+
+        ctx = si.ShapesContext()
+        si.compute_shape_model(ctx, model)
+
+        # The If node is the first (index 0) node of the main graph.
+        self.assertEqual(ctx.subgraph_contexts_size(), 2)
+        self.assertTrue(ctx.has_subgraph_context(0, "then_branch"))
+        self.assertTrue(ctx.has_subgraph_context(0, "else_branch"))
+        self.assertFalse(ctx.has_subgraph_context(0, "body"))
+        self.assertEqual(
+            set(ctx.subgraph_context_keys()), {(0, "then_branch"), (0, "else_branch")}
+        )
+
+        then_ctx = ctx.subgraph_context(0, "then_branch")
+        self.assertTrue(then_ctx.has("Y_then"))
+        self.assertEqual(list(then_ctx.get("Y_then").shape), [2, 3])
+
+        else_ctx = ctx.subgraph_context(0, "else_branch")
+        self.assertTrue(else_ctx.has("Y_else"))
+        self.assertEqual(list(else_ctx.get("Y_else").shape), [2, 3])
+
+        with self.assertRaises(IndexError):
+            ctx.subgraph_context(0, "body")
+
 
 if __name__ == "__main__":
     unittest.main()

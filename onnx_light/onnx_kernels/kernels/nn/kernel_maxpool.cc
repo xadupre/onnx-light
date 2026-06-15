@@ -87,12 +87,17 @@ template <typename T> constexpr T MaxPoolInitial() {
 // Core pooling loop templated on the element type. Reads ``px`` and writes
 // ``py``/``pi`` in row-major order using the strides/shapes already resolved
 // by the caller. ``produce_indices`` controls whether ``pi`` is populated.
+// ``index_spatial_strides`` are the per-axis strides used to flatten the
+// selected spatial coordinate into the ``Indices`` value: row-major strides
+// for ``storage_order == 0`` and column-major strides for
+// ``storage_order == 1``.
 template <typename T>
 void MaxPoolLoop(const T *px, T *py, int64_t *pi, bool produce_indices, int64_t N, int64_t C,
                  const std::vector<int64_t> &x_shape, const std::vector<int64_t> &in_strides,
                  const std::vector<int64_t> &out_strides, const std::vector<int64_t> &out_spatial,
                  const std::vector<int64_t> &kernel_shape, const std::vector<int64_t> &strides,
-                 const std::vector<int64_t> &dilations, const std::vector<int64_t> &pads) {
+                 const std::vector<int64_t> &dilations, const std::vector<int64_t> &pads,
+                 const std::vector<int64_t> &index_spatial_strides) {
   const size_t k = kernel_shape.size();
   int64_t spatial_out_count = 1;
   for (int64_t d : out_spatial) {
@@ -104,6 +109,7 @@ void MaxPoolLoop(const T *px, T *py, int64_t *pi, bool produce_indices, int64_t 
   }
   std::vector<int64_t> out_idx(k);
   std::vector<int64_t> kidx(k);
+  std::vector<int64_t> best_p(k);
   for (int64_t n = 0; n < N; ++n) {
     for (int64_t c = 0; c < C; ++c) {
       const int64_t in_base = n * in_strides[0] + c * in_strides[1];
@@ -115,7 +121,6 @@ void MaxPoolLoop(const T *px, T *py, int64_t *pi, bool produce_indices, int64_t 
           rem /= out_spatial[i];
         }
         T best = MaxPoolInitial<T>();
-        int64_t best_in_offset = -1;
         bool any = false;
         for (int64_t kflat = 0; kflat < kernel_volume; ++kflat) {
           int64_t krem = kflat;
@@ -131,13 +136,14 @@ void MaxPoolLoop(const T *px, T *py, int64_t *pi, bool produce_indices, int64_t 
               in_input = false;
               break;
             }
+            kidx[i] = p;
             in_offset += p * in_strides[i + 2];
           }
           if (in_input) {
             const T v = px[in_offset];
             if (!any || v > best) {
               best = v;
-              best_in_offset = in_offset;
+              best_p = kidx;
               any = true;
             }
           }
@@ -148,7 +154,15 @@ void MaxPoolLoop(const T *px, T *py, int64_t *pi, bool produce_indices, int64_t 
         }
         py[out_offset] = any ? best : MaxPoolInitial<T>();
         if (produce_indices) {
-          pi[out_offset] = best_in_offset;
+          if (any) {
+            int64_t index = in_base;
+            for (size_t i = 0; i < k; ++i) {
+              index += best_p[i] * index_spatial_strides[i];
+            }
+            pi[out_offset] = index;
+          } else {
+            pi[out_offset] = -1;
+          }
         }
       }
     }
@@ -173,8 +187,8 @@ std::pair<Tensor, Tensor> RunMaxPool(const Tensor &x, const std::vector<int64_t>
   EXT_ENFORCE_INVALID(
       x.shape.size() == kernel_shape.size() + 2,
       "kernel::MaxPool: x must have rank == kernel_shape.size() + 2 (N, C, D1, ..., Dk).");
-  EXT_ENFORCE_INVALID(storage_order == 0,
-                      "kernel::MaxPool: only storage_order=0 (row major) is supported.");
+  EXT_ENFORCE_INVALID(storage_order == 0 || storage_order == 1,
+                      "kernel::MaxPool: storage_order must be 0 (row major) or 1 (column major).");
 
   const size_t k = kernel_shape.size();
   std::vector<int64_t> strides = strides_in.empty() ? std::vector<int64_t>(k, 1) : strides_in;
@@ -250,28 +264,45 @@ std::pair<Tensor, Tensor> RunMaxPool(const Tensor &x, const std::vector<int64_t>
     out_spatial[i] = out_shape[i + 2];
   }
 
+  // Per-axis spatial strides used to flatten the selected input coordinate
+  // into the ``Indices`` value. ``storage_order == 0`` uses row-major strides
+  // (matching ``in_strides`` over the spatial axes); ``storage_order == 1``
+  // uses column-major strides over the spatial axes.
+  std::vector<int64_t> index_spatial_strides(k);
+  if (storage_order == 0) {
+    for (size_t i = 0; i < k; ++i) {
+      index_spatial_strides[i] = in_strides[i + 2];
+    }
+  } else {
+    int64_t stride = 1;
+    for (size_t i = 0; i < k; ++i) {
+      index_spatial_strides[i] = stride;
+      stride *= x.shape[i + 2];
+    }
+  }
+
   int64_t *pi = produce_indices ? reinterpret_cast<int64_t *>(indices.data.data()) : nullptr;
 
   switch (static_cast<DataType>(x.data_type)) {
   case DataType::FLOAT:
     MaxPoolLoop<float>(x.AsFloat(), reinterpret_cast<float *>(y.data.data()), pi, produce_indices,
                        N, C, x.shape, in_strides, out_strides, out_spatial, kernel_shape, strides,
-                       dilations, pads);
+                       dilations, pads, index_spatial_strides);
     break;
   case DataType::DOUBLE:
     MaxPoolLoop<double>(x.AsDouble(), reinterpret_cast<double *>(y.data.data()), pi,
                         produce_indices, N, C, x.shape, in_strides, out_strides, out_spatial,
-                        kernel_shape, strides, dilations, pads);
+                        kernel_shape, strides, dilations, pads, index_spatial_strides);
     break;
   case DataType::INT8:
     MaxPoolLoop<int8_t>(x.AsInt8(), reinterpret_cast<int8_t *>(y.data.data()), pi, produce_indices,
                         N, C, x.shape, in_strides, out_strides, out_spatial, kernel_shape, strides,
-                        dilations, pads);
+                        dilations, pads, index_spatial_strides);
     break;
   case DataType::UINT8:
     MaxPoolLoop<uint8_t>(x.AsUint8(), reinterpret_cast<uint8_t *>(y.data.data()), pi,
                          produce_indices, N, C, x.shape, in_strides, out_strides, out_spatial,
-                         kernel_shape, strides, dilations, pads);
+                         kernel_shape, strides, dilations, pads, index_spatial_strides);
     break;
   default:
     EXT_ENFORCE_INVALID(false, "kernel::MaxPool: unsupported element type.");

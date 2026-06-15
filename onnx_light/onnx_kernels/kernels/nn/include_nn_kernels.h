@@ -457,7 +457,9 @@ public:
 
   /// Returns ``(Y, Indices)`` where ``Indices`` is an ``int64`` tensor with
   /// the same shape as ``Y`` containing the flat indices into the un-padded
-  /// input ``(N, C, D1, ..., Dk)`` buffer.
+  /// input ``(N, C, D1, ..., Dk)`` buffer. ``storage_order`` selects the
+  /// flattening of the selected spatial coordinate: ``0`` (row major) or
+  /// ``1`` (column major).
   std::pair<Tensor, Tensor>
   WithIndices(const Tensor &x, const std::vector<int64_t> &kernel_shape,
               const std::vector<int64_t> &strides = {}, const std::vector<int64_t> &pads = {},

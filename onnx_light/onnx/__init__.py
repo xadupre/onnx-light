@@ -4,7 +4,12 @@ This replicates the current Python API of the onnx package.
 
 from __future__ import annotations
 
-from .. import __version__  # noqa: F401
+# Version of the upstream ``onnx`` package whose Python API this module mirrors.
+# It is kept in sync with the bundled operator schemas so that downstream code
+# relying on ``onnx.__version__`` for compatibility checks behaves the same way
+# whether it imports ``onnx`` or ``onnx_light.onnx``. This is distinct from
+# ``onnx_light.__version__``, which is the onnx-light package version.
+__version__ = "1.22.0"
 
 from ..onnx_py._onnxpyprotoop import (  # type: ignore # noqa: F401
     AttributeProto,

@@ -1,3 +1,4 @@
+import re
 import unittest
 import numpy as np
 import onnx
@@ -10,6 +11,17 @@ import onnx_light.onnx as onnxl
 
 
 class TestOnnx(ExtTestCase):
+    def test_onnx_version_compatibility(self):
+        # onnx_light.onnx mirrors a specific onnx release. Downstream code using
+        # onnx.__version__ for compatibility checks must observe the same base
+        # version whether it imports onnx or onnx_light.onnx. The installed onnx
+        # may be a development build (e.g. "1.22.0.dev20260615"), so the dev/pre
+        # release suffix is stripped before comparing.
+        match = re.match(r"\d+(?:\.\d+)*", onnx.__version__)
+        self.assertIsNotNone(match)
+        base_version = match.group(0)
+        self.assertEqual(base_version, onnx_light.onnx.__version__)
+
     def test_onnx_tensorproto(self):
         a = onh.from_array(
             np.array([[10, 20, 30, 40, 50, 60]]).reshape((2, 3, 1, 1)).astype(np.int16),

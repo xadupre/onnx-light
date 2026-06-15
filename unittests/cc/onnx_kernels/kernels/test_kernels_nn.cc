@@ -276,6 +276,47 @@ TEST(KernelClass, BatchNormalizationRank1InputTreatsChannelAsOne) {
   }
 }
 
+TEST(KernelClass, BatchNormalizationTrainingModeMatchesReference) {
+  const KernelContext ctx{DefaultOpset(15)};
+  BatchNormalization bn{ctx};
+  // 1x2x1x3 input. Per-channel batch statistics (population variance):
+  //   channel 0: values {-1, 0, 1} -> mean 0, var 2/3
+  //   channel 1: values { 2, 3, 4} -> mean 3, var 2/3
+  Tensor x = Tensor::FromFloat("", {1, 2, 1, 3}, {-1.0f, 0.0f, 1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor scale = Tensor::FromFloat("", {2}, {1.0f, 1.5f});
+  Tensor bias = Tensor::FromFloat("", {2}, {0.0f, 1.0f});
+  Tensor mean = Tensor::FromFloat("", {2}, {0.5f, 2.0f});
+  Tensor var = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  const float epsilon = 1e-5f;
+  const float momentum = 0.9f;
+  auto [y, running_mean, running_var] =
+      bn.TrainingForward(x, scale, bias, mean, var, epsilon, momentum);
+
+  const float saved_mean0 = 0.0f, saved_mean1 = 3.0f;
+  const float saved_var = 2.0f / 3.0f;
+
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 2, 1, 3}));
+  const float *py = y.AsFloat();
+  const float inv0 = 1.0f / std::sqrt(saved_var + epsilon);
+  for (int64_t i = 0; i < 3; ++i) {
+    const float xv = static_cast<float>(i) - 1.0f; // -1, 0, 1
+    EXPECT_NEAR(py[i], (xv - saved_mean0) * inv0 * 1.0f + 0.0f, 1e-4f);
+  }
+  for (int64_t i = 0; i < 3; ++i) {
+    const float xv = static_cast<float>(i) + 2.0f; // 2, 3, 4
+    EXPECT_NEAR(py[3 + i], (xv - saved_mean1) * inv0 * 1.5f + 1.0f, 1e-4f);
+  }
+
+  ASSERT_EQ(running_mean.shape, (std::vector<int64_t>{2}));
+  ASSERT_EQ(running_var.shape, (std::vector<int64_t>{2}));
+  const float *prm = running_mean.AsFloat();
+  const float *prv = running_var.AsFloat();
+  EXPECT_NEAR(prm[0], 0.5f * momentum + saved_mean0 * (1.0f - momentum), 1e-5f);
+  EXPECT_NEAR(prm[1], 2.0f * momentum + saved_mean1 * (1.0f - momentum), 1e-5f);
+  EXPECT_NEAR(prv[0], 1.0f * momentum + saved_var * (1.0f - momentum), 1e-5f);
+  EXPECT_NEAR(prv[1], 2.0f * momentum + saved_var * (1.0f - momentum), 1e-5f);
+}
+
 TEST(KernelClass, MeanVarianceNormalizationDefaultAxes) {
   const KernelContext ctx{DefaultOpset(13)};
   MeanVarianceNormalization mvn{ctx};

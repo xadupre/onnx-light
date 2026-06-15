@@ -156,6 +156,26 @@ void RegisterReduceMaxCases(std::vector<TestCase> &registry) {
       /*data_shape=*/{3, 2, 2},
       {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f},
       /*keepdims=*/true);
+
+  // BOOL input: ReduceMax on BOOL is logical OR along the reduced axis.
+  // Mirrors upstream ``test_reduce_max_bool_inputs``.
+  {
+    const OpsetId opset = DefaultOpset(20);
+    NodeProto node;
+    node.set_op_type("ReduceMax");
+    node.add_input("data");
+    node.add_input("axes");
+    node.add_output("reduced");
+    AddAttribute<int64_t>(node, "keepdims", 1);
+
+    // shape (4, 2): [[T,T],[T,F],[F,T],[F,F]]
+    const std::vector<uint8_t> bool_data = {1, 1, 1, 0, 0, 1, 0, 0};
+    Tensor data = Tensor::FromBool("", {4, 2}, bool_data);
+    Tensor axes = Tensor::FromInt64("", {1}, {1});
+    Tensor reduced = reduce_max_kernel(data, axes, /*keepdims=*/true, /*noop=*/false);
+    Expect(node, {data, axes}, {reduced}, "test_reduce_max_bool_inputs", {opset}, "backend-test",
+           registry);
+  }
 }
 
 void RegisterReduceMinCases(std::vector<TestCase> &registry) {
@@ -168,6 +188,25 @@ void RegisterReduceMinCases(std::vector<TestCase> &registry) {
       /*data_shape=*/{3, 2, 2},
       {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f},
       /*keepdims=*/true);
+
+  // BOOL input: ReduceMin on BOOL is logical AND along the reduced axis.
+  // Mirrors upstream ``test_reduce_min_bool_inputs``.
+  {
+    const OpsetId opset = DefaultOpset(20);
+    NodeProto node;
+    node.set_op_type("ReduceMin");
+    node.add_input("data");
+    node.add_input("axes");
+    node.add_output("reduced");
+    AddAttribute<int64_t>(node, "keepdims", 1);
+
+    const std::vector<uint8_t> bool_data = {1, 1, 1, 0, 0, 1, 0, 0};
+    Tensor data = Tensor::FromBool("", {4, 2}, bool_data);
+    Tensor axes = Tensor::FromInt64("", {1}, {1});
+    Tensor reduced = reduce_min_kernel(data, axes, /*keepdims=*/true, /*noop=*/false);
+    Expect(node, {data, axes}, {reduced}, "test_reduce_min_bool_inputs", {opset}, "backend-test",
+           registry);
+  }
 }
 
 } // namespace onnx_backend_test

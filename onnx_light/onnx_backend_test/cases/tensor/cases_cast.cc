@@ -214,7 +214,7 @@ void RegisterCastCases(std::vector<TestCase> &registry) {
   // ``FLOAT16`` peer cases are intentionally omitted because the backend
   // test ``Tensor`` storage does not yet support ``FLOAT16``. Inputs use
   // the same ``np.arange`` vectors as the upstream generator so the
-  // saturating-cast paths (values below/above the destination range) and
+  // wrapping-cast paths (values outside the destination range) and
   // the typical in-range values are exercised.
   // ---------------------------------------------------------------------
   struct SubByteVariant {

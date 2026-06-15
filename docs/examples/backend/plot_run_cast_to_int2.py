@@ -23,9 +23,10 @@ This example:
 * runs the model with
   :class:`onnx_light.onnx.reference.ReferenceEvaluator` and prints the
   resulting ``INT2`` tensor,
-* shows how to run the corresponding backend test by building a tiny
-  runtime function and feeding it to
-  :func:`onnx_light.onnx.backend.make_test_class`.
+* shows how to run the corresponding backend test by passing a tiny
+  runtime function to the case's ``assert_allclose`` method (and notes
+  the :func:`onnx_light.onnx.backend.make_test_class` helper for running
+  the whole registry).
 """
 
 from __future__ import annotations
@@ -89,17 +90,13 @@ print(output.astype(np.int8).ravel())
 # Run the corresponding backend test
 # ++++++++++++++++++++++++++++++++++
 #
-# The same case can be executed as a backend test. A backend test only
-# needs a runtime callable with the signature
-# ``rt(model, *inputs) -> list[np.ndarray]``;
-# :func:`~onnx_light.onnx.backend.make_test_class` then builds a
-# :class:`unittest.TestCase` subclass with one ``test_<name>`` method
-# per collected case. We restrict the collection to our single case with
-# ``include_regex``.
-
-import unittest  # noqa: E402
-
-from onnx_light.onnx.backend import make_test_class  # noqa: E402
+# The same case retrieved with ``collect_test_case`` *is* the backend
+# test: every :class:`TestCase` carries the reference input/output data
+# sets and an :meth:`~onnx_light.onnx_lib.backend.test.case.base.TestCase.assert_allclose`
+# method. A backend test only needs a runtime callable with the
+# signature ``rt(model, *inputs) -> list[np.ndarray]``; ``assert_allclose``
+# feeds each data set through it and compares the outputs against the
+# expected tensors (using the case ``atol`` / ``rtol``).
 
 
 def reference_runtime(model, *inputs: np.ndarray) -> list[np.ndarray]:
@@ -107,31 +104,35 @@ def reference_runtime(model, *inputs: np.ndarray) -> list[np.ndarray]:
 
     Returns:
         The model outputs as a list of numpy arrays, in graph-output
-        order, as expected by :func:`make_test_class`.
+        order, as expected by ``TestCase.assert_allclose``.
     """
     sess = ReferenceEvaluator(model)
     feeds = {i.name: arr for i, arr in zip(model.graph.input, inputs)}
     return sess.run(None, feeds)
 
 
-CastToInt2BackendTest = make_test_class(
-    reference_runtime, include_regex=[r"^test_cc_cast_FLOAT_to_INT2$"]
-)
-
-suite = unittest.TestLoader().loadTestsFromTestCase(CastToInt2BackendTest)
-print(f"Number of backend tests collected: {suite.countTestCases()}")
-result = unittest.TextTestRunner(verbosity=2).run(suite)
-print(f"Backend test successful: {result.wasSuccessful()}")
+# ``tc`` was retrieved above from ``collect_test_case()``; run its
+# backend test directly. ``assert_allclose`` raises an ``AssertionError``
+# on a mismatch and returns ``None`` on success.
+tc.assert_allclose(reference_runtime)
+print(f"Backend test {tc.name!r} passed.")
 
 #####################################
-# Running the test from the command line
-# ++++++++++++++++++++++++++++++++++++++
+# Running every backend test from the command line
+# +++++++++++++++++++++++++++++++++++++++++++++++++
 #
-# In practice you would place the ``reference_runtime`` /
-# ``make_test_class`` snippet in its own test file and run it with
-# pytest or unittest, optionally narrowing to this case with ``-k``::
+# To turn the whole registry into a :class:`unittest.TestCase` (one
+# ``test_<name>`` method per collected case), pass the same runtime to
+# :func:`~onnx_light.onnx.backend.make_test_class`, which calls
+# ``collect_test_case`` internally. In practice you would place this in
+# its own test file and run it with pytest or unittest, optionally
+# narrowing to this case with ``-k``::
 #
-#     python -m pytest my_backend_tests.py -v -k cast_FLOAT_to_INT2
+#     from onnx_light.onnx.backend import make_test_class
+#
+#     MyBackendTests = make_test_class(reference_runtime)
+#
+#     # python -m pytest my_backend_tests.py -v -k cast_FLOAT_to_INT2
 #
 # See :ref:`l-design-backend-tests` for the full backend-test workflow.
 

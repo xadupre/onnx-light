@@ -6,6 +6,7 @@ from ..onnx_lib.defs import (  # noqa: F401
     has,
     has_schema,
     ONNX_DOMAIN,
+    ONNX_ML_DOMAIN,
     onnx_ir_version,
     onnx_opset_version,
     OpSchema,

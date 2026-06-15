@@ -5,11 +5,32 @@ import onnx.helper as oh
 import onnx_light.onnx.defs
 import onnx_light.onnx.helper as oh2
 import onnx.numpy_helper as onh
+from packaging.version import Version
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx as onnxl
 
 
 class TestOnnx(ExtTestCase):
+    def test_onnx_version_compatibility(self):
+        """Checks that onnx_light.onnx is not older than the installed onnx.
+
+        Downstream code using ``onnx.__version__`` for compatibility checks must
+        be able to rely on ``onnx_light.onnx`` exposing a version that is newer
+        than or equal to the installed ``onnx`` release, so that any feature
+        available in ``onnx`` is also available in ``onnx_light.onnx``. The
+        installed onnx may be a development build (for example
+        ``1.22.0.dev20260615``); :class:`packaging.version.Version` orders such
+        pre-releases before the matching final release, which is the desired
+        behaviour here.
+        """
+        onnx_version = Version(onnx.__version__)
+        onnxlight_version = Version(onnx_light.onnx.__version__)
+        self.assertGreaterEqual(
+            onnxlight_version,
+            onnx_version,
+            f"onnx_light.onnx {onnxlight_version} is older than onnx {onnx_version}",
+        )
+
     def test_onnx_tensorproto(self):
         a = onh.from_array(
             np.array([[10, 20, 30, 40, 50, 60]]).reshape((2, 3, 1, 1)).astype(np.int16),

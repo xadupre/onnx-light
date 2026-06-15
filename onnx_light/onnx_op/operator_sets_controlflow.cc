@@ -32,25 +32,26 @@ std::string IfTypeConstraintDescription(int since_version) {
 
 LightOpSchema MakeIfSchema(int since_version) {
   return LightOpSchema(
-      "If", kOnnxDomain, since_version, MakeIfDoc(),
-      {
-          {"cond", "Condition for the if. The tensor must contain a single element.", "B"},
-      },
-      {
-          {"outputs", MakeIfOutputDescription(since_version), "V"},
-      },
-      {
-          {"V", IfTypes(since_version), IfTypeConstraintDescription(since_version)},
-          {"B", {TensorType::kBool}, "Only bool"},
-      },
-      {
-          AttributeParam{"then_branch", MakeIfThenBranchAttributeDescription(),
-                         AttributeType::GRAPH,
-                         /*required=*/true, std::monostate{}},
-          AttributeParam{"else_branch", MakeIfElseBranchAttributeDescription(),
-                         AttributeType::GRAPH,
-                         /*required=*/true, std::monostate{}},
-      });
+             "If", kOnnxDomain, since_version, MakeIfDoc(),
+             {
+                 {"cond", "Condition for the if. The tensor must contain a single element.", "B"},
+             },
+             {
+                 {"outputs", MakeIfOutputDescription(since_version), "V"},
+             },
+             {
+                 {"V", IfTypes(since_version), IfTypeConstraintDescription(since_version)},
+                 {"B", {TensorType::kBool}, "Only bool"},
+             },
+             {
+                 AttributeParam{"then_branch", MakeIfThenBranchAttributeDescription(),
+                                AttributeType::GRAPH,
+                                /*required=*/true, std::monostate{}},
+                 AttributeParam{"else_branch", MakeIfElseBranchAttributeDescription(),
+                                AttributeType::GRAPH,
+                                /*required=*/true, std::monostate{}},
+             })
+      .set_node_determinism(LightOpSchema::NodeDeterminism::NonDeterministic);
 }
 
 std::vector<TensorType> LoopTypes(int since_version) {
@@ -72,30 +73,32 @@ std::string LoopTypeConstraintDescription(int since_version) {
 
 LightOpSchema MakeLoopSchema(int since_version) {
   return LightOpSchema(
-      "Loop", kOnnxDomain, since_version, MakeLoopDoc(since_version),
-      {
-          {"M",
-           "A maximum trip-count for the loop specified at runtime. Optional. "
-           "Pass empty string to skip.",
-           "I"},
-          {"cond", "A boolean termination condition. Optional. Pass empty string to skip.", "B"},
-          {"v_initial",
-           "The initial values of any loop-carried dependencies (values that "
-           "change across loop iterations)",
-           "V"},
-      },
-      {
-          {"v_final_and_scan_outputs", MakeLoopOutputDescription(since_version), "V"},
-      },
-      {
-          {"V", LoopTypes(since_version), LoopTypeConstraintDescription(since_version)},
-          {"I", {TensorType::kInt64}, "tensor of int64, which should be a scalar."},
-          {"B", {TensorType::kBool}, "tensor of bool, which should be a scalar."},
-      },
-      {
-          AttributeParam{"body", MakeLoopBodyAttributeDescription(), AttributeType::GRAPH,
-                         /*required=*/true, std::monostate{}},
-      });
+             "Loop", kOnnxDomain, since_version, MakeLoopDoc(since_version),
+             {
+                 {"M",
+                  "A maximum trip-count for the loop specified at runtime. Optional. "
+                  "Pass empty string to skip.",
+                  "I"},
+                 {"cond", "A boolean termination condition. Optional. Pass empty string to skip.",
+                  "B"},
+                 {"v_initial",
+                  "The initial values of any loop-carried dependencies (values that "
+                  "change across loop iterations)",
+                  "V"},
+             },
+             {
+                 {"v_final_and_scan_outputs", MakeLoopOutputDescription(since_version), "V"},
+             },
+             {
+                 {"V", LoopTypes(since_version), LoopTypeConstraintDescription(since_version)},
+                 {"I", {TensorType::kInt64}, "tensor of int64, which should be a scalar."},
+                 {"B", {TensorType::kBool}, "tensor of bool, which should be a scalar."},
+             },
+             {
+                 AttributeParam{"body", MakeLoopBodyAttributeDescription(), AttributeType::GRAPH,
+                                /*required=*/true, std::monostate{}},
+             })
+      .set_node_determinism(LightOpSchema::NodeDeterminism::NonDeterministic);
 }
 
 LightOpSchema MakeScanSchema(int since_version) {
@@ -146,12 +149,13 @@ LightOpSchema MakeScanSchema(int since_version) {
   }
 
   return LightOpSchema(
-      "Scan", kOnnxDomain, since_version, MakeScanDoc(since_version), std::move(inputs),
-      {
-          {"final_state_and_scan_outputs",
-           "Final values of the loop's N state variables followed by K scan_outputs", "V"},
-      },
-      std::move(type_constraints), std::move(attributes));
+             "Scan", kOnnxDomain, since_version, MakeScanDoc(since_version), std::move(inputs),
+             {
+                 {"final_state_and_scan_outputs",
+                  "Final values of the loop's N state variables followed by K scan_outputs", "V"},
+             },
+             std::move(type_constraints), std::move(attributes))
+      .set_node_determinism(LightOpSchema::NodeDeterminism::NonDeterministic);
 }
 
 } // namespace

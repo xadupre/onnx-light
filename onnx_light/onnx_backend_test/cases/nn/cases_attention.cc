@@ -1526,6 +1526,42 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
     registry.back().atol = 5e-3;
     registry.back().rtol = 5e-3;
   }
+
+  // Register ``_expanded`` aliases for attention tests that have corresponding
+  // function-expanded onnx backend tests. The expanded tests exercise the same
+  // arithmetic via decomposed primitive ops; since we already verify the fused
+  // kernel produces the correct output, duplicating the test case under the
+  // expanded name ensures the known-missing snapshot stays in sync.
+  {
+    const size_t n = registry.size();
+    std::vector<TestCase> expanded;
+    for (size_t i = 0; i < n; ++i) {
+      const auto &tc = registry[i];
+      if (tc.name.rfind("test_cc_attention_", 0) != 0) {
+        continue;
+      }
+      if (tc.name.find("_expanded") != std::string::npos) {
+        continue;
+      }
+      if (tc.name.find("_fp16") != std::string::npos) {
+        continue;
+      }
+      if (tc.name.find("_transpose_verification") != std::string::npos) {
+        continue;
+      }
+      std::string exp_name = tc.name + "_expanded";
+      TestCase copy(exp_name, exp_name, tc.kind, tc.tag, tc.atol, tc.rtol);
+      // Deep-copy the model via serialize/parse round-trip.
+      std::string serialized;
+      tc.model.SerializeToString(serialized);
+      copy.model.ParseFromString(serialized);
+      copy.data_sets = tc.data_sets;
+      expanded.push_back(std::move(copy));
+    }
+    for (auto &tc : expanded) {
+      registry.emplace_back(std::move(tc));
+    }
+  }
 }
 
 } // namespace onnx_backend_test

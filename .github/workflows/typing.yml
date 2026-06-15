@@ -28,7 +28,7 @@ jobs:
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}"
       - name: Install dependencies
-        run: pip install -e ".[dev]" mypy pyrefly
+        run: pip install -e ".[dev]" mypy pyrefly -v
       - name: Install ONNX weekly
         run: pip install --upgrade onnx-weekly
       - name: Run mypy

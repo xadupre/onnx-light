@@ -1929,10 +1929,17 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const Tensor &y_scale = GetInput(node, 1, rt.tensors());
          const Tensor *y_zero_point = GetOptionalInput(node, 2, rt.tensors());
-         const int64_t axis = GetAttributeIntOrDefault(node, "axis", 1);
+         int64_t axis = GetAttributeIntOrDefault(node, "axis", 1);
+         const int64_t rank = static_cast<int64_t>(x.shape.size());
+         if (axis < 0) {
+           axis += rank;
+         }
+         const int64_t output_dtype = GetAttributeIntOrDefault(node, "output_dtype", 0);
          kernel::QuantizeLinear k(rt.kernel_ctx());
          if (y_zero_point != nullptr) {
            SetOutput(node, 0, k(x, y_scale, *y_zero_point, axis), rt);
+         } else if (output_dtype != 0) {
+           SetOutput(node, 0, k(x, y_scale, axis, static_cast<int32_t>(output_dtype)), rt);
          } else {
            SetOutput(node, 0, k(x, y_scale), rt);
          }

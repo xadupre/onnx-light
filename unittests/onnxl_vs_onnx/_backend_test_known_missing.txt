@@ -214,7 +214,6 @@ identity_opt
 identity_sequence
 if_opt
 if_seq
-isinf_float16
 layer_normalization_2d_axis0_expanded
 layer_normalization_2d_axis0_expanded_ver18
 layer_normalization_2d_axis1_expanded
@@ -294,8 +293,6 @@ logsoftmax_large_number_expanded_ver18
 logsoftmax_negative_axis_expanded
 logsoftmax_negative_axis_expanded_ver18
 loop16_seq_none
-max_float16
-min_float16
 mish_expanded
 prelu_broadcast_expanded
 prelu_example_expanded

@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
@@ -19,7 +20,7 @@ namespace {
 constexpr const char *kMaxName = "kernel::Max";
 
 constexpr const char *kSupportedMaxTypesMsg =
-    " only supports FLOAT, DOUBLE, INT8, INT16, INT32, INT64, UINT8, UINT16, "
+    " only supports FLOAT, DOUBLE, FLOAT16, INT8, INT16, INT32, INT64, UINT8, UINT16, "
     "UINT32 and UINT64 inputs.";
 
 // Returns the multidirectional-broadcast output shape of ``a`` and ``b``.
@@ -120,6 +121,47 @@ void MaxInPlace(const char *dtype_name, int32_t dtype, const std::vector<Tensor>
   MACRO(UINT32, uint32_t, "UINT32")                                                                \
   MACRO(UINT64, uint64_t, "UINT64")
 
+Tensor MaxFloat16Alloc(const std::vector<Tensor> &inputs) {
+  EXT_ENFORCE_INVALID(!inputs.empty(), kMaxName, " requires at least one input.");
+  for (size_t i = 0; i < inputs.size(); ++i) {
+    EXT_ENFORCE_INVALID(inputs[i].data_type == DataType::FLOAT16, kMaxName,
+                        " only supports FLOAT16 tensors.");
+  }
+  if (inputs.size() == 1) {
+    Tensor z("", DataType::FLOAT16, inputs[0].shape,
+             std::vector<uint8_t>(inputs[0].data.begin(), inputs[0].data.end()));
+    return z;
+  }
+  Tensor z = detail::BinaryHalfElementwiseAlloc(kMaxName, "FLOAT16", DataType::FLOAT16, inputs[0],
+                                                inputs[1], Float16BitsToFloat, FloatToFloat16Bits,
+                                                MaxOf<float>);
+  for (size_t i = 2; i < inputs.size(); ++i) {
+    Tensor partial = z;
+    detail::BinaryHalfElementwise(kMaxName, "FLOAT16", DataType::FLOAT16, partial, inputs[i], z,
+                                  Float16BitsToFloat, FloatToFloat16Bits, MaxOf<float>);
+  }
+  return z;
+}
+
+void MaxFloat16InPlace(const std::vector<Tensor> &inputs, Tensor &output) {
+  EXT_ENFORCE_INVALID(!inputs.empty(), kMaxName, " requires at least one input.");
+  for (size_t i = 0; i < inputs.size(); ++i) {
+    EXT_ENFORCE_INVALID(inputs[i].data_type == DataType::FLOAT16, kMaxName,
+                        " only supports FLOAT16 tensors.");
+  }
+  if (inputs.size() == 1) {
+    std::memcpy(output.data.data(), inputs[0].bytes(), inputs[0].data.size());
+    return;
+  }
+  detail::BinaryHalfElementwise(kMaxName, "FLOAT16", DataType::FLOAT16, inputs[0], inputs[1],
+                                output, Float16BitsToFloat, FloatToFloat16Bits, MaxOf<float>);
+  for (size_t i = 2; i < inputs.size(); ++i) {
+    Tensor partial = output;
+    detail::BinaryHalfElementwise(kMaxName, "FLOAT16", DataType::FLOAT16, partial, inputs[i],
+                                  output, Float16BitsToFloat, FloatToFloat16Bits, MaxOf<float>);
+  }
+}
+
 } // namespace
 
 Tensor Max::operator()(const std::vector<Tensor> &inputs) const {
@@ -130,6 +172,8 @@ Tensor Max::operator()(const std::vector<Tensor> &inputs) const {
     return MaxAlloc<CPP>(NAME, DataType::ENUM, inputs);
     ONNX_LIGHT_MAX_DISPATCH(ONNX_LIGHT_MAX_CASE_ALLOC)
 #undef ONNX_LIGHT_MAX_CASE_ALLOC
+  case DataType::FLOAT16:
+    return MaxFloat16Alloc(inputs);
   default:
     EXT_THROW_INVALID(kMaxName, ": unsupported data type ", inputs[0].data_type,
                       kSupportedMaxTypesMsg);
@@ -144,6 +188,8 @@ void Max::operator()(const std::vector<Tensor> &inputs, Tensor &output) const {
     return MaxInPlace<CPP>(NAME, DataType::ENUM, inputs, output);
     ONNX_LIGHT_MAX_DISPATCH(ONNX_LIGHT_MAX_CASE_INPLACE)
 #undef ONNX_LIGHT_MAX_CASE_INPLACE
+  case DataType::FLOAT16:
+    return MaxFloat16InPlace(inputs, output);
   default:
     EXT_THROW_INVALID(kMaxName, ": unsupported data type ", inputs[0].data_type,
                       kSupportedMaxTypesMsg);

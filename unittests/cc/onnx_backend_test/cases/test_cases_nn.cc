@@ -189,6 +189,28 @@ TEST(BackendTestCase, BatchNormalizationCasesArePresent) {
     const auto &ds = epsilon->data_sets[0];
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{2, 3, 4, 5}));
   }
+
+  // Training-mode case: 5 inputs, 3 outputs (Y + running mean / var).
+  {
+    const TestCase *training = nullptr;
+    for (const auto &c : cases) {
+      if (c.name == "test_cc_batchnorm_example_training_mode") {
+        training = &c;
+      }
+    }
+    ASSERT_NE(training, nullptr);
+    const GraphProto &graph = training->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    EXPECT_EQ(graph.ref_input().size(), 5u);
+    ASSERT_EQ(graph.ref_output().size(), 3u);
+    ASSERT_EQ(training->data_sets.size(), 1u);
+    const auto &ds = training->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 5u);
+    ASSERT_EQ(ds.outputs.size(), 3u);
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 2, 1, 3}));
+    EXPECT_EQ(ds.outputs[1].shape, (std::vector<int64_t>{2}));
+    EXPECT_EQ(ds.outputs[2].shape, (std::vector<int64_t>{2}));
+  }
 }
 
 TEST(BackendTestCase, InstanceNormalizationCasesArePresent) {

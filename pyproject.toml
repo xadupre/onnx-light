@@ -52,6 +52,13 @@ docs = [
 [tool.scikit-build]
 wheel.packages = ["onnx_light"]
 sdist.include = ["sbom.cdx.json"]
+# Build inside the project tree rather than the default system temporary
+# directory. On Windows the temp directory is exposed through an 8.3 short
+# path (e.g. C:\Users\RUNNER~1\AppData\Local\Temp\...), which makes MSBuild
+# emit MSB8029 (output directory under the temp directory) and MSB8012
+# (TargetPath vs OutputFile mismatch between the short and long path forms)
+# and can break the wheel build. A stable build directory avoids both.
+build-dir = "build/{wheel_tag}"
 
 [tool.pytest.ini_options]
 testpaths = ["unittests"]

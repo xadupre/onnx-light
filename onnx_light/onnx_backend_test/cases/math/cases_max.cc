@@ -4,6 +4,7 @@
 
 #include "onnx_backend_test/cases/math/include_math_cases.h"
 #include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
 #include <cstdint>
@@ -71,9 +72,7 @@ void RegisterMaxCases(std::vector<TestCase> &registry) {
   }
 
   // ``Max.export_max_all_numeric_types()`` -- one two-input case per numeric
-  // dtype supported by ``kernel::Max``. ``float16`` and ``bfloat16`` are not
-  // exercised because the underlying C++ kernel does not implement them; the
-  // upstream ``test_max_float16`` case stays in the known-missing snapshot.
+  // dtype supported by ``kernel::Max``.
   struct DtypeCase {
     const char *name;
     Tensor x0;
@@ -126,6 +125,20 @@ void RegisterMaxCases(std::vector<TestCase> &registry) {
     Tensor z = max_kernel({x0, x1});
 
     Expect(node, {x0, x1}, {z}, "test_cc_max_bcast", {opset}, "backend-test", registry);
+  }
+
+  // ``test_max_float16`` — Max on FLOAT16 inputs with hardcoded expected.
+  {
+    NodeProto node;
+    node.set_op_type("Max");
+    node.add_input("data_0");
+    node.add_input("data_1");
+    node.add_output("result");
+
+    Tensor x0 = kernel::MakeFloat16Tensor("", {3}, {1.0f, 4.0f, 3.0f});
+    Tensor x1 = kernel::MakeFloat16Tensor("", {3}, {3.0f, 2.0f, 5.0f});
+    Tensor expected = kernel::MakeFloat16Tensor("", {3}, {3.0f, 4.0f, 5.0f});
+    Expect(node, {x0, x1}, {expected}, "test_max_float16", {opset}, "backend-test", registry);
   }
 }
 

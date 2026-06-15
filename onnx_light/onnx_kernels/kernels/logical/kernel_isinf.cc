@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 
 #include <cmath>
@@ -22,7 +23,9 @@ Tensor IsInf::operator()(const Tensor &x, int64_t detect_positive, int64_t detec
 
 void IsInf::operator()(const Tensor &x, int64_t detect_positive, int64_t detect_negative,
                        Tensor &output) const {
-  EXT_ENFORCE_INVALID(x.data_type == DataType::FLOAT, "kernel::IsInf only supports FLOAT tensors.");
+  EXT_ENFORCE_INVALID(x.data_type == DataType::FLOAT || x.data_type == DataType::DOUBLE ||
+                          x.data_type == DataType::FLOAT16,
+                      "kernel::IsInf only supports FLOAT, DOUBLE and FLOAT16 tensors.");
   EXT_ENFORCE_INVALID(output.data_type == DataType::BOOL,
                       "kernel::IsInf preallocated output must be a BOOL tensor.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
@@ -33,19 +36,39 @@ void IsInf::operator()(const Tensor &x, int64_t detect_positive, int64_t detect_
                       "kernel::IsInf preallocated output buffer has unexpected size in bytes.");
   const bool report_pos = detect_positive != 0;
   const bool report_neg = detect_negative != 0;
-  const float *px = x.AsFloat();
   uint8_t *py = output.data.data();
-  for (int64_t i = 0; i < n; ++i) {
-    const float v = px[i];
-    uint8_t r = 0;
-    if (std::isinf(v)) {
-      if (v > 0.0f) {
-        r = report_pos ? 1u : 0u;
-      } else {
-        r = report_neg ? 1u : 0u;
+
+  if (x.data_type == DataType::FLOAT) {
+    const float *px = x.AsFloat();
+    for (int64_t i = 0; i < n; ++i) {
+      const float v = px[i];
+      uint8_t r = 0;
+      if (std::isinf(v)) {
+        r = (v > 0.0f) ? (report_pos ? 1u : 0u) : (report_neg ? 1u : 0u);
       }
+      py[static_cast<size_t>(i)] = r;
     }
-    py[static_cast<size_t>(i)] = r;
+  } else if (x.data_type == DataType::DOUBLE) {
+    const double *px = x.AsDouble();
+    for (int64_t i = 0; i < n; ++i) {
+      const double v = px[i];
+      uint8_t r = 0;
+      if (std::isinf(v)) {
+        r = (v > 0.0) ? (report_pos ? 1u : 0u) : (report_neg ? 1u : 0u);
+      }
+      py[static_cast<size_t>(i)] = r;
+    }
+  } else {
+    // FLOAT16 — decode to float first.
+    const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
+    for (int64_t i = 0; i < n; ++i) {
+      const float v = Float16BitsToFloat(px[i]);
+      uint8_t r = 0;
+      if (std::isinf(v)) {
+        r = (v > 0.0f) ? (report_pos ? 1u : 0u) : (report_neg ? 1u : 0u);
+      }
+      py[static_cast<size_t>(i)] = r;
+    }
   }
 }
 

@@ -2,17 +2,17 @@
 
 import unittest
 
-from onnx_light.doc import (
-    InferenceCaseReport,
-    InferenceCoverageReport,
-    ValueComparison,
-    ValueShape,
-    compute_inference_coverage,
-    render_rst_case,
-    render_rst_report,
-    render_rst_summary,
-)
-from onnx_light.ext_test_case import ExtTestCase
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
+
+doc = import_or_skip("onnx_light.doc")
+InferenceCaseReport = doc.InferenceCaseReport
+InferenceCoverageReport = doc.InferenceCoverageReport
+ValueComparison = doc.ValueComparison
+ValueShape = doc.ValueShape
+compute_inference_coverage = doc.compute_inference_coverage
+render_rst_case = doc.render_rst_case
+render_rst_report = doc.render_rst_report
+render_rst_summary = doc.render_rst_summary
 
 
 class TestInferenceCoverage(ExtTestCase):

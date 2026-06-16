@@ -468,9 +468,18 @@ TEST(BackendRunModel, FlexAttention) {
         return tc.name != "test_cc_flexattention_soft_cap";
       },
       [](const DataSet &ds) {
-        return ds.inputs.size() >= 3 && ds.inputs[0].data_type == DataType::FLOAT &&
-               ds.inputs[1].data_type == DataType::FLOAT &&
-               ds.inputs[2].data_type == DataType::FLOAT;
+        // Exercise both the FLOAT cases and the DOUBLE case
+        // (``test_cc_flexattention_double``); Q/K/V always share one dtype.
+        if (ds.inputs.size() < 3) {
+          return false;
+        }
+        const bool float_inputs = ds.inputs[0].data_type == DataType::FLOAT &&
+                                  ds.inputs[1].data_type == DataType::FLOAT &&
+                                  ds.inputs[2].data_type == DataType::FLOAT;
+        const bool double_inputs = ds.inputs[0].data_type == DataType::DOUBLE &&
+                                   ds.inputs[1].data_type == DataType::DOUBLE &&
+                                   ds.inputs[2].data_type == DataType::DOUBLE;
+        return float_inputs || double_inputs;
       });
 }
 

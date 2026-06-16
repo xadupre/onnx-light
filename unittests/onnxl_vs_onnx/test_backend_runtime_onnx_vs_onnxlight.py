@@ -15,7 +15,9 @@ it today:
 * the graph has a non-tensor input/output (sequence/optional/map), which the
   Python ``ReferenceEvaluator`` feed/return boundary represents differently;
 * the model uses a non-deterministic operator (its outputs cannot be compared
-  bit-for-bit against a stored reference); or
+  bit-for-bit against a stored reference);
+* the model uses an operator whose result is implementation-defined (image
+  decoding depends on the platform's available codecs); or
 * the runtime reports the operator as unsupported.
 
 The set of ONNX node tests whose results ``onnx_light`` does *not* reproduce is
@@ -57,6 +59,12 @@ _NON_DETERMINISTIC_OPS: frozenset[str] = frozenset(
         "RandomUniformLike",
     }
 )
+
+# Operators whose result is implementation-defined: the ONNX specification lets
+# ``ImageDecoder`` return platform-dependent pixel data (decoding relies on the
+# codecs available on the host), so onnx-light cannot be compared against the
+# stored reference outputs in a portable way.
+_IMPLEMENTATION_DEFINED_OPS: frozenset[str] = frozenset({"ImageDecoder"})
 
 
 def _load_known_discrepancies() -> set[str]:
@@ -178,6 +186,8 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
         if not _has_only_tensor_io(model):
             return "skip"
         if _model_op_types(model) & _NON_DETERMINISTIC_OPS:
+            return "skip"
+        if _model_op_types(model) & _IMPLEMENTATION_DEFINED_OPS:
             return "skip"
 
         model_dir = os.path.dirname(model_file)

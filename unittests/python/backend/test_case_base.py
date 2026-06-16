@@ -1,15 +1,20 @@
 import unittest
+
+import pytest
+
 from onnx_light.ext_test_case import ExtTestCase
 import numpy as np
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.defs as defs
-from onnx_light.onnx_lib.backend.test.case.base import (
-    ALL_TESTS,
-    TestCase,
-    collect_test_case,
-    expect,
-    get_test_cases_for_op,
-)
+
+# The backend test registries are only available in the full build; skip this
+# module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
+_case_base = pytest.importorskip("onnx_light.onnx_lib.backend.test.case.base")
+ALL_TESTS = _case_base.ALL_TESTS
+TestCase = _case_base.TestCase
+collect_test_case = _case_base.collect_test_case
+expect = _case_base.expect
+get_test_cases_for_op = _case_base.get_test_cases_for_op
 
 
 class TestBackendFunction(ExtTestCase):

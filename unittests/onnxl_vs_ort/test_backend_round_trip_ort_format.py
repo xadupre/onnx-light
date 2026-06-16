@@ -36,9 +36,13 @@ import tempfile
 import unittest
 
 import onnxruntime as ort
+import pytest
 
 import onnx_light.onnx as onnxl
-from onnx_light.onnx.backend import make_test_class
+
+# The backend test registries are only available in the full build; skip this
+# module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
+make_test_class = pytest.importorskip("onnx_light.onnx.backend").make_test_class
 
 
 def _onnx_bytes(model: onnxl.ModelProto) -> bytes:

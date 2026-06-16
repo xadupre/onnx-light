@@ -18,10 +18,15 @@ import unittest
 
 import numpy as np
 
+import pytest
+
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx as onnxl
 from onnx_light.onnx_lib import parser
-from onnx_light.onnx.reference import ReferenceEvaluator
+
+# The reference runtime is only available in the full build; skip this module on
+# a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
+ReferenceEvaluator = pytest.importorskip("onnx_light.onnx.reference").ReferenceEvaluator
 
 _ABS_ADD_MODEL_SRC = (
     '<ir_version: 10, opset_import: ["" : 18]>\n'

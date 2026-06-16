@@ -24,9 +24,16 @@ import unittest
 
 import numpy as np
 
+import pytest
+
 import onnx_light.onnx as onnxl
-from onnx_light.onnx_lib.backend.test.case import collect_test_case, make_test_class
-from onnx_light.onnx.reference import ReferenceEvaluator
+
+# The kernels runtime and backend test registries are only available in the
+# full build; skip this module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
+_backend_case = pytest.importorskip("onnx_light.onnx_lib.backend.test.case")
+collect_test_case = _backend_case.collect_test_case
+make_test_class = _backend_case.make_test_class
+ReferenceEvaluator = pytest.importorskip("onnx_light.onnx.reference").ReferenceEvaluator
 
 # Operators currently registered in
 # ``onnx_light/onnx_kernels/run_nodes.cc::KernelDispatchTable``. Backend

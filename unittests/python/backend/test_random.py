@@ -1,10 +1,17 @@
 import unittest
 
+import pytest
+
 from onnx_light.ext_test_case import ExtTestCase
 
 import numpy
 
-from onnx_light.onnx_lib.backend.random import rand, randint, randn
+# The deterministic random helpers are only available in the full build; skip
+# this module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
+_random = pytest.importorskip("onnx_light.onnx_lib.backend.random")
+rand = _random.rand
+randint = _random.randint
+randn = _random.randn
 
 
 class TestCustomRandom(ExtTestCase):

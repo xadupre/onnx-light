@@ -3,7 +3,13 @@ from typing import Any, Callable, Sequence, TypeAlias
 import numpy as np
 from ..... import onnx
 from .....onnx import helper as onnx_helper
-from .....onnx_py._onnxpybackend import backend_test as _backend_test_cc  # type: ignore
+
+try:
+    from .....onnx_py._onnxpybackend import backend_test as _backend_test_cc  # type: ignore
+except ImportError as exc:  # pragma: no cover - exercised only in reduced builds
+    from ....._reduced_build import kernels_required
+
+    kernels_required("onnx_light.onnx_lib.backend.test.case", exc)
 from .....onnx_py._onnxpyprotoop import onnx_op as _onnx_op  # type: ignore
 from .....ext_test_case import ExtTestCase
 

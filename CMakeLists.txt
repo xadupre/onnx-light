@@ -43,17 +43,13 @@ See cmake/Hardening.cmake and \
 https://best.openssf.org/Compiler-Hardening-Guides/Compiler-Options-Hardening-Guide-for-C-and-C++.html"
     OFF)
 
-# The Python extensions and the C++ unit-test executable both link
-# lib_onnx_kernels / lib_onnx_backend_test; refuse incoherent option
-# combinations early instead of failing deep inside add_library.
+# The C++ unit-test executable links lib_onnx_kernels / lib_onnx_backend_test;
+# refuse incoherent option combinations early instead of failing deep inside
+# add_library. The Python extensions are tolerant of ONNX_LIGHT_BUILD_KERNELS=OFF:
+# in that "reduced" build the _onnxpykernels and _onnxpybackend extensions are
+# simply not produced (the surrounding Python package raises an explicit error
+# when the reference runtime or backend-test helpers are requested).
 if(NOT ONNX_LIGHT_BUILD_KERNELS)
-  if(ONNX_LIGHT_BUILD_PYTHON)
-    message(FATAL_ERROR
-        "ONNX_LIGHT_BUILD_KERNELS=OFF is incompatible with "
-        "ONNX_LIGHT_BUILD_PYTHON=ON: the Python extensions "
-        "_onnxpykernels and _onnxpybackend require lib_onnx_kernels "
-        "and lib_onnx_backend_test.")
-  endif()
   if(ONNX_LIGHT_BUILD_TESTS)
     message(FATAL_ERROR
         "ONNX_LIGHT_BUILD_KERNELS=OFF is incompatible with "
@@ -440,6 +436,12 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # _onnxpykernels: kernel helpers (deterministic pseudo-random helpers backing
   # ``onnx_backend_test``). Links lib_onnx_kernels only and does not depend on
   # the backend-test case registries.
+  #
+  # _onnxpykernels and _onnxpybackend are only built when the kernel runtime is
+  # available (ONNX_LIGHT_BUILD_KERNELS=ON). In the reduced build they are
+  # omitted and the Python package raises an explicit error when the reference
+  # runtime or backend-test helpers are requested.
+  if(ONNX_LIGHT_BUILD_KERNELS)
   nanobind_add_module(_onnxpykernels ${ONNX_PY_KERNELS_SOURCES})
   target_include_directories(_onnxpykernels PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
   target_link_libraries(_onnxpykernels PRIVATE lib_onnx_kernels)
@@ -461,6 +463,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   else()
     target_link_libraries(_onnxpybackend PRIVATE lib_onnx_backend_test lib_onnx_kernels lib_onnx_backend_test)
   endif()
+  endif() # ONNX_LIGHT_BUILD_KERNELS
 
   # All extensions and the shared lib_onnx_*.so are installed in the same
   # directory (onnx_light/onnx_py/). Set an $ORIGIN rpath so the dynamic loader
@@ -470,7 +473,10 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # every .so and refuses to repair if a referenced library (e.g.
   # ``liblib_onnx_proto.so`` referenced by ``liblib_onnx_kernels.so``) cannot
   # be located via the consuming library's own rpath.
-  set(_onnxpy_rpath_targets _onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxpykernels _onnxpybackend)
+  set(_onnxpy_rpath_targets _onnxpyprotoop _onnxpyprotolib _onnxpyoptim)
+  if(ONNX_LIGHT_BUILD_KERNELS)
+    list(APPEND _onnxpy_rpath_targets _onnxpykernels _onnxpybackend)
+  endif()
   if(_lib_onnx_proto_type STREQUAL "SHARED")
     list(APPEND _onnxpy_rpath_targets lib_onnx_proto)
   endif()
@@ -714,7 +720,10 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # alongside so the $ORIGIN rpath above resolves them without
   # LD_LIBRARY_PATH and the compiled code is shared across all extensions
   # instead of being duplicated inside each .so.
-  install(TARGETS _onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxpykernels _onnxpybackend LIBRARY DESTINATION onnx_light/onnx_py)
+  install(TARGETS _onnxpyprotoop _onnxpyprotolib _onnxpyoptim LIBRARY DESTINATION onnx_light/onnx_py)
+  if(ONNX_LIGHT_BUILD_KERNELS)
+    install(TARGETS _onnxpykernels _onnxpybackend LIBRARY DESTINATION onnx_light/onnx_py)
+  endif()
   if(_lib_onnx_proto_type STREQUAL "SHARED")
     install(TARGETS lib_onnx_proto
         LIBRARY DESTINATION onnx_light/onnx_py
@@ -726,10 +735,15 @@ if(ONNX_LIGHT_BUILD_PYTHON)
         lib_onnx_lib
         lib_onnx_op
         lib_onnx_optim
-        lib_onnx_kernels
-        lib_onnx_backend_test
         LIBRARY DESTINATION onnx_light/onnx_py
         RUNTIME DESTINATION onnx_light/onnx_py)
+    if(ONNX_LIGHT_BUILD_KERNELS)
+      install(TARGETS
+          lib_onnx_kernels
+          lib_onnx_backend_test
+          LIBRARY DESTINATION onnx_light/onnx_py
+          RUNTIME DESTINATION onnx_light/onnx_py)
+    endif()
   endif()
 endif()
 
@@ -897,7 +911,10 @@ if(ONNX_LIGHT_BUILD_KERNELS)
 endif()
 if(ONNX_LIGHT_BUILD_PYTHON)
   list(APPEND _onnx_light_hardening_targets
-      _onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxpykernels _onnxpybackend)
+      _onnxpyprotoop _onnxpyprotolib _onnxpyoptim)
+  if(ONNX_LIGHT_BUILD_KERNELS)
+    list(APPEND _onnx_light_hardening_targets _onnxpykernels _onnxpybackend)
+  endif()
 endif()
 if(ONNX_LIGHT_BUILD_TESTS)
   list(APPEND _onnx_light_hardening_targets test_onnx_light_helpers test_onnx_light)

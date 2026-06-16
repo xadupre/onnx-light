@@ -13,6 +13,25 @@ import numpy as np
 _UINT64_MASK = (1 << 64) - 1
 
 
+def _load_backend():
+    """Returns the native ``backend`` submodule of ``_onnxpykernels``.
+
+    Returns:
+        The ``backend`` nanobind submodule exposing the deterministic
+        pseudo-random helpers.
+
+    Raises:
+        ReducedBuildError: When onnx-light was built without the kernel runtime.
+    """
+    try:
+        from ...onnx_py._onnxpykernels import backend as _C  # type: ignore[attr-defined]
+    except ImportError as exc:
+        from ..._reduced_build import kernels_required
+
+        kernels_required("onnx_light.onnx_lib.backend.random", exc)
+    return _C
+
+
 def _normalize_seed(seed: int | np.integer | None) -> int | None:
     """Returns a normalized 64-bit seed, or ``None`` to use the default seed."""
     if seed is None:
@@ -48,8 +67,7 @@ def rand(*shape: int, seed: int | np.integer | None = None) -> np.ndarray:
     Returns:
         A ``np.ndarray`` of float64 values with the requested shape.
     """
-    from ...onnx_py._onnxpykernels import backend as _C  # type: ignore[attr-defined]
-
+    _C = _load_backend()
     normalized_shape = _normalize_size(shape)
     values = _C.rand(list(normalized_shape), _normalize_seed(seed))
     return np.asarray(values, dtype=np.float64).reshape(normalized_shape)
@@ -75,8 +93,7 @@ def randint(
     Returns:
         A ``np.ndarray`` of integers with the requested shape.
     """
-    from ...onnx_py._onnxpykernels import backend as _C  # type: ignore[attr-defined]
-
+    _C = _load_backend()
     assert size is not None, "size cannot be None"
     if high is None:
         high = low
@@ -104,8 +121,7 @@ def randn(*shape: int, seed: int | np.integer | None = None) -> np.ndarray:
     Returns:
         A ``np.ndarray`` of float64 values with the requested shape.
     """
-    from ...onnx_py._onnxpykernels import backend as _C  # type: ignore[attr-defined]
-
+    _C = _load_backend()
     normalized_shape = _normalize_size(shape)
     values = _C.randn(list(normalized_shape), _normalize_seed(seed))
     return np.asarray(values, dtype=np.float64).reshape(normalized_shape)

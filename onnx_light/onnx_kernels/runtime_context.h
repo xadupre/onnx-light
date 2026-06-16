@@ -5,6 +5,7 @@
 #pragma once
 
 #include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/simple_map.h"
 #include "onnx_kernels/simple_sequence.h"
 #include "onnx_kernels/simple_tensor.h"
 #include "onnx_light_helpers.h"
@@ -51,6 +52,18 @@ using TensorMap = std::unordered_map<std::string, Tensor>;
  * ``NodeProto::output`` names.
  */
 using SequenceMap = std::unordered_map<std::string, Sequence>;
+
+/**
+ * Name-keyed map of maps carrying the map-typed graph values produced or
+ * consumed by map operators (``CastMap``, ``DictVectorizer``, ``ZipMap``).
+ *
+ * Maps are stored separately from tensors because their runtime
+ * representation (:cpp:struct:`Map`) is a keys+values tensor pair and not
+ * a single tensor: the dispatcher therefore keeps a sibling map of
+ * map-typed edges, looked up by the same ``NodeProto::input`` /
+ * ``NodeProto::output`` names.
+ */
+using OnnxMapMap = std::unordered_map<std::string, Map>;
 
 /**
  * Name-keyed map of model-local :cpp:type:`FunctionProto` definitions
@@ -490,6 +503,7 @@ public:
   void Clear() noexcept {
     tensors_.clear();
     sequences_.clear();
+    maps_.clear();
     events_.clear();
     current_node_index_ = -1;
   }
@@ -638,6 +652,37 @@ public:
     return it->second;
   }
 
+  /// In/out map store shared across every node in a chain. Only
+  /// map-typed graph edges are stored here; tensor-typed edges
+  /// live in :cpp:func:`tensors`.
+  OnnxMapMap &maps() noexcept { return maps_; }
+  const OnnxMapMap &maps() const noexcept { return maps_; }
+
+  /// Returns ``true`` if a map named ``name`` is currently held.
+  bool HasMap(const std::string &name) const { return maps_.find(name) != maps_.end(); }
+
+  /// Inserts or overwrites the map stored under ``name``.
+  void PutMap(const std::string &name, Map map) {
+    map.name = name;
+    maps_[name] = std::move(map);
+  }
+
+  /// Removes the map stored under ``name`` if present.
+  bool RemoveMap(const std::string &name) { return maps_.erase(name) > 0; }
+
+  /**
+   * Returns the map stored under ``name``.
+   *
+   * @throws std::out_of_range if ``name`` is not in the map store.
+   */
+  const Map &GetMap(const std::string &name) const {
+    auto it = maps_.find(name);
+    if (it == maps_.end()) {
+      throw std::out_of_range("RuntimeContext::GetMap: no map named '" + name + "'.");
+    }
+    return it->second;
+  }
+
 private:
   TensorMap tensors_;
   kernel::KernelContext kernel_ctx_;
@@ -645,6 +690,7 @@ private:
   CustomKernelMap custom_kernels_;
   RuntimeEventLog events_;
   SequenceMap sequences_;
+  OnnxMapMap maps_;
   bool events_enabled_ = false;
   bool release_intermediates_ = false;
   int64_t current_node_index_ = -1;

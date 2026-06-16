@@ -6,6 +6,7 @@
 
 #include "onnx.h"
 #include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/simple_map.h"
 #include "onnx_kernels/simple_tensor.h"
 
 #include <cstdint>
@@ -26,6 +27,8 @@ using onnx_kernels::kernel::DefaultOpset;
 struct DataSet {
   std::vector<Tensor> inputs;
   std::vector<Tensor> outputs;
+  /// Map-typed inputs keyed by the graph input name.
+  std::vector<Map> maps;
 };
 
 /**

@@ -22,6 +22,7 @@ using onnx_backend_test::DataSet;
 using onnx_backend_test::DefaultOpset;
 using onnx_backend_test::TestCase;
 using onnx_kernels::DataType;
+using onnx_kernels::Map;
 using onnx_kernels::RunModel;
 using onnx_kernels::RuntimeContext;
 using onnx_kernels::Tensor;
@@ -95,6 +96,9 @@ void RunBackendCasesFor(const std::string &op_type,
       RuntimeContext rt(KernelContext(DefaultOpset(GetDefaultOpsetVersion(tc.model))));
       for (const Tensor &t : ds.inputs) {
         rt.Set(t.name, t);
+      }
+      for (const Map &m : ds.maps) {
+        rt.PutMap(m.name, m);
       }
 
       ASSERT_NO_THROW(RunModel(tc.model, rt)) << "RunModel threw for case " << tc.name;

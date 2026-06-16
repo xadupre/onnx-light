@@ -70,14 +70,18 @@ float Float16BitsToFloat(std::uint16_t h) noexcept {
     if (mant == 0) {
       f = sign << 31;
     } else {
+      // Subnormal half: normalize the mantissa so its implicit leading 1 sits
+      // at bit 10, decrementing the (biased-by-one) half exponent for every
+      // left shift, then rebias into the float32 exponent field.
       std::uint32_t m = mant;
-      std::int32_t e = -1;
+      std::int32_t e = 1;
       while ((m & 0x400u) == 0) {
         m <<= 1;
         --e;
       }
       m &= 0x3ffu;
-      f = (sign << 31) | (static_cast<std::uint32_t>(e + kFloat32ExponentBias + 1) << 23) |
+      f = (sign << 31) |
+          (static_cast<std::uint32_t>(e - kFloat16ExponentBias + kFloat32ExponentBias) << 23) |
           (m << 13);
     }
   } else if (exp == 0x1fu) {

@@ -67,6 +67,13 @@ _NON_DETERMINISTIC_OPS: frozenset[str] = frozenset(
 # stored reference outputs in a portable way.
 _IMPLEMENTATION_DEFINED_OPS: frozenset[str] = frozenset({"ImageDecoder"})
 
+# Per-test tolerances for ONNX backend cases whose stored reference outputs
+# retain tiny floating-point residuals that onnx-light rounds closer to zero.
+_CUSTOM_FLOAT_TOLERANCES: dict[str, tuple[float, float]] = {
+    "test_dft_inverse": (1e-3, 1e-5),
+    "test_dft_inverse_opset19": (1e-3, 1e-5),
+}
+
 
 def _load_known_discrepancies() -> set[str]:
     with open(_KNOWN_DISCREPANCIES_FILE, encoding="utf-8") as f:
@@ -110,6 +117,11 @@ def _load_data_set(data_dir: str) -> tuple[list[np.ndarray], list[np.ndarray]]:
         for i in range(len(glob.glob(os.path.join(data_dir, "output_*.pb"))))
     ]
     return inputs, outputs
+
+
+def _comparison_tolerances(name: str) -> tuple[float, float]:
+    """Returns the comparison tolerances for one backend runtime test."""
+    return _CUSTOM_FLOAT_TOLERANCES.get(name, (1e-3, 1e-7))
 
 
 def _describe_mismatch(
@@ -163,6 +175,11 @@ def _describe_mismatch(
 class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
     """Runs every ONNX backend node test through the ``onnx_light`` runtime."""
 
+    def test_comparison_tolerances_defaults_and_overrides(self):
+        self.assertEqual(_comparison_tolerances("test_abs"), (1e-3, 1e-7))
+        self.assertEqual(_comparison_tolerances("test_dft_inverse"), (1e-3, 1e-5))
+        self.assertEqual(_comparison_tolerances("test_dft_inverse_opset19"), (1e-3, 1e-5))
+
     def test_model_op_types_walks_subgraphs(self):
         # Guards the recursive traversal in ``_model_op_types`` so operators
         # nested inside ``If``/``Loop``/``Scan`` subgraphs (GRAPH and GRAPHS
@@ -214,6 +231,8 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
             return "skip", None
 
         model_dir = os.path.dirname(model_file)
+        test_name = os.path.basename(model_dir)
+        rtol, atol = _comparison_tolerances(test_name)
         data_dirs = sorted(glob.glob(os.path.join(model_dir, "test_data_set*")))
         if not data_dirs:
             return "skip", None
@@ -238,7 +257,7 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
                     f"output count mismatch: got {len(outputs)}, expected {len(expected)}"
                 )
             for i, (got, ref) in enumerate(zip(outputs, expected)):
-                detail = _describe_mismatch(got, ref, rtol=1e-3, atol=1e-7)
+                detail = _describe_mismatch(got, ref, rtol=rtol, atol=atol)
                 if detail is not None:
                     return "fail", f"output {i} ({os.path.basename(data_dir)}): {detail}"
         return "pass", None

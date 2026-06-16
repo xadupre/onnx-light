@@ -26,9 +26,11 @@ from ..onnx_lib import FunctionProto, GraphProto, ModelProto, TensorProto, load,
 try:
     from ..onnx_py._onnxpykernels import runtime as _runtime  # type: ignore[missing-import]
 except ImportError as exc:  # pragma: no cover - exercised only in reduced builds
-    from .._reduced_build import kernels_required
-
-    kernels_required("onnx_light.reference.ReferenceEvaluator", exc)
+    raise ImportError(
+        "onnx-light was built without the operator-kernel runtime "
+        "(ONNX_LIGHT_BUILD_KERNELS=OFF); install the full build to use "
+        "ReferenceEvaluator."
+    ) from exc
 
 try:
     import ml_dtypes as _ml_dtypes  # type: ignore

@@ -1,0 +1,52 @@
+name: ci-reduced
+
+# Builds the reduced onnx-light variant compiled without the operator-kernel
+# runtime and backend-test registries (ONNX_LIGHT_BUILD_KERNELS=OFF) and runs
+# the unit tests. Tests that depend on the kernels/backend skip themselves via
+# pytest.importorskip, so the suite exercises the proto / schema / shape-inference
+# / manipulation layers that ship in the reduced build.
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reduced_tests_ubuntu:
+    name: reduced (ubuntu-latest, py3.13)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install OpenSSL (Linux)
+        run: sudo apt-get install -y libssl-dev
+
+      - name: Set parallel build level
+        shell: bash
+        run: |
+          CMAKE_BUILD_PARALLEL_LEVEL=$(python -c 'import os; print(os.cpu_count() or 1)')
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}"
+
+      - name: Build and Install package without kernels/backend
+        run: pip install -C build-dir=build -C cmake.define.ONNX_LIGHT_BUILD_KERNELS=OFF -e .[dev] -v
+
+      - name: pip freeze
+        run: pip freeze
+
+      - name: Run tests (kernel/backend tests skip themselves)
+        run: |
+          UNITTEST_GOING=1 pytest --durations=10 unittests --ignore=unittests/onnxl_vs_onnx --ignore=unittests/onnxl_vs_ort

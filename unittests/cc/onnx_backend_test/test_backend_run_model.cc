@@ -450,8 +450,13 @@ TEST(BackendRunModel, QLinearConv) {
 // LinearAttention (opset 27) and FlexAttention (ai.onnx.preview) kernels.
 TEST(BackendRunModel, LinearAttention) {
   RunBackendCasesFor("LinearAttention", [](const DataSet &ds) {
-    return ds.inputs.size() >= 3 && ds.inputs[0].data_type == DataType::FLOAT &&
-           ds.inputs[1].data_type == DataType::FLOAT && ds.inputs[2].data_type == DataType::FLOAT;
+    if (ds.inputs.size() < 3) {
+      return false;
+    }
+    const int32_t dtype = ds.inputs[0].data_type;
+    const bool supported = dtype == static_cast<int32_t>(DataType::FLOAT) ||
+                           dtype == static_cast<int32_t>(DataType::FLOAT16);
+    return supported && ds.inputs[1].data_type == dtype && ds.inputs[2].data_type == dtype;
   });
 }
 TEST(BackendRunModel, FlexAttention) {

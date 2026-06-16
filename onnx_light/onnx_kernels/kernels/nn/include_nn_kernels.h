@@ -1101,7 +1101,7 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
-/// Reference ``LinearAttention`` kernel restricted to FLOAT tensors.
+/// Reference ``LinearAttention`` kernel for FLOAT, FLOAT16 and BFLOAT16 tensors.
 ///
 /// Implements the unified linear attention recurrence defined by the upstream
 /// ``ai.onnx::LinearAttention`` operator (since opset 27). Supports four
@@ -1109,7 +1109,8 @@ public:
 /// ``"gated_delta"``. Inputs use 3D packed format ``(B, T, H*D)``; the
 /// recurrent state is 4D ``(B, H_kv, d_k, d_v)``. Group-query attention
 /// (GQA) is supported when ``q_num_heads`` is a positive multiple of
-/// ``kv_num_heads``.
+/// ``kv_num_heads``. Half-precision (FLOAT16/BFLOAT16) activations are
+/// promoted to FLOAT32 for the recurrence and the outputs are demoted back.
 class LinearAttention : public KernelBase {
 public:
   /// Attributes carried by the ONNX ``LinearAttention`` operator.

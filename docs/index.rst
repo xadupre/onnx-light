@@ -21,21 +21,25 @@ onnx-light
     :target: https://github.com/xadupre/onnx-light/actions/workflows/cq_fuzz.yml
     :alt: fuzz
 
-.. image:: https://github.com/xadupre/onnx-light/actions/workflows/mypy.yml/badge.svg
-    :target: https://github.com/xadupre/onnx-light/actions/workflows/mypy.yml
-    :alt: mypy
-
 .. image:: https://github.com/xadupre/onnx-light/actions/workflows/docs.yml/badge.svg
     :target: https://github.com/xadupre/onnx-light/actions/workflows/docs.yml
     :alt: Documentation
+
+.. image:: https://github.com/xadupre/onnx-light/actions/workflows/doc_cpp.yml/badge.svg
+    :target: https://github.com/xadupre/onnx-light/actions/workflows/doc_cpp.yml
+    :alt: C++ Doxygen Documentation
 
 .. image:: https://github.com/xadupre/onnx-light/actions/workflows/style.yml/badge.svg
     :target: https://github.com/xadupre/onnx-light/actions/workflows/style.yml
     :alt: Style
 
-.. image:: https://github.com/xadupre/onnx-light/actions/workflows/pyrefly.yml/badge.svg
-    :target: https://github.com/xadupre/onnx-light/actions/workflows/pyrefly.yml
-    :alt: pyrefly
+.. image:: https://github.com/xadupre/onnx-light/actions/workflows/typing.yml/badge.svg
+    :target: https://github.com/xadupre/onnx-light/actions/workflows/typing.yml
+    :alt: Typing
+
+.. image:: https://github.com/xadupre/onnx-light/actions/workflows/cq_sbom.yml/badge.svg
+    :target: https://github.com/xadupre/onnx-light/actions/workflows/cq_sbom.yml
+    :alt: SBOM
 
 .. image:: https://github.com/xadupre/onnx-light/actions/workflows/spelling.yml/badge.svg
     :target: https://github.com/xadupre/onnx-light/actions/workflows/spelling.yml

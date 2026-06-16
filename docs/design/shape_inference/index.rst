@@ -17,6 +17,7 @@ expectations.
     constraints
     sequences_and_subgraphs
     events
+    value_as_shape
     inference_coverage
 
 Overview
@@ -135,6 +136,18 @@ Dynamic dimensions are represented as symbolic expression strings such as
 evaluates and renames these expressions so that symbolic arithmetic stays
 canonical throughout inference. It is described in
 :ref:`l-design-expressions`.
+
+Value-as-shape propagation
+--------------------------
+
+Many operators accept a shape tensor whose *runtime values* determine the
+output shape. The ``value_as_shape`` annotation on an
+:cpp:class:`OptimTensor` carries the symbolic content of such tensors so
+that consumers like ``Reshape`` or ``Expand`` can infer precise shapes even
+when the shape tensor is not a literal initializer. The annotation is
+seeded by ``Shape`` and ``Size``, propagated through element-wise
+arithmetic and structural operators, and consumed by every shape-tensor
+input. This mechanism is described in :ref:`l-design-value-as-shape`.
 
 Sequences, maps and subgraphs
 -----------------------------

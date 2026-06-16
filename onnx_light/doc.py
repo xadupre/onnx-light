@@ -1443,7 +1443,7 @@ def generate_operators_doc(
 
 from . import onnx as onnxl  # noqa: E402
 from .onnx_optim.shape_inference import infer_shapes_model  # noqa: E402
-from .tools import to_mermaid  # noqa: E402
+from .tools import pretty_onnx  # noqa: E402
 from .onnx_lib.backend.test.case import collect_test_case  # noqa: E402
 from .onnx_lib.backend.test.case.base import TestCase  # noqa: E402
 
@@ -1521,9 +1521,9 @@ class InferenceCaseReport:
     """Name of the backend test case (e.g.
     ``"test_cc_shape_inference_add_concat_reshape"``)."""
 
-    mermaid: str
-    """Mermaid ``flowchart`` source rendering the *original* model (with
-    its expected ``value_info`` annotations)."""
+    model_str: str
+    """Compact text rendering of the *original* model (with its expected
+    ``value_info`` annotations), produced by :func:`~onnx_light.tools.pretty_onnx`."""
 
     error: str | None
     """Error message raised by :func:`infer_shapes_model`, or ``None`` when
@@ -1637,9 +1637,9 @@ def compute_inference_coverage() -> InferenceCoverageReport:
         if original is None:  # pragma: no cover - defensive
             continue
         try:
-            mermaid = to_mermaid(original)
+            model_str = pretty_onnx(original)
         except Exception as exc:  # pragma: no cover - defensive only
-            mermaid = f'flowchart TB\n    err["to_mermaid failed: {exc}"]'
+            model_str = f"pretty_onnx failed: {exc}"
 
         # Snapshot expected shapes from the original (untouched) model so
         # that we can compare them against the shapes produced by shape
@@ -1696,7 +1696,7 @@ def compute_inference_coverage() -> InferenceCoverageReport:
 
         report.cases.append(
             InferenceCaseReport(
-                name=tc.name, mermaid=mermaid, error=error, comparisons=comparisons
+                name=tc.name, model_str=model_str, error=error, comparisons=comparisons
             )
         )
 
@@ -1757,7 +1757,8 @@ def render_rst_case(case: InferenceCaseReport) -> str:
 
     The section contains:
 
-    * a ``.. mermaid::`` block rendering the original model;
+    * a ``.. code-block:: text`` block rendering the original model via
+      :func:`~onnx_light.tools.pretty_onnx`;
     * either an error admonition (when shape inference raised) or a
       ``list-table`` contrasting expected and computed shapes for every
       input, intermediate and output value.
@@ -1765,15 +1766,10 @@ def render_rst_case(case: InferenceCaseReport) -> str:
     title = f"``{case.name}``"
     lines: list[str] = [title, "+" * len(title), ""]
 
-    # Mermaid graph (raw form: the body of the directive is the Mermaid
-    # source itself, which is exactly what ``to_mermaid`` returns). The
-    # ``.. mermaid::`` directive (from ``sphinxcontrib.mermaid``) is used
-    # rather than ``.. runmermaid::``: the latter crashes when emitted from a
-    # ``runpython`` ``:rst:`` block because it cannot resolve the source path
-    # of the dynamically generated content.
-    lines.append(".. mermaid::")
+    # Compact text rendering produced by ``pretty_onnx``.
+    lines.append(".. code-block:: text")
     lines.append("")
-    for ml in case.mermaid.splitlines():
+    for ml in case.model_str.splitlines():
         lines.append(f"    {ml}" if ml else "")
     lines.append("")
 

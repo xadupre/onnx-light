@@ -57,7 +57,7 @@ template <typename T>
 void ComputeFlexAttentionTyped(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
                                const FlexAttention::ScoreModFn &score_mod,
                                const FlexAttention::ProbModFn &prob_mod, Tensor &output) {
-  constexpr int32_t kElemType = TensorElementType<T>::value;
+  constexpr int32_t kElementType = TensorElementType<T>::value;
 
   const int64_t batch_size = Q.shape[0];
   const int64_t q_num_heads = Q.shape[1];
@@ -86,7 +86,7 @@ void ComputeFlexAttentionTyped(const Tensor &Q, const Tensor &K, const Tensor &V
       kv_num_heads > 0 && q_num_heads % kv_num_heads == 0,
       "kernel::FlexAttention: 'q_num_heads' must be a positive multiple of 'kv_num_heads'.");
 
-  EXT_ENFORCE_INVALID(output.data_type == kElemType,
+  EXT_ENFORCE_INVALID(output.data_type == kElementType,
                       "kernel::FlexAttention preallocated output must share Q's element type.");
   const std::vector<int64_t> expected_out_shape = {batch_size, q_num_heads, q_seq_len, v_head_size};
   EXT_ENFORCE_INVALID(
@@ -124,7 +124,7 @@ void ComputeFlexAttentionTyped(const Tensor &Q, const Tensor &K, const Tensor &V
   // softmax and the final ``probs @ V`` matmul, respectively.
   const std::vector<int64_t> probs_shape = {batch_size, q_num_heads, q_seq_len, kv_seq_len};
   const int64_t probs_count = batch_size * q_num_heads * q_seq_len * kv_seq_len;
-  Tensor probs("", kElemType, probs_shape,
+  Tensor probs("", kElementType, probs_shape,
                std::vector<uint8_t>(static_cast<size_t>(probs_count) * sizeof(T)));
   T *pProbs = probs.As<T>();
 
@@ -159,7 +159,7 @@ void ComputeFlexAttentionTyped(const Tensor &Q, const Tensor &K, const Tensor &V
   // element type and the (B, Hq, L, S) shape.
   if (score_mod) {
     score_mod(probs);
-    EXT_ENFORCE_INVALID(probs.data_type == kElemType,
+    EXT_ENFORCE_INVALID(probs.data_type == kElementType,
                         "kernel::FlexAttention: 'score_mod' callback must preserve the "
                         "element type of the score tensor.");
     EXT_ENFORCE_INVALID(probs.shape == probs_shape,
@@ -214,7 +214,7 @@ void ComputeFlexAttentionTyped(const Tensor &Q, const Tensor &K, const Tensor &V
   // the element type and the (B, Hq, L, S) shape.
   if (prob_mod) {
     prob_mod(probs);
-    EXT_ENFORCE_INVALID(probs.data_type == kElemType,
+    EXT_ENFORCE_INVALID(probs.data_type == kElementType,
                         "kernel::FlexAttention: 'prob_mod' callback must preserve the "
                         "element type of the probability tensor.");
     EXT_ENFORCE_INVALID(probs.shape == probs_shape,

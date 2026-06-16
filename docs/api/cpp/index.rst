@@ -10,6 +10,7 @@ headers via :epkg:`Doxygen` and rendered by :epkg:`Breathe`.
     common/index
     onnx/index
     onnx_defs/index
+    onnx_manipulations/index
     onnx_op/index
     onnx_optim/index
     onnx_kernels/index

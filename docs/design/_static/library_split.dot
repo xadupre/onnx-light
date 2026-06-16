@@ -7,7 +7,8 @@ digraph library_split {
 
     lib_onnx_op -> lib_onnx_proto;
     lib_onnx_optim -> lib_onnx_op;
-    lib_onnx_lib -> lib_onnx_proto;
-    lib_onnx_kernels -> lib_onnx_proto;
+    lib_onnx_manipulations -> lib_onnx_proto;
+    lib_onnx_lib -> lib_onnx_manipulations;
+    lib_onnx_kernels -> lib_onnx_manipulations;
     lib_onnx_backend_test -> lib_onnx_kernels;
 }

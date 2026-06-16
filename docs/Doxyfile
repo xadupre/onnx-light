@@ -10,6 +10,7 @@ INPUT                  = ../onnx_light/onnx_helpers/include \
                          ../onnx_light/onnx_backend_test \
                          ../onnx_light/onnx_kernels \
                          ../onnx_light/onnx_proto \
+                         ../onnx_light/onnx_manipulations \
                          ../onnx_light/onnx_lib
 FILE_PATTERNS          = *.h *.hpp
 RECURSIVE              = YES

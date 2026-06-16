@@ -126,8 +126,8 @@ From the repository root, install the C++ library with CMake:
 
 When downstream code only needs the schema / checker / shape-inference /
 version-converter / proto layer (``onnx_light::onnx_light``,
-``onnx_light::lib_onnx_op``, ``onnx_light::lib_onnx_optim``,
-``onnx_light::lib_onnx_proto``), pass
+``onnx_light::onnx_manipulations``, ``onnx_light::lib_onnx_op``,
+``onnx_light::lib_onnx_optim``, ``onnx_light::lib_onnx_proto``), pass
 ``-DONNX_LIGHT_BUILD_KERNELS=OFF`` at configure time to skip building and
 installing the much larger ``lib_onnx_kernels`` (operator-kernel runtime)
 and ``lib_onnx_backend_test`` (backend-test case registry) libraries.
@@ -164,6 +164,16 @@ inference support, downstream code can link:
     find_package(onnx_light REQUIRED)
     target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_op)
 
+To parse / print ONNX text models and manipulate :class:`~onnx_light.onnx_lib.ModelProto` /
+:class:`~onnx_light.onnx_lib.GraphProto` (attribute and tensor proto helpers, data-type name
+utilities, graph-input collection) without pulling in the operator schemas,
+link the manipulations target, which only depends on ``lib_onnx_proto``:
+
+.. code-block:: cmake
+
+    find_package(onnx_light REQUIRED)
+    target_link_libraries(my_target PRIVATE onnx_light::onnx_manipulations)
+
 When shape inference dispatch and graph optimization passes are also needed
 (without pulling in the full ``onnx_light::onnx_light`` checker/inliner/version
 converter), link the optim target instead, which transitively pulls in
@@ -185,8 +195,9 @@ To evaluate ONNX nodes / graphs / models in-process using the bundled C++
     target_link_libraries(my_target PRIVATE onnx_light::onnx_kernels)
 
 The kernels live under ``onnx_light/onnx_kernels/kernels/<group>/`` and
-form a self-contained runtime that only depends on
-``onnx_light::lib_onnx_proto``.  See
+form a self-contained runtime that depends on
+``onnx_light::lib_onnx_proto`` and ``onnx_light::onnx_manipulations``
+(for the graph-manipulation helpers).  See
 :doc:`../api/cpp/onnx_kernels/index` for the full C++ API reference.
 
 To additionally pull in the backend-test infrastructure
@@ -223,9 +234,9 @@ For monorepos or local development, a downstream CMake project can also include
     target_link_libraries(my_target PRIVATE lib_onnx_lib)
 
 Use the in-tree ``lib_onnx_proto`` target instead when only proto
-parsing/serialization is needed, or ``lib_onnx_op``, ``lib_onnx_optim``,
-``lib_onnx_kernels`` or ``lib_onnx_backend_test`` for the corresponding
-feature subset.  This uses the
+parsing/serialization is needed, or ``lib_onnx_op``, ``lib_onnx_manipulations``,
+``lib_onnx_optim``, ``lib_onnx_kernels`` or ``lib_onnx_backend_test`` for the
+corresponding feature subset.  This uses the
 in-tree build targets directly instead of ``find_package``.
 
 Excerpt from the example project

@@ -2,12 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_lib/defs/printer.h"
+#include "onnx_manipulations/printer.h"
 
 #include <iomanip>
 #include <string>
 
-#include "onnx_lib/defs/tensor_util.h"
+#include "onnx_manipulations/tensor_util.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace {

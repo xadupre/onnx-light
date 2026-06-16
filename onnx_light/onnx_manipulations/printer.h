@@ -17,7 +17,7 @@
 #include <sstream>
 #include <string>
 
-#include "onnx_lib/defs/parser.h"
+#include "onnx_manipulations/parser.h"
 #include "onnx_proto/onnx_alias.h"
 
 namespace ONNX_LIGHT_NAMESPACE {

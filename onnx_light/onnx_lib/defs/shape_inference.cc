@@ -8,8 +8,8 @@
 #include <utility>
 #include <vector>
 
-#include "onnx_lib/defs/data_type_utils.h"
-#include "onnx_lib/defs/tensor_proto_util.h"
+#include "onnx_manipulations/data_type_utils.h"
+#include "onnx_manipulations/tensor_proto_util.h"
 #include "onnx_proto/onnx_alias.h"
 
 namespace ONNX_LIGHT_NAMESPACE {

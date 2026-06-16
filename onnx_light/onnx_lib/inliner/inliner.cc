@@ -18,8 +18,8 @@
 #include "onnx_lib/common/proto_util.h"
 #include "onnx_lib/common/visitor.h"
 #include "onnx_lib/defs/function.h"
-#include "onnx_lib/defs/parser.h"
 #include "onnx_lib/shape_inference/attribute_binder.h"
+#include "onnx_manipulations/parser.h"
 #ifdef ONNX_LIGHT_VERSION_CONVERTER
 #include "onnx_lib/shape_inference/implementation.h"
 #include "onnx_lib/version_converter/convert.h"

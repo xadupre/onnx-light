@@ -1,13 +1,13 @@
 #include "onnx.h"
 #include "onnx_lib/checker.h"
-#include "onnx_lib/defs/parser.h"
-#include "onnx_lib/defs/printer.h"
 #include "onnx_lib/defs/schema.h"
 #include "onnx_lib/defs/shape_inference.h"
 #include "onnx_lib/inliner/inliner.h"
 #include "onnx_lib/shape_inference/implementation.h"
 #include "onnx_lib/version_converter/convert.h"
 #include "onnx_lib/version_converter/errors.h"
+#include "onnx_manipulations/parser.h"
+#include "onnx_manipulations/printer.h"
 #include "onnx_optim/expressions.h"
 #include <algorithm>
 #include <limits>

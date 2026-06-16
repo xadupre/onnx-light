@@ -11,9 +11,9 @@
 #include <utility>
 #include <vector>
 
-#include "onnx_lib/defs/tensor_proto_util.h"
-#include "onnx_lib/defs/tensor_util.h"
 #include "onnx_lib/version_converter/adapters/adapter.h"
+#include "onnx_manipulations/tensor_proto_util.h"
+#include "onnx_manipulations/tensor_util.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace version_conversion {

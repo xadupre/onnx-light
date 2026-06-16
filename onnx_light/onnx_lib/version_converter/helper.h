@@ -16,7 +16,7 @@
 
 #include "onnx_lib/common/assertions.h"
 #include "onnx_lib/common/ir.h"
-#include "onnx_lib/defs/tensor_util.h"
+#include "onnx_manipulations/tensor_util.h"
 #include "onnx_proto/onnx_alias.h"
 
 namespace ONNX_LIGHT_NAMESPACE {

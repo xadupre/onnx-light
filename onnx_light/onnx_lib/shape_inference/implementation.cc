@@ -18,8 +18,8 @@
 #include "onnx_lib/common/file_utils.h"
 #include "onnx_lib/common/proto_util.h"
 #include "onnx_lib/common/scoped_resource.h"
-#include "onnx_lib/defs/data_type_utils.h"
 #include "onnx_lib/shape_inference/attribute_binder.h"
+#include "onnx_manipulations/data_type_utils.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace shape_inference {

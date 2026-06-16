@@ -1,5 +1,5 @@
-#include "../defs/parser.h"
 #include "onnx.h"
+#include "onnx_manipulations/parser.h"
 #include <gtest/gtest.h>
 
 using namespace ONNX_LIGHT_NAMESPACE;

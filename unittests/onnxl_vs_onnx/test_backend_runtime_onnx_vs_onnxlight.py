@@ -270,7 +270,6 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
             self.fail(
                 f"The onnx-light runtime does not reproduce {name!r} ({detail}). "
                 f"Fix the runtime or append {name!r} to {snapshot}."
-                f"runtime or append {name!r} to {snapshot}."
             )
 
     def test_known_discrepancies_all_have_tests(self):

@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-lint = [
+style = [
     "black==26.5.1",
     "ruff==0.15.17",
 ]
@@ -30,7 +30,7 @@ dev = [
     "onnx-light[dev-no-onnx]",
 ]
 dev-no-onnx = [
-    "onnx-light[lint]",
+    "onnx-light[style]",
     "matplotlib",
     "pandas",
     "pytest>=7",
@@ -38,7 +38,7 @@ dev-no-onnx = [
     "pytest-subtests",
 ]
 docs = [
-    "onnx-light[lint]",
+    "onnx-light[style]",
     "breathe",
     "onnx-ir",
     "matplotlib",

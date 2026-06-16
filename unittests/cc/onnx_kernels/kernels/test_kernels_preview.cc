@@ -246,4 +246,26 @@ TEST(KernelClass, FlexAttentionHalfPrecisionMatchesFloatReference) {
   }
 }
 
+TEST(KernelClass, FlexAttentionDoubleMatchesFloatReference) {
+  // The DOUBLE code path must reproduce the FLOAT reference (same input
+  // values) while storing Q/K/V/Y as ``double``.
+  const Tensor Qf = Tensor::FromFloat("", {1, 1, 1, 2}, {1.0f, 0.0f});
+  const Tensor Kf = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 0.0f, 0.0f, 1.0f});
+  const Tensor Vf = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+
+  const KernelContext ctx = PreviewKernelContext();
+  const FlexAttention flex{ctx};
+  const Tensor ref = flex(Qf, Kf, Vf);
+
+  const Tensor Qd = Tensor::FromDouble("", {1, 1, 1, 2}, {1.0, 0.0});
+  const Tensor Kd = Tensor::FromDouble("", {1, 1, 2, 2}, {1.0, 0.0, 0.0, 1.0});
+  const Tensor Vd = Tensor::FromDouble("", {1, 1, 2, 2}, {1.0, 2.0, 3.0, 4.0});
+  const Tensor Yd = flex(Qd, Kd, Vd);
+  ASSERT_EQ(Yd.data_type, static_cast<int32_t>(onnx_kernels::DataType::DOUBLE));
+  ASSERT_EQ(Yd.shape, ref.shape);
+  for (int64_t i = 0; i < ref.element_count(); ++i) {
+    EXPECT_NEAR(Yd.AsDouble()[i], static_cast<double>(ref.AsFloat()[i]), 1e-6) << "i=" << i;
+  }
+}
+
 } // namespace Test

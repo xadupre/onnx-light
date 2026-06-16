@@ -1,2 +1,1 @@
-flexattention_double
 flexattention_fp16

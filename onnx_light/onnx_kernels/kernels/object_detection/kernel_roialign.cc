@@ -17,16 +17,23 @@ namespace kernel {
 
 namespace {
 
-// Computes the four bilinear-interpolation weights and corner indices at
-// floating-point coordinate (y, x) in a feature-map plane of size H x W.
-// Returns false and zeros all outputs when (y, x) falls outside the
-// [-1, H] x [-1, W] sampling window (out-of-range samples treated as
-// background, as in the canonical ONNX RoiAlign reference).
-bool BilinearWeights(const float *plane, int64_t H, int64_t W, float y, float x, float &w1,
-                     float &w2, float &w3, float &w4, float &v1, float &v2, float &v3, float &v4) {
+// Holds the four bilinear-interpolation weights and the four pixel values at
+// the corners of the bilinear sample window.
+struct BilinearSample {
+  float w1, w2, w3, w4;
+  float v1, v2, v3, v4;
+};
+
+// Computes the four bilinear-interpolation weights and the four corner pixel
+// values at floating-point coordinate (y, x) in a feature-map plane of size
+// H x W.  Returns false when (y, x) falls outside the [-1, H] x [-1, W]
+// sampling window (out-of-range samples treated as background, as in the
+// canonical ONNX RoiAlign reference); all fields of ``s`` are zeroed in that
+// case.
+bool BilinearWeights(const float *plane, int64_t H, int64_t W, float y, float x,
+                     BilinearSample &s) {
   if (y < -1.0f || y > static_cast<float>(H) || x < -1.0f || x > static_cast<float>(W)) {
-    w1 = w2 = w3 = w4 = 0.0f;
-    v1 = v2 = v3 = v4 = 0.0f;
+    s = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
     return false;
   }
   y = std::max(y, 0.0f);
@@ -47,14 +54,14 @@ bool BilinearWeights(const float *plane, int64_t H, int64_t W, float y, float x,
   const float lx = x - static_cast<float>(x_low);
   const float hy = 1.0f - ly;
   const float hx = 1.0f - lx;
-  w1 = hy * hx;
-  w2 = hy * lx;
-  w3 = ly * hx;
-  w4 = ly * lx;
-  v1 = plane[y_low * W + x_low];
-  v2 = plane[y_low * W + x_high];
-  v3 = plane[y_high * W + x_low];
-  v4 = plane[y_high * W + x_high];
+  s.w1 = hy * hx;
+  s.w2 = hy * lx;
+  s.w3 = ly * hx;
+  s.w4 = ly * lx;
+  s.v1 = plane[y_low * W + x_low];
+  s.v2 = plane[y_low * W + x_high];
+  s.v3 = plane[y_high * W + x_low];
+  s.v4 = plane[y_high * W + x_high];
   return true;
 }
 
@@ -63,11 +70,11 @@ bool BilinearWeights(const float *plane, int64_t H, int64_t W, float y, float x,
 // [-1, H] x [-1, W] sampling window used by the canonical ONNX RoiAlign
 // reference (which treats out-of-range samples as background).
 float BilinearInterpolate(const float *plane, int64_t H, int64_t W, float y, float x) {
-  float w1, w2, w3, w4, v1, v2, v3, v4;
-  if (!BilinearWeights(plane, H, W, y, x, w1, w2, w3, w4, v1, v2, v3, v4)) {
+  BilinearSample s;
+  if (!BilinearWeights(plane, H, W, y, x, s)) {
     return 0.0f;
   }
-  return w1 * v1 + w2 * v2 + w3 * v3 + w4 * v4;
+  return s.w1 * s.v1 + s.w2 * s.v2 + s.w3 * s.v3 + s.w4 * s.v4;
 }
 
 // For max-mode RoiAlign: returns max(w1*v1, w2*v2, w3*v3, w4*v4), i.e. the
@@ -76,11 +83,11 @@ float BilinearInterpolate(const float *plane, int64_t H, int64_t W, float y, flo
 // accumulate the bilinear-weighted sum but picks the largest weighted
 // contribution.  Returns 0 when (y, x) is outside the sampling window.
 float BilinearInterpolateMax(const float *plane, int64_t H, int64_t W, float y, float x) {
-  float w1, w2, w3, w4, v1, v2, v3, v4;
-  if (!BilinearWeights(plane, H, W, y, x, w1, w2, w3, w4, v1, v2, v3, v4)) {
+  BilinearSample s;
+  if (!BilinearWeights(plane, H, W, y, x, s)) {
     return 0.0f;
   }
-  return std::max({w1 * v1, w2 * v2, w3 * v3, w4 * v4});
+  return std::max({s.w1 * s.v1, s.w2 * s.v2, s.w3 * s.v3, s.w4 * s.v4});
 }
 
 void ValidateInputs(const Tensor &x, const Tensor &rois, const Tensor &batch_indices,

@@ -38,7 +38,7 @@ inline std::uint8_t ClampToUint4(double t) noexcept {
 }
 
 inline std::uint8_t ClampToInt2(double t) noexcept {
-  // Match ``ml_dtypes.int2`` cast semantics used by ONNX backend tests:
+  // Match `ml_dtypes.int2` cast semantics used by ONNX backend tests:
   // truncate toward zero, then keep the low 2 bits (two's complement wrap).
   const int v = static_cast<int>(t);
   return static_cast<std::uint8_t>(v & 0x03);

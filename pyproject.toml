@@ -22,16 +22,16 @@ dev = [
     "onnx-light[dev-no-onnx]",
 ]
 dev-no-onnx = [
-    "black",
+    "black==26.5.1",
     "matplotlib",
     "pandas",
     "pytest>=7",
     "pytest-coverage",
     "pytest-subtests",
-    "ruff",
+    "ruff==0.15.17",
 ]
 docs = [
-    "black",
+    "black==26.5.1",
     "breathe",
     "onnx-ir",
     "matplotlib",

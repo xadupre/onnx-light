@@ -77,18 +77,19 @@ Summary of each library
         needed.  Depends publicly on ``lib_onnx_proto``.
     * - ``onnx_light::onnx_manipulations`` (in-tree target
         ``lib_onnx_manipulations``):
-        ``onnx_light/onnx_manipulations/``
-      - Schema-independent ``ModelProto`` / ``GraphProto`` manipulation
-        helpers: the ONNX text-format parser (``parser``) and printer
-        (``printer``), attribute and tensor proto construction helpers
-        (``attr_proto_util``, ``tensor_proto_util``, ``tensor_util``),
-        the data-type name utilities (``data_type_utils``) and the graph
-        manipulation helpers (``graph_manipulations``, formerly
+        ``onnx_light/onnx_manipulations/``,
+        ``onnx_light/onnx_lib/common/``
+      - Foundational ``common`` utilities (``Status``, assertions, IR /
+        proto conversion, ...) plus the schema-independent ``ModelProto`` /
+        ``GraphProto`` manipulation helpers: the ONNX text-format parser
+        (``parser``) and printer (``printer``), attribute and tensor proto
+        construction helpers (``attr_proto_util``, ``tensor_proto_util``,
+        ``tensor_util``), the data-type name utilities (``data_type_utils``)
+        and the graph manipulation helpers (``graph_manipulations``, formerly
         ``onnx_proto/common_functions``).  Depends publicly on
         ``lib_onnx_proto``.  Both ``lib_onnx_lib`` and ``lib_onnx_kernels``
         depend on it.
     * - ``onnx_light::onnx_light`` (in-tree target ``lib_onnx_lib``):
-        ``onnx_light/onnx_lib/common/``,
         ``onnx_light/onnx_lib/defs/``,
         ``onnx_light/onnx_lib/checker.cc``,
         ``onnx_light/onnx_lib/inliner/``,

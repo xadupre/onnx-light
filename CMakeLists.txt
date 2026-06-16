@@ -159,7 +159,7 @@ set(ONNX_LIGHT_PROTO_ALL_SOURCES
     ${ONNX_LIGHT_SOURCES}
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_helpers/onnx_light_helpers.cc")
 set(ONNX_LIGHT_LIB_ALL_SOURCES
-    ${ONNX_COMMON_SOURCES}
+    "${ONNX_COMMON_PATH}/ir_pb_converter.cc"
     ${ONNX_DEFS_SOURCES}
     ${ONNX_CHECKER_SOURCES}
     ${ONNX_INLINER_SOURCES}
@@ -231,11 +231,11 @@ endif()
 # formerly ``common_functions``). ``lib_onnx_lib`` (schemas, checker, shape
 # inference, version converter) depends publicly on it, and the kernels layer
 # reuses its graph-manipulation helpers. It only depends on ``lib_onnx_proto``.
-add_library(lib_onnx_manipulations ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} ${ONNX_MANIPULATIONS_SOURCES})
+add_library(lib_onnx_manipulations ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} "${ONNX_COMMON_PATH}/status.cc" "${ONNX_COMMON_PATH}/assertions.cc" ${ONNX_MANIPULATIONS_SOURCES})
 if(_onnx_light_lib_type STREQUAL "SHARED" AND WIN32)
   set_target_properties(lib_onnx_manipulations PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
-source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES ${ONNX_MANIPULATIONS_SOURCES})
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES "${ONNX_COMMON_PATH}/status.cc" "${ONNX_COMMON_PATH}/assertions.cc" ${ONNX_MANIPULATIONS_SOURCES})
 target_include_directories(lib_onnx_manipulations PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
     $<BUILD_INTERFACE:${ROOT_INCLUDE_PATH}>

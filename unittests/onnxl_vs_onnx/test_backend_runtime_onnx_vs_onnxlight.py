@@ -22,9 +22,9 @@ execute it today:
 * the runtime reports the operator as unsupported.
 
 The set of ONNX node tests whose results ``onnx_light`` does *not* reproduce is
-maintained as a snapshot in ``_backend_runtime_known_discrepancies.txt`` so the
-test fails when a new discrepancy appears (a regression) or when a recorded
-discrepancy is resolved (a stale entry that must be removed).
+maintained as a snapshot in ``_backend_runtime_known_discrepancies.txt``. A
+generated ``test_vs_<name>`` fails when a new discrepancy appears (a regression)
+or when a recorded discrepancy is resolved (a stale entry that must be removed).
 """
 
 from __future__ import annotations

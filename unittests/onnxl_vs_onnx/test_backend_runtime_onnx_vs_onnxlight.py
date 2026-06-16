@@ -37,6 +37,7 @@ from onnx.backend.test.loader import load_model_tests
 
 import onnx_light.onnx as onnxl
 from onnx_light.ext_test_case import ExtTestCase
+from onnx_light.onnx import helper as onnxl_helper
 from onnx_light.onnx.reference import ReferenceEvaluator
 
 _KNOWN_DISCREPANCIES_FILE = os.path.join(
@@ -134,6 +135,34 @@ def _values_match(actual: np.ndarray, expected: np.ndarray, rtol: float, atol: f
 class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
     """Runs every ONNX backend node test through the ``onnx_light`` runtime."""
 
+    def test_model_op_types_walks_subgraphs(self):
+        # Guards the recursive traversal in ``_model_op_types`` so operators
+        # nested inside ``If``/``Loop``/``Scan`` subgraphs (GRAPH and GRAPHS
+        # attributes) are taken into account when filtering cases.
+        then_graph = onnxl_helper.make_graph(
+            [onnxl_helper.make_node("Relu", ["x"], ["y"])],
+            "then",
+            [],
+            [onnxl_helper.make_tensor_value_info("y", onnxl.TensorProto.FLOAT, [1])],
+        )
+        else_graph = onnxl_helper.make_graph(
+            [onnxl_helper.make_node("Neg", ["x"], ["y"])],
+            "else",
+            [],
+            [onnxl_helper.make_tensor_value_info("y", onnxl.TensorProto.FLOAT, [1])],
+        )
+        if_node = onnxl_helper.make_node(
+            "If", ["cond"], ["y"], then_branch=then_graph, else_branch=else_graph
+        )
+        graph = onnxl_helper.make_graph(
+            [if_node],
+            "g",
+            [onnxl_helper.make_tensor_value_info("cond", onnxl.TensorProto.BOOL, [])],
+            [onnxl_helper.make_tensor_value_info("y", onnxl.TensorProto.FLOAT, [1])],
+        )
+        model = onnxl_helper.make_model(graph)
+        self.assertEqual(_model_op_types(model), {"If", "Relu", "Neg"})
+
     def _run_one(self, model_file: str) -> str:
         """Executes one backend test and returns its outcome.
 
@@ -160,6 +189,11 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
         for data_dir in data_dirs:
             inputs, expected = _load_data_set(data_dir)
             feeds = dict(zip(session.input_names, inputs))
+            # Executing the model is an external runtime boundary that can fail.
+            # The runtime has no Python-side API to query the set of registered
+            # kernels, so an operator it does not implement can only be detected
+            # from the ``ValueError`` it raises ("unsupported op_type"). Such a
+            # case is skipped; any other failure is a genuine discrepancy.
             try:
                 outputs = session.run(None, feeds)
             except ValueError as e:

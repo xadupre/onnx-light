@@ -8,6 +8,7 @@
 
 [![core](https://github.com/xadupre/onnx-light/actions/workflows/ci_core.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/ci_core.yml)
 [![build](https://github.com/xadupre/onnx-light/actions/workflows/build.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/build.yml)
+[![build-reduced](https://github.com/xadupre/onnx-light/actions/workflows/build_reduced.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/build_reduced.yml)
 [![Build Release Wheels](https://github.com/xadupre/onnx-light/actions/workflows/build_release.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/build_release.yml)
 [![Build C++ Release Artifacts](https://github.com/xadupre/onnx-light/actions/workflows/release_cpp_artifacts.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/release_cpp_artifacts.yml)
 [![asan-ubsan](https://github.com/xadupre/onnx-light/actions/workflows/cq_asan_ubsan.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/cq_asan_ubsan.yml)

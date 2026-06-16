@@ -85,11 +85,11 @@ GraphProto AddPrefixGraph(const GraphProto &graph, const std::string &prefix,
  *                           operates on a copy.
  * @return The (possibly new) ModelProto with prefixed names.
  */
-ModelProto AddPrefix(const ModelProto &model, const std::string &prefix,
-                     bool rename_nodes = true, bool rename_edges = true,
-                     bool rename_inputs = true, bool rename_outputs = true,
-                     bool rename_initializers = true, bool rename_value_infos = true,
-                     bool rename_functions = true, bool inplace = false);
+ModelProto AddPrefix(const ModelProto &model, const std::string &prefix, bool rename_nodes = true,
+                     bool rename_edges = true, bool rename_inputs = true,
+                     bool rename_outputs = true, bool rename_initializers = true,
+                     bool rename_value_infos = true, bool rename_functions = true,
+                     bool inplace = false);
 
 /**
  * Combines two ONNX graphs into a single one.
@@ -148,8 +148,8 @@ ModelProto MergeModels(const ModelProto &m1, const ModelProto &m2,
                        const std::string &prefix1 = "", const std::string &prefix2 = "",
                        const std::string &name = "", const std::string &doc_string = "",
                        const std::string &producer_name = "onnx_light.onnx.compose.merge_models",
-                       const std::string &producer_version = "1.0",
-                       const std::string &domain = "", int64_t model_version = 1);
+                       const std::string &producer_version = "1.0", const std::string &domain = "",
+                       int64_t model_version = 1);
 
 /**
  * Inserts an extra dimension with extent 1 to each output in the graph.

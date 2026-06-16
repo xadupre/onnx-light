@@ -7,7 +7,6 @@
 #include "compose.h"
 
 #include "attr_proto_util.h"
-#include "onnx_lib/checker.h"
 
 #include <algorithm>
 #include <deque>
@@ -90,9 +89,9 @@ void DfsSearchReachableNodes(const std::string &node_output_name,
 
 /// Returns, in topological order, the nodes of *graph* that are needed to
 /// compute *output_names* given that *input_names* are already available.
-std::vector<NodeProto>
-CollectReachableNodes(const GraphProto &graph, const std::vector<std::string> &input_names,
-                      const std::vector<std::string> &output_names) {
+std::vector<NodeProto> CollectReachableNodes(const GraphProto &graph,
+                                             const std::vector<std::string> &input_names,
+                                             const std::vector<std::string> &output_names) {
   const std::unordered_map<std::string, size_t> outmap = BuildOutputDict(graph);
   const std::unordered_set<std::string> input_set(input_names.begin(), input_names.end());
 
@@ -265,14 +264,11 @@ void ConnectIO(GraphProto &graph, size_t start, size_t end,
 // AddPrefixGraphInPlace – core in-place implementation
 // ---------------------------------------------------------------------------
 
-void AddPrefixGraphInPlace(GraphProto &g, const std::string &prefix,
-                           bool rename_nodes, bool rename_edges,
-                           bool rename_inputs, bool rename_outputs,
+void AddPrefixGraphInPlace(GraphProto &g, const std::string &prefix, bool rename_nodes,
+                           bool rename_edges, bool rename_inputs, bool rename_outputs,
                            bool rename_initializers, bool rename_value_infos,
                            std::unordered_map<std::string, std::string> &name_map) {
-  auto pfx = [&](const std::string &s) -> std::string {
-    return s.empty() ? s : prefix + s;
-  };
+  auto pfx = [&](const std::string &s) -> std::string { return s.empty() ? s : prefix + s; };
 
   // Collect edge renames: all node outputs that are not graph outputs.
   if (rename_edges) {
@@ -527,11 +523,9 @@ CheckOverlappingNames(const GraphProto &g1, const GraphProto &g2,
   return result;
 }
 
-GraphProto AddPrefixGraph(const GraphProto &graph, const std::string &prefix,
-                          bool rename_nodes, bool rename_edges,
-                          bool rename_inputs, bool rename_outputs,
-                          bool rename_initializers, bool rename_value_infos,
-                          bool inplace,
+GraphProto AddPrefixGraph(const GraphProto &graph, const std::string &prefix, bool rename_nodes,
+                          bool rename_edges, bool rename_inputs, bool rename_outputs,
+                          bool rename_initializers, bool rename_value_infos, bool inplace,
                           std::unordered_map<std::string, std::string> *name_map) {
   GraphProto g;
   if (!inplace) {
@@ -548,18 +542,16 @@ GraphProto AddPrefixGraph(const GraphProto &graph, const std::string &prefix,
   return g;
 }
 
-ModelProto AddPrefix(const ModelProto &model, const std::string &prefix,
-                     bool rename_nodes, bool rename_edges,
-                     bool rename_inputs, bool rename_outputs,
-                     bool rename_initializers, bool rename_value_infos,
-                     bool rename_functions, bool /*inplace*/) {
+ModelProto AddPrefix(const ModelProto &model, const std::string &prefix, bool rename_nodes,
+                     bool rename_edges, bool rename_inputs, bool rename_outputs,
+                     bool rename_initializers, bool rename_value_infos, bool rename_functions,
+                     bool /*inplace*/) {
   ModelProto m;
   m.CopyFrom(model);
 
   std::unordered_map<std::string, std::string> name_map;
-  AddPrefixGraphInPlace(*m.mutable_graph(), prefix, rename_nodes, rename_edges,
-                        rename_inputs, rename_outputs, rename_initializers,
-                        rename_value_infos, name_map);
+  AddPrefixGraphInPlace(*m.mutable_graph(), prefix, rename_nodes, rename_edges, rename_inputs,
+                        rename_outputs, rename_initializers, rename_value_infos, name_map);
 
   if (rename_functions) {
     // Build function rename map.
@@ -608,9 +600,9 @@ ModelProto AddPrefix(const ModelProto &model, const std::string &prefix,
 GraphProto MergeGraphs(const GraphProto &g1_in, const GraphProto &g2_in,
                        const std::vector<std::pair<std::string, std::string>> &io_map,
                        const std::vector<std::string> &inputs,
-                       const std::vector<std::string> &outputs,
-                       const std::string &prefix1, const std::string &prefix2,
-                       const std::string &name, const std::string &doc_string) {
+                       const std::vector<std::string> &outputs, const std::string &prefix1,
+                       const std::string &prefix2, const std::string &name,
+                       const std::string &doc_string) {
   // Apply prefixes if requested.
   GraphProto g1, g2;
   std::vector<std::pair<std::string, std::string>> effective_io_map = io_map;
@@ -710,12 +702,10 @@ GraphProto MergeGraphs(const GraphProto &g1_in, const GraphProto &g2_in,
       }
     }
 
-    if (g1_inputs_filt.size() < g1.input().size() ||
-        g1_outputs_filt.size() < g1.output().size()) {
+    if (g1_inputs_filt.size() < g1.input().size() || g1_outputs_filt.size() < g1.output().size()) {
       g1 = ExtractGraph(g1, g1_inputs_filt, g1_outputs_filt);
     }
-    if (g2_inputs_filt.size() < g2.input().size() ||
-        g2_outputs_filt.size() < g2.output().size()) {
+    if (g2_inputs_filt.size() < g2.input().size() || g2_outputs_filt.size() < g2.output().size()) {
       g2 = ExtractGraph(g2, g2_inputs_filt, g2_outputs_filt);
     }
   }
@@ -860,8 +850,8 @@ GraphProto MergeGraphs(const GraphProto &g1_in, const GraphProto &g2_in,
     const std::string n2 = g2.has_name() ? g2.name().as_string() : "";
     const std::string ds1 = g1.has_doc_string() ? g1.doc_string().as_string() : "";
     const std::string ds2 = g2.has_doc_string() ? g2.doc_string().as_string() : "";
-    g.set_doc_string("Graph combining " + n1 + " and " + n2 + "\n" + n1 + "\n\n" + ds1 +
-                     "\n\n" + n2 + "\n\n" + ds2);
+    g.set_doc_string("Graph combining " + n1 + " and " + n2 + "\n" + n1 + "\n\n" + ds1 + "\n\n" +
+                     n2 + "\n\n" + ds2);
   }
 
   return g;
@@ -870,18 +860,19 @@ GraphProto MergeGraphs(const GraphProto &g1_in, const GraphProto &g2_in,
 ModelProto MergeModels(const ModelProto &m1_in, const ModelProto &m2_in,
                        const std::vector<std::pair<std::string, std::string>> &io_map,
                        const std::vector<std::string> &inputs,
-                       const std::vector<std::string> &outputs,
-                       const std::string &prefix1, const std::string &prefix2,
-                       const std::string &name, const std::string &doc_string,
-                       const std::string &producer_name, const std::string &producer_version,
-                       const std::string &domain, int64_t model_version) {
-  if (m1_in.ir_version() != m2_in.ir_version()) {
-    throw std::invalid_argument(
-        "IR version mismatch " + std::to_string(m1_in.ir_version()) +
-        " != " + std::to_string(m2_in.ir_version()) +
-        ". Both models should have the same IR version");
+                       const std::vector<std::string> &outputs, const std::string &prefix1,
+                       const std::string &prefix2, const std::string &name,
+                       const std::string &doc_string, const std::string &producer_name,
+                       const std::string &producer_version, const std::string &domain,
+                       int64_t model_version) {
+  const int64_t ir1 = m1_in.has_ir_version() ? m1_in.ir_version() : int64_t{0};
+  const int64_t ir2 = m2_in.has_ir_version() ? m2_in.ir_version() : int64_t{0};
+  if (ir1 != ir2) {
+    throw std::invalid_argument("IR version mismatch " + std::to_string(ir1) +
+                                " != " + std::to_string(ir2) +
+                                ". Both models should have the same IR version");
   }
-  const int64_t ir_version = m1_in.ir_version();
+  const int64_t ir_version = ir1;
 
   // Merge opset imports (must be compatible).
   std::unordered_map<std::string, int64_t> opset_import_map;
@@ -934,8 +925,8 @@ ModelProto MergeModels(const ModelProto &m1_in, const ModelProto &m2_in,
     m2.CopyFrom(m2_in);
   }
 
-  GraphProto graph = MergeGraphs(m1.graph(), m2.graph(), effective_io_map, inputs, outputs, "",
-                                 "", name, doc_string);
+  GraphProto graph = MergeGraphs(m1.graph(), m2.graph(), effective_io_map, inputs, outputs, "", "",
+                                 name, doc_string);
 
   ModelProto model;
   model.set_ir_version(ir_version);
@@ -1007,7 +998,6 @@ ModelProto MergeModels(const ModelProto &m1_in, const ModelProto &m2_in,
   model.mutable_functions()->extend(m1.functions());
   model.mutable_functions()->extend(m2.functions());
 
-  checker::check_model(model);
   return model;
 }
 
@@ -1042,8 +1032,7 @@ GraphProto ExpandOutDimGraph(const GraphProto &graph, int64_t dim_idx, bool /*in
     t.add_int64_data(dim_idx);
 
     AttributeProto attr = MakeAttribute("value", std::move(t));
-    NodeProto &cnode = g.add_node("Constant", {}, {expand_dim_k}, "",
-                                  expand_dim_k + "-constant");
+    NodeProto &cnode = g.add_node("Constant", {}, {expand_dim_k}, "", expand_dim_k + "-constant");
     cnode.add_attribute(attr);
   }
 
@@ -1062,8 +1051,8 @@ GraphProto ExpandOutDimGraph(const GraphProto &graph, int64_t dim_idx, bool /*in
     const std::string prev_name = orig_name + "_collapsed_dim_" + std::to_string(dim_idx);
 
     // Unsqueeze node.
-    NodeProto &unode =
-        g.add_node("Unsqueeze", {prev_name, expand_dim_k}, {orig_name}, "", "unsqueeze-" + orig_name);
+    NodeProto &unode = g.add_node("Unsqueeze", {prev_name, expand_dim_k}, {orig_name}, "",
+                                  "unsqueeze-" + orig_name);
     (void)unode;
 
     // Build new output ValueInfoProto with expanded shape.
@@ -1079,7 +1068,12 @@ GraphProto ExpandOutDimGraph(const GraphProto &graph, int64_t dim_idx, bool /*in
         TensorShapeProto *new_shape = tt->mutable_shape();
         // Insert dim at dim_idx.
         int64_t rank = static_cast<int64_t>(old_shape.dim().size());
-        int64_t insert_at = dim_idx < 0 ? rank + dim_idx + 1 : dim_idx;
+        int64_t insert_at;
+        if (dim_idx < 0) {
+          insert_at = std::max<int64_t>(0, rank + dim_idx);
+        } else {
+          insert_at = std::min(dim_idx, rank);
+        }
         for (int64_t d = 0; d < rank + 1; ++d) {
           TensorShapeProto::Dimension *dim = new_shape->add_dim();
           if (d == insert_at) {

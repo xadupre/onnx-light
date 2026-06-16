@@ -181,12 +181,13 @@ required by the precedence rules above, so the output round-trips through
 
 For example:
 
-.. code-block:: python
+.. runpython::
+    :showcode:
 
     from onnx_light.onnx_optim.expressions import simplify_expression
 
-    simplify_expression("(a + b) * c")   # "(a+b)*c"  — parens kept (needed)
-    simplify_expression("a * b + c")     # "a*b+c"   — no parens (not needed)
+    print(simplify_expression("(a + b) * c"))   # "(a+b)*c"  — parens kept (needed)
+    print(simplify_expression("a * b + c"))     # "a*b+c"   — no parens (not needed)
 
 ----
 
@@ -214,14 +215,15 @@ operation functions (:func:`~onnx_light.onnx_optim.expressions.dim_add`,
 This ensures that symbolic arithmetic never accumulates unnormalised
 intermediate expressions:
 
-.. code-block:: python
+.. runpython::
+    :showcode:
 
     from onnx_light.onnx_optim.expressions import dim_add, dim_mul, dim_div
 
-    dim_add("batch", 1)          # "1+batch"
-    dim_mul(2, "seq_length")     # "2*seq_length"
-    dim_div("2*seq_length", 2)   # "seq_length"  (simplified)
-    dim_div("2*n", "n")          # 2  (int — fully reduced)
+    print(dim_add("batch", 1))          # "1+batch"
+    print(dim_mul(2, "seq_length"))     # "2*seq_length"
+    print(dim_div("2*seq_length", 2))   # "seq_length"  (simplified)
+    print(dim_div("2*n", "n"))          # 2  (int — fully reduced)
 
 ----
 

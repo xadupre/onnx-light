@@ -308,8 +308,8 @@ inline SVMCommonAttrs ParseSVMCommonAttrs(const NodeProto &node, const char *op_
 // with a ``T*`` tag pointer (always null) so the caller can recover ``T`` via
 // ``std::remove_pointer_t<decltype(tag)>``.
 template <class Fn>
-auto DispatchSVMByDataType(const Tensor &x, const char *op_name, Fn &&fn)
-    -> decltype(fn(static_cast<float *>(nullptr))) {
+auto DispatchSVMByDataType(const Tensor &x, const char *op_name,
+                           Fn &&fn) -> decltype(fn(static_cast<float *>(nullptr))) {
   switch (x.data_type) {
   case static_cast<int32_t>(DataType::FLOAT):
     return fn(static_cast<float *>(nullptr));
@@ -330,8 +330,8 @@ auto DispatchSVMByDataType(const Tensor &x, const char *op_name, Fn &&fn)
 // set of input element types (FLOAT, DOUBLE, INT32, INT64) per the
 // ``ai.onnx.ml`` schema.
 template <class Fn>
-auto DispatchTreeEnsembleClassicByDataType(const Tensor &x, const char *op_name, Fn &&fn)
-    -> decltype(fn(static_cast<float *>(nullptr))) {
+auto DispatchTreeEnsembleClassicByDataType(const Tensor &x, const char *op_name,
+                                           Fn &&fn) -> decltype(fn(static_cast<float *>(nullptr))) {
   return DispatchSVMByDataType(x, op_name, std::forward<Fn>(fn));
 }
 
@@ -2840,35 +2840,13 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          RequireInputCount(node, 1);
          RequireOutputCount(node, 1);
          const std::string map_input = node.input(0).as_string();
-
-         // Look for the map in the maps store first; fall back to the legacy
-         // "_keys" / "_values" tensor convention for backward compatibility.
-         const Tensor *x_keys_ptr = nullptr;
-         const Tensor *x_values_ptr = nullptr;
-         if (rt.HasMap(map_input)) {
-           const Map &m = rt.GetMap(map_input);
-           x_keys_ptr = &m.keys;
-           x_values_ptr = &m.values;
-         } else {
-           const std::string keys_name = map_input + "_keys";
-           const std::string values_name = map_input + "_values";
-           auto keys_it = rt.tensors().find(keys_name);
-           auto values_it = rt.tensors().find(values_name);
-           if (keys_it == rt.tensors().end()) {
-             throw std::invalid_argument("RunNode: CastMap map input '" + map_input +
-                                         "' requires a Map or tensors '" + keys_name +
-                                         "' / '" + values_name + "'.");
-           }
-           if (values_it == rt.tensors().end()) {
-             throw std::invalid_argument("RunNode: CastMap map input '" + map_input +
-                                         "' requires tensor '" + values_name +
-                                         "' (FLOAT or STRING values).");
-           }
-           x_keys_ptr = &keys_it->second;
-           x_values_ptr = &values_it->second;
+         if (!rt.HasMap(map_input)) {
+           throw std::invalid_argument("RunNode: CastMap map input '" + map_input +
+                                       "' requires a Map.");
          }
-         const Tensor &x_keys = *x_keys_ptr;
-         const Tensor &x_values = *x_values_ptr;
+         const Map &cast_m = rt.GetMap(map_input);
+         const Tensor &x_keys = cast_m.keys;
+         const Tensor &x_values = cast_m.values;
          if (x_keys.data_type != static_cast<int32_t>(DataType::INT64)) {
            throw std::invalid_argument("RunNode: CastMap keys must be an INT64 tensor.");
          }
@@ -2919,35 +2897,13 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          RequireInputCount(node, 1);
          RequireOutputCount(node, 1);
          const std::string map_input = node.input(0).as_string();
-         const std::string keys_name = map_input + "_keys";
-         const std::string values_name = map_input + "_values";
-
-         // Look for the map in the maps store first; fall back to the legacy
-         // "_keys" / "_values" tensor convention for backward compatibility.
-         const Tensor *x_keys_ptr = nullptr;
-         const Tensor *x_values_ptr = nullptr;
-         if (rt.HasMap(map_input)) {
-           const Map &m = rt.GetMap(map_input);
-           x_keys_ptr = &m.keys;
-           x_values_ptr = &m.values;
-         } else {
-           auto keys_it = rt.tensors().find(keys_name);
-           auto values_it = rt.tensors().find(values_name);
-           if (keys_it == rt.tensors().end()) {
-             throw std::invalid_argument(
-                 "RunNode: DictVectorizer map input '" + map_input +
-                 "' requires a Map or tensors '" + keys_name + "' / '" + values_name + "'.");
-           }
-           if (values_it == rt.tensors().end()) {
-             throw std::invalid_argument("RunNode: DictVectorizer map input '" + map_input +
-                                         "' requires tensor '" + values_name +
-                                         "' (INT64, FLOAT, DOUBLE, or STRING values).");
-           }
-           x_keys_ptr = &keys_it->second;
-           x_values_ptr = &values_it->second;
+         if (!rt.HasMap(map_input)) {
+           throw std::invalid_argument("RunNode: DictVectorizer map input '" + map_input +
+                                       "' requires a Map.");
          }
-         const Tensor &x_keys = *x_keys_ptr;
-         const Tensor &x_values = *x_values_ptr;
+         const Map &dict_m = rt.GetMap(map_input);
+         const Tensor &x_keys = dict_m.keys;
+         const Tensor &x_values = dict_m.values;
          const AttributeProto *str_vocab = FindAttribute(node, "string_vocabulary");
          const AttributeProto *int_vocab = FindAttribute(node, "int64_vocabulary");
          const bool has_str = str_vocab != nullptr && str_vocab->strings_size() > 0;
@@ -2961,8 +2917,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          Tensor y;
          if (has_str) {
            if (x_keys.data_type != static_cast<int32_t>(DataType::STRING)) {
-             throw std::invalid_argument("RunNode: DictVectorizer '" + keys_name +
-                                         "' must be a STRING tensor when 'string_vocabulary' is set.");
+             throw std::invalid_argument(
+                 "RunNode: DictVectorizer keys must be a STRING tensor when "
+                 "'string_vocabulary' is set.");
            }
            const std::vector<std::string> &keys = x_keys.AsStrings();
            std::vector<std::string> vocab;
@@ -2987,14 +2944,15 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
              break;
            }
            default:
-             throw std::invalid_argument("RunNode: DictVectorizer '" + values_name +
-                                         "' must be INT64, FLOAT, or DOUBLE when "
-                                         "'string_vocabulary' is set.");
+             throw std::invalid_argument(
+                 "RunNode: DictVectorizer values must be INT64, FLOAT, or DOUBLE when "
+                 "'string_vocabulary' is set.");
            }
          } else {
            if (x_keys.data_type != static_cast<int32_t>(DataType::INT64)) {
-             throw std::invalid_argument("RunNode: DictVectorizer '" + keys_name +
-                                         "' must be an INT64 tensor when 'int64_vocabulary' is set.");
+             throw std::invalid_argument(
+                 "RunNode: DictVectorizer keys must be an INT64 tensor when "
+                 "'int64_vocabulary' is set.");
            }
            const std::vector<int64_t> keys = TensorToVector<int64_t>(x_keys);
            std::vector<int64_t> vocab;
@@ -3019,9 +2977,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
              break;
            }
            default:
-             throw std::invalid_argument("RunNode: DictVectorizer '" + values_name +
-                                         "' must be FLOAT, DOUBLE, or STRING when "
-                                         "'int64_vocabulary' is set.");
+             throw std::invalid_argument(
+                 "RunNode: DictVectorizer values must be FLOAT, DOUBLE, or STRING when "
+                 "'int64_vocabulary' is set.");
            }
          }
          SetOutput(node, 0, std::move(y), rt);

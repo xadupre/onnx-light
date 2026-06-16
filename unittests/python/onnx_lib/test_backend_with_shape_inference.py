@@ -48,6 +48,9 @@ TestShapeInferenceBackend = make_test_class(
         "test_cc_shape_inference_reshape_reshape.*",
         "test_cc_shape_inference_check_shape.*",
         "test_cc_shape_inference_scan_running_sum.*",
+        # ONNX's built-in shape inference gives generic unk__N dims for
+        # Resize output; it does not understand onnx-light's symbolic names.
+        "test_cc_shape_inference_resize_tile.*",
     ],
 )
 

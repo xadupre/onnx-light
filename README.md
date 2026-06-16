@@ -13,11 +13,12 @@
 [![asan-ubsan](https://github.com/xadupre/onnx-light/actions/workflows/cq_asan_ubsan.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/cq_asan_ubsan.yml)
 [![fuzz](https://github.com/xadupre/onnx-light/actions/workflows/cq_fuzz.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/cq_fuzz.yml)
 [![hardening](https://github.com/xadupre/onnx-light/actions/workflows/cq_hardening.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/cq_hardening.yml)
-[![mypy](https://github.com/xadupre/onnx-light/actions/workflows/mypy.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/mypy.yml)
 [![Documentation](https://github.com/xadupre/onnx-light/actions/workflows/docs.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/docs.yml)
+[![C++ Doxygen Documentation](https://github.com/xadupre/onnx-light/actions/workflows/doc_cpp.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/doc_cpp.yml)
 [![Style](https://github.com/xadupre/onnx-light/actions/workflows/style.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/style.yml)
 [![clang-format](https://github.com/xadupre/onnx-light/actions/workflows/clang_format.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/clang_format.yml)
-[![pyrefly](https://github.com/xadupre/onnx-light/actions/workflows/pyrefly.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/pyrefly.yml)
+[![Typing](https://github.com/xadupre/onnx-light/actions/workflows/typing.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/typing.yml)
+[![SBOM](https://github.com/xadupre/onnx-light/actions/workflows/cq_sbom.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/cq_sbom.yml)
 [![Spelling](https://github.com/xadupre/onnx-light/actions/workflows/spelling.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/spelling.yml)
 [![pixi](https://github.com/xadupre/onnx-light/actions/workflows/cq_pixi.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/cq_pixi.yml)
 [![codecov](https://codecov.io/gh/xadupre/onnx-light/branch/main/graph/badge.svg)](https://codecov.io/gh/xadupre/onnx-light)
@@ -77,7 +78,7 @@ at the root of the repository as [`sbom.cdx.json`](sbom.cdx.json) and is also
 included in the source distribution. It lists the third-party components
 bundled into the built artifacts (currently only `nanobind`, used to expose the
 C++ extension to Python). The file is validated against the CycloneDX 1.7
-schema by the [`SBOM`](.github/workflows/sbom.yml) GitHub Actions workflow.
+schema by the [`SBOM`](.github/workflows/cq_sbom.yml) GitHub Actions workflow.
 
 ## Getting started
 

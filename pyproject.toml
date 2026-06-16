@@ -16,22 +16,29 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+style = [
+    "black==26.5.1",
+    "ruff==0.15.17",
+]
+typing = [
+    "mypy==2.1.0",
+    "pyrefly==1.0.0",
+]
 dev = [
     "onnx>=1.17",
     "onnxruntime",
     "onnx-light[dev-no-onnx]",
 ]
 dev-no-onnx = [
-    "black",
+    "onnx-light[style]",
     "matplotlib",
     "pandas",
     "pytest>=7",
     "pytest-coverage",
     "pytest-subtests",
-    "ruff",
 ]
 docs = [
-    "black",
+    "onnx-light[style]",
     "breathe",
     "onnx-ir",
     "matplotlib",

@@ -722,6 +722,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   endif()
   if(_onnx_light_lib_type STREQUAL "SHARED")
     install(TARGETS
+        lib_onnx_manipulations
         lib_onnx_lib
         lib_onnx_op
         lib_onnx_optim

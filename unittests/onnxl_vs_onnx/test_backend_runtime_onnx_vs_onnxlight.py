@@ -147,7 +147,7 @@ def _describe_mismatch(
     else:
         equal = actual.astype(np.int64) == expected.astype(np.int64)
 
-    if bool(np.all(equal)):
+    if np.all(equal):
         return None
 
     mismatched = np.argwhere(~np.asarray(equal))

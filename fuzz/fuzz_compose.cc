@@ -45,7 +45,7 @@ std::pair<std::string, std::string> split_input(const uint8_t *data, size_t size
   return {std::move(first), std::move(second)};
 }
 
-// Builds an io_map by pairing outputs of *g1* with inputs of *g2* in
+// Builds an io_map by pairing outputs of g1 with inputs of g2 in
 // order, giving the merge helpers a realistic set of connections to
 // resolve. Returns an empty map when either side has no candidates.
 std::vector<std::pair<std::string, std::string>> build_io_map(const GraphProto &g1,

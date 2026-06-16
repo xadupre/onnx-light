@@ -14,10 +14,10 @@ expectations.
     :maxdepth: 1
 
     expressions
+    value_as_shape
     constraints
     sequences_and_subgraphs
     events
-    value_as_shape
     inference_coverage
 
 Overview

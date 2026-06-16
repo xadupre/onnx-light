@@ -73,8 +73,7 @@ onnx without protobuf and more freedom
 - **No serialize/parse round-trip for C++ tools** – the Python :class:`~onnx_light.onnx_lib.ModelProto`
   exposed by ``onnx_light.onnx`` *is* the C++ :class:`~onnx_light.onnx_lib.ModelProto` (bound through
   nanobind). No serialization is need from Python to C++.
-
-See :ref:`l-design-differences` for more details.
+- Supports protobuf (onnx) and flatbuffers (onnxruntime) format.
 
 Modular C++ libraries
 +++++++++++++++++++++

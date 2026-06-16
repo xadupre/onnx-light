@@ -43,6 +43,7 @@ for the upstream project's direction and priorities.
   with explicit offset alignment
 - **No serialize/parse round-trip for C++ tools** – the Python `ModelProto`
   *is* the C++ `ModelProto`
+- Supports protobuf (onnx) and flatbuffers (onnxruntime) format.
 
 ## Modular C++ libraries
 

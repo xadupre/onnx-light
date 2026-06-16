@@ -4,8 +4,11 @@
 
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_kernels/kernels/_helpers/float16_promote.h"
+
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -114,6 +117,17 @@ std::vector<int64_t> ComputeOutputSpatial(const Tensor &x, Conv::Attributes &att
 
 Tensor Conv::operator()(const Tensor &x, const Tensor &w, const Tensor &b,
                         const Attributes &attrs) const {
+  // FLOAT16/BFLOAT16 are computed in float32 and demoted back; this mirrors
+  // the half-precision dispatch used by kernel::MatMul and lets the expanded
+  // ``CausalConvWithState`` function (which lowers to a half-precision Conv)
+  // run through this kernel.
+  if (IsHalfPrecision(x.data_type)) {
+    const Tensor x_f = PromoteToFloat32(x);
+    const Tensor w_f = PromoteToFloat32(w);
+    const Tensor b_f = b.shape.empty() ? b : PromoteToFloat32(b);
+    Tensor y = (*this)(x_f, w_f, b_f, attrs);
+    return DemoteFromFloat32(y, x.data_type);
+  }
   Attributes resolved = attrs;
   ResolveAttributes(x, w, resolved);
   ValidateInputs(x, w, b, resolved);
@@ -137,6 +151,17 @@ Tensor Conv::operator()(const Tensor &x, const Tensor &w, const Tensor &b,
 
 void Conv::operator()(const Tensor &x, const Tensor &w, const Tensor &b, const Attributes &attrs,
                       Tensor &output) const {
+  if (IsHalfPrecision(x.data_type)) {
+    EXT_ENFORCE_INVALID(output.data_type == x.data_type,
+                        "kernel::Conv preallocated output must match the input dtype.");
+    Tensor y = (*this)(x, w, b, attrs);
+    EXT_ENFORCE_INVALID(output.shape == y.shape,
+                        "kernel::Conv preallocated output shape must equal (N, M, oD1, ..., oDk).");
+    EXT_ENFORCE_INVALID(output.data.size() == y.data.size(),
+                        "kernel::Conv preallocated output buffer has unexpected size.");
+    std::memcpy(output.data.data(), y.data.data(), y.data.size());
+    return;
+  }
   Attributes resolved = attrs;
   ResolveAttributes(x, w, resolved);
   ValidateInputs(x, w, b, resolved);

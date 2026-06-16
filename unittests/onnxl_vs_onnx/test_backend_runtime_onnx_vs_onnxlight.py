@@ -7,9 +7,10 @@ the model and its reference input/output tensors, executes the model through
 compares the produced outputs with the reference outputs computed by ONNX.
 
 This is the ``onnx`` vs ``onnx_light`` runtime counterpart of the serialization
-round-trip checks in ``test_backend_onnx_vs_onnxlight.py``. A test case is
-*skipped* (not run) when the ``onnx_light`` runtime cannot legitimately execute
-it today:
+round-trip checks in ``test_backend_onnx_vs_onnxlight.py`` and, like that module,
+generates one ``test_vs_<name>`` method per ONNX backend node test. A test case
+is *skipped* (not run) when the ``onnx_light`` runtime cannot legitimately
+execute it today:
 
 * the model cannot be parsed by ``onnx_light``;
 * the graph has a non-tensor input/output (sequence/optional/map), which the
@@ -217,50 +218,73 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
                     return "fail"
         return "pass"
 
-    def test_backend_runtime_onnx_vs_onnxlight(self):
-        failed: set[str] = set()
-        ran = 0
-        for test in load_model_tests(kind="node"):
-            model_file = os.path.join(test.model_dir, "model.onnx")
-            if not os.path.exists(model_file):
-                continue
-            name = os.path.basename(test.model_dir)
-            outcome = self._run_one(model_file)
-            if outcome == "skip":
-                continue
-            ran += 1
-            if outcome == "fail":
-                failed.add(name)
+    def _run_model_test(self, model_file: str, name: str) -> None:
+        """Runs one backend node test and checks it against the snapshot.
 
-        # Guard against a misconfigured environment where nothing executes.
-        self.assertGreater(ran, 0, "No ONNX backend node test could be executed.")
-
+        ``name`` is the test's directory basename (e.g. ``test_abs``). When it
+        appears in ``_backend_runtime_known_discrepancies.txt`` the runtime is
+        expected *not* to reproduce the reference outputs; any other outcome
+        (the case now passes or can no longer be executed) means the snapshot
+        entry is stale and must be removed. Otherwise the case is skipped when
+        the runtime cannot execute it and must pass when it can.
+        """
         known = _load_known_discrepancies()
-        new_failures = sorted(failed - known)
-        stale_entries = sorted(known - failed)
-
-        messages = []
-        if new_failures:
-            messages.append(
-                "ONNX backend tests the onnx-light runtime no longer reproduces "
-                f"({len(new_failures)}): {new_failures[:20]}"
-                + (" ..." if len(new_failures) > 20 else "")
-                + "\nFix the runtime or append these names to "
-                + os.path.basename(_KNOWN_DISCREPANCIES_FILE)
-                + "."
+        outcome = self._run_one(model_file)
+        snapshot = os.path.basename(_KNOWN_DISCREPANCIES_FILE)
+        if name in known:
+            if outcome != "fail":
+                self.fail(
+                    f"{name!r} is listed in {snapshot} but the onnx-light runtime "
+                    f"now handles it (outcome={outcome!r}). Remove this entry from "
+                    f"{snapshot}."
+                )
+            return
+        if outcome == "skip":
+            self.skipTest(f"onnx-light runtime cannot execute {name!r} today")
+        if outcome == "fail":
+            self.fail(
+                f"The onnx-light runtime does not reproduce {name!r}. Fix the "
+                f"runtime or append {name!r} to {snapshot}."
             )
+
+    def test_known_discrepancies_all_have_tests(self):
+        # A name recorded in the snapshot that no longer corresponds to any ONNX
+        # backend node test is a stale entry that must be removed.
+        known = _load_known_discrepancies()
+        names = {
+            os.path.basename(test.model_dir)
+            for test in load_model_tests(kind="node")
+            if os.path.exists(os.path.join(test.model_dir, "model.onnx"))
+        }
+        # Guard against a misconfigured environment where nothing is discovered.
+        self.assertGreater(len(names), 0, "No ONNX backend node test could be found.")
+        stale_entries = sorted(known - names)
         if stale_entries:
-            messages.append(
-                "Entries in the known-discrepancies snapshot now reproduced by "
-                f"onnx-light ({len(stale_entries)}): {stale_entries[:20]}"
+            self.fail(
+                "Entries in the known-discrepancies snapshot no longer match any "
+                f"ONNX backend node test ({len(stale_entries)}): {stale_entries[:20]}"
                 + (" ..." if len(stale_entries) > 20 else "")
                 + "\nRemove these names from "
                 + os.path.basename(_KNOWN_DISCREPANCIES_FILE)
                 + "."
             )
-        if messages:
-            self.fail("\n\n".join(messages))
 
+    @classmethod
+    def add_test_methods(cls):
+        for test in load_model_tests(kind="node"):
+            model_file = os.path.join(test.model_dir, "model.onnx")
+            if not os.path.exists(model_file):
+                continue
+            name = os.path.basename(test.model_dir)
+
+            def _test_(self, model_file=model_file, name=name):
+                self._run_model_test(model_file, name)
+
+            short_name = name.replace("test_", "", 1)
+            setattr(cls, f"test_vs_{short_name}", _test_)
+
+
+TestBackendRuntimeOnnxVsOnnxLight.add_test_methods()
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

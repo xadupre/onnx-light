@@ -67,6 +67,7 @@ jobs:
             fuzz_shape_inference \
             fuzz_optim_shape_inference \
             fuzz_version_converter \
+            fuzz_compose \
             fuzz_ort_flatbuffers \
             make_seed_corpus
 
@@ -95,6 +96,9 @@ jobs:
 
       - name: Run fuzz_version_converter (smoke)
         run: ./build-fuzz/fuzz_version_converter /tmp/fuzz_seeds/version_converter -runs=2000 -timeout=25
+
+      - name: Run fuzz_compose (smoke)
+        run: ./build-fuzz/fuzz_compose -runs=2000 -timeout=25
 
       - name: Run fuzz_ort_flatbuffers (smoke)
         run: ./build-fuzz/fuzz_ort_flatbuffers -runs=2000 -timeout=25

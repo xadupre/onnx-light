@@ -103,7 +103,7 @@ def shape_inference_no_new_names_check(model: onnxl.ModelProto, *inputs):
     work.graph.value_info.clear()
     try:
         shape_inference.infer_shapes_model(work)
-    except Exception:
+    except Exception:  # noqa: BLE001 - C++ extension raises various types
         return
     inferred_vi_names = {vi.name for vi in work.graph.value_info}
     new_names = inferred_vi_names - original_vi_names

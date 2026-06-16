@@ -202,14 +202,14 @@ shape ``[N, 1]`` (``N`` symbolic); the goal is to ``Expand`` it to
     )
     from onnx_light.onnx_optim.shape_inference import ShapesContext
 
-    # inputs and output
+    # Inputs and output
     x_vi = make_tensor_value_info("x", TensorProto.FLOAT, ["N", 1])
     out_vi = make_tensor_value_info("expanded", TensorProto.FLOAT, ["N", 1])
 
-    # initializer: int64[1] = [1]
+    # Initializer: int64[1] = [1]
     one = numpy_helper.from_array(numpy.array([1], dtype=numpy.int64), name="one")
 
-    # nodes
+    # Nodes
     n_node = make_node("Shape", ["x"], ["n"], start=0, end=1)
     b_node = make_node("Shape", ["x"], ["b"], start=1, end=2)
     cat_node = make_node("Concat", ["n", "b"], ["shape"], axis=0)

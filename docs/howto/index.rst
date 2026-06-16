@@ -15,3 +15,4 @@ How-to Python / C++
     collect_backend_test_cases
     use_custom_kernel
     use_custom_shape_inference
+    onnx_graph_manipulations

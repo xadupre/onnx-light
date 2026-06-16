@@ -180,6 +180,12 @@ short.
     * - ``onnx_light::lib_onnx_proto``
       - Proto parsing / serialization only (``ModelProto``, ``GraphProto``,
         ``TensorProto``, …).  Lightest option.
+    * - ``onnx_light::onnx_manipulations``
+      - ModelProto/GraphProto manipulation helpers independent from operator
+        schemas: textual proto parser/printer, attribute and tensor-proto
+        utilities, data-type name helpers, and graph-analysis utilities
+        (``CollectExternalInputs``, ``CollectRemainingInputs``,
+        ``CollectNodeInputs``).  Transitively links ``lib_onnx_proto``.
     * - ``onnx_light::lib_onnx_op``
       - Lightweight ``LightOpSchema`` registrations, no shape inference.
         Transitively links ``lib_onnx_proto``.
@@ -260,3 +266,5 @@ See also
 * :ref:`l-design-cpp-linking` – full description of every exported CMake
   target and the ``add_subdirectory`` alternative.
 * :ref:`l-cpp-load-onnx-light-time-example` – a complete runnable example.
+* :ref:`l-howto-onnx-graph-manipulations` – how to use the graph-analysis
+  helpers from ``onnx_light::onnx_manipulations``.

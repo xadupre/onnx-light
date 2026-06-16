@@ -137,6 +137,8 @@ float Float4E2M1NibbleToFloat(std::uint8_t nibble) noexcept {
 }
 
 std::uint8_t FloatRoundToFloat4E2M1Nibble(float v) noexcept {
+  // FLOAT4E2M1 has no NaN or infinity encoding: NaN collapses to zero and
+  // infinities saturate to the largest representable magnitude (±6).
   if (std::isnan(v))
     return 0x0u;
   // Saturate to representable range and handle ±0 sign preservation.
@@ -147,14 +149,16 @@ std::uint8_t FloatRoundToFloat4E2M1Nibble(float v) noexcept {
   if (v == 0.0f)
     return std::signbit(v) ? 0x8u : 0x0u;
 
-  // Search the same-sign half (skipping ±0 since that was handled above).
-  // Positive: nibbles 0x1..0x7  Negative: nibbles 0x9..0xF
-  static const float kPos[7] = {0.5f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f, 6.0f};
-  static const std::uint8_t kPosN[7] = {0x1u, 0x2u, 0x3u, 0x4u, 0x5u, 0x6u, 0x7u};
-  static const float kNeg[7] = {-0.5f, -1.0f, -1.5f, -2.0f, -3.0f, -4.0f, -6.0f};
-  static const std::uint8_t kNegN[7] = {0x9u, 0xAu, 0xBu, 0xCu, 0xDu, 0xEu, 0xFu};
-  const float *vals = (v > 0.0f) ? kPos : kNeg;
-  const std::uint8_t *nibbles = (v > 0.0f) ? kPosN : kNegN;
+  // Search the same-sign half, including the signed zero so values nearer to
+  // zero than to ±0.5 (or exactly halfway, which rounds to even) collapse to
+  // zero. Positive: nibbles 0x0..0x7  Negative: nibbles 0x8..0xF.
+  static const float kPos[8] = {0.0f, 0.5f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f, 6.0f};
+  static const std::uint8_t kPosN[8] = {0x0u, 0x1u, 0x2u, 0x3u, 0x4u, 0x5u, 0x6u, 0x7u};
+  static const float kNeg[8] = {-0.0f, -0.5f, -1.0f, -1.5f, -2.0f, -3.0f, -4.0f, -6.0f};
+  static const std::uint8_t kNegN[8] = {0x8u, 0x9u, 0xAu, 0xBu, 0xCu, 0xDu, 0xEu, 0xFu};
+  const bool positive = v > 0.0f;
+  const float *vals = positive ? kPos : kNeg;
+  const std::uint8_t *nibbles = positive ? kPosN : kNegN;
 
   // Linear scan for the nearest representable value with round-half-to-even
   // tie-breaking. In the FLOAT4E2M1 encoding the mantissa bit is the LSB of
@@ -162,7 +166,7 @@ std::uint8_t FloatRoundToFloat4E2M1Nibble(float v) noexcept {
   // when two candidates are equidistant from ``v``.
   std::uint8_t best = nibbles[0];
   float best_dist = std::abs(v - vals[0]);
-  for (int i = 1; i < 7; ++i) {
+  for (int i = 1; i < 8; ++i) {
     const float d = std::abs(v - vals[i]);
     if (d < best_dist || (d == best_dist && (nibbles[i] & 1u) == 0u && (best & 1u) != 0u)) {
       best = nibbles[i];

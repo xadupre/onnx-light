@@ -139,6 +139,15 @@ void RegisterValueAsShapeBuilderShapeInferenceCases(std::vector<TestCase> &regis
 /// when ``false``, the split sizes differ.
 void RegisterConcatSplitShapeInferenceCases(std::vector<TestCase> &registry, bool even);
 
+/// Registers a ``Resize(scales=[0.5, 0.5]) → Tile(repeats=[2, 2])`` case
+/// whose input ``X`` carries symbolic dimensions ``H`` (odd concrete value)
+/// and ``W`` (even concrete value). Exercises shape inference through
+/// ``Resize`` with a FLOAT ``scales`` initializer (output dims become fresh
+/// ``Resize_dim{i}`` symbols) followed by ``Tile`` with an INT64
+/// ``repeats`` initializer (output dims become ``Tile_dim{i}`` because the
+/// input dims are still symbolic).
+void RegisterResizeTileShapeInferenceCases(std::vector<TestCase> &registry);
+
 /// Collects all shape-inference oriented backend test cases by invoking
 /// every ``Register*ShapeInferenceCases`` helper declared in this header.
 void CollectShapeInferenceTestCases(std::vector<TestCase> &registry,

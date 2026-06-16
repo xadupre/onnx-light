@@ -459,6 +459,7 @@ const std::vector<SubByteExpectation> &SubByteExpectations() {
        onnx_kernels::DataType::UINT8,
        "UINT8"},
       // INT2: input values -3..3 → wrap via low 2 bits → 1,-2,-1,0,1,-2,-1.
+      // Mapping: -3→1, -2→-2, -1→-1, 0→0, 1→1, 2→-2, 3→-1.
       // Two's-complement 2-bit values: 1=0x1, -2=0x2, -1=0x3, 0=0x0.
       //   byte0 = 1|2<<2|3<<4|0<<6 = 0x39
       //   byte1 = 1|2<<2|3<<4|0<<6 = 0x39

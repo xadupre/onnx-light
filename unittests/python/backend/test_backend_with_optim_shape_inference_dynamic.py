@@ -109,6 +109,9 @@ TestOptimShapeInferenceDynamicBackend = make_test_class(
         # dynamic harness cannot rewrite (it asserts concrete dim_value
         # inputs before swapping them to symbolic names).
         "test_cc_shape_inference_nonzero_plus_expression.*",
+        # Inputs use symbolic dim_param ("H", "2*h"); the dynamic harness
+        # requires concrete dim_value inputs.
+        "test_cc_shape_inference_resize_tile.*",
     ],
 )
 

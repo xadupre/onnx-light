@@ -145,14 +145,14 @@ void RegisterPadCannyAverageShapeInferenceCases(std::vector<TestCase> &registry)
   for (size_t i = 0; i < x_values.size(); ++i) {
     x_values[i] = static_cast<float>(i) + 1.0f;
   }
-  Tensor x = Tensor::FromFloat("X", {kN, kC, kH, kW}, x_values);
+  Tensor x_tensor = Tensor::FromFloat("X", {kN, kC, kH, kW}, x_values);
 
   // Pad(reflect) by one pixel on every spatial side: [2, 1, 5, 7] → [2, 1, 7, 9].
   const Tensor pads_tensor = Tensor::FromInt64("", {8},
                                                {int64_t{0}, int64_t{0}, int64_t{1}, int64_t{1},
                                                 int64_t{0}, int64_t{0}, int64_t{1}, int64_t{1}});
-  Tensor padded =
-      kernel::Pad{ctx}(x, pads_tensor, /*constant_value=*/nullptr, /*axes=*/nullptr, "reflect");
+  Tensor padded = kernel::Pad{ctx}(x_tensor, pads_tensor, /*constant_value=*/nullptr,
+                                   /*axes=*/nullptr, "reflect");
   padded.name = "padded";
 
   // Conv with the 3×3 Laplacian kernel, no padding: [2, 1, 7, 9] → [2, 1, 5, 7].
@@ -176,7 +176,7 @@ void RegisterPadCannyAverageShapeInferenceCases(std::vector<TestCase> &registry)
   Tensor y = kernel::Sub{ctx}(filtered, avg);
   y.name = "Y";
 
-  AppendDataSet(tc, {std::move(x)}, {std::move(y)});
+  AppendDataSet(tc, {std::move(x_tensor)}, {std::move(y)});
 
   registry.emplace_back(std::move(tc));
 }

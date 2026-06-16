@@ -1,18 +1,17 @@
 import unittest
 
 import numpy as np
-import pytest
 
 import onnx_light.onnx as onnxl
-from onnx_light.ext_test_case import ExtTestCase
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 
 # The backend test registries are only available in the full build; skip this
 # module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
-_coverage = pytest.importorskip("onnx_light.onnx_lib.backend.coverage")
+_coverage = import_or_skip("onnx_light.onnx_lib.backend.coverage")
 CoverageReport = _coverage.CoverageReport
 OperatorCoverage = _coverage.OperatorCoverage
 compute_test_case_coverage = _coverage.compute_test_case_coverage
-_case_base = pytest.importorskip("onnx_light.onnx_lib.backend.test.case.base")
+_case_base = import_or_skip("onnx_light.onnx_lib.backend.test.case.base")
 ALL_TESTS = _case_base.ALL_TESTS
 TestCase = _case_base.TestCase
 

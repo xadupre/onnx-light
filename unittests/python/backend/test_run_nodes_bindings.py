@@ -15,15 +15,14 @@ import struct
 import unittest
 
 import numpy as np
-import pytest
 
-from onnx_light.ext_test_case import ExtTestCase
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 from onnx_light.onnx import TensorProto
 from onnx_light.onnx_lib import parser
 
 # The kernels runtime is only available in the full build; skip this module on a
 # reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
-rt = pytest.importorskip("onnx_light.onnx_py._onnxpykernels").runtime
+rt = import_or_skip("onnx_light.onnx_py._onnxpykernels", "runtime")
 
 
 def _make_float_tensor(name: str, values: list[float]):

@@ -1,11 +1,11 @@
 import unittest
 import numpy as np
 import onnxruntime as ort
-import pytest
+from onnx_light.ext_test_case import import_or_skip
 
 # The backend test registries are only available in the full build; skip this
 # module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
-make_test_class = pytest.importorskip("onnx_light.onnx.backend").make_test_class
+make_test_class = import_or_skip("onnx_light.onnx.backend", "make_test_class")
 
 
 def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:

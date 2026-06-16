@@ -1,8 +1,7 @@
 import unittest
 
-import pytest
 
-from onnx_light.ext_test_case import ExtTestCase
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx_optim.shape_inference import infer_shapes_model
@@ -10,7 +9,7 @@ from onnx_light.onnx_py._onnxpyoptim import shape_inference as si
 
 # The backend test registries are only available in the full build; skip this
 # module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
-collect_test_cases = pytest.importorskip("onnx_light.onnx.backend").collect_test_cases
+collect_test_cases = import_or_skip("onnx_light.onnx.backend", "collect_test_cases")
 
 
 class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):

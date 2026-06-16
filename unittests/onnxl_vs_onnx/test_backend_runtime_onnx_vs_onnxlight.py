@@ -112,33 +112,52 @@ def _load_data_set(data_dir: str) -> tuple[list[np.ndarray], list[np.ndarray]]:
     return inputs, outputs
 
 
-def _values_match(actual: np.ndarray, expected: np.ndarray, rtol: float, atol: float) -> bool:
-    """Returns ``True`` when ``actual`` reproduces ``expected``.
+def _describe_mismatch(
+    actual: np.ndarray, expected: np.ndarray, rtol: float, atol: float
+) -> str | None:
+    """Returns a description of why ``actual`` differs from ``expected``.
 
-    Floating-point tensors are compared with ``rtol``/``atol`` tolerances while
-    integer, boolean and string tensors are compared for exact equality. Sub-byte
-    and reduced-precision ``ml_dtypes`` values are widened to ``float64``/``int64``
-    so the comparison does not depend on the storage representation.
+    Returns ``None`` when ``actual`` reproduces ``expected``. Floating-point
+    tensors are compared with ``rtol``/``atol`` tolerances while integer, boolean
+    and string tensors are compared for exact equality. Sub-byte and
+    reduced-precision ``ml_dtypes`` values are widened to ``float64``/``int64`` so
+    the comparison does not depend on the storage representation. When the values
+    differ the returned message names the first mismatching position together with
+    its expected and actual values, which is far more actionable than a bare
+    pass/fail flag when diagnosing a runtime discrepancy.
     """
     actual = np.asarray(actual)
     expected = np.asarray(expected)
     if actual.shape != expected.shape:
-        return False
+        return f"shape mismatch: got {actual.shape}, expected {expected.shape}"
 
     kind = expected.dtype.kind
     if kind in ("U", "S", "O"):
-        return np.array_equal(actual.astype(str), expected.astype(str))
-    if kind == "b":
-        return np.array_equal(actual, expected)
-    if "float" in expected.dtype.name or kind == "f":
-        return np.allclose(
+        equal = actual.astype(str) == expected.astype(str)
+    elif kind == "b":
+        equal = actual == expected
+    elif "float" in expected.dtype.name or kind == "f":
+        equal = np.isclose(
             actual.astype(np.float64),
             expected.astype(np.float64),
             rtol=rtol,
             atol=atol,
             equal_nan=True,
         )
-    return np.array_equal(actual.astype(np.int64), expected.astype(np.int64))
+    else:
+        equal = actual.astype(np.int64) == expected.astype(np.int64)
+
+    if np.all(equal):
+        return None
+
+    mismatched = np.argwhere(~np.asarray(equal))
+    first = tuple(int(i) for i in mismatched[0])
+    index = first[0] if actual.ndim == 1 else first
+    return (
+        f"{int(mismatched.shape[0])} of {expected.size} values differ; "
+        f"first at index {index}: got {actual[first].item()!r}, "
+        f"expected {expected[first].item()!r}"
+    )
 
 
 class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
@@ -172,29 +191,32 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
         model = onnxl_helper.make_model(graph)
         self.assertEqual(_model_op_types(model), {"If", "Relu", "Neg"})
 
-    def _run_one(self, model_file: str) -> str:
-        """Executes one backend test and returns its outcome.
+    def _run_one(self, model_file: str) -> tuple[str, str | None]:
+        """Executes one backend test and returns its outcome and a detail.
 
-        Returns ``"pass"`` when the runtime reproduces the reference outputs,
-        ``"fail"`` when it does not (or raises an unexpected error) and
-        ``"skip"`` when the case cannot be run by the runtime today.
+        Returns ``("pass", None)`` when the runtime reproduces the reference
+        outputs, ``("fail", detail)`` when it does not (or raises an unexpected
+        error) and ``("skip", None)`` when the case cannot be run by the runtime
+        today. ``detail`` describes the discrepancy (which output mismatched and
+        the first differing value, or the unexpected error raised) so a failure
+        is actionable without re-running the case by hand.
         """
         try:
             model = onnxl.load(model_file)
         except RuntimeError:
-            return "skip"
+            return "skip", None
 
         if not _has_only_tensor_io(model):
-            return "skip"
+            return "skip", None
         if _model_op_types(model) & _NON_DETERMINISTIC_OPS:
-            return "skip"
+            return "skip", None
         if _model_op_types(model) & _IMPLEMENTATION_DEFINED_OPS:
-            return "skip"
+            return "skip", None
 
         model_dir = os.path.dirname(model_file)
         data_dirs = sorted(glob.glob(os.path.join(model_dir, "test_data_set*")))
         if not data_dirs:
-            return "skip"
+            return "skip", None
 
         session = ReferenceEvaluator(model)
         for data_dir in data_dirs:
@@ -209,14 +231,17 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
                 outputs = session.run(None, feeds)
             except ValueError as e:
                 if "unsupported op_type" in str(e):
-                    return "skip"
-                return "fail"
+                    return "skip", None
+                return "fail", f"runtime raised {type(e).__name__}: {e}"
             if len(outputs) != len(expected):
-                return "fail"
-            for got, ref in zip(outputs, expected):
-                if not _values_match(got, ref, rtol=1e-3, atol=1e-7):
-                    return "fail"
-        return "pass"
+                return "fail", (
+                    f"output count mismatch: got {len(outputs)}, expected {len(expected)}"
+                )
+            for i, (got, ref) in enumerate(zip(outputs, expected)):
+                detail = _describe_mismatch(got, ref, rtol=1e-3, atol=1e-7)
+                if detail is not None:
+                    return "fail", f"output {i} ({os.path.basename(data_dir)}): {detail}"
+        return "pass", None
 
     def _run_model_test(self, model_file: str, name: str) -> None:
         """Runs one backend node test and checks it against the snapshot.
@@ -229,7 +254,7 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
         the runtime cannot execute it and must pass when it can.
         """
         known = _load_known_discrepancies()
-        outcome = self._run_one(model_file)
+        outcome, detail = self._run_one(model_file)
         snapshot = os.path.basename(_KNOWN_DISCREPANCIES_FILE)
         if name in known:
             if outcome != "fail":
@@ -243,8 +268,8 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
             self.skipTest(f"onnx-light runtime cannot execute {name!r} today")
         if outcome == "fail":
             self.fail(
-                f"The onnx-light runtime does not reproduce {name!r}. Fix the "
-                f"runtime or append {name!r} to {snapshot}."
+                f"The onnx-light runtime does not reproduce {name!r} ({detail}). "
+                f"Fix the runtime or append {name!r} to {snapshot}."
             )
 
     def test_known_discrepancies_all_have_tests(self):

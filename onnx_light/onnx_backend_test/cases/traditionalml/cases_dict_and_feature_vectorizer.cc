@@ -5,6 +5,7 @@
 #include "onnx_backend_test/cases/traditionalml/include_traditionalml_cases.h"
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
+#include "onnx_kernels/simple_map.h"
 
 #include <cstdint>
 #include <string>
@@ -83,12 +84,11 @@ void RegisterDictVectorizerCases(std::vector<TestCase> &registry) {
     PromoteInputToMapType(registry, static_cast<int32_t>(DataType::STRING),
                           static_cast<int32_t>(DataType::INT64));
 
-    // Replace the placeholder DataSet input with the real runtime tensors
-    // following the "x_keys" / "x_values" naming convention. Mirrors the
-    // CastMap dispatch convention in kernel_dispatch_table.cc.
-    registry.back().data_sets[0].inputs = {
-        Tensor::FromStrings("x_keys", {static_cast<int64_t>(keys.size())}, keys),
-        Tensor::FromInt64("x_values", {static_cast<int64_t>(values.size())}, values),
+    // Store the map input in the DataSet.
+    registry.back().data_sets[0].inputs.clear();
+    registry.back().data_sets[0].maps = {
+        Map("x", Tensor::FromStrings("x_keys", {static_cast<int64_t>(keys.size())}, keys),
+            Tensor::FromInt64("x_values", {static_cast<int64_t>(values.size())}, values)),
     };
   }
 
@@ -113,9 +113,10 @@ void RegisterDictVectorizerCases(std::vector<TestCase> &registry) {
     PromoteInputToMapType(registry, static_cast<int32_t>(DataType::INT64),
                           static_cast<int32_t>(DataType::FLOAT));
 
-    registry.back().data_sets[0].inputs = {
-        Tensor::FromInt64("x_keys", {static_cast<int64_t>(keys.size())}, keys),
-        Tensor::FromFloat("x_values", {static_cast<int64_t>(values.size())}, values),
+    registry.back().data_sets[0].inputs.clear();
+    registry.back().data_sets[0].maps = {
+        Map("x", Tensor::FromInt64("x_keys", {static_cast<int64_t>(keys.size())}, keys),
+            Tensor::FromFloat("x_values", {static_cast<int64_t>(values.size())}, values)),
     };
   }
 }

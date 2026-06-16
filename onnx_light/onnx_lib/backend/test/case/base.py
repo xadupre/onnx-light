@@ -372,24 +372,29 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
 
         For graph inputs declared with ``map(K, V)`` type (used by
         ``ai.onnx.ml::DictVectorizer`` and ``ai.onnx.ml::CastMap``), the
-        DataSet inputs are two runtime tensors named ``<name>_keys`` /
-        ``<name>_values``.  These are returned as two consecutive positional
-        items so the backend harness (which zips them against
-        ``sess.input_names``) receives them under the correct names.
+        DataSet stores a Map object in ``ds.maps``. The keys and values
+        tensors are returned as two consecutive positional items so the
+        backend harness (which zips them against ``sess.input_names``)
+        receives them under the correct names.
         """
         graph_inputs = list(tc.model.graph.input)
         data_sets: list[list] = []
         for ds in tc.data_sets:
             by_name = {t.name: _tensor_to_np(t) for t in ds.inputs}
+            maps_by_name = {m.name: m for m in ds.maps} if ds.maps else {}
             inputs: list = []
             for gi in graph_inputs:
                 if gi.type.has_map_type():
+                    # Try Map object first.
+                    if gi.name in maps_by_name:
+                        m = maps_by_name[gi.name]
+                        inputs.append(_tensor_to_np(m.keys))
+                        inputs.append(_tensor_to_np(m.values))
+                        continue
+                    # Fall back to legacy _keys/_values tensor convention.
                     keys_arr = by_name.get(f"{gi.name}_keys")
                     values_arr = by_name.get(f"{gi.name}_values")
                     if keys_arr is None or values_arr is None:
-                        # Fall back to whatever the DataSet provides under
-                        # the graph-input name if the convention is not
-                        # followed for this case.
                         inputs.append(by_name.get(gi.name))
                         continue
                     inputs.append(keys_arr)

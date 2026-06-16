@@ -5,6 +5,7 @@
 #include "onnx_backend_test/cases/traditionalml/include_traditionalml_cases.h"
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
+#include "onnx_kernels/simple_map.h"
 
 #include <cstdint>
 #include <string>
@@ -17,7 +18,6 @@ namespace {
 
 // Promotes the single input ValueInfoProto from its placeholder tensor type to
 // the actual map(int64, value_type) type expected by the CastMap schema.
-// Mirrors the helper used by ``cases_dict_and_feature_vectorizer.cc``.
 void PromoteInputToMapType(std::vector<TestCase> &registry, int32_t value_type) {
   GraphProto &graph = registry.back().model.ref_graph();
   ValueInfoProto &in_vi = *graph.mutable_input(0);
@@ -51,15 +51,8 @@ void AddIntAttr(NodeProto &node, const char *name, int64_t value) {
 // The output element type is controlled by the ``cast_to`` attribute. Mirrors
 // the upstream ONNX ``ai.onnx.ml::CastMap`` operator (since opset 1).
 //
-// Runtime map representation
-// ---------------------------
-// Because onnx-light's runtime is tensor-only, the ``map(int64, T)`` input
-// is represented as **two tensors** in the RuntimeContext:
-//   * ``"<input>_keys"``   — INT64 tensor of keys
-//   * ``"<input>_values"`` — FLOAT or STRING tensor of values
-// where ``<input>`` is the name of the node's single formal input (here "x").
-// The test-case DataSets store these two tensors; the dispatch table looks
-// them up by the same naming convention.
+// The map input is represented as a single Map object in the DataSet; the
+// runtime dispatch reads it from RuntimeContext::maps().
 // ---------------------------------------------------------------------------
 void RegisterCastMapCases(std::vector<TestCase> &registry) {
   const OpsetId opset("ai.onnx.ml", 1);
@@ -89,11 +82,11 @@ void RegisterCastMapCases(std::vector<TestCase> &registry) {
            "backend-test", registry);
     PromoteInputToMapType(registry, static_cast<int32_t>(DataType::FLOAT));
 
-    // Replace the placeholder DataSet input with the real runtime tensors
-    // following the "x_keys" / "x_values" naming convention.
-    registry.back().data_sets[0].inputs = {
-        Tensor::FromInt64("x_keys", {static_cast<int64_t>(keys.size())}, keys),
-        Tensor::FromFloat("x_values", {static_cast<int64_t>(values.size())}, values),
+    // Store the map input in the DataSet.
+    registry.back().data_sets[0].inputs.clear();
+    registry.back().data_sets[0].maps = {
+        Map("x", Tensor::FromInt64("x_keys", {static_cast<int64_t>(keys.size())}, keys),
+            Tensor::FromFloat("x_values", {static_cast<int64_t>(values.size())}, values)),
     };
   }
 
@@ -117,9 +110,10 @@ void RegisterCastMapCases(std::vector<TestCase> &registry) {
            "backend-test", registry);
     PromoteInputToMapType(registry, static_cast<int32_t>(DataType::FLOAT));
 
-    registry.back().data_sets[0].inputs = {
-        Tensor::FromInt64("x_keys", {static_cast<int64_t>(keys.size())}, keys),
-        Tensor::FromFloat("x_values", {static_cast<int64_t>(values.size())}, values),
+    registry.back().data_sets[0].inputs.clear();
+    registry.back().data_sets[0].maps = {
+        Map("x", Tensor::FromInt64("x_keys", {static_cast<int64_t>(keys.size())}, keys),
+            Tensor::FromFloat("x_values", {static_cast<int64_t>(values.size())}, values)),
     };
   }
 
@@ -142,9 +136,10 @@ void RegisterCastMapCases(std::vector<TestCase> &registry) {
            "backend-test", registry);
     PromoteInputToMapType(registry, static_cast<int32_t>(DataType::STRING));
 
-    registry.back().data_sets[0].inputs = {
-        Tensor::FromInt64("x_keys", {static_cast<int64_t>(keys.size())}, keys),
-        Tensor::FromStrings("x_values", {static_cast<int64_t>(values.size())}, values),
+    registry.back().data_sets[0].inputs.clear();
+    registry.back().data_sets[0].maps = {
+        Map("x", Tensor::FromInt64("x_keys", {static_cast<int64_t>(keys.size())}, keys),
+            Tensor::FromStrings("x_values", {static_cast<int64_t>(values.size())}, values)),
     };
   }
 }

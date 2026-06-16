@@ -21,6 +21,7 @@ namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DataSet;
 using onnx_backend_test::TestCase;
+using onnx_kernels::Map;
 using onnx_kernels::Tensor;
 
 void AddOnnxPyBackend(nb::module_ &m);
@@ -175,10 +176,21 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
         return r;
       });
 
+  nb::class_<Map>(bt_mod, "Map", "A map-typed value: parallel keys + values tensors.")
+      .def_rw("name", &Map::name)
+      .def_rw("key_type", &Map::key_type)
+      .def_rw("value_type", &Map::value_type)
+      .def_rw("keys", &Map::keys)
+      .def_rw("values", &Map::values)
+      .def("__repr__", [](const Map &m) {
+        return "Map(name='" + m.name + "', size=" + std::to_string(m.size()) + ")";
+      });
+
   nb::class_<DataSet>(bt_mod, "DataSet",
                       "A single (inputs, expected outputs) data set of a TestCase.")
       .def_rw("inputs", &DataSet::inputs)
       .def_rw("outputs", &DataSet::outputs)
+      .def_rw("maps", &DataSet::maps)
       .def("__repr__", [](const DataSet &ds) {
         return "DataSet(inputs=" + std::to_string(ds.inputs.size()) +
                ", outputs=" + std::to_string(ds.outputs.size()) + ")";

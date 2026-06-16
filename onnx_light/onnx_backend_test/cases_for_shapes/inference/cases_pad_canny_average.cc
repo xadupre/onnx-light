@@ -28,24 +28,23 @@ constexpr int64_t kDefaultIrVersion = 10;
 // ---------------------------------------------------------------------------
 // ``Pad(reflect) → Conv(canny) → Sub(ReduceMean)`` — an image-processing
 // pipeline expressed with **symbolic** spatial dimensions so that the
-// shape-inference pass has to propagate fresh symbolic dims through every
-// stage.
+// shape-inference pass has to propagate symbolic dims through every stage.
 //
 // The single input ``X`` is a grayscale image batch ``float[N, 1, H, W]``
 // where ``N``, ``H`` and ``W`` are symbolic. The model:
 //
 //  1. **Pads** the image by one pixel on every spatial side
 //     (``pads = [0, 0, 1, 1, 0, 0, 1, 1]``) using ``reflect`` mode. Because
-//     the spatial dims are symbolic, ``ComputeShapePad`` emits fresh
-//     ``Pad_dim2`` / ``Pad_dim3`` symbols while keeping the (zero-padded)
-//     ``N`` and ``1`` dims untouched.
+//     the spatial dims are symbolic, ``ComputeShapePad`` propagates them as
+//     symbolic **expressions** ``H+2`` / ``W+2`` (input dim plus the per-axis
+//     pad), keeping the unpadded ``N`` and ``1`` dims untouched.
 //
 //  2. Applies a **Canny-style edge filter** as a 3×3 ``Conv`` with the
 //     discrete Laplacian kernel (``[[0,-1,0],[-1,4,-1],[0,-1,0]]``) and no
-//     padding. ``ComputeShapeConv`` cannot evaluate the spatial formula on
-//     the symbolic ``Pad_dim*`` inputs, so it emits the symbolic
-//     ``Conv.padded:0`` / ``Conv.padded:1`` dims; the output channel count
-//     ``M = 1`` comes from the (concrete) weight initializer.
+//     padding. A 3×3 VALID convolution shrinks each spatial dim by 2, so
+//     ``ComputeShapeConv`` evaluates the spatial formula symbolically and the
+//     ``H+2`` / ``W+2`` expressions collapse back to ``H`` / ``W``; the output
+//     channel count ``M = 1`` comes from the (concrete) weight initializer.
 //
 //  3. **Removes the average** by subtracting the global mean: a ``ReduceMean``
 //     over every axis (``keepdims = 1``) yields a ``[1, 1, 1, 1]`` tensor
@@ -55,13 +54,13 @@ constexpr int64_t kDefaultIrVersion = 10;
 //
 //   X [N, 1, H, W]
 //     → Pad(X, pads=[0,0,1,1,0,0,1,1], mode="reflect")
-//     → padded   [N, 1, Pad_dim2, Pad_dim3]
+//     → padded   [N, 1, H+2, W+2]
 //     → Conv(padded, W, kernel_shape=[3,3], pads=[0,0,0,0])
-//     → filtered [N, 1, Conv.padded:0, Conv.padded:1]
+//     → filtered [N, 1, H, W]
 //     → ReduceMean(filtered, axes=[0,1,2,3], keepdims=1)
 //     → avg      [1, 1, 1, 1]
 //     → Sub(filtered, avg)
-//     → Y        [N, 1, Conv.padded:0, Conv.padded:1]
+//     → Y        [N, 1, H, W]
 //
 // Concrete shapes (N=2, H=5, W=7)::
 //
@@ -124,16 +123,14 @@ void RegisterPadCannyAverageShapeInferenceCases(std::vector<TestCase> &registry)
   AppendValueInfo(
       *graph->add_value_info(), "avg", DataType::FLOAT,
       {DimSpec(int64_t{1}), DimSpec(int64_t{1}), DimSpec(int64_t{1}), DimSpec(int64_t{1})});
-  AppendValueInfo(
-      *graph->add_value_info(), "filtered", DataType::FLOAT,
-      {DimSpec("N"), DimSpec(int64_t{1}), DimSpec("Conv.padded:0"), DimSpec("Conv.padded:1")});
+  AppendValueInfo(*graph->add_value_info(), "filtered", DataType::FLOAT,
+                  {DimSpec("N"), DimSpec(int64_t{1}), DimSpec("H"), DimSpec("W")});
   AppendValueInfo(*graph->add_value_info(), "padded", DataType::FLOAT,
-                  {DimSpec("N"), DimSpec(int64_t{1}), DimSpec("Pad_dim2"), DimSpec("Pad_dim3")});
+                  {DimSpec("N"), DimSpec(int64_t{1}), DimSpec("H+2"), DimSpec("W+2")});
 
   // Graph output Y — same symbolic dims as filtered.
-  AppendValueInfo(
-      *graph->add_output(), "Y", DataType::FLOAT,
-      {DimSpec("N"), DimSpec(int64_t{1}), DimSpec("Conv.padded:0"), DimSpec("Conv.padded:1")});
+  AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT,
+                  {DimSpec("N"), DimSpec(int64_t{1}), DimSpec("H"), DimSpec("W")});
 
   // Reference DataSet — concrete N=2, H=5, W=7.
   constexpr int64_t kN = 2;

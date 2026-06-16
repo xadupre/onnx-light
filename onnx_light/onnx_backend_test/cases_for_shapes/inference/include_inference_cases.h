@@ -153,9 +153,9 @@ void RegisterResizeTileShapeInferenceCases(std::vector<TestCase> &registry);
 /// symbolic spatial dims. The image is reflect-padded by one pixel, filtered
 /// with a 3×3 Laplacian (Canny-style edge) ``Conv`` and finally has its
 /// global average removed via ``Sub`` with a ``ReduceMean`` over every axis.
-/// Exercises symbolic-dim propagation through ``Pad`` (fresh ``Pad_dim*``
-/// symbols), ``Conv`` (fresh ``Conv.<x>:<axis>`` symbols) and broadcasting
-/// ``Sub`` against a reduced ``[1, 1, 1, 1]`` mean.
+/// Exercises symbolic-dim propagation through ``Pad`` (symbolic ``H+2`` /
+/// ``W+2`` expressions), ``Conv`` (which collapses them back to ``H`` / ``W``)
+/// and broadcasting ``Sub`` against a reduced ``[1, 1, 1, 1]`` mean.
 void RegisterPadCannyAverageShapeInferenceCases(std::vector<TestCase> &registry);
 
 /// Collects all shape-inference oriented backend test cases by invoking

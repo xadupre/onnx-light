@@ -30,6 +30,7 @@ void CollectShapeInferenceTestCases(std::vector<TestCase> &registry, const std::
     RegisterLoopPairwiseDistanceShapeInferenceCases(registry);
     RegisterScanRunningSumShapeInferenceCases(registry);
     RegisterResizeTileShapeInferenceCases(registry);
+    RegisterPadCannyAverageShapeInferenceCases(registry);
   }
 }
 

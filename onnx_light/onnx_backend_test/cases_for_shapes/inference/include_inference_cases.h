@@ -148,6 +148,16 @@ void RegisterConcatSplitShapeInferenceCases(std::vector<TestCase> &registry, boo
 /// input dims are still symbolic).
 void RegisterResizeTileShapeInferenceCases(std::vector<TestCase> &registry);
 
+/// Registers a ``Pad(reflect) → Conv(canny) → Sub(ReduceMean)`` case whose
+/// single input ``X`` is a grayscale image batch ``float[N, 1, H, W]`` with
+/// symbolic spatial dims. The image is reflect-padded by one pixel, filtered
+/// with a 3×3 Laplacian (Canny-style edge) ``Conv`` and finally has its
+/// global average removed via ``Sub`` with a ``ReduceMean`` over every axis.
+/// Exercises symbolic-dim propagation through ``Pad`` (fresh ``Pad_dim*``
+/// symbols), ``Conv`` (fresh ``Conv.<x>:<axis>`` symbols) and broadcasting
+/// ``Sub`` against a reduced ``[1, 1, 1, 1]`` mean.
+void RegisterPadCannyAverageShapeInferenceCases(std::vector<TestCase> &registry);
+
 /// Collects all shape-inference oriented backend test cases by invoking
 /// every ``Register*ShapeInferenceCases`` helper declared in this header.
 void CollectShapeInferenceTestCases(std::vector<TestCase> &registry,

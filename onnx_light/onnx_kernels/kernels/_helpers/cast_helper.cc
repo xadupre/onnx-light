@@ -70,7 +70,7 @@ float Float16BitsToFloat(std::uint16_t h) noexcept {
     if (mant == 0) {
       f = sign << 31;
     } else {
-      // Subnormal half: normalise the mantissa so its implicit leading 1 sits
+      // Subnormal half: normalize the mantissa so its implicit leading 1 sits
       // at bit 10, decrementing the (biased-by-one) half exponent for every
       // left shift, then rebias into the float32 exponent field.
       std::uint32_t m = mant;

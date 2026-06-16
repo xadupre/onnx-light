@@ -15,6 +15,7 @@ and rewritten directly against the onnx-light C++ API.
 | `fuzz_shape_inference.cc`         | `shape_inference::InferShapes`                                           | Raw bytes → protobuf parser         |
 | `fuzz_optim_shape_inference.cc`   | `onnx_optim::shapes::InferShapesModel`                                   | Raw bytes → protobuf parser         |
 | `fuzz_version_converter.cc`       | `version_conversion::ConvertVersion`                                     | Raw bytes → protobuf parser         |
+| `fuzz_compose.cc`                 | `MergeModels` / `MergeGraphs` / `AddPrefix` / `CheckOverlappingNames` / `ExpandOutDim` | Length-prefixed bytes → two protobuf models |
 | `fuzz_ort_flatbuffers.cc`         | `ModelProto::ParseFromString` with `SerializeFormat::kOrtFlatbuffers`    | Raw bytes → ORT flatbuffer parser   |
 | `make_seed_corpus.cc`             | *(seed generator, not a fuzzer)*                                         | Writes seed files for OSS-Fuzz      |
 
@@ -46,6 +47,7 @@ Each harness is a standard libFuzzer executable:
 ./build-fuzz/fuzz_shape_inference -runs=1000
 ./build-fuzz/fuzz_optim_shape_inference -runs=1000
 ./build-fuzz/fuzz_version_converter -runs=1000
+./build-fuzz/fuzz_compose -runs=1000
 ./build-fuzz/fuzz_ort_flatbuffers -runs=1000
 ```
 

@@ -9,6 +9,10 @@ onnx-light
     :target: https://github.com/xadupre/onnx-light/actions/workflows/build.yml
     :alt: build
 
+.. image:: https://github.com/xadupre/onnx-light/actions/workflows/build_reduced.yml/badge.svg
+    :target: https://github.com/xadupre/onnx-light/actions/workflows/build_reduced.yml
+    :alt: build-reduced
+
 .. image:: https://github.com/xadupre/onnx-light/actions/workflows/release_cpp_artifacts.yml/badge.svg
     :target: https://github.com/xadupre/onnx-light/actions/workflows/release_cpp_artifacts.yml
     :alt: Build C++ Release Artifacts

@@ -3,7 +3,15 @@ from typing import Any, Callable, Sequence, TypeAlias
 import numpy as np
 from ..... import onnx
 from .....onnx import helper as onnx_helper
-from .....onnx_py._onnxpybackend import backend_test as _backend_test_cc  # type: ignore
+
+try:
+    from .....onnx_py._onnxpybackend import backend_test as _backend_test_cc  # type: ignore
+except ImportError as exc:  # pragma: no cover - exercised only in reduced builds
+    raise ImportError(
+        "onnx-light was built without the backend-test extensions "
+        "(ONNX_LIGHT_BUILD_KERNELS=OFF); install the full build to use the "
+        "backend test cases."
+    ) from exc
 from .....onnx_py._onnxpyprotoop import onnx_op as _onnx_op  # type: ignore
 from .....ext_test_case import ExtTestCase
 

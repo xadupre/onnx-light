@@ -5,7 +5,18 @@ import importlib.util
 import subprocess
 import time
 from onnx_light import __file__ as onnxl_file
-from onnx_light.ext_test_case import ExtTestCase, has_onnxruntime, is_windows, ignore_errors
+from onnx_light.ext_test_case import (
+    ExtTestCase,
+    has_onnxruntime,
+    is_windows,
+    ignore_errors,
+    import_or_skip,
+)
+
+# The documentation examples exercise the operator-kernel runtime and backend,
+# which are absent from the reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF). Skip
+# the whole module in that case.
+import_or_skip("onnx_light.onnx_py._onnxpykernels")
 
 VERBOSE = 0
 ROOT = os.path.realpath(os.path.abspath(os.path.join(onnxl_file, "..", "..")))

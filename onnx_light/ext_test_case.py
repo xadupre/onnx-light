@@ -4,6 +4,7 @@ import sys
 import unittest
 import warnings
 from contextlib import redirect_stderr, redirect_stdout
+from importlib import import_module
 from io import StringIO
 from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
 
@@ -27,6 +28,38 @@ def has_onnxruntime() -> bool:
         return hasattr(onnxruntime, "__version__")
     except ImportError:
         return False
+
+
+def import_or_skip(module_name: str, attribute: Optional[str] = None) -> Any:
+    """Imports a module (or one of its attributes) or skips the test otherwise.
+
+    onnx-light can be built without the operator-kernel runtime and the
+    backend-test registries (``ONNX_LIGHT_BUILD_KERNELS=OFF``). In that reduced
+    build the kernel/backend Python modules raise :class:`ImportError`. Tests
+    that depend on them call this helper, at module level or inside a test, to
+    skip themselves cleanly instead of failing.
+
+    Args:
+        module_name: The fully-qualified name of the module to import.
+        attribute: An optional attribute to return from the imported module.
+
+    Returns:
+        The imported module, or ``getattr(module, attribute)`` when *attribute*
+        is provided.
+
+    Raises:
+        unittest.SkipTest: When the module (or attribute) cannot be imported.
+    """
+    try:
+        module = import_module(module_name)
+        if attribute is not None:
+            return getattr(module, attribute)
+        return module
+    except (ImportError, AttributeError) as exc:
+        raise unittest.SkipTest(
+            f"{module_name!r} is unavailable in this build "
+            f"(reduced onnx-light build without kernels/backend): {exc}"
+        ) from exc
 
 
 def skipif_ci_windows(msg) -> Callable:

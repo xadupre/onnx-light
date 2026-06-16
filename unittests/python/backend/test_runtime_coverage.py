@@ -1,17 +1,20 @@
 import unittest
 
-from onnx_light.onnx_lib.backend.runtime_coverage import (
-    DomainSummary,
-    RuntimeCoverageReport,
-    TestCaseStatus,
-    compute_runtime_coverage,
-    render_rst_domain_sections,
-    render_rst_domain_summary,
-    render_rst_domain_tabs,
-    render_rst_summary,
-    render_rst_table_for_domain,
-)
-from onnx_light.ext_test_case import ExtTestCase
+
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
+
+# The runtime coverage helpers are only available in the full build; skip this
+# module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
+_runtime_coverage = import_or_skip("onnx_light.onnx_lib.backend.runtime_coverage")
+DomainSummary = _runtime_coverage.DomainSummary
+RuntimeCoverageReport = _runtime_coverage.RuntimeCoverageReport
+TestCaseStatus = _runtime_coverage.TestCaseStatus
+compute_runtime_coverage = _runtime_coverage.compute_runtime_coverage
+render_rst_domain_sections = _runtime_coverage.render_rst_domain_sections
+render_rst_domain_summary = _runtime_coverage.render_rst_domain_summary
+render_rst_domain_tabs = _runtime_coverage.render_rst_domain_tabs
+render_rst_summary = _runtime_coverage.render_rst_summary
+render_rst_table_for_domain = _runtime_coverage.render_rst_table_for_domain
 
 
 class TestRuntimeCoverage(ExtTestCase):

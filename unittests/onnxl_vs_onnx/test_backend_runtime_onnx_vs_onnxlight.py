@@ -39,9 +39,12 @@ from onnx import numpy_helper
 from onnx.backend.test.loader import load_model_tests
 
 import onnx_light.onnx as onnxl
-from onnx_light.ext_test_case import ExtTestCase
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 from onnx_light.onnx import helper as onnxl_helper
-from onnx_light.onnx.reference import ReferenceEvaluator
+
+# The reference runtime is only available in the full build; skip this module on
+# a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
+ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
 
 _KNOWN_DISCREPANCIES_FILE = os.path.join(
     os.path.dirname(__file__), "_backend_runtime_known_discrepancies.txt"

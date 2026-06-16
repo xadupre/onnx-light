@@ -16,7 +16,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from onnx_light.ext_test_case import ExtTestCase
+
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 
 _KNOWN_MISSING_FILE = os.path.join(os.path.dirname(__file__), "_backend_test_known_missing.txt")
 
@@ -78,8 +79,11 @@ class TestBackendTestNamesOnnxVsOnnxLight(ExtTestCase):
     """Ensures ONNX node backend tests have a counterpart in ``onnx_light``."""
 
     def test_onnx_backend_test_names_found_in_onnx_light(self):
-        from onnx_light.onnx_lib.backend.test.case.base import collect_test_case
-
+        # The backend test registries are only available in the full build; skip
+        # this test on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
+        collect_test_case = import_or_skip(
+            "onnx_light.onnx_lib.backend.test.case.base", "collect_test_case"
+        )
         light_names = set(collect_test_case().keys())
         self.assertGreater(len(light_names), 0)
 

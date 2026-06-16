@@ -6,9 +6,12 @@ import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 import onnx_light.onnx as onnxl
 import onnx_light.onnx_proto._io_helper as io_helper
-from onnx_light.ext_test_case import ExtTestCase
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 from onnx_light.onnx import TensorProto
-from onnx_light.onnx_lib.backend.random import rand
+
+# The deterministic random helpers are only available in the full build; skip
+# this module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
+rand = import_or_skip("onnx_light.onnx_lib.backend.random", "rand")
 
 
 class TestOnnxLightHelper(ExtTestCase):

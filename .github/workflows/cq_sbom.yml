@@ -1,18 +1,52 @@
 name: acq - SBOM
 
 on:
-  push:
-    branches: ["main"]
-  pull_request:
-    branches: ["main"]
+  schedule:
+    # Run daily at 07:30 UTC. The check_recent_commit job below skips the
+    # validation if no new commit landed on the default branch in the last
+    # 24 hours.
+    - cron: "30 7 * * *"
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  check_recent_commit:
+    name: check recent commit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      should_run: ${{ steps.decide.outputs.should_run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: decide
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "Trigger is ${{ github.event_name }}; running unconditionally."
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # On scheduled runs, only proceed when a commit was made on the
+          # default branch within the last 24 hours.
+          recent=$(git log -1 --since='24 hours ago' --format=%H || true)
+          if [ -n "$recent" ]; then
+            echo "Recent commit found: $recent"
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No commit in the last 24 hours; skipping SBOM validation."
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          fi
+
   validate-sbom:
     name: Validate SBOM
+    needs: check_recent_commit
+    if: needs.check_recent_commit.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read

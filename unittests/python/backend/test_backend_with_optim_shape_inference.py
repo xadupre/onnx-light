@@ -125,6 +125,11 @@ TestOptimShapeInferenceNoNewNamesBackend = make_test_class(
         "test_cc_loop.*",
         "test_loop.*",
         "test_cc_shape_inference_loop.*",
+        # Optional models contain intermediate tensors (e.g. opt_value) that
+        # are not declared in value_info; shape inference legitimately adds
+        # them, so these tests are excluded from the no-new-names check.
+        "test_cc_optional.*",
+        "test_optional.*",
     ],
 )
 

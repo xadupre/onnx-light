@@ -16,4 +16,4 @@
 
 #pragma once
 
-#include "onnx_lib/defs/tensor_util.h"
+#include "onnx_manipulations/tensor_util.h"

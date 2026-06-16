@@ -19,10 +19,10 @@
 #include <vector>
 
 #include "onnx_lib/common/status.h"
-#include "onnx_lib/defs/attr_proto_util.h"
-#include "onnx_lib/defs/parser.h"
 #include "onnx_lib/defs/schema.h"
-#include "onnx_lib/defs/tensor_proto_util.h"
+#include "onnx_manipulations/attr_proto_util.h"
+#include "onnx_manipulations/parser.h"
+#include "onnx_manipulations/tensor_proto_util.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 /**

@@ -17,7 +17,7 @@
 // via ``OnnxParser``, so the seed bodies stay close to what a human
 // would read in the upstream OSS-Fuzz seed-corpus zips.
 
-#include "onnx_lib/defs/parser.h"
+#include "onnx_manipulations/parser.h"
 #include "onnx_proto/onnx.h"
 
 #include <cstdint>

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "common_functions.h"
+#include "graph_manipulations.h"
 
 #include <unordered_set>
 

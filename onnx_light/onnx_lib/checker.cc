@@ -17,8 +17,8 @@
 #include "onnx_lib/common/path.h"
 #include "onnx_lib/common/proto_util.h"
 #include "onnx_lib/common/scoped_resource.h"
-#include "onnx_lib/defs/tensor_proto_util.h"
 #include "onnx_lib/shape_inference/implementation.h"
+#include "onnx_manipulations/tensor_proto_util.h"
 
 #ifdef _WIN32
 #include <Windows.h>

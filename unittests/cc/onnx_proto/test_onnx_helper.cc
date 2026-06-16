@@ -1,6 +1,6 @@
-#include "common_functions.h"
 #include "onnx_helper.h"
 #include "onnx_light_helpers.h"
+#include "onnx_manipulations/graph_manipulations.h"
 #include <atomic>
 #include <chrono>
 #include <cstring>

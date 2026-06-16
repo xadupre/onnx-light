@@ -38,11 +38,8 @@ inline std::uint8_t ClampToUint4(double t) noexcept {
 }
 
 inline std::uint8_t ClampToInt2(double t) noexcept {
-  // Int2 representable range is [-2, 1] (two's complement on 2 bits).
-  if (t <= -2.0)
-    return 0x2; // -2
-  if (t >= 1.0)
-    return 0x1;
+  // Match `ml_dtypes.int2` cast semantics used by ONNX backend tests:
+  // truncate toward zero, then keep the low 2 bits (two's complement wrap).
   const int v = static_cast<int>(t);
   return static_cast<std::uint8_t>(v & 0x03);
 }
@@ -94,7 +91,7 @@ std::uint8_t Uint4NibbleToUint8(std::uint8_t nibble) noexcept {
 // ---------------------------------------------------------------------------
 
 std::uint8_t FloatToInt2Bits(float v) noexcept {
-  if (std::isnan(v)) {
+  if (!std::isfinite(v)) {
     return 0x0;
   }
   return ClampToInt2(TruncTowardZero(v));

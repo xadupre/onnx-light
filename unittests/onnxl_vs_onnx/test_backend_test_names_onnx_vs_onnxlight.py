@@ -68,10 +68,7 @@ class TestBackendTestNameHelpers(ExtTestCase):
             f.write("linear_attention_fp16\n")
             path = f.name
         try:
-            with patch(
-                "unittests.onnxl_vs_onnx.test_backend_test_names_onnx_vs_onnxlight._KNOWN_MISSING_FILE",
-                path,
-            ):
+            with patch(f"{__name__}._KNOWN_MISSING_FILE", path):
                 self.assertEqual(_load_known_missing(), {"linear_attention_fp16"})
         finally:
             os.unlink(path)

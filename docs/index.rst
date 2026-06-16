@@ -48,9 +48,6 @@ onnx-light
 .. image:: https://codecov.io/gh/xadupre/onnx-light/branch/main/graph/badge.svg
     :target: https://codecov.io/gh/xadupre/onnx-light
 
-.. image:: https://img.shields.io/github/repo-size/xadupre/onnx-light
-    :target: https://github.com/xadupre/onnx-light
-
 ``onnx-light`` started from the upstream ONNX pull request
 `onnx/onnx#7208 <https://github.com/onnx/onnx/pull/7208>`_, which is the
 initial code base from which this project diverged.

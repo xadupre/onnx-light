@@ -712,24 +712,6 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeLoopSubgraph) {
   ASSERT_TRUE(found) << "test_cc_loop_basic_trip_count case not registered";
 }
 
-// ---------------------------------------------------------------------------
-// onnx_optim shape inference + Scan subgraph
-// ---------------------------------------------------------------------------
-//
-// Verifies that the ``onnx_optim`` shape-inference pipeline correctly handles
-// a ``Scan`` node whose ``body`` attribute is a sub-graph. The case used is
-// ``test_cc_scan_basic_trip_count`` (opset 11, no state variables, one scan
-// input/output):
-//
-//   * ``X`` — FLOAT ``[3, 2]`` (scan axis 0, trip count 3).
-//   * Body: ``y_elt = Identity(x_elt)`` where ``x_elt`` is each per-iteration
-//     FLOAT ``[2]`` slice.
-//
-// After shape inference:
-//
-//   * ``Y`` — the stacked scan output — must be FLOAT ``[3, 2]``; the leading
-//     axis 3 is taken from the scan input ``X``'s scan axis (axis 0), and the
-//     trailing dim 2 comes from the per-iteration element shape ``[2]``.
 TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeScanSubgraph) {
   const std::vector<TestCase> cases = CollectTestCases("Scan");
   bool found = false;
@@ -774,30 +756,6 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeScanSubgraph) {
   ASSERT_TRUE(found) << "test_cc_scan_basic_trip_count case not registered";
 }
 
-// ---------------------------------------------------------------------------
-// onnx_optim shape inference + Scan pairwise-distance subgraph
-// ---------------------------------------------------------------------------
-//
-// Verifies that the ``onnx_optim`` shape-inference pipeline correctly handles
-// a richer ``Scan`` body that combines broadcasting (``Sub``) and a reduction
-// (``ReduceSum`` with ``axes=[1]``). The case used is
-// ``test_cc_scan_pairwise_distance`` (opset 11):
-//
-//   * ``X`` — FLOAT ``[3, 2]`` (used as both the initial state and the scan
-//     input; scan axis 0, trip count 3).
-//   * Body:
-//       state_X_out = Identity(state_X)
-//       diff        = Sub(state_X, x_row)
-//       sq          = Mul(diff, diff)
-//       dist        = ReduceSum(sq, axes=[1], keepdims=0)
-//
-// After shape inference:
-//
-//   * ``state_X_final`` — preserved state — must be FLOAT ``[3, 2]``.
-//   * ``dists`` — stacked scan output — must be FLOAT ``[3, 3]``; the
-//     leading axis 3 is the trip count derived from ``X``'s scan axis, and
-//     the trailing axis 3 is the per-iteration element shape ``[N] = [3]``
-//     produced by ``ReduceSum`` over the row of ``state_X``.
 TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapePairwiseDistanceScan) {
   const std::vector<TestCase> cases = CollectTestCases("Scan");
   bool found = false;
@@ -858,26 +816,6 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapePairwiseDistanceScan) {
   ASSERT_TRUE(found) << "test_cc_scan_pairwise_distance case not registered";
 }
 
-// ---------------------------------------------------------------------------
-// onnx_optim shape inference + Loop pairwise-distance subgraph
-// ---------------------------------------------------------------------------
-//
-// Verifies that the ``onnx_optim`` shape-inference pipeline correctly handles
-// a richer ``Loop`` body which references the outer-scope input ``X`` and
-// combines :cpp:`Unsqueeze`/``Gather``/``Sub``/``Mul``/``ReduceSum``/``Sqrt``
-// to compute one row of the pairwise-distance matrix per iteration. The case
-// used is ``test_cc_shape_inference_loop_pairwise_distance``:
-//
-//   * Main graph input ``X`` — FLOAT ``[N, D]`` (symbolic dims).
-//   * ``Loop`` body produces ``scan_out`` of shape ``[N]`` per iteration.
-//   * Trip count is ``Shape(X)[0]`` (= ``N``).
-//
-// After shape inference:
-//
-//   * ``Y`` — the stacked scan output — must be FLOAT rank 2 with the
-//     per-iteration trailing dim propagated from the body's ``ReduceSum``
-//     output and a symbolic leading axis (the trip count is a runtime
-//     INT64 value, not a static dim).
 TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeLoopPairwiseDistance) {
   const std::vector<TestCase> cases = CollectTestCases();
   bool found = false;

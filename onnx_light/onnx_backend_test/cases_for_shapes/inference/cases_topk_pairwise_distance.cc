@@ -80,7 +80,7 @@ void AddBodyOutputTyped(GraphProto &g, const char *name, TensorProto::DataType d
 //   state_X_out = Identity(state_X)               // [N, D] state pass-through
 //   diff        = Sub(state_X, x_row)             // broadcasts to [N, D]
 //   sq          = Mul(diff, diff)                 // [N, D]
-//   dist_sq     = ReduceSum(sq, axes=[-1], keepdims=0)  // [N]
+//   dist_sq     = ReduceSum(sq, axes=[-1], keepdims=1)  // [N]
 //
 // The ``reduce_axes`` initializer consumed by ``ReduceSum`` is declared in the
 // outer graph and referenced from the body via outer-scope lookup. Stacking
@@ -98,11 +98,12 @@ GraphProto BuildPairwiseDistanceScanBody() {
   AddNode(g, "Sub", {"state_X", "x_row"}, {"diff"});
   AddNode(g, "Mul", {"diff", "diff"}, {"sq"});
   NodeProto &reduce = AddNode(g, "ReduceSum", {"sq", "reduce_axes"}, {"dist_sq"});
-  AddAttribute<int64_t>(reduce, "keepdims", 0);
+  AddAttribute<int64_t>(reduce, "keepdims", 1);
 
   AppendValueInfo(*g.add_output(), "state_X_out", TensorProto::DataType::FLOAT,
                   {DimSpec("N"), DimSpec("D")});
-  AppendValueInfo(*g.add_output(), "dist_sq", TensorProto::DataType::FLOAT, {DimSpec("N")});
+  AppendValueInfo(*g.add_output(), "dist_sq", TensorProto::DataType::FLOAT,
+                  {DimSpec("N"), DimSpec(1)});
   return g;
 }
 
@@ -356,10 +357,21 @@ void RegisterScanTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &
   // lie on the axes of an integer grid so the pairwise distances are exact
   // integers: ``[[0, 3, 4], [3, 0, 5], [4, 5, 0]]``. Keeping the two largest
   // distances of each row and averaging gives ``[3.5, 4.0, 4.5]``.
-  Tensor x = Tensor::FromFloat("X", {3, 3},
-                               {0.0f, 0.0f, 0.0f, //
-                                3.0f, 0.0f, 0.0f, //
-                                0.0f, 4.0f, 0.0f});
+  Tensor x = Tensor::FromFloat("X", {3, 4},
+                               {
+                                   0.0f,
+                                   0.0f,
+                                   0.0f,
+                                   2.0f, //
+                                   3.0f,
+                                   0.0f,
+                                   0.0f,
+                                   3.0f, //
+                                   0.0f,
+                                   4.0f,
+                                   0.0f,
+                                   4.0f,
+                               });
   Tensor k = Tensor::FromInt64("K", {1}, {int64_t{2}});
   Tensor y = Tensor::FromFloat("Y", {3}, {3.5f, 4.0f, 4.5f});
   AppendDataSet(tc, {std::move(x), std::move(k)}, {std::move(y)});
@@ -433,7 +445,7 @@ void RegisterLoopTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &
   // ReduceMean over the (symbolic) TopK axis collapses it away, so ``Y`` is a
   // rank-1 ``[loop]`` vector.
   NodeProto &reduce_mean = AddNode(*graph, "ReduceMean", {"topk_values", "mean_axes"}, {"Y"});
-  AddAttribute<int64_t>(reduce_mean, "keepdims", 0);
+  AddAttribute<int64_t>(reduce_mean, "keepdims", 1);
 
   // Initializers — index ``[0]`` for the trip-count Gather, the BOOL ``cond``
   // constant, the axes vectors referenced from the body via outer-scope
@@ -458,23 +470,22 @@ void RegisterLoopTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &
   // whose trailing axis is the per-iteration ``[N]`` element shape;
   // ``topk_values`` keeps a symbolic ``k`` as its trailing axis because ``K``
   // is a runtime input.
-  AppendValueInfo(*graph->add_value_info(), "dist", DataType::FLOAT,
-                  {DimSpec("loop"), DimSpec("N")});
+  AppendValueInfo(*graph->add_value_info(), "dist", DataType::FLOAT, {DimSpec("N"), DimSpec("N")});
   AppendValueInfo(*graph->add_value_info(), "topk_values", DataType::FLOAT,
-                  {DimSpec("loop"), DimSpec("k")});
+                  {DimSpec("N"), DimSpec("k")});
 
   // Output Y — the per-row mean of the ``k`` largest distances, shape
   // ``[loop]``.
-  AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec("loop")});
+  AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec("N")});
 
   // Reference DataSet with a concrete ``[3, 3]`` input and ``k = 2``. Rows
   // lie on the axes of an integer grid so the pairwise distances are exact
   // integers: ``[[0, 3, 4], [3, 0, 5], [4, 5, 0]]``. Keeping the two largest
   // distances of each row and averaging gives ``[3.5, 4.0, 4.5]``.
-  Tensor x = Tensor::FromFloat("X", {3, 3},
-                               {0.0f, 0.0f, 0.0f, //
-                                3.0f, 0.0f, 0.0f, //
-                                0.0f, 4.0f, 0.0f});
+  Tensor x = Tensor::FromFloat("X", {3, 4},
+                               {0.0f, 0.0f, 0.0f, 0.5f,  //
+                                3.0f, 0.0f, 0.0f, -2.0f, //
+                                0.0f, 4.0f, 0.0f, 0.3f});
   Tensor k = Tensor::FromInt64("K", {1}, {int64_t{2}});
   Tensor y = Tensor::FromFloat("Y", {3}, {3.5f, 4.0f, 4.5f});
   AppendDataSet(tc, {std::move(x), std::move(k)}, {std::move(y)});

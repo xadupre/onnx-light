@@ -218,6 +218,25 @@ TEST(RenameExpressions, RenameDynamicExpression) {
   EXPECT_EQ(rename_dynamic_expression("s9+seq_length", replacements), "cache_length+seq_length");
 }
 
+TEST(RenameExpressions, RenameDynamicExpression_CompoundSubexpression) {
+  // A compound subexpression that is a replacement key collapses to its target,
+  // even when nested inside a function call such as ``broadcast``.
+  std::unordered_map<std::string, std::string> replacements{
+      {"past_seq+seq", "total_seq"},
+      {"total_seq", "total_seq"},
+  };
+  EXPECT_EQ(rename_dynamic_expression("past_seq+seq", replacements), "total_seq");
+  EXPECT_EQ(rename_dynamic_expression("broadcast(past_seq+seq,total_seq)", replacements),
+            "total_seq");
+}
+
+TEST(RenameExpressions, RenameDynamicExpression_BroadcastIdenticalCollapses) {
+  // ``broadcast(x, x)`` is a no-op and collapses to ``x``.
+  EXPECT_EQ(
+      rename_dynamic_expression("broadcast(total_seq,total_seq)", {{"total_seq", "total_seq"}}),
+      "total_seq");
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // test_operations.py (adapted)
 // ═══════════════════════════════════════════════════════════════════════════

@@ -14,7 +14,6 @@ reproduces the expected outputs without discrepancies.
 
 from __future__ import annotations
 
-import re
 import unittest
 
 import numpy as np
@@ -30,14 +29,6 @@ _backend_case = import_or_skip("onnx_light.onnx_lib.backend.test.case")
 make_test_class = _backend_case.make_test_class
 collect_test_case = _backend_case.collect_test_case
 rt = import_or_skip("onnx_light.onnx_py._onnxpykernels", "runtime")
-
-# Operators currently registered in
-# ``onnx_light/onnx_kernels/run_nodes.cc::KernelDispatchTable``. Backend
-# test cases whose top-level graph is a single node of one of these ops are
-# the only ones ``RunModel`` can execute today.
-_IMPLEMENTED_OPS: frozenset[str] = frozenset(
-    {"Abs", "Adagrad", "Adam", "Add", "Div", "Momentum", "Mul", "Neg", "Sub"}
-)
 
 
 def _default_opset_version(model: onnxl.ModelProto) -> int:
@@ -110,28 +101,72 @@ def _single_node_op_type(tc) -> str | None:
     return nodes[0].op_type
 
 
-def _build_include_regex() -> list[str]:
-    """Returns the include-regex list selecting every backend test case whose
-    top-level graph is a single node of one of the implemented operators.
-
-    Building the list once at module load avoids re-walking the registry from
-    inside :func:`make_test_class`.
-    """
-    names: list[str] = []
-    for name, tc in collect_test_case().items():
-        op = _single_node_op_type(tc)
-        # run_model_backend currently has no BFLOAT16 -> numpy conversion path.
-        if op is not None and op in _IMPLEMENTED_OPS and not name.endswith("_bfloat16"):
-            names.append(name)
-    if not names:
-        # Fallback: keep a regex that matches nothing so ``make_test_class``
-        # generates an empty test class instead of every case in the registry.
-        return [r"^$"]
-    # Anchor each name to avoid accidental substring matches.
-    return [r"^" + re.escape(n) + r"$" for n in names]
-
-
-TestRunModelBackend = make_test_class(run_model_backend, include_regex=_build_include_regex())
+TestRunModelBackend = make_test_class(
+    run_model_backend,
+    exclude_regex=[
+        ".*FLOAT4.*",
+        ".*FLOAT8.*",
+        ".*float4.*",
+        ".*float8.*",
+        ".*bfloat16.*",
+        "BFLOAT16.*",
+        ".*STRING.*",
+        ".*int4.*",
+        ".*int2.*",
+        ".*INT4.*",
+        ".*INT2.*",
+        ".*e4m3.*",
+        ".*e5m2.*",
+        ".*sequence_map_identity.*",
+        ".*string_normalizer.*",
+        ".*strnormalizer.*",
+        ".*string_concat.*",
+        ".*string_split.*",
+        ".*split_to_sequence.*",
+        #
+        "blackmanwindow",
+        "cast_BOOL_to_STRING",
+        "cast_map_int64_float_dense",
+        "cast_map_int64_float_sparse",
+        "cast_map_int64_string_dense",
+        "category_mapper_int_to_string",
+        "constant_value_string",
+        "dict_vectorizer_int64_float",
+        "dict_vectorizer_string_int64",
+        "einsum_scalar",
+        "hammingwindow",
+        "hannwindow",
+        "identity_op",
+        "identity_sequence",
+        "if_seq",
+        "if_opt",
+        "image_decoder_decode_jpeg_bgr",
+        "image_decoder_decode_jpeg_grayscale",
+        "image_decoder_decode_jpeg_rgb",
+        "loop16_seq_none",
+        "melweightmatrix",
+        "optional_get_element_optional_sequence",
+        "optional_get_element_sequence",
+        "scan9_input_reverse",
+        "scan9_output_reverse",
+        "scan9_scalar",
+        "sequence_at_neg",
+        "sequence_at_pos0",
+        "sequence_at_pos2",
+        "sequence_construct",
+        "sequence_erase_default",
+        "sequence_erase_neg",
+        "sequence_erase_pos1",
+        "sequence_insert_at_back",
+        "sequence_insert_at_front",
+        "sequence_insert_default",
+        "sequence_insert_neg",
+        "sequence_insert_pos1",
+        "sequence_map_add_1_sequence_1_tensor",
+        "sequence_map_add_2_sequences",
+        "sequence_map_extract_shapes",
+    ],
+)
 
 
 if __name__ == "__main__":

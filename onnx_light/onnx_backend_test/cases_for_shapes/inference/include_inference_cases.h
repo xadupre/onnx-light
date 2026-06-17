@@ -171,6 +171,17 @@ void RegisterPadCannyAverageShapeInferenceCases(std::vector<TestCase> &registry)
 /// cache.
 void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry);
 
+/// Registers the same single Llama-style decoder layer as
+/// :cpp:func:`RegisterTinyLlmShapeInferenceCases` but with the fused
+/// ``RMSNormalization`` and ``Attention`` operators **inlined** into their
+/// primitive subgraphs (``Mul`` / ``ReduceMean`` / ``Add`` / ``Sqrt`` / ``Div``
+/// for RMSNorm; ``Reshape`` / ``Transpose`` / ``Concat`` / ``MatMul`` /
+/// ``Softmax`` for scaled dot-product attention with a KV cache). Exercises
+/// shape inference through the longer chains an exporter emits when those
+/// operators are decomposed, while keeping the same four dynamic inputs and
+/// three outputs as the fused companion.
+void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry);
+
 /// Collects all shape-inference oriented backend test cases by invoking
 /// every ``Register*ShapeInferenceCases`` helper declared in this header.
 void CollectShapeInferenceTestCases(std::vector<TestCase> &registry,

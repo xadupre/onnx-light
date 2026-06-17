@@ -71,9 +71,7 @@ TestReferenceEvaluatorBackend = make_test_class(
     reference_evaluator_backend,
     exclude_regex=[
         "identity_opt",
-        "identity_sequence",
         "if_opt",
-        "if_seq",
         "image_decoder_decode_jpeg2k_rgb",
         "image_decoder_decode_jpeg_bgr",
         "image_decoder_decode_jpeg_grayscale",

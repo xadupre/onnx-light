@@ -84,7 +84,6 @@ TestOptimShapeInferenceDynamicBackend = make_test_class(
         "test_cc_shape_inference_nonzero_chain_anon.*",
         "test_cc_shape_inference_nonzero_chain_named.*",
         "test_cc_attention_3d.*",
-        "test_cc_cast_map_.*",
         "test_cc_dict_vectorizer_.*",
         "test_cc_loop11_carried_state.*",
         "test_cc_optional_get_element_optional_sequence.*",

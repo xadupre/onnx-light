@@ -56,6 +56,10 @@ TestShapeInferenceBackend = make_test_class(
         # ONNX's built-in shape inference gives generic unk__N dims for
         # Resize output; it does not understand onnx-light's symbolic names.
         "test_cc_shape_inference_resize_tile.*",
+        # ONNX's built-in shape inference gives generic unk__N dims for the
+        # Conv output; it does not recover the symbolic H/W spatial dims that
+        # onnx-light's symbolic Pad→Conv propagation collapses back to.
+        "test_cc_shape_inference_pad_canny_average.*",
     ],
 )
 

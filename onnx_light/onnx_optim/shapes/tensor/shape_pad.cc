@@ -10,7 +10,9 @@
 #include <utility>
 #include <vector>
 
+#include "onnx_optim/expressions.h"
 #include "onnx_optim/optim_tensor.h"
+#include "onnx_optim/shapes/_helpers/shape_helpers.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -20,6 +22,15 @@ namespace shapes {
 namespace tensor {
 
 namespace {
+
+// Converts an ``expressions::DimType`` produced by the symbolic dimension
+// helpers back into an ``OptimDim``.
+OptimDim FromDimType(const expressions::DimType &d) {
+  if (std::holds_alternative<int64_t>(d)) {
+    return OptimDim(std::get<int64_t>(d));
+  }
+  return OptimDim(std::get<std::string>(d));
+}
 
 // Extracts the per-axis pad values from a known ``pads`` initializer (length
 // ``2 * num_axes``) into ``out_begin``/``out_end`` (indexed by data axis).
@@ -150,13 +161,12 @@ void ComputeShapePad(ShapesContext &ctx, const NodeProto &node) {
   for (std::size_t i = 0; i < rank; ++i) {
     const OptimDim &in_dim = in_shape[i];
     if (all_pads_known) {
-      if (in_dim.IsInt()) {
-        out_shape.PushBack(OptimDim(in_dim.AsInt() + pad_begin[i] + pad_end[i]));
-      } else if (has_pad[i] && pad_begin[i] == 0 && pad_end[i] == 0) {
-        out_shape.PushBack(in_dim);
-      } else {
-        out_shape.PushBack(OptimDim("Pad_dim" + std::to_string(i)));
-      }
+      // output_dim = input_dim + pad_begin + pad_end. When the input dim is
+      // symbolic this yields a symbolic expression (e.g. ``H+2``) rather than
+      // a fresh, opaque dimension name.
+      const int64_t total = pad_begin[i] + pad_end[i];
+      out_shape.PushBack(
+          FromDimType(expressions::dim_add(ToDimType(in_dim), expressions::DimType{total})));
     } else {
       out_shape.PushBack(OptimDim("Pad_dim" + std::to_string(i)));
     }

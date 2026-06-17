@@ -8,8 +8,11 @@
 #include <cstdint>
 #include <stdexcept>
 #include <string>
+#include <variant>
 #include <vector>
 
+#include "onnx_optim/expressions.h"
+#include "onnx_optim/shapes/_helpers/shape_helpers.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -20,38 +23,66 @@ namespace nn {
 
 namespace {
 
+// Converts an ``expressions::DimType`` produced by the symbolic dimension
+// helpers back into an ``OptimDim``.
+OptimDim FromDimType(const expressions::DimType &d) {
+  if (std::holds_alternative<int64_t>(d)) {
+    return OptimDim(std::get<int64_t>(d));
+  }
+  return OptimDim(std::get<std::string>(d));
+}
+
 // Computes one spatial output dimension following the upstream
 // ``convPoolShapeInference`` rule for Conv-like ops, honoring ``auto_pad``.
-// Returns a symbolic ``"<op>.<x>:<axis>"`` when the input dim is symbolic
-// or the formula cannot be evaluated.
+// When the input dim is symbolic the formula is evaluated symbolically so the
+// result is an expression (e.g. ``H`` for a reflect-padded image that a 3×3
+// VALID convolution shrinks back), never a fresh opaque dimension name.
 OptimDim ComputeConvSpatialDim(const OptimDim &in_dim, int64_t kernel, int64_t stride,
                                int64_t pad_begin, int64_t pad_end, int64_t dilation,
                                const std::string &auto_pad, const std::string &op_name,
                                const std::string &x_name, size_t spatial_axis) {
   const std::string symbolic = op_name + "." + x_name + ":" + std::to_string(spatial_axis);
-  if (!in_dim.IsInt()) {
-    return OptimDim(symbolic);
-  }
-  const int64_t iD = in_dim.AsInt();
-  const int64_t eff_k = dilation * (kernel - 1) + 1;
   if (stride <= 0 || kernel <= 0) {
     return OptimDim(symbolic);
   }
-  if (auto_pad == "SAME_UPPER" || auto_pad == "SAME_LOWER") {
-    return OptimDim((iD + stride - 1) / stride);
-  }
-  if (auto_pad == "VALID") {
-    const int64_t numer = iD - eff_k;
+  const int64_t eff_k = dilation * (kernel - 1) + 1;
+
+  if (in_dim.IsInt()) {
+    const int64_t iD = in_dim.AsInt();
+    if (auto_pad == "SAME_UPPER" || auto_pad == "SAME_LOWER") {
+      return OptimDim((iD + stride - 1) / stride);
+    }
+    if (auto_pad == "VALID") {
+      const int64_t numer = iD - eff_k;
+      if (numer < 0) {
+        return OptimDim(symbolic);
+      }
+      return OptimDim(numer / stride + 1);
+    }
+    const int64_t numer = iD + pad_begin + pad_end - eff_k;
     if (numer < 0) {
       return OptimDim(symbolic);
     }
     return OptimDim(numer / stride + 1);
   }
-  const int64_t numer = iD + pad_begin + pad_end - eff_k;
-  if (numer < 0) {
-    return OptimDim(symbolic);
+
+  // Symbolic input dimension: evaluate the spatial formula with the symbolic
+  // expression helpers so the output stays an expression of the input dim.
+  const expressions::DimType iD = ToDimType(in_dim);
+  if (auto_pad == "SAME_UPPER" || auto_pad == "SAME_LOWER") {
+    return FromDimType(expressions::dim_div(
+        expressions::dim_add(iD, expressions::DimType{stride - 1}), expressions::DimType{stride}));
   }
-  return OptimDim(numer / stride + 1);
+  expressions::DimType numer;
+  if (auto_pad == "VALID") {
+    numer = expressions::dim_sub(iD, expressions::DimType{eff_k});
+  } else {
+    numer =
+        expressions::dim_sub(expressions::dim_add(iD, expressions::DimType{pad_begin + pad_end}),
+                             expressions::DimType{eff_k});
+  }
+  return FromDimType(expressions::dim_add(expressions::dim_div(numer, expressions::DimType{stride}),
+                                          expressions::DimType{1}));
 }
 
 // Shared implementation for ``Conv`` and ``ConvInteger``. The output dtype

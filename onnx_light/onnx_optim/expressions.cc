@@ -503,9 +503,30 @@ public:
 
 namespace {
 
+// Reports whether a floor division appears on the multiplicative spine of
+// `node`, i.e. as a factor of a `*` chain. Floor division is not exact, so
+// `a*(x//b)` must not be flattened into `(a*x)//b`: the equality holds only
+// when `x` is a multiple of `b` (e.g. `2*(3//2) == 2`, not `3`).
+bool has_floordiv_factor(const Node &node) {
+  if (const auto *b = dynamic_cast<const BinOp *>(&node)) {
+    if (b->op == BinOpKind::FloorDiv)
+      return true;
+    if (b->op == BinOpKind::Mult)
+      return has_floordiv_factor(*b->left) || has_floordiv_factor(*b->right);
+  }
+  return false;
+}
+
 void flatten_mul_div(const Node &node, std::vector<NodePtr> &num, std::vector<NodePtr> &den) {
   if (const auto *b = dynamic_cast<const BinOp *>(&node)) {
     if (b->op == BinOpKind::Mult) {
+      // A floor division used as a multiplicative factor cannot be flattened
+      // into the global numerator/denominator: doing so would move the factor
+      // across the (non-exact) division boundary. Keep the product atomic.
+      if (has_floordiv_factor(*b->left) || has_floordiv_factor(*b->right)) {
+        num.push_back(node.clone());
+        return;
+      }
       flatten_mul_div(*b->left, num, den);
       flatten_mul_div(*b->right, num, den);
       return;

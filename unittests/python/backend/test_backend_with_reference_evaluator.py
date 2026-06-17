@@ -97,9 +97,11 @@ TestReferenceEvaluatorBackend = make_test_class(
         "identity_sequence",
         "if_opt",
         "if_seq",
+        "image_decoder_decode_jpeg2k_rgb",
         "image_decoder_decode_jpeg_bgr",
         "image_decoder_decode_jpeg_grayscale",
         "image_decoder_decode_jpeg_rgb",
+        "image_decoder_decode_webp_rgb",
         "loop16_seq_none",
     ],
 )

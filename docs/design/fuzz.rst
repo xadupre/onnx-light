@@ -152,7 +152,7 @@ cause real bugs.
 Why ``LLVMFuzzerTestOneInput``?
 -------------------------------
 
-``LLVMFuzzerTestOneInput`` is the standard :epkg:`libFuzzer entry point.
+``LLVMFuzzerTestOneInput`` is the standard :epkg:`libFuzzer entry point`.
 Each harness defines it with ``extern "C"`` so libFuzzer's runtime can call it
 directly without name mangling.
 

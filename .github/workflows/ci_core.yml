@@ -58,7 +58,7 @@ jobs:
     # start. Kernel/backend tests skip themselves via
     # onnx_light.ext_test_case.import_or_skip, so the suite exercises the proto /
     # schema / shape-inference / manipulation layers that ship in the reduced
-    # build. Mirrors .github/workflows/build_reduced.yml's configure flags.
+    # build. Mirrors .github/workflows/build_reduced_wheel.yml's configure flags.
     name: reduced (ubuntu-latest, py3.13)
     runs-on: ubuntu-latest
     timeout-minutes: 20

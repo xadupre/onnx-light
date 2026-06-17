@@ -1,4 +1,4 @@
-name: Build Reduced
+name: Build Reduced Wheels
 
 # Builds the reduced onnx-light wheel (compiled with
 # ONNX_LIGHT_BUILD_KERNELS=OFF, i.e. without the operator-kernel runtime and the
@@ -58,7 +58,6 @@ jobs:
         uses: pypa/cibuildwheel@v2.23.2
         env:
           CIBW_BUILD: ${{ steps.selector.outputs.build }}
-          # See .github/workflows/build.yml for the manylinux_2_28 rationale.
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
           # ONNX_LIGHT_BUILD_KERNELS=OFF compiles the reduced variant without the
           # operator-kernel runtime and the backend-test registries.

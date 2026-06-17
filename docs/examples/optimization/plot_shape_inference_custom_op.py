@@ -50,7 +50,7 @@ defs.register_onnx_operator_set_schema()
 # Build a model that uses the custom operator
 # +++++++++++++++++++++++++++++++++++++++++++
 #
-# The graph applies a standard :epkg:`Relu` followed by the custom
+# The graph applies a standard `Relu` followed by the custom
 # ``ScaledLinear`` operator from the ``com.example`` domain. The
 # Relu output keeps the input shape ``[N, 4]`` and feeds into
 # ``ScaledLinear`` together with a weight matrix ``W`` of shape

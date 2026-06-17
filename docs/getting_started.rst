@@ -96,6 +96,35 @@ The rest of the code (``onnx.load``, ``onnx.save``, ``helper.make_node``,
 :ref:`l-onnx-tutorial` for a full set of examples ported from the upstream ONNX
 introduction.
 
+In C++, ``onnx-light`` replicates the upstream ``onnx`` C++ API under the
+``onnx_light`` namespace.  Two macros make most sources compile unchanged:
+``ONNX_NAMESPACE`` resolves to ``onnx_light`` and headers such as ``onnx_pb.h``
+and ``checker.h`` keep their familiar names.  Replace the ``onnx/`` include root
+with ``onnx_lib/`` (and the ``onnx::`` namespace with ``onnx_light::`` if it is
+spelled out explicitly):
+
+.. code-block:: cpp
+
+    // before
+    #include "onnx/onnx_pb.h"
+    #include "onnx/checker.h"
+
+    onnx::ModelProto model;
+    onnx::checker::check_model(model);
+
+    // after
+    #include "onnx_lib/onnx_pb.h"
+    #include "onnx_lib/checker.h"
+
+    onnx_light::ModelProto model;
+    onnx_light::checker::check_model(model);
+
+Code that already uses the ``ONNX_NAMESPACE`` macro instead of a hard-coded
+``onnx::`` qualifier needs only the include-path change.  Link against
+``onnx_light::onnx_light`` (schemas / checker / shape inference) or a lighter
+target — see :ref:`l-design-cpp-linking` for the full list of CMake targets and
+:epkg:`C++ onnx-light examples` for runnable programs.
+
 Build without the backend tests and kernels
 --------------------------------------------
 

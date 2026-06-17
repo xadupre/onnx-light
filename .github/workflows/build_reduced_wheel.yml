@@ -1,4 +1,4 @@
-name: Build Reduced
+name: Build Reduced Wheels
 
 # Builds the reduced onnx-light wheel (compiled with
 # ONNX_LIGHT_BUILD_KERNELS=OFF, i.e. without the operator-kernel runtime and the

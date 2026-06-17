@@ -1,4 +1,4 @@
-name: C++ Doxygen Documentation
+name: Doxygen
 
 on:
   push:

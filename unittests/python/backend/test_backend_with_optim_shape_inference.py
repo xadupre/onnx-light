@@ -93,6 +93,12 @@ TestOptimShapeInferenceBackend = make_test_class(
         # auto-generated symbolic dim whose name does not match the ``k``
         # placeholder stored in ``topk_values`` value_info.
         "test_cc_shape_inference_topk_pairwise_distance.*",
+        # Same reasoning as the broadcasting TopK case above, but the pairwise
+        # distance matrix is produced by a Loop / Scan body: TopK's ``K`` is a
+        # runtime model input, so its output axis is an auto-generated symbolic
+        # dim whose name does not match the ``k`` placeholder in value_info.
+        "test_cc_shape_inference_loop_topk_pairwise_distance.*",
+        "test_cc_shape_inference_scan_topk_pairwise_distance.*",
     ],
 )
 
@@ -143,6 +149,12 @@ TestOptimShapeInferenceNoNewNamesBackend = make_test_class(
         # inference legitimately adds the remaining broadcasting / reduction
         # intermediates (x_rows, diff, sq, ...) and the TopK indices output.
         "test_cc_shape_inference_topk_pairwise_distance.*",
+        # The Loop / Scan pairwise-distance + TopK variants similarly declare
+        # only ``dist`` / ``topk_values`` in value_info; shape inference
+        # legitimately adds the subgraph and reduction intermediates plus the
+        # TopK indices output.
+        "test_cc_shape_inference_loop_topk_pairwise_distance.*",
+        "test_cc_shape_inference_scan_topk_pairwise_distance.*",
     ],
 )
 

@@ -1057,4 +1057,146 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeTopKPairwiseDistance) {
   ASSERT_TRUE(found) << "test_cc_shape_inference_topk_pairwise_distance case not registered";
 }
 
+// ---------------------------------------------------------------------------
+// onnx_optim shape inference + Loop pairwise-distance / TopK(k=input) /
+// ReduceMean
+// ---------------------------------------------------------------------------
+//
+// Verifies that the symbolic ``onnx_optim`` shape-inference pipeline keeps a
+// **symbolic** TopK output axis when the pairwise distance matrix is produced
+// by a ``Loop`` body (``test_cc_shape_inference_loop_topk_pairwise_distance``).
+// The Loop trip count is a runtime ``Shape(X)[0]`` value, so the stacked
+// distance matrix has a symbolic leading axis; ``TopK`` then emits a fresh
+// symbolic dim for its trailing axis because ``K`` is a model input, and
+// ``ReduceMean`` collapses it to recover a rank-1 ``Y``.
+TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeLoopTopKPairwiseDistance) {
+  const std::vector<TestCase> cases = CollectTestCases();
+  bool found = false;
+  for (const TestCase &tc : cases) {
+    if (tc.name != "test_cc_shape_inference_loop_topk_pairwise_distance") {
+      continue;
+    }
+    found = true;
+
+    std::string serialized;
+    tc.model.SerializeToString(serialized);
+
+    ModelProto optim_copy;
+    optim_copy.ParseFromString(serialized);
+    auto &optim_outputs = optim_copy.mutable_graph()->ref_output();
+    ASSERT_EQ(optim_outputs.size(), 1u);
+    if (auto *ott = MutableTensorTypeOf(*optim_outputs[0].mutable_type()); ott != nullptr) {
+      ott->clear_shape();
+    }
+    optim_copy.mutable_graph()->mutable_value_info()->clear();
+
+    ASSERT_NO_THROW(onnx_optim::shapes::InferShapesModel(optim_copy)) << "case: " << tc.name;
+
+    std::unordered_map<std::string, const ValueInfoProto *> by_name;
+    const auto &value_infos = optim_copy.ref_graph().ref_value_info();
+    for (size_t i = 0; i < value_infos.size(); ++i) {
+      const auto &vi = value_infos[i];
+      by_name.emplace(std::string(vi.ref_name().data(), vi.ref_name().size()), &vi);
+    }
+
+    // ``topk_values`` — FLOAT rank 2 whose trailing axis is symbolic (no
+    // concrete ``dim_value``) because ``K`` is a runtime input.
+    {
+      auto it = by_name.find("topk_values");
+      ASSERT_NE(it, by_name.end()) << "topk_values value_info missing after inference";
+      const TypeProto::Tensor *tt = TensorTypeOf(it->second->ref_type());
+      ASSERT_NE(tt, nullptr);
+      EXPECT_EQ(static_cast<int32_t>(tt->elem_type()), 1 /* FLOAT */);
+      ASSERT_TRUE(tt->has_shape());
+      const auto &dims = tt->ref_shape().ref_dim();
+      ASSERT_EQ(dims.size(), 2u);
+      EXPECT_FALSE(dims[1].has_dim_value())
+          << "TopK output axis must stay symbolic when K is a model input";
+    }
+
+    // ``Y`` — FLOAT rank 1: ``ReduceMean`` reduces the symbolic TopK axis away.
+    {
+      const ValueInfoProto &out = optim_copy.ref_graph().ref_output()[0];
+      ASSERT_TRUE(out.has_type());
+      const TypeProto::Tensor *ott = TensorTypeOf(out.ref_type());
+      ASSERT_NE(ott, nullptr);
+      EXPECT_EQ(static_cast<int32_t>(ott->elem_type()), 1 /* FLOAT */);
+      ASSERT_TRUE(ott->has_shape());
+      ASSERT_EQ(ott->ref_shape().ref_dim().size(), 1u);
+    }
+  }
+  ASSERT_TRUE(found) << "test_cc_shape_inference_loop_topk_pairwise_distance case not registered";
+}
+
+// ---------------------------------------------------------------------------
+// onnx_optim shape inference + Scan pairwise-distance / TopK(k=input) /
+// ReduceMean
+// ---------------------------------------------------------------------------
+//
+// Verifies that the symbolic ``onnx_optim`` shape-inference pipeline keeps a
+// **symbolic** TopK output axis when the pairwise distance matrix is produced
+// by a ``Scan`` body (``test_cc_shape_inference_scan_topk_pairwise_distance``).
+// The Scan trip count comes from ``X``'s scan axis (symbolic ``N``), so the
+// stacked distance matrix is ``[N, N]``; ``TopK`` then emits a fresh symbolic
+// dim for its trailing axis because ``K`` is a model input, and ``ReduceMean``
+// collapses it to recover a rank-1 ``Y``.
+TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeScanTopKPairwiseDistance) {
+  const std::vector<TestCase> cases = CollectTestCases();
+  bool found = false;
+  for (const TestCase &tc : cases) {
+    if (tc.name != "test_cc_shape_inference_scan_topk_pairwise_distance") {
+      continue;
+    }
+    found = true;
+
+    std::string serialized;
+    tc.model.SerializeToString(serialized);
+
+    ModelProto optim_copy;
+    optim_copy.ParseFromString(serialized);
+    auto &optim_outputs = optim_copy.mutable_graph()->ref_output();
+    ASSERT_EQ(optim_outputs.size(), 1u);
+    if (auto *ott = MutableTensorTypeOf(*optim_outputs[0].mutable_type()); ott != nullptr) {
+      ott->clear_shape();
+    }
+    optim_copy.mutable_graph()->mutable_value_info()->clear();
+
+    ASSERT_NO_THROW(onnx_optim::shapes::InferShapesModel(optim_copy)) << "case: " << tc.name;
+
+    std::unordered_map<std::string, const ValueInfoProto *> by_name;
+    const auto &value_infos = optim_copy.ref_graph().ref_value_info();
+    for (size_t i = 0; i < value_infos.size(); ++i) {
+      const auto &vi = value_infos[i];
+      by_name.emplace(std::string(vi.ref_name().data(), vi.ref_name().size()), &vi);
+    }
+
+    // ``topk_values`` — FLOAT rank 2 whose trailing axis is symbolic (no
+    // concrete ``dim_value``) because ``K`` is a runtime input.
+    {
+      auto it = by_name.find("topk_values");
+      ASSERT_NE(it, by_name.end()) << "topk_values value_info missing after inference";
+      const TypeProto::Tensor *tt = TensorTypeOf(it->second->ref_type());
+      ASSERT_NE(tt, nullptr);
+      EXPECT_EQ(static_cast<int32_t>(tt->elem_type()), 1 /* FLOAT */);
+      ASSERT_TRUE(tt->has_shape());
+      const auto &dims = tt->ref_shape().ref_dim();
+      ASSERT_EQ(dims.size(), 2u);
+      EXPECT_FALSE(dims[1].has_dim_value())
+          << "TopK output axis must stay symbolic when K is a model input";
+    }
+
+    // ``Y`` — FLOAT rank 1: ``ReduceMean`` reduces the symbolic TopK axis away.
+    {
+      const ValueInfoProto &out = optim_copy.ref_graph().ref_output()[0];
+      ASSERT_TRUE(out.has_type());
+      const TypeProto::Tensor *ott = TensorTypeOf(out.ref_type());
+      ASSERT_NE(ott, nullptr);
+      EXPECT_EQ(static_cast<int32_t>(ott->elem_type()), 1 /* FLOAT */);
+      ASSERT_TRUE(ott->has_shape());
+      ASSERT_EQ(ott->ref_shape().ref_dim().size(), 1u);
+    }
+  }
+  ASSERT_TRUE(found) << "test_cc_shape_inference_scan_topk_pairwise_distance case not registered";
+}
+
 } // namespace Test

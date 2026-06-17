@@ -91,6 +91,30 @@ void RegisterLoopPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &regi
 /// data-dependent ``TopK`` axis.
 void RegisterTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &registry);
 
+/// Registers a ``Shape → Gather → Loop → TopK → ReduceMean`` case that
+/// computes the pairwise Euclidean distance matrix of an input ``X`` of
+/// symbolic shape ``[N, D]`` via a ``Loop`` (one row of the ``[N, N]`` matrix
+/// per iteration), keeps the ``k`` largest distances of each row and averages
+/// them. The Loop trip count comes from ``Shape(X)[0]`` (runtime), so the
+/// stacked matrix has a symbolic leading axis, and the TopK ``k`` is a
+/// **model input** (INT64 ``[1]``) so ``TopK`` must emit a fresh symbolic dim
+/// for its output axis, which ``ReduceMean`` then reduces away to recover the
+/// rank-1 output. Exercises symbolic-dim propagation through a non-trivial
+/// ``Loop`` body and a data-dependent ``TopK`` axis.
+void RegisterLoopTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &registry);
+
+/// Registers a ``Scan → Sqrt → TopK → ReduceMean`` case that computes the
+/// pairwise Euclidean distance matrix of an input ``X`` of symbolic shape
+/// ``[N, D]`` via a ``Scan`` (``X`` is both scan input and carried state so
+/// each row broadcasts against the full matrix), keeps the ``k`` largest
+/// distances of each row and averages them. The Scan trip count comes from
+/// ``X``'s scan axis (``N``), and the TopK ``k`` is a **model input**
+/// (INT64 ``[1]``) so ``TopK`` must emit a fresh symbolic dim for its output
+/// axis, which ``ReduceMean`` then reduces away to recover the rank-1 output.
+/// Exercises symbolic-dim propagation through a non-trivial ``Scan`` body and
+/// a data-dependent ``TopK`` axis.
+void RegisterScanTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &registry);
+
 /// Registers a ``Scan`` case that computes the running (cumulative) row sum
 /// of an input ``X`` of shape ``[T, D]``. Each Scan iteration accumulates
 /// one row into a running state (initially zeros) and emits the accumulated

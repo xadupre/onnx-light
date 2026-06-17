@@ -31,6 +31,8 @@ void CollectShapeInferenceTestCases(std::vector<TestCase> &registry, const std::
     RegisterScanRunningSumShapeInferenceCases(registry);
     RegisterResizeTileShapeInferenceCases(registry);
     RegisterPadCannyAverageShapeInferenceCases(registry);
+    RegisterTinyLlmShapeInferenceCases(registry);
+    RegisterTinyLlmInlinedShapeInferenceCases(registry);
   }
 }
 

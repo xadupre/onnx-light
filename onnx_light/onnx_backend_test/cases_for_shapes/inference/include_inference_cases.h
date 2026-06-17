@@ -158,6 +158,30 @@ void RegisterResizeTileShapeInferenceCases(std::vector<TestCase> &registry);
 /// and broadcasting ``Sub`` against a reduced ``[1, 1, 1, 1]`` mean.
 void RegisterPadCannyAverageShapeInferenceCases(std::vector<TestCase> &registry);
 
+/// Registers a single decoder layer of a tiny Llama-style causal language
+/// model (mirroring ``arnir0/Tiny-LLM``) translated to ONNX. The model takes
+/// the four inputs of a cached-generation step — ``input_ids``,
+/// ``attention_mask``, ``past_key`` and ``past_value`` — with fully dynamic
+/// (symbolic) shapes and random weight initializers, and produces the
+/// next-token ``logits`` plus the updated ``present_key`` / ``present_value``
+/// cache. Exercises shape inference through ``Gather`` (token embedding),
+/// ``RMSNormalization``, the QKV / output / MLP ``MatMul`` projections, the
+/// additive ``attention_mask`` path (``Cast`` / ``Unsqueeze`` / ``Sub`` /
+/// ``Mul``), the SwiGLU activation and the ``Attention`` operator with a KV
+/// cache.
+void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry);
+
+/// Registers the same single Llama-style decoder layer as
+/// :cpp:func:`RegisterTinyLlmShapeInferenceCases` but with the fused
+/// ``RMSNormalization`` and ``Attention`` operators **inlined** into their
+/// primitive subgraphs (``Mul`` / ``ReduceMean`` / ``Add`` / ``Sqrt`` / ``Div``
+/// for RMSNorm; ``Reshape`` / ``Transpose`` / ``Concat`` / ``MatMul`` /
+/// ``Softmax`` for scaled dot-product attention with a KV cache). Exercises
+/// shape inference through the longer chains an exporter emits when those
+/// operators are decomposed, while keeping the same four dynamic inputs and
+/// three outputs as the fused companion.
+void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry);
+
 /// Collects all shape-inference oriented backend test cases by invoking
 /// every ``Register*ShapeInferenceCases`` helper declared in this header.
 void CollectShapeInferenceTestCases(std::vector<TestCase> &registry,

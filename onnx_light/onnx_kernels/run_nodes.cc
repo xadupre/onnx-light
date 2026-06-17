@@ -210,11 +210,64 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
   RequireInputCount(node, 1);
 
   const Tensor &cond = GetInput(node, 0, rt.tensors());
+  if (cond.data_type != DataType::BOOL || cond.element_count() != 1) {
+    throw std::invalid_argument("RunNode: op 'If' 'cond' must be a BOOL scalar.");
+  }
+
   const GraphProto &then_branch = GetRequiredGraphAttribute(node, "then_branch");
   const GraphProto &else_branch = GetRequiredGraphAttribute(node, "else_branch");
-  kernel::If if_kernel(rt.kernel_ctx());
-  std::vector<Tensor> outputs = if_kernel(cond, then_branch, else_branch, rt);
-  PropagateOutputsToCaller(node, outputs, rt);
+  if (then_branch.output_size() != else_branch.output_size()) {
+    throw std::invalid_argument(
+        "RunNode: op 'If' then_branch and else_branch must declare the same number of outputs.");
+  }
+  if (node.output_size() != then_branch.output_size()) {
+    throw std::invalid_argument(
+        "RunNode: op 'If' node output count does not match branch output count.");
+  }
+
+  const bool taken = cond.bytes()[0] != 0;
+  const GraphProto &branch = taken ? then_branch : else_branch;
+  const std::string branch_name = taken ? "then_branch" : "else_branch";
+
+  // Run the selected subgraph in a child context. Both the tensor map and
+  // the sequence map are inherited so outer-scope values of either kind are
+  // visible inside the subgraph body (e.g. Optional<Sequence<...>> state
+  // passed through a Loop body can be read by OptionalGetElement / OptionalHasElement).
+  RuntimeContext child(rt.kernel_ctx());
+  child.functions() = rt.functions();
+  child.tensors() = rt.tensors();
+  child.sequences() = rt.sequences();
+  child.set_events_enabled(rt.events_enabled());
+  child.set_current_subgraph(rt.current_node_index(), branch_name);
+  RunGraph(branch, child);
+
+  if (rt.events_enabled()) {
+    for (auto &ev : child.events()) {
+      rt.events().push_back(std::move(ev));
+    }
+  }
+
+  // Propagate subgraph outputs to the caller, handling both tensor-typed and
+  // sequence-typed outputs (e.g. when a branch returns a Sequence value).
+  for (int i = 0; i < branch.output_size(); ++i) {
+    const std::string out_name = branch.output(i).name().as_string();
+    const std::string caller_name = node.output(i).as_string();
+    if (caller_name.empty()) {
+      continue;
+    }
+    if (child.HasSequence(out_name)) {
+      rt.PutSequence(caller_name, child.GetSequence(out_name));
+    } else {
+      auto it = child.tensors().find(out_name);
+      if (it == child.tensors().end()) {
+        throw std::invalid_argument("RunNode: op 'If' subgraph output '" + out_name +
+                                    "' was not produced by the " + branch_name + " branch.");
+      }
+      Tensor t = it->second;
+      t.name = caller_name;
+      rt.Put(caller_name, std::move(t), RuntimeEventKind::kOutput);
+    }
+  }
 }
 
 // Runs ``body`` as a Loop iteration body where loop-carried state may

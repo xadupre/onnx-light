@@ -134,11 +134,11 @@ void RegisterIfSymbolicShapesShapeInferenceCases(std::vector<TestCase> &registry
   GraphProto *then_g = then_attr->add_g();
   // Both then-branch outputs are wired through ``Identity`` so they pick up
   // the outer-scope ValueInfo (and the corresponding shapes) of their
-  // captured inputs.
+  // captured inputs. ``b_then`` is rank-1, matching the else-branch
+  // ``out_b_else`` so the second ``If`` output merges to a rank-1 shape.
   BuildIdentityBranch(*then_g, "then_branch", "a_then", "out_a_then", DataType::FLOAT,
                       {DimSpec("D3"), DimSpec("D4")});
-  AppendIdentityOutput(*then_g, "b_then", "out_b_then", DataType::INT64,
-                       {DimSpec("D3"), DimSpec("D4")});
+  AppendIdentityOutput(*then_g, "b_then", "out_b_then", DataType::INT64, {DimSpec("D3")});
 
   AttributeProto *else_attr = if_node.add_attribute();
   else_attr->set_name("else_branch");
@@ -164,6 +164,17 @@ void RegisterIfSymbolicShapesShapeInferenceCases(std::vector<TestCase> &registry
   // onto ``out_a`` / ``out_b``.
   AddNode(*graph, "Abs", {"B1"}, {"out_a"}, /*domain=*/nullptr, "abs_out_a");
   AddNode(*graph, "Neg", {"B2"}, {"out_b"}, /*domain=*/nullptr, "neg_out_b");
+
+  // Intermediate value_info for the ``If`` outputs ``B1`` / ``B2``. Recording
+  // them keeps the ``TestOptimShapeInferenceNoNewNames`` check happy (shape
+  // inference must not introduce value_info names absent from the model). The
+  // leading axis is the merged symbolic dim, which shape inference
+  // canonicalizes to the graph-output anchor name (``B1`` for ``out_a`` /
+  // ``B2`` for ``out_b``); it is treated as ``-1`` / "unknown" by the
+  // shape-inference test helpers.
+  AppendValueInfo(*graph->add_value_info(), "B1", DataType::FLOAT,
+                  {DimSpec("B1"), DimSpec(int64_t{4})});
+  AppendValueInfo(*graph->add_value_info(), "B2", DataType::INT64, {DimSpec("B2")});
 
   // Graph inputs: scalar BOOL cond, two FLOAT[*, 4] inputs, the
   // else-branch Compress condition ``c_else: bool[5]``, and two INT64[*]

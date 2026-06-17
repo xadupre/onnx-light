@@ -64,6 +64,9 @@ TestShapeInferenceBackend = make_test_class(
         # shape inference emits a generic unk__N dim that does not match the
         # symbolic ``k`` placeholder stored in value_info.
         "test_cc_shape_inference_topk_pairwise_distance.*",
+        # ONNX's built-in shape inference does not recover the symbolic B1/B2
+        # dims that onnx-light propagates through the If→Abs/Neg chain.
+        "test_cc_shape_inference_if_symbolic_shapes.*",
     ],
 )
 

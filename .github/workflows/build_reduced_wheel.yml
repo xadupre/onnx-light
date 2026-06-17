@@ -58,6 +58,12 @@ jobs:
         uses: pypa/cibuildwheel@v2.23.2
         env:
           CIBW_BUILD: ${{ steps.selector.outputs.build }}
+          # Restrict to 64-bit x86 only. The cibuildwheel Linux default ("auto")
+          # also builds an i686 wheel, which lands in ./wheelhouse and then breaks
+          # the "pip install wheelhouse/*.whl" step ("not a supported wheel on this
+          # platform") on the x86_64 runner.
+          CIBW_ARCHS_LINUX: x86_64
+          # See .github/workflows/build.yml for the manylinux_2_28 rationale.
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
           # ONNX_LIGHT_BUILD_KERNELS=OFF compiles the reduced variant without the
           # operator-kernel runtime and the backend-test registries.

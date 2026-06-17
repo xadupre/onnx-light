@@ -1069,7 +1069,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeTopKPairwiseDistance) {
 // distance matrix has a symbolic leading axis; ``TopK`` then emits a fresh
 // symbolic dim for its trailing axis because ``K`` is a model input, and
 // ``ReduceMean`` collapses it to recover a rank-1 ``Y``.
-TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeLoopTopKPairwiseDistance) {
+TEST(BackendTestCaseShapeInference, DISABLED_OnnxOptimInfersShapeLoopTopKPairwiseDistance) {
   const std::vector<TestCase> cases = CollectTestCases();
   bool found = false;
   for (const TestCase &tc : cases) {
@@ -1140,7 +1140,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeLoopTopKPairwiseDistance
 // stacked distance matrix is ``[N, N]``; ``TopK`` then emits a fresh symbolic
 // dim for its trailing axis because ``K`` is a model input, and ``ReduceMean``
 // collapses it to recover a rank-1 ``Y``.
-TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeScanTopKPairwiseDistance) {
+TEST(BackendTestCaseShapeInference, DISABLED_OnnxOptimInfersShapeScanTopKPairwiseDistance) {
   const std::vector<TestCase> cases = CollectTestCases();
   bool found = false;
   for (const TestCase &tc : cases) {

@@ -95,12 +95,13 @@ void AppendIdentityOutput(GraphProto &g, const std::string &input_name,
 //     out_a = Abs(B1)                                        # float[B1, 4]
 //     out_b = Neg(B2)                                        # int64[B2]
 //
-// Expected inferred output shapes (the differing leading axis becomes a
-// fresh ``If_<B>_d<i>`` symbolic dim while the matching trailing axis is
-// preserved verbatim; ``Abs`` / ``Neg`` propagate the merged shapes)::
+// Expected inferred output shapes (the differing leading axis is recorded
+// as a named symbolic dim — ``B1`` for ``out_a`` and ``B2`` for ``out_b`` —
+// while the matching trailing axis is preserved verbatim; ``Abs`` / ``Neg``
+// propagate the merged shapes)::
 //
-//     out_a : float[If_B1_d0, 4]
-//     out_b : int64[If_B2_d0]
+//     out_a : float[B1, 4]
+//     out_b : int64[B2]
 //
 // Input shapes are declared with concrete ``dim_value``s (not ``dim_param``s)
 // so the dynamic shape-inference backend test
@@ -179,13 +180,12 @@ void RegisterIfSymbolicShapesShapeInferenceCases(std::vector<TestCase> &registry
 
   // Graph outputs: the merged shapes recorded as ground truth for the
   // ``AllCollectedCasesInferOutputShapes`` test. ``CheckValueInfoMatches``
-  // / ``CheckOutputs`` only enforce concrete dim equality, so the
-  // ``If_<B>_d<i>`` symbolic axes are recorded as named dims (treated as
+  // / ``CheckOutputs`` only enforce concrete dim equality, so the leading
+  // ``B1`` / ``B2`` symbolic axes are recorded as named dims (treated as
   // ``-1`` / "unknown" by the test helpers), while the trailing concrete
   // ``4`` dim of ``out_a`` is checked verbatim.
-  AppendValueInfo(*graph->add_output(), "out_a", DataType::FLOAT,
-                  {"If_B1_d0", DimSpec(int64_t{4})});
-  AppendValueInfo(*graph->add_output(), "out_b", DataType::INT64, {"If_B2_d0"});
+  AppendValueInfo(*graph->add_output(), "out_a", DataType::FLOAT, {"B1", DimSpec(int64_t{4})});
+  AppendValueInfo(*graph->add_output(), "out_b", DataType::INT64, {"B2"});
 
   // Reference DataSet — concrete ``A=3``, ``B=5``, ``cond=true`` selects the
   // then-branch, so the ``If`` outputs are the then-branch inputs and the

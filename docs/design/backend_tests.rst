@@ -306,7 +306,6 @@ to focus on a single test group.
 See also
 --------
 
-* :ref:`l-api-backend` — Python API reference for the backend module.
 * :ref:`l-cpp-run-backend-test-ort-example` — standalone C++ example that
   runs the same registry against ONNXRuntime.
 * :doc:`../api/cpp/onnx_kernels/index` — C++ API reference for the

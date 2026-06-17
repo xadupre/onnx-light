@@ -503,7 +503,7 @@ public:
 
 namespace {
 
-// Reports whether a floor division appears on the multiplicative spine of
+// Returns whether a floor division appears on the multiplicative spine of
 // `node`, i.e. as a factor of a `*` chain. Floor division is not exact, so
 // `a*(x//b)` must not be flattened into `(a*x)//b`: the equality holds only
 // when `x` is a multiple of `b` (e.g. `2*(3//2) == 2`, not `3`).

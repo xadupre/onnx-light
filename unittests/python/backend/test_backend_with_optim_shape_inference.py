@@ -141,8 +141,6 @@ TestOptimShapeInferenceNoNewNamesBackend = make_test_class(
         "test_cc_nonzero.*",
         "test_nonzero.*",
         "test_cc_shape_inference_nonzero.*",
-        "test_cc_compress.*",
-        "test_compress.*",
         "test_cc_loop.*",
         "test_loop.*",
         "test_cc_shape_inference_loop.*",

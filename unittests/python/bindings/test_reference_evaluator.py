@@ -571,6 +571,47 @@ class TestReferenceEvaluator(ExtTestCase):
             self.assertEqual(got_chunk.shape, (3, 2))
             np.testing.assert_allclose(got_chunk, expected_chunk, rtol=tc.rtol, atol=tc.atol)
 
+    def test_sequence_map_identity_returns_list(self):
+        # Regression test for test_cc_sequence_map_identity_float: SequenceMap
+        # applies an Identity body to each element of a single input sequence,
+        # so ReferenceEvaluator.run() must execute the body subgraph once per
+        # element and return the result as a list of numpy arrays.
+        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+
+        tc = collect_test_case().get("test_cc_sequence_map_identity_float")
+        self.assertIsNotNone(tc)
+        inputs, outputs = tc.data_sets[0]
+        sess = ReferenceEvaluator(tc.model)
+        got = sess.run(None, dict(zip(sess.input_names, inputs)))
+        self.assertEqual(len(got), 1)
+        # Sequence output is a list of numpy arrays.
+        self.assertIsInstance(got[0], list)
+        # Identity over a 3-element sequence yields 3 elements unchanged.
+        expected_stacked = outputs[0]
+        self.assertEqual(len(got[0]), len(expected_stacked))
+        for got_elem, expected_elem in zip(got[0], expected_stacked):
+            np.testing.assert_allclose(got_elem, expected_elem, rtol=tc.rtol, atol=tc.atol)
+
+    def test_sequence_map_identity_2_sequences_returns_list(self):
+        # Regression test for test_cc_sequence_map_identity_2_sequences: the
+        # SequenceMap node consumes two input sequences and produces two output
+        # sequences (y0, y1) through a two-input/two-output Identity body, so
+        # ReferenceEvaluator.run() must return one list of numpy arrays per
+        # output sequence.
+        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+
+        tc = collect_test_case().get("test_cc_sequence_map_identity_2_sequences")
+        self.assertIsNotNone(tc)
+        inputs, outputs = tc.data_sets[0]
+        sess = ReferenceEvaluator(tc.model)
+        got = sess.run(None, dict(zip(sess.input_names, inputs)))
+        self.assertEqual(len(got), 2)
+        for got_seq, expected_stacked in zip(got, outputs):
+            self.assertIsInstance(got_seq, list)
+            self.assertEqual(len(got_seq), len(expected_stacked))
+            for got_elem, expected_elem in zip(got_seq, expected_stacked):
+                np.testing.assert_allclose(got_elem, expected_elem, rtol=tc.rtol, atol=tc.atol)
+
     def test_image_decoder_decode_bmp_rgb(self):
         # Regression test for ``test_cc_image_decoder_decode_bmp_rgb``: the
         # ``ImageDecoder`` kernel must decode the BMP bytestream and return

@@ -1,4 +1,4 @@
-name: Build C++ Release Artifacts
+name: Build C++ Release
 
 on:
   workflow_dispatch:

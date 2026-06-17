@@ -60,6 +60,9 @@ TestShapeInferenceBackend = make_test_class(
         # Conv output; it does not recover the symbolic H/W spatial dims that
         # onnx-light's symbolic Pad→Conv propagation collapses back to.
         "test_cc_shape_inference_pad_canny_average.*",
+        # ONNX's built-in shape inference does not recover the symbolic B1/B2
+        # dims that onnx-light propagates through the If→Abs/Neg chain.
+        "test_cc_shape_inference_if_symbolic_shapes.*",
     ],
 )
 

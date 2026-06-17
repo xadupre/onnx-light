@@ -1252,8 +1252,26 @@ static SimplifyResult make_simplified(const AddVisitorResult &res) {
 
 class RenameTransformer : public Transformer {
 public:
-  explicit RenameTransformer(const std::unordered_map<std::string, std::string> &mapping)
-      : mapping_(mapping) {}
+  // ``match_subexpressions`` enables replacing whole compound subexpressions
+  // (e.g. ``past_seq+seq``) whose textual form is a key of ``mapping`` with the
+  // mapped name. When disabled (the default) only leaf identifiers are renamed,
+  // preserving the original behaviour of :func:`rename_expression`.
+  explicit RenameTransformer(const std::unordered_map<std::string, std::string> &mapping,
+                             bool match_subexpressions = false)
+      : mapping_(mapping), match_subexpressions_(match_subexpressions) {}
+
+  NodePtr visit(NodePtr node) override {
+    if (match_subexpressions_ && node != nullptr && dynamic_cast<Name *>(node.get()) == nullptr &&
+        dynamic_cast<Constant *>(node.get()) == nullptr) {
+      // A compound (non-leaf) subexpression whose textual form matches a
+      // mapping key collapses to the mapped name without descending further.
+      auto it = mapping_.find(unparse(*node));
+      if (it != mapping_.end()) {
+        return std::make_unique<Name>(it->second);
+      }
+    }
+    return Transformer::visit(std::move(node));
+  }
 
   NodePtr visit_Name(std::unique_ptr<Name> n) override {
     auto it = mapping_.find(n->id);
@@ -1264,6 +1282,22 @@ public:
 
 private:
   const std::unordered_map<std::string, std::string> &mapping_;
+  bool match_subexpressions_;
+};
+
+// Collapses ``broadcast(x, x)`` to ``x``: once an equality constraint has been
+// applied the two operands of a synthesised broadcast expression may become
+// textually identical, in which case the broadcast is a no-op.
+class BroadcastSimplifyTransformer : public Transformer {
+public:
+  NodePtr visit_Call(std::unique_ptr<Call> n) override {
+    n = std::unique_ptr<Call>(static_cast<Call *>(generic_visit(std::move(n)).release()));
+    if (n->func == "broadcast" && n->args.size() == 2 &&
+        unparse(*n->args[0]) == unparse(*n->args[1])) {
+      return std::move(n->args[0]);
+    }
+    return n;
+  }
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1481,10 +1515,11 @@ rename_dynamic_expression(const std::string &expression,
   }
 
   MaxToXorTransformer max_tr;
-  RenameTransformer rename_tr(replacements);
+  RenameTransformer rename_tr(replacements, /*match_subexpressions=*/true);
+  BroadcastSimplifyTransformer broadcast_tr;
   SimpleSimplifyTransformer simple_tr;
 
-  tree = simple_tr.visit(rename_tr.visit(max_tr.visit(std::move(tree))));
+  tree = simple_tr.visit(broadcast_tr.visit(rename_tr.visit(max_tr.visit(std::move(tree)))));
 
   std::string out = unparse(*tree);
   out.erase(std::remove(out.begin(), out.end(), ' '), out.end());

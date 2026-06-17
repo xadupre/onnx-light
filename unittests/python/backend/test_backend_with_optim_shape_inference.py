@@ -89,11 +89,12 @@ TestOptimShapeInferenceBackend = make_test_class(
         # The expression simplifier reduces 2*(H//2) → H, so the inferred
         # tile_out dim differs from the symbolic name stored in value_info.
         "test_cc_shape_inference_resize_tile.*",
-        # Inputs already use symbolic dim_param ("batch", "seq", "past_seq",
-        # "total_seq"); the value_info uses symbolic dims that the optim
-        # inference may rename, so exact-match value_info comparison cannot be
-        # enforced here. Covered by the C++ BackendTestCaseShapeInference test.
-        "test_cc_shape_inference_tiny_llm.*",
+        # The fused tiny_llm model uses the fused Attention op, whose shape
+        # inference requires rank-4 query/key/value; that case is covered by the
+        # C++ BackendTestCaseShapeInference test.  The inlined variant is now
+        # exercised here: the optim inference recognises past_seq+seq==total_seq
+        # and rewrites the concat dimension to the total_seq input anchor.
+        "test_cc_shape_inference_tiny_llm$",
     ],
 )
 

@@ -478,6 +478,28 @@ TEST(KernelClass, SoftmaxClassMatchesReferenceAxis1) {
   EXPECT_NEAR(py[5], 0.66524094f, 1e-6f);
 }
 
+TEST(KernelClass, SoftmaxClassSupportsFloat16) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Softmax softmax_kernel{ctx};
+
+  // FLOAT16 inputs are computed in float32 and demoted back to FLOAT16. The
+  // result must match the FLOAT softmax reference within half-precision rounding.
+  Tensor x32 = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 1.0f, 2.0f, 3.0f});
+  Tensor x16 =
+      onnx_kernels::DemoteFromFloat32(x32, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16));
+  Tensor y16 = softmax_kernel(x16, 1);
+  ASSERT_EQ(y16.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16));
+  ASSERT_EQ(y16.element_count(), 6);
+  Tensor y = onnx_kernels::PromoteToFloat32(y16);
+  const float *py = y.AsFloat();
+  EXPECT_NEAR(py[0], 0.09003057f, 1e-3f);
+  EXPECT_NEAR(py[1], 0.24472848f, 1e-3f);
+  EXPECT_NEAR(py[2], 0.66524094f, 1e-3f);
+  EXPECT_NEAR(py[3], 0.09003057f, 1e-3f);
+  EXPECT_NEAR(py[4], 0.24472848f, 1e-3f);
+  EXPECT_NEAR(py[5], 0.66524094f, 1e-3f);
+}
+
 TEST(KernelClass, LogSoftmaxClassMatchesReferenceAxis1) {
   const KernelContext ctx{DefaultOpset(13)};
   LogSoftmax logsoftmax_kernel{ctx};

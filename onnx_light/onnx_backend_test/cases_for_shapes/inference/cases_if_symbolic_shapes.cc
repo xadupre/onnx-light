@@ -81,23 +81,26 @@ void AppendIdentityOutput(GraphProto &g, const std::string &input_name,
 //     b_then  : int64[3]
 //     b_else  : int64[5]
 //
-//   out_a, out_b = If(cond,
-//                     then_branch = {
-//                       out_a = Identity(a_then)              # float[3, 4]
-//                       out_b = Identity(b_then)              # int64[3]
-//                     },
-//                     else_branch = {
-//                       out_a = Compress(a_else, c_else,
-//                                        axis=0)              # float[?, 4]
-//                       out_b = Identity(b_else)              # int64[5]
-//                     })
+//   out_a, out_b via:
+//     B1, B2 = If(cond,
+//                 then_branch = {
+//                   out_a_then = Identity(a_then)            # float[3, 4]
+//                   out_b_then = Identity(b_then)            # int64[3]
+//                 },
+//                 else_branch = {
+//                   out_a_else = Compress(a_else, c_else,
+//                                         axis=0)            # float[?, 4]
+//                   out_b_else = Identity(b_else)            # int64[5]
+//                 })
+//     out_a = Abs(B1)                                        # float[B1, 4]
+//     out_b = Neg(B2)                                        # int64[B2]
 //
 // Expected inferred output shapes (the differing leading axis becomes a
-// fresh ``If_<out>_d<i>`` symbolic dim while the matching trailing axis is
-// preserved verbatim)::
+// fresh ``If_<B>_d<i>`` symbolic dim while the matching trailing axis is
+// preserved verbatim; ``Abs`` / ``Neg`` propagate the merged shapes)::
 //
-//     out_a : float[If_out_a_d0, 4]
-//     out_b : int64[If_out_b_d0]
+//     out_a : float[If_B1_d0, 4]
+//     out_b : int64[If_B2_d0]
 //
 // Input shapes are declared with concrete ``dim_value``s (not ``dim_param``s)
 // so the dynamic shape-inference backend test
@@ -120,9 +123,9 @@ void RegisterIfSymbolicShapesShapeInferenceCases(std::vector<TestCase> &registry
   GraphProto *graph = model.add_graph();
   graph->set_name(name);
 
-  // out_a, out_b = If(cond, then_branch=..., else_branch=...)
+  // B1, B2 = If(cond, then_branch=..., else_branch=...)
   NodeProto &if_node =
-      AddNode(*graph, "If", {"cond"}, {"out_a", "out_b"}, /*domain=*/nullptr, "if_two_outputs");
+      AddNode(*graph, "If", {"cond"}, {"B1", "B2"}, /*domain=*/nullptr, "if_two_outputs");
 
   AttributeProto *then_attr = if_node.add_attribute();
   then_attr->set_name("then_branch");
@@ -154,6 +157,13 @@ void RegisterIfSymbolicShapesShapeInferenceCases(std::vector<TestCase> &registry
                   {DimSpec(), DimSpec(int64_t{4})});
   AppendIdentityOutput(*else_g, "b_else", "out_b_else", DataType::INT64, {DimSpec(int64_t{5})});
 
+  // out_a = Abs(B1) and out_b = Neg(B2). These unary nodes sit between the
+  // ``If`` outputs (``B1`` / ``B2``) and the graph outputs, so the merged
+  // symbolic shapes flow through ``Abs`` / ``Neg`` (both shape-preserving)
+  // onto ``out_a`` / ``out_b``.
+  AddNode(*graph, "Abs", {"B1"}, {"out_a"}, /*domain=*/nullptr, "abs_out_a");
+  AddNode(*graph, "Neg", {"B2"}, {"out_b"}, /*domain=*/nullptr, "neg_out_b");
+
   // Graph inputs: scalar BOOL cond, two FLOAT[*, 4] inputs, the
   // else-branch Compress condition ``c_else: bool[5]``, and two INT64[*]
   // inputs. Distinct concrete leading dims (``3`` vs ``5``) force the
@@ -170,15 +180,17 @@ void RegisterIfSymbolicShapesShapeInferenceCases(std::vector<TestCase> &registry
   // Graph outputs: the merged shapes recorded as ground truth for the
   // ``AllCollectedCasesInferOutputShapes`` test. ``CheckValueInfoMatches``
   // / ``CheckOutputs`` only enforce concrete dim equality, so the
-  // ``If_<out>_d<i>`` symbolic axes are recorded as named dims (treated as
+  // ``If_<B>_d<i>`` symbolic axes are recorded as named dims (treated as
   // ``-1`` / "unknown" by the test helpers), while the trailing concrete
   // ``4`` dim of ``out_a`` is checked verbatim.
   AppendValueInfo(*graph->add_output(), "out_a", DataType::FLOAT,
-                  {"If_out_a_d0", DimSpec(int64_t{4})});
-  AppendValueInfo(*graph->add_output(), "out_b", DataType::INT64, {"If_out_b_d0"});
+                  {"If_B1_d0", DimSpec(int64_t{4})});
+  AppendValueInfo(*graph->add_output(), "out_b", DataType::INT64, {"If_B2_d0"});
 
   // Reference DataSet — concrete ``A=3``, ``B=5``, ``cond=true`` selects the
-  // then-branch, so the runtime outputs are exactly the then-branch inputs.
+  // then-branch, so the ``If`` outputs are the then-branch inputs and the
+  // trailing ``Abs`` / ``Neg`` nodes yield ``out_a = Abs(a_then)`` and
+  // ``out_b = Neg(b_then)``.
   constexpr int64_t kA = 3;
   constexpr int64_t kB = 5;
   constexpr int64_t kK = 4;
@@ -211,10 +223,17 @@ void RegisterIfSymbolicShapesShapeInferenceCases(std::vector<TestCase> &registry
   Tensor b_then = Tensor::FromInt64("b_then", {kA}, b_then_values);
   Tensor b_else = Tensor::FromInt64("b_else", {kB}, b_else_values);
 
+  // ``cond=true`` selects the then-branch, so ``B1 = a_then`` and
+  // ``B2 = b_then``. The trailing ``Abs`` / ``Neg`` nodes then produce
+  // ``out_a = Abs(a_then)`` (unchanged, as ``a_then`` is all-positive) and
+  // ``out_b = Neg(b_then)``.
   Tensor out_a = a_then;
   out_a.name = "out_a";
-  Tensor out_b = b_then;
-  out_b.name = "out_b";
+  std::vector<int64_t> out_b_values(b_then_values.size());
+  for (size_t i = 0; i < out_b_values.size(); ++i) {
+    out_b_values[i] = -b_then_values[i];
+  }
+  Tensor out_b = Tensor::FromInt64("out_b", {kA}, out_b_values);
 
   AppendDataSet(tc,
                 {std::move(cond_tensor), std::move(a_then), std::move(a_else), std::move(c_else),

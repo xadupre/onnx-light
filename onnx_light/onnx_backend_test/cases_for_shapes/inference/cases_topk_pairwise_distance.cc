@@ -294,7 +294,7 @@ void RegisterTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &regi
 void RegisterScanTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(18);
 
-  const std::string name = "test_cc_shape_inference_topk_pairwise_distance";
+  const std::string name = "test_cc_shape_inference_scan_topk_pairwise_distance";
 
   TestCase tc(name, name, "model", "inference");
   tc.rtol = 1e-3;
@@ -399,7 +399,7 @@ void RegisterScanTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &
 void RegisterLoopTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(18);
 
-  const std::string name = "test_cc_shape_inference_topk_pairwise_distance";
+  const std::string name = "test_cc_shape_inference_loop_topk_pairwise_distance";
 
   TestCase tc(name, name, "model", "inference");
   tc.rtol = 1e-3;

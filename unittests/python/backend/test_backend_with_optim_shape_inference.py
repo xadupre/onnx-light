@@ -92,7 +92,7 @@ TestOptimShapeInferenceBackend = make_test_class(
         # The fused tiny_llm model uses the fused Attention op, whose shape
         # inference requires rank-4 query/key/value; that case is covered by the
         # C++ BackendTestCaseShapeInference test.  The inlined variant is now
-        # exercised here: the optim inference recognises past_seq+seq==total_seq
+        # exercised here: the optim inference recognizes past_seq+seq==total_seq
         # and rewrites the concat dimension to the total_seq input anchor.
         "test_cc_shape_inference_tiny_llm$",
     ],

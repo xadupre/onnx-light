@@ -1255,7 +1255,7 @@ public:
   // ``match_subexpressions`` enables replacing whole compound subexpressions
   // (e.g. ``past_seq+seq``) whose textual form is a key of ``mapping`` with the
   // mapped name. When disabled (the default) only leaf identifiers are renamed,
-  // preserving the original behaviour of :func:`rename_expression`.
+  // preserving the original behavior of :func:`rename_expression`.
   explicit RenameTransformer(const std::unordered_map<std::string, std::string> &mapping,
                              bool match_subexpressions = false)
       : mapping_(mapping), match_subexpressions_(match_subexpressions) {}
@@ -1286,7 +1286,7 @@ private:
 };
 
 // Collapses ``broadcast(x, x)`` to ``x``: once an equality constraint has been
-// applied the two operands of a synthesised broadcast expression may become
+// applied the two operands of a synthesized broadcast expression may become
 // textually identical, in which case the broadcast is a no-op.
 class BroadcastSimplifyTransformer : public Transformer {
 public:

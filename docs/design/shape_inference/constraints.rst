@@ -115,7 +115,7 @@ constraints into a renaming of the context:
    :func:`~onnx_light.onnx_optim.expressions.rename_dynamic_expression`
    also substitutes whole compound *subexpressions* that match a
    replacement key — so ``past_seq+seq`` is replaced by ``total_seq`` even
-   when it is nested inside a synthesised ``broadcast(past_seq+seq,
+   when it is nested inside a synthesized ``broadcast(past_seq+seq,
    total_seq)`` term — and collapses ``broadcast(x, x)`` to ``x`` once both
    operands become identical.
 

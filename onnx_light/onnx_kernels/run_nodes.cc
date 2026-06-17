@@ -242,12 +242,12 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
     }
   }
 
-  for (size_t i = 0; i < static_cast<size_t>(branch.output_size()); ++i) {
-    const std::string out_name = branch.output()[static_cast<int>(i)].name().as_string();
+  for (int i = 0; i < branch.output_size(); ++i) {
+    const std::string out_name = branch.output()[i].name().as_string();
     if (out_name.empty()) {
       throw std::invalid_argument("RunNode: If: a subgraph output has an empty name.");
     }
-    const std::string caller_name = node.output(static_cast<int>(i)).as_string();
+    const std::string caller_name = node.output(i).as_string();
     if (caller_name.empty()) {
       continue;
     }

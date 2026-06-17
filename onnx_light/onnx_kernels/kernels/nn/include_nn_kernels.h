@@ -736,9 +736,12 @@ public:
 ///   * Optional ``past_key``/``past_value`` rank-4 FLOAT inputs that are
 ///     concatenated along the sequence axis with ``K``/``V`` to form the
 ///     ``present_key``/``present_value`` outputs.
+///   * Optional ``nonpad_kv_seqlen`` INT64 input (v24): a 1-D tensor of
+///     length ``batch_size`` giving the number of non-padding key/value
+///     positions per batch. Positions ``j >= nonpad_kv_seqlen[b]`` are
+///     masked out with ``-inf``.
 ///
-/// Not modeled: the v24 ``nonpad_kv_seqlen`` input and the
-/// ``softmax_precision`` attribute.
+/// Not modeled: the ``softmax_precision`` attribute.
 class Attention : public KernelBase {
 public:
   using KernelBase::KernelBase;
@@ -795,10 +798,13 @@ public:
                   const Tensor *attn_mask, Tensor &output) const;
 
   /// Comprehensive overload covering every supported feature. ``attn_mask``,
-  /// ``past_key`` and ``past_value`` may be ``nullptr`` to mean "absent".
+  /// ``past_key``, ``past_value`` and ``nonpad_kv_seqlen`` may be ``nullptr``
+  /// to mean "absent". ``nonpad_kv_seqlen`` is a 1-D INT64 tensor of length
+  /// ``batch_size`` masking out trailing (padding) key/value positions.
   Result operator()(const Tensor &Q, const Tensor &K, const Tensor &V, const Attributes &attrs,
                     const Tensor *attn_mask = nullptr, const Tensor *past_key = nullptr,
-                    const Tensor *past_value = nullptr) const;
+                    const Tensor *past_value = nullptr,
+                    const Tensor *nonpad_kv_seqlen = nullptr) const;
 
   /// Attention computes a fresh output buffer from independent reads of
   /// Q, K, V and never aliases an input buffer.

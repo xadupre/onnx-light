@@ -4,6 +4,8 @@
 
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_kernels/kernels/_helpers/float16_promote.h"
+
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -25,6 +27,13 @@ int64_t ResolveAxis(int64_t axis, int64_t rank) {
 } // namespace
 
 Tensor Softmax::operator()(const Tensor &x, int64_t axis) const {
+  // FLOAT16/BFLOAT16 inputs are computed in float32 and demoted back, mirroring
+  // the half-precision handling in the other math kernels.
+  if (IsHalfPrecision(x.data_type)) {
+    const Tensor x_f = PromoteToFloat32(x);
+    Tensor y_f = (*this)(x_f, axis);
+    return DemoteFromFloat32(y_f, x.data_type);
+  }
   Tensor y("", DataType::FLOAT, x.shape,
            std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * sizeof(float)));
   (*this)(x, axis, y);

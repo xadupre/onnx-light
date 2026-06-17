@@ -96,6 +96,19 @@ TEST(SimplifyExpressions, SimplifyExpression_distribute_floordiv) {
   EXPECT_EQ(get_str(simplify_expression("(2*b+3*c)//2")), "(2*b+3*c)//2");
 }
 
+TEST(SimplifyExpressions, SimplifyExpression_floordiv_not_exact) {
+  // `//` is floor division, so a factor cannot cross the division boundary:
+  // a*(x//a) == x only when x is a multiple of a, whereas (a*x)//a == x always.
+  EXPECT_EQ(get_str(simplify_expression("2*(H//2)")), "2*(H//2)");
+  EXPECT_EQ(get_str(simplify_expression("(2*H)//2")), "H");
+  EXPECT_EQ(get_str(simplify_expression("3*(H//3)")), "3*(H//3)");
+  EXPECT_EQ(get_str(simplify_expression("(3*H)//3")), "H");
+  EXPECT_EQ(get_str(simplify_expression("2*(n//2)+1")), "2*(n//2)+1");
+  // Concrete counter-example: 2*(3//2) == 2, not 3.
+  EXPECT_EQ(evaluate_expression("2*(H//2)", {{"H", 3}}), 2);
+  EXPECT_EQ(evaluate_expression("(2*H)//2", {{"H", 3}}), 3);
+}
+
 TEST(SimplifyExpressions, SimplifyExpression_bracket_max) {
   EXPECT_EQ(get_str(simplify_expression("(x)^(y+1)")), "x^1+y");
   EXPECT_EQ(get_str(simplify_expression("(x+1)^(y)")), "1+x^y");

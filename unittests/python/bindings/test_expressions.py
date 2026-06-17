@@ -103,6 +103,19 @@ class TestSimplifyExpressions(ExtTestCase):
         self.assertEqual("a+b", simplify_expression("1024*(a+b)//1024"))
         self.assertEqual("2*a+2*b", simplify_expression("1024*(a+b)//1024*2"))
 
+    def test_simplify_floordiv_not_exact(self):
+        # `//` is floor division, so a factor cannot cross the division
+        # boundary: a*(x//a) == x only when x is a multiple of a, whereas
+        # (a*x)//a == x always holds.
+        self.assertEqual("2*(H//2)", simplify_expression("2*(H//2)"))
+        self.assertEqual("H", simplify_expression("(2*H)//2"))
+        self.assertEqual("3*(H//3)", simplify_expression("3*(H//3)"))
+        self.assertEqual("H", simplify_expression("(3*H)//3"))
+        self.assertEqual("2*(n//2)+1", simplify_expression("2*(n//2)+1"))
+        # Concrete counter-example: 2*(3//2) == 2, not 3.
+        self.assertEqual(2, evaluate_expression("2*(H//2)", {"H": 3}))
+        self.assertEqual(3, evaluate_expression("(2*H)//2", {"H": 3}))
+
     def test_simplify_function_floordiv_distribute(self):
         self.assertEqual("b+c", simplify_expression("(2*b+2*c)//2"))
         self.assertEqual("2*b+c", simplify_expression("(4*b+2*c)//2"))

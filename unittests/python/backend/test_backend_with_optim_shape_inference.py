@@ -93,5 +93,51 @@ TestOptimShapeInferenceBackend = make_test_class(
 )
 
 
+def shape_inference_no_new_names_check(model: onnxl.ModelProto, *inputs):
+    """Verifies that infer_shapes_model does not introduce new value_info names.
+
+    Clears value_info on a copy of the model, runs shape inference, then checks
+    that every inferred value_info name was already present in the original
+    model's value_info.  If shape inference raises an exception the test is
+    treated as a no-op so that operators whose inference is not yet implemented
+    do not cause spurious failures here.
+    """
+    original_vi_names = {vi.name for vi in model.graph.value_info}
+    work = onnxl.ModelProto()
+    work.CopyFrom(model)
+    work.graph.value_info.clear()
+    try:
+        shape_inference.infer_shapes_model(work)
+    except Exception:  # noqa: BLE001 - C++ extension raises various types
+        return
+    inferred_vi_names = {vi.name for vi in work.graph.value_info}
+    new_names = inferred_vi_names - original_vi_names
+    assert (
+        not new_names
+    ), f"infer_shapes_model introduced new value_info names: {sorted(new_names)}"
+
+
+TestOptimShapeInferenceNoNewNamesBackend = make_test_class(
+    shape_inference_no_new_names_check,
+    exclude_regex=[
+        # NonZero, Loop, and Compress are explicitly permitted to introduce
+        # new symbolic intermediate names during shape inference (issue #2733).
+        "test_cc_nonzero.*",
+        "test_nonzero.*",
+        "test_cc_shape_inference_nonzero.*",
+        "test_cc_compress.*",
+        "test_compress.*",
+        "test_cc_loop.*",
+        "test_loop.*",
+        "test_cc_shape_inference_loop.*",
+        # Optional models contain intermediate tensors (e.g. opt_value) that
+        # are not declared in value_info; shape inference legitimately adds
+        # them, so these tests are excluded from the no-new-names check.
+        "test_cc_optional.*",
+        "test_optional.*",
+    ],
+)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -120,6 +120,9 @@ TestOptimShapeInferenceDynamicBackend = make_test_class(
         # Input X already uses symbolic dim_param ("N", "H", "W"); the dynamic
         # harness requires concrete dim_value inputs to rewrite them.
         "test_cc_shape_inference_pad_canny_average.*",
+        # Input X already uses symbolic dim_param ("N", "D"); the dynamic
+        # harness requires concrete dim_value inputs to rewrite them.
+        "test_cc_shape_inference_topk_pairwise_distance.*",
     ],
 )
 

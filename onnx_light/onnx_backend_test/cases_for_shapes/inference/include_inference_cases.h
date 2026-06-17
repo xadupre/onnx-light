@@ -80,6 +80,17 @@ void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &regist
 /// from inside the body subgraph.
 void RegisterLoopPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &registry);
 
+/// Registers an ``Unsqueeze → Unsqueeze → Sub → Mul → ReduceSum → Sqrt →
+/// TopK → ReduceMean`` case that computes the pairwise Euclidean distance
+/// matrix of an input ``X`` of symbolic shape ``[N, D]``, keeps the ``k``
+/// largest distances of each row and averages them. The TopK ``k`` is a
+/// **model input** (INT64 ``[1]``) so its value is unknown at shape-inference
+/// time: ``TopK`` must emit a fresh symbolic dim for its output axis, which
+/// ``ReduceMean`` then reduces away to recover the concrete-rank ``[N]``
+/// output. Exercises symbolic-dim propagation through broadcasting and a
+/// data-dependent ``TopK`` axis.
+void RegisterTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &registry);
+
 /// Registers a ``Scan`` case that computes the running (cumulative) row sum
 /// of an input ``X`` of shape ``[T, D]``. Each Scan iteration accumulates
 /// one row into a running state (initially zeros) and emits the accumulated

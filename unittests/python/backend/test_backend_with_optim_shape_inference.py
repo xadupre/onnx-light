@@ -89,6 +89,10 @@ TestOptimShapeInferenceBackend = make_test_class(
         # The expression simplifier reduces 2*(H//2) → H, so the inferred
         # tile_out dim differs from the symbolic name stored in value_info.
         "test_cc_shape_inference_resize_tile.*",
+        # TopK's ``K`` is a runtime model input, so its output axis is an
+        # auto-generated symbolic dim whose name does not match the ``k``
+        # placeholder stored in ``topk_values`` value_info.
+        "test_cc_shape_inference_topk_pairwise_distance.*",
     ],
 )
 
@@ -135,6 +139,10 @@ TestOptimShapeInferenceNoNewNamesBackend = make_test_class(
         # them, so these tests are excluded from the no-new-names check.
         "test_cc_optional.*",
         "test_optional.*",
+        # Only ``dist`` / ``topk_values`` are declared in value_info; shape
+        # inference legitimately adds the remaining broadcasting / reduction
+        # intermediates (x_rows, diff, sq, ...) and the TopK indices output.
+        "test_cc_shape_inference_topk_pairwise_distance.*",
     ],
 )
 

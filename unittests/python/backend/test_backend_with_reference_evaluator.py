@@ -34,29 +34,6 @@ collect_test_case = _backend_case.collect_test_case
 make_test_class = _backend_case.make_test_class
 ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
 
-# Operators currently registered in
-# ``onnx_light/onnx_kernels/run_nodes.cc::KernelDispatchTable``. Backend
-# test cases whose graph(s) only use these ops are the only ones
-# :class:`ReferenceEvaluator` can execute today. Mirrors
-# ``_IMPLEMENTED_OPS`` in ``test_backend_with_run_model.py`` with the
-# addition of ``Cast``, ``QuantizeLinear`` and ``DequantizeLinear`` (the
-# Python ``ReferenceEvaluator`` facade handles ``STRING`` / sub-byte tensor
-# outputs -- such as ``FLOAT4E2M1`` -- that ``run_model_backend`` cannot
-# yet convert back to numpy).
-_IMPLEMENTED_OPS: frozenset[str] = frozenset(
-    {
-        "Adagrad",
-        "Cast",
-        "CastMap",
-        "DequantizeLinear",
-        "DictVectorizer",
-        "NonZero",
-        "QuantizeLinear",
-        "SequenceConstruct",
-        "SplitToSequence",
-    }
-)
-
 
 def reference_evaluator_backend(model: onnxl.ModelProto, *inputs: np.ndarray) -> list[np.ndarray]:
     """Runs ``model`` through :class:`ReferenceEvaluator`.

@@ -10,8 +10,8 @@ a smooth replacement.
     :caption: ONNX, Concepts, link to protobuf
     :maxdepth: 1
 
-    goals
     intro/index
+    goals
     differences
     protobuf_format
     ort_flatbuffer_format

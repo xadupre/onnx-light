@@ -20,21 +20,23 @@ namespace {
 inline double TruncTowardZero(float v) noexcept { return static_cast<double>(std::trunc(v)); }
 
 inline std::uint8_t ClampToInt4(double t) noexcept {
-  if (t <= -8.0)
-    return 0x8; // -8 as a 4-bit signed value (two's complement low nibble)
-  if (t >= 7.0)
-    return 0x7;
-  // Map negative values into [-8, -1] → [0x8, 0xF].
-  const int v = static_cast<int>(t);
-  return static_cast<std::uint8_t>(v & 0x0F);
+  // Match ml_dtypes.int4 wrapping semantics: truncate toward zero, keep low
+  // 4 bits. Guard against values outside int64 range (float32 max ~3.4e38
+  // exceeds INT64_MAX ~9.2e18); large finite floats are exact multiples of
+  // high powers of 2 so their low nibble is always 0.
+  if (t >= 9.2e18 || t <= -9.2e18)
+    return 0x0;
+  const int64_t v = static_cast<int64_t>(t);
+  return static_cast<std::uint8_t>(static_cast<uint64_t>(v) & 0x0FU);
 }
 
 inline std::uint8_t ClampToUint4(double t) noexcept {
-  if (t <= 0.0)
+  // Match ml_dtypes.uint4 wrapping semantics: truncate toward zero, keep low
+  // 4 bits.
+  if (t >= 9.2e18 || t <= -9.2e18)
     return 0x0;
-  if (t >= 15.0)
-    return 0xF;
-  return static_cast<std::uint8_t>(static_cast<int>(t) & 0x0F);
+  const int64_t v = static_cast<int64_t>(t);
+  return static_cast<std::uint8_t>(static_cast<uint64_t>(v) & 0x0FU);
 }
 
 inline std::uint8_t ClampToInt2(double t) noexcept {
@@ -45,11 +47,12 @@ inline std::uint8_t ClampToInt2(double t) noexcept {
 }
 
 inline std::uint8_t ClampToUint2(double t) noexcept {
-  if (t <= 0.0)
+  // Match ml_dtypes.uint2 wrapping semantics: truncate toward zero, keep low
+  // 2 bits.
+  if (t >= 9.2e18 || t <= -9.2e18)
     return 0x0;
-  if (t >= 3.0)
-    return 0x3;
-  return static_cast<std::uint8_t>(static_cast<int>(t) & 0x03);
+  const int64_t v = static_cast<int64_t>(t);
+  return static_cast<std::uint8_t>(static_cast<uint64_t>(v) & 0x03U);
 }
 
 } // namespace
@@ -59,15 +62,15 @@ inline std::uint8_t ClampToUint2(double t) noexcept {
 // ---------------------------------------------------------------------------
 
 std::uint8_t FloatToInt4Nibble(float v) noexcept {
-  if (std::isnan(v)) {
-    // Match ``ml_dtypes.int4`` round-toward-zero conversion of NaN to 0.
+  if (!std::isfinite(v)) {
+    // Match ``ml_dtypes.int4`` conversion of non-finite inputs to 0.
     return 0x0;
   }
   return ClampToInt4(TruncTowardZero(v));
 }
 
 std::uint8_t FloatToUint4Nibble(float v) noexcept {
-  if (std::isnan(v)) {
+  if (!std::isfinite(v)) {
     return 0x0;
   }
   return ClampToUint4(TruncTowardZero(v));
@@ -98,7 +101,7 @@ std::uint8_t FloatToInt2Bits(float v) noexcept {
 }
 
 std::uint8_t FloatToUint2Bits(float v) noexcept {
-  if (std::isnan(v)) {
+  if (!std::isfinite(v)) {
     return 0x0;
   }
   return ClampToUint2(TruncTowardZero(v));

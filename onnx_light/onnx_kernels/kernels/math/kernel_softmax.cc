@@ -34,24 +34,31 @@ Tensor Softmax::operator()(const Tensor &x, int64_t axis) const {
     Tensor y_f = (*this)(x_f, axis);
     return DemoteFromFloat32(y_f, x.data_type);
   }
-  Tensor y("", DataType::FLOAT, x.shape,
-           std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * sizeof(float)));
+  const int32_t out_dtype = (static_cast<DataType>(x.data_type) == DataType::DOUBLE)
+                                ? x.data_type
+                                : static_cast<int32_t>(DataType::FLOAT);
+  const size_t elem_size =
+      (static_cast<DataType>(x.data_type) == DataType::DOUBLE) ? sizeof(double) : sizeof(float);
+  Tensor y("", out_dtype, x.shape,
+           std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * elem_size));
   (*this)(x, axis, y);
   return y;
 }
 
 void Softmax::operator()(const Tensor &x, int64_t axis, Tensor &output) const {
-  EXT_ENFORCE_INVALID(x.data_type == DataType::FLOAT,
-                      "kernel::Softmax only supports FLOAT tensors.");
-  EXT_ENFORCE_INVALID(output.data_type == DataType::FLOAT,
-                      "kernel::Softmax preallocated output must be a FLOAT tensor.");
+  const bool is_double = static_cast<DataType>(x.data_type) == DataType::DOUBLE;
+  EXT_ENFORCE_INVALID(x.data_type == DataType::FLOAT || is_double,
+                      "kernel::Softmax only supports FLOAT and DOUBLE tensors.");
+  EXT_ENFORCE_INVALID(output.data_type == x.data_type,
+                      "kernel::Softmax preallocated output dtype must match input dtype.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::Softmax preallocated output shape must match input shape.");
   EXT_ENFORCE_INVALID(output.data.data() != x.bytes(),
                       "kernel::Softmax does not support aliasing input/output buffers.");
 
   const int64_t n = x.element_count();
-  const size_t expected_bytes = static_cast<size_t>(n) * sizeof(float);
+  const size_t elem_size = is_double ? sizeof(double) : sizeof(float);
+  const size_t expected_bytes = static_cast<size_t>(n) * elem_size;
   EXT_ENFORCE_INVALID(output.data.size() == expected_bytes,
                       "kernel::Softmax preallocated output buffer has unexpected size in bytes.");
 
@@ -67,6 +74,30 @@ void Softmax::operator()(const Tensor &x, int64_t axis, Tensor &output) const {
   int64_t inner = 1;
   for (int64_t d = resolved_axis + 1; d < rank; ++d) {
     inner *= x.shape[static_cast<size_t>(d)];
+  }
+
+  if (is_double) {
+    const double *px = x.AsDouble();
+    double *py = output.AsDouble();
+    for (int64_t o = 0; o < outer; ++o) {
+      for (int64_t i = 0; i < inner; ++i) {
+        double max_v = -std::numeric_limits<double>::infinity();
+        for (int64_t a = 0; a < axis_dim; ++a) {
+          const int64_t offset = (o * axis_dim + a) * inner + i;
+          max_v = std::max(max_v, px[static_cast<size_t>(offset)]);
+        }
+        double sum = 0.0;
+        for (int64_t a = 0; a < axis_dim; ++a) {
+          const int64_t offset = (o * axis_dim + a) * inner + i;
+          sum += std::exp(px[static_cast<size_t>(offset)] - max_v);
+        }
+        for (int64_t a = 0; a < axis_dim; ++a) {
+          const int64_t offset = (o * axis_dim + a) * inner + i;
+          py[static_cast<size_t>(offset)] = std::exp(px[static_cast<size_t>(offset)] - max_v) / sum;
+        }
+      }
+    }
+    return;
   }
 
   const float *px = x.AsFloat();

@@ -62,8 +62,12 @@ TestShapeInferenceBackend = make_test_class(
         "test_cc_shape_inference_pad_canny_average.*",
         # TopK's output axis depends on the runtime input K, so ONNX's built-in
         # shape inference emits a generic unk__N dim that does not match the
-        # symbolic ``k`` placeholder stored in value_info.
+        # symbolic ``k`` placeholder stored in value_info. The ``scan_``/``loop_``
+        # variants additionally emit a generic ``unk__N`` dim for the Scan/Loop
+        # stacked axis that does not match onnx-light's symbolic names.
         "test_cc_shape_inference_topk_pairwise_distance.*",
+        "test_cc_shape_inference_scan_topk_pairwise_distance.*",
+        "test_cc_shape_inference_loop_topk_pairwise_distance.*",
         # ONNX's built-in shape inference does not recover the symbolic B1/B2
         # dims that onnx-light propagates through the If→Abs/Neg chain.
         "test_cc_shape_inference_if_symbolic_shapes.*",

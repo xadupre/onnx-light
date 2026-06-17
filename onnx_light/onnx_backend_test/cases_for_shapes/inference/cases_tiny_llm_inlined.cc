@@ -250,10 +250,27 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry) 
   AppendValueInfo(*graph->add_value_info(), "hidden2", kFloat, bsh);
   AppendValueInfo(*graph->add_value_info(), "hidden3", kFloat, bsh);
   AppendValueInfo(*graph->add_value_info(), "key", kFloat, bsh);
+  AppendValueInfo(*graph->add_value_info(), "key_4d", kFloat, b_s_nh_hs);
   AppendValueInfo(*graph->add_value_info(), "key_heads", kFloat, b_nh_s_hs);
   AppendValueInfo(*graph->add_value_info(), "key_heads_t", kFloat, b_nh_hs_total);
+  // All five intermediates of the inlined input RMSNorm. The post-attention
+  // (``ln2_*``) and final (``lnf_*``) RMSNorms produce the same shapes; the
+  // ``_mean`` / ``_meaneps`` / ``_rms`` reductions collapse the last axis to 1.
   AppendValueInfo(*graph->add_value_info(), "ln1_mean", kFloat, bs1);
+  AppendValueInfo(*graph->add_value_info(), "ln1_meaneps", kFloat, bs1);
+  AppendValueInfo(*graph->add_value_info(), "ln1_norm", kFloat, bsh);
   AppendValueInfo(*graph->add_value_info(), "ln1_rms", kFloat, bs1);
+  AppendValueInfo(*graph->add_value_info(), "ln1_sq", kFloat, bsh);
+  AppendValueInfo(*graph->add_value_info(), "ln2_mean", kFloat, bs1);
+  AppendValueInfo(*graph->add_value_info(), "ln2_meaneps", kFloat, bs1);
+  AppendValueInfo(*graph->add_value_info(), "ln2_norm", kFloat, bsh);
+  AppendValueInfo(*graph->add_value_info(), "ln2_rms", kFloat, bs1);
+  AppendValueInfo(*graph->add_value_info(), "ln2_sq", kFloat, bsh);
+  AppendValueInfo(*graph->add_value_info(), "lnf_mean", kFloat, bs1);
+  AppendValueInfo(*graph->add_value_info(), "lnf_meaneps", kFloat, bs1);
+  AppendValueInfo(*graph->add_value_info(), "lnf_norm", kFloat, bsh);
+  AppendValueInfo(*graph->add_value_info(), "lnf_rms", kFloat, bs1);
+  AppendValueInfo(*graph->add_value_info(), "lnf_sq", kFloat, bsh);
   AppendValueInfo(*graph->add_value_info(), "mask_4d", kFloat, mask4);
   AppendValueInfo(*graph->add_value_info(), "mask_float", kFloat, {"batch", "total_seq"});
   AppendValueInfo(*graph->add_value_info(), "mask_inv", kFloat, mask4);
@@ -270,6 +287,7 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry) 
   AppendValueInfo(*graph->add_value_info(), "scores_scaled", kFloat, b_nh_s_total);
   AppendValueInfo(*graph->add_value_info(), "up", kFloat, bsi);
   AppendValueInfo(*graph->add_value_info(), "value", kFloat, bsh);
+  AppendValueInfo(*graph->add_value_info(), "value_4d", kFloat, b_s_nh_hs);
   AppendValueInfo(*graph->add_value_info(), "value_heads", kFloat, b_nh_s_hs);
 
   // ---- Graph outputs ---------------------------------------------------

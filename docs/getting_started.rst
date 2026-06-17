@@ -69,14 +69,19 @@ Load a model with parallel tensor parsing:
 Replace ``onnx`` by ``onnx_light.onnx``
 ---------------------------------------
 
-``onnx-light`` mirrors the public :epkg:`onnx` Python API, so most code written
-against the standard ``onnx`` package can be ported by changing a few ``import``
-statements.  The :mod:`onnx_light.onnx` module exposes the same protobuf message
-types (:class:`~onnx_light.onnx_lib.ModelProto`,
-:class:`~onnx_light.onnx_lib.TensorProto`, ...) and submodules
-(``helper``, ``numpy_helper``, ``reference``, ``backend``).
+``onnx-light`` mirrors the public :epkg:`onnx` API in both Python and C++, so
+most code written against the standard ``onnx`` package can be ported by changing
+a few imports / includes.  See :ref:`l-howto-replace-onnx` for a complete
+side-by-side recipe covering Python, C++ and the matching build setup.
 
-Replace ``import onnx`` with ``import onnx_light.onnx as onnx`` and the matching
+Python
+^^^^^^
+
+The :mod:`onnx_light.onnx` module exposes the same protobuf message types
+(:class:`~onnx_light.onnx_lib.ModelProto`,
+:class:`~onnx_light.onnx_lib.TensorProto`, ...) and submodules
+(``helper``, ``numpy_helper``, ``reference``, ``backend``).  Replace
+``import onnx`` with ``import onnx_light.onnx as onnx`` and the matching
 submodules:
 
 .. code-block:: python
@@ -96,7 +101,10 @@ The rest of the code (``onnx.load``, ``onnx.save``, ``helper.make_node``,
 :ref:`l-onnx-tutorial` for a full set of examples ported from the upstream ONNX
 introduction.
 
-In C++, ``onnx-light`` replicates the upstream ``onnx`` C++ API under the
+C++
+^^^
+
+``onnx-light`` replicates the upstream ``onnx`` C++ API under the
 ``onnx_light`` namespace.  Two macros make most sources compile unchanged:
 ``ONNX_NAMESPACE`` resolves to ``onnx_light`` and headers such as ``onnx_pb.h``
 and ``checker.h`` keep their familiar names.  Replace the ``onnx/`` include root

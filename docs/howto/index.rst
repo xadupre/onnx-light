@@ -7,6 +7,7 @@ How-to Python / C++
     :maxdepth: 1
 
     install_onnx_light
+    replace_onnx
     link_prebuilt_cpp
     load_save_onnx_files
     align_external_data_streaming

@@ -183,6 +183,8 @@ directly rather than using the fall-back heuristic.
      - ``output_shape``
      - Target output shape read from ``value_as_shape``.
 
+This is not an exhaustive list.
+
 ----
 
 End-to-end example
@@ -242,7 +244,7 @@ shape ``[N, 1]`` (``N`` symbolic); the goal is to ``Expand`` it to
         if not ctx.has(name):
             continue
         t = ctx.get(name)
-        storage = "[" + ", ".join(str(d) for d in t.shape()) + "]"
+        storage = "[" + ", ".join(str(d) for d in t.shape) + "]"
         if t.has_value_as_shape():
             vas = "[" + ", ".join(str(d) for d in t.value_as_shape()) + "]"
         else:

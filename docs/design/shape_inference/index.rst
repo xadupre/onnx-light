@@ -78,6 +78,17 @@ steps.
     map-typed values and the nested graphs of control-flow operators are
     handled here too; see :ref:`l-design-shape-sequences`.
 
+    Shape operator can create a small tensor which can be concatenated,
+    modified with addition or any other numerical operator and then
+    used to expand or reshape a another tensor. The algorithm also keep
+    tracks of such values, whether they numerical or dynamic:
+    it can propagate a shape such as ``('N', 1)``.
+    That's also one occasion where symbolic expressions are introduced but
+    they also appear with operators such as Slice, Pad, Conv, ...
+
+    Before setting any new shape, the symbolic expression is simplified.
+    ``(2*H)//H`` becomes ``H``. It handles many cases found in LLMs.
+
 4. Merge anchors
     ``MergeAnchorsIntoContext`` reconciles each anchor with the inferred
     shape of the same value via ``MergeWithAnchor``. The merge privileges
@@ -103,24 +114,24 @@ steps.
     inferred tensor that has a known element type. Graph inputs and
     initializers keep their authoritative annotations.
 
-    This write-back is **not mandatory**. Populating ``value_info`` is a
-    convenience for callers that want the inferred shapes serialised on the
-    ``ModelProto``; the descriptors themselves live on the
-    :cpp:class:`ShapesContext` and can be read directly without ever
-    touching the model. The context exposes ``names`` (every inferred
-    tensor name), ``has(name)`` and ``get(name)`` (the
-    :cpp:class:`OptimTensor` descriptor, with its element type and shape)
-    so the full result is accessible programmatically:
+This write-back is **not mandatory**. Populating ``value_info`` is a
+convenience for callers that want the inferred shapes serialised on the
+``ModelProto``; the descriptors themselves live on the
+:cpp:class:`ShapesContext` and can be read directly without ever
+touching the model. The context exposes ``names`` (every inferred
+tensor name), ``has(name)`` and ``get(name)`` (the
+:cpp:class:`OptimTensor` descriptor, with its element type and shape)
+so the full result is accessible programmatically:
 
-    .. code-block:: python
+.. code-block:: python
 
-        from onnx_light.onnx_optim.shape_inference import ShapesContext
+    from onnx_light.onnx_optim.shape_inference import ShapesContext
 
-        ctx = ShapesContext()
-        ctx.compute_shape_model(model)
-        for name in ctx.names():
-            tensor = ctx.get(name)  # OptimTensor: element type + shape
-        # ctx.apply_inferred_shapes_to_model(model)  # optional value_info write-back
+    ctx = ShapesContext()
+    ctx.compute_shape_model(model)
+    for name in ctx.names():
+        tensor = ctx.get(name)  # OptimTensor: element type + shape
+    # ctx.apply_inferred_shapes_to_model(model)  # optional value_info write-back
 
 This basically implements function :func:`onnx_light.onnx_optim.shape_inference.infer_shapes_model`
 which does not return a context but populates missing ``value_info`` in the original model.

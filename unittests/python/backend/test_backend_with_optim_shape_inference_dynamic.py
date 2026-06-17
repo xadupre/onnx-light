@@ -59,6 +59,8 @@ def shape_inference_check(model: onnxl.ModelProto, *inputs):
     for i in work.graph.input:
         if i.name in {"axis", "axes"}:
             continue
+        if not i.type.tensor_type:
+            continue
         shape = i.type.tensor_type.shape
         for di, d in enumerate(shape.dim):
             if d.dim_value not in mapping:
@@ -66,6 +68,8 @@ def shape_inference_check(model: onnxl.ModelProto, *inputs):
                 mapping[int(d.dim_value)] = f"{i.name}_{di}"
     for i in work.graph.input:
         if i.name in {"axis", "axes"}:
+            continue
+        if not i.type.tensor_type:
             continue
         shape = i.type.tensor_type.shape
         new_shape = [mapping[d.dim_value] for d in shape.dim]

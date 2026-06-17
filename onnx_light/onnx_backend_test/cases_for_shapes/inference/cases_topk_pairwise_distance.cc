@@ -347,19 +347,20 @@ void RegisterScanTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &
   // axis because ``K`` is a runtime input.
   AppendValueInfo(*graph->add_value_info(), "dist", DataType::FLOAT, {DimSpec("N"), DimSpec("N")});
   AppendValueInfo(*graph->add_value_info(), "topk_values", DataType::FLOAT,
-                  {DimSpec("N"), DimSpec("k")});
+                  {DimSpec("N"), DimSpec("TopK_k")});
 
   // Output Y — the per-row mean of the ``k`` largest distances, shape ``[N]``.
   AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec("N")});
 
-  // Reference DataSet with a concrete ``[3, 3]`` input and ``k = 2``. Rows
-  // lie on the axes of an integer grid so the pairwise distances are exact
-  // integers: ``[[0, 3, 4], [3, 0, 5], [4, 5, 0]]``. Keeping the two largest
-  // distances of each row and averaging gives ``[3.5, 4.0, 4.5]``.
-  Tensor x = Tensor::FromFloat("X", {3, 3},
-                               {0.0f, 0.0f, 0.0f, //
-                                3.0f, 0.0f, 0.0f, //
-                                0.0f, 4.0f, 0.0f});
+  // Reference DataSet with a concrete ``[3, 4]`` input and ``k = 2``. Rows
+  // lie on the axes of an integer right-triangle grid: (0,0,0,0), (3,0,0,0),
+  // (0,4,0,0). Pairwise L2 distances form the 3-4-5 triple
+  // (``[[0, 3, 4], [3, 0, 5], [4, 5, 0]]``); keeping the ``k = 2`` largest of
+  // each row and averaging them yields ``Y = [3.5, 4.0, 4.5]``.
+  Tensor x = Tensor::FromFloat("X", {3, 4},
+                               {0.0f, 0.0f, 0.0f, 0.0f, //
+                                3.0f, 0.0f, 0.0f, 0.0f, //
+                                0.0f, 4.0f, 0.0f, 0.0f});
   Tensor k = Tensor::FromInt64("K", {1}, {int64_t{2}});
   Tensor y = Tensor::FromFloat("Y", {3}, {3.5f, 4.0f, 4.5f});
   AppendDataSet(tc, {std::move(x), std::move(k)}, {std::move(y)});
@@ -458,23 +459,22 @@ void RegisterLoopTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &
   // whose trailing axis is the per-iteration ``[N]`` element shape;
   // ``topk_values`` keeps a symbolic ``k`` as its trailing axis because ``K``
   // is a runtime input.
-  AppendValueInfo(*graph->add_value_info(), "dist", DataType::FLOAT,
-                  {DimSpec("loop"), DimSpec("N")});
+  AppendValueInfo(*graph->add_value_info(), "dist", DataType::FLOAT, {DimSpec("N"), DimSpec("N")});
   AppendValueInfo(*graph->add_value_info(), "topk_values", DataType::FLOAT,
-                  {DimSpec("loop"), DimSpec("k")});
+                  {DimSpec("N"), DimSpec("k")});
 
-  // Output Y — the per-row mean of the ``k`` largest distances, shape
-  // ``[loop]``.
-  AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec("loop")});
+  // Output Y — the per-row mean of the ``k`` largest distances, shape ``[N]``.
+  AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec("N")});
 
-  // Reference DataSet with a concrete ``[3, 3]`` input and ``k = 2``. Rows
-  // lie on the axes of an integer grid so the pairwise distances are exact
-  // integers: ``[[0, 3, 4], [3, 0, 5], [4, 5, 0]]``. Keeping the two largest
-  // distances of each row and averaging gives ``[3.5, 4.0, 4.5]``.
-  Tensor x = Tensor::FromFloat("X", {3, 3},
-                               {0.0f, 0.0f, 0.0f, //
-                                3.0f, 0.0f, 0.0f, //
-                                0.0f, 4.0f, 0.0f});
+  // Reference DataSet with a concrete ``[3, 4]`` input and ``k = 2``. Rows
+  // lie on the axes of an integer right-triangle grid: (0,0,0,0), (3,0,0,0),
+  // (0,4,0,0). Pairwise L2 distances form the 3-4-5 triple
+  // (``[[0, 3, 4], [3, 0, 5], [4, 5, 0]]``); keeping the ``k = 2`` largest of
+  // each row and averaging them yields ``Y = [3.5, 4.0, 4.5]``.
+  Tensor x = Tensor::FromFloat("X", {3, 4},
+                               {0.0f, 0.0f, 0.0f, 0.0f, //
+                                3.0f, 0.0f, 0.0f, 0.0f, //
+                                0.0f, 4.0f, 0.0f, 0.0f});
   Tensor k = Tensor::FromInt64("K", {1}, {int64_t{2}});
   Tensor y = Tensor::FromFloat("Y", {3}, {3.5f, 4.0f, 4.5f});
   AppendDataSet(tc, {std::move(x), std::move(k)}, {std::move(y)});

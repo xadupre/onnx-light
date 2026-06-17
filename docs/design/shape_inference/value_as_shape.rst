@@ -183,6 +183,8 @@ directly rather than using the fall-back heuristic.
      - ``output_shape``
      - Target output shape read from ``value_as_shape``.
 
+This is not an exhaustive list.
+
 ----
 
 End-to-end example

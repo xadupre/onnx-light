@@ -126,7 +126,7 @@ void RegisterIfSymbolicShapesShapeInferenceCases(std::vector<TestCase> &registry
 
   // B1, B2 = If(cond, then_branch=..., else_branch=...)
   NodeProto &if_node =
-      AddNode(*graph, "If", {"cond"}, {"B1", "B2"}, /*domain=*/nullptr, "if_two_outputs");
+      AddNode(*graph, "If", {"cond"}, {"I1", "I2"}, /*domain=*/nullptr, "if_two_outputs");
 
   AttributeProto *then_attr = if_node.add_attribute();
   then_attr->set_name("then_branch");
@@ -155,15 +155,15 @@ void RegisterIfSymbolicShapesShapeInferenceCases(std::vector<TestCase> &registry
   compress_node->add_output("out_a_else");
   AddAttribute<int64_t>(*compress_node, "axis", 0);
   AppendValueInfo(*else_g->add_output(), "out_a_else", DataType::FLOAT,
-                  {DimSpec(), DimSpec(int64_t{4})});
+                  {DimSpec("Compress_0_d0"), DimSpec(int64_t{4})});
   AppendIdentityOutput(*else_g, "b_else", "out_b_else", DataType::INT64, {DimSpec(int64_t{5})});
 
   // out_a = Abs(B1) and out_b = Neg(B2). These unary nodes sit between the
   // ``If`` outputs (``B1`` / ``B2``) and the graph outputs, so the merged
   // symbolic shapes flow through ``Abs`` / ``Neg`` (both shape-preserving)
   // onto ``out_a`` / ``out_b``.
-  AddNode(*graph, "Abs", {"B1"}, {"out_a"}, /*domain=*/nullptr, "abs_out_a");
-  AddNode(*graph, "Neg", {"B2"}, {"out_b"}, /*domain=*/nullptr, "neg_out_b");
+  AddNode(*graph, "Abs", {"I1"}, {"Y1"}, /*domain=*/nullptr, "abs_out_a");
+  AddNode(*graph, "Neg", {"I2"}, {"Y2"}, /*domain=*/nullptr, "neg_out_b");
 
   // Intermediate value_info for the ``If`` outputs ``B1`` / ``B2``. Recording
   // them keeps the ``TestOptimShapeInferenceNoNewNames`` check happy (shape
@@ -172,9 +172,9 @@ void RegisterIfSymbolicShapesShapeInferenceCases(std::vector<TestCase> &registry
   // canonicalizes to the graph-output anchor name (``B1`` for ``out_a`` /
   // ``B2`` for ``out_b``); it is treated as ``-1`` / "unknown" by the
   // shape-inference test helpers.
-  AppendValueInfo(*graph->add_value_info(), "B1", DataType::FLOAT,
+  AppendValueInfo(*graph->add_value_info(), "I1", DataType::FLOAT,
                   {DimSpec("B1"), DimSpec(int64_t{4})});
-  AppendValueInfo(*graph->add_value_info(), "B2", DataType::INT64, {DimSpec("B2")});
+  AppendValueInfo(*graph->add_value_info(), "I2", DataType::INT64, {DimSpec("B2")});
 
   // Graph inputs: scalar BOOL cond, two FLOAT[*, 4] inputs, the
   // else-branch Compress condition ``c_else: bool[5]``, and two INT64[*]
@@ -195,8 +195,8 @@ void RegisterIfSymbolicShapesShapeInferenceCases(std::vector<TestCase> &registry
   // ``B1`` / ``B2`` symbolic axes are recorded as named dims (treated as
   // ``-1`` / "unknown" by the test helpers), while the trailing concrete
   // ``4`` dim of ``out_a`` is checked verbatim.
-  AppendValueInfo(*graph->add_output(), "out_a", DataType::FLOAT, {"B1", DimSpec(int64_t{4})});
-  AppendValueInfo(*graph->add_output(), "out_b", DataType::INT64, {"B2"});
+  AppendValueInfo(*graph->add_output(), "Y1", DataType::FLOAT, {"B1", DimSpec(int64_t{4})});
+  AppendValueInfo(*graph->add_output(), "Y2", DataType::INT64, {"B2"});
 
   // Reference DataSet — concrete ``A=3``, ``B=5``, ``cond=true`` selects the
   // then-branch, so the ``If`` outputs are the then-branch inputs and the

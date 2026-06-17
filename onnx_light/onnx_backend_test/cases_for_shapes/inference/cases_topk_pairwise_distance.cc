@@ -294,7 +294,7 @@ void RegisterTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &regi
 void RegisterScanTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(18);
 
-  const std::string name = "test_cc_shape_inference_scan_topk_pairwise_distance";
+  const std::string name = "test_cc_shape_inference_topk_pairwise_distance";
 
   TestCase tc(name, name, "model", "inference");
   tc.rtol = 1e-3;
@@ -310,10 +310,10 @@ void RegisterScanTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &
   // state_final (the unchanged matrix) and the stacked squared-distance matrix.
   NodeProto &scan_node = AddNode(*graph, "Scan", {"X", "X"}, {"state_final", "dist_sq"});
   AddAttribute<int64_t>(scan_node, "num_scan_inputs", 1);
-  AttributeProto *scan_body_attr = scan_node.add_attribute();
-  scan_body_attr->set_name("body");
-  scan_body_attr->set_type(AttributeProto::AttributeType::GRAPH);
-  *scan_body_attr->add_g() = BuildPairwiseDistanceScanBody();
+  AttributeProto *body_attr = scan_node.add_attribute();
+  body_attr->set_name("body");
+  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  *body_attr->add_g() = BuildPairwiseDistanceScanBody();
 
   // Turn the squared distances into Euclidean distances.
   AddNode(*graph, "Sqrt", {"dist_sq"}, {"dist"});
@@ -321,15 +321,15 @@ void RegisterScanTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &
   // TopK with ``K`` taken from a model input — its value is unknown to shape
   // inference, so the ``topk_values`` / ``topk_indices`` output axis is
   // symbolic.
-  NodeProto &scan_topk = AddNode(*graph, "TopK", {"dist", "K"}, {"topk_values", "topk_indices"});
-  AddAxisAttribute(scan_topk, -1);
-  AddAttribute<int64_t>(scan_topk, "largest", 1);
-  AddAttribute<int64_t>(scan_topk, "sorted", 1);
+  NodeProto &topk = AddNode(*graph, "TopK", {"dist", "K"}, {"topk_values", "topk_indices"});
+  AddAxisAttribute(topk, -1);
+  AddAttribute<int64_t>(topk, "largest", 1);
+  AddAttribute<int64_t>(topk, "sorted", 1);
 
   // ReduceMean over the (symbolic) TopK axis collapses it away, so ``Y`` is a
   // rank-1 ``[N]`` vector once the input dims are known.
-  NodeProto &scan_reduce_mean = AddNode(*graph, "ReduceMean", {"topk_values", "mean_axes"}, {"Y"});
-  AddAttribute<int64_t>(scan_reduce_mean, "keepdims", 0);
+  NodeProto &reduce_mean = AddNode(*graph, "ReduceMean", {"topk_values", "mean_axes"}, {"Y"});
+  AddAttribute<int64_t>(reduce_mean, "keepdims", 0);
 
   // Initializers — the ``axes`` vectors referenced by ``ReduceSum`` (from the
   // Scan body via outer-scope lookup) and ``ReduceMean``. ``K`` is
@@ -399,7 +399,7 @@ void RegisterScanTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &
 void RegisterLoopTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(18);
 
-  const std::string name = "test_cc_shape_inference_loop_topk_pairwise_distance";
+  const std::string name = "test_cc_shape_inference_topk_pairwise_distance";
 
   TestCase tc(name, name, "model", "inference");
   tc.rtol = 1e-3;
@@ -417,23 +417,23 @@ void RegisterLoopTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &
   AddAxisAttribute(gather_trip, 0);
 
   NodeProto &loop_node = AddNode(*graph, "Loop", {"trip_count", "cond_init"}, {"dist"});
-  AttributeProto *loop_body_attr = loop_node.add_attribute();
-  loop_body_attr->set_name("body");
-  loop_body_attr->set_type(AttributeProto::AttributeType::GRAPH);
-  *loop_body_attr->add_g() = BuildPairwiseDistanceBody();
+  AttributeProto *body_attr = loop_node.add_attribute();
+  body_attr->set_name("body");
+  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  *body_attr->add_g() = BuildPairwiseDistanceBody();
 
   // TopK with ``K`` taken from a model input — its value is unknown to shape
   // inference, so the ``topk_values`` / ``topk_indices`` output axis is
   // symbolic.
-  NodeProto &loop_topk = AddNode(*graph, "TopK", {"dist", "K"}, {"topk_values", "topk_indices"});
-  AddAxisAttribute(loop_topk, -1);
-  AddAttribute<int64_t>(loop_topk, "largest", 1);
-  AddAttribute<int64_t>(loop_topk, "sorted", 1);
+  NodeProto &topk = AddNode(*graph, "TopK", {"dist", "K"}, {"topk_values", "topk_indices"});
+  AddAxisAttribute(topk, -1);
+  AddAttribute<int64_t>(topk, "largest", 1);
+  AddAttribute<int64_t>(topk, "sorted", 1);
 
   // ReduceMean over the (symbolic) TopK axis collapses it away, so ``Y`` is a
   // rank-1 ``[loop]`` vector.
-  NodeProto &loop_reduce_mean = AddNode(*graph, "ReduceMean", {"topk_values", "mean_axes"}, {"Y"});
-  AddAttribute<int64_t>(loop_reduce_mean, "keepdims", 0);
+  NodeProto &reduce_mean = AddNode(*graph, "ReduceMean", {"topk_values", "mean_axes"}, {"Y"});
+  AddAttribute<int64_t>(reduce_mean, "keepdims", 0);
 
   // Initializers — index ``[0]`` for the trip-count Gather, the BOOL ``cond``
   // constant, the axes vectors referenced from the body via outer-scope

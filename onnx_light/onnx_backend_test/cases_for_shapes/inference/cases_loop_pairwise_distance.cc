@@ -190,29 +190,20 @@ void RegisterLoopPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &regi
   // INT64 ``[1]`` slice extracting the leading dim.
   AppendValueInfo(*graph->add_value_info(), "shape_X", DataType::INT64, {DimSpec(2)});
   AppendValueInfo(*graph->add_value_info(), "trip_count", DataType::INT64, {DimSpec(1)});
-  AppendValueInfo(*graph->add_value_info(), "Y_pre_abs", DataType::INT64,
+  AppendValueInfo(*graph->add_value_info(), "Y_pre_abs", DataType::FLOAT,
                   {DimSpec("batch"), DimSpec("batch")});
 
   // Output Y — the stacked pairwise distance matrix of shape ``[3, 3]``.
   AppendValueInfo(*graph->add_output(), "Y", kFloat, {DimSpec("batch"), DimSpec("batch")});
 
-  // Reference DataSet with concrete ``[3, 3]`` input. Rows are on the axes
-  // of an integer grid so the pairwise distances are integers and exact.
+  // Reference DataSet with concrete ``[3, 4]`` input. Rows lie on the axes
+  // of an integer right-triangle grid: (0,0,0,0), (3,0,0,0), (0,4,0,0).
+  // Pairwise L2 distances form the 3-4-5 triple, giving the integer distance
+  // matrix [[0,3,4],[3,0,5],[4,5,0]].
   Tensor x = Tensor::FromFloat("X", {3, 4},
-                               {
-                                   0.0f,
-                                   0.0f,
-                                   0.0f,
-                                   0.0f, //
-                                   3.0f,
-                                   0.0f,
-                                   0.0f,
-                                   -2.0f, //
-                                   0.0f,
-                                   4.0f,
-                                   0.0f,
-                                   3.5f,
-                               });
+                               {0.0f, 0.0f, 0.0f, 0.0f, //
+                                3.0f, 0.0f, 0.0f, 0.0f, //
+                                0.0f, 4.0f, 0.0f, 0.0f});
   Tensor y = Tensor::FromFloat("Y", {3, 3},
                                {0.0f, 3.0f, 4.0f, //
                                 3.0f, 0.0f, 5.0f, //

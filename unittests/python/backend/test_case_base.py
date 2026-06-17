@@ -444,8 +444,13 @@ class TestBackendFunction(ExtTestCase):
             if not case_name.startswith("test_cc_attention"):
                 continue
             self.assertEqual([node.op_type for node in tc.model.graph.node], ["Attention"])
+            # Most cases target ``ai.onnx`` opset 23, but cases exercising the
+            # ``nonpad_kv_seqlen`` input (7th input, added in opset 24) import
+            # opset 24.
+            expected_version = 24 if "nonpad_kv" in case_name else 23
             self.assertEqual(
-                [(opset.domain, opset.version) for opset in tc.model.opset_import], [("", 23)]
+                [(opset.domain, opset.version) for opset in tc.model.opset_import],
+                [("", expected_version)],
             )
 
         # Spot-check a few primary-output shapes per variant.

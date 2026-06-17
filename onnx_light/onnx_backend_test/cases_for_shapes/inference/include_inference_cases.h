@@ -158,6 +158,19 @@ void RegisterResizeTileShapeInferenceCases(std::vector<TestCase> &registry);
 /// and broadcasting ``Sub`` against a reduced ``[1, 1, 1, 1]`` mean.
 void RegisterPadCannyAverageShapeInferenceCases(std::vector<TestCase> &registry);
 
+/// Registers a single decoder layer of a tiny Llama-style causal language
+/// model (mirroring ``arnir0/Tiny-LLM``) translated to ONNX. The model takes
+/// the four inputs of a cached-generation step — ``input_ids``,
+/// ``attention_mask``, ``past_key`` and ``past_value`` — with fully dynamic
+/// (symbolic) shapes and random weight initializers, and produces the
+/// next-token ``logits`` plus the updated ``present_key`` / ``present_value``
+/// cache. Exercises shape inference through ``Gather`` (token embedding),
+/// ``RMSNormalization``, the QKV / output / MLP ``MatMul`` projections, the
+/// additive ``attention_mask`` path (``Cast`` / ``Unsqueeze`` / ``Sub`` /
+/// ``Mul``), the SwiGLU activation and the ``Attention`` operator with a KV
+/// cache.
+void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry);
+
 /// Collects all shape-inference oriented backend test cases by invoking
 /// every ``Register*ShapeInferenceCases`` helper declared in this header.
 void CollectShapeInferenceTestCases(std::vector<TestCase> &registry,

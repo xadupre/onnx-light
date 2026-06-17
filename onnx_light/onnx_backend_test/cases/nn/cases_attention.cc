@@ -1240,6 +1240,40 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
            "backend-test", registry);
   }
 
+  // 4D ``diff_heads`` with ``nonpad_kv_seqlen`` masking trailing padding
+  // key/value positions (opset 24). Mirrors upstream
+  // ``test_attention_4d_diff_heads_mask4d_padded_kv``.
+  {
+    const OpsetId opset24 = DefaultOpset(24);
+    Tensor Q = Tensor::FromFloat("", {2, 2, 2, 2},
+                                 {0.1f, 0.2f, 0.3f, 0.4f, -0.1f, 0.05f, 0.2f, -0.3f, 0.5f, 0.5f,
+                                  0.0f, 1.0f, 1.0f, 0.0f, 0.5f, -0.5f});
+    Tensor K =
+        Tensor::FromFloat("", {2, 2, 3, 2}, {0.5f,  -0.5f,  0.0f, 0.5f, 1.0f, 0.0f, -0.5f, 1.0f,
+                                             0.25f, -0.25f, 0.5f, 0.5f, 1.0f, 1.0f, -1.0f, 0.0f,
+                                             0.0f,  -1.0f,  0.5f, 0.5f, 0.1f, 0.2f, 0.3f,  0.4f});
+    Tensor V =
+        Tensor::FromFloat("", {2, 2, 3, 2}, {0.5f,  0.5f, -1.0f, 0.0f, 0.0f, 0.5f,  0.5f,  -0.5f,
+                                             1.0f,  1.0f, -0.5f, 0.5f, 0.2f, -0.2f, 0.4f,  0.6f,
+                                             -0.1f, 0.3f, 0.0f,  1.0f, 1.0f, 0.0f,  -1.0f, -1.0f});
+    Tensor mask =
+        Tensor::FromFloat("", {2, 2, 2, 3}, {0.0f,  -0.5f, -1.0f, 0.2f,  0.0f, -0.2f, 0.5f, 0.0f,
+                                             -0.1f, 0.0f,  -0.3f, 0.1f,  0.0f, 0.0f,  0.0f, -0.4f,
+                                             -0.2f, 0.0f,  0.1f,  -0.1f, 0.2f, 0.0f,  0.0f, -0.5f});
+    Tensor nonpad_kv_seqlen = Tensor::FromInt64("", {2}, {2, 3});
+    kernel::Attention::Attributes attrs;
+    attrs.has_scale = true;
+    attrs.scale = 0.5f;
+    Tensor Y = attention(Q, K, V, attrs, &mask, /*past_key=*/nullptr, /*past_value=*/nullptr,
+                         &nonpad_kv_seqlen)
+                   .Y;
+    NodeProto node =
+        MakeAttentionNode({"Q", "K", "V", "attn_mask", "", "", "nonpad_kv_seqlen"}, {"Y"});
+    AddFloat(node, "scale", 0.5f);
+    Expect(node, {Q, K, V, mask, nonpad_kv_seqlen}, {Y},
+           "test_cc_attention_4d_diff_heads_mask4d_nonpad_kv", {opset24}, "backend-test", registry);
+  }
+
   // -------------------------------------------------------------------
   // Softcap + ``-inf`` mask ordering checks (mirror upstream
   // ``test_attention_4d_softcap_neginf_mask*``). These verify the kernel

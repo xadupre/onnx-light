@@ -97,7 +97,6 @@ TestOptimShapeInferenceDynamicBackend = make_test_class(
         "test_scan_sum.*",
         "test_cc_loop13_seq.*",
         "test_cc_loop16_seq_none.*",
-        "test_cc_identity_sequence.*",
         "test_cc_identity_opt.*",
         "test_cc_if_seq.*",
         "test_cc_if_opt.*",

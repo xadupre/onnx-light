@@ -99,11 +99,25 @@ constraints into a renaming of the context:
 #. Replacement entries whose key is a compound expression made
    exclusively of leaf tokens that are themselves graph-declared anchor
    symbols are dropped, so already-authoritative expressions such as
-   ``b+c`` (both graph inputs) are preserved.
+   ``b+c`` (both graph inputs) are preserved. The one exception is when
+   the replacement *target* is itself a graph-**input** symbol: a compound
+   expression such as ``past_seq+seq`` that an equality constraint proves
+   equal to the input dimension ``total_seq`` is rewritten to that anchor
+   rather than preserved, because the input symbol is the authoritative
+   dimension. (Graph *output*-only symbols, by contrast, are mere labels,
+   so their computed expression is kept.)
 #. Every tensor's ``shape`` and ``value_as_shape`` is rewritten with the
    replacement mapping. The rewrite is repeated to a fixed point (up to a
    few iterations) because a dimension freshly populated during one pass
    may itself need renaming on the next.
+
+   When rewriting a dimension,
+   :func:`~onnx_light.onnx_optim.expressions.rename_dynamic_expression`
+   also substitutes whole compound *subexpressions* that match a
+   replacement key — so ``past_seq+seq`` is replaced by ``total_seq`` even
+   when it is nested inside a synthesized ``broadcast(past_seq+seq,
+   total_seq)`` term — and collapses ``broadcast(x, x)`` to ``x`` once both
+   operands become identical.
 
 Because the preferred set includes the user-declared symbols, the
 canonicalisation keeps ``X: [N, 4]`` as-is while rewriting an internally

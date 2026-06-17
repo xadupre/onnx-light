@@ -71,5 +71,4 @@ that have zero test cases — operators partially covered (for example
 See also
 --------
 
-* :ref:`l-api-backend-coverage`
 * :ref:`l-design-backend-tests`

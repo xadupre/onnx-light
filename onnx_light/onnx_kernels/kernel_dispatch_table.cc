@@ -638,9 +638,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Atanh", MakeUnaryTrampoline<kernel::Atanh>()},
       {"ai.onnx:Attention",
        [](const NodeProto &node, RuntimeContext &rt) {
-         if (node.input_size() < 3 || node.input_size() > 6) {
+         if (node.input_size() < 3 || node.input_size() > 7) {
            throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
-                                       "' expects between 3 and 6 input(s), got " +
+                                       "' expects between 3 and 7 input(s), got " +
                                        std::to_string(node.input_size()) + ".");
          }
          if (node.output_size() < 1 || node.output_size() > 4) {
@@ -654,6 +654,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor *attn_mask = GetOptionalInput(node, 3, rt.tensors());
          const Tensor *past_key = GetOptionalInput(node, 4, rt.tensors());
          const Tensor *past_value = GetOptionalInput(node, 5, rt.tensors());
+         const Tensor *nonpad_kv_seqlen = GetOptionalInput(node, 6, rt.tensors());
 
          kernel::Attention::Attributes attrs;
          if (FindAttribute(node, "scale") != nullptr) {
@@ -668,7 +669,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          attrs.kv_num_heads = GetAttributeIntOrDefault(node, "kv_num_heads", 0);
 
          kernel::Attention kernel(rt.kernel_ctx());
-         kernel::Attention::Result result = kernel(q, k, v, attrs, attn_mask, past_key, past_value);
+         kernel::Attention::Result result =
+             kernel(q, k, v, attrs, attn_mask, past_key, past_value, nonpad_kv_seqlen);
          SetOutput(node, 0, std::move(result.Y), rt);
 
          auto set_optional_output = [&node, &rt](int index, Tensor output) {

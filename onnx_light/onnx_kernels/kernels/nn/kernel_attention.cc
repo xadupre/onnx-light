@@ -238,7 +238,8 @@ void Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, fl
 
 Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V,
                                         const Attributes &attrs, const Tensor *attn_mask,
-                                        const Tensor *past_key, const Tensor *past_value) const {
+                                        const Tensor *past_key, const Tensor *past_value,
+                                        const Tensor *nonpad_kv_seqlen) const {
   // ----- Half-precision fast path ----------------------------------------
   // FLOAT16 / BFLOAT16 inputs are promoted to FLOAT32 here, the reference
   // implementation runs in float32, and the result tensors are demoted
@@ -269,7 +270,8 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
       past_value_f = PromoteToFloat32(*past_value);
       past_value_ptr = &past_value_f;
     }
-    Result r_f = (*this)(Q_f, K_f, V_f, attrs, attn_mask_ptr, past_key_ptr, past_value_ptr);
+    Result r_f = (*this)(Q_f, K_f, V_f, attrs, attn_mask_ptr, past_key_ptr, past_value_ptr,
+                         nonpad_kv_seqlen);
     Result r;
     r.Y = DemoteFromFloat32(r_f.Y, target_dtype);
     r.present_key = DemoteFromFloat32(r_f.present_key, target_dtype);
@@ -318,6 +320,21 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
   const int64_t total_kv_seq_len = present_key.shape[2];
   const int64_t past_kv_seq_len = past_key != nullptr ? past_key->shape[2] : 0;
   const int64_t v_head_size = present_value.shape[3];
+
+  // ----- Resolve nonpad_kv_seqlen ----------------------------------------
+  // Optional 1-D INT64 tensor of length ``batch_size``. Positions
+  // ``j >= nonpad_kv_seqlen[b]`` along the key/value sequence axis are
+  // padding and masked out with ``-inf`` (mirroring the upstream
+  // ``padding_mask`` derived from ``nonpad_kv_seqlen``).
+  const int64_t *nonpad_lengths = nullptr;
+  if (nonpad_kv_seqlen != nullptr && nonpad_kv_seqlen->size_bytes() != 0) {
+    EXT_ENFORCE_INVALID(nonpad_kv_seqlen->data_type == DataType::INT64,
+                        "kernel::Attention: 'nonpad_kv_seqlen' must be INT64.");
+    EXT_ENFORCE_INVALID(
+        nonpad_kv_seqlen->shape.size() == 1 && nonpad_kv_seqlen->shape[0] == batch_size,
+        "kernel::Attention: 'nonpad_kv_seqlen' must be a 1-D tensor of length batch_size.");
+    nonpad_lengths = nonpad_kv_seqlen->AsInt64();
+  }
 
   // ----- Resolve scale ---------------------------------------------------
   const float scale =
@@ -384,6 +401,10 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
             if (j >= past_kv_seq_len && (j - past_kv_seq_len) > i) {
               b_val = -std::numeric_limits<double>::infinity();
             }
+          }
+          if (nonpad_lengths != nullptr && j >= nonpad_lengths[b]) {
+            // Padding position: suppressed regardless of the supplied mask.
+            b_val = -std::numeric_limits<double>::infinity();
           }
           bias[static_cast<size_t>(j)] = b_val;
         }

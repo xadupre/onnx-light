@@ -35,7 +35,7 @@ Tensor Softmax::operator()(const Tensor &x, int64_t axis) const {
     return DemoteFromFloat32(y_f, x.data_type);
   }
   const int32_t out_dtype = (static_cast<DataType>(x.data_type) == DataType::DOUBLE)
-                                ? x.data_type
+                                ? static_cast<int32_t>(DataType::DOUBLE)
                                 : static_cast<int32_t>(DataType::FLOAT);
   const size_t elem_size =
       (static_cast<DataType>(x.data_type) == DataType::DOUBLE) ? sizeof(double) : sizeof(float);

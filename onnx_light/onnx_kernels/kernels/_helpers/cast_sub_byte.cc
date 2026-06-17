@@ -19,12 +19,16 @@ namespace {
 // preserves the input sign, so callers can clamp the result directly.
 inline double TruncTowardZero(float v) noexcept { return static_cast<double>(std::trunc(v)); }
 
+// Guard value for int64 conversion: float32 max (~3.4e38) exceeds INT64_MAX
+// (~9.2e18), so large finite floats must be excluded before casting to
+// int64_t to avoid undefined behaviour. Values beyond this threshold are
+// exact multiples of high powers of 2, so their low nibble/bit-pair is 0.
+static constexpr double kSafeInt64Range = 9.2e18;
+
 inline std::uint8_t ClampToInt4(double t) noexcept {
   // Match ml_dtypes.int4 wrapping semantics: truncate toward zero, keep low
-  // 4 bits. Guard against values outside int64 range (float32 max ~3.4e38
-  // exceeds INT64_MAX ~9.2e18); large finite floats are exact multiples of
-  // high powers of 2 so their low nibble is always 0.
-  if (t >= 9.2e18 || t <= -9.2e18)
+  // 4 bits.
+  if (t >= kSafeInt64Range || t <= -kSafeInt64Range)
     return 0x0;
   const int64_t v = static_cast<int64_t>(t);
   return static_cast<std::uint8_t>(static_cast<uint64_t>(v) & 0x0FU);
@@ -33,7 +37,7 @@ inline std::uint8_t ClampToInt4(double t) noexcept {
 inline std::uint8_t ClampToUint4(double t) noexcept {
   // Match ml_dtypes.uint4 wrapping semantics: truncate toward zero, keep low
   // 4 bits.
-  if (t >= 9.2e18 || t <= -9.2e18)
+  if (t >= kSafeInt64Range || t <= -kSafeInt64Range)
     return 0x0;
   const int64_t v = static_cast<int64_t>(t);
   return static_cast<std::uint8_t>(static_cast<uint64_t>(v) & 0x0FU);
@@ -49,7 +53,7 @@ inline std::uint8_t ClampToInt2(double t) noexcept {
 inline std::uint8_t ClampToUint2(double t) noexcept {
   // Match ml_dtypes.uint2 wrapping semantics: truncate toward zero, keep low
   // 2 bits.
-  if (t >= 9.2e18 || t <= -9.2e18)
+  if (t >= kSafeInt64Range || t <= -kSafeInt64Range)
     return 0x0;
   const int64_t v = static_cast<int64_t>(t);
   return static_cast<std::uint8_t>(static_cast<uint64_t>(v) & 0x03U);
@@ -63,7 +67,7 @@ inline std::uint8_t ClampToUint2(double t) noexcept {
 
 std::uint8_t FloatToInt4Nibble(float v) noexcept {
   if (!std::isfinite(v)) {
-    // Match ``ml_dtypes.int4`` conversion of non-finite inputs to 0.
+    // Match ml_dtypes.int4 conversion of non-finite inputs to 0.
     return 0x0;
   }
   return ClampToInt4(TruncTowardZero(v));

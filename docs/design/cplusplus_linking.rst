@@ -110,6 +110,37 @@ can be set on the ``cmake`` command line with ``-D<NAME>=<VALUE>``.
         does not accept it.  See ``cmake/Hardening.cmake`` for the full
         list.
 
+.. _l-design-cpp-linking-no-kernels:
+
+Build without the backend tests and kernels
+--------------------------------------------
+
+The operator-kernel runtime (``lib_onnx_kernels``) and the backend-test case
+registry (``lib_onnx_backend_test``) are by far the largest libraries in the
+build.  When downstream code only needs the schema / checker / shape-inference /
+version-converter / proto layer, pass ``-DONNX_LIGHT_BUILD_KERNELS=OFF`` at
+configure time to skip building and installing them:
+
+.. code-block:: bash
+
+    cmake -S . -B build-install \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DONNX_LIGHT_BUILD_PYTHON=OFF \
+          -DONNX_LIGHT_BUILD_KERNELS=OFF \
+          -DCMAKE_INSTALL_PREFIX=/usr/local
+    cmake --build build-install
+    cmake --install build-install
+
+The exported CMake package then provides only the kernel-free targets —
+``onnx_light::onnx_light``, ``onnx_light::onnx_manipulations``,
+``onnx_light::lib_onnx_op``, ``onnx_light::lib_onnx_optim`` and
+``onnx_light::lib_onnx_proto``.  ``onnx_light::onnx_kernels`` and
+``onnx_light::onnx_backend_test`` are not built and not part of the package.
+
+``ONNX_LIGHT_BUILD_KERNELS=OFF`` is incompatible with
+``ONNX_LIGHT_BUILD_PYTHON=ON`` and ``ONNX_LIGHT_BUILD_TESTS=ON``: the Python
+extensions and the C++ unit tests both require the kernels.
+
 Install and link model
 ----------------------
 

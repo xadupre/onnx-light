@@ -66,4 +66,55 @@ Load a model with parallel tensor parsing:
     model = onnx_light.onnx.load("model.onnx", num_threads=4)
     print(model.ir_version)
 
+Replace ``onnx`` by ``onnx_light.onnx``
+---------------------------------------
+
+``onnx-light`` mirrors the public :epkg:`onnx` Python API, so most code written
+against the standard ``onnx`` package can be ported by changing a few ``import``
+statements.  The :mod:`onnx_light.onnx` module exposes the same protobuf message
+types (:class:`~onnx_light.onnx_lib.ModelProto`,
+:class:`~onnx_light.onnx_lib.TensorProto`, ...) and submodules
+(``helper``, ``numpy_helper``, ``reference``, ``backend``).
+
+Replace ``import onnx`` with ``import onnx_light.onnx as onnx`` and the matching
+submodules:
+
+.. code-block:: python
+
+    # before
+    import onnx
+    from onnx import helper, numpy_helper
+    from onnx.reference import ReferenceEvaluator
+
+    # after
+    import onnx_light.onnx as onnx
+    from onnx_light.onnx import helper, numpy_helper
+    from onnx_light.onnx.reference import ReferenceEvaluator
+
+The rest of the code (``onnx.load``, ``onnx.save``, ``helper.make_node``,
+``ReferenceEvaluator``, ...) stays unchanged.  See
+:ref:`l-onnx-tutorial` for a full set of examples ported from the upstream ONNX
+introduction.
+
+Build without the backend tests and kernels
+--------------------------------------------
+
+The operator-kernel runtime (``lib_onnx_kernels``) and the backend-test case
+registry (``lib_onnx_backend_test``) are the largest parts of the build.  When
+you only need the schema / checker / shape-inference / version-converter / proto
+layer, pass ``-DONNX_LIGHT_BUILD_KERNELS=OFF`` at configure time to skip building
+them:
+
+.. code-block:: bash
+
+    cmake -S . -B build-install \
+          -DONNX_LIGHT_BUILD_PYTHON=OFF \
+          -DONNX_LIGHT_BUILD_KERNELS=OFF
+    cmake --build build-install
+
+``ONNX_LIGHT_BUILD_KERNELS=OFF`` is incompatible with
+``ONNX_LIGHT_BUILD_PYTHON=ON`` and ``ONNX_LIGHT_BUILD_TESTS=ON``, so it is meant
+for pure C++ builds.  See :ref:`l-design-cpp-linking-no-kernels` for the
+matching CMake workflow and the list of targets that remain available.
+
 Source code: `https://github.com/xadupre/onnx-light <https://github.com/xadupre/onnx-light>`_

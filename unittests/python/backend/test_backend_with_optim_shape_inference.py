@@ -99,6 +99,11 @@ TestOptimShapeInferenceBackend = make_test_class(
         # dim whose name does not match the ``k`` placeholder in value_info.
         "test_cc_shape_inference_loop_topk_pairwise_distance.*",
         "test_cc_shape_inference_scan_topk_pairwise_distance.*",
+        # Inputs already use symbolic dim_param ("batch", "seq", "past_seq",
+        # "total_seq"); the value_info uses symbolic dims that the optim
+        # inference may rename, so exact-match value_info comparison cannot be
+        # enforced here. Covered by the C++ BackendTestCaseShapeInference test.
+        "test_cc_shape_inference_tiny_llm.*",
     ],
 )
 

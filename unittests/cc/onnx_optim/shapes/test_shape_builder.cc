@@ -335,9 +335,10 @@ TEST(OnnxOptimShapeBuilder, CheckShapeComputesExpectedRankTypesAndConcreteDims) 
 // of ``data_shape`` through
 // :cpp:func:`onnx_optim::expressions::simplify_expression`, yielding clean
 // symbolic expressions (``xr`` ends up with ``c//2`` in the last dim and
-// ``xrr`` recovers ``c``). The assertions below only check ranks and
-// concrete dims to remain robust to the exact rendering of the
-// simplified expression.
+// ``xrr`` keeps the floor division atomic as ``2*a*b*c//2//(a*b)`` — it is
+// *not* simplified back to ``c`` since ``//`` is floor division). The
+// assertions below only check ranks and concrete dims to remain robust to
+// the exact rendering of the simplified expression.
 TEST(OnnxOptimShapeBuilder, ReshapeReshapePreservesRankAndPartialDims) {
   ModelProto model;
   model.set_ir_version(10);

@@ -5,16 +5,12 @@ onnx-light
     :target: https://github.com/xadupre/onnx-light/actions/workflows/ci_core.yml
     :alt: core
 
-.. image:: https://github.com/xadupre/onnx-light/actions/workflows/build.yml/badge.svg
-    :target: https://github.com/xadupre/onnx-light/actions/workflows/build.yml
-    :alt: build
-
-.. image:: https://github.com/xadupre/onnx-light/actions/workflows/build_reduced.yml/badge.svg
-    :target: https://github.com/xadupre/onnx-light/actions/workflows/build_reduced.yml
+.. image:: https://github.com/xadupre/onnx-light/actions/workflows/build_reduced_wheel.yml/badge.svg
+    :target: https://github.com/xadupre/onnx-light/actions/workflows/build_reduced_wheel.yml
     :alt: build-reduced
 
-.. image:: https://github.com/xadupre/onnx-light/actions/workflows/release_cpp_artifacts.yml/badge.svg
-    :target: https://github.com/xadupre/onnx-light/actions/workflows/release_cpp_artifacts.yml
+.. image:: https://github.com/xadupre/onnx-light/actions/workflows/build_release_cpp_artifacts.yml/badge.svg
+    :target: https://github.com/xadupre/onnx-light/actions/workflows/build_release_cpp_artifacts.yml
     :alt: Build C++ Release Artifacts
 
 .. image:: https://github.com/xadupre/onnx-light/actions/workflows/cq_asan_ubsan.yml/badge.svg
@@ -31,7 +27,7 @@ onnx-light
 
 .. image:: https://github.com/xadupre/onnx-light/actions/workflows/doc_cpp.yml/badge.svg
     :target: https://github.com/xadupre/onnx-light/actions/workflows/doc_cpp.yml
-    :alt: C++ Doxygen Documentation
+    :alt: Doxygen
 
 .. image:: https://github.com/xadupre/onnx-light/actions/workflows/style.yml/badge.svg
     :target: https://github.com/xadupre/onnx-light/actions/workflows/style.yml
@@ -89,6 +85,10 @@ projects can link only what they need:
   parser / serializer, external data, optional AES-256 encrypted save / load.
 - ``onnx_light::lib_onnx_op`` – lightweight ``LightOpSchema``
   registrations for ONNX operator domains, with no shape inference.
+- ``onnx_light::onnx_manipulations`` – graph-manipulation helpers
+  (text parser / printer, attribute and tensor proto helpers, data-type
+  name utilities, graph-input collection); depends only on
+  ``lib_onnx_proto``.
 - ``onnx_light::onnx_light`` – full ONNX-compatible schemas (with
   history), checker, inliner, shape inference and version converter.
 - ``onnx_light::lib_onnx_optim`` – shape-inference dispatch table,

@@ -435,7 +435,14 @@ class TestBackendFunction(ExtTestCase):
             "test_cc_attention_3d_with_past_and_present",
         }
         self.assertEqual(expected_subset & names, expected_subset)
-        for tc in result.values():
+        for case_name, tc in result.items():
+            # ``get_test_cases_for_op`` returns every case that contains an
+            # ``Attention`` node, which now includes multi-node models (e.g.
+            # the ``test_cc_shape_inference_tiny_llm`` decoder). The
+            # single-node / opset invariants below only apply to the dedicated
+            # ``cases_attention.cc`` registry.
+            if not case_name.startswith("test_cc_attention"):
+                continue
             self.assertEqual([node.op_type for node in tc.model.graph.node], ["Attention"])
             self.assertEqual(
                 [(opset.domain, opset.version) for opset in tc.model.opset_import], [("", 23)]

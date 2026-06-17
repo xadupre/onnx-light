@@ -170,6 +170,30 @@ normalised sum is unparsed back to a string.
 
 ----
 
+Floor-division semantics
+------------------------
+
+``//`` is *floor* (integer) division, not exact division, so it does **not**
+commute with multiplication.  A constant factor can be cancelled against the
+denominator only when the numerator is provably an exact multiple of it.  This
+explains a pair of expressions that look symmetric but simplify differently:
+
+* ``(2*H)//2`` **simplifies to** ``H``.  The numerator ``2*H`` is always an
+  even multiple of ``2``, so the division is exact for every integer ``H`` and
+  ``ExactMulDivConstantFolderTransformer`` cancels the common factor.
+* ``2*(H//2)`` is **left unchanged**.  Here the floor division ``H//2`` is
+  evaluated first and discards the remainder, so multiplying the result by
+  ``2`` only recovers ``H`` when ``H`` is even (for example ``2*(3//2) == 2``,
+  not ``3``).  Because the equality does not hold for all integers, the
+  simplifier must preserve the expression.
+
+In general ``a*(x//a)`` equals ``x`` only when ``x`` is a multiple of ``a``,
+whereas ``(a*x)//a`` always equals ``x``.  The simplifier is conservative and
+never rewrites an expression unless the rewrite is valid for *every* integer
+value of the symbolic dimensions.
+
+----
+
 Unparser
 --------
 

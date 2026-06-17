@@ -528,6 +528,21 @@ void AddGraphDeclaredSymbols(const GraphProto &graph, std::unordered_set<std::st
   }
 }
 
+// Collects the symbolic dim names attached to graph inputs only (along with
+// the leaf tokens of any compound expressions). Graph-input symbols are
+// first-class, externally provided dimensions: when an internally computed
+// compound expression (e.g. ``past_seq+seq``) is proven equal to such a
+// symbol (e.g. ``total_seq``, the length of an ``attention_mask`` input),
+// the input symbol is the authoritative name and the expression should
+// collapse to it. Output-only symbols do not qualify, so a meaningful
+// expression like ``b+c`` is preserved rather than rewritten to an opaque
+// sibling output anchor.
+void AddGraphInputSymbols(const GraphProto &graph, std::unordered_set<std::string> &symbols) {
+  for (int i = 0; i < graph.input_size(); ++i) {
+    AddValueInfoSymbols(graph.input(i), symbols);
+  }
+}
+
 OptimShape
 RenameShapeWithReplacements(const OptimShape &shape,
                             const std::unordered_map<std::string, std::string> &replacements) {
@@ -571,12 +586,22 @@ void PropagateAnchorConstraintsIntoContext(ShapesContext &ctx, const AnchorMap &
   }
   std::unordered_map<std::string, std::string> replacements(rep.begin(), rep.end());
 
+  // Graph-input symbols (e.g. ``total_seq``) are authoritative anchors a
+  // compound expression of other input symbols may collapse onto.
+  std::unordered_set<std::string> input_symbols;
+  AddGraphInputSymbols(graph, input_symbols);
+
   // Drop replacement entries whose key is a compound expression made
   // exclusively of leaf tokens that are themselves graph-declared
   // anchor symbols. These expressions (e.g. ``b+c`` when ``b`` and
   // ``c`` are graph inputs) are already authoritative, and rewriting
   // them to a sibling output anchor (e.g. ``e``) would erase the
   // user-meaningful expression.
+  //
+  // Exception: when the replacement target is itself a graph-input symbol
+  // (e.g. ``past_seq+seq`` -> ``total_seq``, the length of an
+  // ``attention_mask`` input), the single input dimension is the canonical
+  // name and the compound expression should collapse onto it.
   for (auto it = replacements.begin(); it != replacements.end();) {
     const std::string &key = it->first;
     if (preferred.count(key) != 0) {
@@ -595,7 +620,7 @@ void PropagateAnchorConstraintsIntoContext(ShapesContext &ctx, const AnchorMap &
         break;
       }
     }
-    if (all_preferred) {
+    if (all_preferred && input_symbols.count(it->second) == 0) {
       it = replacements.erase(it);
     } else {
       ++it;

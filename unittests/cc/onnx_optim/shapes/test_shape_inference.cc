@@ -844,6 +844,107 @@ TEST(OnnxOptimShapeInference, InferShapesModelWithPrefillPrefersOutputAnchor) {
   EXPECT_EQ(out.type().tensor_type().shape().dim()[1].dim_value(), 2);
 }
 
+TEST(OnnxOptimShapeInference, ComputeShapeModelReplacesConcatExprWithInputAnchor) {
+  // ``present = Concat(past_key, new_key, axis=2)`` concatenates the
+  // KV-cache sequence dims ``past_seq`` and ``seq``, so node-level inference
+  // produces ``present`` (and its downstream consumer ``consumed``) with
+  // axis-2 dim ``past_seq+seq``. The model also declares an input ``mask`` of
+  // shape ``[batch, total_seq]`` (so ``total_seq`` is a first-class
+  // graph-input symbol) and the ``present`` output anchor declares
+  // ``[batch, 2, total_seq, 4]``. Shape inference must recognise that
+  // ``past_seq+seq == total_seq`` and rewrite the inferred compound
+  // expression to the input anchor ``total_seq`` everywhere it appears,
+  // including the intermediate ``consumed`` (which is not a graph output and
+  // therefore does not receive the anchor directly).
+  ModelProto model;
+  model.set_ir_version(9);
+  OperatorSetIdProto *osi = model.add_opset_import();
+  osi->set_domain("");
+  osi->set_version(18);
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+
+  ValueInfoProto *past = graph->add_input();
+  past->set_name("past_key");
+  SetValueInfoTensorType(*past, TensorProto::DataType::FLOAT, /*shape=*/{-1, 2, -1, 4},
+                         /*symbolic_names=*/{"batch", "", "past_seq", ""});
+  ValueInfoProto *new_key = graph->add_input();
+  new_key->set_name("new_key");
+  SetValueInfoTensorType(*new_key, TensorProto::DataType::FLOAT, /*shape=*/{-1, 2, -1, 4},
+                         /*symbolic_names=*/{"batch", "", "seq", ""});
+  ValueInfoProto *mask = graph->add_input();
+  mask->set_name("mask");
+  SetValueInfoTensorType(*mask, TensorProto::DataType::FLOAT, /*shape=*/{-1, -1},
+                         /*symbolic_names=*/{"batch", "total_seq"});
+
+  ValueInfoProto *out = graph->add_output();
+  out->set_name("present");
+  SetValueInfoTensorType(*out, TensorProto::DataType::FLOAT, /*shape=*/{-1, 2, -1, 4},
+                         /*symbolic_names=*/{"batch", "", "total_seq", ""});
+
+  NodeProto concat = MakeNode("Concat", {"past_key", "new_key"}, {"present"});
+  AddAttribute<int64_t>(concat, "axis", 2);
+  *graph->add_node() = std::move(concat);
+  *graph->add_node() = MakeNode("Identity", {"present"}, {"consumed"});
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.ComputeShapeModel(model);
+
+  // The graph output adopts the declared anchor directly.
+  ASSERT_TRUE(ctx.Has("present"));
+  ASSERT_EQ(ctx.Get("present").Shape().Rank(), 4u);
+  EXPECT_TRUE(ctx.Get("present").Shape()[2].IsExpr());
+  EXPECT_EQ(ctx.Get("present").Shape()[2].AsExpr(), "total_seq");
+  // The intermediate consumer is rewritten from ``past_seq+seq`` to the
+  // equivalent graph-input anchor ``total_seq``.
+  ASSERT_TRUE(ctx.Has("consumed"));
+  ASSERT_EQ(ctx.Get("consumed").Shape().Rank(), 4u);
+  EXPECT_TRUE(ctx.Get("consumed").Shape()[2].IsExpr());
+  EXPECT_EQ(ctx.Get("consumed").Shape()[2].AsExpr(), "total_seq");
+}
+
+TEST(OnnxOptimShapeInference, ComputeShapeModelKeepsConcatExprWithoutInputAnchor) {
+  // Counterpart to the test above: when the equivalent anchor ``e`` only
+  // appears on a graph **output** (never on an input), the internally
+  // computed expression ``past_seq+seq`` carries more information than the
+  // opaque output label and must be preserved on the intermediate
+  // ``consumed`` rather than collapsed to ``e``.
+  ModelProto model;
+  model.set_ir_version(9);
+  OperatorSetIdProto *osi = model.add_opset_import();
+  osi->set_domain("");
+  osi->set_version(18);
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+
+  ValueInfoProto *past = graph->add_input();
+  past->set_name("past_key");
+  SetValueInfoTensorType(*past, TensorProto::DataType::FLOAT, /*shape=*/{-1, 2, -1, 4},
+                         /*symbolic_names=*/{"batch", "", "past_seq", ""});
+  ValueInfoProto *new_key = graph->add_input();
+  new_key->set_name("new_key");
+  SetValueInfoTensorType(*new_key, TensorProto::DataType::FLOAT, /*shape=*/{-1, 2, -1, 4},
+                         /*symbolic_names=*/{"batch", "", "seq", ""});
+
+  ValueInfoProto *out = graph->add_output();
+  out->set_name("present");
+  SetValueInfoTensorType(*out, TensorProto::DataType::FLOAT, /*shape=*/{-1, 2, -1, 4},
+                         /*symbolic_names=*/{"batch", "", "e", ""});
+
+  NodeProto concat = MakeNode("Concat", {"past_key", "new_key"}, {"present"});
+  AddAttribute<int64_t>(concat, "axis", 2);
+  *graph->add_node() = std::move(concat);
+  *graph->add_node() = MakeNode("Identity", {"present"}, {"consumed"});
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.ComputeShapeModel(model);
+
+  ASSERT_TRUE(ctx.Has("consumed"));
+  ASSERT_EQ(ctx.Get("consumed").Shape().Rank(), 4u);
+  EXPECT_TRUE(ctx.Get("consumed").Shape()[2].IsExpr());
+  EXPECT_EQ(ctx.Get("consumed").Shape()[2].AsExpr(), "past_seq+seq");
+}
+
 // ── Model-local functions ────────────────────────────────────────────
 
 namespace {

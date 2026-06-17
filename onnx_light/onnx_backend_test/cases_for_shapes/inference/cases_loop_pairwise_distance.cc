@@ -183,7 +183,7 @@ void RegisterLoopPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &regi
   // ``dim_value`` entries to fresh ``dim_param`` names before re-running
   // shape inference, so input dims must be concrete here.
   const int32_t kFloat = static_cast<int32_t>(DataType::FLOAT);
-  AppendValueInfo(*graph->add_input(), "X", kFloat, {DimSpec("batch"), DimSpec("feat")});
+  AppendValueInfo(*graph->add_input(), "X", kFloat, {DimSpec(3), DimSpec(3)});
 
   // Intermediate value_info entries. ``shape_X`` is the 1-D INT64 shape
   // vector of ``X`` (length 2 = rank of ``X``); ``trip_count`` is the

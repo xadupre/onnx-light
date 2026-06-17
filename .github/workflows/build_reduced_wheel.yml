@@ -87,7 +87,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install "pytest>=7" pytest-subtests numpy ml-dtypes
-          pip install wheelhouse/*.whl
+          # cibuildwheel also produces a musllinux wheel that lands in
+          # ./wheelhouse next to the manylinux one. Installing it with a bare
+          # "*.whl" glob fails on the glibc x86_64 runner ("not a supported
+          # wheel on this platform"), so install only the manylinux wheel.
+          pip install wheelhouse/*manylinux*.whl
           pip freeze
 
       - name: Verify the installed onnx_light package

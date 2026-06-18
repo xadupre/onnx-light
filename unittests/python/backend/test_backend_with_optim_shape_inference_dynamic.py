@@ -11,11 +11,17 @@ make_test_class = import_or_skip("onnx_light.onnx_lib.backend.test.case", "make_
 
 
 def _inputs(inputs):
-    def _v(v):
+    def _v(vi):
+        if vi.type.has_map_type():
+            mt = vi.type.map_type
+            vt = mt.value_type.tensor_type
+            t = tuple(d.dim_param or d.dim_value for d in vt.shape.dim)
+            return f"map[{mt.key_type} -> {vt.elem_type}: {t}]"
+        v = vi.type.tensor_type
         t = tuple(d.dim_param or d.dim_value for d in v.shape.dim)
         return f"{v.elem_type}: {t}"
 
-    return ", ".join([_v(i.type.tensor_type) for i in inputs])
+    return ", ".join([_v(i) for i in inputs])
 
 
 def _check_match(inputs, expected, inferred, rank_only=False) -> None:
@@ -57,7 +63,7 @@ def shape_inference_check(model: onnxl.ModelProto, *inputs):
         o.type.Clear()
     mapping = {}
     for i in work.graph.input:
-        if i.name in {"axis", "axes"}:
+        if i.name in {"axis", "axes"} or not i.type.tensor_type:
             continue
         shape = i.type.tensor_type.shape
         for di, d in enumerate(shape.dim):
@@ -65,7 +71,7 @@ def shape_inference_check(model: onnxl.ModelProto, *inputs):
                 assert not d.dim_param, f"Unexpected input dimension in {i}"
                 mapping[int(d.dim_value)] = f"{i.name}_{di}"
     for i in work.graph.input:
-        if i.name in {"axis", "axes"}:
+        if i.name in {"axis", "axes"} or not i.type.tensor_type:
             continue
         shape = i.type.tensor_type.shape
         new_shape = [mapping[d.dim_value] for d in shape.dim]

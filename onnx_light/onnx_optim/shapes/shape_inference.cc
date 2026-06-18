@@ -188,6 +188,28 @@ bool ValueInfoHasTensorShape(const ValueInfoProto &vi) {
   return vi.type().tensor_type().has_shape();
 }
 
+bool SeedInputValueInfo(const ValueInfoProto &vi, ShapesContext &ctx) {
+  const std::string name = vi.name().as_string();
+  if (name.empty() || ctx.Has(name) || ctx.HasSequence(name)) {
+    return false;
+  }
+  OptimTensor tensor;
+  if (OptimTensorFromValueInfo(vi, tensor)) {
+    ctx.Set(name, std::move(tensor));
+    return true;
+  }
+  if (!vi.has_type() || !vi.type().has_map_type()) {
+    return false;
+  }
+  const TypeProto &value_type = vi.type().map_type().value_type();
+  if (!value_type.has_tensor_type()) {
+    return false;
+  }
+  const TensorType dtype = DataTypeToTensorType(value_type.tensor_type().elem_type());
+  ctx.Set(name, OptimTensor(nullptr, dtype, OptimShape{}));
+  return true;
+}
+
 void AddValueInfoAsAnchor(const ValueInfoProto &vi, AnchorMap &anchors) {
   const std::string name = vi.name().as_string();
   if (name.empty() || !ValueInfoHasTensorShape(vi)) {
@@ -873,14 +895,7 @@ void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
   current_node_index_ = -1;
   for (int i = 0; i < graph.input().size(); ++i) {
     const ValueInfoProto &vi = graph.input()[i];
-    const std::string name = vi.name().as_string();
-    if (name.empty() || Has(name) || HasSequence(name)) {
-      continue;
-    }
-    OptimTensor tensor;
-    if (OptimTensorFromValueInfo(vi, tensor)) {
-      Set(name, std::move(tensor));
-    }
+    SeedInputValueInfo(vi, *this);
   }
   ComputeShapes(graph.node());
 }

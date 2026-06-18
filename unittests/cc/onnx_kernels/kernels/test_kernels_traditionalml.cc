@@ -555,13 +555,18 @@ TEST(KernelClass, SVMClassifierInt64LabelsBinaryLinear) {
   ASSERT_EQ(yz.first.data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
   ASSERT_EQ(yz.first.shape, (std::vector<int64_t>{2}));
   ASSERT_EQ(yz.second.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
-  ASSERT_EQ(yz.second.shape, (std::vector<int64_t>{2, 1}));
+  ASSERT_EQ(yz.second.shape, (std::vector<int64_t>{2, 2}));
   const int64_t *labels = yz.first.AsInt64();
   const float *scores = yz.second.AsFloat();
-  EXPECT_EQ(labels[0], 1);
-  EXPECT_EQ(labels[1], 0);
-  EXPECT_FLOAT_EQ(scores[0], 1.0f);
-  EXPECT_FLOAT_EQ(scores[1], -3.0f);
+  // x[0]=[2,1]: decision = 1*2 + (-1)*1 + 0 = 1.0 > 0 → class 0
+  // x[1]=[0,3]: decision = 1*0 + (-1)*3 + 0 = -3.0 <= 0 → class 1
+  EXPECT_EQ(labels[0], 0);
+  EXPECT_EQ(labels[1], 1);
+  // Z is [-decision, decision] per ONNX spec: one score per class
+  EXPECT_FLOAT_EQ(scores[0], -1.0f);
+  EXPECT_FLOAT_EQ(scores[1], 1.0f);
+  EXPECT_FLOAT_EQ(scores[2], 3.0f);
+  EXPECT_FLOAT_EQ(scores[3], -3.0f);
 }
 
 TEST(KernelClass, SVMClassifierStringLabelsBinaryLinear) {
@@ -575,7 +580,8 @@ TEST(KernelClass, SVMClassifierStringLabelsBinaryLinear) {
   ASSERT_EQ(yz.first.shape, (std::vector<int64_t>{1}));
   const auto &labels = yz.first.AsStrings();
   ASSERT_EQ(labels.size(), 1u);
-  EXPECT_EQ(labels[0], "neg");
+  // x=[0,2]: decision = 1*0 + (-1)*2 + 0 = -2.0 <= 0 → class_labels[1] = "pos"
+  EXPECT_EQ(labels[0], "pos");
 }
 
 TEST(KernelClass, SVMRegressorLinearKernelMatchesReference) {
@@ -587,8 +593,10 @@ TEST(KernelClass, SVMRegressorLinearKernelMatchesReference) {
   ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 1}));
   const float *py = y.AsFloat();
-  EXPECT_FLOAT_EQ(py[0], 4.5f);
-  EXPECT_FLOAT_EQ(py[1], -2.5f);
+  // x[0]=[3,1]: value = 2*(3+0) + (-1)*(0+1) + 0.5 = 6 - 1 + 0.5 = 5.5
+  // x[1]=[0,2]: value = 2*(0+0) + (-1)*(0+2) + 0.5 = 0 - 2 + 0.5 = -1.5
+  EXPECT_FLOAT_EQ(py[0], 5.5f);
+  EXPECT_FLOAT_EQ(py[1], -1.5f);
 }
 
 TEST(KernelClass, LinearRegressorMatchesReference) {

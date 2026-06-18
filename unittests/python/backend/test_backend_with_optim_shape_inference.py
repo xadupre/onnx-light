@@ -88,16 +88,6 @@ TestOptimShapeInferenceBackend = make_test_class(
         # The expression simplifier reduces 2*(H//2) → H, so the inferred
         # tile_out dim differs from the symbolic name stored in value_info.
         "test_cc_shape_inference_resize_tile.*",
-        # TopK's ``K`` is a runtime model input, so its output axis is an
-        # auto-generated symbolic dim whose name does not match the ``k``
-        # placeholder stored in ``topk_values`` value_info.
-        "test_cc_shape_inference_topk_pairwise_distance.*",
-        # Same reasoning as the broadcasting TopK case above, but the pairwise
-        # distance matrix is produced by a Loop / Scan body: TopK's ``K`` is a
-        # runtime model input, so its output axis is an auto-generated symbolic
-        # dim whose name does not match the ``k`` placeholder in value_info.
-        "test_cc_shape_inference_loop_topk_pairwise_distance.*",
-        "test_cc_shape_inference_scan_topk_pairwise_distance.*",
         # The fused tiny_llm model uses the fused Attention op, whose shape
         # inference requires rank-4 query/key/value; that case is covered by the
         # C++ BackendTestCaseShapeInference test.  The inlined variant is now
@@ -135,14 +125,11 @@ def shape_inference_no_new_names_check(model: onnxl.ModelProto, *inputs):
 TestOptimShapeInferenceNoNewNamesBackend = make_test_class(
     shape_inference_no_new_names_check,
     exclude_regex=[
-        # NonZero, Loop, and Compress are explicitly permitted to introduce
+        # NonZero and Compress are explicitly permitted to introduce
         # new symbolic intermediate names during shape inference (issue #2733).
         "test_cc_nonzero.*",
         "test_nonzero.*",
         "test_cc_shape_inference_nonzero.*",
-        "test_cc_loop.*",
-        "test_loop.*",
-        "test_cc_shape_inference_loop.*",
         # Optional models contain intermediate tensors (e.g. opt_value) that
         # are not declared in value_info; shape inference legitimately adds
         # them, so these tests are excluded from the no-new-names check.

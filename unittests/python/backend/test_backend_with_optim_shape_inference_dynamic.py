@@ -69,8 +69,10 @@ def shape_inference_check(model: onnxl.ModelProto, *inputs):
             continue
         shape = i.type.tensor_type.shape
         for di, d in enumerate(shape.dim):
+            if d.dim_param:
+                # Already symbolic; keep it as-is and skip concrete mapping.
+                continue
             if d.dim_value not in mapping:
-                assert not d.dim_param, f"Unexpected input dimension in {i}"
                 mapping[int(d.dim_value)] = f"{i.name}_{di}"
     for i in work.graph.input:
         if i.name in {"axis", "axes"} or not i.type.has_tensor_type():
@@ -78,7 +80,7 @@ def shape_inference_check(model: onnxl.ModelProto, *inputs):
         if not i.type.tensor_type:
             continue
         shape = i.type.tensor_type.shape
-        new_shape = [mapping[d.dim_value] for d in shape.dim]
+        new_shape = [d.dim_param if d.dim_param else mapping[d.dim_value] for d in shape.dim]
         for i in range(len(shape.dim)):
             shape.dim[i].Clear()
             shape.dim[i].dim_param = new_shape[i]
@@ -93,13 +95,10 @@ TestOptimShapeInferenceDynamicBackend = make_test_class(
         "test_cc_shape_inference_add_concat_reshape.*",
         "test_cc_shape_inference_nonzero_chain_anon.*",
         "test_cc_shape_inference_nonzero_chain_named.*",
-        "test_cc_attention_3d.*",
         "test_cc_cast_map_.*",
         "test_cc_dict_vectorizer_.*",
         "test_cc_loop11_carried_state.*",
         "test_cc_optional_get_element_optional_sequence.*",
-        "test_cc_sequence_map_add_2_sequences.*",
-        "test_cc_sequence_map_identity_2_sequences.*",
         "test_cc_squeeze_all_singleton.*",
         "test_cc_squeeze_no_axes_input.*",
         "test_cc_squeeze_empty_axes_name.*",
@@ -109,32 +108,19 @@ TestOptimShapeInferenceDynamicBackend = make_test_class(
         "test_cc_identity_opt.*",
         "test_cc_if_seq.*",
         "test_cc_if_opt.*",
-        "test_cc_shape_inference_local_function_add.*",
-        "test_cc_shape_inference_nested_local_function_add.*",
         "test_cc_linear_attention.*",
         "test_cc_shape_inference_scan_running_sum.*",
-        # Inputs already use symbolic dim_param ("batch", "seq"), which the
-        # dynamic harness cannot rewrite (it asserts concrete dim_value
-        # inputs before swapping them to symbolic names).
+        # Shape inference does not yet fully support the expression-valued
+        # dims produced by this test (e.g. "batch+seq"), so the inferred
+        # value_info names do not match the expected ones.
         "test_cc_shape_inference_nonzero_plus_expression.*",
-        # Inputs use symbolic dim_param ("H", "2*h"); the dynamic harness
-        # requires concrete dim_value inputs.
+        # "2*h" expression dims are not preserved through shape inference.
         "test_cc_shape_inference_resize_tile.*",
-        # Input X already uses symbolic dim_param ("N", "H", "W"); the dynamic
-        # harness requires concrete dim_value inputs to rewrite them.
+        # Canny edge detection shape inference is not yet implemented.
         "test_cc_shape_inference_pad_canny_average.*",
-        # Input X already uses symbolic dim_param ("N", "D"); the dynamic
-        # harness requires concrete dim_value inputs to rewrite them.
-        "test_cc_shape_inference_topk_pairwise_distance.*",
-        # Input X already uses symbolic dim_param ("batch", "features"); the
-        # dynamic harness requires concrete dim_value inputs to rewrite them.
-        "test_cc_shape_inference_loop_pairwise_distance.*",
-        # Input X already uses symbolic dim_param ("N", "D"); the dynamic
-        # harness requires concrete dim_value inputs to rewrite them.
-        "test_cc_shape_inference_loop_topk_pairwise_distance.*",
-        "test_cc_shape_inference_scan_topk_pairwise_distance.*",
         # Inputs already use symbolic dim_param ("batch", "seq", "past_seq",
-        # "total_seq"); the dynamic harness requires concrete dim_value inputs.
+        # "total_seq"); tiny_llm uses a fused Attention op whose shape
+        # inference requires concrete rank-4 query/key/value tensors.
         "test_cc_shape_inference_tiny_llm.*",
     ],
 )

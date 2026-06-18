@@ -222,6 +222,37 @@ class TestModelProtoFields(ExtTestCase):
         self.assertTrue(model.has_model_version())
         self.assertEqual(model.model_version, 3)
 
+    def test_configuration_field_is_accessible(self):
+        """Tests that the repeated ``configuration`` field is exposed."""
+        model = m.ModelProto()
+        self.assertTrue(hasattr(model, "configuration"))
+        self.assertEqual(len(model.configuration), 0)
+        config = model.configuration.add()
+        config.name = "dev0"
+        config.num_devices = 2
+        self.assertEqual(len(model.configuration), 1)
+        self.assertEqual(model.configuration[0].name, "dev0")
+        self.assertEqual(model.configuration[0].num_devices, 2)
+
+    def test_missing_attribute_returns_false(self):
+        """Tests that ``hasattr`` returns ``False`` for an unknown field."""
+        model = m.ModelProto()
+        self.assertFalse(hasattr(model, "not_a_real_field"))
+
+
+class TestNodeProtoFields(ExtTestCase):
+    """Tests for NodeProto field bindings."""
+
+    def test_device_configurations_field_is_accessible(self):
+        """Tests that the repeated ``device_configurations`` field is exposed."""
+        node = m.NodeProto()
+        self.assertTrue(hasattr(node, "device_configurations"))
+        self.assertEqual(len(node.device_configurations), 0)
+        config = node.device_configurations.add()
+        config.configuration_id = "cfg0"
+        self.assertEqual(len(node.device_configurations), 1)
+        self.assertEqual(node.device_configurations[0].configuration_id, "cfg0")
+
 
 class TestProtoRepr(ExtTestCase):
     """Tests for proto repr formatting."""

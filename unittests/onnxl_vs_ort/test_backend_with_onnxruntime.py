@@ -122,6 +122,10 @@ ORT_EXCLUDE_REGEX = [
     # ORT only wires float kernels for these ai.onnx.ml cases.
     r"^test_cc_binarizer_int64$",
     r"^test_cc_scaler_int64$",
+    # ORT's binary LinearClassifier Z output uses [1-z, z] instead of the spec's [-z, z].
+    r"^test_cc_linearclassifier_int64_binary$",
+    # ORT returns wrong labels for the binary TreeEnsembleClassifier test case.
+    r"^test_cc_treeensembleclassifier_int64_binary$",
     # Low-precision Cast/CastLike dtypes are unsupported in ORT.
     r"^test_cc_cast_.*FLOAT8E4M3.*$",
     r"^test_cc_cast_.*FLOAT8E5M2.*$",
@@ -172,12 +176,6 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_qlinearmatmul_2D_int8_float16$",
     r"^test_cc_qlinearmatmul_3D_uint8_float16$",
     r"^test_cc_qlinearmatmul_3D_int8_float16$",
-    # ai.onnx.ml parity cases use different scoring/layout rules in ORT.
-    r"^test_cc_svmclassifier_int64_binary$",
-    r"^test_cc_svmregressor_linear$",
-    r"^test_cc_linearclassifier_int64_binary$",
-    r"^test_cc_linearregressor_single_target$",
-    r"^test_cc_treeensembleclassifier_int64_binary$",
     # ORT is missing kernels for these ops or dtypes.
     r"^test_cc_globallppool_",
     r"^test_cc_maxroipool_",
@@ -186,9 +184,6 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_cast_map_",
     # ORT rejects these mixed-dtype or batchwise sequence patterns.
     r"^test_cc_feature_vectorizer_mixed_dtypes$",
-    r"^test_cc_simple_rnn_batchwise$",
-    r"^test_cc_lstm_batchwise$",
-    r"^test_cc_gru_batchwise$",
     # More single-op kernel gaps and focused parity checks.
     r"^test_bitshift_right_uint16$",
     r"^test_bitshift_left_uint16$",
@@ -210,7 +205,10 @@ ORT_EXCLUDE_REGEX = [
     r"^test_mod_mixed_sign_bfloat16$",
     r"^test_cc_mod_bfloat16_fmod$",
     r"^test_cc_pow_types_bfloat16_float32$",
-    # ORT diverges from the reference on MaxUnpool/Resize edge semantics.
+    # ORT diverges from the reference on MaxUnpool and on align_corners
+    # Resize downsample cases where scale * input_width is fractional:
+    # ONNX reference / onnx-light use (scale * input_width - 1) in the
+    # denominator, while ORT uses (output_width_int - 1).
     r"^test_cc_maxunpool_export_with_output_shape$",
     r"^test_resize_downsample_scales_linear_align_corners$",
     r"^test_resize_downsample_scales_cubic_align_corners$",
@@ -225,6 +223,10 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_if_opt$",
     # ORT rejects the empty-name encoding of the optional ``axes`` input.
     r"^test_cc_squeeze_empty_axes_name$",
+    # ORT does not support batchwise recurrent operations (layout == 1).
+    r"^test_cc_gru_batchwise$",
+    r"^test_cc_lstm_batchwise$",
+    r"^test_cc_simple_rnn_batchwise$",
 ]
 
 # Add opset-gated exclusions only for opset versions ONNX Runtime cannot load yet.

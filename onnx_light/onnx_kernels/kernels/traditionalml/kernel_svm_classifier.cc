@@ -46,7 +46,7 @@ ComputeBinaryDecisionScores(const std::vector<double> &x_values, int64_t sample_
           ComputeSvmKernel(kernel_type, x_row, sv, feature_count, gamma, coef0, degree);
       decision += static_cast<double>(coefficients[static_cast<size_t>(i)]) * k;
     }
-    decision -= static_cast<double>(rho[0]);
+    decision += static_cast<double>(rho[0]);
     scores[static_cast<size_t>(n)] = static_cast<float>(decision);
   }
   return scores;
@@ -71,12 +71,15 @@ SVMClassifier::operator()(const Tensor &x, const std::vector<float> &support_vec
       x_values, sample_count, feature_count, support_vectors, coefficients, rho, vectors_per_class,
       kernel_type, gamma, coef0, degree);
   std::vector<int64_t> labels(static_cast<size_t>(sample_count));
+  std::vector<float> expanded_scores(static_cast<size_t>(sample_count * 2));
   for (int64_t i = 0; i < sample_count; ++i) {
-    labels[static_cast<size_t>(i)] =
-        scores[static_cast<size_t>(i)] > 0.0f ? class_labels[1] : class_labels[0];
+    const float s = scores[static_cast<size_t>(i)];
+    labels[static_cast<size_t>(i)] = s > 0.0f ? class_labels[0] : class_labels[1];
+    expanded_scores[static_cast<size_t>(i * 2)] = -s;
+    expanded_scores[static_cast<size_t>(i * 2 + 1)] = s;
   }
   Tensor y = Tensor::FromInt64("", {sample_count}, labels);
-  Tensor z = Tensor::FromFloat("", {sample_count, 1}, scores);
+  Tensor z = Tensor::FromFloat("", {sample_count, 2}, expanded_scores);
   return std::make_pair(std::move(y), std::move(z));
 }
 
@@ -97,12 +100,15 @@ SVMClassifier::operator()(const Tensor &x, const std::vector<float> &support_vec
       x_values, sample_count, feature_count, support_vectors, coefficients, rho, vectors_per_class,
       kernel_type, gamma, coef0, degree);
   std::vector<std::string> labels(static_cast<size_t>(sample_count));
+  std::vector<float> expanded_scores(static_cast<size_t>(sample_count * 2));
   for (int64_t i = 0; i < sample_count; ++i) {
-    labels[static_cast<size_t>(i)] =
-        scores[static_cast<size_t>(i)] > 0.0f ? class_labels[1] : class_labels[0];
+    const float s = scores[static_cast<size_t>(i)];
+    labels[static_cast<size_t>(i)] = s > 0.0f ? class_labels[0] : class_labels[1];
+    expanded_scores[static_cast<size_t>(i * 2)] = -s;
+    expanded_scores[static_cast<size_t>(i * 2 + 1)] = s;
   }
   Tensor y = Tensor::FromStrings("", {sample_count}, labels);
-  Tensor z = Tensor::FromFloat("", {sample_count, 1}, scores);
+  Tensor z = Tensor::FromFloat("", {sample_count, 2}, expanded_scores);
   return std::make_pair(std::move(y), std::move(z));
 }
 

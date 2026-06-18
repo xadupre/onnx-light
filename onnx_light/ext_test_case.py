@@ -355,13 +355,6 @@ def _lazy_import_tensorproto():
     return TensorProto
 
 
-def _lazy_import_ort_cpp_api():
-    """Lazily imports ORT C++ API bindings."""
-    from onnxruntime.capi import _pybind_state as C
-
-    return C
-
-
 class InferenceSessionAllTypes:
     """
     Wrapper around onnxruntime.InferenceSession that supports all ONNX dtypes.
@@ -384,19 +377,12 @@ class InferenceSessionAllTypes:
             providers = ["CPUExecutionProvider"]
         self._sess = ort.InferenceSession(model_bytes, providers=providers)
         self._TensorProto = None
-        self._C = None
 
     def _get_tensorproto(self):
         """Gets TensorProto with lazy import."""
         if self._TensorProto is None:
             self._TensorProto = _lazy_import_tensorproto()
         return self._TensorProto
-
-    def _get_ort_cpp_api(self):
-        """Gets ORT C++ API with lazy import."""
-        if self._C is None:
-            self._C = _lazy_import_ort_cpp_api()
-        return self._C
 
     def _get_numpy_dtype_to_onnx_mapping(self):
         """Returns mapping from NumPy dtype to ONNX TensorProto data type."""
@@ -515,7 +501,8 @@ class InferenceSessionAllTypes:
 
         # Use IOBinding for special dtypes, standard run otherwise
         if needs_iobinding:
-            C = self._get_ort_cpp_api()
+            from onnxruntime.capi import _pybind_state as C
+
             io_binding = self._sess.io_binding()
 
             for meta, inp in zip(input_metas, inputs):

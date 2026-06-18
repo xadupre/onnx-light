@@ -180,45 +180,35 @@ def _build_to_svg_example() -> tuple[str, str]:
     Returns:
         tuple[str, str]: Python code snippet and rendered SVG content.
     """
-    from onnx_light.onnx.helper import make_graph, make_model, make_node, make_tensor_value_info
-    from onnx_light.onnx_lib import TensorProto
-    from onnx_light.tools import to_svg
+    code = """
+from onnx_light.onnx_lib import TensorProto
+from onnx_light.onnx.helper import (
+    make_model,
+    make_node,
+    make_graph,
+    make_tensor_value_info,
+)
+from onnx_light.tools import to_svg
 
-    code = "\n".join(
-        [
-            "from onnx_light.onnx_lib import TensorProto",
-            "from onnx_light.onnx.helper import (",
-            "    make_model,",
-            "    make_node,",
-            "    make_graph,",
-            "    make_tensor_value_info,",
-            ")",
-            "from onnx_light.tools import to_svg",
-            "",
-            "X = make_tensor_value_info('X', TensorProto.FLOAT, [None, None])",
-            "A = make_tensor_value_info('A', TensorProto.FLOAT, [None, None])",
-            "B = make_tensor_value_info('B', TensorProto.FLOAT, [None, None])",
-            "Y = make_tensor_value_info('Y', TensorProto.FLOAT, [None])",
-            "",
-            "node1 = make_node('MatMul', ['X', 'A'], ['XA'])",
-            "node2 = make_node('Add', ['XA', 'B'], ['Y'])",
-            "graph = make_graph([node1, node2], 'example', [X, A, B], [Y])",
-            "model = make_model(graph)",
-            "",
-            "svg = to_svg(model)",
-        ]
-    )
+X = make_tensor_value_info("X", TensorProto.FLOAT, [None, None])
+A = make_tensor_value_info("A", TensorProto.FLOAT, [None, None])
+B = make_tensor_value_info("B", TensorProto.FLOAT, [None, None])
+Y = make_tensor_value_info("Y", TensorProto.FLOAT, [None])
 
-    X = make_tensor_value_info("X", TensorProto.FLOAT, [None, None])
-    A = make_tensor_value_info("A", TensorProto.FLOAT, [None, None])
-    B = make_tensor_value_info("B", TensorProto.FLOAT, [None, None])
-    Y = make_tensor_value_info("Y", TensorProto.FLOAT, [None])
+node1 = make_node("MatMul", ["X", "A"], ["XA"])
+node2 = make_node("Add", ["XA", "B"], ["Y"])
+graph = make_graph([node1, node2], "example", [X, A, B], [Y])
+model = make_model(graph)
 
-    node1 = make_node("MatMul", ["X", "A"], ["XA"])
-    node2 = make_node("Add", ["XA", "B"], ["Y"])
-    graph = make_graph([node1, node2], "example", [X, A, B], [Y])
-    model = make_model(graph)
-    return code, to_svg(model)
+svg = to_svg(model)
+""".strip()
+
+    namespace: dict[str, object] = {}
+    exec(code, namespace)
+    svg = namespace.get("svg")
+    if not isinstance(svg, str):
+        raise RuntimeError("The to-svg example must define 'svg' as a string.")
+    return code, svg
 
 
 class ToSvgExampleDirective(Directive):
@@ -242,6 +232,6 @@ class ToSvgExampleDirective(Directive):
 
 
 def setup(app) -> None:
-    """Registers Sphinx event hooks used by this configuration."""
+    """Registers Sphinx hooks and custom directives used by this configuration."""
     app.connect("builder-inited", _on_builder_inited)
     app.add_directive("to-svg-example", ToSvgExampleDirective)

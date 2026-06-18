@@ -343,11 +343,21 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
                       "ComputeShapeScan: 'num_scan_inputs' must be strictly positive, got ",
                       std::to_string(num_scan_inputs64), ".");
   const int num_scan_inputs = static_cast<int>(num_scan_inputs64);
+
+  // Scan opset 8 prepends an optional ``sequence_lens`` input (which is not
+  // a state variable and has no corresponding body input). Detect it from
+  // the model's default-domain opset version and skip that slot when
+  // counting / indexing state inputs.
+  const int opset =
+      ctx.HasOpsetVersion(kOnnxDomain) ? ctx.OpsetVersion(kOnnxDomain) : kUnknownOpsetVersion;
+  const bool is_scan8 = opset >= 1 && opset <= 8;
+  const int scan8_offset = is_scan8 ? 1 : 0;
+
   EXT_ENFORCE_INVALID(
-      node.input_size() >= num_scan_inputs, "ComputeShapeScan: 'Scan' node declares ",
-      std::to_string(node.input_size()),
+      node.input_size() >= num_scan_inputs + scan8_offset,
+      "ComputeShapeScan: 'Scan' node declares ", std::to_string(node.input_size()),
       " input(s), expected at least num_scan_inputs = ", std::to_string(num_scan_inputs), ".");
-  const int n_state = node.input_size() - num_scan_inputs;
+  const int n_state = node.input_size() - num_scan_inputs - scan8_offset;
   EXT_ENFORCE_INVALID(node.output_size() >= n_state, "ComputeShapeScan: Scan node declares ",
                       std::to_string(node.output_size()),
                       " output(s), expected at least N=", std::to_string(n_state),
@@ -363,25 +373,35 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
                       std::to_string(body.output().size()),
                       " output(s), expected N + K = ", std::to_string(n_state + k_scan), ".");
 
-  // Optional scan_input_axes attribute (per scan input).
+  // Scan opset 8 does not have scan_input_axes / scan_output_axes; the scan
+  // axis is always 1 of each batched input (axis 0 after stripping the batch
+  // dimension). Opset 9+ supports explicit per-input/output axes.
   std::vector<int64_t> scan_input_axes;
-  GetAttributeInts(node, "scan_input_axes", scan_input_axes);
-  EXT_ENFORCE_INVALID(scan_input_axes.empty() ||
-                          scan_input_axes.size() == static_cast<std::size_t>(num_scan_inputs),
-                      "ComputeShapeScan: 'scan_input_axes' must have num_scan_inputs entries.");
-
-  // Optional scan_output_axes attribute (per scan output).
   std::vector<int64_t> scan_output_axes;
-  GetAttributeInts(node, "scan_output_axes", scan_output_axes);
-  EXT_ENFORCE_INVALID(scan_output_axes.empty() ||
-                          scan_output_axes.size() == static_cast<std::size_t>(k_scan),
-                      "ComputeShapeScan: 'scan_output_axes' must have K entries.");
+  if (!is_scan8) {
+    // Optional scan_input_axes attribute (per scan input).
+    GetAttributeInts(node, "scan_input_axes", scan_input_axes);
+    EXT_ENFORCE_INVALID(scan_input_axes.empty() ||
+                            scan_input_axes.size() == static_cast<std::size_t>(num_scan_inputs),
+                        "ComputeShapeScan: 'scan_input_axes' must have num_scan_inputs entries.");
+
+    // Optional scan_output_axes attribute (per scan output).
+    GetAttributeInts(node, "scan_output_axes", scan_output_axes);
+    EXT_ENFORCE_INVALID(scan_output_axes.empty() ||
+                            scan_output_axes.size() == static_cast<std::size_t>(k_scan),
+                        "ComputeShapeScan: 'scan_output_axes' must have K entries.");
+  }
 
   // Build a child context with the body's formal input descriptors so that
   // shape inference can walk the body. The first N body inputs are the
   // state variables (inherited from the matching node inputs); the
   // remaining M are per-iteration scan-input slices, obtained by dropping
   // the scan axis from the matching scan_input shape.
+  //
+  // For Scan opset 8, every state and scan input carries a leading batch
+  // dimension B. The body inputs are batch-stripped (rank reduced by one):
+  //   state input [B, D...] → body input [D...]
+  //   scan input  [B, T, D...] → body input [D...]  (B and T stripped)
   ShapesContext local = ctx;
   local.set_current_subgraph(local.current_node_index(), "body");
   for (int i = 0; i < body.initializer().size(); ++i) {
@@ -395,11 +415,32 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
       local.Set(name, std::move(tensor));
     }
   }
+
+  // Batch dimension for Scan opset 8 (shared by all batched inputs/outputs).
+  OptimDim batch_dim(std::string("Scan8_") + node.output(0).as_string() + "_batch");
+
   for (int i = 0; i < n_state; ++i) {
-    const std::string state_in_name = node.input(i).as_string();
+    const std::string state_in_name = node.input(scan8_offset + i).as_string();
     EXT_ENFORCE_INVALID(local.Has(state_in_name), "ComputeShapeScan: state input '", state_in_name,
                         "' is missing from the inferred context.");
-    local.Set(body.input()[i].name().as_string(), OptimTensor(local.Get(state_in_name)));
+    const OptimTensor &state_in = local.Get(state_in_name);
+    if (is_scan8) {
+      // Strip leading batch dimension; body sees [D...].
+      EXT_ENFORCE_INVALID(state_in.Shape().Rank() >= 1,
+                          "ComputeShapeScan: Scan opset 8 state input '", state_in_name,
+                          "' must have rank >= 1.");
+      if (i == 0) {
+        batch_dim = state_in.Shape()[0];
+      }
+      OptimShape body_state_shape;
+      for (std::size_t d = 1; d < state_in.Shape().Rank(); ++d) {
+        body_state_shape.PushBack(state_in.Shape()[d]);
+      }
+      local.Set(body.input()[i].name().as_string(),
+                OptimTensor(nullptr, state_in.Dtype(), std::move(body_state_shape)));
+    } else {
+      local.Set(body.input()[i].name().as_string(), OptimTensor(state_in));
+    }
   }
 
   // The trip count is taken from the first scan input's scan axis.
@@ -407,25 +448,46 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
   bool trip_count_known = false;
 
   for (int m = 0; m < num_scan_inputs; ++m) {
-    const std::string scan_in_name = node.input(n_state + m).as_string();
+    const std::string scan_in_name = node.input(scan8_offset + n_state + m).as_string();
     EXT_ENFORCE_INVALID(local.Has(scan_in_name), "ComputeShapeScan: scan input '", scan_in_name,
                         "' is missing from the inferred context.");
     const OptimTensor &scan_in = local.Get(scan_in_name);
-    const int64_t axis_raw = scan_input_axes.empty() ? 0 : scan_input_axes[m];
-    const int64_t axis = NormalizeAxis(axis_raw, scan_in.Shape().Rank(), "scan_input_axes");
     EXT_ENFORCE_INVALID(scan_in.Shape().Rank() >= 1, "ComputeShapeScan: scan input '", scan_in_name,
                         "' must have rank >= 1.");
-    if (m == 0) {
-      trip_count_dim = scan_in.Shape()[static_cast<std::size_t>(axis)];
-      trip_count_known = true;
-    }
-    // Body input shape for this scan input = scan_in.shape with axis removed.
+
     OptimShape body_in_shape;
-    for (std::size_t d = 0; d < scan_in.Shape().Rank(); ++d) {
-      if (static_cast<int64_t>(d) == axis) {
-        continue;
+    if (is_scan8) {
+      // Scan opset 8: input shape is [B, T, D...]. Strip both B (axis 0) and
+      // T (axis 1); body input sees [D...]. Trip count = T = axis 1.
+      EXT_ENFORCE_INVALID(scan_in.Shape().Rank() >= 2,
+                          "ComputeShapeScan: Scan opset 8 scan input '", scan_in_name,
+                          "' must have rank >= 2.");
+      if (m == 0) {
+        trip_count_dim = scan_in.Shape()[1];
+        trip_count_known = true;
+        // When there are no state inputs (n_state=0), take the batch dimension
+        // from the first scan input.
+        if (n_state == 0) {
+          batch_dim = scan_in.Shape()[0];
+        }
       }
-      body_in_shape.PushBack(scan_in.Shape()[d]);
+      for (std::size_t d = 2; d < scan_in.Shape().Rank(); ++d) {
+        body_in_shape.PushBack(scan_in.Shape()[d]);
+      }
+    } else {
+      const int64_t axis_raw = scan_input_axes.empty() ? 0 : scan_input_axes[m];
+      const int64_t axis = NormalizeAxis(axis_raw, scan_in.Shape().Rank(), "scan_input_axes");
+      if (m == 0) {
+        trip_count_dim = scan_in.Shape()[static_cast<std::size_t>(axis)];
+        trip_count_known = true;
+      }
+      // Body input shape for this scan input = scan_in.shape with axis removed.
+      for (std::size_t d = 0; d < scan_in.Shape().Rank(); ++d) {
+        if (static_cast<int64_t>(d) == axis) {
+          continue;
+        }
+        body_in_shape.PushBack(scan_in.Shape()[d]);
+      }
     }
     local.Set(body.input()[n_state + m].name().as_string(),
               OptimTensor(nullptr, scan_in.Dtype(), std::move(body_in_shape)));
@@ -448,48 +510,73 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
 
   // N state outputs: dtype/shape are taken from the body's v_out (and
   // validated against v_initial when shapes agree).
+  // For Scan opset 8, restore the leading batch dimension on state outputs.
   for (int i = 0; i < n_state; ++i) {
     const std::string node_out = node.output(i).as_string();
     if (node_out.empty()) {
       continue;
     }
-    const OptimTensor &state_in = ctx.Get(node.input(i).as_string());
+    const OptimTensor &state_in = ctx.Get(node.input(scan8_offset + i).as_string());
     const OptimTensor &v_out = local.Get(body.output()[i].name().as_string());
     EXT_ENFORCE_INVALID(v_out.Dtype() == state_in.Dtype(), "ComputeShapeScan: body output #",
                         std::to_string(i),
                         " has a different element type than the matching state input.");
-    OptimShape out_shape = (v_out.Shape() == state_in.Shape())
-                               ? state_in.Shape()
-                               : SymbolicShape(v_out.Shape().Rank(), "Scan_" + node_out);
-    ctx.Set(node_out, OptimTensor(nullptr, state_in.Dtype(), std::move(out_shape)));
+    if (is_scan8) {
+      // Output shape = [B, D...] where D... is the body output shape.
+      OptimShape out_shape;
+      out_shape.PushBack(batch_dim);
+      for (std::size_t d = 0; d < v_out.Shape().Rank(); ++d) {
+        out_shape.PushBack(v_out.Shape()[d]);
+      }
+      ctx.Set(node_out, OptimTensor(nullptr, state_in.Dtype(), std::move(out_shape)));
+    } else {
+      OptimShape out_shape = (v_out.Shape() == state_in.Shape())
+                                 ? state_in.Shape()
+                                 : SymbolicShape(v_out.Shape().Rank(), "Scan_" + node_out);
+      ctx.Set(node_out, OptimTensor(nullptr, state_in.Dtype(), std::move(out_shape)));
+    }
   }
 
   // K scan outputs: dtype is the body's scan-output element dtype; shape
   // is the body's per-iteration scan-output shape with a new axis of
   // length ``trip_count_dim`` inserted at position scan_output_axes[k]
   // (default 0).
+  // For Scan opset 8, an additional leading batch dimension B is also
+  // prepended so the output shape is [B, T, D...].
   for (int k = 0; k < k_scan; ++k) {
     const std::string node_out = node.output(n_state + k).as_string();
     if (node_out.empty()) {
       continue;
     }
     const OptimTensor &scan_out_elt = local.Get(body.output()[n_state + k].name().as_string());
-    const int64_t axis_raw = scan_output_axes.empty() ? 0 : scan_output_axes[k];
-    // Output rank = elt rank + 1.
-    const int64_t axis =
-        NormalizeAxis(axis_raw, scan_out_elt.Shape().Rank() + 1, "scan_output_axes");
-    OptimShape stacked;
     const OptimDim trip_dim =
         trip_count_known ? trip_count_dim : OptimDim(std::string("Scan_") + node_out + "_trip");
-    for (std::size_t d = 0; d <= scan_out_elt.Shape().Rank(); ++d) {
-      if (static_cast<int64_t>(d) == axis) {
-        stacked.PushBack(trip_dim);
-      }
-      if (d < scan_out_elt.Shape().Rank()) {
+
+    if (is_scan8) {
+      // Output shape = [B, T, D...].
+      OptimShape stacked;
+      stacked.PushBack(batch_dim);
+      stacked.PushBack(trip_dim);
+      for (std::size_t d = 0; d < scan_out_elt.Shape().Rank(); ++d) {
         stacked.PushBack(scan_out_elt.Shape()[d]);
       }
+      ctx.Set(node_out, OptimTensor(nullptr, scan_out_elt.Dtype(), std::move(stacked)));
+    } else {
+      const int64_t axis_raw = scan_output_axes.empty() ? 0 : scan_output_axes[k];
+      // Output rank = elt rank + 1.
+      const int64_t axis =
+          NormalizeAxis(axis_raw, scan_out_elt.Shape().Rank() + 1, "scan_output_axes");
+      OptimShape stacked;
+      for (std::size_t d = 0; d <= scan_out_elt.Shape().Rank(); ++d) {
+        if (static_cast<int64_t>(d) == axis) {
+          stacked.PushBack(trip_dim);
+        }
+        if (d < scan_out_elt.Shape().Rank()) {
+          stacked.PushBack(scan_out_elt.Shape()[d]);
+        }
+      }
+      ctx.Set(node_out, OptimTensor(nullptr, scan_out_elt.Dtype(), std::move(stacked)));
     }
-    ctx.Set(node_out, OptimTensor(nullptr, scan_out_elt.Dtype(), std::move(stacked)));
   }
 
   // Retain the body's child context so its internals stay inspectable

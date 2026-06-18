@@ -708,4 +708,58 @@ TEST(OnnxOptimShapeScan, RetainsBodySubgraphContext) {
   EXPECT_EQ(body_ctx.Get("y_elt").Shape()[0].AsInt(), 3);
 }
 
+// Scan opset 8: node inputs are (sequence_lens="", initial, x) where
+// ``initial`` has shape [B, D] and ``x`` has shape [B, T, D].  The body
+// receives batch-stripped inputs (state=[D], scan=[D]) and the node outputs
+// should carry the batch dimension back: state output [B, D], scan output
+// [B, T, D].
+TEST(OnnxOptimShapeScan, HandlesOpset8BatchDimension) {
+  // Build body: sum_in + next → sum_out, scan_out = Identity(sum_out).
+  GraphProto body;
+  body.set_name("scan8_body");
+  body.add_input()->set_name("sum_in");
+  body.add_input()->set_name("next");
+  NodeProto *add_node = body.add_node();
+  add_node->set_op_type("Add");
+  add_node->add_input("sum_in");
+  add_node->add_input("next");
+  add_node->add_output("sum_out");
+  NodeProto *id_node = body.add_node();
+  id_node->set_op_type("Identity");
+  id_node->add_input("sum_out");
+  id_node->add_output("scan_out");
+  body.add_output()->set_name("sum_out");
+  body.add_output()->set_name("scan_out");
+
+  // Node: ("", initial, x) → (y_state, y_scan), num_scan_inputs=1.
+  NodeProto node =
+      MakeScanNode({"", "initial", "x"}, {"y_state", "y_scan"}, body, /*num_scan_inputs=*/1);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("ai.onnx", 8);
+
+  // initial: [B=1, D=2], x: [B=1, T=3, D=2].
+  onnx_optim::OptimShape initial_shape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(2)};
+  onnx_optim::OptimShape x_shape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(3),
+                                 onnx_optim::OptimDim(2)};
+  ctx.Set("initial",
+          onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, initial_shape));
+  ctx.Set("x", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, x_shape));
+
+  onnx_optim::shapes::controlflow::ComputeShapeScan(ctx, node);
+
+  // State output y_state should be [B=1, D=2].
+  ASSERT_TRUE(ctx.Has("y_state"));
+  ASSERT_EQ(ctx.Get("y_state").Shape().Rank(), 2u);
+  EXPECT_EQ(ctx.Get("y_state").Shape()[0].AsInt(), 1);
+  EXPECT_EQ(ctx.Get("y_state").Shape()[1].AsInt(), 2);
+
+  // Scan output y_scan should be [B=1, T=3, D=2].
+  ASSERT_TRUE(ctx.Has("y_scan"));
+  ASSERT_EQ(ctx.Get("y_scan").Shape().Rank(), 3u);
+  EXPECT_EQ(ctx.Get("y_scan").Shape()[0].AsInt(), 1);
+  EXPECT_EQ(ctx.Get("y_scan").Shape()[1].AsInt(), 3);
+  EXPECT_EQ(ctx.Get("y_scan").Shape()[2].AsInt(), 2);
+}
+
 } // namespace Test

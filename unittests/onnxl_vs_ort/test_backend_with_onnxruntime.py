@@ -167,6 +167,8 @@ ORT_EXCLUDE_REGEX = [
     r"^test_max_uint16$",
     r"^test_min_int16$",
     r"^test_min_uint16$",
+    # dim0_offset < dim0_size was false. Invalid dim0_offset of 0. Dimension 0 is 0
+    r"^test_cc_scan_zero_trip_count$",
     # ORT CPU does not register int16/int64 kernels for Relu(14).
     r"^test_cc_relu_int16$",
     r"^test_cc_relu_int64$",

@@ -236,11 +236,22 @@ void RegisterTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &regi
   AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {DimSpec("N"), DimSpec("D")});
   AppendValueInfo(*graph->add_input(), "K", DataType::INT64, {DimSpec(int64_t{1})});
 
-  // Intermediate value_info entries. ``dist`` is the symbolic ``[N, N]``
-  // distance matrix; ``topk_values`` keeps a symbolic ``k`` as its trailing
-  // axis because ``K`` is a runtime input.
+  // Intermediate value_info entries used by the no-new-names shape-inference
+  // checks.
+  AppendValueInfo(*graph->add_value_info(), "x_rows", DataType::FLOAT,
+                  {DimSpec("N"), DimSpec(int64_t{1}), DimSpec("D")});
+  AppendValueInfo(*graph->add_value_info(), "x_cols", DataType::FLOAT,
+                  {DimSpec(int64_t{1}), DimSpec("N"), DimSpec("D")});
+  AppendValueInfo(*graph->add_value_info(), "diff", DataType::FLOAT,
+                  {DimSpec("N"), DimSpec("N"), DimSpec("D")});
+  AppendValueInfo(*graph->add_value_info(), "sq", DataType::FLOAT,
+                  {DimSpec("N"), DimSpec("N"), DimSpec("D")});
+  AppendValueInfo(*graph->add_value_info(), "sum_sq", DataType::FLOAT,
+                  {DimSpec("N"), DimSpec("N")});
   AppendValueInfo(*graph->add_value_info(), "dist", DataType::FLOAT, {DimSpec("N"), DimSpec("N")});
   AppendValueInfo(*graph->add_value_info(), "topk_values", DataType::FLOAT,
+                  {DimSpec("N"), DimSpec("TopK_k")});
+  AppendValueInfo(*graph->add_value_info(), "topk_indices", DataType::INT64,
                   {DimSpec("N"), DimSpec("TopK_k")});
 
   // Output Y — the per-row mean of the ``k`` largest distances, shape ``[N]``.
@@ -342,11 +353,16 @@ void RegisterScanTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &
   AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {DimSpec("N"), DimSpec("D")});
   AppendValueInfo(*graph->add_input(), "K", DataType::INT64, {DimSpec(int64_t{1})});
 
-  // Intermediate value_info entries. ``dist`` is the symbolic ``[N, N]``
-  // distance matrix; ``topk_values`` keeps a symbolic ``k`` as its trailing
-  // axis because ``K`` is a runtime input.
+  // Intermediate value_info entries used by the no-new-names shape-inference
+  // checks.
+  AppendValueInfo(*graph->add_value_info(), "state_final", DataType::FLOAT,
+                  {DimSpec("N"), DimSpec("D")});
+  AppendValueInfo(*graph->add_value_info(), "dist_sq", DataType::FLOAT,
+                  {DimSpec("N"), DimSpec("N")});
   AppendValueInfo(*graph->add_value_info(), "dist", DataType::FLOAT, {DimSpec("N"), DimSpec("N")});
   AppendValueInfo(*graph->add_value_info(), "topk_values", DataType::FLOAT,
+                  {DimSpec("N"), DimSpec("TopK_k")});
+  AppendValueInfo(*graph->add_value_info(), "topk_indices", DataType::INT64,
                   {DimSpec("N"), DimSpec("TopK_k")});
 
   // Output Y — the per-row mean of the ``k`` largest distances, shape ``[N]``.

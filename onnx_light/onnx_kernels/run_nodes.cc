@@ -210,35 +210,34 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
   RequireInputCount(node, 1);
 
   const Tensor &cond = GetInput(node, 0, rt.tensors());
-  if (cond.data_type != DataType::BOOL || cond.element_count() != 1) {
-    throw std::invalid_argument("RunNode: op 'If' 'cond' must be a BOOL scalar.");
+  if (cond.data_type != DataType::BOOL) {
+    throw std::invalid_argument("RunNode: If input 'cond' must be BOOL.");
+  }
+  if (cond.element_count() != 1) {
+    throw std::invalid_argument("RunNode: If input 'cond' must contain a single element.");
   }
 
   const GraphProto &then_branch = GetRequiredGraphAttribute(node, "then_branch");
   const GraphProto &else_branch = GetRequiredGraphAttribute(node, "else_branch");
   if (then_branch.output_size() != else_branch.output_size()) {
     throw std::invalid_argument(
-        "RunNode: op 'If' then_branch and else_branch must declare the same number of outputs.");
+        "RunNode: If 'then_branch' and 'else_branch' must declare the same number of outputs.");
   }
   if (node.output_size() != then_branch.output_size()) {
     throw std::invalid_argument(
-        "RunNode: op 'If' node output count does not match branch output count.");
+        "RunNode: If node output count does not match branch output count.");
   }
 
   const bool taken = cond.bytes()[0] != 0;
   const GraphProto &branch = taken ? then_branch : else_branch;
-  const std::string branch_name = taken ? "then_branch" : "else_branch";
+  const std::string branch_attr = taken ? "then_branch" : "else_branch";
 
-  // Run the selected subgraph in a child context. Both the tensor map and
-  // the sequence map are inherited so outer-scope values of either kind are
-  // visible inside the subgraph body (e.g. Optional<Sequence<...>> state
-  // passed through a Loop body can be read by OptionalGetElement / OptionalHasElement).
   RuntimeContext child(rt.kernel_ctx());
   child.functions() = rt.functions();
   child.tensors() = rt.tensors();
   child.sequences() = rt.sequences();
   child.set_events_enabled(rt.events_enabled());
-  child.set_current_subgraph(rt.current_node_index(), branch_name);
+  child.set_current_subgraph(rt.current_node_index(), branch_attr);
   RunGraph(branch, child);
 
   if (rt.events_enabled()) {
@@ -247,10 +246,11 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
     }
   }
 
-  // Propagate subgraph outputs to the caller, handling both tensor-typed and
-  // sequence-typed outputs (e.g. when a branch returns a Sequence value).
   for (int i = 0; i < branch.output_size(); ++i) {
-    const std::string out_name = branch.output(i).name().as_string();
+    const std::string out_name = branch.output()[i].name().as_string();
+    if (out_name.empty()) {
+      throw std::invalid_argument("RunNode: If: a subgraph output has an empty name.");
+    }
     const std::string caller_name = node.output(i).as_string();
     if (caller_name.empty()) {
       continue;
@@ -260,10 +260,10 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
     } else {
       auto it = child.tensors().find(out_name);
       if (it == child.tensors().end()) {
-        throw std::invalid_argument("RunNode: op 'If' subgraph output '" + out_name +
-                                    "' was not produced by the " + branch_name + " branch.");
+        throw std::invalid_argument("RunNode: If: subgraph output '" + out_name +
+                                    "' was not produced by the selected branch.");
       }
-      Tensor t = it->second;
+      Tensor t = std::move(it->second);
       t.name = caller_name;
       rt.Put(caller_name, std::move(t), RuntimeEventKind::kOutput);
     }

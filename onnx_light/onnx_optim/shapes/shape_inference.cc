@@ -188,6 +188,32 @@ bool ValueInfoHasTensorShape(const ValueInfoProto &vi) {
   return vi.type().tensor_type().has_shape();
 }
 
+bool SeedInputValueInfo(const ValueInfoProto &vi, ShapesContext &ctx) {
+  const std::string name = vi.name().as_string();
+  if (name.empty() || ctx.Has(name) || ctx.HasSequence(name)) {
+    return false;
+  }
+  OptimTensor tensor;
+  if (OptimTensorFromValueInfo(vi, tensor)) {
+    ctx.Set(name, std::move(tensor));
+    return true;
+  }
+  if (!vi.has_type() || !vi.type().has_map_type()) {
+    return false;
+  }
+  const TypeProto &value_type = vi.type().map_type().value_type();
+  if (!value_type.has_tensor_type()) {
+    return false;
+  }
+  const TensorType dtype = DataTypeToTensorType(value_type.tensor_type().elem_type());
+  // Map-typed inputs are tracked as placeholder tensors so generic input
+  // availability checks succeed and traditional-ML shape functions can still
+  // inspect the map value dtype when needed. The rank stays unknown because the
+  // map cardinality is a runtime property, not a static tensor shape.
+  ctx.Set(name, OptimTensor(nullptr, dtype, OptimShape{}));
+  return true;
+}
+
 void AddValueInfoAsAnchor(const ValueInfoProto &vi, AnchorMap &anchors) {
   const std::string name = vi.name().as_string();
   if (name.empty() || !ValueInfoHasTensorShape(vi)) {
@@ -873,21 +899,7 @@ void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
   current_node_index_ = -1;
   for (int i = 0; i < graph.input().size(); ++i) {
     const ValueInfoProto &vi = graph.input()[i];
-    const std::string name = vi.name().as_string();
-    if (name.empty() || Has(name) || HasSequence(name)) {
-      continue;
-    }
-    OptimTensor tensor;
-    if (OptimTensorFromValueInfo(vi, tensor)) {
-      Set(name, std::move(tensor));
-    } else if (vi.has_type() && vi.type().has_map_type()) {
-      // Map-type inputs cannot be described as an OptimTensor shape.
-      // Register a placeholder with undefined dtype so that
-      // CheckInputsAvailable does not reject ops that consume map inputs
-      // (e.g., DictVectorizer).  The op-specific shape function is
-      // responsible for deriving its output from node attributes alone.
-      Set(name, OptimTensor(nullptr, TensorType::kUndefined, OptimShape{}));
-    }
+    SeedInputValueInfo(vi, *this);
   }
   ComputeShapes(graph.node());
 }

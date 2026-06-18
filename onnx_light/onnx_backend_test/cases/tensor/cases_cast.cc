@@ -292,7 +292,7 @@ void RegisterCastCases(std::vector<TestCase> &registry) {
       Expect(node, {input}, {output}, std::string("test_cc_cast_FLOAT_to_") + v.name, {opset},
              "backend-test", registry);
     }
-    // sub-byte -> FLOAT — input bytes are the saturated/packed encoding of
+    // sub-byte -> FLOAT — input bytes are the wrapped/packed encoding of
     // the same FP32 vector (matching upstream where the input is the result
     // of ``np_fp32.astype(sub_byte_dtype)``).
     Tensor packed_input;

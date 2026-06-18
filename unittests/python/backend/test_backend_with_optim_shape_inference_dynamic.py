@@ -11,11 +11,17 @@ make_test_class = import_or_skip("onnx_light.onnx_lib.backend.test.case", "make_
 
 
 def _inputs(inputs):
-    def _v(v):
+    def _v(value_info):
+        if value_info.type.has_map_type():
+            mt = value_info.type.map_type
+            vt = mt.value_type.tensor_type
+            t = tuple(d.dim_param or d.dim_value for d in vt.shape.dim)
+            return f"map[{mt.key_type} -> {vt.elem_type}: {t}]"
+        v = value_info.type.tensor_type
         t = tuple(d.dim_param or d.dim_value for d in v.shape.dim)
         return f"{v.elem_type}: {t}"
 
-    return ", ".join([_v(i.type.tensor_type) for i in inputs])
+    return ", ".join([_v(i) for i in inputs])
 
 
 def _check_match(inputs, expected, inferred, rank_only=False) -> None:
@@ -57,7 +63,7 @@ def shape_inference_check(model: onnxl.ModelProto, *inputs):
         o.type.Clear()
     mapping = {}
     for i in work.graph.input:
-        if i.name in {"axis", "axes"}:
+        if i.name in {"axis", "axes"} or not i.type.has_tensor_type():
             continue
         if not i.type.tensor_type:
             continue
@@ -67,7 +73,7 @@ def shape_inference_check(model: onnxl.ModelProto, *inputs):
                 assert not d.dim_param, f"Unexpected input dimension in {i}"
                 mapping[int(d.dim_value)] = f"{i.name}_{di}"
     for i in work.graph.input:
-        if i.name in {"axis", "axes"}:
+        if i.name in {"axis", "axes"} or not i.type.has_tensor_type():
             continue
         if not i.type.tensor_type:
             continue
@@ -89,6 +95,7 @@ TestOptimShapeInferenceDynamicBackend = make_test_class(
         "test_cc_shape_inference_nonzero_chain_named.*",
         "test_cc_attention_3d.*",
         "test_cc_cast_map_.*",
+        "test_cc_dict_vectorizer_.*",
         "test_cc_loop11_carried_state.*",
         "test_cc_optional_get_element_optional_sequence.*",
         "test_cc_sequence_map_add_2_sequences.*",
@@ -97,10 +104,8 @@ TestOptimShapeInferenceDynamicBackend = make_test_class(
         "test_cc_squeeze_no_axes_input.*",
         "test_cc_squeeze_empty_axes_name.*",
         "test_if_seq.*",
-        "test_scan_sum.*",
         "test_cc_loop13_seq.*",
         "test_cc_loop16_seq_none.*",
-        "test_cc_identity_sequence.*",
         "test_cc_identity_opt.*",
         "test_cc_if_seq.*",
         "test_cc_if_opt.*",

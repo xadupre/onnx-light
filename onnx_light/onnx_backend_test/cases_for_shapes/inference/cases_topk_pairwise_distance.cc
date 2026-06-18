@@ -241,7 +241,7 @@ void RegisterTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &regi
   // axis because ``K`` is a runtime input.
   AppendValueInfo(*graph->add_value_info(), "dist", DataType::FLOAT, {DimSpec("N"), DimSpec("N")});
   AppendValueInfo(*graph->add_value_info(), "topk_values", DataType::FLOAT,
-                  {DimSpec("N"), DimSpec("k")});
+                  {DimSpec("N"), DimSpec("TopK_k")});
 
   // Output Y — the per-row mean of the ``k`` largest distances, shape ``[N]``.
   AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec("N")});
@@ -461,7 +461,7 @@ void RegisterLoopTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &
   // is a runtime input.
   AppendValueInfo(*graph->add_value_info(), "dist", DataType::FLOAT, {DimSpec("N"), DimSpec("N")});
   AppendValueInfo(*graph->add_value_info(), "topk_values", DataType::FLOAT,
-                  {DimSpec("N"), DimSpec("k")});
+                  {DimSpec("N"), DimSpec("TopK_k")});
 
   // Output Y — the per-row mean of the ``k`` largest distances, shape ``[N]``.
   AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec("N")});

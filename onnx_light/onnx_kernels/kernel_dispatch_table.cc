@@ -1391,7 +1391,19 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Hardmax", MakeAxisTrampoline<kernel::Hardmax>()},
       {"ai.onnx:HammingWindow", MakeWindowTrampoline<kernel::HammingWindow>("HammingWindow")},
       {"ai.onnx:HannWindow", MakeWindowTrampoline<kernel::HannWindow>("HannWindow")},
-      {"ai.onnx:Identity", MakeUnaryTrampoline<kernel::Identity>()},
+      {"ai.onnx:Identity",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 1);
+         RequireOutputCount(node, 1);
+         const std::string input_name = node.input(0).as_string();
+         if (rt.HasSequence(input_name)) {
+           SetOutputSequence(node, 0, rt.GetSequence(input_name), rt);
+         } else {
+           const Tensor &x = GetInput(node, 0, rt.tensors());
+           kernel::Identity k(rt.kernel_ctx());
+           SetOutput(node, 0, k(x), rt);
+         }
+       }},
       {"ai.onnx:ImageDecoder",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);

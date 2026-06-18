@@ -223,6 +223,10 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
     throw std::invalid_argument(
         "RunNode: If 'then_branch' and 'else_branch' must declare the same number of outputs.");
   }
+  if (node.output_size() != then_branch.output_size()) {
+    throw std::invalid_argument(
+        "RunNode: If node output count does not match branch output count.");
+  }
 
   const bool taken = cond.bytes()[0] != 0;
   const GraphProto &branch = taken ? then_branch : else_branch;

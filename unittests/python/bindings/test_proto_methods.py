@@ -233,6 +233,21 @@ class TestProtoMethods(ExtTestCase):
         with self.assertRaises(ValueError):
             optional_proto.WhichOneof("not_a_oneof")
 
+    def test_repeated_proto_add_with_kwargs(self):
+        model = ModelProto()
+        opset = model.opset_import.add(domain="", version=18)
+        self.assertEqual(opset.domain, "")
+        self.assertEqual(opset.version, 18)
+        self.assertEqual(len(model.opset_import), 1)
+        self.assertEqual(model.opset_import[0].version, 18)
+
+    def test_repeated_proto_add_without_kwargs(self):
+        model = ModelProto()
+        opset = model.opset_import.add()
+        self.assertEqual(opset.domain, "")
+        self.assertEqual(opset.version, 0)
+        self.assertEqual(len(model.opset_import), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

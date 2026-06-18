@@ -672,11 +672,18 @@ void define_repeated_field_type_proto(nb::class_<utils::RepeatedField<T>> &nbcls
   nbcls_proto.def(nb::init<>())
       .def(
           "add",
-          [](utils::RepeatedProtoField<T> &self) -> std::shared_ptr<T> {
+          [](utils::RepeatedProtoField<T> &self, nb::kwargs kwargs) -> std::shared_ptr<T> {
             self.add();
-            return self.shared_at(self.size() - 1);
+            std::shared_ptr<T> element = self.shared_at(self.size() - 1);
+            if (kwargs.size() > 0) {
+              nb::object py_element = nb::cast(element);
+              for (auto item : kwargs) {
+                nb::setattr(py_element, nb::cast<nb::str>(item.first), item.second);
+              }
+            }
+            return element;
           },
-          "Adds an empty element.")
+          "Adds an element. Keyword arguments are set as fields on the new element.")
       .def("clear", &utils::RepeatedProtoField<T>::clear, "Removes every element.")
       .def("__len__", &utils::RepeatedProtoField<T>::size, "Returns the number of elements.")
       .def(

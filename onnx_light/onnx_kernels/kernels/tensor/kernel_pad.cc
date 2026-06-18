@@ -54,7 +54,7 @@ std::vector<int64_t> ResolveAxes(const Tensor *axes_tensor, std::size_t rank) {
       axes[i] = static_cast<int64_t>(p[i]);
     }
   } else {
-    throw std::invalid_argument("kernel::Pad: 'axes' input must be INT32 or INT64.");
+    EXT_THROW_INVALID("kernel::Pad: 'axes' input must be INT32 or INT64.");
   }
   const int64_t r = static_cast<int64_t>(rank);
   for (std::size_t i = 0; i < axes.size(); ++i) {
@@ -143,7 +143,7 @@ int64_t MapCoord(int64_t out_coord, int64_t pad_begin, int64_t input_dim, const 
     }
     return m;
   }
-  throw std::invalid_argument("kernel::Pad: unsupported mode '" + mode + "'.");
+  EXT_THROW_INVALID("kernel::Pad: unsupported mode '" + mode + "'.");
 }
 
 } // namespace

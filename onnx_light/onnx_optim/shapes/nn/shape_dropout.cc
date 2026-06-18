@@ -25,10 +25,8 @@ void CheckScalarInput(const ShapesContext &ctx, const char *name, const char *la
     return;
   }
   const OptimShape &shape = ctx.Get(input_name).Shape();
-  if (shape.Rank() != 0u) {
-    throw std::invalid_argument(std::string("ComputeShapeDropout: ") + label +
-                                " of Dropout must be a scalar.");
-  }
+  EXT_ENFORCE_INVALID(shape.Rank() == 0u, std::string("ComputeShapeDropout: ") + label +
+                                              " of Dropout must be a scalar.");
 }
 
 } // namespace

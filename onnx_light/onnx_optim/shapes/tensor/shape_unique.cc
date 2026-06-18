@@ -20,9 +20,7 @@ namespace tensor {
 
 void ComputeShapeUnique(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Unique", "ComputeShapeUnique");
-  if (node.input_size() < 1) {
-    throw std::invalid_argument("ComputeShapeUnique: Unique requires one input.");
-  }
+  EXT_ENFORCE_INVALID(!(node.input_size() < 1), "ComputeShapeUnique: Unique requires one input.");
 
   const OptimTensor &input = ctx.Get(node.input(0).as_string());
   const TensorType dtype = input.Dtype();
@@ -43,10 +41,9 @@ void ComputeShapeUnique(ShapesContext &ctx, const NodeProto &node) {
       if (axis < 0) {
         axis += rank;
       }
-      if (axis < 0 || axis >= rank) {
-        throw std::invalid_argument("ComputeShapeUnique: axis=" + std::to_string(axis) +
-                                    " out of range for input rank " + std::to_string(rank) + ".");
-      }
+      EXT_ENFORCE_INVALID(!(axis < 0 || axis >= rank),
+                          "ComputeShapeUnique: axis=" + std::to_string(axis) +
+                              " out of range for input rank " + std::to_string(rank) + ".");
     }
     for (int64_t d = 0; d < rank; ++d) {
       if (d == axis) {

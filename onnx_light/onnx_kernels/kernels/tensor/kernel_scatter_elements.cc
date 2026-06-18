@@ -77,8 +77,7 @@ void ApplyScatterElementsTyped(const Tensor &updates, std::vector<uint8_t> &out_
     } else if (reduction == "min") {
       dst = (dst < v) ? dst : v;
     } else {
-      throw std::invalid_argument("kernel::ScatterElements: unsupported reduction '" + reduction +
-                                  "'.");
+      EXT_THROW_INVALID("kernel::ScatterElements: unsupported reduction '" + reduction + "'.");
     }
   }
 }

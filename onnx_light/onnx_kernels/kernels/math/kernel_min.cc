@@ -36,8 +36,8 @@ std::vector<int64_t> BroadcastShape(const std::vector<int64_t> &a, const std::ve
     if (sa[d] == sb[d] || sa[d] == 1 || sb[d] == 1) {
       out[d] = sa[d] >= sb[d] ? sa[d] : sb[d];
     } else {
-      throw std::invalid_argument(std::string(kMinName) +
-                                  " input shapes are not multidirectional-broadcastable.");
+      EXT_THROW_INVALID(std::string(kMinName) +
+                        " input shapes are not multidirectional-broadcastable.");
     }
   }
   return out;

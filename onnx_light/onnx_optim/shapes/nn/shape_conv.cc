@@ -94,14 +94,12 @@ void ComputeShapeConvLike(ShapesContext &ctx, const NodeProto &node, const char 
   const OptimShape &x_shape = x_tensor.Shape();
   const OptimShape &w_shape = w_tensor.Shape();
 
-  if (x_shape.Rank() < 3) {
-    throw std::invalid_argument(std::string("ComputeShape") + op_name + ": input '" +
-                                std::string(x) + "' must have rank >= 3 (N, C, D1, ...).");
-  }
-  if (w_shape.Rank() != x_shape.Rank()) {
-    throw std::invalid_argument(std::string("ComputeShape") + op_name + ": weight '" +
-                                std::string(w) + "' rank must match input rank.");
-  }
+  EXT_ENFORCE_INVALID(!(x_shape.Rank() < 3), std::string("ComputeShape") + op_name + ": input '" +
+                                                 std::string(x) +
+                                                 "' must have rank >= 3 (N, C, D1, ...).");
+  EXT_ENFORCE_INVALID(w_shape.Rank() == x_shape.Rank(), std::string("ComputeShape") + op_name +
+                                                            ": weight '" + std::string(w) +
+                                                            "' rank must match input rank.");
 
   const size_t n_spatial = x_shape.Rank() - 2;
   const std::string auto_pad = GetAttributeOr<std::string>(node, "auto_pad", "NOTSET");
@@ -115,8 +113,8 @@ void ComputeShapeConvLike(ShapesContext &ctx, const NodeProto &node, const char 
       kernel_shape.push_back(kd.IsInt() ? kd.AsInt() : -1);
     }
   } else if (kernel_shape.size() != n_spatial) {
-    throw std::invalid_argument(std::string("ComputeShape") + op_name +
-                                ": 'kernel_shape' size does not match input spatial rank.");
+    EXT_THROW_INVALID(std::string("ComputeShape") + op_name +
+                      ": 'kernel_shape' size does not match input spatial rank.");
   }
 
   std::vector<int64_t> strides;
@@ -124,8 +122,8 @@ void ComputeShapeConvLike(ShapesContext &ctx, const NodeProto &node, const char 
   if (strides.empty()) {
     strides.assign(n_spatial, 1);
   } else if (strides.size() != n_spatial) {
-    throw std::invalid_argument(std::string("ComputeShape") + op_name +
-                                ": 'strides' size does not match input spatial rank.");
+    EXT_THROW_INVALID(std::string("ComputeShape") + op_name +
+                      ": 'strides' size does not match input spatial rank.");
   }
 
   std::vector<int64_t> dilations;
@@ -133,8 +131,8 @@ void ComputeShapeConvLike(ShapesContext &ctx, const NodeProto &node, const char 
   if (dilations.empty()) {
     dilations.assign(n_spatial, 1);
   } else if (dilations.size() != n_spatial) {
-    throw std::invalid_argument(std::string("ComputeShape") + op_name +
-                                ": 'dilations' size does not match input spatial rank.");
+    EXT_THROW_INVALID(std::string("ComputeShape") + op_name +
+                      ": 'dilations' size does not match input spatial rank.");
   }
 
   std::vector<int64_t> pads;
@@ -142,8 +140,8 @@ void ComputeShapeConvLike(ShapesContext &ctx, const NodeProto &node, const char 
   if (pads.empty()) {
     pads.assign(n_spatial * 2, 0);
   } else if (pads.size() != n_spatial * 2) {
-    throw std::invalid_argument(std::string("ComputeShape") + op_name +
-                                ": 'pads' size must be 2 * spatial rank.");
+    EXT_THROW_INVALID(std::string("ComputeShape") + op_name +
+                      ": 'pads' size must be 2 * spatial rank.");
   }
 
   OptimShape out_shape;

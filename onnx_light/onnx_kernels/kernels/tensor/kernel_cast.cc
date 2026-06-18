@@ -113,7 +113,7 @@ std::uint8_t FloatToFloat8Bits(float v, int32_t to, bool saturate) {
     case DataType::FLOAT8E8M0:
       return FloatToFloat8E8M0Bits(v);
     default:
-      throw std::invalid_argument("kernel::Cast: unsupported float8 'to' dtype.");
+      EXT_THROW_INVALID("kernel::Cast: unsupported float8 'to' dtype.");
     }
   } else {
     switch (static_cast<DataType>(to)) {
@@ -128,7 +128,7 @@ std::uint8_t FloatToFloat8Bits(float v, int32_t to, bool saturate) {
     case DataType::FLOAT8E8M0:
       return FloatToFloat8E8M0Bits(v); // E8M0 has no non-saturate variant
     default:
-      throw std::invalid_argument("kernel::Cast: unsupported float8 'to' dtype.");
+      EXT_THROW_INVALID("kernel::Cast: unsupported float8 'to' dtype.");
     }
   }
 }
@@ -146,7 +146,7 @@ float Float8BitsToFloat(std::uint8_t bits, int32_t from) {
   case DataType::FLOAT8E8M0:
     return Float8E8M0BitsToFloat(bits);
   default:
-    throw std::invalid_argument("kernel::Cast: unsupported float8 'from' dtype.");
+    EXT_THROW_INVALID("kernel::Cast: unsupported float8 'from' dtype.");
   }
 }
 
@@ -226,7 +226,7 @@ double LoadAsDouble(const Tensor &x, int64_t i) {
     return static_cast<double>(Bfloat16BitsToFloat(bits));
   }
   default:
-    throw std::invalid_argument("kernel::Cast: unsupported input dtype for numeric load.");
+    EXT_THROW_INVALID("kernel::Cast: unsupported input dtype for numeric load.");
   }
 }
 
@@ -284,7 +284,7 @@ void StoreFromDouble(Tensor &output, int64_t i, double v) {
     return;
   }
   default:
-    throw std::invalid_argument("kernel::Cast: unsupported output dtype for numeric store.");
+    EXT_THROW_INVALID("kernel::Cast: unsupported output dtype for numeric store.");
   }
 }
 
@@ -334,7 +334,7 @@ std::string ElementToString(const Tensor &x, int64_t i) {
   case DataType::BFLOAT16:
     return FloatToOrtString(LoadAsDouble(x, i));
   default:
-    throw std::invalid_argument("kernel::Cast: unsupported input dtype for string conversion.");
+    EXT_THROW_INVALID("kernel::Cast: unsupported input dtype for string conversion.");
   }
 }
 
@@ -345,8 +345,7 @@ double ParseAsDouble(const std::string &s) {
   try {
     return std::stod(s);
   } catch (const std::exception &) {
-    throw std::invalid_argument("kernel::Cast: cannot parse string '" + s +
-                                "' as a numeric value.");
+    EXT_THROW_INVALID("kernel::Cast: cannot parse string '" + s + "' as a numeric value.");
   }
 }
 
@@ -448,7 +447,7 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
             Write4BitElement(dst, i, v);
             break;
           default:
-            throw std::invalid_argument("kernel::Cast: unsupported sub-byte 'to' dtype.");
+            EXT_THROW_INVALID("kernel::Cast: unsupported sub-byte 'to' dtype.");
           }
         }
       } else if (from_dt_ == DataType::INT8) {
@@ -461,7 +460,7 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
             const int v = std::max(-2, std::min(1, static_cast<int>(src[i])));
             Write2BitElement(dst, i, static_cast<std::uint8_t>(v & 0x03));
           } else {
-            throw std::invalid_argument("kernel::Cast: unsupported sub-byte 'to' dtype from INT8.");
+            EXT_THROW_INVALID("kernel::Cast: unsupported sub-byte 'to' dtype from INT8.");
           }
         }
       } else if (static_cast<DataType>(x.data_type) == DataType::UINT8) {
@@ -474,12 +473,11 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
             const unsigned v = std::min(3u, static_cast<unsigned>(src[i]));
             Write2BitElement(dst, i, static_cast<std::uint8_t>(v & 0x03u));
           } else {
-            throw std::invalid_argument(
-                "kernel::Cast: unsupported sub-byte 'to' dtype from UINT8.");
+            EXT_THROW_INVALID("kernel::Cast: unsupported sub-byte 'to' dtype from UINT8.");
           }
         }
       } else {
-        throw std::invalid_argument("kernel::Cast: unsupported sub-byte 'from' dtype.");
+        EXT_THROW_INVALID("kernel::Cast: unsupported sub-byte 'from' dtype.");
       }
     } else {
       const uint8_t *src = x.bytes();
@@ -499,7 +497,7 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
             StoreFromDouble(output, i, static_cast<double>(fv));
             break;
           default:
-            throw std::invalid_argument("kernel::Cast: unsupported 'to' dtype from FLOAT4E2M1.");
+            EXT_THROW_INVALID("kernel::Cast: unsupported 'to' dtype from FLOAT4E2M1.");
           }
         }
         return;
@@ -521,7 +519,7 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
           value = static_cast<int>(Uint2BitsToUint8(Read2BitElement(src, i)));
           break;
         default:
-          throw std::invalid_argument("kernel::Cast: unsupported sub-byte 'from' dtype.");
+          EXT_THROW_INVALID("kernel::Cast: unsupported sub-byte 'from' dtype.");
         }
         switch (to_dt) {
         case DataType::FLOAT:
@@ -538,7 +536,7 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
           output.AsUint8()[i] = static_cast<uint8_t>(value);
           break;
         default:
-          throw std::invalid_argument("kernel::Cast: unsupported sub-byte 'to' dtype.");
+          EXT_THROW_INVALID("kernel::Cast: unsupported sub-byte 'to' dtype.");
         }
       }
     }

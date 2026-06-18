@@ -77,10 +77,9 @@ void ComputeShapeFlatten(ShapesContext &ctx, const NodeProto &node, const char *
   if (axis < 0) {
     axis += rank;
   }
-  if (axis < 0 || axis > rank) {
-    throw std::invalid_argument("ComputeShapeFlatten: 'axis' out of range for input rank " +
-                                std::to_string(rank) + ".");
-  }
+  EXT_ENFORCE_INVALID(!(axis < 0 || axis > rank),
+                      "ComputeShapeFlatten: 'axis' out of range for input rank " +
+                          std::to_string(rank) + ".");
 
   OptimShape out_shape;
   out_shape.PushBack(MultiplyDimRange(in_shape, 0, static_cast<size_t>(axis)));

@@ -49,8 +49,7 @@ int64_t ExtractC(const std::vector<int64_t> &shape) {
   if (shape.size() == 2 && shape[0] == 1) {
     return shape[1];
   }
-  throw std::invalid_argument(
-      "kernel::StringNormalizer only accepts [C] or [1, C] string tensors.");
+  EXT_THROW_INVALID("kernel::StringNormalizer only accepts [C] or [1, C] string tensors.");
 }
 
 } // namespace
@@ -66,8 +65,8 @@ StringNormalizer::ParseCaseChangeAction(const std::string &value) {
   if (value == "UPPER") {
     return CaseChangeAction::kUpper;
   }
-  throw std::invalid_argument("kernel::StringNormalizer: invalid case_change_action '" + value +
-                              "'. Valid values are \"NONE\", \"LOWER\", \"UPPER\".");
+  EXT_THROW_INVALID("kernel::StringNormalizer: invalid case_change_action '" + value +
+                    "'. Valid values are \"NONE\", \"LOWER\", \"UPPER\".");
 }
 
 std::vector<int64_t> StringNormalizer::ComputeOutputShape(const std::vector<int64_t> &input_shape,

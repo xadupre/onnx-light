@@ -99,9 +99,8 @@ std::vector<OptimDim> SymbolicSplitByNumOutputs(const std::string &d, int64_t nu
 
 void ComputeShapeSplit(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Split", "ComputeShapeSplit");
-  if (node.input_size() < 1) {
-    throw std::invalid_argument("ComputeShapeSplit: Split requires at least one input.");
-  }
+  EXT_ENFORCE_INVALID(!(node.input_size() < 1),
+                      "ComputeShapeSplit: Split requires at least one input.");
 
   const OptimTensor &input = ctx.Get(node.input(0).as_string());
   const OptimShape &in_shape = input.Shape();
@@ -109,10 +108,9 @@ void ComputeShapeSplit(ShapesContext &ctx, const NodeProto &node) {
 
   const int64_t axis_attr = GetAttributeOr<int64_t>(node, "axis", 0);
   const int64_t resolved_axis = axis_attr < 0 ? axis_attr + rank : axis_attr;
-  if (resolved_axis < 0 || resolved_axis >= rank) {
-    throw std::invalid_argument("ComputeShapeSplit: axis " + std::to_string(axis_attr) +
-                                " is out of range for rank " + std::to_string(rank) + ".");
-  }
+  EXT_ENFORCE_INVALID(!(resolved_axis < 0 || resolved_axis >= rank),
+                      "ComputeShapeSplit: axis " + std::to_string(axis_attr) +
+                          " is out of range for rank " + std::to_string(rank) + ".");
   const std::size_t axis = static_cast<std::size_t>(resolved_axis);
 
   const int num_outputs_decl = node.output_size();
@@ -176,29 +174,25 @@ void ComputeShapeSplit(ShapesContext &ctx, const NodeProto &node) {
   if (!sizes.empty() && in_shape[axis].IsInt()) {
     int64_t total = 0;
     for (int64_t s : sizes) {
-      if (s < 0) {
-        throw std::invalid_argument("ComputeShapeSplit: 'split' entries must be non-negative.");
-      }
+      EXT_ENFORCE_INVALID(!(s < 0), "ComputeShapeSplit: 'split' entries must be non-negative.");
       total += s;
     }
-    if (total != in_shape[axis].AsInt()) {
-      throw std::invalid_argument("ComputeShapeSplit: sum of 'split' (" + std::to_string(total) +
-                                  ") does not match the input dimension on 'axis' (" +
-                                  std::to_string(in_shape[axis].AsInt()) + ").");
-    }
+    EXT_ENFORCE_INVALID(total == in_shape[axis].AsInt(),
+                        "ComputeShapeSplit: sum of 'split' (" + std::to_string(total) +
+                            ") does not match the input dimension on 'axis' (" +
+                            std::to_string(in_shape[axis].AsInt()) + ").");
   }
 
-  if (!sizes.empty() && static_cast<int>(sizes.size()) != num_outputs_decl) {
-    throw std::invalid_argument(
-        "ComputeShapeSplit: number of resolved split sizes (" + std::to_string(sizes.size()) +
-        ") does not match the number of node outputs (" + std::to_string(num_outputs_decl) + ").");
-  }
-  if (!symbolic_sizes.empty() && static_cast<int>(symbolic_sizes.size()) != num_outputs_decl) {
-    throw std::invalid_argument("ComputeShapeSplit: number of resolved symbolic split sizes (" +
-                                std::to_string(symbolic_sizes.size()) +
-                                ") does not match the number of node outputs (" +
-                                std::to_string(num_outputs_decl) + ").");
-  }
+  EXT_ENFORCE_INVALID(!(!sizes.empty() && static_cast<int>(sizes.size()) != num_outputs_decl),
+                      "ComputeShapeSplit: number of resolved split sizes (" +
+                          std::to_string(sizes.size()) +
+                          ") does not match the number of node outputs (" +
+                          std::to_string(num_outputs_decl) + ").");
+  EXT_ENFORCE_INVALID(
+      !(!symbolic_sizes.empty() && static_cast<int>(symbolic_sizes.size()) != num_outputs_decl),
+      "ComputeShapeSplit: number of resolved symbolic split sizes (" +
+          std::to_string(symbolic_sizes.size()) + ") does not match the number of node outputs (" +
+          std::to_string(num_outputs_decl) + ").");
 
   // Propagate ``ValueAsShape`` when splitting along axis 0 of a 1-D tensor
   // that already carries a ``ValueAsShape`` annotation and the split sizes

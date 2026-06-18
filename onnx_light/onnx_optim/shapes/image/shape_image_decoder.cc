@@ -22,11 +22,9 @@ void ComputeShapeImageDecoder(ShapesContext &ctx, const NodeProto &node, const c
 
   // ImageDecoder requires a 1-D ``tensor(uint8)`` input carrying the
   // encoded bytestream.
-  if (in_shape.Rank() != 1) {
-    throw std::invalid_argument(std::string("ComputeShapeImageDecoder: input '") + a +
-                                "' must be 1-dimensional, got rank " +
-                                std::to_string(in_shape.Rank()) + ".");
-  }
+  EXT_ENFORCE_INVALID(in_shape.Rank() == 1, std::string("ComputeShapeImageDecoder: input '") + a +
+                                                "' must be 1-dimensional, got rank " +
+                                                std::to_string(in_shape.Rank()) + ".");
 
   // Channel count is determined by the pixel_format attribute. The
   // schema documents three valid values; default is "RGB".
@@ -38,8 +36,8 @@ void ComputeShapeImageDecoder(ShapesContext &ctx, const NodeProto &node, const c
   } else if (pixel_format == "Grayscale") {
     channels = 1;
   } else {
-    throw std::invalid_argument("ComputeShapeImageDecoder: unsupported pixel_format '" +
-                                pixel_format + "' (expected 'RGB', 'BGR' or 'Grayscale').");
+    EXT_THROW_INVALID("ComputeShapeImageDecoder: unsupported pixel_format '" + pixel_format +
+                      "' (expected 'RGB', 'BGR' or 'Grayscale').");
   }
 
   // The spatial extent of the decoded image is only known at runtime,

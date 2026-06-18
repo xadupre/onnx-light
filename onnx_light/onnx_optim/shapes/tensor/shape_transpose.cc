@@ -20,9 +20,8 @@ namespace tensor {
 
 void ComputeShapeTranspose(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Transpose", "ComputeShapeTranspose");
-  if (node.input_size() < 1) {
-    throw std::invalid_argument("ComputeShapeTranspose: Transpose requires one input.");
-  }
+  EXT_ENFORCE_INVALID(!(node.input_size() < 1),
+                      "ComputeShapeTranspose: Transpose requires one input.");
 
   const OptimTensor &input = ctx.Get(node.input(0).as_string());
   const OptimShape &input_shape = input.Shape();
@@ -36,21 +35,18 @@ void ComputeShapeTranspose(ShapesContext &ctx, const NodeProto &node) {
       perm.push_back(static_cast<int64_t>(rank - 1 - i));
     }
   } else if (perm.size() != rank) {
-    throw std::invalid_argument("ComputeShapeTranspose: perm length (" +
-                                std::to_string(perm.size()) + ") must match input rank (" +
-                                std::to_string(rank) + ").");
+    EXT_THROW_INVALID("ComputeShapeTranspose: perm length (" + std::to_string(perm.size()) +
+                      ") must match input rank (" + std::to_string(rank) + ").");
   }
 
   std::vector<bool> seen(rank, false);
   for (int64_t p : perm) {
-    if (p < 0 || static_cast<std::size_t>(p) >= rank) {
-      throw std::invalid_argument("ComputeShapeTranspose: perm contains out-of-range axis " +
-                                  std::to_string(p) + " for rank " + std::to_string(rank) + ".");
-    }
-    if (seen[static_cast<std::size_t>(p)]) {
-      throw std::invalid_argument("ComputeShapeTranspose: perm contains duplicate axis " +
-                                  std::to_string(p) + ".");
-    }
+    EXT_ENFORCE_INVALID(!(p < 0 || static_cast<std::size_t>(p) >= rank),
+                        "ComputeShapeTranspose: perm contains out-of-range axis " +
+                            std::to_string(p) + " for rank " + std::to_string(rank) + ".");
+    EXT_ENFORCE_INVALID(!(seen[static_cast<std::size_t>(p)]),
+                        "ComputeShapeTranspose: perm contains duplicate axis " + std::to_string(p) +
+                            ".");
     seen[static_cast<std::size_t>(p)] = true;
   }
 

@@ -20,16 +20,15 @@ namespace {
 /// Returns the batch dimension from a [N,F] or [F] input.
 /// For rank-1 input (single sample), the batch dimension is 1.
 OptimDim BatchDimFromTreeInput(const OptimTensor &input, const char *caller) {
-  if (input.Shape().Empty()) {
-    throw std::invalid_argument(std::string(caller) + ": input rank must be 1 or 2 when known.");
-  }
+  EXT_ENFORCE_INVALID(!(input.Shape().Empty()),
+                      std::string(caller) + ": input rank must be 1 or 2 when known.");
   if (input.Shape().Rank() == 1) {
     return OptimDim(static_cast<int64_t>(1));
   }
   if (input.Shape().Rank() == 2) {
     return input.Shape()[0];
   }
-  throw std::invalid_argument(std::string(caller) + ": input rank must be 1 or 2 when known.");
+  EXT_THROW_INVALID(std::string(caller) + ": input rank must be 1 or 2 when known.");
 }
 
 } // namespace

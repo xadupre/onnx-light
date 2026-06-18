@@ -252,8 +252,8 @@ void Upsample::operator()(const Tensor &X, const Tensor &scales, const Attribute
     UpsampleLinear4D(X, scales_vec, out_shape, output);
     return;
   }
-  throw std::invalid_argument("kernel::Upsample: unsupported mode '" + attrs.mode +
-                              "'. Supported modes: 'nearest', 'linear'/'bilinear'.");
+  EXT_THROW_INVALID("kernel::Upsample: unsupported mode '" + attrs.mode +
+                    "'. Supported modes: 'nearest', 'linear'/'bilinear'.");
 }
 
 } // namespace kernel

@@ -94,11 +94,9 @@ void Adagrad::operator()(const Tensor &R, const Tensor &T, const std::vector<Ten
 
   // R_adjusted: applies the decay factor based on the update count T.
   const double denom = 1.0 + static_cast<double>(T_val) * static_cast<double>(decay_factor);
-  if (denom == 0.0) {
-    throw std::invalid_argument(
-        std::string(kAdagradName) +
-        ": learning-rate decay divides by zero (1 + T * decay_factor == 0).");
-  }
+  EXT_ENFORCE_INVALID(denom != 0.0,
+                      std::string(kAdagradName) +
+                          ": learning-rate decay divides by zero (1 + T * decay_factor == 0).");
   const float R_adjusted = static_cast<float>(static_cast<double>(R_val) / denom);
 
   for (size_t i = 0; i < n; ++i) {

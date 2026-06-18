@@ -31,20 +31,17 @@ void ComputeShapeStringNormalizer(ShapesContext &ctx, const NodeProto &node, con
   }
   if (rank == 2) {
     const OptimDim &b_dim = in_shape[0];
-    if (b_dim.IsInt() && b_dim.AsInt() != 1) {
-      throw std::invalid_argument(
-          "ComputeShapeStringNormalizer: input shape must be [C] or [1, C]; "
-          "got a 2-D shape with leading dimension " +
-          std::to_string(b_dim.AsInt()) + ".");
-    }
+    EXT_ENFORCE_INVALID(!(b_dim.IsInt() && b_dim.AsInt() != 1),
+                        "ComputeShapeStringNormalizer: input shape must be [C] or [1, C]; "
+                        "got a 2-D shape with leading dimension " +
+                            std::to_string(b_dim.AsInt()) + ".");
     OptimShape out_shape{OptimDim(static_cast<int64_t>(1)),
                          OptimDim("StringNormalizer(" + std::string(a) + ")")};
     ctx.Set(node.output(0), OptimTensor(nullptr, TensorType::kString, std::move(out_shape)));
     return;
   }
-  throw std::invalid_argument(
-      "ComputeShapeStringNormalizer: input shape must be [C] or [1, C]; got rank " +
-      std::to_string(rank) + ".");
+  EXT_THROW_INVALID("ComputeShapeStringNormalizer: input shape must be [C] or [1, C]; got rank " +
+                    std::to_string(rank) + ".");
 }
 
 } // namespace text

@@ -2169,8 +2169,8 @@ int64_t ImageDecoder::ChannelCount(const std::string &pixel_format) {
   if (pixel_format == "Grayscale") {
     return 1;
   }
-  throw std::invalid_argument("kernel::ImageDecoder: unsupported pixel_format \"" + pixel_format +
-                              "\" (expected \"RGB\", \"BGR\" or \"Grayscale\").");
+  EXT_THROW_INVALID("kernel::ImageDecoder: unsupported pixel_format \"" + pixel_format +
+                    "\" (expected \"RGB\", \"BGR\" or \"Grayscale\").");
 }
 
 Tensor ImageDecoder::operator()(const Tensor &encoded_stream,

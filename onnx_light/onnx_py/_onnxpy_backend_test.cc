@@ -79,11 +79,10 @@ nb::dlpack::dtype DLPackDtypeFromOnnx(int32_t data_type) {
   case TensorProto::FLOAT8E5M2FNUZ:
     return make(Code::Float8_E5M2FNUZ, 8);
   default:
-    throw std::invalid_argument(
-        std::string("Tensor.__dlpack__: data type '") +
-        TensorProto::DataType_Name(static_cast<TensorProto::DataType>(data_type)) +
-        "' cannot be exported through DLPack (STRING and sub-byte packed types are "
-        "not supported).");
+    EXT_THROW_INVALID(std::string("Tensor.__dlpack__: data type '") +
+                      TensorProto::DataType_Name(static_cast<TensorProto::DataType>(data_type)) +
+                      "' cannot be exported through DLPack (STRING and sub-byte packed types are "
+                      "not supported).");
   }
 }
 

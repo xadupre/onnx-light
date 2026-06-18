@@ -18,16 +18,15 @@ namespace traditionalml {
 namespace {
 
 OptimDim BatchDimFromInput(const OptimTensor &input, const char *caller) {
-  if (input.Shape().Empty()) {
-    throw std::invalid_argument(std::string(caller) + ": input rank must be 1 or 2 when known.");
-  }
+  EXT_ENFORCE_INVALID(!(input.Shape().Empty()),
+                      std::string(caller) + ": input rank must be 1 or 2 when known.");
   if (input.Shape().Rank() == 1) {
     return OptimDim(1);
   }
   if (input.Shape().Rank() == 2) {
     return input.Shape()[0];
   }
-  throw std::invalid_argument(std::string(caller) + ": input rank must be 1 or 2 when known.");
+  EXT_THROW_INVALID(std::string(caller) + ": input rank must be 1 or 2 when known.");
 }
 
 int64_t ResolveClassCount(const NodeProto &node, bool &using_strings) {

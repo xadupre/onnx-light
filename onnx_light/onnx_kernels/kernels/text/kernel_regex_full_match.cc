@@ -26,8 +26,8 @@ std::regex CompileRegexPattern(const std::string &pattern) {
   try {
     return std::regex(pattern);
   } catch (const std::regex_error &e) {
-    throw std::invalid_argument("kernel::RegexFullMatch: invalid regex pattern \"" + pattern +
-                                "\": " + e.what());
+    EXT_THROW_INVALID("kernel::RegexFullMatch: invalid regex pattern \"" + pattern +
+                      "\": " + e.what());
   }
 }
 

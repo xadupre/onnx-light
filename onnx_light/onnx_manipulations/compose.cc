@@ -181,14 +181,10 @@ GraphProto ExtractGraph(const GraphProto &graph, const std::vector<std::string> 
 
   // Validate requested names.
   for (const std::string &n : input_names) {
-    if (!vi_map.count(n)) {
-      throw std::invalid_argument("The following name was not found in value_infos: " + n);
-    }
+    EXT_ENFORCE_INVALID(vi_map.count(n), "The following name was not found in value_infos: " + n);
   }
   for (const std::string &n : output_names) {
-    if (!vi_map.count(n)) {
-      throw std::invalid_argument("The following name was not found in value_infos: " + n);
-    }
+    EXT_ENFORCE_INVALID(vi_map.count(n), "The following name was not found in value_infos: " + n);
   }
 
   std::vector<NodeProto> nodes = CollectReachableNodes(graph, input_names, output_names);
@@ -712,12 +708,8 @@ GraphProto MergeGraphs(const GraphProto &g1_in, const GraphProto &g2_in,
 
   // Validate io_map.
   for (const auto &p : effective_io_map) {
-    if (!g1_outs.count(p.first)) {
-      throw std::invalid_argument("Output " + p.first + " is not present in g1");
-    }
-    if (!g2_ins.count(p.second)) {
-      throw std::invalid_argument("Input " + p.second + " is not present in g2");
-    }
+    EXT_ENFORCE_INVALID(g1_outs.count(p.first), "Output " + p.first + " is not present in g1");
+    EXT_ENFORCE_INVALID(g2_ins.count(p.second), "Input " + p.second + " is not present in g2");
   }
 
   // Check for overlapping names.
@@ -731,11 +723,10 @@ GraphProto MergeGraphs(const GraphProto &g1_in, const GraphProto &g2_in,
       }
       names_str += first.second[i];
     }
-    throw std::invalid_argument(
-        "Can't merge two graphs with overlapping names. Found repeated " + first.first +
-        " names: " + names_str +
-        "\nConsider using onnx_light.onnx.compose.add_prefix to add a prefix "
-        "to names in one of the graphs.");
+    EXT_THROW_INVALID("Can't merge two graphs with overlapping names. Found repeated " +
+                      first.first + " names: " + names_str +
+                      "\nConsider using onnx_light.onnx.compose.add_prefix to add a prefix "
+                      "to names in one of the graphs.");
   }
 
   GraphProto g;
@@ -867,11 +858,9 @@ ModelProto MergeModels(const ModelProto &m1_in, const ModelProto &m2_in,
                        int64_t model_version) {
   const int64_t ir1 = m1_in.has_ir_version() ? m1_in.ir_version() : int64_t{0};
   const int64_t ir2 = m2_in.has_ir_version() ? m2_in.ir_version() : int64_t{0};
-  if (ir1 != ir2) {
-    throw std::invalid_argument("IR version mismatch " + std::to_string(ir1) +
-                                " != " + std::to_string(ir2) +
-                                ". Both models should have the same IR version");
-  }
+  EXT_ENFORCE_INVALID(ir1 == ir2, "IR version mismatch " + std::to_string(ir1) +
+                                      " != " + std::to_string(ir2) +
+                                      ". Both models should have the same IR version");
   const int64_t ir_version = ir1;
 
   // Merge opset imports (must be compatible).
@@ -883,12 +872,11 @@ ModelProto MergeModels(const ModelProto &m1_in, const ModelProto &m2_in,
       const int64_t ver = ops[i].version();
       auto it = opset_import_map.find(dom);
       if (it != opset_import_map.end()) {
-        if (it->second != ver) {
-          throw std::invalid_argument(
-              "Can't merge two models with different operator set ids for a given domain. "
-              "Got conflicting versions for domain '" +
-              dom + "'");
-        }
+        EXT_ENFORCE_INVALID(
+            !(it->second != ver),
+            "Can't merge two models with different operator set ids for a given domain. "
+            "Got conflicting versions for domain '" +
+                dom + "'");
       } else {
         opset_import_map[dom] = ver;
       }
@@ -956,12 +944,11 @@ ModelProto MergeModels(const ModelProto &m1_in, const ModelProto &m2_in,
     const std::string val = m2.metadata_props()[i].value().as_string();
     auto it = model_props.find(key);
     if (it != model_props.end()) {
-      if (it->second != val) {
-        throw std::invalid_argument(
-            "Can't merge models with different values for the same model metadata property. "
-            "Found: property = " +
-            key + ", with values " + it->second + " and " + val + ".");
-      }
+      EXT_ENFORCE_INVALID(
+          !(it->second != val),
+          "Can't merge models with different values for the same model metadata property. "
+          "Found: property = " +
+              key + ", with values " + it->second + " and " + val + ".");
     } else {
       model_props[key] = val;
     }
@@ -990,7 +977,7 @@ ModelProto MergeModels(const ModelProto &m1_in, const ModelProto &m2_in,
       }
       names_str += fn_overlap[i];
     }
-    throw std::invalid_argument(
+    EXT_THROW_INVALID(
         "Can't merge models with overlapping local function names. Found in both graphs: " +
         names_str);
   }

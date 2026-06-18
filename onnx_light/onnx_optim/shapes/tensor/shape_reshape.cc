@@ -91,9 +91,8 @@ OptimDim InferredOrFallbackDim(const OptimShape &data_shape, const OptimShape &o
 void ComputeShapeReshape(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Reshape", "ComputeShapeReshape");
 
-  if (node.input_size() < 2) {
-    throw std::invalid_argument("ComputeShapeReshape: Reshape requires two inputs (data, shape).");
-  }
+  EXT_ENFORCE_INVALID(!(node.input_size() < 2),
+                      "ComputeShapeReshape: Reshape requires two inputs (data, shape).");
 
   const OptimTensor &data = ctx.Get(node.input(0).as_string());
   const OptimTensor &shape_input = ctx.Get(node.input(1).as_string());
@@ -146,21 +145,18 @@ void ComputeShapeReshape(ShapesContext &ctx, const NodeProto &node) {
     }
     const int64_t v = dim.AsInt();
     if (v == -1) {
-      if (neg_one_index != -1) {
-        throw std::invalid_argument(
-            "ComputeShapeReshape: target shape may not have multiple -1 dimensions.");
-      }
+      EXT_ENFORCE_INVALID(neg_one_index == -1,
+                          "ComputeShapeReshape: target shape may not have multiple -1 dimensions.");
       neg_one_index = i;
       // Placeholder; resolved below.
       out_shape.PushBack(OptimDim(static_cast<int64_t>(-1)));
     } else if (v == 0) {
       if (allowzero == 0) {
-        if (i >= data_rank) {
-          throw std::invalid_argument("ComputeShapeReshape: invalid position of 0 in target "
-                                      "shape (index " +
-                                      std::to_string(i) + " out of input rank " +
-                                      std::to_string(data_rank) + ").");
-        }
+        EXT_ENFORCE_INVALID(!(i >= data_rank),
+                            "ComputeShapeReshape: invalid position of 0 in target "
+                            "shape (index " +
+                                std::to_string(i) + " out of input rank " +
+                                std::to_string(data_rank) + ").");
         const OptimDim &input_dim = data_shape[i];
         out_shape.PushBack(input_dim);
         if (input_dim.IsInt()) {
@@ -177,16 +173,15 @@ void ComputeShapeReshape(ShapesContext &ctx, const NodeProto &node) {
       out_shape.PushBack(OptimDim(v));
       output_product *= v;
     } else {
-      throw std::invalid_argument("ComputeShapeReshape: invalid dimension value " +
-                                  std::to_string(v) + " in target shape.");
+      EXT_THROW_INVALID("ComputeShapeReshape: invalid dimension value " + std::to_string(v) +
+                        " in target shape.");
     }
   }
 
   if (neg_one_index != -1 && output_product_valid) {
-    if (output_product == 0) {
-      throw std::invalid_argument(
-          "ComputeShapeReshape: invalid target shape product of 0 in combination with -1.");
-    }
+    EXT_ENFORCE_INVALID(
+        output_product != 0,
+        "ComputeShapeReshape: invalid target shape product of 0 in combination with -1.");
     int64_t input_product = 1;
     bool input_product_valid = true;
     for (int i = 0; i < data_rank; ++i) {
@@ -198,13 +193,12 @@ void ComputeShapeReshape(ShapesContext &ctx, const NodeProto &node) {
       }
     }
     if (input_product_valid) {
-      if (input_product % output_product != 0) {
-        throw std::invalid_argument(
-            "ComputeShapeReshape: dimension could not be inferred: incompatible shapes (input "
-            "element count " +
-            std::to_string(input_product) + " is not a multiple of " +
-            std::to_string(output_product) + ").");
-      }
+      EXT_ENFORCE_INVALID(
+          input_product % output_product == 0,
+          "ComputeShapeReshape: dimension could not be inferred: incompatible shapes (input "
+          "element count " +
+              std::to_string(input_product) + " is not a multiple of " +
+              std::to_string(output_product) + ").");
       out_shape[neg_one_index] = OptimDim(input_product / output_product);
     } else {
       out_shape[neg_one_index] = InferredOrFallbackDim(data_shape, out_shape, neg_one_index);

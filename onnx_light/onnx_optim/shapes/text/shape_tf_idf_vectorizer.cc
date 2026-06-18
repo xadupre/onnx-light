@@ -20,12 +20,11 @@ void ComputeShapeTfIdfVectorizer(ShapesContext &ctx, const NodeProto &node, cons
   CheckNodeOpAndOutput(node, "TfIdfVectorizer", "ComputeShapeTfIdfVectorizer");
 
   std::vector<int64_t> ngram_indexes;
-  if (!GetAttributeInts(node, "ngram_indexes", ngram_indexes) || ngram_indexes.empty() ||
-      !std::all_of(ngram_indexes.cbegin(), ngram_indexes.cend(),
-                   [](int64_t i) { return i >= 0; })) {
-    throw std::invalid_argument(
-        "ComputeShapeTfIdfVectorizer: ngram_indexes must be non-empty with no negative values.");
-  }
+  EXT_ENFORCE_INVALID(
+      !(!GetAttributeInts(node, "ngram_indexes", ngram_indexes) || ngram_indexes.empty() ||
+        !std::all_of(ngram_indexes.cbegin(), ngram_indexes.cend(),
+                     [](int64_t i) { return i >= 0; })),
+      "ComputeShapeTfIdfVectorizer: ngram_indexes must be non-empty with no negative values.");
   const int64_t max_last_axis = *std::max_element(ngram_indexes.cbegin(), ngram_indexes.cend()) + 1;
 
   const OptimTensor &input = ctx.Get(a);
@@ -41,9 +40,8 @@ void ComputeShapeTfIdfVectorizer(ShapesContext &ctx, const NodeProto &node, cons
     ctx.Set(node.output(0), OptimTensor(nullptr, TensorType::kFloat, std::move(out_shape)));
     return;
   }
-  throw std::invalid_argument(
-      "ComputeShapeTfIdfVectorizer: input tensor must have rank 1 or 2; got rank " +
-      std::to_string(rank) + ".");
+  EXT_THROW_INVALID("ComputeShapeTfIdfVectorizer: input tensor must have rank 1 or 2; got rank " +
+                    std::to_string(rank) + ".");
 }
 
 } // namespace text

@@ -212,8 +212,6 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_pow_types_bfloat16_float32$",
     # ORT diverges from the reference on MaxUnpool/Resize edge semantics.
     r"^test_cc_maxunpool_export_with_output_shape$",
-    r"^test_resize_downsample_scales_linear_align_corners$",
-    r"^test_resize_downsample_scales_cubic_align_corners$",
     # ORT IRFFT mishandles the ``inverse=1, onesided=1`` combination.
     r"^test_cc_dft_irfft(_opset19|_roundtrip|_roundtrip_opset19)?$",
     # ORT does not support Optional loop-carried state in this graph structure.

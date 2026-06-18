@@ -117,8 +117,6 @@ TestOptimShapeInferenceDynamicBackend = make_test_class(
         "test_cc_dict_vectorizer_.*",
         "test_cc_loop11_carried_state.*",
         "test_cc_optional_get_element_optional_sequence.*",
-        "test_cc_sequence_map_add_2_sequences.*",
-        "test_cc_sequence_map_identity_2_sequences.*",
         "test_cc_squeeze_all_singleton.*",
         "test_cc_squeeze_no_axes_input.*",
         "test_cc_squeeze_empty_axes_name.*",
@@ -128,14 +126,19 @@ TestOptimShapeInferenceDynamicBackend = make_test_class(
         "test_cc_identity_opt.*",
         "test_cc_if_seq.*",
         "test_cc_if_opt.*",
-        "test_cc_shape_inference_local_function_add.*",
-        "test_cc_shape_inference_nested_local_function_add.*",
         "test_cc_linear_attention.*",
         "test_cc_shape_inference_value_as_shape.*",
         "test_cc_shape_inference_check_shape.*",
         "test_cc_shape_inference_concat_split.*",
         "test_cc_shape_inference_reshape_reshape.*",
         "test_cc_shape_inference_scan_running_sum.*",
+        # These local-function cases keep dedicated non-dynamic coverage because
+        # they rely on user-authored symbolic aliases the generic dynamic
+        # harness does not normalize consistently yet.
+        "test_cc_shape_inference_local_function_add.*",
+        "test_cc_shape_inference_nested_local_function_add.*",
+        "test_cc_sequence_map_add_2_sequences.*",
+        "test_cc_sequence_map_identity_2_sequences.*",
         "test_cc_shape_inference_nonzero_plus_expression.*",
         # These remaining models keep dedicated non-dynamic coverage because
         # they rely on exact user-authored symbolic aliases or expressions that

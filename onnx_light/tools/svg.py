@@ -1,0 +1,426 @@
+"""Convert an ONNX model or graph to a standalone `SVG <https://www.w3.org/Graphics/SVG/>`_
+image.
+
+The resulting string is a self-contained ``<svg>`` document that can be
+written to a ``.svg`` file or embedded directly in an HTML page::
+
+    from onnx_light.tools import to_svg
+
+    with open("model.svg", "w", encoding="utf-8") as f:
+        f.write(to_svg(model))
+
+Unlike :func:`onnx_light.tools.to_mermaid`, which produces source that
+still needs a Mermaid renderer, :func:`to_svg` performs a simple layered
+layout itself and emits ready-to-display SVG.  The converter is
+implemented in pure Python and only depends on the attributes of the
+standard ONNX message types (``ModelProto``, ``GraphProto``,
+``NodeProto``, ``ValueInfoProto``, ``TensorProto`` and
+``TensorShapeProto``).  It therefore works both with messages built by
+:mod:`onnx_light` and with messages built by the upstream :mod:`onnx`
+package.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from .mermaid import _dtype_name, _extract_graph, _format_shape, _iter, _looks_like_graph, _s
+
+# ---------------------------------------------------------------------------
+# Geometry constants
+# ---------------------------------------------------------------------------
+
+_FONT_SIZE = 12
+_CHAR_WIDTH = 7.0  # Approximate width of a monospace-ish character in px.
+_LINE_HEIGHT = 16.0
+_BOX_PAD_X = 12.0
+_BOX_PAD_Y = 8.0
+_LAYER_GAP = 60.0  # Gap between successive layers.
+_SIBLING_GAP = 24.0  # Gap between boxes within the same layer.
+_MARGIN = 20.0  # Outer margin around the whole drawing.
+
+# Styling per kind of box: ``fill``, ``stroke`` and ``dashed`` flag.
+_STYLES = {
+    "input": {"fill": "#cde4ff", "stroke": "#3a6ea5", "dashed": False, "rounded": True},
+    "output": {"fill": "#ffe1b3", "stroke": "#a35a00", "dashed": False, "rounded": True},
+    "initializer": {"fill": "#eeeeee", "stroke": "#888888", "dashed": True, "rounded": False},
+    "op": {"fill": "#d4ecd4", "stroke": "#3a8c3a", "dashed": False, "rounded": False},
+}
+
+
+# ---------------------------------------------------------------------------
+# XML escaping
+# ---------------------------------------------------------------------------
+
+_XML_ESCAPE = {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;"}
+
+
+def _escape_xml(text: str) -> str:
+    """Escape characters that are special in XML text and attributes."""
+    return "".join(_XML_ESCAPE.get(ch, ch) for ch in text)
+
+
+# ---------------------------------------------------------------------------
+# Internal box representation
+# ---------------------------------------------------------------------------
+
+
+class _Box:
+    """A single rectangle in the rendered diagram."""
+
+    def __init__(self, box_id: int, kind: str, lines: list[str]) -> None:
+        self.id = box_id
+        self.kind = kind
+        self.lines = [line for line in lines if line] or [""]
+        text_width = max((len(line) for line in self.lines), default=0) * _CHAR_WIDTH
+        self.width = text_width + 2 * _BOX_PAD_X
+        self.height = len(self.lines) * _LINE_HEIGHT + 2 * _BOX_PAD_Y
+        self.layer = 0
+        # Top-left corner, filled in during layout.
+        self.x = 0.0
+        self.y = 0.0
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+
+def to_svg(
+    model_or_graph: Any,
+    *,
+    direction: str = "TB",
+    include_initializers: bool = True,
+    include_shapes: bool = True,
+    include_attributes: bool = False,
+) -> str:
+    """Render an ONNX ``ModelProto`` or ``GraphProto`` as an SVG image.
+
+    Args:
+        model_or_graph: A ``ModelProto`` or ``GraphProto`` instance.  Both
+            :mod:`onnx_light` and :mod:`onnx` messages are accepted.
+        direction: Layout direction; ``"TB"`` (or ``"TD"``) lays the graph
+            out top-to-bottom and ``"LR"`` left-to-right.  Defaults to
+            ``"TB"``.
+        include_initializers: When :data:`True`, initializers are rendered
+            as separate (dashed) boxes connected to their consumers.  When
+            :data:`False`, initializer tensors are not shown.
+        include_shapes: When :data:`True`, tensor type/shape information
+            available in graph inputs, outputs, ``value_info`` and
+            initializers is appended to the corresponding box labels.
+        include_attributes: When :data:`True`, node attribute names are
+            listed inside the operator label.
+
+    Returns:
+        A self-contained SVG document as a single ``str``.
+
+    Raises:
+        TypeError: If ``model_or_graph`` is neither a ``ModelProto`` nor
+            a ``GraphProto``.
+        ValueError: If ``direction`` is not a supported direction.
+    """
+    valid_directions = {"TB", "TD", "LR"}
+    if direction not in valid_directions:
+        raise ValueError(
+            f"Unsupported SVG direction {direction!r}; "
+            f"expected one of {sorted(valid_directions)}."
+        )
+
+    graph = _extract_graph(model_or_graph)
+    return to_svg_graph(
+        graph,
+        direction=direction,
+        include_initializers=include_initializers,
+        include_shapes=include_shapes,
+        include_attributes=include_attributes,
+    )
+
+
+def to_svg_graph(
+    graph: Any,
+    *,
+    direction: str = "TB",
+    include_initializers: bool = True,
+    include_shapes: bool = True,
+    include_attributes: bool = False,
+) -> str:
+    """Render a ``GraphProto`` as an SVG image.
+
+    See :func:`to_svg` for the meaning of every parameter.
+    """
+    if not _looks_like_graph(graph):
+        raise TypeError(
+            "to_svg_graph expected a GraphProto-like object "
+            f"with 'node', 'input' and 'output' fields, got {type(graph).__name__}."
+        )
+
+    horizontal = direction == "LR"
+
+    boxes: list[_Box] = []
+    # Maps an ONNX tensor name to the box that produces it.
+    producer: dict[str, int] = {}
+    # Edges as ordered (source box id, target box id, label) tuples.
+    edges: list[tuple[int, int, str]] = []
+
+    def new_box(kind: str, lines: list[str]) -> _Box:
+        box = _Box(len(boxes), kind, lines)
+        boxes.append(box)
+        return box
+
+    # Shape lookup from inputs, outputs and value_info.
+    shape_lookup: dict[str, str] = {}
+    if include_shapes:
+        for collection in ("input", "output", "value_info"):
+            for value_info in _iter(getattr(graph, collection, ())):
+                shape_lookup[_s(value_info.name)] = _format_shape(
+                    getattr(value_info, "type", None)
+                )
+
+    initializer_names: set[str] = set()
+    initializer_shapes: dict[str, str] = {}
+    for init in _iter(getattr(graph, "initializer", ())):
+        name = _s(init.name)
+        initializer_names.add(name)
+        if include_shapes:
+            dims = ",".join(str(int(d)) for d in getattr(init, "dims", ()))
+            dtype = _dtype_name(int(getattr(init, "data_type", 0)))
+            initializer_shapes[name] = f"{dtype}[{dims}]" if dims else dtype
+
+    # Input boxes.
+    input_names = [_s(v.name) for v in _iter(getattr(graph, "input", ()))]
+    input_name_set = set(input_names)
+    for name in input_names:
+        if not include_initializers and name in initializer_names:
+            continue
+        lines = [name or "(unnamed)"]
+        shape = shape_lookup.get(name, "")
+        if shape:
+            lines.append(shape)
+        box = new_box("input", lines)
+        producer[name] = box.id
+
+    # Initializer boxes (skip those already shown as inputs).
+    if include_initializers:
+        for name in sorted(initializer_names):
+            if name in input_name_set:
+                continue
+            lines = [name or "(unnamed)"]
+            shape = initializer_shapes.get(name, "")
+            if shape:
+                lines.append(shape)
+            box = new_box("initializer", lines)
+            producer[name] = box.id
+
+    # Operator boxes (recorded first so producers exist before edges).
+    op_boxes: list[tuple[int, Any]] = []
+    for node in _iter(getattr(graph, "node", ())):
+        op_type = _s(getattr(node, "op_type", "")) or "Op"
+        raw_name = _s(getattr(node, "name", ""))
+        lines = [op_type]
+        if raw_name:
+            lines.append(raw_name)
+        if include_attributes:
+            attr_names = sorted(_s(a.name) for a in _iter(getattr(node, "attribute", ())))
+            if attr_names:
+                lines.append(", ".join(attr_names))
+        box = new_box("op", lines)
+        op_boxes.append((box.id, node))
+        for out in _iter(getattr(node, "output", ())):
+            out_name = _s(out)
+            if out_name:
+                producer[out_name] = box.id
+
+    # Edges for operator inputs.
+    for box_id, node in op_boxes:
+        for inp in _iter(getattr(node, "input", ())):
+            inp_name = _s(inp)
+            if not inp_name:
+                continue
+            if not include_initializers and inp_name in initializer_names:
+                continue
+            src = producer.get(inp_name)
+            if src is None:
+                continue
+            label = ""
+            if include_shapes:
+                label = shape_lookup.get(inp_name) or initializer_shapes.get(inp_name, "")
+            edges.append((src, box_id, label))
+
+    # Output boxes and their incoming edges.
+    for value_info in _iter(getattr(graph, "output", ())):
+        name = _s(value_info.name)
+        if not name:
+            continue
+        lines = [name]
+        shape = shape_lookup.get(name, "")
+        if shape:
+            lines.append(shape)
+        box = new_box("output", lines)
+        src = producer.get(name)
+        if src is not None:
+            edges.append((src, box.id, shape if include_shapes else ""))
+
+    _assign_layers(boxes, edges)
+    width, height = _layout(boxes, horizontal)
+
+    return _render_svg(boxes, edges, width, height, horizontal)
+
+
+# ---------------------------------------------------------------------------
+# Layout
+# ---------------------------------------------------------------------------
+
+
+def _assign_layers(boxes: list[_Box], edges: list[tuple[int, int, str]]) -> None:
+    """Assign a layer index to every box using longest-path layering."""
+    # Relax edges until the layering is stable; an ONNX graph is a DAG so
+    # this converges in at most ``len(boxes)`` passes.
+    for _ in range(len(boxes)):
+        changed = False
+        for src, dst, _label in edges:
+            if boxes[dst].layer < boxes[src].layer + 1:
+                boxes[dst].layer = boxes[src].layer + 1
+                changed = True
+        if not changed:
+            break
+
+
+def _layout(boxes: list[_Box], horizontal: bool) -> tuple[float, float]:
+    """Place every box and return the overall ``(width, height)``."""
+    if not boxes:
+        return (2 * _MARGIN, 2 * _MARGIN)
+
+    layers: dict[int, list[_Box]] = {}
+    for box in boxes:
+        layers.setdefault(box.layer, []).append(box)
+
+    # ``cross`` is the axis along which siblings spread, ``depth`` the axis
+    # along which layers stack.
+    cross_extent = 0.0
+    depth_cursor = _MARGIN
+    for layer_index in sorted(layers):
+        layer_boxes = layers[layer_index]
+        depth_size = max((box.width if horizontal else box.height) for box in layer_boxes)
+        cross_cursor = _MARGIN
+        for box in layer_boxes:
+            if horizontal:
+                box.x = depth_cursor
+                box.y = cross_cursor
+                cross_cursor += box.height + _SIBLING_GAP
+            else:
+                box.x = cross_cursor
+                box.y = depth_cursor
+                cross_cursor += box.width + _SIBLING_GAP
+        cross_extent = max(cross_extent, cross_cursor - _SIBLING_GAP)
+        depth_cursor += depth_size + _LAYER_GAP
+
+    depth_extent = depth_cursor - _LAYER_GAP + _MARGIN
+
+    # Centre each layer along the cross axis for a tidier picture.
+    for layer_boxes in layers.values():
+        if horizontal:
+            used = sum(box.height for box in layer_boxes) + _SIBLING_GAP * (len(layer_boxes) - 1)
+            offset = (cross_extent - _MARGIN - used) / 2.0
+            for box in layer_boxes:
+                box.y += offset
+        else:
+            used = sum(box.width for box in layer_boxes) + _SIBLING_GAP * (len(layer_boxes) - 1)
+            offset = (cross_extent - _MARGIN - used) / 2.0
+            for box in layer_boxes:
+                box.x += offset
+
+    if horizontal:
+        return (depth_extent, cross_extent + _MARGIN)
+    return (cross_extent + _MARGIN, depth_extent)
+
+
+# ---------------------------------------------------------------------------
+# SVG rendering
+# ---------------------------------------------------------------------------
+
+
+def _render_svg(
+    boxes: list[_Box],
+    edges: list[tuple[int, int, str]],
+    width: float,
+    height: float,
+    horizontal: bool,
+) -> str:
+    parts: list[str] = []
+    parts.append(
+        f'<svg xmlns="http://www.w3.org/2000/svg" '
+        f'width="{_round(width)}" height="{_round(height)}" '
+        f'viewBox="0 0 {_round(width)} {_round(height)}" '
+        f'font-family="sans-serif" font-size="{_FONT_SIZE}">'
+    )
+    parts.append(
+        '<defs><marker id="arrow" markerWidth="10" markerHeight="10" '
+        'refX="8" refY="3" orient="auto" markerUnits="strokeWidth">'
+        '<path d="M0,0 L8,3 L0,6 Z" fill="#555555"/></marker></defs>'
+    )
+
+    # Draw edges first so boxes sit on top of the lines.
+    for src, dst, label in edges:
+        parts.append(_render_edge(boxes[src], boxes[dst], label, horizontal))
+
+    for box in boxes:
+        parts.append(_render_box(box))
+
+    parts.append("</svg>")
+    return "\n".join(parts)
+
+
+def _render_box(box: _Box) -> str:
+    style = _STYLES[box.kind]
+    rx = 12 if style["rounded"] else 4
+    dash = ' stroke-dasharray="4 3"' if style["dashed"] else ""
+    out = [
+        f'<rect x="{_round(box.x)}" y="{_round(box.y)}" '
+        f'width="{_round(box.width)}" height="{_round(box.height)}" '
+        f'rx="{rx}" ry="{rx}" fill="{style["fill"]}" '
+        f'stroke="{style["stroke"]}"{dash}/>'
+    ]
+    cx = box.x + box.width / 2.0
+    text_top = box.y + _BOX_PAD_Y + _LINE_HEIGHT * 0.75
+    for i, line in enumerate(box.lines):
+        y = text_top + i * _LINE_HEIGHT
+        out.append(
+            f'<text x="{_round(cx)}" y="{_round(y)}" '
+            f'text-anchor="middle" fill="#000000">{_escape_xml(line)}</text>'
+        )
+    return "".join(out)
+
+
+def _render_edge(src: _Box, dst: _Box, label: str, horizontal: bool) -> str:
+    if horizontal:
+        x1 = src.x + src.width
+        y1 = src.y + src.height / 2.0
+        x2 = dst.x
+        y2 = dst.y + dst.height / 2.0
+    else:
+        x1 = src.x + src.width / 2.0
+        y1 = src.y + src.height
+        x2 = dst.x + dst.width / 2.0
+        y2 = dst.y
+    out = [
+        f'<line x1="{_round(x1)}" y1="{_round(y1)}" '
+        f'x2="{_round(x2)}" y2="{_round(y2)}" '
+        f'stroke="#555555" marker-end="url(#arrow)"/>'
+    ]
+    if label:
+        mx = (x1 + x2) / 2.0
+        my = (y1 + y2) / 2.0
+        out.append(
+            f'<text x="{_round(mx)}" y="{_round(my)}" text-anchor="middle" '
+            f'fill="#555555" font-size="{_FONT_SIZE - 2}">{_escape_xml(label)}</text>'
+        )
+    return "".join(out)
+
+
+def _round(value: float) -> str:
+    """Format a coordinate with at most two decimals, dropping trailing zeros."""
+    return f"{value:.2f}".rstrip("0").rstrip(".")
+
+
+# Re-exported for callers that want the iterable helper.
+__all__ = ["to_svg", "to_svg_graph"]

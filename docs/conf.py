@@ -174,35 +174,12 @@ def _on_builder_inited(app) -> None:
     generate_operators_doc(operators_dir, progress_callback=logger.info)
 
 
-def _build_to_svg_example() -> tuple[str, str]:
-    """Builds the `to_svg` code sample and rendered SVG used in documentation.
+def _build_to_svg_example(code: str) -> tuple[str, str]:
+    """Builds the rendered SVG used in documentation from custom example code.
 
     Returns:
         tuple[str, str]: Python code snippet and rendered SVG content.
     """
-    code = """
-from onnx_light.onnx_lib import TensorProto
-from onnx_light.onnx.helper import (
-    make_model,
-    make_node,
-    make_graph,
-    make_tensor_value_info,
-)
-from onnx_light.tools import to_svg
-
-X = make_tensor_value_info("X", TensorProto.FLOAT, [None, None])
-A = make_tensor_value_info("A", TensorProto.FLOAT, [None, None])
-B = make_tensor_value_info("B", TensorProto.FLOAT, [None, None])
-Y = make_tensor_value_info("Y", TensorProto.FLOAT, [None])
-
-node1 = make_node("MatMul", ["X", "A"], ["XA"])
-node2 = make_node("Add", ["XA", "B"], ["Y"])
-graph = make_graph([node1, node2], "example", [X, A, B], [Y])
-model = make_model(graph)
-
-svg = to_svg(model)
-""".strip()
-
     namespace: dict[str, object] = {}
     exec(code, namespace)
     svg = namespace.get("svg")
@@ -214,7 +191,7 @@ svg = to_svg(model)
 class ToSvgExampleDirective(Directive):
     """Renders the `to_svg` example code and the resulting SVG image."""
 
-    has_content = False
+    has_content = True
     required_arguments = 0
     optional_arguments = 0
     final_argument_whitespace = False
@@ -225,7 +202,10 @@ class ToSvgExampleDirective(Directive):
         Returns:
             list[nodes.Node]: Literal code block and raw HTML SVG nodes.
         """
-        code, svg = _build_to_svg_example()
+        code = "\n".join(self.content).strip()
+        if not code:
+            raise self.error("to-svg-example requires Python code and must define 'svg'.")
+        code, svg = _build_to_svg_example(code)
         literal = nodes.literal_block(code, code)
         literal["language"] = "python"
         return [literal, nodes.raw("", svg, format="html")]

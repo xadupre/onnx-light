@@ -133,7 +133,7 @@ TestOptimShapeInferenceDynamicBackend = make_test_class(
         "test_cc_shape_inference_reshape_reshape.*",
         "test_cc_shape_inference_scan_running_sum.*",
         # These local-function cases keep dedicated non-dynamic coverage because
-        # they rely on user-authored symbolic aliases the generic dynamic
+        # they rely on user-authored symbolic aliases that the generic dynamic
         # harness does not normalize consistently yet.
         "test_cc_shape_inference_local_function_add.*",
         "test_cc_shape_inference_nested_local_function_add.*",

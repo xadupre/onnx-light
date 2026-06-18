@@ -493,8 +493,6 @@ class InferenceSessionAllTypes:
 
         # Use IOBinding for special dtypes, standard run otherwise
         if needs_iobinding:
-            from onnxruntime.capi import _pybind_state as C
-
             io_binding = self._sess.io_binding()
 
             for meta, inp in zip(input_metas, inputs):
@@ -507,16 +505,15 @@ class InferenceSessionAllTypes:
                     # View the array as the compatible dtype for buffer access
                     buffer_view = inp.view(view_dtype)
 
-                    # Create OrtValue from buffer with explicit element type
-                    device = C.OrtDevice(C.OrtDevice.cpu(), C.OrtDevice.default_memory(), 0)  # type: ignore[attr-defined]
-                    ortvalue = C.OrtValue.ortvalue_from_shape_and_type(  # type: ignore[attr-defined]
-                        list(inp.shape), tensor_type, device
+                    # Bind the input directly with explicit element type
+                    io_binding.bind_input(  # type: ignore[attr-defined]
+                        meta.name,
+                        "cpu",  # device_type
+                        0,  # device_id
+                        tensor_type,
+                        list(inp.shape),
+                        buffer_view.ctypes.data,
                     )
-                    # Copy data into the OrtValue
-                    ortvalue.update_inplace(buffer_view)  # type: ignore[attr-defined]
-
-                    # Bind the input
-                    io_binding.bind_ortvalue_input(meta.name, ortvalue)
                 else:
                     # Standard dtype, use normal binding
                     io_binding.bind_cpu_input(meta.name, inp)

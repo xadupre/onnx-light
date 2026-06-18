@@ -137,9 +137,6 @@ TestOptimShapeInferenceDynamicBackend = make_test_class(
         # harness requires concrete dim_value inputs to rewrite them.
         "test_cc_shape_inference_loop_topk_pairwise_distance.*",
         "test_cc_shape_inference_scan_topk_pairwise_distance.*",
-        # Inputs already use symbolic dim_param ("batch", "seq", "past_seq",
-        # "total_seq"); the dynamic harness requires concrete dim_value inputs.
-        "test_cc_shape_inference_tiny_llm.*",
     ],
 )
 

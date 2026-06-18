@@ -214,7 +214,7 @@ bool HasBorrowedRawData(const ModelProto &model) {
           EXT_THROW("unexpected value type, unable to set '" #name "' for class '" #cls "'.");     \
         }                                                                                          \
       },                                                                                           \
-      cls::DOC_##name)                                                                             \
+      cls::DOC_##name, nb::for_setter(nb::arg("value").none()))                                    \
       .def("has_" #name, &cls::has_##name, "Tells if '" #name "' has a value.")
 
 #define PYFIELD_OPTIONAL_INT(cls, name) _PYFIELD_OPTIONAL_CTYPE(cls, name, int)
@@ -239,7 +239,7 @@ bool HasBorrowedRawData(const ModelProto &model) {
           EXT_THROW("unexpected value type, unable to set '" #name "' for class '" #cls "'.");     \
         }                                                                                          \
       },                                                                                           \
-      nb::rv_policy::reference_internal, cls::DOC_##name)                                          \
+      nb::rv_policy::reference_internal, cls::DOC_##name, nb::for_setter(nb::arg("value").none())) \
       .def("has_" #name, &cls::has_##name, "Tells if '" #name "' has a value.")                    \
       .def(                                                                                        \
           "add_" #name, [](cls & self) -> cls::name##_t & {                                        \
@@ -448,6 +448,32 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
       .def(
           "CopyFrom", [](cls &self, const cls &src) { self.CopyFrom(src); },
           "Copies one instance into this one.")
+      .def(
+          "ClearField",
+          [](nb::handle self, const std::string &field_name) {
+            // Mirrors ``google.protobuf.Message.ClearField``: resets a single
+            // field to its empty/default state while leaving the others intact.
+            nb::object attr = nb::getattr(self, field_name.c_str());
+            // Repeated fields are containers (RepeatedField / RepeatedProtoField)
+            // exposing a python ``clear`` method; emptying the container clears
+            // the field. They are never ``Message`` instances.
+            if (!nb::isinstance<Message>(attr) && nb::hasattr(attr, "clear")) {
+              attr.attr("clear")();
+              return;
+            }
+            // Optional scalar fields and optional/oneof message fields drop
+            // their presence bit when their setter receives ``None``.
+            try {
+              nb::setattr(self, field_name.c_str(), nb::none());
+            } catch (nb::python_error &) {
+              // Always-present scalar, string and message fields reject ``None``;
+              // reset them to the default value carried by a freshly constructed
+              // message of the same type.
+              nb::object fresh = nb::cast(cls());
+              nb::setattr(self, field_name.c_str(), nb::getattr(fresh, field_name.c_str()));
+            }
+          },
+          nb::arg("field_name"), "Clears the field ``field_name``, following the protobuf API.")
       .def(
           "__eq__",
           [](const cls &self, const cls &other) -> bool {

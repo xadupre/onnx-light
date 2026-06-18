@@ -12,7 +12,10 @@ from onnx_light.onnx_lib import (
     GraphProto,
     ModelProto,
     NodeProto,
+    SparseTensorProto,
     TensorProto,
+    TensorShapeProto,
+    TypeProto,
     ValueInfoProto,
 )
 
@@ -149,6 +152,59 @@ class TestProtoMethods(ExtTestCase):
         self.assertEqual(m2.graph.node[0].op_type, "MatMul")
         self.assertEqual(m2.opset_import[0].version, 18)
         self.assertEqual(m2.metadata_props[0].key, "producer")
+
+    def test_clear_field_repeated(self):
+        tensor = TensorProto()
+        tensor.dims.extend([1, 2, 3])
+        tensor.ClearField("dims")
+        self.assertEqual(list(tensor.dims), [])
+
+    def test_clear_field_string(self):
+        tensor = TensorProto()
+        tensor.name = "abc"
+        tensor.ClearField("name")
+        self.assertEqual(tensor.name, "")
+        self.assertFalse(tensor.has_name())
+
+    def test_clear_field_optional_message(self):
+        type_proto = TypeProto()
+        type_proto.tensor_type.elem_type = TensorProto.FLOAT
+        type_proto.tensor_type.shape.dim.add().dim_value = 3
+        self.assertTrue(type_proto.tensor_type.has_shape())
+        type_proto.tensor_type.ClearField("shape")
+        self.assertFalse(type_proto.tensor_type.has_shape())
+        # Other fields are left untouched.
+        self.assertEqual(type_proto.tensor_type.elem_type, TensorProto.FLOAT)
+
+    def test_clear_field_optional_scalar(self):
+        dim = TensorShapeProto.Dimension()
+        dim.dim_value = 5
+        self.assertTrue(dim.has_dim_value())
+        dim.ClearField("dim_value")
+        self.assertFalse(dim.has_dim_value())
+
+    def test_clear_field_required_message(self):
+        sparse = SparseTensorProto()
+        sparse.values.name = "v"
+        sparse.values.dims.extend([2])
+        sparse.ClearField("values")
+        self.assertEqual(sparse.values.name, "")
+        self.assertEqual(list(sparse.values.dims), [])
+
+    def test_clear_field_absent_is_noop(self):
+        # Clearing an unset field must not raise.
+        TensorProto().ClearField("name")
+
+    def test_set_optional_field_to_none(self):
+        type_proto = TypeProto()
+        type_proto.tensor_type.shape.dim.add()
+        type_proto.tensor_type.shape = None
+        self.assertFalse(type_proto.tensor_type.has_shape())
+
+        dim = TensorShapeProto.Dimension()
+        dim.dim_value = 7
+        dim.dim_value = None
+        self.assertFalse(dim.has_dim_value())
 
 
 if __name__ == "__main__":

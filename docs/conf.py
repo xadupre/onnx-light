@@ -181,7 +181,7 @@ def _build_to_svg_example(code: str) -> tuple[str, str]:
         code: Python code executed to populate variable ``svg``.
 
     Returns:
-        tuple[str, str]: Provided Python code snippet and rendered SVG content.
+        tuple[str, str]: Input Python code snippet and rendered SVG content.
     """
     namespace: dict[str, object] = {}
     exec(code, namespace)

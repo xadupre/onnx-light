@@ -1,5 +1,6 @@
 #include "onnx_optim/expressions.h"
 #include "onnx_optim/optim_tensor.h"
+#include "onnx_optim/shapes/inplace_reuse.h"
 #include "onnx_optim/shapes/shape_inference.h"
 #include "onnx_optim/shapes/shapes_context.h"
 #include <algorithm>
@@ -894,4 +895,36 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       "back into ``model.graph.output`` and ``model.graph.value_info``. The ModelProto is "
       "mutated in place. When ``prefill_with_value_info_output`` is true, existing "
       "``value_info``/``output`` tensor descriptors are used as anchors.");
+
+  // -----------------------------------------------------------------------
+  // In-place reuse analysis
+  // -----------------------------------------------------------------------
+  nb::class_<onnx_shapes::InPlaceReuse>(
+      shape_mod, "InPlaceReuse",
+      "One in-place reuse opportunity for a node: the output at ``output_index`` may reuse the "
+      "buffer of the input at ``input_index`` (both indices into the node's ``output``/``input`` "
+      "lists).")
+      .def(nb::init<>())
+      .def_rw("output_index", &onnx_shapes::InPlaceReuse::output_index)
+      .def_rw("input_index", &onnx_shapes::InPlaceReuse::input_index)
+      .def(nb::self == nb::self)
+      .def(nb::self != nb::self)
+      .def("__repr__", [](const onnx_shapes::InPlaceReuse &r) {
+        std::ostringstream os;
+        os << "InPlaceReuse(output_index=" << r.output_index << ", input_index=" << r.input_index
+           << ")";
+        return os.str();
+      });
+
+  shape_mod.def(
+      "compute_inplace_reuse",
+      [](const onnx_shapes::ShapesContext &ctx, const GraphProto &graph) {
+        return onnx_shapes::ComputeInPlaceReuse(graph, ctx);
+      },
+      nb::arg("ctx"), nb::arg("graph"),
+      "Guesses, for every node of ``graph``, which outputs may reuse which input buffers in "
+      "place, using the shapes already inferred into ``ctx``. Returns a list with one entry per "
+      "node (same order as ``graph.node``); each entry is a list of :class:`InPlaceReuse`. The "
+      "analysis is purely structural (matching element type, shape and value lifetime) and does "
+      "not check whether a given kernel actually supports in-place execution.");
 }

@@ -1,0 +1,86 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#pragma once
+
+#include <cstdint>
+#include <vector>
+
+#include "onnx_optim/shapes/shapes_context.h"
+#include "onnx_proto/onnx.h"
+
+/**
+ * @file inplace_reuse.h
+ * @brief Heuristic that leverages the shapes inferred by
+ *        :cpp:class:`onnx_optim::shapes::ShapesContext` to guess, for
+ *        every node of a graph, which output buffers may reuse which
+ *        input buffers in place.
+ *
+ * The analysis is purely structural: it reports the reuse
+ * *opportunities* implied by shape inference and value lifetimes, not
+ * whether a particular kernel actually performs the reuse. A node's
+ * output ``o`` may reuse the buffer of its input ``i`` when:
+ *
+ *   - both ``o`` and ``i`` carry a tensor descriptor in the populated
+ *     :cpp:class:`ShapesContext` (shape inference succeeded for both);
+ *   - their element types match and their shapes are identical
+ *     dimension by dimension (so the two buffers have the same byte
+ *     size);
+ *   - ``i`` is a graph intermediate (produced by an earlier node, not a
+ *     declared graph input, initializer or output) so its buffer is not
+ *     shared with the caller;
+ *   - the node is the last consumer of ``i`` (``i`` is not read again by
+ *     any later node, directly or through a subgraph capture), so
+ *     overwriting it in place is safe;
+ *   - ``i`` appears exactly once among the node's direct inputs, so the
+ *     in-place write cannot clobber a second read of the same value.
+ *
+ * Each input is matched to at most one output and each output to at
+ * most one input. The runtime is expected to combine these structural
+ * guesses with the kernel-level ``CanRunInPlace()`` capability before
+ * actually aliasing buffers.
+ */
+
+namespace ONNX_LIGHT_NAMESPACE {
+namespace onnx_optim {
+namespace shapes {
+
+/**
+ * A single in-place reuse opportunity for one node: the output at
+ * position :cpp:var:`output_index` may reuse the buffer of the input at
+ * position :cpp:var:`input_index` (both indices refer to the node's
+ * ``output()`` / ``input()`` lists).
+ */
+struct InPlaceReuse {
+  int64_t output_index = -1;
+  int64_t input_index = -1;
+
+  bool operator==(const InPlaceReuse &other) const noexcept {
+    return output_index == other.output_index && input_index == other.input_index;
+  }
+  bool operator!=(const InPlaceReuse &other) const noexcept { return !(*this == other); }
+};
+
+/**
+ * Guesses, for every node of ``graph``, which outputs may reuse which
+ * input buffers in place, using the shapes and element types already
+ * inferred into ``ctx`` (typically by
+ * :cpp:func:`ShapesContext::ComputeShapeGraph` or
+ * :cpp:func:`ShapesContext::ComputeShapeModel`).
+ *
+ * @param graph  Graph whose nodes are analysed, in topological order.
+ * @param ctx    Shapes context already populated with the inferred
+ *               descriptors for ``graph`` (graph inputs, initializers,
+ *               intermediates and outputs).
+ * @return A vector with one entry per node of ``graph`` (same order as
+ *         ``graph.node()``); each entry lists the reuse opportunities
+ *         discovered for that node. Nodes without any opportunity carry
+ *         an empty list.
+ */
+std::vector<std::vector<InPlaceReuse>> ComputeInPlaceReuse(const GraphProto &graph,
+                                                           const ShapesContext &ctx);
+
+} // namespace shapes
+} // namespace onnx_optim
+} // namespace ONNX_LIGHT_NAMESPACE

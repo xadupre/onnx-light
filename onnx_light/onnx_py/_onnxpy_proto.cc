@@ -1535,7 +1535,29 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD_OPTIONAL_PROTO(TypeProto, map_type)
       .PYFIELD_STR(TypeProto, denotation)
       .PYFIELD_OPTIONAL_PROTO(TypeProto, sparse_tensor_type)
-      .PYFIELD_OPTIONAL_PROTO(TypeProto, optional_type);
+      .PYFIELD_OPTIONAL_PROTO(TypeProto, optional_type)
+      .def(
+          "WhichOneof",
+          [](const TypeProto &self, const std::string &oneof_name) -> nb::object {
+            if (oneof_name != "value")
+              throw nb::value_error(
+                  ("Protocol message TypeProto has no oneof field named '" + oneof_name + "'.")
+                      .c_str());
+            if (self.has_tensor_type())
+              return nb::str("tensor_type");
+            if (self.has_sequence_type())
+              return nb::str("sequence_type");
+            if (self.has_map_type())
+              return nb::str("map_type");
+            if (self.has_sparse_tensor_type())
+              return nb::str("sparse_tensor_type");
+            if (self.has_optional_type())
+              return nb::str("optional_type");
+            return nb::none();
+          },
+          nb::arg("oneof_name"),
+          "Returns the name of the field set in the oneof ``oneof_name``, or None if no field is "
+          "set, following the protobuf API.");
   PYADD_PROTO_SERIALIZATION(TypeProto);
   nb_TypeProto.def("__repr__", [](TypeProto &self) { return proto_repr_with_short_line(self); });
 
@@ -1993,18 +2015,41 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD_OPTIONAL_PROTO(OptionalProto, sequence_value)
       .PYFIELD_OPTIONAL_PROTO(OptionalProto, map_value)
       .PYFIELD_OPTIONAL_PROTO(OptionalProto, optional_value)
-      .def("HasField", [](const OptionalProto &self, const std::string &field_name) {
-        if (self.has_tensor_value() && field_name == "tensor_value")
-          return true;
-        if (self.has_sparse_tensor_value() && field_name == "sparse_tensor_value")
-          return true;
-        if (self.has_sequence_value() && field_name == "sequence_value")
-          return true;
-        if (self.has_map_value() && field_name == "map_value")
-          return true;
-        if (self.has_optional_value() && field_name == "optional_value")
-          return true;
-        return false;
-      });
+      .def("HasField",
+           [](const OptionalProto &self, const std::string &field_name) {
+             if (self.has_tensor_value() && field_name == "tensor_value")
+               return true;
+             if (self.has_sparse_tensor_value() && field_name == "sparse_tensor_value")
+               return true;
+             if (self.has_sequence_value() && field_name == "sequence_value")
+               return true;
+             if (self.has_map_value() && field_name == "map_value")
+               return true;
+             if (self.has_optional_value() && field_name == "optional_value")
+               return true;
+             return false;
+           })
+      .def(
+          "WhichOneof",
+          [](const OptionalProto &self, const std::string &oneof_name) -> nb::object {
+            if (oneof_name != "value")
+              throw nb::value_error(
+                  ("Protocol message OptionalProto has no oneof field named '" + oneof_name + "'.")
+                      .c_str());
+            if (self.has_tensor_value())
+              return nb::str("tensor_value");
+            if (self.has_sparse_tensor_value())
+              return nb::str("sparse_tensor_value");
+            if (self.has_sequence_value())
+              return nb::str("sequence_value");
+            if (self.has_map_value())
+              return nb::str("map_value");
+            if (self.has_optional_value())
+              return nb::str("optional_value");
+            return nb::none();
+          },
+          nb::arg("oneof_name"),
+          "Returns the name of the field set in the oneof ``oneof_name``, or None if no field is "
+          "set, following the protobuf API.");
   PYADD_PROTO_SERIALIZATION(OptionalProto);
 }

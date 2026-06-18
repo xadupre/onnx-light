@@ -12,6 +12,7 @@ from onnx_light.onnx_lib import (
     GraphProto,
     ModelProto,
     NodeProto,
+    OptionalProto,
     SparseTensorProto,
     TensorProto,
     TensorShapeProto,
@@ -205,6 +206,32 @@ class TestProtoMethods(ExtTestCase):
         dim.dim_value = 7
         dim.dim_value = None
         self.assertFalse(dim.has_dim_value())
+
+    def test_which_oneof_type_proto(self):
+        type_proto = TypeProto()
+        self.assertIsNone(type_proto.WhichOneof("value"))
+        type_proto.tensor_type.elem_type = TensorProto.FLOAT
+        self.assertEqual(type_proto.WhichOneof("value"), "tensor_type")
+
+        seq_proto = TypeProto()
+        seq_proto.sequence_type.elem_type.tensor_type.elem_type = TensorProto.FLOAT
+        self.assertEqual(seq_proto.WhichOneof("value"), "sequence_type")
+
+    def test_which_oneof_type_proto_invalid_name(self):
+        type_proto = TypeProto()
+        with self.assertRaises(ValueError):
+            type_proto.WhichOneof("not_a_oneof")
+
+    def test_which_oneof_optional_proto(self):
+        optional_proto = OptionalProto()
+        self.assertIsNone(optional_proto.WhichOneof("value"))
+        optional_proto.tensor_value.name = "t"
+        self.assertEqual(optional_proto.WhichOneof("value"), "tensor_value")
+
+    def test_which_oneof_optional_proto_invalid_name(self):
+        optional_proto = OptionalProto()
+        with self.assertRaises(ValueError):
+            optional_proto.WhichOneof("not_a_oneof")
 
 
 if __name__ == "__main__":

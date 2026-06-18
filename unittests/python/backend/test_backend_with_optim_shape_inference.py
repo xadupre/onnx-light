@@ -148,16 +148,6 @@ TestOptimShapeInferenceNoNewNamesBackend = make_test_class(
         # them, so these tests are excluded from the no-new-names check.
         "test_cc_optional.*",
         "test_optional.*",
-        # Only ``dist`` / ``topk_values`` are declared in value_info; shape
-        # inference legitimately adds the remaining broadcasting / reduction
-        # intermediates (x_rows, diff, sq, ...) and the TopK indices output.
-        "test_cc_shape_inference_topk_pairwise_distance.*",
-        # The Loop / Scan pairwise-distance + TopK variants similarly declare
-        # only ``dist`` / ``topk_values`` in value_info; shape inference
-        # legitimately adds the subgraph and reduction intermediates plus the
-        # TopK indices output.
-        "test_cc_shape_inference_loop_topk_pairwise_distance.*",
-        "test_cc_shape_inference_scan_topk_pairwise_distance.*",
     ],
 )
 

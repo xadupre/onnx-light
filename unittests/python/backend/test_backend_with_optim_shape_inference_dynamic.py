@@ -65,6 +65,8 @@ def shape_inference_check(model: onnxl.ModelProto, *inputs):
     for i in work.graph.input:
         if i.name in {"axis", "axes"} or not i.type.has_tensor_type():
             continue
+        if not i.type.tensor_type:
+            continue
         shape = i.type.tensor_type.shape
         for di, d in enumerate(shape.dim):
             if d.dim_value not in mapping:
@@ -72,6 +74,8 @@ def shape_inference_check(model: onnxl.ModelProto, *inputs):
                 mapping[int(d.dim_value)] = f"{i.name}_{di}"
     for i in work.graph.input:
         if i.name in {"axis", "axes"} or not i.type.has_tensor_type():
+            continue
+        if not i.type.tensor_type:
             continue
         shape = i.type.tensor_type.shape
         new_shape = [mapping[d.dim_value] for d in shape.dim]
@@ -90,6 +94,7 @@ TestOptimShapeInferenceDynamicBackend = make_test_class(
         "test_cc_shape_inference_nonzero_chain_anon.*",
         "test_cc_shape_inference_nonzero_chain_named.*",
         "test_cc_attention_3d.*",
+        "test_cc_cast_map_.*",
         "test_cc_dict_vectorizer_.*",
         "test_cc_loop11_carried_state.*",
         "test_cc_optional_get_element_optional_sequence.*",

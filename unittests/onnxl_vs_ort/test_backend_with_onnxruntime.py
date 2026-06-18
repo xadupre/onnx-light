@@ -139,12 +139,6 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_qlinearmatmul_2D_int8_float16$",
     r"^test_cc_qlinearmatmul_3D_uint8_float16$",
     r"^test_cc_qlinearmatmul_3D_int8_float16$",
-    # ai.onnx.ml parity cases use different scoring/layout rules in ORT.
-    r"^test_cc_svmclassifier_int64_binary$",
-    r"^test_cc_svmregressor_linear$",
-    r"^test_cc_linearclassifier_int64_binary$",
-    r"^test_cc_linearregressor_single_target$",
-    r"^test_cc_treeensembleclassifier_int64_binary$",
     # ORT is missing kernels for these ops or dtypes.
     r"^test_cc_globallppool_",
     r"^test_cc_maxroipool_",

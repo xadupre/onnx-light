@@ -470,13 +470,18 @@ void RegisterLoopTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &
   AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {DimSpec("N"), DimSpec("D")});
   AppendValueInfo(*graph->add_input(), "K", DataType::INT64, {DimSpec(int64_t{1})});
 
-  // Intermediate value_info entries. ``dist`` is the stacked distance matrix
-  // whose leading axis is the runtime Loop trip count (symbolic ``loop``) and
-  // whose trailing axis is the per-iteration ``[N]`` element shape;
-  // ``topk_values`` keeps a symbolic ``k`` as its trailing axis because ``K``
-  // is a runtime input.
+  // Intermediate value_info entries. ``shape_X``/``trip_count`` are produced
+  // while deriving Loop's trip count from ``X``. ``dist`` is the stacked
+  // distance matrix whose leading axis is the runtime Loop trip count
+  // (symbolic ``loop``) and whose trailing axis is the per-iteration ``[N]``
+  // element shape. ``topk_values``/``topk_indices`` keep a symbolic ``k`` as
+  // their trailing axis because ``K`` is a runtime input.
+  AppendValueInfo(*graph->add_value_info(), "shape_X", DataType::INT64, {DimSpec(int64_t{2})});
+  AppendValueInfo(*graph->add_value_info(), "trip_count", DataType::INT64, {DimSpec(int64_t{1})});
   AppendValueInfo(*graph->add_value_info(), "dist", DataType::FLOAT, {DimSpec("N"), DimSpec("N")});
   AppendValueInfo(*graph->add_value_info(), "topk_values", DataType::FLOAT,
+                  {DimSpec("N"), DimSpec("TopK_k")});
+  AppendValueInfo(*graph->add_value_info(), "topk_indices", DataType::INT64,
                   {DimSpec("N"), DimSpec("TopK_k")});
 
   // Output Y — the per-row mean of the ``k`` largest distances, shape ``[N]``.

@@ -1281,6 +1281,8 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD(DeviceConfigurationProto, num_devices)
       .PYFIELD(DeviceConfigurationProto, device);
   PYADD_PROTO_SERIALIZATION(DeviceConfigurationProto);
+  DECLARE_REPEATED_FIELD_PROTO(DeviceConfigurationProto, rep_dcp);
+  define_repeated_field_type_proto(rep_dcp, rep_dcp_proto);
 
   PYDEFINE_PROTO(m, SimpleShardedDimProto)
       .PYFIELD_OPTIONAL_INT(SimpleShardedDimProto, dim_value)
@@ -1311,6 +1313,8 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD(NodeDeviceConfigurationProto, sharding_spec)
       .PYFIELD_OPTIONAL_INT(NodeDeviceConfigurationProto, pipeline_stage);
   PYADD_PROTO_SERIALIZATION(NodeDeviceConfigurationProto);
+  DECLARE_REPEATED_FIELD_PROTO(NodeDeviceConfigurationProto, rep_ndcp);
+  define_repeated_field_type_proto(rep_ndcp, rep_ndcp_proto);
 
   PYDEFINE_PROTO_WITH_SUBTYPES(m, TensorShapeProto);
   PYDEFINE_SUBPROTO(nb_TensorShapeProto, TensorShapeProto, Dimension)

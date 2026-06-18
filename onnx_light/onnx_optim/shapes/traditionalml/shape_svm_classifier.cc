@@ -72,10 +72,8 @@ void ComputeShapeSVMClassifier(ShapesContext &ctx, const NodeProto &node, const 
     OptimShape z_shape;
     z_shape.PushBack(batch_size >= 0 ? OptimDim(batch_size) : OptimDim("N"));
     if (class_count > 0) {
-      // Binary SVM exposes one decision score per sample; multi-class emits one
-      // score per class.
-      const int64_t score_count = class_count <= 2 ? 1 : class_count;
-      z_shape.PushBack(OptimDim(score_count));
+      // One score per class per sample (ONNX spec: "one per class per example").
+      z_shape.PushBack(OptimDim(class_count));
     } else {
       z_shape.PushBack(OptimDim("S"));
     }

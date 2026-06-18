@@ -62,6 +62,7 @@ def shape_inference_check(model: onnxl.ModelProto, *inputs):
     for o in work.graph.output:
         o.type.Clear()
     mapping = {}
+    prefill_with_value_info_output = False
     for i in work.graph.input:
         if i.name in {"axis", "axes"} or not i.type.has_tensor_type():
             continue
@@ -69,8 +70,10 @@ def shape_inference_check(model: onnxl.ModelProto, *inputs):
             continue
         shape = i.type.tensor_type.shape
         for di, d in enumerate(shape.dim):
+            if d.dim_param:
+                prefill_with_value_info_output = True
+                continue
             if d.dim_value not in mapping:
-                assert not d.dim_param, f"Unexpected input dimension in {i}"
                 mapping[int(d.dim_value)] = f"{i.name}_{di}"
     for i in work.graph.input:
         if i.name in {"axis", "axes"} or not i.type.has_tensor_type():
@@ -78,12 +81,14 @@ def shape_inference_check(model: onnxl.ModelProto, *inputs):
         if not i.type.tensor_type:
             continue
         shape = i.type.tensor_type.shape
-        new_shape = [mapping[d.dim_value] for d in shape.dim]
+        new_shape = [d.dim_param or mapping[d.dim_value] for d in shape.dim]
         for i in range(len(shape.dim)):
             shape.dim[i].Clear()
             shape.dim[i].dim_param = new_shape[i]
 
-    shape_inference.infer_shapes_model(work)
+    shape_inference.infer_shapes_model(
+        work, prefill_with_value_info_output=prefill_with_value_info_output
+    )
     _check_match(model.graph.input, model.graph.value_info, work.graph.value_info)
 
 
@@ -92,7 +97,6 @@ TestOptimShapeInferenceDynamicBackend = make_test_class(
     exclude_regex=[
         "test_cc_shape_inference_add_concat_reshape.*",
         "test_cc_shape_inference_nonzero_chain_anon.*",
-        "test_cc_shape_inference_nonzero_chain_named.*",
         "test_cc_attention_3d.*",
         "test_cc_cast_map_.*",
         "test_cc_dict_vectorizer_.*",
@@ -117,28 +121,16 @@ TestOptimShapeInferenceDynamicBackend = make_test_class(
         "test_cc_shape_inference_concat_split.*",
         "test_cc_shape_inference_reshape_reshape.*",
         "test_cc_shape_inference_scan_running_sum.*",
-        # Inputs already use symbolic dim_param ("batch", "seq"), which the
-        # dynamic harness cannot rewrite (it asserts concrete dim_value
-        # inputs before swapping them to symbolic names).
         "test_cc_shape_inference_nonzero_plus_expression.*",
-        # Inputs use symbolic dim_param ("H", "2*h"); the dynamic harness
-        # requires concrete dim_value inputs.
+        # These remaining models keep dedicated non-dynamic coverage because
+        # they rely on exact user-authored symbolic aliases or expressions that
+        # this generic harness does not normalize.
         "test_cc_shape_inference_resize_tile.*",
-        # Input X already uses symbolic dim_param ("N", "H", "W"); the dynamic
-        # harness requires concrete dim_value inputs to rewrite them.
         "test_cc_shape_inference_pad_canny_average.*",
-        # Input X already uses symbolic dim_param ("N", "D"); the dynamic
-        # harness requires concrete dim_value inputs to rewrite them.
         "test_cc_shape_inference_topk_pairwise_distance.*",
-        # Input X already uses symbolic dim_param ("batch", "features"); the
-        # dynamic harness requires concrete dim_value inputs to rewrite them.
         "test_cc_shape_inference_loop_pairwise_distance.*",
-        # Input X already uses symbolic dim_param ("N", "D"); the dynamic
-        # harness requires concrete dim_value inputs to rewrite them.
         "test_cc_shape_inference_loop_topk_pairwise_distance.*",
         "test_cc_shape_inference_scan_topk_pairwise_distance.*",
-        # Inputs already use symbolic dim_param ("batch", "seq", "past_seq",
-        # "total_seq"); the dynamic harness requires concrete dim_value inputs.
         "test_cc_shape_inference_tiny_llm.*",
     ],
 )

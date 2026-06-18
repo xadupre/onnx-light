@@ -1,6 +1,7 @@
 import unittest
 import numpy as np
 import onnxruntime as ort
+from onnxruntime.capi._pybind_state import get_all_operator_schema
 from onnx_light.ext_test_case import import_or_skip
 
 # The backend test registries are only available in the full build; skip this
@@ -35,6 +36,40 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
     outputs = sess.run(None, input_dict)
     return outputs
 
+
+def ort_max_supported_opset() -> int:
+    """
+    Returns the highest default-domain opset version ONNX Runtime supports.
+
+    Reads the registered operator schemas from ONNX Runtime and takes the
+    maximum ``since_version`` over the default ONNX domain (``""``). This lets
+    the exclusion list adapt to the installed ONNX Runtime instead of
+    hard-coding an opset ceiling.
+
+    Returns:
+        The highest default-domain opset version ONNX Runtime supports.
+    """
+    return max(
+        schema.since_version for schema in get_all_operator_schema() if schema.domain == ""
+    )
+
+
+# Opset version at which the cases below were introduced. They are only excluded
+# when the installed ONNX Runtime does not yet support that opset.
+OPSET_27 = 27
+
+# Exclusions that only apply when ONNX Runtime does not support the given opset.
+ORT_OPSET_GATED_EXCLUDE_REGEX = {
+    OPSET_27: [
+        # Range opset 27 cases.
+        r"^test_range_float16_type_positive_delta$",
+        r"^test_range_bfloat16_type_positive_delta$",
+        # LinearAttention is opset 27.
+        r"^test_cc_linear_attention_.*$",
+        # CausalConvWithState is opset 27.
+        r"^test_cc_causal_conv_with_state_.*$",
+    ]
+}
 
 ORT_EXCLUDE_REGEX = [
     # ORT/reference parity mismatches in focused C++ cases.
@@ -180,13 +215,6 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_maxunpool_export_with_output_shape$",
     r"^test_resize_downsample_scales_linear_align_corners$",
     r"^test_resize_downsample_scales_cubic_align_corners$",
-    # Range opset 27 cases: ONNX Runtime only guarantees support up to opset 26.
-    r"^test_range_float16_type_positive_delta$",
-    r"^test_range_bfloat16_type_positive_delta$",
-    # LinearAttention is opset 27: ONNX Runtime only guarantees support up to opset 26.
-    r"^test_cc_linear_attention_.*$",
-    # CausalConvWithState is opset 27: ONNX Runtime only guarantees support up to opset 26.
-    r"^test_cc_causal_conv_with_state_.*$",
     # ORT IRFFT mishandles the ``inverse=1, onesided=1`` combination.
     r"^test_cc_dft_irfft(_opset19|_roundtrip|_roundtrip_opset19)?$",
     # ORT does not support Optional loop-carried state in this graph structure.
@@ -199,6 +227,12 @@ ORT_EXCLUDE_REGEX = [
     # ORT rejects the empty-name encoding of the optional ``axes`` input.
     r"^test_cc_squeeze_empty_axes_name$",
 ]
+
+# Add opset-gated exclusions only for opset versions ONNX Runtime cannot load yet.
+_ORT_MAX_OPSET = ort_max_supported_opset()
+for _opset, _patterns in ORT_OPSET_GATED_EXCLUDE_REGEX.items():
+    if _ORT_MAX_OPSET < _opset:
+        ORT_EXCLUDE_REGEX.extend(_patterns)
 
 TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_REGEX)
 

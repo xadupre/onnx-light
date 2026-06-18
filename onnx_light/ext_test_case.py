@@ -415,11 +415,12 @@ class InferenceSessionAllTypes:
             TP.FLOAT8E4M3FNUZ: (numpy.dtype("uint8"), TP.FLOAT8E4M3FNUZ),
             TP.FLOAT8E5M2: (numpy.dtype("uint8"), TP.FLOAT8E5M2),
             TP.FLOAT8E5M2FNUZ: (numpy.dtype("uint8"), TP.FLOAT8E5M2FNUZ),
+            TP.FLOAT8E8M0: (numpy.dtype("uint8"), TP.FLOAT8E8M0),
             TP.INT4: (numpy.dtype("uint8"), TP.INT4),
             TP.INT2: (numpy.dtype("uint8"), TP.INT2),
             TP.UINT4: (numpy.dtype("uint8"), TP.UINT4),
             TP.UINT2: (numpy.dtype("uint8"), TP.UINT2),
-            TP.FLOAT4E2M1FN: (numpy.dtype("uint8"), TP.FLOAT4E2M1FN),
+            TP.FLOAT4E2M1: (numpy.dtype("uint8"), TP.FLOAT4E2M1),
         }
 
     def _get_onnx_tensor_element_type_from_array(self, arr: numpy.ndarray) -> Optional[int]:
@@ -458,6 +459,8 @@ class InferenceSessionAllTypes:
             return TP.FLOAT8E5M2
         elif "float8e5m2fnuz" in dtype_name:
             return TP.FLOAT8E5M2FNUZ
+        elif "float8e8m0" in dtype_name:
+            return TP.FLOAT8E8M0
         elif "int4" in dtype_name:
             return TP.INT4
         elif "int2" in dtype_name:
@@ -467,7 +470,7 @@ class InferenceSessionAllTypes:
         elif "uint2" in dtype_name:
             return TP.UINT2
         elif "float4e2m1" in dtype_name:
-            return TP.FLOAT4E2M1FN
+            return TP.FLOAT4E2M1
 
         return None
 
@@ -516,8 +519,8 @@ class InferenceSessionAllTypes:
                     buffer_view = inp.view(view_dtype)
 
                     # Create OrtValue from raw buffer with explicit dtype
-                    device = C.OrtDevice(C.OrtDevice.cpu(), C.OrtDevice.default_memory(), 0)
-                    ortvalue = C.OrtValue.ortvalue_from_numpy(buffer_view, device)
+                    device = C.OrtDevice(C.OrtDevice.cpu(), C.OrtDevice.default_memory(), 0)  # type: ignore[attr-defined]
+                    ortvalue = C.OrtValue.ortvalue_from_numpy(buffer_view, device)  # type: ignore[attr-defined]
 
                     # Bind the input
                     io_binding.bind_ortvalue_input(meta.name, ortvalue)
@@ -537,4 +540,4 @@ class InferenceSessionAllTypes:
             return [out.numpy() for out in outputs]
         else:
             # Standard path for normal dtypes
-            return self._sess.run(output_names, input_feed)
+            return self._sess.run(output_names, input_feed)  # type: ignore[return-value]

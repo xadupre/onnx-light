@@ -70,7 +70,13 @@ def shape_inference_check(model: onnxl.ModelProto, *inputs):
         shape = i.type.tensor_type.shape
         for di, d in enumerate(shape.dim):
             if d.dim_value not in mapping:
-                assert not d.dim_param, f"Unexpected input dimension in {i}"
+                assert not d.dim_param, (
+                    f"Dynamic-shape harness requires all graph input dimensions to be "
+                    f"concrete (dim_value), but found symbolic dim_param={d.dim_param!r} "
+                    f"in input '{i.name}'. Tests whose graph inputs already carry symbolic "
+                    f"dim_param values must be excluded from this harness via the "
+                    f"exclude_regex list in TestOptimShapeInferenceDynamicBackend."
+                )
                 mapping[int(d.dim_value)] = f"{i.name}_{di}"
     for i in work.graph.input:
         if i.name in {"axis", "axes"} or not i.type.has_tensor_type():
@@ -127,6 +133,16 @@ TestOptimShapeInferenceDynamicBackend = make_test_class(
         # Input X already uses symbolic dim_param ("N", "H", "W"); the dynamic
         # harness requires concrete dim_value inputs to rewrite them.
         "test_cc_shape_inference_pad_canny_average.*",
+        # Input X already uses symbolic dim_param ("N", "D"); the dynamic
+        # harness requires concrete dim_value inputs to rewrite them.
+        "test_cc_shape_inference_topk_pairwise_distance.*",
+        # Input X already uses symbolic dim_param ("batch", "features"); the
+        # dynamic harness requires concrete dim_value inputs to rewrite them.
+        "test_cc_shape_inference_loop_pairwise_distance.*",
+        # Input X already uses symbolic dim_param ("N", "D"); the dynamic
+        # harness requires concrete dim_value inputs to rewrite them.
+        "test_cc_shape_inference_loop_topk_pairwise_distance.*",
+        "test_cc_shape_inference_scan_topk_pairwise_distance.*",
         # Inputs already use symbolic dim_param ("batch", "seq", "past_seq",
         # "total_seq"); the dynamic harness requires concrete dim_value inputs.
         "test_cc_shape_inference_tiny_llm.*",

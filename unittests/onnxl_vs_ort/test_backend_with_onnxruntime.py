@@ -8,114 +8,213 @@ from onnx_light.ext_test_case import import_or_skip
 # module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
 make_test_class = import_or_skip("onnx_light.onnx.backend", "make_test_class")
 
-# Import ORT's C++ bindings for IOBinding workaround
-try:
+
+def _lazy_import_tensorproto():
+    """Lazily imports TensorProto to avoid import errors when module isn't built."""
+    from onnx_light.onnx import TensorProto
+
+    return TensorProto
+
+
+def _lazy_import_ort_cpp_api():
+    """Lazily imports ORT C++ API bindings."""
     from onnxruntime.capi import _pybind_state as C
 
-    _HAS_ORT_CPP_API = True
-except ImportError:
-    _HAS_ORT_CPP_API = False
+    return C
 
 
-# Mapping from NumPy dtype to ONNX TensorProto data type
-_NUMPY_DTYPE_TO_ONNX_TENSOR_ELEMENT_TYPE = {
-    np.dtype("float32"): 1,  # FLOAT
-    np.dtype("uint8"): 2,  # UINT8
-    np.dtype("int8"): 3,  # INT8
-    np.dtype("uint16"): 4,  # UINT16
-    np.dtype("int16"): 5,  # INT16
-    np.dtype("int32"): 6,  # INT32
-    np.dtype("int64"): 7,  # INT64
-    np.dtype("bool"): 9,  # BOOL
-    np.dtype("float64"): 11,  # DOUBLE
-    np.dtype("uint32"): 12,  # UINT32
-    np.dtype("uint64"): 13,  # UINT64
-}
-
-# Special handling for dtypes that need to be viewed as uint types
-# Map from ONNX dtype number to (numpy view dtype, onnx tensor element type)
-_SPECIAL_DTYPE_MAPPINGS = {
-    # FLOAT16: view as uint16
-    10: (np.dtype("uint16"), 10),
-    # BFLOAT16: view as uint16
-    16: (np.dtype("uint16"), 16),
-    # FLOAT8E4M3FN: view as uint8
-    17: (np.dtype("uint8"), 17),
-    # FLOAT8E5M2: view as uint8
-    19: (np.dtype("uint8"), 19),
-    # INT4: view as uint8
-    21: (np.dtype("uint8"), 21),
-    # INT2: view as uint8
-    22: (np.dtype("uint8"), 22),
-    # UINT4: view as uint8
-    29: (np.dtype("uint8"), 29),
-    # UINT2: view as uint8
-    30: (np.dtype("uint8"), 30),
-    # FLOAT8E4M3FNUZ: view as uint8
-    18: (np.dtype("uint8"), 18),
-    # FLOAT8E5M2FNUZ: view as uint8
-    20: (np.dtype("uint8"), 20),
-    # FLOAT4E2M1: view as uint8
-    31: (np.dtype("uint8"), 31),
-    # FLOAT8E8M0FNU: view as uint8
-    32: (np.dtype("uint8"), 32),
-}
-
-
-def _get_onnx_tensor_element_type_from_array(arr: np.ndarray) -> int:
+class InferenceSessionAllTypes:
     """
-    Gets the ONNX tensor element type from a numpy array.
+    Wrapper around onnxruntime.InferenceSession that supports all ONNX dtypes.
 
-    For standard dtypes, uses the dtype directly.
-    For special dtypes (FLOAT16, BFLOAT16, FLOAT8, etc.), infers from the array's
-    dtype attribute if it has an 'onnx_dtype' annotation, otherwise returns None.
+    Uses IOBinding with raw memory buffers to support dtypes that ORT doesn't
+    natively handle through NumPy conversion (FLOAT8, BFLOAT16, INT2, INT4, etc.).
     """
-    # Check if array has ONNX dtype annotation (used by ml_dtypes)
-    if hasattr(arr.dtype, "num"):
-        # ml_dtypes assigns special dtype numbers
-        if arr.dtype.num in _SPECIAL_DTYPE_MAPPINGS:
-            return _SPECIAL_DTYPE_MAPPINGS[arr.dtype.num][1]
 
-    # Check standard dtypes
-    if arr.dtype in _NUMPY_DTYPE_TO_ONNX_TENSOR_ELEMENT_TYPE:
-        return _NUMPY_DTYPE_TO_ONNX_TENSOR_ELEMENT_TYPE[arr.dtype]
+    def __init__(self, model_bytes: bytes, providers: list[str] | None = None):
+        """
+        Creates an inference session.
 
-    # Try to detect from dtype name for ml_dtypes
-    dtype_name = arr.dtype.name.lower()
-    if "float16" in dtype_name or "half" in dtype_name:
-        return 10
-    elif "bfloat16" in dtype_name:
-        return 16
-    elif "float8e4m3fn" in dtype_name and "uz" not in dtype_name:
-        return 17
-    elif "float8e4m3fnuz" in dtype_name:
-        return 18
-    elif "float8e5m2" in dtype_name and "uz" not in dtype_name:
-        return 19
-    elif "float8e5m2fnuz" in dtype_name:
-        return 20
-    elif "int4" in dtype_name:
-        return 21
-    elif "int2" in dtype_name:
-        return 22
-    elif "uint4" in dtype_name:
-        return 29
-    elif "uint2" in dtype_name:
-        return 30
-    elif "float4e2m1" in dtype_name:
-        return 31
-    elif "float8e8m0" in dtype_name:
-        return 32
+        Args:
+            model_bytes: Serialized ONNX model
+            providers: List of execution providers (defaults to ["CPUExecutionProvider"])
+        """
+        if providers is None:
+            providers = ["CPUExecutionProvider"]
+        self._sess = ort.InferenceSession(model_bytes, providers=providers)
+        self._TensorProto = None
+        self._C = None
 
-    return None
+    def _get_tensorproto(self):
+        """Gets TensorProto with lazy import."""
+        if self._TensorProto is None:
+            self._TensorProto = _lazy_import_tensorproto()
+        return self._TensorProto
+
+    def _get_ort_cpp_api(self):
+        """Gets ORT C++ API with lazy import."""
+        if self._C is None:
+            self._C = _lazy_import_ort_cpp_api()
+        return self._C
+
+    def _get_numpy_dtype_to_onnx_mapping(self):
+        """Returns mapping from NumPy dtype to ONNX TensorProto data type."""
+        TP = self._get_tensorproto()
+        return {
+            np.dtype("float32"): TP.FLOAT,
+            np.dtype("uint8"): TP.UINT8,
+            np.dtype("int8"): TP.INT8,
+            np.dtype("uint16"): TP.UINT16,
+            np.dtype("int16"): TP.INT16,
+            np.dtype("int32"): TP.INT32,
+            np.dtype("int64"): TP.INT64,
+            np.dtype("bool"): TP.BOOL,
+            np.dtype("float64"): TP.DOUBLE,
+            np.dtype("uint32"): TP.UINT32,
+            np.dtype("uint64"): TP.UINT64,
+        }
+
+    def _get_special_dtype_mappings(self):
+        """
+        Returns mapping for special dtypes that need IOBinding.
+
+        Maps ONNX dtype to (numpy view dtype, onnx tensor element type).
+        """
+        TP = self._get_tensorproto()
+        return {
+            TP.FLOAT16: (np.dtype("uint16"), TP.FLOAT16),
+            TP.BFLOAT16: (np.dtype("uint16"), TP.BFLOAT16),
+            TP.FLOAT8E4M3FN: (np.dtype("uint8"), TP.FLOAT8E4M3FN),
+            TP.FLOAT8E4M3FNUZ: (np.dtype("uint8"), TP.FLOAT8E4M3FNUZ),
+            TP.FLOAT8E5M2: (np.dtype("uint8"), TP.FLOAT8E5M2),
+            TP.FLOAT8E5M2FNUZ: (np.dtype("uint8"), TP.FLOAT8E5M2FNUZ),
+            TP.INT4: (np.dtype("uint8"), TP.INT4),
+            TP.INT2: (np.dtype("uint8"), TP.INT2),
+            TP.UINT4: (np.dtype("uint8"), TP.UINT4),
+            TP.UINT2: (np.dtype("uint8"), TP.UINT2),
+            TP.FLOAT4E2M1FN: (np.dtype("uint8"), TP.FLOAT4E2M1FN),
+        }
+
+    def _get_onnx_tensor_element_type_from_array(self, arr: np.ndarray) -> int | None:
+        """
+        Gets the ONNX tensor element type from a numpy array.
+
+        For standard dtypes, uses the dtype directly.
+        For special dtypes (FLOAT16, BFLOAT16, FLOAT8, etc.), infers from the
+        array's dtype attribute.
+        """
+        TP = self._get_tensorproto()
+        special_mappings = self._get_special_dtype_mappings()
+
+        # Check if array has ONNX dtype annotation (used by ml_dtypes)
+        if hasattr(arr.dtype, "num"):
+            # ml_dtypes assigns special dtype numbers
+            if arr.dtype.num in special_mappings:
+                return special_mappings[arr.dtype.num][1]
+
+        # Check standard dtypes
+        numpy_mapping = self._get_numpy_dtype_to_onnx_mapping()
+        if arr.dtype in numpy_mapping:
+            return numpy_mapping[arr.dtype]
+
+        # Try to detect from dtype name for ml_dtypes
+        dtype_name = arr.dtype.name.lower()
+        if "float16" in dtype_name or "half" in dtype_name:
+            return TP.FLOAT16
+        elif "bfloat16" in dtype_name:
+            return TP.BFLOAT16
+        elif "float8e4m3fn" in dtype_name and "uz" not in dtype_name:
+            return TP.FLOAT8E4M3FN
+        elif "float8e4m3fnuz" in dtype_name:
+            return TP.FLOAT8E4M3FNUZ
+        elif "float8e5m2" in dtype_name and "uz" not in dtype_name:
+            return TP.FLOAT8E5M2
+        elif "float8e5m2fnuz" in dtype_name:
+            return TP.FLOAT8E5M2FNUZ
+        elif "int4" in dtype_name:
+            return TP.INT4
+        elif "int2" in dtype_name:
+            return TP.INT2
+        elif "uint4" in dtype_name:
+            return TP.UINT4
+        elif "uint2" in dtype_name:
+            return TP.UINT2
+        elif "float4e2m1" in dtype_name:
+            return TP.FLOAT4E2M1FN
+
+        return None
+
+    def run(
+        self, output_names: list[str] | None, input_feed: dict[str, np.ndarray]
+    ) -> list[np.ndarray]:
+        """
+        Runs the model with support for all ONNX dtypes.
+
+        Uses IOBinding for special dtypes that ORT doesn't natively support.
+
+        Args:
+            output_names: Names of outputs to compute (None = all outputs)
+            input_feed: Dictionary mapping input names to numpy arrays
+
+        Returns:
+            List of output arrays from the model
+        """
+        input_metas = self._sess.get_inputs()
+        output_metas = self._sess.get_outputs()
+        inputs = [input_feed[meta.name] for meta in input_metas]
+
+        # Check if we need special dtype handling
+        special_mappings = self._get_special_dtype_mappings()
+        needs_iobinding = False
+        for inp in inputs:
+            onnx_dtype = self._get_onnx_tensor_element_type_from_array(inp)
+            if onnx_dtype and onnx_dtype in special_mappings:
+                needs_iobinding = True
+                break
+
+        # Use IOBinding for special dtypes, standard run otherwise
+        if needs_iobinding:
+            C = self._get_ort_cpp_api()
+            io_binding = self._sess.io_binding()
+
+            for meta, inp in zip(input_metas, inputs):
+                onnx_dtype = self._get_onnx_tensor_element_type_from_array(inp)
+
+                if onnx_dtype and onnx_dtype in special_mappings:
+                    # Use raw buffer binding for special dtypes
+                    view_dtype, _tensor_type = special_mappings[onnx_dtype]
+
+                    # View the array as the compatible dtype for buffer access
+                    buffer_view = inp.view(view_dtype)
+
+                    # Create OrtValue from raw buffer with explicit dtype
+                    device = C.OrtDevice(C.OrtDevice.cpu(), C.OrtDevice.default_memory(), 0)
+                    ortvalue = C.OrtValue.ortvalue_from_numpy(buffer_view, device)
+
+                    # Bind the input
+                    io_binding.bind_ortvalue_input(meta.name, ortvalue)
+                else:
+                    # Standard dtype, use normal binding
+                    io_binding.bind_cpu_input(meta.name, inp)
+
+            # Bind outputs
+            for meta in output_metas:
+                io_binding.bind_output(meta.name)
+
+            # Run with IOBinding
+            self._sess.run_with_iobinding(io_binding)
+
+            # Get outputs
+            outputs = io_binding.get_outputs()
+            return [out.numpy() for out in outputs]
+        else:
+            # Standard path for normal dtypes
+            return self._sess.run(output_names, input_feed)
 
 
 def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
     """
-    Runs an ONNX model using ONNXRuntime.
-
-    Uses IOBinding with raw memory buffers to support dtypes that NumPy/ORT
-    don't natively handle (FLOAT8, BFLOAT16, INT2, INT4, etc.).
+    Runs an ONNX model using ONNXRuntime with support for all dtypes.
 
     Args:
         model: The ONNX model (onnx_light.ModelProto) to run
@@ -127,63 +226,16 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
     # Serialize the model to bytes
     model_bytes = model.SerializeToString()
 
-    # Create an ONNXRuntime inference session
-    sess = ort.InferenceSession(model_bytes, providers=["CPUExecutionProvider"])
+    # Create session with dtype support
+    sess = InferenceSessionAllTypes(model_bytes)
 
-    # Get input and output metadata
-    input_metas = sess.get_inputs()
-    output_metas = sess.get_outputs()
+    # Get input names and create feed dict
+    input_names = [inp.name for inp in sess._sess.get_inputs()]
+    input_dict = dict(zip(input_names, inputs))
 
-    # Check if we need special dtype handling
-    needs_iobinding = False
-    if _HAS_ORT_CPP_API:
-        for inp in inputs:
-            onnx_dtype = _get_onnx_tensor_element_type_from_array(inp)
-            if onnx_dtype and onnx_dtype in _SPECIAL_DTYPE_MAPPINGS:
-                needs_iobinding = True
-                break
-
-    # Use IOBinding for special dtypes, standard run otherwise
-    if needs_iobinding and _HAS_ORT_CPP_API:
-        # Use C++ IOBinding API to bypass NumPy dtype conversion
-        io_binding = sess.io_binding()
-
-        for meta, inp in zip(input_metas, inputs):
-            onnx_dtype = _get_onnx_tensor_element_type_from_array(inp)
-
-            if onnx_dtype and onnx_dtype in _SPECIAL_DTYPE_MAPPINGS:
-                # Use raw buffer binding for special dtypes
-                view_dtype, _tensor_type = _SPECIAL_DTYPE_MAPPINGS[onnx_dtype]
-
-                # View the array as the compatible dtype for buffer access
-                buffer_view = inp.view(view_dtype)
-
-                # Create OrtValue from raw buffer with explicit dtype
-                device = C.OrtDevice(C.OrtDevice.cpu(), C.OrtDevice.default_memory(), 0)
-                ortvalue = C.OrtValue.ortvalue_from_numpy(buffer_view, device)
-
-                # Bind the input
-                io_binding.bind_ortvalue_input(meta.name, ortvalue)
-            else:
-                # Standard dtype, use normal binding
-                io_binding.bind_cpu_input(meta.name, inp)
-
-        # Bind outputs
-        for meta in output_metas:
-            io_binding.bind_output(meta.name)
-
-        # Run with IOBinding
-        sess.run_with_iobinding(io_binding)
-
-        # Get outputs
-        outputs = io_binding.get_outputs()
-        return [out.numpy() for out in outputs]
-    else:
-        # Standard path for normal dtypes
-        input_names = [inp.name for inp in input_metas]
-        input_dict = dict(zip(input_names, inputs))
-        outputs = sess.run(None, input_dict)
-        return outputs
+    # Run inference
+    outputs = sess.run(None, input_dict)
+    return outputs
 
 
 def ort_max_supported_opset() -> int:

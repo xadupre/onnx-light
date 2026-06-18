@@ -11,9 +11,7 @@ The following snippet builds a small model and renders it with
 :func:`onnx_light.tools.to_svg`. The resulting image is embedded below the
 code so it can be inspected directly in the documentation.
 
-.. runpython::
-    :showcode:
-    :rst:
+.. to-svg-example::
 
     from onnx_light.onnx_lib import TensorProto
     from onnx_light.onnx.helper import (
@@ -35,9 +33,3 @@ code so it can be inspected directly in the documentation.
     model = make_model(graph)
 
     svg = to_svg(model)
-
-    # Embed the rendered SVG directly into the documentation page.
-    print(".. raw:: html")
-    print()
-    for line in svg.splitlines():
-        print(f"    {line}")

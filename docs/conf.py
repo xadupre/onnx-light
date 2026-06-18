@@ -175,7 +175,11 @@ def _on_builder_inited(app) -> None:
 
 
 def _build_to_svg_example() -> tuple[str, str]:
-    """Builds the `to_svg` code sample and rendered SVG used in documentation."""
+    """Builds the `to_svg` code sample and rendered SVG used in documentation.
+
+    Returns:
+        tuple[str, str]: Python code snippet and rendered SVG content.
+    """
     from onnx_light.onnx.helper import make_graph, make_model, make_node, make_tensor_value_info
     from onnx_light.onnx_lib import TensorProto
     from onnx_light.tools import to_svg
@@ -226,7 +230,11 @@ class ToSvgExampleDirective(Directive):
     final_argument_whitespace = False
 
     def run(self):
-        """Returns the literal Python example and the rendered SVG output."""
+        """Returns the literal Python example and the rendered SVG output.
+
+        Returns:
+            list[nodes.Node]: Literal code block and raw HTML SVG nodes.
+        """
         code, svg = _build_to_svg_example()
         literal = nodes.literal_block(code, code)
         literal["language"] = "python"

@@ -178,10 +178,9 @@ void RegisterLoopPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &regi
   cond_tensor.set_data_type(TensorProto::DataType::BOOL);
   cond_tensor.set_raw_data(utils::ByteSpan(BoolBytes(true)));
 
-  // Graph input X uses the concrete ``[3, 3]`` shape that matches the
-  // reference DataSet. The dynamic-shape backend test rewrites these
-  // ``dim_value`` entries to fresh ``dim_param`` names before re-running
-  // shape inference, so input dims must be concrete here.
+  // Graph input X uses symbolic dims ``[batch, features]`` matching the
+  // expected value_info shapes. The dynamic-shape backend test supports
+  // symbolic input dims directly, propagating them through shape inference.
   const int32_t kFloat = static_cast<int32_t>(DataType::FLOAT);
   AppendValueInfo(*graph->add_input(), "X", kFloat, {DimSpec("batch"), DimSpec("features")});
 

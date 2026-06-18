@@ -78,7 +78,11 @@ void ComputeShapeSequenceMap(ShapesContext &ctx, const NodeProto &node) {
     const std::string outer_name = node.input(i).as_string();
     const std::string body_in_name = body.input()[i].name().as_string();
     if (ctx.HasSequence(outer_name)) {
-      local.SetSequence(body_in_name, OptimSequence(ctx.GetSequence(outer_name)));
+      // Additional inputs that are sequences contribute one element per
+      // iteration; bind the body input to a per-element tensor descriptor,
+      // not to the whole sequence.
+      const OptimSequence &add_seq = ctx.GetSequence(outer_name);
+      local.Set(body_in_name, OptimTensor(nullptr, add_seq.ElemDtype(), CommonElemShape(add_seq)));
     } else {
       EXT_ENFORCE_INVALID(ctx.Has(outer_name), "ComputeShapeSequenceMap: additional input '",
                           outer_name, "' is missing from the inferred context.");

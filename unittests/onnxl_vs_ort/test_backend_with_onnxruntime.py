@@ -141,9 +141,6 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_cast_map_",
     # ORT rejects these mixed-dtype or batchwise sequence patterns.
     r"^test_cc_feature_vectorizer_mixed_dtypes$",
-    r"^test_cc_simple_rnn_batchwise$",
-    r"^test_cc_lstm_batchwise$",
-    r"^test_cc_gru_batchwise$",
     # More single-op kernel gaps and focused parity checks.
     r"^test_bitshift_right_uint16$",
     r"^test_bitshift_left_uint16$",
@@ -165,7 +162,10 @@ ORT_EXCLUDE_REGEX = [
     r"^test_mod_mixed_sign_bfloat16$",
     r"^test_cc_mod_bfloat16_fmod$",
     r"^test_cc_pow_types_bfloat16_float32$",
-    # ORT diverges from the reference on MaxUnpool/Resize edge semantics.
+    # ORT diverges from the reference on MaxUnpool and on align_corners
+    # Resize downsample cases where scale * input_width is fractional:
+    # ONNX reference / onnx-light use (scale * input_width - 1) in the
+    # denominator, while ORT uses (output_width_int - 1).
     r"^test_cc_maxunpool_export_with_output_shape$",
     r"^test_resize_downsample_scales_linear_align_corners$",
     r"^test_resize_downsample_scales_cubic_align_corners$",
@@ -180,6 +180,10 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_if_opt$",
     # ORT rejects the empty-name encoding of the optional ``axes`` input.
     r"^test_cc_squeeze_empty_axes_name$",
+    # ORT does not support batchwise recurrent operations (layout == 1).
+    r"^test_cc_gru_batchwise$",
+    r"^test_cc_lstm_batchwise$",
+    r"^test_cc_simple_rnn_batchwise$",
 ]
 
 # Add opset-gated exclusions only for opset versions ONNX Runtime cannot load yet.

@@ -206,6 +206,10 @@ bool SeedInputValueInfo(const ValueInfoProto &vi, ShapesContext &ctx) {
     return false;
   }
   const TensorType dtype = DataTypeToTensorType(value_type.tensor_type().elem_type());
+  // Map-typed inputs are tracked as placeholder tensors so generic input
+  // availability checks succeed and traditional-ML shape functions can still
+  // inspect the map value dtype when needed. The rank stays unknown because the
+  // map cardinality is a runtime property, not a static tensor shape.
   ctx.Set(name, OptimTensor(nullptr, dtype, OptimShape{}));
   return true;
 }

@@ -11,13 +11,13 @@ make_test_class = import_or_skip("onnx_light.onnx_lib.backend.test.case", "make_
 
 
 def _inputs(inputs):
-    def _v(vi):
-        if vi.type.has_map_type():
-            mt = vi.type.map_type
+    def _v(value_info):
+        if value_info.type.has_map_type():
+            mt = value_info.type.map_type
             vt = mt.value_type.tensor_type
             t = tuple(d.dim_param or d.dim_value for d in vt.shape.dim)
             return f"map[{mt.key_type} -> {vt.elem_type}: {t}]"
-        v = vi.type.tensor_type
+        v = value_info.type.tensor_type
         t = tuple(d.dim_param or d.dim_value for d in v.shape.dim)
         return f"{v.elem_type}: {t}"
 

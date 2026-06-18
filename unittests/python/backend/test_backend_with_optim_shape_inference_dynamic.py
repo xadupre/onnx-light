@@ -89,6 +89,7 @@ TestOptimShapeInferenceDynamicBackend = make_test_class(
         "test_cc_loop11_carried_state.*",
         "test_cc_optional_get_element_optional_sequence.*",
         "test_cc_sequence_map_add_2_sequences.*",
+        "test_cc_sequence_map_identity_2_sequences.*",
         "test_cc_squeeze_all_singleton.*",
         "test_cc_squeeze_no_axes_input.*",
         "test_cc_squeeze_empty_axes_name.*",

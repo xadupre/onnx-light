@@ -8,5 +8,6 @@ onnx_light.tools
     pretty_print
     schema_comparison
     schema_diff
+    svg
 
 .. automodule:: onnx_light.tools

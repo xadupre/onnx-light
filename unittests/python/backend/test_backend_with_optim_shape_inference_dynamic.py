@@ -69,14 +69,10 @@ def shape_inference_check(model: onnxl.ModelProto, *inputs):
             continue
         shape = i.type.tensor_type.shape
         for di, d in enumerate(shape.dim):
+            if d.dim_param:
+                # Already symbolic; keep it as-is and skip concrete mapping.
+                continue
             if d.dim_value not in mapping:
-                assert not d.dim_param, (
-                    f"Dynamic-shape harness requires all graph input dimensions to be "
-                    f"concrete (dim_value), but found symbolic dim_param={d.dim_param!r} "
-                    f"in input '{i.name}'. Tests whose graph inputs already carry symbolic "
-                    f"dim_param values must be excluded from this harness via the "
-                    f"exclude_regex list in TestOptimShapeInferenceDynamicBackend."
-                )
                 mapping[int(d.dim_value)] = f"{i.name}_{di}"
     for i in work.graph.input:
         if i.name in {"axis", "axes"} or not i.type.has_tensor_type():
@@ -84,7 +80,7 @@ def shape_inference_check(model: onnxl.ModelProto, *inputs):
         if not i.type.tensor_type:
             continue
         shape = i.type.tensor_type.shape
-        new_shape = [mapping[d.dim_value] for d in shape.dim]
+        new_shape = [d.dim_param if d.dim_param else mapping[d.dim_value] for d in shape.dim]
         for i in range(len(shape.dim)):
             shape.dim[i].Clear()
             shape.dim[i].dim_param = new_shape[i]
@@ -123,28 +119,17 @@ TestOptimShapeInferenceDynamicBackend = make_test_class(
         "test_cc_shape_inference_concat_split.*",
         "test_cc_shape_inference_reshape_reshape.*",
         "test_cc_shape_inference_scan_running_sum.*",
-        # Inputs already use symbolic dim_param ("batch", "seq"), which the
-        # dynamic harness cannot rewrite (it asserts concrete dim_value
-        # inputs before swapping them to symbolic names).
+        # Shape inference does not yet fully support the expression-valued
+        # dims produced by this test (e.g. "batch+seq"), so the inferred
+        # value_info names do not match the expected ones.
         "test_cc_shape_inference_nonzero_plus_expression.*",
-        # Inputs use symbolic dim_param ("H", "2*h"); the dynamic harness
-        # requires concrete dim_value inputs.
+        # "2*h" expression dims are not preserved through shape inference.
         "test_cc_shape_inference_resize_tile.*",
-        # Input X already uses symbolic dim_param ("N", "H", "W"); the dynamic
-        # harness requires concrete dim_value inputs to rewrite them.
+        # Canny edge detection shape inference is not yet implemented.
         "test_cc_shape_inference_pad_canny_average.*",
-        # Input X already uses symbolic dim_param ("N", "D"); the dynamic
-        # harness requires concrete dim_value inputs to rewrite them.
-        "test_cc_shape_inference_topk_pairwise_distance.*",
-        # Input X already uses symbolic dim_param ("batch", "features"); the
-        # dynamic harness requires concrete dim_value inputs to rewrite them.
-        "test_cc_shape_inference_loop_pairwise_distance.*",
-        # Input X already uses symbolic dim_param ("N", "D"); the dynamic
-        # harness requires concrete dim_value inputs to rewrite them.
-        "test_cc_shape_inference_loop_topk_pairwise_distance.*",
-        "test_cc_shape_inference_scan_topk_pairwise_distance.*",
         # Inputs already use symbolic dim_param ("batch", "seq", "past_seq",
-        # "total_seq"); the dynamic harness requires concrete dim_value inputs.
+        # "total_seq"); tiny_llm uses a fused Attention op whose shape
+        # inference requires concrete rank-4 query/key/value tensors.
         "test_cc_shape_inference_tiny_llm.*",
     ],
 )

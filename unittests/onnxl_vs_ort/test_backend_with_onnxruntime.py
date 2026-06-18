@@ -63,7 +63,10 @@ def ort_max_supported_opset(max_probe: int = 40) -> int:
         )
         model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", opset)])
         try:
-            ort.InferenceSession(model.SerializeToString(), providers=["CPUExecutionProvider"])
+            _session = ort.InferenceSession(
+                model.SerializeToString(), providers=["CPUExecutionProvider"]
+            )
+            del _session
         except (
             onnxruntime_pybind11_state.InvalidGraph,
             onnxruntime_pybind11_state.Fail,

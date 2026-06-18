@@ -222,6 +222,10 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_if_opt$",
     # ORT rejects the empty-name encoding of the optional ``axes`` input.
     r"^test_cc_squeeze_empty_axes_name$",
+    # ORT does not support batchwise recurrent operations (layout == 1).
+    r"^test_cc_gru_batchwise$",
+    r"^test_cc_lstm_batchwise$",
+    r"^test_cc_simple_rnn_batchwise$",
 ]
 
 # Add opset-gated exclusions only for opset versions ONNX Runtime cannot load yet.

@@ -177,8 +177,11 @@ def _on_builder_inited(app) -> None:
 def _build_to_svg_example(code: str) -> tuple[str, str]:
     """Builds the rendered SVG used in documentation from provided example code.
 
+    Args:
+        code: Python code executed to populate variable ``svg``.
+
     Returns:
-        tuple[str, str]: Input Python code and rendered SVG content.
+        tuple[str, str]: Provided Python code snippet and rendered SVG content.
     """
     namespace: dict[str, object] = {}
     exec(code, namespace)

@@ -210,8 +210,10 @@ ORT_EXCLUDE_REGEX = [
     r"^test_mod_mixed_sign_bfloat16$",
     r"^test_cc_mod_bfloat16_fmod$",
     r"^test_cc_pow_types_bfloat16_float32$",
-    # ORT diverges from the reference on MaxUnpool and align_corners Resize
-    # downsample edge semantics.
+    # ORT diverges from the reference on MaxUnpool and on align_corners
+    # Resize downsample cases where scale * input_width is fractional:
+    # ONNX reference / onnx-light use (scale * input_width - 1) in the
+    # denominator, while ORT uses (output_width_int - 1).
     r"^test_cc_maxunpool_export_with_output_shape$",
     r"^test_resize_downsample_scales_linear_align_corners$",
     r"^test_resize_downsample_scales_cubic_align_corners$",

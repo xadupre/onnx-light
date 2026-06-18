@@ -204,7 +204,7 @@ class ToSvgExampleDirective(Directive):
         """
         code = "\n".join(self.content).strip()
         if not code:
-            raise self.error("to-svg-example requires Python code and must define 'svg'.")
+            raise self.error("to-svg-example requires Python code in the directive body.")
         code, svg = _build_to_svg_example(code)
         literal = nodes.literal_block(code, code)
         literal["language"] = "python"

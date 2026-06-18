@@ -75,6 +75,7 @@ def _format_shape(type_proto: Any) -> str:
 
 
 def _format_tensor_shape(shape: Any) -> str:
+    """Returns a comma-separated string of a ``TensorShapeProto``'s dims."""
     if shape is None:
         return ""
     dims = getattr(shape, "dim", None)
@@ -124,10 +125,12 @@ _DTYPE_NAMES = {
 
 
 def _dtype_name(elem_type: int) -> str:
+    """Returns the textual name of a ``TensorProto.DataType`` value."""
     return _DTYPE_NAMES.get(int(elem_type), f"dtype{int(elem_type)}")
 
 
 def _iter(seq: Any) -> Iterable[Any]:
+    """Returns ``seq`` itself, or an empty tuple when it is ``None``."""
     if seq is None:
         return ()
     return seq
@@ -145,6 +148,7 @@ def _extract_graph(model_or_graph: Any) -> Any:
 
 
 def _looks_like_graph(obj: Any) -> bool:
+    """Returns :data:`True` when ``obj`` quacks like a ``GraphProto``."""
     return (
         hasattr(obj, "node")
         and hasattr(obj, "input")

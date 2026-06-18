@@ -135,8 +135,8 @@ def shape_inference_no_new_names_check(model: onnxl.ModelProto, *inputs):
 TestOptimShapeInferenceNoNewNamesBackend = make_test_class(
     shape_inference_no_new_names_check,
     exclude_regex=[
-        # NonZero and Compress are explicitly permitted to introduce
-        # new symbolic intermediate names during shape inference (issue #2733).
+        # NonZero is explicitly permitted to introduce new symbolic
+        # intermediate names during shape inference (issue #2733).
         "test_cc_nonzero.*",
         "test_nonzero.*",
         "test_cc_shape_inference_nonzero.*",

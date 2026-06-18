@@ -89,6 +89,10 @@ ORT_EXCLUDE_REGEX = [
     # ORT only wires float kernels for these ai.onnx.ml cases.
     r"^test_cc_binarizer_int64$",
     r"^test_cc_scaler_int64$",
+    # ORT's binary LinearClassifier Z output uses [1-z, z] instead of the spec's [-z, z].
+    r"^test_cc_linearclassifier_int64_binary$",
+    # ORT returns wrong labels for the binary TreeEnsembleClassifier test case.
+    r"^test_cc_treeensembleclassifier_int64_binary$",
     # Low-precision Cast/CastLike dtypes are unsupported in ORT.
     r"^test_cc_cast_.*FLOAT8E4M3.*$",
     r"^test_cc_cast_.*FLOAT8E5M2.*$",

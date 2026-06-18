@@ -56,7 +56,7 @@ _XML_ESCAPE = {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apo
 
 
 def _escape_xml(text: str) -> str:
-    """Escape characters that are special in XML text and attributes."""
+    """Escapes characters that are special in XML text and attributes."""
     return "".join(_XML_ESCAPE.get(ch, ch) for ch in text)
 
 
@@ -94,7 +94,7 @@ def to_svg(
     include_shapes: bool = True,
     include_attributes: bool = False,
 ) -> str:
-    """Render an ONNX ``ModelProto`` or ``GraphProto`` as an SVG image.
+    """Renders an ONNX ``ModelProto`` or ``GraphProto`` as an SVG image.
 
     Args:
         model_or_graph: A ``ModelProto`` or ``GraphProto`` instance.  Both
@@ -144,7 +144,7 @@ def to_svg_graph(
     include_shapes: bool = True,
     include_attributes: bool = False,
 ) -> str:
-    """Render a ``GraphProto`` as an SVG image.
+    """Renders a ``GraphProto`` as an SVG image.
 
     See :func:`to_svg` for the meaning of every parameter.
     """
@@ -272,7 +272,7 @@ def to_svg_graph(
 
 
 def _assign_layers(boxes: list[_Box], edges: list[tuple[int, int, str]]) -> None:
-    """Assign a layer index to every box using longest-path layering."""
+    """Assigns a layer index to every box using longest-path layering."""
     # Relax edges until the layering is stable; an ONNX graph is a DAG so
     # this converges in at most ``len(boxes)`` passes.
     for _ in range(len(boxes)):
@@ -286,7 +286,7 @@ def _assign_layers(boxes: list[_Box], edges: list[tuple[int, int, str]]) -> None
 
 
 def _layout(boxes: list[_Box], horizontal: bool) -> tuple[float, float]:
-    """Place every box and return the overall ``(width, height)``."""
+    """Places every box and returns the overall ``(width, height)``."""
     if not boxes:
         return (2 * _MARGIN, 2 * _MARGIN)
 
@@ -418,7 +418,7 @@ def _render_edge(src: _Box, dst: _Box, label: str, horizontal: bool) -> str:
 
 
 def _round(value: float) -> str:
-    """Format a coordinate with at most two decimals, dropping trailing zeros."""
+    """Formats a coordinate with at most two decimals, dropping trailing zeros."""
     return f"{value:.2f}".rstrip("0").rstrip(".")
 
 

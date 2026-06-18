@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .mermaid import _dtype_name, _extract_graph, _format_shape, _iter, _looks_like_graph, _s
+from ._proto_utils import _dtype_name, _extract_graph, _format_shape, _iter, _looks_like_graph, _s
 
 # ---------------------------------------------------------------------------
 # Geometry constants

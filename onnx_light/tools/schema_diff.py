@@ -34,7 +34,7 @@ arity, so those sections of the diff are simply omitted):
     :showcode:
 
     from collections import defaultdict
-    from onnx_light.onnx_proto._onnxpy import onnx_op
+    from onnx_light import onnx_op
     from onnx_light.tools.schema_diff import compare_schemas
 
     by_name = defaultdict(list)
@@ -78,7 +78,7 @@ def _param_type_str(param: Any) -> str:
 
     Supports both the full :class:`OpSchema.FormalParameter` (attribute
     ``type_str``) and the lightweight
-    :class:`~onnx_light.onnx_proto._onnxpy.onnx_op.FormalParameter` (attribute
+    :class:`~onnx_light.onnx_op.FormalParameter` (attribute
     ``type``) exposed by ``LightOpSchema``.
     """
     if hasattr(param, "type_str"):
@@ -834,7 +834,7 @@ def compare_schemas(schema_old: Any, schema_new: Any) -> SchemaDiff:
         print(diff)
 
     The function also accepts lightweight schemas exposed by ``onnx_light``
-    (``onnx_proto._onnxpy.onnx_op.LightOpSchema``).  Those schemas do not
+    (``onnx_light.onnx_op.LightOpSchema``).  Those schemas do not
     expose attributes nor input/output arity, so those parts of the diff are
     simply omitted when both schemas lack them.
 
@@ -842,7 +842,7 @@ def compare_schemas(schema_old: Any, schema_new: Any) -> SchemaDiff:
         :showcode:
 
         from collections import defaultdict
-        from onnx_light.onnx_proto._onnxpy import onnx_op
+        from onnx_light import onnx_op
         from onnx_light.tools.schema_diff import compare_schemas
 
         by_name = defaultdict(list)

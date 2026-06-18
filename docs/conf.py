@@ -1,6 +1,8 @@
 import os
 import subprocess
 import sys
+from docutils import nodes
+from docutils.parsers.rst import Directive
 import onnx_light
 
 project = "onnx-light"
@@ -172,6 +174,66 @@ def _on_builder_inited(app) -> None:
     generate_operators_doc(operators_dir, progress_callback=logger.info)
 
 
+def _build_to_svg_example() -> tuple[str, str]:
+    """Builds the `to_svg` code sample and rendered SVG used in documentation."""
+    from onnx_light.onnx.helper import make_graph, make_model, make_node, make_tensor_value_info
+    from onnx_light.onnx_lib import TensorProto
+    from onnx_light.tools import to_svg
+
+    code = "\n".join(
+        [
+            "from onnx_light.onnx_lib import TensorProto",
+            "from onnx_light.onnx.helper import (",
+            "    make_model,",
+            "    make_node,",
+            "    make_graph,",
+            "    make_tensor_value_info,",
+            ")",
+            "from onnx_light.tools import to_svg",
+            "",
+            "X = make_tensor_value_info('X', TensorProto.FLOAT, [None, None])",
+            "A = make_tensor_value_info('A', TensorProto.FLOAT, [None, None])",
+            "B = make_tensor_value_info('B', TensorProto.FLOAT, [None, None])",
+            "Y = make_tensor_value_info('Y', TensorProto.FLOAT, [None])",
+            "",
+            "node1 = make_node('MatMul', ['X', 'A'], ['XA'])",
+            "node2 = make_node('Add', ['XA', 'B'], ['Y'])",
+            "graph = make_graph([node1, node2], 'example', [X, A, B], [Y])",
+            "model = make_model(graph)",
+            "",
+            "svg = to_svg(model)",
+        ]
+    )
+
+    X = make_tensor_value_info("X", TensorProto.FLOAT, [None, None])
+    A = make_tensor_value_info("A", TensorProto.FLOAT, [None, None])
+    B = make_tensor_value_info("B", TensorProto.FLOAT, [None, None])
+    Y = make_tensor_value_info("Y", TensorProto.FLOAT, [None])
+
+    node1 = make_node("MatMul", ["X", "A"], ["XA"])
+    node2 = make_node("Add", ["XA", "B"], ["Y"])
+    graph = make_graph([node1, node2], "example", [X, A, B], [Y])
+    model = make_model(graph)
+    return code, to_svg(model)
+
+
+class ToSvgExampleDirective(Directive):
+    """Renders the `to_svg` example code and the resulting SVG image."""
+
+    has_content = False
+    required_arguments = 0
+    optional_arguments = 0
+    final_argument_whitespace = False
+
+    def run(self):
+        """Returns the literal Python example and the rendered SVG output."""
+        code, svg = _build_to_svg_example()
+        literal = nodes.literal_block(code, code)
+        literal["language"] = "python"
+        return [literal, nodes.raw("", svg, format="html")]
+
+
 def setup(app) -> None:
     """Registers Sphinx event hooks used by this configuration."""
     app.connect("builder-inited", _on_builder_inited)
+    app.add_directive("to-svg-example", ToSvgExampleDirective)

@@ -1,10 +1,10 @@
-"""Tests for onnx_light.compatibility.compare_schemas."""
+"""Tests for onnx_light.tools.schema_diff.compare_schemas."""
 
 import unittest
 
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx.defs as defs
-from onnx_light.tools.compatibility import (
+from onnx_light.tools.schema_diff import (
     ConstraintDiff,
     DeprecationDiff,
     DocDiff,

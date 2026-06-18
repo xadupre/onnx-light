@@ -18,7 +18,7 @@ Typical usage with a full :class:`~onnx_light.onnx.defs.OpSchema`:
     :showcode:
 
     from onnx_light.onnx import defs
-    from onnx_light.compatibility.schema_diff import compare_schemas
+    from onnx_light.tools.schema_diff import compare_schemas
 
     defs.register_onnx_operator_set_schema()
     old = defs.get_schema("Relu", 6)
@@ -35,7 +35,7 @@ arity, so those sections of the diff are simply omitted):
 
     from collections import defaultdict
     from onnx_light.onnx_proto._onnxpy import onnx_op
-    from onnx_light.compatibility.schema_diff import compare_schemas
+    from onnx_light.tools.schema_diff import compare_schemas
 
     by_name = defaultdict(list)
     for s in onnx_op.GetAllOnnxOpSchemasWithHistory(init_doc=True):
@@ -826,7 +826,7 @@ def compare_schemas(schema_old: Any, schema_new: Any) -> SchemaDiff:
         :showcode:
 
         from onnx_light.onnx import defs
-        from onnx_light.compatibility.schema_diff import compare_schemas
+        from onnx_light.tools.schema_diff import compare_schemas
         defs.register_onnx_operator_set_schema()
         old = defs.get_schema("Relu", 6)
         new = defs.get_schema("Relu", 14)
@@ -843,7 +843,7 @@ def compare_schemas(schema_old: Any, schema_new: Any) -> SchemaDiff:
 
         from collections import defaultdict
         from onnx_light.onnx_proto._onnxpy import onnx_op
-        from onnx_light.compatibility.schema_diff import compare_schemas
+        from onnx_light.tools.schema_diff import compare_schemas
 
         by_name = defaultdict(list)
         for s in onnx_op.GetAllOnnxOpSchemasWithHistory(init_doc=True):

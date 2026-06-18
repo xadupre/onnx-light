@@ -71,21 +71,13 @@ TestReferenceEvaluatorBackend = make_test_class(
     reference_evaluator_backend,
     exclude_regex=[
         "identity_opt",
-        "identity_sequence",
         "if_opt",
-        "if_seq",
         "image_decoder_decode_jpeg2k_rgb",
         "image_decoder_decode_jpeg_bgr",
         "image_decoder_decode_jpeg_grayscale",
         "image_decoder_decode_jpeg_rgb",
         "image_decoder_decode_webp_rgb",
         "loop16_seq_none",
-        # The loop pairwise-distance model uses Manhattan distance (L1) but
-        # the expected outputs are Euclidean (L2): numerical mismatch.
-        "test_cc_shape_inference_loop_pairwise_distance.*",
-        # TopK k input exceeds the axis length for the scan/loop topk variants.
-        "test_cc_shape_inference_loop_topk_pairwise_distance.*",
-        "test_cc_shape_inference_scan_topk_pairwise_distance.*",
     ],
 )
 

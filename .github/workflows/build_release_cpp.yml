@@ -2,6 +2,11 @@ name: Build C++ Release
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Git tag or ref to build (defaults to the branch the workflow is run from)."
+        required: false
+        type: string
   schedule:
     # Every Monday at 07:00 UTC (offset from the Python-wheel build at 06:00).
     - cron: "0 7 * * 1"
@@ -48,6 +53,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
 
       - name: Detect CPU count
         id: cpu_count

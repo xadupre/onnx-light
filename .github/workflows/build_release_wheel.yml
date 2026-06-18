@@ -2,6 +2,11 @@ name: Build Release Wheels
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Git tag or ref to build (defaults to the branch the workflow is run from)."
+        required: false
+        type: string
   schedule:
     # Run every Monday at 06:00 UTC to catch toolchain/manylinux regressions early.
     - cron: "0 6 * * 1"
@@ -26,6 +31,8 @@ jobs:
             runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -77,6 +84,8 @@ jobs:
             runs-on: windows-11-arm
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -112,6 +121,8 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: "13.0"
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
       - name: Set up Python
         uses: actions/setup-python@v5
         with:

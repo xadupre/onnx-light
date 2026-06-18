@@ -880,6 +880,13 @@ void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
     OptimTensor tensor;
     if (OptimTensorFromValueInfo(vi, tensor)) {
       Set(name, std::move(tensor));
+    } else if (vi.has_type() && vi.type().has_map_type()) {
+      // Map-type inputs cannot be described as an OptimTensor shape.
+      // Register a placeholder with undefined dtype so that
+      // CheckInputsAvailable does not reject ops that consume map inputs
+      // (e.g., DictVectorizer).  The op-specific shape function is
+      // responsible for deriving its output from node attributes alone.
+      Set(name, OptimTensor(nullptr, TensorType::kUndefined, OptimShape{}));
     }
   }
   ComputeShapes(graph.node());

@@ -7,5 +7,6 @@ onnx_light.tools
     mermaid
     pretty_print
     schema_comparison
+    schema_diff
 
 .. automodule:: onnx_light.tools

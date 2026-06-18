@@ -18,7 +18,7 @@ Typical usage with a full :class:`~onnx_light.onnx.defs.OpSchema`:
     :showcode:
 
     from onnx_light.onnx import defs
-    from onnx_light.compatibility.schema_diff import compare_schemas
+    from onnx_light.tools.schema_diff import compare_schemas
 
     defs.register_onnx_operator_set_schema()
     old = defs.get_schema("Relu", 6)
@@ -34,8 +34,8 @@ arity, so those sections of the diff are simply omitted):
     :showcode:
 
     from collections import defaultdict
-    from onnx_light.onnx_proto._onnxpy import onnx_op
-    from onnx_light.compatibility.schema_diff import compare_schemas
+    from onnx_light import onnx_op
+    from onnx_light.tools.schema_diff import compare_schemas
 
     by_name = defaultdict(list)
     for s in onnx_op.GetAllOnnxOpSchemasWithHistory(init_doc=True):
@@ -68,7 +68,7 @@ import difflib
 from dataclasses import dataclass, field
 from typing import Any
 
-from ...onnx_py import _onnxpyprotolib as _C  # type: ignore
+from ..onnx_py import _onnxpyprotolib as _C  # type: ignore
 
 _OpSchema = _C.defs.OpSchema  # type: ignore
 
@@ -78,7 +78,7 @@ def _param_type_str(param: Any) -> str:
 
     Supports both the full :class:`OpSchema.FormalParameter` (attribute
     ``type_str``) and the lightweight
-    :class:`~onnx_light.onnx_proto._onnxpy.onnx_op.FormalParameter` (attribute
+    :class:`~onnx_light.onnx_op.FormalParameter` (attribute
     ``type``) exposed by ``LightOpSchema``.
     """
     if hasattr(param, "type_str"):
@@ -108,7 +108,7 @@ def _type_to_str(t: Any) -> str:
         return t
     # LightOpSchema: TensorType enum value -> "tensor(...)" or "seq(...)" string.
     try:
-        from ..onnx_proto._onnxpy import onnx_op as _onnx_op  # type: ignore
+        from ..onnx_py._onnxpyprotoop import onnx_op as _onnx_op  # type: ignore[attr-defined]
 
         return _onnx_op.ToTypeString(t)
     except Exception:
@@ -147,7 +147,7 @@ def _attr_default_value_repr(attr: Any) -> str:
     dv = attr._default_value
     at = dv.type
     # Import here to avoid a circular dependency at module load time.
-    from ...onnx_py._onnxpyprotoop import AttributeProto  # type: ignore[attr-defined]
+    from ..onnx_py._onnxpyprotoop import AttributeProto  # type: ignore[attr-defined]
 
     if at == AttributeProto.UNDEFINED:
         return "UNDEFINED"
@@ -826,7 +826,7 @@ def compare_schemas(schema_old: Any, schema_new: Any) -> SchemaDiff:
         :showcode:
 
         from onnx_light.onnx import defs
-        from onnx_light.compatibility.schema_diff import compare_schemas
+        from onnx_light.tools.schema_diff import compare_schemas
         defs.register_onnx_operator_set_schema()
         old = defs.get_schema("Relu", 6)
         new = defs.get_schema("Relu", 14)
@@ -834,7 +834,7 @@ def compare_schemas(schema_old: Any, schema_new: Any) -> SchemaDiff:
         print(diff)
 
     The function also accepts lightweight schemas exposed by ``onnx_light``
-    (``onnx_proto._onnxpy.onnx_op.LightOpSchema``).  Those schemas do not
+    (``onnx_light.onnx_op.LightOpSchema``).  Those schemas do not
     expose attributes nor input/output arity, so those parts of the diff are
     simply omitted when both schemas lack them.
 
@@ -842,8 +842,8 @@ def compare_schemas(schema_old: Any, schema_new: Any) -> SchemaDiff:
         :showcode:
 
         from collections import defaultdict
-        from onnx_light.onnx_proto._onnxpy import onnx_op
-        from onnx_light.compatibility.schema_diff import compare_schemas
+        from onnx_light import onnx_op
+        from onnx_light.tools.schema_diff import compare_schemas
 
         by_name = defaultdict(list)
         for s in onnx_op.GetAllOnnxOpSchemasWithHistory(init_doc=True):

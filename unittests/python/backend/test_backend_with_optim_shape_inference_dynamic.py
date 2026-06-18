@@ -61,6 +61,10 @@ def shape_inference_check(model: onnxl.ModelProto, *inputs):
         work.graph.value_info.clear()
     for o in work.graph.output:
         o.type.Clear()
+
+    def _has_dim_value(dim) -> bool:
+        return dim.has_dim_value()
+
     mapping = {}
     prefill_with_value_info_output = False
     for i in work.graph.input:
@@ -73,15 +77,26 @@ def shape_inference_check(model: onnxl.ModelProto, *inputs):
             if d.dim_param:
                 prefill_with_value_info_output = True
                 continue
-            if d.dim_value not in mapping:
-                mapping[int(d.dim_value)] = f"{i.name}_{di}"
+            if _has_dim_value(d):
+                key = int(d.dim_value)
+            else:
+                prefill_with_value_info_output = True
+                key = (i.name, di)
+            if key not in mapping:
+                mapping[key] = f"{i.name}_{di}"
     for i in work.graph.input:
         if i.name in {"axis", "axes"} or not i.type.has_tensor_type():
             continue
         if not i.type.tensor_type:
             continue
         shape = i.type.tensor_type.shape
-        new_shape = [d.dim_param or mapping[d.dim_value] for d in shape.dim]
+        new_shape = []
+        for di, d in enumerate(shape.dim):
+            if d.dim_param:
+                new_shape.append(d.dim_param)
+                continue
+            key = int(d.dim_value) if _has_dim_value(d) else (i.name, di)
+            new_shape.append(mapping[key])
         for i in range(len(shape.dim)):
             shape.dim[i].Clear()
             shape.dim[i].dim_param = new_shape[i]

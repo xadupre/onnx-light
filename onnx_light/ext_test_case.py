@@ -502,14 +502,18 @@ class InferenceSessionAllTypes:
 
                 if onnx_dtype and onnx_dtype in special_mappings:
                     # Use raw buffer binding for special dtypes
-                    view_dtype, _tensor_type = special_mappings[onnx_dtype]
+                    view_dtype, tensor_type = special_mappings[onnx_dtype]
 
                     # View the array as the compatible dtype for buffer access
                     buffer_view = inp.view(view_dtype)
 
-                    # Create OrtValue from raw buffer with explicit dtype
+                    # Create OrtValue from buffer with explicit element type
                     device = C.OrtDevice(C.OrtDevice.cpu(), C.OrtDevice.default_memory(), 0)  # type: ignore[attr-defined]
-                    ortvalue = C.OrtValue.ortvalue_from_numpy(buffer_view, device)  # type: ignore[attr-defined]
+                    ortvalue = C.OrtValue.ortvalue_from_shape_and_type(  # type: ignore[attr-defined]
+                        list(inp.shape), tensor_type, device
+                    )
+                    # Copy data into the OrtValue
+                    ortvalue.update_inplace(buffer_view)  # type: ignore[attr-defined]
 
                     # Bind the input
                     io_binding.bind_ortvalue_input(meta.name, ortvalue)

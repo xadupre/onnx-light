@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 import onnxruntime as ort
-from onnxruntime.capi import onnxruntime_pybind11_state
+from onnxruntime.capi._pybind_state import get_all_operator_schema
 from onnx_light.ext_test_case import import_or_skip
 
 # The backend test registries are only available in the full build; skip this
@@ -37,44 +37,21 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
     return outputs
 
 
-def ort_max_supported_opset(max_probe: int = 40) -> int:
+def ort_max_supported_opset() -> int:
     """
-    Determines the highest default-domain opset version ONNX Runtime can load.
+    Returns the highest default-domain opset version ONNX Runtime supports.
 
-    Probes ONNX Runtime by building a trivial ``Identity`` model at decreasing
-    opset versions until one is accepted. This lets the exclusion list adapt to
-    the installed ONNX Runtime instead of hard-coding an opset ceiling.
-
-    Args:
-        max_probe: The highest opset version to probe.
+    Reads the registered operator schemas from ONNX Runtime and takes the
+    maximum ``since_version`` over the default ONNX domain (``""``). This lets
+    the exclusion list adapt to the installed ONNX Runtime instead of
+    hard-coding an opset ceiling.
 
     Returns:
-        The highest default-domain opset version ONNX Runtime accepts.
+        The highest default-domain opset version ONNX Runtime supports.
     """
-    from onnx_light.onnx import helper
-
-    for opset in range(max_probe, 0, -1):
-        node = helper.make_node("Identity", ["x"], ["y"])
-        graph = helper.make_graph(
-            [node],
-            "probe",
-            [helper.make_tensor_value_info("x", 1, [2])],
-            [helper.make_tensor_value_info("y", 1, [2])],
-        )
-        model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", opset)])
-        try:
-            _session = ort.InferenceSession(
-                model.SerializeToString(), providers=["CPUExecutionProvider"]
-            )
-            del _session
-        except (
-            onnxruntime_pybind11_state.InvalidGraph,
-            onnxruntime_pybind11_state.Fail,
-            onnxruntime_pybind11_state.NotImplemented,
-        ):
-            continue
-        return opset
-    raise RuntimeError("ONNX Runtime failed to load a model at any probed opset version.")
+    return max(
+        schema.since_version for schema in get_all_operator_schema() if schema.domain == ""
+    )
 
 
 # Opset version at which the cases below were introduced. They are only excluded

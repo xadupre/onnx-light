@@ -109,10 +109,6 @@ TestOptimShapeInferenceDynamicBackend = make_test_class(
         "test_cc_if_seq.*",
         "test_cc_if_opt.*",
         "test_cc_linear_attention.*",
-        "test_cc_shape_inference_value_as_shape.*",
-        "test_cc_shape_inference_check_shape.*",
-        "test_cc_shape_inference_concat_split.*",
-        "test_cc_shape_inference_reshape_reshape.*",
         "test_cc_shape_inference_scan_running_sum.*",
         # Shape inference does not yet fully support the expression-valued
         # dims produced by this test (e.g. "batch+seq"), so the inferred

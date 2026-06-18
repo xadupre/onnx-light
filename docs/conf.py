@@ -1,6 +1,8 @@
 import os
 import subprocess
 import sys
+from docutils import nodes
+from docutils.parsers.rst import Directive
 import onnx_light
 
 project = "onnx-light"
@@ -172,6 +174,47 @@ def _on_builder_inited(app) -> None:
     generate_operators_doc(operators_dir, progress_callback=logger.info)
 
 
+def _build_to_svg_example(code: str) -> tuple[str, str]:
+    """Builds the rendered SVG used in documentation from provided example code.
+
+    Args:
+        code: Python code executed to populate variable ``svg``.
+
+    Returns:
+        tuple[str, str]: Input Python code snippet and rendered SVG content.
+    """
+    namespace: dict[str, object] = {}
+    exec(code, namespace)
+    svg = namespace.get("svg")
+    if not isinstance(svg, str):
+        raise RuntimeError("The to-svg example must define 'svg' as a string.")
+    return code, svg
+
+
+class ToSvgExampleDirective(Directive):
+    """Renders the `to_svg` example code and the resulting SVG image."""
+
+    has_content = True
+    required_arguments = 0
+    optional_arguments = 0
+    final_argument_whitespace = False
+
+    def run(self):
+        """Returns the literal Python example and the rendered SVG output.
+
+        Returns:
+            list[nodes.Node]: Literal code block and raw HTML SVG nodes.
+        """
+        code = "\n".join(self.content).strip()
+        if not code:
+            raise self.error("to-svg-example requires Python code in the directive body.")
+        code, svg = _build_to_svg_example(code)
+        literal = nodes.literal_block(code, code)
+        literal["language"] = "python"
+        return [literal, nodes.raw("", svg, format="html")]
+
+
 def setup(app) -> None:
-    """Registers Sphinx event hooks used by this configuration."""
+    """Registers Sphinx hooks and custom directives used by this configuration."""
     app.connect("builder-inited", _on_builder_inited)
+    app.add_directive("to-svg-example", ToSvgExampleDirective)

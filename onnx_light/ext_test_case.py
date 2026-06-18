@@ -348,13 +348,6 @@ class ExtTestCase(unittest.TestCase):
         return fullname
 
 
-def _lazy_import_tensorproto():
-    """Lazily imports TensorProto to avoid import errors when module isn't built."""
-    from onnx_light.onnx import TensorProto
-
-    return TensorProto
-
-
 class InferenceSessionAllTypes:
     """
     Wrapper around onnxruntime.InferenceSession that supports all ONNX dtypes.
@@ -376,29 +369,23 @@ class InferenceSessionAllTypes:
         if providers is None:
             providers = ["CPUExecutionProvider"]
         self._sess = ort.InferenceSession(model_bytes, providers=providers)
-        self._TensorProto = None
-
-    def _get_tensorproto(self):
-        """Gets TensorProto with lazy import."""
-        if self._TensorProto is None:
-            self._TensorProto = _lazy_import_tensorproto()
-        return self._TensorProto
 
     def _get_numpy_dtype_to_onnx_mapping(self):
         """Returns mapping from NumPy dtype to ONNX TensorProto data type."""
-        TP = self._get_tensorproto()
+        from onnx_light.onnx import TensorProto
+
         return {
-            numpy.dtype("float32"): TP.FLOAT,
-            numpy.dtype("uint8"): TP.UINT8,
-            numpy.dtype("int8"): TP.INT8,
-            numpy.dtype("uint16"): TP.UINT16,
-            numpy.dtype("int16"): TP.INT16,
-            numpy.dtype("int32"): TP.INT32,
-            numpy.dtype("int64"): TP.INT64,
-            numpy.dtype("bool"): TP.BOOL,
-            numpy.dtype("float64"): TP.DOUBLE,
-            numpy.dtype("uint32"): TP.UINT32,
-            numpy.dtype("uint64"): TP.UINT64,
+            numpy.dtype("float32"): TensorProto.FLOAT,
+            numpy.dtype("uint8"): TensorProto.UINT8,
+            numpy.dtype("int8"): TensorProto.INT8,
+            numpy.dtype("uint16"): TensorProto.UINT16,
+            numpy.dtype("int16"): TensorProto.INT16,
+            numpy.dtype("int32"): TensorProto.INT32,
+            numpy.dtype("int64"): TensorProto.INT64,
+            numpy.dtype("bool"): TensorProto.BOOL,
+            numpy.dtype("float64"): TensorProto.DOUBLE,
+            numpy.dtype("uint32"): TensorProto.UINT32,
+            numpy.dtype("uint64"): TensorProto.UINT64,
         }
 
     def _get_special_dtype_mappings(self):
@@ -407,20 +394,21 @@ class InferenceSessionAllTypes:
 
         Maps ONNX dtype to (numpy view dtype, onnx tensor element type).
         """
-        TP = self._get_tensorproto()
+        from onnx_light.onnx import TensorProto
+
         return {
-            TP.FLOAT16: (numpy.dtype("uint16"), TP.FLOAT16),
-            TP.BFLOAT16: (numpy.dtype("uint16"), TP.BFLOAT16),
-            TP.FLOAT8E4M3FN: (numpy.dtype("uint8"), TP.FLOAT8E4M3FN),
-            TP.FLOAT8E4M3FNUZ: (numpy.dtype("uint8"), TP.FLOAT8E4M3FNUZ),
-            TP.FLOAT8E5M2: (numpy.dtype("uint8"), TP.FLOAT8E5M2),
-            TP.FLOAT8E5M2FNUZ: (numpy.dtype("uint8"), TP.FLOAT8E5M2FNUZ),
-            TP.FLOAT8E8M0: (numpy.dtype("uint8"), TP.FLOAT8E8M0),
-            TP.INT4: (numpy.dtype("uint8"), TP.INT4),
-            TP.INT2: (numpy.dtype("uint8"), TP.INT2),
-            TP.UINT4: (numpy.dtype("uint8"), TP.UINT4),
-            TP.UINT2: (numpy.dtype("uint8"), TP.UINT2),
-            TP.FLOAT4E2M1: (numpy.dtype("uint8"), TP.FLOAT4E2M1),
+            TensorProto.FLOAT16: (numpy.dtype("uint16"), TensorProto.FLOAT16),
+            TensorProto.BFLOAT16: (numpy.dtype("uint16"), TensorProto.BFLOAT16),
+            TensorProto.FLOAT8E4M3FN: (numpy.dtype("uint8"), TensorProto.FLOAT8E4M3FN),
+            TensorProto.FLOAT8E4M3FNUZ: (numpy.dtype("uint8"), TensorProto.FLOAT8E4M3FNUZ),
+            TensorProto.FLOAT8E5M2: (numpy.dtype("uint8"), TensorProto.FLOAT8E5M2),
+            TensorProto.FLOAT8E5M2FNUZ: (numpy.dtype("uint8"), TensorProto.FLOAT8E5M2FNUZ),
+            TensorProto.FLOAT8E8M0: (numpy.dtype("uint8"), TensorProto.FLOAT8E8M0),
+            TensorProto.INT4: (numpy.dtype("uint8"), TensorProto.INT4),
+            TensorProto.INT2: (numpy.dtype("uint8"), TensorProto.INT2),
+            TensorProto.UINT4: (numpy.dtype("uint8"), TensorProto.UINT4),
+            TensorProto.UINT2: (numpy.dtype("uint8"), TensorProto.UINT2),
+            TensorProto.FLOAT4E2M1: (numpy.dtype("uint8"), TensorProto.FLOAT4E2M1),
         }
 
     def _get_onnx_tensor_element_type_from_array(self, arr: numpy.ndarray) -> Optional[int]:
@@ -431,7 +419,8 @@ class InferenceSessionAllTypes:
         For special dtypes (FLOAT16, BFLOAT16, FLOAT8, etc.), infers from the
         array's dtype attribute.
         """
-        TP = self._get_tensorproto()
+        from onnx_light.onnx import TensorProto
+
         special_mappings = self._get_special_dtype_mappings()
 
         # Check if array has ONNX dtype annotation (used by ml_dtypes)
@@ -448,29 +437,29 @@ class InferenceSessionAllTypes:
         # Try to detect from dtype name for ml_dtypes
         dtype_name = arr.dtype.name.lower()
         if "float16" in dtype_name or "half" in dtype_name:
-            return TP.FLOAT16
+            return TensorProto.FLOAT16
         elif "bfloat16" in dtype_name:
-            return TP.BFLOAT16
+            return TensorProto.BFLOAT16
         elif "float8e4m3fn" in dtype_name and "uz" not in dtype_name:
-            return TP.FLOAT8E4M3FN
+            return TensorProto.FLOAT8E4M3FN
         elif "float8e4m3fnuz" in dtype_name:
-            return TP.FLOAT8E4M3FNUZ
+            return TensorProto.FLOAT8E4M3FNUZ
         elif "float8e5m2" in dtype_name and "uz" not in dtype_name:
-            return TP.FLOAT8E5M2
+            return TensorProto.FLOAT8E5M2
         elif "float8e5m2fnuz" in dtype_name:
-            return TP.FLOAT8E5M2FNUZ
+            return TensorProto.FLOAT8E5M2FNUZ
         elif "float8e8m0" in dtype_name:
-            return TP.FLOAT8E8M0
+            return TensorProto.FLOAT8E8M0
         elif "int4" in dtype_name:
-            return TP.INT4
+            return TensorProto.INT4
         elif "int2" in dtype_name:
-            return TP.INT2
+            return TensorProto.INT2
         elif "uint4" in dtype_name:
-            return TP.UINT4
+            return TensorProto.UINT4
         elif "uint2" in dtype_name:
-            return TP.UINT2
+            return TensorProto.UINT2
         elif "float4e2m1" in dtype_name:
-            return TP.FLOAT4E2M1
+            return TensorProto.FLOAT4E2M1
 
         return None
 

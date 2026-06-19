@@ -22,6 +22,12 @@ class TestStringBinding(ExtTestCase):
         self.assertEqual(value, "abcd")
         self.assertIsInstance(value, str)
 
+    def test_string_str(self):
+        """Tests str(String) returns a Python string."""
+        value = str(m.String("abc"))
+        self.assertEqual(value, "abc")
+        self.assertIsInstance(value, str)
+
     def test_string_eq_string(self):
         """Tests String == String."""
         self.assertTrue(m.String("abc") == m.String("abc"))

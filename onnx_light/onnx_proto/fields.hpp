@@ -98,12 +98,12 @@ template <typename T> void OptionalField<T>::reset() { value_.reset(); }
 template <typename T> void OptionalField<T>::set_empty_value() { value_.reset(new T); }
 
 template <typename T> T &OptionalField<T>::operator*() {
-  EXT_ENFORCE(has_value(), "Optional field has no value.");
+  EXT_ENFORCE(has_value(), "Optional field has no value in ", typeid(T).name(), ".");
   return *value_;
 }
 
 template <typename T> const T &OptionalField<T>::operator*() const {
-  EXT_ENFORCE(has_value(), "Optional field has no value.");
+  EXT_ENFORCE(has_value(), "Optional field has no value in ", typeid(T).name(), ".");
   return *value_;
 }
 

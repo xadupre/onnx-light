@@ -22,7 +22,12 @@ class TestInPlaceReuse(ExtTestCase):
         r.input_index = 2
         self.assertEqual(r.output_index, 1)
         self.assertEqual(r.input_index, 2)
-        self.assertEqual(repr(r), "InPlaceReuse(output_index=1, input_index=2)")
+        # The default kind is kEqual (same-sized buffer).
+        self.assertEqual(r.kind, si.InPlaceReuseKind.kEqual)
+        self.assertEqual(repr(r), "InPlaceReuse(output_index=1, input_index=2, kind=kEqual)")
+        r.kind = si.InPlaceReuseKind.kGreater
+        self.assertEqual(r.kind, si.InPlaceReuseKind.kGreater)
+        self.assertEqual(repr(r), "InPlaceReuse(output_index=1, input_index=2, kind=kGreater)")
 
     def _build_model(self, nodes, inputs, outputs):
         graph = oh.make_graph(nodes, "g", inputs, outputs)
@@ -46,6 +51,29 @@ class TestInPlaceReuse(ExtTestCase):
 
         # Node 0 reads the declared graph input X (must not be overwritten).
         self.assertEqual(reuse, [[], [(0, 0)], [(0, 0)]])
+        # The reused buffers are the same size as the outputs.
+        raw = si.compute_inplace_reuse(ctx, model.graph)
+        self.assertEqual(raw[1][0].kind, si.InPlaceReuseKind.kEqual)
+        self.assertEqual(raw[2][0].kind, si.InPlaceReuseKind.kEqual)
+
+    def test_larger_input_buffer_reported_as_greater(self):
+        # A is INT64 (8 bytes/elem); Y is INT32 (4 bytes/elem). A's buffer is
+        # strictly larger than Y, so Y may still reuse it in place.
+        nodes = [
+            oh.make_node("Cast", ["X"], ["A"], to=onnxl.TensorProto.INT64),
+            oh.make_node("Cast", ["A"], ["Y"], to=onnxl.TensorProto.INT32),
+        ]
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [4])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.INT32, [4])
+        model = self._build_model(nodes, [x], [y])
+
+        ctx = si.ShapesContext()
+        si.compute_shape_model(ctx, model)
+        raw = si.compute_inplace_reuse(ctx, model.graph)
+        reuse = self._reuse_pairs(raw)
+
+        self.assertEqual(reuse, [[], [(0, 0)]])
+        self.assertEqual(raw[1][0].kind, si.InPlaceReuseKind.kGreater)
 
     def test_value_read_twice_reused_only_at_last_use(self):
         nodes = [

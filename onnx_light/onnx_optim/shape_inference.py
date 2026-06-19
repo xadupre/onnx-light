@@ -28,6 +28,7 @@ compute_shape_node = _C.compute_shape_node
 kUnknownOpsetVersion = _C.kUnknownOpsetVersion
 kOnnxDomain = _C.kOnnxDomain
 InPlaceReuse = _C.InPlaceReuse
+InPlaceReuseKind = _C.InPlaceReuseKind
 OptimDim = _C.OptimDim
 OptimShape = _C.OptimShape
 OptimTensor = _C.OptimTensor

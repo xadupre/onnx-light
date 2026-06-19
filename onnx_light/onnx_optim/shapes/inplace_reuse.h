@@ -24,9 +24,11 @@
  *
  *   - both ``o`` and ``i`` carry a tensor descriptor in the populated
  *     :cpp:class:`ShapesContext` (shape inference succeeded for both);
- *   - their element types match and their shapes are identical
- *     dimension by dimension (so the two buffers have the same byte
- *     size);
+ *   - ``i``'s buffer is large enough to hold ``o``: either ``i`` and
+ *     ``o`` share the same element type and identical shape (an
+ *     :cpp:enumerator:`InPlaceReuseKind::kEqual` match), or ``i``'s
+ *     buffer is strictly larger in bytes than ``o``'s (an
+ *     :cpp:enumerator:`InPlaceReuseKind::kGreater` match);
  *   - ``i`` is a graph intermediate (produced by an earlier node, not a
  *     declared graph input, initializer or output) so its buffer is not
  *     shared with the caller;
@@ -37,9 +39,11 @@
  *     in-place write cannot clobber a second read of the same value.
  *
  * Each input is matched to at most one output and each output to at
- * most one input. The runtime is expected to combine these structural
- * guesses with the kernel-level ``CanRunInPlace()`` capability before
- * actually aliasing buffers.
+ * most one input. ``kEqual`` matches are always preferred over
+ * ``kGreater`` ones, since reusing a same-sized buffer wastes no space.
+ * The runtime is expected to combine these structural guesses with the
+ * kernel-level ``CanRunInPlace()`` capability before actually aliasing
+ * buffers.
  */
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -47,17 +51,38 @@ namespace onnx_optim {
 namespace shapes {
 
 /**
+ * Classifies how an input buffer compares in size with the output that
+ * reuses it:
+ *
+ *   - :cpp:enumerator:`kEqual`: the input and output have the same
+ *     element type and identical shape, so the buffers have the same
+ *     byte size. This is the preferred, space-optimal reuse.
+ *   - :cpp:enumerator:`kGreater`: the input buffer is strictly larger in
+ *     bytes than the output, so the output still fits but leaves part of
+ *     the buffer unused.
+ */
+enum class InPlaceReuseKind {
+  kEqual,
+  kGreater,
+};
+
+/**
  * A single in-place reuse opportunity for one node: the output at
  * position :cpp:var:`output_index` may reuse the buffer of the input at
  * position :cpp:var:`input_index` (both indices refer to the node's
- * ``output()`` / ``input()`` lists).
+ * ``output()`` / ``input()`` lists). :cpp:var:`kind` records whether the
+ * input buffer has the same size as the output
+ * (:cpp:enumerator:`InPlaceReuseKind::kEqual`) or is strictly larger
+ * (:cpp:enumerator:`InPlaceReuseKind::kGreater`).
  */
 struct InPlaceReuse {
   int64_t output_index = -1;
   int64_t input_index = -1;
+  InPlaceReuseKind kind = InPlaceReuseKind::kEqual;
 
   bool operator==(const InPlaceReuse &other) const noexcept {
-    return output_index == other.output_index && input_index == other.input_index;
+    return output_index == other.output_index && input_index == other.input_index &&
+           kind == other.kind;
   }
   bool operator!=(const InPlaceReuse &other) const noexcept { return !(*this == other); }
 };

@@ -42,10 +42,12 @@ The module is exposed as ``onnx_light.onnx_optim.expressions``.
 
 from __future__ import annotations
 
+from typing import TypeAlias
+
 from ..onnx_py._onnxpyoptim import expressions as _C  # type: ignore[attr-defined]
 
-CompareResult = _C.CompareResult
-ExpressionComparison = _C.ExpressionComparison
+CompareResult: TypeAlias = _C.CompareResult
+ExpressionComparison: TypeAlias = _C.ExpressionComparison
 
 
 def simplify_expression(expr: "str | int") -> "str | int":

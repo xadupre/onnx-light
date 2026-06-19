@@ -63,7 +63,7 @@ def _find_external_location(model_path: str) -> str:
 def save(
     proto: ModelProto,
     f: str | Path,
-    format: str = "protobuf",
+    format: str | None = None,
     *,
     save_as_external_data: bool = False,
     all_tensors_to_one_file: bool = True,
@@ -122,10 +122,12 @@ def save(
     """
     assert isinstance(proto, ModelProto), f"Unexpected type {type(proto)} for proto."
     assert isinstance(f, (str, Path)), f"Unexpected type {type(f)} for f."
-    assert format == "protobuf", f"Unsupported format={format!r}"
+    assert format is None or format == "protobuf", f"Unsupported format={format!r}"
     assert (
         all_tensors_to_one_file
     ), f"all_tensors_to_one_file={all_tensors_to_one_file} is not implemented"
+    if format is None:
+        format = "protobuf"
     if save_as_external_data or location:
         if location is None:
             location = str(f) + ".data"

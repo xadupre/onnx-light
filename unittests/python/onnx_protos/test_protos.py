@@ -47,12 +47,30 @@ class TestStringBinding(ExtTestCase):
         self.assertFalse(m.String("abc") == b"xyz")
         self.assertFalse(b"xyz" == m.String("abc"))
 
-    def test_string_eq_other_type(self):
-        """Tests String == unsupported type returns False instead of raising."""
-        self.assertFalse(m.String("abc") == 12)
-        self.assertFalse(12 == m.String("abc"))
-        self.assertTrue(m.String("abc") != 12)
-        self.assertTrue(12 != m.String("abc"))
+    def test_string_eq_none(self):
+        """Tests String == None returns False."""
+        self.assertFalse(m.String("abc") == None)  # noqa: E711
+        self.assertFalse(None == m.String("abc"))  # noqa: E711
+        self.assertTrue(m.String("abc") != None)  # noqa: E711
+        self.assertTrue(None != m.String("abc"))  # noqa: E711
+
+    def test_string_eq_int(self):
+        """Tests String == int returns False."""
+        self.assertFalse(m.String("abc") == 3)
+        self.assertFalse(3 == m.String("abc"))
+        self.assertTrue(m.String("abc") != 3)
+        self.assertTrue(3 != m.String("abc"))
+
+    def test_string_eq_other(self):
+        """Tests String compared to unrelated objects returns False."""
+        self.assertFalse(m.String("abc") == 1.5)
+        self.assertFalse(1.5 == m.String("abc"))
+        self.assertFalse(m.String("abc") == [1, 2])
+        self.assertFalse([1, 2] == m.String("abc"))
+        self.assertTrue(m.String("abc") != 1.5)
+        self.assertTrue(1.5 != m.String("abc"))
+        self.assertTrue(m.String("abc") != [1, 2])
+        self.assertTrue([1, 2] != m.String("abc"))
 
     def test_string_ne_str(self):
         """Tests String != str."""

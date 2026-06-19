@@ -113,7 +113,7 @@ void AddOnnxPyExpressions(nb::module_ &m) {
           }
           std::string diff = std::holds_alternative<int64_t>(c.difference)
                                  ? std::to_string(std::get<int64_t>(c.difference))
-                                 : std::get<std::string>(c.difference);
+                                 : "'" + std::get<std::string>(c.difference) + "'";
           return std::string("ExpressionComparison(result=CompareResult.") + name +
                  ", difference=" + diff + ")";
         });

@@ -17,16 +17,15 @@ namespace traditionalml {
 namespace {
 
 OptimDim BatchDimFromInput(const OptimTensor &input) {
-  if (input.Shape().Empty()) {
-    throw std::invalid_argument("ComputeShapeSVMRegressor: input rank must be 1 or 2 when known.");
-  }
+  EXT_ENFORCE_INVALID(!(input.Shape().Empty()),
+                      "ComputeShapeSVMRegressor: input rank must be 1 or 2 when known.");
   if (input.Shape().Rank() == 1) {
     return OptimDim(1);
   }
   if (input.Shape().Rank() == 2) {
     return input.Shape()[0];
   }
-  throw std::invalid_argument("ComputeShapeSVMRegressor: input rank must be 1 or 2 when known.");
+  EXT_THROW_INVALID("ComputeShapeSVMRegressor: input rank must be 1 or 2 when known.");
 }
 
 } // namespace

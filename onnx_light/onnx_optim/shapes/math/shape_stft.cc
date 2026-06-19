@@ -46,10 +46,8 @@ bool ReadScalarInt(const OptimTensor &t, int64_t &out) {
 
 void ComputeShapeSTFT(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "STFT", "ComputeShapeSTFT");
-  if (node.input_size() < 2) {
-    throw std::invalid_argument(
-        "ComputeShapeSTFT: STFT requires at least two inputs (signal, frame_step).");
-  }
+  EXT_ENFORCE_INVALID(!(node.input_size() < 2),
+                      "ComputeShapeSTFT: STFT requires at least two inputs (signal, frame_step).");
 
   const OptimTensor &signal = ctx.Get(node.input(0).as_string());
   const TensorType dtype = signal.Dtype();

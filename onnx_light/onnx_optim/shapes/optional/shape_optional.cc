@@ -73,10 +73,8 @@ void ComputeShapeOptional(ShapesContext &ctx, const NodeProto &node) {
     // not model optional types, so the wrapping itself is elided and the
     // output is described by the same dtype/shape as the input.
     const std::string input_name = node.input(0).as_string();
-    if (input_name.empty()) {
-      throw std::invalid_argument(
-          "ComputeShapeOptional: input name of op 'Optional' must not be empty.");
-    }
+    EXT_ENFORCE_INVALID(!(input_name.empty()),
+                        "ComputeShapeOptional: input name of op 'Optional' must not be empty.");
     const OptimTensor &in = ctx.Get(input_name);
     ctx.Set(node.output(0), OptimTensor(nullptr, in.Dtype(), OptimShape(in.Shape().Dims())));
     return;

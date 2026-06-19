@@ -16,14 +16,10 @@ namespace tensor {
 
 void ComputeShapeTrilu(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Trilu", "ComputeShapeTrilu");
-  if (node.input_size() < 1) {
-    throw std::invalid_argument("ComputeShapeTrilu: Trilu requires one input.");
-  }
+  EXT_ENFORCE_INVALID(!(node.input_size() < 1), "ComputeShapeTrilu: Trilu requires one input.");
 
   const OptimTensor &input = ctx.Get(node.input(0).as_string());
-  if (input.Shape().Rank() < 2) {
-    throw std::invalid_argument("ComputeShapeTrilu: input rank must be >= 2.");
-  }
+  EXT_ENFORCE_INVALID(!(input.Shape().Rank() < 2), "ComputeShapeTrilu: input rank must be >= 2.");
 
   ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), input.Shape()));
 }

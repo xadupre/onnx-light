@@ -119,10 +119,8 @@ void ComputeShapeConstant(ShapesContext &ctx, const NodeProto &node) {
   OptimTensor output;
 
   if (value != nullptr) {
-    if (!value->has_t()) {
-      throw std::invalid_argument(
-          "ComputeShapeConstant: attribute 'value' must carry a tensor value.");
-    }
+    EXT_ENFORCE_INVALID(value->has_t(),
+                        "ComputeShapeConstant: attribute 'value' must carry a tensor value.");
     const TensorProto &tensor_proto = value->t();
     const TensorType dtype = DataTypeToTensorType(tensor_proto.data_type());
     OptimShape shape = ShapeFromTensorProtoDims(tensor_proto);

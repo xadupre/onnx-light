@@ -38,9 +38,7 @@ std::optional<std::vector<int64_t>> TryReadIntVector(const OptimTensor &t) {
 }
 
 void ProcessSliceInputs(const int64_t dim, int64_t &start, int64_t &end, int64_t step) {
-  if (step == 0) {
-    throw std::invalid_argument("ComputeShapeSlice: 'steps' entries cannot be 0.");
-  }
+  EXT_ENFORCE_INVALID(step != 0, "ComputeShapeSlice: 'steps' entries cannot be 0.");
   if (dim == 0) {
     start = 0;
     end = 0;
@@ -78,10 +76,9 @@ int64_t SliceLength(int64_t start, int64_t end, int64_t step) {
 
 void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Slice", "ComputeShapeSlice");
-  if (node.input_size() < 3) {
-    throw std::invalid_argument(
-        "ComputeShapeSlice: Slice requires at least three inputs (data, starts, ends).");
-  }
+  EXT_ENFORCE_INVALID(
+      !(node.input_size() < 3),
+      "ComputeShapeSlice: Slice requires at least three inputs (data, starts, ends).");
 
   const OptimTensor &data = ctx.Get(node.input(0).as_string());
   const OptimTensor &starts_t = ctx.Get(node.input(1).as_string());
@@ -102,9 +99,8 @@ void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node) {
   }
   const std::vector<int64_t> &starts = *starts_opt;
   const std::vector<int64_t> &ends = *ends_opt;
-  if (starts.size() != ends.size()) {
-    throw std::invalid_argument("ComputeShapeSlice: starts and ends lengths must match.");
-  }
+  EXT_ENFORCE_INVALID(starts.size() == ends.size(),
+                      "ComputeShapeSlice: starts and ends lengths must match.");
 
   std::vector<int64_t> axes;
   if (node.input_size() >= 4 && !node.input(3).empty()) {
@@ -121,9 +117,8 @@ void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node) {
       axes[i] = static_cast<int64_t>(i);
     }
   }
-  if (axes.size() != starts.size()) {
-    throw std::invalid_argument("ComputeShapeSlice: axes length must match starts length.");
-  }
+  EXT_ENFORCE_INVALID(axes.size() == starts.size(),
+                      "ComputeShapeSlice: axes length must match starts length.");
 
   std::vector<int64_t> steps;
   if (node.input_size() >= 5 && !node.input(4).empty()) {
@@ -137,18 +132,15 @@ void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node) {
   } else {
     steps.assign(starts.size(), static_cast<int64_t>(1));
   }
-  if (steps.size() != starts.size()) {
-    throw std::invalid_argument("ComputeShapeSlice: steps length must match starts length.");
-  }
+  EXT_ENFORCE_INVALID(steps.size() == starts.size(),
+                      "ComputeShapeSlice: steps length must match starts length.");
 
   for (size_t i = 0; i < starts.size(); ++i) {
     int64_t axis = axes[i];
     if (axis < 0) {
       axis += rank;
     }
-    if (axis < 0 || axis >= rank) {
-      throw std::invalid_argument("ComputeShapeSlice: axis out of range.");
-    }
+    EXT_ENFORCE_INVALID(!(axis < 0 || axis >= rank), "ComputeShapeSlice: axis out of range.");
     if (!data_shape[static_cast<size_t>(axis)].IsInt()) {
       out_shape[static_cast<size_t>(axis)] = OptimDim("Slice_dim" + std::to_string(axis));
       continue;

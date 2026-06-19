@@ -72,6 +72,17 @@ class TestDefsLookup(ExtTestCase):
         with self.assertRaises(defs.SchemaError):
             defs.get_schema("DefinitelyUnknownOperator123")
 
+    def test_attribute_default_value(self):
+        # The ``default_value`` property mirrors onnx's ``OpSchema.Attribute``
+        # public API and returns an ``AttributeProto``.
+        from onnx_light.onnx import AttributeProto
+
+        schema = defs.get_schema("Pad", 13)
+        mode = schema.attributes["mode"]
+        self.assertTrue(hasattr(mode, "default_value"))
+        self.assertEqual(mode.default_value.type, AttributeProto.STRING)
+        self.assertEqual(mode.default_value.s, b"constant")
+
     def test_onnx_opset_version(self):
         self.assertEqual(
             defs.onnx_opset_version(), defs.schema_version_map()[defs.ONNX_DOMAIN][1]

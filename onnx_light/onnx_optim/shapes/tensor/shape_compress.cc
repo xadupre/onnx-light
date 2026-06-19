@@ -24,10 +24,8 @@ namespace tensor {
 void ComputeShapeCompress(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Compress", "ComputeShapeCompress");
 
-  if (node.input_size() < 2) {
-    throw std::invalid_argument(
-        "ComputeShapeCompress: Compress requires two inputs (input, condition).");
-  }
+  EXT_ENFORCE_INVALID(!(node.input_size() < 2),
+                      "ComputeShapeCompress: Compress requires two inputs (input, condition).");
 
   const OptimTensor &input = ctx.Get(node.input(0).as_string());
   const TensorType dtype = input.Dtype();
@@ -63,10 +61,8 @@ void ComputeShapeCompress(ShapesContext &ctx, const NodeProto &node) {
     if (axis < 0) {
       axis += rank;
     }
-    if (axis < 0 || axis >= rank) {
-      throw std::invalid_argument("ComputeShapeCompress: axis=" + std::to_string(axis) +
-                                  " out of range for input rank " + std::to_string(rank) + ".");
-    }
+    EXT_ENFORCE_INVALID(!(axis < 0 || axis >= rank), "ComputeShapeCompress: axis=", axis,
+                        " out of range for input rank ", rank, ".");
   }
 
   OptimShape out_shape;

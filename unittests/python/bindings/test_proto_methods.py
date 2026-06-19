@@ -259,6 +259,25 @@ class TestProtoMethods(ExtTestCase):
         model.opset_import.add(domain="", version=18)
         self.assertIsInstance(model.opset_import, collections.abc.Sequence)
 
+    def test_repeated_field_eq_list_str(self):
+        node = oh.make_node("MatMul", ["a", "b"], ["c"])
+        # RepeatedField of strings compared to a list of str.
+        self.assertTrue(node.input == ["a", "b"])
+        self.assertFalse(node.input != ["a", "b"])
+        self.assertFalse(node.input == ["a"])
+        self.assertFalse(node.input == ["a", "x"])
+        # str elements also compare equal to their bytes counterparts.
+        self.assertTrue(node.input == [b"a", b"b"])
+
+    def test_repeated_field_eq_list_numbers(self):
+        ints = oh.make_attribute("ints", [1, 2, 3]).ints
+        self.assertTrue(ints == [1, 2, 3])
+        self.assertFalse(ints == [1, 2])
+        self.assertFalse(ints == [1, 2, 4])
+        floats = oh.make_attribute("floats", [1.0, 2.0]).floats
+        self.assertTrue(floats == [1.0, 2.0])
+        self.assertFalse(floats == [1.0, 3.0])
+
     def test_init_kwargs_tensor_proto(self):
         # The use case from the issue: build a TensorProto from another
         # tensor's repeated ``dims`` field, its ``data_type`` and raw bytes.

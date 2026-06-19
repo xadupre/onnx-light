@@ -1,6 +1,5 @@
 import unittest
 import numpy as np
-from onnxruntime.capi._pybind_state import get_all_operator_schema
 from onnx_light.ext_test_case import import_or_skip, InferenceSessionAllTypes
 
 # The backend test registries are only available in the full build; skip this
@@ -42,6 +41,8 @@ def ort_max_supported_opset() -> int:
     Returns:
         The highest default-domain opset version ONNX Runtime supports.
     """
+    from onnxruntime.capi._pybind_state import get_all_operator_schema
+
     return max(
         schema.since_version for schema in get_all_operator_schema() if schema.domain == ""
     )

@@ -1,4 +1,4 @@
-name: VAL ir-py - mbext
+name: INT ir-py - mbext
 
 # Manually-triggered integration job: validates that onnx-light can be used as a
 # drop-in replacement for onnx (via the USE_ONNX_LIGHT=1 compatibility shim) when

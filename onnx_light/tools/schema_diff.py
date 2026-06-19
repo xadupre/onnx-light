@@ -131,7 +131,7 @@ def _attr_default_value_repr(attr: Any) -> str:
     """Returns a canonical string representation of an ``Attribute`` default value.
 
     Supports both full ``OpSchema.Attribute`` objects (which expose a proto
-    ``_default_value``) and the lightweight ``AttributeParam`` adapter used by
+    ``default_value``) and the lightweight ``AttributeParam`` adapter used by
     ``onnx_op.LightOpSchema`` (which exposes a pre-formatted
     ``default_value_repr`` string).
 
@@ -142,9 +142,9 @@ def _attr_default_value_repr(attr: Any) -> str:
     """
     if hasattr(attr, "default_value_repr"):
         return attr.default_value_repr or "UNDEFINED"
-    if not hasattr(attr, "_default_value"):
+    if not hasattr(attr, "default_value"):
         return "UNDEFINED"
-    dv = attr._default_value
+    dv = attr.default_value
     at = dv.type
     # Import here to avoid a circular dependency at module load time.
     from ..onnx_py._onnxpyprotoop import AttributeProto  # type: ignore[attr-defined]

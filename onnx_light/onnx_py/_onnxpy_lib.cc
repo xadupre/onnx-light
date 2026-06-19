@@ -195,7 +195,7 @@ void AddOnnxPyLib(nb::module_ &m) {
       .def_ro("description", &OpSchema::Attribute::description)
       .def_ro("type", &OpSchema::Attribute::type)
       .def_prop_ro(
-          "_default_value",
+          "default_value",
           [](const OpSchema::Attribute *attr) -> AttributeProto { return attr->default_value; })
       .def_ro("required", &OpSchema::Attribute::required);
 

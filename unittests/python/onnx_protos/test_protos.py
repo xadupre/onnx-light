@@ -103,6 +103,32 @@ class TestStringBinding(ExtTestCase):
         self.assertFalse(m.String("abc") > m.String("xyz"))
         self.assertFalse(m.String("abc") > m.String("abc"))
 
+    def test_string_decode_default(self):
+        """Tests String.decode mimics bytes.decode with default utf-8."""
+        value = m.String("hello").decode()
+        self.assertEqual(value, "hello")
+        self.assertIsInstance(value, str)
+
+    def test_string_decode_encoding(self):
+        """Tests String.decode accepts an explicit encoding argument."""
+        self.assertEqual(m.String("hello").decode("utf-8"), "hello")
+        self.assertEqual(m.String("").decode("utf-8"), "")
+
+    def test_string_decode_errors(self):
+        """Tests String.decode forwards the errors argument."""
+        # "é" is stored as its UTF-8 encoding (0xC3 0xA9), invalid as ASCII.
+        self.assertEqual(m.String("é").decode("ascii", "ignore"), "")
+        with self.assertRaises(UnicodeDecodeError):
+            m.String("é").decode("ascii")
+
+    def test_string_decode_attribute_strings(self):
+        """Tests decoding STRINGS attribute values returned as String objects."""
+        from onnx_light.onnx_proto._helper import get_attribute_value
+
+        attr = oh.make_attribute("x", ["hello", "world"])
+        values = get_attribute_value(attr)
+        self.assertEqual([v.decode("utf-8") for v in values], ["hello", "world"])
+
 
 class TestIterator(ExtTestCase):
     def test_node_iterator(self):

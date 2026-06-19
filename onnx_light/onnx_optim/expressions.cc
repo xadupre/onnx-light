@@ -1386,15 +1386,22 @@ SimplifyResult simplify_expression(const std::string &expr) {
   return make_simplified(res);
 }
 
-std::map<std::string, int64_t> simplify_two_expressions(const std::string &expr1,
-                                                        const std::string &expr2) {
-  // Build expr1 - (expr2) and run the add-visitor directly (no pipeline
-  // transformations — matches the Python implementation).
+// Builds `expr1 - (expr2)` and runs the add-visitor directly (no pipeline
+// transformations — matches the Python implementation), returning the full
+// linear combination (variable coefficients and constant term).
+static AddVisitorResult difference_linear_combination(const std::string &expr1,
+                                                      const std::string &expr2) {
   std::string combined = expr1 + "-(" + expr2 + ")";
   NodePtr tree = parse(combined);
 
   AddVisitorResult res;
   run_add_visitor(*tree, res);
+  return res;
+}
+
+std::map<std::string, int64_t> simplify_two_expressions(const std::string &expr1,
+                                                        const std::string &expr2) {
+  AddVisitorResult res = difference_linear_combination(expr1, expr2);
 
   std::map<std::string, int64_t> out;
   for (const auto &[k, v] : res.coeffs)
@@ -1404,13 +1411,10 @@ std::map<std::string, int64_t> simplify_two_expressions(const std::string &expr1
 }
 
 ExpressionComparison compare_expressions(const std::string &expr1, const std::string &expr2) {
-  // Build expr1 - (expr2) and collect its linear combination (no pipeline
-  // transformations, matching simplify_two_expressions).
-  std::string combined = expr1 + "-(" + expr2 + ")";
-  NodePtr tree = parse(combined);
-
-  AddVisitorResult res;
-  run_add_visitor(*tree, res);
+  // Collect the linear combination of expr1 - (expr2). simplify_two_expressions
+  // discards the constant term, which is exactly what decides Greater/Smaller/
+  // Equal here, so reuse the shared helper that keeps it.
+  AddVisitorResult res = difference_linear_combination(expr1, expr2);
 
   // Inspect the non-zero token coefficients of expr1 - expr2. Every token is
   // assumed to be positive or null, so the minimum of the difference over all

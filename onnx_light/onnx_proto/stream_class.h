@@ -194,7 +194,7 @@ public:                                                                         
     return *name##_;                                                                               \
   }                                                                                                \
   inline const type &ref_##name() const {                                                          \
-    EXT_ENFORCE(name##_.has_value(), "Optional field '", #name, "' has no value.");                \
+    EXT_ENFORCE(name##_.has_value(), "Optional field '", #name, "' has no value in " #type ".");   \
     return *name##_;                                                                               \
   }                                                                                                \
   /** Compatibility accessor - equivalent to ref_##name(). */                                      \
@@ -207,7 +207,7 @@ public:                                                                         
   }                                                                                                \
   inline utils::OptionalField<type> &name##_optional() { return name##_; }                         \
   inline const utils::OptionalField<type> &name##_optional() const {                               \
-    EXT_ENFORCE(name##_.has_value(), "Optional field '", #name, "' has no value.");                \
+    EXT_ENFORCE(name##_.has_value(), "Optional field '", #name, "' has no value in " #type ".");   \
     return name##_;                                                                                \
   }                                                                                                \
   inline type *add_##name() {                                                                      \
@@ -241,7 +241,8 @@ public:                                                                         
     return *name##_;                                                                               \
   }                                                                                                \
   inline const type &ref_##name() const {                                                          \
-    EXT_ENFORCE(name##_.has_value(), "Optional enum field '", #name, "' has no value.");           \
+    EXT_ENFORCE(name##_.has_value(), "Optional enum field '", #name,                               \
+                "' has no value in " #type ".");                                                   \
     return *name##_;                                                                               \
   }                                                                                                \
   /** Compatibility accessor - equivalent to ref_##name(). */                                      \
@@ -253,7 +254,7 @@ public:                                                                         
   }                                                                                                \
   inline utils::OptionalEnumField<type> &name##_optional() { return name##_; }                     \
   inline const utils::OptionalEnumField<type> &name##_optional() const {                           \
-    EXT_ENFORCE(name##_.has_value(), "Optional field '", #name, "' has no value.");                \
+    EXT_ENFORCE(name##_.has_value(), "Optional field '", #name, "' has no value in " #type ".");   \
     return name##_;                                                                                \
   }                                                                                                \
   inline type *add_##name() {                                                                      \

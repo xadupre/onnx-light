@@ -25,7 +25,7 @@ void ComputeShapeSequenceEmpty(ShapesContext &ctx, const NodeProto &node) {
   const AttributeProto *attr = FindAttribute(node, "dtype");
   TensorProto::DataType dtype = TensorProto::FLOAT;
   if (attr != nullptr) {
-    EXT_ENFORCE_INVALID(attr->ref_type() == AttributeProto::AttributeType::INT,
+    EXT_ENFORCE_INVALID(attr->has_type() && attr->ref_type() == AttributeProto::AttributeType::INT,
                         "ComputeShapeSequenceEmpty: attribute 'dtype' must be of type INT.");
     dtype = static_cast<TensorProto::DataType>(attr->ref_i());
   }

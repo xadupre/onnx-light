@@ -102,6 +102,24 @@ bool HasBorrowedRawData(const ModelProto &model) {
   return false;
 }
 
+// Applies a single ``field=value`` keyword argument to a proto instance,
+// mirroring the behavior of ``google.protobuf.Message(**kwargs)``.
+// Repeated fields are populated from the provided iterable (python list/tuple
+// or another ``RepeatedField``): the field is reset with ``clear()`` and then
+// filled with ``extend()``. Every other field (scalar, string, bytes, enum or
+// message) is assigned through its regular attribute setter.
+void SetProtoFieldFromKwarg(nb::handle py, const std::string &key, nb::handle value) {
+  const bool repeated_like = nb::hasattr(value, "__iter__") && !nb::isinstance<nb::str>(value) &&
+                             !nb::isinstance<nb::bytes>(value) && !nb::isinstance<Message>(value);
+  if (repeated_like) {
+    nb::object attr = nb::getattr(py, key.c_str());
+    attr.attr("clear")();
+    attr.attr("extend")(value);
+  } else {
+    nb::setattr(py, key.c_str(), value);
+  }
+}
+
 } // namespace
 
 #define PYDEFINE_PROTO(m, cls)                                                                     \
@@ -266,8 +284,26 @@ bool HasBorrowedRawData(const ModelProto &model) {
                                                                   "RepeatedProtoField" #cls #T);
 
 template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> &name_inst) {
-  name_inst.def(
-               "Clear", [](cls &self) { self.CopyFrom(cls()); }, "Clears the object.")
+  name_inst
+      .def(
+          "__init__",
+          [](cls *self, nb::kwargs kwargs) {
+            new (self) cls();
+            if (kwargs.size() == 0)
+              return;
+            // The wrapping python object exists but is not yet flagged as
+            // ready during ``__init__``; mark it so the regular attribute
+            // getters/setters used below can extract the C++ instance.
+            nb::object py = nb::find(*self);
+            nb::inst_mark_ready(py);
+            for (auto item : kwargs) {
+              SetProtoFieldFromKwarg(py, nb::cast<std::string>(item.first), item.second);
+            }
+          },
+          "Creates an instance. Keyword arguments are set as fields, following the "
+          "protobuf API, e.g. ``TensorProto(dims=[2, 2], data_type=TensorProto.FLOAT)``.")
+      .def(
+          "Clear", [](cls &self) { self.CopyFrom(cls()); }, "Clears the object.")
       .def(
           "ParseFromString",
           [](cls &self, nb::bytes data, nb::object options) {

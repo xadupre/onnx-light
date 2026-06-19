@@ -104,10 +104,10 @@ bool HasBorrowedRawData(const ModelProto &model) {
 
 // Applies a single ``field=value`` keyword argument to a proto instance,
 // mirroring the behavior of ``google.protobuf.Message(**kwargs)``.
-// Repeated fields are filled from the provided iterable (python list/tuple or a
-// ``RepeatedField``), so the values are appended through ``clear``/``extend``;
-// every other field (scalar, string, bytes, enum or message) is assigned
-// through its regular attribute setter.
+// Repeated fields are populated from the provided iterable (python list/tuple
+// or another ``RepeatedField``): the field is reset with ``clear()`` and then
+// filled with ``extend()``. Every other field (scalar, string, bytes, enum or
+// message) is assigned through its regular attribute setter.
 void SetProtoFieldFromKwarg(nb::handle py, const std::string &key, nb::handle value) {
   const bool repeated_like = nb::hasattr(value, "__iter__") && !nb::isinstance<nb::str>(value) &&
                              !nb::isinstance<nb::bytes>(value) && !nb::isinstance<Message>(value);

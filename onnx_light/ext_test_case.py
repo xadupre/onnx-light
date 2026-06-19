@@ -31,7 +31,7 @@ def has_onnxruntime() -> bool:
 def has_ir_py() -> bool:
     "Tells if ir-py is installed."
     try:
-        import onnx_ir
+        import onnx_ir  # type: ignore
 
         return hasattr(onnx_ir, "__version__")
     except ImportError:

@@ -1626,6 +1626,16 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
             memcpy(self.raw_data_.data(), ptr, raw.size());
           },
           TensorProto::DOC_raw_data)
+      .def_prop_ro(
+          "size",
+          [](const TensorProto &self) -> int64_t {
+            int64_t size = 1;
+            for(auto& it: self.ref_dims()) {
+              size *= static_cast<int64_t>(it);
+            }
+            return size;
+          },
+          "Returns the number of elements in the tensor.")
       .def(
           "load_external_data",
           [](TensorProto &self, const std::string &base_dir) { self.LoadExternalData(base_dir); },

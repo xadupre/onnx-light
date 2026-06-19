@@ -40,10 +40,10 @@ def set_external_data(
     The tensor must currently carry inline ``raw_data``; the bytes are left
     untouched so they can be written out by a subsequent ``save`` call.
     """
-    if not tensor.HasField("raw_data"):
+    if not tensor.HasField("raw_data") and tensor.size > 0:
         raise ValueError(
             f"Tensor {tensor.name!r} does not have raw_data. "
-            "Cannot set external data for this tensor."
+            f"Cannot set external data for this tensor {tensor}"
         )
     tensor.external_data.clear()
     tensor.data_location = TensorProto.EXTERNAL

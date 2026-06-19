@@ -17,6 +17,7 @@ Concrete functions are organized per operator domain.
     shape_check
     shape_inference
     dispatch_table
+    inplace_reuse
     controlflow/index
     generator/index
     logical/index

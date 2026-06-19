@@ -55,7 +55,7 @@ inline TreeNodeMode ParseTreeNodeMode(const std::string &mode) {
     return TreeNodeMode::kBranchNeq;
   if (mode == "LEAF")
     return TreeNodeMode::kLeaf;
-  throw std::invalid_argument("Unsupported tree node mode: " + mode);
+  EXT_THROW_INVALID("Unsupported tree node mode: ", mode);
 }
 
 /// Applies a comparison at an interior node.
@@ -75,9 +75,9 @@ inline bool ApplyTreeNodeMode(TreeNodeMode mode, double feature_value, double th
   case TreeNodeMode::kBranchNeq:
     return feature_value != threshold;
   case TreeNodeMode::kLeaf:
-    throw std::invalid_argument("ApplyTreeNodeMode: LEAF nodes should not be compared.");
+    EXT_THROW_INVALID("ApplyTreeNodeMode: LEAF nodes should not be compared.");
   }
-  throw std::invalid_argument("ApplyTreeNodeMode: unknown mode.");
+  EXT_THROW_INVALID("ApplyTreeNodeMode: unknown mode.");
 }
 
 inline bool ApplyTreeNodeModeV5(TreeNodeModeV5 mode, double feature_value, double threshold) {
@@ -95,10 +95,10 @@ inline bool ApplyTreeNodeModeV5(TreeNodeModeV5 mode, double feature_value, doubl
   case TreeNodeModeV5::kBranchNeq:
     return feature_value != threshold;
   case TreeNodeModeV5::kBranchMember:
-    throw std::invalid_argument("ApplyTreeNodeModeV5: BRANCH_MEMBER must be evaluated via "
-                                "membership_values, not via ApplyTreeNodeModeV5.");
+    EXT_THROW_INVALID("ApplyTreeNodeModeV5: BRANCH_MEMBER must be evaluated via "
+                      "membership_values, not via ApplyTreeNodeModeV5.");
   }
-  throw std::invalid_argument("ApplyTreeNodeModeV5: unknown mode.");
+  EXT_THROW_INVALID("ApplyTreeNodeModeV5: unknown mode.");
 }
 
 /// Applies the aggregate function to accumulate leaf weights into per-target
@@ -129,7 +129,7 @@ inline void AggregateTreeLeafWeight(std::vector<float> &accum, int64_t target_id
     }
     counts[static_cast<size_t>(target_id)]++;
   } else {
-    throw std::invalid_argument("AggregateTreeLeafWeight: unsupported aggregate_function: " + agg);
+    EXT_THROW_INVALID("AggregateTreeLeafWeight: unsupported aggregate_function: ", agg);
   }
 }
 
@@ -185,7 +185,7 @@ inline void ApplyPostTransform(std::vector<float> &scores, const std::string &po
     }
     return;
   }
-  throw std::invalid_argument("ApplyPostTransform: unsupported post_transform: " + post_transform);
+  EXT_THROW_INVALID("ApplyPostTransform: unsupported post_transform: ", post_transform);
 }
 
 /// Classic tree node record used by TreeEnsembleRegressor and

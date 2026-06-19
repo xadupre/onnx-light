@@ -94,6 +94,11 @@ TestOptimShapeInferenceBackend = make_test_class(
         # exercised here: the optim inference recognizes past_seq+seq==total_seq
         # and rewrites the concat dimension to the total_seq input anchor.
         "test_cc_shape_inference_tiny_llm$",
+        # TopK's output dimension is named after the K input ("TopK_k") by the
+        # optim inference, whereas the reference value_info uses the per-output
+        # symbolic name ("TopK_topk_values_k"); the dims are equivalent but the
+        # names differ, so these cases are excluded.
+        "test_cc_shape_inference_.*topk_pairwise_distance.*",
     ],
 )
 

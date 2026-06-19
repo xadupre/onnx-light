@@ -38,7 +38,7 @@ size_t ElementSize(int32_t dtype) {
   case DataType::UINT64:
     return 8;
   default:
-    throw std::invalid_argument("Tensor::ElementSize: unsupported data_type.");
+    EXT_THROW_INVALID("Tensor::ElementSize: unsupported data_type.");
   }
 }
 
@@ -347,7 +347,7 @@ Tensor TensorFromProto(const TensorProto &tp) {
     break;
   }
   default:
-    throw std::invalid_argument("TensorFromProto: unsupported data_type " + std::to_string(dtype));
+    EXT_THROW_INVALID("TensorFromProto: unsupported data_type ", dtype);
   }
 
   return Tensor(name, dtype, std::move(shape), std::move(bytes));

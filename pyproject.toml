@@ -78,6 +78,18 @@ build-dir = "build/{wheel_tag}"
 # twice as large). ONNX_LIGHT_INSTALL stays ON by default for plain CMake builds.
 cmake.define.ONNX_LIGHT_INSTALL = "OFF"
 
+# Tag the reduced wheel (built with ONNX_LIGHT_BUILD_KERNELS=OFF, i.e. without
+# the operator-kernel runtime and the backend-test registries) so its file name
+# differs from the full wheel. Setting ONNX_LIGHT_REDUCED=1 adds the "0reduced"
+# build tag, producing e.g. onnx_light-0.1.1-0reduced-cp312-...whl instead of an
+# identically named onnx_light-0.1.1-cp312-...whl. A wheel build tag must start
+# with a digit (PEP 427), so it is "0reduced" rather than "reduced". The build
+# tag is independent of the package version, so the wheel stays installable and
+# the .dist-info directory name is unchanged.
+[[tool.scikit-build.overrides]]
+if.env.ONNX_LIGHT_REDUCED = "1"
+wheel.build-tag = "0reduced"
+
 [tool.pytest.ini_options]
 testpaths = ["unittests"]
 

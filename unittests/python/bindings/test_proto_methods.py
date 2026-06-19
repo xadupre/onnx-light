@@ -248,6 +248,17 @@ class TestProtoMethods(ExtTestCase):
         self.assertEqual(opset.version, 0)
         self.assertEqual(len(model.opset_import), 1)
 
+    def test_repeated_field_is_sequence(self):
+        import collections.abc
+
+        node = oh.make_node("MatMul", ["a", "b"], ["c"])
+        # RepeatedField of strings.
+        self.assertIsInstance(node.input, collections.abc.Sequence)
+        # RepeatedProtoField of messages.
+        model = ModelProto()
+        model.opset_import.add(domain="", version=18)
+        self.assertIsInstance(model.opset_import, collections.abc.Sequence)
+
 
 if __name__ == "__main__":
     unittest.main()

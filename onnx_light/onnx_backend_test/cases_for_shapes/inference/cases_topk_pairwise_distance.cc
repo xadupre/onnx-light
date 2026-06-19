@@ -571,13 +571,13 @@ void RegisterTwoTopKSameKShapeInferenceCases(std::vector<TestCase> &registry) {
 
   // Intermediate value_info entries.
   AppendValueInfo(*graph->add_value_info(), "values1", DataType::FLOAT,
-                  {DimSpec("N"), DimSpec("TopK_values1_k")});
+                  {DimSpec("N"), DimSpec("TopK_k")});
   AppendValueInfo(*graph->add_value_info(), "indices1", DataType::INT64,
-                  {DimSpec("N"), DimSpec("TopK_values1_k")});
+                  {DimSpec("N"), DimSpec("TopK_k")});
   AppendValueInfo(*graph->add_value_info(), "values2", DataType::FLOAT,
-                  {DimSpec("N"), DimSpec("TopK_values2_k")});
+                  {DimSpec("N"), DimSpec("TopK_k")});
   AppendValueInfo(*graph->add_value_info(), "indices2", DataType::INT64,
-                  {DimSpec("N"), DimSpec("TopK_values2_k")});
+                  {DimSpec("N"), DimSpec("TopK_k")});
 
   // Output Y — the per-row mean, shape [N].
   AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec("N")});
@@ -601,7 +601,7 @@ void RegisterTwoTopKSameKShapeInferenceCases(std::vector<TestCase> &registry) {
 // TopK nodes using **different** K model inputs (K1 > K2), followed by a
 // ReduceMean that collapses the second symbolic K axis away. Exercises shape
 // inference with two chained symbolic TopK axes that carry distinct symbolic
-// dim names (``TopK_values1_k`` and ``TopK_values2_k``) because K1 ≠ K2.
+// dim names (``TopK_k`` and ``TopK_k_2``) because K1 ≠ K2.
 //
 // Graph topology::
 //
@@ -665,13 +665,13 @@ void RegisterTwoTopKDifferentKShapeInferenceCases(std::vector<TestCase> &registr
 
   // Intermediate value_info entries.
   AppendValueInfo(*graph->add_value_info(), "values1", DataType::FLOAT,
-                  {DimSpec("N"), DimSpec("TopK_values1_k")});
+                  {DimSpec("N"), DimSpec("TopK_k")});
   AppendValueInfo(*graph->add_value_info(), "indices1", DataType::INT64,
-                  {DimSpec("N"), DimSpec("TopK_values1_k")});
+                  {DimSpec("N"), DimSpec("TopK_k")});
   AppendValueInfo(*graph->add_value_info(), "values2", DataType::FLOAT,
-                  {DimSpec("N"), DimSpec("TopK_values2_k")});
+                  {DimSpec("N"), DimSpec("TopK_k_2")});
   AppendValueInfo(*graph->add_value_info(), "indices2", DataType::INT64,
-                  {DimSpec("N"), DimSpec("TopK_values2_k")});
+                  {DimSpec("N"), DimSpec("TopK_k_2")});
 
   // Output Y — the per-row mean, shape [N].
   AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec("N")});

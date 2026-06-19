@@ -61,5 +61,3 @@ from ..onnx_proto._io_helper import (  # noqa: F401
 # Aliases matching the upstream onnx API.
 load_model = load
 save_model = save
-
-from . import parser  # noqa: F401, E402

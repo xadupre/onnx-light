@@ -285,6 +285,50 @@ class TestProtoMethods(ExtTestCase):
         model.opset_import.add(domain="", version=18)
         self.assertIsInstance(model.opset_import, collections.abc.Sequence)
 
+    def test_init_kwargs_tensor_proto(self):
+        # The use case from the issue: build a TensorProto from another
+        # tensor's repeated ``dims`` field, its ``data_type`` and raw bytes.
+        raw = np.array([1, 2, 3, 4], dtype=np.float32).tobytes()
+        source = TensorProto()
+        source.dims.extend([2, 2])
+        source.data_type = TensorProto.FLOAT
+        tensor = TensorProto(dims=source.dims, data_type=source.data_type, raw_data=raw)
+        self.assertEqual(list(tensor.dims), [2, 2])
+        self.assertEqual(tensor.data_type, TensorProto.FLOAT)
+        self.assertEqual(tensor.raw_data, raw)
+
+    def test_init_kwargs_repeated_from_list(self):
+        tensor = TensorProto(dims=[3, 4], data_type=TensorProto.INT64, name="x")
+        self.assertEqual(list(tensor.dims), [3, 4])
+        self.assertEqual(tensor.data_type, TensorProto.INT64)
+        self.assertEqual(tensor.name, "x")
+
+    def test_init_kwargs_empty_matches_default(self):
+        self.assertEqual(list(TensorProto().dims), [])
+        self.assertEqual(TensorProto().SerializeToString(), TensorProto().SerializeToString())
+
+    def test_init_kwargs_node_proto(self):
+        node = NodeProto(op_type="Add", input=["a", "b"], output=["c"], name="n1")
+        self.assertEqual(node.op_type, "Add")
+        self.assertEqual(list(node.input), ["a", "b"])
+        self.assertEqual(list(node.output), ["c"])
+        self.assertEqual(node.name, "n1")
+
+    def test_init_kwargs_repeated_message_from_list(self):
+        node = NodeProto(op_type="Add")
+        graph = GraphProto(name="g", node=[node])
+        self.assertEqual(graph.name, "g")
+        self.assertEqual(len(graph.node), 1)
+        self.assertEqual(graph.node[0].op_type, "Add")
+
+    def test_init_kwargs_subproto(self):
+        tensor_type = TypeProto.Tensor(elem_type=TensorProto.FLOAT)
+        self.assertEqual(tensor_type.elem_type, TensorProto.FLOAT)
+
+    def test_init_kwargs_unknown_field_raises(self):
+        with self.assertRaises(AttributeError):
+            TensorProto(not_a_field=1)
+
 
 if __name__ == "__main__":
     unittest.main()

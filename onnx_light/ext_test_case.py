@@ -429,7 +429,7 @@ class InferenceSessionAllTypes:
 
     def run(
         self, output_names: Optional[List[str]], input_feed: dict[str, np.ndarray]
-    ) -> dict[str, np.ndarray]:
+    ) -> List[np.ndarray]:
         """
         Runs the model with support for all ONNX dtypes.
 
@@ -489,4 +489,4 @@ class InferenceSessionAllTypes:
 
         # Get outputs
         outputs = io_binding.get_outputs()
-        return dict(zip(output_names, [out.numpy() for out in outputs]))
+        return [out.numpy() for out in outputs]

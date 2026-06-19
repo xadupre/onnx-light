@@ -96,6 +96,9 @@ TEST(SimplifyExpressions, CompareExpressions) {
 
   // Unknown: same token sign but zero constant (equal when the token is null).
   EXPECT_EQ(compare_expressions("2*a", "a").result, CompareResult::Unknown);
+
+  // Malformed input propagates a parse error.
+  EXPECT_THROW(compare_expressions("a", "b +"), std::runtime_error);
 }
 
 TEST(SimplifyExpressions, SimplifyExpression_bracket) {

@@ -71,6 +71,10 @@ class TestSimplifyExpressions(ExtTestCase):
         self.assertEqual(compare_expressions("a", "b"), ("unknown", "b-a"))
         self.assertEqual(compare_expressions("2*a", "a"), ("unknown", "-a"))
 
+    def test_compare_expressions_syntax_error(self):
+        with self.assertRaises(RuntimeError):
+            compare_expressions("a", "b +")
+
     def test_simplify_expression_bracket(self):
         self.assertEqual("x", simplify_expression("2*x//2"))
         self.assertEqual("x", simplify_expression("(2*x)//2"))

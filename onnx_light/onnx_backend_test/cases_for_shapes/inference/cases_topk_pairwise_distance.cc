@@ -505,5 +505,192 @@ void RegisterLoopTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &
   registry.emplace_back(std::move(tc));
 }
 
+// ---------------------------------------------------------------------------
+// ``TopK(K, axis=-1) → TopK(K, axis=-1) → ReduceMean`` — two sequential TopK
+// nodes using the **same** K model input, followed by a ReduceMean that
+// collapses the symbolic K axis away. Exercises shape inference with two
+// chained symbolic TopK axes that share the same runtime K input.
+//
+// Graph topology::
+//
+//   X [N, 5]
+//     TopK(X, K, axis=-1)         ──► values1 [N, k], indices1 [N, k]
+//     TopK(values1, K, axis=-1)   ──► values2 [N, k], indices2 [N, k]
+//     ReduceMean(values2, axes=[-1], keepdims=0) ──► Y [N]
+//
+// Concrete shapes (N=3, K=2)::
+//
+//   X        float[3, 5]
+//   values1  float[3, 2]
+//   values2  float[3, 2]
+//   Y        float[3]
+//
+// The reference DataSet uses rows ``[5, 4, 3, 2, 1]``, ``[10, 9, 8, 7, 6]``,
+// ``[15, 14, 13, 12, 11]`` with ``K = 2``: TopK1 keeps ``[5, 4]``,
+// ``[10, 9]``, ``[15, 14]``; TopK2 (K=2 of 2 elements) is the identity;
+// ReduceMean gives ``Y = [4.5, 9.5, 14.5]``.
+// ---------------------------------------------------------------------------
+void RegisterTwoTopKSameKShapeInferenceCases(std::vector<TestCase> &registry) {
+  const OpsetId opset = DefaultOpset(18);
+
+  const std::string name = "test_cc_shape_inference_two_topk_same_k";
+
+  TestCase tc(name, name, "model", "inference");
+  tc.rtol = 1e-3;
+  tc.atol = 1e-7;
+
+  ModelProto &model = tc.model;
+  InitModel(model, kDefaultIrVersion, {opset});
+
+  GraphProto *graph = model.add_graph();
+  graph->set_name(name);
+
+  // First TopK: keeps the top-K elements of X along axis=-1.
+  NodeProto &topk1 = AddNode(*graph, "TopK", {"X", "K"}, {"values1", "indices1"});
+  AddAxisAttribute(topk1, -1);
+  AddAttribute<int64_t>(topk1, "largest", 1);
+  AddAttribute<int64_t>(topk1, "sorted", 1);
+
+  // Second TopK: applied to values1 with the SAME K input.
+  NodeProto &topk2 = AddNode(*graph, "TopK", {"values1", "K"}, {"values2", "indices2"});
+  AddAxisAttribute(topk2, -1);
+  AddAttribute<int64_t>(topk2, "largest", 1);
+  AddAttribute<int64_t>(topk2, "sorted", 1);
+
+  // ReduceMean over the (symbolic) TopK axis collapses it away.
+  NodeProto &reduce_mean = AddNode(*graph, "ReduceMean", {"values2", "mean_axes"}, {"Y"});
+  AddAttribute<int64_t>(reduce_mean, "keepdims", 0);
+
+  // Initializer for ReduceMean's axes input.
+  AddInitializerShape(*graph, "mean_axes", {-1});
+
+  // Graph inputs: X with symbolic N and concrete trailing dim 5; K is the
+  // shared INT64 [1] number of top elements to keep.
+  AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {DimSpec("N"), DimSpec(int64_t{5})});
+  AppendValueInfo(*graph->add_input(), "K", DataType::INT64, {DimSpec(int64_t{1})});
+
+  // Intermediate value_info entries.
+  AppendValueInfo(*graph->add_value_info(), "values1", DataType::FLOAT,
+                  {DimSpec("N"), DimSpec("TopK_values1_k")});
+  AppendValueInfo(*graph->add_value_info(), "indices1", DataType::INT64,
+                  {DimSpec("N"), DimSpec("TopK_values1_k")});
+  AppendValueInfo(*graph->add_value_info(), "values2", DataType::FLOAT,
+                  {DimSpec("N"), DimSpec("TopK_values2_k")});
+  AppendValueInfo(*graph->add_value_info(), "indices2", DataType::INT64,
+                  {DimSpec("N"), DimSpec("TopK_values2_k")});
+
+  // Output Y — the per-row mean, shape [N].
+  AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec("N")});
+
+  // Reference DataSet: X float[3, 5] with rows [5,4,3,2,1], [10,9,8,7,6],
+  // [15,14,13,12,11] and K=2. TopK1 keeps [5,4], [10,9], [15,14]; TopK2
+  // (K=2 of 2) keeps the same; ReduceMean gives [4.5, 9.5, 14.5].
+  Tensor x = Tensor::FromFloat("X", {3, 5},
+                               {5.0f, 4.0f, 3.0f, 2.0f, 1.0f,  //
+                                10.0f, 9.0f, 8.0f, 7.0f, 6.0f, //
+                                15.0f, 14.0f, 13.0f, 12.0f, 11.0f});
+  Tensor k = Tensor::FromInt64("K", {1}, {int64_t{2}});
+  Tensor y = Tensor::FromFloat("Y", {3}, {4.5f, 9.5f, 14.5f});
+  AppendDataSet(tc, {std::move(x), std::move(k)}, {std::move(y)});
+
+  registry.emplace_back(std::move(tc));
+}
+
+// ---------------------------------------------------------------------------
+// ``TopK(K1, axis=-1) → TopK(K2, axis=-1) → ReduceMean`` — two sequential
+// TopK nodes using **different** K model inputs (K1 > K2), followed by a
+// ReduceMean that collapses the second symbolic K axis away. Exercises shape
+// inference with two chained symbolic TopK axes that carry distinct symbolic
+// dim names (``TopK_values1_k`` and ``TopK_values2_k``) because K1 ≠ K2.
+//
+// Graph topology::
+//
+//   X [N, 5]
+//     TopK(X, K1, axis=-1)         ──► values1 [N, k1], indices1 [N, k1]
+//     TopK(values1, K2, axis=-1)   ──► values2 [N, k2], indices2 [N, k2]
+//     ReduceMean(values2, axes=[-1], keepdims=0) ──► Y [N]
+//
+// Concrete shapes (N=3, K1=3, K2=2)::
+//
+//   X        float[3, 5]
+//   values1  float[3, 3]
+//   values2  float[3, 2]
+//   Y        float[3]
+//
+// The reference DataSet uses rows ``[5, 4, 3, 2, 1]``, ``[10, 9, 8, 7, 6]``,
+// ``[15, 14, 13, 12, 11]`` with ``K1 = 3``, ``K2 = 2``: TopK1 keeps top-3
+// ``[5, 4, 3]``, ``[10, 9, 8]``, ``[15, 14, 13]``; TopK2 then keeps top-2
+// ``[5, 4]``, ``[10, 9]``, ``[15, 14]``; ReduceMean gives
+// ``Y = [4.5, 9.5, 14.5]``.
+// ---------------------------------------------------------------------------
+void RegisterTwoTopKDifferentKShapeInferenceCases(std::vector<TestCase> &registry) {
+  const OpsetId opset = DefaultOpset(18);
+
+  const std::string name = "test_cc_shape_inference_two_topk_different_k";
+
+  TestCase tc(name, name, "model", "inference");
+  tc.rtol = 1e-3;
+  tc.atol = 1e-7;
+
+  ModelProto &model = tc.model;
+  InitModel(model, kDefaultIrVersion, {opset});
+
+  GraphProto *graph = model.add_graph();
+  graph->set_name(name);
+
+  // First TopK: keeps the top-K1 elements of X along axis=-1.
+  NodeProto &topk1 = AddNode(*graph, "TopK", {"X", "K1"}, {"values1", "indices1"});
+  AddAxisAttribute(topk1, -1);
+  AddAttribute<int64_t>(topk1, "largest", 1);
+  AddAttribute<int64_t>(topk1, "sorted", 1);
+
+  // Second TopK: applied to values1 with a DIFFERENT K2 input (K2 < K1).
+  NodeProto &topk2 = AddNode(*graph, "TopK", {"values1", "K2"}, {"values2", "indices2"});
+  AddAxisAttribute(topk2, -1);
+  AddAttribute<int64_t>(topk2, "largest", 1);
+  AddAttribute<int64_t>(topk2, "sorted", 1);
+
+  // ReduceMean over the (symbolic) K2 axis collapses it away.
+  NodeProto &reduce_mean = AddNode(*graph, "ReduceMean", {"values2", "mean_axes"}, {"Y"});
+  AddAttribute<int64_t>(reduce_mean, "keepdims", 0);
+
+  // Initializer for ReduceMean's axes input.
+  AddInitializerShape(*graph, "mean_axes", {-1});
+
+  // Graph inputs: X with symbolic N and concrete trailing dim 5; K1 and K2
+  // are distinct runtime INT64 [1] inputs with K1 > K2.
+  AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {DimSpec("N"), DimSpec(int64_t{5})});
+  AppendValueInfo(*graph->add_input(), "K1", DataType::INT64, {DimSpec(int64_t{1})});
+  AppendValueInfo(*graph->add_input(), "K2", DataType::INT64, {DimSpec(int64_t{1})});
+
+  // Intermediate value_info entries.
+  AppendValueInfo(*graph->add_value_info(), "values1", DataType::FLOAT,
+                  {DimSpec("N"), DimSpec("TopK_values1_k")});
+  AppendValueInfo(*graph->add_value_info(), "indices1", DataType::INT64,
+                  {DimSpec("N"), DimSpec("TopK_values1_k")});
+  AppendValueInfo(*graph->add_value_info(), "values2", DataType::FLOAT,
+                  {DimSpec("N"), DimSpec("TopK_values2_k")});
+  AppendValueInfo(*graph->add_value_info(), "indices2", DataType::INT64,
+                  {DimSpec("N"), DimSpec("TopK_values2_k")});
+
+  // Output Y — the per-row mean, shape [N].
+  AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec("N")});
+
+  // Reference DataSet: X float[3, 5] with rows [5,4,3,2,1], [10,9,8,7,6],
+  // [15,14,13,12,11], K1=3, K2=2. TopK1 keeps top-3: [5,4,3], [10,9,8],
+  // [15,14,13]; TopK2 keeps top-2 of those: [5,4], [10,9], [15,14];
+  // ReduceMean gives [4.5, 9.5, 14.5].
+  Tensor x = Tensor::FromFloat("X", {3, 5},
+                               {5.0f, 4.0f, 3.0f, 2.0f, 1.0f,  //
+                                10.0f, 9.0f, 8.0f, 7.0f, 6.0f, //
+                                15.0f, 14.0f, 13.0f, 12.0f, 11.0f});
+  Tensor k1 = Tensor::FromInt64("K1", {1}, {int64_t{3}});
+  Tensor k2 = Tensor::FromInt64("K2", {1}, {int64_t{2}});
+  Tensor y = Tensor::FromFloat("Y", {3}, {4.5f, 9.5f, 14.5f});
+  AppendDataSet(tc, {std::move(x), std::move(k1), std::move(k2)}, {std::move(y)});
+
+  registry.emplace_back(std::move(tc));
+}
+
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

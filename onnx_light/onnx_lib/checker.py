@@ -11,9 +11,13 @@ _checker = _C.checker  # type: ignore
 ValidationError = _checker.ValidationError
 
 
-def check_model(model: _C.ModelProto, *, full_check: bool = False,  # type: ignore
-                skip_opset_compatibility_check: bool = False,
-                check_custom_domain: bool = False) -> None:
+def check_model(
+    model: _C.ModelProto,
+    *,
+    full_check: bool = False,  # type: ignore
+    skip_opset_compatibility_check: bool = False,
+    check_custom_domain: bool = False,
+) -> None:
     """Checks a model and raises checker.ValidationError on invalid content.
 
     Returns:

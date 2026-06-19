@@ -30,6 +30,16 @@ def has_onnxruntime() -> bool:
         return False
 
 
+def has_ir_py() -> bool:
+    "Tells if ir-py is installed."
+    try:
+        import onnx_ir
+
+        return hasattr(onnx_ir, "__version__")
+    except ImportError:
+        return False
+
+
 def import_or_skip(module_name: str, attribute: Optional[str] = None) -> Any:
     """Imports a module (or one of its attributes) or skips the test otherwise.
 

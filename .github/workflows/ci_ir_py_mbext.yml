@@ -1,4 +1,4 @@
-name: ci-ir-py-mbext
+name: VAL ir-py - mbext
 
 # Manually-triggered integration job: validates that onnx-light can be used as a
 # drop-in replacement for onnx (via the USE_ONNX_LIGHT=1 compatibility shim) when
@@ -79,6 +79,9 @@ jobs:
       - name: Install mbext
         working-directory: mbext
         run: pip install -e .[dev]
+
+      - name: uninstall onnx
+        run: pip uninstall -y onnx
 
       - name: pip freeze
         run: pip freeze

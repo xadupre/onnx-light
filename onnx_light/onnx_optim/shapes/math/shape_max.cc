@@ -20,9 +20,7 @@ void ComputeShapeMax(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Max", "ComputeShapeMax");
 
   const int n_inputs = node.input_size();
-  if (n_inputs < 1) {
-    throw std::invalid_argument("ComputeShapeMax: Max requires at least one input.");
-  }
+  EXT_ENFORCE_INVALID(!(n_inputs < 1), "ComputeShapeMax: Max requires at least one input.");
 
   // Start from the shape and dtype of the first input. Max's type constraint
   // ``T`` requires every input to share the same dtype, so the output dtype

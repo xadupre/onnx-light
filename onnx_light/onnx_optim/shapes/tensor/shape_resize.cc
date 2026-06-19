@@ -49,11 +49,9 @@ std::vector<int64_t> ResolveAxes(const NodeProto &node, std::size_t rank) {
   axes.reserve(axes_attr->ref_ints().size());
   for (int64_t a : axes_attr->ref_ints()) {
     int64_t na = a < 0 ? a + static_cast<int64_t>(rank) : a;
-    if (na < 0 || na >= static_cast<int64_t>(rank)) {
-      throw std::invalid_argument("ComputeShapeResize: 'axes' value " + std::to_string(a) +
-                                  " is out of range for input of rank " + std::to_string(rank) +
-                                  ".");
-    }
+    EXT_ENFORCE_INVALID(!(na < 0 || na >= static_cast<int64_t>(rank)),
+                        "ComputeShapeResize: 'axes' value ", a,
+                        " is out of range for input of rank ", rank, ".");
     axes.push_back(na);
   }
   return axes;
@@ -92,9 +90,8 @@ bool ScaleToRational(double scale, int64_t &divisor, int64_t &multiplier) {
 
 void ComputeShapeResize(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Resize", "ComputeShapeResize");
-  if (node.input_size() < 1) {
-    throw std::invalid_argument("ComputeShapeResize: Resize requires at least one input.");
-  }
+  EXT_ENFORCE_INVALID(!(node.input_size() < 1),
+                      "ComputeShapeResize: Resize requires at least one input.");
 
   const OptimTensor &input = ctx.Get(node.input(0).as_string());
   const OptimShape &input_shape = input.Shape();

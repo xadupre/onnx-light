@@ -21,9 +21,8 @@ namespace tensor {
 void ComputeShapeGather(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Gather", "ComputeShapeGather");
 
-  if (node.input_size() < 2) {
-    throw std::invalid_argument("ComputeShapeGather: Gather requires two inputs (data, indices).");
-  }
+  EXT_ENFORCE_INVALID(!(node.input_size() < 2),
+                      "ComputeShapeGather: Gather requires two inputs (data, indices).");
 
   const OptimTensor &data = ctx.Get(node.input(0).as_string());
   const OptimTensor &indices = ctx.Get(node.input(1).as_string());
@@ -39,10 +38,8 @@ void ComputeShapeGather(ShapesContext &ctx, const NodeProto &node) {
     if (axis < 0) {
       axis += r;
     }
-    if (axis < 0 || axis >= r) {
-      throw std::invalid_argument("ComputeShapeGather: axis=" + std::to_string(axis) +
-                                  " out of range for data rank " + std::to_string(r) + ".");
-    }
+    EXT_ENFORCE_INVALID(!(axis < 0 || axis >= r), "ComputeShapeGather: axis=", axis,
+                        " out of range for data rank ", r, ".");
   }
 
   OptimShape out_shape;

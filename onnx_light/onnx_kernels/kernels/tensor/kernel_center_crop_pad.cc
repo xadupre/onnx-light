@@ -32,7 +32,7 @@ std::vector<int64_t> ReadShapeTensor(const Tensor &t) {
       out[i] = static_cast<int64_t>(p[i]);
     }
   } else {
-    throw std::invalid_argument("kernel::CenterCropPad: 'shape' input must be INT32 or INT64.");
+    EXT_THROW_INVALID("kernel::CenterCropPad: 'shape' input must be INT32 or INT64.");
   }
   return out;
 }

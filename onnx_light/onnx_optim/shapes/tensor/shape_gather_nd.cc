@@ -21,10 +21,8 @@ namespace tensor {
 void ComputeShapeGatherND(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "GatherND", "ComputeShapeGatherND");
 
-  if (node.input_size() < 2) {
-    throw std::invalid_argument(
-        "ComputeShapeGatherND: GatherND requires two inputs (data, indices).");
-  }
+  EXT_ENFORCE_INVALID(!(node.input_size() < 2),
+                      "ComputeShapeGatherND: GatherND requires two inputs (data, indices).");
 
   const OptimTensor &data = ctx.Get(node.input(0).as_string());
   const OptimTensor &indices = ctx.Get(node.input(1).as_string());
@@ -53,10 +51,8 @@ void ComputeShapeGatherND(ShapesContext &ctx, const NodeProto &node) {
   if (k_last_dim.IsInt() && r > 0) {
     const int64_t k_last = k_last_dim.AsInt();
     const int64_t start = batch_dims + k_last;
-    if (start > r) {
-      throw std::invalid_argument(
-          "ComputeShapeGatherND: indices last dim + batch_dims exceeds data rank.");
-    }
+    EXT_ENFORCE_INVALID(!(start > r),
+                        "ComputeShapeGatherND: indices last dim + batch_dims exceeds data rank.");
     for (int64_t i = start; i < r; ++i) {
       out_shape.PushBack(data_shape[static_cast<std::size_t>(i)]);
     }

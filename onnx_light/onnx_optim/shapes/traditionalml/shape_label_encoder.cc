@@ -29,10 +29,9 @@ std::vector<TensorType> CollectLabelEncoderValueTypes(const NodeProto &node) {
     const AttributeProto &attr = node.attribute()[i];
     const std::string name = attr.name().as_string();
     if (name == "values_tensor") {
-      if (!attr.has_t()) {
-        throw std::invalid_argument(
-            "ComputeShapeLabelEncoder: attribute 'values_tensor' must carry a tensor value.");
-      }
+      EXT_ENFORCE_INVALID(
+          attr.has_t(),
+          "ComputeShapeLabelEncoder: attribute 'values_tensor' must carry a tensor value.");
       types.push_back(DataTypeToTensorType(attr.ref_t().data_type()));
     } else if (name == "values_strings") {
       types.push_back(TensorType::kString);

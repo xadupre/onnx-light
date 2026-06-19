@@ -26,7 +26,7 @@ void ComputeShapeCategoryMapper(ShapesContext &ctx, const NodeProto &node, const
   } else if (input.Dtype() == TensorType::kInt64) {
     output_dtype = TensorType::kString;
   } else {
-    throw std::invalid_argument(
+    EXT_THROW_INVALID(
         "ComputeShapeCategoryMapper: CategoryMapper input must be a tensor of strings or "
         "int64s.");
   }

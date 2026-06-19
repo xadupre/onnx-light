@@ -20,22 +20,15 @@ void ComputeShapeNonMaxSuppression(ShapesContext &ctx, const NodeProto &node, co
   CheckNodeOpAndOutput(node, "NonMaxSuppression", "ComputeShapeNonMaxSuppression");
 
   const OptimShape &boxes_shape = ctx.Get(boxes).Shape();
-  if (boxes_shape.Rank() != 3) {
-    throw std::invalid_argument("ComputeShapeNonMaxSuppression: input '" + std::string(boxes) +
-                                "' must have rank 3 (num_batches, spatial_dimension, 4).");
-  }
-  if (boxes_shape[2].IsInt() && boxes_shape[2].AsInt() != 4) {
-    throw std::invalid_argument("ComputeShapeNonMaxSuppression: last dim of '" +
-                                std::string(boxes) + "' must be 4, got " +
-                                std::to_string(boxes_shape[2].AsInt()) + ".");
-  }
+  EXT_ENFORCE_INVALID(boxes_shape.Rank() == 3, "ComputeShapeNonMaxSuppression: input '", boxes,
+                      "' must have rank 3 (num_batches, spatial_dimension, 4).");
+  EXT_ENFORCE_INVALID(!(boxes_shape[2].IsInt() && boxes_shape[2].AsInt() != 4),
+                      "ComputeShapeNonMaxSuppression: last dim of '", boxes, "' must be 4, got ",
+                      boxes_shape[2].AsInt(), ".");
 
   const OptimShape &scores_shape = ctx.Get(scores).Shape();
-  if (scores_shape.Rank() != 3) {
-    throw std::invalid_argument(
-        "ComputeShapeNonMaxSuppression: input '" + std::string(scores) +
-        "' must have rank 3 (num_batches, num_classes, spatial_dimension).");
-  }
+  EXT_ENFORCE_INVALID(scores_shape.Rank() == 3, "ComputeShapeNonMaxSuppression: input '", scores,
+                      "' must have rank 3 (num_batches, num_classes, spatial_dimension).");
 
   // The output is rank 2 with dtype INT64. The first dim depends on the
   // runtime values of the inputs and is therefore symbolic.

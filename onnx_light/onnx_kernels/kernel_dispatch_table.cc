@@ -98,11 +98,8 @@ template <class KernelT> NodeKernelFn MakeBinaryTrampoline() {
 template <class KernelT> NodeKernelFn MakeBinaryWithOptionalThirdTrampoline() {
   return [](const NodeProto &node, RuntimeContext &rt) {
     RequireMinInputCount(node, 2);
-    if (node.input_size() > 3) {
-      throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
-                                  "' expects 2 or 3 inputs, got " +
-                                  std::to_string(node.input_size()) + ".");
-    }
+    EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op '", node.op_type().as_string(),
+                        "' expects 2 or 3 inputs, got ", node.input_size(), ".");
     RequireOutputCount(node, 1);
     const Tensor &a = GetInput(node, 0, rt.tensors());
     const Tensor &b = GetInput(node, 1, rt.tensors());
@@ -181,10 +178,8 @@ template <class KernelT> NodeKernelFn MakeUnaryToTrampoline() {
     RequireOutputCount(node, 1);
     const Tensor &x = GetInput(node, 0, rt.tensors());
     const int32_t to = static_cast<int32_t>(GetAttributeIntOrDefault(node, "to", -1));
-    if (to < 0) {
-      throw std::invalid_argument("RunNode: " + node.op_type().as_string() +
-                                  " requires INT attribute 'to'.");
-    }
+    EXT_ENFORCE_INVALID(!(to < 0), "RunNode: ", node.op_type().as_string(),
+                        " requires INT attribute 'to'.");
     KernelT kernel(rt.kernel_ctx());
     SetOutput(node, 0, kernel(x, to), rt);
   };
@@ -198,10 +193,8 @@ template <class KernelT> NodeKernelFn MakeUnaryToTrampoline() {
 template <class KernelT> NodeKernelFn MakeReduceTrampoline() {
   return [](const NodeProto &node, RuntimeContext &rt) {
     RequireMinInputCount(node, 1);
-    if (node.input_size() > 2) {
-      throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
-                                  "' expects at most 2 inputs.");
-    }
+    EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '", node.op_type().as_string(),
+                        "' expects at most 2 inputs.");
     RequireOutputCount(node, 1);
     const Tensor &data = GetInput(node, 0, rt.tensors());
     const bool keepdims = GetAttributeIntOrDefault(node, "keepdims", 1) != 0;
@@ -233,10 +226,8 @@ template <class KernelT> NodeKernelFn MakeReduceTrampoline() {
 template <class KernelT> NodeKernelFn MakeSqueezeLikeTrampoline(const char *op_name) {
   return [op_name](const NodeProto &node, RuntimeContext &rt) {
     RequireMinInputCount(node, 1);
-    if (node.input_size() > 2) {
-      throw std::invalid_argument(std::string("RunNode: op '") + op_name +
-                                  "' expects at most 2 inputs.");
-    }
+    EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '", op_name,
+                        "' expects at most 2 inputs.");
     RequireOutputCount(node, 1);
     const Tensor &data = GetInput(node, 0, rt.tensors());
     std::vector<int64_t> axes;
@@ -246,11 +237,9 @@ template <class KernelT> NodeKernelFn MakeSqueezeLikeTrampoline(const char *op_n
       // function body (and other upstream function bodies) feed a 0-D INT64
       // scalar here. The upstream reference evaluator accepts scalars too,
       // so for compatibility we treat a scalar as a 1-element 1-D tensor.
-      if (axes_input->data_type != static_cast<int32_t>(DataType::INT64) ||
-          axes_input->shape.size() > 1) {
-        throw std::invalid_argument(std::string("RunNode: ") + op_name +
-                                    " 'axes' input must be a 1-D INT64 tensor.");
-      }
+      EXT_ENFORCE_INVALID(!(axes_input->data_type != static_cast<int32_t>(DataType::INT64) ||
+                            axes_input->shape.size() > 1),
+                          "RunNode: ", op_name, " 'axes' input must be a 1-D INT64 tensor.");
       const int64_t n = axes_input->element_count();
       const int64_t *p = axes_input->AsInt64();
       axes.assign(p, p + n);
@@ -291,10 +280,8 @@ inline SVMCommonAttrs ParseSVMCommonAttrs(const NodeProto &node, const char *op_
   a.kernel_type = GetAttributeStringOrDefault(node, "kernel_type", "LINEAR");
   const std::vector<float> kernel_params =
       GetAttributeFloatsOrDefault(node, "kernel_params", {0.0f, 0.0f, 0.0f});
-  if (kernel_params.size() < 3) {
-    throw std::invalid_argument(std::string("RunNode: ") + op_name +
-                                " 'kernel_params' must have at least 3 floats.");
-  }
+  EXT_ENFORCE_INVALID(!(kernel_params.size() < 3), "RunNode: ", op_name,
+                      " 'kernel_params' must have at least 3 floats.");
   a.gamma = kernel_params[0];
   a.coef0 = kernel_params[1];
   a.degree = kernel_params[2];
@@ -320,8 +307,7 @@ auto DispatchSVMByDataType(const Tensor &x, const char *op_name,
   case static_cast<int32_t>(DataType::INT32):
     return fn(static_cast<int32_t *>(nullptr));
   default:
-    throw std::invalid_argument(std::string("RunNode: ") + op_name +
-                                " input 'X' must be FLOAT, DOUBLE, INT32 or INT64.");
+    EXT_THROW_INVALID("RunNode: ", op_name, " input 'X' must be FLOAT, DOUBLE, INT32 or INT64.");
   }
 }
 
@@ -340,14 +326,11 @@ auto DispatchTreeEnsembleClassicByDataType(const Tensor &x, const char *op_name,
 // attribute is missing or not of type TENSOR.
 inline Tensor GetRequiredAttributeTensor(const NodeProto &node, const std::string &name) {
   const AttributeProto *attr = FindAttribute(node, name);
-  if (attr == nullptr) {
-    throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() + "' is missing '" +
-                                name + "' TENSOR attribute.");
-  }
-  if (attr->type() != AttributeProto::AttributeType::TENSOR) {
-    throw std::invalid_argument("RunNode: attribute '" + name + "' of op '" +
-                                node.op_type().as_string() + "' must be a TENSOR.");
-  }
+  EXT_ENFORCE_INVALID(attr != nullptr, "RunNode: op '", node.op_type().as_string(),
+                      "' is missing '", name, "' TENSOR attribute.");
+  EXT_ENFORCE_INVALID(!(attr->type() != AttributeProto::AttributeType::TENSOR),
+                      "RunNode: attribute '", name, "' of op '", node.op_type().as_string(),
+                      "' must be a TENSOR.");
   return TensorFromProto(attr->t());
 }
 
@@ -359,10 +342,9 @@ inline Tensor GetAttributeTensorOrEmpty(const NodeProto &node, const std::string
   if (attr == nullptr) {
     return Tensor("", fallback_dtype, std::vector<int64_t>{0}, std::vector<uint8_t>{});
   }
-  if (attr->type() != AttributeProto::AttributeType::TENSOR) {
-    throw std::invalid_argument("RunNode: attribute '" + name + "' of op '" +
-                                node.op_type().as_string() + "' must be a TENSOR.");
-  }
+  EXT_ENFORCE_INVALID(!(attr->type() != AttributeProto::AttributeType::TENSOR),
+                      "RunNode: attribute '", name, "' of op '", node.op_type().as_string(),
+                      "' must be a TENSOR.");
   return TensorFromProto(attr->t());
 }
 
@@ -437,10 +419,8 @@ template <class KernelT> NodeKernelFn MakeWindowTrampoline(const char *op_name) 
     const Tensor &size = GetInput(node, 0, rt.tensors());
     const int64_t output_datatype =
         GetAttributeIntOrDefault(node, "output_datatype", static_cast<int64_t>(DataType::FLOAT));
-    if (output_datatype != static_cast<int64_t>(DataType::FLOAT)) {
-      throw std::invalid_argument("RunNode: op '" + name +
-                                  "' only supports output_datatype=FLOAT.");
-    }
+    EXT_ENFORCE_INVALID(!(output_datatype != static_cast<int64_t>(DataType::FLOAT)),
+                        "RunNode: op '", name, "' only supports output_datatype=FLOAT.");
     const bool periodic = GetAttributeIntOrDefault(node, "periodic", 1) != 0;
     KernelT kernel(rt.kernel_ctx());
     SetOutput(node, 0, kernel(size, periodic), rt.tensors());
@@ -483,20 +463,16 @@ inline int64_t GetNormAxis(const NodeProto &node) {
 
 inline void RequireInputRange(const NodeProto &node, int min_inputs, int max_inputs) {
   const int n = node.input_size();
-  if (n < min_inputs || n > max_inputs) {
-    throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() + "' expects " +
-                                std::to_string(min_inputs) + " to " + std::to_string(max_inputs) +
-                                " input(s), got " + std::to_string(n) + ".");
-  }
+  EXT_ENFORCE_INVALID(!(n < min_inputs || n > max_inputs), "RunNode: op '",
+                      node.op_type().as_string(), "' expects ", min_inputs, " to ", max_inputs,
+                      " input(s), got ", n, ".");
 }
 
 inline void RequireOutputRange(const NodeProto &node, int min_outputs, int max_outputs) {
   const int n = node.output_size();
-  if (n < min_outputs || n > max_outputs) {
-    throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() + "' expects " +
-                                std::to_string(min_outputs) + " to " + std::to_string(max_outputs) +
-                                " output(s), got " + std::to_string(n) + ".");
-  }
+  EXT_ENFORCE_INVALID(!(n < min_outputs || n > max_outputs), "RunNode: op '",
+                      node.op_type().as_string(), "' expects ", min_outputs, " to ", max_outputs,
+                      " output(s), got ", n, ".");
 }
 
 void RunBatchNormalization(const NodeProto &node, RuntimeContext &rt) {
@@ -521,10 +497,9 @@ void RunBatchNormalization(const NodeProto &node, RuntimeContext &rt) {
     }
     return;
   }
-  if (node.output_size() != 1) {
-    throw std::invalid_argument("RunNode: op 'BatchNormalization' only supports a single output "
-                                "(running_mean / running_var require training_mode=1).");
-  }
+  EXT_ENFORCE_INVALID(node.output_size() == 1,
+                      "RunNode: op 'BatchNormalization' only supports a single output "
+                      "(running_mean / running_var require training_mode=1).");
   SetOutput(node, 0, k(x, scale, bias, input_mean, input_var, GetEpsilon(node)), rt.tensors());
 }
 
@@ -638,16 +613,12 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Atanh", MakeUnaryTrampoline<kernel::Atanh>()},
       {"ai.onnx:Attention",
        [](const NodeProto &node, RuntimeContext &rt) {
-         if (node.input_size() < 3 || node.input_size() > 7) {
-           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
-                                       "' expects between 3 and 7 input(s), got " +
-                                       std::to_string(node.input_size()) + ".");
-         }
-         if (node.output_size() < 1 || node.output_size() > 4) {
-           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
-                                       "' expects between 1 and 4 output(s), got " +
-                                       std::to_string(node.output_size()) + ".");
-         }
+         EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 7), "RunNode: op '" , node.op_type().as_string() ,
+                                       "' expects between 3 and 7 input(s), got " ,
+                                       node.input_size() , ".");
+         EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 4), "RunNode: op '" , node.op_type().as_string() ,
+                                       "' expects between 1 and 4 output(s), got " ,
+                                       node.output_size() , ".");
          const Tensor &q = GetInput(node, 0, rt.tensors());
          const Tensor &k = GetInput(node, 1, rt.tensors());
          const Tensor &v = GetInput(node, 2, rt.tensors());
@@ -715,8 +686,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          } else if (direction == "RIGHT") {
            dir = kernel::BitShift::Direction::kRight;
          } else {
-           throw std::invalid_argument(
-               "RunNode: BitShift 'direction' must be 'LEFT' or 'RIGHT', got '" + direction + "'.");
+           EXT_THROW_INVALID(
+               "RunNode: BitShift 'direction' must be 'LEFT' or 'RIGHT', got '" , direction , "'.");
          }
          kernel::BitShift k(rt.kernel_ctx());
          SetOutput(node, 0, k(x, y, dir), rt);
@@ -738,11 +709,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:BlackmanWindow", MakeWindowTrampoline<kernel::BlackmanWindow>("BlackmanWindow")},
       {"ai.onnx:CausalConvWithState",
        [](const NodeProto &node, RuntimeContext &rt) {
-         if (node.input_size() < 2 || node.input_size() > 4) {
-           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
-                                       "' expects between 2 and 4 input(s), got " +
-                                       std::to_string(node.input_size()) + ".");
-         }
+         EXT_ENFORCE_INVALID(!(node.input_size() < 2 || node.input_size() > 4), "RunNode: op '" , node.op_type().as_string() ,
+                                       "' expects between 2 and 4 input(s), got " ,
+                                       node.input_size() , ".");
          RequireOutputCount(node, 2);
          const Tensor &input = GetInput(node, 0, rt.tensors());
          const Tensor &weight = GetInput(node, 1, rt.tensors());
@@ -765,9 +734,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const int32_t to = static_cast<int32_t>(GetAttributeIntOrDefault(node, "to", -1));
-         if (to < 0) {
-           throw std::invalid_argument("RunNode: Cast requires INT attribute 'to'.");
-         }
+         EXT_ENFORCE_INVALID(!(to < 0), "RunNode: Cast requires INT attribute 'to'.");
          const bool saturate = GetAttributeIntOrDefault(node, "saturate", 1) != 0;
          kernel::Cast kernel(rt.kernel_ctx());
          SetOutput(node, 0, kernel(x, to, saturate), rt);
@@ -828,7 +795,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                GetAttributeStringsOrDefault(node, "value_strings", {});
            y = Tensor::FromStrings("", {static_cast<int64_t>(vs.size())}, vs);
          } else {
-           throw std::invalid_argument(
+           EXT_THROW_INVALID(
                "RunNode: op 'Constant' requires one of: value, value_float, "
                "value_floats, value_int, value_ints, value_string, value_strings.");
          }
@@ -894,10 +861,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            inputs.push_back(GetInput(node, i, rt.tensors()));
          }
          const AttributeProto *axis_attr = FindAttribute(node, "axis");
-         if (axis_attr == nullptr) {
-           throw std::invalid_argument(
+         EXT_ENFORCE_INVALID(axis_attr != nullptr, 
                "RunNode: op 'Concat' is missing required attribute 'axis'.");
-         }
          const int64_t axis = axis_attr->i();
          kernel::Concat k(rt.kernel_ctx());
          SetOutput(node, 0, k(inputs, axis), rt);
@@ -905,10 +870,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Conv",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 2);
-         if (node.input_size() > 3) {
-           throw std::invalid_argument("RunNode: op 'Conv' expects at most 3 inputs, got " +
-                                       std::to_string(node.input_size()) + ".");
-         }
+         EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op 'Conv' expects at most 3 inputs, got " ,
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const Tensor &w = GetInput(node, 1, rt.tensors());
@@ -926,10 +889,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:ConvInteger",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 2);
-         if (node.input_size() > 4) {
-           throw std::invalid_argument("RunNode: op 'ConvInteger' expects at most 4 inputs, got " +
-                                       std::to_string(node.input_size()) + ".");
-         }
+         EXT_ENFORCE_INVALID(!(node.input_size() > 4), "RunNode: op 'ConvInteger' expects at most 4 inputs, got " ,
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const Tensor &w = GetInput(node, 1, rt.tensors());
@@ -951,10 +912,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:ConvTranspose",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 2);
-         if (node.input_size() > 3) {
-           throw std::invalid_argument("RunNode: op 'ConvTranspose' expects at most 3 inputs, got " +
-                                       std::to_string(node.input_size()) + ".");
-         }
+         EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op 'ConvTranspose' expects at most 3 inputs, got " ,
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const Tensor &w = GetInput(node, 1, rt.tensors());
@@ -978,10 +937,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:DeformConv",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 3);
-         if (node.input_size() > 5) {
-           throw std::invalid_argument("RunNode: op 'DeformConv' expects at most 5 inputs, got " +
-                                       std::to_string(node.input_size()) + ".");
-         }
+         EXT_ENFORCE_INVALID(!(node.input_size() > 5), "RunNode: op 'DeformConv' expects at most 5 inputs, got " ,
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const Tensor &w = GetInput(node, 1, rt.tensors());
@@ -1009,12 +966,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor &input = GetInput(node, 0, rt.tensors());
          kernel::DepthToSpace::Attributes attrs;
          const AttributeProto *blocksize_attr = FindAttribute(node, "blocksize");
-         if (blocksize_attr == nullptr) {
-           throw std::invalid_argument("RunNode: DepthToSpace requires attribute 'blocksize'.");
-         }
-         if (blocksize_attr->type() != AttributeProto::AttributeType::INT) {
-           throw std::invalid_argument("RunNode: DepthToSpace attribute 'blocksize' must be INT.");
-         }
+         EXT_ENFORCE_INVALID(blocksize_attr != nullptr, "RunNode: DepthToSpace requires attribute 'blocksize'.");
+         EXT_ENFORCE_INVALID(!(blocksize_attr->type() != AttributeProto::AttributeType::INT), "RunNode: DepthToSpace attribute 'blocksize' must be INT.");
          attrs.blocksize = blocksize_attr->i();
          attrs.mode = GetAttributeStringOrDefault(node, "mode", "DCR");
          kernel::DepthToSpace kernel(rt.kernel_ctx());
@@ -1027,12 +980,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor &input = GetInput(node, 0, rt.tensors());
          kernel::SpaceToDepth::Attributes attrs;
          const AttributeProto *blocksize_attr = FindAttribute(node, "blocksize");
-         if (blocksize_attr == nullptr) {
-           throw std::invalid_argument("RunNode: SpaceToDepth requires attribute 'blocksize'.");
-         }
-         if (blocksize_attr->type() != AttributeProto::AttributeType::INT) {
-           throw std::invalid_argument("RunNode: SpaceToDepth attribute 'blocksize' must be INT.");
-         }
+         EXT_ENFORCE_INVALID(blocksize_attr != nullptr, "RunNode: SpaceToDepth requires attribute 'blocksize'.");
+         EXT_ENFORCE_INVALID(!(blocksize_attr->type() != AttributeProto::AttributeType::INT), "RunNode: SpaceToDepth attribute 'blocksize' must be INT.");
          attrs.blocksize = blocksize_attr->i();
          kernel::SpaceToDepth kernel(rt.kernel_ctx());
          SetOutput(node, 0, kernel(input, attrs), rt);
@@ -1040,10 +989,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:DequantizeLinear",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 2);
-         if (node.input_size() > 3) {
-           throw std::invalid_argument("RunNode: op 'DequantizeLinear' expects 2 or 3 inputs, got " +
-                                       std::to_string(node.input_size()) + ".");
-         }
+         EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op 'DequantizeLinear' expects 2 or 3 inputs, got " ,
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const Tensor &x_scale = GetInput(node, 1, rt.tensors());
@@ -1059,10 +1006,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:DFT",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 1);
-         if (node.input_size() > 3) {
-           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+         EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op '" , node.op_type().as_string() ,
                                        "' expects at most 3 inputs.");
-         }
          RequireOutputCount(node, 1);
          const Tensor &input = GetInput(node, 0, rt.tensors());
          const Tensor *dft_length = GetOptionalInput(node, 1, rt.tensors());
@@ -1073,11 +1018,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          if (opset_version >= 20) {
            const Tensor *axis_tensor = GetOptionalInput(node, 2, rt.tensors());
            if (axis_tensor != nullptr) {
-             if (axis_tensor->element_count() != 1) {
-               throw std::invalid_argument(
+             EXT_ENFORCE_INVALID(!(axis_tensor->element_count() != 1), 
                    "RunNode: DFT 'axis' input must be a scalar tensor (or a 1-D "
                    "tensor with a single element).");
-             }
              switch (axis_tensor->data_type) {
              case DataType::INT64:
                axis = axis_tensor->AsInt64()[0];
@@ -1086,7 +1029,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                axis = static_cast<int64_t>(axis_tensor->AsInt32()[0]);
                break;
              default:
-               throw std::invalid_argument(
+               EXT_THROW_INVALID(
                    "RunNode: DFT 'axis' input must be INT32 or INT64.");
              }
            }
@@ -1108,10 +1051,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          float ratio = GetAttributeFloatOrDefault(node, "ratio", 0.5f);
          const Tensor *ratio_input = GetOptionalInput(node, 1, rt.tensors());
          if (ratio_input != nullptr) {
-           if (ratio_input->element_count() != 1) {
-             throw std::invalid_argument(
+           EXT_ENFORCE_INVALID(!(ratio_input->element_count() != 1), 
                  "RunNode: op 'Dropout' input 'ratio' must be a scalar tensor.");
-           }
            switch (ratio_input->data_type) {
            case static_cast<int32_t>(DataType::FLOAT):
              ratio = ratio_input->AsFloat()[0];
@@ -1120,7 +1061,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
              ratio = static_cast<float>(ratio_input->AsDouble()[0]);
              break;
            default:
-             throw std::invalid_argument(
+             EXT_THROW_INVALID(
                  "RunNode: op 'Dropout' input 'ratio' must be FLOAT or DOUBLE.");
            }
          }
@@ -1130,14 +1071,10 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          bool training_mode = false;
          const Tensor *training_input = GetOptionalInput(node, 2, rt.tensors());
          if (training_input != nullptr) {
-           if (training_input->element_count() != 1) {
-             throw std::invalid_argument(
+           EXT_ENFORCE_INVALID(!(training_input->element_count() != 1), 
                  "RunNode: op 'Dropout' input 'training_mode' must be a scalar tensor.");
-           }
-           if (training_input->data_type != static_cast<int32_t>(DataType::BOOL)) {
-             throw std::invalid_argument(
+           EXT_ENFORCE_INVALID(!(training_input->data_type != static_cast<int32_t>(DataType::BOOL)), 
                  "RunNode: op 'Dropout' input 'training_mode' must be BOOL.");
-           }
            training_mode = training_input->AsBool()[0] != 0;
          }
 
@@ -1244,11 +1181,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
       {"ai.onnx:Gemm",
        [](const NodeProto &node, RuntimeContext &rt) {
-         if (node.input_size() < 2 || node.input_size() > 3) {
-           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
-                                       "' expects between 2 and 3 input(s), got " +
-                                       std::to_string(node.input_size()) + ".");
-         }
+         EXT_ENFORCE_INVALID(!(node.input_size() < 2 || node.input_size() > 3), "RunNode: op '" , node.op_type().as_string() ,
+                                       "' expects between 2 and 3 input(s), got " ,
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Tensor &a = GetInput(node, 0, rt.tensors());
          const Tensor &b = GetInput(node, 1, rt.tensors());
@@ -1305,16 +1240,12 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:GroupNormalization", RunGroupNormalization},
       {"ai.onnx:GRU",
        [](const NodeProto &node, RuntimeContext &rt) {
-         if (node.input_size() < 3 || node.input_size() > 6) {
-           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
-                                       "' expects between 3 and 6 input(s), got " +
-                                       std::to_string(node.input_size()) + ".");
-         }
-         if (node.output_size() < 1 || node.output_size() > 2) {
-           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
-                                       "' expects 1 or 2 output(s), got " +
-                                       std::to_string(node.output_size()) + ".");
-         }
+         EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 6), "RunNode: op '" , node.op_type().as_string() ,
+                                       "' expects between 3 and 6 input(s), got " ,
+                                       node.input_size() , ".");
+         EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 2), "RunNode: op '" , node.op_type().as_string() ,
+                                       "' expects 1 or 2 output(s), got " ,
+                                       node.output_size() , ".");
 
          // Unsupported attributes: only the default ``forward`` direction
          // with the default ``Sigmoid``/``Tanh`` activations and no
@@ -1322,32 +1253,22 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          // both supported.
          const std::string direction =
              GetAttributeStringOrDefault(node, "direction", "forward");
-         if (direction != "forward") {
-           throw std::invalid_argument(
-               "RunNode: op 'GRU' only supports direction='forward', got '" + direction + "'.");
-         }
-         if (FindAttribute(node, "activations") != nullptr) {
-           throw std::invalid_argument(
+         EXT_ENFORCE_INVALID(direction == "forward", 
+               "RunNode: op 'GRU' only supports direction='forward', got '" , direction , "'.");
+         EXT_ENFORCE_INVALID(FindAttribute(node, "activations") == nullptr, 
                "RunNode: op 'GRU' does not support the 'activations' attribute.");
-         }
-         if (FindAttribute(node, "activation_alpha") != nullptr ||
-             FindAttribute(node, "activation_beta") != nullptr) {
-           throw std::invalid_argument(
+         EXT_ENFORCE_INVALID(!(FindAttribute(node, "activation_alpha") != nullptr ||
+             FindAttribute(node, "activation_beta") != nullptr), 
                "RunNode: op 'GRU' does not support 'activation_alpha'/'activation_beta'.");
-         }
-         if (FindAttribute(node, "clip") != nullptr) {
-           throw std::invalid_argument("RunNode: op 'GRU' does not support the 'clip' attribute.");
-         }
+         EXT_ENFORCE_INVALID(FindAttribute(node, "clip") == nullptr, "RunNode: op 'GRU' does not support the 'clip' attribute.");
          const int64_t layout = GetAttributeIntOrDefault(node, "layout", 0);
 
          // ``sequence_lens`` (input #4) is not supported: it requires
          // per-batch sequence handling that the FLOAT kernel does not
          // implement.
          const Tensor *sequence_lens = GetOptionalInput(node, 4, rt.tensors());
-         if (sequence_lens != nullptr) {
-           throw std::invalid_argument(
+         EXT_ENFORCE_INVALID(sequence_lens == nullptr, 
                "RunNode: op 'GRU' does not support the optional 'sequence_lens' input.");
-         }
 
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const Tensor &w = GetInput(node, 1, rt.tensors());
@@ -1432,16 +1353,12 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:LessOrEqual", MakeBinaryTrampoline<kernel::LessOrEqual>()},
       {"ai.onnx:LinearAttention",
        [](const NodeProto &node, RuntimeContext &rt) {
-         if (node.input_size() < 3 || node.input_size() > 6) {
-           throw std::invalid_argument("RunNode: op 'LinearAttention' expects between 3 and 6 "
-                                       "input(s), got " +
-                                       std::to_string(node.input_size()) + ".");
-         }
-         if (node.output_size() < 1 || node.output_size() > 2) {
-           throw std::invalid_argument("RunNode: op 'LinearAttention' expects 1 or 2 output(s), "
-                                       "got " +
-                                       std::to_string(node.output_size()) + ".");
-         }
+         EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 6), "RunNode: op 'LinearAttention' expects between 3 and 6 "
+                                       "input(s), got " ,
+                                       node.input_size() , ".");
+         EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 2), "RunNode: op 'LinearAttention' expects 1 or 2 output(s), "
+                                       "got " ,
+                                       node.output_size() , ".");
          const Tensor &query = GetInput(node, 0, rt.tensors());
          const Tensor &key = GetInput(node, 1, rt.tensors());
          const Tensor &value = GetInput(node, 2, rt.tensors());
@@ -1476,16 +1393,12 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:LogSoftmax", MakeAxisTrampoline<kernel::LogSoftmax>()},
       {"ai.onnx:LSTM",
        [](const NodeProto &node, RuntimeContext &rt) {
-         if (node.input_size() < 3 || node.input_size() > 8) {
-           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
-                                       "' expects between 3 and 8 input(s), got " +
-                                       std::to_string(node.input_size()) + ".");
-         }
-         if (node.output_size() < 1 || node.output_size() > 3) {
-           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
-                                       "' expects between 1 and 3 output(s), got " +
-                                       std::to_string(node.output_size()) + ".");
-         }
+         EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 8), "RunNode: op '" , node.op_type().as_string() ,
+                                       "' expects between 3 and 8 input(s), got " ,
+                                       node.input_size() , ".");
+         EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 3), "RunNode: op '" , node.op_type().as_string() ,
+                                       "' expects between 1 and 3 output(s), got " ,
+                                       node.output_size() , ".");
 
          // Unsupported attributes: only the default ``forward`` direction
          // with the default ``Sigmoid``/``Tanh``/``Tanh`` activations, no
@@ -1493,33 +1406,21 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          // implemented.
          const std::string direction =
              GetAttributeStringOrDefault(node, "direction", "forward");
-         if (direction != "forward") {
-           throw std::invalid_argument(
-               "RunNode: op 'LSTM' only supports direction='forward', got '" + direction + "'.");
-         }
-         if (FindAttribute(node, "activations") != nullptr) {
-           throw std::invalid_argument(
+         EXT_ENFORCE_INVALID(direction == "forward", 
+               "RunNode: op 'LSTM' only supports direction='forward', got '" , direction , "'.");
+         EXT_ENFORCE_INVALID(FindAttribute(node, "activations") == nullptr, 
                "RunNode: op 'LSTM' does not support the 'activations' attribute.");
-         }
-         if (FindAttribute(node, "activation_alpha") != nullptr ||
-             FindAttribute(node, "activation_beta") != nullptr) {
-           throw std::invalid_argument(
+         EXT_ENFORCE_INVALID(!(FindAttribute(node, "activation_alpha") != nullptr ||
+             FindAttribute(node, "activation_beta") != nullptr), 
                "RunNode: op 'LSTM' does not support 'activation_alpha'/'activation_beta'.");
-         }
-         if (FindAttribute(node, "clip") != nullptr) {
-           throw std::invalid_argument("RunNode: op 'LSTM' does not support the 'clip' attribute.");
-         }
-         if (GetAttributeIntOrDefault(node, "input_forget", 0) != 0) {
-           throw std::invalid_argument("RunNode: op 'LSTM' only supports input_forget=0.");
-         }
+         EXT_ENFORCE_INVALID(FindAttribute(node, "clip") == nullptr, "RunNode: op 'LSTM' does not support the 'clip' attribute.");
+         EXT_ENFORCE_INVALID(GetAttributeIntOrDefault(node, "input_forget", 0) == 0, "RunNode: op 'LSTM' only supports input_forget=0.");
          const int64_t layout = GetAttributeIntOrDefault(node, "layout", 0);
 
          // The current kernel only produces (Y, Y_h); the optional third
          // output ``Y_c`` (final cell state) is not implemented.
-         if (node.output_size() >= 3 && !node.output(2).as_string().empty()) {
-           throw std::invalid_argument(
+         EXT_ENFORCE_INVALID(!(node.output_size() >= 3 && !node.output(2).as_string().empty()), 
                "RunNode: op 'LSTM' does not support the optional third output 'Y_c'.");
-         }
 
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const Tensor &w = GetInput(node, 1, rt.tensors());
@@ -1537,21 +1438,17 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          // and axis 1 for ``layout=1``.
          const Tensor *sequence_lens = GetOptionalInput(node, 4, rt.tensors());
          if (sequence_lens != nullptr) {
-           if (sequence_lens->data_type !=
-               static_cast<int32_t>(DataType::INT32)) {
-             throw std::invalid_argument(
+           EXT_ENFORCE_INVALID(!(sequence_lens->data_type !=
+               static_cast<int32_t>(DataType::INT32)), 
                  "RunNode: op 'LSTM' expects 'sequence_lens' to be INT32.");
-           }
            const size_t seq_axis = layout == 1 ? 1u : 0u;
            const int64_t seq_length = x.shape.size() > seq_axis ? x.shape[seq_axis] : 0;
            const int64_t n = sequence_lens->element_count();
            const int32_t *seq_data = sequence_lens->AsInt32();
            for (int64_t i = 0; i < n; ++i) {
-             if (static_cast<int64_t>(seq_data[i]) != seq_length) {
-               throw std::invalid_argument(
+             EXT_ENFORCE_INVALID(!(static_cast<int64_t>(seq_data[i]) != seq_length), 
                    "RunNode: op 'LSTM' does not support the optional 'sequence_lens' "
                    "input unless every entry equals the full seq_length.");
-             }
            }
          }
 
@@ -1614,10 +1511,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:MatMulInteger",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 2);
-         if (node.input_size() > 4) {
-           throw std::invalid_argument("RunNode: op 'MatMulInteger' expects at most 4 inputs, got " +
-                                       std::to_string(node.input_size()) + ".");
-         }
+         EXT_ENFORCE_INVALID(!(node.input_size() > 4), "RunNode: op 'MatMulInteger' expects at most 4 inputs, got " ,
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Tensor &a = GetInput(node, 0, rt.tensors());
          const Tensor &b = GetInput(node, 1, rt.tensors());
@@ -1633,10 +1528,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:MaxPool",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);
-         if (node.output_size() < 1 || node.output_size() > 2) {
-           throw std::invalid_argument("RunNode: op 'MaxPool' expects 1 or 2 output(s), got " +
-                                       std::to_string(node.output_size()) + ".");
-         }
+         EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 2), "RunNode: op 'MaxPool' expects 1 or 2 output(s), got " ,
+                                       node.output_size() , ".");
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const PoolCommonAttrs a = ParsePoolCommonAttrs(node);
          const int64_t storage_order = GetAttributeIntOrDefault(node, "storage_order", 0);
@@ -1754,11 +1647,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
       {"ai.onnx:NonMaxSuppression",
        [](const NodeProto &node, RuntimeContext &rt) {
-         if (node.input_size() < 2 || node.input_size() > 5) {
-           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
-                                       "' expects between 2 and 5 inputs, got " +
-                                       std::to_string(node.input_size()) + ".");
-         }
+         EXT_ENFORCE_INVALID(!(node.input_size() < 2 || node.input_size() > 5), "RunNode: op '" , node.op_type().as_string() ,
+                                       "' expects between 2 and 5 inputs, got " ,
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Tensor &boxes = GetInput(node, 0, rt.tensors());
          const Tensor &scores = GetInput(node, 1, rt.tensors());
@@ -1827,11 +1718,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
       {"ai.onnx:OptionalHasElement",
        [](const NodeProto &node, RuntimeContext &rt) {
-         if (node.input_size() > 1) {
-           throw std::invalid_argument(
-               "RunNode: op 'OptionalHasElement' expects 0 or 1 inputs, got " +
-               std::to_string(node.input_size()) + ".");
-         }
+         EXT_ENFORCE_INVALID(!(node.input_size() > 1), 
+               "RunNode: op 'OptionalHasElement' expects 0 or 1 inputs, got " ,
+               node.input_size() , ".");
          RequireOutputCount(node, 1);
          kernel::OptionalHasElement k(rt.kernel_ctx());
          if (node.input_size() == 0 || node.input(0).as_string().empty()) {
@@ -1851,9 +1740,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Pad",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 1);
-         if (node.input_size() > 4) {
-           throw std::invalid_argument("RunNode: op 'Pad' expects at most 4 inputs.");
-         }
+         EXT_ENFORCE_INVALID(!(node.input_size() > 4), "RunNode: op 'Pad' expects at most 4 inputs.");
          RequireOutputCount(node, 1);
          const Tensor &data = GetInput(node, 0, rt.tensors());
          const std::string mode = GetAttributeStringOrDefault(node, "mode", "constant");
@@ -1889,10 +1776,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:QLinearConv",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 8);
-         if (node.input_size() > 9) {
-           throw std::invalid_argument("RunNode: op 'QLinearConv' expects at most 9 inputs, got " +
-                                       std::to_string(node.input_size()) + ".");
-         }
+         EXT_ENFORCE_INVALID(!(node.input_size() > 9), "RunNode: op 'QLinearConv' expects at most 9 inputs, got " ,
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const Tensor &x_scale = GetInput(node, 1, rt.tensors());
@@ -1936,10 +1821,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:QuantizeLinear",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 2);
-         if (node.input_size() > 3) {
-           throw std::invalid_argument("RunNode: op 'QuantizeLinear' expects 2 or 3 inputs, got " +
-                                       std::to_string(node.input_size()) + ".");
-         }
+         EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op 'QuantizeLinear' expects 2 or 3 inputs, got " ,
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const Tensor &y_scale = GetInput(node, 1, rt.tensors());
@@ -2011,21 +1894,17 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
       {"ai.onnx:Resize",
        [](const NodeProto &node, RuntimeContext &rt) {
-         if (node.input_size() < 1 || node.input_size() > 4) {
-           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
-                                       "' expects between 1 and 4 input(s), got " +
-                                       std::to_string(node.input_size()) + ".");
-         }
+         EXT_ENFORCE_INVALID(!(node.input_size() < 1 || node.input_size() > 4), "RunNode: op '" , node.op_type().as_string() ,
+                                       "' expects between 1 and 4 input(s), got " ,
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const Tensor *roi = GetOptionalInput(node, 1, rt.tensors());
          const Tensor *scales = GetOptionalInput(node, 2, rt.tensors());
          const Tensor *sizes = GetOptionalInput(node, 3, rt.tensors());
-         if ((scales == nullptr) == (sizes == nullptr)) {
-           throw std::invalid_argument(
+         EXT_ENFORCE_INVALID(!((scales == nullptr) == (sizes == nullptr)), 
                "RunNode: op 'Resize' requires exactly one of 'scales' or 'sizes' to be "
                "provided.");
-         }
 
          kernel::Resize::Attributes attrs;
          attrs.mode = GetAttributeStringOrDefault(node, "mode", attrs.mode);
@@ -2044,13 +1923,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          attrs.extrapolation_value = GetAttributeFloatOrDefault(
              node, "extrapolation_value", attrs.extrapolation_value);
          if (roi != nullptr) {
-           if (roi->data_type != DataType::FLOAT) {
-             throw std::invalid_argument(
+           EXT_ENFORCE_INVALID(!(roi->data_type != DataType::FLOAT), 
                  "RunNode: op 'Resize' 'roi' input must be a FLOAT tensor.");
-           }
-           if (roi->shape.size() != 1) {
-             throw std::invalid_argument("RunNode: op 'Resize' 'roi' input must be 1-D.");
-           }
+           EXT_ENFORCE_INVALID(!(roi->shape.size() != 1), "RunNode: op 'Resize' 'roi' input must be 1-D.");
            const int64_t n = roi->shape[0];
            attrs.roi.assign(static_cast<std::size_t>(n), 0.0f);
            if (n > 0) {
@@ -2106,53 +1981,39 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Round", MakeUnaryTrampoline<kernel::Round>()},
       {"ai.onnx:RNN",
        [](const NodeProto &node, RuntimeContext &rt) {
-         if (node.input_size() < 3 || node.input_size() > 6) {
-           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
-                                       "' expects between 3 and 6 input(s), got " +
-                                       std::to_string(node.input_size()) + ".");
-         }
-         if (node.output_size() < 1 || node.output_size() > 2) {
-           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
-                                       "' expects 1 or 2 output(s), got " +
-                                       std::to_string(node.output_size()) + ".");
-         }
+         EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 6), "RunNode: op '" , node.op_type().as_string() ,
+                                       "' expects between 3 and 6 input(s), got " ,
+                                       node.input_size() , ".");
+         EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 2), "RunNode: op '" , node.op_type().as_string() ,
+                                       "' expects 1 or 2 output(s), got " ,
+                                       node.output_size() , ".");
 
          // Unsupported attributes: only the default ``forward`` direction
          // with the default ``Tanh`` activation and no ``clip`` are
          // implemented; ``layout=0`` and ``layout=1`` are both supported.
          const std::string direction =
              GetAttributeStringOrDefault(node, "direction", "forward");
-         if (direction != "forward") {
-           throw std::invalid_argument(
-               "RunNode: op 'RNN' only supports direction='forward', got '" + direction + "'.");
-         }
+         EXT_ENFORCE_INVALID(direction == "forward", 
+               "RunNode: op 'RNN' only supports direction='forward', got '" , direction , "'.");
          if (const AttributeProto *activations = FindAttribute(node, "activations");
              activations != nullptr) {
            const std::vector<std::string> values =
                GetAttributeStringsOrDefault(node, "activations", {});
-           if (values.size() != 1 || values[0] != "Tanh") {
-             throw std::invalid_argument(
+           EXT_ENFORCE_INVALID(!(values.size() != 1 || values[0] != "Tanh"), 
                  "RunNode: op 'RNN' only supports the default activations=['Tanh'].");
-           }
          }
-         if (FindAttribute(node, "activation_alpha") != nullptr ||
-             FindAttribute(node, "activation_beta") != nullptr) {
-           throw std::invalid_argument(
+         EXT_ENFORCE_INVALID(!(FindAttribute(node, "activation_alpha") != nullptr ||
+             FindAttribute(node, "activation_beta") != nullptr), 
                "RunNode: op 'RNN' does not support 'activation_alpha'/'activation_beta'.");
-         }
-         if (FindAttribute(node, "clip") != nullptr) {
-           throw std::invalid_argument("RunNode: op 'RNN' does not support the 'clip' attribute.");
-         }
+         EXT_ENFORCE_INVALID(FindAttribute(node, "clip") == nullptr, "RunNode: op 'RNN' does not support the 'clip' attribute.");
          const int64_t layout = GetAttributeIntOrDefault(node, "layout", 0);
 
          // ``sequence_lens`` (input #4) is not supported: it requires
          // per-batch sequence handling that the FLOAT kernel does not
          // implement.
          const Tensor *sequence_lens = GetOptionalInput(node, 4, rt.tensors());
-         if (sequence_lens != nullptr) {
-           throw std::invalid_argument(
+         EXT_ENFORCE_INVALID(sequence_lens == nullptr, 
                "RunNode: op 'RNN' does not support the optional 'sequence_lens' input.");
-         }
 
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const Tensor &w = GetInput(node, 1, rt.tensors());
@@ -2180,11 +2041,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
       {"ai.onnx:RotaryEmbedding",
        [](const NodeProto &node, RuntimeContext &rt) {
-         if (node.input_size() < 3 || node.input_size() > 4) {
-           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
-                                       "' expects between 3 and 4 input(s), got " +
-                                       std::to_string(node.input_size()) + ".");
-         }
+         EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 4), "RunNode: op '" , node.op_type().as_string() ,
+                                       "' expects between 3 and 4 input(s), got " ,
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const Tensor &cos_cache = GetInput(node, 1, rt.tensors());
@@ -2259,10 +2118,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          RequireOutputCount(node, 1);
          const Sequence &input_sequence = GetInputSequence(node, 0, rt);
          const AttributeProto *axis_attr = FindAttribute(node, "axis");
-         if (axis_attr == nullptr) {
-           throw std::invalid_argument(
+         EXT_ENFORCE_INVALID(axis_attr != nullptr, 
                "RunNode: op 'ConcatFromSequence' is missing required attribute 'axis'.");
-         }
          const int64_t axis = axis_attr->i();
          const int64_t new_axis = GetAttributeIntOrDefault(node, "new_axis", 0);
          kernel::ConcatFromSequence k(rt.kernel_ctx());
@@ -2300,11 +2157,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:SequenceErase",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 1);
-         if (node.input_size() > 2) {
-           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
-                                       "' expects 1 or 2 inputs, got " +
-                                       std::to_string(node.input_size()) + ".");
-         }
+         EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '" , node.op_type().as_string() ,
+                                       "' expects 1 or 2 inputs, got " ,
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Sequence &input_sequence = GetInputSequence(node, 0, rt);
          const Tensor *position = GetOptionalInput(node, 1, rt.tensors());
@@ -2314,11 +2169,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:SequenceInsert",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 2);
-         if (node.input_size() > 3) {
-           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
-                                       "' expects 2 or 3 inputs, got " +
-                                       std::to_string(node.input_size()) + ".");
-         }
+         EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op '" , node.op_type().as_string() ,
+                                       "' expects 2 or 3 inputs, got " ,
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Sequence &input_sequence = GetInputSequence(node, 0, rt);
          const Tensor &tensor = GetInput(node, 1, rt.tensors());
@@ -2337,15 +2190,11 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Split",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 1);
-         if (node.input_size() > 2) {
-           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
-                                       "' expects 1 or 2 inputs, got " +
-                                       std::to_string(node.input_size()) + ".");
-         }
-         if (node.output_size() < 1) {
-           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+         EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '" , node.op_type().as_string() ,
+                                       "' expects 1 or 2 inputs, got " ,
+                                       node.input_size() , ".");
+         EXT_ENFORCE_INVALID(!(node.output_size() < 1), "RunNode: op '" , node.op_type().as_string() ,
                                        "' expects at least 1 output, got 0.");
-         }
          const Tensor &input = GetInput(node, 0, rt.tensors());
          const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
 
@@ -2368,11 +2217,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
 
          kernel::Split k(rt.kernel_ctx());
          std::vector<Tensor> outputs = k(input, axis, split, num_outputs);
-         if (static_cast<int>(outputs.size()) != node.output_size()) {
-           throw std::invalid_argument(
-               "RunNode: op 'Split' produced " + std::to_string(outputs.size()) +
-               " outputs but node declares " + std::to_string(node.output_size()) + ".");
-         }
+         EXT_ENFORCE_INVALID(!(static_cast<int>(outputs.size()) != node.output_size()), 
+               "RunNode: op 'Split' produced " , outputs.size() ,
+               " outputs but node declares " , node.output_size() , ".");
          for (int i = 0; i < node.output_size(); ++i) {
            SetOutput(node, i, std::move(outputs[static_cast<size_t>(i)]), rt);
          }
@@ -2380,11 +2227,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:SplitToSequence",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 1);
-         if (node.input_size() > 2) {
-           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
-                                       "' expects 1 or 2 inputs, got " +
-                                       std::to_string(node.input_size()) + ".");
-         }
+         EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '" , node.op_type().as_string() ,
+                                       "' expects 1 or 2 inputs, got " ,
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Tensor &input = GetInput(node, 0, rt.tensors());
          const Tensor *split = GetOptionalInput(node, 1, rt.tensors());
@@ -2433,11 +2278,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:Slice",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 3);
-         if (node.input_size() > 5) {
-           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
-                                       "' expects between 3 and 5 input(s), got " +
-                                       std::to_string(node.input_size()) + ".");
-         }
+         EXT_ENFORCE_INVALID(!(node.input_size() > 5), "RunNode: op '" , node.op_type().as_string() ,
+                                       "' expects between 3 and 5 input(s), got " ,
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Tensor &data = GetInput(node, 0, rt.tensors());
          const Tensor &starts = GetInput(node, 1, rt.tensors());
@@ -2473,10 +2316,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx:STFT",
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 2);
-         if (node.input_size() > 4) {
-           throw std::invalid_argument("RunNode: op '" + node.op_type().as_string() +
+         EXT_ENFORCE_INVALID(!(node.input_size() > 4), "RunNode: op '" , node.op_type().as_string() ,
                                        "' expects at most 4 inputs.");
-         }
          RequireOutputCount(node, 1);
          const Tensor &signal = GetInput(node, 0, rt.tensors());
          const Tensor &frame_step = GetInput(node, 1, rt.tensors());
@@ -2584,21 +2425,15 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          if (opset_version >= 10) {
            RequireInputCount(node, 2);
            const Tensor &k_tensor = GetInput(node, 1, rt.tensors());
-           if (k_tensor.element_count() != 1) {
-             throw std::invalid_argument(
+           EXT_ENFORCE_INVALID(k_tensor.element_count() == 1, 
                  "RunNode: op 'TopK' input 'K' must be a 1-D tensor with a single element.");
-           }
-           if (k_tensor.data_type != static_cast<int32_t>(DataType::INT64)) {
-             throw std::invalid_argument("RunNode: op 'TopK' input 'K' must be INT64.");
-           }
+           EXT_ENFORCE_INVALID(!(k_tensor.data_type != static_cast<int32_t>(DataType::INT64)), "RunNode: op 'TopK' input 'K' must be INT64.");
            k = k_tensor.AsInt64()[0];
          } else {
            RequireInputCount(node, 1);
            const AttributeProto *k_attr = FindAttribute(node, "k");
-           if (k_attr == nullptr) {
-             throw std::invalid_argument(
+           EXT_ENFORCE_INVALID(k_attr != nullptr, 
                  "RunNode: op 'TopK' requires the 'k' attribute for opset < 10.");
-           }
            k = k_attr->i();
          }
 
@@ -2689,10 +2524,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const AttributeProto *score_mod_attr = FindAttribute(node, "score_mod");
          if (score_mod_attr != nullptr) {
            const GraphProto &score_mod_graph = score_mod_attr->ref_g();
-           if (score_mod_graph.input().empty()) {
-             throw std::invalid_argument(
+           EXT_ENFORCE_INVALID(!(score_mod_graph.input().empty()), 
                  "RunNode: 'score_mod' subgraph must declare at least one input.");
-           }
            const std::string in_name = score_mod_graph.input()[0].name().as_string();
            score_mod_fn = [&score_mod_graph, in_name, &rt](Tensor &scores) {
              auto outputs = RunSubgraph(score_mod_graph, {{in_name, scores}}, rt, "score_mod");
@@ -2704,10 +2537,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const AttributeProto *prob_mod_attr = FindAttribute(node, "prob_mod");
          if (prob_mod_attr != nullptr) {
            const GraphProto &prob_mod_graph = prob_mod_attr->ref_g();
-           if (prob_mod_graph.input().empty()) {
-             throw std::invalid_argument(
+           EXT_ENFORCE_INVALID(!(prob_mod_graph.input().empty()), 
                  "RunNode: 'prob_mod' subgraph must declare at least one input.");
-           }
            const std::string in_name = prob_mod_graph.input()[0].name().as_string();
            prob_mod_fn = [&prob_mod_graph, in_name, &rt](Tensor &probs) {
              auto outputs = RunSubgraph(prob_mod_graph, {{in_name, probs}}, rt, "prob_mod");
@@ -2727,17 +2558,13 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       // ai.onnx.preview.training
       {"ai.onnx.preview.training:Adagrad",
        [](const NodeProto &node, RuntimeContext &rt) {
-         if (node.input_size() < 5 || (node.input_size() - 2) % 3 != 0) {
-           throw std::invalid_argument(
-               "RunNode: op 'Adagrad' expects 2 + 3*N inputs (got " +
-               std::to_string(node.input_size()) + ").");
-         }
+         EXT_ENFORCE_INVALID(!(node.input_size() < 5 || (node.input_size() - 2) % 3 != 0), 
+               "RunNode: op 'Adagrad' expects 2 + 3*N inputs (got " ,
+               node.input_size() , ").");
          const int64_t n = (node.input_size() - 2) / 3;
-         if (node.output_size() != 2 * n) {
-           throw std::invalid_argument("RunNode: op 'Adagrad' expects 2*N outputs (got " +
-                                       std::to_string(node.output_size()) + " for N=" +
-                                       std::to_string(n) + ").");
-         }
+         EXT_ENFORCE_INVALID(node.output_size() == 2 * n, "RunNode: op 'Adagrad' expects 2*N outputs (got " ,
+                                       node.output_size() , " for N=" ,
+                                       n , ").");
          const Tensor &R = GetInput(node, 0, rt.tensors());
          const Tensor &T = GetInput(node, 1, rt.tensors());
          std::vector<Tensor> Xs, Gs, Hs;
@@ -2763,16 +2590,12 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
       {"ai.onnx.preview.training:Adam",
        [](const NodeProto &node, RuntimeContext &rt) {
-         if (node.input_size() < 6 || (node.input_size() - 2) % 4 != 0) {
-           throw std::invalid_argument("RunNode: op 'Adam' expects 2 + 4*N inputs (got " +
-                                       std::to_string(node.input_size()) + ").");
-         }
+         EXT_ENFORCE_INVALID(!(node.input_size() < 6 || (node.input_size() - 2) % 4 != 0), "RunNode: op 'Adam' expects 2 + 4*N inputs (got " ,
+                                       node.input_size() , ").");
          const int64_t n = (node.input_size() - 2) / 4;
-         if (node.output_size() != 3 * n) {
-           throw std::invalid_argument("RunNode: op 'Adam' expects 3*N outputs (got " +
-                                       std::to_string(node.output_size()) + " for N=" +
-                                       std::to_string(n) + ").");
-         }
+         EXT_ENFORCE_INVALID(node.output_size() == 3 * n, "RunNode: op 'Adam' expects 3*N outputs (got " ,
+                                       node.output_size() , " for N=" ,
+                                       n , ").");
          const Tensor &R = GetInput(node, 0, rt.tensors());
          const Tensor &T = GetInput(node, 1, rt.tensors());
          std::vector<Tensor> Xs, Gs, Vs, Hs;
@@ -2803,17 +2626,13 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        }},
       {"ai.onnx.preview.training:Momentum",
        [](const NodeProto &node, RuntimeContext &rt) {
-         if (node.input_size() < 5 || (node.input_size() - 2) % 3 != 0) {
-           throw std::invalid_argument(
-               "RunNode: op 'Momentum' expects 2 + 3*N inputs (got " +
-               std::to_string(node.input_size()) + ").");
-         }
+         EXT_ENFORCE_INVALID(!(node.input_size() < 5 || (node.input_size() - 2) % 3 != 0), 
+               "RunNode: op 'Momentum' expects 2 + 3*N inputs (got " ,
+               node.input_size() , ").");
          const int64_t n = (node.input_size() - 2) / 3;
-         if (node.output_size() != 2 * n) {
-           throw std::invalid_argument("RunNode: op 'Momentum' expects 2*N outputs (got " +
-                                       std::to_string(node.output_size()) + " for N=" +
-                                       std::to_string(n) + ").");
-         }
+         EXT_ENFORCE_INVALID(node.output_size() == 2 * n, "RunNode: op 'Momentum' expects 2*N outputs (got " ,
+                                       node.output_size() , " for N=" ,
+                                       n , ").");
          const Tensor &R = GetInput(node, 0, rt.tensors());
          const Tensor &T = GetInput(node, 1, rt.tensors());
          std::vector<Tensor> Xs, Gs, Vs;
@@ -2836,8 +2655,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          } else if (mode_str == "nesterov") {
            mode = kernel::Momentum::Mode::kNesterov;
          } else {
-           throw std::invalid_argument(
-               "RunNode: Momentum 'mode' must be 'standard' or 'nesterov', got '" + mode_str +
+           EXT_THROW_INVALID(
+               "RunNode: Momentum 'mode' must be 'standard' or 'nesterov', got '" , mode_str ,
                "'.");
          }
          kernel::Momentum k(rt.kernel_ctx());
@@ -2868,29 +2687,23 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            const std::string values_name = map_input + "_values";
            auto keys_it = rt.tensors().find(keys_name);
            auto values_it = rt.tensors().find(values_name);
-           if (keys_it == rt.tensors().end() || values_it == rt.tensors().end()) {
-             throw std::invalid_argument("RunNode: CastMap map input '" + map_input +
-                                         "' requires a Map or tensors '" + keys_name + "' / '" +
-                                         values_name + "'.");
-           }
+           EXT_ENFORCE_INVALID(!(keys_it == rt.tensors().end() || values_it == rt.tensors().end()), "RunNode: CastMap map input '" , map_input ,
+                                         "' requires a Map or tensors '" , keys_name , "' / '" ,
+                                         values_name , "'.");
            temp_map = Map(map_input, keys_it->second, values_it->second);
            cast_m_ptr = &temp_map;
          }
          const Map &cast_m = *cast_m_ptr;
          const Tensor &x_keys = cast_m.keys;
          const Tensor &x_values = cast_m.values;
-         if (x_keys.data_type != static_cast<int32_t>(DataType::INT64)) {
-           throw std::invalid_argument("RunNode: CastMap keys must be an INT64 tensor.");
-         }
+         EXT_ENFORCE_INVALID(!(x_keys.data_type != static_cast<int32_t>(DataType::INT64)), "RunNode: CastMap keys must be an INT64 tensor.");
          const std::vector<int64_t> keys = TensorToVector<int64_t>(x_keys);
          const std::string cast_to = GetAttributeStringOrDefault(node, "cast_to", "TO_FLOAT");
          const std::string map_form = GetAttributeStringOrDefault(node, "map_form", "DENSE");
          const int64_t max_map = GetAttributeIntOrDefault(node, "max_map", 0);
-         if (cast_to != "TO_FLOAT" && cast_to != "TO_INT64" && cast_to != "TO_STRING") {
-           throw std::invalid_argument(
+         EXT_ENFORCE_INVALID(!(cast_to != "TO_FLOAT" && cast_to != "TO_INT64" && cast_to != "TO_STRING"), 
                "RunNode: CastMap attribute 'cast_to' must be 'TO_FLOAT', 'TO_INT64', or "
                "'TO_STRING'.");
-         }
          kernel::CastMap cast_map(rt.kernel_ctx());
          Tensor y;
          switch (x_values.data_type) {
@@ -2919,7 +2732,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            break;
          }
          default:
-           throw std::invalid_argument(
+           EXT_THROW_INVALID(
                "RunNode: CastMap values must be a FLOAT or STRING tensor.");
          }
          SetOutput(node, 0, std::move(y), rt);
@@ -2943,11 +2756,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            const std::string values_name = map_input + "_values";
            auto keys_it = rt.tensors().find(keys_name);
            auto values_it = rt.tensors().find(values_name);
-           if (keys_it == rt.tensors().end() || values_it == rt.tensors().end()) {
-             throw std::invalid_argument("RunNode: DictVectorizer map input '" + map_input +
-                                         "' requires a Map or tensors '" + keys_name + "' / '" +
-                                         values_name + "'.");
-           }
+           EXT_ENFORCE_INVALID(!(keys_it == rt.tensors().end() || values_it == rt.tensors().end()), "RunNode: DictVectorizer map input '" , map_input ,
+                                         "' requires a Map or tensors '" , keys_name , "' / '" ,
+                                         values_name , "'.");
            temp_map = Map(map_input, keys_it->second, values_it->second);
            dict_m_ptr = &temp_map;
          }
@@ -2958,19 +2769,15 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const AttributeProto *int_vocab = FindAttribute(node, "int64_vocabulary");
          const bool has_str = str_vocab != nullptr && str_vocab->strings_size() > 0;
          const bool has_int = int_vocab != nullptr && int_vocab->ints_size() > 0;
-         if (has_str == has_int) {
-           throw std::invalid_argument(
+         EXT_ENFORCE_INVALID(has_str != has_int, 
                "RunNode: DictVectorizer requires exactly one of 'string_vocabulary' or "
                "'int64_vocabulary' to be specified and non-empty.");
-         }
          kernel::DictVectorizer dict(rt.kernel_ctx());
          Tensor y;
          if (has_str) {
-           if (x_keys.data_type != static_cast<int32_t>(DataType::STRING)) {
-             throw std::invalid_argument(
+           EXT_ENFORCE_INVALID(!(x_keys.data_type != static_cast<int32_t>(DataType::STRING)), 
                  "RunNode: DictVectorizer keys must be a STRING tensor when "
                  "'string_vocabulary' is set.");
-           }
            const std::vector<std::string> &keys = x_keys.AsStrings();
            std::vector<std::string> vocab;
            vocab.reserve(str_vocab->strings_size());
@@ -2994,16 +2801,14 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
              break;
            }
            default:
-             throw std::invalid_argument(
+             EXT_THROW_INVALID(
                  "RunNode: DictVectorizer values must be INT64, FLOAT, or DOUBLE when "
                  "'string_vocabulary' is set.");
            }
          } else {
-           if (x_keys.data_type != static_cast<int32_t>(DataType::INT64)) {
-             throw std::invalid_argument(
+           EXT_ENFORCE_INVALID(!(x_keys.data_type != static_cast<int32_t>(DataType::INT64)), 
                  "RunNode: DictVectorizer keys must be an INT64 tensor when "
                  "'int64_vocabulary' is set.");
-           }
            const std::vector<int64_t> keys = TensorToVector<int64_t>(x_keys);
            std::vector<int64_t> vocab;
            vocab.reserve(int_vocab->ints_size());
@@ -3027,7 +2832,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
              break;
            }
            default:
-             throw std::invalid_argument(
+             EXT_THROW_INVALID(
                  "RunNode: DictVectorizer values must be FLOAT, DOUBLE, or STRING when "
                  "'int64_vocabulary' is set.");
            }
@@ -3063,11 +2868,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
              GetAttributeStringsOrDefault(node, "classlabels_strings", {});
          const bool use_strings = !classlabels_strings.empty();
          const bool has_ints = !classlabels_ints.empty();
-         if (use_strings == has_ints) {
-           throw std::invalid_argument(
+         EXT_ENFORCE_INVALID(use_strings != has_ints, 
                "RunNode: SVMClassifier requires exactly one of 'classlabels_ints' or "
                "'classlabels_strings' to be set.");
-         }
          kernel::SVMClassifier svm(rt.kernel_ctx());
          std::pair<Tensor, Tensor> yz =
              DispatchSVMByDataType(x, "SVMClassifier", [&](auto *tag) {
@@ -3172,11 +2975,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
              GetAttributeStringsOrDefault(node, "classlabels_strings", {});
          const bool use_strings = !classlabels_strings.empty();
          const bool has_ints = !classlabels_ints.empty();
-         if (use_strings == has_ints) {
-           throw std::invalid_argument(
+         EXT_ENFORCE_INVALID(use_strings != has_ints, 
                "RunNode: LinearClassifier requires exactly one of 'classlabels_ints' or "
                "'classlabels_strings' to be set.");
-         }
          kernel::LinearClassifier cls(rt.kernel_ctx());
          std::pair<Tensor, Tensor> yz =
              DispatchSVMByDataType(x, "LinearClassifier", [&](auto *tag) {
@@ -3229,11 +3030,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
              GetAttributeStringOrDefault(node, "post_transform", "NONE");
          const bool use_strings = !classlabels_strings.empty();
          const bool has_ints = !classlabels_int64s.empty();
-         if (use_strings == has_ints) {
-           throw std::invalid_argument(
+         EXT_ENFORCE_INVALID(use_strings != has_ints, 
                "RunNode: TreeEnsembleClassifier requires exactly one of "
                "'classlabels_int64s' or 'classlabels_strings' to be set.");
-         }
          kernel::TreeEnsembleClassifier cls(rt.kernel_ctx());
          std::pair<Tensor, Tensor> yz = DispatchTreeEnsembleClassicByDataType(
              x, "TreeEnsembleClassifier", [&](auto *tag) {
@@ -3381,7 +3180,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
                                                                 default_string);
            break;
          default:
-           throw std::invalid_argument(
+           EXT_THROW_INVALID(
                "RunNode: CategoryMapper input X must have element type STRING or INT64.");
          }
          SetOutput(node, 0, std::move(y), rt.tensors());
@@ -3400,11 +3199,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const AttributeProto *keys_tensor = FindAttribute(node, "keys_tensor");
          const int n_keys = (keys_int64s != nullptr) + (keys_floats != nullptr) +
                             (keys_strings != nullptr) + (keys_tensor != nullptr);
-         if (n_keys != 1) {
-           throw std::invalid_argument(
+         EXT_ENFORCE_INVALID(n_keys == 1, 
                "RunNode: LabelEncoder requires exactly one of 'keys_int64s', "
                "'keys_floats', 'keys_strings' or 'keys_tensor' to be set.");
-         }
 
          // Identify the value source.
          const AttributeProto *values_int64s = FindAttribute(node, "values_int64s");
@@ -3413,11 +3210,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const AttributeProto *values_tensor = FindAttribute(node, "values_tensor");
          const int n_values = (values_int64s != nullptr) + (values_floats != nullptr) +
                               (values_strings != nullptr) + (values_tensor != nullptr);
-         if (n_values != 1) {
-           throw std::invalid_argument(
+         EXT_ENFORCE_INVALID(n_values == 1, 
                "RunNode: LabelEncoder requires exactly one of 'values_int64s', "
                "'values_floats', 'values_strings' or 'values_tensor' to be set.");
-         }
 
          // Resolve KeyT.
          enum class KeyKind { Int64, Float, String };
@@ -3456,7 +3251,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
              keys_str = kt.AsStrings();
              break;
            default:
-             throw std::invalid_argument(
+             EXT_THROW_INVALID(
                  "RunNode: LabelEncoder 'keys_tensor' must have element type "
                  "INT64, FLOAT or STRING.");
            }
@@ -3479,7 +3274,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
              values_f32.push_back(v);
            }
          } else if (values_strings != nullptr) {
-           throw std::invalid_argument(
+           EXT_THROW_INVALID(
                "RunNode: LabelEncoder with 'values_strings' is not supported "
                "by this kernel registration.");
          } else {
@@ -3498,7 +3293,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
              values_i16 = TensorToVector<int16_t>(vt);
              break;
            default:
-             throw std::invalid_argument(
+             EXT_THROW_INVALID(
                  "RunNode: LabelEncoder 'values_tensor' must have element "
                  "type INT64, FLOAT or INT16.");
            }
@@ -3518,10 +3313,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          }
          if (default_tensor_attr != nullptr) {
            const Tensor dt = TensorFromProto(default_tensor_attr->t());
-           if (dt.element_count() != 1) {
-             throw std::invalid_argument(
+           EXT_ENFORCE_INVALID(dt.element_count() == 1, 
                  "RunNode: LabelEncoder 'default_tensor' must contain exactly one element.");
-           }
            switch (dt.data_type) {
            case static_cast<int32_t>(DataType::INT64):
              default_i64 = dt.AsInt64()[0];
@@ -3533,7 +3326,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
              default_i16 = dt.AsInt16()[0];
              break;
            default:
-             throw std::invalid_argument(
+             EXT_THROW_INVALID(
                  "RunNode: LabelEncoder 'default_tensor' must have element "
                  "type INT64, FLOAT or INT16.");
            }
@@ -3556,7 +3349,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            out =
                label_encoder.operator()<std::string, int16_t>(x, keys_str, values_i16, default_i16);
          } else {
-           throw std::invalid_argument(
+           EXT_THROW_INVALID(
                "RunNode: LabelEncoder key/value type combination is not supported.");
          }
          SetOutput(node, 0, std::move(out), rt.tensors());
@@ -3570,11 +3363,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const AttributeProto *cats_int64s = FindAttribute(node, "cats_int64s");
          const AttributeProto *cats_strings = FindAttribute(node, "cats_strings");
          const int n_cats = (cats_int64s != nullptr) + (cats_strings != nullptr);
-         if (n_cats != 1) {
-           throw std::invalid_argument(
+         EXT_ENFORCE_INVALID(n_cats == 1, 
                "RunNode: OneHotEncoder requires exactly one of 'cats_int64s' "
                "or 'cats_strings' to be set.");
-         }
 
          // The ``zeros`` attribute defaults to 1 per the ai.onnx.ml schema.
          const bool zeros = GetAttributeIntOrDefault(node, "zeros", 1) != 0;
@@ -3598,11 +3389,9 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            for (size_t i = 0; i < cats_strings->strings().size(); ++i) {
              cats.push_back(cats_strings->strings()[i].as_string());
            }
-           if (x.data_type != static_cast<int32_t>(DataType::STRING)) {
-             throw std::invalid_argument(
+           EXT_ENFORCE_INVALID(!(x.data_type != static_cast<int32_t>(DataType::STRING)), 
                  "RunNode: OneHotEncoder with 'cats_strings' requires input X "
                  "of element type STRING.");
-           }
            y = one_hot(x, cats, zeros);
          }
          SetOutput(node, 0, std::move(y), rt.tensors());
@@ -3651,22 +3440,16 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          const Tensor nodes_modes_t = GetRequiredAttributeTensor(node, "nodes_modes");
          const Tensor membership_values =
              GetAttributeTensorOrEmpty(node, "membership_values", x.data_type);
-         if (nodes_modes_t.data_type != static_cast<int32_t>(DataType::UINT8)) {
-           throw std::invalid_argument(
+         EXT_ENFORCE_INVALID(!(nodes_modes_t.data_type != static_cast<int32_t>(DataType::UINT8)), 
                "RunNode: TreeEnsemble attribute 'nodes_modes' must be a UINT8 tensor.");
-         }
-         if (nodes_splits.data_type != x.data_type ||
-             leaf_weights.data_type != x.data_type) {
-           throw std::invalid_argument(
+         EXT_ENFORCE_INVALID(!(nodes_splits.data_type != x.data_type ||
+             leaf_weights.data_type != x.data_type), 
                "RunNode: TreeEnsemble attributes 'nodes_splits' and 'leaf_weights' must "
                "have the same element type as input 'X'.");
-         }
-         if (membership_values.element_count() > 0 &&
-             membership_values.data_type != x.data_type) {
-           throw std::invalid_argument(
+         EXT_ENFORCE_INVALID(!(membership_values.element_count() > 0 &&
+             membership_values.data_type != x.data_type), 
                "RunNode: TreeEnsemble attribute 'membership_values' must have the same "
                "element type as input 'X'.");
-         }
          const std::vector<uint8_t> nodes_modes_vec = TensorToVector<uint8_t>(nodes_modes_t);
          kernel::TreeEnsemble tree_ens(rt.kernel_ctx());
          Tensor y;
@@ -3698,7 +3481,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
            break;
          }
          default:
-           throw std::invalid_argument(
+           EXT_THROW_INVALID(
                "RunNode: TreeEnsemble input 'X' must be FLOAT or DOUBLE.");
          }
          SetOutput(node, 0, std::move(y), rt);

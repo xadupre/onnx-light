@@ -67,9 +67,13 @@ jobs:
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
           # ONNX_LIGHT_BUILD_KERNELS=OFF compiles the reduced variant without the
           # operator-kernel runtime and the backend-test registries.
+          # ONNX_LIGHT_REDUCED=1 adds the "0reduced" wheel build tag (see the
+          # [[tool.scikit-build.overrides]] block in pyproject.toml) so the
+          # reduced wheel file name differs from the full wheel.
           CIBW_ENVIRONMENT: >
             CMAKE_ARGS=-DONNX_LIGHT_BUILD_KERNELS=OFF
             CMAKE_BUILD_PARALLEL_LEVEL=${{ steps.cpu_count.outputs.count }}
+            ONNX_LIGHT_REDUCED=1
           CIBW_BEFORE_BUILD_LINUX: >
             yum install -y openssl-devel ||
             dnf install -y openssl-devel ||

@@ -44,6 +44,9 @@ from __future__ import annotations
 
 from ..onnx_py._onnxpyoptim import expressions as _C  # type: ignore[attr-defined]
 
+CompareResult = _C.CompareResult
+ExpressionComparison = _C.ExpressionComparison
+
 
 def simplify_expression(expr: "str | int") -> "str | int":
     """Simplifies a symbolic or numeric expression.
@@ -113,37 +116,40 @@ def simplify_two_expressions(expr1: str, expr2: str) -> "dict[str, int]":
     return _C.simplify_two_expressions(expr1, expr2)
 
 
-def compare_expressions(expr1: str, expr2: str) -> "tuple[str, str | int]":
+def compare_expressions(expr1: str, expr2: str) -> "ExpressionComparison":
     """Compares *expr1* to *expr2* assuming all tokens are positive or null.
 
     Builds the linear combination of ``expr1 - expr2`` and reasons about its
     sign knowing that every symbolic token is greater than or equal to zero:
 
-    * ``"equal"`` when the difference is identically zero.
-    * ``"greater"`` when ``expr1 - expr2`` is strictly positive for every
-      non-negative assignment of the tokens.
-    * ``"smaller"`` when ``expr1 - expr2`` is strictly negative for every
-      non-negative assignment of the tokens.
-    * ``"unknown"`` otherwise (e.g. tokens with mixed-sign coefficients, or a
-      zero constant term that allows equality when all tokens are zero).
+    * :attr:`CompareResult.Equal` when the difference is identically zero.
+    * :attr:`CompareResult.Greater` when ``expr1 - expr2`` is strictly positive
+      for every non-negative assignment of the tokens.
+    * :attr:`CompareResult.Smaller` when ``expr1 - expr2`` is strictly negative
+      for every non-negative assignment of the tokens.
+    * :attr:`CompareResult.Unknown` otherwise (e.g. tokens with mixed-sign
+      coefficients, or a zero constant term that allows equality when all tokens
+      are zero).
 
     :param expr1: The first expression string.
     :param expr2: The second expression string.
-    :returns: A tuple ``(result, difference)`` where *result* is one of
-        ``"smaller"``, ``"equal"``, ``"greater"``, ``"unknown"`` and
-        *difference* is the simplified value of ``expr2 - expr1`` (an ``int``
-        when numeric, otherwise a ``str``).  The difference is most useful when
-        *result* is ``"unknown"``.
-    :rtype: tuple[str, str | int]
+    :returns: An :class:`ExpressionComparison` whose ``result`` is a
+        :class:`CompareResult` and whose ``difference`` is the simplified value
+        of ``expr2 - expr1`` (an ``int`` when numeric, otherwise a ``str``).
+        The difference is most useful when ``result`` is
+        :attr:`CompareResult.Unknown`.
+    :rtype: ExpressionComparison
+    :raises RuntimeError: If either expression cannot be parsed.
 
     Examples::
 
-        >>> compare_expressions("a+1", "a")
-        ('greater', '-1')
-        >>> compare_expressions("a", "a")
-        ('equal', '0')
-        >>> compare_expressions("a", "b")
-        ('unknown', 'b-a')
+        >>> c = compare_expressions("a+1", "a")
+        >>> c.result
+        CompareResult.Greater
+        >>> c.difference
+        '-1'
+        >>> compare_expressions("a", "b").result
+        CompareResult.Unknown
     """
     return _C.compare_expressions(expr1, expr2)
 

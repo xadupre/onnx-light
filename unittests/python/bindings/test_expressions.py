@@ -6,6 +6,7 @@ from onnx_light.onnx_optim.expressions import (
     simplify_expression,
     simplify_two_expressions,
     compare_expressions,
+    CompareResult,
     evaluate_expression,
     parse_expression_tokens,
     rename_expression,
@@ -62,14 +63,19 @@ class TestSimplifyExpressions(ExtTestCase):
         self.assertEqual(simplify_two_expressions("e*2", "e+e"), {})
 
     def test_compare_expressions(self):
-        self.assertEqual(compare_expressions("a+b", "b+a"), ("equal", "0"))
-        self.assertEqual(compare_expressions("5", "3"), ("greater", -2))
-        self.assertEqual(compare_expressions("3", "5"), ("smaller", 2))
-        self.assertEqual(compare_expressions("a+1", "a"), ("greater", "-1"))
-        self.assertEqual(compare_expressions("a", "a+1"), ("smaller", "1"))
-        self.assertEqual(compare_expressions("a+b+1", "a"), ("greater", "-b-1"))
-        self.assertEqual(compare_expressions("a", "b"), ("unknown", "b-a"))
-        self.assertEqual(compare_expressions("2*a", "a"), ("unknown", "-a"))
+        def check(expr1, expr2, result, difference):
+            c = compare_expressions(expr1, expr2)
+            self.assertEqual(c.result, result)
+            self.assertEqual(c.difference, difference)
+
+        check("a+b", "b+a", CompareResult.Equal, "0")
+        check("5", "3", CompareResult.Greater, -2)
+        check("3", "5", CompareResult.Smaller, 2)
+        check("a+1", "a", CompareResult.Greater, "-1")
+        check("a", "a+1", CompareResult.Smaller, "1")
+        check("a+b+1", "a", CompareResult.Greater, "-b-1")
+        check("a", "b", CompareResult.Unknown, "b-a")
+        check("2*a", "a", CompareResult.Unknown, "-a")
 
     def test_compare_expressions_syntax_error(self):
         with self.assertRaises(RuntimeError):

@@ -447,6 +447,8 @@ class InferenceSessionAllTypes:
         input_metas = self._sess.get_inputs()
         output_metas = self._sess.get_outputs()
         inputs = [input_feed[meta.name] for meta in input_metas]
+        if output_names is None:
+            output_names = [o.name for o in output_metas]
 
         for meta in input_metas:
             if meta.type == "tensor(string)":

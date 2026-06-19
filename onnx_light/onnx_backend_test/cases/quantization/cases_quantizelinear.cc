@@ -66,6 +66,8 @@ namespace {
 // ---------------------------------------------------------------------------
 void RegisterQuantizeLinearCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(19);
+  const OpsetId opset_v21 = DefaultOpset(21); // For FLOAT8, INT4, UINT4
+  const OpsetId opset_v23 = DefaultOpset(23); // For INT2, UINT2, FLOAT4E2M1
   const kernel::KernelContext ctx{opset};
   const kernel::QuantizeLinear quantize_kernel{ctx};
 
@@ -176,7 +178,7 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry) {
   }
 
   // From QuantizeLinear.export_e4m3fn(): FLOAT8E4M3FN output with a 1-D
-  // single-element ``y_zero_point`` of 0.
+  // single-element ``y_zero_point`` of 0. FLOAT8 types were introduced in opset 21.
   {
     NodeProto e4m3fn_node;
     e4m3fn_node.set_op_type("QuantizeLinear");
@@ -192,12 +194,12 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry) {
     Tensor y =
         kernel::MakeFloat8Tensor(DataType::FLOAT8E4M3FN, {5}, {0.0f, 0.5f, 1.0f, 448.0f, 96.0f},
                                  &kernel::FloatToFloat8E4M3FNBits);
-    Expect(e4m3fn_node, {x, y_scale, y_zero_point}, {y}, "test_quantizelinear_e4m3fn", {opset},
+    Expect(e4m3fn_node, {x, y_scale, y_zero_point}, {y}, "test_quantizelinear_e4m3fn", {opset_v21},
            "backend-test", registry);
   }
 
   // From QuantizeLinear.export_e5m2(): FLOAT8E5M2 output with a 1-D
-  // single-element ``y_zero_point`` of 0.
+  // single-element ``y_zero_point`` of 0. FLOAT8 types were introduced in opset 21.
   {
     NodeProto e5m2_node;
     e5m2_node.set_op_type("QuantizeLinear");
@@ -213,13 +215,14 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry) {
     Tensor y =
         kernel::MakeFloat8Tensor(DataType::FLOAT8E5M2, {5}, {0.0f, 0.5f, 1.0f, 49152.0f, 96.0f},
                                  &kernel::FloatToFloat8E5M2Bits);
-    Expect(e5m2_node, {x, y_scale, y_zero_point}, {y}, "test_quantizelinear_e5m2", {opset},
+    Expect(e5m2_node, {x, y_scale, y_zero_point}, {y}, "test_quantizelinear_e5m2", {opset_v21},
            "backend-test", registry);
   }
 
   // The remaining upstream cases (UINT4/INT4/UINT2/INT2/FLOAT4E2M1) all use
   // per-axis quantization (``axis=0``) and a 3-element scale/zero point with
   // pre-computed sub-byte expected outputs.
+  // INT4/UINT4 were introduced in opset 21, INT2/UINT2/FLOAT4E2M1 in opset 23.
   NodeProto sub_byte_node;
   sub_byte_node.set_op_type("QuantizeLinear");
   sub_byte_node.add_input("x");
@@ -231,7 +234,7 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry) {
   const std::vector<int64_t> sub_byte_x_shape = {3, 4};
   Tensor sub_byte_scale = Tensor::FromFloat("", {3}, {2.0f, 3.0f, 4.0f});
 
-  // From QuantizeLinear.export_uint4().
+  // From QuantizeLinear.export_uint4(). INT4/UINT4 introduced in opset 21.
   {
     Tensor x = Tensor::FromFloat(
         "", sub_byte_x_shape,
@@ -240,10 +243,10 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry) {
     Tensor y = kernel::MakeSubByteTensor(DataType::UINT4, sub_byte_x_shape,
                                          {1, 2, 3, 5, 0, 0, 3, 4, 4, 5, 5, 11}, /*bits=*/4);
     Expect(sub_byte_node, {x, sub_byte_scale, y_zero_point}, {y}, "test_quantizelinear_uint4",
-           {opset}, "backend-test", registry);
+           {opset_v21}, "backend-test", registry);
   }
 
-  // From QuantizeLinear.export_int4().
+  // From QuantizeLinear.export_int4(). INT4/UINT4 introduced in opset 21.
   {
     Tensor x = Tensor::FromFloat(
         "", sub_byte_x_shape,
@@ -252,10 +255,10 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry) {
     Tensor y = kernel::MakeSubByteTensor(DataType::INT4, sub_byte_x_shape,
                                          {1, 2, 3, 5, -8, -6, 3, 4, 4, 5, 5, 7}, /*bits=*/4);
     Expect(sub_byte_node, {x, sub_byte_scale, y_zero_point}, {y}, "test_quantizelinear_int4",
-           {opset}, "backend-test", registry);
+           {opset_v21}, "backend-test", registry);
   }
 
-  // From QuantizeLinear.export_uint2().
+  // From QuantizeLinear.export_uint2(). INT2/UINT2 introduced in opset 23.
   {
     Tensor x = Tensor::FromFloat(
         "", sub_byte_x_shape,
@@ -264,10 +267,10 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry) {
     Tensor y = kernel::MakeSubByteTensor(DataType::UINT2, sub_byte_x_shape,
                                          {0, 1, 2, 3, 0, 0, 0, 1, 1, 1, 2, 2}, /*bits=*/2);
     Expect(sub_byte_node, {x, sub_byte_scale, y_zero_point}, {y}, "test_quantizelinear_uint2",
-           {opset}, "backend-test", registry);
+           {opset_v23}, "backend-test", registry);
   }
 
-  // From QuantizeLinear.export_int2().
+  // From QuantizeLinear.export_int2(). INT2/UINT2 introduced in opset 23.
   {
     Tensor x = Tensor::FromFloat(
         "", sub_byte_x_shape,
@@ -276,10 +279,10 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry) {
     Tensor y = kernel::MakeSubByteTensor(DataType::INT2, sub_byte_x_shape,
                                          {0, 1, 1, 1, -1, -1, 0, 1, 0, -1, -1, -2}, /*bits=*/2);
     Expect(sub_byte_node, {x, sub_byte_scale, y_zero_point}, {y}, "test_quantizelinear_int2",
-           {opset}, "backend-test", registry);
+           {opset_v23}, "backend-test", registry);
   }
 
-  // From QuantizeLinear.export_float4e2m1().
+  // From QuantizeLinear.export_float4e2m1(). FLOAT4E2M1 introduced in opset 23.
   {
     Tensor x = Tensor::FromFloat(
         "", sub_byte_x_shape,
@@ -289,7 +292,7 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry) {
         kernel::MakeFloat4E2M1Tensor(sub_byte_x_shape, {0.0f, 1.0f, 2.0f, 4.0f, -6.0f, -6.0f, 2.0f,
                                                         3.0f, 0.0f, -0.5f, -1.0f, -2.0f});
     Expect(sub_byte_node, {x, sub_byte_scale, y_zero_point}, {y}, "test_quantizelinear_float4e2m1",
-           {opset}, "backend-test", registry);
+           {opset_v23}, "backend-test", registry);
   }
 
   // --- Blocked quantization (opset 21+) ---

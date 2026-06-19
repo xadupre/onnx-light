@@ -41,29 +41,22 @@ void ComputeShapeRoiAlign(ShapesContext &ctx, const NodeProto &node, const char 
 
   const OptimTensor &input = ctx.Get(x);
   const OptimShape &in_shape = input.Shape();
-  if (in_shape.Rank() != 4) {
-    throw std::invalid_argument("ComputeShapeRoiAlign: input '" + std::string(x) +
-                                "' must have rank 4 (N, C, H, W).");
-  }
+  EXT_ENFORCE_INVALID(in_shape.Rank() == 4, "ComputeShapeRoiAlign: input '", x,
+                      "' must have rank 4 (N, C, H, W).");
 
   const OptimShape &rois_shape = ctx.Get(rois).Shape();
-  if (rois_shape.Rank() != 2) {
-    throw std::invalid_argument("ComputeShapeRoiAlign: input '" + std::string(rois) +
-                                "' must have rank 2 (num_rois, 4).");
-  }
+  EXT_ENFORCE_INVALID(rois_shape.Rank() == 2, "ComputeShapeRoiAlign: input '", rois,
+                      "' must have rank 2 (num_rois, 4).");
 
   const OptimShape &batch_indices_shape = ctx.Get(batch_indices).Shape();
-  if (batch_indices_shape.Rank() != 1) {
-    throw std::invalid_argument("ComputeShapeRoiAlign: input '" + std::string(batch_indices) +
-                                "' must have rank 1 (num_rois,).");
-  }
+  EXT_ENFORCE_INVALID(batch_indices_shape.Rank() == 1, "ComputeShapeRoiAlign: input '",
+                      batch_indices, "' must have rank 1 (num_rois,).");
 
   const int64_t output_height = GetAttributeOr<int64_t>(node, "output_height", 1);
   const int64_t output_width = GetAttributeOr<int64_t>(node, "output_width", 1);
-  if (output_height <= 0 || output_width <= 0) {
-    throw std::invalid_argument(
-        "ComputeShapeRoiAlign: attributes 'output_height' and 'output_width' must be positive.");
-  }
+  EXT_ENFORCE_INVALID(
+      !(output_height <= 0 || output_width <= 0),
+      "ComputeShapeRoiAlign: attributes 'output_height' and 'output_width' must be positive.");
 
   OptimShape out_shape;
   out_shape.PushBack(PickNumRois(rois_shape, batch_indices_shape));

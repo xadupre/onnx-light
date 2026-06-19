@@ -19,10 +19,8 @@ namespace tensor {
 
 void ComputeShapeOneHot(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "OneHot", "ComputeShapeOneHot");
-  if (node.input_size() < 3) {
-    throw std::invalid_argument(
-        "ComputeShapeOneHot: OneHot requires three inputs (indices, depth, values).");
-  }
+  EXT_ENFORCE_INVALID(!(node.input_size() < 3),
+                      "ComputeShapeOneHot: OneHot requires three inputs (indices, depth, values).");
 
   const OptimTensor &indices = ctx.Get(node.input(0).as_string());
   const OptimTensor &depth = ctx.Get(node.input(1).as_string());
@@ -33,10 +31,9 @@ void ComputeShapeOneHot(ShapesContext &ctx, const NodeProto &node) {
   const int64_t out_rank = static_cast<int64_t>(in_rank) + 1;
 
   const int64_t axis_attr = GetAttributeOr<int64_t>(node, "axis", -1);
-  if (axis_attr < -out_rank || axis_attr >= out_rank) {
-    throw std::invalid_argument(
-        "ComputeShapeOneHot: 'axis' is out of range [-rank(indices)-1, rank(indices)].");
-  }
+  EXT_ENFORCE_INVALID(
+      !(axis_attr < -out_rank || axis_attr >= out_rank),
+      "ComputeShapeOneHot: 'axis' is out of range [-rank(indices)-1, rank(indices)].");
   const int64_t axis_pos = axis_attr < 0 ? axis_attr + out_rank : axis_attr;
 
   // Resolve the depth dimension. When the value of the ``depth`` input is

@@ -69,30 +69,25 @@ void ComputeShapeMaxPool(ShapesContext &ctx, const NodeProto &node, const char *
 
   std::vector<int64_t> strides;
   if (GetAttributeInts(node, "strides", strides)) {
-    if (strides.size() != n_input_dims) {
-      throw std::invalid_argument(
-          "ComputeShapeMaxPool: attribute 'strides' size must match input rank - 2.");
-    }
+    EXT_ENFORCE_INVALID(strides.size() == n_input_dims,
+                        "ComputeShapeMaxPool: attribute 'strides' size must match input rank - 2.");
   } else {
     strides.assign(n_input_dims, 1);
   }
 
   std::vector<int64_t> dilations;
   if (GetAttributeInts(node, "dilations", dilations)) {
-    if (dilations.size() != n_input_dims) {
-      throw std::invalid_argument(
-          "ComputeShapeMaxPool: attribute 'dilations' size must match input rank - 2.");
-    }
+    EXT_ENFORCE_INVALID(
+        dilations.size() == n_input_dims,
+        "ComputeShapeMaxPool: attribute 'dilations' size must match input rank - 2.");
   } else {
     dilations.assign(n_input_dims, 1);
   }
 
   std::vector<int64_t> pads;
   if (GetAttributeInts(node, "pads", pads)) {
-    if (pads.size() != 2 * n_input_dims) {
-      throw std::invalid_argument(
-          "ComputeShapeMaxPool: attribute 'pads' size must be 2 * (input rank - 2).");
-    }
+    EXT_ENFORCE_INVALID(pads.size() == 2 * n_input_dims,
+                        "ComputeShapeMaxPool: attribute 'pads' size must be 2 * (input rank - 2).");
   } else {
     pads.assign(2 * n_input_dims, 0);
   }

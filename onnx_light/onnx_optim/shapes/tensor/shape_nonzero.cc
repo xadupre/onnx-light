@@ -22,9 +22,7 @@ namespace tensor {
 
 void ComputeShapeNonZero(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "NonZero", "ComputeShapeNonZero");
-  if (node.input_size() < 1) {
-    throw std::invalid_argument("ComputeShapeNonZero: NonZero requires one input.");
-  }
+  EXT_ENFORCE_INVALID(!(node.input_size() < 1), "ComputeShapeNonZero: NonZero requires one input.");
 
   const OptimTensor &input = ctx.Get(node.input(0).as_string());
 

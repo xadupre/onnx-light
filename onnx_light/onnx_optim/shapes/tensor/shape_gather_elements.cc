@@ -19,10 +19,9 @@ namespace tensor {
 void ComputeShapeGatherElements(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "GatherElements", "ComputeShapeGatherElements");
 
-  if (node.input_size() < 2) {
-    throw std::invalid_argument(
-        "ComputeShapeGatherElements: GatherElements requires two inputs (data, indices).");
-  }
+  EXT_ENFORCE_INVALID(
+      !(node.input_size() < 2),
+      "ComputeShapeGatherElements: GatherElements requires two inputs (data, indices).");
 
   const OptimTensor &data = ctx.Get(node.input(0).as_string());
   const OptimTensor &indices = ctx.Get(node.input(1).as_string());

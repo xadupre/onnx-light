@@ -36,8 +36,7 @@ BroadcastInfo CheckBinaryBroadcastInOut(const char *op_name, const char *in_dtyp
     if (sx[d] == sy[d] || sx[d] == 1 || sy[d] == 1) {
       out[d] = sx[d] >= sy[d] ? sx[d] : sy[d];
     } else {
-      throw std::invalid_argument(std::string(op_name) +
-                                  " input shapes are not multidirectional-broadcastable.");
+      EXT_THROW_INVALID(op_name, " input shapes are not multidirectional-broadcastable.");
     }
   }
 

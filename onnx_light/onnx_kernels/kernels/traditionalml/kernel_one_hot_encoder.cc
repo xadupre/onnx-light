@@ -56,10 +56,9 @@ void FillOneHotNumeric(const Tensor &x, const std::vector<int64_t> &cats, bool z
         break;
       }
     }
-    if (!matched && !zeros) {
-      throw std::invalid_argument(
-          "kernel::OneHotEncoder: input value not found in cats_int64s and zeros=false.");
-    }
+    EXT_ENFORCE_INVALID(
+        !(!matched && !zeros),
+        "kernel::OneHotEncoder: input value not found in cats_int64s and zeros=false.");
   }
 }
 
@@ -78,10 +77,9 @@ void FillOneHotString(const Tensor &x, const std::vector<std::string> &cats, boo
         break;
       }
     }
-    if (!matched && !zeros) {
-      throw std::invalid_argument(
-          "kernel::OneHotEncoder: input value not found in cats_strings and zeros=false.");
-    }
+    EXT_ENFORCE_INVALID(
+        !(!matched && !zeros),
+        "kernel::OneHotEncoder: input value not found in cats_strings and zeros=false.");
   }
 }
 

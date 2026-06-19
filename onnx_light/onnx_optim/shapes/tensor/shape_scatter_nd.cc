@@ -19,10 +19,9 @@ namespace tensor {
 void ComputeShapeScatterND(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "ScatterND", "ComputeShapeScatterND");
 
-  if (node.input_size() < 3) {
-    throw std::invalid_argument(
-        "ComputeShapeScatterND: ScatterND requires three inputs (data, indices, updates).");
-  }
+  EXT_ENFORCE_INVALID(
+      !(node.input_size() < 3),
+      "ComputeShapeScatterND: ScatterND requires three inputs (data, indices, updates).");
 
   const OptimTensor &data = ctx.Get(node.input(0).as_string());
 

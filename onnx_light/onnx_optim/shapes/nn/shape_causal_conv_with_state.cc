@@ -18,23 +18,18 @@ namespace nn {
 void ComputeShapeCausalConvWithState(ShapesContext &ctx, const NodeProto &node, const char *input,
                                      const char *weight) {
   CheckNodeOpAndOutput(node, "CausalConvWithState", "ComputeShapeCausalConvWithState");
-  if (node.output_size() < 2) {
-    throw std::invalid_argument("ComputeShapeCausalConvWithState: node must declare two outputs.");
-  }
+  EXT_ENFORCE_INVALID(!(node.output_size() < 2),
+                      "ComputeShapeCausalConvWithState: node must declare two outputs.");
 
   const OptimTensor &in = ctx.Get(input);
   const OptimTensor &w = ctx.Get(weight);
   const OptimShape &in_shape = in.Shape();
   const OptimShape &w_shape = w.Shape();
 
-  if (in_shape.Rank() != 3) {
-    throw std::invalid_argument(std::string("ComputeShapeCausalConvWithState: input '") + input +
-                                "' must have rank 3, got " + std::to_string(in_shape.Rank()) + ".");
-  }
-  if (w_shape.Rank() != 3) {
-    throw std::invalid_argument(std::string("ComputeShapeCausalConvWithState: weight '") + weight +
-                                "' must have rank 3, got " + std::to_string(w_shape.Rank()) + ".");
-  }
+  EXT_ENFORCE_INVALID(in_shape.Rank() == 3, "ComputeShapeCausalConvWithState: input '", input,
+                      "' must have rank 3, got ", in_shape.Rank(), ".");
+  EXT_ENFORCE_INVALID(w_shape.Rank() == 3, "ComputeShapeCausalConvWithState: weight '", weight,
+                      "' must have rank 3, got ", w_shape.Rank(), ".");
 
   // Output 0 (``output``) has the same shape and dtype as ``input``.
   ctx.Set(node.output(0), OptimTensor(nullptr, in.Dtype(), in_shape));

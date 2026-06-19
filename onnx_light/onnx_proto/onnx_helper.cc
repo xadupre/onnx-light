@@ -1274,9 +1274,8 @@ const GraphProto &FindGraphAttribute(const NodeProto &node, const char *attr_nam
                         node.op_type().as_string(), "'.");
     return attr.g();
   }
-  throw std::invalid_argument(prefix + "attribute '" + attr_name +
-                              "' is missing on node of op_type '" + node.op_type().as_string() +
-                              "'.");
+  EXT_THROW_INVALID(prefix, "attribute '", attr_name, "' is missing on node of op_type '",
+                    node.op_type().as_string(), "'.");
 }
 
 NodeProto MakeNode(const char *op_type, const std::vector<std::string> &inputs,

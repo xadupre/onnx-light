@@ -10,6 +10,9 @@ on:
   schedule:
     # Run every Monday at 06:00 UTC to catch toolchain/manylinux regressions early.
     - cron: "0 6 * * 1"
+  push:
+    tags:
+      - "*"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -20,7 +23,7 @@ jobs:
     name: wheels (linux, ${{ matrix.arch }})
     runs-on: ${{ matrix.runs-on }}
     permissions:
-      contents: read
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -32,7 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ inputs.tag || github.ref }}
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -65,13 +68,29 @@ jobs:
         with:
           name: wheels-linux-${{ matrix.arch }}
           path: ./wheelhouse/*.whl
+      - name: Attach wheels to GitHub Release
+        if: github.ref_type == 'tag' || inputs.tag != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ inputs.tag }}"
+          if [ -z "${tag}" ]; then
+            tag="${{ github.ref_name }}"
+          fi
+          tag="${tag#refs/tags/}"
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            gh release upload "${tag}" ./wheelhouse/*.whl --clobber
+          else
+            echo "Release ${tag} does not exist, skipping release asset upload."
+          fi
 
   build_wheels_windows:
     name: wheels (windows, ${{ matrix.arch }})
     needs: build_wheels_linux
     runs-on: ${{ matrix.runs-on }}
     permissions:
-      contents: read
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -85,7 +104,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ inputs.tag || github.ref }}
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -110,19 +129,35 @@ jobs:
         with:
           name: wheels-windows-${{ matrix.arch }}
           path: ./wheelhouse/*.whl
+      - name: Attach wheels to GitHub Release
+        if: github.ref_type == 'tag' || inputs.tag != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ inputs.tag }}"
+          if [ -z "${tag}" ]; then
+            tag="${{ github.ref_name }}"
+          fi
+          tag="${tag#refs/tags/}"
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            gh release upload "${tag}" ./wheelhouse/*.whl --clobber
+          else
+            echo "Release ${tag} does not exist, skipping release asset upload."
+          fi
 
   build_wheels_macos:
     name: wheels (macos, universal2)
     needs: build_wheels_linux
     runs-on: macos-latest
     permissions:
-      contents: read
+      contents: write
     env:
       MACOSX_DEPLOYMENT_TARGET: "13.0"
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ inputs.tag || github.ref }}
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -154,3 +189,19 @@ jobs:
         with:
           name: wheels-macos-universal2
           path: ./wheelhouse/*.whl
+      - name: Attach wheels to GitHub Release
+        if: github.ref_type == 'tag' || inputs.tag != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ inputs.tag }}"
+          if [ -z "${tag}" ]; then
+            tag="${{ github.ref_name }}"
+          fi
+          tag="${tag#refs/tags/}"
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            gh release upload "${tag}" ./wheelhouse/*.whl --clobber
+          else
+            echo "Release ${tag} does not exist, skipping release asset upload."
+          fi

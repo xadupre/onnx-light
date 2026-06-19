@@ -39,7 +39,7 @@ std::pair<int64_t, int64_t> BatchAndChannels(const std::vector<int64_t> &shape) 
   if (shape.size() == 2) {
     return {shape[0], shape[1]};
   }
-  throw std::invalid_argument("kernel::TfIdfVectorizer: input shape must have rank 1 or 2.");
+  EXT_THROW_INVALID("kernel::TfIdfVectorizer: input shape must have rank 1 or 2.");
 }
 
 // Populates the n-gram trie ``root`` with ``n_ngrams`` consecutive
@@ -59,7 +59,7 @@ int64_t PopulateGrams(const std::vector<Key> &pool, size_t start_idx, size_t n_n
       if (start_idx >= pool.size()) {
         // Defensive — ``ngram_counts`` should already protect us, but
         // make this a hard error so malformed inputs surface clearly.
-        throw std::invalid_argument(
+        EXT_THROW_INVALID(
             "kernel::TfIdfVectorizer: pool overflow while populating the n-gram trie.");
       }
       auto &child = node->leaves[pool[start_idx]];
@@ -91,18 +91,16 @@ NgramNode<Key> BuildTrie(const std::vector<Key> &pool, const std::vector<int64_t
     const int64_t raw_start = ngram_counts[i];
     const int64_t raw_end =
         (i + 1 < ngram_counts.size()) ? ngram_counts[i + 1] : static_cast<int64_t>(total_items);
-    if (raw_start < 0 || raw_end < raw_start || static_cast<size_t>(raw_end) > total_items) {
-      throw std::invalid_argument(
-          "kernel::TfIdfVectorizer: ngram_counts is out of range with respect to the pool.");
-    }
+    EXT_ENFORCE_INVALID(
+        !(raw_start < 0 || raw_end < raw_start || static_cast<size_t>(raw_end) > total_items),
+        "kernel::TfIdfVectorizer: ngram_counts is out of range with respect to the pool.");
     const size_t start_idx = static_cast<size_t>(raw_start);
     const size_t end_idx = static_cast<size_t>(raw_end);
     const size_t items = end_idx - start_idx;
     if (items > 0) {
-      if (ngram_size == 0 || items % ngram_size != 0) {
-        throw std::invalid_argument(
-            "kernel::TfIdfVectorizer: ngram_counts is not a multiple of the current n-gram size.");
-      }
+      EXT_ENFORCE_INVALID(
+          !(ngram_size == 0 || items % ngram_size != 0),
+          "kernel::TfIdfVectorizer: ngram_counts is not a multiple of the current n-gram size.");
       const size_t ngrams = items / ngram_size;
       const int64_t ngram_size_i = static_cast<int64_t>(ngram_size);
       if (ngram_size_i >= min_gram_length && ngram_size_i <= max_gram_length) {
@@ -137,7 +135,7 @@ std::vector<int64_t> ReadRow<int64_t>(const Tensor &x, int64_t row_num, int64_t 
       row[static_cast<size_t>(i)] = data[offset + static_cast<size_t>(i)];
     }
   } else {
-    throw std::invalid_argument(
+    EXT_THROW_INVALID(
         "kernel::TfIdfVectorizer: integer pool requires an INT32 or INT64 input tensor.");
   }
   return row;
@@ -270,8 +268,8 @@ TfIdfVectorizer::Mode TfIdfVectorizer::ParseMode(const std::string &value) {
   if (value == "TFIDF") {
     return Mode::kTFIDF;
   }
-  throw std::invalid_argument("kernel::TfIdfVectorizer: invalid mode '" + value +
-                              "'. Valid values are \"TF\", \"IDF\", \"TFIDF\".");
+  EXT_THROW_INVALID("kernel::TfIdfVectorizer: invalid mode '", value,
+                    "'. Valid values are \"TF\", \"IDF\", \"TFIDF\".");
 }
 
 std::vector<int64_t> TfIdfVectorizer::ComputeOutputShape(const std::vector<int64_t> &input_shape,
@@ -282,7 +280,7 @@ std::vector<int64_t> TfIdfVectorizer::ComputeOutputShape(const std::vector<int64
   if (input_shape.size() == 2) {
     return {input_shape[0], output_size};
   }
-  throw std::invalid_argument("kernel::TfIdfVectorizer: input shape must have rank 1 or 2.");
+  EXT_THROW_INVALID("kernel::TfIdfVectorizer: input shape must have rank 1 or 2.");
 }
 
 Tensor TfIdfVectorizer::operator()(const Tensor &x, Mode mode, int64_t min_gram_length,

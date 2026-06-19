@@ -18,8 +18,7 @@ namespace traditionalml {
 namespace {
 
 int64_t BatchSizeFromInput(const OptimTensor &input, const char *caller) {
-  EXT_ENFORCE_INVALID(!(input.Shape().Empty()), std::string(caller),
-                      ": input rank must be 1 or 2 when known.");
+  EXT_ENFORCE_INVALID(!(input.Shape().Empty()), caller, ": input rank must be 1 or 2 when known.");
   if (input.Shape().Rank() == 1) {
     return 1;
   }
@@ -30,7 +29,7 @@ int64_t BatchSizeFromInput(const OptimTensor &input, const char *caller) {
     }
     return -1;
   }
-  EXT_THROW_INVALID(std::string(caller), ": input rank must be 1 or 2 when known.");
+  EXT_THROW_INVALID(caller, ": input rank must be 1 or 2 when known.");
 }
 
 int64_t ClassCount(const NodeProto &node, bool &using_strings) {

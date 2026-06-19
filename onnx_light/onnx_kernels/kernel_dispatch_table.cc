@@ -226,7 +226,7 @@ template <class KernelT> NodeKernelFn MakeReduceTrampoline() {
 template <class KernelT> NodeKernelFn MakeSqueezeLikeTrampoline(const char *op_name) {
   return [op_name](const NodeProto &node, RuntimeContext &rt) {
     RequireMinInputCount(node, 1);
-    EXT_ENFORCE_INVALID(!(node.input_size() > 2), std::string("RunNode: op '"), op_name,
+    EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '", op_name,
                         "' expects at most 2 inputs.");
     RequireOutputCount(node, 1);
     const Tensor &data = GetInput(node, 0, rt.tensors());
@@ -239,8 +239,7 @@ template <class KernelT> NodeKernelFn MakeSqueezeLikeTrampoline(const char *op_n
       // so for compatibility we treat a scalar as a 1-element 1-D tensor.
       EXT_ENFORCE_INVALID(!(axes_input->data_type != static_cast<int32_t>(DataType::INT64) ||
                             axes_input->shape.size() > 1),
-                          std::string("RunNode: "), op_name,
-                          " 'axes' input must be a 1-D INT64 tensor.");
+                          "RunNode: ", op_name, " 'axes' input must be a 1-D INT64 tensor.");
       const int64_t n = axes_input->element_count();
       const int64_t *p = axes_input->AsInt64();
       axes.assign(p, p + n);
@@ -281,7 +280,7 @@ inline SVMCommonAttrs ParseSVMCommonAttrs(const NodeProto &node, const char *op_
   a.kernel_type = GetAttributeStringOrDefault(node, "kernel_type", "LINEAR");
   const std::vector<float> kernel_params =
       GetAttributeFloatsOrDefault(node, "kernel_params", {0.0f, 0.0f, 0.0f});
-  EXT_ENFORCE_INVALID(!(kernel_params.size() < 3), std::string("RunNode: "), op_name,
+  EXT_ENFORCE_INVALID(!(kernel_params.size() < 3), "RunNode: ", op_name,
                       " 'kernel_params' must have at least 3 floats.");
   a.gamma = kernel_params[0];
   a.coef0 = kernel_params[1];
@@ -308,8 +307,7 @@ auto DispatchSVMByDataType(const Tensor &x, const char *op_name,
   case static_cast<int32_t>(DataType::INT32):
     return fn(static_cast<int32_t *>(nullptr));
   default:
-    EXT_THROW_INVALID(std::string("RunNode: "), op_name,
-                      " input 'X' must be FLOAT, DOUBLE, INT32 or INT64.");
+    EXT_THROW_INVALID("RunNode: ", op_name, " input 'X' must be FLOAT, DOUBLE, INT32 or INT64.");
   }
 }
 

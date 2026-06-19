@@ -23,11 +23,11 @@ void ComputeShapeMaxRoiPool(ShapesContext &ctx, const NodeProto &node, const cha
 
   const OptimTensor &input = ctx.Get(x);
   const OptimShape &in_shape = input.Shape();
-  EXT_ENFORCE_INVALID(in_shape.Rank() == 4, "ComputeShapeMaxRoiPool: input '", std::string(x),
+  EXT_ENFORCE_INVALID(in_shape.Rank() == 4, "ComputeShapeMaxRoiPool: input '", x,
                       "' must have rank 4 (N, C, H, W).");
 
   const OptimShape &rois_shape = ctx.Get(rois).Shape();
-  EXT_ENFORCE_INVALID(rois_shape.Rank() == 2, "ComputeShapeMaxRoiPool: input '", std::string(rois),
+  EXT_ENFORCE_INVALID(rois_shape.Rank() == 2, "ComputeShapeMaxRoiPool: input '", rois,
                       "' must have rank 2 (num_rois, 5).");
 
   std::vector<int64_t> pooled_shape;

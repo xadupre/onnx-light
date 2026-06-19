@@ -22,7 +22,7 @@ namespace {
 // kept.
 OptimDim MergeDim(const OptimDim &a, const OptimDim &b, const char *what) {
   if (a.IsInt() && b.IsInt()) {
-    EXT_ENFORCE_INVALID(a.AsInt() == b.AsInt(), std::string("ComputeShapeAttention: "), what,
+    EXT_ENFORCE_INVALID(a.AsInt() == b.AsInt(), "ComputeShapeAttention: ", what,
                         " mismatch: ", a.AsInt(), " vs ", b.AsInt(), ".");
     return a;
   }
@@ -36,7 +36,7 @@ OptimDim MergeDim(const OptimDim &a, const OptimDim &b, const char *what) {
 }
 
 void RequireRank4(const OptimShape &shape, const char *name) {
-  EXT_ENFORCE_INVALID(shape.Rank() == 4, std::string("ComputeShapeAttention: input '"), name,
+  EXT_ENFORCE_INVALID(shape.Rank() == 4, "ComputeShapeAttention: input '", name,
                       "' must have rank 4, got ", shape.Rank(), ".");
 }
 
@@ -56,8 +56,8 @@ OptimDim DivideByHeads(const OptimDim &hidden, int64_t num_heads, const char *wh
     return OptimDim(std::string("?"));
   }
   const int64_t value = hidden.AsInt();
-  EXT_ENFORCE_INVALID((value % num_heads) == 0, std::string("ComputeShapeAttention: "), what, " (",
-                      value, ") must be divisible by num_heads (", num_heads, ").");
+  EXT_ENFORCE_INVALID((value % num_heads) == 0, "ComputeShapeAttention: ", what, " (", value,
+                      ") must be divisible by num_heads (", num_heads, ").");
   return OptimDim(value / num_heads);
 }
 

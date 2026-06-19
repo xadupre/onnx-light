@@ -50,10 +50,10 @@ void ComputeShapeDeformConv(ShapesContext &ctx, const NodeProto &node, const cha
   const OptimShape &x_shape = x_tensor.Shape();
   const OptimShape &w_shape = w_tensor.Shape();
 
-  EXT_ENFORCE_INVALID(!(x_shape.Rank() < 3), "ComputeShapeDeformConv: input '", std::string(x),
+  EXT_ENFORCE_INVALID(!(x_shape.Rank() < 3), "ComputeShapeDeformConv: input '", x,
                       "' must have rank >= 3 (N, C, D1, ...).");
-  EXT_ENFORCE_INVALID(w_shape.Rank() == x_shape.Rank(), "ComputeShapeDeformConv: weight '",
-                      std::string(w), "' rank must match input rank.");
+  EXT_ENFORCE_INVALID(w_shape.Rank() == x_shape.Rank(), "ComputeShapeDeformConv: weight '", w,
+                      "' rank must match input rank.");
 
   const size_t n_spatial = x_shape.Rank() - 2;
 

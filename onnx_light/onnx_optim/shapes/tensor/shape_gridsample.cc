@@ -24,7 +24,7 @@ namespace {
 // symbolic; symbolic + symbolic keeps the first one.
 OptimDim MergeDim(const OptimDim &a, const OptimDim &b, const char *axis_name) {
   if (a.IsInt() && b.IsInt()) {
-    EXT_ENFORCE_INVALID(a.AsInt() == b.AsInt(), std::string("ComputeShapeGridSample: "), axis_name,
+    EXT_ENFORCE_INVALID(a.AsInt() == b.AsInt(), "ComputeShapeGridSample: ", axis_name,
                         " dimensions disagree (", a.AsInt(), " vs ", b.AsInt(), ").");
     return a;
   }

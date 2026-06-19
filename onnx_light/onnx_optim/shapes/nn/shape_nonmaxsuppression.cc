@@ -20,16 +20,14 @@ void ComputeShapeNonMaxSuppression(ShapesContext &ctx, const NodeProto &node, co
   CheckNodeOpAndOutput(node, "NonMaxSuppression", "ComputeShapeNonMaxSuppression");
 
   const OptimShape &boxes_shape = ctx.Get(boxes).Shape();
-  EXT_ENFORCE_INVALID(boxes_shape.Rank() == 3, "ComputeShapeNonMaxSuppression: input '",
-                      std::string(boxes),
+  EXT_ENFORCE_INVALID(boxes_shape.Rank() == 3, "ComputeShapeNonMaxSuppression: input '", boxes,
                       "' must have rank 3 (num_batches, spatial_dimension, 4).");
   EXT_ENFORCE_INVALID(!(boxes_shape[2].IsInt() && boxes_shape[2].AsInt() != 4),
-                      "ComputeShapeNonMaxSuppression: last dim of '", std::string(boxes),
-                      "' must be 4, got ", boxes_shape[2].AsInt(), ".");
+                      "ComputeShapeNonMaxSuppression: last dim of '", boxes, "' must be 4, got ",
+                      boxes_shape[2].AsInt(), ".");
 
   const OptimShape &scores_shape = ctx.Get(scores).Shape();
-  EXT_ENFORCE_INVALID(scores_shape.Rank() == 3, "ComputeShapeNonMaxSuppression: input '",
-                      std::string(scores),
+  EXT_ENFORCE_INVALID(scores_shape.Rank() == 3, "ComputeShapeNonMaxSuppression: input '", scores,
                       "' must have rank 3 (num_batches, num_classes, spatial_dimension).");
 
   // The output is rank 2 with dtype INT64. The first dim depends on the

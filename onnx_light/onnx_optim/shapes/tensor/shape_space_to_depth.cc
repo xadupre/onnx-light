@@ -29,8 +29,8 @@ OptimDim MulDim(const OptimDim &dim, int64_t factor) {
 OptimDim DivDim(const OptimDim &dim, int64_t divisor, const char *axis_name) {
   if (dim.IsInt()) {
     EXT_ENFORCE_INVALID(!(divisor <= 0 || dim.AsInt() % divisor != 0),
-                        std::string("ComputeShapeSpaceToDepth: input "), axis_name, " dim (",
-                        dim.AsInt(), ") is not divisible by blocksize (", divisor, ").");
+                        "ComputeShapeSpaceToDepth: input ", axis_name, " dim (", dim.AsInt(),
+                        ") is not divisible by blocksize (", divisor, ").");
     return OptimDim(dim.AsInt() / divisor);
   }
   return OptimDim("(" + dim.AsExpr() + ")/" + std::to_string(divisor));

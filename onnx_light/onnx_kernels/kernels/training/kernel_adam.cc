@@ -104,7 +104,7 @@ void Adam::operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor
     const double alpha_pow = std::pow(static_cast<double>(alpha), static_cast<double>(T_val));
     const double beta_pow = std::pow(static_cast<double>(beta), static_cast<double>(T_val));
     const double denom = 1.0 - alpha_pow;
-    EXT_ENFORCE_INVALID(denom != 0.0, std::string(kAdamName),
+    EXT_ENFORCE_INVALID(denom != 0.0, kAdamName,
                         ": bias correction divides by zero (1 - alpha^T == 0); "
                         "choose 'alpha' != 1.");
     R_adjusted = static_cast<float>(static_cast<double>(R_val) * std::sqrt(1.0 - beta_pow) / denom);

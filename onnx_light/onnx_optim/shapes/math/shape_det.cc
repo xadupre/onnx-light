@@ -18,7 +18,7 @@ void ComputeShapeDet(ShapesContext &ctx, const NodeProto &node, const char *x) {
   CheckNodeOpAndOutput(node, "Det", "ComputeShapeDet");
   const OptimTensor &input = ctx.Get(x);
   const OptimShape &input_shape = input.Shape();
-  EXT_ENFORCE_INVALID(!(input_shape.Rank() < 2), "ComputeShapeDet: input '", std::string(x),
+  EXT_ENFORCE_INVALID(!(input_shape.Rank() < 2), "ComputeShapeDet: input '", x,
                       "' must have rank >= 2.");
   // Validate the inner-most two dimensions match when both are concrete.
   const OptimDim &h = input_shape[input_shape.Rank() - 2];

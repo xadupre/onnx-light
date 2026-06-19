@@ -21,7 +21,7 @@ namespace {
 // kept.
 OptimDim MergeDim(const OptimDim &a, const OptimDim &b, const char *what) {
   if (a.IsInt() && b.IsInt()) {
-    EXT_ENFORCE_INVALID(a.AsInt() == b.AsInt(), std::string("ComputeShapeFlexAttention: "), what,
+    EXT_ENFORCE_INVALID(a.AsInt() == b.AsInt(), "ComputeShapeFlexAttention: ", what,
                         " mismatch: ", a.AsInt(), " vs ", b.AsInt(), ".");
     return a;
   }
@@ -35,7 +35,7 @@ OptimDim MergeDim(const OptimDim &a, const OptimDim &b, const char *what) {
 }
 
 void RequireRank4(const OptimShape &shape, const char *name) {
-  EXT_ENFORCE_INVALID(shape.Rank() == 4, std::string("ComputeShapeFlexAttention: input '"), name,
+  EXT_ENFORCE_INVALID(shape.Rank() == 4, "ComputeShapeFlexAttention: input '", name,
                       "' must have rank 4, got ", shape.Rank(), ".");
 }
 

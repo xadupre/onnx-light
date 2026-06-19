@@ -95,8 +95,8 @@ OptimDim MergeLabelDim(const OptimDim &out, const OptimDim &in, char label) {
     if (in.AsInt() == 1) {
       return out;
     }
-    EXT_THROW_INVALID("ComputeShapeEinsum: label '", std::string(1, label),
-                      "' has inconsistent sizes (", out.AsInt(), " and ", in.AsInt(), ").");
+    EXT_THROW_INVALID("ComputeShapeEinsum: label '", label, "' has inconsistent sizes (",
+                      out.AsInt(), " and ", in.AsInt(), ").");
   }
   if (in.IsInt()) {
     return in;
@@ -221,8 +221,8 @@ void ComputeShapeEinsum(ShapesContext &ctx, const NodeProto &node) {
   out_dims.reserve(expanded_output.size());
   for (char c : expanded_output) {
     auto it = label_dim.find(c);
-    EXT_ENFORCE_INVALID(it != label_dim.end(), "ComputeShapeEinsum: output label '",
-                        std::string(1, c), "' does not appear in any input term.");
+    EXT_ENFORCE_INVALID(it != label_dim.end(), "ComputeShapeEinsum: output label '", c,
+                        "' does not appear in any input term.");
     out_dims.push_back(it->second);
   }
 

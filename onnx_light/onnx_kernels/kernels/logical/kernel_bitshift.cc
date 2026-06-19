@@ -18,8 +18,7 @@ namespace {
 constexpr const char *kBitShiftName = "kernel::BitShift";
 
 [[noreturn]] void ThrowUnsupportedBitShift() {
-  EXT_THROW_INVALID(std::string(kBitShiftName),
-                    " only supports UINT8, UINT16, UINT32 and UINT64 inputs.");
+  EXT_THROW_INVALID(kBitShiftName, " only supports UINT8, UINT16, UINT32 and UINT64 inputs.");
 }
 
 template <typename Op> Tensor BitShiftAllocDispatch(const Tensor &x, const Tensor &y, Op op) {

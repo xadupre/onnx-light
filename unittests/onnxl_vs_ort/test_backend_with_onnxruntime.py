@@ -19,11 +19,7 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
     Returns:
         List of output arrays from the model
     """
-    # Serialize the model to bytes
-    model_bytes = model.SerializeToString()
-
-    # Create session with dtype support
-    sess = InferenceSessionAllTypes(model_bytes)
+    sess = InferenceSessionAllTypes(model)
 
     # Get input names and create feed dict
     input_names = [inp.name for inp in sess._sess.get_inputs()]

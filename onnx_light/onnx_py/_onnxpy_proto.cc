@@ -102,6 +102,24 @@ bool HasBorrowedRawData(const ModelProto &model) {
   return false;
 }
 
+// Applies a single ``field=value`` keyword argument to a proto instance,
+// mirroring the behavior of ``google.protobuf.Message(**kwargs)``.
+// Repeated fields are populated from the provided iterable (python list/tuple
+// or another ``RepeatedField``): the field is reset with ``clear()`` and then
+// filled with ``extend()``. Every other field (scalar, string, bytes, enum or
+// message) is assigned through its regular attribute setter.
+void SetProtoFieldFromKwarg(nb::handle py, const std::string &key, nb::handle value) {
+  const bool repeated_like = nb::hasattr(value, "__iter__") && !nb::isinstance<nb::str>(value) &&
+                             !nb::isinstance<nb::bytes>(value) && !nb::isinstance<Message>(value);
+  if (repeated_like) {
+    nb::object attr = nb::getattr(py, key.c_str());
+    attr.attr("clear")();
+    attr.attr("extend")(value);
+  } else {
+    nb::setattr(py, key.c_str(), value);
+  }
+}
+
 } // namespace
 
 #define PYDEFINE_PROTO(m, cls)                                                                     \
@@ -271,14 +289,19 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           "__init__",
           [](cls *self, nb::kwargs kwargs) {
             new (self) cls();
-            nb::object py_self = nb::cast(self, nb::rv_policy::reference);
-            nb::inst_mark_ready(py_self);
+            if (kwargs.size() == 0)
+              return;
+            // The wrapping python object exists but is not yet flagged as
+            // ready during ``__init__``; mark it so the regular attribute
+            // getters/setters used below can extract the C++ instance.
+            nb::object py = nb::find(*self);
+            nb::inst_mark_ready(py);
             for (auto item : kwargs) {
-              nb::setattr(py_self, nb::cast<nb::str>(item.first), item.second);
+              SetProtoFieldFromKwarg(py, nb::cast<std::string>(item.first), item.second);
             }
           },
-          "Creates an instance. Keyword arguments are set as fields, mirroring "
-          "protobuf message construction.")
+          "Creates an instance. Keyword arguments are set as fields, following the "
+          "protobuf API, e.g. ``TensorProto(dims=[2, 2], data_type=TensorProto.FLOAT)``.")
       .def(
           "Clear", [](cls &self) { self.CopyFrom(cls()); }, "Clears the object.")
       .def(
@@ -1184,15 +1207,15 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
           "Returns the length of the string.")
       .def(
           "__eq__",
-          [](const utils::String &self, const std::string &s) -> bool { return self == s; },
-          "Compares two strings.", nb::is_operator())
+          [](const utils::String &self, const std::string &s) -> int { return self == s; },
+          "Compares two strings.")
       .def(
           "__eq__",
-          [](const utils::String &self, const nb::bytes &bytes_obj) -> bool {
+          [](const utils::String &self, const nb::bytes &bytes_obj) -> int {
             std::string st(static_cast<const char *>(bytes_obj.data()), bytes_obj.size());
             return self == st;
           },
-          "Compares to a byte string.", nb::is_operator())
+          "Compares to a byte string.")
       .def(
           "__eq__",
           [](const utils::String &self, const utils::String &s) -> bool { return self == s; },
@@ -1359,7 +1382,7 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
   PYDEFINE_PROTO(m, DeviceConfigurationProto)
       .PYFIELD_STR(DeviceConfigurationProto, name)
       .PYFIELD(DeviceConfigurationProto, num_devices)
-      .PYFIELD_REPEATED_STR(DeviceConfigurationProto, device);
+      .PYFIELD(DeviceConfigurationProto, device);
   PYADD_PROTO_SERIALIZATION(DeviceConfigurationProto);
   nb_DeviceConfigurationProto.def(
       "HasField",

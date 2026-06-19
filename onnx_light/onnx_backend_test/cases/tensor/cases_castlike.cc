@@ -123,7 +123,8 @@ Tensor MakeTargetTypeTensor(const CastLikeDtype &to) {
 void RegisterCastLikeCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(15);
   const OpsetId opset_v21 = DefaultOpset(21); // For FLOAT8, INT4, UINT4
-  const OpsetId opset_v23 = DefaultOpset(23); // For INT2, UINT2, FLOAT4E2M1
+  const OpsetId opset_v23 = DefaultOpset(23); // For FLOAT4E2M1
+  const OpsetId opset_v25 = DefaultOpset(25); // For INT2, UINT2
   const kernel::KernelContext ctx{opset};
   const kernel::CastLike castlike_kernel{ctx};
 
@@ -341,7 +342,7 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry) {
     int4_fp32_values[static_cast<size_t>(i)] = static_cast<float>(i - 9);
   }
   // INT2 / UINT2 — input shape (7, 1) with the 7-element ``np.arange(-3, 4)``
-  // sweep used by the upstream generator. INT2/UINT2 were introduced in opset 23.
+  // sweep used by the upstream generator. INT2/UINT2 were introduced in opset 25.
   const std::vector<int64_t> int2_shape = {7, 1};
   std::vector<float> int2_fp32_values(7);
   for (int i = 0; i < 7; ++i) {
@@ -403,7 +404,7 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry) {
     }
   }
 
-  // INT2/UINT2 cases (opset 23)
+  // INT2/UINT2 cases (opset 25)
   for (const auto &v : kInt2Variants) {
     Tensor sub_target("target_type", static_cast<int32_t>(v.dtype), {1},
                       std::vector<uint8_t>(PackedByteSize(static_cast<int32_t>(v.dtype), 1)));
@@ -414,7 +415,7 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry) {
       Tensor input = Tensor::FromFloat("input", int2_shape, int2_fp32_values);
       Tensor output = castlike_kernel(input, sub_target);
       Expect(node, {input, sub_target}, {output},
-             std::string("test_cc_castlike_FLOAT_to_") + v.name, {opset_v23}, "backend-test",
+             std::string("test_cc_castlike_FLOAT_to_") + v.name, {opset_v25}, "backend-test",
              registry);
     }
     // sub-byte -> FLOAT (input is the packed encoding of the FP32 vector).
@@ -425,7 +426,7 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry) {
       NodeProto node = MakeCastLikeNode();
       Tensor output = castlike_kernel(packed_input, float_target);
       Expect(node, {packed_input, float_target}, {output},
-             std::string("test_cc_castlike_") + v.name + "_to_FLOAT", {opset_v23}, "backend-test",
+             std::string("test_cc_castlike_") + v.name + "_to_FLOAT", {opset_v25}, "backend-test",
              registry);
     }
     // sub-byte -> companion whole-byte integer (INT2->INT8, UINT2->UINT8).
@@ -433,7 +434,7 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry) {
       NodeProto node = MakeCastLikeNode();
       Tensor output = castlike_kernel(packed_input, wide_target);
       Expect(node, {packed_input, wide_target}, {output},
-             std::string("test_cc_castlike_") + v.name + "_to_" + v.wide_int_name, {opset_v23},
+             std::string("test_cc_castlike_") + v.name + "_to_" + v.wide_int_name, {opset_v25},
              "backend-test", registry);
     }
     // FLOAT16 -> sub-byte
@@ -442,7 +443,7 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry) {
       Tensor input = kernel::MakeFloat16Tensor("input", int2_shape, int2_fp32_values);
       Tensor output = castlike_kernel(input, sub_target);
       Expect(node, {input, sub_target}, {output},
-             std::string("test_cc_castlike_FLOAT16_to_") + v.name, {opset_v23}, "backend-test",
+             std::string("test_cc_castlike_FLOAT16_to_") + v.name, {opset_v25}, "backend-test",
              registry);
     }
     // sub-byte -> FLOAT16
@@ -450,7 +451,7 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry) {
       NodeProto node = MakeCastLikeNode();
       Tensor output = castlike_kernel(packed_input, float16_target);
       Expect(node, {packed_input, float16_target}, {output},
-             std::string("test_cc_castlike_") + v.name + "_to_FLOAT16", {opset_v23}, "backend-test",
+             std::string("test_cc_castlike_") + v.name + "_to_FLOAT16", {opset_v25}, "backend-test",
              registry);
     }
   }

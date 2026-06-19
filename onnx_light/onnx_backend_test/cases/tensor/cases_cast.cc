@@ -108,7 +108,8 @@ std::vector<CastDtype> SupportedCastDtypes() {
 void RegisterCastCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(19);
   const OpsetId opset_v21 = DefaultOpset(21); // For FLOAT8, INT4, UINT4
-  const OpsetId opset_v23 = DefaultOpset(23); // For INT2, UINT2, FLOAT4E2M1
+  const OpsetId opset_v23 = DefaultOpset(23); // For FLOAT4E2M1
+  const OpsetId opset_v25 = DefaultOpset(25); // For INT2, UINT2
   const kernel::KernelContext ctx{opset};
   const kernel::Cast cast_kernel{ctx};
 
@@ -260,7 +261,7 @@ void RegisterCastCases(std::vector<TestCase> &registry) {
   // the same ``np.arange`` vectors as the upstream generator so the
   // wrapping-cast paths (values outside the destination range) and
   // the typical in-range values are exercised.
-  // INT4/UINT4 were introduced in opset 21, INT2/UINT2 in opset 23.
+  // INT4/UINT4 were introduced in opset 21, INT2/UINT2 in opset 25.
   // ---------------------------------------------------------------------
   struct SubByteVariant {
     DataType dtype;
@@ -351,7 +352,7 @@ void RegisterCastCases(std::vector<TestCase> &registry) {
       NodeProto node = MakeCastNode(to_attr);
       Tensor input = Tensor::FromFloat("", int2_shape, int2_fp32_values);
       Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
-      Expect(node, {input}, {output}, std::string("test_cc_cast_FLOAT_to_") + v.name, {opset_v23},
+      Expect(node, {input}, {output}, std::string("test_cc_cast_FLOAT_to_") + v.name, {opset_v25},
              "backend-test", registry);
     }
     Tensor packed_input;
@@ -363,14 +364,14 @@ void RegisterCastCases(std::vector<TestCase> &registry) {
       packed_input = Tensor("", static_cast<int32_t>(v.dtype), int2_shape, encoded.data);
       Tensor output = cast_kernel(packed_input, static_cast<int32_t>(to_attr));
       Expect(node, {packed_input}, {output}, std::string("test_cc_cast_") + v.name + "_to_FLOAT",
-             {opset_v23}, "backend-test", registry);
+             {opset_v25}, "backend-test", registry);
     }
     {
       const int64_t to_attr = static_cast<int64_t>(v.wide_int_dtype);
       NodeProto node = MakeCastNode(to_attr);
       Tensor output = cast_kernel(packed_input, static_cast<int32_t>(to_attr));
       Expect(node, {packed_input}, {output},
-             std::string("test_cc_cast_") + v.name + "_to_" + v.wide_int_name, {opset_v23},
+             std::string("test_cc_cast_") + v.name + "_to_" + v.wide_int_name, {opset_v25},
              "backend-test", registry);
     }
     // FLOAT16 -> INT2 / UINT2
@@ -379,7 +380,7 @@ void RegisterCastCases(std::vector<TestCase> &registry) {
       NodeProto node = MakeCastNode(to_attr);
       Tensor input = kernel::MakeFloat16Tensor("", int2_shape, int2_fp32_values);
       Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
-      Expect(node, {input}, {output}, std::string("test_cc_cast_FLOAT16_to_") + v.name, {opset_v23},
+      Expect(node, {input}, {output}, std::string("test_cc_cast_FLOAT16_to_") + v.name, {opset_v25},
              "backend-test", registry);
     }
     // INT2 / UINT2 -> FLOAT16
@@ -388,7 +389,7 @@ void RegisterCastCases(std::vector<TestCase> &registry) {
       NodeProto node = MakeCastNode(to_attr);
       Tensor output = cast_kernel(packed_input, static_cast<int32_t>(to_attr));
       Expect(node, {packed_input}, {output}, std::string("test_cc_cast_") + v.name + "_to_FLOAT16",
-             {opset_v23}, "backend-test", registry);
+             {opset_v25}, "backend-test", registry);
     }
   }
 

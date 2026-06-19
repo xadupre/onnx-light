@@ -38,8 +38,8 @@ void ComputeShapeGather(ShapesContext &ctx, const NodeProto &node) {
     if (axis < 0) {
       axis += r;
     }
-    EXT_ENFORCE_INVALID(!(axis < 0 || axis >= r), "ComputeShapeGather: axis=", std::to_string(axis),
-                        " out of range for data rank ", std::to_string(r), ".");
+    EXT_ENFORCE_INVALID(!(axis < 0 || axis >= r), "ComputeShapeGather: axis=", axis,
+                        " out of range for data rank ", r, ".");
   }
 
   OptimShape out_shape;

@@ -99,7 +99,7 @@ template <class KernelT> NodeKernelFn MakeBinaryWithOptionalThirdTrampoline() {
   return [](const NodeProto &node, RuntimeContext &rt) {
     RequireMinInputCount(node, 2);
     EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op '", node.op_type().as_string(),
-                        "' expects 2 or 3 inputs, got ", std::to_string(node.input_size()), ".");
+                        "' expects 2 or 3 inputs, got ", node.input_size(), ".");
     RequireOutputCount(node, 1);
     const Tensor &a = GetInput(node, 0, rt.tensors());
     const Tensor &b = GetInput(node, 1, rt.tensors());
@@ -466,15 +466,15 @@ inline int64_t GetNormAxis(const NodeProto &node) {
 inline void RequireInputRange(const NodeProto &node, int min_inputs, int max_inputs) {
   const int n = node.input_size();
   EXT_ENFORCE_INVALID(!(n < min_inputs || n > max_inputs), "RunNode: op '",
-                      node.op_type().as_string(), "' expects ", std::to_string(min_inputs), " to ",
-                      std::to_string(max_inputs), " input(s), got ", std::to_string(n), ".");
+                      node.op_type().as_string(), "' expects ", min_inputs, " to ", max_inputs,
+                      " input(s), got ", n, ".");
 }
 
 inline void RequireOutputRange(const NodeProto &node, int min_outputs, int max_outputs) {
   const int n = node.output_size();
   EXT_ENFORCE_INVALID(!(n < min_outputs || n > max_outputs), "RunNode: op '",
-                      node.op_type().as_string(), "' expects ", std::to_string(min_outputs), " to ",
-                      std::to_string(max_outputs), " output(s), got ", std::to_string(n), ".");
+                      node.op_type().as_string(), "' expects ", min_outputs, " to ", max_outputs,
+                      " output(s), got ", n, ".");
 }
 
 void RunBatchNormalization(const NodeProto &node, RuntimeContext &rt) {
@@ -617,10 +617,10 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        [](const NodeProto &node, RuntimeContext &rt) {
          EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 7), "RunNode: op '" , node.op_type().as_string() ,
                                        "' expects between 3 and 7 input(s), got " ,
-                                       std::to_string(node.input_size()) , ".");
+                                       node.input_size() , ".");
          EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 4), "RunNode: op '" , node.op_type().as_string() ,
                                        "' expects between 1 and 4 output(s), got " ,
-                                       std::to_string(node.output_size()) , ".");
+                                       node.output_size() , ".");
          const Tensor &q = GetInput(node, 0, rt.tensors());
          const Tensor &k = GetInput(node, 1, rt.tensors());
          const Tensor &v = GetInput(node, 2, rt.tensors());
@@ -713,7 +713,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        [](const NodeProto &node, RuntimeContext &rt) {
          EXT_ENFORCE_INVALID(!(node.input_size() < 2 || node.input_size() > 4), "RunNode: op '" , node.op_type().as_string() ,
                                        "' expects between 2 and 4 input(s), got " ,
-                                       std::to_string(node.input_size()) , ".");
+                                       node.input_size() , ".");
          RequireOutputCount(node, 2);
          const Tensor &input = GetInput(node, 0, rt.tensors());
          const Tensor &weight = GetInput(node, 1, rt.tensors());
@@ -873,7 +873,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 2);
          EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op 'Conv' expects at most 3 inputs, got " ,
-                                       std::to_string(node.input_size()) , ".");
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const Tensor &w = GetInput(node, 1, rt.tensors());
@@ -892,7 +892,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 2);
          EXT_ENFORCE_INVALID(!(node.input_size() > 4), "RunNode: op 'ConvInteger' expects at most 4 inputs, got " ,
-                                       std::to_string(node.input_size()) , ".");
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const Tensor &w = GetInput(node, 1, rt.tensors());
@@ -915,7 +915,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 2);
          EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op 'ConvTranspose' expects at most 3 inputs, got " ,
-                                       std::to_string(node.input_size()) , ".");
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const Tensor &w = GetInput(node, 1, rt.tensors());
@@ -940,7 +940,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 3);
          EXT_ENFORCE_INVALID(!(node.input_size() > 5), "RunNode: op 'DeformConv' expects at most 5 inputs, got " ,
-                                       std::to_string(node.input_size()) , ".");
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const Tensor &w = GetInput(node, 1, rt.tensors());
@@ -992,7 +992,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 2);
          EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op 'DequantizeLinear' expects 2 or 3 inputs, got " ,
-                                       std::to_string(node.input_size()) , ".");
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const Tensor &x_scale = GetInput(node, 1, rt.tensors());
@@ -1185,7 +1185,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        [](const NodeProto &node, RuntimeContext &rt) {
          EXT_ENFORCE_INVALID(!(node.input_size() < 2 || node.input_size() > 3), "RunNode: op '" , node.op_type().as_string() ,
                                        "' expects between 2 and 3 input(s), got " ,
-                                       std::to_string(node.input_size()) , ".");
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Tensor &a = GetInput(node, 0, rt.tensors());
          const Tensor &b = GetInput(node, 1, rt.tensors());
@@ -1244,10 +1244,10 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        [](const NodeProto &node, RuntimeContext &rt) {
          EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 6), "RunNode: op '" , node.op_type().as_string() ,
                                        "' expects between 3 and 6 input(s), got " ,
-                                       std::to_string(node.input_size()) , ".");
+                                       node.input_size() , ".");
          EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 2), "RunNode: op '" , node.op_type().as_string() ,
                                        "' expects 1 or 2 output(s), got " ,
-                                       std::to_string(node.output_size()) , ".");
+                                       node.output_size() , ".");
 
          // Unsupported attributes: only the default ``forward`` direction
          // with the default ``Sigmoid``/``Tanh`` activations and no
@@ -1357,10 +1357,10 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        [](const NodeProto &node, RuntimeContext &rt) {
          EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 6), "RunNode: op 'LinearAttention' expects between 3 and 6 "
                                        "input(s), got " ,
-                                       std::to_string(node.input_size()) , ".");
+                                       node.input_size() , ".");
          EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 2), "RunNode: op 'LinearAttention' expects 1 or 2 output(s), "
                                        "got " ,
-                                       std::to_string(node.output_size()) , ".");
+                                       node.output_size() , ".");
          const Tensor &query = GetInput(node, 0, rt.tensors());
          const Tensor &key = GetInput(node, 1, rt.tensors());
          const Tensor &value = GetInput(node, 2, rt.tensors());
@@ -1397,10 +1397,10 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        [](const NodeProto &node, RuntimeContext &rt) {
          EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 8), "RunNode: op '" , node.op_type().as_string() ,
                                        "' expects between 3 and 8 input(s), got " ,
-                                       std::to_string(node.input_size()) , ".");
+                                       node.input_size() , ".");
          EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 3), "RunNode: op '" , node.op_type().as_string() ,
                                        "' expects between 1 and 3 output(s), got " ,
-                                       std::to_string(node.output_size()) , ".");
+                                       node.output_size() , ".");
 
          // Unsupported attributes: only the default ``forward`` direction
          // with the default ``Sigmoid``/``Tanh``/``Tanh`` activations, no
@@ -1514,7 +1514,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 2);
          EXT_ENFORCE_INVALID(!(node.input_size() > 4), "RunNode: op 'MatMulInteger' expects at most 4 inputs, got " ,
-                                       std::to_string(node.input_size()) , ".");
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Tensor &a = GetInput(node, 0, rt.tensors());
          const Tensor &b = GetInput(node, 1, rt.tensors());
@@ -1531,7 +1531,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireInputCount(node, 1);
          EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 2), "RunNode: op 'MaxPool' expects 1 or 2 output(s), got " ,
-                                       std::to_string(node.output_size()) , ".");
+                                       node.output_size() , ".");
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const PoolCommonAttrs a = ParsePoolCommonAttrs(node);
          const int64_t storage_order = GetAttributeIntOrDefault(node, "storage_order", 0);
@@ -1651,7 +1651,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        [](const NodeProto &node, RuntimeContext &rt) {
          EXT_ENFORCE_INVALID(!(node.input_size() < 2 || node.input_size() > 5), "RunNode: op '" , node.op_type().as_string() ,
                                        "' expects between 2 and 5 inputs, got " ,
-                                       std::to_string(node.input_size()) , ".");
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Tensor &boxes = GetInput(node, 0, rt.tensors());
          const Tensor &scores = GetInput(node, 1, rt.tensors());
@@ -1722,7 +1722,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        [](const NodeProto &node, RuntimeContext &rt) {
          EXT_ENFORCE_INVALID(!(node.input_size() > 1), 
                "RunNode: op 'OptionalHasElement' expects 0 or 1 inputs, got " ,
-               std::to_string(node.input_size()) , ".");
+               node.input_size() , ".");
          RequireOutputCount(node, 1);
          kernel::OptionalHasElement k(rt.kernel_ctx());
          if (node.input_size() == 0 || node.input(0).as_string().empty()) {
@@ -1779,7 +1779,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 8);
          EXT_ENFORCE_INVALID(!(node.input_size() > 9), "RunNode: op 'QLinearConv' expects at most 9 inputs, got " ,
-                                       std::to_string(node.input_size()) , ".");
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const Tensor &x_scale = GetInput(node, 1, rt.tensors());
@@ -1824,7 +1824,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        [](const NodeProto &node, RuntimeContext &rt) {
          RequireMinInputCount(node, 2);
          EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op 'QuantizeLinear' expects 2 or 3 inputs, got " ,
-                                       std::to_string(node.input_size()) , ".");
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const Tensor &y_scale = GetInput(node, 1, rt.tensors());
@@ -1898,7 +1898,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        [](const NodeProto &node, RuntimeContext &rt) {
          EXT_ENFORCE_INVALID(!(node.input_size() < 1 || node.input_size() > 4), "RunNode: op '" , node.op_type().as_string() ,
                                        "' expects between 1 and 4 input(s), got " ,
-                                       std::to_string(node.input_size()) , ".");
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const Tensor *roi = GetOptionalInput(node, 1, rt.tensors());
@@ -1985,10 +1985,10 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        [](const NodeProto &node, RuntimeContext &rt) {
          EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 6), "RunNode: op '" , node.op_type().as_string() ,
                                        "' expects between 3 and 6 input(s), got " ,
-                                       std::to_string(node.input_size()) , ".");
+                                       node.input_size() , ".");
          EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 2), "RunNode: op '" , node.op_type().as_string() ,
                                        "' expects 1 or 2 output(s), got " ,
-                                       std::to_string(node.output_size()) , ".");
+                                       node.output_size() , ".");
 
          // Unsupported attributes: only the default ``forward`` direction
          // with the default ``Tanh`` activation and no ``clip`` are
@@ -2045,7 +2045,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        [](const NodeProto &node, RuntimeContext &rt) {
          EXT_ENFORCE_INVALID(!(node.input_size() < 3 || node.input_size() > 4), "RunNode: op '" , node.op_type().as_string() ,
                                        "' expects between 3 and 4 input(s), got " ,
-                                       std::to_string(node.input_size()) , ".");
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Tensor &x = GetInput(node, 0, rt.tensors());
          const Tensor &cos_cache = GetInput(node, 1, rt.tensors());
@@ -2161,7 +2161,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          RequireMinInputCount(node, 1);
          EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '" , node.op_type().as_string() ,
                                        "' expects 1 or 2 inputs, got " ,
-                                       std::to_string(node.input_size()) , ".");
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Sequence &input_sequence = GetInputSequence(node, 0, rt);
          const Tensor *position = GetOptionalInput(node, 1, rt.tensors());
@@ -2173,7 +2173,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          RequireMinInputCount(node, 2);
          EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op '" , node.op_type().as_string() ,
                                        "' expects 2 or 3 inputs, got " ,
-                                       std::to_string(node.input_size()) , ".");
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Sequence &input_sequence = GetInputSequence(node, 0, rt);
          const Tensor &tensor = GetInput(node, 1, rt.tensors());
@@ -2194,7 +2194,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          RequireMinInputCount(node, 1);
          EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '" , node.op_type().as_string() ,
                                        "' expects 1 or 2 inputs, got " ,
-                                       std::to_string(node.input_size()) , ".");
+                                       node.input_size() , ".");
          EXT_ENFORCE_INVALID(!(node.output_size() < 1), "RunNode: op '" , node.op_type().as_string() ,
                                        "' expects at least 1 output, got 0.");
          const Tensor &input = GetInput(node, 0, rt.tensors());
@@ -2220,8 +2220,8 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          kernel::Split k(rt.kernel_ctx());
          std::vector<Tensor> outputs = k(input, axis, split, num_outputs);
          EXT_ENFORCE_INVALID(!(static_cast<int>(outputs.size()) != node.output_size()), 
-               "RunNode: op 'Split' produced " , std::to_string(outputs.size()) ,
-               " outputs but node declares " , std::to_string(node.output_size()) , ".");
+               "RunNode: op 'Split' produced " , outputs.size() ,
+               " outputs but node declares " , node.output_size() , ".");
          for (int i = 0; i < node.output_size(); ++i) {
            SetOutput(node, i, std::move(outputs[static_cast<size_t>(i)]), rt);
          }
@@ -2231,7 +2231,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          RequireMinInputCount(node, 1);
          EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '" , node.op_type().as_string() ,
                                        "' expects 1 or 2 inputs, got " ,
-                                       std::to_string(node.input_size()) , ".");
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Tensor &input = GetInput(node, 0, rt.tensors());
          const Tensor *split = GetOptionalInput(node, 1, rt.tensors());
@@ -2282,7 +2282,7 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
          RequireMinInputCount(node, 3);
          EXT_ENFORCE_INVALID(!(node.input_size() > 5), "RunNode: op '" , node.op_type().as_string() ,
                                        "' expects between 3 and 5 input(s), got " ,
-                                       std::to_string(node.input_size()) , ".");
+                                       node.input_size() , ".");
          RequireOutputCount(node, 1);
          const Tensor &data = GetInput(node, 0, rt.tensors());
          const Tensor &starts = GetInput(node, 1, rt.tensors());
@@ -2562,11 +2562,11 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        [](const NodeProto &node, RuntimeContext &rt) {
          EXT_ENFORCE_INVALID(!(node.input_size() < 5 || (node.input_size() - 2) % 3 != 0), 
                "RunNode: op 'Adagrad' expects 2 + 3*N inputs (got " ,
-               std::to_string(node.input_size()) , ").");
+               node.input_size() , ").");
          const int64_t n = (node.input_size() - 2) / 3;
          EXT_ENFORCE_INVALID(node.output_size() == 2 * n, "RunNode: op 'Adagrad' expects 2*N outputs (got " ,
-                                       std::to_string(node.output_size()) , " for N=" ,
-                                       std::to_string(n) , ").");
+                                       node.output_size() , " for N=" ,
+                                       n , ").");
          const Tensor &R = GetInput(node, 0, rt.tensors());
          const Tensor &T = GetInput(node, 1, rt.tensors());
          std::vector<Tensor> Xs, Gs, Hs;
@@ -2593,11 +2593,11 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
       {"ai.onnx.preview.training:Adam",
        [](const NodeProto &node, RuntimeContext &rt) {
          EXT_ENFORCE_INVALID(!(node.input_size() < 6 || (node.input_size() - 2) % 4 != 0), "RunNode: op 'Adam' expects 2 + 4*N inputs (got " ,
-                                       std::to_string(node.input_size()) , ").");
+                                       node.input_size() , ").");
          const int64_t n = (node.input_size() - 2) / 4;
          EXT_ENFORCE_INVALID(node.output_size() == 3 * n, "RunNode: op 'Adam' expects 3*N outputs (got " ,
-                                       std::to_string(node.output_size()) , " for N=" ,
-                                       std::to_string(n) , ").");
+                                       node.output_size() , " for N=" ,
+                                       n , ").");
          const Tensor &R = GetInput(node, 0, rt.tensors());
          const Tensor &T = GetInput(node, 1, rt.tensors());
          std::vector<Tensor> Xs, Gs, Vs, Hs;
@@ -2630,11 +2630,11 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
        [](const NodeProto &node, RuntimeContext &rt) {
          EXT_ENFORCE_INVALID(!(node.input_size() < 5 || (node.input_size() - 2) % 3 != 0), 
                "RunNode: op 'Momentum' expects 2 + 3*N inputs (got " ,
-               std::to_string(node.input_size()) , ").");
+               node.input_size() , ").");
          const int64_t n = (node.input_size() - 2) / 3;
          EXT_ENFORCE_INVALID(node.output_size() == 2 * n, "RunNode: op 'Momentum' expects 2*N outputs (got " ,
-                                       std::to_string(node.output_size()) , " for N=" ,
-                                       std::to_string(n) , ").");
+                                       node.output_size() , " for N=" ,
+                                       n , ").");
          const Tensor &R = GetInput(node, 0, rt.tensors());
          const Tensor &T = GetInput(node, 1, rt.tensors());
          std::vector<Tensor> Xs, Gs, Vs;

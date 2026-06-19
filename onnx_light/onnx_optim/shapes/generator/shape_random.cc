@@ -33,8 +33,7 @@ TensorType ResolveDtype(const NodeProto &node, TensorType default_dtype, const c
   const int64_t dtype_value = dtype_attr->i();
   TensorType out_dtype = DataTypeToTensorType(static_cast<TensorProto::DataType>(dtype_value));
   EXT_ENFORCE_INVALID(out_dtype != TensorType::kUndefined, std::string(op_name),
-                      ": attribute 'dtype' has unsupported value ", std::to_string(dtype_value),
-                      ".");
+                      ": attribute 'dtype' has unsupported value ", dtype_value, ".");
   return out_dtype;
 }
 
@@ -48,8 +47,7 @@ OptimShape ShapeFromAttribute(const NodeProto &node, const char *op_name) {
   OptimShape out_shape;
   for (int64_t dim : dims) {
     EXT_ENFORCE_INVALID(!(dim < 0), std::string(op_name),
-                        ": attribute 'shape' must not contain negative dims, got ",
-                        std::to_string(dim), ".");
+                        ": attribute 'shape' must not contain negative dims, got ", dim, ".");
     out_shape.PushBack(OptimDim(dim));
   }
   return out_shape;

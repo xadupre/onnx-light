@@ -25,8 +25,7 @@ namespace {
 OptimDim MergeDim(const OptimDim &a, const OptimDim &b, const char *axis_name) {
   if (a.IsInt() && b.IsInt()) {
     EXT_ENFORCE_INVALID(a.AsInt() == b.AsInt(), std::string("ComputeShapeGridSample: "), axis_name,
-                        " dimensions disagree (", std::to_string(a.AsInt()), " vs ",
-                        std::to_string(b.AsInt()), ").");
+                        " dimensions disagree (", a.AsInt(), " vs ", b.AsInt(), ").");
     return a;
   }
   if (a.IsInt()) {
@@ -64,12 +63,11 @@ void ComputeShapeGridSample(ShapesContext &ctx, const NodeProto &node) {
 
   EXT_ENFORCE_INVALID(x_shape.Rank() == grid_shape.Rank(),
                       "ComputeShapeGridSample: X and grid must have the same rank. Got X rank ",
-                      std::to_string(x_shape.Rank()), " vs grid rank ",
-                      std::to_string(grid_shape.Rank()), ".");
+                      x_shape.Rank(), " vs grid rank ", grid_shape.Rank(), ".");
 
   EXT_ENFORCE_INVALID(!(x_shape.Rank() < 3),
-                      "ComputeShapeGridSample: X and grid ranks must be >= 3. Got ",
-                      std::to_string(x_shape.Rank()), ".");
+                      "ComputeShapeGridSample: X and grid ranks must be >= 3. Got ", x_shape.Rank(),
+                      ".");
 
   const size_t rank = x_shape.Rank();
 
@@ -79,7 +77,7 @@ void ComputeShapeGridSample(ShapesContext &ctx, const NodeProto &node) {
       !(grid_last.IsInt() && grid_last.AsInt() != static_cast<int64_t>(rank) - 2),
       "ComputeShapeGridSample: the last dimension of grid must equal the number of spatial "
       "dimensions (rank - 2 = ",
-      std::to_string(rank - 2), "). Got ", std::to_string(grid_last.AsInt()), ".");
+      rank - 2, "). Got ", grid_last.AsInt(), ".");
 
   OptimShape out;
   // N: merged dim between X[0] and grid[0].

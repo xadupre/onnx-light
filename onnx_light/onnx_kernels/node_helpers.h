@@ -45,7 +45,7 @@ inline std::string NormaliseDispatchDomain(const NodeProto &node) {
 inline const Tensor &GetInput(const NodeProto &node, int index, const TensorMap &tensors) {
   const std::string name = node.input(index).as_string();
   EXT_ENFORCE_INVALID(!(name.empty()), "RunNode: op '", node.op_type().as_string(), "' input #",
-                      std::to_string(index), " is unset (empty name).");
+                      index, " is unset (empty name).");
   auto it = tensors.find(name);
   EXT_ENFORCE_INVALID(it != tensors.end(), "RunNode: input '", name, "' of op '",
                       node.op_type().as_string(), "' is missing from the tensor map.");
@@ -75,7 +75,7 @@ inline const Tensor *GetOptionalInput(const NodeProto &node, int index, const Te
 inline void SetOutput(const NodeProto &node, int index, Tensor result, TensorMap &tensors) {
   const std::string name = node.output(index).as_string();
   EXT_ENFORCE_INVALID(!(name.empty()), "RunNode: op '", node.op_type().as_string(), "' output #",
-                      std::to_string(index), " is unset (empty name).");
+                      index, " is unset (empty name).");
   result.name = name;
   tensors[name] = std::move(result);
 }
@@ -85,7 +85,7 @@ inline void SetOutput(const NodeProto &node, int index, Tensor result, TensorMap
 inline void SetOutput(const NodeProto &node, int index, Tensor result, RuntimeContext &rt) {
   const std::string name = node.output(index).as_string();
   EXT_ENFORCE_INVALID(!(name.empty()), "RunNode: op '", node.op_type().as_string(), "' output #",
-                      std::to_string(index), " is unset (empty name).");
+                      index, " is unset (empty name).");
   result.name = name;
   rt.Put(name, std::move(result), RuntimeEventKind::kIntermediate);
 }
@@ -98,7 +98,7 @@ inline const Sequence &GetInputSequence(const NodeProto &node, int index,
                                         const RuntimeContext &rt) {
   const std::string name = node.input(index).as_string();
   EXT_ENFORCE_INVALID(!(name.empty()), "RunNode: op '", node.op_type().as_string(),
-                      "' sequence input #", std::to_string(index), " is unset (empty name).");
+                      "' sequence input #", index, " is unset (empty name).");
   EXT_ENFORCE_INVALID(rt.HasSequence(name), "RunNode: sequence input '", name, "' of op '",
                       node.op_type().as_string(), "' is missing from the sequence map.");
   return rt.GetSequence(name);
@@ -111,27 +111,26 @@ inline void SetOutputSequence(const NodeProto &node, int index, Sequence result,
                               RuntimeContext &rt) {
   const std::string name = node.output(index).as_string();
   EXT_ENFORCE_INVALID(!(name.empty()), "RunNode: op '", node.op_type().as_string(),
-                      "' sequence output #", std::to_string(index), " is unset (empty name).");
+                      "' sequence output #", index, " is unset (empty name).");
   rt.PutSequence(name, std::move(result));
 }
 
 inline void RequireInputCount(const NodeProto &node, int expected) {
   EXT_ENFORCE_INVALID(!(static_cast<int>(node.input_size()) != expected), "RunNode: op '",
-                      node.op_type().as_string(), "' expects ", std::to_string(expected),
-                      " input(s), got ", std::to_string(node.input_size()), ".");
+                      node.op_type().as_string(), "' expects ", expected, " input(s), got ",
+                      node.input_size(), ".");
 }
 
 inline void RequireMinInputCount(const NodeProto &node, int min_expected) {
   EXT_ENFORCE_INVALID(!(static_cast<int>(node.input_size()) < min_expected), "RunNode: op '",
-                      node.op_type().as_string(), "' expects at least ",
-                      std::to_string(min_expected), " input(s), got ",
-                      std::to_string(node.input_size()), ".");
+                      node.op_type().as_string(), "' expects at least ", min_expected,
+                      " input(s), got ", node.input_size(), ".");
 }
 
 inline void RequireOutputCount(const NodeProto &node, int expected) {
   EXT_ENFORCE_INVALID(!(static_cast<int>(node.output_size()) != expected), "RunNode: op '",
-                      node.op_type().as_string(), "' expects ", std::to_string(expected),
-                      " output(s), got ", std::to_string(node.output_size()), ".");
+                      node.op_type().as_string(), "' expects ", expected, " output(s), got ",
+                      node.output_size(), ".");
 }
 
 inline const AttributeProto *FindAttribute(const NodeProto &node, const std::string &name) {

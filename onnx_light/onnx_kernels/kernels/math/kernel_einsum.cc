@@ -114,9 +114,8 @@ EinsumPlan BuildPlan(const std::vector<Tensor> &inputs, const std::string &raw_e
   bool has_explicit_output = false;
   SplitEquation(equation, input_terms, output_term, has_explicit_output);
   EXT_ENFORCE_INVALID(input_terms.size() == inputs.size(), std::string(kEinsumName),
-                      ": number of input terms in the equation (",
-                      std::to_string(input_terms.size()), ") does not match number of inputs (",
-                      std::to_string(inputs.size()), ").");
+                      ": number of input terms in the equation (", input_terms.size(),
+                      ") does not match number of inputs (", inputs.size(), ").");
 
   // Determine the ellipsis rank (common across all inputs that use ``...``).
   std::size_t ellipsis_rank = 0;
@@ -127,15 +126,14 @@ EinsumPlan BuildPlan(const std::vector<Tensor> &inputs, const std::string &raw_e
     if (dots == std::string::npos) {
       // No ellipsis in this term: the term length must match the input rank.
       EXT_ENFORCE_INVALID(term.size() == inputs[i].shape.size(), std::string(kEinsumName),
-                          ": term '", term, "' has ", std::to_string(term.size()),
-                          " labels but input ", std::to_string(i), " has rank ",
-                          std::to_string(inputs[i].shape.size()), ".");
+                          ": term '", term, "' has ", term.size(), " labels but input ", i,
+                          " has rank ", inputs[i].shape.size(), ".");
       continue;
     }
     // The term has an ellipsis: it accounts for ``rank - (term.size() - 3)``
     // dimensions.
     EXT_ENFORCE_INVALID(!(term.size() - 3 > inputs[i].shape.size()), std::string(kEinsumName),
-                        ": term '", term, "' has more named labels than input ", std::to_string(i),
+                        ": term '", term, "' has more named labels than input ", i,
                         " has dimensions.");
     const std::size_t this_rank = inputs[i].shape.size() - (term.size() - 3);
     if (!ellipsis_seen) {
@@ -143,8 +141,8 @@ EinsumPlan BuildPlan(const std::vector<Tensor> &inputs, const std::string &raw_e
       ellipsis_rank = this_rank;
     } else if (this_rank != ellipsis_rank) {
       EXT_THROW_INVALID(std::string(kEinsumName),
-                        ": ellipsis dimensions must be consistent across inputs, got ",
-                        std::to_string(this_rank), " and ", std::to_string(ellipsis_rank), ".");
+                        ": ellipsis dimensions must be consistent across inputs, got ", this_rank,
+                        " and ", ellipsis_rank, ".");
     }
   }
 
@@ -168,9 +166,8 @@ EinsumPlan BuildPlan(const std::vector<Tensor> &inputs, const std::string &raw_e
     const std::string &labels = plan.input_labels[i];
     const std::vector<int64_t> &shape = inputs[i].shape;
     EXT_ENFORCE_INVALID(labels.size() == shape.size(), std::string(kEinsumName),
-                        ": expanded term '", labels, "' has ", std::to_string(labels.size()),
-                        " labels but input ", std::to_string(i), " has rank ",
-                        std::to_string(shape.size()), ".");
+                        ": expanded term '", labels, "' has ", labels.size(), " labels but input ",
+                        i, " has rank ", shape.size(), ".");
     for (std::size_t d = 0; d < labels.size(); ++d) {
       const char lbl = labels[d];
       const int64_t dim = shape[d];
@@ -187,8 +184,8 @@ EinsumPlan BuildPlan(const std::vector<Tensor> &inputs, const std::string &raw_e
           it->second = std::max(it->second, dim);
         } else {
           EXT_THROW_INVALID(std::string(kEinsumName), ": label '", std::string(1, lbl),
-                            "' has inconsistent sizes (", std::to_string(it->second), " and ",
-                            std::to_string(dim), ") across inputs.");
+                            "' has inconsistent sizes (", it->second, " and ", dim,
+                            ") across inputs.");
         }
       }
     }

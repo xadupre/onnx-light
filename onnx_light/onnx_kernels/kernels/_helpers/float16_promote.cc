@@ -35,7 +35,7 @@ Tensor PromoteToFloat32(const Tensor &src) {
       dst[i] = kernel::Bfloat16BitsToFloat(bf16[i]);
     }
   } else {
-    EXT_THROW_INVALID("PromoteToFloat32: unsupported data_type ", std::to_string(dt));
+    EXT_THROW_INVALID("PromoteToFloat32: unsupported data_type ", dt);
   }
 
   Tensor result;
@@ -48,8 +48,7 @@ Tensor PromoteToFloat32(const Tensor &src) {
 
 Tensor DemoteFromFloat32(const Tensor &src, int32_t target_dtype) {
   EXT_ENFORCE_INVALID(!(src.data_type != static_cast<int32_t>(DataType::FLOAT)),
-                      "DemoteFromFloat32: source must be FLOAT, got ",
-                      std::to_string(src.data_type));
+                      "DemoteFromFloat32: source must be FLOAT, got ", src.data_type);
 
   const int64_t n = src.element_count();
   const float *fp32 = reinterpret_cast<const float *>(src.bytes());
@@ -65,7 +64,7 @@ Tensor DemoteFromFloat32(const Tensor &src, int32_t target_dtype) {
       dst[i] = kernel::FloatToBfloat16Bits(fp32[i]);
     }
   } else {
-    EXT_THROW_INVALID("DemoteFromFloat32: unsupported target_dtype ", std::to_string(target_dtype));
+    EXT_THROW_INVALID("DemoteFromFloat32: unsupported target_dtype ", target_dtype);
   }
 
   Tensor result;

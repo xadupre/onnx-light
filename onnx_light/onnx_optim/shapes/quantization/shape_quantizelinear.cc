@@ -36,7 +36,7 @@ void ComputeShapeQuantizeLinear(ShapesContext &ctx, const NodeProto &node, const
       EXT_ENFORCE_INVALID(
           from_attr != TensorType::kUndefined,
           "ComputeShapeQuantizeLinear: attribute 'output_dtype' has unsupported value ",
-          std::to_string(output_dtype_attr), ".");
+          output_dtype_attr, ".");
       out_dtype = from_attr;
     }
   }

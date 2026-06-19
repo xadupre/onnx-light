@@ -45,8 +45,7 @@ OptimDim BroadcastDim(const OptimDim &a, const OptimDim &b) {
     if (bi == 1) {
       return a;
     }
-    EXT_THROW_INVALID("BroadcastShapes: incompatible integer dimensions ", std::to_string(ai),
-                      " and ", std::to_string(bi), ".");
+    EXT_THROW_INVALID("BroadcastShapes: incompatible integer dimensions ", ai, " and ", bi, ".");
   }
   // Either operand is the integer 1 → result is the other operand.
   if (a.IsInt() && a.AsInt() == 1) {

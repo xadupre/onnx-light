@@ -23,7 +23,7 @@ void ComputeShapeImageDecoder(ShapesContext &ctx, const NodeProto &node, const c
   // ImageDecoder requires a 1-D ``tensor(uint8)`` input carrying the
   // encoded bytestream.
   EXT_ENFORCE_INVALID(in_shape.Rank() == 1, std::string("ComputeShapeImageDecoder: input '"), a,
-                      "' must be 1-dimensional, got rank ", std::to_string(in_shape.Rank()), ".");
+                      "' must be 1-dimensional, got rank ", in_shape.Rank(), ".");
 
   // Channel count is determined by the pixel_format attribute. The
   // schema documents three valid values; default is "RGB".

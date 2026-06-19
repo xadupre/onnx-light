@@ -30,8 +30,7 @@ void ComputeShapeCast(ShapesContext &ctx, const NodeProto &node) {
   const int64_t to_value = to_attr->i();
   const TensorType out_dtype = DataTypeToTensorType(static_cast<TensorProto::DataType>(to_value));
   EXT_ENFORCE_INVALID(out_dtype != TensorType::kUndefined,
-                      "ComputeShapeCast: attribute 'to' has unsupported value ",
-                      std::to_string(to_value), ".");
+                      "ComputeShapeCast: attribute 'to' has unsupported value ", to_value, ".");
 
   ctx.Set(node.output(0), OptimTensor(nullptr, out_dtype, std::move(out_shape)));
 }

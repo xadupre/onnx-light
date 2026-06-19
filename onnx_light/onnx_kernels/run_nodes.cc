@@ -61,7 +61,7 @@ Tensor MakeBoolScalar(const std::string &name, bool v) {
 
 int64_t CheckedMulInt64(int64_t a, int64_t b, const std::string &where) {
   EXT_ENFORCE_INVALID(!(a < 0 || b < 0), "RunNode: ", where, " encountered a negative dimension (",
-                      std::to_string(a), ", ", std::to_string(b), ").");
+                      a, ", ", b, ").");
   EXT_ENFORCE_INVALID(!(a != 0 && b > std::numeric_limits<int64_t>::max() / a), "RunNode: ", where,
                       " overflows INT64 shape arithmetic.");
   return a * b;
@@ -179,8 +179,8 @@ namespace {
 void PropagateOutputsToCaller(const NodeProto &node, const std::vector<Tensor> &outputs,
                               RuntimeContext &rt) {
   EXT_ENFORCE_INVALID(outputs.size() == node.output_size(), "RunNode: op '",
-                      node.op_type().as_string(), "' produced ", std::to_string(outputs.size()),
-                      " output(s), node declares ", std::to_string(node.output_size()), ".");
+                      node.op_type().as_string(), "' produced ", outputs.size(),
+                      " output(s), node declares ", node.output_size(), ".");
   for (size_t i = 0; i < outputs.size(); ++i) {
     const std::string caller_name = node.output(i).as_string();
     if (caller_name.empty()) {
@@ -688,8 +688,8 @@ void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt) {
     if (rt.HasSequence(name)) {
       const Sequence &seq = rt.GetSequence(name);
       EXT_ENFORCE_INVALID(seq.size() == n, "RunNode: SequenceMap additional sequence input '", name,
-                          "' has length ", std::to_string(seq.size()), ", expected ",
-                          std::to_string(n), " (matching the first input sequence length).");
+                          "' has length ", seq.size(), ", expected ", n,
+                          " (matching the first input sequence length).");
       additional_sequences[k] = &seq;
     } else {
       additional_tensors[k] = &GetInput(node, idx, rt.tensors());
@@ -698,15 +698,14 @@ void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt) {
 
   // ``body`` must declare one input per SequenceMap input.
   EXT_ENFORCE_INVALID(!(static_cast<std::size_t>(body.input_size()) != 1u + num_additional),
-                      "RunNode: SequenceMap body graph declares ",
-                      std::to_string(body.input_size()), " input(s), expected ",
-                      std::to_string(1u + num_additional), ".");
+                      "RunNode: SequenceMap body graph declares ", body.input_size(),
+                      " input(s), expected ", 1u + num_additional, ".");
 
   const std::size_t m = static_cast<std::size_t>(body.output_size());
   EXT_ENFORCE_INVALID(m != 0u, "RunNode: SequenceMap body graph must declare at least 1 output.");
   EXT_ENFORCE_INVALID(!(static_cast<std::size_t>(node.output_size()) != m),
-                      "RunNode: SequenceMap node declares ", std::to_string(node.output_size()),
-                      " output(s), but the body graph produces ", std::to_string(m), ".");
+                      "RunNode: SequenceMap node declares ", node.output_size(),
+                      " output(s), but the body graph produces ", m, ".");
 
   // ``body_outputs_per_iter[k][i]`` = body output ``k`` for iteration ``i``.
   std::vector<std::vector<Tensor>> body_outputs_per_iter(m);
@@ -736,8 +735,7 @@ void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt) {
 
     std::vector<Tensor> iter_outputs = RunSubgraph(body, bindings, rt, "body");
     EXT_ENFORCE_INVALID(iter_outputs.size() == m, "RunNode: SequenceMap body produced ",
-                        std::to_string(iter_outputs.size()), " output(s) at iteration ",
-                        std::to_string(i), ", expected ", std::to_string(m), ".");
+                        iter_outputs.size(), " output(s) at iteration ", i, ", expected ", m, ".");
     for (std::size_t k = 0; k < m; ++k) {
       body_outputs_per_iter[k].push_back(std::move(iter_outputs[k]));
     }
@@ -811,13 +809,11 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
   const std::string op_type = node.op_type().as_string();
   EXT_ENFORCE_INVALID(!(static_cast<int>(node.input_size()) != static_cast<int>(func.input_size())),
                       "RunNode: call to model-local function '", op_type, "' expects ",
-                      std::to_string(func.input_size()), " input(s), got ",
-                      std::to_string(node.input_size()), ".");
+                      func.input_size(), " input(s), got ", node.input_size(), ".");
   EXT_ENFORCE_INVALID(
       !(static_cast<int>(node.output_size()) != static_cast<int>(func.output_size())),
-      "RunNode: call to model-local function '", op_type, "' expects ",
-      std::to_string(func.output_size()), " output(s), got ", std::to_string(node.output_size()),
-      ".");
+      "RunNode: call to model-local function '", op_type, "' expects ", func.output_size(),
+      " output(s), got ", node.output_size(), ".");
 
   // Build a child runtime context that shares the kernel construction
   // context and the function registry (so nested function calls work)

@@ -858,8 +858,8 @@ ModelProto MergeModels(const ModelProto &m1_in, const ModelProto &m2_in,
                        int64_t model_version) {
   const int64_t ir1 = m1_in.has_ir_version() ? m1_in.ir_version() : int64_t{0};
   const int64_t ir2 = m2_in.has_ir_version() ? m2_in.ir_version() : int64_t{0};
-  EXT_ENFORCE_INVALID(ir1 == ir2, "IR version mismatch ", std::to_string(ir1),
-                      " != ", std::to_string(ir2), ". Both models should have the same IR version");
+  EXT_ENFORCE_INVALID(ir1 == ir2, "IR version mismatch ", ir1, " != ", ir2,
+                      ". Both models should have the same IR version");
   const int64_t ir_version = ir1;
 
   // Merge opset imports (must be compatible).

@@ -35,18 +35,17 @@ void ComputeShapeTranspose(ShapesContext &ctx, const NodeProto &node) {
       perm.push_back(static_cast<int64_t>(rank - 1 - i));
     }
   } else if (perm.size() != rank) {
-    EXT_THROW_INVALID("ComputeShapeTranspose: perm length (", std::to_string(perm.size()),
-                      ") must match input rank (", std::to_string(rank), ").");
+    EXT_THROW_INVALID("ComputeShapeTranspose: perm length (", perm.size(),
+                      ") must match input rank (", rank, ").");
   }
 
   std::vector<bool> seen(rank, false);
   for (int64_t p : perm) {
     EXT_ENFORCE_INVALID(!(p < 0 || static_cast<std::size_t>(p) >= rank),
-                        "ComputeShapeTranspose: perm contains out-of-range axis ",
-                        std::to_string(p), " for rank ", std::to_string(rank), ".");
+                        "ComputeShapeTranspose: perm contains out-of-range axis ", p, " for rank ",
+                        rank, ".");
     EXT_ENFORCE_INVALID(!(seen[static_cast<std::size_t>(p)]),
-                        "ComputeShapeTranspose: perm contains duplicate axis ", std::to_string(p),
-                        ".");
+                        "ComputeShapeTranspose: perm contains duplicate axis ", p, ".");
     seen[static_cast<std::size_t>(p)] = true;
   }
 

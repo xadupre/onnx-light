@@ -38,9 +38,8 @@ void ComputeShapeCenterCropPad(ShapesContext &ctx, const NodeProto &node) {
   } else {
     for (auto &a : axes) {
       const int64_t na = a < 0 ? a + rank : a;
-      EXT_ENFORCE_INVALID(!(na < 0 || na >= rank), "ComputeShapeCenterCropPad: axis ",
-                          std::to_string(a), " is out of range for input rank ",
-                          std::to_string(rank), ".");
+      EXT_ENFORCE_INVALID(!(na < 0 || na >= rank), "ComputeShapeCenterCropPad: axis ", a,
+                          " is out of range for input rank ", rank, ".");
       a = na;
     }
   }
@@ -66,8 +65,8 @@ void ComputeShapeCenterCropPad(ShapesContext &ctx, const NodeProto &node) {
   }
   EXT_ENFORCE_INVALID(!(shape_known && shape_values.size() != axes.size()),
                       "ComputeShapeCenterCropPad: number of elements of input 'shape' (",
-                      std::to_string(shape_values.size()), ") does not match the number of axes (",
-                      std::to_string(axes.size()), ").");
+                      shape_values.size(), ") does not match the number of axes (", axes.size(),
+                      ").");
 
   // Build the output shape: start from the input, overwrite axes selected by
   // ``axes`` with values from ``shape`` (or a fresh symbolic dim when

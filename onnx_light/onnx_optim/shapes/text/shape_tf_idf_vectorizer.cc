@@ -41,7 +41,7 @@ void ComputeShapeTfIdfVectorizer(ShapesContext &ctx, const NodeProto &node, cons
     return;
   }
   EXT_THROW_INVALID("ComputeShapeTfIdfVectorizer: input tensor must have rank 1 or 2; got rank ",
-                    std::to_string(rank), ".");
+                    rank, ".");
 }
 
 } // namespace text

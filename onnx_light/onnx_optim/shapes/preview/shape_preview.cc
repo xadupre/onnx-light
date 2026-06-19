@@ -22,8 +22,7 @@ namespace {
 OptimDim MergeDim(const OptimDim &a, const OptimDim &b, const char *what) {
   if (a.IsInt() && b.IsInt()) {
     EXT_ENFORCE_INVALID(a.AsInt() == b.AsInt(), std::string("ComputeShapeFlexAttention: "), what,
-                        " mismatch: ", std::to_string(a.AsInt()), " vs ", std::to_string(b.AsInt()),
-                        ".");
+                        " mismatch: ", a.AsInt(), " vs ", b.AsInt(), ".");
     return a;
   }
   if (a.IsInt()) {
@@ -37,7 +36,7 @@ OptimDim MergeDim(const OptimDim &a, const OptimDim &b, const char *what) {
 
 void RequireRank4(const OptimShape &shape, const char *name) {
   EXT_ENFORCE_INVALID(shape.Rank() == 4, std::string("ComputeShapeFlexAttention: input '"), name,
-                      "' must have rank 4, got ", std::to_string(shape.Rank()), ".");
+                      "' must have rank 4, got ", shape.Rank(), ".");
 }
 
 } // namespace
@@ -68,28 +67,27 @@ void ComputeShapeFlexAttention(ShapesContext &ctx, const NodeProto &node, const 
   EXT_ENFORCE_INVALID(
       !(k_shape[1].IsInt() && v_shape[1].IsInt() && k_shape[1].AsInt() != v_shape[1].AsInt()),
       "ComputeShapeFlexAttention: key and value must share the same head dimension (got ",
-      std::to_string(k_shape[1].AsInt()), " vs ", std::to_string(v_shape[1].AsInt()), ").");
+      k_shape[1].AsInt(), " vs ", v_shape[1].AsInt(), ").");
 
   // K and V share the same sequence length.
   EXT_ENFORCE_INVALID(
       !(k_shape[2].IsInt() && v_shape[2].IsInt() && k_shape[2].AsInt() != v_shape[2].AsInt()),
       "ComputeShapeFlexAttention: key and value must share the same sequence length (got ",
-      std::to_string(k_shape[2].AsInt()), " vs ", std::to_string(v_shape[2].AsInt()), ").");
+      k_shape[2].AsInt(), " vs ", v_shape[2].AsInt(), ").");
 
   // Q and K share the same embedding dimension.
   EXT_ENFORCE_INVALID(
       !(q_shape[3].IsInt() && k_shape[3].IsInt() && q_shape[3].AsInt() != k_shape[3].AsInt()),
       "ComputeShapeFlexAttention: query and key must share the same embedding dimension (got ",
-      std::to_string(q_shape[3].AsInt()), " vs ", std::to_string(k_shape[3].AsInt()), ").");
+      q_shape[3].AsInt(), " vs ", k_shape[3].AsInt(), ").");
 
   // Grouped Query Attention: q_num_heads must be a multiple of kv_num_heads.
   if (q_shape[1].IsInt() && k_shape[1].IsInt()) {
     const int64_t hq = q_shape[1].AsInt();
     const int64_t hkv = k_shape[1].AsInt();
     EXT_ENFORCE_INVALID(!(hq != hkv && (hkv <= 0 || (hq % hkv) != 0)),
-                        "ComputeShapeFlexAttention: q_num_heads (", std::to_string(hq),
-                        ") must be a multiple of kv_num_heads (", std::to_string(hkv),
-                        ") when they differ.");
+                        "ComputeShapeFlexAttention: q_num_heads (", hq,
+                        ") must be a multiple of kv_num_heads (", hkv, ") when they differ.");
   }
 
   // Output: (batch, q_num_heads, q_seq_len, v_head_size).

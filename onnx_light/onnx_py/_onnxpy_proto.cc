@@ -619,6 +619,10 @@ template <typename T> void define_repeated_field_type(nb::class_<utils::Repeated
       .def(
           "__eq__",
           [](utils::RepeatedField<T> &self, nb::list &obj) -> bool {
+            // Compare the size first to avoid materializing the container when
+            // the lengths already differ.
+            if (self.size() != obj.size())
+              return false;
             // Materialize the container into a python list and delegate to the
             // python list comparison so element types (``str``/``bytes``/
             // :class:`String` or numbers) compare as expected.

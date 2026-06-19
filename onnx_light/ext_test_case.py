@@ -401,7 +401,7 @@ class InferenceSessionAllTypes:
             "tensor(uint8)": np.uint8,
         }
 
-    def __init__(self, model: "ModelProto", providers: Optional[List[str]] = None):  # noqa: F821
+    def __init__(self, model: "ModelProto", providers: Optional[List[str]] = None):  # type: ignore # noqa: F821
         import onnxruntime as ort
 
         if providers is None:

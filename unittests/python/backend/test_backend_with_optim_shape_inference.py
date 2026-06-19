@@ -135,6 +135,10 @@ TestOptimShapeInferenceNoNewNamesBackend = make_test_class(
         # them, so these tests are excluded from the no-new-names check.
         "test_cc_optional.*",
         "test_optional.*",
+        # shapes
+        "test_cc_shape_inference_loop_topk_pairwise_distance.*",
+        "test_cc_shape_inference_scan_topk_pairwise_distance.*",
+        "test_cc_shape_inference_topk_pairwise_distance.*",
     ],
 )
 

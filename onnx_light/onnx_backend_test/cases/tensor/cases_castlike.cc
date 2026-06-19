@@ -201,12 +201,6 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry) {
   const kernel::Cast cast_kernel{ctx};
 
   // FLOAT8 variants (opset 21)
-  struct LowPrecisionVariant {
-    DataType dtype;
-    const char *name;
-    std::vector<int64_t> shape;
-    std::vector<float> values;
-  };
   const std::vector<LowPrecisionVariant> kFloat8Variants = {
       {DataType::FLOAT8E4M3FN, "FLOAT8E4M3FN", f8_shape, f8_fp32_values},
       {DataType::FLOAT8E4M3FNUZ, "FLOAT8E4M3FNUZ", f8_shape, f8_fp32_values},

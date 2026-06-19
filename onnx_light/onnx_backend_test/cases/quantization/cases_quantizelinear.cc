@@ -296,7 +296,6 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry) {
   }
 
   // --- Blocked quantization (opset 21+) ---
-  const OpsetId opset_v21 = DefaultOpset(21);
 
   // ``test_quantizelinear_blocked_asymmetric``: blocked per-axis with ZP.
   // x=(3,4), y_scale=(3,2), y_zero_point=(3,2), axis=1, block_size=2.

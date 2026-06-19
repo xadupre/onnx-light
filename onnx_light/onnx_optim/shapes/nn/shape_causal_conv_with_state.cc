@@ -26,12 +26,10 @@ void ComputeShapeCausalConvWithState(ShapesContext &ctx, const NodeProto &node, 
   const OptimShape &in_shape = in.Shape();
   const OptimShape &w_shape = w.Shape();
 
-  EXT_ENFORCE_INVALID(in_shape.Rank() == 3,
-                      std::string("ComputeShapeCausalConvWithState: input '") + input +
-                          "' must have rank 3, got " + std::to_string(in_shape.Rank()) + ".");
-  EXT_ENFORCE_INVALID(w_shape.Rank() == 3,
-                      std::string("ComputeShapeCausalConvWithState: weight '") + weight +
-                          "' must have rank 3, got " + std::to_string(w_shape.Rank()) + ".");
+  EXT_ENFORCE_INVALID(in_shape.Rank() == 3, std::string("ComputeShapeCausalConvWithState: input '"),
+                      input, "' must have rank 3, got ", std::to_string(in_shape.Rank()), ".");
+  EXT_ENFORCE_INVALID(w_shape.Rank() == 3, std::string("ComputeShapeCausalConvWithState: weight '"),
+                      weight, "' must have rank 3, got ", std::to_string(w_shape.Rank()), ".");
 
   // Output 0 (``output``) has the same shape and dtype as ``input``.
   ctx.Set(node.output(0), OptimTensor(nullptr, in.Dtype(), in_shape));

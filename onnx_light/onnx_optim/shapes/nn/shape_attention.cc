@@ -22,9 +22,9 @@ namespace {
 // kept.
 OptimDim MergeDim(const OptimDim &a, const OptimDim &b, const char *what) {
   if (a.IsInt() && b.IsInt()) {
-    EXT_ENFORCE_INVALID(a.AsInt() == b.AsInt(), std::string("ComputeShapeAttention: ") + what +
-                                                    " mismatch: " + std::to_string(a.AsInt()) +
-                                                    " vs " + std::to_string(b.AsInt()) + ".");
+    EXT_ENFORCE_INVALID(a.AsInt() == b.AsInt(), std::string("ComputeShapeAttention: "), what,
+                        " mismatch: ", std::to_string(a.AsInt()), " vs ", std::to_string(b.AsInt()),
+                        ".");
     return a;
   }
   if (a.IsInt()) {
@@ -37,9 +37,8 @@ OptimDim MergeDim(const OptimDim &a, const OptimDim &b, const char *what) {
 }
 
 void RequireRank4(const OptimShape &shape, const char *name) {
-  EXT_ENFORCE_INVALID(shape.Rank() == 4, std::string("ComputeShapeAttention: input '") + name +
-                                             "' must have rank 4, got " +
-                                             std::to_string(shape.Rank()) + ".");
+  EXT_ENFORCE_INVALID(shape.Rank() == 4, std::string("ComputeShapeAttention: input '"), name,
+                      "' must have rank 4, got ", std::to_string(shape.Rank()), ".");
 }
 
 // Returns ``a + b`` when both dims are static; otherwise returns ``a``.
@@ -58,9 +57,9 @@ OptimDim DivideByHeads(const OptimDim &hidden, int64_t num_heads, const char *wh
     return OptimDim(std::string("?"));
   }
   const int64_t value = hidden.AsInt();
-  EXT_ENFORCE_INVALID((value % num_heads) == 0,
-                      std::string("ComputeShapeAttention: ") + what + " (" + std::to_string(value) +
-                          ") must be divisible by num_heads (" + std::to_string(num_heads) + ").");
+  EXT_ENFORCE_INVALID((value % num_heads) == 0, std::string("ComputeShapeAttention: "), what, " (",
+                      std::to_string(value), ") must be divisible by num_heads (",
+                      std::to_string(num_heads), ").");
   return OptimDim(value / num_heads);
 }
 
@@ -110,10 +109,9 @@ void ComputeShapeAttentionRank3(ShapesContext &ctx, const NodeProto &node, const
                                             "'kv_num_heads' are required for rank-3 inputs.");
   EXT_ENFORCE_INVALID(!(q_num_heads <= 0 || kv_num_heads <= 0),
                       "ComputeShapeAttention: 'q_num_heads' and 'kv_num_heads' must be positive.");
-  EXT_ENFORCE_INVALID((q_num_heads % kv_num_heads) == 0,
-                      "ComputeShapeAttention: q_num_heads (" + std::to_string(q_num_heads) +
-                          ") must be a multiple of kv_num_heads (" + std::to_string(kv_num_heads) +
-                          ").");
+  EXT_ENFORCE_INVALID((q_num_heads % kv_num_heads) == 0, "ComputeShapeAttention: q_num_heads (",
+                      std::to_string(q_num_heads), ") must be a multiple of kv_num_heads (",
+                      std::to_string(kv_num_heads), ").");
 
   const OptimShape &q_shape = Q.Shape();
   const OptimShape &k_shape = K.Shape();
@@ -209,9 +207,9 @@ void ComputeShapeAttention(ShapesContext &ctx, const NodeProto &node, const char
   // packed tensors. They must all share the same rank.
   EXT_ENFORCE_INVALID(
       !(q_shape.Rank() != k_shape.Rank() || q_shape.Rank() != v_shape.Rank()),
-      "ComputeShapeAttention: inputs 'Q', 'K' and 'V' must share the same rank, got " +
-          std::to_string(q_shape.Rank()) + ", " + std::to_string(k_shape.Rank()) + " and " +
-          std::to_string(v_shape.Rank()) + ".");
+      "ComputeShapeAttention: inputs 'Q', 'K' and 'V' must share the same rank, got ",
+      std::to_string(q_shape.Rank()), ", ", std::to_string(k_shape.Rank()), " and ",
+      std::to_string(v_shape.Rank()), ".");
   if (q_shape.Rank() == 3) {
     ComputeShapeAttentionRank3(ctx, node, Q, K, V, past_key, past_value);
     return;
@@ -238,9 +236,9 @@ void ComputeShapeAttention(ShapesContext &ctx, const NodeProto &node, const char
     const int64_t hq = q_shape[1].AsInt();
     const int64_t hkv = kv_num_heads.AsInt();
     EXT_ENFORCE_INVALID(!(hq != hkv && (hkv <= 0 || (hq % hkv) != 0)),
-                        "ComputeShapeAttention: q_num_heads (" + std::to_string(hq) +
-                            ") must be a multiple of kv_num_heads (" + std::to_string(hkv) +
-                            ") when they differ.");
+                        "ComputeShapeAttention: q_num_heads (", std::to_string(hq),
+                        ") must be a multiple of kv_num_heads (", std::to_string(hkv),
+                        ") when they differ.");
   }
 
   // total_sequence_length = past_sequence_length + kv_sequence_length when a

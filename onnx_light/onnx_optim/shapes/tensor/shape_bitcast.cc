@@ -79,9 +79,9 @@ void ComputeShapeBitCast(ShapesContext &ctx, const NodeProto &node) {
   const TensorProto::DataType to_dtype = static_cast<TensorProto::DataType>(to_value);
   const TensorType out_dtype = DataTypeToTensorType(to_dtype);
   EXT_ENFORCE_INVALID(!(out_dtype == TensorType::kUndefined || out_dtype == TensorType::kString),
-                      "ComputeShapeBitCast: attribute 'to' has unsupported value " +
-                          std::to_string(to_value) +
-                          " (BitCast does not support STRING or undefined types).");
+                      "ComputeShapeBitCast: attribute 'to' has unsupported value ",
+                      std::to_string(to_value),
+                      " (BitCast does not support STRING or undefined types).");
 
   // The upstream BitCast schema enforces matching bit-widths between the
   // input and the target type.
@@ -91,9 +91,8 @@ void ComputeShapeBitCast(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(
       !(from_bits != 0 && to_bits != 0 && from_bits != to_bits),
       "ComputeShapeBitCast: BitCast requires input and output types to have the same "
-      "bit-width, but input type has " +
-          std::to_string(from_bits) + " bits and output type has " + std::to_string(to_bits) +
-          " bits.");
+      "bit-width, but input type has ",
+      std::to_string(from_bits), " bits and output type has ", std::to_string(to_bits), " bits.");
 
   ctx.Set(node.output(0), OptimTensor(nullptr, out_dtype, std::move(out_shape)));
 }

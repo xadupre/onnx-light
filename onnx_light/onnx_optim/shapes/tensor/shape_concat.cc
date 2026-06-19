@@ -36,11 +36,10 @@ OptimDim FromDimType(const expressions::DimType &d) {
 // ``out`` is preserved.
 void MergeDim(OptimDim &out, const OptimDim &in, int axis, int input_index) {
   if (out.IsInt() && in.IsInt()) {
-    EXT_ENFORCE_INVALID(out.AsInt() == in.AsInt(),
-                        "ComputeShapeConcat: input " + std::to_string(input_index) + " dimension " +
-                            std::to_string(axis) + " (" + std::to_string(in.AsInt()) +
-                            ") differs from the previously-merged value (" +
-                            std::to_string(out.AsInt()) + ").");
+    EXT_ENFORCE_INVALID(out.AsInt() == in.AsInt(), "ComputeShapeConcat: input ",
+                        std::to_string(input_index), " dimension ", std::to_string(axis), " (",
+                        std::to_string(in.AsInt()), ") differs from the previously-merged value (",
+                        std::to_string(out.AsInt()), ").");
     return;
   }
   if (in.IsInt()) {
@@ -69,9 +68,9 @@ void ComputeShapeConcat(ShapesContext &ctx, const NodeProto &node) {
   // only used when the attribute was accidentally omitted.
   const int64_t axis_attr = GetAttributeOr<int64_t>(node, "axis", 1);
   const int64_t resolved_axis = axis_attr < 0 ? axis_attr + rank : axis_attr;
-  EXT_ENFORCE_INVALID(!(resolved_axis < 0 || resolved_axis >= rank),
-                      "ComputeShapeConcat: axis " + std::to_string(axis_attr) +
-                          " is out of range for rank " + std::to_string(rank) + ".");
+  EXT_ENFORCE_INVALID(!(resolved_axis < 0 || resolved_axis >= rank), "ComputeShapeConcat: axis ",
+                      std::to_string(axis_attr), " is out of range for rank ", std::to_string(rank),
+                      ".");
   const std::size_t axis = static_cast<std::size_t>(resolved_axis);
 
   // Start the output shape from the first input.
@@ -85,15 +84,13 @@ void ComputeShapeConcat(ShapesContext &ctx, const NodeProto &node) {
 
   for (int i = 1; i < n_inputs; ++i) {
     const OptimTensor &t = ctx.Get(node.input(i).as_string());
-    EXT_ENFORCE_INVALID(t.Dtype() == common_dtype, "ComputeShapeConcat: input '" +
-                                                       node.input(i).as_string() +
-                                                       "' has a dtype that differs from input '" +
-                                                       node.input(0).as_string() + "'.");
+    EXT_ENFORCE_INVALID(t.Dtype() == common_dtype, "ComputeShapeConcat: input '",
+                        node.input(i).as_string(), "' has a dtype that differs from input '",
+                        node.input(0).as_string(), "'.");
     const OptimShape &shape = t.Shape();
-    EXT_ENFORCE_INVALID(!(static_cast<int>(shape.Rank()) != rank),
-                        "ComputeShapeConcat: input " + std::to_string(i) + " has rank " +
-                            std::to_string(shape.Rank()) + " != " + std::to_string(rank) +
-                            " (first input).");
+    EXT_ENFORCE_INVALID(!(static_cast<int>(shape.Rank()) != rank), "ComputeShapeConcat: input ",
+                        std::to_string(i), " has rank ", std::to_string(shape.Rank()),
+                        " != ", std::to_string(rank), " (first input).");
     for (std::size_t d = 0; d < shape.Rank(); ++d) {
       if (d == axis) {
         axis_dim = expressions::dim_add(axis_dim, ToDimType(shape[d]));

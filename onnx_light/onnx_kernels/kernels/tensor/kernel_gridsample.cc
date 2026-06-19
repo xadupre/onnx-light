@@ -33,7 +33,7 @@ Interp ParseMode(const std::string &mode) {
   if (mode == "cubic" || mode == "bicubic") {
     return Interp::Cubic;
   }
-  EXT_THROW_INVALID("kernel::GridSample: unknown mode '" + mode +
+  EXT_THROW_INVALID("kernel::GridSample: unknown mode '", mode,
                     "' (expected one of 'linear'/'bilinear', 'nearest', 'cubic'/'bicubic').");
 }
 
@@ -47,7 +47,7 @@ Padding ParsePaddingMode(const std::string &pm) {
   if (pm == "reflection") {
     return Padding::Reflection;
   }
-  EXT_THROW_INVALID("kernel::GridSample: unknown padding_mode '" + pm +
+  EXT_THROW_INVALID("kernel::GridSample: unknown padding_mode '", pm,
                     "' (expected one of 'zeros', 'border', 'reflection').");
 }
 

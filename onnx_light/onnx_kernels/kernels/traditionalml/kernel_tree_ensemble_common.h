@@ -55,7 +55,7 @@ inline TreeNodeMode ParseTreeNodeMode(const std::string &mode) {
     return TreeNodeMode::kBranchNeq;
   if (mode == "LEAF")
     return TreeNodeMode::kLeaf;
-  EXT_THROW_INVALID("Unsupported tree node mode: " + mode);
+  EXT_THROW_INVALID("Unsupported tree node mode: ", mode);
 }
 
 /// Applies a comparison at an interior node.
@@ -129,7 +129,7 @@ inline void AggregateTreeLeafWeight(std::vector<float> &accum, int64_t target_id
     }
     counts[static_cast<size_t>(target_id)]++;
   } else {
-    EXT_THROW_INVALID("AggregateTreeLeafWeight: unsupported aggregate_function: " + agg);
+    EXT_THROW_INVALID("AggregateTreeLeafWeight: unsupported aggregate_function: ", agg);
   }
 }
 
@@ -185,7 +185,7 @@ inline void ApplyPostTransform(std::vector<float> &scores, const std::string &po
     }
     return;
   }
-  EXT_THROW_INVALID("ApplyPostTransform: unsupported post_transform: " + post_transform);
+  EXT_THROW_INVALID("ApplyPostTransform: unsupported post_transform: ", post_transform);
 }
 
 /// Classic tree node record used by TreeEnsembleRegressor and

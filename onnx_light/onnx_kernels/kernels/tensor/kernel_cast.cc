@@ -345,7 +345,7 @@ double ParseAsDouble(const std::string &s) {
   try {
     return std::stod(s);
   } catch (const std::exception &) {
-    EXT_THROW_INVALID("kernel::Cast: cannot parse string '" + s + "' as a numeric value.");
+    EXT_THROW_INVALID("kernel::Cast: cannot parse string '", s, "' as a numeric value.");
   }
 }
 

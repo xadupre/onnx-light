@@ -31,8 +31,8 @@ void ComputeShapeDequantizeLinear(ShapesContext &ctx, const NodeProto &node, con
         DataTypeToTensorType(static_cast<TensorProto::DataType>(output_dtype_attr));
     EXT_ENFORCE_INVALID(
         from_attr != TensorType::kUndefined,
-        "ComputeShapeDequantizeLinear: attribute 'output_dtype' has unsupported value " +
-            std::to_string(output_dtype_attr) + ".");
+        "ComputeShapeDequantizeLinear: attribute 'output_dtype' has unsupported value ",
+        std::to_string(output_dtype_attr), ".");
     out_dtype = from_attr;
   } else {
     out_dtype = ctx.Get(x_scale).Dtype();

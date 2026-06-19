@@ -47,7 +47,7 @@ float ReadScalarFloat(const Tensor &t, const char *name) {
     const uint16_t bits = *reinterpret_cast<const uint16_t *>(t.bytes());
     return Float16BitsToFloat(bits);
   }
-  EXT_THROW_INVALID(std::string(kName) + ": '" + name +
+  EXT_THROW_INVALID(std::string(kName), ": '", name,
                     "' must be a FLOAT or FLOAT16 scalar for the reference kernel.");
 }
 
@@ -84,7 +84,7 @@ std::vector<int64_t> BroadcastPrefix(const std::vector<int64_t> &a_prefix,
     } else if (db == 1) {
       out[i] = da;
     } else {
-      EXT_THROW_INVALID(std::string(kName) +
+      EXT_THROW_INVALID(std::string(kName),
                         ": inputs are not broadcast-compatible on batch dimensions.");
     }
   }

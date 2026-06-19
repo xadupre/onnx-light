@@ -66,10 +66,9 @@ void ComputeShapeRNN(ShapesContext &ctx, const NodeProto &node, const char *x, c
 
   const OptimTensor &input = ctx.Get(x);
   const OptimShape &x_shape = input.Shape();
-  EXT_ENFORCE_INVALID(x_shape.Rank() == 3u,
-                      "ComputeShapeRNN: input '" + std::string(x) +
-                          "' must have rank 3 ([seq_length, batch_size, input_size] or "
-                          "[batch_size, seq_length, input_size]).");
+  EXT_ENFORCE_INVALID(x_shape.Rank() == 3u, "ComputeShapeRNN: input '", std::string(x),
+                      "' must have rank 3 ([seq_length, batch_size, input_size] or "
+                      "[batch_size, seq_length, input_size]).");
 
   const std::string direction =
       GetAttributeOr<std::string>(node, "direction", std::string("forward"));

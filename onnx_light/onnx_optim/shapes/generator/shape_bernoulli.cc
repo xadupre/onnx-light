@@ -35,8 +35,8 @@ void ComputeShapeBernoulli(ShapesContext &ctx, const NodeProto &node) {
     out_dtype = DataTypeToTensorType(static_cast<TensorProto::DataType>(dtype_value));
     EXT_ENFORCE_INVALID(out_dtype != TensorType::kUndefined,
                         "ComputeShapeBernoulli: attribute 'dtype' has unsupported "
-                        "value " +
-                            std::to_string(dtype_value) + ".");
+                        "value ",
+                        std::to_string(dtype_value), ".");
   }
 
   ctx.Set(node.output(0), OptimTensor(nullptr, out_dtype, std::move(out_shape)));

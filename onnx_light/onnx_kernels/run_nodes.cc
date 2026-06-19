@@ -41,13 +41,13 @@ using detail::SetOutputSequence;
 
 int64_t ParseInt64Scalar(const Tensor &t, const std::string &where) {
   EXT_ENFORCE_INVALID(!(t.data_type != DataType::INT64 || t.element_count() != 1),
-                      "RunNode: " + where + " must be an INT64 scalar.");
+                      "RunNode: ", where, " must be an INT64 scalar.");
   return t.AsInt64()[0];
 }
 
 bool ParseBoolScalar(const Tensor &t, const std::string &where) {
   EXT_ENFORCE_INVALID(!(t.data_type != DataType::BOOL || t.element_count() != 1),
-                      "RunNode: " + where + " must be a BOOL scalar.");
+                      "RunNode: ", where, " must be a BOOL scalar.");
   return t.AsBool()[0] != 0;
 }
 
@@ -60,11 +60,10 @@ Tensor MakeBoolScalar(const std::string &name, bool v) {
 }
 
 int64_t CheckedMulInt64(int64_t a, int64_t b, const std::string &where) {
-  EXT_ENFORCE_INVALID(!(a < 0 || b < 0), "RunNode: " + where +
-                                             " encountered a negative dimension (" +
-                                             std::to_string(a) + ", " + std::to_string(b) + ").");
-  EXT_ENFORCE_INVALID(!(a != 0 && b > std::numeric_limits<int64_t>::max() / a),
-                      "RunNode: " + where + " overflows INT64 shape arithmetic.");
+  EXT_ENFORCE_INVALID(!(a < 0 || b < 0), "RunNode: ", where, " encountered a negative dimension (",
+                      std::to_string(a), ", ", std::to_string(b), ").");
+  EXT_ENFORCE_INVALID(!(a != 0 && b > std::numeric_limits<int64_t>::max() / a), "RunNode: ", where,
+                      " overflows INT64 shape arithmetic.");
   return a * b;
 }
 
@@ -99,17 +98,17 @@ int64_t ResolveAxis(int64_t axis, size_t rank, const std::string &op_name) {
   if (a < 0) {
     a += r;
   }
-  EXT_ENFORCE_INVALID(!(a < 0 || a >= r), "RunNode: op '" + op_name + "' axis is out of range.");
+  EXT_ENFORCE_INVALID(!(a < 0 || a >= r), "RunNode: op '", op_name, "' axis is out of range.");
   return a;
 }
 
 Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
                             const std::string &op_name) {
-  EXT_ENFORCE_INVALID(!(t.shape.empty()),
-                      "RunNode: op '" + op_name + "' cannot slice a rank-0 scan input.");
+  EXT_ENFORCE_INVALID(!(t.shape.empty()), "RunNode: op '", op_name,
+                      "' cannot slice a rank-0 scan input.");
   const int64_t dim = t.shape[static_cast<size_t>(axis)];
-  EXT_ENFORCE_INVALID(!(index < 0 || index >= dim),
-                      "RunNode: op '" + op_name + "' scan index is out of range.");
+  EXT_ENFORCE_INVALID(!(index < 0 || index >= dim), "RunNode: op '", op_name,
+                      "' scan index is out of range.");
   std::vector<int64_t> out_shape;
   out_shape.reserve(t.shape.size() - 1);
   for (size_t i = 0; i < t.shape.size(); ++i) {
@@ -124,12 +123,12 @@ Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
   const int64_t elements_per_slice = CheckedMulInt64(outer, inner, op_name);
   EXT_ENFORCE_INVALID(!(inner > 0 && static_cast<uint64_t>(inner) >
                                          std::numeric_limits<size_t>::max() / elem_bytes),
-                      "RunNode: op '" + op_name + "' exceeds addressable buffer size.");
+                      "RunNode: op '", op_name, "' exceeds addressable buffer size.");
   const size_t inner_bytes = static_cast<size_t>(inner) * elem_bytes;
   EXT_ENFORCE_INVALID(
       !(elements_per_slice > 0 && static_cast<uint64_t>(elements_per_slice) >
                                       std::numeric_limits<size_t>::max() / elem_bytes),
-      "RunNode: op '" + op_name + "' exceeds addressable buffer size.");
+      "RunNode: op '", op_name, "' exceeds addressable buffer size.");
   std::vector<uint8_t> out_data(static_cast<size_t>(elements_per_slice) * elem_bytes);
 
   for (int64_t o = 0; o < outer; ++o) {
@@ -168,8 +167,8 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
     const std::string out_name = graph.output()[i].name().as_string();
     EXT_ENFORCE_INVALID(!(out_name.empty()), "RunNode: a subgraph output has an empty name.");
     auto it = child.tensors().find(out_name);
-    EXT_ENFORCE_INVALID(it != child.tensors().end(),
-                        "RunNode: subgraph output '" + out_name + "' was not produced.");
+    EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: subgraph output '", out_name,
+                        "' was not produced.");
     outputs.push_back(it->second);
   }
   return outputs;
@@ -179,10 +178,9 @@ namespace {
 
 void PropagateOutputsToCaller(const NodeProto &node, const std::vector<Tensor> &outputs,
                               RuntimeContext &rt) {
-  EXT_ENFORCE_INVALID(outputs.size() == node.output_size(),
-                      "RunNode: op '" + node.op_type().as_string() + "' produced " +
-                          std::to_string(outputs.size()) + " output(s), node declares " +
-                          std::to_string(node.output_size()) + ".");
+  EXT_ENFORCE_INVALID(outputs.size() == node.output_size(), "RunNode: op '",
+                      node.op_type().as_string(), "' produced ", std::to_string(outputs.size()),
+                      " output(s), node declares ", std::to_string(node.output_size()), ".");
   for (size_t i = 0; i < outputs.size(); ++i) {
     const std::string caller_name = node.output(i).as_string();
     if (caller_name.empty()) {
@@ -239,9 +237,8 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
       rt.PutSequence(caller_name, child.GetSequence(out_name));
     } else {
       auto it = child.tensors().find(out_name);
-      EXT_ENFORCE_INVALID(it != child.tensors().end(),
-                          "RunNode: If: subgraph output '" + out_name +
-                              "' was not produced by the selected branch.");
+      EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: If: subgraph output '", out_name,
+                          "' was not produced by the selected branch.");
       Tensor t = std::move(it->second);
       t.name = caller_name;
       rt.Put(caller_name, std::move(t), RuntimeEventKind::kOutput);
@@ -307,8 +304,8 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
     const std::string &cond_out_name = body.output(0).name().as_string();
     auto cond_it = child.tensors().find(cond_out_name);
     EXT_ENFORCE_INVALID(cond_it != child.tensors().end(),
-                        "RunNode: Loop body did not produce 'cond_out' output '" + cond_out_name +
-                            "'.");
+                        "RunNode: Loop body did not produce 'cond_out' output '", cond_out_name,
+                        "'.");
     cond_value = ParseBoolScalar(cond_it->second, "Loop body output 'cond_out'");
 
     for (std::size_t i = 0; i < n; ++i) {
@@ -316,14 +313,13 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
       if (is_seq_state[i]) {
         EXT_ENFORCE_INVALID(
             child.HasSequence(oname),
-            "RunNode: Loop body did not produce sequence-typed loop-carried output '" + oname +
-                "'.");
+            "RunNode: Loop body did not produce sequence-typed loop-carried output '", oname, "'.");
         sequence_state[i] = child.GetSequence(oname);
       } else {
         auto it = child.tensors().find(oname);
-        EXT_ENFORCE_INVALID(
-            it != child.tensors().end(),
-            "RunNode: Loop body did not produce tensor-typed loop-carried output '" + oname + "'.");
+        EXT_ENFORCE_INVALID(it != child.tensors().end(),
+                            "RunNode: Loop body did not produce tensor-typed loop-carried output '",
+                            oname, "'.");
         tensor_state[i] = it->second;
       }
     }
@@ -331,7 +327,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
       const std::string &oname = body.output(static_cast<int>(1 + n + j)).name().as_string();
       auto it = child.tensors().find(oname);
       EXT_ENFORCE_INVALID(it != child.tensors().end(),
-                          "RunNode: Loop body did not produce scan output '" + oname + "'.");
+                          "RunNode: Loop body did not produce scan output '", oname, "'.");
       scan_values[j].push_back(it->second);
     }
     ++trip_count;
@@ -691,10 +687,9 @@ void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt) {
         "RunNode: SequenceMap does not support empty placeholders in additional inputs.");
     if (rt.HasSequence(name)) {
       const Sequence &seq = rt.GetSequence(name);
-      EXT_ENFORCE_INVALID(seq.size() == n, "RunNode: SequenceMap additional sequence input '" +
-                                               name + "' has length " + std::to_string(seq.size()) +
-                                               ", expected " + std::to_string(n) +
-                                               " (matching the first input sequence length).");
+      EXT_ENFORCE_INVALID(seq.size() == n, "RunNode: SequenceMap additional sequence input '", name,
+                          "' has length ", std::to_string(seq.size()), ", expected ",
+                          std::to_string(n), " (matching the first input sequence length).");
       additional_sequences[k] = &seq;
     } else {
       additional_tensors[k] = &GetInput(node, idx, rt.tensors());
@@ -703,15 +698,15 @@ void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt) {
 
   // ``body`` must declare one input per SequenceMap input.
   EXT_ENFORCE_INVALID(!(static_cast<std::size_t>(body.input_size()) != 1u + num_additional),
-                      "RunNode: SequenceMap body graph declares " +
-                          std::to_string(body.input_size()) + " input(s), expected " +
-                          std::to_string(1u + num_additional) + ".");
+                      "RunNode: SequenceMap body graph declares ",
+                      std::to_string(body.input_size()), " input(s), expected ",
+                      std::to_string(1u + num_additional), ".");
 
   const std::size_t m = static_cast<std::size_t>(body.output_size());
   EXT_ENFORCE_INVALID(m != 0u, "RunNode: SequenceMap body graph must declare at least 1 output.");
   EXT_ENFORCE_INVALID(!(static_cast<std::size_t>(node.output_size()) != m),
-                      "RunNode: SequenceMap node declares " + std::to_string(node.output_size()) +
-                          " output(s), but the body graph produces " + std::to_string(m) + ".");
+                      "RunNode: SequenceMap node declares ", std::to_string(node.output_size()),
+                      " output(s), but the body graph produces ", std::to_string(m), ".");
 
   // ``body_outputs_per_iter[k][i]`` = body output ``k`` for iteration ``i``.
   std::vector<std::vector<Tensor>> body_outputs_per_iter(m);
@@ -740,10 +735,9 @@ void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt) {
     }
 
     std::vector<Tensor> iter_outputs = RunSubgraph(body, bindings, rt, "body");
-    EXT_ENFORCE_INVALID(iter_outputs.size() == m,
-                        "RunNode: SequenceMap body produced " +
-                            std::to_string(iter_outputs.size()) + " output(s) at iteration " +
-                            std::to_string(i) + ", expected " + std::to_string(m) + ".");
+    EXT_ENFORCE_INVALID(iter_outputs.size() == m, "RunNode: SequenceMap body produced ",
+                        std::to_string(iter_outputs.size()), " output(s) at iteration ",
+                        std::to_string(i), ", expected ", std::to_string(m), ".");
     for (std::size_t k = 0; k < m; ++k) {
       body_outputs_per_iter[k].push_back(std::move(iter_outputs[k]));
     }
@@ -816,14 +810,14 @@ void BindRefAttributes(NodeProto &node,
 void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, RuntimeContext &rt) {
   const std::string op_type = node.op_type().as_string();
   EXT_ENFORCE_INVALID(!(static_cast<int>(node.input_size()) != static_cast<int>(func.input_size())),
-                      "RunNode: call to model-local function '" + op_type + "' expects " +
-                          std::to_string(func.input_size()) + " input(s), got " +
-                          std::to_string(node.input_size()) + ".");
+                      "RunNode: call to model-local function '", op_type, "' expects ",
+                      std::to_string(func.input_size()), " input(s), got ",
+                      std::to_string(node.input_size()), ".");
   EXT_ENFORCE_INVALID(
       !(static_cast<int>(node.output_size()) != static_cast<int>(func.output_size())),
-      "RunNode: call to model-local function '" + op_type + "' expects " +
-          std::to_string(func.output_size()) + " output(s), got " +
-          std::to_string(node.output_size()) + ".");
+      "RunNode: call to model-local function '", op_type, "' expects ",
+      std::to_string(func.output_size()), " output(s), got ", std::to_string(node.output_size()),
+      ".");
 
   // Build a child runtime context that shares the kernel construction
   // context and the function registry (so nested function calls work)
@@ -840,11 +834,10 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
       continue;
     }
     auto it = rt.tensors().find(caller_name);
-    EXT_ENFORCE_INVALID(it != rt.tensors().end(), "RunNode: input '" + caller_name +
-                                                      "' of call to model-local "
-                                                      "function '" +
-                                                      op_type +
-                                                      "' is missing from the tensor map.");
+    EXT_ENFORCE_INVALID(it != rt.tensors().end(), "RunNode: input '", caller_name,
+                        "' of call to model-local "
+                        "function '",
+                        op_type, "' is missing from the tensor map.");
     Tensor bound = it->second;
     bound.name = param_name;
     child.Put(param_name, std::move(bound), RuntimeEventKind::kInput);
@@ -884,9 +877,9 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
       continue;
     }
     auto it = child.tensors().find(param_name);
-    EXT_ENFORCE_INVALID(it != child.tensors().end(),
-                        "RunNode: output '" + param_name + "' of model-local function '" + op_type +
-                            "' was not produced by the function body.");
+    EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: output '", param_name,
+                        "' of model-local function '", op_type,
+                        "' was not produced by the function body.");
     Tensor result = std::move(it->second);
     result.name = caller_name;
     rt.Put(caller_name, std::move(result), RuntimeEventKind::kOutput);
@@ -954,8 +947,8 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
     } else {
       const auto &table = KernelDispatchTable();
       auto it = table.find(key);
-      EXT_ENFORCE_INVALID(it != table.end(), "RunNode: unsupported op_type '" + op_type +
-                                                 "' in domain '" + domain + "'.");
+      EXT_ENFORCE_INVALID(it != table.end(), "RunNode: unsupported op_type '", op_type,
+                          "' in domain '", domain, "'.");
       it->second(node, rt);
     }
   }

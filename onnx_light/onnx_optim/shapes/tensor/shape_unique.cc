@@ -42,8 +42,8 @@ void ComputeShapeUnique(ShapesContext &ctx, const NodeProto &node) {
         axis += rank;
       }
       EXT_ENFORCE_INVALID(!(axis < 0 || axis >= rank),
-                          "ComputeShapeUnique: axis=" + std::to_string(axis) +
-                              " out of range for input rank " + std::to_string(rank) + ".");
+                          "ComputeShapeUnique: axis=", std::to_string(axis),
+                          " out of range for input rank ", std::to_string(rank), ".");
     }
     for (int64_t d = 0; d < rank; ++d) {
       if (d == axis) {

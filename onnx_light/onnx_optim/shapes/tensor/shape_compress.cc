@@ -62,8 +62,8 @@ void ComputeShapeCompress(ShapesContext &ctx, const NodeProto &node) {
       axis += rank;
     }
     EXT_ENFORCE_INVALID(!(axis < 0 || axis >= rank),
-                        "ComputeShapeCompress: axis=" + std::to_string(axis) +
-                            " out of range for input rank " + std::to_string(rank) + ".");
+                        "ComputeShapeCompress: axis=", std::to_string(axis),
+                        " out of range for input rank ", std::to_string(rank), ".");
   }
 
   OptimShape out_shape;

@@ -617,7 +617,7 @@ std::vector<int64_t> ApplyKeepAspectRatioPolicy(const std::vector<int64_t> &requ
     } else if (policy == "not_smaller") {
       picked = std::max(picked, ratio);
     } else {
-      EXT_THROW_INVALID("kernel::Resize: unsupported keep_aspect_ratio_policy '" + policy + "'.");
+      EXT_THROW_INVALID("kernel::Resize: unsupported keep_aspect_ratio_policy '", policy, "'.");
     }
   }
   std::vector<int64_t> out(requested_sizes.size());
@@ -635,8 +635,8 @@ std::vector<int64_t> ApplyKeepAspectRatioPolicy(const std::vector<int64_t> &requ
 void CheckSupportedAttrs(const Resize::Attributes &attrs) {
   EXT_ENFORCE_INVALID(
       !(!IsNearestMode(attrs.mode) && !IsLinearMode(attrs.mode) && !IsCubicMode(attrs.mode)),
-      "kernel::Resize: unsupported interpolation mode '" + attrs.mode +
-          "'. Supported modes: 'nearest', 'linear'/'bilinear', 'cubic'.");
+      "kernel::Resize: unsupported interpolation mode '", attrs.mode,
+      "'. Supported modes: 'nearest', 'linear'/'bilinear', 'cubic'.");
 }
 
 // Builds per-axis ``roi_start``/``roi_end`` vectors (length ``rank``) from

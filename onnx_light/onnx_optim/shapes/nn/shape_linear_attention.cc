@@ -19,9 +19,9 @@ namespace {
 
 OptimDim MergeDim(const OptimDim &a, const OptimDim &b, const char *what) {
   if (a.IsInt() && b.IsInt()) {
-    EXT_ENFORCE_INVALID(a.AsInt() == b.AsInt(),
-                        std::string("ComputeShapeLinearAttention: ") + what + " mismatch: " +
-                            std::to_string(a.AsInt()) + " vs " + std::to_string(b.AsInt()) + ".");
+    EXT_ENFORCE_INVALID(a.AsInt() == b.AsInt(), std::string("ComputeShapeLinearAttention: "), what,
+                        " mismatch: ", std::to_string(a.AsInt()), " vs ", std::to_string(b.AsInt()),
+                        ".");
     return a;
   }
   if (a.IsInt()) {
@@ -34,15 +34,13 @@ OptimDim MergeDim(const OptimDim &a, const OptimDim &b, const char *what) {
 }
 
 void RequireRank3(const OptimShape &shape, const char *name) {
-  EXT_ENFORCE_INVALID(shape.Rank() == 3, std::string("ComputeShapeLinearAttention: input '") +
-                                             name + "' must have rank 3, got " +
-                                             std::to_string(shape.Rank()) + ".");
+  EXT_ENFORCE_INVALID(shape.Rank() == 3, std::string("ComputeShapeLinearAttention: input '"), name,
+                      "' must have rank 3, got ", std::to_string(shape.Rank()), ".");
 }
 
 void RequireRank4(const OptimShape &shape, const char *name) {
-  EXT_ENFORCE_INVALID(shape.Rank() == 4, std::string("ComputeShapeLinearAttention: input '") +
-                                             name + "' must have rank 4, got " +
-                                             std::to_string(shape.Rank()) + ".");
+  EXT_ENFORCE_INVALID(shape.Rank() == 4, std::string("ComputeShapeLinearAttention: input '"), name,
+                      "' must have rank 4, got ", std::to_string(shape.Rank()), ".");
 }
 
 } // namespace
@@ -72,9 +70,8 @@ void ComputeShapeLinearAttention(ShapesContext &ctx, const NodeProto &node, cons
       !(q_num_heads <= 0 || kv_num_heads <= 0),
       "ComputeShapeLinearAttention: 'q_num_heads' and 'kv_num_heads' must be positive.");
   EXT_ENFORCE_INVALID((q_num_heads % kv_num_heads) == 0,
-                      "ComputeShapeLinearAttention: q_num_heads (" + std::to_string(q_num_heads) +
-                          ") must be a multiple of kv_num_heads (" + std::to_string(kv_num_heads) +
-                          ").");
+                      "ComputeShapeLinearAttention: q_num_heads (", std::to_string(q_num_heads),
+                      ") must be a multiple of kv_num_heads (", std::to_string(kv_num_heads), ").");
 
   const OptimTensor &Q = ctx.Get(query);
   const OptimTensor &K = ctx.Get(key);
@@ -102,20 +99,20 @@ void ComputeShapeLinearAttention(ShapesContext &ctx, const NodeProto &node, cons
   if (k_shape[2].IsInt()) {
     const int64_t hidden_k = k_shape[2].AsInt();
     EXT_ENFORCE_INVALID((hidden_k % kv_num_heads) == 0,
-                        "ComputeShapeLinearAttention: key last dim (" + std::to_string(hidden_k) +
-                            ") must be divisible by kv_num_heads (" + std::to_string(kv_num_heads) +
-                            ").");
+                        "ComputeShapeLinearAttention: key last dim (", std::to_string(hidden_k),
+                        ") must be divisible by kv_num_heads (", std::to_string(kv_num_heads),
+                        ").");
     if (q_shape[2].IsInt()) {
       const int64_t hidden_q = q_shape[2].AsInt();
       EXT_ENFORCE_INVALID((hidden_q % q_num_heads) == 0,
-                          "ComputeShapeLinearAttention: query last dim (" +
-                              std::to_string(hidden_q) + ") must be divisible by q_num_heads (" +
-                              std::to_string(q_num_heads) + ").");
+                          "ComputeShapeLinearAttention: query last dim (", std::to_string(hidden_q),
+                          ") must be divisible by q_num_heads (", std::to_string(q_num_heads),
+                          ").");
       const int64_t q_d_k = hidden_q / q_num_heads;
       const int64_t k_d_k = hidden_k / kv_num_heads;
-      EXT_ENFORCE_INVALID(q_d_k == k_d_k,
-                          "ComputeShapeLinearAttention: query head_size (" + std::to_string(q_d_k) +
-                              ") must equal key head_size (" + std::to_string(k_d_k) + ").");
+      EXT_ENFORCE_INVALID(q_d_k == k_d_k, "ComputeShapeLinearAttention: query head_size (",
+                          std::to_string(q_d_k), ") must equal key head_size (",
+                          std::to_string(k_d_k), ").");
     }
     d_k = OptimDim(hidden_k / kv_num_heads);
     d_k_resolved = true;
@@ -126,9 +123,9 @@ void ComputeShapeLinearAttention(ShapesContext &ctx, const NodeProto &node, cons
   if (v_shape[2].IsInt()) {
     const int64_t hidden_v = v_shape[2].AsInt();
     EXT_ENFORCE_INVALID((hidden_v % kv_num_heads) == 0,
-                        "ComputeShapeLinearAttention: value last dim (" + std::to_string(hidden_v) +
-                            ") must be divisible by kv_num_heads (" + std::to_string(kv_num_heads) +
-                            ").");
+                        "ComputeShapeLinearAttention: value last dim (", std::to_string(hidden_v),
+                        ") must be divisible by kv_num_heads (", std::to_string(kv_num_heads),
+                        ").");
     d_v = OptimDim(hidden_v / kv_num_heads);
     d_v_resolved = true;
   }
@@ -139,9 +136,9 @@ void ComputeShapeLinearAttention(ShapesContext &ctx, const NodeProto &node, cons
     RequireRank4(ps_shape, past_state);
     batch = MergeDim(batch, ps_shape[0], "batch");
     EXT_ENFORCE_INVALID(!(ps_shape[1].IsInt() && ps_shape[1].AsInt() != kv_num_heads),
-                        "ComputeShapeLinearAttention: past_state dim 1 (" +
-                            std::to_string(ps_shape[1].AsInt()) + ") must equal kv_num_heads (" +
-                            std::to_string(kv_num_heads) + ").");
+                        "ComputeShapeLinearAttention: past_state dim 1 (",
+                        std::to_string(ps_shape[1].AsInt()), ") must equal kv_num_heads (",
+                        std::to_string(kv_num_heads), ").");
     if (d_k_resolved) {
       d_k = MergeDim(d_k, ps_shape[2], "d_k");
     } else {

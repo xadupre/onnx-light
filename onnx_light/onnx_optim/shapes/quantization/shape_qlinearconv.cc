@@ -63,11 +63,10 @@ void ComputeShapeQLinearConv(ShapesContext &ctx, const NodeProto &node, const ch
   const OptimShape &x_shape = x_tensor.Shape();
   const OptimShape &w_shape = w_tensor.Shape();
 
-  EXT_ENFORCE_INVALID(!(x_shape.Rank() < 3), "ComputeShapeQLinearConv: input '" + std::string(x) +
-                                                 "' must have rank >= 3 (N, C, D1, ...).");
-  EXT_ENFORCE_INVALID(w_shape.Rank() == x_shape.Rank(), "ComputeShapeQLinearConv: weight '" +
-                                                            std::string(w) +
-                                                            "' rank must match input rank.");
+  EXT_ENFORCE_INVALID(!(x_shape.Rank() < 3), "ComputeShapeQLinearConv: input '", std::string(x),
+                      "' must have rank >= 3 (N, C, D1, ...).");
+  EXT_ENFORCE_INVALID(w_shape.Rank() == x_shape.Rank(), "ComputeShapeQLinearConv: weight '",
+                      std::string(w), "' rank must match input rank.");
 
   const size_t n_spatial = x_shape.Rank() - 2;
   const std::string auto_pad = GetAttributeOr<std::string>(node, "auto_pad", "NOTSET");

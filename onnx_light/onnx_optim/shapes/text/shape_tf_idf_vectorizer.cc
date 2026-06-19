@@ -40,8 +40,8 @@ void ComputeShapeTfIdfVectorizer(ShapesContext &ctx, const NodeProto &node, cons
     ctx.Set(node.output(0), OptimTensor(nullptr, TensorType::kFloat, std::move(out_shape)));
     return;
   }
-  EXT_THROW_INVALID("ComputeShapeTfIdfVectorizer: input tensor must have rank 1 or 2; got rank " +
-                    std::to_string(rank) + ".");
+  EXT_THROW_INVALID("ComputeShapeTfIdfVectorizer: input tensor must have rank 1 or 2; got rank ",
+                    std::to_string(rank), ".");
 }
 
 } // namespace text

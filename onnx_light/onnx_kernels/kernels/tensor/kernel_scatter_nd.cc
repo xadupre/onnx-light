@@ -36,7 +36,7 @@ void ReduceSliceTyped(uint8_t *out_bytes, const uint8_t *upd_bytes, std::size_t 
     } else if (reduction == "min") {
       dst = (dst < v) ? dst : v;
     } else {
-      EXT_THROW_INVALID("kernel::ScatterND: unsupported reduction '" + reduction + "'.");
+      EXT_THROW_INVALID("kernel::ScatterND: unsupported reduction '", reduction, "'.");
     }
   }
 }

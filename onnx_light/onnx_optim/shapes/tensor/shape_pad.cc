@@ -40,9 +40,9 @@ bool FillPads(const std::vector<int64_t> &pads_values, const std::vector<int64_t
               std::vector<int64_t> &out_begin, std::vector<int64_t> &out_end,
               std::vector<bool> &has_pad) {
   const std::size_t num_axes = axes.size();
-  EXT_ENFORCE_INVALID(pads_values.size() == 2 * num_axes,
-                      "ComputeShapePad: 'pads' length (" + std::to_string(pads_values.size()) +
-                          ") must equal 2 * num_axes (" + std::to_string(2 * num_axes) + ").");
+  EXT_ENFORCE_INVALID(pads_values.size() == 2 * num_axes, "ComputeShapePad: 'pads' length (",
+                      std::to_string(pads_values.size()), ") must equal 2 * num_axes (",
+                      std::to_string(2 * num_axes), ").");
   for (std::size_t i = 0; i < num_axes; ++i) {
     const int64_t axis = axes[i];
     out_begin[static_cast<std::size_t>(axis)] = pads_values[i];
@@ -59,9 +59,9 @@ std::vector<int64_t> NormalizeAxes(const std::vector<int64_t> &axes_values, int6
   out.reserve(axes_values.size());
   for (int64_t a : axes_values) {
     int64_t normalized = a < 0 ? a + rank : a;
-    EXT_ENFORCE_INVALID(!(normalized < 0 || normalized >= rank),
-                        "ComputeShapePad: axis " + std::to_string(a) +
-                            " is out of range for input rank " + std::to_string(rank) + ".");
+    EXT_ENFORCE_INVALID(!(normalized < 0 || normalized >= rank), "ComputeShapePad: axis ",
+                        std::to_string(a), " is out of range for input rank ", std::to_string(rank),
+                        ".");
     out.push_back(normalized);
   }
   return out;

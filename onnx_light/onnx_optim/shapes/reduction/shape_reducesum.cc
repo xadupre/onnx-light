@@ -149,16 +149,16 @@ void ComputeShapeReduceCommon(ShapesContext &ctx, const NodeProto &node, const c
     // Rank decreases by ``axes_count``; we cannot know which dims survive,
     // so produce a fully-symbolic shape of the right rank.
     const int64_t out_rank = rank - axes_count;
-    EXT_ENFORCE_INVALID(!(out_rank < 0), "ComputeShape" + op + ": number of axes (" +
-                                             std::to_string(axes_count) + ") exceeds input rank (" +
-                                             std::to_string(rank) + ").");
+    EXT_ENFORCE_INVALID(!(out_rank < 0), "ComputeShape", op, ": number of axes (",
+                        std::to_string(axes_count), ") exceeds input rank (", std::to_string(rank),
+                        ").");
     for (int64_t d = 0; d < out_rank; ++d) {
       out_shape.PushBack(OptimDim(op + "_d" + std::to_string(d)));
     }
   } else {
     // Neither the axes nor their count is known: not enough information to
     // infer the output shape.
-    EXT_THROW_INVALID("ComputeShape" + op +
+    EXT_THROW_INVALID("ComputeShape", op,
                       ": cannot infer output shape because neither the "
                       "axes values nor the number of axes is known and 'keepdims' is 0.");
   }

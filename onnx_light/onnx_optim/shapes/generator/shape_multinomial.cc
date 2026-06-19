@@ -34,8 +34,8 @@ void ComputeShapeMultinomial(ShapesContext &ctx, const NodeProto &node) {
     out_dtype = DataTypeToTensorType(static_cast<TensorProto::DataType>(dtype_value));
     EXT_ENFORCE_INVALID(!(out_dtype != TensorType::kInt32 && out_dtype != TensorType::kInt64),
                         "ComputeShapeMultinomial: attribute 'dtype' must be INT32 or "
-                        "INT64, got " +
-                            std::to_string(dtype_value) + ".");
+                        "INT64, got ",
+                        std::to_string(dtype_value), ".");
   }
 
   const int64_t sample_size = GetAttributeOr<int64_t>(node, "sample_size", 1);

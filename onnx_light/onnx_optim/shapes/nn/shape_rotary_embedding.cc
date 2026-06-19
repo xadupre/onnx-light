@@ -20,8 +20,8 @@ void ComputeShapeRotaryEmbedding(ShapesContext &ctx, const NodeProto &node, cons
   const OptimTensor &input = ctx.Get(x);
   const OptimShape &in_shape = input.Shape();
   EXT_ENFORCE_INVALID(!(in_shape.Rank() != 3 && in_shape.Rank() != 4),
-                      std::string("ComputeShapeRotaryEmbedding: input '") + x +
-                          "' must have rank 3 or 4, got " + std::to_string(in_shape.Rank()) + ".");
+                      std::string("ComputeShapeRotaryEmbedding: input '"), x,
+                      "' must have rank 3 or 4, got ", std::to_string(in_shape.Rank()), ".");
 
   // Output has the same dtype and shape as the input ``X``.
   ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), in_shape));

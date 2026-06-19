@@ -50,9 +50,8 @@ void ComputeShapeTile(ShapesContext &ctx, const NodeProto &node) {
   if (repeats_input.HasValueAsShape()) {
     const OptimShape &repeats = repeats_input.ValueAsShape();
     EXT_ENFORCE_INVALID(!(static_cast<int64_t>(repeats.Rank()) != input_rank),
-                        "ComputeShapeTile: 'repeats' length (" + std::to_string(repeats.Rank()) +
-                            ") must equal the rank of 'input' (" + std::to_string(input_rank) +
-                            ").");
+                        "ComputeShapeTile: 'repeats' length (", std::to_string(repeats.Rank()),
+                        ") must equal the rank of 'input' (", std::to_string(input_rank), ").");
     OptimShape out_shape;
     for (int64_t i = 0; i < input_rank; ++i) {
       const OptimDim &in_dim = in_shape[static_cast<std::size_t>(i)];

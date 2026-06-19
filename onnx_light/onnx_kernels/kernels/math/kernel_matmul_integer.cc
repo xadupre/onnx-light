@@ -82,7 +82,7 @@ std::vector<int64_t> BroadcastPrefix(const std::vector<int64_t> &a_prefix,
     } else if (db == 1) {
       out[i] = da;
     } else {
-      EXT_THROW_INVALID(std::string(kName) +
+      EXT_THROW_INVALID(std::string(kName),
                         ": inputs are not broadcast-compatible on batch dimensions.");
     }
   }

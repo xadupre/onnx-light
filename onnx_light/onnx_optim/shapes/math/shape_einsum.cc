@@ -95,9 +95,9 @@ OptimDim MergeLabelDim(const OptimDim &out, const OptimDim &in, char label) {
     if (in.AsInt() == 1) {
       return out;
     }
-    EXT_THROW_INVALID("ComputeShapeEinsum: label '" + std::string(1, label) +
-                      "' has inconsistent sizes (" + std::to_string(out.AsInt()) + " and " +
-                      std::to_string(in.AsInt()) + ").");
+    EXT_THROW_INVALID("ComputeShapeEinsum: label '", std::string(1, label),
+                      "' has inconsistent sizes (", std::to_string(out.AsInt()), " and ",
+                      std::to_string(in.AsInt()), ").");
   }
   if (in.IsInt()) {
     return in;
@@ -122,9 +122,9 @@ void ComputeShapeEinsum(ShapesContext &ctx, const NodeProto &node) {
   bool has_explicit_output = false;
   SplitEquation(equation, input_terms, output_term, has_explicit_output);
   EXT_ENFORCE_INVALID(!(static_cast<int>(input_terms.size()) != n_inputs),
-                      "ComputeShapeEinsum: number of input terms in the equation (" +
-                          std::to_string(input_terms.size()) +
-                          ") does not match number of inputs (" + std::to_string(n_inputs) + ").");
+                      "ComputeShapeEinsum: number of input terms in the equation (",
+                      std::to_string(input_terms.size()), ") does not match number of inputs (",
+                      std::to_string(n_inputs), ").");
 
   // Collect input shapes and the dtype (propagated from the first input).
   std::vector<OptimShape> input_shapes;
@@ -144,23 +144,22 @@ void ComputeShapeEinsum(ShapesContext &ctx, const NodeProto &node) {
     const std::size_t rank = input_shapes[i].Rank();
     const std::size_t dots = term.find("...");
     if (dots == std::string::npos) {
-      EXT_ENFORCE_INVALID(term.size() == rank, "ComputeShapeEinsum: term '" + term + "' has " +
-                                                   std::to_string(term.size()) +
-                                                   " labels but input " + std::to_string(i) +
-                                                   " has rank " + std::to_string(rank) + ".");
+      EXT_ENFORCE_INVALID(term.size() == rank, "ComputeShapeEinsum: term '", term, "' has ",
+                          std::to_string(term.size()), " labels but input ", std::to_string(i),
+                          " has rank ", std::to_string(rank), ".");
       continue;
     }
-    EXT_ENFORCE_INVALID(!(term.size() - 3 > rank), "ComputeShapeEinsum: term '" + term +
-                                                       "' has more named labels than input " +
-                                                       std::to_string(i) + " has dimensions.");
+    EXT_ENFORCE_INVALID(!(term.size() - 3 > rank), "ComputeShapeEinsum: term '", term,
+                        "' has more named labels than input ", std::to_string(i),
+                        " has dimensions.");
     const std::size_t this_rank = rank - (term.size() - 3);
     if (!ellipsis_seen) {
       ellipsis_seen = true;
       ellipsis_rank = this_rank;
     } else if (this_rank != ellipsis_rank) {
       EXT_THROW_INVALID(
-          "ComputeShapeEinsum: ellipsis dimensions must be consistent across inputs, got " +
-          std::to_string(this_rank) + " and " + std::to_string(ellipsis_rank) + ".");
+          "ComputeShapeEinsum: ellipsis dimensions must be consistent across inputs, got ",
+          std::to_string(this_rank), " and ", std::to_string(ellipsis_rank), ".");
     }
   }
 
@@ -181,10 +180,9 @@ void ComputeShapeEinsum(ShapesContext &ctx, const NodeProto &node) {
   for (int i = 0; i < n_inputs; ++i) {
     const std::string &labels = input_labels[i];
     const OptimShape &shape = input_shapes[i];
-    EXT_ENFORCE_INVALID(labels.size() == shape.Rank(),
-                        "ComputeShapeEinsum: expanded term '" + labels + "' has " +
-                            std::to_string(labels.size()) + " labels but input " +
-                            std::to_string(i) + " has rank " + std::to_string(shape.Rank()) + ".");
+    EXT_ENFORCE_INVALID(labels.size() == shape.Rank(), "ComputeShapeEinsum: expanded term '",
+                        labels, "' has ", std::to_string(labels.size()), " labels but input ",
+                        std::to_string(i), " has rank ", std::to_string(shape.Rank()), ".");
     for (std::size_t d = 0; d < labels.size(); ++d) {
       const char lbl = labels[d];
       const OptimDim &dim = shape[d];
@@ -227,9 +225,8 @@ void ComputeShapeEinsum(ShapesContext &ctx, const NodeProto &node) {
   out_dims.reserve(expanded_output.size());
   for (char c : expanded_output) {
     auto it = label_dim.find(c);
-    EXT_ENFORCE_INVALID(it != label_dim.end(), "ComputeShapeEinsum: output label '" +
-                                                   std::string(1, c) +
-                                                   "' does not appear in any input term.");
+    EXT_ENFORCE_INVALID(it != label_dim.end(), "ComputeShapeEinsum: output label '",
+                        std::string(1, c), "' does not appear in any input term.");
     out_dims.push_back(it->second);
   }
 

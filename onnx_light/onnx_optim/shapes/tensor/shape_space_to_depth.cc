@@ -29,9 +29,9 @@ OptimDim MulDim(const OptimDim &dim, int64_t factor) {
 OptimDim DivDim(const OptimDim &dim, int64_t divisor, const char *axis_name) {
   if (dim.IsInt()) {
     EXT_ENFORCE_INVALID(!(divisor <= 0 || dim.AsInt() % divisor != 0),
-                        std::string("ComputeShapeSpaceToDepth: input ") + axis_name + " dim (" +
-                            std::to_string(dim.AsInt()) + ") is not divisible by blocksize (" +
-                            std::to_string(divisor) + ").");
+                        std::string("ComputeShapeSpaceToDepth: input "), axis_name, " dim (",
+                        std::to_string(dim.AsInt()), ") is not divisible by blocksize (",
+                        std::to_string(divisor), ").");
     return OptimDim(dim.AsInt() / divisor);
   }
   return OptimDim("(" + dim.AsExpr() + ")/" + std::to_string(divisor));
@@ -52,12 +52,12 @@ void ComputeShapeSpaceToDepth(ShapesContext &ctx, const NodeProto &node) {
                       "ComputeShapeSpaceToDepth: required attribute 'blocksize' is missing.");
   const int64_t blocksize = blocksize_attr->ref_i();
   EXT_ENFORCE_INVALID(!(blocksize <= 0),
-                      "ComputeShapeSpaceToDepth: blocksize must be positive (got " +
-                          std::to_string(blocksize) + ").");
+                      "ComputeShapeSpaceToDepth: blocksize must be positive (got ",
+                      std::to_string(blocksize), ").");
 
   EXT_ENFORCE_INVALID(input_shape.Rank() == 4,
-                      "ComputeShapeSpaceToDepth: input must be a 4-D tensor (got rank " +
-                          std::to_string(input_shape.Rank()) + ").");
+                      "ComputeShapeSpaceToDepth: input must be a 4-D tensor (got rank ",
+                      std::to_string(input_shape.Rank()), ").");
 
   const int64_t bs2 = blocksize * blocksize;
   OptimShape out_shape;

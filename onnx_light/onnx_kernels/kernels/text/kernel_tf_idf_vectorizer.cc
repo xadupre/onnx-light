@@ -268,7 +268,7 @@ TfIdfVectorizer::Mode TfIdfVectorizer::ParseMode(const std::string &value) {
   if (value == "TFIDF") {
     return Mode::kTFIDF;
   }
-  EXT_THROW_INVALID("kernel::TfIdfVectorizer: invalid mode '" + value +
+  EXT_THROW_INVALID("kernel::TfIdfVectorizer: invalid mode '", value,
                     "'. Valid values are \"TF\", \"IDF\", \"TFIDF\".");
 }
 

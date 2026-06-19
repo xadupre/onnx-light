@@ -32,8 +32,8 @@ void ComputeShapeEyeLike(ShapesContext &ctx, const NodeProto &node) {
     const int64_t dtype_value = dtype_attr->i();
     out_dtype = DataTypeToTensorType(static_cast<TensorProto::DataType>(dtype_value));
     EXT_ENFORCE_INVALID(out_dtype != TensorType::kUndefined,
-                        "ComputeShapeEyeLike: attribute 'dtype' has unsupported value " +
-                            std::to_string(dtype_value) + ".");
+                        "ComputeShapeEyeLike: attribute 'dtype' has unsupported value ",
+                        std::to_string(dtype_value), ".");
   }
 
   OptimShape out_shape = input.Shape();

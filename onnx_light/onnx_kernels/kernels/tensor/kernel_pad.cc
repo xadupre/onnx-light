@@ -143,7 +143,7 @@ int64_t MapCoord(int64_t out_coord, int64_t pad_begin, int64_t input_dim, const 
     }
     return m;
   }
-  EXT_THROW_INVALID("kernel::Pad: unsupported mode '" + mode + "'.");
+  EXT_THROW_INVALID("kernel::Pad: unsupported mode '", mode, "'.");
 }
 
 } // namespace

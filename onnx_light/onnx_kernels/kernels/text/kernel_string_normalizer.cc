@@ -65,7 +65,7 @@ StringNormalizer::ParseCaseChangeAction(const std::string &value) {
   if (value == "UPPER") {
     return CaseChangeAction::kUpper;
   }
-  EXT_THROW_INVALID("kernel::StringNormalizer: invalid case_change_action '" + value +
+  EXT_THROW_INVALID("kernel::StringNormalizer: invalid case_change_action '", value,
                     "'. Valid values are \"NONE\", \"LOWER\", \"UPPER\".");
 }
 

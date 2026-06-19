@@ -99,7 +99,7 @@ detail::BroadcastInfo BroadcastShape(const Tensor &x, const Tensor &y) {
     if (sx[d] == sy[d] || sx[d] == 1 || sy[d] == 1) {
       out[d] = sx[d] >= sy[d] ? sx[d] : sy[d];
     } else {
-      EXT_THROW_INVALID(std::string(kPowName) +
+      EXT_THROW_INVALID(std::string(kPowName),
                         " input shapes are not multidirectional-broadcastable.");
     }
   }

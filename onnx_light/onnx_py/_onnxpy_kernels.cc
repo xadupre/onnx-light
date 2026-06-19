@@ -41,7 +41,7 @@ onnx_kernels::RuntimeEventKind ParseRuntimeEventKind(const std::string &kind) {
     return onnx_kernels::RuntimeEventKind::kIntermediate;
   if (kind == "output")
     return onnx_kernels::RuntimeEventKind::kOutput;
-  EXT_THROW_INVALID("RuntimeContext: unknown tensor event kind '" + kind +
+  EXT_THROW_INVALID("RuntimeContext: unknown tensor event kind '", kind,
                     "' (expected one of: unknown, initializer, input, intermediate, output).");
 }
 

@@ -93,19 +93,16 @@ constexpr auto kXorFn = [](auto a, auto b) { return a ^ b; };
 // (``output.shape != x.shape``) and an unexpected output buffer size.
 template <typename T>
 void BitwiseNotImpl(const char *dtype_name, int32_t dtype, const Tensor &x, Tensor &output) {
-  EXT_ENFORCE_INVALID(x.data_type == dtype,
-                      std::string(kBitwiseNotName) + " expected ``" + dtype_name + "`` input.");
-  EXT_ENFORCE_INVALID(output.data_type == dtype, std::string(kBitwiseNotName) +
-                                                     " preallocated output must have dtype ``" +
-                                                     dtype_name + "``.");
-  EXT_ENFORCE_INVALID(output.shape == x.shape,
-                      std::string(kBitwiseNotName) +
-                          " preallocated output shape must match input shape.");
+  EXT_ENFORCE_INVALID(x.data_type == dtype, std::string(kBitwiseNotName), " expected ``",
+                      dtype_name, "`` input.");
+  EXT_ENFORCE_INVALID(output.data_type == dtype, std::string(kBitwiseNotName),
+                      " preallocated output must have dtype ``", dtype_name, "``.");
+  EXT_ENFORCE_INVALID(output.shape == x.shape, std::string(kBitwiseNotName),
+                      " preallocated output shape must match input shape.");
   const int64_t n = x.element_count();
   const size_t expected_bytes = static_cast<size_t>(n) * sizeof(T);
-  EXT_ENFORCE_INVALID(output.data.size() == expected_bytes,
-                      std::string(kBitwiseNotName) +
-                          " preallocated output buffer has unexpected size in bytes.");
+  EXT_ENFORCE_INVALID(output.data.size() == expected_bytes, std::string(kBitwiseNotName),
+                      " preallocated output buffer has unexpected size in bytes.");
   const T *px = reinterpret_cast<const T *>(x.bytes());
   T *py = reinterpret_cast<T *>(output.data.data());
   for (int64_t i = 0; i < n; ++i) {

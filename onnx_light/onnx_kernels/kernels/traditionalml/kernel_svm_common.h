@@ -41,7 +41,7 @@ inline double ComputeSvmKernel(const char *kernel_type, const double *x, const f
   if (kind == "SIGMOID") {
     return std::tanh(static_cast<double>(gamma) * dot + static_cast<double>(coef0));
   }
-  EXT_THROW_INVALID("Unsupported SVM kernel_type: " + kind);
+  EXT_THROW_INVALID("Unsupported SVM kernel_type: ", kind);
 }
 
 template <typename T>

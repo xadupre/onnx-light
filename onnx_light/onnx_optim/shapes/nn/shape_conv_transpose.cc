@@ -49,11 +49,10 @@ void ComputeShapeConvTranspose(ShapesContext &ctx, const NodeProto &node, const 
   const OptimShape &x_shape = x_tensor.Shape();
   const OptimShape &w_shape = w_tensor.Shape();
 
-  EXT_ENFORCE_INVALID(!(x_shape.Rank() < 3), "ComputeShapeConvTranspose: input '" + std::string(x) +
-                                                 "' must have rank >= 3 (N, C, D1, ...).");
-  EXT_ENFORCE_INVALID(w_shape.Rank() == x_shape.Rank(), "ComputeShapeConvTranspose: weight '" +
-                                                            std::string(w) +
-                                                            "' rank must match input rank.");
+  EXT_ENFORCE_INVALID(!(x_shape.Rank() < 3), "ComputeShapeConvTranspose: input '", std::string(x),
+                      "' must have rank >= 3 (N, C, D1, ...).");
+  EXT_ENFORCE_INVALID(w_shape.Rank() == x_shape.Rank(), "ComputeShapeConvTranspose: weight '",
+                      std::string(w), "' rank must match input rank.");
 
   const size_t n_spatial = x_shape.Rank() - 2;
   const int64_t group = GetAttributeOr<int64_t>(node, "group", 1);

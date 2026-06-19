@@ -347,7 +347,7 @@ Tensor TensorFromProto(const TensorProto &tp) {
     break;
   }
   default:
-    EXT_THROW_INVALID("TensorFromProto: unsupported data_type " + std::to_string(dtype));
+    EXT_THROW_INVALID("TensorFromProto: unsupported data_type ", std::to_string(dtype));
   }
 
   return Tensor(name, dtype, std::move(shape), std::move(bytes));

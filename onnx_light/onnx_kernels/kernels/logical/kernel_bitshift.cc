@@ -18,7 +18,7 @@ namespace {
 constexpr const char *kBitShiftName = "kernel::BitShift";
 
 [[noreturn]] void ThrowUnsupportedBitShift() {
-  EXT_THROW_INVALID(std::string(kBitShiftName) +
+  EXT_THROW_INVALID(std::string(kBitShiftName),
                     " only supports UINT8, UINT16, UINT32 and UINT64 inputs.");
 }
 

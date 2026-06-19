@@ -74,8 +74,8 @@ void ComputeShapeUpsample(ShapesContext &ctx, const NodeProto &node) {
   }
 
   EXT_ENFORCE_INVALID(!(scales_known && scales.size() != rank),
-                      "ComputeShapeUpsample: 'scales' length (" + std::to_string(scales.size()) +
-                          ") must equal the rank of input 'X' (" + std::to_string(rank) + ").");
+                      "ComputeShapeUpsample: 'scales' length (", std::to_string(scales.size()),
+                      ") must equal the rank of input 'X' (", std::to_string(rank), ").");
 
   OptimShape out_shape;
   for (std::size_t i = 0; i < rank; ++i) {

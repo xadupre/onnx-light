@@ -1653,7 +1653,7 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
           "size",
           [](const TensorProto &self) -> int64_t {
             int64_t size = 1;
-            for(auto& it: self.ref_dims()) {
+            for (auto &it : self.ref_dims()) {
               size *= static_cast<int64_t>(it);
             }
             return size;

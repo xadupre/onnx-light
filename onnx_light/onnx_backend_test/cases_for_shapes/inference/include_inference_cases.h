@@ -220,7 +220,7 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry);
 /// Registers a ``TopK(K, axis=-1) → TopK(K, axis=-1) → ReduceMean`` case
 /// where both TopK nodes share the **same** runtime K input (INT64 ``[1]``).
 /// Because K is unknown at shape-inference time, each TopK emits a fresh
-/// symbolic dim (``TopK_values1_k`` and ``TopK_values2_k`` respectively);
+/// symbolic dim (``TopK_k`` and ``TopK_k`` respectively);
 /// ``ReduceMean`` then collapses the second symbolic axis to recover the
 /// rank-1 output ``Y [N]``. Exercises shape inference through two chained
 /// TopK nodes that share the same K but produce distinct symbolic axes.
@@ -229,7 +229,7 @@ void RegisterTwoTopKSameKShapeInferenceCases(std::vector<TestCase> &registry);
 /// Registers a ``TopK(K1, axis=-1) → TopK(K2, axis=-1) → ReduceMean`` case
 /// where the two TopK nodes use **different** runtime K inputs (K1 > K2).
 /// Because both K values are unknown at shape-inference time, each TopK emits
-/// a distinct symbolic dim (``TopK_values1_k`` and ``TopK_values2_k``);
+/// a distinct symbolic dim (``TopK_k`` and ``TopK_k``);
 /// ``ReduceMean`` then collapses the second symbolic axis to recover the
 /// rank-1 output ``Y [N]``. Exercises shape inference through two chained
 /// TopK nodes with independent symbolic K axes.

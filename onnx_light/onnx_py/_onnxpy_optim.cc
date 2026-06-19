@@ -67,6 +67,69 @@ void AddOnnxPyExpressions(nb::module_ &m) {
         nb::arg("expr1"), nb::arg("expr2"),
         "Returns the non-zero coefficient map of (expr1) - (expr2).");
 
+    // CompareResult — outcome of comparing two symbolic expressions.
+    nb::enum_<expr::CompareResult>(
+        expressions_mod, "CompareResult", nb::is_arithmetic(),
+        "Outcome of :func:`compare_expressions`, assuming every symbolic token is "
+        "positive or null.")
+        .value("Smaller", expr::CompareResult::Smaller,
+               "The first expression is always strictly smaller than the second.")
+        .value("Equal", expr::CompareResult::Equal, "The two expressions are always equal.")
+        .value("Greater", expr::CompareResult::Greater,
+               "The first expression is always strictly greater than the second.")
+        .value("Unknown", expr::CompareResult::Unknown,
+               "The relationship cannot be determined for all non-negative token values.");
+
+    // ExpressionComparison — result + simplified difference of compare_expressions.
+    nb::class_<expr::ExpressionComparison>(
+        expressions_mod, "ExpressionComparison",
+        "Result of :func:`compare_expressions`. Holds the :class:`CompareResult` "
+        "``result`` together with the simplified ``difference`` (expr2) - (expr1), "
+        "an ``int`` when numeric and a ``str`` otherwise.")
+        .def_ro("result", &expr::ExpressionComparison::result,
+                ":class:`CompareResult` describing how ``expr1`` compares to ``expr2``.")
+        .def_prop_ro(
+            "difference",
+            [](const expr::ExpressionComparison &c) -> nb::object {
+              return std::holds_alternative<int64_t>(c.difference)
+                         ? nb::cast(std::get<int64_t>(c.difference))
+                         : nb::cast(std::get<std::string>(c.difference));
+            },
+            "Simplified value of (expr2) - (expr1); ``int`` when numeric, ``str`` otherwise.")
+        .def("__repr__", [](const expr::ExpressionComparison &c) {
+          const char *name = "Unknown";
+          switch (c.result) {
+          case expr::CompareResult::Smaller:
+            name = "Smaller";
+            break;
+          case expr::CompareResult::Equal:
+            name = "Equal";
+            break;
+          case expr::CompareResult::Greater:
+            name = "Greater";
+            break;
+          case expr::CompareResult::Unknown:
+            name = "Unknown";
+            break;
+          }
+          std::string diff = std::holds_alternative<int64_t>(c.difference)
+                                 ? std::to_string(std::get<int64_t>(c.difference))
+                                 : "'" + std::get<std::string>(c.difference) + "'";
+          return std::string("ExpressionComparison(result=CompareResult.") + name +
+                 ", difference=" + diff + ")";
+        });
+
+    // compare_expressions(expr1, expr2) -> ExpressionComparison
+    expressions_mod.def(
+        "compare_expressions",
+        [](const std::string &e1, const std::string &e2) {
+          return expr::compare_expressions(e1, e2);
+        },
+        nb::arg("expr1"), nb::arg("expr2"),
+        "Compares expr1 to expr2 assuming all tokens are positive or null. Returns an "
+        ":class:`ExpressionComparison` whose ``result`` is a :class:`CompareResult` and whose "
+        "``difference`` is the simplified value of (expr2) - (expr1).");
+
     // evaluate_expression(expr, context) -> int
     expressions_mod.def(
         "evaluate_expression",

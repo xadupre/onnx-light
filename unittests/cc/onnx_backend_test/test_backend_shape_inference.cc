@@ -1147,7 +1147,7 @@ TEST(BackendTestCaseShapeInference, DISABLED_OnnxOptimInfersShapeScanTopKPairwis
 // share the same runtime ``K`` model input
 // (``test_cc_shape_inference_two_topk_same_k``). Because K is unknown at
 // inference time, each TopK node emits a fresh symbolic dim
-// (``TopK_values1_k`` / ``TopK_values2_k``); ``ReduceMean`` then collapses
+// (``TopK_k`` / ``TopK_k_2``); ``ReduceMean`` then collapses
 // the second symbolic axis, recovering the rank-1 output ``Y [N]``.
 TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeTwoTopKSameK) {
   const std::vector<TestCase> cases = CollectTestCases();
@@ -1285,7 +1285,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeTwoTopKSameK) {
 // pipelines keep **symbolic** TopK output axes when two consecutive TopK nodes
 // use different runtime K inputs K1 and K2 (K1 > K2)
 // (``test_cc_shape_inference_two_topk_different_k``). Each TopK node emits a
-// distinct symbolic dim (``TopK_values1_k`` / ``TopK_values2_k``);
+// distinct symbolic dim (``TopK_k`` / ``TopK_k_2``);
 // ``ReduceMean`` then collapses the second symbolic axis, recovering the
 // rank-1 output ``Y [N]``.
 TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeTwoTopKDifferentK) {

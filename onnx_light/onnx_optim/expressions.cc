@@ -1386,21 +1386,74 @@ SimplifyResult simplify_expression(const std::string &expr) {
   return make_simplified(res);
 }
 
-std::map<std::string, int64_t> simplify_two_expressions(const std::string &expr1,
-                                                        const std::string &expr2) {
-  // Build expr1 - (expr2) and run the add-visitor directly (no pipeline
-  // transformations — matches the Python implementation).
+// Builds `expr1 - (expr2)` and runs the add-visitor directly (no pipeline
+// transformations — matches the Python implementation), returning the full
+// linear combination (variable coefficients and constant term).
+static AddVisitorResult difference_linear_combination(const std::string &expr1,
+                                                      const std::string &expr2) {
   std::string combined = expr1 + "-(" + expr2 + ")";
   NodePtr tree = parse(combined);
 
   AddVisitorResult res;
   run_add_visitor(*tree, res);
+  return res;
+}
+
+std::map<std::string, int64_t> simplify_two_expressions(const std::string &expr1,
+                                                        const std::string &expr2) {
+  AddVisitorResult res = difference_linear_combination(expr1, expr2);
 
   std::map<std::string, int64_t> out;
   for (const auto &[k, v] : res.coeffs)
     if (v != 0)
       out[k] = v;
   return out;
+}
+
+ExpressionComparison compare_expressions(const std::string &expr1, const std::string &expr2) {
+  // Collect the linear combination of expr1 - (expr2). simplify_two_expressions
+  // discards the constant term, which is exactly what decides Greater/Smaller/
+  // Equal here, so reuse the shared helper that keeps it.
+  AddVisitorResult res = difference_linear_combination(expr1, expr2);
+
+  // Inspect the non-zero token coefficients of expr1 - expr2. Every token is
+  // assumed to be positive or null, so the minimum of the difference over all
+  // non-negative token assignments is reached when all tokens are zero, which
+  // equals the constant term.
+  bool any_positive_coeff = false;
+  bool any_negative_coeff = false;
+  for (const auto &[k, v] : res.coeffs) {
+    (void)k;
+    if (v > 0)
+      any_positive_coeff = true;
+    else if (v < 0)
+      any_negative_coeff = true;
+  }
+
+  CompareResult result;
+  if (!any_positive_coeff && !any_negative_coeff) {
+    // Pure constant difference.
+    if (res.const_term > 0)
+      result = CompareResult::Greater;
+    else if (res.const_term < 0)
+      result = CompareResult::Smaller;
+    else
+      result = CompareResult::Equal;
+  } else if (!any_negative_coeff && res.const_term > 0) {
+    // All token coefficients are non-negative and the constant is strictly
+    // positive: the difference is strictly positive for any non-negative tokens.
+    result = CompareResult::Greater;
+  } else if (!any_positive_coeff && res.const_term < 0) {
+    // All token coefficients are non-positive and the constant is strictly
+    // negative: the difference is strictly negative for any non-negative tokens.
+    result = CompareResult::Smaller;
+  } else {
+    result = CompareResult::Unknown;
+  }
+
+  // Always report the simplified difference expr2 - expr1.
+  SimplifyResult difference = simplify_expression("(" + expr2 + ")-(" + expr1 + ")");
+  return ExpressionComparison{result, difference};
 }
 
 // ─────────────────────────────────────────────────────────────────────────

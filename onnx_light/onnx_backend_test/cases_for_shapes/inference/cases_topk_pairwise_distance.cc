@@ -660,7 +660,6 @@ void RegisterTwoTopKDifferentKShapeInferenceCases(std::vector<TestCase> &registr
   // Graph inputs: X with symbolic N and concrete trailing dim 5; K1 and K2
   // are distinct runtime INT64 [1] inputs with K1 > K2.
   AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {DimSpec("N"), DimSpec(int64_t{5})});
-  // TODO: move K1, K2 as initializers
   AppendValueInfo(*graph->add_input(), "K1", DataType::INT64, {DimSpec(int64_t{1})});
   AppendValueInfo(*graph->add_input(), "K2", DataType::INT64, {DimSpec(int64_t{1})});
 

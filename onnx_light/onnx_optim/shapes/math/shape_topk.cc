@@ -41,6 +41,8 @@ void ComputeShapeTopK(ShapesContext &ctx, const NodeProto &node, const char *x) 
     EXT_ENFORCE_INVALID(k > 0, "ComputeShapeTopK: attribute k must be positive.");
     axis_dim = OptimDim(k);
   } else {
+    // Opset >= 10: ``k`` is a 1-D tensor input at index 1 (mandatory).
+    // An empty string is a safe fallback key for malformed nodes only.
     const std::string k_input_name =
         node.input_size() >= 2 ? node.input(1).as_string() : std::string();
     axis_dim = OptimDim(ctx.TopKKDimName(k_input_name));

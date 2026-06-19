@@ -261,9 +261,7 @@ public:
     const std::size_t count = topk_k_dims_.size();
     std::string dim_name =
         count == 0 ? std::string("TopK_k") : "TopK_k_" + std::to_string(count + 1);
-    auto [inserted_it, ok] = topk_k_dims_.emplace(k_input_name, std::move(dim_name));
-    (void)ok;
-    return inserted_it->second;
+    return topk_k_dims_.emplace(k_input_name, std::move(dim_name)).first->second;
   }
 
   /// Read-only access to the underlying map (useful for iteration).

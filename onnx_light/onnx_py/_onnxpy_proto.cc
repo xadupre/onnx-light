@@ -271,12 +271,10 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           "__init__",
           [](cls *self, nb::kwargs kwargs) {
             new (self) cls();
-            if (kwargs.size() > 0) {
-              nb::object py_self = nb::cast(self, nb::rv_policy::reference);
-              nb::inst_mark_ready(py_self);
-              for (auto item : kwargs) {
-                nb::setattr(py_self, nb::cast<nb::str>(item.first), item.second);
-              }
+            nb::object py_self = nb::cast(self, nb::rv_policy::reference);
+            nb::inst_mark_ready(py_self);
+            for (auto item : kwargs) {
+              nb::setattr(py_self, nb::cast<nb::str>(item.first), item.second);
             }
           },
           "Creates an instance. Keyword arguments are set as fields, mirroring "

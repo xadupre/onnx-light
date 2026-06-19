@@ -408,7 +408,7 @@ class InferenceSessionAllTypes:
             providers = ["CPUExecutionProvider"]
         try:
             self._sess = ort.InferenceSession(model.SerializeToString(), providers=providers)
-        except ort.capi.onnxruntime_pybind11_state.InvalidGraph as e:
+        except ort.capi.onnxruntime_pybind11_state.InvalidGraph as e:  # type: ignore
             from .tools.pretty_print import pretty_onnx
 
             raise AssertionError(
@@ -419,7 +419,7 @@ class InferenceSessionAllTypes:
 
     def run(
         self, output_names: Optional[List[str]], input_feed: dict[str, np.ndarray]
-    ) -> List[np.ndarray]:
+    ) -> dict[str, np.ndarray]:
         """
         Runs the model with support for all ONNX dtypes.
 
@@ -441,7 +441,7 @@ class InferenceSessionAllTypes:
         for meta in input_metas:
             if meta.type == "tensor(string)":
                 # IOBinding does not support strings.
-                return self._sess.run(output_names, input_feed)
+                return self._sess.run(output_names, input_feed)  # type: ignore
 
         io_binding = self._sess.io_binding()
 
@@ -477,4 +477,4 @@ class InferenceSessionAllTypes:
 
         # Get outputs
         outputs = io_binding.get_outputs()
-        return [out.numpy() for out in outputs]
+        return dict(zip(output_names, [out.numpy() for out in outputs]))

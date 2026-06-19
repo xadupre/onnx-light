@@ -41,7 +41,7 @@ def set_external_data(
     untouched so they can be written out by a subsequent ``save`` call.
     """
     if not tensor.HasField("raw_data"):
-         raise ValueError(
+        raise ValueError(
             f"Tensor {tensor.name!r} does not have raw_data. "
             "Cannot set external data for this tensor."
         )

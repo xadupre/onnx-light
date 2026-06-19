@@ -12,9 +12,9 @@ ValidationError = _checker.ValidationError
 
 
 def check_model(
-    model: _C.ModelProto,
+    model: _C.ModelProto,  # type: ignore
     *,
-    full_check: bool = False,  # type: ignore
+    full_check: bool = False,
     skip_opset_compatibility_check: bool = False,
     check_custom_domain: bool = False,
 ) -> None:

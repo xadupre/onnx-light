@@ -74,6 +74,30 @@ TEST(SimplifyExpressions, SimplifyTwoExpressions) {
   EXPECT_TRUE(r2.empty());
 }
 
+TEST(SimplifyExpressions, CompareExpressions) {
+  // Equal expressions.
+  auto eq = compare_expressions("a+b", "b+a");
+  EXPECT_EQ(eq.result, CompareResult::Equal);
+  EXPECT_EQ(simplify_result_to_string(eq.difference), "0");
+
+  // Pure constant difference.
+  EXPECT_EQ(compare_expressions("5", "3").result, CompareResult::Greater);
+  EXPECT_EQ(compare_expressions("3", "5").result, CompareResult::Smaller);
+
+  // Strictly greater / smaller with symbolic tokens.
+  EXPECT_EQ(compare_expressions("a+1", "a").result, CompareResult::Greater);
+  EXPECT_EQ(compare_expressions("a", "a+1").result, CompareResult::Smaller);
+  EXPECT_EQ(compare_expressions("a+b+1", "a").result, CompareResult::Greater);
+
+  // Unknown: mixed-sign coefficients; difference is expr2 - expr1.
+  auto un = compare_expressions("a", "b");
+  EXPECT_EQ(un.result, CompareResult::Unknown);
+  EXPECT_EQ(simplify_result_to_string(un.difference), "b-a");
+
+  // Unknown: same token sign but zero constant (equal when the token is null).
+  EXPECT_EQ(compare_expressions("2*a", "a").result, CompareResult::Unknown);
+}
+
 TEST(SimplifyExpressions, SimplifyExpression_bracket) {
   EXPECT_EQ(get_str(simplify_expression("2*x//2")), "x");
   EXPECT_EQ(get_str(simplify_expression("(2*x)//2")), "x");

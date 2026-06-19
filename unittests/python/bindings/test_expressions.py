@@ -5,6 +5,7 @@ from onnx_light.ext_test_case import ExtTestCase
 from onnx_light.onnx_optim.expressions import (
     simplify_expression,
     simplify_two_expressions,
+    compare_expressions,
     evaluate_expression,
     parse_expression_tokens,
     rename_expression,
@@ -59,6 +60,16 @@ class TestSimplifyExpressions(ExtTestCase):
             simplify_two_expressions("s52+seq_length", "s52+s70"), {"s70": -1, "seq_length": 1}
         )
         self.assertEqual(simplify_two_expressions("e*2", "e+e"), {})
+
+    def test_compare_expressions(self):
+        self.assertEqual(compare_expressions("a+b", "b+a"), ("equal", "0"))
+        self.assertEqual(compare_expressions("5", "3"), ("greater", -2))
+        self.assertEqual(compare_expressions("3", "5"), ("smaller", 2))
+        self.assertEqual(compare_expressions("a+1", "a"), ("greater", "-1"))
+        self.assertEqual(compare_expressions("a", "a+1"), ("smaller", "1"))
+        self.assertEqual(compare_expressions("a+b+1", "a"), ("greater", "-b-1"))
+        self.assertEqual(compare_expressions("a", "b"), ("unknown", "b-a"))
+        self.assertEqual(compare_expressions("2*a", "a"), ("unknown", "-a"))
 
     def test_simplify_expression_bracket(self):
         self.assertEqual("x", simplify_expression("2*x//2"))

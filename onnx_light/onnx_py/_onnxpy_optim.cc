@@ -66,6 +66,36 @@ void AddOnnxPyExpressions(nb::module_ &m) {
         nb::arg("expr1"), nb::arg("expr2"),
         "Returns the non-zero coefficient map of (expr1) - (expr2).");
 
+    // compare_expressions(expr1, expr2) -> tuple[str, str | int]
+    expressions_mod.def(
+        "compare_expressions",
+        [](const std::string &e1, const std::string &e2) -> nb::object {
+          auto c = expr::compare_expressions(e1, e2);
+          const char *result = nullptr;
+          switch (c.result) {
+          case expr::CompareResult::Smaller:
+            result = "smaller";
+            break;
+          case expr::CompareResult::Equal:
+            result = "equal";
+            break;
+          case expr::CompareResult::Greater:
+            result = "greater";
+            break;
+          case expr::CompareResult::Unknown:
+            result = "unknown";
+            break;
+          }
+          nb::object diff = std::holds_alternative<int64_t>(c.difference)
+                                ? nb::cast(std::get<int64_t>(c.difference))
+                                : nb::cast(std::get<std::string>(c.difference));
+          return nb::make_tuple(nb::cast(result), diff);
+        },
+        nb::arg("expr1"), nb::arg("expr2"),
+        "Compares expr1 to expr2 assuming all tokens are positive or null. Returns a tuple "
+        "(result, difference) where result is one of 'smaller', 'equal', 'greater', 'unknown' "
+        "and difference is the simplified value of (expr2) - (expr1).");
+
     // evaluate_expression(expr, context) -> int
     expressions_mod.def(
         "evaluate_expression",

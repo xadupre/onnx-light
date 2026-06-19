@@ -266,8 +266,21 @@ bool HasBorrowedRawData(const ModelProto &model) {
                                                                   "RepeatedProtoField" #cls #T);
 
 template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> &name_inst) {
-  name_inst.def(
-               "Clear", [](cls &self) { self.CopyFrom(cls()); }, "Clears the object.")
+  name_inst
+      .def(
+          "__init__",
+          [](cls *self, nb::kwargs kwargs) {
+            new (self) cls();
+            nb::object py_self = nb::cast(self, nb::rv_policy::reference);
+            nb::inst_mark_ready(py_self);
+            for (auto item : kwargs) {
+              nb::setattr(py_self, nb::cast<nb::str>(item.first), item.second);
+            }
+          },
+          "Creates an instance. Keyword arguments are set as fields, mirroring "
+          "protobuf message construction.")
+      .def(
+          "Clear", [](cls &self) { self.CopyFrom(cls()); }, "Clears the object.")
       .def(
           "ParseFromString",
           [](cls &self, nb::bytes data, nb::object options) {
@@ -1346,7 +1359,7 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
   PYDEFINE_PROTO(m, DeviceConfigurationProto)
       .PYFIELD_STR(DeviceConfigurationProto, name)
       .PYFIELD(DeviceConfigurationProto, num_devices)
-      .PYFIELD(DeviceConfigurationProto, device);
+      .PYFIELD_REPEATED_STR(DeviceConfigurationProto, device);
   PYADD_PROTO_SERIALIZATION(DeviceConfigurationProto);
   nb_DeviceConfigurationProto.def(
       "HasField",

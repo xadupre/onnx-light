@@ -8,6 +8,7 @@ import onnx_light.onnx.helper as oh
 from onnx_light.ext_test_case import ExtTestCase
 from onnx_light.onnx_lib import (
     AttributeProto,
+    DeviceConfigurationProto,
     FunctionProto,
     GraphProto,
     ModelProto,
@@ -247,6 +248,31 @@ class TestProtoMethods(ExtTestCase):
         self.assertEqual(opset.domain, "")
         self.assertEqual(opset.version, 0)
         self.assertEqual(len(model.opset_import), 1)
+
+    def test_proto_constructor_without_kwargs(self):
+        tensor = TensorProto()
+        self.assertEqual(list(tensor.dims), [])
+        self.assertEqual(int(tensor.data_type), 0)
+
+    def test_proto_constructor_with_kwargs(self):
+        source = TensorProto()
+        source.dims.extend([1, 9])
+        tensor = TensorProto(dims=source.dims, data_type=TensorProto.FLOAT, raw_data=b"abcd")
+        self.assertEqual(list(tensor.dims), [1, 9])
+        self.assertEqual(int(tensor.data_type), int(TensorProto.FLOAT))
+        self.assertEqual(tensor.raw_data, b"abcd")
+
+    def test_proto_constructor_with_repeated_string_kwargs(self):
+        config = DeviceConfigurationProto(name="conf0", num_devices=2, device=["CPU", "CUDA:0"])
+        self.assertEqual(config.name, "conf0")
+        self.assertEqual(config.num_devices, 2)
+        self.assertEqual(list(config.device), ["CPU", "CUDA:0"])
+
+    def test_repeated_proto_add_with_repeated_string_kwargs(self):
+        model = ModelProto()
+        config = model.configuration.add(name="c", num_devices=1, device=["CPU"])
+        self.assertEqual(config.name, "c")
+        self.assertEqual(list(config.device), ["CPU"])
 
     def test_repeated_field_is_sequence(self):
         import collections.abc

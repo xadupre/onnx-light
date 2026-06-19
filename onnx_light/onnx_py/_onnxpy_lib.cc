@@ -137,10 +137,20 @@ void AddOnnxPyLib(nb::module_ &m) {
       "AttributeProtos.");
 
   shape_inference_mod.def(
-      "infer_shapes", [](ModelProto &model) -> void { shape_inference::InferShapes(model); },
-      nb::arg("model"),
+      "infer_shapes",
+      [](ModelProto &model, bool check_type, bool strict_mode, bool data_prop) -> void {
+        ShapeInferenceOptions options(/*check_type_val=*/check_type,
+                                      /*strict_mode_val=*/strict_mode ? 1 : 0,
+                                      /*data_prop_val=*/data_prop);
+        shape_inference::InferShapes(model, OpSchemaRegistry::Instance(), options);
+      },
+      nb::arg("model"), nb::arg("check_type") = false, nb::arg("strict_mode") = false,
+      nb::arg("data_prop") = false,
       "Runs whole-model shape inference in place on the given ModelProto, populating "
-      "inferred shapes/types on every intermediate value and graph output.");
+      "inferred shapes/types on every intermediate value and graph output. ``check_type`` "
+      "checks the type-equality for input and output, ``strict_mode`` raises any node-level "
+      "shape inference errors, and ``data_prop`` enables data propagation for limited "
+      "operators to perform shape computation.");
 
   // -----------------------------------------------------------------------
   // Submodule `defs`

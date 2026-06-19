@@ -75,7 +75,7 @@ def infer_node_outputs(
     )
 
 
-def infer_shapes(model):
+def infer_shapes(model, check_type=False, strict_mode=False, data_prop=False):
     """Runs whole-model shape inference in place on the given model.
 
     Calls the native C++ ``shape_inference::InferShapes(ModelProto&)``
@@ -85,10 +85,15 @@ def infer_shapes(model):
     returned for convenience.
 
     :param model: A :class:`~onnx_light.onnx.ModelProto`.
+    :param check_type: Checks the type-equality for input and output.
+    :param strict_mode: Stricter shape inference, it raises errors if any;
+        otherwise, it simply stops if any error.
+    :param data_prop: Enables data propagation for limited operators to
+        perform shape computation.
     :returns: The same model with inferred shapes/types.
     :raises InferenceError: If shape inference fails on any node.
     """
-    _shape_inference.infer_shapes(model)
+    _shape_inference.infer_shapes(model, check_type, strict_mode, data_prop)
     return model
 
 
@@ -111,12 +116,14 @@ def infer_shapes_path(
     :param model_path: Path to the input ONNX model.
     :param output_path: Path to write the inferred model.  When empty,
         the input file is overwritten.
-    :param check_type: Unused, kept for API compatibility.
-    :param strict_mode: Unused, kept for API compatibility.
-    :param data_prop: Unused, kept for API compatibility.
+    :param check_type: Checks the type-equality for input and output.
+    :param strict_mode: Stricter shape inference, it raises errors if any;
+        otherwise, it simply stops if any error.
+    :param data_prop: Enables data propagation for limited operators to
+        perform shape computation.
     """
     from ..onnx_proto._io_helper import load, save
 
     model = load(model_path)
-    _shape_inference.infer_shapes(model)
+    _shape_inference.infer_shapes(model, check_type, strict_mode, data_prop)
     save(model, output_path or model_path)

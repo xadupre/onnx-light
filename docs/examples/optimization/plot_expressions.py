@@ -17,6 +17,9 @@ by a fast C++ AST engine.  This example walks through the main entry points:
   constants and cancel common symbolic factors.
 * :func:`~onnx_light.onnx_optim.expressions.simplify_two_expressions` —
   compare two expressions by computing their difference.
+* :func:`~onnx_light.onnx_optim.expressions.compare_expressions` — tell
+  whether one expression is greater, equal, smaller or unknown relative to
+  another (assuming all tokens are positive or null).
 * :func:`~onnx_light.onnx_optim.expressions.evaluate_expression` — evaluate
   a symbolic expression given a concrete variable assignment.
 * :func:`~onnx_light.onnx_optim.expressions.parse_expression_tokens` —
@@ -32,6 +35,7 @@ by a fast C++ AST engine.  This example walks through the main entry points:
 from __future__ import annotations
 
 from onnx_light.onnx_optim.expressions import (
+    compare_expressions,
     dim_add,
     dim_div,
     dim_max,
@@ -94,6 +98,22 @@ print("difference coefficients:", diff)
 
 # Proves algebraic equality: 2*e == e + e.
 print("equal expressions:", simplify_two_expressions("e*2", "e+e"))
+
+#####################################
+# :func:`compare_expressions` goes one step further: assuming every token is
+# positive or null, it reports whether the first expression is
+# :attr:`~onnx_light.onnx_optim.expressions.CompareResult.Greater`,
+# :attr:`~onnx_light.onnx_optim.expressions.CompareResult.Equal`,
+# :attr:`~onnx_light.onnx_optim.expressions.CompareResult.Smaller` or
+# :attr:`~onnx_light.onnx_optim.expressions.CompareResult.Unknown` compared to
+# the second. The returned
+# :class:`~onnx_light.onnx_optim.expressions.ExpressionComparison` exposes the
+# ``result`` and the simplified ``difference`` ``expr2 - expr1``.
+
+cmp = compare_expressions("a+1", "a")
+print("compare a+1 to a:", cmp.result, cmp.difference)
+cmp = compare_expressions("a", "b")
+print("compare a to b:", cmp.result, cmp.difference)
 
 #####################################
 # Evaluating with concrete values

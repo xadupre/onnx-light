@@ -380,6 +380,66 @@ std::map<std::string, int64_t> simplify_two_expressions(const std::string &expr1
                                                         const std::string &expr2);
 
 /**
+ * @brief Possible outcomes of comparing two symbolic expressions.
+ *
+ * The comparison assumes that every symbolic token is positive or null
+ * (i.e. greater than or equal to zero).
+ */
+enum class CompareResult {
+  Smaller, ///< The first expression is always strictly smaller than the second.
+  Equal,   ///< The two expressions are always equal.
+  Greater, ///< The first expression is always strictly greater than the second.
+  Unknown, ///< The relationship cannot be determined for all non-negative token values.
+};
+
+/**
+ * @brief Result of comparing two symbolic expressions @p expr1 and @p expr2.
+ *
+ * Holds the comparison @p result together with the simplified @p difference
+ * `expr2 - expr1`. The difference is most useful when @p result is
+ * `CompareResult::Unknown`, but it is always populated.
+ */
+struct ExpressionComparison {
+  CompareResult result;      ///< How @p expr1 compares to @p expr2.
+  SimplifyResult difference; ///< The simplified value of `expr2 - expr1`.
+};
+
+/**
+ * @brief Compares @p expr1 to @p expr2 assuming all tokens are positive or null.
+ *
+ * Builds the linear combination of `expr1 - expr2` and reasons about its sign
+ * knowing that every symbolic token is greater than or equal to zero:
+ *  - `CompareResult::Equal` when the difference is identically zero.
+ *  - `CompareResult::Greater` when `expr1 - expr2` is strictly positive for
+ *    every non-negative assignment of the tokens (all token coefficients are
+ *    non-negative and the constant term is strictly positive).
+ *  - `CompareResult::Smaller` when `expr1 - expr2` is strictly negative for
+ *    every non-negative assignment of the tokens (all token coefficients are
+ *    non-positive and the constant term is strictly negative).
+ *  - `CompareResult::Unknown` otherwise (e.g. tokens with mixed-sign
+ *    coefficients, or a zero constant term that allows equality at zero).
+ *
+ * The returned `difference` always holds the simplified value of
+ * `expr2 - expr1`, which the caller can inspect when the result is
+ * `CompareResult::Unknown`.
+ *
+ * @param expr1 The first expression string.
+ * @param expr2 The second expression string.
+ * @returns An `ExpressionComparison` with the result and the difference
+ *          `expr2 - expr1`.
+ *
+ * @code{.cpp}
+ * auto c1 = compare_expressions("a+1", "a");
+ * // c1.result == CompareResult::Greater
+ *
+ * auto c2 = compare_expressions("a", "b");
+ * // c2.result == CompareResult::Unknown
+ * // c2.difference holds the string "b-a"
+ * @endcode
+ */
+ExpressionComparison compare_expressions(const std::string &expr1, const std::string &expr2);
+
+/**
  * @brief Evaluates @p expr with the variable assignments in @p context.
  *
  * Supported constructs:

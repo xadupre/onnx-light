@@ -70,7 +70,7 @@ TestShapeInferenceBackend = make_test_class(
         "test_cc_shape_inference_loop_topk_pairwise_distance.*",
         # ONNX's built-in shape inference emits generic unk__N dims for chained
         # TopK nodes; it does not preserve the symbolic dim names that
-        # onnx-light assigns (e.g. ``TopK_values1_k``).
+        # onnx-light assigns (e.g. ``TopK_k``).
         "test_cc_shape_inference_two_topk_same_k.*",
         "test_cc_shape_inference_two_topk_different_k.*",
         # ONNX's built-in shape inference propagates "batch" through the Loop

@@ -65,7 +65,7 @@ namespace {
 // reference Tensor helpers do not support the blocked layout yet.
 // ---------------------------------------------------------------------------
 void RegisterQuantizeLinearCases(std::vector<TestCase> &registry) {
-  const OpsetId opset = DefaultOpset(13);
+  const OpsetId opset = DefaultOpset(19);
   const kernel::KernelContext ctx{opset};
   const kernel::QuantizeLinear quantize_kernel{ctx};
 

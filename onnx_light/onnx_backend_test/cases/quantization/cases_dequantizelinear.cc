@@ -78,7 +78,7 @@ namespace {
 // integer, float8, and sub-byte (INT4/UINT4/INT2/UINT2/FLOAT4E2M1) inputs.
 // ---------------------------------------------------------------------------
 void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
-  const OpsetId opset = DefaultOpset(13);
+  const OpsetId opset = DefaultOpset(19);
   // Opset 21 introduced the ``block_size`` attribute and the UINT4/INT4
   // sub-byte input types; opset 23 added the UINT2/INT2/FLOAT4E2M1 types.
   const OpsetId opset_v21 = DefaultOpset(21);

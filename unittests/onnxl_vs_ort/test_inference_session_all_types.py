@@ -32,7 +32,7 @@ class TestInferenceSessionAllTypes(ExtTestCase):
         )
 
         # Run inference
-        sess = InferenceSessionAllTypes(model.SerializeToString())
+        sess = InferenceSessionAllTypes(model)
         x = np.array([1.0, 2.0, 3.0], dtype=np.float32)
         y = np.array([4.0, 5.0, 6.0], dtype=np.float32)
         outputs = sess.run(None, {"X": x, "Y": y})
@@ -58,7 +58,7 @@ class TestInferenceSessionAllTypes(ExtTestCase):
         )
 
         # Run inference
-        sess = InferenceSessionAllTypes(model.SerializeToString())
+        sess = InferenceSessionAllTypes(model)
         x = np.array([1, 2, 3], dtype=np.int64)
         y = np.array([4, 5, 6], dtype=np.int64)
         outputs = sess.run(None, {"X": x, "Y": y})
@@ -81,7 +81,7 @@ class TestInferenceSessionAllTypes(ExtTestCase):
         )
 
         # Run inference
-        sess = InferenceSessionAllTypes(model.SerializeToString())
+        sess = InferenceSessionAllTypes(model)
         x = np.array([1.0, 2.0, 3.0], dtype=np.float32)
         outputs = sess.run(None, {"X": x})
 
@@ -104,7 +104,7 @@ class TestInferenceSessionAllTypes(ExtTestCase):
         )
 
         # Run inference
-        sess = InferenceSessionAllTypes(model.SerializeToString())
+        sess = InferenceSessionAllTypes(model)
         x = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32)
         outputs = sess.run(None, {"X": x})
 
@@ -127,7 +127,7 @@ class TestInferenceSessionAllTypes(ExtTestCase):
         )
 
         # Run inference
-        sess = InferenceSessionAllTypes(model.SerializeToString())
+        sess = InferenceSessionAllTypes(model)
         x = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32)
         outputs = sess.run(None, {"X": x})
 
@@ -149,9 +149,7 @@ class TestInferenceSessionAllTypes(ExtTestCase):
         )
 
         # Run inference with explicit providers
-        sess = InferenceSessionAllTypes(
-            model.SerializeToString(), providers=["CPUExecutionProvider"]
-        )
+        sess = InferenceSessionAllTypes(model, providers=["CPUExecutionProvider"])
         x = np.array([1.0, 2.0], dtype=np.float32)
         outputs = sess.run(None, {"X": x})
 

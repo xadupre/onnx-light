@@ -106,7 +106,7 @@ std::vector<CastDtype> SupportedCastDtypes() {
 } // namespace
 
 void RegisterCastCases(std::vector<TestCase> &registry) {
-  const OpsetId opset = DefaultOpset(13);
+  const OpsetId opset = DefaultOpset(19);
   const kernel::KernelContext ctx{opset};
   const kernel::Cast cast_kernel{ctx};
 

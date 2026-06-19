@@ -365,7 +365,9 @@ class InferenceSessionAllTypes:
         from onnx_light.onnx import TensorProto
 
         return {
+            np.dtype("float64"): TensorProto.DOUBLE,
             np.dtype("float32"): TensorProto.FLOAT,
+            np.dtype("float16"): TensorProto.FLOAT16,
             np.dtype("uint8"): TensorProto.UINT8,
             np.dtype("int8"): TensorProto.INT8,
             np.dtype("uint16"): TensorProto.UINT16,
@@ -373,7 +375,6 @@ class InferenceSessionAllTypes:
             np.dtype("int32"): TensorProto.INT32,
             np.dtype("int64"): TensorProto.INT64,
             np.dtype("bool"): TensorProto.BOOL,
-            np.dtype("float64"): TensorProto.DOUBLE,
             np.dtype("uint32"): TensorProto.UINT32,
             np.dtype("uint64"): TensorProto.UINT64,
             np.dtype("O"): TensorProto.STRING,
@@ -405,7 +406,14 @@ class InferenceSessionAllTypes:
 
         if providers is None:
             providers = ["CPUExecutionProvider"]
-        self._sess = ort.InferenceSession(model.SerializeToString(), providers=providers)
+        try:
+            self._sess = ort.InferenceSession(model.SerializeToString(), providers=providers)
+        except ort.capi.onnxruntime_pybind11_state.InvalidGraph as e:
+            from .tools.pretty_print import pretty_onnx
+
+            raise AssertionError(
+                f"Unable to load a model due to {e}\n---\n{pretty_onnx(model)}"
+            ) from e
         self._mapping_to_onnx = self.mapping_numpy_dtype_to_onnx()
         self._mapping_to_numpy = self.mapping_ort_type_name_to_numpy_dtype()
 
@@ -429,6 +437,11 @@ class InferenceSessionAllTypes:
         input_metas = self._sess.get_inputs()
         output_metas = self._sess.get_outputs()
         inputs = [input_feed[meta.name] for meta in input_metas]
+
+        for meta in input_metas:
+            if meta.type == "tensor(string)":
+                # IOBinding does not support strings.
+                return self._sess.run(output_names, input_feed)
 
         io_binding = self._sess.io_binding()
 

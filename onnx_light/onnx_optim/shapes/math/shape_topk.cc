@@ -41,7 +41,9 @@ void ComputeShapeTopK(ShapesContext &ctx, const NodeProto &node, const char *x) 
     EXT_ENFORCE_INVALID(k > 0, "ComputeShapeTopK: attribute k must be positive.");
     axis_dim = OptimDim(k);
   } else {
-    axis_dim = OptimDim("TopK_" + node.output(0).as_string() + "_k");
+    const std::string k_input_name =
+        node.input_size() >= 2 ? node.input(1).as_string() : std::string();
+    axis_dim = OptimDim(ctx.TopKKDimName(k_input_name));
   }
 
   OptimShape out_shape = in_shape;

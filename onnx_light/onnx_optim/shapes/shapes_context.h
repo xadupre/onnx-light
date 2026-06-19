@@ -244,6 +244,26 @@ public:
     custom_shape_inference_.clear();
     constraints_.clear();
     subgraph_contexts_.clear();
+    topk_k_dims_.clear();
+  }
+
+  /// Returns (and records) the symbolic dimension name to use for the TopK
+  /// output axis driven by the K input named ``k_input_name``. The first
+  /// unique K input seen returns ``"TopK_k"``; each subsequent distinct K
+  /// input gets ``"TopK_k_2"``, ``"TopK_k_3"``, and so on. Calling this
+  /// method twice with the same ``k_input_name`` always returns the same
+  /// string.
+  const std::string &TopKKDimName(const std::string &k_input_name) {
+    auto it = topk_k_dims_.find(k_input_name);
+    if (it != topk_k_dims_.end()) {
+      return it->second;
+    }
+    const std::size_t count = topk_k_dims_.size();
+    std::string dim_name =
+        count == 0 ? std::string("TopK_k") : "TopK_k_" + std::to_string(count + 1);
+    auto [inserted_it, ok] = topk_k_dims_.emplace(k_input_name, std::move(dim_name));
+    (void)ok;
+    return inserted_it->second;
   }
 
   /// Read-only access to the underlying map (useful for iteration).
@@ -698,6 +718,9 @@ private:
   /// set to ``"body"``, ``"then_branch"``, ``"else_branch"``, etc. when
   /// running shape inference for a control-flow body subgraph.
   std::string current_subgraph_attr_name_;
+  /// Tracks the mapping from TopK K-input names to the symbolic dimension
+  /// name assigned by :cpp:func:`TopKKDimName`. Populated lazily.
+  std::unordered_map<std::string, std::string> topk_k_dims_;
 };
 
 } // namespace shapes

@@ -4,7 +4,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "onnx-light"
-version = "0.1.0"
+version = "0.1.1"
 description = "onnx without protobuf"
 readme = "README.md"
 license = "Apache-2.0"
@@ -66,6 +66,17 @@ sdist.include = ["sbom.cdx.json"]
 # (TargetPath vs OutputFile mismatch between the short and long path forms)
 # and can break the wheel build. A stable build directory avoids both.
 build-dir = "build/{wheel_tag}"
+
+# Skip the C++ development install (static/import libraries, public headers and
+# CMake package config) when building the Python wheel. Those files target
+# downstream C++ consumers (who build via CMake, e.g. build_release_cpp.yml) and
+# are dead weight inside a wheel: the shared libraries are duplicated (once in
+# onnx_light/onnx_py/ for the runtime extensions and again under lib/ for the
+# C++ install), and the headers/CMake configs are never used at import time.
+# Dropping them roughly halves the wheel size on every platform, most visibly on
+# Windows (extra import .lib files) and macOS (universal2 binaries are already
+# twice as large). ONNX_LIGHT_INSTALL stays ON by default for plain CMake builds.
+cmake.define.ONNX_LIGHT_INSTALL = "OFF"
 
 [tool.pytest.ini_options]
 testpaths = ["unittests"]

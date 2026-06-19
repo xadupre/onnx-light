@@ -578,6 +578,17 @@ std::string proto_repr_with_short_line(cls &self,
 
 template <typename T> void define_repeated_field_type(nb::class_<utils::RepeatedField<T>> &nbcls) {
   nbcls.def(nb::init<>())
+      .def(
+          "__init__",
+          [](utils::RepeatedField<T> *self, nb::iterable iterable) {
+            new (self) utils::RepeatedField<T>();
+            if (nb::isinstance<utils::RepeatedField<T>>(iterable)) {
+              self->extend(nb::cast<utils::RepeatedField<T> &>(iterable));
+            } else {
+              self->extend(nb::cast<std::vector<T>>(iterable));
+            }
+          },
+          nb::arg("iterable"), "Creates a RepeatedField from an iterable.")
       .def("add", &utils::RepeatedField<T>::add, nb::rv_policy::reference, "Adds an empty element.")
       .def("clear", &utils::RepeatedField<T>::clear, "Removes every element.")
       .def("__len__", &utils::RepeatedField<T>::size, "Returns the number of elements.")
@@ -1330,6 +1341,28 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
   nb::class_<utils::RepeatedField<utils::String>> rep_string(m, "RepeatedFieldString",
                                                              "RepeatedFieldString");
   define_repeated_field_type(rep_string);
+  // Override __init__ for String to handle str/bytes/String types
+  rep_string.def(
+      "__init__",
+      [](utils::RepeatedField<utils::String> *self, nb::iterable iterable) {
+        new (self) utils::RepeatedField<utils::String>();
+        if (nb::isinstance<utils::RepeatedField<utils::String>>(iterable)) {
+          self->extend(nb::cast<utils::RepeatedField<utils::String> &>(iterable));
+        } else {
+          for (auto it : iterable) {
+            if (nb::isinstance<utils::String>(it)) {
+              self->push_back(nb::cast<utils::String &>(it));
+            } else if (nb::isinstance<nb::bytes>(it)) {
+              nanobind::bytes bytes_obj = nb::borrow<nb::bytes>(it);
+              std::string st(static_cast<const char *>(bytes_obj.data()), bytes_obj.size());
+              self->push_back(utils::String(st));
+            } else {
+              self->push_back(utils::String(nb::cast<std::string>(it)));
+            }
+          }
+        }
+      },
+      nb::arg("iterable"), "Creates a RepeatedFieldString from an iterable.");
   define_repeated_field_type_extend(rep_string);
 
   nb::enum_<OperatorStatus>(m, "OperatorStatus", nb::is_arithmetic())

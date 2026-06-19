@@ -7,9 +7,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from importlib import import_module
 from io import StringIO
 from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
-
-import numpy
-from numpy.testing import assert_allclose
+import numpy as np
 
 
 def is_windows() -> bool:
@@ -33,7 +31,7 @@ def has_onnxruntime() -> bool:
 def has_ir_py() -> bool:
     "Tells if ir-py is installed."
     try:
-        import onnx_ir
+        import onnx_ir  # type: ignore
 
         return hasattr(onnx_ir, "__version__")
     except ImportError:
@@ -211,8 +209,8 @@ class ExtTestCase(unittest.TestCase):
 
     def assertEqualArray(
         self,
-        expected: numpy.ndarray,
-        value: numpy.ndarray,
+        expected: np.ndarray,
+        value: np.ndarray,
         atol: float = 0,
         rtol: float = 0,
         msg: Optional[str] = None,
@@ -221,28 +219,28 @@ class ExtTestCase(unittest.TestCase):
         self.assertEqual(expected.shape, value.shape)
         if msg:
             try:
-                assert_allclose(expected, value, atol=atol, rtol=rtol)
+                np.testing.assert_allclose(expected, value, atol=atol, rtol=rtol)
             except AssertionError as e:
                 raise AssertionError(msg) from e
         else:
-            assert_allclose(expected, value, atol=atol, rtol=rtol)
+            np.testing.assert_allclose(expected, value, atol=atol, rtol=rtol)
 
     def assertAlmostEqual(  # type: ignore
-        self, expected: numpy.ndarray, value: numpy.ndarray, atol: float = 0, rtol: float = 0
+        self, expected: np.ndarray, value: np.ndarray, atol: float = 0, rtol: float = 0
     ):
-        if not isinstance(expected, numpy.ndarray):
-            expected = numpy.array(expected)
-        if not isinstance(value, numpy.ndarray):
-            value = numpy.array(value).astype(expected.dtype)
+        if not isinstance(expected, np.ndarray):
+            expected = np.array(expected)
+        if not isinstance(value, np.ndarray):
+            value = np.array(value).astype(expected.dtype)
         self.assertEqualArray(expected, value, atol=atol, rtol=rtol)
 
     def assertNotAlmostEqual(  # type: ignore
-        self, expected: numpy.ndarray, value: numpy.ndarray, atol: float = 0, rtol: float = 0
+        self, expected: np.ndarray, value: np.ndarray, atol: float = 0, rtol: float = 0
     ):
-        if not isinstance(expected, numpy.ndarray):
-            expected = numpy.array(expected)
-        if not isinstance(value, numpy.ndarray):
-            value = numpy.array(value).astype(expected.dtype)
+        if not isinstance(expected, np.ndarray):
+            expected = np.array(expected)
+        if not isinstance(value, np.ndarray):
+            value = np.array(value).astype(expected.dtype)
         try:
             self.assertEqualArray(expected, value, atol=atol, rtol=rtol)
             raise AssertionError("Arrays are equal.")
@@ -356,3 +354,139 @@ class ExtTestCase(unittest.TestCase):
         with open(fullname, "wb") as f:
             f.write(proto.SerializeToString())
         return fullname
+
+
+class InferenceSessionAllTypes:
+    """
+    Wrapper around onnxruntime.InferenceSession that supports all ONNX dtypes.
+
+    Uses IOBinding with raw memory buffers to support dtypes that ORT doesn't
+    natively handle through NumPy conversion (FLOAT8, BFLOAT16, INT2, INT4, etc.).
+    Creates an inference session.
+
+    Args:
+        model_bytes: ONNX model
+        providers: List of execution providers (defaults to ["CPUExecutionProvider"])
+    """
+
+    @classmethod
+    def mapping_numpy_dtype_to_onnx(cls):
+        """Returns mapping from NumPy dtype to ONNX TensorProto data type."""
+        from onnx_light.onnx import TensorProto
+
+        return {
+            np.dtype("float64"): TensorProto.DOUBLE,
+            np.dtype("float32"): TensorProto.FLOAT,
+            np.dtype("float16"): TensorProto.FLOAT16,
+            np.dtype("uint8"): TensorProto.UINT8,
+            np.dtype("int8"): TensorProto.INT8,
+            np.dtype("uint16"): TensorProto.UINT16,
+            np.dtype("int16"): TensorProto.INT16,
+            np.dtype("int32"): TensorProto.INT32,
+            np.dtype("int64"): TensorProto.INT64,
+            np.dtype("bool"): TensorProto.BOOL,
+            np.dtype("uint32"): TensorProto.UINT32,
+            np.dtype("uint64"): TensorProto.UINT64,
+            np.dtype("O"): TensorProto.STRING,
+        }
+
+    @classmethod
+    def mapping_ort_type_name_to_numpy_dtype(self):
+        """
+        Returns mapping for special dtypes that need IOBinding.
+
+        Maps ONNX dtype to (numpy view dtype, onnx tensor element type).
+        """
+        return {
+            "tensor(float)": np.float32,
+            "tensor(float16)": np.float16,
+            "tensor(double)": np.double,
+            "tensor(int64)": np.int64,
+            "tensor(int32)": np.int32,
+            "tensor(int16)": np.int16,
+            "tensor(int8)": np.int8,
+            "tensor(uint64)": np.uint64,
+            "tensor(uint32)": np.uint32,
+            "tensor(uint16)": np.uint16,
+            "tensor(uint8)": np.uint8,
+        }
+
+    def __init__(self, model: "ModelProto", providers: Optional[List[str]] = None):  # type: ignore # noqa: F821
+        import onnxruntime as ort
+
+        if providers is None:
+            providers = ["CPUExecutionProvider"]
+        try:
+            self._sess = ort.InferenceSession(model.SerializeToString(), providers=providers)
+        except ort.capi.onnxruntime_pybind11_state.InvalidGraph as e:  # type: ignore
+            from .tools.pretty_print import pretty_onnx
+
+            raise AssertionError(
+                f"Unable to load a model due to {e}\n---\n{pretty_onnx(model)}"
+            ) from e
+        self._mapping_to_onnx = self.mapping_numpy_dtype_to_onnx()
+        self._mapping_to_numpy = self.mapping_ort_type_name_to_numpy_dtype()
+
+    def run(
+        self, output_names: Optional[List[str]], input_feed: dict[str, np.ndarray]
+    ) -> dict[str, np.ndarray]:
+        """
+        Runs the model with support for all ONNX dtypes.
+
+        Uses IOBinding for special dtypes that ORT doesn't natively support.
+
+        Args:
+            output_names: Names of outputs to compute (None = all outputs)
+            input_feed: Dictionary mapping input names to numpy arrays
+
+        Returns:
+            List of output arrays from the model
+        """
+        from onnx_light.onnx import TensorProto
+
+        input_metas = self._sess.get_inputs()
+        output_metas = self._sess.get_outputs()
+        inputs = [input_feed[meta.name] for meta in input_metas]
+        if output_names is None:
+            output_names = [o.name for o in output_metas]
+
+        for meta in input_metas:
+            if meta.type == "tensor(string)":
+                # IOBinding does not support strings.
+                return self._sess.run(output_names, input_feed)  # type: ignore
+
+        io_binding = self._sess.io_binding()
+
+        for meta, inp in zip(input_metas, inputs):
+            assert (
+                meta.type not in self._mapping_to_numpy
+                or inp.dtype == self._mapping_to_numpy[meta.type]
+            ), (
+                f"Unexpected type for input {meta.name!r}, "
+                f"meta.type={meta.type!r}, inp.dtype={inp.dtype!r}"
+            )
+            tensor_type = self._mapping_to_onnx[inp.dtype]
+
+            if tensor_type == TensorProto.STRING:
+                io_binding.bind_cpu_input(meta.name, inp)
+                continue
+
+            io_binding.bind_input(  # type: ignore[attr-defined]
+                meta.name,
+                "cpu",  # device_type
+                0,  # device_id
+                tensor_type,
+                list(inp.shape),
+                inp.ctypes.data,
+            )
+
+        # Bind outputs
+        for meta in output_metas:
+            io_binding.bind_output(meta.name)
+
+        # Run with IOBinding
+        self._sess.run_with_iobinding(io_binding)
+
+        # Get outputs
+        outputs = io_binding.get_outputs()
+        return dict(zip(output_names, [out.numpy() for out in outputs]))

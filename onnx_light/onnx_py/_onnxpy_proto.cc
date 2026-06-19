@@ -2545,4 +2545,15 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
           "Returns the name of the field set in the oneof ``oneof_name``, or None if no field is "
           "set, following the protobuf API.");
   PYADD_PROTO_SERIALIZATION(OptionalProto);
+
+  // Registers every repeated field container as a virtual subclass of
+  // collections.abc.Sequence so that ``isinstance(repeated_field, Sequence)``
+  // returns True, matching the behaviour of protobuf repeated containers.
+  nb::object sequence_abc = nb::module_::import_("collections.abc").attr("Sequence");
+  nb::dict module_dict = nb::borrow<nb::dict>(m.attr("__dict__"));
+  for (auto item : module_dict) {
+    std::string name = nb::cast<std::string>(item.first);
+    if (name.rfind("RepeatedField", 0) == 0 || name.rfind("RepeatedProtoField", 0) == 0)
+      sequence_abc.attr("register")(item.second);
+  }
 }

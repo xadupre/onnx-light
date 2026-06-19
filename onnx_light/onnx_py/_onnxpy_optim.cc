@@ -1,5 +1,6 @@
 #include "onnx_optim/expressions.h"
 #include "onnx_optim/optim_tensor.h"
+#include "onnx_optim/shapes/inplace_reuse.h"
 #include "onnx_optim/shapes/shape_inference.h"
 #include "onnx_optim/shapes/shapes_context.h"
 #include <algorithm>
@@ -894,4 +895,51 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       "back into ``model.graph.output`` and ``model.graph.value_info``. The ModelProto is "
       "mutated in place. When ``prefill_with_value_info_output`` is true, existing "
       "``value_info``/``output`` tensor descriptors are used as anchors.");
+
+  // -----------------------------------------------------------------------
+  // In-place reuse analysis
+  // -----------------------------------------------------------------------
+  nb::enum_<onnx_shapes::InPlaceReuseKind>(
+      shape_mod, "InPlaceReuseKind", nb::is_arithmetic(),
+      "Classifies how the reused input buffer compares in size with the output: "
+      "``kEqual`` when the input and output share the same element type and shape "
+      "(same byte size, the preferred reuse); ``kGreater`` when the input buffer is "
+      "strictly larger in bytes than the output.")
+      .value("kEqual", onnx_shapes::InPlaceReuseKind::kEqual,
+             "The input and output have the same byte size.")
+      .value("kGreater", onnx_shapes::InPlaceReuseKind::kGreater,
+             "The input buffer is strictly larger in bytes than the output.");
+
+  nb::class_<onnx_shapes::InPlaceReuse>(
+      shape_mod, "InPlaceReuse",
+      "Represents one in-place reuse opportunity for a node: the output at ``output_index`` "
+      "reuses the buffer of the input at ``input_index`` (both indices into the node's "
+      "``output``/``input`` lists). ``kind`` records whether the input buffer has the same "
+      "size as the output (``kEqual``) or is strictly larger (``kGreater``).")
+      .def(nb::init<>())
+      .def_rw("output_index", &onnx_shapes::InPlaceReuse::output_index)
+      .def_rw("input_index", &onnx_shapes::InPlaceReuse::input_index)
+      .def_rw("kind", &onnx_shapes::InPlaceReuse::kind)
+      .def(nb::self == nb::self)
+      .def(nb::self != nb::self)
+      .def("__repr__", [](const onnx_shapes::InPlaceReuse &r) {
+        std::ostringstream os;
+        const char *kind = r.kind == onnx_shapes::InPlaceReuseKind::kEqual ? "kEqual" : "kGreater";
+        os << "InPlaceReuse(output_index=" << r.output_index << ", input_index=" << r.input_index
+           << ", kind=" << kind << ")";
+        return os.str();
+      });
+
+  shape_mod.def(
+      "compute_inplace_reuse",
+      [](const onnx_shapes::ShapesContext &ctx, const GraphProto &graph) {
+        return onnx_shapes::ComputeInPlaceReuse(graph, ctx);
+      },
+      nb::arg("ctx"), nb::arg("graph"),
+      "Guesses, for every node of ``graph``, which outputs reuse which input buffers in "
+      "place, using the shapes already inferred into ``ctx``.\n\n"
+      "Returns: a list with one entry per node (same order as ``graph.node``); each entry is a "
+      "list of :class:`InPlaceReuse`. The analysis is purely structural (matching element type, "
+      "shape and value lifetime) and does not check whether a given kernel actually supports "
+      "in-place execution.");
 }

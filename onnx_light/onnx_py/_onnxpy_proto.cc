@@ -1238,6 +1238,10 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
           [](const utils::String &self, const utils::String &s) -> bool { return self == s; },
           "Compares two String instances.", nb::is_operator())
       .def(
+          "__eq__", [](const utils::String &, nb::object) -> bool { return false; },
+          nb::arg("other").none(), "Returns False when compared to an object that is not a string.",
+          nb::is_operator())
+      .def(
           "__ne__",
           [](const utils::String &self, const std::string &s) -> bool { return self != s; },
           "Checks inequality with a python string.", nb::is_operator())
@@ -1252,6 +1256,10 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
           "__ne__",
           [](const utils::String &self, const utils::String &s) -> bool { return self != s; },
           "Checks inequality with a String.", nb::is_operator())
+      .def(
+          "__ne__", [](const utils::String &, nb::object) -> bool { return true; },
+          nb::arg("other").none(), "Returns True when compared to an object that is not a string.",
+          nb::is_operator())
       .def(
           "__lt__",
           [](const utils::String &self, const std::string &s) -> bool { return self < s; },

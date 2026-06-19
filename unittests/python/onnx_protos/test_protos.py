@@ -27,6 +27,23 @@ class TestStringBinding(ExtTestCase):
         self.assertTrue(m.String("abc") == m.String("abc"))
         self.assertFalse(m.String("abc") == m.String("xyz"))
 
+    def test_string_eq_none(self):
+        """Tests String == None returns False."""
+        self.assertFalse(m.String("abc") == None)  # noqa: E711
+        self.assertTrue(m.String("abc") != None)  # noqa: E711
+
+    def test_string_eq_int(self):
+        """Tests String == int returns False."""
+        self.assertFalse(m.String("abc") == 3)
+        self.assertTrue(m.String("abc") != 3)
+
+    def test_string_eq_other(self):
+        """Tests String compared to unrelated objects returns False."""
+        self.assertFalse(m.String("abc") == 1.5)
+        self.assertFalse(m.String("abc") == [1, 2])
+        self.assertTrue(m.String("abc") != 1.5)
+        self.assertTrue(m.String("abc") != [1, 2])
+
     def test_string_ne_str(self):
         """Tests String != str."""
         self.assertTrue(m.String("abc") != "xyz")

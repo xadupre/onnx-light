@@ -1171,15 +1171,15 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
           "Returns the length of the string.")
       .def(
           "__eq__",
-          [](const utils::String &self, const std::string &s) -> int { return self == s; },
-          "Compares two strings.")
+          [](const utils::String &self, const std::string &s) -> bool { return self == s; },
+          "Compares two strings.", nb::is_operator())
       .def(
           "__eq__",
-          [](const utils::String &self, const nb::bytes &bytes_obj) -> int {
+          [](const utils::String &self, const nb::bytes &bytes_obj) -> bool {
             std::string st(static_cast<const char *>(bytes_obj.data()), bytes_obj.size());
             return self == st;
           },
-          "Compares to a byte string.")
+          "Compares to a byte string.", nb::is_operator())
       .def(
           "__eq__",
           [](const utils::String &self, const utils::String &s) -> bool { return self == s; },

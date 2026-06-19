@@ -22,10 +22,37 @@ class TestStringBinding(ExtTestCase):
         self.assertEqual(value, "abcd")
         self.assertIsInstance(value, str)
 
+    def test_string_str(self):
+        """Tests str(String) returns a Python string."""
+        value = str(m.String("abc"))
+        self.assertEqual(value, "abc")
+        self.assertIsInstance(value, str)
+
     def test_string_eq_string(self):
         """Tests String == String."""
         self.assertTrue(m.String("abc") == m.String("abc"))
         self.assertFalse(m.String("abc") == m.String("xyz"))
+
+    def test_string_eq_str(self):
+        """Tests String == str on both sides."""
+        self.assertTrue(m.String("abc") == "abc")
+        self.assertTrue("abc" == m.String("abc"))
+        self.assertFalse(m.String("abc") == "xyz")
+        self.assertFalse("xyz" == m.String("abc"))
+
+    def test_string_eq_bytes(self):
+        """Tests String == bytes on both sides."""
+        self.assertTrue(m.String("abc") == b"abc")
+        self.assertTrue(b"abc" == m.String("abc"))
+        self.assertFalse(m.String("abc") == b"xyz")
+        self.assertFalse(b"xyz" == m.String("abc"))
+
+    def test_string_eq_other_type(self):
+        """Tests String == unsupported type returns False instead of raising."""
+        self.assertFalse(m.String("abc") == 12)
+        self.assertFalse(12 == m.String("abc"))
+        self.assertTrue(m.String("abc") != 12)
+        self.assertTrue(12 != m.String("abc"))
 
     def test_string_ne_str(self):
         """Tests String != str."""

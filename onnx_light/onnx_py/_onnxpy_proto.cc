@@ -1271,7 +1271,16 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
             nb::str py_str(self.data(), self.size());
             return PyObject_Hash(py_str.ptr());
           },
-          "Returns the same hash as the equivalent Python str, enabling use as dict keys.");
+          "Returns the same hash as the equivalent Python str, enabling use as dict keys.")
+      .def(
+          "decode",
+          [](const utils::String &self, const char *encoding, const char *errors) -> nb::object {
+            std::string s = self.as_string();
+            nb::bytes data(s.data(), s.size());
+            return data.attr("decode")(encoding, errors);
+          },
+          nb::arg("encoding") = "utf-8", nb::arg("errors") = "strict",
+          "Decodes the string like a Python :class:`bytes` object, returning a Python str.");
 
   DECLARE_REPEATED_FIELD(int64_t, rep_int64_t);
   define_repeated_field_type(rep_int64_t);

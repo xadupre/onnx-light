@@ -615,7 +615,24 @@ template <typename T> void define_repeated_field_type(nb::class_<utils::Repeated
             return nb::make_iterator(nb::type<utils::RepeatedField<T>>(), "iterator", self.begin(),
                                      self.end());
           },
-          nb::keep_alive<0, 1>(), "Iterates over the elements.");
+          nb::keep_alive<0, 1>(), "Iterates over the elements.")
+      .def(
+          "__eq__",
+          [](utils::RepeatedField<T> &self, nb::list &obj) -> bool {
+            // Compare the size first to avoid materializing the container when
+            // the lengths already differ.
+            if (self.size() != obj.size())
+              return false;
+            // Materialize the container into a python list and delegate to the
+            // python list comparison so element types (``str``/``bytes``/
+            // :class:`String` or numbers) compare as expected.
+            nb::list values;
+            for (auto &it : self) {
+              values.append(nb::cast(it, nb::rv_policy::reference));
+            }
+            return values.equal(obj);
+          },
+          nb::arg("other"), "Compares the container to a list of values.");
 }
 
 template <typename T>

@@ -6,6 +6,7 @@
 
 #include "onnx_kernels/kernels/_helpers/cast_helper.h"
 
+#include "onnx_light_helpers.h"
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -47,10 +48,9 @@ Tensor PromoteToFloat32(const Tensor &src) {
 }
 
 Tensor DemoteFromFloat32(const Tensor &src, int32_t target_dtype) {
-  if (src.data_type != static_cast<int32_t>(DataType::FLOAT)) {
-    throw std::invalid_argument("DemoteFromFloat32: source must be FLOAT, got " +
-                                std::to_string(src.data_type));
-  }
+  EXT_ENFORCE_INVALID(src.data_type == static_cast<int32_t>(DataType::FLOAT),
+                      "DemoteFromFloat32: source must be FLOAT, got ",
+                      std::to_string(src.data_type));
 
   const int64_t n = src.element_count();
   const float *fp32 = reinterpret_cast<const float *>(src.bytes());

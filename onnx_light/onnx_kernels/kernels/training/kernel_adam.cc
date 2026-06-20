@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/training/include_training_kernels.h"
 
+#include "onnx_light_helpers.h"
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -104,11 +105,9 @@ void Adam::operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor
     const double alpha_pow = std::pow(static_cast<double>(alpha), static_cast<double>(T_val));
     const double beta_pow = std::pow(static_cast<double>(beta), static_cast<double>(T_val));
     const double denom = 1.0 - alpha_pow;
-    if (denom == 0.0) {
-      throw std::invalid_argument(std::string(kAdamName) +
-                                  ": bias correction divides by zero (1 - alpha^T == 0); "
-                                  "choose 'alpha' != 1.");
-    }
+    EXT_ENFORCE_INVALID(denom != 0.0, kAdamName,
+                        ": bias correction divides by zero (1 - alpha^T == 0); choose 'alpha' != "
+                        "1.");
     R_adjusted = static_cast<float>(static_cast<double>(R_val) * std::sqrt(1.0 - beta_pow) / denom);
   }
 

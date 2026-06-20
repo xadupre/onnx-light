@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_light_helpers.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -634,10 +635,10 @@ std::vector<int64_t> ApplyKeepAspectRatioPolicy(const std::vector<int64_t> &requ
 }
 
 void CheckSupportedAttrs(const Resize::Attributes &attrs) {
-  if (!IsNearestMode(attrs.mode) && !IsLinearMode(attrs.mode) && !IsCubicMode(attrs.mode)) {
-    throw std::invalid_argument("kernel::Resize: unsupported interpolation mode '" + attrs.mode +
-                                "'. Supported modes: 'nearest', 'linear'/'bilinear', 'cubic'.");
-  }
+  EXT_ENFORCE_INVALID(IsNearestMode(attrs.mode) || IsLinearMode(attrs.mode) ||
+                          IsCubicMode(attrs.mode),
+                      "kernel::Resize: unsupported interpolation mode '", attrs.mode,
+                      "'. Supported modes: 'nearest', 'linear'/'bilinear', 'cubic'.");
 }
 
 // Builds per-axis ``roi_start``/``roi_end`` vectors (length ``rank``) from

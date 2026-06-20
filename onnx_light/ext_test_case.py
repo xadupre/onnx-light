@@ -445,6 +445,21 @@ class InferenceSessionAllTypes:
         }
 
     @staticmethod
+    def _packed_byte_count(n: int, bits: int) -> int:
+        """
+        Returns the number of bytes needed to pack ``n`` values of ``bits`` bits.
+
+        Args:
+            n: Number of logical values.
+            bits: Number of bits per value (2 or 4).
+
+        Returns:
+            The byte count, always at least 1 so a zero-element tensor still has a
+            valid (non-empty) buffer to bind.
+        """
+        return max((n * bits + 7) // 8, 1)
+
+    @staticmethod
     def _pack_sub_byte(array: np.ndarray, bits: int) -> np.ndarray:
         """
         Packs a sub-byte array into a flat ``uint8`` buffer (low bits first).
@@ -462,7 +477,7 @@ class InferenceSessionAllTypes:
         flat = flat & mask
         per_byte = 8 // bits
         n = flat.size
-        nbytes = max((n * bits + 7) // 8, 1)
+        nbytes = InferenceSessionAllTypes._packed_byte_count(n, bits)
         idx = np.arange(n)
         byte_idx = idx // per_byte
         shift = (idx % per_byte) * bits
@@ -598,7 +613,7 @@ class InferenceSessionAllTypes:
                     isinstance(d, int) for d in shape
                 ), f"Sub-byte output {meta.name!r} requires a static shape, got {shape!r}"
                 n = int(np.prod(shape))
-                buffer = np.zeros(max((n * bits + 7) // 8, 1), dtype=np.uint8)
+                buffer = np.zeros(self._packed_byte_count(n, bits), dtype=np.uint8)
                 io_binding.bind_output(  # type: ignore[attr-defined]
                     meta.name,
                     "cpu",  # device_type

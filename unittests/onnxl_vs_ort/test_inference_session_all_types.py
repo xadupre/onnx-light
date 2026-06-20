@@ -90,6 +90,58 @@ class TestInferenceSessionAllTypes(ExtTestCase):
         expected = np.array([1.0, 2.0, 3.0], dtype=np.float16)
         np.testing.assert_allclose(outputs[0], expected, rtol=1e-3)
 
+    def test_cast_float_to_int2(self):
+        """Tests Cast from FLOAT to INT2 uses IOBinding path."""
+        import ml_dtypes  # noqa: F401
+
+        # Create a Cast model converting FLOAT to INT2
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Cast", ["X"], ["Y"], to=TensorProto.INT2)],
+                "cast_float_to_int2",
+                [oh.make_tensor_value_info("X", TensorProto.FLOAT, [4])],
+                [oh.make_tensor_value_info("Y", TensorProto.INT2, [4])],
+            ),
+            opset_imports=[oh.make_opsetid("", 23)],
+        )
+
+        # Run inference
+        sess = InferenceSessionAllTypes(model)
+        x = np.array([-2.0, -1.0, 0.0, 1.0], dtype=np.float32)
+        outputs = sess.run(None, {"X": x})
+
+        # Verify results - output should be INT2
+        self.assertEqual(outputs[0].dtype, np.dtype("int2"))
+        expected = np.array([-2, -1, 0, 1], dtype=np.dtype("int2"))
+        np.testing.assert_array_equal(
+            outputs[0].astype(np.int32), expected.astype(np.int32)
+        )
+
+    def test_cast_int2_to_float(self):
+        """Tests Cast from INT2 to FLOAT uses IOBinding path."""
+        import ml_dtypes  # noqa: F401
+
+        # Create a Cast model converting INT2 to FLOAT
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Cast", ["X"], ["Y"], to=TensorProto.FLOAT)],
+                "cast_int2_to_float",
+                [oh.make_tensor_value_info("X", TensorProto.INT2, [4])],
+                [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [4])],
+            ),
+            opset_imports=[oh.make_opsetid("", 23)],
+        )
+
+        # Run inference
+        sess = InferenceSessionAllTypes(model)
+        x = np.array([-2, -1, 0, 1], dtype=np.dtype("int2"))
+        outputs = sess.run(None, {"X": x})
+
+        # Verify results - output should be FLOAT
+        self.assertEqual(outputs[0].dtype, np.float32)
+        expected = np.array([-2.0, -1.0, 0.0, 1.0], dtype=np.float32)
+        np.testing.assert_array_equal(outputs[0], expected)
+
     def test_identity_model(self):
         """Tests Identity op with standard dtype."""
         # Create an Identity model

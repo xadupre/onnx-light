@@ -113,13 +113,12 @@ class TestInferenceSessionAllTypes(ExtTestCase):
         # Verify results - output should be INT2
         self.assertEqual(outputs[0].dtype, np.dtype("int2"))
         expected = np.array([-2, -1, 0, 1], dtype=np.dtype("int2"))
-        np.testing.assert_array_equal(
-            outputs[0].astype(np.int32), expected.astype(np.int32)
-        )
+        np.testing.assert_array_equal(outputs[0].astype(np.int32), expected.astype(np.int32))
 
     def test_cast_int2_to_float(self):
         """Tests Cast from INT2 to FLOAT uses IOBinding path."""
         import ml_dtypes  # noqa: F401
+        import onnxruntime as ort
 
         # Create a Cast model converting INT2 to FLOAT
         model = oh.make_model(
@@ -131,6 +130,13 @@ class TestInferenceSessionAllTypes(ExtTestCase):
             ),
             opset_imports=[oh.make_opsetid("", 23)],
         )
+
+        # Not every onnxruntime build registers a Cast kernel consuming INT2
+        # inputs. Skip the test when the model cannot be loaded.
+        try:
+            ort.InferenceSession(model.SerializeToString(), providers=["CPUExecutionProvider"])
+        except ort.capi.onnxruntime_pybind11_state.InvalidGraph as e:
+            self.skipTest(f"onnxruntime does not support Cast from INT2: {e}")
 
         # Run inference
         sess = InferenceSessionAllTypes(model)

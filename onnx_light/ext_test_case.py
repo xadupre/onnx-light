@@ -428,9 +428,12 @@ class InferenceSessionAllTypes:
         """
         Returns the sub-byte ONNX dtypes ORT packs into bytes through IOBinding.
 
-        Maps the ORT type name to ``(bits, signed, onnx_element_type, numpy_dtype_name)``.
         ORT stores these types packed (several values per byte), so the wrapper
         packs inputs and unpacks outputs around the raw memory buffers.
+
+        Returns:
+            A dictionary mapping the ORT type name (e.g. ``"tensor(int2)"``) to a
+            tuple ``(bits, signed, onnx_element_type, numpy_dtype_name)``.
         """
         from onnx_light.onnx import TensorProto
 
@@ -443,7 +446,17 @@ class InferenceSessionAllTypes:
 
     @staticmethod
     def _pack_sub_byte(array: np.ndarray, bits: int) -> np.ndarray:
-        """Packs a sub-byte array into a flat ``uint8`` buffer (low bits first)."""
+        """
+        Packs a sub-byte array into a flat ``uint8`` buffer (low bits first).
+
+        Args:
+            array: Array of sub-byte values (one logical value per element).
+            bits: Number of bits per value (2 or 4).
+
+        Returns:
+            A 1-D ``uint8`` buffer holding the values packed several per byte,
+            matching the layout ONNX Runtime expects for sub-byte tensors.
+        """
         flat = np.asarray(array).reshape(-1).astype(np.int64)
         mask = (1 << bits) - 1
         flat = flat & mask
@@ -461,7 +474,19 @@ class InferenceSessionAllTypes:
     def _unpack_sub_byte(
         buffer: np.ndarray, shape: Tuple[int, ...], bits: int, signed: bool, numpy_dtype_name: str
     ) -> np.ndarray:
-        """Unpacks a flat ``uint8`` buffer into a sub-byte array of the given shape."""
+        """
+        Unpacks a flat ``uint8`` buffer into a sub-byte array of the given shape.
+
+        Args:
+            buffer: 1-D ``uint8`` buffer holding the values packed several per byte.
+            shape: Target shape of the unpacked array.
+            bits: Number of bits per value (2 or 4).
+            signed: Whether the values are signed (two's complement).
+            numpy_dtype_name: Name of the ``ml_dtypes`` dtype of the result.
+
+        Returns:
+            An array of the requested shape and dtype with one logical value per element.
+        """
         n = int(np.prod(shape)) if shape else 1
         per_byte = 8 // bits
         mask = (1 << bits) - 1

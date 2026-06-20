@@ -1,7 +1,6 @@
 """Tests for helpers in onnx_light.ext_test_case (e.g. ``hide_stdout``)."""
 
 import os
-import sys
 import unittest
 from io import StringIO
 from unittest import mock
@@ -93,4 +92,4 @@ class TestHideStdout(ExtTestCase):
 
 
 if __name__ == "__main__":
-    sys.exit(unittest.main(verbosity=2))
+    unittest.main(verbosity=2)

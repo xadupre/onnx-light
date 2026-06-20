@@ -82,14 +82,18 @@ class TestGetTotalMemoryGb(ExtTestCase):
         def fake_sysconf(name):
             return {"SC_PHYS_PAGES": 1024**2, "SC_PAGE_SIZE": 1024}[name]
 
-        with mock.patch("onnx_light.doc.os.sysconf", side_effect=fake_sysconf):
+        # ``os.sysconf`` does not exist on Windows, so ``create=True`` is needed
+        # to patch it there.
+        with mock.patch("onnx_light.doc.os.sysconf", side_effect=fake_sysconf, create=True):
             memory = doc_module.get_total_memory_gb()
         self.assertAlmostEqual(memory, 1.0)
 
     def test_falls_back_to_meminfo(self):
         meminfo = "MemTotal:        2097152 kB\nMemFree:         1048576 kB\n"
         with (
-            mock.patch("onnx_light.doc.os.sysconf", side_effect=OSError("unsupported")),
+            mock.patch(
+                "onnx_light.doc.os.sysconf", side_effect=OSError("unsupported"), create=True
+            ),
             mock.patch("builtins.open", mock.mock_open(read_data=meminfo)),
         ):
             memory = doc_module.get_total_memory_gb()
@@ -97,7 +101,9 @@ class TestGetTotalMemoryGb(ExtTestCase):
 
     def test_returns_none_when_unavailable(self):
         with (
-            mock.patch("onnx_light.doc.os.sysconf", side_effect=ValueError("unsupported")),
+            mock.patch(
+                "onnx_light.doc.os.sysconf", side_effect=ValueError("unsupported"), create=True
+            ),
             mock.patch("builtins.open", side_effect=OSError("no /proc")),
         ):
             self.assertIsNone(doc_module.get_total_memory_gb())

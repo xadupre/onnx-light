@@ -14,17 +14,18 @@ namespace utils {
 template <typename T>
 std::vector<std::string> RepeatedField<T>::PrintToVectorString(utils::PrintOptions &options) const {
   std::vector<std::string> rows{"["};
+  std::string indent = utils::indentation_string(options);
   for (const auto &p : values_) {
     std::vector<std::string> r = p.PrintToVectorString(options);
     for (size_t i = 0; i < r.size(); ++i) {
       if (i + 1 == r.size()) {
         if (!r[i].empty() && r[i].back() == ',') {
-          rows.push_back(onnx_light_helpers::MakeString("  ", r[i]));
+          rows.push_back(onnx_light_helpers::MakeString(indent, r[i]));
         } else {
-          rows.push_back(onnx_light_helpers::MakeString("  ", r[i], ","));
+          rows.push_back(onnx_light_helpers::MakeString(indent, r[i], ","));
         }
       } else {
-        rows.push_back(onnx_light_helpers::MakeString("  ", r[i]));
+        rows.push_back(onnx_light_helpers::MakeString(indent, r[i]));
       }
     }
   }
@@ -75,17 +76,18 @@ template <typename T>
 std::vector<std::string>
 RepeatedProtoField<T>::PrintToVectorString(utils::PrintOptions &options) const {
   std::vector<std::string> rows{"["};
+  std::string indent = utils::indentation_string(options);
   for (const auto &p : values_) {
     std::vector<std::string> r = p->PrintToVectorString(options);
     for (size_t i = 0; i < r.size(); ++i) {
       if (i + 1 == r.size()) {
         if (!r[i].empty() && r[i].back() == ',') {
-          rows.push_back(onnx_light_helpers::MakeString("  ", r[i]));
+          rows.push_back(onnx_light_helpers::MakeString(indent, r[i]));
         } else {
-          rows.push_back(onnx_light_helpers::MakeString("  ", r[i], ","));
+          rows.push_back(onnx_light_helpers::MakeString(indent, r[i], ","));
         }
       } else {
-        rows.push_back(onnx_light_helpers::MakeString("  ", r[i]));
+        rows.push_back(onnx_light_helpers::MakeString(indent, r[i]));
       }
     }
   }

@@ -1205,7 +1205,12 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
               "case  but the model structure is still available")
       .def_rw("raw_data_threshold", &utils::PrintOptions::raw_data_threshold,
               "if skip_raw_data is true, raw data will be printed only if it is larger than the "
-              "threshold");
+              "threshold")
+      .def_rw("indentation", &utils::PrintOptions::indentation,
+              "number of spaces used for a single indentation level")
+      .def_rw("inline_threshold", &utils::PrintOptions::inline_threshold,
+              "repeated fields with at most this many elements are printed inline on a single row, "
+              "larger fields are spread over multiple rows");
 
   nb::class_<utils::String>(m, "String", "Simplified string with no final null character.")
       .def(nb::init<std::string>())

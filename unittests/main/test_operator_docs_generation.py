@@ -572,6 +572,78 @@ class TestGenOperators(ExtTestCase):
         content = doc_module._schema_to_rst(self._deprecation_schema("Foo", deprecated=False))
         self.assertNotIn("This operator is **deprecated**.", content)
 
+    def test_schema_to_rst_renders_full_section(self):
+        schema = SimpleNamespace(
+            name="Gemm",
+            domain="",
+            since_version=13,
+            doc="General matrix multiplication.",
+            deprecated=False,
+            inputs=[
+                SimpleNamespace(
+                    name="A", type_str="T", option="Single", description="First operand."
+                ),
+                SimpleNamespace(
+                    name="C", type_str="T", option="Optional", description="Optional bias."
+                ),
+            ],
+            outputs=[
+                SimpleNamespace(name="Y", type_str="T", option="Single", description="Result.")
+            ],
+            attributes={
+                "beta": SimpleNamespace(type=1, description="Scalar multiplier for C."),
+                "alpha": SimpleNamespace(type=1, description="Scalar multiplier for A*B."),
+            },
+            type_constraints=[
+                SimpleNamespace(
+                    type_param_str="T",
+                    description="Constrain input and output types.",
+                    allowed_type_strs=["tensor(float)", "tensor(double)"],
+                )
+            ],
+            min_output=1,
+            max_output=1,
+        )
+        content = doc_module._schema_to_rst(schema)
+        # Section header rendered with the operator name and version.
+        self.assertIn("**Gemm**-13", content)
+        self.assertIn("General matrix multiplication.", content)
+        # Inputs section, including the optional-parameter suffix.
+        self.assertIn("**Inputs**", content)
+        self.assertIn("- **A** (*T*): First operand.", content)
+        self.assertIn("- **C** (*T*) (optional): Optional bias.", content)
+        # Outputs section.
+        self.assertIn("**Outputs**", content)
+        self.assertIn("- **Y** (*T*): Result.", content)
+        # Attributes are sorted alphabetically.
+        self.assertIn("**Attributes**", content)
+        self.assertLess(content.index("- **alpha**"), content.index("- **beta**"))
+        # Type constraints list the allowed types sorted alphabetically.
+        self.assertIn("**Type Constraints**", content)
+        self.assertIn("- **T**: Constrain input and output types.", content)
+        self.assertIn("Allowed types: tensor(double), tensor(float).", content)
+
+    def test_schema_to_rst_omits_empty_sections(self):
+        schema = SimpleNamespace(
+            name="NoOp",
+            domain="",
+            since_version=1,
+            doc="",
+            deprecated=False,
+            inputs=[],
+            outputs=[],
+            attributes={},
+            type_constraints=[],
+            min_output=0,
+            max_output=0,
+        )
+        content = doc_module._schema_to_rst(schema)
+        self.assertIn("**NoOp**-1", content)
+        self.assertNotIn("**Inputs**", content)
+        self.assertNotIn("**Outputs**", content)
+        self.assertNotIn("**Attributes**", content)
+        self.assertNotIn("**Type Constraints**", content)
+
     def test_domain_page_table_reports_deprecation_status(self):
         schemas = [
             self._deprecation_schema("Deprecated", deprecated=True),

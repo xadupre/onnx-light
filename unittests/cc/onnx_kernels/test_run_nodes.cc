@@ -9,6 +9,7 @@
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_kernels/kernels/training/include_training_kernels.h"
 #include "onnx_kernels/run_nodes.h"
+#include "onnx_kernels/simple_sequence.h"
 #include "onnx_kernels/simple_tensor.h"
 #include "onnx_proto/onnx.h"
 
@@ -32,6 +33,7 @@ using onnx_kernels::RunModel;
 using onnx_kernels::RunNode;
 using onnx_kernels::RunNodes;
 using onnx_kernels::RuntimeContext;
+using onnx_kernels::Sequence;
 using onnx_kernels::Tensor;
 using onnx_kernels::TensorFromProto;
 using onnx_kernels::TensorMap;
@@ -57,6 +59,157 @@ NodeProto MakeNode(const std::string &op_type, const std::vector<std::string> &i
     node.add_output(name);
   }
   return node;
+}
+
+// Declares a sequence-typed graph input/output named ``name`` carrying
+// ``FLOAT`` tensor elements. Used to build the body subgraph of a Loop
+// node whose loop-carried state is sequence-typed.
+void AddSequenceFloatValueInfo(ValueInfoProto *vi, const std::string &name) {
+  vi->set_name(name);
+  TypeProto *tp = vi->ref_type().add_sequence_type()->add_elem_type();
+  tp->add_tensor_type()->set_elem_type(static_cast<int>(TensorProto::DataType::FLOAT));
+}
+
+// Appends a ``Constant`` node producing a 1-D INT64 tensor ``[0]`` under
+// the output name ``out`` (used as the ``axes`` input of ``Unsqueeze``).
+void AddInt64AxesConstant(GraphProto &g, const std::string &out) {
+  NodeProto *n = g.add_node();
+  n->set_op_type("Constant");
+  n->add_output(out);
+  AttributeProto *a = n->add_attribute();
+  a->set_name("value");
+  a->set_type(AttributeProto::AttributeType::TENSOR);
+  TensorProto *t = a->add_t();
+  t->set_data_type(TensorProto::DataType::INT64);
+  t->add_dims(1);
+  t->add_int64_data(0);
+}
+
+// Appends nodes that turn the INT64 scalar ``iter`` into a ``FLOAT[1]``
+// tensor under the output name ``out`` (Unsqueeze to ``[1]`` then Cast).
+void AddIterAsFloat1D(GraphProto &g, const std::string &out) {
+  AddInt64AxesConstant(g, "axes");
+  {
+    NodeProto *n = g.add_node();
+    n->set_op_type("Unsqueeze");
+    n->add_input("iter");
+    n->add_input("axes");
+    n->add_output("iter_1d");
+  }
+  {
+    NodeProto *n = g.add_node();
+    n->set_op_type("Cast");
+    n->add_input("iter_1d");
+    n->add_output(out);
+    AttributeProto *a = n->add_attribute();
+    a->set_name("to");
+    a->set_type(AttributeProto::AttributeType::INT);
+    a->set_i(static_cast<int64_t>(TensorProto::DataType::FLOAT));
+  }
+}
+
+// Body subgraph for a Loop whose only loop-carried state is a
+// sequence. Inputs are ``(iter, cond_in, seq_in)``; outputs are
+// ``(cond_out, seq_out)`` where ``seq_out = SequenceInsert(seq_in,
+// (float)iter)`` so the sequence grows by one ``FLOAT[1]`` element per
+// iteration.
+GraphProto BuildSequenceLoopBody() {
+  GraphProto body;
+  body.set_name("seq_loop_body");
+  body.add_input()->set_name("iter");
+  body.add_input()->set_name("cond_in");
+  AddSequenceFloatValueInfo(body.add_input(), "seq_in");
+
+  {
+    NodeProto *n = body.add_node();
+    n->set_op_type("Identity");
+    n->add_input("cond_in");
+    n->add_output("cond_out");
+  }
+  AddIterAsFloat1D(body, "val");
+  {
+    NodeProto *n = body.add_node();
+    n->set_op_type("SequenceInsert");
+    n->add_input("seq_in");
+    n->add_input("val");
+    n->add_output("seq_out");
+  }
+
+  body.add_output()->set_name("cond_out");
+  AddSequenceFloatValueInfo(body.add_output(), "seq_out");
+  return body;
+}
+
+// Body subgraph for a Loop with mixed state: a tensor loop-carried
+// accumulator and a sequence loop-carried state, plus one scan output.
+// Inputs are ``(iter, cond_in, acc_in, seq_in)``; outputs are
+// ``(cond_out, acc_out, seq_out, scan_out)`` where
+// ``acc_out = acc_in + 1``, ``scan_out = acc_out`` and
+// ``seq_out = SequenceInsert(seq_in, (float)iter)``.
+GraphProto BuildMixedSequenceLoopBody() {
+  GraphProto body;
+  body.set_name("mixed_seq_loop_body");
+  body.add_input()->set_name("iter");
+  body.add_input()->set_name("cond_in");
+  body.add_input()->set_name("acc_in");
+  AddSequenceFloatValueInfo(body.add_input(), "seq_in");
+
+  {
+    NodeProto *n = body.add_node();
+    n->set_op_type("Identity");
+    n->add_input("cond_in");
+    n->add_output("cond_out");
+  }
+  {
+    NodeProto *n = body.add_node();
+    n->set_op_type("Constant");
+    n->add_output("one");
+    AttributeProto *a = n->add_attribute();
+    a->set_name("value");
+    a->set_type(AttributeProto::AttributeType::TENSOR);
+    TensorProto *t = a->add_t();
+    t->set_data_type(TensorProto::DataType::FLOAT);
+    t->add_float_data(1.0f);
+  }
+  {
+    NodeProto *n = body.add_node();
+    n->set_op_type("Add");
+    n->add_input("acc_in");
+    n->add_input("one");
+    n->add_output("acc_out");
+  }
+  {
+    NodeProto *n = body.add_node();
+    n->set_op_type("Identity");
+    n->add_input("acc_out");
+    n->add_output("scan_out");
+  }
+  AddIterAsFloat1D(body, "val");
+  {
+    NodeProto *n = body.add_node();
+    n->set_op_type("SequenceInsert");
+    n->add_input("seq_in");
+    n->add_input("val");
+    n->add_output("seq_out");
+  }
+
+  body.add_output()->set_name("cond_out");
+  body.add_output()->set_name("acc_out");
+  AddSequenceFloatValueInfo(body.add_output(), "seq_out");
+  body.add_output()->set_name("scan_out");
+  return body;
+}
+
+// Builds a ``Loop`` node binding ``inputs``/``outputs`` and attaching
+// ``body`` as its ``body`` graph attribute.
+NodeProto MakeLoopNode(const std::vector<std::string> &inputs,
+                       const std::vector<std::string> &outputs, GraphProto body) {
+  NodeProto loop = MakeNode("Loop", inputs, outputs);
+  AttributeProto *body_attr = loop.add_attribute();
+  body_attr->set_name("body");
+  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  *body_attr->add_g() = std::move(body);
+  return loop;
 }
 
 } // namespace
@@ -2232,6 +2385,80 @@ TEST(RunModel, LoopNodeRunsBodySubgraph) {
   EXPECT_FLOAT_EQ(scan[0], 1.0f);
   EXPECT_FLOAT_EQ(scan[1], 2.0f);
   EXPECT_FLOAT_EQ(scan[2], 3.0f);
+}
+
+// RunLoopWithSequenceState: a Loop whose only loop-carried state is a
+// sequence. Each body iteration appends ``(float)iter`` to the sequence
+// via SequenceInsert, so a trip count of 3 yields ``[0, 1, 2]``.
+TEST(RunLoopWithSequenceState, SequenceOnlyStateGrowsPerIteration) {
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.Set("M", Tensor::FromInt64("M", {}, {3}));
+  rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  rt.PutSequence("seq_init", Sequence("seq_init", static_cast<int32_t>(DataType::FLOAT), {}));
+
+  RunNode(MakeLoopNode({"M", "cond", "seq_init"}, {"seq_out"}, BuildSequenceLoopBody()), rt);
+
+  ASSERT_TRUE(rt.HasSequence("seq_out"));
+  const Sequence &seq = rt.GetSequence("seq_out");
+  ASSERT_EQ(seq.size(), 3u);
+  EXPECT_EQ(seq.elem_type, static_cast<int32_t>(DataType::FLOAT));
+  for (std::size_t i = 0; i < seq.size(); ++i) {
+    ASSERT_EQ(seq.at(i).shape, std::vector<int64_t>({1}));
+    EXPECT_FLOAT_EQ(seq.at(i).AsFloat()[0], static_cast<float>(i));
+  }
+}
+
+// RunLoopWithSequenceState: the loop ``cond`` input set to ``false``
+// short-circuits the loop, so the sequence loop-carried output equals
+// the (non-empty) input sequence unchanged.
+TEST(RunLoopWithSequenceState, ZeroTripReturnsInputSequence) {
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.Set("M", Tensor::FromInt64("M", {}, {5}));
+  rt.Set("cond", Tensor::FromBool("cond", {}, {0}));
+  rt.PutSequence("seq_init", Sequence("seq_init", static_cast<int32_t>(DataType::FLOAT),
+                                      {Tensor::FromFloat("e0", {1}, {9.0f})}));
+
+  RunNode(MakeLoopNode({"M", "cond", "seq_init"}, {"seq_out"}, BuildSequenceLoopBody()), rt);
+
+  ASSERT_TRUE(rt.HasSequence("seq_out"));
+  const Sequence &seq = rt.GetSequence("seq_out");
+  ASSERT_EQ(seq.size(), 1u);
+  EXPECT_FLOAT_EQ(seq.at(0).AsFloat()[0], 9.0f);
+}
+
+// RunLoopWithSequenceState: mixed state where a tensor accumulator and a
+// sequence are both loop-carried, plus a per-iteration scan output. The
+// presence of the sequence state routes the Loop through
+// RunLoopWithSequenceState (rather than kernel::Loop), and this exercises
+// the tensor-state, sequence-state and scan-stacking paths together.
+TEST(RunLoopWithSequenceState, MixedTensorSequenceAndScanOutputs) {
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.Set("M", Tensor::FromInt64("M", {}, {3}));
+  rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  rt.Set("acc_init", Tensor::FromFloat("acc_init", {}, {0.0f}));
+  rt.PutSequence("seq_init", Sequence("seq_init", static_cast<int32_t>(DataType::FLOAT), {}));
+
+  RunNode(MakeLoopNode({"M", "cond", "acc_init", "seq_init"}, {"acc_final", "seq_final", "scan"},
+                       BuildMixedSequenceLoopBody()),
+          rt);
+
+  ASSERT_TRUE(rt.Has("acc_final"));
+  EXPECT_FLOAT_EQ(rt.Get("acc_final").AsFloat()[0], 3.0f);
+
+  ASSERT_TRUE(rt.HasSequence("seq_final"));
+  const Sequence &seq = rt.GetSequence("seq_final");
+  ASSERT_EQ(seq.size(), 3u);
+  for (std::size_t i = 0; i < seq.size(); ++i) {
+    EXPECT_FLOAT_EQ(seq.at(i).AsFloat()[0], static_cast<float>(i));
+  }
+
+  ASSERT_TRUE(rt.Has("scan"));
+  const Tensor &scan = rt.Get("scan");
+  ASSERT_EQ(scan.shape, (std::vector<int64_t>{3}));
+  const float *scan_data = scan.AsFloat();
+  EXPECT_FLOAT_EQ(scan_data[0], 1.0f);
+  EXPECT_FLOAT_EQ(scan_data[1], 2.0f);
+  EXPECT_FLOAT_EQ(scan_data[2], 3.0f);
 }
 
 TEST(RunModel, ScanNodeRunsBodySubgraph) {

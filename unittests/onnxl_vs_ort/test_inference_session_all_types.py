@@ -94,6 +94,8 @@ class TestInferenceSessionAllTypes(ExtTestCase):
         """Tests Cast from FLOAT to INT2 uses IOBinding path."""
         import ml_dtypes  # noqa: F401
 
+        from onnx_light.onnx.reference import ReferenceEvaluator
+
         # Create a Cast model converting FLOAT to INT2
         model = oh.make_model(
             oh.make_graph(
@@ -105,20 +107,25 @@ class TestInferenceSessionAllTypes(ExtTestCase):
             opset_imports=[oh.make_opsetid("", 23)],
         )
 
-        # Run inference
-        sess = InferenceSessionAllTypes(model)
         x = np.array([-2.0, -1.0, 0.0, 1.0], dtype=np.float32)
+
+        # Run inference through onnxruntime (IOBinding path)
+        sess = InferenceSessionAllTypes(model)
         outputs = sess.run(None, {"X": x})
 
-        # Verify results - output should be INT2
+        # Compare against the reference evaluator
+        expected = ReferenceEvaluator(model).run(None, {"X": x})
+
         self.assertEqual(outputs[0].dtype, np.dtype("int2"))
-        expected = np.array([-2, -1, 0, 1], dtype=np.dtype("int2"))
-        np.testing.assert_array_equal(outputs[0].astype(np.int32), expected.astype(np.int32))
+        self.assertEqual(outputs[0].dtype, expected[0].dtype)
+        np.testing.assert_array_equal(outputs[0].astype(np.int32), expected[0].astype(np.int32))
 
     def test_cast_int2_to_float(self):
         """Tests Cast from INT2 to FLOAT uses IOBinding path."""
         import ml_dtypes  # noqa: F401
         import onnxruntime as ort
+
+        from onnx_light.onnx.reference import ReferenceEvaluator
 
         # Create a Cast model converting INT2 to FLOAT
         model = oh.make_model(
@@ -138,15 +145,18 @@ class TestInferenceSessionAllTypes(ExtTestCase):
         except ort.capi.onnxruntime_pybind11_state.InvalidGraph as e:
             self.skipTest(f"onnxruntime does not support Cast from INT2: {e}")
 
-        # Run inference
-        sess = InferenceSessionAllTypes(model)
         x = np.array([-2, -1, 0, 1], dtype=np.dtype("int2"))
+
+        # Run inference through onnxruntime (IOBinding path)
+        sess = InferenceSessionAllTypes(model)
         outputs = sess.run(None, {"X": x})
 
-        # Verify results - output should be FLOAT
+        # Compare against the reference evaluator
+        expected = ReferenceEvaluator(model).run(None, {"X": x})
+
         self.assertEqual(outputs[0].dtype, np.float32)
-        expected = np.array([-2.0, -1.0, 0.0, 1.0], dtype=np.float32)
-        np.testing.assert_array_equal(outputs[0], expected)
+        self.assertEqual(outputs[0].dtype, expected[0].dtype)
+        np.testing.assert_array_equal(outputs[0], expected[0])
 
     def test_identity_model(self):
         """Tests Identity op with standard dtype."""

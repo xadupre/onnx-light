@@ -372,6 +372,7 @@ class InferenceSessionAllTypes:
     @classmethod
     def mapping_numpy_dtype_to_onnx(cls):
         """Returns mapping from NumPy dtype to ONNX TensorProto data type."""
+        import ml_dtypes  # noqa: F401
         from onnx_light.onnx import TensorProto
 
         return {
@@ -388,6 +389,17 @@ class InferenceSessionAllTypes:
             np.dtype("uint32"): TensorProto.UINT32,
             np.dtype("uint64"): TensorProto.UINT64,
             np.dtype("O"): TensorProto.STRING,
+            #
+            np.dtype("uint4"): TensorProto.UINT4,
+            np.dtype("int4"): TensorProto.INT4,
+            np.dtype("uint2"): TensorProto.UINT2,
+            np.dtype("int2"): TensorProto.INT2,
+            np.dtype("float8_e4m3fn"): TensorProto.FLOAT8E4M3FN,
+            np.dtype("float8_e4m3fnuz"): TensorProto.FLOAT8E4M3FNUZ,
+            np.dtype("float8_e5m2"): TensorProto.FLOAT8E5M2,
+            np.dtype("float8_e5m2fnuz"): TensorProto.FLOAT8E5M2FNUZ,
+            np.dtype("bfloat16"): TensorProto.BFLOAT16,
+            # np.dtype("float4e2m1"): TensorProto.FLOAT4E2M1,
         }
 
     @classmethod
@@ -429,7 +441,7 @@ class InferenceSessionAllTypes:
 
     def run(
         self, output_names: Optional[List[str]], input_feed: dict[str, np.ndarray]
-    ) -> dict[str, np.ndarray]:
+    ) -> List[np.ndarray]:
         """
         Runs the model with support for all ONNX dtypes.
 
@@ -489,4 +501,4 @@ class InferenceSessionAllTypes:
 
         # Get outputs
         outputs = io_binding.get_outputs()
-        return dict(zip(output_names, [out.numpy() for out in outputs]))
+        return [out.numpy() for out in outputs]

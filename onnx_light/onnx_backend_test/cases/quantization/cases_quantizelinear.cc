@@ -65,9 +65,9 @@ namespace {
 // reference Tensor helpers do not support the blocked layout yet.
 // ---------------------------------------------------------------------------
 void RegisterQuantizeLinearCases(std::vector<TestCase> &registry) {
-  const OpsetId opset = DefaultOpset(19);
-  const OpsetId opset_v21 = DefaultOpset(21); // For FLOAT8, INT4, UINT4
-  const OpsetId opset_v23 = DefaultOpset(23); // For FLOAT4E2M1
+  const OpsetId opset = DefaultOpset(25);
+  const OpsetId opset_v21 = DefaultOpset(25); // For FLOAT8, INT4, UINT4
+  const OpsetId opset_v23 = DefaultOpset(25); // For FLOAT4E2M1
   const OpsetId opset_v25 = DefaultOpset(25); // For INT2, UINT2
   const kernel::KernelContext ctx{opset};
   const kernel::QuantizeLinear quantize_kernel{ctx};

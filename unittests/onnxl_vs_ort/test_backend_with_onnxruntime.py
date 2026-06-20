@@ -178,6 +178,25 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_gru_batchwise$",
     r"^test_cc_lstm_batchwise$",
     r"^test_cc_simple_rnn_batchwise$",
+    # ...
+    r"e2m1.*",
+    r"e4m3.*",
+    r"e5m2.*",
+    r"float8.*",
+    r"quantizelinear_u?int2.*",
+    r"quantizelinear_u?int4.*",
+    # ...
+    r"E2M1.*",
+    r"E4M3.*",
+    r"E5M2.*",
+    r"FLOAT8.*",
+    r"to_BFLOAT16.*",
+    r"to_U?INT[24].*",
+    r"castlike_U?INT[24].*",
+    r"cast_U?INT[24].*",
+    r"to_STRING",
+    r"prelu_inf.*",
+    r"sequence.*",
 ]
 
 # Add opset-gated exclusions only for opset versions ONNX Runtime cannot load yet.

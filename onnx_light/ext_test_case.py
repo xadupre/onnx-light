@@ -423,6 +423,97 @@ class InferenceSessionAllTypes:
             "tensor(uint8)": np.uint8,
         }
 
+    @classmethod
+    def mapping_sub_byte_types(cls):
+        """
+        Returns the sub-byte ONNX dtypes ORT packs into bytes through IOBinding.
+
+        ORT stores these types packed (several values per byte), so the wrapper
+        packs inputs and unpacks outputs around the raw memory buffers.
+
+        Returns:
+            A dictionary mapping the ORT type name (e.g. ``"tensor(int2)"``) to a
+            tuple ``(bits, signed, onnx_element_type, numpy_dtype_name)``.
+        """
+        from onnx_light.onnx import TensorProto
+
+        return {
+            "tensor(int4)": (4, True, TensorProto.INT4, "int4"),
+            "tensor(uint4)": (4, False, TensorProto.UINT4, "uint4"),
+            "tensor(int2)": (2, True, TensorProto.INT2, "int2"),
+            "tensor(uint2)": (2, False, TensorProto.UINT2, "uint2"),
+        }
+
+    @staticmethod
+    def _packed_byte_count(n: int, bits: int) -> int:
+        """
+        Returns the number of bytes needed to pack ``n`` values of ``bits`` bits.
+
+        Args:
+            n: Number of logical values.
+            bits: Number of bits per value (2 or 4).
+
+        Returns:
+            The byte count, always at least 1 so a zero-element tensor still has a
+            valid (non-empty) buffer to bind.
+        """
+        return max((n * bits + 7) // 8, 1)
+
+    @staticmethod
+    def _pack_sub_byte(array: np.ndarray, bits: int) -> np.ndarray:
+        """
+        Packs a sub-byte array into a flat ``uint8`` buffer (low bits first).
+
+        Args:
+            array: Array of sub-byte values (one logical value per element).
+            bits: Number of bits per value (2 or 4).
+
+        Returns:
+            A 1-D ``uint8`` buffer holding the values packed several per byte,
+            matching the layout ONNX Runtime expects for sub-byte tensors.
+        """
+        flat = np.asarray(array).reshape(-1).astype(np.int64)
+        mask = (1 << bits) - 1
+        flat = flat & mask
+        per_byte = 8 // bits
+        n = flat.size
+        nbytes = InferenceSessionAllTypes._packed_byte_count(n, bits)
+        idx = np.arange(n)
+        byte_idx = idx // per_byte
+        shift = (idx % per_byte) * bits
+        acc = np.zeros(nbytes, dtype=np.uint64)
+        np.add.at(acc, byte_idx, (flat.astype(np.uint64) << shift.astype(np.uint64)))
+        return acc.astype(np.uint8)
+
+    @staticmethod
+    def _unpack_sub_byte(
+        buffer: np.ndarray, shape: Tuple[int, ...], bits: int, signed: bool, numpy_dtype_name: str
+    ) -> np.ndarray:
+        """
+        Unpacks a flat ``uint8`` buffer into a sub-byte array of the given shape.
+
+        Args:
+            buffer: 1-D ``uint8`` buffer holding the values packed several per byte.
+            shape: Target shape of the unpacked array.
+            bits: Number of bits per value (2 or 4).
+            signed: Whether the values are signed (two's complement).
+            numpy_dtype_name: Name of the ``ml_dtypes`` dtype of the result.
+
+        Returns:
+            An array of the requested shape and dtype with one logical value per element.
+        """
+        n = int(np.prod(shape)) if shape else 1
+        per_byte = 8 // bits
+        mask = (1 << bits) - 1
+        idx = np.arange(n)
+        byte_idx = idx // per_byte
+        shift = (idx % per_byte) * bits
+        vals = (buffer[byte_idx].astype(np.int64) >> shift) & mask
+        if signed:
+            half = 1 << (bits - 1)
+            vals = np.where(vals >= half, vals - (1 << bits), vals)
+        return vals.astype(np.dtype(numpy_dtype_name)).reshape(shape)
+
     def __init__(self, model: "ModelProto", providers: Optional[List[str]] = None):  # type: ignore # noqa: F821
         import onnxruntime as ort
 
@@ -438,6 +529,7 @@ class InferenceSessionAllTypes:
             ) from e
         self._mapping_to_onnx = self.mapping_numpy_dtype_to_onnx()
         self._mapping_to_numpy = self.mapping_ort_type_name_to_numpy_dtype()
+        self._mapping_sub_byte = self.mapping_sub_byte_types()
 
     def run(
         self, output_names: Optional[List[str]], input_feed: dict[str, np.ndarray]
@@ -469,6 +561,8 @@ class InferenceSessionAllTypes:
 
         io_binding = self._sess.io_binding()
 
+        # Keep packed buffers alive until run_with_iobinding completes.
+        input_buffers: List[np.ndarray] = []
         for meta, inp in zip(input_metas, inputs):
             assert (
                 meta.type not in self._mapping_to_numpy
@@ -483,6 +577,21 @@ class InferenceSessionAllTypes:
                 io_binding.bind_cpu_input(meta.name, inp)
                 continue
 
+            sub_byte = self._mapping_sub_byte.get(meta.type)
+            if sub_byte is not None:
+                bits = sub_byte[0]
+                packed = self._pack_sub_byte(inp, bits)
+                input_buffers.append(packed)
+                io_binding.bind_input(  # type: ignore[attr-defined]
+                    meta.name,
+                    "cpu",  # device_type
+                    0,  # device_id
+                    tensor_type,
+                    list(inp.shape),
+                    packed.ctypes.data,
+                )
+                continue
+
             io_binding.bind_input(  # type: ignore[attr-defined]
                 meta.name,
                 "cpu",  # device_type
@@ -492,13 +601,43 @@ class InferenceSessionAllTypes:
                 inp.ctypes.data,
             )
 
-        # Bind outputs
-        for meta in output_metas:
-            io_binding.bind_output(meta.name)
+        # Bind outputs. Sub-byte outputs are bound to raw packed buffers because
+        # ORT cannot convert them to NumPy directly.
+        sub_byte_outputs: dict = {}
+        for index, meta in enumerate(output_metas):
+            sub_byte = self._mapping_sub_byte.get(meta.type)
+            if sub_byte is not None:
+                bits, signed, tensor_type, numpy_dtype_name = sub_byte
+                shape = tuple(meta.shape)
+                assert shape and all(
+                    isinstance(d, int) for d in shape
+                ), f"Sub-byte output {meta.name!r} requires a static shape, got {shape!r}"
+                n = int(np.prod(shape))
+                buffer = np.zeros(self._packed_byte_count(n, bits), dtype=np.uint8)
+                io_binding.bind_output(  # type: ignore[attr-defined]
+                    meta.name,
+                    "cpu",  # device_type
+                    0,  # device_id
+                    tensor_type,
+                    list(shape),
+                    buffer.ctypes.data,
+                )
+                sub_byte_outputs[index] = (shape, bits, signed, numpy_dtype_name, buffer)
+            else:
+                io_binding.bind_output(meta.name)
 
         # Run with IOBinding
         self._sess.run_with_iobinding(io_binding)
 
         # Get outputs
-        outputs = io_binding.get_outputs()
-        return [out.numpy() for out in outputs]
+        ort_outputs = io_binding.get_outputs()
+        outputs = []
+        for index in range(len(output_metas)):
+            if index in sub_byte_outputs:
+                shape, bits, signed, numpy_dtype_name, buffer = sub_byte_outputs[index]
+                outputs.append(
+                    self._unpack_sub_byte(buffer, shape, bits, signed, numpy_dtype_name)
+                )
+            else:
+                outputs.append(ort_outputs[index].numpy())
+        return outputs

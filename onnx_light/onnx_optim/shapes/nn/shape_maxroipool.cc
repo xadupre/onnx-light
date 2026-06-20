@@ -23,27 +23,19 @@ void ComputeShapeMaxRoiPool(ShapesContext &ctx, const NodeProto &node, const cha
 
   const OptimTensor &input = ctx.Get(x);
   const OptimShape &in_shape = input.Shape();
-  if (in_shape.Rank() != 4) {
-    throw std::invalid_argument("ComputeShapeMaxRoiPool: input '" + std::string(x) +
-                                "' must have rank 4 (N, C, H, W).");
-  }
+  EXT_ENFORCE_INVALID(in_shape.Rank() == 4, "ComputeShapeMaxRoiPool: input '", x,
+                      "' must have rank 4 (N, C, H, W).");
 
   const OptimShape &rois_shape = ctx.Get(rois).Shape();
-  if (rois_shape.Rank() != 2) {
-    throw std::invalid_argument("ComputeShapeMaxRoiPool: input '" + std::string(rois) +
-                                "' must have rank 2 (num_rois, 5).");
-  }
+  EXT_ENFORCE_INVALID(rois_shape.Rank() == 2, "ComputeShapeMaxRoiPool: input '", rois,
+                      "' must have rank 2 (num_rois, 5).");
 
   std::vector<int64_t> pooled_shape;
-  if (!GetAttributeInts(node, "pooled_shape", pooled_shape)) {
-    throw std::invalid_argument(
-        "ComputeShapeMaxRoiPool: required attribute 'pooled_shape' is missing.");
-  }
-  if (pooled_shape.size() != 2 || pooled_shape[0] <= 0 || pooled_shape[1] <= 0) {
-    throw std::invalid_argument(
-        "ComputeShapeMaxRoiPool: attribute 'pooled_shape' must contain two positive "
-        "values (height, width).");
-  }
+  EXT_ENFORCE_INVALID(GetAttributeInts(node, "pooled_shape", pooled_shape),
+                      "ComputeShapeMaxRoiPool: required attribute 'pooled_shape' is missing.");
+  EXT_ENFORCE_INVALID(!(pooled_shape.size() != 2 || pooled_shape[0] <= 0 || pooled_shape[1] <= 0),
+                      "ComputeShapeMaxRoiPool: attribute 'pooled_shape' must contain two positive "
+                      "values (height, width).");
 
   OptimShape out_shape;
   out_shape.PushBack(rois_shape[0]);

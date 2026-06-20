@@ -114,9 +114,8 @@ EinsumPlan BuildPlan(const std::vector<Tensor> &inputs, const std::string &raw_e
   bool has_explicit_output = false;
   SplitEquation(equation, input_terms, output_term, has_explicit_output);
   EXT_ENFORCE_INVALID(input_terms.size() == inputs.size(), kEinsumName,
-                      ": number of input terms in the equation (",
-                      std::to_string(input_terms.size()), ") does not match number of inputs (",
-                      std::to_string(inputs.size()), ").");
+                      ": number of input terms in the equation (", input_terms.size(),
+                      ") does not match number of inputs (", inputs.size(), ").");
 
   // Determine the ellipsis rank (common across all inputs that use ``...``).
   std::size_t ellipsis_rank = 0;
@@ -127,24 +126,21 @@ EinsumPlan BuildPlan(const std::vector<Tensor> &inputs, const std::string &raw_e
     if (dots == std::string::npos) {
       // No ellipsis in this term: the term length must match the input rank.
       EXT_ENFORCE_INVALID(term.size() == inputs[i].shape.size(), kEinsumName, ": term '", term,
-                          "' has ", std::to_string(term.size()), " labels but input ",
-                          std::to_string(i), " has rank ", std::to_string(inputs[i].shape.size()),
-                          ".");
+                          "' has ", term.size(), " labels but input ", i, " has rank ",
+                          inputs[i].shape.size(), ".");
       continue;
     }
     // The term has an ellipsis: it accounts for ``rank - (term.size() - 3)``
     // dimensions.
     EXT_ENFORCE_INVALID(term.size() - 3 <= inputs[i].shape.size(), kEinsumName, ": term '", term,
-                        "' has more named labels than input ", std::to_string(i),
-                        " has dimensions.");
+                        "' has more named labels than input ", i, " has dimensions.");
     const std::size_t this_rank = inputs[i].shape.size() - (term.size() - 3);
     if (!ellipsis_seen) {
       ellipsis_seen = true;
       ellipsis_rank = this_rank;
-    } else {
-      EXT_ENFORCE_INVALID(this_rank == ellipsis_rank, kEinsumName,
-                          ": ellipsis dimensions must be consistent across inputs, got ",
-                          std::to_string(this_rank), " and ", std::to_string(ellipsis_rank), ".");
+    } else if (this_rank != ellipsis_rank) {
+      EXT_THROW_INVALID(kEinsumName, ": ellipsis dimensions must be consistent across inputs, got ",
+                        this_rank, " and ", ellipsis_rank, ".");
     }
   }
 
@@ -168,8 +164,8 @@ EinsumPlan BuildPlan(const std::vector<Tensor> &inputs, const std::string &raw_e
     const std::string &labels = plan.input_labels[i];
     const std::vector<int64_t> &shape = inputs[i].shape;
     EXT_ENFORCE_INVALID(labels.size() == shape.size(), kEinsumName, ": expanded term '", labels,
-                        "' has ", std::to_string(labels.size()), " labels but input ",
-                        std::to_string(i), " has rank ", std::to_string(shape.size()), ".");
+                        "' has ", labels.size(), " labels but input ", i, " has rank ",
+                        shape.size(), ".");
     for (std::size_t d = 0; d < labels.size(); ++d) {
       const char lbl = labels[d];
       const int64_t dim = shape[d];
@@ -185,9 +181,8 @@ EinsumPlan BuildPlan(const std::vector<Tensor> &inputs, const std::string &raw_e
         if (is_ellipsis && (it->second == 1 || dim == 1)) {
           it->second = std::max(it->second, dim);
         } else {
-          throw std::invalid_argument(std::string(kEinsumName) + ": label '" + std::string(1, lbl) +
-                                      "' has inconsistent sizes (" + std::to_string(it->second) +
-                                      " and " + std::to_string(dim) + ") across inputs.");
+          EXT_THROW_INVALID(kEinsumName, ": label '", lbl, "' has inconsistent sizes (", it->second,
+                            " and ", dim, ") across inputs.");
         }
       }
     }
@@ -226,8 +221,7 @@ EinsumPlan BuildPlan(const std::vector<Tensor> &inputs, const std::string &raw_e
   // Validate: every label in the output must appear in some input.
   for (char c : plan.output_labels) {
     EXT_ENFORCE_INVALID(label_size_map.find(c) != label_size_map.end(), kEinsumName,
-                        ": output label '", std::string(1, c),
-                        "' does not appear in any input term.");
+                        ": output label '", c, "' does not appear in any input term.");
   }
 
   // Build the canonical iteration order: output labels first, then summed

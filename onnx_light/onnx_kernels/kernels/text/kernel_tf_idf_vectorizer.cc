@@ -40,7 +40,7 @@ std::pair<int64_t, int64_t> BatchAndChannels(const std::vector<int64_t> &shape) 
   if (shape.size() == 2) {
     return {shape[0], shape[1]};
   }
-  throw std::invalid_argument("kernel::TfIdfVectorizer: input shape must have rank 1 or 2.");
+  EXT_THROW_INVALID("kernel::TfIdfVectorizer: input shape must have rank 1 or 2.");
 }
 
 // Populates the n-gram trie ``root`` with ``n_ngrams`` consecutive
@@ -134,7 +134,7 @@ std::vector<int64_t> ReadRow<int64_t>(const Tensor &x, int64_t row_num, int64_t 
       row[static_cast<size_t>(i)] = data[offset + static_cast<size_t>(i)];
     }
   } else {
-    throw std::invalid_argument(
+    EXT_THROW_INVALID(
         "kernel::TfIdfVectorizer: integer pool requires an INT32 or INT64 input tensor.");
   }
   return row;
@@ -267,8 +267,8 @@ TfIdfVectorizer::Mode TfIdfVectorizer::ParseMode(const std::string &value) {
   if (value == "TFIDF") {
     return Mode::kTFIDF;
   }
-  throw std::invalid_argument("kernel::TfIdfVectorizer: invalid mode '" + value +
-                              "'. Valid values are \"TF\", \"IDF\", \"TFIDF\".");
+  EXT_THROW_INVALID("kernel::TfIdfVectorizer: invalid mode '", value,
+                    "'. Valid values are \"TF\", \"IDF\", \"TFIDF\".");
 }
 
 std::vector<int64_t> TfIdfVectorizer::ComputeOutputShape(const std::vector<int64_t> &input_shape,
@@ -279,7 +279,7 @@ std::vector<int64_t> TfIdfVectorizer::ComputeOutputShape(const std::vector<int64
   if (input_shape.size() == 2) {
     return {input_shape[0], output_size};
   }
-  throw std::invalid_argument("kernel::TfIdfVectorizer: input shape must have rank 1 or 2.");
+  EXT_THROW_INVALID("kernel::TfIdfVectorizer: input shape must have rank 1 or 2.");
 }
 
 Tensor TfIdfVectorizer::operator()(const Tensor &x, Mode mode, int64_t min_gram_length,

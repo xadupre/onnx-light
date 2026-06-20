@@ -4259,6 +4259,87 @@ TEST(onnx_proto, AttributeProto_PrintToVectorString_AllTypes) {
   }
 }
 
+TEST(onnx_proto, PrintOptions_InlineThreshold) {
+  // A repeated field is inlined on a single row when its size does not exceed
+  // ``inline_threshold`` and spread over multiple rows otherwise.
+  TensorProto tensor;
+  tensor.set_name("t");
+  for (int64_t i = 0; i < 6; ++i)
+    tensor.ref_dims().push_back(i);
+
+  {
+    utils::PrintOptions options;
+    options.inline_threshold = 6;
+    std::string serialized = utils::join_string(tensor.PrintToVectorString(options), "\n");
+    EXPECT_TRUE(serialized.find("dims: [0, 1, 2, 3, 4, 5],") != std::string::npos);
+  }
+
+  {
+    utils::PrintOptions options;
+    options.inline_threshold = 5;
+    std::string serialized = utils::join_string(tensor.PrintToVectorString(options), "\n");
+    EXPECT_TRUE(serialized.find("dims: [\n") != std::string::npos);
+    EXPECT_TRUE(serialized.find("dims: [0, 1, 2, 3, 4, 5],") == std::string::npos);
+  }
+}
+
+TEST(onnx_proto, PrintOptions_Indentation) {
+  // ``indentation`` controls the number of spaces used for one indentation level.
+  NodeProto node;
+  node.set_name("relu1");
+  node.set_op_type("Relu");
+  *node.add_input() = "X";
+  *node.add_output() = "Y";
+
+  {
+    utils::PrintOptions options;
+    options.indentation = 2;
+    std::string serialized = utils::join_string(node.PrintToVectorString(options), "\n");
+    EXPECT_TRUE(serialized.find("\n  name: ") != std::string::npos);
+  }
+
+  {
+    utils::PrintOptions options;
+    options.indentation = 4;
+    std::string serialized = utils::join_string(node.PrintToVectorString(options), "\n");
+    EXPECT_TRUE(serialized.find("\n    name: ") != std::string::npos);
+    EXPECT_TRUE(serialized.find("\n  name: ") == std::string::npos);
+  }
+}
+
+TEST(onnx_proto, PrintOptions_IndentationNegativeSingleLine) {
+  // A negative ``indentation`` prints the whole message on a single line, without any newline
+  // or leading space for every proto.
+  ModelProto model;
+  model.set_ir_version(7);
+  model.set_producer_name("test_producer");
+  model.set_doc_string("Model documentation");
+  GraphProto *graph = model.add_graph();
+  graph->set_name("test_graph");
+  NodeProto *node = graph->add_node();
+  node->set_name("relu1");
+  node->set_op_type("Relu");
+  *node->add_input() = "X";
+  *node->add_output() = "Y";
+
+  utils::PrintOptions options;
+  options.indentation = -1;
+  std::vector<std::string> rows = model.PrintToVectorString(options);
+
+  // Every proto collapses to a single row, so there is no newline to join.
+  ASSERT_EQ(rows.size(), 1u);
+  const std::string &serialized = rows[0];
+  EXPECT_TRUE(serialized.find('\n') == std::string::npos);
+  EXPECT_TRUE(serialized.find("ir_version: 7") != std::string::npos);
+  EXPECT_TRUE(serialized.find("test_producer") != std::string::npos);
+  EXPECT_TRUE(serialized.find("test_graph") != std::string::npos);
+  EXPECT_TRUE(serialized.find("relu1") != std::string::npos);
+
+  // The default multi-line output, by contrast, spans several rows.
+  utils::PrintOptions default_options;
+  EXPECT_GT(model.PrintToVectorString(default_options).size(), 1u);
+}
+
 TEST(onnx_proto, AttributeProto_EmptyCollectionAttributes) {
   // Test empty INTS
   AttributeProto ints_attr;
@@ -5999,4 +6080,476 @@ TEST(onnx_proto, OrtFlatbuffersParseModelProtoFromStreamZeroRecursionDepthThrows
   popts.format = SerializeFormat::kOrtFlatbuffers;
   popts.max_recursion_depth = 0;
   EXPECT_THROW(ParseModelProtoFromStream(parsed, stream, popts), std::runtime_error);
+}
+
+// ---------------------------------------------------------------------------
+// Additional coverage for serialization helpers and proto repeated fields.
+// ---------------------------------------------------------------------------
+
+TEST(onnx_string, String_LessThan) {
+  utils::String abc("abc", 3);
+  utils::String abd("abd", 3);
+  utils::String ab("ab", 2);
+  utils::RefString abc_ref("abc", 3);
+  utils::RefString abd_ref("abd", 3);
+  std::string abd_std("abd");
+  std::string abc_std("abc");
+
+  // operator<(const String &)
+  EXPECT_TRUE(abc < abd);
+  EXPECT_FALSE(abd < abc);
+  EXPECT_TRUE(ab < abc); // shorter prefix sorts first
+  EXPECT_FALSE(abc < abc);
+
+  // operator<(const RefString &)
+  EXPECT_TRUE(abc < abd_ref);
+  EXPECT_FALSE(abd < abc_ref);
+  EXPECT_FALSE(abc < abc_ref);
+
+  // operator<(const std::string &)
+  EXPECT_TRUE(abc < abd_std);
+  EXPECT_FALSE(abc < abc_std);
+
+  // operator<(const char *)
+  EXPECT_TRUE(abc < "abd");
+  EXPECT_FALSE(abc < "abc");
+  EXPECT_TRUE(ab < "abc");
+  EXPECT_FALSE(abc < "ab");
+}
+
+TEST(onnx_string, String_LessThanEdgeCases) {
+  utils::String empty;
+  utils::String a("a", 1);
+
+  // ptr_ == nullptr branch of operator<(const char *)
+  EXPECT_TRUE(empty < "a");
+  EXPECT_FALSE(empty < "");
+  // other == nullptr returns false
+  EXPECT_FALSE(a < static_cast<const char *>(nullptr));
+  // exhausting *this without exhausting other
+  EXPECT_FALSE(a < "");
+}
+
+TEST(onnx_string, String_GreaterThan) {
+  utils::String abc("abc", 3);
+  utils::String abd("abd", 3);
+  utils::String ab("ab", 2);
+  utils::RefString abc_ref("abc", 3);
+  utils::RefString abd_ref("abd", 3);
+  std::string abc_std("abc");
+
+  // operator>(const String &)
+  EXPECT_TRUE(abd > abc);
+  EXPECT_FALSE(abc > abd);
+  EXPECT_TRUE(abc > ab); // longer string with shared prefix sorts later
+  EXPECT_FALSE(abc > abc);
+
+  // operator>(const RefString &)
+  EXPECT_TRUE(abd > abc_ref);
+  EXPECT_FALSE(abc > abd_ref);
+  EXPECT_FALSE(abc > abc_ref);
+
+  // operator>(const std::string &)
+  EXPECT_TRUE(abd > abc_std);
+  EXPECT_FALSE(abc > abc_std);
+
+  // operator>(const char *)
+  EXPECT_TRUE(abd > "abc");
+  EXPECT_FALSE(abc > "abd");
+  EXPECT_TRUE(abc > "ab");
+  EXPECT_FALSE(abc > "abc");
+}
+
+TEST(onnx_string, String_GreaterThanEdgeCases) {
+  utils::String empty;
+  utils::String a("a", 1);
+
+  // ptr_ == nullptr || size_ == 0 returns false
+  EXPECT_FALSE(empty > "");
+  EXPECT_FALSE(empty > "anything");
+  // other == nullptr returns true for a non-empty string
+  EXPECT_TRUE(a > static_cast<const char *>(nullptr));
+  // *this longer than other once other is exhausted
+  EXPECT_TRUE(a > "");
+}
+
+TEST(onnx_stream, TwoFilesWriteStream_WriteRawBytesInSecondStream) {
+  const std::string model_path = "test_write_second_stream.onnx";
+  const std::string weights_path = "test_write_second_stream.onnx.data";
+  const std::string extra_location = "test_write_second_stream_extra.bin";
+
+  std::vector<uint8_t> default_bytes = {1, 2, 3, 4, 5};
+  std::vector<uint8_t> extra_bytes = {9, 8, 7};
+
+  {
+    utils::TwoFilesWriteStream stream(model_path, weights_path);
+
+    // Default-location overload writes to the primary weights file.
+    stream.write_raw_bytes_in_second_stream(default_bytes.data(),
+                                            static_cast<utils::offset_t>(default_bytes.size()));
+    EXPECT_EQ(stream.weights_size(), static_cast<int64_t>(default_bytes.size()));
+
+    // A zero-length write is a no-op and does not change the size.
+    stream.write_raw_bytes_in_second_stream(default_bytes.data(), 0);
+    EXPECT_EQ(stream.weights_size(), static_cast<int64_t>(default_bytes.size()));
+
+    // Named-location overload routes bytes to a separate weights file.
+    stream.write_raw_bytes_in_second_stream(
+        extra_bytes.data(), static_cast<utils::offset_t>(extra_bytes.size()), extra_location);
+    EXPECT_EQ(stream.weights_size_for_location(extra_location),
+              static_cast<int64_t>(extra_bytes.size()));
+    // The default-location size is unaffected by the named-location write.
+    EXPECT_EQ(stream.weights_size(extra_location), static_cast<int64_t>(extra_bytes.size()));
+
+    stream.FlushMainToFile();
+  }
+
+  // The default weights file holds exactly the default bytes.
+  std::ifstream f_default(weights_path, std::ios::binary);
+  ASSERT_TRUE(f_default.is_open());
+  std::vector<uint8_t> read_default((std::istreambuf_iterator<char>(f_default)),
+                                    std::istreambuf_iterator<char>());
+  EXPECT_EQ(read_default, default_bytes);
+
+  // The extra weights file holds exactly the named-location bytes.
+  std::ifstream f_extra(extra_location, std::ios::binary);
+  ASSERT_TRUE(f_extra.is_open());
+  std::vector<uint8_t> read_extra((std::istreambuf_iterator<char>(f_extra)),
+                                  std::istreambuf_iterator<char>());
+  EXPECT_EQ(read_extra, extra_bytes);
+
+  std::remove(model_path.c_str());
+  std::remove(weights_path.c_str());
+  std::remove(extra_location.c_str());
+}
+
+TEST(onnx_proto, TensorProto_SegmentSerialization) {
+  TensorProto tensor1;
+  tensor1.set_name("segmented");
+  tensor1.set_data_type(TensorProto::DataType::FLOAT);
+  tensor1.ref_segment().set_begin(5);
+  tensor1.ref_segment().set_end(10);
+
+  std::string serialized;
+  tensor1.SerializeToString(serialized);
+  EXPECT_FALSE(serialized.empty());
+  EXPECT_EQ(serialized.size(), tensor1.SerializeSize().size());
+
+  TensorProto tensor2;
+  tensor2.ParseFromString(serialized);
+
+  EXPECT_EQ(tensor2.ref_name(), "segmented");
+  EXPECT_TRUE(tensor2.has_segment());
+  EXPECT_EQ(tensor2.ref_segment().ref_begin(), 5);
+  EXPECT_EQ(tensor2.ref_segment().ref_end(), 10);
+}
+
+TEST(onnx_proto, ValueInfoProto_MetadataPropsSerialization) {
+  ValueInfoProto value_info1;
+  value_info1.set_name("with_metadata");
+
+  StringStringEntryProto *meta1 = value_info1.add_metadata_props();
+  meta1->set_key("author");
+  meta1->set_value("alice");
+  StringStringEntryProto *meta2 = value_info1.add_metadata_props();
+  meta2->set_key("unit");
+  meta2->set_value("ms");
+
+  std::string serialized;
+  value_info1.SerializeToString(serialized);
+  EXPECT_FALSE(serialized.empty());
+  EXPECT_EQ(serialized.size(), value_info1.SerializeSize().size());
+
+  ValueInfoProto value_info2;
+  value_info2.ParseFromString(serialized);
+
+  EXPECT_EQ(value_info2.ref_name(), "with_metadata");
+  ASSERT_EQ(value_info2.ref_metadata_props().size(), 2);
+  EXPECT_EQ(value_info2.ref_metadata_props()[0].ref_key(), "author");
+  EXPECT_EQ(value_info2.ref_metadata_props()[0].ref_value(), "alice");
+  EXPECT_EQ(value_info2.ref_metadata_props()[1].ref_key(), "unit");
+  EXPECT_EQ(value_info2.ref_metadata_props()[1].ref_value(), "ms");
+}
+
+TEST(onnx_proto, AttributeProto_TypeProtosSerialization) {
+  AttributeProto attribute1;
+  attribute1.set_name("types");
+  attribute1.set_type(AttributeProto::AttributeType::TYPE_PROTOS);
+
+  TypeProto *type1 = attribute1.add_type_protos();
+  type1->add_tensor_type()->set_elem_type(1); // FLOAT
+  TypeProto *type2 = attribute1.add_type_protos();
+  type2->add_tensor_type()->set_elem_type(7); // INT64
+
+  std::string serialized;
+  attribute1.SerializeToString(serialized);
+  EXPECT_FALSE(serialized.empty());
+  EXPECT_EQ(serialized.size(), attribute1.SerializeSize().size());
+
+  AttributeProto attribute2;
+  attribute2.ParseFromString(serialized);
+
+  EXPECT_EQ(attribute2.ref_name(), "types");
+  EXPECT_EQ(attribute2.ref_type(), AttributeProto::AttributeType::TYPE_PROTOS);
+  ASSERT_EQ(attribute2.ref_type_protos().size(), 2);
+  EXPECT_EQ(attribute2.ref_type_protos()[0].ref_tensor_type().ref_elem_type(), 1);
+  EXPECT_EQ(attribute2.ref_type_protos()[1].ref_tensor_type().ref_elem_type(), 7);
+}
+
+TEST(onnx_proto, NodeProto_MetadataPropsSerialization) {
+  NodeProto node1;
+  node1.set_name("node_with_metadata");
+  node1.set_op_type("Identity");
+
+  StringStringEntryProto *meta1 = node1.add_metadata_props();
+  meta1->set_key("namespace");
+  meta1->set_value("layer1");
+  StringStringEntryProto *meta2 = node1.add_metadata_props();
+  meta2->set_key("color");
+  meta2->set_value("blue");
+
+  std::string serialized;
+  node1.SerializeToString(serialized);
+  EXPECT_FALSE(serialized.empty());
+  EXPECT_EQ(serialized.size(), node1.SerializeSize().size());
+
+  NodeProto node2;
+  node2.ParseFromString(serialized);
+
+  EXPECT_EQ(node2.ref_name(), "node_with_metadata");
+  ASSERT_EQ(node2.ref_metadata_props().size(), 2);
+  EXPECT_EQ(node2.ref_metadata_props()[0].ref_key(), "namespace");
+  EXPECT_EQ(node2.ref_metadata_props()[0].ref_value(), "layer1");
+  EXPECT_EQ(node2.ref_metadata_props()[1].ref_key(), "color");
+  EXPECT_EQ(node2.ref_metadata_props()[1].ref_value(), "blue");
+}
+
+TEST(onnx_proto, NodeProto_DeviceConfigurationsSerialization) {
+  NodeProto node1;
+  node1.set_name("node_with_device_config");
+  node1.set_op_type("MatMul");
+
+  NodeDeviceConfigurationProto *config = node1.add_device_configurations();
+  config->set_configuration_id("config_a");
+  config->set_pipeline_stage(2);
+  ShardingSpecProto *spec = config->add_sharding_spec();
+  spec->set_tensor_name("X");
+  *spec->add_device() = 0;
+  *spec->add_device() = 1;
+
+  std::string serialized;
+  node1.SerializeToString(serialized);
+  EXPECT_FALSE(serialized.empty());
+  EXPECT_EQ(serialized.size(), node1.SerializeSize().size());
+
+  NodeProto node2;
+  node2.ParseFromString(serialized);
+
+  EXPECT_EQ(node2.ref_name(), "node_with_device_config");
+  ASSERT_EQ(node2.ref_device_configurations().size(), 1);
+  EXPECT_EQ(node2.ref_device_configurations()[0].ref_configuration_id(), "config_a");
+  EXPECT_TRUE(node2.ref_device_configurations()[0].has_pipeline_stage());
+  EXPECT_EQ(node2.ref_device_configurations()[0].ref_pipeline_stage(), 2);
+  ASSERT_EQ(node2.ref_device_configurations()[0].ref_sharding_spec().size(), 1);
+  EXPECT_EQ(node2.ref_device_configurations()[0].ref_sharding_spec()[0].ref_tensor_name(), "X");
+  ASSERT_EQ(node2.ref_device_configurations()[0].ref_sharding_spec()[0].ref_device().size(), 2);
+  EXPECT_EQ(node2.ref_device_configurations()[0].ref_sharding_spec()[0].ref_device()[0], 0);
+  EXPECT_EQ(node2.ref_device_configurations()[0].ref_sharding_spec()[0].ref_device()[1], 1);
+}
+
+TEST(onnx_proto, GraphProto_MetadataPropsSerialization) {
+  GraphProto graph1;
+  graph1.set_name("graph_with_metadata");
+
+  StringStringEntryProto *meta1 = graph1.add_metadata_props();
+  meta1->set_key("framework");
+  meta1->set_value("onnx-light");
+  StringStringEntryProto *meta2 = graph1.add_metadata_props();
+  meta2->set_key("stage");
+  meta2->set_value("test");
+
+  std::string serialized;
+  graph1.SerializeToString(serialized);
+  EXPECT_FALSE(serialized.empty());
+  EXPECT_EQ(serialized.size(), graph1.SerializeSize().size());
+
+  GraphProto graph2;
+  graph2.ParseFromString(serialized);
+
+  EXPECT_EQ(graph2.ref_name(), "graph_with_metadata");
+  ASSERT_EQ(graph2.ref_metadata_props().size(), 2);
+  EXPECT_EQ(graph2.ref_metadata_props()[0].ref_key(), "framework");
+  EXPECT_EQ(graph2.ref_metadata_props()[0].ref_value(), "onnx-light");
+  EXPECT_EQ(graph2.ref_metadata_props()[1].ref_key(), "stage");
+  EXPECT_EQ(graph2.ref_metadata_props()[1].ref_value(), "test");
+}
+
+TEST(onnx_proto, GraphProto_QuantizationAnnotationSerialization) {
+  GraphProto graph1;
+  graph1.set_name("graph_with_quantization");
+
+  TensorAnnotation *annotation = graph1.add_quantization_annotation();
+  annotation->set_tensor_name("a");
+  StringStringEntryProto *scale = annotation->add_quant_parameter_tensor_names();
+  scale->set_key("SCALE_TENSOR");
+  scale->set_value("a_scale");
+  StringStringEntryProto *zero_point = annotation->add_quant_parameter_tensor_names();
+  zero_point->set_key("ZERO_POINT_TENSOR");
+  zero_point->set_value("a_zero_point");
+
+  std::string serialized;
+  graph1.SerializeToString(serialized);
+  EXPECT_FALSE(serialized.empty());
+  EXPECT_EQ(serialized.size(), graph1.SerializeSize().size());
+
+  GraphProto graph2;
+  graph2.ParseFromString(serialized);
+
+  EXPECT_EQ(graph2.ref_name(), "graph_with_quantization");
+  ASSERT_EQ(graph2.ref_quantization_annotation().size(), 1);
+  EXPECT_EQ(graph2.ref_quantization_annotation()[0].ref_tensor_name(), "a");
+  ASSERT_EQ(graph2.ref_quantization_annotation()[0].ref_quant_parameter_tensor_names().size(), 2);
+  EXPECT_EQ(graph2.ref_quantization_annotation()[0].ref_quant_parameter_tensor_names()[0].ref_key(),
+            "SCALE_TENSOR");
+  EXPECT_EQ(
+      graph2.ref_quantization_annotation()[0].ref_quant_parameter_tensor_names()[0].ref_value(),
+      "a_scale");
+  EXPECT_EQ(graph2.ref_quantization_annotation()[0].ref_quant_parameter_tensor_names()[1].ref_key(),
+            "ZERO_POINT_TENSOR");
+  EXPECT_EQ(
+      graph2.ref_quantization_annotation()[0].ref_quant_parameter_tensor_names()[1].ref_value(),
+      "a_zero_point");
+}
+
+TEST(onnx_proto, FunctionProto_MetadataPropsSerialization) {
+  FunctionProto function1;
+  function1.set_name("function_with_metadata");
+  function1.set_domain("ai.test");
+
+  StringStringEntryProto *meta1 = function1.add_metadata_props();
+  meta1->set_key("author");
+  meta1->set_value("bob");
+  StringStringEntryProto *meta2 = function1.add_metadata_props();
+  meta2->set_key("version");
+  meta2->set_value("1");
+
+  std::string serialized;
+  function1.SerializeToString(serialized);
+  EXPECT_FALSE(serialized.empty());
+  EXPECT_EQ(serialized.size(), function1.SerializeSize().size());
+
+  FunctionProto function2;
+  function2.ParseFromString(serialized);
+
+  EXPECT_EQ(function2.ref_name(), "function_with_metadata");
+  EXPECT_EQ(function2.ref_domain(), "ai.test");
+  ASSERT_EQ(function2.ref_metadata_props().size(), 2);
+  EXPECT_EQ(function2.ref_metadata_props()[0].ref_key(), "author");
+  EXPECT_EQ(function2.ref_metadata_props()[0].ref_value(), "bob");
+  EXPECT_EQ(function2.ref_metadata_props()[1].ref_key(), "version");
+  EXPECT_EQ(function2.ref_metadata_props()[1].ref_value(), "1");
+}
+
+TEST(onnx_proto, ModelProto_ConfigurationSerialization) {
+  ModelProto model1;
+  model1.set_ir_version(10);
+  GraphProto *graph = model1.add_graph();
+  graph->set_name("graph_with_configuration");
+
+  DeviceConfigurationProto *config1 = model1.add_configuration();
+  config1->set_name("two_devices");
+  config1->set_num_devices(2);
+  *config1->add_device() = "gpu0";
+  *config1->add_device() = "gpu1";
+
+  DeviceConfigurationProto *config2 = model1.add_configuration();
+  config2->set_name("single_device");
+  config2->set_num_devices(1);
+  *config2->add_device() = "cpu";
+
+  std::string serialized;
+  model1.SerializeToString(serialized);
+  EXPECT_FALSE(serialized.empty());
+  EXPECT_EQ(serialized.size(), model1.SerializeSize().size());
+
+  ModelProto model2;
+  model2.ParseFromString(serialized);
+
+  ASSERT_EQ(model2.ref_configuration().size(), 2);
+  EXPECT_EQ(model2.ref_configuration()[0].ref_name(), "two_devices");
+  EXPECT_EQ(model2.ref_configuration()[0].ref_num_devices(), 2);
+  ASSERT_EQ(model2.ref_configuration()[0].ref_device().size(), 2);
+  EXPECT_EQ(model2.ref_configuration()[0].ref_device()[0], "gpu0");
+  EXPECT_EQ(model2.ref_configuration()[0].ref_device()[1], "gpu1");
+  EXPECT_EQ(model2.ref_configuration()[1].ref_name(), "single_device");
+  EXPECT_EQ(model2.ref_configuration()[1].ref_num_devices(), 1);
+  ASSERT_EQ(model2.ref_configuration()[1].ref_device().size(), 1);
+  EXPECT_EQ(model2.ref_configuration()[1].ref_device()[0], "cpu");
+}
+
+TEST(onnx_proto, ModelProto_SerializeToStringWithOptions) {
+  ModelProto model1;
+  model1.set_ir_version(9);
+  model1.set_producer_name("options_producer");
+  GraphProto *graph = model1.add_graph();
+  graph->set_name("options_graph");
+  NodeProto *node = graph->add_node();
+  node->set_name("identity");
+  node->set_op_type("Identity");
+
+  // Default overload and the SerializeOptions overload must agree.
+  std::string serialized_default;
+  model1.SerializeToString(serialized_default);
+
+  SerializeOptions options;
+  std::string serialized_with_options;
+  model1.SerializeToString(serialized_with_options, options);
+
+  EXPECT_FALSE(serialized_with_options.empty());
+  EXPECT_EQ(serialized_default, serialized_with_options);
+
+  ModelProto model2;
+  model2.ParseFromString(serialized_with_options);
+  EXPECT_EQ(model2.ref_ir_version(), 9);
+  EXPECT_EQ(model2.ref_producer_name(), "options_producer");
+  ASSERT_TRUE(model2.has_graph());
+  EXPECT_EQ(model2.ref_graph().ref_name(), "options_graph");
+  ASSERT_EQ(model2.ref_graph().ref_node().size(), 1);
+  EXPECT_EQ(model2.ref_graph().ref_node()[0].ref_op_type(), "Identity");
+}
+
+TEST(onnx_proto, SequenceProto_ParseFromStream) {
+  SequenceProto sequence1;
+  sequence1.set_elem_type(1); // FLOAT
+
+  TensorProto *tensor1 = sequence1.add_tensor_values();
+  tensor1->set_name("seq_tensor1");
+  tensor1->set_data_type(TensorProto::DataType::FLOAT);
+  tensor1->ref_float_data().push_back(1.5f);
+
+  TensorProto *tensor2 = sequence1.add_tensor_values();
+  tensor2->set_name("seq_tensor2");
+  tensor2->set_data_type(TensorProto::DataType::FLOAT);
+  tensor2->ref_float_data().push_back(2.5f);
+
+  // Serialize into an in-memory stream and parse it back via ParseFromStream.
+  utils::StringWriteStream write_stream;
+  SerializeOptions serialize_options;
+  SerializeSizeResult total_size = sequence1.SerializeSize(write_stream, serialize_options);
+  write_stream.pre_allocate(total_size.size());
+  sequence1.SerializeToStream(write_stream, serialize_options);
+
+  utils::StringStream read_stream(write_stream.data(), write_stream.size());
+  ParseOptions parse_options;
+  SequenceProto sequence2;
+  sequence2.ParseFromStream(read_stream, parse_options);
+
+  EXPECT_EQ(sequence2.ref_elem_type(), 1);
+  ASSERT_EQ(sequence2.ref_tensor_values().size(), 2);
+  EXPECT_EQ(sequence2.ref_tensor_values()[0].ref_name(), "seq_tensor1");
+  EXPECT_EQ(sequence2.ref_tensor_values()[1].ref_name(), "seq_tensor2");
+  ASSERT_EQ(sequence2.ref_tensor_values()[0].ref_float_data().size(), 1);
+  EXPECT_FLOAT_EQ(sequence2.ref_tensor_values()[0].ref_float_data()[0], 1.5f);
+  ASSERT_EQ(sequence2.ref_tensor_values()[1].ref_float_data().size(), 1);
+  EXPECT_FLOAT_EQ(sequence2.ref_tensor_values()[1].ref_float_data()[0], 2.5f);
 }

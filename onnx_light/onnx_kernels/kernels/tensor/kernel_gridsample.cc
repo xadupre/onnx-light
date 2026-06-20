@@ -33,9 +33,8 @@ Interp ParseMode(const std::string &mode) {
   if (mode == "cubic" || mode == "bicubic") {
     return Interp::Cubic;
   }
-  throw std::invalid_argument(
-      "kernel::GridSample: unknown mode '" + mode +
-      "' (expected one of 'linear'/'bilinear', 'nearest', 'cubic'/'bicubic').");
+  EXT_THROW_INVALID("kernel::GridSample: unknown mode '", mode,
+                    "' (expected one of 'linear'/'bilinear', 'nearest', 'cubic'/'bicubic').");
 }
 
 Padding ParsePaddingMode(const std::string &pm) {
@@ -48,8 +47,8 @@ Padding ParsePaddingMode(const std::string &pm) {
   if (pm == "reflection") {
     return Padding::Reflection;
   }
-  throw std::invalid_argument("kernel::GridSample: unknown padding_mode '" + pm +
-                              "' (expected one of 'zeros', 'border', 'reflection').");
+  EXT_THROW_INVALID("kernel::GridSample: unknown padding_mode '", pm,
+                    "' (expected one of 'zeros', 'border', 'reflection').");
 }
 
 // --- de-normalisation / reflection -----------------------------------------

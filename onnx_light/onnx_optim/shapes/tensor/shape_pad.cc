@@ -40,11 +40,8 @@ bool FillPads(const std::vector<int64_t> &pads_values, const std::vector<int64_t
               std::vector<int64_t> &out_begin, std::vector<int64_t> &out_end,
               std::vector<bool> &has_pad) {
   const std::size_t num_axes = axes.size();
-  if (pads_values.size() != 2 * num_axes) {
-    throw std::invalid_argument("ComputeShapePad: 'pads' length (" +
-                                std::to_string(pads_values.size()) + ") must equal 2 * num_axes (" +
-                                std::to_string(2 * num_axes) + ").");
-  }
+  EXT_ENFORCE_INVALID(pads_values.size() == 2 * num_axes, "ComputeShapePad: 'pads' length (",
+                      pads_values.size(), ") must equal 2 * num_axes (", 2 * num_axes, ").");
   for (std::size_t i = 0; i < num_axes; ++i) {
     const int64_t axis = axes[i];
     out_begin[static_cast<std::size_t>(axis)] = pads_values[i];
@@ -61,10 +58,8 @@ std::vector<int64_t> NormalizeAxes(const std::vector<int64_t> &axes_values, int6
   out.reserve(axes_values.size());
   for (int64_t a : axes_values) {
     int64_t normalized = a < 0 ? a + rank : a;
-    if (normalized < 0 || normalized >= rank) {
-      throw std::invalid_argument("ComputeShapePad: axis " + std::to_string(a) +
-                                  " is out of range for input rank " + std::to_string(rank) + ".");
-    }
+    EXT_ENFORCE_INVALID(!(normalized < 0 || normalized >= rank), "ComputeShapePad: axis ", a,
+                        " is out of range for input rank ", rank, ".");
     out.push_back(normalized);
   }
   return out;
@@ -75,9 +70,8 @@ std::vector<int64_t> NormalizeAxes(const std::vector<int64_t> &axes_values, int6
 void ComputeShapePad(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Pad", "ComputeShapePad");
 
-  if (node.input_size() < 1) {
-    throw std::invalid_argument("ComputeShapePad: Pad requires at least one input.");
-  }
+  EXT_ENFORCE_INVALID(!(node.input_size() < 1),
+                      "ComputeShapePad: Pad requires at least one input.");
 
   const OptimTensor &input = ctx.Get(node.input(0).as_string());
   const TensorType dtype = input.Dtype();

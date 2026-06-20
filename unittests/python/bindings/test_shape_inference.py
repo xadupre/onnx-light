@@ -131,6 +131,97 @@ class TestShapeInference(ExtTestCase):
         self.assertEqual(result.tensor_type.elem_type, onnxl.TensorProto.FLOAT)
         self.assertEqual([dim.dim_value for dim in result.tensor_type.shape.dim], [2, 3])
 
+    def _make_add_neg_model(self) -> onnxl.ModelProto:
+        """Builds a small Add->Neg model with an unshaped output."""
+        return oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Add", ["X", "Y"], ["T"]), oh.make_node("Neg", ["T"], ["Z"])],
+                "g",
+                [
+                    oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 3]),
+                    oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2, 3]),
+                ],
+                [oh.make_value_info("Z", onnxl.TypeProto())],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+
+    def test_infer_shapes_inplace(self) -> None:
+        """infer_shapes mutates the model in place and returns the same object."""
+        model = self._make_add_neg_model()
+        result = shape_inference.infer_shapes(model)
+        self.assertIs(result, model)
+        value_info = {vi.name: vi for vi in model.graph.value_info}
+        self.assertIn("T", value_info)
+        self.assertEqual(
+            [dim.dim_value for dim in value_info["T"].type.tensor_type.shape.dim], [2, 3]
+        )
+
+    def test_infer_shapes_parity_options(self) -> None:
+        """infer_shapes accepts check_type, strict_mode and data_prop, matching onnx."""
+        model = self._make_add_neg_model()
+        result = shape_inference.infer_shapes(
+            model, check_type=True, strict_mode=True, data_prop=True
+        )
+        self.assertIs(result, model)
+        value_info = {vi.name: vi for vi in model.graph.value_info}
+        self.assertIn("T", value_info)
+        self.assertEqual(
+            [dim.dim_value for dim in value_info["T"].type.tensor_type.shape.dim], [2, 3]
+        )
+
+    def test_infer_shapes_with_initializer_weight(self) -> None:
+        """infer_shapes uses an initializer's shape to infer downstream outputs.
+
+        This mirrors the common pattern where a weight is provided as an
+        initializer (with shape and type set) and shape inference is needed
+        to compute the output of a node consuming it. The initializer is not
+        listed as a graph input and is preserved after inference.
+        """
+        weight = oh.make_tensor("W", onnxl.TensorProto.FLOAT, [3, 4], [0.0] * 12)
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("MatMul", ["X", "W"], ["Y"])],
+                "test_graph",
+                [oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 3])],
+                [oh.make_value_info("Y", onnxl.TypeProto())],
+                initializer=[weight],
+            ),
+            opset_imports=[oh.make_opsetid("", 20)],
+        )
+
+        result = shape_inference.infer_shapes(model)
+        self.assertIs(result, model)
+
+        output = {vi.name: vi for vi in result.graph.output}["Y"]
+        self.assertEqual(output.type.tensor_type.elem_type, onnxl.TensorProto.FLOAT)
+        self.assertEqual([dim.dim_value for dim in output.type.tensor_type.shape.dim], [2, 4])
+
+        # The weight stays an initializer and is never promoted to a graph input.
+        self.assertEqual(len(result.graph.input), 1)
+        self.assertNotIn("W", [vi.name for vi in result.graph.input])
+        self.assertEqual(len(result.graph.initializer), 1)
+        self.assertEqual(result.graph.initializer[0].name, "W")
+
+    def test_infer_shapes_strict_mode_raises(self) -> None:
+        """strict_mode surfaces node-level shape inference errors."""
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Add", ["X", "Y"], ["Z"])],
+                "g",
+                [
+                    oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 3]),
+                    oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2, 3]),
+                ],
+                # Z is declared as a scalar (rank 0), which conflicts with the
+                # rank-2 shape inferred for the Add output.
+                [oh.make_tensor_value_info("Z", onnxl.TensorProto.FLOAT, [])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        with self.assertRaises(shape_inference.InferenceError):
+            shape_inference.infer_shapes(model, strict_mode=True)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

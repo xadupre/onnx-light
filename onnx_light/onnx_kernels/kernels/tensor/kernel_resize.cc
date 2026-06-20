@@ -618,8 +618,7 @@ std::vector<int64_t> ApplyKeepAspectRatioPolicy(const std::vector<int64_t> &requ
     } else if (policy == "not_smaller") {
       picked = std::max(picked, ratio);
     } else {
-      throw std::invalid_argument("kernel::Resize: unsupported keep_aspect_ratio_policy '" +
-                                  policy + "'.");
+      EXT_THROW_INVALID("kernel::Resize: unsupported keep_aspect_ratio_policy '", policy, "'.");
     }
   }
   std::vector<int64_t> out(requested_sizes.size());

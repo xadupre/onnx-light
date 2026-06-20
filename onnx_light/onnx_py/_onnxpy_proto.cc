@@ -102,6 +102,24 @@ bool HasBorrowedRawData(const ModelProto &model) {
   return false;
 }
 
+// Applies a single ``field=value`` keyword argument to a proto instance,
+// mirroring the behavior of ``google.protobuf.Message(**kwargs)``.
+// Repeated fields are populated from the provided iterable (python list/tuple
+// or another ``RepeatedField``): the field is reset with ``clear()`` and then
+// filled with ``extend()``. Every other field (scalar, string, bytes, enum or
+// message) is assigned through its regular attribute setter.
+void SetProtoFieldFromKwarg(nb::handle py, const std::string &key, nb::handle value) {
+  const bool repeated_like = nb::hasattr(value, "__iter__") && !nb::isinstance<nb::str>(value) &&
+                             !nb::isinstance<nb::bytes>(value) && !nb::isinstance<Message>(value);
+  if (repeated_like) {
+    nb::object attr = nb::getattr(py, key.c_str());
+    attr.attr("clear")();
+    attr.attr("extend")(value);
+  } else {
+    nb::setattr(py, key.c_str(), value);
+  }
+}
+
 } // namespace
 
 #define PYDEFINE_PROTO(m, cls)                                                                     \
@@ -214,7 +232,7 @@ bool HasBorrowedRawData(const ModelProto &model) {
           EXT_THROW("unexpected value type, unable to set '" #name "' for class '" #cls "'.");     \
         }                                                                                          \
       },                                                                                           \
-      cls::DOC_##name)                                                                             \
+      cls::DOC_##name, nb::for_setter(nb::arg("value").none()))                                    \
       .def("has_" #name, &cls::has_##name, "Tells if '" #name "' has a value.")
 
 #define PYFIELD_OPTIONAL_INT(cls, name) _PYFIELD_OPTIONAL_CTYPE(cls, name, int)
@@ -239,7 +257,7 @@ bool HasBorrowedRawData(const ModelProto &model) {
           EXT_THROW("unexpected value type, unable to set '" #name "' for class '" #cls "'.");     \
         }                                                                                          \
       },                                                                                           \
-      nb::rv_policy::reference_internal, cls::DOC_##name)                                          \
+      nb::rv_policy::reference_internal, cls::DOC_##name, nb::for_setter(nb::arg("value").none())) \
       .def("has_" #name, &cls::has_##name, "Tells if '" #name "' has a value.")                    \
       .def(                                                                                        \
           "add_" #name, [](cls & self) -> cls::name##_t & {                                        \
@@ -266,8 +284,26 @@ bool HasBorrowedRawData(const ModelProto &model) {
                                                                   "RepeatedProtoField" #cls #T);
 
 template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> &name_inst) {
-  name_inst.def(
-               "Clear", [](cls &self) { self.CopyFrom(cls()); }, "Clears the object.")
+  name_inst
+      .def(
+          "__init__",
+          [](cls *self, nb::kwargs kwargs) {
+            new (self) cls();
+            if (kwargs.size() == 0)
+              return;
+            // The wrapping python object exists but is not yet flagged as
+            // ready during ``__init__``; mark it so the regular attribute
+            // getters/setters used below can extract the C++ instance.
+            nb::object py = nb::find(*self);
+            nb::inst_mark_ready(py);
+            for (auto item : kwargs) {
+              SetProtoFieldFromKwarg(py, nb::cast<std::string>(item.first), item.second);
+            }
+          },
+          "Creates an instance. Keyword arguments are set as fields, following the "
+          "protobuf API, e.g. ``TensorProto(dims=[2, 2], data_type=TensorProto.FLOAT)``.")
+      .def(
+          "Clear", [](cls &self) { self.CopyFrom(cls()); }, "Clears the object.")
       .def(
           "ParseFromString",
           [](cls &self, nb::bytes data, nb::object options) {
@@ -449,6 +485,32 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           "CopyFrom", [](cls &self, const cls &src) { self.CopyFrom(src); },
           "Copies one instance into this one.")
       .def(
+          "ClearField",
+          [](nb::handle self, const std::string &field_name) {
+            // Mirrors ``google.protobuf.Message.ClearField``: resets a single
+            // field to its empty/default state while leaving the others intact.
+            nb::object attr = nb::getattr(self, field_name.c_str());
+            // Repeated fields are containers (RepeatedField / RepeatedProtoField)
+            // exposing a python ``clear`` method; emptying the container clears
+            // the field. They are never ``Message`` instances.
+            if (!nb::isinstance<Message>(attr) && nb::hasattr(attr, "clear")) {
+              attr.attr("clear")();
+              return;
+            }
+            // Optional scalar fields and optional/oneof message fields drop
+            // their presence bit when their setter receives ``None``.
+            try {
+              nb::setattr(self, field_name.c_str(), nb::none());
+            } catch (nb::python_error &) {
+              // Always-present scalar, string and message fields reject ``None``;
+              // reset them to the default value carried by a freshly constructed
+              // message of the same type.
+              nb::object fresh = nb::cast(cls());
+              nb::setattr(self, field_name.c_str(), nb::getattr(fresh, field_name.c_str()));
+            }
+          },
+          nb::arg("field_name"), "Clears the field ``field_name``, following the protobuf API.")
+      .def(
           "__eq__",
           [](const cls &self, const cls &other) -> bool {
             SerializeOptions opts1, opts2;
@@ -516,6 +578,17 @@ std::string proto_repr_with_short_line(cls &self,
 
 template <typename T> void define_repeated_field_type(nb::class_<utils::RepeatedField<T>> &nbcls) {
   nbcls.def(nb::init<>())
+      .def(
+          "__init__",
+          [](utils::RepeatedField<T> *self, nb::iterable iterable) {
+            new (self) utils::RepeatedField<T>();
+            if (nb::isinstance<utils::RepeatedField<T>>(iterable)) {
+              self->extend(nb::cast<utils::RepeatedField<T> &>(iterable));
+            } else {
+              self->extend(nb::cast<std::vector<T>>(iterable));
+            }
+          },
+          nb::arg("iterable"), "Creates a RepeatedField from an iterable.")
       .def("add", &utils::RepeatedField<T>::add, nb::rv_policy::reference, "Adds an empty element.")
       .def("clear", &utils::RepeatedField<T>::clear, "Removes every element.")
       .def("__len__", &utils::RepeatedField<T>::size, "Returns the number of elements.")
@@ -553,7 +626,24 @@ template <typename T> void define_repeated_field_type(nb::class_<utils::Repeated
             return nb::make_iterator(nb::type<utils::RepeatedField<T>>(), "iterator", self.begin(),
                                      self.end());
           },
-          nb::keep_alive<0, 1>(), "Iterates over the elements.");
+          nb::keep_alive<0, 1>(), "Iterates over the elements.")
+      .def(
+          "__eq__",
+          [](utils::RepeatedField<T> &self, nb::list &obj) -> bool {
+            // Compare the size first to avoid materializing the container when
+            // the lengths already differ.
+            if (self.size() != obj.size())
+              return false;
+            // Materialize the container into a python list and delegate to the
+            // python list comparison so element types (``str``/``bytes``/
+            // :class:`String` or numbers) compare as expected.
+            nb::list values;
+            for (auto &it : self) {
+              values.append(nb::cast(it, nb::rv_policy::reference));
+            }
+            return values.equal(obj);
+          },
+          nb::arg("other"), "Compares the container to a list of values.");
 }
 
 template <typename T>
@@ -642,15 +732,36 @@ void define_repeated_field_type_proto(nb::class_<utils::RepeatedField<T>> &nbcls
               }
             }
           },
-          nb::arg("sequence"), "Extends the list of values.");
+          nb::arg("sequence"), "Extends the list of values.")
+      .def(
+          "add",
+          [](utils::RepeatedField<T> &self, nb::kwargs kwargs) -> T & {
+            T &element = self.add();
+            if (kwargs.size() > 0) {
+              nb::object py_element = nb::cast(element, nb::rv_policy::reference);
+              for (auto item : kwargs) {
+                nb::setattr(py_element, nb::cast<nb::str>(item.first), item.second);
+              }
+            }
+            return element;
+          },
+          nb::rv_policy::reference,
+          "Adds an element with optional keyword arguments set as fields.");
   nbcls_proto.def(nb::init<>())
       .def(
           "add",
-          [](utils::RepeatedProtoField<T> &self) -> std::shared_ptr<T> {
+          [](utils::RepeatedProtoField<T> &self, nb::kwargs kwargs) -> std::shared_ptr<T> {
             self.add();
-            return self.shared_at(self.size() - 1);
+            std::shared_ptr<T> element = self.shared_at(self.size() - 1);
+            if (kwargs.size() > 0) {
+              nb::object py_element = nb::cast(element);
+              for (auto item : kwargs) {
+                nb::setattr(py_element, nb::cast<nb::str>(item.first), item.second);
+              }
+            }
+            return element;
           },
-          "Adds an empty element.")
+          "Adds an element. Keyword arguments are set as fields on the new element.")
       .def("clear", &utils::RepeatedProtoField<T>::clear, "Removes every element.")
       .def("__len__", &utils::RepeatedProtoField<T>::size, "Returns the number of elements.")
       .def(
@@ -1094,7 +1205,12 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
               "case  but the model structure is still available")
       .def_rw("raw_data_threshold", &utils::PrintOptions::raw_data_threshold,
               "if skip_raw_data is true, raw data will be printed only if it is larger than the "
-              "threshold");
+              "threshold")
+      .def_rw("indentation", &utils::PrintOptions::indentation,
+              "number of spaces used for a single indentation level")
+      .def_rw("inline_threshold", &utils::PrintOptions::inline_threshold,
+              "repeated fields with at most this many elements are printed inline on a single row, "
+              "larger fields are spread over multiple rows");
 
   nb::class_<utils::String>(m, "String", "Simplified string with no final null character.")
       .def(nb::init<std::string>())
@@ -1124,11 +1240,11 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
           "Returns the length of the string.")
       .def(
           "__eq__",
-          [](const utils::String &self, const std::string &s) -> int { return self == s; },
+          [](const utils::String &self, const std::string &s) -> bool { return self == s; },
           "Compares two strings.")
       .def(
           "__eq__",
-          [](const utils::String &self, const nb::bytes &bytes_obj) -> int {
+          [](const utils::String &self, const nb::bytes &bytes_obj) -> bool {
             std::string st(static_cast<const char *>(bytes_obj.data()), bytes_obj.size());
             return self == st;
           },
@@ -1137,6 +1253,10 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
           "__eq__",
           [](const utils::String &self, const utils::String &s) -> bool { return self == s; },
           "Compares two String instances.", nb::is_operator())
+      .def(
+          "__eq__", [](const utils::String &, nb::object) -> bool { return false; },
+          nb::arg("other").none(), "Returns False when compared to an object that is not a string.",
+          nb::is_operator())
       .def(
           "__ne__",
           [](const utils::String &self, const std::string &s) -> bool { return self != s; },
@@ -1152,6 +1272,10 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
           "__ne__",
           [](const utils::String &self, const utils::String &s) -> bool { return self != s; },
           "Checks inequality with a String.", nb::is_operator())
+      .def(
+          "__ne__", [](const utils::String &, nb::object) -> bool { return true; },
+          nb::arg("other").none(), "Returns True when compared to an object that is not a string.",
+          nb::is_operator())
       .def(
           "__lt__",
           [](const utils::String &self, const std::string &s) -> bool { return self < s; },
@@ -1188,7 +1312,16 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
             nb::str py_str(self.data(), self.size());
             return PyObject_Hash(py_str.ptr());
           },
-          "Returns the same hash as the equivalent Python str, enabling use as dict keys.");
+          "Returns the same hash as the equivalent Python str, enabling use as dict keys.")
+      .def(
+          "decode",
+          [](const utils::String &self, const char *encoding, const char *errors) -> nb::object {
+            std::string s = self.as_string();
+            nb::bytes data(s.data(), s.size());
+            return data.attr("decode")(encoding, errors);
+          },
+          nb::arg("encoding") = "utf-8", nb::arg("errors") = "strict",
+          "Decodes the string like a Python :class:`bytes` object, returning a Python str.");
 
   DECLARE_REPEATED_FIELD(int64_t, rep_int64_t);
   define_repeated_field_type(rep_int64_t);
@@ -1213,6 +1346,28 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
   nb::class_<utils::RepeatedField<utils::String>> rep_string(m, "RepeatedFieldString",
                                                              "RepeatedFieldString");
   define_repeated_field_type(rep_string);
+  // Override __init__ for String to handle str/bytes/String types
+  rep_string.def(
+      "__init__",
+      [](utils::RepeatedField<utils::String> *self, nb::iterable iterable) {
+        new (self) utils::RepeatedField<utils::String>();
+        if (nb::isinstance<utils::RepeatedField<utils::String>>(iterable)) {
+          self->extend(nb::cast<utils::RepeatedField<utils::String> &>(iterable));
+        } else {
+          for (auto it : iterable) {
+            if (nb::isinstance<utils::String>(it)) {
+              self->push_back(nb::cast<utils::String &>(it));
+            } else if (nb::isinstance<nb::bytes>(it)) {
+              nanobind::bytes bytes_obj = nb::borrow<nb::bytes>(it);
+              std::string st(static_cast<const char *>(bytes_obj.data()), bytes_obj.size());
+              self->push_back(utils::String(st));
+            } else {
+              self->push_back(utils::String(nb::cast<std::string>(it)));
+            }
+          }
+        }
+      },
+      nb::arg("iterable"), "Creates a RepeatedFieldString from an iterable.");
   define_repeated_field_type_extend(rep_string);
 
   nb::enum_<OperatorStatus>(m, "OperatorStatus", nb::is_arithmetic())
@@ -1226,6 +1381,17 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD_STR(StringStringEntryProto, key)
       .PYFIELD_STR(StringStringEntryProto, value);
   PYADD_PROTO_SERIALIZATION(StringStringEntryProto);
+  nb_StringStringEntryProto.def(
+      "HasField",
+      [](const StringStringEntryProto &self, const std::string &field_name) -> bool {
+        if (field_name == "key")
+          return self.has_key();
+        if (field_name == "value")
+          return self.has_value();
+        throw nb::attribute_error(
+            ("Protocol message has no field named '" + field_name + "'").c_str());
+      },
+      nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.");
   DECLARE_REPEATED_FIELD_PROTO(StringStringEntryProto, rep_ssentry);
   define_repeated_field_type_proto(rep_ssentry, rep_ssentry_proto);
 
@@ -1233,6 +1399,17 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD_STR(OperatorSetIdProto, domain)
       .PYFIELD(OperatorSetIdProto, version);
   PYADD_PROTO_SERIALIZATION(OperatorSetIdProto);
+  nb_OperatorSetIdProto.def(
+      "HasField",
+      [](const OperatorSetIdProto &self, const std::string &field_name) -> bool {
+        if (field_name == "domain")
+          return self.has_domain();
+        if (field_name == "version")
+          return self.has_version();
+        throw nb::attribute_error(
+            ("Protocol message has no field named '" + field_name + "'").c_str());
+      },
+      nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.");
   nb_OperatorSetIdProto.def(
       "__repr__", [](OperatorSetIdProto &self) { return proto_repr_with_short_line(self); });
   DECLARE_REPEATED_FIELD_PROTO(OperatorSetIdProto, rep_osp);
@@ -1242,11 +1419,35 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD_STR(TensorAnnotation, tensor_name)
       .PYFIELD(TensorAnnotation, quant_parameter_tensor_names);
   PYADD_PROTO_SERIALIZATION(TensorAnnotation);
+  nb_TensorAnnotation.def(
+      "HasField",
+      [](const TensorAnnotation &self, const std::string &field_name) -> bool {
+        if (field_name == "tensor_name")
+          return self.has_tensor_name();
+        if (field_name == "quant_parameter_tensor_names")
+          return self.has_quant_parameter_tensor_names();
+        throw nb::attribute_error(
+            ("Protocol message has no field named '" + field_name + "'").c_str());
+      },
+      nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.");
+  DECLARE_REPEATED_FIELD_PROTO(TensorAnnotation, rep_ta);
+  define_repeated_field_type_proto(rep_ta, rep_ta_proto);
 
   PYDEFINE_PROTO(m, IntIntListEntryProto)
       .PYFIELD(IntIntListEntryProto, key)
       .PYFIELD(IntIntListEntryProto, value);
   PYADD_PROTO_SERIALIZATION(IntIntListEntryProto);
+  nb_IntIntListEntryProto.def(
+      "HasField",
+      [](const IntIntListEntryProto &self, const std::string &field_name) -> bool {
+        if (field_name == "key")
+          return self.has_key();
+        if (field_name == "value")
+          return self.has_value();
+        throw nb::attribute_error(
+            ("Protocol message has no field named '" + field_name + "'").c_str());
+      },
+      nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.");
   DECLARE_REPEATED_FIELD_PROTO(IntIntListEntryProto, rep_iil);
   define_repeated_field_type_proto(rep_iil, rep_iil_proto);
 
@@ -1255,6 +1456,19 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD(DeviceConfigurationProto, num_devices)
       .PYFIELD(DeviceConfigurationProto, device);
   PYADD_PROTO_SERIALIZATION(DeviceConfigurationProto);
+  nb_DeviceConfigurationProto.def(
+      "HasField",
+      [](const DeviceConfigurationProto &self, const std::string &field_name) -> bool {
+        if (field_name == "name")
+          return self.has_name();
+        if (field_name == "num_devices")
+          return self.has_num_devices();
+        if (field_name == "device")
+          return self.has_device();
+        throw nb::attribute_error(
+            ("Protocol message has no field named '" + field_name + "'").c_str());
+      },
+      nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.");
   DECLARE_REPEATED_FIELD_PROTO(DeviceConfigurationProto, rep_dcp);
   define_repeated_field_type_proto(rep_dcp, rep_dcp_proto);
 
@@ -1263,6 +1477,19 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD_STR(SimpleShardedDimProto, dim_param)
       .PYFIELD(SimpleShardedDimProto, num_shards);
   PYADD_PROTO_SERIALIZATION(SimpleShardedDimProto);
+  nb_SimpleShardedDimProto.def(
+      "HasField",
+      [](const SimpleShardedDimProto &self, const std::string &field_name) -> bool {
+        if (field_name == "dim_value")
+          return self.has_dim_value();
+        if (field_name == "dim_param")
+          return self.has_dim_param();
+        if (field_name == "num_shards")
+          return self.has_num_shards();
+        throw nb::attribute_error(
+            ("Protocol message has no field named '" + field_name + "'").c_str());
+      },
+      nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.");
   DECLARE_REPEATED_FIELD_PROTO(SimpleShardedDimProto, rep_ssdp);
   define_repeated_field_type_proto(rep_ssdp, rep_ssdp_proto);
 
@@ -1270,6 +1497,17 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD(ShardedDimProto, axis)
       .PYFIELD(ShardedDimProto, simple_sharding);
   PYADD_PROTO_SERIALIZATION(ShardedDimProto);
+  nb_ShardedDimProto.def(
+      "HasField",
+      [](const ShardedDimProto &self, const std::string &field_name) -> bool {
+        if (field_name == "axis")
+          return self.has_axis();
+        if (field_name == "simple_sharding")
+          return self.has_simple_sharding();
+        throw nb::attribute_error(
+            ("Protocol message has no field named '" + field_name + "'").c_str());
+      },
+      nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.");
   DECLARE_REPEATED_FIELD_PROTO(ShardedDimProto, rep_sdp);
   define_repeated_field_type_proto(rep_sdp, rep_sdp_proto);
 
@@ -1279,6 +1517,21 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD(ShardingSpecProto, index_to_device_group_map)
       .PYFIELD(ShardingSpecProto, sharded_dim);
   PYADD_PROTO_SERIALIZATION(ShardingSpecProto);
+  nb_ShardingSpecProto.def(
+      "HasField",
+      [](const ShardingSpecProto &self, const std::string &field_name) -> bool {
+        if (field_name == "tensor_name")
+          return self.has_tensor_name();
+        if (field_name == "device")
+          return self.has_device();
+        if (field_name == "index_to_device_group_map")
+          return self.has_index_to_device_group_map();
+        if (field_name == "sharded_dim")
+          return self.has_sharded_dim();
+        throw nb::attribute_error(
+            ("Protocol message has no field named '" + field_name + "'").c_str());
+      },
+      nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.");
   DECLARE_REPEATED_FIELD_PROTO(ShardingSpecProto, rep_ssp);
   define_repeated_field_type_proto(rep_ssp, rep_ssp_proto);
 
@@ -1287,6 +1540,19 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD(NodeDeviceConfigurationProto, sharding_spec)
       .PYFIELD_OPTIONAL_INT(NodeDeviceConfigurationProto, pipeline_stage);
   PYADD_PROTO_SERIALIZATION(NodeDeviceConfigurationProto);
+  nb_NodeDeviceConfigurationProto.def(
+      "HasField",
+      [](const NodeDeviceConfigurationProto &self, const std::string &field_name) -> bool {
+        if (field_name == "configuration_id")
+          return self.has_configuration_id();
+        if (field_name == "sharding_spec")
+          return self.has_sharding_spec();
+        if (field_name == "pipeline_stage")
+          return self.has_pipeline_stage();
+        throw nb::attribute_error(
+            ("Protocol message has no field named '" + field_name + "'").c_str());
+      },
+      nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.");
   DECLARE_REPEATED_FIELD_PROTO(NodeDeviceConfigurationProto, rep_ndcp);
   define_repeated_field_type_proto(rep_ndcp, rep_ndcp_proto);
 
@@ -1295,13 +1561,51 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD_OPTIONAL_INT(TensorShapeProto::Dimension, dim_value)
       .PYFIELD_STR(TensorShapeProto::Dimension, dim_param)
       .PYFIELD_STR(TensorShapeProto::Dimension, denotation)
+      .def(
+          "WhichOneof",
+          [](const TensorShapeProto::Dimension &self, const std::string &oneof_name) -> nb::object {
+            if (oneof_name != "value")
+              throw nb::value_error(
+                  ("Protocol message TensorShapeProto.Dimension has no oneof field named '" +
+                   oneof_name + "'.")
+                      .c_str());
+            if (self.has_dim_value())
+              return nb::str("dim_value");
+            if (self.has_dim_param())
+              return nb::str("dim_param");
+            return nb::none();
+          },
+          nb::arg("oneof_name"),
+          "Returns the name of the active oneof field, or None if no field is set.")
       .def("__repr__",
            [](TensorShapeProto::Dimension &self) { return proto_repr_with_short_line(self); });
   PYADD_SUBPROTO_SERIALIZATION(TensorShapeProto, Dimension);
+  nb_sub_TensorShapeProtoDimension.def(
+      "HasField",
+      [](const TensorShapeProto::Dimension &self, const std::string &field_name) -> bool {
+        if (field_name == "dim_value")
+          return self.has_dim_value();
+        if (field_name == "dim_param")
+          return self.has_dim_param();
+        if (field_name == "denotation")
+          return self.has_denotation();
+        throw nb::attribute_error(
+            ("Protocol message has no field named '" + field_name + "'").c_str());
+      },
+      nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.");
   DECLARE_REPEATED_FIELD_SUBPROTO(TensorShapeProto, Dimension, rep_tspd);
   define_repeated_field_type_proto(rep_tspd, rep_tspd_proto);
   nb_TensorShapeProto.PYFIELD(TensorShapeProto, dim);
   PYADD_PROTO_SERIALIZATION(TensorShapeProto);
+  nb_TensorShapeProto.def(
+      "HasField",
+      [](const TensorShapeProto &self, const std::string &field_name) -> bool {
+        if (field_name == "dim")
+          return self.has_dim();
+        throw nb::attribute_error(
+            ("Protocol message has no field named '" + field_name + "'").c_str());
+      },
+      nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.");
   nb_TensorShapeProto.def("__repr__",
                           [](TensorShapeProto &self) { return proto_repr_with_short_line(self); });
 
@@ -1417,6 +1721,16 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
             memcpy(self.raw_data_.data(), ptr, raw.size());
           },
           TensorProto::DOC_raw_data)
+      .def_prop_ro(
+          "size",
+          [](const TensorProto &self) -> int64_t {
+            int64_t size = 1;
+            for (auto &it : self.ref_dims()) {
+              size *= static_cast<int64_t>(it);
+            }
+            return size;
+          },
+          "Returns the number of elements in the tensor.")
       .def(
           "load_external_data",
           [](TensorProto &self, const std::string &base_dir) { self.LoadExternalData(base_dir); },
@@ -1424,27 +1738,43 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
           "Loads the raw bytes of this tensor from the external file described by its "
           "``external_data`` field into ``raw_data``. The ``external_data`` and ``data_location`` "
           "fields are preserved.")
-      .def("HasField", [](const TensorProto &self, const std::string &field_name) {
-        if (field_name == "data_location")
-          return self.has_data_location();
-        if (field_name == "external_data")
-          return self.has_external_data();
-        if (field_name == "double_data")
-          return self.has_double_data();
-        if (field_name == "float_data")
-          return self.has_float_data();
-        if (field_name == "int64_data")
-          return self.has_int64_data();
-        if (field_name == "int32_data")
-          return self.has_int32_data();
-        if (field_name == "uint64_data")
-          return self.has_uint64_data();
-        if (field_name == "raw_data")
-          return self.raw_data_.size() > 0;
-        if (field_name == "metadata_props")
-          return self.has_metadata_props();
-        return true;
-      });
+      .def(
+          "HasField",
+          [](const TensorProto &self, const std::string &field_name) -> bool {
+            if (field_name == "dims")
+              return self.has_dims();
+            if (field_name == "data_type")
+              return self.has_data_type();
+            if (field_name == "segment")
+              return self.has_segment();
+            if (field_name == "float_data")
+              return self.has_float_data();
+            if (field_name == "int32_data")
+              return self.has_int32_data();
+            if (field_name == "string_data")
+              return self.has_string_data();
+            if (field_name == "int64_data")
+              return self.has_int64_data();
+            if (field_name == "name")
+              return self.has_name();
+            if (field_name == "raw_data")
+              return self.has_raw_data();
+            if (field_name == "double_data")
+              return self.has_double_data();
+            if (field_name == "uint64_data")
+              return self.has_uint64_data();
+            if (field_name == "doc_string")
+              return self.has_doc_string();
+            if (field_name == "external_data")
+              return self.has_external_data();
+            if (field_name == "data_location")
+              return self.has_data_location();
+            if (field_name == "metadata_props")
+              return self.has_metadata_props();
+            throw nb::attribute_error(
+                ("Protocol message has no field named '" + field_name + "'").c_str());
+          },
+          nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.");
   PYADD_PROTO_SERIALIZATION(TensorProto);
   DECLARE_REPEATED_FIELD_PROTO(TensorProto, rep_tp);
   define_repeated_field_type_proto(rep_tp, rep_tp_proto);
@@ -1454,6 +1784,19 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD(SparseTensorProto, indices)
       .PYFIELD(SparseTensorProto, dims);
   PYADD_PROTO_SERIALIZATION(SparseTensorProto);
+  nb_SparseTensorProto.def(
+      "HasField",
+      [](const SparseTensorProto &self, const std::string &field_name) -> bool {
+        if (field_name == "values")
+          return self.has_values();
+        if (field_name == "indices")
+          return self.has_indices();
+        if (field_name == "dims")
+          return self.has_dims();
+        throw nb::attribute_error(
+            ("Protocol message has no field named '" + field_name + "'").c_str());
+      },
+      nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.");
   DECLARE_REPEATED_FIELD_PROTO(SparseTensorProto, rep_tsp);
   define_repeated_field_type_proto(rep_tsp, rep_tsp_proto);
 
@@ -1472,8 +1815,20 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
             }
           },
           TypeProto::Tensor::DOC_elem_type)
+      .def("has_elem_type", &TypeProto::Tensor::has_elem_type, "Tells if 'elem_type' has a value.")
       .PYFIELD_OPTIONAL_PROTO(TypeProto::Tensor, shape);
   PYADD_SUBPROTO_SERIALIZATION(TypeProto, Tensor);
+  nb_sub_TypeProtoTensor.def(
+      "HasField",
+      [](const TypeProto::Tensor &self, const std::string &field_name) -> bool {
+        if (field_name == "elem_type")
+          return self.has_elem_type();
+        if (field_name == "shape")
+          return self.has_shape();
+        throw nb::attribute_error(
+            ("Protocol message has no field named '" + field_name + "'").c_str());
+      },
+      nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.");
 
   PYDEFINE_PROTO_WITH_SUBTYPES2(m, TypeProto, SparseTensor);
   nb_sub_TypeProtoSparseTensor
@@ -1490,28 +1845,114 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
             }
           },
           TypeProto::SparseTensor::DOC_elem_type)
+      .def("has_elem_type", &TypeProto::SparseTensor::has_elem_type,
+           "Tells if 'elem_type' has a value.")
       .PYFIELD_OPTIONAL_PROTO(TypeProto::SparseTensor, shape);
   PYADD_SUBPROTO_SERIALIZATION(TypeProto, SparseTensor);
+  nb_sub_TypeProtoSparseTensor.def(
+      "HasField",
+      [](const TypeProto::SparseTensor &self, const std::string &field_name) -> bool {
+        if (field_name == "elem_type")
+          return self.has_elem_type();
+        if (field_name == "shape")
+          return self.has_shape();
+        throw nb::attribute_error(
+            ("Protocol message has no field named '" + field_name + "'").c_str());
+      },
+      nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.");
 
   PYADD_SUBPROTO_SERIALIZATION(TypeProto, SparseTensor);
   PYDEFINE_SUBPROTO(nb_TypeProto, TypeProto, Sequence)
       .PYFIELD_OPTIONAL_PROTO(TypeProto::Sequence, elem_type);
   PYADD_SUBPROTO_SERIALIZATION(TypeProto, Sequence);
+  nb_sub_TypeProtoSequence.def(
+      "HasField",
+      [](const TypeProto::Sequence &self, const std::string &field_name) -> bool {
+        if (field_name == "elem_type")
+          return self.has_elem_type();
+        throw nb::attribute_error(
+            ("Protocol message has no field named '" + field_name + "'").c_str());
+      },
+      nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.");
   PYDEFINE_SUBPROTO(nb_TypeProto, TypeProto, Optional)
       .PYFIELD_OPTIONAL_PROTO(TypeProto::Optional, elem_type);
   PYADD_SUBPROTO_SERIALIZATION(TypeProto, Optional);
+  nb_sub_TypeProtoOptional.def(
+      "HasField",
+      [](const TypeProto::Optional &self, const std::string &field_name) -> bool {
+        if (field_name == "elem_type")
+          return self.has_elem_type();
+        throw nb::attribute_error(
+            ("Protocol message has no field named '" + field_name + "'").c_str());
+      },
+      nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.");
   PYDEFINE_SUBPROTO(nb_TypeProto, TypeProto, Map)
       .PYFIELD(TypeProto::Map, key_type)
       .PYFIELD_OPTIONAL_PROTO(TypeProto::Map, value_type);
   PYADD_SUBPROTO_SERIALIZATION(TypeProto, Map);
+  nb_sub_TypeProtoMap.def(
+      "HasField",
+      [](const TypeProto::Map &self, const std::string &field_name) -> bool {
+        if (field_name == "key_type")
+          return self.has_key_type();
+        if (field_name == "value_type")
+          return self.has_value_type();
+        throw nb::attribute_error(
+            ("Protocol message has no field named '" + field_name + "'").c_str());
+      },
+      nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.");
   nb_TypeProto.PYFIELD_OPTIONAL_PROTO(TypeProto, tensor_type)
       .PYFIELD_OPTIONAL_PROTO(TypeProto, sequence_type)
       .PYFIELD_OPTIONAL_PROTO(TypeProto, map_type)
       .PYFIELD_STR(TypeProto, denotation)
       .PYFIELD_OPTIONAL_PROTO(TypeProto, sparse_tensor_type)
-      .PYFIELD_OPTIONAL_PROTO(TypeProto, optional_type);
+      .PYFIELD_OPTIONAL_PROTO(TypeProto, optional_type)
+      .def(
+          "WhichOneof",
+          [](const TypeProto &self, const std::string &oneof_name) -> nb::object {
+            if (oneof_name != "value")
+              throw nb::value_error(
+                  ("Protocol message TypeProto has no oneof field named '" + oneof_name + "'.")
+                      .c_str());
+            if (self.has_tensor_type())
+              return nb::str("tensor_type");
+            if (self.has_sequence_type())
+              return nb::str("sequence_type");
+            if (self.has_map_type())
+              return nb::str("map_type");
+            if (self.has_sparse_tensor_type())
+              return nb::str("sparse_tensor_type");
+            if (self.has_optional_type())
+              return nb::str("optional_type");
+            return nb::none();
+          },
+          nb::arg("oneof_name"),
+          "Returns the name of the field set in the oneof ``oneof_name``, or None if no field is "
+          "set, following the protobuf API.");
   PYADD_PROTO_SERIALIZATION(TypeProto);
-  nb_TypeProto.def("__repr__", [](TypeProto &self) { return proto_repr_with_short_line(self); });
+  nb_TypeProto
+      .def(
+          "HasField",
+          [](const TypeProto &self, const std::string &field_name) -> bool {
+            if (field_name == "tensor_type")
+              return self.has_tensor_type();
+            if (field_name == "sequence_type")
+              return self.has_sequence_type();
+            if (field_name == "map_type")
+              return self.has_map_type();
+            if (field_name == "sparse_tensor_type")
+              return self.has_sparse_tensor_type();
+            if (field_name == "optional_type")
+              return self.has_optional_type();
+            if (field_name == "denotation")
+              return self.has_denotation();
+            throw nb::attribute_error(
+                ("Protocol message has no field named '" + field_name + "'").c_str());
+          },
+          nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.")
+      .def("__repr__", [](TypeProto &self) { return proto_repr_with_short_line(self); });
+  DECLARE_REPEATED_FIELD_PROTO(TypeProto, rep_typeproto);
+  define_repeated_field_type_proto(rep_typeproto, rep_typeproto_proto);
 
   PYDEFINE_PROTO(m, ValueInfoProto)
       .PYFIELD_STR(ValueInfoProto, name)
@@ -1519,8 +1960,23 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD_STR(ValueInfoProto, doc_string)
       .PYFIELD(ValueInfoProto, metadata_props);
   PYADD_PROTO_SERIALIZATION(ValueInfoProto);
-  nb_ValueInfoProto.def("__repr__",
-                        [](ValueInfoProto &self) { return proto_repr_with_short_line(self); });
+  nb_ValueInfoProto
+      .def(
+          "HasField",
+          [](const ValueInfoProto &self, const std::string &field_name) -> bool {
+            if (field_name == "name")
+              return self.has_name();
+            if (field_name == "type")
+              return self.has_type();
+            if (field_name == "doc_string")
+              return self.has_doc_string();
+            if (field_name == "metadata_props")
+              return self.has_metadata_props();
+            throw nb::attribute_error(
+                ("Protocol message has no field named '" + field_name + "'").c_str());
+          },
+          nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.")
+      .def("__repr__", [](ValueInfoProto &self) { return proto_repr_with_short_line(self); });
   DECLARE_REPEATED_FIELD_PROTO(ValueInfoProto, rep_vip);
   define_repeated_field_type_proto(rep_vip, rep_vip_proto);
 
@@ -1634,10 +2090,52 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD_REPEATED_STR(AttributeProto, strings)
       .PYFIELD(AttributeProto, tensors)
       .PYFIELD(AttributeProto, sparse_tensors)
-      .PYFIELD(AttributeProto, graphs);
+      .PYFIELD(AttributeProto, graphs)
+      .PYFIELD(AttributeProto, type_protos);
   PYADD_PROTO_SERIALIZATION(AttributeProto);
-  nb_AttributeProto.def("__repr__",
-                        [](AttributeProto &self) { return proto_repr_with_short_line(self); });
+  nb_AttributeProto
+      .def(
+          "HasField",
+          [](const AttributeProto &self, const std::string &field_name) -> bool {
+            if (field_name == "name")
+              return self.has_name();
+            if (field_name == "ref_attr_name")
+              return self.has_ref_attr_name();
+            if (field_name == "doc_string")
+              return self.has_doc_string();
+            if (field_name == "f")
+              return self.has_f();
+            if (field_name == "i")
+              return self.has_i();
+            if (field_name == "s")
+              return self.has_s();
+            if (field_name == "t")
+              return self.has_t();
+            if (field_name == "sparse_tensor")
+              return self.has_sparse_tensor();
+            if (field_name == "g")
+              return self.has_g();
+            if (field_name == "tp")
+              return self.has_tp();
+            if (field_name == "floats")
+              return self.has_floats();
+            if (field_name == "ints")
+              return self.has_ints();
+            if (field_name == "strings")
+              return self.has_strings();
+            if (field_name == "tensors")
+              return self.has_tensors();
+            if (field_name == "sparse_tensors")
+              return self.has_sparse_tensors();
+            if (field_name == "graphs")
+              return self.has_graphs();
+            if (field_name == "type_protos")
+              return self.has_type_protos();
+            throw nb::attribute_error(
+                ("Protocol message has no field named '" + field_name + "'").c_str());
+          },
+          nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.")
+      .def("__repr__", [](AttributeProto &self) { return proto_repr_with_short_line(self); });
   DECLARE_REPEATED_FIELD_PROTO(AttributeProto, rep_ap);
   define_repeated_field_type_proto(rep_ap, rep_ap_proto);
 
@@ -1653,7 +2151,35 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD(NodeProto, metadata_props)
       .PYFIELD(NodeProto, device_configurations);
   PYADD_PROTO_SERIALIZATION(NodeProto);
-  nb_NodeProto.def("__repr__", [](NodeProto &self) { return proto_repr_with_short_line(self); });
+  nb_NodeProto
+      .def(
+          "HasField",
+          [](const NodeProto &self, const std::string &field_name) -> bool {
+            if (field_name == "name")
+              return self.has_name();
+            if (field_name == "op_type")
+              return self.has_op_type();
+            if (field_name == "domain")
+              return self.has_domain();
+            if (field_name == "overload")
+              return self.has_overload();
+            if (field_name == "doc_string")
+              return self.has_doc_string();
+            if (field_name == "input")
+              return self.has_input();
+            if (field_name == "output")
+              return self.has_output();
+            if (field_name == "attribute")
+              return self.has_attribute();
+            if (field_name == "metadata_props")
+              return self.has_metadata_props();
+            if (field_name == "device_configurations")
+              return self.has_device_configurations();
+            throw nb::attribute_error(
+                ("Protocol message has no field named '" + field_name + "'").c_str());
+          },
+          nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.")
+      .def("__repr__", [](NodeProto &self) { return proto_repr_with_short_line(self); });
   nb_NodeProto
       .def(
           "set_attribute",
@@ -1688,6 +2214,33 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD(GraphProto, metadata_props);
   PYADD_PROTO_SERIALIZATION(GraphProto);
   nb_GraphProto
+      .def(
+          "HasField",
+          [](const GraphProto &self, const std::string &field_name) -> bool {
+            if (field_name == "name")
+              return self.has_name();
+            if (field_name == "doc_string")
+              return self.has_doc_string();
+            if (field_name == "node")
+              return self.has_node();
+            if (field_name == "initializer")
+              return self.has_initializer();
+            if (field_name == "sparse_initializer")
+              return self.has_sparse_initializer();
+            if (field_name == "input")
+              return self.has_input();
+            if (field_name == "output")
+              return self.has_output();
+            if (field_name == "value_info")
+              return self.has_value_info();
+            if (field_name == "quantization_annotation")
+              return self.has_quantization_annotation();
+            if (field_name == "metadata_props")
+              return self.has_metadata_props();
+            throw nb::attribute_error(
+                ("Protocol message has no field named '" + field_name + "'").c_str());
+          },
+          nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.")
       .def(
           "add_input",
           [](GraphProto &self, nb::object name_or_proto, nb::object elem_type, nb::object shape,
@@ -1777,6 +2330,37 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
   PYADD_PROTO_SERIALIZATION(FunctionProto);
   nb_FunctionProto
       .def(
+          "HasField",
+          [](const FunctionProto &self, const std::string &field_name) -> bool {
+            if (field_name == "name")
+              return self.has_name();
+            if (field_name == "doc_string")
+              return self.has_doc_string();
+            if (field_name == "domain")
+              return self.has_domain();
+            if (field_name == "overload")
+              return self.has_overload();
+            if (field_name == "input")
+              return self.has_input();
+            if (field_name == "output")
+              return self.has_output();
+            if (field_name == "attribute")
+              return self.has_attribute();
+            if (field_name == "attribute_proto")
+              return self.has_attribute_proto();
+            if (field_name == "node")
+              return self.has_node();
+            if (field_name == "opset_import")
+              return self.has_opset_import();
+            if (field_name == "value_info")
+              return self.has_value_info();
+            if (field_name == "metadata_props")
+              return self.has_metadata_props();
+            throw nb::attribute_error(
+                ("Protocol message has no field named '" + field_name + "'").c_str());
+          },
+          nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.")
+      .def(
           "add_input",
           [](FunctionProto &self, const std::string &name) {
             self.input_.push_back(utils::String(name));
@@ -1818,7 +2402,37 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD(ModelProto, functions)
       .PYFIELD(ModelProto, configuration);
   PYADD_PROTO_SERIALIZATION(ModelProto);
-  nb_ModelProto.def("__repr__", [](ModelProto &self) { return proto_repr_with_short_line(self); });
+  nb_ModelProto
+      .def(
+          "HasField",
+          [](const ModelProto &self, const std::string &field_name) -> bool {
+            if (field_name == "ir_version")
+              return self.has_ir_version();
+            if (field_name == "producer_name")
+              return self.has_producer_name();
+            if (field_name == "producer_version")
+              return self.has_producer_version();
+            if (field_name == "domain")
+              return self.has_domain();
+            if (field_name == "model_version")
+              return self.has_model_version();
+            if (field_name == "doc_string")
+              return self.has_doc_string();
+            if (field_name == "graph")
+              return self.has_graph();
+            if (field_name == "metadata_props")
+              return self.has_metadata_props();
+            if (field_name == "opset_import")
+              return self.has_opset_import();
+            if (field_name == "functions")
+              return self.has_functions();
+            if (field_name == "configuration")
+              return self.has_configuration();
+            throw nb::attribute_error(
+                ("Protocol message has no field named '" + field_name + "'").c_str());
+          },
+          nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.")
+      .def("__repr__", [](ModelProto &self) { return proto_repr_with_short_line(self); });
   nb_ModelProto
       .def("add_function", &ModelProto::add_function, nb::arg("function"),
            nb::rv_policy::reference_internal, "Appends a :class:`FunctionProto` and returns it.")
@@ -1917,6 +2531,27 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD(SequenceProto, map_values)
       .PYFIELD(SequenceProto, optional_values);
   PYADD_PROTO_SERIALIZATION(SequenceProto);
+  nb_SequenceProto.def(
+      "HasField",
+      [](const SequenceProto &self, const std::string &field_name) -> bool {
+        if (field_name == "name")
+          return self.has_name();
+        if (field_name == "elem_type")
+          return self.has_elem_type();
+        if (field_name == "tensor_values")
+          return self.has_tensor_values();
+        if (field_name == "sparse_tensor_values")
+          return self.has_sparse_tensor_values();
+        if (field_name == "sequence_values")
+          return self.has_sequence_values();
+        if (field_name == "map_values")
+          return self.has_map_values();
+        if (field_name == "optional_values")
+          return self.has_optional_values();
+        throw nb::attribute_error(
+            ("Protocol message has no field named '" + field_name + "'").c_str());
+      },
+      nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.");
 
   PYDEFINE_PROTO_WITH_SUBTYPES(m, MapProto);
   nb_MapProto.PYFIELD_STR(MapProto, name)
@@ -1934,6 +2569,23 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD(MapProto, string_keys)
       .PYFIELD(MapProto, values);
   PYADD_PROTO_SERIALIZATION(MapProto);
+  nb_MapProto.def(
+      "HasField",
+      [](const MapProto &self, const std::string &field_name) -> bool {
+        if (field_name == "name")
+          return self.has_name();
+        if (field_name == "key_type")
+          return self.has_key_type();
+        if (field_name == "keys")
+          return self.has_keys();
+        if (field_name == "string_keys")
+          return self.has_string_keys();
+        if (field_name == "values")
+          return self.has_values();
+        throw nb::attribute_error(
+            ("Protocol message has no field named '" + field_name + "'").c_str());
+      },
+      nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.");
 
   PYDEFINE_PROTO_WITH_SUBTYPES(m, OptionalProto);
   nb::enum_<OptionalProto::DataType>(nb_OptionalProto, "DataType", nb::is_arithmetic())
@@ -1967,18 +2619,59 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD_OPTIONAL_PROTO(OptionalProto, sequence_value)
       .PYFIELD_OPTIONAL_PROTO(OptionalProto, map_value)
       .PYFIELD_OPTIONAL_PROTO(OptionalProto, optional_value)
-      .def("HasField", [](const OptionalProto &self, const std::string &field_name) {
-        if (self.has_tensor_value() && field_name == "tensor_value")
-          return true;
-        if (self.has_sparse_tensor_value() && field_name == "sparse_tensor_value")
-          return true;
-        if (self.has_sequence_value() && field_name == "sequence_value")
-          return true;
-        if (self.has_map_value() && field_name == "map_value")
-          return true;
-        if (self.has_optional_value() && field_name == "optional_value")
-          return true;
-        return false;
-      });
+      .def(
+          "HasField",
+          [](const OptionalProto &self, const std::string &field_name) -> bool {
+            if (field_name == "name")
+              return self.has_name();
+            if (field_name == "elem_type")
+              return self.has_elem_type();
+            if (field_name == "tensor_value")
+              return self.has_tensor_value();
+            if (field_name == "sparse_tensor_value")
+              return self.has_sparse_tensor_value();
+            if (field_name == "sequence_value")
+              return self.has_sequence_value();
+            if (field_name == "map_value")
+              return self.has_map_value();
+            if (field_name == "optional_value")
+              return self.has_optional_value();
+            throw nb::attribute_error(
+                ("Protocol message has no field named '" + field_name + "'").c_str());
+          },
+          nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.")
+      .def(
+          "WhichOneof",
+          [](const OptionalProto &self, const std::string &oneof_name) -> nb::object {
+            if (oneof_name != "value")
+              throw nb::value_error(
+                  ("Protocol message OptionalProto has no oneof field named '" + oneof_name + "'.")
+                      .c_str());
+            if (self.has_tensor_value())
+              return nb::str("tensor_value");
+            if (self.has_sparse_tensor_value())
+              return nb::str("sparse_tensor_value");
+            if (self.has_sequence_value())
+              return nb::str("sequence_value");
+            if (self.has_map_value())
+              return nb::str("map_value");
+            if (self.has_optional_value())
+              return nb::str("optional_value");
+            return nb::none();
+          },
+          nb::arg("oneof_name"),
+          "Returns the name of the field set in the oneof ``oneof_name``, or None if no field is "
+          "set, following the protobuf API.");
   PYADD_PROTO_SERIALIZATION(OptionalProto);
+
+  // Registers every repeated field container as a virtual subclass of
+  // collections.abc.Sequence so that ``isinstance(repeated_field, Sequence)``
+  // returns True, matching the behaviour of protobuf repeated containers.
+  nb::object sequence_abc = nb::module_::import_("collections.abc").attr("Sequence");
+  nb::dict module_dict = nb::borrow<nb::dict>(m.attr("__dict__"));
+  for (auto item : module_dict) {
+    std::string name = nb::cast<std::string>(item.first);
+    if (name.rfind("RepeatedField", 0) == 0 || name.rfind("RepeatedProtoField", 0) == 0)
+      sequence_abc.attr("register")(item.second);
+  }
 }

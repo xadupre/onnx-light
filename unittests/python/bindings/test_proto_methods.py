@@ -8,11 +8,16 @@ import onnx_light.onnx.helper as oh
 from onnx_light.ext_test_case import ExtTestCase
 from onnx_light.onnx_lib import (
     AttributeProto,
+    DeviceConfigurationProto,
     FunctionProto,
     GraphProto,
     ModelProto,
     NodeProto,
+    OptionalProto,
+    SparseTensorProto,
     TensorProto,
+    TensorShapeProto,
+    TypeProto,
     ValueInfoProto,
 )
 
@@ -149,6 +154,200 @@ class TestProtoMethods(ExtTestCase):
         self.assertEqual(m2.graph.node[0].op_type, "MatMul")
         self.assertEqual(m2.opset_import[0].version, 18)
         self.assertEqual(m2.metadata_props[0].key, "producer")
+
+    def test_clear_field_repeated(self):
+        tensor = TensorProto()
+        tensor.dims.extend([1, 2, 3])
+        tensor.ClearField("dims")
+        self.assertEqual(list(tensor.dims), [])
+
+    def test_clear_field_string(self):
+        tensor = TensorProto()
+        tensor.name = "abc"
+        tensor.ClearField("name")
+        self.assertEqual(tensor.name, "")
+        self.assertFalse(tensor.has_name())
+
+    def test_clear_field_optional_message(self):
+        type_proto = TypeProto()
+        type_proto.tensor_type.elem_type = TensorProto.FLOAT
+        type_proto.tensor_type.shape.dim.add().dim_value = 3
+        self.assertTrue(type_proto.tensor_type.has_shape())
+        type_proto.tensor_type.ClearField("shape")
+        self.assertFalse(type_proto.tensor_type.has_shape())
+        # Other fields are left untouched.
+        self.assertEqual(type_proto.tensor_type.elem_type, TensorProto.FLOAT)
+
+    def test_clear_field_optional_scalar(self):
+        dim = TensorShapeProto.Dimension()
+        dim.dim_value = 5
+        self.assertTrue(dim.has_dim_value())
+        dim.ClearField("dim_value")
+        self.assertFalse(dim.has_dim_value())
+
+    def test_clear_field_required_message(self):
+        sparse = SparseTensorProto()
+        sparse.values.name = "v"
+        sparse.values.dims.extend([2])
+        sparse.ClearField("values")
+        self.assertEqual(sparse.values.name, "")
+        self.assertEqual(list(sparse.values.dims), [])
+
+    def test_clear_field_absent_is_noop(self):
+        # Clearing an unset field must not raise.
+        TensorProto().ClearField("name")
+
+    def test_set_optional_field_to_none(self):
+        type_proto = TypeProto()
+        type_proto.tensor_type.shape.dim.add()
+        type_proto.tensor_type.shape = None
+        self.assertFalse(type_proto.tensor_type.has_shape())
+
+        dim = TensorShapeProto.Dimension()
+        dim.dim_value = 7
+        dim.dim_value = None
+        self.assertFalse(dim.has_dim_value())
+
+    def test_which_oneof_type_proto(self):
+        type_proto = TypeProto()
+        self.assertIsNone(type_proto.WhichOneof("value"))
+        type_proto.tensor_type.elem_type = TensorProto.FLOAT
+        self.assertEqual(type_proto.WhichOneof("value"), "tensor_type")
+
+        seq_proto = TypeProto()
+        seq_proto.sequence_type.elem_type.tensor_type.elem_type = TensorProto.FLOAT
+        self.assertEqual(seq_proto.WhichOneof("value"), "sequence_type")
+
+    def test_which_oneof_type_proto_invalid_name(self):
+        type_proto = TypeProto()
+        with self.assertRaises(ValueError):
+            type_proto.WhichOneof("not_a_oneof")
+
+    def test_which_oneof_optional_proto(self):
+        optional_proto = OptionalProto()
+        self.assertIsNone(optional_proto.WhichOneof("value"))
+        optional_proto.tensor_value.name = "t"
+        self.assertEqual(optional_proto.WhichOneof("value"), "tensor_value")
+
+    def test_which_oneof_optional_proto_invalid_name(self):
+        optional_proto = OptionalProto()
+        with self.assertRaises(ValueError):
+            optional_proto.WhichOneof("not_a_oneof")
+
+    def test_repeated_proto_add_with_kwargs(self):
+        model = ModelProto()
+        opset = model.opset_import.add(domain="", version=18)
+        self.assertEqual(opset.domain, "")
+        self.assertEqual(opset.version, 18)
+        self.assertEqual(len(model.opset_import), 1)
+        self.assertEqual(model.opset_import[0].version, 18)
+
+    def test_repeated_proto_add_without_kwargs(self):
+        model = ModelProto()
+        opset = model.opset_import.add()
+        self.assertEqual(opset.domain, "")
+        self.assertEqual(opset.version, 0)
+        self.assertEqual(len(model.opset_import), 1)
+
+    def test_proto_constructor_without_kwargs(self):
+        tensor = TensorProto()
+        self.assertEqual(list(tensor.dims), [])
+        self.assertEqual(int(tensor.data_type), 0)
+
+    def test_proto_constructor_with_kwargs(self):
+        source = TensorProto()
+        source.dims.extend([1, 9])
+        tensor = TensorProto(dims=source.dims, data_type=TensorProto.FLOAT, raw_data=b"abcd")
+        self.assertEqual(list(tensor.dims), [1, 9])
+        self.assertEqual(int(tensor.data_type), int(TensorProto.FLOAT))
+        self.assertEqual(tensor.raw_data, b"abcd")
+
+    def test_proto_constructor_with_repeated_string_kwargs(self):
+        config = DeviceConfigurationProto(name="conf0", num_devices=2, device=["CPU", "CUDA:0"])
+        self.assertEqual(config.name, "conf0")
+        self.assertEqual(config.num_devices, 2)
+        self.assertEqual(list(config.device), ["CPU", "CUDA:0"])
+
+    @unittest.skip("RepeatedField cannot be initialized with a list")
+    def test_repeated_proto_add_with_repeated_string_kwargs(self):
+        model = ModelProto()
+        config = model.configuration.add(name="c", num_devices=1, device=["CPU"])
+        self.assertEqual(config.name, "c")
+        self.assertEqual(list(config.device), ["CPU"])
+
+    def test_repeated_field_is_sequence(self):
+        import collections.abc
+
+        node = oh.make_node("MatMul", ["a", "b"], ["c"])
+        # RepeatedField of strings.
+        self.assertIsInstance(node.input, collections.abc.Sequence)
+        # RepeatedProtoField of messages.
+        model = ModelProto()
+        model.opset_import.add(domain="", version=18)
+        self.assertIsInstance(model.opset_import, collections.abc.Sequence)
+
+    def test_repeated_field_eq_list_str(self):
+        node = oh.make_node("MatMul", ["a", "b"], ["c"])
+        # RepeatedField of strings compared to a list of str.
+        self.assertTrue(node.input == ["a", "b"])
+        self.assertFalse(node.input != ["a", "b"])
+        self.assertFalse(node.input == ["a"])
+        self.assertFalse(node.input == ["a", "x"])
+        # str elements also compare equal to their bytes counterparts.
+        self.assertTrue(node.input == [b"a", b"b"])
+
+    def test_repeated_field_eq_list_numbers(self):
+        ints = oh.make_attribute("ints", [1, 2, 3]).ints
+        self.assertTrue(ints == [1, 2, 3])
+        self.assertFalse(ints == [1, 2])
+        self.assertFalse(ints == [1, 2, 4])
+        floats = oh.make_attribute("floats", [1.0, 2.0]).floats
+        self.assertTrue(floats == [1.0, 2.0])
+        self.assertFalse(floats == [1.0, 3.0])
+
+    def test_init_kwargs_tensor_proto(self):
+        # The use case from the issue: build a TensorProto from another
+        # tensor's repeated ``dims`` field, its ``data_type`` and raw bytes.
+        raw = np.array([1, 2, 3, 4], dtype=np.float32).tobytes()
+        source = TensorProto()
+        source.dims.extend([2, 2])
+        source.data_type = TensorProto.FLOAT
+        tensor = TensorProto(dims=source.dims, data_type=source.data_type, raw_data=raw)
+        self.assertEqual(list(tensor.dims), [2, 2])
+        self.assertEqual(tensor.data_type, TensorProto.FLOAT)
+        self.assertEqual(tensor.raw_data, raw)
+
+    def test_init_kwargs_repeated_from_list(self):
+        tensor = TensorProto(dims=[3, 4], data_type=TensorProto.INT64, name="x")
+        self.assertEqual(list(tensor.dims), [3, 4])
+        self.assertEqual(tensor.data_type, TensorProto.INT64)
+        self.assertEqual(tensor.name, "x")
+
+    def test_init_kwargs_empty_matches_default(self):
+        self.assertEqual(list(TensorProto().dims), [])
+        self.assertEqual(TensorProto().SerializeToString(), TensorProto().SerializeToString())
+
+    def test_init_kwargs_node_proto(self):
+        node = NodeProto(op_type="Add", input=["a", "b"], output=["c"], name="n1")
+        self.assertEqual(node.op_type, "Add")
+        self.assertEqual(list(node.input), ["a", "b"])
+        self.assertEqual(list(node.output), ["c"])
+        self.assertEqual(node.name, "n1")
+
+    def test_init_kwargs_repeated_message_from_list(self):
+        node = NodeProto(op_type="Add")
+        graph = GraphProto(name="g", node=[node])
+        self.assertEqual(graph.name, "g")
+        self.assertEqual(len(graph.node), 1)
+        self.assertEqual(graph.node[0].op_type, "Add")
+
+    def test_init_kwargs_subproto(self):
+        tensor_type = TypeProto.Tensor(elem_type=TensorProto.FLOAT)
+        self.assertEqual(tensor_type.elem_type, TensorProto.FLOAT)
+
+    def test_init_kwargs_unknown_field_raises(self):
+        with self.assertRaises(AttributeError):
+            TensorProto(not_a_field=1)
 
 
 if __name__ == "__main__":

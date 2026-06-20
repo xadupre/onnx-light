@@ -41,9 +41,8 @@ onnx_kernels::RuntimeEventKind ParseRuntimeEventKind(const std::string &kind) {
     return onnx_kernels::RuntimeEventKind::kIntermediate;
   if (kind == "output")
     return onnx_kernels::RuntimeEventKind::kOutput;
-  throw std::invalid_argument(
-      "RuntimeContext: unknown tensor event kind '" + kind +
-      "' (expected one of: unknown, initializer, input, intermediate, output).");
+  EXT_THROW_INVALID("RuntimeContext: unknown tensor event kind '", kind,
+                    "' (expected one of: unknown, initializer, input, intermediate, output).");
 }
 
 } // namespace
@@ -581,10 +580,10 @@ void AddOnnxPyRuntime(nb::module_ &m) {
         // NumPy borrows the bytes (no copy) while keeping the source tensor
         // alive for as long as the view (or any array derived from it) lives.
         const Tensor &t = nb::cast<const Tensor &>(t_obj);
-        if (static_cast<TensorProto::DataType>(t.data_type) == TensorProto::DataType::STRING)
-          throw std::invalid_argument(
-              "tensor_to_numpy: STRING tensors have no raw byte buffer; use "
-              "tensor_to_proto instead.");
+        EXT_ENFORCE_INVALID(
+            !(static_cast<TensorProto::DataType>(t.data_type) == TensorProto::DataType::STRING),
+            "tensor_to_numpy: STRING tensors have no raw byte buffer; use "
+            "tensor_to_proto instead.");
         const size_t n = t.size_bytes();
         return nb::ndarray<nb::numpy, const uint8_t, nb::ndim<1>>(t.bytes(), {n}, t_obj);
       },

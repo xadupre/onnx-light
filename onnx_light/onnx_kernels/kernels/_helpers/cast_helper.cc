@@ -130,7 +130,7 @@ std::uint8_t FloatToFloat4E2M1Nibble(float v) {
       return e.bits;
     }
   }
-  throw std::invalid_argument("FloatToFloat4E2M1Nibble: value not representable in FLOAT4E2M1.");
+  EXT_THROW_INVALID("FloatToFloat4E2M1Nibble: value not representable in FLOAT4E2M1.");
 }
 
 float Float4E2M1NibbleToFloat(std::uint8_t nibble) noexcept {

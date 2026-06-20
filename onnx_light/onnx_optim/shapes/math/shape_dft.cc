@@ -46,9 +46,8 @@ bool ReadScalarInt(const OptimTensor &t, int64_t &out) {
 
 void ComputeShapeDFT(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "DFT", "ComputeShapeDFT");
-  if (node.input_size() < 1) {
-    throw std::invalid_argument("ComputeShapeDFT: DFT requires at least one input (input).");
-  }
+  EXT_ENFORCE_INVALID(!(node.input_size() < 1),
+                      "ComputeShapeDFT: DFT requires at least one input (input).");
 
   const OptimTensor &input = ctx.Get(node.input(0).as_string());
   const TensorType dtype = input.Dtype();

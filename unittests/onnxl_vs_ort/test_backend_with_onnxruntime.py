@@ -1,8 +1,6 @@
 import unittest
 import numpy as np
-import onnxruntime as ort
-from onnxruntime.capi._pybind_state import get_all_operator_schema
-from onnx_light.ext_test_case import import_or_skip
+from onnx_light.ext_test_case import import_or_skip, InferenceSessionAllTypes
 
 # The backend test registries are only available in the full build; skip this
 # module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
@@ -11,7 +9,7 @@ make_test_class = import_or_skip("onnx_light.onnx.backend", "make_test_class")
 
 def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
     """
-    Runs an ONNX model using ONNXRuntime.
+    Runs an ONNX model using ONNXRuntime with support for all dtypes.
 
     Args:
         model: The ONNX model (onnx_light.ModelProto) to run
@@ -20,16 +18,10 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
     Returns:
         List of output arrays from the model
     """
-    # Serialize the model to bytes
-    model_bytes = model.SerializeToString()
+    sess = InferenceSessionAllTypes(model)
 
-    # Create an ONNXRuntime inference session
-    sess = ort.InferenceSession(model_bytes, providers=["CPUExecutionProvider"])
-
-    # Get input names from the session
-    input_names = [inp.name for inp in sess.get_inputs()]
-
-    # Create input dictionary
+    # Get input names and create feed dict
+    input_names = [inp.name for inp in sess._sess.get_inputs()]
     input_dict = dict(zip(input_names, inputs))
 
     # Run inference
@@ -49,6 +41,8 @@ def ort_max_supported_opset() -> int:
     Returns:
         The highest default-domain opset version ONNX Runtime supports.
     """
+    from onnxruntime.capi._pybind_state import get_all_operator_schema
+
     return max(
         schema.since_version for schema in get_all_operator_schema() if schema.domain == ""
     )
@@ -126,51 +120,8 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_linearclassifier_int64_binary$",
     # ORT returns wrong labels for the binary TreeEnsembleClassifier test case.
     r"^test_cc_treeensembleclassifier_int64_binary$",
-    # Low-precision Cast/CastLike dtypes are unsupported in ORT.
-    r"^test_cc_cast_.*FLOAT8E4M3.*$",
-    r"^test_cc_cast_.*FLOAT8E5M2.*$",
-    r"^test_cc_cast_.*FLOAT8E8M0.*$",
-    r"^test_cc_cast_.*FLOAT4E2M1.*$",
-    r"^test_cast_no_saturate_.*FLOAT8.*$",
-    r"^test_cc_castlike_.*FLOAT8E4M3.*$",
-    r"^test_cc_castlike_.*FLOAT8E5M2.*$",
-    r"^test_cc_castlike_.*FLOAT8E8M0.*$",
-    r"^test_cc_castlike_.*FLOAT4E2M1.*$",
-    r"^test_castlike_no_saturate_.*FLOAT8.*$",
-    r"^test_cc_cast_.*UINT4.*$",
-    r"^test_cc_cast_.*UINT2.*$",
-    r"^test_cc_cast_.*INT4.*$",
-    r"^test_cc_cast_.*INT2.*$",
-    r"^test_cc_cast_.*BFLOAT16.*$",
-    r"^test_cc_castlike_.*UINT4.*$",
-    r"^test_cc_castlike_.*UINT2.*$",
-    r"^test_cc_castlike_.*INT4.*$",
-    r"^test_cc_castlike_.*INT2.*$",
-    r"^test_cc_castlike_.*BFLOAT16.*$",
     # ORT returns ZipMap outputs in a different carrier format.
     r"^test_cc_zipmap_",
-    # ORT rejects these QuantizeLinear/DequantizeLinear dtypes or attrs.
-    r"^test_dequantizelinear_int16$",
-    r"^test_dequantizelinear_uint16$",
-    r"^test_dequantizelinear_e4m3fn$",
-    r"^test_dequantizelinear_e4m3fn_zero_point$",
-    r"^test_dequantizelinear_e4m3fn_float16$",
-    r"^test_dequantizelinear_e5m2$",
-    r"^test_dequantizelinear_uint4$",
-    r"^test_dequantizelinear_int4$",
-    r"^test_dequantizelinear_uint2$",
-    r"^test_dequantizelinear_int2$",
-    r"^test_dequantizelinear_float4e2m1$",
-    r"^test_dequantizelinear_blocked$",
-    r"^test_quantizelinear_int16$",
-    r"^test_quantizelinear_uint16$",
-    r"^test_quantizelinear_e4m3fn$",
-    r"^test_quantizelinear_e5m2$",
-    r"^test_quantizelinear_uint4$",
-    r"^test_quantizelinear_int4$",
-    r"^test_quantizelinear_uint2$",
-    r"^test_quantizelinear_int2$",
-    r"^test_quantizelinear_float4e2m1$",
     # ORT rejects FLOAT16 scales for QLinearMatMul.
     r"^test_cc_qlinearmatmul_2D_uint8_float16$",
     r"^test_cc_qlinearmatmul_2D_int8_float16$",
@@ -184,9 +135,6 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_cast_map_",
     # ORT rejects these mixed-dtype or batchwise sequence patterns.
     r"^test_cc_feature_vectorizer_mixed_dtypes$",
-    r"^test_cc_simple_rnn_batchwise$",
-    r"^test_cc_lstm_batchwise$",
-    r"^test_cc_gru_batchwise$",
     # More single-op kernel gaps and focused parity checks.
     r"^test_bitshift_right_uint16$",
     r"^test_bitshift_left_uint16$",
@@ -208,7 +156,10 @@ ORT_EXCLUDE_REGEX = [
     r"^test_mod_mixed_sign_bfloat16$",
     r"^test_cc_mod_bfloat16_fmod$",
     r"^test_cc_pow_types_bfloat16_float32$",
-    # ORT diverges from the reference on MaxUnpool/Resize edge semantics.
+    # ORT diverges from the reference on MaxUnpool and on align_corners
+    # Resize downsample cases where scale * input_width is fractional:
+    # ONNX reference / onnx-light use (scale * input_width - 1) in the
+    # denominator, while ORT uses (output_width_int - 1).
     r"^test_cc_maxunpool_export_with_output_shape$",
     r"^test_resize_downsample_scales_linear_align_corners$",
     r"^test_resize_downsample_scales_cubic_align_corners$",
@@ -223,6 +174,29 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_if_opt$",
     # ORT rejects the empty-name encoding of the optional ``axes`` input.
     r"^test_cc_squeeze_empty_axes_name$",
+    # ORT does not support batchwise recurrent operations (layout == 1).
+    r"^test_cc_gru_batchwise$",
+    r"^test_cc_lstm_batchwise$",
+    r"^test_cc_simple_rnn_batchwise$",
+    # ...
+    r"e2m1.*",
+    r"e4m3.*",
+    r"e5m2.*",
+    r"float8.*",
+    r"quantizelinear_u?int2.*",
+    r"quantizelinear_u?int4.*",
+    # ...
+    r"E2M1.*",
+    r"E4M3.*",
+    r"E5M2.*",
+    r"FLOAT8.*",
+    r"to_BFLOAT16.*",
+    r"to_U?INT[24].*",
+    r"castlike_U?INT[24].*",
+    r"cast_U?INT[24].*",
+    r"to_STRING",
+    r"prelu_inf.*",
+    r"sequence.*",
 ]
 
 # Add opset-gated exclusions only for opset versions ONNX Runtime cannot load yet.

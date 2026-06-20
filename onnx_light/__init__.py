@@ -1,4 +1,5 @@
 """
-onnx-light is onnx fullu rewritten in C++ without protobuf.
+onnx-light is onnx fully rewritten in C++ without protobuf.
 """
-__version__ = "0.1.0"
+
+__version__ = "0.1.1"

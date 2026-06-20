@@ -49,14 +49,10 @@ void ComputeShapeConvTranspose(ShapesContext &ctx, const NodeProto &node, const 
   const OptimShape &x_shape = x_tensor.Shape();
   const OptimShape &w_shape = w_tensor.Shape();
 
-  if (x_shape.Rank() < 3) {
-    throw std::invalid_argument("ComputeShapeConvTranspose: input '" + std::string(x) +
-                                "' must have rank >= 3 (N, C, D1, ...).");
-  }
-  if (w_shape.Rank() != x_shape.Rank()) {
-    throw std::invalid_argument("ComputeShapeConvTranspose: weight '" + std::string(w) +
-                                "' rank must match input rank.");
-  }
+  EXT_ENFORCE_INVALID(!(x_shape.Rank() < 3), "ComputeShapeConvTranspose: input '", x,
+                      "' must have rank >= 3 (N, C, D1, ...).");
+  EXT_ENFORCE_INVALID(w_shape.Rank() == x_shape.Rank(), "ComputeShapeConvTranspose: weight '", w,
+                      "' rank must match input rank.");
 
   const size_t n_spatial = x_shape.Rank() - 2;
   const int64_t group = GetAttributeOr<int64_t>(node, "group", 1);
@@ -71,7 +67,7 @@ void ComputeShapeConvTranspose(ShapesContext &ctx, const NodeProto &node, const 
       kernel_shape.push_back(kd.IsInt() ? kd.AsInt() : -1);
     }
   } else if (kernel_shape.size() != n_spatial) {
-    throw std::invalid_argument(
+    EXT_THROW_INVALID(
         "ComputeShapeConvTranspose: 'kernel_shape' size does not match input spatial rank.");
   }
 
@@ -80,7 +76,7 @@ void ComputeShapeConvTranspose(ShapesContext &ctx, const NodeProto &node, const 
   if (strides.empty()) {
     strides.assign(n_spatial, 1);
   } else if (strides.size() != n_spatial) {
-    throw std::invalid_argument(
+    EXT_THROW_INVALID(
         "ComputeShapeConvTranspose: 'strides' size does not match input spatial rank.");
   }
 
@@ -89,7 +85,7 @@ void ComputeShapeConvTranspose(ShapesContext &ctx, const NodeProto &node, const 
   if (dilations.empty()) {
     dilations.assign(n_spatial, 1);
   } else if (dilations.size() != n_spatial) {
-    throw std::invalid_argument(
+    EXT_THROW_INVALID(
         "ComputeShapeConvTranspose: 'dilations' size does not match input spatial rank.");
   }
 
@@ -98,7 +94,7 @@ void ComputeShapeConvTranspose(ShapesContext &ctx, const NodeProto &node, const 
   if (output_padding.empty()) {
     output_padding.assign(n_spatial, 0);
   } else if (output_padding.size() != n_spatial) {
-    throw std::invalid_argument(
+    EXT_THROW_INVALID(
         "ComputeShapeConvTranspose: 'output_padding' size does not match input spatial rank.");
   }
 
@@ -107,16 +103,15 @@ void ComputeShapeConvTranspose(ShapesContext &ctx, const NodeProto &node, const 
   if (pads.empty()) {
     pads.assign(n_spatial * 2, 0);
   } else if (pads.size() != n_spatial * 2) {
-    throw std::invalid_argument("ComputeShapeConvTranspose: 'pads' size must be 2 * spatial rank.");
+    EXT_THROW_INVALID("ComputeShapeConvTranspose: 'pads' size must be 2 * spatial rank.");
   }
 
   std::vector<int64_t> output_shape_attr;
   GetAttributeInts(node, "output_shape", output_shape_attr);
   const bool has_output_shape = !output_shape_attr.empty();
-  if (has_output_shape && output_shape_attr.size() != n_spatial) {
-    throw std::invalid_argument(
-        "ComputeShapeConvTranspose: 'output_shape' size does not match input spatial rank.");
-  }
+  EXT_ENFORCE_INVALID(
+      !(has_output_shape && output_shape_attr.size() != n_spatial),
+      "ComputeShapeConvTranspose: 'output_shape' size does not match input spatial rank.");
 
   // Output channel dimension: W.shape[1] * group.
   OptimDim out_channels;

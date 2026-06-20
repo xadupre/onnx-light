@@ -60,15 +60,13 @@ int BitCastBitSize(int32_t dtype) {
 void ValidateBitCast(int32_t from, int32_t to) {
   const int from_bits = BitCastBitSize(from);
   const int to_bits = BitCastBitSize(to);
-  if (from_bits == 0 || to_bits == 0) {
-    EXT_THROW_INVALID("kernel::BitCast: unsupported data type (from=", from, ", to=", to,
+  EXT_ENFORCE_INVALID(from_bits != 0 && to_bits != 0,
+                      "kernel::BitCast: unsupported data type (from=", from, ", to=", to,
                       "); string or undefined types are not allowed.");
-  }
-  if (from_bits != to_bits) {
-    EXT_THROW_INVALID("kernel::BitCast: input and output types must have the same bit-width, but "
+  EXT_ENFORCE_INVALID(from_bits == to_bits,
+                      "kernel::BitCast: input and output types must have the same bit-width, but "
                       "input has ",
                       from_bits, " bits and output has ", to_bits, " bits.");
-  }
 }
 
 } // namespace
@@ -84,16 +82,12 @@ Tensor BitCast::operator()(const Tensor &x, int32_t to) const {
 
 void BitCast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
   ValidateBitCast(x.data_type, to);
-  if (output.data_type != to) {
-    EXT_THROW_INVALID("kernel::BitCast: preallocated output dtype ", output.data_type,
-                      " must match ``to`` (", to, ").");
-  }
-  if (output.shape != x.shape) {
-    EXT_THROW_INVALID("kernel::BitCast: preallocated output shape must match input shape.");
-  }
-  if (output.data.size() != x.size_bytes()) {
-    EXT_THROW_INVALID("kernel::BitCast: preallocated output buffer has unexpected size in bytes.");
-  }
+  EXT_ENFORCE_INVALID(output.data_type == to, "kernel::BitCast: preallocated output dtype ",
+                      output.data_type, " must match ``to`` (", to, ").");
+  EXT_ENFORCE_INVALID(output.shape == x.shape,
+                      "kernel::BitCast: preallocated output shape must match input shape.");
+  EXT_ENFORCE_INVALID(output.data.size() == x.size_bytes(),
+                      "kernel::BitCast: preallocated output buffer has unexpected size in bytes.");
   // Byte-wise copy keeps the bit pattern intact on little-endian hosts
   // (the only ABI exercised by the backend test library).
   std::memcpy(output.data.data(), x.bytes(), x.size_bytes());

@@ -26,10 +26,8 @@ void ComputeShapeCol2Im(ShapesContext &ctx, const NodeProto &node, const char *i
   const OptimTensor &block_shape_tensor = ctx.Get(block_shape);
   const OptimShape &input_shape = input_tensor.Shape();
 
-  if (input_shape.Rank() != 3) {
-    throw std::invalid_argument("ComputeShapeCol2Im: input '" + std::string(input) +
-                                "' must have rank 3 (N, C * product(block_shape), L).");
-  }
+  EXT_ENFORCE_INVALID(input_shape.Rank() == 3, "ComputeShapeCol2Im: input '", input,
+                      "' must have rank 3 (N, C * product(block_shape), L).");
 
   // Number of spatial dims: prefer the ``image_shape`` initializer (its
   // ``ValueAsShape`` annotation), otherwise the single static dim of its

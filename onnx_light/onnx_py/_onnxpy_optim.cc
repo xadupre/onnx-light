@@ -1,5 +1,6 @@
 #include "onnx_optim/expressions.h"
 #include "onnx_optim/optim_tensor.h"
+#include "onnx_optim/shapes/inplace_reuse.h"
 #include "onnx_optim/shapes/shape_inference.h"
 #include "onnx_optim/shapes/shapes_context.h"
 #include <algorithm>
@@ -65,6 +66,69 @@ void AddOnnxPyExpressions(nb::module_ &m) {
         },
         nb::arg("expr1"), nb::arg("expr2"),
         "Returns the non-zero coefficient map of (expr1) - (expr2).");
+
+    // CompareResult — outcome of comparing two symbolic expressions.
+    nb::enum_<expr::CompareResult>(
+        expressions_mod, "CompareResult", nb::is_arithmetic(),
+        "Outcome of :func:`compare_expressions`, assuming every symbolic token is "
+        "positive or null.")
+        .value("Smaller", expr::CompareResult::Smaller,
+               "The first expression is always strictly smaller than the second.")
+        .value("Equal", expr::CompareResult::Equal, "The two expressions are always equal.")
+        .value("Greater", expr::CompareResult::Greater,
+               "The first expression is always strictly greater than the second.")
+        .value("Unknown", expr::CompareResult::Unknown,
+               "The relationship cannot be determined for all non-negative token values.");
+
+    // ExpressionComparison — result + simplified difference of compare_expressions.
+    nb::class_<expr::ExpressionComparison>(
+        expressions_mod, "ExpressionComparison",
+        "Result of :func:`compare_expressions`. Holds the :class:`CompareResult` "
+        "``result`` together with the simplified ``difference`` (expr2) - (expr1), "
+        "an ``int`` when numeric and a ``str`` otherwise.")
+        .def_ro("result", &expr::ExpressionComparison::result,
+                ":class:`CompareResult` describing how ``expr1`` compares to ``expr2``.")
+        .def_prop_ro(
+            "difference",
+            [](const expr::ExpressionComparison &c) -> nb::object {
+              return std::holds_alternative<int64_t>(c.difference)
+                         ? nb::cast(std::get<int64_t>(c.difference))
+                         : nb::cast(std::get<std::string>(c.difference));
+            },
+            "Simplified value of (expr2) - (expr1); ``int`` when numeric, ``str`` otherwise.")
+        .def("__repr__", [](const expr::ExpressionComparison &c) {
+          const char *name = "Unknown";
+          switch (c.result) {
+          case expr::CompareResult::Smaller:
+            name = "Smaller";
+            break;
+          case expr::CompareResult::Equal:
+            name = "Equal";
+            break;
+          case expr::CompareResult::Greater:
+            name = "Greater";
+            break;
+          case expr::CompareResult::Unknown:
+            name = "Unknown";
+            break;
+          }
+          std::string diff = std::holds_alternative<int64_t>(c.difference)
+                                 ? std::to_string(std::get<int64_t>(c.difference))
+                                 : "'" + std::get<std::string>(c.difference) + "'";
+          return std::string("ExpressionComparison(result=CompareResult.") + name +
+                 ", difference=" + diff + ")";
+        });
+
+    // compare_expressions(expr1, expr2) -> ExpressionComparison
+    expressions_mod.def(
+        "compare_expressions",
+        [](const std::string &e1, const std::string &e2) {
+          return expr::compare_expressions(e1, e2);
+        },
+        nb::arg("expr1"), nb::arg("expr2"),
+        "Compares expr1 to expr2 assuming all tokens are positive or null. Returns an "
+        ":class:`ExpressionComparison` whose ``result`` is a :class:`CompareResult` and whose "
+        "``difference`` is the simplified value of (expr2) - (expr1).");
 
     // evaluate_expression(expr, context) -> int
     expressions_mod.def(
@@ -894,4 +958,51 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       "back into ``model.graph.output`` and ``model.graph.value_info``. The ModelProto is "
       "mutated in place. When ``prefill_with_value_info_output`` is true, existing "
       "``value_info``/``output`` tensor descriptors are used as anchors.");
+
+  // -----------------------------------------------------------------------
+  // In-place reuse analysis
+  // -----------------------------------------------------------------------
+  nb::enum_<onnx_shapes::InPlaceReuseKind>(
+      shape_mod, "InPlaceReuseKind", nb::is_arithmetic(),
+      "Classifies how the reused input buffer compares in size with the output: "
+      "``kEqual`` when the input and output share the same element type and shape "
+      "(same byte size, the preferred reuse); ``kGreater`` when the input buffer is "
+      "strictly larger in bytes than the output.")
+      .value("kEqual", onnx_shapes::InPlaceReuseKind::kEqual,
+             "The input and output have the same byte size.")
+      .value("kGreater", onnx_shapes::InPlaceReuseKind::kGreater,
+             "The input buffer is strictly larger in bytes than the output.");
+
+  nb::class_<onnx_shapes::InPlaceReuse>(
+      shape_mod, "InPlaceReuse",
+      "Represents one in-place reuse opportunity for a node: the output at ``output_index`` "
+      "reuses the buffer of the input at ``input_index`` (both indices into the node's "
+      "``output``/``input`` lists). ``kind`` records whether the input buffer has the same "
+      "size as the output (``kEqual``) or is strictly larger (``kGreater``).")
+      .def(nb::init<>())
+      .def_rw("output_index", &onnx_shapes::InPlaceReuse::output_index)
+      .def_rw("input_index", &onnx_shapes::InPlaceReuse::input_index)
+      .def_rw("kind", &onnx_shapes::InPlaceReuse::kind)
+      .def(nb::self == nb::self)
+      .def(nb::self != nb::self)
+      .def("__repr__", [](const onnx_shapes::InPlaceReuse &r) {
+        std::ostringstream os;
+        const char *kind = r.kind == onnx_shapes::InPlaceReuseKind::kEqual ? "kEqual" : "kGreater";
+        os << "InPlaceReuse(output_index=" << r.output_index << ", input_index=" << r.input_index
+           << ", kind=" << kind << ")";
+        return os.str();
+      });
+
+  shape_mod.def(
+      "compute_inplace_reuse",
+      [](const onnx_shapes::ShapesContext &ctx, const GraphProto &graph) {
+        return onnx_shapes::ComputeInPlaceReuse(graph, ctx);
+      },
+      nb::arg("ctx"), nb::arg("graph"),
+      "Guesses, for every node of ``graph``, which outputs reuse which input buffers in "
+      "place, using the shapes already inferred into ``ctx``.\n\n"
+      "Returns: a list with one entry per node (same order as ``graph.node``); each entry is a "
+      "list of :class:`InPlaceReuse`. The analysis is purely structural (matching element type, "
+      "shape and value lifetime) and does not check whether a given kernel actually supports "
+      "in-place execution.");
 }

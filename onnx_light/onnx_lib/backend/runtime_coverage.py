@@ -260,12 +260,9 @@ def _strip_intermediate_and_output_shapes(model: onnxl.ModelProto) -> None:
         ttype = vi.type.tensor_type
         if ttype is None or not ttype.has_shape():
             continue
-        # Rebuild the type proto without a ``shape`` field. The bound proto
-        # objects do not expose ``ClearField``, so we ``CopyFrom`` a freshly
-        # constructed ``TypeProto`` carrying just the element type.
-        rebuilt = onnxl.TypeProto()
-        rebuilt.tensor_type.elem_type = ttype.elem_type
-        vi.type.CopyFrom(rebuilt)
+        # Force shape inference to recompute the shape by removing the one
+        # currently stored on the output's tensor type.
+        ttype.ClearField("shape")
 
 
 def _run_static_shape(tc: TestCase) -> tuple[bool, str | None]:

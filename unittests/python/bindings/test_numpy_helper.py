@@ -11,6 +11,7 @@ from onnx_light.onnx_proto._numpy_helper import (
     _unpack_4bit,
     _pack_4bitx2,
     _pack_2bitx4,
+    to_float8e8m0,
     tobytes_little_endian,
 )
 import onnx_light.onnx as onnxl
@@ -436,6 +437,122 @@ class TestHelperExtensions(ExtTestCase):
         self.assertIn(onnxl.TensorProto.INT64, helper.TENSOR_TYPE_MAP)
         self.assertIn(onnxl.TensorProto.DOUBLE, helper.TENSOR_TYPE_MAP)
         self.assertIn(onnxl.TensorProto.STRING, helper.TENSOR_TYPE_MAP)
+
+    def test_saturate_cast_float(self) -> None:
+        from onnx_light.onnx_proto._numpy_helper import saturate_cast
+
+        finfo = np.finfo(np.float16)
+        x = np.array([1e30, -1e30, 1.0, 0.0], dtype=np.float32)
+        result = saturate_cast(x, np.float16)
+        self.assertEqual(result.dtype, np.float16)
+        # Out-of-range values are clamped to the float16 representable range.
+        self.assertEqual(float(result[0]), float(finfo.max))
+        self.assertEqual(float(result[1]), float(finfo.min))
+        self.assertEqual(float(result[2]), 1.0)
+        self.assertEqual(float(result[3]), 0.0)
+
+    def test_saturate_cast_integer(self) -> None:
+        from onnx_light.onnx_proto._numpy_helper import saturate_cast
+
+        iinfo = np.iinfo(np.int8)
+        x = np.array([1000.0, -1000.0, 1.4, 1.6], dtype=np.float32)
+        result = saturate_cast(x, np.int8)
+        self.assertEqual(result.dtype, np.int8)
+        # Out-of-range values are clamped, in-range values are rounded.
+        self.assertEqual(int(result[0]), int(iinfo.max))
+        self.assertEqual(int(result[1]), int(iinfo.min))
+        self.assertEqual(int(result[2]), 1)
+        self.assertEqual(int(result[3]), 2)
+
+    def test_to_float8e8m0_powers_of_two(self) -> None:
+        x = np.array([1.0, 2.0, 4.0, 8.0], dtype=np.float32)
+        result = to_float8e8m0(x)
+        self.assertEqual(str(result.dtype), "float8_e8m0fnu")
+        np.testing.assert_array_equal(result.astype(np.float32), x)
+
+    def test_to_float8e8m0_round_up(self) -> None:
+        # 3.0 is not a power of two; "up" rounds to the next power of two.
+        result = to_float8e8m0(np.array([3.0], dtype=np.float32), round_mode="up")
+        np.testing.assert_array_equal(
+            result.astype(np.float32), np.array([4.0], dtype=np.float32)
+        )
+
+    def test_to_float8e8m0_round_down(self) -> None:
+        result = to_float8e8m0(np.array([3.0], dtype=np.float32), round_mode="down")
+        np.testing.assert_array_equal(
+            result.astype(np.float32), np.array([2.0], dtype=np.float32)
+        )
+
+    def test_to_float8e8m0_round_nearest(self) -> None:
+        result = to_float8e8m0(np.array([3.0], dtype=np.float32), round_mode="nearest")
+        np.testing.assert_array_equal(
+            result.astype(np.float32), np.array([4.0], dtype=np.float32)
+        )
+
+    def test_to_float8e8m0_invalid_round_mode_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            to_float8e8m0(np.array([1.0], dtype=np.float32), round_mode="invalid")
+
+    def test_to_list_unsupported_raises(self) -> None:
+        seq = onnxl.SequenceProto()
+        seq.elem_type = onnxl.SequenceProto.UNDEFINED
+        with self.assertRaises(TypeError):
+            numpy_helper.to_list(seq)
+
+    def test_from_list_to_list_roundtrip(self) -> None:
+        lst = [np.array([1.0, 2.0], dtype=np.float32), np.array([3.0, 4.0], dtype=np.float32)]
+        seq = numpy_helper.from_list(lst)
+        out = numpy_helper.to_list(seq)
+        self.assertEqual(len(out), 2)
+        np.testing.assert_array_equal(out[0], lst[0])
+        np.testing.assert_array_equal(out[1], lst[1])
+
+    def test_to_optional_sequence(self) -> None:
+        optional = onnxl.OptionalProto()
+        optional.elem_type = onnxl.OptionalProto.SEQUENCE
+        optional.sequence_value.elem_type = onnxl.SequenceProto.TENSOR
+        optional.sequence_value.tensor_values.extend(
+            [oh.make_tensor("", onnxl.TensorProto.FLOAT, [1], [5.0])]
+        )
+        result = numpy_helper.to_optional(optional)
+        self.assertEqual(len(result), 1)
+        np.testing.assert_array_equal(result[0], np.array([5.0], dtype=np.float32))
+
+    def test_to_optional_optional(self) -> None:
+        inner = onnxl.OptionalProto()
+        inner.elem_type = onnxl.OptionalProto.TENSOR
+        inner.tensor_value.CopyFrom(oh.make_tensor("", onnxl.TensorProto.FLOAT, [1], [7.0]))
+        optional = onnxl.OptionalProto()
+        optional.elem_type = onnxl.OptionalProto.OPTIONAL
+        optional.optional_value.CopyFrom(inner)
+        result = numpy_helper.to_optional(optional)
+        np.testing.assert_array_equal(result, np.array([7.0], dtype=np.float32))
+
+    def test_to_optional_map(self) -> None:
+        optional = onnxl.OptionalProto()
+        optional.elem_type = onnxl.OptionalProto.MAP
+        optional.map_value.key_type = onnxl.TensorProto.INT64
+        optional.map_value.keys.extend([1])
+        optional.map_value.values.elem_type = onnxl.SequenceProto.TENSOR
+        optional.map_value.values.tensor_values.extend(
+            [oh.make_tensor("", onnxl.TensorProto.FLOAT, [1], [1.0])]
+        )
+        result = numpy_helper.to_optional(optional)
+        self.assertEqual(len(result), 1)
+
+    def test_from_optional_sequence(self) -> None:
+        opt_proto = numpy_helper.from_optional([np.array([1.0], dtype=np.float32)])
+        self.assertEqual(int(opt_proto.elem_type), int(onnxl.OptionalProto.SEQUENCE))
+
+    def test_from_optional_map(self) -> None:
+        opt_proto = numpy_helper.from_optional({np.int64(1): np.array([1.0], dtype=np.float32)})
+        self.assertEqual(int(opt_proto.elem_type), int(onnxl.OptionalProto.MAP))
+
+    def test_from_optional_to_optional_roundtrip(self) -> None:
+        data = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+        opt_proto = numpy_helper.from_optional(data)
+        result = numpy_helper.to_optional(opt_proto)
+        np.testing.assert_array_equal(result, data)
 
 
 if __name__ == "__main__":

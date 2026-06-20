@@ -18,17 +18,15 @@ namespace tensor {
 void ComputeShapeCastLike(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "CastLike", "ComputeShapeCastLike");
 
-  if (node.input_size() < 2) {
-    throw std::invalid_argument("ComputeShapeCastLike: CastLike requires two inputs.");
-  }
+  EXT_ENFORCE_INVALID(!(node.input_size() < 2),
+                      "ComputeShapeCastLike: CastLike requires two inputs.");
 
   const OptimTensor &input = ctx.Get(node.input(0).as_string());
   const OptimTensor &target_type = ctx.Get(node.input(1).as_string());
 
   const TensorType out_dtype = target_type.Dtype();
-  if (out_dtype == TensorType::kUndefined) {
-    throw std::invalid_argument("ComputeShapeCastLike: target_type has an undefined element type.");
-  }
+  EXT_ENFORCE_INVALID(out_dtype != TensorType::kUndefined,
+                      "ComputeShapeCastLike: target_type has an undefined element type.");
 
   OptimShape out_shape = input.Shape();
   ctx.Set(node.output(0), OptimTensor(nullptr, out_dtype, std::move(out_shape)));

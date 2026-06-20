@@ -466,9 +466,7 @@ std::string OptimTensor::ToString() const {
 }
 
 void OptimTensor::SetMinMax(double min, double max) {
-  if (min > max) {
-    throw std::invalid_argument("OptimTensor::SetMinMax requires min <= max");
-  }
+  EXT_ENFORCE_INVALID(!(min > max), "OptimTensor::SetMinMax requires min <= max");
   min_ = min;
   max_ = max;
 }

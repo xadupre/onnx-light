@@ -4307,6 +4307,39 @@ TEST(onnx_proto, PrintOptions_Indentation) {
   }
 }
 
+TEST(onnx_proto, PrintOptions_IndentationNegativeSingleLine) {
+  // A negative ``indentation`` prints the whole message on a single line, without any newline
+  // or leading space for every proto.
+  ModelProto model;
+  model.set_ir_version(7);
+  model.set_producer_name("test_producer");
+  model.set_doc_string("Model documentation");
+  GraphProto *graph = model.add_graph();
+  graph->set_name("test_graph");
+  NodeProto *node = graph->add_node();
+  node->set_name("relu1");
+  node->set_op_type("Relu");
+  *node->add_input() = "X";
+  *node->add_output() = "Y";
+
+  utils::PrintOptions options;
+  options.indentation = -1;
+  std::vector<std::string> rows = model.PrintToVectorString(options);
+
+  // Every proto collapses to a single row, so there is no newline to join.
+  ASSERT_EQ(rows.size(), 1u);
+  const std::string &serialized = rows[0];
+  EXPECT_TRUE(serialized.find('\n') == std::string::npos);
+  EXPECT_TRUE(serialized.find("ir_version: 7") != std::string::npos);
+  EXPECT_TRUE(serialized.find("test_producer") != std::string::npos);
+  EXPECT_TRUE(serialized.find("test_graph") != std::string::npos);
+  EXPECT_TRUE(serialized.find("relu1") != std::string::npos);
+
+  // The default multi-line output, by contrast, spans several rows.
+  utils::PrintOptions default_options;
+  EXPECT_GT(model.PrintToVectorString(default_options).size(), 1u);
+}
+
 TEST(onnx_proto, AttributeProto_EmptyCollectionAttributes) {
   // Test empty INTS
   AttributeProto ints_attr;

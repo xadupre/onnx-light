@@ -415,6 +415,8 @@ std::vector<std::string> write_proto_into_vector_string(utils::PrintOptions &opt
   };
   (append_arg(args), ...);
   rows.push_back("},");
+  if (utils::is_single_line(options))
+    return utils::collapse_into_single_line(rows);
   return rows;
 }
 

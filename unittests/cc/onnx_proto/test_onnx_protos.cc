@@ -4259,6 +4259,54 @@ TEST(onnx_proto, AttributeProto_PrintToVectorString_AllTypes) {
   }
 }
 
+TEST(onnx_proto, PrintOptions_InlineThreshold) {
+  // A repeated field is inlined on a single row when its size does not exceed
+  // ``inline_threshold`` and spread over multiple rows otherwise.
+  TensorProto tensor;
+  tensor.set_name("t");
+  for (int64_t i = 0; i < 6; ++i)
+    tensor.ref_dims().push_back(i);
+
+  {
+    utils::PrintOptions options;
+    options.inline_threshold = 6;
+    std::string serialized = utils::join_string(tensor.PrintToVectorString(options), "\n");
+    EXPECT_TRUE(serialized.find("dims: [0, 1, 2, 3, 4, 5],") != std::string::npos);
+  }
+
+  {
+    utils::PrintOptions options;
+    options.inline_threshold = 5;
+    std::string serialized = utils::join_string(tensor.PrintToVectorString(options), "\n");
+    EXPECT_TRUE(serialized.find("dims: [\n") != std::string::npos);
+    EXPECT_TRUE(serialized.find("dims: [0, 1, 2, 3, 4, 5],") == std::string::npos);
+  }
+}
+
+TEST(onnx_proto, PrintOptions_Indentation) {
+  // ``indentation`` controls the number of spaces used for one indentation level.
+  NodeProto node;
+  node.set_name("relu1");
+  node.set_op_type("Relu");
+  *node.add_input() = "X";
+  *node.add_output() = "Y";
+
+  {
+    utils::PrintOptions options;
+    options.indentation = 2;
+    std::string serialized = utils::join_string(node.PrintToVectorString(options), "\n");
+    EXPECT_TRUE(serialized.find("\n  name: ") != std::string::npos);
+  }
+
+  {
+    utils::PrintOptions options;
+    options.indentation = 4;
+    std::string serialized = utils::join_string(node.PrintToVectorString(options), "\n");
+    EXPECT_TRUE(serialized.find("\n    name: ") != std::string::npos);
+    EXPECT_TRUE(serialized.find("\n  name: ") == std::string::npos);
+  }
+}
+
 TEST(onnx_proto, AttributeProto_EmptyCollectionAttributes) {
   // Test empty INTS
   AttributeProto ints_attr;

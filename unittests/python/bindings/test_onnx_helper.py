@@ -960,6 +960,77 @@ class TestSaveModelWithSharedExternalData(ExtTestCase):
             new_entries = {e.key: str(e.value) for e in new_metas[0].external_data}
             self.assertEqual(str(new_entries["location"]), os.path.basename(dst_onnx) + ".data")
 
+    def test_make_empty_tensor_value_info(self) -> None:
+        value_info = oh.make_empty_tensor_value_info("x")
+        self.assertEqual(value_info.name, "x")
+        self.assertFalse(value_info.HasField("type"))
+
+    def test_make_sparse_tensor_type_proto(self) -> None:
+        type_proto = oh.make_sparse_tensor_type_proto(
+            elem_type=onnxl.TensorProto.FLOAT, shape=[3, "N", None]
+        )
+        sparse = type_proto.sparse_tensor_type
+        self.assertEqual(sparse.elem_type, onnxl.TensorProto.FLOAT)
+        self.assertEqual(len(sparse.shape.dim), 3)
+        self.assertEqual(sparse.shape.dim[0].dim_value, 3)
+        self.assertEqual(sparse.shape.dim[1].dim_param, "N")
+        self.assertFalse(sparse.shape.dim[2].HasField("dim_value"))
+        self.assertFalse(sparse.shape.dim[2].HasField("dim_param"))
+
+    def test_make_sparse_tensor_type_proto_no_shape(self) -> None:
+        type_proto = oh.make_sparse_tensor_type_proto(
+            elem_type=onnxl.TensorProto.INT32, shape=None
+        )
+        self.assertEqual(type_proto.sparse_tensor_type.elem_type, onnxl.TensorProto.INT32)
+        self.assertEqual(len(type_proto.sparse_tensor_type.shape.dim), 0)
+
+    def test_make_sparse_tensor_type_proto_denotation(self) -> None:
+        type_proto = oh.make_sparse_tensor_type_proto(
+            elem_type=onnxl.TensorProto.FLOAT,
+            shape=[1, 2],
+            shape_denotation=["DATA_BATCH", "DATA_CHANNEL"],
+        )
+        sparse = type_proto.sparse_tensor_type
+        self.assertEqual(sparse.shape.dim[0].denotation, "DATA_BATCH")
+        self.assertEqual(sparse.shape.dim[1].denotation, "DATA_CHANNEL")
+
+    def test_make_sparse_tensor_type_proto_invalid_denotation(self) -> None:
+        self.assertRaise(
+            lambda: oh.make_sparse_tensor_type_proto(
+                elem_type=onnxl.TensorProto.FLOAT, shape=[1, 2], shape_denotation=["ONLY_ONE"]
+            ),
+            ValueError,
+        )
+
+    def test_make_map_type_proto(self) -> None:
+        value_type = oh.make_tensor_type_proto(elem_type=onnxl.TensorProto.FLOAT, shape=[2])
+        type_proto = oh.make_map_type_proto(
+            key_type=onnxl.TensorProto.INT64, value_type=value_type
+        )
+        self.assertEqual(type_proto.map_type.key_type, onnxl.TensorProto.INT64)
+        self.assertEqual(type_proto.map_type.value_type, value_type)
+
+    def test_get_attribute_value(self) -> None:
+        self.assertEqual(oh.get_attribute_value(oh.make_attribute("a", 1.0)), 1.0)
+        self.assertEqual(oh.get_attribute_value(oh.make_attribute("a", 5)), 5)
+        self.assertEqual(oh.get_attribute_value(oh.make_attribute("a", "txt")), b"txt")
+        self.assertEqual(oh.get_attribute_value(oh.make_attribute("a", [1, 2, 3])), [1, 2, 3])
+        self.assertEqual(oh.get_attribute_value(oh.make_attribute("a", [1.5, 2.5])), [1.5, 2.5])
+        self.assertEqual(oh.get_attribute_value(oh.make_attribute("a", ["x", "y"])), [b"x", b"y"])
+
+    def test_get_attribute_value_ref_attr(self) -> None:
+        attr = oh.make_attribute_ref("a", onnxl.AttributeProto.INT, ref_attr_name="r")
+        self.assertRaise(lambda: oh.get_attribute_value(attr), ValueError)
+
+    def test_make_sequence_unsupported_elem_type(self) -> None:
+        self.assertRaise(lambda: oh.make_sequence("seq", 999, []), TypeError)
+
+    def test_make_optional_unsupported_elem_type(self) -> None:
+        values_tensor = oh.make_tensor(
+            name="test", data_type=onnxl.TensorProto.FLOAT, dims=(1,), vals=[1.0]
+        )
+        self.assertRaise(lambda: oh.make_optional("opt", 999, values_tensor), TypeError)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

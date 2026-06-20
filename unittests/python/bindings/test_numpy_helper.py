@@ -438,6 +438,32 @@ class TestHelperExtensions(ExtTestCase):
         self.assertIn(onnxl.TensorProto.DOUBLE, helper.TENSOR_TYPE_MAP)
         self.assertIn(onnxl.TensorProto.STRING, helper.TENSOR_TYPE_MAP)
 
+    def test_saturate_cast_float(self) -> None:
+        from onnx_light.onnx_proto._numpy_helper import saturate_cast
+
+        finfo = np.finfo(np.float16)
+        x = np.array([1e30, -1e30, 1.0, 0.0], dtype=np.float32)
+        result = saturate_cast(x, np.float16)
+        self.assertEqual(result.dtype, np.float16)
+        # Out-of-range values are clamped to the float16 representable range.
+        self.assertEqual(float(result[0]), float(finfo.max))
+        self.assertEqual(float(result[1]), float(finfo.min))
+        self.assertEqual(float(result[2]), 1.0)
+        self.assertEqual(float(result[3]), 0.0)
+
+    def test_saturate_cast_integer(self) -> None:
+        from onnx_light.onnx_proto._numpy_helper import saturate_cast
+
+        iinfo = np.iinfo(np.int8)
+        x = np.array([1000.0, -1000.0, 1.4, 1.6], dtype=np.float32)
+        result = saturate_cast(x, np.int8)
+        self.assertEqual(result.dtype, np.int8)
+        # Out-of-range values are clamped, in-range values are rounded.
+        self.assertEqual(int(result[0]), int(iinfo.max))
+        self.assertEqual(int(result[1]), int(iinfo.min))
+        self.assertEqual(int(result[2]), 1)
+        self.assertEqual(int(result[3]), 2)
+
     def test_to_float8e8m0_powers_of_two(self) -> None:
         x = np.array([1.0, 2.0, 4.0, 8.0], dtype=np.float32)
         result = to_float8e8m0(x)

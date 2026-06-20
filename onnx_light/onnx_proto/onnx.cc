@@ -503,6 +503,7 @@ SerializeSizeResult TensorProto::SerializeSize(utils::BinaryWriteStream &stream,
                                        stream.ExternalWeights();
   SIZE_REPEATED_FIELD(size, options, stream, dims)
   SIZE_ENUM_FIELD(size, options, stream, data_type)
+  SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, segment)
   SIZE_ENUM_FIELD(size, options, stream, data_location)
   SIZE_FIELD_NULL(size, options, stream, name)
   if (has_raw_data()) {
@@ -600,6 +601,7 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
   }
   WRITE_REPEATED_FIELD(options, stream, dims)
   WRITE_ENUM_FIELD(options, stream, data_type)
+  WRITE_OPTIONAL_PROTO_FIELD(options, stream, segment)
   WRITE_ENUM_FIELD(options, stream, data_location)
   WRITE_FIELD_NULL(options, stream, name)
   if (has_raw_data()) {
@@ -625,6 +627,7 @@ void TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
   READ_BEGIN(options, stream, TensorProto)                 //
   READ_REPEATED_FIELD(options, stream, dims)               //
   READ_ENUM_FIELD(options, stream, data_type)              //
+  READ_OPTIONAL_PROTO_FIELD(options, stream, segment)      //
   READ_OPTIONAL_ENUM_FIELD(options, stream, data_location) //
   READ_FIELD(options, stream, name)                        //
   READ_FIELD(options, stream, doc_string)                  //

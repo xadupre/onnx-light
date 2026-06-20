@@ -23,7 +23,22 @@ struct PrintOptions {
   bool skip_raw_data = false;
   /** If skip_raw_data is true, raw data will be printed only if it is larger than the threshold. */
   int64_t raw_data_threshold = 1024;
+  /** Number of spaces used for a single indentation level. */
+  int64_t indentation = 2;
+  /** Repeated fields with at most this many elements are printed inline on a single row; larger
+   * fields are spread over multiple rows. */
+  int64_t inline_threshold = 9;
 };
+
+/** Returns the string used for a single indentation level. */
+inline std::string indentation_string(const PrintOptions &options) {
+  return std::string(options.indentation < 0 ? 0 : static_cast<size_t>(options.indentation), ' ');
+}
+
+/** Returns true if a repeated field of the given size should be printed inline on a single row. */
+inline bool is_inline_size(const PrintOptions &options, size_t size) {
+  return static_cast<int64_t>(size) <= options.inline_threshold;
+}
 
 /** Minimal unique_ptr-like holder used by generated proto containers. */
 template <typename T> class simple_unique_ptr {

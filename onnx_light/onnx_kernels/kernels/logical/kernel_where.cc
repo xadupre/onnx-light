@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -18,6 +19,25 @@ namespace kernel {
 namespace {
 
 constexpr const char *kWhereName = "kernel::Where";
+
+// ``uint8_t`` aliases both ``UINT8`` and ``BOOL`` storage, but ``Tensor::As``
+// validates the element type strictly. These helpers route ``BOOL`` tensors
+// through ``AsBool`` so the shared ``uint8_t`` code path serves both dtypes.
+template <typename T> const T *WhereTypedInput(const Tensor &t) {
+  if constexpr (std::is_same_v<T, uint8_t>) {
+    return t.data_type == static_cast<int32_t>(DataType::BOOL) ? t.AsBool() : t.As<T>();
+  } else {
+    return t.As<T>();
+  }
+}
+
+template <typename T> T *WhereTypedOutput(Tensor &t) {
+  if constexpr (std::is_same_v<T, uint8_t>) {
+    return t.data_type == static_cast<int32_t>(DataType::BOOL) ? t.AsBool() : t.As<T>();
+  } else {
+    return t.As<T>();
+  }
+}
 
 struct TernaryBroadcastInfo {
   std::vector<int64_t> shape;
@@ -86,9 +106,9 @@ Tensor WhereAllocTyped(const Tensor &condition, const Tensor &x, const Tensor &y
   Tensor out("", x.data_type, bi.shape,
              std::vector<uint8_t>(static_cast<size_t>(bi.element_count) * sizeof(T)));
   const uint8_t *pc = condition.AsBool();
-  const T *px = x.As<T>();
-  const T *py = y.As<T>();
-  T *po = out.As<T>();
+  const T *px = WhereTypedInput<T>(x);
+  const T *py = WhereTypedInput<T>(y);
+  T *po = WhereTypedOutput<T>(out);
 
   const size_t rank = bi.shape.size();
   std::vector<int64_t> idx(rank, 0);
@@ -123,9 +143,9 @@ void WhereInPlaceTyped(const Tensor &condition, const Tensor &x, const Tensor &y
                       "kernel::Where preallocated output buffer has unexpected size in bytes.");
 
   const uint8_t *pc = condition.AsBool();
-  const T *px = x.As<T>();
-  const T *py = y.As<T>();
-  T *po = output.As<T>();
+  const T *px = WhereTypedInput<T>(x);
+  const T *py = WhereTypedInput<T>(y);
+  T *po = WhereTypedOutput<T>(output);
 
   const size_t rank = bi.shape.size();
   std::vector<int64_t> idx(rank, 0);

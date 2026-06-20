@@ -22,7 +22,7 @@
 //
 // In every variant ``X`` carries symbolic dims ``[N, D]`` and the TopK ``k`` is
 // a runtime model input, so ``TopK`` emits the symbolic dim
-// ``"TopK_topk_values_k"`` on its output axis that ``ReduceMean`` collapses to
+// ``"TopK_k"`` on its output axis that ``ReduceMean`` collapses to
 // recover a rank-1 output.
 // ---------------------------------------------------------------------------
 
@@ -159,7 +159,7 @@ GraphProto BuildPairwiseDistanceBody() {
 //     (``Sub``), the reduction (``ReduceSum``) and the element-wise ops.
 //   * ``K`` is a **model input** (INT64 ``[1]``), not an initializer, so its
 //     *value* is unknown when shapes are inferred. ``TopK`` therefore cannot
-//     resolve its output axis and emits the symbolic dim ``"TopK_topk_values_k"``,
+//     resolve its output axis and emits the symbolic dim ``"TopK_k"``,
 //     which ``ReduceMean`` then reduces away.
 //
 // Graph topology::
@@ -251,9 +251,9 @@ void RegisterTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &regi
                   {DimSpec("N"), DimSpec("N")});
   AppendValueInfo(*graph->add_value_info(), "dist", DataType::FLOAT, {DimSpec("N"), DimSpec("N")});
   AppendValueInfo(*graph->add_value_info(), "topk_values", DataType::FLOAT,
-                  {DimSpec("N"), DimSpec("TopK_topk_values_k")});
+                  {DimSpec("N"), DimSpec("TopK_k")});
   AppendValueInfo(*graph->add_value_info(), "topk_indices", DataType::INT64,
-                  {DimSpec("N"), DimSpec("TopK_topk_values_k")});
+                  {DimSpec("N"), DimSpec("TopK_k")});
 
   // Output Y — the per-row mean of the ``k`` largest distances, shape ``[N]``.
   AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec("N")});
@@ -287,7 +287,7 @@ void RegisterTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &regi
 //     distance matrix is ``[N, N]``.
 //   * ``K`` is a **model input** (INT64 ``[1]``), not an initializer, so
 //     ``TopK`` cannot resolve its output axis and emits the symbolic dim
-//     ``"TopK_topk_values_k"``, which ``ReduceMean`` then reduces away.
+//     ``"TopK_k"``, which ``ReduceMean`` then reduces away.
 //
 // Graph topology::
 //
@@ -362,9 +362,9 @@ void RegisterScanTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &
                   {DimSpec("N"), DimSpec("N")});
   AppendValueInfo(*graph->add_value_info(), "dist", DataType::FLOAT, {DimSpec("N"), DimSpec("N")});
   AppendValueInfo(*graph->add_value_info(), "topk_values", DataType::FLOAT,
-                  {DimSpec("N"), DimSpec("TopK_topk_values_k")});
+                  {DimSpec("N"), DimSpec("TopK_k")});
   AppendValueInfo(*graph->add_value_info(), "topk_indices", DataType::INT64,
-                  {DimSpec("N"), DimSpec("TopK_topk_values_k")});
+                  {DimSpec("N"), DimSpec("TopK_k")});
 
   // Output Y — the per-row mean of the ``k`` largest distances, shape ``[N]``.
   AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec("N")});
@@ -398,7 +398,7 @@ void RegisterScanTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &
 //     value), so the stacked distance matrix has a symbolic leading axis.
 //   * ``K`` is a **model input** (INT64 ``[1]``), not an initializer, so
 //     ``TopK`` cannot resolve its output axis and emits the symbolic dim
-//     ``"TopK_topk_values_k"``, which ``ReduceMean`` then reduces away.
+//     ``"TopK_k"``, which ``ReduceMean`` then reduces away.
 //
 // Graph topology::
 //
@@ -482,9 +482,9 @@ void RegisterLoopTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &
   AppendValueInfo(*graph->add_value_info(), "trip_count", DataType::INT64, {DimSpec(int64_t{1})});
   AppendValueInfo(*graph->add_value_info(), "dist", DataType::FLOAT, {DimSpec("N"), DimSpec("N")});
   AppendValueInfo(*graph->add_value_info(), "topk_values", DataType::FLOAT,
-                  {DimSpec("N"), DimSpec("TopK_topk_values_k")});
+                  {DimSpec("N"), DimSpec("TopK_k")});
   AppendValueInfo(*graph->add_value_info(), "topk_indices", DataType::INT64,
-                  {DimSpec("N"), DimSpec("TopK_topk_values_k")});
+                  {DimSpec("N"), DimSpec("TopK_k")});
 
   // Output Y — the per-row mean of the ``k`` largest distances, shape ``[N]``.
   AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec("N")});

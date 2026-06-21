@@ -510,6 +510,7 @@ def _tokenize(text: str) -> list[_Token]:
             raise ValueError(f"Unexpected character {text[pos]!r} at position {pos}.")
         pos = match.end()
         kind = match.lastgroup
+        assert kind is not None
         if kind in ("ws", "comment"):
             continue
         token_text = match.group()
@@ -683,7 +684,7 @@ def _parse_bool(text: str) -> bool:
     raise ValueError(f"Invalid boolean literal {text!r}.")
 
 
-def _parse_enum(enum_cls: type, text: str) -> int:
+def _parse_enum(enum_cls: Any, text: str) -> int:
     """Parses an enum value given as a name or an integer literal."""
     members = enum_cls.__members__
     if text in members:

@@ -1,4 +1,3 @@
-test_sequence_insert_at_front
 test_training_dropout
 test_training_dropout_default
 test_training_dropout_default_mask

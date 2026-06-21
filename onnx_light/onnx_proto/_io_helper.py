@@ -11,8 +11,6 @@ from ..onnx_py._onnxpyprotoop import FileLoadMode, ModelProto, ParseOptions, Ser
 _FIND_EXTERNAL_PARSE_OPTS = ParseOptions()
 _FIND_EXTERNAL_PARSE_OPTS.skip_raw_data = True
 
-_TEXT_PROTO_EXTENSIONS = {".textproto", ".prototxt", ".pbtxt", ".txtpb"}
-
 
 def _find_external_location(model_path: str) -> str:
     """Scans a model file's structure to find the primary external data location.
@@ -235,18 +233,12 @@ def load(
         ``FileLoadMode.MMAP`` forces memory-mapped I/O and ``FileLoadMode.IFSTREAM`` forces
         the buffered ``std::ifstream``-based reader. Ignored when *f* is a :class:`bytes`
         object or when an external weights file is provided via ``location``.
-    :param format: serialization format.  When ``None`` (default) the format is inferred
-        from the file extension: ``.onnx`` → ``'protobuf'``; ``.textproto``, ``.prototxt``,
-        ``.pbtxt`` or ``.txtpb`` → ``'textproto'``.  Loading ``'textproto'`` files requires
-        the ``google-protobuf`` Python package (available as a transitive dependency of
-        ``onnxruntime``).
     :return: Loaded in-memory ModelProto.
     """
     assert isinstance(f, (str, bytes, Path)), f"Unexpected type {type(f)} for f."
-    if format is not None and format not in ("protobuf", "textproto"):
+    if format is not None and format not in ("protobuf", None):
         raise ValueError(
-            f"Unsupported format={format!r}; onnx-light supports 'protobuf' and 'textproto' "
-            f"formats."
+            f"Unsupported format={format!r}; onnx-light only supports 'protobuf' format."
         )
     if isinstance(file_load_mode, str):
         try:
@@ -266,26 +258,10 @@ def load(
     ), f"'load_external_data' must be True if location={location!r}"
     if isinstance(f, Path):
         f = str(f)
-    # Determine the effective format from the file extension when not specified.
-    _effective_format = format
-    if _effective_format is None and isinstance(f, str):
-        ext = os.path.splitext(f)[-1].lower()
-        if ext in _TEXT_PROTO_EXTENSIONS:
-            _effective_format = "textproto"
-        elif ext != ".onnx":
-            raise AssertionError(
-                f"File name must have the extension .onnx to be loaded but f={f!r}"
-            )
-    # Handle text-format (protobuf text) loading.
-    if _effective_format == "textproto":
-        if isinstance(f, bytes):
-            raise ValueError(
-                "Loading from 'bytes' is not supported for the 'textproto' format. "
-                "Provide a file path instead."
-            )
-        from ._textproto_loader import load_text_proto
-
-        f = load_text_proto(f)  # Convert text proto to binary bytes
+    if format is None:
+        assert not isinstance(f, str) or os.path.splitext(f)[-1] in {
+            ".onnx"
+        }, f"File name must have the extension .onnx to be loaded but f={f!r}"
     if load_external_data and not location and isinstance(f, str):
         location = _find_external_location(f)
     model = ModelProto()

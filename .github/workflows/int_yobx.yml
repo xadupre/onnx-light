@@ -3,7 +3,7 @@ name: INT yobx
 # Manually-triggered integration job: validates that onnx-light can be used as a
 # drop-in replacement for onnx (via the USE_ONNX_LIGHT=1 compatibility shim) when
 # running the test suite of an external project:
-#   * yobx     (https://github.com/xadupre/yobx)
+#   * yobx     (https://github.com/xadupre/yet-another-onnx-builder)
 #
 # It is opt-in (workflow_dispatch only), so it never gates pull requests.
 

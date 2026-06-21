@@ -79,7 +79,7 @@ class TestIOModel(ExtTestCase):
         with self.assertRaises(ValueError) as ctx:
             onnxl.load(proto_bytes, format="ort")
         self.assertIn("Unsupported format", str(ctx.exception))
-        self.assertIn("onnx-light only supports 'protobuf'", str(ctx.exception))
+        self.assertIn("onnx-light supports 'protobuf' and 'textproto'", str(ctx.exception))
 
 
 class TestIOTensor(ExtTestCase):

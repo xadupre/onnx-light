@@ -20,10 +20,21 @@ def check_model(
 ) -> None:
     """Checks a model and raises checker.ValidationError on invalid content.
 
+    Validates the model's IR structure, including topological ordering of nodes,
+    SSA form, schema compliance, and metadata consistency.
+
     Returns:
         None.
+
+    Raises:
+        ValidationError: If the model fails validation.
     """
-    _checker.check_model(model)
+    _checker.check_model(
+        model,
+        full_check=full_check,
+        skip_opset_compatibility_check=skip_opset_compatibility_check,
+        check_custom_domain=check_custom_domain,
+    )
 
 
 def check_attribute(attribute: _C.AttributeProto) -> None:  # type: ignore

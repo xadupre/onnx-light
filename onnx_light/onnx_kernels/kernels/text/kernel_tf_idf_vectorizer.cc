@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/text/include_text_kernels.h"
 
+#include "onnx_light_helpers.h"
 #include <algorithm>
 #include <cstdint>
 #include <stdexcept>
@@ -56,12 +57,9 @@ int64_t PopulateGrams(const std::vector<Key> &pool, size_t start_idx, size_t n_n
   for (size_t g = 0; g < n_ngrams; ++g) {
     NgramNode<Key> *node = &root;
     for (size_t k = 0; k < ngram_size; ++k) {
-      if (start_idx >= pool.size()) {
-        // Defensive — ``ngram_counts`` should already protect us, but
-        // make this a hard error so malformed inputs surface clearly.
-        EXT_THROW_INVALID(
-            "kernel::TfIdfVectorizer: pool overflow while populating the n-gram trie.");
-      }
+      EXT_ENFORCE_INVALID(
+          start_idx < pool.size(),
+          "kernel::TfIdfVectorizer: pool overflow while populating the n-gram trie.");
       auto &child = node->leaves[pool[start_idx]];
       if (k + 1 == ngram_size) {
         child.id = next_id;
@@ -91,15 +89,16 @@ NgramNode<Key> BuildTrie(const std::vector<Key> &pool, const std::vector<int64_t
     const int64_t raw_start = ngram_counts[i];
     const int64_t raw_end =
         (i + 1 < ngram_counts.size()) ? ngram_counts[i + 1] : static_cast<int64_t>(total_items);
-    EXT_ENFORCE_INVALID(
-        !(raw_start < 0 || raw_end < raw_start || static_cast<size_t>(raw_end) > total_items),
-        "kernel::TfIdfVectorizer: ngram_counts is out of range with respect to the pool.");
+    EXT_ENFORCE_INVALID(raw_start >= 0 && raw_end >= raw_start &&
+                            static_cast<size_t>(raw_end) <= total_items,
+                        "kernel::TfIdfVectorizer: ngram_counts is out of range with respect to "
+                        "the pool.");
     const size_t start_idx = static_cast<size_t>(raw_start);
     const size_t end_idx = static_cast<size_t>(raw_end);
     const size_t items = end_idx - start_idx;
     if (items > 0) {
       EXT_ENFORCE_INVALID(
-          !(ngram_size == 0 || items % ngram_size != 0),
+          ngram_size != 0 && items % ngram_size == 0,
           "kernel::TfIdfVectorizer: ngram_counts is not a multiple of the current n-gram size.");
       const size_t ngrams = items / ngram_size;
       const int64_t ngram_size_i = static_cast<int64_t>(ngram_size);

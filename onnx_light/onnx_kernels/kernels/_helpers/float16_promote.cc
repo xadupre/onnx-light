@@ -6,6 +6,7 @@
 
 #include "onnx_kernels/kernels/_helpers/cast_helper.h"
 
+#include "onnx_light_helpers.h"
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -47,7 +48,7 @@ Tensor PromoteToFloat32(const Tensor &src) {
 }
 
 Tensor DemoteFromFloat32(const Tensor &src, int32_t target_dtype) {
-  EXT_ENFORCE_INVALID(!(src.data_type != static_cast<int32_t>(DataType::FLOAT)),
+  EXT_ENFORCE_INVALID(src.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "DemoteFromFloat32: source must be FLOAT, got ", src.data_type);
 
   const int64_t n = src.element_count();

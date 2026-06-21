@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/training/include_training_kernels.h"
 
+#include "onnx_light_helpers.h"
 #include <cmath>
 #include <cstddef>
 #include <cstdint>

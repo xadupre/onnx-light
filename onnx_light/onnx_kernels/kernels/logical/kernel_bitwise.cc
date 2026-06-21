@@ -5,6 +5,7 @@
 #include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 
+#include "onnx_light_helpers.h"
 #include <cstdint>
 #include <stdexcept>
 #include <string>

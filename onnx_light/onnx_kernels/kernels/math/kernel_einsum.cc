@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
+#include "onnx_light_helpers.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -107,7 +108,7 @@ struct EinsumPlan {
 
 EinsumPlan BuildPlan(const std::vector<Tensor> &inputs, const std::string &raw_equation) {
   std::string equation = StripSpaces(raw_equation);
-  EXT_ENFORCE_INVALID(!(equation.empty()), kEinsumName, ": equation must not be empty.");
+  EXT_ENFORCE_INVALID(!equation.empty(), kEinsumName, ": equation must not be empty.");
   std::vector<std::string> input_terms;
   std::string output_term;
   bool has_explicit_output = false;
@@ -131,7 +132,7 @@ EinsumPlan BuildPlan(const std::vector<Tensor> &inputs, const std::string &raw_e
     }
     // The term has an ellipsis: it accounts for ``rank - (term.size() - 3)``
     // dimensions.
-    EXT_ENFORCE_INVALID(!(term.size() - 3 > inputs[i].shape.size()), kEinsumName, ": term '", term,
+    EXT_ENFORCE_INVALID(term.size() - 3 <= inputs[i].shape.size(), kEinsumName, ": term '", term,
                         "' has more named labels than input ", i, " has dimensions.");
     const std::size_t this_rank = inputs[i].shape.size() - (term.size() - 3);
     if (!ellipsis_seen) {
@@ -382,13 +383,13 @@ void EinsumInPlace(const std::vector<Tensor> &inputs, const std::string &equatio
   }
   EXT_ENFORCE_INVALID(output.data_type == dtype, kEinsumName, ": output dtype mismatch.");
   EXT_ENFORCE_INVALID(output.shape == plan.output_shape, kEinsumName, ": output shape mismatch.");
-  EXT_ENFORCE_INVALID(!(output.data.size() != static_cast<std::size_t>(out_count) * sizeof(T)),
+  EXT_ENFORCE_INVALID(output.data.size() == static_cast<std::size_t>(out_count) * sizeof(T),
                       kEinsumName, ": output buffer size mismatch.");
   RunEinsum<T>(inputs, plan, output.As<T>());
 }
 
 void RequireHomogeneous(const std::vector<Tensor> &inputs) {
-  EXT_ENFORCE_INVALID(!(inputs.empty()), kEinsumName, " requires at least one input.");
+  EXT_ENFORCE_INVALID(!inputs.empty(), kEinsumName, " requires at least one input.");
   const int32_t dtype = inputs[0].data_type;
   for (std::size_t i = 1; i < inputs.size(); ++i) {
     EXT_ENFORCE_INVALID(inputs[i].data_type == dtype, kEinsumName,

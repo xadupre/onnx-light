@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/traditionalml/include_traditionalml_kernels.h"
 
+#include "onnx_light_helpers.h"
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
@@ -56,9 +57,9 @@ void FillOneHotNumeric(const Tensor &x, const std::vector<int64_t> &cats, bool z
         break;
       }
     }
-    EXT_ENFORCE_INVALID(
-        !(!matched && !zeros),
-        "kernel::OneHotEncoder: input value not found in cats_int64s and zeros=false.");
+    EXT_ENFORCE_INVALID(matched || zeros,
+                        "kernel::OneHotEncoder: input value not found in cats_int64s and "
+                        "zeros=false.");
   }
 }
 
@@ -77,9 +78,9 @@ void FillOneHotString(const Tensor &x, const std::vector<std::string> &cats, boo
         break;
       }
     }
-    EXT_ENFORCE_INVALID(
-        !(!matched && !zeros),
-        "kernel::OneHotEncoder: input value not found in cats_strings and zeros=false.");
+    EXT_ENFORCE_INVALID(matched || zeros,
+                        "kernel::OneHotEncoder: input value not found in cats_strings and "
+                        "zeros=false.");
   }
 }
 

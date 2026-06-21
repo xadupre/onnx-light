@@ -57,6 +57,10 @@ def _get_pb_model_proto_class() -> type:
     fds.ParseFromString(descriptor_bytes)
 
     pool = descriptor_pool_mod.Default()
+    # pool.Add() raises TypeError if the file descriptor is already registered
+    # in the pool (e.g., when this function is called more than once in the same
+    # process). This is a benign no-op case; we suppress it and reuse the
+    # already-registered descriptor below via GetMessages.
     with contextlib.suppress(TypeError):
         pool.Add(fds.file[0])
 

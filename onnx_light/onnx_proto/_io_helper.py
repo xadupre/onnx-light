@@ -11,6 +11,8 @@ from ..onnx_py._onnxpyprotoop import FileLoadMode, ModelProto, ParseOptions, Ser
 _FIND_EXTERNAL_PARSE_OPTS = ParseOptions()
 _FIND_EXTERNAL_PARSE_OPTS.skip_raw_data = True
 
+_TEXT_PROTO_EXTENSIONS = {".textproto", ".prototxt", ".pbtxt", ".txtpb"}
+
 
 def _find_external_location(model_path: str) -> str:
     """Scans a model file's structure to find the primary external data location.
@@ -265,7 +267,6 @@ def load(
     if isinstance(f, Path):
         f = str(f)
     # Determine the effective format from the file extension when not specified.
-    _TEXT_PROTO_EXTENSIONS = {".textproto", ".prototxt", ".pbtxt", ".txtpb"}
     _effective_format = format
     if _effective_format is None and isinstance(f, str):
         ext = os.path.splitext(f)[-1].lower()

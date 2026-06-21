@@ -13,8 +13,8 @@ is *skipped* (not run) when the ``onnx_light`` runtime cannot legitimately
 execute it today:
 
 * the model cannot be parsed by ``onnx_light``;
-* the graph has an ``optional``/``map``/``sparse_tensor`` input/output, which the
-  Python ``ReferenceEvaluator`` feed/return boundary does not represent (plain
+* the graph has an ``optional``/``map``/``sparse_tensor`` input/output, which is
+  not supported by the Python ``ReferenceEvaluator`` feed/return boundary (plain
   tensors and ``seq(tensor)`` values *are* supported and run);
 * the model uses a non-deterministic operator (its outputs cannot be compared
   bit-for-bit against a stored reference);

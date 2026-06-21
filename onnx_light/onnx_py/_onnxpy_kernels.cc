@@ -21,6 +21,7 @@
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_kernels::RuntimeContext;
+using onnx_kernels::Sequence;
 using onnx_kernels::Tensor;
 using onnx_kernels::kernel::KernelContext;
 using onnx_kernels::kernel::OpsetId;
@@ -400,6 +401,19 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           nb::arg("name"),
           "Returns the tensors in the sequence stored under ``name`` as a list of "
           ":class:`Tensor` objects. Raises ``std::out_of_range`` if absent.")
+      .def(
+          "put_sequence",
+          [](RuntimeContext &rt, const std::string &name, std::vector<Tensor> values) {
+            // The element type is shared by every tensor of a sequence; infer it
+            // from the first element and fall back to ``UNDEFINED`` (``0``) for an
+            // empty sequence.
+            int32_t elem_type = values.empty() ? 0 : static_cast<int32_t>(values.front().data_type);
+            rt.PutSequence(name, Sequence(name, elem_type, std::move(values)));
+          },
+          nb::arg("name"), nb::arg("values"),
+          "Inserts or overwrites the sequence stored under ``name`` from a list of "
+          ":class:`Tensor` objects. The sequence element type is inferred from the "
+          "first tensor (``UNDEFINED`` when the list is empty).")
       .def(
           "events",
           [](const RuntimeContext &rt) {

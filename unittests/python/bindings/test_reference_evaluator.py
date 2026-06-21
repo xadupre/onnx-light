@@ -592,7 +592,65 @@ class TestReferenceEvaluator(ExtTestCase):
         for got_elem, expected_elem in zip(got[0], expected_stacked):
             np.testing.assert_allclose(got_elem, expected_elem, rtol=tc.rtol, atol=tc.atol)
 
-    def test_sequence_map_identity_2_sequences_returns_list(self):
+    def test_sequence_map_with_sequence_graph_input(self):
+        # Regression test for feeding a ``seq(tensor)`` graph input directly:
+        # the SequenceMap node consumes a top-level sequence input ``x`` and the
+        # ReferenceEvaluator.run() feed boundary must accept a list of numpy
+        # arrays (one per element) via ``put_sequence`` rather than the
+        # single-tensor ``set`` path.
+        from onnx_light.onnx import helper
+
+        body = helper.make_graph(
+            [helper.make_node("Identity", ["elem"], ["out"])],
+            "body",
+            [helper.make_tensor_value_info("elem", onnxl.TensorProto.FLOAT, None)],
+            [helper.make_tensor_value_info("out", onnxl.TensorProto.FLOAT, None)],
+        )
+        node = helper.make_node("SequenceMap", ["x"], ["y"], body=body)
+        graph = helper.make_graph(
+            [node],
+            "g",
+            [helper.make_tensor_sequence_value_info("x", onnxl.TensorProto.FLOAT, None)],
+            [helper.make_tensor_sequence_value_info("y", onnxl.TensorProto.FLOAT, None)],
+        )
+        model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 18)])
+
+        sess = ReferenceEvaluator(model)
+        self.assertEqual(sess.input_names, ["x"])
+        elements = [
+            np.array([1.0, 2.0], dtype=np.float32),
+            np.array([3.0, 4.0, 5.0], dtype=np.float32),
+        ]
+        got = sess.run(None, {"x": elements})
+        self.assertEqual(len(got), 1)
+        self.assertIsInstance(got[0], list)
+        self.assertEqual(len(got[0]), len(elements))
+        for got_elem, expected_elem in zip(got[0], elements):
+            np.testing.assert_allclose(got_elem, expected_elem)
+
+    def test_sequence_input_must_be_list(self):
+        # A ``seq(tensor)`` graph input fed as a bare array (instead of a list of
+        # arrays) is a caller error and must raise a clear ``TypeError``.
+        from onnx_light.onnx import helper
+
+        body = helper.make_graph(
+            [helper.make_node("Identity", ["elem"], ["out"])],
+            "body",
+            [helper.make_tensor_value_info("elem", onnxl.TensorProto.FLOAT, None)],
+            [helper.make_tensor_value_info("out", onnxl.TensorProto.FLOAT, None)],
+        )
+        node = helper.make_node("SequenceMap", ["x"], ["y"], body=body)
+        graph = helper.make_graph(
+            [node],
+            "g",
+            [helper.make_tensor_sequence_value_info("x", onnxl.TensorProto.FLOAT, None)],
+            [helper.make_tensor_sequence_value_info("y", onnxl.TensorProto.FLOAT, None)],
+        )
+        model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 18)])
+        sess = ReferenceEvaluator(model)
+        with self.assertRaises(TypeError):
+            sess.run(None, {"x": np.array([1.0, 2.0], dtype=np.float32)})
+
         # Regression test for test_cc_sequence_map_identity_2_sequences: the
         # SequenceMap node consumes two input sequences and produces two output
         # sequences (y0, y1) through a two-input/two-output Identity body, so

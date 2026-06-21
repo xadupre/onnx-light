@@ -207,6 +207,11 @@ class ReferenceEvaluator:
         # original map-input name (e.g. ``{"x": {2: 2.5}}``) and splits it into
         # the ``<name>_keys`` / ``<name>_values`` tensors expected by the runtime.
         self._map_inputs: dict[str, tuple[int, int]] = {}
+        # ``_sequence_inputs`` records graph inputs declared as ``seq(T)``. Such
+        # inputs are fed as a Python ``list``/``tuple`` of arrays (one per
+        # sequence element) and handed to the runtime via ``put_sequence``
+        # instead of the single-tensor ``set`` path.
+        self._sequence_inputs: set[str] = set()
         if graph_inputs is not None:
             inputs: list[str] = []
             for vi in graph_inputs:
@@ -221,6 +226,8 @@ class ReferenceEvaluator:
                         int(mt.value_type.tensor_type.elem_type),
                     )
                 else:
+                    if vi.type.has_sequence_type():
+                        self._sequence_inputs.add(vi.name)
                     inputs.append(vi.name)
         else:
             assert self._function is not None
@@ -493,8 +500,10 @@ class ReferenceEvaluator:
             Names of the outputs to return. ``None`` is shorthand for
             "every declared output, in declaration order".
         feed_inputs:
-            Mapping of input name to NumPy array. Every name listed by
-            :attr:`input_names` must be present.
+            Mapping of input name to value. Tensor inputs are fed as a
+            :class:`numpy.ndarray`; ``seq(T)`` inputs are fed as a ``list``
+            (or ``tuple``) of arrays, one per sequence element. Every name
+            listed by :attr:`input_names` must be present.
 
         Returns
         -------
@@ -543,7 +552,21 @@ class ReferenceEvaluator:
         ctx.release_intermediates = release
 
         for name, value in feed_inputs.items():
-            ctx.set(name, _numpy_to_cpp_tensor(name, value))
+            if name in self._sequence_inputs:
+                # ``seq(T)`` graph inputs are fed as a list/tuple of arrays (one
+                # per sequence element) and stored through ``put_sequence``.
+                if not isinstance(value, (list, tuple)):
+                    raise TypeError(
+                        f"Sequence input {name!r} must be fed as a list/tuple of "
+                        f"arrays, not {type(value).__name__}."
+                    )
+                elements = [
+                    _numpy_to_cpp_tensor(f"{name}_{i}", element)
+                    for i, element in enumerate(value)
+                ]
+                ctx.put_sequence(name, elements)
+            else:
+                ctx.set(name, _numpy_to_cpp_tensor(name, value))
 
         if self._model is not None:
             _runtime.run_model(self._model, ctx)

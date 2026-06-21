@@ -13,8 +13,9 @@ is *skipped* (not run) when the ``onnx_light`` runtime cannot legitimately
 execute it today:
 
 * the model cannot be parsed by ``onnx_light``;
-* the graph has a non-tensor input/output (sequence/optional/map), which the
-  Python ``ReferenceEvaluator`` feed/return boundary represents differently;
+* the graph has an ``optional``/``map``/``sparse_tensor`` input/output, which is
+  not supported by the Python ``ReferenceEvaluator`` feed/return boundary (plain
+  tensors and ``seq(tensor)`` values *are* supported and run);
 * the model uses a non-deterministic operator (its outputs cannot be compared
   bit-for-bit against a stored reference);
 * the model uses an operator whose result is implementation-defined (image
@@ -101,24 +102,59 @@ def _model_op_types(model: onnxl.ModelProto) -> set[str]:
     return ops
 
 
-def _has_only_tensor_io(model: onnxl.ModelProto) -> bool:
-    """Returns ``True`` when every graph input and output is a plain tensor."""
+def _value_info_is_sequence(value_info: onnxl.ValueInfoProto) -> bool:
+    """Returns ``True`` when ``value_info`` is declared as ``seq(tensor)``."""
+    t = value_info.type
+    return t.has_sequence_type() and t.sequence_type.elem_type.has_tensor_type()
+
+
+def _has_supported_io(model: onnxl.ModelProto) -> bool:
+    """Returns ``True`` when every graph input/output is a tensor or ``seq(tensor)``.
+
+    The Python ``ReferenceEvaluator`` feed/return boundary represents plain
+    tensors as :class:`numpy.ndarray` and ``seq(tensor)`` values as a ``list``
+    of arrays. Inputs or outputs of any other structured type (``optional``,
+    ``map``, ``sparse_tensor``) cannot be exercised through that boundary.
+    """
     for value_info in list(model.graph.input) + list(model.graph.output):
-        if not value_info.type.has_tensor_type():
-            return False
+        if value_info.type.has_tensor_type():
+            continue
+        if _value_info_is_sequence(value_info):
+            continue
+        return False
     return True
 
 
-def _load_data_set(data_dir: str) -> tuple[list[np.ndarray], list[np.ndarray]]:
-    """Loads the input/output tensors of one ``test_data_set_*`` directory."""
-    inputs = [
-        numpy_helper.to_array(onnx.load_tensor(os.path.join(data_dir, f"input_{i}.pb")))
-        for i in range(len(glob.glob(os.path.join(data_dir, "input_*.pb"))))
-    ]
-    outputs = [
-        numpy_helper.to_array(onnx.load_tensor(os.path.join(data_dir, f"output_{i}.pb")))
-        for i in range(len(glob.glob(os.path.join(data_dir, "output_*.pb"))))
-    ]
+def _load_tensor_value(path: str) -> np.ndarray:
+    """Loads a serialised ``TensorProto`` as a :class:`numpy.ndarray`."""
+    return numpy_helper.to_array(onnx.load_tensor(path))
+
+
+def _load_sequence_value(path: str) -> list[np.ndarray]:
+    """Loads a serialised ``SequenceProto`` as a list of :class:`numpy.ndarray`."""
+    sequence = onnx.SequenceProto()
+    with open(path, "rb") as f:
+        sequence.ParseFromString(f.read())
+    return [numpy_helper.to_array(t) for t in sequence.tensor_values]
+
+
+def _load_data_set(
+    data_dir: str, input_is_sequence: list[bool], output_is_sequence: list[bool]
+) -> tuple[list, list]:
+    """Loads the input/output values of one ``test_data_set_*`` directory.
+
+    Each input/output is loaded as a :class:`numpy.ndarray` (tensor) or a list
+    of arrays (``seq(tensor)``) according to the corresponding ``*_is_sequence``
+    flag derived from the model's declared graph input/output types.
+    """
+    inputs: list = []
+    for i, is_seq in enumerate(input_is_sequence):
+        path = os.path.join(data_dir, f"input_{i}.pb")
+        inputs.append(_load_sequence_value(path) if is_seq else _load_tensor_value(path))
+    outputs: list = []
+    for i, is_seq in enumerate(output_is_sequence):
+        path = os.path.join(data_dir, f"output_{i}.pb")
+        outputs.append(_load_sequence_value(path) if is_seq else _load_tensor_value(path))
     return inputs, outputs
 
 
@@ -175,6 +211,28 @@ def _describe_mismatch(
     )
 
 
+def _describe_output_mismatch(actual, expected, rtol: float, atol: float) -> str | None:
+    """Returns a description of why output ``actual`` differs from ``expected``.
+
+    Handles both tensor outputs (a :class:`numpy.ndarray`) and ``seq(tensor)``
+    outputs (a ``list`` of arrays). For sequences the element counts must match
+    and each element is compared in turn. Returns ``None`` when they match.
+    """
+    if isinstance(expected, list):
+        if not isinstance(actual, list):
+            return f"type mismatch: got {type(actual).__name__}, expected a sequence"
+        if len(actual) != len(expected):
+            return f"sequence length mismatch: got {len(actual)}, expected {len(expected)}"
+        for j, (got_elem, ref_elem) in enumerate(zip(actual, expected)):
+            detail = _describe_mismatch(got_elem, ref_elem, rtol=rtol, atol=atol)
+            if detail is not None:
+                return f"element {j}: {detail}"
+        return None
+    if isinstance(actual, list):
+        return f"type mismatch: got a sequence, expected {type(expected).__name__}"
+    return _describe_mismatch(actual, expected, rtol=rtol, atol=atol)
+
+
 class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
     """Runs every ONNX backend node test through the ``onnx_light`` runtime."""
 
@@ -226,7 +284,7 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
         except RuntimeError:
             return "skip", None
 
-        if not _has_only_tensor_io(model):
+        if not _has_supported_io(model):
             return "skip", None
         if _model_op_types(model) & _NON_DETERMINISTIC_OPS:
             return "skip", None
@@ -240,9 +298,12 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
         if not data_dirs:
             return "skip", None
 
+        input_is_sequence = [_value_info_is_sequence(vi) for vi in model.graph.input]
+        output_is_sequence = [_value_info_is_sequence(vi) for vi in model.graph.output]
+
         session = ReferenceEvaluator(model)
         for data_dir in data_dirs:
-            inputs, expected = _load_data_set(data_dir)
+            inputs, expected = _load_data_set(data_dir, input_is_sequence, output_is_sequence)
             feeds = dict(zip(session.input_names, inputs))
             # Executing the model is an external runtime boundary that can fail.
             # The runtime has no Python-side API to query the set of registered
@@ -260,7 +321,7 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
                     f"output count mismatch: got {len(outputs)}, expected {len(expected)}"
                 )
             for i, (got, ref) in enumerate(zip(outputs, expected)):
-                detail = _describe_mismatch(got, ref, rtol=rtol, atol=atol)
+                detail = _describe_output_mismatch(got, ref, rtol=rtol, atol=atol)
                 if detail is not None:
                     return "fail", f"output {i} ({os.path.basename(data_dir)}): {detail}"
         return "pass", None

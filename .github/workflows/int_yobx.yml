@@ -33,7 +33,7 @@ jobs:
       - name: Checkout yobx
         uses: actions/checkout@v4
         with:
-          repository: xadupre/yobx
+          repository: xadupre/yet-another-onnx-builder
           path: yobx
 
       - name: Set up Python 3.13

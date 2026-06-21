@@ -183,6 +183,7 @@ TEST(BackendRunModel, Greater) { RunBackendCasesFor("Greater"); }
 TEST(BackendRunModel, GreaterOrEqual) { RunBackendCasesFor("GreaterOrEqual"); }
 TEST(BackendRunModel, Less) { RunBackendCasesFor("Less"); }
 TEST(BackendRunModel, LessOrEqual) { RunBackendCasesFor("LessOrEqual"); }
+TEST(BackendRunModel, Where) { RunBackendCasesFor("Where"); }
 
 // Variadic element-wise reducers.
 TEST(BackendRunModel, Sum) { RunBackendCasesFor("Sum"); }

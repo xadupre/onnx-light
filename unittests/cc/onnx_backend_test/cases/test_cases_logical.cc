@@ -592,6 +592,33 @@ TEST(BackendTestCase, WhereCasesArePresent) {
   EXPECT_NE(FindLogicalCase(cases, "test_where_bcast"), nullptr);
 }
 
+TEST(BackendTestCase, WhereTypeCombinationCasesArePresent) {
+  auto cases = CollectTestCases("Where");
+  const std::vector<std::pair<std::string, onnx_kernels::DataType>> expected = {
+      {"test_cc_where_bool", onnx_kernels::DataType::BOOL},
+      {"test_cc_where_double", onnx_kernels::DataType::DOUBLE},
+      {"test_cc_where_int8", onnx_kernels::DataType::INT8},
+      {"test_cc_where_int16", onnx_kernels::DataType::INT16},
+      {"test_cc_where_uint8", onnx_kernels::DataType::UINT8},
+      {"test_cc_where_uint16", onnx_kernels::DataType::UINT16},
+      {"test_cc_where_uint32", onnx_kernels::DataType::UINT32},
+      {"test_cc_where_uint64", onnx_kernels::DataType::UINT64},
+      {"test_cc_where_string", onnx_kernels::DataType::STRING},
+  };
+  for (const auto &[name, dtype] : expected) {
+    const TestCase *tc = FindLogicalCase(cases, name);
+    ASSERT_NE(tc, nullptr) << "missing Where case " << name;
+    ASSERT_EQ(tc->data_sets.size(), 1u) << name;
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u) << name;
+    ASSERT_EQ(ds.outputs.size(), 1u) << name;
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL)) << name;
+    EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(dtype)) << name;
+    EXPECT_EQ(ds.inputs[2].data_type, static_cast<int32_t>(dtype)) << name;
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(dtype)) << name;
+  }
+}
+
 TEST(BackendTestCase, WhereCaseOutputsSelectExpectedElements) {
   auto cases = CollectTestCases("Where");
   const TestCase *tc = FindLogicalCase(cases, "test_where_example");

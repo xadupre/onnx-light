@@ -167,6 +167,9 @@ TestRunModelBackend = make_test_class(
         "sequence_map_add_1_sequence_1_tensor",
         "sequence_map_add_2_sequences",
         "sequence_map_extract_shapes",
+        # run_model_backend cannot convert STRING tensors to numpy; the
+        # ``.*STRING.*`` regex above is uppercase-only and misses this case.
+        "test_cc_where_string",
         # The loop pairwise-distance model uses Manhattan distance (L1) but
         # the expected outputs are Euclidean (L2): numerical mismatch.
         "test_cc_shape_inference_loop_pairwise_distance.*",

@@ -197,6 +197,8 @@ ORT_EXCLUDE_REGEX = [
     r"to_STRING",
     r"prelu_inf.*",
     r"sequence.*",
+    # ONNX Runtime's Where kernel does not implement these dtypes.
+    r"^test_cc_where_(bool|int8|int16|uint16|uint32|uint64)$",
 ]
 
 # Add opset-gated exclusions only for opset versions ONNX Runtime cannot load yet.

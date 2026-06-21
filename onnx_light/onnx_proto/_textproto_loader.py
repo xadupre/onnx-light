@@ -1,7 +1,7 @@
 """Loads ONNX models stored in protobuf text format (``.textproto``, etc.).
 
 Text-format protobuf files (``.textproto``, ``pbtxt``, ``prototxt``) are
-human-readable representations of the binary protobuf encoding.  onnx-light
+human-readable representations of the binary protobuf encoding. onnx-light
 itself only has a binary protobuf parser, so this module provides a bridge:
 
 1. It uses ``google.protobuf`` (available as a transitive dependency of
@@ -100,7 +100,7 @@ def load_text_proto(path: str | pathlib.Path) -> bytes:
 
     try:
         proto_obj = text_format_mod.Parse(text_content, pb_ModelProto())
-    except Exception as exc:
+    except text_format_mod.ParseError as exc:
         raise ValueError(
             f"Failed to parse '{path}' as an ONNX ModelProto in text format: {exc}"
         ) from exc

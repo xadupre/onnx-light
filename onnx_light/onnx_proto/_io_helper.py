@@ -241,7 +241,7 @@ def load(
     :return: Loaded in-memory ModelProto.
     """
     assert isinstance(f, (str, bytes, Path)), f"Unexpected type {type(f)} for f."
-    if format is not None and format not in ("protobuf", "textproto", None):
+    if format is not None and format not in ("protobuf", "textproto"):
         raise ValueError(
             f"Unsupported format={format!r}; onnx-light supports 'protobuf' and 'textproto' "
             f"formats."

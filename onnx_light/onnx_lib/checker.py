@@ -23,9 +23,6 @@ def check_model(
     Validates the model's IR structure, including topological ordering of nodes,
     SSA form, schema compliance, and metadata consistency.
 
-    Returns:
-        None.
-
     Raises:
         ValidationError: If the model fails validation.
     """

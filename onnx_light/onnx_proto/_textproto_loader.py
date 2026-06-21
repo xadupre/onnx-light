@@ -30,8 +30,8 @@ _pb_ModelProto: type | None = None
 
 
 def _get_pb_model_proto_class() -> type:
-    """Returns the google-protobuf ``ModelProto`` class, loading the ONNX
-    descriptor on the first call.
+    """Returns the google-protobuf ``ModelProto`` class, loading the ONNX descriptor on the first
+    call.
 
     Raises:
         ImportError: When ``google.protobuf`` is not available.
@@ -73,8 +73,8 @@ def _get_pb_model_proto_class() -> type:
 
 
 def load_text_proto(path: str | pathlib.Path) -> bytes:
-    """Reads an ONNX model stored in protobuf text format and returns the
-    equivalent binary protobuf bytes.
+    """Reads an ONNX model stored in protobuf text format and returns the equivalent binary
+    protobuf bytes.
 
     Args:
         path: Path to the ``.textproto`` (or ``.pbtxt`` / ``.prototxt``) file.

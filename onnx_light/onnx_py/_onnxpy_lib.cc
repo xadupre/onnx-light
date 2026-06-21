@@ -540,8 +540,8 @@ void AddOnnxPyLib(nb::module_ &m) {
       },
       nb::arg("model"), nb::arg("full_check") = false,
       nb::arg("skip_opset_compatibility_check") = false, nb::arg("check_custom_domain") = false,
-      "Checks the model and raises ValidationError on invalid content, including "
-      "topological ordering of nodes and schema compliance.");
+      "Validates the model for structural correctness, topological ordering of nodes, "
+      "and schema compliance, raising ValidationError on failures.");
 
   checker_mod.def(
       "check_function_call_cycles",

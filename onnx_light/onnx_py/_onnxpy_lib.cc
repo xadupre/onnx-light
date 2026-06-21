@@ -533,17 +533,15 @@ void AddOnnxPyLib(nb::module_ &m) {
 
   checker_mod.def(
       "check_model",
-      [](const ModelProto &model) {
-        std::unordered_set<std::string> keys;
-        for (const StringStringEntryProto &entry : model.metadata_props()) {
-          const std::string key = entry.key().as_string();
-          if (!keys.insert(key).second) {
-            throw checker::ValidationError("Model contains duplicate keys in metadata_props.");
-          }
-        }
+      [](const ModelProto &model, bool full_check, bool skip_opset_compatibility_check,
+         bool check_custom_domain) {
+        checker::check_model(model, full_check, skip_opset_compatibility_check,
+                             check_custom_domain);
       },
-      nb::arg("model"),
-      "Checks model metadata consistency and raises ValidationError on duplicate keys.");
+      nb::arg("model"), nb::arg("full_check") = false,
+      nb::arg("skip_opset_compatibility_check") = false, nb::arg("check_custom_domain") = false,
+      "Validates the model for structural correctness, topological ordering of nodes, "
+      "and schema compliance, raising ValidationError on failures.");
 
   checker_mod.def(
       "check_function_call_cycles",

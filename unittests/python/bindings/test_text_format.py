@@ -48,7 +48,7 @@ class TestTextFormat(ExtTestCase):
     """Tests for the pure-Python textproto parser and serializer."""
 
     def test_serialize_returns_text(self):
-        """Serializing a model returns readable textproto."""
+        """Tests that serializing a model returns readable textproto."""
         model = _rich_model()
         text = serialize_to_textproto(model)
         self.assertIsInstance(text, str)
@@ -57,21 +57,21 @@ class TestTextFormat(ExtTestCase):
         self.assertIn('op_type: "Add"', text)
 
     def test_round_trip_rich_model(self):
-        """A rich model round-trips through serialize/parse exactly."""
+        """Tests that a rich model round-trips through serialize/parse exactly."""
         model = _rich_model()
         text = serialize_to_textproto(model)
         parsed = parse_from_textproto(text, onnxl.ModelProto())
         self.assertEqual(model.SerializeToString(), parsed.SerializeToString())
 
     def test_round_trip_non_utf8_bytes(self):
-        """Non-UTF-8 attribute bytes survive a round-trip."""
+        """Tests that non-UTF-8 attribute bytes survive a round-trip."""
         model = _rich_model()
         parsed = parse_from_textproto(serialize_to_textproto(model), onnxl.ModelProto())
         attr = parsed.graph.node[1].attribute[2]
         self.assertEqual(attr.s, b'hi\xff\n"quote"\\back')
 
     def test_round_trip_subgraph_attribute(self):
-        """A node with a subgraph attribute round-trips exactly."""
+        """Tests that a node with a subgraph attribute round-trips exactly."""
         body = oh.make_graph(
             [oh.make_node("Identity", ["x"], ["y"])],
             "body",
@@ -90,7 +90,7 @@ class TestTextFormat(ExtTestCase):
         self.assertEqual(model.SerializeToString(), parsed.SerializeToString())
 
     def test_round_trip_tensor_raw_data(self):
-        """A tensor stored with raw_data round-trips exactly."""
+        """Tests that a tensor stored with raw_data round-trips exactly."""
         tensor = onnxl.TensorProto()
         tensor.name = "w"
         tensor.data_type = onnxl.TensorProto.FLOAT
@@ -102,7 +102,7 @@ class TestTextFormat(ExtTestCase):
         self.assertEqual(tensor.SerializeToString(), parsed.SerializeToString())
 
     def test_data_location_enum_name(self):
-        """The true enum field data_location is written using its name."""
+        """Tests that the true enum field data_location is written using its name."""
         tensor = onnxl.TensorProto()
         tensor.name = "w"
         tensor.data_location = onnxl.TensorProto.EXTERNAL
@@ -115,7 +115,7 @@ class TestTextFormat(ExtTestCase):
         self.assertEqual(tensor.SerializeToString(), parsed.SerializeToString())
 
     def test_attribute_type_enum_name(self):
-        """The true enum field AttributeProto.type is written using its name."""
+        """Tests that the true enum field AttributeProto.type is written using its name."""
         attr = onnxl.AttributeProto()
         attr.name = "a"
         attr.type = onnxl.AttributeProto.FLOAT
@@ -124,13 +124,13 @@ class TestTextFormat(ExtTestCase):
         self.assertIn("type: FLOAT", text)
 
     def test_parse_accepts_enum_integer(self):
-        """The parser accepts integer values for true enum fields."""
+        """Tests that the parser accepts integer values for true enum fields."""
         text = 'name: "w"\ndata_location: 1\n'
         parsed = parse_from_textproto(text, onnxl.TensorProto())
         self.assertEqual(int(parsed.data_location), 1)
 
     def test_parse_skips_unknown_fields(self):
-        """Unknown scalar and message fields are skipped during parsing."""
+        """Tests that unknown scalar and message fields are skipped during parsing."""
         text = (
             'producer_name: "p"\n'
             "unknown_scalar: 123\n"
@@ -142,13 +142,13 @@ class TestTextFormat(ExtTestCase):
         self.assertEqual(parsed.ir_version, 9)
 
     def test_parse_angle_bracket_message(self):
-        """The parser accepts angle-bracket message delimiters."""
+        """Tests that the parser accepts angle-bracket message delimiters."""
         text = 'graph <name: "g">\n'
         parsed = parse_from_textproto(text, onnxl.ModelProto())
         self.assertEqual(parsed.graph.name, "g")
 
     def test_serialize_unsupported_type_raises(self):
-        """Serializing an unsupported object raises TypeError."""
+        """Tests that serializing an unsupported object raises TypeError."""
         with self.assertRaises(TypeError):
             serialize_to_textproto(object())
 
@@ -157,7 +157,7 @@ class TestTextFormatIO(ExtTestCase):
     """Tests for load/save with the textproto format."""
 
     def test_save_load_infer_from_extension(self):
-        """save/load infer textproto from the .textproto extension."""
+        """Tests that save/load infer textproto from the .textproto extension."""
         model = _rich_model()
         with tempfile.TemporaryDirectory() as folder:
             path = os.path.join(folder, "model.textproto")
@@ -166,7 +166,7 @@ class TestTextFormatIO(ExtTestCase):
             self.assertEqual(model.SerializeToString(), loaded.SerializeToString())
 
     def test_save_load_explicit_format(self):
-        """save/load honor an explicit textproto format on any extension."""
+        """Tests that save/load honor an explicit textproto format on any extension."""
         model = _rich_model()
         with tempfile.TemporaryDirectory() as folder:
             path = os.path.join(folder, "model.onnx")
@@ -175,14 +175,14 @@ class TestTextFormatIO(ExtTestCase):
             self.assertEqual(model.SerializeToString(), loaded.SerializeToString())
 
     def test_load_textproto_from_bytes(self):
-        """load parses textproto provided as a bytes object."""
+        """Tests that load parses textproto provided as a bytes object."""
         model = _rich_model()
         text_bytes = serialize_to_textproto(model).encode("utf-8")
         loaded = onnxl.load(text_bytes, format="textproto")
         self.assertEqual(model.SerializeToString(), loaded.SerializeToString())
 
     def test_save_textproto_rejects_external_data(self):
-        """Saving textproto with external data raises ValueError."""
+        """Tests that saving textproto with external data raises ValueError."""
         model = _rich_model()
         with tempfile.TemporaryDirectory() as folder:
             path = os.path.join(folder, "model.textproto")
@@ -190,7 +190,7 @@ class TestTextFormatIO(ExtTestCase):
                 onnxl.save(model, path, save_as_external_data=True)
 
     def test_load_unsupported_format_raises(self):
-        """load raises ValueError for an unsupported format."""
+        """Tests that load raises ValueError for an unsupported format."""
         with self.assertRaises(ValueError) as ctx:
             onnxl.load(b"", format="json")
         self.assertIn("Unsupported format", str(ctx.exception))
@@ -201,7 +201,7 @@ class TestTextFormatOnnxInterop(ExtTestCase):
     """Tests interoperability with the onnx/protobuf text format."""
 
     def test_onnxlight_text_parsed_by_onnx(self):
-        """Text produced by onnx-light is parseable by onnx/protobuf."""
+        """Tests that text produced by onnx-light is parseable by onnx/protobuf."""
         import onnx
         from google.protobuf import text_format
 
@@ -215,7 +215,7 @@ class TestTextFormatOnnxInterop(ExtTestCase):
         self.assertEqual(len(onnx_model.graph.node), len(from_binary.graph.node))
 
     def test_onnx_text_parsed_by_onnxlight(self):
-        """Text produced by onnx/protobuf is parseable by onnx-light."""
+        """Tests that text produced by onnx/protobuf is parseable by onnx-light."""
         import onnx
         from google.protobuf import text_format
 

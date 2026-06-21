@@ -203,6 +203,34 @@ class TestShapeInference(ExtTestCase):
         self.assertEqual(len(result.graph.initializer), 1)
         self.assertEqual(result.graph.initializer[0].name, "W")
 
+    def test_infer_shapes_output_without_type(self) -> None:
+        """infer_shapes handles graph outputs whose ``type`` field is unset.
+
+        Tools such as onnx-ir emit graph outputs as bare ValueInfoProtos with no
+        ``type`` field. Shape inference must populate them instead of raising when
+        gathering existing symbolic dimensions.
+        """
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Add", ["X", "Y"], ["Z"])],
+                "g",
+                [
+                    oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [1, 2]),
+                    oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [1, 2]),
+                ],
+                # Output declared without a type field, as onnx-ir emits it.
+                [oh.make_empty_tensor_value_info("Z")],
+            ),
+            opset_imports=[oh.make_opsetid("", 20)],
+        )
+
+        result = shape_inference.infer_shapes(model, strict_mode=True)
+        self.assertIs(result, model)
+
+        output = {vi.name: vi for vi in result.graph.output}["Z"]
+        self.assertEqual(output.type.tensor_type.elem_type, onnxl.TensorProto.FLOAT)
+        self.assertEqual([dim.dim_value for dim in output.type.tensor_type.shape.dim], [1, 2])
+
     def test_infer_shapes_strict_mode_raises(self) -> None:
         """strict_mode surfaces node-level shape inference errors."""
         model = oh.make_model(

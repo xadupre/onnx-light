@@ -93,7 +93,9 @@ private:
 
   void AddExistingSymbolicDims(const utils::RepeatedProtoField<ValueInfoProto> &protos) {
     for (const auto &proto : protos) {
-      AddExistingSymbolicDims(proto.type());
+      if (proto.has_type()) {
+        AddExistingSymbolicDims(proto.type());
+      }
     }
   }
 };

@@ -205,18 +205,17 @@ void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry) {
 // the leading dims through and splits the last dim by 2; a second
 // ``[0, 0, -1]`` reshape collapses the trailing dims back together.
 //
-//   xr  = Reshape(X,  shape1=[0, 0, 2, -1])    # (a, b, 2, c//2)
-//   xrr = Reshape(xr, shape2=[0, 0, -1])       # (a, b, 2*a*b*c//2//(a*b))
-//   Y   = Add(xrr, one)                        # (a, b, 2*a*b*c//2//(a*b))
+//   xr  = Reshape(X,  shape1=[0, 0, 2, -1])    # (a, b, 2, c/:2)
+//   xrr = Reshape(xr, shape2=[0, 0, -1])       # (a, b, c)
+//   Y   = Add(xrr, one)                        # (a, b, c)
 //
-// The trailing dim is *not* simplified back to ``c``: ``//`` is floor division
-// and ``2*(c//2) == c`` only when ``c`` is even, so the symbolic floor division
-// is kept atomic.
+// The trailing dim should be simplified ``c``. The Reshape must assume that
+// c is a multiple of 2.
 //
 // Input:
 //   X : float[a, b, c]
 // Output:
-//   Y : float[a, b, 2*a*b*c//2//(a*b)]
+//   Y : float[a, b, c]
 //
 // The reference DataSet uses concrete sizes ``a=2, b=3, c=4`` so the case is
 // executable (``c`` is even and divisible by 2 so the inferred ``c//2``
@@ -245,32 +244,12 @@ void RegisterReshapeReshapeShapeInferenceCases(std::vector<TestCase> &registry) 
   AddInitializer<int64_t>(*graph, "shape1", {4}, {0, 0, 2, -1});
   AddInitializer<int64_t>(*graph, "shape2", {3}, {0, 0, -1});
   AddInitializer<float>(*graph, "one", {1}, {1.0f});
-
-  // Graph input: X uses symbolic dims (a, b, c).
   AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {"a", "b", "c"});
-
-  // Intermediate value_info entries with the shapes that shape inference
-  // should recover. The Python ``BasicShapeBuilder`` records
-  // ``xr = (a, b, 2, c//2)``; in C++ we only declare ranks/elem types and
-  // the symbolic leading dims here so the test framework's ground-truth
-  // check is independent of how shape inference renders the symbolic
-  // division.
-  //
-  // ``xrr`` is the result of ``Reshape(xr, [0, 0, -1])``: the inferred ``-1``
-  // dim is ``(a*b*2*(c//2)) // (a*b)``. Because ``//`` is floor division it is
-  // *not* simplified to ``c`` (that only holds when ``c`` is even), so shape
-  // inference keeps the floor division atomic and renders it literally as
-  // ``2*a*b*c//2//(a*b)``.
-  AppendValueInfo(*graph->add_value_info(), "xr", DataType::FLOAT, {"a", "b", DimSpec(2), "c//2"});
+  AppendValueInfo(*graph->add_value_info(), "xr", DataType::FLOAT, {"a", "b", DimSpec(2), "c/:2"});
   AppendValueInfo(*graph->add_value_info(), "xrr", DataType::FLOAT,
-                  {"a", "b", "2*a*b*c//2//(a*b)"});
+                  {"a", "b", "c"});
+  AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {"a", "b", "c"});
 
-  // Graph output Y — broadcasts ``xrr`` against the scalar ``one`` so it
-  // carries the same symbolic trailing dim as ``xrr``.
-  AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {"a", "b", "2*a*b*c//2//(a*b)"});
-
-  // Build the reference DataSet — concrete a=2, b=3, c=4 tensors and the
-  // kernels chained to materialise Y.
   constexpr int64_t kA = 2;
   constexpr int64_t kB = 3;
   constexpr int64_t kC = 4;

@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -280,6 +281,26 @@ ComputeInPlaceReuse(const GraphProto &graph, const ShapesContext &ctx, bool allo
   }
 
   return result;
+}
+
+void WriteInPlaceReuseToMetadata(GraphProto &graph, const ShapesContext &ctx) {
+  const std::vector<std::vector<InPlaceReuse>> reuse = ComputeInPlaceReuse(graph, ctx);
+  for (std::size_t i = 0; i < reuse.size(); ++i) {
+    if (reuse[i].empty()) {
+      continue;
+    }
+    std::ostringstream value;
+    for (std::size_t j = 0; j < reuse[i].size(); ++j) {
+      const InPlaceReuse &r = reuse[i][j];
+      if (j != 0) {
+        value << ";";
+      }
+      value << r.output_index << ":" << r.input_index << ":"
+            << (r.kind == InPlaceReuseKind::kEqual ? "equal" : "greater");
+    }
+    NodeProto &node = (*graph.mutable_node())[i];
+    node.add_metadata(kInPlaceReuseMetadataKey, value.str());
+  }
 }
 
 } // namespace shapes

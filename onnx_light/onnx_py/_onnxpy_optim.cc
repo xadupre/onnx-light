@@ -1019,4 +1019,18 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       "list of :class:`InPlaceReuse`. The analysis is purely structural (matching element type, "
       "shape and value lifetime) and does not check whether a given kernel actually supports "
       "in-place execution.");
+
+  shape_mod.def(
+      "write_inplace_reuse_to_metadata",
+      [](const onnx_shapes::ShapesContext &ctx, GraphProto &graph) {
+        onnx_shapes::WriteInPlaceReuseToMetadata(graph, ctx);
+      },
+      nb::arg("ctx"), nb::arg("graph"),
+      "Computes the in-place reuse opportunities for ``graph`` (see "
+      ":func:`compute_inplace_reuse`) and records them into each node's ``metadata_props`` "
+      "under the key ``onnx_light.inplace_reuse``. The ``GraphProto`` is mutated in place.\n\n"
+      "For every node with at least one opportunity, a single metadata entry is added (or "
+      "updated in place if the key already exists) whose value lists the opportunities as "
+      "``output_index:input_index:kind`` triplets separated by ``;`` (``kind`` being ``equal`` "
+      "or ``greater``). Nodes without any opportunity are left untouched.");
 }

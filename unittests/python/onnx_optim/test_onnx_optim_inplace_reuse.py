@@ -123,6 +123,68 @@ class TestInPlaceReuse(ExtTestCase):
         # A is a declared graph output; node 1 must not overwrite it.
         self.assertEqual(reuse, [[], []])
 
+    @staticmethod
+    def _node_metadata(node):
+        return {m.key: m.value for m in node.metadata_props}
+
+    def test_write_inplace_reuse_to_metadata(self):
+        nodes = [
+            oh.make_node("Abs", ["X"], ["A"]),
+            oh.make_node("Abs", ["A"], ["B"]),
+            oh.make_node("Abs", ["B"], ["Y"]),
+        ]
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [3, 4])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [3, 4])
+        model = self._build_model(nodes, [x], [y])
+
+        ctx = si.ShapesContext()
+        si.compute_shape_model(ctx, model)
+        si.write_inplace_reuse_to_metadata(ctx, model.graph)
+
+        # Node 0 reads the declared graph input X, so it has no reuse and no
+        # metadata is written for it.
+        self.assertEqual(self._node_metadata(model.graph.node[0]), {})
+        self.assertEqual(
+            self._node_metadata(model.graph.node[1]), {"onnx_light.inplace_reuse": "0:0:equal"}
+        )
+        self.assertEqual(
+            self._node_metadata(model.graph.node[2]), {"onnx_light.inplace_reuse": "0:0:equal"}
+        )
+
+    def test_write_inplace_reuse_to_metadata_greater(self):
+        nodes = [
+            oh.make_node("Cast", ["X"], ["A"], to=onnxl.TensorProto.INT64),
+            oh.make_node("Cast", ["A"], ["Y"], to=onnxl.TensorProto.INT32),
+        ]
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [4])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.INT32, [4])
+        model = self._build_model(nodes, [x], [y])
+
+        ctx = si.ShapesContext()
+        si.compute_shape_model(ctx, model)
+        si.write_inplace_reuse_to_metadata(ctx, model.graph)
+
+        self.assertEqual(self._node_metadata(model.graph.node[0]), {})
+        self.assertEqual(
+            self._node_metadata(model.graph.node[1]), {"onnx_light.inplace_reuse": "0:0:greater"}
+        )
+
+    def test_write_inplace_reuse_to_metadata_updates_existing_key(self):
+        nodes = [oh.make_node("Abs", ["X"], ["A"]), oh.make_node("Abs", ["A"], ["Y"])]
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [3, 4])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [3, 4])
+        model = self._build_model(nodes, [x], [y])
+        # Pre-existing entry under the same key should be replaced in place.
+        model.graph.node[1].add_metadata("onnx_light.inplace_reuse", "stale")
+
+        ctx = si.ShapesContext()
+        si.compute_shape_model(ctx, model)
+        si.write_inplace_reuse_to_metadata(ctx, model.graph)
+
+        self.assertEqual(
+            self._node_metadata(model.graph.node[1]), {"onnx_light.inplace_reuse": "0:0:equal"}
+        )
+
     def test_allow_input_overwrite_reuses_graph_input(self):
         nodes = [oh.make_node("Abs", ["X"], ["A"]), oh.make_node("Abs", ["A"], ["Y"])]
         x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [3, 4])

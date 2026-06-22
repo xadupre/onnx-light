@@ -35,6 +35,7 @@ OptimTensor = _C.OptimTensor
 ShapeEvent = _C.ShapeEvent
 ShapeEventAction = _C.ShapeEventAction
 ShapesContext = _C.ShapesContext
+write_inplace_reuse_to_metadata = _C.write_inplace_reuse_to_metadata
 
 
 def infer_shapes_model(model, prefill_with_value_info_output: bool = False) -> None:

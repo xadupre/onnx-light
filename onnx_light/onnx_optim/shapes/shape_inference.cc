@@ -108,7 +108,7 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
   for (const auto &fn_node : func.node()) {
     NodeProto bound_node;
     bound_node.CopyFrom(fn_node);
-    attribute_binder.VisitNode(&bound_node);
+    attribute_binder.VisitNode(bound_node);
     sub_ctx.ComputeShapeNode(bound_node);
   }
   // Map function outputs back to caller-visible names.

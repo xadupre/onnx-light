@@ -471,7 +471,7 @@ TEST(KernelClass, AttentionCausalMasksFuturePositions) {
 }
 
 TEST(KernelClass, AttentionCausalExternalCacheIsOffsetAware) {
-  // External/static KV cache decode (mirrors ONNX PR #8068): a single query
+  // External/static KV cache decode (mirrors onnx/onnx#8068): a single query
   // (q_seq=1) attends a 3-key cache with ``nonpad_kv_seqlen=[3]`` and no
   // ``past_key``. The bottom-right causal frontier gives offset = 3 - 1 = 2, so
   // the query attends ALL three keys. Under the previous top-left alignment

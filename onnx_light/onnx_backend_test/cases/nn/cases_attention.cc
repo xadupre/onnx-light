@@ -1277,7 +1277,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
   // 4D external/static KV-cache causal decode + continued-prefill with
   // ``nonpad_kv_seqlen`` and no ``past_key`` (opset 24). Mirrors upstream
   // ``test_attention_4d_gqa_causal_nonpad_decode`` /
-  // ``test_attention_4d_causal_nonpad_continued_prefill`` (ONNX PR #8068):
+  // ``test_attention_4d_causal_nonpad_continued_prefill`` (onnx/onnx#8068):
   // the ``is_causal`` frontier is bottom-right / offset-aware, so each query
   // attends keys ``j <= i + (nonpad_kv_seqlen[b] - q_seq_len)``.
   {

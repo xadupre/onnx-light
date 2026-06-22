@@ -374,7 +374,7 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
   std::vector<double> bias(static_cast<size_t>(total_kv_seq_len));
   std::vector<double> qkraw(static_cast<size_t>(total_kv_seq_len));
   for (int64_t b = 0; b < batch_size; ++b) {
-    // Bottom-right / offset-aware causal frontier (mirrors ONNX PR #8068):
+    // Bottom-right / offset-aware causal frontier (mirrors onnx/onnx#8068):
     // a query at in-block index ``i`` attends key ``j`` iff ``j <= i + offset``,
     // where ``offset`` is the number of valid keys that precede this query block:
     //   * past_key present (internal cache):    offset = past_kv_seq_len

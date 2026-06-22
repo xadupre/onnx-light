@@ -62,8 +62,8 @@ class TestNodeShapeInference(ExtTestCase):
         self._check_conv_weight_rank_mismatch_raises(defs.get_schema("Conv").since_version)
 
     def _check_conv_transpose_group_divisibility_raises(self, opset: int) -> None:
-        """ConvTranspose with input channels C not divisible by group must fail
-        shape inference (propagated from onnx/onnx#7821)."""
+        """Checks that ConvTranspose with input channels C not divisible by
+        group fails shape inference (propagated from onnx/onnx#7821)."""
         schema = defs.get_schema("ConvTranspose", opset, "")
         node = oh.make_node("ConvTranspose", ["x", "w"], ["z"], group=3)
         xtype = oh.make_tensor_type_proto(onnxl.TensorProto.FLOAT, [1, 32, 14, 14])
@@ -87,8 +87,8 @@ class TestNodeShapeInference(ExtTestCase):
         )
 
     def _check_conv_transpose_non_positive_group_raises(self, opset: int) -> None:
-        """ConvTranspose with a non-positive group attribute must fail shape
-        inference (propagated from onnx/onnx#7821)."""
+        """Checks that ConvTranspose with a non-positive group attribute fails
+        shape inference (propagated from onnx/onnx#7821)."""
         schema = defs.get_schema("ConvTranspose", opset, "")
         node = oh.make_node("ConvTranspose", ["x", "w"], ["z"], group=0)
         xtype = oh.make_tensor_type_proto(onnxl.TensorProto.FLOAT, [1, 32, 14, 14])

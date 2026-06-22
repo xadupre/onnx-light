@@ -3,12 +3,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
 #include <gtest/gtest.h>
 
+#include <cmath>
+#include <cstring>
+#include <limits>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -212,6 +217,45 @@ TEST(KernelClass, CastClassFloatToInt32TruncatesTowardZero) {
   EXPECT_EQ(py[3], 4);
 }
 
+// FLOAT16 subnormals must decode to their true tiny magnitudes (value =
+// mantissa * 2^-24), not to spurious larger values. A miscomputed
+// subnormal exponent previously made FLOAT16 -> FLOAT8* casts of values in
+// the subnormal-half range produce wildly wrong results (e.g. 2^-23 turning
+// into 2^-9), which broke the ``test_cast_FLOAT16_to_FLOAT8*`` backend
+// runtime checks.
+TEST(KernelClass, Float16BitsToFloatDecodesSubnormals) {
+  using onnx_kernels::kernel::Float16BitsToFloat;
+  // Smallest positive subnormal half: 2^-24.
+  EXPECT_FLOAT_EQ(Float16BitsToFloat(0x0001u), std::ldexp(1.0f, -24));
+  // 2^-23 (the value the FLOAT16 -> FLOAT8E5M2 backend test feeds in).
+  EXPECT_FLOAT_EQ(Float16BitsToFloat(0x0002u), std::ldexp(1.0f, -23));
+  // 2^-16 (smallest FLOAT8E5M2 subnormal once cast).
+  EXPECT_FLOAT_EQ(Float16BitsToFloat(0x0100u), std::ldexp(1.0f, -16));
+  // Largest subnormal half: 1023 * 2^-24.
+  EXPECT_FLOAT_EQ(Float16BitsToFloat(0x03ffu), 1023.0f * std::ldexp(1.0f, -24));
+  // Sign bit is preserved.
+  EXPECT_FLOAT_EQ(Float16BitsToFloat(0x8002u), -std::ldexp(1.0f, -23));
+}
+
+// Regression test for the FLOAT16 -> FLOAT8E5M2 underflow path: a subnormal
+// half below the smallest FLOAT8E5M2 subnormal (2^-16) rounds to zero, while
+// exactly 2^-16 maps to the smallest FLOAT8E5M2 subnormal encoding (0x01).
+TEST(KernelClass, CastClassFloat16SubnormalToFloat8E5M2) {
+  const KernelContext ctx{DefaultOpset(21)};
+  Cast cast_kernel{ctx};
+  // Raw FLOAT16 bits: {2^-23, -2^-23, 2^-16}.
+  const std::vector<std::uint16_t> bits = {0x0002u, 0x8002u, 0x0100u};
+  std::vector<std::uint8_t> bytes(bits.size() * sizeof(std::uint16_t));
+  std::memcpy(bytes.data(), bits.data(), bytes.size());
+  Tensor x("", static_cast<int32_t>(onnx_kernels::DataType::FLOAT16), {3}, std::move(bytes));
+  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E5M2));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT8E5M2));
+  ASSERT_EQ(y.data.size(), bits.size());
+  EXPECT_EQ(y.data[0], 0x00u); // 2^-23 underflows to +0.
+  EXPECT_EQ(y.data[1], 0x80u); // -2^-23 underflows to -0.
+  EXPECT_EQ(y.data[2], 0x01u); // 2^-16 -> smallest FLOAT8E5M2 subnormal.
+}
+
 TEST(KernelClass, CastClassInt64ToFloat) {
   const KernelContext ctx{DefaultOpset(13)};
   Cast cast_kernel{ctx};
@@ -241,8 +285,8 @@ TEST(KernelClass, CastClassRejectsUnsupportedTo) {
   const KernelContext ctx{DefaultOpset(13)};
   Cast cast_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {1}, {1.0f});
-  // FLOAT16 is not in the supported set for the kernel today.
-  EXPECT_THROW((void)cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16)),
+  // UINT32 is not in the supported set for the kernel today.
+  EXPECT_THROW((void)cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::UINT32)),
                std::invalid_argument);
 }
 
@@ -254,6 +298,43 @@ TEST(KernelClass, CastInPlaceRejectsDtypeMismatch) {
   Tensor wrong_out("", onnx_kernels::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float)));
   EXPECT_THROW(cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::INT32), wrong_out),
                std::invalid_argument);
+}
+
+// Cast-to-STRING uses the ``%.8g`` printf format for floating-point values
+// (matching NumPy's default and onnxruntime's ``CastToString``) and the
+// uppercase ``NaN`` / ``INF`` / ``-INF`` spellings for non-finite inputs.
+TEST(KernelClass, CastClassFloatToStringMatchesOrtFormat) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Cast cast_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {7},
+                               {0.47892547f, 1000000.0f, 1e-7f, std::nanf(""),
+                                std::numeric_limits<float>::infinity(),
+                                -std::numeric_limits<float>::infinity(), 0.0f});
+  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::STRING));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::STRING));
+  const std::vector<std::string> &ys = y.AsStrings();
+  ASSERT_EQ(ys.size(), 7u);
+  EXPECT_EQ(ys[0], "0.47892547");
+  EXPECT_EQ(ys[1], "1000000");
+  EXPECT_EQ(ys[2], "1e-07");
+  EXPECT_EQ(ys[3], "NaN");
+  EXPECT_EQ(ys[4], "INF");
+  EXPECT_EQ(ys[5], "-INF");
+  EXPECT_EQ(ys[6], "0");
+}
+
+TEST(KernelClass, CastClassDoubleToStringMatchesOrtFormat) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Cast cast_kernel{ctx};
+  Tensor x = Tensor::FromDouble("", {4},
+                                {0.123456789, std::nan(""), std::numeric_limits<double>::infinity(),
+                                 -std::numeric_limits<double>::infinity()});
+  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_kernels::DataType::STRING));
+  const std::vector<std::string> &ys = y.AsStrings();
+  EXPECT_EQ(ys[0], "0.12345679");
+  EXPECT_EQ(ys[1], "NaN");
+  EXPECT_EQ(ys[2], "INF");
+  EXPECT_EQ(ys[3], "-INF");
 }
 
 // ---------------------------------------------------------------------------

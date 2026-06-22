@@ -4,6 +4,7 @@
 
 #include "onnx_backend_test/cases/preview/include_preview_cases.h"
 #include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/preview/include_preview_kernels.h"
 
 #include <cmath>
@@ -442,11 +443,8 @@ Tensor ComputeFlexAttentionExpected(const Tensor &Q, const Tensor &K, const Tens
 // FlexAttention — Y = Softmax((Q @ K^T) * scale, axis=-1) @ V (since opset 1
 // in the ``ai.onnx.preview`` domain).
 //
-// Ten cases are registered, mirroring the cases shipped by upstream ONNX
-// in ``onnx/backend/test/case/node/flexattention.py`` except for the
-// ``fp16`` peer (the backend ``Tensor`` storage does not yet support
-// ``FLOAT16``) and the ``double`` peer (``kernel::FlexAttention`` only
-// supports FLOAT today):
+// Twelve cases are registered, mirroring the cases shipped by upstream ONNX
+// in ``onnx/backend/test/case/node/flexattention.py``:
 //
 //   * ``test_cc_flexattention_basic`` — Multi-Head Attention with
 //     q_num_heads == kv_num_heads. No modifier subgraphs.
@@ -477,6 +475,11 @@ Tensor ComputeFlexAttentionExpected(const Tensor &Q, const Tensor &K, const Tens
 //   * ``test_cc_flexattention_relative_positional`` — ``score_mod``
 //     adds the relative positional bias ``q_idx - k_idx`` (cast to
 //     FLOAT) to the scores.
+//   * ``test_cc_flexattention_double`` — basic MHA shape computed in
+//     DOUBLE precision, exercising the kernel's ``double`` code path.
+//   * ``test_cc_flexattention_fp16`` — basic MHA shape computed in
+//     FLOAT16 precision, exercising the kernel's half-precision
+//     promote/compute/demote path.
 //
 // Inputs are small, fully deterministic tensors so this library does not
 // depend on a PRNG.
@@ -846,6 +849,82 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry) {
     AddGraphAttribute(node, "score_mod", BuildScoreModRelativePositional(modifier_shape));
     Expect(node, {Q, K, V}, {Y}, "test_cc_flexattention_relative_positional",
            {default_opset, opset}, "backend-test", registry);
+  }
+
+  // ----- Case 11: basic MHA computed in DOUBLE precision. Mirrors the shape
+  // and values of ``test_cc_flexattention_basic`` but stores Q/K/V/Y as
+  // ``double`` so the kernel's DOUBLE code path is exercised (upstream
+  // ``test_flexattention_double``).
+  {
+    Tensor Q = Tensor::FromDouble("", {1, 2, 2, 2},
+                                  {
+                                      // head 0
+                                      1.0, 0.0, // q0
+                                      0.0, 1.0, // q1
+                                                // head 1
+                                      0.5, 0.5, // q0
+                                      1.0, -1.0 // q1
+                                  });
+    Tensor K = Tensor::FromDouble("", {1, 2, 2, 2},
+                                  {
+                                      // head 0
+                                      1.0, 0.0,  // k0
+                                      0.0, 1.0,  // k1
+                                                 // head 1
+                                      1.0, 1.0,  // k0
+                                      -1.0, 1.0, // k1
+                                  });
+    Tensor V = Tensor::FromDouble("", {1, 2, 2, 2},
+                                  {
+                                      // head 0
+                                      1.0, 2.0,  // v0
+                                      3.0, 4.0,  // v1
+                                                 // head 1
+                                      -1.0, 0.0, // v0
+                                      0.0, 1.0,  // v1
+                                  });
+    Tensor Y = flex(Q, K, V);
+    NodeProto node = make_node();
+    Expect(node, {Q, K, V}, {Y}, "test_cc_flexattention_double", {default_opset, opset},
+           "backend-test", registry);
+  }
+
+  // ----- Case 12: basic MHA computed in FLOAT16 precision. Mirrors the shape
+  // and values of ``test_cc_flexattention_basic`` but stores Q/K/V/Y as
+  // FLOAT16 so the kernel's half-precision promote/compute/demote path is
+  // exercised (upstream ``test_flexattention_fp16``).
+  {
+    Tensor Q = kernel::MakeFloat16Tensor("", {1, 2, 2, 2},
+                                         {
+                                             // head 0
+                                             1.0f, 0.0f, // q0
+                                             0.0f, 1.0f, // q1
+                                                         // head 1
+                                             0.5f, 0.5f, // q0
+                                             1.0f, -1.0f // q1
+                                         });
+    Tensor K = kernel::MakeFloat16Tensor("", {1, 2, 2, 2},
+                                         {
+                                             // head 0
+                                             1.0f, 0.0f,  // k0
+                                             0.0f, 1.0f,  // k1
+                                                          // head 1
+                                             1.0f, 1.0f,  // k0
+                                             -1.0f, 1.0f, // k1
+                                         });
+    Tensor V = kernel::MakeFloat16Tensor("", {1, 2, 2, 2},
+                                         {
+                                             // head 0
+                                             1.0f, 2.0f,  // v0
+                                             3.0f, 4.0f,  // v1
+                                                          // head 1
+                                             -1.0f, 0.0f, // v0
+                                             0.0f, 1.0f,  // v1
+                                         });
+    Tensor Y = flex(Q, K, V);
+    NodeProto node = make_node();
+    Expect(node, {Q, K, V}, {Y}, "test_cc_flexattention_fp16", {default_opset, opset},
+           "backend-test", registry);
   }
 }
 

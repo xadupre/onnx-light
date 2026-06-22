@@ -15,7 +15,7 @@ jobs:
     # no-onnx) completed successfully.
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       UNITTEST_GOING: "1"
     permissions:
@@ -37,7 +37,7 @@ jobs:
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
           echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}"
       - name: Install dependencies
-        run: pip install -e ".[docs]"
+        run: pip install -e ".[docs]" -v
       - name: Install ONNX weekly
         run: pip install --upgrade onnx-weekly
       - name: pip freeze
@@ -46,7 +46,7 @@ jobs:
         run: |
           warnings_file="$(mktemp)"
           set +e
-          sphinx-build -b html docs dist/html -W -w "${warnings_file}"
+          UNITTEST_GOING=1 sphinx-build -b html docs dist/html -W -w "${warnings_file}"
           status=$?
           set -e
           if [ "${status}" -eq 0 ]; then

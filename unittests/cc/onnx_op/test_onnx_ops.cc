@@ -137,6 +137,7 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
     ASSERT_NE(onnx_lib_schema, nullptr);
     ASSERT_EQ(onnx_lib_schema->Name(), schema.name());
     ASSERT_EQ(onnx_lib_schema->SinceVersion(), schema.since_version());
+    ASSERT_EQ(onnx_lib_schema->deprecated(), schema.deprecated());
     ExpectSameFormalParameters(schema.inputs(), onnx_lib_schema->inputs());
     ExpectSameFormalParameters(schema.outputs(), onnx_lib_schema->outputs());
     ExpectSameTypeConstraints(schema.type_constraints(), onnx_lib_schema->typeConstraintParams());

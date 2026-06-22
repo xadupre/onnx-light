@@ -14,6 +14,8 @@
   SerializeSizeResult SerializeSize() const;                                                       \
   void ParseFromString(const std::string &raw);                                                    \
   void ParseFromString(const std::string &raw, ParseOptions &opts);                                \
+  void ParseFromZeroCopyStream(utils::BinaryStream *stream);                                       \
+  void ParseFromZeroCopyStream(utils::BinaryStream *stream, ParseOptions &opts);                   \
   void SerializeToString(std::string &out) const;                                                  \
   void SerializeToString(std::string &out, SerializeOptions &opts) const;                          \
   SerializeSizeResult SerializeSize(utils::BinaryWriteStream &stream, SerializeOptions &opts)      \
@@ -192,7 +194,7 @@ public:                                                                         
     return *name##_;                                                                               \
   }                                                                                                \
   inline const type &ref_##name() const {                                                          \
-    EXT_ENFORCE(name##_.has_value(), "Optional field '", #name, "' has no value.");                \
+    EXT_ENFORCE(name##_.has_value(), "Optional field '", #name, "' has no value in " #type ".");   \
     return *name##_;                                                                               \
   }                                                                                                \
   /** Compatibility accessor - equivalent to ref_##name(). */                                      \
@@ -205,7 +207,7 @@ public:                                                                         
   }                                                                                                \
   inline utils::OptionalField<type> &name##_optional() { return name##_; }                         \
   inline const utils::OptionalField<type> &name##_optional() const {                               \
-    EXT_ENFORCE(name##_.has_value(), "Optional field '", #name, "' has no value.");                \
+    EXT_ENFORCE(name##_.has_value(), "Optional field '", #name, "' has no value in " #type ".");   \
     return name##_;                                                                                \
   }                                                                                                \
   inline type *add_##name() {                                                                      \
@@ -239,7 +241,8 @@ public:                                                                         
     return *name##_;                                                                               \
   }                                                                                                \
   inline const type &ref_##name() const {                                                          \
-    EXT_ENFORCE(name##_.has_value(), "Optional enum field '", #name, "' has no value.");           \
+    EXT_ENFORCE(name##_.has_value(), "Optional enum field '", #name,                               \
+                "' has no value in " #type ".");                                                   \
     return *name##_;                                                                               \
   }                                                                                                \
   /** Compatibility accessor - equivalent to ref_##name(). */                                      \
@@ -251,7 +254,7 @@ public:                                                                         
   }                                                                                                \
   inline utils::OptionalEnumField<type> &name##_optional() { return name##_; }                     \
   inline const utils::OptionalEnumField<type> &name##_optional() const {                           \
-    EXT_ENFORCE(name##_.has_value(), "Optional field '", #name, "' has no value.");                \
+    EXT_ENFORCE(name##_.has_value(), "Optional field '", #name, "' has no value in " #type ".");   \
     return name##_;                                                                                \
   }                                                                                                \
   inline type *add_##name() {                                                                      \
@@ -297,10 +300,24 @@ enum class FileLoadMode : int32_t {
   kFileStream = 2,
 };
 
+/** Selects the on-disk serialization format used when parsing or serializing a
+ *  ``ModelProto``. ``kOnnx`` is the default ONNX protobuf format. ``kOrtFlatbuffers``
+ *  selects the flatbuffer-based format used by ``onnxruntime`` (``*.ort`` files). */
+enum class SerializeFormat : int32_t {
+  kOnnx = 0,
+  kOrtFlatbuffers = 1,
+};
+
 /** Controls behavior when parsing ONNX protobuf messages from a stream or string. */
 struct ParseOptions : TensorBufferOptions {
   /** Constructs a ParseOptions instance with the default raw_data_threshold of 1024 bytes. */
   ParseOptions() { raw_data_threshold = 1024; }
+  /** Selects the on-disk serialization format expected when parsing.
+   *  ``SerializeFormat::kOnnx`` (default) parses the ONNX protobuf wire format;
+   *  ``SerializeFormat::kOrtFlatbuffers`` parses the onnxruntime flatbuffer
+   *  format (``.ort`` files). The flatbuffer path is not yet implemented and
+   *  raises an error when used. */
+  SerializeFormat format = SerializeFormat::kOnnx;
   /** if true, raw data will not be read but skipped, tensors are not valid in that case  but the
    * model structure is still available */
   bool skip_raw_data = false;
@@ -334,12 +351,45 @@ struct ParseOptions : TensorBufferOptions {
    *  from a file path (e.g. ``ModelProto::ParseFromFile``).  See ``FileLoadMode``
    *  for the semantics of each value.  Ignored when parsing from bytes/streams. */
   FileLoadMode file_load_mode = FileLoadMode::kAuto;
+  /** Maximum nesting depth of protobuf sub-messages accepted while parsing.
+   *  Protects the parser against stack overflow / out-of-memory caused by
+   *  maliciously or accidentally deeply nested messages. Parsing raises an error
+   *  when a message nests deeper than this value. The default is deliberately
+   *  more conservative than protobuf's limit of 100: the recursive-descent
+   *  parser uses large per-message stack frames (especially in debug builds), so
+   *  a lower limit guarantees the guard rejects the message before the recursion
+   *  exhausts the platform's default thread stack (e.g. 1 MB on Windows). It is
+   *  still far above any realistic ONNX message nesting. */
+  int32_t max_recursion_depth = 50;
+  /** Internal counter tracking the current sub-message nesting depth while
+   *  parsing. Managed automatically by the parser through a scoped guard; it is
+   *  not a user-facing setting and is reset to 0 once a top-level parse
+   *  completes. */
+  int32_t _recursion_depth = 0;
+  /** Maximum number of bytes that may be allocated for a single tensor's raw
+   *  data (or packed repeated-field payload) during parsing.  This guards
+   *  against OOM caused by maliciously or accidentally large size prefixes in
+   *  the wire format.
+   *  - ``0`` (default): no limit — any allocation is allowed.
+   *  - ``> 0``: parsing raises an error when the declared byte count for a
+   *    single tensor allocation exceeds this value.
+   *  The check fires before the allocation, so the process is never asked to
+   *  commit memory larger than this threshold.  Set this to a value comfortably
+   *  above the largest legitimate tensor you expect, e.g. 2 GB for most models:
+   *  ``options.max_tensor_size_bytes = 2LL * 1024 * 1024 * 1024;`` */
+  int64_t max_tensor_size_bytes = 0;
 };
 
 /** Controls behavior when serializing ONNX protobuf messages to a stream or string. */
 struct SerializeOptions : TensorBufferOptions {
   /** Constructs a SerializeOptions instance with the default raw_data_threshold. */
   SerializeOptions() { raw_data_threshold = kSmallTensorDataThresholdBytes; }
+  /** Selects the on-disk serialization format produced when serializing.
+   *  ``SerializeFormat::kOnnx`` (default) writes the ONNX protobuf wire format;
+   *  ``SerializeFormat::kOrtFlatbuffers`` writes the onnxruntime flatbuffer
+   *  format (``.ort`` files). The flatbuffer path is not yet implemented and
+   *  raises an error when used. */
+  SerializeFormat format = SerializeFormat::kOnnx;
   /** if true, raw data will not be written but skipped, tensors are not valid in that case but the
    * model structure is still available */
   bool skip_raw_data = false;

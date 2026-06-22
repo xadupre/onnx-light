@@ -51,7 +51,7 @@ std::vector<int64_t> RowMajorStrides(const std::vector<int64_t> &shape) {
 
 void ValidateFloat(const Tensor &t, const char *name) {
   EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      std::string("kernel::ReduceL1L2: ") + name + " must be a FLOAT tensor.");
+                      "kernel::ReduceL1L2: ", name, " must be a FLOAT tensor.");
 }
 
 // Accumulates either |x| (L1) or x*x (L2) into the output buffer, then for L2

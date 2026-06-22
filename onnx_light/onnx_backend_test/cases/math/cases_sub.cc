@@ -4,6 +4,7 @@
 
 #include "onnx_backend_test/cases/math/include_math_cases.h"
 #include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 #include "onnx_kernels/random.h"
 
@@ -64,9 +65,9 @@ void RegisterSubCases(std::vector<TestCase> &registry) {
   // Upstream ONNX backend test cases for the ``Sub`` operator (mirror the
   // ``onnx.backend.test.case.node.sub.Sub`` Python class). All numeric input
   // dtypes accepted by :ref:`kernel::Sub` are covered: FLOAT, INT8, INT16,
-  // UINT8, UINT16, UINT32 and UINT64. Inputs are generated deterministically
-  // through the seeded ``Randn``/``RandnInt``/``RandUint`` helpers to match
-  // the upstream ``np.random.randn(...).astype(dtype)`` and
+  // INT32, INT64, UINT8, UINT16, UINT32 and UINT64. Inputs are generated
+  // deterministically through the seeded ``Randn``/``RandnInt``/``RandUint``
+  // helpers to match the upstream ``np.random.randn(...).astype(dtype)`` and
   // ``np.random.randint(..., dtype=...)`` patterns; expected outputs are
   // computed by ``kernel::Sub``.
 
@@ -102,6 +103,12 @@ void RegisterSubCases(std::vector<TestCase> &registry) {
       {"test_sub_int16",
        {Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/13)),
         Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/14))}},
+      {"test_sub_int32",
+       {Tensor::FromInt32("", {3, 4, 5}, RandnInt<int32_t>({3, 4, 5}, /*seed=*/113)),
+        Tensor::FromInt32("", {3, 4, 5}, RandnInt<int32_t>({3, 4, 5}, /*seed=*/114))}},
+      {"test_sub_int64",
+       {Tensor::FromInt64("", {3, 4, 5}, RandnInt<int64_t>({3, 4, 5}, /*seed=*/115)),
+        Tensor::FromInt64("", {3, 4, 5}, RandnInt<int64_t>({3, 4, 5}, /*seed=*/116))}},
       {"test_sub_uint8",
        {Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/15)),
         Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(12, {3, 4, 5}, /*seed=*/16))}},
@@ -121,6 +128,57 @@ void RegisterSubCases(std::vector<TestCase> &registry) {
   for (const auto &[name, inputs] : cases) {
     Tensor z = sub_kernel(inputs[0], inputs[1]);
     Expect(node, inputs, {z}, name, {opset}, "backend-test", registry);
+  }
+
+  // FLOAT16
+  {
+    NodeProto n16;
+    n16.set_op_type("Sub");
+    n16.add_input("x");
+    n16.add_input("y");
+    n16.add_output("z");
+
+    Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+    Tensor y = kernel::MakeFloat16Tensor("", {2, 3}, {10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f});
+    Tensor z = sub_kernel(x, y);
+    Expect(n16, {x, y}, {z}, "test_cc_sub_float16", {opset}, "backend-test", registry);
+  }
+
+  // BFLOAT16
+  {
+    NodeProto nbf;
+    nbf.set_op_type("Sub");
+    nbf.add_input("x");
+    nbf.add_input("y");
+    nbf.add_output("z");
+
+    std::vector<float> vx = {1.0f, 2.0f, 3.0f, 4.0f};
+    std::vector<float> vy = {0.5f, 1.5f, 2.5f, 3.5f};
+    std::vector<uint8_t> rx(vx.size() * 2), ry(vy.size() * 2);
+    auto *dx = reinterpret_cast<uint16_t *>(rx.data());
+    auto *dy = reinterpret_cast<uint16_t *>(ry.data());
+    for (size_t i = 0; i < vx.size(); ++i) {
+      dx[i] = kernel::FloatToBfloat16Bits(vx[i]);
+      dy[i] = kernel::FloatToBfloat16Bits(vy[i]);
+    }
+    Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {4}, std::move(rx));
+    Tensor y("", static_cast<int32_t>(DataType::BFLOAT16), {4}, std::move(ry));
+    Tensor z = sub_kernel(x, y);
+    Expect(nbf, {x, y}, {z}, "test_cc_sub_bfloat16", {opset}, "backend-test", registry);
+  }
+
+  // DOUBLE
+  {
+    NodeProto nd;
+    nd.set_op_type("Sub");
+    nd.add_input("x");
+    nd.add_input("y");
+    nd.add_output("z");
+
+    Tensor x = Tensor::FromDouble("", {2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
+    Tensor y = Tensor::FromDouble("", {2, 3}, {10.0, 20.0, 30.0, 40.0, 50.0, 60.0});
+    Tensor z = sub_kernel(x, y);
+    Expect(nd, {x, y}, {z}, "test_cc_sub_double", {opset}, "backend-test", registry);
   }
 }
 

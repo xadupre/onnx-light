@@ -495,7 +495,10 @@ void SetValueInfoTensorType(ValueInfoProto &vi, TensorProto::DataType dtype,
   for (std::size_t i = 0; i < shape.size(); ++i) {
     TensorShapeProto::Dimension *d = sp->add_dim();
     if (shape[i] < 0) {
-      d->set_dim_param(i < symbolic_names.size() ? symbolic_names[i] : std::string("?"));
+      if (i < symbolic_names.size() && !symbolic_names[i].empty()) {
+        d->set_dim_param(symbolic_names[i]);
+      }
+      // Otherwise leave the dim unset (no name information).
     } else {
       d->set_dim_value(shape[i]);
     }
@@ -609,6 +612,51 @@ TEST(OnnxOptimShapeInference, ComputeShapeModelPrefillPrefersOutputAnchor) {
   ASSERT_EQ(constraints.size(), 1u);
   const auto &c = *constraints.begin();
   EXPECT_TRUE(c.first == "ANCHOR" || c.second == "ANCHOR");
+}
+
+TEST(OnnxOptimShapeInference, ComputeShapeModelPrefillPreservesGraphInputSymbol) {
+  // Regression test: when an output anchor uses a different symbolic name
+  // than the input ("ANCHOR" vs "N"), the prefill+propagate pass must not
+  // rename the graph input dim from "N" to "ANCHOR". Both names are
+  // user-provided and authoritative for their own value.
+  //
+  // ``Y = Relu(X)`` keeps the input shape, so the inferred Y has dim
+  // ``N`` and the anchor declares ``ANCHOR`` for the same position. The
+  // merge records the equality ``N == ANCHOR``; the propagation step
+  // must privilege the anchor on Y but leave X alone.
+  ModelProto model;
+  model.set_ir_version(8);
+  OperatorSetIdProto *osi = model.add_opset_import();
+  osi->set_domain("");
+  osi->set_version(18);
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+  ValueInfoProto *in = graph->add_input();
+  in->set_name("X");
+  SetValueInfoTensorType(*in, TensorProto::DataType::FLOAT, /*shape=*/{-1, 4},
+                         /*symbolic_names=*/{"N"});
+  ValueInfoProto *out = graph->add_output();
+  out->set_name("Y");
+  SetValueInfoTensorType(*out, TensorProto::DataType::FLOAT, /*shape=*/{-1, 4},
+                         /*symbolic_names=*/{"ANCHOR"});
+  *graph->add_node() = MakeNode("Relu", {"X"}, {"Y"});
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.ComputeShapeModel(model, /*prefill_with_value_info_output=*/true);
+
+  // Y adopts the anchor symbol.
+  ASSERT_TRUE(ctx.Has("Y"));
+  ASSERT_EQ(ctx.Get("Y").Shape().Rank(), 2u);
+  EXPECT_TRUE(ctx.Get("Y").Shape()[0].IsExpr());
+  EXPECT_EQ(ctx.Get("Y").Shape()[0].AsExpr(), "ANCHOR");
+  EXPECT_EQ(ctx.Get("Y").Shape()[1], onnx_optim::OptimDim(4));
+  // The graph-input symbol "N" survives propagation untouched, even
+  // though the constraint ``N == ANCHOR`` was recorded.
+  ASSERT_TRUE(ctx.Has("X"));
+  ASSERT_EQ(ctx.Get("X").Shape().Rank(), 2u);
+  EXPECT_TRUE(ctx.Get("X").Shape()[0].IsExpr());
+  EXPECT_EQ(ctx.Get("X").Shape()[0].AsExpr(), "N");
+  EXPECT_EQ(ctx.Get("X").Shape()[1], onnx_optim::OptimDim(4));
 }
 
 TEST(OnnxOptimShapeInference, ComputeShapeModelPrefillRaisesOnDimConflict) {
@@ -794,6 +842,107 @@ TEST(OnnxOptimShapeInference, InferShapesModelWithPrefillPrefersOutputAnchor) {
   EXPECT_TRUE(out.type().tensor_type().shape().dim()[0].has_dim_param());
   EXPECT_EQ(out.type().tensor_type().shape().dim()[0].dim_param().as_string(), "ANCHOR");
   EXPECT_EQ(out.type().tensor_type().shape().dim()[1].dim_value(), 2);
+}
+
+TEST(OnnxOptimShapeInference, ComputeShapeModelReplacesConcatExprWithInputAnchor) {
+  // ``present = Concat(past_key, new_key, axis=2)`` concatenates the
+  // KV-cache sequence dims ``past_seq`` and ``seq``, so node-level inference
+  // produces ``present`` (and its downstream consumer ``consumed``) with
+  // axis-2 dim ``past_seq+seq``. The model also declares an input ``mask`` of
+  // shape ``[batch, total_seq]`` (so ``total_seq`` is a first-class
+  // graph-input symbol) and the ``present`` output anchor declares
+  // ``[batch, 2, total_seq, 4]``. Shape inference must recognise that
+  // ``past_seq+seq == total_seq`` and rewrite the inferred compound
+  // expression to the input anchor ``total_seq`` everywhere it appears,
+  // including the intermediate ``consumed`` (which is not a graph output and
+  // therefore does not receive the anchor directly).
+  ModelProto model;
+  model.set_ir_version(9);
+  OperatorSetIdProto *osi = model.add_opset_import();
+  osi->set_domain("");
+  osi->set_version(18);
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+
+  ValueInfoProto *past = graph->add_input();
+  past->set_name("past_key");
+  SetValueInfoTensorType(*past, TensorProto::DataType::FLOAT, /*shape=*/{-1, 2, -1, 4},
+                         /*symbolic_names=*/{"batch", "", "past_seq", ""});
+  ValueInfoProto *new_key = graph->add_input();
+  new_key->set_name("new_key");
+  SetValueInfoTensorType(*new_key, TensorProto::DataType::FLOAT, /*shape=*/{-1, 2, -1, 4},
+                         /*symbolic_names=*/{"batch", "", "seq", ""});
+  ValueInfoProto *mask = graph->add_input();
+  mask->set_name("mask");
+  SetValueInfoTensorType(*mask, TensorProto::DataType::FLOAT, /*shape=*/{-1, -1},
+                         /*symbolic_names=*/{"batch", "total_seq"});
+
+  ValueInfoProto *out = graph->add_output();
+  out->set_name("present");
+  SetValueInfoTensorType(*out, TensorProto::DataType::FLOAT, /*shape=*/{-1, 2, -1, 4},
+                         /*symbolic_names=*/{"batch", "", "total_seq", ""});
+
+  NodeProto concat = MakeNode("Concat", {"past_key", "new_key"}, {"present"});
+  AddAttribute<int64_t>(concat, "axis", 2);
+  *graph->add_node() = std::move(concat);
+  *graph->add_node() = MakeNode("Identity", {"present"}, {"consumed"});
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.ComputeShapeModel(model);
+
+  // The graph output adopts the declared anchor directly.
+  ASSERT_TRUE(ctx.Has("present"));
+  ASSERT_EQ(ctx.Get("present").Shape().Rank(), 4u);
+  EXPECT_TRUE(ctx.Get("present").Shape()[2].IsExpr());
+  EXPECT_EQ(ctx.Get("present").Shape()[2].AsExpr(), "total_seq");
+  // The intermediate consumer is rewritten from ``past_seq+seq`` to the
+  // equivalent graph-input anchor ``total_seq``.
+  ASSERT_TRUE(ctx.Has("consumed"));
+  ASSERT_EQ(ctx.Get("consumed").Shape().Rank(), 4u);
+  EXPECT_TRUE(ctx.Get("consumed").Shape()[2].IsExpr());
+  EXPECT_EQ(ctx.Get("consumed").Shape()[2].AsExpr(), "total_seq");
+}
+
+TEST(OnnxOptimShapeInference, ComputeShapeModelKeepsConcatExprWithoutInputAnchor) {
+  // Counterpart to the test above: when the equivalent anchor ``e`` only
+  // appears on a graph **output** (never on an input), the internally
+  // computed expression ``past_seq+seq`` carries more information than the
+  // opaque output label and must be preserved on the intermediate
+  // ``consumed`` rather than collapsed to ``e``.
+  ModelProto model;
+  model.set_ir_version(9);
+  OperatorSetIdProto *osi = model.add_opset_import();
+  osi->set_domain("");
+  osi->set_version(18);
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+
+  ValueInfoProto *past = graph->add_input();
+  past->set_name("past_key");
+  SetValueInfoTensorType(*past, TensorProto::DataType::FLOAT, /*shape=*/{-1, 2, -1, 4},
+                         /*symbolic_names=*/{"batch", "", "past_seq", ""});
+  ValueInfoProto *new_key = graph->add_input();
+  new_key->set_name("new_key");
+  SetValueInfoTensorType(*new_key, TensorProto::DataType::FLOAT, /*shape=*/{-1, 2, -1, 4},
+                         /*symbolic_names=*/{"batch", "", "seq", ""});
+
+  ValueInfoProto *out = graph->add_output();
+  out->set_name("present");
+  SetValueInfoTensorType(*out, TensorProto::DataType::FLOAT, /*shape=*/{-1, 2, -1, 4},
+                         /*symbolic_names=*/{"batch", "", "e", ""});
+
+  NodeProto concat = MakeNode("Concat", {"past_key", "new_key"}, {"present"});
+  AddAttribute<int64_t>(concat, "axis", 2);
+  *graph->add_node() = std::move(concat);
+  *graph->add_node() = MakeNode("Identity", {"present"}, {"consumed"});
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.ComputeShapeModel(model);
+
+  ASSERT_TRUE(ctx.Has("consumed"));
+  ASSERT_EQ(ctx.Get("consumed").Shape().Rank(), 4u);
+  EXPECT_TRUE(ctx.Get("consumed").Shape()[2].IsExpr());
+  EXPECT_EQ(ctx.Get("consumed").Shape()[2].AsExpr(), "past_seq+seq");
 }
 
 // ── Model-local functions ────────────────────────────────────────────
@@ -995,6 +1144,366 @@ TEST(OnnxOptimShapeInference, ExpandsLocalFunctionWithLinkedAttribute) {
   EXPECT_EQ(ctx.Get("Z").Dtype(), onnx_optim::TensorType::kInt64);
   EXPECT_EQ(ctx.Get("Z").Shape(),
             (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+}
+
+TEST(OnnxOptimShapesContextLessEqualConstraint, AddAndQuery) {
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_EQ(ctx.LessEqualConstraintsSize(), 0u);
+  // Self-bound is dropped.
+  EXPECT_FALSE(ctx.AddLessEqualConstraint("a", "a"));
+  // Empty operands are dropped.
+  EXPECT_FALSE(ctx.AddLessEqualConstraint("", "rhs"));
+  EXPECT_FALSE(ctx.AddLessEqualConstraint("a", ""));
+  EXPECT_EQ(ctx.LessEqualConstraintsSize(), 0u);
+
+  EXPECT_TRUE(ctx.AddLessEqualConstraint("a", "b"));
+  EXPECT_TRUE(ctx.HasLessEqualConstraint("a", "b"));
+  // Constraint is ordered: ``b <= a`` is *not* recorded.
+  EXPECT_FALSE(ctx.HasLessEqualConstraint("b", "a"));
+  // Re-inserting the same pair is a no-op.
+  EXPECT_FALSE(ctx.AddLessEqualConstraint("a", "b"));
+  EXPECT_EQ(ctx.LessEqualConstraintsSize(), 1u);
+  // ``a <= a`` always reports true.
+  EXPECT_TRUE(ctx.HasLessEqualConstraint("a", "a"));
+
+  EXPECT_TRUE(ctx.AddLessEqualConstraint("a", "N*M"));
+  EXPECT_EQ(ctx.LessEqualConstraintsSize(), 2u);
+}
+
+TEST(OnnxOptimShapesContextEventLog, DisabledByDefault) {
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_FALSE(ctx.events_enabled());
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+  // No events are recorded while logging is disabled.
+  EXPECT_TRUE(ctx.Events().empty());
+}
+
+TEST(OnnxOptimShapesContextEventLog, SetRecordsAddAndReplace) {
+  using onnx_optim::shapes::ShapeEventAction;
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.set_events_enabled(true);
+  EXPECT_TRUE(ctx.Events().empty());
+
+  // First Set on an absent name -> add event with the descriptor snapshot.
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim("N")}));
+  ASSERT_EQ(ctx.Events().size(), 1u);
+  const auto &add_ev = ctx.Events()[0];
+  EXPECT_EQ(add_ev.action, ShapeEventAction::kAdd);
+  EXPECT_EQ(add_ev.name, "X");
+  EXPECT_EQ(add_ev.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  EXPECT_EQ(add_ev.shape, (std::vector<std::string>{"2", "N"}));
+  EXPECT_TRUE(add_ev.op_type.empty());
+
+  // Second Set on the same name -> replace event with the new dtype/shape.
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(5)}));
+  ASSERT_EQ(ctx.Events().size(), 2u);
+  EXPECT_EQ(ctx.Events()[1].action, ShapeEventAction::kReplace);
+  EXPECT_EQ(ctx.Events()[1].name, "X");
+  EXPECT_EQ(ctx.Events()[1].data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+  EXPECT_EQ(ctx.Events()[1].shape, (std::vector<std::string>{"5"}));
+
+  ctx.ClearEvents();
+  EXPECT_TRUE(ctx.Events().empty());
+}
+
+TEST(OnnxOptimShapesContextEventLog, ComputeShapeNodeRecordsComputeNodeEvent) {
+  using onnx_optim::shapes::ShapeEventAction;
+  NodeProto node = MakeNode("Abs", {"X"}, {"Y"});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.set_events_enabled(true);
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+  ctx.ClearEvents();
+
+  ctx.ComputeShapeNode(node);
+
+  // The Abs kernel writes the output descriptor (one add event) and the
+  // dispatch itself appends one compute_node event summarising the node.
+  ASSERT_EQ(ctx.Events().size(), 2u);
+  EXPECT_EQ(ctx.Events()[0].action, ShapeEventAction::kAdd);
+  EXPECT_EQ(ctx.Events()[0].name, "Y");
+  EXPECT_EQ(ctx.Events()[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  EXPECT_EQ(ctx.Events()[0].shape, (std::vector<std::string>{"2", "3"}));
+
+  const auto &node_ev = ctx.Events()[1];
+  EXPECT_EQ(node_ev.action, ShapeEventAction::kComputeNode);
+  EXPECT_EQ(node_ev.op_domain, "ai.onnx");
+  EXPECT_EQ(node_ev.op_type, "Abs");
+  EXPECT_EQ(node_ev.inputs, (std::vector<std::string>{"X"}));
+  EXPECT_EQ(node_ev.data_type, static_cast<int32_t>(TensorProto::DataType::UNDEFINED));
+  EXPECT_TRUE(node_ev.shape.empty());
+}
+
+TEST(OnnxOptimShapesContextEventLog, ConstraintsRecordEvents) {
+  using onnx_optim::shapes::ShapeEventAction;
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.set_events_enabled(true);
+
+  // A new equality constraint records a kConstraint event with the
+  // canonicalised operands in ``inputs``.
+  EXPECT_TRUE(ctx.AddConstraint("N", "M"));
+  ASSERT_EQ(ctx.Events().size(), 1u);
+  const auto &eq_ev = ctx.Events()[0];
+  EXPECT_EQ(eq_ev.action, ShapeEventAction::kConstraint);
+  EXPECT_EQ(eq_ev.inputs, (std::vector<std::string>{"M", "N"}));
+  EXPECT_EQ(eq_ev.data_type, static_cast<int32_t>(TensorProto::DataType::UNDEFINED));
+
+  // Duplicate / self constraints do not append events.
+  EXPECT_FALSE(ctx.AddConstraint("M", "N"));
+  EXPECT_FALSE(ctx.AddConstraint("N", "N"));
+  EXPECT_EQ(ctx.Events().size(), 1u);
+
+  // A new upper-bound constraint records a kConstraintMax event.
+  EXPECT_TRUE(ctx.AddLessEqualConstraint("nnz", "2*N"));
+  ASSERT_EQ(ctx.Events().size(), 2u);
+  const auto &le_ev = ctx.Events()[1];
+  EXPECT_EQ(le_ev.action, ShapeEventAction::kConstraintMax);
+  EXPECT_EQ(le_ev.inputs, (std::vector<std::string>{"nnz", "2*N"}));
+
+  EXPECT_FALSE(ctx.AddLessEqualConstraint("nnz", "2*N"));
+  EXPECT_EQ(ctx.Events().size(), 2u);
+}
+
+TEST(OnnxOptimShapesContextEventLog, ConstraintsDoNotRecordWhenDisabled) {
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_TRUE(ctx.AddConstraint("N", "M"));
+  EXPECT_TRUE(ctx.AddLessEqualConstraint("nnz", "2*N"));
+  EXPECT_TRUE(ctx.Events().empty());
+}
+
+TEST(OnnxOptimShapesContextEventLog, ActionNames) {
+  using onnx_optim::shapes::ShapeEventAction;
+  using onnx_optim::shapes::ShapeEventActionName;
+  EXPECT_STREQ(ShapeEventActionName(ShapeEventAction::kAdd), "add");
+  EXPECT_STREQ(ShapeEventActionName(ShapeEventAction::kReplace), "replace");
+  EXPECT_STREQ(ShapeEventActionName(ShapeEventAction::kComputeNode), "compute_node");
+  EXPECT_STREQ(ShapeEventActionName(ShapeEventAction::kConstraint), "constraint");
+  EXPECT_STREQ(ShapeEventActionName(ShapeEventAction::kConstraintMax), "constraint_max");
+}
+
+TEST(OnnxOptimShapesContextEventLog, NodeIndexTagsInputsInitializersAndNodes) {
+  using onnx_optim::shapes::ShapeEvent;
+  using onnx_optim::shapes::ShapeEventAction;
+  // Graph: input X (float [3,4]), initializer S (int64 [2]) and a single
+  // Reshape node producing Y. Inputs are tagged with node_index -1,
+  // initializers with -2, and descriptors / compute_node events produced by
+  // node 0 with 0.
+  ModelProto model;
+  model.set_ir_version(8);
+  OperatorSetIdProto *osi = model.add_opset_import();
+  osi->set_domain("");
+  osi->set_version(18);
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+  ValueInfoProto *in = graph->add_input();
+  in->set_name("X");
+  SetValueInfoTensorType(*in, TensorProto::DataType::FLOAT, /*shape=*/{3, 4});
+  ValueInfoProto *out = graph->add_output();
+  out->set_name("Y");
+  TensorProto *init = graph->add_initializer();
+  init->set_name("S");
+  init->set_data_type(TensorProto::DataType::INT64);
+  init->add_dims(std::vector<uint64_t>{2});
+  init->add_int64_data(std::vector<int64_t>{-1, 2});
+  *graph->add_node() = MakeNode("Reshape", {"X", "S"}, {"Y"});
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.set_events_enabled(true);
+  ctx.ComputeShapeModel(model);
+
+  auto first_event = [&](ShapeEventAction action, const std::string &name) -> const ShapeEvent * {
+    for (const auto &ev : ctx.Events()) {
+      if (ev.action == action && ev.name == name) {
+        return &ev;
+      }
+    }
+    return nullptr;
+  };
+
+  const ShapeEvent *x_ev = first_event(ShapeEventAction::kAdd, "X");
+  ASSERT_NE(x_ev, nullptr);
+  EXPECT_EQ(x_ev->node_index, -1);
+
+  const ShapeEvent *s_ev = first_event(ShapeEventAction::kAdd, "S");
+  ASSERT_NE(s_ev, nullptr);
+  EXPECT_EQ(s_ev->node_index, -2);
+
+  const ShapeEvent *y_ev = first_event(ShapeEventAction::kAdd, "Y");
+  ASSERT_NE(y_ev, nullptr);
+  EXPECT_EQ(y_ev->node_index, 0);
+
+  const ShapeEvent *node_ev = nullptr;
+  for (const auto &ev : ctx.Events()) {
+    if (ev.action == ShapeEventAction::kComputeNode) {
+      node_ev = &ev;
+      break;
+    }
+  }
+  ASSERT_NE(node_ev, nullptr);
+  EXPECT_EQ(node_ev->op_type, "Reshape");
+  EXPECT_EQ(node_ev->node_index, 0);
+}
+
+TEST(OnnxOptimShapesContextEventLog, TopLevelEventsHaveEmptyGraphName) {
+  // A model with no subgraphs: all events must have an empty subgraph_attr_name.
+  NodeProto node = MakeNode("Relu", {"X"}, {"Y"});
+  ModelProto model;
+  model.set_ir_version(8);
+  OperatorSetIdProto *osi = model.add_opset_import();
+  osi->set_domain("");
+  osi->set_version(18);
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+  ValueInfoProto *in = graph->add_input();
+  in->set_name("X");
+  SetValueInfoTensorType(*in, TensorProto::DataType::FLOAT, /*shape=*/{2, 3});
+  ValueInfoProto *out = graph->add_output();
+  out->set_name("Y");
+  *graph->add_node() = node;
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.set_events_enabled(true);
+  ctx.ComputeShapeModel(model);
+
+  for (const auto &ev : ctx.Events()) {
+    EXPECT_TRUE(ev.subgraph_attr_name.empty())
+        << "Expected empty subgraph_attr_name for top-level event, got: " << ev.subgraph_attr_name;
+  }
+}
+
+TEST(OnnxOptimShapesContextEventLog, IfSubgraphEventsCarryBranchGraphName) {
+  // Build a simple If model: branches each produce Abs(X).
+  // Events from then_branch must carry subgraph_attr_name="then_branch" and
+  // from else_branch subgraph_attr_name="else_branch"; outer events must have
+  // empty subgraph_attr_name.
+  using onnx_optim::shapes::ShapeEvent;
+  ModelProto model;
+  model.set_ir_version(8);
+  OperatorSetIdProto *osi = model.add_opset_import();
+  osi->set_domain("");
+  osi->set_version(18);
+  GraphProto *graph = model.add_graph();
+  graph->set_name("main");
+  // Inputs
+  ValueInfoProto *cond_vi = graph->add_input();
+  cond_vi->set_name("cond");
+  SetValueInfoTensorType(*cond_vi, TensorProto::DataType::BOOL, {});
+  ValueInfoProto *x_vi = graph->add_input();
+  x_vi->set_name("X");
+  SetValueInfoTensorType(*x_vi, TensorProto::DataType::FLOAT, {2, 3});
+  ValueInfoProto *out = graph->add_output();
+  out->set_name("Z");
+
+  NodeProto *if_node = graph->add_node();
+  if_node->set_op_type("If");
+  if_node->add_input("cond");
+  if_node->add_output("Z");
+
+  // then_branch: Z_then = Abs(X)
+  {
+    AttributeProto *attr = if_node->add_attribute();
+    attr->set_name("then_branch");
+    attr->set_type(AttributeProto::AttributeType::GRAPH);
+    GraphProto *tb = attr->mutable_g();
+    *tb->add_node() = MakeNode("Abs", {"X"}, {"Z_then"});
+    tb->add_output()->set_name("Z_then");
+  }
+  // else_branch: Z_else = Neg(X)
+  {
+    AttributeProto *attr = if_node->add_attribute();
+    attr->set_name("else_branch");
+    attr->set_type(AttributeProto::AttributeType::GRAPH);
+    GraphProto *eb = attr->mutable_g();
+    *eb->add_node() = MakeNode("Neg", {"X"}, {"Z_else"});
+    eb->add_output()->set_name("Z_else");
+  }
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.set_events_enabled(true);
+  ctx.ComputeShapeModel(model);
+
+  bool found_then = false;
+  bool found_else = false;
+  for (const auto &ev : ctx.Events()) {
+    if (ev.subgraph_attr_name == "then_branch") {
+      found_then = true;
+    }
+    if (ev.subgraph_attr_name == "else_branch") {
+      found_else = true;
+    }
+  }
+  EXPECT_TRUE(found_then) << "No event with subgraph_attr_name='then_branch' found";
+  EXPECT_TRUE(found_else) << "No event with subgraph_attr_name='else_branch' found";
+}
+
+TEST(OnnxOptimShapesContextEventLog, LoopSubgraphEventsCarryBodyGraphName) {
+  // Build a Loop model: sum = Loop(M, cond, init) with a body that adds 1.
+  using onnx_optim::shapes::ShapeEvent;
+
+  ModelProto model;
+  model.set_ir_version(8);
+  OperatorSetIdProto *osi = model.add_opset_import();
+  osi->set_domain("");
+  osi->set_version(18);
+  GraphProto *graph = model.add_graph();
+  graph->set_name("main");
+
+  // Graph inputs
+  ValueInfoProto *m_vi = graph->add_input();
+  m_vi->set_name("M");
+  SetValueInfoTensorType(*m_vi, TensorProto::DataType::INT64, {});
+  ValueInfoProto *cond_vi = graph->add_input();
+  cond_vi->set_name("cond");
+  SetValueInfoTensorType(*cond_vi, TensorProto::DataType::BOOL, {});
+  ValueInfoProto *init_vi = graph->add_input();
+  init_vi->set_name("s_init");
+  SetValueInfoTensorType(*init_vi, TensorProto::DataType::FLOAT, {});
+  graph->add_output()->set_name("s_final");
+  graph->add_output()->set_name("scan_out");
+
+  NodeProto *loop_node = graph->add_node();
+  loop_node->set_op_type("Loop");
+  loop_node->add_input("M");
+  loop_node->add_input("cond");
+  loop_node->add_input("s_init");
+  loop_node->add_output("s_final");
+  loop_node->add_output("scan_out");
+
+  // body subgraph: s_out = Add(s_in, one_init)
+  AttributeProto *body_attr = loop_node->add_attribute();
+  body_attr->set_name("body");
+  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  GraphProto *body = body_attr->mutable_g();
+  body->set_name("loop_body");
+  body->add_input()->set_name("iter");
+  body->add_input()->set_name("cond_in");
+  body->add_input()->set_name("s_in");
+  // initializer ``one``
+  TensorProto *one = body->add_initializer();
+  one->set_name("one");
+  one->set_data_type(TensorProto::DataType::FLOAT);
+  one->add_float_data(1.0f);
+  *body->add_node() = MakeNode("Add", {"s_in", "one"}, {"s_out"});
+  body->add_output()->set_name("cond_in");
+  body->add_output()->set_name("s_out");
+  body->add_output()->set_name("s_out");
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.set_events_enabled(true);
+  ctx.ComputeShapeModel(model);
+
+  bool found_body = false;
+  for (const auto &ev : ctx.Events()) {
+    if (ev.subgraph_attr_name == "body") {
+      found_body = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(found_body) << "No event with subgraph_attr_name='body' found";
 }
 
 } // namespace Test

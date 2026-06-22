@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 
@@ -214,6 +215,20 @@ TEST(KernelClass, GreaterClassMatchesReferenceUint32) {
   EXPECT_EQ(z.data[3], 1);
 }
 
+TEST(KernelClass, GreaterClassMatchesReferenceInt64) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Greater greater_kernel{ctx};
+  Tensor x = Tensor::FromInt64("", {4}, {-2, 0, 3, 7});
+  Tensor y = Tensor::FromInt64("", {4}, {-1, 0, 1, 9});
+  Tensor z = greater_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
+  EXPECT_EQ(z.data[0], 0); // -2 > -1
+  EXPECT_EQ(z.data[1], 0); //  0 >  0
+  EXPECT_EQ(z.data[2], 1); //  3 >  1
+  EXPECT_EQ(z.data[3], 0); //  7 >  9
+}
+
 TEST(KernelClass, LessClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(13)};
   Less less_kernel{ctx};
@@ -288,6 +303,34 @@ TEST(KernelClass, LessClassMatchesReferenceUint64) {
   EXPECT_EQ(z.data[1], 0);
   EXPECT_EQ(z.data[2], 0);
   EXPECT_EQ(z.data[3], 0);
+}
+
+TEST(KernelClass, LessClassMatchesReferenceInt64) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Less less_kernel{ctx};
+  Tensor x = Tensor::FromInt64("", {4}, {-2, 0, 3, 7});
+  Tensor y = Tensor::FromInt64("", {4}, {-1, 0, 1, 9});
+  Tensor z = less_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
+  EXPECT_EQ(z.data[0], 1); // -2 < -1
+  EXPECT_EQ(z.data[1], 0); //  0 <  0
+  EXPECT_EQ(z.data[2], 0); //  3 <  1
+  EXPECT_EQ(z.data[3], 1); //  7 <  9
+}
+
+TEST(KernelClass, LessClassMatchesReferenceInt32) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Less less_kernel{ctx};
+  Tensor x = Tensor::FromInt32("", {4}, {-2, 0, 3, 7});
+  Tensor y = Tensor::FromInt32("", {4}, {-1, 0, 1, 9});
+  Tensor z = less_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
+  EXPECT_EQ(z.data[0], 1);
+  EXPECT_EQ(z.data[1], 0);
+  EXPECT_EQ(z.data[2], 0);
+  EXPECT_EQ(z.data[3], 1);
 }
 
 TEST(KernelClass, GreaterOrEqualClassMatchesReference) {
@@ -386,6 +429,20 @@ TEST(KernelClass, LessOrEqualRejectsUnsupportedDtype) {
   Tensor y("", onnx_kernels::DataType::BOOL, {2}, {1, 1});
   LessOrEqual le_kernel{ctx};
   EXPECT_THROW({ (void)le_kernel(x, y); }, std::invalid_argument);
+}
+
+TEST(KernelClass, LessOrEqualClassMatchesReferenceInt64) {
+  const KernelContext ctx{DefaultOpset(16)};
+  LessOrEqual le_kernel{ctx};
+  Tensor x = Tensor::FromInt64("", {4}, {-2, 0, 3, 7});
+  Tensor y = Tensor::FromInt64("", {4}, {-1, 0, 1, 9});
+  Tensor z = le_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
+  EXPECT_EQ(z.data[0], 1); // -2 <= -1
+  EXPECT_EQ(z.data[1], 1); //  0 <=  0
+  EXPECT_EQ(z.data[2], 0); //  3 <=  1
+  EXPECT_EQ(z.data[3], 1); //  7 <=  9
 }
 
 TEST(KernelClass, EqualClassMatchesReference) {
@@ -707,6 +764,63 @@ TEST(KernelClass, IsNaNRejectsNonFloatTensors) {
   IsNaN isnan_kernel{ctx};
   Tensor x = Tensor::FromInt32("", {2}, {0, 1});
   EXPECT_THROW((void)isnan_kernel(x), std::invalid_argument);
+}
+
+TEST(KernelClass, IsNaNDoubleMatchesReference) {
+  const KernelContext ctx{DefaultOpset(20)};
+  IsNaN isnan_kernel{ctx};
+  const double nan_v = std::numeric_limits<double>::quiet_NaN();
+  const double inf_v = std::numeric_limits<double>::infinity();
+  Tensor x = Tensor::FromDouble("", {6}, {-1.2, nan_v, inf_v, 2.8, -inf_v, inf_v});
+  Tensor y = isnan_kernel(x);
+  ASSERT_EQ(y.element_count(), 6);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
+  EXPECT_EQ(y.data[0], 0u);
+  EXPECT_EQ(y.data[1], 1u);
+  EXPECT_EQ(y.data[2], 0u);
+  EXPECT_EQ(y.data[3], 0u);
+  EXPECT_EQ(y.data[4], 0u);
+  EXPECT_EQ(y.data[5], 0u);
+}
+
+TEST(KernelClass, IsNaNFloat16MatchesReference) {
+  const KernelContext ctx{DefaultOpset(20)};
+  IsNaN isnan_kernel{ctx};
+  const float nan_v = std::numeric_limits<float>::quiet_NaN();
+  const float inf_v = std::numeric_limits<float>::infinity();
+  Tensor x =
+      onnx_kernels::kernel::MakeFloat16Tensor("", {6}, {-1.2f, nan_v, inf_v, 2.8f, -inf_v, inf_v});
+  Tensor y = isnan_kernel(x);
+  ASSERT_EQ(y.element_count(), 6);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
+  EXPECT_EQ(y.data[0], 0u);
+  EXPECT_EQ(y.data[1], 1u);
+  EXPECT_EQ(y.data[2], 0u);
+  EXPECT_EQ(y.data[3], 0u);
+  EXPECT_EQ(y.data[4], 0u);
+  EXPECT_EQ(y.data[5], 0u);
+}
+
+TEST(KernelClass, IsNaNBfloat16MatchesReference) {
+  const KernelContext ctx{DefaultOpset(20)};
+  IsNaN isnan_kernel{ctx};
+  const float nan_v = std::numeric_limits<float>::quiet_NaN();
+  const float inf_v = std::numeric_limits<float>::infinity();
+  const std::vector<float> vals = {-1.2f, nan_v, inf_v, 2.8f, -inf_v, inf_v};
+  std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
+  auto *dst = reinterpret_cast<uint16_t *>(raw.data());
+  for (size_t i = 0; i < vals.size(); ++i)
+    dst[i] = onnx_kernels::kernel::FloatToBfloat16Bits(vals[i]);
+  Tensor x("", static_cast<int32_t>(onnx_kernels::DataType::BFLOAT16), {6}, std::move(raw));
+  Tensor y = isnan_kernel(x);
+  ASSERT_EQ(y.element_count(), 6);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_kernels::DataType::BOOL));
+  EXPECT_EQ(y.data[0], 0u);
+  EXPECT_EQ(y.data[1], 1u);
+  EXPECT_EQ(y.data[2], 0u);
+  EXPECT_EQ(y.data[3], 0u);
+  EXPECT_EQ(y.data[4], 0u);
+  EXPECT_EQ(y.data[5], 0u);
 }
 
 TEST(KernelClass, IsInfClassMatchesReference) {

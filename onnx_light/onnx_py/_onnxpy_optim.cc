@@ -1,5 +1,6 @@
 #include "onnx_optim/expressions.h"
 #include "onnx_optim/optim_tensor.h"
+#include "onnx_optim/shapes/inplace_reuse.h"
 #include "onnx_optim/shapes/shape_inference.h"
 #include "onnx_optim/shapes/shapes_context.h"
 #include <algorithm>
@@ -65,6 +66,69 @@ void AddOnnxPyExpressions(nb::module_ &m) {
         },
         nb::arg("expr1"), nb::arg("expr2"),
         "Returns the non-zero coefficient map of (expr1) - (expr2).");
+
+    // CompareResult — outcome of comparing two symbolic expressions.
+    nb::enum_<expr::CompareResult>(
+        expressions_mod, "CompareResult", nb::is_arithmetic(),
+        "Outcome of :func:`compare_expressions`, assuming every symbolic token is "
+        "positive or null.")
+        .value("Smaller", expr::CompareResult::Smaller,
+               "The first expression is always strictly smaller than the second.")
+        .value("Equal", expr::CompareResult::Equal, "The two expressions are always equal.")
+        .value("Greater", expr::CompareResult::Greater,
+               "The first expression is always strictly greater than the second.")
+        .value("Unknown", expr::CompareResult::Unknown,
+               "The relationship cannot be determined for all non-negative token values.");
+
+    // ExpressionComparison — result + simplified difference of compare_expressions.
+    nb::class_<expr::ExpressionComparison>(
+        expressions_mod, "ExpressionComparison",
+        "Result of :func:`compare_expressions`. Holds the :class:`CompareResult` "
+        "``result`` together with the simplified ``difference`` (expr2) - (expr1), "
+        "an ``int`` when numeric and a ``str`` otherwise.")
+        .def_ro("result", &expr::ExpressionComparison::result,
+                ":class:`CompareResult` describing how ``expr1`` compares to ``expr2``.")
+        .def_prop_ro(
+            "difference",
+            [](const expr::ExpressionComparison &c) -> nb::object {
+              return std::holds_alternative<int64_t>(c.difference)
+                         ? nb::cast(std::get<int64_t>(c.difference))
+                         : nb::cast(std::get<std::string>(c.difference));
+            },
+            "Simplified value of (expr2) - (expr1); ``int`` when numeric, ``str`` otherwise.")
+        .def("__repr__", [](const expr::ExpressionComparison &c) {
+          const char *name = "Unknown";
+          switch (c.result) {
+          case expr::CompareResult::Smaller:
+            name = "Smaller";
+            break;
+          case expr::CompareResult::Equal:
+            name = "Equal";
+            break;
+          case expr::CompareResult::Greater:
+            name = "Greater";
+            break;
+          case expr::CompareResult::Unknown:
+            name = "Unknown";
+            break;
+          }
+          std::string diff = std::holds_alternative<int64_t>(c.difference)
+                                 ? std::to_string(std::get<int64_t>(c.difference))
+                                 : "'" + std::get<std::string>(c.difference) + "'";
+          return std::string("ExpressionComparison(result=CompareResult.") + name +
+                 ", difference=" + diff + ")";
+        });
+
+    // compare_expressions(expr1, expr2) -> ExpressionComparison
+    expressions_mod.def(
+        "compare_expressions",
+        [](const std::string &e1, const std::string &e2) {
+          return expr::compare_expressions(e1, e2);
+        },
+        nb::arg("expr1"), nb::arg("expr2"),
+        "Compares expr1 to expr2 assuming all tokens are positive or null. Returns an "
+        ":class:`ExpressionComparison` whose ``result`` is a :class:`CompareResult` and whose "
+        "``difference`` is the simplified value of (expr2) - (expr1).");
 
     // evaluate_expression(expr, context) -> int
     expressions_mod.def(
@@ -377,6 +441,107 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           "descriptor equality.");
 
   // -----------------------------------------------------------------------
+  // ShapeEventAction — enum classifying a ShapeEvent record.
+  // Mirrors :cpp:enum:`onnx_optim::shapes::ShapeEventAction`.
+  // -----------------------------------------------------------------------
+  nb::enum_<onnx_shapes::ShapeEventAction>(shape_mod, "ShapeEventAction", nb::is_arithmetic(),
+                                           "Action kind recorded in a :class:`ShapeEvent`. "
+                                           "``kAdd`` / ``kReplace`` mark tensor-descriptor "
+                                           "mutations; ``kComputeNode`` marks the dispatch of "
+                                           "a single shape-inference node; ``kConstraint`` / "
+                                           "``kConstraintMax`` mark newly inserted symbolic "
+                                           "dimension constraints.")
+      .value("kAdd", onnx_shapes::ShapeEventAction::kAdd,
+             "A new tensor descriptor was added to the context.")
+      .value("kReplace", onnx_shapes::ShapeEventAction::kReplace,
+             "An existing tensor descriptor was replaced.")
+      .value("kComputeNode", onnx_shapes::ShapeEventAction::kComputeNode,
+             "Shape inference was dispatched for a node.")
+      .value("kConstraint", onnx_shapes::ShapeEventAction::kConstraint,
+             "A new equality constraint between two symbolic dimensions was inserted.")
+      .value("kConstraintMax", onnx_shapes::ShapeEventAction::kConstraintMax,
+             "A new less-than-or-equal constraint between two symbolic dimensions was inserted.");
+
+  // -----------------------------------------------------------------------
+  // ShapeEvent — append-only log entry for a single shape-inference event.
+  // Mirrors :cpp:class:`onnx_optim::shapes::ShapeEvent`; ``shape`` is exposed
+  // as a list of per-dimension strings so symbolic dims are preserved.
+  // -----------------------------------------------------------------------
+  nb::class_<onnx_shapes::ShapeEvent>(
+      shape_mod, "ShapeEvent",
+      "One entry of the :meth:`ShapesContext.events` log. ``add`` / ``replace`` "
+      "events describe a tensor descriptor mutation performed through "
+      "``ShapesContext.set`` and carry the descriptor ``name``, ``data_type`` "
+      "(a ``TensorProto.DataType`` integer) and ``shape`` (a list of per-dimension "
+      "strings, preserving symbolic dims). ``compute_node`` events summarise the "
+      "shape-inference dispatch of a single node and carry ``op_domain``, "
+      "``op_type`` and ``inputs`` instead. ``constraint`` / ``constraint_max`` "
+      "events record a newly inserted symbolic-dimension constraint and carry its "
+      "two operands in ``inputs``.")
+      .def_prop_ro(
+          "action", [](const onnx_shapes::ShapeEvent &ev) { return ev.action; },
+          ":class:`ShapeEventAction` member describing the event kind: "
+          "``kAdd``, ``kReplace``, ``kComputeNode``, ``kConstraint`` or "
+          "``kConstraintMax``.")
+      .def_ro("name", &onnx_shapes::ShapeEvent::name,
+              "Value name targeted by the mutation. Empty for ``compute_node`` / "
+              "``constraint`` / ``constraint_max`` events.")
+      .def_ro("data_type", &onnx_shapes::ShapeEvent::data_type,
+              "``TensorProto.DataType`` integer of the descriptor, or ``UNDEFINED`` (0) "
+              "for ``compute_node`` / ``constraint`` / ``constraint_max`` events.")
+      .def_ro("shape", &onnx_shapes::ShapeEvent::shape,
+              "Descriptor shape as a list of per-dimension strings (decimal integers for "
+              "concrete dims, symbolic expressions otherwise). Empty for ``compute_node`` / "
+              "``constraint`` / ``constraint_max`` events.")
+      .def_ro("op_domain", &onnx_shapes::ShapeEvent::op_domain,
+              "For ``compute_node`` events: normalised ONNX op domain of the dispatched "
+              "node (default domain reported as ``\"ai.onnx\"``). Empty otherwise.")
+      .def_ro("op_type", &onnx_shapes::ShapeEvent::op_type,
+              "For ``compute_node`` events: ONNX ``op_type`` of the dispatched node. "
+              "Empty otherwise.")
+      .def_ro("inputs", &onnx_shapes::ShapeEvent::inputs,
+              "For ``compute_node`` events: ordered list of input names consumed by the "
+              "node (matching ``NodeProto.input``). For ``constraint`` / ``constraint_max`` "
+              "events: the two constraint operands. Empty otherwise.")
+      .def_ro("node_index", &onnx_shapes::ShapeEvent::node_index,
+              "Index of the node this event is associated with: ``-1`` for graph inputs, "
+              "``-2`` for initializers, and the position (``>= 0``) of the producing / "
+              "dispatched node otherwise (``-1`` when no producing node is known).")
+      .def_ro("subgraph_node_index", &onnx_shapes::ShapeEvent::subgraph_node_index,
+              "Index of the control-flow node in the parent graph whose attribute subgraph "
+              "produced this event. ``-1`` for top-level-graph events.")
+      .def_ro("subgraph_attr_name", &onnx_shapes::ShapeEvent::subgraph_attr_name,
+              "Attribute name of the subgraph within the owning control-flow node "
+              "(``\"body\"``, ``\"then_branch\"``, ``\"else_branch\"``, etc.). "
+              "Empty for top-level-graph events.")
+      .def(
+          "as_dict",
+          [](const onnx_shapes::ShapeEvent &ev) {
+            nb::dict d;
+            d["action"] = std::string(onnx_shapes::ShapeEventActionName(ev.action));
+            d["name"] = ev.name;
+            d["data_type"] = ev.data_type;
+            d["shape"] = ev.shape;
+            d["op_domain"] = ev.op_domain;
+            d["op_type"] = ev.op_type;
+            d["inputs"] = ev.inputs;
+            d["node_index"] = ev.node_index;
+            d["subgraph_node_index"] = ev.subgraph_node_index;
+            d["subgraph_attr_name"] = ev.subgraph_attr_name;
+            return d;
+          },
+          "Returns the event fields as a plain Python ``dict`` (trivially "
+          "renderable as a table, serialisable, etc.).")
+      .def("__repr__", [](const onnx_shapes::ShapeEvent &ev) {
+        return std::string("ShapeEvent(action='") + onnx_shapes::ShapeEventActionName(ev.action) +
+               "', name='" + ev.name + "', op_type='" + ev.op_type +
+               "', data_type=" + std::to_string(ev.data_type) +
+               ", node_index=" + std::to_string(ev.node_index) +
+               ", subgraph_node_index=" + std::to_string(ev.subgraph_node_index) +
+               ", subgraph_attr_name='" + ev.subgraph_attr_name + "')";
+      });
+
+  // -----------------------------------------------------------------------
   // ShapesContext
   // -----------------------------------------------------------------------
   nb::class_<onnx_shapes::ShapesContext>(
@@ -410,6 +575,29 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       .def("empty", &onnx_shapes::ShapesContext::Empty, "True when no entries are stored.")
       .def("clear", &onnx_shapes::ShapesContext::Clear,
            "Removes every entry (tensors, sequences and opset versions).")
+      // Event logging (opt-in; mirrors ``RuntimeContext.events``).
+      .def_prop_rw(
+          "events_enabled", [](const onnx_shapes::ShapesContext &c) { return c.events_enabled(); },
+          [](onnx_shapes::ShapesContext &c, bool v) { c.set_events_enabled(v); },
+          "When ``True``, ``set`` records ``add`` / ``replace`` events, "
+          "``compute_shape_node`` records a ``compute_node`` event per dispatched "
+          "node, and ``add_constraint`` / ``add_less_equal_constraint`` record "
+          "``constraint`` / ``constraint_max`` events. Default is ``False`` for "
+          "maximum throughput; enable only when tracing shape inference.")
+      .def(
+          "events",
+          [](const onnx_shapes::ShapesContext &c) -> nb::list {
+            nb::list out;
+            for (const auto &ev : c.Events())
+              out.append(nb::cast(ev));
+            return out;
+          },
+          "Returns the append-only shape-inference event log as a list of "
+          ":class:`ShapeEvent` instances. Empty unless ``events_enabled`` was set "
+          "before running shape inference.")
+      .def(
+          "clear_events", [](onnx_shapes::ShapesContext &c) { c.ClearEvents(); },
+          "Empties the event log without otherwise touching the context.")
       .def(
           "__repr__",
           [](const onnx_shapes::ShapesContext &c) {
@@ -483,6 +671,34 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
             return out;
           },
           "Returns the list of names of stored sequence descriptors.")
+      // Child contexts retained for control-flow subgraphs.
+      .def(
+          "has_subgraph_context",
+          [](const onnx_shapes::ShapesContext &c, int64_t node_index,
+             const std::string &attr_name) { return c.HasSubgraphContext(node_index, attr_name); },
+          nb::arg("node_index"), nb::arg("attr_name"),
+          "True when a child context was retained for the subgraph ``attr_name`` of the "
+          "control-flow node at ``node_index``.")
+      .def(
+          "subgraph_context",
+          [](const onnx_shapes::ShapesContext &c, int64_t node_index,
+             const std::string &attr_name) -> const onnx_shapes::ShapesContext & {
+            return c.GetSubgraphContext(node_index, attr_name);
+          },
+          nb::arg("node_index"), nb::arg("attr_name"), nb::rv_policy::reference_internal,
+          "Returns the child :class:`ShapesContext` retained for the subgraph ``attr_name`` of "
+          "the control-flow node at ``node_index``. Raises ``IndexError`` if absent.")
+      .def("subgraph_contexts_size", &onnx_shapes::ShapesContext::SubgraphContextsSize,
+           "Number of retained child contexts.")
+      .def(
+          "subgraph_context_keys",
+          [](const onnx_shapes::ShapesContext &c) -> nb::list {
+            nb::list out;
+            for (const auto &kv : c.SubgraphContexts())
+              out.append(nb::make_tuple(kv.first.first, kv.first.second));
+            return out;
+          },
+          "Returns retained child-context keys as ``(node_index, attr_name)`` tuples.")
       // Opset versions
       .def("set_opset_version", &onnx_shapes::ShapesContext::SetOpsetVersion, nb::arg("domain"),
            nb::arg("opset_version"),
@@ -564,7 +780,100 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
             return out;
           },
           "Returns the list of recorded equality constraints as ``(lhs, rhs)`` "
-          "tuples with ``lhs < rhs``.");
+          "tuples with ``lhs < rhs``.")
+      // Symbolic-dimension upper-bound (less-or-equal) constraints.
+      .def(
+          "add_less_equal_constraint",
+          [](onnx_shapes::ShapesContext &c, const std::string &lhs, const std::string &rhs) {
+            return c.AddLessEqualConstraint(lhs, rhs);
+          },
+          nb::arg("lhs"), nb::arg("rhs"),
+          "Records that the symbolic dimension ``lhs`` is less than or equal to "
+          "the dimension expression ``rhs``. ``lhs == rhs`` and empty operands "
+          "are dropped. Returns True when a new constraint was inserted, False "
+          "otherwise.")
+      .def(
+          "has_less_equal_constraint",
+          [](const onnx_shapes::ShapesContext &c, const std::string &lhs, const std::string &rhs) {
+            return c.HasLessEqualConstraint(lhs, rhs);
+          },
+          nb::arg("lhs"), nb::arg("rhs"),
+          "True when a ``lhs <= rhs`` constraint was recorded "
+          "(``lhs == rhs`` always returns True).")
+      .def("less_equal_constraints_size", &onnx_shapes::ShapesContext::LessEqualConstraintsSize,
+           "Number of recorded ``<=`` constraints.")
+      .def(
+          "less_equal_constraints",
+          [](const onnx_shapes::ShapesContext &c) -> nb::list {
+            nb::list out;
+            for (const auto &p : c.LessEqualConstraints()) {
+              out.append(nb::make_tuple(p.first, p.second));
+            }
+            return out;
+          },
+          "Returns the list of recorded ``<=`` constraints as ordered "
+          "``(lhs, rhs)`` tuples meaning ``lhs <= rhs``.")
+      // Shape-inference drivers (also exposed as module-level free functions).
+      .def(
+          "compute_shape_node",
+          [](onnx_shapes::ShapesContext &c, const NodeProto &node) { c.ComputeShapeNode(node); },
+          nb::arg("node"),
+          "Dispatches a single ``NodeProto`` to the matching per-operator "
+          "``ComputeShape*`` function and stores the resulting output tensor "
+          "descriptors in ``self``. The node's input descriptors must already be "
+          "present in ``self``.")
+      .def(
+          "check_inputs_available",
+          [](const onnx_shapes::ShapesContext &c, const NodeProto &node) {
+            c.CheckInputsAvailable(node);
+          },
+          nb::arg("node"),
+          "Raises ``ValueError`` if any non-empty input name declared by ``node`` is "
+          "missing from ``self``.")
+      .def(
+          "check_outputs_not_available",
+          [](const onnx_shapes::ShapesContext &c, const NodeProto &node) {
+            c.CheckOutputsNotAvailable(node);
+          },
+          nb::arg("node"),
+          "Raises ``ValueError`` if any non-empty output name declared by ``node`` "
+          "already has an entry in ``self``.")
+      .def(
+          "compute_shape_graph",
+          [](onnx_shapes::ShapesContext &c, const GraphProto &graph) {
+            c.ComputeShapeGraph(graph);
+          },
+          nb::arg("graph"),
+          "Seeds ``self`` from the initializers and inputs of ``graph`` and then runs "
+          "``compute_shape_node`` on every node in topological order.")
+      .def(
+          "compute_shape_model",
+          [](onnx_shapes::ShapesContext &c, const ModelProto &model,
+             bool prefill_with_value_info_output) {
+            c.ComputeShapeModel(model, prefill_with_value_info_output);
+          },
+          nb::arg("model"), nb::arg("prefill_with_value_info_output") = false,
+          "Records every ``(domain, version)`` pair from ``model.opset_import`` in "
+          "``self`` and delegates to ``compute_shape_graph``. When "
+          "``prefill_with_value_info_output`` is true, tensor descriptors from "
+          "``model.graph.value_info`` and ``model.graph.output`` are added as "
+          "anchors and preferred when there is a non-conflicting choice at the end.")
+      .def(
+          "apply_inferred_shapes_to_graph",
+          [](const onnx_shapes::ShapesContext &c, GraphProto &graph) {
+            c.ApplyInferredShapesToGraph(graph);
+          },
+          nb::arg("graph"),
+          "Writes the shape and element-type descriptors stored in ``self`` back into "
+          "``graph.output`` and ``graph.value_info``.")
+      .def(
+          "apply_inferred_shapes_to_model",
+          [](const onnx_shapes::ShapesContext &c, ModelProto &model) {
+            c.ApplyInferredShapesToModel(model);
+          },
+          nb::arg("model"),
+          "Writes the shape and element-type descriptors stored in ``self`` back into "
+          "``model.graph``.");
 
   shape_mod.attr("kUnknownOpsetVersion") = onnx_shapes::kUnknownOpsetVersion;
   shape_mod.attr("kOnnxDomain") = onnx_shapes::kOnnxDomain;
@@ -649,4 +958,51 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       "back into ``model.graph.output`` and ``model.graph.value_info``. The ModelProto is "
       "mutated in place. When ``prefill_with_value_info_output`` is true, existing "
       "``value_info``/``output`` tensor descriptors are used as anchors.");
+
+  // -----------------------------------------------------------------------
+  // In-place reuse analysis
+  // -----------------------------------------------------------------------
+  nb::enum_<onnx_shapes::InPlaceReuseKind>(
+      shape_mod, "InPlaceReuseKind", nb::is_arithmetic(),
+      "Classifies how the reused input buffer compares in size with the output: "
+      "``kEqual`` when the input and output share the same element type and shape "
+      "(same byte size, the preferred reuse); ``kGreater`` when the input buffer is "
+      "strictly larger in bytes than the output.")
+      .value("kEqual", onnx_shapes::InPlaceReuseKind::kEqual,
+             "The input and output have the same byte size.")
+      .value("kGreater", onnx_shapes::InPlaceReuseKind::kGreater,
+             "The input buffer is strictly larger in bytes than the output.");
+
+  nb::class_<onnx_shapes::InPlaceReuse>(
+      shape_mod, "InPlaceReuse",
+      "Represents one in-place reuse opportunity for a node: the output at ``output_index`` "
+      "reuses the buffer of the input at ``input_index`` (both indices into the node's "
+      "``output``/``input`` lists). ``kind`` records whether the input buffer has the same "
+      "size as the output (``kEqual``) or is strictly larger (``kGreater``).")
+      .def(nb::init<>())
+      .def_rw("output_index", &onnx_shapes::InPlaceReuse::output_index)
+      .def_rw("input_index", &onnx_shapes::InPlaceReuse::input_index)
+      .def_rw("kind", &onnx_shapes::InPlaceReuse::kind)
+      .def(nb::self == nb::self)
+      .def(nb::self != nb::self)
+      .def("__repr__", [](const onnx_shapes::InPlaceReuse &r) {
+        std::ostringstream os;
+        const char *kind = r.kind == onnx_shapes::InPlaceReuseKind::kEqual ? "kEqual" : "kGreater";
+        os << "InPlaceReuse(output_index=" << r.output_index << ", input_index=" << r.input_index
+           << ", kind=" << kind << ")";
+        return os.str();
+      });
+
+  shape_mod.def(
+      "compute_inplace_reuse",
+      [](const onnx_shapes::ShapesContext &ctx, const GraphProto &graph) {
+        return onnx_shapes::ComputeInPlaceReuse(graph, ctx);
+      },
+      nb::arg("ctx"), nb::arg("graph"),
+      "Guesses, for every node of ``graph``, which outputs reuse which input buffers in "
+      "place, using the shapes already inferred into ``ctx``.\n\n"
+      "Returns: a list with one entry per node (same order as ``graph.node``); each entry is a "
+      "list of :class:`InPlaceReuse`. The analysis is purely structural (matching element type, "
+      "shape and value lifetime) and does not check whether a given kernel actually supports "
+      "in-place execution.");
 }

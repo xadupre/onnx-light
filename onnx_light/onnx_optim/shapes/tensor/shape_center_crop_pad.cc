@@ -21,9 +21,8 @@ namespace tensor {
 
 void ComputeShapeCenterCropPad(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "CenterCropPad", "ComputeShapeCenterCropPad");
-  if (node.input_size() < 2) {
-    throw std::invalid_argument("ComputeShapeCenterCropPad: CenterCropPad requires two inputs.");
-  }
+  EXT_ENFORCE_INVALID(!(node.input_size() < 2),
+                      "ComputeShapeCenterCropPad: CenterCropPad requires two inputs.");
 
   const OptimTensor &input = ctx.Get(node.input(0).as_string());
   const OptimShape &in_shape = input.Shape();
@@ -39,11 +38,8 @@ void ComputeShapeCenterCropPad(ShapesContext &ctx, const NodeProto &node) {
   } else {
     for (auto &a : axes) {
       const int64_t na = a < 0 ? a + rank : a;
-      if (na < 0 || na >= rank) {
-        throw std::invalid_argument("ComputeShapeCenterCropPad: axis " + std::to_string(a) +
-                                    " is out of range for input rank " + std::to_string(rank) +
-                                    ".");
-      }
+      EXT_ENFORCE_INVALID(!(na < 0 || na >= rank), "ComputeShapeCenterCropPad: axis ", a,
+                          " is out of range for input rank ", rank, ".");
       a = na;
     }
   }
@@ -67,12 +63,10 @@ void ComputeShapeCenterCropPad(ShapesContext &ctx, const NodeProto &node) {
       shape_known = true;
     }
   }
-  if (shape_known && shape_values.size() != axes.size()) {
-    throw std::invalid_argument("ComputeShapeCenterCropPad: number of elements of input 'shape' (" +
-                                std::to_string(shape_values.size()) +
-                                ") does not match the number of axes (" +
-                                std::to_string(axes.size()) + ").");
-  }
+  EXT_ENFORCE_INVALID(!(shape_known && shape_values.size() != axes.size()),
+                      "ComputeShapeCenterCropPad: number of elements of input 'shape' (",
+                      shape_values.size(), ") does not match the number of axes (", axes.size(),
+                      ").");
 
   // Build the output shape: start from the input, overwrite axes selected by
   // ``axes`` with values from ``shape`` (or a fresh symbolic dim when

@@ -28,7 +28,16 @@ void CollectShapeInferenceTestCases(std::vector<TestCase> &registry, const std::
     RegisterConcatSplitShapeInferenceCases(registry, false);
     RegisterIfSymbolicShapesShapeInferenceCases(registry);
     RegisterLoopPairwiseDistanceShapeInferenceCases(registry);
+    RegisterTopKPairwiseDistanceShapeInferenceCases(registry);
+    RegisterLoopTopKPairwiseDistanceShapeInferenceCases(registry);
+    RegisterScanTopKPairwiseDistanceShapeInferenceCases(registry);
+    RegisterTwoTopKSameKShapeInferenceCases(registry);
+    RegisterTwoTopKDifferentKShapeInferenceCases(registry);
     RegisterScanRunningSumShapeInferenceCases(registry);
+    RegisterResizeTileShapeInferenceCases(registry);
+    RegisterPadCannyAverageShapeInferenceCases(registry);
+    RegisterTinyLlmShapeInferenceCases(registry);
+    RegisterTinyLlmInlinedShapeInferenceCases(registry);
   }
 }
 

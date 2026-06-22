@@ -50,14 +50,10 @@ void ComputeShapeDeformConv(ShapesContext &ctx, const NodeProto &node, const cha
   const OptimShape &x_shape = x_tensor.Shape();
   const OptimShape &w_shape = w_tensor.Shape();
 
-  if (x_shape.Rank() < 3) {
-    throw std::invalid_argument("ComputeShapeDeformConv: input '" + std::string(x) +
-                                "' must have rank >= 3 (N, C, D1, ...).");
-  }
-  if (w_shape.Rank() != x_shape.Rank()) {
-    throw std::invalid_argument("ComputeShapeDeformConv: weight '" + std::string(w) +
-                                "' rank must match input rank.");
-  }
+  EXT_ENFORCE_INVALID(!(x_shape.Rank() < 3), "ComputeShapeDeformConv: input '", x,
+                      "' must have rank >= 3 (N, C, D1, ...).");
+  EXT_ENFORCE_INVALID(w_shape.Rank() == x_shape.Rank(), "ComputeShapeDeformConv: weight '", w,
+                      "' rank must match input rank.");
 
   const size_t n_spatial = x_shape.Rank() - 2;
 
@@ -71,7 +67,7 @@ void ComputeShapeDeformConv(ShapesContext &ctx, const NodeProto &node, const cha
       kernel_shape.push_back(kd.IsInt() ? kd.AsInt() : -1);
     }
   } else if (kernel_shape.size() != n_spatial) {
-    throw std::invalid_argument(
+    EXT_THROW_INVALID(
         "ComputeShapeDeformConv: 'kernel_shape' attribute size does not match input spatial rank.");
   }
 
@@ -80,7 +76,7 @@ void ComputeShapeDeformConv(ShapesContext &ctx, const NodeProto &node, const cha
   if (strides.empty()) {
     strides.assign(n_spatial, 1);
   } else if (strides.size() != n_spatial) {
-    throw std::invalid_argument(
+    EXT_THROW_INVALID(
         "ComputeShapeDeformConv: 'strides' attribute size does not match input spatial rank.");
   }
 
@@ -89,7 +85,7 @@ void ComputeShapeDeformConv(ShapesContext &ctx, const NodeProto &node, const cha
   if (dilations.empty()) {
     dilations.assign(n_spatial, 1);
   } else if (dilations.size() != n_spatial) {
-    throw std::invalid_argument(
+    EXT_THROW_INVALID(
         "ComputeShapeDeformConv: 'dilations' attribute size does not match input spatial rank.");
   }
 
@@ -98,8 +94,7 @@ void ComputeShapeDeformConv(ShapesContext &ctx, const NodeProto &node, const cha
   if (pads.empty()) {
     pads.assign(n_spatial * 2, 0);
   } else if (pads.size() != n_spatial * 2) {
-    throw std::invalid_argument(
-        "ComputeShapeDeformConv: 'pads' attribute size must be 2 * spatial rank.");
+    EXT_THROW_INVALID("ComputeShapeDeformConv: 'pads' attribute size must be 2 * spatial rank.");
   }
 
   OptimShape out_shape;

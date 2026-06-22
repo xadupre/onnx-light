@@ -96,6 +96,7 @@ except ModuleNotFoundError:
             build_lib = "build/lib"
             gprof = False
             with_upstream_onnx = False
+            no_kernels = False
             parallel = None
 
             i = 1
@@ -121,6 +122,8 @@ except ModuleNotFoundError:
                     gprof = True
                 elif arg == "--with-upstream-onnx":
                     with_upstream_onnx = True
+                elif arg == "--no-kernels":
+                    no_kernels = True
                 elif arg.startswith("--parallel="):
                     value = arg.split("=", 1)[1]
                     try:
@@ -143,7 +146,7 @@ except ModuleNotFoundError:
                         f"Unsupported argument for {command}: {arg!r}. "
                         "Supported arguments include: --inplace, --dry-run, "
                         "--build-temp, --build-lib, --cpp-tests, --gprof, "
-                        "--with-upstream-onnx, --parallel."
+                        "--with-upstream-onnx, --no-kernels, --parallel."
                     )
                 i += 1
 
@@ -195,6 +198,8 @@ except ModuleNotFoundError:
                 cmake_args = _set_cmake_default_define(cmake_args, "CMAKE_BUILD_TYPE", "Release")
                 if cpp_tests:
                     cmake_args = _set_cmake_define(cmake_args, "ONNX_LIGHT_BUILD_TESTS", "ON")
+                if no_kernels:
+                    cmake_args = _set_cmake_define(cmake_args, "ONNX_LIGHT_BUILD_KERNELS", "OFF")
                 if with_upstream_onnx:
                     onnx_prefix = _detect_upstream_onnx_prefix()
                     if onnx_prefix is not None:
@@ -258,9 +263,17 @@ class BuildExt(Command):
             "CMAKE_PREFIX_PATH so find_package(ONNX) succeeds (used by C++ unit "
             "tests and benchmarks that compare against the upstream onnx library)",
         ),
+        (
+            "no-kernels",
+            None,
+            "build the reduced extension set without the operator-kernel runtime "
+            "and backend-test registries (sets -DONNX_LIGHT_BUILD_KERNELS=OFF); "
+            "the reference runtime and backend-test helpers then raise an explicit "
+            "error when used",
+        ),
         ("parallel=", "j", "number of parallel build jobs"),
     ]
-    boolean_options = ["inplace", "cpp-tests", "with-upstream-onnx"]
+    boolean_options = ["inplace", "cpp-tests", "with-upstream-onnx", "no-kernels"]
 
     def initialize_options(self):
         """Initializes default values for command options."""
@@ -269,6 +282,7 @@ class BuildExt(Command):
         self.build_lib = None
         self.cpp_tests = False
         self.with_upstream_onnx = False
+        self.no_kernels = False
         self.parallel = _default_parallel_jobs()
 
     def finalize_options(self):
@@ -290,6 +304,8 @@ class BuildExt(Command):
         cmake_args = _set_cmake_default_define(cmake_args, "CMAKE_BUILD_TYPE", "Release")
         if self.cpp_tests:
             cmake_args = _set_cmake_define(cmake_args, "ONNX_LIGHT_BUILD_TESTS", "ON")
+        if self.no_kernels:
+            cmake_args = _set_cmake_define(cmake_args, "ONNX_LIGHT_BUILD_KERNELS", "OFF")
         if self.with_upstream_onnx:
             onnx_prefix = _detect_upstream_onnx_prefix()
             if onnx_prefix is not None:
@@ -393,7 +409,7 @@ class BuildBenchmarks(Command):
 
 setup(
     name="onnx-light",
-    version="0.1.0",
+    version="0.1.1",
     packages=["onnx_light"],
     distclass=NoConfigDistribution,
     cmdclass={"build_ext": BuildExt, "build_benchmarks": BuildBenchmarks},

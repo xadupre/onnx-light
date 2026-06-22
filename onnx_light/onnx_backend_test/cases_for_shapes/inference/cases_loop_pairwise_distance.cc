@@ -178,28 +178,31 @@ void RegisterLoopPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &regi
   cond_tensor.set_data_type(TensorProto::DataType::BOOL);
   cond_tensor.set_raw_data(utils::ByteSpan(BoolBytes(true)));
 
-  // Graph input X uses the concrete ``[3, 3]`` shape that matches the
-  // reference DataSet. The dynamic-shape backend test rewrites these
-  // ``dim_value`` entries to fresh ``dim_param`` names before re-running
-  // shape inference, so input dims must be concrete here.
+  // Graph input X uses symbolic dims ``[batch, features]`` matching the
+  // expected value_info shapes. The dynamic-shape backend test supports
+  // symbolic input dims directly, propagating them through shape inference.
   const int32_t kFloat = static_cast<int32_t>(DataType::FLOAT);
-  AppendValueInfo(*graph->add_input(), "X", kFloat, {DimSpec("batch"), DimSpec("feat")});
+  AppendValueInfo(*graph->add_input(), "X", kFloat, {DimSpec("batch"), DimSpec("features")});
 
   // Intermediate value_info entries. ``shape_X`` is the 1-D INT64 shape
   // vector of ``X`` (length 2 = rank of ``X``); ``trip_count`` is the
   // INT64 ``[1]`` slice extracting the leading dim.
   AppendValueInfo(*graph->add_value_info(), "shape_X", DataType::INT64, {DimSpec(2)});
   AppendValueInfo(*graph->add_value_info(), "trip_count", DataType::INT64, {DimSpec(1)});
+  AppendValueInfo(*graph->add_value_info(), "Y_pre_abs", DataType::FLOAT,
+                  {DimSpec("batch"), DimSpec("batch")});
 
   // Output Y — the stacked pairwise distance matrix of shape ``[3, 3]``.
   AppendValueInfo(*graph->add_output(), "Y", kFloat, {DimSpec("batch"), DimSpec("batch")});
 
-  // Reference DataSet with concrete ``[3, 3]`` input. Rows are on the axes
-  // of an integer grid so the pairwise distances are integers and exact.
-  Tensor x = Tensor::FromFloat("X", {3, 3},
-                               {0.0f, 0.0f, 0.0f, //
-                                3.0f, 0.0f, 0.0f, //
-                                0.0f, 4.0f, 0.0f});
+  // Reference DataSet with concrete ``[3, 4]`` input. Rows lie on the axes
+  // of an integer right-triangle grid: (0,0,0,0), (3,0,0,0), (0,4,0,0).
+  // Pairwise L2 distances form the 3-4-5 triple, giving the integer distance
+  // matrix [[0,3,4],[3,0,5],[4,5,0]].
+  Tensor x = Tensor::FromFloat("X", {3, 4},
+                               {0.0f, 0.0f, 0.0f, 0.0f, //
+                                3.0f, 0.0f, 0.0f, 0.0f, //
+                                0.0f, 4.0f, 0.0f, 0.0f});
   Tensor y = Tensor::FromFloat("Y", {3, 3},
                                {0.0f, 3.0f, 4.0f, //
                                 3.0f, 0.0f, 5.0f, //

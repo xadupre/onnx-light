@@ -7,12 +7,14 @@ independent runtime / static-analysis scenarios:
 * **onnxruntime CPU** — the model is executed with ``onnxruntime`` on the CPU
   execution provider and the maximum absolute discrepancy between the
   reference outputs and the ORT outputs is recorded;
-* **static shape** — the model is passed to
-  :func:`onnx_light.onnx_lib.shape_inference.infer_shapes` with the original
-  (numeric) input shapes;
+* **static shape** — the model's recorded ``graph.value_info`` and output
+  shapes are stripped, :func:`onnx_light.onnx_lib.shape_inference.infer_shapes`
+  is run on the stripped clone, and the inferred output shapes are checked
+  against the originally-recorded ones;
 * **dynamic shapes** — every numeric input dimension is replaced with a
-  symbolic ``dim_param`` (so identical numeric values share the same symbol)
-  and shape inference is run on the resulting symbolic model.
+  symbolic ``dim_param`` (so identical numeric values share the same symbol),
+  ``value_info`` and output shapes are stripped, and shape inference is run
+  on the resulting symbolic model with the same output-shape verification.
 
 The result is a :class:`RuntimeCoverageReport` containing one
 :class:`TestCaseStatus` per backend test case, plus aggregate statistics per
@@ -190,20 +192,103 @@ def _clone_model(model: onnxl.ModelProto) -> onnxl.ModelProto:
     return copy
 
 
+def _output_shapes(model: onnxl.ModelProto) -> dict[str, list[int | str | None] | None]:
+    """Returns ``{name: shape}`` for every graph output.
+
+    A shape is represented as a list mixing ``int`` (concrete dim), ``str``
+    (symbolic ``dim_param``) and ``None`` (dim with neither value nor
+    parameter). Outputs with no shape recorded map to ``None``.
+    """
+    result: dict[str, list[int | str | None] | None] = {}
+    for vi in model.graph.output:
+        shape: list[int | str | None] | None = None
+        if vi.has_type():
+            ttype = vi.type.tensor_type
+            if ttype is not None and ttype.has_shape():
+                shape = []
+                for dim in ttype.shape.dim:
+                    if dim.has_dim_value:
+                        shape.append(dim.dim_value)
+                    elif dim.has_dim_param:
+                        shape.append(dim.dim_param)
+                    else:
+                        shape.append(None)
+        result[vi.name] = shape
+    return result
+
+
+def _shapes_compatible(
+    expected: list[int | str | None] | None, computed: list[int | str | None] | None
+) -> bool:
+    """Returns ``True`` if ``computed`` is consistent with ``expected``.
+
+    Both shapes must have the same rank. For every dimension, an unknown
+    component (``None`` or symbolic ``str``) on either side is considered
+    compatible with anything; concrete integer dimensions must match
+    exactly. ``expected is None`` means the original model did not record an
+    output shape, in which case any computed shape (including ``None``) is
+    accepted.
+    """
+    if expected is None:
+        return True
+    if computed is None:
+        return False
+    if len(expected) != len(computed):
+        return False
+    for e, c in zip(expected, computed):
+        if isinstance(e, int) and isinstance(c, int) and e != c:
+            return False
+    return True
+
+
+def _strip_intermediate_and_output_shapes(model: onnxl.ModelProto) -> None:
+    """Strips intermediate (``value_info``) and output shapes in place.
+
+    Backend test cases typically embed the expected shapes for every
+    intermediate and output value. Leaving those entries in the model would
+    make :func:`infer_shapes` succeed trivially without actually computing
+    anything: the ONNX shape-inference contract preserves shapes already
+    present in the graph. Removing ``value_info`` entirely and clearing the
+    shape of each ``graph.output`` (while keeping the output names and
+    element types) forces shape inference to recompute every intermediate
+    and output shape from the graph inputs and operator semantics.
+    """
+    del model.graph.value_info[:]
+    for vi in model.graph.output:
+        if not vi.has_type():
+            continue
+        ttype = vi.type.tensor_type
+        if ttype is None or not ttype.has_shape():
+            continue
+        # Force shape inference to recompute the shape by removing the one
+        # currently stored on the output's tensor type.
+        ttype.ClearField("shape")
+
+
 def _run_static_shape(tc: TestCase) -> tuple[bool, str | None]:
     if tc.model is None:
         return (False, "no model")
+    expected = _output_shapes(tc.model)
+    model = _clone_model(tc.model)
+    _strip_intermediate_and_output_shapes(model)
     try:
-        infer_shapes(_clone_model(tc.model))
+        inferred = infer_shapes(model)
     except Exception as exc:  # noqa: BLE001
         return (False, type(exc).__name__ + ": " + str(exc).splitlines()[0])
+    computed = _output_shapes(inferred)
+    for name, exp in expected.items():
+        comp = computed.get(name)
+        if not _shapes_compatible(exp, comp):
+            return (False, f"output {name!r} shape {comp} does not match expected {exp}")
     return (True, None)
 
 
 def _run_dynamic_shapes(tc: TestCase) -> tuple[bool, str | None]:
     if tc.model is None:
         return (False, "no model")
+    expected = _output_shapes(tc.model)
     model = _clone_model(tc.model)
+    _strip_intermediate_and_output_shapes(model)
     for vi in model.graph.input:
         if vi.type.tensor_type is None:
             continue
@@ -213,9 +298,17 @@ def _run_dynamic_shapes(tc: TestCase) -> tuple[bool, str | None]:
             if dim.has_dim_value:
                 dim.dim_param = f"sym_v{dim.dim_value}"
     try:
-        infer_shapes(model)
+        inferred = infer_shapes(model)
     except Exception as exc:  # noqa: BLE001
         return (False, type(exc).__name__ + ": " + str(exc).splitlines()[0])
+    computed = _output_shapes(inferred)
+    for name, exp in expected.items():
+        comp = computed.get(name)
+        # In the dynamic-shapes scenario the expected concrete dims have been
+        # converted to symbols; only ranks and any remaining concrete dim are
+        # checked, which ``_shapes_compatible`` already handles.
+        if not _shapes_compatible(exp, comp):
+            return (False, f"output {name!r} shape {comp} does not match expected {exp}")
     return (True, None)
 
 

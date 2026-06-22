@@ -1,0 +1,72 @@
+name: INT yobx
+
+# Manually-triggered integration job: validates that onnx-light can be used as a
+# drop-in replacement for onnx (via the USE_ONNX_LIGHT=1 compatibility shim) when
+# running the test suite of an external project:
+#   * yobx     (https://github.com/xadupre/yet-another-onnx-builder)
+#
+# It is opt-in (workflow_dispatch only), so it never gates pull requests.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  yobx:
+    name: yobx (ubuntu-latest, py3.13)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      # Route yobx onnx imports through onnx_light instead of onnx.
+      USE_ONNX_LIGHT: "1"
+    steps:
+      - name: Checkout onnx-light
+        uses: actions/checkout@v4
+        with:
+          path: onnx-light
+
+      - name: Checkout yobx
+        uses: actions/checkout@v4
+        with:
+          repository: xadupre/yet-another-onnx-builder
+          path: yobx
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install OpenSSL (Linux)
+        run: sudo apt-get install -y libssl-dev
+
+      - name: Set parallel build level
+        shell: bash
+        run: |
+          CMAKE_BUILD_PARALLEL_LEVEL=$(python -c 'import os; print(os.cpu_count() or 1)')
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}"
+
+      - name: Build and install onnx-light
+        working-directory: onnx-light
+        run: pip install -C build-dir=build -e .[dev] -v
+
+      - name: Install yobx
+        working-directory: yobx
+        run: pip install -e .[dev]
+
+      - name: uninstall onnx
+        run: pip uninstall -y onnx
+
+      - name: pip freeze
+        run: pip freeze
+
+      - name: Run yobx unit tests
+        working-directory: yet-another-onnx-builder
+        env:
+          USE_ONNX_LIGHT: "1"
+        run: pytest --durations=10 tests

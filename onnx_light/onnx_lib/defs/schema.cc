@@ -26,7 +26,7 @@
 #ifndef NDEBUG
 #include "onnx_lib/common/assertions.h"
 #endif
-#include "onnx_lib/defs/parser.h"
+#include "onnx_manipulations/parser.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 // -1 means ONNX schema hasn't been loaded yet

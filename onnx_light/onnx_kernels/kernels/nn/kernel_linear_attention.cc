@@ -4,6 +4,8 @@
 
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_kernels/kernels/_helpers/float16_promote.h"
+
 #include <cmath>
 #include <cstdint>
 #include <string>
@@ -17,10 +19,10 @@ namespace {
 
 // Validates a 3D packed FLOAT tensor and returns its shape components.
 void Check3DFloat(const Tensor &t, const char *label, int64_t &B, int64_t &T, int64_t &last) {
-  EXT_ENFORCE_INVALID(t.data_type == DataType::FLOAT,
-                      std::string("kernel::LinearAttention: '") + label + "' must be FLOAT.");
-  EXT_ENFORCE_INVALID(t.shape.size() == 3,
-                      std::string("kernel::LinearAttention: '") + label + "' must be rank-3.");
+  EXT_ENFORCE_INVALID(t.data_type == DataType::FLOAT, "kernel::LinearAttention: '", label,
+                      "' must be FLOAT.");
+  EXT_ENFORCE_INVALID(t.shape.size() == 3, "kernel::LinearAttention: '", label,
+                      "' must be rank-3.");
   B = t.shape[0];
   T = t.shape[1];
   last = t.shape[2];
@@ -50,6 +52,42 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
                                                     const Tensor &value, const Attributes &attrs,
                                                     const Tensor *past_state, const Tensor *decay,
                                                     const Tensor *beta) const {
+  // Half-precision fast path: promote FLOAT16/BFLOAT16 inputs to FLOAT32,
+  // compute the recurrence in float32, then demote the outputs back to the
+  // activation dtype. This mirrors the ONNX reference, which accumulates in
+  // float32 and casts ``output`` (and ``present_state``) back afterwards.
+  if (IsHalfPrecision(query.data_type)) {
+    const int32_t out_dtype = query.data_type;
+    const int32_t state_dtype = (past_state != nullptr) ? past_state->data_type : query.data_type;
+    const Tensor query_f = PromoteToFloat32(query);
+    const Tensor key_f = PromoteToFloat32(key);
+    const Tensor value_f = PromoteToFloat32(value);
+    Tensor past_f, decay_f, beta_f;
+    const Tensor *past_ptr = nullptr;
+    const Tensor *decay_ptr_in = nullptr;
+    const Tensor *beta_ptr_in = nullptr;
+    if (past_state != nullptr) {
+      past_f = PromoteToFloat32(*past_state);
+      past_ptr = &past_f;
+    }
+    if (decay != nullptr) {
+      decay_f = PromoteToFloat32(*decay);
+      decay_ptr_in = &decay_f;
+    }
+    if (beta != nullptr) {
+      beta_f = PromoteToFloat32(*beta);
+      beta_ptr_in = &beta_f;
+    }
+    Result result_f = (*this)(query_f, key_f, value_f, attrs, past_ptr, decay_ptr_in, beta_ptr_in);
+    Result result;
+    result.output = IsHalfPrecision(out_dtype) ? DemoteFromFloat32(result_f.output, out_dtype)
+                                               : std::move(result_f.output);
+    result.present_state = IsHalfPrecision(state_dtype)
+                               ? DemoteFromFloat32(result_f.present_state, state_dtype)
+                               : std::move(result_f.present_state);
+    return result;
+  }
+
   // Validate inputs
   int64_t B_q, T_q, hidden_q;
   Check3DFloat(query, "query", B_q, T_q, hidden_q);
@@ -255,8 +293,7 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
             }
           }
         } else {
-          EXT_ENFORCE_INVALID(false,
-                              "kernel::LinearAttention: unknown update_rule '" + rule + "'.");
+          EXT_ENFORCE_INVALID(false, "kernel::LinearAttention: unknown update_rule '", rule, "'.");
         }
 
         // Compute output for each query head that shares this KV head

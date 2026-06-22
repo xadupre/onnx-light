@@ -40,15 +40,15 @@ Every proto field named ``foo`` of type ``T`` exposes the following members:
 
 Repeated fields (``FIELD_REPEATED``, ``FIELD_REPEATED_PACKED``) additionally
 provide ``add_foo()`` and ``clr_foo()``, and store their values in a
-:cpp:class:`onnx::utils::RepeatedField` or
-:cpp:class:`onnx::utils::RepeatedProtoField` container.
+:cpp:class:`onnx_light::utils::RepeatedField` or
+:cpp:class:`onnx_light::utils::RepeatedProtoField` container.
 
 Optional fields (``FIELD_OPTIONAL``, ``FIELD_OPTIONAL_ENUM``) wrap their value
-in :cpp:class:`onnx::utils::OptionalField` or
-:cpp:class:`onnx::utils::OptionalEnumField` and add ``reset_foo()`` and
+in :cpp:class:`onnx_light::utils::OptionalField` or
+:cpp:class:`onnx_light::utils::OptionalEnumField` and add ``reset_foo()`` and
 ``add_foo()`` members.
 
-Every proto class inherits from :cpp:class:`onnx::Message` and includes the
+Every proto class inherits from :cpp:class:`onnx_light::Message` and includes the
 following serialization / deserialization methods (added by
 ``SERIALIZATION_METHOD()``):
 
@@ -56,18 +56,18 @@ following serialization / deserialization methods (added by
 
     uint64_t SerializeSize() const;
     void ParseFromString(const std::string &raw);
-    void ParseFromString(const std::string &raw, onnx::ParseOptions &options);
+    void ParseFromString(const std::string &raw, onnx_light::ParseOptions &options);
     void SerializeToString(std::string &out) const;
-    void SerializeToString(std::string &out, onnx::SerializeOptions &options) const;
-    uint64_t SerializeSize(onnx::utils::BinaryWriteStream &stream,
-                           onnx::SerializeOptions &options) const;
-    void ParseFromStream(onnx::utils::BinaryStream &stream, onnx::ParseOptions &options);
-    void SerializeToStream(onnx::utils::BinaryWriteStream &stream,
-                           onnx::SerializeOptions &options) const;
-    std::vector<std::string> PrintToVectorString(onnx::utils::PrintOptions &options) const;
+    void SerializeToString(std::string &out, onnx_light::SerializeOptions &options) const;
+    uint64_t SerializeSize(onnx_light::utils::BinaryWriteStream &stream,
+                           onnx_light::SerializeOptions &options) const;
+    void ParseFromStream(onnx_light::utils::BinaryStream &stream, onnx_light::ParseOptions &options);
+    void SerializeToStream(onnx_light::utils::BinaryWriteStream &stream,
+                           onnx_light::SerializeOptions &options) const;
+    std::vector<std::string> PrintToVectorString(onnx_light::utils::PrintOptions &options) const;
 
-See :doc:`stream_class` for :cpp:class:`onnx::ParseOptions`,
-:cpp:class:`onnx::SerializeOptions`, and :cpp:class:`onnx::Message`.
+See :doc:`stream_class` for :cpp:class:`onnx_light::ParseOptions`,
+:cpp:class:`onnx_light::SerializeOptions`, and :cpp:class:`onnx_light::Message`.
 
 API reference
 -------------

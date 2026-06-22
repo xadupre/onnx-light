@@ -245,10 +245,49 @@ std::vector<Tensor> Scan::operator()(const GraphProto &body,
       bindings.emplace_back(slice.name, std::move(slice));
     }
 
-    const std::vector<Tensor> body_outputs = RunSubgraph(body, bindings, rt);
+    const std::vector<Tensor> body_outputs = RunSubgraph(body, bindings, rt, "body");
     EXT_ENFORCE_INVALID(body_outputs.size() == n + k,
                         "kernel::Scan: body produced an unexpected number of outputs.");
     state.assign(body_outputs.begin(), body_outputs.begin() + static_cast<std::ptrdiff_t>(n));
+    for (std::size_t i = 0; i < k; ++i) {
+      scan_values[i].push_back(body_outputs[n + i]);
+    }
+  }
+
+  // When the scan ran zero iterations the body never executed, so the
+  // per-iteration scan-output rows are empty and the stacking step cannot
+  // recover the scan-output element type/shape (it would emit a degenerate
+  // UNDEFINED rank-1 [0] tensor). Run the body once with zero-filled dummy
+  // slices of the correct per-iteration shape/dtype to capture a template
+  // tensor for each scan output, then stack with trip_count == 0 so only the
+  // element type and shape survive (the data stays empty).
+  if (trip_count == 0 && k > 0) {
+    std::vector<std::pair<std::string, Tensor>> bindings;
+    bindings.reserve(n + m);
+    for (std::size_t i = 0; i < n; ++i) {
+      Tensor t = state[i];
+      t.name = body.input(static_cast<int>(i)).name().as_string();
+      bindings.emplace_back(t.name, std::move(t));
+    }
+    for (std::size_t i = 0; i < m; ++i) {
+      std::vector<int64_t> slice_shape;
+      slice_shape.reserve(scan_inputs[i].shape.size() - 1);
+      for (std::size_t d = 0; d < scan_inputs[i].shape.size(); ++d) {
+        if (static_cast<int64_t>(d) != resolved_scan_input_axes[i]) {
+          slice_shape.push_back(scan_inputs[i].shape[d]);
+        }
+      }
+      const int64_t elt_count = std::accumulate(slice_shape.begin(), slice_shape.end(), int64_t{1},
+                                                std::multiplies<int64_t>());
+      std::vector<uint8_t> dummy_data(PackedByteSize(scan_inputs[i].data_type, elt_count), 0);
+      Tensor slice("", scan_inputs[i].data_type, std::move(slice_shape), std::move(dummy_data));
+      slice.name = body.input(static_cast<int>(n + i)).name().as_string();
+      bindings.emplace_back(slice.name, std::move(slice));
+    }
+
+    const std::vector<Tensor> body_outputs = RunSubgraph(body, bindings, rt, "body");
+    EXT_ENFORCE_INVALID(body_outputs.size() == n + k,
+                        "kernel::Scan: body produced an unexpected number of outputs.");
     for (std::size_t i = 0; i < k; ++i) {
       scan_values[i].push_back(body_outputs[n + i]);
     }

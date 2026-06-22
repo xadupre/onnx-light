@@ -2,36 +2,92 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
+#include <cmath>
 #include <stdexcept>
+#include <string>
+#include <type_traits>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_kernels {
 namespace kernel {
 
+namespace {
+
+constexpr const char *kName = "kernel::Neg";
+
+// Negates a signed integer tensor using unsigned two's complement arithmetic so
+// that the minimum-value edge case (e.g. -INT8_MIN) wraps correctly without UB.
+template <typename T> void NegInt(const Tensor &x, Tensor &output) {
+  using U = std::make_unsigned_t<T>;
+  const int64_t n = x.element_count();
+  const T *px = reinterpret_cast<const T *>(x.bytes());
+  T *py = reinterpret_cast<T *>(output.data.data());
+  for (int64_t i = 0; i < n; ++i) {
+    py[i] = static_cast<T>(U{0} - static_cast<U>(px[i]));
+  }
+}
+
+} // namespace
+
 Tensor Neg::operator()(const Tensor &x) const {
-  Tensor y("", DataType::FLOAT, x.shape,
-           std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * sizeof(float)));
+  Tensor y("", x.data_type, x.shape,
+           std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * x.element_size()));
   (*this)(x, y);
   return y;
 }
 
 void Neg::operator()(const Tensor &x, Tensor &output) const {
-  EXT_ENFORCE_INVALID(x.data_type == DataType::FLOAT, "kernel::Neg only supports FLOAT tensors.");
-  EXT_ENFORCE_INVALID(output.data_type == DataType::FLOAT,
-                      "kernel::Neg preallocated output must be a FLOAT tensor.");
-  EXT_ENFORCE_INVALID(output.shape == x.shape,
-                      "kernel::Neg preallocated output shape must match input shape.");
+  EXT_ENFORCE_INVALID(output.data_type == x.data_type, kName,
+                      ": output dtype must match input dtype.");
+  EXT_ENFORCE_INVALID(output.shape == x.shape, kName, ": output shape must match input shape.");
+  EXT_ENFORCE_INVALID(output.data.size() == x.data.size(), kName, ": output buffer size mismatch.");
   const int64_t n = x.element_count();
-  const size_t expected_bytes = static_cast<size_t>(n) * sizeof(float);
-  EXT_ENFORCE_INVALID(output.data.size() == expected_bytes,
-                      "kernel::Neg preallocated output buffer has unexpected size in bytes.");
-  const float *px = x.AsFloat();
-  float *py = output.AsFloat();
-  for (int64_t i = 0; i < n; ++i) {
-    py[static_cast<size_t>(i)] = -px[i];
+  switch (static_cast<DataType>(x.data_type)) {
+  case DataType::FLOAT: {
+    const float *px = x.AsFloat();
+    float *py = output.AsFloat();
+    for (int64_t i = 0; i < n; ++i) {
+      py[i] = -px[i];
+    }
+    return;
+  }
+  case DataType::DOUBLE: {
+    const double *px = x.AsDouble();
+    double *py = output.AsDouble();
+    for (int64_t i = 0; i < n; ++i) {
+      py[i] = -px[i];
+    }
+    return;
+  }
+  case DataType::FLOAT16:
+    kernel::detail::UnaryHalfElementwise(x, output, Float16BitsToFloat, FloatToFloat16Bits,
+                                         [](float v) { return -v; });
+    return;
+  case DataType::BFLOAT16:
+    kernel::detail::UnaryHalfElementwise(x, output, Bfloat16BitsToFloat, FloatToBfloat16Bits,
+                                         [](float v) { return -v; });
+    return;
+  case DataType::INT8:
+    NegInt<int8_t>(x, output);
+    return;
+  case DataType::INT16:
+    NegInt<int16_t>(x, output);
+    return;
+  case DataType::INT32:
+    NegInt<int32_t>(x, output);
+    return;
+  case DataType::INT64:
+    NegInt<int64_t>(x, output);
+    return;
+  default:
+    EXT_THROW_INVALID(kName, ": unsupported data type ", x.data_type,
+                      ", only supports FLOAT, DOUBLE, FLOAT16, BFLOAT16, INT8, INT16, INT32, and "
+                      "INT64 tensors.");
   }
 }
 

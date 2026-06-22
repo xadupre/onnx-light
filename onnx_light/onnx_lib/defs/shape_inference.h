@@ -114,6 +114,17 @@ struct InferenceContext {
   virtual const TensorShapeProto *getSymbolicInput(size_t index) const = 0;
   // To display a name the user can use to narrow its search.
   virtual std::string getDisplayName() const { return ""; }
+
+  // Non-virtual convenience methods for shape inference.
+
+  // unifyInputShape: unifies all dimensions of an input with the given dim references.
+  // Requires the input to have rank exactly equal to the number of dims provided.
+  void unifyInputShape(size_t input_index, std::initializer_list<std::reference_wrapper<Dim>> dims);
+
+  // unifyInputShapePrefix: unifies the first N dimensions of an input with the given dim
+  // references. Requires the input to have rank at least equal to the number of dims provided.
+  void unifyInputShapePrefix(size_t input_index,
+                             std::initializer_list<std::reference_wrapper<Dim>> prefix);
 };
 
 // We use data propagation to perform partial evaluation of the model, to compute statically
@@ -889,16 +900,16 @@ inline void unifyInputDim(const InferenceContext &ctx, size_t input_index, int d
 
 // unifyInputShape: unifies all dimensions of an input with the given dim references.
 // Requires the input to have rank exactly equal to the number of dims provided.
-inline void unifyInputShape(InferenceContext &ctx, size_t input_index,
-                            std::initializer_list<std::reference_wrapper<Dim>> dims) {
-  if (!hasInputShape(ctx, input_index)) {
+inline void
+InferenceContext::unifyInputShape(size_t input_index,
+                                  std::initializer_list<std::reference_wrapper<Dim>> dims) {
+  if (!hasInputShape(*this, input_index)) {
     return;
   }
-  const auto &input_shape = getInputShape(ctx, input_index);
+  const auto &input_shape = getInputShape(*this, input_index);
   if (static_cast<size_t>(input_shape.dim_size()) != dims.size()) {
     fail_shape_inference("Input ", input_index, " expected to have rank ", dims.size(),
-                         " but has rank ", input_shape.dim_size(), " in ", ctx.getDisplayName(),
-                         ".");
+                         " but has rank ", input_shape.dim_size(), " in ", getDisplayName(), ".");
   }
   int i = 0;
   for (const auto &dim_ref : dims) {
@@ -906,6 +917,38 @@ inline void unifyInputShape(InferenceContext &ctx, size_t input_index,
     unifyDim(input_dim, dim_ref.get());
     ++i;
   }
+}
+
+// unifyInputShapePrefix: unifies the first N dimensions of an input with the given dim
+// references. Requires the input to have rank at least equal to the number of dims provided.
+inline void
+InferenceContext::unifyInputShapePrefix(size_t input_index,
+                                        std::initializer_list<std::reference_wrapper<Dim>> prefix) {
+  if (!hasInputShape(*this, input_index)) {
+    return;
+  }
+  const auto &input_shape = getInputShape(*this, input_index);
+  if (static_cast<size_t>(input_shape.dim_size()) < prefix.size()) {
+    fail_shape_inference("Input ", input_index, " expected to have rank >= ", prefix.size(),
+                         " but has rank ", input_shape.dim_size(), " in ", getDisplayName(), ".");
+  }
+  int i = 0;
+  for (const auto &dim_ref : prefix) {
+    const Dim &input_dim = input_shape.dim(i);
+    unifyDim(input_dim, dim_ref.get());
+    ++i;
+  }
+}
+
+// Free-function wrappers preserved for backward compatibility.
+inline void unifyInputShape(InferenceContext &ctx, size_t input_index,
+                            std::initializer_list<std::reference_wrapper<Dim>> dims) {
+  ctx.unifyInputShape(input_index, dims);
+}
+
+inline void unifyInputShapePrefix(InferenceContext &ctx, size_t input_index,
+                                  std::initializer_list<std::reference_wrapper<Dim>> prefix) {
+  ctx.unifyInputShapePrefix(input_index, prefix);
 }
 
 // unifyDim: unifies a dimension with a constant value. If the dimension

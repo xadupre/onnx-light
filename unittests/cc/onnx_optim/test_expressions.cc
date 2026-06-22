@@ -74,12 +74,66 @@ TEST(SimplifyExpressions, SimplifyTwoExpressions) {
   EXPECT_TRUE(r2.empty());
 }
 
+TEST(SimplifyExpressions, CompareExpressions) {
+  // Equal expressions.
+  auto eq = compare_expressions("a+b", "b+a");
+  EXPECT_EQ(eq.result, CompareResult::Equal);
+  EXPECT_EQ(simplify_result_to_string(eq.difference), "0");
+
+  // Pure constant difference.
+  EXPECT_EQ(compare_expressions("5", "3").result, CompareResult::Greater);
+  EXPECT_EQ(compare_expressions("3", "5").result, CompareResult::Smaller);
+
+  // Strictly greater / smaller with symbolic tokens.
+  EXPECT_EQ(compare_expressions("a+1", "a").result, CompareResult::Greater);
+  EXPECT_EQ(compare_expressions("a", "a+1").result, CompareResult::Smaller);
+  EXPECT_EQ(compare_expressions("a+b+1", "a").result, CompareResult::Greater);
+
+  // Unknown: mixed-sign coefficients; difference is expr2 - expr1.
+  auto un = compare_expressions("a", "b");
+  EXPECT_EQ(un.result, CompareResult::Unknown);
+  EXPECT_EQ(simplify_result_to_string(un.difference), "b-a");
+
+  // Unknown: same token sign but zero constant (equal when the token is null).
+  EXPECT_EQ(compare_expressions("2*a", "a").result, CompareResult::Unknown);
+
+  // Malformed input propagates a parse error.
+  EXPECT_THROW(compare_expressions("a", "b +"), std::runtime_error);
+}
+
 TEST(SimplifyExpressions, SimplifyExpression_bracket) {
   EXPECT_EQ(get_str(simplify_expression("2*x//2")), "x");
   EXPECT_EQ(get_str(simplify_expression("(2*x)//2")), "x");
   EXPECT_EQ(get_str(simplify_expression("(x*y)//y")), "x");
   EXPECT_EQ(get_str(simplify_expression("(x*(y+1))//(y+1)")), "x");
   EXPECT_EQ(get_str(simplify_expression("((c)//(2))")), "c//2");
+}
+
+TEST(SimplifyExpressions, SimplifyExpression_distribute_floordiv) {
+  EXPECT_EQ(get_str(simplify_expression("(2*b+2*c)//2")), "b+c");
+  EXPECT_EQ(get_str(simplify_expression("(4*a+2*b)//2")), "2*a+b");
+  EXPECT_EQ(get_str(simplify_expression("(2*a-2*b)//2")), "a-b");
+  EXPECT_EQ(get_str(simplify_expression("(2*a+4*b+6*c)//2")), "2*b+3*c+a");
+  // Constant residual smaller than divisor: 1//2 == 0, so (1+2b+2c)//2 → b+c.
+  EXPECT_EQ(get_str(simplify_expression("(2*b+2*c+1)//2")), "b+c");
+  EXPECT_EQ(get_str(simplify_expression("(1+2*b+2*c)//2")), "b+c");
+  // Constant residual equal to or greater than divisor folds into an
+  // additive integer constant.
+  EXPECT_EQ(get_str(simplify_expression("(2*b+2*c+3)//2")), "b+c+1");
+  EXPECT_EQ(get_str(simplify_expression("(2*b+3*c)//2")), "(2*b+3*c)//2");
+}
+
+TEST(SimplifyExpressions, SimplifyExpression_floordiv_not_exact) {
+  // `//` is floor division, so a factor cannot cross the division boundary:
+  // a*(x//a) == x only when x is a multiple of a, whereas (a*x)//a == x always.
+  EXPECT_EQ(get_str(simplify_expression("2*(H//2)")), "2*(H//2)");
+  EXPECT_EQ(get_str(simplify_expression("(2*H)//2")), "H");
+  EXPECT_EQ(get_str(simplify_expression("3*(H//3)")), "3*(H//3)");
+  EXPECT_EQ(get_str(simplify_expression("(3*H)//3")), "H");
+  EXPECT_EQ(get_str(simplify_expression("2*(n//2)+1")), "2*(n//2)+1");
+  // Concrete counter-example: 2*(3//2) == 2, not 3.
+  EXPECT_EQ(evaluate_expression("2*(H//2)", {{"H", 3}}), 2);
+  EXPECT_EQ(evaluate_expression("(2*H)//2", {{"H", 3}}), 3);
 }
 
 TEST(SimplifyExpressions, SimplifyExpression_bracket_max) {
@@ -89,6 +143,20 @@ TEST(SimplifyExpressions, SimplifyExpression_bracket_max) {
 
 TEST(SimplifyExpressions, SimplifyAddSub) {
   EXPECT_EQ(get_str(simplify_expression("b+c-CeilToInt(b+c,2)+CeilToInt(b+c,2)")), "b+c");
+}
+
+TEST(SimplifyExpressions, SimplifyExpression_floordiv_add_ring) {
+  // floor(y/n) + floor((y+1)/n) + ... + floor((y+n-1)/n) == y (for integer y).
+  EXPECT_EQ(get_str(simplify_expression("(1+b+c)//2+(b+c)//2")), "b+c");
+  EXPECT_EQ(get_str(simplify_expression("(b+c+1)//2+(b+c)//2")), "b+c");
+  EXPECT_EQ(get_str(simplify_expression("a//2+(a+1)//2")), "a");
+  EXPECT_EQ(get_str(simplify_expression("x//3+(x+1)//3+(x+2)//3")), "x");
+  EXPECT_EQ(get_str(simplify_expression("(x+5)//3+(x+6)//3+(x+7)//3")), "x+5");
+  EXPECT_EQ(get_str(simplify_expression("a//2+(a+1)//2+b")), "a+b");
+  EXPECT_EQ(get_str(simplify_expression("CeilToInt(b+c, 2)+(b+c)//2")), "b+c");
+  // Negative cases: not enough terms, or offsets do not span all residues.
+  EXPECT_EQ(get_str(simplify_expression("x//3+(x+1)//3")), "(1+x)//3+x//3");
+  EXPECT_EQ(get_str(simplify_expression("a//2+(a+2)//2")), "(2+a)//2+a//2");
 }
 
 TEST(SimplifyExpressions, SimplifyFunction) {
@@ -175,6 +243,25 @@ TEST(RenameExpressions, RenameDynamicExpression) {
       {"s13", "cache_length"},
   };
   EXPECT_EQ(rename_dynamic_expression("s9+seq_length", replacements), "cache_length+seq_length");
+}
+
+TEST(RenameExpressions, RenameDynamicExpression_CompoundSubexpression) {
+  // A compound subexpression that is a replacement key collapses to its target,
+  // even when nested inside a function call such as ``broadcast``.
+  std::unordered_map<std::string, std::string> replacements{
+      {"past_seq+seq", "total_seq"},
+      {"total_seq", "total_seq"},
+  };
+  EXPECT_EQ(rename_dynamic_expression("past_seq+seq", replacements), "total_seq");
+  EXPECT_EQ(rename_dynamic_expression("broadcast(past_seq+seq,total_seq)", replacements),
+            "total_seq");
+}
+
+TEST(RenameExpressions, RenameDynamicExpression_BroadcastIdenticalCollapses) {
+  // ``broadcast(x, x)`` is a no-op and collapses to ``x``.
+  EXPECT_EQ(
+      rename_dynamic_expression("broadcast(total_seq,total_seq)", {{"total_seq", "total_seq"}}),
+      "total_seq");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

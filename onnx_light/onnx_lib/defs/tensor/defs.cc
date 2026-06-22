@@ -14,7 +14,7 @@
 #include "onnx_lib/defs/doc_strings.h"
 #include "onnx_lib/defs/function.h"
 #include "onnx_lib/defs/tensor/utils.h"
-#include "onnx_lib/defs/tensor_proto_util.h"
+#include "onnx_manipulations/tensor_proto_util.h"
 #include "onnx_proto/onnx_alias.h"
 
 namespace ONNX_LIGHT_NAMESPACE {

@@ -71,32 +71,28 @@ TEST(KernelClass, RoiAlignAvgProducesExpectedShapeAndRange) {
   EXPECT_NEAR(center, 0.5f, 0.2f);
 }
 
-TEST(KernelClass, RoiAlignMaxPickedSampleNotSmallerThanAvg) {
+TEST(KernelClass, RoiAlignMaxProducesNonNegativeOutput) {
+  // Max mode uses max(w1*v1, w2*v2, w3*v3, w4*v4) per sample (ONNX reference
+  // semantics), which can be less than the bilinear sum used by avg mode.
+  // Verify only that the output shape and value range are correct.
   const KernelContext ctx{DefaultOpset(16)};
   RoiAlign roialign{ctx};
   Tensor x = MakeFeatureMap();
   Tensor rois = Tensor::FromFloat("", {1, 4}, {0.0f, 0.0f, 9.0f, 9.0f});
   Tensor batch_indices = Tensor::FromInt64("", {1}, {0});
 
-  RoiAlign::Attributes attrs_avg;
-  attrs_avg.mode = "avg";
-  attrs_avg.output_height = 2;
-  attrs_avg.output_width = 2;
-  attrs_avg.sampling_ratio = 2;
-  attrs_avg.spatial_scale = 1.0f;
-  attrs_avg.coordinate_transformation_mode = "output_half_pixel";
-  Tensor y_avg = roialign(x, rois, batch_indices, attrs_avg);
-
-  RoiAlign::Attributes attrs_max = attrs_avg;
+  RoiAlign::Attributes attrs_max;
   attrs_max.mode = "max";
+  attrs_max.output_height = 2;
+  attrs_max.output_width = 2;
+  attrs_max.sampling_ratio = 2;
+  attrs_max.spatial_scale = 1.0f;
+  attrs_max.coordinate_transformation_mode = "output_half_pixel";
   Tensor y_max = roialign(x, rois, batch_indices, attrs_max);
 
-  ASSERT_EQ(y_avg.element_count(), 4);
   ASSERT_EQ(y_max.element_count(), 4);
-  const float *pa = y_avg.AsFloat();
   const float *pm = y_max.AsFloat();
   for (int i = 0; i < 4; ++i) {
-    EXPECT_GE(pm[i], pa[i] - 1e-6f);
     EXPECT_GE(pm[i], 0.0f);
     EXPECT_LE(pm[i], 1.0f);
   }

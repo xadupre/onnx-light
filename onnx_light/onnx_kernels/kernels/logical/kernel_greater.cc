@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_kernels/kernels/elementwise_helpers.h"
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 
 #include <cstdint>
@@ -42,10 +43,22 @@ Tensor Greater::operator()(const Tensor &x, const Tensor &y) const {
   switch (x.data_type) {
   case DataType::FLOAT:
     return GreaterAlloc<float>("FLOAT", DataType::FLOAT, x, y);
+  case DataType::FLOAT16:
+    return detail::BinaryHalfCompareElementwiseAlloc(
+        kGreaterName, "FLOAT16", DataType::FLOAT16, x, y, Float16BitsToFloat,
+        [](float a, float b) -> uint8_t { return a > b ? 1 : 0; });
+  case DataType::BFLOAT16:
+    return detail::BinaryHalfCompareElementwiseAlloc(
+        kGreaterName, "BFLOAT16", DataType::BFLOAT16, x, y, Bfloat16BitsToFloat,
+        [](float a, float b) -> uint8_t { return a > b ? 1 : 0; });
   case DataType::INT8:
     return GreaterAlloc<int8_t>("INT8", DataType::INT8, x, y);
   case DataType::INT16:
     return GreaterAlloc<int16_t>("INT16", DataType::INT16, x, y);
+  case DataType::INT32:
+    return GreaterAlloc<int32_t>("INT32", DataType::INT32, x, y);
+  case DataType::INT64:
+    return GreaterAlloc<int64_t>("INT64", DataType::INT64, x, y);
   case DataType::UINT8:
     return GreaterAlloc<uint8_t>("UINT8", DataType::UINT8, x, y);
   case DataType::UINT16:
@@ -55,9 +68,9 @@ Tensor Greater::operator()(const Tensor &x, const Tensor &y) const {
   case DataType::UINT64:
     return GreaterAlloc<uint64_t>("UINT64", DataType::UINT64, x, y);
   default:
-    throw std::invalid_argument(std::string(kGreaterName) +
-                                " only supports FLOAT, INT8, INT16, UINT8, UINT16, UINT32 "
-                                "and UINT64 inputs.");
+    EXT_THROW_INVALID(kGreaterName, ": unsupported data type ", x.data_type,
+                      ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, INT32, "
+                      "INT64, UINT8, UINT16, UINT32 and UINT64 inputs.");
   }
 }
 
@@ -65,10 +78,22 @@ void Greater::operator()(const Tensor &x, const Tensor &y, Tensor &output) const
   switch (x.data_type) {
   case DataType::FLOAT:
     return GreaterInPlace<float>("FLOAT", DataType::FLOAT, x, y, output);
+  case DataType::FLOAT16:
+    return detail::BinaryHalfCompareElementwise(
+        kGreaterName, "FLOAT16", DataType::FLOAT16, x, y, output, Float16BitsToFloat,
+        [](float a, float b) -> uint8_t { return a > b ? 1 : 0; });
+  case DataType::BFLOAT16:
+    return detail::BinaryHalfCompareElementwise(
+        kGreaterName, "BFLOAT16", DataType::BFLOAT16, x, y, output, Bfloat16BitsToFloat,
+        [](float a, float b) -> uint8_t { return a > b ? 1 : 0; });
   case DataType::INT8:
     return GreaterInPlace<int8_t>("INT8", DataType::INT8, x, y, output);
   case DataType::INT16:
     return GreaterInPlace<int16_t>("INT16", DataType::INT16, x, y, output);
+  case DataType::INT32:
+    return GreaterInPlace<int32_t>("INT32", DataType::INT32, x, y, output);
+  case DataType::INT64:
+    return GreaterInPlace<int64_t>("INT64", DataType::INT64, x, y, output);
   case DataType::UINT8:
     return GreaterInPlace<uint8_t>("UINT8", DataType::UINT8, x, y, output);
   case DataType::UINT16:
@@ -78,9 +103,9 @@ void Greater::operator()(const Tensor &x, const Tensor &y, Tensor &output) const
   case DataType::UINT64:
     return GreaterInPlace<uint64_t>("UINT64", DataType::UINT64, x, y, output);
   default:
-    throw std::invalid_argument(std::string(kGreaterName) +
-                                " only supports FLOAT, INT8, INT16, UINT8, UINT16, UINT32 "
-                                "and UINT64 inputs.");
+    EXT_THROW_INVALID(kGreaterName, ": unsupported data type ", x.data_type,
+                      ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, INT32, "
+                      "INT64, UINT8, UINT16, UINT32 and UINT64 inputs.");
   }
 }
 

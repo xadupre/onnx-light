@@ -79,8 +79,8 @@ std::vector<double> ReadProbabilities(const Tensor &input) {
     break;
   }
   default:
-    EXT_ENFORCE_INVALID(false, "kernel::Bernoulli: unsupported input dtype " +
-                                   std::to_string(input.data_type) + ".");
+    EXT_ENFORCE_INVALID(false, "kernel::Bernoulli: unsupported input dtype ",
+                        std::to_string(input.data_type), ".");
   }
   return p;
 }
@@ -108,8 +108,8 @@ std::size_t OutputElementSize(int32_t dtype) {
   case DataType::UINT64:
     return 8;
   default:
-    EXT_ENFORCE_INVALID(false, "kernel::Bernoulli: unsupported output dtype " +
-                                   std::to_string(dtype) + ".");
+    EXT_ENFORCE_INVALID(false, "kernel::Bernoulli: unsupported output dtype ",
+                        std::to_string(dtype), ".");
   }
   return 0;
 }
@@ -175,8 +175,8 @@ void StoreSample(int32_t dtype, std::vector<uint8_t> &out, int64_t i, int32_t sa
     break;
   }
   default:
-    EXT_ENFORCE_INVALID(false, "kernel::Bernoulli: unsupported output dtype " +
-                                   std::to_string(dtype) + ".");
+    EXT_ENFORCE_INVALID(false, "kernel::Bernoulli: unsupported output dtype ",
+                        std::to_string(dtype), ".");
   }
 }
 

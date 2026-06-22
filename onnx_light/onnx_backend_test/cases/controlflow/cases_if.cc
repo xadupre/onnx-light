@@ -5,8 +5,10 @@
 #include "onnx_backend_test/cases/controlflow/include_controlflow_cases.h"
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/controlflow/include_controlflow_kernels.h"
+#include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -14,6 +16,13 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 namespace {
+
+// Returns the bytes of a float array as a byte vector.
+std::vector<uint8_t> FloatVecBytes(const std::vector<float> &values) {
+  std::vector<uint8_t> out(values.size() * sizeof(float));
+  std::memcpy(out.data(), values.data(), out.size());
+  return out;
+}
 
 // Builds a single-node subgraph whose only node is a ``Constant`` op
 // producing ``output_name`` from the tensor ``value``. The graph has no
@@ -203,6 +212,256 @@ void RegisterIfCases(std::vector<TestCase> &registry) {
     // cond = true → outputs come from the then-branch.
     Expect(node, {cond}, {then_a, then_b}, "test_cc_if_multi_output", {opset}, "backend-test",
            registry);
+  }
+
+  // -------------------------------------------------------------------------
+  // test_cc_if_seq — If selecting between two sequence branches.
+  // Mirrors ONNX's ``test_if_seq``.
+  // cond=true → then-branch returns Sequence([1,2,3,4,5]),
+  // else-branch returns Sequence([5,4,3,2,1]).
+  // Graph: If(cond) → ConcatFromSequence → FLOAT[1, 5].
+  // -------------------------------------------------------------------------
+  {
+    const std::string name = "test_cc_if_seq";
+    const OpsetId opset13 = DefaultOpset(13);
+
+    Tensor cond_in("cond", DataType::BOOL, {}, {1});
+    Tensor expected = Tensor::FromFloat("res", {1, 5}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
+
+    TestCase tc(name, name);
+    ModelProto &model = tc.model;
+    InitModel(model, /*ir_version=*/9, {opset13});
+    GraphProto *graph = model.add_graph();
+    graph->set_name(name);
+
+    // Build then_body: Constant([1,2,3,4,5]) → SequenceConstruct → then_out
+    GraphProto then_body;
+    then_body.set_name("then_body");
+    {
+      NodeProto *cn = then_body.add_node();
+      cn->set_op_type("Constant");
+      cn->add_output("x");
+      AttributeProto *a = cn->add_attribute();
+      a->set_name("value");
+      a->set_type(AttributeProto::AttributeType::TENSOR);
+      TensorProto *t = a->add_t();
+      t->set_data_type(TensorProto::DataType::FLOAT);
+      t->add_dims(5);
+      t->set_raw_data(utils::ByteSpan(FloatVecBytes({1.0f, 2.0f, 3.0f, 4.0f, 5.0f})));
+    }
+    {
+      NodeProto *sc = then_body.add_node();
+      sc->set_op_type("SequenceConstruct");
+      sc->add_input("x");
+      sc->add_output("then_out");
+    }
+    {
+      ValueInfoProto *vi = then_body.add_output();
+      vi->set_name("then_out");
+      TypeProto *tp = vi->ref_type().add_sequence_type()->add_elem_type();
+      TypeProto::Tensor *tt = tp->add_tensor_type();
+      tt->set_elem_type(static_cast<int>(TensorProto::DataType::FLOAT));
+      tt->add_shape()->add_dim()->set_dim_value(5);
+    }
+
+    // Build else_body: Constant([5,4,3,2,1]) → SequenceConstruct → else_out
+    GraphProto else_body;
+    else_body.set_name("else_body");
+    {
+      NodeProto *cn = else_body.add_node();
+      cn->set_op_type("Constant");
+      cn->add_output("y");
+      AttributeProto *a = cn->add_attribute();
+      a->set_name("value");
+      a->set_type(AttributeProto::AttributeType::TENSOR);
+      TensorProto *t = a->add_t();
+      t->set_data_type(TensorProto::DataType::FLOAT);
+      t->add_dims(5);
+      t->set_raw_data(utils::ByteSpan(FloatVecBytes({5.0f, 4.0f, 3.0f, 2.0f, 1.0f})));
+    }
+    {
+      NodeProto *sc = else_body.add_node();
+      sc->set_op_type("SequenceConstruct");
+      sc->add_input("y");
+      sc->add_output("else_out");
+    }
+    {
+      ValueInfoProto *vi = else_body.add_output();
+      vi->set_name("else_out");
+      TypeProto *tp = vi->ref_type().add_sequence_type()->add_elem_type();
+      TypeProto::Tensor *tt = tp->add_tensor_type();
+      tt->set_elem_type(static_cast<int>(TensorProto::DataType::FLOAT));
+      tt->add_shape()->add_dim()->set_dim_value(5);
+    }
+
+    // If(cond) → seq_res
+    {
+      NodeProto *n = graph->add_node();
+      n->set_op_type("If");
+      n->add_input("cond");
+      n->add_output("seq_res");
+      {
+        AttributeProto *a = n->add_attribute();
+        a->set_name("then_branch");
+        a->set_type(AttributeProto::AttributeType::GRAPH);
+        *a->add_g() = then_body;
+      }
+      {
+        AttributeProto *a = n->add_attribute();
+        a->set_name("else_branch");
+        a->set_type(AttributeProto::AttributeType::GRAPH);
+        *a->add_g() = else_body;
+      }
+    }
+    // ConcatFromSequence(seq_res, axis=0, new_axis=1) → res
+    {
+      NodeProto *n = graph->add_node();
+      n->set_op_type("ConcatFromSequence");
+      n->add_input("seq_res");
+      n->add_output("res");
+      AddAttribute<int64_t>(*n, "axis", 0);
+      AddAttribute<int64_t>(*n, "new_axis", 1);
+    }
+
+    FillValueInfo(cond_in, *graph->add_input());
+    FillValueInfo(expected, *graph->add_output());
+
+    DataSet ds;
+    ds.inputs.push_back(cond_in);
+    ds.outputs.push_back(expected);
+    tc.data_sets.emplace_back(std::move(ds));
+    registry.emplace_back(std::move(tc));
+  }
+
+  // -------------------------------------------------------------------------
+  // test_cc_if_opt — If with Optional<Sequence<FLOAT[5]>> output.
+  // Mirrors ONNX's ``test_if_opt``.
+  // cond=false → else-branch: Constant([1,2,3,4,5]) → SequenceConstruct →
+  //              Optional → else_opt.
+  // then-branch: Optional(empty, type=Seq<FLOAT[5]>) → optional_empty.
+  // Graph: If(cond) → OptionalGetElement → ConcatFromSequence → FLOAT[1,5].
+  // -------------------------------------------------------------------------
+  {
+    const std::string name = "test_cc_if_opt";
+    const OpsetId opset16 = DefaultOpset(16);
+
+    Tensor cond_in("cond", DataType::BOOL, {}, {0}); // false → else branch
+    Tensor expected = Tensor::FromFloat("res", {1, 5}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
+
+    TestCase tc(name, name);
+    ModelProto &model = tc.model;
+    InitModel(model, /*ir_version=*/9, {opset16});
+    GraphProto *graph = model.add_graph();
+    graph->set_name(name);
+
+    // then_body: Optional(empty, type=Seq<FLOAT[5]>) → optional_empty
+    GraphProto then_body;
+    then_body.set_name("then_body");
+    {
+      NodeProto *n = then_body.add_node();
+      n->set_op_type("Optional");
+      n->add_output("optional_empty");
+      // ``type`` attribute specifies the optional element type.
+      AttributeProto *a = n->add_attribute();
+      a->set_name("type");
+      a->set_type(AttributeProto::AttributeType::TYPE_PROTO);
+      TypeProto *tp = a->add_tp();
+      TypeProto *seq_tp = tp->add_sequence_type()->add_elem_type();
+      TypeProto::Tensor *tt = seq_tp->add_tensor_type();
+      tt->set_elem_type(static_cast<int>(TensorProto::DataType::FLOAT));
+      tt->add_shape()->add_dim()->set_dim_value(5);
+    }
+    {
+      ValueInfoProto *vi = then_body.add_output();
+      vi->set_name("optional_empty");
+      TypeProto *opt_tp = vi->ref_type().add_optional_type()->add_elem_type();
+      TypeProto *seq_tp = opt_tp->add_sequence_type()->add_elem_type();
+      TypeProto::Tensor *tt = seq_tp->add_tensor_type();
+      tt->set_elem_type(static_cast<int>(TensorProto::DataType::FLOAT));
+      tt->add_shape()->add_dim()->set_dim_value(5);
+    }
+
+    // else_body: Constant([1..5]) → SequenceConstruct → Optional → else_opt
+    GraphProto else_body;
+    else_body.set_name("else_body");
+    {
+      NodeProto *cn = else_body.add_node();
+      cn->set_op_type("Constant");
+      cn->add_output("x");
+      AttributeProto *a = cn->add_attribute();
+      a->set_name("value");
+      a->set_type(AttributeProto::AttributeType::TENSOR);
+      TensorProto *t = a->add_t();
+      t->set_data_type(TensorProto::DataType::FLOAT);
+      t->add_dims(5);
+      t->set_raw_data(utils::ByteSpan(FloatVecBytes({1.0f, 2.0f, 3.0f, 4.0f, 5.0f})));
+    }
+    {
+      NodeProto *sc = else_body.add_node();
+      sc->set_op_type("SequenceConstruct");
+      sc->add_input("x");
+      sc->add_output("else_seq");
+    }
+    {
+      NodeProto *on = else_body.add_node();
+      on->set_op_type("Optional");
+      on->add_input("else_seq");
+      on->add_output("else_opt");
+    }
+    {
+      ValueInfoProto *vi = else_body.add_output();
+      vi->set_name("else_opt");
+      TypeProto *opt_tp = vi->ref_type().add_optional_type()->add_elem_type();
+      TypeProto *seq_tp = opt_tp->add_sequence_type()->add_elem_type();
+      TypeProto::Tensor *tt = seq_tp->add_tensor_type();
+      tt->set_elem_type(static_cast<int>(TensorProto::DataType::FLOAT));
+      tt->add_shape()->add_dim()->set_dim_value(5);
+    }
+
+    // If(cond) → opt_res
+    {
+      NodeProto *n = graph->add_node();
+      n->set_op_type("If");
+      n->add_input("cond");
+      n->add_output("opt_res");
+      {
+        AttributeProto *a = n->add_attribute();
+        a->set_name("then_branch");
+        a->set_type(AttributeProto::AttributeType::GRAPH);
+        *a->add_g() = then_body;
+      }
+      {
+        AttributeProto *a = n->add_attribute();
+        a->set_name("else_branch");
+        a->set_type(AttributeProto::AttributeType::GRAPH);
+        *a->add_g() = else_body;
+      }
+    }
+    // OptionalGetElement(opt_res) → seq_out
+    {
+      NodeProto *n = graph->add_node();
+      n->set_op_type("OptionalGetElement");
+      n->add_input("opt_res");
+      n->add_output("seq_out");
+    }
+    // ConcatFromSequence(seq_out, axis=0, new_axis=1) → res
+    {
+      NodeProto *n = graph->add_node();
+      n->set_op_type("ConcatFromSequence");
+      n->add_input("seq_out");
+      n->add_output("res");
+      AddAttribute<int64_t>(*n, "axis", 0);
+      AddAttribute<int64_t>(*n, "new_axis", 1);
+    }
+
+    FillValueInfo(cond_in, *graph->add_input());
+    FillValueInfo(expected, *graph->add_output());
+
+    DataSet ds;
+    ds.inputs.push_back(cond_in);
+    ds.outputs.push_back(expected);
+    tc.data_sets.emplace_back(std::move(ds));
+    registry.emplace_back(std::move(tc));
   }
 }
 

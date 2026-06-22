@@ -1,12 +1,14 @@
 #include "onnx.h"
 #include "onnx_lib/checker.h"
-#include "onnx_lib/defs/parser.h"
 #include "onnx_lib/defs/schema.h"
 #include "onnx_lib/defs/shape_inference.h"
 #include "onnx_lib/inliner/inliner.h"
 #include "onnx_lib/shape_inference/implementation.h"
 #include "onnx_lib/version_converter/convert.h"
 #include "onnx_lib/version_converter/errors.h"
+#include "onnx_manipulations/compose.h"
+#include "onnx_manipulations/parser.h"
+#include "onnx_manipulations/printer.h"
 #include "onnx_optim/expressions.h"
 #include <algorithm>
 #include <limits>
@@ -91,6 +93,24 @@ void AddOnnxPyLib(nb::module_ &m) {
   });
 
   // -----------------------------------------------------------------------
+  // Submodule `printer`
+  // -----------------------------------------------------------------------
+  auto printer_mod = m.def_submodule("printer");
+  printer_mod.doc() = "Printer submodule – converts proto objects to ONNX text format";
+
+  printer_mod.def(
+      "model_to_text", [](const ModelProto &model) -> std::string { return ProtoToString(model); },
+      nb::arg("model"), "Converts a ModelProto to ONNX textual representation.");
+
+  printer_mod.def(
+      "graph_to_text", [](const GraphProto &graph) -> std::string { return ProtoToString(graph); },
+      nb::arg("graph"), "Converts a GraphProto to ONNX textual representation.");
+
+  printer_mod.def(
+      "function_to_text", [](const FunctionProto &fn) -> std::string { return ProtoToString(fn); },
+      nb::arg("fn"), "Converts a FunctionProto to ONNX textual representation.");
+
+  // -----------------------------------------------------------------------
   // Submodule `shape_inference`
   // -----------------------------------------------------------------------
   auto shape_inference_mod = m.def_submodule("shape_inference");
@@ -117,10 +137,20 @@ void AddOnnxPyLib(nb::module_ &m) {
       "AttributeProtos.");
 
   shape_inference_mod.def(
-      "infer_shapes", [](ModelProto &model) -> void { shape_inference::InferShapes(model); },
-      nb::arg("model"),
+      "infer_shapes",
+      [](ModelProto &model, bool check_type, bool strict_mode, bool data_prop) -> void {
+        ShapeInferenceOptions options(/*check_type_val=*/check_type,
+                                      /*strict_mode_val=*/strict_mode ? 1 : 0,
+                                      /*data_prop_val=*/data_prop);
+        shape_inference::InferShapes(model, OpSchemaRegistry::Instance(), options);
+      },
+      nb::arg("model"), nb::arg("check_type") = false, nb::arg("strict_mode") = false,
+      nb::arg("data_prop") = false,
       "Runs whole-model shape inference in place on the given ModelProto, populating "
-      "inferred shapes/types on every intermediate value and graph output.");
+      "inferred shapes/types on every intermediate value and graph output. ``check_type`` "
+      "checks the type-equality for input and output, ``strict_mode`` raises any node-level "
+      "shape inference errors, and ``data_prop`` enables data propagation for limited "
+      "operators to perform shape computation.");
 
   // -----------------------------------------------------------------------
   // Submodule `defs`
@@ -175,7 +205,7 @@ void AddOnnxPyLib(nb::module_ &m) {
       .def_ro("description", &OpSchema::Attribute::description)
       .def_ro("type", &OpSchema::Attribute::type)
       .def_prop_ro(
-          "_default_value",
+          "default_value",
           [](const OpSchema::Attribute *attr) -> AttributeProto { return attr->default_value; })
       .def_ro("required", &OpSchema::Attribute::required);
 
@@ -503,17 +533,15 @@ void AddOnnxPyLib(nb::module_ &m) {
 
   checker_mod.def(
       "check_model",
-      [](const ModelProto &model) {
-        std::unordered_set<std::string> keys;
-        for (const StringStringEntryProto &entry : model.metadata_props()) {
-          const std::string key = entry.key().as_string();
-          if (!keys.insert(key).second) {
-            throw checker::ValidationError("Model contains duplicate keys in metadata_props.");
-          }
-        }
+      [](const ModelProto &model, bool full_check, bool skip_opset_compatibility_check,
+         bool check_custom_domain) {
+        checker::check_model(model, full_check, skip_opset_compatibility_check,
+                             check_custom_domain);
       },
-      nb::arg("model"),
-      "Checks model metadata consistency and raises ValidationError on duplicate keys.");
+      nb::arg("model"), nb::arg("full_check") = false,
+      nb::arg("skip_opset_compatibility_check") = false, nb::arg("check_custom_domain") = false,
+      "Validates the model for structural correctness, topological ordering of nodes, "
+      "and schema compliance, raising ValidationError on failures.");
 
   checker_mod.def(
       "check_function_call_cycles",
@@ -569,4 +597,112 @@ void AddOnnxPyLib(nb::module_ &m) {
       nb::arg("model"), nb::arg("function_ids"), nb::arg("invert") = false,
       "Inlines the specified functions including schema-defined functions. If invert is True, "
       "inlines all functions except those listed. Returns a new model with functions inlined.");
+
+  // -----------------------------------------------------------------------
+  // Submodule `compose`
+  // -----------------------------------------------------------------------
+  auto compose_mod = m.def_submodule("compose");
+  compose_mod.doc() = "Compose submodule – graph/model composition utilities";
+
+  compose_mod.def(
+      "check_overlapping_names",
+      [](const GraphProto &g1, const GraphProto &g2,
+         const std::vector<std::pair<std::string, std::string>> &io_map)
+          -> std::vector<std::pair<std::string, std::vector<std::string>>> {
+        return CheckOverlappingNames(g1, g2, io_map);
+      },
+      nb::arg("g1"), nb::arg("g2"),
+      nb::arg("io_map") = std::vector<std::pair<std::string, std::string>>{},
+      "Checks whether two graphs have overlapping names. Returns a list of (category, names) pairs "
+      "for each category where names appear in both graphs. Recognised categories are 'edge', "
+      "'value_info', 'initializer' and 'sparse_initializer'. The optional io_map lists "
+      "output/input pairs that are intentionally shared; those overlaps are excluded.");
+
+  compose_mod.def(
+      "add_prefix_graph",
+      [](const GraphProto &graph, const std::string &prefix, bool rename_nodes, bool rename_edges,
+         bool rename_inputs, bool rename_outputs, bool rename_initializers,
+         bool rename_value_infos) -> GraphProto {
+        return AddPrefixGraph(graph, prefix, rename_nodes, rename_edges, rename_inputs,
+                              rename_outputs, rename_initializers, rename_value_infos);
+      },
+      nb::arg("graph"), nb::arg("prefix"), nb::arg("rename_nodes") = true,
+      nb::arg("rename_edges") = true, nb::arg("rename_inputs") = true,
+      nb::arg("rename_outputs") = true, nb::arg("rename_initializers") = true,
+      nb::arg("rename_value_infos") = true,
+      "Adds a prefix to names of elements in a graph. Returns a new GraphProto with prefixed "
+      "names. "
+      "Empty names are never prefixed.");
+
+  compose_mod.def(
+      "add_prefix",
+      [](const ModelProto &model, const std::string &prefix, bool rename_nodes, bool rename_edges,
+         bool rename_inputs, bool rename_outputs, bool rename_initializers, bool rename_value_infos,
+         bool rename_functions) -> ModelProto {
+        return AddPrefix(model, prefix, rename_nodes, rename_edges, rename_inputs, rename_outputs,
+                         rename_initializers, rename_value_infos, rename_functions);
+      },
+      nb::arg("model"), nb::arg("prefix"), nb::arg("rename_nodes") = true,
+      nb::arg("rename_edges") = true, nb::arg("rename_inputs") = true,
+      nb::arg("rename_outputs") = true, nb::arg("rename_initializers") = true,
+      nb::arg("rename_value_infos") = true, nb::arg("rename_functions") = true,
+      "Adds a prefix to names of elements in a model. Returns a new ModelProto with prefixed "
+      "names. "
+      "Empty names are never prefixed.");
+
+  compose_mod.def(
+      "merge_graphs",
+      [](const GraphProto &g1, const GraphProto &g2,
+         const std::vector<std::pair<std::string, std::string>> &io_map,
+         const std::vector<std::string> &inputs, const std::vector<std::string> &outputs,
+         const std::string &prefix1, const std::string &prefix2, const std::string &name,
+         const std::string &doc_string) -> GraphProto {
+        return MergeGraphs(g1, g2, io_map, inputs, outputs, prefix1, prefix2, name, doc_string);
+      },
+      nb::arg("g1"), nb::arg("g2"), nb::arg("io_map"),
+      nb::arg("inputs") = std::vector<std::string>{},
+      nb::arg("outputs") = std::vector<std::string>{}, nb::arg("prefix1") = "",
+      nb::arg("prefix2") = "", nb::arg("name") = "", nb::arg("doc_string") = "",
+      "Combines two ONNX graphs into a single one. io_map is a list of (output_name, input_name) "
+      "pairs connecting outputs of g1 to inputs of g2.");
+
+  compose_mod.def(
+      "merge_models",
+      [](const ModelProto &m1, const ModelProto &m2,
+         const std::vector<std::pair<std::string, std::string>> &io_map,
+         const std::vector<std::string> &inputs, const std::vector<std::string> &outputs,
+         const std::string &prefix1, const std::string &prefix2, const std::string &name,
+         const std::string &doc_string, const std::string &producer_name,
+         const std::string &producer_version, const std::string &domain,
+         int64_t model_version) -> ModelProto {
+        return MergeModels(m1, m2, io_map, inputs, outputs, prefix1, prefix2, name, doc_string,
+                           producer_name, producer_version, domain, model_version);
+      },
+      nb::arg("m1"), nb::arg("m2"), nb::arg("io_map"),
+      nb::arg("inputs") = std::vector<std::string>{},
+      nb::arg("outputs") = std::vector<std::string>{}, nb::arg("prefix1") = "",
+      nb::arg("prefix2") = "", nb::arg("name") = "", nb::arg("doc_string") = "",
+      nb::arg("producer_name") = "onnx_light.onnx.compose.merge_models",
+      nb::arg("producer_version") = "1.0", nb::arg("domain") = "",
+      nb::arg("model_version") = int64_t{1},
+      "Combines two ONNX models into a single one. Both models must share the same IR version and "
+      "operator sets. io_map is a list of (output_name, input_name) pairs connecting outputs of m1 "
+      "to inputs of m2.");
+
+  compose_mod.def(
+      "expand_out_dim_graph",
+      [](const GraphProto &graph, int64_t dim_idx) -> GraphProto {
+        return ExpandOutDimGraph(graph, dim_idx);
+      },
+      nb::arg("graph"), nb::arg("dim_idx"),
+      "Inserts an extra dimension with extent 1 to each output in the graph. Appends an Unsqueeze "
+      "node for each output.");
+
+  compose_mod.def(
+      "expand_out_dim",
+      [](const ModelProto &model, int64_t dim_idx) -> ModelProto {
+        return ExpandOutDim(model, dim_idx);
+      },
+      nb::arg("model"), nb::arg("dim_idx"),
+      "Inserts an extra dimension with extent 1 to each output in the model.");
 }

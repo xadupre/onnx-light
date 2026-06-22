@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/_helpers/float16_promote.h"
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
@@ -24,6 +25,7 @@ using onnx_kernels::kernel::KernelContext;
 using onnx_kernels::kernel::MaxPool;
 using onnx_kernels::kernel::MaxUnpool;
 using onnx_kernels::kernel::MeanVarianceNormalization;
+using onnx_kernels::kernel::RotaryEmbedding;
 
 namespace Test {
 
@@ -272,6 +274,47 @@ TEST(KernelClass, BatchNormalizationRank1InputTreatsChannelAsOne) {
   for (int64_t i = 0; i < 4; ++i) {
     EXPECT_NEAR(py[i], (static_cast<float>(i + 1) - 2.5f) * 2.0f + (-1.0f), 1e-3f);
   }
+}
+
+TEST(KernelClass, BatchNormalizationTrainingModeMatchesReference) {
+  const KernelContext ctx{DefaultOpset(15)};
+  BatchNormalization bn{ctx};
+  // 1x2x1x3 input. Per-channel batch statistics (population variance):
+  //   channel 0: values {-1, 0, 1} -> mean 0, var 2/3
+  //   channel 1: values { 2, 3, 4} -> mean 3, var 2/3
+  Tensor x = Tensor::FromFloat("", {1, 2, 1, 3}, {-1.0f, 0.0f, 1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor scale = Tensor::FromFloat("", {2}, {1.0f, 1.5f});
+  Tensor bias = Tensor::FromFloat("", {2}, {0.0f, 1.0f});
+  Tensor mean = Tensor::FromFloat("", {2}, {0.5f, 2.0f});
+  Tensor var = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  const float epsilon = 1e-5f;
+  const float momentum = 0.9f;
+  auto [y, running_mean, running_var] =
+      bn.TrainingForward(x, scale, bias, mean, var, epsilon, momentum);
+
+  const float saved_mean0 = 0.0f, saved_mean1 = 3.0f;
+  const float saved_var = 2.0f / 3.0f;
+
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 2, 1, 3}));
+  const float *py = y.AsFloat();
+  const float inv0 = 1.0f / std::sqrt(saved_var + epsilon);
+  for (int64_t i = 0; i < 3; ++i) {
+    const float xv = static_cast<float>(i) - 1.0f; // -1, 0, 1
+    EXPECT_NEAR(py[i], (xv - saved_mean0) * inv0 * 1.0f + 0.0f, 1e-4f);
+  }
+  for (int64_t i = 0; i < 3; ++i) {
+    const float xv = static_cast<float>(i) + 2.0f; // 2, 3, 4
+    EXPECT_NEAR(py[3 + i], (xv - saved_mean1) * inv0 * 1.5f + 1.0f, 1e-4f);
+  }
+
+  ASSERT_EQ(running_mean.shape, (std::vector<int64_t>{2}));
+  ASSERT_EQ(running_var.shape, (std::vector<int64_t>{2}));
+  const float *prm = running_mean.AsFloat();
+  const float *prv = running_var.AsFloat();
+  EXPECT_NEAR(prm[0], 0.5f * momentum + saved_mean0 * (1.0f - momentum), 1e-5f);
+  EXPECT_NEAR(prm[1], 2.0f * momentum + saved_mean1 * (1.0f - momentum), 1e-5f);
+  EXPECT_NEAR(prv[0], 1.0f * momentum + saved_var * (1.0f - momentum), 1e-5f);
+  EXPECT_NEAR(prv[1], 2.0f * momentum + saved_var * (1.0f - momentum), 1e-5f);
 }
 
 TEST(KernelClass, MeanVarianceNormalizationDefaultAxes) {
@@ -790,12 +833,39 @@ TEST(KernelClass, MaxPoolWithIndices) {
   EXPECT_EQ(pi[24], 24);
 }
 
-TEST(KernelClass, MaxPoolRejectsNonRowMajorStorageOrder) {
+TEST(KernelClass, MaxPoolWithIndicesColumnMajorStorageOrder) {
+  // mirrors test_maxpool_with_argmax_2d_precomputed_strides (storage_order=1).
+  const KernelContext ctx{DefaultOpset(22)};
+  MaxPool pool{ctx};
+  Tensor x = Tensor::FromFloat("", {1, 1, 5, 5},
+                               {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
+                                10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f,
+                                19.0f, 20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f});
+  auto yz = pool.WithIndices(x, /*kernel_shape=*/{2, 2}, /*strides=*/{2, 2}, /*pads=*/{},
+                             /*ceil_mode=*/false, /*dilations=*/{}, /*storage_order=*/1);
+  const Tensor &y = yz.first;
+  const Tensor &indices = yz.second;
+  const std::vector<int64_t> expected_shape = {1, 1, 2, 2};
+  EXPECT_EQ(y.shape, expected_shape);
+  EXPECT_EQ(indices.shape, expected_shape);
+  ASSERT_EQ(indices.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
+  const float *py = y.AsFloat();
+  const int64_t *pi = indices.AsInt64();
+  const std::vector<float> expected_y = {7.0f, 9.0f, 17.0f, 19.0f};
+  // Column-major flat indices into the 5x5 plane: col * height + row.
+  const std::vector<int64_t> expected_i = {6, 16, 8, 18};
+  for (size_t i = 0; i < expected_y.size(); ++i) {
+    EXPECT_FLOAT_EQ(py[i], expected_y[i]);
+    EXPECT_EQ(pi[i], expected_i[i]);
+  }
+}
+
+TEST(KernelClass, MaxPoolRejectsInvalidStorageOrder) {
   const KernelContext ctx{DefaultOpset(22)};
   MaxPool pool{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   EXPECT_THROW(pool(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
-                    /*ceil_mode=*/false, /*dilations=*/{}, /*storage_order=*/1),
+                    /*ceil_mode=*/false, /*dilations=*/{}, /*storage_order=*/2),
                std::invalid_argument);
 }
 
@@ -835,6 +905,87 @@ TEST(KernelClass, MaxUnpoolWithOutputShape) {
   EXPECT_FLOAT_EQ(py[8], 6.0f);
   EXPECT_FLOAT_EQ(py[16], 7.0f);
   EXPECT_FLOAT_EQ(py[18], 8.0f);
+}
+
+namespace {
+
+// Demotes a FLOAT tensor to the requested half-precision dtype (FLOAT16 or
+// BFLOAT16). The tensor name is cleared so it can be used directly as a
+// kernel input.
+Tensor DemoteToHalf(const Tensor &f, int32_t target_dtype) {
+  return onnx_kernels::DemoteFromFloat32(f, target_dtype);
+}
+
+// Promotes a half-precision tensor to FLOAT and returns the decoded values
+// as a std::vector<float>.
+std::vector<float> DecodeHalf(const Tensor &t) {
+  Tensor f = onnx_kernels::PromoteToFloat32(t);
+  const float *p = f.AsFloat();
+  return std::vector<float>(p, p + f.element_count());
+}
+
+} // namespace
+
+// Verifies that ``kernel::Attention`` accepts FLOAT16 / BFLOAT16 Q, K, V and
+// returns a half-precision output whose values match the FLOAT path rounded
+// through the same dtype.
+TEST(KernelClass, AttentionHalfPrecisionMatchesFloatReference) {
+  const Tensor Q = Tensor::FromFloat("", {1, 1, 1, 2}, {1.0f, 0.0f});
+  const Tensor K = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 0.0f, 0.0f, 1.0f});
+  const Tensor V = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+
+  const KernelContext ctx = AttentionKernelContext();
+  const Attention attention{ctx};
+  const Tensor ref = attention(Q, K, V);
+
+  for (int32_t target : {static_cast<int32_t>(onnx_kernels::DataType::FLOAT16),
+                         static_cast<int32_t>(onnx_kernels::DataType::BFLOAT16)}) {
+    const Tensor Qh = DemoteToHalf(Q, target);
+    const Tensor Kh = DemoteToHalf(K, target);
+    const Tensor Vh = DemoteToHalf(V, target);
+    const Tensor Yh = attention(Qh, Kh, Vh);
+    ASSERT_EQ(Yh.data_type, target);
+    ASSERT_EQ(Yh.shape, ref.shape);
+    const std::vector<float> got = DecodeHalf(Yh);
+    const float tol =
+        target == static_cast<int32_t>(onnx_kernels::DataType::FLOAT16) ? 1e-2f : 5e-2f;
+    for (int64_t i = 0; i < ref.element_count(); ++i) {
+      EXPECT_NEAR(got[static_cast<size_t>(i)], ref.AsFloat()[i], tol) << "i=" << i;
+    }
+  }
+}
+
+// Verifies that ``kernel::RotaryEmbedding`` supports FLOAT16 / BFLOAT16
+// inputs and produces a half-precision output that matches the FLOAT path
+// rounded through the same dtype.
+TEST(KernelClass, RotaryEmbeddingHalfPrecisionMatchesFloatReference) {
+  // batch=1, num_heads=1, seq=2, head_size=4, no position_ids, interleaved=false.
+  const Tensor X =
+      Tensor::FromFloat("", {1, 1, 2, 4}, {1.0f, 0.5f, -0.5f, 0.25f, 0.0f, -1.0f, 2.0f, -2.0f});
+  const Tensor cos_cache = Tensor::FromFloat("", {1, 2, 2}, {1.0f, 1.0f, 0.0f, 1.0f});
+  const Tensor sin_cache = Tensor::FromFloat("", {1, 2, 2}, {0.0f, 0.0f, 1.0f, 0.0f});
+
+  const KernelContext ctx{DefaultOpset(23)};
+  RotaryEmbedding rope{ctx};
+  RotaryEmbedding::Attributes attrs;
+  const Tensor empty;
+  const Tensor ref = rope(X, cos_cache, sin_cache, empty, attrs);
+
+  for (int32_t target : {static_cast<int32_t>(onnx_kernels::DataType::FLOAT16),
+                         static_cast<int32_t>(onnx_kernels::DataType::BFLOAT16)}) {
+    const Tensor Xh = DemoteToHalf(X, target);
+    const Tensor cos_h = DemoteToHalf(cos_cache, target);
+    const Tensor sin_h = DemoteToHalf(sin_cache, target);
+    const Tensor Yh = rope(Xh, cos_h, sin_h, empty, attrs);
+    ASSERT_EQ(Yh.data_type, target);
+    ASSERT_EQ(Yh.shape, ref.shape);
+    const std::vector<float> got = DecodeHalf(Yh);
+    const float tol =
+        target == static_cast<int32_t>(onnx_kernels::DataType::FLOAT16) ? 1e-2f : 5e-2f;
+    for (int64_t i = 0; i < ref.element_count(); ++i) {
+      EXPECT_NEAR(got[static_cast<size_t>(i)], ref.AsFloat()[i], tol) << "i=" << i;
+    }
+  }
 }
 
 } // namespace Test

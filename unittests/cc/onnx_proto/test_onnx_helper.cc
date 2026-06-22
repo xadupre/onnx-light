@@ -1,5 +1,6 @@
 #include "onnx_helper.h"
 #include "onnx_light_helpers.h"
+#include "onnx_manipulations/graph_manipulations.h"
 #include <atomic>
 #include <chrono>
 #include <cstring>
@@ -207,6 +208,118 @@ TEST(onnx_helper, IteratorTensorProto_ExternalData) {
   }
 }
 
+TEST(onnx_helper, CollectExternalInputs) {
+  std::vector<NodeProto> nodes(3);
+  nodes[0].set_op_type("Mul");
+  nodes[0].add_input("x");
+  nodes[0].add_input("y");
+  nodes[0].add_output("t");
+
+  nodes[1].set_op_type("Sub");
+  nodes[1].add_input("t");
+  nodes[1].add_input("z");
+  nodes[1].add_output("out");
+
+  nodes[2].set_op_type("Add");
+  nodes[2].add_input("out");
+  nodes[2].add_input("x");
+  nodes[2].add_output("final");
+
+  auto inputs = CollectExternalInputs(nodes);
+  EXPECT_EQ(inputs, std::vector<std::string>({"x", "y", "z"}));
+}
+
+TEST(onnx_helper, CollectRemainingInputs) {
+  std::vector<NodeProto> nodes(3);
+  nodes[0].set_op_type("Mul");
+  nodes[0].add_input("x");
+  nodes[0].add_input("y");
+  nodes[0].add_output("t");
+
+  nodes[1].set_op_type("Sub");
+  nodes[1].add_input("t");
+  nodes[1].add_input("z");
+  nodes[1].add_output("out");
+
+  nodes[2].set_op_type("Add");
+  nodes[2].add_input("out");
+  nodes[2].add_input("x");
+  nodes[2].add_output("final");
+
+  auto remaining = CollectRemainingInputs(nodes, {"final"});
+  ASSERT_EQ(remaining.size(), 3u);
+  // Before node 0 every external ancestor of ``final`` must be available.
+  EXPECT_EQ(remaining[0], std::vector<std::string>({"x", "y", "z"}));
+  // Before node 1: ``t`` is produced by node 0 (outside the suffix) and still
+  // read by node 1, ``z`` is read by node 1 and ``x`` by node 2; ``y`` is no
+  // longer needed.
+  EXPECT_EQ(remaining[1], std::vector<std::string>({"t", "z", "x"}));
+  // Before node 2: it reads ``out`` (produced by node 1) and ``x``.
+  EXPECT_EQ(remaining[2], std::vector<std::string>({"out", "x"}));
+}
+
+TEST(onnx_helper, CollectRemainingInputsPrunesDeadBranches) {
+  std::vector<NodeProto> nodes(4);
+  nodes[0].set_op_type("Mul");
+  nodes[0].add_input("x");
+  nodes[0].add_input("y");
+  nodes[0].add_output("t");
+
+  nodes[1].set_op_type("Sub");
+  nodes[1].add_input("t");
+  nodes[1].add_input("z");
+  nodes[1].add_output("out");
+
+  // Dead branch: ``dead`` is never an ancestor of the requested output.
+  nodes[2].set_op_type("Neg");
+  nodes[2].add_input("w");
+  nodes[2].add_output("dead");
+
+  nodes[3].set_op_type("Add");
+  nodes[3].add_input("out");
+  nodes[3].add_input("x");
+  nodes[3].add_output("final");
+
+  auto remaining = CollectRemainingInputs(nodes, {"final"});
+  ASSERT_EQ(remaining.size(), 4u);
+  // ``w`` never appears because the ``Neg`` node does not contribute to ``final``.
+  EXPECT_EQ(remaining[0], std::vector<std::string>({"x", "y", "z"}));
+  EXPECT_EQ(remaining[1], std::vector<std::string>({"t", "z", "x"}));
+  // Before the dead ``Neg`` node, the inputs still required are those of the
+  // remaining relevant nodes (the final ``Add``), not of the dead node itself.
+  EXPECT_EQ(remaining[2], std::vector<std::string>({"out", "x"}));
+  EXPECT_EQ(remaining[3], std::vector<std::string>({"out", "x"}));
+}
+
+TEST(onnx_helper, CollectRemainingInputsMultipleOutputs) {
+  std::vector<NodeProto> nodes(3);
+  nodes[0].set_op_type("Mul");
+  nodes[0].add_input("x");
+  nodes[0].add_input("y");
+  nodes[0].add_output("t");
+
+  nodes[1].set_op_type("Neg");
+  nodes[1].add_input("w");
+  nodes[1].add_output("n");
+
+  nodes[2].set_op_type("Add");
+  nodes[2].add_input("t");
+  nodes[2].add_input("x");
+  nodes[2].add_output("final");
+
+  // Requesting both ``final`` and ``n`` keeps the ``Neg`` branch alive.
+  auto remaining = CollectRemainingInputs(nodes, {"final", "n"});
+  ASSERT_EQ(remaining.size(), 3u);
+  EXPECT_EQ(remaining[0], std::vector<std::string>({"x", "y", "w"}));
+  EXPECT_EQ(remaining[1], std::vector<std::string>({"w", "t", "x"}));
+  EXPECT_EQ(remaining[2], std::vector<std::string>({"t", "x"}));
+}
+
+TEST(onnx_helper, CollectRemainingInputsEmpty) {
+  std::vector<NodeProto> nodes;
+  EXPECT_TRUE(CollectRemainingInputs(nodes, {"final"}).empty());
+}
+
 TEST(onnx_helper, ConvertModelToExternalData_AllToOneFile) {
   ModelProto model;
   GraphProto *graph = model.add_graph();
@@ -330,6 +443,107 @@ TEST(onnx_helper, LoadExternalDataForModel_RoundTrip) {
     EXPECT_EQ(t->ref_raw_data().data()[i], bytes[i]);
   }
   std::filesystem::remove_all(tmpdir);
+}
+
+TEST(onnx_helper, LoadExternalDataForModel_SymlinkRejected) {
+#if !defined(_WIN32)
+  namespace fs = std::filesystem;
+  fs::path tmpdir = fs::temp_directory_path() / "onnx_light_load_external_symlink";
+  fs::remove_all(tmpdir);
+  fs::create_directories(tmpdir);
+
+  // Create a real target file and a symlink pointing to it inside tmpdir.
+  std::vector<uint8_t> bytes{1, 2, 3, 4, 5, 6, 7, 8};
+  fs::path target_path = tmpdir / "target.bin";
+  {
+    std::ofstream out(target_path, std::ios::binary);
+    out.write(reinterpret_cast<const char *>(bytes.data()),
+              static_cast<std::streamsize>(bytes.size()));
+  }
+  const std::string ext_name = "weights.bin";
+  fs::create_symlink(target_path, tmpdir / ext_name);
+
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+  TensorProto *t = graph->add_initializer();
+  t->set_name("W");
+  t->set_data_type(TensorProto::DataType::FLOAT);
+  t->ref_raw_data().resize(bytes.size());
+  std::memcpy(t->ref_raw_data().data(), bytes.data(), bytes.size());
+
+  ConvertModelToExternalData(model, true, ext_name, 0, false);
+  t->ref_raw_data().resize(0);
+
+  // The external data location is a symbolic link and must be rejected.
+  try {
+    LoadExternalDataForModel(model, tmpdir.string());
+    FAIL() << "Expected LoadExternalDataForModel to reject the symbolic link.";
+  } catch (const std::runtime_error &ex) {
+    EXPECT_NE(std::string(ex.what()).find("symbolic link"), std::string::npos)
+        << "Unexpected error message: " << ex.what();
+  }
+
+  fs::remove_all(tmpdir);
+#endif
+}
+
+TEST(onnx_helper, LoadExternalDataForModel_ParentDirSymlinkRejected) {
+#if !defined(_WIN32)
+  namespace fs = std::filesystem;
+  fs::path tmpdir = fs::temp_directory_path() / "onnx_light_load_external_parent_symlink";
+  fs::remove_all(tmpdir);
+  fs::create_directories(tmpdir);
+
+  // Create a target directory outside tmpdir holding sensitive data.
+  fs::path outside = fs::temp_directory_path() / "onnx_light_load_external_outside";
+  fs::remove_all(outside);
+  fs::create_directories(outside);
+  std::vector<uint8_t> bytes{9, 8, 7, 6};
+  {
+    std::ofstream out(outside / "secret.bin", std::ios::binary);
+    out.write(reinterpret_cast<const char *>(bytes.data()),
+              static_cast<std::streamsize>(bytes.size()));
+  }
+
+  // A directory symlink inside tmpdir that points outside.
+  fs::create_directory_symlink(outside, tmpdir / "subdir");
+
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+  TensorProto *t = graph->add_initializer();
+  t->set_name("W");
+  t->set_data_type(TensorProto::DataType::FLOAT);
+  t->ref_raw_data().resize(bytes.size());
+  std::memcpy(t->ref_raw_data().data(), bytes.data(), bytes.size());
+
+  // "subdir/secret.bin" resolves outside tmpdir through the parent symlink.
+  // Set the external_data metadata directly to exercise LoadExternalData's
+  // canonical containment check with a directory component.
+  t->ref_raw_data().resize(0);
+  t->ref_data_location() = TensorProto::DataLocation::EXTERNAL;
+  StringStringEntryProto *loc = t->add_external_data();
+  loc->set_key("location");
+  loc->set_value("subdir/secret.bin");
+  StringStringEntryProto *off = t->add_external_data();
+  off->set_key("offset");
+  off->set_value("0");
+  StringStringEntryProto *len = t->add_external_data();
+  len->set_key("length");
+  len->set_value("4");
+
+  try {
+    LoadExternalDataForModel(model, tmpdir.string());
+    FAIL() << "Expected LoadExternalDataForModel to reject the parent-dir symlink escape.";
+  } catch (const std::runtime_error &ex) {
+    EXPECT_NE(std::string(ex.what()).find("outside the base directory"), std::string::npos)
+        << "Unexpected error message: " << ex.what();
+  }
+
+  fs::remove_all(tmpdir);
+  fs::remove_all(outside);
+#endif
 }
 
 TEST(onnx_helper, SerializeModelProtoToStream) {

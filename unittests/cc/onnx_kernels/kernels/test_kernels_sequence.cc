@@ -467,6 +467,27 @@ TEST(KernelClass, SequenceInsertPositionAndNegativePosition) {
   EXPECT_EQ(out_neg.at(3).data, c.data);
 }
 
+TEST(KernelClass, SequenceInsertAcceptsSingleElementPosition) {
+  // ONNX backend models (e.g. test_sequence_insert_at_front) supply 'position'
+  // as a 1-D tensor of shape [1] rather than a true scalar; the kernel must
+  // accept it and use its single element as the insertion index.
+  const KernelContext ctx{DefaultOpset(11)};
+  SequenceInsert op{ctx};
+  Tensor a = Tensor::FromInt64("", {4}, {1, 2, 3, 4});
+  Tensor b = Tensor::FromInt64("", {3}, {5, 6, 7});
+  Tensor c = Tensor::FromInt64("", {2}, {8, 9});
+  Tensor x = Tensor::FromInt64("", {3}, {-2, -1, 0});
+  const Sequence seq("", a.data_type, {a, b, c});
+
+  Tensor pos = Tensor::FromInt64("", {1}, {0});
+  Sequence out = op(seq, x, &pos);
+  ASSERT_EQ(out.size(), 4u);
+  EXPECT_EQ(out.at(0).data, x.data);
+  EXPECT_EQ(out.at(1).data, a.data);
+  EXPECT_EQ(out.at(2).data, b.data);
+  EXPECT_EQ(out.at(3).data, c.data);
+}
+
 TEST(KernelClass, SequenceInsertRejectsBadInputs) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceInsert op{ctx};
@@ -479,6 +500,9 @@ TEST(KernelClass, SequenceInsertRejectsBadInputs) {
 
   Tensor pos_oob = Tensor::FromInt64("", {}, {2});
   EXPECT_THROW(op(seq, x, &pos_oob), std::invalid_argument);
+
+  Tensor pos_multi = Tensor::FromInt64("", {2}, {0, 1});
+  EXPECT_THROW(op(seq, x, &pos_multi), std::invalid_argument);
 }
 
 // ──────────────────────────────────────────────────────────────────────

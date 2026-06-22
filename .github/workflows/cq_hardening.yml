@@ -1,0 +1,106 @@
+name: acq - hardening
+
+on:
+  schedule:
+    # Run daily at 06:30 UTC (30 min after fuzz.yml to stagger). The
+    # check_recent_commit job below skips the heavy build if no new
+    # commit landed on the default branch in the last 24 hours.
+    - cron: "30 6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check_recent_commit:
+    name: check recent commit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      should_run: ${{ steps.decide.outputs.should_run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: decide
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "Trigger is ${{ github.event_name }}; running unconditionally."
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # On scheduled runs, only proceed when a commit was made on the
+          # default branch within the last 24 hours.
+          recent=$(git log -1 --since='24 hours ago' --format=%H || true)
+          if [ -n "$recent" ]; then
+            echo "Recent commit found: $recent"
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No commit in the last 24 hours; skipping hardening build."
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  hardening_tests:
+    name: hardening (${{ matrix.os }}, ${{ matrix.compiler }})
+    needs: check_recent_commit
+    if: needs.check_recent_commit.outputs.should_run == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            compiler: gcc
+            cc: gcc
+            cxx: g++
+          - os: ubuntu-latest
+            compiler: clang
+            cc: clang
+            cxx: clang++
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install build dependencies (Linux)
+        run: sudo apt-get install -y libssl-dev clang ninja-build
+
+      - name: Set parallel build level
+        shell: bash
+        run: |
+          CMAKE_BUILD_PARALLEL_LEVEL=$(python -c 'import os; print(os.cpu_count() or 1)')
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
+
+      - name: Build and install package (Release + ONNX_HARDENING=ON)
+        env:
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
+        run: |
+          pip install \
+            -C build-dir=build \
+            -C cmake.build-type=Release \
+            -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON \
+            -C cmake.define.ONNX_HARDENING=ON \
+            -e .[dev] -v
+
+      - name: Install ONNX weekly
+        run: pip install --upgrade onnx-weekly
+
+      - name: pip freeze
+        run: pip freeze
+
+      - name: Run C++ unit tests
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Run Python unit tests
+        run: UNITTEST_GOING=1 pytest --durations=10 unittests

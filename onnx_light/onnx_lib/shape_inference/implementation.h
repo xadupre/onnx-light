@@ -12,9 +12,9 @@
 #include <vector>
 
 #include "onnx_lib/defs/schema.h"
-#include "onnx_lib/defs/tensor_proto_util.h"
 #include "onnx_lib/onnx-data.pb.h"
 #include "onnx_lib/string_utils.h"
+#include "onnx_manipulations/tensor_proto_util.h"
 #include "onnx_proto/onnx_alias.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -93,7 +93,9 @@ private:
 
   void AddExistingSymbolicDims(const utils::RepeatedProtoField<ValueInfoProto> &protos) {
     for (const auto &proto : protos) {
-      AddExistingSymbolicDims(proto.type());
+      if (proto.has_type()) {
+        AddExistingSymbolicDims(proto.type());
+      }
     }
   }
 };

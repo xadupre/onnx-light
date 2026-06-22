@@ -22,8 +22,8 @@
 #include "onnx_lib/common/common.h"
 #include "onnx_lib/common/constants.h"
 #include "onnx_lib/common/narrow.h"
-#include "onnx_lib/defs/data_type_utils.h"
 #include "onnx_lib/defs/shape_inference.h"
+#include "onnx_manipulations/data_type_utils.h"
 #include "onnx_proto/simple_string.h"
 
 namespace ONNX_LIGHT_NAMESPACE {

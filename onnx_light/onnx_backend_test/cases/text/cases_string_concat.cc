@@ -159,6 +159,7 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry) {
     Tensor y = Tensor::FromStrings("y", {3}, {"-", "/", "."});
     Tensor z = Tensor::FromStrings("z", {3}, {"123", "456", "789"});
     Tensor tmp = string_concat(x, y);
+    tmp.name = "tmp";
     Tensor w = string_concat(tmp, z);
     w.name = "w";
 
@@ -166,6 +167,7 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry) {
     FillValueInfo(y, *graph->add_input());
     FillValueInfo(z, *graph->add_input());
     FillValueInfo(w, *graph->add_output());
+    FillValueInfo(tmp, *graph->add_value_info());
 
     DataSet ds;
     ds.inputs = {x, y, z};

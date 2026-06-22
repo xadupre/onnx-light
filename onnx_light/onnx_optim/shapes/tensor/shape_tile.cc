@@ -8,8 +8,11 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <variant>
 
+#include "onnx_optim/expressions.h"
 #include "onnx_optim/optim_tensor.h"
+#include "onnx_optim/shapes/_helpers/shape_helpers.h"
 #include "onnx_optim/shapes/shape_check.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -17,12 +20,23 @@ namespace onnx_optim {
 namespace shapes {
 namespace tensor {
 
+namespace {
+
+// Converts a ``DimType`` back to an ``OptimDim``.
+OptimDim FromDimType(const expressions::DimType &d) {
+  if (std::holds_alternative<int64_t>(d)) {
+    return OptimDim(std::get<int64_t>(d));
+  }
+  return OptimDim(std::get<std::string>(d));
+}
+
+} // namespace
+
 void ComputeShapeTile(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Tile", "ComputeShapeTile");
 
-  if (node.input_size() < 2) {
-    throw std::invalid_argument("ComputeShapeTile: Tile requires two inputs (input, repeats).");
-  }
+  EXT_ENFORCE_INVALID(!(node.input_size() < 2),
+                      "ComputeShapeTile: Tile requires two inputs (input, repeats).");
 
   const OptimTensor &input = ctx.Get(node.input(0).as_string());
   const OptimTensor &repeats_input = ctx.Get(node.input(1).as_string());
@@ -35,17 +49,21 @@ void ComputeShapeTile(ShapesContext &ctx, const NodeProto &node) {
   // output shape entry-by-entry as input.shape[i] * repeats[i].
   if (repeats_input.HasValueAsShape()) {
     const OptimShape &repeats = repeats_input.ValueAsShape();
-    if (static_cast<int64_t>(repeats.Rank()) != input_rank) {
-      throw std::invalid_argument(
-          "ComputeShapeTile: 'repeats' length (" + std::to_string(repeats.Rank()) +
-          ") must equal the rank of 'input' (" + std::to_string(input_rank) + ").");
-    }
+    EXT_ENFORCE_INVALID(!(static_cast<int64_t>(repeats.Rank()) != input_rank),
+                        "ComputeShapeTile: 'repeats' length (", repeats.Rank(),
+                        ") must equal the rank of 'input' (", input_rank, ").");
     OptimShape out_shape;
     for (int64_t i = 0; i < input_rank; ++i) {
       const OptimDim &in_dim = in_shape[static_cast<std::size_t>(i)];
       const OptimDim &rep_dim = repeats[static_cast<std::size_t>(i)];
       if (in_dim.IsInt() && rep_dim.IsInt()) {
         out_shape.PushBack(OptimDim(in_dim.AsInt() * rep_dim.AsInt()));
+      } else if (rep_dim.IsInt()) {
+        // The repeat count is known but the input dim is symbolic: compute
+        // the product symbolically using the expressions library so that
+        // downstream shape inference can further simplify the result.
+        out_shape.PushBack(FromDimType(
+            expressions::dim_mul(ToDimType(in_dim), expressions::DimType{rep_dim.AsInt()})));
       } else {
         out_shape.PushBack(OptimDim("Tile_dim" + std::to_string(i)));
       }

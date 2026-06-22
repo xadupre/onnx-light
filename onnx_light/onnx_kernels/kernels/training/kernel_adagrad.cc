@@ -4,6 +4,7 @@
 
 #include "onnx_kernels/kernels/training/include_training_kernels.h"
 
+#include "onnx_light_helpers.h"
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -24,29 +25,28 @@ constexpr const char *kAdagradName = "kernel::Adagrad";
 int64_t ShapeElementCount(const std::vector<int64_t> &shape, const char *label) {
   int64_t count = 1;
   for (int64_t d : shape) {
-    EXT_ENFORCE_INVALID(d >= 0,
-                        std::string(kAdagradName) + ": '" + label + "' has a negative dimension.");
+    EXT_ENFORCE_INVALID(d >= 0, kAdagradName, ": '", label, "' has a negative dimension.");
     count *= d;
   }
   return count;
 }
 
 void CheckFloatTensor(const Tensor &t, const char *label) {
-  EXT_ENFORCE_INVALID(t.data_type == DataType::FLOAT,
-                      std::string(kAdagradName) + ": '" + label + "' must be a FLOAT tensor.");
+  EXT_ENFORCE_INVALID(t.data_type == DataType::FLOAT, kAdagradName, ": '", label,
+                      "' must be a FLOAT tensor.");
 }
 
 void CheckScalar(const Tensor &t, const char *label) {
   // ONNX scalars may be encoded either with an empty shape or with a
   // single-element shape; accept both for the sake of test robustness.
   const int64_t count = ShapeElementCount(t.shape, label);
-  EXT_ENFORCE_INVALID(count == 1, std::string(kAdagradName) + ": '" + label +
-                                      "' must be a scalar (single-element) tensor.");
+  EXT_ENFORCE_INVALID(count == 1, kAdagradName, ": '", label,
+                      "' must be a scalar (single-element) tensor.");
 }
 
 void CheckSameShape(const Tensor &a, const Tensor &b, const char *label_a, const char *label_b) {
-  EXT_ENFORCE_INVALID(a.shape == b.shape, std::string(kAdagradName) + ": '" + label_a + "' and '" +
-                                              label_b + "' must have the same shape.");
+  EXT_ENFORCE_INVALID(a.shape == b.shape, kAdagradName, ": '", label_a, "' and '", label_b,
+                      "' must have the same shape.");
 }
 
 } // namespace
@@ -56,11 +56,9 @@ std::vector<Tensor> Adagrad::operator()(const Tensor &R, const Tensor &T,
                                         const std::vector<Tensor> &Gs,
                                         const std::vector<Tensor> &Hs, float epsilon,
                                         float decay_factor, float norm_coefficient) const {
-  EXT_ENFORCE_INVALID(!Xs.empty(),
-                      std::string(kAdagradName) + ": at least one optimized tensor is required.");
-  EXT_ENFORCE_INVALID(Xs.size() == Gs.size() && Xs.size() == Hs.size(),
-                      std::string(kAdagradName) +
-                          ": 'Xs', 'Gs' and 'Hs' must have the same length.");
+  EXT_ENFORCE_INVALID(!Xs.empty(), kAdagradName, ": at least one optimized tensor is required.");
+  EXT_ENFORCE_INVALID(Xs.size() == Gs.size() && Xs.size() == Hs.size(), kAdagradName,
+                      ": 'Xs', 'Gs' and 'Hs' must have the same length.");
 
   std::vector<Tensor> outputs;
   outputs.reserve(Xs.size() * 2);
@@ -79,20 +77,17 @@ void Adagrad::operator()(const Tensor &R, const Tensor &T, const std::vector<Ten
                          const std::vector<Tensor> &Gs, const std::vector<Tensor> &Hs,
                          std::vector<Tensor> &outputs, float epsilon, float decay_factor,
                          float norm_coefficient) const {
-  EXT_ENFORCE_INVALID(!Xs.empty(),
-                      std::string(kAdagradName) + ": at least one optimized tensor is required.");
-  EXT_ENFORCE_INVALID(Xs.size() == Gs.size() && Xs.size() == Hs.size(),
-                      std::string(kAdagradName) +
-                          ": 'Xs', 'Gs' and 'Hs' must have the same length.");
+  EXT_ENFORCE_INVALID(!Xs.empty(), kAdagradName, ": at least one optimized tensor is required.");
+  EXT_ENFORCE_INVALID(Xs.size() == Gs.size() && Xs.size() == Hs.size(), kAdagradName,
+                      ": 'Xs', 'Gs' and 'Hs' must have the same length.");
   const size_t n = Xs.size();
-  EXT_ENFORCE_INVALID(outputs.size() == 2 * n,
-                      std::string(kAdagradName) +
-                          " preallocated outputs vector must contain exactly 2 * N tensors.");
+  EXT_ENFORCE_INVALID(outputs.size() == 2 * n, kAdagradName,
+                      " preallocated outputs vector must contain exactly 2 * N tensors.");
 
   CheckFloatTensor(R, "R");
   CheckScalar(R, "R");
-  EXT_ENFORCE_INVALID(T.data_type == DataType::INT64,
-                      std::string(kAdagradName) + ": 'T' must be an INT64 tensor.");
+  EXT_ENFORCE_INVALID(T.data_type == DataType::INT64, kAdagradName,
+                      ": 'T' must be an INT64 tensor.");
   CheckScalar(T, "T");
 
   const float R_val = *R.AsFloat();
@@ -100,11 +95,8 @@ void Adagrad::operator()(const Tensor &R, const Tensor &T, const std::vector<Ten
 
   // R_adjusted: applies the decay factor based on the update count T.
   const double denom = 1.0 + static_cast<double>(T_val) * static_cast<double>(decay_factor);
-  if (denom == 0.0) {
-    throw std::invalid_argument(
-        std::string(kAdagradName) +
-        ": learning-rate decay divides by zero (1 + T * decay_factor == 0).");
-  }
+  EXT_ENFORCE_INVALID(denom != 0.0, kAdagradName,
+                      ": learning-rate decay divides by zero (1 + T * decay_factor == 0).");
   const float R_adjusted = static_cast<float>(static_cast<double>(R_val) / denom);
 
   for (size_t i = 0; i < n; ++i) {
@@ -122,15 +114,14 @@ void Adagrad::operator()(const Tensor &R, const Tensor &T, const std::vector<Ten
 
     CheckFloatTensor(X_out, "X_new");
     CheckFloatTensor(H_out, "H_new");
-    EXT_ENFORCE_INVALID(X_out.shape == X.shape,
-                        std::string(kAdagradName) + " preallocated 'X_new' shape must match 'X'.");
-    EXT_ENFORCE_INVALID(H_out.shape == H.shape,
-                        std::string(kAdagradName) + " preallocated 'H_new' shape must match 'H'.");
+    EXT_ENFORCE_INVALID(X_out.shape == X.shape, kAdagradName,
+                        " preallocated 'X_new' shape must match 'X'.");
+    EXT_ENFORCE_INVALID(H_out.shape == H.shape, kAdagradName,
+                        " preallocated 'H_new' shape must match 'H'.");
     const int64_t count = ShapeElementCount(X.shape, "X");
     const size_t bytes = static_cast<size_t>(count) * sizeof(float);
-    EXT_ENFORCE_INVALID(X_out.data.size() == bytes && H_out.data.size() == bytes,
-                        std::string(kAdagradName) +
-                            " preallocated output buffers have unexpected size in bytes.");
+    EXT_ENFORCE_INVALID(X_out.data.size() == bytes && H_out.data.size() == bytes, kAdagradName,
+                        " preallocated output buffers have unexpected size in bytes.");
 
     const float *pX = X.AsFloat();
     const float *pG = G.AsFloat();

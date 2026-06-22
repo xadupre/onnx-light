@@ -1,11 +1,11 @@
-"""Tests for :mod:`onnx_light.schema_comparison`."""
+"""Tests for :mod:`onnx_light.tools.schema_comparison`."""
 
 import os
 import re
 import unittest
 
 from onnx_light.ext_test_case import ExtTestCase
-from onnx_light import schema_comparison as sc
+from onnx_light.tools import schema_comparison as sc
 
 
 class TestSchemaComparison(ExtTestCase):
@@ -82,7 +82,7 @@ class TestSchemaComparison(ExtTestCase):
         self.assertEqual(n_header_rows, n_domains)
 
     def test_op_name_forms_handles_camelcase_and_acronyms(self):
-        from onnx_light.schema_comparison import _op_name_forms
+        from onnx_light.tools.schema_comparison import _op_name_forms
 
         # Plain lowercase op: a single form.
         self.assertEqual(_op_name_forms("Abs"), ("abs",))
@@ -93,7 +93,7 @@ class TestSchemaComparison(ExtTestCase):
         self.assertEqual(_op_name_forms("QLinearConv"), ("qlinearconv", "q_linear_conv"))
 
     def test_attribute_test_name_uses_longest_op_match(self):
-        from onnx_light.schema_comparison import _attribute_test_name, _build_op_form_index
+        from onnx_light.tools.schema_comparison import _attribute_test_name, _build_op_form_index
 
         keys = {
             ("ai.onnx", "Abs"),
@@ -152,7 +152,7 @@ class TestSchemaComparison(ExtTestCase):
         self.assertEqual(
             ops_in_source,
             ops_in_module,
-            "ONNX_OPTIM_SHAPE_INFERENCE_OPS in onnx_light.schema_comparison must be kept "
+            "ONNX_OPTIM_SHAPE_INFERENCE_OPS in onnx_light.tools.schema_comparison must be kept "
             "in sync with the dispatch table in dispatch_table.cc",
         )
 

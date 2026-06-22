@@ -351,7 +351,13 @@ void RegisterNegativeLogLikelihoodLossCases(std::vector<TestCase> &registry) {
     Tensor loss =
         nll_kernel(input, target, weight_ptr, c.reduction, c.has_ignore_index, c.ignore_index);
 
-    Expect(node, inputs, {std::move(loss)}, c.name, {opset}, "backend-test", registry);
+    // Register both the plain variant and the ``_expanded`` variant so that the
+    // ONNX backend test name ``<base>_expanded`` is covered as a substring.
+    for (const char *suffix : {"", "_expanded"}) {
+      Tensor loss_copy = loss;
+      Expect(node, inputs, {std::move(loss_copy)}, c.name + suffix, {opset}, "backend-test",
+             registry);
+    }
   }
 }
 

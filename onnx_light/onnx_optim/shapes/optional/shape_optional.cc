@@ -65,18 +65,16 @@ void ComputeShapeOptional(ShapesContext &ctx, const NodeProto &node) {
 
   const int num_inputs = node.input_size();
   EXT_ENFORCE_INVALID(num_inputs <= 1,
-                      "ComputeShapeOptional: op 'Optional' expects at most 1 input, got " +
-                          std::to_string(num_inputs) + ".");
+                      "ComputeShapeOptional: op 'Optional' expects at most 1 input, got ",
+                      std::to_string(num_inputs), ".");
 
   if (num_inputs == 1) {
     // Copy the descriptor of the wrapped input value. ``OptimTensor`` does
     // not model optional types, so the wrapping itself is elided and the
     // output is described by the same dtype/shape as the input.
     const std::string input_name = node.input(0).as_string();
-    if (input_name.empty()) {
-      throw std::invalid_argument(
-          "ComputeShapeOptional: input name of op 'Optional' must not be empty.");
-    }
+    EXT_ENFORCE_INVALID(!(input_name.empty()),
+                        "ComputeShapeOptional: input name of op 'Optional' must not be empty.");
     const OptimTensor &in = ctx.Get(input_name);
     ctx.Set(node.output(0), OptimTensor(nullptr, in.Dtype(), OptimShape(in.Shape().Dims())));
     return;
@@ -108,8 +106,8 @@ void ComputeShapeOptionalGetElement(ShapesContext &ctx, const NodeProto &node) {
 
   EXT_ENFORCE_INVALID(
       node.input_size() == 1,
-      "ComputeShapeOptionalGetElement: op 'OptionalGetElement' expects exactly 1 input, got " +
-          std::to_string(node.input_size()) + ".");
+      "ComputeShapeOptionalGetElement: op 'OptionalGetElement' expects exactly 1 input, got ",
+      std::to_string(node.input_size()), ".");
 
   const std::string input_name = node.input(0).as_string();
   EXT_ENFORCE_INVALID(
@@ -141,8 +139,8 @@ void ComputeShapeOptionalHasElement(ShapesContext &ctx, const NodeProto &node) {
 
   EXT_ENFORCE_INVALID(
       node.input_size() <= 1,
-      "ComputeShapeOptionalHasElement: op 'OptionalHasElement' expects at most 1 input, got " +
-          std::to_string(node.input_size()) + ".");
+      "ComputeShapeOptionalHasElement: op 'OptionalHasElement' expects at most 1 input, got ",
+      std::to_string(node.input_size()), ".");
 
   // The output is always a scalar boolean tensor regardless of the
   // input. The input itself is not consulted: its presence/absence is a

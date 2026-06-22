@@ -4,7 +4,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "onnx-light"
-version = "0.1.0"
+version = "0.1.1"
 description = "onnx without protobuf"
 readme = "README.md"
 license = "Apache-2.0"
@@ -16,20 +16,31 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+style = [
+    "black==26.5.1",
+    "ruff==0.15.17",
+]
+typing = [
+    "mypy==2.1.0",
+    "pyrefly==1.0.0",
+]
 dev = [
-    "black",
-    "matplotlib",
     "onnx>=1.17",
     "onnxruntime",
+    "onnx-light[dev-no-onnx]",
+]
+dev-no-onnx = [
+    "onnx-light[style]",
+    "matplotlib",
     "pandas",
     "pytest>=7",
     "pytest-coverage",
     "pytest-subtests",
-    "ruff",
 ]
 docs = [
-    "black",
+    "onnx-light[style]",
     "breathe",
+    "onnx-ir",
     "matplotlib",
     "onnx>=1.17",
     "onnxruntime",
@@ -48,6 +59,36 @@ docs = [
 [tool.scikit-build]
 wheel.packages = ["onnx_light"]
 sdist.include = ["sbom.cdx.json"]
+# Build inside the project tree rather than the default system temporary
+# directory. On Windows the temp directory is exposed through an 8.3 short
+# path (e.g. C:\Users\RUNNER~1\AppData\Local\Temp\...), which makes MSBuild
+# emit MSB8029 (output directory under the temp directory) and MSB8012
+# (TargetPath vs OutputFile mismatch between the short and long path forms)
+# and can break the wheel build. A stable build directory avoids both.
+build-dir = "build/{wheel_tag}"
+
+# Skip the C++ development install (static/import libraries, public headers and
+# CMake package config) when building the Python wheel. Those files target
+# downstream C++ consumers (who build via CMake, e.g. build_release_cpp.yml) and
+# are dead weight inside a wheel: the shared libraries are duplicated (once in
+# onnx_light/onnx_py/ for the runtime extensions and again under lib/ for the
+# C++ install), and the headers/CMake configs are never used at import time.
+# Dropping them roughly halves the wheel size on every platform, most visibly on
+# Windows (extra import .lib files) and macOS (universal2 binaries are already
+# twice as large). ONNX_LIGHT_INSTALL stays ON by default for plain CMake builds.
+cmake.define.ONNX_LIGHT_INSTALL = "OFF"
+
+# Tag the reduced wheel (built with ONNX_LIGHT_BUILD_KERNELS=OFF, i.e. without
+# the operator-kernel runtime and the backend-test registries) so its file name
+# differs from the full wheel. Setting ONNX_LIGHT_REDUCED=1 adds the "0reduced"
+# build tag, producing e.g. onnx_light-0.1.1-0reduced-cp312-...whl instead of an
+# identically named onnx_light-0.1.1-cp312-...whl. A wheel build tag must start
+# with a digit (PEP 427), so it is "0reduced" rather than "reduced". The build
+# tag is independent of the package version, so the wheel stays installable and
+# the .dist-info directory name is unchanged.
+[[tool.scikit-build.overrides]]
+if.env.ONNX_LIGHT_REDUCED = "1"
+wheel.build-tag = "0reduced"
 
 [tool.pytest.ini_options]
 testpaths = ["unittests"]

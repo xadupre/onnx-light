@@ -186,6 +186,24 @@ void RegisterReduceLogSumCases(std::vector<TestCase> &registry) {
   const kernel::ReduceLogSum kernel{ctx};
   RegisterReduceLogSumOpCases(registry, "ReduceLogSum", kernel, "reducelogsum");
   RegisterReduceLogSumOnnxCases(registry, kernel);
+
+  // DOUBLE
+  {
+    const OpsetId opset = DefaultOpset(18);
+    NodeProto node;
+    node.set_op_type("ReduceLogSum");
+    node.add_input("data");
+    node.add_input("axes");
+    node.add_output("reduced");
+    AddAttribute<int64_t>(node, "keepdims", 1);
+
+    Tensor data = Tensor::FromDouble(
+        "", {3, 2, 2}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0});
+    Tensor axes = Tensor::FromInt64("", {1}, {1});
+    Tensor reduced = kernel(data, axes, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+    Expect(node, {data, axes}, {reduced}, "test_cc_reducelogsum_double", {opset}, "backend-test",
+           registry);
+  }
 }
 
 void RegisterReduceLogSumExpCases(std::vector<TestCase> &registry) {
@@ -193,6 +211,47 @@ void RegisterReduceLogSumExpCases(std::vector<TestCase> &registry) {
   const kernel::ReduceLogSumExp kernel{ctx};
   RegisterReduceLogSumOpCases(registry, "ReduceLogSumExp", kernel, "reducelogsumexp");
   RegisterReduceLogSumExpOnnxCases(registry, kernel);
+
+  // DOUBLE
+  {
+    const OpsetId opset = DefaultOpset(18);
+    NodeProto node;
+    node.set_op_type("ReduceLogSumExp");
+    node.add_input("data");
+    node.add_input("axes");
+    node.add_output("reduced");
+    AddAttribute<int64_t>(node, "keepdims", 1);
+
+    Tensor data = Tensor::FromDouble(
+        "", {3, 2, 2}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0});
+    Tensor axes = Tensor::FromInt64("", {1}, {1});
+    Tensor reduced = kernel(data, axes, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+    Expect(node, {data, axes}, {reduced}, "test_cc_reducelogsumexp_double", {opset}, "backend-test",
+           registry);
+  }
+
+  // Register _expanded aliases: the expanded graphs decompose ReduceLogSumExp
+  // into Cast+Exp+ReduceSum+Log+CastLike; all those primitive ops are supported
+  // so the non-expanded test results are valid references.
+  {
+    const size_t n = registry.size();
+    for (size_t i = 0; i < n; ++i) {
+      if (registry[i].name.find("test_reduce_log_sum_exp_") != std::string::npos &&
+          registry[i].name.find("_expanded") == std::string::npos &&
+          registry[i].name.find("test_cc_") == std::string::npos) {
+        std::string serialized;
+        registry[i].model.SerializeToString(serialized);
+        TestCase copy;
+        copy.model.ParseFromString(serialized);
+        const_cast<std::string &>(copy.name) = registry[i].name + "_expanded";
+        const_cast<std::string &>(copy.model_name) = registry[i].model_name;
+        copy.data_sets = registry[i].data_sets;
+        const_cast<std::string &>(copy.kind) = registry[i].kind;
+        const_cast<std::string &>(copy.tag) = registry[i].tag;
+        registry.push_back(std::move(copy));
+      }
+    }
+  }
 }
 
 } // namespace onnx_backend_test

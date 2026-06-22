@@ -54,6 +54,13 @@ can be set on the ``cmake`` command line with ``-D<NAME>=<VALUE>``.
     * - ``ONNX_ML``
       - ``ON``
       - Enable ``ai.onnx.ml`` (traditional ML) operator support.
+    * - ``ONNX_LIGHT_BUILD_IMAGE_CODECS``
+      - ``ON``
+      - Build the TIFF, WebP and JPEG2000 decoders in the ``ImageDecoder``
+        kernel.  Turn ``OFF`` for a lighter ``lib_onnx_kernels``: those three
+        formats then fall back to the empty-matrix path while BMP, JPEG, PNG
+        and PNM remain decoded natively.  Only meaningful with
+        ``ONNX_LIGHT_BUILD_KERNELS=ON``.
     * - ``ONNX_LIGHT_BUILD_TESTS``
       - ``OFF``
       - Build the C++ unit-test executable ``test_onnx_light`` and
@@ -85,6 +92,54 @@ can be set on the ``cmake`` command line with ``-D<NAME>=<VALUE>``.
         fuzz harnesses (the ``fuzzer`` sanitizer is always added
         automatically).  Only meaningful with
         ``ONNX_LIGHT_BUILD_FUZZERS=ON``.
+    * - ``ONNX_HARDENING``
+      - ``OFF``
+      - Opt in to the `OpenSSF Compiler Options Hardening Guide for C and
+        C++ <https://best.openssf.org/Compiler-Hardening-Guides/Compiler-Options-Hardening-Guide-for-C-and-C++.html>`_
+        baseline.  When ``ON``, every onnx-light library, Python extension,
+        test, and benchmark target receives the recommended compile and
+        link flags (``_FORTIFY_SOURCE=3``, ``_GLIBCXX_ASSERTIONS``,
+        ``-fstack-protector-strong``, ``-fstack-clash-protection``,
+        ``-fcf-protection=full``, ``-fstrict-flex-arrays=3``,
+        ``-ftrivial-auto-var-init=zero``, ``-Wformat=2``,
+        ``-Werror=format-security``, ``-z noexecstack``, ``-z relro``,
+        ``-z now``, on GCC/Clang and ``/GS``,
+        ``/guard:cf``, ``/Qspectre``, ``/sdl``, ``/DYNAMICBASE``,
+        ``/NXCOMPAT``, ``/CETCOMPAT`` on MSVC).  Each flag is probed by
+        the configure step and silently skipped when the active toolchain
+        does not accept it.  See ``cmake/Hardening.cmake`` for the full
+        list.
+
+.. _l-design-cpp-linking-no-kernels:
+
+Build without the backend tests and kernels
+--------------------------------------------
+
+The operator-kernel runtime (``lib_onnx_kernels``) and the backend-test case
+registry (``lib_onnx_backend_test``) are by far the largest libraries in the
+build.  When downstream code only needs the schema / checker / shape-inference /
+version-converter / proto layer, pass ``-DONNX_LIGHT_BUILD_KERNELS=OFF`` at
+configure time to skip building and installing them:
+
+.. code-block:: bash
+
+    cmake -S . -B build-install \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DONNX_LIGHT_BUILD_PYTHON=OFF \
+          -DONNX_LIGHT_BUILD_KERNELS=OFF \
+          -DCMAKE_INSTALL_PREFIX=/usr/local
+    cmake --build build-install
+    cmake --install build-install
+
+The exported CMake package then provides only the kernel-free targets —
+``onnx_light::onnx_light``, ``onnx_light::onnx_manipulations``,
+``onnx_light::lib_onnx_op``, ``onnx_light::lib_onnx_optim`` and
+``onnx_light::lib_onnx_proto``.  ``onnx_light::onnx_kernels`` and
+``onnx_light::onnx_backend_test`` are not built and not part of the package.
+
+``ONNX_LIGHT_BUILD_KERNELS=OFF`` is incompatible with
+``ONNX_LIGHT_BUILD_PYTHON=ON`` and ``ONNX_LIGHT_BUILD_TESTS=ON``: the Python
+extensions and the C++ unit tests both require the kernels.
 
 Install and link model
 ----------------------
@@ -102,8 +157,8 @@ From the repository root, install the C++ library with CMake:
 
 When downstream code only needs the schema / checker / shape-inference /
 version-converter / proto layer (``onnx_light::onnx_light``,
-``onnx_light::lib_onnx_op``, ``onnx_light::lib_onnx_optim``,
-``onnx_light::lib_onnx_proto``), pass
+``onnx_light::onnx_manipulations``, ``onnx_light::lib_onnx_op``,
+``onnx_light::lib_onnx_optim``, ``onnx_light::lib_onnx_proto``), pass
 ``-DONNX_LIGHT_BUILD_KERNELS=OFF`` at configure time to skip building and
 installing the much larger ``lib_onnx_kernels`` (operator-kernel runtime)
 and ``lib_onnx_backend_test`` (backend-test case registry) libraries.
@@ -129,8 +184,8 @@ link just the lighter proto target:
     find_package(onnx_light REQUIRED)
     target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_proto)
 
-That is sufficient when the program only manipulates ``ModelProto`` /
-``GraphProto`` data and does not need any notion of operators.
+That is sufficient when the program only manipulates :class:`~onnx_light.onnx_lib.ModelProto` /
+:class:`~onnx_light.onnx_lib.GraphProto` data and does not need any notion of operators.
 
 For manual registration of lightweight math operator schemas without shape
 inference support, downstream code can link:
@@ -139,6 +194,16 @@ inference support, downstream code can link:
 
     find_package(onnx_light REQUIRED)
     target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_op)
+
+To parse / print ONNX text models and manipulate :class:`~onnx_light.onnx_lib.ModelProto` /
+:class:`~onnx_light.onnx_lib.GraphProto` (attribute and tensor proto helpers, data-type name
+utilities, graph-input collection) without pulling in the operator schemas,
+link the manipulations target, which only depends on ``lib_onnx_proto``:
+
+.. code-block:: cmake
+
+    find_package(onnx_light REQUIRED)
+    target_link_libraries(my_target PRIVATE onnx_light::onnx_manipulations)
 
 When shape inference dispatch and graph optimization passes are also needed
 (without pulling in the full ``onnx_light::onnx_light`` checker/inliner/version
@@ -161,8 +226,9 @@ To evaluate ONNX nodes / graphs / models in-process using the bundled C++
     target_link_libraries(my_target PRIVATE onnx_light::onnx_kernels)
 
 The kernels live under ``onnx_light/onnx_kernels/kernels/<group>/`` and
-form a self-contained runtime that only depends on
-``onnx_light::lib_onnx_proto``.  See
+form a self-contained runtime that depends on
+``onnx_light::lib_onnx_proto`` and ``onnx_light::onnx_manipulations``
+(for the graph-manipulation helpers).  See
 :doc:`../api/cpp/onnx_kernels/index` for the full C++ API reference.
 
 To additionally pull in the backend-test infrastructure
@@ -199,9 +265,9 @@ For monorepos or local development, a downstream CMake project can also include
     target_link_libraries(my_target PRIVATE lib_onnx_lib)
 
 Use the in-tree ``lib_onnx_proto`` target instead when only proto
-parsing/serialization is needed, or ``lib_onnx_op``, ``lib_onnx_optim``,
-``lib_onnx_kernels`` or ``lib_onnx_backend_test`` for the corresponding
-feature subset.  This uses the
+parsing/serialization is needed, or ``lib_onnx_op``, ``lib_onnx_manipulations``,
+``lib_onnx_optim``, ``lib_onnx_kernels`` or ``lib_onnx_backend_test`` for the
+corresponding feature subset.  This uses the
 in-tree build targets directly instead of ``find_package``.
 
 Excerpt from the example project
@@ -223,7 +289,7 @@ The Python package ships five nanobind extension modules,
 ``onnx_light.onnx_py._onnxpyoptim``,
 ``onnx_light.onnx_py._onnxpykernels`` and
 ``onnx_light.onnx_py._onnxpybackend``.  All five need access to the proto
-classes (``ModelProto``, ``NodeProto``, ``TensorProto``, ...) defined in
+classes (:class:`~onnx_light.onnx_lib.ModelProto`, :class:`~onnx_light.onnx_lib.NodeProto`, :class:`~onnx_light.onnx_lib.TensorProto`, ...) defined in
 ``onnx_light/onnx_proto``.  How do the extensions agree on a single
 ``nb::class_<ModelProto>`` registration so that values can flow between
 them without a serialise/parse round-trip?
@@ -251,7 +317,7 @@ proto classes have a single set of out-of-line member definitions and a
 single ``std::type_info`` instance.  Consequently
 ``&typeid(ModelProto)`` evaluates to the same pointer in every
 extension, and nanobind's cross-module type registry resolves
-``ModelProto`` references coming from ``_onnxpyoptim`` or
+:class:`~onnx_light.onnx_lib.ModelProto` references coming from ``_onnxpyoptim`` or
 ``_onnxpybackend`` against the
 ``nb::class_<ModelProto>`` that ``_onnxpyprotoop`` registered.  In
 practice, only ``_onnxpyprotoop`` declares
@@ -265,7 +331,7 @@ binding.  The package's ``onnx_light/onnx_py/_onnxpy.py`` shim imports
 ``_onnxpyprotoop`` before ``_onnxpyprotolib``, ``_onnxpyoptim``,
 ``_onnxpykernels`` and ``_onnxpybackend`` to
 guarantee that the
-``ModelProto`` binding exists by the time any ``_onnxpyprotolib``,
+:class:`~onnx_light.onnx_lib.ModelProto` binding exists by the time any ``_onnxpyprotolib``,
 ``_onnxpyoptim``, ``_onnxpykernels`` or ``_onnxpybackend`` accessor is used.
 
 See also

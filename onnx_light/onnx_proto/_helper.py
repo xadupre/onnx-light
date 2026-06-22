@@ -636,6 +636,12 @@ def make_tensor(
         expected_size_bytes *= math.prod(dims)
         expected_size_bytes = math.ceil(expected_size_bytes)
         if isinstance(vals, np.ndarray):
+            from ._numpy_helper import _pack_2bitx4, _pack_4bitx2
+
+            if data_type in {TensorProto.UINT4, TensorProto.INT4, TensorProto.FLOAT4E2M1}:
+                vals = _pack_4bitx2(vals)
+            elif data_type in {TensorProto.UINT2, TensorProto.INT2}:
+                vals = _pack_2bitx4(vals)
             raw_data = vals.tobytes()
         elif isinstance(vals, bytes):
             raw_data = vals
@@ -673,6 +679,14 @@ def make_tensor(
         TensorProto.FLOAT8E8M0,
     }:
         vals = vals.view(np.uint8)  # type: ignore
+    elif data_type in {TensorProto.UINT4, TensorProto.INT4, TensorProto.FLOAT4E2M1}:
+        from ._numpy_helper import _pack_4bitx2
+
+        vals = _pack_4bitx2(vals)  # type: ignore
+    elif data_type in {TensorProto.UINT2, TensorProto.INT2}:
+        from ._numpy_helper import _pack_2bitx4
+
+        vals = _pack_2bitx4(vals)  # type: ignore
     elif data_type == TensorProto.BOOL:
         vals = vals.astype(np.uint8)  # type: ignore
     elif data_type >= 16:

@@ -22,8 +22,8 @@ const float *AsFloatOrNull(const Tensor &t, const char *role) {
   if (t.shape.empty() && t.size_bytes() == 0) {
     return nullptr;
   }
-  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      std::string("kernel::GRU: ") + role + " must be FLOAT.");
+  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT), "kernel::GRU: ", role,
+                      " must be FLOAT.");
   return t.AsFloat();
 }
 
@@ -31,22 +31,65 @@ inline float Sigmoid(float x) { return 1.0f / (1.0f + std::exp(-x)); }
 
 } // namespace
 
-std::pair<Tensor, Tensor> GRU::operator()(const Tensor &x, const Tensor &w, const Tensor &r,
-                                          const Tensor &b, const Tensor &initial_h,
-                                          int64_t linear_before_reset) const {
-  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
+std::pair<Tensor, Tensor> GRU::operator()(const Tensor &x_in, const Tensor &w, const Tensor &r,
+                                          const Tensor &b, const Tensor &initial_h_in,
+                                          int64_t linear_before_reset, int64_t layout) const {
+  EXT_ENFORCE_INVALID(layout == 0 || layout == 1, "kernel::GRU: layout must be 0 or 1, got ",
+                      std::to_string(layout), ".");
+  EXT_ENFORCE_INVALID(x_in.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::GRU: X must be FLOAT.");
   EXT_ENFORCE_INVALID(w.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::GRU: W must be FLOAT.");
   EXT_ENFORCE_INVALID(r.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::GRU: R must be FLOAT.");
-  EXT_ENFORCE_INVALID(x.shape.size() == 3u, "kernel::GRU: X must have rank 3.");
+  EXT_ENFORCE_INVALID(x_in.shape.size() == 3u, "kernel::GRU: X must have rank 3.");
   EXT_ENFORCE_INVALID(w.shape.size() == 3u && w.shape[0] == 1,
                       "kernel::GRU: W must have shape [1, 3 * hidden_size, input_size] "
                       "(single forward direction only).");
   EXT_ENFORCE_INVALID(r.shape.size() == 3u && r.shape[0] == 1,
                       "kernel::GRU: R must have shape [1, 3 * hidden_size, hidden_size] "
                       "(single forward direction only).");
+
+  // ``layout == 1`` permutes batch and time/direction axes on a subset
+  // of inputs and outputs; the time-major kernel body below stays as
+  // is. ``num_directions`` is always 1 (only ``forward`` is implemented)
+  // which makes the state-tensor permutation a pure reshape on
+  // contiguous storage.
+  Tensor x_storage;
+  Tensor initial_h_storage;
+  const Tensor *x_p = &x_in;
+  const Tensor *initial_h_p = &initial_h_in;
+  if (layout == 1) {
+    const int64_t batch_size = x_in.shape[0];
+    const int64_t seq_length = x_in.shape[1];
+    const int64_t input_size = x_in.shape[2];
+    std::vector<float> x_data(static_cast<size_t>(batch_size * seq_length * input_size));
+    const float *src = x_in.AsFloat();
+    for (int64_t n = 0; n < batch_size; ++n) {
+      for (int64_t s = 0; s < seq_length; ++s) {
+        for (int64_t k = 0; k < input_size; ++k) {
+          x_data[static_cast<size_t>((s * batch_size + n) * input_size + k)] =
+              src[static_cast<size_t>((n * seq_length + s) * input_size + k)];
+        }
+      }
+    }
+    x_storage = Tensor::FromFloat("", {seq_length, batch_size, input_size}, std::move(x_data));
+    x_p = &x_storage;
+
+    if (!(initial_h_in.shape.empty() && initial_h_in.size_bytes() == 0)) {
+      EXT_ENFORCE_INVALID(initial_h_in.shape.size() == 3u && initial_h_in.shape[1] == 1,
+                          "kernel::GRU: initial_h must have shape [batch_size, num_directions=1, "
+                          "hidden_size] for layout=1.");
+      initial_h_storage = Tensor::FromFloat(
+          "", {1, initial_h_in.shape[0], initial_h_in.shape[2]},
+          std::vector<float>(initial_h_in.AsFloat(),
+                             initial_h_in.AsFloat() + (initial_h_in.size_bytes() / sizeof(float))));
+      initial_h_p = &initial_h_storage;
+    }
+  }
+
+  const Tensor &x = *x_p;
+  const Tensor &initial_h = *initial_h_p;
 
   const int64_t seq_length = x.shape[0];
   const int64_t batch_size = x.shape[1];
@@ -206,6 +249,26 @@ std::pair<Tensor, Tensor> GRU::operator()(const Tensor &x, const Tensor &w, cons
   // final swap).
   for (int64_t i = 0; i < batch_size * hidden_size; ++i) {
     py_h[i] = h_prev[static_cast<size_t>(i)];
+  }
+
+  if (layout == 1) {
+    // Permute Y from [seq, 1, batch, hidden] to [batch, seq, 1, hidden]
+    // and reshape Y_h from [1, batch, hidden] to [batch, 1, hidden]
+    // (num_directions == 1 makes the Y_h transform a pure reshape).
+    std::vector<float> y_perm(static_cast<size_t>(seq_length * batch_size * hidden_size));
+    const float *y_src = y.AsFloat();
+    for (int64_t s = 0; s < seq_length; ++s) {
+      for (int64_t n = 0; n < batch_size; ++n) {
+        for (int64_t h = 0; h < hidden_size; ++h) {
+          y_perm[static_cast<size_t>((n * seq_length + s) * hidden_size + h)] =
+              y_src[static_cast<size_t>((s * batch_size + n) * hidden_size + h)];
+        }
+      }
+    }
+    y = Tensor::FromFloat("", {batch_size, seq_length, 1, hidden_size}, std::move(y_perm));
+    y_h = Tensor::FromFloat(
+        "", {batch_size, 1, hidden_size},
+        std::vector<float>(y_h.AsFloat(), y_h.AsFloat() + (y_h.size_bytes() / sizeof(float))));
   }
 
   return std::pair<Tensor, Tensor>(std::move(y), std::move(y_h));

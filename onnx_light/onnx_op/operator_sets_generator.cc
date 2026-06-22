@@ -133,29 +133,33 @@ std::vector<TensorType> BernoulliT2(int since_version) {
 
 LightOpSchema MakeBernoulliSchema(int since_version) {
   return LightOpSchema(
-      "Bernoulli", kOnnxDomain, since_version, MakeBernoulliDoc(),
-      {
-          {"input", "All values in input have to be in the range:[0, 1].", "T1"},
-      },
-      {
-          {"output",
-           "The returned output tensor only has values 0 or 1, same shape as input tensor.", "T2"},
-      },
-      {
-          {"T1", BernoulliT1(since_version), "Constrain input types to float tensors."},
-          {"T2", BernoulliT2(since_version),
-           "Constrain output types to all numeric tensors and bool tensors."},
-      },
-      {
-          AttributeParam{"seed",
-                         "(Optional) Seed to the random generator, if not specified we will auto "
-                         "generate one.",
-                         AttributeType::FLOAT, /*required=*/false, std::monostate{}},
-          AttributeParam{"dtype",
-                         "The data type for the elements of the output tensor. if not specified, "
-                         "we will use the data type of the input tensor.",
-                         AttributeType::INT, /*required=*/false, std::monostate{}},
-      });
+             "Bernoulli", kOnnxDomain, since_version, MakeBernoulliDoc(),
+             {
+                 {"input", "All values in input have to be in the range:[0, 1].", "T1"},
+             },
+             {
+                 {"output",
+                  "The returned output tensor only has values 0 or 1, same shape as input tensor.",
+                  "T2"},
+             },
+             {
+                 {"T1", BernoulliT1(since_version), "Constrain input types to float tensors."},
+                 {"T2", BernoulliT2(since_version),
+                  "Constrain output types to all numeric tensors and bool tensors."},
+             },
+             {
+                 AttributeParam{
+                     "seed",
+                     "(Optional) Seed to the random generator, if not specified we will auto "
+                     "generate one.",
+                     AttributeType::FLOAT, /*required=*/false, std::monostate{}},
+                 AttributeParam{
+                     "dtype",
+                     "The data type for the elements of the output tensor. if not specified, "
+                     "we will use the data type of the input tensor.",
+                     AttributeType::INT, /*required=*/false, std::monostate{}},
+             })
+      .set_node_determinism(LightOpSchema::NodeDeterminism::NonDeterministic);
 }
 
 LightOpSchema MakeConstantSchema(int since_version) {
@@ -378,113 +382,133 @@ std::vector<TensorType> RandomLikeT1Types(int since_version) {
 
 LightOpSchema MakeRandomNormalSchema(int since_version) {
   return LightOpSchema(
-      "RandomNormal", kOnnxDomain, since_version, MakeRandomNormalDoc(), {},
-      {
-          {"output", "Output tensor of random values drawn from normal distribution", "T"},
-      },
-      {
-          {"T", RandomFloatTypes(since_version), "Constrain output types to float tensors."},
-      },
-      {
-          {"mean", "The mean of the normal distribution.", AttributeType::FLOAT,
-           /*required=*/false, 0.0},
-          {"scale", "The standard deviation of the normal distribution.", AttributeType::FLOAT,
-           /*required=*/false, 1.0},
-          {"seed",
-           "(Optional) Seed to the random generator, if not specified we will auto generate one.",
-           AttributeType::FLOAT, /*required=*/false, std::monostate{}},
-          {"dtype",
-           "The data type for the elements of the output tensor. Default is TensorProto::FLOAT.",
-           AttributeType::INT, /*required=*/false, static_cast<int64_t>(1)},
-          {"shape", "The shape of the output tensor.", AttributeType::INTS, /*required=*/true,
-           std::monostate{}},
-      });
+             "RandomNormal", kOnnxDomain, since_version, MakeRandomNormalDoc(), {},
+             {
+                 {"output", "Output tensor of random values drawn from normal distribution", "T"},
+             },
+             {
+                 {"T", RandomFloatTypes(since_version), "Constrain output types to float tensors."},
+             },
+             {
+                 {"mean", "The mean of the normal distribution.", AttributeType::FLOAT,
+                  /*required=*/false, 0.0},
+                 {"scale", "The standard deviation of the normal distribution.",
+                  AttributeType::FLOAT,
+                  /*required=*/false, 1.0},
+                 {"seed",
+                  "(Optional) Seed to the random generator, if not specified we will auto generate "
+                  "one.",
+                  AttributeType::FLOAT, /*required=*/false, std::monostate{}},
+                 {"dtype",
+                  "The data type for the elements of the output tensor. Default is "
+                  "TensorProto::FLOAT.",
+                  AttributeType::INT, /*required=*/false, static_cast<int64_t>(1)},
+                 {"shape", "The shape of the output tensor.", AttributeType::INTS,
+                  /*required=*/true, std::monostate{}},
+             })
+      .set_node_determinism(LightOpSchema::NodeDeterminism::NonDeterministic);
 }
 
 LightOpSchema MakeRandomUniformSchema(int since_version) {
   return LightOpSchema(
-      "RandomUniform", kOnnxDomain, since_version, MakeRandomUniformDoc(), {},
-      {
-          {"output", "Output tensor of random values drawn from uniform distribution", "T"},
-      },
-      {
-          {"T", RandomFloatTypes(since_version), "Constrain output types to float tensors."},
-      },
-      {
-          {"low", "Lower boundary of the output values.", AttributeType::FLOAT,
-           /*required=*/false, 0.0},
-          {"high", "Upper boundary of the output values.", AttributeType::FLOAT,
-           /*required=*/false, 1.0},
-          {"seed",
-           "(Optional) Seed to the random generator, if not specified we will auto generate one.",
-           AttributeType::FLOAT, /*required=*/false, std::monostate{}},
-          {"dtype",
-           "The data type for the elements of the output tensor. If not specified, default is "
-           "TensorProto::FLOAT.",
-           AttributeType::INT, /*required=*/false, static_cast<int64_t>(1)},
-          {"shape", "The shape of the output tensor.", AttributeType::INTS, /*required=*/true,
-           std::monostate{}},
-      });
+             "RandomUniform", kOnnxDomain, since_version, MakeRandomUniformDoc(), {},
+             {
+                 {"output", "Output tensor of random values drawn from uniform distribution", "T"},
+             },
+             {
+                 {"T", RandomFloatTypes(since_version), "Constrain output types to float tensors."},
+             },
+             {
+                 {"low", "Lower boundary of the output values.", AttributeType::FLOAT,
+                  /*required=*/false, 0.0},
+                 {"high", "Upper boundary of the output values.", AttributeType::FLOAT,
+                  /*required=*/false, 1.0},
+                 {"seed",
+                  "(Optional) Seed to the random generator, if not specified we will auto generate "
+                  "one.",
+                  AttributeType::FLOAT, /*required=*/false, std::monostate{}},
+                 {"dtype",
+                  "The data type for the elements of the output tensor. If not specified, default "
+                  "is "
+                  "TensorProto::FLOAT.",
+                  AttributeType::INT, /*required=*/false, static_cast<int64_t>(1)},
+                 {"shape", "The shape of the output tensor.", AttributeType::INTS,
+                  /*required=*/true, std::monostate{}},
+             })
+      .set_node_determinism(LightOpSchema::NodeDeterminism::NonDeterministic);
 }
 
 LightOpSchema MakeRandomNormalLikeSchema(int since_version) {
   return LightOpSchema(
-      "RandomNormalLike", kOnnxDomain, since_version, MakeRandomNormalLikeDoc(),
-      {
-          {"input", "Input tensor to copy shape and optionally type information from.", "T1"},
-      },
-      {
-          {"output", "Output tensor of random values drawn from normal distribution", "T2"},
-      },
-      {
-          {"T1", RandomLikeT1Types(since_version),
-           "Constrain to any tensor type. If the dtype attribute is not provided this must be a "
-           "valid output type."},
-          {"T2", RandomFloatTypes(since_version), "Constrain output types to float tensors."},
-      },
-      {
-          {"mean", "The mean of the normal distribution.", AttributeType::FLOAT,
-           /*required=*/false, 0.0},
-          {"scale", "The standard deviation of the normal distribution.", AttributeType::FLOAT,
-           /*required=*/false, 1.0},
-          {"seed",
-           "(Optional) Seed to the random generator, if not specified we will auto generate one.",
-           AttributeType::FLOAT, /*required=*/false, std::monostate{}},
-          {"dtype",
-           "(Optional) The data type for the elements of the output tensor, if not specified, "
-           "we will use the data type of the input tensor.",
-           AttributeType::INT, /*required=*/false, std::monostate{}},
-      });
+             "RandomNormalLike", kOnnxDomain, since_version, MakeRandomNormalLikeDoc(),
+             {
+                 {"input", "Input tensor to copy shape and optionally type information from.",
+                  "T1"},
+             },
+             {
+                 {"output", "Output tensor of random values drawn from normal distribution", "T2"},
+             },
+             {
+                 {"T1", RandomLikeT1Types(since_version),
+                  "Constrain to any tensor type. If the dtype attribute is not provided this must "
+                  "be a "
+                  "valid output type."},
+                 {"T2", RandomFloatTypes(since_version),
+                  "Constrain output types to float tensors."},
+             },
+             {
+                 {"mean", "The mean of the normal distribution.", AttributeType::FLOAT,
+                  /*required=*/false, 0.0},
+                 {"scale", "The standard deviation of the normal distribution.",
+                  AttributeType::FLOAT,
+                  /*required=*/false, 1.0},
+                 {"seed",
+                  "(Optional) Seed to the random generator, if not specified we will auto generate "
+                  "one.",
+                  AttributeType::FLOAT, /*required=*/false, std::monostate{}},
+                 {"dtype",
+                  "(Optional) The data type for the elements of the output tensor, if not "
+                  "specified, "
+                  "we will use the data type of the input tensor.",
+                  AttributeType::INT, /*required=*/false, std::monostate{}},
+             })
+      .set_node_determinism(LightOpSchema::NodeDeterminism::NonDeterministic);
 }
 
 LightOpSchema MakeRandomUniformLikeSchema(int since_version) {
   return LightOpSchema(
-      "RandomUniformLike", kOnnxDomain, since_version, MakeRandomUniformLikeDoc(),
-      {
-          {"input", "Input tensor to copy shape and optionally type information from.", "T1"},
-      },
-      {
-          {"output", "Output tensor of random values drawn from uniform distribution", "T2"},
-      },
-      {
-          {"T1", RandomLikeT1Types(since_version),
-           "Constrain to any tensor type. If the dtype attribute is not provided this must be a "
-           "valid output type."},
-          {"T2", RandomFloatTypes(since_version), "Constrain output types to float tensors."},
-      },
-      {
-          {"low", "Lower boundary of the output values.", AttributeType::FLOAT,
-           /*required=*/false, 0.0},
-          {"high", "Upper boundary of the output values.", AttributeType::FLOAT,
-           /*required=*/false, 1.0},
-          {"seed",
-           "(Optional) Seed to the random generator, if not specified we will auto generate one.",
-           AttributeType::FLOAT, /*required=*/false, std::monostate{}},
-          {"dtype",
-           "(Optional) The data type for the elements of the output tensor, if not specified, "
-           "we will use the data type of the input tensor.",
-           AttributeType::INT, /*required=*/false, std::monostate{}},
-      });
+             "RandomUniformLike", kOnnxDomain, since_version, MakeRandomUniformLikeDoc(),
+             {
+                 {"input", "Input tensor to copy shape and optionally type information from.",
+                  "T1"},
+             },
+             {
+                 {"output", "Output tensor of random values drawn from uniform distribution", "T2"},
+             },
+             {
+                 {"T1", RandomLikeT1Types(since_version),
+                  "Constrain to any tensor type. If the dtype attribute is not provided this must "
+                  "be a "
+                  "valid output type."},
+                 {"T2", RandomFloatTypes(since_version),
+                  "Constrain output types to float tensors."},
+             },
+             {
+                 {"low", "Lower boundary of the output values.", AttributeType::FLOAT,
+                  /*required=*/false, 0.0},
+                 {"high", "Upper boundary of the output values.", AttributeType::FLOAT,
+                  /*required=*/false, 1.0},
+                 {"seed",
+                  "(Optional) Seed to the random generator, if not specified we will auto generate "
+                  "one.",
+                  AttributeType::FLOAT, /*required=*/false, std::monostate{}},
+                 {"dtype",
+                  "(Optional) The data type for the elements of the output tensor, if not "
+                  "specified, "
+                  "we will use the data type of the input tensor.",
+                  AttributeType::INT, /*required=*/false, std::monostate{}},
+             })
+      .set_node_determinism(LightOpSchema::NodeDeterminism::NonDeterministic);
 }
 
 // Multinomial T1 (input) type-constraint set, indexed by since_version.
@@ -505,39 +529,44 @@ std::vector<TensorType> MultinomialT1(int since_version) {
 
 LightOpSchema MakeMultinomialSchema(int since_version) {
   return LightOpSchema(
-      "Multinomial", kOnnxDomain, since_version, MakeMultinomialDoc(),
-      {
-          {"input",
-           "Input tensor with shape [batch_size, class_size], where class_size is the number "
-           "of all possible outcomes. Each value along the axis zero represents the "
-           "unnormalized log-probability of each corresponding outcome in a batch.",
-           "T1"},
-      },
-      {
-          {"output",
-           "Output tensor with shape [batch_size, sample_size], where sample_size is the "
-           "number of times to sample. Each value along the axis zero represents the outcome "
-           "of the corresponding sample in a batch.",
-           "T2"},
-      },
-      {
-          {"T1", MultinomialT1(since_version), "Constrain input types to float tensors."},
-          {"T2",
-           {TensorType::kInt32, TensorType::kInt64},
-           "Constrain output types to integral tensors."},
-      },
-      {
-          {"sample_size", "Number of times to sample.", AttributeType::INT,
-           /*required=*/false, static_cast<int64_t>(1)},
-          {"seed",
-           "(Optional) Seed to the random generator, if not specified we will auto generate one.",
-           AttributeType::FLOAT, /*required=*/false, std::monostate{}},
-          {"dtype",
-           "(Optional) The data type for the elements of the output tensor, if not specified, "
-           "we will use int32.",
-           AttributeType::INT, /*required=*/false,
-           /*default=*/static_cast<int64_t>(6) /* TensorProto::INT32 */},
-      });
+             "Multinomial", kOnnxDomain, since_version, MakeMultinomialDoc(),
+             {
+                 {"input",
+                  "Input tensor with shape [batch_size, class_size], where class_size is the "
+                  "number "
+                  "of all possible outcomes. Each value along the axis zero represents the "
+                  "unnormalized log-probability of each corresponding outcome in a batch.",
+                  "T1"},
+             },
+             {
+                 {"output",
+                  "Output tensor with shape [batch_size, sample_size], where sample_size is the "
+                  "number of times to sample. Each value along the axis zero represents the "
+                  "outcome "
+                  "of the corresponding sample in a batch.",
+                  "T2"},
+             },
+             {
+                 {"T1", MultinomialT1(since_version), "Constrain input types to float tensors."},
+                 {"T2",
+                  {TensorType::kInt32, TensorType::kInt64},
+                  "Constrain output types to integral tensors."},
+             },
+             {
+                 {"sample_size", "Number of times to sample.", AttributeType::INT,
+                  /*required=*/false, static_cast<int64_t>(1)},
+                 {"seed",
+                  "(Optional) Seed to the random generator, if not specified we will auto generate "
+                  "one.",
+                  AttributeType::FLOAT, /*required=*/false, std::monostate{}},
+                 {"dtype",
+                  "(Optional) The data type for the elements of the output tensor, if not "
+                  "specified, "
+                  "we will use int32.",
+                  AttributeType::INT, /*required=*/false,
+                  /*default=*/static_cast<int64_t>(6) /* TensorProto::INT32 */},
+             })
+      .set_node_determinism(LightOpSchema::NodeDeterminism::NonDeterministic);
 }
 
 // Range T type-constraint set, indexed by since_version.
@@ -568,7 +597,7 @@ LightOpSchema MakeRangeSchema(int since_version) {
          AttributeType::INT, /*required=*/false,
          /*default=*/static_cast<int64_t>(1) /* TensorProto::FLOAT */});
   }
-  return LightOpSchema(
+  LightOpSchema schema(
       "Range", kOnnxDomain, since_version, MakeRangeDoc(since_version),
       {
           {"start", "Scalar. First entry for the range of output values.", "T"},
@@ -583,6 +612,13 @@ LightOpSchema MakeRangeSchema(int since_version) {
           {"T", RangeT(since_version), "Constrain input types to common numeric type tensors."},
       },
       attrs);
+  // The opset-11 ``Range`` schema is implemented as a function body that expands
+  // to a ``Loop``, which makes it non-deterministic; the opset-27 schema drops
+  // that function body and is deterministic.
+  if (since_version < 27) {
+    schema.set_node_determinism(LightOpSchema::NodeDeterminism::NonDeterministic);
+  }
+  return schema;
 }
 
 } // namespace

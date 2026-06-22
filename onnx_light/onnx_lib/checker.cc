@@ -17,8 +17,8 @@
 #include "onnx_lib/common/path.h"
 #include "onnx_lib/common/proto_util.h"
 #include "onnx_lib/common/scoped_resource.h"
-#include "onnx_lib/defs/tensor_proto_util.h"
 #include "onnx_lib/shape_inference/implementation.h"
+#include "onnx_manipulations/tensor_proto_util.h"
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -234,6 +234,9 @@ void check_tensor(const TensorProto &tensor, const CheckerContext &ctx) {
     case TensorProto::FLOAT8E5M2:
     case TensorProto::FLOAT8E5M2FNUZ:
     case TensorProto::FLOAT8E8M0:
+      check_field(int32_data);
+      break;
+
     case TensorProto::UINT4:
     case TensorProto::INT4:
     case TensorProto::FLOAT4E2M1:

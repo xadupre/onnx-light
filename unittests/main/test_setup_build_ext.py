@@ -291,6 +291,45 @@ class TestSetupBuildExt(ExtTestCase):
         self.assertIn("-DONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX=OFF", output)
         self.assertNotIn("-DONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX=ON", output)
 
+    @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
+    def test_setup_build_ext_no_kernels_flag(self):
+        """Tests that --no-kernels sets ONNX_LIGHT_BUILD_KERNELS=OFF."""
+        root = Path(__file__).resolve().parents[2]
+        command = [
+            sys.executable,
+            "setup.py",
+            "build_ext",
+            "--inplace",
+            "--dry-run",
+            "--no-kernels",
+        ]
+        proc = subprocess.run(command, cwd=root, check=False, capture_output=True, text=True)
+
+        self.assertEqual(
+            proc.returncode, 0, msg=f"stdout:\n{proc.stdout}\n\nstderr:\n{proc.stderr}"
+        )
+        self.assertIn("-DONNX_LIGHT_BUILD_KERNELS=OFF", f"{proc.stdout}\n{proc.stderr}")
+
+    @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
+    def test_setup_build_ext_without_setuptools_no_kernels_flag(self):
+        """Tests that --no-kernels sets ONNX_LIGHT_BUILD_KERNELS=OFF without setuptools."""
+        root = Path(__file__).resolve().parents[2]
+        command = [
+            sys.executable,
+            "-S",
+            "setup.py",
+            "build_ext",
+            "--inplace",
+            "--dry-run",
+            "--no-kernels",
+        ]
+        proc = subprocess.run(command, cwd=root, check=False, capture_output=True, text=True)
+
+        self.assertEqual(
+            proc.returncode, 0, msg=f"stdout:\n{proc.stdout}\n\nstderr:\n{proc.stderr}"
+        )
+        self.assertIn("-DONNX_LIGHT_BUILD_KERNELS=OFF", f"{proc.stdout}\n{proc.stderr}")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

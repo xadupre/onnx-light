@@ -10,8 +10,10 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
+#include "onnx_optim/expressions.h"
 #include "onnx_optim/optim_tensor.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
@@ -23,73 +25,56 @@ namespace tensor {
 
 namespace {
 
-// Tries to infer the Reshape ``-1`` dimension from ``data_shape`` and already
-// materialized ``out_shape`` dimensions by:
-// 1) multiplying concrete integer factors on both sides,
-// 2) cancelling matching symbolic factors present in ``out_shape`` from the
-//    symbolic factors of ``data_shape``,
-// 3) returning the remaining symbolic/integer product when exactly derivable.
-// Returns ``std::nullopt`` when inference is ambiguous or incompatible.
-std::optional<OptimDim> InferNegOneFromFactors(const OptimShape &data_shape,
-                                               const OptimShape &out_shape, int neg_one_dim_index) {
-  int64_t input_int_product = 1;
-  std::vector<OptimDim> input_symbolic_factors;
-  for (const OptimDim &dim : data_shape.Dims()) {
+// Builds the symbolic expression representing the product of ``dims``.
+// Integer entries are emitted as their numeric value; symbolic entries are
+// parenthesised to preserve precedence. Returns ``"1"`` for an empty product.
+std::string BuildProductExpr(const std::vector<OptimDim> &dims) {
+  std::string expr;
+  for (const OptimDim &dim : dims) {
+    if (!expr.empty()) {
+      expr += "*";
+    }
     if (dim.IsInt()) {
-      input_int_product *= dim.AsInt();
+      expr += std::to_string(dim.AsInt());
     } else {
-      input_symbolic_factors.push_back(dim);
+      expr += "(" + dim.AsExpr() + ")";
     }
   }
+  return expr.empty() ? std::string("1") : expr;
+}
 
-  int64_t output_int_product = 1;
-  std::vector<OptimDim> output_symbolic_factors;
+// Tries to infer the Reshape ``-1`` dimension by building the symbolic
+// expression ``(product of input dims) // (product of out_shape dims excluding
+// the -1 position)`` and running it through
+// :cpp:func:`expressions::simplify_expression`. This handles purely concrete
+// inputs (returns an int), purely symbolic inputs (returns a clean symbolic
+// expression such as ``"c//2"``) and mixed cases. Returns ``std::nullopt``
+// when any output dim is concrete zero — division by zero is not meaningful
+// and the caller already rejects that case explicitly.
+std::optional<OptimDim> InferNegOneFromFactors(const OptimShape &data_shape,
+                                               const OptimShape &out_shape, int neg_one_dim_index) {
+  std::vector<OptimDim> input_factors(data_shape.Dims());
+
+  std::vector<OptimDim> output_factors;
+  output_factors.reserve(out_shape.Rank());
   for (int i = 0; i < static_cast<int>(out_shape.Rank()); ++i) {
     if (i == neg_one_dim_index) {
       continue;
     }
     const OptimDim &dim = out_shape[i];
-    if (dim.IsInt()) {
-      output_int_product *= dim.AsInt();
-    } else {
-      output_symbolic_factors.push_back(dim);
-    }
-  }
-
-  for (const OptimDim &factor : output_symbolic_factors) {
-    auto it = std::find(input_symbolic_factors.begin(), input_symbolic_factors.end(), factor);
-    if (it == input_symbolic_factors.end()) {
+    if (dim.IsInt() && dim.AsInt() == 0) {
       return std::nullopt;
     }
-    input_symbolic_factors.erase(it);
+    output_factors.push_back(dim);
   }
 
-  if (output_int_product == 0) {
-    return std::nullopt;
+  const std::string expr =
+      "(" + BuildProductExpr(input_factors) + ")//(" + BuildProductExpr(output_factors) + ")";
+  expressions::SimplifyResult result = expressions::simplify_expression(expr);
+  if (std::holds_alternative<int64_t>(result)) {
+    return OptimDim(std::get<int64_t>(result));
   }
-  if (input_int_product % output_int_product != 0) {
-    return std::nullopt;
-  }
-  const int64_t remaining_int = input_int_product / output_int_product;
-
-  if (input_symbolic_factors.empty()) {
-    return OptimDim(remaining_int);
-  }
-  if (remaining_int == 1 && input_symbolic_factors.size() == 1) {
-    return input_symbolic_factors.front();
-  }
-
-  std::string expr;
-  if (remaining_int != 1) {
-    expr = std::to_string(remaining_int);
-  }
-  for (const OptimDim &factor : input_symbolic_factors) {
-    if (!expr.empty()) {
-      expr += "*";
-    }
-    expr += factor.AsExpr();
-  }
-  return OptimDim(std::move(expr));
+  return OptimDim(std::get<std::string>(result));
 }
 
 // Wraps ``InferNegOneFromFactors`` and falls back to a stable symbolic
@@ -106,9 +91,8 @@ OptimDim InferredOrFallbackDim(const OptimShape &data_shape, const OptimShape &o
 void ComputeShapeReshape(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Reshape", "ComputeShapeReshape");
 
-  if (node.input_size() < 2) {
-    throw std::invalid_argument("ComputeShapeReshape: Reshape requires two inputs (data, shape).");
-  }
+  EXT_ENFORCE_INVALID(!(node.input_size() < 2),
+                      "ComputeShapeReshape: Reshape requires two inputs (data, shape).");
 
   const OptimTensor &data = ctx.Get(node.input(0).as_string());
   const OptimTensor &shape_input = ctx.Get(node.input(1).as_string());
@@ -161,21 +145,17 @@ void ComputeShapeReshape(ShapesContext &ctx, const NodeProto &node) {
     }
     const int64_t v = dim.AsInt();
     if (v == -1) {
-      if (neg_one_index != -1) {
-        throw std::invalid_argument(
-            "ComputeShapeReshape: target shape may not have multiple -1 dimensions.");
-      }
+      EXT_ENFORCE_INVALID(neg_one_index == -1,
+                          "ComputeShapeReshape: target shape may not have multiple -1 dimensions.");
       neg_one_index = i;
       // Placeholder; resolved below.
       out_shape.PushBack(OptimDim(static_cast<int64_t>(-1)));
     } else if (v == 0) {
       if (allowzero == 0) {
-        if (i >= data_rank) {
-          throw std::invalid_argument("ComputeShapeReshape: invalid position of 0 in target "
-                                      "shape (index " +
-                                      std::to_string(i) + " out of input rank " +
-                                      std::to_string(data_rank) + ").");
-        }
+        EXT_ENFORCE_INVALID(!(i >= data_rank),
+                            "ComputeShapeReshape: invalid position of 0 in target "
+                            "shape (index ",
+                            i, " out of input rank ", data_rank, ").");
         const OptimDim &input_dim = data_shape[i];
         out_shape.PushBack(input_dim);
         if (input_dim.IsInt()) {
@@ -192,16 +172,14 @@ void ComputeShapeReshape(ShapesContext &ctx, const NodeProto &node) {
       out_shape.PushBack(OptimDim(v));
       output_product *= v;
     } else {
-      throw std::invalid_argument("ComputeShapeReshape: invalid dimension value " +
-                                  std::to_string(v) + " in target shape.");
+      EXT_THROW_INVALID("ComputeShapeReshape: invalid dimension value ", v, " in target shape.");
     }
   }
 
   if (neg_one_index != -1 && output_product_valid) {
-    if (output_product == 0) {
-      throw std::invalid_argument(
-          "ComputeShapeReshape: invalid target shape product of 0 in combination with -1.");
-    }
+    EXT_ENFORCE_INVALID(
+        output_product != 0,
+        "ComputeShapeReshape: invalid target shape product of 0 in combination with -1.");
     int64_t input_product = 1;
     bool input_product_valid = true;
     for (int i = 0; i < data_rank; ++i) {
@@ -213,13 +191,11 @@ void ComputeShapeReshape(ShapesContext &ctx, const NodeProto &node) {
       }
     }
     if (input_product_valid) {
-      if (input_product % output_product != 0) {
-        throw std::invalid_argument(
-            "ComputeShapeReshape: dimension could not be inferred: incompatible shapes (input "
-            "element count " +
-            std::to_string(input_product) + " is not a multiple of " +
-            std::to_string(output_product) + ").");
-      }
+      EXT_ENFORCE_INVALID(
+          input_product % output_product == 0,
+          "ComputeShapeReshape: dimension could not be inferred: incompatible shapes (input "
+          "element count ",
+          input_product, " is not a multiple of ", output_product, ").");
       out_shape[neg_one_index] = OptimDim(input_product / output_product);
     } else {
       out_shape[neg_one_index] = InferredOrFallbackDim(data_shape, out_shape, neg_one_index);
@@ -228,7 +204,22 @@ void ComputeShapeReshape(ShapesContext &ctx, const NodeProto &node) {
     out_shape[neg_one_index] = InferredOrFallbackDim(data_shape, out_shape, neg_one_index);
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, dtype, std::move(out_shape)));
+  OptimTensor out_tensor(nullptr, dtype, std::move(out_shape));
+
+  // Propagate ``ValueAsShape`` when the input ``data`` already carries one
+  // and the output is 1-D with the same number of elements. ``ValueAsShape``
+  // represents the flattened sequence of (symbolic or concrete) values held
+  // by the tensor, so a 1-D ``Reshape`` that preserves the element count
+  // simply forwards the same sequence. This keeps downstream consumers
+  // (``Expand``, ``ConstantOfShape``, another ``Reshape``, …) able to
+  // recover concrete/symbolic dimensions through ``Reshape`` nodes used in
+  // shape arithmetic.
+  if (data.HasValueAsShape() && out_tensor.Shape().Rank() == 1 && out_tensor.Shape()[0].IsInt() &&
+      static_cast<std::size_t>(out_tensor.Shape()[0].AsInt()) == data.ValueAsShape().Rank()) {
+    out_tensor.SetValueAsShape(data.ValueAsShape());
+  }
+
+  ctx.Set(node.output(0), std::move(out_tensor));
 }
 
 } // namespace tensor

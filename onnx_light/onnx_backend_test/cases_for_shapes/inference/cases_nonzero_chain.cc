@@ -142,7 +142,7 @@ void RegisterNonZeroChainNamedShapeInferenceCases(std::vector<TestCase> &registr
 
 void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &registry) {
   const std::string name("test_cc_shape_inference_nonzero_plus_expression");
-  TestCase tc(name, name, "model", "inference", 1e-3, 1e-7);
+  TestCase tc(name, name, "model", "inference", 1e-7, 1e-3);
   ModelProto &model = tc.model;
   InitModel(model, kDefaultIrVersion, {DefaultOpset(18)});
   GraphProto *graph = model.add_graph();
@@ -158,7 +158,8 @@ void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &regist
 
   AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {"batch", "seq"});
   AppendValueInfo(*graph->add_value_info(), "abs_out", DataType::FLOAT, {"batch", "seq"});
-  AppendValueInfo(*graph->add_value_info(), "nz", DataType::INT64, {"dnz", "2"});
+  AppendValueInfo(*graph->add_value_info(), "nz", DataType::INT64,
+                  {DimSpec(int64_t{2}), DimSpec("dnz")});
   AppendValueInfo(*graph->add_value_info(), "flat_nz", DataType::INT64, {"2*dnz"});
   AppendValueInfo(*graph->add_value_info(), "Y_pre_abs", DataType::INT64, {"2*dnz"});
   AppendValueInfo(*graph->add_output(), "Y", DataType::INT64, {"2*dnz"});

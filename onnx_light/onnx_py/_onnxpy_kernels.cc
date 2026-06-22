@@ -10,6 +10,8 @@
 
 #include <cstdint>
 #include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
+#include <nanobind/stl/function.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/string.h>
@@ -19,6 +21,7 @@
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_kernels::RuntimeContext;
+using onnx_kernels::Sequence;
 using onnx_kernels::Tensor;
 using onnx_kernels::kernel::KernelContext;
 using onnx_kernels::kernel::OpsetId;
@@ -28,20 +31,19 @@ void AddOnnxPyRuntime(nb::module_ &m);
 
 namespace {
 
-onnx_kernels::TensorEventKind ParseTensorEventKind(const std::string &kind) {
+onnx_kernels::RuntimeEventKind ParseRuntimeEventKind(const std::string &kind) {
   if (kind == "unknown")
-    return onnx_kernels::TensorEventKind::kUnknown;
+    return onnx_kernels::RuntimeEventKind::kUnknown;
   if (kind == "initializer")
-    return onnx_kernels::TensorEventKind::kInitializer;
+    return onnx_kernels::RuntimeEventKind::kInitializer;
   if (kind == "input")
-    return onnx_kernels::TensorEventKind::kInput;
+    return onnx_kernels::RuntimeEventKind::kInput;
   if (kind == "intermediate")
-    return onnx_kernels::TensorEventKind::kIntermediate;
+    return onnx_kernels::RuntimeEventKind::kIntermediate;
   if (kind == "output")
-    return onnx_kernels::TensorEventKind::kOutput;
-  throw std::invalid_argument(
-      "RuntimeContext: unknown tensor event kind '" + kind +
-      "' (expected one of: unknown, initializer, input, intermediate, output).");
+    return onnx_kernels::RuntimeEventKind::kOutput;
+  EXT_THROW_INVALID("RuntimeContext: unknown tensor event kind '", kind,
+                    "' (expected one of: unknown, initializer, input, intermediate, output).");
 }
 
 } // namespace
@@ -147,12 +149,28 @@ void AddOnnxPyRuntime(nb::module_ &m) {
                "', version=" + std::to_string(k.opset.version) + "))";
       });
 
-  // TensorEvent — append-only log entry for a single tensor map mutation.
-  // Mirrors :cpp:class:`onnx_kernels::TensorEvent`; ``values`` / ``string_values``
+  // RuntimeEventAction — enum classifying a RuntimeEvent record.
+  // Mirrors :cpp:enum:`onnx_kernels::RuntimeEventAction`.
+  nb::enum_<onnx_kernels::RuntimeEventAction>(rt_mod, "RuntimeEventAction", nb::is_arithmetic(),
+                                              "Action kind recorded in a :class:`RuntimeEvent`. "
+                                              "``kAdd`` / ``kReplace`` / ``kRemove`` mark tensor "
+                                              "map mutations; ``kRunNode`` marks the dispatch of "
+                                              "a single kernel.")
+      .value("kAdd", onnx_kernels::RuntimeEventAction::kAdd,
+             "A new tensor was inserted into the runtime tensor map.")
+      .value("kReplace", onnx_kernels::RuntimeEventAction::kReplace,
+             "An existing tensor in the runtime map was replaced.")
+      .value("kRemove", onnx_kernels::RuntimeEventAction::kRemove,
+             "A tensor was removed from the runtime tensor map.")
+      .value("kRunNode", onnx_kernels::RuntimeEventAction::kRunNode,
+             "A kernel was dispatched for a node.");
+
+  // RuntimeEvent — append-only log entry for a single tensor map mutation.
+  // Mirrors :cpp:class:`onnx_kernels::RuntimeEvent`; ``values`` / ``string_values``
   // expose the populated prefix of the underlying fixed-size buffer as Python
   // lists of length ``value_count``.
-  nb::class_<onnx_kernels::TensorEvent>(
-      rt_mod, "TensorEvent",
+  nb::class_<onnx_kernels::RuntimeEvent>(
+      rt_mod, "RuntimeEvent",
       "One entry of the :meth:`RuntimeContext.events` log describing a single "
       "tensor map mutation (``add`` / ``replace`` / ``remove``). For ``add`` and "
       "``replace`` events the first ``value_count`` element values of the tensor "
@@ -163,32 +181,58 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       "truncated payload. ``remove`` events carry ``data_type = UNDEFINED``, "
       "empty ``shape`` and ``value_count = 0`` (the tensor is already gone).")
       .def_prop_ro(
-          "action",
-          [](const onnx_kernels::TensorEvent &ev) {
-            return std::string(onnx_kernels::TensorEventActionName(ev.action));
-          },
-          "Mutation kind: ``\"add\"``, ``\"replace\"`` or ``\"remove\"``.")
+          "action", [](const onnx_kernels::RuntimeEvent &ev) { return ev.action; },
+          ":class:`RuntimeEventAction` member describing the mutation kind: "
+          "``kAdd``, ``kReplace``, ``kRemove`` or ``kRunNode``.")
       .def_prop_ro(
           "kind",
-          [](const onnx_kernels::TensorEvent &ev) {
-            return std::string(onnx_kernels::TensorEventKindName(ev.kind));
+          [](const onnx_kernels::RuntimeEvent &ev) {
+            return std::string(onnx_kernels::RuntimeEventKindName(ev.kind));
           },
           "Tensor role: ``\"unknown\"``, ``\"initializer\"``, ``\"input\"``, "
           "``\"intermediate\"`` or ``\"output\"``.")
-      .def_ro("timestamp_ns", &onnx_kernels::TensorEvent::timestamp_ns,
+      .def_ro("timestamp_ns", &onnx_kernels::RuntimeEvent::timestamp_ns,
               "Nanoseconds since the Unix epoch (``std::chrono::system_clock``).")
-      .def_ro("name", &onnx_kernels::TensorEvent::name, "Tensor name targeted by the mutation.")
-      .def_ro("data_type", &onnx_kernels::TensorEvent::data_type,
+      .def_ro("name", &onnx_kernels::RuntimeEvent::name, "Tensor name targeted by the mutation.")
+      .def_ro("data_type", &onnx_kernels::RuntimeEvent::data_type,
               "``TensorProto.DataType`` integer of the tensor, or ``-1`` when "
               "the payload was truncated (more than 8 elements).")
-      .def_ro("shape", &onnx_kernels::TensorEvent::shape,
+      .def_ro("shape", &onnx_kernels::RuntimeEvent::shape,
               "Tensor shape, or empty list when truncated / for ``remove`` events.")
-      .def_ro("value_count", &onnx_kernels::TensorEvent::value_count,
+      .def_ro("value_count", &onnx_kernels::RuntimeEvent::value_count,
               "Number of populated entries in :attr:`values` / :attr:`string_values` "
-              "(``min(element_count, 8)``, ``0`` for ``remove`` events).")
+              "(``min(element_count, 8)``, ``0`` for ``remove`` and ``run_node`` events).")
+      .def_ro("op_domain", &onnx_kernels::RuntimeEvent::op_domain,
+              "For ``run_node`` events: normalised ONNX op domain of the dispatched "
+              "node (default domain reported as ``\"ai.onnx\"``). Empty for other "
+              "event actions.")
+      .def_ro("op_type", &onnx_kernels::RuntimeEvent::op_type,
+              "For ``run_node`` events: ONNX ``op_type`` of the dispatched node. "
+              "Empty for other event actions.")
+      .def_ro("inputs", &onnx_kernels::RuntimeEvent::inputs,
+              "For ``run_node`` events: ordered list of input names consumed by the "
+              "node (matching ``NodeProto.input``). Empty for other event actions.")
+      .def_ro("duration_ns", &onnx_kernels::RuntimeEvent::duration_ns,
+              "For ``run_node`` events: wall-clock duration of the kernel dispatch in "
+              "nanoseconds (``std::chrono::steady_clock``). ``0`` for other event "
+              "actions.")
+      .def_ro("node_index", &onnx_kernels::RuntimeEvent::node_index,
+              "Index of the node this event is associated with: ``-1`` for graph "
+              "inputs, ``-2`` for initializers, and the ``>= 0`` position of the "
+              "producing / dispatched node otherwise.")
+      .def_ro("device", &onnx_kernels::RuntimeEvent::device,
+              "Device the tensor lives on: ``-1`` for the CPU and ``0``–``8192`` for "
+              "a GPU device index. The CPU reference runtime always reports ``-1``.")
+      .def_ro("subgraph_node_index", &onnx_kernels::RuntimeEvent::subgraph_node_index,
+              "Index of the control-flow node in the parent graph whose attribute subgraph "
+              "produced this event. ``-1`` for top-level-graph events.")
+      .def_ro("subgraph_attr_name", &onnx_kernels::RuntimeEvent::subgraph_attr_name,
+              "Attribute name of the subgraph within the owning control-flow node "
+              "(``\"body\"``, ``\"then_branch\"``, ``\"else_branch\"``, etc.). "
+              "Empty for top-level-graph events.")
       .def_prop_ro(
           "values",
-          [](const onnx_kernels::TensorEvent &ev) {
+          [](const onnx_kernels::RuntimeEvent &ev) {
             nb::list out;
             if (static_cast<onnx_kernels::DataType>(ev.data_type) !=
                 onnx_kernels::DataType::STRING) {
@@ -202,7 +246,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "tensors and ``remove`` events).")
       .def_prop_ro(
           "string_values",
-          [](const onnx_kernels::TensorEvent &ev) {
+          [](const onnx_kernels::RuntimeEvent &ev) {
             nb::list out;
             if (static_cast<onnx_kernels::DataType>(ev.data_type) ==
                 onnx_kernels::DataType::STRING) {
@@ -216,15 +260,23 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "tensors and ``remove`` events).")
       .def(
           "as_dict",
-          [](const onnx_kernels::TensorEvent &ev) {
+          [](const onnx_kernels::RuntimeEvent &ev) {
             nb::dict d;
-            d["action"] = std::string(onnx_kernels::TensorEventActionName(ev.action));
-            d["kind"] = std::string(onnx_kernels::TensorEventKindName(ev.kind));
+            d["action"] = std::string(onnx_kernels::RuntimeEventActionName(ev.action));
+            d["kind"] = std::string(onnx_kernels::RuntimeEventKindName(ev.kind));
             d["timestamp_ns"] = ev.timestamp_ns;
             d["name"] = ev.name;
             d["data_type"] = ev.data_type;
             d["shape"] = ev.shape;
             d["value_count"] = ev.value_count;
+            d["op_domain"] = ev.op_domain;
+            d["op_type"] = ev.op_type;
+            d["inputs"] = ev.inputs;
+            d["duration_ns"] = ev.duration_ns;
+            d["node_index"] = ev.node_index;
+            d["device"] = ev.device;
+            d["subgraph_node_index"] = ev.subgraph_node_index;
+            d["subgraph_attr_name"] = ev.subgraph_attr_name;
             const int32_t n = ev.value_count;
             if (static_cast<onnx_kernels::DataType>(ev.data_type) ==
                 onnx_kernels::DataType::STRING) {
@@ -246,12 +298,16 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           },
           "Returns the event fields as a plain Python ``dict`` (trivially "
           "renderable as a table, serialisable, etc.).")
-      .def("__repr__", [](const onnx_kernels::TensorEvent &ev) {
-        return std::string("TensorEvent(action='") +
-               onnx_kernels::TensorEventActionName(ev.action) + "', kind='" +
-               onnx_kernels::TensorEventKindName(ev.kind) + "', name='" + ev.name +
+      .def("__repr__", [](const onnx_kernels::RuntimeEvent &ev) {
+        return std::string("RuntimeEvent(action='") +
+               onnx_kernels::RuntimeEventActionName(ev.action) + "', kind='" +
+               onnx_kernels::RuntimeEventKindName(ev.kind) + "', name='" + ev.name +
                "', data_type=" + std::to_string(ev.data_type) +
-               ", value_count=" + std::to_string(ev.value_count) + ")";
+               ", value_count=" + std::to_string(ev.value_count) +
+               ", node_index=" + std::to_string(ev.node_index) +
+               ", device=" + std::to_string(ev.device) +
+               ", subgraph_node_index=" + std::to_string(ev.subgraph_node_index) +
+               ", subgraph_attr_name='" + ev.subgraph_attr_name + "')";
       });
 
   // RuntimeContext — name-keyed tensor map + kernel context + function registry.
@@ -264,6 +320,24 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def(nb::init<>())
       .def(nb::init<KernelContext>(), nb::arg("kernel_ctx"))
       .def_prop_rw(
+          "events_enabled", [](const RuntimeContext &rt) { return rt.events_enabled(); },
+          [](RuntimeContext &rt, bool v) { rt.set_events_enabled(v); },
+          "When ``True``, :func:`set` / :func:`put` / :func:`remove` and "
+          ":func:`run_node` record events (incl. clock reads and value decoding). "
+          "Default is ``False`` for maximum throughput; enable only when profiling "
+          "is required.")
+      .def_prop_rw(
+          "release_intermediates",
+          [](const RuntimeContext &rt) { return rt.release_intermediates(); },
+          [](RuntimeContext &rt, bool v) { rt.set_release_intermediates(v); },
+          "When ``True``, :func:`run_nodes` / :func:`run_graph` / :func:`run_function` / "
+          ":func:`run_model` remove an intermediate tensor (or sequence) from the runtime "
+          "context as soon as the last node that references it has finished — emitting a "
+          "``kRemove`` event when :attr:`events_enabled` is ``True``. Graph / function "
+          "outputs and names already present in the context before the run are always "
+          "preserved. Default is ``False`` so that intermediate values stay observable "
+          "after the run.")
+      .def_prop_rw(
           "kernel_ctx", [](RuntimeContext &rt) -> KernelContext & { return rt.kernel_ctx(); },
           [](RuntimeContext &rt, KernelContext k) { rt.kernel_ctx() = std::move(k); },
           nb::rv_policy::reference_internal, "Kernel construction context (opset).")
@@ -275,7 +349,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def(
           "set",
           [](RuntimeContext &rt, const std::string &name, Tensor tensor, const std::string &kind) {
-            rt.Set(name, std::move(tensor), ParseTensorEventKind(kind));
+            rt.Set(name, std::move(tensor), ParseRuntimeEventKind(kind));
           },
           nb::arg("name"), nb::arg("tensor"), nb::arg("kind") = "input",
           "Inserts ``tensor`` under ``name``. Raises if ``name`` already exists. "
@@ -284,7 +358,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def(
           "put",
           [](RuntimeContext &rt, const std::string &name, Tensor tensor, const std::string &kind) {
-            rt.Put(name, std::move(tensor), ParseTensorEventKind(kind));
+            rt.Put(name, std::move(tensor), ParseRuntimeEventKind(kind));
           },
           nb::arg("name"), nb::arg("tensor"), nb::arg("kind") = "intermediate",
           "Inserts or overwrites the tensor stored under ``name``. Records an ``add`` "
@@ -306,18 +380,52 @@ void AddOnnxPyRuntime(nb::module_ &m) {
             return out;
           },
           "Returns the list of tensor names currently held by the context.")
+      .def("has_sequence", &RuntimeContext::HasSequence, nb::arg("name"),
+           "Returns ``True`` if a sequence named ``name`` is currently held by the context.")
+      .def(
+          "sequence_names",
+          [](const RuntimeContext &rt) {
+            std::vector<std::string> out;
+            out.reserve(rt.sequences().size());
+            for (const auto &kv : rt.sequences()) {
+              out.push_back(kv.first);
+            }
+            return out;
+          },
+          "Returns the list of sequence names currently held by the context.")
+      .def(
+          "get_sequence",
+          [](const RuntimeContext &rt, const std::string &name) {
+            return rt.GetSequence(name).values;
+          },
+          nb::arg("name"),
+          "Returns the tensors in the sequence stored under ``name`` as a list of "
+          ":class:`Tensor` objects. Raises ``std::out_of_range`` if absent.")
+      .def(
+          "put_sequence",
+          [](RuntimeContext &rt, const std::string &name, std::vector<Tensor> values) {
+            // The element type is shared by every tensor of a sequence; infer it
+            // from the first element and fall back to ``UNDEFINED`` (``0``) for an
+            // empty sequence.
+            int32_t elem_type = values.empty() ? 0 : static_cast<int32_t>(values.front().data_type);
+            rt.PutSequence(name, Sequence(name, elem_type, std::move(values)));
+          },
+          nb::arg("name"), nb::arg("values"),
+          "Inserts or overwrites the sequence stored under ``name`` from a list of "
+          ":class:`Tensor` objects. The sequence element type is inferred from the "
+          "first tensor (``UNDEFINED`` when the list is empty).")
       .def(
           "events",
           [](const RuntimeContext &rt) {
             // Returns a copy of the append-only log as a list of
-            // :class:`TensorEvent` instances. Use :meth:`TensorEvent.as_dict`
+            // :class:`RuntimeEvent` instances. Use :meth:`RuntimeEvent.as_dict`
             // to materialise an individual entry as a plain ``dict`` (e.g.
             // for serialisation or tabular rendering).
             return rt.events();
           },
-          "Returns the append-only log of tensor map mutations (add/replace/remove) "
-          "as a list of :class:`TensorEvent` instances. Each entry carries "
-          "``action`` (``\"add\"`` / ``\"replace\"`` / ``\"remove\"``), ``kind`` "
+          "Returns the append-only log of tensor map mutations and node dispatches "
+          "as a list of :class:`RuntimeEvent` instances. Each entry carries "
+          "``action`` (:class:`RuntimeEventAction` enum), ``kind`` "
           "(``\"unknown\"`` / ``\"initializer\"`` / ``\"input\"`` / "
           "``\"intermediate\"`` / ``\"output\"``), ``timestamp_ns`` "
           "(``int`` nanoseconds since the Unix epoch), ``name``, ``data_type`` "
@@ -327,10 +435,61 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "buffer is fixed-size (capped at 8 entries); for tensors with more "
           "than 8 elements only the first 8 are kept, ``data_type`` is set to "
           "``-1`` and ``shape`` is empty to signal the truncated payload. Call "
-          ":meth:`TensorEvent.as_dict` to convert an individual entry to a "
+          ":meth:`RuntimeEvent.as_dict` to convert an individual entry to a "
           "plain Python ``dict``.")
       .def("clear_events", &RuntimeContext::ClearEvents,
-           "Empties the event log without otherwise touching the tensor map.");
+           "Empties the event log without otherwise touching the tensor map.")
+      .def("clear", &RuntimeContext::Clear,
+           "Resets the per-invocation state so the context can be reused for a fresh "
+           "run: clears the tensor map, the sequence map and the event log, and resets "
+           "the current node index. The kernel context, registered model-local "
+           "functions and custom kernels, the cached execution plans and the "
+           ":attr:`events_enabled` / :attr:`release_intermediates` settings are "
+           "preserved, so the execution-plan cache is amortised across repeated runs "
+           "of the same model.")
+      .def(
+          "register_custom_kernel",
+          [](RuntimeContext &rt, const std::string &domain, const std::string &op_type,
+             nb::callable fn) {
+            // Wrap the Python callable in a CustomKernelFn. We capture
+            // the callable in a ``nb::callable`` which keeps a Python
+            // reference alive until the registration is replaced or the
+            // RuntimeContext is destroyed. The GIL is reacquired before
+            // invoking the callable so that it is safe to call from the
+            // RunNode dispatcher (which may be invoked without the GIL
+            // held in the future).
+            rt.RegisterCustomKernel(domain, op_type,
+                                    [fn](const NodeProto &node, RuntimeContext &ctx) {
+                                      nb::gil_scoped_acquire gil;
+                                      fn(nb::cast(&node, nb::rv_policy::reference),
+                                         nb::cast(&ctx, nb::rv_policy::reference));
+                                    });
+          },
+          nb::arg("domain"), nb::arg("op_type"), nb::arg("fn"),
+          "Registers a custom kernel for ``(domain, op_type)``. The empty domain "
+          "is normalised to ``ai.onnx``. ``fn`` is a Python callable invoked as "
+          "``fn(node, ctx)`` where ``node`` is the :class:`NodeProto` being "
+          "dispatched and ``ctx`` is this :class:`RuntimeContext`. The callable "
+          "must read its inputs from ``ctx`` (via :meth:`get` / :meth:`get_sequence`) "
+          "and write its outputs back into ``ctx`` (via :meth:`put` / "
+          ":meth:`put_sequence`) under the names declared by ``node.output``. "
+          "Custom kernels override any built-in entry with the same key, but "
+          "model-local functions and the built-in control-flow operators "
+          "(``If``, ``Loop``, ``Scan``, ``SequenceMap``) still take precedence.")
+      .def_static(
+          "collect_external_inputs",
+          [](const std::vector<NodeProto> &nodes) {
+            return RuntimeContext::CollectExternalInputs(nodes);
+          },
+          nb::arg("nodes"),
+          "Returns the list of input names referenced by ``nodes`` that are not "
+          "produced as outputs by any node in the same list. Names captured by "
+          "subgraph attributes (``GRAPH`` / ``GRAPHS``) are inspected recursively: "
+          "for every subgraph, names read by its nodes that are neither produced "
+          "inside the subgraph (formal inputs, initializers, intermediate node "
+          "outputs) nor produced by the outer ``nodes`` are appended. The returned "
+          "list preserves first-seen order and contains no duplicates; empty input "
+          "names (optional inputs left unbound) are skipped.");
 
   // Top-level run helpers.
   rt_mod.def(
@@ -393,4 +552,59 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       "``raw_data`` field; ``STRING`` tensors are read from ``string_data``. The "
       "returned tensor owns its bytes, so it remains valid after ``tp`` is "
       "garbage-collected.");
+
+  rt_mod.def(
+      "tensor_to_proto",
+      [](const Tensor &t) {
+        // Materializes a ``TensorProto`` from a runtime ``Tensor``. For the
+        // raw-data path the proto's ``raw_data`` borrows the tensor's byte
+        // buffer (zero-copy) instead of copying it; ``nb::keep_alive<0, 1>``
+        // ties the source tensor's lifetime to the returned proto so the
+        // borrowed view never dangles.
+        TensorProto tp;
+        if (!t.name.empty())
+          tp.set_name(t.name);
+        tp.set_data_type(t.data_type);
+        tp.ref_dims().reserve(t.shape.size());
+        for (int64_t d : t.shape)
+          tp.ref_dims().push_back(static_cast<uint64_t>(d));
+        if (static_cast<TensorProto::DataType>(t.data_type) == TensorProto::DataType::STRING) {
+          tp.ref_string_data().reserve(t.string_data.size());
+          for (const std::string &s : t.string_data)
+            tp.add_string_data(utils::String(s));
+        } else {
+          // ``assign_borrowed`` stores a non-owning view over the tensor's
+          // bytes; ``nb::keep_alive<0, 1>`` (below) keeps the source tensor
+          // alive for the proto's lifetime so the view never dangles.
+          tp.ref_raw_data().assign_borrowed(t.bytes(), t.size_bytes());
+        }
+        return tp;
+      },
+      nb::keep_alive<0, 1>(), nb::arg("t"),
+      "Converts a runtime :class:`Tensor` to a ``TensorProto``. For non-``STRING`` "
+      "tensors the proto's ``raw_data`` borrows the tensor's byte buffer (zero-copy); "
+      "the source tensor is kept alive for the lifetime of the returned proto so the "
+      "borrowed view never dangles. ``STRING`` tensors are written to ``string_data``.");
+
+  rt_mod.def(
+      "tensor_to_numpy",
+      [](nb::handle t_obj) {
+        // Zero-copy 1-D ``uint8`` view over the tensor's raw byte buffer. The
+        // tensor's Python wrapper (``t_obj``) is passed as the array's owner so
+        // NumPy borrows the bytes (no copy) while keeping the source tensor
+        // alive for as long as the view (or any array derived from it) lives.
+        const Tensor &t = nb::cast<const Tensor &>(t_obj);
+        EXT_ENFORCE_INVALID(
+            !(static_cast<TensorProto::DataType>(t.data_type) == TensorProto::DataType::STRING),
+            "tensor_to_numpy: STRING tensors have no raw byte buffer; use "
+            "tensor_to_proto instead.");
+        const size_t n = t.size_bytes();
+        return nb::ndarray<nb::numpy, const uint8_t, nb::ndim<1>>(t.bytes(), {n}, t_obj);
+      },
+      nb::arg("t"),
+      "Returns a zero-copy 1-D ``uint8`` NumPy view over the runtime tensor's raw "
+      "little-endian byte buffer. The source tensor is kept alive for the lifetime "
+      "of the returned array (it is the array's ``base``) so the borrowed view never "
+      "dangles. Callers reinterpret the bytes via ``ndarray.view(dtype).reshape(shape)``. "
+      "``STRING`` tensors have no raw buffer and must go through :func:`tensor_to_proto`.");
 }

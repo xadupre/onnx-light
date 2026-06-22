@@ -1,8 +1,12 @@
 import re
 import unittest
 
-from onnx_light.ext_test_case import ExtTestCase
-import onnx_light.onnx.backend as bt
+
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
+
+# The backend test registries are only available in the full build; skip this
+# module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
+bt = import_or_skip("onnx_light.onnx.backend")
 
 
 class TestCollectTestCasesByName(ExtTestCase):

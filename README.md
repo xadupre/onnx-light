@@ -7,18 +7,21 @@
 </p>
 
 [![core](https://github.com/xadupre/onnx-light/actions/workflows/ci_core.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/ci_core.yml)
-[![build](https://github.com/xadupre/onnx-light/actions/workflows/build.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/build.yml)
-[![Build Release Wheels](https://github.com/xadupre/onnx-light/actions/workflows/build_release.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/build_release.yml)
-[![asan-ubsan](https://github.com/xadupre/onnx-light/actions/workflows/asan_ubsan.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/asan_ubsan.yml)
-[![fuzz](https://github.com/xadupre/onnx-light/actions/workflows/fuzz.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/fuzz.yml)
-[![mypy](https://github.com/xadupre/onnx-light/actions/workflows/mypy.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/mypy.yml)
+[![build-reduced](https://github.com/xadupre/onnx-light/actions/workflows/build_reduced_wheel.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/build_reduced_wheel.yml)
+[![Build Release Wheels](https://github.com/xadupre/onnx-light/actions/workflows/build_release_wheel.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/build_release_wheel.yml)
+[![Build C++ Release Artifacts](https://github.com/xadupre/onnx-light/actions/workflows/build_release_cpp.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/build_release_cpp.yml)
+[![asan-ubsan](https://github.com/xadupre/onnx-light/actions/workflows/cq_asan_ubsan.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/cq_asan_ubsan.yml)
+[![fuzz](https://github.com/xadupre/onnx-light/actions/workflows/cq_fuzz.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/cq_fuzz.yml)
+[![hardening](https://github.com/xadupre/onnx-light/actions/workflows/cq_hardening.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/cq_hardening.yml)
 [![Documentation](https://github.com/xadupre/onnx-light/actions/workflows/docs.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/docs.yml)
+[![Doxygen](https://github.com/xadupre/onnx-light/actions/workflows/doc_cpp.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/doc_cpp.yml)
 [![Style](https://github.com/xadupre/onnx-light/actions/workflows/style.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/style.yml)
 [![clang-format](https://github.com/xadupre/onnx-light/actions/workflows/clang_format.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/clang_format.yml)
-[![pyrefly](https://github.com/xadupre/onnx-light/actions/workflows/pyrefly.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/pyrefly.yml)
+[![Typing](https://github.com/xadupre/onnx-light/actions/workflows/typing.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/typing.yml)
+[![SBOM](https://github.com/xadupre/onnx-light/actions/workflows/cq_sbom.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/cq_sbom.yml)
 [![Spelling](https://github.com/xadupre/onnx-light/actions/workflows/spelling.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/spelling.yml)
+[![pixi](https://github.com/xadupre/onnx-light/actions/workflows/cq_pixi.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/cq_pixi.yml)
 [![codecov](https://codecov.io/gh/xadupre/onnx-light/branch/main/graph/badge.svg)](https://codecov.io/gh/xadupre/onnx-light)
-[![GitHub repo size](https://img.shields.io/github/repo-size/xadupre/onnx-light)](https://github.com/xadupre/onnx-light)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
@@ -34,13 +37,13 @@ for the upstream project's direction and priorities.
 ## onnx without protobuf
 
 - **ONNX Files larger than 2 GB** (protobuf is limited to 2Gb)
-- **Parallel loading and saving**: 3 times faster with 4 threads compared
-  to the single-threaded path
+- **Parallel loading and saving**: significantly faster compared to the single-threaded path
 - **Zero-copy parsing** – creates the ModelProto without any tensor copy
 - **Aligned external tensor offsets** – external tensor data can be written
   with explicit offset alignment
 - **No serialize/parse round-trip for C++ tools** – the Python `ModelProto`
   *is* the C++ `ModelProto`
+- Supports protobuf (onnx) and flatbuffers (onnxruntime) format.
 
 ## Modular C++ libraries
 
@@ -60,15 +63,13 @@ can link only what it needs:
 - `onnx_light::onnx_backend_test` – C++ backend test infrastructure and
   reference operator kernels.
 
-## Kernels
+## Kernels and Backend Tests
 
 - Each operator has a corresponding runtime implementation in C++,
   it is used to generated the C++ output of the backend tests.
-
-## Backend Tests
-
 - Fully written in C++, it can be used in any language.
-- Output are always generated with a C++ kernel.
+- Outputs are always generated with a C++ kernel.
+- The kernels can be used without the backend tests.
 
 ## Software Bill of Materials (SBOM)
 
@@ -77,7 +78,7 @@ at the root of the repository as [`sbom.cdx.json`](sbom.cdx.json) and is also
 included in the source distribution. It lists the third-party components
 bundled into the built artifacts (currently only `nanobind`, used to expose the
 C++ extension to Python). The file is validated against the CycloneDX 1.7
-schema by the [`SBOM`](.github/workflows/sbom.yml) GitHub Actions workflow.
+schema by the [`SBOM`](.github/workflows/cq_sbom.yml) GitHub Actions workflow.
 
 ## Getting started
 
@@ -111,7 +112,7 @@ Alternatively, when installing with pip, you can control parallel builds using
 the ``CMAKE_BUILD_PARALLEL_LEVEL`` environment variable:
 
 ```bash
-CMAKE_BUILD_PARALLEL_LEVEL=8 pip install -e .[dev]
+CMAKE_BUILD_PARALLEL_LEVEL=8 pip install -e .[dev] -v
 ```
 
 Run a quick check:

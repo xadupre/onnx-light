@@ -63,9 +63,9 @@ void ResolveAndValidate(const std::vector<Tensor> &inputs, int64_t axis, int64_t
   const int upper_bound = (new_axis == 1) ? rank : rank - 1;
   const int lower_bound = (new_axis == 1) ? -rank - 1 : -rank;
   EXT_ENFORCE_INVALID(axis >= lower_bound && axis <= upper_bound,
-                      "kernel::ConcatFromSequence: axis " + std::to_string(axis) +
-                          " is out of range [" + std::to_string(lower_bound) + ", " +
-                          std::to_string(upper_bound) + "].");
+                      "kernel::ConcatFromSequence: axis ", std::to_string(axis),
+                      " is out of range [", std::to_string(lower_bound), ", ",
+                      std::to_string(upper_bound), "].");
   resolved_axis = static_cast<int>(axis < 0 ? axis + upper_bound + 1 : axis);
 
   if (new_axis == 1) {

@@ -411,7 +411,7 @@ struct SubByteExpectation {
   onnx_kernels::DataType dtype;
   std::vector<int64_t> shape;
   // Packed wire bytes the upstream ONNX ``test_cast_FLOAT_to_<NAME>`` node
-  // test exercises: saturating cast of the input ``np.arange`` vector into
+  // test exercises: wrapping cast of the input ``np.arange`` vector into
   // the destination sub-byte dtype, packed two-per-byte for 4-bit dtypes
   // and four-per-byte for 2-bit dtypes (low elements first).
   std::vector<uint8_t> expected_bytes;
@@ -425,48 +425,50 @@ struct SubByteExpectation {
 };
 
 const std::vector<SubByteExpectation> &SubByteExpectations() {
-  // INT4 — saturating cast of ``np.arange(-9, 16)``: values <= -8 clip to
-  // -8 (0x8 nibble), values >= 7 clip to 7 (0x7 nibble). Negative values
-  // use two's-complement nibbles 0x8..0xF.
+  // Wrapping cast of ``np.arange(-9, 16)`` (INT4/UINT4) and
+  // ``np.arange(-3, 4)`` (INT2/UINT2): truncate toward zero then keep the
+  // low N bits of the resulting int64 (ml_dtypes semantics).
   static const std::vector<SubByteExpectation> kEntries = {
-      // UINT4: input values -9..15 → saturate to [0, 15] → 0,0,...,0,1,2,...,15
-      // (10 zeros then 1..15 = 25 values). Packed nibbles: low first.
+      // UINT4: input values -9..15 → wrap to low 4 bits → 7,8,9,...,15,0,1,...,15.
+      // Nibbles: 7,8,9,A,B,C,D,E,F,0,1,2,3,4,5,6,7,8,9,A,B,C,D,E,F (low first).
+      //   byte[0]=0x87, byte[1]=0xA9, ..., byte[8]=0x87, ...
       {"UINT4",
        onnx_kernels::DataType::UINT4,
        {5, 5},
-       {0x00, 0x00, 0x00, 0x00, 0x00, 0x21, 0x43, 0x65, 0x87, 0xA9, 0xCB, 0xED, 0x0F},
-       {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+       {0x87, 0xA9, 0xCB, 0xED, 0x0F, 0x21, 0x43, 0x65, 0x87, 0xA9, 0xCB, 0xED, 0x0F},
+       {7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
        onnx_kernels::DataType::UINT8,
        "UINT8"},
-      // INT4: input values -9..15 → saturate to [-8, 7] → -8,-8,-7,...,7,7,...,7
-      // ("-8" repeated twice for -9/-8, then -7..6, then 7 repeated 9 times).
+      // INT4: input values -9..15 → wrap to low 4 bits → 7,-8,-7,...,-1,0,...,7,-8,...,-1.
+      // Same packed bytes as UINT4; sign-extended unpacked values differ.
       {"INT4",
        onnx_kernels::DataType::INT4,
        {5, 5},
-       {0x88, 0xA9, 0xCB, 0xED, 0x0F, 0x21, 0x43, 0x65, 0x77, 0x77, 0x77, 0x77, 0x07},
-       {-8, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 7, 7, 7, 7, 7, 7, 7, 7},
+       {0x87, 0xA9, 0xCB, 0xED, 0x0F, 0x21, 0x43, 0x65, 0x87, 0xA9, 0xCB, 0xED, 0x0F},
+       {7, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, -4, -3, -2, -1},
        onnx_kernels::DataType::INT8,
        "INT8"},
-      // UINT2: input values -3..3 → saturate to [0, 3] → 0,0,0,0,1,2,3.
+      // UINT2: input values -3..3 → wrap to low 2 bits → 1,2,3,0,1,2,3.
       // Packed 4 elements per byte (low pair first):
-      //   byte0 = 0|0<<2|0<<4|0<<6 = 0x00
+      //   byte0 = 1|2<<2|3<<4|0<<6 = 0x39
       //   byte1 = 1|2<<2|3<<4|0<<6 = 0x39
       {"UINT2",
        onnx_kernels::DataType::UINT2,
        {7, 1},
-       {0x00, 0x39},
-       {0, 0, 0, 0, 1, 2, 3},
+       {0x39, 0x39},
+       {1, 2, 3, 0, 1, 2, 3},
        onnx_kernels::DataType::UINT8,
        "UINT8"},
-      // INT2: input values -3..3 → saturate to [-2, 1] → -2,-2,-1,0,1,1,1.
-      // Two's-complement 2-bit values: -2=0x2, -1=0x3, 0=0x0, 1=0x1.
-      //   byte0 = 2|2<<2|3<<4|0<<6 = 0x3A
-      //   byte1 = 1|1<<2|1<<4|0<<6 = 0x15
+      // INT2: input values -3..3 → wrap via low 2 bits → 1,-2,-1,0,1,-2,-1.
+      // Mapping: -3→1, -2→-2, -1→-1, 0→0, 1→1, 2→-2, 3→-1.
+      // Two's-complement 2-bit values: 1=0x1, -2=0x2, -1=0x3, 0=0x0.
+      //   byte0 = 1|2<<2|3<<4|0<<6 = 0x39
+      //   byte1 = 1|2<<2|3<<4|0<<6 = 0x39
       {"INT2",
        onnx_kernels::DataType::INT2,
        {7, 1},
-       {0x3A, 0x15},
-       {-2, -2, -1, 0, 1, 1, 1},
+       {0x39, 0x39},
+       {1, -2, -1, 0, 1, -2, -1},
        onnx_kernels::DataType::INT8,
        "INT8"},
   };
@@ -493,7 +495,7 @@ TEST(BackendTestCase, CastFloatToSubByteRegistersExpectedPackedBytes) {
   }
 }
 
-TEST(BackendTestCase, CastSubByteToFloatInputMatchesSaturatedPackedEncoding) {
+TEST(BackendTestCase, CastSubByteToFloatInputMatchesWrappedPackedEncoding) {
   const auto cases = CollectTestCases("Cast");
   for (const auto &e : SubByteExpectations()) {
     const std::string name = std::string("test_cc_cast_") + e.name + "_to_FLOAT";
@@ -518,7 +520,7 @@ TEST(BackendTestCase, CastSubByteToFloatInputMatchesSaturatedPackedEncoding) {
   }
 }
 
-TEST(BackendTestCase, CastSubByteToWideIntegerProducesUnpackedSaturatedValues) {
+TEST(BackendTestCase, CastSubByteToWideIntegerProducesUnpackedWrappedValues) {
   const auto cases = CollectTestCases("Cast");
   for (const auto &e : SubByteExpectations()) {
     const std::string name = std::string("test_cc_cast_") + e.name + "_to_" + e.wide_int_name;

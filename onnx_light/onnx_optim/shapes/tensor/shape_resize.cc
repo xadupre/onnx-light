@@ -4,13 +4,17 @@
 
 #include "onnx_optim/shapes/tensor/shape_tensor.h"
 
+#include <cmath>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
+#include "onnx_optim/expressions.h"
 #include "onnx_optim/optim_tensor.h"
+#include "onnx_optim/shapes/_helpers/shape_helpers.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -20,6 +24,14 @@ namespace shapes {
 namespace tensor {
 
 namespace {
+
+// Converts a ``DimType`` back to an ``OptimDim``.
+OptimDim FromDimType(const expressions::DimType &d) {
+  if (std::holds_alternative<int64_t>(d)) {
+    return OptimDim(std::get<int64_t>(d));
+  }
+  return OptimDim(std::get<std::string>(d));
+}
 
 // Reads the optional ``axes`` attribute introduced at opset 18 and normalises
 // negative entries to positive indices in ``[0, rank)``. When ``axes`` is
@@ -37,23 +49,49 @@ std::vector<int64_t> ResolveAxes(const NodeProto &node, std::size_t rank) {
   axes.reserve(axes_attr->ref_ints().size());
   for (int64_t a : axes_attr->ref_ints()) {
     int64_t na = a < 0 ? a + static_cast<int64_t>(rank) : a;
-    if (na < 0 || na >= static_cast<int64_t>(rank)) {
-      throw std::invalid_argument("ComputeShapeResize: 'axes' value " + std::to_string(a) +
-                                  " is out of range for input of rank " + std::to_string(rank) +
-                                  ".");
-    }
+    EXT_ENFORCE_INVALID(!(na < 0 || na >= static_cast<int64_t>(rank)),
+                        "ComputeShapeResize: 'axes' value ", a,
+                        " is out of range for input of rank ", rank, ".");
     axes.push_back(na);
   }
   return axes;
+}
+
+// Tries to express a positive floating-point scale as a pure integer divisor
+// (scale < 1) or integer multiplier (scale >= 1). Sets ``divisor`` and
+// ``multiplier`` (exactly one will be > 1, the other will be 1) on success.
+// Returns false when the scale cannot be expressed as a small exact rational
+// fraction with integer numerator and denominator.
+bool ScaleToRational(double scale, int64_t &divisor, int64_t &multiplier) {
+  divisor = 1;
+  multiplier = 1;
+  if (scale <= 0.0 || std::isnan(scale) || std::isinf(scale)) {
+    return false;
+  }
+  if (scale >= 1.0) {
+    const double rounded = std::round(scale);
+    if (rounded > 0.0 && std::abs(scale - rounded) <= 1e-9 * rounded) {
+      multiplier = static_cast<int64_t>(rounded);
+      return true;
+    }
+    return false;
+  }
+  // scale < 1: check if 1/scale is close to a positive integer.
+  const double inv = 1.0 / scale;
+  const double rounded = std::round(inv);
+  if (rounded > 0.0 && std::abs(inv - rounded) <= 1e-9 * rounded) {
+    divisor = static_cast<int64_t>(rounded);
+    return true;
+  }
+  return false;
 }
 
 } // namespace
 
 void ComputeShapeResize(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Resize", "ComputeShapeResize");
-  if (node.input_size() < 1) {
-    throw std::invalid_argument("ComputeShapeResize: Resize requires at least one input.");
-  }
+  EXT_ENFORCE_INVALID(!(node.input_size() < 1),
+                      "ComputeShapeResize: Resize requires at least one input.");
 
   const OptimTensor &input = ctx.Get(node.input(0).as_string());
   const OptimShape &input_shape = input.Shape();
@@ -70,10 +108,8 @@ void ComputeShapeResize(ShapesContext &ctx, const NodeProto &node) {
     sizes_name = node.input(3).as_string();
   }
 
-  // The ``scales`` input is a FLOAT tensor whose values are not tracked by the
-  // data-propagation lattice (which only carries integer shape values), so it
-  // never contributes concrete output dims here. The ``sizes`` input (INT64)
-  // is tracked and can drive concrete output dims when statically known.
+  // The ``sizes`` input (INT64) is tracked via the data-propagation lattice
+  // and can drive concrete output dims when statically known.
   std::vector<int64_t> sizes_data;
   bool sizes_known = false;
   if (!sizes_name.empty()) {
@@ -87,6 +123,30 @@ void ComputeShapeResize(ShapesContext &ctx, const NodeProto &node) {
           break;
         }
         sizes_data.push_back(val[i].AsInt());
+      }
+    }
+  }
+
+  // The ``scales`` input is a FLOAT tensor. Per-element values are not tracked
+  // by the data-propagation lattice, but the min/max bounds ARE set for
+  // constant initialisers. When min == max every element is identical, so we
+  // know the single scale value and can compute symbolic output dimensions.
+  // For v11+ the scales input is at index 2; for v10 it is at index 1.
+  bool scales_known = false;
+  int64_t scale_divisor = 1;
+  int64_t scale_multiplier = 1;
+  if (!sizes_known) {
+    std::string scales_name_str;
+    if (has_v11_layout && node.input_size() >= 3) {
+      scales_name_str = node.input(2).as_string();
+    } else if (!has_v11_layout && node.input_size() >= 2) {
+      scales_name_str = node.input(1).as_string();
+    }
+    if (!scales_name_str.empty() && ctx.Has(scales_name_str)) {
+      const OptimTensor &scales_tensor = ctx.Get(scales_name_str);
+      if (scales_tensor.HasMin() && scales_tensor.HasMax() &&
+          scales_tensor.Min() == scales_tensor.Max()) {
+        scales_known = ScaleToRational(scales_tensor.Min(), scale_divisor, scale_multiplier);
       }
     }
   }
@@ -109,6 +169,17 @@ void ComputeShapeResize(ShapesContext &ctx, const NodeProto &node) {
   if (sizes_known && sizes_data.size() == axes.size()) {
     for (std::size_t i = 0; i < axes.size(); ++i) {
       out_shape[static_cast<std::size_t>(axes[i])] = OptimDim(sizes_data[i]);
+    }
+  } else if (scales_known) {
+    for (std::size_t i = 0; i < axes.size(); ++i) {
+      const std::size_t axis = static_cast<std::size_t>(axes[i]);
+      expressions::DimType dim = ToDimType(input_shape[axis]);
+      if (scale_divisor > 1) {
+        dim = expressions::dim_div(dim, expressions::DimType{scale_divisor});
+      } else if (scale_multiplier > 1) {
+        dim = expressions::dim_mul(dim, expressions::DimType{scale_multiplier});
+      }
+      out_shape[axis] = FromDimType(dim);
     }
   }
 

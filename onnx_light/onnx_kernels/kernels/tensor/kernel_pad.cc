@@ -18,10 +18,9 @@ namespace {
 
 // Reads a 1-D INT64 tensor into a ``std::vector<int64_t>``.
 std::vector<int64_t> ReadInt64Vector(const Tensor &t, const std::string &name) {
-  EXT_ENFORCE_INVALID(t.data_type == DataType::INT64,
-                      "kernel::Pad: '" + name + "' input must be INT64.");
-  EXT_ENFORCE_INVALID(t.shape.size() == 1,
-                      "kernel::Pad: '" + name + "' input must be a 1-D tensor.");
+  EXT_ENFORCE_INVALID(t.data_type == DataType::INT64, "kernel::Pad: '", name,
+                      "' input must be INT64.");
+  EXT_ENFORCE_INVALID(t.shape.size() == 1, "kernel::Pad: '", name, "' input must be a 1-D tensor.");
   const std::size_t n = static_cast<std::size_t>(t.shape[0]);
   std::vector<int64_t> out(n);
   if (n > 0) {
@@ -55,7 +54,7 @@ std::vector<int64_t> ResolveAxes(const Tensor *axes_tensor, std::size_t rank) {
       axes[i] = static_cast<int64_t>(p[i]);
     }
   } else {
-    throw std::invalid_argument("kernel::Pad: 'axes' input must be INT32 or INT64.");
+    EXT_THROW_INVALID("kernel::Pad: 'axes' input must be INT32 or INT64.");
   }
   const int64_t r = static_cast<int64_t>(rank);
   for (std::size_t i = 0; i < axes.size(); ++i) {
@@ -144,7 +143,7 @@ int64_t MapCoord(int64_t out_coord, int64_t pad_begin, int64_t input_dim, const 
     }
     return m;
   }
-  throw std::invalid_argument("kernel::Pad: unsupported mode '" + mode + "'.");
+  EXT_THROW_INVALID("kernel::Pad: unsupported mode '", mode, "'.");
 }
 
 } // namespace

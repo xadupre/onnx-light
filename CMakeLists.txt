@@ -15,7 +15,7 @@ if(NOT _is_multi_config AND NOT CMAKE_BUILD_TYPE)
       "Debug" "Release" "RelWithDebInfo" "MinSizeRel")
 endif()
 
-project(onnx_light VERSION 0.1.0 LANGUAGES CXX)
+project(onnx_light VERSION 0.1.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -33,19 +33,23 @@ option(ONNX_LIGHT_INSTALL "Install the C++ library and headers." ON)
 option(ONNX_LIGHT_BUILD_KERNELS
     "Build the operator-kernel runtime (lib_onnx_kernels) and the backend-test registry (lib_onnx_backend_test). Turn OFF to install only the schema / checker / shape-inference / version-converter libraries (useful for downstream projects that only need onnx_light::onnx_light or onnx_light::lib_onnx_proto)."
     ON)
+option(ONNX_LIGHT_BUILD_IMAGE_CODECS
+    "Build the TIFF, WebP and JPEG2000 decoders in the ImageDecoder kernel. Turn OFF to compile a lighter kernel library: those three formats then fall back to the empty-matrix path while BMP, JPEG, PNG and PNM remain decoded natively."
+    ON)
 option(ONNX_ML "Enable ai.onnx.ml support." ON)
+option(ONNX_HARDENING
+    "Enable OpenSSF Compiler Hardening Guide flags for C/C++ targets. \
+See cmake/Hardening.cmake and \
+https://best.openssf.org/Compiler-Hardening-Guides/Compiler-Options-Hardening-Guide-for-C-and-C++.html"
+    OFF)
 
-# The Python extensions and the C++ unit-test executable both link
-# lib_onnx_kernels / lib_onnx_backend_test; refuse incoherent option
-# combinations early instead of failing deep inside add_library.
+# The C++ unit-test executable links lib_onnx_kernels / lib_onnx_backend_test;
+# refuse incoherent option combinations early instead of failing deep inside
+# add_library. The Python extensions are tolerant of ONNX_LIGHT_BUILD_KERNELS=OFF:
+# in that "reduced" build the _onnxpykernels and _onnxpybackend extensions are
+# simply not produced (the surrounding Python package raises an explicit error
+# when the reference runtime or backend-test helpers are requested).
 if(NOT ONNX_LIGHT_BUILD_KERNELS)
-  if(ONNX_LIGHT_BUILD_PYTHON)
-    message(FATAL_ERROR
-        "ONNX_LIGHT_BUILD_KERNELS=OFF is incompatible with "
-        "ONNX_LIGHT_BUILD_PYTHON=ON: the Python extensions "
-        "_onnxpykernels and _onnxpybackend require lib_onnx_kernels "
-        "and lib_onnx_backend_test.")
-  endif()
   if(ONNX_LIGHT_BUILD_TESTS)
     message(FATAL_ERROR
         "ONNX_LIGHT_BUILD_KERNELS=OFF is incompatible with "
@@ -63,6 +67,17 @@ if(MSVC)
 endif()
 
 include(GNUInstallDirs)
+
+# Optional OpenSSF compiler hardening flags. Resolves the list of supported
+# flags up front so each target definition can call onnx_light_apply_hardening
+# unconditionally.
+if(ONNX_HARDENING)
+  list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+  include(Hardening)
+else()
+  function(onnx_light_apply_hardening target)
+  endfunction()
+endif()
 
 if(ONNX_LIGHT_BUILD_PYTHON)
   # Find Python
@@ -88,6 +103,7 @@ set(ROOT_INCLUDE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_helpers/inclu
 set(ONNX_PROTO_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_proto")
 set(ONNX_COMMON_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/common")
 set(ONNX_DEFS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/defs")
+set(ONNX_MANIPULATIONS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_manipulations")
 set(ONNX_OP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_op")
 set(ONNX_OPTIM_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_optim")
 set(ONNX_BACKEND_TEST_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_backend_test")
@@ -105,6 +121,7 @@ file(GLOB ONNX_LIGHT_SOURCES CONFIGURE_DEPENDS
 )
 file(GLOB ONNX_COMMON_SOURCES CONFIGURE_DEPENDS "${ONNX_COMMON_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_DEFS_SOURCES CONFIGURE_DEPENDS "${ONNX_DEFS_PATH}/*.cc")
+file(GLOB ONNX_MANIPULATIONS_SOURCES CONFIGURE_DEPENDS "${ONNX_MANIPULATIONS_PATH}/*.cc")
 set(ONNX_PY_PROTOOP_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_proto.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_op.cc"
@@ -134,9 +151,11 @@ file(GLOB ONNX_SHAPE_INFERENCE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE
 file(GLOB ONNX_VERSION_CONVERTER_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/version_converter/*.cc")
 set(ONNX_CHECKER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/checker.cc" )
 file(GLOB_RECURSE ONNX_LIGHT_BENCHMARK_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/bench_*.cc")
-set(ONNX_LIGHT_PROTO_ALL_SOURCES ${ONNX_LIGHT_SOURCES} "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_helpers/onnx_light_helpers.cc")
+set(ONNX_LIGHT_PROTO_ALL_SOURCES
+    ${ONNX_LIGHT_SOURCES}
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_helpers/onnx_light_helpers.cc")
 set(ONNX_LIGHT_LIB_ALL_SOURCES
-    ${ONNX_COMMON_SOURCES}
+    "${ONNX_COMMON_PATH}/ir_pb_converter.cc"
     ${ONNX_DEFS_SOURCES}
     ${ONNX_CHECKER_SOURCES}
     ${ONNX_INLINER_SOURCES}
@@ -200,6 +219,30 @@ if(OpenSSL_FOUND)
   target_link_libraries(lib_onnx_proto PUBLIC OpenSSL::Crypto)
 endif()
 
+# Builds onnx_manipulations library.
+# This library bundles the lightweight ModelProto/GraphProto manipulation
+# helpers that are independent from the ONNX operator schemas: the textual
+# parser / printer, the attribute / tensor proto helpers, the data-type name
+# utilities and the graph-manipulation helpers (``graph_manipulations``,
+# formerly ``common_functions``). ``lib_onnx_lib`` (schemas, checker, shape
+# inference, version converter) depends publicly on it, and the kernels layer
+# reuses its graph-manipulation helpers. It only depends on ``lib_onnx_proto``.
+add_library(lib_onnx_manipulations ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} "${ONNX_COMMON_PATH}/status.cc" "${ONNX_COMMON_PATH}/assertions.cc" ${ONNX_MANIPULATIONS_SOURCES})
+if(_onnx_light_lib_type STREQUAL "SHARED" AND WIN32)
+  set_target_properties(lib_onnx_manipulations PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES "${ONNX_COMMON_PATH}/status.cc" "${ONNX_COMMON_PATH}/assertions.cc" ${ONNX_MANIPULATIONS_SOURCES})
+target_include_directories(lib_onnx_manipulations PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
+    $<BUILD_INTERFACE:${ROOT_INCLUDE_PATH}>
+    $<BUILD_INTERFACE:${ONNX_PROTO_PATH}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light>
+)
+set_property(TARGET lib_onnx_manipulations PROPERTY POSITION_INDEPENDENT_CODE ON)
+set_target_properties(lib_onnx_manipulations PROPERTIES EXPORT_NAME onnx_manipulations)
+target_compile_features(lib_onnx_manipulations PUBLIC cxx_std_20)
+target_link_libraries(lib_onnx_manipulations PUBLIC lib_onnx_proto)
+
 # Builds onnx_lib library.
 add_library(lib_onnx_lib ${_onnx_light_lib_type} ${ONNX_LIGHT_HEADERS} ${ONNX_LIGHT_LIB_ALL_SOURCES})
 if(_onnx_light_lib_type STREQUAL "SHARED" AND WIN32)
@@ -215,7 +258,7 @@ target_include_directories(lib_onnx_lib PUBLIC
 set_property(TARGET lib_onnx_lib PROPERTY POSITION_INDEPENDENT_CODE ON)
 set_target_properties(lib_onnx_lib PROPERTIES EXPORT_NAME onnx_light)
 target_compile_features(lib_onnx_lib PUBLIC cxx_std_20)
-target_link_libraries(lib_onnx_lib PUBLIC lib_onnx_proto)
+target_link_libraries(lib_onnx_lib PUBLIC lib_onnx_proto lib_onnx_manipulations)
 if(ONNX_ML)
   target_compile_definitions(lib_onnx_lib PUBLIC ONNX_ML=1)
 endif()
@@ -291,7 +334,15 @@ target_include_directories(lib_onnx_kernels PUBLIC
 set_property(TARGET lib_onnx_kernels PROPERTY POSITION_INDEPENDENT_CODE ON)
 set_target_properties(lib_onnx_kernels PROPERTIES EXPORT_NAME onnx_kernels)
 target_compile_features(lib_onnx_kernels PUBLIC cxx_std_20)
-target_link_libraries(lib_onnx_kernels PUBLIC lib_onnx_proto)
+target_link_libraries(lib_onnx_kernels PUBLIC lib_onnx_proto lib_onnx_manipulations)
+# Optional heavier image decoders (TIFF, WebP, JPEG2000). When
+# ONNX_LIGHT_BUILD_IMAGE_CODECS=OFF these formats are compiled out of the
+# ImageDecoder kernel and fall back to the empty-matrix path. The definition
+# is PUBLIC so downstream consumers (and the test executable) observe the
+# same behavior the kernel library was built with.
+if(ONNX_LIGHT_BUILD_IMAGE_CODECS)
+  target_compile_definitions(lib_onnx_kernels PUBLIC ONNX_LIGHT_HAS_IMAGE_CODECS)
+endif()
 # Same PCH rationale as ``lib_onnx_backend_test``: kernel translation
 # units all pull in ``test_case.h`` (via ``kernel_context.h``) and the
 # usual standard-library headers.
@@ -366,7 +417,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # _onnxpyprotoop: proto bindings + onnx_op schema bindings.
   nanobind_add_module(_onnxpyprotoop ${ONNX_PY_PROTOOP_SOURCES})
   target_include_directories(_onnxpyprotoop PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
-  target_link_libraries(_onnxpyprotoop PRIVATE lib_onnx_op)
+  target_link_libraries(_onnxpyprotoop PRIVATE lib_onnx_op lib_onnx_manipulations)
 
   # _onnxpyprotolib: onnx_lib bindings (defs/parser/checker/inliner/
   # shape/version_converter). This module does not register proto classes;
@@ -385,6 +436,12 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # _onnxpykernels: kernel helpers (deterministic pseudo-random helpers backing
   # ``onnx_backend_test``). Links lib_onnx_kernels only and does not depend on
   # the backend-test case registries.
+  #
+  # _onnxpykernels and _onnxpybackend are only built when the kernel runtime is
+  # available (ONNX_LIGHT_BUILD_KERNELS=ON). In the reduced build they are
+  # omitted and the Python package raises an explicit error when the reference
+  # runtime or backend-test helpers are requested.
+  if(ONNX_LIGHT_BUILD_KERNELS)
   nanobind_add_module(_onnxpykernels ${ONNX_PY_KERNELS_SOURCES})
   target_include_directories(_onnxpykernels PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
   target_link_libraries(_onnxpykernels PRIVATE lib_onnx_kernels)
@@ -406,6 +463,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   else()
     target_link_libraries(_onnxpybackend PRIVATE lib_onnx_backend_test lib_onnx_kernels lib_onnx_backend_test)
   endif()
+  endif() # ONNX_LIGHT_BUILD_KERNELS
 
   # All extensions and the shared lib_onnx_*.so are installed in the same
   # directory (onnx_light/onnx_py/). Set an $ORIGIN rpath so the dynamic loader
@@ -415,12 +473,15 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # every .so and refuses to repair if a referenced library (e.g.
   # ``liblib_onnx_proto.so`` referenced by ``liblib_onnx_kernels.so``) cannot
   # be located via the consuming library's own rpath.
-  set(_onnxpy_rpath_targets _onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxpykernels _onnxpybackend)
+  set(_onnxpy_rpath_targets _onnxpyprotoop _onnxpyprotolib _onnxpyoptim)
+  if(ONNX_LIGHT_BUILD_KERNELS)
+    list(APPEND _onnxpy_rpath_targets _onnxpykernels _onnxpybackend)
+  endif()
   if(_lib_onnx_proto_type STREQUAL "SHARED")
     list(APPEND _onnxpy_rpath_targets lib_onnx_proto)
   endif()
   if(_onnx_light_lib_type STREQUAL "SHARED")
-    list(APPEND _onnxpy_rpath_targets lib_onnx_lib lib_onnx_op lib_onnx_optim)
+    list(APPEND _onnxpy_rpath_targets lib_onnx_lib lib_onnx_manipulations lib_onnx_op lib_onnx_optim)
     if(ONNX_LIGHT_BUILD_KERNELS)
       list(APPEND _onnxpy_rpath_targets lib_onnx_kernels lib_onnx_backend_test)
     endif()
@@ -659,7 +720,10 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # alongside so the $ORIGIN rpath above resolves them without
   # LD_LIBRARY_PATH and the compiled code is shared across all extensions
   # instead of being duplicated inside each .so.
-  install(TARGETS _onnxpyprotoop _onnxpyprotolib _onnxpyoptim _onnxpykernels _onnxpybackend LIBRARY DESTINATION onnx_light/onnx_py)
+  install(TARGETS _onnxpyprotoop _onnxpyprotolib _onnxpyoptim LIBRARY DESTINATION onnx_light/onnx_py)
+  if(ONNX_LIGHT_BUILD_KERNELS)
+    install(TARGETS _onnxpykernels _onnxpybackend LIBRARY DESTINATION onnx_light/onnx_py)
+  endif()
   if(_lib_onnx_proto_type STREQUAL "SHARED")
     install(TARGETS lib_onnx_proto
         LIBRARY DESTINATION onnx_light/onnx_py
@@ -667,13 +731,19 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   endif()
   if(_onnx_light_lib_type STREQUAL "SHARED")
     install(TARGETS
+        lib_onnx_manipulations
         lib_onnx_lib
         lib_onnx_op
         lib_onnx_optim
-        lib_onnx_kernels
-        lib_onnx_backend_test
         LIBRARY DESTINATION onnx_light/onnx_py
         RUNTIME DESTINATION onnx_light/onnx_py)
+    if(ONNX_LIGHT_BUILD_KERNELS)
+      install(TARGETS
+          lib_onnx_kernels
+          lib_onnx_backend_test
+          LIBRARY DESTINATION onnx_light/onnx_py
+          RUNTIME DESTINATION onnx_light/onnx_py)
+    endif()
   endif()
 endif()
 
@@ -684,7 +754,7 @@ if(ONNX_LIGHT_INSTALL)
   # Splitting into two install(TARGETS) calls keeps the same exported
   # ``onnx_lightTargets`` set when ONNX_LIGHT_BUILD_KERNELS=OFF while
   # avoiding references to targets that were never created.
-  install(TARGETS lib_onnx_proto lib_onnx_lib lib_onnx_op lib_onnx_optim
+  install(TARGETS lib_onnx_proto lib_onnx_manipulations lib_onnx_lib lib_onnx_op lib_onnx_optim
     EXPORT onnx_lightTargets
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
@@ -735,6 +805,24 @@ if(ONNX_LIGHT_INSTALL)
   # Install public headers from onnx_light/onnx_lib/defs
   install(DIRECTORY "${ONNX_DEFS_PATH}/"
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_lib/defs"
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+  )
+
+  # Install public headers from onnx_light/onnx_lib/shape_inference
+  install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/shape_inference/"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_lib/shape_inference"
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+  )
+
+  # Install public headers from onnx_light/onnx_lib/version_converter
+  install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/version_converter/"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_lib/version_converter"
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+  )
+
+  # Install public headers from onnx_light/onnx_manipulations
+  install(DIRECTORY "${ONNX_MANIPULATIONS_PATH}/"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_manipulations"
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
   )
 
@@ -808,3 +896,31 @@ if(ONNX_LIGHT_INSTALL)
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/onnx"
   )
 endif()
+
+# Apply OpenSSF compiler hardening flags to onnx-light targets when
+# ONNX_HARDENING=ON. When the option is OFF the helper is a no-op so the
+# loop has no effect.
+set(_onnx_light_hardening_targets
+    lib_onnx_proto
+    lib_onnx_lib
+    lib_onnx_op
+    lib_onnx_optim
+)
+if(ONNX_LIGHT_BUILD_KERNELS)
+  list(APPEND _onnx_light_hardening_targets lib_onnx_kernels lib_onnx_backend_test)
+endif()
+if(ONNX_LIGHT_BUILD_PYTHON)
+  list(APPEND _onnx_light_hardening_targets
+      _onnxpyprotoop _onnxpyprotolib _onnxpyoptim)
+  if(ONNX_LIGHT_BUILD_KERNELS)
+    list(APPEND _onnx_light_hardening_targets _onnxpykernels _onnxpybackend)
+  endif()
+endif()
+if(ONNX_LIGHT_BUILD_TESTS)
+  list(APPEND _onnx_light_hardening_targets test_onnx_light_helpers test_onnx_light)
+endif()
+foreach(_t IN LISTS _onnx_light_hardening_targets)
+  if(TARGET ${_t})
+    onnx_light_apply_hardening(${_t})
+  endif()
+endforeach()

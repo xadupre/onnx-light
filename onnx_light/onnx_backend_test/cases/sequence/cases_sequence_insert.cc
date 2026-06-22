@@ -18,22 +18,6 @@ namespace {
 
 constexpr int64_t kDefaultIrVersion = 13;
 
-void PromoteOutputToSequenceType(std::vector<TestCase> &registry, int32_t elem_type,
-                                 const std::vector<int64_t> &elem_shape) {
-  GraphProto &graph = registry.back().model.ref_graph();
-  ValueInfoProto &out_vi = *graph.mutable_output(0);
-  TypeProto &out_tp = out_vi.ref_type();
-  TypeProto::Sequence *out_seq = out_tp.add_sequence_type();
-  TypeProto *out_elem = out_seq->add_elem_type();
-  TypeProto::Tensor *out_tensor = out_elem->add_tensor_type();
-  out_tensor->set_elem_type(static_cast<int>(elem_type));
-  TensorShapeProto *out_shape = out_tensor->add_shape();
-  for (int64_t d : elem_shape) {
-    out_shape->add_dim()->set_dim_value(d);
-  }
-  out_tp.reset_tensor_type();
-}
-
 void RegisterSequenceInsertCase(const std::string &name, const std::vector<Tensor> &inputs,
                                 const Tensor &tensor_to_insert,
                                 const std::vector<int64_t> &elem_shape, bool has_position,
@@ -93,7 +77,9 @@ void RegisterSequenceInsertCase(const std::string &name, const std::vector<Tenso
     FillValueInfo(position_tensor, *graph->add_input());
   }
 
-  FillValueInfo(stacked, *graph->add_output());
+  AppendValueInfo(
+      *graph->add_output(), stacked.name,
+      SequenceTypeSpec(TensorTypeSpec(static_cast<int32_t>(out_seq.elem_type), elem_shape)));
 
   DataSet ds;
   for (const Tensor &t : inputs) {
@@ -107,7 +93,6 @@ void RegisterSequenceInsertCase(const std::string &name, const std::vector<Tenso
   tc.data_sets.emplace_back(std::move(ds));
 
   registry.emplace_back(std::move(tc));
-  PromoteOutputToSequenceType(registry, static_cast<int32_t>(out_seq.elem_type), elem_shape);
 }
 
 } // namespace

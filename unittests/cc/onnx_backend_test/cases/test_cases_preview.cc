@@ -188,6 +188,36 @@ TEST(BackendTestCase, FlexAttentionCasesArePresent) {
       EXPECT_FLOAT_EQ(modified[i], baseline[i]);
     }
   }
+
+  // The DOUBLE case mirrors the basic case's shape and input values but stores
+  // Q/K/V/Y as ``double`` so the kernel's DOUBLE code path is exercised. Its
+  // expected output must reproduce the basic FLOAT baseline elementwise.
+  const TestCase *dbl = FindCase(cases, "test_cc_flexattention_double");
+  ASSERT_NE(dbl, nullptr);
+  {
+    const GraphProto &graph = dbl->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    EXPECT_EQ(node.ref_attribute().size(), 0u);
+    ASSERT_EQ(dbl->data_sets.size(), 1u);
+    const auto &ds = dbl->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    for (const Tensor &t : ds.inputs) {
+      EXPECT_EQ(t.data_type, static_cast<int32_t>(onnx_kernels::DataType::DOUBLE));
+      EXPECT_EQ(t.shape.size(), 4u);
+    }
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::DOUBLE));
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 2, 2, 2}));
+
+    const float *baseline = basic->data_sets[0].outputs[0].AsFloat();
+    const double *modified = ds.outputs[0].AsDouble();
+    const int64_t n = basic->data_sets[0].outputs[0].element_count();
+    ASSERT_EQ(n, ds.outputs[0].element_count());
+    for (int64_t i = 0; i < n; ++i) {
+      EXPECT_NEAR(modified[i], static_cast<double>(baseline[i]), 1e-6);
+    }
+  }
 }
 
 } // namespace Test

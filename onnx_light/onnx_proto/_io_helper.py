@@ -11,6 +11,22 @@ from ..onnx_py._onnxpyprotoop import FileLoadMode, ModelProto, ParseOptions, Ser
 _FIND_EXTERNAL_PARSE_OPTS = ParseOptions()
 _FIND_EXTERNAL_PARSE_OPTS.skip_raw_data = True
 
+# Serialization formats understood by :func:`load` and :func:`save`. ``"protobuf"``
+# is the binary ONNX format; ``"textproto"`` is the protobuf text format handled
+# by :mod:`onnx_light.onnx_proto._text_format`.
+_SUPPORTED_FORMATS = frozenset({"protobuf", "textproto"})
+
+
+def _infer_format(f: object) -> str:
+    """Infers the serialization format from a file path extension.
+
+    Returns ``"textproto"`` for paths ending in ``.textproto`` and ``"protobuf"``
+    otherwise. Non-path inputs default to ``"protobuf"``.
+    """
+    if isinstance(f, (str, Path)) and os.path.splitext(str(f))[-1] == ".textproto":
+        return "textproto"
+    return "protobuf"
+
 
 def _find_external_location(model_path: str) -> str:
     """Scans a model file's structure to find the primary external data location.
@@ -63,7 +79,7 @@ def _find_external_location(model_path: str) -> str:
 def save(
     proto: ModelProto,
     f: str | Path,
-    format: str = "protobuf",
+    format: str | None = None,
     *,
     save_as_external_data: bool = False,
     all_tensors_to_one_file: bool = True,
@@ -83,10 +99,10 @@ def save(
     :param proto: should be a in-memory ModelProto
     :param f: can be a file-like object (has "write" function) or a string containing
         a file name or a pathlike object
-    :param format: The serialization format. When it is not specified, it is inferred
-        from the file extension when ``f`` is a path. If not specified _and_
-        ``f`` is not a path, 'protobuf' is used. The encoding is assumed to
-        be "utf-8" when the format is a text format.
+    :param format: The serialization format, either ``"protobuf"`` (binary ONNX)
+        or ``"textproto"`` (protobuf text format). When it is not specified, it is
+        inferred from the file extension (``.textproto`` selects ``"textproto"``,
+        otherwise ``"protobuf"``). Text-format files are written using "utf-8".
     :param save_as_external_data: If true, save tensors to external file(s).
         all_tensors_to_one_file: Effective only if save_as_external_data is True.
         If true, save all tensors to one external file specified by location.
@@ -122,7 +138,24 @@ def save(
     """
     assert isinstance(proto, ModelProto), f"Unexpected type {type(proto)} for proto."
     assert isinstance(f, (str, Path)), f"Unexpected type {type(f)} for f."
-    assert format == "protobuf", f"Unsupported format={format!r}"
+    if format is None:
+        format = _infer_format(f)
+    if format not in _SUPPORTED_FORMATS:
+        raise ValueError(
+            f"Unsupported format={format!r}; onnx-light only supports "
+            f"{sorted(_SUPPORTED_FORMATS)!r}."
+        )
+    if format == "textproto":
+        if save_as_external_data or location:
+            raise ValueError(
+                "save_as_external_data and location are not supported for the "
+                "'textproto' format."
+            )
+        from ._text_format import serialize_to_textproto
+
+        with open(str(f), "w", encoding="utf-8") as handle:
+            handle.write(serialize_to_textproto(proto))
+        return
     assert (
         all_tensors_to_one_file
     ), f"all_tensors_to_one_file={all_tensors_to_one_file} is not implemented"
@@ -163,6 +196,7 @@ def load(
     no_copy: bool = False,
     touch_raw_data_pages: bool = False,
     file_load_mode: FileLoadMode | str = FileLoadMode.AUTO,
+    format: Optional[str] = None,
 ) -> ModelProto:
     """
     Loads a serialized ModelProto into memory.
@@ -230,9 +264,32 @@ def load(
         ``FileLoadMode.MMAP`` forces memory-mapped I/O and ``FileLoadMode.IFSTREAM`` forces
         the buffered ``std::ifstream``-based reader. Ignored when *f* is a :class:`bytes`
         object or when an external weights file is provided via ``location``.
+    :param format: The serialization format, either ``"protobuf"`` (binary ONNX)
+        or ``"textproto"`` (protobuf text format). When it is not specified, it is
+        inferred from the file extension (``.textproto`` selects ``"textproto"``,
+        otherwise ``"protobuf"``). Text-format inputs are decoded as "utf-8".
     :return: Loaded in-memory ModelProto.
     """
     assert isinstance(f, (str, bytes, Path)), f"Unexpected type {type(f)} for f."
+    if isinstance(f, Path):
+        f = str(f)
+    inferred_format = format is None
+    if format is None:
+        format = _infer_format(f)
+    if format not in _SUPPORTED_FORMATS:
+        raise ValueError(
+            f"Unsupported format={format!r}; onnx-light only supports "
+            f"{sorted(_SUPPORTED_FORMATS)!r}."
+        )
+    if format == "textproto":
+        from ._text_format import parse_from_textproto
+
+        if isinstance(f, bytes):
+            text = f.decode("utf-8")
+        else:
+            with open(f, encoding="utf-8") as handle:
+                text = handle.read()
+        return parse_from_textproto(text, ModelProto())
     if isinstance(file_load_mode, str):
         try:
             file_load_mode = FileLoadMode.__members__[file_load_mode.upper()]
@@ -249,11 +306,10 @@ def load(
     assert (
         not location or load_external_data
     ), f"'load_external_data' must be True if location={location!r}"
-    if isinstance(f, Path):
-        f = str(f)
-    assert not isinstance(f, str) or os.path.splitext(f)[-1] in {
-        ".onnx"
-    }, f"File name must have the extension .onnx to be loaded but f={f!r}"
+    if inferred_format:
+        assert not isinstance(f, str) or os.path.splitext(f)[-1] in {
+            ".onnx"
+        }, f"File name must have the extension .onnx to be loaded but f={f!r}"
     if load_external_data and not location and isinstance(f, str):
         location = _find_external_location(f)
     model = ModelProto()

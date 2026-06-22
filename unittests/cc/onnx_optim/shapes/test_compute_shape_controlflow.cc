@@ -185,6 +185,39 @@ TEST(OnnxOptimShapeIf, DifferingDimsBecomeSymbolic) {
   EXPECT_EQ(ctx.Get("y").Shape()[0].AsInt(), 2);
   ASSERT_TRUE(ctx.Get("y").Shape()[1].IsExpr());
   EXPECT_EQ(ctx.Get("y").Shape()[1].AsExpr(), "If_y_d1");
+  // The merged dim is upper-bounded by max(3, 5) == 5.
+  EXPECT_TRUE(ctx.HasLessEqualConstraint("If_y_d1", "5"));
+}
+
+TEST(OnnxOptimShapeIf, DifferingSymbolicDimsRecordsMaxUpperBound) {
+  // Branches disagree on a symbolic dim: the merged dim is bounded
+  // above by ``max(then_dim, else_dim)``.
+  GraphProto then_b = MakeUnaryBranch("Abs", "a", "y_then");
+  GraphProto else_b = MakeUnaryBranch("Abs", "b", "y_else");
+  NodeProto node = MakeIfNode("cond", {"y"}, then_b, else_b);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("cond", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
+  ctx.Set("a", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim("N")}));
+  ctx.Set("b", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim("M")}));
+
+  onnx_optim::shapes::controlflow::ComputeShapeIf(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("y"));
+  ASSERT_EQ(ctx.Get("y").Shape().Rank(), 1u);
+  EXPECT_TRUE(ctx.Get("y").Shape()[0].IsExpr());
+  EXPECT_EQ(ctx.Get("y").Shape()[0].AsExpr(), "If_y_d0");
+  EXPECT_EQ(ctx.LessEqualConstraintsSize(), 1u);
+  const auto &cs = ctx.LessEqualConstraints();
+  ASSERT_EQ(cs.size(), 1u);
+  const auto &c = *cs.begin();
+  EXPECT_EQ(c.first, "If_y_d0");
+  // The recorded upper bound expresses ``max(M, N)`` (encoded with ``^``).
+  EXPECT_TRUE(c.second.find('^') != std::string::npos);
+  EXPECT_TRUE(c.second.find('M') != std::string::npos);
+  EXPECT_TRUE(c.second.find('N') != std::string::npos);
 }
 
 TEST(OnnxOptimShapeIf, RankMismatchThrows) {
@@ -314,6 +347,35 @@ TEST(OnnxOptimShapeInference, DispatchesIf) {
   EXPECT_EQ(ctx.Get("y").Shape(), shape);
 }
 
+TEST(OnnxOptimShapeIf, RetainsBranchSubgraphContexts) {
+  // ComputeShapeIf should retain the child contexts it builds for both
+  // branches so the subgraph internals stay inspectable afterwards.
+  GraphProto then_b = MakeUnaryBranch("Abs", "x", "y_then");
+  GraphProto else_b = MakeUnaryBranch("Abs", "x", "y_else");
+  NodeProto node = MakeIfNode("cond", {"y"}, then_b, else_b);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("cond", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
+  ctx.Set("x", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  // current_node_index() is -1 when ComputeShapeIf is called directly.
+  onnx_optim::shapes::controlflow::ComputeShapeIf(ctx, node);
+
+  EXPECT_EQ(ctx.SubgraphContextsSize(), 2u);
+  ASSERT_TRUE(ctx.HasSubgraphContext(-1, "then_branch"));
+  ASSERT_TRUE(ctx.HasSubgraphContext(-1, "else_branch"));
+  EXPECT_FALSE(ctx.HasSubgraphContext(-1, "body"));
+
+  const onnx_optim::shapes::ShapesContext &then_ctx = ctx.GetSubgraphContext(-1, "then_branch");
+  ASSERT_TRUE(then_ctx.Has("y_then"));
+  EXPECT_EQ(then_ctx.Get("y_then").Shape(), shape);
+
+  const onnx_optim::shapes::ShapesContext &else_ctx = ctx.GetSubgraphContext(-1, "else_branch");
+  ASSERT_TRUE(else_ctx.Has("y_else"));
+  EXPECT_EQ(else_ctx.Get("y_else").Shape(), shape);
+}
+
 } // namespace Test
 
 namespace Test {
@@ -393,9 +455,27 @@ TEST(OnnxOptimShapeLoop, PropagatesCarriedShapeAndScanShape) {
   EXPECT_EQ(ctx.Get("scan_out").Dtype(), onnx_optim::TensorType::kFloat);
   ASSERT_EQ(ctx.Get("scan_out").Shape().Rank(), 3u);
   ASSERT_TRUE(ctx.Get("scan_out").Shape()[0].IsExpr());
-  EXPECT_EQ(ctx.Get("scan_out").Shape()[0].AsExpr(), "Loop_scan_out_d0");
+  EXPECT_EQ(ctx.Get("scan_out").Shape()[0].AsExpr(), "Loop_trip");
   EXPECT_EQ(ctx.Get("scan_out").Shape()[1].AsInt(), 2);
   EXPECT_EQ(ctx.Get("scan_out").Shape()[2].AsInt(), 3);
+}
+
+TEST(OnnxOptimShapeLoop, RetainsBodySubgraphContext) {
+  GraphProto body = BuildLoopBodyIdentityCarry();
+  NodeProto node = MakeLoopNode({"M", "cond", "v_init"}, {"v_final", "scan_out"}, body);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("M", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64, {}));
+  ctx.Set("cond", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
+  ctx.Set("v_init", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  onnx_optim::shapes::controlflow::ComputeShapeLoop(ctx, node);
+
+  ASSERT_TRUE(ctx.HasSubgraphContext(-1, "body"));
+  const onnx_optim::shapes::ShapesContext &body_ctx = ctx.GetSubgraphContext(-1, "body");
+  ASSERT_TRUE(body_ctx.Has("v_out"));
+  EXPECT_EQ(body_ctx.Get("v_out").Shape(), shape);
 }
 
 TEST(OnnxOptimShapeLoop, AcceptsOmittedMAndCond) {
@@ -413,6 +493,35 @@ TEST(OnnxOptimShapeLoop, AcceptsOmittedMAndCond) {
   EXPECT_EQ(ctx.Get("v_final").Dtype(), onnx_optim::TensorType::kDouble);
   EXPECT_EQ(ctx.Get("v_final").Shape(), shape);
   ASSERT_EQ(ctx.Get("scan_out").Shape().Rank(), 2u);
+}
+
+TEST(OnnxOptimShapeLoop, UsesTripCountFromValueAsShape) {
+  // When M has a ValueAsShape with one element, that element should be
+  // used as the leading dimension of scan outputs.
+  GraphProto body = BuildLoopBodyIdentityCarry();
+  NodeProto node = MakeLoopNode({"M", "cond", "v_init"}, {"v_final", "scan_out"}, body);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  // M is a [1] INT64 tensor with ValueAsShape = [N] (symbolic trip count).
+  onnx_optim::OptimTensor m_tensor(nullptr, onnx_optim::TensorType::kInt64,
+                                   onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+  onnx_optim::OptimShape m_vas;
+  m_vas.PushBack(onnx_optim::OptimDim("N"));
+  m_tensor.SetValueAsShape(std::move(m_vas));
+  ctx.Set("M", std::move(m_tensor));
+  ctx.Set("cond", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
+  ctx.Set("v_init", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  onnx_optim::shapes::controlflow::ComputeShapeLoop(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("scan_out"));
+  ASSERT_EQ(ctx.Get("scan_out").Shape().Rank(), 3u);
+  // The leading dim should be "N" from M's ValueAsShape, not a generic symbol.
+  ASSERT_TRUE(ctx.Get("scan_out").Shape()[0].IsExpr());
+  EXPECT_EQ(ctx.Get("scan_out").Shape()[0].AsExpr(), "N");
+  EXPECT_EQ(ctx.Get("scan_out").Shape()[1].AsInt(), 2);
+  EXPECT_EQ(ctx.Get("scan_out").Shape()[2].AsInt(), 3);
 }
 
 TEST(OnnxOptimShapeLoop, RejectsWrongOpType) {
@@ -579,6 +688,78 @@ TEST(OnnxOptimShapeInference, DispatchesScan) {
 
   ASSERT_TRUE(ctx.Has("Y"));
   EXPECT_EQ(ctx.Get("Y").Shape(), x_shape);
+}
+
+TEST(OnnxOptimShapeScan, RetainsBodySubgraphContext) {
+  GraphProto body = BuildScanBodyIdentity();
+  NodeProto node = MakeScanNode({"X"}, {"Y"}, body, /*num_scan_inputs=*/1);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape x_shape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(3)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, x_shape));
+
+  onnx_optim::shapes::controlflow::ComputeShapeScan(ctx, node);
+
+  ASSERT_TRUE(ctx.HasSubgraphContext(-1, "body"));
+  const onnx_optim::shapes::ShapesContext &body_ctx = ctx.GetSubgraphContext(-1, "body");
+  // The per-iteration scan-input slice drops the trip-count axis: [3].
+  ASSERT_TRUE(body_ctx.Has("y_elt"));
+  ASSERT_EQ(body_ctx.Get("y_elt").Shape().Rank(), 1u);
+  EXPECT_EQ(body_ctx.Get("y_elt").Shape()[0].AsInt(), 3);
+}
+
+// Scan opset 8: node inputs are (sequence_lens="", initial, x) where
+// ``initial`` has shape [B, D] and ``x`` has shape [B, T, D].  The body
+// receives batch-stripped inputs (state=[D], scan=[D]) and the node outputs
+// should carry the batch dimension back: state output [B, D], scan output
+// [B, T, D].
+TEST(OnnxOptimShapeScan, HandlesOpset8BatchDimension) {
+  // Build body: sum_in + next → sum_out, scan_out = Identity(sum_out).
+  GraphProto body;
+  body.set_name("scan8_body");
+  body.add_input()->set_name("sum_in");
+  body.add_input()->set_name("next");
+  NodeProto *add_node = body.add_node();
+  add_node->set_op_type("Add");
+  add_node->add_input("sum_in");
+  add_node->add_input("next");
+  add_node->add_output("sum_out");
+  NodeProto *id_node = body.add_node();
+  id_node->set_op_type("Identity");
+  id_node->add_input("sum_out");
+  id_node->add_output("scan_out");
+  body.add_output()->set_name("sum_out");
+  body.add_output()->set_name("scan_out");
+
+  // Node: ("", initial, x) → (y_state, y_scan), num_scan_inputs=1.
+  NodeProto node =
+      MakeScanNode({"", "initial", "x"}, {"y_state", "y_scan"}, body, /*num_scan_inputs=*/1);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("ai.onnx", 8);
+
+  // initial: [B=1, D=2], x: [B=1, T=3, D=2].
+  onnx_optim::OptimShape initial_shape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(2)};
+  onnx_optim::OptimShape x_shape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(3),
+                                 onnx_optim::OptimDim(2)};
+  ctx.Set("initial",
+          onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, initial_shape));
+  ctx.Set("x", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, x_shape));
+
+  onnx_optim::shapes::controlflow::ComputeShapeScan(ctx, node);
+
+  // State output y_state should be [B=1, D=2].
+  ASSERT_TRUE(ctx.Has("y_state"));
+  ASSERT_EQ(ctx.Get("y_state").Shape().Rank(), 2u);
+  EXPECT_EQ(ctx.Get("y_state").Shape()[0].AsInt(), 1);
+  EXPECT_EQ(ctx.Get("y_state").Shape()[1].AsInt(), 2);
+
+  // Scan output y_scan should be [B=1, T=3, D=2].
+  ASSERT_TRUE(ctx.Has("y_scan"));
+  ASSERT_EQ(ctx.Get("y_scan").Shape().Rank(), 3u);
+  EXPECT_EQ(ctx.Get("y_scan").Shape()[0].AsInt(), 1);
+  EXPECT_EQ(ctx.Get("y_scan").Shape()[1].AsInt(), 3);
+  EXPECT_EQ(ctx.Get("y_scan").Shape()[2].AsInt(), 2);
 }
 
 } // namespace Test

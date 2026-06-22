@@ -19,21 +19,20 @@ only exercises single-node graphs) and a useful cross-check of the Python
 
 from __future__ import annotations
 
-import re
 import unittest
 
 import numpy as np
 
-import onnx_light.onnx as onnxl
-from onnx_light.onnx_lib.backend.test.case import collect_test_case, make_test_class
-from onnx_light.onnx.reference import ReferenceEvaluator
+from onnx_light.ext_test_case import import_or_skip
 
-# Operators currently registered in
-# ``onnx_light/onnx_kernels/run_nodes.cc::KernelDispatchTable``. Backend
-# test cases whose graph(s) only use these ops are the only ones
-# :class:`ReferenceEvaluator` can execute today. The set mirrors
-# ``_IMPLEMENTED_OPS`` in ``test_backend_with_run_model.py``.
-_IMPLEMENTED_OPS: frozenset[str] = frozenset({"Abs", "Neg", "Add", "Sub", "Mul", "Div"})
+import onnx_light.onnx as onnxl
+
+# The kernels runtime and backend test registries are only available in the
+# full build; skip this module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
+_backend_case = import_or_skip("onnx_light.onnx_lib.backend.test.case")
+collect_test_case = _backend_case.collect_test_case
+make_test_class = _backend_case.make_test_class
+ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
 
 
 def reference_evaluator_backend(model: onnxl.ModelProto, *inputs: np.ndarray) -> list[np.ndarray]:
@@ -68,31 +67,15 @@ def _iter_ops(graph) -> list[str]:
     return ops
 
 
-def _build_include_regex() -> list[str]:
-    """Returns the include-regex list selecting every backend test case
-    whose graph(s) only contain operators implemented by the C++
-    ``KernelDispatchTable``.
-
-    Building the list once at module load avoids re-walking the registry
-    from inside :func:`make_test_class`.
-    """
-    names: list[str] = []
-    for name, tc in collect_test_case().items():
-        if tc.model is None:
-            continue
-        ops = _iter_ops(tc.model.graph)
-        if ops and all(op in _IMPLEMENTED_OPS for op in ops):
-            names.append(name)
-    if not names:
-        # Fallback: keep a regex that matches nothing so ``make_test_class``
-        # generates an empty test class instead of every case in the registry.
-        return [r"^$"]
-    # Anchor each name to avoid accidental substring matches.
-    return [r"^" + re.escape(n) + r"$" for n in names]
-
-
 TestReferenceEvaluatorBackend = make_test_class(
-    reference_evaluator_backend, include_regex=_build_include_regex()
+    reference_evaluator_backend,
+    exclude_regex=[
+        "image_decoder_decode_jpeg2k_rgb",
+        "image_decoder_decode_jpeg_bgr",
+        "image_decoder_decode_jpeg_grayscale",
+        "image_decoder_decode_jpeg_rgb",
+        "image_decoder_decode_webp_rgb",
+    ],
 )
 
 

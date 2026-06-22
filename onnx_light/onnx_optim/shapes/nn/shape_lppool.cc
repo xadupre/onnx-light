@@ -72,30 +72,25 @@ void ComputeShapeLpPool(ShapesContext &ctx, const NodeProto &node, const char *x
 
   std::vector<int64_t> strides;
   if (GetAttributeInts(node, "strides", strides)) {
-    if (strides.size() != n_input_dims) {
-      throw std::invalid_argument(
-          "ComputeShapeLpPool: attribute 'strides' size must match input rank - 2.");
-    }
+    EXT_ENFORCE_INVALID(strides.size() == n_input_dims,
+                        "ComputeShapeLpPool: attribute 'strides' size must match input rank - 2.");
   } else {
     strides.assign(n_input_dims, 1);
   }
 
   std::vector<int64_t> dilations;
   if (GetAttributeInts(node, "dilations", dilations)) {
-    if (dilations.size() != n_input_dims) {
-      throw std::invalid_argument(
-          "ComputeShapeLpPool: attribute 'dilations' size must match input rank - 2.");
-    }
+    EXT_ENFORCE_INVALID(
+        dilations.size() == n_input_dims,
+        "ComputeShapeLpPool: attribute 'dilations' size must match input rank - 2.");
   } else {
     dilations.assign(n_input_dims, 1);
   }
 
   std::vector<int64_t> pads;
   if (GetAttributeInts(node, "pads", pads)) {
-    if (pads.size() != 2 * n_input_dims) {
-      throw std::invalid_argument(
-          "ComputeShapeLpPool: attribute 'pads' size must be 2 * (input rank - 2).");
-    }
+    EXT_ENFORCE_INVALID(pads.size() == 2 * n_input_dims,
+                        "ComputeShapeLpPool: attribute 'pads' size must be 2 * (input rank - 2).");
   } else {
     pads.assign(2 * n_input_dims, 0);
   }
@@ -103,9 +98,9 @@ void ComputeShapeLpPool(ShapesContext &ctx, const NodeProto &node, const char *x
   const std::string auto_pad = GetAttributeOr<std::string>(node, "auto_pad", std::string("NOTSET"));
   EXT_ENFORCE_INVALID(auto_pad == "NOTSET" || auto_pad == "VALID" || auto_pad == "SAME_UPPER" ||
                           auto_pad == "SAME_LOWER",
-                      "ComputeShapeLpPool: auto_pad='" + auto_pad +
-                          "' is not supported; must be one of NOTSET, SAME_UPPER, SAME_LOWER "
-                          "or VALID.");
+                      "ComputeShapeLpPool: auto_pad='", auto_pad,
+                      "' is not supported; must be one of NOTSET, SAME_UPPER, SAME_LOWER "
+                      "or VALID.");
   const bool use_auto_pad = auto_pad != "NOTSET";
 
   const bool ceil_mode = GetAttributeOr<int64_t>(node, "ceil_mode", 0) != 0;

@@ -4,8 +4,11 @@
 
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <tuple>
+#include <utility>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -18,11 +21,11 @@ namespace {
 // data pointer. ``role`` identifies the parameter in error messages.
 const float *AsFloat1D(const Tensor &t, int64_t c, const char *role) {
   EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      std::string("kernel::BatchNormalization: ") + role + " must be FLOAT.");
-  EXT_ENFORCE_INVALID(t.shape.size() == 1u,
-                      std::string("kernel::BatchNormalization: ") + role + " must be rank 1.");
-  EXT_ENFORCE_INVALID(t.shape[0] == c, std::string("kernel::BatchNormalization: ") + role +
-                                           " size must equal X's channel dimension.");
+                      "kernel::BatchNormalization: ", role, " must be FLOAT.");
+  EXT_ENFORCE_INVALID(t.shape.size() == 1u, "kernel::BatchNormalization: ", role,
+                      " must be rank 1.");
+  EXT_ENFORCE_INVALID(t.shape[0] == c, "kernel::BatchNormalization: ", role,
+                      " size must equal X's channel dimension.");
   return t.AsFloat();
 }
 
@@ -105,6 +108,98 @@ void BatchNormalization::operator()(const Tensor &x, const Tensor &scale, const 
       }
     }
   }
+}
+
+std::tuple<Tensor, Tensor, Tensor>
+BatchNormalization::TrainingForward(const Tensor &x, const Tensor &scale, const Tensor &bias,
+                                    const Tensor &input_mean, const Tensor &input_var,
+                                    float epsilon, float momentum) const {
+  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
+                      "kernel::BatchNormalization: X must be FLOAT.");
+  EXT_ENFORCE_INVALID(!x.shape.empty(), "kernel::BatchNormalization: X must have rank >= 1.");
+
+  // Per the opset 9+ spec, when X is rank 1 it is interpreted as N values
+  // with C == 1. Otherwise C is the dim at index 1.
+  const int64_t N = x.shape[0];
+  const int64_t C = x.shape.size() >= 2u ? x.shape[1] : static_cast<int64_t>(1);
+
+  const float *p_in_mean = AsFloat1D(input_mean, C, "input_mean");
+  const float *p_in_var = AsFloat1D(input_var, C, "input_var");
+
+  // Number of elements averaged per channel: N * (D1 * ... * Dk).
+  int64_t spatial = 1;
+  for (size_t i = 2; i < x.shape.size(); ++i) {
+    spatial *= x.shape[i];
+  }
+  const int64_t per_channel = N * spatial;
+  EXT_ENFORCE_INVALID(per_channel > 0,
+                      "kernel::BatchNormalization: training mode requires X to be non-empty.");
+
+  const float *px = x.AsFloat();
+
+  // Per-channel batch mean and (population) variance, computed over every
+  // axis except the channel axis, matching the ONNX reference.
+  std::vector<float> saved_mean(static_cast<size_t>(C), 0.0f);
+  std::vector<float> saved_var(static_cast<size_t>(C), 0.0f);
+  if (x.shape.size() == 1u) {
+    double sum = 0.0;
+    for (int64_t i = 0; i < N; ++i) {
+      sum += static_cast<double>(px[i]);
+    }
+    const double mean = sum / static_cast<double>(per_channel);
+    double sq = 0.0;
+    for (int64_t i = 0; i < N; ++i) {
+      const double d = static_cast<double>(px[i]) - mean;
+      sq += d * d;
+    }
+    saved_mean[0] = static_cast<float>(mean);
+    saved_var[0] = static_cast<float>(sq / static_cast<double>(per_channel));
+  } else {
+    for (int64_t c = 0; c < C; ++c) {
+      double sum = 0.0;
+      for (int64_t n = 0; n < N; ++n) {
+        const int64_t base = (n * C + c) * spatial;
+        for (int64_t i = 0; i < spatial; ++i) {
+          sum += static_cast<double>(px[base + i]);
+        }
+      }
+      const double mean = sum / static_cast<double>(per_channel);
+      double sq = 0.0;
+      for (int64_t n = 0; n < N; ++n) {
+        const int64_t base = (n * C + c) * spatial;
+        for (int64_t i = 0; i < spatial; ++i) {
+          const double d = static_cast<double>(px[base + i]) - mean;
+          sq += d * d;
+        }
+      }
+      saved_mean[static_cast<size_t>(c)] = static_cast<float>(mean);
+      saved_var[static_cast<size_t>(c)] = static_cast<float>(sq / static_cast<double>(per_channel));
+    }
+  }
+
+  // Normalize Y using the batch statistics via the inference path.
+  Tensor saved_mean_t("", static_cast<int32_t>(DataType::FLOAT), {C},
+                      std::vector<uint8_t>(static_cast<size_t>(C) * sizeof(float)));
+  Tensor saved_var_t("", static_cast<int32_t>(DataType::FLOAT), {C},
+                     std::vector<uint8_t>(static_cast<size_t>(C) * sizeof(float)));
+  std::copy(saved_mean.begin(), saved_mean.end(), saved_mean_t.AsFloat());
+  std::copy(saved_var.begin(), saved_var.end(), saved_var_t.AsFloat());
+  Tensor y = (*this)(x, scale, bias, saved_mean_t, saved_var_t, epsilon);
+
+  // Update the running estimates: running = input * momentum + saved * (1 - m).
+  Tensor running_mean("", static_cast<int32_t>(DataType::FLOAT), {C},
+                      std::vector<uint8_t>(static_cast<size_t>(C) * sizeof(float)));
+  Tensor running_var("", static_cast<int32_t>(DataType::FLOAT), {C},
+                     std::vector<uint8_t>(static_cast<size_t>(C) * sizeof(float)));
+  float *p_run_mean = running_mean.AsFloat();
+  float *p_run_var = running_var.AsFloat();
+  for (int64_t c = 0; c < C; ++c) {
+    p_run_mean[c] =
+        p_in_mean[c] * momentum + saved_mean[static_cast<size_t>(c)] * (1.0f - momentum);
+    p_run_var[c] = p_in_var[c] * momentum + saved_var[static_cast<size_t>(c)] * (1.0f - momentum);
+  }
+
+  return {std::move(y), std::move(running_mean), std::move(running_var)};
 }
 
 } // namespace kernel

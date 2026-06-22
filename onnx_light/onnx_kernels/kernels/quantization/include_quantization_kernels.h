@@ -33,22 +33,23 @@ namespace kernel {
 //     match the operator's expected output; the kernel validates these
 //     attributes and throws ``std::invalid_argument`` on mismatch.
 //
-// ``QuantizeLinear`` mirrors the ONNX ``QuantizeLinear`` operator restricted
-// to its most widely supported case: per-tensor (scalar ``y_scale`` and
-// optional scalar ``y_zero_point``) quantization of a FLOAT input ``x`` to an
-// integer output ``y`` whose element type is taken from
-// ``y_zero_point`` (UINT8, INT8, UINT16 or INT16). When ``y_zero_point`` is
-// omitted the output defaults to UINT8 with a zero point of 0, matching the
-// ONNX default. The
-// kernel implements the saturating round-half-to-even rule used by ONNX:
-// ``y = saturate(round(x / y_scale) + y_zero_point)``.
+// ``QuantizeLinear`` mirrors the ONNX ``QuantizeLinear`` operator for both
+// per-tensor (scalar ``y_scale`` and optional scalar ``y_zero_point``) and
+// per-axis (vector ``y_scale``/``y_zero_point``) quantization of a FLOAT
+// input ``x`` to an output ``y`` whose element type is taken from
+// ``y_zero_point`` (UINT8, INT8, UINT16, INT16, FLOAT8E4M3FN, FLOAT8E5M2,
+// INT4, UINT4, INT2, UINT2, or FLOAT4E2M1). When ``y_zero_point`` is omitted
+// the output defaults to UINT8 with a zero point of 0, matching the ONNX
+// default. The kernel implements the saturating round-half-to-even rule used
+// by ONNX: ``y = saturate(round(x / y_scale) + y_zero_point)``.
 //
 // ``DequantizeLinear`` mirrors the ONNX ``DequantizeLinear`` operator
 // restricted to the per-tensor case: an integer or float8 input ``x``
 // (UINT8, INT8, UINT16, INT16, INT32, FLOAT8E4M3FN, FLOAT8E4M3FNUZ,
-// FLOAT8E5M2 or FLOAT8E5M2FNUZ), a scalar FLOAT ``x_scale`` and an
+// FLOAT8E5M2 or FLOAT8E5M2FNUZ), a scalar FLOAT or FLOAT16 ``x_scale`` and an
 // optional scalar ``x_zero_point`` of the same element type as ``x``. The
-// output ``y`` is FLOAT with the same shape as ``x``:
+// output ``y`` has the same element type as ``x_scale`` (FLOAT or FLOAT16)
+// and the same shape as ``x``:
 // ``y = (x - x_zero_point) * x_scale``. When ``x_zero_point`` is omitted
 // the zero point defaults to 0.
 //
@@ -59,10 +60,11 @@ namespace kernel {
 // with an input.
 // ---------------------------------------------------------------------------
 
-/// Per-tensor linear quantization of a FLOAT input ``x`` to an integer
-/// output. The output element type is taken from ``y_zero_point`` (UINT8,
-/// INT8, UINT16 or INT16); if ``y_zero_point`` is omitted the output defaults
-/// to UINT8 with a zero point of 0.
+/// Per-tensor and per-axis linear quantization of a FLOAT input ``x`` to an
+/// integer or sub-byte output. The output element type is taken from
+/// ``y_zero_point`` (UINT8, INT8, UINT16, INT16, FLOAT8E4M3FN, FLOAT8E5M2,
+/// INT4, UINT4, INT2, UINT2, or FLOAT4E2M1); if ``y_zero_point`` is omitted
+/// the output defaults to UINT8 with a zero point of 0.
 class QuantizeLinear : public KernelBase {
 public:
   using KernelBase::KernelBase;
@@ -72,8 +74,24 @@ public:
   void operator()(const Tensor &x, const Tensor &y_scale, Tensor &output) const;
 
   /// Explicit ``y_zero_point``: its data_type drives the output element type.
+  /// Per-tensor (scalar ``y_scale``) quantization.
   Tensor operator()(const Tensor &x, const Tensor &y_scale, const Tensor &y_zero_point) const;
   void operator()(const Tensor &x, const Tensor &y_scale, const Tensor &y_zero_point,
+                  Tensor &output) const;
+
+  /// Per-axis quantization: ``y_scale`` (and ``y_zero_point``) may have one
+  /// entry per slice along ``axis``.  When ``y_scale.element_count() == 1``
+  /// the call is forwarded to the scalar overload above.
+  Tensor operator()(const Tensor &x, const Tensor &y_scale, const Tensor &y_zero_point,
+                    int64_t axis) const;
+  void operator()(const Tensor &x, const Tensor &y_scale, const Tensor &y_zero_point, int64_t axis,
+                  Tensor &output) const;
+
+  /// Per-axis/blocked quantization without explicit ``y_zero_point``.
+  /// ``output_dtype`` specifies the output element type; zero point is 0.
+  Tensor operator()(const Tensor &x, const Tensor &y_scale, int64_t axis,
+                    int32_t output_dtype) const;
+  void operator()(const Tensor &x, const Tensor &y_scale, int64_t axis, int32_t output_dtype,
                   Tensor &output) const;
 
   /// Output element type differs from the FLOAT input element type, so storage
@@ -81,9 +99,11 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
-/// Per-tensor linear dequantization of an integer or float8 input ``x`` to a
-/// FLOAT output ``y`` using ``y = (x - x_zero_point) * x_scale``. When
-/// ``x_zero_point`` is omitted the zero point defaults to 0.
+/// Per-tensor or per-axis linear dequantization of an integer or float8 input
+/// ``x`` to a FLOAT output ``y`` using ``y = (x - x_zero_point) * x_scale``.
+/// When ``x_zero_point`` is omitted the zero point defaults to 0.  When
+/// ``x_scale`` has more than one element, per-axis dequantization is performed
+/// along ``axis`` (only FLOAT ``x_scale`` is supported for per-axis).
 class DequantizeLinear : public KernelBase {
 public:
   using KernelBase::KernelBase;
@@ -96,6 +116,19 @@ public:
   Tensor operator()(const Tensor &x, const Tensor &x_scale, const Tensor &x_zero_point) const;
   void operator()(const Tensor &x, const Tensor &x_scale, const Tensor &x_zero_point,
                   Tensor &output) const;
+
+  /// Per-axis overloads: ``x_scale`` and ``x_zero_point`` have one entry per
+  /// slice along ``axis``.  Delegates to the per-tensor overload when
+  /// ``x_scale`` is scalar.
+  Tensor operator()(const Tensor &x, const Tensor &x_scale, const Tensor &x_zero_point,
+                    int64_t axis) const;
+  void operator()(const Tensor &x, const Tensor &x_scale, const Tensor &x_zero_point, int64_t axis,
+                  Tensor &output) const;
+
+  /// Per-axis overloads with the ``x_zero_point`` omitted (defaults to 0).
+  /// Delegates to the per-tensor overload when ``x_scale`` is scalar.
+  Tensor operator()(const Tensor &x, const Tensor &x_scale, int64_t axis) const;
+  void operator()(const Tensor &x, const Tensor &x_scale, int64_t axis, Tensor &output) const;
 
   /// Output element type (FLOAT) differs from the integer/float8 input
   /// element type, so storage can never be shared with an input.

@@ -93,10 +93,18 @@ class TestOnnxPyOp(ExtTestCase):
         self.assertEqual(schema.min_output, 1)
         self.assertEqual(schema.max_output, 1)
         self.assertFalse(schema.deprecated)
+        # node_determinism defaults to Unknown (and is therefore not non_deterministic).
+        self.assertEqual(schema.node_determinism, self.mod.LightOpSchema.NodeDeterminism.Unknown)
+        self.assertFalse(schema.non_deterministic)
         schema.set_min_output(0).set_max_output(2**31 - 1).set_deprecated(True)
         self.assertEqual(schema.min_output, 0)
         self.assertEqual(schema.max_output, 2**31 - 1)
         self.assertTrue(schema.deprecated)
+        schema.set_node_determinism(self.mod.LightOpSchema.NodeDeterminism.NonDeterministic)
+        self.assertEqual(
+            schema.node_determinism, self.mod.LightOpSchema.NodeDeterminism.NonDeterministic
+        )
+        self.assertTrue(schema.non_deterministic)
 
     def test_light_op_schema_repr(self) -> None:
         fp = self.mod.FormalParameter()
@@ -114,7 +122,8 @@ class TestOnnxPyOp(ExtTestCase):
             "type_constraints=[TypeConstraintParam(type_param_str='T', "
             "allowed_type_strs=[TensorType.kFloat], description='any float')], "
             "attributes=[], has_function_implementation=False, "
-            "min_output=1, max_output=1, deprecated=False)",
+            "min_output=1, max_output=1, deprecated=False, "
+            "node_determinism=NodeDeterminism.Unknown)",
         )
 
     def test_get_all_onnx_op_schemas_with_history(self) -> None:

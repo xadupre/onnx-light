@@ -37,17 +37,16 @@ void Dispatch(const Tensor &x, float alpha, float gamma, Tensor &output) {
     ComputeInPlace<double>(x, static_cast<double>(alpha), static_cast<double>(gamma), output);
     return;
   default:
-    throw std::invalid_argument(std::string(kName) + " only supports FLOAT and DOUBLE tensors.");
+    EXT_THROW_INVALID(kName, ": unsupported data type ", x.data_type,
+                      ", only supports FLOAT and DOUBLE tensors.");
   }
 }
 
 void ValidateOutput(const Tensor &x, const Tensor &output) {
-  EXT_ENFORCE_INVALID(output.data_type == x.data_type,
-                      std::string(kName) + ": output dtype must match input dtype.");
-  EXT_ENFORCE_INVALID(output.shape == x.shape,
-                      std::string(kName) + ": output shape must match input shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == x.data.size(),
-                      std::string(kName) + ": output buffer size mismatch.");
+  EXT_ENFORCE_INVALID(output.data_type == x.data_type, kName,
+                      ": output dtype must match input dtype.");
+  EXT_ENFORCE_INVALID(output.shape == x.shape, kName, ": output shape must match input shape.");
+  EXT_ENFORCE_INVALID(output.data.size() == x.data.size(), kName, ": output buffer size mismatch.");
 }
 
 } // namespace

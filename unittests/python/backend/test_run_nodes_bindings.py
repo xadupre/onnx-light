@@ -14,10 +14,15 @@ from __future__ import annotations
 import struct
 import unittest
 
-from onnx_light.ext_test_case import ExtTestCase
+import numpy as np
+
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 from onnx_light.onnx import TensorProto
 from onnx_light.onnx_lib import parser
-from onnx_light.onnx_py._onnxpykernels import runtime as rt
+
+# The kernels runtime is only available in the full build; skip this module on a
+# reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
+rt = import_or_skip("onnx_light.onnx_py._onnxpykernels", "runtime")
 
 
 def _make_float_tensor(name: str, values: list[float]):
@@ -61,8 +66,12 @@ class TestRunNodesBindings(ExtTestCase):
             "OpsetId",
             "KernelContext",
             "RuntimeContext",
+            "RuntimeEvent",
+            "RuntimeEventAction",
             "default_opset",
             "tensor_from_proto",
+            "tensor_to_proto",
+            "tensor_to_numpy",
             "run_node",
             "run_nodes",
             "run_graph",
@@ -70,6 +79,12 @@ class TestRunNodesBindings(ExtTestCase):
             "run_model",
         ]:
             self.assertTrue(hasattr(rt, name), name)
+
+    def test_runtime_event_action_enum_values(self):
+        self.assertEqual(int(rt.RuntimeEventAction.kAdd), 0)
+        self.assertEqual(int(rt.RuntimeEventAction.kReplace), 1)
+        self.assertEqual(int(rt.RuntimeEventAction.kRemove), 2)
+        self.assertEqual(int(rt.RuntimeEventAction.kRunNode), 3)
 
     def test_default_opset_and_kernel_context(self):
         opset = rt.default_opset(18)
@@ -91,6 +106,7 @@ class TestRunNodesBindings(ExtTestCase):
 
     def test_runtime_context_event_log_records_add_replace_remove(self):
         ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        ctx.events_enabled = True
         self.assertEqual(ctx.events(), [])
 
         ctx.set("x", _make_float_tensor("x", [1.0, -2.0]))
@@ -99,7 +115,14 @@ class TestRunNodesBindings(ExtTestCase):
         ctx.remove("missing")  # no-op, does not log
 
         events = ctx.events()
-        self.assertEqual([e.action for e in events], ["add", "replace", "remove"])
+        self.assertEqual(
+            [e.action for e in events],
+            [
+                rt.RuntimeEventAction.kAdd,
+                rt.RuntimeEventAction.kReplace,
+                rt.RuntimeEventAction.kRemove,
+            ],
+        )
         self.assertEqual([e.name for e in events], ["x", "x", "x"])
         # ``set`` defaults to kind ``"input"``, ``put`` to ``"intermediate"``;
         # ``remove`` records ``"unknown"``.
@@ -135,12 +158,18 @@ class TestRunNodesBindings(ExtTestCase):
         self.assertEqual(d0["values"], [1.0, -2.0])
         self.assertEqual(d0["string_values"], [])
         self.assertEqual(d0["timestamp_ns"], events[0].timestamp_ns)
+        # ``set`` defaults to the ``input`` kind: node_index = -1, CPU device.
+        self.assertEqual(d0["node_index"], -1)
+        self.assertEqual(d0["device"], -1)
+        self.assertEqual(events[0].node_index, -1)
+        self.assertEqual(events[0].device, -1)
 
         ctx.clear_events()
         self.assertEqual(ctx.events(), [])
 
     def test_runtime_context_event_log_truncates_large_tensors(self):
         ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        ctx.events_enabled = True
         # 9-element tensor: the buffer keeps only the first 8 entries,
         # data_type is set to -1 and shape is emptied to flag the truncation.
         ctx.put("big", _make_int32_tensor("big", list(range(9))))
@@ -153,15 +182,56 @@ class TestRunNodesBindings(ExtTestCase):
     def test_runtime_context_events_capture_run_model_intermediates(self):
         model = parser.parse_model(_MODEL_SRC)
         ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        ctx.events_enabled = True
         ctx.set("x", _make_float_tensor("x", [-1.0, 2.0, -3.5]))
         ctx.set("z", _make_float_tensor("z", [10.0, 20.0, 30.0]))
         ctx.clear_events()
         rt.run_model(model, ctx)
 
         events = ctx.events()
-        # The graph produces two intermediates (``t`` and ``y``).
+        # The graph produces two intermediates (``t`` and ``y``), each
+        # paired with a ``run_node`` event summarising the kernel
+        # dispatch (domain, op_type, inputs, duration).
         produced = [(e.action, e.name, e.kind) for e in events]
-        self.assertEqual(produced, [("add", "t", "intermediate"), ("add", "y", "intermediate")])
+        self.assertEqual(
+            produced,
+            [
+                (rt.RuntimeEventAction.kAdd, "t", "intermediate"),
+                (rt.RuntimeEventAction.kRunNode, "", "unknown"),
+                (rt.RuntimeEventAction.kAdd, "y", "intermediate"),
+                (rt.RuntimeEventAction.kRunNode, "", "unknown"),
+            ],
+        )
+        run_node_events = [e for e in events if e.action == rt.RuntimeEventAction.kRunNode]
+        self.assertEqual([e.op_type for e in run_node_events], ["Abs", "Add"])
+        self.assertEqual([e.op_domain for e in run_node_events], ["ai.onnx", "ai.onnx"])
+        self.assertEqual([e.inputs for e in run_node_events], [["x"], ["t", "z"]])
+        self.assertTrue(all(e.duration_ns >= 0 for e in run_node_events))
+
+        # ``as_dict`` exposes the new run_node fields.
+        d = run_node_events[0].as_dict()
+        self.assertEqual(d["action"], "run_node")
+        self.assertEqual(d["op_type"], "Abs")
+        self.assertEqual(d["op_domain"], "ai.onnx")
+        self.assertEqual(d["inputs"], ["x"])
+        self.assertEqual(d["duration_ns"], run_node_events[0].duration_ns)
+
+        # ``node_index`` tags inputs with ``-1`` and intermediates / run_node
+        # events with the index of the producing node; ``device`` is ``-1``
+        # (CPU) for the reference runtime.
+        node_indices = [(e.action, e.name, e.node_index) for e in events]
+        self.assertEqual(
+            node_indices,
+            [
+                (rt.RuntimeEventAction.kAdd, "t", 0),
+                (rt.RuntimeEventAction.kRunNode, "", 0),
+                (rt.RuntimeEventAction.kAdd, "y", 1),
+                (rt.RuntimeEventAction.kRunNode, "", 1),
+            ],
+        )
+        self.assertTrue(all(e.device == -1 for e in events))
+        self.assertEqual(d["node_index"], 0)
+        self.assertEqual(d["device"], -1)
 
     def test_run_model_abs_then_add(self):
         model = parser.parse_model(_MODEL_SRC)
@@ -214,6 +284,395 @@ class TestRunNodesBindings(ExtTestCase):
         ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
         with self.assertRaises((ValueError, RuntimeError)):
             rt.run_model(empty, ctx)
+
+    def test_register_custom_kernel(self):
+        # Register a Python custom kernel for a node in an unknown domain
+        # and verify RunNode dispatches to it.
+        model_src = (
+            '<ir_version: 10, opset_import: ["" : 18, "my.domain" : 1]>\n'
+            "agraph (float[3] x) => (float[3] y) {\n"
+            "  y = my.domain.Triple(x)\n"
+            "}\n"
+        )
+        model = parser.parse_model(model_src)
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        ctx.set("x", _make_float_tensor("x", [1.0, 2.0, 3.0]))
+
+        called = []
+
+        def triple(node, c):
+            called.append(str(node.op_type))
+            x = c.get(str(node.input[0]))
+            # Materialize a 3*x tensor via a TensorProto round-trip.
+            tp = TensorProto()
+            tp.name = str(node.output[0])
+            tp.dims.append(3)
+            tp.data_type = int(TensorProto.FLOAT)
+            vals = struct.unpack("<3f", bytes(x.raw_data()))
+            tp.raw_data = struct.pack("<3f", *(v * 3.0 for v in vals))
+            c.put(tp.name, rt.tensor_from_proto(tp), "output")
+
+        ctx.register_custom_kernel("my.domain", "Triple", triple)
+        rt.run_model(model, ctx)
+        self.assertEqual(called, ["Triple"])
+        self.assertEqual(_unpack_floats(ctx.get("y")), (3.0, 6.0, 9.0))
+
+    def test_register_custom_kernel_overrides_builtin(self):
+        # Custom kernels registered on the runtime context override the
+        # built-in dispatch table.
+        model = parser.parse_model(_MODEL_SRC)
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        ctx.set("x", _make_float_tensor("x", [-1.0, -2.0, -3.0]))
+        ctx.set("z", _make_float_tensor("z", [0.0, 0.0, 0.0]))
+
+        def fake_abs(node, c):
+            # Replace Abs with negation to prove the override applies.
+            x = c.get(str(node.input[0]))
+            vals = struct.unpack("<3f", bytes(x.raw_data()))
+            tp = TensorProto()
+            tp.name = str(node.output[0])
+            tp.dims.append(3)
+            tp.data_type = int(TensorProto.FLOAT)
+            tp.raw_data = struct.pack("<3f", *(-v for v in vals))
+            c.put(tp.name, rt.tensor_from_proto(tp), "output")
+
+        ctx.register_custom_kernel("", "Abs", fake_abs)
+        rt.run_nodes(list(model.graph.node), ctx)
+        # Abs replaced by negation: -(-1) = 1, -(-2) = 2, -(-3) = 3, +0.
+        self.assertEqual(_unpack_floats(ctx.get("y")), (1.0, 2.0, 3.0))
+
+
+class TestTensorToProto(ExtTestCase):
+    def test_tensor_to_proto_numeric_roundtrip(self):
+        t = _make_float_tensor("x", [1.0, 2.0, 3.0])
+        tp = rt.tensor_to_proto(t)
+        self.assertEqual(tp.name, "x")
+        self.assertEqual(int(tp.data_type), int(TensorProto.FLOAT))
+        self.assertEqual(list(tp.dims), [3])
+        self.assertEqual(struct.unpack("<3f", bytes(tp.raw_data)), (1.0, 2.0, 3.0))
+
+    def test_tensor_to_proto_keeps_source_alive(self):
+        # ``raw_data`` borrows the tensor's byte buffer (zero-copy); the
+        # ``keep_alive`` policy must keep the source tensor alive so the
+        # borrowed view stays valid after the Python handle is dropped.
+        tp = rt.tensor_to_proto(_make_int32_tensor("v", [7, 8, 9]))
+        self.assertEqual(struct.unpack("<3i", bytes(tp.raw_data)), (7, 8, 9))
+
+    def test_tensor_to_proto_string_tensor(self):
+        sp = TensorProto()
+        sp.name = "s"
+        sp.dims.append(2)
+        sp.data_type = int(TensorProto.STRING)
+        sp.string_data.append(b"abc")
+        sp.string_data.append(b"de")
+        t = rt.tensor_from_proto(sp)
+        tp = rt.tensor_to_proto(t)
+        self.assertEqual(int(tp.data_type), int(TensorProto.STRING))
+        self.assertEqual(list(tp.string_data), [b"abc", b"de"])
+
+
+class TestTensorToNumpy(ExtTestCase):
+    def test_tensor_to_numpy_returns_raw_uint8_view(self):
+        t = _make_float_tensor("x", [1.0, 2.0, 3.0])
+        raw = rt.tensor_to_numpy(t)
+        self.assertEqual(raw.dtype, np.uint8)
+        self.assertEqual(raw.ndim, 1)
+        self.assertEqual(raw.shape, (12,))
+        np.testing.assert_array_equal(raw.view(np.float32), np.array([1.0, 2.0, 3.0], np.float32))
+
+    def test_tensor_to_numpy_is_zero_copy(self):
+        # The returned uint8 view borrows the tensor's bytes: it must not own
+        # its data (``base`` is set) so no copy was made.
+        t = _make_int32_tensor("v", [7, 8, 9])
+        raw = rt.tensor_to_numpy(t)
+        self.assertIsNotNone(raw.base)
+        np.testing.assert_array_equal(raw.view(np.int32), np.array([7, 8, 9], np.int32))
+
+    def test_tensor_to_numpy_keeps_source_alive(self):
+        # Dropping the Python tensor handle must not invalidate the borrowed
+        # view: the array keeps the source tensor alive through its ``base``.
+        arr = rt.tensor_to_numpy(_make_int32_tensor("v", [7, 8, 9])).view(np.int32)
+        np.testing.assert_array_equal(arr, np.array([7, 8, 9], np.int32))
+
+    def test_tensor_to_numpy_string_tensor_raises(self):
+        sp = TensorProto()
+        sp.name = "s"
+        sp.dims.append(1)
+        sp.data_type = int(TensorProto.STRING)
+        sp.string_data.append(b"abc")
+        t = rt.tensor_from_proto(sp)
+        with self.assertRaises(ValueError):
+            rt.tensor_to_numpy(t)
+
+
+class TestTensorDLPack(ExtTestCase):
+    def _make_tensor(self, dtype_enum, array: np.ndarray):
+        tp = TensorProto()
+        tp.name = "x"
+        tp.data_type = int(dtype_enum)
+        tp.dims.extend(array.shape)
+        tp.raw_data = array.tobytes()
+        return rt.tensor_from_proto(tp)
+
+    def test_dlpack_device_is_cpu(self):
+        t = _make_float_tensor("x", [1.0, 2.0, 3.0])
+        # DLPack device tuple is (device_type, device_id); 1 == kDLCPU.
+        self.assertEqual(t.__dlpack_device__(), (1, 0))
+
+    def test_dlpack_returns_capsule(self):
+        t = _make_float_tensor("x", [1.0, 2.0, 3.0])
+        capsule = t.__dlpack__()
+        self.assertEqual(type(capsule).__name__, "PyCapsule")
+
+    def test_from_dlpack_float(self):
+        expected = np.arange(6, dtype=np.float32).reshape(2, 3)
+        out = np.from_dlpack(self._make_tensor(TensorProto.FLOAT, expected))
+        self.assertEqual(out.dtype, np.float32)
+        self.assertEqual(out.shape, (2, 3))
+        np.testing.assert_array_equal(out, expected)
+
+    def test_from_dlpack_is_zero_copy(self):
+        # The exported buffer is shared with the source tensor: the resulting
+        # array must not own its data (``base`` is set) so no copy was made.
+        out = np.from_dlpack(_make_int32_tensor("v", [7, 8, 9]))
+        self.assertIsNotNone(out.base)
+        np.testing.assert_array_equal(out, np.array([7, 8, 9], np.int32))
+
+    def test_from_dlpack_keeps_source_alive(self):
+        # Dropping the Python tensor handle must not invalidate the shared
+        # buffer: the array keeps the source tensor alive through the capsule.
+        out = np.from_dlpack(_make_int32_tensor("v", [7, 8, 9]))
+        np.testing.assert_array_equal(out, np.array([7, 8, 9], np.int32))
+
+    def test_from_dlpack_various_dtypes(self):
+        cases = [
+            (TensorProto.DOUBLE, np.array([1.5, 2.5], dtype=np.float64)),
+            (TensorProto.FLOAT16, np.array([1.5, 2.5], dtype=np.float16)),
+            (TensorProto.INT8, np.array([-1, 2, 3], dtype=np.int8)),
+            (TensorProto.UINT8, np.array([1, 2, 3], dtype=np.uint8)),
+            (TensorProto.INT16, np.array([1, -2], dtype=np.int16)),
+            (TensorProto.UINT16, np.array([1, 2], dtype=np.uint16)),
+            (TensorProto.INT32, np.array([1, -2], dtype=np.int32)),
+            (TensorProto.UINT32, np.array([1, 2], dtype=np.uint32)),
+            (TensorProto.INT64, np.array([[1, 2], [3, 4]], dtype=np.int64)),
+            (TensorProto.UINT64, np.array([1, 2], dtype=np.uint64)),
+        ]
+        for dtype_enum, array in cases:
+            with self.subTest(dtype=dtype_enum):
+                out = np.from_dlpack(self._make_tensor(dtype_enum, array))
+                self.assertEqual(out.dtype, array.dtype)
+                np.testing.assert_array_equal(out, array)
+
+    def test_from_dlpack_bool(self):
+        expected = np.array([True, False, True])
+        out = np.from_dlpack(self._make_tensor(TensorProto.BOOL, expected))
+        self.assertEqual(out.dtype, np.bool_)
+        np.testing.assert_array_equal(out, expected)
+
+    def test_from_dlpack_scalar(self):
+        out = np.from_dlpack(self._make_tensor(TensorProto.INT32, np.array(7, dtype=np.int32)))
+        self.assertEqual(out.shape, ())
+        self.assertEqual(int(out), 7)
+
+    def test_dlpack_string_tensor_raises(self):
+        sp = TensorProto()
+        sp.name = "s"
+        sp.dims.append(1)
+        sp.data_type = int(TensorProto.STRING)
+        sp.string_data.append(b"abc")
+        t = rt.tensor_from_proto(sp)
+        with self.assertRaises(ValueError):
+            t.__dlpack__()
+        with self.assertRaises(ValueError):
+            t.__dlpack_device__()
+
+
+class TestSubgraphEventGraphName(ExtTestCase):
+    """Verify that events produced inside subgraphs carry the correct
+    ``subgraph_node_index`` and ``subgraph_attr_name`` fields, and that
+    top-level events have ``subgraph_node_index == -1`` and an empty
+    ``subgraph_attr_name``."""
+
+    def _build_loop_model(self) -> object:
+        """Builds a Loop model: Loop(M=2, cond=true, s_init=0.0) -> s_final.
+
+        The body adds 1.0 to s_in each iteration.
+        """
+        from onnx_light.onnx import helper, TensorProto
+
+        one_init = helper.make_tensor("one", TensorProto.FLOAT, [], [1.0])
+        add = helper.make_node("Add", ["s_in", "one"], ["s_out"])
+        body = helper.make_graph(
+            [add],
+            "loop_body",
+            [
+                helper.make_tensor_value_info("iter", TensorProto.INT64, []),
+                helper.make_tensor_value_info("cond_in", TensorProto.BOOL, []),
+                helper.make_tensor_value_info("s_in", TensorProto.FLOAT, []),
+            ],
+            [
+                helper.make_tensor_value_info("cond_in", TensorProto.BOOL, []),
+                helper.make_tensor_value_info("s_out", TensorProto.FLOAT, []),
+                helper.make_tensor_value_info("s_out", TensorProto.FLOAT, []),
+            ],
+            initializer=[one_init],
+        )
+        loop_node = helper.make_node("Loop", ["M", "cond", "s_init"], ["s_final", "scan_out"])
+        loop_node.attribute.append(helper.make_attribute("body", body))
+        graph = helper.make_graph(
+            [loop_node],
+            "main",
+            [
+                helper.make_tensor_value_info("M", TensorProto.INT64, []),
+                helper.make_tensor_value_info("cond", TensorProto.BOOL, []),
+                helper.make_tensor_value_info("s_init", TensorProto.FLOAT, []),
+            ],
+            [
+                helper.make_tensor_value_info("s_final", TensorProto.FLOAT, []),
+                helper.make_tensor_value_info("scan_out", TensorProto.FLOAT, None),
+            ],
+        )
+        model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 18)])
+        model.ir_version = 10
+        return model
+
+    def _build_if_model(self) -> object:
+        """Builds an If model: cond -> If(then_branch, else_branch)."""
+        from onnx_light.onnx import helper, TensorProto
+
+        def _const_branch(name: str, val: float) -> object:
+            init = helper.make_tensor(name, TensorProto.FLOAT, [], [val])
+            add = helper.make_node("Add", [name, name], ["out"])
+            return helper.make_graph(
+                [add],
+                name + "_g",
+                [],
+                [helper.make_tensor_value_info("out", TensorProto.FLOAT, [])],
+                initializer=[init],
+            )
+
+        if_node = helper.make_node("If", ["cond"], ["z"])
+        if_node.attribute.append(helper.make_attribute("then_branch", _const_branch("t", 1.0)))
+        if_node.attribute.append(helper.make_attribute("else_branch", _const_branch("e", 2.0)))
+        graph = helper.make_graph(
+            [if_node],
+            "main",
+            [helper.make_tensor_value_info("cond", TensorProto.BOOL, [])],
+            [helper.make_tensor_value_info("z", TensorProto.FLOAT, [])],
+        )
+        model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 18)])
+        model.ir_version = 10
+        return model
+
+    def test_top_level_events_have_empty_subgraph_attr_name(self):
+        """A plain model without subgraphs has all events with empty subgraph_attr_name."""
+        model = parser.parse_model(_MODEL_SRC)
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        ctx.events_enabled = True
+        ctx.set("x", _make_float_tensor("x", [-1.0, 2.0, -3.5]))
+        ctx.set("z", _make_float_tensor("z", [10.0, 20.0, 30.0]))
+        ctx.clear_events()
+        rt.run_model(model, ctx)
+
+        for ev in ctx.events():
+            self.assertEqual(
+                ev.subgraph_attr_name,
+                "",
+                f"Expected empty subgraph_attr_name for top-level event, "
+                f"got: {ev.subgraph_attr_name!r}",
+            )
+            self.assertEqual(ev.subgraph_node_index, -1)
+
+    def test_loop_subgraph_events_carry_body_attr_name(self):
+        """At least one event from a Loop body carries subgraph_attr_name='body'."""
+        import struct
+
+        model = self._build_loop_model()
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        ctx.events_enabled = True
+
+        # Set inputs
+        m_tp = TensorProto()
+        m_tp.name = "M"
+        m_tp.data_type = int(TensorProto.INT64)
+        m_tp.raw_data = struct.pack("<q", 2)
+        ctx.set("M", rt.tensor_from_proto(m_tp))
+
+        cond_tp = TensorProto()
+        cond_tp.name = "cond"
+        cond_tp.data_type = int(TensorProto.BOOL)
+        cond_tp.raw_data = struct.pack("B", 1)
+        ctx.set("cond", rt.tensor_from_proto(cond_tp))
+
+        ctx.set("s_init", _make_float_tensor("s_init", [0.0]))
+        ctx.clear_events()
+        rt.run_model(model, ctx)
+
+        body_events = [ev for ev in ctx.events() if ev.subgraph_attr_name == "body"]
+        self.assertGreater(len(body_events), 0, "No event with subgraph_attr_name='body' found")
+        # The Loop node is node 0 in the main graph.
+        self.assertTrue(all(ev.subgraph_node_index == 0 for ev in body_events))
+
+    def test_if_then_branch_events_carry_attr_name(self):
+        """Events from the then_branch of an If must carry subgraph_attr_name='then_branch'."""
+        model = self._build_if_model()
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        ctx.events_enabled = True
+
+        cond_tp = TensorProto()
+        cond_tp.name = "cond"
+        cond_tp.data_type = int(TensorProto.BOOL)
+        import struct
+
+        cond_tp.raw_data = struct.pack("B", 1)  # true
+        ctx.set("cond", rt.tensor_from_proto(cond_tp))
+        ctx.clear_events()
+        rt.run_model(model, ctx)
+
+        then_events = [ev for ev in ctx.events() if ev.subgraph_attr_name == "then_branch"]
+        self.assertGreater(
+            len(then_events), 0, "No event with subgraph_attr_name='then_branch' found"
+        )
+        self.assertTrue(all(ev.subgraph_node_index == 0 for ev in then_events))
+
+    def test_if_else_branch_events_carry_attr_name(self):
+        """Events from the else_branch of an If must carry subgraph_attr_name='else_branch'."""
+        model = self._build_if_model()
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        ctx.events_enabled = True
+
+        cond_tp = TensorProto()
+        cond_tp.name = "cond"
+        cond_tp.data_type = int(TensorProto.BOOL)
+        import struct
+
+        cond_tp.raw_data = struct.pack("B", 0)  # false
+        ctx.set("cond", rt.tensor_from_proto(cond_tp))
+        ctx.clear_events()
+        rt.run_model(model, ctx)
+
+        else_events = [ev for ev in ctx.events() if ev.subgraph_attr_name == "else_branch"]
+        self.assertGreater(
+            len(else_events), 0, "No event with subgraph_attr_name='else_branch' found"
+        )
+        self.assertTrue(all(ev.subgraph_node_index == 0 for ev in else_events))
+
+    def test_subgraph_fields_exposed_in_as_dict(self):
+        """The ``subgraph_node_index`` and ``subgraph_attr_name`` fields must be in as_dict()."""
+        model = parser.parse_model(_MODEL_SRC)
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+        ctx.events_enabled = True
+        ctx.set("x", _make_float_tensor("x", [-1.0, 2.0, -3.5]))
+        ctx.set("z", _make_float_tensor("z", [10.0, 20.0, 30.0]))
+        ctx.clear_events()
+        rt.run_model(model, ctx)
+
+        for ev in ctx.events():
+            d = ev.as_dict()
+            self.assertIn("subgraph_node_index", d)
+            self.assertIn("subgraph_attr_name", d)
+            self.assertEqual(d["subgraph_node_index"], -1)
+            self.assertEqual(d["subgraph_attr_name"], "")
 
 
 if __name__ == "__main__":

@@ -22,9 +22,9 @@ namespace {
 
 int64_t ResolveAxis(int64_t axis, int64_t rank, const std::string &op_type) {
   const int64_t resolved = axis < 0 ? axis + rank : axis;
-  EXT_ENFORCE_INVALID(resolved >= 0 && resolved < rank,
-                      "ComputeShape" + op_type + ": axis " + std::to_string(axis) +
-                          " is out of range for rank " + std::to_string(rank) + ".");
+  EXT_ENFORCE_INVALID(resolved >= 0 && resolved < rank, "ComputeShape", op_type, ": axis ",
+                      std::to_string(axis), " is out of range for rank ", std::to_string(rank),
+                      ".");
   return resolved;
 }
 
@@ -149,20 +149,17 @@ void ComputeShapeReduceCommon(ShapesContext &ctx, const NodeProto &node, const c
     // Rank decreases by ``axes_count``; we cannot know which dims survive,
     // so produce a fully-symbolic shape of the right rank.
     const int64_t out_rank = rank - axes_count;
-    if (out_rank < 0) {
-      throw std::invalid_argument("ComputeShape" + op + ": number of axes (" +
-                                  std::to_string(axes_count) + ") exceeds input rank (" +
-                                  std::to_string(rank) + ").");
-    }
+    EXT_ENFORCE_INVALID(!(out_rank < 0), "ComputeShape", op, ": number of axes (", axes_count,
+                        ") exceeds input rank (", rank, ").");
     for (int64_t d = 0; d < out_rank; ++d) {
       out_shape.PushBack(OptimDim(op + "_d" + std::to_string(d)));
     }
   } else {
     // Neither the axes nor their count is known: not enough information to
     // infer the output shape.
-    throw std::invalid_argument("ComputeShape" + op +
-                                ": cannot infer output shape because neither the "
-                                "axes values nor the number of axes is known and 'keepdims' is 0.");
+    EXT_THROW_INVALID("ComputeShape", op,
+                      ": cannot infer output shape because neither the "
+                      "axes values nor the number of axes is known and 'keepdims' is 0.");
   }
 
   ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), std::move(out_shape)));

@@ -26,6 +26,7 @@ size_t ElementSize(int32_t dtype) {
   case DataType::FLOAT8E4M3FNUZ:
   case DataType::FLOAT8E5M2:
   case DataType::FLOAT8E5M2FNUZ:
+  case DataType::FLOAT8E8M0:
     return 1;
   case DataType::UINT16:
   case DataType::INT16:
@@ -37,7 +38,7 @@ size_t ElementSize(int32_t dtype) {
   case DataType::UINT64:
     return 8;
   default:
-    throw std::invalid_argument("Tensor::ElementSize: unsupported data_type.");
+    EXT_THROW_INVALID("Tensor::ElementSize: unsupported data_type.");
   }
 }
 
@@ -55,6 +56,7 @@ size_t PackedByteSize(int32_t dtype, int64_t element_count) {
   switch (static_cast<DataType>(dtype)) {
   case DataType::INT4:
   case DataType::UINT4:
+  case DataType::FLOAT4E2M1:
     // Two 4-bit elements packed per byte (low nibble first).
     return static_cast<size_t>((element_count + 1) / 2);
   case DataType::INT2:
@@ -345,7 +347,7 @@ Tensor TensorFromProto(const TensorProto &tp) {
     break;
   }
   default:
-    throw std::invalid_argument("TensorFromProto: unsupported data_type " + std::to_string(dtype));
+    EXT_THROW_INVALID("TensorFromProto: unsupported data_type ", dtype);
   }
 
   return Tensor(name, dtype, std::move(shape), std::move(bytes));

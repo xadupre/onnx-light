@@ -101,6 +101,15 @@ The program opens the ONNX file with :cpp:class:`onnx::utils::FileStream`,
 parses it with :cpp:func:`onnx::ParseModelProtoFromStream`, reports parse-time
 statistics from repeated in-process iterations, and prints model metadata.
 File-not-found and parse errors are caught and reported to ``stderr``.
+Before timing, the program tunes the glibc allocator
+(``mallopt(M_TRIM_THRESHOLD, -1)`` and ``mallopt(M_MMAP_MAX, 0)``) so that the
+large per-tensor ``raw_data`` buffers freed at the end of each iteration are
+kept in the allocator arena for reuse instead of being returned to the OS.
+Without this, every iteration re-``mmap``\ s those buffers and pays the
+kernel's page zero-fill cost on first touch, which dominates the measurement
+and makes the short-lived executable look several times slower than the
+equivalent in-process Python loop (whose long-lived heap already retains the
+freed blocks).
 ``FileStream`` reads the file sequentially using a buffered read-ahead approach:
 
 .. code-block:: cpp

@@ -14,12 +14,14 @@
 #include <random>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 #include <unordered_map>
 #include <vector>
 
 #if defined(_WIN32)
 #include <fcntl.h>
 #include <io.h>
+#include <share.h>
 #include <sys/stat.h>
 #else
 #include <fcntl.h>
@@ -361,6 +363,11 @@ void LoadExternalDataForModel(ModelProto &model, const std::string &base_dir) {
 
 namespace {
 
+// Returns a human-readable error string for `err`, using the thread-safe portable
+// std::error_code message instead of std::strerror (which MSVC flags as deprecated/unsafe
+// under /sdl: warning C4996).
+std::string SafeStrerror(int err) { return std::error_code(err, std::system_category()).message(); }
+
 // Parses an int64_t encoded as decimal text inside external_data entries (offset/length/size).
 int64_t ParseExternalDataInt64(const utils::String &value, const char *key) {
   int64_t out = 0;
@@ -446,7 +453,7 @@ void StreamCopyFileRange(int src_fd, int64_t src_offset, int64_t n_bytes, int ds
   // Zero-copy path: src_fd -> pipe -> dst_fd, entirely in kernel space.
   int pipefd[2];
   EXT_ENFORCE(::pipe(pipefd) == 0, "StreamCopyFileRange: pipe() failed (errno=", errno, ": ",
-              std::strerror(errno), ").");
+              SafeStrerror(errno), ").");
   // RAII pipe closer so we never leak fds on exception.
   struct PipeGuard {
     int *p;
@@ -467,7 +474,7 @@ void StreamCopyFileRange(int src_fd, int64_t src_offset, int64_t n_bytes, int ds
     if (r < 0 && errno == EINTR)
       continue;
     EXT_ENFORCE(r > 0, "StreamCopyFileRange: splice(src->pipe) failed at offset ",
-                src_offset + (n_bytes - remaining), " (errno=", errno, ": ", std::strerror(errno),
+                src_offset + (n_bytes - remaining), " (errno=", errno, ": ", SafeStrerror(errno),
                 ", returned ", r, ").");
     ssize_t to_drain = r;
     while (to_drain > 0) {
@@ -476,7 +483,7 @@ void StreamCopyFileRange(int src_fd, int64_t src_offset, int64_t n_bytes, int ds
       if (w < 0 && errno == EINTR)
         continue;
       EXT_ENFORCE(w > 0, "StreamCopyFileRange: splice(pipe->dst) failed (errno=", errno, ": ",
-                  std::strerror(errno), ", returned ", w, ").");
+                  SafeStrerror(errno), ", returned ", w, ").");
       to_drain -= w;
     }
     remaining -= r;
@@ -486,12 +493,12 @@ void StreamCopyFileRange(int src_fd, int64_t src_offset, int64_t n_bytes, int ds
 #if defined(_WIN32)
   const __int64 seeked = ::_lseeki64(src_fd, static_cast<__int64>(src_offset), SEEK_SET);
   EXT_ENFORCE(seeked == static_cast<__int64>(src_offset),
-              "StreamCopyFileRange: _lseeki64 failed (errno=", errno, ": ", std::strerror(errno),
+              "StreamCopyFileRange: _lseeki64 failed (errno=", errno, ": ", SafeStrerror(errno),
               ").");
 #else
   const off_t seeked = ::lseek(src_fd, static_cast<off_t>(src_offset), SEEK_SET);
   EXT_ENFORCE(seeked == static_cast<off_t>(src_offset),
-              "StreamCopyFileRange: lseek failed (errno=", errno, ": ", std::strerror(errno), ").");
+              "StreamCopyFileRange: lseek failed (errno=", errno, ": ", SafeStrerror(errno), ").");
 #endif
   int64_t remaining = n_bytes;
   while (remaining > 0) {
@@ -507,7 +514,7 @@ void StreamCopyFileRange(int src_fd, int64_t src_offset, int64_t n_bytes, int ds
     EXT_ENFORCE(r > 0 && static_cast<size_t>(r) == to_read,
                 "StreamCopyFileRange: short read from source weights file (asked for ", to_read,
                 ", got ", r, ", at offset ", src_offset + (n_bytes - remaining), ", errno=", errno,
-                ": ", std::strerror(errno), ").");
+                ": ", SafeStrerror(errno), ").");
     const char *p = buffer.data();
     size_t left = static_cast<size_t>(r);
     while (left > 0) {
@@ -519,7 +526,7 @@ void StreamCopyFileRange(int src_fd, int64_t src_offset, int64_t n_bytes, int ds
         continue;
 #endif
       EXT_ENFORCE(w > 0, "StreamCopyFileRange: failed to write to destination (errno=", errno, ": ",
-                  std::strerror(errno), ").");
+                  SafeStrerror(errno), ").");
       p += w;
       left -= static_cast<size_t>(w);
     }
@@ -546,7 +553,7 @@ void WriteZeros(int dst_fd, int64_t n) {
 #endif
       EXT_ENFORCE(w > 0,
                   "AlignExternalDataStreaming: failed to write padding to destination (errno=",
-                  errno, ": ", std::strerror(errno), ").");
+                  errno, ": ", SafeStrerror(errno), ").");
       p += w;
       left -= static_cast<size_t>(w);
     }
@@ -589,7 +596,10 @@ private:
 
 int OpenForRead(const std::string &path) {
 #if defined(_WIN32)
-  return ::_open(path.c_str(), _O_RDONLY | _O_BINARY);
+  int fd = -1;
+  // _sopen_s is MSVC's secure replacement for _open (avoids C4996 under /sdl).
+  ::_sopen_s(&fd, path.c_str(), _O_RDONLY | _O_BINARY, _SH_DENYNO, 0);
+  return fd;
 #else
   return ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
 #endif
@@ -597,7 +607,10 @@ int OpenForRead(const std::string &path) {
 
 int OpenForWriteTrunc(const std::string &path) {
 #if defined(_WIN32)
-  return ::_open(path.c_str(), _O_WRONLY | _O_CREAT | _O_TRUNC | _O_BINARY, _S_IREAD | _S_IWRITE);
+  int fd = -1;
+  ::_sopen_s(&fd, path.c_str(), _O_WRONLY | _O_CREAT | _O_TRUNC | _O_BINARY, _SH_DENYNO,
+             _S_IREAD | _S_IWRITE);
+  return fd;
 #else
   return ::open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
 #endif
@@ -646,7 +659,7 @@ offset_t AlignExternalDataStreaming(const std::string &src_onnx_path,
   ScopedFd out_fd(OpenForWriteTrunc(dst_weights_path));
   EXT_ENFORCE(out_fd.get() >= 0,
               "AlignExternalDataStreaming: cannot open destination weights file '",
-              dst_weights_path, "' for writing (errno=", errno, ": ", std::strerror(errno), ").");
+              dst_weights_path, "' for writing (errno=", errno, ": ", SafeStrerror(errno), ").");
 
   // Cache one fd per source weights location so we don't reopen for every tensor.
   std::unordered_map<std::string, ScopedFd> src_fds;
@@ -691,7 +704,7 @@ offset_t AlignExternalDataStreaming(const std::string &src_onnx_path,
       int fd = OpenForRead(src_weights_key);
       EXT_ENFORCE(fd >= 0, "AlignExternalDataStreaming: cannot open source weights file '",
                   src_weights_key, "' for tensor '", tensor.ref_name().as_string(),
-                  "' (errno=", errno, ": ", std::strerror(errno), ").");
+                  "' (errno=", errno, ": ", SafeStrerror(errno), ").");
       stream_it = src_fds.emplace(src_weights_key, ScopedFd(fd)).first;
     }
 
@@ -716,7 +729,7 @@ offset_t AlignExternalDataStreaming(const std::string &src_onnx_path,
 #if defined(_WIN32)
   EXT_ENFORCE(::_commit(out_fd.get()) == 0,
               "AlignExternalDataStreaming: failed to flush destination weights file (errno=", errno,
-              ": ", std::strerror(errno), ").");
+              ": ", SafeStrerror(errno), ").");
 #else
   // fsync is not strictly needed (close will flush), but matches the prior flush+close intent.
   // We intentionally do not fail on fsync errors that may occur on tmpfs in CI.
@@ -768,7 +781,7 @@ offset_t SaveModelWithSharedExternalData(ModelProto &model, const std::string &d
       out_fd = ScopedFd(OpenForWriteTrunc(dst_weights_path));
       EXT_ENFORCE(out_fd.get() >= 0,
                   "SaveModelWithSharedExternalData: cannot open destination weights file '",
-                  dst_weights_path, "' for writing (errno=", errno, ": ", std::strerror(errno),
+                  dst_weights_path, "' for writing (errno=", errno, ": ", SafeStrerror(errno),
                   ").");
       out_open = true;
     }
@@ -825,7 +838,7 @@ offset_t SaveModelWithSharedExternalData(ModelProto &model, const std::string &d
 #endif
       EXT_ENFORCE(w > 0, "SaveModelWithSharedExternalData: failed to write tensor '",
                   tensor.ref_name().as_string(), "' to destination weights file (errno=", errno,
-                  ": ", std::strerror(errno), ").");
+                  ": ", SafeStrerror(errno), ").");
       p += w;
       left -= static_cast<size_t>(w);
     }
@@ -852,7 +865,7 @@ offset_t SaveModelWithSharedExternalData(ModelProto &model, const std::string &d
 #if defined(_WIN32)
     EXT_ENFORCE(::_commit(out_fd.get()) == 0,
                 "SaveModelWithSharedExternalData: failed to flush destination weights file (errno=",
-                errno, ": ", std::strerror(errno), ").");
+                errno, ": ", SafeStrerror(errno), ").");
 #else
     ::fsync(out_fd.get());
 #endif
@@ -933,6 +946,9 @@ std::shared_ptr<uint8_t[]> ConsolidateTensorsToBuffer(ModelProto &model,
 
 void SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &stream,
                                  SerializeOptions &options, bool clear_external_data) {
+  EXT_ENFORCE(options.format == SerializeFormat::kOnnx,
+              "SerializeModelProtoToStream: SerializeFormat::kOrtFlatbuffers is not "
+              "implemented yet. Use SerializeFormat::kOnnx for now.");
   if (options.is_parallel())
     stream.StartThreadPool(options.num_threads);
   if (stream.ExternalWeights()) {
@@ -1009,36 +1025,61 @@ void SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
 
 void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
                                ParseOptions &options, bool clear_external_data) {
-  // Mirror SerializeModelProtoToStream: start the thread pool when requested and
-  // wait for all delayed reads once parsing is complete.
-  if (options.is_parallel() && !stream.HasParallelizationStarted())
-    stream.StartThreadPool(options.num_threads);
-  if (stream.ExternalWeights()) {
-    // no_copy ownership model:
-    // - External-data tensors borrow slices from TwoFilesStream shared weights buffers.
-    //   TensorProto::raw_data stores a shared_ptr owner (ByteSpan::owner_) so those
-    //   mmap-backed buffers stay alive as long as the parsed model keeps borrowed tensors.
-    // - Inline protobuf raw_data borrowed from an input bytes buffer is different:
-    //   the caller must keep the original bytes object alive for the model lifetime.
-    utils::TwoFilesStream &two_stream = dynamic_cast<utils::TwoFilesStream &>(stream);
-    std::filesystem::path parent_path = two_stream.file_path();
-    parent_path = parent_path.parent_path();
-    std::filesystem::path weight_path = two_stream.weights_file_path();
-    weight_path = std::filesystem::relative(weight_path, parent_path);
-    if (weight_path.empty()) {
-      // If the relative path is empty, it means the weight file is in the same directory as the
-      // model.
-      weight_path = two_stream.weights_file_path();
+  if (options.format == SerializeFormat::kOrtFlatbuffers) {
+    // Recursion-OOM guard: validate the depth limit before any parsing begins
+    // so that a maliciously crafted .ort file cannot exhaust the call stack
+    // once the flatbuffer reader is implemented.
+    EXT_ENFORCE(options.max_recursion_depth > 0,
+                "ParseModelProtoFromStream: ParseOptions::max_recursion_depth must be > 0 "
+                "(got ",
+                options.max_recursion_depth,
+                "). "
+                "The ORT flatbuffer parser uses this limit to reject models "
+                "nested more deeply than the configured value, preventing stack "
+                "overflow on adversarially deep inputs.");
+    // Tensor-size OOM guard: max_tensor_size_bytes must be >= 0.
+    EXT_ENFORCE(options.max_tensor_size_bytes >= 0,
+                "ParseModelProtoFromStream: ParseOptions::max_tensor_size_bytes must be >= 0 "
+                "(got ",
+                options.max_tensor_size_bytes,
+                "). Use 0 to disable the limit or a positive value to cap tensor allocations.");
+    EXT_THROW("ParseModelProtoFromStream: SerializeFormat::kOrtFlatbuffers is not "
+              "implemented yet. Use SerializeFormat::kOnnx for now.");
+  } else {
+    EXT_ENFORCE(options.format == SerializeFormat::kOnnx,
+                "ParseModelProtoFromStream: unrecognised SerializeFormat value ",
+                static_cast<int>(options.format), "; only kOnnx is currently supported.");
+    // Mirror SerializeModelProtoToStream: start the thread pool when requested and
+    // wait for all delayed reads once parsing is complete.
+    if (options.is_parallel() && !stream.HasParallelizationStarted())
+      stream.StartThreadPool(options.num_threads);
+    if (stream.ExternalWeights()) {
+      // no_copy ownership model:
+      // - External-data tensors borrow slices from TwoFilesStream shared weights buffers.
+      //   TensorProto::raw_data stores a shared_ptr owner (ByteSpan::owner_) so those
+      //   mmap-backed buffers stay alive as long as the parsed model keeps borrowed tensors.
+      // - Inline protobuf raw_data borrowed from an input bytes buffer is different:
+      //   the caller must keep the original bytes object alive for the model lifetime.
+      utils::TwoFilesStream &two_stream = dynamic_cast<utils::TwoFilesStream &>(stream);
+      std::filesystem::path parent_path = two_stream.file_path();
+      parent_path = parent_path.parent_path();
+      std::filesystem::path weight_path = two_stream.weights_file_path();
+      weight_path = std::filesystem::relative(weight_path, parent_path);
+      if (weight_path.empty()) {
+        // If the relative path is empty, it means the weight file is in the same directory as the
+        // model.
+        weight_path = two_stream.weights_file_path();
+      }
     }
+    model.ParseFromStream(stream, options);
+    if (options.is_parallel())
+      stream.WaitForDelayedBlock();
+    if (options._touch_raw_data_pages) {
+      (void)TouchesAllModelRawDataPages(model);
+    }
+    if (stream.ExternalWeights() && clear_external_data)
+      ClearExternalData(model);
   }
-  model.ParseFromStream(stream, options);
-  if (options.is_parallel())
-    stream.WaitForDelayedBlock();
-  if (options._touch_raw_data_pages) {
-    (void)TouchesAllModelRawDataPages(model);
-  }
-  if (stream.ExternalWeights() && clear_external_data)
-    ClearExternalData(model);
 }
 
 // Extracts the integer values of ``tensor_proto`` into ``out``. Reads
@@ -1228,15 +1269,13 @@ const GraphProto &FindGraphAttribute(const NodeProto &node, const char *attr_nam
     if (attr.name() != attr_name) {
       continue;
     }
-    EXT_ENFORCE_INVALID(attr.type() == AttributeProto::AttributeType::GRAPH && attr.has_g(),
-                        prefix + "attribute '" + attr_name +
-                            "' must be a GRAPH on node of op_type '" + node.op_type().as_string() +
-                            "'.");
+    EXT_ENFORCE_INVALID(attr.type() == AttributeProto::AttributeType::GRAPH && attr.has_g(), prefix,
+                        "attribute '", attr_name, "' must be a GRAPH on node of op_type '",
+                        node.op_type().as_string(), "'.");
     return attr.g();
   }
-  throw std::invalid_argument(prefix + "attribute '" + attr_name +
-                              "' is missing on node of op_type '" + node.op_type().as_string() +
-                              "'.");
+  EXT_THROW_INVALID(prefix, "attribute '", attr_name, "' is missing on node of op_type '",
+                    node.op_type().as_string(), "'.");
 }
 
 NodeProto MakeNode(const char *op_type, const std::vector<std::string> &inputs,

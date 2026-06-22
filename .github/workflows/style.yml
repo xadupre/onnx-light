@@ -22,6 +22,6 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install ruff
-        run: pip install ruff
+        run: pip install -e ".[style]"
       - name: Check style
         run: ruff check .

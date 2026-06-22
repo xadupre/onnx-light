@@ -2,17 +2,17 @@
 
 import unittest
 
-from onnx_light.doc import (
-    InferenceCaseReport,
-    InferenceCoverageReport,
-    ValueComparison,
-    ValueShape,
-    compute_inference_coverage,
-    render_rst_case,
-    render_rst_report,
-    render_rst_summary,
-)
-from onnx_light.ext_test_case import ExtTestCase
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
+
+doc = import_or_skip("onnx_light.doc")
+InferenceCaseReport = doc.InferenceCaseReport
+InferenceCoverageReport = doc.InferenceCoverageReport
+ValueComparison = doc.ValueComparison
+ValueShape = doc.ValueShape
+compute_inference_coverage = doc.compute_inference_coverage
+render_rst_case = doc.render_rst_case
+render_rst_report = doc.render_rst_report
+render_rst_summary = doc.render_rst_summary
 
 
 class TestInferenceCoverage(ExtTestCase):
@@ -31,7 +31,8 @@ class TestInferenceCoverage(ExtTestCase):
         for case in self.report.cases:
             self.assertIsInstance(case, InferenceCaseReport)
             self.assertTrue(case.name.startswith("test_"))
-            self.assertIn("flowchart", case.mermaid)
+            # model_str is produced by pretty_onnx and contains the opset line.
+            self.assertIn("opset", case.model_str)
 
     def test_known_case_present(self):
         names = {c.name for c in self.report.cases}
@@ -75,7 +76,7 @@ class TestInferenceCoverage(ExtTestCase):
         case = self.report.cases[0]
         text = render_rst_case(case)
         self.assertIn(case.name, text)
-        self.assertIn("runmermaid", text)
+        self.assertIn("code-block", text)
         # Either the comparison table or the warning block must be present.
         self.assertTrue(("list-table" in text) or ("warning" in text))
 

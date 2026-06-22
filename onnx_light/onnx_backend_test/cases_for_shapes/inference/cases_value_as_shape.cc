@@ -56,7 +56,7 @@ void RegisterValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry) {
 
   const std::string name = "test_cc_shape_inference_value_as_shape";
 
-  TestCase tc(name, name, "model", "inference", 1e-3, 1e-7);
+  TestCase tc(name, name, "model", "inference", 1e-7, 1e-3);
 
   ModelProto &model = tc.model;
   InitModel(model, kDefaultIrVersion, {opset});
@@ -105,6 +105,14 @@ void RegisterValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry) {
   // :cpp:func:`SnapshotAndStripValueInfo` in the
   // ``AllCollectedCasesInferOutputShapes`` test and used as the ground
   // truth that shape inference must recover.
+  // Shape-computation intermediates (INT64): n/b/shape/shape1/shape2 flow
+  // into Expand as value-as-shape tensors and must be listed in value_info
+  // so that shape inference does not introduce previously-unknown names.
+  AppendValueInfo(*graph->add_value_info(), "n", DataType::INT64, {DimSpec(int64_t{1})});
+  AppendValueInfo(*graph->add_value_info(), "b", DataType::INT64, {DimSpec(int64_t{1})});
+  AppendValueInfo(*graph->add_value_info(), "shape", DataType::INT64, {DimSpec(int64_t{2})});
+  AppendValueInfo(*graph->add_value_info(), "shape1", DataType::INT64, {DimSpec(int64_t{2})});
+  AppendValueInfo(*graph->add_value_info(), "shape2", DataType::INT64, {DimSpec(int64_t{2})});
   AppendValueInfo(*graph->add_value_info(), "expanded", DataType::FLOAT,
                   {"N", DimSpec(int64_t{1})});
   AppendValueInfo(*graph->add_value_info(), "z1", DataType::FLOAT, {"N", "B"});

@@ -13,23 +13,6 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-namespace {
-
-void PromoteOutputToSequenceMapType(std::vector<TestCase> &registry, int32_t key_type) {
-  GraphProto &graph = registry.back().model.ref_graph();
-  ValueInfoProto &out_vi = *graph.mutable_output(0);
-  TypeProto &out_tp = out_vi.ref_type();
-  TypeProto::Sequence *out_seq = out_tp.mutable_sequence_type();
-  TypeProto *out_elem = out_seq->mutable_elem_type();
-  TypeProto::Map *out_map = out_elem->mutable_map_type();
-  out_map->set_key_type(key_type);
-  TypeProto *map_value_type = out_map->mutable_value_type();
-  map_value_type->mutable_tensor_type()->set_elem_type(static_cast<int>(DataType::FLOAT));
-  out_tp.reset_tensor_type();
-}
-
-} // namespace
-
 void RegisterZipMapCases(std::vector<TestCase> &registry) {
   const OpsetId opset("ai.onnx.ml", 1);
   const OpsetId default_opset = DefaultOpset(13);
@@ -55,9 +38,10 @@ void RegisterZipMapCases(std::vector<TestCase> &registry) {
     Tensor x = Tensor::FromFloat("", {2, 3}, {0.1f, 0.7f, 0.2f, 0.3f, 0.4f, 0.3f});
     Tensor z = zipmap(x, class_labels);
 
-    Expect(node, {x}, {z}, "test_cc_zipmap_int64", {default_opset, opset}, "backend-test",
-           registry);
-    PromoteOutputToSequenceMapType(registry, static_cast<int32_t>(DataType::INT64));
+    Expect(node, {x}, {z}, "test_cc_zipmap_int64", {default_opset, opset}, "backend-test", registry,
+           "",
+           {SequenceTypeSpec(MapTypeSpec(static_cast<int32_t>(DataType::INT64),
+                                         TensorTypeSpec(static_cast<int32_t>(DataType::FLOAT))))});
   }
 
   // string-key variant.
@@ -80,8 +64,9 @@ void RegisterZipMapCases(std::vector<TestCase> &registry) {
     Tensor z = zipmap(x, class_labels);
 
     Expect(node, {x}, {z}, "test_cc_zipmap_string", {default_opset, opset}, "backend-test",
-           registry);
-    PromoteOutputToSequenceMapType(registry, static_cast<int32_t>(DataType::STRING));
+           registry, "",
+           {SequenceTypeSpec(MapTypeSpec(static_cast<int32_t>(DataType::STRING),
+                                         TensorTypeSpec(static_cast<int32_t>(DataType::FLOAT))))});
   }
 }
 

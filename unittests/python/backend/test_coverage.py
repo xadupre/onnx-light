@@ -1,14 +1,19 @@
 import unittest
 
 import numpy as np
+
 import onnx_light.onnx as onnxl
-from onnx_light.onnx_lib.backend.coverage import (
-    CoverageReport,
-    OperatorCoverage,
-    compute_test_case_coverage,
-)
-from onnx_light.onnx_lib.backend.test.case.base import ALL_TESTS, TestCase
-from onnx_light.ext_test_case import ExtTestCase
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
+
+# The backend test registries are only available in the full build; skip this
+# module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
+_coverage = import_or_skip("onnx_light.onnx_lib.backend.coverage")
+CoverageReport = _coverage.CoverageReport
+OperatorCoverage = _coverage.OperatorCoverage
+compute_test_case_coverage = _coverage.compute_test_case_coverage
+_case_base = import_or_skip("onnx_light.onnx_lib.backend.test.case.base")
+ALL_TESTS = _case_base.ALL_TESTS
+TestCase = _case_base.TestCase
 
 
 def _make_test_case(
@@ -52,8 +57,8 @@ def _make_test_case(
         model=model,
         data_sets=[(list(inputs), list(outputs))],
         kind="node",
-        rtol=1e-3,
         atol=1e-7,
+        rtol=1e-3,
     )
 
 
@@ -161,8 +166,8 @@ class TestCoverage(ExtTestCase):
             model=model,
             data_sets=[([a], [np.abs(a)])],
             kind="node",
-            rtol=1e-3,
             atol=1e-7,
+            rtol=1e-3,
         )
         report = compute_test_case_coverage({"test_multi": tc})
         ident = next(

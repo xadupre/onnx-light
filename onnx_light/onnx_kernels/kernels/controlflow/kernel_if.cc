@@ -64,6 +64,7 @@ std::vector<Tensor> If::operator()(const Tensor &cond, const GraphProto &then_br
 
   const bool taken = cond.bytes()[0] != 0;
   const GraphProto &branch = taken ? then_branch : else_branch;
+  const std::string branch_name = taken ? "then_branch" : "else_branch";
 
   // Run the selected subgraph in a fresh child context whose tensor map and
   // model-local function registry are inherited from the caller's context
@@ -72,7 +73,15 @@ std::vector<Tensor> If::operator()(const Tensor &cond, const GraphProto &then_br
   RuntimeContext child(rt.kernel_ctx());
   child.functions() = rt.functions();
   child.tensors() = rt.tensors();
+  child.set_events_enabled(rt.events_enabled());
+  child.set_current_subgraph(rt.current_node_index(), branch_name);
   RunGraph(branch, child);
+
+  if (rt.events_enabled()) {
+    for (auto &ev : child.events()) {
+      rt.events().push_back(std::move(ev));
+    }
+  }
 
   std::vector<Tensor> outputs;
   outputs.reserve(static_cast<size_t>(branch.output_size()));
@@ -80,9 +89,8 @@ std::vector<Tensor> If::operator()(const Tensor &cond, const GraphProto &then_br
     const std::string out_name = branch.output()[i].name().as_string();
     EXT_ENFORCE_INVALID(!out_name.empty(), "kernel::If: a subgraph output has an empty name.");
     auto it = child.tensors().find(out_name);
-    EXT_ENFORCE_INVALID(it != child.tensors().end(),
-                        "kernel::If: subgraph output '" + out_name +
-                            "' was not produced by the selected branch.");
+    EXT_ENFORCE_INVALID(it != child.tensors().end(), "kernel::If: subgraph output '", out_name,
+                        "' was not produced by the selected branch.");
     outputs.push_back(std::move(it->second));
   }
   return outputs;

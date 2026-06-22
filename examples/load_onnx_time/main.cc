@@ -14,6 +14,10 @@
 
 #include "onnx/onnx_pb.h"
 
+#if defined(__GLIBC__)
+#include <malloc.h>
+#endif
+
 #include <algorithm>
 #include <charconv>
 #include <chrono>
@@ -80,9 +84,28 @@ void PrintModelSummary(const onnx::ModelProto &model) {
   }
 }
 
+// Keeps freed heap blocks in the allocator's arena during the benchmark loop.
+//
+// With glibc, malloc serves large requests (>= M_MMAP_THRESHOLD, 128 KiB by
+// default) with mmap and hands the pages back to the OS on free(). Each
+// iteration of the timing loop then re-mmaps the per-tensor raw_data buffers,
+// and the kernel zero-fills those pages on first touch. That page-fault cost
+// dominates the measurement and makes this short-lived executable look several
+// times slower than the equivalent in-process Python loop, whose long-lived
+// heap retains the freed blocks for reuse. Disabling trimming and mmap-backed
+// allocation keeps the freed blocks resident so the loop measures the parser
+// itself, mirroring the steady state of a long-running process.
+void TuneAllocatorForBenchmark() {
+#if defined(__GLIBC__)
+  ::mallopt(M_TRIM_THRESHOLD, -1);
+  ::mallopt(M_MMAP_MAX, 0);
+#endif
+}
+
 } // namespace
 
 int main(int argc, char *argv[]) {
+  TuneAllocatorForBenchmark();
   if (argc < 2 || argc > 4) {
     std::cerr << "Usage: " << argv[0] << " <model.onnx> [iterations] [num_threads]\n";
     return 1;

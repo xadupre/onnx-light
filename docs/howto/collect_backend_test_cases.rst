@@ -1,0 +1,142 @@
+.. _l-howto-collect-backend-test-cases:
+
+:html_theme.sidebar_secondary.remove:
+
+How to collect backend test cases (by op type or by name)
+=========================================================
+
+*onnx-light* ships a catalog of C++-implemented ONNX backend test cases.
+This page shows how to enumerate them, how to filter them by operator
+type or category, and how to look one up by name (substring or full
+regular expression).  The same data is exposed in Python and in C++.
+
+List every test case
+--------------------
+
+.. tab-set::
+
+   .. tab-item:: Python
+      :sync: python
+
+      .. code-block:: python
+
+          import onnx_light.onnx.backend as bt
+
+          cases = bt.collect_test_cases()
+          print(len(cases), "cases")
+          for tc in cases[:5]:
+              print(tc.name, tc.kind, tc.tag)
+
+   .. tab-item:: C++
+      :sync: cpp
+
+      .. code-block:: cpp
+
+          #include "onnx_backend_test/test_case.h"
+
+          auto cases = onnx_backend_test::CollectTestCases();
+          for (const auto &tc : cases) {
+              std::cout << tc.name << " " << tc.kind << " " << tc.tag << "\n";
+          }
+
+Filter by operator type or category
+-----------------------------------
+
+:func:`~onnx_light.onnx.backend.collect_test_cases` accepts an operator type
+(for example ``"Add"``) or one of the special category strings ``"shape"``,
+``"inference"``, or ``"nan_inf"`` to narrow down the result.
+
+.. tab-set::
+
+   .. tab-item:: Python
+      :sync: python
+
+      .. code-block:: python
+
+          import onnx_light.onnx.backend as bt
+
+          add_cases = bt.collect_test_cases("Add")
+          shape_cases = bt.collect_test_cases("shape")
+
+   .. tab-item:: C++
+      :sync: cpp
+
+      .. code-block:: cpp
+
+          #include "onnx_backend_test/test_case.h"
+
+          auto add_cases = onnx_backend_test::CollectTestCases("Add");
+          auto shape_cases = onnx_backend_test::CollectTestCases("shape");
+
+Collect a test case by name
+---------------------------
+
+Use :func:`onnx_light.onnx.backend.collect_test_cases_by_name` (or
+:cpp:func:`onnx_light::onnx_backend_test::CollectTestCasesByName` in C++) to
+look up one or more cases by their ``name``.  The pattern is matched with
+``std::regex_search`` ECMAScript semantics, so a plain string acts as a
+substring match; anchor it with ``^...$`` for a full match.
+
+.. tab-set::
+
+   .. tab-item:: Python
+      :sync: python
+
+      .. code-block:: python
+
+          import re
+          import onnx_light.onnx.backend as bt
+
+          # Substring match: every case whose name contains "abs".
+          cases = bt.collect_test_cases_by_name("abs")
+
+          # Full regex: only the C++ "test_cc_add" cases.
+          cases = bt.collect_test_cases_by_name(r"^test_cc_add(_|$)")
+
+          # A pre-compiled re.Pattern is also accepted.
+          cases = bt.collect_test_cases_by_name(re.compile(r"abs"))
+
+          for tc in cases:
+              print(tc.name)
+
+   .. tab-item:: C++
+      :sync: cpp
+
+      .. code-block:: cpp
+
+          #include "onnx_backend_test/test_case.h"
+
+          // Substring match
+          auto cases = onnx_backend_test::CollectTestCasesByName("abs");
+
+          // Full regex
+          auto cc_add = onnx_backend_test::CollectTestCasesByName(
+              "^test_cc_add(_|$)");
+
+          for (const auto &tc : cases) {
+              std::cout << tc.name << "\n";
+          }
+
+Notes
+-----
+
+* The Python ``pattern`` argument accepts either a :class:`str` or a
+  pre-compiled :class:`re.Pattern`; in the latter case the ``pattern``
+  source string is forwarded to the C++ side.  Passing any other type
+  raises :class:`TypeError`, and an invalid regular expression raises
+  :class:`ValueError`.
+* The C++ overload throws ``std::regex_error`` for an invalid pattern.
+* An empty ``name_regex`` matches every case and is equivalent to
+  calling :func:`~onnx_light.onnx.backend.collect_test_cases` /
+  :cpp:func:`onnx_light::onnx_backend_test::CollectTestCases` with no
+  arguments.
+* :class:`TestCase` exposes ``name``, ``kind``, ``tag``, ``rtol``,
+  ``atol``, ``data_sets``, and a lazily resolved ``model``
+  (:class:`onnx_light.onnx.ModelProto`), so a case retrieved by name can
+  be fed directly to a :class:`~onnx_light.onnx.reference.ReferenceEvaluator`
+  or to any other backend runner.
+
+See also
+--------
+
+* :ref:`l-how-to` - other onnx-light how-to recipes.

@@ -17,7 +17,15 @@ void ComputeShapeIdentity(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Identity", "ComputeShapeIdentity");
   EXT_ENFORCE_INVALID(node.input_size() >= 1, "ComputeShapeIdentity: Identity requires one input.");
 
-  const OptimTensor &input = ctx.Get(node.input(0).as_string());
+  const std::string input_name = node.input(0).as_string();
+
+  if (ctx.HasSequence(input_name)) {
+    // Sequence input: propagate the sequence descriptor to the output.
+    ctx.SetSequence(node.output(0), OptimSequence(ctx.GetSequence(input_name)));
+    return;
+  }
+
+  const OptimTensor &input = ctx.Get(input_name);
   // Identity simply propagates the input dtype and shape (including any
   // symbolic dims) to the output unchanged.
   ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), input.Shape()));

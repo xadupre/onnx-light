@@ -34,9 +34,8 @@ OptimDim ScaleDim(const OptimDim &dim, float scale, std::size_t axis) {
 
 void ComputeShapeUpsample(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Upsample", "ComputeShapeUpsample");
-  if (node.input_size() < 1) {
-    throw std::invalid_argument("ComputeShapeUpsample: Upsample requires one input.");
-  }
+  EXT_ENFORCE_INVALID(!(node.input_size() < 1),
+                      "ComputeShapeUpsample: Upsample requires one input.");
 
   const OptimTensor &input = ctx.Get(node.input(0).as_string());
   const OptimShape &input_shape = input.Shape();
@@ -74,11 +73,9 @@ void ComputeShapeUpsample(ShapesContext &ctx, const NodeProto &node) {
     }
   }
 
-  if (scales_known && scales.size() != rank) {
-    throw std::invalid_argument(
-        "ComputeShapeUpsample: 'scales' length (" + std::to_string(scales.size()) +
-        ") must equal the rank of input 'X' (" + std::to_string(rank) + ").");
-  }
+  EXT_ENFORCE_INVALID(!(scales_known && scales.size() != rank),
+                      "ComputeShapeUpsample: 'scales' length (", scales.size(),
+                      ") must equal the rank of input 'X' (", rank, ").");
 
   OptimShape out_shape;
   for (std::size_t i = 0; i < rank; ++i) {

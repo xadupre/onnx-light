@@ -3,7 +3,15 @@ from typing import Any, Callable, Sequence, TypeAlias
 import numpy as np
 from ..... import onnx
 from .....onnx import helper as onnx_helper
-from .....onnx_py._onnxpybackend import backend_test as _backend_test_cc  # type: ignore
+
+try:
+    from .....onnx_py._onnxpybackend import backend_test as _backend_test_cc  # type: ignore
+except ImportError as exc:  # pragma: no cover - exercised only in reduced builds
+    raise ImportError(
+        "onnx-light was built without the backend-test extensions "
+        "(ONNX_LIGHT_BUILD_KERNELS=OFF); install the full build to use the "
+        "backend test cases."
+    ) from exc
 from .....onnx_py._onnxpyprotoop import onnx_op as _onnx_op  # type: ignore
 from .....ext_test_case import ExtTestCase
 
@@ -67,12 +75,12 @@ class TestCase(_backend_test_cc.TestCase):
         model: onnx.ModelProto | None,
         data_sets: BackendTestDataSets | None,
         kind: str,
-        rtol: float,
         atol: float,
+        rtol: float,
         tag: str = "",
     ) -> None:
         super().__init__(
-            name=name, model_name=model_name, kind=kind, tag=tag, rtol=rtol, atol=atol
+            name=name, model_name=model_name, kind=kind, tag=tag, atol=atol, rtol=rtol
         )
         self.url = url
         self.model_dir = model_dir
@@ -270,8 +278,8 @@ def expect(
         model=model,
         data_sets=[(list(inputs_dict.values()), list(outputs_dict.values()))],
         kind="node",
-        rtol=1e-3,
         atol=1e-7,
+        rtol=1e-3,
     )
 
 
@@ -307,6 +315,7 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
         int(onnx.TensorProto.FLOAT8E4M3FNUZ): _ml_dtypes.float8_e4m3fnuz,
         int(onnx.TensorProto.FLOAT8E5M2): _ml_dtypes.float8_e5m2,
         int(onnx.TensorProto.FLOAT8E5M2FNUZ): _ml_dtypes.float8_e5m2fnuz,
+        int(onnx.TensorProto.FLOAT8E8M0): _ml_dtypes.float8_e8m0fnu,
     }
 
     # Sub-byte packed integer dtypes: ONNX stores these row-major with the
@@ -366,13 +375,71 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
         arr = np.frombuffer(t.raw_data(), dtype=dtype)
         return arr.reshape(tuple(int(d) for d in t.shape))
 
+    def _ds_inputs_to_python(tc) -> list[list]:
+        """Returns per-DataSet positional inputs for ``tc``.
+
+        For graph inputs declared with ``map(K, V)`` type (used by
+        ``ai.onnx.ml::DictVectorizer`` and ``ai.onnx.ml::CastMap``), the
+        DataSet stores a Map object in ``ds.maps``. The keys and values
+        tensors are returned as two consecutive positional items so the
+        backend harness (which zips them against ``sess.input_names``)
+        receives them under the correct names.
+        """
+        graph_inputs = list(tc.model.graph.input)
+        data_sets: list[list] = []
+        for ds in tc.data_sets:
+            by_name = {t.name: _tensor_to_np(t) for t in ds.inputs}
+            maps_by_name = {m.name: m for m in ds.maps} if ds.maps else {}
+            inputs: list = []
+            for gi in graph_inputs:
+                if gi.type.has_map_type():
+                    # Try Map object first.
+                    if gi.name in maps_by_name:
+                        m = maps_by_name[gi.name]
+                        inputs.append(_tensor_to_np(m.keys))
+                        inputs.append(_tensor_to_np(m.values))
+                        continue
+                    # Fall back to legacy _keys/_values tensor convention.
+                    keys_arr = by_name.get(f"{gi.name}_keys")
+                    values_arr = by_name.get(f"{gi.name}_values")
+                    if keys_arr is None or values_arr is None:
+                        inputs.append(by_name.get(gi.name))
+                        continue
+                    inputs.append(keys_arr)
+                    inputs.append(values_arr)
+                else:
+                    inputs.append(by_name.get(gi.name))
+            data_sets.append(inputs)
+        return data_sets
+
+    def _expected_output_to_python(t, sequence_outputs):
+        """Converts a DataSet output ``Tensor`` to its Python expected value.
+
+        Sequence-typed graph outputs are materialized by the C++ test cases as a
+        single stacked tensor whose outer (axis 0) dimension is the sequence
+        length. Splits such a tensor back into a list of per-element arrays so it
+        matches the sequence value (a list of arrays) produced by the runtime,
+        instead of a single stacked array that would mismatch as
+        "sequence vs non-sequence".
+
+        Returns:
+            A list of per-element ``numpy.ndarray`` when ``t`` names a
+            sequence-typed graph output, otherwise the single ``numpy.ndarray``.
+        """
+        arr = _tensor_to_np(t)
+        if t.name in sequence_outputs:
+            return [arr[i] for i in range(arr.shape[0])]
+        return arr
+
     result: dict[str, TestCase] = {}
     for tc in _backend_test_cc.collect_test_cases():
         if tc.name.startswith("test_cc_zipmap_"):
             continue
+        sequence_outputs = {o.name for o in tc.model.graph.output if o.type.has_sequence_type()}
+        py_inputs = _ds_inputs_to_python(tc)
         data_sets = [
-            ([_tensor_to_np(x) for x in ds.inputs], [_tensor_to_np(y) for y in ds.outputs])
-            for ds in tc.data_sets
+            (py_inputs[i], [_expected_output_to_python(y, sequence_outputs) for y in ds.outputs])
+            for i, ds in enumerate(tc.data_sets)
         ]
         result[tc.name] = TestCase(
             name=tc.name,
@@ -382,8 +449,8 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
             model=tc.model,
             data_sets=data_sets,
             kind=tc.kind,
-            rtol=tc.rtol,
             atol=tc.atol,
+            rtol=tc.rtol,
             tag=tc.tag,
         )
     return result

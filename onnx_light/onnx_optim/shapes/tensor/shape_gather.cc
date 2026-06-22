@@ -21,9 +21,8 @@ namespace tensor {
 void ComputeShapeGather(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Gather", "ComputeShapeGather");
 
-  if (node.input_size() < 2) {
-    throw std::invalid_argument("ComputeShapeGather: Gather requires two inputs (data, indices).");
-  }
+  EXT_ENFORCE_INVALID(!(node.input_size() < 2),
+                      "ComputeShapeGather: Gather requires two inputs (data, indices).");
 
   const OptimTensor &data = ctx.Get(node.input(0).as_string());
   const OptimTensor &indices = ctx.Get(node.input(1).as_string());
@@ -39,10 +38,8 @@ void ComputeShapeGather(ShapesContext &ctx, const NodeProto &node) {
     if (axis < 0) {
       axis += r;
     }
-    if (axis < 0 || axis >= r) {
-      throw std::invalid_argument("ComputeShapeGather: axis=" + std::to_string(axis) +
-                                  " out of range for data rank " + std::to_string(r) + ".");
-    }
+    EXT_ENFORCE_INVALID(!(axis < 0 || axis >= r), "ComputeShapeGather: axis=", axis,
+                        " out of range for data rank ", r, ".");
   }
 
   OptimShape out_shape;
@@ -63,7 +60,38 @@ void ComputeShapeGather(ShapesContext &ctx, const NodeProto &node) {
   for (int64_t i = axis + 1; i < r; ++i) {
     out_shape.PushBack(data_shape[static_cast<std::size_t>(i)]);
   }
-  ctx.Set(node.output(0), OptimTensor(nullptr, dtype, std::move(out_shape)));
+
+  OptimTensor out_tensor(nullptr, dtype, std::move(out_shape));
+
+  // Propagate ValueAsShape when data is 1-D with a value-as-shape annotation
+  // and the indices are known constants (axis must be 0 for a 1-D tensor).
+  if (r == 1 && axis == 0 && data.HasValueAsShape() && indices.HasValueAsShape()) {
+    const OptimShape &data_vas = data.ValueAsShape();
+    const OptimShape &idx_vas = indices.ValueAsShape();
+    const std::size_t data_len = data_vas.Rank();
+    OptimShape out_vas;
+    bool valid = true;
+    for (std::size_t i = 0; i < idx_vas.Rank(); ++i) {
+      if (!idx_vas[i].IsInt()) {
+        valid = false;
+        break;
+      }
+      int64_t idx = idx_vas[i].AsInt();
+      if (idx < 0) {
+        idx += static_cast<int64_t>(data_len);
+      }
+      if (idx < 0 || static_cast<std::size_t>(idx) >= data_len) {
+        valid = false;
+        break;
+      }
+      out_vas.PushBack(data_vas[static_cast<std::size_t>(idx)]);
+    }
+    if (valid) {
+      out_tensor.SetValueAsShape(std::move(out_vas));
+    }
+  }
+
+  ctx.Set(node.output(0), std::move(out_tensor));
 }
 
 } // namespace tensor

@@ -4,11 +4,15 @@
 
 #pragma once
 
+#include <cstdint>
 #include <functional>
+#include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "onnx_optim/optim_sequence.h"
 #include "onnx_optim/optim_tensor.h"
@@ -44,6 +48,121 @@ inline constexpr int kUnknownOpsetVersion = -1;
 inline constexpr const char *kOnnxDomain = "ai.onnx";
 
 /**
+ * Kind of shape-inference event recorded in the
+ * :cpp:class:`ShapesContext` event log. Mirrors the runtime
+ * :cpp:enum:`onnx_kernels::RuntimeEventAction` design.
+ *
+ *  * ``kAdd``         — a new tensor descriptor was inserted via
+ *                       :cpp:func:`ShapesContext::Set` on a previously
+ *                       absent name.
+ *  * ``kReplace``     — an existing tensor descriptor was overwritten
+ *                       via :cpp:func:`ShapesContext::Set`.
+ *  * ``kComputeNode`` — shape inference was dispatched for a single
+ *                       :cpp:class:`NodeProto`. The event records the
+ *                       node's ``op_domain`` / ``op_type`` and the list
+ *                       of ``inputs`` it consumed. It does not mutate the
+ *                       tensor map by itself.
+ *  * ``kConstraint``  — a new symbolic-dimension equality constraint
+ *                       (``a == b``) was recorded via
+ *                       :cpp:func:`ShapesContext::AddConstraint`. The two
+ *                       operands are stored in ``inputs``.
+ *  * ``kConstraintMax`` — a new symbolic-dimension upper-bound constraint
+ *                       (``lhs <= rhs``) was recorded via
+ *                       :cpp:func:`ShapesContext::AddLessEqualConstraint`.
+ *                       The two operands are stored in ``inputs``.
+ */
+enum class ShapeEventAction : int32_t {
+  kAdd = 0,
+  kReplace = 1,
+  kComputeNode = 2,
+  kConstraint = 3,
+  kConstraintMax = 4
+};
+
+/**
+ * Returns a short lowercase label for ``action`` (``"add"``,
+ * ``"replace"``, ``"compute_node"``). Useful for human-readable
+ * rendering of the event log.
+ */
+const char *ShapeEventActionName(ShapeEventAction action) noexcept;
+
+/**
+ * Single entry of the :cpp:class:`ShapesContext` event log.
+ *
+ * Each insertion or replacement of a tensor descriptor performed
+ * through :cpp:func:`ShapesContext::Set` produces one ``ShapeEvent``
+ * capturing the action, the name of the value and a snapshot of the
+ * descriptor's element type and shape. Because shape inference works on
+ * descriptors rather than data, no element values are captured; the
+ * ``shape`` is recorded as a list of per-dimension strings so symbolic
+ * dimensions (``"N"``, ``"2*N"``) are preserved alongside concrete
+ * integer dimensions.
+ *
+ * :cpp:enumerator:`ShapeEventAction::kComputeNode` events instead
+ * summarise the dispatch of a single ``NodeProto``: they carry the
+ * node's ``op_domain`` / ``op_type`` and the list of ``inputs``
+ * consumed; ``data_type`` is set to ``DataType::UNDEFINED`` and
+ * ``shape`` is left empty.
+ *
+ * :cpp:enumerator:`ShapeEventAction::kConstraint` /
+ * :cpp:enumerator:`ShapeEventAction::kConstraintMax` events record a
+ * newly inserted symbolic-dimension constraint; the two operands are
+ * stored in ``inputs`` (``{a, b}`` for an equality ``a == b``,
+ * ``{lhs, rhs}`` for an upper bound ``lhs <= rhs``).
+ */
+struct ShapeEvent {
+  /// Kind of event recorded by this entry.
+  ShapeEventAction action = ShapeEventAction::kAdd;
+  /// Name of the value targeted by the event.
+  std::string name;
+  /// Element data type of the descriptor at the moment of the event,
+  /// encoded as a ``TensorProto::DataType`` integer value. Set to
+  /// ``DataType::UNDEFINED`` for ``kComputeNode`` / ``kConstraint`` /
+  /// ``kConstraintMax`` events.
+  int32_t data_type = 0;
+  /// Descriptor shape at the moment of the event, with each dimension
+  /// rendered as a string (a decimal integer for concrete dims, the
+  /// symbolic expression otherwise). Empty for ``kComputeNode`` /
+  /// ``kConstraint`` / ``kConstraintMax`` events.
+  std::vector<std::string> shape;
+  /// For ``kComputeNode`` events: ONNX op domain of the dispatched
+  /// node, normalised so the default domain is reported as
+  /// ``"ai.onnx"``. Empty for other events.
+  std::string op_domain;
+  /// For ``kComputeNode`` events: ONNX ``op_type`` of the dispatched
+  /// node. Empty for other events.
+  std::string op_type;
+  /// For ``kComputeNode`` events: ordered list of input names consumed
+  /// by the node, matching ``NodeProto::input``. For ``kConstraint`` /
+  /// ``kConstraintMax`` events: the two constraint operands (``{a, b}``
+  /// or ``{lhs, rhs}``). Empty for ``kAdd`` / ``kReplace`` events.
+  std::vector<std::string> inputs;
+  /// Index of the node this event is associated with. For graph inputs it is
+  /// ``-1`` and for initializers it is ``-2``. For intermediate / output
+  /// descriptors and for ``kComputeNode`` / ``kConstraint`` /
+  /// ``kConstraintMax`` events it is the position (``>= 0``) of the producing
+  /// / dispatched node in its graph node list. ``-1`` when no producing node
+  /// is known.
+  int64_t node_index = -1;
+  /// Index of the control-flow node in the **parent** graph whose attribute
+  /// subgraph produced this event. ``-1`` for events from the top-level graph.
+  /// Combined with :cpp:var:`subgraph_attr_name` this uniquely identifies
+  /// which operator and which attribute subgraph an event originated from.
+  int64_t subgraph_node_index = -1;
+  /// Attribute name of the subgraph within the control-flow node identified
+  /// by :cpp:var:`subgraph_node_index`: ``"body"`` for :onnx:`Loop` /
+  /// :onnx:`Scan`, ``"then_branch"`` or ``"else_branch"`` for :onnx:`If`.
+  /// Empty for top-level-graph events.
+  std::string subgraph_attr_name;
+};
+
+/**
+ * Append-only log of shape-inference events recorded by
+ * :cpp:class:`ShapesContext`.
+ */
+using ShapeEventLog = std::vector<ShapeEvent>;
+
+/**
  * Lightweight container shared by the per-operator ``ComputeShape*``
  * shape-inference functions. ``ShapesContext`` carries two pieces of
  * information:
@@ -74,17 +193,25 @@ public:
   // ── Tensor descriptors ──────────────────────────────────────────────
 
   /// Inserts or replaces the descriptor for ``name``. ``tensor`` is
-  /// consumed; callers must pass an rvalue (use ``std::move``).
-  void Set(const std::string &name, OptimTensor &&tensor) { tensors_[name] = std::move(tensor); }
+  /// consumed; callers must pass an rvalue (use ``std::move``). When
+  /// event logging is enabled (see :cpp:func:`set_events_enabled`) a
+  /// :cpp:class:`ShapeEvent` describing the new state is appended to the
+  /// event log — with action :cpp:enumerator:`ShapeEventAction::kAdd`
+  /// when ``name`` was absent and
+  /// :cpp:enumerator:`ShapeEventAction::kReplace` otherwise.
+  void Set(const std::string &name, OptimTensor &&tensor) {
+    if (events_enabled_) {
+      LogSetEvent(name, tensor);
+    }
+    tensors_[name] = std::move(tensor);
+  }
 
   /// Overload: ``name`` given as a null-terminated C string.
-  void Set(const char *name, OptimTensor &&tensor) {
-    tensors_[std::string(name)] = std::move(tensor);
-  }
+  void Set(const char *name, OptimTensor &&tensor) { Set(std::string(name), std::move(tensor)); }
 
   /// Overload: ``name`` given as a :cpp:class:`utils::String`.
   void Set(const utils::String &name, OptimTensor &&tensor) {
-    tensors_[std::string(name.data(), name.size())] = std::move(tensor);
+    Set(std::string(name.data(), name.size()), std::move(tensor));
   }
 
   /// Returns ``true`` when an entry exists for ``name``.
@@ -116,6 +243,25 @@ public:
     local_functions_.clear();
     custom_shape_inference_.clear();
     constraints_.clear();
+    subgraph_contexts_.clear();
+    topk_k_dims_.clear();
+  }
+
+  /// Returns (and records) the symbolic dimension name to use for the TopK
+  /// output axis driven by the K input named ``k_input_name``. The first
+  /// unique K input seen returns ``"TopK_k"``; each subsequent distinct K
+  /// input gets ``"TopK_k_2"``, ``"TopK_k_3"``, and so on. Calling this
+  /// method twice with the same ``k_input_name`` always returns the same
+  /// string.
+  const std::string &TopKKDimName(const std::string &k_input_name) {
+    auto it = topk_k_dims_.find(k_input_name);
+    if (it != topk_k_dims_.end()) {
+      return it->second;
+    }
+    const std::size_t count = topk_k_dims_.size();
+    std::string dim_name =
+        count == 0 ? std::string("TopK_k") : "TopK_k_" + std::to_string(count + 1);
+    return topk_k_dims_.emplace(k_input_name, std::move(dim_name)).first->second;
   }
 
   /// Read-only access to the underlying map (useful for iteration).
@@ -166,6 +312,53 @@ public:
   const std::unordered_map<std::string, OptimSequence> &Sequences() const noexcept {
     return sequences_;
   }
+
+  // ── Child contexts for control-flow subgraphs ───────────────────────
+
+  /// Key identifying a child :cpp:class:`ShapesContext` retained while
+  /// inferring a control-flow node's attribute subgraph: the index of
+  /// the control-flow node in this context's graph paired with the name
+  /// of the attribute carrying the subgraph (``"body"`` for
+  /// :onnx:`Loop` / :onnx:`Scan`, ``"then_branch"`` / ``"else_branch"``
+  /// for :onnx:`If`).
+  using SubgraphContextKey = std::pair<int64_t, std::string>;
+
+  /// Retains the child context ``context`` produced while inferring the
+  /// subgraph ``attr_name`` of the control-flow node at ``node_index`` so
+  /// that the subgraph's internal descriptors stay inspectable once the
+  /// parent inference has completed. ``context`` is consumed (moved into
+  /// the store). Any context previously registered for the same key is
+  /// replaced.
+  void RegisterSubgraphContext(int64_t node_index, const std::string &attr_name,
+                               ShapesContext context);
+
+  /// Returns ``true`` when a child context was registered for the
+  /// subgraph ``attr_name`` of the control-flow node at ``node_index``.
+  bool HasSubgraphContext(int64_t node_index, const std::string &attr_name) const {
+    return subgraph_contexts_.find(SubgraphContextKey(node_index, attr_name)) !=
+           subgraph_contexts_.end();
+  }
+
+  /// Returns the child context registered for the subgraph ``attr_name``
+  /// of the control-flow node at ``node_index``. Throws
+  /// ``std::out_of_range`` if no such context exists.
+  const ShapesContext &GetSubgraphContext(int64_t node_index, const std::string &attr_name) const {
+    return *subgraph_contexts_.at(SubgraphContextKey(node_index, attr_name));
+  }
+
+  /// Number of retained child contexts.
+  std::size_t SubgraphContextsSize() const noexcept { return subgraph_contexts_.size(); }
+
+  /// Read-only access to the retained child-context map (useful for iteration).
+  const std::map<SubgraphContextKey, std::shared_ptr<ShapesContext>> &
+  SubgraphContexts() const noexcept {
+    return subgraph_contexts_;
+  }
+
+  /// Empties the retained child-context map without modifying other
+  /// context state (tensor / sequence descriptors, opsets, constraints,
+  /// events, ...).
+  void ClearSubgraphContexts() noexcept { subgraph_contexts_.clear(); }
 
   // ── Opset versions ──────────────────────────────────────────────────
 
@@ -298,7 +491,11 @@ public:
       return false;
     }
     Constraint c = (a < b) ? Constraint(a, b) : Constraint(b, a);
-    return constraints_.insert(std::move(c)).second;
+    const bool inserted = constraints_.insert(c).second;
+    if (inserted && events_enabled_) {
+      LogConstraintEvent(ShapeEventAction::kConstraint, c.first, c.second);
+    }
+    return inserted;
   }
 
   /// ``true`` when an equality constraint between ``a`` and ``b`` is
@@ -317,6 +514,67 @@ public:
   /// Read-only access to the underlying set of equality constraints.
   /// Each element is a ``(lhs, rhs)`` pair with ``lhs < rhs``.
   const std::set<Constraint> &Constraints() const noexcept { return constraints_; }
+
+  // ── Symbolic-dimension upper-bound constraints ──────────────────────
+  //
+  // Some operators produce a symbolic output dimension whose runtime
+  // value is unknown but is guaranteed to be **less than or equal to**
+  // an expression of other dimensions. Two examples:
+  //
+  //   - ``NonZero(X)`` produces ``Y`` with shape ``(rank(X), nnz)``
+  //     where ``nnz`` is bounded above by ``prod(shape(X))``.
+  //   - ``Compress(X, cond, axis=k)`` produces an output whose ``k``-th
+  //     dimension ``count`` is bounded above by ``X.shape[k]``.
+  //   - ``If(...)`` merges two branches; when the matching dims of the
+  //     two branches differ the merged dim is bounded above by the
+  //     ``max`` of the two branch expressions.
+  //
+  // Such inequalities are recorded as ordered ``(lhs, rhs)`` pairs
+  // meaning ``lhs <= rhs`` where ``lhs`` is a symbolic dimension name
+  // and ``rhs`` is an arbitrary (integer-string or symbolic) expression.
+  // The trivial case ``lhs == rhs`` is dropped.
+
+  /// Type used to store a single symbolic ``<=`` (less-or-equal)
+  /// upper-bound constraint. The first element is the bounded symbol,
+  /// the second is an arbitrary dimension expression that upper-bounds
+  /// it.
+  using LessEqualConstraint = std::pair<std::string, std::string>;
+
+  /// Records that the symbolic dimension named ``lhs`` is
+  /// less-than-or-equal-to the expression ``rhs``. The trivial
+  /// self-bound (``lhs == rhs``) is dropped, and empty operands are
+  /// rejected (they cannot designate a valid dimension name nor a
+  /// well-formed bound expression). Returns ``true`` when a new
+  /// constraint was inserted, ``false`` otherwise (duplicate,
+  /// self-bound, or empty operand).
+  bool AddLessEqualConstraint(const std::string &lhs, const std::string &rhs) {
+    if (lhs == rhs || lhs.empty() || rhs.empty()) {
+      return false;
+    }
+    const bool inserted = le_constraints_.insert(LessEqualConstraint(lhs, rhs)).second;
+    if (inserted && events_enabled_) {
+      LogConstraintEvent(ShapeEventAction::kConstraintMax, lhs, rhs);
+    }
+    return inserted;
+  }
+
+  /// ``true`` when a ``lhs <= rhs`` constraint is recorded.
+  /// ``lhs == rhs`` always returns ``true``.
+  bool HasLessEqualConstraint(const std::string &lhs, const std::string &rhs) const {
+    if (lhs == rhs) {
+      return true;
+    }
+    return le_constraints_.find(LessEqualConstraint(lhs, rhs)) != le_constraints_.end();
+  }
+
+  /// Number of recorded ``<=`` constraints.
+  std::size_t LessEqualConstraintsSize() const noexcept { return le_constraints_.size(); }
+
+  /// Read-only access to the underlying set of ``<=`` constraints. Each
+  /// element is an ordered ``(lhs, rhs)`` pair meaning ``lhs <= rhs``.
+  const std::set<LessEqualConstraint> &LessEqualConstraints() const noexcept {
+    return le_constraints_;
+  }
 
   // ── Shape-inference entry points ────────────────────────────────────
   //
@@ -359,10 +617,84 @@ public:
   /// back into ``model.graph()``.
   void ApplyInferredShapesToModel(ModelProto &model) const;
 
+  // ── Event logging ───────────────────────────────────────────────────
+  //
+  // Mirrors the opt-in event log of :cpp:class:`onnx_kernels::RuntimeContext`.
+  // When disabled (the default), :cpp:func:`Set`,
+  // :cpp:func:`ComputeShapeNode`, :cpp:func:`AddConstraint` and
+  // :cpp:func:`AddLessEqualConstraint` skip all event construction,
+  // eliminating the bookkeeping overhead from the hot path.
+
+  /// Enables or disables event logging. When disabled (the default),
+  /// :cpp:func:`Set`, :cpp:func:`ComputeShapeNode`,
+  /// :cpp:func:`AddConstraint` and :cpp:func:`AddLessEqualConstraint`
+  /// skip all event construction. Call ``set_events_enabled(true)``
+  /// before running shape inference if descriptor or constraint tracing
+  /// is required.
+  void set_events_enabled(bool enabled) noexcept { events_enabled_ = enabled; }
+  bool events_enabled() const noexcept { return events_enabled_; }
+
+  /// Index of the control-flow node in the parent graph currently being
+  /// inferred. Set before running subgraph shape inference so that events
+  /// recorded inside carry :cpp:var:`ShapeEvent::subgraph_node_index` and
+  /// :cpp:var:`ShapeEvent::subgraph_attr_name`. ``-1`` for the top-level
+  /// graph. Use :cpp:func:`set_current_subgraph` to update both the index
+  /// and the attribute name atomically.
+  void set_current_subgraph(int64_t node_index, const std::string &attr_name) {
+    current_subgraph_node_index_ = node_index;
+    current_subgraph_attr_name_ = attr_name;
+  }
+  int64_t current_subgraph_node_index() const noexcept { return current_subgraph_node_index_; }
+  const std::string &current_subgraph_attr_name() const noexcept {
+    return current_subgraph_attr_name_;
+  }
+
+  /// Index of the node currently being processed, used to tag the
+  /// :cpp:var:`ShapeEvent::node_index` of descriptors and events recorded
+  /// during its shape-inference dispatch. Set by :cpp:func:`ComputeShapes`
+  /// before each :cpp:func:`ComputeShapeNode` call, ``-2`` while seeding
+  /// initializers and ``-1`` while seeding graph inputs (or when no node is
+  /// being processed).
+  void set_current_node_index(int64_t index) noexcept { current_node_index_ = index; }
+  int64_t current_node_index() const noexcept { return current_node_index_; }
+
+  /// Append-only log of every tensor descriptor mutation performed
+  /// through :cpp:func:`Set`, every node dispatched through
+  /// :cpp:func:`ComputeShapeNode` and every constraint recorded through
+  /// :cpp:func:`AddConstraint` / :cpp:func:`AddLessEqualConstraint`. See
+  /// :cpp:class:`ShapeEvent` for the captured fields.
+  const ShapeEventLog &Events() const noexcept { return events_; }
+  ShapeEventLog &Events() noexcept { return events_; }
+
+  /// Empties the event log without otherwise touching the context.
+  void ClearEvents() noexcept { events_.clear(); }
+
+  /// Appends a :cpp:class:`ShapeEvent` with action
+  /// :cpp:enumerator:`ShapeEventAction::kComputeNode` summarising the
+  /// shape-inference dispatch of a single ``NodeProto`` (its
+  /// ``op_domain`` / ``op_type`` and the ``inputs`` it consumed).
+  /// Appended by :cpp:func:`ComputeShapeNode` for every dispatched node
+  /// when event logging is enabled.
+  void AppendComputeNodeEvent(const std::string &op_domain, const std::string &op_type,
+                              std::vector<std::string> inputs);
+
 private:
   static std::string NormaliseDomain(const std::string &domain) {
     return domain.empty() ? std::string(kOnnxDomain) : domain;
   }
+
+  /// Appends a :cpp:enumerator:`ShapeEventAction::kAdd` /
+  /// :cpp:enumerator:`ShapeEventAction::kReplace` event for ``name``
+  /// describing ``tensor`` (the descriptor about to be stored). Only
+  /// called by :cpp:func:`Set` when event logging is enabled.
+  void LogSetEvent(const std::string &name, const OptimTensor &tensor);
+
+  /// Appends a :cpp:enumerator:`ShapeEventAction::kConstraint` /
+  /// :cpp:enumerator:`ShapeEventAction::kConstraintMax` event recording
+  /// the two operands of a newly inserted constraint in ``inputs``. Only
+  /// called by :cpp:func:`AddConstraint` /
+  /// :cpp:func:`AddLessEqualConstraint` when event logging is enabled.
+  void LogConstraintEvent(ShapeEventAction action, const std::string &lhs, const std::string &rhs);
 
   std::unordered_map<std::string, OptimTensor> tensors_;
   std::unordered_map<std::string, OptimSequence> sequences_;
@@ -370,6 +702,23 @@ private:
   std::unordered_map<std::string, const FunctionProto *> local_functions_;
   CustomShapeInferenceMap custom_shape_inference_;
   std::set<Constraint> constraints_;
+  std::set<LessEqualConstraint> le_constraints_;
+  std::map<SubgraphContextKey, std::shared_ptr<ShapesContext>> subgraph_contexts_;
+  ShapeEventLog events_;
+  bool events_enabled_ = false;
+  int64_t current_node_index_ = -1;
+  /// Index of the control-flow node in the parent graph currently being
+  /// inferred (see :cpp:func:`set_current_subgraph`). ``-1`` for the
+  /// top-level graph.
+  int64_t current_subgraph_node_index_ = -1;
+  /// Attribute name of the subgraph currently being inferred (see
+  /// :cpp:func:`set_current_subgraph`). Empty for the top-level graph;
+  /// set to ``"body"``, ``"then_branch"``, ``"else_branch"``, etc. when
+  /// running shape inference for a control-flow body subgraph.
+  std::string current_subgraph_attr_name_;
+  /// Tracks the mapping from TopK K-input names to the symbolic dimension
+  /// name assigned by :cpp:func:`TopKKDimName`. Populated lazily.
+  std::unordered_map<std::string, std::string> topk_k_dims_;
 };
 
 } // namespace shapes

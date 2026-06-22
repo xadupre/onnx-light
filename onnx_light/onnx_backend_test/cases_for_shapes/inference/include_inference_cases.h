@@ -80,6 +80,41 @@ void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &regist
 /// from inside the body subgraph.
 void RegisterLoopPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &registry);
 
+/// Registers an ``Unsqueeze → Unsqueeze → Sub → Mul → ReduceSum → Sqrt →
+/// TopK → ReduceMean`` case that computes the pairwise Euclidean distance
+/// matrix of an input ``X`` of symbolic shape ``[N, D]``, keeps the ``k``
+/// largest distances of each row and averages them. The TopK ``k`` is a
+/// **model input** (INT64 ``[1]``) so its value is unknown at shape-inference
+/// time: ``TopK`` must emit a fresh symbolic dim for its output axis, which
+/// ``ReduceMean`` then reduces away to recover the concrete-rank ``[N]``
+/// output. Exercises symbolic-dim propagation through broadcasting and a
+/// data-dependent ``TopK`` axis.
+void RegisterTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &registry);
+
+/// Registers a ``Shape → Gather → Loop → TopK → ReduceMean`` case that
+/// computes the pairwise Euclidean distance matrix of an input ``X`` of
+/// symbolic shape ``[N, D]`` via a ``Loop`` (one row of the ``[N, N]`` matrix
+/// per iteration), keeps the ``k`` largest distances of each row and averages
+/// them. The Loop trip count comes from ``Shape(X)[0]`` (runtime), so the
+/// stacked matrix has a symbolic leading axis, and the TopK ``k`` is a
+/// **model input** (INT64 ``[1]``) so ``TopK`` must emit a fresh symbolic dim
+/// for its output axis, which ``ReduceMean`` then reduces away to recover the
+/// rank-1 output. Exercises symbolic-dim propagation through a non-trivial
+/// ``Loop`` body and a data-dependent ``TopK`` axis.
+void RegisterLoopTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &registry);
+
+/// Registers a ``Scan → Sqrt → TopK → ReduceMean`` case that computes the
+/// pairwise Euclidean distance matrix of an input ``X`` of symbolic shape
+/// ``[N, D]`` via a ``Scan`` (``X`` is both scan input and carried state so
+/// each row broadcasts against the full matrix), keeps the ``k`` largest
+/// distances of each row and averages them. The Scan trip count comes from
+/// ``X``'s scan axis (``N``), and the TopK ``k`` is a **model input**
+/// (INT64 ``[1]``) so ``TopK`` must emit a fresh symbolic dim for its output
+/// axis, which ``ReduceMean`` then reduces away to recover the rank-1 output.
+/// Exercises symbolic-dim propagation through a non-trivial ``Scan`` body and
+/// a data-dependent ``TopK`` axis.
+void RegisterScanTopKPairwiseDistanceShapeInferenceCases(std::vector<TestCase> &registry);
+
 /// Registers a ``Scan`` case that computes the running (cumulative) row sum
 /// of an input ``X`` of shape ``[T, D]``. Each Scan iteration accumulates
 /// one row into a running state (initially zeros) and emits the accumulated
@@ -138,6 +173,67 @@ void RegisterValueAsShapeBuilderShapeInferenceCases(std::vector<TestCase> &regis
 /// are symbolic. When ``even`` is ``true``, the split sizes are equal;
 /// when ``false``, the split sizes differ.
 void RegisterConcatSplitShapeInferenceCases(std::vector<TestCase> &registry, bool even);
+
+/// Registers a ``Resize(scales=[0.5, 0.5]) → Tile(repeats=[2, 2])`` case
+/// whose input ``X`` carries symbolic dimensions ``H`` (odd concrete value)
+/// and ``W`` (even concrete value). Exercises shape inference through
+/// ``Resize`` with a FLOAT ``scales`` initializer (output dims become fresh
+/// ``Resize_dim{i}`` symbols) followed by ``Tile`` with an INT64
+/// ``repeats`` initializer (output dims become ``Tile_dim{i}`` because the
+/// input dims are still symbolic).
+void RegisterResizeTileShapeInferenceCases(std::vector<TestCase> &registry);
+
+/// Registers a ``Pad(reflect) → Conv(canny) → Sub(ReduceMean)`` case whose
+/// single input ``X`` is a grayscale image batch ``float[N, 1, H, W]`` with
+/// symbolic spatial dims. The image is reflect-padded by one pixel, filtered
+/// with a 3×3 Laplacian (Canny-style edge) ``Conv`` and finally has its
+/// global average removed via ``Sub`` with a ``ReduceMean`` over every axis.
+/// Exercises symbolic-dim propagation through ``Pad`` (symbolic ``H+2`` /
+/// ``W+2`` expressions), ``Conv`` (which collapses them back to ``H`` / ``W``)
+/// and broadcasting ``Sub`` against a reduced ``[1, 1, 1, 1]`` mean.
+void RegisterPadCannyAverageShapeInferenceCases(std::vector<TestCase> &registry);
+
+/// Registers a single decoder layer of a tiny Llama-style causal language
+/// model (mirroring ``arnir0/Tiny-LLM``) translated to ONNX. The model takes
+/// the four inputs of a cached-generation step — ``input_ids``,
+/// ``attention_mask``, ``past_key`` and ``past_value`` — with fully dynamic
+/// (symbolic) shapes and random weight initializers, and produces the
+/// next-token ``logits`` plus the updated ``present_key`` / ``present_value``
+/// cache. Exercises shape inference through ``Gather`` (token embedding),
+/// ``RMSNormalization``, the QKV / output / MLP ``MatMul`` projections, the
+/// additive ``attention_mask`` path (``Cast`` / ``Unsqueeze`` / ``Sub`` /
+/// ``Mul``), the SwiGLU activation and the ``Attention`` operator with a KV
+/// cache.
+void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry);
+
+/// Registers the same single Llama-style decoder layer as
+/// :cpp:func:`RegisterTinyLlmShapeInferenceCases` but with the fused
+/// ``RMSNormalization`` and ``Attention`` operators **inlined** into their
+/// primitive subgraphs (``Mul`` / ``ReduceMean`` / ``Add`` / ``Sqrt`` / ``Div``
+/// for RMSNorm; ``Reshape`` / ``Transpose`` / ``Concat`` / ``MatMul`` /
+/// ``Softmax`` for scaled dot-product attention with a KV cache). Exercises
+/// shape inference through the longer chains an exporter emits when those
+/// operators are decomposed, while keeping the same four dynamic inputs and
+/// three outputs as the fused companion.
+void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry);
+
+/// Registers a ``TopK(K, axis=-1) → TopK(K, axis=-1) → ReduceMean`` case
+/// where both TopK nodes share the **same** runtime K input (INT64 ``[1]``).
+/// Because K is unknown at shape-inference time, each TopK emits a fresh
+/// symbolic dim (``TopK_k`` and ``TopK_k`` respectively);
+/// ``ReduceMean`` then collapses the second symbolic axis to recover the
+/// rank-1 output ``Y [N]``. Exercises shape inference through two chained
+/// TopK nodes that share the same K but produce distinct symbolic axes.
+void RegisterTwoTopKSameKShapeInferenceCases(std::vector<TestCase> &registry);
+
+/// Registers a ``TopK(K1, axis=-1) → TopK(K2, axis=-1) → ReduceMean`` case
+/// where the two TopK nodes use **different** runtime K inputs (K1 > K2).
+/// Because both K values are unknown at shape-inference time, each TopK emits
+/// a distinct symbolic dim (``TopK_k`` and ``TopK_k``);
+/// ``ReduceMean`` then collapses the second symbolic axis to recover the
+/// rank-1 output ``Y [N]``. Exercises shape inference through two chained
+/// TopK nodes with independent symbolic K axes.
+void RegisterTwoTopKDifferentKShapeInferenceCases(std::vector<TestCase> &registry);
 
 /// Collects all shape-inference oriented backend test cases by invoking
 /// every ``Register*ShapeInferenceCases`` helper declared in this header.

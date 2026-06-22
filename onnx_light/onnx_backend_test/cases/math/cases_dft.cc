@@ -226,6 +226,28 @@ void RegisterDFTCases(std::vector<TestCase> &registry) {
            "test_cc_dft_irfft_opset19", {opset_v19}, "backend-test", registry);
     registry.back().atol = kDFTAtolLarge;
   }
+
+  // --- v20: ``test_cc_dft_irfft_roundtrip`` — IRFFT with hardcoded expected
+  // output to verify Hermitian symmetry reconstruction.
+  // Input: one-sided RFFT of [1,2,3,4] => X[0]=10+0i, X[1]=-2+2i, X[2]=-2+0i.
+  // Expected output: the original signal [1,2,3,4].
+  {
+    Tensor x_onesided = Tensor::FromFloat("x", {1, 3, 2}, {10.0f, 0.0f, -2.0f, 2.0f, -2.0f, 0.0f});
+    Tensor axis = Tensor::FromInt64("axis", {}, {1});
+    Tensor y = Tensor::FromFloat("y", {1, 4, 1}, {1.0f, 2.0f, 3.0f, 4.0f});
+    Expect(MakeDFTNodeV20(/*inverse=*/true, /*onesided=*/true), {x_onesided, axis}, {y},
+           "test_cc_dft_irfft_roundtrip", {opset_v20}, "backend-test", registry);
+    registry.back().atol = kDFTAtol;
+  }
+
+  // --- v19: ``test_cc_dft_irfft_roundtrip_opset19`` — same with v17 API.
+  {
+    Tensor x_onesided = Tensor::FromFloat("x", {1, 3, 2}, {10.0f, 0.0f, -2.0f, 2.0f, -2.0f, 0.0f});
+    Tensor y = Tensor::FromFloat("y", {1, 4, 1}, {1.0f, 2.0f, 3.0f, 4.0f});
+    Expect(MakeDFTNodeV17(/*axis=*/1, /*inverse=*/true, /*onesided=*/true), {x_onesided}, {y},
+           "test_cc_dft_irfft_roundtrip_opset19", {opset_v19}, "backend-test", registry);
+    registry.back().atol = kDFTAtol;
+  }
 }
 
 } // namespace onnx_backend_test

@@ -44,11 +44,15 @@ std::string BuildProductExpr(const std::vector<OptimDim> &dims) {
 }
 
 // Tries to infer the Reshape ``-1`` dimension by building the symbolic
-// expression ``(product of input dims) // (product of out_shape dims excluding
+// expression ``(product of input dims) /: (product of out_shape dims excluding
 // the -1 position)`` and running it through
-// :cpp:func:`expressions::simplify_expression`. This handles purely concrete
+// :cpp:func:`expressions::simplify_expression`. The ``/:`` operator is used
+// because Reshape preserves the total number of elements, so the division is
+// always exact (integer, no remainder). This allows the simplifier to freely
+// distribute multiplication through the division, producing cleaner symbolic
+// results (e.g. ``"batch*c/:c"`` → ``"batch"``). This handles purely concrete
 // inputs (returns an int), purely symbolic inputs (returns a clean symbolic
-// expression such as ``"c//2"``) and mixed cases. Returns ``std::nullopt``
+// expression such as ``"c/:2"``) and mixed cases. Returns ``std::nullopt``
 // when any output dim is concrete zero — division by zero is not meaningful
 // and the caller already rejects that case explicitly.
 std::optional<OptimDim> InferNegOneFromFactors(const OptimShape &data_shape,
@@ -69,7 +73,7 @@ std::optional<OptimDim> InferNegOneFromFactors(const OptimShape &data_shape,
   }
 
   const std::string expr =
-      "(" + BuildProductExpr(input_factors) + ")//(" + BuildProductExpr(output_factors) + ")";
+      "(" + BuildProductExpr(input_factors) + ")/:(" + BuildProductExpr(output_factors) + ")";
   expressions::SimplifyResult result = expressions::simplify_expression(expr);
   if (std::holds_alternative<int64_t>(result)) {
     return OptimDim(std::get<int64_t>(result));

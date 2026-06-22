@@ -6,8 +6,8 @@ during ONNX model shape inference.
 
 Expressions are strings containing integer constants, symbolic variable names
 (e.g. ``"batch"``, ``"seq_length"``), and the arithmetic operators ``+``,
-``-``, ``*``, ``//`` (floor division), ``%`` (modulo), ``^`` (max), and
-``&`` (min).
+``-``, ``*``, ``//`` (floor division), ``/:`` (exact division), ``%``
+(modulo), ``^`` (max), and ``&`` (min).
 
 Typical usage::
 
@@ -369,6 +369,40 @@ def dim_div(a: "int | str", b: "int | str") -> "int | str":
         'n'
     """
     return _C.dim_div(a, b)
+
+
+def dim_exact_div(a: "int | str", b: "int | str") -> "int | str":
+    """Exactly divides *a* by *b*, asserting the division has no remainder.
+
+    Returns ``a / b`` as an ``int`` when both operands are integers (the
+    division must be exact, i.e. ``a % b == 0``).  Otherwise builds
+    ``"(a)/:(b)"`` and simplifies symbolically.
+
+    The ``/:`` operator differs from ``//`` (floor division) in that the caller
+    guarantees the result is always an integer.  This allows the simplifier to
+    freely distribute the division across multiplication:
+    ``c * (a /: b) == (c * a) /: b``.
+
+    Typical use case: Reshape shape inference, where preserving the total
+    element count means the input dimension product is an exact multiple of all
+    known output dimensions.
+
+    :param a: The dividend.
+    :param b: The divisor.
+    :returns: The quotient as an ``int`` when both are concrete, or as a
+        simplified ``str`` otherwise.
+    :rtype: int | str
+
+    Examples::
+
+        >>> dim_exact_div(12, 4)
+        3
+        >>> dim_exact_div("2*n", 2)
+        'n'
+        >>> dim_exact_div("batch*4", 2)
+        '2*batch'
+    """
+    return _C.dim_exact_div(a, b)
 
 
 def dim_mod(a: "int | str", b: "int | str") -> "int | str":

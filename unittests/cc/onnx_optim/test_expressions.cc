@@ -394,3 +394,67 @@ TEST(ParseUnparse, RoundTrip_precedence) {
 }
 
 TEST(ParseUnparse, SyntaxError) { EXPECT_THROW(parse("x +"), std::runtime_error); }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Exact division (/: ) tests
+// ═══════════════════════════════════════════════════════════════════════════
+
+TEST(ExactDiv, ParseUnparse) {
+  auto node = parse("a/:b");
+  EXPECT_EQ(unparse(*node), "a/:b");
+  node = parse("(a*b)/:c");
+  EXPECT_EQ(unparse(*node), "a*b/:c");
+}
+
+TEST(ExactDiv, Simplify_concrete) {
+  // Both concrete: simplifies to integer.
+  EXPECT_EQ(get_int(simplify_expression("12/:4")), 3);
+  EXPECT_EQ(get_int(simplify_expression("(a*b)/:(a*b)")), 1);
+}
+
+TEST(ExactDiv, Simplify_cancel_common_factor) {
+  // Exact division allows the simplifier to cancel a factor in the numerator.
+  EXPECT_EQ(get_str(simplify_expression("(2*H)/:2")), "H");
+  EXPECT_EQ(get_str(simplify_expression("(3*H)/:3")), "H");
+  EXPECT_EQ(get_str(simplify_expression("(batch*seq)/:seq")), "batch");
+  EXPECT_EQ(get_str(simplify_expression("(1024*a)/:2")), "512*a");
+}
+
+TEST(ExactDiv, Simplify_exact_commutes_with_mult) {
+  // Unlike floor division (//), exact division (/: ) commutes with
+  // multiplication: c*(a/:b) == (c*a)/:b is valid for exact division.
+  // The simplifier may therefore cancel the common factor even when it
+  // appears outside the division.
+  EXPECT_EQ(get_str(simplify_expression("2*(H/:2)")), "H");
+}
+
+TEST(ExactDiv, Simplify_floordiv_still_blocked) {
+  // Floor division still does NOT commute: 2*(H//2) must remain unchanged.
+  EXPECT_EQ(get_str(simplify_expression("2*(H//2)")), "2*(H//2)");
+}
+
+TEST(ExactDiv, Evaluate) {
+  EXPECT_EQ(evaluate_expression("12/:4", {}), 3);
+  EXPECT_EQ(evaluate_expression("(batch*4)/:4", {{"batch", 5}}), 5);
+}
+
+TEST(ExactDiv, Evaluate_error_on_remainder) {
+  // /: must be exact: evaluating 7/:2 should throw.
+  EXPECT_THROW(evaluate_expression("7/:2", {}), std::runtime_error);
+}
+
+TEST(DimOperations, DimExactDiv_int_int) {
+  EXPECT_EQ(std::get<int64_t>(dim_exact_div(DimType{int64_t{12}}, DimType{int64_t{4}})), 3);
+}
+
+TEST(DimOperations, DimExactDiv_symbolic_simplifies) {
+  // dim_exact_div("2*n", 2) should simplify to "n".
+  auto r = dim_exact_div(DimType{std::string{"2*n"}}, DimType{int64_t{2}});
+  EXPECT_EQ(dim_to_string(r), "n");
+}
+
+TEST(DimOperations, DimExactDiv_symbolic_mult_outside) {
+  // c*(a/:b) simplifies when c == b.
+  auto r = dim_exact_div(DimType{std::string{"batch*4"}}, DimType{int64_t{2}});
+  EXPECT_EQ(dim_to_string(r), "2*batch");
+}

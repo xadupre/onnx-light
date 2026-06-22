@@ -327,6 +327,10 @@ class TestDimOperations(ExtTestCase):
     def test_dim_exact_div_int_int(self):
         self.assertEqual(dim_exact_div(12, 4), 3)
 
+    def test_dim_exact_div_int_int_not_exact_raises(self):
+        with self.assertRaises(RuntimeError):
+            dim_exact_div(7, 2)
+
     def test_dim_exact_div_symbolic_simplifies(self):
         result = dim_exact_div("2*n", 2)
         self.assertEqual(str(result), "n")

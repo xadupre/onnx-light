@@ -374,9 +374,10 @@ def dim_div(a: "int | str", b: "int | str") -> "int | str":
 def dim_exact_div(a: "int | str", b: "int | str") -> "int | str":
     """Exactly divides *a* by *b*, asserting the division has no remainder.
 
-    Returns ``a / b`` as an ``int`` when both operands are integers (the
-    division must be exact, i.e. ``a % b == 0``).  Otherwise builds
-    ``"(a)/:(b)"`` and simplifies symbolically.
+    Returns ``a / b`` as an ``int`` when both operands are integers.  Raises
+    ``RuntimeError`` when both are integers but the division is not exact
+    (``a % b != 0``) or *b* is zero.  Otherwise builds ``"(a)/:(b)"`` and
+    simplifies symbolically.
 
     The ``/:`` operator differs from ``//`` (floor division) in that the caller
     guarantees the result is always an integer.  This allows the simplifier to
@@ -392,6 +393,8 @@ def dim_exact_div(a: "int | str", b: "int | str") -> "int | str":
     :returns: The quotient as an ``int`` when both are concrete, or as a
         simplified ``str`` otherwise.
     :rtype: int | str
+    :raises RuntimeError: When both operands are integers and the division is
+        not exact or *b* is zero.
 
     Examples::
 

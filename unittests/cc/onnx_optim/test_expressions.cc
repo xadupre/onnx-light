@@ -447,6 +447,10 @@ TEST(DimOperations, DimExactDiv_int_int) {
   EXPECT_EQ(std::get<int64_t>(dim_exact_div(DimType{int64_t{12}}, DimType{int64_t{4}})), 3);
 }
 
+TEST(DimOperations, DimExactDiv_int_int_not_exact_throws) {
+  EXPECT_THROW(dim_exact_div(DimType{int64_t{7}}, DimType{int64_t{2}}), std::runtime_error);
+}
+
 TEST(DimOperations, DimExactDiv_symbolic_simplifies) {
   // dim_exact_div("2*n", 2) should simplify to "n".
   auto r = dim_exact_div(DimType{std::string{"2*n"}}, DimType{int64_t{2}});

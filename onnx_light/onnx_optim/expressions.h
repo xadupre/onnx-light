@@ -696,7 +696,9 @@ DimType dim_div(const DimType &a, const DimType &b);
 /**
  * @brief Exactly divides @p a by @p b, asserting the division is exact (no remainder).
  *
- * Returns `a / b` as an `int64_t` when both are integers (the division must be exact).
+ * Returns `a / b` as an `int64_t` when both are integers and the division is
+ * exact (i.e. `a % b == 0`).  Throws `std::runtime_error` when both are integers
+ * but the division is not exact or when `b == 0`.
  * Otherwise builds `"(a)/:(b)"` and simplifies.
  *
  * The `/:`  operator differs from `//` (floor division) in that the caller guarantees
@@ -711,6 +713,8 @@ DimType dim_div(const DimType &a, const DimType &b);
  * @param b The divisor.
  * @returns The quotient as an integer when both are concrete, or as a
  *          simplified string otherwise.
+ * @throws std::runtime_error when both operands are integers and the division is
+ *         not exact or when @p b is zero.
  *
  * @code{.cpp}
  * dim_exact_div(DimType{int64_t{12}}, DimType{int64_t{4}}) == DimType{int64_t{3}};

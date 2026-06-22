@@ -1724,8 +1724,16 @@ DimType dim_div(const DimType &a, const DimType &b) {
 }
 
 DimType dim_exact_div(const DimType &a, const DimType &b) {
-  if (std::holds_alternative<int64_t>(a) && std::holds_alternative<int64_t>(b))
-    return std::get<int64_t>(a) / std::get<int64_t>(b);
+  if (std::holds_alternative<int64_t>(a) && std::holds_alternative<int64_t>(b)) {
+    int64_t av = std::get<int64_t>(a);
+    int64_t bv = std::get<int64_t>(b);
+    if (bv == 0)
+      throw std::runtime_error("dim_exact_div: division by zero");
+    if (av % bv != 0)
+      throw std::runtime_error("dim_exact_div: division is not exact (" + std::to_string(av) +
+                               " % " + std::to_string(bv) + " != 0)");
+    return av / bv;
+  }
   return simplify_dim("(" + dim_to_string(a) + ")/:(" + dim_to_string(b) + ")");
 }
 

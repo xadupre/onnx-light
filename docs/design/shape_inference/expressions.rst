@@ -43,7 +43,7 @@ The parser accepts a subset of Python arithmetic expressions:
     expr     ::= xor_expr ('^' xor_expr)*
     xor_expr ::= and_expr ('&' and_expr)*
     and_expr ::= add_expr (('+' | '-') add_expr)*
-    add_expr ::= mul_expr (('*' | '//' | '%') mul_expr)*
+    add_expr ::= mul_expr (('*' | '//' | '/: ' | '%') mul_expr)*
     mul_expr ::= unary
     unary    ::= ('+' | '-') unary | atom
     atom     ::= INTEGER | NAME | '(' expr ')' | NAME '(' arg_list ')'
@@ -65,6 +65,8 @@ Operator precedence (low → high):
 | ``*``    | Multiplication                                   |
 +----------+--------------------------------------------------+
 | ``//``   | Floor (integer) division                         |
++----------+--------------------------------------------------+
+| ``/:``   | Exact (integer) division — see below             |
 +----------+--------------------------------------------------+
 | ``%``    | Modulo                                           |
 +----------+--------------------------------------------------+
@@ -194,6 +196,46 @@ value of the symbolic dimensions.
 
 ----
 
+Exact-division semantics (``/:``  )
+-------------------------------------
+
+The ``/:`` operator represents *exact* integer division: the caller asserts
+that the division has no remainder (``a % b == 0``).  This additional
+guarantee allows the simplifier to move the division freely across
+multiplication, which is not possible for ``//``:
+
+* ``(2*H)/:2`` simplifies to ``H`` (same as ``//``).
+* ``2*(H/:2)`` **also simplifies to** ``H``.  Because the caller guarantees
+  the division is exact, ``2*(H/:2) == (2*H)/:2 == H`` is valid for every
+  integer ``H`` that is a multiple of ``2``.  The simplifier exploits this and
+  cancels the common factor even though it appears *outside* the division.
+
+Concretely, the difference between ``//`` and ``/:`` only matters when a
+factor appears on the multiplicative spine *outside* the division:
+
+.. code-block:: python
+
+    from onnx_light.onnx_optim.expressions import simplify_expression
+
+    simplify_expression("2*(H//2)")   # "2*(H//2)"  — NOT simplified (not exact)
+    simplify_expression("2*(H/:2)")   # "H"         — simplified (exact division)
+
+The primary use case for ``/:`` is **Reshape shape inference**.  When a tensor
+is reshaped, the total number of elements is preserved, so the product of the
+input dimensions equals the product of the output dimensions.  If one output
+dimension is ``-1`` (inferred), its value is the input product divided by the
+product of all *known* output dimensions.  This division is always exact (it
+yields an integer dimension), so using ``/:`` instead of ``//`` lets the
+simplifier produce cleaner symbolic shapes, e.g. for a reshape of
+``(batch, seq, 4)`` to ``(batch, seq, 2, 2)``:
+
+* With ``//``: inferred dim = ``"batch*seq*4//(batch*seq*2)"`` (not simplified
+  further because ``//`` blocks cancellation of ``batch*seq``).
+* With ``/:`` : inferred dim = ``"batch*seq*4/:(batch*seq*2)"`` → ``"2"``
+  (the common ``batch*seq`` factor is cancelled).
+
+----
+
 Unparser
 --------
 
@@ -224,6 +266,7 @@ operation functions (:func:`~onnx_light.onnx_optim.expressions.dim_add`,
 :func:`~onnx_light.onnx_optim.expressions.dim_sub`,
 :func:`~onnx_light.onnx_optim.expressions.dim_mul`,
 :func:`~onnx_light.onnx_optim.expressions.dim_div`,
+:func:`~onnx_light.onnx_optim.expressions.dim_exact_div`,
 :func:`~onnx_light.onnx_optim.expressions.dim_mod`,
 :func:`~onnx_light.onnx_optim.expressions.dim_max`,
 :func:`~onnx_light.onnx_optim.expressions.dim_min`,
@@ -242,12 +285,14 @@ intermediate expressions:
 .. runpython::
     :showcode:
 
-    from onnx_light.onnx_optim.expressions import dim_add, dim_mul, dim_div
+    from onnx_light.onnx_optim.expressions import dim_add, dim_mul, dim_div, dim_exact_div
 
-    print(dim_add("batch", 1))          # "1+batch"
-    print(dim_mul(2, "seq_length"))     # "2*seq_length"
-    print(dim_div("2*seq_length", 2))   # "seq_length"  (simplified)
-    print(dim_div("2*n", "n"))          # 2  (int — fully reduced)
+    print(dim_add("batch", 1))               # "1+batch"
+    print(dim_mul(2, "seq_length"))          # "2*seq_length"
+    print(dim_div("2*seq_length", 2))        # "seq_length"  (simplified)
+    print(dim_div("2*n", "n"))               # 2  (int — fully reduced)
+    print(dim_exact_div("batch*4", 2))       # "2*batch"  (/: allows cancellation)
+    print(dim_exact_div("2*batch*seq", "batch*seq"))  # 2 (int — fully reduced)
 
 ----
 

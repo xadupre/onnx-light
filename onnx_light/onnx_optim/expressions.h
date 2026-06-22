@@ -70,6 +70,9 @@ enum class BinOpKind {
   Sub,      ///< Subtraction: `a - b`.
   Mult,     ///< Multiplication: `a * b`.
   FloorDiv, ///< Floor (integer) division: `a // b`.
+  ExactDiv, ///< Exact (integer) division: `a /: b` — the division is guaranteed to be exact (no
+            ///< remainder).  Unlike `//`, exact division commutes with multiplication:
+            ///< `c * (a /: b) == (c * a) /: b`.
   Mod,      ///< Modulo: `a % b`.
   BitXor,   ///< Encodes `max(a, b)` using the `^` syntax.
   BitAnd,   ///< Encodes `min(a, b)` using the `&` syntax.
@@ -689,6 +692,39 @@ DimType dim_sub(const DimType &a, const DimType &b);
  * @endcode
  */
 DimType dim_div(const DimType &a, const DimType &b);
+
+/**
+ * @brief Exactly divides @p a by @p b, asserting the division is exact (no remainder).
+ *
+ * Returns `a / b` as an `int64_t` when both are integers and the division is
+ * exact (i.e. `a % b == 0`).  Throws `std::runtime_error` when both are integers
+ * but the division is not exact or when `b == 0`.
+ * Otherwise builds `"(a)/:(b)"` and simplifies.
+ *
+ * The `/:`  operator differs from `//` (floor division) in that the caller guarantees
+ * the result is an integer, which allows the simplifier to freely move the operation
+ * across multiplication: `c * (a /: b) == (c * a) /: b`.
+ *
+ * Typical use case: Reshape shape inference, where the total number of elements is
+ * preserved — the input dimension product is an exact multiple of all known output
+ * dimensions.
+ *
+ * @param a The dividend.
+ * @param b The divisor.
+ * @returns The quotient as an integer when both are concrete, or as a
+ *          simplified string otherwise.
+ * @throws std::runtime_error when both operands are integers and the division is
+ *         not exact or when @p b is zero.
+ *
+ * @code{.cpp}
+ * dim_exact_div(DimType{int64_t{12}}, DimType{int64_t{4}}) == DimType{int64_t{3}};
+ * dim_exact_div(DimType{std::string{"2*n"}}, DimType{int64_t{2}}) == DimType{std::string{"n"}};
+ * // Unlike dim_div, `c * (a /: b)` simplifies to `(c*a) /: b`:
+ * dim_exact_div(DimType{std::string{"batch*4"}}, DimType{int64_t{2}}) ==
+ * DimType{std::string{"2*batch"}};
+ * @endcode
+ */
+DimType dim_exact_div(const DimType &a, const DimType &b);
 
 /**
  * @brief Computes @p a modulo @p b.

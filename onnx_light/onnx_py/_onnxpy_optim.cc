@@ -216,6 +216,17 @@ void AddOnnxPyExpressions(nb::module_ &m) {
         nb::arg("a"), nb::arg("b"), "Floor-divides dimension a by b.");
 
     expressions_mod.def(
+        "dim_exact_div",
+        [to_dim, from_dim](nb::object a, nb::object b) {
+          return from_dim(expr::dim_exact_div(to_dim(a), to_dim(b)));
+        },
+        nb::arg("a"), nb::arg("b"),
+        "Exactly divides dimension a by b, asserting the division has no remainder. "
+        "Unlike floor division (//), exact division (/: ) commutes with multiplication: "
+        "c*(a/:b) == (c*a)/:b, allowing the simplifier to cancel common factors more "
+        "aggressively.");
+
+    expressions_mod.def(
         "dim_mod",
         [to_dim, from_dim](nb::object a, nb::object b) {
           return from_dim(expr::dim_mod(to_dim(a), to_dim(b)));

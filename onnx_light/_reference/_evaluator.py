@@ -566,15 +566,12 @@ class ReferenceEvaluator:
         ctx.release_intermediates = release
 
         for name, value in feed_inputs.items():
-            if name in self._sequence_inputs or name in self._optional_sequence_inputs:
+            is_optional_sequence_input = name in self._optional_sequence_inputs
+            if name in self._sequence_inputs or is_optional_sequence_input:
                 # ``seq(T)`` graph inputs are fed as a list/tuple of arrays (one
                 # per sequence element) and stored through ``put_sequence``.
                 if not isinstance(value, (list, tuple)):
-                    kind = (
-                        "optional sequence"
-                        if name in self._optional_sequence_inputs
-                        else "sequence"
-                    )
+                    kind = "optional sequence" if is_optional_sequence_input else "sequence"
                     raise TypeError(
                         f"{kind.capitalize()} input {name!r} must be fed as a list/tuple of "
                         f"arrays, not {type(value).__name__}."

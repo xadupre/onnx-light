@@ -132,14 +132,17 @@ def _value_info_is_optional_sequence(value_info: onnxl.ValueInfoProto) -> bool:
 
 def _value_info_kind(value_info: onnxl.ValueInfoProto) -> str | None:
     """Returns the supported boundary kind for ``value_info``."""
-    if value_info.type.has_tensor_type():
+    t = value_info.type
+    if t.has_tensor_type():
         return "tensor"
-    if _value_info_is_sequence(value_info):
+    if t.has_sequence_type() and t.sequence_type.elem_type.has_tensor_type():
         return "sequence"
-    if _value_info_is_optional_tensor(value_info):
-        return "optional_tensor"
-    if _value_info_is_optional_sequence(value_info):
-        return "optional_sequence"
+    if t.has_optional_type() and t.optional_type.has_elem_type():
+        elem_type = t.optional_type.elem_type
+        if elem_type.has_tensor_type():
+            return "optional_tensor"
+        if elem_type.has_sequence_type() and elem_type.sequence_type.elem_type.has_tensor_type():
+            return "optional_sequence"
     return None
 
 

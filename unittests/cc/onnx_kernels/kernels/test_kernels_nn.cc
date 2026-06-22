@@ -470,6 +470,51 @@ TEST(KernelClass, AttentionCausalMasksFuturePositions) {
   EXPECT_GT(Y.AsFloat()[3], -100.0f);
 }
 
+TEST(KernelClass, AttentionCausalExternalCacheIsOffsetAware) {
+  // External/static KV cache decode (mirrors ONNX PR #8068): a single query
+  // (q_seq=1) attends a 3-key cache with ``nonpad_kv_seqlen=[3]`` and no
+  // ``past_key``. The bottom-right causal frontier gives offset = 3 - 1 = 2, so
+  // the query attends ALL three keys. Under the previous top-left alignment
+  // (offset=0) it would have attended only key 0.
+  const Tensor Q = Tensor::FromFloat("", {1, 1, 1, 1}, {0.0f});
+  const Tensor K = Tensor::FromFloat("", {1, 1, 3, 1}, {0.0f, 0.0f, 0.0f});
+  const Tensor V = Tensor::FromFloat("", {1, 1, 3, 1}, {3.0f, 30.0f, 300.0f});
+  const Tensor nonpad_kv_seqlen = Tensor::FromInt64("", {1}, {3});
+
+  const KernelContext ctx = AttentionKernelContext();
+  const Attention attention{ctx};
+  Attention::Attributes attrs;
+  attrs.is_causal = true;
+  const Tensor Y = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, /*past_key=*/nullptr,
+                             /*past_value=*/nullptr, &nonpad_kv_seqlen)
+                       .Y;
+  ASSERT_EQ(Y.shape, (std::vector<int64_t>{1, 1, 1, 1}));
+  // Scores are all zero -> uniform attention over the 3 attended keys.
+  EXPECT_FLOAT_EQ(Y.AsFloat()[0], (3.0f + 30.0f + 300.0f) / 3.0f);
+}
+
+TEST(KernelClass, AttentionCausalExternalCacheContinuedPrefillIsOffsetAware) {
+  // Continued/chunked prefill: q_seq=2 against a 4-key cache with
+  // ``nonpad_kv_seqlen=[4]`` and no ``past_key``. offset = 4 - 2 = 2, so query 0
+  // attends keys {0,1,2} and query 1 attends keys {0,1,2,3}.
+  const Tensor Q = Tensor::FromFloat("", {1, 1, 2, 1}, {0.0f, 0.0f});
+  const Tensor K = Tensor::FromFloat("", {1, 1, 4, 1}, {0.0f, 0.0f, 0.0f, 0.0f});
+  const Tensor V = Tensor::FromFloat("", {1, 1, 4, 1}, {1.0f, 2.0f, 4.0f, 8.0f});
+  const Tensor nonpad_kv_seqlen = Tensor::FromInt64("", {1}, {4});
+
+  const KernelContext ctx = AttentionKernelContext();
+  const Attention attention{ctx};
+  Attention::Attributes attrs;
+  attrs.is_causal = true;
+  const Tensor Y = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, /*past_key=*/nullptr,
+                             /*past_value=*/nullptr, &nonpad_kv_seqlen)
+                       .Y;
+  ASSERT_EQ(Y.shape, (std::vector<int64_t>{1, 1, 2, 1}));
+  // Row 0 -> mean(V[0..2]) ; Row 1 -> mean(V[0..3]).
+  EXPECT_FLOAT_EQ(Y.AsFloat()[0], (1.0f + 2.0f + 4.0f) / 3.0f);
+  EXPECT_FLOAT_EQ(Y.AsFloat()[1], (1.0f + 2.0f + 4.0f + 8.0f) / 4.0f);
+}
+
 TEST(KernelClass, AttentionBoolMaskExcludesFalsePositions) {
   // mask=[true, false] forces softmax to put all weight on position 0,
   // so the output must equal V[0] exactly.

@@ -374,6 +374,20 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
   std::vector<double> bias(static_cast<size_t>(total_kv_seq_len));
   std::vector<double> qkraw(static_cast<size_t>(total_kv_seq_len));
   for (int64_t b = 0; b < batch_size; ++b) {
+    // Bottom-right / offset-aware causal frontier (mirrors ONNX PR #8068):
+    // a query at in-block index ``i`` attends key ``j`` iff ``j <= i + offset``,
+    // where ``offset`` is the number of valid keys that precede this query block:
+    //   * past_key present (internal cache):    offset = past_kv_seq_len
+    //   * nonpad_kv_seqlen present, no past_key (external/static cache):
+    //                                           offset = nonpad_kv_seqlen[b] - q_seq_len
+    //   * neither:                              offset = 0 (ordinary top-left causal)
+    // ``offset`` is intentionally not clamped to ``>= 0``: a negative offset
+    // (out-of-contract over-long query block) fully masks the affected rows,
+    // which the fully-masked-row guard below then zeroes.
+    int64_t causal_offset = past_kv_seq_len;
+    if (past_key == nullptr && nonpad_lengths != nullptr) {
+      causal_offset = nonpad_lengths[b] - q_seq_len;
+    }
     for (int64_t h = 0; h < q_num_heads; ++h) {
       const int64_t kv_h = h / group_size;
       const float *Qbh = pQ + b * q_batch_stride + h * q_head_stride;
@@ -396,9 +410,9 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
           double b_val = MaskValuePadded(attn_mask, batch_size, q_num_heads, q_seq_len,
                                          total_kv_seq_len, b, h, i, j);
           if (attrs.is_causal) {
-            // Upper-triangular causal mask anchored at the upper-left of
-            // the new-token sub-block ``[:, past_kv_seq_len:]``.
-            if (j >= past_kv_seq_len && (j - past_kv_seq_len) > i) {
+            // Bottom-right / offset-aware causal mask: key ``j`` is masked for
+            // query ``i`` iff ``j > i + causal_offset``.
+            if (j > i + causal_offset) {
               b_val = -std::numeric_limits<double>::infinity();
             }
           }

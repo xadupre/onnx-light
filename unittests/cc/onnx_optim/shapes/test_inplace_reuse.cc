@@ -17,6 +17,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -25,6 +26,7 @@ using onnx_optim::OptimShape;
 using onnx_optim::OptimTensor;
 using onnx_optim::TensorType;
 using onnx_optim::shapes::ComputeInPlaceReuse;
+using onnx_optim::shapes::InplaceContext;
 using onnx_optim::shapes::InPlaceReuse;
 using onnx_optim::shapes::InPlaceReuseKind;
 using onnx_optim::shapes::ShapesContext;
@@ -366,6 +368,93 @@ TEST(OnnxOptimInPlaceReuse, AllowInputOverwriteKeepsInputThatIsAlsoOutput) {
   ASSERT_EQ(reuse.size(), 1u);
   // X is also a declared output, so it is protected regardless of the option.
   EXPECT_TRUE(reuse[0].empty());
+}
+
+// The InplaceContext class stores the per-node reuse result and exposes it
+// through Size()/Reuse()/NodeReuse(), matching the free-function output.
+TEST(OnnxOptimInPlaceReuse, InplaceContextStoresResult) {
+  GraphProto graph;
+  graph.set_name("g");
+  AddInput(graph, "X", {3, 4});
+  AddOutput(graph, "Y", {3, 4});
+  *graph.add_node() = MakeNode("Abs", {"X"}, {"A"});
+  *graph.add_node() = MakeNode("Abs", {"A"}, {"B"});
+  *graph.add_node() = MakeNode("Abs", {"B"}, {"Y"});
+
+  ShapesContext ctx;
+  ctx.ComputeShapeGraph(graph);
+
+  InplaceContext inplace;
+  EXPECT_TRUE(inplace.Empty());
+  EXPECT_EQ(inplace.Size(), 0u);
+  inplace.ComputeInPlaceReuseGraph(graph, ctx);
+
+  EXPECT_FALSE(inplace.Empty());
+  ASSERT_EQ(inplace.Size(), 3u);
+  // The stored result matches the free-function wrapper.
+  EXPECT_EQ(inplace.Reuse(), ComputeInPlaceReuse(graph, ctx));
+  EXPECT_TRUE(inplace.NodeReuse(0).empty());
+  ASSERT_EQ(inplace.NodeReuse(1).size(), 1u);
+  EXPECT_EQ(inplace.NodeReuse(1)[0], (InPlaceReuse{0, 0, InPlaceReuseKind::kEqual}));
+  ASSERT_EQ(inplace.NodeReuse(2).size(), 1u);
+  EXPECT_EQ(inplace.NodeReuse(2)[0], (InPlaceReuse{0, 0, InPlaceReuseKind::kEqual}));
+
+  // NodeReuse rejects an out-of-bounds index.
+  EXPECT_THROW(inplace.NodeReuse(3), std::out_of_range);
+
+  // Clear empties the stored result, recomputation refills it.
+  inplace.Clear();
+  EXPECT_TRUE(inplace.Empty());
+}
+
+// InplaceContext honours allow_input_overwrite just like the free function.
+TEST(OnnxOptimInPlaceReuse, InplaceContextAllowInputOverwrite) {
+  GraphProto graph;
+  graph.set_name("g");
+  AddInput(graph, "X", {3, 4});
+  AddOutput(graph, "Y", {3, 4});
+  *graph.add_node() = MakeNode("Abs", {"X"}, {"A"});
+  *graph.add_node() = MakeNode("Abs", {"A"}, {"Y"});
+
+  ShapesContext ctx;
+  ctx.ComputeShapeGraph(graph);
+
+  InplaceContext inplace;
+  inplace.ComputeInPlaceReuseGraph(graph, ctx, /*allow_input_overwrite=*/true);
+  ASSERT_EQ(inplace.Size(), 2u);
+  ASSERT_EQ(inplace.NodeReuse(0).size(), 1u);
+  EXPECT_EQ(inplace.NodeReuse(0)[0], (InPlaceReuse{0, 0, InPlaceReuseKind::kEqual}));
+}
+
+// InplaceContext::WriteToMetadata records the same triplets as the free
+// function and rejects a graph whose node count no longer matches the result.
+TEST(OnnxOptimInPlaceReuse, InplaceContextWriteToMetadata) {
+  GraphProto graph;
+  graph.set_name("g");
+  AddInput(graph, "X", {3, 4});
+  AddOutput(graph, "Y", {3, 4});
+  *graph.add_node() = MakeNode("Abs", {"X"}, {"A"});
+  *graph.add_node() = MakeNode("Abs", {"A"}, {"B"});
+  *graph.add_node() = MakeNode("Abs", {"B"}, {"Y"});
+
+  ShapesContext ctx;
+  ctx.ComputeShapeGraph(graph);
+
+  InplaceContext inplace;
+  inplace.ComputeInPlaceReuseGraph(graph, ctx);
+  inplace.WriteToMetadata(graph);
+  ASSERT_EQ(graph.node().size(), 3);
+  EXPECT_EQ(graph.node()[0].metadata_props().size(), 0);
+  ASSERT_EQ(graph.node()[1].metadata_props().size(), 1);
+  EXPECT_EQ(graph.node()[1].metadata_props()[0].value().as_string(), std::string("0:0:equal"));
+  ASSERT_EQ(graph.node()[2].metadata_props().size(), 1);
+  EXPECT_EQ(graph.node()[2].metadata_props()[0].value().as_string(), std::string("0:0:equal"));
+
+  // Writing into a graph with a different node count is rejected.
+  GraphProto smaller;
+  smaller.set_name("g");
+  *smaller.add_node() = MakeNode("Abs", {"X"}, {"A"});
+  EXPECT_THROW(inplace.WriteToMetadata(smaller), std::invalid_argument);
 }
 
 } // namespace Test

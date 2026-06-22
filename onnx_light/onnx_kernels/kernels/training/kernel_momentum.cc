@@ -20,27 +20,26 @@ constexpr const char *kMomentumName = "kernel::Momentum";
 int64_t ShapeElementCount(const std::vector<int64_t> &shape, const char *label) {
   int64_t count = 1;
   for (int64_t d : shape) {
-    EXT_ENFORCE_INVALID(d >= 0,
-                        std::string(kMomentumName) + ": '" + label + "' has a negative dimension.");
+    EXT_ENFORCE_INVALID(d >= 0, kMomentumName, ": '", label, "' has a negative dimension.");
     count *= d;
   }
   return count;
 }
 
 void CheckFloatTensor(const Tensor &t, const char *label) {
-  EXT_ENFORCE_INVALID(t.data_type == DataType::FLOAT,
-                      std::string(kMomentumName) + ": '" + label + "' must be a FLOAT tensor.");
+  EXT_ENFORCE_INVALID(t.data_type == DataType::FLOAT, kMomentumName, ": '", label,
+                      "' must be a FLOAT tensor.");
 }
 
 void CheckScalar(const Tensor &t, const char *label) {
   const int64_t count = ShapeElementCount(t.shape, label);
-  EXT_ENFORCE_INVALID(count == 1, std::string(kMomentumName) + ": '" + label +
-                                      "' must be a scalar (single-element) tensor.");
+  EXT_ENFORCE_INVALID(count == 1, kMomentumName, ": '", label,
+                      "' must be a scalar (single-element) tensor.");
 }
 
 void CheckSameShape(const Tensor &a, const Tensor &b, const char *label_a, const char *label_b) {
-  EXT_ENFORCE_INVALID(a.shape == b.shape, std::string(kMomentumName) + ": '" + label_a + "' and '" +
-                                              label_b + "' must have the same shape.");
+  EXT_ENFORCE_INVALID(a.shape == b.shape, kMomentumName, ": '", label_a, "' and '", label_b,
+                      "' must have the same shape.");
 }
 
 } // namespace
@@ -50,11 +49,9 @@ std::vector<Tensor> Momentum::operator()(const Tensor &R, const Tensor &T,
                                          const std::vector<Tensor> &Gs,
                                          const std::vector<Tensor> &Vs, float alpha, float beta,
                                          float norm_coefficient, Mode mode) const {
-  EXT_ENFORCE_INVALID(!Xs.empty(),
-                      std::string(kMomentumName) + ": at least one optimized tensor is required.");
-  EXT_ENFORCE_INVALID(Xs.size() == Gs.size() && Xs.size() == Vs.size(),
-                      std::string(kMomentumName) +
-                          ": 'Xs', 'Gs' and 'Vs' must have the same length.");
+  EXT_ENFORCE_INVALID(!Xs.empty(), kMomentumName, ": at least one optimized tensor is required.");
+  EXT_ENFORCE_INVALID(Xs.size() == Gs.size() && Xs.size() == Vs.size(), kMomentumName,
+                      ": 'Xs', 'Gs' and 'Vs' must have the same length.");
 
   std::vector<Tensor> outputs;
   outputs.reserve(Xs.size() * 2);
@@ -73,20 +70,17 @@ void Momentum::operator()(const Tensor &R, const Tensor &T, const std::vector<Te
                           const std::vector<Tensor> &Gs, const std::vector<Tensor> &Vs,
                           std::vector<Tensor> &outputs, float alpha, float beta,
                           float norm_coefficient, Mode mode) const {
-  EXT_ENFORCE_INVALID(!Xs.empty(),
-                      std::string(kMomentumName) + ": at least one optimized tensor is required.");
-  EXT_ENFORCE_INVALID(Xs.size() == Gs.size() && Xs.size() == Vs.size(),
-                      std::string(kMomentumName) +
-                          ": 'Xs', 'Gs' and 'Vs' must have the same length.");
+  EXT_ENFORCE_INVALID(!Xs.empty(), kMomentumName, ": at least one optimized tensor is required.");
+  EXT_ENFORCE_INVALID(Xs.size() == Gs.size() && Xs.size() == Vs.size(), kMomentumName,
+                      ": 'Xs', 'Gs' and 'Vs' must have the same length.");
   const size_t n = Xs.size();
-  EXT_ENFORCE_INVALID(outputs.size() == 2 * n,
-                      std::string(kMomentumName) +
-                          " preallocated outputs vector must contain exactly 2 * N tensors.");
+  EXT_ENFORCE_INVALID(outputs.size() == 2 * n, kMomentumName,
+                      " preallocated outputs vector must contain exactly 2 * N tensors.");
 
   CheckFloatTensor(R, "R");
   CheckScalar(R, "R");
-  EXT_ENFORCE_INVALID(T.data_type == DataType::INT64,
-                      std::string(kMomentumName) + ": 'T' must be an INT64 tensor.");
+  EXT_ENFORCE_INVALID(T.data_type == DataType::INT64, kMomentumName,
+                      ": 'T' must be an INT64 tensor.");
   CheckScalar(T, "T");
 
   const float R_val = *R.AsFloat();
@@ -111,15 +105,14 @@ void Momentum::operator()(const Tensor &R, const Tensor &T, const std::vector<Te
 
     CheckFloatTensor(X_out, "X_new");
     CheckFloatTensor(V_out, "V_new");
-    EXT_ENFORCE_INVALID(X_out.shape == X.shape,
-                        std::string(kMomentumName) + " preallocated 'X_new' shape must match 'X'.");
-    EXT_ENFORCE_INVALID(V_out.shape == V.shape,
-                        std::string(kMomentumName) + " preallocated 'V_new' shape must match 'V'.");
+    EXT_ENFORCE_INVALID(X_out.shape == X.shape, kMomentumName,
+                        " preallocated 'X_new' shape must match 'X'.");
+    EXT_ENFORCE_INVALID(V_out.shape == V.shape, kMomentumName,
+                        " preallocated 'V_new' shape must match 'V'.");
     const int64_t count = ShapeElementCount(X.shape, "X");
     const size_t bytes = static_cast<size_t>(count) * sizeof(float);
-    EXT_ENFORCE_INVALID(X_out.data.size() == bytes && V_out.data.size() == bytes,
-                        std::string(kMomentumName) +
-                            " preallocated output buffers have unexpected size in bytes.");
+    EXT_ENFORCE_INVALID(X_out.data.size() == bytes && V_out.data.size() == bytes, kMomentumName,
+                        " preallocated output buffers have unexpected size in bytes.");
 
     const float *pX = X.AsFloat();
     const float *pG = G.AsFloat();

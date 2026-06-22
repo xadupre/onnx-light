@@ -28,11 +28,10 @@ namespace {
 // symbolic dimensions keep the previously-merged ``out`` value.
 void MergeDim(OptimDim &out, const OptimDim &in, std::size_t axis, std::size_t input_index) {
   if (out.IsInt() && in.IsInt()) {
-    EXT_ENFORCE_INVALID(
-        out.AsInt() == in.AsInt(),
-        "ComputeShapeConcatFromSequence: element " + std::to_string(input_index) + " dimension " +
-            std::to_string(axis) + " (" + std::to_string(in.AsInt()) +
-            ") differs from the previously-merged value (" + std::to_string(out.AsInt()) + ").");
+    EXT_ENFORCE_INVALID(out.AsInt() == in.AsInt(), "ComputeShapeConcatFromSequence: element ",
+                        std::to_string(input_index), " dimension ", std::to_string(axis), " (",
+                        std::to_string(in.AsInt()), ") differs from the previously-merged value (",
+                        std::to_string(out.AsInt()), ").");
     return;
   }
   if (in.IsInt()) {
@@ -57,8 +56,8 @@ void ComputeShapeConcatFromSequence(ShapesContext &ctx, const NodeProto &node) {
   const int64_t axis_attr = GetAttributeOr<int64_t>(node, "axis", 0);
   const int64_t new_axis = GetAttributeOr<int64_t>(node, "new_axis", 0);
   EXT_ENFORCE_INVALID(new_axis == 0 || new_axis == 1,
-                      "ComputeShapeConcatFromSequence: new_axis must be either 0 or 1, got " +
-                          std::to_string(new_axis) + ".");
+                      "ComputeShapeConcatFromSequence: new_axis must be either 0 or 1, got ",
+                      std::to_string(new_axis), ".");
 
   // Without per-element shapes we can only forward the element dtype.
   if (!seq.HasElemShapes() || seq.ElemShapes().empty()) {
@@ -72,18 +71,18 @@ void ComputeShapeConcatFromSequence(ShapesContext &ctx, const NodeProto &node) {
 
   for (std::size_t i = 1; i < n; ++i) {
     EXT_ENFORCE_INVALID(static_cast<int>(elem_shapes[i].Rank()) == rank,
-                        "ComputeShapeConcatFromSequence: element " + std::to_string(i) +
-                            " has rank " + std::to_string(elem_shapes[i].Rank()) +
-                            " which differs from rank " + std::to_string(rank) + " of element 0.");
+                        "ComputeShapeConcatFromSequence: element ", std::to_string(i), " has rank ",
+                        std::to_string(elem_shapes[i].Rank()), " which differs from rank ",
+                        std::to_string(rank), " of element 0.");
   }
 
   const int upper_bound = (new_axis == 1) ? rank : rank - 1;
   const int lower_bound = (new_axis == 1) ? -rank - 1 : -rank;
   EXT_ENFORCE_INVALID(axis_attr >= lower_bound && axis_attr <= upper_bound,
-                      "ComputeShapeConcatFromSequence: axis " + std::to_string(axis_attr) +
-                          " is out of range [" + std::to_string(lower_bound) + ", " +
-                          std::to_string(upper_bound) + "] for rank " + std::to_string(rank) +
-                          " (new_axis=" + std::to_string(new_axis) + ").");
+                      "ComputeShapeConcatFromSequence: axis ", std::to_string(axis_attr),
+                      " is out of range [", std::to_string(lower_bound), ", ",
+                      std::to_string(upper_bound), "] for rank ", std::to_string(rank),
+                      " (new_axis=", std::to_string(new_axis), ").");
 
   const int resolved_axis =
       static_cast<int>(axis_attr < 0 ? axis_attr + upper_bound + 1 : axis_attr);

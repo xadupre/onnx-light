@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 
 #include <cmath>
@@ -21,7 +22,6 @@ Tensor IsNaN::operator()(const Tensor &x) const {
 }
 
 void IsNaN::operator()(const Tensor &x, Tensor &output) const {
-  EXT_ENFORCE_INVALID(x.data_type == DataType::FLOAT, "kernel::IsNaN only supports FLOAT tensors.");
   EXT_ENFORCE_INVALID(output.data_type == DataType::BOOL,
                       "kernel::IsNaN preallocated output must be a BOOL tensor.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
@@ -30,10 +30,39 @@ void IsNaN::operator()(const Tensor &x, Tensor &output) const {
   const size_t expected_bytes = static_cast<size_t>(n);
   EXT_ENFORCE_INVALID(output.data.size() == expected_bytes,
                       "kernel::IsNaN preallocated output buffer has unexpected size in bytes.");
-  const float *px = x.AsFloat();
   uint8_t *py = output.data.data();
-  for (int64_t i = 0; i < n; ++i) {
-    py[static_cast<size_t>(i)] = std::isnan(px[i]) ? 1u : 0u;
+  switch (static_cast<DataType>(x.data_type)) {
+  case DataType::FLOAT: {
+    const float *px = x.AsFloat();
+    for (int64_t i = 0; i < n; ++i) {
+      py[static_cast<size_t>(i)] = std::isnan(px[i]) ? 1u : 0u;
+    }
+    return;
+  }
+  case DataType::DOUBLE: {
+    const double *px = x.AsDouble();
+    for (int64_t i = 0; i < n; ++i) {
+      py[static_cast<size_t>(i)] = std::isnan(px[i]) ? 1u : 0u;
+    }
+    return;
+  }
+  case DataType::FLOAT16: {
+    const uint16_t *px = reinterpret_cast<const uint16_t *>(x.data.data());
+    for (int64_t i = 0; i < n; ++i) {
+      py[static_cast<size_t>(i)] = std::isnan(Float16BitsToFloat(px[i])) ? 1u : 0u;
+    }
+    return;
+  }
+  case DataType::BFLOAT16: {
+    const uint16_t *px = reinterpret_cast<const uint16_t *>(x.data.data());
+    for (int64_t i = 0; i < n; ++i) {
+      py[static_cast<size_t>(i)] = std::isnan(Bfloat16BitsToFloat(px[i])) ? 1u : 0u;
+    }
+    return;
+  }
+  default:
+    EXT_THROW_INVALID("unsupported data type ", x.data_type, ", ",
+                      "kernel::IsNaN only supports FLOAT, DOUBLE, FLOAT16 and BFLOAT16 tensors.");
   }
 }
 

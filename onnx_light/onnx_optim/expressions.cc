@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cctype>
+#include <functional>
 #include <map>
 #include <numeric>
 #include <sstream>
@@ -502,9 +503,30 @@ public:
 
 namespace {
 
+// Returns whether a floor division appears on the multiplicative spine of
+// `node`, i.e. as a factor of a `*` chain. Floor division is not exact, so
+// `a*(x//b)` must not be flattened into `(a*x)//b`: the equality holds only
+// when `x` is a multiple of `b` (e.g. `2*(3//2) == 2`, not `3`).
+bool has_floordiv_factor(const Node &node) {
+  if (const auto *b = dynamic_cast<const BinOp *>(&node)) {
+    if (b->op == BinOpKind::FloorDiv)
+      return true;
+    if (b->op == BinOpKind::Mult)
+      return has_floordiv_factor(*b->left) || has_floordiv_factor(*b->right);
+  }
+  return false;
+}
+
 void flatten_mul_div(const Node &node, std::vector<NodePtr> &num, std::vector<NodePtr> &den) {
   if (const auto *b = dynamic_cast<const BinOp *>(&node)) {
     if (b->op == BinOpKind::Mult) {
+      // A floor division used as a multiplicative factor cannot be flattened
+      // into the global numerator/denominator: doing so would move the factor
+      // across the (non-exact) division boundary. Keep the product atomic.
+      if (has_floordiv_factor(*b->left) || has_floordiv_factor(*b->right)) {
+        num.push_back(node.clone());
+        return;
+      }
       flatten_mul_div(*b->left, num, den);
       flatten_mul_div(*b->right, num, den);
       return;
@@ -655,6 +677,165 @@ public:
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// DistributeFloorDivOverAddTransformer
+// Distributes a floor-division by an integer constant over additive terms
+// when every term is exactly divisible by the divisor, e.g.
+//   (2*b + 2*c) // 2 → b + c
+//   (4*a - 2*b) // 2 → 2*a - b
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+// Attempts to exactly divide the expression rooted at `x` by the positive
+// integer `d`. Returns the resulting expression on success, or nullptr if
+// the division cannot be performed exactly without introducing a residue.
+NodePtr try_exact_divide(const Node &x, int64_t d) {
+  if (d == 1)
+    return x.clone();
+  if (const auto *c = dynamic_cast<const Constant *>(&x)) {
+    if (c->value % d != 0)
+      return nullptr;
+    return std::make_unique<Constant>(c->value / d);
+  }
+  if (const auto *b = dynamic_cast<const BinOp *>(&x)) {
+    if (b->op == BinOpKind::Add || b->op == BinOpKind::Sub) {
+      auto l = try_exact_divide(*b->left, d);
+      if (!l)
+        return nullptr;
+      auto r = try_exact_divide(*b->right, d);
+      if (!r)
+        return nullptr;
+      return std::make_unique<BinOp>(std::move(l), b->op, std::move(r));
+    }
+    if (b->op == BinOpKind::Mult) {
+      if (const auto *cl = dynamic_cast<const Constant *>(b->left.get())) {
+        if (cl->value % d == 0) {
+          int64_t nc = cl->value / d;
+          if (nc == 1)
+            return b->right->clone();
+          return std::make_unique<BinOp>(std::make_unique<Constant>(nc), BinOpKind::Mult,
+                                         b->right->clone());
+        }
+      }
+      if (const auto *cr = dynamic_cast<const Constant *>(b->right.get())) {
+        if (cr->value % d == 0) {
+          int64_t nc = cr->value / d;
+          if (nc == 1)
+            return b->left->clone();
+          return std::make_unique<BinOp>(b->left->clone(), BinOpKind::Mult,
+                                         std::make_unique<Constant>(nc));
+        }
+      }
+      // Recurse into sub-multiplications (e.g. 2*(b+c) under a chain).
+      if (auto l = try_exact_divide(*b->left, d))
+        return std::make_unique<BinOp>(std::move(l), BinOpKind::Mult, b->right->clone());
+      if (auto r = try_exact_divide(*b->right, d))
+        return std::make_unique<BinOp>(b->left->clone(), BinOpKind::Mult, std::move(r));
+    }
+  }
+  if (const auto *u = dynamic_cast<const UnaryOp *>(&x)) {
+    if (u->op == UnaryOpKind::USub) {
+      auto o = try_exact_divide(*u->operand, d);
+      if (!o)
+        return nullptr;
+      return std::make_unique<UnaryOp>(UnaryOpKind::USub, std::move(o));
+    }
+    if (u->op == UnaryOpKind::UAdd) {
+      auto o = try_exact_divide(*u->operand, d);
+      if (!o)
+        return nullptr;
+      return std::make_unique<UnaryOp>(UnaryOpKind::UAdd, std::move(o));
+    }
+  }
+  return nullptr;
+}
+
+// Splits an expression `x` into a divisible quotient `q` and an integer
+// residual `r` such that `x == q * d + r`, where every multiplicative term
+// inside `q` is exactly divisible by `d`. Constant leaves that are not
+// divisible by `d` are folded into `r`. Returns false if the expression
+// cannot be split this way (e.g. a non-divisible symbolic factor).
+bool try_split_for_division(const Node &x, int64_t d, NodePtr &quotient, int64_t &residual) {
+  if (auto q = try_exact_divide(x, d)) {
+    quotient = std::move(q);
+    residual = 0;
+    return true;
+  }
+  if (const auto *c = dynamic_cast<const Constant *>(&x)) {
+    quotient = std::make_unique<Constant>(0);
+    residual = c->value;
+    return true;
+  }
+  if (const auto *b = dynamic_cast<const BinOp *>(&x)) {
+    if (b->op == BinOpKind::Add || b->op == BinOpKind::Sub) {
+      NodePtr lq, rq;
+      int64_t lr = 0, rr = 0;
+      if (!try_split_for_division(*b->left, d, lq, lr))
+        return false;
+      if (!try_split_for_division(*b->right, d, rq, rr))
+        return false;
+      quotient = std::make_unique<BinOp>(std::move(lq), b->op, std::move(rq));
+      residual = (b->op == BinOpKind::Add) ? (lr + rr) : (lr - rr);
+      return true;
+    }
+  }
+  if (const auto *u = dynamic_cast<const UnaryOp *>(&x)) {
+    if (u->op == UnaryOpKind::USub) {
+      NodePtr q;
+      int64_t r = 0;
+      if (!try_split_for_division(*u->operand, d, q, r))
+        return false;
+      quotient = std::make_unique<UnaryOp>(UnaryOpKind::USub, std::move(q));
+      residual = -r;
+      return true;
+    }
+    if (u->op == UnaryOpKind::UAdd)
+      return try_split_for_division(*u->operand, d, quotient, residual);
+  }
+  return false;
+}
+
+// Python-style floor division for int64 (rounds toward negative infinity).
+int64_t floor_div_i64(int64_t a, int64_t b) {
+  int64_t q = a / b;
+  int64_t r = a % b;
+  if ((r != 0) && ((r < 0) != (b < 0)))
+    --q;
+  return q;
+}
+
+} // namespace
+
+class DistributeFloorDivOverAddTransformer : public Transformer {
+public:
+  NodePtr visit_BinOp(std::unique_ptr<BinOp> n) override {
+    n = std::unique_ptr<BinOp>(static_cast<BinOp *>(generic_visit(std::move(n)).release()));
+    if (n->op != BinOpKind::FloorDiv)
+      return n;
+    const auto *dc = dynamic_cast<const Constant *>(n->right.get());
+    if (!dc || dc->value == 0)
+      return n;
+    int64_t d = dc->value;
+    if (d < 0)
+      return n;
+    if (auto r = try_exact_divide(*n->left, d))
+      return r;
+    // Fallback: split numerator into (quotient * d) + constant_residual.
+    // Then floor((q*d + r) / d) == q + floor(r/d), valid because every
+    // non-constant term in the numerator is an exact multiple of d.
+    NodePtr q;
+    int64_t r = 0;
+    if (try_split_for_division(*n->left, d, q, r)) {
+      int64_t add = floor_div_i64(r, d);
+      if (add == 0)
+        return q;
+      return std::make_unique<BinOp>(std::move(q), BinOpKind::Add, std::make_unique<Constant>(add));
+    }
+    return n;
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // MaxToXorTransformer: max(a,b) / Max(a,b) → a^b
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -713,6 +894,178 @@ public:
               [](const NodePtr &a, const NodePtr &b) { return unparse(*a) < unparse(*b); });
 
     return rebuild_chain(operands, n->op);
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FloorDivAddRingTransformer
+// Recognises sums of floor-divisions sharing the same denominator ``n`` whose
+// numerators only differ by a contiguous range of integer constants of length
+// ``n``.  The identity
+//
+//   sum_{i=0..n-1} floor((y + i) / n) = y          (for integer y)
+//
+// lets us collapse such a group to ``s + k`` where ``s`` is the common
+// symbolic part and ``k`` is the smallest of the integer offsets.
+//
+// Example: ``(b + c) // 2 + (1 + b + c) // 2  →  b + c``.
+// ═══════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+// Splits an expression into a symbolic part and an additive integer offset
+// such that ``node == symbolic + offset``.  Walks Add/Sub chains and folds
+// every numeric leaf into ``offset``; the remaining symbolic terms are
+// reassembled into ``symbolic`` preserving their original signs.  When the
+// expression is a pure constant, ``symbolic`` is set to ``Constant(0)``.
+void split_const_offset(const Node &node, NodePtr &symbolic, int64_t &offset) {
+  std::vector<std::pair<NodePtr, int>> sym_terms; // (cloned node, sign)
+  offset = 0;
+  std::function<void(const Node &, int)> walk = [&](const Node &n, int sign) {
+    if (const auto *c = dynamic_cast<const Constant *>(&n)) {
+      offset += sign * c->value;
+      return;
+    }
+    if (const auto *b = dynamic_cast<const BinOp *>(&n)) {
+      if (b->op == BinOpKind::Add) {
+        walk(*b->left, sign);
+        walk(*b->right, sign);
+        return;
+      }
+      if (b->op == BinOpKind::Sub) {
+        walk(*b->left, sign);
+        walk(*b->right, -sign);
+        return;
+      }
+    }
+    if (const auto *u = dynamic_cast<const UnaryOp *>(&n)) {
+      if (u->op == UnaryOpKind::UAdd) {
+        walk(*u->operand, sign);
+        return;
+      }
+      if (u->op == UnaryOpKind::USub) {
+        walk(*u->operand, -sign);
+        return;
+      }
+    }
+    sym_terms.emplace_back(n.clone(), sign);
+  };
+  walk(node, 1);
+
+  if (sym_terms.empty()) {
+    symbolic = std::make_unique<Constant>(0);
+    return;
+  }
+  // Reassemble.  Sort by unparse so that semantically-equal symbolic parts
+  // produce identical keys regardless of source ordering.
+  std::sort(sym_terms.begin(), sym_terms.end(),
+            [](const std::pair<NodePtr, int> &a, const std::pair<NodePtr, int> &b) {
+              return unparse(*a.first) < unparse(*b.first);
+            });
+  NodePtr res;
+  if (sym_terms[0].second >= 0)
+    res = std::move(sym_terms[0].first);
+  else
+    res = std::make_unique<UnaryOp>(UnaryOpKind::USub, std::move(sym_terms[0].first));
+  for (size_t i = 1; i < sym_terms.size(); ++i) {
+    BinOpKind op = (sym_terms[i].second >= 0) ? BinOpKind::Add : BinOpKind::Sub;
+    res = std::make_unique<BinOp>(std::move(res), op, std::move(sym_terms[i].first));
+  }
+  symbolic = std::move(res);
+}
+
+} // namespace
+
+class FloorDivAddRingTransformer : public Transformer {
+public:
+  NodePtr visit_BinOp(std::unique_ptr<BinOp> n) override {
+    n = std::unique_ptr<BinOp>(static_cast<BinOp *>(generic_visit(std::move(n)).release()));
+    if (n->op != BinOpKind::Add)
+      return n;
+
+    std::vector<NodePtr> terms;
+    flatten_chain(*n, BinOpKind::Add, terms);
+
+    while (try_combine_ring(terms)) {
+      // keep combining
+    }
+
+    if (terms.size() == 1)
+      return std::move(terms[0]);
+    return rebuild_chain(terms, BinOpKind::Add);
+  }
+
+private:
+  // Identifies a floor-div ring group within ``terms`` and replaces it with
+  // its collapsed form.  Returns true when a replacement was performed.
+  static bool try_combine_ring(std::vector<NodePtr> &terms) {
+    struct FDInfo {
+      size_t idx;          // position in ``terms``
+      int64_t denom;       // floor-div denominator
+      NodePtr symbolic;    // symbolic part of the numerator
+      int64_t offset;      // integer offset of the numerator
+      std::string sym_key; // unparse(symbolic) for grouping
+    };
+    std::vector<FDInfo> infos;
+    for (size_t i = 0; i < terms.size(); ++i) {
+      const auto *b = dynamic_cast<const BinOp *>(terms[i].get());
+      if (!b || b->op != BinOpKind::FloorDiv)
+        continue;
+      const auto *c = dynamic_cast<const Constant *>(b->right.get());
+      if (!c || c->value <= 1)
+        continue;
+      NodePtr sym;
+      int64_t off = 0;
+      split_const_offset(*b->left, sym, off);
+      std::string key = unparse(*sym);
+      infos.push_back({i, c->value, std::move(sym), off, std::move(key)});
+    }
+    if (infos.empty())
+      return false;
+
+    std::map<std::pair<int64_t, std::string>, std::vector<size_t>> groups;
+    for (size_t j = 0; j < infos.size(); ++j)
+      groups[{infos[j].denom, infos[j].sym_key}].push_back(j);
+
+    for (auto &kv : groups) {
+      int64_t denom = kv.first.first;
+      auto &list = kv.second;
+      if (static_cast<int64_t>(list.size()) < denom)
+        continue;
+      std::sort(list.begin(), list.end(),
+                [&](size_t a, size_t b) { return infos[a].offset < infos[b].offset; });
+      for (size_t start = 0; start + static_cast<size_t>(denom) <= list.size(); ++start) {
+        int64_t base = infos[list[start]].offset;
+        bool ok = true;
+        for (int64_t i = 1; i < denom; ++i) {
+          if (infos[list[start + static_cast<size_t>(i)]].offset != base + i) {
+            ok = false;
+            break;
+          }
+        }
+        if (!ok)
+          continue;
+        // Collect original indices and erase them (largest first).
+        std::vector<size_t> orig;
+        orig.reserve(static_cast<size_t>(denom));
+        for (int64_t i = 0; i < denom; ++i)
+          orig.push_back(infos[list[start + static_cast<size_t>(i)]].idx);
+        std::sort(orig.begin(), orig.end(), std::greater<size_t>());
+        NodePtr sym_clone = infos[list[start]].symbolic->clone();
+        NodePtr replacement;
+        if (base == 0) {
+          replacement = std::move(sym_clone);
+        } else {
+          replacement = std::make_unique<BinOp>(std::move(sym_clone), BinOpKind::Add,
+                                                std::make_unique<Constant>(base));
+        }
+        for (size_t oi : orig)
+          terms.erase(terms.begin() + static_cast<std::ptrdiff_t>(oi));
+        terms.push_back(std::move(replacement));
+        return true;
+      }
+    }
+    return false;
   }
 };
 
@@ -899,8 +1252,26 @@ static SimplifyResult make_simplified(const AddVisitorResult &res) {
 
 class RenameTransformer : public Transformer {
 public:
-  explicit RenameTransformer(const std::unordered_map<std::string, std::string> &mapping)
-      : mapping_(mapping) {}
+  // ``match_subexpressions`` enables replacing whole compound subexpressions
+  // (e.g. ``past_seq+seq``) whose textual form is a key of ``mapping`` with the
+  // mapped name. When disabled (the default) only leaf identifiers are renamed,
+  // preserving the original behavior of :func:`rename_expression`.
+  explicit RenameTransformer(const std::unordered_map<std::string, std::string> &mapping,
+                             bool match_subexpressions = false)
+      : mapping_(mapping), match_subexpressions_(match_subexpressions) {}
+
+  NodePtr visit(NodePtr node) override {
+    if (match_subexpressions_ && node != nullptr && dynamic_cast<Name *>(node.get()) == nullptr &&
+        dynamic_cast<Constant *>(node.get()) == nullptr) {
+      // A compound (non-leaf) subexpression whose textual form matches a
+      // mapping key collapses to the mapped name without descending further.
+      auto it = mapping_.find(unparse(*node));
+      if (it != mapping_.end()) {
+        return std::make_unique<Name>(it->second);
+      }
+    }
+    return Transformer::visit(std::move(node));
+  }
 
   NodePtr visit_Name(std::unique_ptr<Name> n) override {
     auto it = mapping_.find(n->id);
@@ -911,6 +1282,22 @@ public:
 
 private:
   const std::unordered_map<std::string, std::string> &mapping_;
+  bool match_subexpressions_;
+};
+
+// Collapses ``broadcast(x, x)`` to ``x``: once an equality constraint has been
+// applied the two operands of a synthesized broadcast expression may become
+// textually identical, in which case the broadcast is a no-op.
+class BroadcastSimplifyTransformer : public Transformer {
+public:
+  NodePtr visit_Call(std::unique_ptr<Call> n) override {
+    n = std::unique_ptr<Call>(static_cast<Call *>(generic_visit(std::move(n)).release()));
+    if (n->func == "broadcast" && n->args.size() == 2 &&
+        unparse(*n->args[0]) == unparse(*n->args[1])) {
+      return std::move(n->args[0]);
+    }
+    return n;
+  }
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -946,9 +1333,11 @@ static NodePtr apply_pipeline(NodePtr node) {
   SimpleSimplifyTransformer simple_tr;
   MulDivCancellerTransformer muldiv_tr;
   ExactMulDivConstantFolderTransformer fold_tr;
+  DistributeFloorDivOverAddTransformer distrib_tr;
   MaxToXorTransformer max_tr;
   ReorderCommutativeOpsTransformer reorder_tr;
   MaxIntTransformer maxint_tr;
+  FloorDivAddRingTransformer fd_ring_tr;
 
   // Apply pipeline twice (matches the Python implementation)
   for (int pass = 0; pass < 2; ++pass) {
@@ -957,11 +1346,13 @@ static NodePtr apply_pipeline(NodePtr node) {
     node = muldiv_tr.visit(std::move(node));
     node = fold_tr.visit(std::move(node));
     node = muldiv_tr.visit(std::move(node));
+    node = distrib_tr.visit(std::move(node));
     node = max_tr.visit(std::move(node));
     // SimplifyParensTransformer is a no-op; omitted
     node = reorder_tr.visit(std::move(node));
     // StringToIntTransformer converts string constants to ints (not applicable here)
     node = maxint_tr.visit(std::move(node));
+    node = fd_ring_tr.visit(std::move(node));
   }
   return node;
 }
@@ -995,21 +1386,74 @@ SimplifyResult simplify_expression(const std::string &expr) {
   return make_simplified(res);
 }
 
-std::map<std::string, int64_t> simplify_two_expressions(const std::string &expr1,
-                                                        const std::string &expr2) {
-  // Build expr1 - (expr2) and run the add-visitor directly (no pipeline
-  // transformations — matches the Python implementation).
+// Builds `expr1 - (expr2)` and runs the add-visitor directly (no pipeline
+// transformations — matches the Python implementation), returning the full
+// linear combination (variable coefficients and constant term).
+static AddVisitorResult difference_linear_combination(const std::string &expr1,
+                                                      const std::string &expr2) {
   std::string combined = expr1 + "-(" + expr2 + ")";
   NodePtr tree = parse(combined);
 
   AddVisitorResult res;
   run_add_visitor(*tree, res);
+  return res;
+}
+
+std::map<std::string, int64_t> simplify_two_expressions(const std::string &expr1,
+                                                        const std::string &expr2) {
+  AddVisitorResult res = difference_linear_combination(expr1, expr2);
 
   std::map<std::string, int64_t> out;
   for (const auto &[k, v] : res.coeffs)
     if (v != 0)
       out[k] = v;
   return out;
+}
+
+ExpressionComparison compare_expressions(const std::string &expr1, const std::string &expr2) {
+  // Collect the linear combination of expr1 - (expr2). simplify_two_expressions
+  // discards the constant term, which is exactly what decides Greater/Smaller/
+  // Equal here, so reuse the shared helper that keeps it.
+  AddVisitorResult res = difference_linear_combination(expr1, expr2);
+
+  // Inspect the non-zero token coefficients of expr1 - expr2. Every token is
+  // assumed to be positive or null, so the minimum of the difference over all
+  // non-negative token assignments is reached when all tokens are zero, which
+  // equals the constant term.
+  bool any_positive_coeff = false;
+  bool any_negative_coeff = false;
+  for (const auto &[k, v] : res.coeffs) {
+    (void)k;
+    if (v > 0)
+      any_positive_coeff = true;
+    else if (v < 0)
+      any_negative_coeff = true;
+  }
+
+  CompareResult result;
+  if (!any_positive_coeff && !any_negative_coeff) {
+    // Pure constant difference.
+    if (res.const_term > 0)
+      result = CompareResult::Greater;
+    else if (res.const_term < 0)
+      result = CompareResult::Smaller;
+    else
+      result = CompareResult::Equal;
+  } else if (!any_negative_coeff && res.const_term > 0) {
+    // All token coefficients are non-negative and the constant is strictly
+    // positive: the difference is strictly positive for any non-negative tokens.
+    result = CompareResult::Greater;
+  } else if (!any_positive_coeff && res.const_term < 0) {
+    // All token coefficients are non-positive and the constant is strictly
+    // negative: the difference is strictly negative for any non-negative tokens.
+    result = CompareResult::Smaller;
+  } else {
+    result = CompareResult::Unknown;
+  }
+
+  // Always report the simplified difference expr2 - expr1.
+  SimplifyResult difference = simplify_expression("(" + expr2 + ")-(" + expr1 + ")");
+  return ExpressionComparison{result, difference};
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -1124,10 +1568,11 @@ rename_dynamic_expression(const std::string &expression,
   }
 
   MaxToXorTransformer max_tr;
-  RenameTransformer rename_tr(replacements);
+  RenameTransformer rename_tr(replacements, /*match_subexpressions=*/true);
+  BroadcastSimplifyTransformer broadcast_tr;
   SimpleSimplifyTransformer simple_tr;
 
-  tree = simple_tr.visit(rename_tr.visit(max_tr.visit(std::move(tree))));
+  tree = simple_tr.visit(broadcast_tr.visit(rename_tr.visit(max_tr.visit(std::move(tree)))));
 
   std::string out = unparse(*tree);
   out.erase(std::remove(out.begin(), out.end(), ' '), out.end());
@@ -1170,7 +1615,12 @@ rename_dynamic_dimensions(const std::map<std::string, std::unordered_set<std::st
       if (!ban_prefix.empty() && by.size() >= ban_prefix.size() &&
           by.substr(0, ban_prefix.size()) == ban_prefix)
         continue;
-      replacements[k] = by;
+      // Preferred names keep their identity mapping. Without this guard, two
+      // preferred names linked by a constraint would be swapped (each
+      // overwriting the other's identity), which destroys both names instead
+      // of leaving them alone.
+      if (!original.count(k))
+        replacements[k] = by;
       for (const auto &vv : v)
         if (!replacements.count(vv))
           replacements[vv] = by;

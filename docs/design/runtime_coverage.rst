@@ -17,12 +17,18 @@ three independent scenarios:
   tolerances and :red:`red` otherwise (``n/a`` when ORT cannot load or run
   the model — typically when the model uses an op from a domain ORT does not
   register, such as ``ai.onnx.preview`` or ``ai.onnx.preview.training``).
-* **static shape** — the model is passed as-is to
+* **static shape** — every recorded ``graph.value_info`` and output shape
+  is stripped from the model, then the model is passed to
   :func:`onnx_light.onnx_lib.shape_inference.infer_shapes`. A
-  :green:`yes` indicates shape inference completes without raising.
-* **dynamic_shapes** — every numeric input dimension is first replaced with a
-  symbolic ``dim_param`` (identical numeric values share the same symbol),
-  then shape inference is run on the resulting symbolic model.
+  :green:`yes` indicates shape inference completes without raising **and**
+  every output shape originally recorded by the test author is recovered
+  by inference (concrete dims must match exactly; symbolic or missing dims
+  are accepted on either side).
+* **dynamic_shapes** — same as **static shape**, but every numeric input
+  dimension is first replaced with a symbolic ``dim_param`` (identical
+  numeric values share the same symbol) before stripping the recorded
+  output shapes and running shape inference on the resulting symbolic
+  model.
 
 ----
 

@@ -299,26 +299,28 @@ template <>
 std::vector<std::string>
 write_into_vector_string(utils::PrintOptions &options, const char *field_name,
                          const utils::RepeatedField<utils::String> &field) {
-  if (field.size() < 5)
+  if (utils::is_inline_size(options, field.size()))
     return {MakeString(field_name, ": ", write_as_string(options, field), ",")};
   std::vector<std::string> rows{MakeString(field_name, ": [")};
+  std::string indent = utils::indentation_string(options);
   for (const auto &p : field) {
     auto r = p.as_string(true);
-    rows.push_back(MakeString("  ", r, ","));
+    rows.push_back(MakeString(indent, r, ","));
   }
   rows.push_back("],");
   return rows;
 }
 
 template <typename T>
-std::vector<std::string> write_into_vector_string_repeated(utils::PrintOptions &,
+std::vector<std::string> write_into_vector_string_repeated(utils::PrintOptions &options,
                                                            const char *field_name,
                                                            const utils::RepeatedField<T> &field) {
   std::vector<std::string> rows;
-  if (field.size() >= 10) {
+  if (!utils::is_inline_size(options, field.size())) {
+    std::string indent = utils::indentation_string(options);
     rows.push_back(MakeString(field_name, ": ["));
     for (const auto &p : field) {
-      rows.push_back(MakeString("  ", p, ","));
+      rows.push_back(MakeString(indent, p, ","));
     }
     rows.push_back("],");
   } else {
@@ -402,16 +404,19 @@ template <typename... Args>
 std::vector<std::string> write_proto_into_vector_string(utils::PrintOptions &options,
                                                         const Args &...args) {
   std::vector<std::string> rows{"{"};
-  auto append_arg = [&options, &rows](const auto &arg) mutable {
+  std::string indent = utils::indentation_string(options);
+  auto append_arg = [&options, &rows, &indent](const auto &arg) mutable {
     if (arg.exist) {
       std::vector<std::string> r = write_into_vector_string(options, arg.name, *arg.value);
       for (const auto &s : r) {
-        rows.push_back("  " + s);
+        rows.push_back(indent + s);
       }
     }
   };
   (append_arg(args), ...);
   rows.push_back("},");
+  if (utils::is_single_line(options))
+    return utils::collapse_into_single_line(rows);
   return rows;
 }
 

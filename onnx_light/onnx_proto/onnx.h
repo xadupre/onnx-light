@@ -280,7 +280,7 @@ BEGIN_PROTO(
     "For very large tensors, we may want to store them in chunks, in which case the following "
     "fields will specify the segment that is stored in the current TensorProto.")
 FIELD_DEFAULT(int64_t, begin, 1, 0, "Segment start.")
-FIELD_DEFAULT(int64_t, end, 1, 0, "Segment end.")
+FIELD_DEFAULT(int64_t, end, 2, 0, "Segment end.")
 END_PROTO()
 
 FIELD_REPEATED(uint64_t, dims, 1, "The shape of the tensor.")
@@ -628,6 +628,17 @@ FIELD_REPEATED(StringStringEntryProto, metadata_props, 9,
                "Named metadata values; keys should be distinct.")
 FIELD_REPEATED(NodeDeviceConfigurationProto, device_configurations, 10,
                "Configuration of multi-device annotations.")
+/**
+ * Replaces an existing attribute with the same name in place, or appends
+ * *attr* to ``attribute`` if no entry with that name exists yet, and returns
+ * a reference to the stored attribute.
+ */
+AttributeProto &set_attribute(const AttributeProto &attr);
+/**
+ * Sets metadata property *key* to *value*, updating an existing entry with
+ * the same key in place, and returns a reference to the stored entry.
+ */
+StringStringEntryProto &add_metadata(const std::string &key, const std::string &value);
 END_PROTO()
 
 // GraphProto
@@ -670,6 +681,19 @@ FIELD_REPEATED(
     "'a_zero_point' are scale and zero point of tensor 'a' in the model.")
 FIELD_REPEATED(StringStringEntryProto, metadata_props, 16,
                "Named metadata values; keys should be distinct.")
+/**
+ * Appends a new node built from *op_type*, *inputs*, *outputs* and the
+ * optional *domain* / *name* to the graph and returns a reference to it.
+ * Convenience wrapper around the :ref:`MakeNode` factory.
+ */
+NodeProto &add_node(const std::string &op_type, const std::vector<std::string> &inputs,
+                    const std::vector<std::string> &outputs, const std::string &domain = "",
+                    const std::string &name = "");
+/**
+ * Sets metadata property *key* to *value*, updating an existing entry with
+ * the same key in place, and returns a reference to the stored entry.
+ */
+StringStringEntryProto &add_metadata(const std::string &key, const std::string &value);
 END_PROTO()
 
 inline const char *AttributeProto_AttributeType_Name(AttributeProto::AttributeType t) {
@@ -712,6 +736,24 @@ FIELD_REPEATED_PROTO(
     "It is optional for a value to appear in value_info list.")
 FIELD_REPEATED(StringStringEntryProto, metadata_props, 14,
                "Named metadata values; keys should be distinct.")
+/**
+ * Appends a new node built from *op_type*, *inputs*, *outputs* and the
+ * optional *domain* / *name* to the function body and returns a reference to
+ * it. Convenience wrapper around the :ref:`MakeNode` factory.
+ */
+NodeProto &add_node(const std::string &op_type, const std::vector<std::string> &inputs,
+                    const std::vector<std::string> &outputs, const std::string &domain = "",
+                    const std::string &name = "");
+/**
+ * Appends an opset import ``(domain, version)`` and returns a reference to
+ * the newly added entry.
+ */
+OperatorSetIdProto &add_opset(const std::string &domain, int64_t version);
+/**
+ * Sets metadata property *key* to *value*, updating an existing entry with
+ * the same key in place, and returns a reference to the stored entry.
+ */
+StringStringEntryProto &add_metadata(const std::string &key, const std::string &value);
 END_PROTO()
 
 // ModelProto
@@ -772,6 +814,21 @@ FIELD_REPEATED_PROTO(
 FIELD_REPEATED(DeviceConfigurationProto, configuration, 26,
                "Describes different target configurations for a multi-device use case. A model MAY "
                "describe multiple multi-device configurations for execution.")
+/**
+ * Appends *function* to the model's ``functions`` field and returns a
+ * reference to the stored copy.
+ */
+FunctionProto &add_function(const FunctionProto &function);
+/**
+ * Appends an opset import ``(domain, version)`` and returns a reference to
+ * the newly added entry.
+ */
+OperatorSetIdProto &add_opset(const std::string &domain, int64_t version);
+/**
+ * Sets metadata property *key* to *value*, updating an existing entry with
+ * the same key in place, and returns a reference to the stored entry.
+ */
+StringStringEntryProto &add_metadata(const std::string &key, const std::string &value);
 /**
  * Serializes the proto into *out* and external weight payloads into *external_files*.
  * External files are split so each file size is at most *max_external_file_size*.

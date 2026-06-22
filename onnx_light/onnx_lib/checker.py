@@ -11,13 +11,27 @@ _checker = _C.checker  # type: ignore
 ValidationError = _checker.ValidationError
 
 
-def check_model(model: _C.ModelProto) -> None:  # type: ignore
+def check_model(
+    model: _C.ModelProto,  # type: ignore
+    *,
+    full_check: bool = False,
+    skip_opset_compatibility_check: bool = False,
+    check_custom_domain: bool = False,
+) -> None:
     """Checks a model and raises checker.ValidationError on invalid content.
 
-    Returns:
-        None.
+    Validates the model's IR structure, including topological ordering of nodes,
+    SSA form, schema compliance, and metadata consistency.
+
+    Raises:
+        ValidationError: If the model fails validation.
     """
-    _checker.check_model(model)
+    _checker.check_model(
+        model,
+        full_check=full_check,
+        skip_opset_compatibility_check=skip_opset_compatibility_check,
+        check_custom_domain=check_custom_domain,
+    )
 
 
 def check_attribute(attribute: _C.AttributeProto) -> None:  # type: ignore

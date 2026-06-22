@@ -4,6 +4,7 @@
 
 #include "onnx_backend_test/cases/nn/include_nn_cases.h"
 #include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -364,6 +365,40 @@ void RegisterLinearAttentionCases(std::vector<TestCase> &registry) {
     AddAttribute<int64_t>(node, "kv_num_heads", 2);
     Expect(node, {q1, k1, v1}, {result.output, result.present_state},
            "test_cc_linear_attention_linear_t1_no_past", {opset}, "backend-test", registry);
+  }
+
+  // Case 17: fp16 — half-precision activations (gated_delta). The kernel
+  // promotes FLOAT16 inputs to FLOAT32, runs the recurrence, then demotes the
+  // outputs back to FLOAT16, so the reference outputs are computed from the
+  // FP16-rounded inputs in float32 and rounded back to FLOAT16.
+  {
+    Tensor q16 = kernel::RoundToFloat16(query);
+    Tensor k16 = kernel::RoundToFloat16(key);
+    Tensor v16 = kernel::RoundToFloat16(value);
+    Tensor decay32 = Tensor::FromFloat("", {1, 2, 4},
+                                       {-0.1f, -0.2f, -0.3f, -0.4f, -0.05f, -0.1f, -0.15f, -0.2f});
+    Tensor beta32 = Tensor::FromFloat("", {1, 2, 2}, {0.8f, 0.9f, 0.7f, 0.6f});
+    Tensor decay16 = kernel::RoundToFloat16(decay32);
+    Tensor beta16 = kernel::RoundToFloat16(beta32);
+    kernel::LinearAttention::Attributes attrs;
+    attrs.update_rule = "gated_delta";
+    attrs.q_num_heads = 2;
+    attrs.kv_num_heads = 2;
+    auto result = kernel(q16, k16, v16, attrs, nullptr, &decay16, &beta16);
+    NodeProto node = MakeLinearAttentionNode({"query", "key", "value", "", "decay", "beta"},
+                                             {"output", "present_state"});
+    AddAttribute<std::string>(node, "update_rule", "gated_delta");
+    AddAttribute<int64_t>(node, "q_num_heads", 2);
+    AddAttribute<int64_t>(node, "kv_num_heads", 2);
+    Expect(node,
+           {kernel::FloatToFloat16Tensor("", q16), kernel::FloatToFloat16Tensor("", k16),
+            kernel::FloatToFloat16Tensor("", v16), kernel::FloatToFloat16Tensor("", decay16),
+            kernel::FloatToFloat16Tensor("", beta16)},
+           {kernel::FloatToFloat16Tensor("", result.output),
+            kernel::FloatToFloat16Tensor("", result.present_state)},
+           "test_cc_linear_attention_fp16", {opset}, "backend-test", registry);
+    registry.back().atol = 5e-3;
+    registry.back().rtol = 5e-3;
   }
 }
 

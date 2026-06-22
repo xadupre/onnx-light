@@ -27,8 +27,9 @@ Sequence SequenceInsert::operator()(const Sequence &input_sequence, const Tensor
 
   int64_t idx = n;
   if (position != nullptr) {
-    EXT_ENFORCE_INVALID(!position->data.empty() && position->shape.empty(),
-                        "kernel::SequenceInsert: 'position' must be a scalar tensor.");
+    EXT_ENFORCE_INVALID(position->element_count() == 1,
+                        "kernel::SequenceInsert: 'position' must be a single-element tensor "
+                        "(a scalar or a tensor of shape [1]).");
     if (position->data_type == static_cast<int32_t>(DataType::INT32)) {
       idx = static_cast<int64_t>(*position->AsInt32());
     } else {
@@ -39,9 +40,9 @@ Sequence SequenceInsert::operator()(const Sequence &input_sequence, const Tensor
     if (idx < 0) {
       idx += n;
     }
-    EXT_ENFORCE_INVALID(idx >= 0 && idx <= n,
-                        "kernel::SequenceInsert: position " + std::to_string(idx) +
-                            " is out of range for sequence of length " + std::to_string(n) + ".");
+    EXT_ENFORCE_INVALID(idx >= 0 && idx <= n, "kernel::SequenceInsert: position ",
+                        std::to_string(idx), " is out of range for sequence of length ",
+                        std::to_string(n), ".");
   }
 
   std::vector<Tensor> out_values = input_sequence.values;

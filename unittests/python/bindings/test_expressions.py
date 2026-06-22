@@ -5,6 +5,8 @@ from onnx_light.ext_test_case import ExtTestCase
 from onnx_light.onnx_optim.expressions import (
     simplify_expression,
     simplify_two_expressions,
+    compare_expressions,
+    CompareResult,
     evaluate_expression,
     parse_expression_tokens,
     rename_expression,
@@ -60,6 +62,25 @@ class TestSimplifyExpressions(ExtTestCase):
         )
         self.assertEqual(simplify_two_expressions("e*2", "e+e"), {})
 
+    def test_compare_expressions(self):
+        def check(expr1, expr2, result, difference):
+            c = compare_expressions(expr1, expr2)
+            self.assertEqual(c.result, result)
+            self.assertEqual(c.difference, difference)
+
+        check("a+b", "b+a", CompareResult.Equal, "0")
+        check("5", "3", CompareResult.Greater, -2)
+        check("3", "5", CompareResult.Smaller, 2)
+        check("a+1", "a", CompareResult.Greater, "-1")
+        check("a", "a+1", CompareResult.Smaller, "1")
+        check("a+b+1", "a", CompareResult.Greater, "-b-1")
+        check("a", "b", CompareResult.Unknown, "b-a")
+        check("2*a", "a", CompareResult.Unknown, "-a")
+
+    def test_compare_expressions_syntax_error(self):
+        with self.assertRaises(RuntimeError):
+            compare_expressions("a", "b +")
+
     def test_simplify_expression_bracket(self):
         self.assertEqual("x", simplify_expression("2*x//2"))
         self.assertEqual("x", simplify_expression("(2*x)//2"))
@@ -73,6 +94,18 @@ class TestSimplifyExpressions(ExtTestCase):
 
     def test_simplify_add_sub(self):
         self.assertEqual("b+c", simplify_expression("b+c-CeilToInt(b+c,2)+CeilToInt(b+c,2)"))
+
+    def test_simplify_floordiv_add_ring(self):
+        # sum_{i=0..n-1} floor((y + i) / n) == y (for integer y)
+        self.assertEqual("b+c", simplify_expression("(1+b+c)//2+(b+c)//2"))
+        self.assertEqual("a", simplify_expression("a//2+(a+1)//2"))
+        self.assertEqual("x", simplify_expression("x//3+(x+1)//3+(x+2)//3"))
+        self.assertEqual("x+5", simplify_expression("(x+5)//3+(x+6)//3+(x+7)//3"))
+        self.assertEqual("a+b", simplify_expression("a//2+(a+1)//2+b"))
+        self.assertEqual("b+c", simplify_expression("CeilToInt(b+c, 2)+(b+c)//2"))
+        # Insufficient terms / non-contiguous offsets must be preserved.
+        self.assertEqual("(1+x)//3+x//3", simplify_expression("x//3+(x+1)//3"))
+        self.assertEqual("(2+a)//2+a//2", simplify_expression("a//2+(a+2)//2"))
 
     def test_simplify_function(self):
         self.assertEqual("(1+b+c)//2", simplify_expression("CeilToInt(b+c,2)"))
@@ -90,6 +123,31 @@ class TestSimplifyExpressions(ExtTestCase):
         self.assertEqual("a", simplify_expression("1024*a//1024"))
         self.assertEqual("a+b", simplify_expression("1024*(a+b)//1024"))
         self.assertEqual("2*a+2*b", simplify_expression("1024*(a+b)//1024*2"))
+
+    def test_simplify_floordiv_not_exact(self):
+        # `//` is floor division, so a factor cannot cross the division
+        # boundary: a*(x//a) == x only when x is a multiple of a, whereas
+        # (a*x)//a == x always holds.
+        self.assertEqual("2*(H//2)", simplify_expression("2*(H//2)"))
+        self.assertEqual("H", simplify_expression("(2*H)//2"))
+        self.assertEqual("3*(H//3)", simplify_expression("3*(H//3)"))
+        self.assertEqual("H", simplify_expression("(3*H)//3"))
+        self.assertEqual("2*(n//2)+1", simplify_expression("2*(n//2)+1"))
+        # Concrete counter-example: 2*(3//2) == 2, not 3.
+        self.assertEqual(2, evaluate_expression("2*(H//2)", {"H": 3}))
+        self.assertEqual(3, evaluate_expression("(2*H)//2", {"H": 3}))
+
+    def test_simplify_function_floordiv_distribute(self):
+        self.assertEqual("b+c", simplify_expression("(2*b+2*c)//2"))
+        self.assertEqual("2*b+c", simplify_expression("(4*b+2*c)//2"))
+        self.assertEqual("a-b", simplify_expression("(2*a-2*b)//2"))
+        # Constant residual smaller than the divisor: 1//2 == 0, so the
+        # residual vanishes and the result is just the distributed quotient.
+        self.assertEqual("b+c", simplify_expression("(2*b+2*c+1)//2"))
+        self.assertEqual("b+c", simplify_expression("(1+2*b+2*c)//2"))
+        # Constant residual equal to or greater than the divisor folds into
+        # an additive integer constant.
+        self.assertEqual("b+c+1", simplify_expression("(2*b+2*c+3)//2"))
 
     def test_simplify_expression_negation(self):
         self.assertEqual("length", simplify_expression("-1+1+length"))

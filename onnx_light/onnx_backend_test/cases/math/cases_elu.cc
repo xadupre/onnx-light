@@ -4,6 +4,7 @@
 
 #include "onnx_backend_test/cases/math/include_math_cases.h"
 #include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
 #include <vector>
@@ -58,6 +59,46 @@ void RegisterEluCases(std::vector<TestCase> &registry) {
     Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f});
     Tensor y = elu_kernel(x);
     Expect(node, {x}, {y}, "test_cc_elu_default", {opset}, "backend-test", registry);
+  }
+
+  // FLOAT16 test case.
+  {
+    NodeProto node;
+    node.set_op_type("Elu");
+    node.add_input("X");
+    node.add_output("Y");
+
+    AttributeProto *alpha = node.add_attribute();
+    alpha->set_name("alpha");
+    alpha->set_type(AttributeProto::FLOAT);
+    alpha->set_f(2.0f);
+
+    Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f});
+    Tensor y = elu_kernel(x, 2.0f);
+    Expect(node, {x}, {y}, "test_cc_elu_float16", {opset}, "backend-test", registry);
+  }
+
+  // BFLOAT16 test case.
+  {
+    NodeProto node;
+    node.set_op_type("Elu");
+    node.add_input("X");
+    node.add_output("Y");
+
+    AttributeProto *alpha = node.add_attribute();
+    alpha->set_name("alpha");
+    alpha->set_type(AttributeProto::FLOAT);
+    alpha->set_f(1.0f);
+
+    std::vector<float> vals = {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f};
+    std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
+    auto *dst = reinterpret_cast<uint16_t *>(raw.data());
+    for (size_t i = 0; i < vals.size(); ++i) {
+      dst[i] = kernel::FloatToBfloat16Bits(vals[i]);
+    }
+    Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {2, 3}, std::move(raw));
+    Tensor y = elu_kernel(x, 1.0f);
+    Expect(node, {x}, {y}, "test_cc_elu_bfloat16", {opset}, "backend-test", registry);
   }
 }
 

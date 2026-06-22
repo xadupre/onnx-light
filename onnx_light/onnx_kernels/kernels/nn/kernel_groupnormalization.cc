@@ -19,11 +19,11 @@ namespace {
 // data pointer. ``role`` identifies the parameter in error messages.
 const float *AsFloat1D(const Tensor &t, int64_t c, const char *role) {
   EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      std::string("kernel::GroupNormalization: ") + role + " must be FLOAT.");
-  EXT_ENFORCE_INVALID(t.shape.size() == 1u,
-                      std::string("kernel::GroupNormalization: ") + role + " must be rank 1.");
-  EXT_ENFORCE_INVALID(t.shape[0] == c, std::string("kernel::GroupNormalization: ") + role +
-                                           " size must equal X's channel dimension.");
+                      "kernel::GroupNormalization: ", role, " must be FLOAT.");
+  EXT_ENFORCE_INVALID(t.shape.size() == 1u, "kernel::GroupNormalization: ", role,
+                      " must be rank 1.");
+  EXT_ENFORCE_INVALID(t.shape[0] == c, "kernel::GroupNormalization: ", role,
+                      " size must equal X's channel dimension.");
   return t.AsFloat();
 }
 

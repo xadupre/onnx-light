@@ -223,9 +223,11 @@ public:
 /// opset 11 in the ai.onnx domain).
 ///
 /// ``position`` is optional; when omitted ``tensor`` is appended to the
-/// back of the sequence. Negative positions count from the back:
-/// ``position == -1`` inserts before the last element. The accepted range
-/// is ``[-n, n]`` where ``n`` is the sequence length.
+/// back of the sequence. ``position`` may be a scalar tensor or a
+/// single-element tensor of shape ``[1]`` (ONNX backend models supply the
+/// latter). Negative positions count from the back: ``position == -1``
+/// inserts before the last element. The accepted range is ``[-n, n]`` where
+/// ``n`` is the sequence length.
 class SequenceInsert : public KernelBase {
 public:
   using KernelBase::KernelBase;

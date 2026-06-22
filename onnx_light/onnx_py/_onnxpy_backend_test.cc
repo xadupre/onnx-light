@@ -8,20 +8,99 @@
 
 #include <cstdint>
 #include <cstring>
+#include <nanobind/ndarray.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 #include <regex>
+#include <stdexcept>
+#include <vector>
 
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DataSet;
 using onnx_backend_test::TestCase;
+using onnx_kernels::Map;
 using onnx_kernels::Tensor;
 
 void AddOnnxPyBackend(nb::module_ &m);
 void AddOnnxPyBackendTest(nb::module_ &m);
+
+namespace {
+
+/// Maps an ONNX ``TensorProto::DataType`` to the equivalent DLPack dtype.
+///
+/// Throws ``std::invalid_argument`` for data types that cannot be exchanged
+/// through DLPack with a whole-byte element layout, i.e. ``STRING`` and the
+/// sub-byte packed types (``INT4``/``UINT4``/``INT2``/``UINT2``/``FLOAT4E2M1``).
+nb::dlpack::dtype DLPackDtypeFromOnnx(int32_t data_type) {
+  using Code = nb::dlpack::dtype_code;
+  auto make = [](Code code, uint8_t bits) -> nb::dlpack::dtype {
+    return nb::dlpack::dtype{static_cast<uint8_t>(code), bits, 1};
+  };
+  switch (static_cast<TensorProto::DataType>(data_type)) {
+  case TensorProto::FLOAT:
+    return make(Code::Float, 32);
+  case TensorProto::DOUBLE:
+    return make(Code::Float, 64);
+  case TensorProto::FLOAT16:
+    return make(Code::Float, 16);
+  case TensorProto::BFLOAT16:
+    return make(Code::Bfloat, 16);
+  case TensorProto::UINT8:
+    return make(Code::UInt, 8);
+  case TensorProto::INT8:
+    return make(Code::Int, 8);
+  case TensorProto::UINT16:
+    return make(Code::UInt, 16);
+  case TensorProto::INT16:
+    return make(Code::Int, 16);
+  case TensorProto::UINT32:
+    return make(Code::UInt, 32);
+  case TensorProto::INT32:
+    return make(Code::Int, 32);
+  case TensorProto::UINT64:
+    return make(Code::UInt, 64);
+  case TensorProto::INT64:
+    return make(Code::Int, 64);
+  case TensorProto::BOOL:
+    return make(Code::Bool, 8);
+  case TensorProto::COMPLEX64:
+    return make(Code::Complex, 64);
+  case TensorProto::COMPLEX128:
+    return make(Code::Complex, 128);
+  case TensorProto::FLOAT8E4M3FN:
+    return make(Code::Float8_E4M3FN, 8);
+  case TensorProto::FLOAT8E4M3FNUZ:
+    return make(Code::Float8_E4M3FNUZ, 8);
+  case TensorProto::FLOAT8E5M2:
+    return make(Code::Float8_E5M2, 8);
+  case TensorProto::FLOAT8E5M2FNUZ:
+    return make(Code::Float8_E5M2FNUZ, 8);
+  default:
+    EXT_THROW_INVALID("Tensor.__dlpack__: data type '",
+                      TensorProto::DataType_Name(static_cast<TensorProto::DataType>(data_type)),
+                      "' cannot be exported through DLPack (STRING and sub-byte packed types are "
+                      "not supported).");
+  }
+}
+
+/// Builds a zero-copy DLPack-capable ``nb::ndarray`` view over ``owner``'s
+/// element bytes. ``owner`` is the Python ``Tensor`` wrapper; passing it as the
+/// array owner keeps the source tensor alive for as long as the view lives. The
+/// view is read-only because the tensor's byte buffer is logically immutable
+/// (and may be a borrowed/non-owning span).
+nb::object MakeTensorNdarray(nb::handle owner) {
+  const Tensor &t = nb::cast<const Tensor &>(owner);
+  nb::dlpack::dtype dtype = DLPackDtypeFromOnnx(t.data_type);
+  std::vector<size_t> shape(t.shape.begin(), t.shape.end());
+  nb::ndarray<nb::ro> array(t.bytes(), shape.size(), shape.data(), owner,
+                            /*strides=*/nullptr, dtype, nb::device::cpu::value, /*device_id=*/0);
+  return nb::cast(std::move(array));
+}
+
+} // namespace
 
 NB_MODULE(_onnxpybackend, m) {
   m.doc() = "onnx_light backend bindings: deterministic pseudo-random helpers and "
@@ -55,6 +134,32 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
           "string_data", [](const Tensor &t) { return t.string_data; },
           "Returns the string element values (only populated when "
           "``data_type == TensorProto::DataType::STRING``).")
+      .def(
+          "__dlpack__",
+          [](nb::handle self, nb::kwargs /*kwargs*/) {
+            // Export a zero-copy DLPack capsule so consumers such as NumPy or
+            // PyTorch can adopt the tensor's buffer via ``from_dlpack``. The
+            // nanobind ndarray view (built with the framework-agnostic export
+            // path) yields the capsule directly and keeps the source ``Tensor``
+            // alive through its owner handle. The standard keyword arguments
+            // (``stream``/``max_version``/``dl_device``/``copy``) are accepted
+            // for protocol compatibility; the buffer is always returned as-is
+            // on the CPU device.
+            return MakeTensorNdarray(self);
+          },
+          "Returns a DLPack capsule sharing the tensor's element buffer (zero-copy). "
+          "Implements the ``__dlpack__`` exchange protocol. Raises ``ValueError`` for "
+          "``STRING`` and sub-byte packed data types.")
+      .def(
+          "__dlpack_device__",
+          [](const Tensor &t) {
+            // Validate the data type so unsupported tensors fail consistently
+            // with ``__dlpack__``; the buffer always lives on the CPU device.
+            DLPackDtypeFromOnnx(t.data_type);
+            return std::make_pair(static_cast<int>(nb::device::cpu::value), 0);
+          },
+          "Returns the ``(device_type, device_id)`` pair for the DLPack protocol. "
+          "The tensor always resides on the CPU device (``kDLCPU``).")
       .def("__repr__", [](const Tensor &t) {
         std::string r = "Tensor(name='";
         r += t.name;
@@ -70,10 +175,21 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
         return r;
       });
 
+  nb::class_<Map>(bt_mod, "Map", "A map-typed value: parallel keys + values tensors.")
+      .def_rw("name", &Map::name)
+      .def_rw("key_type", &Map::key_type)
+      .def_rw("value_type", &Map::value_type)
+      .def_rw("keys", &Map::keys)
+      .def_rw("values", &Map::values)
+      .def("__repr__", [](const Map &m) {
+        return "Map(name='" + m.name + "', size=" + std::to_string(m.size()) + ")";
+      });
+
   nb::class_<DataSet>(bt_mod, "DataSet",
                       "A single (inputs, expected outputs) data set of a TestCase.")
       .def_rw("inputs", &DataSet::inputs)
       .def_rw("outputs", &DataSet::outputs)
+      .def_rw("maps", &DataSet::maps)
       .def("__repr__", [](const DataSet &ds) {
         return "DataSet(inputs=" + std::to_string(ds.inputs.size()) +
                ", outputs=" + std::to_string(ds.outputs.size()) + ")";
@@ -93,7 +209,7 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
       .def(nb::init<std::string, std::string, std::string, std::string, double, double>(),
            nb::arg("name"), nb::arg("model_name") = std::string(),
            nb::arg("kind") = std::string("node"), nb::arg("tag") = std::string(),
-           nb::arg("rtol") = 1e-3, nb::arg("atol") = 1e-7)
+           nb::arg("atol") = 1e-7, nb::arg("rtol") = 1e-3)
       .def_ro("name", &TestCase::name)
       .def_ro("model_name", &TestCase::model_name)
       .def_ro("kind", &TestCase::kind)

@@ -97,7 +97,8 @@ Tensor MakeSizesTensor(const std::vector<int64_t> &sizes) {
 // (``onnx/backend/test/data/node/test_resize_*``), so the inputs/expected
 // outputs match the upstream backend-test corpus bit-for-bit for the
 // interpolation modes (``linear``, ``cubic``, ``tf_crop_and_resize``,
-// antialias variants) that this reference C++ kernel does not yet implement.
+// antialias variants), most of which this reference C++ kernel also
+// reproduces.
 void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry);
 
 void RegisterResizeCases(std::vector<TestCase> &registry) {

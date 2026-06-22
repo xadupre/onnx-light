@@ -36,11 +36,12 @@ namespace kernel {
 /// Reference implementation of ``ai.onnx.preview::FlexAttention`` (v1).
 ///
 /// Computes ``Y = Softmax((Q @ K^T) * scale, axis=-1) @ V`` over rank-4
-/// (batched, multi-head) FLOAT inputs. Supports Grouped Query Attention
-/// (GQA): when ``q_num_heads != kv_num_heads`` each K/V head is shared by
-/// a contiguous group of query heads, i.e. query head ``h`` uses K/V head
-/// ``floor(h / (q_num_heads / kv_num_heads))``; ``q_num_heads`` must be a
-/// multiple of ``kv_num_heads``.
+/// (batched, multi-head) floating-point inputs (FLOAT or DOUBLE; FLOAT16 and
+/// BFLOAT16 are supported via internal promotion to FLOAT32). Supports
+/// Grouped Query Attention (GQA): when ``q_num_heads != kv_num_heads`` each
+/// K/V head is shared by a contiguous group of query heads, i.e. query head
+/// ``h`` uses K/V head ``floor(h / (q_num_heads / kv_num_heads))``;
+/// ``q_num_heads`` must be a multiple of ``kv_num_heads``.
 ///
 /// The optional ``score_mod`` modifier subgraph is supported via the
 /// ``ScoreModFn`` callback overload: callers that have a way to evaluate
@@ -60,7 +61,9 @@ namespace kernel {
 /// final ``probs @ V`` matmul. Overloads without a callback retain the
 /// baseline behavior (``prob_mod`` treated as identity).
 ///
-/// Only FLOAT tensors are supported.
+/// FLOAT and DOUBLE tensors are supported (and FLOAT16/BFLOAT16 via internal
+/// promotion to FLOAT32). ``Q``, ``K`` and ``V`` must share the same element
+/// type.
 class FlexAttention : public KernelBase {
 public:
   using KernelBase::KernelBase;
@@ -68,7 +71,8 @@ public:
   /// Callback used to apply the ``score_mod`` modifier subgraph to the
   /// pre-softmax score tensor of shape
   /// ``(batch_size, q_num_heads, q_seq_len, kv_seq_len)``. The callback
-  /// receives a mutable reference to a FLOAT tensor and must rewrite
+  /// receives a mutable reference to a tensor sharing ``Q``'s element type
+  /// and must rewrite
   /// its contents in place while preserving ``data_type`` and ``shape``;
   /// the kernel validates these invariants after the call.
   using ScoreModFn = std::function<void(Tensor &)>;
@@ -76,7 +80,8 @@ public:
   /// Callback used to apply the ``prob_mod`` modifier subgraph to the
   /// post-softmax probability tensor of shape
   /// ``(batch_size, q_num_heads, q_seq_len, kv_seq_len)``. The callback
-  /// receives a mutable reference to a FLOAT tensor and must rewrite
+  /// receives a mutable reference to a tensor sharing ``Q``'s element type
+  /// and must rewrite
   /// its contents in place while preserving ``data_type`` and ``shape``;
   /// the kernel validates these invariants after the call.
   using ProbModFn = std::function<void(Tensor &)>;
@@ -107,9 +112,9 @@ public:
                     const ScoreModFn &score_mod, const ProbModFn &prob_mod) const;
 
   /// In-place overload writing into a caller-allocated ``output`` tensor.
-  /// ``output`` must already be a FLOAT tensor whose shape equals
-  /// ``(batch_size, q_num_heads, q_seq_len, v_head_size)`` and whose
-  /// ``data`` buffer has been sized to match.
+  /// ``output`` must already share ``Q``'s element type and have shape
+  /// ``(batch_size, q_num_heads, q_seq_len, v_head_size)`` with its
+  /// ``data`` buffer sized to match.
   void operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
                   Tensor &output) const;
 

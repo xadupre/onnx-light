@@ -24,8 +24,8 @@ void ComputeShapeNegativeLogLikelihoodLoss(ShapesContext &ctx, const NodeProto &
   const OptimShape &input_shape = input_tensor.Shape();
   const int64_t input_rank = static_cast<int64_t>(input_shape.Rank());
   EXT_ENFORCE_INVALID(input_rank >= 2,
-                      "ComputeShapeNegativeLogLikelihoodLoss: input rank must be >= 2 (got " +
-                          std::to_string(input_rank) + ").");
+                      "ComputeShapeNegativeLogLikelihoodLoss: input rank must be >= 2 (got ",
+                      std::to_string(input_rank), ").");
 
   const OptimTensor &target_tensor = ctx.Get(target);
   const OptimShape &target_shape = target_tensor.Shape();
@@ -33,14 +33,14 @@ void ComputeShapeNegativeLogLikelihoodLoss(ShapesContext &ctx, const NodeProto &
   EXT_ENFORCE_INVALID(
       target_rank == input_rank - 1,
       "ComputeShapeNegativeLogLikelihoodLoss: target rank must equal input rank - 1 (got "
-      "input_rank=" +
-          std::to_string(input_rank) + ", target_rank=" + std::to_string(target_rank) + ").");
+      "input_rank=",
+      std::to_string(input_rank), ", target_rank=", std::to_string(target_rank), ").");
 
   if (weight != nullptr && weight[0] != '\0') {
     const OptimTensor &weight_tensor = ctx.Get(weight);
     EXT_ENFORCE_INVALID(weight_tensor.Shape().Rank() == 1u,
-                        "ComputeShapeNegativeLogLikelihoodLoss: weight rank must be 1 (got " +
-                            std::to_string(weight_tensor.Shape().Rank()) + ").");
+                        "ComputeShapeNegativeLogLikelihoodLoss: weight rank must be 1 (got ",
+                        std::to_string(weight_tensor.Shape().Rank()), ").");
   }
 
   const std::string reduction = GetAttributeOr<std::string>(node, "reduction", std::string("mean"));

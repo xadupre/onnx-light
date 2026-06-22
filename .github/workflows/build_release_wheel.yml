@@ -1,0 +1,207 @@
+name: Build Release Wheels
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Git tag or ref to build (defaults to the branch the workflow is run from)."
+        required: false
+        type: string
+  schedule:
+    # Run every Monday at 06:00 UTC to catch toolchain/manylinux regressions early.
+    - cron: "0 6 * * 1"
+  push:
+    tags:
+      - "*"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_wheels_linux:
+    name: wheels (linux, ${{ matrix.arch }})
+    runs-on: ${{ matrix.runs-on }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runs-on: ubuntu-latest
+          - arch: aarch64
+            runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Detect runner CPU count
+        id: cpu_count
+        shell: bash
+        run: |
+          count=$(python -c 'import os; print(os.cpu_count() or 1)')
+          echo "count=${count}" >> "$GITHUB_OUTPUT"
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${count}"
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.23.2
+        env:
+          CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-* cp313t-* cp314-* cp314t-*"
+          CIBW_ARCHS: ${{ matrix.arch }}
+          # The default cibuildwheel manylinux2014 image ships GCC 10, which
+          # rejects some of our recursive container templates (e.g. the
+          # n-gram trie in kernel_tf_idf_vectorizer.cc that stores an
+          # ``std::unordered_map<Key, NgramNode>`` of itself). Use
+          # manylinux_2_28 so we build with GCC 12 across all CPython
+          # versions, matching the toolchain used by the regular CI build.
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
+          CIBW_MANYLINUX_AARCH64_IMAGE: manylinux_2_28
+          CIBW_ENVIRONMENT: >
+            CMAKE_BUILD_PARALLEL_LEVEL=${{ steps.cpu_count.outputs.count }}
+            CMAKE_ARGS=-DONNX_HARDENING=ON
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-linux-${{ matrix.arch }}
+          path: ./wheelhouse/*.whl
+      - name: Attach wheels to GitHub Release
+        if: github.ref_type == 'tag' || inputs.tag != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ inputs.tag }}"
+          if [ -z "${tag}" ]; then
+            tag="${{ github.ref_name }}"
+          fi
+          tag="${tag#refs/tags/}"
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            gh release upload "${tag}" ./wheelhouse/*.whl --clobber
+          else
+            echo "Release ${tag} does not exist, skipping release asset upload."
+          fi
+
+  build_wheels_windows:
+    name: wheels (windows, ${{ matrix.arch }})
+    needs: build_wheels_linux
+    runs-on: ${{ matrix.runs-on }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: AMD64
+            runs-on: windows-latest
+          - arch: x86
+            runs-on: windows-latest
+          - arch: ARM64
+            runs-on: windows-11-arm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Detect runner CPU count
+        id: cpu_count
+        shell: bash
+        run: |
+          count=$(python -c 'import os; print(os.cpu_count() or 1)')
+          echo "count=${count}" >> "$GITHUB_OUTPUT"
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${count}"
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.23.2
+        env:
+          CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-* cp313t-* cp314-* cp314t-*"
+          CIBW_ARCHS: ${{ matrix.arch }}
+          CIBW_ENVIRONMENT: >
+            CMAKE_BUILD_PARALLEL_LEVEL=${{ steps.cpu_count.outputs.count }}
+            CMAKE_ARGS=-DONNX_HARDENING=ON
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-windows-${{ matrix.arch }}
+          path: ./wheelhouse/*.whl
+      - name: Attach wheels to GitHub Release
+        if: github.ref_type == 'tag' || inputs.tag != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ inputs.tag }}"
+          if [ -z "${tag}" ]; then
+            tag="${{ github.ref_name }}"
+          fi
+          tag="${tag#refs/tags/}"
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            gh release upload "${tag}" ./wheelhouse/*.whl --clobber
+          else
+            echo "Release ${tag} does not exist, skipping release asset upload."
+          fi
+
+  build_wheels_macos:
+    name: wheels (macos, universal2)
+    needs: build_wheels_linux
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "13.0"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Detect runner CPU count
+        id: cpu_count
+        shell: bash
+        run: |
+          count=$(python -c 'import os; print(os.cpu_count() or 1)')
+          echo "count=${count}" >> "$GITHUB_OUTPUT"
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${count}"
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.23.2
+        env:
+          CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-* cp313t-* cp314-* cp314t-*"
+          CIBW_ARCHS: universal2
+          # Bump the macOS deployment target high enough to satisfy the
+          # minimum target of Homebrew's ``libcrypto.3.dylib`` (which is
+          # vendored into the wheel via ``delocate-wheel``). Without this,
+          # the wheel is tagged ``macosx_11_0_*`` but ships a dylib that
+          # requires a newer macOS, causing ``delocate-wheel`` to fail with
+          # ``Library dependencies do not satisfy target MacOS version``.
+          CIBW_ENVIRONMENT: >
+            CMAKE_BUILD_PARALLEL_LEVEL=${{ steps.cpu_count.outputs.count }}
+            MACOSX_DEPLOYMENT_TARGET=${{ env.MACOSX_DEPLOYMENT_TARGET }}
+            CMAKE_ARGS='-DONNX_HARDENING=ON -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON -DCMAKE_OSX_DEPLOYMENT_TARGET=${{ env.MACOSX_DEPLOYMENT_TARGET }} -DCMAKE_OSX_ARCHITECTURES=arm64;x86_64'
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-macos-universal2
+          path: ./wheelhouse/*.whl
+      - name: Attach wheels to GitHub Release
+        if: github.ref_type == 'tag' || inputs.tag != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ inputs.tag }}"
+          if [ -z "${tag}" ]; then
+            tag="${{ github.ref_name }}"
+          fi
+          tag="${tag#refs/tags/}"
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            gh release upload "${tag}" ./wheelhouse/*.whl --clobber
+          else
+            echo "Release ${tag} does not exist, skipping release asset upload."
+          fi

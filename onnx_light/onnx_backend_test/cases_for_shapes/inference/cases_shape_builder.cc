@@ -203,16 +203,20 @@ void RegisterCheckShapeShapeInferenceCases(std::vector<TestCase> &registry) {
 // ``Reshape → Reshape → Add`` — mirrors the ``test_reshape_reshape`` example
 // from yet-another-onnx-builder. The ``[0, 0, 2, -1]`` reshape pattern carries
 // the leading dims through and splits the last dim by 2; a second
-// ``[0, 0, -1]`` reshape collapses the trailing dims back to ``(a, b, c)``.
+// ``[0, 0, -1]`` reshape collapses the trailing dims back together.
 //
 //   xr  = Reshape(X,  shape1=[0, 0, 2, -1])    # (a, b, 2, c//2)
-//   xrr = Reshape(xr, shape2=[0, 0, -1])       # (a, b, c)
-//   Y   = Add(xrr, one)                        # (a, b, c)
+//   xrr = Reshape(xr, shape2=[0, 0, -1])       # (a, b, 2*a*b*c//2//(a*b))
+//   Y   = Add(xrr, one)                        # (a, b, 2*a*b*c//2//(a*b))
+//
+// The trailing dim is *not* simplified back to ``c``: ``//`` is floor division
+// and ``2*(c//2) == c`` only when ``c`` is even, so the symbolic floor division
+// is kept atomic.
 //
 // Input:
 //   X : float[a, b, c]
 // Output:
-//   Y : float[a, b, c]
+//   Y : float[a, b, 2*a*b*c//2//(a*b)]
 //
 // The reference DataSet uses concrete sizes ``a=2, b=3, c=4`` so the case is
 // executable (``c`` is even and divisible by 2 so the inferred ``c//2``
@@ -251,11 +255,19 @@ void RegisterReshapeReshapeShapeInferenceCases(std::vector<TestCase> &registry) 
   // the symbolic leading dims here so the test framework's ground-truth
   // check is independent of how shape inference renders the symbolic
   // division.
+  //
+  // ``xrr`` is the result of ``Reshape(xr, [0, 0, -1])``: the inferred ``-1``
+  // dim is ``(a*b*2*(c//2)) // (a*b)``. Because ``//`` is floor division it is
+  // *not* simplified to ``c`` (that only holds when ``c`` is even), so shape
+  // inference keeps the floor division atomic and renders it literally as
+  // ``2*a*b*c//2//(a*b)``.
   AppendValueInfo(*graph->add_value_info(), "xr", DataType::FLOAT, {"a", "b", DimSpec(2), "c//2"});
-  AppendValueInfo(*graph->add_value_info(), "xrr", DataType::FLOAT, {"a", "b", "c"});
+  AppendValueInfo(*graph->add_value_info(), "xrr", DataType::FLOAT,
+                  {"a", "b", "2*a*b*c//2//(a*b)"});
 
-  // Graph output Y — same symbolic dims as X.
-  AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {"a", "b", "c"});
+  // Graph output Y — broadcasts ``xrr`` against the scalar ``one`` so it
+  // carries the same symbolic trailing dim as ``xrr``.
+  AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {"a", "b", "2*a*b*c//2//(a*b)"});
 
   // Build the reference DataSet — concrete a=2, b=3, c=4 tensors and the
   // kernels chained to materialise Y.
@@ -476,7 +488,7 @@ void RegisterConcatSplitShapeInferenceCases(std::vector<TestCase> &registry, boo
 
     // Intermediate value_info — leave the concat axis dim unannotated; shape
     // inference renders it as a fresh symbolic dim (e.g. ``Concat_axis1``).
-    AppendValueInfo(*graph->add_value_info(), "xy", DataType::FLOAT, {"a", "2*b+2*c)"});
+    AppendValueInfo(*graph->add_value_info(), "xy", DataType::FLOAT, {"a", "2*b+2*c"});
     AppendValueInfo(*graph->add_value_info(), "S1", DataType::FLOAT, {"a", "b+c"});
     AppendValueInfo(*graph->add_value_info(), "S2", DataType::FLOAT, {"a", "b+c"});
     AppendValueInfo(*graph->add_value_info(), "zs", DataType::FLOAT, {"a", "2*b+2*c"});
@@ -490,8 +502,8 @@ void RegisterConcatSplitShapeInferenceCases(std::vector<TestCase> &registry, boo
     // Intermediate value_info — leave the concat axis dim unannotated; shape
     // inference renders it as a fresh symbolic dim (e.g. ``Concat_axis1``).
     AppendValueInfo(*graph->add_value_info(), "xy", DataType::FLOAT, {"a", "b+c"});
-    AppendValueInfo(*graph->add_value_info(), "S1", DataType::FLOAT, {"a", "(b+c)//2"});
-    AppendValueInfo(*graph->add_value_info(), "S2", DataType::FLOAT, {"a", "(1+b+c)//2"});
+    AppendValueInfo(*graph->add_value_info(), "S1", DataType::FLOAT, {"a", "(1+b+c)//2"});
+    AppendValueInfo(*graph->add_value_info(), "S2", DataType::FLOAT, {"a", "(b+c)//2"});
     AppendValueInfo(*graph->add_value_info(), "zs", DataType::FLOAT, {"a", "b+c"});
 
     // Graph output Z — same shape as zs.

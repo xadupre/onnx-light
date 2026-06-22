@@ -1,0 +1,144 @@
+name: Build C++ Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Git tag or ref to build (defaults to the branch the workflow is run from)."
+        required: false
+        type: string
+  schedule:
+    # Every Monday at 07:00 UTC (offset from the Python-wheel build at 06:00).
+    - cron: "0 7 * * 1"
+  release:
+    types: [published]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# When triggered by a release event, each matrix job attaches its archive to
+# the GitHub Release (requires contents: write).  For workflow_dispatch and
+# schedule runs, the artifacts are only uploaded to GitHub Actions storage.
+jobs:
+  build_cpp_artifacts:
+    name: cpp (${{ matrix.artifact_suffix }})
+    runs-on: ${{ matrix.runs-on }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ── Linux ──────────────────────────────────────────────────────────
+          - artifact_suffix: linux-x86_64
+            runs-on: ubuntu-24.04
+            archive_ext: tar.gz
+          - artifact_suffix: linux-aarch64
+            runs-on: ubuntu-24.04-arm
+            archive_ext: tar.gz
+          # ── Windows ────────────────────────────────────────────────────────
+          - artifact_suffix: windows-AMD64
+            runs-on: windows-latest
+            archive_ext: zip
+          - artifact_suffix: windows-ARM64
+            runs-on: windows-11-arm
+            archive_ext: zip
+          # ── macOS ──────────────────────────────────────────────────────────
+          - artifact_suffix: macos-universal2
+            runs-on: macos-latest
+            macosx_deployment_target: "13.0"
+            macosx_architectures: "arm64;x86_64"
+            archive_ext: tar.gz
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Detect CPU count
+        id: cpu_count
+        shell: bash
+        run: |
+          count=$(python3 -c 'import os; print(os.cpu_count() or 1)')
+          echo "count=${count}" >> "$GITHUB_OUTPUT"
+          echo "CPU count: ${count}"
+
+      # ── Configure ──────────────────────────────────────────────────────────
+      - name: Configure CMake (Linux / macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macosx_deployment_target || '' }}
+          MACOSX_ARCHITECTURES: ${{ matrix.macosx_architectures || '' }}
+        run: |
+          extra_args=""
+          if [ -n "${MACOSX_DEPLOYMENT_TARGET}" ]; then
+            extra_args="-DCMAKE_OSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET}"
+          fi
+          if [ -n "${MACOSX_ARCHITECTURES}" ]; then
+            extra_args="${extra_args} -DCMAKE_OSX_ARCHITECTURES=${MACOSX_ARCHITECTURES}"
+          fi
+          cmake -S . -B build/cpp \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DONNX_LIGHT_BUILD_PYTHON=OFF \
+            -DONNX_LIGHT_BUILD_TESTS=OFF \
+            -DONNX_HARDENING=ON \
+            -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/dist/onnx-light-cpp" \
+            ${extra_args}
+
+      - name: Configure CMake (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cmake -S . -B build/cpp `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DONNX_LIGHT_BUILD_PYTHON=OFF `
+            -DONNX_LIGHT_BUILD_TESTS=OFF `
+            -DONNX_HARDENING=ON `
+            -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/dist/onnx-light-cpp"
+
+      # ── Build & install ────────────────────────────────────────────────────
+      - name: Build
+        shell: bash
+        run: |
+          cmake --build build/cpp --config Release --parallel ${{ steps.cpu_count.outputs.count }}
+
+      - name: Install
+        shell: bash
+        run: |
+          cmake --install build/cpp --config Release
+
+      # ── Archive ────────────────────────────────────────────────────────────
+      - name: Archive (Linux / macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          cd "${{ github.workspace }}/dist"
+          tar -czf "onnx-light-cpp-${{ matrix.artifact_suffix }}.tar.gz" onnx-light-cpp/
+          echo "Created dist/onnx-light-cpp-${{ matrix.artifact_suffix }}.tar.gz"
+
+      - name: Archive (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $src  = "${{ github.workspace }}\dist\onnx-light-cpp"
+          $dest = "${{ github.workspace }}\dist\onnx-light-cpp-${{ matrix.artifact_suffix }}.zip"
+          Compress-Archive -Path $src -DestinationPath $dest
+          Write-Host "Created $dest"
+
+      # ── Upload ─────────────────────────────────────────────────────────────
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpp-${{ matrix.artifact_suffix }}
+          path: ${{ github.workspace }}/dist/onnx-light-cpp-${{ matrix.artifact_suffix }}.${{ matrix.archive_ext }}
+
+      - name: Attach to GitHub Release
+        if: github.event_name == 'release'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ github.ref_name }}" \
+            "${{ github.workspace }}/dist/onnx-light-cpp-${{ matrix.artifact_suffix }}.${{ matrix.archive_ext }}"

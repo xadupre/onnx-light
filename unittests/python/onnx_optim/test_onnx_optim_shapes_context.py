@@ -236,9 +236,15 @@ class TestShapesContextBindings(ExtTestCase):
         model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
         model.ir_version = 8
 
+        # Graph outputs are always registered as anchors, even without
+        # ``prefill_with_value_info_output``, so the user-authored
+        # ``Y: [ANCHOR, 4]`` annotation overrides the symbolic ``N``
+        # that inference would otherwise produce.
         ctx_no_prefill = si.ShapesContext()
         si.compute_shape_model(ctx_no_prefill, model)
-        self.assertEqual(list(ctx_no_prefill.get("Y").shape), ["N", 4])
+        self.assertEqual(list(ctx_no_prefill.get("Y").shape), ["ANCHOR", 4])
+        self.assertTrue(ctx_no_prefill.has_constraint("N", "ANCHOR"))
+        self.assertEqual(list(ctx_no_prefill.constraints()), [("ANCHOR", "N")])
 
         ctx_prefill = si.ShapesContext()
         si.compute_shape_model(ctx_prefill, model, prefill_with_value_info_output=True)
@@ -249,6 +255,83 @@ class TestShapesContextBindings(ExtTestCase):
         self.assertTrue(ctx_prefill.has_constraint("ANCHOR", "N"))
         self.assertEqual(ctx_prefill.constraints_size(), 1)
         self.assertEqual(list(ctx_prefill.constraints()), [("ANCHOR", "N")])
+
+    # ------------------------------------------------------------------
+    # Method forms exposed directly on ShapesContext.
+    # ------------------------------------------------------------------
+    def test_compute_shape_node_method(self):
+        ctx = si.ShapesContext()
+        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, [2, 3]))
+        node = oh.make_node("Relu", inputs=["X"], outputs=["Y"])
+        ctx.compute_shape_node(node)
+        self.assertTrue(ctx.has("Y"))
+        y = ctx.get("Y")
+        self.assertEqual(y.dtype, onnxl.TensorProto.FLOAT)
+        self.assertEqual(list(y.shape), [2, 3])
+
+    def test_check_inputs_available_method(self):
+        ctx = si.ShapesContext()
+        node = oh.make_node("Relu", inputs=["X"], outputs=["Y"])
+        with self.assertRaises(ValueError):
+            ctx.check_inputs_available(node)
+        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, [1]))
+        ctx.check_inputs_available(node)  # should not raise
+
+    def test_check_outputs_not_available_method(self):
+        ctx = si.ShapesContext()
+        node = oh.make_node("Relu", inputs=["X"], outputs=["Y"])
+        ctx.check_outputs_not_available(node)  # should not raise
+        ctx.set("Y", si.OptimTensor(onnxl.TensorProto.FLOAT, [1]))
+        with self.assertRaises(ValueError):
+            ctx.check_outputs_not_available(node)
+
+    def test_compute_shape_graph_method(self):
+        node = oh.make_node("Relu", inputs=["X"], outputs=["Y"])
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["N", 4])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
+        graph = oh.make_graph([node], "g", [x], [y])
+
+        ctx = si.ShapesContext()
+        ctx.set_opset_version("", 18)
+        ctx.compute_shape_graph(graph)
+        self.assertTrue(ctx.has("X"))
+        self.assertTrue(ctx.has("Y"))
+        self.assertEqual(list(ctx.get("Y").shape), ["N", 4])
+
+    def test_compute_shape_model_and_apply_methods(self):
+        node = oh.make_node("Relu", inputs=["X"], outputs=["Y"])
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["N", 4])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
+        graph = oh.make_graph([node], "g", [x], [y])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+        model.ir_version = 8
+
+        ctx = si.ShapesContext()
+        ctx.compute_shape_model(model)
+        self.assertTrue(ctx.has("Y"))
+        self.assertEqual(ctx.opset_version(""), 18)
+        self.assertEqual(list(ctx.get("Y").shape), ["N", 4])
+
+        ctx.apply_inferred_shapes_to_model(model)
+        out_dims = list(model.graph.output[0].type.tensor_type.shape.dim)
+        self.assertEqual(len(out_dims), 2)
+        self.assertEqual(out_dims[0].dim_param, "N")
+        self.assertEqual(out_dims[1].dim_value, 4)
+
+    def test_apply_inferred_shapes_to_graph_method(self):
+        node = oh.make_node("Relu", inputs=["X"], outputs=["Y"])
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["N", 4])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
+        graph = oh.make_graph([node], "g", [x], [y])
+
+        ctx = si.ShapesContext()
+        ctx.set_opset_version("", 18)
+        ctx.compute_shape_graph(graph)
+        ctx.apply_inferred_shapes_to_graph(graph)
+        out_dims = list(graph.output[0].type.tensor_type.shape.dim)
+        self.assertEqual(len(out_dims), 2)
+        self.assertEqual(out_dims[0].dim_param, "N")
+        self.assertEqual(out_dims[1].dim_value, 4)
 
     # ------------------------------------------------------------------
     # Symbolic-dimension equality constraints.
@@ -312,6 +395,276 @@ class TestShapesContextBindings(ExtTestCase):
         ctx = si.ShapesContext()
         with self.assertRaises(ValueError):
             si.compute_shape_model(ctx, model, prefill_with_value_info_output=True)
+
+
+class TestShapesContextEventLog(ExtTestCase):
+    """Python tests for the opt-in shape-inference event log exposed by
+    ``ShapesContext`` (``events_enabled`` / ``events`` / ``clear_events``)."""
+
+    def test_shape_event_action_enum_values(self):
+        self.assertEqual(int(si.ShapeEventAction.kAdd), 0)
+        self.assertEqual(int(si.ShapeEventAction.kReplace), 1)
+        self.assertEqual(int(si.ShapeEventAction.kComputeNode), 2)
+        self.assertEqual(int(si.ShapeEventAction.kConstraint), 3)
+        self.assertEqual(int(si.ShapeEventAction.kConstraintMax), 4)
+
+    def test_events_disabled_by_default(self):
+        ctx = si.ShapesContext()
+        self.assertFalse(ctx.events_enabled)
+        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, [2, 3]))
+        self.assertEqual(ctx.events(), [])
+
+    def test_set_records_add_and_replace(self):
+        ctx = si.ShapesContext()
+        ctx.events_enabled = True
+        self.assertEqual(ctx.events(), [])
+
+        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, [2, "N"]))
+        ctx.set("X", si.OptimTensor(onnxl.TensorProto.INT64, [5]))
+
+        events = ctx.events()
+        self.assertEqual(
+            [e.action for e in events], [si.ShapeEventAction.kAdd, si.ShapeEventAction.kReplace]
+        )
+        self.assertEqual([e.name for e in events], ["X", "X"])
+        self.assertEqual(events[0].data_type, onnxl.TensorProto.FLOAT)
+        self.assertEqual(events[0].shape, ["2", "N"])
+        self.assertEqual(events[1].data_type, onnxl.TensorProto.INT64)
+        self.assertEqual(events[1].shape, ["5"])
+
+        ctx.clear_events()
+        self.assertEqual(ctx.events(), [])
+
+    def test_compute_shape_node_records_compute_node_event(self):
+        ctx = si.ShapesContext()
+        ctx.events_enabled = True
+        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, [2, 3]))
+        ctx.clear_events()
+
+        node = oh.make_node("Relu", inputs=["X"], outputs=["Y"])
+        si.compute_shape_node(ctx, node)
+
+        events = ctx.events()
+        # One ``add`` event for the produced output descriptor plus one
+        # ``compute_node`` event summarising the dispatch.
+        self.assertEqual(
+            [e.action for e in events],
+            [si.ShapeEventAction.kAdd, si.ShapeEventAction.kComputeNode],
+        )
+        self.assertEqual(events[0].name, "Y")
+        self.assertEqual(events[0].shape, ["2", "3"])
+
+        node_ev = events[1]
+        self.assertEqual(node_ev.op_domain, "ai.onnx")
+        self.assertEqual(node_ev.op_type, "Relu")
+        self.assertEqual(node_ev.inputs, ["X"])
+        self.assertEqual(node_ev.shape, [])
+
+    def test_constraints_record_events(self):
+        ctx = si.ShapesContext()
+        ctx.events_enabled = True
+
+        self.assertTrue(ctx.add_constraint("N", "M"))
+        # Duplicate / self constraints do not append events.
+        self.assertFalse(ctx.add_constraint("M", "N"))
+        self.assertFalse(ctx.add_constraint("N", "N"))
+        self.assertTrue(ctx.add_less_equal_constraint("nnz", "2*N"))
+
+        events = ctx.events()
+        self.assertEqual(
+            [e.action for e in events],
+            [si.ShapeEventAction.kConstraint, si.ShapeEventAction.kConstraintMax],
+        )
+        # Operands are stored in ``inputs`` (equality pair is canonicalised).
+        self.assertEqual(events[0].inputs, ["M", "N"])
+        self.assertEqual(events[1].inputs, ["nnz", "2*N"])
+        self.assertEqual(events[0].data_type, onnxl.TensorProto.UNDEFINED)
+
+    def test_constraints_disabled_by_default(self):
+        ctx = si.ShapesContext()
+        self.assertTrue(ctx.add_constraint("N", "M"))
+        self.assertTrue(ctx.add_less_equal_constraint("nnz", "2*N"))
+        self.assertEqual(ctx.events(), [])
+
+    def test_event_as_dict(self):
+        ctx = si.ShapesContext()
+        ctx.events_enabled = True
+        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, [2, "N"]))
+        d = ctx.events()[0].as_dict()
+        self.assertEqual(d["action"], "add")
+        self.assertEqual(d["name"], "X")
+        self.assertEqual(d["data_type"], onnxl.TensorProto.FLOAT)
+        self.assertEqual(d["shape"], ["2", "N"])
+        self.assertEqual(d["op_type"], "")
+        self.assertEqual(d["inputs"], [])
+        self.assertEqual(d["node_index"], -1)
+
+    def test_compute_shape_model_records_events(self):
+        node = oh.make_node("Relu", inputs=["X"], outputs=["Y"])
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["N", 4])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
+        graph = oh.make_graph([node], "g", [x], [y])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+        model.ir_version = 8
+
+        ctx = si.ShapesContext()
+        ctx.events_enabled = True
+        si.compute_shape_model(ctx, model)
+
+        actions = [e.action for e in ctx.events()]
+        # At least one descriptor mutation and one node dispatch were logged.
+        self.assertIn(si.ShapeEventAction.kComputeNode, actions)
+        node_events = [e for e in ctx.events() if e.action == si.ShapeEventAction.kComputeNode]
+        self.assertEqual([e.op_type for e in node_events], ["Relu"])
+
+    def test_compute_shape_model_records_node_index(self):
+        # ``node_index`` tags graph inputs with -1, initializers with -2 and
+        # descriptors / compute_node events with the producing node index.
+        node = oh.make_node("Reshape", inputs=["X", "S"], outputs=["Y"])
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [3, 4])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
+        s = oh.make_tensor("S", onnxl.TensorProto.INT64, [2], [-1, 2])
+        graph = oh.make_graph([node], "g", [x], [y], initializer=[s])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+        model.ir_version = 8
+
+        ctx = si.ShapesContext()
+        ctx.events_enabled = True
+        si.compute_shape_model(ctx, model)
+
+        events = ctx.events()
+
+        def first(action, name):
+            return next((e for e in events if e.action == action and e.name == name), None)
+
+        self.assertEqual(first(si.ShapeEventAction.kAdd, "X").node_index, -1)
+        self.assertEqual(first(si.ShapeEventAction.kAdd, "S").node_index, -2)
+        self.assertEqual(first(si.ShapeEventAction.kAdd, "Y").node_index, 0)
+        node_ev = next(e for e in events if e.action == si.ShapeEventAction.kComputeNode)
+        self.assertEqual(node_ev.op_type, "Reshape")
+        self.assertEqual(node_ev.node_index, 0)
+
+    def test_top_level_events_have_empty_graph_name(self):
+        """Events from a model with no subgraphs must have empty subgraph_attr_name."""
+        node = oh.make_node("Relu", inputs=["X"], outputs=["Y"])
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 3])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
+        graph = oh.make_graph([node], "g", [x], [y])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+        model.ir_version = 8
+
+        ctx = si.ShapesContext()
+        ctx.events_enabled = True
+        si.compute_shape_model(ctx, model)
+
+        for ev in ctx.events():
+            self.assertEqual(
+                ev.subgraph_attr_name,
+                "",
+                f"Expected empty subgraph_attr_name, got: {ev.subgraph_attr_name!r}",
+            )
+            self.assertEqual(ev.subgraph_node_index, -1)
+
+    def test_if_subgraph_events_carry_branch_graph_name(self):
+        """Events inside If branches must carry then_branch / else_branch."""
+        # then_branch: Abs(X) -> Y;  else_branch: Neg(X) -> Y
+        then_branch = oh.make_graph(
+            [oh.make_node("Abs", ["X"], ["Y_then"])],
+            "then_g",
+            [],
+            [oh.make_tensor_value_info("Y_then", onnxl.TensorProto.FLOAT, None)],
+        )
+        else_branch = oh.make_graph(
+            [oh.make_node("Neg", ["X"], ["Y_else"])],
+            "else_g",
+            [],
+            [oh.make_tensor_value_info("Y_else", onnxl.TensorProto.FLOAT, None)],
+        )
+        if_node = oh.make_node("If", inputs=["cond"], outputs=["Z"])
+        if_node.attribute.append(oh.make_attribute("then_branch", then_branch))
+        if_node.attribute.append(oh.make_attribute("else_branch", else_branch))
+
+        cond_vi = oh.make_tensor_value_info("cond", onnxl.TensorProto.BOOL, [])
+        x_vi = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 3])
+        z_vi = oh.make_tensor_value_info("Z", onnxl.TensorProto.FLOAT, None)
+        graph = oh.make_graph([if_node], "main", [cond_vi, x_vi], [z_vi])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+        model.ir_version = 8
+
+        ctx = si.ShapesContext()
+        ctx.events_enabled = True
+        si.compute_shape_model(ctx, model)
+
+        attr_names = {ev.subgraph_attr_name for ev in ctx.events()}
+        self.assertIn("then_branch", attr_names)
+        self.assertIn("else_branch", attr_names)
+
+    def test_graph_name_in_event_as_dict(self):
+        """subgraph_node_index and subgraph_attr_name must appear in event.as_dict()."""
+        ctx = si.ShapesContext()
+        ctx.events_enabled = True
+        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, [2, 3]))
+
+        events = ctx.events()
+        self.assertEqual(len(events), 1)
+        d = events[0].as_dict()
+        self.assertIn("subgraph_node_index", d)
+        self.assertIn("subgraph_attr_name", d)
+        self.assertEqual(d["subgraph_node_index"], -1)
+        self.assertEqual(d["subgraph_attr_name"], "")
+
+    # ------------------------------------------------------------------
+    # Retained child contexts for control-flow subgraphs.
+    # ------------------------------------------------------------------
+    def test_if_retains_branch_subgraph_contexts(self):
+        """ComputeShapeIf must register the child contexts it builds for
+        ``then_branch`` / ``else_branch`` and expose them through the
+        ``subgraph_context`` accessors."""
+        then_branch = oh.make_graph(
+            [oh.make_node("Abs", ["X"], ["Y_then"])],
+            "then_g",
+            [],
+            [oh.make_tensor_value_info("Y_then", onnxl.TensorProto.FLOAT, None)],
+        )
+        else_branch = oh.make_graph(
+            [oh.make_node("Neg", ["X"], ["Y_else"])],
+            "else_g",
+            [],
+            [oh.make_tensor_value_info("Y_else", onnxl.TensorProto.FLOAT, None)],
+        )
+        if_node = oh.make_node("If", inputs=["cond"], outputs=["Z"])
+        if_node.attribute.append(oh.make_attribute("then_branch", then_branch))
+        if_node.attribute.append(oh.make_attribute("else_branch", else_branch))
+
+        cond_vi = oh.make_tensor_value_info("cond", onnxl.TensorProto.BOOL, [])
+        x_vi = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 3])
+        z_vi = oh.make_tensor_value_info("Z", onnxl.TensorProto.FLOAT, None)
+        graph = oh.make_graph([if_node], "main", [cond_vi, x_vi], [z_vi])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+        model.ir_version = 8
+
+        ctx = si.ShapesContext()
+        si.compute_shape_model(ctx, model)
+
+        # The If node is the first (index 0) node of the main graph.
+        self.assertEqual(ctx.subgraph_contexts_size(), 2)
+        self.assertTrue(ctx.has_subgraph_context(0, "then_branch"))
+        self.assertTrue(ctx.has_subgraph_context(0, "else_branch"))
+        self.assertFalse(ctx.has_subgraph_context(0, "body"))
+        self.assertEqual(
+            set(ctx.subgraph_context_keys()), {(0, "then_branch"), (0, "else_branch")}
+        )
+
+        then_ctx = ctx.subgraph_context(0, "then_branch")
+        self.assertTrue(then_ctx.has("Y_then"))
+        self.assertEqual(list(then_ctx.get("Y_then").shape), [2, 3])
+
+        else_ctx = ctx.subgraph_context(0, "else_branch")
+        self.assertTrue(else_ctx.has("Y_else"))
+        self.assertEqual(list(else_ctx.get("Y_else").shape), [2, 3])
+
+        with self.assertRaises(IndexError):
+            ctx.subgraph_context(0, "body")
 
 
 if __name__ == "__main__":

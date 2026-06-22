@@ -24,8 +24,7 @@ constexpr const char *kTopKName = "kernel::TopK";
 // Resolves a possibly-negative axis to a non-negative one in ``[0, rank)``.
 int64_t ResolveTopKAxis(int64_t axis, int64_t rank) {
   const int64_t resolved = axis < 0 ? axis + rank : axis;
-  EXT_ENFORCE_INVALID(resolved >= 0 && resolved < rank,
-                      std::string(kTopKName) + ": axis is out of range.");
+  EXT_ENFORCE_INVALID(resolved >= 0 && resolved < rank, kTopKName, ": axis is out of range.");
   return resolved;
 }
 
@@ -143,7 +142,7 @@ void RunTopK(const Tensor &x, int64_t k, int64_t axis, bool largest, bool sorted
     DispatchTopK<uint64_t>(x, k, axis, largest, sorted, values, indices);
     return;
   default:
-    throw std::invalid_argument(std::string(kTopKName) + kSupportedTopKTypesMsg);
+    EXT_THROW_INVALID(kTopKName, ": unsupported data type ", x.data_type, kSupportedTopKTypesMsg);
   }
 }
 
@@ -171,11 +170,11 @@ Tensor AllocateOutput(int32_t dtype, const std::vector<int64_t> &shape) {
 std::pair<Tensor, Tensor> TopK::operator()(const Tensor &x, int64_t k, int64_t axis, bool largest,
                                            bool sorted) const {
   const int64_t rank = static_cast<int64_t>(x.shape.size());
-  EXT_ENFORCE_INVALID(rank > 0, std::string(kTopKName) + " requires a non-scalar input.");
-  EXT_ENFORCE_INVALID(k > 0, std::string(kTopKName) + " requires k > 0.");
+  EXT_ENFORCE_INVALID(rank > 0, kTopKName, " requires a non-scalar input.");
+  EXT_ENFORCE_INVALID(k > 0, kTopKName, " requires k > 0.");
   const int64_t resolved_axis = ResolveTopKAxis(axis, rank);
-  EXT_ENFORCE_INVALID(k <= x.shape[static_cast<std::size_t>(resolved_axis)],
-                      std::string(kTopKName) + ": k is larger than the axis dimension.");
+  EXT_ENFORCE_INVALID(k <= x.shape[static_cast<std::size_t>(resolved_axis)], kTopKName,
+                      ": k is larger than the axis dimension.");
 
   const std::vector<int64_t> out_shape = MakeOutputShape(x.shape, resolved_axis, k);
   Tensor values = AllocateOutput(x.data_type, out_shape);
@@ -187,25 +186,21 @@ std::pair<Tensor, Tensor> TopK::operator()(const Tensor &x, int64_t k, int64_t a
 void TopK::operator()(const Tensor &x, int64_t k, int64_t axis, bool largest, bool sorted,
                       Tensor &values, Tensor &indices) const {
   const int64_t rank = static_cast<int64_t>(x.shape.size());
-  EXT_ENFORCE_INVALID(rank > 0, std::string(kTopKName) + " requires a non-scalar input.");
-  EXT_ENFORCE_INVALID(k > 0, std::string(kTopKName) + " requires k > 0.");
+  EXT_ENFORCE_INVALID(rank > 0, kTopKName, " requires a non-scalar input.");
+  EXT_ENFORCE_INVALID(k > 0, kTopKName, " requires k > 0.");
   const int64_t resolved_axis = ResolveTopKAxis(axis, rank);
-  EXT_ENFORCE_INVALID(k <= x.shape[static_cast<std::size_t>(resolved_axis)],
-                      std::string(kTopKName) + ": k is larger than the axis dimension.");
+  EXT_ENFORCE_INVALID(k <= x.shape[static_cast<std::size_t>(resolved_axis)], kTopKName,
+                      ": k is larger than the axis dimension.");
 
   const std::vector<int64_t> out_shape = MakeOutputShape(x.shape, resolved_axis, k);
-  EXT_ENFORCE_INVALID(values.data_type == x.data_type,
-                      std::string(kTopKName) +
-                          " preallocated Values output must share the input dtype.");
-  EXT_ENFORCE_INVALID(values.shape == out_shape,
-                      std::string(kTopKName) +
-                          " preallocated Values output shape does not match expected.");
-  EXT_ENFORCE_INVALID(indices.data_type == static_cast<int32_t>(DataType::INT64),
-                      std::string(kTopKName) +
-                          " preallocated Indices output must have INT64 dtype.");
-  EXT_ENFORCE_INVALID(indices.shape == out_shape,
-                      std::string(kTopKName) +
-                          " preallocated Indices output shape does not match expected.");
+  EXT_ENFORCE_INVALID(values.data_type == x.data_type, kTopKName,
+                      " preallocated Values output must share the input dtype.");
+  EXT_ENFORCE_INVALID(values.shape == out_shape, kTopKName,
+                      " preallocated Values output shape does not match expected.");
+  EXT_ENFORCE_INVALID(indices.data_type == static_cast<int32_t>(DataType::INT64), kTopKName,
+                      " preallocated Indices output must have INT64 dtype.");
+  EXT_ENFORCE_INVALID(indices.shape == out_shape, kTopKName,
+                      " preallocated Indices output shape does not match expected.");
   RunTopK(x, k, resolved_axis, largest, sorted, values, indices);
 }
 

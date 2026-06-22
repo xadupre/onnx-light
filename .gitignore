@@ -13,6 +13,7 @@ build/
 build-*/
 build_*/
 bin/
+cache_dir/
 !examples/build_*/
 build_tests/
 develop-eggs/
@@ -79,6 +80,7 @@ instance/
 # Sphinx documentation
 docs/_build/
 docs/auto_examples
+docs/examples/backend/plot*.png
 docs/examples/core/plot*.png
 docs/sg_execution_times.rst
 docs/operators/
@@ -172,3 +174,6 @@ cmake_install.cmake
 *.onnx
 *.data
 *.pb
+
+# Pixi environment directory
+.pixi/

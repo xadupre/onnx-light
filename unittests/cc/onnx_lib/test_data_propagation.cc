@@ -5,8 +5,8 @@
 // Translated from https://github.com/onnx/onnx/blob/main/onnx/test/cpp/data_propagation_test.cc
 
 #include "../defs/data_propagators.h"
-#include "../defs/parser.h"
 #include "onnx.h"
+#include "onnx_manipulations/parser.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>

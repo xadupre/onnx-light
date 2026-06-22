@@ -503,6 +503,7 @@ SerializeSizeResult TensorProto::SerializeSize(utils::BinaryWriteStream &stream,
                                        stream.ExternalWeights();
   SIZE_REPEATED_FIELD(size, options, stream, dims)
   SIZE_ENUM_FIELD(size, options, stream, data_type)
+  SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, segment)
   SIZE_ENUM_FIELD(size, options, stream, data_location)
   SIZE_FIELD_NULL(size, options, stream, name)
   if (has_raw_data()) {
@@ -550,9 +551,19 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
         has_location = true;
       } else if (entry.ref_key() == "size" || entry.ref_key() == "length") {
         int64_t size = entry.ref_value().toint64();
-        EXT_ENFORCE(size == static_cast<int64_t>(raw_data_.size()), "Size mismatch ", size,
-                    " != ", static_cast<int64_t>(raw_data_.size()), " name='",
-                    ref_name().as_string(), "'");
+        if (size != static_cast<int64_t>(raw_data_.size())) {
+          if (raw_data_.size() == 0) {
+            EXT_THROW(
+                "Tensor '", ref_name().as_string(),
+                "' is marked EXTERNAL but its raw_data is empty while serializing external data. "
+                "This usually means the model was loaded with load_external_data=False. "
+                "Reload it with load_external_data=True, call load_external_data_for_model(), "
+                "or use save_model_with_shared_external_data() to reuse the existing weights "
+                "file.");
+          }
+          EXT_THROW("Size mismatch ", size, " != ", static_cast<int64_t>(raw_data_.size()),
+                    " name='", ref_name().as_string(), "'");
+        }
         has_size = true;
       } else if (entry.ref_key() == "offset") {
         expected_offset = entry.ref_value().toint64();
@@ -590,6 +601,7 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
   }
   WRITE_REPEATED_FIELD(options, stream, dims)
   WRITE_ENUM_FIELD(options, stream, data_type)
+  WRITE_OPTIONAL_PROTO_FIELD(options, stream, segment)
   WRITE_ENUM_FIELD(options, stream, data_location)
   WRITE_FIELD_NULL(options, stream, name)
   if (has_raw_data()) {
@@ -615,6 +627,7 @@ void TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
   READ_BEGIN(options, stream, TensorProto)                 //
   READ_REPEATED_FIELD(options, stream, dims)               //
   READ_ENUM_FIELD(options, stream, data_type)              //
+  READ_OPTIONAL_PROTO_FIELD(options, stream, segment)      //
   READ_OPTIONAL_ENUM_FIELD(options, stream, data_location) //
   READ_FIELD(options, stream, name)                        //
   READ_FIELD(options, stream, doc_string)                  //
@@ -690,6 +703,13 @@ void TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
     }
     EXT_ENFORCE(offset >= 0 && size > 0, "External data offset and size must be specified, name='",
                 ref_name().as_string(), "'");
+    if (options.max_tensor_size_bytes > 0 &&
+        static_cast<int64_t>(size) > options.max_tensor_size_bytes) {
+      EXT_THROW("TensorProto::ParseFromStream (external data): tensor '", ref_name().as_string(),
+                "' requests ", size, " bytes which exceeds ParseOptions::max_tensor_size_bytes=",
+                options.max_tensor_size_bytes,
+                ". Increase max_tensor_size_bytes or set it to 0 to disable the limit.");
+    }
     onnx_light_helpers::ValidateAlignmentOption(options.alignment, "ParseOptions.alignment");
     if (options.alignment > 1 && offset % options.alignment != 0) {
       std::ostringstream oss;
@@ -758,6 +778,32 @@ void TensorProto::LoadExternalData(const std::string &base_dir) {
               "' must be a relative path that does not escape the base directory.");
   std::filesystem::path data_path =
       base_dir.empty() ? loc_normal : std::filesystem::path(base_dir) / loc_normal;
+  // Reject symlinks: external data must be a regular file, never a symbolic
+  // link, otherwise a malicious model could read arbitrary files on disk.
+  EXT_ENFORCE(!std::filesystem::is_symlink(data_path),
+              "TensorProto::LoadExternalData: external data file '", data_path.string(),
+              "' is a symbolic link, which is not allowed, for tensor '", ref_name().as_string(),
+              "'.");
+  // Verify canonical containment to catch symlinks in any parent component
+  // that would resolve outside the base directory.
+  if (!base_dir.empty()) {
+    std::error_code ec;
+    std::filesystem::path canonical_data = std::filesystem::weakly_canonical(data_path, ec);
+    EXT_ENFORCE(!ec, "TensorProto::LoadExternalData: external data path '", data_path.string(),
+                "' could not be canonicalized: ", ec.message());
+    std::filesystem::path canonical_base =
+        std::filesystem::weakly_canonical(std::filesystem::path(base_dir), ec);
+    EXT_ENFORCE(!ec, "TensorProto::LoadExternalData: base directory '", base_dir,
+                "' could not be canonicalized: ", ec.message());
+    std::filesystem::path::string_type base_str = canonical_base.native();
+    if (!base_str.empty() && base_str.back() != std::filesystem::path::preferred_separator) {
+      base_str += std::filesystem::path::preferred_separator;
+    }
+    EXT_ENFORCE(canonical_data.native().find(base_str) == 0 || canonical_data == canonical_base,
+                "TensorProto::LoadExternalData: external data '", data_path.string(),
+                "' resolves outside the base directory '", base_dir, "' for tensor '",
+                ref_name().as_string(), "'.");
+  }
   std::ifstream file(data_path, std::ios::binary);
   EXT_ENFORCE(file.is_open(), "TensorProto::LoadExternalData unable to open external data file '",
               data_path.string(), "' for tensor '", ref_name().as_string(), "'.");
@@ -1350,6 +1396,9 @@ void ModelProto::SerializeToString(std::string &out,
                                    size_t max_external_file_size,
                                    const std::string &external_file_prefix,
                                    const SerializeOptions &opts) const {
+  EXT_ENFORCE(opts.format == SerializeFormat::kOnnx,
+              "ModelProto::SerializeToString: SerializeFormat::kOrtFlatbuffers is not "
+              "implemented yet. Use SerializeFormat::kOnnx for now.");
   ModelProto copy;
   copy.CopyFrom(*this);
   SerializeOptions local_opts = opts;
@@ -1481,6 +1530,105 @@ void OptionalProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &o
       options, NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(elem_type), NAME_EXIST_VALUE(tensor_value),
       NAME_EXIST_VALUE(sparse_tensor_value), NAME_EXIST_VALUE(sequence_value),
       NAME_EXIST_VALUE(map_value), NAME_EXIST_VALUE(optional_value));
+}
+
+// Convenience builder methods for proto classes.
+// These keep the proto-native overloads (replace-by-name for attributes,
+// idempotent-by-key for metadata, ``(domain, version)`` for opsets).
+
+namespace {
+
+// Sets metadata property *key* to *value* on a metadata_props field, updating
+// an existing entry with the same key in place, and returns a reference to it.
+template <typename RepeatedT>
+StringStringEntryProto &SetOrAddMetadataEntry(RepeatedT &metadata_props, const std::string &key,
+                                              const std::string &value) {
+  for (size_t i = 0; i < metadata_props.size(); ++i) {
+    if (metadata_props[i].ref_key().as_string() == key) {
+      metadata_props[i].set_value(value);
+      return metadata_props[i];
+    }
+  }
+  StringStringEntryProto entry;
+  entry.set_key(key);
+  entry.set_value(value);
+  metadata_props.push_back(entry);
+  return metadata_props.back();
+}
+
+// Appends an OperatorSetIdProto ``(domain, version)`` to *opset_import* and
+// returns a reference to the new entry.
+template <typename RepeatedT>
+OperatorSetIdProto &AddOpsetEntry(RepeatedT &opset_import, const std::string &domain,
+                                  int64_t version) {
+  OperatorSetIdProto opset;
+  opset.set_domain(domain);
+  opset.set_version(version);
+  opset_import.push_back(opset);
+  return opset_import.back();
+}
+
+} // namespace
+
+AttributeProto &NodeProto::set_attribute(const AttributeProto &attr) {
+  const std::string name = attr.ref_name().as_string();
+  for (size_t i = 0; i < attribute_.size(); ++i) {
+    if (attribute_[i].ref_name().as_string() == name) {
+      attribute_[i] = attr;
+      return attribute_[i];
+    }
+  }
+  attribute_.push_back(attr);
+  return attribute_.back();
+}
+
+StringStringEntryProto &NodeProto::add_metadata(const std::string &key, const std::string &value) {
+  return SetOrAddMetadataEntry(metadata_props_, key, value);
+}
+
+NodeProto &GraphProto::add_node(const std::string &op_type, const std::vector<std::string> &inputs,
+                                const std::vector<std::string> &outputs, const std::string &domain,
+                                const std::string &name) {
+  node_.push_back(MakeNode(op_type.c_str(), inputs, outputs,
+                           domain.empty() ? nullptr : domain.c_str(),
+                           name.empty() ? nullptr : name.c_str()));
+  return node_.back();
+}
+
+StringStringEntryProto &GraphProto::add_metadata(const std::string &key, const std::string &value) {
+  return SetOrAddMetadataEntry(metadata_props_, key, value);
+}
+
+NodeProto &FunctionProto::add_node(const std::string &op_type,
+                                   const std::vector<std::string> &inputs,
+                                   const std::vector<std::string> &outputs,
+                                   const std::string &domain, const std::string &name) {
+  node_.push_back(MakeNode(op_type.c_str(), inputs, outputs,
+                           domain.empty() ? nullptr : domain.c_str(),
+                           name.empty() ? nullptr : name.c_str()));
+  return node_.back();
+}
+
+OperatorSetIdProto &FunctionProto::add_opset(const std::string &domain, int64_t version) {
+  return AddOpsetEntry(opset_import_, domain, version);
+}
+
+StringStringEntryProto &FunctionProto::add_metadata(const std::string &key,
+                                                    const std::string &value) {
+  return SetOrAddMetadataEntry(metadata_props_, key, value);
+}
+
+FunctionProto &ModelProto::add_function(const FunctionProto &function) {
+  functions_.push_back(function);
+  return functions_.back();
+}
+
+OperatorSetIdProto &ModelProto::add_opset(const std::string &domain, int64_t version) {
+  return AddOpsetEntry(opset_import_, domain, version);
+}
+
+StringStringEntryProto &ModelProto::add_metadata(const std::string &key, const std::string &value) {
+  return SetOrAddMetadataEntry(metadata_props_, key, value);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE

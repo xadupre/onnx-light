@@ -1,0 +1,91 @@
+name: acq - pixi
+
+on:
+  schedule:
+    # Run daily at 07:00 UTC. The check_recent_commit job below skips the
+    # build if no new commit landed on the default branch in the last 24 hours.
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check_recent_commit:
+    name: check recent commit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      should_run: ${{ steps.decide.outputs.should_run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: decide
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "Trigger is ${{ github.event_name }}; running unconditionally."
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # On scheduled runs, only proceed when a commit was made on the
+          # default branch within the last 24 hours.
+          recent=$(git log -1 --since='24 hours ago' --format=%H || true)
+          if [ -n "$recent" ]; then
+            echo "Recent commit found: $recent"
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No commit in the last 24 hours; skipping pixi validation."
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  pixi_validate:
+    name: pixi (${{ matrix.os }}, ${{ matrix.environment }})
+    needs: check_recent_commit
+    if: needs.check_recent_commit.outputs.should_run == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["ubuntu-latest"]
+        environment: ["dev-no-onnx", "dev"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OpenSSL (Linux)
+        run: sudo apt-get install -y libssl-dev
+
+      - name: Set up pixi
+        uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          pixi-version: latest
+          environments: ${{ matrix.environment }}
+          cache: true
+
+      - name: Show pixi info
+        run: pixi info
+
+      - name: Set parallel build level
+        shell: bash
+        run: |
+          CMAKE_BUILD_PARALLEL_LEVEL=$(python -c 'import os; print(os.cpu_count() or 1)')
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
+
+      - name: Build and install package in pixi environment
+        run: pixi run -e ${{ matrix.environment }} pip install --no-build-isolation -e . -v
+
+      - name: pip freeze
+        run: pixi run -e ${{ matrix.environment }} pip freeze
+
+      - name: Run Python unit tests
+        env:
+          UNITTEST_GOING: "1"
+        run: |
+          pixi run -e ${{ matrix.environment }} pytest --durations=10 unittests --ignore=unittests/onnxl_vs_onnx --ignore=unittests/onnxl_vs_ort

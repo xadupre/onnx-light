@@ -18,9 +18,7 @@ namespace traditionalml {
 namespace {
 
 int64_t BatchSizeFromInput(const OptimTensor &input, const char *caller) {
-  if (input.Shape().Empty()) {
-    throw std::invalid_argument(std::string(caller) + ": input rank must be 1 or 2 when known.");
-  }
+  EXT_ENFORCE_INVALID(!(input.Shape().Empty()), caller, ": input rank must be 1 or 2 when known.");
   if (input.Shape().Rank() == 1) {
     return 1;
   }
@@ -31,7 +29,7 @@ int64_t BatchSizeFromInput(const OptimTensor &input, const char *caller) {
     }
     return -1;
   }
-  throw std::invalid_argument(std::string(caller) + ": input rank must be 1 or 2 when known.");
+  EXT_THROW_INVALID(caller, ": input rank must be 1 or 2 when known.");
 }
 
 int64_t ClassCount(const NodeProto &node, bool &using_strings) {
@@ -72,10 +70,8 @@ void ComputeShapeSVMClassifier(ShapesContext &ctx, const NodeProto &node, const 
     OptimShape z_shape;
     z_shape.PushBack(batch_size >= 0 ? OptimDim(batch_size) : OptimDim("N"));
     if (class_count > 0) {
-      // Binary SVM exposes one decision score per sample; multi-class emits one
-      // score per class.
-      const int64_t score_count = class_count <= 2 ? 1 : class_count;
-      z_shape.PushBack(OptimDim(score_count));
+      // One score per class per sample (ONNX spec: "one per class per example").
+      z_shape.PushBack(OptimDim(class_count));
     } else {
       z_shape.PushBack(OptimDim("S"));
     }

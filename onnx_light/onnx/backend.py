@@ -1,6 +1,14 @@
 import re
 from typing import Pattern, Union
-from ..onnx_py._onnxpybackend.backend_test import TestCase, collect_test_cases  # type: ignore # noqa: F401
+
+try:
+    from ..onnx_py._onnxpybackend.backend_test import TestCase, collect_test_cases  # type: ignore # noqa: F401
+except ImportError as exc:  # pragma: no cover - exercised only in reduced builds
+    raise ImportError(
+        "onnx-light was built without the backend-test extensions "
+        "(ONNX_LIGHT_BUILD_KERNELS=OFF); install the full build to use the "
+        "backend test cases."
+    ) from exc
 from ..onnx_lib.backend.test.case import collect_test_case, make_test_class  # type: ignore # noqa: F401
 
 

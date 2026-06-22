@@ -70,8 +70,8 @@ void ComputeShapeSplitToSequence(ShapesContext &ctx, const NodeProto &node) {
   const int64_t rank = static_cast<int64_t>(in_shape.Rank());
   const int64_t resolved_axis = axis_attr < 0 ? axis_attr + rank : axis_attr;
   EXT_ENFORCE_INVALID(resolved_axis >= 0 && resolved_axis < rank,
-                      "ComputeShapeSplitToSequence: axis " + std::to_string(axis_attr) +
-                          " is out of range for rank " + std::to_string(rank) + ".");
+                      "ComputeShapeSplitToSequence: axis ", std::to_string(axis_attr),
+                      " is out of range for rank ", std::to_string(rank), ".");
   const std::size_t axis = static_cast<std::size_t>(resolved_axis);
 
   const bool axis_dim_known = in_shape[axis].IsInt();
@@ -117,10 +117,9 @@ void ComputeShapeSplitToSequence(ShapesContext &ctx, const NodeProto &node) {
                                         "non-negative.");
             total += s;
           }
-          EXT_ENFORCE_INVALID(total == axis_dim, "ComputeShapeSplitToSequence: sum of 'split' (" +
-                                                     std::to_string(total) +
-                                                     ") does not match the input dim on 'axis' (" +
-                                                     std::to_string(axis_dim) + ").");
+          EXT_ENFORCE_INVALID(total == axis_dim, "ComputeShapeSplitToSequence: sum of 'split' (",
+                              std::to_string(total), ") does not match the input dim on 'axis' (",
+                              std::to_string(axis_dim), ").");
         }
         sizes = std::move(*v);
       }

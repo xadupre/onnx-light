@@ -13,6 +13,16 @@ import numpy as np
 _UINT64_MASK = (1 << 64) - 1
 
 
+try:
+    from ...onnx_py._onnxpykernels import backend as _backend  # type: ignore[attr-defined]
+except ImportError as exc:  # pragma: no cover - exercised only in reduced builds
+    raise ImportError(
+        "onnx-light was built without the operator-kernel runtime "
+        "(ONNX_LIGHT_BUILD_KERNELS=OFF); install the full build to use the "
+        "deterministic random helpers."
+    ) from exc
+
+
 def _normalize_seed(seed: int | np.integer | None) -> int | None:
     """Returns a normalized 64-bit seed, or ``None`` to use the default seed."""
     if seed is None:
@@ -48,10 +58,8 @@ def rand(*shape: int, seed: int | np.integer | None = None) -> np.ndarray:
     Returns:
         A ``np.ndarray`` of float64 values with the requested shape.
     """
-    from ...onnx_py._onnxpykernels import backend as _C  # type: ignore[attr-defined]
-
     normalized_shape = _normalize_size(shape)
-    values = _C.rand(list(normalized_shape), _normalize_seed(seed))
+    values = _backend.rand(list(normalized_shape), _normalize_seed(seed))
     return np.asarray(values, dtype=np.float64).reshape(normalized_shape)
 
 
@@ -75,8 +83,6 @@ def randint(
     Returns:
         A ``np.ndarray`` of integers with the requested shape.
     """
-    from ...onnx_py._onnxpykernels import backend as _C  # type: ignore[attr-defined]
-
     assert size is not None, "size cannot be None"
     if high is None:
         high = low
@@ -87,7 +93,7 @@ def randint(
     if output_dtype.kind not in {"i", "u"}:
         raise TypeError(f"dtype must be an integer dtype, not {dtype!r}.")
     normalized_shape = _normalize_size(size)
-    values = _C.randint(low, high, list(normalized_shape), _normalize_seed(seed))
+    values = _backend.randint(low, high, list(normalized_shape), _normalize_seed(seed))
     return np.asarray(values, dtype=output_dtype).reshape(normalized_shape)
 
 
@@ -104,8 +110,6 @@ def randn(*shape: int, seed: int | np.integer | None = None) -> np.ndarray:
     Returns:
         A ``np.ndarray`` of float64 values with the requested shape.
     """
-    from ...onnx_py._onnxpykernels import backend as _C  # type: ignore[attr-defined]
-
     normalized_shape = _normalize_size(shape)
-    values = _C.randn(list(normalized_shape), _normalize_seed(seed))
+    values = _backend.randn(list(normalized_shape), _normalize_seed(seed))
     return np.asarray(values, dtype=np.float64).reshape(normalized_shape)

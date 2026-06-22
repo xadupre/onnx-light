@@ -50,7 +50,7 @@ std::vector<int64_t> RowMajorStrides(const std::vector<int64_t> &shape) {
 
 void ValidateFloat(const Tensor &t, const char *name) {
   EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      std::string("kernel::ReduceMean: ") + name + " must be a FLOAT tensor.");
+                      "kernel::ReduceMean: ", name, " must be a FLOAT tensor.");
 }
 
 // Computes the arithmetic mean of elements of ``data`` along the reduced

@@ -4,6 +4,8 @@
 
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+
 #include <cmath>
 #include <cstdint>
 #include <stdexcept>
@@ -28,6 +30,20 @@ template <typename T> void ComputeInPlace(const Tensor &x, T alpha, Tensor &outp
   }
 }
 
+using DecodeFunc = float (*)(uint16_t);
+using EncodeFunc = uint16_t (*)(float);
+
+void ComputeHalf(const Tensor &x, float alpha, Tensor &output, DecodeFunc decode,
+                 EncodeFunc encode) {
+  const int64_t n = x.element_count();
+  const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
+  uint16_t *py = reinterpret_cast<uint16_t *>(output.data.data());
+  for (int64_t i = 0; i < n; ++i) {
+    const float v = decode(px[i]);
+    py[i] = encode(v < 0.0f ? alpha * (std::exp(v) - 1.0f) : v);
+  }
+}
+
 void Dispatch(const Tensor &x, float alpha, Tensor &output) {
   switch (static_cast<DataType>(x.data_type)) {
   case DataType::FLOAT:
@@ -36,18 +52,23 @@ void Dispatch(const Tensor &x, float alpha, Tensor &output) {
   case DataType::DOUBLE:
     ComputeInPlace<double>(x, static_cast<double>(alpha), output);
     return;
+  case DataType::FLOAT16:
+    ComputeHalf(x, alpha, output, Float16BitsToFloat, FloatToFloat16Bits);
+    return;
+  case DataType::BFLOAT16:
+    ComputeHalf(x, alpha, output, Bfloat16BitsToFloat, FloatToBfloat16Bits);
+    return;
   default:
-    throw std::invalid_argument(std::string(kName) + " only supports FLOAT and DOUBLE tensors.");
+    EXT_THROW_INVALID(kName, ": unsupported data type ", x.data_type,
+                      ", only supports FLOAT, DOUBLE, FLOAT16, and BFLOAT16 tensors.");
   }
 }
 
 void ValidateOutput(const Tensor &x, const Tensor &output) {
-  EXT_ENFORCE_INVALID(output.data_type == x.data_type,
-                      std::string(kName) + ": output dtype must match input dtype.");
-  EXT_ENFORCE_INVALID(output.shape == x.shape,
-                      std::string(kName) + ": output shape must match input shape.");
-  EXT_ENFORCE_INVALID(output.data.size() == x.data.size(),
-                      std::string(kName) + ": output buffer size mismatch.");
+  EXT_ENFORCE_INVALID(output.data_type == x.data_type, kName,
+                      ": output dtype must match input dtype.");
+  EXT_ENFORCE_INVALID(output.shape == x.shape, kName, ": output shape must match input shape.");
+  EXT_ENFORCE_INVALID(output.data.size() == x.data.size(), kName, ": output buffer size mismatch.");
 }
 
 } // namespace

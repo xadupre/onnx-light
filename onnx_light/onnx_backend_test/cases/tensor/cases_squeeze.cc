@@ -33,6 +33,27 @@ NodeProto MakeSqueezeNode() {
   return node;
 }
 
+NodeProto MakeSqueezeNodeNoAxes() {
+  // ``axes`` input slot is omitted entirely (``input_size() == 1``), exercising
+  // the optional-input path of the kernel trampoline.
+  NodeProto node;
+  node.set_op_type("Squeeze");
+  node.add_input("data");
+  node.add_output("squeezed");
+  return node;
+}
+
+NodeProto MakeSqueezeNodeEmptyAxes() {
+  // ``axes`` input slot is present but named with the empty string, which is
+  // the ONNX convention for an unconnected optional input.
+  NodeProto node;
+  node.set_op_type("Squeeze");
+  node.add_input("data");
+  node.add_input("");
+  node.add_output("squeezed");
+  return node;
+}
+
 } // namespace
 
 void RegisterSqueezeCases(std::vector<TestCase> &registry) {
@@ -56,6 +77,24 @@ void RegisterSqueezeCases(std::vector<TestCase> &registry) {
     const Tensor squeezed = squeeze_kernel(data, {});
     Expect(MakeSqueezeNode(), {data, axes}, {squeezed}, "test_cc_squeeze_all_singleton", {opset},
            "backend-test", registry);
+  }
+
+  // test_cc_squeeze_no_axes_input: the optional ``axes`` input slot is omitted
+  // entirely; the kernel should squeeze every dimension equal to 1.
+  {
+    const Tensor data = Tensor::FromFloat("", {1, 2, 1, 3}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
+    const Tensor squeezed = squeeze_kernel(data, {});
+    Expect(MakeSqueezeNodeNoAxes(), {data}, {squeezed}, "test_cc_squeeze_no_axes_input", {opset},
+           "backend-test", registry);
+  }
+
+  // test_cc_squeeze_empty_axes_name: the optional ``axes`` input slot is
+  // present but unconnected (empty name).
+  {
+    const Tensor data = Tensor::FromFloat("", {1, 2, 1, 3}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
+    const Tensor squeezed = squeeze_kernel(data, {});
+    Expect(MakeSqueezeNodeEmptyAxes(), {data}, {squeezed}, "test_cc_squeeze_empty_axes_name",
+           {opset}, "backend-test", registry);
   }
 }
 

@@ -286,6 +286,20 @@ public:
 class LightOpSchema {
 public:
   /**
+   * Describes whether evaluating the operator produces deterministic outputs.
+   *
+   * Mirrors ``OpSchema::NodeDeterminism`` from the full ONNX library.
+   */
+  enum class NodeDeterminism : uint8_t {
+    /// Determinism has not been specified for this operator.
+    Unknown = 0,
+    /// The operator may produce different outputs for identical inputs.
+    NonDeterministic = 1,
+    /// The operator always produces the same outputs for identical inputs.
+    Deterministic = 2,
+  };
+
+  /**
    * Constructs a schema record for a versioned ONNX operator.
    *
    * @param name Operator name (e.g. "Add").
@@ -362,6 +376,10 @@ public:
   int max_output() const { return max_output_; }
   /// Returns true if this versioned operator is deprecated.
   bool deprecated() const { return deprecated_; }
+  /// Returns the operator's node determinism (``Unknown`` when unspecified).
+  NodeDeterminism node_determinism() const { return node_determinism_; }
+  /// Returns true if the operator is explicitly marked non-deterministic.
+  bool non_deterministic() const { return node_determinism_ == NodeDeterminism::NonDeterministic; }
 
   /// Sets the minimum number of outputs. Returns *this for chaining.
   LightOpSchema &set_min_output(int v) {
@@ -378,6 +396,11 @@ public:
     deprecated_ = v;
     return *this;
   }
+  /// Sets the operator's node determinism. Returns *this for chaining.
+  LightOpSchema &set_node_determinism(NodeDeterminism v) {
+    node_determinism_ = v;
+    return *this;
+  }
 
 private:
   std::string name_;
@@ -392,6 +415,7 @@ private:
   int min_output_;
   int max_output_;
   bool deprecated_;
+  NodeDeterminism node_determinism_ = NodeDeterminism::Unknown;
 };
 
 /// Returns floating-point tensor types (float16, float, double, bfloat16).

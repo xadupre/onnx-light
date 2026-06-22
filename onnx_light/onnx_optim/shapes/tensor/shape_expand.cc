@@ -20,9 +20,8 @@ namespace tensor {
 void ComputeShapeExpand(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Expand", "ComputeShapeExpand");
 
-  if (node.input_size() < 2) {
-    throw std::invalid_argument("ComputeShapeExpand: Expand requires two inputs (input, shape).");
-  }
+  EXT_ENFORCE_INVALID(!(node.input_size() < 2),
+                      "ComputeShapeExpand: Expand requires two inputs (input, shape).");
 
   const OptimTensor &input = ctx.Get(node.input(0).as_string());
   const OptimTensor &shape_input = ctx.Get(node.input(1).as_string());

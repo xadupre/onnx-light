@@ -16,12 +16,21 @@ input/output conversion between :class:`numpy.ndarray` and the runtime
 from __future__ import annotations
 
 import os
+import sys
 from typing import Any
 
 import numpy as np
 
 from ..onnx_lib import FunctionProto, GraphProto, ModelProto, TensorProto, load, numpy_helper
-from ..onnx_py._onnxpykernels import runtime as _runtime  # type: ignore[missing-import]
+
+try:
+    from ..onnx_py._onnxpykernels import runtime as _runtime  # type: ignore[missing-import]
+except ImportError as exc:  # pragma: no cover - exercised only in reduced builds
+    raise ImportError(
+        "onnx-light was built without the operator-kernel runtime "
+        "(ONNX_LIGHT_BUILD_KERNELS=OFF); install the full build to use "
+        "ReferenceEvaluator."
+    ) from exc
 
 try:
     import ml_dtypes as _ml_dtypes  # type: ignore
@@ -35,7 +44,7 @@ except ImportError:  # pragma: no cover - ml_dtypes is a runtime dependency
 
 # Mapping ``TensorProto.DataType`` -> numpy dtype for fixed-width element
 # types. Sub-byte types (INT4, UINT4, INT2, UINT2, FLOAT4E2M1) and the
-# string type are handled out-of-band: see ``_cpp_tensor_to_proto``.
+# string type are handled out-of-band: see ``_runtime.tensor_to_proto``.
 _DTYPE_TO_NP: dict[int, Any] = {
     int(TensorProto.FLOAT): np.float32,
     int(TensorProto.DOUBLE): np.float64,
@@ -62,44 +71,55 @@ if _ml_dtypes is not None:
         }
     )
 
+# Reverse mapping: numpy dtype -> TensorProto.DataType int (for fast input path).
+_NP_TO_DTYPE: dict[Any, int] = {v: k for k, v in _DTYPE_TO_NP.items()}
 
-def _cpp_tensor_to_proto(t: Any) -> TensorProto:
-    """Materializes a :class:`TensorProto` from a runtime ``Tensor``.
-
-    The returned proto carries an owned copy of the tensor bytes (or string
-    data) and is suitable input for :func:`numpy_helper.to_array`.
-    """
-    tp = TensorProto()
-    if t.name:
-        tp.name = t.name
-    tp.data_type = int(t.data_type)
-    for d in t.shape:
-        tp.dims.append(int(d))
-    if int(t.data_type) == int(TensorProto.STRING):
-        for s in t.string_data():
-            tp.string_data.append(s.encode("utf-8") if isinstance(s, str) else s)
-    else:
-        tp.raw_data = bytes(t.raw_data())
-    return tp
+_IS_BIG_ENDIAN = sys.byteorder == "big"
 
 
 def _cpp_tensor_to_numpy(t: Any) -> np.ndarray:
     """Converts a runtime ``Tensor`` to a :class:`numpy.ndarray`.
 
-    Delegates to :func:`numpy_helper.to_array`, which already handles
-    sub-byte packed types (INT4/UINT4/INT2/UINT2/FLOAT4E2M1) and string
-    tensors.
+    For standard fixed-width dtypes (float32, int64, etc.) the array is a
+    zero-copy view over the tensor's raw byte buffer obtained from
+    :func:`_runtime.tensor_to_numpy`; the source tensor is kept alive for the
+    lifetime of the returned array so the borrowed view never dangles.
+    Sub-byte packed types and STRING tensors fall back to the full
+    :func:`numpy_helper.to_array` path.
     """
-    return numpy_helper.to_array(_cpp_tensor_to_proto(t))
+    dt = int(t.data_type)
+    np_dtype = _DTYPE_TO_NP.get(dt)
+    if np_dtype is not None:
+        # ``tensor_to_numpy`` returns a 1-D uint8 view borrowing the tensor's
+        # bytes (no copy); reinterpret it as ``np_dtype`` and reshape.
+        raw = _runtime.tensor_to_numpy(t)
+        arr = raw.view(np_dtype)
+        if _IS_BIG_ENDIAN:  # pragma: no cover
+            arr = arr.byteswap()
+        return arr.reshape(t.shape)
+    # Fallback for sub-byte types (INT4/UINT4/INT2/UINT2/FLOAT4E2M1) and STRING.
+    return numpy_helper.to_array(_runtime.tensor_to_proto(t))
 
 
 def _numpy_to_cpp_tensor(name: str, arr: np.ndarray) -> Any:
-    """Converts a :class:`numpy.ndarray` to a runtime ``Tensor``."""
-    if isinstance(arr, np.ndarray):
-        np_arr = arr
-    else:
-        np_arr = np.asarray(arr)
-    tp = numpy_helper.from_array(np_arr, name=name)
+    """Converts a :class:`numpy.ndarray` to a runtime ``Tensor``.
+
+    For standard fixed-width dtypes, builds a minimal :class:`TensorProto`
+    with only ``raw_data``, ``data_type`` and ``dims`` populated, avoiding
+    the overhead of the full :func:`numpy_helper.from_array` path.
+    """
+    if not isinstance(arr, np.ndarray):
+        arr = np.asarray(arr)
+    onnx_dtype = _NP_TO_DTYPE.get(arr.dtype.type)
+    if onnx_dtype is not None:
+        tp = TensorProto()
+        tp.name = name
+        tp.data_type = onnx_dtype
+        tp.dims.extend(arr.shape)
+        tp.raw_data = arr.tobytes()
+        return _runtime.tensor_from_proto(tp)
+    # Fallback for strings, sub-byte types, and exotic dtypes.
+    tp = numpy_helper.from_array(arr, name=name)
     return _runtime.tensor_from_proto(tp)
 
 
@@ -137,29 +157,36 @@ class ReferenceEvaluator:
     """
 
     def __init__(
-        self, proto: ModelProto | GraphProto | FunctionProto | bytes | str | os.PathLike
+        self,
+        proto: ModelProto | GraphProto | FunctionProto | bytes | str | os.PathLike,
+        *,
+        events_enabled: bool = False,
+        release_intermediates: bool = True,
     ) -> None:
         proto = self._load_proto(proto)
         self._model: ModelProto | None = None
         self._graph: GraphProto | None = None
         self._function: FunctionProto | None = None
+        self._last_ctx: Any = None
+        self._events_enabled = events_enabled
+        self._release_intermediates = release_intermediates
 
         if isinstance(proto, ModelProto):
             self._model = proto
             self._graph = proto.graph
-            inputs = [vi.name for vi in self._graph.input]
+            graph_inputs = list(self._graph.input)
             outputs = [vi.name for vi in self._graph.output]
             initializers = {init.name for init in self._graph.initializer}
             self._opsets = {op.domain: op.version for op in proto.opset_import}
         elif isinstance(proto, GraphProto):
             self._graph = proto
-            inputs = [vi.name for vi in proto.input]
+            graph_inputs = list(proto.input)
             outputs = [vi.name for vi in proto.output]
             initializers = {init.name for init in proto.initializer}
             self._opsets = {}
         elif isinstance(proto, FunctionProto):
             self._function = proto
-            inputs = list(proto.input)
+            graph_inputs = None
             outputs = list(proto.output)
             initializers = set()
             self._opsets = {op.domain: op.version for op in proto.opset_import}
@@ -168,10 +195,257 @@ class ReferenceEvaluator:
                 f"Unsupported proto type for ReferenceEvaluator: {type(proto).__name__}."
             )
 
-        # Inputs that are also initializers (a legal but uncommon pattern)
-        # do not need to be supplied by the caller.
-        self._input_names: list[str] = [n for n in inputs if n not in initializers]
+        # Map-typed graph inputs (``map(K, V)``) are consumed by the C++ kernels
+        # for ``ai.onnx.ml::DictVectorizer`` and ``ai.onnx.ml::CastMap`` through a
+        # two-tensor naming convention: ``<name>_keys`` / ``<name>_values``.
+        # Expand these inputs so callers feed (and the runtime receives) the tensors
+        # directly by those names, keeping all map-handling logic in C++.
+        #
+        # ``_map_inputs`` records, for every such graph input, the
+        # ``(key_type, value_type)`` pair (``TensorProto`` enum values). As a
+        # convenience, :meth:`run` also accepts a Python ``dict`` fed under the
+        # original map-input name (e.g. ``{"x": {2: 2.5}}``) and splits it into
+        # the ``<name>_keys`` / ``<name>_values`` tensors expected by the runtime.
+        self._map_inputs: dict[str, tuple[int, int]] = {}
+        # ``_sequence_inputs`` records graph inputs declared as ``seq(T)``. Such
+        # inputs are fed as a Python ``list``/``tuple`` of arrays (one per
+        # sequence element) and handed to the runtime via ``put_sequence``
+        # instead of the single-tensor ``set`` path.
+        self._sequence_inputs: set[str] = set()
+        # ``_optional_sequence_inputs`` records graph inputs declared as
+        # ``optional(seq(T))``. The runtime models present optionals as a
+        # passthrough of the underlying value, so these inputs are fed through
+        # the same ``put_sequence`` path as plain ``seq(T)`` inputs.
+        self._optional_sequence_inputs: set[str] = set()
+        if graph_inputs is not None:
+            inputs: list[str] = []
+            for vi in graph_inputs:
+                if vi.name in initializers:
+                    continue
+                if vi.type.has_map_type():
+                    inputs.append(f"{vi.name}_keys")
+                    inputs.append(f"{vi.name}_values")
+                    mt = vi.type.map_type
+                    self._map_inputs[vi.name] = (
+                        int(mt.key_type),
+                        int(mt.value_type.tensor_type.elem_type),
+                    )
+                else:
+                    if vi.type.has_sequence_type():
+                        self._sequence_inputs.add(vi.name)
+                    elif (
+                        vi.type.has_optional_type()
+                        and vi.type.optional_type.has_elem_type()
+                        and vi.type.optional_type.elem_type.has_sequence_type()
+                        and (
+                            vi.type.optional_type.elem_type.sequence_type.elem_type.has_tensor_type()
+                        )
+                    ):
+                        self._optional_sequence_inputs.add(vi.name)
+                    inputs.append(vi.name)
+        else:
+            assert self._function is not None
+            inputs = list(self._function.input)
+
+        self._input_names: list[str] = inputs
+        self._input_names_set: frozenset[str] = frozenset(self._input_names)
         self._output_names: list[str] = list(outputs)
+
+        # Pre-compute the opset version and KernelContext once at construction
+        # time instead of rebuilding them on every run() call.
+        version: int = int(self._opsets.get("", self._opsets.get("ai.onnx", 0)) or 0)
+        if version == 0 and self._opsets:
+            version = int(max(self._opsets.values()))
+        self._kernel_ctx = _runtime.KernelContext(_runtime.default_opset(version))
+
+        # Build the RuntimeContext once at construction time and reuse it for
+        # every :meth:`run` call. Keeping a single context alive across runs
+        # amortises the per-model ExecutionPlan analysis (cached inside the
+        # context, keyed by graph/function address) instead of rebuilding it on
+        # every call. The per-invocation tensor / sequence / event state is
+        # reset via ``RuntimeContext.clear`` at the start of each :meth:`run`.
+        self._ctx = _runtime.RuntimeContext(self._kernel_ctx)
+        self._ctx.events_enabled = self._events_enabled
+
+        # Mapping ``"<domain>:<op_type>" -> low-level callback``. A
+        # low-level callback has the signature
+        # ``fn(node: NodeProto, ctx: RuntimeContext) -> None`` and is
+        # registered directly on the persistent RuntimeContext when the
+        # higher-level :meth:`register_custom_kernel` API is called. That
+        # API installs a numpy-friendly wrapper that delegates to the
+        # user-provided callable.
+        self._custom_kernels: dict[str, Any] = {}
+
+    # -- map-typed input handling ------------------------------------------
+
+    @staticmethod
+    def _dict_to_key_value_arrays(
+        name: str, mapping: dict, key_type: int, value_type: int
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Converts a Python ``dict`` feed into the ``(keys, values)`` arrays.
+
+        Parameters
+        ----------
+        name:
+            Name of the map-typed graph input the ``dict`` is fed under;
+            used only for error messages.
+        mapping:
+            The ``dict`` feed, mapping map keys to map values.
+        key_type:
+            ``TensorProto`` enum value of the map's key dtype.
+        value_type:
+            ``TensorProto`` enum value of the map's value dtype.
+
+        Returns
+        -------
+        tuple of :class:`numpy.ndarray`
+            The ``(keys, values)`` tensors expected by the C++ runtime for a
+            ``map(K, V)``-typed input fed under its original name (the
+            ``<name>_keys`` / ``<name>_values`` convention).
+        """
+        keys_list = list(mapping.keys())
+        values_list = list(mapping.values())
+        if key_type == int(TensorProto.STRING):
+            keys_arr = np.array(keys_list, dtype=object)
+        else:
+            keys_dtype = _DTYPE_TO_NP.get(key_type)
+            if keys_dtype is None:
+                raise NotImplementedError(
+                    f"ReferenceEvaluator: unsupported map key dtype {key_type} "
+                    f"for input {name!r}."
+                )
+            keys_arr = np.array(keys_list, dtype=keys_dtype)
+        if value_type == int(TensorProto.STRING):
+            values_arr = np.array(values_list, dtype=object)
+        else:
+            values_dtype = _DTYPE_TO_NP.get(value_type)
+            if values_dtype is None:
+                raise NotImplementedError(
+                    f"ReferenceEvaluator: unsupported map value dtype "
+                    f"{value_type} for input {name!r}."
+                )
+            values_arr = np.array(values_list, dtype=values_dtype)
+        return keys_arr, values_arr
+
+    def _expand_map_feeds(self, feed_inputs: dict[str, Any]) -> dict[str, Any]:
+        """Expands map-typed ``dict`` feeds into the two-tensor convention.
+
+        A ``map(K, V)``-typed input may be fed either directly through its
+        ``<name>_keys`` / ``<name>_values`` tensors or, as a convenience,
+        through a single Python ``dict`` (optionally wrapped in a size-1 numpy
+        object array) under the original input name.
+
+        Parameters
+        ----------
+        feed_inputs:
+            The raw ``name -> value`` feed mapping passed to :meth:`run`.
+
+        Returns
+        -------
+        dict
+            A new feed mapping where every ``dict`` fed under a map-typed
+            input name has been split into the expected ``<name>_keys`` /
+            ``<name>_values`` tensors; all other entries are passed through
+            unchanged.
+        """
+        if not self._map_inputs:
+            return feed_inputs
+        expanded: dict[str, Any] = {}
+        for name, value in feed_inputs.items():
+            # Unwrap a size-1 object array wrapping a ``dict`` (e.g. when a
+            # caller normalises every feed value with ``np.asarray`` before
+            # dispatch).
+            if isinstance(value, np.ndarray) and value.dtype == object and value.size == 1:
+                unwrapped = value.item()
+                if isinstance(unwrapped, dict):
+                    value = unwrapped
+            if name in self._map_inputs and isinstance(value, dict):
+                key_type, value_type = self._map_inputs[name]
+                keys_arr, values_arr = self._dict_to_key_value_arrays(
+                    name, value, key_type, value_type
+                )
+                expanded[f"{name}_keys"] = keys_arr
+                expanded[f"{name}_values"] = values_arr
+            elif isinstance(value, dict):
+                raise TypeError(
+                    f"ReferenceEvaluator.run: input {name!r} received a "
+                    f"dict feed but is not declared as a map(K, V) input. "
+                    f"Map-typed inputs are: {sorted(self._map_inputs)}."
+                )
+            else:
+                expanded[name] = value
+        return expanded
+
+    # -- custom kernels -----------------------------------------------------
+
+    def register_custom_kernel(self, domain: str, op_type: str, fn: Any) -> None:
+        """Registers a Python custom kernel for ``(domain, op_type)``.
+
+        The kernel is invoked on every :meth:`run` call whenever a node
+        matches the registered ``(domain, op_type)`` pair. Custom
+        kernels override any built-in onnx-light kernel with the same
+        key (model-local functions and the built-in control-flow
+        operators ``If`` / ``Loop`` / ``Scan`` / ``SequenceMap`` still
+        take precedence).
+
+        Parameters
+        ----------
+        domain:
+            Operator domain. The empty string is treated as
+            ``ai.onnx``.
+        op_type:
+            Operator name (``NodeProto.op_type``).
+        fn:
+            Python callable invoked as ``fn(node, *inputs)`` where
+            ``node`` is the matching :class:`NodeProto` and ``inputs``
+            are the input tensors converted to :class:`numpy.ndarray`.
+            The callable must return either a single
+            :class:`numpy.ndarray` (for single-output kernels) or a
+            tuple / list of arrays (for multi-output kernels), in the
+            same order as the node's declared outputs.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            def square(node, x):
+                return x * x
+
+            sess.register_custom_kernel("my.domain", "Square", square)
+        """
+
+        def _wrapper(node: Any, ctx: Any) -> None:
+            inputs: list[Any] = []
+            for raw_name in node.input:
+                name = str(raw_name)
+                if not name:
+                    inputs.append(None)
+                else:
+                    inputs.append(_cpp_tensor_to_numpy(ctx.get(name)))
+            result = fn(node, *inputs)
+            if isinstance(result, (list, tuple)):
+                outputs = list(result)
+            else:
+                outputs = [result]
+            output_names = [str(n) for n in node.output]
+            expected = len(output_names)
+            if len(outputs) != expected:
+                raise ValueError(
+                    f"Custom kernel for {domain!r}:{op_type!r} returned "
+                    f"{len(outputs)} output(s) but the node declares {expected} "
+                    f"output(s)."
+                )
+            for i, value in enumerate(outputs):
+                name = output_names[i]
+                if not name:
+                    continue
+                ctx.put(name, _numpy_to_cpp_tensor(name, value), "output")
+
+        self._custom_kernels[f"{domain or 'ai.onnx'}:{op_type}"] = (domain, op_type, _wrapper)
+        # Register the wrapper directly on the persistent RuntimeContext. A
+        # later registration for the same (domain, op_type) overwrites the
+        # previous one, matching the dict-based bookkeeping above.
+        self._ctx.register_custom_kernel(domain, op_type, _wrapper)
 
     # -- proto loading ------------------------------------------------------
 
@@ -215,9 +489,23 @@ class ReferenceEvaluator:
 
     # -- evaluation ---------------------------------------------------------
 
+    def events(self) -> list[Any]:
+        """Returns the event log from the most recent :meth:`run` call.
+
+        Each entry is a ``RuntimeEvent`` object with an :meth:`as_dict` method
+        that returns a dictionary with the keys ``"action"``, ``"kind"``,
+        ``"name"``, ``"data_type"``, ``"shape"``, ``"value_count"``,
+        ``"values"`` and ``"string_values"``.
+
+        Returns an empty list if :meth:`run` has not been called yet.
+        """
+        if self._last_ctx is None:
+            return []
+        return self._last_ctx.events()
+
     def run(
         self, output_names: list[str] | None, feed_inputs: dict[str, Any]
-    ) -> list[np.ndarray]:
+    ) -> list[np.ndarray | list]:
         """Executes the wrapped graph / model / function.
 
         Parameters
@@ -226,17 +514,22 @@ class ReferenceEvaluator:
             Names of the outputs to return. ``None`` is shorthand for
             "every declared output, in declaration order".
         feed_inputs:
-            Mapping of input name to NumPy array. Every name listed by
-            :attr:`input_names` must be present.
+            Mapping of input name to value. Tensor inputs are fed as a
+            :class:`numpy.ndarray`; ``seq(T)`` inputs are fed as a ``list``
+            (or ``tuple``) of arrays, one per sequence element. Every name
+            listed by :attr:`input_names` must be present.
 
         Returns
         -------
-        list of :class:`numpy.ndarray`
-            One array per name in ``output_names`` (defaults to
-            :attr:`output_names`), in the requested order.
+        list of :class:`numpy.ndarray` or list of :class:`numpy.ndarray`
+            One entry per name in ``output_names`` (defaults to
+            :attr:`output_names`), in the requested order. Tensor-typed
+            outputs are returned as :class:`numpy.ndarray`; sequence-typed
+            outputs are returned as a ``list`` of :class:`numpy.ndarray`
+            (one array per sequence element).
         """
         if output_names is None:
-            output_names = list(self._output_names)
+            output_names = self._output_names
 
         if not isinstance(feed_inputs, dict):
             raise TypeError(
@@ -244,37 +537,74 @@ class ReferenceEvaluator:
                 f"{type(feed_inputs).__name__}."
             )
 
-        missing = [n for n in self._input_names if n not in feed_inputs]
+        # Allow ``map(K, V)``-typed inputs to be fed as a single Python ``dict``
+        # under the original input name; expand them into the two-tensor
+        # ``<name>_keys`` / ``<name>_values`` convention the runtime expects.
+        feed_inputs = self._expand_map_feeds(feed_inputs)
+
+        # Fast missing-input check using frozenset difference.
+        missing = self._input_names_set - feed_inputs.keys()
         if missing:
             raise ValueError(
-                f"Missing input(s) for ReferenceEvaluator.run: {missing}. "
+                f"Missing input(s) for ReferenceEvaluator.run: {sorted(missing)}. "
                 f"Expected: {self._input_names}, got: {list(feed_inputs)}."
             )
 
-        # Pick the opset version of the default ai.onnx domain (falls back
-        # to the highest version declared otherwise, then to 0).
-        version: int = int(self._opsets.get("", self._opsets.get("ai.onnx", 0)) or 0)
-        if version == 0 and self._opsets:
-            version = int(max(self._opsets.values()))
-        ctx = _runtime.RuntimeContext(_runtime.KernelContext(_runtime.default_opset(version)))
+        ctx = self._ctx
+        # Reset the per-invocation tensor / sequence / event state from any
+        # previous run while preserving the cached execution plans, registered
+        # custom kernels, kernel context and the ``events_enabled`` setting.
+        ctx.clear()
+        # Releasing intermediates would drop any requested output that is
+        # not a declared graph/function output before the caller can fetch
+        # it. Disable the per-run release in that case so callers can still
+        # observe arbitrary intermediate values via ``run([name], ...)``.
+        declared_outputs = frozenset(self._output_names)
+        release = self._release_intermediates and all(
+            name in declared_outputs for name in output_names
+        )
+        ctx.release_intermediates = release
 
         for name, value in feed_inputs.items():
-            ctx.set(name, _numpy_to_cpp_tensor(name, value))
+            is_optional_sequence_input = name in self._optional_sequence_inputs
+            if name in self._sequence_inputs or is_optional_sequence_input:
+                # ``seq(T)`` graph inputs are fed as a list/tuple of arrays (one
+                # per sequence element) and stored through ``put_sequence``.
+                if not isinstance(value, (list, tuple)):
+                    input_type_description = (
+                        "optional sequence" if is_optional_sequence_input else "sequence"
+                    )
+                    raise TypeError(
+                        f"{input_type_description.capitalize()} input {name!r} must be fed as a "
+                        f"list/tuple of arrays, not {type(value).__name__}."
+                    )
+                elements = [
+                    _numpy_to_cpp_tensor(f"{name}_{i}", element)
+                    for i, element in enumerate(value)
+                ]
+                ctx.put_sequence(name, elements)
+            else:
+                ctx.set(name, _numpy_to_cpp_tensor(name, value))
 
         if self._model is not None:
             _runtime.run_model(self._model, ctx)
         elif self._function is not None:
             _runtime.run_function(self._function, ctx)
         else:
-            assert self._graph is not None
             _runtime.run_graph(self._graph, ctx)
 
-        results: list[np.ndarray] = []
+        self._last_ctx = ctx
+
+        results: list[np.ndarray | list] = []
         for name in output_names:
-            if not ctx.has(name):
+            if ctx.has(name):
+                results.append(_cpp_tensor_to_numpy(ctx.get(name)))
+            elif ctx.has_sequence(name):
+                results.append([_cpp_tensor_to_numpy(t) for t in ctx.get_sequence(name)])
+            else:
+                all_names = sorted(ctx.names() + ctx.sequence_names())
                 raise RuntimeError(
                     f"Output {name!r} was not produced by the graph. "
-                    f"Available names after execution: {sorted(ctx.names())}."
+                    f"Available names after execution: {all_names}."
                 )
-            results.append(_cpp_tensor_to_numpy(ctx.get(name)))
         return results

@@ -5,7 +5,18 @@ import importlib.util
 import subprocess
 import time
 from onnx_light import __file__ as onnxl_file
-from onnx_light.ext_test_case import ExtTestCase, is_windows, ignore_errors
+from onnx_light.ext_test_case import (
+    ExtTestCase,
+    has_onnxruntime,
+    is_windows,
+    ignore_errors,
+    import_or_skip,
+)
+
+# The documentation examples exercise the operator-kernel runtime and backend,
+# which are absent from the reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF). Skip
+# the whole module in that case.
+import_or_skip("onnx_light.onnx_py._onnxpykernels")
 
 VERBOSE = 0
 ROOT = os.path.realpath(os.path.abspath(os.path.join(onnxl_file, "..", "..")))
@@ -71,6 +82,10 @@ class TestDocumentationExamples(ExtTestCase):
             print(f"{dt:.3f}: run {name!r}")
         return 1
 
+    def test_check_unittest_going_is_true(self):
+        self.assertIn("UNITTEST_GOING", os.environ)
+        self.assertEqual(os.environ["UNITTEST_GOING"], "1")
+
     @classmethod
     def add_test_methods(cls):
         this = os.path.abspath(os.path.dirname(__file__))
@@ -90,10 +105,12 @@ class TestDocumentationExamples(ExtTestCase):
             if (
                 not reason
                 and not has_onnx()
-                and name
-                in {"plot_api_compare.py", "plot_save_external_data_time.py", "plot_onnx_time.py"}
+                and name in {"plot_save_external_data_time.py", "plot_onnx_time.py"}
             ):
                 reason = "onnx is missing"
+
+            if not reason and not has_onnxruntime() and name in {"plot_save_ort_flatbuffers.py"}:
+                reason = "onnxruntime is missing"
 
             if reason:
 

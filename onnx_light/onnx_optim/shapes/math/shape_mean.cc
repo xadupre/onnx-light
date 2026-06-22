@@ -20,9 +20,7 @@ void ComputeShapeMean(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Mean", "ComputeShapeMean");
 
   const int n_inputs = node.input_size();
-  if (n_inputs < 1) {
-    throw std::invalid_argument("ComputeShapeMean: Mean requires at least one input.");
-  }
+  EXT_ENFORCE_INVALID(!(n_inputs < 1), "ComputeShapeMean: Mean requires at least one input.");
 
   // Start from the shape and dtype of the first input. Mean's type constraint
   // ``T`` requires every input to share the same float dtype, so the output

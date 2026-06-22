@@ -6,7 +6,7 @@
 // Feeds NUL-terminated text to the ONNX textual-format parser. Mirrors
 // the former ``onnx_light/fuzz/fuzz_parser.py``.
 
-#include "onnx_lib/defs/parser.h"
+#include "onnx_manipulations/parser.h"
 #include "onnx_proto/onnx.h"
 
 #include <cstddef>

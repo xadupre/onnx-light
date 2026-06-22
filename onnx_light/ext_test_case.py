@@ -4,11 +4,10 @@ import sys
 import unittest
 import warnings
 from contextlib import redirect_stderr, redirect_stdout
+from importlib import import_module
 from io import StringIO
 from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
-
-import numpy
-from numpy.testing import assert_allclose
+import numpy as np
 
 
 def is_windows() -> bool:
@@ -17,6 +16,58 @@ def is_windows() -> bool:
 
 def is_apple() -> bool:
     return sys.platform == "darwin"
+
+
+def has_onnxruntime() -> bool:
+    "Tells if onnxruntime is installed."
+    try:
+        import onnxruntime
+
+        return hasattr(onnxruntime, "__version__")
+    except ImportError:
+        return False
+
+
+def has_ir_py() -> bool:
+    "Tells if ir-py is installed."
+    try:
+        import onnx_ir  # type: ignore
+
+        return hasattr(onnx_ir, "__version__")
+    except ImportError:
+        return False
+
+
+def import_or_skip(module_name: str, attribute: Optional[str] = None) -> Any:
+    """Imports a module (or one of its attributes) or skips the test otherwise.
+
+    onnx-light can be built without the operator-kernel runtime and the
+    backend-test registries (``ONNX_LIGHT_BUILD_KERNELS=OFF``). In that reduced
+    build the kernel/backend Python modules raise :class:`ImportError`. Tests
+    that depend on them call this helper, at module level or inside a test, to
+    skip themselves cleanly instead of failing.
+
+    Args:
+        module_name: The fully-qualified name of the module to import.
+        attribute: An optional attribute to return from the imported module.
+
+    Returns:
+        The imported module, or ``getattr(module, attribute)`` when *attribute*
+        is provided.
+
+    Raises:
+        unittest.SkipTest: When the module (or attribute) cannot be imported.
+    """
+    try:
+        module = import_module(module_name)
+        if attribute is not None:
+            return getattr(module, attribute)
+        return module
+    except (ImportError, AttributeError) as exc:
+        raise unittest.SkipTest(
+            f"{module_name!r} is unavailable in this build "
+            f"(reduced onnx-light build without kernels/backend): {exc}"
+        ) from exc
 
 
 def skipif_ci_windows(msg) -> Callable:
@@ -158,8 +209,8 @@ class ExtTestCase(unittest.TestCase):
 
     def assertEqualArray(
         self,
-        expected: numpy.ndarray,
-        value: numpy.ndarray,
+        expected: np.ndarray,
+        value: np.ndarray,
         atol: float = 0,
         rtol: float = 0,
         msg: Optional[str] = None,
@@ -168,28 +219,28 @@ class ExtTestCase(unittest.TestCase):
         self.assertEqual(expected.shape, value.shape)
         if msg:
             try:
-                assert_allclose(expected, value, atol=atol, rtol=rtol)
+                np.testing.assert_allclose(expected, value, atol=atol, rtol=rtol)
             except AssertionError as e:
                 raise AssertionError(msg) from e
         else:
-            assert_allclose(expected, value, atol=atol, rtol=rtol)
+            np.testing.assert_allclose(expected, value, atol=atol, rtol=rtol)
 
     def assertAlmostEqual(  # type: ignore
-        self, expected: numpy.ndarray, value: numpy.ndarray, atol: float = 0, rtol: float = 0
+        self, expected: np.ndarray, value: np.ndarray, atol: float = 0, rtol: float = 0
     ):
-        if not isinstance(expected, numpy.ndarray):
-            expected = numpy.array(expected)
-        if not isinstance(value, numpy.ndarray):
-            value = numpy.array(value).astype(expected.dtype)
+        if not isinstance(expected, np.ndarray):
+            expected = np.array(expected)
+        if not isinstance(value, np.ndarray):
+            value = np.array(value).astype(expected.dtype)
         self.assertEqualArray(expected, value, atol=atol, rtol=rtol)
 
     def assertNotAlmostEqual(  # type: ignore
-        self, expected: numpy.ndarray, value: numpy.ndarray, atol: float = 0, rtol: float = 0
+        self, expected: np.ndarray, value: np.ndarray, atol: float = 0, rtol: float = 0
     ):
-        if not isinstance(expected, numpy.ndarray):
-            expected = numpy.array(expected)
-        if not isinstance(value, numpy.ndarray):
-            value = numpy.array(value).astype(expected.dtype)
+        if not isinstance(expected, np.ndarray):
+            expected = np.array(expected)
+        if not isinstance(value, np.ndarray):
+            value = np.array(value).astype(expected.dtype)
         try:
             self.assertEqualArray(expected, value, atol=atol, rtol=rtol)
             raise AssertionError("Arrays are equal.")
@@ -303,3 +354,290 @@ class ExtTestCase(unittest.TestCase):
         with open(fullname, "wb") as f:
             f.write(proto.SerializeToString())
         return fullname
+
+
+class InferenceSessionAllTypes:
+    """
+    Wrapper around onnxruntime.InferenceSession that supports all ONNX dtypes.
+
+    Uses IOBinding with raw memory buffers to support dtypes that ORT doesn't
+    natively handle through NumPy conversion (FLOAT8, BFLOAT16, INT2, INT4, etc.).
+    Creates an inference session.
+
+    Args:
+        model_bytes: ONNX model
+        providers: List of execution providers (defaults to ["CPUExecutionProvider"])
+    """
+
+    @classmethod
+    def mapping_numpy_dtype_to_onnx(cls):
+        """Returns mapping from NumPy dtype to ONNX TensorProto data type."""
+        import ml_dtypes  # noqa: F401
+        from onnx_light.onnx import TensorProto
+
+        return {
+            np.dtype("float64"): TensorProto.DOUBLE,
+            np.dtype("float32"): TensorProto.FLOAT,
+            np.dtype("float16"): TensorProto.FLOAT16,
+            np.dtype("uint8"): TensorProto.UINT8,
+            np.dtype("int8"): TensorProto.INT8,
+            np.dtype("uint16"): TensorProto.UINT16,
+            np.dtype("int16"): TensorProto.INT16,
+            np.dtype("int32"): TensorProto.INT32,
+            np.dtype("int64"): TensorProto.INT64,
+            np.dtype("bool"): TensorProto.BOOL,
+            np.dtype("uint32"): TensorProto.UINT32,
+            np.dtype("uint64"): TensorProto.UINT64,
+            np.dtype("O"): TensorProto.STRING,
+            #
+            np.dtype("uint4"): TensorProto.UINT4,
+            np.dtype("int4"): TensorProto.INT4,
+            np.dtype("uint2"): TensorProto.UINT2,
+            np.dtype("int2"): TensorProto.INT2,
+            np.dtype("float8_e4m3fn"): TensorProto.FLOAT8E4M3FN,
+            np.dtype("float8_e4m3fnuz"): TensorProto.FLOAT8E4M3FNUZ,
+            np.dtype("float8_e5m2"): TensorProto.FLOAT8E5M2,
+            np.dtype("float8_e5m2fnuz"): TensorProto.FLOAT8E5M2FNUZ,
+            np.dtype("bfloat16"): TensorProto.BFLOAT16,
+            # np.dtype("float4e2m1"): TensorProto.FLOAT4E2M1,
+        }
+
+    @classmethod
+    def mapping_ort_type_name_to_numpy_dtype(self):
+        """
+        Returns mapping for special dtypes that need IOBinding.
+
+        Maps ONNX dtype to (numpy view dtype, onnx tensor element type).
+        """
+        return {
+            "tensor(float)": np.float32,
+            "tensor(float16)": np.float16,
+            "tensor(double)": np.double,
+            "tensor(int64)": np.int64,
+            "tensor(int32)": np.int32,
+            "tensor(int16)": np.int16,
+            "tensor(int8)": np.int8,
+            "tensor(uint64)": np.uint64,
+            "tensor(uint32)": np.uint32,
+            "tensor(uint16)": np.uint16,
+            "tensor(uint8)": np.uint8,
+        }
+
+    @classmethod
+    def mapping_sub_byte_types(cls):
+        """
+        Returns the sub-byte ONNX dtypes ORT packs into bytes through IOBinding.
+
+        ORT stores these types packed (several values per byte), so the wrapper
+        packs inputs and unpacks outputs around the raw memory buffers.
+
+        Returns:
+            A dictionary mapping the ORT type name (e.g. ``"tensor(int2)"``) to a
+            tuple ``(bits, signed, onnx_element_type, numpy_dtype_name)``.
+        """
+        from onnx_light.onnx import TensorProto
+
+        return {
+            "tensor(int4)": (4, True, TensorProto.INT4, "int4"),
+            "tensor(uint4)": (4, False, TensorProto.UINT4, "uint4"),
+            "tensor(int2)": (2, True, TensorProto.INT2, "int2"),
+            "tensor(uint2)": (2, False, TensorProto.UINT2, "uint2"),
+        }
+
+    @staticmethod
+    def _packed_byte_count(n: int, bits: int) -> int:
+        """
+        Returns the number of bytes needed to pack ``n`` values of ``bits`` bits.
+
+        Args:
+            n: Number of logical values.
+            bits: Number of bits per value (2 or 4).
+
+        Returns:
+            The byte count, always at least 1 so a zero-element tensor still has a
+            valid (non-empty) buffer to bind.
+        """
+        return max((n * bits + 7) // 8, 1)
+
+    @staticmethod
+    def _pack_sub_byte(array: np.ndarray, bits: int) -> np.ndarray:
+        """
+        Packs a sub-byte array into a flat ``uint8`` buffer (low bits first).
+
+        Args:
+            array: Array of sub-byte values (one logical value per element).
+            bits: Number of bits per value (2 or 4).
+
+        Returns:
+            A 1-D ``uint8`` buffer holding the values packed several per byte,
+            matching the layout ONNX Runtime expects for sub-byte tensors.
+        """
+        flat = np.asarray(array).reshape(-1).astype(np.int64)
+        mask = (1 << bits) - 1
+        flat = flat & mask
+        per_byte = 8 // bits
+        n = flat.size
+        nbytes = InferenceSessionAllTypes._packed_byte_count(n, bits)
+        idx = np.arange(n)
+        byte_idx = idx // per_byte
+        shift = (idx % per_byte) * bits
+        acc = np.zeros(nbytes, dtype=np.uint64)
+        np.add.at(acc, byte_idx, (flat.astype(np.uint64) << shift.astype(np.uint64)))
+        return acc.astype(np.uint8)
+
+    @staticmethod
+    def _unpack_sub_byte(
+        buffer: np.ndarray, shape: Tuple[int, ...], bits: int, signed: bool, numpy_dtype_name: str
+    ) -> np.ndarray:
+        """
+        Unpacks a flat ``uint8`` buffer into a sub-byte array of the given shape.
+
+        Args:
+            buffer: 1-D ``uint8`` buffer holding the values packed several per byte.
+            shape: Target shape of the unpacked array.
+            bits: Number of bits per value (2 or 4).
+            signed: Whether the values are signed (two's complement).
+            numpy_dtype_name: Name of the ``ml_dtypes`` dtype of the result.
+
+        Returns:
+            An array of the requested shape and dtype with one logical value per element.
+        """
+        n = int(np.prod(shape)) if shape else 1
+        per_byte = 8 // bits
+        mask = (1 << bits) - 1
+        idx = np.arange(n)
+        byte_idx = idx // per_byte
+        shift = (idx % per_byte) * bits
+        vals = (buffer[byte_idx].astype(np.int64) >> shift) & mask
+        if signed:
+            half = 1 << (bits - 1)
+            vals = np.where(vals >= half, vals - (1 << bits), vals)
+        return vals.astype(np.dtype(numpy_dtype_name)).reshape(shape)
+
+    def __init__(self, model: "ModelProto", providers: Optional[List[str]] = None):  # type: ignore # noqa: F821
+        import onnxruntime as ort
+
+        if providers is None:
+            providers = ["CPUExecutionProvider"]
+        try:
+            self._sess = ort.InferenceSession(model.SerializeToString(), providers=providers)
+        except ort.capi.onnxruntime_pybind11_state.InvalidGraph as e:  # type: ignore
+            from .tools.pretty_print import pretty_onnx
+
+            raise AssertionError(
+                f"Unable to load a model due to {e}\n---\n{pretty_onnx(model)}"
+            ) from e
+        self._mapping_to_onnx = self.mapping_numpy_dtype_to_onnx()
+        self._mapping_to_numpy = self.mapping_ort_type_name_to_numpy_dtype()
+        self._mapping_sub_byte = self.mapping_sub_byte_types()
+
+    def run(
+        self, output_names: Optional[List[str]], input_feed: dict[str, np.ndarray]
+    ) -> List[np.ndarray]:
+        """
+        Runs the model with support for all ONNX dtypes.
+
+        Uses IOBinding for special dtypes that ORT doesn't natively support.
+
+        Args:
+            output_names: Names of outputs to compute (None = all outputs)
+            input_feed: Dictionary mapping input names to numpy arrays
+
+        Returns:
+            List of output arrays from the model
+        """
+        from onnx_light.onnx import TensorProto
+
+        input_metas = self._sess.get_inputs()
+        output_metas = self._sess.get_outputs()
+        inputs = [input_feed[meta.name] for meta in input_metas]
+        if output_names is None:
+            output_names = [o.name for o in output_metas]
+
+        for meta in input_metas:
+            if meta.type == "tensor(string)":
+                # IOBinding does not support strings.
+                return self._sess.run(output_names, input_feed)  # type: ignore
+
+        io_binding = self._sess.io_binding()
+
+        # Keep packed buffers alive until run_with_iobinding completes.
+        input_buffers: List[np.ndarray] = []
+        for meta, inp in zip(input_metas, inputs):
+            assert (
+                meta.type not in self._mapping_to_numpy
+                or inp.dtype == self._mapping_to_numpy[meta.type]
+            ), (
+                f"Unexpected type for input {meta.name!r}, "
+                f"meta.type={meta.type!r}, inp.dtype={inp.dtype!r}"
+            )
+            tensor_type = self._mapping_to_onnx[inp.dtype]
+
+            if tensor_type == TensorProto.STRING:
+                io_binding.bind_cpu_input(meta.name, inp)
+                continue
+
+            sub_byte = self._mapping_sub_byte.get(meta.type)
+            if sub_byte is not None:
+                bits = sub_byte[0]
+                packed = self._pack_sub_byte(inp, bits)
+                input_buffers.append(packed)
+                io_binding.bind_input(  # type: ignore[attr-defined]
+                    meta.name,
+                    "cpu",  # device_type
+                    0,  # device_id
+                    tensor_type,
+                    list(inp.shape),
+                    packed.ctypes.data,
+                )
+                continue
+
+            io_binding.bind_input(  # type: ignore[attr-defined]
+                meta.name,
+                "cpu",  # device_type
+                0,  # device_id
+                tensor_type,
+                list(inp.shape),
+                inp.ctypes.data,
+            )
+
+        # Bind outputs. Sub-byte outputs are bound to raw packed buffers because
+        # ORT cannot convert them to NumPy directly.
+        sub_byte_outputs: dict = {}
+        for index, meta in enumerate(output_metas):
+            sub_byte = self._mapping_sub_byte.get(meta.type)
+            if sub_byte is not None:
+                bits, signed, tensor_type, numpy_dtype_name = sub_byte
+                shape = tuple(meta.shape)
+                assert shape and all(
+                    isinstance(d, int) for d in shape
+                ), f"Sub-byte output {meta.name!r} requires a static shape, got {shape!r}"
+                n = int(np.prod(shape))
+                buffer = np.zeros(self._packed_byte_count(n, bits), dtype=np.uint8)
+                io_binding.bind_output(  # type: ignore[attr-defined]
+                    meta.name,
+                    "cpu",  # device_type
+                    0,  # device_id
+                    tensor_type,
+                    list(shape),
+                    buffer.ctypes.data,
+                )
+                sub_byte_outputs[index] = (shape, bits, signed, numpy_dtype_name, buffer)
+            else:
+                io_binding.bind_output(meta.name)
+
+        # Run with IOBinding
+        self._sess.run_with_iobinding(io_binding)
+
+        # Get outputs
+        ort_outputs = io_binding.get_outputs()
+        outputs = []
+        for index in range(len(output_metas)):
+            if index in sub_byte_outputs:
+                shape, bits, signed, numpy_dtype_name, buffer = sub_byte_outputs[index]
+                outputs.append(
+                    self._unpack_sub_byte(buffer, shape, bits, signed, numpy_dtype_name)
+                )
+            else:
+                outputs.append(ort_outputs[index].numpy())
+        return outputs

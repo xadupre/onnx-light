@@ -1,15 +1,19 @@
 import unittest
-from onnx_light.ext_test_case import ExtTestCase
+
+
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 import numpy as np
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.defs as defs
-from onnx_light.onnx_lib.backend.test.case.base import (
-    ALL_TESTS,
-    TestCase,
-    collect_test_case,
-    expect,
-    get_test_cases_for_op,
-)
+
+# The backend test registries are only available in the full build; skip this
+# module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
+_case_base = import_or_skip("onnx_light.onnx_lib.backend.test.case.base")
+ALL_TESTS = _case_base.ALL_TESTS
+TestCase = _case_base.TestCase
+collect_test_case = _case_base.collect_test_case
+expect = _case_base.expect
+get_test_cases_for_op = _case_base.get_test_cases_for_op
 
 
 class TestBackendFunction(ExtTestCase):
@@ -431,10 +435,22 @@ class TestBackendFunction(ExtTestCase):
             "test_cc_attention_3d_with_past_and_present",
         }
         self.assertEqual(expected_subset & names, expected_subset)
-        for tc in result.values():
+        for case_name, tc in result.items():
+            # ``get_test_cases_for_op`` returns every case that contains an
+            # ``Attention`` node, which now includes multi-node models (e.g.
+            # the ``test_cc_shape_inference_tiny_llm`` decoder). The
+            # single-node / opset invariants below only apply to the dedicated
+            # ``cases_attention.cc`` registry.
+            if not case_name.startswith("test_cc_attention"):
+                continue
             self.assertEqual([node.op_type for node in tc.model.graph.node], ["Attention"])
+            # Most cases target ``ai.onnx`` opset 23, but cases exercising the
+            # ``nonpad_kv_seqlen`` input (7th input, added in opset 24) import
+            # opset 24.
+            expected_version = 24 if "nonpad_kv" in case_name else 23
             self.assertEqual(
-                [(opset.domain, opset.version) for opset in tc.model.opset_import], [("", 23)]
+                [(opset.domain, opset.version) for opset in tc.model.opset_import],
+                [("", expected_version)],
             )
 
         # Spot-check a few primary-output shapes per variant.

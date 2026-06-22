@@ -4,6 +4,7 @@
 
 #include "onnx_backend_test/cases/math/include_math_cases.h"
 #include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 #include "onnx_kernels/random.h"
 
@@ -103,8 +104,8 @@ void RegisterDivCases(std::vector<TestCase> &registry) {
   // ``onnx.backend.test.case.node.div.Div`` Python class). All numeric input
   // dtypes accepted by :ref:`kernel::Div` are covered: FLOAT, INT8, INT16,
   // INT32 (the ``test_div_int32_trunc`` fixed-vector case exercising
-  // truncating signed division), UINT8, UINT16, UINT32 and UINT64. The
-  // divisor for the integer variants is shifted by ``+1`` to mirror the
+  // truncating signed division), INT64, UINT8, UINT16, UINT32 and UINT64.
+  // The divisor for the integer variants is shifted by ``+1`` to mirror the
   // upstream ``np.random.randint(24, ...) + 1`` pattern, which guarantees a
   // non-zero divisor.
 
@@ -130,6 +131,9 @@ void RegisterDivCases(std::vector<TestCase> &registry) {
       // exercises truncation toward zero (e.g. ``-3 / 2 == -1``).
       {"test_div_int32_trunc",
        {Tensor::FromInt32("", {4}, {-3, 3, -3, 3}), Tensor::FromInt32("", {4}, {2, 2, -2, -2})}},
+      {"test_div_int64",
+       {Tensor::FromInt64("", {3, 4, 5}, RandnInt<int64_t>({3, 4, 5}, /*seed=*/163)),
+        Tensor::FromInt64("", {3, 4, 5}, RandnIntNonZero<int64_t>({3, 4, 5}, /*seed=*/164))}},
       {"test_div_uint8",
        {Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/65)),
         Tensor::FromUint8("", {3, 4, 5}, RandUintNonZero<uint8_t>(24, {3, 4, 5}, /*seed=*/66))}},
@@ -150,6 +154,57 @@ void RegisterDivCases(std::vector<TestCase> &registry) {
   for (const auto &[name, inputs] : cases) {
     Tensor z = div_kernel(inputs[0], inputs[1]);
     Expect(node, inputs, {z}, name, {opset}, "backend-test", registry);
+  }
+
+  // FLOAT16
+  {
+    NodeProto n16;
+    n16.set_op_type("Div");
+    n16.add_input("x");
+    n16.add_input("y");
+    n16.add_output("z");
+
+    Tensor x = kernel::MakeFloat16Tensor("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+    Tensor y = kernel::MakeFloat16Tensor("", {2, 3}, {2.0f, 4.0f, 5.0f, 10.0f, 2.0f, 3.0f});
+    Tensor z = div_kernel(x, y);
+    Expect(n16, {x, y}, {z}, "test_cc_div_float16", {opset}, "backend-test", registry);
+  }
+
+  // BFLOAT16
+  {
+    NodeProto nbf;
+    nbf.set_op_type("Div");
+    nbf.add_input("x");
+    nbf.add_input("y");
+    nbf.add_output("z");
+
+    std::vector<float> vx = {1.0f, 2.0f, 3.0f, 4.0f};
+    std::vector<float> vy = {0.5f, 1.5f, 2.5f, 3.5f};
+    std::vector<uint8_t> rx(vx.size() * 2), ry(vy.size() * 2);
+    auto *dx = reinterpret_cast<uint16_t *>(rx.data());
+    auto *dy = reinterpret_cast<uint16_t *>(ry.data());
+    for (size_t i = 0; i < vx.size(); ++i) {
+      dx[i] = kernel::FloatToBfloat16Bits(vx[i]);
+      dy[i] = kernel::FloatToBfloat16Bits(vy[i]);
+    }
+    Tensor x("", static_cast<int32_t>(DataType::BFLOAT16), {4}, std::move(rx));
+    Tensor y("", static_cast<int32_t>(DataType::BFLOAT16), {4}, std::move(ry));
+    Tensor z = div_kernel(x, y);
+    Expect(nbf, {x, y}, {z}, "test_cc_div_bfloat16", {opset}, "backend-test", registry);
+  }
+
+  // DOUBLE
+  {
+    NodeProto nd;
+    nd.set_op_type("Div");
+    nd.add_input("x");
+    nd.add_input("y");
+    nd.add_output("z");
+
+    Tensor x = Tensor::FromDouble("", {2, 3}, {10.0, 20.0, 30.0, 40.0, 50.0, 60.0});
+    Tensor y = Tensor::FromDouble("", {2, 3}, {2.0, 4.0, 5.0, 8.0, 10.0, 12.0});
+    Tensor z = div_kernel(x, y);
+    Expect(nd, {x, y}, {z}, "test_cc_div_double", {opset}, "backend-test", registry);
   }
 }
 

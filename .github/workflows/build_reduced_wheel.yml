@@ -1,0 +1,116 @@
+name: Build Reduced Wheels
+
+# Builds the reduced onnx-light wheel (compiled with
+# ONNX_LIGHT_BUILD_KERNELS=OFF, i.e. without the operator-kernel runtime and the
+# backend-test registries) and runs the subset of unit tests that do not depend
+# on the kernels (protos / schemas / optim / manipulations / lib).
+#
+# This is an opt-in, low-frequency job: it runs on a weekly schedule and on
+# manual dispatch only, so it never gates pull requests.
+
+on:
+  schedule:
+    # Every Monday at 06:00 UTC.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_reduced_wheel:
+    name: reduced wheel (ubuntu-latest, py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # The reduced wheel targets modern interpreters only (python >= 3.12).
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install OpenSSL (Linux)
+        run: sudo apt-get install -y libssl-dev
+
+      - name: Detect runner CPU count
+        id: cpu_count
+        shell: bash
+        run: |
+          count=$(python -c 'import os; print(os.cpu_count() or 1)')
+          echo "count=${count}" >> "$GITHUB_OUTPUT"
+
+      - name: Compute cibuildwheel build selector
+        id: selector
+        shell: bash
+        run: |
+          tag="cp$(echo '${{ matrix.python-version }}' | tr -d '.')"
+          echo "build=${tag}-*" >> "$GITHUB_OUTPUT"
+
+      - name: Build reduced wheel
+        uses: pypa/cibuildwheel@v2.23.2
+        env:
+          CIBW_BUILD: ${{ steps.selector.outputs.build }}
+          # Restrict to 64-bit x86 only. The cibuildwheel Linux default ("auto")
+          # also builds an i686 wheel, which lands in ./wheelhouse and then breaks
+          # the "pip install wheelhouse/*.whl" step ("not a supported wheel on this
+          # platform") on the x86_64 runner.
+          CIBW_ARCHS_LINUX: x86_64
+          # See .github/workflows/build.yml for the manylinux_2_28 rationale.
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
+          # ONNX_LIGHT_BUILD_KERNELS=OFF compiles the reduced variant without the
+          # operator-kernel runtime and the backend-test registries.
+          # ONNX_LIGHT_REDUCED=1 adds the "0reduced" wheel build tag (see the
+          # [[tool.scikit-build.overrides]] block in pyproject.toml) so the
+          # reduced wheel file name differs from the full wheel.
+          CIBW_ENVIRONMENT: >
+            CMAKE_ARGS=-DONNX_LIGHT_BUILD_KERNELS=OFF
+            CMAKE_BUILD_PARALLEL_LEVEL=${{ steps.cpu_count.outputs.count }}
+            ONNX_LIGHT_REDUCED=1
+          CIBW_BEFORE_BUILD_LINUX: >
+            yum install -y openssl-devel ||
+            dnf install -y openssl-devel ||
+            apt-get install -y libssl-dev ||
+            true
+
+      - name: Upload reduced wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-reduced-py${{ matrix.python-version }}
+          path: ./wheelhouse/*.whl
+
+      - name: Install the reduced wheel
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install "pytest>=7" pytest-subtests numpy ml-dtypes
+          # cibuildwheel also produces a musllinux wheel that lands in
+          # ./wheelhouse next to the manylinux one. Installing it with a bare
+          # "*.whl" glob fails on the glibc x86_64 runner ("not a supported
+          # wheel on this platform"), so install only the manylinux wheel.
+          pip install wheelhouse/*manylinux*.whl
+          pip freeze
+
+      - name: Verify the installed onnx_light package
+        shell: bash
+        run: |
+          pip show onnx-light
+          python -c "import onnx_light; print('onnx_light', onnx_light.__version__)"
+
+      - name: Run reduced-build unit tests (protos, schemas, optim, manipulations, lib)
+        env:
+          UNITTEST_GOING: "1"
+        run: |
+          pytest --durations=10 \
+            unittests/python/onnx_protos \
+            unittests/python/onnx_op \
+            unittests/python/onnx_optim \
+            unittests/python/onnx_lib \
+            unittests/python/bindings

@@ -19,7 +19,7 @@ std::vector<int64_t> ReadIndicesAsInt64(const Tensor &indices, const std::string
   const int32_t int64_dt = static_cast<int32_t>(DataType::INT64);
   const int32_t int32_dt = static_cast<int32_t>(DataType::INT32);
   EXT_ENFORCE_INVALID(indices.data_type == int64_dt || indices.data_type == int32_dt,
-                      "kernel::" + op_name + ": 'indices' input must be INT32 or INT64.");
+                      "kernel::", op_name, ": 'indices' input must be INT32 or INT64.");
   int64_t n = indices.element_count();
   std::vector<int64_t> out(static_cast<std::size_t>(n));
   if (n == 0) {

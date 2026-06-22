@@ -20,6 +20,12 @@
   void cls::ParseFromString(const std::string &raw, ParseOptions &opts) {                          \
     _ParseFromString(*this, raw, opts);                                                            \
   }                                                                                                \
+  void cls::ParseFromZeroCopyStream(utils::BinaryStream *stream) {                                 \
+    _ParseFromZeroCopyStream(*this, stream);                                                       \
+  }                                                                                                \
+  void cls::ParseFromZeroCopyStream(utils::BinaryStream *stream, ParseOptions &opts) {             \
+    _ParseFromZeroCopyStream(*this, stream, opts);                                                 \
+  }                                                                                                \
   void cls::SerializeToString(std::string &out) const { _SerializeToString(*this, out); }          \
   void cls::SerializeToString(std::string &out, SerializeOptions &opts) const {                    \
     _SerializeToString(*this, out, opts);                                                          \
@@ -206,13 +212,57 @@ template <typename cls> void _ParseFromString(cls &self, const std::string &raw)
 
 template <typename cls>
 void _ParseFromString(cls &self, const std::string &raw, ParseOptions &opts) {
-  const uint8_t *ptr = reinterpret_cast<const uint8_t *>(raw.data());
-  ONNX_LIGHT_NAMESPACE::utils::StringStream st(ptr, raw.size());
+  if (opts.format == SerializeFormat::kOrtFlatbuffers) {
+    // Recursion-OOM guard: validate the depth limit before any parsing begins.
+    // When the flatbuffer reader is fully implemented this limit will be
+    // threaded through the recursive table traversal at each nesting level so
+    // that a maliciously crafted .ort file cannot exhaust the call stack.
+    EXT_ENFORCE(opts.max_recursion_depth > 0,
+                "ParseFromString: ParseOptions::max_recursion_depth must be > 0 "
+                "(got ",
+                opts.max_recursion_depth,
+                "). "
+                "The ORT flatbuffer parser uses this limit to reject models "
+                "nested more deeply than the configured value, preventing stack "
+                "overflow on adversarially deep inputs.");
+    // Tensor-size OOM guard: max_tensor_size_bytes must be >= 0.
+    EXT_ENFORCE(opts.max_tensor_size_bytes >= 0,
+                "ParseFromString: ParseOptions::max_tensor_size_bytes must be >= 0 "
+                "(got ",
+                opts.max_tensor_size_bytes,
+                "). Use 0 to disable the limit or a positive value to cap tensor allocations.");
+    EXT_THROW("ParseFromString: SerializeFormat::kOrtFlatbuffers is not implemented yet. "
+              "Use SerializeFormat::kOnnx for now.");
+  } else {
+    EXT_ENFORCE(opts.format == SerializeFormat::kOnnx,
+                "ParseFromString: unrecognised SerializeFormat value ",
+                static_cast<int>(opts.format), "; only kOnnx is currently supported.");
+    const uint8_t *ptr = reinterpret_cast<const uint8_t *>(raw.data());
+    ONNX_LIGHT_NAMESPACE::utils::StringStream st(ptr, raw.size());
+    if (opts.is_parallel())
+      st.StartThreadPool(opts.num_threads);
+    self.ParseFromStream(st, opts);
+    if (opts.is_parallel())
+      st.WaitForDelayedBlock();
+  }
+}
+
+template <typename cls>
+void _ParseFromZeroCopyStream(cls &self, ONNX_LIGHT_NAMESPACE::utils::BinaryStream *stream) {
+  EXT_ENFORCE(stream != nullptr, "ParseFromZeroCopyStream: stream pointer must not be null.");
+  ParseOptions opts;
+  self.ParseFromStream(*stream, opts);
+}
+
+template <typename cls>
+void _ParseFromZeroCopyStream(cls &self, ONNX_LIGHT_NAMESPACE::utils::BinaryStream *stream,
+                              ParseOptions &opts) {
+  EXT_ENFORCE(stream != nullptr, "ParseFromZeroCopyStream: stream pointer must not be null.");
   if (opts.is_parallel())
-    st.StartThreadPool(opts.num_threads);
-  self.ParseFromStream(st, opts);
+    stream->StartThreadPool(opts.num_threads);
+  self.ParseFromStream(*stream, opts);
   if (opts.is_parallel())
-    st.WaitForDelayedBlock();
+    stream->WaitForDelayedBlock();
 }
 
 template <typename cls> void _SerializeToString(cls &self, std::string &out) {
@@ -222,6 +272,9 @@ template <typename cls> void _SerializeToString(cls &self, std::string &out) {
 
 template <typename cls>
 void _SerializeToString(cls &self, std::string &out, SerializeOptions &opts) {
+  EXT_ENFORCE(opts.format == SerializeFormat::kOnnx,
+              "SerializeToString: SerializeFormat::kOrtFlatbuffers is not implemented yet. "
+              "Use SerializeFormat::kOnnx for now.");
   ONNX_LIGHT_NAMESPACE::utils::StringWriteStream size_buf;
   // Two-pass approach: compute the total serialized size first so we can
   // resize the output string exactly once, then write directly into it via

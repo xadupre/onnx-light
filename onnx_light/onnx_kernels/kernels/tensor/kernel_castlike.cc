@@ -16,9 +16,20 @@ Tensor CastLike::operator()(const Tensor &x, const Tensor &target_type) const {
   return cast_kernel(x, target_type.data_type);
 }
 
+Tensor CastLike::operator()(const Tensor &x, const Tensor &target_type, bool saturate) const {
+  const Cast cast_kernel{ctx_};
+  return cast_kernel(x, target_type.data_type, saturate);
+}
+
 void CastLike::operator()(const Tensor &x, const Tensor &target_type, Tensor &output) const {
   const Cast cast_kernel{ctx_};
   cast_kernel(x, target_type.data_type, output);
+}
+
+void CastLike::operator()(const Tensor &x, const Tensor &target_type, bool saturate,
+                          Tensor &output) const {
+  const Cast cast_kernel{ctx_};
+  cast_kernel(x, target_type.data_type, saturate, output);
 }
 
 } // namespace kernel

@@ -170,9 +170,9 @@ public:
 /// ``C``. The kernel implements the inference formula
 /// ``Y = (X - input_mean) / sqrt(input_var + epsilon) * scale + B``
 /// using NumPy-style broadcasting along the channel axis. Training mode
-/// (``training_mode = 1``, opset 14+) is not supported because the
-/// reference backend test cases registered today exercise only the
-/// inference path.
+/// (``training_mode = 1``, opset 14+) is also supported via
+/// ``TrainingForward``: it normalizes ``X`` with the per-channel batch
+/// statistics and returns the updated running mean / variance.
 class BatchNormalization : public KernelBase {
 public:
   using KernelBase::KernelBase;
@@ -185,6 +185,18 @@ public:
   void operator()(const Tensor &x, const Tensor &scale, const Tensor &bias,
                   const Tensor &input_mean, const Tensor &input_var, Tensor &output,
                   float epsilon = 1e-5f) const;
+
+  /// Returns the training-mode outputs ``(Y, running_mean, running_var)``
+  /// for ``training_mode = 1`` (opset 14+). The per-channel batch ``mean``
+  /// and (population) ``var`` are computed over every axis except the
+  /// channel axis, ``Y`` is normalized with those batch statistics, and the
+  /// running estimates are updated as
+  /// ``running = input * momentum + saved * (1 - momentum)``. ``momentum``
+  /// defaults to 0.9f and ``epsilon`` to 1e-5f, the upstream defaults.
+  std::tuple<Tensor, Tensor, Tensor> TrainingForward(const Tensor &x, const Tensor &scale,
+                                                     const Tensor &bias, const Tensor &input_mean,
+                                                     const Tensor &input_var, float epsilon = 1e-5f,
+                                                     float momentum = 0.9f) const;
 
   /// Output ``Y`` has the same shape as ``X`` so the output buffer may
   /// alias the input ``X`` buffer.
@@ -429,7 +441,9 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
-/// N-D max pooling on a FLOAT tensor laid out as ``(N, C, D1, ..., Dk)``.
+/// N-D max pooling on a numeric tensor laid out as ``(N, C, D1, ..., Dk)``.
+/// Supported element types are ``FLOAT``, ``DOUBLE``, ``INT8`` and ``UINT8``;
+/// the output type matches the input type.
 /// Implements the ONNX ``MaxPool`` operator restricted to ``storage_order=0``
 /// (row-major). ``kernel_shape`` must have ``k`` entries; ``strides``,
 /// ``pads`` and ``dilations`` (lengths ``k``, ``2 * k`` and ``k``
@@ -446,7 +460,8 @@ class MaxPool : public KernelBase {
 public:
   using KernelBase::KernelBase;
 
-  /// Returns the primary output ``Y`` (FLOAT tensor of the pooled values).
+  /// Returns the primary output ``Y`` (tensor of the pooled values; same
+  /// element type as ``x``).
   Tensor operator()(const Tensor &x, const std::vector<int64_t> &kernel_shape,
                     const std::vector<int64_t> &strides = {}, const std::vector<int64_t> &pads = {},
                     bool ceil_mode = false, const std::vector<int64_t> &dilations = {},
@@ -454,7 +469,9 @@ public:
 
   /// Returns ``(Y, Indices)`` where ``Indices`` is an ``int64`` tensor with
   /// the same shape as ``Y`` containing the flat indices into the un-padded
-  /// input ``(N, C, D1, ..., Dk)`` buffer.
+  /// input ``(N, C, D1, ..., Dk)`` buffer. ``storage_order`` selects the
+  /// flattening of the selected spatial coordinate: ``0`` (row major) or
+  /// ``1`` (column major).
   std::pair<Tensor, Tensor>
   WithIndices(const Tensor &x, const std::vector<int64_t> &kernel_shape,
               const std::vector<int64_t> &strides = {}, const std::vector<int64_t> &pads = {},
@@ -537,11 +554,14 @@ public:
 ///
 ///   ``H_t = tanh(X_t @ W^T + W_b + H_{t-1} @ R^T + R_b)``
 ///
-/// for ``layout=0`` only (``X.shape = [seq_length, batch_size,
+/// for ``layout=0``, with ``X.shape = [seq_length, batch_size,
 /// input_size]``; ``W.shape = [1, hidden_size, input_size]``;
 /// ``R.shape = [1, hidden_size, hidden_size]``; optional ``B.shape =
 /// [1, 2 * hidden_size]`` (``[Wb, Rb]``); optional ``initial_h.shape =
-/// [1, batch_size, hidden_size]``, defaulting to zeros). The ``activations``
+/// [1, batch_size, hidden_size]``, defaulting to zeros. ``layout=1``
+/// (batch-major) is also supported: the kernel transposes
+/// ``X``/``initial_h`` on entry and the outputs on exit so the core
+/// time-major loop is unchanged. The ``activations``
 /// attribute, if present, must be either empty or the single value
 /// ``"Tanh"``; ``direction`` must be ``"forward"`` (the default);
 /// ``sequence_lens`` is not supported (every batch must share the same
@@ -557,10 +577,14 @@ public:
 
   /// Returns the pair ``(Y, Y_h)``. ``b`` may be a default-constructed
   /// (empty-shape) ``Tensor`` to indicate the optional ``B`` input is
-  /// missing; same convention for ``initial_h``.
+  /// missing; same convention for ``initial_h``. ``layout`` may be ``0``
+  /// (time-major, the default) or ``1`` (batch-major); for ``layout=1``
+  /// the kernel transposes ``X``/``initial_h`` on entry and the outputs
+  /// on exit so the core time-major loop is unchanged.
   std::pair<Tensor, Tensor> operator()(const Tensor &x, const Tensor &w, const Tensor &r,
                                        const Tensor &b = Tensor{},
-                                       const Tensor &initial_h = Tensor{}) const;
+                                       const Tensor &initial_h = Tensor{},
+                                       int64_t layout = 0) const;
 
   /// Output shape generally differs from the input shape, so storage
   /// cannot in general be shared.
@@ -579,20 +603,25 @@ public:
 ///       (``linear_before_reset != 0``)
 ///   ``H_t = (1 - z_t) (.) h_t + z_t (.) H_{t-1}``
 ///
-/// for ``layout=0`` only (``X.shape = [seq_length, batch_size,
-/// input_size]``; ``W.shape = [1, 3 * hidden_size, input_size]``;
+/// for both ``layout=0`` (``X.shape = [seq_length, batch_size,
+/// input_size]``; optional ``initial_h.shape = [1, batch_size,
+/// hidden_size]``) and ``layout=1`` (``X.shape = [batch_size, seq_length,
+/// input_size]``; optional ``initial_h.shape = [batch_size, 1,
+/// hidden_size]``). ``W.shape = [1, 3 * hidden_size, input_size]``;
 /// ``R.shape = [1, 3 * hidden_size, hidden_size]``; optional ``B.shape =
 /// [1, 6 * hidden_size]`` (``[Wb, Rb]`` each with 3 gate blocks in the
-/// ONNX gate order ``z, r, h``); optional ``initial_h.shape =
-/// [1, batch_size, hidden_size]``, defaulting to zeros). ``sequence_lens``
-/// is not supported (every batch must share the same sequence length);
-/// ``activations``, ``clip`` and non-``forward`` ``direction`` are not
-/// supported.
+/// ONNX gate order ``z, r, h``); ``initial_h`` defaults to zeros.
+/// ``sequence_lens`` is not supported (every batch must share the same
+/// sequence length); ``activations``, ``clip`` and non-``forward``
+/// ``direction`` are not supported.
 ///
-/// The two outputs are produced together: ``Y`` has shape
+/// The two outputs are produced together: for ``layout=0``, ``Y`` has shape
 /// ``[seq_length, 1, batch_size, hidden_size]`` and is the concatenation of
 /// every per-time-step hidden state; ``Y_h`` has shape
-/// ``[1, batch_size, hidden_size]`` and equals the last time step of ``Y``.
+/// ``[1, batch_size, hidden_size]`` and equals the last time step of
+/// ``Y``. For ``layout=1`` the corresponding shapes are
+/// ``[batch_size, seq_length, 1, hidden_size]`` and
+/// ``[batch_size, 1, hidden_size]``.
 class GRU : public KernelBase {
 public:
   using KernelBase::KernelBase;
@@ -601,10 +630,12 @@ public:
   /// (empty-shape) ``Tensor`` to indicate the optional ``B`` input is
   /// missing; same convention for ``initial_h``. ``linear_before_reset``
   /// matches the ONNX attribute of the same name (default ``0``).
+  /// ``layout`` matches the ONNX attribute of the same name (default
+  /// ``0``).
   std::pair<Tensor, Tensor> operator()(const Tensor &x, const Tensor &w, const Tensor &r,
                                        const Tensor &b = Tensor{},
                                        const Tensor &initial_h = Tensor{},
-                                       int64_t linear_before_reset = 0) const;
+                                       int64_t linear_before_reset = 0, int64_t layout = 0) const;
 
   /// Output shape generally differs from the input shape, so storage
   /// cannot in general be shared.
@@ -622,23 +653,31 @@ public:
 ///   ``ot = sigmoid(Xt @ Wo^T + Ht-1 @ Ro^T + Po (.) Ct   + Wbo + Rbo)``
 ///   ``Ht = ot (.) tanh(Ct)``
 ///
-/// for ``layout=0`` only (``X.shape = [seq_length, batch_size,
-/// input_size]``; ``W.shape = [1, 4 * hidden_size, input_size]``;
+/// for ``W.shape = [1, 4 * hidden_size, input_size]``;
 /// ``R.shape = [1, 4 * hidden_size, hidden_size]``; optional ``B.shape =
 /// [1, 8 * hidden_size]`` (``[Wb, Rb]`` each with 4 gate blocks in the
 /// ONNX gate order ``i, o, f, c``); optional ``P.shape =
-/// [1, 3 * hidden_size]`` (peephole weights in gate order ``i, o, f``);
-/// optional ``initial_h.shape = [1, batch_size, hidden_size]`` and
-/// ``initial_c.shape = [1, batch_size, hidden_size]``, both defaulting
-/// to zeros). ``sequence_lens`` is not supported (every batch must share
-/// the same sequence length); ``activations``, ``clip``,
-/// ``input_forget`` and non-``forward`` ``direction`` are not supported.
+/// [1, 3 * hidden_size]`` (peephole weights in gate order ``i, o, f``).
+/// ``sequence_lens`` is not supported (every batch must share the same
+/// sequence length); ``activations``, ``clip``, ``input_forget`` and
+/// non-``forward`` ``direction`` are not supported.
 ///
-/// The two outputs are produced together: ``Y`` has shape
-/// ``[seq_length, 1, batch_size, hidden_size]`` and is the concatenation of
-/// every per-time-step hidden state; ``Y_h`` has shape
-/// ``[1, batch_size, hidden_size]`` and equals the last time step of ``Y``.
-/// The optional third output ``Y_c`` is not produced by this overload.
+/// Both ``layout`` values defined by ONNX are supported:
+///   * ``layout == 0`` (default): ``X.shape = [seq_length, batch_size,
+///     input_size]``; optional ``initial_h.shape = initial_c.shape =
+///     [1, batch_size, hidden_size]``; ``Y.shape = [seq_length, 1,
+///     batch_size, hidden_size]``; ``Y_h.shape = [1, batch_size,
+///     hidden_size]``.
+///   * ``layout == 1``: ``X.shape = [batch_size, seq_length,
+///     input_size]``; optional ``initial_h.shape = initial_c.shape =
+///     [batch_size, 1, hidden_size]``; ``Y.shape = [batch_size,
+///     seq_length, 1, hidden_size]``; ``Y_h.shape = [batch_size, 1,
+///     hidden_size]``.
+///
+/// The two outputs are produced together: ``Y`` is the concatenation of
+/// every per-time-step hidden state and ``Y_h`` equals the last time
+/// step of ``Y``. The optional third output ``Y_c`` is not produced by
+/// this overload.
 class LSTM : public KernelBase {
 public:
   using KernelBase::KernelBase;
@@ -646,11 +685,13 @@ public:
   /// Returns the pair ``(Y, Y_h)``. ``b``, ``initial_h``, ``initial_c``
   /// and ``p`` may each be a default-constructed (empty-shape) ``Tensor``
   /// to indicate that the corresponding optional input is missing.
+  /// ``layout`` selects between the two ONNX layouts (``0`` or ``1``);
+  /// any other value is rejected.
   std::pair<Tensor, Tensor> operator()(const Tensor &x, const Tensor &w, const Tensor &r,
                                        const Tensor &b = Tensor{},
                                        const Tensor &initial_h = Tensor{},
                                        const Tensor &initial_c = Tensor{},
-                                       const Tensor &p = Tensor{}) const;
+                                       const Tensor &p = Tensor{}, int64_t layout = 0) const;
 
   /// Output shape generally differs from the input shape, so storage
   /// cannot in general be shared.
@@ -695,9 +736,12 @@ public:
 ///   * Optional ``past_key``/``past_value`` rank-4 FLOAT inputs that are
 ///     concatenated along the sequence axis with ``K``/``V`` to form the
 ///     ``present_key``/``present_value`` outputs.
+///   * Optional ``nonpad_kv_seqlen`` INT64 input (v24): a 1-D tensor of
+///     length ``batch_size`` giving the number of non-padding key/value
+///     positions per batch. Positions ``j >= nonpad_kv_seqlen[b]`` are
+///     masked out with ``-inf``.
 ///
-/// Not modeled: the v24 ``nonpad_kv_seqlen`` input and the
-/// ``softmax_precision`` attribute.
+/// Not modeled: the ``softmax_precision`` attribute.
 class Attention : public KernelBase {
 public:
   using KernelBase::KernelBase;
@@ -754,10 +798,13 @@ public:
                   const Tensor *attn_mask, Tensor &output) const;
 
   /// Comprehensive overload covering every supported feature. ``attn_mask``,
-  /// ``past_key`` and ``past_value`` may be ``nullptr`` to mean "absent".
+  /// ``past_key``, ``past_value`` and ``nonpad_kv_seqlen`` may be ``nullptr``
+  /// to mean "absent". ``nonpad_kv_seqlen`` is a 1-D INT64 tensor of length
+  /// ``batch_size`` masking out trailing (padding) key/value positions.
   Result operator()(const Tensor &Q, const Tensor &K, const Tensor &V, const Attributes &attrs,
                     const Tensor *attn_mask = nullptr, const Tensor *past_key = nullptr,
-                    const Tensor *past_value = nullptr) const;
+                    const Tensor *past_value = nullptr,
+                    const Tensor *nonpad_kv_seqlen = nullptr) const;
 
   /// Attention computes a fresh output buffer from independent reads of
   /// Q, K, V and never aliases an input buffer.
@@ -1060,7 +1107,7 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
-/// Reference ``LinearAttention`` kernel restricted to FLOAT tensors.
+/// Reference ``LinearAttention`` kernel for FLOAT, FLOAT16 and BFLOAT16 tensors.
 ///
 /// Implements the unified linear attention recurrence defined by the upstream
 /// ``ai.onnx::LinearAttention`` operator (since opset 27). Supports four
@@ -1068,7 +1115,8 @@ public:
 /// ``"gated_delta"``. Inputs use 3D packed format ``(B, T, H*D)``; the
 /// recurrent state is 4D ``(B, H_kv, d_k, d_v)``. Group-query attention
 /// (GQA) is supported when ``q_num_heads`` is a positive multiple of
-/// ``kv_num_heads``.
+/// ``kv_num_heads``. Half-precision (FLOAT16/BFLOAT16) activations are
+/// promoted to FLOAT32 for the recurrence and the outputs are demoted back.
 class LinearAttention : public KernelBase {
 public:
   /// Attributes carried by the ONNX ``LinearAttention`` operator.

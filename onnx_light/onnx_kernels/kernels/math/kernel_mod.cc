@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_kernels/kernels/elementwise_helpers.h"
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
 #include <cmath>
@@ -92,75 +93,11 @@ void ModInPlaceFloat(const char *dtype_name, int32_t dtype, const Tensor &x, con
                                   [](T a, T b) -> T { return FloatFmod<T>(a, b); });
 }
 
-// IEEE-754 binary16 helpers for the FLOAT16 dispatch path. Mirrors the
-// helpers used by ``cases_attention`` / ``cases_dequantizelinear``;
-// duplicated here to keep the kernel self-contained and avoid depending
-// on the case files. ``np.fmod`` on float16 inputs yields the same bit
-// pattern as round-tripping through float32 fmod, so this conversion
+// IEEE-754 binary16 helpers for the FLOAT16 dispatch path are provided by
+// ``onnx_kernels/kernels/_helpers/cast_helper.h`` (``FloatToFloat16Bits`` /
+// ``Float16BitsToFloat``). ``np.fmod`` on float16 inputs yields the same
+// bit pattern as round-tripping through float32 fmod, so this conversion
 // path matches the upstream ``test_mod_mixed_sign_float16`` reference.
-uint16_t FloatToFloat16Bits(float f) {
-  uint32_t u;
-  std::memcpy(&u, &f, sizeof(u));
-  const uint32_t sign = (u >> 16) & 0x8000u;
-  const int32_t e32 = static_cast<int32_t>((u >> 23) & 0xffu);
-  const uint32_t m32 = u & 0x007fffffu;
-  if (e32 == 0xff) {
-    // Inf / NaN: preserve sign; collapse the mantissa to a quiet-NaN
-    // marker when it was non-zero.
-    return static_cast<uint16_t>(sign | 0x7c00u | (m32 != 0 ? 0x0200u : 0u));
-  }
-  const int32_t e = e32 - 127 + 15;
-  if (e >= 31) {
-    return static_cast<uint16_t>(sign | 0x7c00u); // overflow -> +/-inf
-  }
-  if (e <= 0) {
-    if (e < -10) {
-      return static_cast<uint16_t>(sign); // too small -> +/-0
-    }
-    const uint32_t m = (m32 | 0x00800000u) >> static_cast<uint32_t>(1 - e);
-    const uint32_t round_bit = (m >> 12) & 1u;
-    const uint32_t sticky = m & 0x00000fffu;
-    uint16_t h = static_cast<uint16_t>(sign | (m >> 13));
-    if (round_bit && (sticky != 0 || (h & 1))) {
-      h = static_cast<uint16_t>(h + 1);
-    }
-    return h;
-  }
-  const uint32_t low = m32 & 0x1fffu;
-  uint16_t h = static_cast<uint16_t>(sign | (static_cast<uint32_t>(e) << 10) | (m32 >> 13));
-  if (low > 0x1000u || (low == 0x1000u && (h & 1u))) {
-    h = static_cast<uint16_t>(h + 1); // mantissa carry naturally bumps exponent
-  }
-  return h;
-}
-
-float Float16BitsToFloat(uint16_t h) {
-  const uint32_t sign = (static_cast<uint32_t>(h) >> 15) & 0x1u;
-  const uint32_t exp = (static_cast<uint32_t>(h) >> 10) & 0x1fu;
-  const uint32_t mant = static_cast<uint32_t>(h) & 0x3ffu;
-  uint32_t f;
-  if (exp == 0) {
-    if (mant == 0) {
-      f = sign << 31;
-    } else {
-      uint32_t m = mant;
-      int32_t e = -1;
-      while ((m & 0x400u) == 0) {
-        m <<= 1;
-        --e;
-      }
-      m &= 0x3ffu;
-      f = (sign << 31) | (static_cast<uint32_t>(e + 127 + 1) << 23) | (m << 13);
-    }
-  } else if (exp == 0x1fu) {
-    f = (sign << 31) | 0x7f800000u | (mant << 13);
-  } else {
-    f = (sign << 31) | (static_cast<uint32_t>(exp - 15 + 127) << 23) | (mant << 13);
-  }
-  float fv;
-  std::memcpy(&fv, &f, sizeof(float));
-  return fv;
-}
 
 Tensor ModAllocFloat16(const Tensor &x, const Tensor &y) {
   return detail::BinaryElementwiseAlloc<uint16_t, uint16_t>(
@@ -176,9 +113,24 @@ void ModInPlaceFloat16(const Tensor &x, const Tensor &y, Tensor &output) {
       });
 }
 
+Tensor ModAllocBfloat16(const Tensor &x, const Tensor &y) {
+  return detail::BinaryElementwiseAlloc<uint16_t, uint16_t>(
+      kModName, "BFLOAT16", DataType::BFLOAT16, x, y, [](uint16_t a, uint16_t b) -> uint16_t {
+        return FloatToBfloat16Bits(std::fmod(Bfloat16BitsToFloat(a), Bfloat16BitsToFloat(b)));
+      });
+}
+
+void ModInPlaceBfloat16(const Tensor &x, const Tensor &y, Tensor &output) {
+  detail::BinaryElementwise<uint16_t, uint16_t>(
+      kModName, "BFLOAT16", DataType::BFLOAT16, x, y, output,
+      [](uint16_t a, uint16_t b) -> uint16_t {
+        return FloatToBfloat16Bits(std::fmod(Bfloat16BitsToFloat(a), Bfloat16BitsToFloat(b)));
+      });
+}
+
 constexpr const char *kSupportedModTypesMsg =
-    " only supports FLOAT16, FLOAT, DOUBLE, INT8, INT16, INT32, INT64, UINT8, UINT16, UINT32 and "
-    "UINT64 inputs.";
+    " only supports FLOAT16, BFLOAT16, FLOAT, DOUBLE, INT8, INT16, INT32, INT64, UINT8, UINT16, "
+    "UINT32 and UINT64 inputs.";
 
 constexpr const char *kFmodRequiredForFloatMsg =
     " requires attribute ``fmod`` set to 1 for floating-point inputs.";
@@ -187,19 +139,20 @@ constexpr const char *kFmodRequiredForFloatMsg =
 Tensor Mod::operator()(const Tensor &x, const Tensor &y, int64_t fmod) const {
   switch (x.data_type) {
   case DataType::FLOAT16:
-    if (fmod != 1) {
-      throw std::invalid_argument(std::string(kModName) + kFmodRequiredForFloatMsg);
-    }
+    EXT_ENFORCE_INVALID(fmod == 1, kModName, ": unsupported data type ", x.data_type,
+                        kFmodRequiredForFloatMsg);
     return ModAllocFloat16(x, y);
+  case DataType::BFLOAT16:
+    EXT_ENFORCE_INVALID(fmod == 1, kModName, ": unsupported data type ", x.data_type,
+                        kFmodRequiredForFloatMsg);
+    return ModAllocBfloat16(x, y);
   case DataType::FLOAT:
-    if (fmod != 1) {
-      throw std::invalid_argument(std::string(kModName) + kFmodRequiredForFloatMsg);
-    }
+    EXT_ENFORCE_INVALID(fmod == 1, kModName, ": unsupported data type ", x.data_type,
+                        kFmodRequiredForFloatMsg);
     return ModAllocFloat<float>("FLOAT", DataType::FLOAT, x, y);
   case DataType::DOUBLE:
-    if (fmod != 1) {
-      throw std::invalid_argument(std::string(kModName) + kFmodRequiredForFloatMsg);
-    }
+    EXT_ENFORCE_INVALID(fmod == 1, kModName, ": unsupported data type ", x.data_type,
+                        kFmodRequiredForFloatMsg);
     return ModAllocFloat<double>("DOUBLE", DataType::DOUBLE, x, y);
   case DataType::INT8:
     return ModAllocInt<int8_t>("INT8", DataType::INT8, x, y, fmod);
@@ -218,26 +171,27 @@ Tensor Mod::operator()(const Tensor &x, const Tensor &y, int64_t fmod) const {
   case DataType::UINT64:
     return ModAllocInt<uint64_t>("UINT64", DataType::UINT64, x, y, fmod);
   default:
-    throw std::invalid_argument(std::string(kModName) + kSupportedModTypesMsg);
+    EXT_THROW_INVALID(kModName, ": unsupported data type ", x.data_type, kSupportedModTypesMsg);
   }
 }
 
 void Mod::operator()(const Tensor &x, const Tensor &y, int64_t fmod, Tensor &output) const {
   switch (x.data_type) {
   case DataType::FLOAT16:
-    if (fmod != 1) {
-      throw std::invalid_argument(std::string(kModName) + kFmodRequiredForFloatMsg);
-    }
+    EXT_ENFORCE_INVALID(fmod == 1, kModName, ": unsupported data type ", x.data_type,
+                        kFmodRequiredForFloatMsg);
     return ModInPlaceFloat16(x, y, output);
+  case DataType::BFLOAT16:
+    EXT_ENFORCE_INVALID(fmod == 1, kModName, ": unsupported data type ", x.data_type,
+                        kFmodRequiredForFloatMsg);
+    return ModInPlaceBfloat16(x, y, output);
   case DataType::FLOAT:
-    if (fmod != 1) {
-      throw std::invalid_argument(std::string(kModName) + kFmodRequiredForFloatMsg);
-    }
+    EXT_ENFORCE_INVALID(fmod == 1, kModName, ": unsupported data type ", x.data_type,
+                        kFmodRequiredForFloatMsg);
     return ModInPlaceFloat<float>("FLOAT", DataType::FLOAT, x, y, output);
   case DataType::DOUBLE:
-    if (fmod != 1) {
-      throw std::invalid_argument(std::string(kModName) + kFmodRequiredForFloatMsg);
-    }
+    EXT_ENFORCE_INVALID(fmod == 1, kModName, ": unsupported data type ", x.data_type,
+                        kFmodRequiredForFloatMsg);
     return ModInPlaceFloat<double>("DOUBLE", DataType::DOUBLE, x, y, output);
   case DataType::INT8:
     return ModInPlaceInt<int8_t>("INT8", DataType::INT8, x, y, fmod, output);
@@ -256,7 +210,7 @@ void Mod::operator()(const Tensor &x, const Tensor &y, int64_t fmod, Tensor &out
   case DataType::UINT64:
     return ModInPlaceInt<uint64_t>("UINT64", DataType::UINT64, x, y, fmod, output);
   default:
-    throw std::invalid_argument(std::string(kModName) + kSupportedModTypesMsg);
+    EXT_THROW_INVALID(kModName, ": unsupported data type ", x.data_type, kSupportedModTypesMsg);
   }
 }
 

@@ -1,0 +1,95 @@
+name: INT ir-py - mbext
+
+# Manually-triggered integration job: validates that onnx-light can be used as a
+# drop-in replacement for onnx (via the USE_ONNX_LIGHT=1 compatibility shim) when
+# running the test suites of two external projects:
+#   * ir-py     (https://github.com/onnx/ir-py, branch xadupre/ol)
+#   * mbext     (https://github.com/xadupre/mbext)
+#
+# It is opt-in (workflow_dispatch only), so it never gates pull requests.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ir_py_mbext:
+    name: ir-py + mbext (ubuntu-latest, py3.13)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      # Route ir-py / mbext onnx imports through onnx_light instead of onnx.
+      USE_ONNX_LIGHT: "1"
+    steps:
+      - name: Checkout onnx-light
+        uses: actions/checkout@v4
+        with:
+          path: onnx-light
+
+      - name: Checkout ir-py (branch xadupre/ol)
+        uses: actions/checkout@v4
+        with:
+          repository: onnx/ir-py
+          ref: xadupre/ol
+          path: ir-py
+          lfs: true
+
+      - name: Checkout mbext
+        uses: actions/checkout@v4
+        with:
+          repository: xadupre/mbext
+          path: mbext
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install OpenSSL (Linux)
+        run: sudo apt-get install -y libssl-dev
+
+      - name: Set parallel build level
+        shell: bash
+        run: |
+          CMAKE_BUILD_PARALLEL_LEVEL=$(python -c 'import os; print(os.cpu_count() or 1)')
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}"
+
+      - name: Build and install onnx-light
+        working-directory: onnx-light
+        run: pip install -C build-dir=build -e .[dev] -v
+
+      - name: Install ir-py (without pulling in onnx)
+        working-directory: ir-py
+        run: |
+          # Install ir-py runtime dependencies except onnx; the USE_ONNX_LIGHT
+          # shim makes ir-py import onnx_light.onnx instead of onnx.
+          pip install numpy "typing_extensions>=4.10" "ml_dtypes>=0.5.0" "sympy>=1.13"
+          # Test-only dependencies (mirrors noxfile.py COMMON_TEST_DEPENDENCIES).
+          pip install expecttest hypothesis packaging parameterized \
+            pytest-subtests "pytest>7.1.0" pyyaml onnxruntime safetensors
+          # Install ir-py itself without dependencies so onnx is not installed.
+          pip install -e . --no-deps
+
+      - name: Install mbext
+        working-directory: mbext
+        run: pip install -e .[dev]
+
+      - name: uninstall onnx
+        run: pip uninstall -y onnx
+
+      - name: pip freeze
+        run: pip freeze
+
+      - name: Run ir-py unit tests
+        working-directory: ir-py
+        run: pytest --durations=10 src tests
+
+      - name: Run mbext fast tests
+        working-directory: mbext
+        run: pytest --durations=10 tests/fast

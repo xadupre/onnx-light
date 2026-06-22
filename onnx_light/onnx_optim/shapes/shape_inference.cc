@@ -39,8 +39,8 @@ void CheckOnnxDomain(const NodeProto &node) {
                           node.domain() == traditionalml::kOnnxMlDomain ||
                           node.domain() == preview::kOnnxPreviewDomain ||
                           node.domain() == training::kOnnxPreviewTrainingDomain,
-                      "ComputeShapeNode: unsupported domain '" + node.domain().as_string() +
-                          "' for op '" + node.op_type().as_string() + "'.");
+                      "ComputeShapeNode: unsupported domain '", node.domain().as_string(),
+                      "' for op '", node.op_type().as_string(), "'.");
 }
 
 // Returns the ``"<domain>:<name>"`` identifier used as a key in
@@ -136,9 +136,87 @@ std::string NormaliseDispatchDomain(const NodeProto &node) {
 
 using AnchorMap = std::unordered_map<std::string, OptimTensor>;
 
+// Records ``a == b`` (a constraint between two symbolic expressions) and,
+// when their algebraic difference reduces to ``c*x - c*y`` (a coefficient
+// map with exactly two non-zero entries of equal magnitude and opposite
+// signs), also records the implied leaf-level equality ``x == y``. This
+// lets output anchors like ``Y: [2*dnz]`` propagate down to intermediate
+// tensors whose inferred shape uses a scaled symbol such as
+// ``[2*NonZero_nz_nnz]`` — without the derived ``dnz == NonZero_nz_nnz``
+// constraint, the canonicalisation pass would only rename the compound
+// expression and leave the leaf occurrence of ``NonZero_nz_nnz``
+// untouched.
+void AddSymbolicConstraintWithLeafDerivation(ShapesContext &ctx, const std::string &a,
+                                             const std::string &b) {
+  ctx.AddConstraint(a, b);
+  if (a == b) {
+    return;
+  }
+  std::map<std::string, int64_t> diff;
+  try {
+    diff = expressions::simplify_two_expressions(a, b);
+  } catch (const std::runtime_error &) {
+    return;
+  }
+  if (diff.size() != 2) {
+    return;
+  }
+  auto it = diff.begin();
+  const std::string &name1 = it->first;
+  const int64_t coeff1 = it->second;
+  ++it;
+  const std::string &name2 = it->first;
+  const int64_t coeff2 = it->second;
+  if (coeff1 + coeff2 != 0) {
+    return;
+  }
+  if (name1.empty() || name2.empty() || name1 == name2) {
+    return;
+  }
+  ctx.AddConstraint(name1, name2);
+}
+
+// Returns ``true`` when ``vi`` carries a tensor type with a non-empty
+// ``shape`` field. ValueInfo entries that only declare an element type
+// (no shape annotation at all) produce a rank-0 ``OptimTensor`` which
+// would conflict with every non-scalar inferred shape, so they must be
+// skipped when building the anchor set.
+bool ValueInfoHasTensorShape(const ValueInfoProto &vi) {
+  if (!vi.has_type() || !vi.type().has_tensor_type()) {
+    return false;
+  }
+  return vi.type().tensor_type().has_shape();
+}
+
+bool SeedInputValueInfo(const ValueInfoProto &vi, ShapesContext &ctx) {
+  const std::string name = vi.name().as_string();
+  if (name.empty() || ctx.Has(name) || ctx.HasSequence(name)) {
+    return false;
+  }
+  OptimTensor tensor;
+  if (OptimTensorFromValueInfo(vi, tensor)) {
+    ctx.Set(name, std::move(tensor));
+    return true;
+  }
+  if (!vi.has_type() || !vi.type().has_map_type()) {
+    return false;
+  }
+  const TypeProto &value_type = vi.type().map_type().value_type();
+  if (!value_type.has_tensor_type()) {
+    return false;
+  }
+  const TensorType dtype = DataTypeToTensorType(value_type.tensor_type().elem_type());
+  // Map-typed inputs are tracked as placeholder tensors so generic input
+  // availability checks succeed and traditional-ML shape functions can still
+  // inspect the map value dtype when needed. The rank stays unknown because the
+  // map cardinality is a runtime property, not a static tensor shape.
+  ctx.Set(name, OptimTensor(nullptr, dtype, OptimShape{}));
+  return true;
+}
+
 void AddValueInfoAsAnchor(const ValueInfoProto &vi, AnchorMap &anchors) {
   const std::string name = vi.name().as_string();
-  if (name.empty()) {
+  if (name.empty() || !ValueInfoHasTensorShape(vi)) {
     return;
   }
   OptimTensor tensor;
@@ -148,13 +226,23 @@ void AddValueInfoAsAnchor(const ValueInfoProto &vi, AnchorMap &anchors) {
   anchors.try_emplace(name, std::move(tensor));
 }
 
-AnchorMap CollectGraphAnchors(const GraphProto &graph) {
+// Collects anchors from ``graph.output`` only. Used for the
+// "always-anchor outputs" pass that runs unconditionally so that user-
+// declared output shape expressions (e.g. ``Y: [2*dnz]``) propagate
+// into intermediate tensors via ``PropagateAnchorConstraintsIntoContext``
+// regardless of whether ``prefill_with_value_info_output`` was set.
+AnchorMap CollectGraphOutputAnchors(const GraphProto &graph) {
   AnchorMap anchors;
-  // Outputs are considered more authoritative than value_info for the
-  // same name (first insert wins).
   for (int i = 0; i < graph.output_size(); ++i) {
     AddValueInfoAsAnchor(graph.output(i), anchors);
   }
+  return anchors;
+}
+
+AnchorMap CollectGraphAnchors(const GraphProto &graph) {
+  AnchorMap anchors = CollectGraphOutputAnchors(graph);
+  // Outputs are considered more authoritative than value_info for the
+  // same name (first insert wins).
   for (int i = 0; i < graph.value_info_size(); ++i) {
     AddValueInfoAsAnchor(graph.value_info(i), anchors);
   }
@@ -184,32 +272,55 @@ AnchorMap CollectGraphAnchors(const GraphProto &graph) {
 //   - min/max bounds: a known bound is kept; when both are known the
 //     tighter bound wins (higher min, lower max). Provably disjoint
 //     intervals are a conflict.
-OptimTensor MergeWithAnchor(ShapesContext &ctx, const std::string &name,
-                            const OptimTensor &inferred, const OptimTensor &anchor) {
+// Returns std::nullopt when a conflict is detected
+// (incompatible dtype/rank/dim/device/bounds). When ``error_out`` is
+// non-null, a human-readable description of the conflict is written
+// to it. Callers that require strict merging can promote the failure
+// into an exception themselves; this function never throws on
+// conflicts.
+std::optional<OptimTensor> MergeWithAnchor(ShapesContext &ctx, const std::string &name,
+                                           const OptimTensor &inferred, const OptimTensor &anchor,
+                                           std::string *error_out = nullptr) {
   // dtype: both known and different → conflict.
   if (inferred.Dtype() != TensorType::kUndefined && anchor.Dtype() != TensorType::kUndefined &&
       inferred.Dtype() != anchor.Dtype()) {
-    EXT_ENFORCE_INVALID(
-        false, "MergeWithAnchor: incompatible element type for '" + name +
+    if (error_out != nullptr) {
+      *error_out = "MergeWithAnchor: incompatible element type for '" + name +
                    "': inferred has dtype " + std::to_string(static_cast<int>(inferred.Dtype())) +
-                   ", anchor has dtype " + std::to_string(static_cast<int>(anchor.Dtype())) + ".");
+                   ", anchor has dtype " + std::to_string(static_cast<int>(anchor.Dtype())) + ".";
+    }
+    return std::nullopt;
   }
   // Rank check.
-  EXT_ENFORCE_INVALID(inferred.Shape().Rank() == anchor.Shape().Rank(),
-                      "MergeWithAnchor: incompatible rank for '" + name + "': inferred has rank " +
-                          std::to_string(inferred.Shape().Rank()) + ", anchor has rank " +
-                          std::to_string(anchor.Shape().Rank()) + ".");
+  if (inferred.Shape().Rank() != anchor.Shape().Rank()) {
+    if (error_out != nullptr) {
+      *error_out = "MergeWithAnchor: incompatible rank for '" + name + "': inferred has rank " +
+                   std::to_string(inferred.Shape().Rank()) + ", anchor has rank " +
+                   std::to_string(anchor.Shape().Rank()) + ".";
+    }
+    return std::nullopt;
+  }
   // Per-dim merge.
   OptimShape merged_shape;
   for (std::size_t i = 0; i < inferred.Shape().Rank(); ++i) {
     const OptimDim &di = inferred.Shape()[i];
     const OptimDim &da = anchor.Shape()[i];
+    // An empty-string symbolic anchor dim means the ValueInfoProto did
+    // not declare a name nor a value for this position, so it carries
+    // no constraint: keep the inferred dim.
+    if (da.IsExpr() && da.AsExpr().empty()) {
+      merged_shape.PushBack(di);
+      continue;
+    }
     if (di == da) {
       merged_shape.PushBack(di);
     } else if (di.IsInt() && da.IsInt()) {
-      EXT_ENFORCE_INVALID(false, "MergeWithAnchor: incompatible dim " + std::to_string(i) +
-                                     " for '" + name + "': inferred=" + std::to_string(di.AsInt()) +
-                                     ", anchor=" + std::to_string(da.AsInt()) + ".");
+      if (error_out != nullptr) {
+        *error_out = "MergeWithAnchor: incompatible dim " + std::to_string(i) + " for '" + name +
+                     "': inferred=" + std::to_string(di.AsInt()) +
+                     ", anchor=" + std::to_string(da.AsInt()) + ".";
+      }
+      return std::nullopt;
     } else if (di.IsInt()) {
       // anchor is symbolic, inferred is concrete: keep the concrete one
       // but still record the anchor symbol equals the concrete value.
@@ -223,7 +334,7 @@ OptimTensor MergeWithAnchor(ShapesContext &ctx, const std::string &name,
     } else {
       // Both symbolic and different: record the equality and privilege
       // the anchor's symbol.
-      ctx.AddConstraint(di.AsExpr(), da.AsExpr());
+      AddSymbolicConstraintWithLeafDerivation(ctx, di.AsExpr(), da.AsExpr());
       merged_shape.PushBack(da);
     }
   }
@@ -238,9 +349,12 @@ OptimTensor MergeWithAnchor(ShapesContext &ctx, const std::string &name,
   OptimTensor out(inferred.Data(), merged_dtype, std::move(merged_shape));
   Device merged_device = inferred.GetDevice();
   if (anchor.GetDevice() != Device::kUndefined) {
-    EXT_ENFORCE_INVALID(inferred.GetDevice() == Device::kUndefined ||
-                            inferred.GetDevice() == anchor.GetDevice(),
-                        "MergeWithAnchor: incompatible device for '" + name + "'.");
+    if (inferred.GetDevice() != Device::kUndefined && inferred.GetDevice() != anchor.GetDevice()) {
+      if (error_out != nullptr) {
+        *error_out = "MergeWithAnchor: incompatible device for '" + name + "'.";
+      }
+      return std::nullopt;
+    }
     merged_device = anchor.GetDevice();
   }
   if (merged_device != Device::kUndefined) {
@@ -250,17 +364,27 @@ OptimTensor MergeWithAnchor(ShapesContext &ctx, const std::string &name,
   if (inferred.HasValueAsShape() && anchor.HasValueAsShape()) {
     const OptimShape &a = inferred.ValueAsShape();
     const OptimShape &b = anchor.ValueAsShape();
-    EXT_ENFORCE_INVALID(a.Rank() == b.Rank(),
-                        "MergeWithAnchor: incompatible value_as_shape rank for '" + name + "'.");
+    if (a.Rank() != b.Rank()) {
+      if (error_out != nullptr) {
+        *error_out = "MergeWithAnchor: incompatible value_as_shape rank for '" + name + "'.";
+      }
+      return std::nullopt;
+    }
     OptimShape merged_vas;
     for (std::size_t i = 0; i < a.Rank(); ++i) {
       const OptimDim &di = a[i];
       const OptimDim &da = b[i];
+      if (da.IsExpr() && da.AsExpr().empty()) {
+        merged_vas.PushBack(di);
+        continue;
+      }
       if (di == da) {
         merged_vas.PushBack(di);
       } else if (di.IsInt() && da.IsInt()) {
-        EXT_ENFORCE_INVALID(false,
-                            "MergeWithAnchor: incompatible value_as_shape dim for '" + name + "'.");
+        if (error_out != nullptr) {
+          *error_out = "MergeWithAnchor: incompatible value_as_shape dim for '" + name + "'.";
+        }
+        return std::nullopt;
       } else if (di.IsInt()) {
         ctx.AddConstraint(da.AsExpr(), std::to_string(di.AsInt()));
         merged_vas.PushBack(di);
@@ -296,8 +420,12 @@ OptimTensor MergeWithAnchor(ShapesContext &ctx, const std::string &name,
     merged_max = anchor.Max();
   }
   if (merged_min.has_value() && merged_max.has_value()) {
-    EXT_ENFORCE_INVALID(*merged_min <= *merged_max,
-                        "MergeWithAnchor: incompatible min/max bounds for '" + name + "'.");
+    if (*merged_min > *merged_max) {
+      if (error_out != nullptr) {
+        *error_out = "MergeWithAnchor: incompatible min/max bounds for '" + name + "'.";
+      }
+      return std::nullopt;
+    }
     out.SetMinMax(*merged_min, *merged_max);
   } else {
     if (merged_min.has_value()) {
@@ -310,7 +438,7 @@ OptimTensor MergeWithAnchor(ShapesContext &ctx, const std::string &name,
   return out;
 }
 
-void MergeAnchorsIntoContext(ShapesContext &ctx, const AnchorMap &anchors) {
+void MergeAnchorsIntoContext(ShapesContext &ctx, const AnchorMap &anchors, bool strict = true) {
   for (const auto &kv : anchors) {
     const std::string &name = kv.first;
     const OptimTensor &anchor = kv.second;
@@ -318,10 +446,24 @@ void MergeAnchorsIntoContext(ShapesContext &ctx, const AnchorMap &anchors) {
       ctx.Set(name, OptimTensor(anchor));
       continue;
     }
-    OptimTensor merged = MergeWithAnchor(ctx, name, ctx.Get(name), anchor);
-    if (merged != ctx.Get(name)) {
-      ctx.Set(name, std::move(merged));
+    std::string error;
+    std::optional<OptimTensor> merged = MergeWithAnchor(ctx, name, ctx.Get(name), anchor, &error);
+    if (merged.has_value()) {
+      if (*merged != ctx.Get(name)) {
+        ctx.Set(name, std::move(*merged));
+      }
+      continue;
     }
+    // Conflict between the inferred shape and the anchor.
+    if (strict) {
+      EXT_ENFORCE_INVALID(false, error);
+    }
+    // Lenient mode: the inferred shape may legitimately disagree
+    // with the anchor (e.g. ``Resize`` has historically reported a
+    // smaller output shape than the model declares). Skip the
+    // anchor on conflict instead of aborting the whole pipeline so
+    // that the well-formed anchors still drive constraint
+    // propagation downstream.
   }
 }
 
@@ -338,6 +480,9 @@ void AddDimAnchorSymbols(const OptimDim &dim, std::unordered_set<std::string> &s
     return;
   }
   const std::string &expr = dim.AsExpr();
+  if (expr.empty()) {
+    return;
+  }
   symbols.insert(expr);
   const std::unordered_set<std::string> tokens = expressions::parse_expression_tokens(expr);
   for (const std::string &token : tokens) {
@@ -363,6 +508,67 @@ std::unordered_set<std::string> CollectAnchorSymbols(const AnchorMap &anchors) {
   return symbols;
 }
 
+// Collects the symbolic dim names attached to a value info entry (and
+// the leaf tokens of any compound expressions) into ``symbols``.
+void AddValueInfoSymbols(const ValueInfoProto &vi, std::unordered_set<std::string> &symbols) {
+  if (!vi.has_type() || !vi.type().has_tensor_type()) {
+    return;
+  }
+  const auto &shape = vi.type().tensor_type().shape();
+  for (int j = 0; j < shape.dim_size(); ++j) {
+    const auto &dim = shape.dim(j);
+    if (!dim.has_dim_param()) {
+      continue;
+    }
+    const std::string param = dim.dim_param().as_string();
+    if (param.empty()) {
+      continue;
+    }
+    symbols.insert(param);
+    const std::unordered_set<std::string> tokens = expressions::parse_expression_tokens(param);
+    for (const std::string &token : tokens) {
+      if (!token.empty()) {
+        symbols.insert(token);
+      }
+    }
+  }
+}
+
+// Collects the symbolic dim names attached to graph inputs, graph outputs,
+// and existing value_info entries (along with the leaf tokens of any
+// compound expressions). These names are user-provided and must not be
+// renamed by anchor-driven propagation: if an output anchor declares ``Y``
+// as ``[ANCHOR, 4]`` while ``X`` is declared as ``[N, 4]`` and
+// ``Y = Relu(X)``, the merge records the equality ``N == ANCHOR`` but the
+// renaming pass should keep ``X`` as ``[N, 4]`` (and ``Y`` as
+// ``[ANCHOR, 4]``) instead of forcing one symbol to become the other.
+void AddGraphDeclaredSymbols(const GraphProto &graph, std::unordered_set<std::string> &symbols) {
+  for (int i = 0; i < graph.input_size(); ++i) {
+    AddValueInfoSymbols(graph.input(i), symbols);
+  }
+  for (int i = 0; i < graph.output_size(); ++i) {
+    AddValueInfoSymbols(graph.output(i), symbols);
+  }
+  for (int i = 0; i < graph.value_info_size(); ++i) {
+    AddValueInfoSymbols(graph.value_info(i), symbols);
+  }
+}
+
+// Collects the symbolic dim names attached to graph inputs only (along with
+// the leaf tokens of any compound expressions). Graph-input symbols are
+// first-class, externally provided dimensions: when an internally computed
+// compound expression (e.g. ``past_seq+seq``) is proven equal to such a
+// symbol (e.g. ``total_seq``, the length of an ``attention_mask`` input),
+// the input symbol is the authoritative name and the expression should
+// collapse to it. Output-only symbols do not qualify, so a meaningful
+// expression like ``b+c`` is preserved rather than rewritten to an opaque
+// sibling output anchor.
+void AddGraphInputSymbols(const GraphProto &graph, std::unordered_set<std::string> &symbols) {
+  for (int i = 0; i < graph.input_size(); ++i) {
+    AddValueInfoSymbols(graph.input(i), symbols);
+  }
+}
+
 OptimShape
 RenameShapeWithReplacements(const OptimShape &shape,
                             const std::unordered_map<std::string, std::string> &replacements) {
@@ -384,11 +590,13 @@ RenameShapeWithReplacements(const OptimShape &shape,
   return renamed;
 }
 
-void PropagateAnchorConstraintsIntoContext(ShapesContext &ctx, const AnchorMap &anchors) {
+void PropagateAnchorConstraintsIntoContext(ShapesContext &ctx, const AnchorMap &anchors,
+                                           const GraphProto &graph) {
   if (ctx.ConstraintsSize() == 0) {
     return;
   }
-  const std::unordered_set<std::string> preferred = CollectAnchorSymbols(anchors);
+  std::unordered_set<std::string> preferred = CollectAnchorSymbols(anchors);
+  AddGraphDeclaredSymbols(graph, preferred);
   if (preferred.empty()) {
     return;
   }
@@ -404,6 +612,49 @@ void PropagateAnchorConstraintsIntoContext(ShapesContext &ctx, const AnchorMap &
   }
   std::unordered_map<std::string, std::string> replacements(rep.begin(), rep.end());
 
+  // Graph-input symbols (e.g. ``total_seq``) are authoritative anchors a
+  // compound expression of other input symbols may collapse onto.
+  std::unordered_set<std::string> input_symbols;
+  AddGraphInputSymbols(graph, input_symbols);
+
+  // Drop replacement entries whose key is a compound expression made
+  // exclusively of leaf tokens that are themselves graph-declared
+  // anchor symbols. These expressions (e.g. ``b+c`` when ``b`` and
+  // ``c`` are graph inputs) are already authoritative, and rewriting
+  // them to a sibling output anchor (e.g. ``e``) would erase the
+  // user-meaningful expression.
+  //
+  // Exception: when the replacement target is itself a graph-input symbol
+  // (e.g. ``past_seq+seq`` -> ``total_seq``, the length of an
+  // ``attention_mask`` input), the single input dimension is the canonical
+  // name and the compound expression should collapse onto it.
+  for (auto it = replacements.begin(); it != replacements.end();) {
+    const std::string &key = it->first;
+    if (preferred.count(key) != 0) {
+      ++it;
+      continue;
+    }
+    const std::unordered_set<std::string> tokens = expressions::parse_expression_tokens(key);
+    if (tokens.empty() || tokens.size() == 1) {
+      ++it;
+      continue;
+    }
+    bool all_preferred = true;
+    for (const std::string &token : tokens) {
+      if (preferred.count(token) == 0) {
+        all_preferred = false;
+        break;
+      }
+    }
+    if (all_preferred && input_symbols.count(it->second) == 0) {
+      it = replacements.erase(it);
+    } else {
+      ++it;
+    }
+  }
+  if (replacements.empty()) {
+    return;
+  }
   std::vector<std::string> names;
   names.reserve(ctx.Tensors().size());
   for (const auto &kv : ctx.Tensors()) {
@@ -434,9 +685,147 @@ void PropagateAnchorConstraintsIntoContext(ShapesContext &ctx, const AnchorMap &
       ctx.Set(name, std::move(updated));
     }
   }
+
+  // Final verification pass. Assuming outputs (and the leaf tokens of
+  // their dim expressions) are registered as anchors, before returning
+  // we double-check that every dim expression and every token inside
+  // such an expression has been replaced by its equivalent anchor
+  // wherever the ``replacements`` map provides one. The first rewrite
+  // pass above can leave a shape stale when one of its dims was newly
+  // populated by an earlier iteration over ``names`` (for example a
+  // ``value_as_shape`` entry copied verbatim from another tensor), so
+  // we repeat the rewrite until ``ctx`` reaches a fixed point.
+  bool dirty = true;
+  int max_iters = 4;
+  while (dirty && max_iters-- > 0) {
+    dirty = false;
+    for (const std::string &name : names) {
+      const OptimTensor &tensor = ctx.Get(name);
+      OptimTensor updated(tensor);
+      bool changed = false;
+      OptimShape renamed_shape = RenameShapeWithReplacements(tensor.Shape(), replacements);
+      if (renamed_shape != tensor.Shape()) {
+        updated.Shape() = std::move(renamed_shape);
+        changed = true;
+      }
+      if (tensor.HasValueAsShape()) {
+        OptimShape renamed_value_shape =
+            RenameShapeWithReplacements(tensor.ValueAsShape(), replacements);
+        if (renamed_value_shape != tensor.ValueAsShape()) {
+          updated.SetValueAsShape(std::move(renamed_value_shape));
+          changed = true;
+        }
+      }
+      if (changed) {
+        ctx.Set(name, std::move(updated));
+        dirty = true;
+      }
+    }
+  }
+}
+
+// Dispatches a single ``NodeProto`` to the matching shape-inference
+// implementation (model-local function expansion, custom callback, or
+// built-in dispatch-table entry) and stores the resulting output
+// descriptors in ``ctx``. Shared by :cpp:func:`ShapesContext::ComputeShapeNode`,
+// which wraps this with optional event logging.
+void DispatchComputeShapeNode(ShapesContext &ctx, const NodeProto &node) {
+  // Model-local function calls bypass the domain check (their domain
+  // is arbitrary) and the op-type dispatch table; they are expanded
+  // by recursively running shape inference on the FunctionProto body.
+  const std::string op_type = node.op_type().as_string();
+  const std::string local_key = LocalFunctionKey(node.domain().as_string(), op_type);
+  if (const FunctionProto *func = ctx.GetLocalFunction(local_key); func != nullptr) {
+    ctx.CheckInputsAvailable(node);
+    ctx.CheckOutputsNotAvailable(node);
+    ExpandLocalFunctionCall(ctx, node, *func);
+    return;
+  }
+  if (const ShapesContext::CustomComputeShapeFn *custom_shape_fn =
+          ctx.GetCustomShapeInferenceFunction(node.domain().as_string(), op_type);
+      custom_shape_fn != nullptr) {
+    ctx.CheckInputsAvailable(node);
+    ctx.CheckOutputsNotAvailable(node);
+    (*custom_shape_fn)(ctx, node);
+    return;
+  }
+  CheckOnnxDomain(node);
+  ctx.CheckInputsAvailable(node);
+  ctx.CheckOutputsNotAvailable(node);
+  const std::string key = NormaliseDispatchDomain(node) + ":" + op_type;
+  const auto &table = DispatchTable();
+  auto it = table.find(key);
+  EXT_ENFORCE_INVALID(it != table.end(), "ComputeShapeNode: unsupported op_type '", op_type,
+                      "' in domain '", NormaliseDispatchDomain(node), "'.");
+  it->second(ctx, node);
 }
 
 } // namespace
+
+const char *ShapeEventActionName(ShapeEventAction action) noexcept {
+  switch (action) {
+  case ShapeEventAction::kAdd:
+    return "add";
+  case ShapeEventAction::kReplace:
+    return "replace";
+  case ShapeEventAction::kComputeNode:
+    return "compute_node";
+  case ShapeEventAction::kConstraint:
+    return "constraint";
+  case ShapeEventAction::kConstraintMax:
+    return "constraint_max";
+  }
+  return "unknown";
+}
+
+void ShapesContext::RegisterSubgraphContext(int64_t node_index, const std::string &attr_name,
+                                            ShapesContext context) {
+  subgraph_contexts_[SubgraphContextKey(node_index, attr_name)] =
+      std::make_shared<ShapesContext>(std::move(context));
+}
+
+void ShapesContext::LogSetEvent(const std::string &name, const OptimTensor &tensor) {
+  ShapeEvent ev;
+  ev.action = Has(name) ? ShapeEventAction::kReplace : ShapeEventAction::kAdd;
+  ev.name = name;
+  ev.data_type = static_cast<int32_t>(TensorTypeToDataType(tensor.Dtype()));
+  ev.node_index = current_node_index_;
+  ev.subgraph_node_index = current_subgraph_node_index_;
+  ev.subgraph_attr_name = current_subgraph_attr_name_;
+  const OptimShape &shape = tensor.Shape();
+  ev.shape.reserve(shape.Rank());
+  for (std::size_t i = 0; i < shape.Rank(); ++i) {
+    const OptimDim &d = shape[i];
+    ev.shape.push_back(d.IsInt() ? std::to_string(d.AsInt()) : d.AsExpr());
+  }
+  events_.push_back(std::move(ev));
+}
+
+void ShapesContext::LogConstraintEvent(ShapeEventAction action, const std::string &lhs,
+                                       const std::string &rhs) {
+  ShapeEvent ev;
+  ev.action = action;
+  ev.data_type = static_cast<int32_t>(TensorProto::DataType::UNDEFINED);
+  ev.inputs = {lhs, rhs};
+  ev.node_index = current_node_index_;
+  ev.subgraph_node_index = current_subgraph_node_index_;
+  ev.subgraph_attr_name = current_subgraph_attr_name_;
+  events_.push_back(std::move(ev));
+}
+
+void ShapesContext::AppendComputeNodeEvent(const std::string &op_domain, const std::string &op_type,
+                                           std::vector<std::string> inputs) {
+  ShapeEvent ev;
+  ev.action = ShapeEventAction::kComputeNode;
+  ev.data_type = static_cast<int32_t>(TensorProto::DataType::UNDEFINED);
+  ev.op_domain = op_domain;
+  ev.op_type = op_type;
+  ev.inputs = std::move(inputs);
+  ev.node_index = current_node_index_;
+  ev.subgraph_node_index = current_subgraph_node_index_;
+  ev.subgraph_attr_name = current_subgraph_attr_name_;
+  events_.push_back(std::move(ev));
+}
 
 void ShapesContext::CheckInputsAvailable(const NodeProto &node) const {
   for (int i = 0; i < node.input_size(); ++i) {
@@ -444,9 +833,9 @@ void ShapesContext::CheckInputsAvailable(const NodeProto &node) const {
     if (name.empty()) {
       continue;
     }
-    EXT_ENFORCE_INVALID(Has(name) || HasSequence(name),
-                        "CheckInputsAvailable: input '" + name + "' of op '" +
-                            node.op_type().as_string() + "' is missing from ShapesContext.");
+    EXT_ENFORCE_INVALID(Has(name) || HasSequence(name), "CheckInputsAvailable: input '", name,
+                        "' of op '", node.op_type().as_string(),
+                        "' is missing from ShapesContext.");
   }
 }
 
@@ -456,54 +845,44 @@ void ShapesContext::CheckOutputsNotAvailable(const NodeProto &node) const {
     if (name.empty()) {
       continue;
     }
-    EXT_ENFORCE_INVALID(!Has(name) && !HasSequence(name),
-                        "CheckOutputsNotAvailable: output '" + name + "' of op '" +
-                            node.op_type().as_string() + "' is already present in ShapesContext.");
+    EXT_ENFORCE_INVALID(!Has(name) && !HasSequence(name), "CheckOutputsNotAvailable: output '",
+                        name, "' of op '", node.op_type().as_string(),
+                        "' is already present in ShapesContext.");
   }
 }
 
 void ShapesContext::ComputeShapeNode(const NodeProto &node) {
-  // Model-local function calls bypass the domain check (their domain
-  // is arbitrary) and the op-type dispatch table; they are expanded
-  // by recursively running shape inference on the FunctionProto body.
-  const std::string op_type = node.op_type().as_string();
-  const std::string local_key = LocalFunctionKey(node.domain().as_string(), op_type);
-  if (const FunctionProto *func = GetLocalFunction(local_key); func != nullptr) {
-    CheckInputsAvailable(node);
-    CheckOutputsNotAvailable(node);
-    ExpandLocalFunctionCall(*this, node, *func);
-    return;
+  // Only capture input names when event logging is active so that the
+  // default path stays free of bookkeeping overhead, mirroring
+  // ``onnx_kernels::RunNode``.
+  const bool logging = events_enabled_;
+
+  DispatchComputeShapeNode(*this, node);
+
+  if (logging) {
+    std::vector<std::string> inputs;
+    inputs.reserve(static_cast<size_t>(node.input_size()));
+    for (int i = 0; i < node.input_size(); ++i) {
+      inputs.push_back(node.input(i).as_string());
+    }
+    AppendComputeNodeEvent(NormaliseDispatchDomain(node), node.op_type().as_string(),
+                           std::move(inputs));
   }
-  if (const CustomComputeShapeFn *custom_shape_fn =
-          GetCustomShapeInferenceFunction(node.domain().as_string(), op_type);
-      custom_shape_fn != nullptr) {
-    CheckInputsAvailable(node);
-    CheckOutputsNotAvailable(node);
-    (*custom_shape_fn)(*this, node);
-    return;
-  }
-  CheckOnnxDomain(node);
-  CheckInputsAvailable(node);
-  CheckOutputsNotAvailable(node);
-  const std::string key = NormaliseDispatchDomain(node) + ":" + op_type;
-  const auto &table = DispatchTable();
-  auto it = table.find(key);
-  EXT_ENFORCE_INVALID(it != table.end(), "ComputeShapeNode: unsupported op_type '" + op_type +
-                                             "' in domain '" + NormaliseDispatchDomain(node) +
-                                             "'.");
-  it->second(*this, node);
 }
 
 void ShapesContext::ComputeShapes(const utils::RepeatedProtoField<NodeProto> &nodes) {
   for (int i = 0; i < nodes.size(); ++i) {
+    current_node_index_ = static_cast<int64_t>(i);
     ComputeShapeNode(nodes[i]);
   }
+  current_node_index_ = -1;
 }
 
 void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
   // Seed initializers first so that they shadow any duplicate input
   // (an ONNX initializer may appear both in ``graph.initializer()``
   // and ``graph.input()``; the initializer wins).
+  current_node_index_ = -2;
   for (int i = 0; i < graph.initializer().size(); ++i) {
     const TensorProto &init = graph.initializer()[i];
     const std::string name = init.name().as_string();
@@ -517,16 +896,10 @@ void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
   }
   // Then seed graph inputs (skipping those already known via the
   // initializers or via outer-scope entries carried in ``*this``).
+  current_node_index_ = -1;
   for (int i = 0; i < graph.input().size(); ++i) {
     const ValueInfoProto &vi = graph.input()[i];
-    const std::string name = vi.name().as_string();
-    if (name.empty() || Has(name) || HasSequence(name)) {
-      continue;
-    }
-    OptimTensor tensor;
-    if (OptimTensorFromValueInfo(vi, tensor)) {
-      Set(name, std::move(tensor));
-    }
+    SeedInputValueInfo(vi, *this);
   }
   ComputeShapes(graph.node());
 }
@@ -545,14 +918,22 @@ void ShapesContext::ComputeShapeModel(const ModelProto &model,
   }
   EXT_ENFORCE_INVALID(model.has_graph(),
                       "ComputeShapeModel: the ModelProto has no graph to run shape inference on.");
-  AnchorMap anchors;
-  if (prefill_with_value_info_output) {
-    anchors = CollectGraphAnchors(model.graph());
-  }
+  // Graph outputs are always registered as anchors so that the
+  // user-authored output dim expressions (for example ``Y: [2*dnz]``)
+  // are propagated back into the intermediate tensors via the symbolic
+  // constraint solver. Output anchors are merged leniently: a shape
+  // mismatch between an output anchor and the freshly inferred shape
+  // is treated as a pre-existing inference imperfection and silently
+  // skipped instead of aborting the whole pass. When
+  // ``prefill_with_value_info_output`` is set, ``value_info`` entries
+  // are additionally registered as anchors and the full anchor set is
+  // merged strictly, matching the long-standing prefill contract.
+  AnchorMap anchors = prefill_with_value_info_output ? CollectGraphAnchors(model.graph())
+                                                     : CollectGraphOutputAnchors(model.graph());
   ComputeShapeGraph(model.graph());
-  if (prefill_with_value_info_output) {
-    MergeAnchorsIntoContext(*this, anchors);
-    PropagateAnchorConstraintsIntoContext(*this, anchors);
+  if (!anchors.empty()) {
+    MergeAnchorsIntoContext(*this, anchors, /*strict=*/prefill_with_value_info_output);
+    PropagateAnchorConstraintsIntoContext(*this, anchors, model.graph());
   }
 }
 

@@ -50,7 +50,72 @@ std::vector<std::string> NonEmpty(const utils::RepeatedField<utils::String> &nam
   return out;
 }
 
+// Recursively builds the TypeProto ``tp`` from ``spec``.
+void BuildTypeProto(const TypeSpec &spec, TypeProto &tp) {
+  switch (spec.kind) {
+  case TypeSpec::Kind::kTensor: {
+    TypeProto::Tensor *tt = tp.add_tensor_type();
+    tt->set_elem_type(spec.elem_type);
+    if (spec.has_shape) {
+      TensorShapeProto *sh = tt->add_shape();
+      for (int64_t d : spec.shape) {
+        sh->add_dim()->set_dim_value(d);
+      }
+    }
+    break;
+  }
+  case TypeSpec::Kind::kSequence: {
+    TypeProto::Sequence *seq = tp.add_sequence_type();
+    BuildTypeProto(spec.children.front(), *seq->add_elem_type());
+    break;
+  }
+  case TypeSpec::Kind::kMap: {
+    TypeProto::Map *mp = tp.add_map_type();
+    mp->set_key_type(spec.elem_type);
+    BuildTypeProto(spec.children.front(), *mp->add_value_type());
+    break;
+  }
+  }
+}
+
 } // namespace
+
+TypeSpec TensorTypeSpec(int32_t elem_type) {
+  TypeSpec spec;
+  spec.kind = TypeSpec::Kind::kTensor;
+  spec.elem_type = elem_type;
+  spec.has_shape = false;
+  return spec;
+}
+
+TypeSpec TensorTypeSpec(int32_t elem_type, std::vector<int64_t> shape) {
+  TypeSpec spec;
+  spec.kind = TypeSpec::Kind::kTensor;
+  spec.elem_type = elem_type;
+  spec.has_shape = true;
+  spec.shape = std::move(shape);
+  return spec;
+}
+
+TypeSpec SequenceTypeSpec(TypeSpec elem) {
+  TypeSpec spec;
+  spec.kind = TypeSpec::Kind::kSequence;
+  spec.children.push_back(std::move(elem));
+  return spec;
+}
+
+TypeSpec MapTypeSpec(int32_t key_type, TypeSpec value) {
+  TypeSpec spec;
+  spec.kind = TypeSpec::Kind::kMap;
+  spec.elem_type = key_type;
+  spec.children.push_back(std::move(value));
+  return spec;
+}
+
+void AppendValueInfo(ValueInfoProto &vi, const std::string &name, const TypeSpec &spec) {
+  vi.set_name(name);
+  BuildTypeProto(spec, *vi.add_type());
+}
 
 void InitModel(ModelProto &model, int64_t ir_version, const std::vector<OpsetId> &opset_imports,
                const std::string &producer_name) {
@@ -122,7 +187,8 @@ void AppendDataSet(TestCase &tc, std::vector<Tensor> inputs, std::vector<Tensor>
 void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
             const std::vector<Tensor> &outputs, const std::string &name,
             const std::vector<OpsetId> &opset_imports, const std::string &producer_name,
-            std::vector<TestCase> &registry, const std::string &tag) {
+            std::vector<TestCase> &registry, const std::string &tag,
+            const std::vector<TypeSpec> &output_types) {
   const auto present_inputs = NonEmpty(node.ref_input());
   const auto present_outputs = NonEmpty(node.ref_output());
   EXT_ENFORCE_INVALID(
@@ -131,6 +197,9 @@ void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
   EXT_ENFORCE_INVALID(
       present_outputs.size() == outputs.size(),
       "Expect: number of output tensors does not match the non-empty outputs of the node.");
+  EXT_ENFORCE_INVALID(
+      output_types.empty() || output_types.size() == outputs.size(),
+      "Expect: output_types, when provided, must have one entry per output tensor.");
 
   // When the test targets a non-default operator domain and the caller did
   // not provide an explicit tag, default the tag to the node's domain so
@@ -164,7 +233,11 @@ void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
   for (size_t i = 0; i < outputs.size(); ++i) {
     Tensor tensor = outputs[i];
     tensor.name = present_outputs[i];
-    FillValueInfo(tensor, *graph->add_output());
+    if (output_types.empty()) {
+      FillValueInfo(tensor, *graph->add_output());
+    } else {
+      AppendValueInfo(*graph->add_output(), present_outputs[i], output_types[i]);
+    }
   }
 
   DataSet ds;

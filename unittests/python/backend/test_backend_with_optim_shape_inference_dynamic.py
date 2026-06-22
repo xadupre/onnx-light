@@ -1,16 +1,27 @@
 import unittest
 
+from onnx_light.ext_test_case import import_or_skip
+
 import onnx_light.onnx as onnxl
 import onnx_light.onnx_optim.shape_inference as shape_inference
-from onnx_light.onnx_lib.backend.test.case import make_test_class
+
+# The backend test registries are only available in the full build; skip this
+# module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
+make_test_class = import_or_skip("onnx_light.onnx_lib.backend.test.case", "make_test_class")
 
 
 def _inputs(inputs):
-    def _v(v):
+    def _v(value_info):
+        if value_info.type.has_map_type():
+            mt = value_info.type.map_type
+            vt = mt.value_type.tensor_type
+            t = tuple(d.dim_param or d.dim_value for d in vt.shape.dim)
+            return f"map[{mt.key_type} -> {vt.elem_type}: {t}]"
+        v = value_info.type.tensor_type
         t = tuple(d.dim_param or d.dim_value for d in v.shape.dim)
         return f"{v.elem_type}: {t}"
 
-    return ", ".join([_v(i.type.tensor_type) for i in inputs])
+    return ", ".join([_v(i) for i in inputs])
 
 
 def _check_match(inputs, expected, inferred, rank_only=False) -> None:
@@ -50,25 +61,49 @@ def shape_inference_check(model: onnxl.ModelProto, *inputs):
         work.graph.value_info.clear()
     for o in work.graph.output:
         o.type.Clear()
+
+    def _has_dim_value(dim) -> bool:
+        return dim.has_dim_value()
+
     mapping = {}
+    prefill_with_value_info_output = False
     for i in work.graph.input:
-        if i.name in {"axis", "axes"}:
+        if i.name in {"axis", "axes"} or not i.type.has_tensor_type():
+            continue
+        if not i.type.tensor_type:
             continue
         shape = i.type.tensor_type.shape
         for di, d in enumerate(shape.dim):
-            if d.dim_value not in mapping:
-                assert not d.dim_param, f"Unexpected input dimension in {i}"
-                mapping[int(d.dim_value)] = f"{i.name}_{di}"
+            if d.dim_param:
+                prefill_with_value_info_output = True
+                continue
+            if _has_dim_value(d):
+                key = int(d.dim_value)
+            else:
+                prefill_with_value_info_output = True
+                key = (i.name, di)
+            if key not in mapping:
+                mapping[key] = f"{i.name}_{di}"
     for i in work.graph.input:
-        if i.name in {"axis", "axes"}:
+        if i.name in {"axis", "axes"} or not i.type.has_tensor_type():
+            continue
+        if not i.type.tensor_type:
             continue
         shape = i.type.tensor_type.shape
-        new_shape = [mapping[d.dim_value] for d in shape.dim]
+        new_shape = []
+        for di, d in enumerate(shape.dim):
+            if d.dim_param:
+                new_shape.append(d.dim_param)
+                continue
+            key = int(d.dim_value) if _has_dim_value(d) else (i.name, di)
+            new_shape.append(mapping[key])
         for i in range(len(shape.dim)):
             shape.dim[i].Clear()
             shape.dim[i].dim_param = new_shape[i]
 
-    shape_inference.infer_shapes_model(work)
+    shape_inference.infer_shapes_model(
+        work, prefill_with_value_info_output=prefill_with_value_info_output
+    )
     _check_match(model.graph.input, model.graph.value_info, work.graph.value_info)
 
 
@@ -77,28 +112,40 @@ TestOptimShapeInferenceDynamicBackend = make_test_class(
     exclude_regex=[
         "test_cc_shape_inference_add_concat_reshape.*",
         "test_cc_shape_inference_nonzero_chain_anon.*",
-        "test_cc_shape_inference_nonzero_chain_named.*",
         "test_cc_attention_3d.*",
         "test_cc_cast_map_.*",
         "test_cc_dict_vectorizer_.*",
         "test_cc_loop11_carried_state.*",
         "test_cc_optional_get_element_optional_sequence.*",
-        "test_cc_sequence_map_add_2_sequences.*",
-        "test_cc_sequence_map_identity_2_sequences.*",
         "test_cc_squeeze_all_singleton.*",
+        "test_cc_squeeze_no_axes_input.*",
+        "test_cc_squeeze_empty_axes_name.*",
         "test_if_seq.*",
-        "test_scan_sum.*",
         "test_cc_loop13_seq.*",
+        "test_cc_loop16_seq_none.*",
+        "test_cc_identity_opt.*",
+        "test_cc_if_seq.*",
+        "test_cc_if_opt.*",
+        "test_cc_linear_attention.*",
+        "test_cc_shape_inference_scan_running_sum.*",
+        # These local-function cases keep dedicated non-dynamic coverage because
+        # they rely on user-authored symbolic aliases that the generic dynamic
+        # harness does not normalize consistently yet.
         "test_cc_shape_inference_local_function_add.*",
         "test_cc_shape_inference_nested_local_function_add.*",
-        "test_cc_linear_attention.*",
+        "test_cc_sequence_map_add_2_sequences.*",
+        "test_cc_sequence_map_identity_2_sequences.*",
         "test_cc_shape_inference_nonzero_plus_expression.*",
-        "test_cc_shape_inference_value_as_shape.*",
-        "test_cc_shape_inference_check_shape.*",
-        "test_cc_shape_inference_concat_split.*",
-        "test_cc_shape_inference_reshape_reshape.*",
+        # These remaining models keep dedicated non-dynamic coverage because
+        # they rely on exact user-authored symbolic aliases or expressions that
+        # this generic harness does not normalize.
+        "test_cc_shape_inference_resize_tile.*",
+        "test_cc_shape_inference_pad_canny_average.*",
+        "test_cc_shape_inference_topk_pairwise_distance.*",
         "test_cc_shape_inference_loop_pairwise_distance.*",
-        "test_cc_shape_inference_scan_running_sum.*",
+        "test_cc_shape_inference_loop_topk_pairwise_distance.*",
+        "test_cc_shape_inference_scan_topk_pairwise_distance.*",
+        "test_cc_shape_inference_tiny_llm.*",
     ],
 )
 

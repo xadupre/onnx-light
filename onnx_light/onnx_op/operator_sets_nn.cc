@@ -293,56 +293,61 @@ std::vector<TensorType> DropoutTypes22() {
 LightOpSchema MakeDropoutSchema(int since_version) {
   if (since_version <= 7) {
     return LightOpSchema(
-        "Dropout", kOnnxDomain, since_version, "",
-        {
-            {"data", kDropoutDataDescription, "T"},
-        },
-        {
-            {"output", kDropoutOutputDescription, "T"},
-            {"mask", since_version <= 6 ? kDropoutMaskDescriptionVer1And6 : kDropoutMaskDescription,
-             "T"},
-        },
-        {
-            {"T", FloatTypes(), "Constrain input and output types to float tensors."},
-        });
+               "Dropout", kOnnxDomain, since_version, "",
+               {
+                   {"data", kDropoutDataDescription, "T"},
+               },
+               {
+                   {"output", kDropoutOutputDescription, "T"},
+                   {"mask",
+                    since_version <= 6 ? kDropoutMaskDescriptionVer1And6 : kDropoutMaskDescription,
+                    "T"},
+               },
+               {
+                   {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+               })
+        .set_node_determinism(LightOpSchema::NodeDeterminism::NonDeterministic);
   }
   if (since_version == 10) {
     return LightOpSchema(
-        "Dropout", kOnnxDomain, since_version, "",
-        {
-            {"data", kDropoutDataDescription, "T"},
-        },
-        {
-            {"output", kDropoutOutputDescription, "T"},
-            {"mask", kDropoutMaskDescription, "T1"},
-        },
-        {
-            {"T", FloatTypes(), "Constrain input and output types to float tensors."},
-            {"T1", {TensorType::kBool}, "Constrain output mask types to boolean tensors."},
-        });
+               "Dropout", kOnnxDomain, since_version, "",
+               {
+                   {"data", kDropoutDataDescription, "T"},
+               },
+               {
+                   {"output", kDropoutOutputDescription, "T"},
+                   {"mask", kDropoutMaskDescription, "T1"},
+               },
+               {
+                   {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                   {"T1", {TensorType::kBool}, "Constrain output mask types to boolean tensors."},
+               })
+        .set_node_determinism(LightOpSchema::NodeDeterminism::NonDeterministic);
   }
   return LightOpSchema(
-      "Dropout", kOnnxDomain, since_version, "",
-      {
-          {"data", kDropoutDataDescription, "T"},
-          {"ratio",
-           since_version >= 22 ? kDropoutRatioDescriptionVer22 : kDropoutRatioDescriptionVer12And13,
-           "T1"},
-          {"training_mode", kDropoutTrainingModeDescription, "T2"},
-      },
-      {
-          {"output", kDropoutOutputDescription, "T"},
-          {"mask", kDropoutMaskDescription, "T2"},
-      },
-      {
-          {"T",
-           since_version >= 22 ? DropoutTypes22()
-                               : (since_version >= 13 ? DropoutTypes13() : FloatTypes()),
-           "Constrain input and output types to float tensors."},
-          {"T1", since_version >= 22 ? DropoutTypes22() : FloatTypes(),
-           "Constrain input 'ratio' types to float tensors."},
-          {"T2", {TensorType::kBool}, "Constrain output 'mask' types to boolean tensors."},
-      });
+             "Dropout", kOnnxDomain, since_version, "",
+             {
+                 {"data", kDropoutDataDescription, "T"},
+                 {"ratio",
+                  since_version >= 22 ? kDropoutRatioDescriptionVer22
+                                      : kDropoutRatioDescriptionVer12And13,
+                  "T1"},
+                 {"training_mode", kDropoutTrainingModeDescription, "T2"},
+             },
+             {
+                 {"output", kDropoutOutputDescription, "T"},
+                 {"mask", kDropoutMaskDescription, "T2"},
+             },
+             {
+                 {"T",
+                  since_version >= 22 ? DropoutTypes22()
+                                      : (since_version >= 13 ? DropoutTypes13() : FloatTypes()),
+                  "Constrain input and output types to float tensors."},
+                 {"T1", since_version >= 22 ? DropoutTypes22() : FloatTypes(),
+                  "Constrain input 'ratio' types to float tensors."},
+                 {"T2", {TensorType::kBool}, "Constrain output 'mask' types to boolean tensors."},
+             })
+      .set_node_determinism(LightOpSchema::NodeDeterminism::NonDeterministic);
 }
 
 // --- GlobalAveragePool / GlobalMaxPool / GlobalLpPool -------------------------

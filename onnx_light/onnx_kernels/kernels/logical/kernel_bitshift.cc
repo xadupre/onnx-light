@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_kernels/kernels/elementwise_helpers.h"
+#include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 
 #include <cstdint>
@@ -18,8 +18,7 @@ namespace {
 constexpr const char *kBitShiftName = "kernel::BitShift";
 
 [[noreturn]] void ThrowUnsupportedBitShift() {
-  throw std::invalid_argument(std::string(kBitShiftName) +
-                              " only supports UINT8, UINT16, UINT32 and UINT64 inputs.");
+  EXT_THROW_INVALID(kBitShiftName, " only supports UINT8, UINT16, UINT32 and UINT64 inputs.");
 }
 
 template <typename Op> Tensor BitShiftAllocDispatch(const Tensor &x, const Tensor &y, Op op) {

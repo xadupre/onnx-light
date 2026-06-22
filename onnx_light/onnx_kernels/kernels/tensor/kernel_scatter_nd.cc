@@ -36,7 +36,7 @@ void ReduceSliceTyped(uint8_t *out_bytes, const uint8_t *upd_bytes, std::size_t 
     } else if (reduction == "min") {
       dst = (dst < v) ? dst : v;
     } else {
-      throw std::invalid_argument("kernel::ScatterND: unsupported reduction '" + reduction + "'.");
+      EXT_THROW_INVALID("kernel::ScatterND: unsupported reduction '", reduction, "'.");
     }
   }
 }
@@ -60,8 +60,7 @@ void ReduceSlice(int32_t data_type, uint8_t *out_bytes, const uint8_t *upd_bytes
   } else if (data_type == static_cast<int32_t>(DataType::INT8)) {
     ReduceSliceTyped<int8_t>(out_bytes, upd_bytes, n_elements, reduction);
   } else {
-    throw std::invalid_argument(
-        "kernel::ScatterND: unsupported dtype for reduction other than 'none'.");
+    EXT_THROW_INVALID("kernel::ScatterND: unsupported dtype for reduction other than 'none'.");
   }
 }
 

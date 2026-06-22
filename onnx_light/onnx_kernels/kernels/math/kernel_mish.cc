@@ -39,24 +39,19 @@ void Dispatch(const Tensor &x, Tensor &output) {
     ComputeInPlace<double>(x, output);
     return;
   default:
-    throw std::invalid_argument(std::string(kName) + " only supports FLOAT and DOUBLE tensors.");
+    EXT_THROW_INVALID(kName, ": unsupported data type ", x.data_type,
+                      ", only supports FLOAT and DOUBLE tensors.");
   }
 }
 
 void ValidateOutput(const Tensor &x, const Tensor &output) {
-  if (output.data_type != x.data_type) {
-    throw std::invalid_argument(std::string(kName) +
-                                " preallocated output must have the same dtype as input.");
-  }
-  if (output.shape != x.shape) {
-    throw std::invalid_argument(std::string(kName) +
-                                " preallocated output shape must match input shape.");
-  }
+  EXT_ENFORCE_INVALID(output.data_type == x.data_type, kName, ": unsupported data type ",
+                      x.data_type, ", preallocated output must have the same dtype as input.");
+  EXT_ENFORCE_INVALID(output.shape == x.shape, kName, ": unsupported data type ", x.data_type,
+                      ", preallocated output shape must match input shape.");
   const size_t expected_bytes = static_cast<size_t>(x.element_count()) * x.element_size();
-  if (output.data.size() != expected_bytes) {
-    throw std::invalid_argument(std::string(kName) +
-                                " preallocated output buffer has unexpected size in bytes.");
-  }
+  EXT_ENFORCE_INVALID(output.data.size() == expected_bytes, kName, ": unsupported data type ",
+                      x.data_type, ", preallocated output buffer has unexpected size in bytes.");
 }
 
 } // namespace

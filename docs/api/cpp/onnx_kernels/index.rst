@@ -7,12 +7,12 @@ runtime infrastructure they rely on (``TestCase``, ``Tensor``,
 ``run_nodes``, ``random`` …). It only depends on ``lib_onnx_proto`` and
 exposes:
 
-* a runtime :cpp:struct:`onnx::onnx_kernels::Tensor` (distinct from
-  :cpp:class:`onnx::TensorProto`) that stores raw element bytes;
-* a :cpp:struct:`onnx::onnx_kernels::TestCase` bundle of
-  :cpp:class:`onnx::ModelProto` + expected input/output data sets;
-* the :cpp:func:`onnx::onnx_kernels::Expect` helper and
-  :cpp:func:`onnx::onnx_kernels::CollectTestCases` registry;
+* a runtime :cpp:struct:`onnx_light::onnx_kernels::Tensor` (distinct from
+  :cpp:class:`onnx_light::TensorProto`) that stores raw element bytes;
+* a :cpp:struct:`onnx_light::onnx_backend_test::TestCase` bundle of
+  :cpp:class:`onnx_light::ModelProto` + expected input/output data sets;
+* the :cpp:func:`onnx_light::onnx_backend_test::Expect` helper and
+  :cpp:func:`onnx_light::onnx_backend_test::CollectTestCases` registry;
 * the ONNX operator kernel implementations themselves under
   ``onnx_kernels/kernels/``.
 

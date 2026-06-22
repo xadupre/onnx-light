@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_kernels/kernels/elementwise_helpers.h"
+#include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
 #include <cstdint>
@@ -34,8 +34,7 @@ std::vector<int64_t> BroadcastShape(const std::vector<int64_t> &a, const std::ve
     if (sa[d] == sb[d] || sa[d] == 1 || sb[d] == 1) {
       out[d] = sa[d] >= sb[d] ? sa[d] : sb[d];
     } else {
-      throw std::invalid_argument(std::string(kSumName) +
-                                  " input shapes are not multidirectional-broadcastable.");
+      EXT_THROW_INVALID(kSumName, " input shapes are not multidirectional-broadcastable.");
     }
   }
   return out;
@@ -45,10 +44,10 @@ std::vector<int64_t> BroadcastShape(const std::vector<int64_t> &a, const std::ve
 // be non-empty and all tensors must share ``expected_dtype``.
 std::vector<int64_t> ValidateAndBroadcastShape(const std::vector<Tensor> &inputs,
                                                const char *dtype_name, int32_t expected_dtype) {
-  EXT_ENFORCE_INVALID(!inputs.empty(), std::string(kSumName) + " requires at least one input.");
+  EXT_ENFORCE_INVALID(!inputs.empty(), kSumName, " requires at least one input.");
   for (size_t i = 0; i < inputs.size(); ++i) {
-    EXT_ENFORCE_INVALID(inputs[i].data_type == expected_dtype,
-                        std::string(kSumName) + " only supports " + dtype_name + " tensors.");
+    EXT_ENFORCE_INVALID(inputs[i].data_type == expected_dtype, kSumName, " only supports ",
+                        dtype_name, " tensors.");
   }
   std::vector<int64_t> shape = inputs[0].shape;
   for (size_t i = 1; i < inputs.size(); ++i) {
@@ -116,26 +115,28 @@ void SumInPlace(const char *dtype_name, int32_t dtype, const std::vector<Tensor>
 } // namespace
 
 Tensor Sum::operator()(const std::vector<Tensor> &inputs) const {
-  EXT_ENFORCE_INVALID(!inputs.empty(), std::string(kSumName) + " requires at least one input.");
+  EXT_ENFORCE_INVALID(!inputs.empty(), kSumName, " requires at least one input.");
   switch (inputs[0].data_type) {
   case DataType::FLOAT:
     return SumAlloc<float>("FLOAT", DataType::FLOAT, inputs);
   case DataType::DOUBLE:
     return SumAlloc<double>("DOUBLE", DataType::DOUBLE, inputs);
   default:
-    throw std::invalid_argument(std::string(kSumName) + kSupportedSumTypesMsg);
+    EXT_THROW_INVALID(kSumName, ": unsupported data type ", inputs[0].data_type,
+                      kSupportedSumTypesMsg);
   }
 }
 
 void Sum::operator()(const std::vector<Tensor> &inputs, Tensor &output) const {
-  EXT_ENFORCE_INVALID(!inputs.empty(), std::string(kSumName) + " requires at least one input.");
+  EXT_ENFORCE_INVALID(!inputs.empty(), kSumName, " requires at least one input.");
   switch (inputs[0].data_type) {
   case DataType::FLOAT:
     return SumInPlace<float>("FLOAT", DataType::FLOAT, inputs, output);
   case DataType::DOUBLE:
     return SumInPlace<double>("DOUBLE", DataType::DOUBLE, inputs, output);
   default:
-    throw std::invalid_argument(std::string(kSumName) + kSupportedSumTypesMsg);
+    EXT_THROW_INVALID(kSumName, ": unsupported data type ", inputs[0].data_type,
+                      kSupportedSumTypesMsg);
   }
 }
 

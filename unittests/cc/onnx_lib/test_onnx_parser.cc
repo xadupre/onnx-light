@@ -1,5 +1,5 @@
-#include "../defs/parser.h"
 #include "onnx.h"
+#include "onnx_manipulations/parser.h"
 #include <gtest/gtest.h>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -137,6 +137,15 @@ TEST(onnx_defs, Parser_AttributeProto_Float) {
   ParseIt(attr, "x = 0.625");
   EXPECT_EQ(attr.ref_type(), AttributeProto::AttributeType::FLOAT);
   EXPECT_FLOAT_EQ(attr.ref_f(), 0.625f);
+}
+
+TEST(onnx_defs, Parser_AttributeProto_FloatFromIntLiteral) {
+  AttributeProto attr;
+  ParseIt(attr, "x : float = 2");
+  EXPECT_EQ(attr.ref_type(), AttributeProto::AttributeType::FLOAT);
+  EXPECT_TRUE(attr.has_f());
+  EXPECT_FALSE(attr.has_i());
+  EXPECT_FLOAT_EQ(attr.ref_f(), 2.0f);
 }
 
 TEST(onnx_defs, Parser_AttributeProto_String) {

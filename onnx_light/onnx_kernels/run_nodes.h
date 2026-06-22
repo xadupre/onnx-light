@@ -117,6 +117,27 @@ void RunNode(const NodeProto &node, RuntimeContext &rt);
 void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext &rt);
 
 /**
+ * Release-aware overload of :cpp:func:`RunNodes`. Runs every node of
+ * ``nodes`` in order and, after each node, frees from ``rt`` every
+ * intermediate whose last reference has been reached according to
+ * ``plan``. Names that the caller seeded into ``rt`` on top of
+ * ``plan.keep()`` (graph inputs / initializers / outputs already
+ * covered by the plan) are preserved automatically — they are
+ * detected at run start and excluded from the release loop.
+ *
+ * The plan is *not* built here: callers (typically
+ * :cpp:func:`RunGraph` / :cpp:func:`RunFunction`) obtain it via
+ * :cpp:func:`RuntimeContext::GetExecutionPlan` so the analysis is
+ * paid only once per model and reused across every subsequent run.
+ *
+ * @param nodes The list of nodes to execute, in topological order.
+ * @param rt    In/out runtime context.
+ * @param plan  Precomputed release schedule covering ``nodes``.
+ */
+void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext &rt,
+              const ExecutionPlan &plan);
+
+/**
  * Generic iterator overload of :cpp:func:`RunNodes`. Accepts any
  * input-iterator range whose ``value_type`` (after dereferencing) is
  * convertible to ``const NodeProto &``, so callers can drive the
@@ -124,9 +145,12 @@ void RunNodes(const utils::RepeatedProtoField<NodeProto> &nodes, RuntimeContext 
  * or any other container — not only ``RepeatedProtoField``.
  */
 template <class InputIt> void RunNodes(InputIt first, InputIt last, RuntimeContext &rt) {
-  for (auto it = first; it != last; ++it) {
+  int64_t index = 0;
+  for (auto it = first; it != last; ++it, ++index) {
+    rt.set_current_node_index(index);
     RunNode(*it, rt);
   }
+  rt.set_current_node_index(-1);
 }
 
 /**
@@ -192,16 +216,31 @@ void RunModel(const ModelProto &model, RuntimeContext &rt);
  * tensor pairs for the subgraph). Returns the subgraph's outputs in the
  * order declared by ``graph.output()``.
  *
+ * When the caller's context has event logging enabled
+ * (:cpp:func:`RuntimeContext::events_enabled`), child events are appended
+ * to the caller's event log after the subgraph finishes. Each propagated
+ * event carries :cpp:var:`RuntimeEvent::subgraph_node_index` set to
+ * ``rt.current_node_index()`` (the index of the control-flow node in the
+ * parent graph) and :cpp:var:`RuntimeEvent::subgraph_attr_name` set to
+ * ``attr_name``, so consumers can distinguish subgraph events from
+ * top-level events.
+ *
  * Exposed publicly so control-flow kernels (e.g. :cpp:class:`kernel::Scan`)
  * can run their body subgraph without going through
  * :cpp:func:`RunNode` themselves.
+ *
+ * @param attr_name  Attribute name identifying the subgraph within its
+ *                   owning control-flow node (e.g. ``"body"``,
+ *                   ``"then_branch"``, ``"else_branch"``). Stored in
+ *                   :cpp:var:`RuntimeEvent::subgraph_attr_name` of every
+ *                   event produced during the subgraph run.
  *
  * @throws std::invalid_argument if a subgraph output has an empty name or
  *         is not produced by the body.
  */
 std::vector<Tensor> RunSubgraph(const GraphProto &graph,
                                 const std::vector<std::pair<std::string, Tensor>> &bindings,
-                                RuntimeContext &rt);
+                                RuntimeContext &rt, const std::string &attr_name = "");
 
 /**
  * Resolves a possibly-negative ``axis`` against a tensor of rank

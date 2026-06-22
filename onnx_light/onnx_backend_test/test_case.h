@@ -6,6 +6,7 @@
 
 #include "onnx.h"
 #include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/simple_map.h"
 #include "onnx_kernels/simple_tensor.h"
 
 #include <cstdint>
@@ -26,6 +27,8 @@ using onnx_kernels::kernel::DefaultOpset;
 struct DataSet {
   std::vector<Tensor> inputs;
   std::vector<Tensor> outputs;
+  /// Map-typed inputs keyed by the graph input name.
+  std::vector<Map> maps;
 };
 
 /**
@@ -55,7 +58,7 @@ struct TestCase {
 
   TestCase() : kind("node"), tag() {}
   explicit TestCase(std::string name_, std::string model_name_ = "", std::string kind_ = "node",
-                    std::string tag_ = "", double rtol_ = 1e-3, double atol_ = 1e-7)
+                    std::string tag_ = "", double atol_ = 1e-7, double rtol_ = 1e-3)
       : name(std::move(name_)), model_name(std::move(model_name_)), kind(std::move(kind_)),
         tag(std::move(tag_)), rtol(rtol_), atol(atol_) {}
 
@@ -140,6 +143,51 @@ void AppendValueInfo(ValueInfoProto &vi, const std::string &name, TensorProto::D
                      const std::vector<DimSpec> &dims);
 
 /**
+ * Describes an ONNX value type for a graph value-info, supporting the
+ * container kinds the backend test cases need: a plain ``Tensor``, a
+ * ``Sequence`` of an element type, or a ``Map`` from a key type to a value
+ * type. Built via the factory helpers :func:`TensorTypeSpec`,
+ * :func:`SequenceTypeSpec` and :func:`MapTypeSpec` and consumed by
+ * :func:`AppendValueInfo` / :func:`Expect` to emit value-infos whose declared
+ * schema type differs from the materialized ``Tensor`` representation (e.g.
+ * sequence- or map-valued outputs).
+ */
+struct TypeSpec {
+  enum class Kind { kTensor, kSequence, kMap };
+
+  Kind kind = Kind::kTensor;
+  /// For ``kTensor``: the tensor element type. For ``kMap``: the key type.
+  int32_t elem_type = 0;
+  /// For ``kTensor`` only: whether a (possibly empty) shape is declared.
+  bool has_shape = false;
+  /// For ``kTensor`` only: the concrete dimension values of the shape.
+  std::vector<int64_t> shape;
+  /// Nested element type. For ``kSequence`` the single sequence element type,
+  /// for ``kMap`` the single map value type; empty for ``kTensor``.
+  std::vector<TypeSpec> children;
+};
+
+/// Returns a ``TypeSpec`` describing a ``Tensor`` of ``elem_type`` with no
+/// declared shape (used e.g. for map value types).
+TypeSpec TensorTypeSpec(int32_t elem_type);
+
+/// Returns a ``TypeSpec`` describing a ``Tensor`` of ``elem_type`` whose
+/// declared shape has the given concrete dimension values (an empty ``shape``
+/// declares a rank-0 / scalar shape).
+TypeSpec TensorTypeSpec(int32_t elem_type, std::vector<int64_t> shape);
+
+/// Returns a ``TypeSpec`` describing a ``Sequence`` whose elements have type
+/// ``elem``.
+TypeSpec SequenceTypeSpec(TypeSpec elem);
+
+/// Returns a ``TypeSpec`` describing a ``Map`` from ``key_type`` keys to
+/// ``value`` values.
+TypeSpec MapTypeSpec(int32_t key_type, TypeSpec value);
+
+/// Fills ``vi`` with ``name`` and the type described by ``spec``.
+void AppendValueInfo(ValueInfoProto &vi, const std::string &name, const TypeSpec &spec);
+
+/**
  * Appends a new ``DataSet`` to ``tc.data_sets`` populated with the given
  * ``inputs`` and ``outputs``. Saves the
  * ``DataSet ds; ds.inputs.push_back(...); ds.outputs.push_back(...);
@@ -168,14 +216,25 @@ void AppendDataSet(TestCase &tc, std::vector<Tensor> inputs, std::vector<Tensor>
  *                      applied — typically pass at least ``DefaultOpset(since_version)``.
  * @param producer_name Producer name written into the model.
  * @param registry Output registry (appended to).
+ * @param tag Optional grouping tag (defaults to the node domain for
+ *            non-default operator domains).
+ * @param output_types Optional per-output declared type specs. When non-empty
+ *                     it must contain one entry per output tensor; each output
+ *                     value-info is then declared from its ``TypeSpec`` instead
+ *                     of the materialized tensor type. Used to declare
+ *                     ``Sequence`` / ``Map`` valued outputs whose runtime
+ *                     representation is a plain ``Tensor``.
  * @throws std::invalid_argument if ``inputs.size()`` does not equal the number
  *         of non-empty entries in ``node.input`` or if ``outputs.size()`` does
- *         not equal the number of non-empty entries in ``node.output``.
+ *         not equal the number of non-empty entries in ``node.output``, or if
+ *         ``output_types`` is non-empty and its size does not equal
+ *         ``outputs.size()``.
  */
 void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
             const std::vector<Tensor> &outputs, const std::string &name,
             const std::vector<OpsetId> &opset_imports, const std::string &producer_name,
-            std::vector<TestCase> &registry, const std::string &tag = "");
+            std::vector<TestCase> &registry, const std::string &tag = "",
+            const std::vector<TypeSpec> &output_types = {});
 
 /// Function pointer registering one or more :ref:`TestCase` entries into the
 /// caller-supplied ``registry``. Used by ``Collect*TestCases`` dispatch tables.

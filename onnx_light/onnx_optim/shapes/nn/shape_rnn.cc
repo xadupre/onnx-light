@@ -59,18 +59,16 @@ bool IsRecurrentOp(const std::string &op_type) {
 void ComputeShapeRNN(ShapesContext &ctx, const NodeProto &node, const char *x, const char *r) {
   const std::string op_type = node.op_type().as_string();
   EXT_ENFORCE_INVALID(IsRecurrentOp(op_type),
-                      "ComputeShapeRNN: node.op_type() must be one of RNN, GRU or LSTM, got '" +
-                          op_type + "'.");
-  EXT_ENFORCE_INVALID(node.output_size() > 0,
-                      "ComputeShapeRNN: node '" + op_type + "' must declare at least one output.");
+                      "ComputeShapeRNN: node.op_type() must be one of RNN, GRU or LSTM, got '",
+                      op_type, "'.");
+  EXT_ENFORCE_INVALID(node.output_size() > 0, "ComputeShapeRNN: node '", op_type,
+                      "' must declare at least one output.");
 
   const OptimTensor &input = ctx.Get(x);
   const OptimShape &x_shape = input.Shape();
-  if (x_shape.Rank() != 3u) {
-    throw std::invalid_argument("ComputeShapeRNN: input '" + std::string(x) +
-                                "' must have rank 3 ([seq_length, batch_size, input_size] or "
-                                "[batch_size, seq_length, input_size]).");
-  }
+  EXT_ENFORCE_INVALID(x_shape.Rank() == 3u, "ComputeShapeRNN: input '", x,
+                      "' must have rank 3 ([seq_length, batch_size, input_size] or "
+                      "[batch_size, seq_length, input_size]).");
 
   const std::string direction =
       GetAttributeOr<std::string>(node, "direction", std::string("forward"));

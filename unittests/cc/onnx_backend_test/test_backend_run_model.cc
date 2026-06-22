@@ -4,6 +4,7 @@
 
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/kernel_context.h"
+#include "onnx_kernels/kernels/sequence/include_sequence_kernels.h"
 #include "onnx_kernels/run_nodes.h"
 #include "onnx_kernels/runtime_context.h"
 #include "onnx_kernels/simple_tensor.h"
@@ -21,6 +22,7 @@ using onnx_backend_test::DataSet;
 using onnx_backend_test::DefaultOpset;
 using onnx_backend_test::TestCase;
 using onnx_kernels::DataType;
+using onnx_kernels::Map;
 using onnx_kernels::RunModel;
 using onnx_kernels::RuntimeContext;
 using onnx_kernels::Tensor;
@@ -95,6 +97,9 @@ void RunBackendCasesFor(const std::string &op_type,
       for (const Tensor &t : ds.inputs) {
         rt.Set(t.name, t);
       }
+      for (const Map &m : ds.maps) {
+        rt.PutMap(m.name, m);
+      }
 
       ASSERT_NO_THROW(RunModel(tc.model, rt)) << "RunModel threw for case " << tc.name;
 
@@ -154,6 +159,7 @@ TEST(BackendRunModel, Log) { RunBackendCasesFor("Log"); }
 TEST(BackendRunModel, Mish) { RunBackendCasesFor("Mish"); }
 TEST(BackendRunModel, Reciprocal) { RunBackendCasesFor("Reciprocal"); }
 TEST(BackendRunModel, Relu) { RunBackendCasesFor("Relu"); }
+TEST(BackendRunModel, ReverseSequence) { RunBackendCasesFor("ReverseSequence"); }
 TEST(BackendRunModel, Round) { RunBackendCasesFor("Round"); }
 TEST(BackendRunModel, Sigmoid) { RunBackendCasesFor("Sigmoid"); }
 TEST(BackendRunModel, Sign) { RunBackendCasesFor("Sign"); }
@@ -167,8 +173,17 @@ TEST(BackendRunModel, Tanh) { RunBackendCasesFor("Tanh"); }
 
 // Additional binary, no-attribute math kernels.
 TEST(BackendRunModel, MatMul) { RunBackendCasesFor("MatMul"); }
+TEST(BackendRunModel, MatMulInteger) { RunBackendCasesFor("MatMulInteger"); }
 TEST(BackendRunModel, PRelu) { RunBackendCasesFor("PRelu"); }
 TEST(BackendRunModel, Pow) { RunBackendCasesFor("Pow"); }
+
+// Comparison / logical kernels.
+TEST(BackendRunModel, Equal) { RunBackendCasesFor("Equal"); }
+TEST(BackendRunModel, Greater) { RunBackendCasesFor("Greater"); }
+TEST(BackendRunModel, GreaterOrEqual) { RunBackendCasesFor("GreaterOrEqual"); }
+TEST(BackendRunModel, Less) { RunBackendCasesFor("Less"); }
+TEST(BackendRunModel, LessOrEqual) { RunBackendCasesFor("LessOrEqual"); }
+TEST(BackendRunModel, Where) { RunBackendCasesFor("Where"); }
 
 // Variadic element-wise reducers.
 TEST(BackendRunModel, Sum) { RunBackendCasesFor("Sum"); }
@@ -196,6 +211,7 @@ TEST(BackendRunModel, Elu) { RunBackendCasesFor("Elu"); }
 TEST(BackendRunModel, LeakyRelu) { RunBackendCasesFor("LeakyRelu"); }
 TEST(BackendRunModel, Swish) { RunBackendCasesFor("Swish"); }
 TEST(BackendRunModel, ThresholdedRelu) { RunBackendCasesFor("ThresholdedRelu"); }
+TEST(BackendRunModel, TopK) { RunBackendCasesFor("TopK"); }
 TEST(BackendRunModel, Hardmax) { RunBackendCasesFor("Hardmax"); }
 TEST(BackendRunModel, LogSoftmax) { RunBackendCasesFor("LogSoftmax"); }
 TEST(BackendRunModel, Flatten) { RunBackendCasesFor("Flatten"); }
@@ -203,14 +219,21 @@ TEST(BackendRunModel, Softmax) { RunBackendCasesFor("Softmax"); }
 TEST(BackendRunModel, HardSigmoid) { RunBackendCasesFor("HardSigmoid"); }
 TEST(BackendRunModel, Selu) { RunBackendCasesFor("Selu"); }
 TEST(BackendRunModel, Shrink) { RunBackendCasesFor("Shrink"); }
+TEST(BackendRunModel, GatherElements) { RunBackendCasesFor("GatherElements"); }
+TEST(BackendRunModel, ScatterElements) { RunBackendCasesFor("ScatterElements"); }
+TEST(BackendRunModel, ScatterND) { RunBackendCasesFor("ScatterND"); }
 TEST(BackendRunModel, Gelu) { RunBackendCasesFor("Gelu"); }
 TEST(BackendRunModel, Mod) { RunBackendCasesFor("Mod"); }
 TEST(BackendRunModel, Clip) { RunBackendCasesFor("Clip"); }
 TEST(BackendRunModel, Compress) { RunBackendCasesFor("Compress"); }
+TEST(BackendRunModel, Unique) { RunBackendCasesFor("Unique"); }
+TEST(BackendRunModel, NonZero) { RunBackendCasesFor("NonZero"); }
+TEST(BackendRunModel, Concat) { RunBackendCasesFor("Concat"); }
 TEST(BackendRunModel, CumSum) { RunBackendCasesFor("CumSum"); }
 TEST(BackendRunModel, CumProd) { RunBackendCasesFor("CumProd"); }
 TEST(BackendRunModel, DFT) { RunBackendCasesFor("DFT"); }
 TEST(BackendRunModel, STFT) { RunBackendCasesFor("STFT"); }
+TEST(BackendRunModel, MelWeightMatrix) { RunBackendCasesFor("MelWeightMatrix"); }
 TEST(BackendRunModel, Attention) {
   RunBackendCasesFor("Attention", [](const DataSet &ds) {
     return ds.inputs.size() >= 3 && ds.inputs[0].data_type == DataType::FLOAT &&
@@ -221,20 +244,33 @@ TEST(BackendRunModel, Cast) { RunBackendCasesFor("Cast"); }
 TEST(BackendRunModel, CastLike) { RunBackendCasesFor("CastLike"); }
 TEST(BackendRunModel, CenterCropPad) { RunBackendCasesFor("CenterCropPad"); }
 TEST(BackendRunModel, Pad) { RunBackendCasesFor("Pad"); }
+TEST(BackendRunModel, Slice) { RunBackendCasesFor("Slice"); }
 TEST(BackendRunModel, BitCast) { RunBackendCasesFor("BitCast"); }
 TEST(BackendRunModel, CausalConvWithState) { RunBackendCasesFor("CausalConvWithState"); }
 TEST(BackendRunModel, Conv) { RunBackendCasesFor("Conv"); }
 TEST(BackendRunModel, ConvInteger) { RunBackendCasesFor("ConvInteger"); }
+TEST(BackendRunModel, ConvTranspose) { RunBackendCasesFor("ConvTranspose"); }
+TEST(BackendRunModel, Transpose) { RunBackendCasesFor("Transpose"); }
+TEST(BackendRunModel, Trilu) { RunBackendCasesFor("Trilu"); }
+TEST(BackendRunModel, TensorScatter) { RunBackendCasesFor("TensorScatter"); }
 TEST(BackendRunModel, Col2Im) { RunBackendCasesFor("Col2Im"); }
 TEST(BackendRunModel, DeformConv) { RunBackendCasesFor("DeformConv"); }
 TEST(BackendRunModel, DepthToSpace) { RunBackendCasesFor("DepthToSpace"); }
+TEST(BackendRunModel, SpaceToDepth) { RunBackendCasesFor("SpaceToDepth"); }
 TEST(BackendRunModel, Upsample) { RunBackendCasesFor("Upsample"); }
 TEST(BackendRunModel, BatchNormalization) { RunBackendCasesFor("BatchNormalization"); }
 TEST(BackendRunModel, GroupNormalization) { RunBackendCasesFor("GroupNormalization"); }
 TEST(BackendRunModel, GridSample) { RunBackendCasesFor("GridSample"); }
+TEST(BackendRunModel, RoiAlign) { RunBackendCasesFor("RoiAlign"); }
+TEST(BackendRunModel, MaxRoiPool) { RunBackendCasesFor("MaxRoiPool"); }
 TEST(BackendRunModel, InstanceNormalization) { RunBackendCasesFor("InstanceNormalization"); }
 TEST(BackendRunModel, LayerNormalization) { RunBackendCasesFor("LayerNormalization"); }
 TEST(BackendRunModel, RMSNormalization) { RunBackendCasesFor("RMSNormalization"); }
+TEST(BackendRunModel, RNN) { RunBackendCasesFor("RNN"); }
+TEST(BackendRunModel, RotaryEmbedding) { RunBackendCasesFor("RotaryEmbedding"); }
+TEST(BackendRunModel, MeanVarianceNormalization) {
+  RunBackendCasesFor("MeanVarianceNormalization");
+}
 TEST(BackendRunModel, Dropout) { RunBackendCasesFor("Dropout"); }
 TEST(BackendRunModel, AveragePool) { RunBackendCasesFor("AveragePool"); }
 TEST(BackendRunModel, GlobalAveragePool) { RunBackendCasesFor("GlobalAveragePool"); }
@@ -242,22 +278,13 @@ TEST(BackendRunModel, GlobalMaxPool) { RunBackendCasesFor("GlobalMaxPool"); }
 TEST(BackendRunModel, GlobalLpPool) { RunBackendCasesFor("GlobalLpPool"); }
 TEST(BackendRunModel, LpPool) { RunBackendCasesFor("LpPool"); }
 TEST(BackendRunModel, LpNormalization) { RunBackendCasesFor("LpNormalization"); }
+TEST(BackendRunModel, LRN) { RunBackendCasesFor("LRN"); }
 TEST(BackendRunModel, MaxPool) {
-  RunBackendCasesFor(
-      "MaxPool",
-      [](const TestCase &tc) {
-        const NodeProto &node = tc.model.ref_graph().ref_node()[0];
-        for (const auto &attr : node.ref_attribute()) {
-          if (attr.ref_name().as_string() == "storage_order" && attr.i() != 0) {
-            return false;
-          }
-        }
-        return true;
-      },
-      [](const DataSet &ds) {
-        return !ds.inputs.empty() && ds.inputs[0].data_type == DataType::FLOAT;
-      });
+  RunBackendCasesFor("MaxPool", [](const DataSet &ds) {
+    return !ds.inputs.empty() && ds.inputs[0].data_type == DataType::FLOAT;
+  });
 }
+TEST(BackendRunModel, MaxUnpool) { RunBackendCasesFor("MaxUnpool"); }
 
 // ai.onnx.preview.training optimizer kernels.
 TEST(BackendRunModel, Adagrad) { RunBackendCasesFor("Adagrad"); }
@@ -278,6 +305,8 @@ TEST(BackendRunModel, HannWindow) { RunBackendCasesFor("HannWindow"); }
 TEST(BackendRunModel, HammingWindow) { RunBackendCasesFor("HammingWindow"); }
 
 // ai.onnx.ml kernels.
+TEST(BackendRunModel, CastMap) { RunBackendCasesFor("CastMap"); }
+TEST(BackendRunModel, DictVectorizer) { RunBackendCasesFor("DictVectorizer"); }
 TEST(BackendRunModel, SVMRegressor) { RunBackendCasesFor("SVMRegressor"); }
 TEST(BackendRunModel, SVMClassifier) { RunBackendCasesFor("SVMClassifier"); }
 TEST(BackendRunModel, LinearRegressor) { RunBackendCasesFor("LinearRegressor"); }
@@ -293,6 +322,13 @@ TEST(BackendRunModel, FeatureVectorizer) { RunBackendCasesFor("FeatureVectorizer
 TEST(BackendRunModel, Imputer) { RunBackendCasesFor("Imputer"); }
 TEST(BackendRunModel, LabelEncoder) { RunBackendCasesFor("LabelEncoder"); }
 TEST(BackendRunModel, OneHotEncoder) { RunBackendCasesFor("OneHotEncoder"); }
+TEST(BackendRunModel, Scaler) { RunBackendCasesFor("Scaler"); }
+
+// Text kernels.
+TEST(BackendRunModel, StringConcat) { RunBackendCasesFor("StringConcat"); }
+TEST(BackendRunModel, StringNormalizer) { RunBackendCasesFor("StringNormalizer"); }
+TEST(BackendRunModel, StringSplit) { RunBackendCasesFor("StringSplit"); }
+TEST(BackendRunModel, TfIdfVectorizer) { RunBackendCasesFor("TfIdfVectorizer"); }
 
 // Control-flow kernels. ``Scan`` body-aware execution is owned by
 // :cpp:class:`kernel::Scan`; :cpp:func:`RunScanNode` additionally handles
@@ -300,26 +336,20 @@ TEST(BackendRunModel, OneHotEncoder) { RunBackendCasesFor("OneHotEncoder"); }
 // batch dim on every state / scan input/output) by running the Scan-9
 // kernel once per batch element and stacking the per-batch outputs.
 //
-// ``test_cc_scan_zero_trip_count`` is excluded: when trip_count==0 the
-// body is never executed so the body-aware overload of ``kernel::Scan``
-// has no per-iteration tensor from which to recover the scan-output
-// element shape/dtype, and produces a degenerate UNDEFINED ``[0]`` output
-// instead of the expected FLOAT ``[0, 2]``. This is unrelated to the
-// opset-8 fix and tracked separately.
-TEST(BackendRunModel, Scan) {
-  RunBackendCasesFor(
-      "Scan", [](const TestCase &tc) { return tc.name != "test_cc_scan_zero_trip_count"; },
-      [](const DataSet &) { return true; });
-}
+// ``test_cc_scan_zero_trip_count`` is included: when trip_count==0 the body
+// is run once with zero-filled dummy slices so the body-aware overload can
+// recover the scan-output element type/shape and emit the expected FLOAT
+// ``[0, 2]`` output (instead of a degenerate UNDEFINED ``[0]`` tensor).
+TEST(BackendRunModel, Scan) { RunBackendCasesFor("Scan"); }
 
 // Quantization kernels.
-// The reference QuantizeLinear/DequantizeLinear kernels only support
-// per-tensor quantization (scalar y_scale/x_scale) with FLOAT scales and
-// byte-or-larger integer (or float8 for DequantizeLinear) element types.
-// Skip per-axis / sub-byte / blocked / FLOAT16-scale cases.
+// The reference QuantizeLinear/DequantizeLinear kernels support per-tensor and
+// per-axis quantization with FLOAT scales, covering integer (UINT8/INT8/UINT16/
+// INT16), float8, and sub-byte (INT4/UINT4/INT2/UINT2/FLOAT4E2M1) output types.
+// Skip blocked / FLOAT16-scale cases which are not yet implemented.
 TEST(BackendRunModel, QuantizeLinear) {
   RunBackendCasesFor("QuantizeLinear", [](const DataSet &ds) {
-    if (ds.inputs.size() < 2 || ds.inputs[1].element_count() != 1) {
+    if (ds.inputs.size() < 2) {
       return false;
     }
     if (ds.inputs[1].data_type != static_cast<int32_t>(DataType::FLOAT)) {
@@ -332,18 +362,41 @@ TEST(BackendRunModel, QuantizeLinear) {
     return y_dtype == static_cast<int32_t>(DataType::UINT8) ||
            y_dtype == static_cast<int32_t>(DataType::INT8) ||
            y_dtype == static_cast<int32_t>(DataType::UINT16) ||
-           y_dtype == static_cast<int32_t>(DataType::INT16);
+           y_dtype == static_cast<int32_t>(DataType::INT16) ||
+           y_dtype == static_cast<int32_t>(DataType::FLOAT8E4M3FN) ||
+           y_dtype == static_cast<int32_t>(DataType::FLOAT8E4M3FNUZ) ||
+           y_dtype == static_cast<int32_t>(DataType::FLOAT8E5M2) ||
+           y_dtype == static_cast<int32_t>(DataType::FLOAT8E5M2FNUZ) ||
+           y_dtype == static_cast<int32_t>(DataType::INT4) ||
+           y_dtype == static_cast<int32_t>(DataType::UINT4) ||
+           y_dtype == static_cast<int32_t>(DataType::INT2) ||
+           y_dtype == static_cast<int32_t>(DataType::UINT2) ||
+           y_dtype == static_cast<int32_t>(DataType::FLOAT4E2M1);
   });
 }
 TEST(BackendRunModel, DequantizeLinear) {
   RunBackendCasesFor("DequantizeLinear", [](const DataSet &ds) {
-    if (ds.inputs.size() < 2 || ds.inputs[1].element_count() != 1) {
+    if (ds.inputs.size() < 2) {
       return false;
     }
-    if (ds.inputs[1].data_type != static_cast<int32_t>(DataType::FLOAT)) {
+    const int32_t scale_dtype = ds.inputs[1].data_type;
+    const int64_t scale_count = ds.inputs[1].element_count();
+    const bool is_scalar_scale = scale_count == 1;
+    // Per-axis: 1-D x_scale with multiple elements; FLOAT only (no FLOAT16
+    // per-axis). Blocked: N-D FLOAT x_scale that divides x along the
+    // quantization axis. Both are handled by the reference kernel.
+    const bool is_per_axis_scale = scale_count > 1 && ds.inputs[1].shape.size() == 1 &&
+                                   scale_dtype == static_cast<int32_t>(DataType::FLOAT);
+    const bool is_blocked_scale = scale_count > 1 && ds.inputs[1].shape.size() > 1 &&
+                                  scale_dtype == static_cast<int32_t>(DataType::FLOAT);
+    if (!is_scalar_scale && !is_per_axis_scale && !is_blocked_scale) {
       return false;
     }
-    if (ds.outputs.empty() || ds.outputs[0].data_type != static_cast<int32_t>(DataType::FLOAT)) {
+    if (scale_dtype != static_cast<int32_t>(DataType::FLOAT) &&
+        scale_dtype != static_cast<int32_t>(DataType::FLOAT16)) {
+      return false;
+    }
+    if (ds.outputs.empty() || ds.outputs[0].data_type != scale_dtype) {
       return false;
     }
     const int32_t x_dtype = ds.inputs[0].data_type;
@@ -355,16 +408,38 @@ TEST(BackendRunModel, DequantizeLinear) {
            x_dtype == static_cast<int32_t>(DataType::FLOAT8E4M3FN) ||
            x_dtype == static_cast<int32_t>(DataType::FLOAT8E4M3FNUZ) ||
            x_dtype == static_cast<int32_t>(DataType::FLOAT8E5M2) ||
-           x_dtype == static_cast<int32_t>(DataType::FLOAT8E5M2FNUZ);
+           x_dtype == static_cast<int32_t>(DataType::FLOAT8E5M2FNUZ) ||
+           x_dtype == static_cast<int32_t>(DataType::INT4) ||
+           x_dtype == static_cast<int32_t>(DataType::UINT4) ||
+           x_dtype == static_cast<int32_t>(DataType::INT2) ||
+           x_dtype == static_cast<int32_t>(DataType::UINT2) ||
+           x_dtype == static_cast<int32_t>(DataType::FLOAT4E2M1);
   });
 }
 TEST(BackendRunModel, DynamicQuantizeLinear) { RunBackendCasesFor("DynamicQuantizeLinear"); }
 
-// The reference QLinearMatMul kernel only supports per-tensor quantization
-// (scalar scales/zero-points) with FLOAT scales. Skip FLOAT16-scale cases.
+// The reference QLinearMatMul kernel supports per-tensor quantization
+// (scalar scales/zero-points) with FLOAT or FLOAT16 scales.
 TEST(BackendRunModel, QLinearMatMul) {
   RunBackendCasesFor("QLinearMatMul", [](const DataSet &ds) {
     if (ds.inputs.size() < 8 || ds.inputs[1].element_count() != 1) {
+      return false;
+    }
+    auto is_float_scale = [](int32_t dt) {
+      return dt == static_cast<int32_t>(DataType::FLOAT) ||
+             dt == static_cast<int32_t>(DataType::FLOAT16);
+    };
+    return is_float_scale(ds.inputs[1].data_type) && is_float_scale(ds.inputs[4].data_type) &&
+           is_float_scale(ds.inputs[6].data_type);
+  });
+}
+
+// The reference QLinearConv kernel supports per-tensor (or per-output-channel
+// ``w``-side) quantization with INT8/UINT8 ``x``/``w``/``y`` and FLOAT scales.
+TEST(BackendRunModel, QLinearConv) {
+  RunBackendCasesFor("QLinearConv", [](const DataSet &ds) {
+    if (ds.inputs.size() < 8 || ds.inputs[1].element_count() != 1 ||
+        ds.inputs[6].element_count() != 1) {
       return false;
     }
     return ds.inputs[1].data_type == static_cast<int32_t>(DataType::FLOAT) &&
@@ -376,32 +451,87 @@ TEST(BackendRunModel, QLinearMatMul) {
 // LinearAttention (opset 27) and FlexAttention (ai.onnx.preview) kernels.
 TEST(BackendRunModel, LinearAttention) {
   RunBackendCasesFor("LinearAttention", [](const DataSet &ds) {
-    return ds.inputs.size() >= 3 && ds.inputs[0].data_type == DataType::FLOAT &&
-           ds.inputs[1].data_type == DataType::FLOAT && ds.inputs[2].data_type == DataType::FLOAT;
+    if (ds.inputs.size() < 3) {
+      return false;
+    }
+    const int32_t dtype = ds.inputs[0].data_type;
+    const bool supported = dtype == static_cast<int32_t>(DataType::FLOAT) ||
+                           dtype == static_cast<int32_t>(DataType::FLOAT16);
+    return supported && ds.inputs[1].data_type == dtype && ds.inputs[2].data_type == dtype;
   });
 }
 TEST(BackendRunModel, FlexAttention) {
   // The dispatch-table kernel handles the base FlexAttention path (Q, K, V ->
   // Y) including the optional ``score_mod`` and ``prob_mod`` modifier
   // subgraphs (executed via RunSubgraph). Some score_mod cases use ops
-  // (e.g. ``Sub`` / ``Cast`` over INT64 indices) not yet wired through the
-  // dispatch table; skip those by case name.
+  // not yet wired through the dispatch table; skip those by case name.
   RunBackendCasesFor(
       "FlexAttention",
       [](const TestCase &tc) {
-        // ``test_cc_flexattention_relative_positional`` uses Sub/Cast on
-        // INT64 indices which are not yet registered in the dispatch
-        // table. ``test_cc_flexattention_soft_cap`` uses Constant/Div/Tanh
+        // ``test_cc_flexattention_soft_cap`` uses Constant/Div/Tanh
         // chains in its score_mod subgraph; some of those paths are not
-        // yet covered either.
-        return tc.name != "test_cc_flexattention_relative_positional" &&
-               tc.name != "test_cc_flexattention_soft_cap";
+        // yet covered.
+        return tc.name != "test_cc_flexattention_soft_cap";
       },
       [](const DataSet &ds) {
-        return ds.inputs.size() >= 3 && ds.inputs[0].data_type == DataType::FLOAT &&
-               ds.inputs[1].data_type == DataType::FLOAT &&
-               ds.inputs[2].data_type == DataType::FLOAT;
+        // Exercise both the FLOAT cases and the DOUBLE case
+        // (``test_cc_flexattention_double``); Q/K/V always share one dtype.
+        if (ds.inputs.size() < 3) {
+          return false;
+        }
+        const bool float_inputs = ds.inputs[0].data_type == DataType::FLOAT &&
+                                  ds.inputs[1].data_type == DataType::FLOAT &&
+                                  ds.inputs[2].data_type == DataType::FLOAT;
+        const bool double_inputs = ds.inputs[0].data_type == DataType::DOUBLE &&
+                                   ds.inputs[1].data_type == DataType::DOUBLE &&
+                                   ds.inputs[2].data_type == DataType::DOUBLE;
+        return float_inputs || double_inputs;
       });
+}
+
+// SequenceMap is a sequence-typed control-flow op: its outputs are
+// :cpp:struct:`Sequence` values held in ``RuntimeContext::sequences``,
+// not :cpp:struct:`Tensor` values in ``RuntimeContext::tensors``, and
+// every backend test case wraps the SequenceMap node in a 2-node
+// graph (``SequenceConstruct`` + ``SequenceMap``). The single-node
+// ``RunBackendCasesFor`` helper therefore does not apply; instead the
+// per-case expected stacked tensor (registered in
+// ``cases_sequence_map.cc``) is compared against the actual output
+// sequence by re-stacking the latter through
+// :cpp:class:`kernel::SequenceConstruct`.
+TEST(BackendRunModel, SequenceMap) {
+  const std::vector<TestCase> cases = CollectTestCases("SequenceMap");
+  ASSERT_FALSE(cases.empty()) << "No backend test cases found for SequenceMap";
+
+  std::size_t executed = 0;
+  for (const TestCase &tc : cases) {
+    SCOPED_TRACE(tc.name);
+    const onnx_kernels::kernel::KernelContext kctx(DefaultOpset(GetDefaultOpsetVersion(tc.model)));
+
+    for (const DataSet &ds : tc.data_sets) {
+      RuntimeContext rt(kctx);
+      for (const Tensor &t : ds.inputs) {
+        rt.Set(t.name, t);
+      }
+      ASSERT_NO_THROW(RunModel(tc.model, rt)) << "RunModel threw for case " << tc.name;
+
+      // Each expected output is the stacked-tensor materialisation of
+      // the corresponding output sequence (see
+      // ``cases_sequence_map.cc``); re-stack the actual sequence and
+      // compare bit-exactly.
+      for (const Tensor &expected : ds.outputs) {
+        ASSERT_TRUE(rt.HasSequence(expected.name))
+            << "Missing output sequence '" << expected.name << "' for case " << tc.name;
+        const auto &out_seq = rt.GetSequence(expected.name);
+        const std::vector<Tensor> values(out_seq.values.begin(), out_seq.values.end());
+        Tensor actual = onnx_kernels::kernel::SequenceConstruct(kctx)(values);
+        actual.name = expected.name;
+        ExpectTensorBitEqual(actual, expected);
+      }
+      ++executed;
+    }
+  }
+  EXPECT_GT(executed, 0u) << "No SequenceMap test cases exercised.";
 }
 
 } // namespace Test

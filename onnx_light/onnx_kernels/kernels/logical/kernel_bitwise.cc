@@ -2,9 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_kernels/kernels/elementwise_helpers.h"
+#include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 
+#include "onnx_light_helpers.h"
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -25,10 +26,10 @@ constexpr const char *kBitwiseOrName = "kernel::BitwiseOr";
 constexpr const char *kBitwiseXorName = "kernel::BitwiseXor";
 constexpr const char *kBitwiseNotName = "kernel::BitwiseNot";
 
-[[noreturn]] void ThrowUnsupportedBitwise(const char *op_name) {
-  throw std::invalid_argument(std::string(op_name) +
-                              " only supports INT8, INT16, INT32, INT64, UINT8, UINT16, "
-                              "UINT32 and UINT64 inputs.");
+[[noreturn]] void ThrowUnsupportedBitwise(const char *op_name, int32_t data_type) {
+  EXT_THROW_INVALID(op_name, ": unsupported data type ", data_type,
+                    ", only supports INT8, INT16, INT32, INT64, UINT8, UINT16, "
+                    "UINT32 and UINT64 inputs.");
 }
 
 // Allocating binary bitwise dispatcher: routes ``x.data_type`` to a
@@ -50,7 +51,7 @@ Tensor BitwiseBinAllocDispatch(const char *op_name, const Tensor &x, const Tenso
     ONNX_LIGHT_BITWISE_DISPATCH_CASE(UINT32, "UINT32", uint32_t);
     ONNX_LIGHT_BITWISE_DISPATCH_CASE(UINT64, "UINT64", uint64_t);
   default:
-    ThrowUnsupportedBitwise(op_name);
+    ThrowUnsupportedBitwise(op_name, x.data_type);
   }
 #undef ONNX_LIGHT_BITWISE_DISPATCH_CASE
 }
@@ -76,7 +77,7 @@ void BitwiseBinInPlaceDispatch(const char *op_name, const Tensor &x, const Tenso
     ONNX_LIGHT_BITWISE_DISPATCH_CASE(UINT32, "UINT32", uint32_t);
     ONNX_LIGHT_BITWISE_DISPATCH_CASE(UINT64, "UINT64", uint64_t);
   default:
-    ThrowUnsupportedBitwise(op_name);
+    ThrowUnsupportedBitwise(op_name, x.data_type);
   }
 #undef ONNX_LIGHT_BITWISE_DISPATCH_CASE
 }
@@ -93,24 +94,16 @@ constexpr auto kXorFn = [](auto a, auto b) { return a ^ b; };
 // (``output.shape != x.shape``) and an unexpected output buffer size.
 template <typename T>
 void BitwiseNotImpl(const char *dtype_name, int32_t dtype, const Tensor &x, Tensor &output) {
-  if (x.data_type != dtype) {
-    throw std::invalid_argument(std::string(kBitwiseNotName) + " expected ``" + dtype_name +
-                                "`` input.");
-  }
-  if (output.data_type != dtype) {
-    throw std::invalid_argument(std::string(kBitwiseNotName) +
-                                " preallocated output must have dtype ``" + dtype_name + "``.");
-  }
-  if (output.shape != x.shape) {
-    throw std::invalid_argument(std::string(kBitwiseNotName) +
-                                " preallocated output shape must match input shape.");
-  }
+  EXT_ENFORCE_INVALID(x.data_type == dtype, kBitwiseNotName, " expected ``", dtype_name,
+                      "`` input.");
+  EXT_ENFORCE_INVALID(output.data_type == dtype, kBitwiseNotName,
+                      " preallocated output must have dtype ``", dtype_name, "``.");
+  EXT_ENFORCE_INVALID(output.shape == x.shape, kBitwiseNotName,
+                      " preallocated output shape must match input shape.");
   const int64_t n = x.element_count();
   const size_t expected_bytes = static_cast<size_t>(n) * sizeof(T);
-  if (output.data.size() != expected_bytes) {
-    throw std::invalid_argument(std::string(kBitwiseNotName) +
-                                " preallocated output buffer has unexpected size in bytes.");
-  }
+  EXT_ENFORCE_INVALID(output.data.size() == expected_bytes, kBitwiseNotName,
+                      " preallocated output buffer has unexpected size in bytes.");
   const T *px = reinterpret_cast<const T *>(x.bytes());
   T *py = reinterpret_cast<T *>(output.data.data());
   for (int64_t i = 0; i < n; ++i) {
@@ -183,7 +176,7 @@ Tensor BitwiseNot::operator()(const Tensor &x) const {
   case DataType::UINT64:
     return BitwiseNotAlloc<uint64_t>("UINT64", DataType::UINT64, x);
   default:
-    ThrowUnsupportedBitwise(kBitwiseNotName);
+    ThrowUnsupportedBitwise(kBitwiseNotName, x.data_type);
   }
 }
 
@@ -206,7 +199,7 @@ void BitwiseNot::operator()(const Tensor &x, Tensor &output) const {
   case DataType::UINT64:
     return BitwiseNotImpl<uint64_t>("UINT64", DataType::UINT64, x, output);
   default:
-    ThrowUnsupportedBitwise(kBitwiseNotName);
+    ThrowUnsupportedBitwise(kBitwiseNotName, x.data_type);
   }
 }
 

@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_kernels/kernels/_helpers/float16_promote.h"
 #include "onnx_kernels/kernels/kernel_context.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
@@ -37,6 +39,7 @@ using onnx_kernels::kernel::Einsum;
 using onnx_kernels::kernel::Erf;
 using onnx_kernels::kernel::Exp;
 using onnx_kernels::kernel::Floor;
+using onnx_kernels::kernel::Gemm;
 using onnx_kernels::kernel::HammingWindow;
 using onnx_kernels::kernel::HannWindow;
 using onnx_kernels::kernel::Hardmax;
@@ -110,10 +113,12 @@ TEST(KernelClass, NegInPlaceWritesToPreallocatedOutput) {
   EXPECT_FLOAT_EQ(py[1], -2.0f);
 }
 
-TEST(KernelClass, NegRejectsNonFloatTensors) {
+TEST(KernelClass, NegRejectsUnsupportedDtype) {
+  // UINT8 is not in Neg's supported set (FLOAT/DOUBLE/FLOAT16/BFLOAT16/
+  // INT8/INT16/INT32/INT64), so the kernel must reject it.
   const KernelContext ctx{DefaultOpset(13)};
   Neg neg_kernel{ctx};
-  Tensor x = Tensor::FromInt32("", {2}, {-1, 2});
+  Tensor x = Tensor::FromUint8("", {2}, {1, 2});
   EXPECT_THROW((void)neg_kernel(x), std::invalid_argument);
 }
 
@@ -473,6 +478,28 @@ TEST(KernelClass, SoftmaxClassMatchesReferenceAxis1) {
   EXPECT_NEAR(py[5], 0.66524094f, 1e-6f);
 }
 
+TEST(KernelClass, SoftmaxClassSupportsFloat16) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Softmax softmax_kernel{ctx};
+
+  // FLOAT16 inputs are computed in float32 and demoted back to FLOAT16. The
+  // result must match the FLOAT softmax reference within half-precision rounding.
+  Tensor x32 = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 1.0f, 2.0f, 3.0f});
+  Tensor x16 =
+      onnx_kernels::DemoteFromFloat32(x32, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16));
+  Tensor y16 = softmax_kernel(x16, 1);
+  ASSERT_EQ(y16.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16));
+  ASSERT_EQ(y16.element_count(), 6);
+  Tensor y = onnx_kernels::PromoteToFloat32(y16);
+  const float *py = y.AsFloat();
+  EXPECT_NEAR(py[0], 0.09003057f, 1e-3f);
+  EXPECT_NEAR(py[1], 0.24472848f, 1e-3f);
+  EXPECT_NEAR(py[2], 0.66524094f, 1e-3f);
+  EXPECT_NEAR(py[3], 0.09003057f, 1e-3f);
+  EXPECT_NEAR(py[4], 0.24472848f, 1e-3f);
+  EXPECT_NEAR(py[5], 0.66524094f, 1e-3f);
+}
+
 TEST(KernelClass, LogSoftmaxClassMatchesReferenceAxis1) {
   const KernelContext ctx{DefaultOpset(13)};
   LogSoftmax logsoftmax_kernel{ctx};
@@ -573,6 +600,36 @@ TEST(KernelClass, AddClassBroadcastsScalar) {
   EXPECT_FLOAT_EQ(pz[1], 2.5f);
   EXPECT_FLOAT_EQ(pz[2], 3.5f);
   EXPECT_FLOAT_EQ(pz[3], 4.5f);
+}
+
+TEST(KernelClass, AddClassMatchesReferenceInt32) {
+  const KernelContext ctx{DefaultOpset(14)};
+  Add add_kernel{ctx};
+  Tensor x = Tensor::FromInt32("", {4}, {10, 0, -3, 7});
+  Tensor y = Tensor::FromInt32("", {4}, {3, 0, 2, -1});
+  Tensor z = add_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
+  const int32_t *pz = z.AsInt32();
+  EXPECT_EQ(pz[0], 13);
+  EXPECT_EQ(pz[1], 0);
+  EXPECT_EQ(pz[2], -1);
+  EXPECT_EQ(pz[3], 6);
+}
+
+TEST(KernelClass, AddClassMatchesReferenceInt64) {
+  const KernelContext ctx{DefaultOpset(14)};
+  Add add_kernel{ctx};
+  Tensor x = Tensor::FromInt64("", {4}, {10, 0, -3, 7});
+  Tensor y = Tensor::FromInt64("", {4}, {3, 0, 2, -1});
+  Tensor z = add_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
+  const int64_t *pz = z.AsInt64();
+  EXPECT_EQ(pz[0], 13);
+  EXPECT_EQ(pz[1], 0);
+  EXPECT_EQ(pz[2], -1);
+  EXPECT_EQ(pz[3], 6);
 }
 
 TEST(KernelClass, BlackmanWindowPeriodicLength) {
@@ -771,9 +828,26 @@ TEST(KernelClass, SubClassMatchesReferenceUint32) {
   EXPECT_EQ(pz[3], 50u);
 }
 
+TEST(KernelClass, SubClassMatchesReferenceInt64) {
+  // ``test_cc_flexattention_relative_positional`` exercises Sub on INT64
+  // index tensors (q_idx - k_idx), so the kernel must handle INT64.
+  const KernelContext ctx{DefaultOpset(14)};
+  Sub sub_kernel{ctx};
+  Tensor x = Tensor::FromInt64("", {4}, {10, 0, -3, 7});
+  Tensor y = Tensor::FromInt64("", {4}, {3, 0, 2, -1});
+  Tensor z = sub_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
+  const int64_t *pz = z.AsInt64();
+  EXPECT_EQ(pz[0], 7);
+  EXPECT_EQ(pz[1], 0);
+  EXPECT_EQ(pz[2], -5);
+  EXPECT_EQ(pz[3], 8);
+}
+
 TEST(KernelClass, SubRejectsUnsupportedDtype) {
-  // BOOL inputs are not in the supported dtype set (FLOAT/INT8/INT16/UINT8/
-  // UINT16/UINT32/UINT64) so the kernel must reject them.
+  // BOOL inputs are not in the supported dtype set (FLOAT/INT8/INT16/INT32/
+  // INT64/UINT8/UINT16/UINT32/UINT64) so the kernel must reject them.
   const KernelContext ctx{DefaultOpset(14)};
   Sub sub_kernel{ctx};
   Tensor x("", onnx_kernels::DataType::BOOL, {2}, {1, 0});
@@ -821,6 +895,34 @@ TEST(KernelClass, MulInPlaceWritesToPreallocatedOutput) {
   EXPECT_FLOAT_EQ(pz[1], 6.0f);
   EXPECT_FLOAT_EQ(pz[2], 9.0f);
   EXPECT_FLOAT_EQ(pz[3], 12.0f);
+}
+
+TEST(KernelClass, MulClassMatchesReferenceInt32) {
+  const KernelContext ctx{DefaultOpset(14)};
+  Mul mul_kernel{ctx};
+  Tensor x = Tensor::FromInt32("", {3}, {1, -2, 3});
+  Tensor y = Tensor::FromInt32("", {3}, {4, 5, -6});
+  Tensor z = mul_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 3);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT32));
+  const int32_t *pz = z.AsInt32();
+  EXPECT_EQ(pz[0], 4);
+  EXPECT_EQ(pz[1], -10);
+  EXPECT_EQ(pz[2], -18);
+}
+
+TEST(KernelClass, MulClassMatchesReferenceInt64) {
+  const KernelContext ctx{DefaultOpset(14)};
+  Mul mul_kernel{ctx};
+  Tensor x = Tensor::FromInt64("", {3}, {1, -2, 3});
+  Tensor y = Tensor::FromInt64("", {3}, {4, 5, -6});
+  Tensor z = mul_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 3);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_kernels::DataType::INT64));
+  const int64_t *pz = z.AsInt64();
+  EXPECT_EQ(pz[0], 4);
+  EXPECT_EQ(pz[1], -10);
+  EXPECT_EQ(pz[2], -18);
 }
 
 TEST(KernelClass, DivClassMatchesReference) {
@@ -935,6 +1037,16 @@ TEST(KernelClass, DivClassSupportsIntegerTypesWithTruncation) {
     EXPECT_EQ(pz[0], 3);
     EXPECT_EQ(pz[1], 4);
     EXPECT_EQ(pz[2], 1);
+  }
+  {
+    Tensor x = Tensor::FromInt64("", {4}, {-3, 3, -3, 3});
+    Tensor y = Tensor::FromInt64("", {4}, {2, 2, -2, -2});
+    Tensor z = div_kernel(x, y);
+    const int64_t *pz = z.AsInt64();
+    EXPECT_EQ(pz[0], -1);
+    EXPECT_EQ(pz[1], 1);
+    EXPECT_EQ(pz[2], 1);
+    EXPECT_EQ(pz[3], -1);
   }
 }
 
@@ -1802,6 +1914,118 @@ TEST(KernelClass, ShrinkClassRejectsUnsupportedDtype) {
   Shrink shrink_kernel{ctx};
   Tensor x = Tensor::FromUint8("", {2}, {1u, 2u});
   EXPECT_THROW(shrink_kernel(x), std::invalid_argument);
+}
+
+namespace {
+
+// Builds a half-precision tensor (FLOAT16 or BFLOAT16) from a flattened list
+// of float32 sample values by promoting/demoting through
+// :cpp:func:`DemoteFromFloat32`.
+Tensor MakeHalfTensor(int32_t target_dtype, const std::vector<int64_t> &shape,
+                      const std::vector<float> &values) {
+  Tensor f = Tensor::FromFloat("", shape, values);
+  return onnx_kernels::DemoteFromFloat32(f, target_dtype);
+}
+
+// Decodes a half-precision tensor back into a std::vector<float> by promoting
+// to FLOAT32. Used to verify the bit-pattern of kernel outputs against the
+// equivalent FLOAT computation rounded to the same half-precision dtype.
+std::vector<float> DecodeHalfTensor(const Tensor &t) {
+  Tensor f = onnx_kernels::PromoteToFloat32(t);
+  const float *p = f.AsFloat();
+  return std::vector<float>(p, p + f.element_count());
+}
+
+} // namespace
+
+// Verifies that the half-precision path of ``kernel::Gemm`` matches the
+// FLOAT path rounded through the same half-precision dtype, for both
+// FLOAT16 and BFLOAT16 inputs (with and without the optional ``C`` bias).
+TEST(KernelClass, GemmHalfPrecisionMatchesFloatReference) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Gemm gemm_kernel{ctx};
+  const std::vector<float> a_vals = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
+  const std::vector<float> b_vals = {0.5f, -1.0f, 1.5f, 2.0f, -0.5f, 0.25f};
+  const std::vector<float> c_vals = {0.125f, -0.5f};
+  const Tensor a_f = Tensor::FromFloat("", {2, 3}, a_vals);
+  const Tensor b_f = Tensor::FromFloat("", {3, 2}, b_vals);
+  const Tensor c_f = Tensor::FromFloat("", {2}, c_vals);
+  const float alpha = 0.5f;
+  const float beta = 1.5f;
+  const Tensor ref = gemm_kernel(a_f, b_f, &c_f, alpha, beta, 0, 0);
+  ASSERT_EQ(ref.shape, (std::vector<int64_t>{2, 2}));
+
+  for (int32_t target : {static_cast<int32_t>(onnx_kernels::DataType::FLOAT16),
+                         static_cast<int32_t>(onnx_kernels::DataType::BFLOAT16)}) {
+    const Tensor a_h = MakeHalfTensor(target, {2, 3}, a_vals);
+    const Tensor b_h = MakeHalfTensor(target, {3, 2}, b_vals);
+    const Tensor c_h = MakeHalfTensor(target, {2}, c_vals);
+    const Tensor y_h = gemm_kernel(a_h, b_h, &c_h, alpha, beta, 0, 0);
+    ASSERT_EQ(y_h.data_type, target);
+    ASSERT_EQ(y_h.shape, ref.shape);
+    // Compare via the matching half rounding of the FLOAT reference.
+    const Tensor expected =
+        onnx_kernels::DemoteFromFloat32(onnx_kernels::PromoteToFloat32(ref), target);
+    // Bit-for-bit equality is too strict because the inner computation is
+    // performed in FLOAT32 — compare numerical values after promoting both.
+    const std::vector<float> got = DecodeHalfTensor(y_h);
+    const std::vector<float> exp = DecodeHalfTensor(expected);
+    ASSERT_EQ(got.size(), exp.size());
+    const float tol =
+        target == static_cast<int32_t>(onnx_kernels::DataType::FLOAT16) ? 1e-2f : 5e-2f;
+    for (std::size_t i = 0; i < got.size(); ++i) {
+      EXPECT_NEAR(got[i], exp[i], tol) << "i=" << i;
+    }
+  }
+
+  // In-place overload preserves the half-precision dtype of the output.
+  const Tensor a_h =
+      MakeHalfTensor(static_cast<int32_t>(onnx_kernels::DataType::FLOAT16), {2, 3}, a_vals);
+  const Tensor b_h =
+      MakeHalfTensor(static_cast<int32_t>(onnx_kernels::DataType::FLOAT16), {3, 2}, b_vals);
+  Tensor y_h("", onnx_kernels::DataType::FLOAT16, {2, 2},
+             std::vector<uint8_t>(4 * sizeof(uint16_t)));
+  gemm_kernel(a_h, b_h, /*c=*/nullptr, 1.0f, 0.0f, 0, 0, y_h);
+  EXPECT_EQ(y_h.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT16));
+}
+
+// Verifies that ``kernel::MatMul`` produces FLOAT16 / BFLOAT16 outputs that
+// numerically match the FLOAT computation rounded through the same dtype.
+TEST(KernelClass, MatMulHalfPrecisionMatchesFloatReference) {
+  const KernelContext ctx{DefaultOpset(13)};
+  MatMul matmul_kernel{ctx};
+  const std::vector<float> a_vals = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
+  const std::vector<float> b_vals = {7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f};
+  const Tensor a_f = Tensor::FromFloat("", {2, 3}, a_vals);
+  const Tensor b_f = Tensor::FromFloat("", {3, 2}, b_vals);
+  const Tensor ref = matmul_kernel(a_f, b_f);
+
+  for (int32_t target : {static_cast<int32_t>(onnx_kernels::DataType::FLOAT16),
+                         static_cast<int32_t>(onnx_kernels::DataType::BFLOAT16)}) {
+    const Tensor a_h = MakeHalfTensor(target, {2, 3}, a_vals);
+    const Tensor b_h = MakeHalfTensor(target, {3, 2}, b_vals);
+    const Tensor y_h = matmul_kernel(a_h, b_h);
+    ASSERT_EQ(y_h.data_type, target);
+    ASSERT_EQ(y_h.shape, ref.shape);
+    const std::vector<float> got = DecodeHalfTensor(y_h);
+    const std::vector<float> exp = DecodeHalfTensor(
+        onnx_kernels::DemoteFromFloat32(onnx_kernels::PromoteToFloat32(ref), target));
+    ASSERT_EQ(got.size(), exp.size());
+    const float tol = target == static_cast<int32_t>(onnx_kernels::DataType::FLOAT16) ? 1.0f : 4.0f;
+    for (std::size_t i = 0; i < got.size(); ++i) {
+      EXPECT_NEAR(got[i], exp[i], tol) << "i=" << i;
+    }
+  }
+
+  // In-place overload preserves the half-precision dtype.
+  const Tensor a_h =
+      MakeHalfTensor(static_cast<int32_t>(onnx_kernels::DataType::BFLOAT16), {2, 3}, a_vals);
+  const Tensor b_h =
+      MakeHalfTensor(static_cast<int32_t>(onnx_kernels::DataType::BFLOAT16), {3, 2}, b_vals);
+  Tensor y_h("", onnx_kernels::DataType::BFLOAT16, {2, 2},
+             std::vector<uint8_t>(4 * sizeof(uint16_t)));
+  matmul_kernel(a_h, b_h, y_h);
+  EXPECT_EQ(y_h.data_type, static_cast<int32_t>(onnx_kernels::DataType::BFLOAT16));
 }
 
 } // namespace Test

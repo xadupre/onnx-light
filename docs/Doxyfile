@@ -10,6 +10,7 @@ INPUT                  = ../onnx_light/onnx_helpers/include \
                          ../onnx_light/onnx_backend_test \
                          ../onnx_light/onnx_kernels \
                          ../onnx_light/onnx_proto \
+                         ../onnx_light/onnx_manipulations \
                          ../onnx_light/onnx_lib
 FILE_PATTERNS          = *.h *.hpp
 RECURSIVE              = YES
@@ -46,20 +47,21 @@ EXPAND_ONLY_PREDEF     = YES
 # SERIALIZATION_METHOD expands to the parse/serialize method signatures.
 PREDEFINED             = \
     "ONNX_API=" \
+    "ONNX_LIGHT_NAMESPACE=onnx_light" \
     "ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(domain,ver,name)=name" \
-    "BEGIN_PROTO(cls,doc)=/** doc */ class cls : public onnx::Message { public:" \
-    "BEGIN_PROTO_NOINIT(cls,doc)=/** doc */ class cls : public onnx::Message { public:" \
+    "BEGIN_PROTO(cls,doc)=/** doc */ class cls : public onnx_light::Message { public:" \
+    "BEGIN_PROTO_NOINIT(cls,doc)=/** doc */ class cls : public onnx_light::Message { public:" \
     "END_PROTO()=};" \
     "FIELD(type,name,order,doc)=/** doc */ type name;" \
     "FIELD_DEFAULT(type,name,order,default_value,doc)=/** doc */ type name;" \
-    "FIELD_STR(name,order,doc)=/** doc */ onnx::utils::String name;" \
-    "FIELD_REPEATED(type,name,order,doc)=/** doc */ onnx::utils::RepeatedField<type> name;" \
-    "FIELD_REPEATED_PROTO(type,name,order,doc)=/** doc */ onnx::utils::RepeatedProtoField<type> name;" \
-    "FIELD_REPEATED_PACKED(type,name,order,doc)=/** doc */ onnx::utils::RepeatedField<type> name;" \
-    "FIELD_OPTIONAL(type,name,order,doc)=/** doc */ onnx::utils::OptionalField<type> name;" \
-    "FIELD_OPTIONAL_ONEOF(type,name,order,oneof,doc)=/** doc */ onnx::utils::OptionalField<type> name;" \
-    "FIELD_OPTIONAL_ENUM(type,name,order,doc)=/** doc */ onnx::utils::OptionalEnumField<type> name;" \
-    "SERIALIZATION_METHOD()=uint64_t SerializeSize() const; void ParseFromString(const std::string &raw); void ParseFromString(const std::string &raw, onnx::ParseOptions &options); void SerializeToString(std::string &out) const; void SerializeToString(std::string &out, onnx::SerializeOptions &options) const; uint64_t SerializeSize(onnx::utils::BinaryWriteStream &stream, onnx::SerializeOptions &options) const; void ParseFromStream(onnx::utils::BinaryStream &stream, onnx::ParseOptions &options); void SerializeToStream(onnx::utils::BinaryWriteStream &stream, onnx::SerializeOptions &options) const; std::vector<std::string> PrintToVectorString(onnx::utils::PrintOptions &options) const;" \
+    "FIELD_STR(name,order,doc)=/** doc */ onnx_light::utils::String name;" \
+    "FIELD_REPEATED(type,name,order,doc)=/** doc */ onnx_light::utils::RepeatedField<type> name;" \
+    "FIELD_REPEATED_PROTO(type,name,order,doc)=/** doc */ onnx_light::utils::RepeatedProtoField<type> name;" \
+    "FIELD_REPEATED_PACKED(type,name,order,doc)=/** doc */ onnx_light::utils::RepeatedField<type> name;" \
+    "FIELD_OPTIONAL(type,name,order,doc)=/** doc */ onnx_light::utils::OptionalField<type> name;" \
+    "FIELD_OPTIONAL_ONEOF(type,name,order,oneof,doc)=/** doc */ onnx_light::utils::OptionalField<type> name;" \
+    "FIELD_OPTIONAL_ENUM(type,name,order,doc)=/** doc */ onnx_light::utils::OptionalEnumField<type> name;" \
+    "SERIALIZATION_METHOD()=uint64_t SerializeSize() const; void ParseFromString(const std::string &raw); void ParseFromString(const std::string &raw, onnx_light::ParseOptions &options); void SerializeToString(std::string &out) const; void SerializeToString(std::string &out, onnx_light::SerializeOptions &options) const; uint64_t SerializeSize(onnx_light::utils::BinaryWriteStream &stream, onnx_light::SerializeOptions &options) const; void ParseFromStream(onnx_light::utils::BinaryStream &stream, onnx_light::ParseOptions &options); void SerializeToStream(onnx_light::utils::BinaryWriteStream &stream, onnx_light::SerializeOptions &options) const; std::vector<std::string> PrintToVectorString(onnx_light::utils::PrintOptions &options) const;" \
     "define_data(type, field)=/** doc */ template <> inline type *Tensor::data<type>() { if (is_raw_data_) { return reinterpret_cast<type *>(raw_data_.data()); } return field.data(); } template <> inline const type *Tensor::data<type>() const { if (is_raw_data_) { return reinterpret_cast<const type *>(raw_data_.data()); } return field.data(); }"
 
 # Quiet mode

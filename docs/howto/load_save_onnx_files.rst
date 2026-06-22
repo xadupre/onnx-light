@@ -280,6 +280,35 @@ Load/save with aligned external data
           onnx::ParseModelProtoFromStream(loaded, in, load_options);
 
 
+Save and load the text format (textproto)
+-----------------------------------------
+
+The Python helpers also support the protobuf *text format* (``.textproto``),
+a human-readable, pure-Python (de)serialization that does not require the
+``protobuf`` runtime.  The format is selected automatically from the
+``.textproto`` extension, or explicitly with ``format="textproto"``.
+
+.. tab-set::
+
+   .. tab-item:: Python
+      :sync: python
+
+      .. code-block:: python
+
+          import onnx_light.onnx as onnxl
+
+          # Inferred from the .textproto extension.
+          onnxl.save(model, "model.textproto")
+          loaded = onnxl.load("model.textproto")
+
+          # Explicit format, any extension.
+          onnxl.save(model, "model.onnx", format="textproto")
+          loaded = onnxl.load("model.onnx", format="textproto")
+
+The textproto format keeps the full model structure inline; saving with
+external tensor data is not supported for this format.
+
+
 Notes
 -----
 

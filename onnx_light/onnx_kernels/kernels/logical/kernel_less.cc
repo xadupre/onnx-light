@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_kernels/kernels/elementwise_helpers.h"
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_kernels/kernels/_helpers/elementwise_helpers.h"
 #include "onnx_kernels/kernels/logical/include_logical_kernels.h"
 
 #include <cstdint>
@@ -37,10 +38,22 @@ Tensor Less::operator()(const Tensor &x, const Tensor &y) const {
   switch (x.data_type) {
   case DataType::FLOAT:
     return LessAlloc<float>("FLOAT", DataType::FLOAT, x, y);
+  case DataType::FLOAT16:
+    return detail::BinaryHalfCompareElementwiseAlloc(
+        kLessName, "FLOAT16", DataType::FLOAT16, x, y, Float16BitsToFloat,
+        [](float a, float b) -> uint8_t { return a < b ? 1 : 0; });
+  case DataType::BFLOAT16:
+    return detail::BinaryHalfCompareElementwiseAlloc(
+        kLessName, "BFLOAT16", DataType::BFLOAT16, x, y, Bfloat16BitsToFloat,
+        [](float a, float b) -> uint8_t { return a < b ? 1 : 0; });
   case DataType::INT8:
     return LessAlloc<int8_t>("INT8", DataType::INT8, x, y);
   case DataType::INT16:
     return LessAlloc<int16_t>("INT16", DataType::INT16, x, y);
+  case DataType::INT32:
+    return LessAlloc<int32_t>("INT32", DataType::INT32, x, y);
+  case DataType::INT64:
+    return LessAlloc<int64_t>("INT64", DataType::INT64, x, y);
   case DataType::UINT8:
     return LessAlloc<uint8_t>("UINT8", DataType::UINT8, x, y);
   case DataType::UINT16:
@@ -50,9 +63,9 @@ Tensor Less::operator()(const Tensor &x, const Tensor &y) const {
   case DataType::UINT64:
     return LessAlloc<uint64_t>("UINT64", DataType::UINT64, x, y);
   default:
-    throw std::invalid_argument(std::string(kLessName) +
-                                " only supports FLOAT, INT8, INT16, UINT8, UINT16, UINT32 "
-                                "and UINT64 inputs.");
+    EXT_THROW_INVALID(kLessName, ": unsupported data type ", x.data_type,
+                      ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, INT32, "
+                      "INT64, UINT8, UINT16, UINT32 and UINT64 inputs.");
   }
 }
 
@@ -60,10 +73,22 @@ void Less::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
   switch (x.data_type) {
   case DataType::FLOAT:
     return LessInPlace<float>("FLOAT", DataType::FLOAT, x, y, output);
+  case DataType::FLOAT16:
+    return detail::BinaryHalfCompareElementwise(
+        kLessName, "FLOAT16", DataType::FLOAT16, x, y, output, Float16BitsToFloat,
+        [](float a, float b) -> uint8_t { return a < b ? 1 : 0; });
+  case DataType::BFLOAT16:
+    return detail::BinaryHalfCompareElementwise(
+        kLessName, "BFLOAT16", DataType::BFLOAT16, x, y, output, Bfloat16BitsToFloat,
+        [](float a, float b) -> uint8_t { return a < b ? 1 : 0; });
   case DataType::INT8:
     return LessInPlace<int8_t>("INT8", DataType::INT8, x, y, output);
   case DataType::INT16:
     return LessInPlace<int16_t>("INT16", DataType::INT16, x, y, output);
+  case DataType::INT32:
+    return LessInPlace<int32_t>("INT32", DataType::INT32, x, y, output);
+  case DataType::INT64:
+    return LessInPlace<int64_t>("INT64", DataType::INT64, x, y, output);
   case DataType::UINT8:
     return LessInPlace<uint8_t>("UINT8", DataType::UINT8, x, y, output);
   case DataType::UINT16:
@@ -73,9 +98,9 @@ void Less::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
   case DataType::UINT64:
     return LessInPlace<uint64_t>("UINT64", DataType::UINT64, x, y, output);
   default:
-    throw std::invalid_argument(std::string(kLessName) +
-                                " only supports FLOAT, INT8, INT16, UINT8, UINT16, UINT32 "
-                                "and UINT64 inputs.");
+    EXT_THROW_INVALID(kLessName, ": unsupported data type ", x.data_type,
+                      ", only supports FLOAT, FLOAT16, BFLOAT16, INT8, INT16, INT32, "
+                      "INT64, UINT8, UINT16, UINT32 and UINT64 inputs.");
   }
 }
 

@@ -466,9 +466,7 @@ std::string OptimTensor::ToString() const {
 }
 
 void OptimTensor::SetMinMax(double min, double max) {
-  if (min > max) {
-    throw std::invalid_argument("OptimTensor::SetMinMax requires min <= max");
-  }
+  EXT_ENFORCE_INVALID(!(min > max), "OptimTensor::SetMinMax requires min <= max");
   min_ = min;
   max_ = max;
 }
@@ -591,7 +589,7 @@ namespace {
 // Builds an OptimShape from a TensorShapeProto, preserving symbolic
 // dimensions: ``dim_value`` becomes a concrete int dim, ``dim_param``
 // becomes a symbolic dim with the same name, and an unset dim becomes
-// a fresh ``"?"`` placeholder. Mirrors the historical helper that
+// an empty-string placeholder. Mirrors the historical helper that
 // lived in shape_inference.cc.
 OptimShape ShapeFromTensorShapeProto(const TensorShapeProto &sp) {
   OptimShape shape;
@@ -602,7 +600,7 @@ OptimShape ShapeFromTensorShapeProto(const TensorShapeProto &sp) {
     } else if (d.has_dim_param()) {
       shape.PushBack(OptimDim(std::string(d.dim_param().data(), d.dim_param().size())));
     } else {
-      shape.PushBack(OptimDim(std::string("?")));
+      shape.PushBack(OptimDim(std::string()));
     }
   }
   return shape;

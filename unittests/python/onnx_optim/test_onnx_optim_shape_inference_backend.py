@@ -1,10 +1,15 @@
 import unittest
-from onnx_light.ext_test_case import ExtTestCase
+
+
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx_optim.shape_inference import infer_shapes_model
-from onnx_light.onnx.backend import collect_test_cases
 from onnx_light.onnx_py._onnxpyoptim import shape_inference as si
+
+# The backend test registries are only available in the full build; skip this
+# module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
+collect_test_cases = import_or_skip("onnx_light.onnx.backend", "collect_test_cases")
 
 
 class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
@@ -138,7 +143,6 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
             inferred = computed[name]
             self.assertEqual(expected, inferred, f"{name!r} failed\n{expected=}\n--\n{inferred=}")
 
-    @unittest.skip("broken")
     def test_inference_shape_backend_non_zero_expression(self):
         tests = [
             test
@@ -150,7 +154,7 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
         model = onnxl.ModelProto()
         model.CopyFrom(test.model)
         model.graph.value_info.clear()
-        infer_shapes_model(model)
+        infer_shapes_model(model, prefill_with_value_info_output=True)
         expected_info = {
             info.name: info for info in [*test.model.graph.value_info, *test.model.graph.output]
         }

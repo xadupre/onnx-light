@@ -10,7 +10,9 @@
 #include <utility>
 #include <vector>
 
+#include "onnx_optim/expressions.h"
 #include "onnx_optim/optim_tensor.h"
+#include "onnx_optim/shapes/_helpers/shape_helpers.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -21,6 +23,15 @@ namespace tensor {
 
 namespace {
 
+// Converts an ``expressions::DimType`` produced by the symbolic dimension
+// helpers back into an ``OptimDim``.
+OptimDim FromDimType(const expressions::DimType &d) {
+  if (std::holds_alternative<int64_t>(d)) {
+    return OptimDim(std::get<int64_t>(d));
+  }
+  return OptimDim(std::get<std::string>(d));
+}
+
 // Extracts the per-axis pad values from a known ``pads`` initializer (length
 // ``2 * num_axes``) into ``out_begin``/``out_end`` (indexed by data axis).
 // ``axes`` is the resolved list of data axes that ``pads`` applies to.
@@ -29,11 +40,8 @@ bool FillPads(const std::vector<int64_t> &pads_values, const std::vector<int64_t
               std::vector<int64_t> &out_begin, std::vector<int64_t> &out_end,
               std::vector<bool> &has_pad) {
   const std::size_t num_axes = axes.size();
-  if (pads_values.size() != 2 * num_axes) {
-    throw std::invalid_argument("ComputeShapePad: 'pads' length (" +
-                                std::to_string(pads_values.size()) + ") must equal 2 * num_axes (" +
-                                std::to_string(2 * num_axes) + ").");
-  }
+  EXT_ENFORCE_INVALID(pads_values.size() == 2 * num_axes, "ComputeShapePad: 'pads' length (",
+                      pads_values.size(), ") must equal 2 * num_axes (", 2 * num_axes, ").");
   for (std::size_t i = 0; i < num_axes; ++i) {
     const int64_t axis = axes[i];
     out_begin[static_cast<std::size_t>(axis)] = pads_values[i];
@@ -50,10 +58,8 @@ std::vector<int64_t> NormalizeAxes(const std::vector<int64_t> &axes_values, int6
   out.reserve(axes_values.size());
   for (int64_t a : axes_values) {
     int64_t normalized = a < 0 ? a + rank : a;
-    if (normalized < 0 || normalized >= rank) {
-      throw std::invalid_argument("ComputeShapePad: axis " + std::to_string(a) +
-                                  " is out of range for input rank " + std::to_string(rank) + ".");
-    }
+    EXT_ENFORCE_INVALID(!(normalized < 0 || normalized >= rank), "ComputeShapePad: axis ", a,
+                        " is out of range for input rank ", rank, ".");
     out.push_back(normalized);
   }
   return out;
@@ -64,9 +70,8 @@ std::vector<int64_t> NormalizeAxes(const std::vector<int64_t> &axes_values, int6
 void ComputeShapePad(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Pad", "ComputeShapePad");
 
-  if (node.input_size() < 1) {
-    throw std::invalid_argument("ComputeShapePad: Pad requires at least one input.");
-  }
+  EXT_ENFORCE_INVALID(!(node.input_size() < 1),
+                      "ComputeShapePad: Pad requires at least one input.");
 
   const OptimTensor &input = ctx.Get(node.input(0).as_string());
   const TensorType dtype = input.Dtype();
@@ -150,13 +155,12 @@ void ComputeShapePad(ShapesContext &ctx, const NodeProto &node) {
   for (std::size_t i = 0; i < rank; ++i) {
     const OptimDim &in_dim = in_shape[i];
     if (all_pads_known) {
-      if (in_dim.IsInt()) {
-        out_shape.PushBack(OptimDim(in_dim.AsInt() + pad_begin[i] + pad_end[i]));
-      } else if (has_pad[i] && pad_begin[i] == 0 && pad_end[i] == 0) {
-        out_shape.PushBack(in_dim);
-      } else {
-        out_shape.PushBack(OptimDim("Pad_dim" + std::to_string(i)));
-      }
+      // output_dim = input_dim + pad_begin + pad_end. When the input dim is
+      // symbolic this yields a symbolic expression (e.g. ``H+2``) rather than
+      // a fresh, opaque dimension name.
+      const int64_t total = pad_begin[i] + pad_end[i];
+      out_shape.PushBack(
+          FromDimType(expressions::dim_add(ToDimType(in_dim), expressions::DimType{total})));
     } else {
       out_shape.PushBack(OptimDim("Pad_dim" + std::to_string(i)));
     }

@@ -15,7 +15,7 @@
 #include <cmath>
 
 #include "onnx_lib/defs/schema.h"
-#include "onnx_lib/defs/tensor_proto_util.h"
+#include "onnx_manipulations/tensor_proto_util.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 

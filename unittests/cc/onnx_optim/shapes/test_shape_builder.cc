@@ -59,8 +59,9 @@ void AddInt64Initializer(GraphProto &graph, const std::string &name,
 
 // Adds a float input to ``graph`` whose shape mixes concrete and symbolic
 // dimensions. ``shape[i] >= 0`` is treated as a concrete ``dim_value``;
-// ``shape[i] < 0`` picks ``symbolic_names[i]`` as the ``dim_param`` (or
-// ``"?"`` when out of range).
+// ``shape[i] < 0`` picks ``symbolic_names[i]`` as the ``dim_param`` when
+// available; otherwise the dim is left fully unset (no dim_value and no
+// dim_param), which the optim layer treats as "no information / wildcard".
 void AddFloatInput(GraphProto &graph, const std::string &name, const std::vector<int64_t> &shape,
                    const std::vector<std::string> &symbolic_names = {}) {
   ValueInfoProto *vi = graph.add_input();
@@ -72,7 +73,10 @@ void AddFloatInput(GraphProto &graph, const std::string &name, const std::vector
   for (std::size_t i = 0; i < shape.size(); ++i) {
     TensorShapeProto::Dimension *d = sp->add_dim();
     if (shape[i] < 0) {
-      d->set_dim_param(i < symbolic_names.size() ? symbolic_names[i] : std::string("?"));
+      if (i < symbolic_names.size() && !symbolic_names[i].empty()) {
+        d->set_dim_param(symbolic_names[i]);
+      }
+      // Otherwise leave the dim unset (carries no name information).
     } else {
       d->set_dim_value(shape[i]);
     }
@@ -92,7 +96,10 @@ void AddFloatOutput(GraphProto &graph, const std::string &name, const std::vecto
   for (std::size_t i = 0; i < shape.size(); ++i) {
     TensorShapeProto::Dimension *d = sp->add_dim();
     if (shape[i] < 0) {
-      d->set_dim_param(i < symbolic_names.size() ? symbolic_names[i] : std::string("?"));
+      if (i < symbolic_names.size() && !symbolic_names[i].empty()) {
+        d->set_dim_param(symbolic_names[i]);
+      }
+      // Otherwise leave the dim unset (carries no name information).
     } else {
       d->set_dim_value(shape[i]);
     }
@@ -324,12 +331,14 @@ TEST(OnnxOptimShapeBuilder, CheckShapeComputesExpectedRankTypesAndConcreteDims) 
 // Input: X: float[a, b, c]
 // Output: Y: float[a, b, c]
 //
-// In C++ the ``-1`` dimension is resolved to a symbolic placeholder
-// (``Reshape_neg1_<index>``) rather than a symbolic arithmetic expression
-// (``c//2``) because C++ shape inference does not perform symbolic
-// arithmetic on unknown dimension products.  The test therefore checks
-// ranks, concrete intermediate dims and that ``-1`` positions remain
-// symbolic.
+// In C++ the ``-1`` dimension is resolved by feeding the symbolic factors
+// of ``data_shape`` through
+// :cpp:func:`onnx_optim::expressions::simplify_expression`, yielding clean
+// symbolic expressions (``xr`` ends up with ``c//2`` in the last dim and
+// ``xrr`` keeps the floor division atomic as ``2*a*b*c//2//(a*b)`` — it is
+// *not* simplified back to ``c`` since ``//`` is floor division). The
+// assertions below only check ranks and concrete dims to remain robust to
+// the exact rendering of the simplified expression.
 TEST(OnnxOptimShapeBuilder, ReshapeReshapePreservesRankAndPartialDims) {
   ModelProto model;
   model.set_ir_version(10);
@@ -682,8 +691,10 @@ TEST(OnnxOptimShapeBuilder, ConcatSplitApplyInferredShapesToGraph) {
   EXPECT_EQ(ctx.Get("xy").Dtype(), onnx_optim::TensorType::kFloat);
   // non-concat dim (axis=0) comes from both X and Y which both have "a"
   CheckSymbolicDim(ctx, "xy", 0, "a");
-  // concat axis: symbolic (b + c cannot be summed symbolically in C++)
-  CheckIsSymbolic(ctx, "xy", 1);
+  // concat axis: symbolic — ComputeShapeConcat sums the symbolic
+  // dims with ``dim_add`` so the axis dim is the simplified
+  // expression ``b+c``.
+  CheckSymbolicDim(ctx, "xy", 1, "b+c");
 
   // S1, S2: each has rank 2; the non-concat dim is "a"; axis dim is symbolic
   for (const std::string &name : {"S1", "S2"}) {

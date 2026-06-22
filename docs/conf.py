@@ -1,6 +1,8 @@
 import os
 import subprocess
 import sys
+from docutils import nodes
+from docutils.parsers.rst import Directive
 import onnx_light
 
 project = "onnx-light"
@@ -70,6 +72,7 @@ exclude_patterns = ["build"]
 html_theme = "pydata_sphinx_theme"
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
+html_js_files = ["svg_zoom.js"]
 html_logo = "_static/logo.svg"
 html_favicon = "_static/logo.svg"
 html_theme_options = {
@@ -97,17 +100,46 @@ epkg_dictionary = {
     "Breathe": "https://breathe.readthedocs.io/",
     "C++ onnx-light examples": "https://github.com/xadupre/onnx-light/tree/main/examples",
     "Doxygen": "https://www.doxygen.nl/",
+    "FlatBuffers": "https://flatbuffers.dev/",
     "libFuzzer": "https://llvm.org/docs/LibFuzzer.html",
     "libFuzzer command line": "https://llvm.org/docs/LibFuzzer.html#options",
     "libFuzzer entry point": "https://llvm.org/docs/LibFuzzer.html#fuzz-target",
+    "lib_onnx_backend_test": (
+        "https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_backend_test"
+    ),
+    "lib_onnx_kernels": (
+        "https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_kernels"
+    ),
     "Mermaid": "https://mermaid.js.org/",
     "mermaid.js": "https://mermaid.js.org/",
     "onnx": "https://github.com/onnx/onnx",
+    "onnx_light/onnx_backend_test/cases": (
+        "https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_backend_test/cases"
+    ),
+    "onnx_light/onnx_kernels": (
+        "https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_kernels"
+    ),
+    "onnx_light/onnx_kernels/kernels": (
+        "https://github.com/xadupre/onnx-light/tree/main/onnx_light/onnx_kernels/kernels"
+    ),
+    "onnx_light/onnx_kernels/run_nodes.cc": (
+        "https://github.com/xadupre/onnx-light/blob/main/onnx_light/onnx_kernels/run_nodes.cc"
+    ),
     "onnxruntime": "https://github.com/microsoft/onnxruntime",
     "OSS-Fuzz": "https://github.com/google/oss-fuzz",
     "protobuf": "https://protobuf.dev/",
     "Protocol Buffers": "https://protobuf.dev/",
     "sphinx-datatables": "https://pypi.org/project/sphinx-datatables/",
+    "unittests/cc/onnx_backend_test": (
+        "https://github.com/xadupre/onnx-light/tree/main/unittests/cc/onnx_backend_test"
+    ),
+    "unittests/cc/onnx_kernels": (
+        "https://github.com/xadupre/onnx-light/tree/main/unittests/cc/onnx_kernels"
+    ),
+    "unittests/onnxl_vs_ort/test_backend_with_onnxruntime.py": (
+        "https://github.com/xadupre/onnx-light/blob/main/unittests/onnxl_vs_ort/"
+        "test_backend_with_onnxruntime.py"
+    ),
 }
 
 
@@ -142,6 +174,47 @@ def _on_builder_inited(app) -> None:
     generate_operators_doc(operators_dir, progress_callback=logger.info)
 
 
+def _build_to_svg_example(code: str) -> tuple[str, str]:
+    """Builds the rendered SVG used in documentation from provided example code.
+
+    Args:
+        code: Python code executed to populate variable ``svg``.
+
+    Returns:
+        tuple[str, str]: Input Python code snippet and rendered SVG content.
+    """
+    namespace: dict[str, object] = {}
+    exec(code, namespace)
+    svg = namespace.get("svg")
+    if not isinstance(svg, str):
+        raise RuntimeError("The to-svg example must define 'svg' as a string.")
+    return code, svg
+
+
+class ToSvgExampleDirective(Directive):
+    """Renders the `to_svg` example code and the resulting SVG image."""
+
+    has_content = True
+    required_arguments = 0
+    optional_arguments = 0
+    final_argument_whitespace = False
+
+    def run(self):
+        """Returns the literal Python example and the rendered SVG output.
+
+        Returns:
+            list[nodes.Node]: Literal code block and raw HTML SVG nodes.
+        """
+        code = "\n".join(self.content).strip()
+        if not code:
+            raise self.error("to-svg-example requires Python code in the directive body.")
+        code, svg = _build_to_svg_example(code)
+        literal = nodes.literal_block(code, code)
+        literal["language"] = "python"
+        return [literal, nodes.raw("", svg, format="html")]
+
+
 def setup(app) -> None:
-    """Registers Sphinx event hooks used by this configuration."""
+    """Registers Sphinx hooks and custom directives used by this configuration."""
     app.connect("builder-inited", _on_builder_inited)
+    app.add_directive("to-svg-example", ToSvgExampleDirective)

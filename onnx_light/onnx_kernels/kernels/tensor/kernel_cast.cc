@@ -4,14 +4,15 @@
 
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 
-#include "onnx_kernels/kernels/tensor/cast_float8.h"
-#include "onnx_kernels/kernels/tensor/cast_sub_byte.h"
+#include "onnx_kernels/kernels/_helpers/cast_float8.h"
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+#include "onnx_kernels/kernels/_helpers/cast_sub_byte.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -37,6 +38,8 @@ bool IsSupportedNumericCastDtype(int32_t dtype) {
   case DataType::INT16:
   case DataType::UINT16:
   case DataType::BOOL:
+  case DataType::FLOAT16:
+  case DataType::BFLOAT16:
     return true;
   default:
     return false;
@@ -44,15 +47,16 @@ bool IsSupportedNumericCastDtype(int32_t dtype) {
 }
 
 // Float8 element types currently supported by ``kernel::Cast``. These types
-// only round-trip against ``FLOAT`` (matching what the upstream ONNX
-// ``test_cast_<FROM>_to_<TO>`` node tests exercise for the floating-point
-// 8-bit variants).
+// only round-trip against ``FLOAT`` / ``FLOAT16`` / ``BFLOAT16`` (matching
+// what the upstream ONNX ``test_cast_<FROM>_to_<TO>`` node tests exercise
+// for the floating-point 8-bit variants).
 bool IsFloat8CastDtype(int32_t dtype) {
   switch (static_cast<DataType>(dtype)) {
   case DataType::FLOAT8E4M3FN:
   case DataType::FLOAT8E4M3FNUZ:
   case DataType::FLOAT8E5M2:
   case DataType::FLOAT8E5M2FNUZ:
+  case DataType::FLOAT8E8M0:
     return true;
   default:
     return false;
@@ -60,10 +64,10 @@ bool IsFloat8CastDtype(int32_t dtype) {
 }
 
 // Packed sub-byte dtypes currently supported by ``kernel::Cast``. INT4 / UINT4
-// pack two elements per byte, INT2 / UINT2 four. Each type only round-trips
-// against ``FLOAT`` and its companion whole-byte integer (``INT8`` for the
-// signed variants, ``UINT8`` for the unsigned variants), mirroring the
-// upstream ONNX ``test_cast_<FROM>_to_<TO>`` coverage for these dtypes.
+// and the 4-bit floating-point variant FLOAT4E2M1 pack two elements per byte,
+// INT2 / UINT2 four. Each type only round-trips against its supported
+// partners (see :ref:`IsSupportedSubBytePair`), mirroring the upstream ONNX
+// ``test_cast_<FROM>_to_<TO>`` coverage for these dtypes.
 bool IsInt4CastDtype(int32_t dtype) {
   return static_cast<DataType>(dtype) == DataType::INT4 ||
          static_cast<DataType>(dtype) == DataType::UINT4;
@@ -74,7 +78,13 @@ bool IsInt2CastDtype(int32_t dtype) {
          static_cast<DataType>(dtype) == DataType::UINT2;
 }
 
-bool IsSubByteCastDtype(int32_t dtype) { return IsInt4CastDtype(dtype) || IsInt2CastDtype(dtype); }
+bool IsFloat4CastDtype(int32_t dtype) {
+  return static_cast<DataType>(dtype) == DataType::FLOAT4E2M1;
+}
+
+bool IsSubByteCastDtype(int32_t dtype) {
+  return IsInt4CastDtype(dtype) || IsInt2CastDtype(dtype) || IsFloat4CastDtype(dtype);
+}
 
 bool IsSupportedCastDtype(int32_t dtype) {
   if (IsSupportedNumericCastDtype(dtype))
@@ -86,20 +96,40 @@ bool IsSupportedCastDtype(int32_t dtype) {
   return static_cast<DataType>(dtype) == DataType::STRING;
 }
 
-// Float ↔ float8 round-trip. ``saturate`` semantics are hard-coded to ``true``
-// to match the default ``Cast`` attribute used by the registered cases.
-std::uint8_t FloatToFloat8Bits(float v, int32_t to) {
-  switch (static_cast<DataType>(to)) {
-  case DataType::FLOAT8E4M3FN:
-    return FloatToFloat8E4M3FNBits(v);
-  case DataType::FLOAT8E4M3FNUZ:
-    return FloatToFloat8E4M3FNUZBits(v);
-  case DataType::FLOAT8E5M2:
-    return FloatToFloat8E5M2Bits(v);
-  case DataType::FLOAT8E5M2FNUZ:
-    return FloatToFloat8E5M2FNUZBits(v);
-  default:
-    throw std::invalid_argument("kernel::Cast: unsupported float8 'to' dtype.");
+// Float ↔ float8 round-trip. When ``saturate`` is true (default Cast
+// attribute), overflow maps to the largest finite magnitude. When false,
+// overflow maps to NaN (FN/FNUZ types) or infinity (E5M2).
+std::uint8_t FloatToFloat8Bits(float v, int32_t to, bool saturate) {
+  if (saturate) {
+    switch (static_cast<DataType>(to)) {
+    case DataType::FLOAT8E4M3FN:
+      return FloatToFloat8E4M3FNBits(v);
+    case DataType::FLOAT8E4M3FNUZ:
+      return FloatToFloat8E4M3FNUZBits(v);
+    case DataType::FLOAT8E5M2:
+      return FloatToFloat8E5M2Bits(v);
+    case DataType::FLOAT8E5M2FNUZ:
+      return FloatToFloat8E5M2FNUZBits(v);
+    case DataType::FLOAT8E8M0:
+      return FloatToFloat8E8M0Bits(v);
+    default:
+      EXT_THROW_INVALID("kernel::Cast: unsupported float8 'to' dtype.");
+    }
+  } else {
+    switch (static_cast<DataType>(to)) {
+    case DataType::FLOAT8E4M3FN:
+      return FloatToFloat8E4M3FNBitsNoSaturate(v);
+    case DataType::FLOAT8E4M3FNUZ:
+      return FloatToFloat8E4M3FNUZBitsNoSaturate(v);
+    case DataType::FLOAT8E5M2:
+      return FloatToFloat8E5M2BitsNoSaturate(v);
+    case DataType::FLOAT8E5M2FNUZ:
+      return FloatToFloat8E5M2FNUZBitsNoSaturate(v);
+    case DataType::FLOAT8E8M0:
+      return FloatToFloat8E8M0Bits(v); // E8M0 has no non-saturate variant
+    default:
+      EXT_THROW_INVALID("kernel::Cast: unsupported float8 'to' dtype.");
+    }
   }
 }
 
@@ -113,54 +143,17 @@ float Float8BitsToFloat(std::uint8_t bits, int32_t from) {
     return Float8E5M2BitsToFloat(bits);
   case DataType::FLOAT8E5M2FNUZ:
     return Float8E5M2FNUZBitsToFloat(bits);
+  case DataType::FLOAT8E8M0:
+    return Float8E8M0BitsToFloat(bits);
   default:
-    throw std::invalid_argument("kernel::Cast: unsupported float8 'from' dtype.");
+    EXT_THROW_INVALID("kernel::Cast: unsupported float8 'from' dtype.");
   }
-}
-
-// ---------------------------------------------------------------------------
-// Sub-byte (INT4 / UINT4 / INT2 / UINT2) packing helpers.
-//
-// The packed wire layout matches the ONNX TensorProto convention:
-//   * INT4 / UINT4 — two 4-bit elements per byte, low nibble holds the
-//     even-indexed element (flat index 2*i), high nibble holds the
-//     odd-indexed element (flat index 2*i + 1).
-//   * INT2 / UINT2 — four 2-bit elements per byte, packed least-significant
-//     pair first (flat index 4*i in bits 0-1, 4*i+1 in bits 2-3, etc.).
-//
-// When the element count is not a multiple of the packing factor, the
-// trailing nibble / bit-pair is zero-padded.
-// ---------------------------------------------------------------------------
-inline std::uint8_t Read4BitElement(const std::uint8_t *data, int64_t i) noexcept {
-  const std::uint8_t byte = data[i / 2];
-  return static_cast<std::uint8_t>((i % 2 == 0) ? (byte & 0x0F) : ((byte >> 4) & 0x0F));
-}
-
-inline void Write4BitElement(std::uint8_t *data, int64_t i, std::uint8_t nibble) noexcept {
-  std::uint8_t &byte = data[i / 2];
-  if (i % 2 == 0) {
-    byte = static_cast<std::uint8_t>((byte & 0xF0) | (nibble & 0x0F));
-  } else {
-    byte = static_cast<std::uint8_t>((byte & 0x0F) | ((nibble & 0x0F) << 4));
-  }
-}
-
-inline std::uint8_t Read2BitElement(const std::uint8_t *data, int64_t i) noexcept {
-  const std::uint8_t byte = data[i / 4];
-  const int shift = static_cast<int>((i % 4) * 2);
-  return static_cast<std::uint8_t>((byte >> shift) & 0x03);
-}
-
-inline void Write2BitElement(std::uint8_t *data, int64_t i, std::uint8_t bits) noexcept {
-  std::uint8_t &byte = data[i / 4];
-  const int shift = static_cast<int>((i % 4) * 2);
-  const std::uint8_t mask = static_cast<std::uint8_t>(0x03u << shift);
-  byte = static_cast<std::uint8_t>((byte & ~mask) | (((bits & 0x03) << shift) & mask));
 }
 
 // Returns true when ``(from, to)`` matches one of the supported sub-byte
-// cast pairs: FLOAT ↔ {INT4,UINT4,INT2,UINT2} and INT4 ↔ INT8 /
-// UINT4 ↔ UINT8 / INT2 ↔ INT8 / UINT2 ↔ UINT8.
+// cast pairs: FLOAT/FLOAT16/BFLOAT16 ↔ {INT4,UINT4,INT2,UINT2,FLOAT4E2M1}
+// and INT4 ↔ INT8 / UINT4 ↔ UINT8 / INT2 ↔ INT8 / UINT2 ↔ UINT8.
+// FLOAT4E2M1 only round-trips against the floating-point partners.
 bool IsSupportedSubBytePair(int32_t from, int32_t to) {
   const bool from_sub = IsSubByteCastDtype(from);
   const bool to_sub = IsSubByteCastDtype(to);
@@ -170,7 +163,8 @@ bool IsSupportedSubBytePair(int32_t from, int32_t to) {
   const auto other = from_sub ? to : from;
   const auto sub_dt = static_cast<DataType>(sub);
   const auto other_dt = static_cast<DataType>(other);
-  if (other_dt == DataType::FLOAT)
+  if (other_dt == DataType::FLOAT || other_dt == DataType::FLOAT16 ||
+      other_dt == DataType::BFLOAT16)
     return true;
   switch (sub_dt) {
   case DataType::INT4:
@@ -179,6 +173,19 @@ bool IsSupportedSubBytePair(int32_t from, int32_t to) {
   case DataType::UINT4:
   case DataType::UINT2:
     return other_dt == DataType::UINT8;
+  default:
+    return false;
+  }
+}
+
+// Returns true for FLOAT, FLOAT16 and BFLOAT16 — the floating-point partner
+// dtypes accepted by the FLOAT8* and sub-byte round-trip code paths.
+bool IsAnyFloat(int32_t dtype) {
+  switch (static_cast<DataType>(dtype)) {
+  case DataType::FLOAT:
+  case DataType::FLOAT16:
+  case DataType::BFLOAT16:
+    return true;
   default:
     return false;
   }
@@ -208,8 +215,18 @@ double LoadAsDouble(const Tensor &x, int64_t i) {
     return static_cast<double>(x.AsUint16()[i]);
   case DataType::BOOL:
     return x.AsBool()[i] != 0 ? 1.0 : 0.0;
+  case DataType::FLOAT16: {
+    std::uint16_t bits;
+    std::memcpy(&bits, x.bytes() + static_cast<size_t>(i) * sizeof(std::uint16_t), sizeof(bits));
+    return static_cast<double>(Float16BitsToFloat(bits));
+  }
+  case DataType::BFLOAT16: {
+    std::uint16_t bits;
+    std::memcpy(&bits, x.bytes() + static_cast<size_t>(i) * sizeof(std::uint16_t), sizeof(bits));
+    return static_cast<double>(Bfloat16BitsToFloat(bits));
+  }
   default:
-    throw std::invalid_argument("kernel::Cast: unsupported input dtype for numeric load.");
+    EXT_THROW_INVALID("kernel::Cast: unsupported input dtype for numeric load.");
   }
 }
 
@@ -254,28 +271,51 @@ void StoreFromDouble(Tensor &output, int64_t i, double v) {
   case DataType::BOOL:
     output.AsBool()[i] = (v != 0.0) ? uint8_t{1} : uint8_t{0};
     return;
+  case DataType::FLOAT16: {
+    const std::uint16_t bits = FloatToFloat16Bits(static_cast<float>(v));
+    std::memcpy(output.data.data() + static_cast<size_t>(i) * sizeof(std::uint16_t), &bits,
+                sizeof(bits));
+    return;
+  }
+  case DataType::BFLOAT16: {
+    const std::uint16_t bits = FloatToBfloat16Bits(static_cast<float>(v));
+    std::memcpy(output.data.data() + static_cast<size_t>(i) * sizeof(std::uint16_t), &bits,
+                sizeof(bits));
+    return;
+  }
   default:
-    throw std::invalid_argument("kernel::Cast: unsupported output dtype for numeric store.");
+    EXT_THROW_INVALID("kernel::Cast: unsupported output dtype for numeric store.");
   }
 }
 
+// Formats a finite floating-point value using the ``%.8g`` printf format
+// (8 significant digits, matching NumPy's default and onnxruntime's
+// ``CastToString`` behaviour). NaN and +/-infinity follow onnxruntime's
+// uppercase ``NaN`` / ``INF`` / ``-INF`` spellings so cast-to-string
+// round-trips through external reference implementations.
+std::string FloatToOrtString(double v) {
+  if (std::isnan(v)) {
+    return "NaN";
+  }
+  if (std::isinf(v)) {
+    return v < 0.0 ? "-INF" : "INF";
+  }
+  char buffer[64];
+  std::snprintf(buffer, sizeof(buffer), "%.8g", v);
+  return std::string(buffer);
+}
+
 // Converts one numeric element of ``x`` to its canonical decimal string
-// representation. Floating-point values use a stream-default representation
-// (matching upstream reference behaviour closely enough for the
-// deterministic backend test inputs registered here); ``BOOL`` becomes
-// "1" or "0" so it round-trips through the numeric parse path.
+// representation. Floating-point values use ``%.8g`` (NumPy default /
+// onnxruntime-compatible) with ``NaN``/``INF``/``-INF`` for the
+// non-finite cases; ``BOOL`` becomes "1" or "0" so it round-trips
+// through the numeric parse path.
 std::string ElementToString(const Tensor &x, int64_t i) {
   switch (static_cast<DataType>(x.data_type)) {
-  case DataType::FLOAT: {
-    std::ostringstream os;
-    os << x.AsFloat()[i];
-    return os.str();
-  }
-  case DataType::DOUBLE: {
-    std::ostringstream os;
-    os << x.AsDouble()[i];
-    return os.str();
-  }
+  case DataType::FLOAT:
+    return FloatToOrtString(static_cast<double>(x.AsFloat()[i]));
+  case DataType::DOUBLE:
+    return FloatToOrtString(x.AsDouble()[i]);
   case DataType::INT32:
     return std::to_string(x.AsInt32()[i]);
   case DataType::INT64:
@@ -290,8 +330,11 @@ std::string ElementToString(const Tensor &x, int64_t i) {
     return std::to_string(static_cast<uint32_t>(x.AsUint16()[i]));
   case DataType::BOOL:
     return x.AsBool()[i] != 0 ? std::string("1") : std::string("0");
+  case DataType::FLOAT16:
+  case DataType::BFLOAT16:
+    return FloatToOrtString(LoadAsDouble(x, i));
   default:
-    throw std::invalid_argument("kernel::Cast: unsupported input dtype for string conversion.");
+    EXT_THROW_INVALID("kernel::Cast: unsupported input dtype for string conversion.");
   }
 }
 
@@ -302,42 +345,48 @@ double ParseAsDouble(const std::string &s) {
   try {
     return std::stod(s);
   } catch (const std::exception &) {
-    throw std::invalid_argument("kernel::Cast: cannot parse string '" + s +
-                                "' as a numeric value.");
+    EXT_THROW_INVALID("kernel::Cast: cannot parse string '", s, "' as a numeric value.");
   }
 }
 
 } // namespace
 
-Tensor Cast::operator()(const Tensor &x, int32_t to) const {
-  EXT_ENFORCE_INVALID(IsSupportedCastDtype(to),
-                      "kernel::Cast: unsupported 'to' dtype " + std::to_string(to) +
-                          " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
-                          "INT16, UINT16, BOOL, STRING, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
-                          "FLOAT8E5M2, FLOAT8E5M2FNUZ).");
+Tensor Cast::operator()(const Tensor &x, int32_t to) const { return (*this)(x, to, true); }
+
+Tensor Cast::operator()(const Tensor &x, int32_t to, bool saturate) const {
+  EXT_ENFORCE_INVALID(
+      IsSupportedCastDtype(to), "kernel::Cast: unsupported 'to' dtype ", std::to_string(to),
+      " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
+      "INT16, UINT16, BOOL, STRING, FLOAT16, BFLOAT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
+      "FLOAT8E5M2, FLOAT8E5M2FNUZ, FLOAT8E8M0, FLOAT4E2M1, INT4, UINT4, INT2, UINT2).");
   if (static_cast<DataType>(to) == DataType::STRING) {
     Tensor out = Tensor::MakeString(
         "", x.shape, std::vector<std::string>(static_cast<size_t>(x.element_count())));
-    (*this)(x, to, out);
+    (*this)(x, to, saturate, out);
     return out;
   }
   const size_t out_bytes = PackedByteSize(to, x.element_count());
   Tensor out("", to, x.shape, std::vector<uint8_t>(out_bytes));
-  (*this)(x, to, out);
+  (*this)(x, to, saturate, out);
   return out;
 }
 
 void Cast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
-  EXT_ENFORCE_INVALID(IsSupportedCastDtype(x.data_type),
-                      "kernel::Cast: unsupported input dtype " + std::to_string(x.data_type) +
-                          " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
-                          "INT16, UINT16, BOOL, STRING, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
-                          "FLOAT8E5M2, FLOAT8E5M2FNUZ).");
-  EXT_ENFORCE_INVALID(IsSupportedCastDtype(to),
-                      "kernel::Cast: unsupported 'to' dtype " + std::to_string(to) +
-                          " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
-                          "INT16, UINT16, BOOL, STRING, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
-                          "FLOAT8E5M2, FLOAT8E5M2FNUZ).");
+  (*this)(x, to, true, output);
+}
+
+void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output) const {
+  EXT_ENFORCE_INVALID(
+      IsSupportedCastDtype(x.data_type), "kernel::Cast: unsupported input dtype ",
+      std::to_string(x.data_type),
+      " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
+      "INT16, UINT16, BOOL, STRING, FLOAT16, BFLOAT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
+      "FLOAT8E5M2, FLOAT8E5M2FNUZ, FLOAT8E8M0, FLOAT4E2M1, INT4, UINT4, INT2, UINT2).");
+  EXT_ENFORCE_INVALID(
+      IsSupportedCastDtype(to), "kernel::Cast: unsupported 'to' dtype ", std::to_string(to),
+      " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
+      "INT16, UINT16, BOOL, STRING, FLOAT16, BFLOAT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
+      "FLOAT8E5M2, FLOAT8E5M2FNUZ, FLOAT8E8M0, FLOAT4E2M1, INT4, UINT4, INT2, UINT2).");
   EXT_ENFORCE_INVALID(output.data_type == to,
                       "kernel::Cast preallocated output dtype must match 'to'.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
@@ -370,32 +419,38 @@ void Cast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
       }
       const auto to_dt = static_cast<DataType>(to);
       uint8_t *dst = output.data.data();
-      if (static_cast<DataType>(x.data_type) == DataType::FLOAT) {
-        const float *src = x.AsFloat();
+      const auto from_dt_ = static_cast<DataType>(x.data_type);
+      if (from_dt_ == DataType::FLOAT || from_dt_ == DataType::FLOAT16 ||
+          from_dt_ == DataType::BFLOAT16) {
         for (int64_t i = 0; i < n; ++i) {
+          const float src_v = static_cast<float>(LoadAsDouble(x, i));
           std::uint8_t v = 0;
           switch (to_dt) {
           case DataType::INT4:
-            v = FloatToInt4Nibble(src[i]);
+            v = FloatToInt4Nibble(src_v);
             Write4BitElement(dst, i, v);
             break;
           case DataType::UINT4:
-            v = FloatToUint4Nibble(src[i]);
+            v = FloatToUint4Nibble(src_v);
             Write4BitElement(dst, i, v);
             break;
           case DataType::INT2:
-            v = FloatToInt2Bits(src[i]);
+            v = FloatToInt2Bits(src_v);
             Write2BitElement(dst, i, v);
             break;
           case DataType::UINT2:
-            v = FloatToUint2Bits(src[i]);
+            v = FloatToUint2Bits(src_v);
             Write2BitElement(dst, i, v);
             break;
+          case DataType::FLOAT4E2M1:
+            v = FloatRoundToFloat4E2M1Nibble(src_v);
+            Write4BitElement(dst, i, v);
+            break;
           default:
-            throw std::invalid_argument("kernel::Cast: unsupported sub-byte 'to' dtype.");
+            EXT_THROW_INVALID("kernel::Cast: unsupported sub-byte 'to' dtype.");
           }
         }
-      } else if (static_cast<DataType>(x.data_type) == DataType::INT8) {
+      } else if (from_dt_ == DataType::INT8) {
         const int8_t *src = x.AsInt8();
         for (int64_t i = 0; i < n; ++i) {
           if (to_dt == DataType::INT4) {
@@ -405,7 +460,7 @@ void Cast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
             const int v = std::max(-2, std::min(1, static_cast<int>(src[i])));
             Write2BitElement(dst, i, static_cast<std::uint8_t>(v & 0x03));
           } else {
-            throw std::invalid_argument("kernel::Cast: unsupported sub-byte 'to' dtype from INT8.");
+            EXT_THROW_INVALID("kernel::Cast: unsupported sub-byte 'to' dtype from INT8.");
           }
         }
       } else if (static_cast<DataType>(x.data_type) == DataType::UINT8) {
@@ -418,17 +473,35 @@ void Cast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
             const unsigned v = std::min(3u, static_cast<unsigned>(src[i]));
             Write2BitElement(dst, i, static_cast<std::uint8_t>(v & 0x03u));
           } else {
-            throw std::invalid_argument(
-                "kernel::Cast: unsupported sub-byte 'to' dtype from UINT8.");
+            EXT_THROW_INVALID("kernel::Cast: unsupported sub-byte 'to' dtype from UINT8.");
           }
         }
       } else {
-        throw std::invalid_argument("kernel::Cast: unsupported sub-byte 'from' dtype.");
+        EXT_THROW_INVALID("kernel::Cast: unsupported sub-byte 'from' dtype.");
       }
     } else {
       const uint8_t *src = x.bytes();
       const auto from_dt = static_cast<DataType>(x.data_type);
       const auto to_dt = static_cast<DataType>(to);
+      // FLOAT4E2M1 decodes to a non-integer real value; route through a
+      // separate float path so 0.5/1.5/etc. survive the conversion.
+      if (from_dt == DataType::FLOAT4E2M1) {
+        for (int64_t i = 0; i < n; ++i) {
+          const float fv = Float4E2M1NibbleToFloat(Read4BitElement(src, i));
+          switch (to_dt) {
+          case DataType::FLOAT:
+            output.AsFloat()[i] = fv;
+            break;
+          case DataType::FLOAT16:
+          case DataType::BFLOAT16:
+            StoreFromDouble(output, i, static_cast<double>(fv));
+            break;
+          default:
+            EXT_THROW_INVALID("kernel::Cast: unsupported 'to' dtype from FLOAT4E2M1.");
+          }
+        }
+        return;
+      }
       for (int64_t i = 0; i < n; ++i) {
         // Read the unpacked sub-byte value (sign-extended into ``int``).
         int value = 0;
@@ -446,11 +519,15 @@ void Cast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
           value = static_cast<int>(Uint2BitsToUint8(Read2BitElement(src, i)));
           break;
         default:
-          throw std::invalid_argument("kernel::Cast: unsupported sub-byte 'from' dtype.");
+          EXT_THROW_INVALID("kernel::Cast: unsupported sub-byte 'from' dtype.");
         }
         switch (to_dt) {
         case DataType::FLOAT:
           output.AsFloat()[i] = static_cast<float>(value);
+          break;
+        case DataType::FLOAT16:
+        case DataType::BFLOAT16:
+          StoreFromDouble(output, i, static_cast<double>(value));
           break;
         case DataType::INT8:
           output.AsInt8()[i] = static_cast<int8_t>(value);
@@ -459,35 +536,37 @@ void Cast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
           output.AsUint8()[i] = static_cast<uint8_t>(value);
           break;
         default:
-          throw std::invalid_argument("kernel::Cast: unsupported sub-byte 'to' dtype.");
+          EXT_THROW_INVALID("kernel::Cast: unsupported sub-byte 'to' dtype.");
         }
       }
     }
     return;
   }
 
-  // Float8 dtypes only round-trip against ``FLOAT`` in this reference
+  // Float8 dtypes round-trip against ``FLOAT`` and the half-precision
+  // floating-point dtypes (``FLOAT16`` / ``BFLOAT16``) in this reference
   // kernel (matching the upstream ONNX ``test_cast`` coverage that
   // ``kernel::Cast`` mirrors). Cross-casting against any other dtype is
   // rejected up front rather than silently routed through ``double``.
   if (from_float8 || to_float8) {
-    EXT_ENFORCE_INVALID((from_float8 && static_cast<DataType>(to) == DataType::FLOAT) ||
-                            (to_float8 && static_cast<DataType>(x.data_type) == DataType::FLOAT),
-                        "kernel::Cast: FLOAT8* dtypes only round-trip against FLOAT.");
-    const size_t expected_bytes = static_cast<size_t>(n) * (to_float8 ? size_t{1} : sizeof(float));
+    EXT_ENFORCE_INVALID((from_float8 && IsAnyFloat(to)) || (to_float8 && IsAnyFloat(x.data_type)),
+                        "kernel::Cast: FLOAT8* dtypes only round-trip against FLOAT, FLOAT16 "
+                        "or BFLOAT16.");
+    const size_t expected_bytes =
+        static_cast<size_t>(n) * (to_float8 ? size_t{1} : ElementSize(to));
     EXT_ENFORCE_INVALID(output.data.size() == expected_bytes,
                         "kernel::Cast preallocated output buffer has unexpected size in bytes.");
     if (to_float8) {
-      const float *src = x.AsFloat();
       uint8_t *dst = output.data.data();
       for (int64_t i = 0; i < n; ++i) {
-        dst[i] = FloatToFloat8Bits(src[i], to);
+        const float v = static_cast<float>(LoadAsDouble(x, i));
+        dst[i] = FloatToFloat8Bits(v, to, saturate);
       }
     } else {
       const uint8_t *src = x.bytes();
-      float *dst = output.AsFloat();
       for (int64_t i = 0; i < n; ++i) {
-        dst[i] = Float8BitsToFloat(src[i], x.data_type);
+        const float v = Float8BitsToFloat(src[i], x.data_type);
+        StoreFromDouble(output, i, static_cast<double>(v));
       }
     }
     return;

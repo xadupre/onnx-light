@@ -5,12 +5,13 @@
 #include "onnx_optim/shapes/tensor/shape_tensor.h"
 
 #include <cstdint>
-#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
 
+#include "onnx_optim/expressions.h"
 #include "onnx_optim/optim_tensor.h"
+#include "onnx_optim/shapes/_helpers/shape_helpers.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -21,6 +22,13 @@ namespace tensor {
 
 namespace {
 
+OptimDim FromDimType(const expressions::DimType &d) {
+  if (std::holds_alternative<int64_t>(d)) {
+    return OptimDim(std::get<int64_t>(d));
+  }
+  return OptimDim(std::get<std::string>(d));
+}
+
 // Merges ``in`` into ``out``. Two concrete integer dimensions must be
 // equal. A concrete integer wins over a symbolic dimension. Two
 // symbolic dimensions are merged into ``out`` only when they share
@@ -28,12 +36,9 @@ namespace {
 // ``out`` is preserved.
 void MergeDim(OptimDim &out, const OptimDim &in, int axis, int input_index) {
   if (out.IsInt() && in.IsInt()) {
-    if (out.AsInt() != in.AsInt()) {
-      throw std::invalid_argument(
-          "ComputeShapeConcat: input " + std::to_string(input_index) + " dimension " +
-          std::to_string(axis) + " (" + std::to_string(in.AsInt()) +
-          ") differs from the previously-merged value (" + std::to_string(out.AsInt()) + ").");
-    }
+    EXT_ENFORCE_INVALID(out.AsInt() == in.AsInt(), "ComputeShapeConcat: input ", input_index,
+                        " dimension ", axis, " (", in.AsInt(),
+                        ") differs from the previously-merged value (", out.AsInt(), ").");
     return;
   }
   if (in.IsInt()) {
@@ -50,9 +55,7 @@ void ComputeShapeConcat(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Concat", "ComputeShapeConcat");
 
   const int n_inputs = node.input_size();
-  if (n_inputs < 1) {
-    throw std::invalid_argument("ComputeShapeConcat: Concat requires at least one input.");
-  }
+  EXT_ENFORCE_INVALID(!(n_inputs < 1), "ComputeShapeConcat: Concat requires at least one input.");
 
   const OptimTensor &first = ctx.Get(node.input(0).as_string());
   const TensorType common_dtype = first.Dtype();
@@ -64,65 +67,37 @@ void ComputeShapeConcat(ShapesContext &ctx, const NodeProto &node) {
   // only used when the attribute was accidentally omitted.
   const int64_t axis_attr = GetAttributeOr<int64_t>(node, "axis", 1);
   const int64_t resolved_axis = axis_attr < 0 ? axis_attr + rank : axis_attr;
-  if (resolved_axis < 0 || resolved_axis >= rank) {
-    throw std::invalid_argument("ComputeShapeConcat: axis " + std::to_string(axis_attr) +
-                                " is out of range for rank " + std::to_string(rank) + ".");
-  }
+  EXT_ENFORCE_INVALID(!(resolved_axis < 0 || resolved_axis >= rank), "ComputeShapeConcat: axis ",
+                      axis_attr, " is out of range for rank ", rank, ".");
   const std::size_t axis = static_cast<std::size_t>(resolved_axis);
 
   // Start the output shape from the first input.
   OptimShape out_shape = first_shape;
 
-  // Track running sum of the concat-axis dimension. Only meaningful
-  // when every input's concat-axis dimension is a concrete integer.
-  bool axis_dim_known = first_shape[axis].IsInt();
-  int64_t axis_dim_total = axis_dim_known ? first_shape[axis].AsInt() : 0;
-  bool axis_dim_all_symbolic_same_so_far = first_shape[axis].IsExpr();
-  std::optional<std::string> axis_symbolic_expr;
-  if (axis_dim_all_symbolic_same_so_far) {
-    axis_symbolic_expr = first_shape[axis].AsExpr();
-  }
+  // Accumulate the concat-axis dimension using symbolic arithmetic so
+  // that ``Concat([X[..,b], Y[..,c]], axis=1)`` produces ``..,b+c``
+  // (or simplifications such as ``2*b`` when the same expression
+  // repeats) rather than a fresh anonymous placeholder.
+  expressions::DimType axis_dim = ToDimType(first_shape[axis]);
 
   for (int i = 1; i < n_inputs; ++i) {
     const OptimTensor &t = ctx.Get(node.input(i).as_string());
-    if (t.Dtype() != common_dtype) {
-      throw std::invalid_argument("ComputeShapeConcat: input '" + node.input(i).as_string() +
-                                  "' has a dtype that differs from input '" +
-                                  node.input(0).as_string() + "'.");
-    }
+    EXT_ENFORCE_INVALID(t.Dtype() == common_dtype, "ComputeShapeConcat: input '",
+                        node.input(i).as_string(), "' has a dtype that differs from input '",
+                        node.input(0).as_string(), "'.");
     const OptimShape &shape = t.Shape();
-    if (static_cast<int>(shape.Rank()) != rank) {
-      throw std::invalid_argument("ComputeShapeConcat: input " + std::to_string(i) + " has rank " +
-                                  std::to_string(shape.Rank()) + " != " + std::to_string(rank) +
-                                  " (first input).");
-    }
+    EXT_ENFORCE_INVALID(!(static_cast<int>(shape.Rank()) != rank), "ComputeShapeConcat: input ", i,
+                        " has rank ", shape.Rank(), " != ", rank, " (first input).");
     for (std::size_t d = 0; d < shape.Rank(); ++d) {
       if (d == axis) {
-        if (axis_dim_known && shape[d].IsInt()) {
-          axis_dim_total += shape[d].AsInt();
-        } else {
-          axis_dim_known = false;
-          const bool same_symbolic_expr = shape[d].IsExpr() && axis_dim_all_symbolic_same_so_far &&
-                                          axis_symbolic_expr.has_value() &&
-                                          shape[d].AsExpr() == *axis_symbolic_expr;
-          if (!same_symbolic_expr) {
-            axis_dim_all_symbolic_same_so_far = false;
-            axis_symbolic_expr.reset();
-          }
-        }
+        axis_dim = expressions::dim_add(axis_dim, ToDimType(shape[d]));
       } else {
         MergeDim(out_shape[d], shape[d], static_cast<int>(d), i);
       }
     }
   }
 
-  if (axis_dim_known) {
-    out_shape[axis] = OptimDim(axis_dim_total);
-  } else if (axis_dim_all_symbolic_same_so_far && axis_symbolic_expr.has_value()) {
-    out_shape[axis] = OptimDim(std::to_string(n_inputs) + "*" + *axis_symbolic_expr);
-  } else {
-    out_shape[axis] = OptimDim("Concat_axis" + std::to_string(resolved_axis));
-  }
+  out_shape[axis] = FromDimType(axis_dim);
 
   OptimTensor out_tensor(nullptr, common_dtype, std::move(out_shape));
 

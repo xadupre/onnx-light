@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-#include "onnx_lib/defs/tensor_proto_util.h"
+#include "onnx_manipulations/tensor_proto_util.h"
 #include "onnx_proto/onnx_alias.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -449,7 +449,10 @@ std::function<void(OpSchema &)> PadDocGenerator(const char *description,
       auto num_axes = axes.size();
       auto *output_shape = ctx.getOutputType(0)->mutable_tensor_type()->mutable_shape();
 
-      // Populating default dims
+      // Populating default dims. Reserve up front so that the repeated dim
+      // field (backed by a std::vector) is not reallocated while we cache the
+      // element pointers below; otherwise the cached pointers would dangle.
+      output_shape->mutable_dim()->reserve(input_rank);
       std::vector<TensorShapeProto_Dimension *> out_dims(input_rank);
       for (int i = 0; i < input_rank; ++i) {
         out_dims[i] = output_shape->add_dim();

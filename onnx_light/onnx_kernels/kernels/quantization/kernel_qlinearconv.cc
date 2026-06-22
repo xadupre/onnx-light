@@ -36,13 +36,13 @@ int32_t ReadScalarInt(const Tensor &t, const char *name) {
   for (int64_t d : t.shape) {
     numel *= d;
   }
-  EXT_ENFORCE_INVALID(numel == 1, std::string(kName) + ": '" + name + "' must be a scalar.");
+  EXT_ENFORCE_INVALID(numel == 1, kName, ": '", name, "' must be a scalar.");
   return ReadElem(t, 0);
 }
 
 float ReadFloatElem(const Tensor &t, int64_t idx) {
-  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      std::string(kName) + ": scale must be FLOAT for the reference kernel.");
+  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT), kName,
+                      ": scale must be FLOAT for the reference kernel.");
   return t.AsFloat()[idx];
 }
 
@@ -51,29 +51,28 @@ void ResolveAttributes(const Tensor &x, const Tensor &w, QLinearConv::Attributes
   if (attrs.kernel_shape.empty()) {
     attrs.kernel_shape.assign(w.shape.begin() + 2, w.shape.end());
   }
-  EXT_ENFORCE_INVALID(attrs.kernel_shape.size() == spatial_rank,
-                      std::string(kName) + ": 'kernel_shape' size must match input spatial rank.");
+  EXT_ENFORCE_INVALID(attrs.kernel_shape.size() == spatial_rank, kName,
+                      ": 'kernel_shape' size must match input spatial rank.");
   if (attrs.strides.empty()) {
     attrs.strides.assign(spatial_rank, 1);
   }
-  EXT_ENFORCE_INVALID(attrs.strides.size() == spatial_rank,
-                      std::string(kName) + ": 'strides' size must match input spatial rank.");
+  EXT_ENFORCE_INVALID(attrs.strides.size() == spatial_rank, kName,
+                      ": 'strides' size must match input spatial rank.");
   if (attrs.dilations.empty()) {
     attrs.dilations.assign(spatial_rank, 1);
   }
-  EXT_ENFORCE_INVALID(attrs.dilations.size() == spatial_rank,
-                      std::string(kName) + ": 'dilations' size must match input spatial rank.");
+  EXT_ENFORCE_INVALID(attrs.dilations.size() == spatial_rank, kName,
+                      ": 'dilations' size must match input spatial rank.");
   if (attrs.auto_pad.empty() || attrs.auto_pad == "NOTSET") {
     if (attrs.pads.empty()) {
       attrs.pads.assign(spatial_rank * 2, 0);
     }
-    EXT_ENFORCE_INVALID(attrs.pads.size() == spatial_rank * 2,
-                        std::string(kName) + ": 'pads' size must be 2 * spatial rank.");
+    EXT_ENFORCE_INVALID(attrs.pads.size() == spatial_rank * 2, kName,
+                        ": 'pads' size must be 2 * spatial rank.");
   } else {
     EXT_ENFORCE_INVALID(attrs.auto_pad == "SAME_UPPER" || attrs.auto_pad == "SAME_LOWER" ||
                             attrs.auto_pad == "VALID",
-                        std::string(kName) +
-                            ": 'auto_pad' must be NOTSET/SAME_UPPER/SAME_LOWER/VALID.");
+                        kName, ": 'auto_pad' must be NOTSET/SAME_UPPER/SAME_LOWER/VALID.");
     attrs.pads.assign(spatial_rank * 2, 0);
   }
 }
@@ -160,22 +159,18 @@ void QLinearConv::operator()(const Tensor &x, const Tensor &x_scale, const Tenso
                              const Attributes &attrs, Tensor &output) const {
   Attributes resolved = attrs;
   ResolveAttributes(x, w, resolved);
-  EXT_ENFORCE_INVALID(IsInt8OrUint8(x.data_type),
-                      std::string(kName) + ": x must be INT8 or UINT8.");
-  EXT_ENFORCE_INVALID(IsInt8OrUint8(w.data_type),
-                      std::string(kName) + ": w must be INT8 or UINT8.");
-  EXT_ENFORCE_INVALID(IsInt8OrUint8(y_zero_point.data_type),
-                      std::string(kName) + ": y_zero_point must be INT8 or UINT8.");
-  EXT_ENFORCE_INVALID(x.shape.size() >= 3, std::string(kName) + ": x must have rank >= 3.");
-  EXT_ENFORCE_INVALID(w.shape.size() == x.shape.size(),
-                      std::string(kName) + ": w rank must match x rank.");
-  EXT_ENFORCE_INVALID(resolved.group >= 1, std::string(kName) + ": 'group' must be >= 1.");
+  EXT_ENFORCE_INVALID(IsInt8OrUint8(x.data_type), kName, ": x must be INT8 or UINT8.");
+  EXT_ENFORCE_INVALID(IsInt8OrUint8(w.data_type), kName, ": w must be INT8 or UINT8.");
+  EXT_ENFORCE_INVALID(IsInt8OrUint8(y_zero_point.data_type), kName,
+                      ": y_zero_point must be INT8 or UINT8.");
+  EXT_ENFORCE_INVALID(x.shape.size() >= 3, kName, ": x must have rank >= 3.");
+  EXT_ENFORCE_INVALID(w.shape.size() == x.shape.size(), kName, ": w rank must match x rank.");
+  EXT_ENFORCE_INVALID(resolved.group >= 1, kName, ": 'group' must be >= 1.");
   const int64_t C = x.shape[1];
   const int64_t M = w.shape[0];
-  EXT_ENFORCE_INVALID(C == w.shape[1] * resolved.group,
-                      std::string(kName) + ": x.shape[1] must equal w.shape[1] * group.");
-  EXT_ENFORCE_INVALID(M % resolved.group == 0,
-                      std::string(kName) + ": w.shape[0] must be divisible by group.");
+  EXT_ENFORCE_INVALID(C == w.shape[1] * resolved.group, kName,
+                      ": x.shape[1] must equal w.shape[1] * group.");
+  EXT_ENFORCE_INVALID(M % resolved.group == 0, kName, ": w.shape[0] must be divisible by group.");
 
   std::vector<int64_t> out_spatial = ComputeOutputSpatial(x, resolved);
   std::vector<int64_t> expected_shape;
@@ -185,23 +180,23 @@ void QLinearConv::operator()(const Tensor &x, const Tensor &x_scale, const Tenso
   for (int64_t d : out_spatial) {
     expected_shape.push_back(d);
   }
-  EXT_ENFORCE_INVALID(output.data_type == y_zero_point.data_type,
-                      std::string(kName) + ": output dtype must match y_zero_point.");
-  EXT_ENFORCE_INVALID(output.shape == expected_shape,
-                      std::string(kName) + ": preallocated output shape mismatch.");
+  EXT_ENFORCE_INVALID(output.data_type == y_zero_point.data_type, kName,
+                      ": output dtype must match y_zero_point.");
+  EXT_ENFORCE_INVALID(output.shape == expected_shape, kName,
+                      ": preallocated output shape mismatch.");
 
   const int32_t x_zp = ReadScalarInt(x_zero_point, "x_zero_point");
   const int32_t y_zp = ReadScalarInt(y_zero_point, "y_zero_point");
-  EXT_ENFORCE_INVALID(x_zero_point.data_type == x.data_type,
-                      std::string(kName) + ": x_zero_point dtype must match x.");
-  EXT_ENFORCE_INVALID(w_zero_point.data_type == w.data_type,
-                      std::string(kName) + ": w_zero_point dtype must match w.");
+  EXT_ENFORCE_INVALID(x_zero_point.data_type == x.data_type, kName,
+                      ": x_zero_point dtype must match x.");
+  EXT_ENFORCE_INVALID(w_zero_point.data_type == w.data_type, kName,
+                      ": w_zero_point dtype must match w.");
 
   const float x_s = ReadFloatElem(x_scale, 0);
   const float y_s = ReadFloatElem(y_scale, 0);
-  EXT_ENFORCE_INVALID(y_s != 0.0f, std::string(kName) + ": y_scale must be non-zero.");
-  EXT_ENFORCE_INVALID(x_scale.element_count() == 1 && y_scale.element_count() == 1,
-                      std::string(kName) + ": 'x_scale' and 'y_scale' must be scalar.");
+  EXT_ENFORCE_INVALID(y_s != 0.0f, kName, ": y_scale must be non-zero.");
+  EXT_ENFORCE_INVALID(x_scale.element_count() == 1 && y_scale.element_count() == 1, kName,
+                      ": 'x_scale' and 'y_scale' must be scalar.");
 
   // ``w_scale`` and ``w_zero_point`` are either scalar (per-tensor) or 1-D
   // length-M (per-output-channel).
@@ -213,22 +208,22 @@ void QLinearConv::operator()(const Tensor &x, const Tensor &x_scale, const Tenso
   for (int64_t d : w_zero_point.shape) {
     w_zp_numel *= d;
   }
-  EXT_ENFORCE_INVALID(w_scale_numel == 1 || w_scale_numel == M,
-                      std::string(kName) + ": 'w_scale' must be scalar or length-M.");
-  EXT_ENFORCE_INVALID(w_zp_numel == 1 || w_zp_numel == M,
-                      std::string(kName) + ": 'w_zero_point' must be scalar or length-M.");
+  EXT_ENFORCE_INVALID(w_scale_numel == 1 || w_scale_numel == M, kName,
+                      ": 'w_scale' must be scalar or length-M.");
+  EXT_ENFORCE_INVALID(w_zp_numel == 1 || w_zp_numel == M, kName,
+                      ": 'w_zero_point' must be scalar or length-M.");
   const bool w_scale_per_channel = w_scale_numel == M;
   const bool w_zp_per_channel = w_zp_numel == M;
 
   const bool has_bias = !B.shape.empty() || B.size_bytes() > 0;
   if (has_bias) {
-    EXT_ENFORCE_INVALID(B.data_type == static_cast<int32_t>(DataType::INT32),
-                        std::string(kName) + ": B must be INT32.");
+    EXT_ENFORCE_INVALID(B.data_type == static_cast<int32_t>(DataType::INT32), kName,
+                        ": B must be INT32.");
     int64_t b_numel = 1;
     for (int64_t d : B.shape) {
       b_numel *= d;
     }
-    EXT_ENFORCE_INVALID(b_numel == M, std::string(kName) + ": B must be 1-D with length M.");
+    EXT_ENFORCE_INVALID(b_numel == M, kName, ": B must be 1-D with length M.");
   }
 
   const size_t spatial_rank = x.shape.size() - 2;

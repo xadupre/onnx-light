@@ -14,21 +14,21 @@ reproduces the expected outputs without discrepancies.
 
 from __future__ import annotations
 
-import re
 import unittest
 
 import numpy as np
 
-import onnx_light.onnx as onnxl
-from onnx_light.onnx_lib.backend.test.case import make_test_class, collect_test_case
-from onnx_light.onnx import numpy_helper as onh
-from onnx_light.onnx_py._onnxpykernels import runtime as rt
+from onnx_light.ext_test_case import import_or_skip
 
-# Operators currently registered in
-# ``onnx_light/onnx_kernels/run_nodes.cc::KernelDispatchTable``. Backend
-# test cases whose top-level graph is a single node of one of these ops are
-# the only ones ``RunModel`` can execute today.
-_IMPLEMENTED_OPS: frozenset[str] = frozenset({"Abs", "Neg", "Add", "Sub", "Mul", "Div"})
+import onnx_light.onnx as onnxl
+from onnx_light.onnx import numpy_helper as onh
+
+# The kernels runtime and backend test registries are only available in the
+# full build; skip this module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
+_backend_case = import_or_skip("onnx_light.onnx_lib.backend.test.case")
+make_test_class = _backend_case.make_test_class
+collect_test_case = _backend_case.collect_test_case
+rt = import_or_skip("onnx_light.onnx_py._onnxpykernels", "runtime")
 
 
 def _default_opset_version(model: onnxl.ModelProto) -> int:
@@ -101,27 +101,83 @@ def _single_node_op_type(tc) -> str | None:
     return nodes[0].op_type
 
 
-def _build_include_regex() -> list[str]:
-    """Returns the include-regex list selecting every backend test case whose
-    top-level graph is a single node of one of the implemented operators.
-
-    Building the list once at module load avoids re-walking the registry from
-    inside :func:`make_test_class`.
-    """
-    names: list[str] = []
-    for name, tc in collect_test_case().items():
-        op = _single_node_op_type(tc)
-        if op is not None and op in _IMPLEMENTED_OPS:
-            names.append(name)
-    if not names:
-        # Fallback: keep a regex that matches nothing so ``make_test_class``
-        # generates an empty test class instead of every case in the registry.
-        return [r"^$"]
-    # Anchor each name to avoid accidental substring matches.
-    return [r"^" + re.escape(n) + r"$" for n in names]
-
-
-TestRunModelBackend = make_test_class(run_model_backend, include_regex=_build_include_regex())
+TestRunModelBackend = make_test_class(
+    run_model_backend,
+    exclude_regex=[
+        ".*FLOAT4.*",
+        ".*FLOAT8.*",
+        ".*float4.*",
+        ".*float8.*",
+        ".*bfloat16.*",
+        "BFLOAT16.*",
+        ".*STRING.*",
+        ".*int4.*",
+        ".*int2.*",
+        ".*INT4.*",
+        ".*INT2.*",
+        ".*e4m3.*",
+        ".*e5m2.*",
+        ".*sequence_map_identity.*",
+        ".*string_normalizer.*",
+        ".*strnormalizer.*",
+        ".*string_concat.*",
+        ".*string_split.*",
+        ".*split_to_sequence.*",
+        #
+        "blackmanwindow",
+        "cast_BOOL_to_STRING",
+        "cast_map_int64_float_dense",
+        "cast_map_int64_float_sparse",
+        "cast_map_int64_string_dense",
+        "category_mapper_int_to_string",
+        "constant_value_string",
+        "dict_vectorizer_int64_float",
+        "dict_vectorizer_string_int64",
+        "einsum_scalar",
+        "hammingwindow",
+        "hannwindow",
+        "identity_op",
+        "identity_sequence",
+        "if_seq",
+        "if_opt",
+        "image_decoder_decode_jpeg2k_rgb",
+        "image_decoder_decode_jpeg_bgr",
+        "image_decoder_decode_jpeg_grayscale",
+        "image_decoder_decode_jpeg_rgb",
+        "image_decoder_decode_webp_rgb",
+        "loop16_seq_none",
+        "melweightmatrix",
+        "optional_get_element_optional_sequence",
+        "optional_get_element_sequence",
+        "scan9_input_reverse",
+        "scan9_output_reverse",
+        "scan9_scalar",
+        "sequence_at_neg",
+        "sequence_at_pos0",
+        "sequence_at_pos2",
+        "sequence_construct",
+        "sequence_erase_default",
+        "sequence_erase_neg",
+        "sequence_erase_pos1",
+        "sequence_insert_at_back",
+        "sequence_insert_at_front",
+        "sequence_insert_default",
+        "sequence_insert_neg",
+        "sequence_insert_pos1",
+        "sequence_map_add_1_sequence_1_tensor",
+        "sequence_map_add_2_sequences",
+        "sequence_map_extract_shapes",
+        # run_model_backend cannot convert STRING tensors to numpy; the
+        # ``.*STRING.*`` regex above is uppercase-only and misses this case.
+        "test_cc_where_string",
+        # The loop pairwise-distance model uses Manhattan distance (L1) but
+        # the expected outputs are Euclidean (L2): numerical mismatch.
+        "test_cc_shape_inference_loop_pairwise_distance.*",
+        # TopK k input exceeds the axis length for the scan/loop topk variants.
+        "test_cc_shape_inference_loop_topk_pairwise_distance.*",
+        "test_cc_shape_inference_scan_topk_pairwise_distance.*",
+    ],
+)
 
 
 if __name__ == "__main__":

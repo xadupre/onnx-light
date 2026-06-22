@@ -3950,7 +3950,7 @@ ONNX_OPERATOR_SET_SCHEMA(
           ctx.getOutputType(0)->mutable_tensor_type()->mutable_shape();
           const auto &input_shape = ctx.getInputType(0)->tensor_type().shape();
           const auto input_ndim = input_shape.dim_size();
-          const auto output_ndim = input_ndim + static_cast<int>(axes.size());
+          const int output_ndim = static_cast<int>(input_ndim) + static_cast<int>(axes.size());
           for (auto &axe : axes) {
             if (axe < -output_ndim || axe >= output_ndim) {
               fail_shape_inference(

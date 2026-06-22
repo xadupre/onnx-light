@@ -12,9 +12,9 @@
 #include <vector>
 
 #include "onnx_lib/defs/function.h"
-#include "onnx_lib/defs/parser.h"
 #include "onnx_lib/defs/schema.h"
 #include "onnx_lib/inliner/inliner.h"
+#include "onnx_manipulations/parser.h"
 #include "gtest/gtest.h"
 
 namespace ONNX_LIGHT_NAMESPACE {

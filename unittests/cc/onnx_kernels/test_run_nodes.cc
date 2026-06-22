@@ -9,15 +9,18 @@
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_kernels/kernels/training/include_training_kernels.h"
 #include "onnx_kernels/run_nodes.h"
+#include "onnx_kernels/simple_sequence.h"
 #include "onnx_kernels/simple_tensor.h"
 #include "onnx_proto/onnx.h"
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -30,6 +33,7 @@ using onnx_kernels::RunModel;
 using onnx_kernels::RunNode;
 using onnx_kernels::RunNodes;
 using onnx_kernels::RuntimeContext;
+using onnx_kernels::Sequence;
 using onnx_kernels::Tensor;
 using onnx_kernels::TensorFromProto;
 using onnx_kernels::TensorMap;
@@ -55,6 +59,157 @@ NodeProto MakeNode(const std::string &op_type, const std::vector<std::string> &i
     node.add_output(name);
   }
   return node;
+}
+
+// Declares a sequence-typed graph input/output named ``name`` carrying
+// ``FLOAT`` tensor elements. Used to build the body subgraph of a Loop
+// node whose loop-carried state is sequence-typed.
+void AddSequenceFloatValueInfo(ValueInfoProto *vi, const std::string &name) {
+  vi->set_name(name);
+  TypeProto *tp = vi->ref_type().add_sequence_type()->add_elem_type();
+  tp->add_tensor_type()->set_elem_type(static_cast<int>(TensorProto::DataType::FLOAT));
+}
+
+// Appends a ``Constant`` node producing a 1-D INT64 tensor ``[0]`` under
+// the output name ``out`` (used as the ``axes`` input of ``Unsqueeze``).
+void AddInt64AxesConstant(GraphProto &g, const std::string &out) {
+  NodeProto *n = g.add_node();
+  n->set_op_type("Constant");
+  n->add_output(out);
+  AttributeProto *a = n->add_attribute();
+  a->set_name("value");
+  a->set_type(AttributeProto::AttributeType::TENSOR);
+  TensorProto *t = a->add_t();
+  t->set_data_type(TensorProto::DataType::INT64);
+  t->add_dims(1);
+  t->add_int64_data(0);
+}
+
+// Appends nodes that turn the INT64 scalar ``iter`` into a ``FLOAT[1]``
+// tensor under the output name ``out`` (Unsqueeze to ``[1]`` then Cast).
+void AddIterAsFloat1D(GraphProto &g, const std::string &out) {
+  AddInt64AxesConstant(g, "axes");
+  {
+    NodeProto *n = g.add_node();
+    n->set_op_type("Unsqueeze");
+    n->add_input("iter");
+    n->add_input("axes");
+    n->add_output("iter_1d");
+  }
+  {
+    NodeProto *n = g.add_node();
+    n->set_op_type("Cast");
+    n->add_input("iter_1d");
+    n->add_output(out);
+    AttributeProto *a = n->add_attribute();
+    a->set_name("to");
+    a->set_type(AttributeProto::AttributeType::INT);
+    a->set_i(static_cast<int64_t>(TensorProto::DataType::FLOAT));
+  }
+}
+
+// Body subgraph for a Loop whose only loop-carried state is a
+// sequence. Inputs are ``(iter, cond_in, seq_in)``; outputs are
+// ``(cond_out, seq_out)`` where ``seq_out = SequenceInsert(seq_in,
+// (float)iter)`` so the sequence grows by one ``FLOAT[1]`` element per
+// iteration.
+GraphProto BuildSequenceLoopBody() {
+  GraphProto body;
+  body.set_name("seq_loop_body");
+  body.add_input()->set_name("iter");
+  body.add_input()->set_name("cond_in");
+  AddSequenceFloatValueInfo(body.add_input(), "seq_in");
+
+  {
+    NodeProto *n = body.add_node();
+    n->set_op_type("Identity");
+    n->add_input("cond_in");
+    n->add_output("cond_out");
+  }
+  AddIterAsFloat1D(body, "val");
+  {
+    NodeProto *n = body.add_node();
+    n->set_op_type("SequenceInsert");
+    n->add_input("seq_in");
+    n->add_input("val");
+    n->add_output("seq_out");
+  }
+
+  body.add_output()->set_name("cond_out");
+  AddSequenceFloatValueInfo(body.add_output(), "seq_out");
+  return body;
+}
+
+// Body subgraph for a Loop with mixed state: a tensor loop-carried
+// accumulator and a sequence loop-carried state, plus one scan output.
+// Inputs are ``(iter, cond_in, acc_in, seq_in)``; outputs are
+// ``(cond_out, acc_out, seq_out, scan_out)`` where
+// ``acc_out = acc_in + 1``, ``scan_out = acc_out`` and
+// ``seq_out = SequenceInsert(seq_in, (float)iter)``.
+GraphProto BuildMixedSequenceLoopBody() {
+  GraphProto body;
+  body.set_name("mixed_seq_loop_body");
+  body.add_input()->set_name("iter");
+  body.add_input()->set_name("cond_in");
+  body.add_input()->set_name("acc_in");
+  AddSequenceFloatValueInfo(body.add_input(), "seq_in");
+
+  {
+    NodeProto *n = body.add_node();
+    n->set_op_type("Identity");
+    n->add_input("cond_in");
+    n->add_output("cond_out");
+  }
+  {
+    NodeProto *n = body.add_node();
+    n->set_op_type("Constant");
+    n->add_output("one");
+    AttributeProto *a = n->add_attribute();
+    a->set_name("value");
+    a->set_type(AttributeProto::AttributeType::TENSOR);
+    TensorProto *t = a->add_t();
+    t->set_data_type(TensorProto::DataType::FLOAT);
+    t->add_float_data(1.0f);
+  }
+  {
+    NodeProto *n = body.add_node();
+    n->set_op_type("Add");
+    n->add_input("acc_in");
+    n->add_input("one");
+    n->add_output("acc_out");
+  }
+  {
+    NodeProto *n = body.add_node();
+    n->set_op_type("Identity");
+    n->add_input("acc_out");
+    n->add_output("scan_out");
+  }
+  AddIterAsFloat1D(body, "val");
+  {
+    NodeProto *n = body.add_node();
+    n->set_op_type("SequenceInsert");
+    n->add_input("seq_in");
+    n->add_input("val");
+    n->add_output("seq_out");
+  }
+
+  body.add_output()->set_name("cond_out");
+  body.add_output()->set_name("acc_out");
+  AddSequenceFloatValueInfo(body.add_output(), "seq_out");
+  body.add_output()->set_name("scan_out");
+  return body;
+}
+
+// Builds a ``Loop`` node binding ``inputs``/``outputs`` and attaching
+// ``body`` as its ``body`` graph attribute.
+NodeProto MakeLoopNode(const std::vector<std::string> &inputs,
+                       const std::vector<std::string> &outputs, GraphProto body) {
+  NodeProto loop = MakeNode("Loop", inputs, outputs);
+  AttributeProto *body_attr = loop.add_attribute();
+  body_attr->set_name("body");
+  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  *body_attr->add_g() = std::move(body);
+  return loop;
 }
 
 } // namespace
@@ -110,11 +265,13 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx:Attention"), table.end());
   EXPECT_NE(table.find("ai.onnx:GRU"), table.end());
   EXPECT_NE(table.find("ai.onnx:NonMaxSuppression"), table.end());
+  EXPECT_NE(table.find("ai.onnx:NonZero"), table.end());
   EXPECT_NE(table.find("ai.onnx:IsInf"), table.end());
   EXPECT_NE(table.find("ai.onnx:BitShift"), table.end());
   EXPECT_NE(table.find("ai.onnx:BitCast"), table.end());
   EXPECT_NE(table.find("ai.onnx:Einsum"), table.end());
   EXPECT_NE(table.find("ai.onnx:DFT"), table.end());
+  EXPECT_NE(table.find("ai.onnx:TopK"), table.end());
   // Quantization kernels.
   EXPECT_NE(table.find("ai.onnx:QuantizeLinear"), table.end());
   EXPECT_NE(table.find("ai.onnx:DequantizeLinear"), table.end());
@@ -126,6 +283,7 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   // Tensor shape kernels.
   EXPECT_NE(table.find("ai.onnx:Cast"), table.end());
   EXPECT_NE(table.find("ai.onnx:Shape"), table.end());
+  EXPECT_NE(table.find("ai.onnx:Size"), table.end());
   EXPECT_NE(table.find("ai.onnx:DepthToSpace"), table.end());
   EXPECT_NE(table.find("ai.onnx:Gather"), table.end());
   EXPECT_NE(table.find("ai.onnx:GatherND"), table.end());
@@ -158,6 +316,8 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx.ml:LabelEncoder"), table.end());
   // Linear attention (opset 27).
   EXPECT_NE(table.find("ai.onnx:LinearAttention"), table.end());
+  // Normalization kernels.
+  EXPECT_NE(table.find("ai.onnx:BatchNormalization"), table.end());
   // Sequence operators (opset 11+).
   EXPECT_NE(table.find("ai.onnx:SequenceConstruct"), table.end());
   EXPECT_NE(table.find("ai.onnx:SequenceEmpty"), table.end());
@@ -167,6 +327,10 @@ TEST(RunNodes, DispatchTableContainsRegisteredOps) {
   EXPECT_NE(table.find("ai.onnx:SequenceLength"), table.end());
   EXPECT_NE(table.find("ai.onnx:ConcatFromSequence"), table.end());
   EXPECT_NE(table.find("ai.onnx:SplitToSequence"), table.end());
+  // Optional kernels (opset 15+).
+  EXPECT_NE(table.find("ai.onnx:Optional"), table.end());
+  EXPECT_NE(table.find("ai.onnx:OptionalGetElement"), table.end());
+  EXPECT_NE(table.find("ai.onnx:OptionalHasElement"), table.end());
   // Text kernels (ai.onnx).
   EXPECT_NE(table.find("ai.onnx:RegexFullMatch"), table.end());
 }
@@ -186,6 +350,40 @@ TEST(RunNodes, RunNodeSingleAdd) {
   EXPECT_FLOAT_EQ(got[0], 11.0f);
   EXPECT_FLOAT_EQ(got[1], 22.0f);
   EXPECT_FLOAT_EQ(got[2], 33.0f);
+}
+
+TEST(RunNodes, RunNodeClearResetsStateButKeepsSettings) {
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_events_enabled(true);
+  rt.set_release_intermediates(true);
+  rt.tensors()["x"] = Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f});
+  rt.tensors()["y"] = Tensor::FromFloat("y", {3}, {10.0f, 20.0f, 30.0f});
+  NodeProto node = MakeNode("Add", {"x", "y"}, {"z"});
+  RunNode(node, rt);
+  ASSERT_FALSE(rt.tensors().empty());
+  ASSERT_FALSE(rt.events().empty());
+
+  rt.Clear();
+
+  // Tensor map, sequence map and event log are reset.
+  EXPECT_TRUE(rt.tensors().empty());
+  EXPECT_TRUE(rt.sequences().empty());
+  EXPECT_TRUE(rt.events().empty());
+  EXPECT_EQ(rt.current_node_index(), -1);
+  // Settings survive the reset.
+  EXPECT_TRUE(rt.events_enabled());
+  EXPECT_TRUE(rt.release_intermediates());
+
+  // The context can be reused for a fresh run after clearing.
+  rt.tensors()["x"] = Tensor::FromFloat("x", {3}, {4.0f, 5.0f, 6.0f});
+  rt.tensors()["y"] = Tensor::FromFloat("y", {3}, {40.0f, 50.0f, 60.0f});
+  RunNode(node, rt);
+  ASSERT_NE(rt.tensors().find("z"), rt.tensors().end());
+  const float *got = rt.tensors()["z"].AsFloat();
+  ASSERT_EQ(rt.tensors()["z"].element_count(), 3);
+  EXPECT_FLOAT_EQ(got[0], 44.0f);
+  EXPECT_FLOAT_EQ(got[1], 55.0f);
+  EXPECT_FLOAT_EQ(got[2], 66.0f);
 }
 
 TEST(RunNodes, RunNodeGemmWithoutBiasUsesSchemaDefaults) {
@@ -281,6 +479,22 @@ TEST(RunNodes, RunNodeNonMaxSuppressionFromDispatchTable) {
   EXPECT_EQ(selected.shape, (std::vector<int64_t>{2, 3}));
   const int64_t *py = selected.AsInt64();
   const std::vector<int64_t> expected = {0, 0, 0, 0, 0, 1};
+  for (size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_EQ(py[i], expected[i]);
+  }
+}
+
+TEST(RunNodes, RunNodeNonZeroFromDispatchTable) {
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {2, 3}, {1.0f, 0.0f, 2.0f, 0.0f, 3.0f, 0.0f});
+
+  NodeProto node = MakeNode("NonZero", {"x"}, {"y"});
+  RunNode(node, rt);
+
+  const Tensor &y = rt.tensors().at("y");
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
+  const int64_t *py = y.AsInt64();
+  const std::vector<int64_t> expected = {0, 0, 1, 0, 2, 1};
   for (size_t i = 0; i < expected.size(); ++i) {
     EXPECT_EQ(py[i], expected[i]);
   }
@@ -439,6 +653,84 @@ TEST(RunNodes, RunNodeAffineGridUsesAttributes) {
   EXPECT_FLOAT_EQ(got[7], 1.0f);
 }
 
+TEST(RunNodes, RunNodeBatchNormalizationFromDispatchTable) {
+  // Verifies that the ``BatchNormalization`` trampoline routes through the
+  // dispatch table, picks up the ``epsilon`` attribute, and produces the
+  // inference-mode output ``Y = (X - mean) / sqrt(var + epsilon) * scale + B``
+  // for a 1x2x1x3 input with per-channel parameters.
+  RuntimeContext rt(KernelContext(DefaultOpset(15)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {1, 2, 1, 3}, {-1.0f, 0.0f, 1.0f, 2.0f, 3.0f, 4.0f});
+  rt.tensors()["scale"] = Tensor::FromFloat("scale", {2}, {1.0f, 1.5f});
+  rt.tensors()["bias"] = Tensor::FromFloat("bias", {2}, {0.0f, 1.0f});
+  rt.tensors()["mean"] = Tensor::FromFloat("mean", {2}, {0.0f, 3.0f});
+  rt.tensors()["var"] = Tensor::FromFloat("var", {2}, {1.0f, 1.5f});
+
+  NodeProto node = MakeNode("BatchNormalization", {"x", "scale", "bias", "mean", "var"}, {"y"});
+  AttributeProto *epsilon_attr = node.add_attribute();
+  epsilon_attr->set_name("epsilon");
+  epsilon_attr->set_type(AttributeProto::AttributeType::FLOAT);
+  epsilon_attr->set_f(1e-2f);
+
+  RunNode(node, rt);
+
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{1, 2, 1, 3}));
+  ASSERT_EQ(y.element_count(), 6);
+  const float *got = y.AsFloat();
+  // Channel 0: (x - 0) / sqrt(1 + 1e-2) * 1 + 0
+  const float inv0 = 1.0f / std::sqrt(1.0f + 1e-2f);
+  EXPECT_FLOAT_EQ(got[0], -1.0f * inv0);
+  EXPECT_FLOAT_EQ(got[1], 0.0f);
+  EXPECT_FLOAT_EQ(got[2], 1.0f * inv0);
+  // Channel 1: (x - 3) / sqrt(1.5 + 1e-2) * 1.5 + 1
+  const float inv1 = 1.0f / std::sqrt(1.5f + 1e-2f);
+  EXPECT_NEAR(got[3], (2.0f - 3.0f) * inv1 * 1.5f + 1.0f, 1e-6f);
+  EXPECT_NEAR(got[4], (3.0f - 3.0f) * inv1 * 1.5f + 1.0f, 1e-6f);
+  EXPECT_NEAR(got[5], (4.0f - 3.0f) * inv1 * 1.5f + 1.0f, 1e-6f);
+}
+
+TEST(RunNodes, RunNodeBatchNormalizationTrainingModeFromDispatchTable) {
+  // Verifies that ``training_mode = 1`` routes through the dispatch table and
+  // produces the three training-mode outputs (Y, running_mean, running_var).
+  RuntimeContext rt(KernelContext(DefaultOpset(15)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {1, 2, 1, 3}, {-1.0f, 0.0f, 1.0f, 2.0f, 3.0f, 4.0f});
+  rt.tensors()["scale"] = Tensor::FromFloat("scale", {2}, {1.0f, 1.5f});
+  rt.tensors()["bias"] = Tensor::FromFloat("bias", {2}, {0.0f, 1.0f});
+  rt.tensors()["mean"] = Tensor::FromFloat("mean", {2}, {0.5f, 2.0f});
+  rt.tensors()["var"] = Tensor::FromFloat("var", {2}, {1.0f, 2.0f});
+
+  NodeProto node = MakeNode("BatchNormalization", {"x", "scale", "bias", "mean", "var"},
+                            {"y", "running_mean", "running_var"});
+  AttributeProto *training_attr = node.add_attribute();
+  training_attr->set_name("training_mode");
+  training_attr->set_type(AttributeProto::AttributeType::INT);
+  training_attr->set_i(1);
+
+  RunNode(node, rt);
+
+  const float momentum = 0.9f;
+  const float saved_mean0 = 0.0f, saved_mean1 = 3.0f;
+  const float saved_var = 2.0f / 3.0f;
+
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{1, 2, 1, 3}));
+  const float *got = y.AsFloat();
+  const float inv = 1.0f / std::sqrt(saved_var + 1e-5f);
+  EXPECT_NEAR(got[0], (-1.0f - saved_mean0) * inv, 1e-4f);
+  EXPECT_NEAR(got[3], (2.0f - saved_mean1) * inv * 1.5f + 1.0f, 1e-4f);
+
+  const Tensor &rm = rt.tensors()["running_mean"];
+  const Tensor &rv = rt.tensors()["running_var"];
+  EXPECT_EQ(rm.shape, (std::vector<int64_t>{2}));
+  EXPECT_EQ(rv.shape, (std::vector<int64_t>{2}));
+  const float *prm = rm.AsFloat();
+  const float *prv = rv.AsFloat();
+  EXPECT_NEAR(prm[0], 0.5f * momentum + saved_mean0 * (1.0f - momentum), 1e-5f);
+  EXPECT_NEAR(prm[1], 2.0f * momentum + saved_mean1 * (1.0f - momentum), 1e-5f);
+  EXPECT_NEAR(prv[0], 1.0f * momentum + saved_var * (1.0f - momentum), 1e-5f);
+  EXPECT_NEAR(prv[1], 2.0f * momentum + saved_var * (1.0f - momentum), 1e-5f);
+}
+
 TEST(RunNodes, RunNodeImageDecoderFromDispatchTable) {
   // ``ImageDecoder`` was introduced in ONNX opset 20. The reference kernel
   // does not link an image-decoding library and returns the empty
@@ -491,6 +783,22 @@ TEST(RunNodes, RunNodeExpandFromDispatchTable) {
   EXPECT_FLOAT_EQ(got[3], 1.0f);
   EXPECT_FLOAT_EQ(got[4], 2.0f);
   EXPECT_FLOAT_EQ(got[11], 3.0f);
+}
+
+TEST(RunNodes, RunNodeTileFromDispatchTable) {
+  // Tile repeats a (2, 2) input by (2, 2) to produce a (4, 4) output.
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {2, 2}, {0.0f, 1.0f, 2.0f, 3.0f});
+  rt.tensors()["repeats"] = Tensor::FromInt64("repeats", {2}, {2, 2});
+  NodeProto node = MakeNode("Tile", {"x", "repeats"}, {"y"});
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{4, 4}));
+  const float *got = y.AsFloat();
+  const std::vector<float> expected = {0, 1, 0, 1, 2, 3, 2, 3, 0, 1, 0, 1, 2, 3, 2, 3};
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_FLOAT_EQ(got[i], expected[i]);
+  }
 }
 
 TEST(RunNodes, RunNodeReshapeFromDispatchTable) {
@@ -672,6 +980,32 @@ TEST(RunNodes, RunNodeSqueezeAxesAsAttribute) {
   EXPECT_EQ(y.shape, (std::vector<int64_t>{3, 2}));
 }
 
+TEST(RunNodes, RunNodeSqueezeAxesMissingInput) {
+  // Opset 13+: ``axes`` is an optional input. When the node is declared with
+  // only the ``data`` input (the optional ``axes`` slot is omitted entirely),
+  // the kernel squeezes every dimension equal to 1, matching the ONNX spec.
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {1, 3, 1, 2}, {1, 2, 3, 4, 5, 6});
+  NodeProto node = MakeNode("Squeeze", {"x"}, {"y"});
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{3, 2}));
+  EXPECT_EQ(y.element_count(), 6);
+}
+
+TEST(RunNodes, RunNodeSqueezeAxesEmptyName) {
+  // Opset 13+: a missing optional input is conventionally encoded as an empty
+  // input name. The kernel must treat this the same as omitting the slot
+  // entirely and squeeze all unit dimensions.
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {1, 3, 1, 2}, {1, 2, 3, 4, 5, 6});
+  NodeProto node = MakeNode("Squeeze", {"x", ""}, {"y"});
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{3, 2}));
+  EXPECT_EQ(y.element_count(), 6);
+}
+
 TEST(RunNodes, RunNodeUnsqueezeAxesAsInput) {
   RuntimeContext rt(KernelContext(DefaultOpset(13)));
   rt.tensors()["x"] = Tensor::FromFloat("x", {3, 2}, {1, 2, 3, 4, 5, 6});
@@ -680,6 +1014,21 @@ TEST(RunNodes, RunNodeUnsqueezeAxesAsInput) {
   RunNode(node, rt);
   const Tensor &y = rt.tensors()["y"];
   EXPECT_EQ(y.shape, (std::vector<int64_t>{1, 3, 1, 2}));
+}
+
+TEST(RunNodes, RunNodeUnsqueezeScalarAxesInput) {
+  // Some upstream function bodies (e.g. ai.onnx::AffineGrid) feed the
+  // Unsqueeze ``axes`` input with a 0-D INT64 scalar instead of the 1-D
+  // tensor required by the schema. For compatibility with those models
+  // (which the upstream reference evaluator also accepts) the trampoline
+  // tolerates a rank-0 axes tensor.
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.tensors()["x"] = Tensor::FromFloat("x", {3, 2}, {1, 2, 3, 4, 5, 6});
+  rt.tensors()["axes"] = Tensor::FromInt64("axes", {}, {-1});
+  NodeProto node = MakeNode("Unsqueeze", {"x", "axes"}, {"y"});
+  RunNode(node, rt);
+  const Tensor &y = rt.tensors()["y"];
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{3, 2, 1}));
 }
 
 TEST(RunNodes, RunNodeShapeNoAttributes) {
@@ -996,9 +1345,10 @@ TEST(RunNodes, RuntimeContextRemove) {
 }
 
 TEST(RunNodes, RuntimeContextEventLogSetReplaceRemove) {
-  using onnx_kernels::TensorEventAction;
-  using onnx_kernels::TensorEventKind;
+  using onnx_kernels::RuntimeEventAction;
+  using onnx_kernels::RuntimeEventKind;
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_events_enabled(true);
   EXPECT_TRUE(rt.events().empty());
 
   // Set -> add event with values populated (element_count <= 8). Default
@@ -1006,9 +1356,12 @@ TEST(RunNodes, RuntimeContextEventLogSetReplaceRemove) {
   rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, -2.0f, 3.5f}));
   ASSERT_EQ(rt.events().size(), 1u);
   const auto &add_ev = rt.events()[0];
-  EXPECT_EQ(add_ev.action, TensorEventAction::kAdd);
-  EXPECT_EQ(add_ev.kind, TensorEventKind::kInput);
+  EXPECT_EQ(add_ev.action, RuntimeEventAction::kAdd);
+  EXPECT_EQ(add_ev.kind, RuntimeEventKind::kInput);
   EXPECT_EQ(add_ev.name, "x");
+  // Inputs report node_index = -1 and the CPU device (-1).
+  EXPECT_EQ(add_ev.node_index, -1);
+  EXPECT_EQ(add_ev.device, -1);
   EXPECT_EQ(add_ev.data_type, static_cast<int32_t>(DataType::FLOAT));
   EXPECT_EQ(add_ev.shape, (std::vector<int64_t>{3}));
   EXPECT_EQ(add_ev.value_count, 3);
@@ -1024,8 +1377,8 @@ TEST(RunNodes, RuntimeContextEventLogSetReplaceRemove) {
   // "intermediate".
   rt.Put("x", Tensor::FromInt32("x", {2}, {7, 8}));
   ASSERT_EQ(rt.events().size(), 2u);
-  EXPECT_EQ(rt.events()[1].action, TensorEventAction::kReplace);
-  EXPECT_EQ(rt.events()[1].kind, TensorEventKind::kIntermediate);
+  EXPECT_EQ(rt.events()[1].action, RuntimeEventAction::kReplace);
+  EXPECT_EQ(rt.events()[1].kind, RuntimeEventKind::kIntermediate);
   EXPECT_EQ(rt.events()[1].data_type, static_cast<int32_t>(DataType::INT32));
   EXPECT_EQ(rt.events()[1].value_count, 2);
   EXPECT_DOUBLE_EQ(rt.events()[1].values[0], 7.0);
@@ -1034,7 +1387,7 @@ TEST(RunNodes, RuntimeContextEventLogSetReplaceRemove) {
   // Remove -> remove event with empty shape and value_count = 0.
   EXPECT_TRUE(rt.Remove("x"));
   ASSERT_EQ(rt.events().size(), 3u);
-  EXPECT_EQ(rt.events()[2].action, TensorEventAction::kRemove);
+  EXPECT_EQ(rt.events()[2].action, RuntimeEventAction::kRemove);
   EXPECT_EQ(rt.events()[2].name, "x");
   EXPECT_TRUE(rt.events()[2].shape.empty());
   EXPECT_EQ(rt.events()[2].value_count, 0);
@@ -1043,11 +1396,11 @@ TEST(RunNodes, RuntimeContextEventLogSetReplaceRemove) {
   EXPECT_FALSE(rt.Remove("x"));
   EXPECT_EQ(rt.events().size(), 3u);
 
-  // Large tensor (> kTensorEventValueLimit) -> data_type = -1, empty shape,
-  // values truncated to the first kTensorEventValueLimit entries.
+  // Large tensor (> kRuntimeEventValueLimit) -> data_type = -1, empty shape,
+  // values truncated to the first kRuntimeEventValueLimit entries.
   rt.Put("big", Tensor::FromInt32("big", {9}, {0, 1, 2, 3, 4, 5, 6, 7, 8}));
   ASSERT_EQ(rt.events().size(), 4u);
-  EXPECT_EQ(rt.events()[3].action, TensorEventAction::kAdd);
+  EXPECT_EQ(rt.events()[3].action, RuntimeEventAction::kAdd);
   EXPECT_EQ(rt.events()[3].data_type, -1);
   EXPECT_TRUE(rt.events()[3].shape.empty());
   EXPECT_EQ(rt.events()[3].value_count, 8);
@@ -1071,10 +1424,12 @@ TEST(RunNodes, RuntimeContextEventLogSetReplaceRemove) {
 
 TEST(RunNodes, RuntimeContextEventLogCapturesRunGraphMutations) {
   // Smoke test: running a small chain of nodes through the dispatcher
-  // populates the event log via SetOutput / Put on every produced tensor.
-  using onnx_kernels::TensorEventAction;
-  using onnx_kernels::TensorEventKind;
+  // populates the event log via SetOutput / Put on every produced tensor
+  // and also appends one ``kRunNode`` event per dispatched node.
+  using onnx_kernels::RuntimeEventAction;
+  using onnx_kernels::RuntimeEventKind;
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_events_enabled(true);
   rt.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
   rt.Set("z", Tensor::FromFloat("z", {2}, {10.0f, 20.0f}));
   rt.ClearEvents();
@@ -1084,14 +1439,30 @@ TEST(RunNodes, RuntimeContextEventLogCapturesRunGraphMutations) {
   nodes.push_back(MakeNode("Add", {"t", "z"}, {"y"}));
   RunNodes(nodes.begin(), nodes.end(), rt);
 
-  // Exactly two "add" events tagged as intermediate values.
-  ASSERT_EQ(rt.events().size(), 2u);
+  // Each node produces one tensor ``add`` event tagged as an
+  // intermediate plus one ``run_node`` event summarising the dispatch.
+  ASSERT_EQ(rt.events().size(), 4u);
   EXPECT_EQ(rt.events()[0].name, "t");
-  EXPECT_EQ(rt.events()[0].action, TensorEventAction::kAdd);
-  EXPECT_EQ(rt.events()[0].kind, TensorEventKind::kIntermediate);
-  EXPECT_EQ(rt.events()[1].name, "y");
-  EXPECT_EQ(rt.events()[1].action, TensorEventAction::kAdd);
-  EXPECT_EQ(rt.events()[1].kind, TensorEventKind::kIntermediate);
+  EXPECT_EQ(rt.events()[0].action, RuntimeEventAction::kAdd);
+  EXPECT_EQ(rt.events()[0].kind, RuntimeEventKind::kIntermediate);
+  EXPECT_EQ(rt.events()[0].node_index, 0);
+  EXPECT_EQ(rt.events()[0].device, -1);
+  EXPECT_EQ(rt.events()[1].action, RuntimeEventAction::kRunNode);
+  EXPECT_EQ(rt.events()[1].op_domain, "ai.onnx");
+  EXPECT_EQ(rt.events()[1].op_type, "Abs");
+  EXPECT_EQ(rt.events()[1].inputs, (std::vector<std::string>{"x"}));
+  EXPECT_GE(rt.events()[1].duration_ns, 0);
+  EXPECT_EQ(rt.events()[1].node_index, 0);
+  EXPECT_EQ(rt.events()[2].name, "y");
+  EXPECT_EQ(rt.events()[2].action, RuntimeEventAction::kAdd);
+  EXPECT_EQ(rt.events()[2].kind, RuntimeEventKind::kIntermediate);
+  EXPECT_EQ(rt.events()[2].node_index, 1);
+  EXPECT_EQ(rt.events()[3].action, RuntimeEventAction::kRunNode);
+  EXPECT_EQ(rt.events()[3].op_domain, "ai.onnx");
+  EXPECT_EQ(rt.events()[3].op_type, "Add");
+  EXPECT_EQ(rt.events()[3].inputs, (std::vector<std::string>{"t", "z"}));
+  EXPECT_GE(rt.events()[3].duration_ns, 0);
+  EXPECT_EQ(rt.events()[3].node_index, 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -2016,6 +2387,80 @@ TEST(RunModel, LoopNodeRunsBodySubgraph) {
   EXPECT_FLOAT_EQ(scan[2], 3.0f);
 }
 
+// RunLoopWithSequenceState: a Loop whose only loop-carried state is a
+// sequence. Each body iteration appends ``(float)iter`` to the sequence
+// via SequenceInsert, so a trip count of 3 yields ``[0, 1, 2]``.
+TEST(RunLoopWithSequenceState, SequenceOnlyStateGrowsPerIteration) {
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.Set("M", Tensor::FromInt64("M", {}, {3}));
+  rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  rt.PutSequence("seq_init", Sequence("seq_init", static_cast<int32_t>(DataType::FLOAT), {}));
+
+  RunNode(MakeLoopNode({"M", "cond", "seq_init"}, {"seq_out"}, BuildSequenceLoopBody()), rt);
+
+  ASSERT_TRUE(rt.HasSequence("seq_out"));
+  const Sequence &seq = rt.GetSequence("seq_out");
+  ASSERT_EQ(seq.size(), 3u);
+  EXPECT_EQ(seq.elem_type, static_cast<int32_t>(DataType::FLOAT));
+  for (std::size_t i = 0; i < seq.size(); ++i) {
+    ASSERT_EQ(seq.at(i).shape, std::vector<int64_t>({1}));
+    EXPECT_FLOAT_EQ(seq.at(i).AsFloat()[0], static_cast<float>(i));
+  }
+}
+
+// RunLoopWithSequenceState: the loop ``cond`` input set to ``false``
+// short-circuits the loop, so the sequence loop-carried output equals
+// the (non-empty) input sequence unchanged.
+TEST(RunLoopWithSequenceState, ZeroTripReturnsInputSequence) {
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.Set("M", Tensor::FromInt64("M", {}, {5}));
+  rt.Set("cond", Tensor::FromBool("cond", {}, {0}));
+  rt.PutSequence("seq_init", Sequence("seq_init", static_cast<int32_t>(DataType::FLOAT),
+                                      {Tensor::FromFloat("e0", {1}, {9.0f})}));
+
+  RunNode(MakeLoopNode({"M", "cond", "seq_init"}, {"seq_out"}, BuildSequenceLoopBody()), rt);
+
+  ASSERT_TRUE(rt.HasSequence("seq_out"));
+  const Sequence &seq = rt.GetSequence("seq_out");
+  ASSERT_EQ(seq.size(), 1u);
+  EXPECT_FLOAT_EQ(seq.at(0).AsFloat()[0], 9.0f);
+}
+
+// RunLoopWithSequenceState: mixed state where a tensor accumulator and a
+// sequence are both loop-carried, plus a per-iteration scan output. The
+// presence of the sequence state routes the Loop through
+// RunLoopWithSequenceState (rather than kernel::Loop), and this exercises
+// the tensor-state, sequence-state and scan-stacking paths together.
+TEST(RunLoopWithSequenceState, MixedTensorSequenceAndScanOutputs) {
+  RuntimeContext rt(KernelContext(DefaultOpset(13)));
+  rt.Set("M", Tensor::FromInt64("M", {}, {3}));
+  rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  rt.Set("acc_init", Tensor::FromFloat("acc_init", {}, {0.0f}));
+  rt.PutSequence("seq_init", Sequence("seq_init", static_cast<int32_t>(DataType::FLOAT), {}));
+
+  RunNode(MakeLoopNode({"M", "cond", "acc_init", "seq_init"}, {"acc_final", "seq_final", "scan"},
+                       BuildMixedSequenceLoopBody()),
+          rt);
+
+  ASSERT_TRUE(rt.Has("acc_final"));
+  EXPECT_FLOAT_EQ(rt.Get("acc_final").AsFloat()[0], 3.0f);
+
+  ASSERT_TRUE(rt.HasSequence("seq_final"));
+  const Sequence &seq = rt.GetSequence("seq_final");
+  ASSERT_EQ(seq.size(), 3u);
+  for (std::size_t i = 0; i < seq.size(); ++i) {
+    EXPECT_FLOAT_EQ(seq.at(i).AsFloat()[0], static_cast<float>(i));
+  }
+
+  ASSERT_TRUE(rt.Has("scan"));
+  const Tensor &scan = rt.Get("scan");
+  ASSERT_EQ(scan.shape, (std::vector<int64_t>{3}));
+  const float *scan_data = scan.AsFloat();
+  EXPECT_FLOAT_EQ(scan_data[0], 1.0f);
+  EXPECT_FLOAT_EQ(scan_data[1], 2.0f);
+  EXPECT_FLOAT_EQ(scan_data[2], 3.0f);
+}
+
 TEST(RunModel, ScanNodeRunsBodySubgraph) {
   ModelProto model;
   model.set_ir_version(10);
@@ -2232,6 +2677,104 @@ TEST(RunNodes, RunNodeGRUFromDispatchTable) {
   }
 }
 
+TEST(RunNodes, RunNodeLSTMFromDispatchTableUniformSequenceLens) {
+  // ``sequence_lens`` is accepted when every entry equals ``seq_length``
+  // (no-op masking); the dispatch must produce the same outputs as the
+  // 3-input form above. This mirrors the ``test_cc_lstm_with_peepholes``
+  // backend case (which passes a uniform ``sequence_lens``).
+  RuntimeContext rt(KernelContext(DefaultOpset(14)));
+
+  constexpr int64_t kSeqLength = 1;
+  constexpr int64_t kBatch = 2;
+  constexpr int64_t kInput = 4;
+  constexpr int64_t kHidden = 3;
+  constexpr int64_t kNumGates = 4;
+  constexpr int64_t kNumPeepholes = 3;
+  constexpr float kWeightScale = 0.1f;
+
+  rt.tensors()["X"] =
+      Tensor::FromFloat("X", {kSeqLength, kBatch, kInput}, {1, 2, 3, 4, 5, 6, 7, 8});
+  std::vector<float> w_data(static_cast<size_t>(kNumGates * kHidden * kInput), kWeightScale);
+  std::vector<float> r_data(static_cast<size_t>(kNumGates * kHidden * kHidden), kWeightScale);
+  std::vector<float> b_data(static_cast<size_t>(2 * kNumGates * kHidden), 0.0f);
+  std::vector<float> h0_data(static_cast<size_t>(kBatch * kHidden), 0.0f);
+  std::vector<float> c0_data(static_cast<size_t>(kBatch * kHidden), 0.0f);
+  std::vector<float> p_data(static_cast<size_t>(kNumPeepholes * kHidden), kWeightScale);
+  rt.tensors()["W"] = Tensor::FromFloat("W", {1, kNumGates * kHidden, kInput}, w_data);
+  rt.tensors()["R"] = Tensor::FromFloat("R", {1, kNumGates * kHidden, kHidden}, r_data);
+  rt.tensors()["B"] = Tensor::FromFloat("B", {1, 2 * kNumGates * kHidden}, b_data);
+  rt.tensors()["sequence_lens"] =
+      Tensor::FromInt32("sequence_lens", {kBatch},
+                        {static_cast<int32_t>(kSeqLength), static_cast<int32_t>(kSeqLength)});
+  rt.tensors()["initial_h"] = Tensor::FromFloat("initial_h", {1, kBatch, kHidden}, h0_data);
+  rt.tensors()["initial_c"] = Tensor::FromFloat("initial_c", {1, kBatch, kHidden}, c0_data);
+  rt.tensors()["P"] = Tensor::FromFloat("P", {1, kNumPeepholes * kHidden}, p_data);
+
+  NodeProto node = MakeNode(
+      "LSTM", {"X", "W", "R", "B", "sequence_lens", "initial_h", "initial_c", "P"}, {"", "Y_h"});
+  AttributeProto *hs = node.add_attribute();
+  hs->set_name("hidden_size");
+  hs->set_type(AttributeProto::AttributeType::INT);
+  hs->set_i(kHidden);
+
+  RunNode(node, rt);
+
+  const Tensor &y_h = rt.tensors().at("Y_h");
+  EXPECT_EQ(y_h.shape, (std::vector<int64_t>{1, kBatch, kHidden}));
+  EXPECT_EQ(y_h.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+
+  // Non-uniform ``sequence_lens`` is still rejected.
+  rt.tensors()["sequence_lens"] =
+      Tensor::FromInt32("sequence_lens", {kBatch}, {static_cast<int32_t>(kSeqLength), 0});
+  EXPECT_THROW(RunNode(node, rt), std::invalid_argument);
+}
+
+TEST(RunNodes, RunNodeLSTMFromDispatchTable) {
+  // Single-step (seq_length=1) LSTM with X/W/R only: requests Y_h as the
+  // only output via an empty Y output name, mirroring the ``lstm_defaults``
+  // backend test case (batch=3, input=2, hidden=3).
+  RuntimeContext rt(KernelContext(DefaultOpset(14)));
+
+  constexpr int64_t kSeqLength = 1;
+  constexpr int64_t kBatch = 3;
+  constexpr int64_t kInput = 2;
+  constexpr int64_t kHidden = 3;
+  constexpr int64_t kNumGates = 4;
+  constexpr float kWeightScale = 0.1f;
+
+  rt.tensors()["X"] = Tensor::FromFloat("X", {kSeqLength, kBatch, kInput}, {1, 2, 3, 4, 5, 6});
+  std::vector<float> w_data(static_cast<size_t>(kNumGates * kHidden * kInput), kWeightScale);
+  std::vector<float> r_data(static_cast<size_t>(kNumGates * kHidden * kHidden), kWeightScale);
+  rt.tensors()["W"] = Tensor::FromFloat("W", {1, kNumGates * kHidden, kInput}, w_data);
+  rt.tensors()["R"] = Tensor::FromFloat("R", {1, kNumGates * kHidden, kHidden}, r_data);
+
+  NodeProto node = MakeNode("LSTM", {"X", "W", "R"}, {"", "Y_h"});
+  AttributeProto *hs = node.add_attribute();
+  hs->set_name("hidden_size");
+  hs->set_type(AttributeProto::AttributeType::INT);
+  hs->set_i(kHidden);
+
+  RunNode(node, rt);
+
+  // Y is suppressed (empty output name) so it must not appear in the tensors map.
+  EXPECT_EQ(rt.tensors().find("Y"), rt.tensors().end());
+
+  const Tensor &y_h = rt.tensors().at("Y_h");
+  EXPECT_EQ(y_h.shape, (std::vector<int64_t>{1, kBatch, kHidden}));
+  EXPECT_EQ(y_h.data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+
+  // Compare against the kernel's direct output to validate dispatch-time
+  // wiring of inputs, attributes and outputs.
+  const onnx_kernels::kernel::LSTM lstm_kernel(rt.kernel_ctx());
+  auto [y_ref, y_h_ref] =
+      lstm_kernel(rt.tensors().at("X"), rt.tensors().at("W"), rt.tensors().at("R"));
+  (void)y_ref;
+  ASSERT_EQ(y_h.element_count(), y_h_ref.element_count());
+  for (int64_t i = 0; i < y_h.element_count(); ++i) {
+    EXPECT_FLOAT_EQ(y_h.AsFloat()[i], y_h_ref.AsFloat()[i]);
+  }
+}
+
 TEST(RunNodes, RunNodeSequenceConstructAndQueriesFromDispatchTable) {
   // Build a sequence of three tensors with SequenceConstruct, then
   // dispatch SequenceLength, SequenceAt and ConcatFromSequence and
@@ -2316,6 +2859,861 @@ TEST(RunNodes, RunNodeSplitToSequenceFromDispatchTable) {
     EXPECT_EQ(seq.at(i).shape, std::vector<int64_t>({2}));
     EXPECT_FLOAT_EQ(seq.at(i).AsFloat()[0], static_cast<float>(2 * i + 1));
     EXPECT_FLOAT_EQ(seq.at(i).AsFloat()[1], static_cast<float>(2 * i + 2));
+  }
+}
+
+TEST(RuntimeContextCollectExternalInputs, FlatNodes) {
+  std::vector<NodeProto> nodes;
+  nodes.push_back(MakeNode("Mul", {"x", "y"}, {"t"}));
+  nodes.push_back(MakeNode("Sub", {"t", "z"}, {"out"}));
+  nodes.push_back(MakeNode("Add", {"out", "x"}, {"final"}));
+
+  auto inputs = RuntimeContext::CollectExternalInputs(nodes);
+  EXPECT_EQ(inputs, std::vector<std::string>({"x", "y", "z"}));
+}
+
+TEST(RuntimeContextCollectExternalInputs, EmptyNodes) {
+  std::vector<NodeProto> nodes;
+  EXPECT_TRUE(RuntimeContext::CollectExternalInputs(nodes).empty());
+}
+
+TEST(RuntimeContextCollectExternalInputs, SkipsEmptyAndProducedNames) {
+  std::vector<NodeProto> nodes;
+  // Optional input "" must be ignored; output "t" produced internally
+  // must not be reported as external.
+  nodes.push_back(MakeNode("Resize", {"X", "", "scales"}, {"t"}));
+  nodes.push_back(MakeNode("Abs", {"t"}, {"Y"}));
+
+  auto inputs = RuntimeContext::CollectExternalInputs(nodes);
+  EXPECT_EQ(inputs, std::vector<std::string>({"X", "scales"}));
+}
+
+TEST(RuntimeContextCollectExternalInputs, SubgraphCapturesOuterValues) {
+  // Build an If node whose then_branch reads "cap1" from the outer
+  // scope and whose else_branch reads "cap2"; "cond" feeds the If
+  // input and "produced" is produced by an earlier node in the set.
+  GraphProto then_branch;
+  *then_branch.add_node() = MakeNode("Add", {"cap1", "produced"}, {"then_out"});
+  then_branch.add_output()->set_name("then_out");
+
+  GraphProto else_branch;
+  *else_branch.add_node() = MakeNode("Add", {"cap2", "produced"}, {"else_out"});
+  else_branch.add_output()->set_name("else_out");
+
+  NodeProto if_node = MakeNode("If", {"cond"}, {"y"});
+  AttributeProto *attr_then = if_node.add_attribute();
+  attr_then->set_name("then_branch");
+  attr_then->set_type(AttributeProto::AttributeType::GRAPH);
+  *attr_then->mutable_g() = then_branch;
+  AttributeProto *attr_else = if_node.add_attribute();
+  attr_else->set_name("else_branch");
+  attr_else->set_type(AttributeProto::AttributeType::GRAPH);
+  *attr_else->mutable_g() = else_branch;
+
+  std::vector<NodeProto> nodes;
+  nodes.push_back(MakeNode("Identity", {"x"}, {"produced"}));
+  nodes.push_back(if_node);
+
+  auto inputs = RuntimeContext::CollectExternalInputs(nodes);
+  // "produced" is produced by the outer set and must not be reported.
+  // Order is first-seen.
+  EXPECT_EQ(inputs, std::vector<std::string>({"x", "cond", "cap1", "cap2"}));
+}
+
+TEST(RuntimeContextCollectExternalInputs, SubgraphLocalNamesShadowOuter) {
+  // Subgraph defines its own formal input "x", an initializer "k",
+  // and produces "tmp" internally — none of these should be reported.
+  // It additionally reads "outer_only" from the outer scope.
+  GraphProto body;
+  body.add_input()->set_name("x");
+  TensorProto *init = body.add_initializer();
+  init->set_name("k");
+  init->set_data_type(static_cast<int32_t>(DataType::FLOAT));
+  *body.add_node() = MakeNode("Add", {"x", "k"}, {"tmp"});
+  *body.add_node() = MakeNode("Mul", {"tmp", "outer_only"}, {"body_out"});
+  body.add_output()->set_name("body_out");
+
+  NodeProto loop = MakeNode("Loop", {"M", "cond"}, {"y"});
+  AttributeProto *attr = loop.add_attribute();
+  attr->set_name("body");
+  attr->set_type(AttributeProto::AttributeType::GRAPH);
+  *attr->mutable_g() = body;
+
+  std::vector<NodeProto> nodes = {loop};
+  auto inputs = RuntimeContext::CollectExternalInputs(nodes);
+  EXPECT_EQ(inputs, std::vector<std::string>({"M", "cond", "outer_only"}));
+}
+
+TEST(RuntimeContextCollectExternalInputs, NestedSubgraphCaptures) {
+  // Outer If holds an inner If whose then_branch reads "deep".
+  GraphProto inner_then;
+  *inner_then.add_node() = MakeNode("Identity", {"deep"}, {"inner_out"});
+  inner_then.add_output()->set_name("inner_out");
+  GraphProto inner_else;
+  *inner_else.add_node() = MakeNode("Identity", {"deep"}, {"inner_out"});
+  inner_else.add_output()->set_name("inner_out");
+
+  NodeProto inner_if = MakeNode("If", {"inner_cond"}, {"middle"});
+  AttributeProto *a1 = inner_if.add_attribute();
+  a1->set_name("then_branch");
+  a1->set_type(AttributeProto::AttributeType::GRAPH);
+  *a1->mutable_g() = inner_then;
+  AttributeProto *a2 = inner_if.add_attribute();
+  a2->set_name("else_branch");
+  a2->set_type(AttributeProto::AttributeType::GRAPH);
+  *a2->mutable_g() = inner_else;
+
+  GraphProto outer_then;
+  *outer_then.add_node() = inner_if;
+  *outer_then.add_node() = MakeNode("Identity", {"middle"}, {"outer_out"});
+  outer_then.add_output()->set_name("outer_out");
+  GraphProto outer_else;
+  *outer_else.add_node() = MakeNode("Identity", {"middle"}, {"outer_out"});
+  outer_else.add_output()->set_name("outer_out");
+
+  NodeProto outer_if = MakeNode("If", {"outer_cond"}, {"y"});
+  AttributeProto *b1 = outer_if.add_attribute();
+  b1->set_name("then_branch");
+  b1->set_type(AttributeProto::AttributeType::GRAPH);
+  *b1->mutable_g() = outer_then;
+  AttributeProto *b2 = outer_if.add_attribute();
+  b2->set_name("else_branch");
+  b2->set_type(AttributeProto::AttributeType::GRAPH);
+  *b2->mutable_g() = outer_else;
+
+  std::vector<NodeProto> nodes = {outer_if};
+  auto inputs = RuntimeContext::CollectExternalInputs(nodes);
+  // outer_cond is read by the outer If node itself.
+  // Inside outer_then: inner_if introduces inner_cond, and its branches
+  // capture "deep" from above.
+  // Inside outer_else: the lone Identity reads "middle", which is not
+  // produced anywhere in outer_else (only in outer_then via inner_if),
+  // so it is captured from the outer scope.
+  EXPECT_EQ(inputs, std::vector<std::string>({"outer_cond", "inner_cond", "deep", "middle"}));
+}
+
+TEST(RuntimeContextCollectExternalInputs, DeduplicatesOrdering) {
+  std::vector<NodeProto> nodes;
+  nodes.push_back(MakeNode("Add", {"a", "b"}, {"u"}));
+  nodes.push_back(MakeNode("Mul", {"a", "u"}, {"v"})); // re-references "a"
+  nodes.push_back(MakeNode("Sub", {"b", "v"}, {"w"})); // re-references "b"
+
+  auto inputs = RuntimeContext::CollectExternalInputs(nodes);
+  EXPECT_EQ(inputs, std::vector<std::string>({"a", "b"}));
+}
+
+// ---------------------------------------------------------------------------
+// RuntimeContext isolation invariants when running a local function or a
+// subgraph. See issue #2157.
+// ---------------------------------------------------------------------------
+
+// A model-local function must be invoked with an isolated tensor map: only
+// its formal inputs (bound to the caller's actuals) are visible inside the
+// function body. Names that exist in the caller's tensor map but are not
+// passed as a function input must NOT be visible from inside the function.
+// The construction-time ``kernel_ctx()`` is still shared so the function's
+// nodes are dispatched against the same opset as the caller.
+TEST(RunModel, LocalFunctionStartsWithEmptyTensorMap) {
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+  OperatorSetIdProto *custom_os = model.add_opset_import();
+  custom_os->set_domain("custom");
+  custom_os->set_version(1);
+
+  // Function "F" has a single formal input "x" and a node that references
+  // a name ("leak") which exists in the caller's tensor map but is NOT a
+  // declared function input. Because the function runs in an isolated
+  // child RuntimeContext that starts empty (then gets only "x" bound),
+  // dispatching the body must fail: "leak" cannot be resolved.
+  FunctionProto *func = model.add_functions();
+  func->set_name("F");
+  func->set_domain("custom");
+  func->add_input("x");
+  func->add_output("out");
+  NodeProto *fn = func->add_node();
+  fn->set_op_type("Add");
+  fn->add_input("x");
+  fn->add_input("leak"); // not a function input -> must be invisible.
+  fn->add_output("out");
+
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *call = g->add_node();
+  call->set_op_type("F");
+  call->set_domain("custom");
+  call->add_input("x");
+  call->add_output("y");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {2}, {1.0f, 2.0f}));
+  rt.Set("leak", Tensor::FromFloat("leak", {2}, {100.0f, 200.0f}));
+
+  // The function body references "leak" which is not bound as a formal
+  // input. With proper isolation the lookup throws.
+  EXPECT_THROW(RunModel(model, rt), std::invalid_argument);
+
+  // The caller's tensor map is untouched: "leak" is still there and the
+  // function's formal output "out" did not leak in either.
+  EXPECT_TRUE(rt.Has("leak"));
+  EXPECT_FALSE(rt.Has("out"));
+}
+
+// Companion to the test above: the same model with "leak" passed as the
+// function's formal input "x" succeeds, demonstrating that the function
+// body sees only what was explicitly bound and that ``kernel_ctx()`` is
+// shared (the Add kernel is dispatched against the caller's opset).
+TEST(RunModel, LocalFunctionSharesKernelContextOnlyWithEmptyTensorMap) {
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+  OperatorSetIdProto *custom_os = model.add_opset_import();
+  custom_os->set_domain("custom");
+  custom_os->set_version(1);
+
+  FunctionProto *func = model.add_functions();
+  func->set_name("Twice");
+  func->set_domain("custom");
+  func->add_input("v");
+  func->add_output("out");
+  NodeProto *fn = func->add_node();
+  fn->set_op_type("Add");
+  fn->add_input("v");
+  fn->add_input("v");
+  fn->add_output("internal_tmp"); // an intermediate inside the function.
+  NodeProto *fn2 = func->add_node();
+  fn2->set_op_type("Identity");
+  fn2->add_input("internal_tmp");
+  fn2->add_output("out");
+
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *call = g->add_node();
+  call->set_op_type("Twice");
+  call->set_domain("custom");
+  call->add_input("a");
+  call->add_output("y");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("a", Tensor::FromFloat("a", {2}, {3.0f, 4.0f}));
+  // Pre-populate the caller's tensor map with a name that collides with
+  // a function-local intermediate. The function must not see or
+  // overwrite this caller-side value; after the call the caller's
+  // value must still be there.
+  rt.Set("internal_tmp", Tensor::FromFloat("internal_tmp", {1}, {-1.0f}));
+
+  RunModel(model, rt);
+
+  ASSERT_TRUE(rt.Has("y"));
+  EXPECT_FLOAT_EQ(rt.Get("y").AsFloat()[0], 6.0f);
+  EXPECT_FLOAT_EQ(rt.Get("y").AsFloat()[1], 8.0f);
+  // The function intermediate must not leak back to the caller: the
+  // caller's pre-existing "internal_tmp" is preserved unchanged.
+  ASSERT_TRUE(rt.Has("internal_tmp"));
+  ASSERT_EQ(rt.Get("internal_tmp").shape, (std::vector<int64_t>{1}));
+  EXPECT_FLOAT_EQ(rt.Get("internal_tmp").AsFloat()[0], -1.0f);
+}
+
+// A local subgraph (e.g. the body of an If/Loop/Scan node) must start
+// with a *copy* of the caller's tensor map so it can reference outer-scope
+// names. Intermediates produced inside the subgraph must NOT be propagated
+// back to the caller's tensor map: only the values declared as subgraph
+// outputs are visible to the caller (under the node's output names).
+TEST(RunModel, LocalSubgraphCopiesCallerTensorsButHidesIntermediates) {
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *if_node = g->add_node();
+  if_node->set_op_type("If");
+  if_node->add_input("cond");
+  if_node->add_output("out");
+
+  // ``then_branch`` references an outer-scope tensor ``outer`` (only
+  // present in the caller's tensor map) via an Add node, and produces a
+  // subgraph-local intermediate ``branch_tmp`` that must not leak back.
+  AttributeProto *then_attr = if_node->add_attribute();
+  then_attr->set_name("then_branch");
+  then_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  GraphProto *then_g = then_attr->add_g();
+  then_g->set_name("then_graph");
+  NodeProto *then_add = then_g->add_node();
+  then_add->set_op_type("Add");
+  then_add->add_input("outer");
+  then_add->add_input("outer");
+  then_add->add_output("branch_tmp");
+  NodeProto *then_id = then_g->add_node();
+  then_id->set_op_type("Identity");
+  then_id->add_input("branch_tmp");
+  then_id->add_output("z");
+  then_g->add_output()->set_name("z");
+
+  // Minimal else_branch, never taken in this test.
+  AttributeProto *else_attr = if_node->add_attribute();
+  else_attr->set_name("else_branch");
+  else_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  GraphProto *else_g = else_attr->add_g();
+  else_g->set_name("else_graph");
+  NodeProto *else_id = else_g->add_node();
+  else_id->set_op_type("Identity");
+  else_id->add_input("outer");
+  else_id->add_output("z");
+  else_g->add_output()->set_name("z");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  rt.Set("outer", Tensor::FromFloat("outer", {2}, {5.0f, 7.0f}));
+
+  RunModel(model, rt);
+
+  // The subgraph can see ``outer`` (caller's tensor map was copied into
+  // the child) and produced the declared output.
+  ASSERT_TRUE(rt.Has("out"));
+  ASSERT_EQ(rt.Get("out").shape, (std::vector<int64_t>{2}));
+  EXPECT_FLOAT_EQ(rt.Get("out").AsFloat()[0], 10.0f);
+  EXPECT_FLOAT_EQ(rt.Get("out").AsFloat()[1], 14.0f);
+
+  // The caller's pre-existing tensors are preserved.
+  EXPECT_TRUE(rt.Has("cond"));
+  EXPECT_TRUE(rt.Has("outer"));
+
+  // Subgraph intermediates do NOT leak into the caller's tensor map.
+  EXPECT_FALSE(rt.Has("branch_tmp"));
+  // The subgraph's formal output name ``z`` (distinct from the node's
+  // output name ``out``) likewise stays inside the child context.
+  EXPECT_FALSE(rt.Has("z"));
+}
+
+// ---------------------------------------------------------------------------
+// Custom kernel registration through RuntimeContext::RegisterCustomKernel.
+// ---------------------------------------------------------------------------
+
+// A custom kernel registered for an op outside the built-in dispatch table
+// is invoked by RunNode; its output is written back to the RuntimeContext.
+TEST(RunNodes, RunNodeDispatchesCustomKernelForUnknownOp) {
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}));
+
+  int call_count = 0;
+  rt.RegisterCustomKernel("my.domain", "Scale",
+                          [&call_count](const NodeProto &node, RuntimeContext &ctx) {
+                            ++call_count;
+                            // Read the "factor" attribute (default 1.0f).
+                            float factor = 1.0f;
+                            for (int i = 0; i < node.attribute_size(); ++i) {
+                              const AttributeProto &a = node.attribute(i);
+                              if (a.name() == "factor") {
+                                factor = a.f();
+                              }
+                            }
+                            const Tensor &in = ctx.Get(node.input(0).as_string());
+                            std::vector<float> out(static_cast<size_t>(in.element_count()));
+                            const float *src = in.AsFloat();
+                            for (size_t i = 0; i < out.size(); ++i) {
+                              out[i] = src[i] * factor;
+                            }
+                            ctx.Put(node.output(0).as_string(),
+                                    Tensor::FromFloat(node.output(0).as_string(), in.shape, out));
+                          });
+
+  NodeProto node = MakeNode("Scale", {"x"}, {"y"}, "my.domain");
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name("factor");
+  attr->set_type(AttributeProto::AttributeType::FLOAT);
+  attr->set_f(3.0f);
+
+  RunNode(node, rt);
+  EXPECT_EQ(call_count, 1);
+  const Tensor &y = rt.tensors().at("y");
+  ASSERT_EQ(y.element_count(), 3);
+  const float *yp = y.AsFloat();
+  EXPECT_FLOAT_EQ(yp[0], 3.0f);
+  EXPECT_FLOAT_EQ(yp[1], 6.0f);
+  EXPECT_FLOAT_EQ(yp[2], 9.0f);
+}
+
+// A custom kernel registered under the default ONNX domain overrides the
+// built-in dispatch-table entry with the same key.
+TEST(RunNodes, RunNodeCustomKernelOverridesBuiltin) {
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {3}, {-1.0f, -2.0f, -3.0f}));
+
+  // Replace Abs with negation: a custom override must take precedence over
+  // the entry that KernelDispatchTable() would otherwise resolve.
+  rt.RegisterCustomKernel("", "Abs", [](const NodeProto &node, RuntimeContext &ctx) {
+    const Tensor &in = ctx.Get(node.input(0).as_string());
+    std::vector<float> out(static_cast<size_t>(in.element_count()));
+    const float *src = in.AsFloat();
+    for (size_t i = 0; i < out.size(); ++i) {
+      out[i] = -src[i];
+    }
+    ctx.Put(node.output(0).as_string(),
+            Tensor::FromFloat(node.output(0).as_string(), in.shape, out));
+  });
+
+  NodeProto node = MakeNode("Abs", {"x"}, {"y"});
+  RunNode(node, rt);
+
+  const Tensor &y = rt.tensors().at("y");
+  ASSERT_EQ(y.element_count(), 3);
+  const float *yp = y.AsFloat();
+  EXPECT_FLOAT_EQ(yp[0], 1.0f);
+  EXPECT_FLOAT_EQ(yp[1], 2.0f);
+  EXPECT_FLOAT_EQ(yp[2], 3.0f);
+}
+
+// RunModel chains a built-in kernel and a custom kernel together; the
+// CustomKernelMap survives across nodes within the same context.
+TEST(RunModel, CustomKernelChainsWithBuiltinKernels) {
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+  OperatorSetIdProto *custom_os = model.add_opset_import();
+  custom_os->set_domain("my.domain");
+  custom_os->set_version(1);
+
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *n1 = g->add_node();
+  n1->set_op_type("Abs");
+  n1->add_input("x");
+  n1->add_output("a");
+  NodeProto *n2 = g->add_node();
+  n2->set_op_type("Scale");
+  n2->set_domain("my.domain");
+  n2->add_input("a");
+  n2->add_output("y");
+  AttributeProto *attr = n2->add_attribute();
+  attr->set_name("factor");
+  attr->set_type(AttributeProto::AttributeType::FLOAT);
+  attr->set_f(2.0f);
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {3}, {-1.0f, -2.0f, -3.0f}));
+  rt.RegisterCustomKernel("my.domain", "Scale", [](const NodeProto &node, RuntimeContext &ctx) {
+    float factor = 1.0f;
+    for (int i = 0; i < node.attribute_size(); ++i) {
+      if (node.attribute(i).name() == "factor") {
+        factor = node.attribute(i).f();
+      }
+    }
+    const Tensor &in = ctx.Get(node.input(0).as_string());
+    std::vector<float> out(static_cast<size_t>(in.element_count()));
+    const float *src = in.AsFloat();
+    for (size_t i = 0; i < out.size(); ++i) {
+      out[i] = src[i] * factor;
+    }
+    ctx.Put(node.output(0).as_string(),
+            Tensor::FromFloat(node.output(0).as_string(), in.shape, out));
+  });
+
+  RunModel(model, rt);
+  const Tensor &y = rt.tensors().at("y");
+  ASSERT_EQ(y.element_count(), 3);
+  const float *yp = y.AsFloat();
+  EXPECT_FLOAT_EQ(yp[0], 2.0f);
+  EXPECT_FLOAT_EQ(yp[1], 4.0f);
+  EXPECT_FLOAT_EQ(yp[2], 6.0f);
+}
+
+// Without a registered custom kernel, an unknown op fails as before.
+TEST(RunNodes, RunNodeUnknownOpWithoutCustomKernelThrows) {
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}));
+  NodeProto node = MakeNode("Scale", {"x"}, {"y"}, "my.domain");
+  EXPECT_THROW(RunNode(node, rt), std::invalid_argument);
+}
+
+// ---------------------------------------------------------------------------
+// Release-unused-intermediates tests
+// ---------------------------------------------------------------------------
+
+TEST(RunNodes, CollectNodeInputsPlainNode) {
+  NodeProto node = MakeNode("Add", {"x", "y"}, {"z"});
+  auto inputs = RuntimeContext::CollectNodeInputs(node);
+  EXPECT_EQ(inputs, (std::vector<std::string>{"x", "y"}));
+}
+
+TEST(RunNodes, CollectNodeInputsSkipsEmptyAndDedups) {
+  NodeProto node = MakeNode("Add", {"x", "", "x"}, {"z"});
+  auto inputs = RuntimeContext::CollectNodeInputs(node);
+  EXPECT_EQ(inputs, (std::vector<std::string>{"x"}));
+}
+
+TEST(RunNodes, CollectNodeInputsIncludesSubgraphCaptures) {
+  // ``If`` node with then/else subgraphs each capturing an outer name.
+  NodeProto node;
+  node.set_op_type("If");
+  node.add_input("cond");
+
+  auto add_subgraph = [](NodeProto &n, const std::string &attr_name,
+                         const std::string &captured_name, const std::string &out_name) {
+    AttributeProto attr;
+    attr.set_name(attr_name);
+    attr.set_type(AttributeProto::AttributeType::GRAPH);
+    GraphProto &g = attr.ref_g();
+    // Body: out_name = Identity(captured_name)
+    NodeProto inner;
+    inner.set_op_type("Identity");
+    inner.add_input(captured_name);
+    inner.add_output(out_name);
+    g.ref_node().push_back(inner);
+    ValueInfoProto vi;
+    vi.set_name(out_name);
+    g.ref_output().push_back(vi);
+    n.ref_attribute().push_back(attr);
+  };
+  add_subgraph(node, "then_branch", "a", "y");
+  add_subgraph(node, "else_branch", "b", "y");
+
+  auto inputs = RuntimeContext::CollectNodeInputs(node);
+  EXPECT_EQ(inputs, (std::vector<std::string>{"cond", "a", "b"}));
+}
+
+TEST(RunNodes, ComputeReleasableInputsLastUse) {
+  // x -> Abs -> t ; (t, z) -> Add -> y
+  // "x" last-used at node 0, "t" last-used at node 1, "z" last-used at node 1.
+  // With keep = {"y"}, after node 0 we can release "x"; after node 1 we can
+  // release "t" and "z".
+  std::vector<NodeProto> nodes;
+  nodes.push_back(MakeNode("Abs", {"x"}, {"t"}));
+  nodes.push_back(MakeNode("Add", {"t", "z"}, {"y"}));
+
+  std::unordered_set<std::string> keep{"y"};
+  auto rel = RuntimeContext::ComputeReleasableInputs(nodes, keep);
+  ASSERT_EQ(rel.size(), 2u);
+  EXPECT_EQ(rel[0], (std::vector<std::string>{"x"}));
+  EXPECT_EQ(rel[1], (std::vector<std::string>{"t", "z"}));
+}
+
+TEST(RunNodes, ComputeReleasableInputsKeepIsPreserved) {
+  // Reuse the same intermediate: pretend "x" is also a declared graph output
+  // (i.e. caller wants to keep "x" after the run). It must NOT be released.
+  std::vector<NodeProto> nodes;
+  nodes.push_back(MakeNode("Abs", {"x"}, {"t"}));
+  std::unordered_set<std::string> keep{"x", "t"};
+  auto rel = RuntimeContext::ComputeReleasableInputs(nodes, keep);
+  ASSERT_EQ(rel.size(), 1u);
+  EXPECT_TRUE(rel[0].empty());
+}
+
+TEST(RunNodes, RunGraphReleaseIntermediatesRemovesUnusedAndEmitsEvent) {
+  // y = Add(Abs(x), z) — after running, "t" (the intermediate) must be gone
+  // from the context, "y" (declared output) must remain, and "x" / "z"
+  // (graph inputs already in the context) must also remain.
+  using onnx_kernels::RuntimeEventAction;
+
+  GraphProto graph;
+  ValueInfoProto vi_x;
+  vi_x.set_name("x");
+  ValueInfoProto vi_z;
+  vi_z.set_name("z");
+  ValueInfoProto vi_y;
+  vi_y.set_name("y");
+  graph.ref_input().push_back(vi_x);
+  graph.ref_input().push_back(vi_z);
+  graph.ref_output().push_back(vi_y);
+  graph.ref_node().push_back(MakeNode("Abs", {"x"}, {"t"}));
+  graph.ref_node().push_back(MakeNode("Add", {"t", "z"}, {"y"}));
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_events_enabled(true);
+  rt.set_release_intermediates(true);
+  rt.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
+  rt.Set("z", Tensor::FromFloat("z", {2}, {10.0f, 20.0f}));
+
+  RunGraph(graph, rt);
+
+  // "t" was released, "y" / "x" / "z" survived.
+  EXPECT_FALSE(rt.Has("t"));
+  EXPECT_TRUE(rt.Has("y"));
+  EXPECT_TRUE(rt.Has("x"));
+  EXPECT_TRUE(rt.Has("z"));
+
+  // At least one kRemove event was emitted for "t".
+  bool saw_remove_t = false;
+  for (const auto &ev : rt.events()) {
+    if (ev.action == RuntimeEventAction::kRemove && ev.name == "t") {
+      saw_remove_t = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(saw_remove_t);
+
+  // Default behaviour (release disabled) keeps the intermediate around so
+  // callers can still fetch it after run.
+  RuntimeContext rt2(KernelContext(DefaultOpset(18)));
+  rt2.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
+  rt2.Set("z", Tensor::FromFloat("z", {2}, {10.0f, 20.0f}));
+  RunGraph(graph, rt2);
+  EXPECT_TRUE(rt2.Has("t"));
+  EXPECT_TRUE(rt2.Has("y"));
+}
+
+TEST(RunNodes, ExecutionPlanIsCachedAcrossRunGraphInvocations) {
+  // GetExecutionPlan returns the same instance on subsequent calls for
+  // the same GraphProto, so the release analysis is paid only once.
+  GraphProto graph;
+  ValueInfoProto vi_x;
+  vi_x.set_name("x");
+  ValueInfoProto vi_y;
+  vi_y.set_name("y");
+  graph.ref_input().push_back(vi_x);
+  graph.ref_output().push_back(vi_y);
+  graph.ref_node().push_back(MakeNode("Abs", {"x"}, {"t"}));
+  graph.ref_node().push_back(MakeNode("Neg", {"t"}, {"y"}));
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_release_intermediates(true);
+  const onnx_kernels::ExecutionPlan &plan1 = rt.GetExecutionPlan(graph);
+  const onnx_kernels::ExecutionPlan &plan2 = rt.GetExecutionPlan(graph);
+  EXPECT_EQ(&plan1, &plan2);
+  EXPECT_EQ(plan1.num_nodes(), 2u);
+  // "t" is releasable after node 1, "x" / "y" are in keep (input/output).
+  EXPECT_TRUE(plan1.releasable()[0].empty());
+  ASSERT_EQ(plan1.releasable()[1].size(), 1u);
+  EXPECT_EQ(plan1.releasable()[1][0], "t");
+  EXPECT_TRUE(plan1.keep().count("x"));
+  EXPECT_TRUE(plan1.keep().count("y"));
+
+  // Two successive RunGraph calls both reuse the cached plan.
+  rt.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
+  RunGraph(graph, rt);
+  EXPECT_FALSE(rt.Has("t"));
+  EXPECT_TRUE(rt.Has("y"));
+  rt.Remove("y");
+  rt.Put("x", Tensor::FromFloat("x", {2}, {-3.0f, 4.0f}));
+  RunGraph(graph, rt);
+  EXPECT_FALSE(rt.Has("t"));
+  EXPECT_TRUE(rt.Has("y"));
+  // Cached plan still the same instance after both runs.
+  EXPECT_EQ(&rt.GetExecutionPlan(graph), &plan1);
+}
+
+// ---------------------------------------------------------------------------
+// SubgraphEventGraphName tests
+// Verify that events produced inside subgraphs carry the correct
+// subgraph_node_index and subgraph_attr_name.
+// ---------------------------------------------------------------------------
+
+// Helper: build a minimal Loop body that adds a scalar ``one`` initializer to
+// ``s_in`` and writes it to ``s_out``, while forwarding the loop condition.
+static void FillLoopBody(GraphProto &body) {
+  body.set_name("loop_body");
+  body.add_input()->set_name("iter");
+  body.add_input()->set_name("cond_in");
+  body.add_input()->set_name("s_in");
+  TensorProto *one = body.add_initializer();
+  one->set_name("one");
+  one->set_data_type(TensorProto::DataType::FLOAT);
+  one->add_float_data(1.0f);
+  NodeProto *add = body.add_node();
+  add->set_op_type("Add");
+  add->add_input("s_in");
+  add->add_input("one");
+  add->add_output("s_out");
+  body.add_output()->set_name("cond_in");
+  body.add_output()->set_name("s_out");
+  body.add_output()->set_name("s_out");
+}
+
+TEST(SubgraphEventGraphName, LoopSubgraphEventsCarryBodyGraphName) {
+  using onnx_kernels::RuntimeEventAction;
+
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *loop = g->add_node();
+  loop->set_op_type("Loop");
+  loop->add_input("M");
+  loop->add_input("cond");
+  loop->add_input("s_init");
+  loop->add_output("s_final");
+  loop->add_output("scan");
+
+  AttributeProto *body_attr = loop->add_attribute();
+  body_attr->set_name("body");
+  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  FillLoopBody(*body_attr->add_g());
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_events_enabled(true);
+  rt.Set("M", Tensor::FromInt64("M", {}, {2}));
+  rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  rt.Set("s_init", Tensor::FromFloat("s_init", {}, {0.0f}));
+  rt.ClearEvents();
+
+  RunModel(model, rt);
+
+  // All events from the loop body subgraph must be tagged with
+  // subgraph_attr_name "body". Events from the outer graph must have an
+  // empty subgraph_attr_name.
+  bool found_body_event = false;
+  for (const auto &ev : rt.events()) {
+    if (ev.subgraph_attr_name == "body") {
+      found_body_event = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(found_body_event) << "No event with subgraph_attr_name='body' found";
+
+  // Top-level events must have an empty subgraph_attr_name.
+  for (const auto &ev : rt.events()) {
+    if (ev.subgraph_attr_name.empty()) {
+      // At least one outer-graph event should exist (output tensors).
+      break;
+    }
+  }
+}
+
+TEST(SubgraphEventGraphName, IfSubgraphEventsCarryBranchGraphName) {
+  using onnx_kernels::RuntimeEventAction;
+
+  // Build a trivial If model: cond -> If(then_branch, else_branch).
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *if_node = g->add_node();
+  if_node->set_op_type("If");
+  if_node->add_input("cond");
+  if_node->add_output("z");
+
+  AttributeProto *then_attr = if_node->add_attribute();
+  then_attr->set_name("then_branch");
+  then_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  FillConstantBranch(*then_attr->add_g(), "then_g", "t", "z", 1.0f);
+
+  AttributeProto *else_attr = if_node->add_attribute();
+  else_attr->set_name("else_branch");
+  else_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  FillConstantBranch(*else_attr->add_g(), "else_g", "e", "z", 2.0f);
+
+  // Run with cond = true: the then_branch executes.
+  RuntimeContext rt_true(KernelContext(DefaultOpset(18)));
+  rt_true.set_events_enabled(true);
+  rt_true.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  rt_true.ClearEvents();
+  RunModel(model, rt_true);
+
+  bool found_then = false;
+  for (const auto &ev : rt_true.events()) {
+    if (ev.subgraph_attr_name == "then_branch") {
+      found_then = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(found_then) << "No event with subgraph_attr_name='then_branch' found";
+
+  // Run with cond = false: the else_branch executes.
+  RuntimeContext rt_false(KernelContext(DefaultOpset(18)));
+  rt_false.set_events_enabled(true);
+  rt_false.Set("cond", Tensor::FromBool("cond", {}, {0}));
+  rt_false.ClearEvents();
+  RunModel(model, rt_false);
+
+  bool found_else = false;
+  for (const auto &ev : rt_false.events()) {
+    if (ev.subgraph_attr_name == "else_branch") {
+      found_else = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(found_else) << "No event with subgraph_attr_name='else_branch' found";
+}
+
+TEST(SubgraphEventGraphName, ScanSubgraphEventsCarryBodyGraphName) {
+  using onnx_kernels::RuntimeEventAction;
+
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  NodeProto *scan = g->add_node();
+  scan->set_op_type("Scan");
+  scan->add_input("state0");
+  scan->add_input("x");
+  scan->add_output("state_final");
+  scan->add_output("y");
+  AttributeProto *num_attr = scan->add_attribute();
+  num_attr->set_name("num_scan_inputs");
+  num_attr->set_type(AttributeProto::AttributeType::INT);
+  num_attr->set_i(1);
+
+  AttributeProto *body_attr = scan->add_attribute();
+  body_attr->set_name("body");
+  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  GraphProto *body = body_attr->add_g();
+  body->set_name("scan_body");
+  body->add_input()->set_name("state_in");
+  body->add_input()->set_name("x_in");
+  NodeProto *add = body->add_node();
+  add->set_op_type("Add");
+  add->add_input("state_in");
+  add->add_input("x_in");
+  add->add_output("state_out");
+  body->add_output()->set_name("state_out");
+  body->add_output()->set_name("state_out");
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_events_enabled(true);
+  rt.Set("state0", Tensor::FromFloat("state0", {}, {0.0f}));
+  rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.0f, 3.0f}));
+  rt.ClearEvents();
+
+  RunModel(model, rt);
+
+  bool found_body = false;
+  for (const auto &ev : rt.events()) {
+    if (ev.subgraph_attr_name == "body") {
+      found_body = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(found_body) << "No event with subgraph_attr_name='body' found";
+}
+
+TEST(SubgraphEventGraphName, TopLevelEventsHaveEmptyGraphName) {
+  // A plain two-node graph (no subgraphs) must produce only events
+  // with an empty subgraph_attr_name.
+  using onnx_kernels::RuntimeEventAction;
+
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *os = model.add_opset_import();
+  os->set_version(18);
+
+  GraphProto *g = model.add_graph();
+  g->set_name("main");
+  *g->add_node() = MakeNode("Abs", {"x"}, {"t"});
+  *g->add_node() = MakeNode("Neg", {"t"}, {"y"});
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.set_events_enabled(true);
+  rt.Set("x", Tensor::FromFloat("x", {2}, {-1.0f, 2.0f}));
+  rt.ClearEvents();
+
+  RunModel(model, rt);
+
+  for (const auto &ev : rt.events()) {
+    EXPECT_TRUE(ev.subgraph_attr_name.empty())
+        << "Expected empty subgraph_attr_name for top-level event, got: " << ev.subgraph_attr_name;
   }
 }
 

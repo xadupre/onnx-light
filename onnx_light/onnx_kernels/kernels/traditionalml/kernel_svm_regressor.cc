@@ -41,7 +41,7 @@ Tensor SVMRegressor::operator()(const Tensor &x, const std::vector<float> &suppo
           ComputeSvmKernel(kernel_type, x_row, sv, feature_count, gamma, coef0, degree);
       value += static_cast<double>(coefficients[static_cast<size_t>(i)]) * k;
     }
-    value -= static_cast<double>(rho[0]);
+    value += static_cast<double>(rho[0]);
     predictions[static_cast<size_t>(n)] = static_cast<float>(value);
   }
   return Tensor::FromFloat("", {sample_count, 1}, predictions);

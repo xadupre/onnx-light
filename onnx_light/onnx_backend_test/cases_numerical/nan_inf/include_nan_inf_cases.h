@@ -48,6 +48,10 @@ void RegisterDivNanInfCases(std::vector<TestCase> &registry);
 /// containing NaN/Inf in either branch.
 void RegisterWhereNanInfCases(std::vector<TestCase> &registry);
 
+/// Registers backend test cases that run ``TopK`` on tensors containing
+/// the non-finite IEEE-754 specials (NaN, +Inf, -Inf).
+void RegisterTopKNanInfCases(std::vector<TestCase> &registry);
+
 /// Collects all NaN/Inf backend test cases by invoking every
 /// ``Register*NanInfCases`` helper declared in this header.
 void CollectNanInfTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");

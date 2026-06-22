@@ -20,15 +20,15 @@ namespace {
 constexpr const char *kDFTName = "kernel::DFT";
 
 int64_t ReadDFTLength(const Tensor &len) {
-  EXT_ENFORCE_INVALID(len.element_count() == 1,
-                      std::string(kDFTName) + ": dft_length must be a 0-D tensor.");
+  EXT_ENFORCE_INVALID(len.element_count() == 1, kDFTName, ": dft_length must be a 0-D tensor.");
   switch (len.data_type) {
   case DataType::INT32:
     return static_cast<int64_t>(len.AsInt32()[0]);
   case DataType::INT64:
     return len.AsInt64()[0];
   default:
-    throw std::invalid_argument(std::string(kDFTName) + ": dft_length must be INT32 or INT64.");
+    EXT_THROW_INVALID(kDFTName, ": unsupported data type ", len.data_type,
+                      ", : dft_length must be INT32 or INT64.");
   }
 }
 
@@ -51,6 +51,25 @@ void ReadSample(const T *data, const std::vector<int64_t> &strides, int64_t axis
   im = (last_dim == 2) ? static_cast<double>(data[off + 1]) : 0.0;
 }
 
+// Read one sample for the IRFFT path, applying Hermitian symmetry.
+// Input contains bins 0..in_axis-1 (one-sided). For frequency index n >= in_axis,
+// the value is conj(X[n_dft - n]).
+template <typename T>
+void ReadSampleIRFFT(const T *data, const std::vector<int64_t> &strides, int64_t in_axis,
+                     int64_t outer, int64_t inner, int64_t outer_idx, int64_t freq_idx,
+                     int64_t inner_idx, int64_t last_dim, int64_t n_dft, double &re, double &im) {
+  int64_t idx = freq_idx;
+  bool conjugate = false;
+  if (idx >= in_axis) {
+    idx = n_dft - idx;
+    conjugate = true;
+  }
+  ReadSample<T>(data, strides, in_axis, outer, inner, outer_idx, idx, inner_idx, last_dim, re, im);
+  if (conjugate) {
+    im = -im;
+  }
+}
+
 template <typename T>
 void DftCompute(const T *in, T *out, int64_t outer, int64_t in_axis, int64_t out_axis,
                 int64_t inner, int64_t in_last, int64_t out_last, int64_t n_dft, bool inverse,
@@ -66,13 +85,20 @@ void DftCompute(const T *in, T *out, int64_t outer, int64_t in_axis, int64_t out
   const double norm = inverse ? (1.0 / static_cast<double>(n_dft)) : 1.0;
   const double two_pi = 2.0 * 3.14159265358979323846;
 
+  const bool irfft = onesided && inverse;
+
   for (int64_t o = 0; o < outer; ++o) {
     for (int64_t i = 0; i < inner; ++i) {
       for (int64_t k = 0; k < out_axis; ++k) {
         double acc_re = 0.0, acc_im = 0.0;
         for (int64_t n = 0; n < n_dft; ++n) {
           double xr = 0.0, xi = 0.0;
-          ReadSample<T>(in, in_strides, in_axis, outer, inner, o, n, i, in_last, xr, xi);
+          if (irfft) {
+            ReadSampleIRFFT<T>(in, in_strides, in_axis, outer, inner, o, n, i, in_last, n_dft, xr,
+                               xi);
+          } else {
+            ReadSample<T>(in, in_strides, in_axis, outer, inner, o, n, i, in_last, xr, xi);
+          }
           const double theta = sign * two_pi * static_cast<double>(k) * static_cast<double>(n) /
                                static_cast<double>(n_dft);
           const double c = std::cos(theta);
@@ -89,7 +115,6 @@ void DftCompute(const T *in, T *out, int64_t outer, int64_t in_axis, int64_t out
           out[base + 1] = static_cast<T>(acc_im);
         } else {
           // IRFFT: take the real part only.
-          (void)onesided;
           out[base] = static_cast<T>(acc_re);
         }
       }
@@ -102,18 +127,17 @@ void DftCompute(const T *in, T *out, int64_t outer, int64_t in_axis, int64_t out
 Tensor DFT::operator()(const Tensor &input, const Tensor *dft_length, int64_t axis, bool onesided,
                        bool inverse) const {
   const int64_t rank = static_cast<int64_t>(input.shape.size());
-  EXT_ENFORCE_INVALID(rank >= 2, std::string(kDFTName) +
-                                     ": input must have rank >= 2 (including the "
-                                     "trailing complex/real dimension).");
+  EXT_ENFORCE_INVALID(rank >= 2, kDFTName,
+                      ": input must have rank >= 2 (including the "
+                      "trailing complex/real dimension).");
   // Normalise axis (negative -> positive). The valid range matches the schema:
   // ``-rank <= axis``, ``axis != -1`` and ``axis < rank - 1``.
-  EXT_ENFORCE_INVALID(axis >= -rank && axis != -1 && axis < rank - 1,
-                      std::string(kDFTName) + ": axis is out of range.");
+  EXT_ENFORCE_INVALID(axis >= -rank && axis != -1 && axis < rank - 1, kDFTName,
+                      ": axis is out of range.");
   const int64_t a = axis < 0 ? axis + rank : axis;
   const int64_t last_dim = input.shape[static_cast<std::size_t>(rank - 1)];
-  EXT_ENFORCE_INVALID(last_dim == 1 || last_dim == 2,
-                      std::string(kDFTName) +
-                          ": the last dimension of input must be 1 (real) or 2 (complex).");
+  EXT_ENFORCE_INVALID(last_dim == 1 || last_dim == 2, kDFTName,
+                      ": the last dimension of input must be 1 (real) or 2 (complex).");
 
   // Compute outer/inner factors. ``inner`` excludes the trailing real/imag dim.
   int64_t outer = 1;
@@ -130,12 +154,11 @@ Tensor DFT::operator()(const Tensor &input, const Tensor *dft_length, int64_t ax
   int64_t n_dft = in_axis;
   if (dft_length != nullptr) {
     n_dft = ReadDFTLength(*dft_length);
-    EXT_ENFORCE_INVALID(n_dft > 0, std::string(kDFTName) + ": dft_length must be positive.");
+    EXT_ENFORCE_INVALID(n_dft > 0, kDFTName, ": dft_length must be positive.");
   } else if (onesided && inverse) {
     // IRFFT default: 2 * (signal_dim_axis - 1).
     n_dft = 2 * (in_axis - 1);
-    EXT_ENFORCE_INVALID(n_dft > 0,
-                        std::string(kDFTName) + ": invalid default dft_length for IRFFT.");
+    EXT_ENFORCE_INVALID(n_dft > 0, kDFTName, ": invalid default dft_length for IRFFT.");
   }
 
   // Determine the output axis dimension and trailing dimension.
@@ -176,8 +199,8 @@ Tensor DFT::operator()(const Tensor &input, const Tensor *dft_length, int64_t ax
                        last_dim, out_last, n_dft, inverse, onesided);
     break;
   default:
-    throw std::invalid_argument(std::string(kDFTName) +
-                                " only supports FLOAT and DOUBLE input tensors.");
+    EXT_THROW_INVALID(kDFTName, ": unsupported data type ", input.data_type,
+                      ", only supports FLOAT and DOUBLE input tensors.");
   }
   return output;
 }
@@ -185,12 +208,12 @@ Tensor DFT::operator()(const Tensor &input, const Tensor *dft_length, int64_t ax
 void DFT::operator()(const Tensor &input, const Tensor *dft_length, int64_t axis, bool onesided,
                      bool inverse, Tensor &output) const {
   Tensor produced = (*this)(input, dft_length, axis, onesided, inverse);
-  EXT_ENFORCE_INVALID(output.data_type == produced.data_type,
-                      std::string(kDFTName) + ": preallocated output dtype must match.");
-  EXT_ENFORCE_INVALID(output.shape == produced.shape,
-                      std::string(kDFTName) + ": preallocated output shape mismatch.");
-  EXT_ENFORCE_INVALID(output.data.size() == produced.data.size(),
-                      std::string(kDFTName) + ": preallocated output buffer size mismatch.");
+  EXT_ENFORCE_INVALID(output.data_type == produced.data_type, kDFTName,
+                      ": preallocated output dtype must match.");
+  EXT_ENFORCE_INVALID(output.shape == produced.shape, kDFTName,
+                      ": preallocated output shape mismatch.");
+  EXT_ENFORCE_INVALID(output.data.size() == produced.data.size(), kDFTName,
+                      ": preallocated output buffer size mismatch.");
   if (!produced.data.empty()) {
     std::memcpy(output.data.data(), produced.data.data(), produced.data.size());
   }

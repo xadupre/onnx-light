@@ -571,9 +571,12 @@ class ReferenceEvaluator:
                 # ``seq(T)`` graph inputs are fed as a list/tuple of arrays (one
                 # per sequence element) and stored through ``put_sequence``.
                 if not isinstance(value, (list, tuple)):
-                    kind = "optional sequence" if is_optional_sequence_input else "sequence"
+                    input_type_description = (
+                        "optional sequence" if is_optional_sequence_input else "sequence"
+                    )
                     raise TypeError(
-                        f"{kind.capitalize()} input {name!r} must be fed as a list/tuple of "
+                        f"{input_type_description.capitalize()} input {name!r} must be fed as a "
+                        "list/tuple of "
                         f"arrays, not {type(value).__name__}."
                     )
                 elements = [

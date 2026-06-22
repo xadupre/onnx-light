@@ -212,6 +212,11 @@ class ReferenceEvaluator:
         # sequence element) and handed to the runtime via ``put_sequence``
         # instead of the single-tensor ``set`` path.
         self._sequence_inputs: set[str] = set()
+        # ``_optional_sequence_inputs`` records graph inputs declared as
+        # ``optional(seq(T))``. The runtime models present optionals as a
+        # passthrough of the underlying value, so these inputs are fed through
+        # the same ``put_sequence`` path as plain ``seq(T)`` inputs.
+        self._optional_sequence_inputs: set[str] = set()
         if graph_inputs is not None:
             inputs: list[str] = []
             for vi in graph_inputs:
@@ -228,6 +233,15 @@ class ReferenceEvaluator:
                 else:
                     if vi.type.has_sequence_type():
                         self._sequence_inputs.add(vi.name)
+                    elif (
+                        vi.type.has_optional_type()
+                        and vi.type.optional_type.has_elem_type()
+                        and vi.type.optional_type.elem_type.has_sequence_type()
+                        and (
+                            vi.type.optional_type.elem_type.sequence_type.elem_type.has_tensor_type()
+                        )
+                    ):
+                        self._optional_sequence_inputs.add(vi.name)
                     inputs.append(vi.name)
         else:
             assert self._function is not None
@@ -552,13 +566,17 @@ class ReferenceEvaluator:
         ctx.release_intermediates = release
 
         for name, value in feed_inputs.items():
-            if name in self._sequence_inputs:
+            is_optional_sequence_input = name in self._optional_sequence_inputs
+            if name in self._sequence_inputs or is_optional_sequence_input:
                 # ``seq(T)`` graph inputs are fed as a list/tuple of arrays (one
                 # per sequence element) and stored through ``put_sequence``.
                 if not isinstance(value, (list, tuple)):
+                    input_type_description = (
+                        "optional sequence" if is_optional_sequence_input else "sequence"
+                    )
                     raise TypeError(
-                        f"Sequence input {name!r} must be fed as a list/tuple of "
-                        f"arrays, not {type(value).__name__}."
+                        f"{input_type_description.capitalize()} input {name!r} must be fed as a "
+                        f"list/tuple of arrays, not {type(value).__name__}."
                     )
                 elements = [
                     _numpy_to_cpp_tensor(f"{name}_{i}", element)

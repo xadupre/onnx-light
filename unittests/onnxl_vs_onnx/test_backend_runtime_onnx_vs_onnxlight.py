@@ -42,6 +42,7 @@ from onnx.backend.test.loader import load_model_tests
 import onnx_light.onnx as onnxl
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 from onnx_light.onnx import helper as onnxl_helper
+from onnx_light.onnx import numpy_helper as onnxl_numpy_helper
 
 # The reference runtime is only available in the full build; skip this module on
 # a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
@@ -108,20 +109,62 @@ def _value_info_is_sequence(value_info: onnxl.ValueInfoProto) -> bool:
     return t.has_sequence_type() and t.sequence_type.elem_type.has_tensor_type()
 
 
+def _value_info_is_optional_tensor(value_info: onnxl.ValueInfoProto) -> bool:
+    """Returns ``True`` when ``value_info`` is declared as ``optional(tensor)``."""
+    t = value_info.type
+    return (
+        t.has_optional_type()
+        and t.optional_type.has_elem_type()
+        and t.optional_type.elem_type.has_tensor_type()
+    )
+
+
+def _value_info_is_optional_sequence(value_info: onnxl.ValueInfoProto) -> bool:
+    """Returns ``True`` when ``value_info`` is declared as ``optional(seq(tensor))``."""
+    t = value_info.type
+    return (
+        t.has_optional_type()
+        and t.optional_type.has_elem_type()
+        and t.optional_type.elem_type.has_sequence_type()
+        and t.optional_type.elem_type.sequence_type.elem_type.has_tensor_type()
+    )
+
+
+def _value_info_kind(value_info: onnxl.ValueInfoProto) -> str | None:
+    """Returns the supported boundary kind for ``value_info``.
+
+    Returns one of ``"tensor"``, ``"sequence"``, ``"optional_tensor"``,
+    ``"optional_sequence"`` or ``None`` when the value cannot be exercised
+    through the Python ``ReferenceEvaluator`` boundary.
+    """
+    t = value_info.type
+    if t.has_tensor_type():
+        return "tensor"
+    if t.has_sequence_type() and t.sequence_type.elem_type.has_tensor_type():
+        return "sequence"
+    if t.has_optional_type() and t.optional_type.has_elem_type():
+        elem_type = t.optional_type.elem_type
+        if elem_type.has_tensor_type():
+            return "optional_tensor"
+        if elem_type.has_sequence_type() and elem_type.sequence_type.elem_type.has_tensor_type():
+            return "optional_sequence"
+    return None
+
+
 def _has_supported_io(model: onnxl.ModelProto) -> bool:
-    """Returns ``True`` when every graph input/output is a tensor or ``seq(tensor)``.
+    """Returns ``True`` when every graph input/output uses a supported boundary type.
 
     The Python ``ReferenceEvaluator`` feed/return boundary represents plain
     tensors as :class:`numpy.ndarray` and ``seq(tensor)`` values as a ``list``
-    of arrays. Inputs or outputs of any other structured type (``optional``,
-    ``map``, ``sparse_tensor``) cannot be exercised through that boundary.
+    of arrays. Present ``optional(tensor)`` / ``optional(seq(tensor))`` values
+    are represented by the underlying tensor / list through the runtime's
+    passthrough optional convention. Any other structured type (``map``,
+    ``sparse_tensor`` or unsupported optional element kinds) cannot be
+    exercised through that boundary.
     """
     for value_info in list(model.graph.input) + list(model.graph.output):
-        if value_info.type.has_tensor_type():
-            continue
-        if _value_info_is_sequence(value_info):
-            continue
-        return False
+        if _value_info_kind(value_info) is None:
+            return False
     return True
 
 
@@ -138,23 +181,42 @@ def _load_sequence_value(path: str) -> list[np.ndarray]:
     return [numpy_helper.to_array(t) for t in sequence.tensor_values]
 
 
+def _load_optional_value(path: str):
+    """Loads a serialised ``OptionalProto`` as a Python value or ``None``."""
+    optional = onnxl.OptionalProto()
+    with open(path, "rb") as f:
+        optional.ParseFromString(f.read())
+    return onnxl_numpy_helper.to_optional(optional)
+
+
+def _load_value(path: str, kind: str) -> np.ndarray | list[np.ndarray] | None:
+    """Loads one backend input/output value according to ``kind``."""
+    if kind == "tensor":
+        return _load_tensor_value(path)
+    if kind == "sequence":
+        return _load_sequence_value(path)
+    if kind in {"optional_tensor", "optional_sequence"}:
+        return _load_optional_value(path)
+    raise AssertionError(f"Unexpected backend value kind {kind!r}.")
+
+
 def _load_data_set(
-    data_dir: str, input_is_sequence: list[bool], output_is_sequence: list[bool]
+    data_dir: str, input_kinds: list[str], output_kinds: list[str]
 ) -> tuple[list, list]:
     """Loads the input/output values of one ``test_data_set_*`` directory.
 
-    Each input/output is loaded as a :class:`numpy.ndarray` (tensor) or a list
-    of arrays (``seq(tensor)``) according to the corresponding ``*_is_sequence``
-    flag derived from the model's declared graph input/output types.
+    Each input/output is loaded as the Python value corresponding to its
+    declared boundary kind (tensor, ``seq(tensor)``, ``optional(tensor)``,
+    ``optional(seq(tensor))``).
     """
     inputs: list = []
-    for i, is_seq in enumerate(input_is_sequence):
+    for i, kind in enumerate(input_kinds):
         path = os.path.join(data_dir, f"input_{i}.pb")
-        inputs.append(_load_sequence_value(path) if is_seq else _load_tensor_value(path))
+        inputs.append(_load_value(path, kind))
     outputs: list = []
-    for i, is_seq in enumerate(output_is_sequence):
+    for i, kind in enumerate(output_kinds):
         path = os.path.join(data_dir, f"output_{i}.pb")
-        outputs.append(_load_sequence_value(path) if is_seq else _load_tensor_value(path))
+        outputs.append(_load_value(path, kind))
     return inputs, outputs
 
 
@@ -215,9 +277,16 @@ def _describe_output_mismatch(actual, expected, rtol: float, atol: float) -> str
     """Returns a description of why output ``actual`` differs from ``expected``.
 
     Handles both tensor outputs (a :class:`numpy.ndarray`) and ``seq(tensor)``
-    outputs (a ``list`` of arrays). For sequences the element counts must match
-    and each element is compared in turn. Returns ``None`` when they match.
+    outputs (a ``list`` of arrays). Empty optionals are represented as
+    ``None``. For sequences the element counts must match and each element is
+    compared in turn. Returns ``None`` when they match.
     """
+    if expected is None or actual is None:
+        return (
+            None
+            if expected is actual
+            else f"type mismatch: got {actual!r}, expected {expected!r}"
+        )
     if isinstance(expected, list):
         if not isinstance(actual, list):
             return f"type mismatch: got {type(actual).__name__}, expected a sequence"
@@ -269,6 +338,20 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
         model = onnxl_helper.make_model(graph)
         self.assertEqual(_model_op_types(model), {"If", "Relu", "Neg"})
 
+    def test_run_one_loop16_seq_none(self):
+        model_file = None
+        for test in load_model_tests(kind="node"):
+            if os.path.basename(test.model_dir) == "test_loop16_seq_none":
+                model_file = os.path.join(test.model_dir, "model.onnx")
+                break
+        self.assertIsNotNone(
+            model_file, "ONNX backend case 'test_loop16_seq_none' was not found."
+        )
+        self.assertTrue(os.path.exists(model_file))
+        outcome, detail = self._run_one(model_file)
+        self.assertEqual(outcome, "pass")
+        self.assertIsNone(detail)
+
     def _run_one(self, model_file: str) -> tuple[str, str | None]:
         """Executes one backend test and returns its outcome and a detail.
 
@@ -298,12 +381,15 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
         if not data_dirs:
             return "skip", None
 
-        input_is_sequence = [_value_info_is_sequence(vi) for vi in model.graph.input]
-        output_is_sequence = [_value_info_is_sequence(vi) for vi in model.graph.output]
+        input_kinds = [_value_info_kind(vi) for vi in model.graph.input]
+        output_kinds = [_value_info_kind(vi) for vi in model.graph.output]
+        assert all(kind is not None for kind in input_kinds + output_kinds)
 
         session = ReferenceEvaluator(model)
         for data_dir in data_dirs:
-            inputs, expected = _load_data_set(data_dir, input_is_sequence, output_is_sequence)
+            inputs, expected = _load_data_set(data_dir, input_kinds, output_kinds)
+            if any(value is None for value in inputs + expected):
+                return "skip", None
             feeds = dict(zip(session.input_names, inputs))
             # Executing the model is an external runtime boundary that can fail.
             # The runtime has no Python-side API to query the set of registered

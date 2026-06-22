@@ -265,6 +265,29 @@ std::vector<std::vector<InPlaceReuse>> ComputeInPlaceReuse(const GraphProto &gra
   return result;
 }
 
+void WriteInPlaceReuseToMetadata(GraphProto &graph, const ShapesContext &ctx) {
+  const std::vector<std::vector<InPlaceReuse>> reuse = ComputeInPlaceReuse(graph, ctx);
+  for (std::size_t i = 0; i < reuse.size(); ++i) {
+    if (reuse[i].empty()) {
+      continue;
+    }
+    std::string value;
+    for (std::size_t j = 0; j < reuse[i].size(); ++j) {
+      const InPlaceReuse &r = reuse[i][j];
+      if (j != 0) {
+        value += ";";
+      }
+      value += std::to_string(r.output_index);
+      value += ":";
+      value += std::to_string(r.input_index);
+      value += ":";
+      value += (r.kind == InPlaceReuseKind::kEqual ? "equal" : "greater");
+    }
+    NodeProto &node = (*graph.mutable_node())[i];
+    node.add_metadata(kInPlaceReuseMetadataKey, value);
+  }
+}
+
 } // namespace shapes
 } // namespace onnx_optim
 } // namespace ONNX_LIGHT_NAMESPACE

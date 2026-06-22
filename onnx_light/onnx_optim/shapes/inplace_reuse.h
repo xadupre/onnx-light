@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include "onnx_optim/shapes/shapes_context.h"
@@ -105,6 +106,31 @@ struct InPlaceReuse {
  */
 std::vector<std::vector<InPlaceReuse>> ComputeInPlaceReuse(const GraphProto &graph,
                                                            const ShapesContext &ctx);
+
+/**
+ * Metadata key under which :cpp:func:`WriteInPlaceReuseToMetadata` records a
+ * node's in-place reuse opportunities. The associated value is a string with
+ * one ``output_index:input_index:kind`` triplet per opportunity (``kind`` is
+ * ``equal`` or ``greater``), triplets separated by ``;``.
+ */
+constexpr const char *kInPlaceReuseMetadataKey = "onnx_light.inplace_reuse";
+
+/**
+ * Computes the in-place reuse opportunities for ``graph`` (via
+ * :cpp:func:`ComputeInPlaceReuse`) and records them in each node's
+ * ``metadata_props`` under :cpp:var:`kInPlaceReuseMetadataKey`.
+ *
+ * For every node that has at least one opportunity, a single metadata entry is
+ * added (or updated in place if the key already exists) whose value lists the
+ * opportunities as ``output_index:input_index:kind`` triplets separated by
+ * ``;`` (``kind`` being ``equal`` or ``greater``). Nodes without any
+ * opportunity are left untouched.
+ *
+ * @param graph  Graph whose nodes are analysed and mutated in place.
+ * @param ctx    Shapes context already populated with the inferred descriptors
+ *               for ``graph``.
+ */
+void WriteInPlaceReuseToMetadata(GraphProto &graph, const ShapesContext &ctx);
 
 } // namespace shapes
 } // namespace onnx_optim

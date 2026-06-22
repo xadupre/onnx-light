@@ -28,6 +28,7 @@ using onnx_optim::shapes::ComputeInPlaceReuse;
 using onnx_optim::shapes::InPlaceReuse;
 using onnx_optim::shapes::InPlaceReuseKind;
 using onnx_optim::shapes::ShapesContext;
+using onnx_optim::shapes::WriteInPlaceReuseToMetadata;
 
 namespace Test {
 
@@ -243,6 +244,54 @@ TEST(OnnxOptimInPlaceReuse, EqualSizedInputIsPreferredOverLarger) {
   // rather than the larger BIG buffer at the lower input index 0.
   ASSERT_EQ(reuse[2].size(), 1u);
   EXPECT_EQ(reuse[2][0], (InPlaceReuse{0, 1, InPlaceReuseKind::kEqual}));
+}
+
+// WriteInPlaceReuseToMetadata records the opportunities of each node into its
+// ``metadata_props``, leaving nodes without any opportunity untouched.
+TEST(OnnxOptimInPlaceReuse, WriteInPlaceReuseToMetadata) {
+  GraphProto graph;
+  graph.set_name("g");
+  AddInput(graph, "X", {3, 4});
+  AddOutput(graph, "Y", {3, 4});
+  *graph.add_node() = MakeNode("Abs", {"X"}, {"A"});
+  *graph.add_node() = MakeNode("Abs", {"A"}, {"B"});
+  *graph.add_node() = MakeNode("Abs", {"B"}, {"Y"});
+
+  ShapesContext ctx;
+  ctx.ComputeShapeGraph(graph);
+
+  WriteInPlaceReuseToMetadata(graph, ctx);
+  ASSERT_EQ(graph.node().size(), 3);
+  // Node 0 reads the declared graph input X, so it has no reuse and no
+  // metadata is written for it.
+  EXPECT_EQ(graph.node()[0].metadata_props().size(), 0);
+  ASSERT_EQ(graph.node()[1].metadata_props().size(), 1);
+  EXPECT_EQ(graph.node()[1].metadata_props()[0].key().as_string(),
+            std::string(onnx_optim::shapes::kInPlaceReuseMetadataKey));
+  EXPECT_EQ(graph.node()[1].metadata_props()[0].value().as_string(), std::string("0:0:equal"));
+  ASSERT_EQ(graph.node()[2].metadata_props().size(), 1);
+  EXPECT_EQ(graph.node()[2].metadata_props()[0].value().as_string(), std::string("0:0:equal"));
+}
+
+// A strictly larger reused buffer is recorded with the ``greater`` kind, and an
+// existing entry under the same key is replaced in place.
+TEST(OnnxOptimInPlaceReuse, WriteInPlaceReuseToMetadataGreaterAndUpdate) {
+  GraphProto graph;
+  graph.set_name("g");
+  AddInput(graph, "X", {4});
+  AddTypedOutput(graph, "Y", TensorProto::DataType::INT32, {4});
+  *graph.add_node() = MakeCastNode("X", "A", TensorProto::DataType::INT64);
+  *graph.add_node() = MakeCastNode("A", "Y", TensorProto::DataType::INT32);
+  // Pre-existing entry under the same key must be replaced, not duplicated.
+  (*graph.mutable_node())[1].add_metadata(onnx_optim::shapes::kInPlaceReuseMetadataKey, "stale");
+
+  ShapesContext ctx;
+  ctx.ComputeShapeGraph(graph);
+
+  WriteInPlaceReuseToMetadata(graph, ctx);
+  EXPECT_EQ(graph.node()[0].metadata_props().size(), 0);
+  ASSERT_EQ(graph.node()[1].metadata_props().size(), 1);
+  EXPECT_EQ(graph.node()[1].metadata_props()[0].value().as_string(), std::string("0:0:greater"));
 }
 
 } // namespace Test

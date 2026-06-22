@@ -286,9 +286,12 @@ void InplaceContext::ComputeInPlaceReuseGraph(const GraphProto &graph, const Sha
 
 void InplaceContext::WriteToMetadata(GraphProto &graph) const {
   if (static_cast<std::size_t>(graph.node().size()) != reuse_.size()) {
-    throw std::invalid_argument(
-        "InplaceContext::WriteToMetadata: graph node count does not match the "
-        "computed reuse result; call ComputeInPlaceReuseGraph on the same graph first.");
+    std::ostringstream msg;
+    msg << "InplaceContext::WriteToMetadata: graph has " << graph.node().size()
+        << " node(s) but the computed reuse result has " << reuse_.size()
+        << " entry(ies); call WriteToMetadata on the same graph passed to "
+           "ComputeInPlaceReuseGraph.";
+    throw std::invalid_argument(msg.str());
   }
   for (std::size_t i = 0; i < reuse_.size(); ++i) {
     if (reuse_[i].empty()) {

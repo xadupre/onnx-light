@@ -16,6 +16,7 @@ from onnx_light.onnx_optim.expressions import (
     dim_mul,
     dim_multi_mul,
     dim_div,
+    dim_exact_div,
     dim_mod,
     dim_max,
     dim_min,
@@ -321,6 +322,63 @@ class TestDimOperations(ExtTestCase):
         self.assertEqual(dim_min(2, 9), 2)
         self.assertEqual(dim_min(8, 3), 3)
         self.assertEqual(dim_min(4, 4), 4)
+
+    # ----------------------------------------------------------- dim_exact_div
+    def test_dim_exact_div_int_int(self):
+        self.assertEqual(dim_exact_div(12, 4), 3)
+
+    def test_dim_exact_div_int_int_not_exact_raises(self):
+        with self.assertRaises(RuntimeError):
+            dim_exact_div(7, 2)
+
+    def test_dim_exact_div_symbolic_simplifies(self):
+        result = dim_exact_div("2*n", 2)
+        self.assertEqual(str(result), "n")
+
+    def test_dim_exact_div_symbolic_mult_outside(self):
+        result = dim_exact_div("batch*4", 2)
+        self.assertEqual(str(result), "2*batch")
+
+
+class TestExactDiv(ExtTestCase):
+    """Tests for the /: (exact division) operator."""
+
+    def test_parse_unparse(self):
+        from onnx_light.onnx_optim.expressions import simplify_expression
+
+        # Round-trip through parse/simplify.
+        self.assertEqual(simplify_expression("a/:b"), "a/:b")
+
+    def test_simplify_concrete(self):
+        self.assertEqual(simplify_expression("12/:4"), 3)
+        self.assertEqual(simplify_expression("(a*b)/:(a*b)"), 1)
+
+    def test_simplify_cancel_common_factor(self):
+        # Exact division cancels common factors from numerator.
+        self.assertEqual(simplify_expression("(2*H)/:2"), "H")
+        self.assertEqual(simplify_expression("(3*H)/:3"), "H")
+        self.assertEqual(simplify_expression("(batch*seq)/:seq"), "batch")
+        self.assertEqual(simplify_expression("(1024*a)/:2"), "512*a")
+
+    def test_simplify_exact_commutes_with_mult(self):
+        # Unlike floor division (//), exact division (/: ) commutes with
+        # multiplication: c*(a/:b) == (c*a)/:b is valid for exact division,
+        # so the simplifier is allowed to cancel the factor even when it
+        # appears outside the division.
+        self.assertEqual(simplify_expression("2*(H/:2)"), "H")
+
+    def test_simplify_floordiv_still_blocked(self):
+        # Floor division still does NOT commute.
+        self.assertEqual(simplify_expression("2*(H//2)"), "2*(H//2)")
+
+    def test_evaluate(self):
+        self.assertEqual(evaluate_expression("12/:4", {}), 3)
+        self.assertEqual(evaluate_expression("(batch*4)/:4", {"batch": 5}), 5)
+
+    def test_evaluate_error_on_remainder(self):
+        # /: must be exact: evaluating 7/:2 should raise.
+        with self.assertRaises(RuntimeError):
+            evaluate_expression("7/:2", {})
 
 
 if __name__ == "__main__":

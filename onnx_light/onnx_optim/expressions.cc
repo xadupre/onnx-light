@@ -29,6 +29,7 @@ enum class TokenKind {
   Minus,
   Star,
   DoubleSlash,
+  SlashColon,
   Percent,
   Caret,
   Ampersand,
@@ -76,10 +77,16 @@ public:
       return {TokenKind::Name, input_.substr(start, pos_ - start)};
     }
 
-    // Double slash //
-    if (c == '/' && pos_ + 1 < input_.size() && input_[pos_ + 1] == '/') {
-      pos_ += 2;
-      return {TokenKind::DoubleSlash, "//"};
+    // Double slash // or exact-division slash-colon /:
+    if (c == '/') {
+      if (pos_ + 1 < input_.size() && input_[pos_ + 1] == '/') {
+        pos_ += 2;
+        return {TokenKind::DoubleSlash, "//"};
+      }
+      if (pos_ + 1 < input_.size() && input_[pos_ + 1] == ':') {
+        pos_ += 2;
+        return {TokenKind::SlashColon, "/:"};
+      }
     }
 
     ++pos_;
@@ -184,7 +191,7 @@ private:
   NodePtr parse_mul() {
     NodePtr lhs = parse_unary();
     while (cur_.kind == TokenKind::Star || cur_.kind == TokenKind::DoubleSlash ||
-           cur_.kind == TokenKind::Percent) {
+           cur_.kind == TokenKind::SlashColon || cur_.kind == TokenKind::Percent) {
       BinOpKind op;
       switch (cur_.kind) {
       case TokenKind::Star:
@@ -192,6 +199,9 @@ private:
         break;
       case TokenKind::DoubleSlash:
         op = BinOpKind::FloorDiv;
+        break;
+      case TokenKind::SlashColon:
+        op = BinOpKind::ExactDiv;
         break;
       default:
         op = BinOpKind::Mod;
@@ -284,6 +294,7 @@ int binop_prec(BinOpKind op) {
     return 3;
   case BinOpKind::Mult:
   case BinOpKind::FloorDiv:
+  case BinOpKind::ExactDiv:
   case BinOpKind::Mod:
     return 4;
   }
@@ -305,6 +316,8 @@ const char *binop_sym(BinOpKind op) {
     return "*";
   case BinOpKind::FloorDiv:
     return "//";
+  case BinOpKind::ExactDiv:
+    return "/:";
   case BinOpKind::Mod:
     return "%";
   case BinOpKind::BitXor:
@@ -507,6 +520,8 @@ namespace {
 // `node`, i.e. as a factor of a `*` chain. Floor division is not exact, so
 // `a*(x//b)` must not be flattened into `(a*x)//b`: the equality holds only
 // when `x` is a multiple of `b` (e.g. `2*(3//2) == 2`, not `3`).
+// Exact division (`/:`) is excluded because it commutes with multiplication
+// by definition: `c*(x/:b) == (c*x)/:b` always holds.
 bool has_floordiv_factor(const Node &node) {
   if (const auto *b = dynamic_cast<const BinOp *>(&node)) {
     if (b->op == BinOpKind::FloorDiv)
@@ -531,7 +546,7 @@ void flatten_mul_div(const Node &node, std::vector<NodePtr> &num, std::vector<No
       flatten_mul_div(*b->right, num, den);
       return;
     }
-    if (b->op == BinOpKind::FloorDiv) {
+    if (b->op == BinOpKind::FloorDiv || b->op == BinOpKind::ExactDiv) {
       std::vector<NodePtr> ln, ld, rn, rd;
       flatten_mul_div(*b->left, ln, ld);
       flatten_mul_div(*b->right, rn, rd);
@@ -565,7 +580,7 @@ public:
   NodePtr visit_BinOp(std::unique_ptr<BinOp> n) override {
     n = std::unique_ptr<BinOp>(static_cast<BinOp *>(generic_visit(std::move(n)).release()));
 
-    if (n->op != BinOpKind::Mult && n->op != BinOpKind::FloorDiv)
+    if (n->op != BinOpKind::Mult && n->op != BinOpKind::FloorDiv && n->op != BinOpKind::ExactDiv)
       return n;
 
     std::vector<NodePtr> num, den;
@@ -621,7 +636,9 @@ public:
     if (rd.empty())
       return numerator;
     NodePtr denom = build_product(rd);
-    return std::make_unique<BinOp>(std::move(numerator), BinOpKind::FloorDiv, std::move(denom));
+    // Preserve ExactDiv annotation if the root operation was an exact division.
+    BinOpKind div_op = (n->op == BinOpKind::ExactDiv) ? BinOpKind::ExactDiv : BinOpKind::FloorDiv;
+    return std::make_unique<BinOp>(std::move(numerator), div_op, std::move(denom));
   }
 };
 
@@ -636,7 +653,7 @@ public:
   NodePtr visit_BinOp(std::unique_ptr<BinOp> n) override {
     n = std::unique_ptr<BinOp>(static_cast<BinOp *>(generic_visit(std::move(n)).release()));
 
-    if (n->op != BinOpKind::Mult && n->op != BinOpKind::FloorDiv)
+    if (n->op != BinOpKind::Mult && n->op != BinOpKind::FloorDiv && n->op != BinOpKind::ExactDiv)
       return n;
 
     std::vector<NodePtr> num, den;
@@ -810,7 +827,7 @@ class DistributeFloorDivOverAddTransformer : public Transformer {
 public:
   NodePtr visit_BinOp(std::unique_ptr<BinOp> n) override {
     n = std::unique_ptr<BinOp>(static_cast<BinOp *>(generic_visit(std::move(n)).release()));
-    if (n->op != BinOpKind::FloorDiv)
+    if (n->op != BinOpKind::FloorDiv && n->op != BinOpKind::ExactDiv)
       return n;
     const auto *dc = dynamic_cast<const Constant *>(n->right.get());
     if (!dc || dc->value == 0)
@@ -1009,7 +1026,7 @@ private:
     std::vector<FDInfo> infos;
     for (size_t i = 0; i < terms.size(); ++i) {
       const auto *b = dynamic_cast<const BinOp *>(terms[i].get());
-      if (!b || b->op != BinOpKind::FloorDiv)
+      if (!b || (b->op != BinOpKind::FloorDiv && b->op != BinOpKind::ExactDiv))
         continue;
       const auto *c = dynamic_cast<const Constant *>(b->right.get());
       if (!c || c->value <= 1)
@@ -1116,9 +1133,9 @@ struct AddVisitorResult {
   }
 };
 
-// Returns true if `var` contains `//` or `%` outside balanced parentheses,
+// Returns true if `var` contains `//`, `/:`, or `%` outside balanced parentheses,
 // meaning the expression needs to be wrapped in parens when used as a
-// multiplicand (since `*` and `//` share the same precedence level).
+// multiplicand (since `*`, `//`, and `/:` share the same precedence level).
 static bool needs_mul_parens(const std::string &var) {
   int depth = 0;
   for (size_t i = 0; i < var.size(); ++i) {
@@ -1130,7 +1147,7 @@ static bool needs_mul_parens(const std::string &var) {
     else if (depth == 0) {
       if (c == '%')
         return true;
-      if (i + 1 < var.size() && var[i] == '/' && var[i + 1] == '/')
+      if (i + 1 < var.size() && var[i] == '/' && (var[i + 1] == '/' || var[i + 1] == ':'))
         return true;
     }
   }
@@ -1487,6 +1504,12 @@ static int64_t eval_node(const Node &node, const std::unordered_map<std::string,
       if (r == 0)
         throw std::runtime_error("Division by zero in expression '" + expr + "'");
       return l / r;
+    case BinOpKind::ExactDiv:
+      if (r == 0)
+        throw std::runtime_error("Division by zero in expression '" + expr + "'");
+      if (l % r != 0)
+        throw std::runtime_error("Exact division has remainder in expression '" + expr + "'");
+      return l / r;
     case BinOpKind::Mod:
       if (r == 0)
         throw std::runtime_error("Modulo by zero in expression '" + expr + "'");
@@ -1698,6 +1721,20 @@ DimType dim_div(const DimType &a, const DimType &b) {
   if (std::holds_alternative<int64_t>(a) && std::holds_alternative<int64_t>(b))
     return std::get<int64_t>(a) / std::get<int64_t>(b);
   return simplify_dim("(" + dim_to_string(a) + ")//(" + dim_to_string(b) + ")");
+}
+
+DimType dim_exact_div(const DimType &a, const DimType &b) {
+  if (std::holds_alternative<int64_t>(a) && std::holds_alternative<int64_t>(b)) {
+    int64_t av = std::get<int64_t>(a);
+    int64_t bv = std::get<int64_t>(b);
+    if (bv == 0)
+      throw std::runtime_error("dim_exact_div: division by zero");
+    if (av % bv != 0)
+      throw std::runtime_error("dim_exact_div: division is not exact (" + std::to_string(av) +
+                               " % " + std::to_string(bv) + " != 0)");
+    return av / bv;
+  }
+  return simplify_dim("(" + dim_to_string(a) + ")/:(" + dim_to_string(b) + ")");
 }
 
 DimType dim_mod(const DimType &a, const DimType &b) {

@@ -61,6 +61,53 @@ class TestNodeShapeInference(ExtTestCase):
         # Conv-22 -> convPoolShapeInference
         self._check_conv_weight_rank_mismatch_raises(defs.get_schema("Conv").since_version)
 
+    def _check_conv_transpose_group_divisibility_raises(self, opset: int) -> None:
+        """ConvTranspose with input channels C not divisible by group must fail
+        shape inference (propagated from onnx/onnx#7821)."""
+        schema = defs.get_schema("ConvTranspose", opset, "")
+        node = oh.make_node("ConvTranspose", ["x", "w"], ["z"], group=3)
+        xtype = oh.make_tensor_type_proto(onnxl.TensorProto.FLOAT, [1, 32, 14, 14])
+        wtype = oh.make_tensor_type_proto(onnxl.TensorProto.FLOAT, [32, 64, 3, 3])
+        with self.assertRaises(shape_inference.InferenceError) as cm:
+            shape_inference.infer_node_outputs(schema, node, {"x": xtype, "w": wtype})
+        self.assertIn("Input channels C must be divisible by group", str(cm.exception))
+
+    def test_conv_transpose_group_divisibility_raises_opset1(self) -> None:
+        # ConvTranspose-1 -> convTransposeShapeInference_opset1
+        self._check_conv_transpose_group_divisibility_raises(1)
+
+    def test_conv_transpose_group_divisibility_raises_opset11(self) -> None:
+        # ConvTranspose-11 -> convTransposeShapeInference_opset11
+        self._check_conv_transpose_group_divisibility_raises(11)
+
+    def test_conv_transpose_group_divisibility_raises_latest(self) -> None:
+        # ConvTranspose latest -> convTransposeShapeInference
+        self._check_conv_transpose_group_divisibility_raises(
+            defs.get_schema("ConvTranspose").since_version
+        )
+
+    def _check_conv_transpose_non_positive_group_raises(self, opset: int) -> None:
+        """ConvTranspose with a non-positive group attribute must fail shape
+        inference (propagated from onnx/onnx#7821)."""
+        schema = defs.get_schema("ConvTranspose", opset, "")
+        node = oh.make_node("ConvTranspose", ["x", "w"], ["z"], group=0)
+        xtype = oh.make_tensor_type_proto(onnxl.TensorProto.FLOAT, [1, 32, 14, 14])
+        wtype = oh.make_tensor_type_proto(onnxl.TensorProto.FLOAT, [32, 64, 3, 3])
+        with self.assertRaises(shape_inference.InferenceError) as cm:
+            shape_inference.infer_node_outputs(schema, node, {"x": xtype, "w": wtype})
+        self.assertIn("Attribute group must be > 0", str(cm.exception))
+
+    def test_conv_transpose_non_positive_group_raises_opset1(self) -> None:
+        self._check_conv_transpose_non_positive_group_raises(1)
+
+    def test_conv_transpose_non_positive_group_raises_opset11(self) -> None:
+        self._check_conv_transpose_non_positive_group_raises(11)
+
+    def test_conv_transpose_non_positive_group_raises_latest(self) -> None:
+        self._check_conv_transpose_non_positive_group_raises(
+            defs.get_schema("ConvTranspose").since_version
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

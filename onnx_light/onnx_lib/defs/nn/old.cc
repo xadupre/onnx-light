@@ -3595,9 +3595,10 @@ ONNX_OPERATOR_SET_SCHEMA(
     OpSchema()
         .SetDoc(Attention_ver23_doc)
         .Attr("is_causal",
-              "If set to `1`, the attention masking is a lower triangular matrix when the mask is "
-              "a square matrix. The attention masking has the form of the upper left causal bias "
-              "due to the alignment.",
+              "If set to `1`, causal masking is applied with bottom-right (offset-aware) "
+              "alignment: query `i` attends key `j` iff `j <= i + past_sequence_length` (the "
+              "count of cached keys in `past_key`); for a square Q/K this is the standard "
+              "lower-triangular mask.",
               AttributeProto::INT, static_cast<int64_t>(0))
         .Attr("scale",
               "Scaling factor applied to $Q*K^T$. Default value is `1/sqrt(head_size)`. To prevent "
@@ -3624,7 +3625,12 @@ ONNX_OPERATOR_SET_SCHEMA(
               "If set to `2`, qk_matmul_output includes the attention mask and softcap (if "
               "provided) applied to the output of qk matmul. "
               "If set to `3`, qk_matmul_output is the output after the softmax operation. "
-              "Default value is 0.",
+              "In mode `3`, a fully-masked query row (every key disallowed, e.g. an all-`False` "
+              "boolean `attn_mask` row) is a zero row, consistent with the corresponding row of "
+              "the primary output `Y`: the fully-masked-row guard is applied before this output "
+              "is produced. The mode-`3` output is emitted at the operator's output precision "
+              "(`T1`); when `softmax_precision` differs from `T1` this is a cast of the softmax "
+              "result to `T1`. Default value is 0.",
               AttributeProto::INT, static_cast<int64_t>(0))
         .Input(0, "Q",
                "Query tensor. "

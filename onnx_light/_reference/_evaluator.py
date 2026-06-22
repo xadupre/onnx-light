@@ -576,8 +576,7 @@ class ReferenceEvaluator:
                     )
                     raise TypeError(
                         f"{input_type_description.capitalize()} input {name!r} must be fed as a "
-                        "list/tuple of "
-                        f"arrays, not {type(value).__name__}."
+                        f"list/tuple of arrays, not {type(value).__name__}."
                     )
                 elements = [
                     _numpy_to_cpp_tensor(f"{name}_{i}", element)

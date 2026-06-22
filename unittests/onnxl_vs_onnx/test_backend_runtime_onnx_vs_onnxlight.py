@@ -131,7 +131,12 @@ def _value_info_is_optional_sequence(value_info: onnxl.ValueInfoProto) -> bool:
 
 
 def _value_info_kind(value_info: onnxl.ValueInfoProto) -> str | None:
-    """Returns the supported boundary kind for ``value_info``."""
+    """Returns the supported boundary kind for ``value_info``.
+
+    Returns one of ``"tensor"``, ``"sequence"``, ``"optional_tensor"``,
+    ``"optional_sequence"`` or ``None`` when the value cannot be exercised
+    through the Python ``ReferenceEvaluator`` boundary.
+    """
     t = value_info.type
     if t.has_tensor_type():
         return "tensor"
@@ -184,7 +189,7 @@ def _load_optional_value(path: str):
     return onnxl_numpy_helper.to_optional(optional)
 
 
-def _load_value(path: str, kind: str):
+def _load_value(path: str, kind: str) -> np.ndarray | list[np.ndarray] | None:
     """Loads one backend input/output value according to ``kind``."""
     if kind == "tensor":
         return _load_tensor_value(path)
@@ -339,7 +344,10 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
             if os.path.basename(test.model_dir) == "test_loop16_seq_none":
                 model_file = os.path.join(test.model_dir, "model.onnx")
                 break
-        self.assertIsNotNone(model_file)
+        self.assertIsNotNone(
+            model_file, "ONNX backend case 'test_loop16_seq_none' was not found."
+        )
+        self.assertTrue(os.path.exists(model_file))
         outcome, detail = self._run_one(model_file)
         self.assertEqual(outcome, "pass")
         self.assertIsNone(detail)

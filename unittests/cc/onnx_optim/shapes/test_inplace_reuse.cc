@@ -245,4 +245,78 @@ TEST(OnnxOptimInPlaceReuse, EqualSizedInputIsPreferredOverLarger) {
   EXPECT_EQ(reuse[2][0], (InPlaceReuse{0, 1, InPlaceReuseKind::kEqual}));
 }
 
+// By default a declared graph input is never overwritten in place, but when
+// ``allow_input_overwrite`` is set the first node may reuse the input buffer
+// once it reaches its last use.
+TEST(OnnxOptimInPlaceReuse, AllowInputOverwriteReusesGraphInput) {
+  GraphProto graph;
+  graph.set_name("g");
+  AddInput(graph, "X", {3, 4});
+  AddOutput(graph, "Y", {3, 4});
+  *graph.add_node() = MakeNode("Abs", {"X"}, {"A"});
+  *graph.add_node() = MakeNode("Abs", {"A"}, {"Y"});
+
+  ShapesContext ctx;
+  ctx.ComputeShapeGraph(graph);
+
+  // Default: the graph input X must not be overwritten.
+  std::vector<std::vector<InPlaceReuse>> reuse = ComputeInPlaceReuse(graph, ctx);
+  ASSERT_EQ(reuse.size(), 2u);
+  EXPECT_TRUE(reuse[0].empty());
+
+  // Opt-in: node 0 is the last (and only) use of X, so it may reuse it.
+  std::vector<std::vector<InPlaceReuse>> reuse_ovw =
+      ComputeInPlaceReuse(graph, ctx, /*allow_input_overwrite=*/true);
+  ASSERT_EQ(reuse_ovw.size(), 2u);
+  ASSERT_EQ(reuse_ovw[0].size(), 1u);
+  EXPECT_EQ(reuse_ovw[0][0], (InPlaceReuse{0, 0, InPlaceReuseKind::kEqual}));
+  ASSERT_EQ(reuse_ovw[1].size(), 1u);
+  EXPECT_EQ(reuse_ovw[1][0], (InPlaceReuse{0, 0, InPlaceReuseKind::kEqual}));
+}
+
+// Even with ``allow_input_overwrite`` set, an input that is read by more than
+// one node is only reused at its last use, and an input that is also a graph
+// output is still protected.
+TEST(OnnxOptimInPlaceReuse, AllowInputOverwriteRespectsLifetimes) {
+  GraphProto graph;
+  graph.set_name("g");
+  AddInput(graph, "X", {3, 4});
+  AddOutput(graph, "Y", {3, 4});
+  // X feeds two nodes, so node 0 must not overwrite it; node 1 is the last use.
+  *graph.add_node() = MakeNode("Abs", {"X"}, {"A"});
+  *graph.add_node() = MakeNode("Add", {"X", "A"}, {"Y"});
+
+  ShapesContext ctx;
+  ctx.ComputeShapeGraph(graph);
+
+  std::vector<std::vector<InPlaceReuse>> reuse =
+      ComputeInPlaceReuse(graph, ctx, /*allow_input_overwrite=*/true);
+  ASSERT_EQ(reuse.size(), 2u);
+  // X is still alive (read by node 1), so node 0 must not reuse it.
+  EXPECT_TRUE(reuse[0].empty());
+  // Node 1 is the last use of X; the first compatible input wins.
+  ASSERT_EQ(reuse[1].size(), 1u);
+  EXPECT_EQ(reuse[1][0], (InPlaceReuse{0, 0, InPlaceReuseKind::kEqual}));
+}
+
+// A graph input that is also a declared graph output must never be reused,
+// even when ``allow_input_overwrite`` is set, since it must outlive the run.
+TEST(OnnxOptimInPlaceReuse, AllowInputOverwriteKeepsInputThatIsAlsoOutput) {
+  GraphProto graph;
+  graph.set_name("g");
+  AddInput(graph, "X", {2, 2});
+  AddOutput(graph, "X", {2, 2});
+  AddOutput(graph, "Y", {2, 2});
+  *graph.add_node() = MakeNode("Abs", {"X"}, {"Y"});
+
+  ShapesContext ctx;
+  ctx.ComputeShapeGraph(graph);
+
+  std::vector<std::vector<InPlaceReuse>> reuse =
+      ComputeInPlaceReuse(graph, ctx, /*allow_input_overwrite=*/true);
+  ASSERT_EQ(reuse.size(), 1u);
+  // X is also a declared output, so it is protected regardless of the option.
+  EXPECT_TRUE(reuse[0].empty());
+}
+
 } // namespace Test

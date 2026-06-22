@@ -149,17 +149,24 @@ void CollectReferencedNames(const NodeProto &node, std::unordered_set<std::strin
 
 } // namespace
 
-std::vector<std::vector<InPlaceReuse>> ComputeInPlaceReuse(const GraphProto &graph,
-                                                           const ShapesContext &ctx) {
+std::vector<std::vector<InPlaceReuse>>
+ComputeInPlaceReuse(const GraphProto &graph, const ShapesContext &ctx, bool allow_input_overwrite) {
   const int num_nodes = graph.node().size();
   std::vector<std::vector<InPlaceReuse>> result(static_cast<std::size_t>(num_nodes));
 
   // Names whose buffers must never be overwritten in place: declared graph
   // inputs, initializers and declared graph outputs are owned by the caller
-  // or must outlive the run.
+  // or must outlive the run. Declared graph inputs are protected unless
+  // ``allow_input_overwrite`` explicitly opts into reusing them, in which case
+  // only initializers and outputs stay protected.
   std::unordered_set<std::string> keep;
+  std::unordered_set<std::string> graph_inputs;
   for (int i = 0; i < graph.input().size(); ++i) {
-    keep.insert(graph.input()[i].name().as_string());
+    const std::string name = graph.input()[i].name().as_string();
+    graph_inputs.insert(name);
+    if (!allow_input_overwrite) {
+      keep.insert(name);
+    }
   }
   for (int i = 0; i < graph.initializer().size(); ++i) {
     keep.insert(graph.initializer()[i].name().as_string());
@@ -170,8 +177,18 @@ std::vector<std::vector<InPlaceReuse>> ComputeInPlaceReuse(const GraphProto &gra
 
   // Producer node index for every top-level intermediate, and the index of
   // the last node that references each name (directly or via a subgraph).
+  // When input overwrite is allowed, declared graph inputs are treated as
+  // available before the first node (producer index ``-1``) so they can be
+  // reused once they reach their last use.
   std::unordered_map<std::string, int> producer;
   std::unordered_map<std::string, int> last_use;
+  if (allow_input_overwrite) {
+    for (const std::string &name : graph_inputs) {
+      if (!name.empty()) {
+        producer[name] = -1;
+      }
+    }
+  }
   for (int i = 0; i < num_nodes; ++i) {
     const NodeProto &node = graph.node()[i];
     std::unordered_set<std::string> referenced;

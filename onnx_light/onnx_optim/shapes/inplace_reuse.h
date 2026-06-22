@@ -32,7 +32,10 @@
  *     :cpp:enumerator:`InPlaceReuseKind::kGreater` match);
  *   - ``i`` is a graph intermediate (produced by an earlier node, not a
  *     declared graph input, initializer or output) so its buffer is not
- *     shared with the caller;
+ *     shared with the caller. Declared graph inputs are never overwritten
+ *     in place unless ``allow_input_overwrite`` is set, in which case an
+ *     input that is otherwise reusable (an intermediate-like lifetime, not
+ *     also a graph output) may be aliased;
  *   - the node is the last consumer of ``i`` (``i`` is not read again by
  *     any later node, directly or through a subgraph capture), so
  *     overwriting it in place is safe;
@@ -99,13 +102,20 @@ struct InPlaceReuse {
  * @param ctx    Shapes context already populated with the inferred
  *               descriptors for ``graph`` (graph inputs, initializers,
  *               intermediates and outputs).
+ * @param allow_input_overwrite  When ``false`` (the default), declared
+ *               graph inputs are never offered as reusable buffers, so a
+ *               caller's input is never overwritten in place. When
+ *               ``true``, a declared graph input may be reused like an
+ *               intermediate (subject to the same lifetime and shape
+ *               checks), allowing kernels to overwrite it.
  * @return A vector with one entry per node of ``graph`` (same order as
  *         ``graph.node()``); each entry lists the reuse opportunities
  *         discovered for that node. Nodes without any opportunity carry
  *         an empty list.
  */
 std::vector<std::vector<InPlaceReuse>> ComputeInPlaceReuse(const GraphProto &graph,
-                                                           const ShapesContext &ctx);
+                                                           const ShapesContext &ctx,
+                                                           bool allow_input_overwrite = false);
 
 /**
  * Metadata key under which :cpp:func:`WriteInPlaceReuseToMetadata` records a

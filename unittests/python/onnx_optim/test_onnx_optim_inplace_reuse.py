@@ -123,6 +123,41 @@ class TestInPlaceReuse(ExtTestCase):
         # A is a declared graph output; node 1 must not overwrite it.
         self.assertEqual(reuse, [[], []])
 
+    def test_allow_input_overwrite_reuses_graph_input(self):
+        nodes = [oh.make_node("Abs", ["X"], ["A"]), oh.make_node("Abs", ["A"], ["Y"])]
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [3, 4])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [3, 4])
+        model = self._build_model(nodes, [x], [y])
+
+        ctx = si.ShapesContext()
+        si.compute_shape_model(ctx, model)
+
+        # By default the graph input X must not be overwritten.
+        reuse = self._reuse_pairs(si.compute_inplace_reuse(ctx, model.graph))
+        self.assertEqual(reuse, [[], [(0, 0)]])
+
+        # Opt-in: node 0 is the only use of X, so it may reuse it in place.
+        reuse_ovw = self._reuse_pairs(
+            si.compute_inplace_reuse(ctx, model.graph, allow_input_overwrite=True)
+        )
+        self.assertEqual(reuse_ovw, [[(0, 0)], [(0, 0)]])
+
+    def test_allow_input_overwrite_keeps_input_that_is_also_output(self):
+        nodes = [oh.make_node("Abs", ["X"], ["Y"])]
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 2])
+        x_out = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 2])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2, 2])
+        model = self._build_model(nodes, [x], [x_out, y])
+
+        ctx = si.ShapesContext()
+        si.compute_shape_model(ctx, model)
+
+        # X is also a declared output, so it stays protected even with the option.
+        reuse = self._reuse_pairs(
+            si.compute_inplace_reuse(ctx, model.graph, allow_input_overwrite=True)
+        )
+        self.assertEqual(reuse, [[]])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

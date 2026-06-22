@@ -1006,12 +1006,15 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
 
   shape_mod.def(
       "compute_inplace_reuse",
-      [](const onnx_shapes::ShapesContext &ctx, const GraphProto &graph) {
-        return onnx_shapes::ComputeInPlaceReuse(graph, ctx);
+      [](const onnx_shapes::ShapesContext &ctx, const GraphProto &graph,
+         bool allow_input_overwrite) {
+        return onnx_shapes::ComputeInPlaceReuse(graph, ctx, allow_input_overwrite);
       },
-      nb::arg("ctx"), nb::arg("graph"),
+      nb::arg("ctx"), nb::arg("graph"), nb::arg("allow_input_overwrite") = false,
       "Guesses, for every node of ``graph``, which outputs reuse which input buffers in "
       "place, using the shapes already inferred into ``ctx``.\n\n"
+      "By default declared graph inputs are never overwritten in place; set "
+      "``allow_input_overwrite=True`` to let an input be reused like an intermediate.\n\n"
       "Returns: a list with one entry per node (same order as ``graph.node``); each entry is a "
       "list of :class:`InPlaceReuse`. The analysis is purely structural (matching element type, "
       "shape and value lifetime) and does not check whether a given kernel actually supports "

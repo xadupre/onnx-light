@@ -238,16 +238,16 @@ public:
   }
 
   // Process a node:
-  bool ProcessNode(NodeProto *node) override {
-    if (!node->name().empty())
-      node->set_name(MakeUnique(node->name().as_string()));
+  bool ProcessNode(NodeProto &node) override {
+    if (!node.name().empty())
+      node.set_name(MakeUnique(node.name().as_string()));
 
-    for (auto &x : node->input()) {
+    for (auto &x : node.input()) {
       std::string s = x.as_string();
       LookupOrRename(s, false);
       x = s;
     }
-    for (auto &y : node->output()) {
+    for (auto &y : node.output()) {
       std::string s = y.as_string();
       LookupOrRename(s, true);
       y = s;
@@ -258,25 +258,25 @@ public:
   // Process a sub-graph, contained as an attribute in a control-flow op node.
   // Since we need both pre-processing and post-processing in the traversal, we
   // override the VisitGraph method.
-  void VisitGraph(GraphProto *graph) override {
+  void VisitGraph(GraphProto &graph) override {
     rename_scopes.emplace_back();
-    for (auto &x : graph->input()) {
+    for (auto &x : graph.input()) {
       std::string s = x.name().as_string();
       Rename(s);
       x.set_name(s);
     }
-    for (auto &init : graph->initializer()) {
+    for (auto &init : graph.initializer()) {
       std::string s = init.name().as_string();
       Rename(s);
       init.set_name(s);
     }
-    for (auto &y : graph->output()) {
+    for (auto &y : graph.output()) {
       std::string s = y.name().as_string();
       Rename(s);
       y.set_name(s);
     }
-    for (auto &n : graph->node())
-      VisitNode(&n);
+    for (auto &n : graph.node())
+      VisitNode(n);
     rename_scopes.pop_back();
   }
 
@@ -318,7 +318,7 @@ public:
     renamer.Bind<false>(callee.input(), callnode.input());
     renamer.Bind<true>(callee.output(), callnode.output());
 
-    renamer.VisitFunction(&callee);
+    renamer.VisitFunction(callee);
     for (auto &v : callee.value_info()) {
       std::string name_str = v.name().as_string();
       renamer.LookupOrRename(name_str, false);
@@ -897,7 +897,7 @@ public:
 
   void RenameNode(NodeProto &node) {
     // Use the InliningRenamer's ProcessNode method which handles graph-value attributes
-    renamer_.ProcessNode(&node);
+    renamer_.ProcessNode(node);
   }
 };
 

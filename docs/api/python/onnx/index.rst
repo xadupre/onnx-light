@@ -18,3 +18,5 @@ onnx_light.onnx
 
 .. automodule:: onnx_light.onnx
     :members:
+
+.. autofunction:: onnx_light.onnx.save_model_with_shared_external_data

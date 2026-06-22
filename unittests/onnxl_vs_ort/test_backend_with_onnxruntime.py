@@ -81,6 +81,10 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_attention_4d_with_past_and_present_qk_matmul_bias_4d_mask(_expanded)?$",
     r"^test_cc_attention_4d_softcap_neginf_mask(_expanded)?$",
     r"^test_cc_attention_4d_softcap_neginf_mask_poison(_expanded)?$",
+    # ORT does not yet implement the opset-24 offset-aware (bottom-right)
+    # causal frontier for an external KV cache (``nonpad_kv_seqlen`` without
+    # ``past_key``); see ONNX PR #8068.
+    r"^test_cc_attention_4d_causal_nonpad_kv_continued_prefill(_expanded)?$",
     # Preview training ops are not registered in ORT.
     r"^test_cc_adam_",
     r"^test_adam$",

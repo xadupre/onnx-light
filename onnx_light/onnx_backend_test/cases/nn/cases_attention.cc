@@ -1274,6 +1274,31 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
            "test_cc_attention_4d_diff_heads_mask4d_nonpad_kv", {opset24}, "backend-test", registry);
   }
 
+  // 4D external/static KV-cache causal decode + continued-prefill with
+  // ``nonpad_kv_seqlen`` and no ``past_key`` (opset 24). Mirrors upstream
+  // ``test_attention_4d_gqa_causal_nonpad_decode`` /
+  // ``test_attention_4d_causal_nonpad_continued_prefill`` (onnx/onnx#8068):
+  // the ``is_causal`` frontier is bottom-right / offset-aware, so each query
+  // attends keys ``j <= i + (nonpad_kv_seqlen[b] - q_seq_len)``.
+  {
+    const OpsetId opset24 = DefaultOpset(24);
+    // q_seq=2, kv_seq=4, nonpad=[4,3] -> offsets {2, 1}.
+    Tensor Q = MakeDeterministicFloatTensor({2, 2, 2, 2}, 0x51a1u, 0.0f, 1.0f);
+    Tensor K = MakeDeterministicFloatTensor({2, 2, 4, 2}, 0x51a2u, 0.0f, 1.0f);
+    Tensor V = MakeDeterministicFloatTensor({2, 2, 4, 2}, 0x51a3u, 0.0f, 1.0f);
+    Tensor nonpad_kv_seqlen = Tensor::FromInt64("", {2}, {4, 3});
+    kernel::Attention::Attributes attrs;
+    attrs.is_causal = true;
+    Tensor Y = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, /*past_key=*/nullptr,
+                         /*past_value=*/nullptr, &nonpad_kv_seqlen)
+                   .Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "", "", "nonpad_kv_seqlen"}, {"Y"});
+    AddInt(node, "is_causal", 1);
+    Expect(node, {Q, K, V, nonpad_kv_seqlen}, {Y},
+           "test_cc_attention_4d_causal_nonpad_kv_continued_prefill", {opset24}, "backend-test",
+           registry);
+  }
+
   // -------------------------------------------------------------------
   // Softcap + ``-inf`` mask ordering checks (mirror upstream
   // ``test_attention_4d_softcap_neginf_mask*``). These verify the kernel

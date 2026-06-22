@@ -9,7 +9,7 @@ from __future__ import annotations
 # relying on ``onnx.__version__`` for compatibility checks behaves the same way
 # whether it imports ``onnx`` or ``onnx_light.onnx``. This is distinct from
 # ``onnx_light.__version__``, which is the onnx-light package version.
-__version__ = "1.22.0"
+__version__ = "1.23.0"
 
 from ..onnx_py._onnxpyprotoop import (  # type: ignore # noqa: F401
     AttributeProto,

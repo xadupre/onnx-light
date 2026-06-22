@@ -114,7 +114,7 @@ struct Visitor {
 /**
  * @brief Mutable visitor for ONNX proto objects.
  *
- * Identical in structure to @c Visitor but receives non-const pointers,
+ * Identical in structure to @c Visitor but receives non-const references,
  * allowing in-place modification of the visited elements.  Subclasses may
  * override @c ProcessX methods to mutate elements or @c VisitX methods to
  * change traversal order.
@@ -122,77 +122,77 @@ struct Visitor {
 struct MutableVisitor {
   /**
    * @brief Visits all nodes of @p graph if @c ProcessGraph returns @c true.
-   * @param graph Mutable pointer to the graph to traverse.
+   * @param graph Mutable reference to the graph to traverse.
    */
-  virtual void VisitGraph(GraphProto *graph) {
+  virtual void VisitGraph(GraphProto &graph) {
     if (ProcessGraph(graph))
-      for (auto &node : graph->node())
-        VisitNode(&node);
+      for (auto &node : graph.node())
+        VisitNode(node);
   }
 
   /**
    * @brief Visits all nodes of @p function if @c ProcessFunction returns @c true.
-   * @param function Mutable pointer to the function to traverse.
+   * @param function Mutable reference to the function to traverse.
    */
-  virtual void VisitFunction(FunctionProto *function) {
+  virtual void VisitFunction(FunctionProto &function) {
     if (ProcessFunction(function))
-      for (auto &node : function->node())
-        VisitNode(&node);
+      for (auto &node : function.node())
+        VisitNode(node);
   }
 
   /**
    * @brief Visits all attributes of @p node if @c ProcessNode returns @c true.
-   * @param node Mutable pointer to the node to traverse.
+   * @param node Mutable reference to the node to traverse.
    */
-  virtual void VisitNode(NodeProto *node) {
+  virtual void VisitNode(NodeProto &node) {
     if (ProcessNode(node)) {
-      for (auto &attr : node->attribute()) {
-        VisitAttribute(&attr);
+      for (auto &attr : node.attribute()) {
+        VisitAttribute(attr);
       }
     }
   }
 
   /**
    * @brief Visits graph-valued attribute sub-graphs if @c ProcessAttribute returns @c true.
-   * @param attr Mutable pointer to the attribute to traverse.
+   * @param attr Mutable reference to the attribute to traverse.
    */
-  virtual void VisitAttribute(AttributeProto *attr) {
+  virtual void VisitAttribute(AttributeProto &attr) {
     if (ProcessAttribute(attr)) {
-      if (attr->has_g()) {
-        VisitGraph(&attr->g());
+      if (attr.has_g()) {
+        VisitGraph(attr.g());
       }
-      for (auto &graph : attr->graphs())
-        VisitGraph(&graph);
+      for (auto &graph : attr.graphs())
+        VisitGraph(graph);
     }
   }
 
   /**
    * @brief Called for each graph; returns @c true to visit child nodes.
-   * @param graph Mutable pointer to the current graph.
+   * @param graph Mutable reference to the current graph.
    * @returns @c true to descend into child nodes; @c false to skip them.
    */
-  virtual bool ProcessGraph(GraphProto * /*graph*/) { return true; }
+  virtual bool ProcessGraph(GraphProto & /*graph*/) { return true; }
 
   /**
    * @brief Called for each function; returns @c true to visit child nodes.
-   * @param function Mutable pointer to the current function.
+   * @param function Mutable reference to the current function.
    * @returns @c true to descend into child nodes; @c false to skip them.
    */
-  virtual bool ProcessFunction(FunctionProto * /*function*/) { return true; }
+  virtual bool ProcessFunction(FunctionProto & /*function*/) { return true; }
 
   /**
    * @brief Called for each node; returns @c true to visit child attributes.
-   * @param node Mutable pointer to the current node.
+   * @param node Mutable reference to the current node.
    * @returns @c true to descend into child attributes; @c false to skip them.
    */
-  virtual bool ProcessNode(NodeProto * /*node*/) { return true; }
+  virtual bool ProcessNode(NodeProto & /*node*/) { return true; }
 
   /**
    * @brief Called for each attribute; returns @c true to visit sub-graphs.
-   * @param attr Mutable pointer to the current attribute.
+   * @param attr Mutable reference to the current attribute.
    * @returns @c true to descend into sub-graphs; @c false to skip them.
    */
-  virtual bool ProcessAttribute(AttributeProto * /*attr*/) { return true; }
+  virtual bool ProcessAttribute(AttributeProto & /*attr*/) { return true; }
 
   virtual ~MutableVisitor() = default;
 };

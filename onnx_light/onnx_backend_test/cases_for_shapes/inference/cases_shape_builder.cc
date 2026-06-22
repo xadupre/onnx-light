@@ -246,8 +246,7 @@ void RegisterReshapeReshapeShapeInferenceCases(std::vector<TestCase> &registry) 
   AddInitializer<float>(*graph, "one", {1}, {1.0f});
   AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {"a", "b", "c"});
   AppendValueInfo(*graph->add_value_info(), "xr", DataType::FLOAT, {"a", "b", DimSpec(2), "c/:2"});
-  AppendValueInfo(*graph->add_value_info(), "xrr", DataType::FLOAT,
-                  {"a", "b", "c"});
+  AppendValueInfo(*graph->add_value_info(), "xrr", DataType::FLOAT, {"a", "b", "c"});
   AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {"a", "b", "c"});
 
   constexpr int64_t kA = 2;

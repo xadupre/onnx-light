@@ -1415,4 +1415,76 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeTwoTopKDifferentK) {
   ASSERT_TRUE(found) << "test_cc_shape_inference_two_topk_different_k case not registered";
 }
 
+namespace {
+
+// Builds a single-node ``ConvTranspose`` model with the given ``group``
+// attribute and the input/weight shapes from the example in onnx/onnx#7821.
+ModelProto MakeConvTransposeGroupModel(int64_t group) {
+  ModelProto model;
+  model.set_ir_version(10);
+
+  OperatorSetIdProto *default_opset = model.add_opset_import();
+  default_opset->set_domain("");
+  default_opset->set_version(22);
+
+  GraphProto *graph = model.add_graph();
+  graph->set_name("conv_transpose_group_graph");
+
+  ValueInfoProto *x = graph->add_input();
+  x->set_name("x");
+  TypeProto::Tensor *x_tt = x->add_type()->add_tensor_type();
+  x_tt->set_elem_type(onnx_kernels::DataType::FLOAT);
+  TensorShapeProto *x_shape = x_tt->add_shape();
+  for (int64_t dim : {1, 32, 14, 14}) {
+    x_shape->add_dim()->set_dim_value(dim);
+  }
+
+  ValueInfoProto *w = graph->add_input();
+  w->set_name("w");
+  TypeProto::Tensor *w_tt = w->add_type()->add_tensor_type();
+  w_tt->set_elem_type(onnx_kernels::DataType::FLOAT);
+  TensorShapeProto *w_shape = w_tt->add_shape();
+  for (int64_t dim : {32, 64, 3, 3}) {
+    w_shape->add_dim()->set_dim_value(dim);
+  }
+
+  ValueInfoProto *output = graph->add_output();
+  output->set_name("z");
+  // Leave the output type empty so shape inference must populate it.
+  output->add_type();
+
+  NodeProto *node = graph->add_node();
+  node->set_op_type("ConvTranspose");
+  node->add_input("x");
+  node->add_input("w");
+  node->add_output("z");
+  AttributeProto *group_attr = node->add_attribute();
+  group_attr->set_name("group");
+  group_attr->set_type(AttributeProto::AttributeType::INT);
+  group_attr->set_i(group);
+
+  return model;
+}
+
+} // namespace
+
+// ConvTranspose rejects input channels C that are not divisible by group
+// (propagated from onnx/onnx#7821). Mirrors the example: x=[1, 32, 14, 14],
+// w=[32, 64, 3, 3], group=3 -> 32 % 3 != 0.
+TEST(BackendTestCaseShapeInference, ConvTransposeRejectsIndivisibleGroup) {
+  ModelProto model = MakeConvTransposeGroupModel(/*group=*/3);
+  EXPECT_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                            ShapeInferenceOptions(false, 1, false)),
+               ONNX_LIGHT_NAMESPACE::InferenceError);
+}
+
+// ConvTranspose rejects a non-positive group attribute (propagated from
+// onnx/onnx#7821).
+TEST(BackendTestCaseShapeInference, ConvTransposeRejectsNonPositiveGroup) {
+  ModelProto model = MakeConvTransposeGroupModel(/*group=*/0);
+  EXPECT_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                            ShapeInferenceOptions(false, 1, false)),
+               ONNX_LIGHT_NAMESPACE::InferenceError);
+}
+
 } // namespace Test

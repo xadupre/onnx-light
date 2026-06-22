@@ -130,11 +130,11 @@ static Tensor tensorProtoToTensor(const TensorProto &tp) {
   return ret;
 }
 
-static void convertAttribute(const AttributeProto &ap, Node *n, const int ir_version = IR_VERSION) {
+static void convertAttribute(const AttributeProto &ap, Node &n, const int ir_version = IR_VERSION) {
   Symbol sym = Symbol(to_std_string(ap.name()));
   switch (ap.type()) {
   case AttributeProto::AttributeType::FLOAT:
-    n->f_(sym, ap.f());
+    n.f_(sym, ap.f());
     break;
   case AttributeProto::AttributeType::FLOATS: {
     std::vector<double> floats;
@@ -142,11 +142,11 @@ static void convertAttribute(const AttributeProto &ap, Node *n, const int ir_ver
     for (int i = 0; i < ap.floats().size(); i++) {
       floats.push_back(ap.floats()[i]);
     }
-    n->fs_(sym, std::move(floats));
+    n.fs_(sym, std::move(floats));
     break;
   }
   case AttributeProto::AttributeType::INT:
-    n->i_(sym, ap.i());
+    n.i_(sym, ap.i());
     break;
   case AttributeProto::AttributeType::INTS: {
     std::vector<int64_t> ints;
@@ -154,11 +154,11 @@ static void convertAttribute(const AttributeProto &ap, Node *n, const int ir_ver
     for (int i = 0; i < ap.ints().size(); i++) {
       ints.push_back(ap.ints()[i]);
     }
-    n->is_(sym, std::move(ints));
+    n.is_(sym, std::move(ints));
     break;
   }
   case AttributeProto::AttributeType::STRING:
-    n->s_(sym, to_std_string(ap.s()));
+    n.s_(sym, to_std_string(ap.s()));
     break;
   case AttributeProto::AttributeType::STRINGS: {
     std::vector<std::string> strings;
@@ -166,11 +166,11 @@ static void convertAttribute(const AttributeProto &ap, Node *n, const int ir_ver
     for (int i = 0; i < ap.strings().size(); i++) {
       strings.push_back(to_std_string(ap.strings()[i]));
     }
-    n->ss_(sym, std::move(strings));
+    n.ss_(sym, std::move(strings));
     break;
   }
   case AttributeProto::AttributeType::TENSOR:
-    n->t_(sym, tensorProtoToTensor(ap.t()));
+    n.t_(sym, tensorProtoToTensor(ap.t()));
     break;
   case AttributeProto::AttributeType::TENSORS: {
     std::vector<Tensor> tensors;
@@ -178,11 +178,11 @@ static void convertAttribute(const AttributeProto &ap, Node *n, const int ir_ver
     for (int i = 0; i < ap.tensors().size(); i++) {
       tensors.emplace_back(tensorProtoToTensor(ap.tensors()[i]));
     }
-    n->ts_(sym, std::move(tensors));
+    n.ts_(sym, std::move(tensors));
     break;
   }
   case AttributeProto::AttributeType::TYPE_PROTO:
-    n->tp_(sym, ap.tp());
+    n.tp_(sym, ap.tp());
     break;
   case AttributeProto::AttributeType::TYPE_PROTOS: {
     std::vector<TypeProto> types;
@@ -190,11 +190,11 @@ static void convertAttribute(const AttributeProto &ap, Node *n, const int ir_ver
     for (int i = 0; i < ap.type_protos().size(); i++) {
       types.push_back(ap.type_protos()[i]);
     }
-    n->tps_(sym, std::move(types));
+    n.tps_(sym, std::move(types));
     break;
   }
   case AttributeProto::AttributeType::GRAPH:
-    n->g_(sym, graphProtoToGraph(ap.g(), true, ir_version));
+    n.g_(sym, graphProtoToGraph(ap.g(), true, ir_version));
     break;
   case AttributeProto::AttributeType::GRAPHS: {
     std::vector<std::shared_ptr<Graph>> graphs;
@@ -202,7 +202,7 @@ static void convertAttribute(const AttributeProto &ap, Node *n, const int ir_ver
     for (int i = 0; i < ap.graphs().size(); i++) {
       graphs.push_back(graphProtoToGraph(ap.graphs()[i], true, ir_version));
     }
-    n->gs_(sym, std::move(graphs));
+    n.gs_(sym, std::move(graphs));
     break;
   }
   case AttributeProto::AttributeType::SPARSE_TENSOR:
@@ -215,7 +215,7 @@ static void convertAttribute(const AttributeProto &ap, Node *n, const int ir_ver
   }
 }
 
-static void convertAttributes(const NodeProto &np, Node *n, const int ir_version = IR_VERSION) {
+static void convertAttributes(const NodeProto &np, Node &n, const int ir_version = IR_VERSION) {
   for (int i = 0; i < np.attribute().size(); i++) {
     convertAttribute(np.attribute()[i], n, ir_version);
   }
@@ -335,7 +335,7 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto &gp, bool nested, cons
       out->setUniqueName(to_std_string(np.output()[j]));
       value_by_name_of[to_std_string(np.output()[j])] = out;
     }
-    convertAttributes(np, n, ir_version);
+    convertAttributes(np, *n, ir_version);
     std::vector<std::string> inputs;
     inputs.reserve(np.input().size());
     for (int j = 0; j < np.input().size(); j++) {
@@ -453,29 +453,29 @@ std::unique_ptr<Graph> ImportModelProto(const ModelProto &mp) {
 }
 
 // Part 2: convert IR to ONNX Protobuf
-static std::string value_name(const Value *n) { return n->uniqueName(); }
+static std::string value_name(const Value &n) { return n.uniqueName(); }
 
-static void encodeGraph(GraphProto *p_g, const std::shared_ptr<Graph> &g);
+static void encodeGraph(GraphProto &p_g, const std::shared_ptr<Graph> &g);
 
-static void encodeTensor(TensorProto *p, const Tensor &tensor) {
+static void encodeTensor(TensorProto &p, const Tensor &tensor) {
   if (tensor.hasName()) {
-    p->set_name(tensor.name());
+    p.set_name(tensor.name());
   }
   if (tensor.is_segment()) {
     TensorProto::Segment segment;
     segment.set_begin(tensor.segment_begin());
     segment.set_end(tensor.segment_end());
-    p->ref_segment().CopyFrom(segment);
+    p.ref_segment().CopyFrom(segment);
   }
   for (auto d : tensor.sizes()) {
-    p->dims().push_back(static_cast<uint64_t>(d));
+    p.dims().push_back(static_cast<uint64_t>(d));
   }
-  p->set_data_type(tensor.elem_type());
+  p.set_data_type(tensor.elem_type());
   switch (tensor.elem_type()) {
   case TensorProto::DataType::FLOAT:
   case TensorProto::DataType::COMPLEX64: {
     for (float x : tensor.floats()) {
-      p->float_data().push_back(float(x));
+      p.float_data().push_back(float(x));
     }
     break;
   }
@@ -497,33 +497,33 @@ static void encodeTensor(TensorProto *p, const Tensor &tensor) {
   case TensorProto::DataType::UINT8:
   case TensorProto::DataType::UINT16: {
     for (int32_t x : tensor.int32s()) {
-      p->int32_data().push_back(int32_t(x));
+      p.int32_data().push_back(int32_t(x));
     }
     break;
   }
   case TensorProto::DataType::INT64: {
     for (int64_t x : tensor.int64s()) {
-      p->int64_data().push_back(int64_t(x));
+      p.int64_data().push_back(int64_t(x));
     }
     break;
   }
   case TensorProto::DataType::UINT32:
   case TensorProto::DataType::UINT64: {
     for (uint64_t x : tensor.uint64s()) {
-      p->uint64_data().push_back(uint64_t(x));
+      p.uint64_data().push_back(uint64_t(x));
     }
     break;
   }
   case TensorProto::DataType::DOUBLE:
   case TensorProto::DataType::COMPLEX128: {
     for (double x : tensor.doubles()) {
-      p->double_data().push_back(double(x));
+      p.double_data().push_back(double(x));
     }
     break;
   }
   case TensorProto::DataType::STRING: {
     for (const std::string &x : tensor.strings()) {
-      p->string_data().push_back(utils::String(x));
+      p.string_data().push_back(utils::String(x));
     }
     break;
   }
@@ -535,86 +535,86 @@ static void encodeTensor(TensorProto *p, const Tensor &tensor) {
   if (tensor.is_raw_data()) {
     {
       const std::string &_raw_s = tensor.raw();
-      p->ref_raw_data() =
+      p.ref_raw_data() =
           std::vector<uint8_t>(reinterpret_cast<const uint8_t *>(_raw_s.data()),
                                reinterpret_cast<const uint8_t *>(_raw_s.data()) + _raw_s.size());
     }
   }
   if (!tensor.external_data().empty()) {
     for (const auto &[key, value] : tensor.external_data()) {
-      auto *external_data = p->add_external_data();
+      auto *external_data = p.add_external_data();
       external_data->set_key(key);
       external_data->set_value(value);
     }
   }
   if (tensor.has_data_location()) {
-    p->ref_data_location() = tensor.data_location();
+    p.ref_data_location() = tensor.data_location();
   }
 }
 
-static void addAttribute(NodeProto *n_p, Node *n, Symbol name) {
-  auto *attr = n_p->add_attribute();
+static void addAttribute(NodeProto &n_p, Node &n, Symbol name) {
+  auto *attr = n_p.add_attribute();
   attr->set_name(name.toString());
-  switch (n->kindOf(name)) {
+  switch (n.kindOf(name)) {
   case AttributeKind::f: {
-    attr->set_f(static_cast<float>(n->f(name)));
+    attr->set_f(static_cast<float>(n.f(name)));
     attr->set_type(AttributeProto::AttributeType::FLOAT);
   } break;
   case AttributeKind::fs: {
     attr->set_type(AttributeProto::AttributeType::FLOATS);
-    for (const auto &v : n->fs(name))
+    for (const auto &v : n.fs(name))
       attr->floats().push_back(static_cast<float>(v));
   } break;
   case AttributeKind::i: {
     attr->set_type(AttributeProto::AttributeType::INT);
-    attr->set_i(n->i(name));
+    attr->set_i(n.i(name));
   } break;
   case AttributeKind::is: {
     attr->set_type(AttributeProto::AttributeType::INTS);
-    for (const auto &v : n->is(name))
+    for (const auto &v : n.is(name))
       attr->ints().push_back(int64_t(v));
   } break;
   case AttributeKind::s: {
     attr->set_type(AttributeProto::AttributeType::STRING);
-    attr->set_s(n->s(name));
+    attr->set_s(n.s(name));
   } break;
   case AttributeKind::ss: {
     attr->set_type(AttributeProto::AttributeType::STRINGS);
-    for (const auto &v : n->ss(name))
+    for (const auto &v : n.ss(name))
       attr->strings().push_back(utils::String(v));
   } break;
   case AttributeKind::t: {
     attr->set_type(AttributeProto::AttributeType::TENSOR);
     auto *t = attr->add_t();
-    encodeTensor(t, n->t(name));
+    encodeTensor(*t, n.t(name));
   } break;
   case AttributeKind::ts: {
     attr->set_type(AttributeProto::AttributeType::TENSORS);
-    for (const auto &v : n->ts(name)) {
+    for (const auto &v : n.ts(name)) {
       auto *t = attr->add_tensors();
-      encodeTensor(t, v);
+      encodeTensor(*t, v);
     }
   } break;
   case AttributeKind::g: {
     attr->set_type(AttributeProto::AttributeType::GRAPH);
     auto *g = attr->add_g();
-    encodeGraph(g, n->g(name));
+    encodeGraph(*g, n.g(name));
   } break;
   case AttributeKind::gs: {
     attr->set_type(AttributeProto::AttributeType::GRAPHS);
-    for (const auto &v : n->gs(name)) {
+    for (const auto &v : n.gs(name)) {
       auto *g = attr->add_graphs();
-      encodeGraph(g, v);
+      encodeGraph(*g, v);
     }
   } break;
   case AttributeKind::tp: {
     attr->set_type(AttributeProto::AttributeType::TYPE_PROTO);
     auto *tp = attr->add_tp();
-    tp->CopyFrom(n->tp(name));
+    tp->CopyFrom(n.tp(name));
   } break;
   case AttributeKind::tps: {
     attr->set_type(AttributeProto::AttributeType::TYPE_PROTOS);
-    for (const auto &v : n->tps(name)) {
+    for (const auto &v : n.tps(name)) {
       auto *tp = attr->add_type_protos();
       tp->CopyFrom(v);
     }
@@ -622,13 +622,13 @@ static void addAttribute(NodeProto *n_p, Node *n, Symbol name) {
   }
 }
 
-static void encodeTypeProtoTensorType(TypeProto::Tensor *tensor_type, const Value *n) {
-  if (n->elemType() != 0) {
-    tensor_type->set_elem_type(n->elemType());
+static void encodeTypeProtoTensorType(TypeProto::Tensor &tensor_type, const Value &n) {
+  if (n.elemType() != 0) {
+    tensor_type.set_elem_type(n.elemType());
   }
-  if (n->has_sizes()) {
-    TensorShapeProto *shape = tensor_type->add_shape();
-    for (const Dimension &d : n->sizes()) {
+  if (n.has_sizes()) {
+    TensorShapeProto *shape = tensor_type.add_shape();
+    for (const Dimension &d : n.sizes()) {
       auto *dim = shape->add_dim();
       if (!d.is_unknown) {
         if (d.is_int) {
@@ -641,35 +641,33 @@ static void encodeTypeProtoTensorType(TypeProto::Tensor *tensor_type, const Valu
   }
 }
 
-static void encodeValueInfo(ValueInfoProto *v, Value *n) {
-  v->set_name(value_name(n));
-  if (n->elemType() != 0 || n->has_sizes()) {
-    TypeProto *t = v->add_type();
+static void encodeValueInfo(ValueInfoProto &v, Value &n) {
+  v.set_name(value_name(n));
+  if (n.elemType() != 0 || n.has_sizes()) {
+    TypeProto *t = v.add_type();
     TypeProto::Tensor *tensor_type = t->add_tensor_type();
-    encodeTypeProtoTensorType(tensor_type, n);
-  } else if (n->type()) {
-    v->add_type()->CopyFrom(*n->type());
+    encodeTypeProtoTensorType(*tensor_type, n);
+  } else if (n.type()) {
+    v.add_type()->CopyFrom(*n.type());
   }
 }
 
-void encodeGraph(GraphProto *p_g, const std::shared_ptr<Graph> &g) {
-  ONNX_ASSERT(p_g != nullptr)
-
+static void encodeGraph(GraphProto &p_g, const std::shared_ptr<Graph> &g) {
   if (g->has_name()) {
-    p_g->set_name(g->name());
+    p_g.set_name(g->name());
   }
 
   if (g->has_doc_string()) {
-    p_g->set_doc_string(g->docString());
+    p_g.set_doc_string(g->docString());
   }
 
   for (auto *input : g->inputs()) {
-    ValueInfoProto *v = p_g->add_input();
-    encodeValueInfo(v, input);
+    ValueInfoProto *v = p_g.add_input();
+    encodeValueInfo(*v, *input);
   }
   for (auto *output : g->outputs()) {
-    ValueInfoProto *v = p_g->add_output();
-    encodeValueInfo(v, output);
+    ValueInfoProto *v = p_g.add_output();
+    encodeValueInfo(*v, *output);
   }
 
   std::unordered_set<Value *> graph_outputs(g->outputs().begin(), g->outputs().end());
@@ -680,16 +678,16 @@ void encodeGraph(GraphProto *p_g, const std::shared_ptr<Graph> &g) {
       // provided.
       continue;
     }
-    auto *p_n = p_g->add_node();
+    auto *p_n = p_g.add_node();
     for (auto *input : node->inputs()) {
       if (input->node()->kind() == kUndefined) {
         p_n->input().push_back(utils::String(""));
       } else {
-        p_n->input().push_back(utils::String(value_name(input)));
+        p_n->input().push_back(utils::String(value_name(*input)));
       }
     }
     for (auto *output : node->outputs()) {
-      p_n->output().push_back(utils::String(value_name(output)));
+      p_n->output().push_back(utils::String(value_name(*output)));
       // only save it if
       //  - it has actual information worth saving
       //  - it's not already saved in the graph outputs value info
@@ -699,12 +697,12 @@ void encodeGraph(GraphProto *p_g, const std::shared_ptr<Graph> &g) {
       if (output->elemType() == TensorProto::DataType::UNDEFINED && output->sizes().empty()) {
         continue;
       }
-      ValueInfoProto *v = p_g->add_value_info();
-      encodeValueInfo(v, output);
+      ValueInfoProto *v = p_g.add_value_info();
+      encodeValueInfo(*v, *output);
     }
     p_n->set_op_type(node->kind().toString());
     for (auto attr_name : node->attributeNames()) {
-      addAttribute(p_n, node, attr_name);
+      addAttribute(*p_n, *node, attr_name);
     }
     if (node->has_doc_string()) {
       p_n->set_doc_string(node->docString());
@@ -722,15 +720,15 @@ void encodeGraph(GraphProto *p_g, const std::shared_ptr<Graph> &g) {
 
   auto num_initializers = g->initializers().size();
   for (unsigned int i = 0; i < num_initializers; i++) {
-    auto *p = p_g->add_initializer();
+    auto *p = p_g.add_initializer();
     p->set_name(g->initializer_names()[i]);
-    encodeTensor(p, g->initializers()[i]);
+    encodeTensor(*p, g->initializers()[i]);
   }
 }
 
 void ExportModelProto(ModelProto *p_m, const std::shared_ptr<Graph> &g) {
   GraphProto *p_g = p_m->add_graph();
-  encodeGraph(p_g, g);
+  encodeGraph(*p_g, g);
   // Add new opset_versions
   p_m->clr_opset_import();
   for (const OpSetID &opset : g->opset_versions_mutable()) {

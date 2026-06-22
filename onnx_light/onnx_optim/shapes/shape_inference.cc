@@ -15,7 +15,6 @@
 
 #include "onnx_proto/onnx_helper.h"
 
-#include "onnx_lib/shape_inference/attribute_binder.h"
 #include "onnx_optim/expressions.h"
 #include "onnx_optim/shapes/dispatch_table.h"
 #include "onnx_optim/shapes/generator/shape_generator.h"
@@ -51,6 +50,48 @@ void CheckOnnxDomain(const NodeProto &node) {
 // FunctionProto's own ``domain`` field.
 std::string LocalFunctionKey(const std::string &domain, const std::string &name) {
   return domain + ":" + name;
+}
+
+// Maps formal attribute names to concrete call-site attribute values.
+using AttributeMap = std::unordered_map<std::string, const AttributeProto *>;
+
+// Binds attribute references (``ref_attr_name``) in ``node`` against the
+// call-site attribute values in ``attr_map``, recursing into subgraphs.
+// A bound attribute keeps the callee's original name and copies only the
+// value of the matching call-site attribute. An attribute referencing a
+// name absent from ``attr_map`` is removed. This mirrors the semantics of
+// ``onnx_lib``'s ``AttributeBinder`` without depending on ``onnx_lib``.
+void BindNodeAttributes(NodeProto &node, const AttributeMap &attr_map) {
+  auto &attributes = node.attribute();
+  for (auto attr_iter = attributes.begin(); attr_iter != attributes.end();) {
+    auto &attr = *attr_iter;
+    if (!attr.ref_attr_name().empty()) {
+      auto it = attr_map.find(attr.ref_attr_name().as_string());
+      if (it != attr_map.end()) {
+        const AttributeProto *replacement = it->second;
+        // Copy the value of the call-site attribute, but retain the original name.
+        std::string name = attr.name().as_string();
+        attr.CopyFrom(*replacement);
+        attr.set_name(name);
+        ++attr_iter;
+      } else {
+        attr_iter = attributes.erase(attr_iter);
+      }
+    } else {
+      // Regular attributes: recurse into any graph-valued sub-graphs.
+      if (attr.has_g()) {
+        for (auto &sub_node : attr.g().node()) {
+          BindNodeAttributes(sub_node, attr_map);
+        }
+      }
+      for (auto &subgraph : attr.graphs()) {
+        for (auto &sub_node : subgraph.node()) {
+          BindNodeAttributes(sub_node, attr_map);
+        }
+      }
+      ++attr_iter;
+    }
+  }
 }
 
 // Expands a single local-function call ``node`` into shape inference
@@ -97,18 +138,17 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
   // Resolve linked attributes (``ref_attr_name``) in the function body
   // against the call-site node's attributes before running shape
   // inference. Attributes referencing a name not supplied by the call
-  // site are removed (matching ``AttributeBinder`` semantics).
-  internal::AttributeMap attr_map;
+  // site are removed (see ``BindNodeAttributes``).
+  AttributeMap attr_map;
   for (const auto &attr : node.attribute()) {
     attr_map[attr.name().as_string()] = &attr;
   }
-  internal::AttributeBinder attribute_binder(attr_map);
   // Recursively run shape inference on the function body, binding
   // attribute references on a per-node copy to avoid mutating ``func``.
   for (const auto &fn_node : func.node()) {
     NodeProto bound_node;
     bound_node.CopyFrom(fn_node);
-    attribute_binder.VisitNode(&bound_node);
+    BindNodeAttributes(bound_node, attr_map);
     sub_ctx.ComputeShapeNode(bound_node);
   }
   // Map function outputs back to caller-visible names.

@@ -599,7 +599,7 @@ public:
     // needing to copy the node.
     NodeProto copy_n;
     copy_n.CopyFrom(n);
-    attribute_binder.VisitNode(&copy_n);
+    attribute_binder.VisitNode(copy_n);
     Process(copy_n);
   }
 

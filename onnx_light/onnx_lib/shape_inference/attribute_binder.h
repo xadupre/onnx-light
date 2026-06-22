@@ -30,8 +30,8 @@ public:
   /// Binding a formal attribute parameter may remove an attribute from a node
   /// when the call-site omits that parameter. This requires processing at node scope
   /// (not at attribute scope) because attributes may be erased from the node list.
-  void VisitNode(NodeProto *node) override {
-    auto &attributes = node->attribute();
+  void VisitNode(NodeProto &node) override {
+    auto &attributes = node.attribute();
     for (auto attr_iter = attributes.begin(); attr_iter != attributes.end();) {
       auto &attr = *attr_iter;
       if (!attr.ref_attr_name().empty()) {
@@ -51,7 +51,7 @@ public:
         }
       } else {
         // For regular attributes, we process subgraphs, if present, recursively.
-        VisitAttribute(&attr);
+        VisitAttribute(attr);
         ++attr_iter;
       }
     }
@@ -67,7 +67,7 @@ public:
       map[attr.name().as_string()] = &attr;
     }
     AttributeBinder attr_binder(map);
-    attr_binder.VisitFunction(&callee);
+    attr_binder.VisitFunction(callee);
   }
 
 private:

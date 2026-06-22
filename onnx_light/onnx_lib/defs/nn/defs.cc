@@ -955,10 +955,19 @@ ONNX_API void convTransposeShapeInference(InferenceContext &ctx) {
   }
 
   int64_t group = getAttribute(ctx, "group", 1);
+  if (group <= 0) {
+    fail_shape_inference("Attribute group must be > 0 for ConvTranspose. group=", group, ".");
+  }
 
   auto input_shape = ctx.getInputType(0)->tensor_type().shape();
   if (input_shape.dim_size() < 2) {
     return; // Input tensor should have at least two dimensions.
+  }
+
+  const auto &input_channels_dim = input_shape.dim(1);
+  if (input_channels_dim.has_dim_value() && input_channels_dim.dim_value() % group != 0) {
+    fail_shape_inference("Input channels C must be divisible by group for ConvTranspose. C=",
+                         input_channels_dim.dim_value(), " group=", group, ".");
   }
 
   // first dim is the batch axis and the next is the number of channels.

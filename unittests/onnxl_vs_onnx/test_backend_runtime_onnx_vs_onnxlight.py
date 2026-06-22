@@ -333,11 +333,8 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
     def test_run_one_loop16_seq_none(self):
         model_file = None
         for test in load_model_tests(kind="node"):
-            candidate = os.path.join(test.model_dir, "model.onnx")
-            if os.path.basename(test.model_dir) == "test_loop16_seq_none" and os.path.exists(
-                candidate
-            ):
-                model_file = candidate
+            if os.path.basename(test.model_dir) == "test_loop16_seq_none":
+                model_file = os.path.join(test.model_dir, "model.onnx")
                 break
         self.assertIsNotNone(model_file)
         outcome, detail = self._run_one(model_file)
@@ -379,11 +376,7 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
 
         session = ReferenceEvaluator(model)
         for data_dir in data_dirs:
-            inputs, expected = _load_data_set(
-                data_dir,
-                [kind for kind in input_kinds if kind is not None],
-                [kind for kind in output_kinds if kind is not None],
-            )
+            inputs, expected = _load_data_set(data_dir, input_kinds, output_kinds)
             if any(value is None for value in inputs + expected):
                 return "skip", None
             feeds = dict(zip(session.input_names, inputs))

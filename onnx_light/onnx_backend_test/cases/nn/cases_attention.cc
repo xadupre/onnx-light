@@ -1295,7 +1295,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "", "", "nonpad_kv_seqlen"}, {"Y"});
     AddInt(node, "is_causal", 1);
     Expect(node, {Q, K, V, nonpad_kv_seqlen}, {Y},
-           "test_cc_attention_4d_causal_nonpad_continued_prefill", {opset24}, "backend-test",
+           "test_cc_attention_4d_causal_nonpad_kv_continued_prefill", {opset24}, "backend-test",
            registry);
   }
 

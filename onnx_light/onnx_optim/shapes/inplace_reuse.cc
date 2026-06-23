@@ -150,7 +150,7 @@ void CollectReferencedNames(const NodeProto &node, std::unordered_set<std::strin
 
 } // namespace
 
-void InplaceContext::ComputeInPlaceReuseGraph(const GraphProto &graph, const ShapesContext &ctx,
+void ComputeContext::ComputeInPlaceReuseGraph(const GraphProto &graph, const ShapesContext &ctx,
                                               bool allow_input_overwrite) {
   const int num_nodes = graph.node().size();
   std::vector<std::vector<InPlaceReuse>> result(static_cast<std::size_t>(num_nodes));
@@ -284,10 +284,10 @@ void InplaceContext::ComputeInPlaceReuseGraph(const GraphProto &graph, const Sha
   reuse_ = std::move(result);
 }
 
-void InplaceContext::WriteToMetadata(GraphProto &graph) const {
+void ComputeContext::WriteToMetadata(GraphProto &graph) const {
   if (static_cast<std::size_t>(graph.node().size()) != reuse_.size()) {
     std::ostringstream msg;
-    msg << "InplaceContext::WriteToMetadata: graph has " << graph.node().size()
+    msg << "ComputeContext::WriteToMetadata: graph has " << graph.node().size()
         << " node(s) but the computed reuse result has " << reuse_.size()
         << " entry(ies); call WriteToMetadata on the same graph passed to "
            "ComputeInPlaceReuseGraph.";
@@ -313,13 +313,13 @@ void InplaceContext::WriteToMetadata(GraphProto &graph) const {
 
 std::vector<std::vector<InPlaceReuse>>
 ComputeInPlaceReuse(const GraphProto &graph, const ShapesContext &ctx, bool allow_input_overwrite) {
-  InplaceContext inplace;
+  ComputeContext inplace;
   inplace.ComputeInPlaceReuseGraph(graph, ctx, allow_input_overwrite);
   return inplace.Reuse();
 }
 
 void WriteInPlaceReuseToMetadata(GraphProto &graph, const ShapesContext &ctx) {
-  InplaceContext inplace;
+  ComputeContext inplace;
   inplace.ComputeInPlaceReuseGraph(graph, ctx);
   inplace.WriteToMetadata(graph);
 }

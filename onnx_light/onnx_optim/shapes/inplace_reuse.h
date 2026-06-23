@@ -49,7 +49,7 @@
  * kernel-level ``CanRunInPlace()`` capability before actually aliasing
  * buffers.
  *
- * The analysis is exposed through :cpp:class:`InplaceContext`, which
+ * The analysis is exposed through :cpp:class:`ComputeContext`, which
  * stores the per-node result (mirroring the way
  * :cpp:class:`onnx_optim::shapes::ShapesContext` stores inferred
  * descriptors). The free functions :cpp:func:`ComputeInPlaceReuse` and
@@ -99,7 +99,7 @@ struct InPlaceReuse {
 };
 
 /**
- * Metadata key under which :cpp:func:`InplaceContext::WriteToMetadata`
+ * Metadata key under which :cpp:func:`ComputeContext::WriteToMetadata`
  * records a node's in-place reuse opportunities. The associated value is a
  * string with one ``output_index:input_index:kind`` triplet per opportunity
  * (``kind`` is ``equal`` or ``greater``), triplets separated by ``;``.
@@ -120,9 +120,9 @@ constexpr const char *kInPlaceReuseMetadataKey = "onnx_light.inplace_reuse";
  * :cpp:func:`Reuse` / :cpp:func:`NodeReuse` or persist it into the graph with
  * :cpp:func:`WriteToMetadata`.
  */
-class InplaceContext {
+class ComputeContext {
 public:
-  InplaceContext() = default;
+  ComputeContext() = default;
 
   /**
    * Guesses, for every node of ``graph``, which outputs may reuse which input
@@ -192,7 +192,7 @@ private:
 };
 
 /**
- * Convenience wrapper around :cpp:func:`InplaceContext::ComputeInPlaceReuseGraph`:
+ * Convenience wrapper around :cpp:func:`ComputeContext::ComputeInPlaceReuseGraph`:
  * computes and returns the per-node reuse opportunities for ``graph`` using the
  * shapes already inferred into ``ctx``.
  *
@@ -200,7 +200,7 @@ private:
  * @param ctx    Shapes context already populated with the inferred
  *               descriptors for ``graph``.
  * @param allow_input_overwrite  See
- *               :cpp:func:`InplaceContext::ComputeInPlaceReuseGraph`.
+ *               :cpp:func:`ComputeContext::ComputeInPlaceReuseGraph`.
  * @return A vector with one entry per node of ``graph`` (same order as
  *         ``graph.node()``); each entry lists the reuse opportunities
  *         discovered for that node. Nodes without any opportunity carry an
@@ -212,7 +212,7 @@ std::vector<std::vector<InPlaceReuse>> ComputeInPlaceReuse(const GraphProto &gra
 
 /**
  * Convenience wrapper that computes the in-place reuse opportunities for
- * ``graph`` (via :cpp:class:`InplaceContext`) and records them in each node's
+ * ``graph`` (via :cpp:class:`ComputeContext`) and records them in each node's
  * ``metadata_props`` under :cpp:var:`kInPlaceReuseMetadataKey`.
  *
  * @param graph  Graph whose nodes are analysed and mutated in place.

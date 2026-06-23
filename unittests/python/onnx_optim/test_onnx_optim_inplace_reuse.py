@@ -233,7 +233,7 @@ class TestInPlaceReuse(ExtTestCase):
         ctx = si.ShapesContext()
         si.compute_shape_model(ctx, model)
 
-        inplace = si.InplaceContext()
+        inplace = si.ComputeContext()
         self.assertEqual(len(inplace), 0)
         inplace.compute_inplace_reuse_graph(model.graph, ctx)
 
@@ -258,7 +258,7 @@ class TestInPlaceReuse(ExtTestCase):
         ctx = si.ShapesContext()
         si.compute_shape_model(ctx, model)
 
-        inplace = si.InplaceContext()
+        inplace = si.ComputeContext()
         inplace.compute_inplace_reuse_graph(model.graph, ctx, allow_input_overwrite=True)
         self.assertEqual(self._reuse_pairs(inplace.reuse), [[(0, 0)], [(0, 0)]])
 
@@ -275,7 +275,7 @@ class TestInPlaceReuse(ExtTestCase):
         ctx = si.ShapesContext()
         si.compute_shape_model(ctx, model)
 
-        inplace = si.InplaceContext()
+        inplace = si.ComputeContext()
         inplace.compute_inplace_reuse_graph(model.graph, ctx)
         inplace.write_to_metadata(model.graph)
 

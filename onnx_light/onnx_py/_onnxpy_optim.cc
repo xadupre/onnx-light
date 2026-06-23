@@ -1004,8 +1004,8 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
         return os.str();
       });
 
-  nb::class_<onnx_shapes::InplaceContext>(
-      shape_mod, "InplaceContext",
+  nb::class_<onnx_shapes::ComputeContext>(
+      shape_mod, "ComputeContext",
       "Holds the in-place reuse opportunities computed for a graph, mirroring the way "
       "``ShapesContext`` holds inferred descriptors. Populate it with "
       "``compute_inplace_reuse_graph`` (consuming a ``ShapesContext``), then read the result "
@@ -1013,7 +1013,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       .def(nb::init<>())
       .def(
           "compute_inplace_reuse_graph",
-          [](onnx_shapes::InplaceContext &self, const GraphProto &graph,
+          [](onnx_shapes::ComputeContext &self, const GraphProto &graph,
              const onnx_shapes::ShapesContext &ctx, bool allow_input_overwrite) {
             self.ComputeInPlaceReuseGraph(graph, ctx, allow_input_overwrite);
           },
@@ -1024,12 +1024,12 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           "By default declared graph inputs are never overwritten in place; set "
           "``allow_input_overwrite=True`` to let an input be reused like an intermediate.")
       .def_prop_ro(
-          "reuse", [](const onnx_shapes::InplaceContext &self) { return self.Reuse(); },
+          "reuse", [](const onnx_shapes::ComputeContext &self) { return self.Reuse(); },
           "The per-node reuse opportunities as a list (one entry per node, same order as "
           "``graph.node``); each entry is a list of :class:`InPlaceReuse`.")
       .def(
           "node_reuse",
-          [](const onnx_shapes::InplaceContext &self, std::size_t node_index) {
+          [](const onnx_shapes::ComputeContext &self, std::size_t node_index) {
             return self.NodeReuse(node_index);
           },
           nb::arg("node_index"),
@@ -1037,15 +1037,15 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           "``node_index``. Raises ``IndexError`` when ``node_index`` is out of bounds.")
       .def(
           "write_to_metadata",
-          [](const onnx_shapes::InplaceContext &self, GraphProto &graph) {
+          [](const onnx_shapes::ComputeContext &self, GraphProto &graph) {
             self.WriteToMetadata(graph);
           },
           nb::arg("graph"),
           "Records the computed opportunities into each node's ``metadata_props`` under the key "
           "``onnx_light.inplace_reuse``. The ``GraphProto`` is mutated in place and must be the "
           "same graph passed to ``compute_inplace_reuse_graph``.")
-      .def("clear", &onnx_shapes::InplaceContext::Clear, "Empties the stored result.")
-      .def("__len__", [](const onnx_shapes::InplaceContext &self) { return self.Size(); });
+      .def("clear", &onnx_shapes::ComputeContext::Clear, "Empties the stored result.")
+      .def("__len__", [](const onnx_shapes::ComputeContext &self) { return self.Size(); });
 
   shape_mod.def(
       "compute_inplace_reuse",

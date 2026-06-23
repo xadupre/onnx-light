@@ -25,8 +25,8 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_optim::OptimShape;
 using onnx_optim::OptimTensor;
 using onnx_optim::TensorType;
+using onnx_optim::shapes::ComputeContext;
 using onnx_optim::shapes::ComputeInPlaceReuse;
-using onnx_optim::shapes::InplaceContext;
 using onnx_optim::shapes::InPlaceReuse;
 using onnx_optim::shapes::InPlaceReuseKind;
 using onnx_optim::shapes::ShapesContext;
@@ -370,9 +370,9 @@ TEST(OnnxOptimInPlaceReuse, AllowInputOverwriteKeepsInputThatIsAlsoOutput) {
   EXPECT_TRUE(reuse[0].empty());
 }
 
-// The InplaceContext class stores the per-node reuse result and exposes it
+// The ComputeContext class stores the per-node reuse result and exposes it
 // through Size()/Reuse()/NodeReuse(), matching the free-function output.
-TEST(OnnxOptimInPlaceReuse, InplaceContextStoresResult) {
+TEST(OnnxOptimInPlaceReuse, ComputeContextStoresResult) {
   GraphProto graph;
   graph.set_name("g");
   AddInput(graph, "X", {3, 4});
@@ -384,7 +384,7 @@ TEST(OnnxOptimInPlaceReuse, InplaceContextStoresResult) {
   ShapesContext ctx;
   ctx.ComputeShapeGraph(graph);
 
-  InplaceContext inplace;
+  ComputeContext inplace;
   EXPECT_TRUE(inplace.Empty());
   EXPECT_EQ(inplace.Size(), 0u);
   inplace.ComputeInPlaceReuseGraph(graph, ctx);
@@ -407,8 +407,8 @@ TEST(OnnxOptimInPlaceReuse, InplaceContextStoresResult) {
   EXPECT_TRUE(inplace.Empty());
 }
 
-// InplaceContext honours allow_input_overwrite just like the free function.
-TEST(OnnxOptimInPlaceReuse, InplaceContextAllowInputOverwrite) {
+// ComputeContext honours allow_input_overwrite just like the free function.
+TEST(OnnxOptimInPlaceReuse, ComputeContextAllowInputOverwrite) {
   GraphProto graph;
   graph.set_name("g");
   AddInput(graph, "X", {3, 4});
@@ -419,16 +419,16 @@ TEST(OnnxOptimInPlaceReuse, InplaceContextAllowInputOverwrite) {
   ShapesContext ctx;
   ctx.ComputeShapeGraph(graph);
 
-  InplaceContext inplace;
+  ComputeContext inplace;
   inplace.ComputeInPlaceReuseGraph(graph, ctx, /*allow_input_overwrite=*/true);
   ASSERT_EQ(inplace.Size(), 2u);
   ASSERT_EQ(inplace.NodeReuse(0).size(), 1u);
   EXPECT_EQ(inplace.NodeReuse(0)[0], (InPlaceReuse{0, 0, InPlaceReuseKind::kEqual}));
 }
 
-// InplaceContext::WriteToMetadata records the same triplets as the free
+// ComputeContext::WriteToMetadata records the same triplets as the free
 // function and rejects a graph whose node count no longer matches the result.
-TEST(OnnxOptimInPlaceReuse, InplaceContextWriteToMetadata) {
+TEST(OnnxOptimInPlaceReuse, ComputeContextWriteToMetadata) {
   GraphProto graph;
   graph.set_name("g");
   AddInput(graph, "X", {3, 4});
@@ -440,7 +440,7 @@ TEST(OnnxOptimInPlaceReuse, InplaceContextWriteToMetadata) {
   ShapesContext ctx;
   ctx.ComputeShapeGraph(graph);
 
-  InplaceContext inplace;
+  ComputeContext inplace;
   inplace.ComputeInPlaceReuseGraph(graph, ctx);
   inplace.WriteToMetadata(graph);
   ASSERT_EQ(graph.node().size(), 3);

@@ -42,6 +42,52 @@ When the borrowed mode also carries a shared owner token, the backing storage
 remains alive as long as the corresponding :class:`~onnx_light.onnx_lib.TensorProto` (or a copy of it) is
 alive.
 
+Attaching a custom deleter to a TensorProto
+-------------------------------------------
+
+Rather than managing lifetime through a raw ``std::shared_ptr<void>`` owner token,
+you can attach an arbitrary cleanup function directly to a tensor via
+:cpp:func:`~onnx_light::TensorProto::set_raw_data_with_deleter` or the lower-level
+:cpp:func:`~onnx_light::utils::ByteSpan::assign_with_deleter`.  The deleter is called
+exactly once when the last copy of the owner token inside the ByteSpan is destroyed —
+that is, when the tensor (and all copies of it that share the same buffer) goes out
+of scope or its raw_data is overwritten/cleared.
+
+The deleter is a zero-argument callable (lambda, function pointer, or functor)
+returning ``void``.  Internally it is wrapped in a ``std::shared_ptr<void>`` with a
+custom deleter and stored as the ``owner_`` token, so all the copy/move/clear
+semantics of :cpp:class:`~onnx_light::utils::ByteSpan` apply without any change.
+
+C++ example::
+
+    #include "onnx_proto/onnx.h"
+    #include <malloc.h>  // for malloc / free
+
+    // Allocate tensor data outside of TensorProto's normal allocators.
+    const size_t n_bytes = 4 * sizeof(float);
+    uint8_t *buf = static_cast<uint8_t *>(std::malloc(n_bytes));
+    // … fill buf …
+
+    TensorProto tensor;
+    tensor.set_data_type(TensorProto::DataType::FLOAT);
+    tensor.ref_dims().push_back(4);
+
+    // Hand the buffer to the tensor.  free() will be called when the tensor is
+    // destroyed (or when the raw_data is overwritten/cleared).
+    tensor.set_raw_data_with_deleter(buf, n_bytes, [buf]() { std::free(buf); });
+
+    // The tensor now owns buf's lifetime through the deleter.  buf must not be
+    // freed elsewhere.
+
+A no-op deleter is valid and costs nothing extra::
+
+    tensor.set_raw_data_with_deleter(ptr, sz, []() {});
+    // Equivalent to: tensor.ref_raw_data().assign_borrowed(ptr, sz);
+
+The lower-level :cpp:func:`~onnx_light::utils::ByteSpan::assign_with_deleter` works the same way::
+
+    span.assign_with_deleter(ptr, sz, []() { /* custom cleanup */ });
+
 When ownership is assigned during parsing
 -----------------------------------------
 

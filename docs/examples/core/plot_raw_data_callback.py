@@ -113,7 +113,15 @@ print(f"released tensors: {released_tensors}")
 names = []
 
 inspect_options = onnxl.ParseOptions()
-inspect_options.raw_data_callback = lambda tensor: names.append(tensor.name)
+
+
+def record_name(tensor: onnxl.TensorProto):
+    """Records the tensor name and returns None to keep ownership unchanged."""
+    names.append(tensor.name)
+    return None
+
+
+inspect_options.raw_data_callback = record_name
 
 inspected = onnxl.ModelProto()
 inspected.ParseFromString(serialized, inspect_options)

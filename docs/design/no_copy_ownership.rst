@@ -61,7 +61,7 @@ semantics of :cpp:class:`~onnx_light::utils::ByteSpan` apply without any change.
 C++ example::
 
     #include "onnx_proto/onnx.h"
-    #include <malloc.h>  // for malloc / free
+    #include <cstdlib>  // for std::malloc / std::free
 
     // Allocate tensor data outside of TensorProto's normal allocators.
     const size_t n_bytes = 4 * sizeof(float);

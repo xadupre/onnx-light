@@ -371,11 +371,10 @@ inline void set_data_type(int v) { data_type_ = static_cast<DataType>(v); }
 inline bool is_raw_data() const { return !raw_data_.empty(); }
 /**
  * Sets the tensor raw data to a borrowed view of an external buffer and attaches
- * a custom deleter that is called when all references to that buffer are dropped.
+ * a custom deleter called when all references to that buffer are dropped.
  *
- * This is the preferred way to associate a non-owning raw-data pointer with a
- * cleanup function.  The tensor stores ptr/sz as a borrowed view (identical to
- * calling ``ref_raw_data().assign_borrowed(ptr, sz)``), but additionally schedules
+ * Stores ptr/sz as a borrowed view (identical to calling
+ * ``ref_raw_data().assign_borrowed(ptr, sz)``), but additionally schedules
  * deleter() for invocation when the last copy of the internal owner token is
  * destroyed (i.e., when the TensorProto, and all copies of it sharing the same
  * buffer, go out of scope or are overwritten).

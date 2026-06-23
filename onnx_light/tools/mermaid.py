@@ -175,6 +175,49 @@ def to_mermaid(
             a ``GraphProto``.
         ValueError: If ``direction`` is not a supported Mermaid
             flowchart direction.
+
+    The example below builds a small ``Abs`` chain, runs shape inference and
+    records the in-place reuse opportunities into the graph metadata with
+    :func:`onnx_light.onnx_optim.shape_inference.write_inplace_reuse_to_metadata`,
+    then renders the annotated flowchart with ``include_inplace=True``:
+
+    .. runpython::
+        :rst:
+
+        from onnx_light.onnx_lib import TensorProto
+        from onnx_light.onnx.helper import (
+            make_graph,
+            make_model,
+            make_node,
+            make_opsetid,
+            make_tensor_value_info,
+        )
+        from onnx_light.onnx_optim import shape_inference
+        from onnx_light.tools import to_mermaid
+
+        X = make_tensor_value_info("X", TensorProto.FLOAT, [3, 4])
+        Y = make_tensor_value_info("Y", TensorProto.FLOAT, [3, 4])
+        graph = make_graph(
+            [
+                make_node("Abs", ["X"], ["A"]),
+                make_node("Abs", ["A"], ["B"]),
+                make_node("Abs", ["B"], ["Y"]),
+            ],
+            "example",
+            [X],
+            [Y],
+        )
+        model = make_model(graph, opset_imports=[make_opsetid("", 18)])
+        model.ir_version = 8
+
+        ctx = shape_inference.ShapesContext()
+        shape_inference.compute_shape_model(ctx, model)
+        shape_inference.write_inplace_reuse_to_metadata(ctx, model.graph)
+
+        print(".. mermaid::")
+        print()
+        for line in to_mermaid(model, include_inplace=True).split("\n"):
+            print("    " + line)
     """
 
     valid_directions = {"TB", "TD", "BT", "LR", "RL"}

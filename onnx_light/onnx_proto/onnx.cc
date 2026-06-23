@@ -749,7 +749,7 @@ void TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
       }
     }
   }
-  // After raw_data (inline or external) has been resolved, give the caller a chance to take
+  // After raw_data (inline or external) has been resolved, gives the caller a chance to take
   // custom ownership of the tensor data and register a matching deleter.
   if (options.raw_data_callback && has_raw_data()) {
     std::function<void()> deleter = options.raw_data_callback(*this);

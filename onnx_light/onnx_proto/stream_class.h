@@ -383,11 +383,11 @@ struct ParseOptions : TensorBufferOptions {
    *  above the largest legitimate tensor you expect, e.g. 2 GB for most models:
    *  ``options.max_tensor_size_bytes = 2LL * 1024 * 1024 * 1024;`` */
   int64_t max_tensor_size_bytes = 0;
-  /** Optional callback invoked for each TensorProto once its ``raw_data`` has been parsed
-   *  (including external-data tensors, after their bytes have been resolved).  The callback
-   *  receives the freshly parsed TensorProto and returns a deleter — a zero-argument callable
-   *  invoked once when the tensor's ``raw_data`` is released (the tensor and all copies sharing
-   *  the same buffer go out of scope, or the buffer is overwritten/cleared).
+  /** Holds an optional callback invoked for each TensorProto once its ``raw_data`` has been
+   *  parsed (including external-data tensors, after their bytes have been resolved).  The
+   *  callback receives the freshly parsed TensorProto and returns a deleter — a zero-argument
+   *  callable invoked once when the tensor's ``raw_data`` is released (the tensor and all copies
+   *  sharing the same buffer go out of scope, or the buffer is overwritten/cleared).
    *
    *  This lets callers take custom ownership of tensor data and register the matching cleanup,
    *  regardless of whether the bytes live on disk (no_copy borrowed view of an mmap or external

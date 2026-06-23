@@ -6659,7 +6659,7 @@ TEST(onnx_proto, TensorProto_SetRawDataWithDeleter_NoOpDeleter) {
 // ---------------------------------------------------------------------------
 
 TEST(onnx_proto, ByteSpan_AttachDeleter_KeepsDataAndFiresOnDestruction) {
-  // attach_deleter must keep the current bytes in place (owned mode here) and call the
+  // Attaches a deleter while keeping the current bytes in place (owned mode here) and calls the
   // deleter exactly once when the span is destroyed.
   bool deleter_called = false;
   {
@@ -6693,7 +6693,7 @@ TEST(onnx_proto, TensorProto_AttachRawDataDeleter_FiresOnDestruction) {
 }
 
 TEST(onnx_proto, ParseOptions_RawDataCallback_InvokedAndDeleterAttached) {
-  // Build a tensor with raw_data, serialize it, then parse it back with a callback that
+  // Builds a tensor with raw_data, serializes it, then parses it back with a callback that
   // returns a deleter. The callback must be invoked for the tensor and the returned deleter
   // must fire when the parsed tensor is destroyed.
   std::vector<float> data = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f};
@@ -6733,8 +6733,8 @@ TEST(onnx_proto, ParseOptions_RawDataCallback_InvokedAndDeleterAttached) {
 }
 
 TEST(onnx_proto, ParseOptions_RawDataCallback_EmptyReturnLeavesOwnershipUnchanged) {
-  // A callback that returns an empty std::function must not attach any deleter and must leave
-  // the parsed tensor's data intact.
+  // Tests that a callback returning an empty std::function does not attach any deleter and
+  // leaves the parsed tensor's data intact.
   std::vector<float> data = {1.0f, 2.0f, 3.0f, 4.0f};
   TensorProto tensor1;
   tensor1.set_name("w");
@@ -6763,7 +6763,8 @@ TEST(onnx_proto, ParseOptions_RawDataCallback_EmptyReturnLeavesOwnershipUnchange
 }
 
 TEST(onnx_proto, ParseOptions_RawDataCallback_NotInvokedWithoutRawData) {
-  // A tensor without raw_data (data stored in float_data) must not trigger the callback.
+  // Verifies that a tensor without raw_data (data stored in float_data) does not trigger the
+  // callback.
   TensorProto tensor1;
   tensor1.set_name("no_raw");
   tensor1.set_data_type(TensorProto::DataType::FLOAT);

@@ -615,7 +615,9 @@ template <typename T> void define_repeated_field_type(nb::class_<utils::Repeated
             if (nb::isinstance<utils::RepeatedField<T>>(iterable)) {
               self->extend(nb::cast<utils::RepeatedField<T> &>(iterable));
             } else {
-              self->extend(nb::cast<std::vector<T>>(iterable));
+              for (auto it : iterable) {
+                self->push_back(nb::cast<T>(it));
+              }
             }
           },
           nb::arg("iterable"), "Creates a RepeatedField from an iterable.")
@@ -688,7 +690,9 @@ void define_repeated_field_type_extend(nb::class_<utils::RepeatedField<T>> &nbcl
             if (nb::isinstance<utils::RepeatedField<T>>(iterable)) {
               self.extend(nb::cast<utils::RepeatedField<T> &>(iterable));
             } else {
-              self.extend(nb::cast<std::vector<T>>(iterable));
+              for (auto it : iterable) {
+                self.push_back(nb::cast<T>(it));
+              }
             }
           },
           nb::arg("sequence"), "Extends the list of values.");

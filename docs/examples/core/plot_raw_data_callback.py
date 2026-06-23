@@ -126,3 +126,24 @@ inspect_options.raw_data_callback = record_name
 inspected = onnxl.ModelProto()
 inspected.ParseFromString(serialized, inspect_options)
 print(f"inspected tensor names: {names}")
+
+# %%
+# Reporting progress with ``RawDataCallback``
+# -------------------------------------------
+#
+# :class:`onnx_light.onnx.RawDataCallback` is a ready-made callback object for
+# the common case of *only* reporting progress: it forwards every parsed tensor
+# to an ``on_tensor`` callable and always returns ``None``, so the default C++
+# allocation is left untouched.  Assign an instance to ``raw_data_callback`` to
+# print progress without changing how tensor data is owned.
+
+progress = []
+
+progress_options = onnxl.ParseOptions()
+progress_options.raw_data_callback = onnxl.RawDataCallback(
+    lambda tensor: progress.append(f"{tensor.name}: {len(tensor.raw_data)} bytes")
+)
+
+with_progress = onnxl.ModelProto()
+with_progress.ParseFromString(serialized, progress_options)
+print("\n".join(progress))

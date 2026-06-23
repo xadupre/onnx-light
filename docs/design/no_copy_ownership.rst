@@ -134,6 +134,16 @@ either ``None`` (ownership unchanged) or a zero-argument callable used as the de
     model = onnx.ModelProto()
     model.ParseFromString(serialized, options)
 
+For the common case of *only* reporting progress while keeping the default
+allocation, assign a :class:`onnx_light.onnx.RawDataCallback` instead.  It
+forwards every parsed tensor to its ``on_tensor`` callable and always returns
+``None``, so tensor ownership is left to the default allocator::
+
+    options = onnx.ParseOptions()
+    options.raw_data_callback = onnx.RawDataCallback(
+        lambda tensor: print(tensor.name, len(tensor.raw_data))
+    )
+
 See the :ref:`l-example-plot-raw-data-callback` gallery example for a complete walk-through.
 
 

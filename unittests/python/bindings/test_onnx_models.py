@@ -199,6 +199,51 @@ class TestOnnxLightHelper(ExtTestCase):
         gc.collect()
         self.assertEqual(deleted, ["W"])
 
+    def test_raw_data_callback_object_reports_progress(self):
+        arr = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+        tensor = onh.from_array(arr, name="W")
+        model = oh.make_model(oh.make_graph([], "g", [], [], [tensor]))
+        serialized = model.SerializeToString()
+
+        seen = []
+        cb = onnxl.RawDataCallback(lambda parsed_tensor: seen.append(parsed_tensor.name))
+
+        opts = onnxl.ParseOptions()
+        opts.raw_data_callback = cb
+        # The callback object round-trips through ParseOptions.
+        self.assertIs(opts.raw_data_callback, cb)
+
+        parsed = onnxl.ModelProto()
+        parsed.ParseFromString(serialized, opts)
+        # The progress callable fires once for the tensor carrying raw_data.
+        self.assertEqual(seen, ["W"])
+        # The default C++ allocation is preserved: data stays readable.
+        np.testing.assert_array_equal(onh.to_array(parsed.graph.initializer[0]), arr)
+
+    def test_raw_data_callback_object_default_is_noop(self):
+        arr = np.array([4.0, 5.0], dtype=np.float32)
+        tensor = onh.from_array(arr, name="W")
+        model = oh.make_model(oh.make_graph([], "g", [], [], [tensor]))
+        serialized = model.SerializeToString()
+
+        cb = onnxl.RawDataCallback()
+        # Without an ``on_tensor`` callable the object is a pure no-op.
+        self.assertIsNone(cb.on_tensor)
+        # Calling it directly returns None (default allocation unchanged).
+        self.assertIsNone(cb(tensor))
+
+        opts = onnxl.ParseOptions()
+        opts.raw_data_callback = cb
+        parsed = onnxl.ModelProto()
+        parsed.ParseFromString(serialized, opts)
+        np.testing.assert_array_equal(onh.to_array(parsed.graph.initializer[0]), arr)
+
+        # ``on_tensor`` can be cleared back to None.
+        cb.on_tensor = lambda parsed_tensor: None
+        self.assertIsNotNone(cb.on_tensor)
+        cb.on_tensor = None
+        self.assertIsNone(cb.on_tensor)
+
     def test_parse_options_raw_data_callback_returning_none(self):
         arr = np.array([4.0, 5.0], dtype=np.float32)
         tensor = onh.from_array(arr, name="W")

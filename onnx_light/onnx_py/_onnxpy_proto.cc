@@ -46,6 +46,15 @@ struct PyRawDataCallback {
   }
 };
 
+// Reusable ``raw_data_callback`` that keeps the default C++ allocation (tensor ownership
+// unchanged) while letting users observe parsing progress. When called it optionally forwards
+// the freshly parsed TensorProto to a user callable invoked as ``on_tensor(tensor)`` (for
+// example to print progress) and always returns ``None``, so the tensor's ``raw_data`` is left
+// to the default allocator. Subclasses may override ``__call__`` for richer behaviour.
+struct RawDataCallback {
+  nb::object on_tensor;
+};
+
 ModelProto MakeOwnedModelProtoCopy(const ModelProto &model) {
   // Fully reparse through bytes to ensure every borrowed span in the model
   // becomes owned before serialization paths that may mutate buffers/metadata.
@@ -944,6 +953,37 @@ void AddOnnxPyProto(nb::module_ &m) {
               "If > 0, each tensor's offset within the buffer is padded to a multiple of this many "
               "bytes. 0 disables alignment. Use 4096 for mmap-friendly page-aligned offsets.");
 
+  nb::class_<RawDataCallback>(
+      m, "RawDataCallback",
+      "Reusable :attr:`ParseOptions.raw_data_callback` that keeps the default C++ allocation "
+      "(tensor ownership unchanged) while letting users observe parsing progress.\n\n"
+      "It is callable as ``fn(tensor)``: it forwards the freshly parsed :class:`TensorProto` to "
+      "the optional ``on_tensor`` callable (for example to print progress) and always returns "
+      "``None``, so the tensor's ``raw_data`` is left to the default allocator. Assign an "
+      "instance to :attr:`ParseOptions.raw_data_callback`, or subclass it and override "
+      "``__call__`` for richer behaviour.")
+      .def(nb::init<nb::object>(), nb::arg("on_tensor").none() = nb::none(),
+           "Builds the callback. ``on_tensor`` is an optional callable invoked as "
+           "``on_tensor(tensor)`` for every parsed tensor; pass ``None`` (the default) for a "
+           "no-op that simply preserves the default allocation.")
+      .def_prop_rw(
+          "on_tensor", [](RawDataCallback &self) -> nb::object { return self.on_tensor; },
+          [](RawDataCallback &self, nb::object value) { self.on_tensor = value; },
+          "Optional callable invoked as ``on_tensor(tensor)`` for every parsed tensor; "
+          "``None`` disables it.",
+          nb::for_setter(nb::arg("value").none()))
+      .def(
+          "__call__",
+          [](RawDataCallback &self, TensorProto &tensor) -> nb::object {
+            if (self.on_tensor.is_valid() && !self.on_tensor.is_none()) {
+              self.on_tensor(nb::cast(&tensor, nb::rv_policy::reference));
+            }
+            return nb::none();
+          },
+          nb::arg("tensor"),
+          "Invokes ``on_tensor(tensor)`` when set and returns ``None`` so the tensor's "
+          "``raw_data`` keeps the default C++ allocation.");
+
   nb::class_<ParseOptions, TensorBufferOptions>(m, "ParseOptions",
                                                 "Parsing options for proto classes")
       .def(nb::init<>())
@@ -1023,7 +1063,9 @@ void AddOnnxPyProto(nb::module_ &m) {
           "``fn(tensor)`` with the freshly parsed :class:`TensorProto` and must return either "
           "``None`` (ownership unchanged) or a zero-argument callable used as the deleter "
           "attached to the tensor's ``raw_data``; the deleter runs once when that raw_data is "
-          "released. Setting it to ``None`` (the default) disables the callback.",
+          "released. Setting it to ``None`` (the default) disables the callback. See "
+          ":class:`RawDataCallback` for a ready-made object that only reports progress while "
+          "keeping the default allocation.",
           nb::for_setter(nb::arg("value").none()));
 
   nb::class_<SerializeOptions, TensorBufferOptions>(m, "SerializeOptions",

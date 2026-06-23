@@ -305,6 +305,26 @@ class TestProtoMethods(ExtTestCase):
         self.assertTrue(floats == [1.0, 2.0])
         self.assertFalse(floats == [1.0, 3.0])
 
+    def test_repeated_field_extend_iterable_str(self):
+        # ``extend`` must accept any iterable (e.g. a generator), not just
+        # sequences such as lists or tuples.
+        node = oh.make_node("MatMul", ["a", "b"], ["c"])
+        node.input.extend(name for name in ["d", "e"])
+        self.assertEqual(list(node.input), ["a", "b", "d", "e"])
+        node.input.extend(map(str, ["f", "g"]))
+        self.assertEqual(list(node.input), ["a", "b", "d", "e", "f", "g"])
+
+    def test_repeated_field_extend_iterable_numbers(self):
+        # Same behavior for numeric repeated fields.
+        tensor = TensorProto()
+        tensor.dims.extend(d for d in [2, 3])
+        self.assertEqual(list(tensor.dims), [2, 3])
+        tensor.dims.extend(map(int, ["4", "5"]))
+        self.assertEqual(list(tensor.dims), [2, 3, 4, 5])
+        # Plain sequences keep working.
+        tensor.dims.extend([6, 7])
+        self.assertEqual(list(tensor.dims), [2, 3, 4, 5, 6, 7])
+
     def test_init_kwargs_tensor_proto(self):
         # The use case from the issue: build a TensorProto from another
         # tensor's repeated ``dims`` field, its ``data_type`` and raw bytes.

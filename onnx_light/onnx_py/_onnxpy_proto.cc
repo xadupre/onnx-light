@@ -50,7 +50,7 @@ struct PyRawDataCallback {
 // unchanged) while letting users observe parsing progress. When called it optionally forwards
 // the freshly parsed TensorProto to a user callable invoked as ``on_tensor(tensor)`` (for
 // example to print progress) and always returns ``None``, so the tensor's ``raw_data`` is left
-// to the default allocator. Subclasses may override ``__call__`` for richer behaviour.
+// to the default allocator. Subclasses may override ``__call__`` for richer behavior.
 struct RawDataCallback {
   nb::object on_tensor;
 };
@@ -961,7 +961,7 @@ void AddOnnxPyProto(nb::module_ &m) {
       "the optional ``on_tensor`` callable (for example to print progress) and always returns "
       "``None``, so the tensor's ``raw_data`` is left to the default allocator. Assign an "
       "instance to :attr:`ParseOptions.raw_data_callback`, or subclass it and override "
-      "``__call__`` for richer behaviour.")
+      "``__call__`` for richer behavior.")
       .def(nb::init<nb::object>(), nb::arg("on_tensor").none() = nb::none(),
            "Builds the callback. ``on_tensor`` is an optional callable invoked as "
            "``on_tensor(tensor)`` for every parsed tensor; pass ``None`` (the default) for a "

@@ -11,6 +11,7 @@ built by :mod:`onnx_light` and with messages built by the upstream
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # pragma: no cover - imports for type hints only.
@@ -136,6 +137,7 @@ def _iter(seq: Any) -> Iterable[Any]:
     return seq
 
 
+@lru_cache(maxsize=1)
 def _inplace_reuse_metadata_key() -> str:
     """Returns the metadata key under which in-place reuse is recorded.
 

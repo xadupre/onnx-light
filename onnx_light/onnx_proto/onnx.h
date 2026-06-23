@@ -391,6 +391,23 @@ inline void set_raw_data_with_deleter(const uint8_t *ptr, size_t sz, Deleter &&d
   raw_data_.assign_with_deleter(ptr, sz, std::forward<Deleter>(deleter));
 }
 /**
+ * Attaches a custom deleter to this tensor's ``raw_data`` without changing the stored bytes.
+ *
+ * Unlike ``set_raw_data_with_deleter``, the current ``raw_data`` pointer/size and storage mode
+ * (owned or borrowed) are left untouched; only a cleanup callback is registered.  deleter() is
+ * invoked once when the last copy of the internal owner token is destroyed (i.e., when the
+ * TensorProto, and all copies of it sharing the same buffer, go out of scope or the buffer is
+ * overwritten/cleared).  Any previously attached deleter/owner token is replaced.
+ *
+ * The deleter receives no arguments and returns void.  Any callable — lambda, function pointer,
+ * or functor — is accepted.
+ *
+ * @param deleter Callable invoked once when the backing storage is released.
+ */
+template <typename Deleter> inline void attach_raw_data_deleter(Deleter &&deleter) {
+  raw_data_.attach_deleter(std::forward<Deleter>(deleter));
+}
+/**
  * Loads the raw bytes of this tensor from the external file described by
  * its ``external_data`` field into ``raw_data``.
  *

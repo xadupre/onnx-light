@@ -6653,3 +6653,135 @@ TEST(onnx_proto, TensorProto_SetRawDataWithDeleter_NoOpDeleter) {
   }
   // No crash expected.
 }
+
+// ---------------------------------------------------------------------------
+// ParseOptions::raw_data_callback and TensorProto::attach_raw_data_deleter
+// ---------------------------------------------------------------------------
+
+TEST(onnx_proto, ByteSpan_AttachDeleter_KeepsDataAndFiresOnDestruction) {
+  // attach_deleter must keep the current bytes in place (owned mode here) and call the
+  // deleter exactly once when the span is destroyed.
+  bool deleter_called = false;
+  {
+    utils::ByteSpan span;
+    span.resize(4);
+    span.data()[0] = 7;
+    span.data()[3] = 9;
+    span.attach_deleter([&deleter_called]() { deleter_called = true; });
+    EXPECT_FALSE(span.is_borrowed());
+    const utils::ByteSpan &cspan = span;
+    EXPECT_EQ(cspan.size(), 4u);
+    EXPECT_EQ(cspan.data()[0], uint8_t{7});
+    EXPECT_EQ(cspan.data()[3], uint8_t{9});
+    EXPECT_FALSE(deleter_called);
+  } // span destroyed → deleter fires
+  EXPECT_TRUE(deleter_called);
+}
+
+TEST(onnx_proto, TensorProto_AttachRawDataDeleter_FiresOnDestruction) {
+  bool deleter_called = false;
+  {
+    TensorProto tensor;
+    tensor.set_data_type(TensorProto::DataType::UINT8);
+    tensor.ref_dims().push_back(4);
+    tensor.ref_raw_data().resize(4);
+    tensor.attach_raw_data_deleter([&deleter_called]() { deleter_called = true; });
+    EXPECT_TRUE(tensor.is_raw_data());
+    EXPECT_FALSE(deleter_called);
+  }
+  EXPECT_TRUE(deleter_called);
+}
+
+TEST(onnx_proto, ParseOptions_RawDataCallback_InvokedAndDeleterAttached) {
+  // Build a tensor with raw_data, serialize it, then parse it back with a callback that
+  // returns a deleter. The callback must be invoked for the tensor and the returned deleter
+  // must fire when the parsed tensor is destroyed.
+  std::vector<float> data = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f};
+  TensorProto tensor1;
+  tensor1.set_name("weights");
+  tensor1.set_data_type(TensorProto::DataType::FLOAT);
+  tensor1.ref_dims().push_back(static_cast<int64_t>(data.size()));
+  tensor1.ref_raw_data().resize(data.size() * sizeof(float));
+  std::memcpy(tensor1.ref_raw_data().data(), data.data(), data.size() * sizeof(float));
+
+  std::string serialized;
+  tensor1.SerializeToString(serialized);
+
+  int callback_calls = 0;
+  bool deleter_called = false;
+  std::string seen_name;
+  size_t seen_size = 0;
+
+  ParseOptions options;
+  options.raw_data_callback = [&](TensorProto &t) -> std::function<void()> {
+    ++callback_calls;
+    seen_name = t.ref_name().as_string();
+    seen_size = t.ref_raw_data().size();
+    return [&deleter_called]() { deleter_called = true; };
+  };
+
+  {
+    TensorProto tensor2;
+    tensor2.ParseFromString(serialized, options);
+    EXPECT_EQ(callback_calls, 1);
+    EXPECT_EQ(seen_name, "weights");
+    EXPECT_EQ(seen_size, data.size() * sizeof(float));
+    EXPECT_EQ(tensor2.ref_raw_data().size(), data.size() * sizeof(float));
+    EXPECT_FALSE(deleter_called);
+  } // tensor2 destroyed → attached deleter fires
+  EXPECT_TRUE(deleter_called);
+}
+
+TEST(onnx_proto, ParseOptions_RawDataCallback_EmptyReturnLeavesOwnershipUnchanged) {
+  // A callback that returns an empty std::function must not attach any deleter and must leave
+  // the parsed tensor's data intact.
+  std::vector<float> data = {1.0f, 2.0f, 3.0f, 4.0f};
+  TensorProto tensor1;
+  tensor1.set_name("w");
+  tensor1.set_data_type(TensorProto::DataType::FLOAT);
+  tensor1.ref_dims().push_back(static_cast<int64_t>(data.size()));
+  tensor1.ref_raw_data().resize(data.size() * sizeof(float));
+  std::memcpy(tensor1.ref_raw_data().data(), data.data(), data.size() * sizeof(float));
+
+  std::string serialized;
+  tensor1.SerializeToString(serialized);
+
+  int callback_calls = 0;
+  ParseOptions options;
+  options.raw_data_callback = [&](TensorProto &) -> std::function<void()> {
+    ++callback_calls;
+    return {}; // leave ownership unchanged
+  };
+
+  TensorProto tensor2;
+  tensor2.ParseFromString(serialized, options);
+  EXPECT_EQ(callback_calls, 1);
+  EXPECT_EQ(tensor2.ref_raw_data().size(), data.size() * sizeof(float));
+  const float *raw = reinterpret_cast<const float *>(tensor2.ref_raw_data().data());
+  EXPECT_EQ(raw[0], 1.0f);
+  EXPECT_EQ(raw[3], 4.0f);
+}
+
+TEST(onnx_proto, ParseOptions_RawDataCallback_NotInvokedWithoutRawData) {
+  // A tensor without raw_data (data stored in float_data) must not trigger the callback.
+  TensorProto tensor1;
+  tensor1.set_name("no_raw");
+  tensor1.set_data_type(TensorProto::DataType::FLOAT);
+  tensor1.ref_dims().push_back(2);
+  tensor1.ref_float_data().push_back(1.0f);
+  tensor1.ref_float_data().push_back(2.0f);
+
+  std::string serialized;
+  tensor1.SerializeToString(serialized);
+
+  int callback_calls = 0;
+  ParseOptions options;
+  options.raw_data_callback = [&](TensorProto &) -> std::function<void()> {
+    ++callback_calls;
+    return {};
+  };
+
+  TensorProto tensor2;
+  tensor2.ParseFromString(serialized, options);
+  EXPECT_EQ(callback_calls, 0);
+}

@@ -403,6 +403,19 @@ public:
     assign_borrowed(ptr, sz, std::move(owner));
   }
 
+  /** Attaches a custom deleter to the data without changing the stored bytes or the storage
+   *  mode (owned, aligned-owned or borrowed).  deleter() is called exactly once when the last
+   *  copy of this ByteSpan that shares the owner token is destroyed (or the span is
+   *  overwritten/cleared).  The deleter receives no arguments and returns void.
+   *
+   *  Unlike assign_with_deleter, this method keeps the current pointer/size in place, so it can
+   *  register cleanup for data that has already been parsed (for example a tensor's raw_data
+   *  relocated by a parse callback).  Any previously stored owner token is replaced. */
+  template <typename Deleter> inline void attach_deleter(Deleter &&deleter) {
+    owner_ = std::shared_ptr<void>(static_cast<void *>(nullptr),
+                                   [d = std::forward<Deleter>(deleter)](void *) { d(); });
+  }
+
   /** Clears all data and resets to the empty owned state. */
   inline void clear() {
     owned_.clear();

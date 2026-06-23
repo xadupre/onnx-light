@@ -88,6 +88,39 @@ The lower-level :cpp:func:`~onnx_light::utils::ByteSpan::assign_with_deleter` wo
 
     span.assign_with_deleter(ptr, sz, []() { /* custom cleanup */ });
 
+To attach a deleter to data that is already stored (without replacing the bytes or
+changing the storage mode), use
+:cpp:func:`~onnx_light::TensorProto::attach_raw_data_deleter` or the lower-level
+:cpp:func:`~onnx_light::utils::ByteSpan::attach_deleter`::
+
+    // raw_data already populated (owned or borrowed); just register cleanup.
+    tensor.attach_raw_data_deleter([]() { /* custom cleanup */ });
+
+Taking ownership of tensor data while parsing
+---------------------------------------------
+
+:cpp:struct:`~onnx_light::ParseOptions` exposes a ``raw_data_callback`` hook that is
+invoked for every :class:`~onnx_light.onnx_lib.TensorProto` once its ``raw_data`` has
+been parsed (inline or external).  The callback receives the freshly parsed tensor and
+returns a deleter (a zero-argument callable); when the returned deleter is non-empty it is
+attached to the tensor's ``raw_data`` via
+:cpp:func:`~onnx_light::utils::ByteSpan::attach_deleter`, so it fires once when the buffer
+is released.  Return an empty ``std::function`` to leave ownership unchanged.
+
+The callback works regardless of where the bytes live — on disk (a ``no_copy`` borrowed
+view of an mmap or external weights file) or in CPU memory (an owned buffer) — because the
+deleter is layered on top of the existing storage without moving the bytes::
+
+    ParseOptions options;
+    options.raw_data_callback = [](TensorProto &tensor) -> std::function<void()> {
+      // Inspect tensor.ref_raw_data(); optionally relocate it (e.g. to a device) and
+      // return the matching cleanup. Returning {} keeps the default ownership.
+      return [name = tensor.ref_name().as_string()]() { /* release resources */ };
+    };
+    model.ParseFromString(bytes, options);
+
+By default ``raw_data_callback`` is empty and parsing behaves exactly as before.
+
 When ownership is assigned during parsing
 -----------------------------------------
 

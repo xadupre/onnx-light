@@ -3,6 +3,7 @@
 #include "simple_span.h"
 #include "simple_string.h"
 #include "stream.h"
+#include <functional>
 
 #define FIELD_VARINT 0
 #define FIELD_FIXED64 1
@@ -272,6 +273,10 @@ public:                                                                         
 
 namespace ONNX_LIGHT_NAMESPACE {
 
+// Forward declaration: ParseOptions::raw_data_callback references TensorProto, which is
+// defined later in onnx.h. Only the declaration is needed for the std::function signature.
+class TensorProto;
+
 /**
  * Common options shared by tensor buffer operations: in-place consolidation
  * (ConsolidateTensorsToBuffer), serialization (SerializeOptions) and parsing (ParseOptions).
@@ -378,6 +383,20 @@ struct ParseOptions : TensorBufferOptions {
    *  above the largest legitimate tensor you expect, e.g. 2 GB for most models:
    *  ``options.max_tensor_size_bytes = 2LL * 1024 * 1024 * 1024;`` */
   int64_t max_tensor_size_bytes = 0;
+  /** Optional callback invoked for each TensorProto once its ``raw_data`` has been parsed
+   *  (including external-data tensors, after their bytes have been resolved).  The callback
+   *  receives the freshly parsed TensorProto and returns a deleter — a zero-argument callable
+   *  invoked once when the tensor's ``raw_data`` is released (the tensor and all copies sharing
+   *  the same buffer go out of scope, or the buffer is overwritten/cleared).
+   *
+   *  This lets callers take custom ownership of tensor data and register the matching cleanup,
+   *  regardless of whether the bytes live on disk (no_copy borrowed view of an mmap or external
+   *  file) or in CPU memory (owned buffer): the returned deleter is attached on top of the
+   *  existing storage without moving the bytes.  Return an empty ``std::function`` to leave the
+   *  tensor's ownership unchanged.
+   *
+   *  By default it is empty (no callback) and parsing behaves exactly as before. */
+  std::function<std::function<void()>(TensorProto &)> raw_data_callback = {};
 };
 
 /** Controls behavior when serializing ONNX protobuf messages to a stream or string. */

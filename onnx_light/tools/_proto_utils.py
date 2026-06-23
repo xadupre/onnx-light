@@ -136,21 +136,24 @@ def _iter(seq: Any) -> Iterable[Any]:
     return seq
 
 
-# Metadata key under which the in-place reuse analysis records a node's
-# reuse opportunities.  Exposed by the C++ binding as
-# ``onnx_light.onnx_optim.shape_inference.INPLACE_REUSE_METADATA_KEY``
-# (``kInPlaceReuseMetadataKey`` in
-# ``onnx_light/onnx_optim/shapes/inplace_reuse.h``).  The associated value
-# holds one ``output_index:input_index:kind`` triplet per opportunity
-# (``kind`` is ``equal`` or ``greater``), triplets separated by ``;``.  These
-# duck-typed helpers must keep working without the compiled extension, so the
-# literal is used as a fallback when the binding is unavailable.
-try:
-    from onnx_light.onnx_optim.shape_inference import (
-        INPLACE_REUSE_METADATA_KEY as _INPLACE_REUSE_METADATA_KEY,
-    )
-except ImportError:  # pragma: no cover - exercised when the binding is absent.
-    _INPLACE_REUSE_METADATA_KEY = "onnx_light.inplace_reuse"
+def _inplace_reuse_metadata_key() -> str:
+    """Returns the metadata key under which in-place reuse is recorded.
+
+    The key is exposed by the C++ binding as
+    ``onnx_light.onnx_optim.shape_inference.INPLACE_REUSE_METADATA_KEY``
+    (``kInPlaceReuseMetadataKey`` in
+    ``onnx_light/onnx_optim/shapes/inplace_reuse.h``).  The associated value
+    holds one ``output_index:input_index:kind`` triplet per opportunity
+    (``kind`` is ``equal`` or ``greater``), triplets separated by ``;``.  The
+    import is delayed so these duck-typed helpers keep working without the
+    compiled extension, falling back to the literal when the binding is absent.
+    """
+
+    try:
+        from onnx_light.onnx_optim.shape_inference import INPLACE_REUSE_METADATA_KEY
+    except ImportError:  # pragma: no cover - exercised when the binding is absent.
+        return "onnx_light.inplace_reuse"
+    return INPLACE_REUSE_METADATA_KEY
 
 
 def _node_metadata_value(node: Any, key: str) -> str:
@@ -170,7 +173,7 @@ def _format_inplace_reuse(node: Any) -> str:
     carries no such metadata.
     """
 
-    raw = _node_metadata_value(node, _INPLACE_REUSE_METADATA_KEY)
+    raw = _node_metadata_value(node, _inplace_reuse_metadata_key())
     if not raw:
         return ""
     parts: list[str] = []

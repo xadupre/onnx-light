@@ -20,7 +20,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from ._proto_utils import _dtype_name, _extract_graph, _format_shape, _iter, _looks_like_graph, _s
+from ._proto_utils import (
+    _dtype_name,
+    _extract_graph,
+    _format_inplace_reuse,
+    _format_shape,
+    _iter,
+    _looks_like_graph,
+    _s,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -132,6 +140,7 @@ def to_mermaid(
     include_initializers: bool = True,
     include_shapes: bool = True,
     include_attributes: bool = False,
+    include_inplace: bool = False,
 ) -> str:
     """Render an ONNX ``ModelProto`` or ``GraphProto`` as a Mermaid flowchart.
 
@@ -150,6 +159,10 @@ def to_mermaid(
             initializers is appended to the corresponding node labels.
         include_attributes: When :data:`True`, node attribute names are
             listed inside the operator label.
+        include_inplace: When :data:`True`, the in-place reuse opportunities
+            recorded in each node's ``metadata_props`` (under the
+            ``onnx_light.inplace_reuse`` key) are appended to the operator
+            label, for example ``inplace: out0=in1(equal)``.
 
     Returns:
         The Mermaid source as a single ``str`` (newline-separated).  The
@@ -178,6 +191,7 @@ def to_mermaid(
         include_initializers=include_initializers,
         include_shapes=include_shapes,
         include_attributes=include_attributes,
+        include_inplace=include_inplace,
     )
 
 
@@ -188,6 +202,7 @@ def to_mermaid_graph(
     include_initializers: bool = True,
     include_shapes: bool = True,
     include_attributes: bool = False,
+    include_inplace: bool = False,
 ) -> str:
     """Render a ``GraphProto`` as a Mermaid flowchart.
 
@@ -263,6 +278,10 @@ def to_mermaid_graph(
                 attr_suffix = ", ".join(sorted(attr_names))
         if attr_suffix:
             label_parts.append(attr_suffix)
+        if include_inplace:
+            inplace_label = _format_inplace_reuse(node)
+            if inplace_label:
+                label_parts.append(inplace_label)
         label = _join_label(*label_parts)
         lines.append(f'    {node_id}["{label}"]:::onnxOp')
 

@@ -973,6 +973,8 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   // -----------------------------------------------------------------------
   // In-place reuse analysis
   // -----------------------------------------------------------------------
+  shape_mod.attr("INPLACE_REUSE_METADATA_KEY") = onnx_shapes::kInPlaceReuseMetadataKey;
+
   nb::enum_<onnx_shapes::InPlaceReuseKind>(
       shape_mod, "InPlaceReuseKind", nb::is_arithmetic(),
       "Classifies how the reused input buffer compares in size with the output: "

@@ -23,6 +23,7 @@ from ..onnx_py._onnxpyoptim import shape_inference as _C  # type: ignore[attr-de
 apply_inferred_shapes_to_model = _C.apply_inferred_shapes_to_model
 check_inputs_available = _C.check_inputs_available
 compute_inplace_reuse = _C.compute_inplace_reuse
+INPLACE_REUSE_METADATA_KEY = _C.INPLACE_REUSE_METADATA_KEY
 compute_shape_model = _C.compute_shape_model
 compute_shape_node = _C.compute_shape_node
 kUnknownOpsetVersion = _C.kUnknownOpsetVersion

@@ -76,6 +76,8 @@ class _Box:
         self.width = text_width + 2 * _BOX_PAD_X
         self.height = len(self.lines) * _LINE_HEIGHT + 2 * _BOX_PAD_Y
         self.layer = 0
+        # Position within the layer, filled in by the crossing-reduction pass.
+        self.order = 0
         # Top-left corner, filled in during layout.
         self.x = 0.0
         self.y = 0.0
@@ -261,6 +263,7 @@ def to_svg_graph(
             edges.append((src, box.id, shape if include_shapes else ""))
 
     _assign_layers(boxes, edges)
+    _minimize_crossings(boxes, edges)
     width, height = _layout(boxes, horizontal)
 
     return _render_svg(boxes, edges, width, height, horizontal)
@@ -272,7 +275,15 @@ def to_svg_graph(
 
 
 def _assign_layers(boxes: list[_Box], edges: list[tuple[int, int, str]]) -> None:
-    """Assigns a layer index to every box using longest-path layering."""
+    """Assigns a layer index to every box.
+
+    The layers are first computed with longest-path layering and then pure
+    source boxes (graph inputs and initializers, which have no incoming
+    edges) are pulled down to sit just above their earliest consumer.  This
+    keeps inputs that feed deep operators from being stranded on the first
+    row, which shortens the corresponding edges and yields a more compact
+    drawing.
+    """
     # Relax edges until the layering is stable; an ONNX graph is a DAG so
     # this converges in at most ``len(boxes)`` passes.
     for _ in range(len(boxes)):
@@ -284,6 +295,74 @@ def _assign_layers(boxes: list[_Box], edges: list[tuple[int, int, str]]) -> None
         if not changed:
             break
 
+    if not edges:
+        return
+
+    successors: dict[int, list[int]] = {box.id: [] for box in boxes}
+    predecessors: dict[int, list[int]] = {box.id: [] for box in boxes}
+    for src, dst, _label in edges:
+        successors[src].append(dst)
+        predecessors[dst].append(src)
+
+    # Pull pure sources down to just above their earliest consumer.  A source
+    # has no predecessors, so lowering it only shortens its outgoing edges and
+    # can never lengthen another edge.
+    for box in boxes:
+        if not predecessors[box.id] and successors[box.id]:
+            box.layer = min(boxes[succ].layer for succ in successors[box.id]) - 1
+
+
+def _minimize_crossings(boxes: list[_Box], edges: list[tuple[int, int, str]]) -> None:
+    """Orders boxes within each layer to reduce the number of edge crossings.
+
+    Uses the iterated barycenter heuristic: every box is repeatedly placed at
+    the average position of its neighbours in the adjacent layers, alternating
+    downward and upward sweeps.  Boxes without neighbours keep their current
+    position so the layout stays stable.
+    """
+    if not edges:
+        return
+
+    successors: dict[int, list[int]] = {box.id: [] for box in boxes}
+    predecessors: dict[int, list[int]] = {box.id: [] for box in boxes}
+    for src, dst, _label in edges:
+        successors[src].append(dst)
+        predecessors[dst].append(src)
+
+    layers: dict[int, list[_Box]] = {}
+    for box in boxes:
+        layers.setdefault(box.layer, []).append(box)
+
+    # Position of every box within its layer; updated as layers are reordered.
+    position: dict[int, int] = {}
+    for layer_boxes in layers.values():
+        for index, box in enumerate(layer_boxes):
+            position[box.id] = index
+
+    def reorder(layer_index: int, neighbours: dict[int, list[int]]) -> None:
+        layer_boxes = layers[layer_index]
+
+        def barycenter(box: _Box) -> float:
+            ids = neighbours[box.id]
+            if not ids:
+                return float(position[box.id])
+            return sum(position[i] for i in ids) / len(ids)
+
+        layer_boxes.sort(key=barycenter)
+        for index, box in enumerate(layer_boxes):
+            position[box.id] = index
+
+    sorted_layers = sorted(layers)
+    for _ in range(4):
+        for layer_index in sorted_layers[1:]:
+            reorder(layer_index, predecessors)
+        for layer_index in reversed(sorted_layers[:-1]):
+            reorder(layer_index, successors)
+
+    for layer_boxes in layers.values():
+        for index, box in enumerate(layer_boxes):
+            box.order = index
+
 
 def _layout(boxes: list[_Box], horizontal: bool) -> tuple[float, float]:
     """Places every box and returns the overall ``(width, height)``."""
@@ -293,6 +372,10 @@ def _layout(boxes: list[_Box], horizontal: bool) -> tuple[float, float]:
     layers: dict[int, list[_Box]] = {}
     for box in boxes:
         layers.setdefault(box.layer, []).append(box)
+
+    # Honor the order computed by the crossing-reduction pass.
+    for layer_boxes in layers.values():
+        layer_boxes.sort(key=lambda box: (box.order, box.id))
 
     # ``cross`` is the axis along which siblings spread, ``depth`` the axis
     # along which layers stack.

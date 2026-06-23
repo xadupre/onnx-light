@@ -76,6 +76,34 @@ def _model(graph: SimpleNamespace) -> SimpleNamespace:
     return SimpleNamespace(graph=graph)
 
 
+def _count_crossings(boxes: list, edges: list, by_order: bool) -> int:
+    """Counts edge crossings using the within-layer position of each box."""
+    layers: dict[int, list] = {}
+    for box in boxes:
+        layers.setdefault(box.layer, []).append(box)
+    position: dict[int, int] = {}
+    for layer_boxes in layers.values():
+        if by_order:
+            ordered = sorted(layer_boxes, key=lambda box: (box.order, box.id))
+        else:
+            ordered = sorted(layer_boxes, key=lambda box: box.id)
+        for index, box in enumerate(ordered):
+            position[box.id] = index
+    crossings = 0
+    for i, (src1, dst1, _l1) in enumerate(edges):
+        for src2, dst2, _l2 in edges[i + 1 :]:
+            # Only edges spanning the same pair of layers can be compared.
+            if boxes[src1].layer != boxes[src2].layer:
+                continue
+            if boxes[dst1].layer != boxes[dst2].layer:
+                continue
+            top = position[src1] - position[src2]
+            bottom = position[dst1] - position[dst2]
+            if top * bottom < 0:
+                crossings += 1
+    return crossings
+
+
 class TestSvg(unittest.TestCase):
     def _assert_valid_svg(self, text: str) -> None:
         self.assertTrue(text.startswith("<svg "))
@@ -199,6 +227,54 @@ class TestSvg(unittest.TestCase):
         g = _graph(nodes=[], inputs=[], outputs=[])
         text = to_svg(_model(g))
         self._assert_valid_svg(text)
+
+    def test_input_pulled_down_to_consumer(self) -> None:
+        # ``W`` only feeds the last operator, so it must not stay stranded on
+        # the first layer next to ``X`` and ``A``.
+        from onnx_light.tools.svg import _assign_layers, _Box
+
+        # 0:X 1:A 2:W (inputs) 3:Add 4:Relu 5:Mul 6:Z (output)
+        boxes = [
+            _Box(0, "input", ["X"]),
+            _Box(1, "input", ["A"]),
+            _Box(2, "input", ["W"]),
+            _Box(3, "op", ["Add"]),
+            _Box(4, "op", ["Relu"]),
+            _Box(5, "op", ["Mul"]),
+            _Box(6, "output", ["Z"]),
+        ]
+        edges = [(0, 3, ""), (1, 3, ""), (3, 4, ""), (4, 5, ""), (2, 5, ""), (5, 6, "")]
+        _assign_layers(boxes, edges)
+        # Inputs feeding the first operator stay on the first layer.
+        self.assertEqual(boxes[0].layer, 0)
+        self.assertEqual(boxes[1].layer, 0)
+        # ``W`` is pulled down to just above its consumer ``Mul``.
+        self.assertEqual(boxes[2].layer, boxes[5].layer - 1)
+        self.assertGreater(boxes[2].layer, 0)
+
+    def test_crossings_are_reduced(self) -> None:
+        from onnx_light.tools.svg import _assign_layers, _Box, _minimize_crossings
+
+        # Two parallel chains whose operators are declared in the opposite
+        # order to their inputs, which makes the edges cross under the naive
+        # insertion order.  The crossing-reduction pass should untangle them.
+        boxes = [
+            _Box(0, "input", ["A"]),
+            _Box(1, "input", ["B"]),
+            _Box(2, "op", ["rb"]),
+            _Box(3, "op", ["ra"]),
+            _Box(4, "output", ["Yb"]),
+            _Box(5, "output", ["Ya"]),
+        ]
+        # Chain A: A(0) -> ra(3) -> Ya(5) ; Chain B: B(1) -> rb(2) -> Yb(4).
+        edges = [(0, 3, ""), (3, 5, ""), (1, 2, ""), (2, 4, "")]
+        _assign_layers(boxes, edges)
+        before = _count_crossings(boxes, edges, by_order=False)
+        _minimize_crossings(boxes, edges)
+        after = _count_crossings(boxes, edges, by_order=True)
+        self.assertGreater(before, 0)
+        self.assertLess(after, before)
+        self.assertEqual(after, 0)
 
 
 if __name__ == "__main__":

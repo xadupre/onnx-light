@@ -28,6 +28,7 @@ from ..onnx_py._onnxpyprotoop import (  # type: ignore # noqa: F401
     OptionalProto,
     ParseOptions,
     PrintOptions,
+    RawDataCallback,
     SequenceProto,
     SerializeFormat,
     SerializeOptions,

@@ -1,4 +1,5 @@
 import os
+import gc
 import unittest
 from unittest.mock import patch
 import numpy as np
@@ -156,7 +157,106 @@ class TestOnnxLightHelper(ExtTestCase):
         opts.file_load_mode = onnxl.FileLoadMode.IFSTREAM
         self.assertEqual(opts.file_load_mode, onnxl.FileLoadMode.IFSTREAM)
 
-    def test_load_with_file_load_mode(self):
+    def test_parse_options_raw_data_callback(self):
+        # Default is None (no callback).
+        opts = onnxl.ParseOptions()
+        self.assertIsNone(opts.raw_data_callback)
+
+        # Round-trips the exact Python callable that was assigned.
+        def callback(tensor):
+            return None
+
+        opts.raw_data_callback = callback
+        self.assertIs(opts.raw_data_callback, callback)
+
+        # Assigning None disables the callback again.
+        opts.raw_data_callback = None
+        self.assertIsNone(opts.raw_data_callback)
+
+    def test_parse_options_raw_data_callback_invoked(self):
+        arr = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+        tensor = onh.from_array(arr, name="W")
+        model = oh.make_model(oh.make_graph([], "g", [], [], [tensor]))
+        serialized = model.SerializeToString()
+
+        seen = []
+        deleted = []
+
+        def callback(parsed_tensor):
+            seen.append(parsed_tensor.name)
+            return lambda: deleted.append(parsed_tensor.name)
+
+        opts = onnxl.ParseOptions()
+        opts.raw_data_callback = callback
+        parsed = onnxl.ModelProto()
+        parsed.ParseFromString(serialized, opts)
+        # The callback fires once for the only tensor carrying raw_data.
+        self.assertEqual(seen, ["W"])
+        # Data is still readable: attaching a deleter does not move the bytes.
+        np.testing.assert_array_equal(onh.to_array(parsed.graph.initializer[0]), arr)
+        # The deleter runs once the tensor's raw_data is released.
+        del parsed
+        gc.collect()
+        self.assertEqual(deleted, ["W"])
+
+    def test_raw_data_callback_object_reports_progress(self):
+        arr = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+        tensor = onh.from_array(arr, name="W")
+        model = oh.make_model(oh.make_graph([], "g", [], [], [tensor]))
+        serialized = model.SerializeToString()
+
+        seen = []
+        cb = onnxl.RawDataCallback(lambda parsed_tensor: seen.append(parsed_tensor.name))
+
+        opts = onnxl.ParseOptions()
+        opts.raw_data_callback = cb
+        # The callback object round-trips through ParseOptions.
+        self.assertIs(opts.raw_data_callback, cb)
+
+        parsed = onnxl.ModelProto()
+        parsed.ParseFromString(serialized, opts)
+        # The progress callable fires once for the tensor carrying raw_data.
+        self.assertEqual(seen, ["W"])
+        # The default C++ allocation is preserved: data stays readable.
+        np.testing.assert_array_equal(onh.to_array(parsed.graph.initializer[0]), arr)
+
+    def test_raw_data_callback_object_default_is_noop(self):
+        arr = np.array([4.0, 5.0], dtype=np.float32)
+        tensor = onh.from_array(arr, name="W")
+        model = oh.make_model(oh.make_graph([], "g", [], [], [tensor]))
+        serialized = model.SerializeToString()
+
+        cb = onnxl.RawDataCallback()
+        # Without an ``on_tensor`` callable the object is a pure no-op.
+        self.assertIsNone(cb.on_tensor)
+        # Calling it directly returns None (default allocation unchanged).
+        self.assertIsNone(cb(tensor))
+
+        opts = onnxl.ParseOptions()
+        opts.raw_data_callback = cb
+        parsed = onnxl.ModelProto()
+        parsed.ParseFromString(serialized, opts)
+        np.testing.assert_array_equal(onh.to_array(parsed.graph.initializer[0]), arr)
+
+        # ``on_tensor`` can be cleared back to None.
+        cb.on_tensor = lambda parsed_tensor: None
+        self.assertIsNotNone(cb.on_tensor)
+        cb.on_tensor = None
+        self.assertIsNone(cb.on_tensor)
+
+    def test_parse_options_raw_data_callback_returning_none(self):
+        arr = np.array([4.0, 5.0], dtype=np.float32)
+        tensor = onh.from_array(arr, name="W")
+        model = oh.make_model(oh.make_graph([], "g", [], [], [tensor]))
+        serialized = model.SerializeToString()
+
+        opts = onnxl.ParseOptions()
+        opts.raw_data_callback = lambda parsed_tensor: None
+        parsed = onnxl.ModelProto()
+        parsed.ParseFromString(serialized, opts)
+        # Returning None leaves the tensor ownership and data unchanged.
+        np.testing.assert_array_equal(onh.to_array(parsed.graph.initializer[0]), arr)
+
         # Round-trip a model under each FileLoadMode and verify the parsed
         # model is byte-identical to the saved one.
         name = self.get_dump_file("test_load_with_file_load_mode.onnx")

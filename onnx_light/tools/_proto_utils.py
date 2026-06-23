@@ -13,8 +13,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from onnx_light.onnx_optim.shape_inference import INPLACE_REUSE_METADATA_KEY
-
 if TYPE_CHECKING:  # pragma: no cover - imports for type hints only.
     from collections.abc import Iterable
 
@@ -154,6 +152,8 @@ def _format_inplace_reuse(node: Any) -> str:
     as ``inplace: out0=in1(equal)``.  Returns an empty string when the node
     carries no such metadata.
     """
+
+    from onnx_light.onnx_optim.shape_inference import INPLACE_REUSE_METADATA_KEY
 
     raw = _node_metadata_value(node, INPLACE_REUSE_METADATA_KEY)
     if not raw:

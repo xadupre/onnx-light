@@ -38,6 +38,9 @@ _BOX_PAD_Y = 8.0
 _LAYER_GAP = 60.0  # Gap between successive layers.
 _SIBLING_GAP = 24.0  # Gap between boxes within the same layer.
 _MARGIN = 20.0  # Outer margin around the whole drawing.
+# Number of barycenter sweeps used to reduce edge crossings; a handful of
+# passes is enough to converge for the small graphs rendered here.
+_CROSSING_SWEEPS = 4
 
 # Styling per kind of box: ``fill``, ``stroke`` and ``dashed`` flag.
 _STYLES = {
@@ -353,7 +356,7 @@ def _minimize_crossings(boxes: list[_Box], edges: list[tuple[int, int, str]]) ->
             position[box.id] = index
 
     sorted_layers = sorted(layers)
-    for _ in range(4):
+    for _ in range(_CROSSING_SWEEPS):
         for layer_index in sorted_layers[1:]:
             reorder(layer_index, predecessors)
         for layer_index in reversed(sorted_layers[:-1]):

@@ -220,6 +220,73 @@ class TestInPlaceReuse(ExtTestCase):
         )
         self.assertEqual(reuse, [[]])
 
+    def test_inplace_context_stores_result(self):
+        nodes = [
+            oh.make_node("Abs", ["X"], ["A"]),
+            oh.make_node("Abs", ["A"], ["B"]),
+            oh.make_node("Abs", ["B"], ["Y"]),
+        ]
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [3, 4])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [3, 4])
+        model = self._build_model(nodes, [x], [y])
+
+        ctx = si.ShapesContext()
+        si.compute_shape_model(ctx, model)
+
+        inplace = si.ComputeContext()
+        self.assertEqual(len(inplace), 0)
+        inplace.compute_inplace_reuse_graph(model.graph, ctx)
+
+        self.assertEqual(len(inplace), 3)
+        # The stored result matches the free-function wrapper.
+        self.assertEqual(self._reuse_pairs(inplace.reuse), [[], [(0, 0)], [(0, 0)]])
+        self.assertEqual(self._reuse_pairs([inplace.node_reuse(1)]), [[(0, 0)]])
+        self.assertEqual(inplace.node_reuse(1)[0].kind, si.InPlaceReuseKind.kEqual)
+        # node_reuse rejects an out-of-bounds index.
+        with self.assertRaises(IndexError):
+            inplace.node_reuse(3)
+        # clear empties the stored result.
+        inplace.clear()
+        self.assertEqual(len(inplace), 0)
+
+    def test_inplace_context_allow_input_overwrite(self):
+        nodes = [oh.make_node("Abs", ["X"], ["A"]), oh.make_node("Abs", ["A"], ["Y"])]
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [3, 4])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [3, 4])
+        model = self._build_model(nodes, [x], [y])
+
+        ctx = si.ShapesContext()
+        si.compute_shape_model(ctx, model)
+
+        inplace = si.ComputeContext()
+        inplace.compute_inplace_reuse_graph(model.graph, ctx, allow_input_overwrite=True)
+        self.assertEqual(self._reuse_pairs(inplace.reuse), [[(0, 0)], [(0, 0)]])
+
+    def test_inplace_context_write_to_metadata(self):
+        nodes = [
+            oh.make_node("Abs", ["X"], ["A"]),
+            oh.make_node("Abs", ["A"], ["B"]),
+            oh.make_node("Abs", ["B"], ["Y"]),
+        ]
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [3, 4])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [3, 4])
+        model = self._build_model(nodes, [x], [y])
+
+        ctx = si.ShapesContext()
+        si.compute_shape_model(ctx, model)
+
+        inplace = si.ComputeContext()
+        inplace.compute_inplace_reuse_graph(model.graph, ctx)
+        inplace.write_to_metadata(model.graph)
+
+        self.assertEqual(self._node_metadata(model.graph.node[0]), {})
+        self.assertEqual(
+            self._node_metadata(model.graph.node[1]), {"onnx_light.inplace_reuse": "0:0:equal"}
+        )
+        self.assertEqual(
+            self._node_metadata(model.graph.node[2]), {"onnx_light.inplace_reuse": "0:0:equal"}
+        )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

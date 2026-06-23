@@ -29,6 +29,7 @@ kUnknownOpsetVersion = _C.kUnknownOpsetVersion
 kOnnxDomain = _C.kOnnxDomain
 InPlaceReuse = _C.InPlaceReuse
 InPlaceReuseKind = _C.InPlaceReuseKind
+ComputeContext = _C.ComputeContext
 OptimDim = _C.OptimDim
 OptimShape = _C.OptimShape
 OptimTensor = _C.OptimTensor

@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <optional>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -149,8 +150,8 @@ void CollectReferencedNames(const NodeProto &node, std::unordered_set<std::strin
 
 } // namespace
 
-std::vector<std::vector<InPlaceReuse>>
-ComputeInPlaceReuse(const GraphProto &graph, const ShapesContext &ctx, bool allow_input_overwrite) {
+void ComputeContext::ComputeInPlaceReuseGraph(const GraphProto &graph, const ShapesContext &ctx,
+                                              bool allow_input_overwrite) {
   const int num_nodes = graph.node().size();
   std::vector<std::vector<InPlaceReuse>> result(static_cast<std::size_t>(num_nodes));
 
@@ -280,18 +281,25 @@ ComputeInPlaceReuse(const GraphProto &graph, const ShapesContext &ctx, bool allo
               });
   }
 
-  return result;
+  reuse_ = std::move(result);
 }
 
-void WriteInPlaceReuseToMetadata(GraphProto &graph, const ShapesContext &ctx) {
-  const std::vector<std::vector<InPlaceReuse>> reuse = ComputeInPlaceReuse(graph, ctx);
-  for (std::size_t i = 0; i < reuse.size(); ++i) {
-    if (reuse[i].empty()) {
+void ComputeContext::WriteToMetadata(GraphProto &graph) const {
+  if (static_cast<std::size_t>(graph.node().size()) != reuse_.size()) {
+    std::ostringstream msg;
+    msg << "ComputeContext::WriteToMetadata: graph has " << graph.node().size()
+        << " node(s) but the computed reuse result has " << reuse_.size()
+        << " entry(ies); call WriteToMetadata on the same graph passed to "
+           "ComputeInPlaceReuseGraph.";
+    throw std::invalid_argument(msg.str());
+  }
+  for (std::size_t i = 0; i < reuse_.size(); ++i) {
+    if (reuse_[i].empty()) {
       continue;
     }
     std::ostringstream value;
-    for (std::size_t j = 0; j < reuse[i].size(); ++j) {
-      const InPlaceReuse &r = reuse[i][j];
+    for (std::size_t j = 0; j < reuse_[i].size(); ++j) {
+      const InPlaceReuse &r = reuse_[i][j];
       if (j != 0) {
         value << ";";
       }
@@ -301,6 +309,19 @@ void WriteInPlaceReuseToMetadata(GraphProto &graph, const ShapesContext &ctx) {
     NodeProto &node = (*graph.mutable_node())[i];
     node.add_metadata(kInPlaceReuseMetadataKey, value.str());
   }
+}
+
+std::vector<std::vector<InPlaceReuse>>
+ComputeInPlaceReuse(const GraphProto &graph, const ShapesContext &ctx, bool allow_input_overwrite) {
+  ComputeContext inplace;
+  inplace.ComputeInPlaceReuseGraph(graph, ctx, allow_input_overwrite);
+  return inplace.Reuse();
+}
+
+void WriteInPlaceReuseToMetadata(GraphProto &graph, const ShapesContext &ctx) {
+  ComputeContext inplace;
+  inplace.ComputeInPlaceReuseGraph(graph, ctx);
+  inplace.WriteToMetadata(graph);
 }
 
 } // namespace shapes

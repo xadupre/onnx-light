@@ -25,6 +25,27 @@ namespace {
 constexpr size_t MAX_SHORT_REPR_LENGTH = 60;
 inline bool is_space_char(char c) { return std::isspace(static_cast<unsigned char>(c)) != 0; }
 
+// Adapts a Python callable to ParseOptions::raw_data_callback. The callable is invoked as
+// ``fn(tensor)`` for every parsed TensorProto that has raw_data and must return either ``None``
+// (ownership unchanged) or a zero-argument callable used as the tensor's raw_data deleter. The
+// Python object is held by value so the deleter retrieved by std::function::target keeps a live
+// reference, and the GIL is reacquired around every Python call.
+struct PyRawDataCallback {
+  nb::object fn;
+  std::function<void()> operator()(TensorProto &tensor) const {
+    nb::gil_scoped_acquire gil;
+    nb::object result = fn(nb::cast(&tensor, nb::rv_policy::reference));
+    if (result.is_none()) {
+      return {};
+    }
+    nb::object deleter = result;
+    return [deleter]() {
+      nb::gil_scoped_acquire gil;
+      deleter();
+    };
+  }
+};
+
 ModelProto MakeOwnedModelProtoCopy(const ModelProto &model) {
   // Fully reparse through bytes to ensure every borrowed span in the model
   // becomes owned before serialization paths that may mutate buffers/metadata.
@@ -977,7 +998,33 @@ void AddOnnxPyProto(nb::module_ &m) {
               "the wire format: parsing raises an error when the declared byte count for any "
               "single tensor allocation exceeds this value. The check fires before the "
               "allocation. Set to 0 to disable (default) or to a value comfortably above the "
-              "largest legitimate tensor you expect, e.g. 2 * 1024 ** 3 for a 2 GB cap.");
+              "largest legitimate tensor you expect, e.g. 2 * 1024 ** 3 for a 2 GB cap.")
+      .def_prop_rw(
+          "raw_data_callback",
+          [](ParseOptions &options) -> nb::object {
+            if (!options.raw_data_callback) {
+              return nb::none();
+            }
+            if (const PyRawDataCallback *cb =
+                    options.raw_data_callback.target<PyRawDataCallback>()) {
+              return cb->fn;
+            }
+            return nb::none();
+          },
+          [](ParseOptions &options, nb::object fn) {
+            if (fn.is_none()) {
+              options.raw_data_callback = {};
+            } else {
+              options.raw_data_callback = PyRawDataCallback{fn};
+            }
+          },
+          "Optional callable invoked for every parsed TensorProto once its ``raw_data`` has "
+          "been resolved (including external-data tensors). It is called as "
+          "``fn(tensor)`` with the freshly parsed :class:`TensorProto` and must return either "
+          "``None`` (ownership unchanged) or a zero-argument callable used as the deleter "
+          "attached to the tensor's ``raw_data``; the deleter runs once when that raw_data is "
+          "released. Setting it to ``None`` (the default) disables the callback.",
+          nb::for_setter(nb::arg("value").none()));
 
   nb::class_<SerializeOptions, TensorBufferOptions>(m, "SerializeOptions",
                                                     "Serializing options for proto classes")

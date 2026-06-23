@@ -121,7 +121,22 @@ deleter is layered on top of the existing storage without moving the bytes::
 
 By default ``raw_data_callback`` is empty and parsing behaves exactly as before.
 
-When ownership is assigned during parsing
+The same hook is available from Python as
+:attr:`onnx_light.onnx.ParseOptions.raw_data_callback`.  The callback is called as
+``fn(tensor)`` with the freshly parsed :class:`~onnx_light.onnx.TensorProto` and must return
+either ``None`` (ownership unchanged) or a zero-argument callable used as the deleter::
+
+    import onnx_light.onnx as onnx
+
+    options = onnx.ParseOptions()
+    options.raw_data_callback = lambda tensor: print(tensor.name, len(tensor.raw_data))
+
+    model = onnx.ModelProto()
+    model.ParseFromString(serialized, options)
+
+See the :ref:`l-example-plot-raw-data-callback` gallery example for a complete walk-through.
+
+
 -----------------------------------------
 
 Ownership is assigned while parsing each tensor:

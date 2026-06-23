@@ -370,6 +370,27 @@ inline TensorProto() { data_type_ = DataType::UNDEFINED; }
 inline void set_data_type(int v) { data_type_ = static_cast<DataType>(v); }
 inline bool is_raw_data() const { return !raw_data_.empty(); }
 /**
+ * Sets the tensor raw data to a borrowed view of an external buffer and attaches
+ * a custom deleter called when all references to that buffer are dropped.
+ *
+ * Stores ptr/sz as a borrowed view (identical to calling
+ * ``ref_raw_data().assign_borrowed(ptr, sz)``), but additionally schedules
+ * deleter() for invocation when the last copy of the internal owner token is
+ * destroyed (i.e., when the TensorProto, and all copies of it sharing the same
+ * buffer, go out of scope or are overwritten).
+ *
+ * The deleter receives no arguments and returns void.  Any callable — lambda,
+ * function pointer, or functor — is accepted.
+ *
+ * @param ptr     Pointer to the first byte of tensor raw data.
+ * @param sz      Number of raw data bytes.
+ * @param deleter Callable invoked once when the backing storage is released.
+ */
+template <typename Deleter>
+inline void set_raw_data_with_deleter(const uint8_t *ptr, size_t sz, Deleter &&deleter) {
+  raw_data_.assign_with_deleter(ptr, sz, std::forward<Deleter>(deleter));
+}
+/**
  * Loads the raw bytes of this tensor from the external file described by
  * its ``external_data`` field into ``raw_data``.
  *

@@ -386,6 +386,23 @@ public:
     owner_ = std::move(owner);
   }
 
+  /** Sets borrowed mode with a custom deleter.  Stores ptr/size without any copy and arranges for
+   *  deleter() to be called when all copies of this ByteSpan are destroyed (or the span is
+   *  overwritten/cleared).  The deleter receives no arguments and returns void.
+   *
+   *  More flexible than assign_borrowed(ptr, sz, owner) because any callable — lambda,
+   *  function pointer, or functor — can be supplied directly instead of wrapping it in a
+   *  shared_ptr first. */
+  template <typename Deleter>
+  inline void assign_with_deleter(const uint8_t *ptr, size_t sz, Deleter &&deleter) {
+    // Wrap the callable in a shared_ptr whose custom deleter invokes it on destruction.
+    // A null managed pointer is intentional: the shared_ptr exists solely to call the
+    // deleter at the right time, not to manage the raw byte pointer.
+    std::shared_ptr<void> owner(static_cast<void *>(nullptr),
+                                [d = std::forward<Deleter>(deleter)](void *) { d(); });
+    assign_borrowed(ptr, sz, std::move(owner));
+  }
+
   /** Clears all data and resets to the empty owned state. */
   inline void clear() {
     owned_.clear();

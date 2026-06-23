@@ -6553,3 +6553,103 @@ TEST(onnx_proto, SequenceProto_ParseFromStream) {
   ASSERT_EQ(sequence2.ref_tensor_values()[1].ref_float_data().size(), 1);
   EXPECT_FLOAT_EQ(sequence2.ref_tensor_values()[1].ref_float_data()[0], 2.5f);
 }
+
+// ---------------------------------------------------------------------------
+// ByteSpan::assign_with_deleter and TensorProto::set_raw_data_with_deleter
+// ---------------------------------------------------------------------------
+
+TEST(onnx_proto, ByteSpan_AssignWithDeleter_CallsDeleterOnDestruction) {
+  // Verify that the deleter is called exactly once when the last ByteSpan that
+  // holds the owner token is destroyed.
+  bool deleter_called = false;
+
+  std::vector<uint8_t> buf = {1, 2, 3, 4};
+  {
+    utils::ByteSpan span;
+    span.assign_with_deleter(buf.data(), buf.size(),
+                             [&deleter_called]() { deleter_called = true; });
+    EXPECT_TRUE(span.is_borrowed());
+    EXPECT_EQ(span.size(), buf.size());
+    // Use a const reference to call the read-only data() overload on a borrowed span.
+    const utils::ByteSpan &cspan = span;
+    EXPECT_EQ(cspan.data(), buf.data());
+    EXPECT_FALSE(deleter_called);
+  } // span is destroyed here → owner token refcount reaches 0 → deleter fires
+  EXPECT_TRUE(deleter_called);
+}
+
+TEST(onnx_proto, ByteSpan_AssignWithDeleter_DeleterCalledOnceAfterCopy) {
+  // Copying a ByteSpan with a deleter increments the shared owner refcount.
+  // The deleter must fire exactly once when both copies are gone.
+  int call_count = 0;
+
+  std::vector<uint8_t> buf = {10, 20, 30};
+  {
+    utils::ByteSpan span1;
+    span1.assign_with_deleter(buf.data(), buf.size(), [&call_count]() { ++call_count; });
+    {
+      utils::ByteSpan span2(span1); // copy — shares the owner token
+      EXPECT_TRUE(span2.is_borrowed());
+      EXPECT_EQ(span2.size(), buf.size());
+      EXPECT_EQ(call_count, 0);
+    } // span2 destroyed; refcount goes from 2→1, deleter NOT called yet
+    EXPECT_EQ(call_count, 0);
+  } // span1 destroyed; refcount goes from 1→0, deleter called exactly once
+  EXPECT_EQ(call_count, 1);
+}
+
+TEST(onnx_proto, ByteSpan_AssignWithDeleter_ClearReleasesOwnerToken) {
+  // clear() must release the owner token, triggering the deleter.
+  bool deleter_called = false;
+
+  std::vector<uint8_t> buf = {5, 6, 7};
+  utils::ByteSpan span;
+  span.assign_with_deleter(buf.data(), buf.size(), [&deleter_called]() { deleter_called = true; });
+  EXPECT_FALSE(deleter_called);
+  span.clear();
+  EXPECT_TRUE(deleter_called);
+  EXPECT_TRUE(span.empty());
+}
+
+TEST(onnx_proto, TensorProto_SetRawDataWithDeleter_DeletedOnDestruction) {
+  // TensorProto::set_raw_data_with_deleter should attach the deleter to the
+  // tensor's raw_data ByteSpan so it fires when the tensor is destroyed.
+  bool deleter_called = false;
+
+  std::vector<uint8_t> raw = {0xAA, 0xBB, 0xCC, 0xDD};
+  {
+    TensorProto tensor;
+    tensor.set_data_type(TensorProto::DataType::UINT8);
+    tensor.ref_dims().push_back(4);
+    tensor.set_raw_data_with_deleter(raw.data(), raw.size(),
+                                     [&deleter_called]() { deleter_called = true; });
+
+    // Use a const reference to call the read-only data() overload on a borrowed span.
+    const utils::ByteSpan &raw_span = tensor.ref_raw_data();
+    EXPECT_TRUE(raw_span.is_borrowed());
+    EXPECT_EQ(raw_span.size(), raw.size());
+    EXPECT_EQ(raw_span.data(), raw.data());
+    EXPECT_TRUE(tensor.is_raw_data());
+    EXPECT_FALSE(deleter_called);
+  } // tensor destroyed here → deleter fires
+  EXPECT_TRUE(deleter_called);
+}
+
+TEST(onnx_proto, TensorProto_SetRawDataWithDeleter_NoOpDeleter) {
+  // A no-op deleter (lambda that does nothing) should work without errors.
+  std::vector<uint8_t> raw = {1, 2, 3, 4};
+  {
+    TensorProto tensor;
+    tensor.set_data_type(TensorProto::DataType::UINT8);
+    tensor.ref_dims().push_back(4);
+    tensor.set_raw_data_with_deleter(raw.data(), raw.size(), []() {});
+
+    EXPECT_TRUE(tensor.ref_raw_data().is_borrowed());
+    EXPECT_EQ(tensor.ref_raw_data().size(), raw.size());
+    // Use a const reference to call the read-only data() overload on a borrowed span.
+    const utils::ByteSpan &raw_span = tensor.ref_raw_data();
+    EXPECT_EQ(raw_span.data()[0], uint8_t{1});
+    EXPECT_EQ(raw_span.data()[3], uint8_t{4});
+  }
+  // No crash expected.
+}

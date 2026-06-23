@@ -136,6 +136,48 @@ def _iter(seq: Any) -> Iterable[Any]:
     return seq
 
 
+def _node_metadata_value(node: Any, key: str) -> str:
+    """Returns the value of a node's ``metadata_props`` entry, or ``""``."""
+    for entry in _iter(getattr(node, "metadata_props", ())):
+        if _s(getattr(entry, "key", "")) == key:
+            return _s(getattr(entry, "value", ""))
+    return ""
+
+
+def _format_inplace_reuse(node: Any) -> str:
+    """Returns a compact description of a node's in-place reuse opportunities.
+
+    Parses the ``onnx_light.inplace_reuse`` metadata entry written by the
+    in-place reuse analysis and renders it as a human-readable string such
+    as ``inplace: out0=in1(equal)``.  Returns an empty string when the node
+    carries no such metadata.
+    """
+
+    from onnx_light.onnx_optim.shape_inference import INPLACE_REUSE_METADATA_KEY
+
+    raw = _node_metadata_value(node, INPLACE_REUSE_METADATA_KEY)
+    if not raw:
+        return ""
+    parts: list[str] = []
+    for triplet in raw.split(";"):
+        triplet = triplet.strip()
+        if not triplet:
+            continue
+        fields = triplet.split(":")
+        if len(fields) < 2:
+            continue
+        out_index = fields[0].strip()
+        in_index = fields[1].strip()
+        kind = fields[2].strip() if len(fields) > 2 else ""
+        label = f"out{out_index}=in{in_index}"
+        if kind:
+            label = f"{label}({kind})"
+        parts.append(label)
+    if not parts:
+        return ""
+    return "inplace: " + ", ".join(parts)
+
+
 def _extract_graph(model_or_graph: Any) -> Any:
     """Returns ``model_or_graph.graph`` when given a ``ModelProto``."""
 

@@ -40,7 +40,12 @@ def _vi(name: str, elem_type: int = 1, dims: tuple = ()) -> SimpleNamespace:
 
 
 def _node(
-    op_type: str, inputs: list, outputs: list, name: str = "", attributes: list | None = None
+    op_type: str,
+    inputs: list,
+    outputs: list,
+    name: str = "",
+    attributes: list | None = None,
+    metadata: dict | None = None,
 ) -> SimpleNamespace:
     return SimpleNamespace(
         op_type=op_type,
@@ -48,6 +53,7 @@ def _node(
         output=list(outputs),
         name=name,
         attribute=[SimpleNamespace(name=a) for a in (attributes or [])],
+        metadata_props=[SimpleNamespace(key=k, value=v) for k, v in (metadata or {}).items()],
     )
 
 
@@ -156,6 +162,44 @@ class TestMermaid(unittest.TestCase):
         self.assertIn("pads", text)
         text_no_attr = to_mermaid(_model(g), include_attributes=False)
         self.assertNotIn("kernel_shape", text_no_attr)
+
+    def test_inplace(self) -> None:
+        g = _graph(
+            nodes=[
+                _node("Add", ["X", "Y"], ["T"], name="add0"),
+                _node(
+                    "Relu",
+                    ["T"],
+                    ["Z"],
+                    name="relu0",
+                    metadata={"onnx_light.inplace_reuse": "0:0:equal"},
+                ),
+            ],
+            inputs=[_vi("X"), _vi("Y")],
+            outputs=[_vi("Z")],
+        )
+        text = to_mermaid(_model(g), include_inplace=True)
+        self.assertIn("inplace: out0=in0(equal)", text)
+        # The node without metadata is unaffected.
+        text_off = to_mermaid(_model(g), include_inplace=False)
+        self.assertNotIn("inplace", text_off)
+
+    def test_inplace_multiple_and_greater(self) -> None:
+        g = _graph(
+            nodes=[
+                _node(
+                    "Foo",
+                    ["A", "B"],
+                    ["C", "D"],
+                    name="foo0",
+                    metadata={"onnx_light.inplace_reuse": "0:0:equal;1:1:greater"},
+                )
+            ],
+            inputs=[_vi("A"), _vi("B")],
+            outputs=[_vi("C"), _vi("D")],
+        )
+        text = to_mermaid(_model(g), include_inplace=True)
+        self.assertIn("inplace: out0=in0(equal), out1=in1(greater)", text)
 
     def test_node_name_collision(self) -> None:
         """Two nodes with the same op_type and no name must get distinct ids."""

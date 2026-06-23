@@ -20,7 +20,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from ._proto_utils import _dtype_name, _extract_graph, _format_shape, _iter, _looks_like_graph, _s
+from ._proto_utils import (
+    _dtype_name,
+    _extract_graph,
+    _format_inplace_reuse,
+    _format_shape,
+    _iter,
+    _looks_like_graph,
+    _s,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -132,6 +140,7 @@ def to_mermaid(
     include_initializers: bool = True,
     include_shapes: bool = True,
     include_attributes: bool = False,
+    include_inplace: bool = False,
 ) -> str:
     """Render an ONNX ``ModelProto`` or ``GraphProto`` as a Mermaid flowchart.
 
@@ -150,6 +159,10 @@ def to_mermaid(
             initializers is appended to the corresponding node labels.
         include_attributes: When :data:`True`, node attribute names are
             listed inside the operator label.
+        include_inplace: When :data:`True`, the in-place reuse opportunities
+            recorded in each node's ``metadata_props`` (under the
+            ``onnx_light.inplace_reuse`` key) are appended to the operator
+            label, for example ``inplace: out0=in1(equal)``.
 
     Returns:
         The Mermaid source as a single ``str`` (newline-separated).  The
@@ -162,6 +175,49 @@ def to_mermaid(
             a ``GraphProto``.
         ValueError: If ``direction`` is not a supported Mermaid
             flowchart direction.
+
+    The example below builds a small ``Abs`` chain, runs shape inference and
+    records the in-place reuse opportunities into the graph metadata with
+    :func:`onnx_light.onnx_optim.shape_inference.write_inplace_reuse_to_metadata`,
+    then renders the annotated flowchart with ``include_inplace=True``:
+
+    .. runpython::
+        :rst:
+
+        from onnx_light.onnx_lib import TensorProto
+        from onnx_light.onnx.helper import (
+            make_graph,
+            make_model,
+            make_node,
+            make_opsetid,
+            make_tensor_value_info,
+        )
+        from onnx_light.onnx_optim import shape_inference
+        from onnx_light.tools import to_mermaid
+
+        X = make_tensor_value_info("X", TensorProto.FLOAT, [3, 4])
+        Y = make_tensor_value_info("Y", TensorProto.FLOAT, [3, 4])
+        graph = make_graph(
+            [
+                make_node("Abs", ["X"], ["A"]),
+                make_node("Abs", ["A"], ["B"]),
+                make_node("Abs", ["B"], ["Y"]),
+            ],
+            "example",
+            [X],
+            [Y],
+        )
+        model = make_model(graph, opset_imports=[make_opsetid("", 18)])
+        model.ir_version = 8
+
+        ctx = shape_inference.ShapesContext()
+        shape_inference.compute_shape_model(ctx, model)
+        shape_inference.write_inplace_reuse_to_metadata(ctx, model.graph)
+
+        print(".. mermaid::")
+        print()
+        for line in to_mermaid(model, include_inplace=True).split("\n"):
+            print("    " + line)
     """
 
     valid_directions = {"TB", "TD", "BT", "LR", "RL"}
@@ -178,6 +234,7 @@ def to_mermaid(
         include_initializers=include_initializers,
         include_shapes=include_shapes,
         include_attributes=include_attributes,
+        include_inplace=include_inplace,
     )
 
 
@@ -188,6 +245,7 @@ def to_mermaid_graph(
     include_initializers: bool = True,
     include_shapes: bool = True,
     include_attributes: bool = False,
+    include_inplace: bool = False,
 ) -> str:
     """Render a ``GraphProto`` as a Mermaid flowchart.
 
@@ -263,6 +321,10 @@ def to_mermaid_graph(
                 attr_suffix = ", ".join(sorted(attr_names))
         if attr_suffix:
             label_parts.append(attr_suffix)
+        if include_inplace:
+            inplace_label = _format_inplace_reuse(node)
+            if inplace_label:
+                label_parts.append(inplace_label)
         label = _join_label(*label_parts)
         lines.append(f'    {node_id}["{label}"]:::onnxOp')
 

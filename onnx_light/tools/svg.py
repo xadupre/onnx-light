@@ -24,7 +24,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from ._proto_utils import _dtype_name, _extract_graph, _format_shape, _iter, _looks_like_graph, _s
+from ._proto_utils import (
+    _dtype_name,
+    _extract_graph,
+    _format_inplace_reuse,
+    _format_shape,
+    _iter,
+    _looks_like_graph,
+    _s,
+)
 
 # ---------------------------------------------------------------------------
 # Geometry constants
@@ -98,6 +106,7 @@ def to_svg(
     include_initializers: bool = True,
     include_shapes: bool = True,
     include_attributes: bool = False,
+    include_inplace: bool = False,
 ) -> str:
     """Renders an ONNX ``ModelProto`` or ``GraphProto`` as an SVG image.
 
@@ -115,6 +124,10 @@ def to_svg(
             initializers is appended to the corresponding box labels.
         include_attributes: When :data:`True`, node attribute names are
             listed inside the operator label.
+        include_inplace: When :data:`True`, the in-place reuse opportunities
+            recorded in each node's ``metadata_props`` (under the
+            ``onnx_light.inplace_reuse`` key) are appended to the operator
+            label, for example ``inplace: out0=in1(equal)``.
 
     Returns:
         A self-contained SVG document as a single ``str``.
@@ -123,6 +136,49 @@ def to_svg(
         TypeError: If ``model_or_graph`` is neither a ``ModelProto`` nor
             a ``GraphProto``.
         ValueError: If ``direction`` is not a supported direction.
+
+    The example below builds a small ``Abs`` chain, runs shape inference and
+    records the in-place reuse opportunities into the graph metadata with
+    :func:`onnx_light.onnx_optim.shape_inference.write_inplace_reuse_to_metadata`,
+    then renders the annotated diagram with ``include_inplace=True``:
+
+    .. runpython::
+        :rst:
+
+        from onnx_light.onnx_lib import TensorProto
+        from onnx_light.onnx.helper import (
+            make_graph,
+            make_model,
+            make_node,
+            make_opsetid,
+            make_tensor_value_info,
+        )
+        from onnx_light.onnx_optim import shape_inference
+        from onnx_light.tools import to_svg
+
+        X = make_tensor_value_info("X", TensorProto.FLOAT, [3, 4])
+        Y = make_tensor_value_info("Y", TensorProto.FLOAT, [3, 4])
+        graph = make_graph(
+            [
+                make_node("Abs", ["X"], ["A"]),
+                make_node("Abs", ["A"], ["B"]),
+                make_node("Abs", ["B"], ["Y"]),
+            ],
+            "example",
+            [X],
+            [Y],
+        )
+        model = make_model(graph, opset_imports=[make_opsetid("", 18)])
+        model.ir_version = 8
+
+        ctx = shape_inference.ShapesContext()
+        shape_inference.compute_shape_model(ctx, model)
+        shape_inference.write_inplace_reuse_to_metadata(ctx, model.graph)
+
+        print(".. raw:: html")
+        print()
+        for line in to_svg(model, include_inplace=True).split("\n"):
+            print("    " + line)
     """
     valid_directions = {"TB", "TD", "LR"}
     if direction not in valid_directions:
@@ -138,6 +194,7 @@ def to_svg(
         include_initializers=include_initializers,
         include_shapes=include_shapes,
         include_attributes=include_attributes,
+        include_inplace=include_inplace,
     )
 
 
@@ -148,6 +205,7 @@ def to_svg_graph(
     include_initializers: bool = True,
     include_shapes: bool = True,
     include_attributes: bool = False,
+    include_inplace: bool = False,
 ) -> str:
     """Renders a ``GraphProto`` as an SVG image.
 
@@ -228,6 +286,10 @@ def to_svg_graph(
             attr_names = sorted(_s(a.name) for a in _iter(getattr(node, "attribute", ())))
             if attr_names:
                 lines.append(", ".join(attr_names))
+        if include_inplace:
+            inplace_label = _format_inplace_reuse(node)
+            if inplace_label:
+                lines.append(inplace_label)
         box = new_box("op", lines)
         op_boxes.append((box.id, node))
         for out in _iter(getattr(node, "output", ())):

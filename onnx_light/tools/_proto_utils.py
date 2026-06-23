@@ -11,8 +11,9 @@ built by :mod:`onnx_light` and with messages built by the upstream
 
 from __future__ import annotations
 
-from functools import lru_cache
 from typing import TYPE_CHECKING, Any
+
+from onnx_light.onnx_optim.shape_inference import INPLACE_REUSE_METADATA_KEY
 
 if TYPE_CHECKING:  # pragma: no cover - imports for type hints only.
     from collections.abc import Iterable
@@ -137,27 +138,6 @@ def _iter(seq: Any) -> Iterable[Any]:
     return seq
 
 
-@lru_cache(maxsize=1)
-def _inplace_reuse_metadata_key() -> str:
-    """Returns the metadata key under which in-place reuse is recorded.
-
-    The key is exposed by the C++ binding as
-    ``onnx_light.onnx_optim.shape_inference.INPLACE_REUSE_METADATA_KEY``
-    (``kInPlaceReuseMetadataKey`` in
-    ``onnx_light/onnx_optim/shapes/inplace_reuse.h``).  The associated value
-    holds one ``output_index:input_index:kind`` triplet per opportunity
-    (``kind`` is ``equal`` or ``greater``), triplets separated by ``;``.  The
-    import is delayed so these duck-typed helpers keep working without the
-    compiled extension, falling back to the literal when the binding is absent.
-    """
-
-    try:
-        from onnx_light.onnx_optim.shape_inference import INPLACE_REUSE_METADATA_KEY
-    except ImportError:  # pragma: no cover - exercised when the binding is absent.
-        return "onnx_light.inplace_reuse"
-    return INPLACE_REUSE_METADATA_KEY
-
-
 def _node_metadata_value(node: Any, key: str) -> str:
     """Returns the value of a node's ``metadata_props`` entry, or ``""``."""
     for entry in _iter(getattr(node, "metadata_props", ())):
@@ -175,7 +155,7 @@ def _format_inplace_reuse(node: Any) -> str:
     carries no such metadata.
     """
 
-    raw = _node_metadata_value(node, _inplace_reuse_metadata_key())
+    raw = _node_metadata_value(node, INPLACE_REUSE_METADATA_KEY)
     if not raw:
         return ""
     parts: list[str] = []

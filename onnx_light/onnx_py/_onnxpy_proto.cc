@@ -616,7 +616,11 @@ template <typename T> void define_repeated_field_type(nb::class_<utils::Repeated
               self->extend(nb::cast<utils::RepeatedField<T> &>(iterable));
             } else {
               for (auto it : iterable) {
-                self->push_back(nb::cast<T>(it));
+                if constexpr (std::is_same_v<T, utils::String>) {
+                  self->push_back(nb::cast<T &>(it));
+                } else {
+                  self->push_back(nb::cast<T>(it));
+                }
               }
             }
           },
@@ -691,7 +695,11 @@ void define_repeated_field_type_extend(nb::class_<utils::RepeatedField<T>> &nbcl
               self.extend(nb::cast<utils::RepeatedField<T> &>(iterable));
             } else {
               for (auto it : iterable) {
-                self.push_back(nb::cast<T>(it));
+                if constexpr (std::is_same_v<T, utils::String>) {
+                  self.push_back(nb::cast<T &>(it));
+                } else {
+                  self.push_back(nb::cast<T>(it));
+                }
               }
             }
           },

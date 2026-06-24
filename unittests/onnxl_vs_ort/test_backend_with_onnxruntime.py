@@ -71,6 +71,8 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_image_decoder_",
     # Preview ops/functions are not registered in ORT.
     r"^test_cc_flexattention_",
+    # Light-only ai.rt ops are not registered in ORT.
+    r"^test_cc_delayedinitializer_",
     # ORT exposes different Attention intermediates than the ONNX reference.
     r"^test_cc_attention_4d_with_past_and_present_qk_matmul_bias_3d_mask_causal(_expanded)?$",
     r"^test_cc_attention_4d_with_past_and_present_qk_matmul_bias_4d_mask_causal(_expanded)?$",

@@ -894,18 +894,20 @@ public:
     if (n->op == BinOpKind::FloorDiv) {
       if (const auto *left_bin = dynamic_cast<const BinOp *>(n->left.get())) {
         if (left_bin->op == BinOpKind::Add || left_bin->op == BinOpKind::Sub) {
-          int64_t c = 0;
+          int64_t constant_offset = 0;
           bool has_constant_offset = false;
           if (const auto *cr = dynamic_cast<const Constant *>(left_bin->right.get())) {
-            c = (left_bin->op == BinOpKind::Add) ? cr->value : -cr->value;
+            constant_offset = (left_bin->op == BinOpKind::Add) ? cr->value : -cr->value;
             has_constant_offset = true;
           } else if (left_bin->op == BinOpKind::Add) {
             if (const auto *cl = dynamic_cast<const Constant *>(left_bin->left.get())) {
-              c = cl->value;
+              constant_offset = cl->value;
               has_constant_offset = true;
             }
           }
-          if (has_constant_offset && (c == d || c == -d))
+          // Keeps (x±d)//d unchanged so non-contiguous ring cases such as
+          // x//d + (x+d)//d are preserved for the dedicated ring pass.
+          if (has_constant_offset && (constant_offset == d || constant_offset == -d))
             return n;
         }
       }

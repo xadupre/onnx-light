@@ -13,15 +13,14 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import contextlib
 from typing import TYPE_CHECKING, Any
 
+_shape_inference: Any = None
+
 if importlib.util.find_spec("onnx_light.onnx_py._onnxpyoptim") is not None:
-    try:
+    with contextlib.suppress(ImportError):  # pragma: no cover
         from ..onnx_optim import shape_inference as _shape_inference
-    except ImportError:  # pragma: no cover
-        _shape_inference = None
-else:  # pragma: no cover
-    _shape_inference = None
 
 if TYPE_CHECKING:  # pragma: no cover - imports for type hints only.
     from collections.abc import Iterable

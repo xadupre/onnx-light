@@ -828,6 +828,8 @@ inline bool is_constant_zero(const Node &n) {
 }
 
 /// Returns true when `node` is `x+d` or `x-d` with the given denominator `d`.
+/// Returns false for `x-INT64_MIN` to avoid signed-overflow when negating the
+/// right-hand constant offset.
 bool has_single_step_floordiv_offset(const Node &node, int64_t d) {
   const auto *left_bin = dynamic_cast<const BinOp *>(&node);
   if (!left_bin || (left_bin->op != BinOpKind::Add && left_bin->op != BinOpKind::Sub))
@@ -847,6 +849,9 @@ bool has_single_step_floordiv_offset(const Node &node, int64_t d) {
       constant_offset = cl->value;
       has_constant_offset = true;
     }
+  } else if (left_bin->op == BinOpKind::Sub) {
+    // `c-x` is not the `x±c` pattern this guard handles.
+    return false;
   }
   return has_constant_offset && (constant_offset == d || constant_offset == -d);
 }
@@ -915,8 +920,9 @@ public:
     int64_t d = dc->value;
     if (d < 0)
       return n;
-    // Keep (x+d)//d and (x-d)//d unchanged so non-contiguous ring cases such as
-    // x//d + (x+d)//d are preserved for the dedicated ring pass.
+    // Keep (x+d)//d and (x-d)//d unchanged so non-contiguous ring cases (offsets
+    // that do not cover every residue class, e.g. x//d + (x+d)//d) are preserved
+    // for the dedicated ring pass.
     if (n->op == BinOpKind::FloorDiv && has_single_step_floordiv_offset(*n->left, d))
       return n;
     if (n->op == BinOpKind::FloorDiv || n->op == BinOpKind::ExactDiv) {

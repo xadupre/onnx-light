@@ -48,8 +48,8 @@ OptimShape ShapeFromAttribute(const NodeProto &node, const char *op_name) {
   return out_shape;
 }
 
-std::string GetRequiredStringAttribute(const NodeProto &node, const char *name,
-                                       const char *op_name) {
+std::string RequiredStringAttributeValue(const NodeProto &node, const char *name,
+                                         const char *op_name) {
   const AttributeProto *attr = FindAttribute(node, name);
   EXT_ENFORCE_INVALID(attr != nullptr, op_name, ": required attribute '", name, "' is missing.");
   EXT_ENFORCE_INVALID(attr->type() == AttributeProto::AttributeType::STRING, op_name,
@@ -57,7 +57,7 @@ std::string GetRequiredStringAttribute(const NodeProto &node, const char *name,
   return attr->s().as_string();
 }
 
-int64_t GetRequiredIntAttribute(const NodeProto &node, const char *name, const char *op_name) {
+int64_t RequiredIntAttributeValue(const NodeProto &node, const char *name, const char *op_name) {
   const AttributeProto *attr = FindAttribute(node, name);
   EXT_ENFORCE_INVALID(attr != nullptr, op_name, ": required attribute '", name, "' is missing.");
   EXT_ENFORCE_INVALID(attr->type() == AttributeProto::AttributeType::INT, op_name, ": attribute '",
@@ -66,16 +66,16 @@ int64_t GetRequiredIntAttribute(const NodeProto &node, const char *name, const c
 }
 
 void ValidateDeviceAttributes(const NodeProto &node, const char *op_name) {
-  const std::string load_device = GetRequiredStringAttribute(node, "load_device", op_name);
+  const std::string load_device = RequiredStringAttributeValue(node, "load_device", op_name);
   EXT_ENFORCE_INVALID(load_device == "cpu" || load_device == "file", op_name,
                       ": attribute 'load_device' must be 'cpu' or 'file', got '", load_device,
                       "'.");
-  const std::string runtime_device = GetRequiredStringAttribute(node, "runtime_device", op_name);
+  const std::string runtime_device = RequiredStringAttributeValue(node, "runtime_device", op_name);
   EXT_ENFORCE_INVALID(runtime_device == "cpu", op_name,
                       ": attribute 'runtime_device' must be 'cpu', got '", runtime_device, "'.");
-  const std::string filename = GetRequiredStringAttribute(node, "filename", op_name);
+  const std::string filename = RequiredStringAttributeValue(node, "filename", op_name);
   EXT_ENFORCE_INVALID(!filename.empty(), op_name, ": attribute 'filename' must not be empty.");
-  const int64_t offset = GetRequiredIntAttribute(node, "offset", op_name);
+  const int64_t offset = RequiredIntAttributeValue(node, "offset", op_name);
   EXT_ENFORCE_INVALID(offset >= 0, op_name, ": attribute 'offset' must be non-negative, got ",
                       offset, ".");
 }

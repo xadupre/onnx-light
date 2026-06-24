@@ -17,6 +17,7 @@ namespace kernel {
 
 namespace {
 
+/// Validates DelayedInitializer attributes that are independent from file contents.
 void ValidateAttributes(const DelayedInitializer::Attributes &attrs) {
   EXT_ENFORCE_INVALID(attrs.load_device == "cpu" || attrs.load_device == "file",
                       "kernel::DelayedInitializer load_device must be 'cpu' or 'file', got '",
@@ -50,6 +51,7 @@ Tensor DelayedInitializer::operator()() const {
   return Tensor("", attrs_.dtype, attrs_.shape, LoadBytes(attrs_));
 }
 
+/// Computes the total number of elements described by a shape.
 int64_t DelayedInitializer::ComputeElementCount(const std::vector<int64_t> &shape) {
   int64_t count = 1;
   for (int64_t dim : shape) {
@@ -64,6 +66,7 @@ int64_t DelayedInitializer::ComputeElementCount(const std::vector<int64_t> &shap
   return count;
 }
 
+/// Loads the raw tensor payload described by the DelayedInitializer attributes.
 std::vector<uint8_t> DelayedInitializer::LoadBytes(const Attributes &attrs) {
   const int64_t element_count = ComputeElementCount(attrs.shape);
   const size_t byte_count = PackedByteSize(attrs.dtype, element_count);

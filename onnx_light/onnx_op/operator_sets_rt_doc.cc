@@ -8,6 +8,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 namespace rt {
 
+/// Returns the documentation string for the DelayedInitializer operator.
 std::string MakeDelayedInitializerDoc() {
   return R"DOC(
 Defers materialization of a tensor stored in an external weights file.

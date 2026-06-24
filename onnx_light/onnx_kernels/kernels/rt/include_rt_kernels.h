@@ -27,8 +27,10 @@ public:
     int64_t offset = 0;
   };
 
+  /// Initializes the delayed-initializer kernel and eagerly loads bytes when requested.
   DelayedInitializer(const KernelContext &ctx, Attributes attrs);
 
+  /// Returns the initialized tensor, loading bytes at execution time when needed.
   Tensor operator()() const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }

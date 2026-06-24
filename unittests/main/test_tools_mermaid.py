@@ -11,11 +11,14 @@ upstream :mod:`onnx` package.
 
 from __future__ import annotations
 
+import importlib.util
 import unittest
 from types import SimpleNamespace
 
 from onnx_light.tools import to_mermaid, to_mermaid_graph
 from onnx_light.tools.mermaid import _escape_label, _format_shape
+
+HAS_SHAPE_EXT = importlib.util.find_spec("onnx_light.onnx_py._onnxpyoptim") is not None
 
 
 def _vi(name: str, elem_type: int = 1, dims: tuple = ()) -> SimpleNamespace:
@@ -203,19 +206,22 @@ class TestMermaid(unittest.TestCase):
         text = to_mermaid(_model(g), include_inplace=True)
         self.assertIn("inplace: out0=in0(equal), out1=in1(greater)", text)
 
+    @unittest.skipUnless(HAS_SHAPE_EXT, "requires onnx_light C++ shape_inference bindings")
     def test_tagged_style_classes(self) -> None:
+        from onnx_light.onnx import TensorProto, helper
         from onnx_light.tools import write_value_and_node_tags_to_metadata
 
-        g = _graph(
-            nodes=[
-                _node("Shape", ["X"], ["S"], name="shape0"),
-                _node("Reshape", ["X", "S"], ["Y"], name="reshape0"),
+        g = helper.make_graph(
+            [
+                helper.make_node("Shape", ["X"], ["S"], name="shape0"),
+                helper.make_node("Reshape", ["X", "S"], ["Y"], name="reshape0"),
             ],
-            inputs=[_vi("X")],
-            outputs=[_vi("Y")],
+            "g",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 2])],
+            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 2])],
         )
         write_value_and_node_tags_to_metadata(g)
-        text = to_mermaid(_model(g))
+        text = to_mermaid(helper.make_model(g))
         self.assertIn(":::onnxTagShape", text)
         self.assertIn("classDef onnxTagShape", text)
         self.assertIn("classDef onnxTagAxes", text)

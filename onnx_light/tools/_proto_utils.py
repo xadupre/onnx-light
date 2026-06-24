@@ -154,38 +154,6 @@ def _node_metadata_value(node: Any, key: str) -> str:
     return ""
 
 
-def _set_metadata_value(obj: Any, key: str, value: str) -> None:
-    """Sets a metadata key/value pair on an ONNX-like proto object.
-
-    The helper first prefers ``obj.add_metadata(key, value)`` when this
-    method exists. Otherwise it falls back to mutating ``obj.metadata_props``:
-    an existing entry is updated in place, and when no entry exists a new one
-    is appended. Objects without either API are ignored.
-    """
-    add_metadata = getattr(obj, "add_metadata", None)
-    if callable(add_metadata):
-        add_metadata(key, value)
-        return
-    entries = getattr(obj, "metadata_props", None)
-    if entries is None:
-        return
-    for entry in entries:
-        if _s(getattr(entry, "key", "")) == key:
-            entry.value = value
-            return
-    entry_type = type(entries[0]) if entries else None
-    if entry_type is None:
-
-        class _Meta:
-            def __init__(self, k: str, v: str):
-                self.key = k
-                self.value = v
-
-        entries.append(_Meta(key, value))
-    else:
-        entries.append(entry_type(key=key, value=value))
-
-
 # Metadata keys written by tooling:
 # - per-value tag -> VALUE_TAG_METADATA_KEY
 # - graph/function-level value-tag map -> VALUE_TAGS_METADATA_KEY
@@ -208,169 +176,14 @@ def _normalise_value_tag(value: str) -> str:
     return value if value in VALUE_TAGS else ""
 
 
-def _infer_value_and_node_tags_python(
-    graph_or_nodes_or_function: Any,
-) -> tuple[dict[str, str], list[str]]:
-    """Infers semantic ``shape``/``axes``/``weight`` tags for values and nodes.
-
-    Returns:
-        A pair ``(value_tags, node_tags)`` where ``value_tags`` maps value
-        names to tags and ``node_tags`` is ordered like the processed node list.
-    """
-    if hasattr(graph_or_nodes_or_function, "graph"):
-        graph_or_nodes_or_function = graph_or_nodes_or_function.graph
-    if hasattr(graph_or_nodes_or_function, "node"):
-        nodes = list(_iter(getattr(graph_or_nodes_or_function, "node", ())))
-        graph_like = graph_or_nodes_or_function
-    else:
-        nodes = list(_iter(graph_or_nodes_or_function))
-        graph_like = None
-
-    value_tags: dict[str, str] = {}
-    node_tags: list[str] = []
-
-    def set_value_tag(name: str, tag: str) -> None:
-        if not name:
-            return
-        norm = _normalise_value_tag(tag)
-        if norm:
-            value_tags[name] = norm
-
-    if graph_like is not None:
-        for value_info in _iter(getattr(graph_like, "input", ())):
-            name = _s(getattr(value_info, "name", ""))
-            tag = _normalise_value_tag(_node_metadata_value(value_info, VALUE_TAG_METADATA_KEY))
-            if tag:
-                set_value_tag(name, tag)
-        for init in _iter(getattr(graph_like, "initializer", ())):
-            name = _s(getattr(init, "name", ""))
-            tag = (
-                _normalise_value_tag(_node_metadata_value(init, VALUE_TAG_METADATA_KEY))
-                or "weight"
-            )
-            set_value_tag(name, tag)
-        for value_info in _iter(getattr(graph_like, "value_info", ())):
-            name = _s(getattr(value_info, "name", ""))
-            tag = _normalise_value_tag(_node_metadata_value(value_info, VALUE_TAG_METADATA_KEY))
-            if tag:
-                set_value_tag(name, tag)
-        for value_info in _iter(getattr(graph_like, "output", ())):
-            name = _s(getattr(value_info, "name", ""))
-            tag = _normalise_value_tag(_node_metadata_value(value_info, VALUE_TAG_METADATA_KEY))
-            if tag:
-                set_value_tag(name, tag)
-        try:
-            payload = json.loads(_node_metadata_value(graph_like, VALUE_TAGS_METADATA_KEY))
-        except json.JSONDecodeError:
-            payload = {}
-        if isinstance(payload, dict):
-            for name, tag in payload.items():
-                set_value_tag(_s(name), _s(tag))
-
-    for node in nodes:
-        op_type = _s(getattr(node, "op_type", ""))
-        inputs = [_s(inp) for inp in _iter(getattr(node, "input", ()))]
-        outputs = [_s(out) for out in _iter(getattr(node, "output", ()))]
-        explicit_output_tag = ""
-
-        if op_type in {"Shape", "Size"}:
-            explicit_output_tag = "shape"
-        elif op_type == "Constant":
-            explicit_output_tag = "weight"
-
-        if len(inputs) >= 2:
-            if op_type in {"Reshape", "Expand", "Slice"}:
-                set_value_tag(inputs[1], "shape")
-            elif op_type in {
-                "Squeeze",
-                "Unsqueeze",
-                "ReduceSum",
-                "ReduceMean",
-                "ReduceMax",
-                "ReduceMin",
-            }:
-                set_value_tag(inputs[1], "axes")
-        if op_type == "Slice":
-            for idx, tag in ((2, "shape"), (3, "axes"), (4, "shape")):
-                if idx < len(inputs):
-                    set_value_tag(inputs[idx], tag)
-
-        inherited = ""
-        if inputs:
-            inherited = value_tags.get(inputs[0], "")
-        node_tag = explicit_output_tag or inherited
-        node_tags.append(node_tag)
-        out_tag = explicit_output_tag or inherited
-        if out_tag:
-            for out in outputs:
-                set_value_tag(out, out_tag)
-
-        for attr in _iter(getattr(node, "attribute", ())):
-            subgraphs = []
-            subgraph = getattr(attr, "g", None)
-            if subgraph is not None:
-                subgraphs.append(subgraph)
-            subgraphs.extend(_iter(getattr(attr, "graphs", ())))
-            for subgraph in subgraphs:
-                _infer_value_and_node_tags_python(subgraph)
-
-    return value_tags, node_tags
-
-
-def _write_value_and_node_tags_to_metadata_python(graph_or_nodes_or_function: Any) -> None:
-    """Writes inferred ``shape``/``axes``/``weight`` tags into metadata.
-
-    Values are stored under ``onnx_light.value_tag`` (for value infos,
-    initializers, inputs and outputs) and as a graph/function-level JSON map
-    under ``onnx_light.value_tags``. Node tags are stored under
-    ``onnx_light.node_tag``. Subgraphs nested in node attributes are processed
-    recursively.
-
-    Returns:
-        ``None``. The function mutates metadata fields in place.
-    """
-    value_tags, node_tags = _infer_value_and_node_tags_python(graph_or_nodes_or_function)
-    if hasattr(graph_or_nodes_or_function, "graph"):
-        graph_or_nodes_or_function = graph_or_nodes_or_function.graph
-    nodes = _iter(getattr(graph_or_nodes_or_function, "node", graph_or_nodes_or_function))
-    for node, tag in zip(nodes, node_tags, strict=True):
-        if tag:
-            _set_metadata_value(node, NODE_TAG_METADATA_KEY, tag)
-    if hasattr(graph_or_nodes_or_function, "add_metadata") or hasattr(
-        graph_or_nodes_or_function, "metadata_props"
-    ):
-        payload = dict(sorted(value_tags.items()))
-        _set_metadata_value(
-            graph_or_nodes_or_function, VALUE_TAGS_METADATA_KEY, json.dumps(payload)
+def _require_shape_inference_extension() -> Any:
+    """Returns the shape inference nanobind module or raises an informative error."""
+    if _shape_inference is None:  # pragma: no cover
+        raise RuntimeError(
+            "onnx_light.onnx_optim.shape_inference is unavailable. "
+            "Install the onnx_light C++ extension to use value/node tag inference."
         )
-        for collection in ("input", "value_info", "output", "initializer"):
-            for value in _iter(getattr(graph_or_nodes_or_function, collection, ())):
-                name = _s(getattr(value, "name", ""))
-                tag = value_tags.get(name, "")
-                if tag:
-                    _set_metadata_value(value, VALUE_TAG_METADATA_KEY, tag)
-    for node in _iter(getattr(graph_or_nodes_or_function, "node", ())):
-        for attr in _iter(getattr(node, "attribute", ())):
-            subgraphs = []
-            subgraph = getattr(attr, "g", None)
-            if subgraph is not None:
-                subgraphs.append(subgraph)
-            subgraphs.extend(_iter(getattr(attr, "graphs", ())))
-            for subgraph in subgraphs:
-                _write_value_and_node_tags_to_metadata_python(subgraph)
-
-
-def _is_onnx_light_proto_or_node_list(obj: Any) -> bool:
-    module_name = type(obj).__module__
-    if module_name.startswith("onnx_light."):
-        return True
-    if (
-        isinstance(obj, list)
-        and obj
-        and all(type(n).__module__.startswith("onnx_light.") for n in obj)
-    ):
-        return True
-    return False
+    return _shape_inference
 
 
 def infer_value_and_node_tags(
@@ -382,11 +195,9 @@ def infer_value_and_node_tags(
         A pair ``(value_tags, node_tags)`` where ``value_tags`` maps value
         names to tags and ``node_tags`` is ordered like the processed node list.
     """
-    if _shape_inference is not None and _is_onnx_light_proto_or_node_list(
+    return _require_shape_inference_extension().infer_value_and_node_tags(
         graph_or_nodes_or_function
-    ):
-        return _shape_inference.infer_value_and_node_tags(graph_or_nodes_or_function)
-    return _infer_value_and_node_tags_python(graph_or_nodes_or_function)
+    )
 
 
 def write_value_and_node_tags_to_metadata(graph_or_nodes_or_function: Any) -> None:
@@ -395,12 +206,9 @@ def write_value_and_node_tags_to_metadata(graph_or_nodes_or_function: Any) -> No
     Returns:
         ``None``. The function mutates metadata fields in place.
     """
-    if _shape_inference is not None and _is_onnx_light_proto_or_node_list(
+    _require_shape_inference_extension().write_value_and_node_tags_to_metadata(
         graph_or_nodes_or_function
-    ):
-        _shape_inference.write_value_and_node_tags_to_metadata(graph_or_nodes_or_function)
-        return
-    _write_value_and_node_tags_to_metadata_python(graph_or_nodes_or_function)
+    )
 
 
 def _format_inplace_reuse(node: Any) -> str:

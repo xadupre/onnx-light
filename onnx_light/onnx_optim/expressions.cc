@@ -827,6 +827,30 @@ inline bool is_constant_zero(const Node &n) {
   return c && c->value == 0;
 }
 
+/// Returns true when `node` is `x+d` or `x-d` with the given denominator `d`.
+bool has_single_step_floordiv_offset(const Node &node, int64_t d) {
+  const auto *left_bin = dynamic_cast<const BinOp *>(&node);
+  if (!left_bin || (left_bin->op != BinOpKind::Add && left_bin->op != BinOpKind::Sub))
+    return false;
+
+  int64_t constant_offset = 0;
+  bool has_constant_offset = false;
+  if (const auto *cr = dynamic_cast<const Constant *>(left_bin->right.get())) {
+    if (left_bin->op == BinOpKind::Sub && cr->value == std::numeric_limits<int64_t>::min()) {
+      // Avoid overflow when computing -INT64_MIN.
+      return false;
+    }
+    constant_offset = (left_bin->op == BinOpKind::Add) ? cr->value : -cr->value;
+    has_constant_offset = true;
+  } else if (left_bin->op == BinOpKind::Add) {
+    if (const auto *cl = dynamic_cast<const Constant *>(left_bin->left.get())) {
+      constant_offset = cl->value;
+      has_constant_offset = true;
+    }
+  }
+  return has_constant_offset && (constant_offset == d || constant_offset == -d);
+}
+
 /// Decomposes the input `node` into `symbolic + offset`.
 /// @param node The input expression to decompose.
 /// @param symbolic The output non-constant expression term.
@@ -891,32 +915,10 @@ public:
     int64_t d = dc->value;
     if (d < 0)
       return n;
-    if (n->op == BinOpKind::FloorDiv) {
-      if (const auto *left_bin = dynamic_cast<const BinOp *>(n->left.get())) {
-        if (left_bin->op == BinOpKind::Add || left_bin->op == BinOpKind::Sub) {
-          int64_t constant_offset = 0;
-          bool has_constant_offset = false;
-          if (const auto *cr = dynamic_cast<const Constant *>(left_bin->right.get())) {
-            if (left_bin->op == BinOpKind::Sub &&
-                cr->value == std::numeric_limits<int64_t>::min()) {
-              // Avoid overflow when computing -INT64_MIN.
-              return n;
-            }
-            constant_offset = (left_bin->op == BinOpKind::Add) ? cr->value : -cr->value;
-            has_constant_offset = true;
-          } else if (left_bin->op == BinOpKind::Add) {
-            if (const auto *cl = dynamic_cast<const Constant *>(left_bin->left.get())) {
-              constant_offset = cl->value;
-              has_constant_offset = true;
-            }
-          }
-          // Keep (x+d)//d and (x-d)//d unchanged so non-contiguous ring cases such as
-          // x//d + (x+d)//d are preserved for the dedicated ring pass.
-          if (has_constant_offset && (constant_offset == d || constant_offset == -d))
-            return n;
-        }
-      }
-    }
+    // Keep (x+d)//d and (x-d)//d unchanged so non-contiguous ring cases such as
+    // x//d + (x+d)//d are preserved for the dedicated ring pass.
+    if (n->op == BinOpKind::FloorDiv && has_single_step_floordiv_offset(*n->left, d))
+      return n;
     if (n->op == BinOpKind::FloorDiv || n->op == BinOpKind::ExactDiv) {
       NodePtr symbolic;
       int64_t offset = 0;

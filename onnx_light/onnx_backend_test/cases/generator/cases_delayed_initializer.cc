@@ -34,11 +34,10 @@ void CleanupWeightsFiles() {
 }
 
 void RegisterCleanupPath(const std::filesystem::path &path) {
-  static const int cleanup_registered = []() {
+  [[maybe_unused]] static const int cleanup_registered = []() {
     std::atexit(CleanupWeightsFiles);
     return 0;
   }();
-  (void)cleanup_registered;
   auto &paths = CleanupPaths();
   if (std::find(paths.begin(), paths.end(), path) == paths.end()) {
     paths.push_back(path);
@@ -52,12 +51,14 @@ std::string WriteWeightsFile(const std::string &filename, const std::vector<uint
   fs::remove(path, ec);
   std::ofstream out(path, std::ios::binary | std::ios::trunc);
   if (!out.good()) {
-    throw std::runtime_error("Unable to create DelayedInitializer backend-test weights file.");
+    throw std::runtime_error("Unable to create DelayedInitializer backend-test weights file '" +
+                             path.string() + "'.");
   }
   out.write(reinterpret_cast<const char *>(bytes.data()),
             static_cast<std::streamsize>(bytes.size()));
   if (!out.good()) {
-    throw std::runtime_error("Unable to write DelayedInitializer backend-test weights file.");
+    throw std::runtime_error("Unable to write DelayedInitializer backend-test weights file '" +
+                             path.string() + "'.");
   }
   RegisterCleanupPath(path);
   return path.string();

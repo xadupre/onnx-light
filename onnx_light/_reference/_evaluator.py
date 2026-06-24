@@ -173,9 +173,9 @@ class ReferenceEvaluator:
     ) -> None:
         proto = self._load_proto(proto)
         if not isinstance(verbose, int):
-            raise TypeError(f"verbose must be an integer, not {type(verbose).__name__}.")
+            raise TypeError(f"verbose must be of type int, not {type(verbose).__name__}.")
         if verbose < 0:
-            raise ValueError(f"verbose must be >= 0, not {verbose}.")
+            raise ValueError(f"verbose must be non-negative, got {verbose}.")
         self._model: ModelProto | None = None
         self._graph: GraphProto | None = None
         self._function: FunctionProto | None = None

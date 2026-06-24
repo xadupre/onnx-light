@@ -284,6 +284,7 @@ template <typename Nodes, typename F> void ForEachAttributeTensorInNodes(Nodes &
 
 } // namespace
 
+// Public helper shared by the generic and helper-based ModelProto serialization paths.
 void ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &options) {
   if (!options.raw_data_callback || !model.has_graph()) {
     return;
@@ -298,23 +299,25 @@ void ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &op
     const int64_t rewritten_size = options.raw_data_callback(*it, nullptr, 0, true);
     EXT_ENFORCE(rewritten_size >= 0, "SerializeOptions.raw_data_callback returned a negative size ",
                 rewritten_size, " for tensor '", it->ref_name().as_string(), "'.");
-    utils::ByteSpan rewritten_raw_data;
     if (rewritten_size > 0) {
+      utils::ByteSpan rewritten_raw_data;
       if (options.alignment > 1) {
         rewritten_raw_data.resize_aligned(static_cast<size_t>(rewritten_size),
                                           static_cast<size_t>(options.alignment));
       } else {
         rewritten_raw_data.resize(static_cast<size_t>(rewritten_size));
       }
-    }
-    const int64_t filled_size =
-        options.raw_data_callback(*it, rewritten_raw_data.data(), rewritten_raw_data.size(), false);
-    EXT_ENFORCE(filled_size == rewritten_size, "SerializeOptions.raw_data_callback returned ",
-                filled_size, " bytes in the fill pass for tensor '", it->ref_name().as_string(),
-                "' after reporting ", rewritten_size, " bytes in the size pass.");
-    if (rewritten_size > 0) {
+      const int64_t filled_size = options.raw_data_callback(*it, rewritten_raw_data.data(),
+                                                            rewritten_raw_data.size(), false);
+      EXT_ENFORCE(filled_size == rewritten_size, "SerializeOptions.raw_data_callback returned ",
+                  filled_size, " bytes in the fill pass for tensor '", it->ref_name().as_string(),
+                  "' after reporting ", rewritten_size, " bytes in the size pass.");
       it->ref_raw_data() = std::move(rewritten_raw_data);
     } else {
+      const int64_t filled_size = options.raw_data_callback(*it, nullptr, 0, false);
+      EXT_ENFORCE(filled_size == 0, "SerializeOptions.raw_data_callback returned ", filled_size,
+                  " bytes in the fill pass for tensor '", it->ref_name().as_string(),
+                  "' after reporting 0 bytes in the size pass.");
       it->ref_raw_data().clear();
     }
     if (reset_external_data) {

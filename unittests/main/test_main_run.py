@@ -15,7 +15,7 @@ import numpy as np
 
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
-from onnx_light.ext_test_case import ExtTestCase
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 from onnx_light.onnx import defs, save
 
 
@@ -58,6 +58,9 @@ def _make_int_abs_model() -> onnxl.ModelProto:
 class TestMainRun(ExtTestCase):
     @classmethod
     def setUpClass(cls):
+        # ReferenceEvaluator requires the operator-kernel runtime; skip this
+        # entire class on reduced builds (ONNX_LIGHT_BUILD_KERNELS=OFF).
+        import_or_skip("onnx_light.onnx_py._onnxpykernels")
         defs.register_onnx_operator_set_schema()
 
     def _save_model(self, model: onnxl.ModelProto, path: str) -> None:

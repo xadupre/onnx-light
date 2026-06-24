@@ -32,11 +32,11 @@ inline constexpr const char *kAiRtDomain = "ai.rt";
  * ``runtime_device == "cpu"``, and rejects ``STRING`` outputs because that
  * dtype has no raw-byte tensor representation in the runtime.
  *
- * @throws std::invalid_argument if ``node.op_type()`` is not
- *         ``"DelayedInitializer"``, if ``node`` declares any inputs or no
- *         outputs, if the ``shape`` attribute is missing or contains a negative
- *         dimension, if ``dtype`` is missing or unsupported, or if the device /
- *         location attributes are invalid.
+ * Validation failures are reported through ``EXT_ENFORCE_INVALID`` when
+ * ``node.op_type()`` is not ``"DelayedInitializer"``, when ``node`` declares
+ * inputs or no outputs, when ``shape`` is missing or contains a negative
+ * dimension, when ``dtype`` is missing or unsupported, or when the device /
+ * location attributes are invalid.
  */
 void ComputeShapeDelayedInitializer(ShapesContext &ctx, const NodeProto &node);
 

@@ -53,6 +53,8 @@ void CleanupWeightsFiles() {
 void RegisterCleanupPath(const std::filesystem::path &path) {
   static std::once_flag cleanup_once;
   std::call_once(cleanup_once, []() {
+    // Construct the cleanup state before registering the atexit handler so it
+    // remains alive when cleanup runs during process shutdown.
     (void)GetCleanupState();
     std::atexit(CleanupWeightsFiles);
   });

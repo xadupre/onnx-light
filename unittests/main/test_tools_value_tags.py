@@ -23,7 +23,9 @@ class TestValueTagsErrors(unittest.TestCase):
     def test_requires_cpp_bindings(self):
         with (
             patch.object(_proto_utils, "_shape_inference", None),
-            self.assertRaisesRegex(RuntimeError, "shape_inference is unavailable"),
+            self.assertRaisesRegex(
+                RuntimeError, "onnx_light\\.onnx_py\\._onnxpyoptim.*is unavailable"
+            ),
         ):
             infer_value_and_node_tags([])
 

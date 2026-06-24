@@ -180,7 +180,8 @@ def _require_shape_inference_extension() -> Any:
     """Returns the shape inference nanobind module or raises an informative error."""
     if _shape_inference is None:
         raise RuntimeError(
-            "onnx_light.onnx_optim.shape_inference is unavailable. "
+            "onnx_light.onnx_optim.shape_inference (backed by "
+            "onnx_light.onnx_py._onnxpyoptim) is unavailable. "
             "Install the onnx_light C++ extension to use value/node tag inference."
         )
     return _shape_inference

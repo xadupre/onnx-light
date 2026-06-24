@@ -1,12 +1,21 @@
-name: Build Release Wheels
+name: Weekly Wheel Build Check
+
+# Builds all release wheels on a weekly schedule to catch toolchain and
+# manylinux regressions early.  This workflow intentionally does NOT upload
+# artifacts to any GitHub Release – that is the responsibility of the
+# build_release_wheel.yml workflow, which is triggered by tag pushes and
+# workflow_dispatch.
+#
+# Keeping the schedule separate from build_release_wheel.yml ensures that the
+# release badge always reflects the status of an intentional release build
+# rather than a (potentially cancelled) scheduled run.
 
 on:
+  schedule:
+    # Run every Monday at 08:00 UTC (after build_reduced_wheel.yml at 06:00
+    # and build_release_cpp.yml at 07:00).
+    - cron: "0 8 * * 1"
   workflow_dispatch:
-    inputs:
-      tag:
-        description: "Git tag or ref to build (defaults to the branch the workflow is run from)."
-        required: false
-        type: string
   push:
     tags:
       - "*"
@@ -20,7 +29,7 @@ jobs:
     name: wheels (linux, ${{ matrix.arch }})
     runs-on: ${{ matrix.runs-on }}
     permissions:
-      contents: write
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -31,8 +40,6 @@ jobs:
             runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.tag || github.ref }}
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -65,29 +72,13 @@ jobs:
         with:
           name: wheels-linux-${{ matrix.arch }}
           path: ./wheelhouse/*.whl
-      - name: Attach wheels to GitHub Release
-        if: github.ref_type == 'tag' || inputs.tag != ''
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          tag="${{ inputs.tag }}"
-          if [ -z "${tag}" ]; then
-            tag="${{ github.ref_name }}"
-          fi
-          tag="${tag#refs/tags/}"
-          if gh release view "${tag}" >/dev/null 2>&1; then
-            gh release upload "${tag}" ./wheelhouse/*.whl --clobber
-          else
-            echo "Release ${tag} does not exist, skipping release asset upload."
-          fi
 
   build_wheels_windows:
     name: wheels (windows, ${{ matrix.arch }})
     needs: build_wheels_linux
     runs-on: ${{ matrix.runs-on }}
     permissions:
-      contents: write
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -100,8 +91,6 @@ jobs:
             runs-on: windows-11-arm
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.tag || github.ref }}
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -126,35 +115,17 @@ jobs:
         with:
           name: wheels-windows-${{ matrix.arch }}
           path: ./wheelhouse/*.whl
-      - name: Attach wheels to GitHub Release
-        if: github.ref_type == 'tag' || inputs.tag != ''
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          tag="${{ inputs.tag }}"
-          if [ -z "${tag}" ]; then
-            tag="${{ github.ref_name }}"
-          fi
-          tag="${tag#refs/tags/}"
-          if gh release view "${tag}" >/dev/null 2>&1; then
-            gh release upload "${tag}" ./wheelhouse/*.whl --clobber
-          else
-            echo "Release ${tag} does not exist, skipping release asset upload."
-          fi
 
   build_wheels_macos:
     name: wheels (macos, universal2)
     needs: build_wheels_linux
     runs-on: macos-latest
     permissions:
-      contents: write
+      contents: read
     env:
       MACOSX_DEPLOYMENT_TARGET: "13.0"
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.tag || github.ref }}
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -186,19 +157,3 @@ jobs:
         with:
           name: wheels-macos-universal2
           path: ./wheelhouse/*.whl
-      - name: Attach wheels to GitHub Release
-        if: github.ref_type == 'tag' || inputs.tag != ''
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          tag="${{ inputs.tag }}"
-          if [ -z "${tag}" ]; then
-            tag="${{ github.ref_name }}"
-          fi
-          tag="${tag#refs/tags/}"
-          if gh release view "${tag}" >/dev/null 2>&1; then
-            gh release upload "${tag}" ./wheelhouse/*.whl --clobber
-          else
-            echo "Release ${tag} does not exist, skipping release asset upload."
-          fi

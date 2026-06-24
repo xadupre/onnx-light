@@ -52,8 +52,10 @@ run
     ``--seed SEED``
         Integer seed for the deterministic pseudo-random input generator.
         Defaults to 0.
-    ``--verbose`` / ``-v``
-        Print input names, shapes, dtypes, and per-output values.
+    ``--verbose [LEVEL]`` / ``-v [LEVEL]``
+        Print run progress information. With no level, defaults to ``1``
+        (summary: loading, input shapes, output shapes). With ``2``, also
+        prints per-node execution details.
     ``--dump PATH``
         Write all inputs and outputs to *PATH* as an ONNX model whose
         ``graph.initializer`` list contains one ``TensorProto`` per input
@@ -65,27 +67,14 @@ from __future__ import annotations
 
 import argparse
 import os
+import warnings
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .onnx_proto._helper import TypeProto as _TypeProto
 
-
-def _print_shape_inference_events(events: list) -> None:
-    """Prints a compact summary of shape-inference events."""
-    print(f"[fillshape] shape inference events: {len(events)}")
-
-
-def _print_shape_inference_events_detailed(events: list) -> None:
-    """Prints detailed shape-inference events."""
-    for ev in events:
-        d = ev.as_dict()
-        op = f"{d['op_domain']}::{d['op_type']}" if d["op_type"] else "-"
-        print(
-            f"[fillshape] node={d['node_index']:<3d} "
-            f"action={d['action']:<12s} op={op:<20s} "
-            f"name={d['name'] or '-':<16s} shape={d['shape']}"
-        )
+# Action string used in RuntimeEvent records for node-dispatch events.
+_EVENT_ACTION_RUN_NODE = "run_node"
 
 
 def _print_shape_inference_events(events: list) -> None:
@@ -355,18 +344,36 @@ def _cmd_run(args: argparse.Namespace) -> None:
         name, _, value_str = entry.partition("=")
         dim_overrides[name.strip()] = int(value_str.strip())
     seed: int = args.seed
-    verbose: bool = args.verbose
+    verbose: int = args.verbose
     dump_path: str | None = args.dump
 
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model file not found: {model_path!r}")
 
+    if verbose >= 1:
+        print(f"[run] loading {model_path!r}")
     model = load(model_path)
 
-    if verbose:
-        print(f"Model: {model_path}")
-
     initializer_names = {init.name for init in model.graph.initializer}
+
+    # Collect every symbolic dim_param used across all non-initializer inputs.
+    used_dim_params: set[str] = set()
+    for vi in model.graph.input:
+        if vi.name in initializer_names:
+            continue
+        if vi.type.has_tensor_type() and vi.type.tensor_type.has_shape():
+            for dim in vi.type.tensor_type.shape.dim:
+                if dim.has_dim_param() and dim.dim_param:
+                    used_dim_params.add(dim.dim_param)
+
+    # Warn about --dim overrides that do not match any symbolic dim in the inputs.
+    for dim_name in dim_overrides:
+        if dim_name not in used_dim_params:
+            warnings.warn(
+                f"--dim {dim_name!r} does not match any symbolic dimension in the model inputs.",
+                UserWarning,
+                stacklevel=2,
+            )
 
     feed: dict[str, object] = {}
     for vi in model.graph.input:
@@ -376,24 +383,36 @@ def _cmd_run(args: argparse.Namespace) -> None:
         shape = _resolve_input_shape(vi.type, dim_overrides, vi.name)
         tensor = _make_random_input(elem_type, shape, seed)
         feed[vi.name] = tensor
-        if verbose and isinstance(tensor, np.ndarray):
-            print(f"  input {vi.name!r}: shape={list(tensor.shape)}, dtype={tensor.dtype}")
+        if verbose >= 1 and isinstance(tensor, np.ndarray):
+            print(f"[run]   input {vi.name!r}: shape={list(tensor.shape)}, dtype={tensor.dtype}")
 
-    sess = ReferenceEvaluator(model)
+    if verbose >= 1:
+        print("[run] running inference")
+    sess = ReferenceEvaluator(model, events_enabled=(verbose >= 2))
     outputs = sess.run(None, feed)
+
+    if verbose >= 2:
+        # Events include tensor add/replace records as well as node-dispatch
+        # ("run_node") records. Only run_node events are shown here because
+        # they identify which operator was executed and at which graph position.
+        for ev in sess.events():
+            d = ev.as_dict()
+            if d["action"] == _EVENT_ACTION_RUN_NODE:
+                op = f"{d['op_domain']}::{d['op_type']}" if d["op_domain"] else d["op_type"]
+                print(f"[run]   node={d['node_index']:<3d} op={op}")
 
     for name, value in zip(sess.output_names, outputs):
         if isinstance(value, np.ndarray):
-            print(f"output {name!r}: shape={list(value.shape)}, dtype={value.dtype}")
-            if verbose:
-                print(f"  values: {value}")
+            print(f"[run] output {name!r}: shape={list(value.shape)}, dtype={value.dtype}")
+            if verbose >= 1:
+                print(f"[run]   values: {value}")
         elif isinstance(value, list):
-            print(f"output {name!r}: sequence of {len(value)} element(s)")
-            if verbose:
+            print(f"[run] output {name!r}: sequence of {len(value)} element(s)")
+            if verbose >= 1:
                 for i, elem in enumerate(value):
-                    print(f"  [{i}]: {elem}")
+                    print(f"[run]   [{i}]: {elem}")
         else:
-            print(f"output {name!r}: {value!r}")
+            print(f"[run] output {name!r}: {value!r}")
 
     if dump_path is not None:
         all_tensors: dict[str, object] = dict(feed)
@@ -499,9 +518,16 @@ def _build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "--verbose",
         "-v",
-        action="store_true",
-        default=False,
-        help="Print input names, shapes, dtypes, and per-output values.",
+        nargs="?",
+        const=1,
+        default=0,
+        metavar="LEVEL",
+        type=int,
+        help=(
+            "Print run progress; default level is 1 when the option is present. "
+            "Level 1 prints loading progress, input shapes and output shapes. "
+            "Level 2 also prints per-node execution details."
+        ),
     )
     run_parser.add_argument(
         "--dump",

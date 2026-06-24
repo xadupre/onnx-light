@@ -94,7 +94,7 @@ class TestMainRun(ExtTestCase):
                 main(["run", model_path, "--verbose"])
 
             output = buf.getvalue()
-            self.assertIn("Model:", output)
+            self.assertIn("loading", output)
             self.assertIn("input 'X'", output)
             self.assertIn("output 'Y'", output)
             self.assertIn("values:", output)
@@ -112,7 +112,24 @@ class TestMainRun(ExtTestCase):
                 main(["run", model_path, "-v"])
 
             output = buf.getvalue()
-            self.assertIn("Model:", output)
+            self.assertIn("loading", output)
+
+    def test_run_verbose_level2(self):
+        """run --verbose 2 prints per-node execution details."""
+        from onnx_light.__main__ import main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            self._save_model(_make_abs_model(), model_path)
+
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                main(["run", model_path, "--verbose", "2"])
+
+            output = buf.getvalue()
+            self.assertIn("loading", output)
+            # Level 2 should print per-node info (node index and op type).
+            self.assertIn("node=", output)
 
     def test_run_dim_override(self):
         """run --dim resolves a symbolic dimension."""
@@ -195,6 +212,30 @@ class TestMainRun(ExtTestCase):
                 main(["run", model_path, "--seed", "2", "--verbose"])
 
             self.assertNotEqual(buf1.getvalue(), buf2.getvalue())
+
+    def test_run_unused_dim_warns(self):
+        """run issues a UserWarning when a --dim name does not match any input dim."""
+        import warnings
+
+        from onnx_light.__main__ import main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            # Model with concrete shape [2, 3] — no symbolic dims at all.
+            self._save_model(_make_abs_model(input_shape=[2, 3]), model_path)
+
+            buf = io.StringIO()
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")
+                with redirect_stdout(buf):
+                    main(["run", model_path, "--dim", "batch=4"])
+
+            self.assertTrue(
+                any("batch" in str(warning.message) for warning in w),
+                "Expected a UserWarning mentioning 'batch' for the unused --dim.",
+            )
+            # Run must still complete and produce output despite the unused dim.
+            self.assertIn("output 'Y'", buf.getvalue())
 
     def test_run_missing_file_raises(self):
         """run raises when the model file does not exist."""

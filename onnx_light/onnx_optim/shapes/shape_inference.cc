@@ -841,6 +841,7 @@ void ShapesContext::LogSetEvent(const std::string &name, const OptimTensor &tens
     ev.shape.push_back(d.IsInt() ? std::to_string(d.AsInt()) : d.AsExpr());
   }
   events_.push_back(std::move(ev));
+  EmitEvent(events_.back());
 }
 
 void ShapesContext::LogConstraintEvent(ShapeEventAction action, const std::string &lhs,
@@ -853,6 +854,7 @@ void ShapesContext::LogConstraintEvent(ShapeEventAction action, const std::strin
   ev.subgraph_node_index = current_subgraph_node_index_;
   ev.subgraph_attr_name = current_subgraph_attr_name_;
   events_.push_back(std::move(ev));
+  EmitEvent(events_.back());
 }
 
 void ShapesContext::AppendComputeNodeEvent(const std::string &op_domain, const std::string &op_type,
@@ -867,6 +869,7 @@ void ShapesContext::AppendComputeNodeEvent(const std::string &op_domain, const s
   ev.subgraph_node_index = current_subgraph_node_index_;
   ev.subgraph_attr_name = current_subgraph_attr_name_;
   events_.push_back(std::move(ev));
+  EmitEvent(events_.back());
 }
 
 void ShapesContext::CheckInputsAvailable(const NodeProto &node) const {

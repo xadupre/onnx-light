@@ -42,12 +42,12 @@ import os
 
 
 def _print_shape_inference_events(events: list) -> None:
-    """Outputs a compact summary of shape-inference events."""
+    """Prints a compact summary of shape-inference events."""
     print(f"[fillshape] shape inference events: {len(events)}")
 
 
 def _print_shape_inference_events_detailed(events: list) -> None:
-    """Outputs detailed shape-inference events."""
+    """Prints detailed shape-inference events."""
     for ev in events:
         d = ev.as_dict()
         op = f"{d['op_domain']}::{d['op_type']}" if d["op_type"] else "-"

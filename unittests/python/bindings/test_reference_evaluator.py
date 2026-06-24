@@ -13,6 +13,8 @@ and the ``run`` calling convention.
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -128,6 +130,13 @@ class TestReferenceEvaluator(ExtTestCase):
         sess = ReferenceEvaluator(model)
         self.assertEqual(sess.events(), [])
 
+    def test_verbose_must_be_non_negative_int(self):
+        model = parser.parse_model(_ABS_ADD_MODEL_SRC)
+        with self.assertRaises(TypeError):
+            ReferenceEvaluator(model, verbose=1.5)
+        with self.assertRaises(ValueError):
+            ReferenceEvaluator(model, verbose=-1)
+
     def test_events_after_run(self):
         # After run, events() should return a non-empty list whose entries
         # have an as_dict() method with the expected keys.
@@ -142,6 +151,29 @@ class TestReferenceEvaluator(ExtTestCase):
             d = ev.as_dict()
             for key in ("action", "kind", "name", "data_type", "shape"):
                 self.assertIn(key, d)
+
+    def test_verbose_prints_node_progress(self):
+        code = f"""
+import numpy as np
+from onnx_light.onnx_lib import parser
+from onnx_light.onnx.reference import ReferenceEvaluator
+
+model = parser.parse_model({ _ABS_ADD_MODEL_SRC!r })
+sess = ReferenceEvaluator(model, verbose=1)
+sess.run(
+    None,
+    {{
+        "x": np.array([-1.0, 2.0, -3.5], dtype=np.float32),
+        "z": np.array([10.0, 20.0, 30.0], dtype=np.float32),
+    }},
+)
+"""
+        proc = subprocess.run(
+            [sys.executable, "-c", code], check=True, capture_output=True, text=True
+        )
+        out = proc.stdout
+        self.assertIn("[ReferenceEvaluator] #0 Abs(x) -> (t)", out)
+        self.assertIn("[ReferenceEvaluator] #1 Add(t, z) -> (y)", out)
 
     def test_events_contain_intermediate(self):
         # The intermediate tensor ``t = Abs(x)`` must appear in the event log.

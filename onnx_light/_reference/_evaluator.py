@@ -139,6 +139,13 @@ class ReferenceEvaluator:
     :class:`onnx.reference.ReferenceEvaluator` (and
     :class:`onnxruntime.InferenceSession`).
 
+    Parameters
+    ----------
+    verbose:
+        Verbosity level forwarded to the runtime. ``0`` disables progress
+        printing; positive values print one line per dispatched node while the
+        model is executing.
+
     Example
     -------
     .. code-block:: python
@@ -160,14 +167,20 @@ class ReferenceEvaluator:
         self,
         proto: ModelProto | GraphProto | FunctionProto | bytes | str | os.PathLike,
         *,
+        verbose: int = 0,
         events_enabled: bool = False,
         release_intermediates: bool = True,
     ) -> None:
         proto = self._load_proto(proto)
+        if not isinstance(verbose, int):
+            raise TypeError(f"verbose must be an integer, not {type(verbose).__name__}.")
+        if verbose < 0:
+            raise ValueError(f"verbose must be non-negative, got {verbose}.")
         self._model: ModelProto | None = None
         self._graph: GraphProto | None = None
         self._function: FunctionProto | None = None
         self._last_ctx: Any = None
+        self._verbose = verbose
         self._events_enabled = events_enabled
         self._release_intermediates = release_intermediates
 
@@ -265,6 +278,7 @@ class ReferenceEvaluator:
         # every call. The per-invocation tensor / sequence / event state is
         # reset via ``RuntimeContext.clear`` at the start of each :meth:`run`.
         self._ctx = _runtime.RuntimeContext(self._kernel_ctx)
+        self._ctx.verbose = self._verbose
         self._ctx.events_enabled = self._events_enabled
 
         # Mapping ``"<domain>:<op_type>" -> low-level callback``. A

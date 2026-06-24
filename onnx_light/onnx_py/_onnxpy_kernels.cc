@@ -327,6 +327,11 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "Default is ``False`` for maximum throughput; enable only when profiling "
           "is required.")
       .def_prop_rw(
+          "verbose", [](const RuntimeContext &rt) { return rt.verbose(); },
+          [](RuntimeContext &rt, int v) { rt.set_verbose(v); },
+          "Verbosity level used by :func:`run_node` to print execution progress to "
+          "``stdout`` while the graph runs. ``0`` disables printing.")
+      .def_prop_rw(
           "release_intermediates",
           [](const RuntimeContext &rt) { return rt.release_intermediates(); },
           [](RuntimeContext &rt, bool v) { rt.set_release_intermediates(v); },

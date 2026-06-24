@@ -383,17 +383,16 @@ class TestOnnxLightHelper(ExtTestCase):
         )
 
         def callback(tensor, buffer, size_only):
-            if tensor.name != "W":
-                if size_only:
-                    return len(tensor.raw_data)
-                np.copyto(np.asarray(buffer), np.frombuffer(tensor.raw_data, dtype=np.uint8))
-                return len(tensor.raw_data)
+            expected_size = replacement.nbytes if tensor.name == "W" else len(tensor.raw_data)
             if size_only:
-                return replacement.nbytes
-            tensor.ClearField("dims")
-            tensor.dims.extend([25])
-            np.copyto(np.asarray(buffer), replacement_bytes)
-            return replacement.nbytes
+                return expected_size
+            if tensor.name == "W":
+                tensor.ClearField("dims")
+                tensor.dims.extend([25])
+                np.copyto(np.asarray(buffer), replacement_bytes)
+            else:
+                np.copyto(np.asarray(buffer), np.frombuffer(tensor.raw_data, dtype=np.uint8))
+            return expected_size
 
         opts = onnxl.SerializeOptions()
         opts.raw_data_callback = callback

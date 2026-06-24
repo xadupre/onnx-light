@@ -123,7 +123,8 @@ std::optional<InPlaceReuseKind> ClassifyReuse(const OptimTensor &out, const Opti
 // Recursively collects every input name referenced by ``node`` — its direct
 // inputs plus any name read inside the bodies of its subgraph attributes
 // (``If``, ``Loop``, ``Scan``, ...). The resulting list preserves first-seen
-// order and deduplicates names via ``seen``.
+// order (deterministic metadata serialization) and deduplicates names via
+// ``seen``.
 void CollectReferencedNames(const NodeProto &node, std::vector<std::string> &out,
                             std::unordered_set<std::string> &seen) {
   for (int i = 0; i < node.input_size(); ++i) {
@@ -214,7 +215,13 @@ void ComputeContext::ComputeInPlaceReuseGraph(const GraphProto &graph, const Sha
 
     for (const std::string &name : referenced) {
       auto use_it = last_use.find(name);
-      if (use_it == last_use.end() || use_it->second != i || keep.count(name)) {
+      if (use_it == last_use.end()) {
+        continue;
+      }
+      if (use_it->second != i) {
+        continue;
+      }
+      if (keep.count(name)) {
         continue;
       }
       auto prod_it = producer.find(name);

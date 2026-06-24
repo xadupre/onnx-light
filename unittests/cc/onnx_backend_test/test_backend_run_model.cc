@@ -293,6 +293,7 @@ TEST(BackendRunModel, Momentum) { RunBackendCasesFor("Momentum"); }
 
 // Random / sampling kernels (ai.onnx).
 TEST(BackendRunModel, Bernoulli) { RunBackendCasesFor("Bernoulli"); }
+TEST(BackendRunModel, DelayedInitializer) { RunBackendCasesFor("DelayedInitializer"); }
 TEST(BackendRunModel, RandomNormal) { RunBackendCasesFor("RandomNormal"); }
 TEST(BackendRunModel, RandomNormalLike) { RunBackendCasesFor("RandomNormalLike"); }
 TEST(BackendRunModel, RandomUniform) { RunBackendCasesFor("RandomUniform"); }

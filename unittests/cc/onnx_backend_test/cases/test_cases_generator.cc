@@ -33,6 +33,17 @@ const TestCase *FindCase(const std::vector<TestCase> &cases, const std::string &
   }
   return nullptr;
 }
+
+std::string ToStdString(const utils::String &s) { return std::string(s.data(), s.size()); }
+
+const AttributeProto *FindAttribute(const NodeProto &node, const std::string &name) {
+  for (const auto &attr : node.ref_attribute()) {
+    if (ToStdString(attr.ref_name()) == name) {
+      return &attr;
+    }
+  }
+  return nullptr;
+}
 } // namespace
 
 TEST(BackendTestCase, ConstantCaseIsPresent) {
@@ -356,6 +367,62 @@ TEST(BackendTestCase, BernoulliCasesArePresent) {
   const float *py = plain->data_sets[0].outputs[0].AsFloat();
   for (int64_t i = 0; i < plain->data_sets[0].outputs[0].element_count(); ++i) {
     EXPECT_TRUE(py[i] == 0.0f || py[i] == 1.0f);
+  }
+}
+
+TEST(BackendTestCase, DelayedInitializerCasesArePresent) {
+  auto cases = CollectTestCases("DelayedInitializer");
+  ASSERT_FALSE(cases.empty());
+
+  struct ExpectedCase {
+    const char *name;
+    const char *load_device;
+    std::vector<int64_t> shape;
+    int64_t offset;
+  };
+  const std::vector<ExpectedCase> expected = {
+      {"test_cc_delayedinitializer_file", "file", {2}, 8},
+      {"test_cc_delayedinitializer_cpu", "cpu", {3}, 0},
+  };
+
+  for (const auto &entry : expected) {
+    const TestCase *tc = FindCase(cases, entry.name);
+    ASSERT_NE(tc, nullptr);
+    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    EXPECT_EQ(ToStdString(node.ref_op_type()), "DelayedInitializer");
+    EXPECT_EQ(ToStdString(node.ref_domain()), "ai.rt");
+    EXPECT_EQ(graph.ref_input().size(), 0u);
+    ASSERT_EQ(graph.ref_output().size(), 1u);
+    ASSERT_EQ(tc->data_sets.size(), 1u);
+    const auto &ds = tc->data_sets[0];
+    EXPECT_EQ(ds.inputs.size(), 0u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].shape, entry.shape);
+
+    const AttributeProto *shape = FindAttribute(node, "shape");
+    const AttributeProto *dtype = FindAttribute(node, "dtype");
+    const AttributeProto *load = FindAttribute(node, "load_device");
+    const AttributeProto *runtime = FindAttribute(node, "runtime_device");
+    const AttributeProto *filename = FindAttribute(node, "filename");
+    const AttributeProto *offset = FindAttribute(node, "offset");
+    ASSERT_NE(shape, nullptr);
+    ASSERT_NE(dtype, nullptr);
+    ASSERT_NE(load, nullptr);
+    ASSERT_NE(runtime, nullptr);
+    ASSERT_NE(filename, nullptr);
+    ASSERT_NE(offset, nullptr);
+    EXPECT_EQ(ToStdString(load->ref_s()), entry.load_device);
+    EXPECT_EQ(ToStdString(runtime->ref_s()), "cpu");
+    EXPECT_FALSE(ToStdString(filename->ref_s()).empty());
+    EXPECT_EQ(offset->i(), entry.offset);
+    ASSERT_EQ(shape->ref_ints().size(), entry.shape.size());
+    for (size_t i = 0; i < entry.shape.size(); ++i) {
+      EXPECT_EQ(shape->ints(i), entry.shape[i]);
+    }
+    EXPECT_EQ(dtype->i(), static_cast<int64_t>(onnx_kernels::DataType::FLOAT));
   }
 }
 

@@ -19,7 +19,7 @@ from types import SimpleNamespace
 from onnx_light.tools import to_svg, to_svg_graph
 from onnx_light.tools.svg import _escape_xml
 
-HAS_SHAPE_EXT = importlib.util.find_spec("onnx_light.onnx_py._onnxpyoptim") is not None
+HAS_OPTIM_EXT = importlib.util.find_spec("onnx_light.onnx_py._onnxpyoptim") is not None
 
 
 def _vi(name: str, elem_type: int = 1, dims: tuple = ()) -> SimpleNamespace:
@@ -235,7 +235,7 @@ class TestSvg(unittest.TestCase):
         text_off = to_svg(_model(g), include_inplace=False)
         self.assertNotIn("inplace", text_off)
 
-    @unittest.skipUnless(HAS_SHAPE_EXT, "requires onnx_light C++ shape_inference bindings")
+    @unittest.skipUnless(HAS_OPTIM_EXT, "requires onnx_light C++ shape_inference bindings")
     def test_tagged_colors(self) -> None:
         from onnx_light.onnx import TensorProto, helper
         from onnx_light.tools import write_value_and_node_tags_to_metadata

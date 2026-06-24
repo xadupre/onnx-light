@@ -18,7 +18,7 @@ from types import SimpleNamespace
 from onnx_light.tools import to_mermaid, to_mermaid_graph
 from onnx_light.tools.mermaid import _escape_label, _format_shape
 
-HAS_SHAPE_EXT = importlib.util.find_spec("onnx_light.onnx_py._onnxpyoptim") is not None
+HAS_OPTIM_EXT = importlib.util.find_spec("onnx_light.onnx_py._onnxpyoptim") is not None
 
 
 def _vi(name: str, elem_type: int = 1, dims: tuple = ()) -> SimpleNamespace:
@@ -206,7 +206,7 @@ class TestMermaid(unittest.TestCase):
         text = to_mermaid(_model(g), include_inplace=True)
         self.assertIn("inplace: out0=in0(equal), out1=in1(greater)", text)
 
-    @unittest.skipUnless(HAS_SHAPE_EXT, "requires onnx_light C++ shape_inference bindings")
+    @unittest.skipUnless(HAS_OPTIM_EXT, "requires onnx_light C++ shape_inference bindings")
     def test_tagged_style_classes(self) -> None:
         from onnx_light.onnx import TensorProto, helper
         from onnx_light.tools import write_value_and_node_tags_to_metadata

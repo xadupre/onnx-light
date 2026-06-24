@@ -6,18 +6,29 @@ from __future__ import annotations
 import importlib.util
 import json
 import unittest
+from unittest.mock import patch
 
 from onnx_light.tools import infer_value_and_node_tags, write_value_and_node_tags_to_metadata
+from onnx_light.tools import _proto_utils
 from onnx_light.tools._proto_utils import NODE_TAG_METADATA_KEY, VALUE_TAGS_METADATA_KEY
 
-HAS_SHAPE_EXT = importlib.util.find_spec("onnx_light.onnx_py._onnxpyoptim") is not None
+HAS_OPTIM_EXT = importlib.util.find_spec("onnx_light.onnx_py._onnxpyoptim") is not None
 
 
 def _meta_dict(obj: object) -> dict[str, str]:
     return {m.key: m.value for m in getattr(obj, "metadata_props", [])}
 
 
-@unittest.skipUnless(HAS_SHAPE_EXT, "requires onnx_light C++ shape_inference bindings")
+class TestValueTagsErrors(unittest.TestCase):
+    def test_requires_cpp_bindings(self):
+        with (
+            patch.object(_proto_utils, "_shape_inference", None),
+            self.assertRaisesRegex(RuntimeError, "shape_inference is unavailable"),
+        ):
+            infer_value_and_node_tags([])
+
+
+@unittest.skipUnless(HAS_OPTIM_EXT, "requires onnx_light C++ shape_inference bindings")
 class TestValueTags(unittest.TestCase):
     def test_tags_graph_and_nodes(self):
         from onnx_light.onnx import TensorProto, helper

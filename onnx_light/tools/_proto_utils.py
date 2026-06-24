@@ -178,7 +178,7 @@ def _normalise_value_tag(value: str) -> str:
 
 def _require_shape_inference_extension() -> Any:
     """Returns the shape inference nanobind module or raises an informative error."""
-    if _shape_inference is None:  # pragma: no cover
+    if _shape_inference is None:
         raise RuntimeError(
             "onnx_light.onnx_optim.shape_inference is unavailable. "
             "Install the onnx_light C++ extension to use value/node tag inference."

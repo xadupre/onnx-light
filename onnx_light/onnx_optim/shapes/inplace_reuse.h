@@ -107,6 +107,14 @@ struct InPlaceReuse {
 constexpr const char *kInPlaceReuseMetadataKey = "onnx_light.inplace_reuse";
 
 /**
+ * Metadata key under which :cpp:func:`ComputeContext::WriteToMetadata`
+ * records, for every node, which referenced values reach their last use at
+ * this node and can therefore be released after the node runs. The associated
+ * value is a ``;``-separated list of value names.
+ */
+constexpr const char *kReleaseAfterMetadataKey = "onnx_light.release_after";
+
+/**
  * Holds the in-place reuse opportunities computed for a graph, mirroring the
  * way :cpp:class:`onnx_optim::shapes::ShapesContext` holds the inferred
  * descriptors.
@@ -166,13 +174,21 @@ public:
 
   /**
    * Records the computed opportunities into each node's ``metadata_props`` of
-   * ``graph`` under :cpp:var:`kInPlaceReuseMetadataKey`.
+   * ``graph`` under :cpp:var:`kInPlaceReuseMetadataKey` and
+   * :cpp:var:`kReleaseAfterMetadataKey`.
    *
-   * For every node that has at least one opportunity, a single metadata entry
-   * is added (or updated in place if the key already exists) whose value lists
-   * the opportunities as ``output_index:input_index:kind`` triplets separated
-   * by ``;`` (``kind`` being ``equal`` or ``greater``). Nodes without any
-   * opportunity are left untouched.
+   * For every node that has at least one in-place opportunity, a single
+   * metadata entry is added (or updated in place if the key already exists)
+   * whose value lists the opportunities as
+   * ``output_index:input_index:kind`` triplets separated by ``;`` (``kind``
+   * being ``equal`` or ``greater``).
+   *
+   * For every node that has releasable last-use inputs, one metadata entry is
+   * added (or updated in place) under :cpp:var:`kReleaseAfterMetadataKey`; the
+   * value is a ``;``-separated list of releasable names.
+   *
+   * Nodes without in-place opportunities and without releasable names are left
+   * untouched.
    *
    * ``graph`` must be the same graph passed to
    * :cpp:func:`ComputeInPlaceReuseGraph`, so that node indices line up with
@@ -185,10 +201,14 @@ public:
   void WriteToMetadata(GraphProto &graph) const;
 
   /// Empties the stored result.
-  void Clear() noexcept { reuse_.clear(); }
+  void Clear() noexcept {
+    reuse_.clear();
+    release_after_.clear();
+  }
 
 private:
   std::vector<std::vector<InPlaceReuse>> reuse_;
+  std::vector<std::vector<std::string>> release_after_;
 };
 
 /**

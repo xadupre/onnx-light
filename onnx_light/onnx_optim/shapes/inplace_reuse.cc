@@ -122,27 +122,27 @@ std::optional<InPlaceReuseKind> ClassifyReuse(const OptimTensor &out, const Opti
 
 // Recursively collects every input name referenced by ``node`` — its direct
 // inputs plus any name read inside the bodies of its subgraph attributes
-// (``If``, ``Loop``, ``Scan``, ...). Subgraph-local names are included too;
-// this only over-approximates the set of live names, which keeps the reuse
-// guess conservative.
-void CollectReferencedNames(const NodeProto &node, std::unordered_set<std::string> &out) {
+// (``If``, ``Loop``, ``Scan``, ...). The resulting list preserves first-seen
+// order and deduplicates names.
+void CollectReferencedNames(const NodeProto &node, std::vector<std::string> &out,
+                            std::unordered_set<std::string> &seen) {
   for (int i = 0; i < node.input_size(); ++i) {
     const std::string name = node.input(i).as_string();
-    if (!name.empty()) {
-      out.insert(name);
+    if (!name.empty() && seen.insert(name).second) {
+      out.push_back(name);
     }
   }
   for (int i = 0; i < node.attribute_size(); ++i) {
     const AttributeProto &attr = node.attribute(i);
     if (attr.has_g()) {
       for (int j = 0; j < attr.g().node().size(); ++j) {
-        CollectReferencedNames(attr.g().node()[j], out);
+        CollectReferencedNames(attr.g().node()[j], out, seen);
       }
     }
     for (int g = 0; g < attr.graphs().size(); ++g) {
       const GraphProto &subgraph = attr.graphs()[g];
       for (int j = 0; j < subgraph.node().size(); ++j) {
-        CollectReferencedNames(subgraph.node()[j], out);
+        CollectReferencedNames(subgraph.node()[j], out, seen);
       }
     }
   }
@@ -154,6 +154,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(const GraphProto &graph, const Sha
                                               bool allow_input_overwrite) {
   const int num_nodes = graph.node().size();
   std::vector<std::vector<InPlaceReuse>> result(static_cast<std::size_t>(num_nodes));
+  std::vector<std::vector<std::string>> release_after(static_cast<std::size_t>(num_nodes));
 
   // Names whose buffers must never be overwritten in place: declared graph
   // inputs, initializers and declared graph outputs are owned by the caller
@@ -192,8 +193,9 @@ void ComputeContext::ComputeInPlaceReuseGraph(const GraphProto &graph, const Sha
   }
   for (int i = 0; i < num_nodes; ++i) {
     const NodeProto &node = graph.node()[i];
-    std::unordered_set<std::string> referenced;
-    CollectReferencedNames(node, referenced);
+    std::vector<std::string> referenced;
+    std::unordered_set<std::string> seen;
+    CollectReferencedNames(node, referenced, seen);
     for (const std::string &name : referenced) {
       last_use[name] = i;
     }
@@ -207,6 +209,21 @@ void ComputeContext::ComputeInPlaceReuseGraph(const GraphProto &graph, const Sha
 
   for (int i = 0; i < num_nodes; ++i) {
     const NodeProto &node = graph.node()[i];
+    std::vector<std::string> referenced;
+    std::unordered_set<std::string> seen;
+    CollectReferencedNames(node, referenced, seen);
+
+    for (const std::string &name : referenced) {
+      auto use_it = last_use.find(name);
+      if (use_it == last_use.end() || use_it->second != i || keep.count(name)) {
+        continue;
+      }
+      auto prod_it = producer.find(name);
+      if (prod_it == producer.end() || prod_it->second < 0 || prod_it->second >= i) {
+        continue;
+      }
+      release_after[static_cast<std::size_t>(i)].push_back(name);
+    }
 
     // Count direct-input occurrences so a value read twice is never aliased.
     std::unordered_map<std::string, int> input_occurrences;
@@ -282,6 +299,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(const GraphProto &graph, const Sha
   }
 
   reuse_ = std::move(result);
+  release_after_ = std::move(release_after);
 }
 
 void ComputeContext::WriteToMetadata(GraphProto &graph) const {
@@ -295,19 +313,33 @@ void ComputeContext::WriteToMetadata(GraphProto &graph) const {
   }
   for (std::size_t i = 0; i < reuse_.size(); ++i) {
     if (reuse_[i].empty()) {
-      continue;
-    }
-    std::ostringstream value;
-    for (std::size_t j = 0; j < reuse_[i].size(); ++j) {
-      const InPlaceReuse &r = reuse_[i][j];
-      if (j != 0) {
-        value << ";";
+      if (release_after_[i].empty()) {
+        continue;
       }
-      value << r.output_index << ":" << r.input_index << ":"
-            << (r.kind == InPlaceReuseKind::kEqual ? "equal" : "greater");
     }
     NodeProto &node = (*graph.mutable_node())[i];
-    node.add_metadata(kInPlaceReuseMetadataKey, value.str());
+    if (!reuse_[i].empty()) {
+      std::ostringstream value;
+      for (std::size_t j = 0; j < reuse_[i].size(); ++j) {
+        const InPlaceReuse &r = reuse_[i][j];
+        if (j != 0) {
+          value << ";";
+        }
+        value << r.output_index << ":" << r.input_index << ":"
+              << (r.kind == InPlaceReuseKind::kEqual ? "equal" : "greater");
+      }
+      node.add_metadata(kInPlaceReuseMetadataKey, value.str());
+    }
+    if (!release_after_[i].empty()) {
+      std::ostringstream value;
+      for (std::size_t j = 0; j < release_after_[i].size(); ++j) {
+        if (j != 0) {
+          value << ";";
+        }
+        value << release_after_[i][j];
+      }
+      node.add_metadata(kReleaseAfterMetadataKey, value.str());
+    }
   }
 }
 

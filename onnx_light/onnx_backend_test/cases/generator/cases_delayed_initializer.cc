@@ -24,13 +24,13 @@ namespace {
 constexpr const char *kAiRtDomain = "ai.rt";
 
 std::vector<std::filesystem::path> &CleanupPaths() {
-  static std::vector<std::filesystem::path> paths;
-  return paths;
+  static auto *paths = new std::vector<std::filesystem::path>();
+  return *paths;
 }
 
 std::mutex &CleanupMutex() {
-  static std::mutex mutex;
-  return mutex;
+  static auto *mutex = new std::mutex();
+  return *mutex;
 }
 
 // Removes every temporary weights file registered for DelayedInitializer

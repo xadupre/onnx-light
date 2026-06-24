@@ -261,8 +261,8 @@ class TestOnnxLightHelper(ExtTestCase):
         opts = onnxl.SerializeOptions()
         self.assertIsNone(opts.raw_data_callback)
 
-        def callback(tensor):
-            return None
+        def callback(tensor, buffer, size_only):
+            return 0
 
         opts.raw_data_callback = callback
         self.assertIs(opts.raw_data_callback, callback)
@@ -526,18 +526,24 @@ class TestOnnxLightHelper(ExtTestCase):
 
         replacement = np.arange(3, dtype=np.float32) + 10
         seen = []
+        replacement_bytes = np.frombuffer(replacement.tobytes(), dtype=np.uint8)
 
-        def callback(serialized_tensor):
-            seen.append(serialized_tensor.name)
+        def callback(serialized_tensor, buffer, size_only):
+            seen.append(
+                (serialized_tensor.name, size_only, None if buffer is None else len(buffer))
+            )
+            if size_only:
+                return replacement.nbytes
             serialized_tensor.ClearField("dims")
             serialized_tensor.dims.extend([replacement.size])
-            serialized_tensor.raw_data = replacement.tobytes()
+            np.copyto(np.asarray(buffer), replacement_bytes)
+            return replacement.nbytes
 
         opts = onnxl.SerializeOptions()
         opts.raw_data_callback = callback
         serialized = model.SerializeToString(opts)
 
-        self.assertEqual(seen, ["W"])
+        self.assertEqual(seen, [("W", True, None), ("W", False, replacement.nbytes)])
         np.testing.assert_array_equal(onh.to_array(model.graph.initializer[0]), data)
 
         parsed = onnxl.ModelProto()
@@ -581,13 +587,19 @@ class TestOnnxLightHelper(ExtTestCase):
 
         replacement = np.arange(25, dtype=np.float32) + 50
         seen = []
+        replacement_bytes = np.frombuffer(replacement.tobytes(), dtype=np.uint8)
         saved = self.get_dump_file("test_save_raw_data_callback.onnx")
 
-        def callback(serialized_tensor):
-            seen.append(serialized_tensor.name)
+        def callback(serialized_tensor, buffer, size_only):
+            seen.append(
+                (serialized_tensor.name, size_only, None if buffer is None else len(buffer))
+            )
+            if size_only:
+                return replacement.nbytes
             serialized_tensor.ClearField("dims")
             serialized_tensor.dims.extend([replacement.size])
-            serialized_tensor.raw_data = replacement.tobytes()
+            np.copyto(np.asarray(buffer), replacement_bytes)
+            return replacement.nbytes
 
         onnxl.save(
             model,
@@ -598,7 +610,7 @@ class TestOnnxLightHelper(ExtTestCase):
             raw_data_callback=callback,
         )
 
-        self.assertEqual(seen, ["W"])
+        self.assertEqual(seen, [("W", True, None), ("W", False, replacement.nbytes)])
         self.assertEqual(list(model.graph.initializer[0].dims), [100])
         self.assertEqual(bytes(model.graph.initializer[0].raw_data), data.tobytes())
 

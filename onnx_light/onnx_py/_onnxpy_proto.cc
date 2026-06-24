@@ -10,6 +10,7 @@
 #include <memory>
 #include <nanobind/make_iterator.h>
 #include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/string.h>
@@ -47,14 +48,28 @@ struct PyRawDataCallback {
 };
 
 // Adapts a Python callable to SerializeOptions::raw_data_callback. The callable is invoked as
-// ``fn(tensor)`` immediately before serialization and may mutate the TensorProto in place,
-// including changing its raw_data byte size. The Python object is held by value so the
-// std::function target keeps the callable alive, and the GIL is reacquired around every call.
+// ``fn(tensor, buffer, size_only)``:
+// - when ``size_only`` is True, ``buffer`` is None and the callback must return the number of
+//   bytes it will write for that tensor;
+// - when ``size_only`` is False, ``buffer`` is a writable 1-D uint8 NumPy view owned by
+//   onnx-light; the callback may update tensor metadata in place, must write the serialized bytes
+//   into that buffer, and must return the same size again.
+// The Python object is held by value so the std::function target keeps the callable alive, and
+// the GIL is reacquired around every call.
 struct PySerializeRawDataCallback {
   nb::object fn;
-  void operator()(TensorProto &tensor) const {
+  int64_t operator()(TensorProto &tensor, uint8_t *buffer, size_t buffer_size,
+                     bool size_only) const {
     nb::gil_scoped_acquire gil;
-    fn(nb::cast(&tensor, nb::rv_policy::reference));
+    nb::object py_buffer;
+    if (size_only || buffer == nullptr) {
+      py_buffer = nb::none();
+    } else {
+      nb::capsule owner(static_cast<void *>(buffer), [](void *) noexcept {});
+      py_buffer =
+          nb::cast(nb::ndarray<nb::numpy, uint8_t, nb::ndim<1>>(buffer, {buffer_size}, owner));
+    }
+    return nb::cast<int64_t>(fn(nb::cast(&tensor, nb::rv_policy::reference), py_buffer, size_only));
   }
 };
 
@@ -1141,14 +1156,18 @@ void AddOnnxPyProto(nb::module_ &m) {
               options.raw_data_callback = PySerializeRawDataCallback{fn};
             }
           },
-          "Optional callable invoked as ``fn(tensor)`` for every tensor carrying "
-          "``raw_data`` immediately before serialization. The callback may mutate the "
-          ":class:`TensorProto` in place, including changing its byte size, shape, "
-          "dtype, or external-data metadata. When a tensor was previously marked as "
-          "EXTERNAL and still carries ``raw_data`` (for example after "
-          "``tensor.load_external_data(...)``), serialization refreshes that metadata "
-          "after the callback so the written ``length`` and ``offset`` match the "
-          "rewritten bytes. Setting it to ``None`` (the default) disables the callback.",
+          "Optional callable invoked as ``fn(tensor, buffer, size_only)`` for every "
+          "tensor carrying ``raw_data`` immediately before serialization. The callback "
+          "is first called with ``buffer=None`` and ``size_only=True`` and must return "
+          "the number of bytes it will serialize. onnx-light then allocates a writable "
+          "1-D uint8 buffer of that size and calls ``fn(tensor, buffer, size_only=False)``; "
+          "the callback may update the :class:`TensorProto` metadata in place, must fill "
+          "the provided buffer, and must return the same size again. When a tensor was "
+          "previously marked as EXTERNAL and still carries ``raw_data`` (for example "
+          "after ``tensor.load_external_data(...)``), serialization refreshes that "
+          "metadata after the callback so the written ``length`` and ``offset`` match "
+          "the rewritten bytes. Setting it to ``None`` (the default) disables the "
+          "callback.",
           nb::for_setter(nb::arg("value").none()));
 
   nb::class_<SerializeSizeResult>(m, "SerializeSizeResult",

@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 from ..onnx_py._onnxpyprotoop import (  # type: ignore
     FileLoadMode,
     ModelProto,
@@ -95,7 +95,7 @@ def save(
     num_threads: int = -1,
     min_block_size: int = 0,
     max_external_file_size: int = 0,
-    raw_data_callback: Callable[[TensorProto], object] | None = None,
+    raw_data_callback: Callable[[TensorProto, Any | None, bool], int] | None = None,
 ) -> None:
     """
     Saves the ModelProto to the specified path and optionally,
@@ -142,10 +142,13 @@ def save(
     :param max_external_file_size: maximum size in bytes for one external
         weight file when saving with external data. A value of 0 (default)
         means no limit.
-    :param raw_data_callback: optional callable invoked as ``fn(tensor)`` for
-        every tensor carrying ``raw_data`` immediately before serialization.
-        The callback may mutate the tensor in place, including changing its
-        bytes and shape, before those bytes are dumped.
+    :param raw_data_callback: optional callable invoked as
+        ``fn(tensor, buffer, size_only)`` for every tensor carrying
+        ``raw_data`` immediately before serialization. It is first called with
+        ``buffer=None`` and ``size_only=True`` and must return the number of
+        bytes it will write. onnx-light then allocates a writable buffer of
+        that size and calls it again with ``size_only=False`` so it can fill
+        the bytes and update tensor metadata before serialization.
     """
     assert isinstance(proto, ModelProto), f"Unexpected type {type(proto)} for proto."
     assert isinstance(f, (str, Path)), f"Unexpected type {type(f)} for f."

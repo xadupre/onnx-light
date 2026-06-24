@@ -282,6 +282,8 @@ template <typename Nodes, typename F> void ForEachAttributeTensorInNodes(Nodes &
   }
 }
 
+} // namespace
+
 void ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &options) {
   if (!options.raw_data_callback || !model.has_graph()) {
     return;
@@ -293,15 +295,34 @@ void ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &op
     }
     const bool reset_external_data =
         it->has_data_location() && it->ref_data_location() == TensorProto::DataLocation::EXTERNAL;
-    options.raw_data_callback(*it);
+    const int64_t rewritten_size = options.raw_data_callback(*it, nullptr, 0, true);
+    EXT_ENFORCE(rewritten_size >= 0, "SerializeOptions.raw_data_callback returned a negative size ",
+                rewritten_size, " for tensor '", it->ref_name().as_string(), "'.");
+    utils::ByteSpan rewritten_raw_data;
+    if (rewritten_size > 0) {
+      if (options.alignment > 1) {
+        rewritten_raw_data.resize_aligned(static_cast<size_t>(rewritten_size),
+                                          static_cast<size_t>(options.alignment));
+      } else {
+        rewritten_raw_data.resize(static_cast<size_t>(rewritten_size));
+      }
+    }
+    const int64_t filled_size =
+        options.raw_data_callback(*it, rewritten_raw_data.data(), rewritten_raw_data.size(), false);
+    EXT_ENFORCE(filled_size == rewritten_size, "SerializeOptions.raw_data_callback returned ",
+                filled_size, " bytes in the fill pass for tensor '", it->ref_name().as_string(),
+                "' after reporting ", rewritten_size, " bytes in the size pass.");
+    if (rewritten_size > 0) {
+      it->ref_raw_data() = std::move(rewritten_raw_data);
+    } else {
+      it->ref_raw_data().clear();
+    }
     if (reset_external_data) {
       it->clr_external_data();
       it->reset_data_location();
     }
   }
 }
-
-} // namespace
 
 void ConvertModelToExternalData(ModelProto &model, bool all_tensors_to_one_file,
                                 const std::string &location, size_t size_threshold,

@@ -1410,20 +1410,8 @@ void ModelProto::SerializeToString(std::string &out,
   ModelProto copy;
   copy.CopyFrom(*this);
   SerializeOptions local_opts = opts;
-  if (local_opts.raw_data_callback && copy.has_graph()) {
-    IteratorTensorProto it(&copy.ref_graph());
-    while (it.next()) {
-      if (!it->has_raw_data()) {
-        continue;
-      }
-      const bool reset_external_data =
-          it->has_data_location() && it->ref_data_location() == TensorProto::DataLocation::EXTERNAL;
-      local_opts.raw_data_callback(*it);
-      if (reset_external_data) {
-        it->clr_external_data();
-        it->reset_data_location();
-      }
-    }
+  if (local_opts.raw_data_callback) {
+    ApplySerializeRawDataCallback(copy, local_opts);
   }
   local_opts.num_threads = 1;
   local_opts.use_external_data_location = true;

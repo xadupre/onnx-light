@@ -437,9 +437,14 @@ struct SerializeOptions : TensorBufferOptions {
   /** Holds an optional callback invoked for each TensorProto carrying ``raw_data`` immediately
    *  before serialization.
    *
-   *  The callback receives the TensorProto by mutable reference and may rewrite it in place,
-   *  including changing the ``raw_data`` byte size and any matching tensor metadata such as
-   *  dimensions or data type.
+   *  Serialization calls the callback twice per tensor:
+   *
+   *  - size pass: ``fn(tensor, nullptr, 0, true)`` must return the number of bytes that the
+   *    callback will serialize for that tensor.
+   *  - fill pass: onnx-light allocates a buffer of that size, then calls
+   *    ``fn(tensor, buffer, buffer_size, false)``. The callback may update the tensor metadata
+   *    in place (for example dims or data_type), must fill ``buffer`` with exactly that many
+   *    bytes, and must return the same size again.
    *
    *  When the tensor was previously marked with ``data_location=EXTERNAL`` and still carries
    *  ``raw_data`` (for example after ``load_external_data``), serialization regenerates the
@@ -447,7 +452,7 @@ struct SerializeOptions : TensorBufferOptions {
    *  the rewritten bytes.
    *
    *  By default it is empty (no callback) and serialization behaves exactly as before. */
-  std::function<void(TensorProto &)> raw_data_callback = {};
+  std::function<int64_t(TensorProto &, uint8_t *, size_t, bool)> raw_data_callback = {};
 };
 
 using utils::offset_t;

@@ -276,6 +276,9 @@ namespace ONNX_LIGHT_NAMESPACE {
 // Forward declaration: ParseOptions::raw_data_callback references TensorProto, which is
 // defined later in onnx.h. Only the declaration is needed for the std::function signature.
 class TensorProto;
+class ModelProto;
+struct SerializeOptions;
+void ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &options);
 
 /**
  * Common options shared by tensor buffer operations: in-place consolidation

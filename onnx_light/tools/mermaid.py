@@ -21,12 +21,15 @@ from __future__ import annotations
 from typing import Any
 
 from ._proto_utils import (
+    NODE_TAG_METADATA_KEY,
+    _graph_value_tags,
     _dtype_name,
     _extract_graph,
     _format_inplace_reuse,
     _format_shape,
     _iter,
     _looks_like_graph,
+    _node_metadata_value,
     _s,
 )
 
@@ -260,6 +263,7 @@ def to_mermaid_graph(
 
     tensor_ids = _IdAllocator(prefix="t")
     node_ids = _IdAllocator(prefix="n")
+    value_tags = _graph_value_tags(graph)
 
     lines: list[str] = [f"flowchart {direction}"]
 
@@ -290,7 +294,11 @@ def to_mermaid_graph(
             continue
         node_id = tensor_ids.get(name)
         label = _join_label(name or "(unnamed)", shape_lookup.get(name, ""))
-        lines.append(f'    {node_id}(["{label}"]):::onnxInput')
+        tag = value_tags.get(name, "")
+        style = (
+            f"onnxTag{tag.capitalize()}" if tag in {"shape", "axes", "weight"} else "onnxInput"
+        )
+        lines.append(f'    {node_id}(["{label}"]):::{style}')
 
     # Emit initializer nodes (cylinder shape).  Only render initializers
     # that are not also listed as inputs, to avoid duplicates.
@@ -301,7 +309,13 @@ def to_mermaid_graph(
                 continue
             node_id = tensor_ids.get(name)
             label = _join_label(name or "(unnamed)", initializer_shapes.get(name, ""))
-            lines.append(f'    {node_id}[("{label}")]:::onnxInitializer')
+            tag = value_tags.get(name, "")
+            style = (
+                f"onnxTag{tag.capitalize()}"
+                if tag in {"shape", "axes", "weight"}
+                else "onnxInitializer"
+            )
+            lines.append(f'    {node_id}[("{label}")]:::{style}')
 
     # Emit operator nodes and edges.
     for index, node in enumerate(_iter(getattr(graph, "node", ()))):
@@ -326,7 +340,13 @@ def to_mermaid_graph(
             if inplace_label:
                 label_parts.append(inplace_label)
         label = _join_label(*label_parts)
-        lines.append(f'    {node_id}["{label}"]:::onnxOp')
+        node_tag = _s(_node_metadata_value(node, NODE_TAG_METADATA_KEY)).lower()
+        style = (
+            f"onnxTag{node_tag.capitalize()}"
+            if node_tag in {"shape", "axes", "weight"}
+            else "onnxOp"
+        )
+        lines.append(f'    {node_id}["{label}"]:::{style}')
 
         for inp in _iter(getattr(node, "input", ())):
             inp_name = _s(inp)
@@ -351,7 +371,11 @@ def to_mermaid_graph(
             edge_label = ""
             if include_shapes and shape_lookup.get(out_name):
                 edge_label = f'|"{_escape_label(shape_lookup[out_name])}"|'
-            lines.append(f"    {node_id} -->{edge_label} {tensor_id}")
+            style = ""
+            out_tag = value_tags.get(out_name, "")
+            if out_tag in {"shape", "axes", "weight"}:
+                style = f":::{'onnxTag' + out_tag.capitalize()}"
+            lines.append(f"    {node_id} -->{edge_label} {tensor_id}{style}")
 
     # Emit output nodes (stadium shape).  We only need to add the styling
     # since the identifiers already exist from the producing nodes; we
@@ -362,12 +386,19 @@ def to_mermaid_graph(
             continue
         node_id = tensor_ids.get(name)
         label = _join_label(name, shape_lookup.get(name, ""))
-        lines.append(f'    {node_id}(["{label}"]):::onnxOutput')
+        tag = value_tags.get(name, "")
+        style = (
+            f"onnxTag{tag.capitalize()}" if tag in {"shape", "axes", "weight"} else "onnxOutput"
+        )
+        lines.append(f'    {node_id}(["{label}"]):::{style}')
 
     # Append style classes.
     lines.append("    classDef onnxInput fill:#cde4ff,stroke:#3a6ea5,color:#000;")
     lines.append("    classDef onnxOutput fill:#ffe1b3,stroke:#a35a00,color:#000;")
     lines.append("    classDef onnxInitializer fill:#eeeeee,stroke:#888,color:#000;")
     lines.append("    classDef onnxOp fill:#d4ecd4,stroke:#3a8c3a,color:#000;")
+    lines.append("    classDef onnxTagShape fill:#f4d6ff,stroke:#8744a2,color:#000;")
+    lines.append("    classDef onnxTagAxes fill:#ffe9a8,stroke:#9e7a00,color:#000;")
+    lines.append("    classDef onnxTagWeight fill:#e0e0e0,stroke:#666,color:#000;")
 
     return "\n".join(lines)

@@ -31,6 +31,7 @@ def _vi(name: str, elem_type: int = 1, dims: tuple = ()) -> SimpleNamespace:
     ]
     return SimpleNamespace(
         name=name,
+        metadata_props=[],
         type=SimpleNamespace(
             tensor_type=SimpleNamespace(elem_type=elem_type, shape=SimpleNamespace(dim=dim)),
             sequence_type=None,
@@ -59,7 +60,7 @@ def _node(
 
 
 def _init(name: str, dims: tuple = (), data_type: int = 1) -> SimpleNamespace:
-    return SimpleNamespace(name=name, dims=list(dims), data_type=data_type)
+    return SimpleNamespace(name=name, dims=list(dims), data_type=data_type, metadata_props=[])
 
 
 def _graph(
@@ -75,6 +76,7 @@ def _graph(
         output=outputs,
         initializer=initializers or [],
         value_info=value_info or [],
+        metadata_props=[],
     )
 
 
@@ -229,6 +231,21 @@ class TestSvg(unittest.TestCase):
         self.assertIn("inplace: out0=in0(equal)", text)
         text_off = to_svg(_model(g), include_inplace=False)
         self.assertNotIn("inplace", text_off)
+
+    def test_tagged_colors(self) -> None:
+        from onnx_light.tools import write_value_and_node_tags_to_metadata
+
+        g = _graph(
+            nodes=[
+                _node("Shape", ["X"], ["S"], name="shape0"),
+                _node("Reshape", ["X", "S"], ["Y"], name="reshape0"),
+            ],
+            inputs=[_vi("X")],
+            outputs=[_vi("Y")],
+        )
+        write_value_and_node_tags_to_metadata(g)
+        text = to_svg(_model(g))
+        self.assertIn("#f4d6ff", text)
 
     def test_special_chars_escaped(self) -> None:
         g = _graph(

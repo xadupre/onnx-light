@@ -25,12 +25,15 @@ from __future__ import annotations
 from typing import Any
 
 from ._proto_utils import (
+    NODE_TAG_METADATA_KEY,
+    _graph_value_tags,
     _dtype_name,
     _extract_graph,
     _format_inplace_reuse,
     _format_shape,
     _iter,
     _looks_like_graph,
+    _node_metadata_value,
     _s,
 )
 
@@ -79,9 +82,10 @@ def _escape_xml(text: str) -> str:
 class _Box:
     """A single rectangle in the rendered diagram."""
 
-    def __init__(self, box_id: int, kind: str, lines: list[str]) -> None:
+    def __init__(self, box_id: int, kind: str, lines: list[str], tag: str = "") -> None:
         self.id = box_id
         self.kind = kind
+        self.tag = tag
         self.lines = [line for line in lines if line] or [""]
         text_width = max((len(line) for line in self.lines), default=0) * _CHAR_WIDTH
         self.width = text_width + 2 * _BOX_PAD_X
@@ -225,8 +229,10 @@ def to_svg_graph(
     # Edges as ordered (source box id, target box id, label) tuples.
     edges: list[tuple[int, int, str]] = []
 
-    def new_box(kind: str, lines: list[str]) -> _Box:
-        box = _Box(len(boxes), kind, lines)
+    value_tags = _graph_value_tags(graph)
+
+    def new_box(kind: str, lines: list[str], tag: str = "") -> _Box:
+        box = _Box(len(boxes), kind, lines, tag=tag)
         boxes.append(box)
         return box
 
@@ -259,7 +265,7 @@ def to_svg_graph(
         shape = shape_lookup.get(name, "")
         if shape:
             lines.append(shape)
-        box = new_box("input", lines)
+        box = new_box("input", lines, value_tags.get(name, ""))
         producer[name] = box.id
 
     # Initializer boxes (skip those already shown as inputs).
@@ -271,7 +277,7 @@ def to_svg_graph(
             shape = initializer_shapes.get(name, "")
             if shape:
                 lines.append(shape)
-            box = new_box("initializer", lines)
+            box = new_box("initializer", lines, value_tags.get(name, ""))
             producer[name] = box.id
 
     # Operator boxes (recorded first so producers exist before edges).
@@ -290,7 +296,8 @@ def to_svg_graph(
             inplace_label = _format_inplace_reuse(node)
             if inplace_label:
                 lines.append(inplace_label)
-        box = new_box("op", lines)
+        node_tag = _s(_node_metadata_value(node, NODE_TAG_METADATA_KEY)).lower()
+        box = new_box("op", lines, node_tag)
         op_boxes.append((box.id, node))
         for out in _iter(getattr(node, "output", ())):
             out_name = _s(out)
@@ -322,7 +329,7 @@ def to_svg_graph(
         shape = shape_lookup.get(name, "")
         if shape:
             lines.append(shape)
-        box = new_box("output", lines)
+        box = new_box("output", lines, value_tags.get(name, ""))
         src = producer.get(name)
         if src is not None:
             edges.append((src, box.id, shape if include_shapes else ""))
@@ -520,6 +527,17 @@ def _render_svg(
 
 def _render_box(box: _Box) -> str:
     style = _STYLES[box.kind]
+    if box.tag in {"shape", "axes", "weight"}:
+        style = {
+            "shape": {"fill": "#f4d6ff", "stroke": "#8744a2", "dashed": False, "rounded": True},
+            "axes": {"fill": "#ffe9a8", "stroke": "#9e7a00", "dashed": False, "rounded": True},
+            "weight": {
+                "fill": "#e0e0e0",
+                "stroke": "#666666",
+                "dashed": style["dashed"],
+                "rounded": True,
+            },
+        }[box.tag]
     rx = 12 if style["rounded"] else 4
     dash = ' stroke-dasharray="4 3"' if style["dashed"] else ""
     out = [

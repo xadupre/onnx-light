@@ -11,6 +11,7 @@ built by :mod:`onnx_light` and with messages built by the upstream
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # pragma: no cover - imports for type hints only.
@@ -144,6 +145,181 @@ def _node_metadata_value(node: Any, key: str) -> str:
     return ""
 
 
+def _set_metadata_value(obj: Any, key: str, value: str) -> None:
+    """Sets a metadata key/value pair on an ONNX-like proto object."""
+    add_metadata = getattr(obj, "add_metadata", None)
+    if callable(add_metadata):
+        add_metadata(key, value)
+        return
+    entries = getattr(obj, "metadata_props", None)
+    if entries is None:
+        return
+    for entry in entries:
+        if _s(getattr(entry, "key", "")) == key:
+            entry.value = value
+            return
+    entry_type = type(entries[0]) if entries else None
+    if entry_type is None:
+
+        class _Meta:
+            def __init__(self, k: str, v: str):
+                self.key = k
+                self.value = v
+
+        entries.append(_Meta(key, value))
+    else:
+        entries.append(entry_type(key=key, value=value))
+
+
+VALUE_TAG_METADATA_KEY = "onnx_light.value_tag"
+VALUE_TAGS_METADATA_KEY = "onnx_light.value_tags"
+NODE_TAG_METADATA_KEY = "onnx_light.node_tag"
+INPLACE_REUSE_METADATA_KEY = "onnx_light.inplace_reuse"
+VALUE_TAGS = {"shape", "axes", "weight"}
+
+
+def _normalise_value_tag(value: str) -> str:
+    value = _s(value).strip().lower()
+    return value if value in VALUE_TAGS else ""
+
+
+def infer_value_and_node_tags(
+    graph_or_nodes_or_function: Any,
+) -> tuple[dict[str, str], list[str]]:
+    """Infers semantic ``shape``/``axes``/``weight`` tags for values and nodes."""
+    if hasattr(graph_or_nodes_or_function, "graph"):
+        graph_or_nodes_or_function = graph_or_nodes_or_function.graph
+    if hasattr(graph_or_nodes_or_function, "node"):
+        nodes = list(_iter(getattr(graph_or_nodes_or_function, "node", ())))
+        graph_like = graph_or_nodes_or_function
+    else:
+        nodes = list(_iter(graph_or_nodes_or_function))
+        graph_like = None
+
+    value_tags: dict[str, str] = {}
+    node_tags: list[str] = []
+
+    def set_value_tag(name: str, tag: str) -> None:
+        if not name:
+            return
+        norm = _normalise_value_tag(tag)
+        if norm:
+            value_tags[name] = norm
+
+    if graph_like is not None:
+        for value_info in _iter(getattr(graph_like, "input", ())):
+            name = _s(getattr(value_info, "name", ""))
+            tag = _normalise_value_tag(_node_metadata_value(value_info, VALUE_TAG_METADATA_KEY))
+            if tag:
+                set_value_tag(name, tag)
+        for init in _iter(getattr(graph_like, "initializer", ())):
+            name = _s(getattr(init, "name", ""))
+            tag = (
+                _normalise_value_tag(_node_metadata_value(init, VALUE_TAG_METADATA_KEY))
+                or "weight"
+            )
+            set_value_tag(name, tag)
+        for value_info in _iter(getattr(graph_like, "value_info", ())):
+            name = _s(getattr(value_info, "name", ""))
+            tag = _normalise_value_tag(_node_metadata_value(value_info, VALUE_TAG_METADATA_KEY))
+            if tag:
+                set_value_tag(name, tag)
+        for value_info in _iter(getattr(graph_like, "output", ())):
+            name = _s(getattr(value_info, "name", ""))
+            tag = _normalise_value_tag(_node_metadata_value(value_info, VALUE_TAG_METADATA_KEY))
+            if tag:
+                set_value_tag(name, tag)
+        try:
+            payload = json.loads(_node_metadata_value(graph_like, VALUE_TAGS_METADATA_KEY))
+        except json.JSONDecodeError:
+            payload = {}
+        if isinstance(payload, dict):
+            for name, tag in payload.items():
+                set_value_tag(_s(name), _s(tag))
+
+    for node in nodes:
+        op_type = _s(getattr(node, "op_type", ""))
+        inputs = [_s(inp) for inp in _iter(getattr(node, "input", ()))]
+        outputs = [_s(out) for out in _iter(getattr(node, "output", ()))]
+        explicit_output_tag = ""
+
+        if op_type in {"Shape", "Size"}:
+            explicit_output_tag = "shape"
+        elif op_type == "Constant":
+            explicit_output_tag = "weight"
+
+        if len(inputs) >= 2:
+            if op_type in {"Reshape", "Expand", "Slice"}:
+                set_value_tag(inputs[1], "shape")
+            elif op_type in {
+                "Squeeze",
+                "Unsqueeze",
+                "ReduceSum",
+                "ReduceMean",
+                "ReduceMax",
+                "ReduceMin",
+            }:
+                set_value_tag(inputs[1], "axes")
+        if op_type == "Slice":
+            for idx, tag in ((2, "shape"), (3, "axes"), (4, "shape")):
+                if idx < len(inputs):
+                    set_value_tag(inputs[idx], tag)
+
+        inherited = ""
+        if inputs:
+            inherited = value_tags.get(inputs[0], "")
+        node_tag = explicit_output_tag or inherited
+        node_tags.append(node_tag)
+        out_tag = explicit_output_tag or inherited
+        if out_tag:
+            for out in outputs:
+                set_value_tag(out, out_tag)
+
+        for attr in _iter(getattr(node, "attribute", ())):
+            subgraphs = []
+            subgraph = getattr(attr, "g", None)
+            if subgraph is not None:
+                subgraphs.append(subgraph)
+            subgraphs.extend(_iter(getattr(attr, "graphs", ())))
+            for subgraph in subgraphs:
+                infer_value_and_node_tags(subgraph)
+
+    return value_tags, node_tags
+
+
+def write_value_and_node_tags_to_metadata(graph_or_nodes_or_function: Any) -> None:
+    """Writes inferred ``shape``/``axes``/``weight`` tags into metadata."""
+    value_tags, node_tags = infer_value_and_node_tags(graph_or_nodes_or_function)
+    if hasattr(graph_or_nodes_or_function, "graph"):
+        graph_or_nodes_or_function = graph_or_nodes_or_function.graph
+    nodes = _iter(getattr(graph_or_nodes_or_function, "node", graph_or_nodes_or_function))
+    for node, tag in zip(nodes, node_tags, strict=False):
+        if tag:
+            _set_metadata_value(node, NODE_TAG_METADATA_KEY, tag)
+    if hasattr(graph_or_nodes_or_function, "add_metadata") or hasattr(
+        graph_or_nodes_or_function, "metadata_props"
+    ):
+        payload = dict(sorted(value_tags.items()))
+        _set_metadata_value(
+            graph_or_nodes_or_function, VALUE_TAGS_METADATA_KEY, json.dumps(payload)
+        )
+        for collection in ("input", "value_info", "output", "initializer"):
+            for value in _iter(getattr(graph_or_nodes_or_function, collection, ())):
+                name = _s(getattr(value, "name", ""))
+                tag = value_tags.get(name, "")
+                if tag:
+                    _set_metadata_value(value, VALUE_TAG_METADATA_KEY, tag)
+    for node in _iter(getattr(graph_or_nodes_or_function, "node", ())):
+        for attr in _iter(getattr(node, "attribute", ())):
+            subgraphs = []
+            subgraph = getattr(attr, "g", None)
+            if subgraph is not None:
+                subgraphs.append(subgraph)
+            subgraphs.extend(_iter(getattr(attr, "graphs", ())))
+            for subgraph in subgraphs:
+                write_value_and_node_tags_to_metadata(subgraph)
+
+
 def _format_inplace_reuse(node: Any) -> str:
     """Returns a compact description of a node's in-place reuse opportunities.
 
@@ -152,8 +328,6 @@ def _format_inplace_reuse(node: Any) -> str:
     as ``inplace: out0=in1(equal)``.  Returns an empty string when the node
     carries no such metadata.
     """
-
-    from onnx_light.onnx_optim.shape_inference import INPLACE_REUSE_METADATA_KEY
 
     raw = _node_metadata_value(node, INPLACE_REUSE_METADATA_KEY)
     if not raw:
@@ -176,6 +350,31 @@ def _format_inplace_reuse(node: Any) -> str:
     if not parts:
         return ""
     return "inplace: " + ", ".join(parts)
+
+
+def _graph_value_tags(graph: Any) -> dict[str, str]:
+    """Collects value tags from graph/value metadata."""
+    tags: dict[str, str] = {}
+    for collection in ("input", "value_info", "output", "initializer"):
+        for value in _iter(getattr(graph, collection, ())):
+            name = _s(getattr(value, "name", ""))
+            if not name:
+                continue
+            tag = _normalise_value_tag(_node_metadata_value(value, VALUE_TAG_METADATA_KEY))
+            if tag:
+                tags[name] = tag
+    raw = _node_metadata_value(graph, VALUE_TAGS_METADATA_KEY)
+    if raw:
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            payload = {}
+        if isinstance(payload, dict):
+            for name, tag in payload.items():
+                norm = _normalise_value_tag(_s(tag))
+                if norm:
+                    tags[_s(name)] = norm
+    return tags
 
 
 def _extract_graph(model_or_graph: Any) -> Any:

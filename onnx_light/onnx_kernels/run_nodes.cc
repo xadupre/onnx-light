@@ -92,7 +92,7 @@ std::string FunctionLookupKey(const std::string &domain, const std::string &op_t
   return d + ":" + op_type + ":" + overload;
 }
 
-template <class Names> std::string FormatNameList(const Names &names) {
+template <class NameCollection> std::string FormatNameList(const NameCollection &names) {
   std::ostringstream oss;
   for (size_t i = 0; i < names.size(); ++i) {
     if (i > 0) {

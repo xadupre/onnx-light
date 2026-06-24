@@ -172,11 +172,15 @@ class ReferenceEvaluator:
         release_intermediates: bool = True,
     ) -> None:
         proto = self._load_proto(proto)
+        if not isinstance(verbose, int):
+            raise TypeError(f"verbose must be an integer, not {type(verbose).__name__}.")
+        if verbose < 0:
+            raise ValueError(f"verbose must be >= 0, not {verbose}.")
         self._model: ModelProto | None = None
         self._graph: GraphProto | None = None
         self._function: FunctionProto | None = None
         self._last_ctx: Any = None
-        self._verbose = int(verbose)
+        self._verbose = verbose
         self._events_enabled = events_enabled
         self._release_intermediates = release_intermediates
 

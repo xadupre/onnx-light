@@ -130,6 +130,13 @@ class TestReferenceEvaluator(ExtTestCase):
         sess = ReferenceEvaluator(model)
         self.assertEqual(sess.events(), [])
 
+    def test_verbose_must_be_non_negative_int(self):
+        model = parser.parse_model(_ABS_ADD_MODEL_SRC)
+        with self.assertRaises(TypeError):
+            ReferenceEvaluator(model, verbose=1.5)
+        with self.assertRaises(ValueError):
+            ReferenceEvaluator(model, verbose=-1)
+
     def test_events_after_run(self):
         # After run, events() should return a non-empty list whose entries
         # have an as_dict() method with the expected keys.

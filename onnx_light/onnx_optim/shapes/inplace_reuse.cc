@@ -228,7 +228,9 @@ void ComputeContext::ComputeInPlaceReuseGraph(const GraphProto &graph, const Sha
       }
       auto prod_it = producer.find(name);
       // Releasable values here are top-level intermediates produced by an
-      // earlier node. Values produced at this same node are not eligible.
+      // earlier node. ``-1`` marks declared graph inputs when input overwrite
+      // is enabled; they are not considered "results to release" metadata.
+      // Values produced at this same node are not eligible.
       if (prod_it == producer.end() || prod_it->second < 0 || prod_it->second >= i) {
         continue;
       }
@@ -322,10 +324,8 @@ void ComputeContext::WriteToMetadata(GraphProto &graph) const {
     throw std::invalid_argument(msg.str());
   }
   for (std::size_t i = 0; i < reuse_.size(); ++i) {
-    if (reuse_[i].empty()) {
-      if (release_after_[i].empty()) {
-        continue;
-      }
+    if (reuse_[i].empty() && release_after_[i].empty()) {
+      continue;
     }
     NodeProto &node = (*graph.mutable_node())[i];
     if (!reuse_[i].empty()) {

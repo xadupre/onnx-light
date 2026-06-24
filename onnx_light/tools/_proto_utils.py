@@ -11,7 +11,16 @@ built by :mod:`onnx_light` and with messages built by the upstream
 
 from __future__ import annotations
 
+import importlib.util
+import json
+import contextlib
 from typing import TYPE_CHECKING, Any
+
+_shape_inference: Any = None
+
+if importlib.util.find_spec("onnx_light.onnx_py._onnxpyoptim") is not None:
+    with contextlib.suppress(ImportError):  # pragma: no cover
+        from ..onnx_optim import shape_inference as _shape_inference
 
 if TYPE_CHECKING:  # pragma: no cover - imports for type hints only.
     from collections.abc import Iterable
@@ -144,6 +153,68 @@ def _node_metadata_value(node: Any, key: str) -> str:
     return ""
 
 
+# Metadata keys written by tooling:
+# - per-value tag -> VALUE_TAG_METADATA_KEY
+# - graph/function-level value-tag map -> VALUE_TAGS_METADATA_KEY
+# - per-node tag -> NODE_TAG_METADATA_KEY
+# - per-node in-place reuse map -> INPLACE_REUSE_METADATA_KEY
+VALUE_TAG_METADATA_KEY = "onnx_light.value_tag"
+VALUE_TAGS_METADATA_KEY = "onnx_light.value_tags"
+NODE_TAG_METADATA_KEY = "onnx_light.node_tag"
+INPLACE_REUSE_METADATA_KEY = "onnx_light.inplace_reuse"
+VALUE_TAGS = {"shape", "axes", "weight"}
+VALUE_TAG_COLORS = {
+    "shape": {"fill": "#f4d6ff", "stroke": "#8744a2"},
+    "axes": {"fill": "#ffe9a8", "stroke": "#9e7a00"},
+    "weight": {"fill": "#e0e0e0", "stroke": "#666666"},
+}
+
+
+def _normalise_value_tag(value: str) -> str:
+    value = _s(value).strip().lower()
+    return value if value in VALUE_TAGS else ""
+
+
+def _require_shape_inference_extension() -> Any:
+    """Gets the shape inference nanobind module.
+
+    Returns:
+        The imported ``onnx_light.onnx_optim.shape_inference`` module.
+    """
+    if _shape_inference is None:
+        raise RuntimeError(
+            "onnx_light.onnx_py._onnxpyoptim is unavailable, so "
+            "onnx_light.onnx_optim.shape_inference cannot be used. "
+            "Install the onnx_light C++ extension to use value/node tag inference."
+        )
+    return _shape_inference
+
+
+def infer_value_and_node_tags(
+    graph_or_nodes_or_function: Any,
+) -> tuple[dict[str, str], list[str]]:
+    """Infers semantic ``shape``/``axes``/``weight`` tags for values and nodes.
+
+    Returns:
+        A pair ``(value_tags, node_tags)`` where ``value_tags`` maps value
+        names to tags and ``node_tags`` is ordered like the processed node list.
+    """
+    return _require_shape_inference_extension().infer_value_and_node_tags(
+        graph_or_nodes_or_function
+    )
+
+
+def write_value_and_node_tags_to_metadata(graph_or_nodes_or_function: Any) -> None:
+    """Writes inferred ``shape``/``axes``/``weight`` tags into metadata.
+
+    Returns:
+        ``None``. The function mutates metadata fields in place.
+    """
+    _require_shape_inference_extension().write_value_and_node_tags_to_metadata(
+        graph_or_nodes_or_function
+    )
+
+
 def _format_inplace_reuse(node: Any) -> str:
     """Returns a compact description of a node's in-place reuse opportunities.
 
@@ -152,8 +223,6 @@ def _format_inplace_reuse(node: Any) -> str:
     as ``inplace: out0=in1(equal)``.  Returns an empty string when the node
     carries no such metadata.
     """
-
-    from onnx_light.onnx_optim.shape_inference import INPLACE_REUSE_METADATA_KEY
 
     raw = _node_metadata_value(node, INPLACE_REUSE_METADATA_KEY)
     if not raw:
@@ -176,6 +245,35 @@ def _format_inplace_reuse(node: Any) -> str:
     if not parts:
         return ""
     return "inplace: " + ", ".join(parts)
+
+
+def _graph_value_tags(graph: Any) -> dict[str, str]:
+    """Collects value tags from graph/value metadata.
+
+    Returns:
+        A dictionary mapping value names to normalized tags.
+    """
+    tags: dict[str, str] = {}
+    for collection in ("input", "value_info", "output", "initializer"):
+        for value in _iter(getattr(graph, collection, ())):
+            name = _s(getattr(value, "name", ""))
+            if not name:
+                continue
+            tag = _normalise_value_tag(_node_metadata_value(value, VALUE_TAG_METADATA_KEY))
+            if tag:
+                tags[name] = tag
+    raw = _node_metadata_value(graph, VALUE_TAGS_METADATA_KEY)
+    if raw:
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            payload = {}
+        if isinstance(payload, dict):
+            for name, tag in payload.items():
+                norm = _normalise_value_tag(_s(tag))
+                if norm:
+                    tags[_s(name)] = norm
+    return tags
 
 
 def _extract_graph(model_or_graph: Any) -> Any:

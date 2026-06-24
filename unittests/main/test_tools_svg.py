@@ -11,12 +11,15 @@ upstream :mod:`onnx` package.
 
 from __future__ import annotations
 
+import importlib.util
 import unittest
 import xml.dom.minidom
 from types import SimpleNamespace
 
 from onnx_light.tools import to_svg, to_svg_graph
 from onnx_light.tools.svg import _escape_xml
+
+HAS_OPTIM_EXT = importlib.util.find_spec("onnx_light.onnx_py._onnxpyoptim") is not None
 
 
 def _vi(name: str, elem_type: int = 1, dims: tuple = ()) -> SimpleNamespace:
@@ -31,6 +34,7 @@ def _vi(name: str, elem_type: int = 1, dims: tuple = ()) -> SimpleNamespace:
     ]
     return SimpleNamespace(
         name=name,
+        metadata_props=[],
         type=SimpleNamespace(
             tensor_type=SimpleNamespace(elem_type=elem_type, shape=SimpleNamespace(dim=dim)),
             sequence_type=None,
@@ -59,7 +63,7 @@ def _node(
 
 
 def _init(name: str, dims: tuple = (), data_type: int = 1) -> SimpleNamespace:
-    return SimpleNamespace(name=name, dims=list(dims), data_type=data_type)
+    return SimpleNamespace(name=name, dims=list(dims), data_type=data_type, metadata_props=[])
 
 
 def _graph(
@@ -75,6 +79,7 @@ def _graph(
         output=outputs,
         initializer=initializers or [],
         value_info=value_info or [],
+        metadata_props=[],
     )
 
 
@@ -229,6 +234,24 @@ class TestSvg(unittest.TestCase):
         self.assertIn("inplace: out0=in0(equal)", text)
         text_off = to_svg(_model(g), include_inplace=False)
         self.assertNotIn("inplace", text_off)
+
+    @unittest.skipUnless(HAS_OPTIM_EXT, "requires onnx_light C++ shape_inference bindings")
+    def test_tagged_colors(self) -> None:
+        from onnx_light.onnx import TensorProto, helper
+        from onnx_light.tools import write_value_and_node_tags_to_metadata
+
+        g = helper.make_graph(
+            [
+                helper.make_node("Shape", ["X"], ["S"], name="shape0"),
+                helper.make_node("Reshape", ["X", "S"], ["Y"], name="reshape0"),
+            ],
+            "g",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 2])],
+            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 2])],
+        )
+        write_value_and_node_tags_to_metadata(g)
+        text = to_svg(helper.make_model(g))
+        self.assertIn("#f4d6ff", text)
 
     def test_special_chars_escaped(self) -> None:
         g = _graph(

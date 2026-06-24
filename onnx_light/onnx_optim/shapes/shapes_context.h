@@ -669,6 +669,15 @@ public:
   /// Empties the event log without otherwise touching the context.
   void ClearEvents() noexcept { events_.clear(); }
 
+  /// Registers a callback invoked synchronously for every newly appended
+  /// :cpp:class:`ShapeEvent`. Used by callers that want to stream shape
+  /// inference progress while computation is still running.
+  void set_event_callback(std::function<void(const ShapeEvent &)> callback) {
+    event_callback_ = std::move(callback);
+  }
+  void clear_event_callback() noexcept { event_callback_ = nullptr; }
+  bool has_event_callback() const noexcept { return static_cast<bool>(event_callback_); }
+
   /// Appends a :cpp:class:`ShapeEvent` with action
   /// :cpp:enumerator:`ShapeEventAction::kComputeNode` summarising the
   /// shape-inference dispatch of a single ``NodeProto`` (its
@@ -696,6 +705,12 @@ private:
   /// :cpp:func:`AddLessEqualConstraint` when event logging is enabled.
   void LogConstraintEvent(ShapeEventAction action, const std::string &lhs, const std::string &rhs);
 
+  void EmitEvent(const ShapeEvent &ev) const {
+    if (event_callback_) {
+      event_callback_(ev);
+    }
+  }
+
   std::unordered_map<std::string, OptimTensor> tensors_;
   std::unordered_map<std::string, OptimSequence> sequences_;
   std::unordered_map<std::string, int> opsets_;
@@ -705,6 +720,7 @@ private:
   std::set<LessEqualConstraint> le_constraints_;
   std::map<SubgraphContextKey, std::shared_ptr<ShapesContext>> subgraph_contexts_;
   ShapeEventLog events_;
+  std::function<void(const ShapeEvent &)> event_callback_;
   bool events_enabled_ = false;
   int64_t current_node_index_ = -1;
   /// Index of the control-flow node in the parent graph currently being

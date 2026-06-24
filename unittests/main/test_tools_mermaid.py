@@ -11,11 +11,14 @@ upstream :mod:`onnx` package.
 
 from __future__ import annotations
 
+import importlib.util
 import unittest
 from types import SimpleNamespace
 
 from onnx_light.tools import to_mermaid, to_mermaid_graph
 from onnx_light.tools.mermaid import _escape_label, _format_shape
+
+HAS_OPTIM_EXT = importlib.util.find_spec("onnx_light.onnx_py._onnxpyoptim") is not None
 
 
 def _vi(name: str, elem_type: int = 1, dims: tuple = ()) -> SimpleNamespace:
@@ -30,6 +33,7 @@ def _vi(name: str, elem_type: int = 1, dims: tuple = ()) -> SimpleNamespace:
     ]
     return SimpleNamespace(
         name=name,
+        metadata_props=[],
         type=SimpleNamespace(
             tensor_type=SimpleNamespace(elem_type=elem_type, shape=SimpleNamespace(dim=dim)),
             sequence_type=None,
@@ -58,7 +62,7 @@ def _node(
 
 
 def _init(name: str, dims: tuple = (), data_type: int = 1) -> SimpleNamespace:
-    return SimpleNamespace(name=name, dims=list(dims), data_type=data_type)
+    return SimpleNamespace(name=name, dims=list(dims), data_type=data_type, metadata_props=[])
 
 
 def _graph(
@@ -74,6 +78,7 @@ def _graph(
         output=outputs,
         initializer=initializers or [],
         value_info=value_info or [],
+        metadata_props=[],
     )
     return g
 
@@ -200,6 +205,27 @@ class TestMermaid(unittest.TestCase):
         )
         text = to_mermaid(_model(g), include_inplace=True)
         self.assertIn("inplace: out0=in0(equal), out1=in1(greater)", text)
+
+    @unittest.skipUnless(HAS_OPTIM_EXT, "requires onnx_light C++ shape_inference bindings")
+    def test_tagged_style_classes(self) -> None:
+        from onnx_light.onnx import TensorProto, helper
+        from onnx_light.tools import write_value_and_node_tags_to_metadata
+
+        g = helper.make_graph(
+            [
+                helper.make_node("Shape", ["X"], ["S"], name="shape0"),
+                helper.make_node("Reshape", ["X", "S"], ["Y"], name="reshape0"),
+            ],
+            "g",
+            [helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 2])],
+            [helper.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 2])],
+        )
+        write_value_and_node_tags_to_metadata(g)
+        text = to_mermaid(helper.make_model(g))
+        self.assertIn(":::onnxTagShape", text)
+        self.assertIn("classDef onnxTagShape", text)
+        self.assertIn("classDef onnxTagAxes", text)
+        self.assertIn("classDef onnxTagWeight", text)
 
     def test_node_name_collision(self) -> None:
         """Two nodes with the same op_type and no name must get distinct ids."""

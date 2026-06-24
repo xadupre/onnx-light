@@ -3,6 +3,7 @@
 #include "onnx_optim/shapes/inplace_reuse.h"
 #include "onnx_optim/shapes/shape_inference.h"
 #include "onnx_optim/shapes/shapes_context.h"
+#include "onnx_optim/shapes/value_tags.h"
 #include <algorithm>
 #include <nanobind/nanobind.h>
 #include <nanobind/operators.h>
@@ -974,6 +975,9 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   // In-place reuse analysis
   // -----------------------------------------------------------------------
   shape_mod.attr("INPLACE_REUSE_METADATA_KEY") = onnx_shapes::kInPlaceReuseMetadataKey;
+  shape_mod.attr("VALUE_TAG_METADATA_KEY") = onnx_shapes::kValueTagMetadataKey;
+  shape_mod.attr("VALUE_TAGS_METADATA_KEY") = onnx_shapes::kValueTagsMetadataKey;
+  shape_mod.attr("NODE_TAG_METADATA_KEY") = onnx_shapes::kNodeTagMetadataKey;
 
   nb::enum_<onnx_shapes::InPlaceReuseKind>(
       shape_mod, "InPlaceReuseKind", nb::is_arithmetic(),
@@ -1078,4 +1082,64 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       "updated in place if the key already exists) whose value lists the opportunities as "
       "``output_index:input_index:kind`` triplets separated by ``;`` (``kind`` being ``equal`` "
       "or ``greater``). Nodes without any opportunity are left untouched.");
+
+  auto copy_node_list = [](nb::list nodes) {
+    std::vector<NodeProto> copied;
+    copied.reserve(nodes.size());
+    for (nb::handle h : nodes) {
+      copied.push_back(nb::cast<const NodeProto &>(h));
+    }
+    return copied;
+  };
+
+  shape_mod.def(
+      "infer_value_and_node_tags",
+      [](const GraphProto &graph) {
+        const auto inferred = onnx_shapes::InferValueAndNodeTags(graph);
+        return nb::make_tuple(inferred.first, inferred.second);
+      },
+      nb::arg("graph"),
+      "Infers semantic ``shape``/``axes``/``weight`` tags for values and nodes in ``graph``.");
+  shape_mod.def(
+      "infer_value_and_node_tags",
+      [](const FunctionProto &function) {
+        const auto inferred = onnx_shapes::InferValueAndNodeTags(function);
+        return nb::make_tuple(inferred.first, inferred.second);
+      },
+      nb::arg("function"),
+      "Infers semantic ``shape``/``axes``/``weight`` tags for values and nodes in ``function``.");
+  shape_mod.def(
+      "infer_value_and_node_tags",
+      [copy_node_list](nb::list nodes) {
+        const auto inferred = onnx_shapes::InferValueAndNodeTags(copy_node_list(nodes));
+        return nb::make_tuple(inferred.first, inferred.second);
+      },
+      nb::arg("nodes"), "Infers semantic ``shape``/``axes``/``weight`` tags for a node list.");
+
+  shape_mod.def(
+      "write_value_and_node_tags_to_metadata",
+      [](GraphProto &graph) { onnx_shapes::WriteValueAndNodeTagsToMetadata(graph); },
+      nb::arg("graph"), "Writes inferred value/node tags into graph metadata.");
+  shape_mod.def(
+      "write_value_and_node_tags_to_metadata",
+      [](FunctionProto &function) { onnx_shapes::WriteValueAndNodeTagsToMetadata(function); },
+      nb::arg("function"), "Writes inferred value/node tags into function metadata.");
+  shape_mod.def(
+      "write_value_and_node_tags_to_metadata",
+      [](ModelProto &model) { onnx_shapes::WriteValueAndNodeTagsToMetadata(model); },
+      nb::arg("model"), "Writes inferred value/node tags into ``model.graph`` metadata.");
+  shape_mod.def(
+      "write_value_and_node_tags_to_metadata",
+      [copy_node_list](nb::list nodes) {
+        const auto inferred = onnx_shapes::InferValueAndNodeTags(copy_node_list(nodes));
+        const auto &node_tags = inferred.second;
+        std::size_t i = 0;
+        for (nb::handle h : nodes) {
+          if (i < node_tags.size() && !node_tags[i].empty()) {
+            nb::cast<NodeProto &>(h).add_metadata(onnx_shapes::kNodeTagMetadataKey, node_tags[i]);
+          }
+          ++i;
+        }
+      },
+      nb::arg("nodes"), "Writes inferred node tags for a node list.");
 }

@@ -31,7 +31,11 @@ import sys
 
 
 def _cmd_fillshape(args: argparse.Namespace) -> int:
-    """Implements the ``fillshape`` subcommand."""
+    """Implements the ``fillshape`` subcommand.
+
+    Returns:
+        Exit code: 0 on success, 1 on failure.
+    """
     from .onnx import load, save
     from .onnx_optim.shape_inference import infer_shapes_model
     from .tools.pretty_print import pretty_onnx
@@ -114,7 +118,8 @@ def _build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     """Parses *argv* and dispatches to the appropriate subcommand.
 
-    Returns the exit code (0 for success, non-zero for failure).
+    Returns:
+        Exit code: 0 on success, non-zero on failure.
     """
     parser = _build_parser()
     args = parser.parse_args(argv)

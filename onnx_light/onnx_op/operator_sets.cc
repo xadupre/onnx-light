@@ -15,6 +15,7 @@
 #include "onnx_op/operator_sets_preview.h"
 #include "onnx_op/operator_sets_quantization.h"
 #include "onnx_op/operator_sets_reduction.h"
+#include "onnx_op/operator_sets_rt.h"
 #include "onnx_op/operator_sets_sequence.h"
 #include "onnx_op/operator_sets_tensor.h"
 #include "onnx_op/operator_sets_text.h"
@@ -48,6 +49,8 @@ std::vector<LightOpSchema> GetAllOnnxOpSchemasWithHistory(const std::string &op_
       quantization::GetAllOnnxOpQuantizationSchemasWithHistory(op_type, init_doc);
   const std::vector<LightOpSchema> reduction_schemas =
       reduction::GetAllOnnxOpReductionSchemasWithHistory(op_type, init_doc);
+  const std::vector<LightOpSchema> rt_schemas =
+      rt::GetAllOnnxOpRtSchemasWithHistory(op_type, init_doc);
   const std::vector<LightOpSchema> sequence_schemas =
       sequence::GetAllOnnxOpSequenceSchemasWithHistory(op_type, init_doc);
   const std::vector<LightOpSchema> tensor_schemas =
@@ -64,8 +67,9 @@ std::vector<LightOpSchema> GetAllOnnxOpSchemasWithHistory(const std::string &op_
                       math_schemas.size() + logical_schemas.size() + nn_schemas.size() +
                       object_detection_schemas.size() + optional_schemas.size() +
                       preview_schemas.size() + quantization_schemas.size() +
-                      reduction_schemas.size() + sequence_schemas.size() + tensor_schemas.size() +
-                      text_schemas.size() + traditionalml_schemas.size() + training_schemas.size());
+                      reduction_schemas.size() + rt_schemas.size() + sequence_schemas.size() +
+                      tensor_schemas.size() + text_schemas.size() + traditionalml_schemas.size() +
+                      training_schemas.size());
 
   all_schemas.insert(all_schemas.end(), controlflow_schemas.begin(), controlflow_schemas.end());
   all_schemas.insert(all_schemas.end(), generator_schemas.begin(), generator_schemas.end());
@@ -79,6 +83,7 @@ std::vector<LightOpSchema> GetAllOnnxOpSchemasWithHistory(const std::string &op_
   all_schemas.insert(all_schemas.end(), preview_schemas.begin(), preview_schemas.end());
   all_schemas.insert(all_schemas.end(), quantization_schemas.begin(), quantization_schemas.end());
   all_schemas.insert(all_schemas.end(), reduction_schemas.begin(), reduction_schemas.end());
+  all_schemas.insert(all_schemas.end(), rt_schemas.begin(), rt_schemas.end());
   all_schemas.insert(all_schemas.end(), sequence_schemas.begin(), sequence_schemas.end());
   all_schemas.insert(all_schemas.end(), tensor_schemas.begin(), tensor_schemas.end());
   all_schemas.insert(all_schemas.end(), text_schemas.begin(), text_schemas.end());

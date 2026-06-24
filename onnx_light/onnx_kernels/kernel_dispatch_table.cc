@@ -14,6 +14,7 @@
 #include "onnx_kernels/kernels/preview/include_preview_kernels.h"
 #include "onnx_kernels/kernels/quantization/include_quantization_kernels.h"
 #include "onnx_kernels/kernels/reduction/include_reduction_kernels.h"
+#include "onnx_kernels/kernels/rt/include_rt_kernels.h"
 #include "onnx_kernels/kernels/sequence/include_sequence_kernels.h"
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_kernels/kernels/text/include_text_kernels.h"
@@ -589,6 +590,28 @@ template <typename T> std::vector<T> TensorToVector(const Tensor &t) {
 
 const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable() {
   static const std::unordered_map<std::string, NodeKernelFn> table = {
+      {"ai.rt:DelayedInitializer",
+       [](const NodeProto &node, RuntimeContext &rt) {
+         RequireInputCount(node, 0);
+         RequireOutputCount(node, 1);
+         const AttributeProto *shape_attr = FindAttribute(node, "shape");
+         EXT_ENFORCE_INVALID(shape_attr != nullptr,
+                             "RunNode: op 'DelayedInitializer' is missing 'shape' INTS attribute.");
+         EXT_ENFORCE_INVALID(shape_attr->type() == AttributeProto::AttributeType::INTS,
+                             "RunNode: attribute 'shape' of op 'DelayedInitializer' must be INTS.");
+         kernel::DelayedInitializer::Attributes attrs;
+         attrs.shape.reserve(shape_attr->ints().size());
+         for (size_t i = 0; i < shape_attr->ints().size(); ++i) {
+           attrs.shape.push_back(shape_attr->ints()[i]);
+         }
+         attrs.dtype = static_cast<int32_t>(GetRequiredAttributeInt(node, "dtype"));
+         attrs.load_device = GetRequiredAttributeString(node, "load_device");
+         attrs.runtime_device = GetRequiredAttributeString(node, "runtime_device");
+         attrs.filename = GetRequiredAttributeString(node, "filename");
+         attrs.offset = GetRequiredAttributeInt(node, "offset");
+         kernel::DelayedInitializer kernel(rt.kernel_ctx(), std::move(attrs));
+         SetOutput(node, 0, kernel(), rt);
+       }},
       {"ai.onnx:Abs", MakeUnaryTrampoline<kernel::Abs>()},
       {"ai.onnx:Acos", MakeUnaryTrampoline<kernel::Acos>()},
       {"ai.onnx:Acosh", MakeUnaryTrampoline<kernel::Acosh>()},

@@ -51,6 +51,11 @@ run
         Defaults to 0.
     ``--verbose`` / ``-v``
         Print input names, shapes, dtypes, and per-output values.
+    ``--dump PATH``
+        Write all inputs and outputs to *PATH* as an ONNX model whose
+        ``graph.initializer`` list contains one ``TensorProto`` per input
+        and per output tensor (in that order).  Only ``numpy.ndarray``
+        values are stored; non-array outputs (e.g. sequences) are skipped.
 """
 
 from __future__ import annotations
@@ -255,6 +260,39 @@ def _make_random_input(elem_type: int, shape: list[int], seed: int) -> object:
     )
 
 
+def _dump_tensors_as_model(
+    tensors: dict[str, object], dump_path: str, *, ir_version: int = 8
+) -> None:
+    """Writes *tensors* to *dump_path* as an ONNX model with initializers.
+
+    Creates a ``ModelProto`` whose ``graph.initializer`` list contains one
+    ``TensorProto`` per entry in *tensors*.  Non-``numpy.ndarray`` values are
+    silently skipped.
+
+    Args:
+        tensors: Ordered mapping from tensor name to value.  Only
+            ``numpy.ndarray`` entries are stored.
+        dump_path: Filesystem path where the resulting ``.onnx`` file is
+            written.
+        ir_version: IR version to set on the model (default: 8).
+    """
+    import numpy as np
+
+    from .onnx import save
+    from .onnx.helper import make_graph, make_model, make_opsetid
+    from .onnx.numpy_helper import from_array
+
+    initializers = [
+        from_array(value, name=name)
+        for name, value in tensors.items()
+        if isinstance(value, np.ndarray)
+    ]
+    graph = make_graph([], "dump", [], [], initializer=initializers)
+    model = make_model(graph, opset_imports=[make_opsetid("", 21)])
+    model.ir_version = ir_version
+    save(model, dump_path)
+
+
 def _cmd_run(args: argparse.Namespace) -> None:
     """Implements the ``run`` subcommand."""
     import numpy as np
@@ -273,6 +311,7 @@ def _cmd_run(args: argparse.Namespace) -> None:
         dim_overrides[name.strip()] = int(value_str.strip())
     seed: int = args.seed
     verbose: bool = args.verbose
+    dump_path: str | None = args.dump
 
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model file not found: {model_path!r}")
@@ -310,6 +349,12 @@ def _cmd_run(args: argparse.Namespace) -> None:
                     print(f"  [{i}]: {elem}")
         else:
             print(f"output {name!r}: {value!r}")
+
+    if dump_path is not None:
+        all_tensors: dict[str, object] = dict(feed)
+        for name, value in zip(sess.output_names, outputs):
+            all_tensors[name] = value
+        _dump_tensors_as_model(all_tensors, dump_path)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -400,6 +445,16 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         default=False,
         help="Print input names, shapes, dtypes, and per-output values.",
+    )
+    run_parser.add_argument(
+        "--dump",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Write all inputs and outputs to PATH as an ONNX model whose "
+            "graph.initializer contains one TensorProto per tensor. "
+            "Non-array outputs (e.g. sequences) are skipped."
+        ),
     )
     run_parser.set_defaults(func=_cmd_run)
 

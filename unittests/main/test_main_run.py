@@ -234,6 +234,60 @@ class TestMainRun(ExtTestCase):
             output = buf.getvalue()
             self.assertIn("[2, 5]", output)
 
+    def test_run_dump_creates_file(self):
+        """run --dump creates an ONNX file at the given path."""
+        from onnx_light.__main__ import main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            dump_path = os.path.join(tmp, "dump.onnx")
+            self._save_model(_make_abs_model(), model_path)
+
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                main(["run", model_path, "--dump", dump_path])
+
+            self.assertTrue(os.path.exists(dump_path))
+
+    def test_run_dump_contains_inputs_and_outputs(self):
+        """run --dump stores both inputs and outputs as initializers."""
+        from onnx_light.__main__ import main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            dump_path = os.path.join(tmp, "dump.onnx")
+            self._save_model(_make_abs_model(), model_path)
+
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                main(["run", model_path, "--dump", dump_path])
+
+            dumped = onnxl.load(dump_path)
+            init_names = {init.name for init in dumped.graph.initializer}
+            # The Abs model has input "X" and output "Y".
+            self.assertIn("X", init_names)
+            self.assertIn("Y", init_names)
+
+    def test_run_dump_initializer_shapes(self):
+        """Dumped initializers have the correct shapes."""
+        from onnx_light.__main__ import main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            dump_path = os.path.join(tmp, "dump.onnx")
+            self._save_model(_make_abs_model(input_shape=[2, 3]), model_path)
+
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                main(["run", model_path, "--dump", dump_path])
+
+            dumped = onnxl.load(dump_path)
+            inits = {init.name: init for init in dumped.graph.initializer}
+            self.assertIn("X", inits)
+            self.assertEqual(list(inits["X"].dims), [2, 3])
+            self.assertIn("Y", inits)
+            self.assertEqual(list(inits["Y"].dims), [2, 3])
+
 
 class TestMakeRandomInput(ExtTestCase):
     """Unit tests for ``_make_random_input``."""
@@ -324,6 +378,61 @@ class TestResolveInputShape(ExtTestCase):
         vi = oh.make_tensor_sequence_value_info("X", onnxl.TensorProto.FLOAT, None)
         with self.assertRaises(ValueError):
             _resolve_input_shape(vi.type, {}, "X")
+
+
+class TestDumpTensorsAsModel(ExtTestCase):
+    """Unit tests for ``_dump_tensors_as_model``."""
+
+    @classmethod
+    def setUpClass(cls):
+        defs.register_onnx_operator_set_schema()
+
+    def test_creates_valid_onnx_file(self):
+        """Saved file is a valid ONNX ModelProto."""
+        from onnx_light.__main__ import _dump_tensors_as_model
+
+        with tempfile.TemporaryDirectory() as tmp:
+            dump_path = os.path.join(tmp, "dump.onnx")
+            tensors = {"A": np.array([1.0, 2.0], dtype=np.float32)}
+            _dump_tensors_as_model(tensors, dump_path)
+
+            dumped = onnxl.load(dump_path)
+            self.assertEqual(len(dumped.graph.initializer), 1)
+            self.assertEqual(dumped.graph.initializer[0].name, "A")
+
+    def test_multiple_tensors(self):
+        """All numpy arrays in the dict become initializers."""
+        from onnx_light.__main__ import _dump_tensors_as_model
+
+        with tempfile.TemporaryDirectory() as tmp:
+            dump_path = os.path.join(tmp, "dump.onnx")
+            tensors = {
+                "X": np.zeros((2, 3), dtype=np.float32),
+                "Y": np.ones((2, 3), dtype=np.float32),
+            }
+            _dump_tensors_as_model(tensors, dump_path)
+
+            dumped = onnxl.load(dump_path)
+            init_names = {init.name for init in dumped.graph.initializer}
+            self.assertIn("X", init_names)
+            self.assertIn("Y", init_names)
+
+    def test_non_array_values_are_skipped(self):
+        """Non-ndarray entries in the dict are ignored."""
+        from onnx_light.__main__ import _dump_tensors_as_model
+
+        with tempfile.TemporaryDirectory() as tmp:
+            dump_path = os.path.join(tmp, "dump.onnx")
+            tensors = {
+                "A": np.array([1.0], dtype=np.float32),
+                "B": [1, 2, 3],  # list: not an ndarray, should be skipped
+            }
+            _dump_tensors_as_model(tensors, dump_path)
+
+            dumped = onnxl.load(dump_path)
+            init_names = {init.name for init in dumped.graph.initializer}
+            self.assertIn("A", init_names)
+            self.assertNotIn("B", init_names)
 
 
 if __name__ == "__main__":

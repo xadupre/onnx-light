@@ -897,6 +897,10 @@ public:
           int64_t constant_offset = 0;
           bool has_constant_offset = false;
           if (const auto *cr = dynamic_cast<const Constant *>(left_bin->right.get())) {
+            if (left_bin->op == BinOpKind::Sub &&
+                cr->value == std::numeric_limits<int64_t>::min()) {
+              return n;
+            }
             constant_offset = (left_bin->op == BinOpKind::Add) ? cr->value : -cr->value;
             has_constant_offset = true;
           } else if (left_bin->op == BinOpKind::Add) {
@@ -905,7 +909,7 @@ public:
               has_constant_offset = true;
             }
           }
-          // Keep (x±d)//d unchanged so non-contiguous ring cases such as
+          // Keep (x+d)//d and (x-d)//d unchanged so non-contiguous ring cases such as
           // x//d + (x+d)//d are preserved for the dedicated ring pass.
           if (has_constant_offset && (constant_offset == d || constant_offset == -d))
             return n;

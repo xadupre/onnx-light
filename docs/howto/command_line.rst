@@ -27,6 +27,7 @@ Synopsis::
 
     python -m onnx_light fillshape MODEL [--output OUTPUT] [--keep]
                                          [--inplace-info] [--show]
+                                         [--verbose [LEVEL]]
 
 Positional argument
 ^^^^^^^^^^^^^^^^^^^
@@ -62,6 +63,13 @@ Options
     :func:`~onnx_light.tools.pretty_print.pretty_onnx`; do **not** save
     the model.
 
+``--verbose [LEVEL]``
+    Prints shape-inference progress information.
+
+    When passed without a level (``--verbose``), level ``1`` is used and
+    a short summary is printed.
+    Level ``2`` (``--verbose 2``) also prints per-event details.
+
 Examples
 ^^^^^^^^
 
@@ -94,6 +102,13 @@ Print inferred shapes without saving:
 .. code-block:: bash
 
     python -m onnx_light fillshape model.onnx --show
+
+Print shape-inference events:
+
+.. code-block:: bash
+
+    python -m onnx_light fillshape model.onnx --verbose
+    python -m onnx_light fillshape model.onnx --verbose 2
 
 External-data models
 ^^^^^^^^^^^^^^^^^^^^

@@ -26,6 +26,7 @@ from typing import Any
 
 from ._proto_utils import (
     NODE_TAG_METADATA_KEY,
+    VALUE_TAG_COLORS,
     _graph_value_tags,
     _dtype_name,
     _extract_graph,
@@ -528,16 +529,13 @@ def _render_svg(
 def _render_box(box: _Box) -> str:
     style = _STYLES[box.kind]
     if box.tag in {"shape", "axes", "weight"}:
+        colors = VALUE_TAG_COLORS[box.tag]
         style = {
-            "shape": {"fill": "#f4d6ff", "stroke": "#8744a2", "dashed": False, "rounded": True},
-            "axes": {"fill": "#ffe9a8", "stroke": "#9e7a00", "dashed": False, "rounded": True},
-            "weight": {
-                "fill": "#e0e0e0",
-                "stroke": "#666666",
-                "dashed": style["dashed"],
-                "rounded": True,
-            },
-        }[box.tag]
+            "fill": colors["fill"],
+            "stroke": colors["stroke"],
+            "dashed": style["dashed"] if box.tag == "weight" else False,
+            "rounded": True,
+        }
     rx = 12 if style["rounded"] else 4
     dash = ' stroke-dasharray="4 3"' if style["dashed"] else ""
     out = [

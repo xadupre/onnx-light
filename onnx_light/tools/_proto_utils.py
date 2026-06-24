@@ -146,7 +146,13 @@ def _node_metadata_value(node: Any, key: str) -> str:
 
 
 def _set_metadata_value(obj: Any, key: str, value: str) -> None:
-    """Sets a metadata key/value pair on an ONNX-like proto object."""
+    """Sets a metadata key/value pair on an ONNX-like proto object.
+
+    The helper first prefers ``obj.add_metadata(key, value)`` when this
+    method exists. Otherwise it falls back to mutating ``obj.metadata_props``:
+    an existing entry is updated in place, and when no entry exists a new one
+    is appended. Objects without either API are ignored.
+    """
     add_metadata = getattr(obj, "add_metadata", None)
     if callable(add_metadata):
         add_metadata(key, value)
@@ -171,11 +177,21 @@ def _set_metadata_value(obj: Any, key: str, value: str) -> None:
         entries.append(entry_type(key=key, value=value))
 
 
+# Metadata keys written by tooling:
+# - per-value tag -> VALUE_TAG_METADATA_KEY
+# - graph/function-level value-tag map -> VALUE_TAGS_METADATA_KEY
+# - per-node tag -> NODE_TAG_METADATA_KEY
+# - per-node in-place reuse map -> INPLACE_REUSE_METADATA_KEY
 VALUE_TAG_METADATA_KEY = "onnx_light.value_tag"
 VALUE_TAGS_METADATA_KEY = "onnx_light.value_tags"
 NODE_TAG_METADATA_KEY = "onnx_light.node_tag"
 INPLACE_REUSE_METADATA_KEY = "onnx_light.inplace_reuse"
 VALUE_TAGS = {"shape", "axes", "weight"}
+VALUE_TAG_COLORS = {
+    "shape": {"fill": "#f4d6ff", "stroke": "#8744a2"},
+    "axes": {"fill": "#ffe9a8", "stroke": "#9e7a00"},
+    "weight": {"fill": "#e0e0e0", "stroke": "#666666"},
+}
 
 
 def _normalise_value_tag(value: str) -> str:
@@ -186,7 +202,12 @@ def _normalise_value_tag(value: str) -> str:
 def infer_value_and_node_tags(
     graph_or_nodes_or_function: Any,
 ) -> tuple[dict[str, str], list[str]]:
-    """Infers semantic ``shape``/``axes``/``weight`` tags for values and nodes."""
+    """Infers semantic ``shape``/``axes``/``weight`` tags for values and nodes.
+
+    Returns:
+        A pair ``(value_tags, node_tags)`` where ``value_tags`` maps value
+        names to tags and ``node_tags`` is ordered like the processed node list.
+    """
     if hasattr(graph_or_nodes_or_function, "graph"):
         graph_or_nodes_or_function = graph_or_nodes_or_function.graph
     if hasattr(graph_or_nodes_or_function, "node"):
@@ -288,12 +309,22 @@ def infer_value_and_node_tags(
 
 
 def write_value_and_node_tags_to_metadata(graph_or_nodes_or_function: Any) -> None:
-    """Writes inferred ``shape``/``axes``/``weight`` tags into metadata."""
+    """Writes inferred ``shape``/``axes``/``weight`` tags into metadata.
+
+    Values are stored under ``onnx_light.value_tag`` (for value infos,
+    initializers, inputs and outputs) and as a graph/function-level JSON map
+    under ``onnx_light.value_tags``. Node tags are stored under
+    ``onnx_light.node_tag``. Subgraphs nested in node attributes are processed
+    recursively.
+
+    Returns:
+        ``None``. The function mutates metadata fields in place.
+    """
     value_tags, node_tags = infer_value_and_node_tags(graph_or_nodes_or_function)
     if hasattr(graph_or_nodes_or_function, "graph"):
         graph_or_nodes_or_function = graph_or_nodes_or_function.graph
     nodes = _iter(getattr(graph_or_nodes_or_function, "node", graph_or_nodes_or_function))
-    for node, tag in zip(nodes, node_tags, strict=False):
+    for node, tag in zip(nodes, node_tags, strict=True):
         if tag:
             _set_metadata_value(node, NODE_TAG_METADATA_KEY, tag)
     if hasattr(graph_or_nodes_or_function, "add_metadata") or hasattr(
@@ -353,7 +384,11 @@ def _format_inplace_reuse(node: Any) -> str:
 
 
 def _graph_value_tags(graph: Any) -> dict[str, str]:
-    """Collects value tags from graph/value metadata."""
+    """Collects value tags from graph/value metadata.
+
+    Returns:
+        A dictionary mapping value names to normalized tags.
+    """
     tags: dict[str, str] = {}
     for collection in ("input", "value_info", "output", "initializer"):
         for value in _iter(getattr(graph, collection, ())):

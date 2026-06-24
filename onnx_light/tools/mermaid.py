@@ -22,6 +22,7 @@ from typing import Any
 
 from ._proto_utils import (
     NODE_TAG_METADATA_KEY,
+    VALUE_TAG_COLORS,
     _graph_value_tags,
     _dtype_name,
     _extract_graph,
@@ -397,8 +398,17 @@ def to_mermaid_graph(
     lines.append("    classDef onnxOutput fill:#ffe1b3,stroke:#a35a00,color:#000;")
     lines.append("    classDef onnxInitializer fill:#eeeeee,stroke:#888,color:#000;")
     lines.append("    classDef onnxOp fill:#d4ecd4,stroke:#3a8c3a,color:#000;")
-    lines.append("    classDef onnxTagShape fill:#f4d6ff,stroke:#8744a2,color:#000;")
-    lines.append("    classDef onnxTagAxes fill:#ffe9a8,stroke:#9e7a00,color:#000;")
-    lines.append("    classDef onnxTagWeight fill:#e0e0e0,stroke:#666,color:#000;")
+    lines.append(
+        f"    classDef onnxTagShape fill:{VALUE_TAG_COLORS['shape']['fill']},"
+        f"stroke:{VALUE_TAG_COLORS['shape']['stroke']},color:#000;"
+    )
+    lines.append(
+        f"    classDef onnxTagAxes fill:{VALUE_TAG_COLORS['axes']['fill']},"
+        f"stroke:{VALUE_TAG_COLORS['axes']['stroke']},color:#000;"
+    )
+    lines.append(
+        f"    classDef onnxTagWeight fill:{VALUE_TAG_COLORS['weight']['fill']},"
+        f"stroke:{VALUE_TAG_COLORS['weight']['stroke']},color:#000;"
+    )
 
     return "\n".join(lines)

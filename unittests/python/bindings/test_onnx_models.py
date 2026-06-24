@@ -383,8 +383,7 @@ class TestOnnxLightHelper(ExtTestCase):
         )
 
         def callback(tensor, buffer, size_only):
-            if tensor.name != "W":
-                return len(tensor.raw_data) if size_only else 0
+            self.assertEqual(tensor.name, "W")
             if size_only:
                 return replacement.nbytes
             tensor.ClearField("dims")

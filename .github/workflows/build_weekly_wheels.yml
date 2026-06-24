@@ -16,6 +16,9 @@ on:
     # and build_release_cpp.yml at 07:00).
     - cron: "0 8 * * 1"
   workflow_dispatch:
+  push:
+    tags:
+      - "*"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

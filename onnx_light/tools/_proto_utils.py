@@ -16,7 +16,10 @@ import json
 from typing import TYPE_CHECKING, Any
 
 if importlib.util.find_spec("onnx_light.onnx_py._onnxpyoptim") is not None:
-    from ..onnx_optim import shape_inference as _shape_inference
+    try:
+        from ..onnx_optim import shape_inference as _shape_inference
+    except ImportError:  # pragma: no cover
+        _shape_inference = None
 else:  # pragma: no cover
     _shape_inference = None
 

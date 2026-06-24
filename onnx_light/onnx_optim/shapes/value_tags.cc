@@ -263,7 +263,9 @@ void WriteValueAndNodeTagsToMetadata(GraphProto &graph) {
   const auto inferred = InferValueAndNodeTags(graph);
   const auto &value_tags = inferred.first;
   const auto &node_tags = inferred.second;
-  for (std::size_t i = 0; i < node_tags.size(); ++i) {
+  const std::size_t node_limit =
+      std::min(node_tags.size(), static_cast<std::size_t>(graph.node().size()));
+  for (std::size_t i = 0; i < node_limit; ++i) {
     if (!node_tags[i].empty()) {
       SetMetadataValue(*graph.mutable_node(i), kNodeTagMetadataKey, node_tags[i]);
     }
@@ -306,7 +308,9 @@ void WriteValueAndNodeTagsToMetadata(FunctionProto &function) {
   const auto inferred = InferValueAndNodeTags(function);
   const auto &value_tags = inferred.first;
   const auto &node_tags = inferred.second;
-  for (std::size_t i = 0; i < node_tags.size(); ++i) {
+  const std::size_t node_limit =
+      std::min(node_tags.size(), static_cast<std::size_t>(function.node().size()));
+  for (std::size_t i = 0; i < node_limit; ++i) {
     if (!node_tags[i].empty()) {
       SetMetadataValue(*function.mutable_node(i), kNodeTagMetadataKey, node_tags[i]);
     }

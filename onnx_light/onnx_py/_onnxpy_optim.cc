@@ -1083,6 +1083,15 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       "``output_index:input_index:kind`` triplets separated by ``;`` (``kind`` being ``equal`` "
       "or ``greater``). Nodes without any opportunity are left untouched.");
 
+  auto copy_node_list = [](nb::list nodes) {
+    std::vector<NodeProto> copied;
+    copied.reserve(nodes.size());
+    for (nb::handle h : nodes) {
+      copied.push_back(nb::cast<const NodeProto &>(h));
+    }
+    return copied;
+  };
+
   shape_mod.def(
       "infer_value_and_node_tags",
       [](const GraphProto &graph) {
@@ -1101,13 +1110,8 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       "Infers semantic ``shape``/``axes``/``weight`` tags for values and nodes in ``function``.");
   shape_mod.def(
       "infer_value_and_node_tags",
-      [](nb::list nodes) {
-        std::vector<NodeProto> copied;
-        copied.reserve(nodes.size());
-        for (nb::handle h : nodes) {
-          copied.push_back(nb::cast<const NodeProto &>(h));
-        }
-        const auto inferred = onnx_shapes::InferValueAndNodeTags(copied);
+      [copy_node_list](nb::list nodes) {
+        const auto inferred = onnx_shapes::InferValueAndNodeTags(copy_node_list(nodes));
         return nb::make_tuple(inferred.first, inferred.second);
       },
       nb::arg("nodes"), "Infers semantic ``shape``/``axes``/``weight`` tags for a node list.");
@@ -1126,13 +1130,8 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       nb::arg("model"), "Writes inferred value/node tags into ``model.graph`` metadata.");
   shape_mod.def(
       "write_value_and_node_tags_to_metadata",
-      [](nb::list nodes) {
-        std::vector<NodeProto> copied;
-        copied.reserve(nodes.size());
-        for (nb::handle h : nodes) {
-          copied.push_back(nb::cast<const NodeProto &>(h));
-        }
-        const auto inferred = onnx_shapes::InferValueAndNodeTags(copied);
+      [copy_node_list](nb::list nodes) {
+        const auto inferred = onnx_shapes::InferValueAndNodeTags(copy_node_list(nodes));
         const auto &node_tags = inferred.second;
         std::size_t i = 0;
         for (nb::handle h : nodes) {

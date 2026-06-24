@@ -273,6 +273,7 @@ template <typename cls> bool _ParseFromIstream(cls &self, std::istream *input) {
   // allocated exactly once.  For non-seekable streams (pipes, network sockets,
   // etc.) fall back to the iterator-based read.
   std::string buffer;
+  bool seekable_read_done = false;
   const std::streampos start = input->tellg();
   if (start != std::streampos(-1)) {
     if (input->seekg(0, std::ios::end)) {
@@ -283,10 +284,11 @@ template <typename cls> bool _ParseFromIstream(cls &self, std::istream *input) {
         buffer.resize(static_cast<size_t>(size));
         input->read(buffer.data(), size);
         buffer.resize(static_cast<size_t>(input->gcount()));
+        seekable_read_done = true;
       }
     }
   }
-  if (buffer.empty()) {
+  if (!seekable_read_done) {
     buffer.assign(std::istreambuf_iterator<char>(*input), std::istreambuf_iterator<char>());
   }
   // Reaching EOF is expected after reading all bytes; only report failure for

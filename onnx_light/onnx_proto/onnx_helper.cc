@@ -284,7 +284,7 @@ template <typename Nodes, typename F> void ForEachAttributeTensorInNodes(Nodes &
 
 } // namespace
 
-// Public helper shared by the generic and helper-based ModelProto serialization paths.
+// Shared ModelProto serialization helper declared in onnx_helper.h.
 void ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &options) {
   if (!options.raw_data_callback || !model.has_graph()) {
     return;

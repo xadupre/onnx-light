@@ -65,6 +65,8 @@ struct PySerializeRawDataCallback {
     if (size_only || buffer == nullptr) {
       py_buffer = nb::none();
     } else {
+      // The writable view borrows C++-managed storage for the duration of the callback only,
+      // so the capsule deliberately uses a no-op deleter.
       nb::capsule owner(static_cast<void *>(buffer), [](void *) noexcept {});
       py_buffer =
           nb::cast(nb::ndarray<nb::numpy, uint8_t, nb::ndim<1>>(buffer, {buffer_size}, owner));

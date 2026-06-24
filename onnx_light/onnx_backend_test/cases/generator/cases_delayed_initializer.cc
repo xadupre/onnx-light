@@ -24,11 +24,13 @@ namespace {
 constexpr const char *kAiRtDomain = "ai.rt";
 
 std::vector<std::filesystem::path> &CleanupPaths() {
+  // Heap-allocated so the atexit cleanup handler never touches a destroyed static.
   static auto *paths = new std::vector<std::filesystem::path>();
   return *paths;
 }
 
 std::mutex &CleanupMutex() {
+  // Heap-allocated so the atexit cleanup handler never touches a destroyed static.
   static auto *mutex = new std::mutex();
   return *mutex;
 }

@@ -11,8 +11,14 @@ built by :mod:`onnx_light` and with messages built by the upstream
 
 from __future__ import annotations
 
+import importlib.util
 import json
 from typing import TYPE_CHECKING, Any
+
+if importlib.util.find_spec("onnx_light.onnx_py._onnxpyoptim") is not None:
+    from ..onnx_optim import shape_inference as _shape_inference
+else:  # pragma: no cover
+    _shape_inference = None
 
 if TYPE_CHECKING:  # pragma: no cover - imports for type hints only.
     from collections.abc import Iterable
@@ -199,7 +205,7 @@ def _normalise_value_tag(value: str) -> str:
     return value if value in VALUE_TAGS else ""
 
 
-def infer_value_and_node_tags(
+def _infer_value_and_node_tags_python(
     graph_or_nodes_or_function: Any,
 ) -> tuple[dict[str, str], list[str]]:
     """Infers semantic ``shape``/``axes``/``weight`` tags for values and nodes.
@@ -303,12 +309,12 @@ def infer_value_and_node_tags(
                 subgraphs.append(subgraph)
             subgraphs.extend(_iter(getattr(attr, "graphs", ())))
             for subgraph in subgraphs:
-                infer_value_and_node_tags(subgraph)
+                _infer_value_and_node_tags_python(subgraph)
 
     return value_tags, node_tags
 
 
-def write_value_and_node_tags_to_metadata(graph_or_nodes_or_function: Any) -> None:
+def _write_value_and_node_tags_to_metadata_python(graph_or_nodes_or_function: Any) -> None:
     """Writes inferred ``shape``/``axes``/``weight`` tags into metadata.
 
     Values are stored under ``onnx_light.value_tag`` (for value infos,
@@ -320,7 +326,7 @@ def write_value_and_node_tags_to_metadata(graph_or_nodes_or_function: Any) -> No
     Returns:
         ``None``. The function mutates metadata fields in place.
     """
-    value_tags, node_tags = infer_value_and_node_tags(graph_or_nodes_or_function)
+    value_tags, node_tags = _infer_value_and_node_tags_python(graph_or_nodes_or_function)
     if hasattr(graph_or_nodes_or_function, "graph"):
         graph_or_nodes_or_function = graph_or_nodes_or_function.graph
     nodes = _iter(getattr(graph_or_nodes_or_function, "node", graph_or_nodes_or_function))
@@ -348,7 +354,50 @@ def write_value_and_node_tags_to_metadata(graph_or_nodes_or_function: Any) -> No
                 subgraphs.append(subgraph)
             subgraphs.extend(_iter(getattr(attr, "graphs", ())))
             for subgraph in subgraphs:
-                write_value_and_node_tags_to_metadata(subgraph)
+                _write_value_and_node_tags_to_metadata_python(subgraph)
+
+
+def _is_onnx_light_proto_or_node_list(obj: Any) -> bool:
+    module_name = type(obj).__module__
+    if module_name.startswith("onnx_light."):
+        return True
+    if (
+        isinstance(obj, list)
+        and obj
+        and all(type(n).__module__.startswith("onnx_light.") for n in obj)
+    ):
+        return True
+    return False
+
+
+def infer_value_and_node_tags(
+    graph_or_nodes_or_function: Any,
+) -> tuple[dict[str, str], list[str]]:
+    """Infers semantic ``shape``/``axes``/``weight`` tags for values and nodes.
+
+    Returns:
+        A pair ``(value_tags, node_tags)`` where ``value_tags`` maps value
+        names to tags and ``node_tags`` is ordered like the processed node list.
+    """
+    if _shape_inference is not None and _is_onnx_light_proto_or_node_list(
+        graph_or_nodes_or_function
+    ):
+        return _shape_inference.infer_value_and_node_tags(graph_or_nodes_or_function)
+    return _infer_value_and_node_tags_python(graph_or_nodes_or_function)
+
+
+def write_value_and_node_tags_to_metadata(graph_or_nodes_or_function: Any) -> None:
+    """Writes inferred ``shape``/``axes``/``weight`` tags into metadata.
+
+    Returns:
+        ``None``. The function mutates metadata fields in place.
+    """
+    if _shape_inference is not None and _is_onnx_light_proto_or_node_list(
+        graph_or_nodes_or_function
+    ):
+        _shape_inference.write_value_and_node_tags_to_metadata(graph_or_nodes_or_function)
+        return
+    _write_value_and_node_tags_to_metadata_python(graph_or_nodes_or_function)
 
 
 def _format_inplace_reuse(node: Any) -> str:

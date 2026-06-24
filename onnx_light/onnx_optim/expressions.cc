@@ -821,6 +821,91 @@ int64_t floor_div_i64(int64_t a, int64_t b) {
   return q;
 }
 
+/// Returns whether the node represents the constant value zero.
+inline bool is_constant_zero(const Node &n) {
+  const auto *c = dynamic_cast<const Constant *>(&n);
+  return c && c->value == 0;
+}
+
+/// Returns true when `node` is `x+d` or `x-d` with the given denominator `d`.
+/// Returns false for `x-INT64_MIN` to avoid signed-overflow when negating the
+/// right-hand constant offset.
+bool has_single_step_floordiv_offset(const Node &node, int64_t d) {
+  const auto *left_bin = dynamic_cast<const BinOp *>(&node);
+  if (!left_bin || (left_bin->op != BinOpKind::Add && left_bin->op != BinOpKind::Sub))
+    return false;
+
+  int64_t constant_offset = 0;
+  bool has_constant_offset = false;
+  if (const auto *cr = dynamic_cast<const Constant *>(left_bin->right.get())) {
+    if (left_bin->op == BinOpKind::Sub && cr->value == std::numeric_limits<int64_t>::min()) {
+      // Avoid overflow when computing -INT64_MIN.
+      return false;
+    }
+    constant_offset = (left_bin->op == BinOpKind::Add) ? cr->value : -cr->value;
+    has_constant_offset = true;
+  } else if (left_bin->op == BinOpKind::Add) {
+    if (const auto *cl = dynamic_cast<const Constant *>(left_bin->left.get())) {
+      constant_offset = cl->value;
+      has_constant_offset = true;
+    }
+  } else if (left_bin->op == BinOpKind::Sub) {
+    // `c-x` is not the `x±c` pattern this guard handles.
+    return false;
+  }
+  return has_constant_offset && (constant_offset == d || constant_offset == -d);
+}
+
+/// Decomposes the input `node` into `symbolic + offset`.
+/// @param node The input expression to decompose.
+/// @param symbolic The output non-constant expression term.
+/// @param offset The output folded integer constant term.
+void split_symbolic_and_offset(const Node &node, NodePtr &symbolic, int64_t &offset) {
+  if (const auto *c = dynamic_cast<const Constant *>(&node)) {
+    symbolic = std::make_unique<Constant>(0);
+    offset = c->value;
+    return;
+  }
+  if (const auto *b = dynamic_cast<const BinOp *>(&node)) {
+    if (b->op == BinOpKind::Add || b->op == BinOpKind::Sub) {
+      NodePtr ls, rs;
+      int64_t lo = 0, ro = 0;
+      split_symbolic_and_offset(*b->left, ls, lo);
+      split_symbolic_and_offset(*b->right, rs, ro);
+      offset = (b->op == BinOpKind::Add) ? (lo + ro) : (lo - ro);
+      if (is_constant_zero(*ls)) {
+        symbolic = (b->op == BinOpKind::Add)
+                       ? std::move(rs)
+                       : std::make_unique<UnaryOp>(UnaryOpKind::USub, std::move(rs));
+      } else if (is_constant_zero(*rs)) {
+        symbolic = std::move(ls);
+      } else {
+        symbolic = std::make_unique<BinOp>(std::move(ls), b->op, std::move(rs));
+      }
+      return;
+    }
+  }
+  if (const auto *u = dynamic_cast<const UnaryOp *>(&node)) {
+    NodePtr os;
+    int64_t oo = 0;
+    split_symbolic_and_offset(*u->operand, os, oo);
+    if (u->op == UnaryOpKind::USub) {
+      offset = -oo;
+      symbolic = is_constant_zero(*os)
+                     ? std::move(os)
+                     : std::make_unique<UnaryOp>(UnaryOpKind::USub, std::move(os));
+      return;
+    }
+    if (u->op == UnaryOpKind::UAdd) {
+      symbolic = std::move(os);
+      offset = oo;
+      return;
+    }
+  }
+  symbolic = node.clone();
+  offset = 0;
+}
+
 } // namespace
 
 class DistributeFloorDivOverAddTransformer : public Transformer {
@@ -835,6 +920,27 @@ public:
     int64_t d = dc->value;
     if (d < 0)
       return n;
+    // Keep (x+d)//d and (x-d)//d unchanged so non-contiguous ring cases (offsets
+    // that do not cover every residue class, e.g. x//d + (x+d)//d) are preserved
+    // for the dedicated ring pass.
+    if (n->op == BinOpKind::FloorDiv && has_single_step_floordiv_offset(*n->left, d))
+      return n;
+    if (n->op == BinOpKind::FloorDiv || n->op == BinOpKind::ExactDiv) {
+      NodePtr symbolic;
+      int64_t offset = 0;
+      split_symbolic_and_offset(*n->left, symbolic, offset);
+      if (offset != 0 && offset % d == 0) {
+        int64_t offset_quotient = offset / d;
+        if (is_constant_zero(*symbolic))
+          return std::make_unique<Constant>(offset_quotient);
+        auto base =
+            std::make_unique<BinOp>(std::move(symbolic), n->op, std::make_unique<Constant>(d));
+        if (offset_quotient == 0)
+          return base;
+        return std::make_unique<BinOp>(std::move(base), BinOpKind::Add,
+                                       std::make_unique<Constant>(offset_quotient));
+      }
+    }
     if (auto r = try_exact_divide(*n->left, d))
       return r;
     // Fallback: split numerator into (quotient * d) + constant_residual.
@@ -1363,6 +1469,7 @@ static NodePtr apply_pipeline(NodePtr node) {
     node = muldiv_tr.visit(std::move(node));
     node = fold_tr.visit(std::move(node));
     node = muldiv_tr.visit(std::move(node));
+    node = fd_ring_tr.visit(std::move(node));
     node = distrib_tr.visit(std::move(node));
     node = max_tr.visit(std::move(node));
     // SimplifyParensTransformer is a no-op; omitted

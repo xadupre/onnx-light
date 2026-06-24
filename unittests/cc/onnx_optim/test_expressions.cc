@@ -120,6 +120,8 @@ TEST(SimplifyExpressions, SimplifyExpression_distribute_floordiv) {
   // Constant residual equal to or greater than divisor folds into an
   // additive integer constant.
   EXPECT_EQ(get_str(simplify_expression("(2*b+2*c+3)//2")), "b+c+1");
+  EXPECT_EQ(get_str(simplify_expression("(sequence-10)//5")), "sequence//5-2");
+  EXPECT_EQ(get_str(simplify_expression("(sequence+10)//5")), "sequence//5+2");
   EXPECT_EQ(get_str(simplify_expression("(2*b+3*c)//2")), "(2*b+3*c)//2");
 }
 
@@ -418,6 +420,8 @@ TEST(ExactDiv, Simplify_cancel_common_factor) {
   EXPECT_EQ(get_str(simplify_expression("(3*H)/:3")), "H");
   EXPECT_EQ(get_str(simplify_expression("(batch*seq)/:seq")), "batch");
   EXPECT_EQ(get_str(simplify_expression("(1024*a)/:2")), "512*a");
+  EXPECT_EQ(get_str(simplify_expression("(sequence-10)/:5")), "sequence/:5-2");
+  EXPECT_EQ(get_str(simplify_expression("(sequence+10)/:5")), "sequence/:5+2");
 }
 
 TEST(ExactDiv, Simplify_exact_commutes_with_mult) {

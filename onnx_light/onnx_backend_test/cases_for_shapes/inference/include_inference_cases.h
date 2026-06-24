@@ -70,6 +70,10 @@ void RegisterNestedLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &re
 /// Expressions must be simplified.
 void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &registry);
 
+/// Registers a MaxPool case whose output spatial dim simplifies from
+/// ``(seq + 10) // 5`` to ``seq//5+2``.
+void RegisterFloorDivOffsetShapeInferenceCase(std::vector<TestCase> &registry);
+
 /// Registers a ``Slice(axis=2, starts=0, ends=-1) → Abs`` case on symbolic
 /// input ``X[a,b,c]`` to exercise symbolic Slice-length inference
 /// (``c-1``) without creating fresh dimension names.

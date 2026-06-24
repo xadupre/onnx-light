@@ -30,12 +30,32 @@ fillshape
         under the key ``onnx_light.inplace_reuse``.
     ``--show``
         Print the inferred shapes to stdout; do **not** save the model.
+    ``--verbose [LEVEL]``
+        Print shape-inference progress information. With no level, defaults
+        to ``1`` (summary). With ``2``, also prints per-event details.
 """
 
 from __future__ import annotations
 
 import argparse
 import os
+
+
+def _print_shape_inference_events(events: list) -> None:
+    """Prints a compact shape-inference event summary."""
+    print(f"[fillshape] shape inference events: {len(events)}")
+
+
+def _print_shape_inference_events_detailed(events: list) -> None:
+    """Prints shape-inference event details."""
+    for ev in events:
+        d = ev.as_dict()
+        op = f"{d['op_domain']}::{d['op_type']}" if d["op_type"] else "-"
+        print(
+            f"[fillshape] node={d['node_index']:<3d} "
+            f"action={d['action']:<12s} op={op:<20s} "
+            f"name={d['name'] or '-':<16s} shape={d['shape']}"
+        )
 
 
 def _cmd_fillshape(args: argparse.Namespace) -> None:
@@ -56,6 +76,7 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
     keep: bool = args.keep
     inplace_info: bool = args.inplace_info
     show: bool = args.show
+    verbose: int = args.verbose
 
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model file not found: {model_path!r}")
@@ -67,13 +88,20 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
     # Detect whether the model references weights stored in a separate file.
     has_external_data = any(uses_external_data(init) for init in model.graph.initializer)
 
-    if inplace_info:
+    if inplace_info or verbose > 0:
         # Retain the ShapesContext so the in-place reuse analysis can
-        # reuse the already-inferred shape data.
+        # reuse the already-inferred shape data or log shape events.
         ctx = ShapesContext()
+        ctx.events_enabled = verbose > 0
         compute_shape_model(ctx, model, keep)
         apply_inferred_shapes_to_model(ctx, model)
-        write_inplace_reuse_to_metadata(ctx, model.graph)
+        if verbose > 0:
+            events = ctx.events()
+            _print_shape_inference_events(events)
+            if verbose >= 2:
+                _print_shape_inference_events_detailed(events)
+        if inplace_info:
+            write_inplace_reuse_to_metadata(ctx, model.graph)
     else:
         infer_shapes_model(model, prefill_with_value_info_output=keep)
 
@@ -145,6 +173,18 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         default=False,
         help="Print inferred shapes to stdout; do not save the model.",
+    )
+    fillshape_parser.add_argument(
+        "--verbose",
+        nargs="?",
+        const=1,
+        default=0,
+        metavar="LEVEL",
+        type=int,
+        help=(
+            "Print shape-inference progress; default level is 1 when the option "
+            "is present. Level 2 also prints per-event details."
+        ),
     )
     fillshape_parser.set_defaults(func=_cmd_fillshape)
 

@@ -33,6 +33,8 @@ std::mutex &CleanupMutex() {
   return mutex;
 }
 
+// Removes every temporary weights file registered for DelayedInitializer
+// backend cases and logs cleanup failures at process exit.
 void CleanupWeightsFiles() {
   std::lock_guard<std::mutex> lock(CleanupMutex());
   for (const auto &path : CleanupPaths()) {
@@ -45,6 +47,8 @@ void CleanupWeightsFiles() {
   }
 }
 
+// Registers one temporary weights-file path for process-exit cleanup, making
+// sure the atexit handler is installed exactly once in a thread-safe way.
 void RegisterCleanupPath(const std::filesystem::path &path) {
   static std::once_flag cleanup_once;
   std::call_once(cleanup_once, []() { std::atexit(CleanupWeightsFiles); });
@@ -55,6 +59,8 @@ void RegisterCleanupPath(const std::filesystem::path &path) {
   }
 }
 
+// Writes one temporary weights file for a backend case, requiring a basename,
+// registering cleanup, and returning the absolute path used by the test node.
 std::string WriteWeightsFile(const std::string &filename, const std::vector<uint8_t> &bytes) {
   namespace fs = std::filesystem;
   const fs::path filename_path(filename);
@@ -81,6 +87,9 @@ std::string WriteWeightsFile(const std::string &filename, const std::vector<uint
   return path.string();
 }
 
+// Creates one ``ai.rt::DelayedInitializer`` backend case, writes the expected
+// bytes to a temporary weights file (optionally prefixed before ``offset``),
+// and registers the single-node model with the provided expected output.
 void RegisterDelayedInitializerCase(std::vector<TestCase> &registry, const std::string &case_name,
                                     const std::string &filename, const std::string &load_device,
                                     int64_t offset, const std::vector<uint8_t> &prefix,
@@ -133,6 +142,8 @@ void RegisterDelayedInitializerCase(std::vector<TestCase> &registry, const std::
 
 } // namespace
 
+// Registers backend cases covering both supported load-device modes:
+// eager CPU loading and deferred file loading.
 void RegisterDelayedInitializerCases(std::vector<TestCase> &registry) {
   RegisterDelayedInitializerCase(
       registry, "test_cc_delayedinitializer_file", "onnx_light_backend_delayedinitializer_file.bin",

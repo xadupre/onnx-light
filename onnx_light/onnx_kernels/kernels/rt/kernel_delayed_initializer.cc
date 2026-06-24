@@ -4,6 +4,8 @@
 
 #include "onnx_kernels/kernels/rt/include_rt_kernels.h"
 
+#include <cerrno>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <limits>
@@ -75,9 +77,11 @@ std::vector<uint8_t> DelayedInitializer::LoadBytes(const Attributes &attrs) {
                       "kernel::DelayedInitializer filename is not a regular file: '",
                       attrs.filename, "'.");
 
+  errno = 0;
   std::ifstream stream(path, std::ios::binary | std::ios::ate);
+  const int open_errno = errno;
   EXT_ENFORCE_INVALID(stream.good(), "kernel::DelayedInitializer unable to open file '",
-                      attrs.filename, "'.");
+                      attrs.filename, "': ", std::strerror(open_errno), ".");
 
   const std::streamoff file_size = stream.tellg();
   EXT_ENFORCE_INVALID(file_size >= 0,
@@ -96,7 +100,8 @@ std::vector<uint8_t> DelayedInitializer::LoadBytes(const Attributes &attrs) {
                       "'.");
   stream.read(reinterpret_cast<char *>(bytes.data()), static_cast<std::streamsize>(byte_count));
   EXT_ENFORCE_INVALID(stream.gcount() == static_cast<std::streamsize>(byte_count),
-                      "kernel::DelayedInitializer read failed for '", attrs.filename, "'.");
+                      "kernel::DelayedInitializer read failed for '", attrs.filename,
+                      "': expected ", byte_count, " bytes, got ", stream.gcount(), ".");
   return bytes;
 }
 

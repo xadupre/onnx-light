@@ -11,28 +11,29 @@ namespace ONNX_LIGHT_NAMESPACE {
  * @defgroup encryption Encrypted model I/O
  * @{
  *
- * Saves and loads ONNX ModelProto objects as single, AES-256-CBC encrypted
- * binary files.
+ * Saves and loads ONNX ModelProto objects as single encrypted binary files.
  *
- * @warning **Security limitation**: The current format (ONNXCRY1) uses
- * AES-256-CBC without a Message Authentication Code (MAC).  This means
- * encrypted payloads are malleable — an attacker who can modify the
- * ciphertext can tamper with the decrypted output without detection.
- * A future format revision (ONNXCRY2) should use an authenticated
- * encryption mode (e.g. AES-256-GCM) to provide integrity guarantees.
- * Until then, callers should verify model integrity via an external
- * mechanism (e.g. HMAC signature, content hash) when loading models
- * from untrusted sources.
+ * Supported formats:
+ * - ONNXCRY1: AES-256-CBC (legacy, no MAC)
+ * - ONNXCRY2: ChaCha20-Poly1305 (authenticated encryption)
  *
  * ### File format
  *
  * ```
  * Offset  Size  Field
  * ------  ----  -----
+ *   ONNXCRY1 (AES-256-CBC):
  *      0     8  Magic: "ONNXCRY1"
  *      8    16  Random PBKDF2 salt
  *     24    16  Random AES-CBC initialisation vector
  *     40     N  AES-256-CBC ciphertext (PKCS#7 padded protobuf payload)
+ *
+ *   ONNXCRY2 (ChaCha20-Poly1305):
+ *      0     8  Magic: "ONNXCRY2"
+ *      8    16  Random PBKDF2 salt
+ *     24    12  Random nonce
+ *     36    16  Authentication tag
+ *     52     N  ChaCha20 ciphertext (same length as plaintext)
  * ```
  *
  * ### Key derivation
@@ -43,7 +44,7 @@ namespace ONNX_LIGHT_NAMESPACE {
  */
 
 /**
- * Serializes *model* to a single AES-256-CBC encrypted file.
+ * Serializes *model* to a single encrypted file.
  *
  * The ModelProto is first serialized to an in-memory buffer (honouring
  * *opts*), then encrypted and written to *file_path*.  The input model is
@@ -51,16 +52,21 @@ namespace ONNX_LIGHT_NAMESPACE {
  *
  * @param model   The model to save.
  * @param file_path  Destination file path.  Created or truncated.
- * @param key     Passphrase / raw key used to derive the AES-256 key via
+ * @param key     Passphrase / raw key used to derive the encryption key via
  *                PBKDF2-HMAC-SHA256 (100 000 iterations).
  * @param opts    Serialization options (e.g. raw_data_threshold).
+ * @param encryption  Encryption algorithm: ``"AES-256-CBC"`` (ONNXCRY1) or
+ *                ``"ChaCha20-Poly1305"`` (ONNXCRY2).
  * @throws std::runtime_error on OpenSSL errors or I/O failures.
  */
 void SaveEncryptedModel(ModelProto &model, const std::string &file_path, const std::string &key,
-                        const SerializeOptions &opts = SerializeOptions{});
+                        const SerializeOptions &opts = SerializeOptions{},
+                        const std::string &encryption = "AES-256-CBC");
+void SaveEncryptedModel(ModelProto &model, const std::string &file_path, const std::string &key,
+                        const std::string &encryption);
 
 /**
- * Loads and decrypts an AES-256-CBC encrypted ONNX model from *file_path*.
+ * Loads and decrypts an encrypted ONNX model from *file_path*.
  *
  * The file must have been produced by SaveEncryptedModel() with the same
  * passphrase.  The decrypted bytes are parsed into *model*.
@@ -75,31 +81,36 @@ void LoadEncryptedModel(ModelProto &model, const std::string &file_path, const s
                         const ParseOptions &opts = ParseOptions{});
 
 /**
- * Serializes *model* to an in-memory AES-256-CBC encrypted byte string.
+ * Serializes *model* to an in-memory encrypted byte string.
  *
  * Equivalent to SaveEncryptedModel() but the ciphertext is returned as a
  * `std::string` (raw bytes) instead of being written to a file.  The caller
  * can write, transmit, or cache the returned buffer as required.
  *
  * @param model  The model to encrypt.
- * @param key    Passphrase / raw key used to derive the AES-256 key via
+ * @param key    Passphrase / raw key used to derive the encryption key via
  *               PBKDF2-HMAC-SHA256 (100 000 iterations).
  * @param opts   Serialization options.
- * @return       Raw encrypted bytes in the ONNXCRY1 format.
+ * @param encryption  Encryption algorithm: ``"AES-256-CBC"`` (ONNXCRY1) or
+ *               ``"ChaCha20-Poly1305"`` (ONNXCRY2).
+ * @return       Raw encrypted bytes in ONNXCRY1 or ONNXCRY2 format.
  * @throws std::runtime_error on OpenSSL errors.
  */
 std::string SaveEncryptedModelToString(ModelProto &model, const std::string &key,
-                                       const SerializeOptions &opts = SerializeOptions{});
+                                       const SerializeOptions &opts = SerializeOptions{},
+                                       const std::string &encryption = "AES-256-CBC");
+std::string SaveEncryptedModelToString(ModelProto &model, const std::string &key,
+                                       const std::string &encryption);
 
 /**
- * Decrypts and parses an in-memory AES-256-CBC encrypted byte string into
+ * Decrypts and parses an in-memory encrypted byte string into
  * *model*.
  *
  * The buffer must have been produced by SaveEncryptedModelToString() (or
  * SaveEncryptedModel()) with the same passphrase.
  *
  * @param model          Output model populated from the decrypted payload.
- * @param encrypted_data Raw encrypted bytes in the ONNXCRY1 format.
+ * @param encrypted_data Raw encrypted bytes in ONNXCRY1 or ONNXCRY2 format.
  * @param key            Passphrase / raw key (must match the one used to save).
  * @param opts           Parsing options.
  * @throws std::runtime_error on decryption failure or bad magic.

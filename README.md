@@ -51,7 +51,8 @@ The C++ code is split into several small libraries so a downstream project
 can link only what it needs:
 
 - `onnx_light::lib_onnx_proto` – protobuf-compatible message types,
-  parser / serializer, external data, optional AES-256 encrypted save / load.
+  parser / serializer, external data, optional encrypted save / load
+  (AES-256-CBC or ChaCha20-Poly1305).
 - `onnx_light::lib_onnx_bil` – current ONNX C++ API
 - `onnx_light::lib_onnx_op` – lightweight `LightOpSchema` registrations for
   ONNX operator domains, with no shape inference.

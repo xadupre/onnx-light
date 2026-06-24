@@ -821,13 +821,16 @@ int64_t floor_div_i64(int64_t a, int64_t b) {
   return q;
 }
 
-bool is_constant_zero(const Node &n) {
+/// Returns whether the node represents the constant value zero.
+inline bool is_constant_zero(const Node &n) {
   const auto *c = dynamic_cast<const Constant *>(&n);
   return c && c->value == 0;
 }
 
-// Splits `node` into `symbolic + offset` where `offset` is a folded integer
-// constant and `symbolic` contains the remaining expression.
+/// Decomposes the input `node` into `symbolic + offset`.
+/// @param node The input expression to decompose.
+/// @param symbolic The output non-constant expression term.
+/// @param offset The output folded integer constant term.
 void split_symbolic_and_offset(const Node &node, NodePtr &symbolic, int64_t &offset) {
   if (const auto *c = dynamic_cast<const Constant *>(&node)) {
     symbolic = std::make_unique<Constant>(0);
@@ -893,15 +896,15 @@ public:
       int64_t offset = 0;
       split_symbolic_and_offset(*n->left, symbolic, offset);
       if (offset != 0 && offset % d == 0) {
-        int64_t add = offset / d;
+        int64_t offset_quotient = offset / d;
         if (is_constant_zero(*symbolic))
-          return std::make_unique<Constant>(add);
+          return std::make_unique<Constant>(offset_quotient);
         auto base = std::make_unique<BinOp>(std::move(symbolic), BinOpKind::FloorDiv,
                                             std::make_unique<Constant>(d));
-        if (add == 0)
+        if (offset_quotient == 0)
           return base;
         return std::make_unique<BinOp>(std::move(base), BinOpKind::Add,
-                                       std::make_unique<Constant>(add));
+                                       std::make_unique<Constant>(offset_quotient));
       }
     }
     if (auto r = try_exact_divide(*n->left, d))

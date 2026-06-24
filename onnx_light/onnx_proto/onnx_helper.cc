@@ -284,7 +284,6 @@ template <typename Nodes, typename F> void ForEachAttributeTensorInNodes(Nodes &
 
 } // namespace
 
-// Shared ModelProto serialization helper declared in onnx_helper.h.
 void ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &options) {
   if (!options.raw_data_callback || !model.has_graph()) {
     return;
@@ -297,8 +296,9 @@ void ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &op
     const bool reset_external_data =
         it->has_data_location() && it->ref_data_location() == TensorProto::DataLocation::EXTERNAL;
     const int64_t rewritten_size = options.raw_data_callback(*it, nullptr, 0, true);
-    EXT_ENFORCE(rewritten_size >= 0, "raw_data_callback returned a negative size ", rewritten_size,
-                " for tensor ", it->ref_name().as_string(), ".");
+    EXT_ENFORCE(rewritten_size >= 0,
+                "raw_data_callback returned a negative size. Value=", rewritten_size,
+                ", tensor=", it->ref_name().as_string(), ".");
     if (rewritten_size > 0) {
       utils::ByteSpan rewritten_raw_data;
       if (options.alignment > 1) {

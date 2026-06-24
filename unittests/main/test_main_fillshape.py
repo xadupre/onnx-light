@@ -196,6 +196,42 @@ class TestMainFillshape(ExtTestCase):
             node1_meta = {entry.key: entry.value for entry in result.graph.node[1].metadata_props}
             self.assertIn("onnx_light.inplace_reuse", node1_meta)
 
+    def test_fillshape_shape_tag_option(self):
+        """fillshape --shape-tag writes value/node tag metadata into the model."""
+        from onnx_light.__main__ import main
+        from onnx_light.onnx_optim.shape_inference import (
+            NODE_TAG_METADATA_KEY,
+            VALUE_TAGS_METADATA_KEY,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            # Build Shape(X)->S, Reshape(X, S)->Y: S should get the "shape" tag.
+            shape_node = oh.make_node("Shape", inputs=["X"], outputs=["S"])
+            reshape_node = oh.make_node("Reshape", inputs=["X", "S"], outputs=["Y"])
+            x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 3])
+            y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
+            graph = oh.make_graph([shape_node, reshape_node], "g", [x], [y])
+            model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+            model.ir_version = 8
+            self._save_model(model, model_path)
+
+            main(["fillshape", model_path, "--shape-tag"])
+
+            result = load(model_path)
+            # Shapes must also be filled.
+            dims = list(result.graph.output[0].type.tensor_type.shape.dim)
+            self.assertEqual(len(dims), 2)
+
+            # The graph should carry value_tags metadata.
+            graph_meta = {entry.key: entry.value for entry in result.graph.metadata_props}
+            self.assertIn(VALUE_TAGS_METADATA_KEY, graph_meta)
+
+            # Shape node (node 0) should carry the "shape" node tag.
+            node0_meta = {entry.key: entry.value for entry in result.graph.node[0].metadata_props}
+            self.assertIn(NODE_TAG_METADATA_KEY, node0_meta)
+            self.assertEqual(node0_meta[NODE_TAG_METADATA_KEY], "shape")
+
     def test_fillshape_missing_file_raises(self):
         """fillshape raises when the model file does not exist."""
         from onnx_light.__main__ import main

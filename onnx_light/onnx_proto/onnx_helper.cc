@@ -297,8 +297,8 @@ void ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &op
     const bool reset_external_data =
         it->has_data_location() && it->ref_data_location() == TensorProto::DataLocation::EXTERNAL;
     const int64_t rewritten_size = options.raw_data_callback(*it, nullptr, 0, true);
-    EXT_ENFORCE(rewritten_size >= 0, "SerializeOptions.raw_data_callback returned a negative size ",
-                rewritten_size, " for tensor ", it->ref_name().as_string(), ".");
+    EXT_ENFORCE(rewritten_size >= 0, "raw_data_callback returned a negative size ", rewritten_size,
+                " for tensor ", it->ref_name().as_string(), ".");
     if (rewritten_size > 0) {
       utils::ByteSpan rewritten_raw_data;
       if (options.alignment > 1) {
@@ -309,13 +309,13 @@ void ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &op
       }
       const int64_t filled_size = options.raw_data_callback(*it, rewritten_raw_data.data(),
                                                             rewritten_raw_data.size(), false);
-      EXT_ENFORCE(filled_size == rewritten_size, "SerializeOptions.raw_data_callback returned ",
-                  filled_size, " bytes in the fill pass for tensor ", it->ref_name().as_string(),
+      EXT_ENFORCE(filled_size == rewritten_size, "raw_data_callback returned ", filled_size,
+                  " bytes in the fill pass for tensor ", it->ref_name().as_string(),
                   " after reporting ", rewritten_size, " bytes in the size pass.");
       it->ref_raw_data() = std::move(rewritten_raw_data);
     } else {
       const int64_t filled_size = options.raw_data_callback(*it, nullptr, 0, false);
-      EXT_ENFORCE(filled_size == 0, "SerializeOptions.raw_data_callback returned ", filled_size,
+      EXT_ENFORCE(filled_size == 0, "raw_data_callback returned ", filled_size,
                   " bytes in the fill pass for tensor ", it->ref_name().as_string(),
                   " after reporting 0 bytes in the size pass.");
       it->ref_raw_data().clear();

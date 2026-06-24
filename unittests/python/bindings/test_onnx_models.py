@@ -418,19 +418,19 @@ class TestOnnxLightHelper(ExtTestCase):
         encrypted_by_name = {}
         meta_by_name = {}
 
-        def encrypt_bytes_chacha20(raw):
+        def _encrypt_bytes_chacha20(raw):
             payload = onh.from_array(np.frombuffer(raw, dtype=np.uint8), name="PAYLOAD")
             holder = oh.make_model(oh.make_graph([], "encrypt_payload", [], [], [payload]))
             return onnxl.save_encrypted_string(holder, key, encryption="ChaCha20-Poly1305")
 
-        def decrypt_bytes_chacha20(blob):
+        def _decrypt_bytes_chacha20(blob):
             holder = onnxl.load_encrypted_string(blob, key)
             return onh.to_array(holder.graph.initializer[0]).tobytes()
 
         def serialize_callback(tensor, buffer, size_only):
             encrypted = encrypted_by_name.get(tensor.name)
             if encrypted is None:
-                encrypted = encrypt_bytes_chacha20(bytes(tensor.raw_data))
+                encrypted = _encrypt_bytes_chacha20(bytes(tensor.raw_data))
                 encrypted_by_name[tensor.name] = encrypted
                 meta_by_name[tensor.name] = (int(tensor.data_type), list(tensor.dims))
             if size_only:
@@ -455,7 +455,7 @@ class TestOnnxLightHelper(ExtTestCase):
             tensor.ClearField("dims")
             if dims_text:
                 tensor.dims.extend(int(value) for value in dims_text.split(",") if value)
-            tensor.raw_data = decrypt_bytes_chacha20(bytes(tensor.raw_data))
+            tensor.raw_data = _decrypt_bytes_chacha20(bytes(tensor.raw_data))
             return None
 
         popts = onnxl.ParseOptions()

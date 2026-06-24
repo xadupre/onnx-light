@@ -178,6 +178,7 @@ if hasattr(onnxl.ModelProto(), "SerializeToEncryptedString"):
     meta_by_name = {}
 
     def encrypt_weights(tensor, buffer, size_only):
+        """Encrypts tensor raw_data with ChaCha20 and writes it to the output buffer."""
         encrypted = encrypted_by_name.get(tensor.name)
         if encrypted is None:
             encrypted = _encrypt_bytes_chacha20(bytes(tensor.raw_data))
@@ -198,6 +199,7 @@ if hasattr(onnxl.ModelProto(), "SerializeToEncryptedString"):
     encrypted_serialized = onnx_model.SerializeToString(serialize_options)
 
     def decrypt_weights(tensor: onnxl.TensorProto):
+        """Restores original tensor dtype/dims/raw_data from callback-encrypted metadata."""
         if not tensor.doc_string.startswith("chacha20:"):
             return None
         _, dtype_text, dims_text = tensor.doc_string.split(":", 2)

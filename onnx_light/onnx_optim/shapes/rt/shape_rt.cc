@@ -22,6 +22,9 @@ TensorType ResolveDtype(const NodeProto &node, const char *op_name) {
   const AttributeProto *dtype_attr = FindAttribute(node, "dtype");
   EXT_ENFORCE_INVALID(dtype_attr != nullptr, op_name, ": required attribute 'dtype' is missing.");
   const int64_t dtype_value = dtype_attr->i();
+  EXT_ENFORCE_INVALID(dtype_value >= static_cast<int64_t>(TensorProto::DataType::UNDEFINED) &&
+                          dtype_value <= static_cast<int64_t>(TensorProto::DataType::INT2),
+                      op_name, ": attribute 'dtype' is out of range: ", dtype_value, ".");
   TensorType out_dtype = DataTypeToTensorType(static_cast<TensorProto::DataType>(dtype_value));
   EXT_ENFORCE_INVALID(out_dtype != TensorType::kUndefined, op_name,
                       ": attribute 'dtype' has unsupported value ", dtype_value, ".");
@@ -34,7 +37,7 @@ OptimShape ShapeFromAttribute(const NodeProto &node, const char *op_name) {
                       ": required attribute 'shape' is missing.");
   OptimShape out_shape;
   for (int64_t dim : dims) {
-    EXT_ENFORCE_INVALID(!(dim < 0), op_name,
+    EXT_ENFORCE_INVALID(dim >= 0, op_name,
                         ": attribute 'shape' must not contain negative dims, got ", dim, ".");
     out_shape.PushBack(OptimDim(dim));
   }

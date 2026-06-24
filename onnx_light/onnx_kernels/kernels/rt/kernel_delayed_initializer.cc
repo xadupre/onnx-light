@@ -48,7 +48,7 @@ Tensor DelayedInitializer::operator()() const {
   return Tensor("", attrs_.dtype, attrs_.shape, LoadBytes(attrs_));
 }
 
-int64_t DelayedInitializer::ElementCount(const std::vector<int64_t> &shape) {
+int64_t DelayedInitializer::ComputeElementCount(const std::vector<int64_t> &shape) {
   int64_t count = 1;
   for (int64_t dim : shape) {
     EXT_ENFORCE_INVALID(dim >= 0,
@@ -63,7 +63,7 @@ int64_t DelayedInitializer::ElementCount(const std::vector<int64_t> &shape) {
 }
 
 std::vector<uint8_t> DelayedInitializer::LoadBytes(const Attributes &attrs) {
-  const int64_t element_count = ElementCount(attrs.shape);
+  const int64_t element_count = ComputeElementCount(attrs.shape);
   const size_t byte_count = PackedByteSize(attrs.dtype, element_count);
   std::vector<uint8_t> bytes(byte_count);
   if (byte_count == 0) {

@@ -65,7 +65,7 @@ int64_t GetRequiredIntAttribute(const NodeProto &node, const char *name, const c
   return attr->i();
 }
 
-void ValidateDevicesAndLocation(const NodeProto &node, const char *op_name) {
+void ValidateDeviceAttributes(const NodeProto &node, const char *op_name) {
   const std::string load_device = GetRequiredStringAttribute(node, "load_device", op_name);
   EXT_ENFORCE_INVALID(load_device == "cpu" || load_device == "file", op_name,
                       ": attribute 'load_device' must be 'cpu' or 'file', got '", load_device,
@@ -88,7 +88,7 @@ void ComputeShapeDelayedInitializer(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(node.input_size() == 0, kCaller, ": DelayedInitializer requires no inputs.");
   TensorType out_dtype = ResolveDtype(node, kCaller);
   OptimShape out_shape = ShapeFromAttribute(node, kCaller);
-  ValidateDevicesAndLocation(node, kCaller);
+  ValidateDeviceAttributes(node, kCaller);
   ctx.Set(node.output(0), OptimTensor(nullptr, out_dtype, std::move(out_shape)));
 }
 

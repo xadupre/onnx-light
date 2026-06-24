@@ -35,7 +35,7 @@ public:
 
 private:
   static std::vector<uint8_t> LoadBytes(const Attributes &attrs);
-  static int64_t ElementCount(const std::vector<int64_t> &shape);
+  static int64_t ComputeElementCount(const std::vector<int64_t> &shape);
 
   Attributes attrs_;
   std::vector<uint8_t> loaded_bytes_;

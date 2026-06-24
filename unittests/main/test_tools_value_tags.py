@@ -15,8 +15,8 @@ from onnx_light.tools._proto_utils import NODE_TAG_METADATA_KEY, VALUE_TAGS_META
 HAS_OPTIM_EXT = importlib.util.find_spec("onnx_light.onnx_py._onnxpyoptim") is not None
 
 
-def _meta_dict(obj: object) -> dict[str, str]:
-    return {m.key: m.value for m in getattr(obj, "metadata_props", [])}
+def _meta_dict(proto_obj: object) -> dict[str, str]:
+    return {m.key: m.value for m in getattr(proto_obj, "metadata_props", [])}
 
 
 class TestValueTagsErrors(unittest.TestCase):

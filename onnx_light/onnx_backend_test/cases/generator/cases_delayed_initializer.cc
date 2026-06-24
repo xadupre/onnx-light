@@ -7,9 +7,11 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -26,18 +28,27 @@ std::vector<std::filesystem::path> &CleanupPaths() {
   return paths;
 }
 
+std::mutex &CleanupMutex() {
+  static std::mutex mutex;
+  return mutex;
+}
+
 void CleanupWeightsFiles() {
+  std::lock_guard<std::mutex> lock(CleanupMutex());
   for (const auto &path : CleanupPaths()) {
     std::error_code ec;
     std::filesystem::remove(path, ec);
+    if (ec) {
+      std::fprintf(stderr, "DelayedInitializer backend-test cleanup failed for '%s': %s\n",
+                   path.string().c_str(), ec.message().c_str());
+    }
   }
 }
 
 void RegisterCleanupPath(const std::filesystem::path &path) {
-  [[maybe_unused]] static const int cleanup_registered = []() {
-    std::atexit(CleanupWeightsFiles);
-    return 0;
-  }();
+  static std::once_flag cleanup_once;
+  std::call_once(cleanup_once, []() { std::atexit(CleanupWeightsFiles); });
+  std::lock_guard<std::mutex> lock(CleanupMutex());
   auto &paths = CleanupPaths();
   if (std::find(paths.begin(), paths.end(), path) == paths.end()) {
     paths.push_back(path);
@@ -46,7 +57,12 @@ void RegisterCleanupPath(const std::filesystem::path &path) {
 
 std::string WriteWeightsFile(const std::string &filename, const std::vector<uint8_t> &bytes) {
   namespace fs = std::filesystem;
-  const fs::path path = fs::temp_directory_path() / filename;
+  const fs::path filename_path(filename);
+  if (filename_path.has_parent_path()) {
+    throw std::runtime_error("DelayedInitializer backend-test filename must be a basename, got '" +
+                             filename_path.string() + "'.");
+  }
+  const fs::path path = fs::temp_directory_path() / filename_path.filename();
   std::error_code ec;
   fs::remove(path, ec);
   std::ofstream out(path, std::ios::binary | std::ios::trunc);

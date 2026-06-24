@@ -34,11 +34,11 @@ const TestCase *FindCase(const std::vector<TestCase> &cases, const std::string &
   return nullptr;
 }
 
-std::string ToString(const utils::String &s) { return std::string(s.data(), s.size()); }
+std::string ConvertUtilsString(const utils::String &s) { return std::string(s.data(), s.size()); }
 
 const AttributeProto *FindAttribute(const NodeProto &node, const std::string &name) {
   for (const auto &attr : node.ref_attribute()) {
-    if (ToString(attr.ref_name()) == name) {
+    if (ConvertUtilsString(attr.ref_name()) == name) {
       return &attr;
     }
   }
@@ -391,8 +391,8 @@ TEST(BackendTestCase, DelayedInitializerCasesArePresent) {
     const GraphProto &graph = tc->model.ref_graph();
     ASSERT_EQ(graph.ref_node().size(), 1u);
     const NodeProto &node = graph.ref_node()[0];
-    EXPECT_EQ(ToString(node.ref_op_type()), "DelayedInitializer");
-    EXPECT_EQ(ToString(node.ref_domain()), "ai.rt");
+    EXPECT_EQ(ConvertUtilsString(node.ref_op_type()), "DelayedInitializer");
+    EXPECT_EQ(ConvertUtilsString(node.ref_domain()), "ai.rt");
     EXPECT_EQ(graph.ref_input().size(), 0u);
     ASSERT_EQ(graph.ref_output().size(), 1u);
     ASSERT_EQ(tc->data_sets.size(), 1u);
@@ -414,9 +414,9 @@ TEST(BackendTestCase, DelayedInitializerCasesArePresent) {
     ASSERT_NE(runtime, nullptr);
     ASSERT_NE(filename, nullptr);
     ASSERT_NE(offset, nullptr);
-    EXPECT_EQ(ToString(load->ref_s()), entry.load_device);
-    EXPECT_EQ(ToString(runtime->ref_s()), "cpu");
-    EXPECT_FALSE(ToString(filename->ref_s()).empty());
+    EXPECT_EQ(ConvertUtilsString(load->ref_s()), entry.load_device);
+    EXPECT_EQ(ConvertUtilsString(runtime->ref_s()), "cpu");
+    EXPECT_FALSE(ConvertUtilsString(filename->ref_s()).empty());
     EXPECT_EQ(offset->i(), entry.offset);
     ASSERT_EQ(shape->ref_ints().size(), entry.shape.size());
     for (size_t i = 0; i < entry.shape.size(); ++i) {

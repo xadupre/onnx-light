@@ -393,9 +393,9 @@ class TestOnnxLightHelper(ExtTestCase):
 
         opts = onnxl.SerializeOptions()
         opts.raw_data_callback = callback
-        size = model.SerializeSize(opts)
+        serialized_size = model.SerializeSize(opts)
         serialized = model.SerializeToString(opts)
-        self.assertEqual(size.size(), len(serialized))
+        self.assertEqual(serialized_size.size(), len(serialized))
 
         reparsed = onnxl.ModelProto()
         reparsed.ParseFromString(serialized)

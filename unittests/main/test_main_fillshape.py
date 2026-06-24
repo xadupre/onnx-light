@@ -125,7 +125,34 @@ class TestMainFillshape(ExtTestCase):
             self.assertTrue(dims[0].has_dim_param())
             self.assertEqual(dims[0].dim_param, "ANCHOR")
 
-    def test_fillshape_invalid_model(self):
+    def test_fillshape_inplace_info_option(self):
+        """fillshape --inplace-info writes reuse metadata into node metadata_props."""
+        from onnx_light.__main__ import main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            # Build Abs(X)->A, Abs(A)->Y: node 1 can reuse A's buffer.
+            abs0 = oh.make_node("Abs", inputs=["X"], outputs=["A"])
+            abs1 = oh.make_node("Abs", inputs=["A"], outputs=["Y"])
+            x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [3, 4])
+            y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
+            graph = oh.make_graph([abs0, abs1], "g", [x], [y])
+            model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+            model.ir_version = 8
+            self._save_model(model, model_path)
+
+            ret = main(["fillshape", model_path, "--inplace-info"])
+            self.assertEqual(ret, 0)
+
+            result = load(model_path)
+            # Shapes must also be filled.
+            dims = list(result.graph.output[0].type.tensor_type.shape.dim)
+            self.assertEqual(len(dims), 2)
+
+            # Node 1 (Abs A->Y) should have inplace_reuse metadata.
+            node1_meta = {entry.key: entry.value for entry in result.graph.node[1].metadata_props}
+            self.assertIn("onnx_light.inplace_reuse", node1_meta)
+
         """fillshape returns non-zero when the model file does not exist."""
         from onnx_light.__main__ import main
 

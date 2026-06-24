@@ -20,6 +20,10 @@ fillshape
         ``infer_shapes_model`` with ``prefill_with_value_info_output=True``).
         Existing non-conflicting shapes are preferred over newly inferred
         ones.
+    ``--inplace-info``
+        After shape inference, also compute in-place buffer-reuse
+        opportunities and write them into each node's ``metadata_props``
+        under the key ``onnx_light.inplace_reuse``.
     ``--show``
         Print the inferred shapes to stdout; do **not** save the model.
 """
@@ -37,12 +41,19 @@ def _cmd_fillshape(args: argparse.Namespace) -> int:
         Exit code: 0 on success, 1 on failure.
     """
     from .onnx import load, save
-    from .onnx_optim.shape_inference import infer_shapes_model
+    from .onnx_optim.shape_inference import (
+        ShapesContext,
+        apply_inferred_shapes_to_model,
+        compute_shape_model,
+        infer_shapes_model,
+        write_inplace_reuse_to_metadata,
+    )
     from .tools.pretty_print import pretty_onnx
 
     model_path: str = args.model
     output_path: str | None = args.output
     keep: bool = args.keep
+    inplace_info: bool = args.inplace_info
     show: bool = args.show
 
     try:
@@ -52,7 +63,15 @@ def _cmd_fillshape(args: argparse.Namespace) -> int:
         return 1
 
     try:
-        infer_shapes_model(model, prefill_with_value_info_output=keep)
+        if inplace_info:
+            # Retain the ShapesContext so the in-place reuse analysis can
+            # reuse the already-inferred shape data.
+            ctx = ShapesContext()
+            compute_shape_model(ctx, model, keep)
+            apply_inferred_shapes_to_model(ctx, model)
+            write_inplace_reuse_to_metadata(ctx, model.graph)
+        else:
+            infer_shapes_model(model, prefill_with_value_info_output=keep)
     except Exception as exc:
         print(f"error: shape inference failed: {exc}", file=sys.stderr)
         return 1
@@ -102,6 +121,17 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "Seed the inference context from shapes already present in the model. "
             "Existing non-conflicting shapes are kept as anchors."
+        ),
+    )
+    fillshape_parser.add_argument(
+        "--inplace-info",
+        action="store_true",
+        default=False,
+        dest="inplace_info",
+        help=(
+            "Also compute in-place buffer-reuse opportunities and record them "
+            "in each node's metadata_props under the key "
+            "``onnx_light.inplace_reuse``."
         ),
     )
     fillshape_parser.add_argument(

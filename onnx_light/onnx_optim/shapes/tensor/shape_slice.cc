@@ -9,9 +9,12 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <variant>
 #include <vector>
 
+#include "onnx_optim/expressions.h"
 #include "onnx_optim/optim_tensor.h"
+#include "onnx_optim/shapes/_helpers/shape_helpers.h"
 #include "onnx_optim/shapes/shape_check.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -72,6 +75,36 @@ int64_t SliceLength(int64_t start, int64_t end, int64_t step) {
   return 1 + (start - end - 1) / (-step);
 }
 
+OptimDim FromDimType(const expressions::DimType &d) {
+  if (std::holds_alternative<int64_t>(d)) {
+    return OptimDim(std::get<int64_t>(d));
+  }
+  return OptimDim(std::get<std::string>(d));
+}
+
+expressions::DimType ResolveSliceIndex(const expressions::DimType &dim, int64_t index) {
+  if (index >= 0) {
+    return expressions::DimType{index};
+  }
+  return expressions::dim_add(dim, expressions::DimType{index});
+}
+
+OptimDim SymbolicSliceLength(const OptimDim &dim, int64_t start, int64_t end, int64_t step) {
+  const expressions::DimType d = ToDimType(dim);
+  const expressions::DimType start_expr = ResolveSliceIndex(d, start);
+  const expressions::DimType end_expr = ResolveSliceIndex(d, end);
+
+  const bool reverse = step < 0;
+  const int64_t abs_step = reverse ? -step : step;
+  expressions::DimType extent = reverse ? expressions::dim_sub(start_expr, end_expr)
+                                        : expressions::dim_sub(end_expr, start_expr);
+  if (abs_step == 1) {
+    return FromDimType(extent);
+  }
+  extent = expressions::dim_add(extent, expressions::DimType{abs_step - 1});
+  return FromDimType(expressions::dim_div(extent, expressions::DimType{abs_step}));
+}
+
 } // namespace
 
 void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node) {
@@ -86,10 +119,7 @@ void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node) {
   const OptimShape &data_shape = data.Shape();
   const int64_t rank = static_cast<int64_t>(data_shape.Rank());
 
-  OptimShape out_shape;
-  for (int64_t i = 0; i < rank; ++i) {
-    out_shape.PushBack(OptimDim("Slice_dim" + std::to_string(i)));
-  }
+  OptimShape out_shape = data_shape;
 
   const std::optional<std::vector<int64_t>> starts_opt = TryReadIntVector(starts_t);
   const std::optional<std::vector<int64_t>> ends_opt = TryReadIntVector(ends_t);
@@ -134,20 +164,24 @@ void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node) {
   }
   EXT_ENFORCE_INVALID(steps.size() == starts.size(),
                       "ComputeShapeSlice: steps length must match starts length.");
+  for (size_t i = 0; i < steps.size(); ++i) {
+    EXT_ENFORCE_INVALID(steps[i] != 0, "ComputeShapeSlice: 'steps' entries cannot be 0.");
+  }
 
   for (size_t i = 0; i < starts.size(); ++i) {
     int64_t axis = axes[i];
+    const int64_t step = steps[i];
     if (axis < 0) {
       axis += rank;
     }
     EXT_ENFORCE_INVALID(!(axis < 0 || axis >= rank), "ComputeShapeSlice: axis out of range.");
     if (!data_shape[static_cast<size_t>(axis)].IsInt()) {
-      out_shape[static_cast<size_t>(axis)] = OptimDim("Slice_dim" + std::to_string(axis));
+      out_shape[static_cast<size_t>(axis)] =
+          SymbolicSliceLength(data_shape[static_cast<size_t>(axis)], starts[i], ends[i], step);
       continue;
     }
     int64_t start = starts[i];
     int64_t end = ends[i];
-    const int64_t step = steps[i];
     ProcessSliceInputs(data_shape[static_cast<size_t>(axis)].AsInt(), start, end, step);
     out_shape[static_cast<size_t>(axis)] = OptimDim(SliceLength(start, end, step));
   }

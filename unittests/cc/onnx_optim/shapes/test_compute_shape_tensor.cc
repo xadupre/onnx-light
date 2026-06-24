@@ -524,6 +524,24 @@ TEST(OnnxOptimShapesTensorSlice, UsesDefaultAxesWhenOmitted) {
             (onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(3)}));
 }
 
+TEST(OnnxOptimShapesTensorSlice, KeepsAnchorDimsAndBuildsSliceExpression) {
+  NodeProto node = MakeSliceNode("X", "Starts", "Ends", "Axes");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim("a"),
+                                                              onnx_optim::OptimDim("b"),
+                                                              onnx_optim::OptimDim("c")}));
+  ctx.Set("Starts", MakeShapeInput({0}));
+  ctx.Set("Ends", MakeShapeInput({-1}));
+  ctx.Set("Axes", MakeShapeInput({2}));
+
+  onnx_optim::shapes::tensor::ComputeShapeSlice(ctx, node);
+
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim("a"), onnx_optim::OptimDim("b"),
+                                    onnx_optim::OptimDim("c-1")}));
+}
+
 TEST(OnnxOptimShapesTensorSlice, FallsBackToSymbolicWhenBoundsUnknown) {
   NodeProto node = MakeSliceNode();
   onnx_optim::shapes::ShapesContext ctx;
@@ -537,9 +555,8 @@ TEST(OnnxOptimShapesTensorSlice, FallsBackToSymbolicWhenBoundsUnknown) {
 
   onnx_optim::shapes::tensor::ComputeShapeSlice(ctx, node);
 
-  ASSERT_EQ(ctx.Get("Y").Shape().Rank(), 2u);
-  EXPECT_TRUE(ctx.Get("Y").Shape()[0].IsExpr());
-  EXPECT_TRUE(ctx.Get("Y").Shape()[1].IsExpr());
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(4)}));
 }
 
 TEST(OnnxOptimShapesTensorSlice, RejectsWrongOpType) {

@@ -9,7 +9,6 @@ import unittest
 from unittest.mock import patch
 
 from onnx_light.tools import infer_value_and_node_tags, write_value_and_node_tags_to_metadata
-from onnx_light.tools import _proto_utils
 from onnx_light.tools._proto_utils import NODE_TAG_METADATA_KEY, VALUE_TAGS_METADATA_KEY
 
 HAS_OPTIM_EXT = importlib.util.find_spec("onnx_light.onnx_py._onnxpyoptim") is not None
@@ -21,6 +20,8 @@ def _meta_dict(proto_obj: object) -> dict[str, str]:
 
 class TestValueTagsErrors(unittest.TestCase):
     def test_requires_cpp_bindings(self):
+        from onnx_light.tools import _proto_utils
+
         with (
             patch.object(_proto_utils, "_shape_inference", None),
             self.assertRaisesRegex(

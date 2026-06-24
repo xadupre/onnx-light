@@ -177,7 +177,11 @@ def _normalise_value_tag(value: str) -> str:
 
 
 def _require_shape_inference_extension() -> Any:
-    """Returns the shape inference nanobind module or raises an informative error."""
+    """Gets the shape inference nanobind module.
+
+    Returns:
+        The imported ``onnx_light.onnx_optim.shape_inference`` module.
+    """
     if _shape_inference is None:
         raise RuntimeError(
             "onnx_light.onnx_py._onnxpyoptim is unavailable, so "

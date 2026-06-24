@@ -383,7 +383,11 @@ class TestOnnxLightHelper(ExtTestCase):
         )
 
         def callback(tensor, buffer, size_only):
-            self.assertEqual(tensor.name, "W")
+            if tensor.name != "W":
+                if size_only:
+                    return len(tensor.raw_data)
+                np.copyto(np.asarray(buffer), np.frombuffer(tensor.raw_data, dtype=np.uint8))
+                return len(tensor.raw_data)
             if size_only:
                 return replacement.nbytes
             tensor.ClearField("dims")
@@ -393,9 +397,9 @@ class TestOnnxLightHelper(ExtTestCase):
 
         opts = onnxl.SerializeOptions()
         opts.raw_data_callback = callback
-        serialized_size = model.SerializeSize(opts)
+        size_result = model.SerializeSize(opts)
         serialized = model.SerializeToString(opts)
-        self.assertEqual(serialized_size.size(), len(serialized))
+        self.assertEqual(size_result.size(), len(serialized))
 
         reparsed = onnxl.ModelProto()
         reparsed.ParseFromString(serialized)

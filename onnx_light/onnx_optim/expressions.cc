@@ -905,7 +905,7 @@ public:
               has_constant_offset = true;
             }
           }
-          // Keeps (x±d)//d unchanged so non-contiguous ring cases such as
+          // Keep (x±d)//d unchanged so non-contiguous ring cases such as
           // x//d + (x+d)//d are preserved for the dedicated ring pass.
           if (has_constant_offset && (constant_offset == d || constant_offset == -d))
             return n;

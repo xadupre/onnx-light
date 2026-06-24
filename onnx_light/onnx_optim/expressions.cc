@@ -895,17 +895,17 @@ public:
       if (const auto *left_bin = dynamic_cast<const BinOp *>(n->left.get())) {
         if (left_bin->op == BinOpKind::Add || left_bin->op == BinOpKind::Sub) {
           int64_t c = 0;
-          bool has_simple_unit_offset = false;
+          bool has_constant_offset = false;
           if (const auto *cr = dynamic_cast<const Constant *>(left_bin->right.get())) {
             c = (left_bin->op == BinOpKind::Add) ? cr->value : -cr->value;
-            has_simple_unit_offset = true;
+            has_constant_offset = true;
           } else if (left_bin->op == BinOpKind::Add) {
             if (const auto *cl = dynamic_cast<const Constant *>(left_bin->left.get())) {
               c = cl->value;
-              has_simple_unit_offset = true;
+              has_constant_offset = true;
             }
           }
-          if (has_simple_unit_offset && (c == d || c == -d))
+          if (has_constant_offset && (c == d || c == -d))
             return n;
         }
       }

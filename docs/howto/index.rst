@@ -6,6 +6,7 @@ How-to Python / C++
 .. toctree::
     :maxdepth: 1
 
+    command_line
     install_onnx_light
     replace_onnx
     link_prebuilt_cpp

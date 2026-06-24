@@ -5,7 +5,9 @@
 #include "onnx_backend_test/cases/generator/include_generator_cases.h"
 #include "onnx_backend_test/test_case.h"
 
+#include <algorithm>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
@@ -19,9 +21,35 @@ namespace {
 
 constexpr const char *kAiRtDomain = "ai.rt";
 
+std::vector<std::filesystem::path> &CleanupPaths() {
+  static std::vector<std::filesystem::path> paths;
+  return paths;
+}
+
+void CleanupWeightsFiles() {
+  for (const auto &path : CleanupPaths()) {
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+  }
+}
+
+void RegisterCleanupPath(const std::filesystem::path &path) {
+  static const int cleanup_registered = []() {
+    std::atexit(CleanupWeightsFiles);
+    return 0;
+  }();
+  (void)cleanup_registered;
+  auto &paths = CleanupPaths();
+  if (std::find(paths.begin(), paths.end(), path) == paths.end()) {
+    paths.push_back(path);
+  }
+}
+
 std::string WriteWeightsFile(const std::string &filename, const std::vector<uint8_t> &bytes) {
   namespace fs = std::filesystem;
   const fs::path path = fs::temp_directory_path() / filename;
+  std::error_code ec;
+  fs::remove(path, ec);
   std::ofstream out(path, std::ios::binary | std::ios::trunc);
   if (!out.good()) {
     throw std::runtime_error("Unable to create DelayedInitializer backend-test weights file.");
@@ -31,6 +59,7 @@ std::string WriteWeightsFile(const std::string &filename, const std::vector<uint
   if (!out.good()) {
     throw std::runtime_error("Unable to write DelayedInitializer backend-test weights file.");
   }
+  RegisterCleanupPath(path);
   return path.string();
 }
 

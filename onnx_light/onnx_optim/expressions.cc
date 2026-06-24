@@ -899,6 +899,7 @@ public:
           if (const auto *cr = dynamic_cast<const Constant *>(left_bin->right.get())) {
             if (left_bin->op == BinOpKind::Sub &&
                 cr->value == std::numeric_limits<int64_t>::min()) {
+              // Avoid overflow when computing -INT64_MIN.
               return n;
             }
             constant_offset = (left_bin->op == BinOpKind::Add) ? cr->value : -cr->value;

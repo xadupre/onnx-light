@@ -9,6 +9,8 @@ import os
 import tempfile
 import unittest
 
+import numpy as np
+
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
 from onnx_light.ext_test_case import ExtTestCase
@@ -158,6 +160,81 @@ class TestMainFillshape(ExtTestCase):
 
         ret = main(["fillshape", "/nonexistent/path/model.onnx"])
         self.assertNotEqual(ret, 0)
+
+    def test_fillshape_external_data_not_loaded(self):
+        """fillshape loads the model without fetching external weight bytes."""
+        from onnx_light.__main__ import main
+        from onnx_light.onnx import save
+        from onnx_light.onnx_lib.external_data_helper import uses_external_data
+
+        values = np.zeros((8, 8), dtype=np.float32)
+        init = oh.make_tensor("W", onnxl.TensorProto.FLOAT, [8, 8], values.tobytes(), raw=True)
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [8, 8])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
+        node = oh.make_node("Add", ["X", "W"], ["Y"])
+        graph = oh.make_graph([node], "g", [x], [y], [init])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+        model.ir_version = 8
+
+        with tempfile.TemporaryDirectory() as model_dir:
+            model_path = os.path.join(model_dir, "model.onnx")
+            save(model, model_path, save_as_external_data=True, size_threshold=0)
+
+            # The weight file must exist beside the model.
+            weight_file = model_path + ".data"
+            self.assertTrue(os.path.exists(weight_file))
+
+            # fillshape must succeed even though weights are external.
+            ret = main(["fillshape", model_path])
+            self.assertEqual(ret, 0)
+
+            # The output model should still reference external data.
+            result = load(model_path, load_external_data=False)
+            self.assertTrue(any(uses_external_data(i) for i in result.graph.initializer))
+
+            # Shapes must be filled.
+            dims = list(result.graph.output[0].type.tensor_type.shape.dim)
+            self.assertEqual(len(dims), 2)
+
+    def test_fillshape_external_data_output_beside_weights(self):
+        """--output with an external-data model places the output beside the weight file."""
+        from onnx_light.__main__ import main
+        from onnx_light.onnx import save
+
+        values = np.zeros((8, 8), dtype=np.float32)
+        init = oh.make_tensor("W", onnxl.TensorProto.FLOAT, [8, 8], values.tobytes(), raw=True)
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [8, 8])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
+        node = oh.make_node("Add", ["X", "W"], ["Y"])
+        graph = oh.make_graph([node], "g", [x], [y], [init])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+        model.ir_version = 8
+
+        with (
+            tempfile.TemporaryDirectory() as model_dir,
+            tempfile.TemporaryDirectory() as other_dir,
+        ):
+            model_path = os.path.join(model_dir, "model.onnx")
+            save(model, model_path, save_as_external_data=True, size_threshold=0)
+
+            weight_file = model_path + ".data"
+            self.assertTrue(os.path.exists(weight_file))
+
+            # Ask for output in a completely different directory.
+            output_path = os.path.join(other_dir, "out.onnx")
+            ret = main(["fillshape", model_path, "--output", output_path])
+            self.assertEqual(ret, 0)
+
+            # Output must be placed beside the original model (not in other_dir).
+            expected_dest = os.path.join(model_dir, "out.onnx")
+            self.assertTrue(os.path.exists(expected_dest))
+            self.assertFalse(os.path.exists(output_path))
+
+            # Weight file must NOT have been recreated in other_dir.
+            self.assertFalse(
+                any(f.endswith(".data") for f in os.listdir(other_dir)),
+                "No weight file should have been created in the output directory",
+            )
 
 
 if __name__ == "__main__":

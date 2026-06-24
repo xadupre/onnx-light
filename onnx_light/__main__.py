@@ -14,6 +14,10 @@ fillshape
 
     ``--output OUTPUT`` / ``-o OUTPUT``
         Write the result to *OUTPUT* instead of overwriting the input file.
+        When the model stores weights in a separate file (external data), the
+        output is placed in the **same directory as the input model** so that
+        the relative weight-file paths encoded in the proto remain valid.  The
+        weight file itself is never written again.
     ``--keep``
         Seed the inference context from any shapes already present in
         ``graph.value_info`` / ``graph.output`` (i.e. call
@@ -31,6 +35,7 @@ fillshape
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 
@@ -41,6 +46,7 @@ def _cmd_fillshape(args: argparse.Namespace) -> int:
         Exit code: 0 on success, 1 on failure.
     """
     from .onnx import load, save
+    from .onnx_lib.external_data_helper import uses_external_data
     from .onnx_optim.shape_inference import (
         ShapesContext,
         apply_inferred_shapes_to_model,
@@ -57,10 +63,15 @@ def _cmd_fillshape(args: argparse.Namespace) -> int:
     show: bool = args.show
 
     try:
-        model = load(model_path)
+        # Load without fetching external tensor bytes – shape inference only
+        # needs type/shape metadata, not the actual weight values.
+        model = load(model_path, load_external_data=False)
     except Exception as exc:
         print(f"error: could not load {model_path!r}: {exc}", file=sys.stderr)
         return 1
+
+    # Detect whether the model references weights stored in a separate file.
+    has_external_data = any(uses_external_data(init) for init in model.graph.initializer)
 
     try:
         if inplace_info:
@@ -80,7 +91,18 @@ def _cmd_fillshape(args: argparse.Namespace) -> int:
         print(pretty_onnx(model))
         return 0
 
-    dest = output_path if output_path is not None else model_path
+    if output_path is not None and has_external_data:
+        # The weight-file paths encoded in the proto are relative to the model
+        # directory. Place the output file next to the original model (beside
+        # the existing weight files) so those paths remain valid. The weight
+        # files are NOT written again.
+        model_dir = os.path.dirname(os.path.abspath(model_path))
+        dest = os.path.join(model_dir, os.path.basename(output_path))
+    elif output_path is not None:
+        dest = output_path
+    else:
+        dest = model_path
+
     try:
         save(model, dest)
     except Exception as exc:

@@ -272,6 +272,32 @@ template <typename cls> void _SerializeToString(cls &self, std::string &out) {
 
 template <typename cls>
 void _SerializeToString(cls &self, std::string &out, SerializeOptions &opts) {
+  if constexpr (std::is_same_v<std::remove_cv_t<cls>, ModelProto>) {
+    if (opts.raw_data_callback) {
+      ModelProto copy;
+      copy.CopyFrom(self);
+      if (copy.has_graph()) {
+        IteratorTensorProto it(&copy.ref_graph());
+        while (it.next()) {
+          if (!it->has_raw_data()) {
+            continue;
+          }
+          const bool reset_external_data =
+              it->has_data_location() &&
+              it->ref_data_location() == TensorProto::DataLocation::EXTERNAL;
+          opts.raw_data_callback(*it);
+          if (reset_external_data) {
+            it->clr_external_data();
+            it->reset_data_location();
+          }
+        }
+      }
+      SerializeOptions local_opts = opts;
+      local_opts.raw_data_callback = {};
+      _SerializeToString(copy, out, local_opts);
+      return;
+    }
+  }
   EXT_ENFORCE(opts.format == SerializeFormat::kOnnx,
               "SerializeToString: SerializeFormat::kOrtFlatbuffers is not implemented yet. "
               "Use SerializeFormat::kOnnx for now.");

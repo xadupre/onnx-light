@@ -46,6 +46,18 @@ struct PyRawDataCallback {
   }
 };
 
+// Adapts a Python callable to SerializeOptions::raw_data_callback. The callable is invoked as
+// ``fn(tensor)`` immediately before serialization and may mutate the TensorProto in place,
+// including changing its raw_data byte size. The Python object is held by value so the
+// std::function target keeps the callable alive, and the GIL is reacquired around every call.
+struct PySerializeRawDataCallback {
+  nb::object fn;
+  void operator()(TensorProto &tensor) const {
+    nb::gil_scoped_acquire gil;
+    fn(nb::cast(&tensor, nb::rv_policy::reference));
+  }
+};
+
 // Reusable ``raw_data_callback`` that keeps the default C++ allocation (tensor ownership
 // unchanged) while letting users observe parsing progress. When called it optionally forwards
 // the freshly parsed TensorProto to a user callable invoked as ``on_tensor(tensor)`` (for
@@ -1109,7 +1121,35 @@ void AddOnnxPyProto(nb::module_ &m) {
               "SerializeFormat.ONNX (default) writes the ONNX protobuf wire format; "
               "SerializeFormat.ORT_FLATBUFFERS writes the onnxruntime flatbuffer format "
               "(``.ort`` files). The flatbuffer path is not implemented yet and raises "
-              "an error when used.");
+              "an error when used.")
+      .def_prop_rw(
+          "raw_data_callback",
+          [](SerializeOptions &options) -> nb::object {
+            if (!options.raw_data_callback) {
+              return nb::none();
+            }
+            if (const PySerializeRawDataCallback *cb =
+                    options.raw_data_callback.target<PySerializeRawDataCallback>()) {
+              return cb->fn;
+            }
+            return nb::none();
+          },
+          [](SerializeOptions &options, nb::object fn) {
+            if (fn.is_none()) {
+              options.raw_data_callback = {};
+            } else {
+              options.raw_data_callback = PySerializeRawDataCallback{fn};
+            }
+          },
+          "Optional callable invoked as ``fn(tensor)`` for every tensor carrying "
+          "``raw_data`` immediately before serialization. The callback may mutate the "
+          ":class:`TensorProto` in place, including changing its byte size, shape, "
+          "dtype, or external-data metadata. When a tensor was previously marked as "
+          "EXTERNAL and still carries ``raw_data`` (for example after "
+          "``tensor.load_external_data(...)``), serialization refreshes that metadata "
+          "after the callback so the written ``length`` and ``offset`` match the "
+          "rewritten bytes. Setting it to ``None`` (the default) disables the callback.",
+          nb::for_setter(nb::arg("value").none()));
 
   nb::class_<SerializeSizeResult>(m, "SerializeSizeResult",
                                   "Splits serialized bytes between proto data and tensor content.")

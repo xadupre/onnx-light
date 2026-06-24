@@ -257,6 +257,18 @@ class TestOnnxLightHelper(ExtTestCase):
         # Returning None leaves the tensor ownership and data unchanged.
         np.testing.assert_array_equal(onh.to_array(parsed.graph.initializer[0]), arr)
 
+    def test_serialize_options_raw_data_callback(self):
+        opts = onnxl.SerializeOptions()
+        self.assertIsNone(opts.raw_data_callback)
+
+        def callback(tensor):
+            return None
+
+        opts.raw_data_callback = callback
+        self.assertIs(opts.raw_data_callback, callback)
+        opts.raw_data_callback = None
+        self.assertIsNone(opts.raw_data_callback)
+
         # Round-trip a model under each FileLoadMode and verify the parsed
         # model is byte-identical to the saved one.
         name = self.get_dump_file("test_load_with_file_load_mode.onnx")
@@ -502,6 +514,107 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertEqual(len(ext_inits), 1)
         self.assertEqual(len(ext_inits[0].raw_data), 0)
         self.assertGreater(len(ext_inits[0].external_data), 0)
+
+    def test_serialize_to_string_raw_data_callback_changed_size(self):
+        data = np.arange(8, dtype=np.float32)
+        tensor = onh.from_array(data, name="W")
+        model = oh.make_model(
+            oh.make_graph([], "g", [], [], [tensor]),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+
+        replacement = np.arange(3, dtype=np.float32) + 10
+        seen = []
+
+        def callback(serialized_tensor):
+            seen.append(serialized_tensor.name)
+            serialized_tensor.ClearField("dims")
+            serialized_tensor.dims.extend([replacement.size])
+            serialized_tensor.raw_data = replacement.tobytes()
+
+        opts = onnxl.SerializeOptions()
+        opts.raw_data_callback = callback
+        serialized = model.SerializeToString(opts)
+
+        self.assertEqual(seen, ["W"])
+        np.testing.assert_array_equal(onh.to_array(model.graph.initializer[0]), data)
+
+        parsed = onnxl.ModelProto()
+        parsed.ParseFromString(serialized)
+        self.assertEqual(list(parsed.graph.initializer[0].dims), [3])
+        np.testing.assert_array_equal(onh.to_array(parsed.graph.initializer[0]), replacement)
+
+    def test_save_raw_data_callback_rewrites_external_tensor_changed_size(self):
+        weights_name = "test_save_raw_data_callback.bin"
+        weights = self.get_dump_file(weights_name, clean=True)
+        data = np.arange(100, dtype=np.float32)
+        with open(weights, "wb") as fobj:
+            fobj.write(data.tobytes())
+
+        tensor = onnxl.TensorProto()
+        tensor.name = "W"
+        tensor.data_type = onnxl.TensorProto.FLOAT
+        tensor.dims.extend([100])
+        tensor.data_location = onnxl.TensorProto.EXTERNAL
+        for key, value in (
+            ("location", weights_name),
+            ("offset", "0"),
+            ("length", str(data.nbytes)),
+        ):
+            entry = tensor.external_data.add()
+            entry.key = key
+            entry.value = value
+        tensor.load_external_data(os.path.dirname(weights))
+
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Identity", ["W"], ["Y"])],
+                "g",
+                [],
+                [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [None])],
+                [tensor],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+
+        replacement = np.arange(25, dtype=np.float32) + 50
+        seen = []
+        saved = self.get_dump_file("test_save_raw_data_callback.onnx")
+
+        def callback(serialized_tensor):
+            seen.append(serialized_tensor.name)
+            serialized_tensor.ClearField("dims")
+            serialized_tensor.dims.extend([replacement.size])
+            serialized_tensor.raw_data = replacement.tobytes()
+
+        onnxl.save(
+            model,
+            saved,
+            location=weights_name,
+            save_as_external_data=True,
+            size_threshold=0,
+            raw_data_callback=callback,
+        )
+
+        self.assertEqual(seen, ["W"])
+        self.assertEqual(list(model.graph.initializer[0].dims), [100])
+        self.assertEqual(bytes(model.graph.initializer[0].raw_data), data.tobytes())
+
+        with open(weights, "rb") as fobj:
+            self.assertEqual(fobj.read(), replacement.tobytes())
+
+        saved_no_ext = onnxl.load(saved, load_external_data=False)
+        self.assertEqual(list(saved_no_ext.graph.initializer[0].dims), [25])
+        self.assertEqual(int(saved_no_ext.graph.initializer[0].data_location), 1)
+        entries = {e.key: e.value for e in saved_no_ext.graph.initializer[0].external_data}
+        self.assertEqual(entries["location"], weights_name)
+        self.assertEqual(entries["offset"], "0")
+        self.assertEqual(entries["length"], str(replacement.nbytes))
+
+        reloaded = onnxl.load(saved, location=weights)
+        np.testing.assert_array_equal(onh.to_array(reloaded.graph.initializer[0]), replacement)
 
     def test_resave_external_mixed_with_inline_raises(self):
         # Mix one tensor that already has external_data metadata + loaded

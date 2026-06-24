@@ -434,6 +434,20 @@ struct SerializeOptions : TensorBufferOptions {
   /** maximum size in bytes for one external weights file when saving with external data;
    * 0 means no limit (single weights file) */
   int64_t max_external_file_size = 0;
+  /** Holds an optional callback invoked for each TensorProto carrying ``raw_data`` immediately
+   *  before serialization.
+   *
+   *  The callback receives the TensorProto by mutable reference and may rewrite it in place,
+   *  including changing the ``raw_data`` byte size and any matching tensor metadata such as
+   *  dimensions or data type.
+   *
+   *  When the tensor was previously marked with ``data_location=EXTERNAL`` and still carries
+   *  ``raw_data`` (for example after ``load_external_data``), serialization regenerates the
+   *  external-data metadata after the callback so the stored ``length`` and ``offset`` reflect
+   *  the rewritten bytes.
+   *
+   *  By default it is empty (no callback) and serialization behaves exactly as before. */
+  std::function<void(TensorProto &)> raw_data_callback = {};
 };
 
 using utils::offset_t;

@@ -1,7 +1,13 @@
 import os
 from pathlib import Path
-from typing import Optional
-from ..onnx_py._onnxpyprotoop import FileLoadMode, ModelProto, ParseOptions, SerializeOptions  # type: ignore
+from typing import Callable, Optional
+from ..onnx_py._onnxpyprotoop import (  # type: ignore
+    FileLoadMode,
+    ModelProto,
+    ParseOptions,
+    SerializeOptions,
+    TensorProto,
+)
 
 # ParseOptions used by :func:`_find_external_location` to skip copying raw tensor
 # bytes when scanning a model file purely for external-data ``location`` entries.
@@ -89,6 +95,7 @@ def save(
     num_threads: int = -1,
     min_block_size: int = 0,
     max_external_file_size: int = 0,
+    raw_data_callback: Callable[[TensorProto], object] | None = None,
 ) -> None:
     """
     Saves the ModelProto to the specified path and optionally,
@@ -135,6 +142,10 @@ def save(
     :param max_external_file_size: maximum size in bytes for one external
         weight file when saving with external data. A value of 0 (default)
         means no limit.
+    :param raw_data_callback: optional callable invoked as ``fn(tensor)`` for
+        every tensor carrying ``raw_data`` immediately before serialization.
+        The callback may mutate the tensor in place, including changing its
+        bytes and shape, before those bytes are dumped.
     """
     assert isinstance(proto, ModelProto), f"Unexpected type {type(proto)} for proto."
     assert isinstance(f, (str, Path)), f"Unexpected type {type(f)} for f."
@@ -146,10 +157,10 @@ def save(
             f"{sorted(_SUPPORTED_FORMATS)!r}."
         )
     if format == "textproto":
-        if save_as_external_data or location:
+        if save_as_external_data or location or raw_data_callback is not None:
             raise ValueError(
-                "save_as_external_data and location are not supported for the "
-                "'textproto' format."
+                "save_as_external_data, location, and raw_data_callback are not "
+                "supported for the 'textproto' format."
             )
         from ._text_format import serialize_to_textproto
 
@@ -173,13 +184,15 @@ def save(
         opts.num_threads = num_threads
         opts.min_parallel_block_size = min_block_size
         opts.max_external_file_size = max_external_file_size
+        opts.raw_data_callback = raw_data_callback
         proto.SerializeToFile(str(f), opts, str(location))
-    elif num_threads > 1 or num_threads < 0:
+    elif num_threads > 1 or num_threads < 0 or raw_data_callback is not None:
         opts = SerializeOptions()
         opts.raw_data_threshold = size_threshold
         opts.num_threads = num_threads
         opts.min_parallel_block_size = min_block_size
         opts.max_external_file_size = max_external_file_size
+        opts.raw_data_callback = raw_data_callback
         proto.SerializeToFile(str(f), opts)
     else:
         proto.SerializeToFile(str(f))

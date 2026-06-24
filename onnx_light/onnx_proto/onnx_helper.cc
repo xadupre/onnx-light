@@ -282,6 +282,25 @@ template <typename Nodes, typename F> void ForEachAttributeTensorInNodes(Nodes &
   }
 }
 
+void ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &options) {
+  if (!options.raw_data_callback || !model.has_graph()) {
+    return;
+  }
+  IteratorTensorProto it(&model.ref_graph());
+  while (it.next()) {
+    if (!it->has_raw_data()) {
+      continue;
+    }
+    const bool reset_external_data =
+        it->has_data_location() && it->ref_data_location() == TensorProto::DataLocation::EXTERNAL;
+    options.raw_data_callback(*it);
+    if (reset_external_data) {
+      it->clr_external_data();
+      it->reset_data_location();
+    }
+  }
+}
+
 } // namespace
 
 void ConvertModelToExternalData(ModelProto &model, bool all_tensors_to_one_file,
@@ -946,6 +965,15 @@ std::shared_ptr<uint8_t[]> ConsolidateTensorsToBuffer(ModelProto &model,
 
 void SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &stream,
                                  SerializeOptions &options, bool clear_external_data) {
+  if (options.raw_data_callback) {
+    ModelProto copy;
+    copy.CopyFrom(model);
+    ApplySerializeRawDataCallback(copy, options);
+    SerializeOptions local_options = options;
+    local_options.raw_data_callback = {};
+    SerializeModelProtoToStream(copy, stream, local_options, clear_external_data);
+    return;
+  }
   EXT_ENFORCE(options.format == SerializeFormat::kOnnx,
               "SerializeModelProtoToStream: SerializeFormat::kOrtFlatbuffers is not "
               "implemented yet. Use SerializeFormat::kOnnx for now.");

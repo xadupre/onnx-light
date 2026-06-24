@@ -361,6 +361,8 @@ class TestExactDiv(ExtTestCase):
         self.assertEqual(simplify_expression("(3*H)/:3"), "H")
         self.assertEqual(simplify_expression("(batch*seq)/:seq"), "batch")
         self.assertEqual(simplify_expression("(1024*a)/:2"), "512*a")
+        self.assertEqual(simplify_expression("(sequence-10)/:5"), "sequence/:5-2")
+        self.assertEqual(simplify_expression("(sequence+10)/:5"), "sequence/:5+2")
 
     def test_simplify_exact_commutes_with_mult(self):
         # Unlike floor division (//), exact division (/: ) commutes with

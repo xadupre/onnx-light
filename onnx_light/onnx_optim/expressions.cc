@@ -891,7 +891,7 @@ public:
     int64_t d = dc->value;
     if (d < 0)
       return n;
-    if (n->op == BinOpKind::FloorDiv) {
+    if (n->op == BinOpKind::FloorDiv || n->op == BinOpKind::ExactDiv) {
       NodePtr symbolic;
       int64_t offset = 0;
       split_symbolic_and_offset(*n->left, symbolic, offset);
@@ -899,8 +899,8 @@ public:
         int64_t offset_quotient = offset / d;
         if (is_constant_zero(*symbolic))
           return std::make_unique<Constant>(offset_quotient);
-        auto base = std::make_unique<BinOp>(std::move(symbolic), BinOpKind::FloorDiv,
-                                            std::make_unique<Constant>(d));
+        auto base =
+            std::make_unique<BinOp>(std::move(symbolic), n->op, std::make_unique<Constant>(d));
         if (offset_quotient == 0)
           return base;
         return std::make_unique<BinOp>(std::move(base), BinOpKind::Add,

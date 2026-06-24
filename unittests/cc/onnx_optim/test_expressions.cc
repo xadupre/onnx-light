@@ -420,6 +420,8 @@ TEST(ExactDiv, Simplify_cancel_common_factor) {
   EXPECT_EQ(get_str(simplify_expression("(3*H)/:3")), "H");
   EXPECT_EQ(get_str(simplify_expression("(batch*seq)/:seq")), "batch");
   EXPECT_EQ(get_str(simplify_expression("(1024*a)/:2")), "512*a");
+  EXPECT_EQ(get_str(simplify_expression("(sequence-10)/:5")), "sequence/:5-2");
+  EXPECT_EQ(get_str(simplify_expression("(sequence+10)/:5")), "sequence/:5+2");
 }
 
 TEST(ExactDiv, Simplify_exact_commutes_with_mult) {

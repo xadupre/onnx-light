@@ -70,6 +70,10 @@ void RegisterNestedLocalFunctionAddShapeInferenceCases(std::vector<TestCase> &re
 /// Expressions must be simplified.
 void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &registry);
 
+/// Registers a MaxPool case whose output spatial dim simplifies from
+/// ``(seq + 10) // 5`` to ``seq//5+2``.
+void RegisterFloorDivOffsetShapeInferenceCase(std::vector<TestCase> &registry);
+
 /// Registers a ``Loop`` case that computes the pairwise Euclidean distance
 /// matrix of an input ``X`` of shape ``[N, D]``. The Loop iterates ``N``
 /// times: each iteration gathers one row of the outer-scope ``X`` and emits

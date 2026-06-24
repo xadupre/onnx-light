@@ -142,9 +142,6 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
             expected = expected_info[name]
             inferred = computed[name]
             self.assertEqual(expected, inferred, f"{name!r} failed\n{expected=}\n--\n{inferred=}")
-        z_dims = computed["Z"].type.tensor_type.shape.dim
-        self.assertEqual(len(z_dims), 1)
-        self.assertEqual(z_dims[0].dim_param, "seq//5+2")
 
     def test_inference_shape_backend_non_zero_expression(self):
         tests = [
@@ -167,6 +164,26 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
             expected = expected_info[name]
             inferred = computed[name]
             self.assertEqual(expected, inferred, f"{name!r} failed\n{expected=}\n--\n{inferred=}")
+
+    def test_inference_shape_backend_floordiv_offset_expression(self):
+        tests = [
+            test
+            for test in collect_test_cases("shape")
+            if "test_cc_shape_inference_floordiv_offset_expression" == test.name
+        ]
+        self.assertEqual(len(tests), 1)
+        test = tests[0]
+        model = onnxl.ModelProto()
+        model.CopyFrom(test.model)
+        model.graph.value_info.clear()
+        infer_shapes_model(model)
+        output_shapes = {info.name: info for info in model.graph.output}
+        self.assertIn("Y", output_shapes)
+        dims = output_shapes["Y"].type.tensor_type.shape.dim
+        self.assertEqual(len(dims), 3)
+        self.assertEqual(dims[0].dim_param, "batch")
+        self.assertEqual(dims[1].dim_param, "channel")
+        self.assertEqual(dims[2].dim_param, "seq//5+2")
 
 
 if __name__ == "__main__":

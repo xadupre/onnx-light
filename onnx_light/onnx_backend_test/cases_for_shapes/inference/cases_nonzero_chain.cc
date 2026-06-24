@@ -149,20 +149,12 @@ void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &regist
   graph->set_name(name);
 
   AddInitializer<int64_t>(*graph, "m1", {1}, {-1});
-  AddInitializer<int64_t>(*graph, "i1", {1}, {1});
-  AddInitializer<int64_t>(*graph, "p10", {1}, {10});
-  AddInitializer<int64_t>(*graph, "c5", {1}, {5});
 
   AddNode(*graph, "Abs", {"X"}, {"abs_out"});
   AddNode(*graph, "NonZero", {"abs_out"}, {"nz"});
   AddNode(*graph, "Reshape", {"nz", "m1"}, {"flat_nz"});
   AddNode(*graph, "Neg", {"flat_nz"}, {"Y_pre_abs"});
   AddNode(*graph, "Abs", {"Y_pre_abs"}, {"Y"});
-  AddNode(*graph, "Shape", {"X"}, {"x_shape"});
-  AddNode(*graph, "Gather", {"x_shape", "i1"}, {"seq_dim"});
-  AddNode(*graph, "Add", {"seq_dim", "p10"}, {"seq_plus10"});
-  AddNode(*graph, "Div", {"seq_plus10", "c5"}, {"new_shape"});
-  AddNode(*graph, "ConstantOfShape", {"new_shape"}, {"Z"});
 
   AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {"batch", "seq"});
   AppendValueInfo(*graph->add_value_info(), "abs_out", DataType::FLOAT, {"batch", "seq"});
@@ -170,12 +162,7 @@ void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &regist
                   {DimSpec(int64_t{2}), DimSpec("dnz")});
   AppendValueInfo(*graph->add_value_info(), "flat_nz", DataType::INT64, {"2*dnz"});
   AppendValueInfo(*graph->add_value_info(), "Y_pre_abs", DataType::INT64, {"2*dnz"});
-  AppendValueInfo(*graph->add_value_info(), "x_shape", DataType::INT64, {DimSpec(int64_t{2})});
-  AppendValueInfo(*graph->add_value_info(), "seq_dim", DataType::INT64, {DimSpec(int64_t{1})});
-  AppendValueInfo(*graph->add_value_info(), "seq_plus10", DataType::INT64, {DimSpec("seq+10")});
-  AppendValueInfo(*graph->add_value_info(), "new_shape", DataType::INT64, {DimSpec("seq//5+2")});
   AppendValueInfo(*graph->add_output(), "Y", DataType::INT64, {"2*dnz"});
-  AppendValueInfo(*graph->add_output(), "Z", DataType::FLOAT, {"seq//5+2"});
 
   // Provide a concrete DataSet so the case is executable end-to-end.
 
@@ -187,8 +174,7 @@ void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &regist
   // returns indices); ``Y = Abs(Y_pre_abs)`` flips the sign back so the
   // reference values are the original NonZero-flattened indices.
   Tensor y = Tensor::FromInt64("Y", {12}, {0, 0, 1, 1, 2, 2, 0, 2, 1, 3, 0, 2});
-  Tensor z = Tensor::FromFloat("Z", {2}, {0.0f, 0.0f});
-  AppendDataSet(tc, {std::move(x)}, {std::move(y), std::move(z)});
+  AppendDataSet(tc, {std::move(x)}, {std::move(y)});
   registry.emplace_back(std::move(tc));
 }
 

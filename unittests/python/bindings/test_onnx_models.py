@@ -405,6 +405,70 @@ class TestOnnxLightHelper(ExtTestCase):
         np.testing.assert_array_equal(onh.to_array(reparsed.graph.initializer[0]), replacement)
         self.assertEqual(list(model.graph.initializer[0].dims), [3])
 
+    def test_serialize_parse_callback_chacha20_weights(self):
+        if not hasattr(onnxl.ModelProto(), "SerializeToEncryptedString"):
+            self.skipTest("OpenSSL not available in this build")
+
+        key = "callback-secret"
+        original = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+        model = oh.make_model(
+            oh.make_graph([], "g", [], [], [onh.from_array(original, name="W")])
+        )
+
+        encrypted_by_name = {}
+        meta_by_name = {}
+
+        def _encrypt_bytes_chacha20(raw: bytes) -> bytes:
+            """Encrypts raw bytes into an ONNXCRY2 blob."""
+            payload = onh.from_array(np.frombuffer(raw, dtype=np.uint8), name="PAYLOAD")
+            holder = oh.make_model(oh.make_graph([], "encrypt_payload", [], [], [payload]))
+            return onnxl.save_encrypted_string(holder, key, encryption="ChaCha20-Poly1305")
+
+        def _decrypt_bytes_chacha20(blob: bytes) -> bytes:
+            """Decrypts an ONNXCRY2 blob back to raw bytes."""
+            holder = onnxl.load_encrypted_string(blob, key)
+            return onh.to_array(holder.graph.initializer[0]).tobytes()
+
+        def serialize_callback(tensor: onnxl.TensorProto, buffer, size_only: bool) -> int:
+            """Encrypts tensor bytes and writes them into the provided serialization buffer."""
+            encrypted = encrypted_by_name.get(tensor.name)
+            if encrypted is None:
+                encrypted = _encrypt_bytes_chacha20(bytes(tensor.raw_data))
+                encrypted_by_name[tensor.name] = encrypted
+                meta_by_name[tensor.name] = (int(tensor.data_type), list(tensor.dims))
+            if size_only:
+                return len(encrypted)
+            orig_dtype, orig_dims = meta_by_name[tensor.name]
+            tensor.data_type = onnxl.TensorProto.UINT8
+            tensor.ClearField("dims")
+            tensor.dims.extend([len(encrypted)])
+            tensor.doc_string = f"chacha20:{orig_dtype}:{','.join(map(str, orig_dims))}"
+            np.copyto(np.asarray(buffer), np.frombuffer(encrypted, dtype=np.uint8))
+            return len(encrypted)
+
+        sopts = onnxl.SerializeOptions()
+        sopts.raw_data_callback = serialize_callback
+        serialized = model.SerializeToString(sopts)
+
+        def parse_callback(tensor: onnxl.TensorProto) -> None:
+            """Decrypts callback-encrypted tensor bytes and restores original metadata."""
+            if not tensor.doc_string.startswith("chacha20:"):
+                return None
+            _, dtype_text, dims_text = tensor.doc_string.split(":", 2)
+            tensor.data_type = int(dtype_text)
+            tensor.ClearField("dims")
+            if dims_text:
+                tensor.dims.extend(int(value) for value in dims_text.split(",") if value)
+            tensor.raw_data = _decrypt_bytes_chacha20(bytes(tensor.raw_data))
+            return None
+
+        popts = onnxl.ParseOptions()
+        popts.raw_data_callback = parse_callback
+
+        reparsed = onnxl.ModelProto()
+        reparsed.ParseFromString(serialized, popts)
+        np.testing.assert_array_equal(onh.to_array(reparsed.graph.initializer[0]), original)
+
     def test_writing_external_weights_write(self):
         nameo = self.get_dump_file("test_writing_external_weights.original.onnx")
         name = self.get_dump_file("test_writing_external_weights.onnx")

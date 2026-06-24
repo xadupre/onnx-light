@@ -46,8 +46,7 @@ class TestMainFillshape(ExtTestCase):
             model_path = os.path.join(tmp, "model.onnx")
             self._save_model(_make_add_model(), model_path)
 
-            ret = main(["fillshape", model_path])
-            self.assertEqual(ret, 0)
+            main(["fillshape", model_path])
 
             result = load(model_path)
             y = result.graph.output[0]
@@ -66,8 +65,7 @@ class TestMainFillshape(ExtTestCase):
             output_path = os.path.join(tmp, "out.onnx")
             self._save_model(_make_add_model(), model_path)
 
-            ret = main(["fillshape", model_path, "--output", output_path])
-            self.assertEqual(ret, 0)
+            main(["fillshape", model_path, "--output", output_path])
 
             # Output file must exist and carry shapes.
             self.assertTrue(os.path.exists(output_path))
@@ -95,8 +93,7 @@ class TestMainFillshape(ExtTestCase):
 
             buf = io.StringIO()
             with redirect_stdout(buf):
-                ret = main(["fillshape", model_path, "--show"])
-            self.assertEqual(ret, 0)
+                main(["fillshape", model_path, "--show"])
 
             output = buf.getvalue()
             self.assertIn("Add", output)
@@ -117,8 +114,7 @@ class TestMainFillshape(ExtTestCase):
             )
             self._save_model(model, model_path)
 
-            ret = main(["fillshape", model_path, "--keep"])
-            self.assertEqual(ret, 0)
+            main(["fillshape", model_path, "--keep"])
 
             result = load(model_path)
             dims = list(result.graph.output[0].type.tensor_type.shape.dim)
@@ -143,8 +139,7 @@ class TestMainFillshape(ExtTestCase):
             model.ir_version = 8
             self._save_model(model, model_path)
 
-            ret = main(["fillshape", model_path, "--inplace-info"])
-            self.assertEqual(ret, 0)
+            main(["fillshape", model_path, "--inplace-info"])
 
             result = load(model_path)
             # Shapes must also be filled.
@@ -155,11 +150,12 @@ class TestMainFillshape(ExtTestCase):
             node1_meta = {entry.key: entry.value for entry in result.graph.node[1].metadata_props}
             self.assertIn("onnx_light.inplace_reuse", node1_meta)
 
-        """fillshape returns non-zero when the model file does not exist."""
+    def test_fillshape_missing_file_raises(self):
+        """fillshape raises when the model file does not exist."""
         from onnx_light.__main__ import main
 
-        ret = main(["fillshape", "/nonexistent/path/model.onnx"])
-        self.assertNotEqual(ret, 0)
+        with self.assertRaises(OSError):
+            main(["fillshape", "/nonexistent/path/model.onnx"])
 
     def test_fillshape_external_data_not_loaded(self):
         """fillshape loads the model without fetching external weight bytes."""
@@ -185,8 +181,7 @@ class TestMainFillshape(ExtTestCase):
             self.assertTrue(os.path.exists(weight_file))
 
             # fillshape must succeed even though weights are external.
-            ret = main(["fillshape", model_path])
-            self.assertEqual(ret, 0)
+            main(["fillshape", model_path])
 
             # The output model should still reference external data.
             result = load(model_path, load_external_data=False)
@@ -222,8 +217,7 @@ class TestMainFillshape(ExtTestCase):
 
             # Ask for output in a completely different directory.
             output_path = os.path.join(other_dir, "out.onnx")
-            ret = main(["fillshape", model_path, "--output", output_path])
-            self.assertEqual(ret, 0)
+            main(["fillshape", model_path, "--output", output_path])
 
             # Output must be placed beside the original model (not in other_dir).
             expected_dest = os.path.join(model_dir, "out.onnx")

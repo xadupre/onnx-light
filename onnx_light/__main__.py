@@ -36,15 +36,10 @@ from __future__ import annotations
 
 import argparse
 import os
-import sys
 
 
-def _cmd_fillshape(args: argparse.Namespace) -> int:
-    """Implements the ``fillshape`` subcommand.
-
-    Returns:
-        Exit code: 0 on success, 1 on failure.
-    """
+def _cmd_fillshape(args: argparse.Namespace) -> None:
+    """Implements the ``fillshape`` subcommand."""
     from .onnx import load, save
     from .onnx_lib.external_data_helper import uses_external_data
     from .onnx_optim.shape_inference import (
@@ -62,34 +57,26 @@ def _cmd_fillshape(args: argparse.Namespace) -> int:
     inplace_info: bool = args.inplace_info
     show: bool = args.show
 
-    try:
-        # Load without fetching external tensor bytes – shape inference only
-        # needs type/shape metadata, not the actual weight values.
-        model = load(model_path, load_external_data=False)
-    except Exception as exc:
-        print(f"error: could not load {model_path!r}: {exc}", file=sys.stderr)
-        return 1
+    # Load without fetching external tensor bytes – shape inference only
+    # needs type/shape metadata, not the actual weight values.
+    model = load(model_path, load_external_data=False)
 
     # Detect whether the model references weights stored in a separate file.
     has_external_data = any(uses_external_data(init) for init in model.graph.initializer)
 
-    try:
-        if inplace_info:
-            # Retain the ShapesContext so the in-place reuse analysis can
-            # reuse the already-inferred shape data.
-            ctx = ShapesContext()
-            compute_shape_model(ctx, model, keep)
-            apply_inferred_shapes_to_model(ctx, model)
-            write_inplace_reuse_to_metadata(ctx, model.graph)
-        else:
-            infer_shapes_model(model, prefill_with_value_info_output=keep)
-    except Exception as exc:
-        print(f"error: shape inference failed: {exc}", file=sys.stderr)
-        return 1
+    if inplace_info:
+        # Retain the ShapesContext so the in-place reuse analysis can
+        # reuse the already-inferred shape data.
+        ctx = ShapesContext()
+        compute_shape_model(ctx, model, keep)
+        apply_inferred_shapes_to_model(ctx, model)
+        write_inplace_reuse_to_metadata(ctx, model.graph)
+    else:
+        infer_shapes_model(model, prefill_with_value_info_output=keep)
 
     if show:
         print(pretty_onnx(model))
-        return 0
+        return
 
     if output_path is not None and has_external_data:
         # The weight-file paths encoded in the proto are relative to the model
@@ -103,13 +90,7 @@ def _cmd_fillshape(args: argparse.Namespace) -> int:
     else:
         dest = model_path
 
-    try:
-        save(model, dest)
-    except Exception as exc:
-        print(f"error: could not save model to {dest!r}: {exc}", file=sys.stderr)
-        return 1
-
-    return 0
+    save(model, dest)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -167,16 +148,12 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Parses *argv* and dispatches to the appropriate subcommand.
-
-    Returns:
-        Exit code: 0 on success, non-zero on failure.
-    """
+def main(argv: list[str] | None = None) -> None:
+    """Parses *argv* and dispatches to the appropriate subcommand."""
     parser = _build_parser()
     args = parser.parse_args(argv)
-    return args.func(args)
+    args.func(args)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

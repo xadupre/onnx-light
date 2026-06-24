@@ -23,23 +23,22 @@ namespace {
 
 constexpr const char *kAiRtDomain = "ai.rt";
 
-std::vector<std::filesystem::path> &CleanupPaths() {
-  // Intentional process-lifetime allocation: avoids atexit/static-destruction ordering bugs.
-  static auto *paths = new std::vector<std::filesystem::path>();
-  return *paths;
-}
+struct CleanupState {
+  std::mutex mutex;
+  std::vector<std::filesystem::path> paths;
+};
 
-std::mutex &CleanupMutex() {
-  // Intentional process-lifetime allocation: avoids atexit/static-destruction ordering bugs.
-  static auto *mutex = new std::mutex();
-  return *mutex;
+CleanupState &GetCleanupState() {
+  static CleanupState state;
+  return state;
 }
 
 // Removes every temporary weights file registered for DelayedInitializer
 // backend cases and logs cleanup failures at process exit.
 void CleanupWeightsFiles() {
-  std::lock_guard<std::mutex> lock(CleanupMutex());
-  for (const auto &path : CleanupPaths()) {
+  auto &state = GetCleanupState();
+  std::lock_guard<std::mutex> lock(state.mutex);
+  for (const auto &path : state.paths) {
     std::error_code ec;
     std::filesystem::remove(path, ec);
     if (ec) {
@@ -53,11 +52,14 @@ void CleanupWeightsFiles() {
 // sure the atexit handler is installed exactly once in a thread-safe way.
 void RegisterCleanupPath(const std::filesystem::path &path) {
   static std::once_flag cleanup_once;
-  std::call_once(cleanup_once, []() { std::atexit(CleanupWeightsFiles); });
-  std::lock_guard<std::mutex> lock(CleanupMutex());
-  auto &paths = CleanupPaths();
-  if (std::find(paths.begin(), paths.end(), path) == paths.end()) {
-    paths.push_back(path);
+  std::call_once(cleanup_once, []() {
+    (void)GetCleanupState();
+    std::atexit(CleanupWeightsFiles);
+  });
+  auto &state = GetCleanupState();
+  std::lock_guard<std::mutex> lock(state.mutex);
+  if (std::find(state.paths.begin(), state.paths.end(), path) == state.paths.end()) {
+    state.paths.push_back(path);
   }
 }
 

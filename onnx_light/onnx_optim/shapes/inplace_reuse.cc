@@ -129,6 +129,8 @@ void CollectReferencedNames(const NodeProto &node, std::vector<std::string> &out
                             std::unordered_set<std::string> &seen) {
   for (int i = 0; i < node.input_size(); ++i) {
     const std::string name = node.input(i).as_string();
+    // ``insert`` returns {iterator, inserted}; ``inserted`` is true only for
+    // the first occurrence, which keeps ``out`` deduplicated.
     if (!name.empty() && seen.insert(name).second) {
       out.push_back(name);
     }
@@ -225,6 +227,8 @@ void ComputeContext::ComputeInPlaceReuseGraph(const GraphProto &graph, const Sha
         continue;
       }
       auto prod_it = producer.find(name);
+      // Releasable values here are top-level intermediates produced by an
+      // earlier node. Values produced at this same node are not eligible.
       if (prod_it == producer.end() || prod_it->second < 0 || prod_it->second >= i) {
         continue;
       }

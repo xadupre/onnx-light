@@ -13,7 +13,7 @@ namespace rt {
 namespace {
 
 std::string MakeDelayedInitializerDoc() {
-  return "Delays loading an initializer tensor until runtime."
+  return "Defers loading of an initializer tensor until runtime."
          "\n\n"
          "This lightweight runtime-only operator records where the initializer data lives on "
          "disk, which device it should first be loaded on, and which device should receive the "

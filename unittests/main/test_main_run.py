@@ -338,6 +338,7 @@ class TestMakeRandomInput(ExtTestCase):
 
     @classmethod
     def setUpClass(cls):
+        import_or_skip("onnx_light.onnx_py._onnxpykernels")
         defs.register_onnx_operator_set_schema()
 
     def test_float_input(self):

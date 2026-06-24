@@ -57,6 +57,9 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
     inplace_info: bool = args.inplace_info
     show: bool = args.show
 
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"Model file not found: {model_path!r}")
+
     # Load without fetching external tensor bytes – shape inference only
     # needs type/shape metadata, not the actual weight values.
     model = load(model_path, load_external_data=False)

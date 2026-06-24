@@ -107,7 +107,14 @@ class TestMainFillshape(ExtTestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             model_path = os.path.join(tmp, "model.onnx")
-            model = _make_add_model()
+            # Use a symbolic input dim "N" so the inferred output dim is also
+            # symbolic and the anchor "ANCHOR" is non-conflicting (both symbolic).
+            add = oh.make_node("Add", inputs=["X", "X"], outputs=["Y"])
+            x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["N", 3])
+            y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
+            graph = oh.make_graph([add], "g", [x], [y])
+            model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+            model.ir_version = 8
             # Pre-set the output with a symbolic anchor dim.
             model.graph.output[0].CopyFrom(
                 oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, ["ANCHOR", 3])

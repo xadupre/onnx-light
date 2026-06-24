@@ -8,7 +8,9 @@
 #include <chrono>
 #include <cstdint>
 #include <cstring>
+#include <iostream>
 #include <limits>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -90,6 +92,37 @@ std::string FunctionLookupKey(const std::string &domain, const std::string &op_t
   return d + ":" + op_type + ":" + overload;
 }
 
+template <class Names>
+std::string FormatNameList(const Names &names) {
+  std::ostringstream oss;
+  for (size_t i = 0; i < names.size(); ++i) {
+    if (i > 0) {
+      oss << ", ";
+    }
+    oss << names[i].as_string();
+  }
+  return oss.str();
+}
+
+void PrintNodeProgress(const RuntimeContext &rt, const NodeProto &node, const std::string &domain,
+                       const std::string &op_type) {
+  if (rt.verbose() <= 0) {
+    return;
+  }
+  std::cout << "[ReferenceEvaluator] ";
+  if (rt.current_subgraph_node_index() >= 0) {
+    std::cout << rt.current_subgraph_attr_name() << "@" << rt.current_subgraph_node_index() << "/";
+  }
+  if (rt.current_node_index() >= 0) {
+    std::cout << "#" << rt.current_node_index() << " ";
+  }
+  if (domain != kDefaultOnnxDomain) {
+    std::cout << domain << "::";
+  }
+  std::cout << op_type << "(" << FormatNameList(node.input()) << ") -> ("
+            << FormatNameList(node.output()) << ")" << std::endl;
+}
+
 } // namespace
 
 int64_t ResolveAxis(int64_t axis, size_t rank, const std::string &op_name) {
@@ -148,6 +181,7 @@ std::vector<Tensor> RunSubgraph(const GraphProto &graph,
   RuntimeContext child(rt.kernel_ctx());
   child.functions() = rt.functions();
   child.tensors() = rt.tensors();
+  child.set_verbose(rt.verbose());
   child.set_events_enabled(rt.events_enabled());
   child.set_current_subgraph(rt.current_node_index(), attr_name);
   for (const auto &kv : bindings) {
@@ -216,6 +250,7 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt) {
   child.functions() = rt.functions();
   child.tensors() = rt.tensors();
   child.sequences() = rt.sequences();
+  child.set_verbose(rt.verbose());
   child.set_events_enabled(rt.events_enabled());
   child.set_current_subgraph(rt.current_node_index(), branch_attr);
   RunGraph(branch, child);
@@ -276,6 +311,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
     child.functions() = rt.functions();
     child.tensors() = rt.tensors();
     child.sequences() = rt.sequences();
+    child.set_verbose(rt.verbose());
     child.set_events_enabled(rt.events_enabled());
     child.set_current_subgraph(rt.current_node_index(), "body");
 
@@ -820,6 +856,7 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
   // but starts with a fresh, isolated tensor map.
   RuntimeContext child(rt.kernel_ctx());
   child.functions() = rt.functions();
+  child.set_verbose(rt.verbose());
 
   // Bind formal function inputs to the caller's actuals.
   for (size_t i = 0; i < func.input_size(); ++i) {
@@ -887,6 +924,7 @@ void CallModelLocalFunction(const NodeProto &node, const FunctionProto &func, Ru
 void RunNode(const NodeProto &node, RuntimeContext &rt) {
   const std::string op_type = node.op_type().as_string();
   const std::string domain = NormaliseDispatchDomain(node);
+  PrintNodeProgress(rt, node, domain, op_type);
 
   // Only capture timing and input names when event logging is active.
   const bool logging = rt.events_enabled();

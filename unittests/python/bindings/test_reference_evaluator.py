@@ -15,6 +15,8 @@ from __future__ import annotations
 import os
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 
 import numpy as np
 
@@ -142,6 +144,22 @@ class TestReferenceEvaluator(ExtTestCase):
             d = ev.as_dict()
             for key in ("action", "kind", "name", "data_type", "shape"):
                 self.assertIn(key, d)
+
+    def test_verbose_prints_node_progress(self):
+        model = parser.parse_model(_ABS_ADD_MODEL_SRC)
+        sess = ReferenceEvaluator(model, verbose=1)
+        buf = StringIO()
+        with redirect_stdout(buf):
+            sess.run(
+                None,
+                {
+                    "x": np.array([-1.0, 2.0, -3.5], dtype=np.float32),
+                    "z": np.array([10.0, 20.0, 30.0], dtype=np.float32),
+                },
+            )
+        out = buf.getvalue()
+        self.assertIn("[ReferenceEvaluator] #0 Abs(x) -> (t)", out)
+        self.assertIn("[ReferenceEvaluator] #1 Add(t, z) -> (y)", out)
 
     def test_events_contain_intermediate(self):
         # The intermediate tensor ``t = Abs(x)`` must appear in the event log.

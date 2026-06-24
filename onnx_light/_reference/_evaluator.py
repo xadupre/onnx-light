@@ -160,6 +160,7 @@ class ReferenceEvaluator:
         self,
         proto: ModelProto | GraphProto | FunctionProto | bytes | str | os.PathLike,
         *,
+        verbose: int = 0,
         events_enabled: bool = False,
         release_intermediates: bool = True,
     ) -> None:
@@ -168,6 +169,7 @@ class ReferenceEvaluator:
         self._graph: GraphProto | None = None
         self._function: FunctionProto | None = None
         self._last_ctx: Any = None
+        self._verbose = int(verbose)
         self._events_enabled = events_enabled
         self._release_intermediates = release_intermediates
 
@@ -265,6 +267,7 @@ class ReferenceEvaluator:
         # every call. The per-invocation tensor / sequence / event state is
         # reset via ``RuntimeContext.clear`` at the start of each :meth:`run`.
         self._ctx = _runtime.RuntimeContext(self._kernel_ctx)
+        self._ctx.verbose = self._verbose
         self._ctx.events_enabled = self._events_enabled
 
         # Mapping ``"<domain>:<op_type>" -> low-level callback``. A

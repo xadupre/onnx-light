@@ -391,6 +391,12 @@ public:
   void set_events_enabled(bool enabled) noexcept { events_enabled_ = enabled; }
   bool events_enabled() const noexcept { return events_enabled_; }
 
+  /// Verbosity level used by :cpp:func:`RunNode` to print execution
+  /// progress to ``stdout`` while the graph is running. ``0`` disables
+  /// printing.
+  void set_verbose(int verbose) noexcept { verbose_ = verbose; }
+  int verbose() const noexcept { return verbose_; }
+
   /// Index of the control-flow node in the parent graph currently being
   /// executed. Set before running a subgraph so that events recorded inside
   /// carry :cpp:var:`RuntimeEvent::subgraph_node_index` and
@@ -692,6 +698,7 @@ private:
   SequenceMap sequences_;
   OnnxMapMap maps_;
   bool events_enabled_ = false;
+  int verbose_ = 0;
   bool release_intermediates_ = false;
   int64_t current_node_index_ = -1;
   /// Index of the control-flow node in the parent graph currently being

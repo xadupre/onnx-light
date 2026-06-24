@@ -88,6 +88,23 @@ def _print_shape_inference_events_detailed(events: list) -> None:
         )
 
 
+def _print_shape_inference_events(events: list) -> None:
+    """Prints a compact summary of shape-inference events."""
+    print(f"[fillshape] shape inference events: {len(events)}")
+
+
+def _print_shape_inference_events_detailed(events: list) -> None:
+    """Prints detailed shape-inference events."""
+    for ev in events:
+        d = ev.as_dict()
+        op = f"{d['op_domain']}::{d['op_type']}" if d["op_type"] else "-"
+        print(
+            f"[fillshape] node={d['node_index']:<3d} "
+            f"action={d['action']:<12s} op={op:<20s} "
+            f"name={d['name'] or '-':<16s} shape={d['shape']}"
+        )
+
+
 def _cmd_fillshape(args: argparse.Namespace) -> None:
     """Implements the ``fillshape`` subcommand."""
     from .onnx import load, save

@@ -18,6 +18,8 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
@@ -1603,6 +1605,136 @@ TEST(RunGraph, CallerInputOverridesInitializer) {
 
   ASSERT_TRUE(rt.Has("out"));
   EXPECT_FLOAT_EQ(rt.Get("out").AsFloat()[0], 5.0f);
+}
+
+TEST(RunModel, DelayedInitializerLoadsFromFileAtRuntime) {
+  namespace fs = std::filesystem;
+
+  const fs::path weights_path =
+      fs::temp_directory_path() / "onnx_light_delayed_initializer_file.bin";
+  fs::remove(weights_path);
+  {
+    std::ofstream out(weights_path, std::ios::binary);
+    ASSERT_TRUE(out.good());
+    const char pad[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    out.write(pad, sizeof(pad));
+    const float values[2] = {1.5f, -2.0f};
+    out.write(reinterpret_cast<const char *>(values), sizeof(values));
+  }
+
+  ModelProto model;
+  model.set_ir_version(10);
+  OperatorSetIdProto *rt_os = model.add_opset_import();
+  rt_os->set_domain("ai.rt");
+  rt_os->set_version(1);
+  GraphProto *graph = model.add_graph();
+  graph->set_name("main");
+  graph->add_output()->set_name("Y");
+  NodeProto *node = graph->add_node();
+  node->set_op_type("DelayedInitializer");
+  node->set_domain("ai.rt");
+  node->add_output("Y");
+
+  AttributeProto *shape = node->add_attribute();
+  shape->set_name("shape");
+  shape->set_type(AttributeProto::AttributeType::INTS);
+  shape->add_ints(2);
+
+  AttributeProto *dtype = node->add_attribute();
+  dtype->set_name("dtype");
+  dtype->set_type(AttributeProto::AttributeType::INT);
+  dtype->set_i(static_cast<int64_t>(TensorProto::DataType::FLOAT));
+
+  AttributeProto *load_device = node->add_attribute();
+  load_device->set_name("load_device");
+  load_device->set_type(AttributeProto::AttributeType::STRING);
+  load_device->set_s("file");
+
+  AttributeProto *runtime_device = node->add_attribute();
+  runtime_device->set_name("runtime_device");
+  runtime_device->set_type(AttributeProto::AttributeType::STRING);
+  runtime_device->set_s("cpu");
+
+  AttributeProto *filename = node->add_attribute();
+  filename->set_name("filename");
+  filename->set_type(AttributeProto::AttributeType::STRING);
+  filename->set_s(weights_path.string());
+
+  AttributeProto *offset = node->add_attribute();
+  offset->set_name("offset");
+  offset->set_type(AttributeProto::AttributeType::INT);
+  offset->set_i(8);
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  RunModel(model, rt);
+
+  ASSERT_TRUE(rt.Has("Y"));
+  const Tensor &y = rt.Get("Y");
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  ASSERT_EQ(y.shape.size(), 1u);
+  EXPECT_EQ(y.shape[0], 2);
+  EXPECT_FLOAT_EQ(y.AsFloat()[0], 1.5f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[1], -2.0f);
+  fs::remove(weights_path);
+}
+
+TEST(RunModel, DelayedInitializerLoadsIntoCpuAtKernelInitialization) {
+  namespace fs = std::filesystem;
+
+  const fs::path weights_path =
+      fs::temp_directory_path() / "onnx_light_delayed_initializer_cpu.bin";
+  fs::remove(weights_path);
+  {
+    std::ofstream out(weights_path, std::ios::binary);
+    ASSERT_TRUE(out.good());
+    const float values[3] = {3.0f, 4.0f, 5.0f};
+    out.write(reinterpret_cast<const char *>(values), sizeof(values));
+  }
+
+  NodeProto node = MakeNode("DelayedInitializer", {}, {"Y"}, "ai.rt");
+
+  AttributeProto *shape = node.add_attribute();
+  shape->set_name("shape");
+  shape->set_type(AttributeProto::AttributeType::INTS);
+  shape->add_ints(3);
+
+  AttributeProto *dtype = node.add_attribute();
+  dtype->set_name("dtype");
+  dtype->set_type(AttributeProto::AttributeType::INT);
+  dtype->set_i(static_cast<int64_t>(TensorProto::DataType::FLOAT));
+
+  AttributeProto *load_device = node.add_attribute();
+  load_device->set_name("load_device");
+  load_device->set_type(AttributeProto::AttributeType::STRING);
+  load_device->set_s("cpu");
+
+  AttributeProto *runtime_device = node.add_attribute();
+  runtime_device->set_name("runtime_device");
+  runtime_device->set_type(AttributeProto::AttributeType::STRING);
+  runtime_device->set_s("cpu");
+
+  AttributeProto *filename = node.add_attribute();
+  filename->set_name("filename");
+  filename->set_type(AttributeProto::AttributeType::STRING);
+  filename->set_s(weights_path.string());
+
+  AttributeProto *offset = node.add_attribute();
+  offset->set_name("offset");
+  offset->set_type(AttributeProto::AttributeType::INT);
+  offset->set_i(0);
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  RunNode(node, rt);
+
+  ASSERT_TRUE(rt.Has("Y"));
+  const Tensor &y = rt.Get("Y");
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  ASSERT_EQ(y.shape.size(), 1u);
+  EXPECT_EQ(y.shape[0], 3);
+  EXPECT_FLOAT_EQ(y.AsFloat()[0], 3.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[1], 4.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[2], 5.0f);
+  fs::remove(weights_path);
 }
 
 // ---------------------------------------------------------------------------

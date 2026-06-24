@@ -68,7 +68,8 @@ onnx without protobuf and more freedom
   the source bytes without allocating an extra copy.  This eliminates one
   ``malloc + memcpy`` per tensor initializer.
 - **Encrypted save / load** – Models can be encrypted with AES-256-CBC
-  (PBKDF2-HMAC-SHA256 key derivation) and saved to a single self-contained
+  (ONNXCRY1) or ChaCha20-Poly1305 (ONNXCRY2), both using
+  PBKDF2-HMAC-SHA256 key derivation, and saved to a single self-contained
   ``.onnxc`` file, or serialized to an in-memory ``bytes`` object.
 - **No serialize/parse round-trip for C++ tools** – the Python :class:`~onnx_light.onnx_lib.ModelProto`
   exposed by ``onnx_light.onnx`` *is* the C++ :class:`~onnx_light.onnx_lib.ModelProto` (bound through
@@ -82,7 +83,8 @@ The C++ code is shipped as several small libraries so that downstream
 projects can link only what they need:
 
 - ``onnx_light::lib_onnx_proto`` – protobuf-compatible message types,
-  parser / serializer, external data, optional AES-256 encrypted save / load.
+  parser / serializer, external data, optional encrypted save / load
+  (AES-256-CBC or ChaCha20-Poly1305).
 - ``onnx_light::lib_onnx_op`` – lightweight ``LightOpSchema``
   registrations for ONNX operator domains, with no shape inference.
 - ``onnx_light::onnx_manipulations`` – graph-manipulation helpers

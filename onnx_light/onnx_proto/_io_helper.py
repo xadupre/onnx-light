@@ -365,14 +365,15 @@ def save_encrypted(
     f: str | Path,
     key: str | bytes,
     *,
+    encryption: str = "AES-256-CBC",
     num_threads: int = -1,
     size_threshold: int = 1024,
     min_block_size: int = 0,
 ) -> None:
-    """Serializes and encrypts a ModelProto to a single AES-256-CBC file.
+    """Serializes and encrypts a ModelProto to a single encrypted file.
 
     The model is first serialized to an in-memory buffer and then encrypted
-    using AES-256-CBC.  The passphrase is stretched to a 32-byte key via
+    using the selected cipher. The passphrase is stretched to a 32-byte key via
     PBKDF2-HMAC-SHA256 (100 000 iterations).  The output file is a
     self-contained binary that can only be loaded by :func:`load_encrypted`
     with the same key.
@@ -383,9 +384,11 @@ def save_encrypted(
 
     :param proto: The ModelProto to save.
     :param f: Destination file path (str or :class:`pathlib.Path`).
-    :param key: Passphrase or raw bytes used to derive the AES-256 key.
+    :param key: Passphrase or raw bytes used to derive the encryption key.
         When *key* is :class:`bytes` it is decoded as ``latin-1`` before
         PBKDF2 so that arbitrary byte values are preserved faithfully.
+    :param encryption: Encryption algorithm. Supported values are
+        ``"AES-256-CBC"`` (ONNXCRY1) and ``"ChaCha20-Poly1305"`` (ONNXCRY2).
     :param num_threads: Number of threads to use for parallel serialization.
         ``1`` disables parallelization, ``> 1`` uses exactly that many
         worker threads, and any negative value (``-1`` is the default)
@@ -410,16 +413,17 @@ def save_encrypted(
     opts.raw_data_threshold = size_threshold
     opts.num_threads = num_threads
     opts.min_parallel_block_size = min_block_size
-    proto.SerializeToEncryptedFile(str(f), key, opts)
+    proto.SerializeToEncryptedFile(str(f), key, opts, encryption)
 
 
 def load_encrypted(
     f: str | Path, key: str | bytes, *, num_threads: int = -1, min_block_size: int = 0
 ) -> ModelProto:
-    """Decrypts and parses an AES-256-CBC encrypted ONNX model.
+    """Decrypts and parses an encrypted ONNX model.
 
     The file must have been produced by :func:`save_encrypted` with the
-    same key.  Decryption is performed with AES-256-CBC using a key
+    same key.  Decryption supports ONNXCRY1 (AES-256-CBC) and ONNXCRY2
+    (ChaCha20-Poly1305) formats using a key
     derived from the passphrase via PBKDF2-HMAC-SHA256.
 
     .. note::
@@ -459,15 +463,16 @@ def save_encrypted_string(
     proto: ModelProto,
     key: str | bytes,
     *,
+    encryption: str = "AES-256-CBC",
     num_threads: int = -1,
     size_threshold: int = 1024,
     min_block_size: int = 0,
 ) -> bytes:
-    """Serializes and encrypts a ModelProto to an in-memory AES-256-CBC bytes object.
+    """Serializes and encrypts a ModelProto to an in-memory bytes object.
 
     Equivalent to :func:`save_encrypted` but returns the ciphertext as
     :class:`bytes` instead of writing it to a file.  The returned bytes are
-    in ONNXCRY1 format and can be decrypted with :func:`load_encrypted_string`
+    in ONNXCRY1 or ONNXCRY2 format and can be decrypted with :func:`load_encrypted_string`
     (or :func:`load_encrypted` after writing the bytes to a file).
 
     .. note::
@@ -475,9 +480,11 @@ def save_encrypted_string(
         (``ONNX_LIGHT_HAS_OPENSSL`` compile-time flag).
 
     :param proto: The ModelProto to save.
-    :param key: Passphrase or raw bytes used to derive the AES-256 key.
+    :param key: Passphrase or raw bytes used to derive the encryption key.
         When *key* is :class:`bytes` it is decoded as ``latin-1`` before
         PBKDF2 so that arbitrary byte values are preserved faithfully.
+    :param encryption: Encryption algorithm. Supported values are
+        ``"AES-256-CBC"`` (ONNXCRY1) and ``"ChaCha20-Poly1305"`` (ONNXCRY2).
     :param num_threads: Number of threads to use for parallel serialization.
         ``1`` disables parallelization, ``> 1`` uses exactly that many
         worker threads, and any negative value (``-1`` is the default)
@@ -486,7 +493,7 @@ def save_encrypted_string(
         considered "large" for the purposes of parallelisation.
     :param min_block_size: Minimum raw-data block size (bytes) parallelised
         when ``num_threads != 1``.
-    :return: Encrypted model bytes in ONNXCRY1 format.
+    :return: Encrypted model bytes in ONNXCRY1 or ONNXCRY2 format.
     :raises RuntimeError: On OpenSSL errors.
     :raises NotImplementedError: When OpenSSL support is not compiled in.
     """
@@ -502,23 +509,23 @@ def save_encrypted_string(
     opts.raw_data_threshold = size_threshold
     opts.num_threads = num_threads
     opts.min_parallel_block_size = min_block_size
-    return proto.SerializeToEncryptedString(key, opts)
+    return proto.SerializeToEncryptedString(key, opts, encryption)
 
 
 def load_encrypted_string(
     data: bytes, key: str | bytes, *, num_threads: int = -1, min_block_size: int = 0
 ) -> ModelProto:
-    """Decrypts and parses an in-memory AES-256-CBC encrypted ONNX model.
+    """Decrypts and parses an in-memory encrypted ONNX model.
 
     Equivalent to :func:`load_encrypted` but takes a :class:`bytes` object
-    instead of a file path.  The bytes must be in ONNXCRY1 format as
+    instead of a file path.  The bytes must be in ONNXCRY1 or ONNXCRY2 format as
     produced by :func:`save_encrypted_string` (or :func:`save_encrypted`).
 
     .. note::
         This function requires that onnx-light was built with OpenSSL support
         (``ONNX_LIGHT_HAS_OPENSSL`` compile-time flag).
 
-    :param data: Encrypted model bytes in ONNXCRY1 format.
+    :param data: Encrypted model bytes in ONNXCRY1 or ONNXCRY2 format.
     :param key: Passphrase or raw bytes (must match the one used to encrypt).
         :class:`bytes` values are decoded as ``latin-1``.
     :param num_threads: Number of threads to use for parallel parsing.

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_op/operator_sets.h"
+#include "onnx_op/operator_sets_rt.h"
 
 #include "onnx_lib/defs/operator_sets.h"
 #include "onnx_lib/defs/schema.h"
@@ -73,6 +74,8 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
       onnx_op::quantization::GetAllOnnxOpQuantizationSchemasWithHistory();
   const std::vector<onnx_op::reduction::LightOpSchema> reduction_schemas =
       onnx_op::reduction::GetAllOnnxOpReductionSchemasWithHistory();
+  const std::vector<onnx_op::rt::LightOpSchema> rt_schemas =
+      onnx_op::rt::GetAllOnnxOpRtSchemasWithHistory();
   const std::vector<onnx_op::sequence::LightOpSchema> sequence_schemas =
       onnx_op::sequence::GetAllOnnxOpSequenceSchemasWithHistory();
   const std::vector<onnx_op::tensor::LightOpSchema> tensor_schemas =
@@ -88,9 +91,9 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
       controlflow_schemas.size() + generator_schemas.size() + image_schemas.size() +
       math_schemas.size() + logical_schemas.size() + nn_schemas.size() +
       object_detection_schemas.size() + optional_schemas.size() + preview_schemas.size() +
-      quantization_schemas.size() + reduction_schemas.size() + sequence_schemas.size() +
-      tensor_schemas.size() + text_schemas.size() + traditionalml_schemas.size() +
-      training_schemas.size();
+      quantization_schemas.size() + reduction_schemas.size() + rt_schemas.size() +
+      sequence_schemas.size() + tensor_schemas.size() + text_schemas.size() +
+      traditionalml_schemas.size() + training_schemas.size();
   ASSERT_EQ(all_schemas.size(), expected_total);
 
   for (const onnx_op::reduction::LightOpSchema &reduction_schema : reduction_schemas) {

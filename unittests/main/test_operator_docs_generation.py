@@ -35,6 +35,7 @@ class TestGenOperators(ExtTestCase):
         self.assertIn("ai_onnx", index)
         self.assertIn("ai_onnx_ml", index)
         self.assertIn("ai_onnx_preview", index)
+        self.assertIn("ai_rt", index)
 
     def test_ml_domain_page_contains_operators(self):
         self._init()
@@ -86,6 +87,20 @@ class TestGenOperators(ExtTestCase):
         for name in ("Abs", "Add", "Cast", "Mul"):
             op_file = op_dir / f"{name}.rst"
             self.assertTrue(op_file.exists(), f"Individual page {name}.rst must exist")
+
+    def test_runtime_domain_page_contains_delayed_initializer(self):
+        self._init()
+        content = Path(self.tmp_dir, "ai_rt.rst").read_text(encoding="utf-8")
+        self.assertIn("DelayedInitializer", content)
+
+        page = Path(self.tmp_dir, "ai_rt", "DelayedInitializer.rst").read_text(encoding="utf-8")
+        self.assertIn(".. _op_ai_rt_DelayedInitializer:", page)
+        self.assertIn("load_device", page)
+        self.assertIn("runtime_device", page)
+        self.assertIn("filename", page)
+        self.assertIn("offset", page)
+        self.assertIn('"cpu"', page)
+        self.assertIn('"file"', page)
 
     def test_past_version_pages_created(self):
         self._init()

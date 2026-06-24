@@ -194,6 +194,60 @@ class TestShapesContextBindings(ExtTestCase):
         with self.assertRaises(ValueError):
             si.compute_shape_node(ctx, node)
 
+    def test_compute_shape_node_delayed_initializer_custom_domain(self):
+        ctx = si.ShapesContext()
+        node = oh.make_node(
+            "DelayedInitializer",
+            inputs=[],
+            outputs=["Y"],
+            domain="ai.rt",
+            shape=[2, 3],
+            dtype=onnxl.TensorProto.FLOAT16,
+            load_device="cpu",
+            runtime_device="cpu",
+            filename="weights.bin",
+            offset=128,
+        )
+        si.compute_shape_node(ctx, node)
+        self.assertTrue(ctx.has("Y"))
+        y = ctx.get("Y")
+        self.assertEqual(y.dtype, onnxl.TensorProto.FLOAT16)
+        self.assertEqual(list(y.shape), [2, 3])
+
+    def test_compute_shape_node_delayed_initializer_rejects_negative_dim(self):
+        ctx = si.ShapesContext()
+        node = oh.make_node(
+            "DelayedInitializer",
+            inputs=[],
+            outputs=["Y"],
+            domain="ai.rt",
+            shape=[2, -1],
+            dtype=onnxl.TensorProto.FLOAT,
+            load_device="cpu",
+            runtime_device="cpu",
+            filename="weights.bin",
+            offset=0,
+        )
+        with self.assertRaises(ValueError):
+            si.compute_shape_node(ctx, node)
+
+    def test_compute_shape_node_delayed_initializer_rejects_runtime_device(self):
+        ctx = si.ShapesContext()
+        node = oh.make_node(
+            "DelayedInitializer",
+            inputs=[],
+            outputs=["Y"],
+            domain="ai.rt",
+            shape=[2, 3],
+            dtype=onnxl.TensorProto.FLOAT,
+            load_device="cpu",
+            runtime_device="cuda:0",
+            filename="weights.bin",
+            offset=0,
+        )
+        with self.assertRaises(ValueError):
+            si.compute_shape_node(ctx, node)
+
     def test_check_inputs_available(self):
         ctx = si.ShapesContext()
         node = oh.make_node("Relu", inputs=["X"], outputs=["Y"])

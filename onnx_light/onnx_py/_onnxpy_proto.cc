@@ -2608,17 +2608,17 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .def(
           "SerializeToEncryptedFile",
           [](ModelProto &self, const std::string &file_path, const std::string &key,
-             nb::object options) {
+             nb::object options, const std::string &encryption) {
             SerializeOptions opts;
             if (nb::isinstance<SerializeOptions>(options)) {
               opts = nb::cast<SerializeOptions>(options);
             }
-            SaveEncryptedModel(self, file_path, key, opts);
+            SaveEncryptedModel(self, file_path, key, opts, encryption);
           },
           nb::arg("name"), nb::arg("key"), nb::arg("options") = nb::none(),
-          "Encrypts the model with AES-256-CBC (PBKDF2 key derivation) and writes it to a "
-          "single binary file.  The *key* argument is a passphrase or raw bytes used to derive "
-          "the AES-256 key via PBKDF2-HMAC-SHA256.")
+          nb::arg("encryption") = "AES-256-CBC",
+          "Encrypts the model and writes it to a single binary file. Supported values are "
+          "\"AES-256-CBC\" (ONNXCRY1) and \"ChaCha20-Poly1305\" (ONNXCRY2).")
       .def(
           "ParseFromEncryptedFile",
           [](ModelProto &self, const std::string &file_path, const std::string &key,
@@ -2630,21 +2630,22 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
             LoadEncryptedModel(self, file_path, key, opts);
           },
           nb::arg("name"), nb::arg("key"), nb::arg("options") = nb::none(),
-          "Decrypts an ONNXCRY1 encrypted file (written by SerializeToEncryptedFile) and "
+          "Decrypts an ONNXCRY1/ONNXCRY2 encrypted file (written by SerializeToEncryptedFile) and "
           "parses the payload into this model instance.")
       .def(
           "SerializeToEncryptedString",
-          [](ModelProto &self, const std::string &key, nb::object options) {
+          [](ModelProto &self, const std::string &key, nb::object options,
+             const std::string &encryption) {
             SerializeOptions opts;
             if (nb::isinstance<SerializeOptions>(options)) {
               opts = nb::cast<SerializeOptions>(options);
             }
-            const std::string blob = SaveEncryptedModelToString(self, key, opts);
+            const std::string blob = SaveEncryptedModelToString(self, key, opts, encryption);
             return nb::bytes(blob.data(), blob.size());
           },
-          nb::arg("key"), nb::arg("options") = nb::none(),
-          "Encrypts the model with AES-256-CBC (PBKDF2 key derivation) and returns the "
-          "ciphertext as a bytes object in ONNXCRY1 format.")
+          nb::arg("key"), nb::arg("options") = nb::none(), nb::arg("encryption") = "AES-256-CBC",
+          "Encrypts the model and returns ciphertext bytes in ONNXCRY1 (AES-256-CBC) or "
+          "ONNXCRY2 (ChaCha20-Poly1305) format.")
       .def(
           "ParseFromEncryptedString",
           [](ModelProto &self, nb::bytes data, const std::string &key, nb::object options) {
@@ -2656,7 +2657,8 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
             LoadEncryptedModelFromString(self, blob, key, opts);
           },
           nb::arg("data"), nb::arg("key"), nb::arg("options") = nb::none(),
-          "Decrypts an ONNXCRY1 encrypted bytes object (produced by SerializeToEncryptedString) "
+          "Decrypts an ONNXCRY1/ONNXCRY2 encrypted bytes object (produced by "
+          "SerializeToEncryptedString) "
           "and parses the payload into this model instance.");
 #endif // ONNX_LIGHT_HAS_OPENSSL
 

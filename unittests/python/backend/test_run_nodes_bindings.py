@@ -12,7 +12,9 @@ The dispatcher is exposed as the ``runtime`` submodule of
 from __future__ import annotations
 
 import struct
+import tempfile
 import unittest
+from pathlib import Path
 
 import numpy as np
 
@@ -166,6 +168,33 @@ class TestRunNodesBindings(ExtTestCase):
 
         ctx.clear_events()
         self.assertEqual(ctx.events(), [])
+
+    def test_run_model_delayed_initializer(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            weights = Path(temp_dir) / "weights.bin"
+            weights.write_bytes(b"\x00" * 8 + struct.pack("<2f", 1.25, -3.5))
+
+            model = parser.parse_model(f"""
+                <
+                  ir_version: 10,
+                  opset_import: ["" : 18, "ai.rt" : 1]
+                >
+                agraph () => (float[2] Y)
+                {{
+                    Y = ai.rt.DelayedInitializer<
+                        shape = [2],
+                        dtype = {int(TensorProto.FLOAT)},
+                        load_device = "file",
+                        runtime_device = "cpu",
+                        filename = "{weights.as_posix()}",
+                        offset = 8
+                    >()
+                }}
+                """)
+            ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+            rt.run_model(model, ctx)
+            y = ctx.get("Y")
+            self.assertEqual(_unpack_floats(y), (1.25, -3.5))
 
     def test_runtime_context_event_log_truncates_large_tensors(self):
         ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))

@@ -57,6 +57,10 @@ from __future__ import annotations
 
 import argparse
 import os
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .onnx_proto._helper import TypeProto as _TypeProto
 
 
 def _cmd_fillshape(args: argparse.Namespace) -> None:
@@ -118,7 +122,7 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
 
 
 def _resolve_input_shape(
-    vi_type: object, dim_overrides: dict[str, int], input_name: str
+    vi_type: _TypeProto | Any, dim_overrides: dict[str, int], input_name: str
 ) -> list[int]:
     """Resolves the concrete shape for a tensor graph input.
 
@@ -135,12 +139,12 @@ def _resolve_input_shape(
         ValueError: When the type is not a tensor type or a dimension cannot
             be resolved.
     """
-    if not vi_type.has_tensor_type():  # type: ignore[union-attr]
+    if not vi_type.has_tensor_type():
         raise ValueError(
             f"Input {input_name!r} is not a tensor type; only tensor inputs are "
             "supported by the run subcommand."
         )
-    tensor_type = vi_type.tensor_type  # type: ignore[union-attr]
+    tensor_type = vi_type.tensor_type
     if not tensor_type.has_shape():
         raise ValueError(
             f"Input {input_name!r} has no shape information. "
@@ -233,7 +237,7 @@ def _make_random_input(elem_type: int, shape: list[int], seed: int) -> object:
     if elem_type in _FLOAT_TYPES:
         if elem_type in (int(TensorProto.COMPLEX64), int(TensorProto.COMPLEX128)):
             real = rand(*shape, seed=seed)
-            imag = rand(*shape, seed=seed + 1 if seed is not None else None)
+            imag = rand(*shape, seed=seed + 1)
             return (real + 1j * imag).astype(np_dtype)
         values = rand(*shape, seed=seed)
         return values.astype(np_dtype)

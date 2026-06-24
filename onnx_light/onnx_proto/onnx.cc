@@ -1340,6 +1340,14 @@ void FunctionProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &o
 IMPLEMENT_PROTO(ModelProto)
 SerializeSizeResult ModelProto::SerializeSize(utils::BinaryWriteStream &stream,
                                               SerializeOptions &options) const {
+  if (options.raw_data_callback) {
+    ModelProto copy;
+    copy.CopyFrom(*this);
+    ApplySerializeRawDataCallback(copy, options);
+    SerializeOptions local_opts = options;
+    local_opts.raw_data_callback = {};
+    return copy.SerializeSize(stream, local_opts);
+  }
   SerializeSizeResult size;
   SIZE_FIELD(size, options, stream, ir_version)
   SIZE_REPEATED_FIELD(size, options, stream, opset_import)
@@ -1410,6 +1418,10 @@ void ModelProto::SerializeToString(std::string &out,
   ModelProto copy;
   copy.CopyFrom(*this);
   SerializeOptions local_opts = opts;
+  if (local_opts.raw_data_callback) {
+    ApplySerializeRawDataCallback(copy, local_opts);
+    local_opts.raw_data_callback = {};
+  }
   local_opts.num_threads = 1;
   local_opts.use_external_data_location = true;
   AssignExternalDataChunks(copy, static_cast<size_t>(local_opts.raw_data_threshold),

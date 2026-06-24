@@ -95,7 +95,7 @@ std::vector<uint8_t> DelayedInitializer::LoadBytes(const Attributes &attrs) {
   EXT_ENFORCE_INVALID(stream.good(), "kernel::DelayedInitializer seek failed for '", attrs.filename,
                       "'.");
   stream.read(reinterpret_cast<char *>(bytes.data()), static_cast<std::streamsize>(byte_count));
-  EXT_ENFORCE_INVALID(stream.good() || stream.gcount() == static_cast<std::streamsize>(byte_count),
+  EXT_ENFORCE_INVALID(stream.gcount() == static_cast<std::streamsize>(byte_count),
                       "kernel::DelayedInitializer read failed for '", attrs.filename, "'.");
   return bytes;
 }

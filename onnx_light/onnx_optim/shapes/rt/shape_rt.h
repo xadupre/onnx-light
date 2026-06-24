@@ -29,8 +29,8 @@ inline constexpr const char *kAiRtDomain = "ai.rt";
  * Its output shape is given by the required ``shape`` attribute and its element
  * type is given by the required ``dtype`` attribute. onnx-light accepts only
  * ``load_device`` values ``"cpu"`` and ``"file"``, requires
- * ``runtime_device == "cpu"``, and rejects ``STRING`` outputs because the
- * runtime kernel loads raw bytes from disk.
+ * ``runtime_device == "cpu"``, and rejects ``STRING`` outputs because that
+ * dtype has no raw-byte tensor representation in the runtime.
  *
  * @throws std::invalid_argument if ``node.op_type()`` is not
  *         ``"DelayedInitializer"``, if ``node`` declares any inputs or no

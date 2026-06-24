@@ -12,7 +12,7 @@ std::string MakeDelayedInitializerDoc() {
   return R"DOC(
 Defers materialization of a tensor stored in an external weights file.
 
-In onnx-light, ``load_device`` must be either ``"file"`` or ``"cpu"`` and
+In onnx-light, ``load_device`` must be either ``"cpu"`` or ``"file"`` and
 ``runtime_device`` must be ``"cpu"``. When ``load_device`` is ``"cpu"``, the
 kernel loads the tensor bytes during kernel initialization and returns a CPU
 copy at execution time. When ``load_device`` is ``"file"``, initialization does

@@ -40,7 +40,7 @@ template <typename T> void SetMetadataValue(T &obj, const char *key, const std::
   entry->set_value(value);
 }
 
-std::string NormaliseValueTag(std::string_view tag) {
+std::string NormalizeValueTag(std::string_view tag) {
   std::string lower;
   lower.reserve(tag.size());
   for (char c : tag) {
@@ -67,7 +67,7 @@ void SetValueTag(std::unordered_map<std::string, std::string> &value_tags, const
   if (name.empty()) {
     return;
   }
-  const std::string norm = NormaliseValueTag(tag);
+  const std::string norm = NormalizeValueTag(tag);
   if (!norm.empty()) {
     value_tags[name] = norm;
   }
@@ -152,39 +152,53 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
 }
 
 std::string EscapeJson(std::string_view text) {
+  static constexpr char kHex[] = "0123456789abcdef";
   std::string out;
-  out.reserve(text.size());
-  for (char c : text) {
+  out.reserve(text.size() + 8);
+  for (unsigned char c : text) {
     if (c == '\\' || c == '"') {
       out.push_back('\\');
+      out.push_back(static_cast<char>(c));
+    } else if (c == '\b') {
+      out.append("\\b");
+    } else if (c == '\f') {
+      out.append("\\f");
+    } else if (c == '\n') {
+      out.append("\\n");
+    } else if (c == '\r') {
+      out.append("\\r");
+    } else if (c == '\t') {
+      out.append("\\t");
+    } else if (c < 0x20) {
+      out.append("\\u00");
+      out.push_back(kHex[c >> 4]);
+      out.push_back(kHex[c & 0x0f]);
+    } else {
+      out.push_back(static_cast<char>(c));
     }
-    out.push_back(c);
   }
   return out;
 }
 
 std::string DumpValueTagsAsJson(const std::unordered_map<std::string, std::string> &value_tags) {
-  std::vector<std::string> keys;
-  keys.reserve(value_tags.size());
+  std::vector<std::pair<std::string, std::string>> entries;
+  entries.reserve(value_tags.size());
   for (const auto &kv : value_tags) {
-    keys.push_back(kv.first);
+    entries.push_back(kv);
   }
-  std::sort(keys.begin(), keys.end());
+  std::sort(entries.begin(), entries.end(),
+            [](const auto &a, const auto &b) { return a.first < b.first; });
   std::string out = "{";
   bool first = true;
-  for (const std::string &key : keys) {
-    auto it = value_tags.find(key);
-    if (it == value_tags.end()) {
-      continue;
-    }
+  for (const auto &entry : entries) {
     if (!first) {
       out.append(",");
     }
     first = false;
     out.append("\"");
-    out.append(EscapeJson(key));
+    out.append(EscapeJson(entry.first));
     out.append("\":\"");
-    out.append(EscapeJson(it->second));
+    out.append(EscapeJson(entry.second));
     out.append("\"");
   }
   out.append("}");

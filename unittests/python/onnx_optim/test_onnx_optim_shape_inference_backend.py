@@ -142,6 +142,9 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
             expected = expected_info[name]
             inferred = computed[name]
             self.assertEqual(expected, inferred, f"{name!r} failed\n{expected=}\n--\n{inferred=}")
+        z_dims = computed["Z"].type.tensor_type.shape.dim
+        self.assertEqual(len(z_dims), 1)
+        self.assertEqual(z_dims[0].dim_param, "seq//5+2")
 
     def test_inference_shape_backend_non_zero_expression(self):
         tests = [

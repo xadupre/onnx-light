@@ -123,7 +123,7 @@ std::optional<InPlaceReuseKind> ClassifyReuse(const OptimTensor &out, const Opti
 // Recursively collects every input name referenced by ``node`` — its direct
 // inputs plus any name read inside the bodies of its subgraph attributes
 // (``If``, ``Loop``, ``Scan``, ...). The resulting list preserves first-seen
-// order and deduplicates names.
+// order and deduplicates names via ``seen``.
 void CollectReferencedNames(const NodeProto &node, std::vector<std::string> &out,
                             std::unordered_set<std::string> &seen) {
   for (int i = 0; i < node.input_size(); ++i) {
@@ -184,6 +184,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(const GraphProto &graph, const Sha
   // reused once they reach their last use.
   std::unordered_map<std::string, int> producer;
   std::unordered_map<std::string, int> last_use;
+  std::vector<std::vector<std::string>> referenced_per_node(static_cast<std::size_t>(num_nodes));
   if (allow_input_overwrite) {
     for (const std::string &name : graph_inputs) {
       if (!name.empty()) {
@@ -193,7 +194,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(const GraphProto &graph, const Sha
   }
   for (int i = 0; i < num_nodes; ++i) {
     const NodeProto &node = graph.node()[i];
-    std::vector<std::string> referenced;
+    std::vector<std::string> &referenced = referenced_per_node[static_cast<std::size_t>(i)];
     std::unordered_set<std::string> seen;
     CollectReferencedNames(node, referenced, seen);
     for (const std::string &name : referenced) {
@@ -209,9 +210,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(const GraphProto &graph, const Sha
 
   for (int i = 0; i < num_nodes; ++i) {
     const NodeProto &node = graph.node()[i];
-    std::vector<std::string> referenced;
-    std::unordered_set<std::string> seen;
-    CollectReferencedNames(node, referenced, seen);
+    const std::vector<std::string> &referenced = referenced_per_node[static_cast<std::size_t>(i)];
 
     for (const std::string &name : referenced) {
       auto use_it = last_use.find(name);

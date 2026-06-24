@@ -266,14 +266,14 @@ def _dump_tensors_as_model(
     """Writes *tensors* to *dump_path* as an ONNX model with initializers.
 
     Creates a ``ModelProto`` whose ``graph.initializer`` list contains one
-    ``TensorProto`` per entry in *tensors*.  Non-``numpy.ndarray`` values are
-    silently skipped.
+    ``TensorProto`` per entry in *tensors*.  Silently skips non-``numpy.ndarray``
+    values.
 
     Args:
-        tensors: Ordered mapping from tensor name to value.  Only
-            ``numpy.ndarray`` entries are stored.
-        dump_path: Filesystem path where the resulting ``.onnx`` file is
-            written.
+        tensors: Ordered mapping from tensor name to value.  Skips entries
+            that are not ``numpy.ndarray``.
+        dump_path: Filesystem path where this function writes the resulting
+            ``.onnx`` file.
         ir_version: IR version to set on the model (default: 8).
     """
     import numpy as np

@@ -891,6 +891,25 @@ public:
     int64_t d = dc->value;
     if (d < 0)
       return n;
+    if (n->op == BinOpKind::FloorDiv) {
+      if (const auto *left_bin = dynamic_cast<const BinOp *>(n->left.get())) {
+        if (left_bin->op == BinOpKind::Add || left_bin->op == BinOpKind::Sub) {
+          int64_t c = 0;
+          bool has_simple_unit_offset = false;
+          if (const auto *cr = dynamic_cast<const Constant *>(left_bin->right.get())) {
+            c = (left_bin->op == BinOpKind::Add) ? cr->value : -cr->value;
+            has_simple_unit_offset = true;
+          } else if (left_bin->op == BinOpKind::Add) {
+            if (const auto *cl = dynamic_cast<const Constant *>(left_bin->left.get())) {
+              c = cl->value;
+              has_simple_unit_offset = true;
+            }
+          }
+          if (has_simple_unit_offset && (c == d || c == -d))
+            return n;
+        }
+      }
+    }
     if (n->op == BinOpKind::FloorDiv || n->op == BinOpKind::ExactDiv) {
       NodePtr symbolic;
       int64_t offset = 0;
@@ -1435,6 +1454,7 @@ static NodePtr apply_pipeline(NodePtr node) {
     node = muldiv_tr.visit(std::move(node));
     node = fold_tr.visit(std::move(node));
     node = muldiv_tr.visit(std::move(node));
+    node = fd_ring_tr.visit(std::move(node));
     node = distrib_tr.visit(std::move(node));
     node = max_tr.visit(std::move(node));
     // SimplifyParensTransformer is a no-op; omitted

@@ -103,6 +103,10 @@ template <class Names> std::string FormatNameList(const Names &names) {
   return oss.str();
 }
 
+// Emits the ReferenceEvaluator verbose progress line for one node dispatch.
+// The format is
+// ``[ReferenceEvaluator] #<node_index> Domain::OpType(inputs) -> (outputs)``.
+// Nothing is printed when ``rt.verbose() <= 0``.
 void PrintNodeProgress(const RuntimeContext &rt, const NodeProto &node, const std::string &domain,
                        const std::string &op_type) {
   if (rt.verbose() <= 0) {

@@ -139,6 +139,13 @@ class ReferenceEvaluator:
     :class:`onnx.reference.ReferenceEvaluator` (and
     :class:`onnxruntime.InferenceSession`).
 
+    Parameters
+    ----------
+    verbose:
+        Verbosity level forwarded to the runtime. ``0`` disables progress
+        printing; positive values print one line per dispatched node while the
+        model is executing.
+
     Example
     -------
     .. code-block:: python

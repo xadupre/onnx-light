@@ -42,12 +42,12 @@ import os
 
 
 def _print_shape_inference_events(events: list) -> None:
-    """Prints a compact shape-inference event summary."""
+    """Prints the compact summary of shape-inference events."""
     print(f"[fillshape] shape inference events: {len(events)}")
 
 
 def _print_shape_inference_events_detailed(events: list) -> None:
-    """Prints shape-inference event details."""
+    """Prints the detailed shape-inference events."""
     for ev in events:
         d = ev.as_dict()
         op = f"{d['op_domain']}::{d['op_type']}" if d["op_type"] else "-"
@@ -89,8 +89,8 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
     has_external_data = any(uses_external_data(init) for init in model.graph.initializer)
 
     if inplace_info or verbose > 0:
-        # Retain the ShapesContext so the in-place reuse analysis can
-        # reuse the already-inferred shape data or log shape events.
+        # Retains the ShapesContext so in-place reuse analysis and verbose
+        # event logging can reuse the already-inferred shape data.
         ctx = ShapesContext()
         ctx.events_enabled = verbose > 0
         compute_shape_model(ctx, model, keep)

@@ -6,6 +6,7 @@
 #include "stream_class_size.hpp"
 #include "stream_class_write.hpp"
 #include <cstring>
+#include <istream>
 
 ////////////////
 // macro helpers
@@ -26,6 +27,7 @@
   void cls::ParseFromZeroCopyStream(utils::BinaryStream *stream, ParseOptions &opts) {             \
     _ParseFromZeroCopyStream(*this, stream, opts);                                                 \
   }                                                                                                \
+  bool cls::ParseFromIstream(std::istream *input) { return _ParseFromIstream(*this, input); }      \
   void cls::SerializeToString(std::string &out) const { _SerializeToString(*this, out); }          \
   void cls::SerializeToString(std::string &out, SerializeOptions &opts) const {                    \
     _SerializeToString(*this, out, opts);                                                          \
@@ -263,6 +265,20 @@ void _ParseFromZeroCopyStream(cls &self, ONNX_LIGHT_NAMESPACE::utils::BinaryStre
   self.ParseFromStream(*stream, opts);
   if (opts.is_parallel())
     stream->WaitForDelayedBlock();
+}
+
+template <typename cls> bool _ParseFromIstream(cls &self, std::istream *input) {
+  EXT_ENFORCE(input != nullptr, "ParseFromIstream: input stream pointer must not be null.");
+  const std::string buffer((std::istreambuf_iterator<char>(*input)),
+                           std::istreambuf_iterator<char>());
+  if (input->bad()) {
+    return false;
+  }
+  ParseOptions opts;
+  const uint8_t *ptr = reinterpret_cast<const uint8_t *>(buffer.data());
+  ONNX_LIGHT_NAMESPACE::utils::StringStream st(ptr, static_cast<int64_t>(buffer.size()));
+  self.ParseFromStream(st, opts);
+  return true;
 }
 
 template <typename cls> void _SerializeToString(cls &self, std::string &out) {

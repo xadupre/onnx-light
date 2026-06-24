@@ -374,6 +374,35 @@ class TestOnnxLightHelper(ExtTestCase):
         reparsed_model.ParseFromString(serialized_parallel)
         self.assertEqual(len(loaded_model.graph.node), len(reparsed_model.graph.node))
 
+    def test_serialize_size_uses_raw_data_callback(self):
+        original = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+        replacement = np.arange(25, dtype=np.float32) + 50
+        replacement_bytes = np.frombuffer(replacement.tobytes(), dtype=np.uint8)
+        model = oh.make_model(
+            oh.make_graph([], "g", [], [], [onh.from_array(original, name="W")])
+        )
+
+        def callback(tensor, buffer, size_only):
+            if tensor.name != "W":
+                return len(tensor.raw_data) if size_only else 0
+            if size_only:
+                return replacement.nbytes
+            tensor.ClearField("dims")
+            tensor.dims.extend([25])
+            np.copyto(np.asarray(buffer), replacement_bytes)
+            return replacement.nbytes
+
+        opts = onnxl.SerializeOptions()
+        opts.raw_data_callback = callback
+        size = model.SerializeSize(opts)
+        serialized = model.SerializeToString(opts)
+        self.assertEqual(size.size(), len(serialized))
+
+        reparsed = onnxl.ModelProto()
+        reparsed.ParseFromString(serialized)
+        np.testing.assert_array_equal(onh.to_array(reparsed.graph.initializer[0]), replacement)
+        self.assertEqual(list(model.graph.initializer[0].dims), [3])
+
     def test_writing_external_weights_write(self):
         nameo = self.get_dump_file("test_writing_external_weights.original.onnx")
         name = self.get_dump_file("test_writing_external_weights.onnx")

@@ -4,6 +4,8 @@
 
 #include "onnx_optim/shapes/rt/shape_rt.h"
 
+#include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -22,8 +24,8 @@ TensorType ResolveDtype(const NodeProto &node, const char *op_name) {
   const AttributeProto *dtype_attr = FindAttribute(node, "dtype");
   EXT_ENFORCE_INVALID(dtype_attr != nullptr, op_name, ": required attribute 'dtype' is missing.");
   const int64_t dtype_value = dtype_attr->i();
-  EXT_ENFORCE_INVALID(dtype_value >= static_cast<int64_t>(TensorProto::DataType::FLOAT) &&
-                          dtype_value <= static_cast<int64_t>(TensorProto::DataType::INT2),
+  EXT_ENFORCE_INVALID(dtype_value >= std::numeric_limits<int32_t>::min() &&
+                          dtype_value <= std::numeric_limits<int32_t>::max(),
                       op_name, ": attribute 'dtype' is out of range: ", dtype_value, ".");
   TensorType out_dtype = DataTypeToTensorType(static_cast<TensorProto::DataType>(dtype_value));
   EXT_ENFORCE_INVALID(out_dtype != TensorType::kUndefined, op_name,

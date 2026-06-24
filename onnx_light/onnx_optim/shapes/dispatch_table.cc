@@ -335,8 +335,6 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          math::ComputeShapeRound(ctx, node, node.input(0).as_string().c_str());
        }},
-      {"ai.rt:DelayedInitializer",
-       [](ShapesContext &ctx, const NodeProto &node) { rt::ComputeShapeDelayedInitializer(ctx, node); }},
       {"ai.onnx:Sign",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
@@ -1312,6 +1310,10 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 5);
          training::ComputeShapeMomentum(ctx, node);
+       }},
+      {"ai.rt:DelayedInitializer",
+       [](ShapesContext &ctx, const NodeProto &node) {
+        rt::ComputeShapeDelayedInitializer(ctx, node);
        }},
   };
   return table;

@@ -3,7 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_op/operator_sets_rt.h"
+#include "onnx_op/operator_sets_rt_doc.h"
 
+#include <algorithm>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -12,13 +14,10 @@ namespace rt {
 
 namespace {
 
-std::string MakeDelayedInitializerDoc() {
-  return "Defers loading of an initializer tensor until runtime."
-         "\n\n"
-         "This lightweight runtime-only operator records where the initializer data lives on "
-         "disk, which device it should first be loaded on, and which device should receive the "
-         "tensor at execution time. Its static output shape comes from the required `shape` "
-         "attribute and its element type comes from the required `dtype` attribute.";
+std::vector<TensorType> DelayedInitializerTensorTypes() {
+  std::vector<TensorType> types = AllTensorTypes();
+  types.erase(std::remove(types.begin(), types.end(), TensorType::kString), types.end());
+  return types;
 }
 
 LightOpSchema MakeDelayedInitializerSchema() {
@@ -28,7 +27,8 @@ LightOpSchema MakeDelayedInitializerSchema() {
           {"output", "Tensor produced by the delayed initializer.", "T"},
       },
       {
-          {"T", AllTensorTypes(), "Constrain output to any tensor type."},
+          {"T", DelayedInitializerTensorTypes(),
+           "Constrain output to tensor types backed by raw byte storage."},
       },
       {
           {"shape", "Shape of the output tensor.", AttributeType::INTS, /*required=*/true,

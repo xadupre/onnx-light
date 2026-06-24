@@ -204,7 +204,7 @@ class TestShapesContextBindings(ExtTestCase):
             shape=[2, 3],
             dtype=onnxl.TensorProto.FLOAT16,
             load_device="cpu",
-            runtime_device="cuda:0",
+            runtime_device="cpu",
             filename="weights.bin",
             offset=128,
         )
@@ -225,6 +225,23 @@ class TestShapesContextBindings(ExtTestCase):
             dtype=onnxl.TensorProto.FLOAT,
             load_device="cpu",
             runtime_device="cpu",
+            filename="weights.bin",
+            offset=0,
+        )
+        with self.assertRaises(ValueError):
+            si.compute_shape_node(ctx, node)
+
+    def test_compute_shape_node_delayed_initializer_rejects_runtime_device(self):
+        ctx = si.ShapesContext()
+        node = oh.make_node(
+            "DelayedInitializer",
+            inputs=[],
+            outputs=["Y"],
+            domain="ai.rt",
+            shape=[2, 3],
+            dtype=onnxl.TensorProto.FLOAT,
+            load_device="cpu",
+            runtime_device="cuda:0",
             filename="weights.bin",
             offset=0,
         )

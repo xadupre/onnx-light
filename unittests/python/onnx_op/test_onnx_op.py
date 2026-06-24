@@ -165,6 +165,7 @@ class TestOnnxPyOp(ExtTestCase):
         self.assertEqual(len(schema.type_constraints), 1)
         self.assertEqual(schema.type_constraints[0].type_param_str, "T")
         self.assertGreater(len(schema.type_constraints[0].allowed_type_strs), 10)
+        self.assertNotIn("tensor(string)", schema.type_constraints[0].allowed_type_strs)
         self.assertEqual(
             [attribute.name for attribute in schema.attributes],
             ["shape", "dtype", "load_device", "runtime_device", "filename", "offset"],

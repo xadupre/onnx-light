@@ -99,6 +99,8 @@ class TestGenOperators(ExtTestCase):
         self.assertIn("runtime_device", page)
         self.assertIn("filename", page)
         self.assertIn("offset", page)
+        self.assertIn('"cpu"', page)
+        self.assertIn('"file"', page)
 
     def test_past_version_pages_created(self):
         self._init()

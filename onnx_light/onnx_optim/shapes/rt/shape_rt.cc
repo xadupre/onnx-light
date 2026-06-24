@@ -30,6 +30,8 @@ TensorType ResolveDtype(const NodeProto &node, const char *op_name) {
   TensorType out_dtype = DataTypeToTensorType(static_cast<TensorProto::DataType>(dtype_value));
   EXT_ENFORCE_INVALID(out_dtype != TensorType::kUndefined, op_name,
                       ": attribute 'dtype' has unsupported value ", dtype_value, ".");
+  EXT_ENFORCE_INVALID(out_dtype != TensorType::kString, op_name,
+                      ": attribute 'dtype' does not support STRING tensors.");
   return out_dtype;
 }
 
@@ -46,6 +48,38 @@ OptimShape ShapeFromAttribute(const NodeProto &node, const char *op_name) {
   return out_shape;
 }
 
+std::string GetRequiredStringAttribute(const NodeProto &node, const char *name,
+                                       const char *op_name) {
+  const AttributeProto *attr = FindAttribute(node, name);
+  EXT_ENFORCE_INVALID(attr != nullptr, op_name, ": required attribute '", name, "' is missing.");
+  EXT_ENFORCE_INVALID(attr->type() == AttributeProto::AttributeType::STRING, op_name,
+                      ": attribute '", name, "' must be STRING.");
+  return attr->s().as_string();
+}
+
+int64_t GetRequiredIntAttribute(const NodeProto &node, const char *name, const char *op_name) {
+  const AttributeProto *attr = FindAttribute(node, name);
+  EXT_ENFORCE_INVALID(attr != nullptr, op_name, ": required attribute '", name, "' is missing.");
+  EXT_ENFORCE_INVALID(attr->type() == AttributeProto::AttributeType::INT, op_name, ": attribute '",
+                      name, "' must be INT.");
+  return attr->i();
+}
+
+void ValidateDevicesAndLocation(const NodeProto &node, const char *op_name) {
+  const std::string load_device = GetRequiredStringAttribute(node, "load_device", op_name);
+  EXT_ENFORCE_INVALID(load_device == "cpu" || load_device == "file", op_name,
+                      ": attribute 'load_device' must be 'cpu' or 'file', got '", load_device,
+                      "'.");
+  const std::string runtime_device = GetRequiredStringAttribute(node, "runtime_device", op_name);
+  EXT_ENFORCE_INVALID(runtime_device == "cpu", op_name,
+                      ": attribute 'runtime_device' must be 'cpu', got '", runtime_device, "'.");
+  const std::string filename = GetRequiredStringAttribute(node, "filename", op_name);
+  EXT_ENFORCE_INVALID(!filename.empty(), op_name, ": attribute 'filename' must not be empty.");
+  const int64_t offset = GetRequiredIntAttribute(node, "offset", op_name);
+  EXT_ENFORCE_INVALID(offset >= 0, op_name, ": attribute 'offset' must be non-negative, got ",
+                      offset, ".");
+}
+
 } // namespace
 
 void ComputeShapeDelayedInitializer(ShapesContext &ctx, const NodeProto &node) {
@@ -54,6 +88,7 @@ void ComputeShapeDelayedInitializer(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(node.input_size() == 0, kCaller, ": DelayedInitializer requires no inputs.");
   TensorType out_dtype = ResolveDtype(node, kCaller);
   OptimShape out_shape = ShapeFromAttribute(node, kCaller);
+  ValidateDevicesAndLocation(node, kCaller);
   ctx.Set(node.output(0), OptimTensor(nullptr, out_dtype, std::move(out_shape)));
 }
 

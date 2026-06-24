@@ -269,9 +269,29 @@ void _ParseFromZeroCopyStream(cls &self, ONNX_LIGHT_NAMESPACE::utils::BinaryStre
 
 template <typename cls> bool _ParseFromIstream(cls &self, std::istream *input) {
   EXT_ENFORCE(input != nullptr, "ParseFromIstream: input stream pointer must not be null.");
-  const std::string buffer((std::istreambuf_iterator<char>(*input)),
-                           std::istreambuf_iterator<char>());
-  if (input->bad()) {
+  // For seekable streams, determine the size up front so the buffer is
+  // allocated exactly once.  For non-seekable streams (pipes, network sockets,
+  // etc.) fall back to the iterator-based read.
+  std::string buffer;
+  const std::streampos start = input->tellg();
+  if (start != std::streampos(-1)) {
+    if (input->seekg(0, std::ios::end)) {
+      const std::streampos end_pos = input->tellg();
+      input->seekg(start);
+      if (end_pos != std::streampos(-1) && end_pos >= start) {
+        const auto size = static_cast<std::streamsize>(end_pos - start);
+        buffer.resize(static_cast<size_t>(size));
+        input->read(buffer.data(), size);
+        buffer.resize(static_cast<size_t>(input->gcount()));
+      }
+    }
+  }
+  if (buffer.empty()) {
+    buffer.assign(std::istreambuf_iterator<char>(*input), std::istreambuf_iterator<char>());
+  }
+  // Reaching EOF is expected after reading all bytes; only report failure for
+  // genuine I/O errors (fail() without eof()).
+  if (input->fail() && !input->eof()) {
     return false;
   }
   ParseOptions opts;

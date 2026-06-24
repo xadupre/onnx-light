@@ -34,8 +34,8 @@ void RegisterFloorDivOffsetShapeInferenceCase(std::vector<TestCase> &registry) {
   graph->set_name(name);
 
   NodeProto &node = AddNode(*graph, "MaxPool", {"X"}, {"Y"});
-  AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {1});
-  AddAttribute<std::vector<int64_t>>(node, "pads", {3, 3});
+  AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {7});
+  AddAttribute<std::vector<int64_t>>(node, "pads", {6, 6});
   AddAttribute<std::vector<int64_t>>(node, "strides", {5});
 
   AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {"batch", "channel", "seq"});
@@ -44,7 +44,7 @@ void RegisterFloorDivOffsetShapeInferenceCase(std::vector<TestCase> &registry) {
   Tensor x = Tensor::FromFloat("X", {2, 1, 4},
                                {1.0f, 0.0f, 2.0f, 0.0f, //
                                 0.0f, 3.0f, 0.0f, 4.0f});
-  Tensor y = maxpool_kernel(x, /*kernel_shape=*/{1}, /*strides=*/{5}, /*pads=*/{3, 3});
+  Tensor y = maxpool_kernel(x, /*kernel_shape=*/{7}, /*strides=*/{5}, /*pads=*/{6, 6});
   y.name = "Y";
   AppendDataSet(tc, {std::move(x)}, {std::move(y)});
   registry.emplace_back(std::move(tc));

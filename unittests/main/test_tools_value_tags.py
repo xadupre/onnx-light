@@ -68,7 +68,8 @@ class TestValueTags(unittest.TestCase):
             [helper.make_tensor_value_info("Y", TensorProto.FLOAT, [2])],
         )
         write_value_and_node_tags_to_metadata(g)
-        body_tags = json.loads(_meta_dict(body)[VALUE_TAGS_METADATA_KEY])
+        tagged_body = g.node[0].attribute[0].g
+        body_tags = json.loads(_meta_dict(tagged_body)[VALUE_TAGS_METADATA_KEY])
         self.assertEqual(body_tags["SA"], "shape")
 
     def test_accepts_list_of_nodes_and_function(self):

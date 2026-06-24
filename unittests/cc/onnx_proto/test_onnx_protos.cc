@@ -6,6 +6,7 @@
 #include "onnx_light_helpers.h"
 #include <filesystem>
 #include <gtest/gtest.h>
+#include <sstream>
 #include <type_traits>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -6785,4 +6786,55 @@ TEST(onnx_proto, ParseOptions_RawDataCallback_NotInvokedWithoutRawData) {
   TensorProto tensor2;
   tensor2.ParseFromString(serialized, options);
   EXPECT_EQ(callback_calls, 0);
+}
+
+TEST(onnx_proto, ParseFromIstream_ModelProto) {
+  // Build a minimal model and serialize it to a string buffer.
+  ModelProto model;
+  model.set_ir_version(8);
+  model.set_producer_name("test_producer");
+  GraphProto *graph = model.add_graph();
+  graph->set_name("test_graph");
+
+  std::string serialized;
+  model.SerializeToString(serialized);
+
+  // Parse back via ParseFromIstream using std::istringstream.
+  std::istringstream iss(serialized, std::ios::binary);
+  ModelProto parsed;
+  EXPECT_TRUE(parsed.ParseFromIstream(&iss));
+  EXPECT_TRUE(parsed.has_ir_version());
+  EXPECT_EQ(parsed.ref_ir_version(), 8);
+  EXPECT_TRUE(parsed.has_producer_name());
+  EXPECT_EQ(parsed.ref_producer_name().as_string(), "test_producer");
+  EXPECT_TRUE(parsed.has_graph());
+  EXPECT_EQ(parsed.ref_graph().ref_name(), "test_graph");
+}
+
+TEST(onnx_proto, ParseFromIstream_NullReturnsEnforceFailure) {
+  ModelProto model;
+  EXPECT_THROW(model.ParseFromIstream(nullptr), std::runtime_error);
+}
+
+TEST(onnx_proto, ParseFromIstream_TensorProto) {
+  // Verify that ParseFromIstream works for proto types other than ModelProto.
+  TensorProto tensor;
+  tensor.set_name("my_tensor");
+  tensor.set_data_type(TensorProto::DataType::FLOAT);
+  tensor.ref_dims().push_back(2);
+  tensor.ref_float_data().push_back(1.0f);
+  tensor.ref_float_data().push_back(2.0f);
+
+  std::string serialized;
+  tensor.SerializeToString(serialized);
+
+  std::istringstream iss(serialized, std::ios::binary);
+  TensorProto parsed;
+  EXPECT_TRUE(parsed.ParseFromIstream(&iss));
+  EXPECT_EQ(parsed.ref_name().as_string(), "my_tensor");
+  EXPECT_EQ(parsed.ref_dims().size(), 1u);
+  EXPECT_EQ(parsed.ref_dims()[0], 2);
+  EXPECT_EQ(parsed.ref_float_data().size(), 2u);
+  EXPECT_EQ(parsed.ref_float_data()[0], 1.0f);
+  EXPECT_EQ(parsed.ref_float_data()[1], 2.0f);
 }

@@ -6,6 +6,7 @@
 #include "stream_class_size.hpp"
 #include "stream_class_write.hpp"
 #include <cstring>
+#include <istream>
 
 ////////////////
 // macro helpers
@@ -26,6 +27,7 @@
   void cls::ParseFromZeroCopyStream(utils::BinaryStream *stream, ParseOptions &opts) {             \
     _ParseFromZeroCopyStream(*this, stream, opts);                                                 \
   }                                                                                                \
+  bool cls::ParseFromIstream(std::istream *input) { return _ParseFromIstream(*this, input); }      \
   void cls::SerializeToString(std::string &out) const { _SerializeToString(*this, out); }          \
   void cls::SerializeToString(std::string &out, SerializeOptions &opts) const {                    \
     _SerializeToString(*this, out, opts);                                                          \
@@ -263,6 +265,42 @@ void _ParseFromZeroCopyStream(cls &self, ONNX_LIGHT_NAMESPACE::utils::BinaryStre
   self.ParseFromStream(*stream, opts);
   if (opts.is_parallel())
     stream->WaitForDelayedBlock();
+}
+
+template <typename cls> bool _ParseFromIstream(cls &self, std::istream *input) {
+  EXT_ENFORCE(input != nullptr, "ParseFromIstream: input stream pointer must not be null.");
+  // For seekable streams, determine the size up front so the buffer is
+  // allocated exactly once.  For non-seekable streams (pipes, network sockets,
+  // etc.) fall back to the iterator-based read.
+  std::string buffer;
+  bool seekable_read_done = false;
+  const std::streampos start = input->tellg();
+  if (start != std::streampos(-1)) {
+    if (input->seekg(0, std::ios::end)) {
+      const std::streampos end_pos = input->tellg();
+      input->seekg(start);
+      if (end_pos != std::streampos(-1) && end_pos >= start) {
+        const auto size = static_cast<std::streamsize>(end_pos - start);
+        buffer.resize(static_cast<size_t>(size));
+        input->read(buffer.data(), size);
+        buffer.resize(static_cast<size_t>(input->gcount()));
+        seekable_read_done = true;
+      }
+    }
+  }
+  if (!seekable_read_done) {
+    buffer.assign(std::istreambuf_iterator<char>(*input), std::istreambuf_iterator<char>());
+  }
+  // Reaching EOF is expected after reading all bytes; only report failure for
+  // genuine I/O errors (fail() without eof()).
+  if (input->fail() && !input->eof()) {
+    return false;
+  }
+  ParseOptions opts;
+  const uint8_t *ptr = reinterpret_cast<const uint8_t *>(buffer.data());
+  ONNX_LIGHT_NAMESPACE::utils::StringStream st(ptr, static_cast<int64_t>(buffer.size()));
+  self.ParseFromStream(st, opts);
+  return true;
 }
 
 template <typename cls> void _SerializeToString(cls &self, std::string &out) {

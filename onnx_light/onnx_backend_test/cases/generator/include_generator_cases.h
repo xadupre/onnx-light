@@ -47,6 +47,9 @@ void RegisterRangeCases(std::vector<TestCase> &registry);
 /// Registers the ``Multinomial`` backend test node case(s).
 void RegisterMultinomialCases(std::vector<TestCase> &registry);
 
+/// Registers the ``ai.rt::DelayedInitializer`` backend test node case(s).
+void RegisterDelayedInitializerCases(std::vector<TestCase> &registry);
+
 /// Collects all ``generator`` op category backend test node cases by invoking
 /// every ``Register*Cases`` helper declared in this header.
 void CollectGeneratorTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");

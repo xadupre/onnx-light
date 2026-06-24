@@ -205,6 +205,33 @@ TEST(onnx_crypt, StringAndFileBlobs_AreCompatible) {
   std::filesystem::remove(path);
 }
 
+TEST(onnx_crypt, StringRoundTrip_ChaCha20Poly1305) {
+  const std::string pass = "string_roundtrip_pass";
+  ModelProto original = make_test_model();
+  const std::string blob =
+      SaveEncryptedModelToString(original, pass, SerializeOptions{}, "ChaCha20-Poly1305");
+  EXPECT_GT(blob.size(), 52u);
+  EXPECT_EQ(blob.substr(0, 8), "ONNXCRY2");
+
+  ModelProto loaded;
+  LoadEncryptedModelFromString(loaded, blob, pass);
+
+  SerializeOptions sopts;
+  std::string s_orig, s_loaded;
+  original.SerializeToString(s_orig, sopts);
+  loaded.SerializeToString(s_loaded, sopts);
+  EXPECT_EQ(s_orig, s_loaded);
+}
+
+TEST(onnx_crypt, StringRoundTrip_ChaCha20Poly1305WrongKey_Throws) {
+  ModelProto original = make_test_model();
+  const std::string blob =
+      SaveEncryptedModelToString(original, "correct_key", SerializeOptions{}, "ChaCha20-Poly1305");
+
+  ModelProto loaded;
+  EXPECT_THROW(LoadEncryptedModelFromString(loaded, blob, "wrong_key"), std::runtime_error);
+}
+
 #else // ONNX_LIGHT_HAS_OPENSSL
 
 // Placeholder so the test binary still compiles without OpenSSL.

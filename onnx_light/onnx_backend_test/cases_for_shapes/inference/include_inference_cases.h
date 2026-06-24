@@ -74,6 +74,11 @@ void RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &regist
 /// ``(seq + 10) // 5`` to ``seq//5+2``.
 void RegisterFloorDivOffsetShapeInferenceCase(std::vector<TestCase> &registry);
 
+/// Registers a ``Slice(axis=2, starts=0, ends=-1) → Abs`` case on symbolic
+/// input ``X[a,b,c]`` to exercise symbolic Slice-length inference
+/// (``c-1``) without creating fresh dimension names.
+void RegisterSliceSymbolicEndShapeInferenceCases(std::vector<TestCase> &registry);
+
 /// Registers a ``Loop`` case that computes the pairwise Euclidean distance
 /// matrix of an input ``X`` of shape ``[N, D]``. The Loop iterates ``N``
 /// times: each iteration gathers one row of the outer-scope ``X`` and emits

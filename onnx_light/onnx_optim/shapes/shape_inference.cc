@@ -19,6 +19,7 @@
 #include "onnx_optim/shapes/dispatch_table.h"
 #include "onnx_optim/shapes/generator/shape_generator.h"
 #include "onnx_optim/shapes/preview/shape_preview.h"
+#include "onnx_optim/shapes/rt/shape_rt.h"
 #include "onnx_optim/shapes/traditionalml/shape_traditionalml.h"
 #include "onnx_optim/shapes/training/shape_training.h"
 
@@ -37,6 +38,7 @@ void CheckOnnxDomain(const NodeProto &node) {
   EXT_ENFORCE_INVALID(node.domain().empty() || node.domain() == kOnnxDomain ||
                           node.domain() == traditionalml::kOnnxMlDomain ||
                           node.domain() == preview::kOnnxPreviewDomain ||
+                          node.domain() == rt::kAiRtDomain ||
                           node.domain() == training::kOnnxPreviewTrainingDomain,
                       "ComputeShapeNode: unsupported domain '", node.domain().as_string(),
                       "' for op '", node.op_type().as_string(), "'.");

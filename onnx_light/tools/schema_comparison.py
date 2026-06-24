@@ -189,6 +189,7 @@ ONNX_OPTIM_SHAPE_INFERENCE_OPS: frozenset[tuple[str, str]] = frozenset(
         ("ai.onnx", "ReverseSequence"),
         ("ai.onnx", "Resize"),
         ("ai.onnx", "Round"),
+        ("ai.rt", "DelayedInitializer"),
         ("ai.onnx", "Scatter"),
         ("ai.onnx", "ScatterElements"),
         ("ai.onnx", "ScatterND"),

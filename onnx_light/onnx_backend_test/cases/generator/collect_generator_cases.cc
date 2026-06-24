@@ -12,6 +12,7 @@ void CollectGeneratorTestCases(std::vector<TestCase> &registry, const std::strin
       {"Bernoulli", &RegisterBernoulliCases},
       {"Constant", &RegisterConstantCases},
       {"ConstantOfShape", &RegisterConstantOfShapeCases},
+      {"DelayedInitializer", &RegisterDelayedInitializerCases},
       {"EyeLike", &RegisterEyeLikeCases},
       {"RandomNormal", &RegisterRandomNormalCases},
       {"RandomNormalLike", &RegisterRandomNormalLikeCases},

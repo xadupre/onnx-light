@@ -131,6 +131,44 @@ class TestMainFillshape(ExtTestCase):
             self.assertTrue(dims[0].has_dim_param())
             self.assertEqual(dims[0].dim_param, "ANCHOR")
 
+    def test_fillshape_verbose_default_level(self):
+        """fillshape --verbose prints a summary of shape-inference events."""
+        import io
+        from contextlib import redirect_stdout
+
+        from onnx_light.__main__ import main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            self._save_model(_make_add_model(), model_path)
+
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                main(["fillshape", model_path, "--verbose"])
+
+            output = buf.getvalue()
+            self.assertIn("[fillshape] shape inference events:", output)
+            self.assertNotIn("action=compute_node", output)
+
+    def test_fillshape_verbose_level_2(self):
+        """fillshape --verbose 2 prints detailed shape-inference events."""
+        import io
+        from contextlib import redirect_stdout
+
+        from onnx_light.__main__ import main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            self._save_model(_make_add_model(), model_path)
+
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                main(["fillshape", model_path, "--verbose", "2"])
+
+            output = buf.getvalue()
+            self.assertIn("[fillshape] shape inference events:", output)
+            self.assertIn("action=compute_node", output)
+
     def test_fillshape_inplace_info_option(self):
         """fillshape --inplace-info writes reuse metadata into node metadata_props."""
         from onnx_light.__main__ import main

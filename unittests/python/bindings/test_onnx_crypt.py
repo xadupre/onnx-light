@@ -141,6 +141,21 @@ class TestEncryptedIO(ExtTestCase):
         with self.assertRaises(RuntimeError):
             onnxl.load_encrypted_string(b"BADMAGIC1234567890", "any")
 
+    def test_save_encrypted_string_chacha20_round_trip(self):
+        model = _make_simple_model()
+        blob = onnxl.save_encrypted_string(model, "my_password", encryption="ChaCha20-Poly1305")
+        self.assertIsInstance(blob, bytes)
+        self.assertGreater(len(blob), 52)
+        self.assertEqual(blob[:8], b"ONNXCRY2")
+        loaded = onnxl.load_encrypted_string(blob, "my_password")
+        self.assertEqual(model.SerializeToString(), loaded.SerializeToString())
+
+    def test_load_encrypted_string_chacha20_wrong_key_raises(self):
+        model = _make_simple_model()
+        blob = onnxl.save_encrypted_string(model, "correct", encryption="ChaCha20-Poly1305")
+        with self.assertRaises(RuntimeError):
+            onnxl.load_encrypted_string(blob, "wrong")
+
     def test_string_and_file_blobs_are_compatible(self):
         model = _make_simple_model()
         with tempfile.TemporaryDirectory() as tmpdir:

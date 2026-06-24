@@ -10,6 +10,7 @@
 #include <memory>
 #include <nanobind/make_iterator.h>
 #include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/string.h>
@@ -43,6 +44,34 @@ struct PyRawDataCallback {
       nb::gil_scoped_acquire gil;
       deleter();
     };
+  }
+};
+
+// Adapts a Python callable to SerializeOptions::raw_data_callback. The callable is invoked as
+// ``fn(tensor, buffer, size_only)``:
+// - when ``size_only`` is True, ``buffer`` is None and the callback must return the number of
+//   bytes it will write for that tensor;
+// - when ``size_only`` is False, ``buffer`` is a writable 1-D uint8 NumPy view owned by
+//   onnx-light; the callback may update tensor metadata in place, must write the serialized bytes
+//   into that buffer, and must return the same size again.
+// The Python object is held by value so the std::function target keeps the callable alive, and
+// the GIL is reacquired around every call.
+struct PySerializeRawDataCallback {
+  nb::object fn;
+  int64_t operator()(TensorProto &tensor, uint8_t *buffer, size_t buffer_size,
+                     bool size_only) const {
+    nb::gil_scoped_acquire gil;
+    nb::object py_buffer;
+    if (size_only || buffer == nullptr) {
+      py_buffer = nb::none();
+    } else {
+      // The writable view borrows C++-managed storage for the duration of the callback only,
+      // so the capsule deliberately uses a no-op deleter.
+      nb::capsule owner(static_cast<void *>(buffer), [](void *) noexcept {});
+      py_buffer =
+          nb::cast(nb::ndarray<nb::numpy, uint8_t, nb::ndim<1>>(buffer, {buffer_size}, owner));
+    }
+    return nb::cast<int64_t>(fn(nb::cast(&tensor, nb::rv_policy::reference), py_buffer, size_only));
   }
 };
 
@@ -1109,7 +1138,39 @@ void AddOnnxPyProto(nb::module_ &m) {
               "SerializeFormat.ONNX (default) writes the ONNX protobuf wire format; "
               "SerializeFormat.ORT_FLATBUFFERS writes the onnxruntime flatbuffer format "
               "(``.ort`` files). The flatbuffer path is not implemented yet and raises "
-              "an error when used.");
+              "an error when used.")
+      .def_prop_rw(
+          "raw_data_callback",
+          [](SerializeOptions &options) -> nb::object {
+            if (!options.raw_data_callback) {
+              return nb::none();
+            }
+            if (const PySerializeRawDataCallback *cb =
+                    options.raw_data_callback.target<PySerializeRawDataCallback>()) {
+              return cb->fn;
+            }
+            return nb::none();
+          },
+          [](SerializeOptions &options, nb::object fn) {
+            if (fn.is_none()) {
+              options.raw_data_callback = {};
+            } else {
+              options.raw_data_callback = PySerializeRawDataCallback{fn};
+            }
+          },
+          "Optional callable invoked as ``fn(tensor, buffer, size_only)`` for every "
+          "tensor carrying ``raw_data`` immediately before serialization. The callback "
+          "is first called with ``buffer=None`` and ``size_only=True`` and must return "
+          "the number of bytes it will serialize. onnx-light then allocates a writable "
+          "1-D uint8 buffer of that size and calls ``fn(tensor, buffer, size_only=False)``; "
+          "the callback may update the :class:`TensorProto` metadata in place, must fill "
+          "the provided buffer, and must return the same size again. When a tensor was "
+          "previously marked as EXTERNAL and still carries ``raw_data`` (for example "
+          "after ``tensor.load_external_data(...)``), serialization refreshes that "
+          "metadata after the callback so the written ``length`` and ``offset`` match "
+          "the rewritten bytes. Setting it to ``None`` (the default) disables the "
+          "callback.",
+          nb::for_setter(nb::arg("value").none()));
 
   nb::class_<SerializeSizeResult>(m, "SerializeSizeResult",
                                   "Splits serialized bytes between proto data and tensor content.")
@@ -2547,17 +2608,17 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .def(
           "SerializeToEncryptedFile",
           [](ModelProto &self, const std::string &file_path, const std::string &key,
-             nb::object options) {
+             nb::object options, const std::string &encryption) {
             SerializeOptions opts;
             if (nb::isinstance<SerializeOptions>(options)) {
               opts = nb::cast<SerializeOptions>(options);
             }
-            SaveEncryptedModel(self, file_path, key, opts);
+            SaveEncryptedModel(self, file_path, key, opts, encryption);
           },
           nb::arg("name"), nb::arg("key"), nb::arg("options") = nb::none(),
-          "Encrypts the model with AES-256-CBC (PBKDF2 key derivation) and writes it to a "
-          "single binary file.  The *key* argument is a passphrase or raw bytes used to derive "
-          "the AES-256 key via PBKDF2-HMAC-SHA256.")
+          nb::arg("encryption") = "AES-256-CBC",
+          "Encrypts the model and writes it to a single binary file. Supported values are "
+          "\"AES-256-CBC\" (ONNXCRY1) and \"ChaCha20-Poly1305\" (ONNXCRY2).")
       .def(
           "ParseFromEncryptedFile",
           [](ModelProto &self, const std::string &file_path, const std::string &key,
@@ -2569,21 +2630,22 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
             LoadEncryptedModel(self, file_path, key, opts);
           },
           nb::arg("name"), nb::arg("key"), nb::arg("options") = nb::none(),
-          "Decrypts an ONNXCRY1 encrypted file (written by SerializeToEncryptedFile) and "
+          "Decrypts an ONNXCRY1/ONNXCRY2 encrypted file (written by SerializeToEncryptedFile) and "
           "parses the payload into this model instance.")
       .def(
           "SerializeToEncryptedString",
-          [](ModelProto &self, const std::string &key, nb::object options) {
+          [](ModelProto &self, const std::string &key, nb::object options,
+             const std::string &encryption) {
             SerializeOptions opts;
             if (nb::isinstance<SerializeOptions>(options)) {
               opts = nb::cast<SerializeOptions>(options);
             }
-            const std::string blob = SaveEncryptedModelToString(self, key, opts);
+            const std::string blob = SaveEncryptedModelToString(self, key, opts, encryption);
             return nb::bytes(blob.data(), blob.size());
           },
-          nb::arg("key"), nb::arg("options") = nb::none(),
-          "Encrypts the model with AES-256-CBC (PBKDF2 key derivation) and returns the "
-          "ciphertext as a bytes object in ONNXCRY1 format.")
+          nb::arg("key"), nb::arg("options") = nb::none(), nb::arg("encryption") = "AES-256-CBC",
+          "Encrypts the model and returns ciphertext bytes in ONNXCRY1 (AES-256-CBC) or "
+          "ONNXCRY2 (ChaCha20-Poly1305) format.")
       .def(
           "ParseFromEncryptedString",
           [](ModelProto &self, nb::bytes data, const std::string &key, nb::object options) {
@@ -2595,7 +2657,8 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
             LoadEncryptedModelFromString(self, blob, key, opts);
           },
           nb::arg("data"), nb::arg("key"), nb::arg("options") = nb::none(),
-          "Decrypts an ONNXCRY1 encrypted bytes object (produced by SerializeToEncryptedString) "
+          "Decrypts an ONNXCRY1/ONNXCRY2 encrypted bytes object (produced by "
+          "SerializeToEncryptedString) "
           "and parses the payload into this model instance.");
 #endif // ONNX_LIGHT_HAS_OPENSSL
 

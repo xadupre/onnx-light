@@ -310,6 +310,17 @@ template <typename cls> void _SerializeToString(cls &self, std::string &out) {
 
 template <typename cls>
 void _SerializeToString(cls &self, std::string &out, SerializeOptions &opts) {
+  if constexpr (std::is_same_v<std::remove_cv_t<cls>, ModelProto>) {
+    if (opts.raw_data_callback) {
+      ModelProto copy;
+      copy.CopyFrom(self);
+      ApplySerializeRawDataCallback(copy, opts);
+      SerializeOptions local_opts = opts;
+      local_opts.raw_data_callback = {};
+      _SerializeToString(copy, out, local_opts);
+      return;
+    }
+  }
   EXT_ENFORCE(opts.format == SerializeFormat::kOnnx,
               "SerializeToString: SerializeFormat::kOrtFlatbuffers is not implemented yet. "
               "Use SerializeFormat::kOnnx for now.");

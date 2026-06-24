@@ -19,6 +19,7 @@
 #include "onnx_optim/shapes/preview/shape_preview.h"
 #include "onnx_optim/shapes/quantization/shape_quantization.h"
 #include "onnx_optim/shapes/reduction/shape_reduction.h"
+#include "onnx_optim/shapes/rt/shape_rt.h"
 #include "onnx_optim/shapes/sequence/shape_sequence.h"
 #include "onnx_optim/shapes/tensor/shape_tensor.h"
 #include "onnx_optim/shapes/text/shape_text.h"
@@ -1309,6 +1310,10 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 5);
          training::ComputeShapeMomentum(ctx, node);
+       }},
+      {"ai.rt:DelayedInitializer",
+       [](ShapesContext &ctx, const NodeProto &node) {
+        rt::ComputeShapeDelayedInitializer(ctx, node);
        }},
   };
   return table;

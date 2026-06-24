@@ -34,6 +34,16 @@ offset_t PopulateExternalData(ModelProto &model, size_t threshold,
 void ClearExternalData(ModelProto &model);
 
 /**
+ * Applies :cpp:member:`SerializeOptions::raw_data_callback` to every tensor carrying
+ * ``raw_data`` in ``model``.
+ *
+ * The callback is first asked for the rewritten byte size, then invoked again with an
+ * onnx-light-allocated writable buffer of that size so it can populate the serialized bytes and
+ * update tensor metadata in place.
+ */
+void ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &options);
+
+/**
  * Rewrites an existing two-file ONNX model (one ``.onnx`` proto + one or more
  * external weights files) into a new ``(.onnx, weights)`` pair so that every
  * tensor's offset inside the destination weights file is aligned to

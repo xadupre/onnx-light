@@ -22,8 +22,8 @@ namespace rt {
 inline constexpr const char *kAiRtDomain = "ai.rt";
 
 /**
- * Computes the output :cpp:class:`OptimTensor` of a ``DelayedInitializer`` node
- * and stores it in ``ctx``.
+ * Computes the output ``OptimTensor`` of a ``DelayedInitializer`` node and
+ * stores it in ``ctx``.
  *
  * ``DelayedInitializer`` is a lightweight runtime-only operator with no inputs.
  * Its output shape is given by the required ``shape`` attribute and its element

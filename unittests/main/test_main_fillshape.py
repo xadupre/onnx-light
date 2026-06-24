@@ -17,10 +17,16 @@ from onnx_light.ext_test_case import ExtTestCase
 from onnx_light.onnx import defs, load
 
 
-def _make_add_model() -> onnxl.ModelProto:
-    """Builds ``Y = Add(X, X)`` with unresolved output shape."""
+def _make_add_model(input_shape=None) -> onnxl.ModelProto:
+    """Builds ``Y = Add(X, X)`` with unresolved output shape.
+
+    :param input_shape: Shape for input X. Defaults to ``[2, 3]``. Each entry
+        may be an ``int`` (concrete dim) or a ``str`` (symbolic dim_param).
+    """
+    if input_shape is None:
+        input_shape = [2, 3]
     add = oh.make_node("Add", inputs=["X", "X"], outputs=["Y"])
-    x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 3])
+    x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, input_shape)
     y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
     graph = oh.make_graph([add], "g", [x], [y])
     model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
@@ -109,12 +115,7 @@ class TestMainFillshape(ExtTestCase):
             model_path = os.path.join(tmp, "model.onnx")
             # Use a symbolic input dim "N" so the inferred output dim is also
             # symbolic and the anchor "ANCHOR" is non-conflicting (both symbolic).
-            add = oh.make_node("Add", inputs=["X", "X"], outputs=["Y"])
-            x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["N", 3])
-            y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
-            graph = oh.make_graph([add], "g", [x], [y])
-            model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
-            model.ir_version = 8
+            model = _make_add_model(input_shape=["N", 3])
             # Pre-set the output with a symbolic anchor dim.
             model.graph.output[0].CopyFrom(
                 oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, ["ANCHOR", 3])

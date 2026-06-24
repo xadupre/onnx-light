@@ -164,11 +164,13 @@ void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node) {
   }
   EXT_ENFORCE_INVALID(steps.size() == starts.size(),
                       "ComputeShapeSlice: steps length must match starts length.");
+  for (size_t i = 0; i < steps.size(); ++i) {
+    EXT_ENFORCE_INVALID(steps[i] != 0, "ComputeShapeSlice: 'steps' entries cannot be 0.");
+  }
 
   for (size_t i = 0; i < starts.size(); ++i) {
     int64_t axis = axes[i];
     const int64_t step = steps[i];
-    EXT_ENFORCE_INVALID(step != 0, "ComputeShapeSlice: 'steps' entries cannot be 0.");
     if (axis < 0) {
       axis += rank;
     }

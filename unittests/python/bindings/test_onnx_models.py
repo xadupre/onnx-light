@@ -418,18 +418,18 @@ class TestOnnxLightHelper(ExtTestCase):
         encrypted_by_name = {}
         meta_by_name = {}
 
-        def _encrypt_bytes_chacha20(raw):
+        def _encrypt_bytes_chacha20(raw: bytes) -> bytes:
             """Encrypts raw bytes into an ONNXCRY2 blob."""
             payload = onh.from_array(np.frombuffer(raw, dtype=np.uint8), name="PAYLOAD")
             holder = oh.make_model(oh.make_graph([], "encrypt_payload", [], [], [payload]))
             return onnxl.save_encrypted_string(holder, key, encryption="ChaCha20-Poly1305")
 
-        def _decrypt_bytes_chacha20(blob):
+        def _decrypt_bytes_chacha20(blob: bytes) -> bytes:
             """Decrypts an ONNXCRY2 blob back to raw bytes."""
             holder = onnxl.load_encrypted_string(blob, key)
             return onh.to_array(holder.graph.initializer[0]).tobytes()
 
-        def serialize_callback(tensor, buffer, size_only):
+        def serialize_callback(tensor: onnxl.TensorProto, buffer, size_only: bool) -> int:
             """Encrypts tensor bytes and writes them into the provided serialization buffer."""
             encrypted = encrypted_by_name.get(tensor.name)
             if encrypted is None:
@@ -450,7 +450,7 @@ class TestOnnxLightHelper(ExtTestCase):
         sopts.raw_data_callback = serialize_callback
         serialized = model.SerializeToString(sopts)
 
-        def parse_callback(tensor):
+        def parse_callback(tensor: onnxl.TensorProto) -> None:
             """Decrypts callback-encrypted tensor bytes and restores original metadata."""
             if not tensor.doc_string.startswith("chacha20:"):
                 return None

@@ -179,11 +179,11 @@ if hasattr(onnxl.ModelProto(), "SerializeToEncryptedString"):
     encrypted_by_name = {}
     meta_by_name = {}
 
-    def encrypt_weights(tensor, buffer, size_only):
+    def encrypt_weights(tensor: onnxl.TensorProto, buffer, size_only: bool) -> int:
         """Encrypts tensor bytes during callback serialization.
 
         Returns:
-            The number of bytes written (or expected when size_only is true).
+            The number of bytes written (or expected when size_only is True).
         """
         encrypted = encrypted_by_name.get(tensor.name)
         if encrypted is None:
@@ -204,7 +204,7 @@ if hasattr(onnxl.ModelProto(), "SerializeToEncryptedString"):
     serialize_options.raw_data_callback = encrypt_weights
     encrypted_serialized = onnx_model.SerializeToString(serialize_options)
 
-    def decrypt_weights(tensor: onnxl.TensorProto):
+    def decrypt_weights(tensor: onnxl.TensorProto) -> None:
         """Restores original tensor metadata and raw_data during parsing.
 
         Returns:

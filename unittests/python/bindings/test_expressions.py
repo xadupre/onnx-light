@@ -149,6 +149,8 @@ class TestSimplifyExpressions(ExtTestCase):
         # Constant residual equal to or greater than the divisor folds into
         # an additive integer constant.
         self.assertEqual("b+c+1", simplify_expression("(2*b+2*c+3)//2"))
+        self.assertEqual("sequence//5-2", simplify_expression("(sequence-10)//5"))
+        self.assertEqual("sequence//5+2", simplify_expression("(sequence+10)//5"))
 
     def test_simplify_expression_negation(self):
         self.assertEqual("length", simplify_expression("-1+1+length"))

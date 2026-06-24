@@ -821,6 +821,59 @@ int64_t floor_div_i64(int64_t a, int64_t b) {
   return q;
 }
 
+bool is_constant_zero(const Node &n) {
+  const auto *c = dynamic_cast<const Constant *>(&n);
+  return c && c->value == 0;
+}
+
+// Splits `node` into `symbolic + offset` where `offset` is a folded integer
+// constant and `symbolic` contains the remaining expression.
+void split_symbolic_and_offset(const Node &node, NodePtr &symbolic, int64_t &offset) {
+  if (const auto *c = dynamic_cast<const Constant *>(&node)) {
+    symbolic = std::make_unique<Constant>(0);
+    offset = c->value;
+    return;
+  }
+  if (const auto *b = dynamic_cast<const BinOp *>(&node)) {
+    if (b->op == BinOpKind::Add || b->op == BinOpKind::Sub) {
+      NodePtr ls, rs;
+      int64_t lo = 0, ro = 0;
+      split_symbolic_and_offset(*b->left, ls, lo);
+      split_symbolic_and_offset(*b->right, rs, ro);
+      offset = (b->op == BinOpKind::Add) ? (lo + ro) : (lo - ro);
+      if (is_constant_zero(*ls)) {
+        symbolic = (b->op == BinOpKind::Add)
+                       ? std::move(rs)
+                       : std::make_unique<UnaryOp>(UnaryOpKind::USub, std::move(rs));
+      } else if (is_constant_zero(*rs)) {
+        symbolic = std::move(ls);
+      } else {
+        symbolic = std::make_unique<BinOp>(std::move(ls), b->op, std::move(rs));
+      }
+      return;
+    }
+  }
+  if (const auto *u = dynamic_cast<const UnaryOp *>(&node)) {
+    NodePtr os;
+    int64_t oo = 0;
+    split_symbolic_and_offset(*u->operand, os, oo);
+    if (u->op == UnaryOpKind::USub) {
+      offset = -oo;
+      symbolic = is_constant_zero(*os)
+                     ? std::move(os)
+                     : std::make_unique<UnaryOp>(UnaryOpKind::USub, std::move(os));
+      return;
+    }
+    if (u->op == UnaryOpKind::UAdd) {
+      symbolic = std::move(os);
+      offset = oo;
+      return;
+    }
+  }
+  symbolic = node.clone();
+  offset = 0;
+}
+
 } // namespace
 
 class DistributeFloorDivOverAddTransformer : public Transformer {
@@ -835,6 +888,22 @@ public:
     int64_t d = dc->value;
     if (d < 0)
       return n;
+    if (n->op == BinOpKind::FloorDiv) {
+      NodePtr symbolic;
+      int64_t offset = 0;
+      split_symbolic_and_offset(*n->left, symbolic, offset);
+      if (offset != 0 && offset % d == 0) {
+        int64_t add = offset / d;
+        if (is_constant_zero(*symbolic))
+          return std::make_unique<Constant>(add);
+        auto base = std::make_unique<BinOp>(std::move(symbolic), BinOpKind::FloorDiv,
+                                            std::make_unique<Constant>(d));
+        if (add == 0)
+          return base;
+        return std::make_unique<BinOp>(std::move(base), BinOpKind::Add,
+                                       std::make_unique<Constant>(add));
+      }
+    }
     if (auto r = try_exact_divide(*n->left, d))
       return r;
     // Fallback: split numerator into (quotient * d) + constant_residual.

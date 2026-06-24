@@ -151,6 +151,26 @@ class TestOnnxPyOp(ExtTestCase):
             self.mod.GetAllOnnxOpSchemasWithHistory("ThisOpDoesNotExist", init_doc=False), []
         )
 
+    def test_delayed_initializer_schema(self) -> None:
+        delayed = self.mod.GetAllOnnxOpSchemasWithHistory("DelayedInitializer")
+        self.assertEqual(len(delayed), 1)
+        schema = delayed[0]
+        self.assertEqual(schema.domain, "ai.rt")
+        self.assertEqual(schema.since_version, 1)
+        self.assertFalse(schema.has_function_implementation)
+        self.assertEqual(schema.inputs, [])
+        self.assertEqual(len(schema.outputs), 1)
+        self.assertEqual(schema.outputs[0].name, "output")
+        self.assertEqual(schema.outputs[0].type, "T")
+        self.assertEqual(len(schema.type_constraints), 1)
+        self.assertEqual(schema.type_constraints[0].type_param_str, "T")
+        self.assertGreater(len(schema.type_constraints[0].allowed_type_strs), 10)
+        self.assertEqual(
+            [attribute.name for attribute in schema.attributes],
+            ["shape", "dtype", "load_device", "runtime_device", "filename", "offset"],
+        )
+        self.assertTrue(all(attribute.required for attribute in schema.attributes))
+
 
 if __name__ == "__main__":
     unittest.main()

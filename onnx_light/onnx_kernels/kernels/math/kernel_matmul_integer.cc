@@ -30,23 +30,32 @@ int32_t ReadIntElem(const Tensor &t, int64_t idx) {
   return static_cast<int32_t>(t.AsUint8()[idx]);
 }
 
-// Returns 0 for default-constructed (empty) optional tensor. Otherwise the
-// tensor must hold exactly one element (scalar shape, or 1-D shape of size 1)
-// matching the dtype of the corresponding data tensor.
-int32_t ReadOptionalScalarZP(const Tensor &t, int32_t expected_dtype, const char *name) {
+// Returns a vector of zero-point values for the given optional zero-point tensor.
+// - Empty tensor (absent input): returns {0} — scalar zero broadcast to all positions.
+// - Scalar (0-D) or 1-D of size 1: returns a one-element vector (per-tensor).
+// - 1-D of size `expected_size`: returns all values (per-row or per-column).
+// Any other shape triggers an assertion failure.
+std::vector<int32_t> ReadZeroPoints(const Tensor &t, int32_t expected_dtype, int64_t expected_size,
+                                    const char *name) {
   if (t.shape.empty() && t.size_bytes() == 0) {
-    return 0;
+    return {0};
   }
   EXT_ENFORCE_INVALID(t.data_type == expected_dtype, kName, ": '", name,
                       "' dtype must match its data input.");
+  EXT_ENFORCE_INVALID(t.shape.size() <= 1, kName, ": '", name,
+                      "' must be a scalar or a 1-D tensor.");
   int64_t numel = 1;
   for (int64_t d : t.shape) {
     numel *= d;
   }
-  EXT_ENFORCE_INVALID(numel == 1, kName, ": '", name,
-                      "' must be a scalar or a one-element 1-D tensor in this reference "
-                      "implementation.");
-  return ReadIntElem(t, 0);
+  EXT_ENFORCE_INVALID(numel == 1 || numel == expected_size, kName, ": '", name,
+                      "' must be a scalar, a one-element 1-D tensor, or a 1-D tensor whose "
+                      "size matches the corresponding matrix dimension.");
+  std::vector<int32_t> zps(static_cast<size_t>(numel));
+  for (int64_t i = 0; i < numel; ++i) {
+    zps[static_cast<size_t>(i)] = ReadIntElem(t, i);
+  }
+  return zps;
 }
 
 std::vector<int64_t> PromoteMatMulShape(const std::vector<int64_t> &shape, bool is_left) {
@@ -108,8 +117,8 @@ std::vector<int64_t> ComputeOutputShape(const std::vector<int64_t> &a_shape,
   return out_shape;
 }
 
-void RunMatMulInteger(const Tensor &a, int32_t a_zp, const Tensor &b, int32_t b_zp,
-                      Tensor &output) {
+void RunMatMulInteger(const Tensor &a, const std::vector<int32_t> &a_zps, const Tensor &b,
+                      const std::vector<int32_t> &b_zps, Tensor &output) {
   const std::vector<int64_t> a2 = PromoteMatMulShape(a.shape, true);
   const std::vector<int64_t> b2 = PromoteMatMulShape(b.shape, false);
   const int64_t M = a2[a2.size() - 2];
@@ -134,6 +143,9 @@ void RunMatMulInteger(const Tensor &a, int32_t a_zp, const Tensor &b, int32_t b_
   }
 
   int32_t *py = output.AsInt32();
+
+  const bool a_per_row = a_zps.size() > 1;
+  const bool b_per_col = b_zps.size() > 1;
 
   std::vector<int64_t> batch_idx(batch_rank, 0);
   for (int64_t batch = 0; batch < batch_count; ++batch) {
@@ -161,12 +173,14 @@ void RunMatMulInteger(const Tensor &a, int32_t a_zp, const Tensor &b, int32_t b_
     const int64_t b_col_stride = b_strides[b2.size() - 1];
 
     for (int64_t i = 0; i < M; ++i) {
+      const int32_t a_row_zp = a_per_row ? a_zps[static_cast<size_t>(i)] : a_zps[0];
       for (int64_t j = 0; j < N; ++j) {
+        const int32_t b_col_zp = b_per_col ? b_zps[static_cast<size_t>(j)] : b_zps[0];
         int32_t acc = 0;
         for (int64_t kk = 0; kk < K; ++kk) {
           const int32_t av = ReadIntElem(a, a_base + i * a_row_stride + kk * a_k_stride);
           const int32_t bv = ReadIntElem(b, b_base + kk * b_k_stride + j * b_col_stride);
-          acc += (av - a_zp) * (bv - b_zp);
+          acc += (av - a_row_zp) * (bv - b_col_zp);
         }
         int64_t y_index = y_base;
         if (a.shape.size() != 1 && b.shape.size() != 1) {
@@ -223,10 +237,15 @@ void MatMulInteger::operator()(const Tensor &a, const Tensor &b, const Tensor &a
   EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(total) * sizeof(int32_t), kName,
                       ": preallocated output buffer size does not match its shape.");
 
-  const int32_t a_zp = ReadOptionalScalarZP(a_zero_point, a.data_type, "a_zero_point");
-  const int32_t b_zp = ReadOptionalScalarZP(b_zero_point, b.data_type, "b_zero_point");
+  const std::vector<int64_t> a2 = PromoteMatMulShape(a.shape, true);
+  const std::vector<int64_t> b2 = PromoteMatMulShape(b.shape, false);
+  const int64_t M = a2[a2.size() - 2];
+  const int64_t N = b2[b2.size() - 1];
 
-  RunMatMulInteger(a, a_zp, b, b_zp, output);
+  const std::vector<int32_t> a_zps = ReadZeroPoints(a_zero_point, a.data_type, M, "a_zero_point");
+  const std::vector<int32_t> b_zps = ReadZeroPoints(b_zero_point, b.data_type, N, "b_zero_point");
+
+  RunMatMulInteger(a, a_zps, b, b_zps, output);
 }
 
 } // namespace kernel

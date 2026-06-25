@@ -69,6 +69,38 @@ void RegisterMatMulIntegerCases(std::vector<TestCase> &registry) {
     Expect(node, {A, B, a_zp, b_zp}, {Y}, "test_cc_matmulinteger_int8", {opset}, "backend-test",
            registry);
   }
+
+  // 2-D UINT8 case with per-column b_zero_point.
+  {
+    Tensor A = Tensor::FromUint8("A", {2, 3}, {11, 7, 3, 10, 6, 2});
+    Tensor B = Tensor::FromUint8("B", {3, 2}, {1, 4, 2, 5, 3, 6});
+    Tensor a_zp;
+    a_zp.name = "a_zero_point";
+    Tensor b_zp("b_zero_point", static_cast<int32_t>(DataType::UINT8), {2},
+                std::vector<uint8_t>{1, 2});
+
+    Tensor Y = mmi(A, B, a_zp, b_zp);
+    Y.name = "Y";
+    NodeProto node = MakeMatMulIntegerNode();
+    Expect(node, {A, B, a_zp, b_zp}, {Y}, "test_cc_matmulinteger_per_col_b_zp", {opset},
+           "backend-test", registry);
+  }
+
+  // 2-D UINT8 case with per-row a_zero_point.
+  {
+    Tensor A = Tensor::FromUint8("A", {2, 3}, {11, 7, 3, 10, 6, 2});
+    Tensor B = Tensor::FromUint8("B", {3, 2}, {1, 4, 2, 5, 3, 6});
+    Tensor a_zp("a_zero_point", static_cast<int32_t>(DataType::UINT8), {2},
+                std::vector<uint8_t>{1, 2});
+    Tensor b_zp;
+    b_zp.name = "b_zero_point";
+
+    Tensor Y = mmi(A, B, a_zp, b_zp);
+    Y.name = "Y";
+    NodeProto node = MakeMatMulIntegerNode();
+    Expect(node, {A, B, a_zp, b_zp}, {Y}, "test_cc_matmulinteger_per_row_a_zp", {opset},
+           "backend-test", registry);
+  }
 }
 
 } // namespace onnx_backend_test

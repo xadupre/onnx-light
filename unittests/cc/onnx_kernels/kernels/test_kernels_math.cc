@@ -1303,6 +1303,52 @@ TEST(KernelClass, MatMulIntegerRejectsNonByteInput) {
   EXPECT_THROW(mmi(a, b, a_zp, b_zp), std::invalid_argument);
 }
 
+TEST(KernelClass, MatMulIntegerWithPerColumnBZeroPoint) {
+  // Per-column b_zero_point: b_zp[j] is subtracted from each element in column j of B.
+  // A [2x3] UINT8, B [3x2] UINT8, b_zp = [1, 2] (one per output column).
+  // Y[i][j] = sum_k A[i][k] * (B[k][j] - b_zp[j])
+  const KernelContext ctx{DefaultOpset(10)};
+  MatMulInteger mmi{ctx};
+  Tensor a = Tensor::FromUint8("", {2, 3}, {11, 7, 3, 10, 6, 2});
+  Tensor b = Tensor::FromUint8("", {3, 2}, {1, 4, 2, 5, 3, 6});
+  Tensor a_zp;
+  Tensor b_zp("", onnx_kernels::DataType::UINT8, {2}, std::vector<uint8_t>{1, 2});
+  Tensor y = mmi(a, b, a_zp, b_zp);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 2}));
+  const int32_t *py = y.AsInt32();
+  // Y[0][0] = 11*(1-1) + 7*(2-1) + 3*(3-1) = 0 + 7 + 6 = 13
+  // Y[0][1] = 11*(4-2) + 7*(5-2) + 3*(6-2) = 22 + 21 + 12 = 55
+  // Y[1][0] = 10*(1-1) + 6*(2-1) + 2*(3-1) = 0 + 6 + 4 = 10
+  // Y[1][1] = 10*(4-2) + 6*(5-2) + 2*(6-2) = 20 + 18 + 8 = 46
+  EXPECT_EQ(py[0], 13);
+  EXPECT_EQ(py[1], 55);
+  EXPECT_EQ(py[2], 10);
+  EXPECT_EQ(py[3], 46);
+}
+
+TEST(KernelClass, MatMulIntegerWithPerRowAZeroPoint) {
+  // Per-row a_zero_point: a_zp[i] is subtracted from each element in row i of A.
+  // A [2x3] UINT8, B [3x2] UINT8, a_zp = [1, 2] (one per input row).
+  // Y[i][j] = sum_k (A[i][k] - a_zp[i]) * B[k][j]
+  const KernelContext ctx{DefaultOpset(10)};
+  MatMulInteger mmi{ctx};
+  Tensor a = Tensor::FromUint8("", {2, 3}, {11, 7, 3, 10, 6, 2});
+  Tensor b = Tensor::FromUint8("", {3, 2}, {1, 4, 2, 5, 3, 6});
+  Tensor a_zp("", onnx_kernels::DataType::UINT8, {2}, std::vector<uint8_t>{1, 2});
+  Tensor b_zp;
+  Tensor y = mmi(a, b, a_zp, b_zp);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 2}));
+  const int32_t *py = y.AsInt32();
+  // Y[0][0] = (11-1)*1 + (7-1)*2 + (3-1)*3 = 10 + 12 + 6 = 28
+  // Y[0][1] = (11-1)*4 + (7-1)*5 + (3-1)*6 = 40 + 30 + 12 = 82
+  // Y[1][0] = (10-2)*1 + (6-2)*2 + (2-2)*3 = 8 + 8 + 0 = 16
+  // Y[1][1] = (10-2)*4 + (6-2)*5 + (2-2)*6 = 32 + 20 + 0 = 52
+  EXPECT_EQ(py[0], 28);
+  EXPECT_EQ(py[1], 82);
+  EXPECT_EQ(py[2], 16);
+  EXPECT_EQ(py[3], 52);
+}
+
 TEST(KernelClass, FloorClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(13)};
   Floor floor_kernel{ctx};

@@ -3,12 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // Tests for the structural in-place reuse guess
-// (:cpp:func:`onnx_optim::shapes::ComputeInPlaceReuse`). The analysis is
+// (:cpp:func:`onnx_optim::annotations::ComputeInPlaceReuse`). The analysis is
 // driven entirely by the shapes inferred into a ``ShapesContext`` and by
 // value lifetimes, so each test runs shape inference on a small graph and
 // then checks which (output, input) reuse opportunities are reported.
 
-#include "onnx_optim/shapes/inplace_reuse.h"
+#include "onnx_optim/annotations/inplace_reuse.h"
 
 #include "onnx_optim/shapes/shape_inference.h"
 #include "onnx_optim/shapes/shapes_context.h"
@@ -25,12 +25,12 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_optim::OptimShape;
 using onnx_optim::OptimTensor;
 using onnx_optim::TensorType;
-using onnx_optim::shapes::ComputeContext;
-using onnx_optim::shapes::ComputeInPlaceReuse;
-using onnx_optim::shapes::InPlaceReuse;
-using onnx_optim::shapes::InPlaceReuseKind;
+using onnx_optim::annotations::ComputeContext;
+using onnx_optim::annotations::ComputeInPlaceReuse;
+using onnx_optim::annotations::InPlaceReuse;
+using onnx_optim::annotations::InPlaceReuseKind;
+using onnx_optim::annotations::WriteInPlaceReuseToMetadata;
 using onnx_optim::shapes::ShapesContext;
-using onnx_optim::shapes::WriteInPlaceReuseToMetadata;
 
 namespace Test {
 
@@ -270,15 +270,15 @@ TEST(OnnxOptimInPlaceReuse, WriteInPlaceReuseToMetadata) {
   EXPECT_EQ(graph.node()[0].metadata_props().size(), 0);
   ASSERT_EQ(graph.node()[1].metadata_props().size(), 2);
   EXPECT_EQ(graph.node()[1].metadata_props()[0].key().as_string(),
-            std::string(onnx_optim::shapes::kInPlaceReuseMetadataKey));
+            std::string(onnx_optim::annotations::kInPlaceReuseMetadataKey));
   EXPECT_EQ(graph.node()[1].metadata_props()[0].value().as_string(), std::string("0:0:equal"));
   EXPECT_EQ(graph.node()[1].metadata_props()[1].key().as_string(),
-            std::string(onnx_optim::shapes::kReleaseAfterMetadataKey));
+            std::string(onnx_optim::annotations::kReleaseAfterMetadataKey));
   EXPECT_EQ(graph.node()[1].metadata_props()[1].value().as_string(), std::string("A"));
   ASSERT_EQ(graph.node()[2].metadata_props().size(), 2);
   EXPECT_EQ(graph.node()[2].metadata_props()[0].value().as_string(), std::string("0:0:equal"));
   EXPECT_EQ(graph.node()[2].metadata_props()[1].key().as_string(),
-            std::string(onnx_optim::shapes::kReleaseAfterMetadataKey));
+            std::string(onnx_optim::annotations::kReleaseAfterMetadataKey));
   EXPECT_EQ(graph.node()[2].metadata_props()[1].value().as_string(), std::string("B"));
 }
 
@@ -292,7 +292,8 @@ TEST(OnnxOptimInPlaceReuse, WriteInPlaceReuseToMetadataGreaterAndUpdate) {
   *graph.add_node() = MakeCastNode("X", "A", TensorProto::DataType::INT64);
   *graph.add_node() = MakeCastNode("A", "Y", TensorProto::DataType::INT32);
   // Pre-existing entry under the same key must be replaced, not duplicated.
-  (*graph.mutable_node())[1].add_metadata(onnx_optim::shapes::kInPlaceReuseMetadataKey, "stale");
+  (*graph.mutable_node())[1].add_metadata(onnx_optim::annotations::kInPlaceReuseMetadataKey,
+                                          "stale");
 
   ShapesContext ctx;
   ctx.ComputeShapeGraph(graph);
@@ -302,7 +303,7 @@ TEST(OnnxOptimInPlaceReuse, WriteInPlaceReuseToMetadataGreaterAndUpdate) {
   ASSERT_EQ(graph.node()[1].metadata_props().size(), 2);
   EXPECT_EQ(graph.node()[1].metadata_props()[0].value().as_string(), std::string("0:0:greater"));
   EXPECT_EQ(graph.node()[1].metadata_props()[1].key().as_string(),
-            std::string(onnx_optim::shapes::kReleaseAfterMetadataKey));
+            std::string(onnx_optim::annotations::kReleaseAfterMetadataKey));
   EXPECT_EQ(graph.node()[1].metadata_props()[1].value().as_string(), std::string("A"));
 }
 
@@ -458,12 +459,12 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextWriteToMetadata) {
   ASSERT_EQ(graph.node()[1].metadata_props().size(), 2);
   EXPECT_EQ(graph.node()[1].metadata_props()[0].value().as_string(), std::string("0:0:equal"));
   EXPECT_EQ(graph.node()[1].metadata_props()[1].key().as_string(),
-            std::string(onnx_optim::shapes::kReleaseAfterMetadataKey));
+            std::string(onnx_optim::annotations::kReleaseAfterMetadataKey));
   EXPECT_EQ(graph.node()[1].metadata_props()[1].value().as_string(), std::string("A"));
   ASSERT_EQ(graph.node()[2].metadata_props().size(), 2);
   EXPECT_EQ(graph.node()[2].metadata_props()[0].value().as_string(), std::string("0:0:equal"));
   EXPECT_EQ(graph.node()[2].metadata_props()[1].key().as_string(),
-            std::string(onnx_optim::shapes::kReleaseAfterMetadataKey));
+            std::string(onnx_optim::annotations::kReleaseAfterMetadataKey));
   EXPECT_EQ(graph.node()[2].metadata_props()[1].value().as_string(), std::string("B"));
 
   // Writing into a graph with a different node count is rejected.

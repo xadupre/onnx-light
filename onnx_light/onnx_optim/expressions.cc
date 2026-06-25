@@ -984,6 +984,42 @@ public:
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// NestedFloorDivTransformer
+// Simplifies (x // a) // b → x // (a * b) when both a and b are positive
+// integer constants.  The identity holds for all integer x and positive
+// integer a, b: floor(floor(x/a)/b) == floor(x/(a*b)).
+// ═══════════════════════════════════════════════════════════════════════════
+
+class NestedFloorDivTransformer : public Transformer {
+public:
+  NodePtr visit_BinOp(std::unique_ptr<BinOp> n) override {
+    n = std::unique_ptr<BinOp>(static_cast<BinOp *>(generic_visit(std::move(n)).release()));
+
+    if (n->op != BinOpKind::FloorDiv)
+      return n;
+    const auto *outer_d = dynamic_cast<const Constant *>(n->right.get());
+    if (!outer_d || outer_d->value <= 0)
+      return n;
+
+    const auto *inner = dynamic_cast<const BinOp *>(n->left.get());
+    if (!inner || inner->op != BinOpKind::FloorDiv)
+      return n;
+    const auto *inner_d = dynamic_cast<const Constant *>(inner->right.get());
+    if (!inner_d || inner_d->value <= 0)
+      return n;
+
+    // Guard against overflow before multiplying the two divisors.
+    int64_t a = inner_d->value;
+    int64_t b = outer_d->value;
+    if (b > INT64_MAX / a)
+      return n;
+
+    return std::make_unique<BinOp>(inner->left->clone(), BinOpKind::FloorDiv,
+                                   std::make_unique<Constant>(a * b));
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // MaxToXorTransformer: max(a,b) / Max(a,b) → a^b
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -1482,6 +1518,7 @@ static NodePtr apply_pipeline(NodePtr node) {
   MulDivCancellerTransformer muldiv_tr;
   ExactMulDivConstantFolderTransformer fold_tr;
   DistributeFloorDivOverAddTransformer distrib_tr;
+  NestedFloorDivTransformer nested_fd_tr;
   MaxToXorTransformer max_tr;
   ReorderCommutativeOpsTransformer reorder_tr;
   MaxIntTransformer maxint_tr;
@@ -1494,6 +1531,7 @@ static NodePtr apply_pipeline(NodePtr node) {
     node = muldiv_tr.visit(std::move(node));
     node = fold_tr.visit(std::move(node));
     node = muldiv_tr.visit(std::move(node));
+    node = nested_fd_tr.visit(std::move(node));
     node = fd_ring_tr.visit(std::move(node));
     node = distrib_tr.visit(std::move(node));
     node = max_tr.visit(std::move(node));

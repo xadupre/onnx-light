@@ -82,7 +82,17 @@ void ComputeShapeUnsqueeze(ShapesContext &ctx, const NodeProto &node) {
     out_shape.PushBack(OptimDim("Unsqueeze_dim0"));
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, data.Dtype(), std::move(out_shape)));
+  OptimTensor out_tensor(nullptr, data.Dtype(), std::move(out_shape));
+
+  // Unsqueeze only inserts size-1 dimensions into the shape; it does not
+  // change the tensor values.  Forward the ValueAsShape annotation so that
+  // downstream ops (e.g. Concat → Reshape) can still reconstruct the
+  // symbolic target shape from these values.
+  if (data.HasValueAsShape()) {
+    out_tensor.SetValueAsShape(data.ValueAsShape());
+  }
+
+  ctx.Set(node.output(0), std::move(out_tensor));
 }
 
 } // namespace tensor

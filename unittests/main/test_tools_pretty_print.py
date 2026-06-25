@@ -66,6 +66,7 @@ def _node(
     name: str = "",
     attributes: list | None = None,
     domain: str = "",
+    metadata: dict | None = None,
 ) -> SimpleNamespace:
     """Returns a minimal NodeProto-like object."""
     return SimpleNamespace(
@@ -75,6 +76,7 @@ def _node(
         name=name,
         domain=domain,
         attribute=list(attributes or []),
+        metadata_props=[SimpleNamespace(key=k, value=v) for k, v in (metadata or {}).items()],
     )
 
 
@@ -182,6 +184,80 @@ class TestPrettyOnnx(unittest.TestCase):
     def test_assert_none(self) -> None:
         with self.assertRaises(AssertionError):
             pretty_onnx(None)
+
+    def test_node_tag_shape(self) -> None:
+        node = _node("Shape", ["X"], ["S"], metadata={"onnx_light.node_tag": "shape"})
+        self.assertIn("[shape]", pretty_onnx(node, include_node_tags=True))
+        self.assertNotIn("[shape]", pretty_onnx(node, include_node_tags=False))
+
+    def test_node_tag_axes(self) -> None:
+        node = _node("Gather", ["X", "I"], ["Y"], metadata={"onnx_light.node_tag": "axes"})
+        self.assertIn("[axes]", pretty_onnx(node, include_node_tags=True))
+
+    def test_node_tag_weight(self) -> None:
+        node = _node("Constant", [], ["C"], metadata={"onnx_light.node_tag": "weight"})
+        self.assertIn("[weight]", pretty_onnx(node, include_node_tags=True))
+
+    def test_node_tag_unknown_not_shown(self) -> None:
+        node = _node("Add", ["X", "Y"], ["Z"], metadata={"onnx_light.node_tag": "other"})
+        text = pretty_onnx(node, include_node_tags=True)
+        self.assertNotIn("[other]", text)
+
+    def test_node_tag_absent_not_shown(self) -> None:
+        node = _node("Add", ["X", "Y"], ["Z"])
+        text = pretty_onnx(node, include_node_tags=True)
+        self.assertNotIn("[", text)
+
+    def test_inplace(self) -> None:
+        node = _node("Relu", ["T"], ["Z"], metadata={"onnx_light.inplace_reuse": "0:0:equal"})
+        text = pretty_onnx(node, include_inplace=True)
+        self.assertIn("inplace: out0=in0(equal)", text)
+        text_off = pretty_onnx(node, include_inplace=False)
+        self.assertNotIn("inplace", text_off)
+
+    def test_inplace_multiple(self) -> None:
+        node = _node(
+            "Foo",
+            ["A", "B"],
+            ["C", "D"],
+            metadata={"onnx_light.inplace_reuse": "0:0:equal;1:1:greater"},
+        )
+        text = pretty_onnx(node, include_inplace=True)
+        self.assertIn("inplace: out0=in0(equal), out1=in1(greater)", text)
+
+    def test_inplace_absent_not_shown(self) -> None:
+        node = _node("Add", ["X", "Y"], ["Z"])
+        text = pretty_onnx(node, include_inplace=True)
+        self.assertNotIn("inplace", text)
+
+    def test_graph_with_tags_and_inplace(self) -> None:
+        g = _graph(
+            nodes=[
+                _node(
+                    "Shape",
+                    ["X"],
+                    ["S"],
+                    name="shape0",
+                    metadata={"onnx_light.node_tag": "shape"},
+                ),
+                _node(
+                    "Relu",
+                    ["X"],
+                    ["Y"],
+                    name="relu0",
+                    metadata={"onnx_light.inplace_reuse": "0:0:equal"},
+                ),
+            ],
+            inputs=[_vi("X")],
+            outputs=[_vi("Y")],
+        )
+        text = pretty_onnx(g, include_node_tags=True, include_inplace=True)
+        self.assertIn("[shape] Shape", text)
+        self.assertIn("inplace: out0=in0(equal)", text)
+        # Tags and inplace off by default.
+        text_off = pretty_onnx(g)
+        self.assertNotIn("[shape]", text_off)
+        self.assertNotIn("inplace", text_off)
 
 
 if __name__ == "__main__":

@@ -29,6 +29,11 @@ fillshape
         opportunities and last-use release hints, and write them into each
         node's ``metadata_props`` under the keys
         ``onnx_light.inplace_reuse`` and ``onnx_light.release_after``.
+    ``--shape-tag``
+        After shape inference, infer semantic ``shape``/``axes``/``weight``
+        tags for every value and node in the graph and record them in
+        ``metadata_props`` (keys ``onnx_light.value_tags`` and
+        ``onnx_light.node_tag``).
     ``--show``
         Print the inferred shapes to stdout; do **not** save the model.
     ``--verbose [LEVEL]``
@@ -105,6 +110,7 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
         compute_shape_model,
         infer_shapes_model,
         write_inplace_reuse_to_metadata,
+        write_value_and_node_tags_to_metadata,
     )
     from .tools.pretty_print import pretty_onnx
 
@@ -112,6 +118,7 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
     output_path: str | None = args.output
     keep: bool = args.keep
     inplace_info: bool = args.inplace_info
+    shape_tag: bool = args.shape_tag
     show: bool = args.show
     verbose: int = args.verbose
 
@@ -141,6 +148,9 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
             write_inplace_reuse_to_metadata(ctx, model.graph)
     else:
         infer_shapes_model(model, prefill_with_value_info_output=keep)
+
+    if shape_tag:
+        write_value_and_node_tags_to_metadata(model.graph)
 
     if show:
         print(pretty_onnx(model))
@@ -465,6 +475,17 @@ def _build_parser() -> argparse.ArgumentParser:
             "release hints, and record them in each node's metadata_props "
             "under the keys ``onnx_light.inplace_reuse`` and "
             "``onnx_light.release_after``."
+        ),
+    )
+    fillshape_parser.add_argument(
+        "--shape-tag",
+        action="store_true",
+        default=False,
+        dest="shape_tag",
+        help=(
+            "After shape inference, infer semantic shape/axes/weight tags for "
+            "every value and node in the graph and record them in metadata_props "
+            "(keys ``onnx_light.value_tags`` and ``onnx_light.node_tag``)."
         ),
     )
     fillshape_parser.add_argument(

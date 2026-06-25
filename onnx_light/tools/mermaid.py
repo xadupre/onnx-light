@@ -27,6 +27,7 @@ from ._proto_utils import (
     _dtype_name,
     _extract_graph,
     _format_inplace_reuse,
+    _format_release_after,
     _format_shape,
     _iter,
     _looks_like_graph,
@@ -145,6 +146,7 @@ def to_mermaid(
     include_shapes: bool = True,
     include_attributes: bool = False,
     include_inplace: bool = False,
+    include_release: bool = False,
 ) -> str:
     """Render an ONNX ``ModelProto`` or ``GraphProto`` as a Mermaid flowchart.
 
@@ -167,6 +169,10 @@ def to_mermaid(
             recorded in each node's ``metadata_props`` (under the
             ``onnx_light.inplace_reuse`` key) are appended to the operator
             label, for example ``inplace: out0=in1(equal)``.
+        include_release: When :data:`True`, the post-execution release hints
+            recorded in each node's ``metadata_props`` (under the
+            ``onnx_light.release_after`` key) are appended to the operator
+            label, for example ``release: A, B``.
 
     Returns:
         The Mermaid source as a single ``str`` (newline-separated).  The
@@ -239,6 +245,7 @@ def to_mermaid(
         include_shapes=include_shapes,
         include_attributes=include_attributes,
         include_inplace=include_inplace,
+        include_release=include_release,
     )
 
 
@@ -250,6 +257,7 @@ def to_mermaid_graph(
     include_shapes: bool = True,
     include_attributes: bool = False,
     include_inplace: bool = False,
+    include_release: bool = False,
 ) -> str:
     """Render a ``GraphProto`` as a Mermaid flowchart.
 
@@ -340,6 +348,10 @@ def to_mermaid_graph(
             inplace_label = _format_inplace_reuse(node)
             if inplace_label:
                 label_parts.append(inplace_label)
+        if include_release:
+            release_label = _format_release_after(node)
+            if release_label:
+                label_parts.append(release_label)
         label = _join_label(*label_parts)
         node_tag = _s(_node_metadata_value(node, NODE_TAG_METADATA_KEY)).lower()
         style = (

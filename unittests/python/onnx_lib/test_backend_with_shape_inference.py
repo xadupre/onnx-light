@@ -83,6 +83,10 @@ TestShapeInferenceBackend = make_test_class(
         # ONNX's built-in shape inference does not recover the symbolic B1/B2
         # dims that onnx-light propagates through the If→Abs/Neg chain.
         "test_cc_shape_inference_if_symbolic_shapes.*",
+        # ONNX's built-in shape inference does not propagate value-as-shape
+        # through Gather: Expand(y, Gather(Shape(x), [0])) produces unk__0
+        # instead of the symbolic N from x's leading axis.
+        "test_cc_shape_inference_gather_value_as_shape.*",
     ],
 )
 

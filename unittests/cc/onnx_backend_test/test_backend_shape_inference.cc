@@ -1415,6 +1415,95 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeTwoTopKDifferentK) {
   ASSERT_TRUE(found) << "test_cc_shape_inference_two_topk_different_k case not registered";
 }
 
+// ---------------------------------------------------------------------------
+// onnx_optim shape inference + Gather value-as-shape propagation
+// ---------------------------------------------------------------------------
+//
+// Verifies that the ``onnx_optim`` shape-inference pipeline correctly propagates
+// the *value-as-shape* annotation through a ``Gather`` node. The model is built
+// by :cpp:func:`RegisterGatherValueAsShapeShapeInferenceCases`:
+//   Shape(x[N,D]) -> shape_x [2]
+//   Gather(shape_x, [0], axis=0) -> n_vec [1]   # VAS [N] propagated here
+//   Expand(y[1], n_vec) -> expanded [N]
+//   Abs(expanded) -> z [N]
+//
+// ``n_vec`` receives the VAS ``[N]`` sliced from ``shape_x``; ``Expand`` then
+// turns that VAS into the concrete output shape so ``z`` carries the symbolic
+// dim ``N`` that matches the first axis of ``x``.
+TEST(BackendTestCaseShapeInference, OnnxOptimPropagatesGatherValueAsShape) {
+  const std::vector<TestCase> cases = CollectTestCases("shape");
+  bool found = false;
+  for (const TestCase &tc : cases) {
+    if (tc.name != "test_cc_shape_inference_gather_value_as_shape") {
+      continue;
+    }
+    found = true;
+
+    std::string serialized;
+    tc.model.SerializeToString(serialized);
+
+    // --- onnx_optim pass ---
+    ModelProto optim_copy;
+    optim_copy.ParseFromString(serialized);
+    auto &optim_outputs = optim_copy.mutable_graph()->ref_output();
+    if (auto *ott = MutableTensorTypeOf(*optim_outputs[0].mutable_type()); ott != nullptr) {
+      ott->clear_shape();
+    }
+    optim_copy.mutable_graph()->mutable_value_info()->clear();
+
+    ASSERT_NO_THROW(onnx_optim::shapes::InferShapesModel(optim_copy)) << "case: " << tc.name;
+
+    // Build a name-indexed map for value_info inspection.
+    std::unordered_map<std::string, const ValueInfoProto *> by_name;
+    const auto &vis = optim_copy.ref_graph().ref_value_info();
+    for (size_t i = 0; i < vis.size(); ++i) {
+      const auto &vi = vis[i];
+      by_name.emplace(std::string(vi.ref_name().data(), vi.ref_name().size()), &vi);
+    }
+
+    // ``n_vec`` = Gather(shape_x, [0]) must be INT64 rank 1.
+    {
+      auto it = by_name.find("n_vec");
+      ASSERT_NE(it, by_name.end()) << "optim: n_vec value_info missing after shape inference";
+      const TypeProto::Tensor *tt = TensorTypeOf(it->second->ref_type());
+      ASSERT_NE(tt, nullptr) << "optim: n_vec type missing";
+      EXPECT_EQ(static_cast<int32_t>(tt->elem_type()), 7 /* INT64 */);
+      ASSERT_TRUE(tt->has_shape());
+      ASSERT_EQ(tt->ref_shape().ref_dim().size(), 1u) << "optim: n_vec must be rank 1";
+    }
+
+    // ``expanded`` = Expand(y, n_vec) must be FLOAT rank 1 with a symbolic axis.
+    {
+      auto it = by_name.find("expanded");
+      ASSERT_NE(it, by_name.end()) << "optim: expanded value_info missing after shape inference";
+      const TypeProto::Tensor *tt = TensorTypeOf(it->second->ref_type());
+      ASSERT_NE(tt, nullptr) << "optim: expanded type missing";
+      EXPECT_EQ(static_cast<int32_t>(tt->elem_type()), 1 /* FLOAT */);
+      ASSERT_TRUE(tt->has_shape());
+      const auto &dims = tt->ref_shape().ref_dim();
+      ASSERT_EQ(dims.size(), 1u) << "optim: expanded must be rank 1";
+      // The axis must be symbolic (VAS [N] propagated through Gather).
+      EXPECT_FALSE(dims[0].has_dim_value())
+          << "optim: expanded[0] must be symbolic (N from x), not concrete";
+    }
+
+    // ``z`` = Abs(expanded) — model output — must be FLOAT rank 1 with a
+    // symbolic axis matching the first axis of ``x``.
+    {
+      const ValueInfoProto &out = optim_copy.ref_graph().ref_output()[0];
+      ASSERT_TRUE(out.has_type());
+      const TypeProto::Tensor *ott = TensorTypeOf(out.ref_type());
+      ASSERT_NE(ott, nullptr);
+      EXPECT_EQ(static_cast<int32_t>(ott->elem_type()), 1 /* FLOAT */);
+      ASSERT_TRUE(ott->has_shape());
+      const auto &dims = ott->ref_shape().ref_dim();
+      ASSERT_EQ(dims.size(), 1u) << "optim: z must be rank 1";
+      EXPECT_FALSE(dims[0].has_dim_value()) << "optim: z[0] must be symbolic (N), not concrete";
+    }
+  }
+  ASSERT_TRUE(found) << "test_cc_shape_inference_gather_value_as_shape case not registered";
+}
+
 namespace {
 
 // Builds a single-node ``ConvTranspose`` model with the given ``group``

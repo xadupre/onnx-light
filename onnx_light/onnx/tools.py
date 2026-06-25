@@ -49,12 +49,12 @@ def make_random_input(elem_type: int, shape: list[int], seed: int) -> np.ndarray
     else:
         # ``ml_dtypes``-backed dtypes such as ``bfloat16`` and ``uint4`` report
         # ``kind == "V"``, so fall back to the dtype name for category checks.
-        dtype_name = np.dtype(np_dtype).name
+        dtype_name = np_dtype.name
         if dtype_name.startswith("complex"):
             category = "complex"
         elif dtype_name.startswith(("float", "bfloat")):
             category = "float"
-        elif dtype_name.startswith(("int", "uint")):
+        elif dtype_name.startswith(("int", "uint")) and not np.issubdtype(np_dtype, np.integer):
             category = "custom_int"
 
     if category == "complex":
@@ -73,7 +73,7 @@ def make_random_input(elem_type: int, shape: list[int], seed: int) -> np.ndarray
         values = randint(0, 10, size=shape, seed=seed, dtype=np.int32)
         return values.astype(np_dtype)
 
-    if elem_type == int(TensorProto.STRING):
+    if category is None and elem_type == int(TensorProto.STRING):
         raise NotImplementedError(
             "STRING inputs are not supported by the run subcommand's random input generator."
         )

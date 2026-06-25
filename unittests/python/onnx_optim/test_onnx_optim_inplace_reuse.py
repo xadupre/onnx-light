@@ -145,10 +145,12 @@ class TestInPlaceReuse(ExtTestCase):
         # metadata is written for it.
         self.assertEqual(self._node_metadata(model.graph.node[0]), {})
         self.assertEqual(
-            self._node_metadata(model.graph.node[1]), {"onnx_light.inplace_reuse": "0:0:equal"}
+            self._node_metadata(model.graph.node[1]),
+            {"onnx_light.inplace_reuse": "0:0:equal", "onnx_light.release_after": "A"},
         )
         self.assertEqual(
-            self._node_metadata(model.graph.node[2]), {"onnx_light.inplace_reuse": "0:0:equal"}
+            self._node_metadata(model.graph.node[2]),
+            {"onnx_light.inplace_reuse": "0:0:equal", "onnx_light.release_after": "B"},
         )
 
     def test_write_inplace_reuse_to_metadata_greater(self):
@@ -166,7 +168,8 @@ class TestInPlaceReuse(ExtTestCase):
 
         self.assertEqual(self._node_metadata(model.graph.node[0]), {})
         self.assertEqual(
-            self._node_metadata(model.graph.node[1]), {"onnx_light.inplace_reuse": "0:0:greater"}
+            self._node_metadata(model.graph.node[1]),
+            {"onnx_light.inplace_reuse": "0:0:greater", "onnx_light.release_after": "A"},
         )
 
     def test_write_inplace_reuse_to_metadata_updates_existing_key(self):
@@ -182,7 +185,8 @@ class TestInPlaceReuse(ExtTestCase):
         si.write_inplace_reuse_to_metadata(ctx, model.graph)
 
         self.assertEqual(
-            self._node_metadata(model.graph.node[1]), {"onnx_light.inplace_reuse": "0:0:equal"}
+            self._node_metadata(model.graph.node[1]),
+            {"onnx_light.inplace_reuse": "0:0:equal", "onnx_light.release_after": "A"},
         )
 
     def test_allow_input_overwrite_reuses_graph_input(self):
@@ -281,10 +285,12 @@ class TestInPlaceReuse(ExtTestCase):
 
         self.assertEqual(self._node_metadata(model.graph.node[0]), {})
         self.assertEqual(
-            self._node_metadata(model.graph.node[1]), {"onnx_light.inplace_reuse": "0:0:equal"}
+            self._node_metadata(model.graph.node[1]),
+            {"onnx_light.inplace_reuse": "0:0:equal", "onnx_light.release_after": "A"},
         )
         self.assertEqual(
-            self._node_metadata(model.graph.node[2]), {"onnx_light.inplace_reuse": "0:0:equal"}
+            self._node_metadata(model.graph.node[2]),
+            {"onnx_light.inplace_reuse": "0:0:equal", "onnx_light.release_after": "B"},
         )
 
 

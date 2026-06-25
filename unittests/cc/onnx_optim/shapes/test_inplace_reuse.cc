@@ -267,12 +267,18 @@ TEST(OnnxOptimInPlaceReuse, WriteInPlaceReuseToMetadata) {
   // Node 0 reads the declared graph input X, so it has no reuse and no
   // metadata is written for it.
   EXPECT_EQ(graph.node()[0].metadata_props().size(), 0);
-  ASSERT_EQ(graph.node()[1].metadata_props().size(), 1);
+  ASSERT_EQ(graph.node()[1].metadata_props().size(), 2);
   EXPECT_EQ(graph.node()[1].metadata_props()[0].key().as_string(),
             std::string(onnx_optim::shapes::kInPlaceReuseMetadataKey));
   EXPECT_EQ(graph.node()[1].metadata_props()[0].value().as_string(), std::string("0:0:equal"));
-  ASSERT_EQ(graph.node()[2].metadata_props().size(), 1);
+  EXPECT_EQ(graph.node()[1].metadata_props()[1].key().as_string(),
+            std::string(onnx_optim::shapes::kReleaseAfterMetadataKey));
+  EXPECT_EQ(graph.node()[1].metadata_props()[1].value().as_string(), std::string("A"));
+  ASSERT_EQ(graph.node()[2].metadata_props().size(), 2);
   EXPECT_EQ(graph.node()[2].metadata_props()[0].value().as_string(), std::string("0:0:equal"));
+  EXPECT_EQ(graph.node()[2].metadata_props()[1].key().as_string(),
+            std::string(onnx_optim::shapes::kReleaseAfterMetadataKey));
+  EXPECT_EQ(graph.node()[2].metadata_props()[1].value().as_string(), std::string("B"));
 }
 
 // A strictly larger reused buffer is recorded with the ``greater`` kind, and an
@@ -292,8 +298,11 @@ TEST(OnnxOptimInPlaceReuse, WriteInPlaceReuseToMetadataGreaterAndUpdate) {
 
   WriteInPlaceReuseToMetadata(graph, ctx);
   EXPECT_EQ(graph.node()[0].metadata_props().size(), 0);
-  ASSERT_EQ(graph.node()[1].metadata_props().size(), 1);
+  ASSERT_EQ(graph.node()[1].metadata_props().size(), 2);
   EXPECT_EQ(graph.node()[1].metadata_props()[0].value().as_string(), std::string("0:0:greater"));
+  EXPECT_EQ(graph.node()[1].metadata_props()[1].key().as_string(),
+            std::string(onnx_optim::shapes::kReleaseAfterMetadataKey));
+  EXPECT_EQ(graph.node()[1].metadata_props()[1].value().as_string(), std::string("A"));
 }
 
 // By default a declared graph input is never overwritten in place, but when
@@ -445,10 +454,16 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextWriteToMetadata) {
   inplace.WriteToMetadata(graph);
   ASSERT_EQ(graph.node().size(), 3);
   EXPECT_EQ(graph.node()[0].metadata_props().size(), 0);
-  ASSERT_EQ(graph.node()[1].metadata_props().size(), 1);
+  ASSERT_EQ(graph.node()[1].metadata_props().size(), 2);
   EXPECT_EQ(graph.node()[1].metadata_props()[0].value().as_string(), std::string("0:0:equal"));
-  ASSERT_EQ(graph.node()[2].metadata_props().size(), 1);
+  EXPECT_EQ(graph.node()[1].metadata_props()[1].key().as_string(),
+            std::string(onnx_optim::shapes::kReleaseAfterMetadataKey));
+  EXPECT_EQ(graph.node()[1].metadata_props()[1].value().as_string(), std::string("A"));
+  ASSERT_EQ(graph.node()[2].metadata_props().size(), 2);
   EXPECT_EQ(graph.node()[2].metadata_props()[0].value().as_string(), std::string("0:0:equal"));
+  EXPECT_EQ(graph.node()[2].metadata_props()[1].key().as_string(),
+            std::string(onnx_optim::shapes::kReleaseAfterMetadataKey));
+  EXPECT_EQ(graph.node()[2].metadata_props()[1].value().as_string(), std::string("B"));
 
   // Writing into a graph with a different node count is rejected.
   GraphProto smaller;

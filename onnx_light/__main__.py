@@ -26,8 +26,9 @@ fillshape
         ones.
     ``--inplace-info``
         After shape inference, also compute in-place buffer-reuse
-        opportunities and write them into each node's ``metadata_props``
-        under the key ``onnx_light.inplace_reuse``.
+        opportunities and last-use release hints, and write them into each
+        node's ``metadata_props`` under the keys
+        ``onnx_light.inplace_reuse`` and ``onnx_light.release_after``.
     ``--shape-tag``
         After shape inference, infer semantic ``shape``/``axes``/``weight``
         tags for every value and node in the graph and record them in
@@ -470,9 +471,10 @@ def _build_parser() -> argparse.ArgumentParser:
         default=False,
         dest="inplace_info",
         help=(
-            "Also compute in-place buffer-reuse opportunities and record them "
-            "in each node's metadata_props under the key "
-            "``onnx_light.inplace_reuse``."
+            "Also compute in-place buffer-reuse opportunities and last-use "
+            "release hints, and record them in each node's metadata_props "
+            "under the keys ``onnx_light.inplace_reuse`` and "
+            "``onnx_light.release_after``."
         ),
     )
     fillshape_parser.add_argument(

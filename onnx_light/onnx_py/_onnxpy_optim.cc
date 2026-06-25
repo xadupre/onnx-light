@@ -1047,9 +1047,10 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
             self.WriteToMetadata(graph);
           },
           nb::arg("graph"),
-          "Records the computed opportunities into each node's ``metadata_props`` under the key "
-          "``onnx_light.inplace_reuse``. The ``GraphProto`` is mutated in place and must be the "
-          "same graph passed to ``compute_inplace_reuse_graph``.")
+          "Records the computed opportunities into each node's ``metadata_props`` under the keys "
+          "``onnx_light.inplace_reuse`` and ``onnx_light.release_after``. The ``GraphProto`` is "
+          "mutated in place and must be the same graph passed to "
+          "``compute_inplace_reuse_graph``.")
       .def("clear", &onnx_shapes::ComputeContext::Clear, "Empties the stored result.")
       .def("__len__", [](const onnx_shapes::ComputeContext &self) { return self.Size(); });
 
@@ -1077,11 +1078,13 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       nb::arg("ctx"), nb::arg("graph"),
       "Computes the in-place reuse opportunities for ``graph`` (see "
       ":func:`compute_inplace_reuse`) and records them into each node's ``metadata_props`` "
-      "under the key ``onnx_light.inplace_reuse``. The ``GraphProto`` is mutated in place.\n\n"
+      "under the keys ``onnx_light.inplace_reuse`` and ``onnx_light.release_after``. "
+      "The ``GraphProto`` is mutated in place.\n\n"
       "For every node with at least one opportunity, a single metadata entry is added (or "
       "updated in place if the key already exists) whose value lists the opportunities as "
       "``output_index:input_index:kind`` triplets separated by ``;`` (``kind`` being ``equal`` "
-      "or ``greater``). Nodes without any opportunity are left untouched.");
+      "or ``greater``). For every node with releasable last-use inputs, one metadata entry is "
+      "added under ``onnx_light.release_after`` as a ``;``-separated name list.");
 
   auto copy_node_list = [](nb::list nodes) {
     std::vector<NodeProto> copied;

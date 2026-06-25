@@ -192,9 +192,10 @@ class TestMainFillshape(ExtTestCase):
             dims = list(result.graph.output[0].type.tensor_type.shape.dim)
             self.assertEqual(len(dims), 2)
 
-            # Node 1 (Abs A->Y) should have inplace_reuse metadata.
+            # Node 1 (Abs A->Y) should have in-place and release metadata.
             node1_meta = {entry.key: entry.value for entry in result.graph.node[1].metadata_props}
             self.assertIn("onnx_light.inplace_reuse", node1_meta)
+            self.assertEqual(node1_meta["onnx_light.release_after"], "A")
 
     def test_fillshape_shape_tag_option(self):
         """fillshape --shape-tag writes value/node tag metadata into the model."""

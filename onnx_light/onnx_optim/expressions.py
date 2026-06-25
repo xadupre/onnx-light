@@ -514,6 +514,8 @@ def dim_ranges_from_expressions(
         >>> r = dim_ranges_from_expressions([("a", "d//5")])
         >>> r["a"].lower, r["a"].upper
         ('d//5', 'd//5')
+        >>> r["d"].lower
+        '5*a'
         >>> r = dim_ranges_from_expressions([("a", "3")])
         >>> r["a"].lower, r["a"].upper
         (3, 3)

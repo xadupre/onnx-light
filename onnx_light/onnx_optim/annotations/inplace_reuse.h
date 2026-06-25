@@ -59,7 +59,9 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
-namespace shapes {
+namespace annotations {
+
+using ::onnx_light::onnx_optim::shapes::ShapesContext;
 
 /**
  * Classifies how an input buffer compares in size with the output that
@@ -241,6 +243,6 @@ std::vector<std::vector<InPlaceReuse>> ComputeInPlaceReuse(const GraphProto &gra
  */
 void WriteInPlaceReuseToMetadata(GraphProto &graph, const ShapesContext &ctx);
 
-} // namespace shapes
+} // namespace annotations
 } // namespace onnx_optim
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -92,22 +92,25 @@ class TestInPlaceReuse(ExtTestCase):
         # A is alive at node 2, so node 1 cannot reuse it; node 2 reuses A.
         self.assertEqual(reuse, [[], [], [(0, 0)]])
 
-    def test_shape_mismatch_yields_no_reuse(self):
+    def test_transpose_same_byte_size_reported_as_greater(self):
         nodes = [
             oh.make_node("Abs", ["X"], ["A"]),
             oh.make_node("Transpose", ["A"], ["B"]),
             oh.make_node("Transpose", ["B"], ["Y"]),
         ]
         x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [3, 4])
-        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [4, 3])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [3, 4])
         model = self._build_model(nodes, [x], [y])
 
         ctx = si.ShapesContext()
         si.compute_shape_model(ctx, model)
-        reuse = self._reuse_pairs(si.compute_inplace_reuse(ctx, model.graph))
+        raw = si.compute_inplace_reuse(ctx, model.graph)
+        reuse = self._reuse_pairs(raw)
 
-        # Both transposes change the shape from [3,4] to [4,3] (and back).
-        self.assertEqual(reuse, [[], [], []])
+        # Both transposes change layout but keep the same byte size.
+        self.assertEqual(reuse, [[], [(0, 0)], [(0, 0)]])
+        self.assertEqual(raw[1][0].kind, si.InPlaceReuseKind.kGreater)
+        self.assertEqual(raw[2][0].kind, si.InPlaceReuseKind.kGreater)
 
     def test_graph_output_input_is_not_reused(self):
         nodes = [oh.make_node("Abs", ["X"], ["A"]), oh.make_node("Abs", ["A"], ["Y"])]

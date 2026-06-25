@@ -148,14 +148,15 @@ TEST(OnnxOptimInPlaceReuse, ValueReadTwiceIsReusedOnlyAtLastUse) {
   EXPECT_EQ(reuse[2][0], (InPlaceReuse{0, 0, InPlaceReuseKind::kEqual}));
 }
 
-// A node whose output shape differs from its input shape offers no reuse.
-TEST(OnnxOptimInPlaceReuse, ShapeMismatchYieldsNoReuse) {
+// A Transpose may still reuse its input buffer when the byte size matches even
+// though the shape layout differs.
+TEST(OnnxOptimInPlaceReuse, TransposeWithSameByteSizeIsReportedAsGreater) {
   GraphProto graph;
   graph.set_name("g");
   AddInput(graph, "X", {3, 4});
   AddOutput(graph, "Y", {3, 4});
-  // Abs keeps the shape; Transpose flips it to [4, 3], so the Transpose
-  // output cannot alias its [3, 4] input even though both are intermediates.
+  // Abs keeps the shape; each Transpose changes the layout but keeps the same
+  // element count and dtype, so both opportunities are reported as kGreater.
   *graph.add_node() = MakeNode("Abs", {"X"}, {"A"});
   NodeProto transpose = MakeNode("Transpose", {"A"}, {"B"});
   *graph.add_node() = transpose;
@@ -167,10 +168,10 @@ TEST(OnnxOptimInPlaceReuse, ShapeMismatchYieldsNoReuse) {
   std::vector<std::vector<InPlaceReuse>> reuse = ComputeInPlaceReuse(graph, ctx);
   ASSERT_EQ(reuse.size(), 3u);
   EXPECT_TRUE(reuse[0].empty());
-  // [3,4] -> [4,3]: shapes differ, no in-place reuse.
-  EXPECT_TRUE(reuse[1].empty());
-  // [4,3] -> [3,4]: shapes differ, no in-place reuse.
-  EXPECT_TRUE(reuse[2].empty());
+  ASSERT_EQ(reuse[1].size(), 1u);
+  EXPECT_EQ(reuse[1][0], (InPlaceReuse{0, 0, InPlaceReuseKind::kGreater}));
+  ASSERT_EQ(reuse[2].size(), 1u);
+  EXPECT_EQ(reuse[2][0], (InPlaceReuse{0, 0, InPlaceReuseKind::kGreater}));
 }
 
 // The buffer of a declared graph output must survive, so it is never offered

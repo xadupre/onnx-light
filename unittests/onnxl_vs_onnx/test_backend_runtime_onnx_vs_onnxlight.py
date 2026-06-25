@@ -83,13 +83,7 @@ _CUSTOM_FLOAT_TOLERANCES: dict[str, tuple[float, float]] = {
 
 
 def _should_exclude_runtime_test_name(test_name: str) -> bool:
-    """Returns whether a backend runtime test name should be excluded from comparison.
-
-    Tests with an ``_expanded`` suffix represent ops that ONNX expands into
-    simpler primitives. These tests are not validated separately and are
-    excluded from both the runtime comparison and the known-discrepancies
-    snapshot.
-    """
+    """Returns whether a backend runtime test name should be excluded from comparison."""
     return "_expanded" in test_name
 
 
@@ -198,7 +192,7 @@ def _load_sequence_value(path: str) -> list[np.ndarray]:
     return [numpy_helper.to_array(t) for t in sequence.tensor_values]
 
 
-def _load_optional_value(path: str):
+def _load_optional_value(path: str) -> np.ndarray | list[np.ndarray] | None:
     """Loads a serialised ``OptionalProto`` as a Python value or ``None``."""
     optional = onnxl.OptionalProto()
     with open(path, "rb") as f:
@@ -322,12 +316,12 @@ def _describe_output_mismatch(actual, expected, rtol: float, atol: float) -> str
 class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
     """Runs every ONNX backend node test through the ``onnx_light`` runtime."""
 
-    def test_should_exclude_runtime_test_name(self):
+    def test_should_exclude_runtime_test_name(self) -> None:
         self.assertTrue(_should_exclude_runtime_test_name("elu_example_expanded_ver18"))
         self.assertTrue(_should_exclude_runtime_test_name("attention_4d_fp16_expanded"))
         self.assertFalse(_should_exclude_runtime_test_name("attention_4d_fp16"))
 
-    def test_load_known_discrepancies_excludes_expanded_names(self):
+    def test_load_known_discrepancies_excludes_expanded_names(self) -> None:
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as f:
             f.write("test_attention_4d_fp16_expanded\n")
             f.write("test_training_dropout\n")

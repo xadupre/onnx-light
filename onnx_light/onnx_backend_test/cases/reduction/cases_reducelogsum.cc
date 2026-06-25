@@ -229,6 +229,7 @@ void RegisterReduceLogSumExpCases(std::vector<TestCase> &registry) {
     Expect(node, {data, axes}, {reduced}, "test_cc_reducelogsumexp_double", {opset}, "backend-test",
            registry);
   }
+}
 
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

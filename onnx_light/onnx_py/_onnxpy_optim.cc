@@ -1053,6 +1053,8 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   // -----------------------------------------------------------------------
   shape_mod.attr("INPLACE_REUSE_METADATA_KEY") = onnx_annotations::kInPlaceReuseMetadataKey;
   shape_mod.attr("RELEASE_AFTER_METADATA_KEY") = onnx_annotations::kReleaseAfterMetadataKey;
+  shape_mod.attr("RELEASE_AFTER_SHAPE_TAG_METADATA_KEY") =
+      onnx_annotations::kReleaseAfterShapeTagMetadataKey;
   shape_mod.attr("VALUE_TAG_METADATA_KEY") = onnx_annotations::kValueTagMetadataKey;
   shape_mod.attr("VALUE_TAGS_METADATA_KEY") = onnx_annotations::kValueTagsMetadataKey;
   shape_mod.attr("NODE_TAG_METADATA_KEY") = onnx_annotations::kNodeTagMetadataKey;
@@ -1099,15 +1101,21 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       .def(
           "compute_inplace_reuse_graph",
           [](onnx_annotations::ComputeContext &self, const GraphProto &graph,
-             const onnx_shapes::ShapesContext &ctx, bool allow_input_overwrite) {
-            self.ComputeInPlaceReuseGraph(graph, ctx, allow_input_overwrite);
+             const onnx_shapes::ShapesContext &ctx, bool allow_input_overwrite,
+             const std::unordered_map<std::string, std::string> &value_tags) {
+            self.ComputeInPlaceReuseGraph(graph, ctx, allow_input_overwrite, value_tags);
           },
           nb::arg("graph"), nb::arg("ctx"), nb::arg("allow_input_overwrite") = false,
+          nb::arg("value_tags") = std::unordered_map<std::string, std::string>{},
           "Guesses, for every node of ``graph``, which outputs reuse which input buffers in "
           "place, using the shapes already inferred into ``ctx``, and stores the result in this "
           "context (replacing any previous result).\n\n"
           "By default declared graph inputs are never overwritten in place; set "
-          "``allow_input_overwrite=True`` to let an input be reused like an intermediate.")
+          "``allow_input_overwrite=True`` to let an input be reused like an intermediate.\n\n"
+          "When ``value_tags`` is provided (a ``{name: tag}`` dict such as the one returned by "
+          ":func:`infer_value_and_node_tags`), released values that carry the ``\"shape\"`` tag "
+          "are also stored in ``release_after_shape_tagged`` and written to "
+          "``onnx_light.release_after_shape_tag`` by :meth:`write_to_metadata`.")
       .def_prop_ro(
           "reuse", [](const onnx_annotations::ComputeContext &self) { return self.Reuse(); },
           "The per-node reuse opportunities as a list (one entry per node, same order as "
@@ -1120,6 +1128,23 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           nb::arg("node_index"),
           "Returns the list of :class:`InPlaceReuse` opportunities discovered for the node at "
           "``node_index``. Raises ``IndexError`` when ``node_index`` is out of bounds.")
+      .def_prop_ro(
+          "release_after_shape_tagged",
+          [](const onnx_annotations::ComputeContext &self) {
+            return self.ReleaseAfterShapeTagged();
+          },
+          "The per-node shape-tagged releasable values as a list (one entry per node, same order "
+          "as ``graph.node``); each entry is a list of value names that carry the ``\"shape\"`` "
+          "tag. Populated only when ``compute_inplace_reuse_graph`` was called with a non-empty "
+          "``value_tags`` argument.")
+      .def(
+          "node_release_after_shape_tagged",
+          [](const onnx_annotations::ComputeContext &self, std::size_t node_index) {
+            return self.NodeReleaseAfterShapeTagged(node_index);
+          },
+          nb::arg("node_index"),
+          "Returns the list of shape-tagged releasable value names for the node at "
+          "``node_index``. Raises ``IndexError`` when ``node_index`` is out of bounds.")
       .def(
           "write_to_metadata",
           [](const onnx_annotations::ComputeContext &self, GraphProto &graph) {
@@ -1127,7 +1152,9 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           },
           nb::arg("graph"),
           "Records the computed opportunities into each node's ``metadata_props`` under the keys "
-          "``onnx_light.inplace_reuse`` and ``onnx_light.release_after``. The ``GraphProto`` is "
+          "``onnx_light.inplace_reuse``, ``onnx_light.release_after``, and (when value tags were "
+          "provided to ``compute_inplace_reuse_graph``) "
+          "``onnx_light.release_after_shape_tag``. The ``GraphProto`` is "
           "mutated in place and must be the same graph passed to "
           "``compute_inplace_reuse_graph``.")
       .def("clear", &onnx_annotations::ComputeContext::Clear, "Empties the stored result.")
@@ -1151,10 +1178,12 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
 
   shape_mod.def(
       "write_inplace_reuse_to_metadata",
-      [](const onnx_shapes::ShapesContext &ctx, GraphProto &graph) {
-        onnx_annotations::WriteInPlaceReuseToMetadata(graph, ctx);
+      [](const onnx_shapes::ShapesContext &ctx, GraphProto &graph,
+         const std::unordered_map<std::string, std::string> &value_tags) {
+        onnx_annotations::WriteInPlaceReuseToMetadata(graph, ctx, value_tags);
       },
       nb::arg("ctx"), nb::arg("graph"),
+      nb::arg("value_tags") = std::unordered_map<std::string, std::string>{},
       "Computes the in-place reuse opportunities for ``graph`` (see "
       ":func:`compute_inplace_reuse`) and records them into each node's ``metadata_props`` "
       "under the keys ``onnx_light.inplace_reuse`` and ``onnx_light.release_after``. "
@@ -1163,7 +1192,10 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       "updated in place if the key already exists) whose value lists the opportunities as "
       "``output_index:input_index:kind`` triplets separated by ``;`` (``kind`` being ``equal`` "
       "or ``greater``). For every node with releasable last-use inputs, one metadata entry is "
-      "added under ``onnx_light.release_after`` as a ``;``-separated name list.");
+      "added under ``onnx_light.release_after`` as a ``;``-separated name list.\n\n"
+      "When ``value_tags`` is provided (a ``{name: tag}`` dict such as the one returned by "
+      ":func:`infer_value_and_node_tags`), released values that carry the ``\"shape\"`` tag are "
+      "also written under ``onnx_light.release_after_shape_tag``.");
 
   auto copy_node_list = [](nb::list nodes) {
     std::vector<NodeProto> copied;

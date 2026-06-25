@@ -293,6 +293,103 @@ class TestInPlaceReuse(ExtTestCase):
             {"onnx_light.inplace_reuse": "0:0:equal", "onnx_light.release_after": "B"},
         )
 
+    def test_shape_tag_release_info_populates_shape_tagged(self):
+        # Shape(X)->S, Reshape(X, S)->Y: S is shape-tagged and released after Reshape.
+        nodes = [oh.make_node("Shape", ["X"], ["S"]), oh.make_node("Reshape", ["X", "S"], ["Y"])]
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 3])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2, 3])
+        model = self._build_model(nodes, [x], [y])
+
+        ctx = si.ShapesContext()
+        si.compute_shape_model(ctx, model)
+
+        value_tags = {"S": "shape"}
+        inplace = si.ComputeContext()
+        inplace.compute_inplace_reuse_graph(model.graph, ctx, value_tags=value_tags)
+
+        self.assertEqual(len(inplace), 2)
+        # S is released after the Reshape node (index 1).
+        self.assertEqual(inplace.release_after_shape_tagged[0], [])
+        self.assertEqual(inplace.release_after_shape_tagged[1], ["S"])
+        # Per-node accessor mirrors the list.
+        self.assertEqual(inplace.node_release_after_shape_tagged(1), ["S"])
+        with self.assertRaises(IndexError):
+            inplace.node_release_after_shape_tagged(2)
+
+    def test_shape_tag_release_info_writes_metadata(self):
+        nodes = [oh.make_node("Shape", ["X"], ["S"]), oh.make_node("Reshape", ["X", "S"], ["Y"])]
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 3])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2, 3])
+        model = self._build_model(nodes, [x], [y])
+
+        ctx = si.ShapesContext()
+        si.compute_shape_model(ctx, model)
+
+        value_tags = {"S": "shape"}
+        inplace = si.ComputeContext()
+        inplace.compute_inplace_reuse_graph(model.graph, ctx, value_tags=value_tags)
+        inplace.write_to_metadata(model.graph)
+
+        # Node 0 (Shape) has no release metadata.
+        self.assertEqual(self._node_metadata(model.graph.node[0]), {})
+        meta1 = self._node_metadata(model.graph.node[1])
+        # kReleaseAfterMetadataKey lists S.
+        self.assertEqual(meta1.get("onnx_light.release_after"), "S")
+        # kReleaseAfterShapeTagMetadataKey also lists S (it is shape-tagged).
+        self.assertEqual(meta1.get("onnx_light.release_after_shape_tag"), "S")
+
+    def test_shape_tag_no_value_tags_leaves_shape_tagged_empty(self):
+        nodes = [oh.make_node("Abs", ["X"], ["A"]), oh.make_node("Abs", ["A"], ["Y"])]
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [3, 4])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [3, 4])
+        model = self._build_model(nodes, [x], [y])
+
+        ctx = si.ShapesContext()
+        si.compute_shape_model(ctx, model)
+
+        inplace = si.ComputeContext()
+        inplace.compute_inplace_reuse_graph(model.graph, ctx)
+        inplace.write_to_metadata(model.graph)
+
+        # Without value_tags all shape-tagged entries are empty.
+        for tagged in inplace.release_after_shape_tagged:
+            self.assertEqual(tagged, [])
+        # kReleaseAfterShapeTagMetadataKey must not appear.
+        for node in model.graph.node:
+            self.assertNotIn("onnx_light.release_after_shape_tag", self._node_metadata(node))
+
+    def test_write_inplace_reuse_to_metadata_with_value_tags(self):
+        nodes = [oh.make_node("Shape", ["X"], ["S"]), oh.make_node("Reshape", ["X", "S"], ["Y"])]
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 3])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2, 3])
+        model = self._build_model(nodes, [x], [y])
+
+        ctx = si.ShapesContext()
+        si.compute_shape_model(ctx, model)
+
+        value_tags = {"S": "shape"}
+        si.write_inplace_reuse_to_metadata(ctx, model.graph, value_tags=value_tags)
+
+        meta1 = self._node_metadata(model.graph.node[1])
+        self.assertEqual(meta1.get("onnx_light.release_after"), "S")
+        self.assertEqual(meta1.get("onnx_light.release_after_shape_tag"), "S")
+
+    def test_shape_tag_clear_resets_shape_tagged(self):
+        nodes = [oh.make_node("Shape", ["X"], ["S"]), oh.make_node("Reshape", ["X", "S"], ["Y"])]
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 3])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2, 3])
+        model = self._build_model(nodes, [x], [y])
+
+        ctx = si.ShapesContext()
+        si.compute_shape_model(ctx, model)
+
+        inplace = si.ComputeContext()
+        inplace.compute_inplace_reuse_graph(model.graph, ctx, value_tags={"S": "shape"})
+        self.assertEqual(len(inplace), 2)
+        inplace.clear()
+        self.assertEqual(len(inplace), 0)
+        self.assertEqual(inplace.release_after_shape_tagged, [])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

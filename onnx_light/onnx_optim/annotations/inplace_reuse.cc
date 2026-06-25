@@ -153,8 +153,9 @@ void CollectReferencedNames(const NodeProto &node, std::vector<std::string> &out
 
 } // namespace
 
-void ComputeContext::ComputeInPlaceReuseGraph(const GraphProto &graph, const ShapesContext &ctx,
-                                              bool allow_input_overwrite) {
+void ComputeContext::ComputeInPlaceReuseGraph(
+    const GraphProto &graph, const ShapesContext &ctx, bool allow_input_overwrite,
+    const std::unordered_map<std::string, std::string> &value_tags) {
   const int num_nodes = graph.node().size();
   std::vector<std::vector<InPlaceReuse>> result(static_cast<std::size_t>(num_nodes));
   std::vector<std::vector<std::string>> release_after(static_cast<std::size_t>(num_nodes));
@@ -312,6 +313,20 @@ void ComputeContext::ComputeInPlaceReuseGraph(const GraphProto &graph, const Sha
 
   reuse_ = std::move(result);
   release_after_ = std::move(release_after);
+
+  // Populate the shape-tagged subset from value_tags (when provided).
+  const std::size_t n = release_after_.size();
+  release_after_shape_tagged_.assign(n, {});
+  if (!value_tags.empty()) {
+    for (std::size_t i = 0; i < n; ++i) {
+      for (const std::string &name : release_after_[i]) {
+        auto it = value_tags.find(name);
+        if (it != value_tags.end() && it->second == "shape") {
+          release_after_shape_tagged_[i].push_back(name);
+        }
+      }
+    }
+  }
 }
 
 void ComputeContext::WriteToMetadata(GraphProto &graph) const {
@@ -323,8 +338,10 @@ void ComputeContext::WriteToMetadata(GraphProto &graph) const {
            "ComputeInPlaceReuseGraph.";
     throw std::invalid_argument(msg.str());
   }
+  const bool has_shape_tag_info = !release_after_shape_tagged_.empty();
   for (std::size_t i = 0; i < reuse_.size(); ++i) {
-    if (reuse_[i].empty() && release_after_[i].empty()) {
+    const bool has_shape_tagged = has_shape_tag_info && !release_after_shape_tagged_[i].empty();
+    if (reuse_[i].empty() && release_after_[i].empty() && !has_shape_tagged) {
       continue;
     }
     NodeProto &node = (*graph.mutable_node())[i];
@@ -350,6 +367,16 @@ void ComputeContext::WriteToMetadata(GraphProto &graph) const {
       }
       node.add_metadata(kReleaseAfterMetadataKey, value.str());
     }
+    if (has_shape_tagged) {
+      std::ostringstream value;
+      for (std::size_t j = 0; j < release_after_shape_tagged_[i].size(); ++j) {
+        if (j != 0) {
+          value << ";";
+        }
+        value << release_after_shape_tagged_[i][j];
+      }
+      node.add_metadata(kReleaseAfterShapeTagMetadataKey, value.str());
+    }
   }
 }
 
@@ -360,9 +387,10 @@ ComputeInPlaceReuse(const GraphProto &graph, const ShapesContext &ctx, bool allo
   return inplace.Reuse();
 }
 
-void WriteInPlaceReuseToMetadata(GraphProto &graph, const ShapesContext &ctx) {
+void WriteInPlaceReuseToMetadata(GraphProto &graph, const ShapesContext &ctx,
+                                 const std::unordered_map<std::string, std::string> &value_tags) {
   ComputeContext inplace;
-  inplace.ComputeInPlaceReuseGraph(graph, ctx);
+  inplace.ComputeInPlaceReuseGraph(graph, ctx, false, value_tags);
   inplace.WriteToMetadata(graph);
 }
 

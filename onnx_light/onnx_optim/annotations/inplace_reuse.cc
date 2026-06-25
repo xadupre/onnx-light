@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_optim/shapes/inplace_reuse.h"
+#include "onnx_optim/annotations/inplace_reuse.h"
 
 #include <algorithm>
 #include <optional>
@@ -14,7 +14,7 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
-namespace shapes {
+namespace annotations {
 
 namespace {
 
@@ -102,9 +102,11 @@ std::optional<int64_t> ByteSize(const OptimTensor &t) {
 // their buffer sizes. ``kEqual`` requires identical descriptors (same element
 // type and shape), so an element-wise overwrite keeps the layout valid even
 // for symbolic shapes. ``kGreater`` reports an input buffer that is strictly
-// larger in bytes than the output, so the output still fits. Any other case
-// (input smaller, or equal byte size but a different shape such as a
-// transpose) yields no opportunity.
+// larger in bytes than the output, so the output still fits. When descriptors
+// differ but byte sizes are equal (for example a transpose), the opportunity
+// is also reported as ``kGreater``: this keeps ``kEqual`` reserved for true
+// same-storage matches while still allowing shape-changing rewrites that fit.
+// Any other case (input smaller) yields no opportunity.
 std::optional<InPlaceReuseKind> ClassifyReuse(const OptimTensor &out, const OptimTensor &in) {
   if (SameStorage(out, in)) {
     return InPlaceReuseKind::kEqual;
@@ -114,7 +116,7 @@ std::optional<InPlaceReuseKind> ClassifyReuse(const OptimTensor &out, const Opti
   if (!out_bytes.has_value() || !in_bytes.has_value()) {
     return std::nullopt;
   }
-  if (*in_bytes > *out_bytes) {
+  if (*in_bytes >= *out_bytes) {
     return InPlaceReuseKind::kGreater;
   }
   return std::nullopt;
@@ -366,6 +368,6 @@ void WriteInPlaceReuseToMetadata(GraphProto &graph, const ShapesContext &ctx) {
   inplace.WriteToMetadata(graph);
 }
 
-} // namespace shapes
+} // namespace annotations
 } // namespace onnx_optim
 } // namespace ONNX_LIGHT_NAMESPACE

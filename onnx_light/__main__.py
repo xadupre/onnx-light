@@ -111,14 +111,12 @@ run
 from __future__ import annotations
 
 import argparse
-import contextlib
 import json
 import os
 import warnings
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .onnx_lib import ModelProto as _ModelProto
     from .onnx_proto._helper import TypeProto as _TypeProto
 
 # Action string used in RuntimeEvent records for node-dispatch events.
@@ -132,44 +130,6 @@ _EVENT_ACTION_RUN_NODE = "run_node"
 _FILLSHAPE_TINY_TENSOR_THRESHOLD = 128
 
 
-def _load_tiny_external_tensors(model: _ModelProto, model_dir: str) -> None:
-    """Loads small external-data tensors as inline ``raw_data`` in place.
-
-    Walks ``model.graph.initializer`` and, for every tensor stored in an
-    external file whose declared byte length is below
-    :data:`_FILLSHAPE_TINY_TENSOR_THRESHOLD`, reads the bytes from disk and
-    converts the tensor to inline storage (clears ``data_location`` and
-    ``external_data``).  Large external tensors remain untouched.
-
-    Shape inference needs the *values* of small constant tensors even when the
-    bulk weight data is not loaded (e.g. the ``shape`` input of a Reshape node
-    or the ``indices`` input of a Gather node stored externally because the
-    model was saved with ``size_threshold=0``).
-    """
-    from .onnx_lib.external_data_helper import uses_external_data
-
-    for init in model.graph.initializer:
-        if not uses_external_data(init):
-            continue
-        # Read the declared byte length from the external_data metadata.
-        # Both "length" and "size" are accepted by the C++ loader.
-        length = -1
-        for entry in init.external_data:
-            if entry.key in ("length", "size"):
-                with contextlib.suppress(ValueError):
-                    length = int(entry.value)
-                break
-        # A negative length means the tensor spans to end-of-file (i.e. its
-        # size is not declared in the metadata).  Skip it – it is likely large.
-        if length < 0 or length >= _FILLSHAPE_TINY_TENSOR_THRESHOLD:
-            continue
-        # Read the tensor's bytes from the external file into raw_data, then
-        # convert to inline storage so shape inference can access the values.
-        init.load_external_data(model_dir)
-        init.ClearField("data_location")
-        init.ClearField("external_data")
-
-
 def _set_metadata_property(obj: Any, key: str, value: str) -> None:
     """Sets or replaces one ``metadata_props`` entry."""
     for entry in obj.metadata_props:
@@ -179,6 +139,23 @@ def _set_metadata_property(obj: Any, key: str, value: str) -> None:
     entry = obj.metadata_props.add()
     entry.key = key
     entry.value = value
+
+
+def _print_shape_inference_events(events: list) -> None:
+    """Prints a compact summary of shape-inference events."""
+    print(f"[fillshape] shape inference events: {len(events)}")
+
+
+def _print_shape_inference_events_detailed(events: list) -> None:
+    """Prints detailed shape-inference events."""
+    for ev in events:
+        d = ev.as_dict()
+        op = f"{d['op_domain']}::{d['op_type']}" if d["op_type"] else "-"
+        print(
+            f"[fillshape] node={d['node_index']:<3d} "
+            f"action={d['action']:<12s} op={op:<20s} "
+            f"name={d['name'] or '-':<16s} shape={d['shape']}"
+        )
 
 
 def _write_inferred_value_and_node_tags_to_metadata(
@@ -241,21 +218,22 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model file not found: {model_path!r}")
 
-    # Load without fetching external tensor bytes.  Large weight tensors are
-    # not required for shape inference and would waste memory.  Tiny tensors
-    # (below _FILLSHAPE_TINY_TENSOR_THRESHOLD) are loaded separately below
-    # because shape inference may need their values (e.g. Reshape's shape
-    # input, Gather's indices, Slice's starts/ends/axes).
     if verbose:
         print(f"[fillshape] load {model_path!r}")
-    model = load(model_path, load_external_data=False)
+
+    # Load without fetching large external tensor bytes. Shape inference only
+    # needs the values of small shape-driving tensors (e.g. Reshape's shape
+    # input), so parsing inlines only tiny external tensors and leaves larger
+    # weights as external references.
+    model = load(
+        model_path,
+        load_external_data=False,
+        tiny_external_data_threshold=_FILLSHAPE_TINY_TENSOR_THRESHOLD,
+    )
 
     # Detect whether the model references weights stored in a separate file
     # (must happen before the tiny-tensor step, which inlines small tensors).
     has_external_data = any(uses_external_data(init) for init in model.graph.initializer)
-
-    if has_external_data:
-        _load_tiny_external_tensors(model, os.path.dirname(os.path.abspath(model_path)))
 
     if inplace_info or verbose > 0:
         # Retains the ShapesContext so in-place reuse analysis and verbose
@@ -268,16 +246,9 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
         apply_inferred_shapes_to_model(ctx, model)
         if verbose:
             events = ctx.events()
-            print(f"[fillshape] shape inference events: {len(events)}")
+            _print_shape_inference_events(events)
             if verbose >= 2:
-                for ev in events:
-                    d = ev.as_dict()
-                    op = f"{d['op_domain']}::{d['op_type']}" if d["op_type"] else "-"
-                    print(
-                        f"[fillshape] node={d['node_index']:<3d} "
-                        f"action={d['action']:<12s} op={op:<20s} "
-                        f"name={d['name'] or '-':<16s} shape={d['shape']}"
-                    )
+                _print_shape_inference_events_detailed(events)
         if inplace_info:
             if verbose:
                 print("[fillshape] compute inplace/release info")
@@ -456,94 +427,6 @@ def _resolve_input_shape(
     return shape
 
 
-def _make_random_input(elem_type: int, shape: list[int], seed: int) -> object:
-    """Creates a random NumPy array for an ONNX tensor input.
-
-    Uses the same deterministic pseudo-random generators as the onnx-light
-    runtime (``onnx_light.onnx_lib.backend.random``).
-
-    Args:
-        elem_type: ``TensorProto`` data-type integer (e.g.
-            ``TensorProto.FLOAT``).
-        shape: Concrete non-negative integer dimensions.
-        seed: Integer seed forwarded to the random generator.
-
-    Returns:
-        A ``numpy.ndarray`` of the appropriate dtype and shape.
-
-    Raises:
-        NotImplementedError: For unsupported element types (e.g. STRING).
-    """
-    import numpy as np
-
-    from .onnx_lib.backend.random import rand, randint
-    from .onnx_proto._helper import tensor_dtype_to_np_dtype
-
-    try:
-        from .onnx_py._onnxpyprotoop import TensorProto  # type: ignore[attr-defined]
-    except ImportError:
-        from .onnx import TensorProto  # type: ignore[assignment]
-
-    _FLOAT_TYPES = frozenset(
-        {
-            int(TensorProto.FLOAT),
-            int(TensorProto.DOUBLE),
-            int(TensorProto.FLOAT16),
-            int(TensorProto.BFLOAT16),
-            int(TensorProto.FLOAT8E4M3FN),
-            int(TensorProto.FLOAT8E4M3FNUZ),
-            int(TensorProto.FLOAT8E5M2),
-            int(TensorProto.FLOAT8E5M2FNUZ),
-            int(TensorProto.FLOAT8E8M0),
-            int(TensorProto.FLOAT4E2M1),
-            int(TensorProto.COMPLEX64),
-            int(TensorProto.COMPLEX128),
-        }
-    )
-    _INT_TYPES = frozenset(
-        {
-            int(TensorProto.INT8),
-            int(TensorProto.INT16),
-            int(TensorProto.INT32),
-            int(TensorProto.INT64),
-            int(TensorProto.UINT8),
-            int(TensorProto.UINT16),
-            int(TensorProto.UINT32),
-            int(TensorProto.UINT64),
-            int(TensorProto.INT4),
-            int(TensorProto.UINT4),
-            int(TensorProto.INT2),
-            int(TensorProto.UINT2),
-        }
-    )
-
-    np_dtype = tensor_dtype_to_np_dtype(elem_type)
-
-    if elem_type == int(TensorProto.BOOL):
-        values = randint(0, 2, size=shape, seed=seed, dtype=np.int32)
-        return values.astype(bool)
-
-    if elem_type in _FLOAT_TYPES:
-        if elem_type in (int(TensorProto.COMPLEX64), int(TensorProto.COMPLEX128)):
-            real = rand(*shape, seed=seed)
-            imag = rand(*shape, seed=seed + 1)
-            return (real + 1j * imag).astype(np_dtype)
-        values = rand(*shape, seed=seed)
-        return values.astype(np_dtype)
-
-    if elem_type in _INT_TYPES:
-        return randint(0, 10, size=shape, seed=seed, dtype=np_dtype)
-
-    if elem_type == int(TensorProto.STRING):
-        raise NotImplementedError(
-            "STRING inputs are not supported by the run subcommand's random input generator."
-        )
-
-    raise NotImplementedError(
-        f"Unsupported element type {elem_type} for random input generation."
-    )
-
-
 def _dump_tensors_as_model(
     tensors: dict[str, object], dump_path: str, *, ir_version: int = 8
 ) -> None:
@@ -583,6 +466,7 @@ def _cmd_run(args: argparse.Namespace) -> None:
 
     from .onnx import load
     from .onnx.reference import ReferenceEvaluator
+    from .onnx.tools import make_random_input
 
     model_path: str = args.model
     dim_overrides: dict[str, int] = {}
@@ -631,7 +515,7 @@ def _cmd_run(args: argparse.Namespace) -> None:
             continue
         elem_type = int(vi.type.tensor_type.elem_type)
         shape = _resolve_input_shape(vi.type, dim_overrides, vi.name)
-        tensor = _make_random_input(elem_type, shape, seed)
+        tensor = make_random_input(elem_type, shape, seed)
         feed[vi.name] = tensor
         if verbose >= 1 and isinstance(tensor, np.ndarray):
             print(f"[run]   input {vi.name!r}: shape={list(tensor.shape)}, dtype={tensor.dtype}")

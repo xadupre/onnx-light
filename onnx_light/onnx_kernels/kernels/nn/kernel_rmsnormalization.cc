@@ -4,9 +4,12 @@
 
 #include "onnx_kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_kernels/kernels/_helpers/float16_promote.h"
+
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -47,6 +50,16 @@ void CheckScaleBroadcast(const std::vector<int64_t> &x_shape, int64_t axis,
 
 Tensor RMSNormalization::operator()(const Tensor &x, const Tensor &scale, int64_t axis,
                                     float epsilon) const {
+  // FLOAT16/BFLOAT16 are computed in float32 and demoted back, mirroring the
+  // half-precision dispatch used by kernel::Conv and kernel::MatMul. This lets
+  // half-precision language models (e.g. the tiny Llama-style decoder) run
+  // their RMSNorm layers through this kernel.
+  if (IsHalfPrecision(x.data_type)) {
+    const Tensor x_f = PromoteToFloat32(x);
+    const Tensor scale_f = PromoteToFloat32(scale);
+    Tensor y = (*this)(x_f, scale_f, axis, epsilon);
+    return DemoteFromFloat32(y, x.data_type);
+  }
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::RMSNormalization: X must be FLOAT.");
   Tensor out("", static_cast<int32_t>(DataType::FLOAT), x.shape,
@@ -57,6 +70,17 @@ Tensor RMSNormalization::operator()(const Tensor &x, const Tensor &scale, int64_
 
 void RMSNormalization::operator()(const Tensor &x, const Tensor &scale, Tensor &output,
                                   int64_t axis, float epsilon) const {
+  if (IsHalfPrecision(x.data_type)) {
+    EXT_ENFORCE_INVALID(output.data_type == x.data_type,
+                        "kernel::RMSNormalization preallocated output must match the input dtype.");
+    Tensor y = (*this)(x, scale, axis, epsilon);
+    EXT_ENFORCE_INVALID(output.shape == y.shape,
+                        "kernel::RMSNormalization: output must have the same shape as X.");
+    EXT_ENFORCE_INVALID(output.data.size() == y.data.size(),
+                        "kernel::RMSNormalization: output buffer has unexpected size.");
+    std::memcpy(output.data.data(), y.data.data(), y.data.size());
+    return;
+  }
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::RMSNormalization: X must be FLOAT.");
   EXT_ENFORCE_INVALID(scale.data_type == static_cast<int32_t>(DataType::FLOAT),

@@ -154,6 +154,23 @@ class TestSimplifyExpressions(ExtTestCase):
         self.assertEqual("sequence//5-2", simplify_expression("(sequence-10)//5"))
         self.assertEqual("sequence//5+2", simplify_expression("(sequence+10)//5"))
 
+    def test_simplify_nested_floordiv(self):
+        # (x // a) // b  →  x // (a * b)
+        self.assertEqual("x//10", simplify_expression("x//5//2"))
+        self.assertEqual("x//6", simplify_expression("x//2//3"))
+        self.assertEqual("x//16", simplify_expression("x//4//4"))
+        # Verify numerically for positive and negative values.
+        self.assertEqual(
+            evaluate_expression("x//10", {"x": 37}), evaluate_expression("x//5//2", {"x": 37})
+        )
+        self.assertEqual(
+            evaluate_expression("x//10", {"x": -37}), evaluate_expression("x//5//2", {"x": -37})
+        )
+        # Should not simplify when a divisor is not a constant.
+        # // is left-associative so (x//a)//2 prints without redundant parens.
+        self.assertEqual("x//a//2", simplify_expression("(x//a)//2"))
+        self.assertEqual("x//2//b", simplify_expression("(x//2)//b"))
+
     def test_simplify_expression_negation(self):
         self.assertEqual("length", simplify_expression("-1+1+length"))
         self.assertEqual("x-1", simplify_expression("-1+x"))

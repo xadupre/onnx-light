@@ -17,6 +17,7 @@ onnx_light.onnx
     printer
     reference
     shape_inference
+    tools
     version_converter
 
 .. automodule:: onnx_light.onnx

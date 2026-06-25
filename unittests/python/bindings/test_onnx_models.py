@@ -148,6 +148,12 @@ class TestOnnxLightHelper(ExtTestCase):
         opts._touch_raw_data_pages = True
         self.assertTrue(opts._touch_raw_data_pages)
 
+    def test_parse_options_tiny_external_data_threshold_flag(self):
+        opts = onnxl.ParseOptions()
+        self.assertEqual(opts.tiny_external_data_threshold, -1)
+        opts.tiny_external_data_threshold = 128
+        self.assertEqual(opts.tiny_external_data_threshold, 128)
+
     def test_parse_options_file_load_mode(self):
         opts = onnxl.ParseOptions()
         # Default is AUTO.
@@ -977,6 +983,37 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertEqual(len(model.calls), 1)
         args, kwargs = model.calls[0]
         self.assertEqual(args, ("model.onnx",))
+        self.assertEqual(kwargs, {})
+
+    def test_loading_with_tiny_external_threshold_uses_parse_options(self):
+        class FakeParseOptions:
+            def __init__(self):
+                self.skip_raw_data = False
+                self.raw_data_threshold = -1
+                self.num_threads = 1
+                self.min_parallel_block_size = -1
+                self.tiny_external_data_threshold = -1
+
+        class FakeModelProto:
+            def __init__(self):
+                self.calls = []
+
+            def ParseFromFile(self, *args, **kwargs):
+                self.calls.append((args, kwargs))
+
+            def ParseFromString(self, *args, **kwargs):
+                self.calls.append((args, kwargs))
+
+        with (
+            patch.object(io_helper, "ParseOptions", FakeParseOptions),
+            patch.object(io_helper, "ModelProto", FakeModelProto),
+        ):
+            model = io_helper.load("model.onnx", tiny_external_data_threshold=128)
+
+        self.assertEqual(len(model.calls), 1)
+        args, kwargs = model.calls[0]
+        self.assertEqual(args[0], "model.onnx")
+        self.assertEqual(args[1].tiny_external_data_threshold, 128)
         self.assertEqual(kwargs, {})
 
     def test_saving_without_external_data_keeps_non_parallel_default(self):

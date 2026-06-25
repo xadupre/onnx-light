@@ -356,6 +356,14 @@ struct ParseOptions : TensorBufferOptions {
    * each non-empty raw_data buffer (plus the last byte). This forces lazy page faults
    * (for example mmap-backed no-copy buffers) to occur within the parse timing window. */
   bool _touch_raw_data_pages = false;
+  /** Loads tiny external-data tensors inline during parsing when reading a model
+   *  file without an explicit external weights stream.
+   *  - ``< 0`` (default): disabled.
+   *  - ``>= 0``: if a tensor is marked ``EXTERNAL`` and its external metadata
+   *    declares ``length``/``size`` below this threshold (in bytes), parsing
+   *    loads it from disk into ``raw_data`` and clears ``data_location`` and
+   *    ``external_data``. */
+  int64_t tiny_external_data_threshold = -1;
   /** Selects the file-backed BinaryStream implementation used when parsing a model
    *  from a file path (e.g. ``ModelProto::ParseFromFile``).  See ``FileLoadMode``
    *  for the semantics of each value.  Ignored when parsing from bytes/streams. */

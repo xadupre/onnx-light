@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_optim/shapes/value_tags.h"
+#include "onnx_optim/annotations/value_tags.h"
 
 #include <algorithm>
 #include <string_view>
@@ -10,7 +10,7 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
-namespace shapes {
+namespace annotations {
 
 namespace {
 
@@ -327,6 +327,6 @@ void WriteValueAndNodeTagsToMetadata(ModelProto &model) {
   }
 }
 
-} // namespace shapes
+} // namespace annotations
 } // namespace onnx_optim
 } // namespace ONNX_LIGHT_NAMESPACE

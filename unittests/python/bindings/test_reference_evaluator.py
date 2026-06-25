@@ -23,6 +23,7 @@ import numpy as np
 
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 import onnx_light.onnx as onnxl
+from onnx_light.onnx import numpy_helper
 from onnx_light.onnx_lib import parser
 
 # The reference runtime is only available in the full build; skip this module on
@@ -886,6 +887,98 @@ sess.run(
 
     def test_resize_downsample_scales_cubic_align_corners(self):
         self._check_resize_backend_case("test_resize_downsample_scales_cubic_align_corners")
+
+    @staticmethod
+    def _tiny_llm_inputs(bfloat16=None):
+        # Builds a deterministic set of valid inputs for the ``tiny_llm``
+        # decoder. The shape-inference test case ships no ``data_sets``, so
+        # the inputs are generated here. ``input_ids`` indexes the 32-row
+        # embedding table and the attention mask covers ``seq + past`` keys.
+        rng = np.random.RandomState(0)
+        batch, seq, past = 1, 3, 2
+        float_dtype = np.float32 if bfloat16 is None else bfloat16
+        return {
+            "input_ids": rng.randint(0, 32, (batch, seq)).astype(np.int64),
+            "attention_mask": np.ones((batch, seq + past), dtype=np.int64),
+            "past_key": rng.rand(batch, 4, past, 4).astype(float_dtype),
+            "past_value": rng.rand(batch, 4, past, 4).astype(float_dtype),
+        }
+
+    @staticmethod
+    def _model_to_bfloat16(model, bfloat16):
+        # Rewrites every FLOAT tensor in ``model`` to BFLOAT16: initializers,
+        # ``Constant`` value tensors, ``Cast`` ``to`` attributes and the
+        # element types of graph inputs/outputs/value_info. The model is
+        # round-tripped through serialization first because the bound
+        # ``ModelProto`` cannot be deep-copied.
+        FLOAT = int(onnxl.TensorProto.FLOAT)
+        BFLOAT16 = int(onnxl.TensorProto.BFLOAT16)
+        converted = onnxl.ModelProto()
+        converted.ParseFromString(model.SerializeToString())
+        graph = converted.graph
+        new_initializers = []
+        for init in graph.initializer:
+            if init.data_type == FLOAT:
+                array = numpy_helper.to_array(init).astype(bfloat16)
+                new_initializers.append(numpy_helper.from_array(array, init.name))
+            else:
+                new_initializers.append(init)
+        del graph.initializer[:]
+        graph.initializer.extend(new_initializers)
+        for value_info in list(graph.input) + list(graph.output) + list(graph.value_info):
+            tensor_type = value_info.type.tensor_type
+            if tensor_type.elem_type == FLOAT:
+                tensor_type.elem_type = BFLOAT16
+        for node in graph.node:
+            if node.op_type == "Cast":
+                for attr in node.attribute:
+                    if attr.name == "to" and attr.i == FLOAT:
+                        attr.i = BFLOAT16
+            elif node.op_type == "Constant":
+                for attr in node.attribute:
+                    if attr.name == "value" and attr.t.data_type == FLOAT:
+                        array = numpy_helper.to_array(attr.t).astype(bfloat16)
+                        attr.t.CopyFrom(numpy_helper.from_array(array))
+        return converted
+
+    def test_tiny_llm_float32(self):
+        # Runs the ``tiny_llm`` Llama-style decoder end to end in float32 and
+        # locks in the output ranks/dtypes (logits and the updated KV cache).
+        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+
+        tc = collect_test_case().get("test_cc_shape_inference_tiny_llm")
+        self.assertIsNotNone(tc)
+        sess = ReferenceEvaluator(tc.model)
+        logits, present_key, present_value = sess.run(None, self._tiny_llm_inputs())
+        self.assertEqual(logits.dtype, np.float32)
+        self.assertEqual(logits.shape, (1, 3, 32))
+        self.assertEqual(present_key.shape, (1, 4, 5, 4))
+        self.assertEqual(present_value.shape, (1, 4, 5, 4))
+
+    def test_tiny_llm_bfloat16(self):
+        # Companion to ``test_tiny_llm_float32``: the same decoder runs in
+        # BFLOAT16 (exercising the half-precision promote/demote paths of
+        # RMSNormalization, Attention and the elementwise kernels) and the
+        # de-quantized outputs stay close to the float32 reference.
+        from onnx_light.onnx_lib.backend.test.case import collect_test_case
+
+        bfloat16 = import_or_skip("ml_dtypes", "bfloat16")
+        tc = collect_test_case().get("test_cc_shape_inference_tiny_llm")
+        self.assertIsNotNone(tc)
+
+        ref = ReferenceEvaluator(tc.model).run(None, self._tiny_llm_inputs())
+
+        model_bf16 = self._model_to_bfloat16(tc.model, bfloat16)
+        sess = ReferenceEvaluator(model_bf16)
+        got = sess.run(None, self._tiny_llm_inputs(bfloat16))
+        self.assertEqual(len(got), 3)
+        for tensor in got:
+            self.assertEqual(tensor.dtype, bfloat16)
+        self.assertEqual(got[0].shape, (1, 3, 32))
+        self.assertEqual(got[1].shape, (1, 4, 5, 4))
+        self.assertEqual(got[2].shape, (1, 4, 5, 4))
+        for expected, actual in zip(ref, got):
+            np.testing.assert_allclose(expected, actual.astype(np.float32), rtol=0.05, atol=0.05)
 
     def test_resize_downsample_scales_linear_antialias(self):
         self._check_resize_backend_case("test_resize_downsample_scales_linear_antialias")

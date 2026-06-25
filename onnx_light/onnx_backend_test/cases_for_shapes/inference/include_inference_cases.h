@@ -254,6 +254,18 @@ void RegisterTwoTopKSameKShapeInferenceCases(std::vector<TestCase> &registry);
 /// TopK nodes with independent symbolic K axes.
 void RegisterTwoTopKDifferentKShapeInferenceCases(std::vector<TestCase> &registry);
 
+/// Registers a ``Shape → Gather → Unsqueeze → Concat → Reshape`` case on
+/// inputs ``y: float[M, D1]`` and ``z: float[K, D2]`` whose dim-1 symbolic
+/// values are extracted via ``Gather``, wrapped into 1-D tensors via
+/// ``Unsqueeze``, concatenated into a 2-element ``new_shape`` tensor, and
+/// consumed by ``Reshape`` applied to ``x: float[D1, D2]``. Directly
+/// exercises the VAS-forwarding fix in
+/// :cpp:func:`onnx_optim::shapes::tensor::ComputeShapeUnsqueeze`: without
+/// VAS propagation through ``Unsqueeze``, ``Concat`` never sees the
+/// per-element symbolic values and ``Reshape`` falls back to inventing
+/// undefined placeholder names instead of the real dims ``D1``/``D2``.
+void RegisterUnsqueezeVasReshapeShapeInferenceCases(std::vector<TestCase> &registry);
+
 /// Collects all shape-inference oriented backend test cases by invoking
 /// every ``Register*ShapeInferenceCases`` helper declared in this header.
 void CollectShapeInferenceTestCases(std::vector<TestCase> &registry,

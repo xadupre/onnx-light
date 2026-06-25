@@ -334,7 +334,7 @@ class TestMainRun(ExtTestCase):
 
 
 class TestMakeRandomInput(ExtTestCase):
-    """Unit tests for ``_make_random_input``."""
+    """Unit tests for ``onnx_light.onnx.tools.make_random_input``."""
 
     @classmethod
     def setUpClass(cls):
@@ -343,18 +343,18 @@ class TestMakeRandomInput(ExtTestCase):
 
     def test_float_input(self):
         """Float input is in [0, 1) range."""
-        from onnx_light.__main__ import _make_random_input
+        from onnx_light.onnx.tools import make_random_input
 
-        arr = _make_random_input(int(onnxl.TensorProto.FLOAT), [4, 4], seed=0)
+        arr = make_random_input(int(onnxl.TensorProto.FLOAT), [4, 4], seed=0)
         self.assertIsInstance(arr, np.ndarray)
         self.assertEqual(arr.dtype, np.float32)
         self.assertEqual(arr.shape, (4, 4))
 
     def test_int64_input(self):
         """INT64 input has correct dtype and values in [0, 10)."""
-        from onnx_light.__main__ import _make_random_input
+        from onnx_light.onnx.tools import make_random_input
 
-        arr = _make_random_input(int(onnxl.TensorProto.INT64), [3], seed=0)
+        arr = make_random_input(int(onnxl.TensorProto.INT64), [3], seed=0)
         self.assertIsInstance(arr, np.ndarray)
         self.assertEqual(arr.dtype, np.int64)
         self.assertTrue(np.all(arr >= 0))
@@ -362,26 +362,44 @@ class TestMakeRandomInput(ExtTestCase):
 
     def test_bool_input(self):
         """BOOL input has bool dtype."""
-        from onnx_light.__main__ import _make_random_input
+        from onnx_light.onnx.tools import make_random_input
 
-        arr = _make_random_input(int(onnxl.TensorProto.BOOL), [5], seed=0)
+        arr = make_random_input(int(onnxl.TensorProto.BOOL), [5], seed=0)
         self.assertIsInstance(arr, np.ndarray)
         self.assertEqual(arr.dtype, np.bool_)
 
     def test_double_input(self):
         """DOUBLE input has float64 dtype."""
-        from onnx_light.__main__ import _make_random_input
+        from onnx_light.onnx.tools import make_random_input
 
-        arr = _make_random_input(int(onnxl.TensorProto.DOUBLE), [2, 3], seed=0)
+        arr = make_random_input(int(onnxl.TensorProto.DOUBLE), [2, 3], seed=0)
         self.assertIsInstance(arr, np.ndarray)
         self.assertEqual(arr.dtype, np.float64)
 
+    def test_bfloat16_input(self):
+        """BFLOAT16 input keeps its custom dtype."""
+        from onnx_light.onnx.tools import make_random_input
+
+        arr = make_random_input(int(onnxl.TensorProto.BFLOAT16), [2], seed=0)
+        self.assertIsInstance(arr, np.ndarray)
+        self.assertEqual(arr.dtype, np.dtype("bfloat16"))
+
+    def test_uint4_input(self):
+        """UINT4 input keeps its custom dtype and the helper's [0, 10) value range."""
+        from onnx_light.onnx.tools import make_random_input
+
+        arr = make_random_input(int(onnxl.TensorProto.UINT4), [3], seed=0)
+        self.assertIsInstance(arr, np.ndarray)
+        self.assertEqual(arr.dtype, np.dtype("uint4"))
+        self.assertTrue(np.all(arr >= 0))
+        self.assertTrue(np.all(arr < 10))
+
     def test_string_input_raises(self):
         """STRING inputs raise NotImplementedError."""
-        from onnx_light.__main__ import _make_random_input
+        from onnx_light.onnx.tools import make_random_input
 
         with self.assertRaises(NotImplementedError):
-            _make_random_input(int(onnxl.TensorProto.STRING), [3], seed=0)
+            make_random_input(int(onnxl.TensorProto.STRING), [3], seed=0)
 
 
 class TestResolveInputShape(ExtTestCase):

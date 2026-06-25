@@ -1053,6 +1053,11 @@ void AddOnnxPyProto(nb::module_ &m) {
               "If true, this option touches one byte per page in every non-empty tensor "
               "raw_data buffer (plus the last byte) after parsing, forcing lazy page faults "
               "to occur during parse timing.")
+      .def_rw("tiny_external_data_threshold", &ParseOptions::tiny_external_data_threshold,
+              "Loads tiny external-data tensors inline during parsing when reading from a model "
+              "file path without an explicit external_data_file stream. Negative disables it "
+              "(default); non-negative values load tensors whose declared external-data "
+              "``length``/``size`` is strictly below the threshold (in bytes).")
       .def_rw("file_load_mode", &ParseOptions::file_load_mode,
               "Selects the file-backed stream used when parsing a model from a path: "
               "FileLoadMode.AUTO (default) picks mmap unless no_copy=True is set on a "

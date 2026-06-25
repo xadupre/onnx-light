@@ -142,6 +142,16 @@ void RegisterScanRunningSumShapeInferenceCases(std::vector<TestCase> &registry);
 /// downstream ``Expand`` can recover the precise symbolic output shape.
 void RegisterValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry);
 
+/// Registers a ``Shape → Gather → Expand → Abs`` case whose input ``x``
+/// carries symbolic dims ``[N, D]``. ``Shape(x)`` lifts the symbolic dims into
+/// an INT64 tensor with a *value-as-shape* annotation ``[N, D]``. ``Gather``
+/// with a constant index ``[0]`` then slices the annotation to produce an
+/// INT64 ``[1]`` tensor with VAS ``[N]``. ``Expand`` consumes it as the
+/// target shape so shape inference must recover the precise output
+/// shape ``float[N]``. Directly exercises the VAS-propagation logic in
+/// :cpp:func:`onnx_optim::shapes::tensor::ComputeShapeGather`.
+void RegisterGatherValueAsShapeShapeInferenceCases(std::vector<TestCase> &registry);
+
 /// Registers a single-node ``If`` model whose ``then_branch`` and
 /// ``else_branch`` each produce **two** outputs of the same rank but with
 /// *different* symbolic shapes (the leading axis differs, every trailing

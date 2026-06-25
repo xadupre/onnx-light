@@ -1,6 +1,7 @@
 #include "onnx_light_helpers.h"
 
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -84,7 +85,8 @@ bool TestLoggerWritesToStdout() {
 }
 
 bool TestLoggerWritesToFile() {
-  const std::string path = "/tmp/test_logger_output.txt";
+  const std::string path =
+      (std::filesystem::temp_directory_path() / "test_logger_output.txt").string();
   std::remove(path.c_str());
 
   {
@@ -114,7 +116,8 @@ bool TestLoggerDoesNothingWhenDisabled() {
 }
 
 bool TestLoggerSourceLocationInOutput() {
-  const std::string path = "/tmp/test_logger_srcloc.txt";
+  const std::string path =
+      (std::filesystem::temp_directory_path() / "test_logger_srcloc.txt").string();
   std::remove(path.c_str());
 
   {

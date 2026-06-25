@@ -112,6 +112,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import json
 import os
 import warnings
 from typing import TYPE_CHECKING, Any
@@ -169,6 +170,52 @@ def _load_tiny_external_tensors(model: _ModelProto, model_dir: str) -> None:
         init.ClearField("external_data")
 
 
+def _set_metadata_property(obj: Any, key: str, value: str) -> None:
+    """Sets or replaces one ``metadata_props`` entry."""
+    for entry in obj.metadata_props:
+        if entry.key == key:
+            entry.value = value
+            return
+    entry = obj.metadata_props.add()
+    entry.key = key
+    entry.value = value
+
+
+def _write_inferred_value_and_node_tags_to_metadata(
+    graph: Any, value_tags: dict[str, str], node_tags: list[str]
+) -> None:
+    """Writes precomputed value/node tags into graph metadata."""
+    from .onnx_optim.shape_inference import (
+        NODE_TAG_METADATA_KEY,
+        VALUE_TAG_METADATA_KEY,
+        VALUE_TAGS_METADATA_KEY,
+        write_value_and_node_tags_to_metadata,
+    )
+
+    for index, tag in enumerate(node_tags[: len(graph.node)]):
+        if tag:
+            _set_metadata_property(graph.node[index], NODE_TAG_METADATA_KEY, tag)
+
+    _set_metadata_property(
+        graph,
+        VALUE_TAGS_METADATA_KEY,
+        json.dumps(value_tags, sort_keys=True, separators=(",", ":")),
+    )
+
+    for collection in ("input", "value_info", "output", "initializer"):
+        for value in getattr(graph, collection, ()):
+            tag = value_tags.get(value.name)
+            if tag:
+                _set_metadata_property(value, VALUE_TAG_METADATA_KEY, tag)
+
+    for node in graph.node:
+        for attr in node.attribute:
+            if attr.has_g():
+                write_value_and_node_tags_to_metadata(attr.g)
+            for subgraph in attr.graphs:
+                write_value_and_node_tags_to_metadata(subgraph)
+
+
 def _cmd_fillshape(args: argparse.Namespace) -> None:
     """Implements the ``fillshape`` subcommand."""
     from .onnx import load, save
@@ -180,7 +227,6 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
         compute_shape_model,
         infer_shapes_model,
         infer_value_and_node_tags,
-        write_value_and_node_tags_to_metadata,
     )
     from .tools.pretty_print import pretty_onnx
 
@@ -257,7 +303,7 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
             )
         if verbose:
             print("[fillshape] write shape tags in the model")
-        write_value_and_node_tags_to_metadata(model.graph)
+        _write_inferred_value_and_node_tags_to_metadata(model.graph, value_tags, node_tags)
 
     if show:
         print(

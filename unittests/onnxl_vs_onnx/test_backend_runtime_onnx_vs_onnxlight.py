@@ -32,7 +32,9 @@ from __future__ import annotations
 
 import glob
 import os
+import tempfile
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 import onnx
@@ -326,9 +328,6 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
         self.assertFalse(_should_exclude_runtime_test_name("attention_4d_fp16"))
 
     def test_load_known_discrepancies_excludes_expanded_names(self):
-        import tempfile
-        from unittest.mock import patch
-
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as f:
             f.write("test_attention_4d_fp16_expanded\n")
             f.write("test_training_dropout\n")

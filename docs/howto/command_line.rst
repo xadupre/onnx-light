@@ -351,4 +351,6 @@ See also
 
 * :class:`~onnx_light.onnx.reference.ReferenceEvaluator` — the Python
   evaluator used under the hood.
+* :func:`~onnx_light.onnx.tools.make_random_input` — the public helper used
+  to synthesize each input tensor.
 * :ref:`l-how-to` — other onnx-light how-to recipes.

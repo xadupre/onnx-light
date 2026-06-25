@@ -108,6 +108,7 @@ run
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import warnings
 from typing import TYPE_CHECKING, Any
@@ -117,6 +118,50 @@ if TYPE_CHECKING:
 
 # Action string used in RuntimeEvent records for node-dispatch events.
 _EVENT_ACTION_RUN_NODE = "run_node"
+
+# Maximum byte size of an external-data tensor that is loaded inline for shape
+# inference.  Tensors at or above this threshold remain as external-data
+# references and are not read from disk.  Tensors below the threshold are
+# loaded because shape inference may need their values (e.g. the ``shape``
+# input of a Reshape node).
+_FILLSHAPE_TINY_TENSOR_THRESHOLD = 128
+
+
+def _load_tiny_external_tensors(model: Any, model_dir: str) -> None:
+    """Loads small external-data tensors as inline ``raw_data`` in place.
+
+    Walks ``model.graph.initializer`` and, for every tensor stored in an
+    external file whose declared byte length is below
+    :data:`_FILLSHAPE_TINY_TENSOR_THRESHOLD`, reads the bytes from disk and
+    converts the tensor to inline storage (clears ``data_location`` and
+    ``external_data``).  Large external tensors remain untouched.
+
+    Shape inference needs the *values* of small constant tensors even when the
+    bulk weight data is not loaded (e.g. the ``shape`` input of a Reshape node
+    or the ``indices`` input of a Gather node stored externally because the
+    model was saved with ``size_threshold=0``).
+    """
+    from .onnx_lib.external_data_helper import uses_external_data
+
+    for init in model.graph.initializer:
+        if not uses_external_data(init):
+            continue
+        # Read the declared byte length from the external_data metadata.
+        # Both "length" and "size" are accepted by the C++ loader.
+        length = -1
+        for entry in init.external_data:
+            if entry.key in ("length", "size"):
+                with contextlib.suppress(ValueError):
+                    length = int(entry.value)
+                break
+        # A negative length means the tensor spans to end-of-file (i.e. its
+        # size is not declared in the metadata).  Skip it – it is likely large.
+        if length < 0 or length >= _FILLSHAPE_TINY_TENSOR_THRESHOLD:
+            continue
+        # Load the bytes from the external file and convert to inline storage.
+        init.load_external_data(model_dir)
+        init.ClearField("data_location")
+        init.ClearField("external_data")
 
 
 def _print_shape_inference_events(events: list) -> None:
@@ -161,12 +206,19 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model file not found: {model_path!r}")
 
-    # Load without fetching external tensor bytes – shape inference only
-    # needs type/shape metadata, not the actual weight values.
+    # Load without fetching external tensor bytes.  Large weight tensors are
+    # not required for shape inference and would waste memory.  Tiny tensors
+    # (below _FILLSHAPE_TINY_TENSOR_THRESHOLD) are loaded separately below
+    # because shape inference may need their values (e.g. Reshape's shape
+    # input, Gather's indices, Slice's starts/ends/axes).
     model = load(model_path, load_external_data=False)
 
-    # Detect whether the model references weights stored in a separate file.
+    # Detect whether the model references weights stored in a separate file
+    # (must happen before the tiny-tensor step, which inlines small tensors).
     has_external_data = any(uses_external_data(init) for init in model.graph.initializer)
+
+    if has_external_data:
+        _load_tiny_external_tensors(model, os.path.dirname(os.path.abspath(model_path)))
 
     if inplace_info or verbose > 0:
         # Retains the ShapesContext so in-place reuse analysis and verbose

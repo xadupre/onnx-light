@@ -31,11 +31,14 @@ bool TryParseInt64(const utils::String &value, int64_t &out) {
 }
 
 std::string BaseDirFromStream(utils::BinaryStream &stream) {
+  const auto parent_dir = [](const std::string &path) {
+    return std::filesystem::path(path).parent_path().string();
+  };
   if (auto *file_stream = dynamic_cast<utils::FileStream *>(&stream)) {
-    return std::filesystem::path(file_stream->file_path()).parent_path().string();
+    return parent_dir(file_stream->file_path());
   }
   if (auto *mmap_stream = dynamic_cast<utils::MmapFileStream *>(&stream)) {
-    return std::filesystem::path(mmap_stream->file_path()).parent_path().string();
+    return parent_dir(mmap_stream->file_path());
   }
   return "";
 }

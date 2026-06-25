@@ -7,6 +7,7 @@ from onnx_light.onnx_optim.expressions import (
     simplify_two_expressions,
     compare_expressions,
     CompareResult,
+    DimRange,
     evaluate_expression,
     parse_expression_tokens,
     rename_expression,
@@ -398,47 +399,57 @@ class TestDimRangesFromExpressions(ExtTestCase):
     def test_direct_equality(self):
         # a == d//5  →  a ∈ [d//5, d//5],  d ∈ [5*a, 5*a+4]
         result = dim_ranges_from_expressions([("a", "d//5")])
-        self.assertEqual(result["a"], ("d//5", "d//5"))
-        lo, hi = result["d"]
-        self.assertEqual(simplify_expression(lo), "5*a")
-        self.assertIn(simplify_expression(hi), ("4+5*a", "5*a+4"))
+        self.assertIsInstance(result["a"], DimRange)
+        self.assertEqual(result["a"].lower, "d//5")
+        self.assertEqual(result["a"].upper, "d//5")
+        self.assertIsInstance(result["d"], DimRange)
+        self.assertEqual(simplify_expression(result["d"].lower), "5*a")
+        self.assertIn(simplify_expression(result["d"].upper), ("4+5*a", "5*a+4"))
 
     def test_direct_variable_equality(self):
         # a == b  →  a ∈ [b, b],  b ∈ [a, a]
         result = dim_ranges_from_expressions([("a", "b")])
-        self.assertEqual(result["a"], ("b", "b"))
-        self.assertEqual(result["b"], ("a", "a"))
+        self.assertIsInstance(result["a"], DimRange)
+        self.assertEqual(result["a"].lower, "b")
+        self.assertEqual(result["a"].upper, "b")
+        self.assertIsInstance(result["b"], DimRange)
+        self.assertEqual(result["b"].lower, "a")
+        self.assertEqual(result["b"].upper, "a")
 
     def test_direct_constant_equality(self):
         # a == 3  →  a ∈ [3, 3]
         result = dim_ranges_from_expressions([("a", "3")])
-        self.assertEqual(result["a"], (3, 3))
+        self.assertIsInstance(result["a"], DimRange)
+        self.assertEqual(result["a"].lower, 3)
+        self.assertEqual(result["a"].upper, 3)
 
     # ── Double floor-division chain ────────────────────────────────────────
     def test_double_floordiv(self):
         # a == d//5//2  ⟹  d//10 == a  →  d ∈ [10*a, 10*a+9],  a ∈ [d//10, d//10]
         result = dim_ranges_from_expressions([("a", "d//5//2")])
-        lo, hi = result["d"]
-        self.assertEqual(simplify_expression(lo), "10*a")
-        self.assertIn(simplify_expression(hi), ("9+10*a", "10*a+9"))
-        lo_a, hi_a = result["a"]
-        self.assertEqual(simplify_expression(lo_a), "d//10")
-        self.assertEqual(simplify_expression(hi_a), "d//10")
+        self.assertIsInstance(result["d"], DimRange)
+        self.assertEqual(simplify_expression(result["d"].lower), "10*a")
+        self.assertIn(simplify_expression(result["d"].upper), ("9+10*a", "10*a+9"))
+        self.assertIsInstance(result["a"], DimRange)
+        self.assertEqual(simplify_expression(result["a"].lower), "d//10")
+        self.assertEqual(simplify_expression(result["a"].upper), "d//10")
 
     # ── LHS is the floor-div chain ─────────────────────────────────────────
     def test_lhs_floordiv_chain(self):
         # d//5 == a  →  same as a == d//5
         result = dim_ranges_from_expressions([("d//5", "a")])
         self.assertIn("d", result)
-        lo, _hi = result["d"]
-        self.assertEqual(simplify_expression(lo), "5*a")
+        self.assertIsInstance(result["d"], DimRange)
+        self.assertEqual(simplify_expression(result["d"].lower), "5*a")
 
     # ── Multiple equalities ────────────────────────────────────────────────
     def test_multiple_equalities(self):
         # a == d//5  AND  b == 1  →  ranges for a, b, d
         result = dim_ranges_from_expressions([("a", "d//5"), ("b", "1")])
         self.assertIn("a", result)
-        self.assertEqual(result["b"], (1, 1))
+        self.assertIsInstance(result["b"], DimRange)
+        self.assertEqual(result["b"].lower, 1)
+        self.assertEqual(result["b"].upper, 1)
         self.assertIn("d", result)
 
     # ── Token filtering ───────────────────────────────────────────────────
@@ -458,6 +469,17 @@ class TestDimRangesFromExpressions(ExtTestCase):
         result = dim_ranges_from_expressions([("a", "d//5")], tokens=None)
         self.assertIn("a", result)
         self.assertIn("d", result)
+
+    # ── DimRange repr and equality ─────────────────────────────────────────
+    def test_dim_range_repr_symbolic(self):
+        result = dim_ranges_from_expressions([("a", "d//5")])
+        r = result["a"]
+        self.assertEqual(repr(r), "DimRange(lower='d//5', upper='d//5')")
+
+    def test_dim_range_repr_numeric(self):
+        result = dim_ranges_from_expressions([("a", "3")])
+        r = result["a"]
+        self.assertEqual(repr(r), "DimRange(lower=3, upper=3)")
 
     # ── Unsupported patterns return empty (variable absent) ────────────────
     def test_unsupported_two_variables_on_one_side(self):

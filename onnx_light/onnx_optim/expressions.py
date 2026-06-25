@@ -48,6 +48,7 @@ from ..onnx_py._onnxpyoptim import expressions as _C  # type: ignore[attr-define
 
 CompareResult: TypeAlias = _C.CompareResult
 ExpressionComparison: TypeAlias = _C.ExpressionComparison
+DimRange: TypeAlias = _C.DimRange
 
 
 def simplify_expression(expr: "str | int") -> "str | int":
@@ -480,7 +481,7 @@ def dim_min(a: "int | str", b: "int | str") -> "int | str":
 
 def dim_ranges_from_expressions(
     equalities: "list[tuple[str, str]]", tokens: "list[str] | None" = None
-) -> "dict[str, tuple[str | int, str | int]]":
+) -> "dict[str, DimRange]":
     """Infers dimension ranges from a set of equality constraints.
 
     Each element of *equalities* is a ``(lhs, rhs)`` pair that represents the
@@ -503,20 +504,18 @@ def dim_ranges_from_expressions(
     :param tokens: Optional list of variable names to include in the result.
         When *None* (the default), ranges for all recognised variables are
         returned.
-    :returns: A ``dict`` mapping each variable name to a ``(lower, upper)``
-        tuple of inclusive bounds.  Each bound is an ``int`` when concrete or
-        a simplified ``str`` when symbolic.
-    :rtype: dict[str, tuple[int | str, int | str]]
+    :returns: A ``dict`` mapping each variable name to a :class:`DimRange`
+        with inclusive ``lower`` and ``upper`` bounds.  Each bound is an
+        ``int`` when concrete or a simplified ``str`` when symbolic.
+    :rtype: dict[str, DimRange]
 
     Examples::
 
-        >>> dim_ranges_from_expressions([("a", "d//5")])
-        {'a': ('d//5', 'd//5'), 'd': ('5*a', '4+5*a')}
-        >>> dim_ranges_from_expressions([("a", "d//5")], tokens=["d"])
-        {'d': ('5*a', '4+5*a')}
-        >>> dim_ranges_from_expressions([("a", "d//5//2")])
-        {'a': ('d//10', 'd//10'), 'd': ('10*a', '9+10*a')}
-        >>> dim_ranges_from_expressions([("a", "3")])
-        {'a': (3, 3)}
+        >>> r = dim_ranges_from_expressions([("a", "d//5")])
+        >>> r["a"].lower, r["a"].upper
+        ('d//5', 'd//5')
+        >>> r = dim_ranges_from_expressions([("a", "3")])
+        >>> r["a"].lower, r["a"].upper
+        (3, 3)
     """
     return _C.dim_ranges_from_expressions(equalities, tokens if tokens is not None else [])

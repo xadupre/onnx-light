@@ -178,6 +178,44 @@ void AddOnnxPyExpressions(nb::module_ &m) {
       return nb::cast(std::get<std::string>(d));
     };
 
+    // DimRange — inclusive [lower, upper] range for a dimension variable.
+    nb::class_<expr::DimRange>(
+        expressions_mod, "DimRange",
+        "Inclusive ``[lower, upper]`` range for a dimension variable.\n\n"
+        "Each bound is an ``int`` when concrete or a ``str`` when symbolic.\n"
+        "Returned by :func:`dim_ranges_from_expressions`.")
+        .def_prop_ro(
+            "lower",
+            [from_dim](const expr::DimRange &r) -> nb::object { return from_dim(r.lower); },
+            "Inclusive lower bound; ``int`` when numeric, ``str`` when symbolic.")
+        .def_prop_ro(
+            "upper",
+            [from_dim](const expr::DimRange &r) -> nb::object { return from_dim(r.upper); },
+            "Inclusive upper bound; ``int`` when numeric, ``str`` when symbolic.")
+        .def("__repr__",
+             [from_dim](const expr::DimRange &r) {
+               auto lo = from_dim(r.lower);
+               auto hi = from_dim(r.upper);
+               auto to_s = [](nb::object o) -> std::string {
+                 if (nb::isinstance<nb::int_>(o))
+                   return std::to_string(nb::cast<int64_t>(o));
+                 return "'" + nb::cast<std::string>(o) + "'";
+               };
+               return std::string("DimRange(lower=") + to_s(lo) + ", upper=" + to_s(hi) + ")";
+             })
+        .def(
+            "__eq__",
+            [from_dim](const expr::DimRange &r, nb::object other) -> bool {
+              if (!nb::isinstance<expr::DimRange>(other))
+                return false;
+              const auto &o = nb::cast<const expr::DimRange &>(other);
+              return r.lower == o.lower && r.upper == o.upper;
+            },
+            nb::arg("other"))
+        .def("__hash__", [](const expr::DimRange &) -> int64_t {
+          throw nb::type_error("unhashable type: 'DimRange'");
+        });
+
     expressions_mod.def(
         "dim_add",
         [to_dim, from_dim](nb::object a, nb::object b) {
@@ -249,29 +287,23 @@ void AddOnnxPyExpressions(nb::module_ &m) {
         },
         nb::arg("a"), nb::arg("b"), "Returns the minimum of two dimensions.");
 
-    // dim_ranges_from_expressions(equalities, tokens=[]) -> dict[str, tuple[int|str, int|str]]
+    // dim_ranges_from_expressions(equalities, tokens=[]) -> dict[str, DimRange]
     expressions_mod.def(
         "dim_ranges_from_expressions",
-        [from_dim](const std::vector<std::pair<std::string, std::string>> &equalities,
-                   const std::vector<std::string> &tokens) {
-          auto ranges = expr::dim_ranges_from_expressions(equalities, tokens);
-          std::unordered_map<std::string, nb::tuple> result;
-          result.reserve(ranges.size());
-          for (const auto &[var, range] : ranges)
-            result[var] = nb::make_tuple(from_dim(range.lower), from_dim(range.upper));
-          return result;
+        [](const std::vector<std::pair<std::string, std::string>> &equalities,
+           const std::vector<std::string> &tokens) {
+          return expr::dim_ranges_from_expressions(equalities, tokens);
         },
         nb::arg("equalities"), nb::arg("tokens") = std::vector<std::string>{},
         "Infers dimension ranges from equality constraints.\n\n"
         "Each element of *equalities* is a ``(lhs, rhs)`` pair representing the equality\n"
         "``lhs == rhs``.  For each variable that appears as the leaf of a floor-division\n"
         "chain on one side, computes the tight range:\n\n"
-        "* ``var == value``                  → ``{var: (value, value)}``\n"
-        "* ``var // d₁ // … // dₙ == value`` → ``{var: (P*value, P*value+P-1)}`` "
+        "* ``var == value``                  → ``{var: DimRange(value, value)}``\n"
+        "* ``var // d₁ // … // dₙ == value`` → ``{var: DimRange(P*value, P*value+P-1)}`` "
         "where P = d₁·…·dₙ.\n\n"
         "When *tokens* is non-empty, only the listed variables are returned.\n\n"
-        "Returns a ``dict[str, tuple[int | str, int | str]]`` mapping each variable to\n"
-        "its ``(lower, upper)`` bound pair.");
+        "Returns a ``dict[str, DimRange]`` mapping each variable to its inclusive range.");
   }
 
   // -----------------------------------------------------------------------

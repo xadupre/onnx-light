@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "onnx_optim/shapes/shapes_context.h"
@@ -117,6 +118,17 @@ constexpr const char *kInPlaceReuseMetadataKey = "onnx_light.inplace_reuse";
 constexpr const char *kReleaseAfterMetadataKey = "onnx_light.release_after";
 
 /**
+ * Metadata key under which :cpp:func:`ComputeContext::WriteToMetadata`
+ * records, for every node, the subset of releasable values that carry the
+ * ``"shape"`` value tag (i.e. tensors that represent tensor-shape metadata
+ * rather than activation data). The associated value is a ``;``-separated
+ * list of value names — a strict subset of the
+ * :cpp:var:`kReleaseAfterMetadataKey` entry for the same node. The key is
+ * omitted for nodes that have no shape-tagged releasable values.
+ */
+constexpr const char *kReleaseAfterShapeTagMetadataKey = "onnx_light.release_after_shape_tag";
+
+/**
  * Holds the in-place reuse opportunities computed for a graph, mirroring the
  * way :cpp:class:`onnx_optim::shapes::ShapesContext` holds the inferred
  * descriptors.
@@ -150,9 +162,19 @@ public:
    *               a declared graph input may be reused like an intermediate
    *               (subject to the same lifetime and shape checks), allowing
    *               kernels to overwrite it.
+   * @param value_tags  Optional map from value name to tag string (``"shape"``,
+   *               ``"axes"``, ``"weight"``). When non-empty, values in the
+   *               release list that carry the ``"shape"`` tag are also stored
+   *               separately and exposed through
+   *               :cpp:func:`ReleaseAfterShapeTagged` /
+   *               :cpp:func:`NodeReleaseAfterShapeTagged`, and written to
+   *               :cpp:var:`kReleaseAfterShapeTagMetadataKey` by
+   *               :cpp:func:`WriteToMetadata`.
    */
-  void ComputeInPlaceReuseGraph(const GraphProto &graph, const ShapesContext &ctx,
-                                bool allow_input_overwrite = false);
+  void
+  ComputeInPlaceReuseGraph(const GraphProto &graph, const ShapesContext &ctx,
+                           bool allow_input_overwrite = false,
+                           const std::unordered_map<std::string, std::string> &value_tags = {});
 
   /// Number of nodes for which reuse has been computed (one entry per node of
   /// the analysed graph, in ``graph.node()`` order). Zero before
@@ -174,10 +196,33 @@ public:
     return reuse_.at(node_index);
   }
 
+  /// Read-only access to the per-node shape-tagged releasable values. When
+  /// :cpp:func:`ComputeInPlaceReuseGraph` was called with a non-empty
+  /// ``value_tags`` map, this vector has one entry per node (same order as
+  /// ``graph.node()``), and entry ``i`` lists the names from the
+  /// ``release_after`` list that carry the ``"shape"`` value tag. When
+  /// ``ComputeInPlaceReuseGraph`` was called without ``value_tags`` (or with
+  /// an empty map), this vector is itself empty.
+  const std::vector<std::vector<std::string>> &ReleaseAfterShapeTagged() const noexcept {
+    return release_after_shape_tagged_;
+  }
+
+  /// Shape-tagged releasable values for the node at ``node_index``.
+  ///
+  /// @throws std::out_of_range when ``node_index`` is out of bounds, or when
+  ///         :cpp:func:`ComputeInPlaceReuseGraph` was called without value tags
+  ///         (in which case the vector is empty and every access is out of
+  ///         bounds).
+  const std::vector<std::string> &NodeReleaseAfterShapeTagged(std::size_t node_index) const {
+    return release_after_shape_tagged_.at(node_index);
+  }
+
   /**
    * Records the computed opportunities into each node's ``metadata_props`` of
-   * ``graph`` under :cpp:var:`kInPlaceReuseMetadataKey` and
-   * :cpp:var:`kReleaseAfterMetadataKey`.
+   * ``graph`` under :cpp:var:`kInPlaceReuseMetadataKey`,
+   * :cpp:var:`kReleaseAfterMetadataKey`, and (when
+   * :cpp:func:`ComputeInPlaceReuseGraph` was called with value tags)
+   * :cpp:var:`kReleaseAfterShapeTagMetadataKey`.
    *
    * For every node that has at least one in-place opportunity, a single
    * metadata entry is added (or updated in place if the key already exists)
@@ -188,6 +233,12 @@ public:
    * For every node that has releasable last-use inputs, one metadata entry is
    * added (or updated in place) under :cpp:var:`kReleaseAfterMetadataKey`; the
    * value is a ``;``-separated list of releasable names.
+   *
+   * When shape-tag information was provided to
+   * :cpp:func:`ComputeInPlaceReuseGraph`, a further metadata entry is added
+   * under :cpp:var:`kReleaseAfterShapeTagMetadataKey` for every node that has
+   * at least one shape-tagged releasable value; the value is a
+   * ``;``-separated list of those names.
    *
    * Nodes without in-place opportunities and without releasable names are left
    * untouched.
@@ -206,11 +257,13 @@ public:
   void Clear() noexcept {
     reuse_.clear();
     release_after_.clear();
+    release_after_shape_tagged_.clear();
   }
 
 private:
   std::vector<std::vector<InPlaceReuse>> reuse_;
   std::vector<std::vector<std::string>> release_after_;
+  std::vector<std::vector<std::string>> release_after_shape_tagged_;
 };
 
 /**
@@ -235,13 +288,22 @@ std::vector<std::vector<InPlaceReuse>> ComputeInPlaceReuse(const GraphProto &gra
 /**
  * Convenience wrapper that computes the in-place reuse opportunities for
  * ``graph`` (via :cpp:class:`ComputeContext`) and records them in each node's
- * ``metadata_props`` under :cpp:var:`kInPlaceReuseMetadataKey`.
+ * ``metadata_props`` under :cpp:var:`kInPlaceReuseMetadataKey`,
+ * :cpp:var:`kReleaseAfterMetadataKey`, and (when ``value_tags`` is non-empty)
+ * :cpp:var:`kReleaseAfterShapeTagMetadataKey`.
  *
- * @param graph  Graph whose nodes are analysed and mutated in place.
- * @param ctx    Shapes context already populated with the inferred descriptors
- *               for ``graph``.
+ * @param graph       Graph whose nodes are analysed and mutated in place.
+ * @param ctx         Shapes context already populated with the inferred
+ *                    descriptors for ``graph``.
+ * @param value_tags  Optional map from value name to tag string. When
+ *                    non-empty, the shape-tagged subset of the release list is
+ *                    also written under
+ *                    :cpp:var:`kReleaseAfterShapeTagMetadataKey`. See
+ *                    :cpp:func:`ComputeContext::ComputeInPlaceReuseGraph`.
  */
-void WriteInPlaceReuseToMetadata(GraphProto &graph, const ShapesContext &ctx);
+void WriteInPlaceReuseToMetadata(
+    GraphProto &graph, const ShapesContext &ctx,
+    const std::unordered_map<std::string, std::string> &value_tags = {});
 
 } // namespace annotations
 } // namespace onnx_optim

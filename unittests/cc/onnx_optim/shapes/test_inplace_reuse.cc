@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -472,6 +473,159 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextWriteToMetadata) {
   smaller.set_name("g");
   *smaller.add_node() = MakeNode("Abs", {"X"}, {"A"});
   EXPECT_THROW(inplace.WriteToMetadata(smaller), std::invalid_argument);
+}
+
+// When value_tags are passed, released values with the "shape" tag are stored
+// in ReleaseAfterShapeTagged and written to kReleaseAfterShapeTagMetadataKey.
+TEST(OnnxOptimInPlaceReuse, ComputeContextShapeTagReleaseInfo) {
+  // Graph: Shape(X) -> S, Reshape(X, S) -> Y
+  // S is the output of Shape, so it should be tagged "shape".
+  GraphProto graph;
+  graph.set_name("g");
+  AddInput(graph, "X", {2, 3});
+  AddOutput(graph, "Y", {2, 3});
+  auto *shape_node = graph.add_node();
+  shape_node->set_op_type("Shape");
+  shape_node->add_input("X");
+  shape_node->add_output("S");
+  auto *reshape_node = graph.add_node();
+  reshape_node->set_op_type("Reshape");
+  reshape_node->add_input("X");
+  reshape_node->add_input("S");
+  reshape_node->add_output("Y");
+
+  ShapesContext ctx;
+  ctx.SetOpsetVersion("", 18);
+  ctx.ComputeShapeGraph(graph);
+
+  // Build value_tags: mark "S" as shape-tagged (as InferValueAndNodeTags would).
+  const std::unordered_map<std::string, std::string> value_tags = {{"S", "shape"}};
+
+  ComputeContext inplace;
+  inplace.ComputeInPlaceReuseGraph(graph, ctx, false, value_tags);
+
+  ASSERT_EQ(inplace.Size(), 2u);
+  // S is released after the Reshape node (node 1).
+  EXPECT_TRUE(inplace.NodeReleaseAfterShapeTagged(0).empty());
+  EXPECT_EQ(inplace.NodeReleaseAfterShapeTagged(1), (std::vector<std::string>{"S"}));
+
+  // ReleaseAfterShapeTagged matches the per-node accessors.
+  ASSERT_EQ(inplace.ReleaseAfterShapeTagged().size(), 2u);
+  EXPECT_TRUE(inplace.ReleaseAfterShapeTagged()[0].empty());
+  EXPECT_EQ(inplace.ReleaseAfterShapeTagged()[1], (std::vector<std::string>{"S"}));
+}
+
+// WriteToMetadata writes kReleaseAfterShapeTagMetadataKey when shape-tagged
+// values exist in the release list.
+TEST(OnnxOptimInPlaceReuse, ComputeContextWriteToMetadataShapeTag) {
+  GraphProto graph;
+  graph.set_name("g");
+  AddInput(graph, "X", {2, 3});
+  AddOutput(graph, "Y", {2, 3});
+  auto *shape_node = graph.add_node();
+  shape_node->set_op_type("Shape");
+  shape_node->add_input("X");
+  shape_node->add_output("S");
+  auto *reshape_node = graph.add_node();
+  reshape_node->set_op_type("Reshape");
+  reshape_node->add_input("X");
+  reshape_node->add_input("S");
+  reshape_node->add_output("Y");
+
+  ShapesContext ctx;
+  ctx.SetOpsetVersion("", 18);
+  ctx.ComputeShapeGraph(graph);
+
+  const std::unordered_map<std::string, std::string> value_tags = {{"S", "shape"}};
+  ComputeContext inplace;
+  inplace.ComputeInPlaceReuseGraph(graph, ctx, false, value_tags);
+  inplace.WriteToMetadata(graph);
+
+  // Node 0 (Shape) has no release and no in-place reuse.
+  EXPECT_EQ(graph.node()[0].metadata_props().size(), 0);
+
+  // Node 1 (Reshape): releases S which is shape-tagged.
+  bool found_release_after = false;
+  bool found_shape_tag = false;
+  for (int i = 0; i < graph.node()[1].metadata_props().size(); ++i) {
+    const auto &prop = graph.node()[1].metadata_props()[i];
+    if (prop.key().as_string() == std::string(onnx_optim::annotations::kReleaseAfterMetadataKey)) {
+      EXPECT_EQ(prop.value().as_string(), std::string("S"));
+      found_release_after = true;
+    }
+    if (prop.key().as_string() ==
+        std::string(onnx_optim::annotations::kReleaseAfterShapeTagMetadataKey)) {
+      EXPECT_EQ(prop.value().as_string(), std::string("S"));
+      found_shape_tag = true;
+    }
+  }
+  EXPECT_TRUE(found_release_after);
+  EXPECT_TRUE(found_shape_tag);
+}
+
+// Without value_tags, ReleaseAfterShapeTagged is all-empty and
+// kReleaseAfterShapeTagMetadataKey is not written.
+TEST(OnnxOptimInPlaceReuse, ComputeContextNoValueTagsYieldsEmptyShapeTagged) {
+  GraphProto graph;
+  graph.set_name("g");
+  AddInput(graph, "X", {3, 4});
+  AddOutput(graph, "Y", {3, 4});
+  *graph.add_node() = MakeNode("Abs", {"X"}, {"A"});
+  *graph.add_node() = MakeNode("Abs", {"A"}, {"Y"});
+
+  ShapesContext ctx;
+  ctx.ComputeShapeGraph(graph);
+
+  ComputeContext inplace;
+  inplace.ComputeInPlaceReuseGraph(graph, ctx);
+  inplace.WriteToMetadata(graph);
+
+  ASSERT_EQ(inplace.Size(), 2u);
+  // Without value_tags the shape-tagged vector is itself empty.
+  EXPECT_TRUE(inplace.ReleaseAfterShapeTagged().empty());
+
+  // kReleaseAfterShapeTagMetadataKey must not appear in metadata.
+  for (int n = 0; n < graph.node().size(); ++n) {
+    for (int i = 0; i < graph.node()[n].metadata_props().size(); ++i) {
+      EXPECT_NE(graph.node()[n].metadata_props()[i].key().as_string(),
+                std::string(onnx_optim::annotations::kReleaseAfterShapeTagMetadataKey));
+    }
+  }
+}
+
+// WriteInPlaceReuseToMetadata free function also accepts value_tags and writes
+// kReleaseAfterShapeTagMetadataKey accordingly.
+TEST(OnnxOptimInPlaceReuse, WriteInPlaceReuseToMetadataWithShapeTags) {
+  GraphProto graph;
+  graph.set_name("g");
+  AddInput(graph, "X", {2, 3});
+  AddOutput(graph, "Y", {2, 3});
+  auto *shape_node = graph.add_node();
+  shape_node->set_op_type("Shape");
+  shape_node->add_input("X");
+  shape_node->add_output("S");
+  auto *reshape_node = graph.add_node();
+  reshape_node->set_op_type("Reshape");
+  reshape_node->add_input("X");
+  reshape_node->add_input("S");
+  reshape_node->add_output("Y");
+
+  ShapesContext ctx;
+  ctx.SetOpsetVersion("", 18);
+  ctx.ComputeShapeGraph(graph);
+
+  const std::unordered_map<std::string, std::string> value_tags = {{"S", "shape"}};
+  WriteInPlaceReuseToMetadata(graph, ctx, value_tags);
+
+  bool found_shape_tag = false;
+  for (int i = 0; i < graph.node()[1].metadata_props().size(); ++i) {
+    if (graph.node()[1].metadata_props()[i].key().as_string() ==
+        std::string(onnx_optim::annotations::kReleaseAfterShapeTagMetadataKey)) {
+      EXPECT_EQ(graph.node()[1].metadata_props()[i].value().as_string(), std::string("S"));
+      found_shape_tag = true;
+    }
+  }
+  EXPECT_TRUE(found_shape_tag);
 }
 
 } // namespace Test

@@ -159,11 +159,13 @@ def _node_metadata_value(node: Any, key: str) -> str:
 # - per-node tag -> NODE_TAG_METADATA_KEY
 # - per-node in-place reuse map -> INPLACE_REUSE_METADATA_KEY
 # - per-node release-after tensor list -> RELEASE_AFTER_METADATA_KEY
+# - per-node shape-tagged release-after list -> RELEASE_AFTER_SHAPE_TAG_METADATA_KEY
 VALUE_TAG_METADATA_KEY = "onnx_light.value_tag"
 VALUE_TAGS_METADATA_KEY = "onnx_light.value_tags"
 NODE_TAG_METADATA_KEY = "onnx_light.node_tag"
 INPLACE_REUSE_METADATA_KEY = "onnx_light.inplace_reuse"
 RELEASE_AFTER_METADATA_KEY = "onnx_light.release_after"
+RELEASE_AFTER_SHAPE_TAG_METADATA_KEY = "onnx_light.release_after_shape_tag"
 VALUE_TAGS = {"shape", "axes", "weight"}
 VALUE_TAG_COLORS = {
     "shape": {"fill": "#f4d6ff", "stroke": "#8744a2"},

@@ -580,8 +580,8 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextNoValueTagsYieldsEmptyShapeTagged) {
   inplace.WriteToMetadata(graph);
 
   ASSERT_EQ(inplace.Size(), 2u);
-  EXPECT_TRUE(inplace.ReleaseAfterShapeTagged()[0].empty());
-  EXPECT_TRUE(inplace.ReleaseAfterShapeTagged()[1].empty());
+  // Without value_tags the shape-tagged vector is itself empty.
+  EXPECT_TRUE(inplace.ReleaseAfterShapeTagged().empty());
 
   // kReleaseAfterShapeTagMetadataKey must not appear in metadata.
   for (int n = 0; n < graph.node().size(); ++n) {

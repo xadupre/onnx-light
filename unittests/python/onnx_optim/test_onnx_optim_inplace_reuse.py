@@ -351,9 +351,8 @@ class TestInPlaceReuse(ExtTestCase):
         inplace.compute_inplace_reuse_graph(model.graph, ctx)
         inplace.write_to_metadata(model.graph)
 
-        # Without value_tags all shape-tagged entries are empty.
-        for tagged in inplace.release_after_shape_tagged:
-            self.assertEqual(tagged, [])
+        # Without value_tags the shape-tagged vector is itself empty.
+        self.assertEqual(inplace.release_after_shape_tagged, [])
         # kReleaseAfterShapeTagMetadataKey must not appear.
         for node in model.graph.node:
             self.assertNotIn("onnx_light.release_after_shape_tag", self._node_metadata(node))

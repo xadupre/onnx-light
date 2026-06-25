@@ -315,9 +315,13 @@ void ComputeContext::ComputeInPlaceReuseGraph(
   release_after_ = std::move(release_after);
 
   // Populate the shape-tagged subset from value_tags (when provided).
-  const std::size_t n = release_after_.size();
-  release_after_shape_tagged_.assign(n, {});
+  // Only allocate the per-node sub-vectors when value_tags is actually non-empty
+  // so that WriteToMetadata can use release_after_shape_tagged_.size() ==
+  // reuse_.size() to detect whether shape-tag info was supplied.
+  release_after_shape_tagged_.clear();
   if (!value_tags.empty()) {
+    const std::size_t n = release_after_.size();
+    release_after_shape_tagged_.assign(n, {});
     for (std::size_t i = 0; i < n; ++i) {
       for (const std::string &name : release_after_[i]) {
         auto it = value_tags.find(name);
@@ -338,7 +342,7 @@ void ComputeContext::WriteToMetadata(GraphProto &graph) const {
            "ComputeInPlaceReuseGraph.";
     throw std::invalid_argument(msg.str());
   }
-  const bool has_shape_tag_info = !release_after_shape_tagged_.empty();
+  const bool has_shape_tag_info = release_after_shape_tagged_.size() == reuse_.size();
   for (std::size_t i = 0; i < reuse_.size(); ++i) {
     const bool has_shape_tagged = has_shape_tag_info && !release_after_shape_tagged_[i].empty();
     if (reuse_[i].empty() && release_after_[i].empty() && !has_shape_tagged) {

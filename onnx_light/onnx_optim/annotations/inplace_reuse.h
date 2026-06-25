@@ -196,18 +196,23 @@ public:
     return reuse_.at(node_index);
   }
 
-  /// Read-only access to the per-node shape-tagged releasable values. Entry
-  /// ``i`` lists the names from the ``release_after`` list for
-  /// ``graph.node()[i]`` that carry the ``"shape"`` value tag. Populated only
-  /// when :cpp:func:`ComputeInPlaceReuseGraph` was called with a non-empty
-  /// ``value_tags`` map; otherwise every entry is empty.
+  /// Read-only access to the per-node shape-tagged releasable values. When
+  /// :cpp:func:`ComputeInPlaceReuseGraph` was called with a non-empty
+  /// ``value_tags`` map, this vector has one entry per node (same order as
+  /// ``graph.node()``), and entry ``i`` lists the names from the
+  /// ``release_after`` list that carry the ``"shape"`` value tag. When
+  /// ``ComputeInPlaceReuseGraph`` was called without ``value_tags`` (or with
+  /// an empty map), this vector is itself empty.
   const std::vector<std::vector<std::string>> &ReleaseAfterShapeTagged() const noexcept {
     return release_after_shape_tagged_;
   }
 
   /// Shape-tagged releasable values for the node at ``node_index``.
   ///
-  /// @throws std::out_of_range when ``node_index`` is out of bounds.
+  /// @throws std::out_of_range when ``node_index`` is out of bounds, or when
+  ///         :cpp:func:`ComputeInPlaceReuseGraph` was called without value tags
+  ///         (in which case the vector is empty and every access is out of
+  ///         bounds).
   const std::vector<std::string> &NodeReleaseAfterShapeTagged(std::size_t node_index) const {
     return release_after_shape_tagged_.at(node_index);
   }

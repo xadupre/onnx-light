@@ -1133,10 +1133,11 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           [](const onnx_annotations::ComputeContext &self) {
             return self.ReleaseAfterShapeTagged();
           },
-          "The per-node shape-tagged releasable values as a list (one entry per node, same order "
-          "as ``graph.node``); each entry is a list of value names that carry the ``\"shape\"`` "
-          "tag. Populated only when ``compute_inplace_reuse_graph`` was called with a non-empty "
-          "``value_tags`` argument.")
+          "The per-node shape-tagged releasable values. When ``compute_inplace_reuse_graph`` "
+          "was called with a non-empty ``value_tags`` argument, this is a list with one entry "
+          "per node (same order as ``graph.node``), where each entry is a list of value names "
+          "that carry the ``\"shape\"`` tag. When called without ``value_tags``, this list is "
+          "itself empty.")
       .def(
           "node_release_after_shape_tagged",
           [](const onnx_annotations::ComputeContext &self, std::size_t node_index) {

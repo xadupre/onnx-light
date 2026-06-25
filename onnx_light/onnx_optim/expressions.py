@@ -490,7 +490,12 @@ def _split_trailing_integer(expr: str) -> "tuple[str, int]":
 
     Scans *expr* right-to-left at depth 0 (outside parentheses) for the last
     ``+`` or ``-`` whose right-hand side is a bare non-negative integer.
-    Returns ``(expr, 0)`` when no such split is found.
+
+    :param expr: The expression string to split.
+    :returns: A ``(head, k)`` pair where ``k`` is the trailing integer constant
+        (negated when the operator is ``+``).  Returns ``(expr, 0)`` when no
+        top-level ``+``/``-`` with a bare integer tail is found.
+    :rtype: tuple[str, int]
     """
     depth = 0
     for i in range(len(expr) - 1, 0, -1):
@@ -512,8 +517,7 @@ def _split_trailing_integer(expr: str) -> "tuple[str, int]":
 
 
 def _invert_chain(expr: str, minimum: int) -> "dict[str, int]":
-    """Given ``expr >= minimum``, inverts a floor-division chain and returns
-    the minimum value of the underlying variable.
+    """Inverts a floor-division chain given ``expr >= minimum``.
 
     Handles:
 
@@ -521,7 +525,11 @@ def _invert_chain(expr: str, minimum: int) -> "dict[str, int]":
     * ``inner // d`` — returns ``_invert_chain(inner, minimum * d)`` when *d*
       is a positive integer literal.
 
-    Returns ``{}`` for any pattern that does not fit the above.
+    :param expr: The left-hand side of the ``>= minimum`` constraint.
+    :param minimum: The lower bound to invert against.
+    :returns: A dict mapping the underlying variable to its minimum required
+        value, or an empty dict when the pattern is not supported.
+    :rtype: dict[str, int]
     """
     expr = expr.strip()
 

@@ -29,6 +29,7 @@ from ._proto_utils import (
     NODE_TAG_METADATA_KEY,
     VALUE_TAGS,
     _format_inplace_reuse,
+    _format_release_after,
     _node_metadata_value,
 )
 from .mermaid import _dtype_name, _s
@@ -225,6 +226,7 @@ def _format_node(
     highlight: set[str] | None,
     include_node_tags: bool = False,
     include_inplace: bool = False,
+    include_release: bool = False,
 ) -> str:
     def _high(n: str) -> str:
         text = _s(n)
@@ -248,6 +250,11 @@ def _format_node(
         inplace_label = _format_inplace_reuse(node)
         if inplace_label:
             text = f"{text}  {inplace_label}"
+
+    if include_release:
+        release_label = _format_release_after(node)
+        if release_label:
+            text = f"{text}  {release_label}"
 
     attrs = list(getattr(node, "attribute", []) or [])
     if not with_attributes or not attrs:
@@ -287,6 +294,7 @@ def _format_graph_lines(
     indent: str = "",
     include_node_tags: bool = False,
     include_inplace: bool = False,
+    include_release: bool = False,
 ) -> list[str]:
     lines: list[str] = []
     name = _s(getattr(graph, "name", ""))
@@ -303,6 +311,7 @@ def _format_graph_lines(
             highlight=highlight,
             include_node_tags=include_node_tags,
             include_inplace=include_inplace,
+            include_release=include_release,
         )
         for line in rendered.splitlines():
             lines.append(f"{indent}{line}")
@@ -317,6 +326,7 @@ def _format_function_lines(
     highlight: set[str] | None,
     include_node_tags: bool = False,
     include_inplace: bool = False,
+    include_release: bool = False,
 ) -> list[str]:
     name = _s(getattr(fn, "name", "")) or ""
     domain = _s(getattr(fn, "domain", "")) or ""
@@ -331,6 +341,7 @@ def _format_function_lines(
                 highlight=highlight,
                 include_node_tags=include_node_tags,
                 include_inplace=include_inplace,
+                include_release=include_release,
             ).splitlines()
         )
     for o in getattr(fn, "output", []) or []:
@@ -344,6 +355,7 @@ def _format_model(
     highlight: set[str] | None,
     include_node_tags: bool = False,
     include_inplace: bool = False,
+    include_release: bool = False,
 ) -> str:
     lines: list[str] = []
     lines.extend(_format_opsets(getattr(model, "opset_import", []) or []))
@@ -354,6 +366,7 @@ def _format_model(
             highlight=highlight,
             include_node_tags=include_node_tags,
             include_inplace=include_inplace,
+            include_release=include_release,
         )
     )
     for fn in getattr(model, "functions", []) or []:
@@ -365,6 +378,7 @@ def _format_model(
                 highlight=highlight,
                 include_node_tags=include_node_tags,
                 include_inplace=include_inplace,
+                include_release=include_release,
             )
         )
     return "\n".join(lines)
@@ -382,6 +396,7 @@ def pretty_onnx(
     shape_inference: bool = False,
     include_node_tags: bool = False,
     include_inplace: bool = False,
+    include_release: bool = False,
 ) -> str:
     """Returns a compact, human-readable string for any ONNX proto.
 
@@ -408,6 +423,9 @@ def pretty_onnx(
         ``onnx_light.inplace_reuse`` metadata have the inplace reuse
         opportunities appended to their line, e.g.
         ``inplace: out0=in0(equal)``.
+    :param include_release: when True, nodes that carry
+        ``onnx_light.release_after`` metadata have the release hints
+        appended to their line, e.g. ``release: A, B``.
     :return: the formatted text.
     """
     assert onx is not None, "onx cannot be None"
@@ -436,6 +454,7 @@ def pretty_onnx(
             highlight=highlight,
             include_node_tags=include_node_tags,
             include_inplace=include_inplace,
+            include_release=include_release,
         )
 
     if _is_tensor(onx):
@@ -454,6 +473,7 @@ def pretty_onnx(
             highlight=highlight,
             include_node_tags=include_node_tags,
             include_inplace=include_inplace,
+            include_release=include_release,
         )
 
     if _is_graph(onx):
@@ -464,6 +484,7 @@ def pretty_onnx(
                 highlight=highlight,
                 include_node_tags=include_node_tags,
                 include_inplace=include_inplace,
+                include_release=include_release,
             )
         )
 
@@ -475,6 +496,7 @@ def pretty_onnx(
                 highlight=highlight,
                 include_node_tags=include_node_tags,
                 include_inplace=include_inplace,
+                include_release=include_release,
             )
         )
 

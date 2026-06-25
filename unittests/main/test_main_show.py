@@ -334,6 +334,27 @@ class TestMainShow(ExtTestCase):
             output = buf.getvalue()
             self.assertIn("Abs", output)
 
+    def test_show_release_info(self):
+        """show --include-release includes release annotations in the output."""
+        from onnx_light.__main__ import main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            self._save_model(_make_chain_model(), model_path)
+
+            # First fill the model with inplace/release metadata.
+            from onnx_light.__main__ import main as _main
+
+            _main(["fillshape", model_path, "--inplace-info"])
+
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                main(["show", model_path, "--include-release"])
+
+            output = buf.getvalue()
+            self.assertIn("Abs", output)
+            self.assertIn("release", output)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -304,7 +304,7 @@ def to_dot_graph(
         if not include_initializers and name in initializer_names:
             continue
         node_id = tensor_ids.get(name)
-        label_parts = [name or "(unnamed)"]
+        label_parts: list[str] = [name or "(unnamed)"]
         if include_shapes and shape_lookup.get(name):
             label_parts.append(shape_lookup[name])
         label = "\n".join(label_parts)
@@ -332,7 +332,7 @@ def to_dot_graph(
         raw_name = _s(getattr(node, "name", ""))
         node_id = node_ids.fresh(raw_name or f"{op_type}_{index}")
 
-        label_parts: list[str] = [op_type]
+        label_parts = [op_type]
         if raw_name:
             label_parts.append(raw_name)
         if include_attributes:

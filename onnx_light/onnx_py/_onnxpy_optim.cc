@@ -975,6 +975,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   // In-place reuse analysis
   // -----------------------------------------------------------------------
   shape_mod.attr("INPLACE_REUSE_METADATA_KEY") = onnx_shapes::kInPlaceReuseMetadataKey;
+  shape_mod.attr("RELEASE_AFTER_METADATA_KEY") = onnx_shapes::kReleaseAfterMetadataKey;
   shape_mod.attr("VALUE_TAG_METADATA_KEY") = onnx_shapes::kValueTagMetadataKey;
   shape_mod.attr("VALUE_TAGS_METADATA_KEY") = onnx_shapes::kValueTagsMetadataKey;
   shape_mod.attr("NODE_TAG_METADATA_KEY") = onnx_shapes::kNodeTagMetadataKey;

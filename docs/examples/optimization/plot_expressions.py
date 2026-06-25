@@ -39,7 +39,7 @@ from __future__ import annotations
 
 from onnx_light.onnx_optim.expressions import (
     INFINITY,
-    DimRange,  # noqa: F401
+    DimRange,
     compare_expressions,
     dim_add,
     dim_div,
@@ -215,8 +215,9 @@ print(dim_multi_mul(2, "n", 3))
 # add(x[a,b], y[d//5,1])  →  a == d//5
 # a is exactly d//5; d ∈ [5*a, 4+5*a]
 r = dim_ranges_from_expressions([("a", "d//5")])
-print("a:", r["a"].lower, r["a"].upper)  # exact: d//5 == d//5
+print("a:", r["a"].lower, r["a"].upper)  # exact: a == d//5
 print("d:", r["d"].lower, r["d"].upper)  # range: 5*a <= d <= 4+5*a
+print("isinstance DimRange:", isinstance(r["a"], DimRange))
 
 # Numeric equality: a == 3  →  a is exactly 3
 r2 = dim_ranges_from_expressions([("a", "3")])

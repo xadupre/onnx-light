@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_optim/shapes/inplace_reuse.h"
+#include "onnx_optim/annotations/inplace_reuse.h"
 
 #include <algorithm>
 #include <optional>

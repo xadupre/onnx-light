@@ -8,7 +8,7 @@
 // value lifetimes, so each test runs shape inference on a small graph and
 // then checks which (output, input) reuse opportunities are reported.
 
-#include "onnx_optim/shapes/inplace_reuse.h"
+#include "onnx_optim/annotations/inplace_reuse.h"
 
 #include "onnx_optim/shapes/shape_inference.h"
 #include "onnx_optim/shapes/shapes_context.h"

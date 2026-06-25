@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_optim/shapes/value_tags.h"
+#include "onnx_optim/annotations/value_tags.h"
 
 #include <algorithm>
 #include <string_view>

@@ -1,9 +1,9 @@
+#include "onnx_optim/annotations/inplace_reuse.h"
+#include "onnx_optim/annotations/value_tags.h"
 #include "onnx_optim/expressions.h"
 #include "onnx_optim/optim_tensor.h"
-#include "onnx_optim/shapes/inplace_reuse.h"
 #include "onnx_optim/shapes/shape_inference.h"
 #include "onnx_optim/shapes/shapes_context.h"
-#include "onnx_optim/shapes/value_tags.h"
 #include <algorithm>
 #include <nanobind/nanobind.h>
 #include <nanobind/operators.h>

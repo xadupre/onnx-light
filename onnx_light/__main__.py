@@ -39,6 +39,42 @@ fillshape
         Print shape-inference progress information. With no level, defaults
         to ``1`` (summary). With ``2``, also prints per-event details.
 
+show
+    Prints a human-readable, Mermaid or SVG rendering of an ONNX model.
+
+    Usage::
+
+        python -m onnx_light show model.onnx [options]
+
+    Options:
+
+    ``--format FORMAT`` / ``-f FORMAT``
+        Output format: ``pretty`` (default), ``mermaid`` or ``svg``.
+    ``--output OUTPUT`` / ``-o OUTPUT``
+        Write the rendered text to *OUTPUT* instead of printing to stdout.
+    ``--shape-inference``
+        Run onnx-light shape inference on the model before rendering.
+    ``--include-shapes / --no-shapes``
+        Include (or suppress) shape annotations in the rendered output.
+        Enabled by default; only has effect for the ``mermaid`` and ``svg``
+        formats.
+    ``--include-attributes``
+        Include node attributes in the rendered output.
+    ``--include-inplace``
+        Show in-place buffer-reuse annotations (``onnx_light.inplace_reuse``
+        metadata).
+    ``--include-node-tags``
+        Show semantic ``shape``/``axes``/``weight`` node-tag annotations
+        (``onnx_light.node_tag`` metadata).  Only used by the ``pretty``
+        format.
+    ``--no-initializers``
+        Exclude initializer nodes from the rendered graph.  Only used by the
+        ``mermaid`` and ``svg`` formats.
+    ``--direction DIRECTION``
+        Flowchart direction for the ``mermaid`` and ``svg`` formats.
+        One of ``TB`` (top-to-bottom, default), ``LR`` (left-to-right),
+        ``TD`` or ``BT`` (``mermaid`` only).
+
 run
     Generates random inputs and runs a model through the onnx-light runtime.
 
@@ -168,6 +204,81 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
         dest = model_path
 
     save(model, dest)
+
+
+def _cmd_show(args: argparse.Namespace) -> None:
+    """Implements the ``show`` subcommand."""
+    from .onnx import load
+
+    model_path: str = args.model
+    fmt: str = args.format
+    output_path: str | None = args.output
+    run_shape_inference: bool = args.shape_inference
+    include_shapes: bool = args.include_shapes
+    include_attributes: bool = args.include_attributes
+    include_inplace: bool = args.include_inplace
+    include_node_tags: bool = args.include_node_tags
+    include_initializers: bool = args.include_initializers
+    direction: str = args.direction
+
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"Model file not found: {model_path!r}")
+
+    model = load(model_path, load_external_data=False)
+
+    if run_shape_inference:
+        from .onnx_optim.shape_inference import (
+            ShapesContext,
+            apply_inferred_shapes_to_model,
+            compute_shape_model,
+        )
+
+        ctx = ShapesContext()
+        compute_shape_model(ctx, model)
+        apply_inferred_shapes_to_model(ctx, model)
+
+    if fmt == "pretty":
+        from .tools.pretty_print import pretty_onnx
+
+        text = pretty_onnx(
+            model,
+            with_attributes=include_attributes,
+            include_node_tags=include_node_tags,
+            include_inplace=include_inplace,
+        )
+    elif fmt == "mermaid":
+        from .tools.mermaid import to_mermaid
+
+        text = to_mermaid(
+            model,
+            direction=direction,
+            include_initializers=include_initializers,
+            include_shapes=include_shapes,
+            include_attributes=include_attributes,
+            include_inplace=include_inplace,
+        )
+    elif fmt == "svg":
+        from .tools.svg import to_svg
+
+        text = to_svg(
+            model,
+            direction=direction,
+            include_initializers=include_initializers,
+            include_shapes=include_shapes,
+            include_attributes=include_attributes,
+            include_inplace=include_inplace,
+        )
+    else:
+        # argparse enforces choices=['pretty', 'mermaid', 'svg'], so this
+        # branch is unreachable in normal usage.  It acts as a defensive guard
+        # for programmatic callers that bypass the argument parser.
+        raise ValueError(f"Unknown format {fmt!r}; expected one of 'pretty', 'mermaid', 'svg'.")
+
+    if output_path is not None:
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(text)
+    else:
+        print(text)
 
 
 def _resolve_input_shape(
@@ -505,6 +616,96 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     fillshape_parser.set_defaults(func=_cmd_fillshape)
+
+    # --- show ----------------------------------------------------------------
+    show_parser = subparsers.add_parser(
+        "show",
+        help="Print a human-readable, Mermaid or SVG rendering of a model.",
+        description=(
+            "Loads an ONNX model and renders it as plain text (pretty), a Mermaid "
+            "flowchart or an SVG image. The result is written to stdout by default."
+        ),
+    )
+    show_parser.add_argument("model", help="Path to the input ONNX model file.")
+    show_parser.add_argument(
+        "--format",
+        "-f",
+        default="pretty",
+        choices=["pretty", "mermaid", "svg"],
+        dest="format",
+        help=(
+            "Output format: 'pretty' (default) for a compact text listing, "
+            "'mermaid' for a Mermaid flowchart, or 'svg' for an SVG image."
+        ),
+    )
+    show_parser.add_argument(
+        "--output",
+        "-o",
+        default=None,
+        metavar="OUTPUT",
+        help="Write the rendered output to OUTPUT instead of printing to stdout.",
+    )
+    show_parser.add_argument(
+        "--shape-inference",
+        action="store_true",
+        default=False,
+        dest="shape_inference",
+        help="Run onnx-light shape inference on the model before rendering.",
+    )
+    show_parser.add_argument(
+        "--no-shapes",
+        action="store_false",
+        default=True,
+        dest="include_shapes",
+        help=(
+            "Suppress shape annotations in the rendered output "
+            "(applies to 'mermaid' and 'svg' formats)."
+        ),
+    )
+    show_parser.add_argument(
+        "--include-attributes",
+        action="store_true",
+        default=False,
+        dest="include_attributes",
+        help="Include node attributes in the rendered output.",
+    )
+    show_parser.add_argument(
+        "--include-inplace",
+        action="store_true",
+        default=False,
+        dest="include_inplace",
+        help="Show in-place buffer-reuse annotations (onnx_light.inplace_reuse metadata).",
+    )
+    show_parser.add_argument(
+        "--include-node-tags",
+        action="store_true",
+        default=False,
+        dest="include_node_tags",
+        help=(
+            "Show semantic shape/axes/weight node-tag annotations "
+            "(onnx_light.node_tag metadata). Only used by the 'pretty' format."
+        ),
+    )
+    show_parser.add_argument(
+        "--no-initializers",
+        action="store_false",
+        default=True,
+        dest="include_initializers",
+        help=(
+            "Exclude initializer nodes from the rendered graph "
+            "(applies to 'mermaid' and 'svg' formats)."
+        ),
+    )
+    show_parser.add_argument(
+        "--direction",
+        default="TB",
+        metavar="DIRECTION",
+        help=(
+            "Flowchart direction for 'mermaid' and 'svg' formats. "
+            "One of TB (default), LR, TD or BT (mermaid only)."
+        ),
+    )
+    show_parser.set_defaults(func=_cmd_show)
 
     # --- run -----------------------------------------------------------------
     run_parser = subparsers.add_parser(

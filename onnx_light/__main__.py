@@ -204,9 +204,9 @@ def _write_inferred_value_and_node_tags_to_metadata(
 
     for collection in ("input", "value_info", "output", "initializer"):
         for value in getattr(graph, collection, ()):
-            tag = value_tags.get(value.name)
-            if tag:
-                _set_metadata_property(value, VALUE_TAG_METADATA_KEY, tag)
+            value_tag = value_tags.get(value.name)
+            if value_tag:
+                _set_metadata_property(value, VALUE_TAG_METADATA_KEY, value_tag)
 
     for node in graph.node:
         for attr in node.attribute:

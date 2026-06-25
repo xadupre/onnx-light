@@ -105,7 +105,16 @@ void ComputeShapeSqueeze(ShapesContext &ctx, const NodeProto &node) {
     out_shape.PushBack(OptimDim("Squeeze_dim0"));
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, data.Dtype(), std::move(out_shape)));
+  OptimTensor out_tensor(nullptr, data.Dtype(), std::move(out_shape));
+
+  // Squeeze only removes size-1 dimensions from the shape; it does not
+  // change the tensor values.  Forward the ValueAsShape annotation so that
+  // downstream ops can still use the propagated values.
+  if (data.HasValueAsShape()) {
+    out_tensor.SetValueAsShape(data.ValueAsShape());
+  }
+
+  ctx.Set(node.output(0), std::move(out_tensor));
 }
 
 } // namespace tensor

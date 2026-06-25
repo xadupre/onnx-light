@@ -85,6 +85,69 @@ class TestOnnxOptimShapeInferenceModel(ExtTestCase):
         with self.assertRaises(ValueError):
             infer_shapes_model(model)
 
+    def test_reshape_from_gather_shape_unsqueeze_concat(self):
+        """Tests that Reshape(x, Concat(Unsqueeze(Gather(Shape(y), 1), 0), ...))
+        infers the output shape from symbolic dims without adding undefined names."""
+        # Graph:
+        #   x: float[N, D1, D2]
+        #   y: float[M, D1]   <- dim 1 is "D1"
+        #   z: float[K, D2]   <- dim 1 is "D2"
+        #   idx1 = Constant(1)
+        #   idx2 = Constant(1)
+        #   axes0 = Constant([0])
+        #   shape_y = Shape(y)                    # int64[2] values=[M, D1]
+        #   shape_z = Shape(z)                    # int64[2] values=[K, D2]
+        #   d1 = Gather(shape_y, idx1, axis=0)   # scalar with value D1
+        #   d2 = Gather(shape_z, idx2, axis=0)   # scalar with value D2
+        #   u1 = Unsqueeze(d1, axes0)             # int64[1] values=[D1]
+        #   u2 = Unsqueeze(d2, axes0)             # int64[1] values=[D2]
+        #   new_shape = Concat(u1, u2, axis=0)   # int64[2] values=[D1, D2]
+        #   out = Reshape(x[*, D1, D2], new_shape) # float[*, D1, D2]
+        nodes = [
+            oh.make_node(
+                "Constant",
+                [],
+                ["idx"],
+                value=oh.make_tensor("", onnxl.TensorProto.INT64, [], [1]),
+            ),
+            oh.make_node(
+                "Constant",
+                [],
+                ["axes0"],
+                value=oh.make_tensor("", onnxl.TensorProto.INT64, [1], [0]),
+            ),
+            oh.make_node("Shape", ["y"], ["shape_y"]),
+            oh.make_node("Shape", ["z"], ["shape_z"]),
+            oh.make_node("Gather", ["shape_y", "idx"], ["d1"]),
+            oh.make_node("Gather", ["shape_z", "idx"], ["d2"]),
+            oh.make_node("Unsqueeze", ["d1", "axes0"], ["u1"]),
+            oh.make_node("Unsqueeze", ["d2", "axes0"], ["u2"]),
+            oh.make_node("Concat", ["u1", "u2"], ["new_shape"], axis=0),
+            oh.make_node("Reshape", ["x", "new_shape"], ["out"]),
+        ]
+        x = oh.make_tensor_value_info("x", onnxl.TensorProto.FLOAT, ["N", "D1", "D2"])
+        y = oh.make_tensor_value_info("y", onnxl.TensorProto.FLOAT, ["M", "D1"])
+        z = oh.make_tensor_value_info("z", onnxl.TensorProto.FLOAT, ["K", "D2"])
+        out = oh.make_tensor_value_info("out", onnxl.TensorProto.FLOAT, None)
+        graph = oh.make_graph(nodes, "g", [x, y, z], [out])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+        model.ir_version = 8
+
+        infer_shapes_model(model)
+
+        dims = list(model.graph.output[0].type.tensor_type.shape.dim)
+        self.assertEqual(len(dims), 2)
+        # Both output dims must be symbolic (derived from D1 and D2), not
+        # undefined placeholder names like "Reshape_dim0".
+        for dim in dims:
+            self.assertFalse(
+                dim.has_dim_value(), "Expected symbolic output dim, got concrete value"
+            )
+            self.assertTrue(dim.has_dim_param(), "Expected symbolic dim_param, got no name")
+        # The dim_param values must match the original symbolic names from y and z.
+        self.assertEqual(dims[0].dim_param, "D1")
+        self.assertEqual(dims[1].dim_param, "D2")
+
 
 if __name__ == "__main__":
     unittest.main()

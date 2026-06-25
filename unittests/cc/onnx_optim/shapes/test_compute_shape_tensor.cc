@@ -1751,6 +1751,59 @@ TEST(OnnxOptimShapesTensorUnsqueeze, RejectsDuplicateAxes) {
   EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeUnsqueeze(ctx, node), std::invalid_argument);
 }
 
+// Unsqueeze of a scalar INT64 tensor carrying a ValueAsShape annotation (e.g.
+// after Gather(Shape(x), scalar_idx)) must forward the annotation unchanged.
+// This is required for the pattern
+//   Reshape(x, Concat(Unsqueeze(Gather(Shape(y),1),0), Unsqueeze(Gather(Shape(z),1),0)))
+// to resolve the Reshape output shape without introducing undefined symbolic
+// dimension names.
+TEST(OnnxOptimShapesTensorUnsqueeze, PropagatesValueAsShapeFromScalarData) {
+  NodeProto node = MakeUnsqueezeNode();
+  onnx_optim::shapes::ShapesContext ctx;
+
+  // Scalar INT64 tensor representing a single symbolic dimension "D".
+  onnx_optim::OptimTensor scalar_data(nullptr, onnx_optim::TensorType::kInt64,
+                                      onnx_optim::OptimShape{});
+  scalar_data.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim("D")});
+  ctx.Set("X", std::move(scalar_data));
+  // axes = [0]
+  ctx.Set("A", MakeShapeInput({0}));
+
+  onnx_optim::shapes::tensor::ComputeShapeUnsqueeze(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kInt64);
+  EXPECT_EQ(ctx.Get("Y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(1)}));
+  // ValueAsShape must be forwarded so downstream Concat can propagate it.
+  ASSERT_TRUE(ctx.Get("Y").HasValueAsShape());
+  EXPECT_EQ(ctx.Get("Y").ValueAsShape(), (onnx_optim::OptimShape{onnx_optim::OptimDim("D")}));
+}
+
+// Same as above but for the Squeeze direction: removing a size-1 axis from a
+// 1-D INT64 tensor must not drop the ValueAsShape annotation.
+TEST(OnnxOptimShapesTensorSqueeze, PropagatesValueAsShapeWhenRemovingUnitAxis) {
+  NodeProto node = MakeSqueezeNode();
+  onnx_optim::shapes::ShapesContext ctx;
+
+  // 1-D INT64 tensor of shape [1] with VAS = ["D"].
+  onnx_optim::OptimTensor vec_data(nullptr, onnx_optim::TensorType::kInt64,
+                                   onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+  vec_data.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim("D")});
+  ctx.Set("X", std::move(vec_data));
+  // axes = [0]
+  ctx.Set("A", MakeShapeInput({0}));
+
+  onnx_optim::shapes::tensor::ComputeShapeSqueeze(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kInt64);
+  // Shape after squeezing the single axis is scalar (rank 0).
+  EXPECT_EQ(ctx.Get("Y").Shape().Rank(), 0u);
+  // ValueAsShape must be forwarded unchanged.
+  ASSERT_TRUE(ctx.Get("Y").HasValueAsShape());
+  EXPECT_EQ(ctx.Get("Y").ValueAsShape(), (onnx_optim::OptimShape{onnx_optim::OptimDim("D")}));
+}
+
 // ---------------------------------------------------------------------------
 // NonZero shape-inference tests
 // ---------------------------------------------------------------------------

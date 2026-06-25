@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..onnx_lib.backend.random import rand, randint
 from .helper import tensor_dtype_to_np_dtype
 
 __all__ = ["make_random_input"]
@@ -28,6 +27,7 @@ def make_random_input(elem_type: int, shape: list[int], seed: int) -> np.ndarray
     Raises:
         NotImplementedError: For unsupported element types (e.g. STRING).
     """
+    from ..onnx_lib.backend.random import rand, randint
     from . import TensorProto
 
     np_dtype = tensor_dtype_to_np_dtype(elem_type)

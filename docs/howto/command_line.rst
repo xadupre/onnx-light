@@ -26,7 +26,7 @@ back to disk.
 Synopsis::
 
     python -m onnx_light fillshape MODEL [--output OUTPUT] [--keep]
-                                         [--inplace-info] [--show]
+                                         [--inplace-info] [--shape-tag] [--show]
                                          [--verbose [LEVEL]]
 
 Positional argument
@@ -57,6 +57,12 @@ Options
     After shape inference, compute in-place buffer-reuse opportunities
     and record them in each eligible node's ``metadata_props`` under the
     key ``onnx_light.inplace_reuse``.
+
+``--shape-tag``
+    After shape inference, infer semantic ``shape``/``axes``/``weight``
+    tags for every value and node in the graph and record them in
+    ``metadata_props`` (keys ``onnx_light.value_tags`` and
+    ``onnx_light.node_tag``).
 
 ``--show``
     Print the model with inferred shapes to stdout using
@@ -96,6 +102,12 @@ Annotate nodes with in-place buffer-reuse information:
 .. code-block:: bash
 
     python -m onnx_light fillshape model.onnx --inplace-info
+
+Annotate values and nodes with semantic shape/axes/weight tags:
+
+.. code-block:: bash
+
+    python -m onnx_light fillshape model.onnx --shape-tag
 
 Print inferred shapes without saving:
 

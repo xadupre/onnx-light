@@ -33,8 +33,17 @@ BroadcastInfo CheckBinaryBroadcastInOut(const char *op_name, const char *in_dtyp
     sy[rank - y.shape.size() + i] = y.shape[i];
   }
   for (size_t d = 0; d < rank; ++d) {
-    if (sx[d] == sy[d] || sx[d] == 1 || sy[d] == 1) {
-      out[d] = sx[d] >= sy[d] ? sx[d] : sy[d];
+    // Multidirectional broadcasting: a size-1 dimension takes the size of the
+    // other operand. This must follow the broadcast rule literally rather than
+    // ``max(dx, dy)`` so that a size-1 dimension broadcasting against a size-0
+    // (empty) dimension yields 0, not 1 -- otherwise the output element count is
+    // over-estimated and the iteration reads past an empty input buffer.
+    if (sx[d] == sy[d]) {
+      out[d] = sx[d];
+    } else if (sx[d] == 1) {
+      out[d] = sy[d];
+    } else if (sy[d] == 1) {
+      out[d] = sx[d];
     } else {
       EXT_THROW_INVALID(op_name, " input shapes are not multidirectional-broadcastable.");
     }

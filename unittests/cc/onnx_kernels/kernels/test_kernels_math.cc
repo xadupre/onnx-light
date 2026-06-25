@@ -951,6 +951,22 @@ TEST(KernelClass, DivClassBroadcastsScalar) {
   EXPECT_FLOAT_EQ(pz[3], 4.0f);
 }
 
+TEST(KernelClass, DivClassBroadcastsScalarOverEmptyAxis) {
+  // Regression test: broadcasting a scalar (or size-1) operand against an
+  // input whose shape contains a zero-length axis must yield a zero-element
+  // output, not over-estimate the element count. The earlier ``max(dx, dy)``
+  // broadcast rule produced an output dim of 1 for a (0, 1) pair, so the
+  // iteration read past the empty input buffer and crashed.
+  const KernelContext ctx{DefaultOpset(14)};
+  Div div_kernel{ctx};
+  Tensor x("", onnx_kernels::DataType::FLOAT, {1, 512, 0}, std::vector<uint8_t>(0));
+  Tensor y = Tensor::FromFloat("", {}, {2.0f});
+  Tensor z = div_kernel(x, y);
+  EXPECT_EQ(z.element_count(), 0);
+  const std::vector<int64_t> expected_shape{1, 512, 0};
+  EXPECT_EQ(z.shape, expected_shape);
+}
+
 TEST(KernelClass, DivInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(14)};
   Div div_kernel{ctx};

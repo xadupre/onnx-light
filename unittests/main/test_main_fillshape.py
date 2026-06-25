@@ -197,6 +197,33 @@ class TestMainFillshape(ExtTestCase):
             self.assertIn("onnx_light.inplace_reuse", node1_meta)
             self.assertEqual(node1_meta["onnx_light.release_after"], "A")
 
+    def test_fillshape_release_info_option(self):
+        """fillshape --release-info writes release metadata into node metadata_props."""
+        from onnx_light.__main__ import main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            # Build Abs(X)->A, Abs(A)->Y: node 1 can release A after execution.
+            abs0 = oh.make_node("Abs", inputs=["X"], outputs=["A"])
+            abs1 = oh.make_node("Abs", inputs=["A"], outputs=["Y"])
+            x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [3, 4])
+            y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
+            graph = oh.make_graph([abs0, abs1], "g", [x], [y])
+            model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+            model.ir_version = 8
+            self._save_model(model, model_path)
+
+            main(["fillshape", model_path, "--release-info"])
+
+            result = load(model_path)
+            # Shapes must also be filled.
+            dims = list(result.graph.output[0].type.tensor_type.shape.dim)
+            self.assertEqual(len(dims), 2)
+
+            # Node 1 (Abs A->Y) should have release metadata.
+            node1_meta = {entry.key: entry.value for entry in result.graph.node[1].metadata_props}
+            self.assertEqual(node1_meta["onnx_light.release_after"], "A")
+
     def test_fillshape_shape_tag_option(self):
         """fillshape --shape-tag writes value/node tag metadata into the model."""
         from onnx_light.__main__ import main

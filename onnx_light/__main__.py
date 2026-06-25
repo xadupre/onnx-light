@@ -26,9 +26,12 @@ fillshape
         ones.
     ``--inplace-info``
         After shape inference, also compute in-place buffer-reuse
-        opportunities and last-use release hints, and write them into each
-        node's ``metadata_props`` under the keys
-        ``onnx_light.inplace_reuse`` and ``onnx_light.release_after``.
+        opportunities and write them into each node's ``metadata_props``
+        under the key ``onnx_light.inplace_reuse``.
+    ``--release-info``
+        After shape inference, compute last-use release hints and write
+        them into each node's ``metadata_props`` under the key
+        ``onnx_light.release_after``.
     ``--shape-tag``
         After shape inference, infer semantic ``shape``/``axes``/``weight``
         tags for every value and node in the graph and record them in
@@ -211,6 +214,7 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
     output_path: str | None = args.output
     keep: bool = args.keep
     inplace_info: bool = args.inplace_info
+    release_info: bool = args.release_info
     shape_tag: bool = args.shape_tag
     show: bool = args.show
     verbose: int = args.verbose
@@ -235,7 +239,7 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
     # (must happen before the tiny-tensor step, which inlines small tensors).
     has_external_data = any(uses_external_data(init) for init in model.graph.initializer)
 
-    if inplace_info or verbose > 0:
+    if inplace_info or release_info or verbose > 0:
         # Retains the ShapesContext so in-place reuse analysis and verbose
         # event logging can reuse the already-inferred shape data.
         ctx = ShapesContext()
@@ -249,7 +253,7 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
             _print_shape_inference_events(events)
             if verbose >= 2:
                 _print_shape_inference_events_detailed(events)
-        if inplace_info:
+        if inplace_info or release_info:
             if verbose:
                 print("[fillshape] compute inplace/release info")
             inplace_context = ComputeContext()
@@ -281,7 +285,7 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
             pretty_onnx(
                 model,
                 include_inplace=inplace_info,
-                include_release=inplace_info,
+                include_release=(inplace_info or release_info),
                 include_node_tags=shape_tag,
             )
         )
@@ -594,9 +598,19 @@ def _build_parser() -> argparse.ArgumentParser:
         default=False,
         dest="inplace_info",
         help=(
-            "Also compute in-place buffer-reuse opportunities and last-use "
-            "release hints, and record them in each node's metadata_props "
-            "under the keys ``onnx_light.inplace_reuse`` and "
+            "Also compute in-place buffer-reuse opportunities and record them "
+            "in each node's metadata_props under the key "
+            "``onnx_light.inplace_reuse``."
+        ),
+    )
+    fillshape_parser.add_argument(
+        "--release-info",
+        action="store_true",
+        default=False,
+        dest="release_info",
+        help=(
+            "Also compute last-use release hints and record them in each "
+            "node's metadata_props under the key "
             "``onnx_light.release_after``."
         ),
     )

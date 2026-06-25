@@ -299,8 +299,8 @@ public:
   ~Logger();
 
   /**
-   * Writes @p message followed by a newline to the configured destination.
-   * Does nothing when logging is disabled.
+   * Writes @p message followed by a newline to the configured destination and flushes
+   * immediately.  Does nothing when logging is disabled.
    *
    * @param message The text to log.
    */

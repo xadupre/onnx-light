@@ -229,8 +229,10 @@ void Logger::log(const std::string &message) {
   }
   if (to_stdout_) {
     std::cout << message << "\n";
+    std::cout.flush();
   } else {
     file_stream_ << message << "\n";
+    file_stream_.flush();
   }
 }
 

@@ -3,15 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-import importlib.util
 import json
 import unittest
 from unittest.mock import patch
 
+from onnx_light.ext_test_case import HAS_OPTIM_EXT
 from onnx_light.tools import infer_value_and_node_tags, write_value_and_node_tags_to_metadata
 from onnx_light.tools._proto_utils import NODE_TAG_METADATA_KEY, VALUE_TAGS_METADATA_KEY
-
-HAS_OPTIM_EXT = importlib.util.find_spec("onnx_light.onnx_py._onnxpyoptim") is not None
 
 
 def _meta_dict(proto_obj: object) -> dict[str, str]:

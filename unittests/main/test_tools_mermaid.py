@@ -11,14 +11,12 @@ upstream :mod:`onnx` package.
 
 from __future__ import annotations
 
-import importlib.util
 import unittest
 from types import SimpleNamespace
 
+from onnx_light.ext_test_case import HAS_OPTIM_EXT
 from onnx_light.tools import to_mermaid, to_mermaid_graph
 from onnx_light.tools.mermaid import _escape_label, _format_shape
-
-HAS_OPTIM_EXT = importlib.util.find_spec("onnx_light.onnx_py._onnxpyoptim") is not None
 
 
 def _vi(name: str, elem_type: int = 1, dims: tuple = ()) -> SimpleNamespace:

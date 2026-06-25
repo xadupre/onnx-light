@@ -380,6 +380,28 @@ class ReferenceEvaluator:
                 )
                 expanded[f"{name}_keys"] = keys_arr
                 expanded[f"{name}_values"] = values_arr
+            elif name.endswith("_keys") and isinstance(value, dict):
+                # Backward-compatibility path: some callers build feeds by
+                # zipping positional inputs against ``sess.input_names``. For a
+                # map(K, V) input represented as a single ``dict`` positional
+                # value, that zip may yield ``{"<name>_keys": {...}}`` instead
+                # of ``{"<name>": {...}}``. Treat that form as the same map
+                # shorthand when ``<name>`` is a known map input and
+                # ``<name>_values`` is not provided explicitly.
+                base_name = name.removesuffix("_keys")
+                if (
+                    base_name in self._map_inputs
+                    and f"{base_name}_values" not in feed_inputs
+                    and base_name not in feed_inputs
+                ):
+                    key_type, value_type = self._map_inputs[base_name]
+                    keys_arr, values_arr = self._dict_to_key_value_arrays(
+                        base_name, value, key_type, value_type
+                    )
+                    expanded[f"{base_name}_keys"] = keys_arr
+                    expanded[f"{base_name}_values"] = values_arr
+                else:
+                    expanded[name] = value
             elif isinstance(value, dict):
                 raise TypeError(
                     f"ReferenceEvaluator.run: input {name!r} received a "

@@ -403,6 +403,12 @@ sess.run(
         )
         np.testing.assert_array_equal(out2, np.array([0.5, 1.5, 2.5], dtype=np.float32))
 
+        # Backward-compatibility: callers that zip positional inputs against
+        # ``sess.input_names`` may produce ``{"x_keys": {...}}`` for a map
+        # input fed as a single dict. This shorthand is accepted.
+        (out3,) = sess.run(None, {"x_keys": {2: 2.5, 0: 0.5, 1: 1.5}})
+        np.testing.assert_array_equal(out3, np.array([0.5, 1.5, 2.5], dtype=np.float32))
+
     def test_lstm_layout1_matches_layout0(self):
         # Regression test for ``test_cc_lstm_batchwise``: the LSTM kernel
         # itself only implements ``layout=0`` so the dispatch table

@@ -167,8 +167,9 @@ class TestSimplifyExpressions(ExtTestCase):
             evaluate_expression("x//5//2", {"x": -37}),
         )
         # Should not simplify when a divisor is not a constant.
-        self.assertEqual("(x//a)//2", simplify_expression("(x//a)//2"))
-        self.assertEqual("(x//2)//b", simplify_expression("(x//2)//b"))
+        # // is left-associative so (x//a)//2 prints without redundant parens.
+        self.assertEqual("x//a//2", simplify_expression("(x//a)//2"))
+        self.assertEqual("x//2//b", simplify_expression("(x//2)//b"))
 
     def test_simplify_expression_negation(self):
         self.assertEqual("length", simplify_expression("-1+1+length"))

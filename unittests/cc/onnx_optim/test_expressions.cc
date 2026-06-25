@@ -148,9 +148,10 @@ TEST(SimplifyExpressions, SimplifyExpression_nested_floordiv) {
   EXPECT_EQ(evaluate_expression("x//5//2", {{"x", -37}}),
             evaluate_expression("x//10", {{"x", -37}}));
   // Should not simplify when the inner divisor is not a constant.
-  EXPECT_EQ(get_str(simplify_expression("(x//a)//2")), "(x//a)//2");
+  // // is left-associative so (x//a)//2 prints without redundant parens.
+  EXPECT_EQ(get_str(simplify_expression("(x//a)//2")), "x//a//2");
   // Should not simplify when the outer divisor is not a constant.
-  EXPECT_EQ(get_str(simplify_expression("(x//2)//b")), "(x//2)//b");
+  EXPECT_EQ(get_str(simplify_expression("(x//2)//b")), "x//2//b");
 }
 
 TEST(SimplifyExpressions, SimplifyExpression_bracket_max) {

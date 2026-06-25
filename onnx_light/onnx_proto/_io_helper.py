@@ -205,6 +205,7 @@ def load(
     f: str | Path,
     skip_raw_data: bool = False,
     raw_data_threshold: int = 1024,
+    tiny_external_data_threshold: int = -1,
     load_external_data: Optional[bool] = None,
     num_threads: int = -1,
     location: str = "",
@@ -238,6 +239,11 @@ def load(
         one unique file
     :param raw_data_threshold: if `skip_raw_data` is True, still keeps the tensors
         smaller than this size (in bytes)
+    :param tiny_external_data_threshold: when parsing from a model file path without
+        ``external_data_file`` (that is, with ``load_external_data=False``), loads
+        tensors marked as external if their declared external ``length``/``size`` is
+        strictly below this threshold (in bytes), then inlines them into ``raw_data``.
+        A negative value (default) disables this behavior.
     :param load_external_data: Whether to load the external data.
             Set to True if the data is under the same directory of the model.
     :param num_threads: number of threads to use for parallel parsing.
@@ -332,6 +338,7 @@ def load(
     if (
         skip_raw_data
         or (num_threads > 1 or num_threads < 0)
+        or tiny_external_data_threshold >= 0
         or no_copy
         or touch_raw_data_pages
         or file_load_mode != FileLoadMode.AUTO
@@ -341,6 +348,7 @@ def load(
         opts.raw_data_threshold = raw_data_threshold
         opts.num_threads = num_threads
         opts.min_parallel_block_size = min_block_size
+        opts.tiny_external_data_threshold = tiny_external_data_threshold
         opts.no_copy = no_copy
         opts._touch_raw_data_pages = touch_raw_data_pages
         opts.file_load_mode = file_load_mode

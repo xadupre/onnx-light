@@ -182,7 +182,14 @@ void AddOnnxPyExpressions(nb::module_ &m) {
     nb::class_<expr::DimRange>(
         expressions_mod, "DimRange",
         "Inclusive ``[lower, upper]`` range for a dimension variable.\n\n"
-        "Each bound is an ``int`` when concrete or a ``str`` when symbolic.\n"
+        "Each bound is an ``int`` when concrete or a ``str`` when symbolic.\n\n"
+        "When ``upper == lower`` the variable is **exactly constrained** to that\n"
+        "value (an equality constraint with no slack).  In that case there is no\n"
+        "separate upper bound beyond the equality itself.\n\n"
+        "A variable that does not appear as a key in the dict returned by\n"
+        ":func:`dim_ranges_from_expressions` has no determinable range at all;\n"
+        "it is absent from the result rather than represented as an unbounded\n"
+        "``DimRange``.\n\n"
         "Returned by :func:`dim_ranges_from_expressions`.")
         .def_prop_ro(
             "lower",
@@ -191,7 +198,12 @@ void AddOnnxPyExpressions(nb::module_ &m) {
         .def_prop_ro(
             "upper",
             [from_dim](const expr::DimRange &r) -> nb::object { return from_dim(r.upper); },
-            "Inclusive upper bound; ``int`` when numeric, ``str`` when symbolic.")
+            "Inclusive upper bound; ``int`` when numeric, ``str`` when symbolic.\n\n"
+            "Equals ``lower`` when the variable is exactly constrained by a direct\n"
+            "equality (e.g. ``var == value``).  In that case no separate upper bound\n"
+            "is available — the bound simply reflects the equality.  When ``upper``\n"
+            "differs from ``lower`` (floor-division chain with divisor product > 1),\n"
+            "it is a true finite upper bound.")
         .def("__repr__",
              [from_dim](const expr::DimRange &r) {
                auto lo = from_dim(r.lower);
@@ -299,9 +311,13 @@ void AddOnnxPyExpressions(nb::module_ &m) {
         "Each element of *equalities* is a ``(lhs, rhs)`` pair representing the equality\n"
         "``lhs == rhs``.  For each variable that appears as the leaf of a floor-division\n"
         "chain on one side, computes the tight range:\n\n"
-        "* ``var == value``                  → ``{var: DimRange(value, value)}``\n"
-        "* ``var // d₁ // … // dₙ == value`` → ``{var: DimRange(P*value, P*value+P-1)}`` "
-        "where P = d₁·…·dₙ.\n\n"
+        "* ``var == value`` → ``{var: DimRange(value, value)}`` — the variable is exactly\n"
+        "  constrained to ``value``; ``upper == lower`` and there is no separate upper\n"
+        "  bound beyond the equality itself.\n"
+        "* ``var // d₁ // … // dₙ == value`` → ``{var: DimRange(P*value, P*value+P-1)}``\n"
+        "  where P = d₁·…·dₙ — a proper range with ``upper > lower`` whenever P > 1.\n\n"
+        "Variables that do not match any supported pattern are **absent** from the result;\n"
+        "they have no determinable range and are not represented as unbounded entries.\n\n"
         "When *tokens* is non-empty, only the listed variables are returned.\n\n"
         "Returns a ``dict[str, DimRange]`` mapping each variable to its inclusive range.");
   }

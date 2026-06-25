@@ -781,10 +781,19 @@ DimType dim_min(const DimType &a, const DimType &b);
  * @brief Inclusive range `[lower, upper]` for a dimension variable.
  *
  * Each bound is either a concrete `int64_t` or a symbolic expression string.
+ *
+ * When `lower == upper` the variable is **exactly constrained** to that value
+ * (no slack, i.e. an equality rather than a proper interval).  In that case
+ * there is no separate upper bound beyond the equality itself.
+ *
+ * A variable that does not appear in the result map of
+ * @ref dim_ranges_from_expressions has no determinable range at all; it is
+ * simply absent rather than represented as an unbounded `DimRange`.
  */
 struct DimRange {
   DimType lower; ///< Inclusive lower bound.
-  DimType upper; ///< Inclusive upper bound.
+  DimType upper; ///< Inclusive upper bound.  Equals `lower` when the variable
+                 ///< is exactly constrained (no separate upper bound).
 };
 
 /**
@@ -796,16 +805,22 @@ struct DimRange {
  * side of an equality as the leaf of a floor-division chain, the function
  * derives tight integer bounds:
  *
- * * **`var == rhs`** (product = 1): range is `[rhs, rhs]`.
+ * * **`var == rhs`** (product = 1): `DimRange{rhs, rhs}` — the variable is
+ *   exactly constrained to `rhs`; `lower == upper` and there is no separate
+ *   upper bound beyond the equality itself.
  * * **`var // d₁ // … // dₙ == rhs`** (P = d₁·…·dₙ, all dᵢ positive
- *   integers): range is `[rhs·P, rhs·P + P − 1]`, which is the exact set of
- *   integers that floor-divide to `rhs` when divided by P.
+ *   integers): `DimRange{rhs·P, rhs·P + P − 1}` — the variable is in the
+ *   half-open integer set that floor-divides to `rhs` when divided by P;
+ *   `upper` is strictly greater than `lower` whenever `P > 1`.
  *
  * The symmetry of each equality is exploited: both sides are tried as the
  * "chain" side, with the other side as the bound expression.
  *
  * Both sides are simplified via @ref simplify_expression before pattern
  * matching.
+ *
+ * Variables for which no supported pattern is recognised are **absent** from
+ * the result map entirely; they are not represented as an unbounded range.
  *
  * @param equalities  Pairs `(lhs, rhs)` of symbolic expressions that are
  *                    equal (e.g. `{"a", "d//5"}`).
@@ -818,8 +833,8 @@ struct DimRange {
  * @code{.cpp}
  * using P = std::pair<std::string, std::string>;
  * auto ranges = dim_ranges_from_expressions({P{"a", "d//5"}});
- * // ranges["a"] == DimRange{DimType{"d//5"}, DimType{"d//5"}}
- * // ranges["d"] == DimRange{DimType{"5*a"}, DimType{"4+5*a"}}
+ * // ranges["a"] == DimRange{DimType{"d//5"}, DimType{"d//5"}}  // exact
+ * // ranges["d"] == DimRange{DimType{"5*a"}, DimType{"4+5*a"}}  // proper range
  * @endcode
  */
 std::unordered_map<std::string, DimRange>

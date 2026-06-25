@@ -7,6 +7,7 @@ from onnx_light.onnx_optim.expressions import (
     simplify_two_expressions,
     compare_expressions,
     CompareResult,
+    DimRange,
     evaluate_expression,
     parse_expression_tokens,
     rename_expression,
@@ -20,6 +21,7 @@ from onnx_light.onnx_optim.expressions import (
     dim_mod,
     dim_max,
     dim_min,
+    dim_ranges_from_expressions,
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -383,6 +385,123 @@ class TestExactDiv(ExtTestCase):
         # /: must be exact: evaluating 7/:2 should raise.
         with self.assertRaises(RuntimeError):
             evaluate_expression("7/:2", {})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# test_dim_ranges_from_expressions.py (adapted)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestDimRangesFromExpressions(ExtTestCase):
+    """Tests for :func:`dim_ranges_from_expressions`."""
+
+    # ── Direct equality ────────────────────────────────────────────────────
+    def test_direct_equality(self):
+        # a == d//5  →  a ∈ [d//5, d//5],  d ∈ [5*a, 5*a+4]
+        result = dim_ranges_from_expressions([("a", "d//5")])
+        self.assertIsInstance(result["a"], DimRange)
+        self.assertEqual(result["a"].lower, "d//5")
+        self.assertEqual(result["a"].upper, "d//5")
+        self.assertIsInstance(result["d"], DimRange)
+        self.assertEqual(simplify_expression(result["d"].lower), "5*a")
+        self.assertIn(simplify_expression(result["d"].upper), ("4+5*a", "5*a+4"))
+
+    def test_direct_variable_equality(self):
+        # a == b  →  a ∈ [b, b],  b ∈ [a, a]
+        result = dim_ranges_from_expressions([("a", "b")])
+        self.assertIsInstance(result["a"], DimRange)
+        self.assertEqual(result["a"].lower, "b")
+        self.assertEqual(result["a"].upper, "b")
+        self.assertIsInstance(result["b"], DimRange)
+        self.assertEqual(result["b"].lower, "a")
+        self.assertEqual(result["b"].upper, "a")
+
+    def test_direct_constant_equality(self):
+        # a == 3  →  a ∈ [3, 3]
+        result = dim_ranges_from_expressions([("a", "3")])
+        self.assertIsInstance(result["a"], DimRange)
+        self.assertEqual(result["a"].lower, 3)
+        self.assertEqual(result["a"].upper, 3)
+
+    # ── Double floor-division chain ────────────────────────────────────────
+    def test_double_floordiv(self):
+        # a == d//5//2  ⟹  d//10 == a  →  d ∈ [10*a, 10*a+9],  a ∈ [d//10, d//10]
+        result = dim_ranges_from_expressions([("a", "d//5//2")])
+        self.assertIsInstance(result["d"], DimRange)
+        self.assertEqual(simplify_expression(result["d"].lower), "10*a")
+        self.assertIn(simplify_expression(result["d"].upper), ("9+10*a", "10*a+9"))
+        self.assertIsInstance(result["a"], DimRange)
+        self.assertEqual(simplify_expression(result["a"].lower), "d//10")
+        self.assertEqual(simplify_expression(result["a"].upper), "d//10")
+
+    # ── LHS is the floor-div chain ─────────────────────────────────────────
+    def test_lhs_floordiv_chain(self):
+        # d//5 == a  →  same as a == d//5
+        result = dim_ranges_from_expressions([("d//5", "a")])
+        self.assertIn("d", result)
+        self.assertIsInstance(result["d"], DimRange)
+        self.assertEqual(simplify_expression(result["d"].lower), "5*a")
+
+    # ── Multiple equalities ────────────────────────────────────────────────
+    def test_multiple_equalities(self):
+        # a == d//5  AND  b == 1  →  ranges for a, b, d
+        result = dim_ranges_from_expressions([("a", "d//5"), ("b", "1")])
+        self.assertIn("a", result)
+        self.assertIsInstance(result["b"], DimRange)
+        self.assertEqual(result["b"].lower, 1)
+        self.assertEqual(result["b"].upper, 1)
+        self.assertIn("d", result)
+
+    # ── Token filtering ───────────────────────────────────────────────────
+    def test_tokens_filter(self):
+        result = dim_ranges_from_expressions([("a", "d//5")], tokens=["d"])
+        self.assertIn("d", result)
+        self.assertNotIn("a", result)
+
+    def test_tokens_filter_empty_list(self):
+        # Empty tokens list means "all tokens".
+        result = dim_ranges_from_expressions([("a", "d//5")], tokens=[])
+        self.assertIn("a", result)
+        self.assertIn("d", result)
+
+    def test_tokens_filter_none(self):
+        # None means "all tokens".
+        result = dim_ranges_from_expressions([("a", "d//5")], tokens=None)
+        self.assertIn("a", result)
+        self.assertIn("d", result)
+
+    # ── DimRange repr and equality ─────────────────────────────────────────
+    def test_dim_range_repr_symbolic(self):
+        result = dim_ranges_from_expressions([("a", "d//5")])
+        r = result["a"]
+        self.assertEqual(repr(r), "DimRange(lower='d//5', upper='d//5')")
+
+    def test_dim_range_repr_numeric(self):
+        result = dim_ranges_from_expressions([("a", "3")])
+        r = result["a"]
+        self.assertEqual(repr(r), "DimRange(lower=3, upper=3)")
+
+    # ── Unsupported patterns return empty (variable absent) ────────────────
+    def test_unsupported_two_variables_on_one_side(self):
+        # x + y == 5 — x+y is not a chain of a single variable; skip both sides.
+        result = dim_ranges_from_expressions([("x+y", "5")])
+        self.assertNotIn("x", result)
+        self.assertNotIn("y", result)
+
+    def test_unsupported_symbolic_divisor(self):
+        # x//(a*b) == rhs — non-integer divisor; cannot invert.
+        result = dim_ranges_from_expressions([("x//(a*b)", "rhs")])
+        self.assertNotIn("x", result)
+
+    def test_empty_equalities(self):
+        self.assertEqual(dim_ranges_from_expressions([]), {})
+
+    # ── INFINITY constant ──────────────────────────────────────────────────
+    def test_infinity_constant_exists(self):
+        self.assertEqual(onnx_expressions.INFINITY, "+inf")
+
+    def test_infinity_is_string(self):
+        self.assertIsInstance(onnx_expressions.INFINITY, str)
 
 
 if __name__ == "__main__":

@@ -74,19 +74,19 @@ ORT_EXCLUDE_REGEX = [
     # Light-only ai.rt ops are not registered in ORT.
     r"^test_cc_delayedinitializer_",
     # ORT exposes different Attention intermediates than the ONNX reference.
-    r"^test_cc_attention_4d_with_past_and_present_qk_matmul_bias_3d_mask_causal(_expanded)?$",
-    r"^test_cc_attention_4d_with_past_and_present_qk_matmul_bias_4d_mask_causal(_expanded)?$",
-    r"^test_cc_attention_3d_with_past_and_present_qk_matmul_bias(_expanded)?$",
-    r"^test_cc_attention_4d_with_qk_matmul_bias(_expanded)?$",
-    r"^test_cc_attention_4d_with_past_and_present_qk_matmul_bias(_expanded)?$",
-    r"^test_cc_attention_4d_with_past_and_present_qk_matmul_bias_3d_mask(_expanded)?$",
-    r"^test_cc_attention_4d_with_past_and_present_qk_matmul_bias_4d_mask(_expanded)?$",
-    r"^test_cc_attention_4d_softcap_neginf_mask(_expanded)?$",
-    r"^test_cc_attention_4d_softcap_neginf_mask_poison(_expanded)?$",
+    r"^test_cc_attention_4d_with_past_and_present_qk_matmul_bias_3d_mask_causal$",
+    r"^test_cc_attention_4d_with_past_and_present_qk_matmul_bias_4d_mask_causal$",
+    r"^test_cc_attention_3d_with_past_and_present_qk_matmul_bias$",
+    r"^test_cc_attention_4d_with_qk_matmul_bias$",
+    r"^test_cc_attention_4d_with_past_and_present_qk_matmul_bias$",
+    r"^test_cc_attention_4d_with_past_and_present_qk_matmul_bias_3d_mask$",
+    r"^test_cc_attention_4d_with_past_and_present_qk_matmul_bias_4d_mask$",
+    r"^test_cc_attention_4d_softcap_neginf_mask$",
+    r"^test_cc_attention_4d_softcap_neginf_mask_poison$",
     # ORT does not yet implement the opset-24 offset-aware (bottom-right)
     # causal frontier for an external KV cache (``nonpad_kv_seqlen`` without
     # ``past_key``); see ONNX PR #8068.
-    r"^test_cc_attention_4d_causal_nonpad_kv_continued_prefill(_expanded)?$",
+    r"^test_cc_attention_4d_causal_nonpad_kv_continued_prefill$",
     # Preview training ops are not registered in ORT.
     r"^test_cc_adam_",
     r"^test_adam$",

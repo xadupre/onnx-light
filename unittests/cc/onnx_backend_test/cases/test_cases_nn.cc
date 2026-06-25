@@ -298,20 +298,20 @@ TEST(BackendTestCase, LayerNormalizationCasesArePresent) {
 TEST(BackendTestCase, MeanVarianceNormalizationCasesArePresent) {
   auto cases = CollectTestCases("MeanVarianceNormalization");
   const TestCase *mvn = nullptr;
-  const TestCase *mvn_expanded = nullptr;
-  const TestCase *mvn_expanded_ver18 = nullptr;
+  const TestCase *mvn_explicit_axes = nullptr;
+  const TestCase *mvn_explicit_axes_ver18 = nullptr;
   for (const auto &c : cases) {
     if (c.name == "test_cc_mvn") {
       mvn = &c;
-    } else if (c.name == "test_cc_mvn_expanded") {
-      mvn_expanded = &c;
-    } else if (c.name == "test_cc_mvn_expanded_ver18") {
-      mvn_expanded_ver18 = &c;
+    } else if (c.name == "test_cc_mvn_explicit_axes") {
+      mvn_explicit_axes = &c;
+    } else if (c.name == "test_cc_mvn_explicit_axes_ver18") {
+      mvn_explicit_axes_ver18 = &c;
     }
   }
   ASSERT_NE(mvn, nullptr);
-  ASSERT_NE(mvn_expanded, nullptr);
-  ASSERT_NE(mvn_expanded_ver18, nullptr);
+  ASSERT_NE(mvn_explicit_axes, nullptr);
+  ASSERT_NE(mvn_explicit_axes_ver18, nullptr);
   ASSERT_EQ(mvn->data_sets.size(), 1u);
   const auto &ds = mvn->data_sets[0];
   ASSERT_EQ(ds.inputs.size(), 1u);

@@ -230,29 +230,5 @@ void RegisterReduceLogSumExpCases(std::vector<TestCase> &registry) {
            registry);
   }
 
-  // Register _expanded aliases: the expanded graphs decompose ReduceLogSumExp
-  // into Cast+Exp+ReduceSum+Log+CastLike; all those primitive ops are supported
-  // so the non-expanded test results are valid references.
-  {
-    const size_t n = registry.size();
-    for (size_t i = 0; i < n; ++i) {
-      if (registry[i].name.find("test_reduce_log_sum_exp_") != std::string::npos &&
-          registry[i].name.find("_expanded") == std::string::npos &&
-          registry[i].name.find("test_cc_") == std::string::npos) {
-        std::string serialized;
-        registry[i].model.SerializeToString(serialized);
-        TestCase copy;
-        copy.model.ParseFromString(serialized);
-        const_cast<std::string &>(copy.name) = registry[i].name + "_expanded";
-        const_cast<std::string &>(copy.model_name) = registry[i].model_name;
-        copy.data_sets = registry[i].data_sets;
-        const_cast<std::string &>(copy.kind) = registry[i].kind;
-        const_cast<std::string &>(copy.tag) = registry[i].tag;
-        registry.push_back(std::move(copy));
-      }
-    }
-  }
-}
-
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

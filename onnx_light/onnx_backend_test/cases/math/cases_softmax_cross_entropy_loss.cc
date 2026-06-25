@@ -41,11 +41,9 @@ NodeProto BuildSCENode(bool has_weights, bool with_log_prob, const std::string &
   return node;
 }
 
-// Register the four ONNX backend test variants for the given SCE configuration:
-//   - ``test_cc_<base>``                       (loss only)
-//   - ``test_cc_<base>_expanded``              (loss only)
-//   - ``test_cc_<base>_log_prob``              (loss + log_prob)
-//   - ``test_cc_<base>_log_prob_expanded``     (loss + log_prob)
+// Register the two ONNX backend test variants for the given SCE configuration:
+//   - ``test_cc_<base>``          (loss only)
+//   - ``test_cc_<base>_log_prob`` (loss + log_prob)
 // The case names embed the ONNX node-test names (``sce_<base>...``) as
 // substrings so the ``onnxl_vs_onnx`` coverage check considers each of them
 // covered. The expected outputs are produced by the kernel itself; since the
@@ -68,23 +66,21 @@ void RegisterSCEVariants(const kernel::SoftmaxCrossEntropyLoss &sce_kernel, cons
   const std::string name_prefix = "test_cc_" + base;
   const bool has_weights = weights != nullptr;
 
-  // Loss-only variants ("" and "_expanded").
-  for (const char *suffix : {"", "_expanded"}) {
+  // Loss-only variant.
+  {
     NodeProto node = BuildSCENode(has_weights, /*with_log_prob=*/false, reduction, has_ignore_index,
                                   ignore_index);
-    Tensor loss_copy = loss;
-    Expect(node, inputs, {std::move(loss_copy)}, name_prefix + suffix, {opset}, "backend-test",
-           registry);
+    Expect(node, inputs, {loss}, name_prefix, {opset}, "backend-test", registry);
   }
 
-  // Two-output variants ("_log_prob" and "_log_prob_expanded").
-  for (const char *suffix : {"_log_prob", "_log_prob_expanded"}) {
+  // Two-output variant (loss + log_prob).
+  {
     NodeProto node = BuildSCENode(has_weights, /*with_log_prob=*/true, reduction, has_ignore_index,
                                   ignore_index);
     Tensor loss_copy = loss;
     Tensor log_prob_copy = log_prob;
-    Expect(node, inputs, {std::move(loss_copy), std::move(log_prob_copy)}, name_prefix + suffix,
-           {opset}, "backend-test", registry);
+    Expect(node, inputs, {std::move(loss_copy), std::move(log_prob_copy)},
+           name_prefix + "_log_prob", {opset}, "backend-test", registry);
   }
 }
 
@@ -200,10 +196,9 @@ void RegisterSoftmaxCrossEntropyLossCases(std::vector<TestCase> &registry) {
   // ---------------------------------------------------------------------------
   // Cases mirroring the official ONNX backend node tests (``test_sce_*``).
   //
-  // Each base configuration below is exercised in four variants:
-  //   ``<base>``, ``<base>_expanded``, ``<base>_log_prob``,
-  //   ``<base>_log_prob_expanded`` — matching the four ONNX test names per
-  //   base. Expected outputs are produced by the kernel itself; the backend
+  // Each base configuration below is exercised in two variants:
+  //   ``<base>`` and ``<base>_log_prob`` — matching the two ONNX test names
+  //   per base. Expected outputs are produced by the kernel itself; the backend
   //   evaluation then checks the runtime agrees with the kernel for every
   //   supported (reduction × weights × ignore_index × rank) combination.
   // ---------------------------------------------------------------------------

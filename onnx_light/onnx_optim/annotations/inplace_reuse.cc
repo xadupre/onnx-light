@@ -14,7 +14,7 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
-namespace shapes {
+namespace annotations {
 
 namespace {
 
@@ -366,6 +366,6 @@ void WriteInPlaceReuseToMetadata(GraphProto &graph, const ShapesContext &ctx) {
   inplace.WriteToMetadata(graph);
 }
 
-} // namespace shapes
+} // namespace annotations
 } // namespace onnx_optim
 } // namespace ONNX_LIGHT_NAMESPACE

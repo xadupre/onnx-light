@@ -10,7 +10,7 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
-namespace shapes {
+namespace annotations {
 
 namespace {
 
@@ -327,6 +327,6 @@ void WriteValueAndNodeTagsToMetadata(ModelProto &model) {
   }
 }
 
-} // namespace shapes
+} // namespace annotations
 } // namespace onnx_optim
 } // namespace ONNX_LIGHT_NAMESPACE

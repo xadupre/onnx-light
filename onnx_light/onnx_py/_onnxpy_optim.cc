@@ -256,6 +256,7 @@ void AddOnnxPyExpressions(nb::module_ &m) {
 }
 
 void AddOnnxPyShapeInference(nb::module_ &m) {
+  namespace onnx_annotations = ::onnx_light::onnx_optim::annotations;
   namespace onnx_shapes = ::onnx_light::onnx_optim::shapes;
   using ::onnx_light::onnx_optim::DataTypeToTensorType;
   using ::onnx_light::onnx_optim::OptimDim;
@@ -974,44 +975,45 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   // -----------------------------------------------------------------------
   // In-place reuse analysis
   // -----------------------------------------------------------------------
-  shape_mod.attr("INPLACE_REUSE_METADATA_KEY") = onnx_shapes::kInPlaceReuseMetadataKey;
-  shape_mod.attr("RELEASE_AFTER_METADATA_KEY") = onnx_shapes::kReleaseAfterMetadataKey;
-  shape_mod.attr("VALUE_TAG_METADATA_KEY") = onnx_shapes::kValueTagMetadataKey;
-  shape_mod.attr("VALUE_TAGS_METADATA_KEY") = onnx_shapes::kValueTagsMetadataKey;
-  shape_mod.attr("NODE_TAG_METADATA_KEY") = onnx_shapes::kNodeTagMetadataKey;
+  shape_mod.attr("INPLACE_REUSE_METADATA_KEY") = onnx_annotations::kInPlaceReuseMetadataKey;
+  shape_mod.attr("RELEASE_AFTER_METADATA_KEY") = onnx_annotations::kReleaseAfterMetadataKey;
+  shape_mod.attr("VALUE_TAG_METADATA_KEY") = onnx_annotations::kValueTagMetadataKey;
+  shape_mod.attr("VALUE_TAGS_METADATA_KEY") = onnx_annotations::kValueTagsMetadataKey;
+  shape_mod.attr("NODE_TAG_METADATA_KEY") = onnx_annotations::kNodeTagMetadataKey;
 
-  nb::enum_<onnx_shapes::InPlaceReuseKind>(
+  nb::enum_<onnx_annotations::InPlaceReuseKind>(
       shape_mod, "InPlaceReuseKind", nb::is_arithmetic(),
       "Classifies how the reused input buffer compares in size with the output: "
       "``kEqual`` when the input and output share the same element type and shape "
       "(same byte size, the preferred reuse); ``kGreater`` when the input buffer is "
       "strictly larger in bytes than the output.")
-      .value("kEqual", onnx_shapes::InPlaceReuseKind::kEqual,
+      .value("kEqual", onnx_annotations::InPlaceReuseKind::kEqual,
              "The input and output have the same byte size.")
-      .value("kGreater", onnx_shapes::InPlaceReuseKind::kGreater,
+      .value("kGreater", onnx_annotations::InPlaceReuseKind::kGreater,
              "The input buffer is strictly larger in bytes than the output.");
 
-  nb::class_<onnx_shapes::InPlaceReuse>(
+  nb::class_<onnx_annotations::InPlaceReuse>(
       shape_mod, "InPlaceReuse",
       "Represents one in-place reuse opportunity for a node: the output at ``output_index`` "
       "reuses the buffer of the input at ``input_index`` (both indices into the node's "
       "``output``/``input`` lists). ``kind`` records whether the input buffer has the same "
       "size as the output (``kEqual``) or is strictly larger (``kGreater``).")
       .def(nb::init<>())
-      .def_rw("output_index", &onnx_shapes::InPlaceReuse::output_index)
-      .def_rw("input_index", &onnx_shapes::InPlaceReuse::input_index)
-      .def_rw("kind", &onnx_shapes::InPlaceReuse::kind)
+      .def_rw("output_index", &onnx_annotations::InPlaceReuse::output_index)
+      .def_rw("input_index", &onnx_annotations::InPlaceReuse::input_index)
+      .def_rw("kind", &onnx_annotations::InPlaceReuse::kind)
       .def(nb::self == nb::self)
       .def(nb::self != nb::self)
-      .def("__repr__", [](const onnx_shapes::InPlaceReuse &r) {
+      .def("__repr__", [](const onnx_annotations::InPlaceReuse &r) {
         std::ostringstream os;
-        const char *kind = r.kind == onnx_shapes::InPlaceReuseKind::kEqual ? "kEqual" : "kGreater";
+        const char *kind =
+            r.kind == onnx_annotations::InPlaceReuseKind::kEqual ? "kEqual" : "kGreater";
         os << "InPlaceReuse(output_index=" << r.output_index << ", input_index=" << r.input_index
            << ", kind=" << kind << ")";
         return os.str();
       });
 
-  nb::class_<onnx_shapes::ComputeContext>(
+  nb::class_<onnx_annotations::ComputeContext>(
       shape_mod, "ComputeContext",
       "Holds the in-place reuse opportunities computed for a graph, mirroring the way "
       "``ShapesContext`` holds inferred descriptors. Populate it with "
@@ -1020,7 +1022,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       .def(nb::init<>())
       .def(
           "compute_inplace_reuse_graph",
-          [](onnx_shapes::ComputeContext &self, const GraphProto &graph,
+          [](onnx_annotations::ComputeContext &self, const GraphProto &graph,
              const onnx_shapes::ShapesContext &ctx, bool allow_input_overwrite) {
             self.ComputeInPlaceReuseGraph(graph, ctx, allow_input_overwrite);
           },
@@ -1031,12 +1033,12 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           "By default declared graph inputs are never overwritten in place; set "
           "``allow_input_overwrite=True`` to let an input be reused like an intermediate.")
       .def_prop_ro(
-          "reuse", [](const onnx_shapes::ComputeContext &self) { return self.Reuse(); },
+          "reuse", [](const onnx_annotations::ComputeContext &self) { return self.Reuse(); },
           "The per-node reuse opportunities as a list (one entry per node, same order as "
           "``graph.node``); each entry is a list of :class:`InPlaceReuse`.")
       .def(
           "node_reuse",
-          [](const onnx_shapes::ComputeContext &self, std::size_t node_index) {
+          [](const onnx_annotations::ComputeContext &self, std::size_t node_index) {
             return self.NodeReuse(node_index);
           },
           nb::arg("node_index"),
@@ -1044,7 +1046,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           "``node_index``. Raises ``IndexError`` when ``node_index`` is out of bounds.")
       .def(
           "write_to_metadata",
-          [](const onnx_shapes::ComputeContext &self, GraphProto &graph) {
+          [](const onnx_annotations::ComputeContext &self, GraphProto &graph) {
             self.WriteToMetadata(graph);
           },
           nb::arg("graph"),
@@ -1052,14 +1054,14 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           "``onnx_light.inplace_reuse`` and ``onnx_light.release_after``. The ``GraphProto`` is "
           "mutated in place and must be the same graph passed to "
           "``compute_inplace_reuse_graph``.")
-      .def("clear", &onnx_shapes::ComputeContext::Clear, "Empties the stored result.")
-      .def("__len__", [](const onnx_shapes::ComputeContext &self) { return self.Size(); });
+      .def("clear", &onnx_annotations::ComputeContext::Clear, "Empties the stored result.")
+      .def("__len__", [](const onnx_annotations::ComputeContext &self) { return self.Size(); });
 
   shape_mod.def(
       "compute_inplace_reuse",
       [](const onnx_shapes::ShapesContext &ctx, const GraphProto &graph,
          bool allow_input_overwrite) {
-        return onnx_shapes::ComputeInPlaceReuse(graph, ctx, allow_input_overwrite);
+        return onnx_annotations::ComputeInPlaceReuse(graph, ctx, allow_input_overwrite);
       },
       nb::arg("ctx"), nb::arg("graph"), nb::arg("allow_input_overwrite") = false,
       "Guesses, for every node of ``graph``, which outputs reuse which input buffers in "
@@ -1074,7 +1076,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   shape_mod.def(
       "write_inplace_reuse_to_metadata",
       [](const onnx_shapes::ShapesContext &ctx, GraphProto &graph) {
-        onnx_shapes::WriteInPlaceReuseToMetadata(graph, ctx);
+        onnx_annotations::WriteInPlaceReuseToMetadata(graph, ctx);
       },
       nb::arg("ctx"), nb::arg("graph"),
       "Computes the in-place reuse opportunities for ``graph`` (see "
@@ -1099,7 +1101,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   shape_mod.def(
       "infer_value_and_node_tags",
       [](const GraphProto &graph) {
-        const auto inferred = onnx_shapes::InferValueAndNodeTags(graph);
+        const auto inferred = onnx_annotations::InferValueAndNodeTags(graph);
         return nb::make_tuple(inferred.first, inferred.second);
       },
       nb::arg("graph"),
@@ -1107,7 +1109,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   shape_mod.def(
       "infer_value_and_node_tags",
       [](const FunctionProto &function) {
-        const auto inferred = onnx_shapes::InferValueAndNodeTags(function);
+        const auto inferred = onnx_annotations::InferValueAndNodeTags(function);
         return nb::make_tuple(inferred.first, inferred.second);
       },
       nb::arg("function"),
@@ -1115,32 +1117,33 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   shape_mod.def(
       "infer_value_and_node_tags",
       [copy_node_list](nb::list nodes) {
-        const auto inferred = onnx_shapes::InferValueAndNodeTags(copy_node_list(nodes));
+        const auto inferred = onnx_annotations::InferValueAndNodeTags(copy_node_list(nodes));
         return nb::make_tuple(inferred.first, inferred.second);
       },
       nb::arg("nodes"), "Infers semantic ``shape``/``axes``/``weight`` tags for a node list.");
 
   shape_mod.def(
       "write_value_and_node_tags_to_metadata",
-      [](GraphProto &graph) { onnx_shapes::WriteValueAndNodeTagsToMetadata(graph); },
+      [](GraphProto &graph) { onnx_annotations::WriteValueAndNodeTagsToMetadata(graph); },
       nb::arg("graph"), "Writes inferred value/node tags into graph metadata.");
   shape_mod.def(
       "write_value_and_node_tags_to_metadata",
-      [](FunctionProto &function) { onnx_shapes::WriteValueAndNodeTagsToMetadata(function); },
+      [](FunctionProto &function) { onnx_annotations::WriteValueAndNodeTagsToMetadata(function); },
       nb::arg("function"), "Writes inferred value/node tags into function metadata.");
   shape_mod.def(
       "write_value_and_node_tags_to_metadata",
-      [](ModelProto &model) { onnx_shapes::WriteValueAndNodeTagsToMetadata(model); },
+      [](ModelProto &model) { onnx_annotations::WriteValueAndNodeTagsToMetadata(model); },
       nb::arg("model"), "Writes inferred value/node tags into ``model.graph`` metadata.");
   shape_mod.def(
       "write_value_and_node_tags_to_metadata",
       [copy_node_list](nb::list nodes) {
-        const auto inferred = onnx_shapes::InferValueAndNodeTags(copy_node_list(nodes));
+        const auto inferred = onnx_annotations::InferValueAndNodeTags(copy_node_list(nodes));
         const auto &node_tags = inferred.second;
         std::size_t i = 0;
         for (nb::handle h : nodes) {
           if (i < node_tags.size() && !node_tags[i].empty()) {
-            nb::cast<NodeProto &>(h).add_metadata(onnx_shapes::kNodeTagMetadataKey, node_tags[i]);
+            nb::cast<NodeProto &>(h).add_metadata(onnx_annotations::kNodeTagMetadataKey,
+                                                  node_tags[i]);
           }
           ++i;
         }

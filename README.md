@@ -21,6 +21,7 @@
 [![SBOM](https://github.com/xadupre/onnx-light/actions/workflows/cq_sbom.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/cq_sbom.yml)
 [![Spelling](https://github.com/xadupre/onnx-light/actions/workflows/spelling.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/spelling.yml)
 [![pixi](https://github.com/xadupre/onnx-light/actions/workflows/cq_pixi.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/cq_pixi.yml)
+[![INT ir-py](https://github.com/xadupre/onnx-light/actions/workflows/int_ir_py.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/int_ir_py.yml)
 [![codecov](https://codecov.io/gh/xadupre/onnx-light/branch/main/graph/badge.svg)](https://codecov.io/gh/xadupre/onnx-light)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)

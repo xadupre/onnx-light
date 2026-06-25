@@ -169,23 +169,6 @@ def _load_tiny_external_tensors(model: _ModelProto, model_dir: str) -> None:
         init.ClearField("external_data")
 
 
-def _print_shape_inference_events(events: list) -> None:
-    """Prints a compact summary of shape-inference events."""
-    print(f"[fillshape] shape inference events: {len(events)}")
-
-
-def _print_shape_inference_events_detailed(events: list) -> None:
-    """Prints detailed shape-inference events."""
-    for ev in events:
-        d = ev.as_dict()
-        op = f"{d['op_domain']}::{d['op_type']}" if d["op_type"] else "-"
-        print(
-            f"[fillshape] node={d['node_index']:<3d} "
-            f"action={d['action']:<12s} op={op:<20s} "
-            f"name={d['name'] or '-':<16s} shape={d['shape']}"
-        )
-
-
 def _cmd_fillshape(args: argparse.Namespace) -> None:
     """Implements the ``fillshape`` subcommand."""
     from .onnx import load, save
@@ -216,6 +199,8 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
     # (below _FILLSHAPE_TINY_TENSOR_THRESHOLD) are loaded separately below
     # because shape inference may need their values (e.g. Reshape's shape
     # input, Gather's indices, Slice's starts/ends/axes).
+    if verbose:
+        print(f"[fillshape] load {model_path!r}")
     model = load(model_path, load_external_data=False)
 
     # Detect whether the model references weights stored in a separate file
@@ -230,19 +215,37 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
         # event logging can reuse the already-inferred shape data.
         ctx = ShapesContext()
         ctx.events_enabled = verbose > 0
+        if verbose:
+            print("[fillshape] shape inference")
         compute_shape_model(ctx, model, keep)
         apply_inferred_shapes_to_model(ctx, model)
-        if verbose > 0:
+        # where inplace info is called?
+        if verbose:
             events = ctx.events()
-            _print_shape_inference_events(events)
-            if verbose >= 2:
-                _print_shape_inference_events_detailed(events)
+            if verbose:
+                print(f"[fillshape] shape inference events: {len(events)}")
+                if verbose >= 2:
+                    for ev in events:
+                        d = ev.as_dict()
+                        op = f"{d['op_domain']}::{d['op_type']}" if d["op_type"] else "-"
+                        print(
+                            f"[fillshape] node={d['node_index']:<3d} "
+                            f"action={d['action']:<12s} op={op:<20s} "
+                            f"name={d['name'] or '-':<16s} shape={d['shape']}"
+                        )
         if inplace_info:
+            if verbose:
+                print("[fillshape] write inplace info in the model")
             write_inplace_reuse_to_metadata(ctx, model.graph)
     else:
+        if verbose:
+            print("[fillshape] shape inference only")
         infer_shapes_model(model, prefill_with_value_info_output=keep)
 
     if shape_tag:
+        # where shape tag is run?
+        if verbose:
+            print("[fillshape] write shape tag")
         write_value_and_node_tags_to_metadata(model.graph)
 
     if show:
@@ -268,6 +271,8 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
     else:
         dest = model_path
 
+    if verbose:
+        print(f"[fillshape] save into {dest!r}")
     save(model, dest)
 
 

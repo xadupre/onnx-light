@@ -8,6 +8,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/operators.h>
 #include <nanobind/stl/map.h>
+#include <nanobind/stl/pair.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/unordered_set.h>
@@ -177,6 +178,59 @@ void AddOnnxPyExpressions(nb::module_ &m) {
       return nb::cast(std::get<std::string>(d));
     };
 
+    // DimRange — inclusive [lower, upper] range for a dimension variable.
+    nb::class_<expr::DimRange>(
+        expressions_mod, "DimRange",
+        "Inclusive ``[lower, upper]`` range for a dimension variable.\n\n"
+        "Each bound is an ``int`` when concrete or a ``str`` when symbolic.\n\n"
+        "When ``upper`` equals ``lower`` the variable is **exactly constrained** to that\n"
+        "value (an equality constraint with no slack).  In that case there is no\n"
+        "separate upper bound beyond the equality itself.\n\n"
+        "When no finite upper bound can be derived, ``upper`` is set to\n"
+        ":data:`~onnx_light.onnx_optim.expressions.INFINITY` (the string ``'+inf'``),\n"
+        "the reserved infinity sentinel.  Test for it with ``dr.upper == INFINITY``.\n"
+        "No valid dimension-variable name may equal ``'+inf'``.\n\n"
+        "Returned by :func:`dim_ranges_from_expressions`.")
+        .def_prop_ro(
+            "lower",
+            [from_dim](const expr::DimRange &r) -> nb::object { return from_dim(r.lower); },
+            "Inclusive lower bound; ``int`` when numeric, ``str`` when symbolic.")
+        .def_prop_ro(
+            "upper",
+            [from_dim](const expr::DimRange &r) -> nb::object { return from_dim(r.upper); },
+            "Inclusive upper bound; ``int`` when numeric, ``str`` when symbolic.\n\n"
+            "Equals ``lower`` when the variable is exactly constrained by a direct\n"
+            "equality (e.g. ``var == value``).  When ``upper`` differs from ``lower``\n"
+            "(floor-division chain with divisor product > 1), it is a true finite upper\n"
+            "bound.  When no finite upper bound is known, ``upper`` equals\n"
+            ":data:`~onnx_light.onnx_optim.expressions.INFINITY` (``'+inf'``).")
+        .def("__repr__",
+             [from_dim](const expr::DimRange &r) {
+               auto lo = from_dim(r.lower);
+               auto hi = from_dim(r.upper);
+               auto to_s = [](nb::object o) -> std::string {
+                 if (nb::isinstance<nb::int_>(o))
+                   return std::to_string(nb::cast<int64_t>(o));
+                 return "'" + nb::cast<std::string>(o) + "'";
+               };
+               return std::string("DimRange(lower=") + to_s(lo) + ", upper=" + to_s(hi) + ")";
+             })
+        .def(
+            "__eq__",
+            [from_dim](const expr::DimRange &r, nb::object other) -> bool {
+              if (!nb::isinstance<expr::DimRange>(other))
+                return false;
+              const auto &o = nb::cast<const expr::DimRange &>(other);
+              return r.lower == o.lower && r.upper == o.upper;
+            },
+            nb::arg("other"))
+        .def("__hash__", [](const expr::DimRange &) -> int64_t {
+          throw nb::type_error("unhashable type: 'DimRange'");
+        });
+
+    // INFINITY — sentinel DimType value for an unbounded upper bound.
+    expressions_mod.attr("INFINITY") = from_dim(expr::kDimInfinity);
+
     expressions_mod.def(
         "dim_add",
         [to_dim, from_dim](nb::object a, nb::object b) {
@@ -247,6 +301,28 @@ void AddOnnxPyExpressions(nb::module_ &m) {
           return from_dim(expr::dim_min(to_dim(a), to_dim(b)));
         },
         nb::arg("a"), nb::arg("b"), "Returns the minimum of two dimensions.");
+
+    // dim_ranges_from_expressions(equalities, tokens=[]) -> dict[str, DimRange]
+    expressions_mod.def(
+        "dim_ranges_from_expressions",
+        [](const std::vector<std::pair<std::string, std::string>> &equalities,
+           const std::vector<std::string> &tokens) {
+          return expr::dim_ranges_from_expressions(equalities, tokens);
+        },
+        nb::arg("equalities"), nb::arg("tokens") = std::vector<std::string>{},
+        "Infers dimension ranges from equality constraints.\n\n"
+        "Each element of *equalities* is a ``(lhs, rhs)`` pair representing the equality\n"
+        "``lhs == rhs``.  For each variable that appears as the leaf of a floor-division\n"
+        "chain on one side, computes the tight range:\n\n"
+        "* ``var == value`` → ``{var: DimRange(value, value)}`` — the variable is exactly\n"
+        "  constrained to ``value``; ``upper == lower`` and there is no separate upper\n"
+        "  bound beyond the equality itself.\n"
+        "* ``var // d₁ // … // dₙ == value`` → ``{var: DimRange(P*value, P*value+P-1)}``\n"
+        "  where P = d₁·…·dₙ — a proper range with ``upper > lower`` whenever P > 1.\n\n"
+        "Variables that do not match any supported pattern are **absent** from the result\n"
+        "(they are not represented as entries with ``upper == INFINITY``).\n\n"
+        "When *tokens* is non-empty, only the listed variables are returned.\n\n"
+        "Returns a ``dict[str, DimRange]`` mapping each variable to its inclusive range.");
   }
 
   // -----------------------------------------------------------------------

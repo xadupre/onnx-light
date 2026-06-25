@@ -30,11 +30,16 @@ by a fast C++ AST engine.  This example walks through the main entry points:
 * ``dim_add``, ``dim_sub``, ``dim_mul``, ``dim_div``, ``dim_mod``,
   ``dim_max``, ``dim_min`` — arithmetic on dimensions that may be either
   concrete integers or symbolic strings.
+* :func:`~onnx_light.onnx_optim.expressions.dim_ranges_from_expressions` —
+  infer tight ``[lower, upper]`` ranges for each dimension variable from a
+  set of equality constraints.
 """
 
 from __future__ import annotations
 
 from onnx_light.onnx_optim.expressions import (
+    INFINITY,
+    DimRange,
     compare_expressions,
     dim_add,
     dim_div,
@@ -43,6 +48,7 @@ from onnx_light.onnx_optim.expressions import (
     dim_mod,
     dim_mul,
     dim_multi_mul,
+    dim_ranges_from_expressions,
     dim_sub,
     evaluate_expression,
     parse_expression_tokens,
@@ -189,6 +195,48 @@ print(dim_max("a", "b"))
 # :func:`dim_multi_mul` accepts any number of arguments.
 print(dim_multi_mul(2, 3, 4))
 print(dim_multi_mul(2, "n", 3))
+
+#####################################
+# Inferring dimension ranges from equality constraints
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++
+#
+# :func:`dim_ranges_from_expressions` derives tight ``[lower, upper]`` ranges
+# for each dimension variable given a list of equality constraints between
+# symbolic dimension expressions, as arises when matching the shapes of two
+# ONNX inputs.
+#
+# Supported pattern: ``var // d1 // d2 // ... // dn == value``, which yields
+# ``var ∈ [value * P, value * P + P - 1]`` where ``P = d1 * d2 * ... * dn``.
+# Both sides of each equality are tried; the result is a dict mapping each
+# variable name to a :class:`DimRange` with inclusive ``lower`` and ``upper``
+# bounds.  When ``upper`` equals ``lower`` the variable is exactly constrained.
+# When no finite upper bound exists, ``upper`` is set to ``INFINITY``.
+
+# add(x[a,b], y[d//5,1])  →  a == d//5
+# a is exactly d//5; d ∈ [5*a, 4+5*a]
+r = dim_ranges_from_expressions([("a", "d//5")])
+print("a:", r["a"].lower, r["a"].upper)  # exact: a == d//5
+print("d:", r["d"].lower, r["d"].upper)  # range: 5*a <= d <= 4+5*a
+print("isinstance DimRange:", isinstance(r["a"], DimRange))
+
+# Numeric equality: a == 3  →  a is exactly 3
+r2 = dim_ranges_from_expressions([("a", "3")])
+print("a (numeric):", r2["a"].lower, r2["a"].upper)
+
+# Double floor-division chain: a == d//10  →  d ∈ [10*a, 9+10*a]
+r3 = dim_ranges_from_expressions([("a", "d//10")])
+print("d (d//10):", r3["d"].lower, r3["d"].upper)
+
+# Variables without a recognised pattern are absent from the result.
+r4 = dim_ranges_from_expressions([("x+y", "5")])
+print("'x' in result:", "x" in r4)
+
+# Filter to a subset of tokens.
+r5 = dim_ranges_from_expressions([("a", "d//5")], tokens=["d"])
+print("filtered to d:", r5["d"].lower, r5["d"].upper)
+
+# The INFINITY sentinel marks an unbounded upper bound.
+print("INFINITY:", INFINITY)
 
 #####################################
 # End-to-end: deriving the output shape of a Reshape node

@@ -594,6 +594,18 @@ rename_dynamic_dimensions(const std::map<std::string, std::unordered_set<std::st
 using DimType = std::variant<int64_t, std::string>;
 
 /**
+ * @brief Sentinel `DimType` value representing a positive-infinity upper bound.
+ *
+ * Used as `DimRange::upper` when no finite upper bound is known for a dimension
+ * variable.  The underlying string `"+inf"` is reserved and must never be used
+ * as an actual dimension-variable name.  Equality with this sentinel can be
+ * tested with `d == kDimInfinity`.
+ *
+ * @see DimRange
+ */
+inline const DimType kDimInfinity{std::string{"+inf"}};
+
+/**
  * @brief Returns a string representation of @p d.
  *
  * Converts an `int64_t` to its decimal string; returns the `std::string`
@@ -774,6 +786,76 @@ DimType dim_max(const DimType &a, const DimType &b);
  * @endcode
  */
 DimType dim_min(const DimType &a, const DimType &b);
+
+// ─────────────────── dimension range inference ─────────────────────────────
+
+/**
+ * @brief Inclusive range `[lower, upper]` for a dimension variable.
+ *
+ * Each bound is either a concrete `int64_t` or a symbolic expression string.
+ *
+ * When `lower == upper` the variable is **exactly constrained** to that value
+ * (no slack, i.e. an equality rather than a proper interval).  In that case
+ * there is no separate upper bound beyond the equality itself.
+ *
+ * When no finite upper bound can be derived, `upper` is set to @ref kDimInfinity
+ * (`"+inf"`), the reserved infinity sentinel.  Callers can test for this with
+ * `upper == kDimInfinity`.  A valid dimension-variable name must never equal
+ * `"+inf"` so that the sentinel is unambiguous.
+ */
+struct DimRange {
+  DimType lower; ///< Inclusive lower bound.
+  DimType upper; ///< Inclusive upper bound.  Equals `lower` when the variable
+                 ///< is exactly constrained (no separate upper bound).
+                 ///< Equals @ref kDimInfinity when no finite upper bound is
+                 ///< known.
+};
+
+/**
+ * @brief Infers a range `[lower, upper]` for every dimension variable that
+ *        appears in a set of equality constraints.
+ *
+ * Each element of @p equalities represents an equality `lhs == rhs` between
+ * two dimension expressions.  For every variable that appears in exactly one
+ * side of an equality as the leaf of a floor-division chain, the function
+ * derives tight integer bounds:
+ *
+ * * **`var == rhs`** (product = 1): `DimRange{rhs, rhs}` — the variable is
+ *   exactly constrained to `rhs`; `lower == upper` and there is no separate
+ *   upper bound beyond the equality itself.
+ * * **`var // d₁ // … // dₙ == rhs`** (P = d₁·…·dₙ, all dᵢ positive
+ *   integers): `DimRange{rhs·P, rhs·P + P − 1}` — the variable is in the
+ *   half-open integer set that floor-divides to `rhs` when divided by P;
+ *   `upper` is strictly greater than `lower` whenever `P > 1`.
+ *
+ * The symmetry of each equality is exploited: both sides are tried as the
+ * "chain" side, with the other side as the bound expression.
+ *
+ * Both sides are simplified via @ref simplify_expression before pattern
+ * matching.
+ *
+ * Variables for which no supported pattern is recognised are **absent** from
+ * the result map entirely; they are not represented as an unbounded range
+ * (i.e. they do not appear with `upper == kDimInfinity`).
+ *
+ * @param equalities  Pairs `(lhs, rhs)` of symbolic expressions that are
+ *                    equal (e.g. `{"a", "d//5"}`).
+ * @param tokens      Optional allow-list of variable names.  When non-empty,
+ *                    only variables listed here are included in the result.
+ *                    Pass an empty vector to return ranges for all variables.
+ * @returns A map from variable name to its inferred `DimRange`.  Variables
+ *          for which no supported pattern is found are omitted.
+ *
+ * @code{.cpp}
+ * using P = std::pair<std::string, std::string>;
+ * auto ranges = dim_ranges_from_expressions({P{"a", "d//5"}});
+ * // ranges["a"] == DimRange{DimType{"d//5"}, DimType{"d//5"}}  // exact
+ * // ranges["d"] == DimRange{DimType{"5*a"}, DimType{"4+5*a"}}  // proper range
+ * @endcode
+ */
+std::unordered_map<std::string, DimRange>
+dim_ranges_from_expressions(const std::vector<std::pair<std::string, std::string>> &equalities,
+                            const std::vector<std::string> &tokens = {});
 
 } // namespace expressions
 } // namespace onnx_optim

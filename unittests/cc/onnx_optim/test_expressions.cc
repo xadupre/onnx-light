@@ -466,3 +466,99 @@ TEST(DimOperations, DimExactDiv_symbolic_mult_outside) {
   auto r = dim_exact_div(DimType{std::string{"batch*4"}}, DimType{int64_t{2}});
   EXPECT_EQ(dim_to_string(r), "2*batch");
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// dim_ranges_from_expressions tests
+// ═══════════════════════════════════════════════════════════════════════════
+
+using EqPair = std::pair<std::string, std::string>;
+
+// Helper: get the range for a specific variable or fail.
+static DimRange get_range(const std::unordered_map<std::string, DimRange> &ranges,
+                          const std::string &var) {
+  auto it = ranges.find(var);
+  EXPECT_NE(it, ranges.end()) << "Variable '" << var << "' not found in ranges";
+  return it->second;
+}
+
+TEST(DimRangesFromExpressions, DirectEquality_symbolic) {
+  // a == d//5  →  a ∈ [d//5, d//5],  d ∈ [5*a, 5*a+4]
+  auto ranges = dim_ranges_from_expressions({EqPair{"a", "d//5"}});
+
+  auto ra = get_range(ranges, "a");
+  EXPECT_EQ(dim_to_string(ra.lower), "d//5");
+  EXPECT_EQ(dim_to_string(ra.upper), "d//5");
+
+  auto rd = get_range(ranges, "d");
+  EXPECT_EQ(dim_to_string(rd.lower), "5*a");
+  // upper bound is 5*a + 4; canonical form may vary
+  auto upper_simplified = simplify_result_to_string(simplify_expression(dim_to_string(rd.upper)));
+  EXPECT_TRUE(upper_simplified == "4+5*a" || upper_simplified == "5*a+4")
+      << "Unexpected upper bound: " << upper_simplified;
+}
+
+TEST(DimRangesFromExpressions, DirectEquality_constant) {
+  // a == 3  →  a ∈ [3, 3]
+  auto ranges = dim_ranges_from_expressions({EqPair{"a", "3"}});
+  auto ra = get_range(ranges, "a");
+  EXPECT_EQ(std::get<int64_t>(ra.lower), 3);
+  EXPECT_EQ(std::get<int64_t>(ra.upper), 3);
+}
+
+TEST(DimRangesFromExpressions, DoubleFloorDiv) {
+  // a == d//5//2  →  d ∈ [10*a, 10*a+9],  a ∈ [d//10, d//10]
+  auto ranges = dim_ranges_from_expressions({EqPair{"a", "d//5//2"}});
+
+  auto rd = get_range(ranges, "d");
+  EXPECT_EQ(dim_to_string(rd.lower), "10*a");
+  auto upper_simplified = simplify_result_to_string(simplify_expression(dim_to_string(rd.upper)));
+  EXPECT_TRUE(upper_simplified == "9+10*a" || upper_simplified == "10*a+9")
+      << "Unexpected upper bound: " << upper_simplified;
+
+  auto ra = get_range(ranges, "a");
+  EXPECT_EQ(dim_to_string(ra.lower), "d//10");
+  EXPECT_EQ(dim_to_string(ra.upper), "d//10");
+}
+
+TEST(DimRangesFromExpressions, LhsIsChain) {
+  // d//5 == a  →  same as a == d//5
+  auto ranges = dim_ranges_from_expressions({EqPair{"d//5", "a"}});
+  EXPECT_NE(ranges.find("d"), ranges.end());
+  auto rd = get_range(ranges, "d");
+  EXPECT_EQ(dim_to_string(rd.lower), "5*a");
+}
+
+TEST(DimRangesFromExpressions, MultipleEqualities) {
+  // a == d//5  AND  b == 1
+  auto ranges = dim_ranges_from_expressions({EqPair{"a", "d//5"}, EqPair{"b", "1"}});
+  EXPECT_NE(ranges.find("a"), ranges.end());
+  EXPECT_NE(ranges.find("d"), ranges.end());
+  auto rb = get_range(ranges, "b");
+  EXPECT_EQ(std::get<int64_t>(rb.lower), 1);
+  EXPECT_EQ(std::get<int64_t>(rb.upper), 1);
+}
+
+TEST(DimRangesFromExpressions, TokenFilter) {
+  // Only request "d" — "a" should not be present.
+  auto ranges = dim_ranges_from_expressions({EqPair{"a", "d//5"}}, {"d"});
+  EXPECT_NE(ranges.find("d"), ranges.end());
+  EXPECT_EQ(ranges.find("a"), ranges.end());
+}
+
+TEST(DimRangesFromExpressions, EmptyEqualities) {
+  auto ranges = dim_ranges_from_expressions({});
+  EXPECT_TRUE(ranges.empty());
+}
+
+TEST(DimRangesFromExpressions, UnsupportedTwoVariables) {
+  // x+y == 5 — neither side is a pure chain of one variable.
+  auto ranges = dim_ranges_from_expressions({EqPair{"x+y", "5"}});
+  EXPECT_EQ(ranges.find("x"), ranges.end());
+  EXPECT_EQ(ranges.find("y"), ranges.end());
+}
+
+TEST(DimRangesFromExpressions, UnsupportedSymbolicDivisor) {
+  // x//(a*b) == rhs — non-integer divisor; variable x absent.
+  auto ranges = dim_ranges_from_expressions({EqPair{"x//(a*b)", "rhs"}});
+  EXPECT_EQ(ranges.find("x"), ranges.end());
+}

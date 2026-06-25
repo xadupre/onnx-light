@@ -34,23 +34,34 @@ def make_random_input(elem_type: int, shape: list[int], seed: int) -> np.ndarray
         NotImplementedError: For unsupported element types (e.g. STRING).
     """
     np_dtype = tensor_dtype_to_np_dtype(elem_type)
-    dtype_name = np.dtype(np_dtype).name
 
     if elem_type == int(TensorProto.BOOL):
         values = randint(0, 2, size=shape, seed=seed, dtype=np.int32)
         return values.astype(bool)
 
-    if np.issubdtype(np_dtype, np.complexfloating) or dtype_name.startswith("complex"):
+    if np.issubdtype(np_dtype, np.complexfloating):
         real = rand(*shape, seed=seed)
         imag = rand(*shape, seed=seed + 1)
         return (real + 1j * imag).astype(np_dtype)
 
-    if np.issubdtype(np_dtype, np.floating) or dtype_name.startswith(("float", "bfloat")):
+    if np.issubdtype(np_dtype, np.floating):
         values = rand(*shape, seed=seed)
         return values.astype(np_dtype)
 
     if np.issubdtype(np_dtype, np.integer):
         return randint(0, 10, size=shape, seed=seed, dtype=np_dtype)
+
+    # ``ml_dtypes``-backed dtypes such as ``bfloat16`` and ``uint4`` report
+    # ``kind == "V"``, so fall back to the dtype name for category checks.
+    dtype_name = np.dtype(np_dtype).name
+    if dtype_name.startswith("complex"):
+        real = rand(*shape, seed=seed)
+        imag = rand(*shape, seed=seed + 1)
+        return (real + 1j * imag).astype(np_dtype)
+
+    if dtype_name.startswith(("float", "bfloat")):
+        values = rand(*shape, seed=seed)
+        return values.astype(np_dtype)
 
     if dtype_name.startswith(("int", "uint")):
         values = randint(0, 10, size=shape, seed=seed, dtype=np.int32)

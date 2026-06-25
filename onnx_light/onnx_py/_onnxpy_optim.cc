@@ -8,6 +8,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/operators.h>
 #include <nanobind/stl/map.h>
+#include <nanobind/stl/pair.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/unordered_set.h>
@@ -247,6 +248,30 @@ void AddOnnxPyExpressions(nb::module_ &m) {
           return from_dim(expr::dim_min(to_dim(a), to_dim(b)));
         },
         nb::arg("a"), nb::arg("b"), "Returns the minimum of two dimensions.");
+
+    // dim_ranges_from_expressions(equalities, tokens=[]) -> dict[str, tuple[int|str, int|str]]
+    expressions_mod.def(
+        "dim_ranges_from_expressions",
+        [from_dim](const std::vector<std::pair<std::string, std::string>> &equalities,
+                   const std::vector<std::string> &tokens) {
+          auto ranges = expr::dim_ranges_from_expressions(equalities, tokens);
+          std::unordered_map<std::string, nb::tuple> result;
+          result.reserve(ranges.size());
+          for (const auto &[var, range] : ranges)
+            result[var] = nb::make_tuple(from_dim(range.lower), from_dim(range.upper));
+          return result;
+        },
+        nb::arg("equalities"), nb::arg("tokens") = std::vector<std::string>{},
+        "Infers dimension ranges from equality constraints.\n\n"
+        "Each element of *equalities* is a ``(lhs, rhs)`` pair representing the equality\n"
+        "``lhs == rhs``.  For each variable that appears as the leaf of a floor-division\n"
+        "chain on one side, the tight range is computed:\n\n"
+        "* ``var == value``                  → ``{var: (value, value)}``\n"
+        "* ``var // d₁ // … // dₙ == value`` → ``{var: (P*value, P*value+P-1)}`` "
+        "where P = d₁·…·dₙ.\n\n"
+        "When *tokens* is non-empty, only the listed variables are returned.\n\n"
+        "Returns a ``dict[str, tuple[int | str, int | str]]`` mapping each variable to\n"
+        "its ``(lower, upper)`` bound pair.");
   }
 
   // -----------------------------------------------------------------------

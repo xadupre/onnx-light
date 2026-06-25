@@ -42,7 +42,6 @@ The module is exposed as ``onnx_light.onnx_optim.expressions``.
 
 from __future__ import annotations
 
-import re
 from typing import TypeAlias
 
 from ..onnx_py._onnxpyoptim import expressions as _C  # type: ignore[attr-defined]
@@ -479,145 +478,45 @@ def dim_min(a: "int | str", b: "int | str") -> "int | str":
     return _C.dim_min(a, b)
 
 
-# ─────────────────────── dimension constraint inference ───────────────────────
+def dim_ranges_from_expressions(
+    equalities: "list[tuple[str, str]]", tokens: "list[str] | None" = None
+) -> "dict[str, tuple[str | int, str | int]]":
+    """Infers dimension ranges from a set of equality constraints.
 
-_VAR_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-_INT_RE = re.compile(r"^\d+$")
+    Each element of *equalities* is a ``(lhs, rhs)`` pair that represents the
+    equality ``lhs == rhs`` between two dimension expressions, as arises when
+    matching the shapes of two ONNX inputs or outputs.
 
+    For every variable that appears as the leaf of a floor-division chain on
+    either side of an equality, the function derives tight integer bounds:
 
-def _split_trailing_integer(expr: str) -> "tuple[str, int]":
-    """Splits ``head - k`` or ``head + k`` into ``(head, k)`` or ``(head, -k)``.
+    * **Direct equality** ``var == value`` (chain length 0): ``var ∈ [value, value]``.
+    * **Floor-division chain** ``var // d₁ // … // dₙ == value``
+      (all dᵢ are strictly positive integer literals, P = d₁·…·dₙ):
+      ``var ∈ [P·value, P·value + P − 1]``.
 
-    Scans *expr* right-to-left at depth 0 (outside parentheses) for the last
-    ``+`` or ``-`` whose right-hand side is a bare non-negative integer.
+    The symmetry of each equality is exploited; both sides are tried as the
+    chain side.  Both expressions are simplified before pattern matching.
 
-    :param expr: The expression string to split.
-    :returns: A ``(head, k)`` pair where ``k`` is the trailing integer constant
-        (negated when the operator is ``+``).  Returns ``(expr, 0)`` when no
-        top-level ``+``/``-`` with a bare integer tail is found.
-    :rtype: tuple[str, int]
-    """
-    depth = 0
-    for i in range(len(expr) - 1, 0, -1):
-        c = expr[i]
-        if c == ")":
-            depth += 1
-        elif c == "(":
-            depth -= 1
-        elif depth == 0 and c in ("+", "-"):
-            tail = expr[i + 1 :].strip()
-            if _INT_RE.fullmatch(tail):
-                k = int(tail)
-                if c == "+":
-                    k = -k
-                return expr[:i].strip(), k
-            # Last top-level +/- whose RHS is not a bare integer — stop.
-            break
-    return expr, 0
-
-
-def _invert_chain(expr: str, minimum: int) -> "dict[str, int]":
-    """Inverts a floor-division chain given ``expr >= minimum``.
-
-    Handles:
-
-    * ``var`` — base case, returns ``{var: minimum}``.
-    * ``inner // d`` — returns ``_invert_chain(inner, minimum * d)`` when *d*
-      is a positive integer literal.
-
-    :param expr: The left-hand side of the ``>= minimum`` constraint.
-    :param minimum: The lower bound to invert against.
-    :returns: A dict mapping the underlying variable to its minimum required
-        value, or an empty dict when the pattern is not supported.
-    :rtype: dict[str, int]
-    """
-    expr = expr.strip()
-
-    # Base case: single variable name.
-    if _VAR_RE.fullmatch(expr):
-        return {expr: minimum}
-
-    # Find the last top-level ``//`` operator.
-    depth = 0
-    pos = -1
-    for i in range(len(expr) - 1, -1, -1):
-        c = expr[i]
-        if c == ")":
-            depth += 1
-        elif c == "(":
-            depth -= 1
-        elif depth == 0 and i + 1 < len(expr) and expr[i : i + 2] == "//":
-            pos = i
-            break
-
-    if pos == -1:
-        return {}
-
-    inner = expr[:pos].strip()
-    divisor_str = expr[pos + 2 :].strip()
-
-    # Only integer divisors can be inverted algebraically.
-    if not _INT_RE.fullmatch(divisor_str):
-        return {}
-    divisor = int(divisor_str)
-    if divisor <= 0:
-        return {}
-
-    return _invert_chain(inner, minimum * divisor)
-
-
-def dim_minimum_from_constraint(expr: "str | int") -> "dict[str, int]":
-    """Determines the minimum value of each dimension variable from ``expr >= 0``.
-
-    Assuming all dimension variables are non-negative integers, computes the
-    tightest lower bound implied by the constraint ``expr >= 0``.
-
-    Supported pattern::
-
-        var // d1 // d2 // ... // dn - k   (all di and k are positive integers)
-
-    yields ``{var: k * d1 * d2 * ... * dn}`` because ``x // d >= k`` if and only
-    if ``x >= k * d`` for positive integer *d*.
-
-    The expression is first run through :func:`simplify_expression` so that
-    equivalent forms such as ``(sequence - 10) // 5`` (which simplifies to
-    ``sequence // 5 - 2``) are handled correctly.
-
-    :param expr: The expression string (or integer) representing the left-hand
-        side of ``expr >= 0``.
-    :returns: A dict mapping each constrained variable name to its minimum
-        required non-negative integer value.  Variables whose implied minimum
-        is zero are omitted (zero is already the default for non-negative
-        dimensions).  Returns an empty dict when *expr* is an integer, when it
-        does not match a supported pattern, or when all implied minima are zero.
-    :rtype: dict[str, int]
+    :param equalities: A list of ``(lhs, rhs)`` string pairs, each
+        representing the equality ``lhs == rhs``.
+    :param tokens: Optional list of variable names to include in the result.
+        When *None* (the default), ranges for all recognised variables are
+        returned.
+    :returns: A ``dict`` mapping each variable name to a ``(lower, upper)``
+        tuple of inclusive bounds.  Each bound is an ``int`` when concrete or
+        a simplified ``str`` when symbolic.
+    :rtype: dict[str, tuple[int | str, int | str]]
 
     Examples::
 
-        >>> dim_minimum_from_constraint("sequence//5-1")
-        {'sequence': 5}
-        >>> dim_minimum_from_constraint("sequence//5//2-3")
-        {'sequence': 30}
-        >>> dim_minimum_from_constraint("x-2")
-        {'x': 2}
-        >>> dim_minimum_from_constraint("x")
-        {}
+        >>> dim_ranges_from_expressions([("a", "d//5")])
+        {'a': ('d//5', 'd//5'), 'd': ('5*a', '4+5*a')}
+        >>> dim_ranges_from_expressions([("a", "d//5")], tokens=["d"])
+        {'d': ('5*a', '4+5*a')}
+        >>> dim_ranges_from_expressions([("a", "d//5//2")])
+        {'a': ('d//10', 'd//10'), 'd': ('10*a', '9+10*a')}
+        >>> dim_ranges_from_expressions([("a", "3")])
+        {'a': (3, 3)}
     """
-    if isinstance(expr, int):
-        return {}
-
-    simplified = simplify_expression(expr)
-    if isinstance(simplified, int):
-        return {}
-
-    simplified_str = str(simplified)
-    head, constant = _split_trailing_integer(simplified_str)
-
-    # A non-positive trailing term (e.g. ``+3``) means the constraint is
-    # satisfied for any non-negative value of the variable; minimum is 0.
-    if constant <= 0:
-        return {}
-
-    result = _invert_chain(head, constant)
-    # Filter out zero minima (trivially satisfied).
-    return {k: v for k, v in result.items() if v > 0}
+    return _C.dim_ranges_from_expressions(equalities, tokens if tokens is not None else [])

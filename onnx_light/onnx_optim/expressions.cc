@@ -11,6 +11,7 @@
 #include <functional>
 #include <map>
 #include <numeric>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 
@@ -1860,6 +1861,106 @@ DimType dim_min(const DimType &a, const DimType &b) {
   if (std::holds_alternative<int64_t>(a) && std::holds_alternative<int64_t>(b))
     return std::min(std::get<int64_t>(a), std::get<int64_t>(b));
   return simplify_dim("(" + dim_to_string(a) + ")&(" + dim_to_string(b) + ")");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Dimension range inference
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Returns {variable_name, product_of_divisors} when simplified_str matches the
+// pattern  var // d1 // d2 // … // dn  where every divisor di is a strictly
+// positive integer literal.  Returns nullopt for any other shape (multiple
+// variables, non-integer divisors, arithmetic at the top level, etc.).
+static std::optional<std::pair<std::string, int64_t>>
+extract_floordiv_chain(const std::string &simplified_str) {
+  NodePtr node;
+  try {
+    node = parse(simplified_str);
+  } catch (...) {
+    return std::nullopt;
+  }
+
+  int64_t product = 1;
+  const Node *current = node.get();
+
+  // Walk the left-spine of floor-division nodes.
+  while (true) {
+    const auto *binop = dynamic_cast<const BinOp *>(current);
+    if (binop && binop->op == BinOpKind::FloorDiv) {
+      const auto *rhs_const = dynamic_cast<const Constant *>(binop->right.get());
+      if (!rhs_const || rhs_const->value <= 0)
+        return std::nullopt;
+      product *= rhs_const->value;
+      current = binop->left.get();
+    } else {
+      break;
+    }
+  }
+
+  // The leaf must be a single Name node (bare variable).
+  const auto *name_node = dynamic_cast<const Name *>(current);
+  if (!name_node)
+    return std::nullopt;
+
+  return std::make_pair(name_node->id, product);
+}
+
+std::unordered_map<std::string, DimRange>
+dim_ranges_from_expressions(const std::vector<std::pair<std::string, std::string>> &equalities,
+                            const std::vector<std::string> &tokens) {
+  std::unordered_map<std::string, DimRange> ranges;
+
+  // Try to interpret chain_side as a floor-div chain of one variable and
+  // compute the variable's range using value_side as the bound expression.
+  auto process_side = [&](const std::string &chain_side, const std::string &value_side) {
+    // Simplify the chain side; skip if it reduces to an integer.
+    auto chain_simplified = simplify_expression(chain_side);
+    if (std::holds_alternative<int64_t>(chain_simplified))
+      return;
+    const std::string &chain_str = std::get<std::string>(chain_simplified);
+
+    // Extract the floor-div chain pattern.
+    auto chain = extract_floordiv_chain(chain_str);
+    if (!chain)
+      return;
+    const auto &[var_name, product] = *chain;
+
+    // Simplify the value (bound) side.
+    DimType value_dim;
+    auto val_simplified = simplify_expression(value_side);
+    if (std::holds_alternative<int64_t>(val_simplified)) {
+      value_dim = std::get<int64_t>(val_simplified);
+    } else {
+      value_dim = std::get<std::string>(val_simplified);
+    }
+
+    if (product == 1) {
+      // Direct equality: var == value  →  var ∈ [value, value].
+      ranges[var_name] = {value_dim, value_dim};
+    } else {
+      // var // product == value  →  var ∈ [value·product, value·product + product − 1].
+      DimType lower = dim_mul(value_dim, DimType{product});
+      DimType upper = dim_add(lower, DimType{product - 1});
+      ranges[var_name] = {lower, upper};
+    }
+  };
+
+  for (const auto &[lhs, rhs] : equalities) {
+    process_side(lhs, rhs);
+    process_side(rhs, lhs);
+  }
+
+  if (tokens.empty())
+    return ranges;
+
+  // Filter to the requested subset of tokens.
+  std::unordered_map<std::string, DimRange> filtered;
+  for (const auto &tok : tokens) {
+    auto it = ranges.find(tok);
+    if (it != ranges.end())
+      filtered[tok] = it->second;
+  }
+  return filtered;
 }
 
 } // namespace expressions

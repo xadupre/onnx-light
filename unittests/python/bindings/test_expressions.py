@@ -20,7 +20,7 @@ from onnx_light.onnx_optim.expressions import (
     dim_mod,
     dim_max,
     dim_min,
-    dim_minimum_from_constraint,
+    dim_ranges_from_expressions,
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -387,100 +387,92 @@ class TestExactDiv(ExtTestCase):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# test_dim_minimum_from_constraint.py (adapted)
+# test_dim_ranges_from_expressions.py (adapted)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class TestDimMinimumFromConstraint(ExtTestCase):
-    """Tests for :func:`dim_minimum_from_constraint`."""
+class TestDimRangesFromExpressions(ExtTestCase):
+    """Tests for :func:`dim_ranges_from_expressions`."""
 
-    # ── Examples from the issue description ───────────────────────────────
-    def test_single_floordiv_minus_one(self):
-        # sequence//5-1 >= 0  ⟹  sequence >= 5
-        self.assertEqual(dim_minimum_from_constraint("sequence//5-1"), {"sequence": 5})
+    # ── Direct equality ────────────────────────────────────────────────────
+    def test_direct_equality(self):
+        # a == d//5  →  a ∈ [d//5, d//5],  d ∈ [5*a, 5*a+4]
+        result = dim_ranges_from_expressions([("a", "d//5")])
+        self.assertEqual(result["a"], ("d//5", "d//5"))
+        lo, hi = result["d"]
+        self.assertEqual(simplify_expression(lo), "5*a")
+        self.assertIn(simplify_expression(hi), ("4+5*a", "5*a+4"))
 
-    def test_double_floordiv_minus_three(self):
-        # sequence//5//2-3 >= 0  ⟹  sequence >= 30
-        self.assertEqual(dim_minimum_from_constraint("sequence//5//2-3"), {"sequence": 30})
+    def test_direct_variable_equality(self):
+        # a == b  →  a ∈ [b, b],  b ∈ [a, a]
+        result = dim_ranges_from_expressions([("a", "b")])
+        self.assertEqual(result["a"], ("b", "b"))
+        self.assertEqual(result["b"], ("a", "a"))
 
-    # ── Bare variable ──────────────────────────────────────────────────────
-    def test_bare_variable(self):
-        # x >= 0 is trivially satisfied for non-negative dims; no constraint needed.
-        self.assertEqual(dim_minimum_from_constraint("x"), {})
+    def test_direct_constant_equality(self):
+        # a == 3  →  a ∈ [3, 3]
+        result = dim_ranges_from_expressions([("a", "3")])
+        self.assertEqual(result["a"], (3, 3))
 
-    # ── Simple subtraction ─────────────────────────────────────────────────
-    def test_variable_minus_constant(self):
-        # x-2 >= 0  ⟹  x >= 2
-        self.assertEqual(dim_minimum_from_constraint("x-2"), {"x": 2})
+    # ── Double floor-division chain ────────────────────────────────────────
+    def test_double_floordiv(self):
+        # a == d//5//2  ⟹  d//10 == a  →  d ∈ [10*a, 10*a+9],  a ∈ [d//10, d//10]
+        result = dim_ranges_from_expressions([("a", "d//5//2")])
+        lo, hi = result["d"]
+        self.assertEqual(simplify_expression(lo), "10*a")
+        self.assertIn(simplify_expression(hi), ("9+10*a", "10*a+9"))
+        lo_a, hi_a = result["a"]
+        self.assertEqual(simplify_expression(lo_a), "d//10")
+        self.assertEqual(simplify_expression(hi_a), "d//10")
 
-    def test_variable_minus_zero(self):
-        # x-0 >= 0 is trivially satisfied.
-        self.assertEqual(dim_minimum_from_constraint("x-0"), {})
+    # ── LHS is the floor-div chain ─────────────────────────────────────────
+    def test_lhs_floordiv_chain(self):
+        # d//5 == a  →  same as a == d//5
+        result = dim_ranges_from_expressions([("d//5", "a")])
+        self.assertIn("d", result)
+        lo, _hi = result["d"]
+        self.assertEqual(simplify_expression(lo), "5*a")
 
-    # ── Positive trailing constant (constraint is easier to satisfy) ───────
-    def test_variable_plus_constant(self):
-        # x+3 >= 0 is always true for non-negative x; no constraint needed.
-        self.assertEqual(dim_minimum_from_constraint("x+3"), {})
+    # ── Multiple equalities ────────────────────────────────────────────────
+    def test_multiple_equalities(self):
+        # a == d//5  AND  b == 1  →  ranges for a, b, d
+        result = dim_ranges_from_expressions([("a", "d//5"), ("b", "1")])
+        self.assertIn("a", result)
+        self.assertEqual(result["b"], (1, 1))
+        self.assertIn("d", result)
 
-    # ── Integer expressions ────────────────────────────────────────────────
-    def test_integer_input(self):
-        # No variables — nothing to constrain.
-        self.assertEqual(dim_minimum_from_constraint(5), {})
+    # ── Token filtering ───────────────────────────────────────────────────
+    def test_tokens_filter(self):
+        result = dim_ranges_from_expressions([("a", "d//5")], tokens=["d"])
+        self.assertIn("d", result)
+        self.assertNotIn("a", result)
 
-    def test_expression_reduces_to_integer(self):
-        # "2*batch//batch - 1" simplifies to 2-1=1 (pure integer).
-        self.assertEqual(dim_minimum_from_constraint("2*batch//batch-1"), {})
+    def test_tokens_filter_empty_list(self):
+        # Empty tokens list means "all tokens".
+        result = dim_ranges_from_expressions([("a", "d//5")], tokens=[])
+        self.assertIn("a", result)
+        self.assertIn("d", result)
 
-    # ── Equivalent forms via simplification ───────────────────────────────
-    def test_parenthesised_form(self):
-        # (sequence-10)//5 simplifies to sequence//5-2; minimum = 2*5 = 10
-        self.assertEqual(dim_minimum_from_constraint("(sequence-10)//5"), {"sequence": 10})
+    def test_tokens_filter_none(self):
+        # None means "all tokens".
+        result = dim_ranges_from_expressions([("a", "d//5")], tokens=None)
+        self.assertIn("a", result)
+        self.assertIn("d", result)
 
-    # ── Unsupported / complex patterns return {} ───────────────────────────
-    def test_two_variable_expression_returns_empty(self):
-        # x+y-5 >= 0 cannot be independently bounded; return {}.
-        self.assertEqual(dim_minimum_from_constraint("x+y-5"), {})
+    # ── Unsupported patterns return empty (variable absent) ────────────────
+    def test_unsupported_two_variables_on_one_side(self):
+        # x + y == 5 — x+y is not a chain of a single variable; skip both sides.
+        result = dim_ranges_from_expressions([("x+y", "5")])
+        self.assertNotIn("x", result)
+        self.assertNotIn("y", result)
 
-    def test_symbolic_divisor_returns_empty(self):
-        # x//(a*b)-1 >= 0 has a non-integer divisor; cannot invert.
-        self.assertEqual(dim_minimum_from_constraint("x//(a*b)-1"), {})
+    def test_unsupported_symbolic_divisor(self):
+        # x//(a*b) == rhs — non-integer divisor; cannot invert.
+        result = dim_ranges_from_expressions([("x//(a*b)", "rhs")])
+        self.assertNotIn("x", result)
 
-    # ── Internal helpers ───────────────────────────────────────────────────
-    def test_split_trailing_integer_subtraction(self):
-        from onnx_light.onnx_optim.expressions import _split_trailing_integer
-
-        head, k = _split_trailing_integer("sequence//5-1")
-        self.assertEqual(head, "sequence//5")
-        self.assertEqual(k, 1)
-
-    def test_split_trailing_integer_addition(self):
-        from onnx_light.onnx_optim.expressions import _split_trailing_integer
-
-        head, k = _split_trailing_integer("x+3")
-        self.assertEqual(head, "x")
-        self.assertEqual(k, -3)
-
-    def test_split_trailing_integer_no_split(self):
-        from onnx_light.onnx_optim.expressions import _split_trailing_integer
-
-        head, k = _split_trailing_integer("x//5")
-        self.assertEqual(head, "x//5")
-        self.assertEqual(k, 0)
-
-    def test_invert_chain_variable(self):
-        from onnx_light.onnx_optim.expressions import _invert_chain
-
-        self.assertEqual(_invert_chain("seq", 30), {"seq": 30})
-
-    def test_invert_chain_one_level(self):
-        from onnx_light.onnx_optim.expressions import _invert_chain
-
-        self.assertEqual(_invert_chain("seq//5", 6), {"seq": 30})
-
-    def test_invert_chain_two_levels(self):
-        from onnx_light.onnx_optim.expressions import _invert_chain
-
-        self.assertEqual(_invert_chain("seq//5//2", 3), {"seq": 30})
+    def test_empty_equalities(self):
+        self.assertEqual(dim_ranges_from_expressions([]), {})
 
 
 if __name__ == "__main__":

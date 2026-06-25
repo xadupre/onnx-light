@@ -775,6 +775,57 @@ DimType dim_max(const DimType &a, const DimType &b);
  */
 DimType dim_min(const DimType &a, const DimType &b);
 
+// ─────────────────── dimension range inference ─────────────────────────────
+
+/**
+ * @brief Inclusive range `[lower, upper]` for a dimension variable.
+ *
+ * Each bound is either a concrete `int64_t` or a symbolic expression string.
+ */
+struct DimRange {
+  DimType lower; ///< Inclusive lower bound.
+  DimType upper; ///< Inclusive upper bound.
+};
+
+/**
+ * @brief Infers a range `[lower, upper]` for every dimension variable that
+ *        appears in a set of equality constraints.
+ *
+ * Each element of @p equalities represents an equality `lhs == rhs` between
+ * two dimension expressions.  For every variable that appears in exactly one
+ * side of an equality as the leaf of a floor-division chain, the function
+ * derives tight integer bounds:
+ *
+ * * **`var == rhs`** (product = 1): range is `[rhs, rhs]`.
+ * * **`var // d₁ // … // dₙ == rhs`** (P = d₁·…·dₙ, all dᵢ positive
+ *   integers): range is `[rhs·P, rhs·P + P − 1]`, which is the exact set of
+ *   integers that floor-divide to `rhs` when divided by P.
+ *
+ * The symmetry of each equality is exploited: both sides are tried as the
+ * "chain" side, with the other side as the bound expression.
+ *
+ * Both sides are simplified via @ref simplify_expression before pattern
+ * matching.
+ *
+ * @param equalities  Pairs `(lhs, rhs)` of symbolic expressions that are
+ *                    equal (e.g. `{"a", "d//5"}`).
+ * @param tokens      Optional allow-list of variable names.  When non-empty,
+ *                    only variables listed here are included in the result.
+ *                    Pass an empty vector to return ranges for all variables.
+ * @returns A map from variable name to its inferred `DimRange`.  Variables
+ *          for which no supported pattern is found are omitted.
+ *
+ * @code{.cpp}
+ * using P = std::pair<std::string, std::string>;
+ * auto ranges = dim_ranges_from_expressions({P{"a", "d//5"}});
+ * // ranges["a"] == DimRange{DimType{"d//5"}, DimType{"d//5"}}
+ * // ranges["d"] == DimRange{DimType{"5*a"}, DimType{"4+5*a"}}
+ * @endcode
+ */
+std::unordered_map<std::string, DimRange>
+dim_ranges_from_expressions(const std::vector<std::pair<std::string, std::string>> &equalities,
+                            const std::vector<std::string> &tokens = {});
+
 } // namespace expressions
 } // namespace onnx_optim
 } // namespace onnx_light

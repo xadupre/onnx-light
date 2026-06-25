@@ -1,6 +1,9 @@
 #include "onnx_light_helpers.h"
 
+#include <cstdio>
+#include <fstream>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -55,6 +58,60 @@ bool TestThrowInvalid() {
   return false;
 }
 
+bool TestLoggerDisabledByDefault() {
+  onnx_light_helpers::Logger logger;
+  return !logger.enabled();
+}
+
+bool TestLoggerEnabledWithOne() {
+  onnx_light_helpers::Logger logger("1");
+  return logger.enabled();
+}
+
+bool TestLoggerWritesToStdout() {
+  // Redirect stdout to a buffer, log a message, and verify it appears.
+  std::streambuf *old_buf = std::cout.rdbuf();
+  std::ostringstream captured;
+  std::cout.rdbuf(captured.rdbuf());
+
+  {
+    onnx_light_helpers::Logger logger("1");
+    logger.log("hello stdout");
+  }
+
+  std::cout.rdbuf(old_buf);
+  return captured.str().find("hello stdout") != std::string::npos;
+}
+
+bool TestLoggerWritesToFile() {
+  const std::string path = "/tmp/test_logger_output.txt";
+  std::remove(path.c_str());
+
+  {
+    onnx_light_helpers::Logger logger(path);
+    if (!logger.enabled()) {
+      return false;
+    }
+    logger.log("hello file");
+  }
+
+  std::ifstream in(path);
+  if (!in.is_open()) {
+    return false;
+  }
+  std::string line;
+  std::getline(in, line);
+  std::remove(path.c_str());
+  return line == "hello file";
+}
+
+bool TestLoggerDoesNothingWhenDisabled() {
+  onnx_light_helpers::Logger logger;
+  // Should not throw or write anything.
+  logger.log("this is silently dropped");
+  return true;
+}
+
 } // namespace
 
 int main() {
@@ -80,6 +137,26 @@ int main() {
   }
   if (!TestThrowInvalid()) {
     std::cerr << "TestThrowInvalid failed." << std::endl;
+    return 1;
+  }
+  if (!TestLoggerDisabledByDefault()) {
+    std::cerr << "TestLoggerDisabledByDefault failed." << std::endl;
+    return 1;
+  }
+  if (!TestLoggerEnabledWithOne()) {
+    std::cerr << "TestLoggerEnabledWithOne failed." << std::endl;
+    return 1;
+  }
+  if (!TestLoggerWritesToStdout()) {
+    std::cerr << "TestLoggerWritesToStdout failed." << std::endl;
+    return 1;
+  }
+  if (!TestLoggerWritesToFile()) {
+    std::cerr << "TestLoggerWritesToFile failed." << std::endl;
+    return 1;
+  }
+  if (!TestLoggerDoesNothingWhenDisabled()) {
+    std::cerr << "TestLoggerDoesNothingWhenDisabled failed." << std::endl;
     return 1;
   }
   return 0;

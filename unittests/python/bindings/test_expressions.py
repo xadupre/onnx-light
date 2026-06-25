@@ -161,12 +161,10 @@ class TestSimplifyExpressions(ExtTestCase):
         self.assertEqual("x//16", simplify_expression("x//4//4"))
         # Verify numerically for positive and negative values.
         self.assertEqual(
-            evaluate_expression("x//10", {"x": 37}),
-            evaluate_expression("x//5//2", {"x": 37}),
+            evaluate_expression("x//10", {"x": 37}), evaluate_expression("x//5//2", {"x": 37})
         )
         self.assertEqual(
-            evaluate_expression("x//10", {"x": -37}),
-            evaluate_expression("x//5//2", {"x": -37}),
+            evaluate_expression("x//10", {"x": -37}), evaluate_expression("x//5//2", {"x": -37})
         )
         # Should not simplify when a divisor is not a constant.
         # // is left-associative so (x//a)//2 prints without redundant parens.

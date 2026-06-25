@@ -87,6 +87,10 @@ TestShapeInferenceBackend = make_test_class(
         # through Gather: Expand(y, Gather(Shape(x), [0])) produces unk__0
         # instead of the symbolic N from x's leading axis.
         "test_cc_shape_inference_gather_value_as_shape.*",
+        # ONNX's built-in shape inference does not propagate value-as-shape
+        # through the Shape→Gather→Unsqueeze→Concat chain, so Reshape produces
+        # unk__0/unk__1 instead of the symbolic D1/D2 dims from the inputs.
+        "test_cc_shape_inference_unsqueeze_vas_reshape.*",
     ],
 )
 

@@ -186,10 +186,11 @@ void AddOnnxPyExpressions(nb::module_ &m) {
         "When ``upper`` equals ``lower`` the variable is **exactly constrained** to that\n"
         "value (an equality constraint with no slack).  In that case there is no\n"
         "separate upper bound beyond the equality itself.\n\n"
-        "A variable that does not appear as a key in the dict returned by\n"
-        ":func:`dim_ranges_from_expressions` has no determinable range at all;\n"
-        "it is absent from the result rather than represented as an unbounded\n"
-        "``DimRange``.\n\n"
+        "**There is no infinity sentinel value.**  :class:`DimRange` only holds tight,\n"
+        "finite bounds derived from a recognised equality pattern.  A variable whose\n"
+        "upper bound cannot be determined is **absent** from the dict returned by\n"
+        ":func:`dim_ranges_from_expressions` entirely; ``upper`` is never set to any\n"
+        "special infinity value.\n\n"
         "Returned by :func:`dim_ranges_from_expressions`.")
         .def_prop_ro(
             "lower",
@@ -203,7 +204,10 @@ void AddOnnxPyExpressions(nb::module_ &m) {
             "equality (e.g. ``var == value``).  In that case no separate upper bound\n"
             "is available — the bound simply reflects the equality.  When ``upper``\n"
             "differs from ``lower`` (floor-division chain with divisor product > 1),\n"
-            "it is a true finite upper bound.")
+            "it is a true finite upper bound.\n\n"
+            "**There is no infinity sentinel.**  When no finite upper bound can be\n"
+            "established the variable is absent from the result dict entirely; this\n"
+            "property is never set to a special infinity value.")
         .def("__repr__",
              [from_dim](const expr::DimRange &r) {
                auto lo = from_dim(r.lower);

@@ -786,14 +786,18 @@ DimType dim_min(const DimType &a, const DimType &b);
  * (no slack, i.e. an equality rather than a proper interval).  In that case
  * there is no separate upper bound beyond the equality itself.
  *
- * A variable that does not appear in the result map of
- * @ref dim_ranges_from_expressions has no determinable range at all; it is
- * simply absent rather than represented as an unbounded `DimRange`.
+ * **There is no infinity sentinel value.**  `DimRange` only represents tight,
+ * finite bounds derived from a supported equality pattern.  A variable whose
+ * upper bound cannot be determined is **absent** from the result map of
+ * @ref dim_ranges_from_expressions entirely; it is never represented as a
+ * `DimRange` with `upper` set to any special infinity value.
  */
 struct DimRange {
   DimType lower; ///< Inclusive lower bound.
   DimType upper; ///< Inclusive upper bound.  Equals `lower` when the variable
                  ///< is exactly constrained (no separate upper bound).
+                 ///< There is no infinity sentinel: variables with no
+                 ///< determinable upper bound are absent from the result map.
 };
 
 /**

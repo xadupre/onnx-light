@@ -138,6 +138,21 @@ TEST(SimplifyExpressions, SimplifyExpression_floordiv_not_exact) {
   EXPECT_EQ(evaluate_expression("(2*H)//2", {{"H", 3}}), 3);
 }
 
+TEST(SimplifyExpressions, SimplifyExpression_nested_floordiv) {
+  // (x // a) // b  →  x // (a * b)
+  EXPECT_EQ(get_str(simplify_expression("x//5//2")), "x//10");
+  EXPECT_EQ(get_str(simplify_expression("x//2//3")), "x//6");
+  EXPECT_EQ(get_str(simplify_expression("x//4//4")), "x//16");
+  // Verify the simplification is numerically correct.
+  EXPECT_EQ(evaluate_expression("x//5//2", {{"x", 37}}), evaluate_expression("x//10", {{"x", 37}}));
+  EXPECT_EQ(evaluate_expression("x//5//2", {{"x", -37}}),
+            evaluate_expression("x//10", {{"x", -37}}));
+  // Should not simplify when the inner divisor is not a constant.
+  EXPECT_EQ(get_str(simplify_expression("(x//a)//2")), "(x//a)//2");
+  // Should not simplify when the outer divisor is not a constant.
+  EXPECT_EQ(get_str(simplify_expression("(x//2)//b")), "(x//2)//b");
+}
+
 TEST(SimplifyExpressions, SimplifyExpression_bracket_max) {
   EXPECT_EQ(get_str(simplify_expression("(x)^(y+1)")), "x^1+y");
   EXPECT_EQ(get_str(simplify_expression("(x+1)^(y)")), "1+x^y");

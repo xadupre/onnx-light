@@ -385,7 +385,7 @@ class TestMakeRandomInput(ExtTestCase):
         self.assertEqual(arr.dtype, np.dtype("bfloat16"))
 
     def test_uint4_input(self):
-        """UINT4 input keeps its custom dtype."""
+        """UINT4 input keeps its custom dtype and the helper's [0, 10) value range."""
         from onnx_light.onnx.tools import make_random_input
 
         arr = make_random_input(int(onnxl.TensorProto.UINT4), [3], seed=0)

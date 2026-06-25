@@ -49,9 +49,11 @@ def make_random_input(elem_type: int, shape: list[int], seed: int) -> np.ndarray
         values = rand(*shape, seed=seed)
         return values.astype(np_dtype)
 
-    if np.issubdtype(np_dtype, np.integer) or dtype_name.startswith(("int", "uint")):
-        int_dtype = np_dtype if np.dtype(np_dtype).kind in {"i", "u"} else np.int32
-        values = randint(0, 10, size=shape, seed=seed, dtype=int_dtype)
+    if np.issubdtype(np_dtype, np.integer):
+        return randint(0, 10, size=shape, seed=seed, dtype=np_dtype)
+
+    if dtype_name.startswith(("int", "uint")):
+        values = randint(0, 10, size=shape, seed=seed, dtype=np.int32)
         return values.astype(np_dtype)
 
     if elem_type == int(TensorProto.STRING):

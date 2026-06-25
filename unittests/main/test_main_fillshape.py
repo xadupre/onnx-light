@@ -451,7 +451,7 @@ class TestMainFillshape(ExtTestCase):
             self.assertIn("release:", output)
 
     def test_fillshape_generates_metadata_before_writing_it(self):
-        """fillshape computes metadata before persisting it into the model."""
+        """Computes metadata before persisting it into the model."""
         from unittest.mock import patch
 
         from onnx_light.__main__ import main

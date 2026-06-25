@@ -1,6 +1,8 @@
 #include "onnx_light_helpers.h"
 #include <algorithm>
+#include <cstdlib>
 #include <float.h>
+#include <iostream>
 #include <iterator>
 #include <sstream>
 #include <thread>
@@ -192,6 +194,58 @@ void MakeStringInternalElement(StringStream &ss, const std::vector<double> &t) {
     ss.append_charp("x");
     ss.append_double(it);
   }
+}
+
+Logger::Logger(const std::string &destination) : to_stdout_(false), enabled_(false) {
+  std::string dest = destination;
+  if (dest.empty()) {
+    const char *env = std::getenv("ONNX_LIGHT_LOG");
+    if (env != nullptr) {
+      dest = env;
+    }
+  }
+  if (dest.empty()) {
+    return;
+  }
+  if (dest == "1") {
+    to_stdout_ = true;
+    enabled_ = true;
+  } else {
+    file_stream_.open(dest, std::ios::out | std::ios::app);
+    enabled_ = file_stream_.is_open();
+  }
+}
+
+Logger::~Logger() {
+  if (file_stream_.is_open()) {
+    file_stream_.flush();
+    file_stream_.close();
+  }
+}
+
+void Logger::log(const std::string &message, const std::source_location loc) {
+  if (!enabled_) {
+    return;
+  }
+  std::string formatted =
+      std::string("[") + loc.file_name() + ":" + std::to_string(loc.line()) + "] " + message;
+  if (to_stdout_) {
+    std::cout << formatted << "\n";
+    std::cout.flush();
+  } else {
+    file_stream_ << formatted << "\n";
+    file_stream_.flush();
+  }
+}
+
+bool Logger::enabled() const { return enabled_; }
+
+Logger &Logger::Instance(const char *message, const std::source_location loc) {
+  static Logger instance;
+  if (message != nullptr) {
+    instance.log(message, loc);
+  }
+  return instance;
 }
 
 } // namespace onnx_light_helpers

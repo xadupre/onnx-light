@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <cstdint>
 #include <float.h>
+#include <fstream>
 #include <iterator>
+#include <source_location>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -265,5 +267,75 @@ inline void ValidateAlignmentOption(int64_t alignment, const char *option_name) 
   EXT_ENFORCE(alignment <= 1 || IsPowerOfTwo(alignment), option_name,
               " must be a power of two when > 0, got ", alignment, ".");
 }
+
+/**
+ * Simple single-destination logger backed by the standard library only.
+ *
+ * The logging destination is selected in the following priority order:
+ *  1. The @p destination argument passed to the constructor (when non-empty).
+ *  2. The value of the `ONNX_LIGHT_LOG` environment variable.
+ *  3. Logging is disabled when neither source provides a destination.
+ *
+ * Destination semantics:
+ *  - `"1"` — messages are written to stdout.
+ *  - Any other non-empty string — messages are written to the file whose path equals that string.
+ *
+ * @warning This class is **not thread-safe**.  Concurrent calls to log() from
+ *          multiple threads result in undefined behavior.  Callers that require
+ *          thread-safe logging must provide their own synchronisation.
+ */
+class Logger {
+public:
+  /**
+   * Constructs a Logger and opens the configured destination.
+   *
+   * @param destination Overrides `ONNX_LIGHT_LOG` when non-empty.  Pass `"1"` to
+   *                    redirect to stdout, or a file path to write to a file.
+   *                    An empty string causes the environment variable to be
+   *                    consulted instead.
+   */
+  explicit Logger(const std::string &destination = "");
+
+  /** Destroys the Logger; flushes and closes any open file stream. */
+  ~Logger();
+
+  /**
+   * Writes @p message followed by a newline to the configured destination and flushes
+   * immediately.  Does nothing when logging is disabled.
+   *
+   * The source location is captured automatically at the call site and prepended to the
+   * message as `[file:line] message`.
+   *
+   * @param message The text to log.
+   * @param loc     Call-site location; defaults to `std::source_location::current()`.
+   */
+  void log(const std::string &message,
+           const std::source_location loc = std::source_location::current());
+
+  /** Returns true when a destination is configured and the logger is active. */
+  bool enabled() const;
+
+  /**
+   * Returns a reference to the process-wide static Logger instance.
+   *
+   * The instance is constructed on the first call using the `ONNX_LIGHT_LOG`
+   * environment variable as its destination.
+   *
+   * When @p message is non-null, it is logged (with source location) before the instance
+   * is returned, allowing the one-liner `Logger::Instance("initialising")`.
+   *
+   * @param message Optional message to log; pass `nullptr` (default) to skip logging.
+   * @param loc     Call-site location; defaults to `std::source_location::current()`.
+   *
+   * @warning The static instance is **not thread-safe**; see the class-level warning.
+   */
+  static Logger &Instance(const char *message = nullptr,
+                          const std::source_location loc = std::source_location::current());
+
+private:
+  bool to_stdout_;
+  bool enabled_;
+  std::ofstream file_stream_;
+};
 
 } // namespace onnx_light_helpers

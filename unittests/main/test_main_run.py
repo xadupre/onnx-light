@@ -376,6 +376,24 @@ class TestMakeRandomInput(ExtTestCase):
         self.assertIsInstance(arr, np.ndarray)
         self.assertEqual(arr.dtype, np.float64)
 
+    def test_bfloat16_input(self):
+        """BFLOAT16 input keeps its custom dtype."""
+        from onnx_light.onnx.tools import make_random_input
+
+        arr = make_random_input(int(onnxl.TensorProto.BFLOAT16), [2], seed=0)
+        self.assertIsInstance(arr, np.ndarray)
+        self.assertEqual(arr.dtype, np.dtype("bfloat16"))
+
+    def test_uint4_input(self):
+        """UINT4 input keeps its custom dtype."""
+        from onnx_light.onnx.tools import make_random_input
+
+        arr = make_random_input(int(onnxl.TensorProto.UINT4), [3], seed=0)
+        self.assertIsInstance(arr, np.ndarray)
+        self.assertEqual(arr.dtype, np.dtype("uint4"))
+        self.assertTrue(np.all(arr >= 0))
+        self.assertTrue(np.all(arr < 10))
+
     def test_string_input_raises(self):
         """STRING inputs raise NotImplementedError."""
         from onnx_light.onnx.tools import make_random_input

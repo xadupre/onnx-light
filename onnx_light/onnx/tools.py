@@ -12,39 +12,6 @@ try:
 except ImportError:
     from . import TensorProto  # type: ignore[assignment]
 
-_FLOAT_TYPES = frozenset(
-    {
-        int(TensorProto.FLOAT),
-        int(TensorProto.DOUBLE),
-        int(TensorProto.FLOAT16),
-        int(TensorProto.BFLOAT16),
-        int(TensorProto.FLOAT8E4M3FN),
-        int(TensorProto.FLOAT8E4M3FNUZ),
-        int(TensorProto.FLOAT8E5M2),
-        int(TensorProto.FLOAT8E5M2FNUZ),
-        int(TensorProto.FLOAT8E8M0),
-        int(TensorProto.FLOAT4E2M1),
-        int(TensorProto.COMPLEX64),
-        int(TensorProto.COMPLEX128),
-    }
-)
-_INT_TYPES = frozenset(
-    {
-        int(TensorProto.INT8),
-        int(TensorProto.INT16),
-        int(TensorProto.INT32),
-        int(TensorProto.INT64),
-        int(TensorProto.UINT8),
-        int(TensorProto.UINT16),
-        int(TensorProto.UINT32),
-        int(TensorProto.UINT64),
-        int(TensorProto.INT4),
-        int(TensorProto.UINT4),
-        int(TensorProto.INT2),
-        int(TensorProto.UINT2),
-    }
-)
-
 __all__ = ["make_random_input"]
 
 
@@ -67,21 +34,25 @@ def make_random_input(elem_type: int, shape: list[int], seed: int) -> np.ndarray
         NotImplementedError: For unsupported element types (e.g. STRING).
     """
     np_dtype = tensor_dtype_to_np_dtype(elem_type)
+    dtype_name = np.dtype(np_dtype).name
 
     if elem_type == int(TensorProto.BOOL):
         values = randint(0, 2, size=shape, seed=seed, dtype=np.int32)
         return values.astype(bool)
 
-    if elem_type in _FLOAT_TYPES:
-        if elem_type in (int(TensorProto.COMPLEX64), int(TensorProto.COMPLEX128)):
-            real = rand(*shape, seed=seed)
-            imag = rand(*shape, seed=seed + 1)
-            return (real + 1j * imag).astype(np_dtype)
+    if np.issubdtype(np_dtype, np.complexfloating) or dtype_name.startswith("complex"):
+        real = rand(*shape, seed=seed)
+        imag = rand(*shape, seed=seed + 1)
+        return (real + 1j * imag).astype(np_dtype)
+
+    if np.issubdtype(np_dtype, np.floating) or dtype_name.startswith(("float", "bfloat")):
         values = rand(*shape, seed=seed)
         return values.astype(np_dtype)
 
-    if elem_type in _INT_TYPES:
-        return randint(0, 10, size=shape, seed=seed, dtype=np_dtype)
+    if np.issubdtype(np_dtype, np.integer) or dtype_name.startswith(("int", "uint")):
+        int_dtype = np_dtype if np.dtype(np_dtype).kind in {"i", "u"} else np.int32
+        values = randint(0, 10, size=shape, seed=seed, dtype=int_dtype)
+        return values.astype(np_dtype)
 
     if elem_type == int(TensorProto.STRING):
         raise NotImplementedError(

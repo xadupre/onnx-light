@@ -450,6 +450,61 @@ class TestMainFillshape(ExtTestCase):
             # Release annotation must appear in --show output.
             self.assertIn("release:", output)
 
+    def test_fillshape_generates_metadata_before_writing_it(self):
+        """Verifies that fillshape computes metadata before persisting it."""
+        from unittest.mock import patch
+
+        from onnx_light.__main__ import main
+
+        order = []
+
+        class _FakeComputeContext:
+            def compute_inplace_reuse_graph(self, graph, ctx, allow_input_overwrite=False):
+                del graph, ctx, allow_input_overwrite
+                order.append("compute_inplace_reuse_graph")
+
+            def write_to_metadata(self, graph):
+                del graph
+                order.append("write_inplace_reuse_to_metadata")
+
+        def _record_infer_value_and_node_tags(graph):
+            del graph
+            order.append("infer_value_and_node_tags")
+            return {}, []
+
+        def _record_write_value_and_node_tags_to_metadata(graph, value_tags, node_tags):
+            del graph, value_tags, node_tags
+            order.append("write_value_and_node_tags_to_metadata")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            self._save_model(_make_add_model(), model_path)
+
+            with (
+                patch(
+                    "onnx_light.onnx_optim.shape_inference.ComputeContext", _FakeComputeContext
+                ),
+                patch(
+                    "onnx_light.onnx_optim.shape_inference.infer_value_and_node_tags",
+                    side_effect=_record_infer_value_and_node_tags,
+                ),
+                patch(
+                    "onnx_light.__main__._write_inferred_value_and_node_tags_to_metadata",
+                    side_effect=_record_write_value_and_node_tags_to_metadata,
+                ),
+            ):
+                main(["fillshape", model_path, "--inplace-info", "--shape-tag", "--show"])
+
+        self.assertEqual(
+            order,
+            [
+                "compute_inplace_reuse_graph",
+                "write_inplace_reuse_to_metadata",
+                "infer_value_and_node_tags",
+                "write_value_and_node_tags_to_metadata",
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

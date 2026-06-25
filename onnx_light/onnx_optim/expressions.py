@@ -42,6 +42,7 @@ The module is exposed as ``onnx_light.onnx_optim.expressions``.
 
 from __future__ import annotations
 
+import re
 from typing import TypeAlias
 
 from ..onnx_py._onnxpyoptim import expressions as _C  # type: ignore[attr-defined]
@@ -476,3 +477,139 @@ def dim_min(a: "int | str", b: "int | str") -> "int | str":
         3
     """
     return _C.dim_min(a, b)
+
+
+# ─────────────────────── dimension constraint inference ───────────────────────
+
+_VAR_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_INT_RE = re.compile(r"^\d+$")
+
+
+def _split_trailing_integer(expr: str) -> "tuple[str, int]":
+    """Splits ``head - k`` or ``head + k`` into ``(head, k)`` or ``(head, -k)``.
+
+    Scans *expr* right-to-left at depth 0 (outside parentheses) for the last
+    ``+`` or ``-`` whose right-hand side is a bare non-negative integer.
+    Returns ``(expr, 0)`` when no such split is found.
+    """
+    depth = 0
+    for i in range(len(expr) - 1, 0, -1):
+        c = expr[i]
+        if c == ")":
+            depth += 1
+        elif c == "(":
+            depth -= 1
+        elif depth == 0 and c in ("+", "-"):
+            tail = expr[i + 1 :].strip()
+            if _INT_RE.fullmatch(tail):
+                k = int(tail)
+                if c == "+":
+                    k = -k
+                return expr[:i].strip(), k
+            # Last top-level +/- whose RHS is not a bare integer — stop.
+            break
+    return expr, 0
+
+
+def _invert_chain(expr: str, minimum: int) -> "dict[str, int]":
+    """Given ``expr >= minimum``, inverts a floor-division chain and returns
+    the minimum value of the underlying variable.
+
+    Handles:
+
+    * ``var`` — base case, returns ``{var: minimum}``.
+    * ``inner // d`` — returns ``_invert_chain(inner, minimum * d)`` when *d*
+      is a positive integer literal.
+
+    Returns ``{}`` for any pattern that does not fit the above.
+    """
+    expr = expr.strip()
+
+    # Base case: single variable name.
+    if _VAR_RE.fullmatch(expr):
+        return {expr: minimum}
+
+    # Find the last top-level ``//`` operator.
+    depth = 0
+    pos = -1
+    for i in range(len(expr) - 1, -1, -1):
+        c = expr[i]
+        if c == ")":
+            depth += 1
+        elif c == "(":
+            depth -= 1
+        elif depth == 0 and i + 1 < len(expr) and expr[i : i + 2] == "//":
+            pos = i
+            break
+
+    if pos == -1:
+        return {}
+
+    inner = expr[:pos].strip()
+    divisor_str = expr[pos + 2 :].strip()
+
+    # Only integer divisors can be inverted algebraically.
+    if not _INT_RE.fullmatch(divisor_str):
+        return {}
+    divisor = int(divisor_str)
+    if divisor <= 0:
+        return {}
+
+    return _invert_chain(inner, minimum * divisor)
+
+
+def dim_minimum_from_constraint(expr: "str | int") -> "dict[str, int]":
+    """Determines the minimum value of each dimension variable from ``expr >= 0``.
+
+    Assuming all dimension variables are non-negative integers, computes the
+    tightest lower bound implied by the constraint ``expr >= 0``.
+
+    Supported pattern::
+
+        var // d1 // d2 // ... // dn - k   (all di and k are positive integers)
+
+    yields ``{var: k * d1 * d2 * ... * dn}`` because ``x // d >= k`` if and only
+    if ``x >= k * d`` for positive integer *d*.
+
+    The expression is first run through :func:`simplify_expression` so that
+    equivalent forms such as ``(sequence - 10) // 5`` (which simplifies to
+    ``sequence // 5 - 2``) are handled correctly.
+
+    :param expr: The expression string (or integer) representing the left-hand
+        side of ``expr >= 0``.
+    :returns: A dict mapping each constrained variable name to its minimum
+        required non-negative integer value.  Variables whose implied minimum
+        is zero are omitted (zero is already the default for non-negative
+        dimensions).  Returns an empty dict when *expr* is an integer, when it
+        does not match a supported pattern, or when all implied minima are zero.
+    :rtype: dict[str, int]
+
+    Examples::
+
+        >>> dim_minimum_from_constraint("sequence//5-1")
+        {'sequence': 5}
+        >>> dim_minimum_from_constraint("sequence//5//2-3")
+        {'sequence': 30}
+        >>> dim_minimum_from_constraint("x-2")
+        {'x': 2}
+        >>> dim_minimum_from_constraint("x")
+        {}
+    """
+    if isinstance(expr, int):
+        return {}
+
+    simplified = simplify_expression(expr)
+    if isinstance(simplified, int):
+        return {}
+
+    simplified_str = str(simplified)
+    head, constant = _split_trailing_integer(simplified_str)
+
+    # A non-positive trailing term (e.g. ``+3``) means the constraint is
+    # satisfied for any non-negative value of the variable; minimum is 0.
+    if constant <= 0:
+        return {}
+
+    result = _invert_chain(head, constant)
+    # Filter out zero minima (trivially satisfied).
+    return {k: v for k, v in result.items() if v > 0}

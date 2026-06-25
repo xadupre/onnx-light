@@ -20,6 +20,7 @@ from onnx_light.onnx_optim.expressions import (
     dim_mod,
     dim_max,
     dim_min,
+    dim_minimum_from_constraint,
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -383,6 +384,103 @@ class TestExactDiv(ExtTestCase):
         # /: must be exact: evaluating 7/:2 should raise.
         with self.assertRaises(RuntimeError):
             evaluate_expression("7/:2", {})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# test_dim_minimum_from_constraint.py (adapted)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestDimMinimumFromConstraint(ExtTestCase):
+    """Tests for :func:`dim_minimum_from_constraint`."""
+
+    # ── Examples from the issue description ───────────────────────────────
+    def test_single_floordiv_minus_one(self):
+        # sequence//5-1 >= 0  ⟹  sequence >= 5
+        self.assertEqual(dim_minimum_from_constraint("sequence//5-1"), {"sequence": 5})
+
+    def test_double_floordiv_minus_three(self):
+        # sequence//5//2-3 >= 0  ⟹  sequence >= 30
+        self.assertEqual(dim_minimum_from_constraint("sequence//5//2-3"), {"sequence": 30})
+
+    # ── Bare variable ──────────────────────────────────────────────────────
+    def test_bare_variable(self):
+        # x >= 0 is trivially satisfied for non-negative dims; no constraint needed.
+        self.assertEqual(dim_minimum_from_constraint("x"), {})
+
+    # ── Simple subtraction ─────────────────────────────────────────────────
+    def test_variable_minus_constant(self):
+        # x-2 >= 0  ⟹  x >= 2
+        self.assertEqual(dim_minimum_from_constraint("x-2"), {"x": 2})
+
+    def test_variable_minus_zero(self):
+        # x-0 >= 0 is trivially satisfied.
+        self.assertEqual(dim_minimum_from_constraint("x-0"), {})
+
+    # ── Positive trailing constant (constraint is easier to satisfy) ───────
+    def test_variable_plus_constant(self):
+        # x+3 >= 0 is always true for non-negative x; no constraint needed.
+        self.assertEqual(dim_minimum_from_constraint("x+3"), {})
+
+    # ── Integer expressions ────────────────────────────────────────────────
+    def test_integer_input(self):
+        # No variables — nothing to constrain.
+        self.assertEqual(dim_minimum_from_constraint(5), {})
+
+    def test_expression_reduces_to_integer(self):
+        # "2*batch//batch - 1" simplifies to 2-1=1 (pure integer).
+        self.assertEqual(dim_minimum_from_constraint("2*batch//batch-1"), {})
+
+    # ── Equivalent forms via simplification ───────────────────────────────
+    def test_parenthesised_form(self):
+        # (sequence-10)//5 simplifies to sequence//5-2; minimum = 2*5 = 10
+        self.assertEqual(dim_minimum_from_constraint("(sequence-10)//5"), {"sequence": 10})
+
+    # ── Unsupported / complex patterns return {} ───────────────────────────
+    def test_two_variable_expression_returns_empty(self):
+        # x+y-5 >= 0 cannot be independently bounded; return {}.
+        self.assertEqual(dim_minimum_from_constraint("x+y-5"), {})
+
+    def test_symbolic_divisor_returns_empty(self):
+        # x//(a*b)-1 >= 0 has a non-integer divisor; cannot invert.
+        self.assertEqual(dim_minimum_from_constraint("x//(a*b)-1"), {})
+
+    # ── Internal helpers ───────────────────────────────────────────────────
+    def test_split_trailing_integer_subtraction(self):
+        from onnx_light.onnx_optim.expressions import _split_trailing_integer
+
+        head, k = _split_trailing_integer("sequence//5-1")
+        self.assertEqual(head, "sequence//5")
+        self.assertEqual(k, 1)
+
+    def test_split_trailing_integer_addition(self):
+        from onnx_light.onnx_optim.expressions import _split_trailing_integer
+
+        head, k = _split_trailing_integer("x+3")
+        self.assertEqual(head, "x")
+        self.assertEqual(k, -3)
+
+    def test_split_trailing_integer_no_split(self):
+        from onnx_light.onnx_optim.expressions import _split_trailing_integer
+
+        head, k = _split_trailing_integer("x//5")
+        self.assertEqual(head, "x//5")
+        self.assertEqual(k, 0)
+
+    def test_invert_chain_variable(self):
+        from onnx_light.onnx_optim.expressions import _invert_chain
+
+        self.assertEqual(_invert_chain("seq", 30), {"seq": 30})
+
+    def test_invert_chain_one_level(self):
+        from onnx_light.onnx_optim.expressions import _invert_chain
+
+        self.assertEqual(_invert_chain("seq//5", 6), {"seq": 30})
+
+    def test_invert_chain_two_levels(self):
+        from onnx_light.onnx_optim.expressions import _invert_chain
+
+        self.assertEqual(_invert_chain("seq//5//2", 3), {"seq": 30})
 
 
 if __name__ == "__main__":

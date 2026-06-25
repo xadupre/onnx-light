@@ -40,6 +40,7 @@ from onnx_light.onnx_optim.expressions import (
     dim_div,
     dim_max,
     dim_min,
+    dim_minimum_from_constraint,
     dim_mod,
     dim_mul,
     dim_multi_mul,
@@ -189,6 +190,32 @@ print(dim_max("a", "b"))
 # :func:`dim_multi_mul` accepts any number of arguments.
 print(dim_multi_mul(2, 3, 4))
 print(dim_multi_mul(2, "n", 3))
+
+#####################################
+# Inferring minimum dimension constraints
+# +++++++++++++++++++++++++++++++++++++++
+#
+# :func:`dim_minimum_from_constraint` determines the minimum required value of
+# each dimension variable given that an expression ``expr >= 0`` must hold,
+# assuming all variables are non-negative.
+#
+# Supported pattern: ``var // d1 // d2 // ... // dn - k``, which yields the
+# minimum ``{var: k * d1 * d2 * ... * dn}`` because ``x // d >= k`` iff
+# ``x >= k * d``.
+
+# sequence//5-1 >= 0  ⟹  sequence//5 >= 1  ⟹  sequence >= 5
+print(dim_minimum_from_constraint("sequence//5-1"))
+
+# sequence//5//2-3 >= 0  ⟹  sequence >= 3*5*2 = 30
+print(dim_minimum_from_constraint("sequence//5//2-3"))
+
+# Equivalent parenthesised form is normalised by simplify_expression first.
+# (sequence-10)//5 simplifies to sequence//5-2  ⟹  sequence >= 2*5 = 10
+print(dim_minimum_from_constraint("(sequence-10)//5"))
+
+# Trivially satisfied constraints return an empty dict.
+print(dim_minimum_from_constraint("x+3"))  # always ≥ 0 for non-negative x
+print(dim_minimum_from_constraint(5))  # integer — no variable to constrain
 
 #####################################
 # End-to-end: deriving the output shape of a Reshape node

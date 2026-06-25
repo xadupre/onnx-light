@@ -248,7 +248,13 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
     if shape_tag:
         if verbose:
             print("[fillshape] compute shape tags")
-        infer_value_and_node_tags(model.graph)
+        value_tags, node_tags = infer_value_and_node_tags(model.graph)
+        if verbose:
+            tagged_nodes = sum(1 for tag in node_tags if tag)
+            print(
+                f"[fillshape] computed {len(value_tags)} value tag(s) "
+                f"and {tagged_nodes} node tag(s)"
+            )
         if verbose:
             print("[fillshape] write shape tags in the model")
         write_value_and_node_tags_to_metadata(model.graph)

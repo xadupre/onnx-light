@@ -494,7 +494,7 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextShapeTagReleaseInfo) {
   reshape_node->add_output("Y");
 
   ShapesContext ctx;
-  ctx.set_opset_version("", 18);
+  ctx.SetOpsetVersion("", 18);
   ctx.ComputeShapeGraph(graph);
 
   // Build value_tags: mark "S" as shape-tagged (as InferValueAndNodeTags would).
@@ -532,7 +532,7 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextWriteToMetadataShapeTag) {
   reshape_node->add_output("Y");
 
   ShapesContext ctx;
-  ctx.set_opset_version("", 18);
+  ctx.SetOpsetVersion("", 18);
   ctx.ComputeShapeGraph(graph);
 
   const std::unordered_map<std::string, std::string> value_tags = {{"S", "shape"}};
@@ -610,7 +610,7 @@ TEST(OnnxOptimInPlaceReuse, WriteInPlaceReuseToMetadataWithShapeTags) {
   reshape_node->add_output("Y");
 
   ShapesContext ctx;
-  ctx.set_opset_version("", 18);
+  ctx.SetOpsetVersion("", 18);
   ctx.ComputeShapeGraph(graph);
 
   const std::unordered_map<std::string, std::string> value_tags = {{"S", "shape"}};

@@ -128,6 +128,9 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_treeensembleclassifier_int64_binary$",
     # ORT returns ZipMap outputs in a different carrier format.
     r"^test_cc_zipmap_",
+    # ORT only supports scalar/1-element zero points for MatMulInteger.
+    r"^test_cc_matmulinteger_per_col_b_zp$",
+    r"^test_cc_matmulinteger_per_row_a_zp$",
     # ORT rejects FLOAT16 scales for QLinearMatMul.
     r"^test_cc_qlinearmatmul_2D_uint8_float16$",
     r"^test_cc_qlinearmatmul_2D_int8_float16$",

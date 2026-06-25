@@ -14,3 +14,4 @@ onnx_proto
     simple_span
     thread_pool
     fields
+    google_protobuf_compat

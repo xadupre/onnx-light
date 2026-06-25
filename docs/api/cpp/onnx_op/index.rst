@@ -28,6 +28,8 @@ onnx_op
     operator_sets_quantization_doc
     operator_sets_reduction
     operator_sets_reduction_doc
+    operator_sets_rt
+    operator_sets_rt_doc
     operator_sets_sequence
     operator_sets_sequence_doc
     operator_sets_tensor

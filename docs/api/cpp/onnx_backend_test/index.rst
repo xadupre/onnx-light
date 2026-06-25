@@ -16,4 +16,7 @@ and the kernel implementations used by these test cases.
     :maxdepth: 1
 
     cases/index
+    cases_for_shapes/index
+    cases_numerical/index
+    cases_runtime/index
     test_case

@@ -235,11 +235,11 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
         if inplace_info:
             if verbose:
                 print("[fillshape] compute inplace/release info")
-            inplace = ComputeContext()
-            inplace.compute_inplace_reuse_graph(model.graph, ctx)
+            inplace_context = ComputeContext()
+            inplace_context.compute_inplace_reuse_graph(model.graph, ctx)
             if verbose:
                 print("[fillshape] write inplace/release info in the model")
-            inplace.write_to_metadata(model.graph)
+            inplace_context.write_to_metadata(model.graph)
     else:
         if verbose:
             print("[fillshape] shape inference only")

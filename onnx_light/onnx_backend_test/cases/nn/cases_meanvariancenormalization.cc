@@ -37,7 +37,7 @@ void RegisterMeanVarianceNormalizationCases(std::vector<TestCase> &registry) {
     Expect(node, {x}, {y}, "test_cc_mvn", {opset}, "backend-test", registry);
   }
 
-  // ``mvn_expanded``: explicit axes [0,2,3].
+  // ``mvn_explicit_axes``: explicit axes [0,2,3].
   {
     const OpsetId opset = DefaultOpset(13);
     const kernel::KernelContext ctx{opset};
@@ -59,10 +59,10 @@ void RegisterMeanVarianceNormalizationCases(std::vector<TestCase> &registry) {
 
     Tensor y = mvn_kernel(x, {0, 2, 3});
 
-    Expect(node, {x}, {y}, "test_cc_mvn_expanded", {opset}, "backend-test", registry);
+    Expect(node, {x}, {y}, "test_cc_mvn_explicit_axes", {opset}, "backend-test", registry);
   }
 
-  // ``mvn_expanded_ver18``: same explicit axes with opset 18 import.
+  // ``mvn_explicit_axes_ver18``: same explicit axes with opset 18 import.
   {
     const OpsetId opset = DefaultOpset(18);
     const kernel::KernelContext ctx{opset};
@@ -84,7 +84,7 @@ void RegisterMeanVarianceNormalizationCases(std::vector<TestCase> &registry) {
 
     Tensor y = mvn_kernel(x, {0, 2, 3});
 
-    Expect(node, {x}, {y}, "test_cc_mvn_expanded_ver18", {opset}, "backend-test", registry);
+    Expect(node, {x}, {y}, "test_cc_mvn_explicit_axes_ver18", {opset}, "backend-test", registry);
   }
 }
 

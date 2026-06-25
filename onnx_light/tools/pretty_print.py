@@ -25,6 +25,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from ._proto_utils import (
+    NODE_TAG_METADATA_KEY,
+    VALUE_TAGS,
+    _format_inplace_reuse,
+    _node_metadata_value,
+)
 from .mermaid import _dtype_name, _s
 
 if TYPE_CHECKING:  # pragma: no cover - imports for type hints only.
@@ -213,7 +219,13 @@ def _attr_value(attr: Any) -> str:
     return name
 
 
-def _format_node(node: Any, with_attributes: bool, highlight: set[str] | None) -> str:
+def _format_node(
+    node: Any,
+    with_attributes: bool,
+    highlight: set[str] | None,
+    include_node_tags: bool = False,
+    include_inplace: bool = False,
+) -> str:
     def _high(n: str) -> str:
         text = _s(n)
         if highlight and text in highlight:
@@ -226,6 +238,16 @@ def _format_node(node: Any, with_attributes: bool, highlight: set[str] | None) -
     domain = _s(getattr(node, "domain", ""))
     head = f"{domain}.{op_type}" if domain else op_type
     text = f"{head}({inputs}) -> {outputs}"
+
+    if include_node_tags:
+        tag = _s(_node_metadata_value(node, NODE_TAG_METADATA_KEY)).lower()
+        if tag in VALUE_TAGS:
+            text = f"[{tag}] {text}"
+
+    if include_inplace:
+        inplace_label = _format_inplace_reuse(node)
+        if inplace_label:
+            text = f"{text}  {inplace_label}"
 
     attrs = list(getattr(node, "attribute", []) or [])
     if not with_attributes or not attrs:
@@ -259,7 +281,12 @@ def _format_initializer(tensor: Any) -> str:
 
 
 def _format_graph_lines(
-    graph: Any, with_attributes: bool, highlight: set[str] | None, indent: str = ""
+    graph: Any,
+    with_attributes: bool,
+    highlight: set[str] | None,
+    indent: str = "",
+    include_node_tags: bool = False,
+    include_inplace: bool = False,
 ) -> list[str]:
     lines: list[str] = []
     name = _s(getattr(graph, "name", ""))
@@ -270,7 +297,13 @@ def _format_graph_lines(
     for init in getattr(graph, "initializer", []) or []:
         lines.append(f"{indent}{_format_initializer(init)}")
     for node in getattr(graph, "node", []) or []:
-        rendered = _format_node(node, with_attributes=with_attributes, highlight=highlight)
+        rendered = _format_node(
+            node,
+            with_attributes=with_attributes,
+            highlight=highlight,
+            include_node_tags=include_node_tags,
+            include_inplace=include_inplace,
+        )
         for line in rendered.splitlines():
             lines.append(f"{indent}{line}")
     for vi in getattr(graph, "output", []) or []:
@@ -279,7 +312,11 @@ def _format_graph_lines(
 
 
 def _format_function_lines(
-    fn: Any, with_attributes: bool, highlight: set[str] | None
+    fn: Any,
+    with_attributes: bool,
+    highlight: set[str] | None,
+    include_node_tags: bool = False,
+    include_inplace: bool = False,
 ) -> list[str]:
     name = _s(getattr(fn, "name", "")) or ""
     domain = _s(getattr(fn, "domain", "")) or ""
@@ -288,23 +325,47 @@ def _format_function_lines(
         lines.append(f"input: {_s(i)}")
     for node in getattr(fn, "node", []) or []:
         lines.extend(
-            _format_node(node, with_attributes=with_attributes, highlight=highlight).splitlines()
+            _format_node(
+                node,
+                with_attributes=with_attributes,
+                highlight=highlight,
+                include_node_tags=include_node_tags,
+                include_inplace=include_inplace,
+            ).splitlines()
         )
     for o in getattr(fn, "output", []) or []:
         lines.append(f"output: {_s(o)}")
     return lines
 
 
-def _format_model(model: Any, with_attributes: bool, highlight: set[str] | None) -> str:
+def _format_model(
+    model: Any,
+    with_attributes: bool,
+    highlight: set[str] | None,
+    include_node_tags: bool = False,
+    include_inplace: bool = False,
+) -> str:
     lines: list[str] = []
     lines.extend(_format_opsets(getattr(model, "opset_import", []) or []))
     lines.extend(
-        _format_graph_lines(model.graph, with_attributes=with_attributes, highlight=highlight)
+        _format_graph_lines(
+            model.graph,
+            with_attributes=with_attributes,
+            highlight=highlight,
+            include_node_tags=include_node_tags,
+            include_inplace=include_inplace,
+        )
     )
     for fn in getattr(model, "functions", []) or []:
         lines.append("")
         lines.extend(
-            _format_function_lines(fn, with_attributes=with_attributes, highlight=highlight)
+            _format_function_lines(
+                fn,
+                with_attributes=with_attributes,
+                highlight=highlight,
+                include_node_tags=include_node_tags,
+                include_inplace=include_inplace,
+            )
         )
     return "\n".join(lines)
 
@@ -319,6 +380,8 @@ def pretty_onnx(
     with_attributes: bool = False,
     highlight: set[str] | None = None,
     shape_inference: bool = False,
+    include_node_tags: bool = False,
+    include_inplace: bool = False,
 ) -> str:
     """Returns a compact, human-readable string for any ONNX proto.
 
@@ -338,6 +401,13 @@ def pretty_onnx(
         markers in the rendered I/O lists.
     :param shape_inference: when True and ``onx`` is a model, run
         :mod:`onnx_light` shape inference before rendering.
+    :param include_node_tags: when True, nodes that carry a
+        ``onnx_light.node_tag`` metadata entry (``shape``, ``axes`` or
+        ``weight``) are prefixed with ``[tag]`` in the rendered output.
+    :param include_inplace: when True, nodes that carry
+        ``onnx_light.inplace_reuse`` metadata have the inplace reuse
+        opportunities appended to their line, e.g.
+        ``inplace: out0=in0(equal)``.
     :return: the formatted text.
     """
     assert onx is not None, "onx cannot be None"
@@ -360,7 +430,13 @@ def pretty_onnx(
         return _attr_value(onx)
 
     if _is_node(onx):
-        return _format_node(onx, with_attributes=with_attributes, highlight=highlight)
+        return _format_node(
+            onx,
+            with_attributes=with_attributes,
+            highlight=highlight,
+            include_node_tags=include_node_tags,
+            include_inplace=include_inplace,
+        )
 
     if _is_tensor(onx):
         return _format_tensor_proto(onx)
@@ -372,16 +448,34 @@ def pretty_onnx(
         return _format_type_proto(onx)
 
     if _is_model(onx):
-        return _format_model(onx, with_attributes=with_attributes, highlight=highlight)
+        return _format_model(
+            onx,
+            with_attributes=with_attributes,
+            highlight=highlight,
+            include_node_tags=include_node_tags,
+            include_inplace=include_inplace,
+        )
 
     if _is_graph(onx):
         return "\n".join(
-            _format_graph_lines(onx, with_attributes=with_attributes, highlight=highlight)
+            _format_graph_lines(
+                onx,
+                with_attributes=with_attributes,
+                highlight=highlight,
+                include_node_tags=include_node_tags,
+                include_inplace=include_inplace,
+            )
         )
 
     if _is_function(onx):
         return "\n".join(
-            _format_function_lines(onx, with_attributes=with_attributes, highlight=highlight)
+            _format_function_lines(
+                onx,
+                with_attributes=with_attributes,
+                highlight=highlight,
+                include_node_tags=include_node_tags,
+                include_inplace=include_inplace,
+            )
         )
 
     return str(onx)

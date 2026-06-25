@@ -23,6 +23,23 @@ int64_t ParseInt64Fast(const utils::String &value) {
   return out;
 }
 
+bool TryParseInt64(const utils::String &value, int64_t &out) {
+  const char *begin = value.data();
+  const char *end = begin + value.size();
+  auto parsed = std::from_chars(begin, end, out);
+  return parsed.ec == std::errc() && parsed.ptr == end;
+}
+
+std::string BaseDirFromStream(utils::BinaryStream &stream) {
+  if (auto *file_stream = dynamic_cast<utils::FileStream *>(&stream)) {
+    return std::filesystem::path(file_stream->file_path()).parent_path().string();
+  }
+  if (auto *mmap_stream = dynamic_cast<utils::MmapFileStream *>(&stream)) {
+    return std::filesystem::path(mmap_stream->file_path()).parent_path().string();
+  }
+  return "";
+}
+
 // Sets external_data metadata for one tensor using location/offset/length fields.
 void SetTensorExternalMetadata(TensorProto &tensor, const std::string &location, int64_t offset) {
   tensor.clr_external_data();
@@ -755,6 +772,24 @@ void TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
     std::function<void()> deleter = options.raw_data_callback(*this);
     if (deleter) {
       ref_raw_data().attach_deleter(std::move(deleter));
+    }
+  }
+  if (options.tiny_external_data_threshold >= 0 && has_data_location() &&
+      ref_data_location() == DataLocation::EXTERNAL && !stream.ExternalWeights()) {
+    int64_t length = -1;
+    for (const StringStringEntryProto &entry : ref_external_data()) {
+      if ((entry.ref_key() == "length" || entry.ref_key() == "size") &&
+          TryParseInt64(entry.ref_value(), length)) {
+        break;
+      }
+    }
+    if (length >= 0 && length < options.tiny_external_data_threshold) {
+      const std::string base_dir = BaseDirFromStream(stream);
+      if (!base_dir.empty()) {
+        LoadExternalData(base_dir);
+        ref_data_location() = DataLocation::DEFAULT;
+        clr_external_data();
+      }
     }
   }
 }

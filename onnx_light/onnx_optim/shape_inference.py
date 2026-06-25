@@ -24,6 +24,7 @@ apply_inferred_shapes_to_model = _C.apply_inferred_shapes_to_model
 check_inputs_available = _C.check_inputs_available
 compute_inplace_reuse = _C.compute_inplace_reuse
 INPLACE_REUSE_METADATA_KEY = _C.INPLACE_REUSE_METADATA_KEY
+RELEASE_AFTER_METADATA_KEY = _C.RELEASE_AFTER_METADATA_KEY
 NODE_TAG_METADATA_KEY = _C.NODE_TAG_METADATA_KEY
 VALUE_TAG_METADATA_KEY = _C.VALUE_TAG_METADATA_KEY
 VALUE_TAGS_METADATA_KEY = _C.VALUE_TAGS_METADATA_KEY

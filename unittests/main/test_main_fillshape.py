@@ -362,6 +362,94 @@ class TestMainFillshape(ExtTestCase):
                 "No weight file should have been created in the output directory",
             )
 
+    def test_fillshape_inplace_info_and_shape_tag_combined(self):
+        """--inplace-info and --shape-tag together must both write their metadata.
+
+        Regression test for issue #3004: when both flags are used, neither set
+        of metadata should be overwritten by the other.  The saved model must
+        carry node-level inplace-reuse/release metadata (from --inplace-info)
+        AND graph-level value_tags + per-node node_tag metadata (from
+        --shape-tag).
+        """
+        from onnx_light.__main__ import main
+        from onnx_light.onnx_optim.shape_inference import (
+            INPLACE_REUSE_METADATA_KEY,
+            NODE_TAG_METADATA_KEY,
+            RELEASE_AFTER_METADATA_KEY,
+            VALUE_TAGS_METADATA_KEY,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            # Build Shape(X)->S, Reshape(X, S)->Y, Abs(Y)->Z.
+            #  * Shape and Reshape give shape-tag annotations on S and nodes.
+            #  * Abs(Y)->Z: Z can reuse Y's buffer (same shape) → inplace reuse.
+            shape_node = oh.make_node("Shape", inputs=["X"], outputs=["S"])
+            reshape_node = oh.make_node("Reshape", inputs=["X", "S"], outputs=["Y"])
+            abs_node = oh.make_node("Abs", inputs=["Y"], outputs=["Z"])
+            x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 3])
+            z = oh.make_tensor_value_info("Z", onnxl.TensorProto.FLOAT, None)
+            graph = oh.make_graph([shape_node, reshape_node, abs_node], "g", [x], [z])
+            model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+            model.ir_version = 8
+            self._save_model(model, model_path)
+
+            main(["fillshape", model_path, "--inplace-info", "--shape-tag"])
+
+            result = load(model_path)
+
+            # Shapes must be filled.
+            dims = list(result.graph.output[0].type.tensor_type.shape.dim)
+            self.assertEqual(len(dims), 2)
+
+            # --shape-tag: graph must carry value_tags metadata.
+            graph_meta = {entry.key: entry.value for entry in result.graph.metadata_props}
+            self.assertIn(VALUE_TAGS_METADATA_KEY, graph_meta)
+
+            # --shape-tag: Shape node (node 0) must carry the "shape" node tag.
+            node0_meta = {entry.key: entry.value for entry in result.graph.node[0].metadata_props}
+            self.assertIn(NODE_TAG_METADATA_KEY, node0_meta)
+            self.assertEqual(node0_meta[NODE_TAG_METADATA_KEY], "shape")
+
+            # --inplace-info: Abs node (node 2) must carry inplace/release metadata.
+            node2_meta = {entry.key: entry.value for entry in result.graph.node[2].metadata_props}
+            self.assertIn(INPLACE_REUSE_METADATA_KEY, node2_meta)
+            self.assertIn(RELEASE_AFTER_METADATA_KEY, node2_meta)
+
+    def test_fillshape_show_with_inplace_info_and_shape_tag(self):
+        """--show with --inplace-info and --shape-tag must include their annotations.
+
+        Regression test for issue #3004: the --show output must include the
+        inplace/release annotations (from --inplace-info) and the node-tag
+        prefix (from --shape-tag), not just the bare op-type lines.
+        """
+        import io
+        from contextlib import redirect_stdout
+
+        from onnx_light.__main__ import main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            # Abs(X)->A, Abs(A)->Y: node 1 can reuse A's buffer (inplace).
+            abs0 = oh.make_node("Abs", inputs=["X"], outputs=["A"])
+            abs1 = oh.make_node("Abs", inputs=["A"], outputs=["Y"])
+            x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [3, 4])
+            y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
+            graph = oh.make_graph([abs0, abs1], "g", [x], [y])
+            model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+            model.ir_version = 8
+            self._save_model(model, model_path)
+
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                main(["fillshape", model_path, "--inplace-info", "--shape-tag", "--show"])
+
+            output = buf.getvalue()
+            # Inplace annotation must appear in --show output.
+            self.assertIn("inplace:", output)
+            # Release annotation must appear in --show output.
+            self.assertIn("release:", output)
+
 
 if __name__ == "__main__":
     unittest.main()

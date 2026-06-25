@@ -246,7 +246,14 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
         write_value_and_node_tags_to_metadata(model.graph)
 
     if show:
-        print(pretty_onnx(model))
+        print(
+            pretty_onnx(
+                model,
+                include_inplace=inplace_info,
+                include_release=inplace_info,
+                include_node_tags=shape_tag,
+            )
+        )
         return
 
     if output_path is not None and has_external_data:

@@ -1,4 +1,4 @@
-name: INT ir-py - mbext
+name: INT mbext
 
 # Manually-triggered integration job: validates that onnx-light can be used as a
 # drop-in replacement for onnx (via the USE_ONNX_LIGHT=1 compatibility shim) when
@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   ir_py_mbext:
-    name: ir-py + mbext (ubuntu-latest, py3.13)
+    name: mbext (ubuntu-latest, py3.13)
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:

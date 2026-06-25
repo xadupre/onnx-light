@@ -64,6 +64,9 @@ show
     ``--include-inplace``
         Show in-place buffer-reuse annotations (``onnx_light.inplace_reuse``
         metadata).
+    ``--include-release``
+        Show post-execution release hints (``onnx_light.release_after``
+        metadata).  Only used by the ``pretty`` format.
     ``--include-node-tags``
         Show semantic ``shape``/``axes``/``weight`` node-tag annotations
         (``onnx_light.node_tag`` metadata).  Only used by the ``pretty``
@@ -218,6 +221,7 @@ def _cmd_show(args: argparse.Namespace) -> None:
     include_shapes: bool = args.include_shapes
     include_attributes: bool = args.include_attributes
     include_inplace: bool = args.include_inplace
+    include_release: bool = args.include_release
     include_node_tags: bool = args.include_node_tags
     include_initializers: bool = args.include_initializers
     direction: str = args.direction
@@ -246,6 +250,7 @@ def _cmd_show(args: argparse.Namespace) -> None:
             with_attributes=include_attributes,
             include_node_tags=include_node_tags,
             include_inplace=include_inplace,
+            include_release=include_release,
         )
     elif fmt == "mermaid":
         from .tools.mermaid import to_mermaid
@@ -677,6 +682,16 @@ def _build_parser() -> argparse.ArgumentParser:
         default=False,
         dest="include_inplace",
         help="Show in-place buffer-reuse annotations (onnx_light.inplace_reuse metadata).",
+    )
+    show_parser.add_argument(
+        "--include-release",
+        action="store_true",
+        default=False,
+        dest="include_release",
+        help=(
+            "Show post-execution release hints (onnx_light.release_after metadata). "
+            "Only used by the 'pretty' format."
+        ),
     )
     show_parser.add_argument(
         "--include-node-tags",

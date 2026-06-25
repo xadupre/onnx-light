@@ -87,11 +87,11 @@ print(pretty_onnx(model))
 # Shape info
 # ++++++++++
 #
-# Pass ``shape_inference=True`` to run :mod:`onnx_light` shape inference
-# before rendering.  After inference every value in ``model.graph.value_info``
-# and ``model.graph.output`` carries its inferred dtype and shape, which
-# :func:`~onnx_light.tools.pretty_onnx` then shows next to every
-# input/output/intermediate name.
+# Pass ``shape_inference=True`` to run :mod:`onnx_light.onnx_optim.shape_inference`
+# shape inference before rendering.  After inference every value in
+# ``model.graph.value_info`` and ``model.graph.output`` carries its inferred
+# dtype and shape, which :func:`~onnx_light.tools.pretty_onnx` then shows
+# next to every input/output/intermediate name.
 #
 # .. note::
 #   ``shape_inference=True`` creates a *copy* of the model with the

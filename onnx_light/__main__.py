@@ -114,6 +114,7 @@ import warnings
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from .onnx_lib import ModelProto as _ModelProto
     from .onnx_proto._helper import TypeProto as _TypeProto
 
 # Action string used in RuntimeEvent records for node-dispatch events.
@@ -127,7 +128,7 @@ _EVENT_ACTION_RUN_NODE = "run_node"
 _FILLSHAPE_TINY_TENSOR_THRESHOLD = 128
 
 
-def _load_tiny_external_tensors(model: Any, model_dir: str) -> None:
+def _load_tiny_external_tensors(model: _ModelProto, model_dir: str) -> None:
     """Loads small external-data tensors as inline ``raw_data`` in place.
 
     Walks ``model.graph.initializer`` and, for every tensor stored in an
@@ -158,7 +159,8 @@ def _load_tiny_external_tensors(model: Any, model_dir: str) -> None:
         # size is not declared in the metadata).  Skip it – it is likely large.
         if length < 0 or length >= _FILLSHAPE_TINY_TENSOR_THRESHOLD:
             continue
-        # Load the bytes from the external file and convert to inline storage.
+        # Read the tensor's bytes from the external file into raw_data, then
+        # convert to inline storage so shape inference can access the values.
         init.load_external_data(model_dir)
         init.ClearField("data_location")
         init.ClearField("external_data")

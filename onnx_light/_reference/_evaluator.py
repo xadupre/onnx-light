@@ -388,7 +388,7 @@ class ReferenceEvaluator:
                 # of ``{"<name>": {...}}``. Treat that form as the same map
                 # shorthand when ``<name>`` is a known map input and
                 # ``<name>_values`` is not provided explicitly.
-                base_name = name[: -len("_keys")]
+                base_name = name.removesuffix("_keys")
                 if (
                     base_name in self._map_inputs
                     and f"{base_name}_values" not in feed_inputs

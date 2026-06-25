@@ -1876,7 +1876,7 @@ extract_floordiv_chain(const std::string &simplified_str) {
   NodePtr node;
   try {
     node = parse(simplified_str);
-  } catch (...) {
+  } catch (const std::runtime_error &) {
     return std::nullopt;
   }
 

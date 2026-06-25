@@ -265,7 +265,7 @@ void AddOnnxPyExpressions(nb::module_ &m) {
         "Infers dimension ranges from equality constraints.\n\n"
         "Each element of *equalities* is a ``(lhs, rhs)`` pair representing the equality\n"
         "``lhs == rhs``.  For each variable that appears as the leaf of a floor-division\n"
-        "chain on one side, the tight range is computed:\n\n"
+        "chain on one side, computes the tight range:\n\n"
         "* ``var == value``                  → ``{var: (value, value)}``\n"
         "* ``var // d₁ // … // dₙ == value`` → ``{var: (P*value, P*value+P-1)}`` "
         "where P = d₁·…·dₙ.\n\n"

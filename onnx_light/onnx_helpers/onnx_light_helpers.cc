@@ -223,23 +223,28 @@ Logger::~Logger() {
   }
 }
 
-void Logger::log(const std::string &message) {
+void Logger::log(const std::string &message, const std::source_location loc) {
   if (!enabled_) {
     return;
   }
+  std::string formatted =
+      std::string("[") + loc.file_name() + ":" + std::to_string(loc.line()) + "] " + message;
   if (to_stdout_) {
-    std::cout << message << "\n";
+    std::cout << formatted << "\n";
     std::cout.flush();
   } else {
-    file_stream_ << message << "\n";
+    file_stream_ << formatted << "\n";
     file_stream_.flush();
   }
 }
 
 bool Logger::enabled() const { return enabled_; }
 
-Logger &Logger::Instance() {
+Logger &Logger::Instance(const char *message, const std::source_location loc) {
   static Logger instance;
+  if (message != nullptr) {
+    instance.log(message, loc);
+  }
   return instance;
 }
 

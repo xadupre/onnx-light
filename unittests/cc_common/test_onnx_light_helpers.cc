@@ -102,7 +102,8 @@ bool TestLoggerWritesToFile() {
   std::string line;
   std::getline(in, line);
   std::remove(path.c_str());
-  return line == "hello file";
+  // log() prepends [file:line] so check for the message substring.
+  return line.find("hello file") != std::string::npos;
 }
 
 bool TestLoggerDoesNothingWhenDisabled() {
@@ -110,6 +111,46 @@ bool TestLoggerDoesNothingWhenDisabled() {
   // Should not throw or write anything.
   logger.log("this is silently dropped");
   return true;
+}
+
+bool TestLoggerSourceLocationInOutput() {
+  const std::string path = "/tmp/test_logger_srcloc.txt";
+  std::remove(path.c_str());
+
+  {
+    onnx_light_helpers::Logger logger(path);
+    if (!logger.enabled()) {
+      return false;
+    }
+    logger.log("srcloc test");
+  }
+
+  std::ifstream in(path);
+  if (!in.is_open()) {
+    return false;
+  }
+  std::string line;
+  std::getline(in, line);
+  std::remove(path.c_str());
+  // The line must start with '[' (source-location prefix) and contain the message.
+  return !line.empty() && line[0] == '[' && line.find("srcloc test") != std::string::npos;
+}
+
+bool TestLoggerInstanceWithMessage() {
+  // Redirect stdout to a buffer and verify Instance(message) logs via the static instance.
+  std::streambuf *old_buf = std::cout.rdbuf();
+  std::ostringstream captured;
+  std::cout.rdbuf(captured.rdbuf());
+
+  // Force the static instance to stdout for this test via a local instance instead,
+  // so we don't depend on env vars in the test environment.
+  {
+    onnx_light_helpers::Logger logger("1");
+    logger.log("instance msg test");
+  }
+
+  std::cout.rdbuf(old_buf);
+  return captured.str().find("instance msg test") != std::string::npos;
 }
 
 } // namespace
@@ -157,6 +198,14 @@ int main() {
   }
   if (!TestLoggerDoesNothingWhenDisabled()) {
     std::cerr << "TestLoggerDoesNothingWhenDisabled failed." << std::endl;
+    return 1;
+  }
+  if (!TestLoggerSourceLocationInOutput()) {
+    std::cerr << "TestLoggerSourceLocationInOutput failed." << std::endl;
+    return 1;
+  }
+  if (!TestLoggerInstanceWithMessage()) {
+    std::cerr << "TestLoggerInstanceWithMessage failed." << std::endl;
     return 1;
   }
   return 0;

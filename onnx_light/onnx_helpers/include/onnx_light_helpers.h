@@ -5,6 +5,7 @@
 #include <float.h>
 #include <fstream>
 #include <iterator>
+#include <source_location>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -302,9 +303,14 @@ public:
    * Writes @p message followed by a newline to the configured destination and flushes
    * immediately.  Does nothing when logging is disabled.
    *
+   * The source location is captured automatically at the call site and prepended to the
+   * message as `[file:line] message`.
+   *
    * @param message The text to log.
+   * @param loc     Call-site location; defaults to `std::source_location::current()`.
    */
-  void log(const std::string &message);
+  void log(const std::string &message,
+           const std::source_location loc = std::source_location::current());
 
   /** Returns true when a destination is configured and the logger is active. */
   bool enabled() const;
@@ -315,9 +321,16 @@ public:
    * The instance is constructed on the first call using the `ONNX_LIGHT_LOG`
    * environment variable as its destination.
    *
+   * When @p message is non-null, it is logged (with source location) before the instance
+   * is returned, allowing the one-liner `Logger::Instance("initialising")`.
+   *
+   * @param message Optional message to log; pass `nullptr` (default) to skip logging.
+   * @param loc     Call-site location; defaults to `std::source_location::current()`.
+   *
    * @warning The static instance is **not thread-safe**; see the class-level warning.
    */
-  static Logger &Instance();
+  static Logger &Instance(const char *message = nullptr,
+                          const std::source_location loc = std::source_location::current());
 
 private:
   bool to_stdout_;

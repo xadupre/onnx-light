@@ -394,94 +394,6 @@ def _resolve_input_shape(
     return shape
 
 
-def _make_random_input(elem_type: int, shape: list[int], seed: int) -> object:
-    """Creates a random NumPy array for an ONNX tensor input.
-
-    Uses the same deterministic pseudo-random generators as the onnx-light
-    runtime (``onnx_light.onnx_lib.backend.random``).
-
-    Args:
-        elem_type: ``TensorProto`` data-type integer (e.g.
-            ``TensorProto.FLOAT``).
-        shape: Concrete non-negative integer dimensions.
-        seed: Integer seed forwarded to the random generator.
-
-    Returns:
-        A ``numpy.ndarray`` of the appropriate dtype and shape.
-
-    Raises:
-        NotImplementedError: For unsupported element types (e.g. STRING).
-    """
-    import numpy as np
-
-    from .onnx_lib.backend.random import rand, randint
-    from .onnx_proto._helper import tensor_dtype_to_np_dtype
-
-    try:
-        from .onnx_py._onnxpyprotoop import TensorProto  # type: ignore[attr-defined]
-    except ImportError:
-        from .onnx import TensorProto  # type: ignore[assignment]
-
-    _FLOAT_TYPES = frozenset(
-        {
-            int(TensorProto.FLOAT),
-            int(TensorProto.DOUBLE),
-            int(TensorProto.FLOAT16),
-            int(TensorProto.BFLOAT16),
-            int(TensorProto.FLOAT8E4M3FN),
-            int(TensorProto.FLOAT8E4M3FNUZ),
-            int(TensorProto.FLOAT8E5M2),
-            int(TensorProto.FLOAT8E5M2FNUZ),
-            int(TensorProto.FLOAT8E8M0),
-            int(TensorProto.FLOAT4E2M1),
-            int(TensorProto.COMPLEX64),
-            int(TensorProto.COMPLEX128),
-        }
-    )
-    _INT_TYPES = frozenset(
-        {
-            int(TensorProto.INT8),
-            int(TensorProto.INT16),
-            int(TensorProto.INT32),
-            int(TensorProto.INT64),
-            int(TensorProto.UINT8),
-            int(TensorProto.UINT16),
-            int(TensorProto.UINT32),
-            int(TensorProto.UINT64),
-            int(TensorProto.INT4),
-            int(TensorProto.UINT4),
-            int(TensorProto.INT2),
-            int(TensorProto.UINT2),
-        }
-    )
-
-    np_dtype = tensor_dtype_to_np_dtype(elem_type)
-
-    if elem_type == int(TensorProto.BOOL):
-        values = randint(0, 2, size=shape, seed=seed, dtype=np.int32)
-        return values.astype(bool)
-
-    if elem_type in _FLOAT_TYPES:
-        if elem_type in (int(TensorProto.COMPLEX64), int(TensorProto.COMPLEX128)):
-            real = rand(*shape, seed=seed)
-            imag = rand(*shape, seed=seed + 1)
-            return (real + 1j * imag).astype(np_dtype)
-        values = rand(*shape, seed=seed)
-        return values.astype(np_dtype)
-
-    if elem_type in _INT_TYPES:
-        return randint(0, 10, size=shape, seed=seed, dtype=np_dtype)
-
-    if elem_type == int(TensorProto.STRING):
-        raise NotImplementedError(
-            "STRING inputs are not supported by the run subcommand's random input generator."
-        )
-
-    raise NotImplementedError(
-        f"Unsupported element type {elem_type} for random input generation."
-    )
-
-
 def _dump_tensors_as_model(
     tensors: dict[str, object], dump_path: str, *, ir_version: int = 8
 ) -> None:
@@ -521,6 +433,7 @@ def _cmd_run(args: argparse.Namespace) -> None:
 
     from .onnx import load
     from .onnx.reference import ReferenceEvaluator
+    from .onnx.tools import make_random_input
 
     model_path: str = args.model
     dim_overrides: dict[str, int] = {}
@@ -569,7 +482,7 @@ def _cmd_run(args: argparse.Namespace) -> None:
             continue
         elem_type = int(vi.type.tensor_type.elem_type)
         shape = _resolve_input_shape(vi.type, dim_overrides, vi.name)
-        tensor = _make_random_input(elem_type, shape, seed)
+        tensor = make_random_input(elem_type, shape, seed)
         feed[vi.name] = tensor
         if verbose >= 1 and isinstance(tensor, np.ndarray):
             print(f"[run]   input {vi.name!r}: shape={list(tensor.shape)}, dtype={tensor.dtype}")

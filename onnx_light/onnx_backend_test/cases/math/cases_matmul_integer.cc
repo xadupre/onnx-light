@@ -15,6 +15,7 @@ namespace onnx_backend_test {
 
 namespace {
 
+// Node with all optional zero-point inputs present.
 NodeProto MakeMatMulIntegerNode() {
   NodeProto node;
   node.set_op_type("MatMulInteger");
@@ -22,6 +23,30 @@ NodeProto MakeMatMulIntegerNode() {
   node.add_input("B");
   node.add_input("a_zero_point");
   node.add_input("b_zero_point");
+  node.add_output("Y");
+  return node;
+}
+
+// Node with a_zero_point absent (empty string) and b_zero_point present.
+NodeProto MakeMatMulIntegerNodeNoAZP() {
+  NodeProto node;
+  node.set_op_type("MatMulInteger");
+  node.add_input("A");
+  node.add_input("B");
+  node.add_input(""); // a_zero_point absent
+  node.add_input("b_zero_point");
+  node.add_output("Y");
+  return node;
+}
+
+// Node with a_zero_point present and b_zero_point absent (empty string).
+NodeProto MakeMatMulIntegerNodeNoBZP() {
+  NodeProto node;
+  node.set_op_type("MatMulInteger");
+  node.add_input("A");
+  node.add_input("B");
+  node.add_input("a_zero_point");
+  node.add_input(""); // b_zero_point absent
   node.add_output("Y");
   return node;
 }
@@ -67,6 +92,38 @@ void RegisterMatMulIntegerCases(std::vector<TestCase> &registry) {
     Y.name = "Y";
     NodeProto node = MakeMatMulIntegerNode();
     Expect(node, {A, B, a_zp, b_zp}, {Y}, "test_cc_matmulinteger_int8", {opset}, "backend-test",
+           registry);
+  }
+
+  // 2-D UINT8 case with per-column b_zero_point (a_zero_point absent).
+  {
+    Tensor A = Tensor::FromUint8("A", {2, 3}, {11, 7, 3, 10, 6, 2});
+    Tensor B = Tensor::FromUint8("B", {3, 2}, {1, 4, 2, 5, 3, 6});
+    Tensor b_zp("b_zero_point", static_cast<int32_t>(DataType::UINT8), {2},
+                std::vector<uint8_t>{1, 2});
+
+    // Default-constructed Tensor signals an absent optional input to the kernel.
+    const Tensor no_a_zp;
+    Tensor Y = mmi(A, B, no_a_zp, b_zp);
+    Y.name = "Y";
+    NodeProto node = MakeMatMulIntegerNodeNoAZP();
+    Expect(node, {A, B, b_zp}, {Y}, "test_cc_matmulinteger_per_col_b_zp", {opset}, "backend-test",
+           registry);
+  }
+
+  // 2-D UINT8 case with per-row a_zero_point (b_zero_point absent).
+  {
+    Tensor A = Tensor::FromUint8("A", {2, 3}, {11, 7, 3, 10, 6, 2});
+    Tensor B = Tensor::FromUint8("B", {3, 2}, {1, 4, 2, 5, 3, 6});
+    Tensor a_zp("a_zero_point", static_cast<int32_t>(DataType::UINT8), {2},
+                std::vector<uint8_t>{1, 2});
+
+    // Default-constructed Tensor signals an absent optional input to the kernel.
+    const Tensor no_b_zp;
+    Tensor Y = mmi(A, B, a_zp, no_b_zp);
+    Y.name = "Y";
+    NodeProto node = MakeMatMulIntegerNodeNoBZP();
+    Expect(node, {A, B, a_zp}, {Y}, "test_cc_matmulinteger_per_row_a_zp", {opset}, "backend-test",
            registry);
   }
 }

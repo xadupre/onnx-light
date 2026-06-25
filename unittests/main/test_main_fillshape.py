@@ -223,6 +223,7 @@ class TestMainFillshape(ExtTestCase):
             # Node 1 (Abs A->Y) should have release metadata.
             node1_meta = {entry.key: entry.value for entry in result.graph.node[1].metadata_props}
             self.assertEqual(node1_meta["onnx_light.release_after"], "A")
+            self.assertNotIn("onnx_light.inplace_reuse", node1_meta)
 
     def test_fillshape_shape_tag_option(self):
         """fillshape --shape-tag writes value/node tag metadata into the model."""

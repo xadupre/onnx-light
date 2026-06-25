@@ -196,6 +196,25 @@ def _write_inferred_value_and_node_tags_to_metadata(
                 write_value_and_node_tags_to_metadata(subgraph)
 
 
+def _remove_node_metadata_key(graph: Any, key: str) -> None:
+    """Removes a metadata key from all nodes in a graph and nested subgraphs."""
+
+    for node in graph.node:
+        props = node.metadata_props
+        kept = [(entry.key, entry.value) for entry in props if entry.key != key]
+        if len(kept) != len(props):
+            del props[:]
+            for k, v in kept:
+                entry = props.add()
+                entry.key = k
+                entry.value = v
+        for attr in node.attribute:
+            if attr.has_g():
+                _remove_node_metadata_key(attr.g, key)
+            for subgraph in attr.graphs:
+                _remove_node_metadata_key(subgraph, key)
+
+
 def _cmd_fillshape(args: argparse.Namespace) -> None:
     """Implements the ``fillshape`` subcommand."""
     from .onnx import load, save
@@ -255,12 +274,20 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
                 _print_shape_inference_events_detailed(events)
         if inplace_info or release_info:
             if verbose:
-                print("[fillshape] compute inplace/release info")
+                if inplace_info and release_info:
+                    what = "inplace/release"
+                elif inplace_info:
+                    what = "inplace"
+                else:
+                    what = "release"
+                print(f"[fillshape] compute {what} info")
             inplace_context = ComputeContext()
             inplace_context.compute_inplace_reuse_graph(model.graph, ctx)
             if verbose:
-                print("[fillshape] write inplace/release info in the model")
+                print(f"[fillshape] write {what} info in the model")
             inplace_context.write_to_metadata(model.graph)
+            if release_info and not inplace_info:
+                _remove_node_metadata_key(model.graph, "onnx_light.inplace_reuse")
     else:
         if verbose:
             print("[fillshape] shape inference only")

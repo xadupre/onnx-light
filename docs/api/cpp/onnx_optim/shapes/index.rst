@@ -18,8 +18,10 @@ Concrete functions are organized per operator domain.
     shape_inference
     dispatch_table
     inplace_reuse
+    value_tags
     controlflow/index
     generator/index
+    image/index
     logical/index
     math/index
     nn/index
@@ -27,6 +29,7 @@ Concrete functions are organized per operator domain.
     preview/index
     quantization/index
     reduction/index
+    rt/index
     sequence/index
     tensor/index
     text/index

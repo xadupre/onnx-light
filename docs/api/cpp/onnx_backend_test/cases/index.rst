@@ -6,6 +6,7 @@ cases
 
     include_controlflow_cases
     include_generator_cases
+    include_image_cases
     include_logical_cases
     include_math_cases
     include_nn_cases

@@ -4,7 +4,11 @@ kernels
 .. toctree::
     :maxdepth: 1
 
+    cast_float8
+    cast_helper
+    cast_sub_byte
     elementwise_helpers
+    float16_promote
     kernel_context
     include_controlflow_kernels
     include_generator_kernels

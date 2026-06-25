@@ -10,6 +10,7 @@ manipulation helpers. ``lib_onnx_lib`` depends publicly on this library.
     :maxdepth: 1
 
     attr_proto_util
+    compose
     data_type_utils
     graph_manipulations
     parser

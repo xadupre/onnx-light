@@ -21,5 +21,9 @@ exposes:
 
     simple_tensor
     simple_sequence
+    simple_map
     random
+    runtime_context
+    run_nodes
+    kernel_dispatch_table
     kernels/index

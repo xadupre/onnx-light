@@ -174,11 +174,12 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
     from .onnx import load, save
     from .onnx_lib.external_data_helper import uses_external_data
     from .onnx_optim.shape_inference import (
+        ComputeContext,
         ShapesContext,
         apply_inferred_shapes_to_model,
         compute_shape_model,
         infer_shapes_model,
-        write_inplace_reuse_to_metadata,
+        infer_value_and_node_tags,
         write_value_and_node_tags_to_metadata,
     )
     from .tools.pretty_print import pretty_onnx
@@ -219,33 +220,37 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
             print("[fillshape] shape inference")
         compute_shape_model(ctx, model, keep)
         apply_inferred_shapes_to_model(ctx, model)
-        # where inplace info is called?
         if verbose:
             events = ctx.events()
-            if verbose:
-                print(f"[fillshape] shape inference events: {len(events)}")
-                if verbose >= 2:
-                    for ev in events:
-                        d = ev.as_dict()
-                        op = f"{d['op_domain']}::{d['op_type']}" if d["op_type"] else "-"
-                        print(
-                            f"[fillshape] node={d['node_index']:<3d} "
-                            f"action={d['action']:<12s} op={op:<20s} "
-                            f"name={d['name'] or '-':<16s} shape={d['shape']}"
-                        )
+            print(f"[fillshape] shape inference events: {len(events)}")
+            if verbose >= 2:
+                for ev in events:
+                    d = ev.as_dict()
+                    op = f"{d['op_domain']}::{d['op_type']}" if d["op_type"] else "-"
+                    print(
+                        f"[fillshape] node={d['node_index']:<3d} "
+                        f"action={d['action']:<12s} op={op:<20s} "
+                        f"name={d['name'] or '-':<16s} shape={d['shape']}"
+                    )
         if inplace_info:
             if verbose:
-                print("[fillshape] write inplace info in the model")
-            write_inplace_reuse_to_metadata(ctx, model.graph)
+                print("[fillshape] compute inplace/release info")
+            inplace = ComputeContext()
+            inplace.compute_inplace_reuse_graph(model.graph, ctx)
+            if verbose:
+                print("[fillshape] write inplace/release info in the model")
+            inplace.write_to_metadata(model.graph)
     else:
         if verbose:
             print("[fillshape] shape inference only")
         infer_shapes_model(model, prefill_with_value_info_output=keep)
 
     if shape_tag:
-        # where shape tag is run?
         if verbose:
-            print("[fillshape] write shape tag")
+            print("[fillshape] infer shape tags")
+        infer_value_and_node_tags(model.graph)
+        if verbose:
+            print("[fillshape] write shape tags in the model")
         write_value_and_node_tags_to_metadata(model.graph)
 
     if show:

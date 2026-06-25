@@ -49,6 +49,7 @@ from ..onnx_py._onnxpyoptim import expressions as _C  # type: ignore[attr-define
 CompareResult: TypeAlias = _C.CompareResult
 ExpressionComparison: TypeAlias = _C.ExpressionComparison
 DimRange: TypeAlias = _C.DimRange
+INFINITY: str = _C.INFINITY
 
 
 def simplify_expression(expr: "str | int") -> "str | int":

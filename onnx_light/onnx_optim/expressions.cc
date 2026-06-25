@@ -680,17 +680,39 @@ public:
       return n;
     if (!den_other.empty())
       return n;
-    if (num_c % den_c != 0)
-      return n;
 
-    int64_t folded = num_c / den_c;
+    if (num_c % den_c == 0) {
+      // Denominator divides the numerator constant exactly: fold completely.
+      int64_t folded = num_c / den_c;
+      std::vector<NodePtr> factors;
+      if (folded != 1 || num_other.empty())
+        factors.push_back(std::make_unique<Constant>(folded));
+      for (auto &x : num_other)
+        factors.push_back(std::move(x));
+      return build_product(factors);
+    }
+
+    // Partial cancellation via GCD: collapse multiple floor-division constants
+    // into one, e.g. d//5//2 → d//10, or 6*a//4 → 3*a//2.
+    // The identity floor(floor(x/a)/b) == floor(x/(a*b)) makes this valid.
+    int64_t g = std::gcd(std::abs(num_c), std::abs(den_c));
+    int64_t new_num_c = num_c / g;
+    int64_t new_den_c = den_c / g;
+
+    // Build the (reduced) numerator.
     std::vector<NodePtr> factors;
-    if (folded != 1 || num_other.empty())
-      factors.push_back(std::make_unique<Constant>(folded));
+    if (new_num_c != 1 || num_other.empty())
+      factors.push_back(std::make_unique<Constant>(new_num_c));
     for (auto &x : num_other)
       factors.push_back(std::move(x));
+    NodePtr numerator = build_product(factors);
 
-    return build_product(factors);
+    if (new_den_c == 1)
+      return numerator;
+
+    BinOpKind div_op = (n->op == BinOpKind::ExactDiv) ? BinOpKind::ExactDiv : BinOpKind::FloorDiv;
+    return std::make_unique<BinOp>(std::move(numerator), div_op,
+                                   std::make_unique<Constant>(new_den_c));
   }
 };
 

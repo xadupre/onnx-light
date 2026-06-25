@@ -496,6 +496,13 @@ class TestDimRangesFromExpressions(ExtTestCase):
     def test_empty_equalities(self):
         self.assertEqual(dim_ranges_from_expressions([]), {})
 
+    # ── INFINITY constant ──────────────────────────────────────────────────
+    def test_infinity_constant_exists(self):
+        self.assertEqual(onnx_expressions.INFINITY, "+inf")
+
+    def test_infinity_is_string(self):
+        self.assertIsInstance(onnx_expressions.INFINITY, str)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

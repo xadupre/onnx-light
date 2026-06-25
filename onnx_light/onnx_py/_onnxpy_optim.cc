@@ -186,11 +186,10 @@ void AddOnnxPyExpressions(nb::module_ &m) {
         "When ``upper`` equals ``lower`` the variable is **exactly constrained** to that\n"
         "value (an equality constraint with no slack).  In that case there is no\n"
         "separate upper bound beyond the equality itself.\n\n"
-        "**There is no infinity sentinel value.**  :class:`DimRange` only holds tight,\n"
-        "finite bounds derived from a recognised equality pattern.  A variable whose\n"
-        "upper bound cannot be determined is **absent** from the dict returned by\n"
-        ":func:`dim_ranges_from_expressions` entirely; ``upper`` is never set to any\n"
-        "special infinity value.\n\n"
+        "When no finite upper bound can be derived, ``upper`` is set to\n"
+        ":data:`~onnx_light.onnx_optim.expressions.INFINITY` (the string ``'+inf'``),\n"
+        "the reserved infinity sentinel.  Test for it with ``dr.upper == INFINITY``.\n"
+        "No valid dimension-variable name may equal ``'+inf'``.\n\n"
         "Returned by :func:`dim_ranges_from_expressions`.")
         .def_prop_ro(
             "lower",
@@ -201,13 +200,10 @@ void AddOnnxPyExpressions(nb::module_ &m) {
             [from_dim](const expr::DimRange &r) -> nb::object { return from_dim(r.upper); },
             "Inclusive upper bound; ``int`` when numeric, ``str`` when symbolic.\n\n"
             "Equals ``lower`` when the variable is exactly constrained by a direct\n"
-            "equality (e.g. ``var == value``).  In that case no separate upper bound\n"
-            "is available — the bound simply reflects the equality.  When ``upper``\n"
-            "differs from ``lower`` (floor-division chain with divisor product > 1),\n"
-            "it is a true finite upper bound.\n\n"
-            "**There is no infinity sentinel.**  When no finite upper bound can be\n"
-            "established the variable is absent from the result dict entirely; this\n"
-            "property is never set to a special infinity value.")
+            "equality (e.g. ``var == value``).  When ``upper`` differs from ``lower``\n"
+            "(floor-division chain with divisor product > 1), it is a true finite upper\n"
+            "bound.  When no finite upper bound is known, ``upper`` equals\n"
+            ":data:`~onnx_light.onnx_optim.expressions.INFINITY` (``'+inf'``).")
         .def("__repr__",
              [from_dim](const expr::DimRange &r) {
                auto lo = from_dim(r.lower);
@@ -231,6 +227,9 @@ void AddOnnxPyExpressions(nb::module_ &m) {
         .def("__hash__", [](const expr::DimRange &) -> int64_t {
           throw nb::type_error("unhashable type: 'DimRange'");
         });
+
+    // INFINITY — sentinel DimType value for an unbounded upper bound.
+    expressions_mod.attr("INFINITY") = from_dim(expr::kDimInfinity);
 
     expressions_mod.def(
         "dim_add",
@@ -320,8 +319,8 @@ void AddOnnxPyExpressions(nb::module_ &m) {
         "  bound beyond the equality itself.\n"
         "* ``var // d₁ // … // dₙ == value`` → ``{var: DimRange(P*value, P*value+P-1)}``\n"
         "  where P = d₁·…·dₙ — a proper range with ``upper > lower`` whenever P > 1.\n\n"
-        "Variables that do not match any supported pattern are **absent** from the result;\n"
-        "they have no determinable range and are not represented as unbounded entries.\n\n"
+        "Variables that do not match any supported pattern are **absent** from the result\n"
+        "(they are not represented as entries with ``upper == INFINITY``).\n\n"
         "When *tokens* is non-empty, only the listed variables are returned.\n\n"
         "Returns a ``dict[str, DimRange]`` mapping each variable to its inclusive range.");
   }

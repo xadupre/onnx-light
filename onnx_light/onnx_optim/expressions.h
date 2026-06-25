@@ -594,6 +594,18 @@ rename_dynamic_dimensions(const std::map<std::string, std::unordered_set<std::st
 using DimType = std::variant<int64_t, std::string>;
 
 /**
+ * @brief Sentinel `DimType` value representing a positive-infinity upper bound.
+ *
+ * Used as `DimRange::upper` when no finite upper bound is known for a dimension
+ * variable.  The underlying string `"+inf"` is reserved and must never be used
+ * as an actual dimension-variable name.  Equality with this sentinel can be
+ * tested with `d == kDimInfinity`.
+ *
+ * @see DimRange
+ */
+inline const DimType kDimInfinity{std::string{"+inf"}};
+
+/**
  * @brief Returns a string representation of @p d.
  *
  * Converts an `int64_t` to its decimal string; returns the `std::string`
@@ -786,18 +798,17 @@ DimType dim_min(const DimType &a, const DimType &b);
  * (no slack, i.e. an equality rather than a proper interval).  In that case
  * there is no separate upper bound beyond the equality itself.
  *
- * **There is no infinity sentinel value.**  `DimRange` only represents tight,
- * finite bounds derived from a supported equality pattern.  A variable whose
- * upper bound cannot be determined is **absent** from the result map of
- * @ref dim_ranges_from_expressions entirely; it is never represented as a
- * `DimRange` with `upper` set to any special infinity value.
+ * When no finite upper bound can be derived, `upper` is set to @ref kDimInfinity
+ * (`"+inf"`), the reserved infinity sentinel.  Callers can test for this with
+ * `upper == kDimInfinity`.  A valid dimension-variable name must never equal
+ * `"+inf"` so that the sentinel is unambiguous.
  */
 struct DimRange {
   DimType lower; ///< Inclusive lower bound.
   DimType upper; ///< Inclusive upper bound.  Equals `lower` when the variable
                  ///< is exactly constrained (no separate upper bound).
-                 ///< There is no infinity sentinel: variables with no
-                 ///< determinable upper bound are absent from the result map.
+                 ///< Equals @ref kDimInfinity when no finite upper bound is
+                 ///< known.
 };
 
 /**
@@ -824,7 +835,8 @@ struct DimRange {
  * matching.
  *
  * Variables for which no supported pattern is recognised are **absent** from
- * the result map entirely; they are not represented as an unbounded range.
+ * the result map entirely; they are not represented as an unbounded range
+ * (i.e. they do not appear with `upper == kDimInfinity`).
  *
  * @param equalities  Pairs `(lhs, rhs)` of symbolic expressions that are
  *                    equal (e.g. `{"a", "d//5"}`).

@@ -241,11 +241,18 @@ class TestMainFillshape(ExtTestCase):
             main(["fillshape", "/nonexistent/path/model.onnx"])
 
     def test_fillshape_external_data_not_loaded(self):
-        """fillshape loads the model without fetching external weight bytes."""
+        """fillshape loads the model without fetching large external weight bytes.
+
+        Large tensors (at or above the tiny-tensor threshold) must remain as
+        external-data references after fillshape so that the .data file is not
+        inlined unnecessarily.
+        """
         from onnx_light.__main__ import main
         from onnx_light.onnx import save
         from onnx_light.onnx_lib.external_data_helper import uses_external_data
 
+        # W is 8 × 8 × float32 = 256 bytes, well above the 128-byte tiny-tensor
+        # threshold, so it must remain external after fillshape.
         values = np.zeros((8, 8), dtype=np.float32)
         init = oh.make_tensor("W", onnxl.TensorProto.FLOAT, [8, 8], values.tobytes(), raw=True)
         x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [8, 8])
@@ -266,13 +273,55 @@ class TestMainFillshape(ExtTestCase):
             # fillshape must succeed even though weights are external.
             main(["fillshape", model_path])
 
-            # The output model should still reference external data.
+            # The output model should still reference external data (W is large).
             result = load(model_path, load_external_data=False)
             self.assertTrue(any(uses_external_data(i) for i in result.graph.initializer))
 
             # Shapes must be filled.
             dims = list(result.graph.output[0].type.tensor_type.shape.dim)
             self.assertEqual(len(dims), 2)
+
+    def test_fillshape_tiny_external_tensor_loaded_for_shape_inference(self):
+        """fillshape loads tiny external tensors so shape inference can use their values.
+
+        When a model is saved with ``size_threshold=0`` all tensors go to the
+        external data file, including small shape-constant tensors such as the
+        ``shape`` input of a Reshape node.  fillshape must still infer the
+        output shape correctly by loading those tiny tensors from disk.
+        """
+        from onnx_light.__main__ import main
+        from onnx_light.onnx import save
+
+        # shape initializer: [2, 3] as int64 raw_data = 16 bytes (< 128-byte threshold).
+        shape_values = np.array([2, 3], dtype=np.int64)
+        shape_init = oh.make_tensor(
+            "shape", onnxl.TensorProto.INT64, [2], shape_values.tobytes(), raw=True
+        )
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [6])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
+        node = oh.make_node("Reshape", ["X", "shape"], ["Y"])
+        graph = oh.make_graph([node], "g", [x], [y], [shape_init])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+        model.ir_version = 8
+
+        with tempfile.TemporaryDirectory() as model_dir:
+            model_path = os.path.join(model_dir, "model.onnx")
+            # Save with size_threshold=0 so even the tiny shape tensor is external.
+            save(model, model_path, save_as_external_data=True, size_threshold=0)
+
+            weight_file = model_path + ".data"
+            self.assertTrue(os.path.exists(weight_file))
+
+            # fillshape must infer Y's shape correctly despite the shape tensor
+            # being stored externally.
+            main(["fillshape", model_path])
+
+            # Reload and check that Y's shape is fully resolved.
+            result = load(model_path)
+            dims = list(result.graph.output[0].type.tensor_type.shape.dim)
+            self.assertEqual(len(dims), 2)
+            self.assertEqual(dims[0].dim_value, 2)
+            self.assertEqual(dims[1].dim_value, 3)
 
     def test_fillshape_external_data_output_beside_weights(self):
         """--output with an external-data model places the output beside the weight file."""

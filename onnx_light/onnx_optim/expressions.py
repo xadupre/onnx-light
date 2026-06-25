@@ -493,8 +493,8 @@ def dim_ranges_from_expressions(
 
     * **Direct equality** ``var == value`` (chain length 0):
       ``DimRange(lower=value, upper=value)``.  The variable is **exactly
-      constrained** to ``value``; ``upper == lower`` and there is no separate
-      upper bound beyond the equality itself.
+      constrained** to ``value``; ``upper`` equals ``lower`` and there is no
+      separate upper bound beyond the equality itself.
     * **Floor-division chain** ``var // d₁ // … // dₙ == value``
       (all dᵢ are strictly positive integer literals, P = d₁·…·dₙ):
       ``DimRange(lower=P·value, upper=P·value + P − 1)``.  This is a proper
@@ -510,27 +510,27 @@ def dim_ranges_from_expressions(
     :param equalities: A list of ``(lhs, rhs)`` string pairs, each
         representing the equality ``lhs == rhs``.
     :param tokens: Optional list of variable names to include in the result.
-        When *None* (the default), ranges for all recognised variables are
+        When *None* (the default), ranges for all recognized variables are
         returned.
     :returns: A ``dict`` mapping each variable name to a :class:`DimRange`
         with inclusive ``lower`` and ``upper`` bounds.  Each bound is an
         ``int`` when concrete or a simplified ``str`` when symbolic.
-        When ``upper == lower`` the variable is exactly constrained (no
-        separate upper bound).  A variable absent from the dict has no
+        When ``upper`` equals ``lower`` the variable is exactly constrained
+        (no separate upper bound).  A variable absent from the dict has no
         determinable range.
     :rtype: dict[str, DimRange]
 
     Examples::
 
         >>> r = dim_ranges_from_expressions([("a", "d//5")])
-        >>> r["a"].lower, r["a"].upper   # exact: upper == lower, no separate upper bound
+        >>> r["a"].lower, r["a"].upper   # exact: upper equals lower, no separate upper bound
         ('d//5', 'd//5')
         >>> r["d"].lower, r["d"].upper   # proper range: upper > lower
         ('5*a', '4+5*a')
         >>> r = dim_ranges_from_expressions([("a", "3")])
         >>> r["a"].lower, r["a"].upper   # exact numeric constraint
         (3, 3)
-        >>> # Variables without a recognised pattern are absent:
+        >>> # Variables without a recognized pattern are absent:
         >>> "x" not in dim_ranges_from_expressions([("x+y", "5")])
         True
     """

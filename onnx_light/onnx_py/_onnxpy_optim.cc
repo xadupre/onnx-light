@@ -183,7 +183,7 @@ void AddOnnxPyExpressions(nb::module_ &m) {
         expressions_mod, "DimRange",
         "Inclusive ``[lower, upper]`` range for a dimension variable.\n\n"
         "Each bound is an ``int`` when concrete or a ``str`` when symbolic.\n\n"
-        "When ``upper == lower`` the variable is **exactly constrained** to that\n"
+        "When ``upper`` equals ``lower`` the variable is **exactly constrained** to that\n"
         "value (an equality constraint with no slack).  In that case there is no\n"
         "separate upper bound beyond the equality itself.\n\n"
         "A variable that does not appear as a key in the dict returned by\n"

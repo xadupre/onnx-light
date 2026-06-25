@@ -15,7 +15,7 @@ namespace onnx_backend_test {
 
 namespace {
 
-// Node with all four inputs present.
+// Node with all optional zero-point inputs present.
 NodeProto MakeMatMulIntegerNode() {
   NodeProto node;
   node.set_op_type("MatMulInteger");
@@ -102,8 +102,9 @@ void RegisterMatMulIntegerCases(std::vector<TestCase> &registry) {
     Tensor b_zp("b_zero_point", static_cast<int32_t>(DataType::UINT8), {2},
                 std::vector<uint8_t>{1, 2});
 
-    const Tensor a_zp_absent;
-    Tensor Y = mmi(A, B, a_zp_absent, b_zp);
+    // Default-constructed Tensor signals an absent optional input to the kernel.
+    const Tensor no_a_zp;
+    Tensor Y = mmi(A, B, no_a_zp, b_zp);
     Y.name = "Y";
     NodeProto node = MakeMatMulIntegerNodeNoAZP();
     Expect(node, {A, B, b_zp}, {Y}, "test_cc_matmulinteger_per_col_b_zp", {opset}, "backend-test",
@@ -117,8 +118,9 @@ void RegisterMatMulIntegerCases(std::vector<TestCase> &registry) {
     Tensor a_zp("a_zero_point", static_cast<int32_t>(DataType::UINT8), {2},
                 std::vector<uint8_t>{1, 2});
 
-    const Tensor b_zp_absent;
-    Tensor Y = mmi(A, B, a_zp, b_zp_absent);
+    // Default-constructed Tensor signals an absent optional input to the kernel.
+    const Tensor no_b_zp;
+    Tensor Y = mmi(A, B, a_zp, no_b_zp);
     Y.name = "Y";
     NodeProto node = MakeMatMulIntegerNodeNoBZP();
     Expect(node, {A, B, a_zp}, {Y}, "test_cc_matmulinteger_per_row_a_zp", {opset}, "backend-test",

@@ -710,6 +710,8 @@ public:
     if (new_den_c == 1)
       return numerator;
 
+    // n->op is FloorDiv or ExactDiv here: Mult would have den_c==1 and gone
+    // through the exact-fold branch above (num_c % 1 == 0 is always true).
     BinOpKind div_op = (n->op == BinOpKind::ExactDiv) ? BinOpKind::ExactDiv : BinOpKind::FloorDiv;
     return std::make_unique<BinOp>(std::move(numerator), div_op,
                                    std::make_unique<Constant>(new_den_c));

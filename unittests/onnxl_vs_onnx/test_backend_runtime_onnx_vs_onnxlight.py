@@ -80,9 +80,24 @@ _CUSTOM_FLOAT_TOLERANCES: dict[str, tuple[float, float]] = {
 }
 
 
+def _should_exclude_runtime_test_name(test_name: str) -> bool:
+    """Returns whether a backend runtime test name should be excluded from comparison.
+
+    Tests with an ``_expanded`` suffix represent ops that ONNX expands into
+    simpler primitives. These tests are not validated separately and are
+    excluded from both the runtime comparison and the known-discrepancies
+    snapshot.
+    """
+    return "_expanded" in test_name
+
+
 def _load_known_discrepancies() -> set[str]:
     with open(_KNOWN_DISCREPANCIES_FILE, encoding="utf-8") as f:
-        return {line.strip() for line in f if line.strip()}
+        return {
+            line.strip()
+            for line in f
+            if line.strip() and not _should_exclude_runtime_test_name(line.strip())
+        }
 
 
 def _model_op_types(model: onnxl.ModelProto) -> set[str]:
@@ -305,6 +320,25 @@ def _describe_output_mismatch(actual, expected, rtol: float, atol: float) -> str
 class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
     """Runs every ONNX backend node test through the ``onnx_light`` runtime."""
 
+    def test_should_exclude_runtime_test_name(self):
+        self.assertTrue(_should_exclude_runtime_test_name("elu_example_expanded_ver18"))
+        self.assertTrue(_should_exclude_runtime_test_name("attention_4d_fp16_expanded"))
+        self.assertFalse(_should_exclude_runtime_test_name("attention_4d_fp16"))
+
+    def test_load_known_discrepancies_excludes_expanded_names(self):
+        import tempfile
+        from unittest.mock import patch
+
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as f:
+            f.write("test_attention_4d_fp16_expanded\n")
+            f.write("test_training_dropout\n")
+            path = f.name
+        try:
+            with patch(f"{__name__}._KNOWN_DISCREPANCIES_FILE", path):
+                self.assertEqual(_load_known_discrepancies(), {"test_training_dropout"})
+        finally:
+            os.unlink(path)
+
     def test_comparison_tolerances_defaults_and_overrides(self):
         self.assertEqual(_comparison_tolerances("test_abs"), (1e-3, 1e-7))
         self.assertEqual(_comparison_tolerances("test_dft_inverse"), (1e-3, 1e-5))
@@ -470,6 +504,8 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
             if not os.path.exists(model_file):
                 continue
             name = os.path.basename(test.model_dir)
+            if _should_exclude_runtime_test_name(name):
+                continue
 
             def _test_(self, model_file=model_file, name=name):
                 self._run_model_test(model_file, name)

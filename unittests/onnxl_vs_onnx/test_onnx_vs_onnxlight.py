@@ -1141,5 +1141,103 @@ class TestOnnx(ExtTestCase):
         node3.ParseFromString(s2)
 
 
+class TestOnnxHelperApiCompleteness(ExtTestCase):
+    """Validates that onnx_light.onnx.helper exposes the same public API as onnx.helper."""
+
+    # Functions that onnx.helper exposes but onnx_light intentionally omits.
+    # - printable_*: depend on the google.protobuf descriptor API which onnx_light
+    #   does not use (nanobind-based protos instead).
+    # - strip_doc_string: requires google.protobuf.message.Message.
+    # - make_training_info: requires TrainingInfoProto which is not yet
+    #   implemented in onnx_light.
+    _INTENTIONALLY_OMITTED: frozenset[str] = frozenset(
+        {
+            "make_training_info",
+            "printable_attribute",
+            "printable_dim",
+            "printable_graph",
+            "printable_node",
+            "printable_tensor_proto",
+            "printable_type",
+            "printable_value_info",
+            "strip_doc_string",
+        }
+    )
+
+    def test_helper_functions_present(self) -> None:
+        """All public callable members of onnx.helper (minus the omitted set) must
+        appear in onnx_light.onnx.helper."""
+        expected = {
+            name
+            for name in dir(oh)
+            if not name.startswith("_")
+            and callable(getattr(oh, name))
+            and name not in self._INTENTIONALLY_OMITTED
+        }
+        actual = {name for name in dir(oh2) if not name.startswith("_")}
+        missing = expected - actual
+        self.assertEqual(
+            missing,
+            set(),
+            f"Functions present in onnx.helper but missing from "
+            f"onnx_light.onnx.helper: {sorted(missing)}",
+        )
+
+    def test_helper_constants_present(self) -> None:
+        """OP_SET_ID_VERSION_MAP and VERSION_TABLE must be present and up to date."""
+        self.assertIn("OP_SET_ID_VERSION_MAP", dir(oh2))
+        self.assertIn("VERSION_TABLE", dir(oh2))
+        # onnx_light's table should cover at least the same range as onnx.
+        self.assertGreaterEqual(
+            len(oh2.VERSION_TABLE),
+            len(oh.VERSION_TABLE),
+            "onnx_light.onnx.helper.VERSION_TABLE is shorter than onnx.helper.VERSION_TABLE",
+        )
+        self.assertGreaterEqual(
+            len(oh2.OP_SET_ID_VERSION_MAP),
+            len(oh.OP_SET_ID_VERSION_MAP),
+            "onnx_light.onnx.helper.OP_SET_ID_VERSION_MAP has fewer entries than "
+            "onnx.helper.OP_SET_ID_VERSION_MAP",
+        )
+
+    def test_tensor_dtype_to_string(self) -> None:
+        import onnx_light.onnx as onnxl
+
+        self.assertEqual(
+            oh2.tensor_dtype_to_string(int(onnxl.TensorProto.FLOAT)), "TensorProto.FLOAT"
+        )
+        self.assertEqual(
+            oh2.tensor_dtype_to_string(int(onnxl.TensorProto.INT64)), "TensorProto.INT64"
+        )
+
+    def test_get_all_tensor_dtypes(self) -> None:
+        dtypes = oh2.get_all_tensor_dtypes()
+        self.assertGreater(len(list(dtypes)), 0)
+        import onnx_light.onnx as onnxl
+
+        self.assertIn(int(onnxl.TensorProto.FLOAT), dtypes)
+
+    def test_get_node_attr_value(self) -> None:
+        node = oh2.make_node("Add", inputs=["a", "b"], outputs=["c"])
+        node2 = oh2.make_node("Relu", inputs=["x"], outputs=["y"], alpha=0.1)
+        with self.assertRaises(ValueError):
+            oh2.get_node_attr_value(node, "alpha")
+        self.assertAlmostEqual(oh2.get_node_attr_value(node2, "alpha"), 0.1)
+
+    def test_find_min_ir_version_for(self) -> None:
+        imports = [oh2.make_opsetid("", 17)]
+        ir_ver = oh2.find_min_ir_version_for(imports)
+        self.assertEqual(ir_ver, 8)
+        imports27 = [oh2.make_opsetid("", 27)]
+        ir_ver27 = oh2.find_min_ir_version_for(imports27)
+        self.assertEqual(ir_ver27, 13)
+
+    def test_make_model_gen_version(self) -> None:
+        graph = oh2.make_graph([], "g", [], [])
+        imports = [oh2.make_opsetid("", 17)]
+        model = oh2.make_model_gen_version(graph, opset_imports=imports)
+        self.assertEqual(model.ir_version, 8)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

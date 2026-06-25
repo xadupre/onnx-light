@@ -43,6 +43,21 @@ def onnx_ml_opset_version() -> int:
     return C.schema_version_map()[ONNX_ML_DOMAIN][1]
 
 
+def get_function_ops() -> list:  # type: ignore[type-arg]
+    """Returns operators defined as functions.
+
+    Returns:
+        A list of OpSchema objects whose implementation is a function (i.e.,
+        ``has_function`` or ``has_context_dependent_function`` is True).
+    """
+    schemas = C.get_all_schemas()
+    return [
+        schema
+        for schema in schemas
+        if schema.has_function or schema.has_context_dependent_function
+    ]
+
+
 def register_onnx_operator_set_schema() -> None:
     """Registers all built-in ONNX operator schemas into the schema registry.
 

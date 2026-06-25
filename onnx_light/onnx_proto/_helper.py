@@ -3,7 +3,7 @@ import collections
 import functools
 import math
 import numbers
-from typing import Any, NamedTuple, Optional, Sequence
+from typing import Any, KeysView, NamedTuple, Optional, Sequence
 
 import ml_dtypes as _ml_dtypes
 import numpy as np
@@ -562,6 +562,200 @@ def tensor_dtype_to_field(tensor_dtype: int) -> str:
         int(TensorProto.STRING): "string_data",
     }
     return storage_tensor_type_to_field[TENSOR_TYPE_MAP[tensor_dtype].storage_dtype]
+
+
+def tensor_dtype_to_string(tensor_dtype: int) -> str:
+    """Returns the name of given TensorProto's data_type.
+
+    Args:
+        tensor_dtype: TensorProto's data_type
+
+    Returns:
+        the name of data_type
+    """
+    return TENSOR_TYPE_MAP[tensor_dtype].name
+
+
+def get_all_tensor_dtypes() -> KeysView[int]:
+    """Returns all tensor type codes from TENSOR_TYPE_MAP.
+
+    Returns:
+        All integer keys from TENSOR_TYPE_MAP.
+    """
+    return TENSOR_TYPE_MAP.keys()
+
+
+def get_node_attr_value(node: NodeProto, attr_name: str) -> Any:
+    """Returns the value of a named attribute on a node.
+
+    Args:
+        node: NodeProto whose attributes to search.
+        attr_name: Name of the attribute to retrieve.
+
+    Returns:
+        The attribute value as a Python object.
+
+    Raises:
+        ValueError: If the attribute is not found or multiple attributes have
+            the same name.
+    """
+    matching = [x for x in node.attribute if x.name == attr_name]
+    if len(matching) > 1:
+        raise ValueError(f"Node has multiple attributes with name {attr_name}")
+    if len(matching) < 1:
+        raise ValueError(f"Node has no attribute with name {attr_name}")
+    return get_attribute_value(matching[0])
+
+
+# Maps ``(domain, opset_version)`` to the minimum IR version required to use
+# that opset.  This mirrors the ``OP_SET_ID_VERSION_MAP`` constant in
+# ``onnx.helper``, extended with opset 27 which was introduced in onnx 1.22.0.
+OP_SET_ID_VERSION_MAP: dict[tuple[str, int], int] = {
+    ("ai.onnx", 1): 3,
+    ("ai.onnx", 5): 3,
+    ("ai.onnx", 6): 3,
+    ("ai.onnx", 7): 3,
+    ("ai.onnx", 8): 3,
+    ("ai.onnx", 9): 4,
+    ("ai.onnx", 10): 5,
+    ("ai.onnx", 11): 6,
+    ("ai.onnx", 12): 7,
+    ("ai.onnx", 13): 7,
+    ("ai.onnx", 14): 7,
+    ("ai.onnx", 15): 8,
+    ("ai.onnx", 16): 8,
+    ("ai.onnx", 17): 8,
+    ("ai.onnx", 18): 8,
+    ("ai.onnx", 19): 9,
+    ("ai.onnx", 20): 9,
+    ("ai.onnx", 21): 10,
+    ("ai.onnx", 22): 10,
+    ("ai.onnx", 23): 11,
+    ("ai.onnx", 24): 12,
+    ("ai.onnx", 25): 13,
+    ("ai.onnx", 26): 13,
+    ("ai.onnx", 27): 13,
+    ("ai.onnx.ml", 1): 3,
+    ("ai.onnx.ml", 2): 6,
+    ("ai.onnx.ml", 3): 8,
+    ("ai.onnx.ml", 4): 9,
+    ("ai.onnx.ml", 5): 10,
+    ("ai.onnx.preview", 1): 3,
+    ("ai.onnx.preview", 5): 3,
+    ("ai.onnx.preview", 6): 3,
+    ("ai.onnx.preview", 7): 3,
+    ("ai.onnx.preview", 8): 3,
+    ("ai.onnx.preview", 9): 4,
+    ("ai.onnx.preview", 10): 5,
+    ("ai.onnx.preview", 11): 6,
+    ("ai.onnx.preview", 12): 7,
+    ("ai.onnx.preview", 13): 7,
+    ("ai.onnx.preview", 14): 7,
+    ("ai.onnx.preview", 15): 8,
+    ("ai.onnx.preview", 16): 8,
+    ("ai.onnx.preview", 17): 8,
+    ("ai.onnx.preview", 18): 8,
+    ("ai.onnx.preview", 19): 9,
+    ("ai.onnx.preview", 20): 9,
+    ("ai.onnx.preview", 21): 10,
+    ("ai.onnx.preview", 22): 10,
+    ("ai.onnx.preview", 23): 11,
+    ("ai.onnx.preview", 24): 12,
+    ("ai.onnx.preview", 25): 13,
+    ("ai.onnx.preview", 26): 13,
+    ("ai.onnx.preview", 27): 13,
+    ("ai.onnx.preview.training", 1): 7,
+    ("ai.onnx.training", 1): 7,
+}
+
+# Maps onnx release version strings to ``(ir_version, opset_version,
+# ml_opset_version, training_opset_version)`` tuples.  This mirrors the
+# ``VERSION_TABLE`` constant in ``onnx.helper``, extended with the onnx 1.22.0
+# release which introduced opset 27.
+VERSION_TABLE: list[tuple] = [
+    ("1.0", 3, 1, 1),
+    ("1.1", 3, 5, 1),
+    ("1.1.2", 3, 6, 1),
+    ("1.2", 3, 7, 1),
+    ("1.3", 3, 8, 1),
+    ("1.4.1", 4, 9, 1),
+    ("1.5.0", 5, 10, 1),
+    ("1.6.0", 6, 11, 2),
+    ("1.7.0", 7, 12, 2, 1),
+    ("1.8.0", 7, 13, 2, 1),
+    ("1.8.1", 7, 13, 2, 1),
+    ("1.9.0", 7, 14, 2, 1),
+    ("1.10.0", 8, 15, 2, 1),
+    ("1.10.1", 8, 15, 2, 1),
+    ("1.10.2", 8, 15, 2, 1),
+    ("1.11.0", 8, 16, 3, 1),
+    ("1.12.0", 8, 17, 3, 1),
+    ("1.13.0", 8, 18, 3, 1),
+    ("1.13.1", 8, 18, 3, 1),
+    ("1.14.0", 9, 19, 3, 1),
+    ("1.14.1", 9, 19, 3, 1),
+    ("1.15.0", 9, 20, 4, 1),
+    ("1.16.0", 10, 21, 5, 1),
+    ("1.16.1", 10, 21, 5, 1),
+    ("1.16.2", 10, 21, 5, 1),
+    ("1.17.0", 10, 22, 5, 1),
+    ("1.18.0", 11, 23, 5, 1),
+    ("1.19.0", 12, 24, 5, 1),
+    ("1.19.1", 12, 24, 5, 1),
+    ("1.20.0", 13, 25, 5, 1),
+    ("1.20.1", 13, 25, 5, 1),
+    ("1.21.0", 13, 26, 5, 1),
+    ("1.22.0", 13, 27, 5, 1),
+]
+
+
+def find_min_ir_version_for(
+    opsetidlist: Sequence[OperatorSetIdProto], ignore_unknown: bool = False
+) -> int:
+    """Determines the minimum IR version required for the given opset IDs.
+
+    Args:
+        opsetidlist: A sequence of OperatorSetIdProto.
+        ignore_unknown: If True, ignores unknown domains and returns the default
+            minimum version for those domains.
+
+    Returns:
+        The minimum IR version required (integer).
+    """
+    default_min_version = 3
+
+    def find_min(domain: str | None, version: int) -> int:
+        key = (domain or "ai.onnx", version)
+        if key in OP_SET_ID_VERSION_MAP:
+            return OP_SET_ID_VERSION_MAP[key]
+        if ignore_unknown:
+            return default_min_version
+        raise ValueError("Unsupported opset-version.")
+
+    if opsetidlist:
+        return max(find_min(x.domain, x.version) for x in opsetidlist)
+    return default_min_version
+
+
+def make_model_gen_version(graph: GraphProto, **kwargs: Any) -> ModelProto:
+    """Constructs a ModelProto, automatically computing the minimum IR version.
+
+    When ``ir_version`` is not provided, this function derives it from the
+    opset imports using :func:`find_min_ir_version_for`.
+
+    Args:
+        graph: GraphProto for the model.
+        **kwargs: Additional keyword arguments forwarded to :func:`make_model`.
+
+    Returns:
+        A ModelProto with an appropriate ir_version.
+    """
+    ir_version_field = "ir_version"
+    if ir_version_field not in kwargs:
+        opset_imports_field = "opset_imports"
+        imports = kwargs.get(opset_imports_field, [])
+        kwargs[ir_version_field] = find_min_ir_version_for(imports)
+    return make_model(graph, **kwargs)
 
 
 def make_tensor(

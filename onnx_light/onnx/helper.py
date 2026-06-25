@@ -1,5 +1,10 @@
 from ..onnx_proto._helper import (  # noqa: F401
+    OP_SET_ID_VERSION_MAP,
+    VERSION_TABLE,
+    find_min_ir_version_for,
+    get_all_tensor_dtypes,
     get_attribute_value,
+    get_node_attr_value,
     make_attribute,
     make_attribute_ref,
     make_empty_tensor_value_info,
@@ -8,6 +13,7 @@ from ..onnx_proto._helper import (  # noqa: F401
     make_map,
     make_map_type_proto,
     make_model,
+    make_model_gen_version,
     make_node,
     make_operatorsetid,
     make_opsetid,
@@ -26,6 +32,8 @@ from ..onnx_proto._helper import (  # noqa: F401
     np_dtype_to_tensor_dtype,
     set_metadata_props,
     set_model_props,
+    tensor_dtype_to_field,
     tensor_dtype_to_np_dtype,
     tensor_dtype_to_storage_tensor_dtype,
+    tensor_dtype_to_string,
 )

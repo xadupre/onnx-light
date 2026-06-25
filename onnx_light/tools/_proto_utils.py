@@ -158,10 +158,12 @@ def _node_metadata_value(node: Any, key: str) -> str:
 # - graph/function-level value-tag map -> VALUE_TAGS_METADATA_KEY
 # - per-node tag -> NODE_TAG_METADATA_KEY
 # - per-node in-place reuse map -> INPLACE_REUSE_METADATA_KEY
+# - per-node release-after tensor list -> RELEASE_AFTER_METADATA_KEY
 VALUE_TAG_METADATA_KEY = "onnx_light.value_tag"
 VALUE_TAGS_METADATA_KEY = "onnx_light.value_tags"
 NODE_TAG_METADATA_KEY = "onnx_light.node_tag"
 INPLACE_REUSE_METADATA_KEY = "onnx_light.inplace_reuse"
+RELEASE_AFTER_METADATA_KEY = "onnx_light.release_after"
 VALUE_TAGS = {"shape", "axes", "weight"}
 VALUE_TAG_COLORS = {
     "shape": {"fill": "#f4d6ff", "stroke": "#8744a2"},
@@ -245,6 +247,23 @@ def _format_inplace_reuse(node: Any) -> str:
     if not parts:
         return ""
     return "inplace: " + ", ".join(parts)
+
+
+def _format_release_after(node: Any) -> str:
+    """Returns a compact description of a node's post-execution release hints.
+
+    Parses the ``onnx_light.release_after`` metadata entry written by the
+    in-place reuse analysis and renders it as a human-readable string such
+    as ``release: A, B``.  Returns an empty string when the node carries no
+    such metadata.
+    """
+    raw = _node_metadata_value(node, RELEASE_AFTER_METADATA_KEY)
+    if not raw:
+        return ""
+    names = [name.strip() for name in raw.split(";") if name.strip()]
+    if not names:
+        return ""
+    return "release: " + ", ".join(names)
 
 
 def _graph_value_tags(graph: Any) -> dict[str, str]:

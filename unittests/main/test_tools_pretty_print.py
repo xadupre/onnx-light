@@ -259,6 +259,49 @@ class TestPrettyOnnx(unittest.TestCase):
         self.assertNotIn("[shape]", text_off)
         self.assertNotIn("inplace", text_off)
 
+    def test_release(self) -> None:
+        node = _node("Abs", ["A"], ["B"], metadata={"onnx_light.release_after": "A"})
+        text = pretty_onnx(node, include_release=True)
+        self.assertIn("release: A", text)
+        text_off = pretty_onnx(node, include_release=False)
+        self.assertNotIn("release", text_off)
+
+    def test_release_multiple(self) -> None:
+        node = _node("Add", ["A", "B"], ["C"], metadata={"onnx_light.release_after": "A;B"})
+        text = pretty_onnx(node, include_release=True)
+        self.assertIn("release: A, B", text)
+
+    def test_release_absent_not_shown(self) -> None:
+        node = _node("Add", ["X", "Y"], ["Z"])
+        text = pretty_onnx(node, include_release=True)
+        self.assertNotIn("release", text)
+
+    def test_graph_with_inplace_and_release(self) -> None:
+        g = _graph(
+            nodes=[
+                _node("Abs", ["X"], ["A"], name="abs0"),
+                _node(
+                    "Abs",
+                    ["A"],
+                    ["Y"],
+                    name="abs1",
+                    metadata={
+                        "onnx_light.inplace_reuse": "0:0:equal",
+                        "onnx_light.release_after": "A",
+                    },
+                ),
+            ],
+            inputs=[_vi("X")],
+            outputs=[_vi("Y")],
+        )
+        text = pretty_onnx(g, include_inplace=True, include_release=True)
+        self.assertIn("inplace: out0=in0(equal)", text)
+        self.assertIn("release: A", text)
+        # Off by default.
+        text_off = pretty_onnx(g)
+        self.assertNotIn("inplace", text_off)
+        self.assertNotIn("release", text_off)
+
 
 if __name__ == "__main__":
     unittest.main()

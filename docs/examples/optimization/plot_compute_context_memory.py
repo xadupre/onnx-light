@@ -29,6 +29,7 @@ from onnx_light.onnx_optim.shape_inference import (
     ComputeContext,
     NODE_MEMORY_ALREADY_ALLOCATED_BYTES_KEY,
     NODE_MEMORY_INPUTS_KEY,
+    NODE_MEMORY_INITIALIZERS_KEY,
     NODE_MEMORY_INTERMEDIATES_KEY,
     NODE_MEMORY_OUTPUT_ALLOCATION_BYTES_KEY,
     NODE_MEMORY_OUTPUTS_KEY,
@@ -52,26 +53,38 @@ defs.register_onnx_operator_set_schema()
 # .. code-block:: none
 #
 #    X : float[N, 4]
-#    S = Shape(X)      -> int64[2]
-#    A = Abs(X)        -> float[N, 4]
-#    B = Relu(A)       -> float[N, 4]
-#    Z = Reshape(B, S) -> float[N, 4]
+#    W : float[4, 4]
+#    M = MatMul(X, W)     -> float[N, 4]
+#    C = Concat(M, X)     -> float[2*N, 4]
+#    S = Shape(C)         -> int64[2]
+#    A = Abs(C)           -> float[2*N, 4]
+#    Z = Reshape(A, S)    -> float[2*N, 4]
 #
-# ``S`` is tagged as a shape tensor and the last two nodes can reuse their
-# input buffers in place, so the memory table mixes constant terms, symbolic
-# terms, and zero-allocation steps.
+# ``W`` contributes constant initializer memory, ``Concat`` turns the symbolic
+# leading dimension into ``2*N``, ``S`` is tagged as a shape tensor, and the
+# last two nodes can reuse their input buffers in place. The memory table
+# therefore mixes constant terms, symbolic terms, and zero-allocation steps.
 
 model = helper.make_model(
     helper.make_graph(
         [
-            helper.make_node("Shape", ["X"], ["S"]),
-            helper.make_node("Abs", ["X"], ["A"]),
-            helper.make_node("Relu", ["A"], ["B"]),
-            helper.make_node("Reshape", ["B", "S"], ["Z"]),
+            helper.make_node("MatMul", ["X", "W"], ["M"]),
+            helper.make_node("Concat", ["M", "X"], ["C"], axis=0),
+            helper.make_node("Shape", ["C"], ["S"]),
+            helper.make_node("Abs", ["C"], ["A"]),
+            helper.make_node("Reshape", ["A", "S"], ["Z"]),
         ],
         "compute_context_memory_demo",
         inputs=[helper.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["N", 4])],
         outputs=[helper.make_tensor_value_info("Z", onnxl.TensorProto.FLOAT, None)],
+        initializer=[
+            helper.make_tensor(
+                "W",
+                onnxl.TensorProto.FLOAT,
+                [4, 4],
+                [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+            )
+        ],
     ),
     opset_imports=[helper.make_opsetid("", 18)],
     ir_version=8,
@@ -138,7 +151,7 @@ def format_bucket(bucket: dict[str, MemoryScalar]) -> str:
 # * ``total`` is their sum.
 #
 # The source buckets make it easy to see which bytes come from live inputs,
-# intermediates, or newly allocated outputs.
+# initializers, intermediates, or newly allocated outputs.
 
 rows = []
 for node_index, node in enumerate(model.graph.node):
@@ -150,6 +163,7 @@ for node_index, node in enumerate(model.graph.node):
             str(profile[NODE_MEMORY_ALREADY_ALLOCATED_BYTES_KEY]),
             str(profile[NODE_MEMORY_OUTPUT_ALLOCATION_BYTES_KEY]),
             format_bucket(profile[NODE_MEMORY_INPUTS_KEY]),
+            format_bucket(profile[NODE_MEMORY_INITIALIZERS_KEY]),
             format_bucket(profile[NODE_MEMORY_INTERMEDIATES_KEY]),
             format_bucket(profile[NODE_MEMORY_OUTPUTS_KEY]),
             str(profile[NODE_MEMORY_TOTAL_BYTES_KEY]),
@@ -161,7 +175,7 @@ print(
     f"  {'node':<4} {'op':<8} {'already_allocated':>20} {'output_allocation':>20} {'total':>16}"
 )
 for row in rows:
-    print(f"  {row[0]:<4} {row[1]:<8} {row[2]:>20} {row[3]:>20} {row[7]:>16}")
+    print(f"  {row[0]:<4} {row[1]:<8} {row[2]:>20} {row[3]:>20} {row[8]:>16}")
 
 fig, ax = plt.subplots(figsize=(13, 1.6 + 0.35 * len(rows)))
 ax.set_axis_off()
@@ -173,6 +187,7 @@ table = ax.table(
         "already_allocated",
         "output_allocation",
         "inputs",
+        "initializers",
         "intermediates",
         "outputs",
         "total",

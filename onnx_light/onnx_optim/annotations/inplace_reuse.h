@@ -129,7 +129,8 @@ constexpr const char *kReleaseAfterMetadataKey = "onnx_light.release_after";
 constexpr const char *kReleaseAfterShapeTagMetadataKey = "onnx_light.release_after_shape_tag";
 
 /**
- * Per-node memory snapshot computed by :cpp:class:`ComputeContext`.
+ * Represents a per-node memory snapshot computed by
+ * :cpp:class:`ComputeContext`.
  *
  * The snapshot represents the memory footprint visible while one node runs:
  *
@@ -142,9 +143,13 @@ constexpr const char *kReleaseAfterShapeTagMetadataKey = "onnx_light.release_aft
  *   - ``total_bytes`` is their sum.
  *
  * Each source bucket is also split by value tag (``"shape"``, ``"axes"``,
- * ``"weight"``, or the empty string for untagged values). The ``outputs`` map
- * only counts the extra allocations performed at this node; outputs that reuse
- * an existing input buffer in place contribute no additional bytes there.
+ * ``"weight"``, or the empty string for untagged values). The
+ * ``already_allocated_bytes`` field is the sum of the ``inputs``,
+ * ``initializers`` and ``intermediates`` maps; ``output_allocation_bytes`` is
+ * the sum of ``outputs``; and ``total_bytes`` is the sum of those two scalar
+ * fields. The ``outputs`` map only counts the extra allocations performed at
+ * this node; outputs that reuse an existing input buffer in place contribute no
+ * additional bytes there.
  */
 struct NodeMemoryProfile {
   int64_t total_bytes = 0;

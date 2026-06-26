@@ -41,8 +41,12 @@ std::string ValueTag(const std::unordered_map<std::string, std::string> &value_t
 
 void AddTaggedBytes(std::unordered_map<std::string, int64_t> &dst, const std::string &tag,
                     int64_t bytes) {
-  if (bytes <= 0) {
+  if (bytes == 0) {
     return;
+  }
+  if (bytes < 0) {
+    throw std::invalid_argument("AddTaggedBytes: negative byte size (" + std::to_string(bytes) +
+                                ") is invalid.");
   }
   dst[tag] += bytes;
 }
@@ -416,8 +420,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
     }
     profile.total_bytes = profile.already_allocated_bytes + profile.output_allocation_bytes;
 
-    std::vector<std::pair<std::string, LiveAllocation>> outputs_to_add;
-    outputs_to_add.reserve(static_cast<std::size_t>(node.output_size()));
+    std::unordered_map<std::string, LiveAllocation> outputs_to_add;
     std::unordered_set<std::string> inputs_reused_from_graph_input;
     for (int o = 0; o < node.output_size(); ++o) {
       const std::string out_name = node.output(o).as_string();
@@ -433,7 +436,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
           continue;
         }
         alloc_bytes = alive_it->second.bytes;
-        if (graph_inputs.count(in_name) != 0) {
+        if (graph_inputs.find(in_name) != graph_inputs.end()) {
           inputs_reused_from_graph_input.insert(in_name);
         }
       } else {
@@ -444,14 +447,13 @@ void ComputeContext::ComputeInPlaceReuseGraph(
         alloc_bytes = *out_bytes;
       }
       const auto use_it = last_use.find(out_name);
-      const bool survives_after_node =
-          graph_outputs.count(out_name) != 0 || (use_it != last_use.end() && use_it->second > i);
+      const bool survives_after_node = graph_outputs.find(out_name) != graph_outputs.end() ||
+                                       (use_it != last_use.end() && use_it->second > i);
       if (!survives_after_node) {
         continue;
       }
-      outputs_to_add.emplace_back(out_name,
-                                  LiveAllocation{alloc_bytes, MemoryValueSource::kIntermediate,
-                                                 ValueTag(value_tags, out_name)});
+      outputs_to_add.emplace(out_name, LiveAllocation{alloc_bytes, MemoryValueSource::kIntermediate,
+                                                      ValueTag(value_tags, out_name)});
     }
 
     for (const std::string &name : release_after[static_cast<std::size_t>(i)]) {

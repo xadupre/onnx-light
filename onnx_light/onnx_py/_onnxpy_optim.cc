@@ -1093,10 +1093,15 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
 
   nb::class_<onnx_annotations::NodeMemoryProfile>(
       shape_mod, "NodeMemoryProfile",
-      "Per-node memory snapshot computed by :class:`ComputeContext`. "
+      "Represents a per-node memory snapshot computed by :class:`ComputeContext`. "
       "``already_allocated_bytes`` counts the live buffers present before the node runs; "
       "``output_allocation_bytes`` counts the extra output buffers that must be allocated "
-      "because no in-place reuse opportunity covers them; ``total_bytes`` is their sum.")
+      "because no in-place reuse opportunity covers them; ``total_bytes`` is their sum. "
+      "The ``inputs``, ``initializers`` and ``intermediates`` attributes are tag-indexed "
+      "breakdowns of ``already_allocated_bytes``; ``outputs`` is the tag-indexed breakdown "
+      "of ``output_allocation_bytes``. Tags such as ``\"shape\"``, ``\"axes\"`` and "
+      "``\"weight\"`` categorize memory by purpose; the empty-string key represents "
+      "untagged values.")
       .def(nb::init<>())
       .def_rw("total_bytes", &onnx_annotations::NodeMemoryProfile::total_bytes)
       .def_rw("already_allocated_bytes",

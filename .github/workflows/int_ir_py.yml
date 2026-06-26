@@ -70,10 +70,6 @@ jobs:
           # Install ir-py itself without dependencies so onnx is not installed.
           pip install -e . --no-deps
 
-      - name: Install mbext
-        working-directory: mbext
-        run: pip install -e .[dev]
-
       - name: uninstall onnx
         run: pip uninstall -y onnx
 

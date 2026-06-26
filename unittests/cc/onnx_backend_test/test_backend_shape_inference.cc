@@ -5,6 +5,7 @@
 #include "onnx_backend_test/test_case.h"
 #include "onnx_lib/checker.h"
 #include "onnx_lib/shape_inference/implementation.h"
+#include "onnx_optim/annotations/inplace_reuse.h"
 #include "onnx_optim/optim_tensor.h"
 #include "onnx_optim/shapes/shape_inference.h"
 
@@ -814,6 +815,41 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapePairwiseDistanceScan) {
     }
   }
   ASSERT_TRUE(found) << "test_cc_scan_pairwise_distance case not registered";
+}
+
+TEST(BackendTestCaseShapeInference, OnnxOptimInfersInPlaceReuseOnBackendCase) {
+  const std::vector<TestCase> cases = CollectTestCases("shape");
+  bool found = false;
+  for (const TestCase &tc : cases) {
+    if (tc.name != "test_cc_shape_inference_inplace_reuse") {
+      continue;
+    }
+    found = true;
+
+    onnx_optim::shapes::ShapesContext ctx;
+    ASSERT_NO_THROW(ctx.ComputeShapeModel(tc.model)) << "case: " << tc.name;
+
+    std::vector<std::vector<onnx_optim::annotations::InPlaceReuse>> reuse =
+        onnx_optim::annotations::ComputeInPlaceReuse(tc.model.ref_graph(), ctx);
+    ASSERT_EQ(reuse.size(), 3u);
+    EXPECT_TRUE(reuse[0].empty());
+    ASSERT_EQ(reuse[1].size(), 1u);
+    EXPECT_EQ(reuse[1][0], (onnx_optim::annotations::InPlaceReuse{
+                               0, 0, onnx_optim::annotations::InPlaceReuseKind::kEqual}));
+    ASSERT_EQ(reuse[2].size(), 1u);
+    EXPECT_EQ(reuse[2][0], (onnx_optim::annotations::InPlaceReuse{
+                               0, 0, onnx_optim::annotations::InPlaceReuseKind::kEqual}));
+
+    std::vector<std::vector<onnx_optim::annotations::InPlaceReuse>> reuse_with_inputs =
+        onnx_optim::annotations::ComputeInPlaceReuse(tc.model.ref_graph(), ctx,
+                                                     /*allow_input_overwrite=*/true);
+    ASSERT_EQ(reuse_with_inputs.size(), 3u);
+    ASSERT_EQ(reuse_with_inputs[0].size(), 1u);
+    EXPECT_EQ(reuse_with_inputs[0][0],
+              (onnx_optim::annotations::InPlaceReuse{
+                  0, 0, onnx_optim::annotations::InPlaceReuseKind::kEqual}));
+  }
+  ASSERT_TRUE(found) << "test_cc_shape_inference_inplace_reuse case not registered";
 }
 
 TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeLoopPairwiseDistance) {

@@ -51,6 +51,11 @@ void RegisterNonZeroChainNamedShapeInferenceCases(std::vector<TestCase> &registr
 /// https://github.com/microsoft/onnxruntime/pull/28778.
 void RegisterShapeIdentityUnsqueezeShapeInferenceCases(std::vector<TestCase> &registry);
 
+/// Registers an ``Abs → Abs → Abs`` case whose intermediate tensors all share
+/// the same shape so in-place-reuse inference can detect the recyclable
+/// buffers.
+void RegisterInPlaceReuseShapeInferenceCases(std::vector<TestCase> &registry);
+
 /// Registers a single-node case whose op is a call to a **model-local
 /// function** (declared in ``ModelProto::functions``). The function body
 /// is a one-node ``Add`` of two same-shape inputs. Exercises the

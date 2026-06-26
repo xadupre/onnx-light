@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <optional>
 #include <sstream>
-#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -44,10 +43,7 @@ void AddTaggedBytes(std::unordered_map<std::string, int64_t> &dst, const std::st
   if (bytes == 0) {
     return;
   }
-  if (bytes < 0) {
-    throw std::invalid_argument("AddTaggedBytes: negative byte size (" + std::to_string(bytes) +
-                                ") is invalid.");
-  }
+  EXT_ENFORCE_INVALID(bytes >= 0, "AddTaggedBytes: negative byte size (", bytes, ") is invalid.");
   dst[tag] += bytes;
 }
 
@@ -491,14 +487,11 @@ void ComputeContext::ComputeInPlaceReuseGraph(
 }
 
 void ComputeContext::WriteToMetadata(GraphProto &graph) const {
-  if (static_cast<std::size_t>(graph.node().size()) != reuse_.size()) {
-    std::ostringstream msg;
-    msg << "ComputeContext::WriteToMetadata: graph has " << graph.node().size()
-        << " node(s) but the computed reuse result has " << reuse_.size()
-        << " entry(ies); call WriteToMetadata on the same graph passed to "
-           "ComputeInPlaceReuseGraph.";
-    throw std::invalid_argument(msg.str());
-  }
+  EXT_ENFORCE_INVALID(static_cast<std::size_t>(graph.node().size()) == reuse_.size(),
+                      "ComputeContext::WriteToMetadata: graph has ", graph.node().size(),
+                      " node(s) but the computed reuse result has ", reuse_.size(),
+                      " entry(ies); call WriteToMetadata on the same graph passed to ",
+                      "ComputeInPlaceReuseGraph.");
   const bool has_shape_tag_info = release_after_shape_tagged_.size() == reuse_.size();
   for (std::size_t i = 0; i < reuse_.size(); ++i) {
     const bool has_shape_tagged = has_shape_tag_info && !release_after_shape_tagged_[i].empty();

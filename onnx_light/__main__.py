@@ -198,7 +198,7 @@ def _parse_token_spec(token_str: str) -> tuple[str, int, int]:
 def _seed_context_with_token_ranges(
     ctx: Any, model: Any, token_ranges: dict[str, tuple[int, int]]
 ) -> None:
-    """Pre-seeds the ShapesContext with concrete dim values for symbolic tokens.
+    """Seeds the ShapesContext with concrete dim values for symbolic tokens.
 
     For each graph input whose shape contains a symbolic dim that matches a
     key in *token_ranges*, that dim is replaced with the lower bound of the
@@ -207,7 +207,7 @@ def _seed_context_with_token_ranges(
     graph for those dimensions.
 
     Args:
-        ctx: The :class:`ShapesContext` to pre-seed.
+        ctx: The :class:`ShapesContext` to seed.
         model: The ``ModelProto`` whose graph inputs are inspected.
         token_ranges: Mapping from symbolic dim name to ``(low, high)``
             where *low* is used as the concrete substitute value.

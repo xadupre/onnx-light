@@ -536,13 +536,13 @@ class TestParseTokenSpec(ExtTestCase):
     def test_missing_equals_raises(self):
         from onnx_light.__main__ import _parse_token_spec
 
-        with self.assertRaises(ValueError, msg="missing '='"):
+        with self.assertRaisesRegex(ValueError, "NAME=VALUE or NAME=LOW:HIGH"):
             _parse_token_spec("batch4")
 
     def test_inverted_bounds_raises(self):
         from onnx_light.__main__ import _parse_token_spec
 
-        with self.assertRaises(ValueError, msg="lower > upper"):
+        with self.assertRaisesRegex(ValueError, "lower bound.*upper bound"):
             _parse_token_spec("seq=128:1")
 
 

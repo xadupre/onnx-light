@@ -12,6 +12,7 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/unordered_set.h>
+#include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 #include <sstream>
 #include <vector>
@@ -333,6 +334,7 @@ void AddOnnxPyExpressions(nb::module_ &m) {
 
 void AddOnnxPyShapeInference(nb::module_ &m) {
   namespace onnx_annotations = ::onnx_light::onnx_optim::annotations;
+  namespace expr = ::onnx_light::onnx_optim::expressions;
   namespace onnx_shapes = ::onnx_light::onnx_optim::shapes;
   using ::onnx_light::onnx_optim::DataTypeToTensorType;
   using ::onnx_light::onnx_optim::OptimDim;
@@ -1091,12 +1093,23 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
         return os.str();
       });
 
+  shape_mod.attr("NODE_MEMORY_TOTAL_BYTES_KEY") = onnx_annotations::kNodeMemoryTotalBytesKey;
+  shape_mod.attr("NODE_MEMORY_ALREADY_ALLOCATED_BYTES_KEY") =
+      onnx_annotations::kNodeMemoryAlreadyAllocatedBytesKey;
+  shape_mod.attr("NODE_MEMORY_OUTPUT_ALLOCATION_BYTES_KEY") =
+      onnx_annotations::kNodeMemoryOutputAllocationBytesKey;
+  shape_mod.attr("NODE_MEMORY_INPUTS_KEY") = onnx_annotations::kNodeMemoryInputsKey;
+  shape_mod.attr("NODE_MEMORY_INITIALIZERS_KEY") = onnx_annotations::kNodeMemoryInitializersKey;
+  shape_mod.attr("NODE_MEMORY_INTERMEDIATES_KEY") = onnx_annotations::kNodeMemoryIntermediatesKey;
+  shape_mod.attr("NODE_MEMORY_OUTPUTS_KEY") = onnx_annotations::kNodeMemoryOutputsKey;
+
   nb::class_<onnx_annotations::ComputeContext>(
       shape_mod, "ComputeContext",
       "Holds the in-place reuse opportunities computed for a graph, mirroring the way "
       "``ShapesContext`` holds inferred descriptors. Populate it with "
       "``compute_inplace_reuse_graph`` (consuming a ``ShapesContext``), then read the result "
-      "through ``reuse`` / ``node_reuse`` or persist it with ``write_to_metadata``.")
+      "through ``reuse`` / ``node_reuse`` / ``memory`` or persist it with "
+      "``write_to_metadata``.")
       .def(nb::init<>())
       .def(
           "compute_inplace_reuse_graph",
@@ -1146,6 +1159,20 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           nb::arg("node_index"),
           "Returns the list of shape-tagged releasable value names for the node at "
           "``node_index``. Raises ``IndexError`` when ``node_index`` is out of bounds.")
+      .def_prop_ro(
+          "memory", [](const onnx_annotations::ComputeContext &self) { return self.Memory(); },
+          "The per-node memory snapshots as a list (one entry per node, same order as "
+          "``graph.node``). Each entry is a ``dict[str, int | str | dict[str, int | str]]`` "
+          "describing the live input/initializer/intermediate buffers plus the extra output "
+          "allocation needed by that node.")
+      .def(
+          "node_memory",
+          [](const onnx_annotations::ComputeContext &self, std::size_t node_index) {
+            return self.NodeMemory(node_index);
+          },
+          nb::arg("node_index"),
+          "Returns the memory snapshot ``dict`` computed for the node at ``node_index``. "
+          "Raises ``IndexError`` when ``node_index`` is out of bounds.")
       .def(
           "write_to_metadata",
           [](const onnx_annotations::ComputeContext &self, GraphProto &graph) {

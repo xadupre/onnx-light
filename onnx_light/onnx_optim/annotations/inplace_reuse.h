@@ -5,10 +5,13 @@
 #pragma once
 
 #include <cstdint>
+#include <map>
 #include <string>
 #include <unordered_map>
+#include <variant>
 #include <vector>
 
+#include "onnx_optim/expressions.h"
 #include "onnx_optim/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
 
@@ -129,6 +132,92 @@ constexpr const char *kReleaseAfterMetadataKey = "onnx_light.release_after";
 constexpr const char *kReleaseAfterShapeTagMetadataKey = "onnx_light.release_after_shape_tag";
 
 /**
+ * Represents a per-node memory snapshot computed by
+ * :cpp:class:`ComputeContext`.
+ *
+ * The snapshot represents the memory footprint visible while one node runs:
+ *
+ *   - ``already_allocated_bytes`` is the sum of the buffers already alive before
+ *     the node starts (declared inputs, initializers and still-live
+ *     intermediates), after shape inference and lifetime analysis;
+ *   - ``output_allocation_bytes`` is the additional memory that must be
+ *     allocated for the node's outputs because no eligible in-place reuse
+ *     opportunity covers them;
+ *   - ``total_bytes`` is their sum.
+ *
+ * The profile is stored as a ``std::map`` with seven well-known keys:
+ *
+ *   - ``"total_bytes"``
+ *   - ``"already_allocated_bytes"``
+ *   - ``"output_allocation_bytes"``
+ *   - ``"inputs"``
+ *   - ``"initializers"``
+ *   - ``"intermediates"``
+ *   - ``"outputs"``
+ *
+ * The first three keys map to scalar :cpp:type:`onnx_optim::expressions::DimType`
+ * values. The other four keys map to ``std::map<ShapeTag, DimType>`` buckets
+ * split by value tag (``"shape"``, ``"axes"``, ``"weight"``, or the empty string
+ * for untagged values). ``"already_allocated_bytes"`` is the sum of the
+ * ``"inputs"``, ``"initializers"`` and ``"intermediates"`` maps;
+ * ``"output_allocation_bytes"`` is the sum of ``"outputs"``; and
+ * ``"total_bytes"`` is the sum of those two scalar entries. Every amount is
+ * represented as a :cpp:type:`onnx_optim::expressions::DimType`, so symbolic
+ * shapes retain their expression form instead of being dropped. The ``"outputs"``
+ * map only counts the extra allocations performed at this node; outputs that
+ * reuse an existing input buffer in place contribute no additional bytes there.
+ */
+using ShapeTag = std::string;
+using TaggedMemory = std::map<ShapeTag, expressions::DimType>;
+using NodeMemoryProfileValue = std::variant<expressions::DimType, TaggedMemory>;
+using NodeMemoryProfile = std::map<std::string, NodeMemoryProfileValue>;
+
+constexpr const char *kNodeMemoryTotalBytesKey = "total_bytes";
+constexpr const char *kNodeMemoryAlreadyAllocatedBytesKey = "already_allocated_bytes";
+constexpr const char *kNodeMemoryOutputAllocationBytesKey = "output_allocation_bytes";
+constexpr const char *kNodeMemoryInputsKey = "inputs";
+constexpr const char *kNodeMemoryInitializersKey = "initializers";
+constexpr const char *kNodeMemoryIntermediatesKey = "intermediates";
+constexpr const char *kNodeMemoryOutputsKey = "outputs";
+
+inline expressions::DimType &NodeMemoryProfileScalar(NodeMemoryProfile &profile,
+                                                     const std::string &key) {
+  auto it = profile.find(key);
+  if (it == profile.end()) {
+    it = profile.emplace(key, expressions::DimType{int64_t{0}}).first;
+  }
+  return std::get<expressions::DimType>(it->second);
+}
+
+inline const expressions::DimType &NodeMemoryProfileScalar(const NodeMemoryProfile &profile,
+                                                           const std::string &key) {
+  static const expressions::DimType zero = int64_t{0};
+  auto it = profile.find(key);
+  if (it == profile.end()) {
+    return zero;
+  }
+  return std::get<expressions::DimType>(it->second);
+}
+
+inline TaggedMemory &NodeMemoryProfileBucket(NodeMemoryProfile &profile, const std::string &key) {
+  auto it = profile.find(key);
+  if (it == profile.end()) {
+    it = profile.emplace(key, TaggedMemory{}).first;
+  }
+  return std::get<TaggedMemory>(it->second);
+}
+
+inline const TaggedMemory &NodeMemoryProfileBucket(const NodeMemoryProfile &profile,
+                                                   const std::string &key) {
+  static const TaggedMemory empty;
+  auto it = profile.find(key);
+  if (it == profile.end()) {
+    return empty;
+  }
+  return std::get<TaggedMemory>(it->second);
+}
+
+/**
  * Holds the in-place reuse opportunities computed for a graph, mirroring the
  * way :cpp:class:`onnx_optim::shapes::ShapesContext` holds the inferred
  * descriptors.
@@ -217,6 +306,17 @@ public:
     return release_after_shape_tagged_.at(node_index);
   }
 
+  /// Read-only access to the per-node memory snapshots. Entry ``i`` describes
+  /// the memory footprint observed while running ``graph.node()[i]``.
+  const std::vector<NodeMemoryProfile> &Memory() const noexcept { return memory_; }
+
+  /// Memory snapshot for the node at ``node_index``.
+  ///
+  /// @throws std::out_of_range when ``node_index`` is out of bounds.
+  const NodeMemoryProfile &NodeMemory(std::size_t node_index) const {
+    return memory_.at(node_index);
+  }
+
   /**
    * Records the computed opportunities into each node's ``metadata_props`` of
    * ``graph`` under :cpp:var:`kInPlaceReuseMetadataKey`,
@@ -258,12 +358,14 @@ public:
     reuse_.clear();
     release_after_.clear();
     release_after_shape_tagged_.clear();
+    memory_.clear();
   }
 
 private:
   std::vector<std::vector<InPlaceReuse>> reuse_;
   std::vector<std::vector<std::string>> release_after_;
   std::vector<std::vector<std::string>> release_after_shape_tagged_;
+  std::vector<NodeMemoryProfile> memory_;
 };
 
 /**

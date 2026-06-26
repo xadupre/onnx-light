@@ -269,6 +269,156 @@ class TestInPlaceReuse(ExtTestCase):
         inplace.compute_inplace_reuse_graph(model.graph, ctx, allow_input_overwrite=True)
         self.assertEqual(self._reuse_pairs(inplace.reuse), [[(0, 0)], [(0, 0)]])
 
+    def test_inplace_context_memory_tracks_sources_and_reuse(self):
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [4])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.INT32, [4])
+        shape_init = oh.make_tensor("S", onnxl.TensorProto.INT64, [1], [4])
+        graph = oh.make_graph(
+            [
+                oh.make_node("P", ["X", "S"], ["A"]),
+                oh.make_node("Q", ["A"], ["B"]),
+                oh.make_node("R", ["B"], ["Y"]),
+            ],
+            "g",
+            [x],
+            [y],
+            [shape_init],
+        )
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+        model.ir_version = 8
+
+        ctx = si.ShapesContext()
+        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, [4]))
+        ctx.set("S", si.OptimTensor(onnxl.TensorProto.INT64, [1]))
+        ctx.set("A", si.OptimTensor(onnxl.TensorProto.FLOAT, [4]))
+        ctx.set("B", si.OptimTensor(onnxl.TensorProto.INT64, [4]))
+        ctx.set("Y", si.OptimTensor(onnxl.TensorProto.INT32, [4]))
+
+        inplace = si.ComputeContext()
+        inplace.compute_inplace_reuse_graph(model.graph, ctx, value_tags={"S": "shape"})
+
+        self.assertEqual(self._reuse_pairs(inplace.reuse), [[], [], [(0, 0)]])
+        self.assertEqual(len(inplace.memory), 3)
+
+        mem0 = inplace.node_memory(0)
+        self.assertEqual(
+            list(mem0.keys()),
+            [
+                "already_allocated_bytes",
+                "initializers",
+                "inputs",
+                "intermediates",
+                "output_allocation_bytes",
+                "outputs",
+                "total_bytes",
+            ],
+        )
+        self.assertEqual(mem0["total_bytes"], 40)
+        self.assertEqual(mem0["inputs"], {"": 16})
+        self.assertEqual(mem0["already_allocated_bytes"], 24)
+        self.assertEqual(mem0["output_allocation_bytes"], 16)
+        self.assertEqual(mem0["inputs"], {"": 16})
+        self.assertEqual(mem0["initializers"], {"shape": 8})
+        self.assertEqual(mem0["intermediates"], {})
+        self.assertEqual(mem0["outputs"], {"": 16})
+
+        mem1 = inplace.node_memory(1)
+        self.assertEqual(mem1["total_bytes"], 72)
+        self.assertEqual(mem1["already_allocated_bytes"], 40)
+        self.assertEqual(mem1["output_allocation_bytes"], 32)
+        self.assertEqual(mem1["inputs"], {"": 16})
+        self.assertEqual(mem1["initializers"], {"shape": 8})
+        self.assertEqual(mem1["intermediates"], {"": 16})
+        self.assertEqual(mem1["outputs"], {"": 32})
+
+        mem2 = inplace.node_memory(2)
+        self.assertEqual(mem2["total_bytes"], 56)
+        self.assertEqual(mem2["already_allocated_bytes"], 56)
+        self.assertEqual(mem2["output_allocation_bytes"], 0)
+        self.assertEqual(mem2["inputs"], {"": 16})
+        self.assertEqual(mem2["initializers"], {"shape": 8})
+        self.assertEqual(mem2["intermediates"], {"": 32})
+        self.assertEqual(mem2["outputs"], {})
+
+        with self.assertRaises(IndexError):
+            inplace.node_memory(3)
+
+    def test_inplace_context_memory_keeps_symbolic_shapes(self):
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["N"])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.INT32, ["N"])
+        shape_init = oh.make_tensor("S", onnxl.TensorProto.INT64, [1], [4])
+        graph = oh.make_graph(
+            [oh.make_node("P", ["X", "S"], ["A"]), oh.make_node("Q", ["A"], ["Y"])],
+            "g",
+            [x],
+            [y],
+            [shape_init],
+        )
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+        model.ir_version = 8
+
+        ctx = si.ShapesContext()
+        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, ["N"]))
+        ctx.set("S", si.OptimTensor(onnxl.TensorProto.INT64, [1]))
+        ctx.set("A", si.OptimTensor(onnxl.TensorProto.FLOAT, ["N"]))
+        ctx.set("Y", si.OptimTensor(onnxl.TensorProto.INT32, ["N"]))
+
+        inplace = si.ComputeContext()
+        inplace.compute_inplace_reuse_graph(model.graph, ctx, value_tags={"S": "shape"})
+
+        mem0 = inplace.node_memory(0)
+        self.assertEqual(mem0["outputs"], {"": "4*N"})
+        self.assertEqual(mem0["total_bytes"], "8*N+8")
+        self.assertEqual(mem0["already_allocated_bytes"], "4*N+8")
+        self.assertEqual(mem0["output_allocation_bytes"], "4*N")
+        self.assertEqual(mem0["inputs"], {"": "4*N"})
+        self.assertEqual(mem0["initializers"], {"shape": 8})
+        self.assertEqual(mem0["intermediates"], {})
+        self.assertEqual(mem0["outputs"], {"": "4*N"})
+
+        mem1 = inplace.node_memory(1)
+        self.assertEqual(mem1["total_bytes"], "12*N+8")
+        self.assertEqual(mem1["already_allocated_bytes"], "8*N+8")
+        self.assertEqual(mem1["output_allocation_bytes"], "4*N")
+        self.assertEqual(mem1["inputs"], {"": "4*N"})
+        self.assertEqual(mem1["initializers"], {"shape": 8})
+        self.assertEqual(mem1["intermediates"], {"": "4*N"})
+        self.assertEqual(mem1["outputs"], {"": "4*N"})
+
+    def test_inplace_context_memory_simplifies_repeated_symbolic_sums(self):
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["N"])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, ["N"])
+        nodes = [oh.make_node("P", ["X"], [f"A{i}"]) for i in range(5)]
+        nodes.append(oh.make_node("Q", [f"A{i}" for i in range(5)], ["Y"]))
+        graph = oh.make_graph(nodes, "g", [x], [y])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+        model.ir_version = 8
+
+        ctx = si.ShapesContext()
+        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, ["N"]))
+        for i in range(5):
+            ctx.set(f"A{i}", si.OptimTensor(onnxl.TensorProto.FLOAT, ["N"]))
+        ctx.set("Y", si.OptimTensor(onnxl.TensorProto.FLOAT, ["N"]))
+
+        inplace = si.ComputeContext()
+        inplace.compute_inplace_reuse_graph(model.graph, ctx)
+
+        mem4 = inplace.node_memory(4)
+        self.assertEqual(mem4["already_allocated_bytes"], "20*N")
+        self.assertEqual(mem4["output_allocation_bytes"], "4*N")
+        self.assertEqual(mem4["total_bytes"], "24*N")
+        self.assertEqual(mem4["inputs"], {"": "4*N"})
+        self.assertEqual(mem4["intermediates"], {"": "16*N"})
+        self.assertEqual(mem4["outputs"], {"": "4*N"})
+
+        mem5 = inplace.node_memory(5)
+        self.assertEqual(mem5["already_allocated_bytes"], "24*N")
+        self.assertEqual(mem5["output_allocation_bytes"], 0)
+        self.assertEqual(mem5["total_bytes"], "24*N")
+        self.assertEqual(mem5["inputs"], {"": "4*N"})
+        self.assertEqual(mem5["intermediates"], {"": "20*N"})
+        self.assertEqual(mem5["outputs"], {})
+
     def test_inplace_context_write_to_metadata(self):
         nodes = [
             oh.make_node("Abs", ["X"], ["A"]),

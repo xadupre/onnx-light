@@ -7,16 +7,119 @@
 #include <algorithm>
 #include <optional>
 #include <sstream>
-#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+
+#include "onnx_optim/shapes/_helpers/shape_helpers.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
 namespace annotations {
 
 namespace {
+
+enum class MemoryValueSource : uint8_t {
+  kInput,
+  kInitializer,
+  kIntermediate,
+};
+
+struct LiveAllocation {
+  expressions::DimType bytes = int64_t{0};
+  MemoryValueSource source = MemoryValueSource::kIntermediate;
+  ShapeTag tag;
+};
+
+ShapeTag ValueTag(const std::unordered_map<std::string, std::string> &value_tags,
+                  const std::string &name) {
+  auto it = value_tags.find(name);
+  if (it == value_tags.end()) {
+    return {};
+  }
+  return it->second;
+}
+
+bool IsZeroDim(const expressions::DimType &d) {
+  return std::holds_alternative<int64_t>(d) && std::get<int64_t>(d) == 0;
+}
+
+expressions::DimType SimplifyDimType(const expressions::DimType &value) {
+  if (std::holds_alternative<int64_t>(value)) {
+    return value;
+  }
+  const expressions::SimplifyResult simplified =
+      expressions::simplify_expression(std::get<std::string>(value));
+  if (std::holds_alternative<int64_t>(simplified)) {
+    return std::get<int64_t>(simplified);
+  }
+  return std::get<std::string>(simplified);
+}
+
+void SimplifyTaggedMemory(TaggedMemory &bucket) {
+  for (auto &entry : bucket) {
+    entry.second = SimplifyDimType(entry.second);
+  }
+}
+
+void SimplifyNodeMemoryProfile(NodeMemoryProfile &profile) {
+  NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey) =
+      SimplifyDimType(NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey));
+  NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey) =
+      SimplifyDimType(NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey));
+  NodeMemoryProfileScalar(profile, kNodeMemoryOutputAllocationBytesKey) =
+      SimplifyDimType(NodeMemoryProfileScalar(profile, kNodeMemoryOutputAllocationBytesKey));
+  SimplifyTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryInputsKey));
+  SimplifyTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryInitializersKey));
+  SimplifyTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryIntermediatesKey));
+  SimplifyTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryOutputsKey));
+}
+
+void AddTaggedBytes(TaggedMemory &dst, const ShapeTag &tag, const expressions::DimType &bytes) {
+  const expressions::DimType simplified_bytes = SimplifyDimType(bytes);
+  if (IsZeroDim(simplified_bytes)) {
+    return;
+  }
+  auto it = dst.find(tag);
+  if (it == dst.end()) {
+    dst.emplace(tag, simplified_bytes);
+    return;
+  }
+  it->second = SimplifyDimType(expressions::dim_add(it->second, simplified_bytes));
+}
+
+void AddLiveAllocation(NodeMemoryProfile &profile, const LiveAllocation &alloc) {
+  const expressions::DimType simplified_bytes = SimplifyDimType(alloc.bytes);
+  expressions::DimType &already_allocated =
+      NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey);
+  already_allocated = SimplifyDimType(expressions::dim_add(already_allocated, simplified_bytes));
+  switch (alloc.source) {
+  case MemoryValueSource::kInput:
+    AddTaggedBytes(NodeMemoryProfileBucket(profile, kNodeMemoryInputsKey), alloc.tag,
+                   simplified_bytes);
+    break;
+  case MemoryValueSource::kInitializer:
+    AddTaggedBytes(NodeMemoryProfileBucket(profile, kNodeMemoryInitializersKey), alloc.tag,
+                   simplified_bytes);
+    break;
+  case MemoryValueSource::kIntermediate:
+    AddTaggedBytes(NodeMemoryProfileBucket(profile, kNodeMemoryIntermediatesKey), alloc.tag,
+                   simplified_bytes);
+    break;
+  }
+}
+
+NodeMemoryProfile MakeEmptyNodeMemoryProfile() {
+  NodeMemoryProfile profile;
+  NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey) = int64_t{0};
+  NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey) = int64_t{0};
+  NodeMemoryProfileScalar(profile, kNodeMemoryOutputAllocationBytesKey) = int64_t{0};
+  NodeMemoryProfileBucket(profile, kNodeMemoryInputsKey);
+  NodeMemoryProfileBucket(profile, kNodeMemoryInitializersKey);
+  NodeMemoryProfileBucket(profile, kNodeMemoryIntermediatesKey);
+  NodeMemoryProfileBucket(profile, kNodeMemoryOutputsKey);
+  return profile;
+}
 
 // Returns whether two descriptors are byte-for-byte interchangeable: same
 // element type and identical shape (rank and every dimension, concrete or
@@ -85,7 +188,7 @@ int ElementBitWidth(TensorType t) {
 // Packed byte size of ``t`` when its shape is fully known and its element type
 // has a fixed bit width, otherwise ``std::nullopt``. Sub-byte element types are
 // packed, matching the ONNX storage convention.
-std::optional<int64_t> ByteSize(const OptimTensor &t) {
+std::optional<int64_t> ConcreteByteSize(const OptimTensor &t) {
   const int bits = ElementBitWidth(t.Dtype());
   if (bits == 0) {
     return std::nullopt;
@@ -96,6 +199,28 @@ std::optional<int64_t> ByteSize(const OptimTensor &t) {
   }
   const int64_t num_elements = shape.NumElements();
   return (num_elements * bits + 7) / 8;
+}
+
+std::optional<expressions::DimType> ByteSizeExpr(const OptimTensor &t) {
+  const int bits = ElementBitWidth(t.Dtype());
+  if (bits == 0) {
+    return std::nullopt;
+  }
+  expressions::DimType num_elements = int64_t{1};
+  for (std::size_t i = 0; i < t.Shape().Rank(); ++i) {
+    num_elements = expressions::dim_mul(num_elements, shapes::ToDimType(t.Shape()[i]));
+  }
+  if (bits % 8 == 0) {
+    return SimplifyDimType(
+        expressions::dim_mul(num_elements, expressions::DimType{int64_t{bits / 8}}));
+  }
+  // Sub-byte element types pack multiple values per byte, so the buffer size is
+  // ceil(num_elements * bits / 8). ``dim_div`` is floor division, hence the
+  // ``+7`` round-up term before dividing by 8.
+  return SimplifyDimType(expressions::dim_div(
+      expressions::dim_add(expressions::dim_mul(num_elements, expressions::DimType{int64_t{bits}}),
+                           expressions::DimType{int64_t{7}}),
+      expressions::DimType{int64_t{8}}));
 }
 
 // Classifies a candidate reuse of input ``in`` by output ``out`` by comparing
@@ -111,8 +236,8 @@ std::optional<InPlaceReuseKind> ClassifyReuse(const OptimTensor &out, const Opti
   if (SameStorage(out, in)) {
     return InPlaceReuseKind::kEqual;
   }
-  const std::optional<int64_t> out_bytes = ByteSize(out);
-  const std::optional<int64_t> in_bytes = ByteSize(in);
+  const std::optional<int64_t> out_bytes = ConcreteByteSize(out);
+  const std::optional<int64_t> in_bytes = ConcreteByteSize(in);
   if (!out_bytes.has_value() || !in_bytes.has_value()) {
     return std::nullopt;
   }
@@ -161,6 +286,8 @@ void ComputeContext::ComputeInPlaceReuseGraph(
   const int num_nodes = graph.node().size();
   std::vector<std::vector<InPlaceReuse>> result(static_cast<std::size_t>(num_nodes));
   std::vector<std::vector<std::string>> release_after(static_cast<std::size_t>(num_nodes));
+  std::vector<NodeMemoryProfile> memory(static_cast<std::size_t>(num_nodes),
+                                        MakeEmptyNodeMemoryProfile());
 
   // Names whose buffers must never be overwritten in place: declared graph
   // inputs, initializers and declared graph outputs are owned by the caller
@@ -191,6 +318,10 @@ void ComputeContext::ComputeInPlaceReuseGraph(
   std::unordered_map<std::string, int> producer;
   std::unordered_map<std::string, int> last_use;
   std::vector<std::vector<std::string>> referenced_per_node(static_cast<std::size_t>(num_nodes));
+  std::unordered_set<std::string> graph_outputs;
+  for (int i = 0; i < graph.output().size(); ++i) {
+    graph_outputs.insert(graph.output()[i].name().as_string());
+  }
   if (allow_input_overwrite) {
     for (const std::string &name : graph_inputs) {
       if (!name.empty()) {
@@ -313,8 +444,120 @@ void ComputeContext::ComputeInPlaceReuseGraph(
               });
   }
 
+  std::unordered_map<std::string, LiveAllocation> alive;
+  for (int i = 0; i < graph.initializer().size(); ++i) {
+    const std::string name = graph.initializer()[i].name().as_string();
+    if (name.empty() || !ctx.Has(name)) {
+      continue;
+    }
+    const std::optional<expressions::DimType> bytes = ByteSizeExpr(ctx.Get(name));
+    if (!bytes.has_value()) {
+      continue;
+    }
+    alive[name] = LiveAllocation{SimplifyDimType(*bytes), MemoryValueSource::kInitializer,
+                                 ValueTag(value_tags, name)};
+  }
+  for (int i = 0; i < graph.input().size(); ++i) {
+    const std::string name = graph.input()[i].name().as_string();
+    if (name.empty() || alive.find(name) != alive.end() || !ctx.Has(name)) {
+      continue;
+    }
+    const std::optional<expressions::DimType> bytes = ByteSizeExpr(ctx.Get(name));
+    if (!bytes.has_value()) {
+      continue;
+    }
+    alive[name] = LiveAllocation{SimplifyDimType(*bytes), MemoryValueSource::kInput,
+                                 ValueTag(value_tags, name)};
+  }
+
+  for (int i = 0; i < num_nodes; ++i) {
+    NodeMemoryProfile &profile = memory[static_cast<std::size_t>(i)];
+    for (const auto &kv : alive) {
+      AddLiveAllocation(profile, kv.second);
+    }
+
+    const NodeProto &node = graph.node()[i];
+    std::unordered_map<int, int> reuse_by_output;
+    for (const InPlaceReuse &reuse : result[static_cast<std::size_t>(i)]) {
+      reuse_by_output[static_cast<int>(reuse.output_index)] = static_cast<int>(reuse.input_index);
+    }
+
+    for (int o = 0; o < node.output_size(); ++o) {
+      if (reuse_by_output.find(o) != reuse_by_output.end()) {
+        continue;
+      }
+      const std::string out_name = node.output(o).as_string();
+      if (out_name.empty() || !ctx.Has(out_name)) {
+        continue;
+      }
+      const std::optional<expressions::DimType> out_bytes = ByteSizeExpr(ctx.Get(out_name));
+      if (!out_bytes.has_value()) {
+        continue;
+      }
+      expressions::DimType &output_allocation =
+          NodeMemoryProfileScalar(profile, kNodeMemoryOutputAllocationBytesKey);
+      output_allocation =
+          SimplifyDimType(expressions::dim_add(output_allocation, SimplifyDimType(*out_bytes)));
+      AddTaggedBytes(NodeMemoryProfileBucket(profile, kNodeMemoryOutputsKey),
+                     ValueTag(value_tags, out_name), *out_bytes);
+    }
+    NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey) =
+        SimplifyDimType(expressions::dim_add(
+            NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey),
+            NodeMemoryProfileScalar(profile, kNodeMemoryOutputAllocationBytesKey)));
+    SimplifyNodeMemoryProfile(profile);
+
+    std::unordered_map<std::string, LiveAllocation> outputs_to_add;
+    std::unordered_set<std::string> inputs_reused_from_graph_input;
+    for (int o = 0; o < node.output_size(); ++o) {
+      const std::string out_name = node.output(o).as_string();
+      if (out_name.empty() || !ctx.Has(out_name)) {
+        continue;
+      }
+      expressions::DimType alloc_bytes = int64_t{0};
+      auto reuse_it = reuse_by_output.find(o);
+      if (reuse_it != reuse_by_output.end()) {
+        const std::string in_name = node.input(reuse_it->second).as_string();
+        auto alive_it = alive.find(in_name);
+        if (alive_it == alive.end()) {
+          continue;
+        }
+        alloc_bytes = alive_it->second.bytes;
+        if (graph_inputs.find(in_name) != graph_inputs.end()) {
+          inputs_reused_from_graph_input.insert(in_name);
+        }
+      } else {
+        const std::optional<expressions::DimType> out_bytes = ByteSizeExpr(ctx.Get(out_name));
+        if (!out_bytes.has_value()) {
+          continue;
+        }
+        alloc_bytes = SimplifyDimType(*out_bytes);
+      }
+      const auto use_it = last_use.find(out_name);
+      const bool survives_after_node = graph_outputs.find(out_name) != graph_outputs.end() ||
+                                       (use_it != last_use.end() && use_it->second > i);
+      if (!survives_after_node) {
+        continue;
+      }
+      outputs_to_add.emplace(out_name, LiveAllocation{SimplifyDimType(alloc_bytes),
+                                                      MemoryValueSource::kIntermediate,
+                                                      ValueTag(value_tags, out_name)});
+    }
+
+    for (const std::string &name : release_after[static_cast<std::size_t>(i)]) {
+      alive.erase(name);
+    }
+    for (const std::string &name : inputs_reused_from_graph_input) {
+      alive.erase(name);
+    }
+    for (auto &entry : outputs_to_add) {
+      alive[entry.first] = std::move(entry.second);
+    }
+  }
+
   reuse_ = std::move(result);
   release_after_ = std::move(release_after);
+  memory_ = std::move(memory);
 
   // Populate the shape-tagged subset from value_tags (when provided).
   // Only allocate the per-node sub-vectors when value_tags is actually non-empty
@@ -336,14 +579,11 @@ void ComputeContext::ComputeInPlaceReuseGraph(
 }
 
 void ComputeContext::WriteToMetadata(GraphProto &graph) const {
-  if (static_cast<std::size_t>(graph.node().size()) != reuse_.size()) {
-    std::ostringstream msg;
-    msg << "ComputeContext::WriteToMetadata: graph has " << graph.node().size()
-        << " node(s) but the computed reuse result has " << reuse_.size()
-        << " entry(ies); call WriteToMetadata on the same graph passed to "
-           "ComputeInPlaceReuseGraph.";
-    throw std::invalid_argument(msg.str());
-  }
+  EXT_ENFORCE_INVALID(static_cast<std::size_t>(graph.node().size()) == reuse_.size(),
+                      "ComputeContext::WriteToMetadata: graph has ", graph.node().size(),
+                      " node(s) but the computed reuse result has ", reuse_.size(),
+                      " entry(ies); call WriteToMetadata on the same graph passed to ",
+                      "ComputeInPlaceReuseGraph.");
   const bool has_shape_tag_info = release_after_shape_tagged_.size() == reuse_.size();
   for (std::size_t i = 0; i < reuse_.size(); ++i) {
     const bool has_shape_tagged = has_shape_tag_info && !release_after_shape_tagged_[i].empty();

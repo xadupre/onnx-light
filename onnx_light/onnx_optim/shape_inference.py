@@ -18,6 +18,8 @@ The module is exposed as ``onnx_light.onnx_optim.shape_inference``.
 
 from __future__ import annotations
 
+from typing import TypeAlias
+
 from ..onnx_py._onnxpyoptim import shape_inference as _C  # type: ignore[attr-defined]
 
 apply_inferred_shapes_to_model = _C.apply_inferred_shapes_to_model
@@ -36,7 +38,14 @@ kUnknownOpsetVersion = _C.kUnknownOpsetVersion
 kOnnxDomain = _C.kOnnxDomain
 InPlaceReuse = _C.InPlaceReuse
 InPlaceReuseKind = _C.InPlaceReuseKind
-NodeMemoryProfile = _C.NodeMemoryProfile
+NODE_MEMORY_TOTAL_BYTES_KEY = _C.NODE_MEMORY_TOTAL_BYTES_KEY
+NODE_MEMORY_ALREADY_ALLOCATED_BYTES_KEY = _C.NODE_MEMORY_ALREADY_ALLOCATED_BYTES_KEY
+NODE_MEMORY_OUTPUT_ALLOCATION_BYTES_KEY = _C.NODE_MEMORY_OUTPUT_ALLOCATION_BYTES_KEY
+NODE_MEMORY_INPUTS_KEY = _C.NODE_MEMORY_INPUTS_KEY
+NODE_MEMORY_INITIALIZERS_KEY = _C.NODE_MEMORY_INITIALIZERS_KEY
+NODE_MEMORY_INTERMEDIATES_KEY = _C.NODE_MEMORY_INTERMEDIATES_KEY
+NODE_MEMORY_OUTPUTS_KEY = _C.NODE_MEMORY_OUTPUTS_KEY
+NodeMemoryProfile: TypeAlias = dict[str, int | str | dict[str, int | str]]
 ComputeContext = _C.ComputeContext
 OptimDim = _C.OptimDim
 OptimShape = _C.OptimShape

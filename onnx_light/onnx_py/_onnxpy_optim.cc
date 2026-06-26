@@ -12,6 +12,7 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/unordered_set.h>
+#include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 #include <sstream>
 #include <vector>
@@ -1092,142 +1093,15 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
         return os.str();
       });
 
-  auto dim_to_repr = [](const expr::DimType &d) {
-    if (std::holds_alternative<int64_t>(d)) {
-      return std::to_string(std::get<int64_t>(d));
-    }
-    return std::string("'") + std::get<std::string>(d) + "'";
-  };
-
-  nb::class_<onnx_annotations::NodeMemoryProfile>(
-      shape_mod, "NodeMemoryProfile",
-      "Represents a per-node memory snapshot computed by :class:`ComputeContext`. "
-      "``already_allocated_bytes`` counts the live buffers present before the node runs; "
-      "``output_allocation_bytes`` counts the extra output buffers that must be allocated "
-      "because no in-place reuse opportunity covers them; ``total_bytes`` is their sum. "
-      "These three attributes are returned as ``int | str`` values so symbolic shapes keep "
-      "their expression form. The ``inputs``, ``initializers`` and ``intermediates`` "
-      "attributes are ``dict[str, int | str]`` breakdowns of ``already_allocated_bytes`` by "
-      "shape tag; ``outputs`` is the ``dict[str, int | str]`` breakdown of "
-      "``output_allocation_bytes``. Tags such as ``\"shape\"``, ``\"axes\"`` and "
-      "``\"weight\"`` categorize memory by purpose; the empty-string key represents "
-      "untagged values.")
-      .def(nb::init<>())
-      .def_prop_ro("total_bytes",
-                   [](const onnx_annotations::NodeMemoryProfile &m) -> nb::object {
-                     if (std::holds_alternative<int64_t>(m.total_bytes)) {
-                       return nb::cast(std::get<int64_t>(m.total_bytes));
-                     }
-                     return nb::cast(std::get<std::string>(m.total_bytes));
-                   })
-      .def_prop_ro("already_allocated_bytes",
-                   [](const onnx_annotations::NodeMemoryProfile &m) -> nb::object {
-                     if (std::holds_alternative<int64_t>(m.already_allocated_bytes)) {
-                       return nb::cast(std::get<int64_t>(m.already_allocated_bytes));
-                     }
-                     return nb::cast(std::get<std::string>(m.already_allocated_bytes));
-                   })
-      .def_prop_ro("output_allocation_bytes",
-                   [](const onnx_annotations::NodeMemoryProfile &m) -> nb::object {
-                     if (std::holds_alternative<int64_t>(m.output_allocation_bytes)) {
-                       return nb::cast(std::get<int64_t>(m.output_allocation_bytes));
-                     }
-                     return nb::cast(std::get<std::string>(m.output_allocation_bytes));
-                   })
-      .def_prop_ro("inputs",
-                   [](const onnx_annotations::NodeMemoryProfile &m) {
-                     nb::dict d;
-                     for (const auto &kv : m.inputs) {
-                       if (std::holds_alternative<int64_t>(kv.second)) {
-                         d[nb::cast(kv.first)] = nb::cast(std::get<int64_t>(kv.second));
-                       } else {
-                         d[nb::cast(kv.first)] = nb::cast(std::get<std::string>(kv.second));
-                       }
-                     }
-                     return d;
-                   })
-      .def_prop_ro("initializers",
-                   [](const onnx_annotations::NodeMemoryProfile &m) {
-                     nb::dict d;
-                     for (const auto &kv : m.initializers) {
-                       if (std::holds_alternative<int64_t>(kv.second)) {
-                         d[nb::cast(kv.first)] = nb::cast(std::get<int64_t>(kv.second));
-                       } else {
-                         d[nb::cast(kv.first)] = nb::cast(std::get<std::string>(kv.second));
-                       }
-                     }
-                     return d;
-                   })
-      .def_prop_ro("intermediates",
-                   [](const onnx_annotations::NodeMemoryProfile &m) {
-                     nb::dict d;
-                     for (const auto &kv : m.intermediates) {
-                       if (std::holds_alternative<int64_t>(kv.second)) {
-                         d[nb::cast(kv.first)] = nb::cast(std::get<int64_t>(kv.second));
-                       } else {
-                         d[nb::cast(kv.first)] = nb::cast(std::get<std::string>(kv.second));
-                       }
-                     }
-                     return d;
-                   })
-      .def_prop_ro("outputs",
-                   [](const onnx_annotations::NodeMemoryProfile &m) {
-                     nb::dict d;
-                     for (const auto &kv : m.outputs) {
-                       if (std::holds_alternative<int64_t>(kv.second)) {
-                         d[nb::cast(kv.first)] = nb::cast(std::get<int64_t>(kv.second));
-                       } else {
-                         d[nb::cast(kv.first)] = nb::cast(std::get<std::string>(kv.second));
-                       }
-                     }
-                     return d;
-                   })
-      .def(nb::self == nb::self)
-      .def(nb::self != nb::self)
-      .def("__repr__", [dim_to_repr](const onnx_annotations::NodeMemoryProfile &m) {
-        std::ostringstream os;
-        os << "NodeMemoryProfile(total_bytes=" << dim_to_repr(m.total_bytes)
-           << ", already_allocated_bytes=" << dim_to_repr(m.already_allocated_bytes)
-           << ", output_allocation_bytes=" << dim_to_repr(m.output_allocation_bytes)
-           << ", inputs={";
-        bool first = true;
-        for (const auto &kv : m.inputs) {
-          if (!first) {
-            os << ", ";
-          }
-          first = false;
-          os << "'" << kv.first << "': " << dim_to_repr(kv.second);
-        }
-        os << "}, initializers={";
-        first = true;
-        for (const auto &kv : m.initializers) {
-          if (!first) {
-            os << ", ";
-          }
-          first = false;
-          os << "'" << kv.first << "': " << dim_to_repr(kv.second);
-        }
-        os << "}, intermediates={";
-        first = true;
-        for (const auto &kv : m.intermediates) {
-          if (!first) {
-            os << ", ";
-          }
-          first = false;
-          os << "'" << kv.first << "': " << dim_to_repr(kv.second);
-        }
-        os << "}, outputs={";
-        first = true;
-        for (const auto &kv : m.outputs) {
-          if (!first) {
-            os << ", ";
-          }
-          first = false;
-          os << "'" << kv.first << "': " << dim_to_repr(kv.second);
-        }
-        os << "})";
-        return os.str();
-      });
+  shape_mod.attr("NODE_MEMORY_TOTAL_BYTES_KEY") = onnx_annotations::kNodeMemoryTotalBytesKey;
+  shape_mod.attr("NODE_MEMORY_ALREADY_ALLOCATED_BYTES_KEY") =
+      onnx_annotations::kNodeMemoryAlreadyAllocatedBytesKey;
+  shape_mod.attr("NODE_MEMORY_OUTPUT_ALLOCATION_BYTES_KEY") =
+      onnx_annotations::kNodeMemoryOutputAllocationBytesKey;
+  shape_mod.attr("NODE_MEMORY_INPUTS_KEY") = onnx_annotations::kNodeMemoryInputsKey;
+  shape_mod.attr("NODE_MEMORY_INITIALIZERS_KEY") = onnx_annotations::kNodeMemoryInitializersKey;
+  shape_mod.attr("NODE_MEMORY_INTERMEDIATES_KEY") = onnx_annotations::kNodeMemoryIntermediatesKey;
+  shape_mod.attr("NODE_MEMORY_OUTPUTS_KEY") = onnx_annotations::kNodeMemoryOutputsKey;
 
   nb::class_<onnx_annotations::ComputeContext>(
       shape_mod, "ComputeContext",
@@ -1288,16 +1162,16 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       .def_prop_ro(
           "memory", [](const onnx_annotations::ComputeContext &self) { return self.Memory(); },
           "The per-node memory snapshots as a list (one entry per node, same order as "
-          "``graph.node``). Each entry is a :class:`NodeMemoryProfile` describing the live "
-          "input/initializer/intermediate buffers plus the extra output allocation needed by "
-          "that node.")
+          "``graph.node``). Each entry is a ``dict[str, int | str | dict[str, int | str]]`` "
+          "describing the live input/initializer/intermediate buffers plus the extra output "
+          "allocation needed by that node.")
       .def(
           "node_memory",
           [](const onnx_annotations::ComputeContext &self, std::size_t node_index) {
             return self.NodeMemory(node_index);
           },
           nb::arg("node_index"),
-          "Returns the :class:`NodeMemoryProfile` computed for the node at ``node_index``. "
+          "Returns the memory snapshot ``dict`` computed for the node at ``node_index``. "
           "Raises ``IndexError`` when ``node_index`` is out of bounds.")
       .def(
           "write_to_metadata",

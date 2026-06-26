@@ -57,19 +57,34 @@ void AddTaggedBytes(TaggedMemory &dst, const ShapeTag &tag, const expressions::D
 }
 
 void AddLiveAllocation(NodeMemoryProfile &profile, const LiveAllocation &alloc) {
-  profile.already_allocated_bytes =
-      expressions::dim_add(profile.already_allocated_bytes, alloc.bytes);
+  expressions::DimType &already_allocated =
+      NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey);
+  already_allocated = expressions::dim_add(already_allocated, alloc.bytes);
   switch (alloc.source) {
   case MemoryValueSource::kInput:
-    AddTaggedBytes(profile.inputs, alloc.tag, alloc.bytes);
+    AddTaggedBytes(NodeMemoryProfileBucket(profile, kNodeMemoryInputsKey), alloc.tag, alloc.bytes);
     break;
   case MemoryValueSource::kInitializer:
-    AddTaggedBytes(profile.initializers, alloc.tag, alloc.bytes);
+    AddTaggedBytes(NodeMemoryProfileBucket(profile, kNodeMemoryInitializersKey), alloc.tag,
+                   alloc.bytes);
     break;
   case MemoryValueSource::kIntermediate:
-    AddTaggedBytes(profile.intermediates, alloc.tag, alloc.bytes);
+    AddTaggedBytes(NodeMemoryProfileBucket(profile, kNodeMemoryIntermediatesKey), alloc.tag,
+                   alloc.bytes);
     break;
   }
+}
+
+NodeMemoryProfile MakeEmptyNodeMemoryProfile() {
+  NodeMemoryProfile profile;
+  NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey) = int64_t{0};
+  NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey) = int64_t{0};
+  NodeMemoryProfileScalar(profile, kNodeMemoryOutputAllocationBytesKey) = int64_t{0};
+  NodeMemoryProfileBucket(profile, kNodeMemoryInputsKey);
+  NodeMemoryProfileBucket(profile, kNodeMemoryInitializersKey);
+  NodeMemoryProfileBucket(profile, kNodeMemoryIntermediatesKey);
+  NodeMemoryProfileBucket(profile, kNodeMemoryOutputsKey);
+  return profile;
 }
 
 // Returns whether two descriptors are byte-for-byte interchangeable: same
@@ -236,7 +251,8 @@ void ComputeContext::ComputeInPlaceReuseGraph(
   const int num_nodes = graph.node().size();
   std::vector<std::vector<InPlaceReuse>> result(static_cast<std::size_t>(num_nodes));
   std::vector<std::vector<std::string>> release_after(static_cast<std::size_t>(num_nodes));
-  std::vector<NodeMemoryProfile> memory(static_cast<std::size_t>(num_nodes));
+  std::vector<NodeMemoryProfile> memory(static_cast<std::size_t>(num_nodes),
+                                        MakeEmptyNodeMemoryProfile());
 
   // Names whose buffers must never be overwritten in place: declared graph
   // inputs, initializers and declared graph outputs are owned by the caller
@@ -442,12 +458,15 @@ void ComputeContext::ComputeInPlaceReuseGraph(
       if (!out_bytes.has_value()) {
         continue;
       }
-      profile.output_allocation_bytes =
-          expressions::dim_add(profile.output_allocation_bytes, *out_bytes);
-      AddTaggedBytes(profile.outputs, ValueTag(value_tags, out_name), *out_bytes);
+      expressions::DimType &output_allocation =
+          NodeMemoryProfileScalar(profile, kNodeMemoryOutputAllocationBytesKey);
+      output_allocation = expressions::dim_add(output_allocation, *out_bytes);
+      AddTaggedBytes(NodeMemoryProfileBucket(profile, kNodeMemoryOutputsKey),
+                     ValueTag(value_tags, out_name), *out_bytes);
     }
-    profile.total_bytes =
-        expressions::dim_add(profile.already_allocated_bytes, profile.output_allocation_bytes);
+    NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey) =
+        expressions::dim_add(NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey),
+                             NodeMemoryProfileScalar(profile, kNodeMemoryOutputAllocationBytesKey));
 
     std::unordered_map<std::string, LiveAllocation> outputs_to_add;
     std::unordered_set<std::string> inputs_reused_from_graph_input;

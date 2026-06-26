@@ -301,31 +301,45 @@ class TestInPlaceReuse(ExtTestCase):
         self.assertEqual(len(inplace.memory), 3)
 
         mem0 = inplace.node_memory(0)
-        self.assertEqual(mem0.total_bytes, 40)
-        self.assertEqual(mem0.already_allocated_bytes, 24)
-        self.assertEqual(mem0.output_allocation_bytes, 16)
-        self.assertEqual(mem0.inputs, {"": 16})
-        self.assertEqual(mem0.initializers, {"shape": 8})
-        self.assertEqual(mem0.intermediates, {})
-        self.assertEqual(mem0.outputs, {"": 16})
+        self.assertEqual(
+            list(mem0.keys()),
+            [
+                "already_allocated_bytes",
+                "initializers",
+                "inputs",
+                "intermediates",
+                "output_allocation_bytes",
+                "outputs",
+                "total_bytes",
+            ],
+        )
+        self.assertEqual(mem0["total_bytes"], 40)
+        self.assertEqual(mem0["inputs"], {"": 16})
+        self.assertEqual(mem0["total_bytes"], 40)
+        self.assertEqual(mem0["already_allocated_bytes"], 24)
+        self.assertEqual(mem0["output_allocation_bytes"], 16)
+        self.assertEqual(mem0["inputs"], {"": 16})
+        self.assertEqual(mem0["initializers"], {"shape": 8})
+        self.assertEqual(mem0["intermediates"], {})
+        self.assertEqual(mem0["outputs"], {"": 16})
 
         mem1 = inplace.node_memory(1)
-        self.assertEqual(mem1.total_bytes, 72)
-        self.assertEqual(mem1.already_allocated_bytes, 40)
-        self.assertEqual(mem1.output_allocation_bytes, 32)
-        self.assertEqual(mem1.inputs, {"": 16})
-        self.assertEqual(mem1.initializers, {"shape": 8})
-        self.assertEqual(mem1.intermediates, {"": 16})
-        self.assertEqual(mem1.outputs, {"": 32})
+        self.assertEqual(mem1["total_bytes"], 72)
+        self.assertEqual(mem1["already_allocated_bytes"], 40)
+        self.assertEqual(mem1["output_allocation_bytes"], 32)
+        self.assertEqual(mem1["inputs"], {"": 16})
+        self.assertEqual(mem1["initializers"], {"shape": 8})
+        self.assertEqual(mem1["intermediates"], {"": 16})
+        self.assertEqual(mem1["outputs"], {"": 32})
 
         mem2 = inplace.node_memory(2)
-        self.assertEqual(mem2.total_bytes, 56)
-        self.assertEqual(mem2.already_allocated_bytes, 56)
-        self.assertEqual(mem2.output_allocation_bytes, 0)
-        self.assertEqual(mem2.inputs, {"": 16})
-        self.assertEqual(mem2.initializers, {"shape": 8})
-        self.assertEqual(mem2.intermediates, {"": 32})
-        self.assertEqual(mem2.outputs, {})
+        self.assertEqual(mem2["total_bytes"], 56)
+        self.assertEqual(mem2["already_allocated_bytes"], 56)
+        self.assertEqual(mem2["output_allocation_bytes"], 0)
+        self.assertEqual(mem2["inputs"], {"": 16})
+        self.assertEqual(mem2["initializers"], {"shape": 8})
+        self.assertEqual(mem2["intermediates"], {"": 32})
+        self.assertEqual(mem2["outputs"], {})
 
         with self.assertRaises(IndexError):
             inplace.node_memory(3)
@@ -354,22 +368,24 @@ class TestInPlaceReuse(ExtTestCase):
         inplace.compute_inplace_reuse_graph(model.graph, ctx, value_tags={"S": "shape"})
 
         mem0 = inplace.node_memory(0)
-        self.assertEqual(mem0.total_bytes, "8*N+8")
-        self.assertEqual(mem0.already_allocated_bytes, "4*N+8")
-        self.assertEqual(mem0.output_allocation_bytes, "4*N")
-        self.assertEqual(mem0.inputs, {"": "4*N"})
-        self.assertEqual(mem0.initializers, {"shape": 8})
-        self.assertEqual(mem0.intermediates, {})
-        self.assertEqual(mem0.outputs, {"": "4*N"})
+        self.assertEqual(mem0["total_bytes"], "8*N+8")
+        self.assertEqual(mem0["outputs"], {"": "4*N"})
+        self.assertEqual(mem0["total_bytes"], "8*N+8")
+        self.assertEqual(mem0["already_allocated_bytes"], "4*N+8")
+        self.assertEqual(mem0["output_allocation_bytes"], "4*N")
+        self.assertEqual(mem0["inputs"], {"": "4*N"})
+        self.assertEqual(mem0["initializers"], {"shape": 8})
+        self.assertEqual(mem0["intermediates"], {})
+        self.assertEqual(mem0["outputs"], {"": "4*N"})
 
         mem1 = inplace.node_memory(1)
-        self.assertEqual(mem1.total_bytes, "12*N+8")
-        self.assertEqual(mem1.already_allocated_bytes, "8*N+8")
-        self.assertEqual(mem1.output_allocation_bytes, "4*N")
-        self.assertEqual(mem1.inputs, {"": "4*N"})
-        self.assertEqual(mem1.initializers, {"shape": 8})
-        self.assertEqual(mem1.intermediates, {"": "4*N"})
-        self.assertEqual(mem1.outputs, {"": "4*N"})
+        self.assertEqual(mem1["total_bytes"], "12*N+8")
+        self.assertEqual(mem1["already_allocated_bytes"], "8*N+8")
+        self.assertEqual(mem1["output_allocation_bytes"], "4*N")
+        self.assertEqual(mem1["inputs"], {"": "4*N"})
+        self.assertEqual(mem1["initializers"], {"shape": 8})
+        self.assertEqual(mem1["intermediates"], {"": "4*N"})
+        self.assertEqual(mem1["outputs"], {"": "4*N"})
 
     def test_inplace_context_write_to_metadata(self):
         nodes = [

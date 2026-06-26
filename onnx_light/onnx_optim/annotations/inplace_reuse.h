@@ -8,6 +8,7 @@
 #include <map>
 #include <string>
 #include <unordered_map>
+#include <variant>
 #include <vector>
 
 #include "onnx_optim/expressions.h"
@@ -144,39 +145,77 @@ constexpr const char *kReleaseAfterShapeTagMetadataKey = "onnx_light.release_aft
  *     opportunity covers them;
  *   - ``total_bytes`` is their sum.
  *
- * Each source bucket is also split by value tag (``"shape"``, ``"axes"``,
- * ``"weight"``, or the empty string for untagged values). The
- * ``already_allocated_bytes`` field is the sum of the ``inputs``,
- * ``initializers`` and ``intermediates`` maps; ``output_allocation_bytes`` is
- * the sum of ``outputs``; and ``total_bytes`` is the sum of those two scalar
- * fields. Every amount is represented as an
- * :cpp:type:`onnx_optim::expressions::DimType`, so symbolic shapes retain their
- * expression form instead of being dropped. The tag-indexed buckets use
- * ``std::map<ShapeTag, DimType>`` for deterministic ordering. The ``outputs``
+ * The profile is stored as a ``std::map`` with seven well-known keys:
+ *
+ *   - ``"total_bytes"``
+ *   - ``"already_allocated_bytes"``
+ *   - ``"output_allocation_bytes"``
+ *   - ``"inputs"``
+ *   - ``"initializers"``
+ *   - ``"intermediates"``
+ *   - ``"outputs"``
+ *
+ * The first three keys map to scalar :cpp:type:`onnx_optim::expressions::DimType`
+ * values. The other four keys map to ``std::map<ShapeTag, DimType>`` buckets
+ * split by value tag (``"shape"``, ``"axes"``, ``"weight"``, or the empty string
+ * for untagged values). ``"already_allocated_bytes"`` is the sum of the
+ * ``"inputs"``, ``"initializers"`` and ``"intermediates"`` maps;
+ * ``"output_allocation_bytes"`` is the sum of ``"outputs"``; and
+ * ``"total_bytes"`` is the sum of those two scalar entries. Every amount is
+ * represented as a :cpp:type:`onnx_optim::expressions::DimType`, so symbolic
+ * shapes retain their expression form instead of being dropped. The ``"outputs"``
  * map only counts the extra allocations performed at this node; outputs that
  * reuse an existing input buffer in place contribute no additional bytes there.
  */
 using ShapeTag = std::string;
 using TaggedMemory = std::map<ShapeTag, expressions::DimType>;
+using NodeMemoryProfileValue = std::variant<expressions::DimType, TaggedMemory>;
+using NodeMemoryProfile = std::map<std::string, NodeMemoryProfileValue>;
 
-struct NodeMemoryProfile {
-  expressions::DimType total_bytes = int64_t{0};
-  expressions::DimType already_allocated_bytes = int64_t{0};
-  expressions::DimType output_allocation_bytes = int64_t{0};
-  TaggedMemory inputs;
-  TaggedMemory initializers;
-  TaggedMemory intermediates;
-  TaggedMemory outputs;
+constexpr const char *kNodeMemoryTotalBytesKey = "total_bytes";
+constexpr const char *kNodeMemoryAlreadyAllocatedBytesKey = "already_allocated_bytes";
+constexpr const char *kNodeMemoryOutputAllocationBytesKey = "output_allocation_bytes";
+constexpr const char *kNodeMemoryInputsKey = "inputs";
+constexpr const char *kNodeMemoryInitializersKey = "initializers";
+constexpr const char *kNodeMemoryIntermediatesKey = "intermediates";
+constexpr const char *kNodeMemoryOutputsKey = "outputs";
 
-  bool operator==(const NodeMemoryProfile &other) const noexcept {
-    return total_bytes == other.total_bytes &&
-           already_allocated_bytes == other.already_allocated_bytes &&
-           output_allocation_bytes == other.output_allocation_bytes && inputs == other.inputs &&
-           initializers == other.initializers && intermediates == other.intermediates &&
-           outputs == other.outputs;
+inline expressions::DimType &NodeMemoryProfileScalar(NodeMemoryProfile &profile,
+                                                     const std::string &key) {
+  auto it = profile.find(key);
+  if (it == profile.end()) {
+    it = profile.emplace(key, expressions::DimType{int64_t{0}}).first;
   }
-  bool operator!=(const NodeMemoryProfile &other) const noexcept { return !(*this == other); }
-};
+  return std::get<expressions::DimType>(it->second);
+}
+
+inline const expressions::DimType &NodeMemoryProfileScalar(const NodeMemoryProfile &profile,
+                                                           const std::string &key) {
+  static const expressions::DimType zero = int64_t{0};
+  auto it = profile.find(key);
+  if (it == profile.end()) {
+    return zero;
+  }
+  return std::get<expressions::DimType>(it->second);
+}
+
+inline TaggedMemory &NodeMemoryProfileBucket(NodeMemoryProfile &profile, const std::string &key) {
+  auto it = profile.find(key);
+  if (it == profile.end()) {
+    it = profile.emplace(key, TaggedMemory{}).first;
+  }
+  return std::get<TaggedMemory>(it->second);
+}
+
+inline const TaggedMemory &NodeMemoryProfileBucket(const NodeMemoryProfile &profile,
+                                                   const std::string &key) {
+  static const TaggedMemory empty;
+  auto it = profile.find(key);
+  if (it == profile.end()) {
+    return empty;
+  }
+  return std::get<TaggedMemory>(it->second);
+}
 
 /**
  * Holds the in-place reuse opportunities computed for a graph, mirroring the

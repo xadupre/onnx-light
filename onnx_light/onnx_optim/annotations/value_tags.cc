@@ -62,15 +62,26 @@ std::string NormalizeValueTag(std::string_view tag) {
   return {};
 }
 
-void SetValueTag(std::unordered_map<std::string, std::string> &value_tags, const std::string &name,
-                 const std::string &tag) {
+bool SetValueTagIfChanged(std::unordered_map<std::string, std::string> &value_tags,
+                          const std::string &name, const std::string &tag) {
   if (name.empty()) {
-    return;
+    return false;
   }
   const std::string norm = NormalizeValueTag(tag);
   if (!norm.empty()) {
+    auto it = value_tags.find(name);
+    if (it != value_tags.end() && it->second == norm) {
+      return false;
+    }
     value_tags[name] = norm;
+    return true;
   }
+  return false;
+}
+
+void SetValueTag(std::unordered_map<std::string, std::string> &value_tags, const std::string &name,
+                 const std::string &tag) {
+  static_cast<void>(SetValueTagIfChanged(value_tags, name, tag));
 }
 
 void CollectGraphSeedTags(const GraphProto &graph,
@@ -103,49 +114,71 @@ void CollectGraphSeedTags(const GraphProto &graph,
 void InferNodesTags(const std::vector<const NodeProto *> &nodes,
                     std::unordered_map<std::string, std::string> &value_tags,
                     std::vector<std::string> &node_tags) {
-  node_tags.clear();
-  node_tags.reserve(nodes.size());
-  for (const NodeProto *node : nodes) {
-    const std::string op_type = node->op_type().as_string();
-    std::string explicit_output_tag;
-    if (op_type == "Shape" || op_type == "Size") {
-      explicit_output_tag = "shape";
-    } else if (op_type == "Constant") {
-      explicit_output_tag = "weight";
-    }
+  node_tags.assign(nodes.size(), std::string());
+  bool changed = true;
+  while (changed) {
+    changed = false;
+    for (std::size_t n = 0; n < nodes.size(); ++n) {
+      const NodeProto *node = nodes[n];
+      const std::string op_type = node->op_type().as_string();
+      std::string explicit_output_tag;
+      if (op_type == "Shape" || op_type == "Size") {
+        explicit_output_tag = "shape";
+      } else if (op_type == "Constant") {
+        explicit_output_tag = "weight";
+      }
 
-    if (node->input().size() >= 2) {
-      if (op_type == "Reshape" || op_type == "Expand" || op_type == "Slice") {
-        SetValueTag(value_tags, node->input(1).as_string(), "shape");
-      } else if (op_type == "Squeeze" || op_type == "Unsqueeze" || op_type == "ReduceSum" ||
-                 op_type == "ReduceMean" || op_type == "ReduceMax" || op_type == "ReduceMin") {
-        SetValueTag(value_tags, node->input(1).as_string(), "axes");
+      if (node->input().size() >= 2) {
+        if (op_type == "Reshape" || op_type == "Expand" || op_type == "Slice") {
+          changed |= SetValueTagIfChanged(value_tags, node->input(1).as_string(), "shape");
+        } else if (op_type == "Squeeze" || op_type == "Unsqueeze" || op_type == "ReduceSum" ||
+                   op_type == "ReduceMean" || op_type == "ReduceMax" || op_type == "ReduceMin") {
+          changed |= SetValueTagIfChanged(value_tags, node->input(1).as_string(), "axes");
+        }
       }
-    }
-    if (op_type == "Slice") {
-      if (node->input().size() > 2) {
-        SetValueTag(value_tags, node->input(2).as_string(), "shape");
+      if (op_type == "Slice") {
+        if (node->input().size() > 2) {
+          changed |= SetValueTagIfChanged(value_tags, node->input(2).as_string(), "shape");
+        }
+        if (node->input().size() > 3) {
+          changed |= SetValueTagIfChanged(value_tags, node->input(3).as_string(), "axes");
+        }
+        if (node->input().size() > 4) {
+          changed |= SetValueTagIfChanged(value_tags, node->input(4).as_string(), "shape");
+        }
       }
-      if (node->input().size() > 3) {
-        SetValueTag(value_tags, node->input(3).as_string(), "axes");
-      }
-      if (node->input().size() > 4) {
-        SetValueTag(value_tags, node->input(4).as_string(), "shape");
-      }
-    }
 
-    std::string inherited_tag;
-    if (!node->input().empty()) {
-      auto it = value_tags.find(node->input(0).as_string());
-      if (it != value_tags.end()) {
-        inherited_tag = it->second;
+      std::string inherited_tag;
+      if (!node->input().empty()) {
+        auto it = value_tags.find(node->input(0).as_string());
+        if (it != value_tags.end()) {
+          inherited_tag = it->second;
+        }
       }
-    }
-    const std::string node_tag = explicit_output_tag.empty() ? inherited_tag : explicit_output_tag;
-    node_tags.push_back(node_tag);
-    if (!node_tag.empty()) {
-      for (int o = 0; o < node->output().size(); ++o) {
-        SetValueTag(value_tags, node->output(o).as_string(), node_tag);
+      const std::string node_tag =
+          explicit_output_tag.empty() ? inherited_tag : explicit_output_tag;
+      if (node_tags[n] != node_tag) {
+        node_tags[n] = node_tag;
+        changed = true;
+      }
+      if (!node_tag.empty()) {
+        for (int o = 0; o < node->output().size(); ++o) {
+          changed |= SetValueTagIfChanged(value_tags, node->output(o).as_string(), node_tag);
+        }
+      }
+
+      if (!node->input().empty()) {
+        std::string output_tag;
+        for (int o = 0; o < node->output().size(); ++o) {
+          auto it = value_tags.find(node->output(o).as_string());
+          if (it != value_tags.end()) {
+            output_tag = it->second;
+            break;
+          }
+        }
+        if (!output_tag.empty()) {
+          changed |= SetValueTagIfChanged(value_tags, node->input(0).as_string(), output_tag);
+        }
       }
     }
   }

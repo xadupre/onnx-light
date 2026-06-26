@@ -87,6 +87,19 @@ class TestValueTags(unittest.TestCase):
         write_value_and_node_tags_to_metadata(function)
         self.assertIn(VALUE_TAGS_METADATA_KEY, _meta_dict(function))
 
+    def test_reshape_shape_tag_propagates_backward(self):
+        from onnx_light.onnx import helper
+
+        nodes = [
+            helper.make_node("Shape", ["X"], ["S0"]),
+            helper.make_node("Identity", ["S0"], ["S1"]),
+            helper.make_node("Reshape", ["X", "S1"], ["Y"]),
+        ]
+        value_tags, node_tags = infer_value_and_node_tags(nodes)
+        self.assertEqual(value_tags["S1"], "shape")
+        self.assertEqual(value_tags["S0"], "shape")
+        self.assertEqual(node_tags[1], "shape")
+
 
 if __name__ == "__main__":
     unittest.main()

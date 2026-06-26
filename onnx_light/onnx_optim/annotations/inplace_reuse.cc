@@ -247,6 +247,10 @@ std::optional<InPlaceReuseKind> ClassifyReuse(const OptimTensor &out, const Opti
   return std::nullopt;
 }
 
+// Recursively collects the values that ``graph`` captures from outside its own
+// scope. Inputs/initializers/intermediates local to ``graph`` are excluded, as
+// are names already produced by ancestor subgraphs tracked in
+// ``ancestor_locals``.
 void CollectGraphExternalInputs(const GraphProto &graph, std::vector<std::string> &out,
                                 std::unordered_set<std::string> &seen,
                                 const std::unordered_set<std::string> &ancestor_locals) {
@@ -298,6 +302,8 @@ void CollectGraphExternalInputs(const GraphProto &graph, std::vector<std::string
   }
 }
 
+// Collects every unique value a node depends on at runtime: its direct inputs
+// plus any external values captured by nested GRAPH / GRAPHS attributes.
 std::vector<std::string> CollectNodeInputs(const NodeProto &node) {
   std::vector<std::string> out;
   std::unordered_set<std::string> seen;

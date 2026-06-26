@@ -419,7 +419,7 @@ class TestInPlaceReuse(ExtTestCase):
         self.assertEqual(mem5["intermediates"], {"": "20*N"})
         self.assertEqual(mem5["outputs"], {})
 
-    def test_inplace_context_memory_ignores_subgraph_local_shadowing(self):
+    def test_if_subgraph_local_shadowing_excluded_from_captures(self):
         x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [3, 4])
         cond = oh.make_tensor_value_info("cond", onnxl.TensorProto.BOOL, [])
         y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [3, 4])

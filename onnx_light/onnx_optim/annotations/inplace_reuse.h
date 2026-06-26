@@ -129,6 +129,43 @@ constexpr const char *kReleaseAfterMetadataKey = "onnx_light.release_after";
 constexpr const char *kReleaseAfterShapeTagMetadataKey = "onnx_light.release_after_shape_tag";
 
 /**
+ * Per-node memory snapshot computed by :cpp:class:`ComputeContext`.
+ *
+ * The snapshot represents the memory footprint visible while one node runs:
+ *
+ *   - ``already_allocated_bytes`` is the sum of the buffers already alive before
+ *     the node starts (declared inputs, initializers and still-live
+ *     intermediates), after shape inference and lifetime analysis;
+ *   - ``output_allocation_bytes`` is the additional memory that must be
+ *     allocated for the node's outputs because no eligible in-place reuse
+ *     opportunity covers them;
+ *   - ``total_bytes`` is their sum.
+ *
+ * Each source bucket is also split by value tag (``"shape"``, ``"axes"``,
+ * ``"weight"``, or the empty string for untagged values). The ``outputs`` map
+ * only counts the extra allocations performed at this node; outputs that reuse
+ * an existing input buffer in place contribute no additional bytes there.
+ */
+struct NodeMemoryProfile {
+  int64_t total_bytes = 0;
+  int64_t already_allocated_bytes = 0;
+  int64_t output_allocation_bytes = 0;
+  std::unordered_map<std::string, int64_t> inputs;
+  std::unordered_map<std::string, int64_t> initializers;
+  std::unordered_map<std::string, int64_t> intermediates;
+  std::unordered_map<std::string, int64_t> outputs;
+
+  bool operator==(const NodeMemoryProfile &other) const noexcept {
+    return total_bytes == other.total_bytes &&
+           already_allocated_bytes == other.already_allocated_bytes &&
+           output_allocation_bytes == other.output_allocation_bytes && inputs == other.inputs &&
+           initializers == other.initializers && intermediates == other.intermediates &&
+           outputs == other.outputs;
+  }
+  bool operator!=(const NodeMemoryProfile &other) const noexcept { return !(*this == other); }
+};
+
+/**
  * Holds the in-place reuse opportunities computed for a graph, mirroring the
  * way :cpp:class:`onnx_optim::shapes::ShapesContext` holds the inferred
  * descriptors.
@@ -217,6 +254,17 @@ public:
     return release_after_shape_tagged_.at(node_index);
   }
 
+  /// Read-only access to the per-node memory snapshots. Entry ``i`` describes
+  /// the memory footprint observed while running ``graph.node()[i]``.
+  const std::vector<NodeMemoryProfile> &Memory() const noexcept { return memory_; }
+
+  /// Memory snapshot for the node at ``node_index``.
+  ///
+  /// @throws std::out_of_range when ``node_index`` is out of bounds.
+  const NodeMemoryProfile &NodeMemory(std::size_t node_index) const {
+    return memory_.at(node_index);
+  }
+
   /**
    * Records the computed opportunities into each node's ``metadata_props`` of
    * ``graph`` under :cpp:var:`kInPlaceReuseMetadataKey`,
@@ -258,12 +306,14 @@ public:
     reuse_.clear();
     release_after_.clear();
     release_after_shape_tagged_.clear();
+    memory_.clear();
   }
 
 private:
   std::vector<std::vector<InPlaceReuse>> reuse_;
   std::vector<std::vector<std::string>> release_after_;
   std::vector<std::vector<std::string>> release_after_shape_tagged_;
+  std::vector<NodeMemoryProfile> memory_;
 };
 
 /**

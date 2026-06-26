@@ -18,6 +18,50 @@ namespace annotations {
 
 namespace {
 
+enum class MemoryValueSource : uint8_t {
+  kInput,
+  kInitializer,
+  kIntermediate,
+};
+
+struct LiveAllocation {
+  int64_t bytes = 0;
+  MemoryValueSource source = MemoryValueSource::kIntermediate;
+  std::string tag;
+};
+
+std::string ValueTag(const std::unordered_map<std::string, std::string> &value_tags,
+                     const std::string &name) {
+  auto it = value_tags.find(name);
+  if (it == value_tags.end()) {
+    return {};
+  }
+  return it->second;
+}
+
+void AddTaggedBytes(std::unordered_map<std::string, int64_t> &dst, const std::string &tag,
+                    int64_t bytes) {
+  if (bytes <= 0) {
+    return;
+  }
+  dst[tag] += bytes;
+}
+
+void AddLiveAllocation(NodeMemoryProfile &profile, const LiveAllocation &alloc) {
+  profile.already_allocated_bytes += alloc.bytes;
+  switch (alloc.source) {
+  case MemoryValueSource::kInput:
+    AddTaggedBytes(profile.inputs, alloc.tag, alloc.bytes);
+    break;
+  case MemoryValueSource::kInitializer:
+    AddTaggedBytes(profile.initializers, alloc.tag, alloc.bytes);
+    break;
+  case MemoryValueSource::kIntermediate:
+    AddTaggedBytes(profile.intermediates, alloc.tag, alloc.bytes);
+    break;
+  }
+}
+
 // Returns whether two descriptors are byte-for-byte interchangeable: same
 // element type and identical shape (rank and every dimension, concrete or
 // symbolic). Equal descriptors imply equal element counts and therefore
@@ -161,6 +205,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
   const int num_nodes = graph.node().size();
   std::vector<std::vector<InPlaceReuse>> result(static_cast<std::size_t>(num_nodes));
   std::vector<std::vector<std::string>> release_after(static_cast<std::size_t>(num_nodes));
+  std::vector<NodeMemoryProfile> memory(static_cast<std::size_t>(num_nodes));
 
   // Names whose buffers must never be overwritten in place: declared graph
   // inputs, initializers and declared graph outputs are owned by the caller
@@ -191,6 +236,10 @@ void ComputeContext::ComputeInPlaceReuseGraph(
   std::unordered_map<std::string, int> producer;
   std::unordered_map<std::string, int> last_use;
   std::vector<std::vector<std::string>> referenced_per_node(static_cast<std::size_t>(num_nodes));
+  std::unordered_set<std::string> graph_outputs;
+  for (int i = 0; i < graph.output().size(); ++i) {
+    graph_outputs.insert(graph.output()[i].name().as_string());
+  }
   if (allow_input_overwrite) {
     for (const std::string &name : graph_inputs) {
       if (!name.empty()) {
@@ -313,8 +362,112 @@ void ComputeContext::ComputeInPlaceReuseGraph(
               });
   }
 
+  std::unordered_map<std::string, LiveAllocation> alive;
+  for (int i = 0; i < graph.initializer().size(); ++i) {
+    const std::string name = graph.initializer()[i].name().as_string();
+    if (name.empty() || !ctx.Has(name)) {
+      continue;
+    }
+    const std::optional<int64_t> bytes = ByteSize(ctx.Get(name));
+    if (!bytes.has_value()) {
+      continue;
+    }
+    alive[name] =
+        LiveAllocation{*bytes, MemoryValueSource::kInitializer, ValueTag(value_tags, name)};
+  }
+  for (int i = 0; i < graph.input().size(); ++i) {
+    const std::string name = graph.input()[i].name().as_string();
+    if (name.empty() || alive.find(name) != alive.end() || !ctx.Has(name)) {
+      continue;
+    }
+    const std::optional<int64_t> bytes = ByteSize(ctx.Get(name));
+    if (!bytes.has_value()) {
+      continue;
+    }
+    alive[name] = LiveAllocation{*bytes, MemoryValueSource::kInput, ValueTag(value_tags, name)};
+  }
+
+  for (int i = 0; i < num_nodes; ++i) {
+    NodeMemoryProfile &profile = memory[static_cast<std::size_t>(i)];
+    for (const auto &kv : alive) {
+      AddLiveAllocation(profile, kv.second);
+    }
+
+    const NodeProto &node = graph.node()[i];
+    std::unordered_map<int, int> reuse_by_output;
+    for (const InPlaceReuse &reuse : result[static_cast<std::size_t>(i)]) {
+      reuse_by_output[static_cast<int>(reuse.output_index)] = static_cast<int>(reuse.input_index);
+    }
+
+    for (int o = 0; o < node.output_size(); ++o) {
+      if (reuse_by_output.find(o) != reuse_by_output.end()) {
+        continue;
+      }
+      const std::string out_name = node.output(o).as_string();
+      if (out_name.empty() || !ctx.Has(out_name)) {
+        continue;
+      }
+      const std::optional<int64_t> out_bytes = ByteSize(ctx.Get(out_name));
+      if (!out_bytes.has_value()) {
+        continue;
+      }
+      profile.output_allocation_bytes += *out_bytes;
+      AddTaggedBytes(profile.outputs, ValueTag(value_tags, out_name), *out_bytes);
+    }
+    profile.total_bytes = profile.already_allocated_bytes + profile.output_allocation_bytes;
+
+    std::vector<std::pair<std::string, LiveAllocation>> outputs_to_add;
+    outputs_to_add.reserve(static_cast<std::size_t>(node.output_size()));
+    std::unordered_set<std::string> inputs_reused_from_graph_input;
+    for (int o = 0; o < node.output_size(); ++o) {
+      const std::string out_name = node.output(o).as_string();
+      if (out_name.empty() || !ctx.Has(out_name)) {
+        continue;
+      }
+      int64_t alloc_bytes = 0;
+      auto reuse_it = reuse_by_output.find(o);
+      if (reuse_it != reuse_by_output.end()) {
+        const std::string in_name = node.input(reuse_it->second).as_string();
+        auto alive_it = alive.find(in_name);
+        if (alive_it == alive.end()) {
+          continue;
+        }
+        alloc_bytes = alive_it->second.bytes;
+        if (graph_inputs.count(in_name) != 0) {
+          inputs_reused_from_graph_input.insert(in_name);
+        }
+      } else {
+        const std::optional<int64_t> out_bytes = ByteSize(ctx.Get(out_name));
+        if (!out_bytes.has_value()) {
+          continue;
+        }
+        alloc_bytes = *out_bytes;
+      }
+      const auto use_it = last_use.find(out_name);
+      const bool survives_after_node =
+          graph_outputs.count(out_name) != 0 || (use_it != last_use.end() && use_it->second > i);
+      if (!survives_after_node) {
+        continue;
+      }
+      outputs_to_add.emplace_back(out_name,
+                                  LiveAllocation{alloc_bytes, MemoryValueSource::kIntermediate,
+                                                 ValueTag(value_tags, out_name)});
+    }
+
+    for (const std::string &name : release_after[static_cast<std::size_t>(i)]) {
+      alive.erase(name);
+    }
+    for (const std::string &name : inputs_reused_from_graph_input) {
+      alive.erase(name);
+    }
+    for (auto &entry : outputs_to_add) {
+      alive[entry.first] = std::move(entry.second);
+    }
+  }
+
   reuse_ = std::move(result);
   release_after_ = std::move(release_after);
+  memory_ = std::move(memory);
 
   // Populate the shape-tagged subset from value_tags (when provided).
   // Only allocate the per-node sub-vectors when value_tags is actually non-empty

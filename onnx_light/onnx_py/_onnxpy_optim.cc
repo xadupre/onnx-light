@@ -1091,12 +1091,75 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
         return os.str();
       });
 
+  nb::class_<onnx_annotations::NodeMemoryProfile>(
+      shape_mod, "NodeMemoryProfile",
+      "Per-node memory snapshot computed by :class:`ComputeContext`. "
+      "``already_allocated_bytes`` counts the live buffers present before the node runs; "
+      "``output_allocation_bytes`` counts the extra output buffers that must be allocated "
+      "because no in-place reuse opportunity covers them; ``total_bytes`` is their sum.")
+      .def(nb::init<>())
+      .def_rw("total_bytes", &onnx_annotations::NodeMemoryProfile::total_bytes)
+      .def_rw("already_allocated_bytes",
+              &onnx_annotations::NodeMemoryProfile::already_allocated_bytes)
+      .def_rw("output_allocation_bytes",
+              &onnx_annotations::NodeMemoryProfile::output_allocation_bytes)
+      .def_rw("inputs", &onnx_annotations::NodeMemoryProfile::inputs)
+      .def_rw("initializers", &onnx_annotations::NodeMemoryProfile::initializers)
+      .def_rw("intermediates", &onnx_annotations::NodeMemoryProfile::intermediates)
+      .def_rw("outputs", &onnx_annotations::NodeMemoryProfile::outputs)
+      .def(nb::self == nb::self)
+      .def(nb::self != nb::self)
+      .def("__repr__", [](const onnx_annotations::NodeMemoryProfile &m) {
+        std::ostringstream os;
+        os << "NodeMemoryProfile(total_bytes=" << m.total_bytes
+           << ", already_allocated_bytes=" << m.already_allocated_bytes
+           << ", output_allocation_bytes=" << m.output_allocation_bytes << ", inputs={";
+        bool first = true;
+        for (const auto &kv : m.inputs) {
+          if (!first) {
+            os << ", ";
+          }
+          first = false;
+          os << "'" << kv.first << "': " << kv.second;
+        }
+        os << "}, initializers={";
+        first = true;
+        for (const auto &kv : m.initializers) {
+          if (!first) {
+            os << ", ";
+          }
+          first = false;
+          os << "'" << kv.first << "': " << kv.second;
+        }
+        os << "}, intermediates={";
+        first = true;
+        for (const auto &kv : m.intermediates) {
+          if (!first) {
+            os << ", ";
+          }
+          first = false;
+          os << "'" << kv.first << "': " << kv.second;
+        }
+        os << "}, outputs={";
+        first = true;
+        for (const auto &kv : m.outputs) {
+          if (!first) {
+            os << ", ";
+          }
+          first = false;
+          os << "'" << kv.first << "': " << kv.second;
+        }
+        os << "})";
+        return os.str();
+      });
+
   nb::class_<onnx_annotations::ComputeContext>(
       shape_mod, "ComputeContext",
       "Holds the in-place reuse opportunities computed for a graph, mirroring the way "
       "``ShapesContext`` holds inferred descriptors. Populate it with "
       "``compute_inplace_reuse_graph`` (consuming a ``ShapesContext``), then read the result "
-      "through ``reuse`` / ``node_reuse`` or persist it with ``write_to_metadata``.")
+      "through ``reuse`` / ``node_reuse`` / ``memory`` or persist it with "
+      "``write_to_metadata``.")
       .def(nb::init<>())
       .def(
           "compute_inplace_reuse_graph",
@@ -1146,6 +1209,20 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           nb::arg("node_index"),
           "Returns the list of shape-tagged releasable value names for the node at "
           "``node_index``. Raises ``IndexError`` when ``node_index`` is out of bounds.")
+      .def_prop_ro(
+          "memory", [](const onnx_annotations::ComputeContext &self) { return self.Memory(); },
+          "The per-node memory snapshots as a list (one entry per node, same order as "
+          "``graph.node``). Each entry is a :class:`NodeMemoryProfile` describing the live "
+          "input/initializer/intermediate buffers plus the extra output allocation needed by "
+          "that node.")
+      .def(
+          "node_memory",
+          [](const onnx_annotations::ComputeContext &self, std::size_t node_index) {
+            return self.NodeMemory(node_index);
+          },
+          nb::arg("node_index"),
+          "Returns the :class:`NodeMemoryProfile` computed for the node at ``node_index``. "
+          "Raises ``IndexError`` when ``node_index`` is out of bounds.")
       .def(
           "write_to_metadata",
           [](const onnx_annotations::ComputeContext &self, GraphProto &graph) {

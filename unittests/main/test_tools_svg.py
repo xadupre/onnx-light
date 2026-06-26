@@ -133,7 +133,7 @@ class TestSvg(unittest.TestCase):
         self._assert_valid_svg(text)
         self.assertIn("Add", text)
         self.assertIn("Mul", text)
-        self.assertIn("add0", text)
+        self.assertNotIn("add0", text)
         # Distinct fill colours are used per kind of box.
         self.assertIn("#cde4ff", text)  # input
         self.assertIn("#ffe1b3", text)  # output
@@ -209,8 +209,29 @@ class TestSvg(unittest.TestCase):
         text = to_svg(_model(g), include_attributes=True)
         self.assertIn("kernel_shape", text)
         self.assertIn("pads", text)
+        self.assertNotIn(">c0<", text)
         text_no_attr = to_svg(_model(g), include_attributes=False)
         self.assertNotIn("kernel_shape", text_no_attr)
+
+    def test_edge_labels_use_tensor_names(self) -> None:
+        g = _graph(
+            nodes=[
+                _node(
+                    "Identity",
+                    ["very_long_input_name_abcdef"],
+                    ["very_long_output_name_uvwxyz"],
+                    name="very_long_node_name_123456789",
+                )
+            ],
+            inputs=[_vi("very_long_input_name_abcdef", dims=(2,))],
+            outputs=[_vi("very_long_output_name_uvwxyz", dims=(2,))],
+        )
+        text = to_svg(_model(g), include_shapes=True)
+        self._assert_valid_svg(text)
+        self.assertIn("put_name_abcdef · float[2]", text)
+        self.assertIn("put_name_uvwxyz · float[2]", text)
+        self.assertNotIn(">very_long_output_name_uvwxyz<", text)
+        self.assertNotIn(">very_long_node_name_123456789<", text)
 
     def test_inplace(self) -> None:
         g = _graph(
@@ -283,7 +304,6 @@ class TestSvg(unittest.TestCase):
         self.assertIn("a&lt;b", text)
         self.assertIn("c&amp;d", text)
         self.assertIn("e&gt;f", text)
-        self.assertIn("my&quot;node", text)
         self._assert_valid_svg(text)
 
     def test_escape_xml(self) -> None:

@@ -163,6 +163,23 @@ class TestDot(unittest.TestCase):
         text_no_attr = to_dot(_model(g), include_attributes=False)
         self.assertNotIn("kernel_shape", text_no_attr)
 
+    def test_long_names_are_shortened(self) -> None:
+        g = _graph(
+            nodes=[
+                _node(
+                    "Identity",
+                    ["very_long_input_name_abcdef"],
+                    ["very_long_output_name_uvwxyz"],
+                    name="very_long_node_name_123456789",
+                )
+            ],
+            inputs=[_vi("very_long_input_name_abcdef")],
+            outputs=[_vi("very_long_output_name_uvwxyz")],
+        )
+        text = to_dot(_model(g))
+        self.assertIn('label="Identity\\n_name_123456789"', text)
+        self.assertIn('label="put_name_uvwxyz\\nfloat"', text)
+
     def test_inplace(self) -> None:
         g = _graph(
             nodes=[

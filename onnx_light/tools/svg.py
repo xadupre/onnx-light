@@ -36,6 +36,7 @@ from ._proto_utils import (
     _iter,
     _looks_like_graph,
     _node_metadata_value,
+    _short_display_name,
     _s,
 )
 
@@ -74,6 +75,23 @@ _XML_ESCAPE = {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apo
 def _escape_xml(text: str) -> str:
     """Escapes characters that are special in XML text and attributes."""
     return "".join(_XML_ESCAPE.get(ch, ch) for ch in text)
+
+
+def _edge_label(name: str, shape: str) -> str:
+    """Returns the SVG label for an edge.
+
+    Parameters:
+        name: The tensor name carried by the edge.
+        shape: The optional tensor shape annotation for the edge.
+
+    Returns:
+        A compact label containing the shortened tensor name, optionally
+        followed by the shape annotation.
+    """
+    display_name = _short_display_name(name)
+    if display_name and shape:
+        return f"{display_name} · {shape}"
+    return display_name or shape
 
 
 # ---------------------------------------------------------------------------
@@ -270,7 +288,7 @@ def to_svg_graph(
     for name in input_names:
         if not include_initializers and name in initializer_names:
             continue
-        lines = [name or "(unnamed)"]
+        lines = [_short_display_name(name) or "(unnamed)"]
         shape = shape_lookup.get(name, "")
         if shape:
             lines.append(shape)
@@ -282,7 +300,7 @@ def to_svg_graph(
         for name in sorted(initializer_names):
             if name in input_name_set:
                 continue
-            lines = [name or "(unnamed)"]
+            lines = [_short_display_name(name) or "(unnamed)"]
             shape = initializer_shapes.get(name, "")
             if shape:
                 lines.append(shape)
@@ -293,10 +311,7 @@ def to_svg_graph(
     op_boxes: list[tuple[int, Any]] = []
     for node in _iter(getattr(graph, "node", ())):
         op_type = _s(getattr(node, "op_type", "")) or "Op"
-        raw_name = _s(getattr(node, "name", ""))
         lines = [op_type]
-        if raw_name:
-            lines.append(raw_name)
         if include_attributes:
             attr_names = sorted(_s(a.name) for a in _iter(getattr(node, "attribute", ())))
             if attr_names:
@@ -328,9 +343,8 @@ def to_svg_graph(
             src = producer.get(inp_name)
             if src is None:
                 continue
-            label = ""
-            if include_shapes:
-                label = shape_lookup.get(inp_name) or initializer_shapes.get(inp_name, "")
+            shape = shape_lookup.get(inp_name) or initializer_shapes.get(inp_name, "")
+            label = _edge_label(inp_name, shape if include_shapes else "")
             edges.append((src, box_id, label))
 
     # Output boxes and their incoming edges.
@@ -338,14 +352,12 @@ def to_svg_graph(
         name = _s(value_info.name)
         if not name:
             continue
-        lines = [name]
         shape = shape_lookup.get(name, "")
-        if shape:
-            lines.append(shape)
+        lines = [shape or "output"]
         box = new_box("output", lines, value_tags.get(name, ""))
         src = producer.get(name)
         if src is not None:
-            edges.append((src, box.id, shape if include_shapes else ""))
+            edges.append((src, box.id, _edge_label(name, shape if include_shapes else "")))
 
     _assign_layers(boxes, edges)
     _minimize_crossings(boxes, edges)

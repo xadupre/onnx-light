@@ -32,6 +32,7 @@ from ._proto_utils import (
     _iter,
     _looks_like_graph,
     _node_metadata_value,
+    _short_display_name,
     _s,
 )
 
@@ -304,7 +305,7 @@ def to_dot_graph(
         if not include_initializers and name in initializer_names:
             continue
         node_id = tensor_ids.get(name)
-        label_parts: list[str] = [name or "(unnamed)"]
+        label_parts: list[str] = [_short_display_name(name) or "(unnamed)"]
         if include_shapes and shape_lookup.get(name):
             label_parts.append(shape_lookup[name])
         label = "\n".join(label_parts)
@@ -319,7 +320,7 @@ def to_dot_graph(
             if name in input_name_set:
                 continue
             node_id = tensor_ids.get(name)
-            label_parts = [name or "(unnamed)"]
+            label_parts = [_short_display_name(name) or "(unnamed)"]
             if include_shapes and initializer_shapes.get(name):
                 label_parts.append(initializer_shapes[name])
             label = "\n".join(label_parts)
@@ -334,7 +335,7 @@ def to_dot_graph(
 
         label_parts = [op_type]
         if raw_name:
-            label_parts.append(raw_name)
+            label_parts.append(_short_display_name(raw_name))
         if include_attributes:
             attr_names = [_s(a.name) for a in _iter(getattr(node, "attribute", ()))]
             if attr_names:
@@ -381,7 +382,7 @@ def to_dot_graph(
         if not name:
             continue
         node_id = tensor_ids.get(name)
-        label_parts = [name]
+        label_parts = [_short_display_name(name)]
         if include_shapes and shape_lookup.get(name):
             label_parts.append(shape_lookup[name])
         label = "\n".join(label_parts)

@@ -100,7 +100,7 @@ class TestValueTags(unittest.TestCase):
         self.assertEqual(value_tags["S0"], "shape")
         self.assertEqual(node_tags[1], "shape")
 
-    def test_constant_shape_tensor_does_not_loop(self):
+    def test_constant_feeding_reshape_shape_input(self):
         from onnx_light.onnx import TensorProto, helper
 
         nodes = [

@@ -100,6 +100,16 @@ class TestValueTags(unittest.TestCase):
         self.assertEqual(value_tags["S0"], "shape")
         self.assertEqual(node_tags[1], "shape")
 
+    def test_conflicting_shape_axes_input_tag_converges(self):
+        from onnx_light.onnx import helper
+
+        nodes = [
+            helper.make_node("Reshape", ["X", "IDX"], ["A"]),
+            helper.make_node("ReduceSum", ["A", "IDX"], ["Y"]),
+        ]
+        value_tags, _ = infer_value_and_node_tags(nodes)
+        self.assertEqual(value_tags["IDX"], "shape")
+
     def test_constant_feeding_reshape_shape_input(self):
         from onnx_light.onnx import TensorProto, helper
 

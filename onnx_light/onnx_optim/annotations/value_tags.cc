@@ -62,6 +62,19 @@ std::string NormalizeValueTag(std::string_view tag) {
   return {};
 }
 
+int ValueTagPriority(std::string_view tag) {
+  if (tag == "shape") {
+    return 3;
+  }
+  if (tag == "axes") {
+    return 2;
+  }
+  if (tag == "weight") {
+    return 1;
+  }
+  return 0;
+}
+
 bool IsFloatRank2Tensor(const ValueInfoProto &value) {
   if (!value.has_type() || !value.type().has_tensor_type()) {
     return false;
@@ -90,7 +103,7 @@ bool TrySetValueTag(std::unordered_map<std::string, std::string> &value_tags,
       if (it->second == norm) {
         return false;
       }
-      if (norm == "weight" && it->second != "weight") {
+      if (ValueTagPriority(norm) <= ValueTagPriority(it->second)) {
         return false;
       }
     }

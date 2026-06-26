@@ -7,6 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### New Features
 
+- Show node indexes in `pretty_onnx` graph output ([#3031](https://github.com/xadupre/onnx-light/pull/3031))
+- Add `--token` support to `fillshape` for binding symbolic dimension tokens to ranges ([#3028](https://github.com/xadupre/onnx-light/pull/3028))
+- Add `include_release` option to `to_svg` and `to_mermaid` ([#3020](https://github.com/xadupre/onnx-light/pull/3020))
+- Add `fillshape --release-info` to emit release metadata independently ([#3019](https://github.com/xadupre/onnx-light/pull/3019))
+- Add verbose progress output for `fillshape` execution ([#3012](https://github.com/xadupre/onnx-light/pull/3012))
+- Expose random input generation as `onnx_light.onnx.tools.make_random_input` ([#3009](https://github.com/xadupre/onnx-light/pull/3009))
+- Add `Logger` to `onnx_helpers` ([#2999](https://github.com/xadupre/onnx-light/pull/2999))
+- Add `dim_ranges_from_expressions` to infer dimension ranges from equality constraints ([#2988](https://github.com/xadupre/onnx-light/pull/2988))
 - Add C++/nanobind shape, axes, and weight metadata tagging and tag-aware Mermaid/SVG rendering ([#2959](https://github.com/xadupre/onnx-light/pull/2959))
 - Add runtime progress output for verbose `ReferenceEvaluator` execution ([#2961](https://github.com/xadupre/onnx-light/pull/2961))
 - Add `run` subcommand to generate random inputs and execute a model from the CLI ([#2956](https://github.com/xadupre/onnx-light/pull/2956))
@@ -24,6 +32,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Improvements
 
+- Align floor-division simplification with Python `//` semantics ([#3026](https://github.com/xadupre/onnx-light/pull/3026))
+- Propagate Reshape shape-tag metadata backward through producer chains ([#3024](https://github.com/xadupre/onnx-light/pull/3024))
+- Reuse the core shape-inference API for `fillshape` shape-tag metadata writing ([#3022](https://github.com/xadupre/onnx-light/pull/3022))
+- Seed `weight` tags for rank-2 `FLOAT` graph inputs in shape-tag inference ([#3021](https://github.com/xadupre/onnx-light/pull/3021))
+- Fix empty-axis broadcasting and add half-precision `RMSNormalization` support ([#3018](https://github.com/xadupre/onnx-light/pull/3018))
+- Extend `ComputeContext` with shape-tag release info ([#3017](https://github.com/xadupre/onnx-light/pull/3017))
+- Allow Transpose in-place reuse detection when storage size is equal ([#3015](https://github.com/xadupre/onnx-light/pull/3015))
+- Move tiny external-tensor inlining from `fillshape` into `ParseOptions` ([#3011](https://github.com/xadupre/onnx-light/pull/3011))
+- Move `inplace_reuse` and value-tag helpers into `onnx_optim.annotations` ([#3007](https://github.com/xadupre/onnx-light/pull/3007))
+- Show release, in-place, and shape-tag annotations in `fillshape --show` output ([#3005](https://github.com/xadupre/onnx-light/pull/3005))
+- Fix symbolic shape inference for `Reshape` shapes built from `Unsqueeze(Gather(Shape(...)))` ([#3003](https://github.com/xadupre/onnx-light/pull/3003))
+- Simplify nested floor divisions such as `x//5//2` into `x//10` ([#3001](https://github.com/xadupre/onnx-light/pull/3001))
 - Slice shape inference now emits symbolic expressions instead of fresh names ([#2954](https://github.com/xadupre/onnx-light/pull/2954))
 - Simplify divisible additive offsets for floor and exact division in expressions ([#2950](https://github.com/xadupre/onnx-light/pull/2950))
 - Improve `to_svg` layout: shorten edges and reduce crossings ([#2932](https://github.com/xadupre/onnx-light/pull/2932))

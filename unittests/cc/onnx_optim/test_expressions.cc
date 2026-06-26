@@ -439,6 +439,7 @@ TEST(ExactDiv, Simplify_cancel_common_factor) {
   EXPECT_EQ(get_str(simplify_expression("(2*H)/:2")), "H");
   EXPECT_EQ(get_str(simplify_expression("(3*H)/:3")), "H");
   EXPECT_EQ(get_str(simplify_expression("(batch*seq)/:seq")), "batch");
+  EXPECT_EQ(get_int(simplify_expression("time*1024*batch/:(time*64*batch)")), 16);
   EXPECT_EQ(get_str(simplify_expression("(1024*a)/:2")), "512*a");
   EXPECT_EQ(get_str(simplify_expression("(sequence-10)/:5")), "sequence/:5-2");
   EXPECT_EQ(get_str(simplify_expression("(sequence+10)/:5")), "sequence/:5+2");

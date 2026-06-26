@@ -165,7 +165,7 @@ def evaluate_expression(expression: str, context: "dict[str, int]") -> int:
     via *context*, binary operators ``+``, ``-``, ``*``, ``//`` (floor
     division), ``%`` (modulo), ``^`` (max), ``&`` (min), unary ``-``, and
     the built-in ``CeilToInt(n, div)`` function (ceiling division). Floor
-    division follows Python semantics and rounds toward negative infinity,
+    division follows Python semantics and rounds down toward negative infinity,
     so ``-1//2 == -1``.
 
     :param expression: The expression string to evaluate.

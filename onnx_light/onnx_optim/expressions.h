@@ -452,8 +452,8 @@ ExpressionComparison compare_expressions(const std::string &expr1, const std::st
  *    `^` (max), `&` (min).
  *  - Unary `-`.
  *  - `CeilToInt(n, div)` — ceiling division: `(n % div == 0) ? n/div : n/div + 1`.
- *  - `//` follows Python floor-division semantics and rounds toward negative
- *    infinity, so `-1//2 == -1`.
+ *  - `//` follows Python floor-division semantics and rounds down toward
+ *    negative infinity, so `-1//2 == -1`.
  *
  * @param expr    The expression string to evaluate.
  * @param context A map from variable name to its integer value.

@@ -175,7 +175,7 @@ normalised sum is unparsed back to a string.
 Floor-division semantics
 ------------------------
 
-``//`` uses Python's floor-division semantics: it rounds toward negative
+``//`` uses Python's floor-division semantics: it rounds down toward negative
 infinity, so ``-1//2 == -1`` (unlike C++ integer ``/``, which truncates toward
 zero).  It is also not exact division, so it does **not** commute with
 multiplication.  A constant factor can be cancelled against the denominator

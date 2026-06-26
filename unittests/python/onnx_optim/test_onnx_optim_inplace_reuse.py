@@ -315,7 +315,6 @@ class TestInPlaceReuse(ExtTestCase):
         )
         self.assertEqual(mem0["total_bytes"], 40)
         self.assertEqual(mem0["inputs"], {"": 16})
-        self.assertEqual(mem0["total_bytes"], 40)
         self.assertEqual(mem0["already_allocated_bytes"], 24)
         self.assertEqual(mem0["output_allocation_bytes"], 16)
         self.assertEqual(mem0["inputs"], {"": 16})
@@ -368,7 +367,6 @@ class TestInPlaceReuse(ExtTestCase):
         inplace.compute_inplace_reuse_graph(model.graph, ctx, value_tags={"S": "shape"})
 
         mem0 = inplace.node_memory(0)
-        self.assertEqual(mem0["total_bytes"], "8*N+8")
         self.assertEqual(mem0["outputs"], {"": "4*N"})
         self.assertEqual(mem0["total_bytes"], "8*N+8")
         self.assertEqual(mem0["already_allocated_bytes"], "4*N+8")

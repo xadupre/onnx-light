@@ -419,6 +419,53 @@ class TestInPlaceReuse(ExtTestCase):
         self.assertEqual(mem5["intermediates"], {"": "20*N"})
         self.assertEqual(mem5["outputs"], {})
 
+    def test_if_subgraph_local_shadowing_excluded_from_captures(self):
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [3, 4])
+        cond = oh.make_tensor_value_info("cond", onnxl.TensorProto.BOOL, [])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [3, 4])
+
+        then_branch = oh.make_graph(
+            [oh.make_node("Abs", ["X"], ["A"]), oh.make_node("Identity", ["A"], ["T"])],
+            "then",
+            [],
+            [oh.make_tensor_value_info("T", onnxl.TensorProto.FLOAT, [3, 4])],
+        )
+        else_branch = oh.make_graph(
+            [oh.make_node("Abs", ["X"], ["A"]), oh.make_node("Identity", ["A"], ["E"])],
+            "else",
+            [],
+            [oh.make_tensor_value_info("E", onnxl.TensorProto.FLOAT, [3, 4])],
+        )
+
+        model = self._build_model(
+            [
+                oh.make_node("Abs", ["X"], ["A"]),
+                oh.make_node(
+                    "If", ["cond"], ["B"], then_branch=then_branch, else_branch=else_branch
+                ),
+                oh.make_node("Abs", ["B"], ["Y"]),
+            ],
+            [x, cond],
+            [y],
+        )
+
+        ctx = si.ShapesContext()
+        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, [3, 4]))
+        ctx.set("A", si.OptimTensor(onnxl.TensorProto.FLOAT, [3, 4]))
+        ctx.set("B", si.OptimTensor(onnxl.TensorProto.FLOAT, [3, 4]))
+        ctx.set("Y", si.OptimTensor(onnxl.TensorProto.FLOAT, [3, 4]))
+
+        inplace = si.ComputeContext()
+        inplace.compute_inplace_reuse_graph(model.graph, ctx)
+
+        mem1 = inplace.node_memory(1)
+        self.assertEqual(mem1["already_allocated_bytes"], 48)
+        self.assertEqual(mem1["inputs"], {"": 48})
+        self.assertEqual(mem1["intermediates"], {})
+        self.assertEqual(mem1["output_allocation_bytes"], 48)
+        self.assertEqual(mem1["outputs"], {"": 48})
+        self.assertEqual(mem1["total_bytes"], 96)
+
     def test_inplace_context_write_to_metadata(self):
         nodes = [
             oh.make_node("Abs", ["X"], ["A"]),

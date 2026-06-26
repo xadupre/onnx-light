@@ -99,8 +99,12 @@ memory_profiles = compute_context.memory
 MemoryScalar = int | str
 
 
-def evaluate_dim(value: MemoryScalar, assignment: dict[str, int]) -> int:
-    """Evaluates *value* under *assignment* and returns the result."""
+def evaluate_memory_scalar(value: MemoryScalar, assignment: dict[str, int]) -> int:
+    """Evaluates *value* under *assignment*.
+
+    Returns:
+        The evaluated integer result.
+    """
 
     if isinstance(value, int):
         return value
@@ -108,7 +112,11 @@ def evaluate_dim(value: MemoryScalar, assignment: dict[str, int]) -> int:
 
 
 def format_bucket(bucket: dict[str, MemoryScalar]) -> str:
-    """Formats one tagged memory bucket and returns a stable string rendering."""
+    """Formats one tagged memory bucket.
+
+    Returns:
+        A stable string rendering of the bucket.
+    """
 
     if not bucket:
         return "-"
@@ -197,7 +205,7 @@ evaluated_totals: dict[int, list[int]] = {}
 for assignment in ASSIGNMENTS:
     n_value = assignment["N"]
     totals = [
-        evaluate_dim(profile[NODE_MEMORY_TOTAL_BYTES_KEY], assignment)
+        evaluate_memory_scalar(profile[NODE_MEMORY_TOTAL_BYTES_KEY], assignment)
         for profile in memory_profiles
     ]
     evaluated_totals[n_value] = totals

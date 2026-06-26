@@ -175,10 +175,12 @@ normalised sum is unparsed back to a string.
 Floor-division semantics
 ------------------------
 
-``//`` is *floor* (integer) division, not exact division, so it does **not**
-commute with multiplication.  A constant factor can be cancelled against the
-denominator only when the numerator is provably an exact multiple of it.  This
-explains a pair of expressions that look symmetric but simplify differently:
+``//`` uses Python's floor-division semantics: it rounds down toward negative
+infinity, so ``-1//2 == -1`` (unlike C++ integer ``/``, which truncates toward
+zero).  It is also not exact division, so it does **not** commute with
+multiplication.  A constant factor can be cancelled against the denominator
+only when the numerator is provably an exact multiple of it.  This explains a
+pair of expressions that look symmetric but simplify differently:
 
 * ``(2*H)//2`` **simplifies to** ``H``.  The numerator ``2*H`` is always an
   even multiple of ``2``, so the division is exact for every integer ``H`` and
@@ -193,6 +195,10 @@ In general ``a*(x//a)`` equals ``x`` only when ``x`` is a multiple of ``a``,
 whereas ``(a*x)//a`` always equals ``x``.  The simplifier is conservative and
 never rewrites an expression unless the rewrite is valid for *every* integer
 value of the symbolic dimensions.
+
+Python's negative-value semantics also enable rewrites such as
+``(a-3)//2 + 1 -> (a-1)//2`` because both sides evaluate to ``0`` when
+``a = 2`` and remain equal for every integer ``a``.
 
 ----
 

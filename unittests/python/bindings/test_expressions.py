@@ -136,9 +136,13 @@ class TestSimplifyExpressions(ExtTestCase):
         self.assertEqual("3*(H//3)", simplify_expression("3*(H//3)"))
         self.assertEqual("H", simplify_expression("(3*H)//3"))
         self.assertEqual("2*(n//2)+1", simplify_expression("2*(n//2)+1"))
+        self.assertEqual("(a-1)//2", simplify_expression("(a-3)//2+1"))
         # Concrete counter-example: 2*(3//2) == 2, not 3.
         self.assertEqual(2, evaluate_expression("2*(H//2)", {"H": 3}))
         self.assertEqual(3, evaluate_expression("(2*H)//2", {"H": 3}))
+        self.assertEqual(-1, evaluate_expression("-1//2", {}))
+        self.assertEqual(0, evaluate_expression("(a-3)//2+1", {"a": 2}))
+        self.assertEqual(0, evaluate_expression("(a-1)//2", {"a": 2}))
 
     def test_simplify_function_floordiv_distribute(self):
         self.assertEqual("b+c", simplify_expression("(2*b+2*c)//2"))

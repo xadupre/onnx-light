@@ -164,7 +164,9 @@ def evaluate_expression(expression: str, context: "dict[str, int]") -> int:
     Supports signed 64-bit integer constants, variable references resolved
     via *context*, binary operators ``+``, ``-``, ``*``, ``//`` (floor
     division), ``%`` (modulo), ``^`` (max), ``&`` (min), unary ``-``, and
-    the built-in ``CeilToInt(n, div)`` function (ceiling division).
+    the built-in ``CeilToInt(n, div)`` function (ceiling division). Floor
+    division follows Python semantics and rounds toward negative infinity,
+    so ``-1//2 == -1``.
 
     :param expression: The expression string to evaluate.
     :param context: A mapping from variable name to its integer value.
@@ -179,6 +181,8 @@ def evaluate_expression(expression: str, context: "dict[str, int]") -> int:
         -1
         >>> evaluate_expression("-x", {"x": 5})
         -5
+        >>> evaluate_expression("-1//2", {})
+        -1
         >>> evaluate_expression("CeilToInt(7, 2)", {})
         4
     """

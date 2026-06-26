@@ -983,6 +983,61 @@ public:
   }
 };
 
+class FoldAddIntoFloorDivTransformer : public Transformer {
+public:
+  NodePtr visit_BinOp(std::unique_ptr<BinOp> n) override {
+    n = std::unique_ptr<BinOp>(static_cast<BinOp *>(generic_visit(std::move(n)).release()));
+    if (n->op != BinOpKind::Add && n->op != BinOpKind::Sub)
+      return n;
+
+    const BinOp *fd = nullptr;
+    int64_t outer_constant = 0;
+
+    if (n->op == BinOpKind::Add) {
+      if (const auto *c = dynamic_cast<const Constant *>(n->left.get())) {
+        fd = dynamic_cast<const BinOp *>(n->right.get());
+        outer_constant = c->value;
+      } else if (const auto *c = dynamic_cast<const Constant *>(n->right.get())) {
+        fd = dynamic_cast<const BinOp *>(n->left.get());
+        outer_constant = c->value;
+      }
+    } else if (const auto *c = dynamic_cast<const Constant *>(n->right.get())) {
+      fd = dynamic_cast<const BinOp *>(n->left.get());
+      outer_constant = -c->value;
+    }
+
+    if (!fd || fd->op != BinOpKind::FloorDiv)
+      return n;
+
+    const auto *denom = dynamic_cast<const Constant *>(fd->right.get());
+    if (!denom || denom->value == 0)
+      return n;
+
+    NodePtr symbolic;
+    int64_t inner_offset = 0;
+    split_symbolic_and_offset(*fd->left, symbolic, inner_offset);
+    int64_t shifted_offset = inner_offset + outer_constant * denom->value;
+    if (shifted_offset % denom->value == 0)
+      return n;
+
+    NodePtr numerator;
+    if (is_constant_zero(*symbolic)) {
+      numerator = std::make_unique<Constant>(shifted_offset);
+    } else if (shifted_offset > 0) {
+      numerator = std::make_unique<BinOp>(std::move(symbolic), BinOpKind::Add,
+                                          std::make_unique<Constant>(shifted_offset));
+    } else if (shifted_offset < 0) {
+      numerator = std::make_unique<BinOp>(std::move(symbolic), BinOpKind::Sub,
+                                          std::make_unique<Constant>(-shifted_offset));
+    } else {
+      numerator = std::move(symbolic);
+    }
+
+    return std::make_unique<BinOp>(std::move(numerator), BinOpKind::FloorDiv,
+                                   std::make_unique<Constant>(denom->value));
+  }
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 // NestedFloorDivTransformer
 // Simplifies (x // a) // b → x // (a * b) when both a and b are positive
@@ -1518,6 +1573,7 @@ static NodePtr apply_pipeline(NodePtr node) {
   MulDivCancellerTransformer muldiv_tr;
   ExactMulDivConstantFolderTransformer fold_tr;
   DistributeFloorDivOverAddTransformer distrib_tr;
+  FoldAddIntoFloorDivTransformer fold_add_floordiv_tr;
   NestedFloorDivTransformer nested_fd_tr;
   MaxToXorTransformer max_tr;
   ReorderCommutativeOpsTransformer reorder_tr;
@@ -1534,6 +1590,7 @@ static NodePtr apply_pipeline(NodePtr node) {
     node = nested_fd_tr.visit(std::move(node));
     node = fd_ring_tr.visit(std::move(node));
     node = distrib_tr.visit(std::move(node));
+    node = fold_add_floordiv_tr.visit(std::move(node));
     node = max_tr.visit(std::move(node));
     // SimplifyParensTransformer is a no-op; omitted
     node = reorder_tr.visit(std::move(node));
@@ -1673,7 +1730,7 @@ static int64_t eval_node(const Node &node, const std::unordered_map<std::string,
     case BinOpKind::FloorDiv:
       if (r == 0)
         throw std::runtime_error("Division by zero in expression '" + expr + "'");
-      return l / r;
+      return floor_div_i64(l, r);
     case BinOpKind::ExactDiv:
       if (r == 0)
         throw std::runtime_error("Division by zero in expression '" + expr + "'");

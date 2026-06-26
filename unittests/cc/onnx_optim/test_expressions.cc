@@ -133,11 +133,12 @@ TEST(SimplifyExpressions, SimplifyExpression_floordiv_not_exact) {
   EXPECT_EQ(get_str(simplify_expression("3*(H//3)")), "3*(H//3)");
   EXPECT_EQ(get_str(simplify_expression("(3*H)//3")), "H");
   EXPECT_EQ(get_str(simplify_expression("2*(n//2)+1")), "2*(n//2)+1");
-  EXPECT_EQ(get_str(simplify_expression("(a-3)//2+1")), "(a-3)//2+1");
+  EXPECT_EQ(get_str(simplify_expression("(a-3)//2+1")), "(a-1)//2");
   // Concrete counter-example: 2*(3//2) == 2, not 3.
   EXPECT_EQ(evaluate_expression("2*(H//2)", {{"H", 3}}), 2);
   EXPECT_EQ(evaluate_expression("(2*H)//2", {{"H", 3}}), 3);
-  EXPECT_EQ(evaluate_expression("(a-3)//2+1", {{"a", 2}}), 1);
+  EXPECT_EQ(evaluate_expression("-1//2", {}), -1);
+  EXPECT_EQ(evaluate_expression("(a-3)//2+1", {{"a", 2}}), 0);
   EXPECT_EQ(evaluate_expression("(a-1)//2", {{"a", 2}}), 0);
 }
 

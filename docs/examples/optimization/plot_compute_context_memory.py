@@ -14,7 +14,7 @@ This example shows how to:
 1. Build a small graph with one symbolic dimension ``N``.
 2. Run shape inference and memory analysis.
 3. Render a table with the symbolic memory expressions for every node.
-4. Evaluate ``total_bytes`` for a few concrete values of ``N`` and plot the
+4. Evaluate ``peak_bytes`` for a few concrete values of ``N`` and plot the
    resulting curves.
 """
 
@@ -52,18 +52,20 @@ defs.register_onnx_operator_set_schema()
 #
 # .. code-block:: none
 #
-#    X : float[N, 4]
-#    W : float[4, 4]
-#    M = MatMul(X, W)     -> float[N, 4]
-#    C = Concat(M, X)     -> float[2*N, 4]
+#    X : float[N, 32]
+#    W : float[32, 32]
+#    M = MatMul(X, W)     -> float[N, 32]
+#    C = Concat(M, X)     -> float[2*N, 32]
 #    S = Shape(C)         -> int64[2]
-#    A = Abs(C)           -> float[2*N, 4]
-#    Z = Reshape(A, S)    -> float[2*N, 4]
+#    A = Abs(C)           -> float[2*N, 32]
+#    Z = Reshape(A, S)    -> float[2*N, 32]
 #
 # ``W`` contributes constant initializer memory, ``Concat`` turns the symbolic
 # leading dimension into ``2*N``, ``S`` is tagged as a shape tensor, and the
 # last two nodes can reuse their input buffers in place. The memory table
 # therefore mixes constant terms, symbolic terms, and zero-allocation steps.
+
+_DIM = 32
 
 model = helper.make_model(
     helper.make_graph(
@@ -75,14 +77,14 @@ model = helper.make_model(
             helper.make_node("Reshape", ["A", "S"], ["Z"]),
         ],
         "compute_context_memory_demo",
-        inputs=[helper.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["N", 4])],
+        inputs=[helper.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["N", _DIM])],
         outputs=[helper.make_tensor_value_info("Z", onnxl.TensorProto.FLOAT, None)],
         initializer=[
             helper.make_tensor(
                 "W",
                 onnxl.TensorProto.FLOAT,
-                [4, 4],
-                [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+                [_DIM, _DIM],
+                [float(i == j) for i in range(_DIM) for j in range(_DIM)],
             )
         ],
     ),
@@ -148,7 +150,7 @@ def format_bucket(bucket: dict[str, MemoryScalar]) -> str:
 #
 # * ``already_allocated`` is the live memory at node entry,
 # * ``output_allocation`` is the fresh allocation still required for outputs,
-# * ``total`` is their sum.
+# * ``peak`` is their sum.
 #
 # The source buckets make it easy to see which bytes come from live inputs,
 # initializers, intermediates, or newly allocated outputs.
@@ -171,27 +173,32 @@ for node_index, node in enumerate(model.graph.node):
     )
 
 print("Symbolic ComputeContext.memory table:")
-print(
-    f"  {'node':<4} {'op':<8} {'already_allocated':>20} {'output_allocation':>20} {'total':>16}"
-)
+print(f"  {'node':<4} {'op':<8} {'already_allocated':>20} {'output_allocation':>20} {'peak':>16}")
 for row in rows:
     print(f"  {row[0]:<4} {row[1]:<8} {row[2]:>20} {row[3]:>20} {row[8]:>16}")
 
-fig, ax = plt.subplots(figsize=(13, 1.6 + 0.35 * len(rows)))
+# Transpose: rows are metrics, columns are nodes.
+_col_labels = [f"{row[0]}:{row[1]}" for row in rows]
+_row_labels = [
+    "already_allocated",
+    "output_allocation",
+    "inputs",
+    "initializers",
+    "intermediates",
+    "outputs",
+    "peak",
+]
+_transposed_rows = [
+    [rows[node_j][metric_i + 2] for node_j in range(len(rows))]
+    for metric_i in range(len(_row_labels))
+]
+
+fig, ax = plt.subplots(figsize=(2.5 + 2.0 * len(_col_labels), 1.6 + 0.5 * len(_row_labels)))
 ax.set_axis_off()
 table = ax.table(
-    cellText=rows,
-    colLabels=[
-        "node",
-        "op",
-        "already_allocated",
-        "output_allocation",
-        "inputs",
-        "initializers",
-        "intermediates",
-        "outputs",
-        "total",
-    ],
+    cellText=_transposed_rows,
+    rowLabels=_row_labels,
+    colLabels=_col_labels,
     loc="center",
     cellLoc="left",
     colLoc="left",
@@ -208,13 +215,13 @@ fig.tight_layout()
 # +++++++++++++++++++++++++++++++++
 #
 # Once concrete values are chosen for ``N``, the symbolic totals become plain
-# integers. Each line below evaluates the same node-wise ``total_bytes`` curve
+# integers. Each line below evaluates the same node-wise ``peak_bytes`` curve
 # under a different assignment.
 
 ASSIGNMENTS = [{"N": 1}, {"N": 8}, {"N": 32}, {"N": 128}]
 node_indices = list(range(len(memory_profiles)))
 
-print("\nEvaluated total_bytes per node:")
+print("\nEvaluated peak_bytes per node:")
 print(f"  {'N':>6} " + " ".join(f"node{i:>2}" for i in node_indices))
 evaluated_totals: dict[int, list[int]] = {}
 for assignment in ASSIGNMENTS:
@@ -233,8 +240,8 @@ for n_value, totals in evaluated_totals.items():
 ax.set_xticks(node_indices)
 ax.set_xticklabels([f"{i}:{node.op_type}" for i, node in enumerate(model.graph.node)])
 ax.set_xlabel("node index")
-ax.set_ylabel("total bytes")
-ax.set_title("Evaluated ComputeContext.total_bytes")
+ax.set_ylabel("peak bytes")
+ax.set_title("Evaluated ComputeContext.peak_bytes")
 ax.grid(True, alpha=0.3)
 ax.legend()
 fig.tight_layout()

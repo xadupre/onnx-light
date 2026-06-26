@@ -247,35 +247,78 @@ std::optional<InPlaceReuseKind> ClassifyReuse(const OptimTensor &out, const Opti
   return std::nullopt;
 }
 
-// Recursively collects every input name referenced by ``node`` — its direct
-// inputs plus any name read inside the bodies of its subgraph attributes
-// (``If``, ``Loop``, ``Scan``, ...). The resulting list preserves first-seen
-// order (deterministic metadata serialization) and deduplicates names via
-// ``seen``.
-void CollectReferencedNames(const NodeProto &node, std::vector<std::string> &out,
-                            std::unordered_set<std::string> &seen) {
-  for (int i = 0; i < node.input_size(); ++i) {
-    const std::string name = node.input(i).as_string();
-    // ``insert`` returns {iterator, inserted}; ``inserted`` is true only for
-    // the first occurrence, which keeps ``out`` deduplicated.
-    if (!name.empty() && seen.insert(name).second) {
+void CollectGraphExternalInputs(const GraphProto &graph, std::vector<std::string> &out,
+                                std::unordered_set<std::string> &seen,
+                                const std::unordered_set<std::string> &outer_produced) {
+  std::unordered_set<std::string> local;
+  for (int i = 0; i < graph.input().size(); ++i) {
+    local.insert(graph.input()[i].name().as_string());
+  }
+  for (int i = 0; i < graph.initializer().size(); ++i) {
+    local.insert(graph.initializer()[i].name().as_string());
+  }
+  for (int i = 0; i < graph.node().size(); ++i) {
+    const NodeProto &nd = graph.node()[i];
+    for (int j = 0; j < nd.output().size(); ++j) {
+      const std::string name = nd.output()[j].as_string();
+      if (!name.empty()) {
+        local.insert(name);
+      }
+    }
+  }
+
+  std::unordered_set<std::string> inner_outer = outer_produced;
+  inner_outer.insert(local.begin(), local.end());
+
+  for (int i = 0; i < graph.node().size(); ++i) {
+    const NodeProto &nd = graph.node()[i];
+    for (int j = 0; j < nd.input().size(); ++j) {
+      const std::string name = nd.input()[j].as_string();
+      if (name.empty() || local.count(name) || outer_produced.count(name)) {
+        continue;
+      }
+      if (seen.insert(name).second) {
+        out.push_back(name);
+      }
+    }
+    for (int a = 0; a < nd.attribute().size(); ++a) {
+      const AttributeProto &attr = nd.attribute()[a];
+      if (attr.type() == AttributeProto::AttributeType::GRAPH && attr.has_g()) {
+        CollectGraphExternalInputs(attr.g(), out, seen, inner_outer);
+      } else if (attr.type() == AttributeProto::AttributeType::GRAPHS) {
+        for (int k = 0; k < attr.graphs().size(); ++k) {
+          CollectGraphExternalInputs(attr.graphs()[k], out, seen, inner_outer);
+        }
+      }
+    }
+  }
+}
+
+std::vector<std::string> CollectNodeInputs(const NodeProto &node) {
+  std::vector<std::string> out;
+  std::unordered_set<std::string> seen;
+  for (int i = 0; i < node.input().size(); ++i) {
+    const std::string name = node.input()[i].as_string();
+    if (name.empty()) {
+      continue;
+    }
+    if (seen.insert(name).second) {
       out.push_back(name);
     }
   }
-  for (int i = 0; i < node.attribute_size(); ++i) {
-    const AttributeProto &attr = node.attribute(i);
-    if (attr.has_g()) {
-      for (int j = 0; j < attr.g().node().size(); ++j) {
-        CollectReferencedNames(attr.g().node()[j], out, seen);
-      }
-    }
-    for (int g = 0; g < attr.graphs().size(); ++g) {
-      const GraphProto &subgraph = attr.graphs()[g];
-      for (int j = 0; j < subgraph.node().size(); ++j) {
-        CollectReferencedNames(subgraph.node()[j], out, seen);
+
+  std::unordered_set<std::string> empty_outer;
+  for (int a = 0; a < node.attribute().size(); ++a) {
+    const AttributeProto &attr = node.attribute()[a];
+    if (attr.type() == AttributeProto::AttributeType::GRAPH && attr.has_g()) {
+      CollectGraphExternalInputs(attr.g(), out, seen, empty_outer);
+    } else if (attr.type() == AttributeProto::AttributeType::GRAPHS) {
+      for (int k = 0; k < attr.graphs().size(); ++k) {
+        CollectGraphExternalInputs(attr.graphs()[k], out, seen, empty_outer);
       }
     }
   }
+  return out;
 }
 
 } // namespace
@@ -332,8 +375,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
   for (int i = 0; i < num_nodes; ++i) {
     const NodeProto &node = graph.node()[i];
     std::vector<std::string> &referenced = referenced_per_node[static_cast<std::size_t>(i)];
-    std::unordered_set<std::string> seen;
-    CollectReferencedNames(node, referenced, seen);
+    referenced = CollectNodeInputs(node);
     for (const std::string &name : referenced) {
       last_use[name] = i;
     }

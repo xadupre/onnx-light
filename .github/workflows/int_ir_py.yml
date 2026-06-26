@@ -58,7 +58,7 @@ jobs:
         working-directory: onnx-light
         run: pip install -C build-dir=build -e .[dev] -v
 
-      - name: Install ir-py (without pulling in onnx)
+      - name: Install ir-py
         working-directory: ir-py
         run: |
           # Install ir-py runtime dependencies except onnx; the USE_ONNX_LIGHT
@@ -68,7 +68,7 @@ jobs:
           pip install expecttest hypothesis packaging parameterized \
             pytest-subtests "pytest>7.1.0" pyyaml onnxruntime safetensors
           # Install ir-py itself without dependencies so onnx is not installed.
-          pip install -e . --no-deps
+          pip install -e .
 
       - name: uninstall onnx
         run: pip uninstall -y onnx

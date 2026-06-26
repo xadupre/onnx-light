@@ -45,10 +45,18 @@ def _s(value: Any) -> str:
 
 
 def _short_display_name(value: Any, max_length: int = 15) -> str:
-    """Returns a shortened display name.
+    """Returns a display name, shortening long names to their trailing characters.
 
     Long names are reduced to their trailing characters so graph renderings stay
     readable while still exposing the most distinguishing suffix.
+
+    Parameters:
+        value: The original value name to shorten for display.
+        max_length: The maximum number of trailing characters to keep.
+
+    Returns:
+        The original name when it already fits, otherwise its trailing
+        ``max_length`` characters.
     """
 
     text = _s(value)

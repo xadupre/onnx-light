@@ -78,7 +78,16 @@ def _escape_xml(text: str) -> str:
 
 
 def _edge_label(name: str, shape: str) -> str:
-    """Returns the SVG label for an edge."""
+    """Returns the SVG label for an edge.
+
+    Parameters:
+        name: The tensor name carried by the edge.
+        shape: The optional tensor shape annotation for the edge.
+
+    Returns:
+        A compact label containing the shortened tensor name, optionally
+        followed by the shape annotation.
+    """
     display_name = _short_display_name(name)
     if display_name and shape:
         return f"{display_name} · {shape}"

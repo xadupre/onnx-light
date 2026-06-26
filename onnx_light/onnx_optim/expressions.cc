@@ -846,6 +846,35 @@ int64_t floor_div_i64(int64_t a, int64_t b) {
   return q;
 }
 
+bool checked_add_i64(int64_t a, int64_t b, int64_t &out) {
+  if ((b > 0 && a > INT64_MAX - b) || (b < 0 && a < INT64_MIN - b))
+    return false;
+  out = a + b;
+  return true;
+}
+
+bool checked_mul_i64(int64_t a, int64_t b, int64_t &out) {
+  if (a == 0 || b == 0) {
+    out = 0;
+    return true;
+  }
+  if (a > 0) {
+    if (b > 0) {
+      if (a > INT64_MAX / b)
+        return false;
+    } else if (b < INT64_MIN / a) {
+      return false;
+    }
+  } else if (b > 0) {
+    if (a < INT64_MIN / b)
+      return false;
+  } else if (a != 0 && b < INT64_MAX / a) {
+    return false;
+  }
+  out = a * b;
+  return true;
+}
+
 /// Returns whether the node represents the constant value zero.
 inline bool is_constant_zero(const Node &n) {
   const auto *c = dynamic_cast<const Constant *>(&n);
@@ -1003,6 +1032,8 @@ public:
       }
     } else if (const auto *c = dynamic_cast<const Constant *>(n->right.get())) {
       fd = dynamic_cast<const BinOp *>(n->left.get());
+      if (c->value == INT64_MIN)
+        return n;
       outer_constant = -c->value;
     }
 
@@ -1016,7 +1047,12 @@ public:
     NodePtr symbolic;
     int64_t inner_offset = 0;
     split_symbolic_and_offset(*fd->left, symbolic, inner_offset);
-    int64_t shifted_offset = inner_offset + outer_constant * denom->value;
+    int64_t outer_shift = 0;
+    if (!checked_mul_i64(outer_constant, denom->value, outer_shift))
+      return n;
+    int64_t shifted_offset = 0;
+    if (!checked_add_i64(inner_offset, outer_shift, shifted_offset))
+      return n;
     // Keep divisible offsets in the q + k form produced by
     // DistributeFloorDivOverAddTransformer. Folding them back into the
     // numerator here would only oscillate between equivalent representations

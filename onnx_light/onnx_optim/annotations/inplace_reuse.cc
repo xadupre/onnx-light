@@ -267,13 +267,16 @@ void CollectGraphExternalInputs(const GraphProto &graph, std::vector<std::string
     }
   }
 
-  std::unordered_set<std::string> inner_outer = outer_produced;
-  inner_outer.insert(local.begin(), local.end());
+  std::unordered_set<std::string> available_names = outer_produced;
+  available_names.insert(local.begin(), local.end());
 
   for (int i = 0; i < graph.node().size(); ++i) {
     const NodeProto &nd = graph.node()[i];
     for (int j = 0; j < nd.input().size(); ++j) {
       const std::string name = nd.input()[j].as_string();
+      // Keep only true captures from an outer scope: skip empty names,
+      // subgraph-local values (graph inputs/initializers/intermediates), and
+      // names already produced by an ancestor scope.
       if (name.empty() || local.count(name) || outer_produced.count(name)) {
         continue;
       }
@@ -284,10 +287,10 @@ void CollectGraphExternalInputs(const GraphProto &graph, std::vector<std::string
     for (int a = 0; a < nd.attribute().size(); ++a) {
       const AttributeProto &attr = nd.attribute()[a];
       if (attr.type() == AttributeProto::AttributeType::GRAPH && attr.has_g()) {
-        CollectGraphExternalInputs(attr.g(), out, seen, inner_outer);
+        CollectGraphExternalInputs(attr.g(), out, seen, available_names);
       } else if (attr.type() == AttributeProto::AttributeType::GRAPHS) {
         for (int k = 0; k < attr.graphs().size(); ++k) {
-          CollectGraphExternalInputs(attr.graphs()[k], out, seen, inner_outer);
+          CollectGraphExternalInputs(attr.graphs()[k], out, seen, available_names);
         }
       }
     }

@@ -249,7 +249,7 @@ std::optional<InPlaceReuseKind> ClassifyReuse(const OptimTensor &out, const Opti
 
 void CollectGraphExternalInputs(const GraphProto &graph, std::vector<std::string> &out,
                                 std::unordered_set<std::string> &seen,
-                                const std::unordered_set<std::string> &outer_produced) {
+                                const std::unordered_set<std::string> &ancestor_locals) {
   std::unordered_set<std::string> local;
   for (int i = 0; i < graph.input().size(); ++i) {
     local.insert(graph.input()[i].name().as_string());
@@ -267,17 +267,18 @@ void CollectGraphExternalInputs(const GraphProto &graph, std::vector<std::string
     }
   }
 
-  std::unordered_set<std::string> available_names = outer_produced;
-  available_names.insert(local.begin(), local.end());
+  std::unordered_set<std::string> visible_locals = ancestor_locals;
+  visible_locals.insert(local.begin(), local.end());
 
   for (int i = 0; i < graph.node().size(); ++i) {
     const NodeProto &nd = graph.node()[i];
     for (int j = 0; j < nd.input().size(); ++j) {
       const std::string name = nd.input()[j].as_string();
       // Keep only true captures from an outer scope: skip empty names,
-      // subgraph-local values (graph inputs/initializers/intermediates), and
-      // names already produced by an ancestor scope.
-      if (name.empty() || local.count(name) || outer_produced.count(name)) {
+      // values local to this subgraph, and names produced by ancestor
+      // subgraphs. Such names are already available within the enclosing
+      // control-flow body and are not captures of the top-level node itself.
+      if (name.empty() || local.count(name) || ancestor_locals.count(name)) {
         continue;
       }
       if (seen.insert(name).second) {
@@ -287,10 +288,10 @@ void CollectGraphExternalInputs(const GraphProto &graph, std::vector<std::string
     for (int a = 0; a < nd.attribute().size(); ++a) {
       const AttributeProto &attr = nd.attribute()[a];
       if (attr.type() == AttributeProto::AttributeType::GRAPH && attr.has_g()) {
-        CollectGraphExternalInputs(attr.g(), out, seen, available_names);
+        CollectGraphExternalInputs(attr.g(), out, seen, visible_locals);
       } else if (attr.type() == AttributeProto::AttributeType::GRAPHS) {
         for (int k = 0; k < attr.graphs().size(); ++k) {
-          CollectGraphExternalInputs(attr.graphs()[k], out, seen, available_names);
+          CollectGraphExternalInputs(attr.graphs()[k], out, seen, visible_locals);
         }
       }
     }

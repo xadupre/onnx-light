@@ -593,6 +593,66 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextNoValueTagsYieldsEmptyShapeTagged) {
   }
 }
 
+TEST(OnnxOptimInPlaceReuse, ComputeEventActionNames) {
+  using onnx_optim::annotations::ComputeEventAction;
+  using onnx_optim::annotations::ComputeEventActionName;
+  EXPECT_STREQ(ComputeEventActionName(ComputeEventAction::kInPlace), "inplace");
+  EXPECT_STREQ(ComputeEventActionName(ComputeEventAction::kRelease), "release");
+  EXPECT_STREQ(ComputeEventActionName(ComputeEventAction::kReleaseShapeTag), "release_shape_tag");
+}
+
+TEST(OnnxOptimInPlaceReuse, ComputeContextDecisionEvents) {
+  GraphProto graph;
+  graph.set_name("g");
+  AddInput(graph, "X", {2, 3});
+  AddOutput(graph, "Y", {2, 3});
+  *graph.add_node() = MakeNode("Abs", {"X"}, {"A"});
+  *graph.add_node() = MakeNode("Shape", {"X"}, {"S"});
+  *graph.add_node() = MakeNode("Reshape", {"A", "S"}, {"Y"});
+
+  ShapesContext ctx;
+  ctx.SetOpsetVersion("", 18);
+  ctx.ComputeShapeGraph(graph);
+
+  ComputeContext inplace;
+  EXPECT_FALSE(inplace.events_enabled());
+  EXPECT_TRUE(inplace.Events().empty());
+  inplace.ComputeInPlaceReuseGraph(graph, ctx, false, {{"S", "shape"}});
+  EXPECT_TRUE(inplace.Events().empty());
+
+  inplace.set_events_enabled(true);
+  inplace.ClearEvents();
+  inplace.ComputeInPlaceReuseGraph(graph, ctx, false, {{"S", "shape"}});
+
+  using onnx_optim::annotations::ComputeEventAction;
+  int inplace_count = 0;
+  int release_count = 0;
+  int shape_release_count = 0;
+  bool found_expected_inplace = false;
+  for (const auto &ev : inplace.Events()) {
+    if (ev.action == ComputeEventAction::kInPlace) {
+      ++inplace_count;
+      if (ev.node_index == 2 && ev.output_index == 0 && ev.input_index == 0 &&
+          ev.kind == InPlaceReuseKind::kEqual) {
+        found_expected_inplace = true;
+      }
+    } else if (ev.action == ComputeEventAction::kRelease) {
+      ++release_count;
+    } else if (ev.action == ComputeEventAction::kReleaseShapeTag) {
+      ++shape_release_count;
+      EXPECT_EQ(ev.name, "S");
+      EXPECT_EQ(ev.node_index, 2);
+    }
+  }
+  EXPECT_EQ(inplace_count, 1);
+  EXPECT_EQ(release_count, 2);
+  EXPECT_EQ(shape_release_count, 1);
+  EXPECT_TRUE(found_expected_inplace);
+
+  inplace.ClearEvents();
+  EXPECT_TRUE(inplace.Events().empty());
+}
+
 // WriteInPlaceReuseToMetadata free function also accepts value_tags and writes
 // kReleaseAfterShapeTagMetadataKey accordingly.
 TEST(OnnxOptimInPlaceReuse, WriteInPlaceReuseToMetadataWithShapeTags) {

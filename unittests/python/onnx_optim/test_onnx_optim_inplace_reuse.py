@@ -628,6 +628,70 @@ class TestInPlaceReuse(ExtTestCase):
         self.assertEqual(len(inplace), 0)
         self.assertEqual(inplace.release_after_shape_tagged, [])
 
+    def test_compute_event_action_enum_values(self):
+        self.assertEqual(int(si.ComputeEventAction.kInPlace), 0)
+        self.assertEqual(int(si.ComputeEventAction.kRelease), 1)
+        self.assertEqual(int(si.ComputeEventAction.kReleaseShapeTag), 2)
+
+    def test_compute_context_decision_events(self):
+        nodes = [
+            oh.make_node("Abs", ["X"], ["A"]),
+            oh.make_node("Shape", ["X"], ["S"]),
+            oh.make_node("Reshape", ["A", "S"], ["Y"]),
+        ]
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 3])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2, 3])
+        model = self._build_model(nodes, [x], [y])
+
+        ctx = si.ShapesContext()
+        si.compute_shape_model(ctx, model)
+
+        inplace = si.ComputeContext()
+        self.assertFalse(inplace.events_enabled)
+        self.assertEqual(inplace.events(), [])
+        inplace.compute_inplace_reuse_graph(model.graph, ctx, value_tags={"S": "shape"})
+        self.assertEqual(inplace.events(), [])
+
+        inplace.events_enabled = True
+        inplace.clear_events()
+        inplace.compute_inplace_reuse_graph(model.graph, ctx, value_tags={"S": "shape"})
+
+        events = inplace.events()
+        self.assertTrue(events)
+        self.assertIn(si.ComputeEventAction.kInPlace, [ev.action for ev in events])
+        self.assertIn(si.ComputeEventAction.kRelease, [ev.action for ev in events])
+        self.assertIn(si.ComputeEventAction.kReleaseShapeTag, [ev.action for ev in events])
+
+        inplace_ev = [
+            ev
+            for ev in events
+            if ev.action == si.ComputeEventAction.kInPlace and ev.node_index == 2
+        ]
+        self.assertEqual(len(inplace_ev), 1)
+        self.assertEqual(inplace_ev[0].output_index, 0)
+        self.assertEqual(inplace_ev[0].input_index, 0)
+        self.assertEqual(inplace_ev[0].kind, si.InPlaceReuseKind.kEqual)
+
+        release_names = [
+            ev.name
+            for ev in events
+            if ev.action == si.ComputeEventAction.kRelease and ev.node_index == 2
+        ]
+        self.assertEqual(sorted(release_names), ["A", "S"])
+
+        shape_release = [
+            ev
+            for ev in events
+            if ev.action == si.ComputeEventAction.kReleaseShapeTag and ev.node_index == 2
+        ]
+        self.assertEqual(len(shape_release), 1)
+        self.assertEqual(shape_release[0].name, "S")
+        self.assertEqual(shape_release[0].as_dict()["action"], "release_shape_tag")
+        self.assertIn("ComputeEvent(action='release_shape_tag'", repr(shape_release[0]))
+
+        inplace.clear_events()
+        self.assertEqual(inplace.events(), [])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

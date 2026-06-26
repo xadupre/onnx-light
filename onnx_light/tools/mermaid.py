@@ -32,6 +32,7 @@ from ._proto_utils import (
     _iter,
     _looks_like_graph,
     _node_metadata_value,
+    _short_display_name,
     _s,
 )
 
@@ -302,7 +303,7 @@ def to_mermaid_graph(
         if not include_initializers and name in initializer_names:
             continue
         node_id = tensor_ids.get(name)
-        label = _join_label(name or "(unnamed)", shape_lookup.get(name, ""))
+        label = _join_label(_short_display_name(name) or "(unnamed)", shape_lookup.get(name, ""))
         tag = value_tags.get(name, "")
         style = (
             f"onnxTag{tag.capitalize()}" if tag in {"shape", "axes", "weight"} else "onnxInput"
@@ -317,7 +318,9 @@ def to_mermaid_graph(
             if name in input_name_set:
                 continue
             node_id = tensor_ids.get(name)
-            label = _join_label(name or "(unnamed)", initializer_shapes.get(name, ""))
+            label = _join_label(
+                _short_display_name(name) or "(unnamed)", initializer_shapes.get(name, "")
+            )
             tag = value_tags.get(name, "")
             style = (
                 f"onnxTag{tag.capitalize()}"
@@ -336,7 +339,7 @@ def to_mermaid_graph(
         if raw_name:
             # The name is rendered on a second line; italics are added
             # post-escape so the HTML tags survive.
-            label_parts.append(raw_name)
+            label_parts.append(_short_display_name(raw_name))
         attr_suffix = ""
         if include_attributes:
             attr_names = [_s(a.name) for a in _iter(getattr(node, "attribute", ()))]
@@ -398,7 +401,7 @@ def to_mermaid_graph(
         if not name:
             continue
         node_id = tensor_ids.get(name)
-        label = _join_label(name, shape_lookup.get(name, ""))
+        label = _join_label(_short_display_name(name), shape_lookup.get(name, ""))
         tag = value_tags.get(name, "")
         style = (
             f"onnxTag{tag.capitalize()}" if tag in {"shape", "axes", "weight"} else "onnxOutput"

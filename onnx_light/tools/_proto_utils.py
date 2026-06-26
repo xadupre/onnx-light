@@ -44,6 +44,19 @@ def _s(value: Any) -> str:
     return str(value)
 
 
+def _short_display_name(value: Any, max_length: int = 15) -> str:
+    """Returns a shortened display name.
+
+    Long names are reduced to their trailing characters so graph renderings stay
+    readable while still exposing the most distinguishing suffix.
+    """
+
+    text = _s(value)
+    if len(text) <= max_length:
+        return text
+    return text[-max_length:]
+
+
 def _format_shape(type_proto: Any) -> str:
     """Returns a compact textual representation of a ``TypeProto``.
 

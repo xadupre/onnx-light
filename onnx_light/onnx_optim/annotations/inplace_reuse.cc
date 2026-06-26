@@ -11,6 +11,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "onnx_optim/shapes/_helpers/shape_helpers.h"
+
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
 namespace annotations {
@@ -24,13 +26,13 @@ enum class MemoryValueSource : uint8_t {
 };
 
 struct LiveAllocation {
-  int64_t bytes = 0;
+  expressions::DimType bytes = int64_t{0};
   MemoryValueSource source = MemoryValueSource::kIntermediate;
-  std::string tag;
+  ShapeTag tag;
 };
 
-std::string ValueTag(const std::unordered_map<std::string, std::string> &value_tags,
-                     const std::string &name) {
+ShapeTag ValueTag(const std::unordered_map<std::string, std::string> &value_tags,
+                  const std::string &name) {
   auto it = value_tags.find(name);
   if (it == value_tags.end()) {
     return {};
@@ -38,17 +40,25 @@ std::string ValueTag(const std::unordered_map<std::string, std::string> &value_t
   return it->second;
 }
 
-void AddTaggedBytes(std::unordered_map<std::string, int64_t> &dst, const std::string &tag,
-                    int64_t bytes) {
-  if (bytes == 0) {
+bool IsZeroDim(const expressions::DimType &d) {
+  return std::holds_alternative<int64_t>(d) && std::get<int64_t>(d) == 0;
+}
+
+void AddTaggedBytes(TaggedMemory &dst, const ShapeTag &tag, const expressions::DimType &bytes) {
+  if (IsZeroDim(bytes)) {
     return;
   }
-  EXT_ENFORCE_INVALID(bytes >= 0, "AddTaggedBytes: negative byte size (", bytes, ") is invalid.");
-  dst[tag] += bytes;
+  auto it = dst.find(tag);
+  if (it == dst.end()) {
+    dst.emplace(tag, bytes);
+    return;
+  }
+  it->second = expressions::dim_add(it->second, bytes);
 }
 
 void AddLiveAllocation(NodeMemoryProfile &profile, const LiveAllocation &alloc) {
-  profile.already_allocated_bytes += alloc.bytes;
+  profile.already_allocated_bytes =
+      expressions::dim_add(profile.already_allocated_bytes, alloc.bytes);
   switch (alloc.source) {
   case MemoryValueSource::kInput:
     AddTaggedBytes(profile.inputs, alloc.tag, alloc.bytes);
@@ -129,7 +139,7 @@ int ElementBitWidth(TensorType t) {
 // Packed byte size of ``t`` when its shape is fully known and its element type
 // has a fixed bit width, otherwise ``std::nullopt``. Sub-byte element types are
 // packed, matching the ONNX storage convention.
-std::optional<int64_t> ByteSize(const OptimTensor &t) {
+std::optional<int64_t> ConcreteByteSize(const OptimTensor &t) {
   const int bits = ElementBitWidth(t.Dtype());
   if (bits == 0) {
     return std::nullopt;
@@ -140,6 +150,24 @@ std::optional<int64_t> ByteSize(const OptimTensor &t) {
   }
   const int64_t num_elements = shape.NumElements();
   return (num_elements * bits + 7) / 8;
+}
+
+std::optional<expressions::DimType> ByteSizeExpr(const OptimTensor &t) {
+  const int bits = ElementBitWidth(t.Dtype());
+  if (bits == 0) {
+    return std::nullopt;
+  }
+  expressions::DimType num_elements = int64_t{1};
+  for (std::size_t i = 0; i < t.Shape().Rank(); ++i) {
+    num_elements = expressions::dim_mul(num_elements, shapes::ToDimType(t.Shape()[i]));
+  }
+  if (bits % 8 == 0) {
+    return expressions::dim_mul(num_elements, expressions::DimType{int64_t{bits / 8}});
+  }
+  return expressions::dim_div(
+      expressions::dim_add(expressions::dim_mul(num_elements, expressions::DimType{int64_t{bits}}),
+                           expressions::DimType{int64_t{7}}),
+      expressions::DimType{int64_t{8}});
 }
 
 // Classifies a candidate reuse of input ``in`` by output ``out`` by comparing
@@ -155,8 +183,8 @@ std::optional<InPlaceReuseKind> ClassifyReuse(const OptimTensor &out, const Opti
   if (SameStorage(out, in)) {
     return InPlaceReuseKind::kEqual;
   }
-  const std::optional<int64_t> out_bytes = ByteSize(out);
-  const std::optional<int64_t> in_bytes = ByteSize(in);
+  const std::optional<int64_t> out_bytes = ConcreteByteSize(out);
+  const std::optional<int64_t> in_bytes = ConcreteByteSize(in);
   if (!out_bytes.has_value() || !in_bytes.has_value()) {
     return std::nullopt;
   }
@@ -368,7 +396,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
     if (name.empty() || !ctx.Has(name)) {
       continue;
     }
-    const std::optional<int64_t> bytes = ByteSize(ctx.Get(name));
+    const std::optional<expressions::DimType> bytes = ByteSizeExpr(ctx.Get(name));
     if (!bytes.has_value()) {
       continue;
     }
@@ -380,7 +408,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
     if (name.empty() || alive.find(name) != alive.end() || !ctx.Has(name)) {
       continue;
     }
-    const std::optional<int64_t> bytes = ByteSize(ctx.Get(name));
+    const std::optional<expressions::DimType> bytes = ByteSizeExpr(ctx.Get(name));
     if (!bytes.has_value()) {
       continue;
     }
@@ -407,14 +435,16 @@ void ComputeContext::ComputeInPlaceReuseGraph(
       if (out_name.empty() || !ctx.Has(out_name)) {
         continue;
       }
-      const std::optional<int64_t> out_bytes = ByteSize(ctx.Get(out_name));
+      const std::optional<expressions::DimType> out_bytes = ByteSizeExpr(ctx.Get(out_name));
       if (!out_bytes.has_value()) {
         continue;
       }
-      profile.output_allocation_bytes += *out_bytes;
+      profile.output_allocation_bytes =
+          expressions::dim_add(profile.output_allocation_bytes, *out_bytes);
       AddTaggedBytes(profile.outputs, ValueTag(value_tags, out_name), *out_bytes);
     }
-    profile.total_bytes = profile.already_allocated_bytes + profile.output_allocation_bytes;
+    profile.total_bytes =
+        expressions::dim_add(profile.already_allocated_bytes, profile.output_allocation_bytes);
 
     std::unordered_map<std::string, LiveAllocation> outputs_to_add;
     std::unordered_set<std::string> inputs_reused_from_graph_input;
@@ -423,7 +453,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
       if (out_name.empty() || !ctx.Has(out_name)) {
         continue;
       }
-      int64_t alloc_bytes = 0;
+      expressions::DimType alloc_bytes = int64_t{0};
       auto reuse_it = reuse_by_output.find(o);
       if (reuse_it != reuse_by_output.end()) {
         const std::string in_name = node.input(reuse_it->second).as_string();
@@ -436,7 +466,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
           inputs_reused_from_graph_input.insert(in_name);
         }
       } else {
-        const std::optional<int64_t> out_bytes = ByteSize(ctx.Get(out_name));
+        const std::optional<expressions::DimType> out_bytes = ByteSizeExpr(ctx.Get(out_name));
         if (!out_bytes.has_value()) {
           continue;
         }

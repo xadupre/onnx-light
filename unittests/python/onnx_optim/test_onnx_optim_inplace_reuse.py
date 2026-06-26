@@ -330,6 +330,47 @@ class TestInPlaceReuse(ExtTestCase):
         with self.assertRaises(IndexError):
             inplace.node_memory(3)
 
+    def test_inplace_context_memory_keeps_symbolic_shapes(self):
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["N"])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.INT32, ["N"])
+        shape_init = oh.make_tensor("S", onnxl.TensorProto.INT64, [1], [4])
+        graph = oh.make_graph(
+            [oh.make_node("P", ["X", "S"], ["A"]), oh.make_node("Q", ["A"], ["Y"])],
+            "g",
+            [x],
+            [y],
+            [shape_init],
+        )
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+        model.ir_version = 8
+
+        ctx = si.ShapesContext()
+        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, ["N"]))
+        ctx.set("S", si.OptimTensor(onnxl.TensorProto.INT64, [1]))
+        ctx.set("A", si.OptimTensor(onnxl.TensorProto.FLOAT, ["N"]))
+        ctx.set("Y", si.OptimTensor(onnxl.TensorProto.INT32, ["N"]))
+
+        inplace = si.ComputeContext()
+        inplace.compute_inplace_reuse_graph(model.graph, ctx, value_tags={"S": "shape"})
+
+        mem0 = inplace.node_memory(0)
+        self.assertEqual(mem0.total_bytes, "8*N+8")
+        self.assertEqual(mem0.already_allocated_bytes, "4*N+8")
+        self.assertEqual(mem0.output_allocation_bytes, "4*N")
+        self.assertEqual(mem0.inputs, {"": "4*N"})
+        self.assertEqual(mem0.initializers, {"shape": 8})
+        self.assertEqual(mem0.intermediates, {})
+        self.assertEqual(mem0.outputs, {"": "4*N"})
+
+        mem1 = inplace.node_memory(1)
+        self.assertEqual(mem1.total_bytes, "12*N+8")
+        self.assertEqual(mem1.already_allocated_bytes, "8*N+8")
+        self.assertEqual(mem1.output_allocation_bytes, "4*N")
+        self.assertEqual(mem1.inputs, {"": "4*N"})
+        self.assertEqual(mem1.initializers, {"shape": 8})
+        self.assertEqual(mem1.intermediates, {"": "4*N"})
+        self.assertEqual(mem1.outputs, {"": "4*N"})
+
     def test_inplace_context_write_to_metadata(self):
         nodes = [
             oh.make_node("Abs", ["X"], ["A"]),

@@ -5,10 +5,12 @@
 #pragma once
 
 #include <cstdint>
+#include <map>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
+#include "onnx_optim/expressions.h"
 #include "onnx_optim/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
 
@@ -147,18 +149,24 @@ constexpr const char *kReleaseAfterShapeTagMetadataKey = "onnx_light.release_aft
  * ``already_allocated_bytes`` field is the sum of the ``inputs``,
  * ``initializers`` and ``intermediates`` maps; ``output_allocation_bytes`` is
  * the sum of ``outputs``; and ``total_bytes`` is the sum of those two scalar
- * fields. The ``outputs`` map only counts the extra allocations performed at
- * this node; outputs that reuse an existing input buffer in place contribute no
- * additional bytes there.
+ * fields. Every amount is represented as an
+ * :cpp:type:`onnx_optim::expressions::DimType`, so symbolic shapes retain their
+ * expression form instead of being dropped. The tag-indexed buckets use
+ * ``std::map<ShapeTag, DimType>`` for deterministic ordering. The ``outputs``
+ * map only counts the extra allocations performed at this node; outputs that
+ * reuse an existing input buffer in place contribute no additional bytes there.
  */
+using ShapeTag = std::string;
+using TaggedMemory = std::map<ShapeTag, expressions::DimType>;
+
 struct NodeMemoryProfile {
-  int64_t total_bytes = 0;
-  int64_t already_allocated_bytes = 0;
-  int64_t output_allocation_bytes = 0;
-  std::unordered_map<std::string, int64_t> inputs;
-  std::unordered_map<std::string, int64_t> initializers;
-  std::unordered_map<std::string, int64_t> intermediates;
-  std::unordered_map<std::string, int64_t> outputs;
+  expressions::DimType total_bytes = int64_t{0};
+  expressions::DimType already_allocated_bytes = int64_t{0};
+  expressions::DimType output_allocation_bytes = int64_t{0};
+  TaggedMemory inputs;
+  TaggedMemory initializers;
+  TaggedMemory intermediates;
+  TaggedMemory outputs;
 
   bool operator==(const NodeMemoryProfile &other) const noexcept {
     return total_bytes == other.total_bytes &&

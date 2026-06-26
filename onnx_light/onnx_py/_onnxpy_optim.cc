@@ -333,6 +333,7 @@ void AddOnnxPyExpressions(nb::module_ &m) {
 
 void AddOnnxPyShapeInference(nb::module_ &m) {
   namespace onnx_annotations = ::onnx_light::onnx_optim::annotations;
+  namespace expr = ::onnx_light::onnx_optim::expressions;
   namespace onnx_shapes = ::onnx_light::onnx_optim::shapes;
   using ::onnx_light::onnx_optim::DataTypeToTensorType;
   using ::onnx_light::onnx_optim::OptimDim;
@@ -1091,41 +1092,122 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
         return os.str();
       });
 
+  auto tagged_memory_to_dict = [](const onnx_annotations::TaggedMemory &memory) {
+    nb::dict d;
+    for (const auto &kv : memory) {
+      if (std::holds_alternative<int64_t>(kv.second)) {
+        d[nb::cast(kv.first)] = nb::cast(std::get<int64_t>(kv.second));
+      } else {
+        d[nb::cast(kv.first)] = nb::cast(std::get<std::string>(kv.second));
+      }
+    }
+    return d;
+  };
+  auto dim_to_repr = [](const expr::DimType &d) {
+    if (std::holds_alternative<int64_t>(d)) {
+      return std::to_string(std::get<int64_t>(d));
+    }
+    return std::string("'") + std::get<std::string>(d) + "'";
+  };
+
   nb::class_<onnx_annotations::NodeMemoryProfile>(
       shape_mod, "NodeMemoryProfile",
       "Represents a per-node memory snapshot computed by :class:`ComputeContext`. "
       "``already_allocated_bytes`` counts the live buffers present before the node runs; "
       "``output_allocation_bytes`` counts the extra output buffers that must be allocated "
       "because no in-place reuse opportunity covers them; ``total_bytes`` is their sum. "
-      "The ``inputs``, ``initializers`` and ``intermediates`` attributes are tag-indexed "
-      "breakdowns of ``already_allocated_bytes``; ``outputs`` is the tag-indexed breakdown "
-      "of ``output_allocation_bytes``. Tags such as ``\"shape\"``, ``\"axes\"`` and "
+      "These three attributes are returned as ``int | str`` values so symbolic shapes keep "
+      "their expression form. The ``inputs``, ``initializers`` and ``intermediates`` "
+      "attributes are ``dict[str, int | str]`` breakdowns of ``already_allocated_bytes`` by "
+      "shape tag; ``outputs`` is the ``dict[str, int | str]`` breakdown of "
+      "``output_allocation_bytes``. Tags such as ``\"shape\"``, ``\"axes\"`` and "
       "``\"weight\"`` categorize memory by purpose; the empty-string key represents "
       "untagged values.")
       .def(nb::init<>())
-      .def_rw("total_bytes", &onnx_annotations::NodeMemoryProfile::total_bytes)
-      .def_rw("already_allocated_bytes",
-              &onnx_annotations::NodeMemoryProfile::already_allocated_bytes)
-      .def_rw("output_allocation_bytes",
-              &onnx_annotations::NodeMemoryProfile::output_allocation_bytes)
-      .def_rw("inputs", &onnx_annotations::NodeMemoryProfile::inputs)
-      .def_rw("initializers", &onnx_annotations::NodeMemoryProfile::initializers)
-      .def_rw("intermediates", &onnx_annotations::NodeMemoryProfile::intermediates)
-      .def_rw("outputs", &onnx_annotations::NodeMemoryProfile::outputs)
+      .def_prop_ro("total_bytes",
+                   [](const onnx_annotations::NodeMemoryProfile &m) -> nb::object {
+                     if (std::holds_alternative<int64_t>(m.total_bytes)) {
+                       return nb::cast(std::get<int64_t>(m.total_bytes));
+                     }
+                     return nb::cast(std::get<std::string>(m.total_bytes));
+                   })
+      .def_prop_ro("already_allocated_bytes",
+                   [](const onnx_annotations::NodeMemoryProfile &m) -> nb::object {
+                     if (std::holds_alternative<int64_t>(m.already_allocated_bytes)) {
+                       return nb::cast(std::get<int64_t>(m.already_allocated_bytes));
+                     }
+                     return nb::cast(std::get<std::string>(m.already_allocated_bytes));
+                   })
+      .def_prop_ro("output_allocation_bytes",
+                   [](const onnx_annotations::NodeMemoryProfile &m) -> nb::object {
+                     if (std::holds_alternative<int64_t>(m.output_allocation_bytes)) {
+                       return nb::cast(std::get<int64_t>(m.output_allocation_bytes));
+                     }
+                     return nb::cast(std::get<std::string>(m.output_allocation_bytes));
+                   })
+      .def_prop_ro("inputs",
+                   [](const onnx_annotations::NodeMemoryProfile &m) {
+                     nb::dict d;
+                     for (const auto &kv : m.inputs) {
+                       if (std::holds_alternative<int64_t>(kv.second)) {
+                         d[nb::cast(kv.first)] = nb::cast(std::get<int64_t>(kv.second));
+                       } else {
+                         d[nb::cast(kv.first)] = nb::cast(std::get<std::string>(kv.second));
+                       }
+                     }
+                     return d;
+                   })
+      .def_prop_ro("initializers",
+                   [](const onnx_annotations::NodeMemoryProfile &m) {
+                     nb::dict d;
+                     for (const auto &kv : m.initializers) {
+                       if (std::holds_alternative<int64_t>(kv.second)) {
+                         d[nb::cast(kv.first)] = nb::cast(std::get<int64_t>(kv.second));
+                       } else {
+                         d[nb::cast(kv.first)] = nb::cast(std::get<std::string>(kv.second));
+                       }
+                     }
+                     return d;
+                   })
+      .def_prop_ro("intermediates",
+                   [](const onnx_annotations::NodeMemoryProfile &m) {
+                     nb::dict d;
+                     for (const auto &kv : m.intermediates) {
+                       if (std::holds_alternative<int64_t>(kv.second)) {
+                         d[nb::cast(kv.first)] = nb::cast(std::get<int64_t>(kv.second));
+                       } else {
+                         d[nb::cast(kv.first)] = nb::cast(std::get<std::string>(kv.second));
+                       }
+                     }
+                     return d;
+                   })
+      .def_prop_ro("outputs",
+                   [](const onnx_annotations::NodeMemoryProfile &m) {
+                     nb::dict d;
+                     for (const auto &kv : m.outputs) {
+                       if (std::holds_alternative<int64_t>(kv.second)) {
+                         d[nb::cast(kv.first)] = nb::cast(std::get<int64_t>(kv.second));
+                       } else {
+                         d[nb::cast(kv.first)] = nb::cast(std::get<std::string>(kv.second));
+                       }
+                     }
+                     return d;
+                   })
       .def(nb::self == nb::self)
       .def(nb::self != nb::self)
-      .def("__repr__", [](const onnx_annotations::NodeMemoryProfile &m) {
+      .def("__repr__", [dim_to_repr](const onnx_annotations::NodeMemoryProfile &m) {
         std::ostringstream os;
-        os << "NodeMemoryProfile(total_bytes=" << m.total_bytes
-           << ", already_allocated_bytes=" << m.already_allocated_bytes
-           << ", output_allocation_bytes=" << m.output_allocation_bytes << ", inputs={";
+        os << "NodeMemoryProfile(total_bytes=" << dim_to_repr(m.total_bytes)
+           << ", already_allocated_bytes=" << dim_to_repr(m.already_allocated_bytes)
+           << ", output_allocation_bytes=" << dim_to_repr(m.output_allocation_bytes)
+           << ", inputs={";
         bool first = true;
         for (const auto &kv : m.inputs) {
           if (!first) {
             os << ", ";
           }
           first = false;
-          os << "'" << kv.first << "': " << kv.second;
+          os << "'" << kv.first << "': " << dim_to_repr(kv.second);
         }
         os << "}, initializers={";
         first = true;
@@ -1134,7 +1216,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
             os << ", ";
           }
           first = false;
-          os << "'" << kv.first << "': " << kv.second;
+          os << "'" << kv.first << "': " << dim_to_repr(kv.second);
         }
         os << "}, intermediates={";
         first = true;
@@ -1143,7 +1225,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
             os << ", ";
           }
           first = false;
-          os << "'" << kv.first << "': " << kv.second;
+          os << "'" << kv.first << "': " << dim_to_repr(kv.second);
         }
         os << "}, outputs={";
         first = true;
@@ -1152,7 +1234,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
             os << ", ";
           }
           first = false;
-          os << "'" << kv.first << "': " << kv.second;
+          os << "'" << kv.first << "': " << dim_to_repr(kv.second);
         }
         os << "})";
         return os.str();

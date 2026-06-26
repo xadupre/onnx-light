@@ -500,8 +500,8 @@ class TestMainFillshape(ExtTestCase):
             order.append("infer_value_and_node_tags")
             return {}, []
 
-        def _record_write_value_and_node_tags_to_metadata(graph, value_tags, node_tags):
-            del graph, value_tags, node_tags
+        def _record_write_value_and_node_tags_to_metadata(graph):
+            del graph
             order.append("write_value_and_node_tags_to_metadata")
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -517,7 +517,7 @@ class TestMainFillshape(ExtTestCase):
                     side_effect=_record_infer_value_and_node_tags,
                 ),
                 patch(
-                    "onnx_light.__main__._write_inferred_value_and_node_tags_to_metadata",
+                    "onnx_light.onnx_optim.shape_inference.write_value_and_node_tags_to_metadata",
                     side_effect=_record_write_value_and_node_tags_to_metadata,
                 ),
             ):

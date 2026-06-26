@@ -233,6 +233,27 @@ class TestSvg(unittest.TestCase):
         text_off = to_svg(_model(g), include_inplace=False)
         self.assertNotIn("inplace", text_off)
 
+    def test_release(self) -> None:
+        g = _graph(
+            nodes=[
+                _node("Add", ["X", "Y"], ["T"], name="add0"),
+                _node(
+                    "Relu",
+                    ["T"],
+                    ["Z"],
+                    name="relu0",
+                    metadata={"onnx_light.release_after": "T;X"},
+                ),
+            ],
+            inputs=[_vi("X"), _vi("Y")],
+            outputs=[_vi("Z")],
+        )
+        text = to_svg(_model(g), include_release=True)
+        self._assert_valid_svg(text)
+        self.assertIn("release: T, X", text)
+        text_off = to_svg(_model(g), include_release=False)
+        self.assertNotIn("release:", text_off)
+
     @unittest.skipUnless(HAS_OPTIM_EXT, "requires onnx_light C++ shape_inference bindings")
     def test_tagged_colors(self) -> None:
         from onnx_light.onnx import TensorProto, helper

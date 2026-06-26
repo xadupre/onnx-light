@@ -87,6 +87,24 @@ class TestValueTags(unittest.TestCase):
         write_value_and_node_tags_to_metadata(function)
         self.assertIn(VALUE_TAGS_METADATA_KEY, _meta_dict(function))
 
+    def test_rank2_float_input_is_seeded_as_weight(self):
+        from onnx_light.onnx import TensorProto, helper
+
+        g = helper.make_graph(
+            [],
+            "g",
+            [
+                helper.make_tensor_value_info("W", TensorProto.FLOAT, [4, 3]),
+                helper.make_tensor_value_info("X", TensorProto.FLOAT, [2, 4, 3]),
+                helper.make_tensor_value_info("I", TensorProto.INT64, [4, 3]),
+            ],
+            [],
+        )
+        value_tags, _ = infer_value_and_node_tags(g)
+        self.assertEqual(value_tags.get("W"), "weight")
+        self.assertNotIn("X", value_tags)
+        self.assertNotIn("I", value_tags)
+
 
 if __name__ == "__main__":
     unittest.main()

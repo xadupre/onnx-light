@@ -204,6 +204,27 @@ class TestMermaid(unittest.TestCase):
         text = to_mermaid(_model(g), include_inplace=True)
         self.assertIn("inplace: out0=in0(equal), out1=in1(greater)", text)
 
+    def test_release(self) -> None:
+        g = _graph(
+            nodes=[
+                _node("Add", ["X", "Y"], ["T"], name="add0"),
+                _node(
+                    "Relu",
+                    ["T"],
+                    ["Z"],
+                    name="relu0",
+                    metadata={"onnx_light.release_after": "T;X"},
+                ),
+            ],
+            inputs=[_vi("X"), _vi("Y")],
+            outputs=[_vi("Z")],
+        )
+        text = to_mermaid(_model(g), include_release=True)
+        self.assertIn("release: T, X", text)
+        # The node without metadata is unaffected.
+        text_off = to_mermaid(_model(g), include_release=False)
+        self.assertNotIn("release:", text_off)
+
     @unittest.skipUnless(HAS_OPTIM_EXT, "requires onnx_light C++ shape_inference bindings")
     def test_tagged_style_classes(self) -> None:
         from onnx_light.onnx import TensorProto, helper

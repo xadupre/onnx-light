@@ -100,7 +100,7 @@ MemoryScalar = int | str
 
 
 def evaluate_dim(value: MemoryScalar, assignment: dict[str, int]) -> int:
-    """Evaluates and returns *value* under *assignment*."""
+    """Evaluates *value* under *assignment* and returns the result."""
 
     if isinstance(value, int):
         return value
@@ -108,7 +108,7 @@ def evaluate_dim(value: MemoryScalar, assignment: dict[str, int]) -> int:
 
 
 def format_bucket(bucket: dict[str, MemoryScalar]) -> str:
-    """Formats and returns a stable string rendering for one tagged memory bucket."""
+    """Formats one tagged memory bucket and returns a stable string rendering."""
 
     if not bucket:
         return "-"

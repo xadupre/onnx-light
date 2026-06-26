@@ -26,9 +26,12 @@ fillshape
         ones.
     ``--inplace-info``
         After shape inference, also compute in-place buffer-reuse
-        opportunities and last-use release hints, and write them into each
-        node's ``metadata_props`` under the keys
-        ``onnx_light.inplace_reuse`` and ``onnx_light.release_after``.
+        opportunities and write them into each node's ``metadata_props``
+        under the key ``onnx_light.inplace_reuse``.
+    ``--release-info``
+        After shape inference, compute last-use release hints and write
+        them into each node's ``metadata_props`` under the key
+        ``onnx_light.release_after``.
     ``--shape-tag``
         After shape inference, infer semantic ``shape``/``axes``/``weight``
         tags for every value and node in the graph and record them in
@@ -234,6 +237,25 @@ def _seed_context_with_token_ranges(
         ctx.set(vi_name, OptimTensor(dtype, dims))
 
 
+def _remove_node_metadata_key(graph: Any, key: str) -> None:
+    """Removes a metadata key from all nodes in a graph and nested subgraphs."""
+
+    for node in graph.node:
+        props = node.metadata_props
+        kept = [(entry.key, entry.value) for entry in props if entry.key != key]
+        if len(kept) != len(props):
+            del props[:]
+            for k, v in kept:
+                entry = props.add()
+                entry.key = k
+                entry.value = v
+        for attr in node.attribute:
+            if attr.has_g():
+                _remove_node_metadata_key(attr.g, key)
+            for subgraph in attr.graphs:
+                _remove_node_metadata_key(subgraph, key)
+
+
 def _cmd_fillshape(args: argparse.Namespace) -> None:
     """Implements the ``fillshape`` subcommand."""
     from .onnx import load, save
@@ -253,6 +275,7 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
     output_path: str | None = args.output
     keep: bool = args.keep
     inplace_info: bool = args.inplace_info
+    release_info: bool = args.release_info
     shape_tag: bool = args.shape_tag
     show: bool = args.show
     verbose: int = args.verbose
@@ -283,7 +306,7 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
     # (must happen before the tiny-tensor step, which inlines small tensors).
     has_external_data = any(uses_external_data(init) for init in model.graph.initializer)
 
-    if inplace_info or verbose > 0 or token_ranges:
+    if inplace_info or release_info or verbose > 0 or token_ranges:
         # Retains the ShapesContext so in-place reuse analysis, verbose
         # event logging, and token-range substitution can reuse the already-
         # inferred shape data.
@@ -303,14 +326,21 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
             _print_shape_inference_events(events)
             if verbose >= 2:
                 _print_shape_inference_events_detailed(events)
-        if inplace_info:
+        if inplace_info or release_info:
+            what = (
+                "inplace/release"
+                if inplace_info and release_info
+                else ("inplace" if inplace_info else "release")
+            )
             if verbose:
-                print("[fillshape] compute inplace/release info")
+                print(f"[fillshape] compute {what} info")
             inplace_context = ComputeContext()
             inplace_context.compute_inplace_reuse_graph(model.graph, ctx)
             if verbose:
-                print("[fillshape] write inplace/release info in the model")
+                print(f"[fillshape] write {what} info in the model")
             inplace_context.write_to_metadata(model.graph)
+            if release_info and not inplace_info:
+                _remove_node_metadata_key(model.graph, "onnx_light.inplace_reuse")
     else:
         if verbose:
             print("[fillshape] shape inference only")
@@ -335,7 +365,7 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
             pretty_onnx(
                 model,
                 include_inplace=inplace_info,
-                include_release=inplace_info,
+                include_release=(inplace_info or release_info),
                 include_node_tags=shape_tag,
             )
         )
@@ -648,9 +678,19 @@ def _build_parser() -> argparse.ArgumentParser:
         default=False,
         dest="inplace_info",
         help=(
-            "Also compute in-place buffer-reuse opportunities and last-use "
-            "release hints, and record them in each node's metadata_props "
-            "under the keys ``onnx_light.inplace_reuse`` and "
+            "Also compute in-place buffer-reuse opportunities and record them "
+            "in each node's metadata_props under the key "
+            "``onnx_light.inplace_reuse``."
+        ),
+    )
+    fillshape_parser.add_argument(
+        "--release-info",
+        action="store_true",
+        default=False,
+        dest="release_info",
+        help=(
+            "Also compute last-use release hints and record them in each "
+            "node's metadata_props under the key "
             "``onnx_light.release_after``."
         ),
     )

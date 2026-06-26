@@ -26,7 +26,8 @@ back to disk.
 Synopsis::
 
     python -m onnx_light fillshape MODEL [--output OUTPUT] [--keep]
-                                         [--inplace-info] [--shape-tag] [--show]
+                                         [--inplace-info] [--release-info]
+                                         [--shape-tag] [--show]
                                          [--token NAME=LOW:HIGH ...]
                                          [--verbose [LEVEL]]
 
@@ -58,6 +59,11 @@ Options
     After shape inference, compute in-place buffer-reuse opportunities
     and record them in each eligible node's ``metadata_props`` under the
     key ``onnx_light.inplace_reuse``.
+
+``--release-info``
+    After shape inference, compute last-use release hints and record them
+    in each eligible node's ``metadata_props`` under the key
+    ``onnx_light.release_after``.
 
 ``--shape-tag``
     After shape inference, infer semantic ``shape``/``axes``/``weight``
@@ -125,6 +131,12 @@ Annotate nodes with in-place buffer-reuse information:
 .. code-block:: bash
 
     python -m onnx_light fillshape model.onnx --inplace-info
+
+Annotate nodes with release hints:
+
+.. code-block:: bash
+
+    python -m onnx_light fillshape model.onnx --release-info
 
 Annotate values and nodes with semantic shape/axes/weight tags:
 

@@ -24,6 +24,7 @@ import matplotlib.pyplot as plt
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.defs as defs
 import onnx_light.onnx.helper as helper
+from onnx_light.tools import pretty_onnx
 from onnx_light.onnx_optim.expressions import evaluate_expression
 from onnx_light.onnx_optim.shape_inference import (
     ComputeContext,
@@ -89,6 +90,8 @@ model = helper.make_model(
     opset_imports=[helper.make_opsetid("", 18)],
     ir_version=8,
 )
+
+print(pretty_onnx(model))
 
 
 #####################################

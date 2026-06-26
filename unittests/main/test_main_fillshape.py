@@ -572,6 +572,8 @@ class TestFillshapeTokenOption(ExtTestCase):
             self.assertEqual(len(dims), 2)
             self.assertEqual(dims[0].dim_value, 4)
             self.assertEqual(dims[1].dim_value, 3)
+
+    def test_token_range_asymmetric(self):
         """--token seq=1:128 uses lower bound 1 for shape propagation."""
         from onnx_light.__main__ import main
 

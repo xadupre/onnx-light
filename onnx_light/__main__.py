@@ -169,14 +169,17 @@ def _parse_token_spec(token_str: str) -> tuple[str, int, int]:
         ValueError: When the format is invalid or the bounds are
             inconsistent.
     """
-    if "=" not in token_str or ":" not in token_str:
-        raise ValueError(
-            f"--token value {token_str!r} must be in NAME=LOW:HIGH format "
-            "(e.g. --token seq=1:128)."
-        )
+    _fmt_error = (
+        f"--token value {token_str!r} must be in NAME=LOW:HIGH format "
+        "(e.g. --token seq=1:128)."
+    )
+    if "=" not in token_str:
+        raise ValueError(_fmt_error)
     name, _, range_str = token_str.partition("=")
     name = name.strip()
     range_str = range_str.strip()
+    if ":" not in range_str:
+        raise ValueError(_fmt_error)
     low_str, _, high_str = range_str.partition(":")
     low = int(low_str.strip())
     high = int(high_str.strip())

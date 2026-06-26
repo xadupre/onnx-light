@@ -236,6 +236,47 @@ public:
   ComputeContext() = default;
 
   /**
+   * Infers semantic ``shape`` / ``axes`` / ``weight`` tags for the values and
+   * nodes in ``graph`` and stores the result in ``*this`` (replacing any
+   * previously computed tags).
+   *
+   * @return A pair ``(value_tags, node_tags)`` where ``value_tags`` maps value
+   *         names to their inferred tag and ``node_tags`` follows the order of
+   *         ``graph.node()``.
+   */
+  std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
+  ComputeValueAndNodeTags(const GraphProto &graph);
+
+  /**
+   * Same as :cpp:func:`ComputeValueAndNodeTags(const GraphProto&)` but for a
+   * function body.
+   */
+  std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
+  ComputeValueAndNodeTags(const FunctionProto &function);
+
+  /**
+   * Same as :cpp:func:`ComputeValueAndNodeTags(const GraphProto&)` but for an
+   * arbitrary node list.
+   */
+  std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
+  ComputeValueAndNodeTags(const std::vector<NodeProto> &nodes);
+
+  /// Read-only access to the last value-tag map computed through
+  /// :cpp:func:`ComputeValueAndNodeTags`.
+  const std::unordered_map<std::string, std::string> &ValueTags() const noexcept {
+    return value_tags_;
+  }
+
+  /// Read-only access to the last per-node tag list computed through
+  /// :cpp:func:`ComputeValueAndNodeTags`.
+  const std::vector<std::string> &NodeTags() const noexcept { return node_tags_; }
+
+  /// Tag inferred for the node at ``node_index``.
+  ///
+  /// @throws std::out_of_range when ``node_index`` is out of bounds.
+  const std::string &NodeTag(std::size_t node_index) const { return node_tags_.at(node_index); }
+
+  /**
    * Guesses, for every node of ``graph``, which outputs may reuse which input
    * buffers in place, using the shapes and element types already inferred
    * into ``ctx``, and stores the result in ``*this`` (replacing any
@@ -355,6 +396,8 @@ public:
 
   /// Empties the stored result.
   void Clear() noexcept {
+    value_tags_.clear();
+    node_tags_.clear();
     reuse_.clear();
     release_after_.clear();
     release_after_shape_tagged_.clear();
@@ -362,6 +405,8 @@ public:
   }
 
 private:
+  std::unordered_map<std::string, std::string> value_tags_;
+  std::vector<std::string> node_tags_;
   std::vector<std::vector<InPlaceReuse>> reuse_;
   std::vector<std::vector<std::string>> release_after_;
   std::vector<std::vector<std::string>> release_after_shape_tagged_;

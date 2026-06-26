@@ -8,7 +8,11 @@ import unittest
 from unittest.mock import patch
 
 from onnx_light.ext_test_case import HAS_OPTIM_EXT
-from onnx_light.tools import infer_value_and_node_tags, write_value_and_node_tags_to_metadata
+from onnx_light.tools import (
+    compute_value_and_node_tags,
+    infer_value_and_node_tags,
+    write_value_and_node_tags_to_metadata,
+)
 from onnx_light.tools._proto_utils import NODE_TAG_METADATA_KEY, VALUE_TAGS_METADATA_KEY
 
 
@@ -26,7 +30,7 @@ class TestValueTagsErrors(unittest.TestCase):
                 RuntimeError, "onnx_light\\.onnx_py\\._onnxpyoptim.*is unavailable"
             ),
         ):
-            infer_value_and_node_tags([])
+            compute_value_and_node_tags([])
 
 
 @unittest.skipUnless(HAS_OPTIM_EXT, "requires onnx_light C++ shape_inference bindings")
@@ -77,7 +81,7 @@ class TestValueTags(unittest.TestCase):
             helper.make_node("Shape", ["X"], ["S"]),
             helper.make_node("Expand", ["Y", "S"], ["Z"]),
         ]
-        value_tags, node_tags = infer_value_and_node_tags(nodes)
+        value_tags, node_tags = compute_value_and_node_tags(nodes)
         self.assertEqual(value_tags["S"], "shape")
         self.assertEqual(node_tags[0], "shape")
 
@@ -95,7 +99,7 @@ class TestValueTags(unittest.TestCase):
             helper.make_node("Identity", ["S0"], ["S1"]),
             helper.make_node("Reshape", ["X", "S1"], ["Y"]),
         ]
-        value_tags, node_tags = infer_value_and_node_tags(nodes)
+        value_tags, node_tags = compute_value_and_node_tags(nodes)
         self.assertEqual(value_tags["S1"], "shape")
         self.assertEqual(value_tags["S0"], "shape")
         self.assertEqual(node_tags[1], "shape")
@@ -112,7 +116,7 @@ class TestValueTags(unittest.TestCase):
             ),
             helper.make_node("Reshape", ["X", "S"], ["Y"]),
         ]
-        value_tags, node_tags = infer_value_and_node_tags(nodes)
+        value_tags, node_tags = compute_value_and_node_tags(nodes)
         self.assertEqual(value_tags["S"], "shape")
         self.assertEqual(node_tags[0], "shape")
 
@@ -129,10 +133,16 @@ class TestValueTags(unittest.TestCase):
             ],
             [],
         )
-        value_tags, _ = infer_value_and_node_tags(g)
+        value_tags, _ = compute_value_and_node_tags(g)
         self.assertEqual(value_tags.get("W"), "weight")
         self.assertNotIn("X", value_tags)
         self.assertNotIn("I", value_tags)
+
+    def test_infer_alias_keeps_backward_compatibility(self):
+        from onnx_light.onnx import helper
+
+        nodes = [helper.make_node("Shape", ["X"], ["S"])]
+        self.assertEqual(compute_value_and_node_tags(nodes), infer_value_and_node_tags(nodes))
 
 
 if __name__ == "__main__":

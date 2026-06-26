@@ -266,7 +266,6 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
         apply_inferred_shapes_to_model,
         compute_shape_model,
         infer_shapes_model,
-        infer_value_and_node_tags,
         write_value_and_node_tags_to_metadata,
     )
     from .tools.pretty_print import pretty_onnx
@@ -347,9 +346,10 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
         infer_shapes_model(model, prefill_with_value_info_output=keep)
 
     if shape_tag:
+        tag_context = ComputeContext()
         if verbose:
             print("[fillshape] compute shape tags")
-        value_tags, node_tags = infer_value_and_node_tags(model.graph)
+        value_tags, node_tags = tag_context.compute_value_and_node_tags(model.graph)
         if verbose:
             tagged_nodes = sum(1 for tag in node_tags if tag)
             print(

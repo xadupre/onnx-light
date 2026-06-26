@@ -469,6 +469,41 @@ class TestInPlaceReuse(ExtTestCase):
         with self.assertRaises(IndexError):
             inplace.node_release_after_shape_tagged(2)
 
+    def test_compute_value_and_node_tags_method(self):
+        nodes = [oh.make_node("Shape", ["X"], ["S"]), oh.make_node("Reshape", ["X", "S"], ["Y"])]
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 3])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2, 3])
+        model = self._build_model(nodes, [x], [y])
+
+        compute = si.ComputeContext()
+        value_tags, node_tags = compute.compute_value_and_node_tags(model.graph)
+
+        self.assertEqual(value_tags["S"], "shape")
+        self.assertEqual(node_tags[0], "shape")
+        self.assertEqual(len(node_tags), 2)
+        self.assertEqual(compute.value_tags, value_tags)
+        self.assertEqual(compute.node_tags, node_tags)
+        self.assertEqual(compute.node_tag(0), "shape")
+        self.assertEqual(compute.node_tag(1), node_tags[1])
+        with self.assertRaises(IndexError):
+            compute.node_tag(2)
+
+    def test_shape_tag_release_info_uses_stored_tags(self):
+        nodes = [oh.make_node("Shape", ["X"], ["S"]), oh.make_node("Reshape", ["X", "S"], ["Y"])]
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 3])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2, 3])
+        model = self._build_model(nodes, [x], [y])
+
+        ctx = si.ShapesContext()
+        si.compute_shape_model(ctx, model)
+
+        inplace = si.ComputeContext()
+        inplace.compute_value_and_node_tags(model.graph)
+        inplace.compute_inplace_reuse_graph(model.graph, ctx)
+
+        self.assertEqual(inplace.release_after_shape_tagged[0], [])
+        self.assertEqual(inplace.release_after_shape_tagged[1], ["S"])
+
     def test_shape_tag_release_info_writes_metadata(self):
         nodes = [oh.make_node("Shape", ["X"], ["S"]), oh.make_node("Reshape", ["X", "S"], ["Y"])]
         x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 3])

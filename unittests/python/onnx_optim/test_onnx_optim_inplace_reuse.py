@@ -488,6 +488,10 @@ class TestInPlaceReuse(ExtTestCase):
         with self.assertRaises(IndexError):
             compute.node_tag(2)
 
+    def test_shape_inference_alias_keeps_only_renamed_binding(self):
+        self.assertFalse(hasattr(si._C, "infer_value_and_node_tags"))
+        self.assertIs(si.infer_value_and_node_tags, si.compute_value_and_node_tags)
+
     def test_shape_tag_release_info_uses_stored_tags(self):
         nodes = [oh.make_node("Shape", ["X"], ["S"]), oh.make_node("Reshape", ["X", "S"], ["Y"])]
         x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 3])

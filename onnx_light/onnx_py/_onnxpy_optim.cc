@@ -1307,33 +1307,6 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       nb::arg("nodes"), "Computes semantic ``shape``/``axes``/``weight`` tags for a node list.");
 
   shape_mod.def(
-      "infer_value_and_node_tags",
-      [](const GraphProto &graph) {
-        onnx_annotations::ComputeContext ctx;
-        const auto inferred = ctx.ComputeValueAndNodeTags(graph);
-        return nb::make_tuple(inferred.first, inferred.second);
-      },
-      nb::arg("graph"),
-      "Infers semantic ``shape``/``axes``/``weight`` tags for values and nodes in ``graph``.");
-  shape_mod.def(
-      "infer_value_and_node_tags",
-      [](const FunctionProto &function) {
-        onnx_annotations::ComputeContext ctx;
-        const auto inferred = ctx.ComputeValueAndNodeTags(function);
-        return nb::make_tuple(inferred.first, inferred.second);
-      },
-      nb::arg("function"),
-      "Infers semantic ``shape``/``axes``/``weight`` tags for values and nodes in ``function``.");
-  shape_mod.def(
-      "infer_value_and_node_tags",
-      [copy_node_list](nb::list nodes) {
-        onnx_annotations::ComputeContext ctx;
-        const auto inferred = ctx.ComputeValueAndNodeTags(copy_node_list(nodes));
-        return nb::make_tuple(inferred.first, inferred.second);
-      },
-      nb::arg("nodes"), "Infers semantic ``shape``/``axes``/``weight`` tags for a node list.");
-
-  shape_mod.def(
       "write_value_and_node_tags_to_metadata",
       [](GraphProto &graph) { onnx_annotations::WriteValueAndNodeTagsToMetadata(graph); },
       nb::arg("graph"), "Writes inferred value/node tags into graph metadata.");

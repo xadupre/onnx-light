@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import io
 import os
+import shutil
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -381,8 +382,7 @@ class TestMainShow(ExtTestCase):
             self.assertIn("Abs", content)
 
     @unittest.skipUnless(
-        __import__("shutil").which("dot") is not None,
-        "Graphviz 'dot' executable not found on PATH",
+        shutil.which("dot") is not None, "Graphviz 'dot' executable not found on PATH"
     )
     def test_show_dot_graphviz_png(self):
         """show --format dot --graphviz png invokes graphviz and writes PNG bytes."""
@@ -413,8 +413,7 @@ class TestMainShow(ExtTestCase):
             self.assertEqual(header, b"\x89PNG")
 
     @unittest.skipUnless(
-        __import__("shutil").which("dot") is not None,
-        "Graphviz 'dot' executable not found on PATH",
+        shutil.which("dot") is not None, "Graphviz 'dot' executable not found on PATH"
     )
     def test_show_dot_graphviz_svg_to_stdout(self):
         """show --format dot --graphviz svg writes SVG bytes to stdout.buffer."""

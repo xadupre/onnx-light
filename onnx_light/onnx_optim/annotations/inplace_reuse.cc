@@ -164,6 +164,9 @@ std::optional<expressions::DimType> ByteSizeExpr(const OptimTensor &t) {
   if (bits % 8 == 0) {
     return expressions::dim_mul(num_elements, expressions::DimType{int64_t{bits / 8}});
   }
+  // Sub-byte element types pack multiple values per byte, so the buffer size is
+  // ceil(num_elements * bits / 8). ``dim_div`` is floor division, hence the
+  // ``+7`` round-up term before dividing by 8.
   return expressions::dim_div(
       expressions::dim_add(expressions::dim_mul(num_elements, expressions::DimType{int64_t{bits}}),
                            expressions::DimType{int64_t{7}}),

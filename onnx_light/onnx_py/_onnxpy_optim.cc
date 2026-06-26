@@ -1092,17 +1092,6 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
         return os.str();
       });
 
-  auto tagged_memory_to_dict = [](const onnx_annotations::TaggedMemory &memory) {
-    nb::dict d;
-    for (const auto &kv : memory) {
-      if (std::holds_alternative<int64_t>(kv.second)) {
-        d[nb::cast(kv.first)] = nb::cast(std::get<int64_t>(kv.second));
-      } else {
-        d[nb::cast(kv.first)] = nb::cast(std::get<std::string>(kv.second));
-      }
-    }
-    return d;
-  };
   auto dim_to_repr = [](const expr::DimType &d) {
     if (std::holds_alternative<int64_t>(d)) {
       return std::to_string(std::get<int64_t>(d));

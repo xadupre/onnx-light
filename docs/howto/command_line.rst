@@ -190,8 +190,8 @@ See also
 show
 ----
 
-Loads an ONNX model and renders it as plain text, a Mermaid flowchart or an
-SVG image.  The result is written to stdout by default.
+Loads an ONNX model and renders it as plain text, a Mermaid flowchart, an
+SVG image or Graphviz DOT source.  The result is written to stdout by default.
 
 .. code-block:: bash
 
@@ -199,7 +199,7 @@ SVG image.  The result is written to stdout by default.
 
 Synopsis::
 
-    python -m onnx_light show MODEL [--format {pretty,mermaid,svg}]
+    python -m onnx_light show MODEL [--format {pretty,mermaid,svg,dot}]
                                     [--output OUTPUT]
                                     [--shape-inference]
                                     [--no-shapes]
@@ -208,6 +208,7 @@ Synopsis::
                                     [--include-node-tags]
                                     [--no-initializers]
                                     [--direction DIRECTION]
+                                    [--graphviz GRAPHVIZ_FORMAT]
 
 Positional argument
 ^^^^^^^^^^^^^^^^^^^
@@ -218,7 +219,7 @@ Positional argument
 Options
 ^^^^^^^
 
-``--format {pretty,mermaid,svg}`` / ``-f {pretty,mermaid,svg}``
+``--format {pretty,mermaid,svg,dot}`` / ``-f {pretty,mermaid,svg,dot}``
     Output format (default: ``pretty``).
 
     * ``pretty`` — compact text listing produced by
@@ -227,6 +228,8 @@ Options
       or rendered with the Mermaid CLI.
     * ``svg`` — SVG image written to stdout (or to the file given by
       ``--output``).
+    * ``dot`` — Graphviz DOT source produced by
+      :func:`~onnx_light.tools.dot.to_dot`.
 
 ``--output OUTPUT`` / ``-o OUTPUT``
     Write the rendered output to *OUTPUT* instead of printing to stdout.
@@ -236,7 +239,7 @@ Options
 
 ``--no-shapes``
     Suppress shape annotations in the rendered output
-    (applies to ``mermaid`` and ``svg`` formats).
+    (applies to ``mermaid``, ``svg`` and ``dot`` formats).
 
 ``--include-attributes``
     Include node attributes in the rendered output.
@@ -251,11 +254,17 @@ Options
 
 ``--no-initializers``
     Exclude initializer nodes from the rendered graph
-    (applies to ``mermaid`` and ``svg`` formats).
+    (applies to ``mermaid``, ``svg`` and ``dot`` formats).
 
 ``--direction DIRECTION``
-    Flowchart direction for ``mermaid`` and ``svg`` formats.
+    Flowchart direction for ``mermaid``, ``svg`` and ``dot`` formats.
     One of ``TB`` (default), ``LR``, ``TD`` or ``BT`` (Mermaid only).
+
+``--graphviz GRAPHVIZ_FORMAT``
+    Invoke the Graphviz ``dot`` executable on the generated DOT source and
+    write the rendered image in *GRAPHVIZ_FORMAT* (e.g. ``png``, ``svg``,
+    ``pdf``).  Only used when ``--format dot`` is given.  Requires Graphviz
+    to be installed and ``dot`` to be available on ``PATH``.
 
 Examples
 ^^^^^^^^
@@ -290,11 +299,25 @@ Show the model without initializer nodes and without shape annotations:
 
     python -m onnx_light show model.onnx --format mermaid --no-initializers --no-shapes
 
+Dump the Graphviz DOT source to a file:
+
+.. code-block:: bash
+
+    python -m onnx_light show model.onnx --format dot -o model.dot
+
+Render a PNG image via Graphviz (requires ``dot`` on PATH):
+
+.. code-block:: bash
+
+    python -m onnx_light show model.onnx --format dot --graphviz png -o model.png
+
 See also
 ^^^^^^^^
 
 * :func:`~onnx_light.tools.pretty_print.pretty_onnx` — the Python function
   used by the ``pretty`` format.
+* :func:`~onnx_light.tools.dot.to_dot` — the Python function used by the
+  ``dot`` format.
 * :ref:`l-how-to` — other onnx-light how-to recipes.
 
 .. _l-cli-run:

@@ -44,33 +44,67 @@ bool IsZeroDim(const expressions::DimType &d) {
   return std::holds_alternative<int64_t>(d) && std::get<int64_t>(d) == 0;
 }
 
+expressions::DimType SimplifyDimType(const expressions::DimType &value) {
+  if (std::holds_alternative<int64_t>(value)) {
+    return value;
+  }
+  const expressions::SimplifyResult simplified =
+      expressions::simplify_expression(std::get<std::string>(value));
+  if (std::holds_alternative<int64_t>(simplified)) {
+    return std::get<int64_t>(simplified);
+  }
+  return std::get<std::string>(simplified);
+}
+
+void SimplifyTaggedMemory(TaggedMemory &bucket) {
+  for (auto &entry : bucket) {
+    entry.second = SimplifyDimType(entry.second);
+  }
+}
+
+void SimplifyNodeMemoryProfile(NodeMemoryProfile &profile) {
+  NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey) =
+      SimplifyDimType(NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey));
+  NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey) =
+      SimplifyDimType(NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey));
+  NodeMemoryProfileScalar(profile, kNodeMemoryOutputAllocationBytesKey) =
+      SimplifyDimType(NodeMemoryProfileScalar(profile, kNodeMemoryOutputAllocationBytesKey));
+  SimplifyTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryInputsKey));
+  SimplifyTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryInitializersKey));
+  SimplifyTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryIntermediatesKey));
+  SimplifyTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryOutputsKey));
+}
+
 void AddTaggedBytes(TaggedMemory &dst, const ShapeTag &tag, const expressions::DimType &bytes) {
-  if (IsZeroDim(bytes)) {
+  const expressions::DimType simplified_bytes = SimplifyDimType(bytes);
+  if (IsZeroDim(simplified_bytes)) {
     return;
   }
   auto it = dst.find(tag);
   if (it == dst.end()) {
-    dst.emplace(tag, bytes);
+    dst.emplace(tag, simplified_bytes);
     return;
   }
-  it->second = expressions::dim_add(it->second, bytes);
+  it->second = SimplifyDimType(expressions::dim_add(it->second, simplified_bytes));
 }
 
 void AddLiveAllocation(NodeMemoryProfile &profile, const LiveAllocation &alloc) {
+  const expressions::DimType simplified_bytes = SimplifyDimType(alloc.bytes);
   expressions::DimType &already_allocated =
       NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey);
-  already_allocated = expressions::dim_add(already_allocated, alloc.bytes);
+  already_allocated = SimplifyDimType(expressions::dim_add(already_allocated, simplified_bytes));
   switch (alloc.source) {
   case MemoryValueSource::kInput:
-    AddTaggedBytes(NodeMemoryProfileBucket(profile, kNodeMemoryInputsKey), alloc.tag, alloc.bytes);
+    AddTaggedBytes(NodeMemoryProfileBucket(profile, kNodeMemoryInputsKey), alloc.tag,
+                   simplified_bytes);
     break;
   case MemoryValueSource::kInitializer:
     AddTaggedBytes(NodeMemoryProfileBucket(profile, kNodeMemoryInitializersKey), alloc.tag,
-                   alloc.bytes);
+                   simplified_bytes);
     break;
   case MemoryValueSource::kIntermediate:
     AddTaggedBytes(NodeMemoryProfileBucket(profile, kNodeMemoryIntermediatesKey), alloc.tag,
-                   alloc.bytes);
+                   simplified_bytes);
     break;
   }
 }
@@ -177,15 +211,16 @@ std::optional<expressions::DimType> ByteSizeExpr(const OptimTensor &t) {
     num_elements = expressions::dim_mul(num_elements, shapes::ToDimType(t.Shape()[i]));
   }
   if (bits % 8 == 0) {
-    return expressions::dim_mul(num_elements, expressions::DimType{int64_t{bits / 8}});
+    return SimplifyDimType(
+        expressions::dim_mul(num_elements, expressions::DimType{int64_t{bits / 8}}));
   }
   // Sub-byte element types pack multiple values per byte, so the buffer size is
   // ceil(num_elements * bits / 8). ``dim_div`` is floor division, hence the
   // ``+7`` round-up term before dividing by 8.
-  return expressions::dim_div(
+  return SimplifyDimType(expressions::dim_div(
       expressions::dim_add(expressions::dim_mul(num_elements, expressions::DimType{int64_t{bits}}),
                            expressions::DimType{int64_t{7}}),
-      expressions::DimType{int64_t{8}});
+      expressions::DimType{int64_t{8}}));
 }
 
 // Classifies a candidate reuse of input ``in`` by output ``out`` by comparing
@@ -419,8 +454,8 @@ void ComputeContext::ComputeInPlaceReuseGraph(
     if (!bytes.has_value()) {
       continue;
     }
-    alive[name] =
-        LiveAllocation{*bytes, MemoryValueSource::kInitializer, ValueTag(value_tags, name)};
+    alive[name] = LiveAllocation{SimplifyDimType(*bytes), MemoryValueSource::kInitializer,
+                                 ValueTag(value_tags, name)};
   }
   for (int i = 0; i < graph.input().size(); ++i) {
     const std::string name = graph.input()[i].name().as_string();
@@ -431,7 +466,8 @@ void ComputeContext::ComputeInPlaceReuseGraph(
     if (!bytes.has_value()) {
       continue;
     }
-    alive[name] = LiveAllocation{*bytes, MemoryValueSource::kInput, ValueTag(value_tags, name)};
+    alive[name] = LiveAllocation{SimplifyDimType(*bytes), MemoryValueSource::kInput,
+                                 ValueTag(value_tags, name)};
   }
 
   for (int i = 0; i < num_nodes; ++i) {
@@ -460,13 +496,16 @@ void ComputeContext::ComputeInPlaceReuseGraph(
       }
       expressions::DimType &output_allocation =
           NodeMemoryProfileScalar(profile, kNodeMemoryOutputAllocationBytesKey);
-      output_allocation = expressions::dim_add(output_allocation, *out_bytes);
+      output_allocation =
+          SimplifyDimType(expressions::dim_add(output_allocation, SimplifyDimType(*out_bytes)));
       AddTaggedBytes(NodeMemoryProfileBucket(profile, kNodeMemoryOutputsKey),
                      ValueTag(value_tags, out_name), *out_bytes);
     }
     NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey) =
-        expressions::dim_add(NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey),
-                             NodeMemoryProfileScalar(profile, kNodeMemoryOutputAllocationBytesKey));
+        SimplifyDimType(expressions::dim_add(
+            NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey),
+            NodeMemoryProfileScalar(profile, kNodeMemoryOutputAllocationBytesKey)));
+    SimplifyNodeMemoryProfile(profile);
 
     std::unordered_map<std::string, LiveAllocation> outputs_to_add;
     std::unordered_set<std::string> inputs_reused_from_graph_input;
@@ -492,7 +531,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
         if (!out_bytes.has_value()) {
           continue;
         }
-        alloc_bytes = *out_bytes;
+        alloc_bytes = SimplifyDimType(*out_bytes);
       }
       const auto use_it = last_use.find(out_name);
       const bool survives_after_node = graph_outputs.find(out_name) != graph_outputs.end() ||
@@ -500,7 +539,8 @@ void ComputeContext::ComputeInPlaceReuseGraph(
       if (!survives_after_node) {
         continue;
       }
-      outputs_to_add.emplace(out_name, LiveAllocation{alloc_bytes, MemoryValueSource::kIntermediate,
+      outputs_to_add.emplace(out_name, LiveAllocation{SimplifyDimType(alloc_bytes),
+                                                      MemoryValueSource::kIntermediate,
                                                       ValueTag(value_tags, out_name)});
     }
 

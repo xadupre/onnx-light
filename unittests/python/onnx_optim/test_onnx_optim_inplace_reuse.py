@@ -488,7 +488,7 @@ class TestInPlaceReuse(ExtTestCase):
         with self.assertRaises(IndexError):
             compute.node_tag(2)
 
-    def test_shape_inference_alias_keeps_only_renamed_binding(self):
+    def test_infer_value_and_node_tags_binding_removed(self):
         self.assertFalse(hasattr(si._C, "infer_value_and_node_tags"))
         self.assertIs(si.infer_value_and_node_tags, si.compute_value_and_node_tags)
 

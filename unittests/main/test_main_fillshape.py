@@ -509,14 +509,6 @@ class TestMainFillshape(ExtTestCase):
 class TestParseTokenSpec(ExtTestCase):
     """Unit tests for the ``_parse_token_spec`` helper."""
 
-    def test_exact_value(self):
-        from onnx_light.__main__ import _parse_token_spec
-
-        name, lo, hi = _parse_token_spec("batch=4")
-        self.assertEqual(name, "batch")
-        self.assertEqual(lo, 4)
-        self.assertEqual(hi, 4)
-
     def test_range(self):
         from onnx_light.__main__ import _parse_token_spec
 
@@ -536,8 +528,14 @@ class TestParseTokenSpec(ExtTestCase):
     def test_missing_equals_raises(self):
         from onnx_light.__main__ import _parse_token_spec
 
-        with self.assertRaisesRegex(ValueError, "NAME=VALUE or NAME=LOW:HIGH"):
+        with self.assertRaisesRegex(ValueError, "NAME=LOW:HIGH"):
             _parse_token_spec("batch4")
+
+    def test_missing_colon_raises(self):
+        from onnx_light.__main__ import _parse_token_spec
+
+        with self.assertRaisesRegex(ValueError, "NAME=LOW:HIGH"):
+            _parse_token_spec("batch=4")
 
     def test_inverted_bounds_raises(self):
         from onnx_light.__main__ import _parse_token_spec
@@ -558,8 +556,8 @@ class TestFillshapeTokenOption(ExtTestCase):
 
         save(model, path)
 
-    def test_token_exact_value_produces_concrete_output_shape(self):
-        """--token batch=4 substitutes 'batch' with 4 → concrete output shape."""
+    def test_token_range_uses_lower_bound_for_inference(self):
+        """--token batch=4:4 uses lower bound 4 for shape propagation → concrete output shape."""
         from onnx_light.__main__ import main
 
         model = _make_add_model(input_shape=["batch", 3])
@@ -567,15 +565,13 @@ class TestFillshapeTokenOption(ExtTestCase):
             model_path = os.path.join(tmp, "model.onnx")
             self._save_model(model, model_path)
 
-            main(["fillshape", model_path, "--token", "batch=4"])
+            main(["fillshape", model_path, "--token", "batch=4:4"])
 
             result = load(model_path)
             dims = list(result.graph.output[0].type.tensor_type.shape.dim)
             self.assertEqual(len(dims), 2)
             self.assertEqual(dims[0].dim_value, 4)
             self.assertEqual(dims[1].dim_value, 3)
-
-    def test_token_range_uses_lower_bound_for_inference(self):
         """--token seq=1:128 uses lower bound 1 for shape propagation."""
         from onnx_light.__main__ import main
 
@@ -608,7 +604,7 @@ class TestFillshapeTokenOption(ExtTestCase):
             model_path = os.path.join(tmp, "model.onnx")
             self._save_model(model, model_path)
 
-            main(["fillshape", model_path, "--token", "batch=4", "--token", "seq=16"])
+            main(["fillshape", model_path, "--token", "batch=4:4", "--token", "seq=16:16"])
 
             result = load(model_path)
             dims = list(result.graph.output[0].type.tensor_type.shape.dim)
@@ -626,7 +622,7 @@ class TestFillshapeTokenOption(ExtTestCase):
             self._save_model(model, model_path)
 
             # Only override 'batch'; 'seq' should remain symbolic.
-            main(["fillshape", model_path, "--token", "batch=2"])
+            main(["fillshape", model_path, "--token", "batch=2:2"])
 
             result = load(model_path)
             dims = list(result.graph.output[0].type.tensor_type.shape.dim)
@@ -646,7 +642,7 @@ class TestFillshapeTokenOption(ExtTestCase):
             output_path = os.path.join(tmp, "out.onnx")
             self._save_model(model, model_path)
 
-            main(["fillshape", model_path, "--output", output_path, "--token", "batch=8"])
+            main(["fillshape", model_path, "--output", output_path, "--token", "batch=8:8"])
 
             result = load(output_path)
             dims = list(result.graph.output[0].type.tensor_type.shape.dim)

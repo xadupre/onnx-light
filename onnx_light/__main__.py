@@ -34,11 +34,10 @@ fillshape
         tags for every value and node in the graph and record them in
         ``metadata_props`` (keys ``onnx_light.value_tags`` and
         ``onnx_light.node_tag``).
-    ``--token NAME=VALUE`` / ``--token NAME=LOW:HIGH``
-        Bind a symbolic dimension token to a concrete integer value (or range)
-        before running shape inference.  May be specified multiple times.
-        For example, ``--token batch=4 --token seq=1:128`` sets the symbolic
-        dimension named ``batch`` to 4 and treats ``seq`` as having range
+    ``--token NAME=LOW:HIGH``
+        Bind a symbolic dimension token to an inclusive integer range before
+        running shape inference.  May be specified multiple times.
+        For example, ``--token seq=1:128`` treats ``seq`` as having range
         ``[1, 128]`` (the lower bound is used for shape propagation).
         Symbolic dims not covered by ``--token`` remain symbolic.
     ``--show``
@@ -156,14 +155,11 @@ def _print_shape_inference_events_detailed(events: list) -> None:
 def _parse_token_spec(token_str: str) -> tuple[str, int, int]:
     """Parses a ``--token`` specification into ``(name, low, high)``.
 
-    Accepted formats:
-
-    * ``NAME=VALUE`` — exact value; ``low == high == VALUE``.
-    * ``NAME=LOW:HIGH`` — inclusive range; ``LOW <= HIGH``.
+    The only accepted format is ``NAME=LOW:HIGH`` — an inclusive range where
+    ``LOW <= HIGH``.
 
     Args:
-        token_str: The raw argument string, e.g. ``"batch=4"`` or
-            ``"seq=1:128"``.
+        token_str: The raw argument string, e.g. ``"seq=1:128"``.
 
     Returns:
         A ``(name, low, high)`` triple where *low* and *high* are
@@ -173,25 +169,19 @@ def _parse_token_spec(token_str: str) -> tuple[str, int, int]:
         ValueError: When the format is invalid or the bounds are
             inconsistent.
     """
-    if "=" not in token_str:
+    if "=" not in token_str or ":" not in token_str:
         raise ValueError(
-            f"--token value {token_str!r} must be in NAME=VALUE or NAME=LOW:HIGH format "
-            "(e.g. --token batch=4 or --token seq=1:128)."
+            f"--token value {token_str!r} must be in NAME=LOW:HIGH format "
+            "(e.g. --token seq=1:128)."
         )
-    name, _, value_str = token_str.partition("=")
+    name, _, range_str = token_str.partition("=")
     name = name.strip()
-    value_str = value_str.strip()
-    if ":" in value_str:
-        low_str, _, high_str = value_str.partition(":")
-        low = int(low_str.strip())
-        high = int(high_str.strip())
-        if low > high:
-            raise ValueError(
-                f"--token {name!r}: lower bound {low} must be <= upper bound {high}."
-            )
-    else:
-        val = int(value_str)
-        low = high = val
+    range_str = range_str.strip()
+    low_str, _, high_str = range_str.partition(":")
+    low = int(low_str.strip())
+    high = int(high_str.strip())
+    if low > high:
+        raise ValueError(f"--token {name!r}: lower bound {low} must be <= upper bound {high}.")
     return name, low, high
 
 
@@ -682,12 +672,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "--token",
         action="append",
         default=None,
-        metavar="NAME=VALUE",
+        metavar="NAME=LOW:HIGH",
         help=(
-            "Bind a symbolic dimension token to a concrete integer value or range "
+            "Bind a symbolic dimension token to an inclusive integer range "
             "before running shape inference. May be given multiple times "
-            "(e.g. --token batch=4 --token seq=1:128). "
-            "For a range LOW:HIGH the lower bound is used for shape propagation. "
+            "(e.g. --token batch=1:8 --token seq=1:128). "
+            "The lower bound is used for shape propagation. "
             "Symbolic dims not covered by --token remain symbolic."
         ),
     )

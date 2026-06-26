@@ -27,7 +27,7 @@ Synopsis::
 
     python -m onnx_light fillshape MODEL [--output OUTPUT] [--keep]
                                          [--inplace-info] [--shape-tag] [--show]
-                                         [--token NAME=VALUE ...]
+                                         [--token NAME=LOW:HIGH ...]
                                          [--verbose [LEVEL]]
 
 Positional argument
@@ -65,12 +65,10 @@ Options
     ``metadata_props`` (keys ``onnx_light.value_tags`` and
     ``onnx_light.node_tag``).
 
-``--token NAME=VALUE`` / ``--token NAME=LOW:HIGH``
-    Bind a symbolic dimension token to a concrete integer value (or
-    inclusive range) before running shape inference.  May be specified
-    multiple times.
+``--token NAME=LOW:HIGH``
+    Bind a symbolic dimension token to an inclusive integer range before
+    running shape inference.  May be specified multiple times.
 
-    * ``--token batch=4`` — sets the symbolic dim named ``batch`` to 4.
     * ``--token seq=1:128`` — treats ``seq`` as having range ``[1, 128]``
       and uses ``1`` (the lower bound) for shape propagation.
 
@@ -110,11 +108,11 @@ Preserve existing symbolic dimensions as anchors:
 
     python -m onnx_light fillshape model.onnx --keep
 
-Bind symbolic dimensions to concrete values for concrete shape propagation:
+Bind symbolic dimensions to ranges for shape propagation:
 
 .. code-block:: bash
 
-    python -m onnx_light fillshape model.onnx --token batch=4 --token seq=128
+    python -m onnx_light fillshape model.onnx --token batch=1:8 --token seq=1:128
 
 Bind a symbolic dimension to a range (lower bound used for inference):
 

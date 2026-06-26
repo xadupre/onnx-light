@@ -62,6 +62,20 @@ std::string NormalizeValueTag(std::string_view tag) {
   return {};
 }
 
+bool IsFloatRank2Tensor(const ValueInfoProto &value) {
+  if (!value.has_type() || !value.type().has_tensor_type()) {
+    return false;
+  }
+  const auto &tensor_type = value.type().tensor_type();
+  if (tensor_type.elem_type() != TensorProto::DataType::FLOAT) {
+    return false;
+  }
+  if (!tensor_type.has_shape()) {
+    return false;
+  }
+  return tensor_type.shape().dim_size() == 2;
+}
+
 // Sets ``name`` to ``tag`` (after normalization) and returns whether the map
 // content changed (new key or updated tag value).
 bool TrySetValueTag(std::unordered_map<std::string, std::string> &value_tags,
@@ -109,8 +123,11 @@ void CollectGraphSeedTags(const GraphProto &graph,
                           std::unordered_map<std::string, std::string> &value_tags) {
   for (int i = 0; i < graph.input().size(); ++i) {
     const auto &value = graph.input()[i];
-    SetValueTag(value_tags, value.name().as_string(),
-                ReadMetadataValue(value, kValueTagMetadataKey));
+    std::string tag = ReadMetadataValue(value, kValueTagMetadataKey);
+    if (tag.empty() && IsFloatRank2Tensor(value)) {
+      tag = "weight";
+    }
+    SetValueTag(value_tags, value.name().as_string(), tag);
   }
   for (int i = 0; i < graph.initializer().size(); ++i) {
     const auto &value = graph.initializer()[i];

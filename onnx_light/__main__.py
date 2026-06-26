@@ -390,6 +390,8 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
 
 def _cmd_show(args: argparse.Namespace) -> None:
     """Implements the ``show`` subcommand."""
+    import sys
+
     from .onnx import load
 
     model_path: str = args.model
@@ -403,6 +405,7 @@ def _cmd_show(args: argparse.Namespace) -> None:
     include_node_tags: bool = args.include_node_tags
     include_initializers: bool = args.include_initializers
     direction: str = args.direction
+    graphviz_format: str | None = args.graphviz
 
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model file not found: {model_path!r}")
@@ -452,11 +455,42 @@ def _cmd_show(args: argparse.Namespace) -> None:
             include_attributes=include_attributes,
             include_inplace=include_inplace,
         )
+    elif fmt == "dot":
+        from .tools.dot import to_dot
+
+        dot_text = to_dot(
+            model,
+            direction=direction,
+            include_initializers=include_initializers,
+            include_shapes=include_shapes,
+            include_attributes=include_attributes,
+            include_inplace=include_inplace,
+        )
+
+        if graphviz_format is not None:
+            import subprocess
+
+            result = subprocess.run(
+                ["dot", f"-T{graphviz_format}"],
+                input=dot_text.encode(),
+                capture_output=True,
+                check=True,
+            )
+            if output_path is not None:
+                with open(output_path, "wb") as f:
+                    f.write(result.stdout)
+            else:
+                sys.stdout.buffer.write(result.stdout)
+            return
+
+        text = dot_text
     else:
-        # argparse enforces choices=['pretty', 'mermaid', 'svg'], so this
-        # branch is unreachable in normal usage.  It acts as a defensive guard
-        # for programmatic callers that bypass the argument parser.
-        raise ValueError(f"Unknown format {fmt!r}; expected one of 'pretty', 'mermaid', 'svg'.")
+        # argparse enforces choices=['pretty', 'mermaid', 'svg', 'dot'], so
+        # this branch is unreachable in normal usage.  It acts as a defensive
+        # guard for programmatic callers that bypass the argument parser.
+        raise ValueError(
+            f"Unknown format {fmt!r}; expected one of 'pretty', 'mermaid', 'svg', 'dot'."
+        )
 
     if output_path is not None:
         with open(output_path, "w", encoding="utf-8") as f:
@@ -752,11 +786,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "--format",
         "-f",
         default="pretty",
-        choices=["pretty", "mermaid", "svg"],
+        choices=["pretty", "mermaid", "svg", "dot"],
         dest="format",
         help=(
             "Output format: 'pretty' (default) for a compact text listing, "
-            "'mermaid' for a Mermaid flowchart, or 'svg' for an SVG image."
+            "'mermaid' for a Mermaid flowchart, 'svg' for an SVG image, "
+            "or 'dot' for Graphviz DOT source."
         ),
     )
     show_parser.add_argument(
@@ -824,7 +859,7 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="include_initializers",
         help=(
             "Exclude initializer nodes from the rendered graph "
-            "(applies to 'mermaid' and 'svg' formats)."
+            "(applies to 'mermaid', 'svg' and 'dot' formats)."
         ),
     )
     show_parser.add_argument(
@@ -832,8 +867,20 @@ def _build_parser() -> argparse.ArgumentParser:
         default="TB",
         metavar="DIRECTION",
         help=(
-            "Flowchart direction for 'mermaid' and 'svg' formats. "
+            "Flowchart direction for 'mermaid', 'svg' and 'dot' formats. "
             "One of TB (default), LR, TD or BT (mermaid only)."
+        ),
+    )
+    show_parser.add_argument(
+        "--graphviz",
+        default=None,
+        metavar="GRAPHVIZ_FORMAT",
+        dest="graphviz",
+        help=(
+            "Invoke the Graphviz 'dot' executable on the generated DOT source "
+            "and write the result in GRAPHVIZ_FORMAT (e.g. 'png', 'svg', 'pdf'). "
+            "Only used when --format dot is given. "
+            "Requires Graphviz to be installed and 'dot' to be on PATH."
         ),
     )
     show_parser.set_defaults(func=_cmd_show)

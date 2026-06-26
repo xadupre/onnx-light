@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import io
 import os
+import shutil
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -302,6 +303,136 @@ class TestMainShow(ExtTestCase):
             with open(output_path, encoding="utf-8") as f:
                 content = f.read()
             self.assertIn("<svg", content)
+
+    # ------------------------------------------------------------------
+    # dot format
+    # ------------------------------------------------------------------
+
+    def test_show_dot_format(self):
+        """show --format dot renders a Graphviz DOT graph."""
+        from onnx_light.__main__ import main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            self._save_model(_make_abs_model(), model_path)
+
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                main(["show", model_path, "--format", "dot"])
+
+            output = buf.getvalue()
+            self.assertIn("digraph onnx {", output)
+            self.assertIn("Abs", output)
+
+    def test_show_dot_direction_lr(self):
+        """show --format dot --direction LR uses left-to-right layout."""
+        from onnx_light.__main__ import main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            self._save_model(_make_abs_model(), model_path)
+
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                main(["show", model_path, "--format", "dot", "--direction", "LR"])
+
+            output = buf.getvalue()
+            self.assertIn('rankdir="LR"', output)
+
+    def test_show_dot_no_shapes(self):
+        """show --format dot --no-shapes omits shape annotations."""
+        from onnx_light.__main__ import main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [3, 4])
+            y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [3, 4])
+            node = oh.make_node("Abs", inputs=["X"], outputs=["Y"])
+            graph = oh.make_graph([node], "g", [x], [y])
+            model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+            model.ir_version = 8
+            self._save_model(model, model_path)
+
+            buf_shapes = io.StringIO()
+            with redirect_stdout(buf_shapes):
+                main(["show", model_path, "--format", "dot"])
+
+            buf_no_shapes = io.StringIO()
+            with redirect_stdout(buf_no_shapes):
+                main(["show", model_path, "--format", "dot", "--no-shapes"])
+
+            self.assertIn("float[3,4]", buf_shapes.getvalue())
+            self.assertNotIn("float[3,4]", buf_no_shapes.getvalue())
+
+    def test_show_dot_output_file(self):
+        """show --format dot --output writes DOT source to the specified file."""
+        from onnx_light.__main__ import main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            output_path = os.path.join(tmp, "out.dot")
+            self._save_model(_make_abs_model(), model_path)
+
+            main(["show", model_path, "--format", "dot", "--output", output_path])
+
+            self.assertTrue(os.path.exists(output_path))
+            with open(output_path, encoding="utf-8") as f:
+                content = f.read()
+            self.assertIn("digraph onnx {", content)
+            self.assertIn("Abs", content)
+
+    @unittest.skipUnless(
+        shutil.which("dot") is not None, "Graphviz 'dot' executable not found on PATH"
+    )
+    def test_show_dot_graphviz_png(self):
+        """show --format dot --graphviz png invokes graphviz and writes PNG bytes."""
+        from onnx_light.__main__ import main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            output_path = os.path.join(tmp, "out.png")
+            self._save_model(_make_abs_model(), model_path)
+
+            main(
+                [
+                    "show",
+                    model_path,
+                    "--format",
+                    "dot",
+                    "--graphviz",
+                    "png",
+                    "--output",
+                    output_path,
+                ]
+            )
+
+            self.assertTrue(os.path.exists(output_path))
+            with open(output_path, "rb") as f:
+                header = f.read(4)
+            # PNG files start with the 4-byte magic \x89PNG.
+            self.assertEqual(header, b"\x89PNG")
+
+    @unittest.skipUnless(
+        shutil.which("dot") is not None, "Graphviz 'dot' executable not found on PATH"
+    )
+    def test_show_dot_graphviz_svg_to_stdout(self):
+        """show --format dot --graphviz svg writes SVG bytes to stdout.buffer."""
+        import sys
+        from io import BytesIO
+        from unittest.mock import patch
+
+        from onnx_light.__main__ import main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            self._save_model(_make_abs_model(), model_path)
+
+            buf = BytesIO()
+            with patch.object(sys.stdout, "buffer", buf):
+                main(["show", model_path, "--format", "dot", "--graphviz", "svg"])
+
+            output = buf.getvalue()
+            self.assertIn(b"<svg", output)
 
     # ------------------------------------------------------------------
     # error handling

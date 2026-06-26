@@ -1103,6 +1103,15 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   shape_mod.attr("NODE_MEMORY_INTERMEDIATES_KEY") = onnx_annotations::kNodeMemoryIntermediatesKey;
   shape_mod.attr("NODE_MEMORY_OUTPUTS_KEY") = onnx_annotations::kNodeMemoryOutputsKey;
 
+  auto copy_node_list = [](nb::list nodes) {
+    std::vector<NodeProto> copied;
+    copied.reserve(nodes.size());
+    for (nb::handle h : nodes) {
+      copied.push_back(nb::cast<const NodeProto &>(h));
+    }
+    return copied;
+  };
+
   nb::class_<onnx_annotations::ComputeContext>(
       shape_mod, "ComputeContext",
       "Holds the in-place reuse opportunities computed for a graph, mirroring the way "
@@ -1111,6 +1120,48 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       "through ``reuse`` / ``node_reuse`` / ``memory`` or persist it with "
       "``write_to_metadata``.")
       .def(nb::init<>())
+      .def(
+          "compute_value_and_node_tags",
+          [](onnx_annotations::ComputeContext &self, const GraphProto &graph) {
+            const auto inferred = self.ComputeValueAndNodeTags(graph);
+            return nb::make_tuple(inferred.first, inferred.second);
+          },
+          nb::arg("graph"),
+          "Computes semantic ``shape``/``axes``/``weight`` tags for values and nodes in ``graph`` "
+          "and stores the result in this context.")
+      .def(
+          "compute_value_and_node_tags",
+          [](onnx_annotations::ComputeContext &self, const FunctionProto &function) {
+            const auto inferred = self.ComputeValueAndNodeTags(function);
+            return nb::make_tuple(inferred.first, inferred.second);
+          },
+          nb::arg("function"),
+          "Computes semantic ``shape``/``axes``/``weight`` tags for values and nodes in "
+          "``function`` and stores the result in this context.")
+      .def(
+          "compute_value_and_node_tags",
+          [copy_node_list](onnx_annotations::ComputeContext &self, nb::list nodes) {
+            const auto inferred = self.ComputeValueAndNodeTags(copy_node_list(nodes));
+            return nb::make_tuple(inferred.first, inferred.second);
+          },
+          nb::arg("nodes"),
+          "Computes semantic ``shape``/``axes``/``weight`` tags for a node list and stores the "
+          "result in this context.")
+      .def_prop_ro(
+          "value_tags",
+          [](const onnx_annotations::ComputeContext &self) { return self.ValueTags(); },
+          "Returns the last value-tag map computed by :meth:`compute_value_and_node_tags`.")
+      .def_prop_ro(
+          "node_tags", [](const onnx_annotations::ComputeContext &self) { return self.NodeTags(); },
+          "Returns the last per-node tag list computed by :meth:`compute_value_and_node_tags`.")
+      .def(
+          "node_tag",
+          [](const onnx_annotations::ComputeContext &self, std::size_t node_index) {
+            return self.NodeTag(node_index);
+          },
+          nb::arg("node_index"),
+          "Returns the last tag computed for the node at ``node_index``. Raises ``IndexError`` "
+          "when ``node_index`` is out of bounds.")
       .def(
           "compute_inplace_reuse_graph",
           [](onnx_annotations::ComputeContext &self, const GraphProto &graph,
@@ -1126,9 +1177,11 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           "By default declared graph inputs are never overwritten in place; set "
           "``allow_input_overwrite=True`` to let an input be reused like an intermediate.\n\n"
           "When ``value_tags`` is provided (a ``{name: tag}`` dict such as the one returned by "
-          ":func:`infer_value_and_node_tags`), released values that carry the ``\"shape\"`` tag "
+          ":func:`compute_value_and_node_tags`), released values that carry the ``\"shape\"`` tag "
           "are also stored in ``release_after_shape_tagged`` and written to "
-          "``onnx_light.release_after_shape_tag`` by :meth:`write_to_metadata`.")
+          "``onnx_light.release_after_shape_tag`` by :meth:`write_to_metadata`. When "
+          "``value_tags`` is omitted, this method reuses the last tags stored by "
+          ":meth:`compute_value_and_node_tags` on the same context, if any.")
       .def_prop_ro(
           "reuse", [](const onnx_annotations::ComputeContext &self) { return self.Reuse(); },
           "The per-node reuse opportunities as a list (one entry per node, same order as "
@@ -1147,10 +1200,10 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
             return self.ReleaseAfterShapeTagged();
           },
           "The per-node shape-tagged releasable values. When ``compute_inplace_reuse_graph`` "
-          "was called with a non-empty ``value_tags`` argument, this is a list with one entry "
-          "per node (same order as ``graph.node``), where each entry is a list of value names "
-          "that carry the ``\"shape\"`` tag. When called without ``value_tags``, this list is "
-          "itself empty.")
+          "was called with an explicit non-empty ``value_tags`` argument (or after "
+          "``compute_value_and_node_tags`` populated this context), this is a list with one "
+          "entry per node (same order as ``graph.node``), where each entry is a list of value "
+          "names that carry the ``\"shape\"`` tag. Otherwise this list is itself empty.")
       .def(
           "node_release_after_shape_tagged",
           [](const onnx_annotations::ComputeContext &self, std::size_t node_index) {
@@ -1222,41 +1275,36 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       "or ``greater``). For every node with releasable last-use inputs, one metadata entry is "
       "added under ``onnx_light.release_after`` as a ``;``-separated name list.\n\n"
       "When ``value_tags`` is provided (a ``{name: tag}`` dict such as the one returned by "
-      ":func:`infer_value_and_node_tags`), released values that carry the ``\"shape\"`` tag are "
+      ":func:`compute_value_and_node_tags`), released values that carry the ``\"shape\"`` tag are "
       "also written under ``onnx_light.release_after_shape_tag``.");
 
-  auto copy_node_list = [](nb::list nodes) {
-    std::vector<NodeProto> copied;
-    copied.reserve(nodes.size());
-    for (nb::handle h : nodes) {
-      copied.push_back(nb::cast<const NodeProto &>(h));
-    }
-    return copied;
-  };
-
   shape_mod.def(
-      "infer_value_and_node_tags",
+      "compute_value_and_node_tags",
       [](const GraphProto &graph) {
-        const auto inferred = onnx_annotations::InferValueAndNodeTags(graph);
+        onnx_annotations::ComputeContext ctx;
+        const auto inferred = ctx.ComputeValueAndNodeTags(graph);
         return nb::make_tuple(inferred.first, inferred.second);
       },
       nb::arg("graph"),
-      "Infers semantic ``shape``/``axes``/``weight`` tags for values and nodes in ``graph``.");
+      "Computes semantic ``shape``/``axes``/``weight`` tags for values and nodes in ``graph``.");
   shape_mod.def(
-      "infer_value_and_node_tags",
+      "compute_value_and_node_tags",
       [](const FunctionProto &function) {
-        const auto inferred = onnx_annotations::InferValueAndNodeTags(function);
+        onnx_annotations::ComputeContext ctx;
+        const auto inferred = ctx.ComputeValueAndNodeTags(function);
         return nb::make_tuple(inferred.first, inferred.second);
       },
       nb::arg("function"),
-      "Infers semantic ``shape``/``axes``/``weight`` tags for values and nodes in ``function``.");
+      "Computes semantic ``shape``/``axes``/``weight`` tags for values and nodes in "
+      "``function``.");
   shape_mod.def(
-      "infer_value_and_node_tags",
+      "compute_value_and_node_tags",
       [copy_node_list](nb::list nodes) {
-        const auto inferred = onnx_annotations::InferValueAndNodeTags(copy_node_list(nodes));
+        onnx_annotations::ComputeContext ctx;
+        const auto inferred = ctx.ComputeValueAndNodeTags(copy_node_list(nodes));
         return nb::make_tuple(inferred.first, inferred.second);
       },
-      nb::arg("nodes"), "Infers semantic ``shape``/``axes``/``weight`` tags for a node list.");
+      nb::arg("nodes"), "Computes semantic ``shape``/``axes``/``weight`` tags for a node list.");
 
   shape_mod.def(
       "write_value_and_node_tags_to_metadata",

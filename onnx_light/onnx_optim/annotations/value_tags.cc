@@ -6,7 +6,10 @@
 
 #include <algorithm>
 #include <string_view>
+#include <tuple>
 #include <unordered_set>
+
+#include "onnx_optim/annotations/inplace_reuse.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
@@ -311,47 +314,84 @@ void RecurseSubgraphs(NodeProto &node) {
 } // namespace
 
 std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
-InferValueAndNodeTags(const GraphProto &graph) {
-  std::unordered_map<std::string, std::string> value_tags;
-  std::vector<std::string> node_tags;
-  CollectGraphSeedTags(graph, value_tags);
+ComputeTags(const GraphProto &graph) {
+  std::unordered_map<std::string, std::string> computed_value_tags;
+  std::vector<std::string> computed_node_tags;
+  CollectGraphSeedTags(graph, computed_value_tags);
   std::vector<const NodeProto *> nodes;
   nodes.reserve(graph.node().size());
   for (int i = 0; i < graph.node().size(); ++i) {
     nodes.push_back(&graph.node()[i]);
   }
-  InferNodesTags(nodes, value_tags, node_tags);
-  return {value_tags, node_tags};
+  InferNodesTags(nodes, computed_value_tags, computed_node_tags);
+  return {computed_value_tags, computed_node_tags};
 }
 
 std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
-InferValueAndNodeTags(const FunctionProto &function) {
-  std::unordered_map<std::string, std::string> value_tags;
-  std::vector<std::string> node_tags;
+ComputeTags(const FunctionProto &function) {
+  std::unordered_map<std::string, std::string> computed_value_tags;
+  std::vector<std::string> computed_node_tags;
   std::vector<const NodeProto *> nodes;
   nodes.reserve(function.node().size());
   for (int i = 0; i < function.node().size(); ++i) {
     nodes.push_back(&function.node()[i]);
   }
-  InferNodesTags(nodes, value_tags, node_tags);
-  return {value_tags, node_tags};
+  InferNodesTags(nodes, computed_value_tags, computed_node_tags);
+  return {computed_value_tags, computed_node_tags};
 }
 
 std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
-InferValueAndNodeTags(const std::vector<NodeProto> &nodes) {
-  std::unordered_map<std::string, std::string> value_tags;
-  std::vector<std::string> node_tags;
+ComputeTags(const std::vector<NodeProto> &nodes) {
+  std::unordered_map<std::string, std::string> computed_value_tags;
+  std::vector<std::string> computed_node_tags;
   std::vector<const NodeProto *> ptrs;
   ptrs.reserve(nodes.size());
   for (const NodeProto &node : nodes) {
     ptrs.push_back(&node);
   }
-  InferNodesTags(ptrs, value_tags, node_tags);
-  return {value_tags, node_tags};
+  InferNodesTags(ptrs, computed_value_tags, computed_node_tags);
+  return {computed_value_tags, computed_node_tags};
+}
+
+std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
+ComputeContext::ComputeValueAndNodeTags(const GraphProto &graph) {
+  std::tie(value_tags_, node_tags_) = ComputeTags(graph);
+  return {value_tags_, node_tags_};
+}
+
+std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
+ComputeContext::ComputeValueAndNodeTags(const FunctionProto &function) {
+  std::tie(value_tags_, node_tags_) = ComputeTags(function);
+  return {value_tags_, node_tags_};
+}
+
+std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
+ComputeContext::ComputeValueAndNodeTags(const std::vector<NodeProto> &nodes) {
+  std::tie(value_tags_, node_tags_) = ComputeTags(nodes);
+  return {value_tags_, node_tags_};
+}
+
+std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
+InferValueAndNodeTags(const GraphProto &graph) {
+  ComputeContext ctx;
+  return ctx.ComputeValueAndNodeTags(graph);
+}
+
+std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
+InferValueAndNodeTags(const FunctionProto &function) {
+  ComputeContext ctx;
+  return ctx.ComputeValueAndNodeTags(function);
+}
+
+std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
+InferValueAndNodeTags(const std::vector<NodeProto> &nodes) {
+  ComputeContext ctx;
+  return ctx.ComputeValueAndNodeTags(nodes);
 }
 
 void WriteValueAndNodeTagsToMetadata(GraphProto &graph) {
-  const auto inferred = InferValueAndNodeTags(graph);
+  ComputeContext ctx;
+  const auto inferred = ctx.ComputeValueAndNodeTags(graph);
   const auto &value_tags = inferred.first;
   const auto &node_tags = inferred.second;
   const std::size_t node_limit =
@@ -396,7 +436,8 @@ void WriteValueAndNodeTagsToMetadata(GraphProto &graph) {
 }
 
 void WriteValueAndNodeTagsToMetadata(FunctionProto &function) {
-  const auto inferred = InferValueAndNodeTags(function);
+  ComputeContext ctx;
+  const auto inferred = ctx.ComputeValueAndNodeTags(function);
   const auto &value_tags = inferred.first;
   const auto &node_tags = inferred.second;
   const std::size_t node_limit =

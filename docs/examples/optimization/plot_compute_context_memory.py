@@ -38,7 +38,6 @@ from onnx_light.onnx_optim.shape_inference import (
     ShapesContext,
     apply_inferred_shapes_to_model,
     compute_shape_model,
-    infer_value_and_node_tags,
 )
 
 # Built-in operator schemas must be registered before shape inference.
@@ -106,8 +105,8 @@ shape_context = ShapesContext()
 compute_shape_model(shape_context, model)
 apply_inferred_shapes_to_model(shape_context, model)
 
-value_tags, _ = infer_value_and_node_tags(model.graph)
 compute_context = ComputeContext()
+value_tags, _ = compute_context.compute_value_and_node_tags(model.graph)
 compute_context.compute_inplace_reuse_graph(model.graph, shape_context, value_tags=value_tags)
 memory_profiles = compute_context.memory
 

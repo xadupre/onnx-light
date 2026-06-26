@@ -12,6 +12,8 @@ Currently provided helpers:
   `Mermaid <https://mermaid.js.org/>`_ flowchart.
 * :func:`onnx_light.tools.to_svg` -- render a model or a graph as a
   standalone `SVG <https://www.w3.org/Graphics/SVG/>`_ image.
+* :func:`onnx_light.tools.compute_value_and_node_tags` -- infer semantic
+  value/node tags.
 * :func:`onnx_light.tools.write_value_and_node_tags_to_metadata` -- tag
   values and nodes as ``shape``, ``axes`` or ``weight`` in metadata.
 * :func:`onnx_light.tools.pretty_onnx` -- render any ONNX proto
@@ -24,10 +26,15 @@ from __future__ import annotations
 from .dot import to_dot, to_dot_graph
 from .mermaid import to_mermaid, to_mermaid_graph
 from .pretty_print import pretty_onnx
-from ._proto_utils import infer_value_and_node_tags, write_value_and_node_tags_to_metadata
+from ._proto_utils import (
+    compute_value_and_node_tags,
+    infer_value_and_node_tags,
+    write_value_and_node_tags_to_metadata,
+)
 from .svg import to_svg, to_svg_graph
 
 __all__ = [
+    "compute_value_and_node_tags",
     "infer_value_and_node_tags",
     "pretty_onnx",
     "to_dot",

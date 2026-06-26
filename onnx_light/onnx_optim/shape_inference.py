@@ -25,6 +25,7 @@ from ..onnx_py._onnxpyoptim import shape_inference as _C  # type: ignore[attr-de
 apply_inferred_shapes_to_model = _C.apply_inferred_shapes_to_model
 check_inputs_available = _C.check_inputs_available
 compute_inplace_reuse = _C.compute_inplace_reuse
+compute_value_and_node_tags = _C.compute_value_and_node_tags
 INPLACE_REUSE_METADATA_KEY = _C.INPLACE_REUSE_METADATA_KEY
 RELEASE_AFTER_METADATA_KEY = _C.RELEASE_AFTER_METADATA_KEY
 RELEASE_AFTER_SHAPE_TAG_METADATA_KEY = _C.RELEASE_AFTER_SHAPE_TAG_METADATA_KEY
@@ -33,7 +34,7 @@ VALUE_TAG_METADATA_KEY = _C.VALUE_TAG_METADATA_KEY
 VALUE_TAGS_METADATA_KEY = _C.VALUE_TAGS_METADATA_KEY
 compute_shape_model = _C.compute_shape_model
 compute_shape_node = _C.compute_shape_node
-infer_value_and_node_tags = _C.infer_value_and_node_tags
+infer_value_and_node_tags = compute_value_and_node_tags
 kUnknownOpsetVersion = _C.kUnknownOpsetVersion
 kOnnxDomain = _C.kOnnxDomain
 InPlaceReuse = _C.InPlaceReuse

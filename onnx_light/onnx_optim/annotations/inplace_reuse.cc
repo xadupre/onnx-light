@@ -615,14 +615,15 @@ void ComputeContext::ComputeInPlaceReuseGraph(
   // Only allocate the per-node sub-vectors when value_tags is actually non-empty
   // so that WriteToMetadata can use release_after_shape_tagged_.size() ==
   // reuse_.size() to detect whether shape-tag info was supplied.
+  const auto &effective_value_tags = value_tags.empty() ? value_tags_ : value_tags;
   release_after_shape_tagged_.clear();
-  if (!value_tags.empty()) {
+  if (!effective_value_tags.empty()) {
     const std::size_t n = release_after_.size();
     release_after_shape_tagged_.assign(n, {});
     for (std::size_t i = 0; i < n; ++i) {
       for (const std::string &name : release_after_[i]) {
-        auto it = value_tags.find(name);
-        if (it != value_tags.end() && it->second == "shape") {
+        auto it = effective_value_tags.find(name);
+        if (it != effective_value_tags.end() && it->second == "shape") {
           release_after_shape_tagged_[i].push_back(name);
         }
       }

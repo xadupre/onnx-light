@@ -215,7 +215,7 @@ def _require_shape_inference_extension() -> Any:
     return _shape_inference
 
 
-def infer_value_and_node_tags(
+def compute_value_and_node_tags(
     graph_or_nodes_or_function: Any,
 ) -> tuple[dict[str, str], list[str]]:
     """Infers semantic ``shape``/``axes``/``weight`` tags for values and nodes.
@@ -224,9 +224,12 @@ def infer_value_and_node_tags(
         A pair ``(value_tags, node_tags)`` where ``value_tags`` maps value
         names to tags and ``node_tags`` is ordered like the processed node list.
     """
-    return _require_shape_inference_extension().infer_value_and_node_tags(
+    return _require_shape_inference_extension().compute_value_and_node_tags(
         graph_or_nodes_or_function
     )
+
+
+infer_value_and_node_tags = compute_value_and_node_tags
 
 
 def write_value_and_node_tags_to_metadata(graph_or_nodes_or_function: Any) -> None:

@@ -491,14 +491,14 @@ class TestMainFillshape(ExtTestCase):
                 del graph, ctx, allow_input_overwrite
                 order.append("compute_inplace_reuse_graph")
 
+            def compute_value_and_node_tags(self, graph):
+                del graph
+                order.append("compute_value_and_node_tags")
+                return {}, []
+
             def write_to_metadata(self, graph):
                 del graph
                 order.append("write_inplace_reuse_to_metadata")
-
-        def _record_infer_value_and_node_tags(graph):
-            del graph
-            order.append("infer_value_and_node_tags")
-            return {}, []
 
         def _record_write_value_and_node_tags_to_metadata(graph):
             del graph
@@ -513,10 +513,6 @@ class TestMainFillshape(ExtTestCase):
                     "onnx_light.onnx_optim.shape_inference.ComputeContext", _FakeComputeContext
                 ),
                 patch(
-                    "onnx_light.onnx_optim.shape_inference.infer_value_and_node_tags",
-                    side_effect=_record_infer_value_and_node_tags,
-                ),
-                patch(
                     "onnx_light.onnx_optim.shape_inference.write_value_and_node_tags_to_metadata",
                     side_effect=_record_write_value_and_node_tags_to_metadata,
                 ),
@@ -528,7 +524,7 @@ class TestMainFillshape(ExtTestCase):
             [
                 "compute_inplace_reuse_graph",
                 "write_inplace_reuse_to_metadata",
-                "infer_value_and_node_tags",
+                "compute_value_and_node_tags",
                 "write_value_and_node_tags_to_metadata",
             ],
         )

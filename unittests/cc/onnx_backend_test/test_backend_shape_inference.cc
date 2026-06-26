@@ -848,6 +848,14 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersInPlaceReuseOnBackendCase) {
     EXPECT_EQ(reuse_with_inputs[0][0],
               (onnx_optim::annotations::InPlaceReuse{
                   0, 0, onnx_optim::annotations::InPlaceReuseKind::kEqual}));
+    ASSERT_EQ(reuse_with_inputs[1].size(), 1u);
+    EXPECT_EQ(reuse_with_inputs[1][0],
+              (onnx_optim::annotations::InPlaceReuse{
+                  0, 0, onnx_optim::annotations::InPlaceReuseKind::kEqual}));
+    ASSERT_EQ(reuse_with_inputs[2].size(), 1u);
+    EXPECT_EQ(reuse_with_inputs[2][0],
+              (onnx_optim::annotations::InPlaceReuse{
+                  0, 0, onnx_optim::annotations::InPlaceReuseKind::kEqual}));
   }
   ASSERT_TRUE(found) << "test_cc_shape_inference_inplace_reuse case not registered";
 }

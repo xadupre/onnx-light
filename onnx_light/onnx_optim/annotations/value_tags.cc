@@ -62,8 +62,10 @@ std::string NormalizeValueTag(std::string_view tag) {
   return {};
 }
 
-bool SetValueTagIfChanged(std::unordered_map<std::string, std::string> &value_tags,
-                          const std::string &name, const std::string &tag) {
+// Sets ``name`` to ``tag`` (after normalization) and returns whether the map
+// content changed (new key or updated tag value).
+bool TrySetValueTag(std::unordered_map<std::string, std::string> &value_tags,
+                    const std::string &name, const std::string &tag) {
   if (name.empty()) {
     return false;
   }
@@ -81,7 +83,26 @@ bool SetValueTagIfChanged(std::unordered_map<std::string, std::string> &value_ta
 
 void SetValueTag(std::unordered_map<std::string, std::string> &value_tags, const std::string &name,
                  const std::string &tag) {
-  static_cast<void>(SetValueTagIfChanged(value_tags, name, tag));
+  static_cast<void>(TrySetValueTag(value_tags, name, tag));
+}
+
+// Returns the input indices that can safely inherit an output tag when running
+// backward propagation from consumers to producers.
+std::vector<int> BackwardTagInputIndices(const NodeProto &node) {
+  const std::string op_type = node.op_type().as_string();
+  if (op_type == "Concat") {
+    std::vector<int> all_inputs;
+    all_inputs.reserve(static_cast<std::size_t>(node.input().size()));
+    for (int i = 0; i < node.input().size(); ++i) {
+      all_inputs.push_back(i);
+    }
+    return all_inputs;
+  }
+  if (op_type == "Identity" || op_type == "Cast" || op_type == "Squeeze" ||
+      op_type == "Unsqueeze" || op_type == "Gather" || op_type == "Slice") {
+    return {0};
+  }
+  return {};
 }
 
 void CollectGraphSeedTags(const GraphProto &graph,
@@ -130,21 +151,21 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
 
       if (node->input().size() >= 2) {
         if (op_type == "Reshape" || op_type == "Expand" || op_type == "Slice") {
-          changed |= SetValueTagIfChanged(value_tags, node->input(1).as_string(), "shape");
+          changed |= TrySetValueTag(value_tags, node->input(1).as_string(), "shape");
         } else if (op_type == "Squeeze" || op_type == "Unsqueeze" || op_type == "ReduceSum" ||
                    op_type == "ReduceMean" || op_type == "ReduceMax" || op_type == "ReduceMin") {
-          changed |= SetValueTagIfChanged(value_tags, node->input(1).as_string(), "axes");
+          changed |= TrySetValueTag(value_tags, node->input(1).as_string(), "axes");
         }
       }
       if (op_type == "Slice") {
         if (node->input().size() > 2) {
-          changed |= SetValueTagIfChanged(value_tags, node->input(2).as_string(), "shape");
+          changed |= TrySetValueTag(value_tags, node->input(2).as_string(), "shape");
         }
         if (node->input().size() > 3) {
-          changed |= SetValueTagIfChanged(value_tags, node->input(3).as_string(), "axes");
+          changed |= TrySetValueTag(value_tags, node->input(3).as_string(), "axes");
         }
         if (node->input().size() > 4) {
-          changed |= SetValueTagIfChanged(value_tags, node->input(4).as_string(), "shape");
+          changed |= TrySetValueTag(value_tags, node->input(4).as_string(), "shape");
         }
       }
 
@@ -163,21 +184,31 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
       }
       if (!node_tag.empty()) {
         for (int o = 0; o < node->output().size(); ++o) {
-          changed |= SetValueTagIfChanged(value_tags, node->output(o).as_string(), node_tag);
+          changed |= TrySetValueTag(value_tags, node->output(o).as_string(), node_tag);
         }
       }
 
-      if (!node->input().empty()) {
+      const std::vector<int> backward_inputs = BackwardTagInputIndices(*node);
+      if (!backward_inputs.empty()) {
         std::string output_tag;
+        bool output_tags_are_consistent = true;
         for (int o = 0; o < node->output().size(); ++o) {
           auto it = value_tags.find(node->output(o).as_string());
           if (it != value_tags.end()) {
-            output_tag = it->second;
-            break;
+            if (output_tag.empty()) {
+              output_tag = it->second;
+            } else if (output_tag != it->second) {
+              output_tags_are_consistent = false;
+              break;
+            }
           }
         }
-        if (!output_tag.empty()) {
-          changed |= SetValueTagIfChanged(value_tags, node->input(0).as_string(), output_tag);
+        if (output_tags_are_consistent && !output_tag.empty()) {
+          for (int idx : backward_inputs) {
+            if (idx >= 0 && idx < node->input().size()) {
+              changed |= TrySetValueTag(value_tags, node->input(idx).as_string(), output_tag);
+            }
+          }
         }
       }
     }

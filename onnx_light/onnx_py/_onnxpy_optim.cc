@@ -1127,7 +1127,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
             return nb::make_tuple(inferred.first, inferred.second);
           },
           nb::arg("graph"),
-          "Infers semantic ``shape``/``axes``/``weight`` tags for values and nodes in ``graph`` "
+          "Computes semantic ``shape``/``axes``/``weight`` tags for values and nodes in ``graph`` "
           "and stores the result in this context.")
       .def(
           "compute_value_and_node_tags",
@@ -1136,7 +1136,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
             return nb::make_tuple(inferred.first, inferred.second);
           },
           nb::arg("function"),
-          "Infers semantic ``shape``/``axes``/``weight`` tags for values and nodes in "
+          "Computes semantic ``shape``/``axes``/``weight`` tags for values and nodes in "
           "``function`` and stores the result in this context.")
       .def(
           "compute_value_and_node_tags",
@@ -1145,15 +1145,15 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
             return nb::make_tuple(inferred.first, inferred.second);
           },
           nb::arg("nodes"),
-          "Infers semantic ``shape``/``axes``/``weight`` tags for a node list and stores the "
+          "Computes semantic ``shape``/``axes``/``weight`` tags for a node list and stores the "
           "result in this context.")
       .def_prop_ro(
           "value_tags",
           [](const onnx_annotations::ComputeContext &self) { return self.ValueTags(); },
-          "The last value-tag map computed by :meth:`compute_value_and_node_tags`.")
+          "Returns the last value-tag map computed by :meth:`compute_value_and_node_tags`.")
       .def_prop_ro(
           "node_tags", [](const onnx_annotations::ComputeContext &self) { return self.NodeTags(); },
-          "The last per-node tag list computed by :meth:`compute_value_and_node_tags`.")
+          "Returns the last per-node tag list computed by :meth:`compute_value_and_node_tags`.")
       .def(
           "node_tag",
           [](const onnx_annotations::ComputeContext &self, std::size_t node_index) {
@@ -1286,7 +1286,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
         return nb::make_tuple(inferred.first, inferred.second);
       },
       nb::arg("graph"),
-      "Infers semantic ``shape``/``axes``/``weight`` tags for values and nodes in ``graph``.");
+      "Computes semantic ``shape``/``axes``/``weight`` tags for values and nodes in ``graph``.");
   shape_mod.def(
       "compute_value_and_node_tags",
       [](const FunctionProto &function) {
@@ -1295,7 +1295,8 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
         return nb::make_tuple(inferred.first, inferred.second);
       },
       nb::arg("function"),
-      "Infers semantic ``shape``/``axes``/``weight`` tags for values and nodes in ``function``.");
+      "Computes semantic ``shape``/``axes``/``weight`` tags for values and nodes in "
+      "``function``.");
   shape_mod.def(
       "compute_value_and_node_tags",
       [copy_node_list](nb::list nodes) {
@@ -1303,7 +1304,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
         const auto inferred = ctx.ComputeValueAndNodeTags(copy_node_list(nodes));
         return nb::make_tuple(inferred.first, inferred.second);
       },
-      nb::arg("nodes"), "Infers semantic ``shape``/``axes``/``weight`` tags for a node list.");
+      nb::arg("nodes"), "Computes semantic ``shape``/``axes``/``weight`` tags for a node list.");
 
   shape_mod.def(
       "infer_value_and_node_tags",

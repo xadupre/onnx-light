@@ -5,6 +5,7 @@
 #include "onnx_backend_test/test_case.h"
 #include "onnx_lib/checker.h"
 #include "onnx_lib/shape_inference/implementation.h"
+#include "onnx_optim/annotations/inplace_reuse.h"
 #include "onnx_optim/optim_tensor.h"
 #include "onnx_optim/shapes/shape_inference.h"
 
@@ -35,6 +36,14 @@ std::vector<int64_t> DimsOf(const TypeProto::Tensor &tt) {
   out.reserve(dims.size());
   for (size_t i = 0; i < dims.size(); ++i) {
     out.push_back(dims[i].has_dim_value() ? dims[i].ref_dim_value() : -1);
+  }
+  return out;
+}
+
+std::unordered_map<std::string, std::string> MetadataOf(const NodeProto &node) {
+  std::unordered_map<std::string, std::string> out;
+  for (const auto &prop : node.ref_metadata_props()) {
+    out[prop.ref_key().as_string()] = prop.ref_value().as_string();
   }
   return out;
 }
@@ -814,6 +823,49 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapePairwiseDistanceScan) {
     }
   }
   ASSERT_TRUE(found) << "test_cc_scan_pairwise_distance case not registered";
+}
+
+TEST(BackendTestCaseShapeInference, OnnxOptimInfersInPlaceReuseOnBackendCase) {
+  const std::vector<TestCase> cases = CollectTestCases("inplace");
+  bool found = false;
+  for (const TestCase &tc : cases) {
+    if (tc.name != "test_cc_shape_inference_inplace_reuse") {
+      continue;
+    }
+    found = true;
+
+    onnx_optim::shapes::ShapesContext ctx;
+    ASSERT_NO_THROW(ctx.ComputeShapeModel(tc.model)) << "case: " << tc.name;
+
+    const std::vector<std::unordered_map<std::string, std::string>> expected_metadata = {
+        {},
+        {{"onnx_light.inplace_reuse", "0:0:equal"}, {"onnx_light.release_after", "A"}},
+        {{"onnx_light.inplace_reuse", "0:0:equal"}, {"onnx_light.release_after", "B"}}};
+    const auto &nodes = tc.model.ref_graph().ref_node();
+    ASSERT_EQ(nodes.size(), expected_metadata.size());
+    for (size_t i = 0; i < nodes.size(); ++i) {
+      EXPECT_EQ(MetadataOf(nodes[i]), expected_metadata[i])
+          << "metadata mismatch on node " << i << " in case " << tc.name;
+    }
+
+    std::vector<std::vector<onnx_optim::annotations::InPlaceReuse>> reuse_with_inputs =
+        onnx_optim::annotations::ComputeInPlaceReuse(tc.model.ref_graph(), ctx,
+                                                     /*allow_input_overwrite=*/true);
+    ASSERT_EQ(reuse_with_inputs.size(), 3u);
+    ASSERT_EQ(reuse_with_inputs[0].size(), 1u);
+    EXPECT_EQ(reuse_with_inputs[0][0],
+              (onnx_optim::annotations::InPlaceReuse{
+                  0, 0, onnx_optim::annotations::InPlaceReuseKind::kEqual}));
+    ASSERT_EQ(reuse_with_inputs[1].size(), 1u);
+    EXPECT_EQ(reuse_with_inputs[1][0],
+              (onnx_optim::annotations::InPlaceReuse{
+                  0, 0, onnx_optim::annotations::InPlaceReuseKind::kEqual}));
+    ASSERT_EQ(reuse_with_inputs[2].size(), 1u);
+    EXPECT_EQ(reuse_with_inputs[2][0],
+              (onnx_optim::annotations::InPlaceReuse{
+                  0, 0, onnx_optim::annotations::InPlaceReuseKind::kEqual}));
+  }
+  ASSERT_TRUE(found) << "test_cc_shape_inference_inplace_reuse case not registered";
 }
 
 TEST(BackendTestCaseShapeInference, OnnxOptimInfersShapeLoopPairwiseDistance) {

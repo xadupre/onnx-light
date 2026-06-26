@@ -22,6 +22,7 @@
 #include "onnx_backend_test/cases/training/include_training_cases.h"
 #include "onnx_backend_test/cases_for_shapes/empty_shape/include_empty_shape_cases.h"
 #include "onnx_backend_test/cases_for_shapes/inference/include_inference_cases.h"
+#include "onnx_backend_test/cases_for_shapes/inplace/include_inplace_cases.h"
 #include "onnx_backend_test/cases_numerical/nan_inf/include_nan_inf_cases.h"
 
 #include <regex>
@@ -292,6 +293,7 @@ std::vector<TestCase> CollectTestCases(const std::string &op_type) {
   CollectTrainingTestCases(registry, op_type);
   CollectShapeInferenceTestCases(registry, op_type);
   CollectEmptyShapeTestCases(registry, op_type);
+  CollectInPlaceTestCases(registry, op_type);
   CollectNanInfTestCases(registry, op_type);
   return registry;
 }

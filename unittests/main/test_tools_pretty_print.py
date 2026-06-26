@@ -106,6 +106,15 @@ def _model(graph: SimpleNamespace, opsets: list | None = None) -> SimpleNamespac
     )
 
 
+def _function(
+    name: str, inputs: list, outputs: list, nodes: list, domain: str = ""
+) -> SimpleNamespace:
+    """Returns a minimal FunctionProto-like object."""
+    return SimpleNamespace(
+        name=name, domain=domain, input=list(inputs), output=list(outputs), node=nodes
+    )
+
+
 class TestPrettyOnnx(unittest.TestCase):
     def test_value_info(self) -> None:
         self.assertEqual(pretty_onnx(_vi("X", dims=(1, 3))), "float[1,3] X")
@@ -167,8 +176,8 @@ class TestPrettyOnnx(unittest.TestCase):
         self.assertIn("graph: name='g'", text)
         self.assertIn("input: float[1,3] X", text)
         self.assertIn("init: float[3] W", text)
-        self.assertIn("Add(X, Y) -> T", text)
-        self.assertIn("Mul(T, W) -> Z", text)
+        self.assertIn("0: Add(X, Y) -> T", text)
+        self.assertIn("1: Mul(T, W) -> Z", text)
         self.assertIn("output: float[1,3] Z", text)
 
     def test_model(self) -> None:
@@ -178,8 +187,36 @@ class TestPrettyOnnx(unittest.TestCase):
         text = pretty_onnx(_model(g))
         self.assertIn("opset: domain='' version=18", text)
         self.assertIn("input: float[N] X", text)
-        self.assertIn("Identity(X) -> Y", text)
+        self.assertIn("0: Identity(X) -> Y", text)
         self.assertIn("output: float[N] Y", text)
+
+    def test_model_function_node_indexes(self) -> None:
+        g = _graph([], [], [])
+        model = _model(g)
+        model.functions = [
+            _function("f", ["X"], ["Y"], [_node("Identity", ["X"], ["Y"])], "custom")
+        ]
+        text = pretty_onnx(model)
+        self.assertIn("function: f[custom]", text)
+        self.assertIn("0: Identity(X) -> Y", text)
+
+    def test_graph_node_index_with_multiline_attributes(self) -> None:
+        g = _graph(
+            [
+                _node(
+                    "Mul",
+                    ["A", "B"],
+                    ["C"],
+                    attributes=[_attr("axis", type=2, i=1), _attr("beta", type=2, i=2)],
+                )
+            ],
+            [_vi("A")],
+            [_vi("C")],
+        )
+        text = pretty_onnx(g, with_attributes=True)
+        self.assertIn("0: Mul(A, B) -> C", text)
+        self.assertIn("   axis=1", text)
+        self.assertIn("   beta=2", text)
 
     def test_assert_none(self) -> None:
         with self.assertRaises(AssertionError):

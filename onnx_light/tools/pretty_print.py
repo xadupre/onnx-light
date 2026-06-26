@@ -304,7 +304,7 @@ def _format_graph_lines(
         lines.append(f"{indent}input: {_format_value_info(vi)}")
     for init in getattr(graph, "initializer", []) or []:
         lines.append(f"{indent}{_format_initializer(init)}")
-    for node in getattr(graph, "node", []) or []:
+    for index, node in enumerate(getattr(graph, "node", []) or []):
         rendered = _format_node(
             node,
             with_attributes=with_attributes,
@@ -313,8 +313,12 @@ def _format_graph_lines(
             include_inplace=include_inplace,
             include_release=include_release,
         )
-        for line in rendered.splitlines():
-            lines.append(f"{indent}{line}")
+        node_lines = rendered.splitlines()
+        if node_lines:
+            lines.append(f"{indent}{index}: {node_lines[0]}")
+            padding = " " * (len(f"{index}: "))
+            for line in node_lines[1:]:
+                lines.append(f"{indent}{padding}{line}")
     for vi in getattr(graph, "output", []) or []:
         lines.append(f"{indent}output: {_format_value_info(vi)}")
     return lines
@@ -333,17 +337,20 @@ def _format_function_lines(
     lines = [f"function: {name}[{domain}]"]
     for i in getattr(fn, "input", []) or []:
         lines.append(f"input: {_s(i)}")
-    for node in getattr(fn, "node", []) or []:
-        lines.extend(
-            _format_node(
-                node,
-                with_attributes=with_attributes,
-                highlight=highlight,
-                include_node_tags=include_node_tags,
-                include_inplace=include_inplace,
-                include_release=include_release,
-            ).splitlines()
-        )
+    for index, node in enumerate(getattr(fn, "node", []) or []):
+        node_lines = _format_node(
+            node,
+            with_attributes=with_attributes,
+            highlight=highlight,
+            include_node_tags=include_node_tags,
+            include_inplace=include_inplace,
+            include_release=include_release,
+        ).splitlines()
+        if node_lines:
+            lines.append(f"{index}: {node_lines[0]}")
+            padding = " " * (len(f"{index}: "))
+            for line in node_lines[1:]:
+                lines.append(f"{padding}{line}")
     for o in getattr(fn, "output", []) or []:
         lines.append(f"output: {_s(o)}")
     return lines

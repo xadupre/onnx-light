@@ -1017,6 +1017,10 @@ public:
     int64_t inner_offset = 0;
     split_symbolic_and_offset(*fd->left, symbolic, inner_offset);
     int64_t shifted_offset = inner_offset + outer_constant * denom->value;
+    // Keep divisible offsets in the q + k form produced by
+    // DistributeFloorDivOverAddTransformer. Folding them back into the
+    // numerator here would only oscillate between equivalent representations
+    // across simplification passes.
     if (shifted_offset % denom->value == 0)
       return n;
 

@@ -100,6 +100,22 @@ class TestValueTags(unittest.TestCase):
         self.assertEqual(value_tags["S0"], "shape")
         self.assertEqual(node_tags[1], "shape")
 
+    def test_constant_shape_tensor_does_not_loop(self):
+        from onnx_light.onnx import TensorProto, helper
+
+        nodes = [
+            helper.make_node(
+                "Constant",
+                [],
+                ["S"],
+                value=helper.make_tensor("shape", TensorProto.INT64, [2], [2, 2]),
+            ),
+            helper.make_node("Reshape", ["X", "S"], ["Y"]),
+        ]
+        value_tags, node_tags = infer_value_and_node_tags(nodes)
+        self.assertEqual(value_tags["S"], "shape")
+        self.assertEqual(node_tags[0], "shape")
+
     def test_rank2_float_input_is_seeded_as_weight(self):
         from onnx_light.onnx import TensorProto, helper
 

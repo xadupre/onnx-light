@@ -5,8 +5,6 @@
 #include "onnx_backend_test/cases_for_shapes/inplace/include_inplace_cases.h"
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
-#include "onnx_optim/annotations/inplace_reuse.h"
-#include "onnx_optim/shapes/shapes_context.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
@@ -19,6 +17,8 @@ namespace onnx_backend_test {
 namespace {
 
 constexpr int64_t kDefaultIrVersion = 10;
+constexpr const char *kInPlaceReuseMetadataKey = "onnx_light.inplace_reuse";
+constexpr const char *kReleaseAfterMetadataKey = "onnx_light.release_after";
 
 } // namespace
 
@@ -50,9 +50,10 @@ void RegisterInPlaceReuseCases(std::vector<TestCase> &registry) {
   AppendValueInfo(*graph->add_value_info(), "B", kFloat, shape);
   AppendValueInfo(*graph->add_output(), "Y", kFloat, shape);
 
-  onnx_optim::shapes::ShapesContext shape_ctx;
-  shape_ctx.ComputeShapeModel(model);
-  onnx_optim::annotations::WriteInPlaceReuseToMetadata(*graph, shape_ctx);
+  (*graph->mutable_node())[1].add_metadata(kInPlaceReuseMetadataKey, "0:0:equal");
+  (*graph->mutable_node())[1].add_metadata(kReleaseAfterMetadataKey, "A");
+  (*graph->mutable_node())[2].add_metadata(kInPlaceReuseMetadataKey, "0:0:equal");
+  (*graph->mutable_node())[2].add_metadata(kReleaseAfterMetadataKey, "B");
 
   const Tensor x = Tensor::FromFloat(
       "X", {3, 4}, {-3.0f, -2.0f, -1.0f, 0.0f, 1.0f, 2.0f, 3.0f, 4.0f, -5.0f, -6.0f, 7.0f, 8.0f});

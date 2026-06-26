@@ -11,8 +11,6 @@
 
 #include <gtest/gtest.h>
 
-#include <optional>
-#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -48,28 +46,6 @@ std::unordered_map<std::string, std::string> MetadataOf(const NodeProto &node) {
     out[prop.ref_key().as_string()] = prop.ref_value().as_string();
   }
   return out;
-}
-
-std::string SerializeReuse(const std::vector<onnx_optim::annotations::InPlaceReuse> &reuse) {
-  std::ostringstream value;
-  for (size_t i = 0; i < reuse.size(); ++i) {
-    if (i != 0) {
-      value << ";";
-    }
-    value << reuse[i].output_index << ":" << reuse[i].input_index << ":"
-          << (reuse[i].kind == onnx_optim::annotations::InPlaceReuseKind::kEqual ? "equal"
-                                                                                 : "greater");
-  }
-  return value.str();
-}
-
-std::optional<std::string> FindMetadata(const NodeProto &node, const std::string &key) {
-  for (const auto &prop : node.ref_metadata_props()) {
-    if (prop.ref_key().as_string() == key) {
-      return prop.ref_value().as_string();
-    }
-  }
-  return std::nullopt;
 }
 
 // Captures the (elem_type, shape) of each graph output before stripping it
@@ -861,18 +837,14 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersInPlaceReuseOnBackendCase) {
     onnx_optim::shapes::ShapesContext ctx;
     ASSERT_NO_THROW(ctx.ComputeShapeModel(tc.model)) << "case: " << tc.name;
 
-    ModelProto model_copy;
-    std::string serialized;
-    tc.model.SerializeToString(serialized);
-    model_copy.ParseFromString(serialized);
-
-    onnx_optim::annotations::WriteInPlaceReuseToMetadata(*model_copy.mutable_graph(), ctx);
-
-    const auto &expected_nodes = tc.model.ref_graph().ref_node();
-    const auto &actual_nodes = model_copy.ref_graph().ref_node();
-    ASSERT_EQ(actual_nodes.size(), expected_nodes.size());
-    for (size_t i = 0; i < actual_nodes.size(); ++i) {
-      EXPECT_EQ(MetadataOf(actual_nodes[i]), MetadataOf(expected_nodes[i]))
+    const std::vector<std::unordered_map<std::string, std::string>> expected_metadata = {
+        {},
+        {{"onnx_light.inplace_reuse", "0:0:equal"}, {"onnx_light.release_after", "A"}},
+        {{"onnx_light.inplace_reuse", "0:0:equal"}, {"onnx_light.release_after", "B"}}};
+    const auto &nodes = tc.model.ref_graph().ref_node();
+    ASSERT_EQ(nodes.size(), expected_metadata.size());
+    for (size_t i = 0; i < nodes.size(); ++i) {
+      EXPECT_EQ(MetadataOf(nodes[i]), expected_metadata[i])
           << "metadata mismatch on node " << i << " in case " << tc.name;
     }
 
@@ -884,17 +856,14 @@ TEST(BackendTestCaseShapeInference, OnnxOptimInfersInPlaceReuseOnBackendCase) {
     EXPECT_EQ(reuse_with_inputs[0][0],
               (onnx_optim::annotations::InPlaceReuse{
                   0, 0, onnx_optim::annotations::InPlaceReuseKind::kEqual}));
-    EXPECT_EQ(FindMetadata(tc.model.ref_graph().ref_node()[0],
-                           onnx_optim::annotations::kInPlaceReuseMetadataKey),
-              std::nullopt);
     ASSERT_EQ(reuse_with_inputs[1].size(), 1u);
-    EXPECT_EQ(FindMetadata(tc.model.ref_graph().ref_node()[1],
-                           onnx_optim::annotations::kInPlaceReuseMetadataKey),
-              SerializeReuse(reuse_with_inputs[1]));
+    EXPECT_EQ(reuse_with_inputs[1][0],
+              (onnx_optim::annotations::InPlaceReuse{
+                  0, 0, onnx_optim::annotations::InPlaceReuseKind::kEqual}));
     ASSERT_EQ(reuse_with_inputs[2].size(), 1u);
-    EXPECT_EQ(FindMetadata(tc.model.ref_graph().ref_node()[2],
-                           onnx_optim::annotations::kInPlaceReuseMetadataKey),
-              SerializeReuse(reuse_with_inputs[2]));
+    EXPECT_EQ(reuse_with_inputs[2][0],
+              (onnx_optim::annotations::InPlaceReuse{
+                  0, 0, onnx_optim::annotations::InPlaceReuseKind::kEqual}));
   }
   ASSERT_TRUE(found) << "test_cc_shape_inference_inplace_reuse case not registered";
 }

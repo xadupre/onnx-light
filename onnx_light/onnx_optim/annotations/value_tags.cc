@@ -86,8 +86,13 @@ bool TrySetValueTag(std::unordered_map<std::string, std::string> &value_tags,
   const std::string norm = NormalizeValueTag(tag);
   if (!norm.empty()) {
     auto it = value_tags.find(name);
-    if (it != value_tags.end() && it->second == norm) {
-      return false;
+    if (it != value_tags.end()) {
+      if (it->second == norm) {
+        return false;
+      }
+      if (norm == "weight" && it->second != "weight") {
+        return false;
+      }
     }
     value_tags[name] = norm;
     return true;
@@ -186,6 +191,23 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
         }
       }
 
+      std::string current_output_tag;
+      bool output_tags_are_consistent = true;
+      for (int o = 0; o < node->output().size(); ++o) {
+        auto it = value_tags.find(node->output(o).as_string());
+        if (it != value_tags.end()) {
+          if (current_output_tag.empty()) {
+            current_output_tag = it->second;
+          } else if (current_output_tag != it->second) {
+            output_tags_are_consistent = false;
+            break;
+          }
+        }
+      }
+      if (op_type == "Constant" && output_tags_are_consistent && !current_output_tag.empty()) {
+        explicit_output_tag = current_output_tag;
+      }
+
       std::string inherited_tag;
       if (!node->input().empty()) {
         auto it = value_tags.find(node->input(0).as_string());
@@ -207,23 +229,11 @@ void InferNodesTags(const std::vector<const NodeProto *> &nodes,
 
       const std::vector<int> backward_inputs = BackwardTagInputIndices(*node);
       if (!backward_inputs.empty()) {
-        std::string output_tag;
-        bool output_tags_are_consistent = true;
-        for (int o = 0; o < node->output().size(); ++o) {
-          auto it = value_tags.find(node->output(o).as_string());
-          if (it != value_tags.end()) {
-            if (output_tag.empty()) {
-              output_tag = it->second;
-            } else if (output_tag != it->second) {
-              output_tags_are_consistent = false;
-              break;
-            }
-          }
-        }
-        if (output_tags_are_consistent && !output_tag.empty()) {
+        if (output_tags_are_consistent && !current_output_tag.empty()) {
           for (int idx : backward_inputs) {
             if (idx >= 0 && idx < node->input().size()) {
-              changed |= TrySetValueTag(value_tags, node->input(idx).as_string(), output_tag);
+              changed |=
+                  TrySetValueTag(value_tags, node->input(idx).as_string(), current_output_tag);
             }
           }
         }

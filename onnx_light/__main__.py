@@ -34,6 +34,13 @@ fillshape
         tags for every value and node in the graph and record them in
         ``metadata_props`` (keys ``onnx_light.value_tags`` and
         ``onnx_light.node_tag``).
+    ``--token NAME=VALUE`` / ``--token NAME=LOW:HIGH``
+        Bind a symbolic dimension token to a concrete integer value (or range)
+        before running shape inference.  May be specified multiple times.
+        For example, ``--token batch=4 --token seq=1:128`` sets the symbolic
+        dimension named ``batch`` to 4 and treats ``seq`` as having range
+        ``[1, 128]`` (the lower bound is used for shape propagation).
+        Symbolic dims not covered by ``--token`` remain symbolic.
     ``--show``
         Print the inferred shapes to stdout; do **not** save the model.
     ``--verbose [LEVEL]``
@@ -146,6 +153,94 @@ def _print_shape_inference_events_detailed(events: list) -> None:
         )
 
 
+def _parse_token_spec(token_str: str) -> tuple[str, int, int]:
+    """Parses a ``--token`` specification into ``(name, low, high)``.
+
+    Accepted formats:
+
+    * ``NAME=VALUE`` — exact value; ``low == high == VALUE``.
+    * ``NAME=LOW:HIGH`` — inclusive range; ``LOW <= HIGH``.
+
+    Args:
+        token_str: The raw argument string, e.g. ``"batch=4"`` or
+            ``"seq=1:128"``.
+
+    Returns:
+        A ``(name, low, high)`` triple where *low* and *high* are
+        non-negative integers.
+
+    Raises:
+        ValueError: When the format is invalid or the bounds are
+            inconsistent.
+    """
+    if "=" not in token_str:
+        raise ValueError(
+            f"--token value {token_str!r} must be in NAME=VALUE or NAME=LOW:HIGH format "
+            "(e.g. --token batch=4 or --token seq=1:128)."
+        )
+    name, _, value_str = token_str.partition("=")
+    name = name.strip()
+    value_str = value_str.strip()
+    if ":" in value_str:
+        low_str, _, high_str = value_str.partition(":")
+        low = int(low_str.strip())
+        high = int(high_str.strip())
+        if low > high:
+            raise ValueError(
+                f"--token {name!r}: lower bound {low} must be <= upper bound {high}."
+            )
+    else:
+        val = int(value_str)
+        low = high = val
+    return name, low, high
+
+
+def _seed_context_with_token_ranges(
+    ctx: Any, model: Any, token_ranges: dict[str, tuple[int, int]]
+) -> None:
+    """Pre-seeds the ShapesContext with concrete dim values for symbolic tokens.
+
+    For each graph input whose shape contains a symbolic dim that matches a
+    key in *token_ranges*, that dim is replaced with the lower bound of the
+    corresponding range before shape inference runs.  This makes the
+    shape-inference engine propagate concrete integer shapes through the
+    graph for those dimensions.
+
+    Args:
+        ctx: The :class:`ShapesContext` to pre-seed.
+        model: The ``ModelProto`` whose graph inputs are inspected.
+        token_ranges: Mapping from symbolic dim name to ``(low, high)``
+            where *low* is used as the concrete substitute value.
+    """
+    from .onnx_optim.shape_inference import OptimTensor
+
+    initializer_names = {init.name for init in model.graph.initializer}
+    for vi in model.graph.input:
+        vi_name = vi.name
+        if vi_name in initializer_names:
+            continue
+        if not vi.type.has_tensor_type():
+            continue
+        tensor_type = vi.type.tensor_type
+        dtype = int(tensor_type.elem_type)
+        if not tensor_type.has_shape():
+            continue
+        dims: list[int | str] = []
+        for dim in tensor_type.shape.dim:
+            if dim.has_dim_value() and dim.dim_value > 0:
+                dims.append(int(dim.dim_value))
+            elif dim.has_dim_param() and dim.dim_param in token_ranges:
+                # Substitute the symbolic token with its lower bound so that
+                # shape inference can propagate a concrete integer dimension.
+                dims.append(token_ranges[dim.dim_param][0])
+            elif dim.has_dim_param() and dim.dim_param:
+                dims.append(str(dim.dim_param))
+            else:
+                # Fully dynamic (no name, no value): leave as 0.
+                dims.append(0)
+        ctx.set(vi_name, OptimTensor(dtype, dims))
+
+
 def _cmd_fillshape(args: argparse.Namespace) -> None:
     """Implements the ``fillshape`` subcommand."""
     from .onnx import load, save
@@ -169,6 +264,12 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
     show: bool = args.show
     verbose: int = args.verbose
 
+    # Parse --token specifications into a name → (low, high) mapping.
+    token_ranges: dict[str, tuple[int, int]] = {}
+    for spec in args.token or []:
+        name, low, high = _parse_token_spec(spec)
+        token_ranges[name] = (low, high)
+
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model file not found: {model_path!r}")
 
@@ -189,11 +290,17 @@ def _cmd_fillshape(args: argparse.Namespace) -> None:
     # (must happen before the tiny-tensor step, which inlines small tensors).
     has_external_data = any(uses_external_data(init) for init in model.graph.initializer)
 
-    if inplace_info or verbose > 0:
-        # Retains the ShapesContext so in-place reuse analysis and verbose
-        # event logging can reuse the already-inferred shape data.
+    if inplace_info or verbose > 0 or token_ranges:
+        # Retains the ShapesContext so in-place reuse analysis, verbose
+        # event logging, and token-range substitution can reuse the already-
+        # inferred shape data.
         ctx = ShapesContext()
         ctx.events_enabled = verbose > 0
+        if token_ranges:
+            # Pre-seed the context with concrete dim values for the specified
+            # symbolic tokens so that shape inference propagates concrete
+            # shapes for those dimensions.
+            _seed_context_with_token_ranges(ctx, model, token_ranges)
         if verbose:
             print("[fillshape] shape inference")
         compute_shape_model(ctx, model, keep)
@@ -570,6 +677,19 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         default=False,
         help="Print inferred shapes to stdout; do not save the model.",
+    )
+    fillshape_parser.add_argument(
+        "--token",
+        action="append",
+        default=None,
+        metavar="NAME=VALUE",
+        help=(
+            "Bind a symbolic dimension token to a concrete integer value or range "
+            "before running shape inference. May be given multiple times "
+            "(e.g. --token batch=4 --token seq=1:128). "
+            "For a range LOW:HIGH the lower bound is used for shape propagation. "
+            "Symbolic dims not covered by --token remain symbolic."
+        ),
     )
     fillshape_parser.add_argument(
         "--verbose",

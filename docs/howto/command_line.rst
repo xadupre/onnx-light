@@ -27,6 +27,7 @@ Synopsis::
 
     python -m onnx_light fillshape MODEL [--output OUTPUT] [--keep]
                                          [--inplace-info] [--shape-tag] [--show]
+                                         [--token NAME=VALUE ...]
                                          [--verbose [LEVEL]]
 
 Positional argument
@@ -64,6 +65,18 @@ Options
     ``metadata_props`` (keys ``onnx_light.value_tags`` and
     ``onnx_light.node_tag``).
 
+``--token NAME=VALUE`` / ``--token NAME=LOW:HIGH``
+    Bind a symbolic dimension token to a concrete integer value (or
+    inclusive range) before running shape inference.  May be specified
+    multiple times.
+
+    * ``--token batch=4`` — sets the symbolic dim named ``batch`` to 4.
+    * ``--token seq=1:128`` — treats ``seq`` as having range ``[1, 128]``
+      and uses ``1`` (the lower bound) for shape propagation.
+
+    Symbolic dims not covered by ``--token`` remain symbolic.  Providing
+    this option forces the use of the :class:`ShapesContext`-based path.
+
 ``--show``
     Print the model with inferred shapes to stdout using
     :func:`~onnx_light.tools.pretty_print.pretty_onnx`; do **not** save
@@ -96,6 +109,18 @@ Preserve existing symbolic dimensions as anchors:
 .. code-block:: bash
 
     python -m onnx_light fillshape model.onnx --keep
+
+Bind symbolic dimensions to concrete values for concrete shape propagation:
+
+.. code-block:: bash
+
+    python -m onnx_light fillshape model.onnx --token batch=4 --token seq=128
+
+Bind a symbolic dimension to a range (lower bound used for inference):
+
+.. code-block:: bash
+
+    python -m onnx_light fillshape model.onnx --token seq=1:512
 
 Annotate nodes with in-place buffer-reuse information:
 

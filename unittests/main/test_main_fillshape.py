@@ -506,5 +506,154 @@ class TestMainFillshape(ExtTestCase):
         )
 
 
+class TestParseTokenSpec(ExtTestCase):
+    """Unit tests for the ``_parse_token_spec`` helper."""
+
+    def test_exact_value(self):
+        from onnx_light.__main__ import _parse_token_spec
+
+        name, lo, hi = _parse_token_spec("batch=4")
+        self.assertEqual(name, "batch")
+        self.assertEqual(lo, 4)
+        self.assertEqual(hi, 4)
+
+    def test_range(self):
+        from onnx_light.__main__ import _parse_token_spec
+
+        name, lo, hi = _parse_token_spec("seq=1:128")
+        self.assertEqual(name, "seq")
+        self.assertEqual(lo, 1)
+        self.assertEqual(hi, 128)
+
+    def test_range_equal_bounds(self):
+        from onnx_light.__main__ import _parse_token_spec
+
+        name, lo, hi = _parse_token_spec("n=7:7")
+        self.assertEqual(name, "n")
+        self.assertEqual(lo, 7)
+        self.assertEqual(hi, 7)
+
+    def test_missing_equals_raises(self):
+        from onnx_light.__main__ import _parse_token_spec
+
+        with self.assertRaises(ValueError, msg="missing '='"):
+            _parse_token_spec("batch4")
+
+    def test_inverted_bounds_raises(self):
+        from onnx_light.__main__ import _parse_token_spec
+
+        with self.assertRaises(ValueError, msg="lower > upper"):
+            _parse_token_spec("seq=128:1")
+
+
+class TestFillshapeTokenOption(ExtTestCase):
+    """Integration tests for ``fillshape --token``."""
+
+    @classmethod
+    def setUpClass(cls):
+        defs.register_onnx_operator_set_schema()
+
+    def _save_model(self, model: onnxl.ModelProto, path: str) -> None:
+        from onnx_light.onnx import save
+
+        save(model, path)
+
+    def test_token_exact_value_produces_concrete_output_shape(self):
+        """--token batch=4 substitutes 'batch' with 4 → concrete output shape."""
+        from onnx_light.__main__ import main
+
+        model = _make_add_model(input_shape=["batch", 3])
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            self._save_model(model, model_path)
+
+            main(["fillshape", model_path, "--token", "batch=4"])
+
+            result = load(model_path)
+            dims = list(result.graph.output[0].type.tensor_type.shape.dim)
+            self.assertEqual(len(dims), 2)
+            self.assertEqual(dims[0].dim_value, 4)
+            self.assertEqual(dims[1].dim_value, 3)
+
+    def test_token_range_uses_lower_bound_for_inference(self):
+        """--token seq=1:128 uses lower bound 1 for shape propagation."""
+        from onnx_light.__main__ import main
+
+        model = _make_add_model(input_shape=["seq", 8])
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            self._save_model(model, model_path)
+
+            main(["fillshape", model_path, "--token", "seq=1:128"])
+
+            result = load(model_path)
+            dims = list(result.graph.output[0].type.tensor_type.shape.dim)
+            self.assertEqual(len(dims), 2)
+            self.assertEqual(dims[0].dim_value, 1)
+            self.assertEqual(dims[1].dim_value, 8)
+
+    def test_multiple_tokens(self):
+        """Multiple --token args each substitute their respective dim."""
+        from onnx_light.__main__ import main
+
+        # Two-input Add: both symbolic, both overridden.
+        add = oh.make_node("Add", inputs=["X", "X"], outputs=["Y"])
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, ["batch", "seq"])
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
+        graph = oh.make_graph([add], "g", [x], [y])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+        model.ir_version = 8
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            self._save_model(model, model_path)
+
+            main(["fillshape", model_path, "--token", "batch=4", "--token", "seq=16"])
+
+            result = load(model_path)
+            dims = list(result.graph.output[0].type.tensor_type.shape.dim)
+            self.assertEqual(len(dims), 2)
+            self.assertEqual(dims[0].dim_value, 4)
+            self.assertEqual(dims[1].dim_value, 16)
+
+    def test_uncovered_symbolic_dim_remains_symbolic(self):
+        """Dims not covered by --token stay symbolic in the inferred output."""
+        from onnx_light.__main__ import main
+
+        model = _make_add_model(input_shape=["batch", "seq"])
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            self._save_model(model, model_path)
+
+            # Only override 'batch'; 'seq' should remain symbolic.
+            main(["fillshape", model_path, "--token", "batch=2"])
+
+            result = load(model_path)
+            dims = list(result.graph.output[0].type.tensor_type.shape.dim)
+            self.assertEqual(len(dims), 2)
+            self.assertEqual(dims[0].dim_value, 2)
+            # 'seq' was not overridden → still symbolic.
+            self.assertTrue(dims[1].has_dim_param())
+            self.assertEqual(dims[1].dim_param, "seq")
+
+    def test_token_with_output_option(self):
+        """--token works together with --output."""
+        from onnx_light.__main__ import main
+
+        model = _make_add_model(input_shape=["batch", 5])
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            output_path = os.path.join(tmp, "out.onnx")
+            self._save_model(model, model_path)
+
+            main(["fillshape", model_path, "--output", output_path, "--token", "batch=8"])
+
+            result = load(output_path)
+            dims = list(result.graph.output[0].type.tensor_type.shape.dim)
+            self.assertEqual(len(dims), 2)
+            self.assertEqual(dims[0].dim_value, 8)
+            self.assertEqual(dims[1].dim_value, 5)
+
+
 if __name__ == "__main__":
     unittest.main()

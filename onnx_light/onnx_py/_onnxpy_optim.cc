@@ -1204,31 +1204,37 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       .def(nb::init<>())
       .def(
           "compute_value_and_node_tags",
-          [](onnx_annotations::ComputeContext &self, const GraphProto &graph) {
+          [](onnx_annotations::ComputeContext &self, const GraphProto &graph, int verbose) {
+            (void)verbose;
             const auto inferred = self.ComputeValueAndNodeTags(graph);
             return nb::make_tuple(inferred.first, inferred.second);
           },
-          nb::arg("graph"),
+          nb::arg("graph"), nb::arg("verbose") = 0,
           "Computes semantic ``shape``/``axes``/``weight`` tags for values and nodes in ``graph`` "
-          "and stores the result in this context.")
+          "and stores the result in this context. ``verbose`` is currently accepted for API "
+          "compatibility and has no effect.")
       .def(
           "compute_value_and_node_tags",
-          [](onnx_annotations::ComputeContext &self, const FunctionProto &function) {
+          [](onnx_annotations::ComputeContext &self, const FunctionProto &function, int verbose) {
+            (void)verbose;
             const auto inferred = self.ComputeValueAndNodeTags(function);
             return nb::make_tuple(inferred.first, inferred.second);
           },
-          nb::arg("function"),
+          nb::arg("function"), nb::arg("verbose") = 0,
           "Computes semantic ``shape``/``axes``/``weight`` tags for values and nodes in "
-          "``function`` and stores the result in this context.")
+          "``function`` and stores the result in this context. ``verbose`` is currently accepted "
+          "for API compatibility and has no effect.")
       .def(
           "compute_value_and_node_tags",
-          [copy_node_list](onnx_annotations::ComputeContext &self, nb::list nodes) {
+          [copy_node_list](onnx_annotations::ComputeContext &self, nb::list nodes, int verbose) {
+            (void)verbose;
             const auto inferred = self.ComputeValueAndNodeTags(copy_node_list(nodes));
             return nb::make_tuple(inferred.first, inferred.second);
           },
-          nb::arg("nodes"),
+          nb::arg("nodes"), nb::arg("verbose") = 0,
           "Computes semantic ``shape``/``axes``/``weight`` tags for a node list and stores the "
-          "result in this context.")
+          "result in this context. ``verbose`` is currently accepted for API compatibility and has "
+          "no effect.")
       .def_prop_ro(
           "value_tags",
           [](const onnx_annotations::ComputeContext &self) { return self.ValueTags(); },
@@ -1248,11 +1254,13 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           "compute_inplace_reuse_graph",
           [](onnx_annotations::ComputeContext &self, const GraphProto &graph,
              const onnx_shapes::ShapesContext &ctx, bool allow_input_overwrite,
-             const std::unordered_map<std::string, std::string> &value_tags) {
+             const std::unordered_map<std::string, std::string> &value_tags, int verbose) {
+            (void)verbose;
             self.ComputeInPlaceReuseGraph(graph, ctx, allow_input_overwrite, value_tags);
           },
           nb::arg("graph"), nb::arg("ctx"), nb::arg("allow_input_overwrite") = false,
           nb::arg("value_tags") = std::unordered_map<std::string, std::string>{},
+          nb::arg("verbose") = 0,
           "Guesses, for every node of ``graph``, which outputs reuse which input buffers in "
           "place, using the shapes already inferred into ``ctx``, and stores the result in this "
           "context (replacing any previous result).\n\n"
@@ -1263,7 +1271,17 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           "are also stored in ``release_after_shape_tagged`` and written to "
           "``onnx_light.release_after_shape_tag`` by :meth:`write_to_metadata`. When "
           "``value_tags`` is omitted, this method reuses the last tags stored by "
-          ":meth:`compute_value_and_node_tags` on the same context, if any.")
+          ":meth:`compute_value_and_node_tags` on the same context, if any. ``verbose`` is "
+          "currently accepted for API compatibility and has no effect.")
+      .def(
+          "compute_release_after_shape_tagged",
+          [](const onnx_annotations::ComputeContext &self, int verbose) {
+            (void)verbose;
+            return self.ReleaseAfterShapeTagged();
+          },
+          nb::arg("verbose") = 0,
+          "Returns ``release_after_shape_tagged``. The optional ``verbose`` argument is accepted "
+          "for API compatibility.")
       .def_prop_rw(
           "events_enabled",
           [](const onnx_annotations::ComputeContext &self) { return self.events_enabled(); },
@@ -1386,31 +1404,37 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
 
   shape_mod.def(
       "compute_value_and_node_tags",
-      [](const GraphProto &graph) {
+      [](const GraphProto &graph, int verbose) {
+        (void)verbose;
         onnx_annotations::ComputeContext ctx;
         const auto inferred = ctx.ComputeValueAndNodeTags(graph);
         return nb::make_tuple(inferred.first, inferred.second);
       },
-      nb::arg("graph"),
-      "Computes semantic ``shape``/``axes``/``weight`` tags for values and nodes in ``graph``.");
+      nb::arg("graph"), nb::arg("verbose") = 0,
+      "Computes semantic ``shape``/``axes``/``weight`` tags for values and nodes in ``graph``. "
+      "``verbose`` is currently accepted for API compatibility and has no effect.");
   shape_mod.def(
       "compute_value_and_node_tags",
-      [](const FunctionProto &function) {
+      [](const FunctionProto &function, int verbose) {
+        (void)verbose;
         onnx_annotations::ComputeContext ctx;
         const auto inferred = ctx.ComputeValueAndNodeTags(function);
         return nb::make_tuple(inferred.first, inferred.second);
       },
-      nb::arg("function"),
+      nb::arg("function"), nb::arg("verbose") = 0,
       "Computes semantic ``shape``/``axes``/``weight`` tags for values and nodes in "
-      "``function``.");
+      "``function``. ``verbose`` is currently accepted for API compatibility and has no effect.");
   shape_mod.def(
       "compute_value_and_node_tags",
-      [copy_node_list](nb::list nodes) {
+      [copy_node_list](nb::list nodes, int verbose) {
+        (void)verbose;
         onnx_annotations::ComputeContext ctx;
         const auto inferred = ctx.ComputeValueAndNodeTags(copy_node_list(nodes));
         return nb::make_tuple(inferred.first, inferred.second);
       },
-      nb::arg("nodes"), "Computes semantic ``shape``/``axes``/``weight`` tags for a node list.");
+      nb::arg("nodes"), nb::arg("verbose") = 0,
+      "Computes semantic ``shape``/``axes``/``weight`` tags for a node list. ``verbose`` is "
+      "currently accepted for API compatibility and has no effect.");
 
   shape_mod.def(
       "write_value_and_node_tags_to_metadata",

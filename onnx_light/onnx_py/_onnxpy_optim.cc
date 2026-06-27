@@ -1210,7 +1210,8 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
             return nb::make_tuple(inferred.first, inferred.second);
           },
           nb::arg("graph"), nb::arg("verbose") = 0,
-          "Computes semantic ``shape``/``axes``/``weight`` tags for values and nodes in ``graph`` "
+          "Computes semantic ``shape``/``axes``/``weight``/``ambiguous`` tags for values and nodes "
+          "in ``graph`` "
           "and stores the result in this context. ``verbose`` is currently accepted for API "
           "compatibility and has no effect.")
       .def(
@@ -1221,7 +1222,8 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
             return nb::make_tuple(inferred.first, inferred.second);
           },
           nb::arg("function"), nb::arg("verbose") = 0,
-          "Computes semantic ``shape``/``axes``/``weight`` tags for values and nodes in "
+          "Computes semantic ``shape``/``axes``/``weight``/``ambiguous`` tags for values and nodes "
+          "in "
           "``function`` and stores the result in this context. ``verbose`` is currently accepted "
           "for API compatibility and has no effect.")
       .def(
@@ -1232,7 +1234,8 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
             return nb::make_tuple(inferred.first, inferred.second);
           },
           nb::arg("nodes"), nb::arg("verbose") = 0,
-          "Computes semantic ``shape``/``axes``/``weight`` tags for a node list and stores the "
+          "Computes semantic ``shape``/``axes``/``weight``/``ambiguous`` tags for a node list and "
+          "stores the "
           "result in this context. ``verbose`` is currently accepted for API compatibility and has "
           "no effect.")
       .def_prop_ro(
@@ -1280,7 +1283,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
             return self.ReleaseAfterShapeTagged();
           },
           nb::arg("verbose") = 0,
-          "Returns ``release_after_shape_tagged``. The optional ``verbose`` argument is accepted "
+          "Returns ``release_after_shape_tagged``; the optional ``verbose`` argument is accepted "
           "for API compatibility.")
       .def_prop_rw(
           "events_enabled",
@@ -1411,7 +1414,8 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
         return nb::make_tuple(inferred.first, inferred.second);
       },
       nb::arg("graph"), nb::arg("verbose") = 0,
-      "Computes semantic ``shape``/``axes``/``weight`` tags for values and nodes in ``graph``. "
+      "Computes semantic ``shape``/``axes``/``weight``/``ambiguous`` tags for values and nodes in "
+      "``graph``. "
       "``verbose`` is currently accepted for API compatibility and has no effect.");
   shape_mod.def(
       "compute_value_and_node_tags",
@@ -1422,7 +1426,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
         return nb::make_tuple(inferred.first, inferred.second);
       },
       nb::arg("function"), nb::arg("verbose") = 0,
-      "Computes semantic ``shape``/``axes``/``weight`` tags for values and nodes in "
+      "Computes semantic ``shape``/``axes``/``weight``/``ambiguous`` tags for values and nodes in "
       "``function``. ``verbose`` is currently accepted for API compatibility and has no effect.");
   shape_mod.def(
       "compute_value_and_node_tags",
@@ -1433,7 +1437,8 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
         return nb::make_tuple(inferred.first, inferred.second);
       },
       nb::arg("nodes"), nb::arg("verbose") = 0,
-      "Computes semantic ``shape``/``axes``/``weight`` tags for a node list. ``verbose`` is "
+      "Computes semantic ``shape``/``axes``/``weight``/``ambiguous`` tags for a node list. "
+      "``verbose`` is "
       "currently accepted for API compatibility and has no effect.");
 
   shape_mod.def(

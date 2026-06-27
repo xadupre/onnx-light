@@ -306,7 +306,9 @@ def to_mermaid_graph(
         label = _join_label(_short_display_name(name) or "(unnamed)", shape_lookup.get(name, ""))
         tag = value_tags.get(name, "")
         style = (
-            f"onnxTag{tag.capitalize()}" if tag in {"shape", "axes", "weight"} else "onnxInput"
+            f"onnxTag{tag.capitalize()}"
+            if tag in {"shape", "axes", "weight", "ambiguous"}
+            else "onnxInput"
         )
         lines.append(f'    {node_id}(["{label}"]):::{style}')
 
@@ -324,7 +326,7 @@ def to_mermaid_graph(
             tag = value_tags.get(name, "")
             style = (
                 f"onnxTag{tag.capitalize()}"
-                if tag in {"shape", "axes", "weight"}
+                if tag in {"shape", "axes", "weight", "ambiguous"}
                 else "onnxInitializer"
             )
             lines.append(f'    {node_id}[("{label}")]:::{style}')
@@ -359,7 +361,7 @@ def to_mermaid_graph(
         node_tag = _s(_node_metadata_value(node, NODE_TAG_METADATA_KEY)).lower()
         style = (
             f"onnxTag{node_tag.capitalize()}"
-            if node_tag in {"shape", "axes", "weight"}
+            if node_tag in {"shape", "axes", "weight", "ambiguous"}
             else "onnxOp"
         )
         lines.append(f'    {node_id}["{label}"]:::{style}')
@@ -389,7 +391,7 @@ def to_mermaid_graph(
                 edge_label = f'|"{_escape_label(shape_lookup[out_name])}"|'
             style = ""
             out_tag = value_tags.get(out_name, "")
-            if out_tag in {"shape", "axes", "weight"}:
+            if out_tag in {"shape", "axes", "weight", "ambiguous"}:
                 style = f":::{'onnxTag' + out_tag.capitalize()}"
             lines.append(f"    {node_id} -->{edge_label} {tensor_id}{style}")
 
@@ -404,7 +406,9 @@ def to_mermaid_graph(
         label = _join_label(_short_display_name(name), shape_lookup.get(name, ""))
         tag = value_tags.get(name, "")
         style = (
-            f"onnxTag{tag.capitalize()}" if tag in {"shape", "axes", "weight"} else "onnxOutput"
+            f"onnxTag{tag.capitalize()}"
+            if tag in {"shape", "axes", "weight", "ambiguous"}
+            else "onnxOutput"
         )
         lines.append(f'    {node_id}(["{label}"]):::{style}')
 
@@ -424,6 +428,10 @@ def to_mermaid_graph(
     lines.append(
         f"    classDef onnxTagWeight fill:{VALUE_TAG_COLORS['weight']['fill']},"
         f"stroke:{VALUE_TAG_COLORS['weight']['stroke']},color:#000;"
+    )
+    lines.append(
+        f"    classDef onnxTagAmbiguous fill:{VALUE_TAG_COLORS['ambiguous']['fill']},"
+        f"stroke:{VALUE_TAG_COLORS['ambiguous']['stroke']},color:#000;"
     )
 
     return "\n".join(lines)

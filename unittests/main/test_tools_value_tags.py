@@ -112,7 +112,7 @@ class TestValueTags(unittest.TestCase):
         self.assertEqual(value_tags["S0"], "shape")
         self.assertEqual(node_tags[1], "shape")
 
-    def test_conflicting_shape_axes_input_tag_converges(self):
+    def test_conflicting_shape_axes_input_tag_becomes_ambiguous(self):
         from onnx_light.onnx import helper
 
         nodes = [
@@ -120,7 +120,7 @@ class TestValueTags(unittest.TestCase):
             helper.make_node("ReduceSum", ["A", "IDX"], ["Y"]),
         ]
         value_tags, _ = infer_value_and_node_tags(nodes)
-        self.assertEqual(value_tags["IDX"], "shape")
+        self.assertEqual(value_tags["IDX"], "ambiguous")
 
     def test_constant_feeding_reshape_shape_input(self):
         from onnx_light.onnx import TensorProto, helper
@@ -135,8 +135,8 @@ class TestValueTags(unittest.TestCase):
             helper.make_node("Reshape", ["X", "S"], ["Y"]),
         ]
         value_tags, node_tags = compute_value_and_node_tags(nodes)
-        self.assertEqual(value_tags["S"], "shape")
-        self.assertEqual(node_tags[0], "shape")
+        self.assertEqual(value_tags["S"], "ambiguous")
+        self.assertEqual(node_tags[0], "ambiguous")
 
     def test_rank2_float_input_is_seeded_as_weight(self):
         from onnx_light.onnx import TensorProto, helper

@@ -187,11 +187,12 @@ NODE_TAG_METADATA_KEY = "onnx_light.node_tag"
 INPLACE_REUSE_METADATA_KEY = "onnx_light.inplace_reuse"
 RELEASE_AFTER_METADATA_KEY = "onnx_light.release_after"
 RELEASE_AFTER_SHAPE_TAG_METADATA_KEY = "onnx_light.release_after_shape_tag"
-VALUE_TAGS = {"shape", "axes", "weight"}
+VALUE_TAGS = {"shape", "axes", "weight", "ambiguous"}
 VALUE_TAG_COLORS = {
     "shape": {"fill": "#f4d6ff", "stroke": "#8744a2"},
     "axes": {"fill": "#ffe9a8", "stroke": "#9e7a00"},
     "weight": {"fill": "#e0e0e0", "stroke": "#666666"},
+    "ambiguous": {"fill": "#ffd9d9", "stroke": "#a33a3a"},
 }
 
 
@@ -218,7 +219,7 @@ def _require_shape_inference_extension() -> Any:
 def compute_value_and_node_tags(
     graph_or_nodes_or_function: Any, verbose: int = 0
 ) -> tuple[dict[str, str], list[str]]:
-    """Infers semantic ``shape``/``axes``/``weight`` tags for values and nodes.
+    """Infers semantic ``shape``/``axes``/``weight``/``ambiguous`` tags for values and nodes.
 
     Returns:
         A pair ``(value_tags, node_tags)`` where ``value_tags`` maps value
@@ -233,7 +234,7 @@ infer_value_and_node_tags = compute_value_and_node_tags
 
 
 def write_value_and_node_tags_to_metadata(graph_or_nodes_or_function: Any) -> None:
-    """Writes inferred ``shape``/``axes``/``weight`` tags into metadata.
+    """Writes inferred ``shape``/``axes``/``weight``/``ambiguous`` tags into metadata.
 
     Returns:
         ``None``. The function mutates metadata fields in place.

@@ -66,7 +66,7 @@ Options
     ``onnx_light.release_after``.
 
 ``--shape-tag``
-    After shape inference, infer semantic ``shape``/``axes``/``weight``
+    After shape inference, infer semantic ``shape``/``axes``/``weight``/``ambiguous``
     tags for every value and node in the graph and record them in
     ``metadata_props`` (keys ``onnx_light.value_tags`` and
     ``onnx_light.node_tag``).
@@ -138,7 +138,7 @@ Annotate nodes with release hints:
 
     python -m onnx_light fillshape model.onnx --release-info
 
-Annotate values and nodes with semantic shape/axes/weight tags:
+Annotate values and nodes with semantic shape/axes/weight/ambiguous tags:
 
 .. code-block:: bash
 
@@ -249,7 +249,7 @@ Options
     metadata).
 
 ``--include-node-tags``
-    Show semantic shape/axes/weight node-tag annotations
+    Show semantic shape/axes/weight/ambiguous node-tag annotations
     (``onnx_light.node_tag`` metadata).  Only used by the ``pretty`` format.
 
 ``--no-initializers``

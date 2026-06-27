@@ -552,7 +552,7 @@ def _render_svg(
 
 def _render_box(box: _Box) -> str:
     style = _STYLES[box.kind]
-    if box.tag in {"shape", "axes", "weight"}:
+    if box.tag in {"shape", "axes", "weight", "ambiguous"}:
         colors = VALUE_TAG_COLORS[box.tag]
         style = {
             "fill": colors["fill"],

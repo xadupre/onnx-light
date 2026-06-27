@@ -33,7 +33,7 @@ fillshape
         them into each node's ``metadata_props`` under the key
         ``onnx_light.release_after``.
     ``--shape-tag``
-        After shape inference, infer semantic ``shape``/``axes``/``weight``
+        After shape inference, infer semantic ``shape``/``axes``/``weight``/``ambiguous``
         tags for every value and node in the graph and record them in
         ``metadata_props`` (keys ``onnx_light.value_tags`` and
         ``onnx_light.node_tag``).
@@ -77,7 +77,7 @@ show
         Show post-execution release hints (``onnx_light.release_after``
         metadata).  Only used by the ``pretty`` format.
     ``--include-node-tags``
-        Show semantic ``shape``/``axes``/``weight`` node-tag annotations
+        Show semantic ``shape``/``axes``/``weight``/``ambiguous`` node-tag annotations
         (``onnx_light.node_tag`` metadata).  Only used by the ``pretty``
         format.
     ``--no-initializers``
@@ -734,7 +734,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default=False,
         dest="shape_tag",
         help=(
-            "After shape inference, infer semantic shape/axes/weight tags for "
+            "After shape inference, infer semantic shape/axes/weight/ambiguous tags for "
             "every value and node in the graph and record them in metadata_props "
             "(keys ``onnx_light.value_tags`` and ``onnx_light.node_tag``)."
         ),
@@ -848,7 +848,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default=False,
         dest="include_node_tags",
         help=(
-            "Show semantic shape/axes/weight node-tag annotations "
+            "Show semantic shape/axes/weight/ambiguous node-tag annotations "
             "(onnx_light.node_tag metadata). Only used by the 'pretty' format."
         ),
     )

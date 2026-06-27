@@ -15,7 +15,7 @@ Currently provided helpers:
 * :func:`onnx_light.tools.compute_value_and_node_tags` -- infer semantic
   value/node tags.
 * :func:`onnx_light.tools.write_value_and_node_tags_to_metadata` -- tag
-  values and nodes as ``shape``, ``axes`` or ``weight`` in metadata.
+  values and nodes as ``shape``, ``axes``, ``weight`` or ``ambiguous`` in metadata.
 * :func:`onnx_light.tools.pretty_onnx` -- render any ONNX proto
   (model, graph, function, node, attribute, value info, tensor) as a
   compact human-readable string.

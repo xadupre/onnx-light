@@ -1209,7 +1209,8 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
             return nb::make_tuple(inferred.first, inferred.second);
           },
           nb::arg("graph"),
-          "Computes semantic ``shape``/``axes``/``weight`` tags for values and nodes in ``graph`` "
+          "Computes semantic ``shape``/``axes``/``weight``/``ambiguous`` tags for values and "
+          "nodes in ``graph`` "
           "and stores the result in this context.")
       .def(
           "compute_value_and_node_tags",
@@ -1218,7 +1219,8 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
             return nb::make_tuple(inferred.first, inferred.second);
           },
           nb::arg("function"),
-          "Computes semantic ``shape``/``axes``/``weight`` tags for values and nodes in "
+          "Computes semantic ``shape``/``axes``/``weight``/``ambiguous`` tags for values and "
+          "nodes in "
           "``function`` and stores the result in this context.")
       .def(
           "compute_value_and_node_tags",
@@ -1227,7 +1229,8 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
             return nb::make_tuple(inferred.first, inferred.second);
           },
           nb::arg("nodes"),
-          "Computes semantic ``shape``/``axes``/``weight`` tags for a node list and stores the "
+          "Computes semantic ``shape``/``axes``/``weight``/``ambiguous`` tags for a node list and "
+          "stores the "
           "result in this context.")
       .def_prop_ro(
           "value_tags",
@@ -1392,7 +1395,8 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
         return nb::make_tuple(inferred.first, inferred.second);
       },
       nb::arg("graph"),
-      "Computes semantic ``shape``/``axes``/``weight`` tags for values and nodes in ``graph``.");
+      "Computes semantic ``shape``/``axes``/``weight``/``ambiguous`` tags for values and nodes in "
+      "``graph``.");
   shape_mod.def(
       "compute_value_and_node_tags",
       [](const FunctionProto &function) {
@@ -1401,7 +1405,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
         return nb::make_tuple(inferred.first, inferred.second);
       },
       nb::arg("function"),
-      "Computes semantic ``shape``/``axes``/``weight`` tags for values and nodes in "
+      "Computes semantic ``shape``/``axes``/``weight``/``ambiguous`` tags for values and nodes in "
       "``function``.");
   shape_mod.def(
       "compute_value_and_node_tags",
@@ -1410,7 +1414,8 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
         const auto inferred = ctx.ComputeValueAndNodeTags(copy_node_list(nodes));
         return nb::make_tuple(inferred.first, inferred.second);
       },
-      nb::arg("nodes"), "Computes semantic ``shape``/``axes``/``weight`` tags for a node list.");
+      nb::arg("nodes"),
+      "Computes semantic ``shape``/``axes``/``weight``/``ambiguous`` tags for a node list.");
 
   shape_mod.def(
       "write_value_and_node_tags_to_metadata",

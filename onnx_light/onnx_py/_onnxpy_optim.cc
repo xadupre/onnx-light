@@ -20,6 +20,30 @@
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
 
+namespace {
+
+const char *InPlaceReuseKindName(onnx_optim::annotations::InPlaceReuseKind kind) {
+  switch (kind) {
+  case onnx_optim::annotations::InPlaceReuseKind::kEqual:
+    return "equal";
+  case onnx_optim::annotations::InPlaceReuseKind::kGreater:
+    return "greater";
+  }
+  return "unknown";
+}
+
+const char *InPlaceReuseKindEnumName(onnx_optim::annotations::InPlaceReuseKind kind) {
+  switch (kind) {
+  case onnx_optim::annotations::InPlaceReuseKind::kEqual:
+    return "kEqual";
+  case onnx_optim::annotations::InPlaceReuseKind::kGreater:
+    return "kGreater";
+  }
+  return "kUnknown";
+}
+
+} // namespace
+
 void AddOnnxPyExpressions(nb::module_ &m);
 void AddOnnxPyShapeInference(nb::module_ &m);
 
@@ -1093,6 +1117,64 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
         return os.str();
       });
 
+  nb::enum_<onnx_annotations::ComputeEventAction>(
+      shape_mod, "ComputeEventAction", nb::is_arithmetic(),
+      "Classifies decisions logged by :class:`ComputeContext` when "
+      "``events_enabled`` is ``True``: ``kInPlace`` for in-place matches, "
+      "``kRelease`` for releasable last-use values, and ``kReleaseShapeTag`` "
+      "for released values tagged ``\"shape\"``.")
+      .value("kInPlace", onnx_annotations::ComputeEventAction::kInPlace,
+             "One output was matched to one input for in-place reuse.")
+      .value("kRelease", onnx_annotations::ComputeEventAction::kRelease,
+             "One value reached its last use and can be released.")
+      .value("kReleaseShapeTag", onnx_annotations::ComputeEventAction::kReleaseShapeTag,
+             "One released value was also tagged ``\"shape\"``.");
+
+  nb::class_<onnx_annotations::ComputeEvent>(
+      shape_mod, "ComputeEvent",
+      "One entry in :meth:`ComputeContext.events`. ``inplace`` events carry "
+      "``output_index`` / ``input_index`` / ``kind``. ``release`` and "
+      "``release_shape_tag`` events carry ``name``.")
+      .def_prop_ro(
+          "action", [](const onnx_annotations::ComputeEvent &ev) { return ev.action; },
+          ":class:`ComputeEventAction` value describing the decision kind.")
+      .def_prop_ro(
+          "node_index", [](const onnx_annotations::ComputeEvent &ev) { return ev.node_index; },
+          "Node index where the decision was made.")
+      .def_prop_ro(
+          "name", [](const onnx_annotations::ComputeEvent &ev) { return ev.name; },
+          "Value name for ``release`` / ``release_shape_tag`` events.")
+      .def_prop_ro(
+          "output_index", [](const onnx_annotations::ComputeEvent &ev) { return ev.output_index; },
+          "Output index for ``inplace`` events, ``-1`` otherwise.")
+      .def_prop_ro(
+          "input_index", [](const onnx_annotations::ComputeEvent &ev) { return ev.input_index; },
+          "Input index for ``inplace`` events, ``-1`` otherwise.")
+      .def_prop_ro(
+          "kind", [](const onnx_annotations::ComputeEvent &ev) { return ev.kind; },
+          "Reuse kind for ``inplace`` events.")
+      .def(
+          "as_dict",
+          [](const onnx_annotations::ComputeEvent &ev) {
+            nb::dict d;
+            d["action"] = std::string(onnx_annotations::ComputeEventActionName(ev.action));
+            d["node_index"] = ev.node_index;
+            d["name"] = ev.name;
+            d["output_index"] = ev.output_index;
+            d["input_index"] = ev.input_index;
+            d["kind"] = std::string(InPlaceReuseKindName(ev.kind));
+            return d;
+          },
+          "Returns this event as a plain ``dict``.")
+      .def("__repr__", [](const onnx_annotations::ComputeEvent &ev) {
+        std::ostringstream os;
+        os << "ComputeEvent(action='" << onnx_annotations::ComputeEventActionName(ev.action)
+           << "', node_index=" << ev.node_index << ", name='" << ev.name
+           << "', output_index=" << ev.output_index << ", input_index=" << ev.input_index
+           << ", kind=" << InPlaceReuseKindEnumName(ev.kind) << ")";
+        return os.str();
+      });
+
   shape_mod.attr("NODE_MEMORY_TOTAL_BYTES_KEY") = onnx_annotations::kNodeMemoryTotalBytesKey;
   shape_mod.attr("NODE_MEMORY_ALREADY_ALLOCATED_BYTES_KEY") =
       onnx_annotations::kNodeMemoryAlreadyAllocatedBytesKey;
@@ -1182,6 +1264,30 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           "``onnx_light.release_after_shape_tag`` by :meth:`write_to_metadata`. When "
           "``value_tags`` is omitted, this method reuses the last tags stored by "
           ":meth:`compute_value_and_node_tags` on the same context, if any.")
+      .def_prop_rw(
+          "events_enabled",
+          [](const onnx_annotations::ComputeContext &self) { return self.events_enabled(); },
+          [](onnx_annotations::ComputeContext &self, bool enabled) {
+            self.set_events_enabled(enabled);
+          },
+          "When ``True``, :meth:`compute_inplace_reuse_graph` appends one "
+          ":class:`ComputeEvent` per in-place decision, release decision and "
+          "shape-tagged release decision. Default is ``False``.")
+      .def(
+          "events",
+          [](const onnx_annotations::ComputeContext &self) {
+            const auto &events = self.Events();
+            nb::list out;
+            for (const auto &ev : events) {
+              out.append(ev);
+            }
+            return out;
+          },
+          "Returns the append-only decision log as a list of "
+          ":class:`ComputeEvent` entries.")
+      .def(
+          "clear_events", [](onnx_annotations::ComputeContext &self) { self.ClearEvents(); },
+          "Empties the decision log without touching computed reuse results.")
       .def_prop_ro(
           "reuse", [](const onnx_annotations::ComputeContext &self) { return self.Reuse(); },
           "The per-node reuse opportunities as a list (one entry per node, same order as "

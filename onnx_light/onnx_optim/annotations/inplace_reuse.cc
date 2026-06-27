@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <optional>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -333,6 +334,19 @@ std::vector<std::string> CollectNodeInputs(const NodeProto &node) {
 
 } // namespace
 
+const char *ComputeEventActionName(ComputeEventAction action) {
+  switch (action) {
+  case ComputeEventAction::kInPlace:
+    return "inplace";
+  case ComputeEventAction::kRelease:
+    return "release";
+  case ComputeEventAction::kReleaseShapeTag:
+    return "release_shape_tag";
+  }
+  throw std::invalid_argument("ComputeEventActionName: unexpected action value " +
+                              std::to_string(static_cast<int32_t>(action)));
+}
+
 void ComputeContext::ComputeInPlaceReuseGraph(
     const GraphProto &graph, const ShapesContext &ctx, bool allow_input_overwrite,
     const std::unordered_map<std::string, std::string> &value_tags) {
@@ -421,6 +435,13 @@ void ComputeContext::ComputeInPlaceReuseGraph(
         continue;
       }
       release_after[static_cast<std::size_t>(i)].push_back(name);
+      if (events_enabled_) {
+        ComputeEvent ev;
+        ev.action = ComputeEventAction::kRelease;
+        ev.node_index = i;
+        ev.name = name;
+        events_.push_back(std::move(ev));
+      }
     }
 
     // Count direct-input occurrences so a value read twice is never aliased.
@@ -481,6 +502,15 @@ void ComputeContext::ComputeInPlaceReuseGraph(
           reuse.input_index = k;
           reuse.kind = kind;
           result[static_cast<std::size_t>(i)].push_back(reuse);
+          if (events_enabled_) {
+            ComputeEvent ev;
+            ev.action = ComputeEventAction::kInPlace;
+            ev.node_index = i;
+            ev.output_index = o;
+            ev.input_index = k;
+            ev.kind = kind;
+            events_.push_back(std::move(ev));
+          }
           used_inputs.insert(k);
           matched_outputs.insert(o);
           break;
@@ -625,6 +655,13 @@ void ComputeContext::ComputeInPlaceReuseGraph(
         auto it = effective_value_tags.find(name);
         if (it != effective_value_tags.end() && it->second == "shape") {
           release_after_shape_tagged_[i].push_back(name);
+          if (events_enabled_) {
+            ComputeEvent ev;
+            ev.action = ComputeEventAction::kReleaseShapeTag;
+            ev.node_index = i;
+            ev.name = name;
+            events_.push_back(std::move(ev));
+          }
         }
       }
     }

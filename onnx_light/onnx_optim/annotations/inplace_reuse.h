@@ -132,6 +132,45 @@ constexpr const char *kReleaseAfterMetadataKey = "onnx_light.release_after";
 constexpr const char *kReleaseAfterShapeTagMetadataKey = "onnx_light.release_after_shape_tag";
 
 /**
+ * Kind of decision recorded in the optional :cpp:class:`ComputeContext`
+ * decision log.
+ *
+ *  * ``kInPlace`` — one output was matched to one input for in-place reuse.
+ *  * ``kRelease`` — one value reached its last use at a node and can be
+ *                   released after that node.
+ *  * ``kReleaseShapeTag`` — one released value was also classified as
+ *                           ``"shape"`` by value tagging.
+ */
+enum class ComputeEventAction : int32_t {
+  kInPlace = 0,
+  kRelease = 1,
+  kReleaseShapeTag = 2,
+};
+
+/// Returns the short lowercase label for ``action``.
+const char *ComputeEventActionName(ComputeEventAction action);
+
+/**
+ * One entry of the optional :cpp:class:`ComputeContext` decision log.
+ */
+struct ComputeEvent {
+  /// Decision kind.
+  ComputeEventAction action = ComputeEventAction::kInPlace;
+  /// Node index in ``graph.node()`` where the decision was made.
+  int64_t node_index = -1;
+  /// Value name for ``kRelease`` / ``kReleaseShapeTag`` decisions.
+  std::string name;
+  /// Output index for ``kInPlace`` decisions; ``-1`` otherwise.
+  int64_t output_index = -1;
+  /// Input index for ``kInPlace`` decisions; ``-1`` otherwise.
+  int64_t input_index = -1;
+  /// Match kind for ``kInPlace`` decisions.
+  InPlaceReuseKind kind = InPlaceReuseKind::kEqual;
+};
+
+using ComputeEventLog = std::vector<ComputeEvent>;
+
+/**
  * Represents a per-node memory snapshot computed by
  * :cpp:class:`ComputeContext`.
  *
@@ -358,6 +397,20 @@ public:
     return memory_.at(node_index);
   }
 
+  // ── Optional decision logging ────────────────────────────────────────
+  //
+  // Mirrors the opt-in event logs of RuntimeContext and ShapesContext.
+  // When disabled (the default), no ComputeEvent object is constructed.
+  void set_events_enabled(bool enabled) noexcept { events_enabled_ = enabled; }
+  bool events_enabled() const noexcept { return events_enabled_; }
+
+  /// Append-only log of decisions made by :cpp:func:`ComputeInPlaceReuseGraph`.
+  const ComputeEventLog &Events() const noexcept { return events_; }
+  ComputeEventLog &Events() noexcept { return events_; }
+
+  /// Empties the decision log without touching computed results.
+  void ClearEvents() noexcept { events_.clear(); }
+
   /**
    * Records the computed opportunities into each node's ``metadata_props`` of
    * ``graph`` under :cpp:var:`kInPlaceReuseMetadataKey`,
@@ -411,6 +464,8 @@ private:
   std::vector<std::vector<std::string>> release_after_;
   std::vector<std::vector<std::string>> release_after_shape_tagged_;
   std::vector<NodeMemoryProfile> memory_;
+  ComputeEventLog events_;
+  bool events_enabled_ = false;
 };
 
 /**

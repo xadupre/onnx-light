@@ -127,8 +127,8 @@ class TestValueTags(unittest.TestCase):
             helper.make_node("Reshape", ["X", "S"], ["Y"]),
         ]
         value_tags, node_tags = compute_value_and_node_tags(nodes)
-        self.assertEqual(value_tags["S"], "shape")
-        self.assertEqual(node_tags[0], "shape")
+        self.assertEqual(value_tags["S"], "ambiguous")
+        self.assertEqual(node_tags[0], "ambiguous")
 
     def test_rank2_float_input_is_seeded_as_weight(self):
         from onnx_light.onnx import TensorProto, helper

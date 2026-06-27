@@ -216,7 +216,7 @@ def _require_shape_inference_extension() -> Any:
 
 
 def compute_value_and_node_tags(
-    graph_or_nodes_or_function: Any,
+    graph_or_nodes_or_function: Any, verbose: int = 0
 ) -> tuple[dict[str, str], list[str]]:
     """Infers semantic ``shape``/``axes``/``weight`` tags for values and nodes.
 
@@ -225,7 +225,7 @@ def compute_value_and_node_tags(
         names to tags and ``node_tags`` is ordered like the processed node list.
     """
     return _require_shape_inference_extension().compute_value_and_node_tags(
-        graph_or_nodes_or_function
+        graph_or_nodes_or_function, verbose=verbose
     )
 
 

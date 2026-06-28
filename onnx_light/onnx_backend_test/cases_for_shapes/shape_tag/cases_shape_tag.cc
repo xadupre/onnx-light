@@ -52,13 +52,10 @@ void RegisterShapeTagCases(std::vector<TestCase> &registry) {
   AddNode(*graph, "Shape", {"X"}, {"S"});
   AddNode(*graph, "Reshape", {"X", "S"}, {"Y"});
 
-  const int32_t kFloat = static_cast<int32_t>(DataType::FLOAT);
-  const int32_t kInt64 = static_cast<int32_t>(DataType::INT64);
-
   // Concrete input shape [2, 3] so the model is executable end-to-end.
-  AppendValueInfo(*graph->add_input(), "X", kFloat, {DimSpec(2), DimSpec(3)});
-  AppendValueInfo(*graph->add_value_info(), "S", kInt64, {DimSpec(2)});
-  AppendValueInfo(*graph->add_output(), "Y", kFloat, {DimSpec(2), DimSpec(3)});
+  AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
+  AppendValueInfo(*graph->add_value_info(), "S", DataType::INT64, {DimSpec(2)});
+  AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
 
   // Pre-embed the expected shape-tag metadata so tests can verify that
   // WriteValueAndNodeTagsToMetadata produces identical results.

@@ -461,6 +461,17 @@ public:
     return it == custom_shape_inference_.end() ? nullptr : &it->second;
   }
 
+  /// Removes the custom shape-inference callback registered for
+  /// ``(domain, op_type)``. ``domain == ""`` is normalized to
+  /// :cpp:var:`kOnnxDomain`. Returns ``true`` when an entry was removed
+  /// and ``false`` when no callback matched that key.
+  bool RemoveCustomShapeInferenceFunction(const std::string &domain, const std::string &op_type) {
+    return custom_shape_inference_.erase(NormaliseDomain(domain) + ":" + op_type) > 0;
+  }
+
+  /// Removes every custom shape-inference callback.
+  void ClearCustomShapeInferenceFunctions() { custom_shape_inference_.clear(); }
+
   /// Read-only access to all registered custom shape-inference callbacks.
   const CustomShapeInferenceMap &CustomShapeInferenceFunctions() const noexcept {
     return custom_shape_inference_;

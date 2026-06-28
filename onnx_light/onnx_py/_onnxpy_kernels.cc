@@ -481,6 +481,13 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "Custom kernels override any built-in entry with the same key, but "
           "model-local functions and the built-in control-flow operators "
           "(``If``, ``Loop``, ``Scan``, ``SequenceMap``) still take precedence.")
+      .def("unregister_custom_kernel", &RuntimeContext::UnregisterCustomKernel, nb::arg("domain"),
+           nb::arg("op_type"),
+           "Removes a custom kernel registration for ``(domain, op_type)``. "
+           "The empty domain is normalised to ``ai.onnx``. Returns ``True`` "
+           "when an entry was removed.")
+      .def("clear_custom_kernels", &RuntimeContext::ClearCustomKernels,
+           "Removes every custom kernel registration from the runtime context.")
       .def_static(
           "collect_external_inputs",
           [](const std::vector<NodeProto> &nodes) {

@@ -41,9 +41,11 @@ std::vector<int64_t> DimsOf(const TypeProto::Tensor &tt) {
   return out;
 }
 
-std::unordered_map<std::string, std::string> MetadataOf(const NodeProto &node) {
-  std::unordered_map<std::string, std::string> out;
-  for (const auto &prop : node.ref_metadata_props()) {
+using MetadataMap = std::unordered_map<std::string, std::string>;
+
+template <typename Proto> MetadataMap MetadataOf(const Proto &proto) {
+  MetadataMap out;
+  for (const auto &prop : proto.ref_metadata_props()) {
     out[prop.ref_key().as_string()] = prop.ref_value().as_string();
   }
   return out;
@@ -1642,19 +1644,15 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagMetadataOnBackendCase
     found = true;
 
     // Collect the expected graph-level metadata pre-embedded in the case model.
-    std::unordered_map<std::string, std::string> expected_graph_meta;
-    for (const auto &prop : tc.model.ref_graph().ref_metadata_props()) {
-      expected_graph_meta[prop.ref_key().as_string()] = prop.ref_value().as_string();
-    }
+    const MetadataMap expected_graph_meta = MetadataOf(tc.model.ref_graph());
     ASSERT_FALSE(expected_graph_meta.empty()) << "no graph metadata pre-embedded in case";
 
     // Collect per-node expected metadata from the pre-embedded model.
     const auto &src_nodes = tc.model.ref_graph().ref_node();
-    std::vector<std::unordered_map<std::string, std::string>> expected_node_meta(src_nodes.size());
-    for (size_t i = 0; i < src_nodes.size(); ++i) {
-      for (const auto &prop : src_nodes[i].ref_metadata_props()) {
-        expected_node_meta[i][prop.ref_key().as_string()] = prop.ref_value().as_string();
-      }
+    std::vector<MetadataMap> expected_node_meta;
+    expected_node_meta.reserve(src_nodes.size());
+    for (const auto &node : src_nodes) {
+      expected_node_meta.push_back(MetadataOf(node));
     }
 
     // Make a clean copy of the model and strip all metadata so
@@ -1678,21 +1676,13 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagMetadataOnBackendCase
     ASSERT_NO_THROW(onnx_optim::annotations::WriteValueAndNodeTagsToMetadata(*graph))
         << "case: " << tc.name;
 
-    std::unordered_map<std::string, std::string> actual_graph_meta;
-    for (const auto &prop : graph->ref_metadata_props()) {
-      actual_graph_meta[prop.ref_key().as_string()] = prop.ref_value().as_string();
-    }
-    EXPECT_EQ(actual_graph_meta, expected_graph_meta)
+    EXPECT_EQ(MetadataOf(*graph), expected_graph_meta)
         << "graph metadata mismatch in case " << tc.name;
 
     const auto &result_nodes = graph->ref_node();
     ASSERT_EQ(result_nodes.size(), expected_node_meta.size());
     for (size_t i = 0; i < result_nodes.size(); ++i) {
-      std::unordered_map<std::string, std::string> actual_node_meta;
-      for (const auto &prop : result_nodes[i].ref_metadata_props()) {
-        actual_node_meta[prop.ref_key().as_string()] = prop.ref_value().as_string();
-      }
-      EXPECT_EQ(actual_node_meta, expected_node_meta[i])
+      EXPECT_EQ(MetadataOf(result_nodes[i]), expected_node_meta[i])
           << "node " << i << " metadata mismatch in case " << tc.name;
     }
 
@@ -1702,15 +1692,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagMetadataOnBackendCase
     const auto &src_vis = tc.model.ref_graph().ref_value_info();
     ASSERT_EQ(result_vis.size(), src_vis.size());
     for (size_t vi = 0; vi < result_vis.size(); ++vi) {
-      std::unordered_map<std::string, std::string> expected_vi_meta;
-      for (const auto &prop : src_vis[vi].ref_metadata_props()) {
-        expected_vi_meta[prop.ref_key().as_string()] = prop.ref_value().as_string();
-      }
-      std::unordered_map<std::string, std::string> actual_vi_meta;
-      for (const auto &prop : result_vis[vi].ref_metadata_props()) {
-        actual_vi_meta[prop.ref_key().as_string()] = prop.ref_value().as_string();
-      }
-      EXPECT_EQ(actual_vi_meta, expected_vi_meta)
+      EXPECT_EQ(MetadataOf(result_vis[vi]), MetadataOf(src_vis[vi]))
           << "value_info[" << vi << "] metadata mismatch in case " << tc.name;
     }
   }

@@ -6,6 +6,7 @@ import onnx_light.onnx as onnxl
 import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx_optim.shape_inference import (
     NODE_TAG_METADATA_KEY,
+    VALUE_TAG_METADATA_KEY,
     VALUE_TAGS_METADATA_KEY,
     infer_shapes_model,
     write_value_and_node_tags_to_metadata,
@@ -237,7 +238,7 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
         # Verify onnx_light.value_tag is also written on value_info for "S".
         s_vi = next(vi for vi in model_copy.graph.value_info if vi.name == "S")
         s_vi_meta = {entry.key: entry.value for entry in s_vi.metadata_props}
-        self.assertEqual(s_vi_meta.get("onnx_light.value_tag"), "shape")
+        self.assertEqual(s_vi_meta.get(VALUE_TAG_METADATA_KEY), "shape")
 
 
 if __name__ == "__main__":

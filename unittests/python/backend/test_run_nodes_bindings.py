@@ -11,9 +11,11 @@ The dispatcher is exposed as the ``runtime`` submodule of
 
 from __future__ import annotations
 
+import gc
 import struct
 import tempfile
 import unittest
+import weakref
 from pathlib import Path
 
 import numpy as np
@@ -369,6 +371,21 @@ class TestRunNodesBindings(ExtTestCase):
         rt.run_nodes(list(model.graph.node), ctx)
         # Abs replaced by negation: -(-1) = 1, -(-2) = 2, -(-3) = 3, +0.
         self.assertEqual(_unpack_floats(ctx.get("y")), (1.0, 2.0, 3.0))
+
+    def test_unregister_custom_kernel_releases_python_function(self):
+        ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+
+        def custom(_node, _ctx):
+            return None
+
+        custom_ref = weakref.ref(custom)
+        ctx.register_custom_kernel("my.domain", "Tmp", custom)
+        self.assertTrue(ctx.unregister_custom_kernel("my.domain", "Tmp"))
+        self.assertFalse(ctx.unregister_custom_kernel("my.domain", "Tmp"))
+
+        del custom
+        gc.collect()
+        self.assertIsNone(custom_ref())
 
 
 class TestTensorToProto(ExtTestCase):

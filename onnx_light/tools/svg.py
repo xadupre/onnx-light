@@ -206,7 +206,7 @@ def to_svg(
 
         print(".. raw:: html")
         print()
-        for line in to_svg(model, include_inplace=True).split("\n"):
+        for line in to_svg(model, include_inplace=True).split("\\n"):
             print("    " + line)
     """
     valid_directions = {"TB", "TD", "LR"}

@@ -855,6 +855,15 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
           },
           nb::arg("domain"), nb::arg("op_type"),
           "True when a custom callback is registered for ``(domain, op_type)``.")
+      .def("remove_custom_shape_inference_function",
+           &onnx_shapes::ShapesContext::RemoveCustomShapeInferenceFunction, nb::arg("domain"),
+           nb::arg("op_type"),
+           "Removes a custom callback for ``(domain, op_type)``. "
+           "An empty domain is normalised to ``ai.onnx``. Returns ``True`` "
+           "when an entry was removed.")
+      .def("clear_custom_shape_inference_functions",
+           &onnx_shapes::ShapesContext::ClearCustomShapeInferenceFunctions,
+           "Removes every registered custom callback.")
       .def(
           "custom_shape_inference_keys",
           [](const onnx_shapes::ShapesContext &c) -> nb::list {

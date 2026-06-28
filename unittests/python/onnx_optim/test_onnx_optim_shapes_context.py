@@ -1,4 +1,6 @@
+import gc
 import unittest
+import weakref
 
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
@@ -172,6 +174,21 @@ class TestShapesContextBindings(ExtTestCase):
         y = ctx.get("Y")
         self.assertEqual(y.dtype, onnxl.TensorProto.FLOAT)
         self.assertEqual(list(y.shape), [2, "N"])
+
+    def test_remove_custom_shape_inference_function_releases_python_function(self):
+        ctx = si.ShapesContext()
+
+        def custom_infer(_ctx, _node):
+            return None
+
+        custom_ref = weakref.ref(custom_infer)
+        ctx.set_custom_shape_inference_function("com.acme", "Tmp", custom_infer)
+        self.assertTrue(ctx.remove_custom_shape_inference_function("com.acme", "Tmp"))
+        self.assertFalse(ctx.remove_custom_shape_inference_function("com.acme", "Tmp"))
+
+        del custom_infer
+        gc.collect()
+        self.assertIsNone(custom_ref())
 
     # ------------------------------------------------------------------
     # compute_shape_node / compute_shape_graph / compute_shape_model.

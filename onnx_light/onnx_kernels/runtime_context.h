@@ -444,12 +444,23 @@ public:
   const CustomKernelMap &custom_kernels() const noexcept { return custom_kernels_; }
 
   /// Registers or replaces a custom kernel for ``(domain, op_type)``.
-  /// The empty domain is normalised to ``"ai.onnx"``.
+  /// The empty domain is normalized to ``"ai.onnx"``.
   void RegisterCustomKernel(const std::string &domain, const std::string &op_type,
                             CustomKernelFn fn) {
     const std::string d = domain.empty() ? std::string("ai.onnx") : domain;
     custom_kernels_[d + ":" + op_type] = std::move(fn);
   }
+
+  /// Removes the custom kernel registered for ``(domain, op_type)``.
+  /// The empty domain is normalised to ``"ai.onnx"``.
+  /// Returns ``true`` when an entry was removed, ``false`` otherwise.
+  bool UnregisterCustomKernel(const std::string &domain, const std::string &op_type) {
+    const std::string d = domain.empty() ? std::string("ai.onnx") : domain;
+    return custom_kernels_.erase(d + ":" + op_type) > 0;
+  }
+
+  /// Removes every registered custom kernel.
+  void ClearCustomKernels() { custom_kernels_.clear(); }
 
   /// Returns ``true`` if a tensor named ``name`` is currently held.
   bool Has(const std::string &name) const { return tensors_.find(name) != tensors_.end(); }

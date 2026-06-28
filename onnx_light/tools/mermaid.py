@@ -227,7 +227,7 @@ def to_mermaid(
 
         print(".. mermaid::")
         print()
-        for line in to_mermaid(model, include_inplace=True).split("\n"):
+        for line in to_mermaid(model, include_inplace=True).split("\\n"):
             print("    " + line)
     """
 

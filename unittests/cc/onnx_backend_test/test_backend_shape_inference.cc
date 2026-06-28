@@ -1651,7 +1651,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagMetadataOnBackendCase
     // Collect per-node expected metadata from the pre-embedded model.
     const auto &src_nodes = tc.model.ref_graph().ref_node();
     std::vector<std::unordered_map<std::string, std::string>> expected_node_meta(src_nodes.size());
-    for (std::size_t i = 0; i < src_nodes.size(); ++i) {
+    for (size_t i = 0; i < src_nodes.size(); ++i) {
       for (const auto &prop : src_nodes[i].ref_metadata_props()) {
         expected_node_meta[i][prop.ref_key().as_string()] = prop.ref_value().as_string();
       }
@@ -1666,10 +1666,10 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagMetadataOnBackendCase
 
     GraphProto *graph = model_copy.mutable_graph();
     graph->mutable_metadata_props()->clear();
-    for (std::size_t n = 0; n < graph->node().size(); ++n) {
+    for (size_t n = 0; n < graph->node().size(); ++n) {
       graph->mutable_node(n)->mutable_metadata_props()->clear();
     }
-    for (std::size_t vi = 0; vi < graph->value_info().size(); ++vi) {
+    for (size_t vi = 0; vi < graph->value_info().size(); ++vi) {
       graph->mutable_value_info(vi)->mutable_metadata_props()->clear();
     }
 
@@ -1687,7 +1687,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagMetadataOnBackendCase
 
     const auto &result_nodes = graph->ref_node();
     ASSERT_EQ(result_nodes.size(), expected_node_meta.size());
-    for (std::size_t i = 0; i < result_nodes.size(); ++i) {
+    for (size_t i = 0; i < result_nodes.size(); ++i) {
       std::unordered_map<std::string, std::string> actual_node_meta;
       for (const auto &prop : result_nodes[i].ref_metadata_props()) {
         actual_node_meta[prop.ref_key().as_string()] = prop.ref_value().as_string();
@@ -1701,7 +1701,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagMetadataOnBackendCase
     const auto &result_vis = graph->ref_value_info();
     const auto &src_vis = tc.model.ref_graph().ref_value_info();
     ASSERT_EQ(result_vis.size(), src_vis.size());
-    for (std::size_t vi = 0; vi < result_vis.size(); ++vi) {
+    for (size_t vi = 0; vi < result_vis.size(); ++vi) {
       std::unordered_map<std::string, std::string> expected_vi_meta;
       for (const auto &prop : src_vis[vi].ref_metadata_props()) {
         expected_vi_meta[prop.ref_key().as_string()] = prop.ref_value().as_string();

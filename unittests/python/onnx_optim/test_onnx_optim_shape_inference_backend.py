@@ -1,10 +1,15 @@
+import json
 import unittest
-
 
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.numpy_helper as onh
-from onnx_light.onnx_optim.shape_inference import infer_shapes_model
+from onnx_light.onnx_optim.shape_inference import (
+    NODE_TAG_METADATA_KEY,
+    VALUE_TAGS_METADATA_KEY,
+    infer_shapes_model,
+    write_value_and_node_tags_to_metadata,
+)
 from onnx_light.onnx_py._onnxpyoptim import shape_inference as si
 
 # The backend test registries are only available in the full build; skip this
@@ -188,14 +193,6 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
     def test_shape_tag_backend_case_metadata(self):
         """Verifies that the shape-tag backend case has expected metadata pre-embedded
         and that write_value_and_node_tags_to_metadata reproduces it on a blank copy."""
-        import json
-
-        from onnx_light.onnx_optim.shape_inference import (
-            NODE_TAG_METADATA_KEY,
-            VALUE_TAGS_METADATA_KEY,
-        )
-        from onnx_light.tools import write_value_and_node_tags_to_metadata
-
         tests = [
             test
             for test in collect_test_cases("shape_tag")

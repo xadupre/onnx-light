@@ -80,8 +80,14 @@ else()
 endif()
 
 if(ONNX_LIGHT_BUILD_PYTHON)
-  # Find Python
-  find_package(Python 3.10 REQUIRED COMPONENTS Interpreter Development.Module)
+  # Find Python. Development.SABIModule (CMake >= 3.26) is needed to enable
+  # nanobind's STABLE_ABI mode, which produces a single abi3-tagged extension
+  # that is forward-compatible across all CPython 3.12+ versions. It is
+  # requested as an optional component so that older CMake installations (and
+  # free-threaded interpreters, which do not expose this target) continue to
+  # work without error.
+  find_package(Python 3.10 REQUIRED COMPONENTS Interpreter Development.Module
+    OPTIONAL_COMPONENTS Development.SABIModule)
 
   # Find nanobind
   execute_process(
@@ -415,21 +421,24 @@ endif() # ONNX_LIGHT_BUILD_KERNELS
 # Builds _onnxpyprotoop, _onnxpyprotolib, _onnxpyoptim, _onnxpykernels and _onnxpybackend libraries.
 if(ONNX_LIGHT_BUILD_PYTHON)
   # _onnxpyprotoop: proto bindings + onnx_op schema bindings.
-  nanobind_add_module(_onnxpyprotoop ${ONNX_PY_PROTOOP_SOURCES})
+  # STABLE_ABI: emit an abi3-tagged extension on CPython >= 3.12 so a single
+  # wheel covers all future minor versions. nanobind silently drops the flag on
+  # older interpreters and on free-threaded builds (which use their own ABI).
+  nanobind_add_module(_onnxpyprotoop STABLE_ABI ${ONNX_PY_PROTOOP_SOURCES})
   target_include_directories(_onnxpyprotoop PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
   target_link_libraries(_onnxpyprotoop PRIVATE lib_onnx_op lib_onnx_manipulations)
 
   # _onnxpyprotolib: onnx_lib bindings (defs/parser/checker/inliner/
   # shape/version_converter). This module does not register proto classes;
   # those are registered by _onnxpyprotoop.
-  nanobind_add_module(_onnxpyprotolib ${ONNX_PY_PROTOLIB_SOURCES})
+  nanobind_add_module(_onnxpyprotolib STABLE_ABI ${ONNX_PY_PROTOLIB_SOURCES})
   target_include_directories(_onnxpyprotolib PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
   target_link_libraries(_onnxpyprotolib PRIVATE lib_onnx_lib)
 
   # _onnxpyoptim: optim bindings (symbolic expressions and shape inference).
   # Split from _onnxpyproto* so the schema bindings and the shape-inference
   # bindings live in distinct extensions.
-  nanobind_add_module(_onnxpyoptim ${ONNX_PY_OPTIM_SOURCES})
+  nanobind_add_module(_onnxpyoptim STABLE_ABI ${ONNX_PY_OPTIM_SOURCES})
   target_include_directories(_onnxpyoptim PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
   target_link_libraries(_onnxpyoptim PRIVATE lib_onnx_optim)
 
@@ -442,7 +451,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # omitted and the Python package raises an explicit error when the reference
   # runtime or backend-test helpers are requested.
   if(ONNX_LIGHT_BUILD_KERNELS)
-  nanobind_add_module(_onnxpykernels ${ONNX_PY_KERNELS_SOURCES})
+  nanobind_add_module(_onnxpykernels STABLE_ABI ${ONNX_PY_KERNELS_SOURCES})
   target_include_directories(_onnxpykernels PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
   target_link_libraries(_onnxpykernels PRIVATE lib_onnx_kernels)
 
@@ -456,7 +465,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # special ordering is required; in the pure C++ STATIC variant we repeat
   # ``lib_onnx_backend_test`` after ``lib_onnx_kernels`` to break the
   # circular reference between the two static archives.
-  nanobind_add_module(_onnxpybackend ${ONNX_PY_BACKEND_SOURCES})
+  nanobind_add_module(_onnxpybackend STABLE_ABI ${ONNX_PY_BACKEND_SOURCES})
   target_include_directories(_onnxpybackend PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
   if(_onnx_light_lib_type STREQUAL "SHARED")
     target_link_libraries(_onnxpybackend PRIVATE lib_onnx_backend_test lib_onnx_kernels)

@@ -1440,17 +1440,17 @@ int64_t open_external_data(const std::string &base_dir, const std::string &locat
 
 #endif
 
-static std::unordered_set<std::string> experimental_ops = {"ATen",
-                                                           "Affine",
-                                                           "ConstantFill",
-                                                           "Crop",
-                                                           "DynamicSlice",
-                                                           "GRUUnit",
-                                                           "GivenTensorFill",
-                                                           "ImageScaler",
-                                                           "ParametricSoftplus",
-                                                           "Scale",
-                                                           "ScaledTanh"};
+static const std::unordered_set<std::string> experimental_ops = {"ATen",
+                                                                 "Affine",
+                                                                 "ConstantFill",
+                                                                 "Crop",
+                                                                 "DynamicSlice",
+                                                                 "GRUUnit",
+                                                                 "GivenTensorFill",
+                                                                 "ImageScaler",
+                                                                 "ParametricSoftplus",
+                                                                 "Scale",
+                                                                 "ScaledTanh"};
 
 bool check_is_experimental_op(const NodeProto &node) {
   return (node.domain() == ONNX_DOMAIN || node.domain() == "ai.onnx") &&

@@ -113,7 +113,7 @@ public:
   void set_model_dir(const std::string &model_dir) { model_dir_ = model_dir; }
 
   /** Returns the directory used to resolve relative external data locations. */
-  std::string get_model_dir() const { return model_dir_; }
+  const std::string &get_model_dir() const { return model_dir_; }
 
   /** Returns true when schema-version compatibility checks are skipped. */
   bool skip_opset_compatibility_check() const { return skip_opset_compatibility_check_; }

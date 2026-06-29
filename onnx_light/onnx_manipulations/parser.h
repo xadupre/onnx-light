@@ -19,8 +19,8 @@
 
 #include <cctype>
 #include <cstdint>
-#include <cstring>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -238,15 +238,19 @@ private:
  */
 class ParserBase {
 public:
+  /// Creates a parser from a contiguous character buffer.
+  /// The underlying buffer must remain valid and unchanged during the parser lifetime.
+  explicit ParserBase(std::string_view input)
+      : start_(input.data()), next_(input.data()), end_(input.data() + input.size()),
+        saved_pos_(input.data()) {}
+
   /// Creates a parser from a string buffer.
   /// The underlying buffer must remain valid and unchanged during the parser lifetime.
-  explicit ParserBase(const std::string &str)
-      : start_(str.data()), next_(str.data()), end_(str.data() + str.length()), saved_pos_(next_) {}
+  explicit ParserBase(const std::string &str) : ParserBase(std::string_view(str)) {}
 
   /// Creates a parser from a null-terminated string.
   /// The referenced character buffer must outlive the parser instance.
-  explicit ParserBase(const char *cstr)
-      : start_(cstr), next_(cstr), end_(cstr + strlen(cstr)), saved_pos_(next_) {}
+  explicit ParserBase(const char *cstr) : ParserBase(std::string_view(cstr)) {}
 
   /// Saves the current parser cursor position.
   void SavePos() { saved_pos_ = next_; }
@@ -272,6 +276,8 @@ public:
   // return the line containing the last non-space character preceding the error (if it exists).
   /// Returns a line of source context around the current cursor position for error messages.
   std::string GetErrorContext() {
+    if (start_ == end_)
+      return std::string();
     // Special cases: empty input string, and parse-error at first character.
     const char *p = next_ < end_ ? next_ : next_ - 1;
     while ((p > start_) && std::isspace(static_cast<unsigned char>(*p)))
@@ -311,7 +317,7 @@ public:
   int NextChar(bool skipspace = true) {
     if (skipspace)
       SkipWhiteSpace();
-    return (next_ < end_) ? *next_ : 0;
+    return (next_ < end_) ? static_cast<unsigned char>(*next_) : 0;
   }
 
   /// Consumes `ch` if it is the next character and returns true; otherwise returns false.
@@ -529,8 +535,7 @@ protected:
  */
 class OnnxParser : public ParserBase {
 public:
-  /// Creates an ONNX text parser from a null-terminated buffer.
-  explicit OnnxParser(const char *cstr) : ParserBase(cstr) {}
+  using ParserBase::ParserBase;
 
   /// Parses a `TensorShapeProto`.
   ONNX_API Common::Status Parse(TensorShapeProto &shape);
@@ -569,7 +574,7 @@ public:
   ONNX_API Common::Status Parse(ModelProto &model);
 
   /// Parses an ONNX text snippet into the requested protobuf type.
-  template <typename T> static Common::Status Parse(T &parsedData, const char *input) {
+  template <typename T> static Common::Status Parse(T &parsedData, std::string_view input) {
     OnnxParser parser(input);
     return parser.Parse(parsedData);
   }

@@ -1,6 +1,8 @@
 #include "onnx.h"
 #include "onnx_manipulations/parser.h"
+#include <cmath>
 #include <gtest/gtest.h>
+#include <string_view>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
@@ -8,14 +10,14 @@ namespace {
 
 // Parse a single ONNX-text-format entity and assert the parse succeeded and
 // the entire input was consumed.
-template <typename T> static void ParseIt(T &parsedData, const char *input) {
+template <typename T> static void ParseIt(T &parsedData, std::string_view input) {
   OnnxParser parser(input);
   auto status = parser.Parse(parsedData);
   EXPECT_TRUE(status.IsOK()) << status.ErrorMessage();
   EXPECT_TRUE(parser.EndOfInput()) << "Extra unparsed input unexpected.";
 }
 
-template <typename T> static void ExpectParseFailure(T &result, const char *input) {
+template <typename T> static void ExpectParseFailure(T &result, std::string_view input) {
   auto status = OnnxParser::Parse(result, input);
   EXPECT_FALSE(status.IsOK());
 }
@@ -689,6 +691,17 @@ TEST(onnx_defs, Parser_EscapeStringLiteral) {
   EXPECT_TRUE(status.IsOK()) << status.ErrorMessage();
   EXPECT_TRUE(parser.EndOfInput()) << "Extra unparsed input unexpected.";
   EXPECT_EQ(s, std::string("123\"56\\89"));
+}
+
+TEST(onnx_defs, Parser_NonNulTerminatedStringView) {
+  std::string backing = "inf9";
+  std::string_view view(backing.data(), 3);
+  OnnxParser parser(view);
+  float value = 0.0f;
+  auto status = parser.ParserBase::Parse(value);
+  EXPECT_TRUE(status.IsOK()) << status.ErrorMessage();
+  EXPECT_TRUE(std::isinf(value));
+  EXPECT_TRUE(parser.EndOfInput()) << "Extra unparsed input unexpected.";
 }
 
 TEST(onnx_defs, Parser_FunctionProto_Basic) {

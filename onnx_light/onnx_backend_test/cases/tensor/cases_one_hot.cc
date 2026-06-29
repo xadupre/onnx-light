@@ -80,6 +80,19 @@ void RegisterOneHotCases(std::vector<TestCase> &registry) {
            "test_onehot_negative_indices", {opset}, "backend-test", registry);
   }
 
+  // test_onehot_out_of_range_indices: indices INT64 vector with out-of-range
+  // positive and negative entries. Out-of-range positions stay at off_value.
+  {
+    const Tensor indices = Tensor::FromInt64("indices", {3}, {5, -6, -1});
+    const Tensor depth = Tensor::FromFloat("depth", {}, {5.0f});
+    const Tensor values = Tensor::FromFloat("values", {2}, {1.0f, 3.0f});
+    kernel::OneHot::Attributes attrs;
+    attrs.axis = 1;
+    const Tensor y = one_hot_kernel(indices, depth, values, attrs);
+    Expect(MakeOneHotNode(/*set_axis=*/true, /*axis=*/1), {indices, depth, values}, {y},
+           "test_onehot_out_of_range_indices", {opset}, "backend-test", registry);
+  }
+
   // test_onehot_with_negative_axis: indices FLOAT matrix, depth FLOAT scalar,
   // FLOAT values, axis = -2.
   {

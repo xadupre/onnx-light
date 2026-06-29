@@ -20,17 +20,82 @@
 #include "onnx_manipulations/parser.h"
 #include "onnx_proto/onnx.h"
 
+#include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
+using ONNX_LIGHT_NAMESPACE::GraphProto;
 using ONNX_LIGHT_NAMESPACE::ModelProto;
+using ONNX_LIGHT_NAMESPACE::NodeProto;
 using ONNX_LIGHT_NAMESPACE::OnnxParser;
+using ONNX_LIGHT_NAMESPACE::OperatorSetIdProto;
+using ONNX_LIGHT_NAMESPACE::TensorProto;
+using ONNX_LIGHT_NAMESPACE::TensorShapeProto;
+using ONNX_LIGHT_NAMESPACE::TypeProto;
+using ONNX_LIGHT_NAMESPACE::ValueInfoProto;
 
 namespace {
+
+// Builds a serialized ModelProto with explicit, possibly inconsistent graph
+// I/O. The graph output need not be produced by the node, so the result can
+// carry a topological gap (an output or node input that nothing produces) to
+// seed the version converter's undefined-name handling.
+std::string make_model_unchecked(const char *op_type, int64_t opset_version,
+                                 const std::vector<std::string> &node_inputs,
+                                 const std::vector<std::string> &node_outputs,
+                                 const std::vector<std::string> &graph_inputs,
+                                 const std::vector<std::string> &graph_outputs) {
+  auto add_value_info = [](GraphProto *g, bool is_input, const std::string &name) {
+    ValueInfoProto *v = is_input ? g->add_input() : g->add_output();
+    v->set_name(name);
+    TypeProto *t = v->add_type();
+    TypeProto::Tensor *tt = t->add_tensor_type();
+    tt->set_elem_type(static_cast<int32_t>(TensorProto::DataType::FLOAT));
+    tt->add_shape()->add_dim()->set_dim_value(1);
+  };
+
+  ModelProto model;
+  model.set_ir_version(7);
+  model.set_producer_name("oss-fuzz");
+
+  OperatorSetIdProto *opset = model.add_opset_import();
+  opset->set_domain("");
+  opset->set_version(opset_version);
+
+  std::string graph_name(op_type);
+  std::transform(graph_name.begin(), graph_name.end(), graph_name.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  graph_name += "-unchecked";
+
+  GraphProto *graph = model.add_graph();
+  graph->set_name(graph_name);
+
+  for (const auto &name : graph_inputs) {
+    add_value_info(graph, true, name);
+  }
+  for (const auto &name : graph_outputs) {
+    add_value_info(graph, false, name);
+  }
+
+  NodeProto *node = graph->add_node();
+  node->set_op_type(op_type);
+  for (const auto &name : node_inputs) {
+    node->add_input(name);
+  }
+  for (const auto &name : node_outputs) {
+    node->add_output(name);
+  }
+
+  std::string out;
+  model.SerializeToString(out);
+  return out;
+}
 
 std::string text_to_serialized_model(const char *text) {
   ModelProto m;
@@ -104,6 +169,14 @@ int main(int argc, char *argv[]) {
                                         ">\n"
                                         "agraph (float[N] X) => (float[N] Y)\n"
                                         "{ Y = Sigmoid(X) }\n"));
+    // Models with a topological gap (an output or node input that nothing
+    // produces) seed graphProtoToGraph's undefined-name handling directly.
+    write_file(vc_dir, "identity_13_output_undefined.onnx",
+               make_model_unchecked("Identity", 13, {"X"}, {"Y"}, {"X"}, {"Z"}));
+    write_file(vc_dir, "add_13_output_partial_undefined.onnx",
+               make_model_unchecked("Add", 13, {"X", "X"}, {"Y"}, {"X"}, {"Y", "Z"}));
+    write_file(vc_dir, "add_13_node_input_undefined.onnx",
+               make_model_unchecked("Add", 13, {"X", "W"}, {"Y"}, {"X"}, {"Y"}));
 
     // parser seeds: textual ONNX models exercising the productions
     // used by ``OnnxParser::Parse<ModelProto>`` directly. Written as

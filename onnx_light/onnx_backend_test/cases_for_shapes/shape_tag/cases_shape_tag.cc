@@ -28,7 +28,8 @@ constexpr int64_t kDefaultIrVersion = 10;
 // must emit:
 //
 //   * ``onnx_light.node_tag = "shape"`` on the ``Shape`` node.
-//   * ``onnx_light.value_tags = {"S":"shape"}`` on the graph.
+//   * ``onnx_light.value_tags = {"S":"shape","X":"weight","Y":"weight"}`` on
+//     the graph (X is a rank-2 float tensor → "weight"; Y inherits from X).
 //
 // The expected metadata is pre-embedded into the model so consumers can
 // verify that ``WriteValueAndNodeTagsToMetadata`` reproduces it exactly.
@@ -59,13 +60,29 @@ void RegisterShapeTagCases(std::vector<TestCase> &registry) {
 
   // Pre-embed the expected shape-tag metadata so tests can verify that
   // WriteValueAndNodeTagsToMetadata produces identical results.
-  graph->add_metadata(onnx_optim::annotations::kValueTagsMetadataKey, "{\"S\":\"shape\"}");
+  // X is a rank-2 float tensor so CollectGraphSeedTags tags it as "weight";
+  // Y inherits "weight" from X through Reshape; S is tagged "shape" by Shape.
+  // DumpValueTagsAsJson sorts keys, so the canonical order is S < X < Y.
+  graph->add_metadata(onnx_optim::annotations::kValueTagsMetadataKey,
+                      "{\"S\":\"shape\",\"X\":\"weight\",\"Y\":\"weight\"}");
   (*graph->mutable_node())[0].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey, "shape");
   // S (value_info[0]) also receives onnx_light.value_tag = "shape".
   {
     StringStringEntryProto *entry = graph->mutable_value_info(0)->add_metadata_props();
     entry->set_key(onnx_optim::annotations::kValueTagMetadataKey);
     entry->set_value("shape");
+  }
+  // X (input[0]) receives onnx_light.value_tag = "weight".
+  {
+    StringStringEntryProto *entry = graph->mutable_input(0)->add_metadata_props();
+    entry->set_key(onnx_optim::annotations::kValueTagMetadataKey);
+    entry->set_value("weight");
+  }
+  // Y (output[0]) receives onnx_light.value_tag = "weight".
+  {
+    StringStringEntryProto *entry = graph->mutable_output(0)->add_metadata_props();
+    entry->set_key(onnx_optim::annotations::kValueTagMetadataKey);
+    entry->set_value("weight");
   }
 
   // Build the reference DataSet so the case is executable end-to-end.

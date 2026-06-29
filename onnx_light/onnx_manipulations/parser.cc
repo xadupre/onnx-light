@@ -715,7 +715,7 @@ Common::Status OnnxParser::ParseSingleAttributeValue(AttributeProto &attr,
       return ParseError("Internal error");
     case LiteralType::INT_LITERAL:
       attr.set_type(AttributeProto::AttributeType::INT);
-      attr.set_i(std::stoll(literal.value));
+      attr.set_i(std::stol(literal.value));
       break;
     case LiteralType::FLOAT_LITERAL:
       attr.set_type(AttributeProto::AttributeType::FLOAT);

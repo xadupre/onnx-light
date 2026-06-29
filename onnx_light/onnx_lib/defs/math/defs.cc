@@ -437,6 +437,40 @@ ONNX_OPERATOR_SET_SCHEMA(
         .SetContextDependentFunctionBodyBuilder(BuildContextDependentFunctionBodyCelu)
         .TypeAndShapeInferenceFunction(propagateShapeAndTypeFromFirstInput));
 
+ONNX_OPERATOR_SET_SCHEMA(Celu, 28,
+                         OpSchema()
+                             .SetDoc(celu_ver12_doc)
+                             .Input(0, "X", "Input tensor", "T", OpSchema::Single, true, 1,
+                                    OpSchema::Differentiable)
+                             .Output(0, "Y", "Output tensor", "T", OpSchema::Single, true, 1,
+                                     OpSchema::Differentiable)
+                             .Attr("alpha",
+                                   "The Alpha value in Celu formula which control the shape of "
+                                   "the unit. The default value is 1.0.",
+                                   AttributeProto::FLOAT, celu_default_alpha)
+                             .TypeConstraint("T", OpSchema::all_float_types_ir4(),
+                                             "Constrain input and output types to float tensors.")
+                             .SetNodeDeterminism(OpSchema::NodeDeterminism::Deterministic)
+                             .TypeAndShapeInferenceFunction(propagateShapeAndTypeFromFirstInput)
+                             .FunctionBody(
+                                 R"ONNX(
+          {
+            Alpha = Constant <value_float: float = @alpha>()
+            AlphaCast = CastLike (Alpha, X)
+            Zero = Constant <value = float {0.0}>()
+            ZeroCast = CastLike (Zero, X)
+            One = Constant <value = float {1.0}>()
+            OneCast = CastLike (One, X)
+            XDivAlpha = Div (X, AlphaCast)
+            ExpXDivAlpha = Exp (XDivAlpha)
+            ExpXDivAlphaSubOne = Sub (ExpXDivAlpha, OneCast)
+            AlphaMulExpXDivAlphaSubOne = Mul (AlphaCast, ExpXDivAlphaSubOne)
+            XGreaterThanZero = Greater (X, ZeroCast)
+            Y = Where (XGreaterThanZero, X, AlphaMulExpXDivAlphaSubOne)
+          }
+        )ONNX",
+                                 22));
+
 static constexpr const char *gelu_ver20_doc = R"DOC(
 Gelu takes one input data (Tensor<T>) and produces one
 output data (Tensor<T>) where the gaussian error linear units function,

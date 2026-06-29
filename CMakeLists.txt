@@ -64,6 +64,7 @@ endif()
 # at the project/target level on MSBuild).
 if(MSVC)
   add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/MP>)
+  add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/WX>)
 endif()
 
 include(GNUInstallDirs)

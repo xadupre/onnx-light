@@ -156,7 +156,7 @@ class TestCheckerSubmodule(ExtTestCase):
     def test_check_model_accepts_foreign_model_proto(self):
         """Tests that checker.check_model accepts a foreign serialized ModelProto."""
 
-        class ModelProto:
+        class FakeModelProto:
             def __init__(self, serialized):
                 self.serialized = serialized
 
@@ -170,7 +170,7 @@ class TestCheckerSubmodule(ExtTestCase):
             [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [1, 2])],
         )
         model = oh.make_model(graph, producer_name="test")
-        checker.check_model(ModelProto(model.SerializeToString()))
+        checker.check_model(FakeModelProto(model.SerializeToString()))
 
     def test_check_model_proto_like_conversion_errors_raise_type_error(self):
         """Tests that proto-like conversion failures raise TypeError after SerializeToString."""

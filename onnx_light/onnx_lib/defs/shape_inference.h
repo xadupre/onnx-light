@@ -188,18 +188,9 @@ inline int64_t getRequiredAttributeInt(const InferenceContext &ctx, const std::s
   return attr.i();
 }
 
-inline int64_t getAttribute(const InferenceContext &ctx, const std::string &attributeName,
-                            int64_t defaultValue) {
-  const auto *attr_proto = ctx.getAttribute(attributeName);
-  if ((nullptr != attr_proto) && attr_proto->has_i())
-    return attr_proto->i();
-  else if (nullptr != attr_proto)
-    return 0; // protobuf default for integers
-  else
-    return defaultValue;
-}
-
-inline int64_t getAttribute(const DataPropagationContext &ctx, const std::string &attributeName,
+// Works for both InferenceContext and DataPropagationContext.
+template <typename Context>
+inline int64_t getAttribute(const Context &ctx, const std::string &attributeName,
                             int64_t defaultValue) {
   const auto *attr_proto = ctx.getAttribute(attributeName);
   if ((nullptr != attr_proto) && attr_proto->has_i())
@@ -324,9 +315,9 @@ ONNX_API void propagateElemTypeFromInputToOutput(InferenceContext &ctx, size_t i
 ONNX_API void propagateElemTypeFromTensorInputToOutput(InferenceContext &ctx, size_t inputIndex,
                                                        size_t outputIndex);
 
-inline void propagateElemTypeFromDtypeToOutput(InferenceContext &ctx, const int data_type,
-                                               size_t outputIndex,
-                                               TypeProto::ValueCase expected_value_case) {
+inline void propagateElemTypeFromDtypeToOutput(
+    InferenceContext &ctx, const int data_type, size_t outputIndex,
+    TypeProto::ValueCase expected_value_case = TypeProto::kTensorType) {
   const auto attribute_tensor_datatype = data_type;
   auto *output_type = ctx.getOutputType(outputIndex);
   const auto output_value_case = output_type->value_case();
@@ -338,11 +329,6 @@ inline void propagateElemTypeFromDtypeToOutput(InferenceContext &ctx, const int 
                         " or UNDEFINED. Got: ", output_value_case, " in ", ctx.getDisplayName(),
                         ".");
   }
-}
-
-inline void propagateElemTypeFromDtypeToOutput(InferenceContext &ctx, const int data_type,
-                                               size_t outputIndex) {
-  propagateElemTypeFromDtypeToOutput(ctx, data_type, outputIndex, TypeProto::kTensorType);
 }
 
 inline void propagateElemTypeFromDtypeToOutput(InferenceContext &ctx, const AttributeProto *attr,
@@ -516,7 +502,7 @@ ONNX_API inline void propagateShapeAndTypeFromFirstInput(InferenceContext &ctx) 
 }
 
 inline void updateOutputElemType(InferenceContext &ctx, size_t outputIndex, int32_t elemType,
-                                 TypeProto::ValueCase expected_type) {
+                                 TypeProto::ValueCase expected_type = TypeProto::kTensorType) {
   auto *output_type = ctx.getOutputType(outputIndex);
   if (output_type == nullptr) {
     fail_type_inference("Output ", outputIndex, " is null");
@@ -530,10 +516,6 @@ inline void updateOutputElemType(InferenceContext &ctx, size_t outputIndex, int3
                         " expected to have tensor or sparse tensor type: ", expected_type, " in ",
                         ctx.getDisplayName(), ".");
   }
-}
-
-inline void updateOutputElemType(InferenceContext &ctx, size_t outputIndex, int32_t elemType) {
-  updateOutputElemType(ctx, outputIndex, elemType, TypeProto::kTensorType);
 }
 
 // Infer type of an output from the value of a specified attribute, which is

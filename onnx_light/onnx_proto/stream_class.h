@@ -5,6 +5,8 @@
 #include "stream.h"
 #include <functional>
 #include <sstream>
+#include <string>
+#include <vector>
 
 #define FIELD_VARINT 0
 #define FIELD_FIXED64 1
@@ -25,7 +27,15 @@
       const;                                                                                       \
   void ParseFromStream(utils::BinaryStream &stream, ParseOptions &options);                        \
   void SerializeToStream(utils::BinaryWriteStream &stream, SerializeOptions &options) const;       \
-  void PrintToVectorString(std::stringstream &ss, utils::PrintOptions &options) const;
+  void PrintToVectorString(std::stringstream &ss, utils::PrintOptions &options) const;             \
+  /** Backward-compatible overload that returns a single-element vector containing the             \
+   *  flat string representation. Kept for binary compatibility with modules compiled              \
+   *  before the API was changed to use a stringstream parameter. */                               \
+  std::vector<std::string> PrintToVectorString(utils::PrintOptions &options) const {               \
+    std::stringstream ss;                                                                          \
+    PrintToVectorString(ss, options);                                                              \
+    return {ss.str()};                                                                             \
+  }
 
 /** Macro for beginning a generated proto class with a default constructor. */
 #define BEGIN_PROTO(cls, doc)                                                                      \

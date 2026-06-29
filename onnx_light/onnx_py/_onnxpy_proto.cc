@@ -1330,8 +1330,8 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
               "if skip_raw_data is true, raw data will be printed only if it is larger than the "
               "threshold")
       .def_rw("inline_threshold", &utils::PrintOptions::inline_threshold,
-              "repeated fields with at most this many elements are printed inline on a single row, "
-              "larger fields are spread over multiple rows");
+              "repeated fields with at most this many elements are printed as a bracketed list; "
+              "all output is flat (no newlines)");
 
   nb::class_<utils::String>(m, "String", "Simplified string with no final null character.")
       .def(nb::init<std::string>())

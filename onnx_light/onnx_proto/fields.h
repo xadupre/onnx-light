@@ -24,8 +24,8 @@ struct PrintOptions {
   bool skip_raw_data = false;
   /** If skip_raw_data is true, raw data will be printed only if it is larger than the threshold. */
   int64_t raw_data_threshold = 1024;
-  /** Repeated fields with at most this many elements are printed inline on a single row; larger
-   * fields are spread over multiple rows. */
+  /** Repeated fields with at most this many elements are printed as a bracketed list; all output
+   * is always flat (no newlines). */
   int64_t inline_threshold = 9;
 };
 

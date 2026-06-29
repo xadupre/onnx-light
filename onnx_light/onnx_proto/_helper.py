@@ -1025,3 +1025,117 @@ def make_map(name: str, key_type: int, keys: list[Any], values: SequenceProto) -
         map_proto.keys.extend(keys)
     map_proto.values.CopyFrom(values)
     return map_proto
+
+
+def proto_str_to_multiline(flat: str, indent: str = "  ") -> str:
+    """Converts the flat proto string from ``str(proto)`` to a multi-row indented form.
+
+    ``str(proto)`` (or ``proto.PrintToVectorString(ss, opts)``) produces a
+    single-line representation such as::
+
+        { name: relu1 op_type: Relu input: [X] output: [Y] }
+
+    This function reformats that string as a human-readable, indented block::
+
+        {
+          name: relu1
+          op_type: Relu
+          input: [X]
+          output: [Y]
+        }
+
+    Nested message fields are indented recursively; array values (``[…]``)
+    are kept on one line.
+
+    :param flat: flat proto string, e.g. the return value of ``str(proto)``.
+    :param indent: whitespace string used for each indentation level (default: two spaces).
+    :returns: multi-row indented string.
+    """
+    result: list[str] = []
+    depth = 0
+    i = 0
+    n = len(flat)
+
+    while i < n:
+        ch = flat[i]
+
+        # Skip whitespace between tokens.
+        if ch == " ":
+            i += 1
+            continue
+
+        # Opening brace — start of a message (outermost or nested inline).
+        if ch == "{":
+            result.append(indent * depth + "{\n")
+            depth += 1
+            i += 1
+            if i < n and flat[i] == " ":
+                i += 1
+            continue
+
+        # Closing brace — end of a message.
+        if ch == "}":
+            depth -= 1
+            result.append(indent * depth + "}\n")
+            i += 1
+            if i < n and flat[i] == " ":
+                i += 1
+            continue
+
+        # Field entry: "field_name: value ".
+        # Read up to the first ':' to get the field name.
+        colon = flat.index(":", i)
+        field_name = flat[i:colon]
+        i = colon + 2  # skip ': '
+
+        if i >= n:
+            result.append(indent * depth + field_name + ":\n")
+            break
+
+        # Nested message: emit "field: {\n" and enter the nested level.
+        if flat[i] == "{":
+            result.append(indent * depth + field_name + ": {\n")
+            depth += 1
+            i += 1
+            if i < n and flat[i] == " ":
+                i += 1
+            continue
+
+        # Array value: read to the matching ']', keep on one line.
+        if flat[i] == "[":
+            bracket_depth = 0
+            j = i
+            while j < n:
+                if flat[j] == "[":
+                    bracket_depth += 1
+                elif flat[j] == "]":
+                    bracket_depth -= 1
+                    if bracket_depth == 0:
+                        j += 1
+                        break
+                j += 1
+            result.append(indent * depth + field_name + ": " + flat[i:j] + "\n")
+            i = j
+            if i < n and flat[i] == " ":
+                i += 1
+            continue
+
+        # Scalar value: read until the next unquoted space.
+        j = i
+        in_string = False
+        while j < n:
+            c = flat[j]
+            if c == "\\" and in_string:
+                j += 2  # skip the escaped character
+                continue
+            if c == '"':
+                in_string = not in_string
+            elif not in_string and c == " ":
+                break
+            j += 1
+        result.append(indent * depth + field_name + ": " + flat[i:j] + "\n")
+        i = j
+        if i < n and flat[i] == " ":
+            i += 1
+
+    return "".join(result)

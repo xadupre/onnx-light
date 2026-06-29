@@ -370,5 +370,85 @@ class TestProtoMethods(ExtTestCase):
             TensorProto(not_a_field=1)
 
 
+class TestProtoStrToMultiline(ExtTestCase):
+    """Tests for the proto_str_to_multiline utility."""
+
+    def _import(self):
+        from onnx_light.onnx_proto._helper import proto_str_to_multiline
+
+        return proto_str_to_multiline
+
+    def test_flat_node_becomes_multiline(self):
+        """Flat proto string for a NodeProto is formatted with indentation."""
+        fn = self._import()
+        node = oh.make_node("Relu", ["X"], ["Y"], name="relu1")
+        flat = str(node)
+        result = fn(flat)
+        self.assertNotIn("\n" + " " * 0 + "{", result[1:])  # inner braces are indented
+        self.assertIn("name: relu1", result)
+        self.assertIn("op_type: Relu", result)
+        self.assertIn("\n", result)
+        # No trailing trailing space; each field on its own line.
+        for line in result.splitlines():
+            self.assertFalse(line.endswith(" "), f"trailing space in: {line!r}")
+
+    def test_output_starts_with_open_brace(self):
+        fn = self._import()
+        node = oh.make_node("Add", ["a", "b"], ["c"])
+        result = fn(str(node))
+        self.assertTrue(result.startswith("{\n"))
+
+    def test_output_ends_with_close_brace(self):
+        fn = self._import()
+        node = oh.make_node("Add", ["a", "b"], ["c"])
+        result = fn(str(node))
+        self.assertTrue(result.rstrip("\n").endswith("}"))
+
+    def test_nested_message_indented(self):
+        """Nested messages (e.g. model.graph) are indented one level deeper."""
+        fn = self._import()
+        node = oh.make_node("Relu", ["X"], ["Y"])
+        graph = oh.make_graph([node], "g", [], [])
+        model = oh.make_model(graph)
+        result = fn(str(model))
+        lines = result.splitlines()
+        graph_line = next((line for line in lines if "graph:" in line), None)
+        self.assertIsNotNone(graph_line, "graph field not found")
+        # The graph field must be indented (not at column 0).
+        self.assertTrue(graph_line.startswith("  "), f"graph line not indented: {graph_line!r}")
+
+    def test_array_value_kept_on_one_line(self):
+        """Array fields like dims are kept on a single line."""
+        fn = self._import()
+        tensor = TensorProto()
+        tensor.name = "t"
+        tensor.dims.extend([2, 3, 4])
+        result = fn(str(tensor))
+        # dims: [2, 3, 4] must appear on one line.
+        self.assertIn("dims: [2, 3, 4]", result)
+
+    def test_custom_indent(self):
+        """The indent parameter controls the indentation string."""
+        fn = self._import()
+        node = oh.make_node("Relu", ["X"], ["Y"])
+        result_4 = fn(str(node), indent="    ")
+        # Fields at depth 1 should use four spaces.
+        has_four_space_line = any(
+            line.startswith("    ") and not line.startswith("        ")
+            for line in result_4.splitlines()
+            if line.strip()
+        )
+        self.assertTrue(has_four_space_line)
+
+    def test_importable_from_onnx_module(self):
+        """proto_str_to_multiline is accessible from onnx_light.onnx."""
+        import onnx_light.onnx as onnxl
+
+        self.assertTrue(hasattr(onnxl, "proto_str_to_multiline"))
+        node = oh.make_node("Sigmoid", ["x"], ["y"])
+        result = onnxl.proto_str_to_multiline(str(node))
+        self.assertIn("op_type: Sigmoid", result)
+
+
 if __name__ == "__main__":
     unittest.main()

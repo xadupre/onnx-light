@@ -18,18 +18,18 @@ namespace ONNX_LIGHT_NAMESPACE {
 /**
  * @brief Returns a human-readable debug representation of a protobuf message.
  *
- * Creates a @c std::stringstream, calls @c PrintToVectorString() on @p proto
+ * Creates a @c std::stringstream, calls @c PrintToStringStream() on @p proto
  * with default print options, and returns the accumulated string.
  *
  * @tparam Proto A protobuf-like message type that exposes a
- *               @c PrintToVectorString(std::stringstream&, utils::PrintOptions&) method.
+ *               @c PrintToStringStream(std::stringstream&, utils::PrintOptions&) method.
  * @param proto  The message to format.
  * @returns A string representation of @p proto.
  */
 template <typename Proto> inline std::string ProtoDebugString(const Proto &proto) {
   utils::PrintOptions options;
   std::stringstream ss;
-  proto.PrintToVectorString(ss, options);
+  proto.PrintToStringStream(ss, options);
   return ss.str();
 }
 

@@ -1030,7 +1030,7 @@ def make_map(name: str, key_type: int, keys: list[Any], values: SequenceProto) -
 def proto_str_to_multiline(flat: str, indent: str = "  ") -> str:
     """Converts the flat proto string from ``str(proto)`` to a multi-row indented form.
 
-    ``str(proto)`` (or ``proto.PrintToVectorString(ss, opts)``) produces a
+    ``str(proto)`` (or ``proto.PrintToStringStream(ss, opts)``) produces a
     single-line representation such as::
 
         { name: "relu1" op_type: "Relu" input: ["X"] output: ["Y"] }

@@ -206,7 +206,7 @@ void StringStringEntryProto::ParseFromStream(utils::BinaryStream &stream, ParseO
   READ_FIELD(options, stream, value)                  //
   READ_END(options, stream, StringStringEntryProto)   //  // NOLINT
 }
-void StringStringEntryProto::PrintToVectorString(std::stringstream &ss,
+void StringStringEntryProto::PrintToStringStream(std::stringstream &ss,
                                                  utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(key), NAME_EXIST_VALUE(value));
 }
@@ -231,7 +231,7 @@ void TensorAnnotation::ParseFromStream(utils::BinaryStream &stream, ParseOptions
   READ_REPEATED_FIELD(options, stream, quant_parameter_tensor_names) //
   READ_END(options, stream, TensorAnnotation)                        //  // NOLINT
 }
-void TensorAnnotation::PrintToVectorString(std::stringstream &ss,
+void TensorAnnotation::PrintToStringStream(std::stringstream &ss,
                                            utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(tensor_name),
                                  NAME_EXIST_VALUE(quant_parameter_tensor_names));
@@ -258,7 +258,7 @@ void IntIntListEntryProto::ParseFromStream(utils::BinaryStream &stream, ParseOpt
   READ_REPEATED_FIELD(options, stream, value)       //
   READ_END(options, stream, IntIntListEntryProto)   //
 }
-void IntIntListEntryProto::PrintToVectorString(std::stringstream &ss,
+void IntIntListEntryProto::PrintToStringStream(std::stringstream &ss,
                                                utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(key), NAME_EXIST_VALUE(value));
 }
@@ -287,7 +287,7 @@ void DeviceConfigurationProto::ParseFromStream(utils::BinaryStream &stream, Pars
   READ_REPEATED_FIELD(options, stream, device)          //
   READ_END(options, stream, DeviceConfigurationProto)   //
 }
-void DeviceConfigurationProto::PrintToVectorString(std::stringstream &ss,
+void DeviceConfigurationProto::PrintToStringStream(std::stringstream &ss,
                                                    utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(num_devices),
                                  NAME_EXIST_VALUE(device));
@@ -317,7 +317,7 @@ void SimpleShardedDimProto::ParseFromStream(utils::BinaryStream &stream, ParseOp
   READ_FIELD(options, stream, num_shards)            //
   READ_END(options, stream, SimpleShardedDimProto)   //
 }
-void SimpleShardedDimProto::PrintToVectorString(std::stringstream &ss,
+void SimpleShardedDimProto::PrintToStringStream(std::stringstream &ss,
                                                 utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(dim_value),
                                  NAME_EXIST_VALUE(dim_param), NAME_EXIST_VALUE(num_shards));
@@ -345,7 +345,7 @@ void ShardedDimProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions 
   READ_REPEATED_FIELD(options, stream, simple_sharding) //
   READ_END(options, stream, ShardedDimProto)            //
 }
-void ShardedDimProto::PrintToVectorString(std::stringstream &ss,
+void ShardedDimProto::PrintToStringStream(std::stringstream &ss,
                                           utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(axis),
                                  NAME_EXIST_VALUE(simple_sharding));
@@ -378,7 +378,7 @@ void ShardingSpecProto::ParseFromStream(utils::BinaryStream &stream, ParseOption
   READ_REPEATED_FIELD(options, stream, sharded_dim)               //
   READ_END(options, stream, ShardingSpecProto)                    //  // NOLINT
 }
-void ShardingSpecProto::PrintToVectorString(std::stringstream &ss,
+void ShardingSpecProto::PrintToStringStream(std::stringstream &ss,
                                             utils::PrintOptions &options) const {
   write_proto_into_vector_string(
       ss, options, NAME_EXIST_VALUE(tensor_name), NAME_EXIST_VALUE(device),
@@ -410,7 +410,7 @@ void NodeDeviceConfigurationProto::ParseFromStream(utils::BinaryStream &stream,
   READ_FIELD(options, stream, pipeline_stage)               //
   READ_END(options, stream, NodeDeviceConfigurationProto)   //
 }
-void NodeDeviceConfigurationProto::PrintToVectorString(std::stringstream &ss,
+void NodeDeviceConfigurationProto::PrintToStringStream(std::stringstream &ss,
                                                        utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(configuration_id),
                                  NAME_EXIST_VALUE(sharding_spec), NAME_EXIST_VALUE(pipeline_stage));
@@ -437,7 +437,7 @@ void OperatorSetIdProto::ParseFromStream(utils::BinaryStream &stream, ParseOptio
   READ_FIELD(options, stream, version)            //
   READ_END(options, stream, OperatorSetIdProto)   //
 }
-void OperatorSetIdProto::PrintToVectorString(std::stringstream &ss,
+void OperatorSetIdProto::PrintToStringStream(std::stringstream &ss,
                                              utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(domain), NAME_EXIST_VALUE(version));
 }
@@ -467,7 +467,7 @@ void TensorShapeProto::Dimension::ParseFromStream(utils::BinaryStream &stream,
   READ_FIELD(options, stream, denotation)                  //
   READ_END(options, stream, TensorShapeProto::Dimension)   //
 }
-void TensorShapeProto::Dimension::PrintToVectorString(std::stringstream &ss,
+void TensorShapeProto::Dimension::PrintToStringStream(std::stringstream &ss,
                                                       utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(dim_value),
                                  NAME_EXIST_VALUE(dim_param), NAME_EXIST_VALUE(denotation));
@@ -491,7 +491,7 @@ void TensorShapeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions
   READ_REPEATED_FIELD(options, stream, dim)     //
   READ_END(options, stream, TensorShapeProto)   //
 }
-void TensorShapeProto::PrintToVectorString(std::stringstream &ss,
+void TensorShapeProto::PrintToStringStream(std::stringstream &ss,
                                            utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(dim));
 }
@@ -517,7 +517,7 @@ void TensorProto::Segment::ParseFromStream(utils::BinaryStream &stream, ParseOpt
   READ_FIELD(options, stream, end)                  //
   READ_END(options, stream, TensorProto::Segment)   //
 }
-void TensorProto::Segment::PrintToVectorString(std::stringstream &ss,
+void TensorProto::Segment::PrintToStringStream(std::stringstream &ss,
                                                utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(begin), NAME_EXIST_VALUE(end));
 }
@@ -892,7 +892,7 @@ void TensorProto::LoadExternalData(const std::string &base_dir) {
                 "': expected ", length, " bytes, got ", static_cast<int64_t>(file.gcount()), ".");
   }
 }
-void TensorProto::PrintToVectorString(std::stringstream &ss, utils::PrintOptions &options) const {
+void TensorProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
   write_proto_into_vector_string(
       ss, options, NAME_EXIST_VALUE(dims), NAME_EXIST_VALUE(data_type),
       NAME_EXIST_VALUE(data_location), NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(segment),
@@ -926,7 +926,7 @@ void SparseTensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOption
   READ_REPEATED_FIELD(options, stream, dims)     //
   READ_END(options, stream, SparseTensorProto)   //
 }
-void SparseTensorProto::PrintToVectorString(std::stringstream &ss,
+void SparseTensorProto::PrintToStringStream(std::stringstream &ss,
                                             utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(values), NAME_EXIST_VALUE(indices),
                                  NAME_EXIST_VALUE(dims));
@@ -953,7 +953,7 @@ void TypeProto::Tensor::ParseFromStream(utils::BinaryStream &stream, ParseOption
   READ_OPTIONAL_PROTO_FIELD(options, stream, shape)    //
   READ_END(options, stream, TypeProto::Tensor)         //
 }
-void TypeProto::Tensor::PrintToVectorString(std::stringstream &ss,
+void TypeProto::Tensor::PrintToStringStream(std::stringstream &ss,
                                             utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(elem_type), NAME_EXIST_VALUE(shape));
 }
@@ -979,7 +979,7 @@ void TypeProto::SparseTensor::ParseFromStream(utils::BinaryStream &stream, Parse
   READ_OPTIONAL_PROTO_FIELD(options, stream, shape)    //
   READ_END(options, stream, TypeProto::SparseTensor)   //
 }
-void TypeProto::SparseTensor::PrintToVectorString(std::stringstream &ss,
+void TypeProto::SparseTensor::PrintToStringStream(std::stringstream &ss,
                                                   utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(elem_type), NAME_EXIST_VALUE(shape));
 }
@@ -1002,7 +1002,7 @@ void TypeProto::Sequence::ParseFromStream(utils::BinaryStream &stream, ParseOpti
   READ_OPTIONAL_PROTO_FIELD(options, stream, elem_type) //
   READ_END(options, stream, TypeProto::Sequence)        //
 }
-void TypeProto::Sequence::PrintToVectorString(std::stringstream &ss,
+void TypeProto::Sequence::PrintToStringStream(std::stringstream &ss,
                                               utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(elem_type));
 }
@@ -1028,7 +1028,7 @@ void TypeProto::Map::ParseFromStream(utils::BinaryStream &stream, ParseOptions &
   READ_OPTIONAL_PROTO_FIELD(options, stream, value_type) //
   READ_END(options, stream, TypeProto::Map)              //
 }
-void TypeProto::Map::PrintToVectorString(std::stringstream &ss,
+void TypeProto::Map::PrintToStringStream(std::stringstream &ss,
                                          utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(key_type),
                                  NAME_EXIST_VALUE(value_type));
@@ -1052,7 +1052,7 @@ void TypeProto::Optional::ParseFromStream(utils::BinaryStream &stream, ParseOpti
   READ_OPTIONAL_PROTO_FIELD(options, stream, elem_type) //
   READ_END(options, stream, TypeProto::Optional)        //
 }
-void TypeProto::Optional::PrintToVectorString(std::stringstream &ss,
+void TypeProto::Optional::PrintToStringStream(std::stringstream &ss,
                                               utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(elem_type));
 }
@@ -1090,7 +1090,7 @@ void TypeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &optio
   READ_OPTIONAL_PROTO_FIELD(options, stream, optional_type)      //
   READ_END(options, stream, TypeProto)                           //
 }
-void TypeProto::PrintToVectorString(std::stringstream &ss, utils::PrintOptions &options) const {
+void TypeProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(tensor_type),
                                  NAME_EXIST_VALUE(sequence_type), NAME_EXIST_VALUE(map_type),
                                  NAME_EXIST_VALUE(denotation), NAME_EXIST_VALUE(sparse_tensor_type),
@@ -1125,7 +1125,7 @@ void ValueInfoProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &
   READ_REPEATED_FIELD(options, stream, metadata_props) //
   READ_END(options, stream, ValueInfoProto)            //
 }
-void ValueInfoProto::PrintToVectorString(std::stringstream &ss,
+void ValueInfoProto::PrintToStringStream(std::stringstream &ss,
                                          utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(type),
                                  NAME_EXIST_VALUE(doc_string), NAME_EXIST_VALUE(metadata_props));
@@ -1200,7 +1200,7 @@ void AttributeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &
   READ_REPEATED_FIELD(options, stream, type_protos)         //
   READ_END(options, stream, AttributeProto)                 //
 }
-void AttributeProto::PrintToVectorString(std::stringstream &ss,
+void AttributeProto::PrintToStringStream(std::stringstream &ss,
                                          utils::PrintOptions &options) const {
   switch (type_) {
   case AttributeType::UNDEFINED:
@@ -1281,7 +1281,7 @@ void NodeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &optio
   READ_REPEATED_FIELD(options, stream, device_configurations) //
   READ_END(options, stream, NodeProto)                        //
 }
-void NodeProto::PrintToVectorString(std::stringstream &ss, utils::PrintOptions &options) const {
+void NodeProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
   write_proto_into_vector_string(
       ss, options, NAME_EXIST_VALUE(input), NAME_EXIST_VALUE(output), NAME_EXIST_VALUE(name),
       NAME_EXIST_VALUE(op_type), NAME_EXIST_VALUE(attribute), NAME_EXIST_VALUE(domain),
@@ -1334,7 +1334,7 @@ void GraphProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opti
   READ_REPEATED_FIELD(options, stream, metadata_props)          //
   READ_END(options, stream, GraphProto)                         //  // NOLINT
 }
-void GraphProto::PrintToVectorString(std::stringstream &ss, utils::PrintOptions &options) const {
+void GraphProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
   write_proto_into_vector_string(
       ss, options, NAME_EXIST_VALUE(doc_string), NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(input),
       NAME_EXIST_VALUE(output), NAME_EXIST_VALUE(metadata_props), NAME_EXIST_VALUE(node),
@@ -1393,7 +1393,7 @@ void FunctionProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &o
   READ_REPEATED_FIELD(options, stream, metadata_props)  //
   READ_END(options, stream, FunctionProto)              //  // NOLINT
 }
-void FunctionProto::PrintToVectorString(std::stringstream &ss, utils::PrintOptions &options) const {
+void FunctionProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(domain),
                                  NAME_EXIST_VALUE(overload), NAME_EXIST_VALUE(doc_string),
                                  NAME_EXIST_VALUE(input), NAME_EXIST_VALUE(output),
@@ -1458,7 +1458,7 @@ void ModelProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opti
   READ_REPEATED_FIELD(options, stream, configuration)  //
   READ_END(options, stream, ModelProto)                //  // NOLINT
 }
-void ModelProto::PrintToVectorString(std::stringstream &ss, utils::PrintOptions &options) const {
+void ModelProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(ir_version),
                                  NAME_EXIST_VALUE(opset_import), NAME_EXIST_VALUE(producer_name),
                                  NAME_EXIST_VALUE(producer_version), NAME_EXIST_VALUE(domain),
@@ -1537,7 +1537,7 @@ void SequenceProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &o
   READ_REPEATED_FIELD(options, stream, optional_values)      //
   READ_END(options, stream, SequenceProto)                   // NOLINT
 }
-void SequenceProto::PrintToVectorString(std::stringstream &ss, utils::PrintOptions &options) const {
+void SequenceProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(elem_type),
                                  NAME_EXIST_VALUE(tensor_values),
                                  NAME_EXIST_VALUE(sparse_tensor_values),
@@ -1575,7 +1575,7 @@ void MapProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &option
   READ_FIELD(options, stream, values)               //
   READ_END(options, stream, MapProto)               // NOLINT
 }
-void MapProto::PrintToVectorString(std::stringstream &ss, utils::PrintOptions &options) const {
+void MapProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(key_type),
                                  NAME_EXIST_VALUE(keys), NAME_EXIST_VALUE(string_keys),
                                  NAME_EXIST_VALUE(values));
@@ -1617,7 +1617,7 @@ void OptionalProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &o
   READ_OPTIONAL_PROTO_FIELD(options, stream, optional_value)      //
   READ_END(options, stream, OptionalProto)                        // NOLINT
 }
-void OptionalProto::PrintToVectorString(std::stringstream &ss, utils::PrintOptions &options) const {
+void OptionalProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(elem_type),
                                  NAME_EXIST_VALUE(tensor_value),
                                  NAME_EXIST_VALUE(sparse_tensor_value),

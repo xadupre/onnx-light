@@ -49,23 +49,23 @@ Step 3 – Run the example
 .. code-block:: cpp
 
     #include "onnx.h"
-    #include "simple_string.h"
-
     #include <iostream>
-    #include <vector>
+    #include <sstream>
+
+    namespace onnx_light = ONNX_LIGHT_NAMESPACE;
 
     int main() {
-      onnx::NodeProto node;
+      onnx_light::NodeProto node;
       node.set_name("relu1");
       node.set_op_type("Relu");
       *node.add_input() = "X";
       *node.add_output() = "Y";
       node.set_doc_string("Simple ReLU activation");
 
-      onnx::utils::PrintOptions options;
-      std::vector<std::string> lines = node.PrintToVectorString(options);
-      // join_string is declared in simple_string.h.
-      std::cout << onnx::utils::join_string(lines, "\n") << "\n";
+      onnx_light::utils::PrintOptions options;
+      std::stringstream ss;
+      node.PrintToStringStream(ss, options);
+      std::cout << ss.str() << "\n";
       return 0;
     }
 
@@ -104,5 +104,5 @@ See also
 --------
 
 * ``onnx::ProtoDebugString`` (from ``proto_utils.h``) is a convenience helper
-  that internally calls ``PrintToVectorString`` and returns a single
+  that internally calls ``PrintToStringStream`` and returns a single
   ``std::string``.

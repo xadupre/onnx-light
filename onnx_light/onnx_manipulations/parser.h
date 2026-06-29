@@ -535,6 +535,8 @@ protected:
  */
 class OnnxParser : public ParserBase {
 public:
+  /// Exposes the inherited scalar Parse overloads and constructors so callers can parse literals
+  /// directly and pass std::string_view without qualifying ParserBase explicitly.
   using ParserBase::Parse;
   using ParserBase::ParserBase;
 

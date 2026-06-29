@@ -52,15 +52,17 @@ Step 3 – Run the example
     #include <iostream>
     #include <sstream>
 
+    namespace onnx_light = ONNX_LIGHT_NAMESPACE;
+
     int main() {
-      onnx::NodeProto node;
+      onnx_light::NodeProto node;
       node.set_name("relu1");
       node.set_op_type("Relu");
       *node.add_input() = "X";
       *node.add_output() = "Y";
       node.set_doc_string("Simple ReLU activation");
 
-      onnx::utils::PrintOptions options;
+      onnx_light::utils::PrintOptions options;
       std::stringstream ss;
       node.PrintToStringStream(ss, options);
       std::cout << ss.str() << "\n";

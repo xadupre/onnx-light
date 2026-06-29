@@ -175,7 +175,10 @@ public:
   /** Returns the number of elements as int (protobuf compat). */
   inline int size_int() const { return static_cast<int>(values_.size()); }
   /** Writes string representations of the contained values to ss. */
-  void PrintToVectorString(std::stringstream &ss, PrintOptions &options) const;
+  void PrintToStringStream(std::stringstream &ss, PrintOptions &options) const;
+  inline void PrintToVectorString(std::stringstream &ss, PrintOptions &options) const {
+    PrintToStringStream(ss, options);
+  }
 
 private:
   std::vector<T> values_;
@@ -240,7 +243,10 @@ public:
   /** Returns a reference to the last element. */
   T &back();
   /** Writes string representations of the contained values to ss. */
-  void PrintToVectorString(std::stringstream &ss, PrintOptions &options) const;
+  void PrintToStringStream(std::stringstream &ss, PrintOptions &options) const;
+  inline void PrintToVectorString(std::stringstream &ss, PrintOptions &options) const {
+    PrintToStringStream(ss, options);
+  }
 
   /** Mutable iterator for repeated proto fields. */
   class iterator {

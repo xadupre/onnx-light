@@ -64,7 +64,7 @@ following serialization / deserialization methods (added by
     void ParseFromStream(onnx_light::utils::BinaryStream &stream, onnx_light::ParseOptions &options);
     void SerializeToStream(onnx_light::utils::BinaryWriteStream &stream,
                            onnx_light::SerializeOptions &options) const;
-    std::vector<std::string> PrintToVectorString(onnx_light::utils::PrintOptions &options) const;
+    void PrintToStringStream(std::stringstream &ss, onnx_light::utils::PrintOptions &options) const;
 
 See :doc:`stream_class` for :cpp:class:`onnx_light::ParseOptions`,
 :cpp:class:`onnx_light::SerializeOptions`, and :cpp:class:`onnx_light::Message`.

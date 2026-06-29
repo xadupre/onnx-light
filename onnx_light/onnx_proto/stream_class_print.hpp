@@ -217,7 +217,7 @@ template <typename T>
 void write_into_stream(std::stringstream &ss, utils::PrintOptions &options, const char *field_name,
                        const T &field) {
   ss << field_name << ": ";
-  field.PrintToVectorString(ss, options);
+  field.PrintToStringStream(ss, options);
   ss << " ";
 }
 

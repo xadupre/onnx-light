@@ -1728,7 +1728,7 @@ TEST(onnx_string, StringStringEntryProto) {
   proto.set_key("test_key");
   proto.set_value("test_value");
   std::stringstream ss_result;
-  proto.PrintToVectorString(ss_result, options);
+  proto.PrintToStringStream(ss_result, options);
   std::string serialized = ss_result.str();
   EXPECT_TRUE(serialized.find("test_key") != std::string::npos);
   EXPECT_TRUE(serialized.find("test_value") != std::string::npos);
@@ -1742,7 +1742,7 @@ TEST(onnx_string, IntIntListEntryProto) {
   proto.ref_value().push_back(2);
   proto.ref_value().push_back(3);
   std::stringstream ss_result;
-  proto.PrintToVectorString(ss_result, options);
+  proto.PrintToStringStream(ss_result, options);
   std::string serialized = ss_result.str();
   EXPECT_TRUE(serialized.find("42") != std::string::npos);
   EXPECT_TRUE(serialized.find("1") != std::string::npos);
@@ -1758,7 +1758,7 @@ TEST(onnx_string, TensorAnnotation) {
   entry->set_key("scale");
   entry->set_value("scale_tensor");
   std::stringstream ss_result;
-  proto.PrintToVectorString(ss_result, options);
+  proto.PrintToStringStream(ss_result, options);
   std::string serialized = ss_result.str();
   EXPECT_TRUE(serialized.find("my_tensor") != std::string::npos);
   EXPECT_TRUE(serialized.find("scale") != std::string::npos);
@@ -1775,7 +1775,7 @@ TEST(onnx_string, DeviceConfigurationProto) {
   *config.add_device() = "device3";
 
   std::stringstream ss_result;
-  config.PrintToVectorString(ss_result, options);
+  config.PrintToStringStream(ss_result, options);
   std::string serialized = ss_result.str();
 
   ASSERT_FALSE(serialized.empty());
@@ -1810,7 +1810,7 @@ TEST(onnx_string, SimpleShardedDimProto) {
   proto.set_num_shards(4);
 
   std::stringstream ss_result;
-  proto.PrintToVectorString(ss_result, options);
+  proto.PrintToStringStream(ss_result, options);
   std::string serialized = ss_result.str();
   ASSERT_FALSE(serialized.empty());
 
@@ -1836,7 +1836,7 @@ TEST(onnx_string, ShardedDimProto) {
   simple_dim2->set_num_shards(2);
 
   std::stringstream ss_result;
-  proto.PrintToVectorString(ss_result, options);
+  proto.PrintToStringStream(ss_result, options);
   std::string serialized = ss_result.str();
   ASSERT_FALSE(serialized.empty());
 
@@ -1866,7 +1866,7 @@ TEST(onnx_string, ShardingSpecProto) {
   simple_dim->set_num_shards(4);
 
   std::stringstream ss_result;
-  proto.PrintToVectorString(ss_result, options);
+  proto.PrintToStringStream(ss_result, options);
   std::string serialized = ss_result.str();
   ASSERT_FALSE(serialized.empty());
 
@@ -1889,7 +1889,7 @@ TEST(onnx_string, NodeDeviceConfigurationProto) {
   spec->ref_device().push_back(1);
 
   std::stringstream ss_result;
-  proto.PrintToVectorString(ss_result, options);
+  proto.PrintToStringStream(ss_result, options);
   std::string serialized = ss_result.str();
   ASSERT_FALSE(serialized.empty());
 
@@ -1907,7 +1907,7 @@ TEST(onnx_string, OperatorSetIdProto) {
   proto.set_version(15);
 
   std::stringstream ss_result;
-  proto.PrintToVectorString(ss_result, options);
+  proto.PrintToStringStream(ss_result, options);
   std::string serialized = ss_result.str();
   ASSERT_FALSE(serialized.empty());
 
@@ -1929,7 +1929,7 @@ TEST(onnx_string, TensorShapeProto) {
   dim2->set_denotation("N");
 
   std::stringstream ss_result;
-  proto.PrintToVectorString(ss_result, options);
+  proto.PrintToStringStream(ss_result, options);
   std::string serialized = ss_result.str();
   ASSERT_FALSE(serialized.empty());
 
@@ -1968,7 +1968,7 @@ TEST(onnx_string, TensorProto) {
   proto.ref_doc_string() = "Un tenseur de test";
 
   std::stringstream ss_result;
-  proto.PrintToVectorString(ss_result, options);
+  proto.PrintToStringStream(ss_result, options);
   std::string serialized = ss_result.str();
   ASSERT_FALSE(serialized.empty());
 
@@ -2009,7 +2009,7 @@ TEST(onnx_string, SparseTensorProto) {
   proto.ref_indices().ref_int64_data().push_back(2);
 
   std::stringstream ss_result;
-  proto.PrintToVectorString(ss_result, options);
+  proto.PrintToStringStream(ss_result, options);
   std::string serialized = ss_result.str();
   ASSERT_FALSE(serialized.empty());
 
@@ -2037,7 +2037,7 @@ TEST(onnx_string, TypeProto) {
   dim2->set_denotation("N");
 
   std::stringstream ss_result;
-  proto.PrintToVectorString(ss_result, options);
+  proto.PrintToStringStream(ss_result, options);
   std::string serialized = ss_result.str();
   ASSERT_FALSE(serialized.empty());
 
@@ -2085,7 +2085,7 @@ TEST(onnx_string, TensorProto_WithRawData) {
   std::memcpy(proto.ref_raw_data().data(), data.data(), data.size() * sizeof(float));
 
   std::stringstream ss_result;
-  proto.PrintToVectorString(ss_result, options);
+  proto.PrintToStringStream(ss_result, options);
   std::string serialized = ss_result.str();
   ASSERT_FALSE(serialized.empty());
 
@@ -2107,7 +2107,7 @@ TEST(onnx_string, TensorProto_WithSegment) {
   proto.ref_segment().set_end(10);
 
   std::stringstream ss_result;
-  proto.PrintToVectorString(ss_result, options);
+  proto.PrintToStringStream(ss_result, options);
   std::string serialized = ss_result.str();
   ASSERT_FALSE(serialized.empty());
 
@@ -2189,7 +2189,7 @@ TEST(onnx_proto, ValueInfoProto_Serialization) {
             "dynamic_dim");
 }
 
-TEST(onnx_proto, ValueInfoProto_PrintToVectorString) {
+TEST(onnx_proto, ValueInfoProto_PrintToStringStream) {
   utils::PrintOptions options;
   ValueInfoProto value_info;
   value_info.set_name("feature_vector");
@@ -2202,7 +2202,7 @@ TEST(onnx_proto, ValueInfoProto_PrintToVectorString) {
   shape->add_dim()->set_dim_value(512);
 
   std::stringstream ss_result;
-  value_info.PrintToVectorString(ss_result, options);
+  value_info.PrintToStringStream(ss_result, options);
   std::string serialized = ss_result.str();
   ASSERT_FALSE(serialized.empty());
 
@@ -2480,7 +2480,7 @@ TEST(onnx_string, AttributeProto) {
   attribute.set_doc_string("Dropout ratio documentation");
 
   std::stringstream ss_result;
-  attribute.PrintToVectorString(ss_result, options);
+  attribute.PrintToStringStream(ss_result, options);
   std::string serialized = ss_result.str();
   ASSERT_FALSE(serialized.empty());
 
@@ -2660,7 +2660,7 @@ TEST(onnx_proto, NodeProto_Serialization) {
   EXPECT_EQ(node2.ref_attribute()[0].ref_ints()[1], 3);
 }
 
-TEST(onnx_string, NodeProto_PrintToVectorString) {
+TEST(onnx_string, NodeProto_PrintToStringStream) {
   utils::PrintOptions options;
   NodeProto node;
   node.set_name("relu1");
@@ -2670,7 +2670,7 @@ TEST(onnx_string, NodeProto_PrintToVectorString) {
   node.set_doc_string("Simple ReLU activation");
 
   std::stringstream ss_result;
-  node.PrintToVectorString(ss_result, options);
+  node.PrintToStringStream(ss_result, options);
   std::string serialized = ss_result.str();
   ASSERT_FALSE(serialized.empty());
 
@@ -2997,7 +2997,7 @@ TEST(onnx_proto, GraphProto_Serialization) {
   EXPECT_EQ(graph2.ref_output()[0].ref_name(), "Y");
 }
 
-TEST(onnx_proto, GraphProto_PrintToVectorString) {
+TEST(onnx_proto, GraphProto_PrintToStringStream) {
   utils::PrintOptions options;
   GraphProto graph;
   graph.set_name("vector_serialization_test");
@@ -3011,7 +3011,7 @@ TEST(onnx_proto, GraphProto_PrintToVectorString) {
   *node->add_output() = "C";
 
   std::stringstream ss_result;
-  graph.PrintToVectorString(ss_result, options);
+  graph.PrintToStringStream(ss_result, options);
   std::string serialized = ss_result.str();
   ASSERT_FALSE(serialized.empty());
 
@@ -3308,7 +3308,7 @@ TEST(onnx_string, FunctionProto) {
   node->set_op_type("MatMul");
 
   std::stringstream ss_result;
-  function.PrintToVectorString(ss_result, options);
+  function.PrintToStringStream(ss_result, options);
   std::string serialized = ss_result.str();
   ASSERT_FALSE(serialized.empty());
 
@@ -3440,7 +3440,7 @@ TEST(onnx_proto, ModelProto_Serialization) {
   EXPECT_EQ(model2.ref_metadata_props()[0].ref_value(), "test_value");
 }
 
-TEST(onnx_proto, ModelProto_PrintToVectorString) {
+TEST(onnx_proto, ModelProto_PrintToStringStream) {
   utils::PrintOptions options;
   ModelProto model;
   model.set_ir_version(7);
@@ -3449,7 +3449,7 @@ TEST(onnx_proto, ModelProto_PrintToVectorString) {
   model.add_graph()->set_name("test_graph");
 
   std::stringstream ss_result;
-  model.PrintToVectorString(ss_result, options);
+  model.PrintToStringStream(ss_result, options);
   std::string serialized = ss_result.str();
   ASSERT_FALSE(serialized.empty());
 
@@ -3567,14 +3567,14 @@ TEST(onnx_proto, AttributeProto_InNodeProto1) {
   att2.ref_i() = 2;
   node.ref_attribute().push_back(att2);
   std::stringstream ss_s1;
-  node.ref_attribute()[0].PrintToVectorString(ss_s1, options);
+  node.ref_attribute()[0].PrintToStringStream(ss_s1, options);
   std::string s1 = ss_s1.str();
   std::stringstream ss_s2;
-  node.ref_attribute()[1].PrintToVectorString(ss_s2, options);
+  node.ref_attribute()[1].PrintToStringStream(ss_s2, options);
   std::string s2 = ss_s2.str();
   EXPECT_EQ(s1, s2);
   std::stringstream ss_s4;
-  att2.PrintToVectorString(ss_s4, options);
+  att2.PrintToStringStream(ss_s4, options);
   std::string s4 = ss_s4.str();
   EXPECT_EQ(s1, s4);
 }
@@ -3591,14 +3591,14 @@ TEST(onnx_proto, AttributeProto_InNodeProto2) {
   att2->set_type(AttributeProto::AttributeType::INT);
   att2->ref_i() = 2;
   std::stringstream ss_s1;
-  node.ref_attribute()[0].PrintToVectorString(ss_s1, options);
+  node.ref_attribute()[0].PrintToStringStream(ss_s1, options);
   std::string s1 = ss_s1.str();
   std::stringstream ss_s2;
-  node.ref_attribute()[1].PrintToVectorString(ss_s2, options);
+  node.ref_attribute()[1].PrintToStringStream(ss_s2, options);
   std::string s2 = ss_s2.str();
   EXPECT_EQ(s1, s2);
   std::stringstream ss_s4;
-  att2->PrintToVectorString(ss_s4, options);
+  att2->PrintToStringStream(ss_s4, options);
   std::string s4 = ss_s4.str();
   EXPECT_EQ(s1, s4);
 }
@@ -4128,7 +4128,7 @@ TEST(onnx_proto, AttributeProto_Serialization_AllTypes_GRAPH) {
   }
 }
 
-TEST(onnx_proto, AttributeProto_PrintToVectorString_AllTypes) {
+TEST(onnx_proto, AttributeProto_PrintToStringStream_AllTypes) {
   utils::PrintOptions options;
 
   {
@@ -4139,7 +4139,7 @@ TEST(onnx_proto, AttributeProto_PrintToVectorString_AllTypes) {
     int_attr.set_i(42);
 
     std::stringstream ss_result;
-    int_attr.PrintToVectorString(ss_result, options);
+    int_attr.PrintToStringStream(ss_result, options);
     std::string serialized = ss_result.str();
 
     EXPECT_TRUE(serialized.find("int_attr: 42") != std::string::npos);
@@ -4155,7 +4155,7 @@ TEST(onnx_proto, AttributeProto_PrintToVectorString_AllTypes) {
     ints_attr.ref_ints().push_back(3);
 
     std::stringstream ss_result;
-    ints_attr.PrintToVectorString(ss_result, options);
+    ints_attr.PrintToStringStream(ss_result, options);
     std::string serialized = ss_result.str();
 
     EXPECT_TRUE(serialized.find("ints_attr: [1, 2, 3]") != std::string::npos);
@@ -4170,7 +4170,7 @@ TEST(onnx_proto, AttributeProto_PrintToVectorString_AllTypes) {
     floats_attr.ref_floats().push_back(2.2f);
 
     std::stringstream ss_result;
-    floats_attr.PrintToVectorString(ss_result, options);
+    floats_attr.PrintToStringStream(ss_result, options);
     std::string serialized = ss_result.str();
 
     EXPECT_TRUE(serialized.find("floats_attr: [1.1, 2.2]") != std::string::npos);
@@ -4190,7 +4190,7 @@ TEST(onnx_proto, PrintOptions_InlineThreshold) {
     utils::PrintOptions options;
     options.inline_threshold = 6;
     std::stringstream ss_serialized;
-    tensor.PrintToVectorString(ss_serialized, options);
+    tensor.PrintToStringStream(ss_serialized, options);
     std::string serialized = ss_serialized.str();
     EXPECT_TRUE(serialized.find("dims: [0, 1, 2, 3, 4, 5]") != std::string::npos);
     EXPECT_TRUE(serialized.find('\n') == std::string::npos);
@@ -4200,7 +4200,7 @@ TEST(onnx_proto, PrintOptions_InlineThreshold) {
     utils::PrintOptions options;
     options.inline_threshold = 5;
     std::stringstream ss_serialized;
-    tensor.PrintToVectorString(ss_serialized, options);
+    tensor.PrintToStringStream(ss_serialized, options);
     std::string serialized = ss_serialized.str();
     EXPECT_TRUE(serialized.find("dims:") != std::string::npos);
     EXPECT_TRUE(serialized.find('\n') == std::string::npos);
@@ -4208,7 +4208,7 @@ TEST(onnx_proto, PrintOptions_InlineThreshold) {
 }
 
 TEST(onnx_proto, PrintOptions_FlatOutput) {
-  // PrintToVectorString always writes a flat single-line representation to a
+  // PrintToStringStream always writes a flat single-line representation to a
   // stringstream; there are no newlines regardless of message size or nesting.
   NodeProto node;
   node.set_name("relu1");
@@ -4218,7 +4218,7 @@ TEST(onnx_proto, PrintOptions_FlatOutput) {
 
   utils::PrintOptions options;
   std::stringstream ss;
-  node.PrintToVectorString(ss, options);
+  node.PrintToStringStream(ss, options);
   std::string serialized = ss.str();
   EXPECT_TRUE(serialized.find('\n') == std::string::npos);
   EXPECT_TRUE(serialized.find("name:") != std::string::npos);
@@ -4226,7 +4226,7 @@ TEST(onnx_proto, PrintOptions_FlatOutput) {
 }
 
 TEST(onnx_proto, PrintOptions_FlatModelOutput) {
-  // PrintToVectorString writes flat output without newlines.
+  // PrintToStringStream writes flat output without newlines.
   ModelProto model;
   model.set_ir_version(7);
   model.set_producer_name("test_producer");
@@ -4241,7 +4241,7 @@ TEST(onnx_proto, PrintOptions_FlatModelOutput) {
 
   utils::PrintOptions options;
   std::stringstream ss;
-  model.PrintToVectorString(ss, options);
+  model.PrintToStringStream(ss, options);
   std::string serialized = ss.str();
   EXPECT_TRUE(serialized.find('\n') == std::string::npos);
   EXPECT_TRUE(serialized.find("ir_version: 7") != std::string::npos);
@@ -4648,7 +4648,7 @@ TEST(onnx_file, LoadOnnxFile_OldProtobuf) {
 
   utils::PrintOptions pr;
   std::stringstream ss_text;
-  model.PrintToVectorString(ss_text, pr);
+  model.PrintToStringStream(ss_text, pr);
   std::string text = ss_text.str();
   EXPECT_NE(text.find("Binarizer"), std::string::npos);
 }
@@ -4666,7 +4666,7 @@ TEST(onnx_file, LoadOnnxFile_Expanded) {
 
   utils::PrintOptions pr;
   std::stringstream ss_text;
-  model.PrintToVectorString(ss_text, pr);
+  model.PrintToStringStream(ss_text, pr);
   std::string text = ss_text.str();
   EXPECT_NE(text.find("ReduceSum"), std::string::npos);
 }
@@ -4684,7 +4684,7 @@ TEST(onnx_file, LoadOnnxFile_Constant) {
 
   utils::PrintOptions pr;
   std::stringstream ss_text;
-  node.PrintToVectorString(ss_text, pr);
+  node.PrintToStringStream(ss_text, pr);
   std::string text = ss_text.str();
   EXPECT_NE(text.find("Constant"), std::string::npos);
 }
@@ -4702,7 +4702,7 @@ TEST(onnx_file, LoadOnnxFile_ConstantAsString) {
 
   utils::PrintOptions pr;
   std::stringstream ss_text;
-  node.PrintToVectorString(ss_text, pr);
+  node.PrintToStringStream(ss_text, pr);
   std::string text = ss_text.str();
   EXPECT_NE(text.find("Constant"), std::string::npos);
 }
@@ -4913,7 +4913,7 @@ TEST(onnx_proto, TensorProto_ExternalData) {
   EXPECT_EQ(tensor2.ref_external_data()[0].ref_value(), "weights.bin");
 }
 
-TEST(onnx_proto, TensorProto_DataLocationPrintToVectorString) {
+TEST(onnx_proto, TensorProto_DataLocationPrintToStringStream) {
   utils::PrintOptions options;
   TensorProto tensor;
   tensor.set_name("external_print_tensor");
@@ -4926,7 +4926,7 @@ TEST(onnx_proto, TensorProto_DataLocationPrintToVectorString) {
 
   // Generate the text representation
   std::stringstream ss_result;
-  tensor.PrintToVectorString(ss_result, options);
+  tensor.PrintToStringStream(ss_result, options);
   std::string serialized = ss_result.str();
   ASSERT_FALSE(serialized.empty());
 
@@ -5115,7 +5115,7 @@ TEST(onnx_string, SequenceProto) {
   tensor->ref_float_data().push_back(2.5f);
 
   std::stringstream ss_result;
-  sequence.PrintToVectorString(ss_result, options);
+  sequence.PrintToStringStream(ss_result, options);
   std::string serialized = ss_result.str();
   ASSERT_FALSE(serialized.empty());
 
@@ -5283,7 +5283,7 @@ TEST(onnx_string, MapProto) {
 
   // Generate the text representation
   std::stringstream ss_result;
-  map.PrintToVectorString(ss_result, options);
+  map.PrintToStringStream(ss_result, options);
   std::string serialized = ss_result.str();
   ASSERT_FALSE(serialized.empty());
 
@@ -5528,7 +5528,7 @@ TEST(onnx_string, OptionalProto) {
   tensor->ref_float_data().push_back(2.5f);
 
   std::stringstream ss_result;
-  optional.PrintToVectorString(ss_result, options);
+  optional.PrintToStringStream(ss_result, options);
   std::string serialized = ss_result.str();
   ASSERT_FALSE(serialized.empty());
 

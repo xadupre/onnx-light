@@ -536,7 +536,7 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           [](cls &self) -> std::string {
             utils::PrintOptions opts;
             std::stringstream ss;
-            self.PrintToVectorString(ss, opts);
+            self.PrintToStringStream(ss, opts);
             return ss.str();
           },
           "Creates a printable string for this class.")
@@ -587,7 +587,7 @@ std::string proto_repr_with_short_line(cls &self,
                                        size_t max_short_repr_length = MAX_SHORT_REPR_LENGTH) {
   utils::PrintOptions opts;
   std::stringstream ss;
-  self.PrintToVectorString(ss, opts);
+  self.PrintToStringStream(ss, opts);
   return ss.str();
 }
 

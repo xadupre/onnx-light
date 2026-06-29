@@ -6,7 +6,7 @@
  *   ./print_proto_debug
  *
  * The executable creates a tiny NodeProto, formats it with
- * PrintToVectorString (writing to a stringstream), and writes the debug text to
+ * PrintToStringStream (writing to a stringstream), and writes the debug text to
  * stdout.
  */
 
@@ -28,7 +28,7 @@ int main() {
 
   onnx_light::utils::PrintOptions options;
   std::stringstream ss;
-  node.PrintToVectorString(ss, options);
+  node.PrintToStringStream(ss, options);
   std::cout << ss.str() << "\n";
   return 0;
 }

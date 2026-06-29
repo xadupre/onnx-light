@@ -12,11 +12,11 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace utils {
 
 template <typename T>
-void RepeatedField<T>::PrintToVectorString(std::stringstream &ss,
+void RepeatedField<T>::PrintToStringStream(std::stringstream &ss,
                                            utils::PrintOptions &options) const {
   ss << "[ ";
   for (const auto &p : values_) {
-    p.PrintToVectorString(ss, options);
+    p.PrintToStringStream(ss, options);
     ss << " ";
   }
   ss << "]";
@@ -62,11 +62,11 @@ template <typename T> T &RepeatedProtoField<T>::back() {
 }
 
 template <typename T>
-void RepeatedProtoField<T>::PrintToVectorString(std::stringstream &ss,
+void RepeatedProtoField<T>::PrintToStringStream(std::stringstream &ss,
                                                 utils::PrintOptions &options) const {
   ss << "[ ";
   for (const auto &p : values_) {
-    p->PrintToVectorString(ss, options);
+    p->PrintToStringStream(ss, options);
     ss << " ";
   }
   ss << "]";

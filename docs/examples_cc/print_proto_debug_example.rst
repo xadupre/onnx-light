@@ -49,10 +49,8 @@ Step 3 – Run the example
 .. code-block:: cpp
 
     #include "onnx.h"
-    #include "simple_string.h"
-
     #include <iostream>
-    #include <vector>
+    #include <sstream>
 
     int main() {
       onnx::NodeProto node;
@@ -63,9 +61,9 @@ Step 3 – Run the example
       node.set_doc_string("Simple ReLU activation");
 
       onnx::utils::PrintOptions options;
-      std::vector<std::string> lines = node.PrintToVectorString(options);
-      // join_string is declared in simple_string.h.
-      std::cout << onnx::utils::join_string(lines, "\n") << "\n";
+      std::stringstream ss;
+      node.PrintToStringStream(ss, options);
+      std::cout << ss.str() << "\n";
       return 0;
     }
 
@@ -104,5 +102,5 @@ See also
 --------
 
 * ``onnx::ProtoDebugString`` (from ``proto_utils.h``) is a convenience helper
-  that internally calls ``PrintToVectorString`` and returns a single
+  that internally calls ``PrintToStringStream`` and returns a single
   ``std::string``.

@@ -548,7 +548,7 @@ static void encodeTensor(TensorProto &p, const Tensor &tensor) {
   }
 }
 
-static void addAttribute(NodeProto &n_p, Node &n, Symbol name) {
+static void addAttribute(NodeProto &n_p, const Node &n, Symbol name) {
   auto *attr = n_p.add_attribute();
   attr->set_name(name.toString());
   switch (n.kindOf(name)) {

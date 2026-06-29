@@ -69,7 +69,7 @@ barf(const char *fmt, ...);
  *
  * @param msg Formatted error message to embed in the exception.
  */
-[[noreturn]] void throw_assert_error(std::string &msg);
+[[noreturn]] void throw_assert_error(const std::string &msg);
 
 /**
  * @brief Throws a tensor_error with the given message.
@@ -79,7 +79,7 @@ barf(const char *fmt, ...);
  *
  * @param msg Formatted error message to embed in the exception.
  */
-[[noreturn]] void throw_tensor_error(std::string &msg);
+[[noreturn]] void throw_tensor_error(const std::string &msg);
 
 } // namespace ONNX_LIGHT_NAMESPACE
 

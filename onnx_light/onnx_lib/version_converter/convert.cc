@@ -111,7 +111,7 @@ void DefaultVersionConverter::convert_graph(const std::shared_ptr<Graph> &g,
           }
         }
       }
-      it++;
+      ++it;
     }
     // Update model version
     curr_version += step;

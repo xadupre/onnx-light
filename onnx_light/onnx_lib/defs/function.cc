@@ -69,7 +69,7 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
   const OpSchemaRegistry *schema_registry = OpSchemaRegistry::Instance();
   const auto *const schema = schema_registry->GetSchema(
       node.ref_op_type().as_string(), domain_version, node.ref_domain().as_string());
-  auto default_attrs = schema->attributes();
+  const auto &default_attrs = schema->attributes();
 
   for (const auto &[attr_name, attr] : default_attrs) {
     if (!attr_map.count(attr_name)) {

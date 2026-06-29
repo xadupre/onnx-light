@@ -216,7 +216,7 @@ struct ScalarAttributeValue final : public AttributeValue {
   using ConstructorType = const T &;
   using ValueType = T;
   ScalarAttributeValue(Symbol name, ConstructorType value_)
-      : AttributeValue(name), value_(std::move(value_)) {}
+      : AttributeValue(name), value_(value_) {}
   /** @brief Returns a mutable reference to the stored scalar value. */
   ValueType &value() { return value_; }
   /** @brief Returns a deep copy wrapped in a @c Ptr. */

@@ -28,6 +28,8 @@ constexpr int64_t kDefaultIrVersion = 10;
 // must emit:
 //
 //   * ``onnx_light.node_tag = "shape"`` on the ``Shape`` node.
+//   * ``onnx_light.node_tag = "weight"`` on the ``Reshape`` node (inherited
+//     from its first input X which is a rank-2 float tensor).
 //   * ``onnx_light.value_tags = {"S":"shape","X":"weight","Y":"weight"}`` on
 //     the graph (X is a rank-2 float tensor → "weight"; Y inherits from X).
 //
@@ -66,6 +68,8 @@ void RegisterShapeTagCases(std::vector<TestCase> &registry) {
   graph->add_metadata(onnx_optim::annotations::kValueTagsMetadataKey,
                       "{\"S\":\"shape\",\"X\":\"weight\",\"Y\":\"weight\"}");
   (*graph->mutable_node())[0].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey, "shape");
+  // Reshape (node[1]) inherits "weight" from its first input X.
+  (*graph->mutable_node())[1].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey, "weight");
   // S (value_info[0]) also receives onnx_light.value_tag = "shape".
   {
     StringStringEntryProto *entry = graph->mutable_value_info(0)->add_metadata_props();

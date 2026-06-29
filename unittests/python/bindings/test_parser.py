@@ -85,7 +85,7 @@ class TestParser(ExtTestCase):
                 """)
             node = model.graph.node[0]
             self.assertEqual(node.attribute[0].name, "alpha")
-            self.assertAlmostEqual(node.attribute[0].f, 0.123, places=5)
+            self.assertAlmostEqual(node.attribute[0].f, 0.123, atol=1e-5)
         finally:
             locale.setlocale(locale.LC_NUMERIC, original_locale)
 

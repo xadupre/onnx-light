@@ -1,7 +1,7 @@
 .. _l-what-is-onnx-light:
 
-What is onnx-light?
-===================
+Quick tour
+==========
 
 ``onnx-light`` is a rewrite of :epkg:`onnx` that keeps the same format and
 the same API but drops :epkg:`protobuf` along the way. It is **protobuf

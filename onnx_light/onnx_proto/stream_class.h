@@ -4,6 +4,7 @@
 #include "simple_string.h"
 #include "stream.h"
 #include <functional>
+#include <sstream>
 
 #define FIELD_VARINT 0
 #define FIELD_FIXED64 1
@@ -24,7 +25,7 @@
       const;                                                                                       \
   void ParseFromStream(utils::BinaryStream &stream, ParseOptions &options);                        \
   void SerializeToStream(utils::BinaryWriteStream &stream, SerializeOptions &options) const;       \
-  std::vector<std::string> PrintToVectorString(utils::PrintOptions &options) const;
+  void PrintToVectorString(std::stringstream &ss, utils::PrintOptions &options) const;
 
 /** Macro for beginning a generated proto class with a default constructor. */
 #define BEGIN_PROTO(cls, doc)                                                                      \

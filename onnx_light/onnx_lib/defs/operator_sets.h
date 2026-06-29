@@ -1477,6 +1477,17 @@ public:
   }
 };
 
+// Forward declarations for ai.onnx version 28
+class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 28, Celu);
+
+// Iterate over schema from ai.onnx version 28
+class OpSet_Onnx_ver28 {
+public:
+  static void ForEachSchema(std::function<void(OpSchema &&)> fn) {
+    fn(GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(Onnx, 28, Celu)>());
+  }
+};
+
 ONNX_API inline void RegisterOnnxOperatorSetSchema() {
   RegisterOpSetSchema<OpSet_Onnx_ver1>(0, false);
   RegisterOpSetSchema<OpSet_Onnx_ver2>(0, false);
@@ -1505,6 +1516,7 @@ ONNX_API inline void RegisterOnnxOperatorSetSchema() {
   RegisterOpSetSchema<OpSet_Onnx_ver25>(0, false);
   RegisterOpSetSchema<OpSet_Onnx_ver26>(0, false);
   RegisterOpSetSchema<OpSet_Onnx_ver27>(0, false);
+  RegisterOpSetSchema<OpSet_Onnx_ver28>(0, false);
   // 0 means all versions of ONNX schema have been loaded
   OpSchemaRegistry::Instance()->SetLoadedSchemaVersion(0);
 }
@@ -1517,6 +1529,7 @@ ONNX_API inline void RegisterOnnxOperatorSetSchema(int target_version,
   //
   // Version-specific registration sees duplicate schema version request as error if
   // fail_duplicate_schema
+  RegisterOpSetSchema<OpSet_Onnx_ver28>(target_version, fail_duplicate_schema);
   RegisterOpSetSchema<OpSet_Onnx_ver27>(target_version, fail_duplicate_schema);
   RegisterOpSetSchema<OpSet_Onnx_ver26>(target_version, fail_duplicate_schema);
   RegisterOpSetSchema<OpSet_Onnx_ver25>(target_version, fail_duplicate_schema);

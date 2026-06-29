@@ -131,6 +131,7 @@ on the kernels to produce the expected outputs.
     :maxdepth: 1
     :caption: Contents
 
+    what_is_onnx_light
     getting_started
     design/index
     api/index

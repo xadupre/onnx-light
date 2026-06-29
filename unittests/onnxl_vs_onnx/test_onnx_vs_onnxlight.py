@@ -915,8 +915,8 @@ class TestOnnx(ExtTestCase):
         p0 = onnxl.AttributeProto()
         p0.ParseFromString(s2)
         self.assertEqual(p.SerializeToString(), p0.SerializeToString())
-        self.assertIn("float_data: [5, 6, 7],", str(p))
-        self.assertIn("float_data: [5, 6, 7],", str(p0))
+        self.assertIn("float_data: [5, 6, 7]", str(p))
+        self.assertIn("float_data: [5, 6, 7]", str(p0))
         self.assertFalse(p.has_sparse_tensor())
         self.assertFalse(p0.has_sparse_tensor())
 

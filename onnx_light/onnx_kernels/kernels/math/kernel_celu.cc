@@ -4,6 +4,8 @@
 
 #include "onnx_kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_kernels/kernels/_helpers/cast_helper.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -19,27 +21,52 @@ namespace {
 
 constexpr const char *kName = "kernel::Celu";
 
-void ComputeInPlace(const Tensor &x, float alpha, Tensor &output) {
+template <typename T> void ComputeInPlace(const Tensor &x, T alpha, Tensor &output) {
   const int64_t n = x.element_count();
-  const float *px = reinterpret_cast<const float *>(x.bytes());
-  float *py = reinterpret_cast<float *>(output.data.data());
+  const T *px = reinterpret_cast<const T *>(x.bytes());
+  T *py = reinterpret_cast<T *>(output.data.data());
   for (int64_t i = 0; i < n; ++i) {
-    const float v = px[i];
+    const T v = px[i];
     // max(0, x) + min(0, alpha * (exp(x / alpha) - 1))
+    const T pos = std::max(static_cast<T>(0), v);
+    const T neg = std::min(static_cast<T>(0), alpha * (std::exp(v / alpha) - static_cast<T>(1)));
+    py[i] = pos + neg;
+  }
+}
+
+using DecodeFunc = float (*)(uint16_t);
+using EncodeFunc = uint16_t (*)(float);
+
+void ComputeHalf(const Tensor &x, float alpha, Tensor &output, DecodeFunc decode,
+                 EncodeFunc encode) {
+  const int64_t n = x.element_count();
+  const uint16_t *px = reinterpret_cast<const uint16_t *>(x.bytes());
+  uint16_t *py = reinterpret_cast<uint16_t *>(output.data.data());
+  for (int64_t i = 0; i < n; ++i) {
+    const float v = decode(px[i]);
     const float pos = std::max(0.0f, v);
     const float neg = std::min(0.0f, alpha * (std::exp(v / alpha) - 1.0f));
-    py[i] = pos + neg;
+    py[i] = encode(pos + neg);
   }
 }
 
 void Dispatch(const Tensor &x, float alpha, Tensor &output) {
   switch (static_cast<DataType>(x.data_type)) {
   case DataType::FLOAT:
-    ComputeInPlace(x, alpha, output);
+    ComputeInPlace<float>(x, alpha, output);
+    return;
+  case DataType::DOUBLE:
+    ComputeInPlace<double>(x, static_cast<double>(alpha), output);
+    return;
+  case DataType::FLOAT16:
+    ComputeHalf(x, alpha, output, Float16BitsToFloat, FloatToFloat16Bits);
+    return;
+  case DataType::BFLOAT16:
+    ComputeHalf(x, alpha, output, Bfloat16BitsToFloat, FloatToBfloat16Bits);
     return;
   default:
     EXT_THROW_INVALID(kName, ": unsupported data type ", x.data_type,
-                      ", only supports FLOAT tensors.");
+                      ", only supports FLOAT, DOUBLE, FLOAT16, and BFLOAT16 tensors.");
   }
 }
 

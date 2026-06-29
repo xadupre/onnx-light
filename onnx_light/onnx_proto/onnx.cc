@@ -200,14 +200,15 @@ void StringStringEntryProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_FIELD(options, stream, key)
   WRITE_FIELD(options, stream, value)
 }
-void StringStringEntryProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
-    READ_BEGIN(options, stream, StringStringEntryProto) //
-    READ_FIELD(options, stream, key)                    //
-    READ_FIELD(options, stream, value)                  //
-    READ_END(options, stream, StringStringEntryProto)   //  // NOLINT
-} std::vector<std::string> StringStringEntryProto::PrintToVectorString(utils::PrintOptions &options)
-    const {
-  return {write_as_string(options, NAME_EXIST_VALUE(key), NAME_EXIST_VALUE(value))};
+void StringStringEntryProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, StringStringEntryProto) //
+  READ_FIELD(options, stream, key)                    //
+  READ_FIELD(options, stream, value)                  //
+  READ_END(options, stream, StringStringEntryProto)   //  // NOLINT
+}
+void StringStringEntryProto::PrintToVectorString(std::stringstream &ss,
+                                                 utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(key), NAME_EXIST_VALUE(value));
 }
 
 // TensorAnnotation
@@ -224,15 +225,16 @@ void TensorAnnotation::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_FIELD(options, stream, tensor_name)
   WRITE_REPEATED_FIELD(options, stream, quant_parameter_tensor_names)
 }
-void TensorAnnotation::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
-    READ_BEGIN(options, stream, TensorAnnotation)                      //
-    READ_FIELD(options, stream, tensor_name)                           //
-    READ_REPEATED_FIELD(options, stream, quant_parameter_tensor_names) //
-    READ_END(options, stream, TensorAnnotation)                        //  // NOLINT
-} std::vector<std::string> TensorAnnotation::PrintToVectorString(utils::PrintOptions &options)
-    const {
-  return write_proto_into_vector_string(options, NAME_EXIST_VALUE(tensor_name),
-                                        NAME_EXIST_VALUE(quant_parameter_tensor_names));
+void TensorAnnotation::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, TensorAnnotation)                      //
+  READ_FIELD(options, stream, tensor_name)                           //
+  READ_REPEATED_FIELD(options, stream, quant_parameter_tensor_names) //
+  READ_END(options, stream, TensorAnnotation)                        //  // NOLINT
+}
+void TensorAnnotation::PrintToVectorString(std::stringstream &ss,
+                                           utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(tensor_name),
+                                 NAME_EXIST_VALUE(quant_parameter_tensor_names));
 }
 
 // IntIntListEntryProto
@@ -250,14 +252,15 @@ void IntIntListEntryProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_FIELD(options, stream, key)
   WRITE_REPEATED_FIELD(options, stream, value)
 }
-void IntIntListEntryProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
-    READ_BEGIN(options, stream, IntIntListEntryProto) //
-    READ_FIELD(options, stream, key)                  //
-    READ_REPEATED_FIELD(options, stream, value)       //
-    READ_END(options, stream, IntIntListEntryProto)   //
-} std::vector<std::string> IntIntListEntryProto::PrintToVectorString(utils::PrintOptions &options)
-    const {
-  return write_proto_into_vector_string(options, NAME_EXIST_VALUE(key), NAME_EXIST_VALUE(value));
+void IntIntListEntryProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, IntIntListEntryProto) //
+  READ_FIELD(options, stream, key)                  //
+  READ_REPEATED_FIELD(options, stream, value)       //
+  READ_END(options, stream, IntIntListEntryProto)   //
+}
+void IntIntListEntryProto::PrintToVectorString(std::stringstream &ss,
+                                               utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(key), NAME_EXIST_VALUE(value));
 }
 
 // DeviceConfigurationProto
@@ -277,16 +280,17 @@ void DeviceConfigurationProto::SerializeToStream(utils::BinaryWriteStream &strea
   WRITE_FIELD(options, stream, num_devices)
   WRITE_REPEATED_FIELD(options, stream, device)
 }
-void DeviceConfigurationProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
-    READ_BEGIN(options, stream, DeviceConfigurationProto) //
-    READ_FIELD(options, stream, name)                     //
-    READ_FIELD(options, stream, num_devices)              //
-    READ_REPEATED_FIELD(options, stream, device)          //
-    READ_END(options, stream, DeviceConfigurationProto)   //
-} std::vector<std::string> DeviceConfigurationProto::PrintToVectorString(utils::PrintOptions
-                                                                             &options) const {
-  return write_proto_into_vector_string(options, NAME_EXIST_VALUE(name),
-                                        NAME_EXIST_VALUE(num_devices), NAME_EXIST_VALUE(device));
+void DeviceConfigurationProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, DeviceConfigurationProto) //
+  READ_FIELD(options, stream, name)                     //
+  READ_FIELD(options, stream, num_devices)              //
+  READ_REPEATED_FIELD(options, stream, device)          //
+  READ_END(options, stream, DeviceConfigurationProto)   //
+}
+void DeviceConfigurationProto::PrintToVectorString(std::stringstream &ss,
+                                                   utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(num_devices),
+                                 NAME_EXIST_VALUE(device));
 }
 
 // SimpleShardedDimProto
@@ -306,16 +310,17 @@ void SimpleShardedDimProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_FIELD(options, stream, dim_param)
   WRITE_FIELD(options, stream, num_shards)
 }
-void SimpleShardedDimProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
-    READ_BEGIN(options, stream, SimpleShardedDimProto) //
-    READ_FIELD(options, stream, dim_value)             //
-    READ_FIELD(options, stream, dim_param)             //
-    READ_FIELD(options, stream, num_shards)            //
-    READ_END(options, stream, SimpleShardedDimProto)   //
-} std::vector<std::string> SimpleShardedDimProto::PrintToVectorString(utils::PrintOptions &options)
-    const {
-  return write_proto_into_vector_string(options, NAME_EXIST_VALUE(dim_value),
-                                        NAME_EXIST_VALUE(dim_param), NAME_EXIST_VALUE(num_shards));
+void SimpleShardedDimProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, SimpleShardedDimProto) //
+  READ_FIELD(options, stream, dim_value)             //
+  READ_FIELD(options, stream, dim_param)             //
+  READ_FIELD(options, stream, num_shards)            //
+  READ_END(options, stream, SimpleShardedDimProto)   //
+}
+void SimpleShardedDimProto::PrintToVectorString(std::stringstream &ss,
+                                                utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(dim_value),
+                                 NAME_EXIST_VALUE(dim_param), NAME_EXIST_VALUE(num_shards));
 }
 
 // ShardedDimProto
@@ -334,15 +339,16 @@ void ShardedDimProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, simple_sharding)
 }
 
-void ShardedDimProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
-    READ_BEGIN(options, stream, ShardedDimProto)          //
-    READ_FIELD(options, stream, axis)                     //
-    READ_REPEATED_FIELD(options, stream, simple_sharding) //
-    READ_END(options, stream, ShardedDimProto)            //
-} std::vector<std::string> ShardedDimProto::PrintToVectorString(utils::PrintOptions &options)
-    const {
-  return write_proto_into_vector_string(options, NAME_EXIST_VALUE(axis),
-                                        NAME_EXIST_VALUE(simple_sharding));
+void ShardedDimProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, ShardedDimProto)          //
+  READ_FIELD(options, stream, axis)                     //
+  READ_REPEATED_FIELD(options, stream, simple_sharding) //
+  READ_END(options, stream, ShardedDimProto)            //
+}
+void ShardedDimProto::PrintToVectorString(std::stringstream &ss,
+                                          utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(axis),
+                                 NAME_EXIST_VALUE(simple_sharding));
 }
 
 // ShardingSpecProto
@@ -364,17 +370,18 @@ void ShardingSpecProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, index_to_device_group_map)
   WRITE_REPEATED_FIELD(options, stream, sharded_dim)
 }
-void ShardingSpecProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
-    READ_BEGIN(options, stream, ShardingSpecProto)                  //
-    READ_FIELD(options, stream, tensor_name)                        //
-    READ_REPEATED_FIELD(options, stream, device)                    //
-    READ_REPEATED_FIELD(options, stream, index_to_device_group_map) //
-    READ_REPEATED_FIELD(options, stream, sharded_dim)               //
-    READ_END(options, stream, ShardingSpecProto)                    //  // NOLINT
-} std::vector<std::string> ShardingSpecProto::PrintToVectorString(utils::PrintOptions &options)
-    const {
-  return write_proto_into_vector_string(
-      options, NAME_EXIST_VALUE(tensor_name), NAME_EXIST_VALUE(device),
+void ShardingSpecProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, ShardingSpecProto)                  //
+  READ_FIELD(options, stream, tensor_name)                        //
+  READ_REPEATED_FIELD(options, stream, device)                    //
+  READ_REPEATED_FIELD(options, stream, index_to_device_group_map) //
+  READ_REPEATED_FIELD(options, stream, sharded_dim)               //
+  READ_END(options, stream, ShardingSpecProto)                    //  // NOLINT
+}
+void ShardingSpecProto::PrintToVectorString(std::stringstream &ss,
+                                            utils::PrintOptions &options) const {
+  write_proto_into_vector_string(
+      ss, options, NAME_EXIST_VALUE(tensor_name), NAME_EXIST_VALUE(device),
       NAME_EXIST_VALUE(index_to_device_group_map), NAME_EXIST_VALUE(sharded_dim));
 }
 
@@ -396,17 +403,17 @@ void NodeDeviceConfigurationProto::SerializeToStream(utils::BinaryWriteStream &s
   WRITE_FIELD(options, stream, pipeline_stage)
 }
 void NodeDeviceConfigurationProto::ParseFromStream(utils::BinaryStream &stream,
-                                                   ParseOptions &options){
-    READ_BEGIN(options, stream, NodeDeviceConfigurationProto) //
-    READ_FIELD(options, stream, configuration_id)             //
-    READ_REPEATED_FIELD(options, stream, sharding_spec)       //
-    READ_FIELD(options, stream, pipeline_stage)               //
-    READ_END(options, stream, NodeDeviceConfigurationProto)   //
-} std::vector<std::string> NodeDeviceConfigurationProto::PrintToVectorString(utils::PrintOptions
-                                                                                 &options) const {
-  return write_proto_into_vector_string(options, NAME_EXIST_VALUE(configuration_id),
-                                        NAME_EXIST_VALUE(sharding_spec),
-                                        NAME_EXIST_VALUE(pipeline_stage));
+                                                   ParseOptions &options) {
+  READ_BEGIN(options, stream, NodeDeviceConfigurationProto) //
+  READ_FIELD(options, stream, configuration_id)             //
+  READ_REPEATED_FIELD(options, stream, sharding_spec)       //
+  READ_FIELD(options, stream, pipeline_stage)               //
+  READ_END(options, stream, NodeDeviceConfigurationProto)   //
+}
+void NodeDeviceConfigurationProto::PrintToVectorString(std::stringstream &ss,
+                                                       utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(configuration_id),
+                                 NAME_EXIST_VALUE(sharding_spec), NAME_EXIST_VALUE(pipeline_stage));
 }
 
 // OperatorSetIdProto
@@ -424,15 +431,15 @@ void OperatorSetIdProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_FIELD_EMPTY(options, stream, domain)
   WRITE_FIELD(options, stream, version)
 }
-void OperatorSetIdProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
-    READ_BEGIN(options, stream, OperatorSetIdProto) //
-    READ_FIELD(options, stream, domain)             //
-    READ_FIELD(options, stream, version)            //
-    READ_END(options, stream, OperatorSetIdProto)   //
-} std::vector<std::string> OperatorSetIdProto::PrintToVectorString(utils::PrintOptions &options)
-    const {
-  return write_proto_into_vector_string(options, NAME_EXIST_VALUE(domain),
-                                        NAME_EXIST_VALUE(version));
+void OperatorSetIdProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, OperatorSetIdProto) //
+  READ_FIELD(options, stream, domain)             //
+  READ_FIELD(options, stream, version)            //
+  READ_END(options, stream, OperatorSetIdProto)   //
+}
+void OperatorSetIdProto::PrintToVectorString(std::stringstream &ss,
+                                             utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(domain), NAME_EXIST_VALUE(version));
 }
 
 // TensorShapeProto::Dimension
@@ -453,16 +460,17 @@ void TensorShapeProto::Dimension::SerializeToStream(utils::BinaryWriteStream &st
   WRITE_FIELD(options, stream, denotation)
 }
 void TensorShapeProto::Dimension::ParseFromStream(utils::BinaryStream &stream,
-                                                  ParseOptions &options){
-    READ_BEGIN(options, stream, TensorShapeProto::Dimension) //
-    READ_FIELD(options, stream, dim_value)                   //
-    READ_FIELD(options, stream, dim_param)                   //
-    READ_FIELD(options, stream, denotation)                  //
-    READ_END(options, stream, TensorShapeProto::Dimension)   //
-} std::vector<std::string> TensorShapeProto::Dimension::PrintToVectorString(utils::PrintOptions
-                                                                                &options) const {
-  return write_proto_into_vector_string(options, NAME_EXIST_VALUE(dim_value),
-                                        NAME_EXIST_VALUE(dim_param), NAME_EXIST_VALUE(denotation));
+                                                  ParseOptions &options) {
+  READ_BEGIN(options, stream, TensorShapeProto::Dimension) //
+  READ_FIELD(options, stream, dim_value)                   //
+  READ_FIELD(options, stream, dim_param)                   //
+  READ_FIELD(options, stream, denotation)                  //
+  READ_END(options, stream, TensorShapeProto::Dimension)   //
+}
+void TensorShapeProto::Dimension::PrintToVectorString(std::stringstream &ss,
+                                                      utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(dim_value),
+                                 NAME_EXIST_VALUE(dim_param), NAME_EXIST_VALUE(denotation));
 }
 
 // TensorShapeProto
@@ -478,13 +486,14 @@ void TensorShapeProto::SerializeToStream(utils::BinaryWriteStream &stream,
                                          SerializeOptions &options) const {
   WRITE_REPEATED_FIELD(options, stream, dim)
 }
-void TensorShapeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
-    READ_BEGIN(options, stream, TensorShapeProto) //
-    READ_REPEATED_FIELD(options, stream, dim)     //
-    READ_END(options, stream, TensorShapeProto)   //
-} std::vector<std::string> TensorShapeProto::PrintToVectorString(utils::PrintOptions &options)
-    const {
-  return write_proto_into_vector_string(options, NAME_EXIST_VALUE(dim));
+void TensorShapeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, TensorShapeProto) //
+  READ_REPEATED_FIELD(options, stream, dim)     //
+  READ_END(options, stream, TensorShapeProto)   //
+}
+void TensorShapeProto::PrintToVectorString(std::stringstream &ss,
+                                           utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(dim));
 }
 
 // TensorProto::Segment
@@ -502,14 +511,15 @@ void TensorProto::Segment::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_FIELD(options, stream, begin)
   WRITE_FIELD(options, stream, end)
 }
-void TensorProto::Segment::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
-    READ_BEGIN(options, stream, TensorProto::Segment) //
-    READ_FIELD(options, stream, begin)                //
-    READ_FIELD(options, stream, end)                  //
-    READ_END(options, stream, TensorProto::Segment)   //
-} std::vector<std::string> TensorProto::Segment::PrintToVectorString(utils::PrintOptions &options)
-    const {
-  return write_proto_into_vector_string(options, NAME_EXIST_VALUE(begin), NAME_EXIST_VALUE(end));
+void TensorProto::Segment::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, TensorProto::Segment) //
+  READ_FIELD(options, stream, begin)                //
+  READ_FIELD(options, stream, end)                  //
+  READ_END(options, stream, TensorProto::Segment)   //
+}
+void TensorProto::Segment::PrintToVectorString(std::stringstream &ss,
+                                               utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(begin), NAME_EXIST_VALUE(end));
 }
 
 // TensorProto
@@ -882,11 +892,11 @@ void TensorProto::LoadExternalData(const std::string &base_dir) {
                 "': expected ", length, " bytes, got ", static_cast<int64_t>(file.gcount()), ".");
   }
 }
-std::vector<std::string> TensorProto::PrintToVectorString(utils::PrintOptions &options) const {
-  return write_proto_into_vector_string(
-      options, NAME_EXIST_VALUE(dims), NAME_EXIST_VALUE(data_type), NAME_EXIST_VALUE(data_location),
-      NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(segment), NAME_EXIST_VALUE(raw_data),
-      NAME_EXIST_VALUE(doc_string), NAME_EXIST_VALUE(external_data),
+void TensorProto::PrintToVectorString(std::stringstream &ss, utils::PrintOptions &options) const {
+  write_proto_into_vector_string(
+      ss, options, NAME_EXIST_VALUE(dims), NAME_EXIST_VALUE(data_type),
+      NAME_EXIST_VALUE(data_location), NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(segment),
+      NAME_EXIST_VALUE(raw_data), NAME_EXIST_VALUE(doc_string), NAME_EXIST_VALUE(external_data),
       NAME_EXIST_VALUE(metadata_props), NAME_EXIST_VALUE(double_data), NAME_EXIST_VALUE(float_data),
       NAME_EXIST_VALUE(int32_data), NAME_EXIST_VALUE(int64_data), NAME_EXIST_VALUE(uint64_data),
       NAME_EXIST_VALUE(string_data));
@@ -909,16 +919,17 @@ void SparseTensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_FIELD(options, stream, indices)
   WRITE_REPEATED_FIELD(options, stream, dims)
 }
-void SparseTensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
-    READ_BEGIN(options, stream, SparseTensorProto) //
-    READ_FIELD(options, stream, values)            //
-    READ_FIELD(options, stream, indices)           //
-    READ_REPEATED_FIELD(options, stream, dims)     //
-    READ_END(options, stream, SparseTensorProto)   //
-} std::vector<std::string> SparseTensorProto::PrintToVectorString(utils::PrintOptions &options)
-    const {
-  return write_proto_into_vector_string(options, NAME_EXIST_VALUE(values),
-                                        NAME_EXIST_VALUE(indices), NAME_EXIST_VALUE(dims));
+void SparseTensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, SparseTensorProto) //
+  READ_FIELD(options, stream, values)            //
+  READ_FIELD(options, stream, indices)           //
+  READ_REPEATED_FIELD(options, stream, dims)     //
+  READ_END(options, stream, SparseTensorProto)   //
+}
+void SparseTensorProto::PrintToVectorString(std::stringstream &ss,
+                                            utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(values), NAME_EXIST_VALUE(indices),
+                                 NAME_EXIST_VALUE(dims));
 }
 
 // TypeProto::Tensor
@@ -936,15 +947,15 @@ void TypeProto::Tensor::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_ENUM_FIELD(options, stream, elem_type)
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, shape)
 }
-void TypeProto::Tensor::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
-    READ_BEGIN(options, stream, TypeProto::Tensor)       //
-    READ_OPTIONAL_ENUM_FIELD(options, stream, elem_type) //
-    READ_OPTIONAL_PROTO_FIELD(options, stream, shape)    //
-    READ_END(options, stream, TypeProto::Tensor)         //
-} std::vector<std::string> TypeProto::Tensor::PrintToVectorString(utils::PrintOptions &options)
-    const {
-  return write_proto_into_vector_string(options, NAME_EXIST_VALUE(elem_type),
-                                        NAME_EXIST_VALUE(shape));
+void TypeProto::Tensor::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, TypeProto::Tensor)       //
+  READ_OPTIONAL_ENUM_FIELD(options, stream, elem_type) //
+  READ_OPTIONAL_PROTO_FIELD(options, stream, shape)    //
+  READ_END(options, stream, TypeProto::Tensor)         //
+}
+void TypeProto::Tensor::PrintToVectorString(std::stringstream &ss,
+                                            utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(elem_type), NAME_EXIST_VALUE(shape));
 }
 
 // TypeProto::SparseTensor
@@ -962,15 +973,15 @@ void TypeProto::SparseTensor::SerializeToStream(utils::BinaryWriteStream &stream
   WRITE_ENUM_FIELD(options, stream, elem_type)
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, shape)
 }
-void TypeProto::SparseTensor::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
-    READ_BEGIN(options, stream, TypeProto::SparseTensor) //
-    READ_OPTIONAL_ENUM_FIELD(options, stream, elem_type) //
-    READ_OPTIONAL_PROTO_FIELD(options, stream, shape)    //
-    READ_END(options, stream, TypeProto::SparseTensor)   //
-} std::vector<std::string> TypeProto::SparseTensor::PrintToVectorString(utils::PrintOptions
-                                                                            &options) const {
-  return write_proto_into_vector_string(options, NAME_EXIST_VALUE(elem_type),
-                                        NAME_EXIST_VALUE(shape));
+void TypeProto::SparseTensor::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, TypeProto::SparseTensor) //
+  READ_OPTIONAL_ENUM_FIELD(options, stream, elem_type) //
+  READ_OPTIONAL_PROTO_FIELD(options, stream, shape)    //
+  READ_END(options, stream, TypeProto::SparseTensor)   //
+}
+void TypeProto::SparseTensor::PrintToVectorString(std::stringstream &ss,
+                                                  utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(elem_type), NAME_EXIST_VALUE(shape));
 }
 
 // TypeProto::Sequence
@@ -986,13 +997,14 @@ void TypeProto::Sequence::SerializeToStream(utils::BinaryWriteStream &stream,
                                             SerializeOptions &options) const {
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, elem_type)
 }
-void TypeProto::Sequence::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
-    READ_BEGIN(options, stream, TypeProto::Sequence)      //
-    READ_OPTIONAL_PROTO_FIELD(options, stream, elem_type) //
-    READ_END(options, stream, TypeProto::Sequence)        //
-} std::vector<std::string> TypeProto::Sequence::PrintToVectorString(utils::PrintOptions &options)
-    const {
-  return write_proto_into_vector_string(options, NAME_EXIST_VALUE(elem_type));
+void TypeProto::Sequence::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, TypeProto::Sequence)      //
+  READ_OPTIONAL_PROTO_FIELD(options, stream, elem_type) //
+  READ_END(options, stream, TypeProto::Sequence)        //
+}
+void TypeProto::Sequence::PrintToVectorString(std::stringstream &ss,
+                                              utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(elem_type));
 }
 
 //  TypeProto::Map
@@ -1010,14 +1022,16 @@ void TypeProto::Map::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_FIELD(options, stream, key_type)
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, value_type)
 }
-void TypeProto::Map::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
-    READ_BEGIN(options, stream, TypeProto::Map)            //
-    READ_FIELD(options, stream, key_type)                  //
-    READ_OPTIONAL_PROTO_FIELD(options, stream, value_type) //
-    READ_END(options, stream, TypeProto::Map)              //
-} std::vector<std::string> TypeProto::Map::PrintToVectorString(utils::PrintOptions &options) const {
-  return write_proto_into_vector_string(options, NAME_EXIST_VALUE(key_type),
-                                        NAME_EXIST_VALUE(value_type));
+void TypeProto::Map::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, TypeProto::Map)            //
+  READ_FIELD(options, stream, key_type)                  //
+  READ_OPTIONAL_PROTO_FIELD(options, stream, value_type) //
+  READ_END(options, stream, TypeProto::Map)              //
+}
+void TypeProto::Map::PrintToVectorString(std::stringstream &ss,
+                                         utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(key_type),
+                                 NAME_EXIST_VALUE(value_type));
 }
 
 // TypeProto::Optional
@@ -1033,13 +1047,14 @@ void TypeProto::Optional::SerializeToStream(utils::BinaryWriteStream &stream,
                                             SerializeOptions &options) const {
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, elem_type)
 }
-void TypeProto::Optional::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
-    READ_BEGIN(options, stream, TypeProto::Optional)      //
-    READ_OPTIONAL_PROTO_FIELD(options, stream, elem_type) //
-    READ_END(options, stream, TypeProto::Optional)        //
-} std::vector<std::string> TypeProto::Optional::PrintToVectorString(utils::PrintOptions &options)
-    const {
-  return write_proto_into_vector_string(options, NAME_EXIST_VALUE(elem_type));
+void TypeProto::Optional::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, TypeProto::Optional)      //
+  READ_OPTIONAL_PROTO_FIELD(options, stream, elem_type) //
+  READ_END(options, stream, TypeProto::Optional)        //
+}
+void TypeProto::Optional::PrintToVectorString(std::stringstream &ss,
+                                              utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(elem_type));
 }
 
 // TypeProto
@@ -1065,20 +1080,21 @@ void TypeProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, sparse_tensor_type)
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, optional_type)
 }
-void TypeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
-    READ_BEGIN(options, stream, TypeProto)                         //
-    READ_OPTIONAL_PROTO_FIELD(options, stream, tensor_type)        //
-    READ_OPTIONAL_PROTO_FIELD(options, stream, sequence_type)      //
-    READ_OPTIONAL_PROTO_FIELD(options, stream, map_type)           //
-    READ_FIELD(options, stream, denotation)                        //
-    READ_OPTIONAL_PROTO_FIELD(options, stream, sparse_tensor_type) //
-    READ_OPTIONAL_PROTO_FIELD(options, stream, optional_type)      //
-    READ_END(options, stream, TypeProto)                           //
-} std::vector<std::string> TypeProto::PrintToVectorString(utils::PrintOptions &options) const {
-  return write_proto_into_vector_string(
-      options, NAME_EXIST_VALUE(tensor_type), NAME_EXIST_VALUE(sequence_type),
-      NAME_EXIST_VALUE(map_type), NAME_EXIST_VALUE(denotation),
-      NAME_EXIST_VALUE(sparse_tensor_type), NAME_EXIST_VALUE(optional_type));
+void TypeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, TypeProto)                         //
+  READ_OPTIONAL_PROTO_FIELD(options, stream, tensor_type)        //
+  READ_OPTIONAL_PROTO_FIELD(options, stream, sequence_type)      //
+  READ_OPTIONAL_PROTO_FIELD(options, stream, map_type)           //
+  READ_FIELD(options, stream, denotation)                        //
+  READ_OPTIONAL_PROTO_FIELD(options, stream, sparse_tensor_type) //
+  READ_OPTIONAL_PROTO_FIELD(options, stream, optional_type)      //
+  READ_END(options, stream, TypeProto)                           //
+}
+void TypeProto::PrintToVectorString(std::stringstream &ss, utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(tensor_type),
+                                 NAME_EXIST_VALUE(sequence_type), NAME_EXIST_VALUE(map_type),
+                                 NAME_EXIST_VALUE(denotation), NAME_EXIST_VALUE(sparse_tensor_type),
+                                 NAME_EXIST_VALUE(optional_type));
 }
 
 // ValueInfoProto
@@ -1101,17 +1117,18 @@ void ValueInfoProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, metadata_props)
 }
 
-void ValueInfoProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
-    READ_BEGIN(options, stream, ValueInfoProto)          //
-    READ_FIELD(options, stream, name)                    //
-    READ_OPTIONAL_PROTO_FIELD(options, stream, type)     //
-    READ_FIELD(options, stream, doc_string)              //
-    READ_REPEATED_FIELD(options, stream, metadata_props) //
-    READ_END(options, stream, ValueInfoProto)            //
-} std::vector<std::string> ValueInfoProto::PrintToVectorString(utils::PrintOptions &options) const {
-  return write_proto_into_vector_string(options, NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(type),
-                                        NAME_EXIST_VALUE(doc_string),
-                                        NAME_EXIST_VALUE(metadata_props));
+void ValueInfoProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, ValueInfoProto)          //
+  READ_FIELD(options, stream, name)                    //
+  READ_OPTIONAL_PROTO_FIELD(options, stream, type)     //
+  READ_FIELD(options, stream, doc_string)              //
+  READ_REPEATED_FIELD(options, stream, metadata_props) //
+  READ_END(options, stream, ValueInfoProto)            //
+}
+void ValueInfoProto::PrintToVectorString(std::stringstream &ss,
+                                         utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(type),
+                                 NAME_EXIST_VALUE(doc_string), NAME_EXIST_VALUE(metadata_props));
 }
 
 // AttributeProto
@@ -1161,46 +1178,55 @@ void AttributeProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, graphs)
   WRITE_REPEATED_FIELD(options, stream, type_protos)
 }
-void AttributeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
-    READ_BEGIN(options, stream, AttributeProto)               //
-    READ_FIELD(options, stream, name)                         //
-    READ_FIELD(options, stream, ref_attr_name)                //
-    READ_ENUM_FIELD(options, stream, type)                    //
-    READ_FIELD(options, stream, doc_string)                   //
-    READ_FIELD(options, stream, f)                            //
-    READ_FIELD(options, stream, i)                            //
-    READ_FIELD(options, stream, s)                            //
-    READ_OPTIONAL_PROTO_FIELD(options, stream, t)             //
-    READ_OPTIONAL_PROTO_FIELD(options, stream, sparse_tensor) //
-    READ_OPTIONAL_PROTO_FIELD(options, stream, g)             //
-    READ_OPTIONAL_PROTO_FIELD(options, stream, tp)            //
-    READ_REPEATED_FIELD(options, stream, floats)              //
-    READ_REPEATED_FIELD(options, stream, ints)                //
-    READ_REPEATED_FIELD(options, stream, strings)             //
-    READ_REPEATED_FIELD(options, stream, tensors)             //
-    READ_REPEATED_FIELD(options, stream, sparse_tensors)      //
-    READ_REPEATED_FIELD(options, stream, graphs)              //
-    READ_REPEATED_FIELD(options, stream, type_protos)         //
-    READ_END(options, stream, AttributeProto)                 //
-} std::vector<std::string> AttributeProto::PrintToVectorString(utils::PrintOptions &options) const {
+void AttributeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, AttributeProto)               //
+  READ_FIELD(options, stream, name)                         //
+  READ_FIELD(options, stream, ref_attr_name)                //
+  READ_ENUM_FIELD(options, stream, type)                    //
+  READ_FIELD(options, stream, doc_string)                   //
+  READ_FIELD(options, stream, f)                            //
+  READ_FIELD(options, stream, i)                            //
+  READ_FIELD(options, stream, s)                            //
+  READ_OPTIONAL_PROTO_FIELD(options, stream, t)             //
+  READ_OPTIONAL_PROTO_FIELD(options, stream, sparse_tensor) //
+  READ_OPTIONAL_PROTO_FIELD(options, stream, g)             //
+  READ_OPTIONAL_PROTO_FIELD(options, stream, tp)            //
+  READ_REPEATED_FIELD(options, stream, floats)              //
+  READ_REPEATED_FIELD(options, stream, ints)                //
+  READ_REPEATED_FIELD(options, stream, strings)             //
+  READ_REPEATED_FIELD(options, stream, tensors)             //
+  READ_REPEATED_FIELD(options, stream, sparse_tensors)      //
+  READ_REPEATED_FIELD(options, stream, graphs)              //
+  READ_REPEATED_FIELD(options, stream, type_protos)         //
+  READ_END(options, stream, AttributeProto)                 //
+}
+void AttributeProto::PrintToVectorString(std::stringstream &ss,
+                                         utils::PrintOptions &options) const {
   switch (type_) {
   case AttributeType::UNDEFINED:
-    return {MakeString("{", name_.as_string(), ": UNDEFINED }")};
+    ss << "{ " << name_.as_string() << ": UNDEFINED }";
+    return;
   case AttributeType::FLOAT:
-    return {MakeString("{", name_.as_string(), ": ", has_f() ? MakeString(*f_) : "?", "}")};
+    ss << "{ " << name_.as_string() << ": " << (has_f() ? MakeString(*f_) : "?") << " }";
+    return;
   case AttributeType::INT:
-    return {MakeString("{", name_.as_string(), ": ", has_i() ? MakeString(*i_) : "?", "}")};
+    ss << "{ " << name_.as_string() << ": " << (has_i() ? MakeString(*i_) : "?") << " }";
+    return;
   case AttributeType::STRING:
-    return {MakeString("{", name_.as_string(), ": ", s_.as_string(), "}")};
+    ss << "{ " << name_.as_string() << ": " << s_.as_string() << " }";
+    return;
   case AttributeType::FLOATS:
-    return {MakeString("{", name_.as_string(), ": ", write_as_string(options, floats_), "}")};
+    ss << "{ " << name_.as_string() << ": " << write_as_string(options, floats_) << " }";
+    return;
   case AttributeType::INTS:
-    return {MakeString("{", name_.as_string(), ": ", write_as_string(options, ints_), "}")};
+    ss << "{ " << name_.as_string() << ": " << write_as_string(options, ints_) << " }";
+    return;
   case AttributeType::STRINGS:
-    return {MakeString("{", name_.as_string(), ": ", write_as_string(options, strings_), "}")};
+    ss << "{ " << name_.as_string() << ": " << write_as_string(options, strings_) << " }";
+    return;
   default:
-    return write_proto_into_vector_string(
-        options, NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(ref_attr_name),
+    write_proto_into_vector_string(
+        ss, options, NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(ref_attr_name),
         NAME_EXIST_VALUE(doc_string), NAME_EXIST_VALUE(type), NAME_EXIST_VALUE(f),
         NAME_EXIST_VALUE(i), NAME_EXIST_VALUE(s), NAME_EXIST_VALUE(t),
         NAME_EXIST_VALUE(sparse_tensor), NAME_EXIST_VALUE(g), NAME_EXIST_VALUE(floats),
@@ -1241,22 +1267,23 @@ void NodeProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, metadata_props)
   WRITE_REPEATED_FIELD(options, stream, device_configurations)
 }
-void NodeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
-    READ_BEGIN(options, stream, NodeProto)                      //
-    READ_REPEATED_FIELD(options, stream, input)                 //
-    READ_REPEATED_FIELD(options, stream, output)                //
-    READ_FIELD(options, stream, name)                           //
-    READ_FIELD(options, stream, op_type)                        //
-    READ_REPEATED_FIELD(options, stream, attribute)             //
-    READ_FIELD(options, stream, domain)                         //
-    READ_FIELD(options, stream, overload)                       //
-    READ_FIELD(options, stream, doc_string)                     //
-    READ_REPEATED_FIELD(options, stream, metadata_props)        //
-    READ_REPEATED_FIELD(options, stream, device_configurations) //
-    READ_END(options, stream, NodeProto)                        //
-} std::vector<std::string> NodeProto::PrintToVectorString(utils::PrintOptions &options) const {
-  return write_proto_into_vector_string(
-      options, NAME_EXIST_VALUE(input), NAME_EXIST_VALUE(output), NAME_EXIST_VALUE(name),
+void NodeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, NodeProto)                      //
+  READ_REPEATED_FIELD(options, stream, input)                 //
+  READ_REPEATED_FIELD(options, stream, output)                //
+  READ_FIELD(options, stream, name)                           //
+  READ_FIELD(options, stream, op_type)                        //
+  READ_REPEATED_FIELD(options, stream, attribute)             //
+  READ_FIELD(options, stream, domain)                         //
+  READ_FIELD(options, stream, overload)                       //
+  READ_FIELD(options, stream, doc_string)                     //
+  READ_REPEATED_FIELD(options, stream, metadata_props)        //
+  READ_REPEATED_FIELD(options, stream, device_configurations) //
+  READ_END(options, stream, NodeProto)                        //
+}
+void NodeProto::PrintToVectorString(std::stringstream &ss, utils::PrintOptions &options) const {
+  write_proto_into_vector_string(
+      ss, options, NAME_EXIST_VALUE(input), NAME_EXIST_VALUE(output), NAME_EXIST_VALUE(name),
       NAME_EXIST_VALUE(op_type), NAME_EXIST_VALUE(attribute), NAME_EXIST_VALUE(domain),
       NAME_EXIST_VALUE(overload), NAME_EXIST_VALUE(doc_string), NAME_EXIST_VALUE(metadata_props),
       NAME_EXIST_VALUE(device_configurations));
@@ -1293,22 +1320,23 @@ void GraphProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, quantization_annotation)
   WRITE_REPEATED_FIELD(options, stream, metadata_props)
 }
-void GraphProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
-    READ_BEGIN(options, stream, GraphProto)                       //
-    READ_REPEATED_FIELD(options, stream, node)                    //
-    READ_FIELD(options, stream, name)                             //
-    READ_REPEATED_FIELD(options, stream, initializer)             //
-    READ_REPEATED_FIELD(options, stream, sparse_initializer)      //
-    READ_FIELD(options, stream, doc_string)                       //
-    READ_REPEATED_FIELD(options, stream, input)                   //
-    READ_REPEATED_FIELD(options, stream, output)                  //
-    READ_REPEATED_FIELD(options, stream, value_info)              //
-    READ_REPEATED_FIELD(options, stream, quantization_annotation) //
-    READ_REPEATED_FIELD(options, stream, metadata_props)          //
-    READ_END(options, stream, GraphProto)                         //  // NOLINT
-} std::vector<std::string> GraphProto::PrintToVectorString(utils::PrintOptions &options) const {
-  return write_proto_into_vector_string(
-      options, NAME_EXIST_VALUE(doc_string), NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(input),
+void GraphProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, GraphProto)                       //
+  READ_REPEATED_FIELD(options, stream, node)                    //
+  READ_FIELD(options, stream, name)                             //
+  READ_REPEATED_FIELD(options, stream, initializer)             //
+  READ_REPEATED_FIELD(options, stream, sparse_initializer)      //
+  READ_FIELD(options, stream, doc_string)                       //
+  READ_REPEATED_FIELD(options, stream, input)                   //
+  READ_REPEATED_FIELD(options, stream, output)                  //
+  READ_REPEATED_FIELD(options, stream, value_info)              //
+  READ_REPEATED_FIELD(options, stream, quantization_annotation) //
+  READ_REPEATED_FIELD(options, stream, metadata_props)          //
+  READ_END(options, stream, GraphProto)                         //  // NOLINT
+}
+void GraphProto::PrintToVectorString(std::stringstream &ss, utils::PrintOptions &options) const {
+  write_proto_into_vector_string(
+      ss, options, NAME_EXIST_VALUE(doc_string), NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(input),
       NAME_EXIST_VALUE(output), NAME_EXIST_VALUE(metadata_props), NAME_EXIST_VALUE(node),
       NAME_EXIST_VALUE(initializer), NAME_EXIST_VALUE(sparse_initializer),
       NAME_EXIST_VALUE(value_info), NAME_EXIST_VALUE(quantization_annotation));
@@ -1349,28 +1377,29 @@ void FunctionProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, value_info)
   WRITE_REPEATED_FIELD(options, stream, metadata_props)
 }
-void FunctionProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
-    READ_BEGIN(options, stream, FunctionProto)            //
-    READ_FIELD(options, stream, name)                     //
-    READ_REPEATED_FIELD(options, stream, input)           //
-    READ_REPEATED_FIELD(options, stream, output)          //
-    READ_REPEATED_FIELD(options, stream, attribute)       //
-    READ_REPEATED_FIELD(options, stream, attribute_proto) //
-    READ_REPEATED_FIELD(options, stream, node)            //
-    READ_FIELD(options, stream, doc_string)               //
-    READ_REPEATED_FIELD(options, stream, opset_import)    //
-    READ_FIELD(options, stream, domain)                   //
-    READ_FIELD(options, stream, overload)                 //
-    READ_REPEATED_FIELD(options, stream, value_info)      //
-    READ_REPEATED_FIELD(options, stream, metadata_props)  //
-    READ_END(options, stream, FunctionProto)              //  // NOLINT
-} std::vector<std::string> FunctionProto::PrintToVectorString(utils::PrintOptions &options) const {
-  return write_proto_into_vector_string(
-      options, NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(domain), NAME_EXIST_VALUE(overload),
-      NAME_EXIST_VALUE(doc_string), NAME_EXIST_VALUE(input), NAME_EXIST_VALUE(output),
-      NAME_EXIST_VALUE(opset_import), NAME_EXIST_VALUE(attribute),
-      NAME_EXIST_VALUE(attribute_proto), NAME_EXIST_VALUE(node), NAME_EXIST_VALUE(value_info),
-      NAME_EXIST_VALUE(metadata_props));
+void FunctionProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, FunctionProto)            //
+  READ_FIELD(options, stream, name)                     //
+  READ_REPEATED_FIELD(options, stream, input)           //
+  READ_REPEATED_FIELD(options, stream, output)          //
+  READ_REPEATED_FIELD(options, stream, attribute)       //
+  READ_REPEATED_FIELD(options, stream, attribute_proto) //
+  READ_REPEATED_FIELD(options, stream, node)            //
+  READ_FIELD(options, stream, doc_string)               //
+  READ_REPEATED_FIELD(options, stream, opset_import)    //
+  READ_FIELD(options, stream, domain)                   //
+  READ_FIELD(options, stream, overload)                 //
+  READ_REPEATED_FIELD(options, stream, value_info)      //
+  READ_REPEATED_FIELD(options, stream, metadata_props)  //
+  READ_END(options, stream, FunctionProto)              //  // NOLINT
+}
+void FunctionProto::PrintToVectorString(std::stringstream &ss, utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(domain),
+                                 NAME_EXIST_VALUE(overload), NAME_EXIST_VALUE(doc_string),
+                                 NAME_EXIST_VALUE(input), NAME_EXIST_VALUE(output),
+                                 NAME_EXIST_VALUE(opset_import), NAME_EXIST_VALUE(attribute),
+                                 NAME_EXIST_VALUE(attribute_proto), NAME_EXIST_VALUE(node),
+                                 NAME_EXIST_VALUE(value_info), NAME_EXIST_VALUE(metadata_props));
 }
 
 // ModelProto
@@ -1414,27 +1443,28 @@ void ModelProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, functions)
   WRITE_REPEATED_FIELD(options, stream, configuration)
 }
-void ModelProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
-    READ_BEGIN(options, stream, ModelProto)              //
-    READ_FIELD(options, stream, ir_version)              //
-    READ_REPEATED_FIELD(options, stream, opset_import)   //
-    READ_FIELD(options, stream, producer_name)           //
-    READ_FIELD(options, stream, producer_version)        //
-    READ_FIELD(options, stream, domain)                  //
-    READ_FIELD(options, stream, model_version)           //
-    READ_FIELD(options, stream, doc_string)              //
-    READ_OPTIONAL_PROTO_FIELD(options, stream, graph)    //
-    READ_REPEATED_FIELD(options, stream, metadata_props) //
-    READ_REPEATED_FIELD(options, stream, functions)      //
-    READ_REPEATED_FIELD(options, stream, configuration)  //
-    READ_END(options, stream, ModelProto)                //  // NOLINT
-} std::vector<std::string> ModelProto::PrintToVectorString(utils::PrintOptions &options) const {
-  return write_proto_into_vector_string(
-      options, NAME_EXIST_VALUE(ir_version), NAME_EXIST_VALUE(opset_import),
-      NAME_EXIST_VALUE(producer_name), NAME_EXIST_VALUE(producer_version), NAME_EXIST_VALUE(domain),
-      NAME_EXIST_VALUE(model_version), NAME_EXIST_VALUE(doc_string), NAME_EXIST_VALUE(graph),
-      NAME_EXIST_VALUE(metadata_props), NAME_EXIST_VALUE(functions),
-      NAME_EXIST_VALUE(configuration));
+void ModelProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, ModelProto)              //
+  READ_FIELD(options, stream, ir_version)              //
+  READ_REPEATED_FIELD(options, stream, opset_import)   //
+  READ_FIELD(options, stream, producer_name)           //
+  READ_FIELD(options, stream, producer_version)        //
+  READ_FIELD(options, stream, domain)                  //
+  READ_FIELD(options, stream, model_version)           //
+  READ_FIELD(options, stream, doc_string)              //
+  READ_OPTIONAL_PROTO_FIELD(options, stream, graph)    //
+  READ_REPEATED_FIELD(options, stream, metadata_props) //
+  READ_REPEATED_FIELD(options, stream, functions)      //
+  READ_REPEATED_FIELD(options, stream, configuration)  //
+  READ_END(options, stream, ModelProto)                //  // NOLINT
+}
+void ModelProto::PrintToVectorString(std::stringstream &ss, utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(ir_version),
+                                 NAME_EXIST_VALUE(opset_import), NAME_EXIST_VALUE(producer_name),
+                                 NAME_EXIST_VALUE(producer_version), NAME_EXIST_VALUE(domain),
+                                 NAME_EXIST_VALUE(model_version), NAME_EXIST_VALUE(doc_string),
+                                 NAME_EXIST_VALUE(graph), NAME_EXIST_VALUE(metadata_props),
+                                 NAME_EXIST_VALUE(functions), NAME_EXIST_VALUE(configuration));
 }
 
 void ModelProto::SerializeToString(std::string &out,
@@ -1496,21 +1526,23 @@ void SequenceProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, map_values)
   WRITE_REPEATED_FIELD(options, stream, optional_values)
 }
-void SequenceProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
-    READ_BEGIN(options, stream, SequenceProto)                 //
-    READ_FIELD(options, stream, name)                          //
-    READ_ENUM_FIELD(options, stream, elem_type)                //
-    READ_REPEATED_FIELD(options, stream, tensor_values)        //
-    READ_REPEATED_FIELD(options, stream, sparse_tensor_values) //
-    READ_REPEATED_FIELD(options, stream, sequence_values)      //
-    READ_REPEATED_FIELD(options, stream, map_values)           //
-    READ_REPEATED_FIELD(options, stream, optional_values)      //
-    READ_END(options, stream, SequenceProto)                   // NOLINT
-} std::vector<std::string> SequenceProto::PrintToVectorString(utils::PrintOptions &options) const {
-  return write_proto_into_vector_string(
-      options, NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(elem_type), NAME_EXIST_VALUE(tensor_values),
-      NAME_EXIST_VALUE(sparse_tensor_values), NAME_EXIST_VALUE(sequence_values),
-      NAME_EXIST_VALUE(map_values), NAME_EXIST_VALUE(optional_values));
+void SequenceProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, SequenceProto)                 //
+  READ_FIELD(options, stream, name)                          //
+  READ_ENUM_FIELD(options, stream, elem_type)                //
+  READ_REPEATED_FIELD(options, stream, tensor_values)        //
+  READ_REPEATED_FIELD(options, stream, sparse_tensor_values) //
+  READ_REPEATED_FIELD(options, stream, sequence_values)      //
+  READ_REPEATED_FIELD(options, stream, map_values)           //
+  READ_REPEATED_FIELD(options, stream, optional_values)      //
+  READ_END(options, stream, SequenceProto)                   // NOLINT
+}
+void SequenceProto::PrintToVectorString(std::stringstream &ss, utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(elem_type),
+                                 NAME_EXIST_VALUE(tensor_values),
+                                 NAME_EXIST_VALUE(sparse_tensor_values),
+                                 NAME_EXIST_VALUE(sequence_values), NAME_EXIST_VALUE(map_values),
+                                 NAME_EXIST_VALUE(optional_values));
 }
 
 // MapProto
@@ -1534,18 +1566,19 @@ void MapProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, string_keys)
   WRITE_FIELD(options, stream, values)
 }
-void MapProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
-    READ_BEGIN(options, stream, MapProto)             //
-    READ_FIELD(options, stream, name)                 //
-    READ_ENUM_FIELD(options, stream, key_type)        //
-    READ_REPEATED_FIELD(options, stream, keys)        //
-    READ_REPEATED_FIELD(options, stream, string_keys) //
-    READ_FIELD(options, stream, values)               //
-    READ_END(options, stream, MapProto)               // NOLINT
-} std::vector<std::string> MapProto::PrintToVectorString(utils::PrintOptions &options) const {
-  return write_proto_into_vector_string(options, NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(key_type),
-                                        NAME_EXIST_VALUE(keys), NAME_EXIST_VALUE(string_keys),
-                                        NAME_EXIST_VALUE(values));
+void MapProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, MapProto)             //
+  READ_FIELD(options, stream, name)                 //
+  READ_ENUM_FIELD(options, stream, key_type)        //
+  READ_REPEATED_FIELD(options, stream, keys)        //
+  READ_REPEATED_FIELD(options, stream, string_keys) //
+  READ_FIELD(options, stream, values)               //
+  READ_END(options, stream, MapProto)               // NOLINT
+}
+void MapProto::PrintToVectorString(std::stringstream &ss, utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(key_type),
+                                 NAME_EXIST_VALUE(keys), NAME_EXIST_VALUE(string_keys),
+                                 NAME_EXIST_VALUE(values));
 }
 
 // OptionalProto
@@ -1573,21 +1606,23 @@ void OptionalProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, map_value)
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, optional_value)
 }
-void OptionalProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
-    READ_BEGIN(options, stream, OptionalProto)                      //
-    READ_FIELD(options, stream, name)                               //
-    READ_ENUM_FIELD(options, stream, elem_type)                     //
-    READ_OPTIONAL_PROTO_FIELD(options, stream, tensor_value)        //
-    READ_OPTIONAL_PROTO_FIELD(options, stream, sparse_tensor_value) //
-    READ_OPTIONAL_PROTO_FIELD(options, stream, sequence_value)      //
-    READ_OPTIONAL_PROTO_FIELD(options, stream, map_value)           //
-    READ_OPTIONAL_PROTO_FIELD(options, stream, optional_value)      //
-    READ_END(options, stream, OptionalProto)                        // NOLINT
-} std::vector<std::string> OptionalProto::PrintToVectorString(utils::PrintOptions &options) const {
-  return write_proto_into_vector_string(
-      options, NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(elem_type), NAME_EXIST_VALUE(tensor_value),
-      NAME_EXIST_VALUE(sparse_tensor_value), NAME_EXIST_VALUE(sequence_value),
-      NAME_EXIST_VALUE(map_value), NAME_EXIST_VALUE(optional_value));
+void OptionalProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, OptionalProto)                      //
+  READ_FIELD(options, stream, name)                               //
+  READ_ENUM_FIELD(options, stream, elem_type)                     //
+  READ_OPTIONAL_PROTO_FIELD(options, stream, tensor_value)        //
+  READ_OPTIONAL_PROTO_FIELD(options, stream, sparse_tensor_value) //
+  READ_OPTIONAL_PROTO_FIELD(options, stream, sequence_value)      //
+  READ_OPTIONAL_PROTO_FIELD(options, stream, map_value)           //
+  READ_OPTIONAL_PROTO_FIELD(options, stream, optional_value)      //
+  READ_END(options, stream, OptionalProto)                        // NOLINT
+}
+void OptionalProto::PrintToVectorString(std::stringstream &ss, utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(elem_type),
+                                 NAME_EXIST_VALUE(tensor_value),
+                                 NAME_EXIST_VALUE(sparse_tensor_value),
+                                 NAME_EXIST_VALUE(sequence_value), NAME_EXIST_VALUE(map_value),
+                                 NAME_EXIST_VALUE(optional_value));
 }
 
 // Convenience builder methods for proto classes.

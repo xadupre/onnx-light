@@ -47,7 +47,7 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.23.2
         env:
-          CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-* cp313t-* cp314-* cp314t-*"
+          CIBW_BUILD: "cp310-* cp311-* cp312-* cp313t-* cp314t-*"
           CIBW_ARCHS: ${{ matrix.arch }}
           # The default cibuildwheel manylinux2014 image ships GCC 10, which
           # rejects some of our recursive container templates (e.g. the
@@ -116,7 +116,7 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.23.2
         env:
-          CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-* cp313t-* cp314-* cp314t-*"
+          CIBW_BUILD: "cp310-* cp311-* cp312-* cp313t-* cp314t-*"
           CIBW_ARCHS: ${{ matrix.arch }}
           CIBW_ENVIRONMENT: >
             CMAKE_BUILD_PARALLEL_LEVEL=${{ steps.cpu_count.outputs.count }}
@@ -169,7 +169,7 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.23.2
         env:
-          CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-* cp313t-* cp314-* cp314t-*"
+          CIBW_BUILD: "cp310-* cp311-* cp312-* cp313t-* cp314t-*"
           CIBW_ARCHS: universal2
           # Bump the macOS deployment target high enough to satisfy the
           # minimum target of Homebrew's ``libcrypto.3.dylib`` (which is

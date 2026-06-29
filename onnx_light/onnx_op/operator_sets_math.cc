@@ -966,7 +966,27 @@ max(0,x) + min(0,alpha*(exp(x/alpha)-1))
 ```
 )DOC";
   std::vector<LightOpSchema> schemas;
-  schemas.reserve(1);
+  schemas.reserve(2);
+  schemas.push_back(LightOpSchema(
+      "Celu", kOnnxDomain, 28, kCeluDoc,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T",
+           {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble},
+           "Constrain input and output types to float tensors."},
+      },
+      {
+          {"alpha",
+           "The Alpha value in Celu formula which control the shape of "
+           "the unit. The default value is 1.0.",
+           AttributeType::FLOAT, /*required=*/false, 1.0},
+      },
+      /*has_function_implementation=*/true));
   schemas.push_back(LightOpSchema(
       "Celu", kOnnxDomain, 12, kCeluDoc,
       {

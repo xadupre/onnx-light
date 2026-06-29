@@ -48,12 +48,6 @@
 #include "onnx_lib/string_utils.h"
 #include "onnx_lib/version_converter/internal_symbol.h"
 
-#ifndef ONNX_DISALLOW_COPY_AND_ASSIGN
-#define ONNX_DISALLOW_COPY_AND_ASSIGN(TypeName)                                                    \
-  TypeName(const TypeName &) = delete;                                                             \
-  TypeName &operator=(const TypeName &) = delete
-#endif // ONNX_DISALLOW_COPY_AND_ASSIGN
-
 namespace ONNX_LIGHT_NAMESPACE {
 
 // internal/private API
@@ -100,9 +94,7 @@ class ResourceGuard final {
   std::function<void()> destructor_;
 
 public:
-  ONNX_DISALLOW_COPY_AND_ASSIGN(ResourceGuard);
-  ResourceGuard(ResourceGuard &&) = delete;
-  ResourceGuard &operator=(ResourceGuard &&) = delete;
+  ONNX_DISALLOW_COPY_ASSIGNMENT_AND_MOVE(ResourceGuard);
 
   explicit ResourceGuard(std::function<void()> destructor) : destructor_(std::move(destructor)) {}
 
@@ -442,7 +434,7 @@ using NodeKind = Symbol;
  * @c Value objects are owned by their @ref Graph; do not delete them manually.
  */
 struct Value final {
-  ONNX_DISALLOW_COPY_AND_ASSIGN(Value);
+  ONNX_DISALLOW_COPY_AND_ASSIGNMENT(Value);
   /**
    * @brief Constructs a value produced by @p node_ at output position @p offset_.
    */
@@ -598,7 +590,7 @@ public:
  * use @ref destroy() instead.
  */
 struct Node : public Attributes<Node> {
-  ONNX_DISALLOW_COPY_AND_ASSIGN(Node);
+  ONNX_DISALLOW_COPY_AND_ASSIGNMENT(Node);
   friend struct Graph;
   friend struct Value;
 
@@ -1229,7 +1221,7 @@ public:
  * initializers that are not required to appear in the input list.
  */
 struct Graph final {
-  ONNX_DISALLOW_COPY_AND_ASSIGN(Graph);
+  ONNX_DISALLOW_COPY_AND_ASSIGNMENT(Graph);
   friend struct Node;
   friend struct Value;
 

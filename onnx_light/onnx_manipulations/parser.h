@@ -30,6 +30,9 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 
+float LocaleIndependentStof(const std::string &s);
+double LocaleIndependentStod(const std::string &s);
+
 /// List of identifiers used in parser productions.
 using IdList = std::vector<std::string>;
 
@@ -383,7 +386,7 @@ public:
     switch (literal.type) {
     case LiteralType::INT_LITERAL:
     case LiteralType::FLOAT_LITERAL:
-      val = std::stof(literal.value);
+      val = LocaleIndependentStof(literal.value);
       break;
     default:
       return ParseError("Unexpected literal type.");
@@ -398,7 +401,7 @@ public:
     switch (literal.type) {
     case LiteralType::INT_LITERAL:
     case LiteralType::FLOAT_LITERAL:
-      val = std::stod(literal.value);
+      val = LocaleIndependentStod(literal.value);
       break;
     default:
       return ParseError("Unexpected literal type.");

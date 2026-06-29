@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import locale
+import platform
 import unittest
 
 from onnx_light.onnx import parser
@@ -51,6 +53,41 @@ class TestParser(ExtTestCase):
         self.assertTrue(attr.has_f())
         self.assertFalse(attr.has_i())
         self.assertEqual(attr.f, 2.0)
+
+    def test_locale_independent_float_parsing(self):
+        original_locale = locale.setlocale(locale.LC_NUMERIC, None)
+
+        is_windows = platform.system() == "Windows"
+        candidates = (
+            ("German_Germany.1252", "French_France.1252")
+            if is_windows
+            else ("de_DE.UTF-8", "fr_FR.UTF-8")
+        )
+        locale_set = False
+        for candidate in candidates:
+            try:
+                locale.setlocale(locale.LC_NUMERIC, candidate)
+                locale_set = True
+                break
+            except locale.Error:
+                continue
+
+        if not locale_set:
+            locale.setlocale(locale.LC_NUMERIC, original_locale)
+            self.skipTest("No locale with comma decimal separator available")
+
+        try:
+            model = parser.parse_model("""
+                <ir_version: 7, opset_import: ["" : 13]>
+                agraph (float[1, 5] X) => (float[1, 5] Y) {
+                    Y = LeakyRelu <alpha = 0.123> (X)
+                }
+                """)
+            node = model.graph.node[0]
+            self.assertEqual(node.attribute[0].name, "alpha")
+            self.assertAlmostEqual(node.attribute[0].f, 0.123, places=5)
+        finally:
+            locale.setlocale(locale.LC_NUMERIC, original_locale)
 
     def test_parse_model_error(self):
         with self.assertRaises(ValueError) as cm:

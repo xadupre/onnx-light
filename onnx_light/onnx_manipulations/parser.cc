@@ -7,11 +7,19 @@
 
 #include "parser.h"
 
+#if !defined(__cpp_lib_to_chars) || __cpp_lib_to_chars < 201611L
+#include <locale.h> // NOLINT(modernize-deprecated-headers)
+#endif
+
 #include <algorithm>
 #include <cctype>
+#include <cerrno>
+#include <charconv>
+#include <cstdlib>
 #include <limits>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <unordered_map>
 
 #include "onnx_lib/common/common.h"
@@ -21,6 +29,103 @@
 #define MATCH(...) CHECK_PARSER_STATUS(Match(__VA_ARGS__))
 
 namespace ONNX_LIGHT_NAMESPACE {
+
+#if defined(__cpp_lib_to_chars) && __cpp_lib_to_chars >= 201611L
+
+float LocaleIndependentStof(const std::string &s) {
+  float val = 0.0f;
+  const char *const begin = s.data();
+  const char *const end = begin + s.size();
+  const auto result = std::from_chars(begin, end, val);
+  if (result.ec != std::errc{} || result.ptr != end) {
+    ONNX_THROW("Failed to parse float from string: " + s);
+  }
+  return val;
+}
+
+double LocaleIndependentStod(const std::string &s) {
+  double val = 0.0;
+  const char *const begin = s.data();
+  const char *const end = begin + s.size();
+  const auto result = std::from_chars(begin, end, val);
+  if (result.ec != std::errc{} || result.ptr != end) {
+    ONNX_THROW("Failed to parse double from string: " + s);
+  }
+  return val;
+}
+
+#else
+
+namespace {
+
+#ifdef _WIN32
+struct CLocale {
+  _locale_t loc;
+  CLocale() : loc(_create_locale(LC_ALL, "C")) {}
+  ~CLocale() {
+    if (loc)
+      _free_locale(loc);
+  }
+  CLocale(const CLocale &) = delete;
+  CLocale &operator=(const CLocale &) = delete;
+};
+#else
+struct CLocale {
+  locale_t loc;
+  CLocale() : loc(newlocale(LC_ALL_MASK, "C", nullptr)) {}
+  ~CLocale() {
+    if (loc)
+      freelocale(loc);
+  }
+  CLocale(const CLocale &) = delete;
+  CLocale &operator=(const CLocale &) = delete;
+};
+#endif
+
+const CLocale &GetCLocale() {
+  static const CLocale instance;
+  return instance;
+}
+
+} // namespace
+
+float LocaleIndependentStof(const std::string &s) {
+  const auto &cloc = GetCLocale();
+  if (!cloc.loc) {
+    ONNX_THROW("Failed to create C locale for float parsing");
+  }
+  char *end = nullptr;
+  errno = 0;
+#ifdef _WIN32
+  const float val = _strtof_l(s.c_str(), &end, cloc.loc);
+#else
+  const float val = strtof_l(s.c_str(), &end, cloc.loc);
+#endif
+  if (end == s.c_str() || end != s.c_str() + s.size() || errno == ERANGE) {
+    ONNX_THROW("Failed to parse float from string: " + s);
+  }
+  return val;
+}
+
+double LocaleIndependentStod(const std::string &s) {
+  const auto &cloc = GetCLocale();
+  if (!cloc.loc) {
+    ONNX_THROW("Failed to create C locale for double parsing");
+  }
+  char *end = nullptr;
+  errno = 0;
+#ifdef _WIN32
+  const double val = _strtod_l(s.c_str(), &end, cloc.loc);
+#else
+  const double val = strtod_l(s.c_str(), &end, cloc.loc);
+#endif
+  if (end == s.c_str() || end != s.c_str() + s.size() || errno == ERANGE) {
+    ONNX_THROW("Failed to parse double from string: " + s);
+  }
+  return val;
+}
+
+#endif
 
 Common::Status ParserBase::Parse(Literal &result) {
   bool decimal_point = false;
@@ -71,7 +176,8 @@ Common::Status ParserBase::Parse(Literal &result) {
         ++next_;
       }
       ONNX_TRY {
-        static_cast<void>(std::stof(std::string(from, static_cast<size_t>(next_ - from))));
+        static_cast<void>(
+            LocaleIndependentStof(std::string(from, static_cast<size_t>(next_ - from))));
         result.type = LiteralType::FLOAT_LITERAL;
         result.value = std::string(from, static_cast<size_t>(next_ - from));
       }
@@ -591,7 +697,7 @@ Common::Status OnnxParser::ParseSingleAttributeValue(AttributeProto &attr,
         Literal literal;
         PARSE_TOKEN(literal);
         attr.set_type(AttributeProto::AttributeType::FLOAT);
-        attr.set_f(std::stof(literal.value));
+        attr.set_f(LocaleIndependentStof(literal.value));
       } else {
         attr.set_type(AttributeProto::AttributeType::GRAPH);
         PARSE(attr.ref_g());
@@ -609,11 +715,11 @@ Common::Status OnnxParser::ParseSingleAttributeValue(AttributeProto &attr,
       return ParseError("Internal error");
     case LiteralType::INT_LITERAL:
       attr.set_type(AttributeProto::AttributeType::INT);
-      attr.set_i(std::stol(literal.value));
+      attr.set_i(std::stoll(literal.value));
       break;
     case LiteralType::FLOAT_LITERAL:
       attr.set_type(AttributeProto::AttributeType::FLOAT);
-      attr.set_f(std::stof(literal.value));
+      attr.set_f(LocaleIndependentStof(literal.value));
       break;
     case LiteralType::STRING_LITERAL:
       attr.set_type(AttributeProto::AttributeType::STRING);

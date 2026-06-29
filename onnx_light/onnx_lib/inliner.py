@@ -5,7 +5,8 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
-from ..onnx_py import _onnxpyprotolib as _C  # type: ignore
+from ..onnx_py import _onnxpyprotoop as _P, _onnxpyprotolib as _C  # type: ignore
+from ._proto_compat import coerce_proto
 
 _inliner = _C.inliner  # type: ignore
 # UntypedModelProto aliases _onnxpy.ModelProto, which is runtime-only for type checkers.
@@ -23,7 +24,7 @@ def inline_local_functions(
     Raises:
         checker.ValidationError: If the model contains cyclic function references.
     """
-    return _inliner.inline_local_functions(model, convert_version)
+    return _inliner.inline_local_functions(coerce_proto(model, _P.ModelProto), convert_version)
 
 
 def inline_selected_functions(
@@ -49,5 +50,9 @@ def inline_selected_functions(
     """
     function_ids = list(functions)
     if inline_schema_functions:
-        return _inliner.inline_selected_functions(model, function_ids, exclude)
-    return _inliner.inline_selected_local_functions(model, function_ids, exclude)
+        return _inliner.inline_selected_functions(
+            coerce_proto(model, _P.ModelProto), function_ids, exclude
+        )
+    return _inliner.inline_selected_local_functions(
+        coerce_proto(model, _P.ModelProto), function_ids, exclude
+    )

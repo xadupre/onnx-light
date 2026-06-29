@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..onnx_py import _onnxpyprotolib as _C  # type: ignore
+from ..onnx_py import _onnxpyprotoop as _P, _onnxpyprotolib as _C  # type: ignore
+from ._proto_compat import coerce_proto
 
 if TYPE_CHECKING:
     from . import ModelProto
@@ -25,4 +26,4 @@ def convert_version(model: ModelProto, target_version: int) -> ModelProto:
     Raises:
         ConvertError: If the conversion cannot be completed.
     """
-    return _vc.convert_version(model, target_version)
+    return _vc.convert_version(coerce_proto(model, _P.ModelProto), target_version)

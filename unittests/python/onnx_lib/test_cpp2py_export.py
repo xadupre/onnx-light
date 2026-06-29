@@ -1,6 +1,8 @@
 import unittest
 
 from onnx_light.ext_test_case import ExtTestCase
+import onnx
+import onnx.helper
 import onnx_light.onnx.checker as checker
 import onnx_light.onnx.defs as defs
 import onnx_light.onnx.helper as oh
@@ -152,6 +154,33 @@ class TestCheckerSubmodule(ExtTestCase):
         item.value = "2"
         with self.assertRaises(checker.ValidationError):
             checker.check_model(model)
+
+    def test_check_model_accepts_upstream_model_proto(self):
+        """Tests checker.check_model accepts an upstream onnx ModelProto."""
+        graph = onnx.helper.make_graph(
+            [onnx.helper.make_node("Relu", ["X"], ["Y"])],
+            "test",
+            [onnx.helper.make_tensor_value_info("X", onnx.TensorProto.FLOAT, [1, 2])],
+            [onnx.helper.make_tensor_value_info("Y", onnx.TensorProto.FLOAT, [1, 2])],
+        )
+        model = onnx.helper.make_model(graph, producer_name="test")
+        checker.check_model(model)
+
+    def test_check_model_proto_like_conversion_errors_raise_type_error(self):
+        """Tests proto-like conversion failures raise TypeError after SerializeToString runs."""
+
+        class BadModelProto:
+            def __init__(self):
+                self.called = False
+
+            def SerializeToString(self):
+                self.called = True
+                return 3
+
+        bad = BadModelProto()
+        with self.assertRaises(TypeError):
+            checker.check_model(bad)
+        self.assertTrue(bad.called)
 
 
 if __name__ == "__main__":

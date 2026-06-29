@@ -1,7 +1,8 @@
 # source: https://github.com/onnx/onnx/blob/main/onnx/shape_inference.py
 from __future__ import annotations
 
-from ..onnx_py import _onnxpyprotolib as _C  # type: ignore
+from ..onnx_py import _onnxpyprotoop as _P, _onnxpyprotolib as _C  # type: ignore
+from ._proto_compat import coerce_proto, copy_proto_back
 
 _shape_inference = _C.shape_inference  # type: ignore
 
@@ -29,7 +30,11 @@ def infer_function_output_types(function, input_types: list, attributes: list) -
     Raises:
         InferenceError: If node-level type or shape inference fails.
     """
-    result = _C.shape_inference.infer_function_output_types(function, input_types, attributes)  # type: ignore
+    result = _C.shape_inference.infer_function_output_types(
+        coerce_proto(function, _P.FunctionProto),
+        [coerce_proto(t, _P.TypeProto) for t in input_types],
+        [coerce_proto(a, _P.AttributeProto) for a in attributes],
+    )  # type: ignore
     return result
 
 
@@ -93,8 +98,10 @@ def infer_shapes(model, check_type=False, strict_mode=False, data_prop=False):
     :returns: The same model with inferred shapes/types.
     :raises InferenceError: If shape inference fails on any node.
     """
-    _shape_inference.infer_shapes(model, check_type, strict_mode, data_prop)
-    return model
+    converted = coerce_proto(model, _P.ModelProto)
+    _shape_inference.infer_shapes(converted, check_type, strict_mode, data_prop)
+    copy_proto_back(model, converted)
+    return model if model is not converted else converted
 
 
 def infer_shapes_path(

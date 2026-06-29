@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from ..onnx_py import _onnxpyprotoop as _P, _onnxpyprotolib as _C  # type: ignore
+from ._proto_compat import coerce_proto
 
 _checker = _C.checker  # type: ignore
 
@@ -12,7 +13,7 @@ ValidationError = _checker.ValidationError
 
 
 def check_model(
-    model: _C.ModelProto,  # type: ignore
+    model,  # type: ignore
     *,
     full_check: bool = False,
     skip_opset_compatibility_check: bool = False,
@@ -26,6 +27,7 @@ def check_model(
     Raises:
         ValidationError: If the model fails validation.
     """
+    model = coerce_proto(model, _P.ModelProto)
     _checker.check_model(
         model,
         full_check=full_check,
@@ -34,12 +36,13 @@ def check_model(
     )
 
 
-def check_attribute(attribute: _C.AttributeProto) -> None:  # type: ignore
+def check_attribute(attribute) -> None:  # type: ignore
     """Checks an attribute and raises checker.ValidationError on invalid content.
 
     Raises:
         ValidationError: If the attribute is invalid.
     """
+    attribute = coerce_proto(attribute, _P.AttributeProto)
     oneof = [
         attribute.has_f(),
         attribute.has_i(),
@@ -60,30 +63,33 @@ def check_attribute(attribute: _C.AttributeProto) -> None:  # type: ignore
         )
 
 
-def check_sparse_tensor(sparse_tensor: _P.SparseTensorProto) -> None:  # type: ignore
+def check_sparse_tensor(sparse_tensor) -> None:  # type: ignore
     """Checks a sparse tensor and raises checker.ValidationError on invalid content.
 
     Raises:
         ValidationError: If the sparse tensor is invalid.
     """
+    sparse_tensor = coerce_proto(sparse_tensor, _P.SparseTensorProto)
     if len(sparse_tensor.dims) != 2:
         raise ValidationError(f"Only 2D sparse tensors are allowed: {tuple(sparse_tensor.dims)}")
 
 
-def check_graph(graph: _P.GraphProto) -> None:  # type: ignore
+def check_graph(graph) -> None:  # type: ignore
     """Checks a graph and raises checker.ValidationError on invalid content.
 
     Raises:
         ValidationError: If the graph is invalid.
     """
+    graph = coerce_proto(graph, _P.GraphProto)
     if not isinstance(graph, _P.GraphProto):  # type: ignore
         raise ValidationError(f"Expected a GraphProto, got {type(graph)}")
 
 
-def check_function_call_cycles(model: _P.ModelProto) -> None:  # type: ignore
+def check_function_call_cycles(model) -> None:  # type: ignore
     """Checks for cycles in model-local function call graph.
 
     Raises:
         ValidationError: If the model contains cyclic function references.
     """
+    model = coerce_proto(model, _P.ModelProto)
     _checker.check_function_call_cycles(model)

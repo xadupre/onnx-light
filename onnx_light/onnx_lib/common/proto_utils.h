@@ -9,6 +9,7 @@
 #pragma once
 
 #include "onnx_pb.h"
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -17,25 +18,19 @@ namespace ONNX_LIGHT_NAMESPACE {
 /**
  * @brief Returns a human-readable debug representation of a protobuf message.
  *
- * Calls @c PrintToVectorString() on @p proto with default print options and
- * joins the resulting lines with newline characters.
+ * Creates a @c std::stringstream, calls @c PrintToVectorString() on @p proto
+ * with default print options, and returns the accumulated string.
  *
  * @tparam Proto A protobuf-like message type that exposes a
- *               @c PrintToVectorString(utils::PrintOptions&) method.
+ *               @c PrintToVectorString(std::stringstream&, utils::PrintOptions&) method.
  * @param proto  The message to format.
- * @returns A multi-line string representation of @p proto.
+ * @returns A string representation of @p proto.
  */
 template <typename Proto> inline std::string ProtoDebugString(const Proto &proto) {
   utils::PrintOptions options;
-  std::vector<std::string> rows = proto.PrintToVectorString(options);
-  std::string text;
-  for (size_t i = 0; i < rows.size(); ++i) {
-    if (i > 0) {
-      text.push_back('\n');
-    }
-    text.append(rows[i]);
-  }
-  return text;
+  std::stringstream ss;
+  proto.PrintToVectorString(ss, options);
+  return ss.str();
 }
 
 /**

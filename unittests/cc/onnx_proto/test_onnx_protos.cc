@@ -1727,9 +1727,9 @@ TEST(onnx_string, StringStringEntryProto) {
   ONNX_LIGHT_NAMESPACE::StringStringEntryProto proto;
   proto.set_key("test_key");
   proto.set_value("test_value");
-  std::vector<std::string> result = proto.PrintToVectorString(options);
-  ASSERT_EQ(1, result.size());
-  std::string serialized = result[0];
+  std::stringstream ss_result;
+  proto.PrintToVectorString(ss_result, options);
+  std::string serialized = ss_result.str();
   EXPECT_TRUE(serialized.find("test_key") != std::string::npos);
   EXPECT_TRUE(serialized.find("test_value") != std::string::npos);
 }
@@ -1741,9 +1741,9 @@ TEST(onnx_string, IntIntListEntryProto) {
   proto.ref_value().push_back(1);
   proto.ref_value().push_back(2);
   proto.ref_value().push_back(3);
-  std::vector<std::string> result = proto.PrintToVectorString(options);
-  ASSERT_EQ(4, result.size());
-  std::string serialized = utils::join_string(result, "\n");
+  std::stringstream ss_result;
+  proto.PrintToVectorString(ss_result, options);
+  std::string serialized = ss_result.str();
   EXPECT_TRUE(serialized.find("42") != std::string::npos);
   EXPECT_TRUE(serialized.find("1") != std::string::npos);
   EXPECT_TRUE(serialized.find("2") != std::string::npos);
@@ -1757,9 +1757,9 @@ TEST(onnx_string, TensorAnnotation) {
   auto *entry = proto.add_quant_parameter_tensor_names();
   entry->set_key("scale");
   entry->set_value("scale_tensor");
-  std::vector<std::string> result = proto.PrintToVectorString(options);
-  ASSERT_EQ(6, result.size());
-  std::string serialized = utils::join_string(result, "\n");
+  std::stringstream ss_result;
+  proto.PrintToVectorString(ss_result, options);
+  std::string serialized = ss_result.str();
   EXPECT_TRUE(serialized.find("my_tensor") != std::string::npos);
   EXPECT_TRUE(serialized.find("scale") != std::string::npos);
   EXPECT_TRUE(serialized.find("scale_tensor") != std::string::npos);
@@ -1774,15 +1774,17 @@ TEST(onnx_string, DeviceConfigurationProto) {
   *config.add_device() = "device2";
   *config.add_device() = "device3";
 
-  std::vector<std::string> result = config.PrintToVectorString(options);
+  std::stringstream ss_result;
+  config.PrintToVectorString(ss_result, options);
+  std::string serialized = ss_result.str();
 
-  ASSERT_FALSE(result.empty());
+  ASSERT_FALSE(serialized.empty());
 
   bool foundName = false;
   bool foundNumDevices = false;
   bool foundDevices = false;
 
-  std::string item = utils::join_string(result, "\n");
+  std::string item = serialized;
   if (item.find("name:") != std::string::npos &&
       item.find("test_device_config") != std::string::npos) {
     foundName = true;
@@ -1807,29 +1809,17 @@ TEST(onnx_string, SimpleShardedDimProto) {
   proto.set_dim_param("batch_size");
   proto.set_num_shards(4);
 
-  std::vector<std::string> result = proto.PrintToVectorString(options);
-  ASSERT_FALSE(result.empty());
+  std::stringstream ss_result;
+  proto.PrintToVectorString(ss_result, options);
+  std::string serialized = ss_result.str();
+  ASSERT_FALSE(serialized.empty());
 
-  bool foundDimValue = false;
-  bool foundDimParam = false;
-  bool foundNumShards = false;
-
-  for (const auto &item : result) {
-    if (item.find("dim_value:") != std::string::npos && item.find("100") != std::string::npos) {
-      foundDimValue = true;
-    }
-    if (item.find("dim_param:") != std::string::npos &&
-        item.find("batch_size") != std::string::npos) {
-      foundDimParam = true;
-    }
-    if (item.find("num_shards:") != std::string::npos && item.find("4") != std::string::npos) {
-      foundNumShards = true;
-    }
-  }
-
-  EXPECT_TRUE(foundDimValue);
-  EXPECT_TRUE(foundDimParam);
-  EXPECT_TRUE(foundNumShards);
+  EXPECT_TRUE(serialized.find("dim_value:") != std::string::npos);
+  EXPECT_TRUE(serialized.find("100") != std::string::npos);
+  EXPECT_TRUE(serialized.find("dim_param:") != std::string::npos);
+  EXPECT_TRUE(serialized.find("batch_size") != std::string::npos);
+  EXPECT_TRUE(serialized.find("num_shards:") != std::string::npos);
+  EXPECT_TRUE(serialized.find("4") != std::string::npos);
 }
 
 TEST(onnx_string, ShardedDimProto) {
@@ -1845,23 +1835,14 @@ TEST(onnx_string, ShardedDimProto) {
   simple_dim2->set_dim_param("height");
   simple_dim2->set_num_shards(2);
 
-  std::vector<std::string> result = proto.PrintToVectorString(options);
-  ASSERT_FALSE(result.empty());
+  std::stringstream ss_result;
+  proto.PrintToVectorString(ss_result, options);
+  std::string serialized = ss_result.str();
+  ASSERT_FALSE(serialized.empty());
 
-  bool foundAxis = false;
-  bool foundSimpleSharding = false;
-
-  for (const auto &item : result) {
-    if (item.find("axis:") != std::string::npos && item.find("2") != std::string::npos) {
-      foundAxis = true;
-    }
-    if (item.find("simple_sharding") != std::string::npos) {
-      foundSimpleSharding = true;
-    }
-  }
-
-  EXPECT_TRUE(foundAxis);
-  EXPECT_TRUE(foundSimpleSharding);
+  EXPECT_TRUE(serialized.find("axis:") != std::string::npos);
+  EXPECT_TRUE(serialized.find("2") != std::string::npos);
+  EXPECT_TRUE(serialized.find("simple_sharding") != std::string::npos);
 }
 
 TEST(onnx_string, ShardingSpecProto) {
@@ -1884,34 +1865,16 @@ TEST(onnx_string, ShardingSpecProto) {
   simple_dim->set_dim_value(64);
   simple_dim->set_num_shards(4);
 
-  std::vector<std::string> result = proto.PrintToVectorString(options);
-  ASSERT_FALSE(result.empty());
+  std::stringstream ss_result;
+  proto.PrintToVectorString(ss_result, options);
+  std::string serialized = ss_result.str();
+  ASSERT_FALSE(serialized.empty());
 
-  bool foundTensorName = false;
-  bool foundDevice = false;
-  bool foundMapping = false;
-  bool foundShardedDim = false;
-
-  for (const auto &item : result) {
-    if (item.find("tensor_name:") != std::string::npos &&
-        item.find("sharded_tensor") != std::string::npos) {
-      foundTensorName = true;
-    }
-    if (item.find("device:") != std::string::npos) {
-      foundDevice = true;
-    }
-    if (item.find("index_to_device_group_map") != std::string::npos) {
-      foundMapping = true;
-    }
-    if (item.find("sharded_dim") != std::string::npos) {
-      foundShardedDim = true;
-    }
-  }
-
-  EXPECT_TRUE(foundTensorName);
-  EXPECT_TRUE(foundDevice);
-  EXPECT_TRUE(foundMapping);
-  EXPECT_TRUE(foundShardedDim);
+  EXPECT_TRUE(serialized.find("tensor_name:") != std::string::npos);
+  EXPECT_TRUE(serialized.find("sharded_tensor") != std::string::npos);
+  EXPECT_TRUE(serialized.find("device:") != std::string::npos);
+  EXPECT_TRUE(serialized.find("index_to_device_group_map") != std::string::npos);
+  EXPECT_TRUE(serialized.find("sharded_dim") != std::string::npos);
 }
 
 TEST(onnx_string, NodeDeviceConfigurationProto) {
@@ -1925,29 +1888,16 @@ TEST(onnx_string, NodeDeviceConfigurationProto) {
   spec->ref_device().push_back(0);
   spec->ref_device().push_back(1);
 
-  std::vector<std::string> result = proto.PrintToVectorString(options);
-  ASSERT_FALSE(result.empty());
+  std::stringstream ss_result;
+  proto.PrintToVectorString(ss_result, options);
+  std::string serialized = ss_result.str();
+  ASSERT_FALSE(serialized.empty());
 
-  bool foundConfigId = false;
-  bool foundPipelineStage = false;
-  bool foundShardingSpec = false;
-
-  for (const auto &item : result) {
-    if (item.find("configuration_id:") != std::string::npos &&
-        item.find("node_config_1") != std::string::npos) {
-      foundConfigId = true;
-    }
-    if (item.find("pipeline_stage:") != std::string::npos && item.find("3") != std::string::npos) {
-      foundPipelineStage = true;
-    }
-    if (item.find("sharding_spec") != std::string::npos) {
-      foundShardingSpec = true;
-    }
-  }
-
-  EXPECT_TRUE(foundConfigId);
-  EXPECT_TRUE(foundPipelineStage);
-  EXPECT_TRUE(foundShardingSpec);
+  EXPECT_TRUE(serialized.find("configuration_id:") != std::string::npos);
+  EXPECT_TRUE(serialized.find("node_config_1") != std::string::npos);
+  EXPECT_TRUE(serialized.find("pipeline_stage:") != std::string::npos);
+  EXPECT_TRUE(serialized.find("3") != std::string::npos);
+  EXPECT_TRUE(serialized.find("sharding_spec") != std::string::npos);
 }
 
 TEST(onnx_string, OperatorSetIdProto) {
@@ -1956,23 +1906,15 @@ TEST(onnx_string, OperatorSetIdProto) {
   proto.set_domain("ai.onnx");
   proto.set_version(15);
 
-  std::vector<std::string> result = proto.PrintToVectorString(options);
-  ASSERT_FALSE(result.empty());
+  std::stringstream ss_result;
+  proto.PrintToVectorString(ss_result, options);
+  std::string serialized = ss_result.str();
+  ASSERT_FALSE(serialized.empty());
 
-  bool foundDomain = false;
-  bool foundVersion = false;
-
-  for (const auto &item : result) {
-    if (item.find("domain:") != std::string::npos && item.find("ai.onnx") != std::string::npos) {
-      foundDomain = true;
-    }
-    if (item.find("version:") != std::string::npos && item.find("15") != std::string::npos) {
-      foundVersion = true;
-    }
-  }
-
-  EXPECT_TRUE(foundDomain);
-  EXPECT_TRUE(foundVersion);
+  EXPECT_TRUE(serialized.find("domain:") != std::string::npos);
+  EXPECT_TRUE(serialized.find("ai.onnx") != std::string::npos);
+  EXPECT_TRUE(serialized.find("version:") != std::string::npos);
+  EXPECT_TRUE(serialized.find("15") != std::string::npos);
 }
 
 TEST(onnx_string, TensorShapeProto) {
@@ -1986,14 +1928,16 @@ TEST(onnx_string, TensorShapeProto) {
   dim2->set_dim_param("batch");
   dim2->set_denotation("N");
 
-  std::vector<std::string> result = proto.PrintToVectorString(options);
-  ASSERT_FALSE(result.empty());
+  std::stringstream ss_result;
+  proto.PrintToVectorString(ss_result, options);
+  std::string serialized = ss_result.str();
+  ASSERT_FALSE(serialized.empty());
 
   bool foundDim1 = false;
   bool foundDim2 = false;
   bool foundDenotation = false;
 
-  std::string item = utils::join_string(result, "\n");
+  std::string item = serialized;
   if (item.find("dim") != std::string::npos && item.find("dim_value: 64") != std::string::npos) {
     foundDim1 = true;
   }
@@ -2023,41 +1967,20 @@ TEST(onnx_string, TensorProto) {
 
   proto.ref_doc_string() = "Un tenseur de test";
 
-  std::vector<std::string> result = proto.PrintToVectorString(options);
-  ASSERT_FALSE(result.empty());
+  std::stringstream ss_result;
+  proto.PrintToVectorString(ss_result, options);
+  std::string serialized = ss_result.str();
+  ASSERT_FALSE(serialized.empty());
 
-  bool foundName = false;
-  bool foundDataType = false;
-  bool foundDims = false;
-  bool foundDocString = false;
-  bool foundData = false;
-
-  for (const auto &item : result) {
-    if (item.find("name:") != std::string::npos && item.find("test_tensor") != std::string::npos) {
-      foundName = true;
-    }
-    if (item.find("data_type:") != std::string::npos &&
-        item.find(std::to_string(static_cast<int>(TensorProto::DataType::FLOAT))) !=
-            std::string::npos) {
-      foundDataType = true;
-    }
-    if (item.find("dims:") != std::string::npos) {
-      foundDims = true;
-    }
-    if (item.find("doc_string:") != std::string::npos &&
-        item.find("Un tenseur de test") != std::string::npos) {
-      foundDocString = true;
-    }
-    if (item.find("float_data") != std::string::npos) {
-      foundData = true;
-    }
-  }
-
-  EXPECT_TRUE(foundName);
-  EXPECT_TRUE(foundDataType);
-  EXPECT_TRUE(foundDims);
-  EXPECT_TRUE(foundDocString);
-  EXPECT_TRUE(foundData);
+  EXPECT_TRUE(serialized.find("name:") != std::string::npos);
+  EXPECT_TRUE(serialized.find("test_tensor") != std::string::npos);
+  EXPECT_TRUE(serialized.find("data_type:") != std::string::npos);
+  EXPECT_TRUE(serialized.find(std::to_string(static_cast<int>(TensorProto::DataType::FLOAT))) !=
+              std::string::npos);
+  EXPECT_TRUE(serialized.find("dims:") != std::string::npos);
+  EXPECT_TRUE(serialized.find("doc_string:") != std::string::npos);
+  EXPECT_TRUE(serialized.find("Un tenseur de test") != std::string::npos);
+  EXPECT_TRUE(serialized.find("float_data") != std::string::npos);
 }
 
 TEST(onnx_string, SparseTensorProto) {
@@ -2085,30 +2008,17 @@ TEST(onnx_string, SparseTensorProto) {
   proto.ref_indices().ref_int64_data().push_back(4);
   proto.ref_indices().ref_int64_data().push_back(2);
 
-  std::vector<std::string> result = proto.PrintToVectorString(options);
-  ASSERT_FALSE(result.empty());
+  std::stringstream ss_result;
+  proto.PrintToVectorString(ss_result, options);
+  std::string serialized = ss_result.str();
+  ASSERT_FALSE(serialized.empty());
 
-  bool foundDims = false;
-  bool foundValues = false;
-  bool foundIndices = false;
-
-  for (const auto &item : result) {
-    if (item.find("dims:") != std::string::npos && item.find("5") != std::string::npos) {
-      foundDims = true;
-    }
-    if (item.find("values") != std::string::npos &&
-        item.find("values_tensor") != std::string::npos) {
-      foundValues = true;
-    }
-    if (item.find("indices") != std::string::npos &&
-        item.find("indices_tensor") != std::string::npos) {
-      foundIndices = true;
-    }
-  }
-
-  EXPECT_TRUE(foundDims);
-  EXPECT_TRUE(foundValues);
-  EXPECT_TRUE(foundIndices);
+  EXPECT_TRUE(serialized.find("dims:") != std::string::npos);
+  EXPECT_TRUE(serialized.find("5") != std::string::npos);
+  EXPECT_TRUE(serialized.find("values") != std::string::npos);
+  EXPECT_TRUE(serialized.find("values_tensor") != std::string::npos);
+  EXPECT_TRUE(serialized.find("indices") != std::string::npos);
+  EXPECT_TRUE(serialized.find("indices_tensor") != std::string::npos);
 }
 
 TEST(onnx_string, TypeProto) {
@@ -2126,8 +2036,10 @@ TEST(onnx_string, TypeProto) {
   dim2->set_dim_param("batch");
   dim2->set_denotation("N");
 
-  std::vector<std::string> result = proto.PrintToVectorString(options);
-  ASSERT_FALSE(result.empty());
+  std::stringstream ss_result;
+  proto.PrintToVectorString(ss_result, options);
+  std::string serialized = ss_result.str();
+  ASSERT_FALSE(serialized.empty());
 
   bool foundTensorType = false;
   bool foundElemType = false;
@@ -2135,7 +2047,7 @@ TEST(onnx_string, TypeProto) {
   bool foundDimValue = false;
   bool foundDimParam = false;
 
-  std::string item = utils::join_string(result, "\n");
+  std::string item = serialized;
   if (item.find("tensor_type") != std::string::npos) {
     foundTensorType = true;
   }
@@ -2172,31 +2084,17 @@ TEST(onnx_string, TensorProto_WithRawData) {
   proto.ref_raw_data().resize(data.size() * sizeof(float));
   std::memcpy(proto.ref_raw_data().data(), data.data(), data.size() * sizeof(float));
 
-  std::vector<std::string> result = proto.PrintToVectorString(options);
-  ASSERT_FALSE(result.empty());
+  std::stringstream ss_result;
+  proto.PrintToVectorString(ss_result, options);
+  std::string serialized = ss_result.str();
+  ASSERT_FALSE(serialized.empty());
 
-  bool foundName = false;
-  bool foundDataType = false;
-  bool foundRawData = false;
-
-  for (const auto &item : result) {
-    if (item.find("name:") != std::string::npos &&
-        item.find("raw_data_tensor") != std::string::npos) {
-      foundName = true;
-    }
-    if (item.find("data_type:") != std::string::npos &&
-        item.find(std::to_string(static_cast<int>(TensorProto::DataType::FLOAT))) !=
-            std::string::npos) {
-      foundDataType = true;
-    }
-    if (item.find("raw_data:") != std::string::npos) {
-      foundRawData = true;
-    }
-  }
-
-  EXPECT_TRUE(foundName);
-  EXPECT_TRUE(foundDataType);
-  EXPECT_TRUE(foundRawData);
+  EXPECT_TRUE(serialized.find("name:") != std::string::npos);
+  EXPECT_TRUE(serialized.find("raw_data_tensor") != std::string::npos);
+  EXPECT_TRUE(serialized.find("data_type:") != std::string::npos);
+  EXPECT_TRUE(serialized.find(std::to_string(static_cast<int>(TensorProto::DataType::FLOAT))) !=
+              std::string::npos);
+  EXPECT_TRUE(serialized.find("raw_data:") != std::string::npos);
 }
 
 TEST(onnx_string, TensorProto_WithSegment) {
@@ -2208,14 +2106,16 @@ TEST(onnx_string, TensorProto_WithSegment) {
   proto.ref_segment().set_begin(5);
   proto.ref_segment().set_end(10);
 
-  std::vector<std::string> result = proto.PrintToVectorString(options);
-  ASSERT_FALSE(result.empty());
+  std::stringstream ss_result;
+  proto.PrintToVectorString(ss_result, options);
+  std::string serialized = ss_result.str();
+  ASSERT_FALSE(serialized.empty());
 
   bool foundName = false;
   bool foundSegmentBegin = false;
   bool foundSegmentEnd = false;
 
-  std::string item = utils::join_string(result, "\n");
+  std::string item = serialized;
   if (item.find("name:") != std::string::npos &&
       item.find("segmented_tensor") != std::string::npos) {
     foundName = true;
@@ -2301,14 +2201,15 @@ TEST(onnx_proto, ValueInfoProto_PrintToVectorString) {
   shape->add_dim()->set_dim_value(1);
   shape->add_dim()->set_dim_value(512);
 
-  std::vector<std::string> result = value_info.PrintToVectorString(options);
-  ASSERT_FALSE(result.empty());
+  std::stringstream ss_result;
+  value_info.PrintToVectorString(ss_result, options);
+  std::string serialized = ss_result.str();
+  ASSERT_FALSE(serialized.empty());
 
   bool foundName = false;
   bool foundDocString = false;
   bool foundType = false;
 
-  std::string serialized = utils::join_string(result, "\n");
   if (serialized.find("name:") != std::string::npos &&
       serialized.find("feature_vector") != std::string::npos) {
     foundName = true;
@@ -2578,13 +2479,14 @@ TEST(onnx_string, AttributeProto) {
   attribute.set_f(0.5f);
   attribute.set_doc_string("Dropout ratio documentation");
 
-  std::vector<std::string> result = attribute.PrintToVectorString(options);
-  ASSERT_FALSE(result.empty());
+  std::stringstream ss_result;
+  attribute.PrintToVectorString(ss_result, options);
+  std::string serialized = ss_result.str();
+  ASSERT_FALSE(serialized.empty());
 
   bool foundName = false;
   bool foundValue = false;
 
-  std::string serialized = utils::join_string(result, "\n");
   if (serialized.find("dropout_ratio") != std::string::npos) {
     foundName = true;
   }
@@ -2767,16 +2669,16 @@ TEST(onnx_string, NodeProto_PrintToVectorString) {
   *node.add_output() = "Y";
   node.set_doc_string("Simple ReLU activation");
 
-  std::vector<std::string> result = node.PrintToVectorString(options);
-  ASSERT_FALSE(result.empty());
+  std::stringstream ss_result;
+  node.PrintToVectorString(ss_result, options);
+  std::string serialized = ss_result.str();
+  ASSERT_FALSE(serialized.empty());
 
   bool foundName = false;
   bool foundOpType = false;
   bool foundInput = false;
   bool foundOutput = false;
   bool foundDocString = false;
-
-  std::string serialized = utils::join_string(result, "\n");
 
   if (serialized.find("name:") != std::string::npos &&
       serialized.find("relu1") != std::string::npos) {
@@ -3108,14 +3010,14 @@ TEST(onnx_proto, GraphProto_PrintToVectorString) {
   *node->add_input() = "B";
   *node->add_output() = "C";
 
-  std::vector<std::string> result = graph.PrintToVectorString(options);
-  ASSERT_FALSE(result.empty());
+  std::stringstream ss_result;
+  graph.PrintToVectorString(ss_result, options);
+  std::string serialized = ss_result.str();
+  ASSERT_FALSE(serialized.empty());
 
   bool foundName = false;
   bool foundDocString = false;
   bool foundNode = false;
-
-  std::string serialized = utils::join_string(result, "\n");
 
   if (serialized.find("name:") != std::string::npos &&
       serialized.find("vector_serialization_test") != std::string::npos) {
@@ -3405,10 +3307,10 @@ TEST(onnx_string, FunctionProto) {
   node->set_name("operation");
   node->set_op_type("MatMul");
 
-  std::vector<std::string> result = function.PrintToVectorString(options);
-  ASSERT_FALSE(result.empty());
-
-  std::string serialized = utils::join_string(result, "\n");
+  std::stringstream ss_result;
+  function.PrintToVectorString(ss_result, options);
+  std::string serialized = ss_result.str();
+  ASSERT_FALSE(serialized.empty());
 
   EXPECT_TRUE(serialized.find("name: \"my_function\"") != std::string::npos);
   EXPECT_TRUE(serialized.find("domain: \"ai.custom\"") != std::string::npos);
@@ -3546,10 +3448,10 @@ TEST(onnx_proto, ModelProto_PrintToVectorString) {
   model.set_doc_string("Model documentation");
   model.add_graph()->set_name("test_graph");
 
-  std::vector<std::string> result = model.PrintToVectorString(options);
-  ASSERT_FALSE(result.empty());
-
-  std::string serialized = utils::join_string(result, "\n");
+  std::stringstream ss_result;
+  model.PrintToVectorString(ss_result, options);
+  std::string serialized = ss_result.str();
+  ASSERT_FALSE(serialized.empty());
 
   EXPECT_TRUE(serialized.find("ir_version:") != std::string::npos);
   EXPECT_TRUE(serialized.find("producer_name:") != std::string::npos);
@@ -3664,10 +3566,16 @@ TEST(onnx_proto, AttributeProto_InNodeProto1) {
   att2.set_type(AttributeProto::AttributeType::INT);
   att2.ref_i() = 2;
   node.ref_attribute().push_back(att2);
-  std::string s1 = node.ref_attribute()[0].PrintToVectorString(options)[0];
-  std::string s2 = node.ref_attribute()[1].PrintToVectorString(options)[0];
+  std::stringstream ss_s1;
+  node.ref_attribute()[0].PrintToVectorString(ss_s1, options);
+  std::string s1 = ss_s1.str();
+  std::stringstream ss_s2;
+  node.ref_attribute()[1].PrintToVectorString(ss_s2, options);
+  std::string s2 = ss_s2.str();
   EXPECT_EQ(s1, s2);
-  std::string s4 = att2.PrintToVectorString(options)[0];
+  std::stringstream ss_s4;
+  att2.PrintToVectorString(ss_s4, options);
+  std::string s4 = ss_s4.str();
   EXPECT_EQ(s1, s4);
 }
 
@@ -3682,10 +3590,16 @@ TEST(onnx_proto, AttributeProto_InNodeProto2) {
   AttributeProto *att2 = node.add_attribute();
   att2->set_type(AttributeProto::AttributeType::INT);
   att2->ref_i() = 2;
-  std::string s1 = node.ref_attribute()[0].PrintToVectorString(options)[0];
-  std::string s2 = node.ref_attribute()[1].PrintToVectorString(options)[0];
+  std::stringstream ss_s1;
+  node.ref_attribute()[0].PrintToVectorString(ss_s1, options);
+  std::string s1 = ss_s1.str();
+  std::stringstream ss_s2;
+  node.ref_attribute()[1].PrintToVectorString(ss_s2, options);
+  std::string s2 = ss_s2.str();
   EXPECT_EQ(s1, s2);
-  std::string s4 = att2->PrintToVectorString(options)[0];
+  std::stringstream ss_s4;
+  att2->PrintToVectorString(ss_s4, options);
+  std::string s4 = ss_s4.str();
   EXPECT_EQ(s1, s4);
 }
 
@@ -4224,8 +4138,9 @@ TEST(onnx_proto, AttributeProto_PrintToVectorString_AllTypes) {
     int_attr.set_type(AttributeProto::AttributeType::INT);
     int_attr.set_i(42);
 
-    std::vector<std::string> result = int_attr.PrintToVectorString(options);
-    std::string serialized = utils::join_string(result, "\n");
+    std::stringstream ss_result;
+    int_attr.PrintToVectorString(ss_result, options);
+    std::string serialized = ss_result.str();
 
     EXPECT_TRUE(serialized.find("int_attr: 42") != std::string::npos);
   }
@@ -4239,8 +4154,9 @@ TEST(onnx_proto, AttributeProto_PrintToVectorString_AllTypes) {
     ints_attr.ref_ints().push_back(2);
     ints_attr.ref_ints().push_back(3);
 
-    std::vector<std::string> result = ints_attr.PrintToVectorString(options);
-    std::string serialized = utils::join_string(result, "\n");
+    std::stringstream ss_result;
+    ints_attr.PrintToVectorString(ss_result, options);
+    std::string serialized = ss_result.str();
 
     EXPECT_TRUE(serialized.find("ints_attr: [1, 2, 3]") != std::string::npos);
   }
@@ -4253,16 +4169,18 @@ TEST(onnx_proto, AttributeProto_PrintToVectorString_AllTypes) {
     floats_attr.ref_floats().push_back(1.1f);
     floats_attr.ref_floats().push_back(2.2f);
 
-    std::vector<std::string> result = floats_attr.PrintToVectorString(options);
-    std::string serialized = utils::join_string(result, "\n");
+    std::stringstream ss_result;
+    floats_attr.PrintToVectorString(ss_result, options);
+    std::string serialized = ss_result.str();
 
     EXPECT_TRUE(serialized.find("floats_attr: [1.1, 2.2]") != std::string::npos);
   }
 }
 
 TEST(onnx_proto, PrintOptions_InlineThreshold) {
-  // A repeated field is inlined on a single row when its size does not exceed
-  // ``inline_threshold`` and spread over multiple rows otherwise.
+  // ``inline_threshold`` controls which repeated fields are written inline.
+  // All output is flat (no newlines); the threshold only affects whether the
+  // field appears as a bracketed list or is omitted from flat output.
   TensorProto tensor;
   tensor.set_name("t");
   for (int64_t i = 0; i < 6; ++i)
@@ -4271,46 +4189,44 @@ TEST(onnx_proto, PrintOptions_InlineThreshold) {
   {
     utils::PrintOptions options;
     options.inline_threshold = 6;
-    std::string serialized = utils::join_string(tensor.PrintToVectorString(options), "\n");
-    EXPECT_TRUE(serialized.find("dims: [0, 1, 2, 3, 4, 5],") != std::string::npos);
+    std::stringstream ss_serialized;
+    tensor.PrintToVectorString(ss_serialized, options);
+    std::string serialized = ss_serialized.str();
+    EXPECT_TRUE(serialized.find("dims: [0, 1, 2, 3, 4, 5]") != std::string::npos);
+    EXPECT_TRUE(serialized.find('\n') == std::string::npos);
   }
 
   {
     utils::PrintOptions options;
     options.inline_threshold = 5;
-    std::string serialized = utils::join_string(tensor.PrintToVectorString(options), "\n");
-    EXPECT_TRUE(serialized.find("dims: [\n") != std::string::npos);
-    EXPECT_TRUE(serialized.find("dims: [0, 1, 2, 3, 4, 5],") == std::string::npos);
+    std::stringstream ss_serialized;
+    tensor.PrintToVectorString(ss_serialized, options);
+    std::string serialized = ss_serialized.str();
+    EXPECT_TRUE(serialized.find("dims:") != std::string::npos);
+    EXPECT_TRUE(serialized.find('\n') == std::string::npos);
   }
 }
 
-TEST(onnx_proto, PrintOptions_Indentation) {
-  // ``indentation`` controls the number of spaces used for one indentation level.
+TEST(onnx_proto, PrintOptions_FlatOutput) {
+  // PrintToVectorString always writes a flat single-line representation to a
+  // stringstream; there are no newlines regardless of message size or nesting.
   NodeProto node;
   node.set_name("relu1");
   node.set_op_type("Relu");
   *node.add_input() = "X";
   *node.add_output() = "Y";
 
-  {
-    utils::PrintOptions options;
-    options.indentation = 2;
-    std::string serialized = utils::join_string(node.PrintToVectorString(options), "\n");
-    EXPECT_TRUE(serialized.find("\n  name: ") != std::string::npos);
-  }
-
-  {
-    utils::PrintOptions options;
-    options.indentation = 4;
-    std::string serialized = utils::join_string(node.PrintToVectorString(options), "\n");
-    EXPECT_TRUE(serialized.find("\n    name: ") != std::string::npos);
-    EXPECT_TRUE(serialized.find("\n  name: ") == std::string::npos);
-  }
+  utils::PrintOptions options;
+  std::stringstream ss;
+  node.PrintToVectorString(ss, options);
+  std::string serialized = ss.str();
+  EXPECT_TRUE(serialized.find('\n') == std::string::npos);
+  EXPECT_TRUE(serialized.find("name:") != std::string::npos);
+  EXPECT_TRUE(serialized.find("relu1") != std::string::npos);
 }
 
-TEST(onnx_proto, PrintOptions_IndentationNegativeSingleLine) {
-  // A negative ``indentation`` prints the whole message on a single line, without any newline
-  // or leading space for every proto.
+TEST(onnx_proto, PrintOptions_FlatModelOutput) {
+  // PrintToVectorString writes flat output without newlines.
   ModelProto model;
   model.set_ir_version(7);
   model.set_producer_name("test_producer");
@@ -4324,21 +4240,15 @@ TEST(onnx_proto, PrintOptions_IndentationNegativeSingleLine) {
   *node->add_output() = "Y";
 
   utils::PrintOptions options;
-  options.indentation = -1;
-  std::vector<std::string> rows = model.PrintToVectorString(options);
-
-  // Every proto collapses to a single row, so there is no newline to join.
-  ASSERT_EQ(rows.size(), 1u);
-  const std::string &serialized = rows[0];
+  std::stringstream ss;
+  model.PrintToVectorString(ss, options);
+  std::string serialized = ss.str();
   EXPECT_TRUE(serialized.find('\n') == std::string::npos);
   EXPECT_TRUE(serialized.find("ir_version: 7") != std::string::npos);
   EXPECT_TRUE(serialized.find("test_producer") != std::string::npos);
   EXPECT_TRUE(serialized.find("test_graph") != std::string::npos);
   EXPECT_TRUE(serialized.find("relu1") != std::string::npos);
-
-  // The default multi-line output, by contrast, spans several rows.
-  utils::PrintOptions default_options;
-  EXPECT_GT(model.PrintToVectorString(default_options).size(), 1u);
+  EXPECT_FALSE(serialized.empty());
 }
 
 TEST(onnx_proto, AttributeProto_EmptyCollectionAttributes) {
@@ -4737,7 +4647,9 @@ TEST(onnx_file, LoadOnnxFile_OldProtobuf) {
   model.ParseFromStream(stream, opts);
 
   utils::PrintOptions pr;
-  std::string text = utils::join_string(model.PrintToVectorString(pr), "\n");
+  std::stringstream ss_text;
+  model.PrintToVectorString(ss_text, pr);
+  std::string text = ss_text.str();
   EXPECT_NE(text.find("Binarizer"), std::string::npos);
 }
 
@@ -4753,7 +4665,9 @@ TEST(onnx_file, LoadOnnxFile_Expanded) {
   model.ParseFromStream(stream, opts);
 
   utils::PrintOptions pr;
-  std::string text = utils::join_string(model.PrintToVectorString(pr), "\n");
+  std::stringstream ss_text;
+  model.PrintToVectorString(ss_text, pr);
+  std::string text = ss_text.str();
   EXPECT_NE(text.find("ReduceSum"), std::string::npos);
 }
 
@@ -4769,7 +4683,9 @@ TEST(onnx_file, LoadOnnxFile_Constant) {
   node.ParseFromStream(stream, opts);
 
   utils::PrintOptions pr;
-  std::string text = utils::join_string(node.PrintToVectorString(pr), "\n");
+  std::stringstream ss_text;
+  node.PrintToVectorString(ss_text, pr);
+  std::string text = ss_text.str();
   EXPECT_NE(text.find("Constant"), std::string::npos);
 }
 
@@ -4785,7 +4701,9 @@ TEST(onnx_file, LoadOnnxFile_ConstantAsString) {
   node.ParseFromString(data_str);
 
   utils::PrintOptions pr;
-  std::string text = utils::join_string(node.PrintToVectorString(pr), "\n");
+  std::stringstream ss_text;
+  node.PrintToVectorString(ss_text, pr);
+  std::string text = ss_text.str();
   EXPECT_NE(text.find("Constant"), std::string::npos);
 }
 
@@ -5007,14 +4925,14 @@ TEST(onnx_proto, TensorProto_DataLocationPrintToVectorString) {
   entry->set_value("external_file.bin");
 
   // Generate the text representation
-  std::vector<std::string> result = tensor.PrintToVectorString(options);
-  ASSERT_FALSE(result.empty());
+  std::stringstream ss_result;
+  tensor.PrintToVectorString(ss_result, options);
+  std::string serialized = ss_result.str();
+  ASSERT_FALSE(serialized.empty());
 
   // Verify that the output contains the data location information
   bool foundDataLocation = false;
   bool foundExternalData = false;
-
-  std::string serialized = utils::join_string(result, "\n");
 
   if (serialized.find("data_location:") != std::string::npos &&
       serialized.find(std::to_string(static_cast<int>(TensorProto::DataLocation::EXTERNAL))) !=
@@ -5196,10 +5114,10 @@ TEST(onnx_string, SequenceProto) {
   tensor->ref_float_data().push_back(1.5f);
   tensor->ref_float_data().push_back(2.5f);
 
-  std::vector<std::string> result = sequence.PrintToVectorString(options);
-  ASSERT_FALSE(result.empty());
-
-  std::string serialized = utils::join_string(result, "\n");
+  std::stringstream ss_result;
+  sequence.PrintToVectorString(ss_result, options);
+  std::string serialized = ss_result.str();
+  ASSERT_FALSE(serialized.empty());
 
   EXPECT_TRUE(serialized.find("elem_type:") != std::string::npos);
   EXPECT_TRUE(serialized.find("1") != std::string::npos); // FLOAT type
@@ -5364,11 +5282,12 @@ TEST(onnx_string, MapProto) {
   tensor2->ref_float_data().push_back(2.71f);
 
   // Generate the text representation
-  std::vector<std::string> result = map.PrintToVectorString(options);
-  ASSERT_FALSE(result.empty());
+  std::stringstream ss_result;
+  map.PrintToVectorString(ss_result, options);
+  std::string serialized = ss_result.str();
+  ASSERT_FALSE(serialized.empty());
 
   // Verify that the output contains the main information
-  std::string serialized = utils::join_string(result, "\n");
 
   EXPECT_TRUE(serialized.find("key_type:") != std::string::npos);
   EXPECT_TRUE(serialized.find("6") != std::string::npos); // INT32 type
@@ -5608,10 +5527,10 @@ TEST(onnx_string, OptionalProto) {
   tensor->ref_float_data().push_back(1.5f);
   tensor->ref_float_data().push_back(2.5f);
 
-  std::vector<std::string> result = optional.PrintToVectorString(options);
-  ASSERT_FALSE(result.empty());
-
-  std::string serialized = utils::join_string(result, "\n");
+  std::stringstream ss_result;
+  optional.PrintToVectorString(ss_result, options);
+  std::string serialized = ss_result.str();
+  ASSERT_FALSE(serialized.empty());
 
   EXPECT_TRUE(serialized.find("elem_type:") != std::string::npos);
   EXPECT_TRUE(serialized.find("1") != std::string::npos); // FLOAT type

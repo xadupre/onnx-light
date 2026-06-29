@@ -12,25 +12,14 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace utils {
 
 template <typename T>
-std::vector<std::string> RepeatedField<T>::PrintToVectorString(utils::PrintOptions &options) const {
-  std::vector<std::string> rows{"["};
-  std::string indent = utils::indentation_string(options);
+void RepeatedField<T>::PrintToVectorString(std::stringstream &ss,
+                                           utils::PrintOptions &options) const {
+  ss << "[ ";
   for (const auto &p : values_) {
-    std::vector<std::string> r = p.PrintToVectorString(options);
-    for (size_t i = 0; i < r.size(); ++i) {
-      if (i + 1 == r.size()) {
-        if (!r[i].empty() && r[i].back() == ',') {
-          rows.push_back(onnx_light_helpers::MakeString(indent, r[i]));
-        } else {
-          rows.push_back(onnx_light_helpers::MakeString(indent, r[i], ","));
-        }
-      } else {
-        rows.push_back(onnx_light_helpers::MakeString(indent, r[i]));
-      }
-    }
+    p.PrintToVectorString(ss, options);
+    ss << " ";
   }
-  rows.push_back("],");
-  return rows;
+  ss << "]";
 }
 
 template <typename T> void RepeatedProtoField<T>::clear() { values_.clear(); }
@@ -73,26 +62,14 @@ template <typename T> T &RepeatedProtoField<T>::back() {
 }
 
 template <typename T>
-std::vector<std::string>
-RepeatedProtoField<T>::PrintToVectorString(utils::PrintOptions &options) const {
-  std::vector<std::string> rows{"["};
-  std::string indent = utils::indentation_string(options);
+void RepeatedProtoField<T>::PrintToVectorString(std::stringstream &ss,
+                                                utils::PrintOptions &options) const {
+  ss << "[ ";
   for (const auto &p : values_) {
-    std::vector<std::string> r = p->PrintToVectorString(options);
-    for (size_t i = 0; i < r.size(); ++i) {
-      if (i + 1 == r.size()) {
-        if (!r[i].empty() && r[i].back() == ',') {
-          rows.push_back(onnx_light_helpers::MakeString(indent, r[i]));
-        } else {
-          rows.push_back(onnx_light_helpers::MakeString(indent, r[i], ","));
-        }
-      } else {
-        rows.push_back(onnx_light_helpers::MakeString(indent, r[i]));
-      }
-    }
+    p->PrintToVectorString(ss, options);
+    ss << " ";
   }
-  rows.push_back("],");
-  return rows;
+  ss << "]";
 }
 
 template <typename T> void OptionalField<T>::reset() { value_.reset(); }

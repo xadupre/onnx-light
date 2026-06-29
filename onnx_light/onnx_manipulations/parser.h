@@ -535,6 +535,7 @@ protected:
  */
 class OnnxParser : public ParserBase {
 public:
+  using ParserBase::Parse;
   using ParserBase::ParserBase;
 
   /// Parses a `TensorShapeProto`.

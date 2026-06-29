@@ -1,7 +1,8 @@
 #include "onnx.h"
 #include "onnx_manipulations/parser.h"
-#include <cmath>
 #include <gtest/gtest.h>
+
+#include <cmath>
 #include <string_view>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -687,7 +688,7 @@ agraph (float y = {1.0}, float[N] z) => (w) <
 TEST(onnx_defs, Parser_EscapeStringLiteral) {
   OnnxParser parser(R"("123\"56\\89")");
   std::string s;
-  auto status = parser.ParserBase::Parse(s);
+  auto status = parser.Parse(s);
   EXPECT_TRUE(status.IsOK()) << status.ErrorMessage();
   EXPECT_TRUE(parser.EndOfInput()) << "Extra unparsed input unexpected.";
   EXPECT_EQ(s, std::string("123\"56\\89"));
@@ -698,7 +699,7 @@ TEST(onnx_defs, Parser_NonNulTerminatedStringView) {
   std::string_view view(backing.data(), 3);
   OnnxParser parser(view);
   float value = 0.0f;
-  auto status = parser.ParserBase::Parse(value);
+  auto status = parser.Parse(value);
   EXPECT_TRUE(status.IsOK()) << status.ErrorMessage();
   EXPECT_TRUE(std::isinf(value));
   EXPECT_TRUE(parser.EndOfInput()) << "Extra unparsed input unexpected.";

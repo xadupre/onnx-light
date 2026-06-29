@@ -4178,8 +4178,9 @@ TEST(onnx_proto, AttributeProto_PrintToVectorString_AllTypes) {
 }
 
 TEST(onnx_proto, PrintOptions_InlineThreshold) {
-  // A repeated field is inlined on a single row when its size does not exceed
-  // ``inline_threshold`` and spread over multiple rows otherwise.
+  // ``inline_threshold`` controls which repeated fields are written inline.
+  // All output is flat (no newlines); the threshold only affects whether the
+  // field appears as a bracketed list or is omitted from flat output.
   TensorProto tensor;
   tensor.set_name("t");
   for (int64_t i = 0; i < 6; ++i)
@@ -4192,6 +4193,7 @@ TEST(onnx_proto, PrintOptions_InlineThreshold) {
     tensor.PrintToVectorString(ss_serialized, options);
     std::string serialized = ss_serialized.str();
     EXPECT_TRUE(serialized.find("dims: [0, 1, 2, 3, 4, 5]") != std::string::npos);
+    EXPECT_TRUE(serialized.find('\n') == std::string::npos);
   }
 
   {
@@ -4201,11 +4203,13 @@ TEST(onnx_proto, PrintOptions_InlineThreshold) {
     tensor.PrintToVectorString(ss_serialized, options);
     std::string serialized = ss_serialized.str();
     EXPECT_TRUE(serialized.find("dims:") != std::string::npos);
+    EXPECT_TRUE(serialized.find('\n') == std::string::npos);
   }
 }
 
 TEST(onnx_proto, PrintOptions_FlatOutput) {
-  // PrintToVectorString writes a flat single-line representation to a stringstream.
+  // PrintToVectorString always writes a flat single-line representation to a
+  // stringstream; there are no newlines regardless of message size or nesting.
   NodeProto node;
   node.set_name("relu1");
   node.set_op_type("Relu");

@@ -25,10 +25,7 @@
       const;                                                                                       \
   void ParseFromStream(utils::BinaryStream &stream, ParseOptions &options);                        \
   void SerializeToStream(utils::BinaryWriteStream &stream, SerializeOptions &options) const;       \
-  void PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const;             \
-  inline void PrintToVectorString(std::stringstream &ss, utils::PrintOptions &options) const {     \
-    PrintToStringStream(ss, options);                                                              \
-  }
+  void PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const;
 
 /** Macro for beginning a generated proto class with a default constructor. */
 #define BEGIN_PROTO(cls, doc)                                                                      \

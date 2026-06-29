@@ -9,7 +9,16 @@ class TestCMakeCppStandard(unittest.TestCase):
         self.assertIn("set(CMAKE_CXX_STANDARD 20)", content)
         self.assertIn("target_compile_features(lib_onnx_proto PUBLIC cxx_std_20)", content)
         self.assertIn("target_compile_features(lib_onnx_lib PUBLIC cxx_std_20)", content)
-        self.assertIn("add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/WX>)", content)
+        self.assertRegex(
+            content,
+            (
+                r"(?s)if\(MSVC\)\s*"
+                r"add_compile_options\(\$<\$<COMPILE_LANGUAGE:C,CXX>:/MP>\)\s*"
+                r"add_compile_options\(\$<\$<COMPILE_LANGUAGE:C,CXX>:/WX>\)\s*"
+                r"endif\(\)"
+            ),
+            msg="MSVC /WX must remain scoped to the MSVC compile options block.",
+        )
 
     def test_examples_cmake_use_cpp20(self):
         root = Path(__file__).resolve().parents[2]

@@ -13,7 +13,7 @@ This example shows how to:
 
 1. Build a small graph with one symbolic dimension ``N``.
 2. Run shape inference and memory analysis.
-3. Render a table with the symbolic memory expressions for every node.
+3. Print a table with the symbolic memory expressions for every node.
 4. Evaluate ``total_bytes`` for a few concrete values of ``N`` and plot the
    resulting curves.
 """
@@ -172,37 +172,31 @@ for node_index, node in enumerate(model.graph.node):
         ]
     )
 
-print("Symbolic ComputeContext.memory table:")
-print(
-    f"  {'node':<4} {'op':<8} {'already_allocated':>20} {'output_allocation':>20} {'total':>16}"
-)
+headers = [
+    "node",
+    "op",
+    "already_allocated",
+    "output_allocation",
+    "inputs",
+    "initializers",
+    "intermediates",
+    "outputs",
+    "total",
+]
+col_widths = [len(h) for h in headers]
 for row in rows:
-    print(f"  {row[0]:<4} {row[1]:<8} {row[2]:>20} {row[3]:>20} {row[8]:>16}")
-
-fig, ax = plt.subplots(figsize=(13, 1.6 + 0.35 * len(rows)))
-ax.set_axis_off()
-table = ax.table(
-    cellText=rows,
-    colLabels=[
-        "node",
-        "op",
-        "already_allocated",
-        "output_allocation",
-        "inputs",
-        "initializers",
-        "intermediates",
-        "outputs",
-        "total",
-    ],
-    loc="center",
-    cellLoc="left",
-    colLoc="left",
-)
-table.auto_set_font_size(False)
-table.set_fontsize(9)
-table.scale(1.0, 1.3)
-ax.set_title("Symbolic ComputeContext memory profile")
-fig.tight_layout()
+    for i, cell in enumerate(row):
+        if len(cell) > col_widths[i]:
+            col_widths[i] = len(cell)
+separator = "  " + "  ".join("-" * w for w in col_widths)
+header_line = "  " + "  ".join(h.ljust(col_widths[i]) for i, h in enumerate(headers))
+print("Symbolic ComputeContext.memory table:")
+print(separator)
+print(header_line)
+print(separator)
+for row in rows:
+    print("  " + "  ".join(cell.ljust(col_widths[i]) for i, cell in enumerate(row)))
+print(separator)
 
 
 #####################################

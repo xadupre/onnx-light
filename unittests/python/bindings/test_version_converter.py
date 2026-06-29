@@ -86,9 +86,11 @@ class TestVersionConverter(ExtTestCase):
 
         self.assertRaises(RuntimeError, test)
 
-    # A graph output that nothing produces must raise (RuntimeError), not crash.
-    # Regression test for a SEGV in graphProtoToGraph when a top-level
-    # graph output name was absent from the value map.
+    # A graph output that nothing produces must raise (ConvertError, seen as
+    # RuntimeError in Python since ONNX_LIGHT_NAMESPACE::ConvertError is not
+    # bound as version_converter.ConvertError), not crash. Regression test for a
+    # SEGV in graphProtoToGraph when a top-level graph output name was absent
+    # from the value map.
     def test_undefined_output(self) -> None:
         def test() -> None:
             nodes = [oh.make_node("Identity", ["X"], ["Y"])]

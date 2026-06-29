@@ -237,6 +237,9 @@ static std::vector<Dimension> tensorShapeProtoToDimensions(const TensorShapeProt
   return dims;
 }
 
+// Creates a placeholder kCaptured Value for a name not yet defined in the graph.
+// Used for values captured from an enclosing scope in nested (subgraph) contexts.
+// Returns the newly-inserted Value pointer.
 static Value *createDummyValue(const std::unique_ptr<Graph> &g, const std::string &name,
                                std::unordered_map<std::string, Value *> &value_by_name_of) {
   auto *undef = g->create(kCaptured, 1);

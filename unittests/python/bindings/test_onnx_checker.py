@@ -8,6 +8,10 @@ import onnx_light.onnx.helper as oh
 
 
 class TestChecker(ExtTestCase):
+    def test_maximum_protobuf_matches_cpp_parser_limit(self) -> None:
+        """Checks that the exported protobuf size limit matches the C++ parser boundary."""
+        self.assertEqual(checker.MAXIMUM_PROTOBUF, 2147483647)
+
     def make_sparse(
         self,
         shape: tuple[int, ...],

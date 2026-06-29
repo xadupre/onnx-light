@@ -1,8 +1,6 @@
 import unittest
 
 from onnx_light.ext_test_case import ExtTestCase
-import onnx
-import onnx.helper
 import onnx_light.onnx.checker as checker
 import onnx_light.onnx.defs as defs
 import onnx_light.onnx.helper as oh
@@ -155,16 +153,24 @@ class TestCheckerSubmodule(ExtTestCase):
         with self.assertRaises(checker.ValidationError):
             checker.check_model(model)
 
-    def test_check_model_accepts_upstream_model_proto(self):
-        """Tests that checker.check_model accepts an upstream onnx ModelProto."""
-        graph = onnx.helper.make_graph(
-            [onnx.helper.make_node("Relu", ["X"], ["Y"])],
+    def test_check_model_accepts_foreign_model_proto(self):
+        """Tests that checker.check_model accepts a foreign serialized ModelProto."""
+
+        class ModelProto:
+            def __init__(self, serialized):
+                self.serialized = serialized
+
+            def SerializeToString(self):
+                return self.serialized
+
+        graph = oh.make_graph(
+            [oh.make_node("Relu", ["X"], ["Y"])],
             "test",
-            [onnx.helper.make_tensor_value_info("X", onnx.TensorProto.FLOAT, [1, 2])],
-            [onnx.helper.make_tensor_value_info("Y", onnx.TensorProto.FLOAT, [1, 2])],
+            [oh.make_tensor_value_info("X", TensorProto.FLOAT, [1, 2])],
+            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [1, 2])],
         )
-        model = onnx.helper.make_model(graph, producer_name="test")
-        checker.check_model(model)
+        model = oh.make_model(graph, producer_name="test")
+        checker.check_model(ModelProto(model.SerializeToString()))
 
     def test_check_model_proto_like_conversion_errors_raise_type_error(self):
         """Tests that proto-like conversion failures raise TypeError after SerializeToString."""

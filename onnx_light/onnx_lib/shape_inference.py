@@ -100,8 +100,10 @@ def infer_shapes(model, check_type=False, strict_mode=False, data_prop=False):
     """
     converted = coerce_proto(model, _P.ModelProto)
     _shape_inference.infer_shapes(converted, check_type, strict_mode, data_prop)
+    if model is converted:
+        return converted
     copy_proto_back(model, converted)
-    return model if model is not converted else converted
+    return model
 
 
 def infer_shapes_path(

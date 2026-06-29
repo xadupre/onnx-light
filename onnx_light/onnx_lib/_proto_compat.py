@@ -34,6 +34,12 @@ def coerce_proto(proto: Any, cls: type[_ProtoT]) -> _ProtoT:
     return converted
 
 
+def matches_proto_class(proto: Any, cls: type[Any]) -> bool:
+    """Returns whether *proto* is an instance of *cls* or has the same proto class name."""
+
+    return isinstance(proto, cls) or type(proto).__name__ == cls.__name__
+
+
 def copy_proto_back(dst: Any, src: Any) -> None:
     """Copies the serialized contents of *src* back into *dst* when possible."""
 

@@ -81,8 +81,6 @@ def check_graph(graph) -> None:  # type: ignore
         ValidationError: If the graph is invalid.
     """
     graph = coerce_proto(graph, _P.GraphProto)
-    if not isinstance(graph, _P.GraphProto):  # type: ignore
-        raise ValidationError(f"Expected a GraphProto, got {type(graph)}")
 
 
 def check_function_call_cycles(model) -> None:  # type: ignore

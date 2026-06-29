@@ -21,6 +21,7 @@
 #include "onnx_backend_test/cases_for_shapes/empty_shape/include_empty_shape_cases.h"
 #include "onnx_backend_test/cases_for_shapes/inference/include_inference_cases.h"
 #include "onnx_backend_test/cases_for_shapes/inplace/include_inplace_cases.h"
+#include "onnx_backend_test/cases_for_shapes/shape_tag/include_shape_tag_cases.h"
 #include "onnx_backend_test/cases_numerical/nan_inf/include_nan_inf_cases.h"
 #include "onnx_backend_test/test_case.h"
 
@@ -404,6 +405,10 @@ TEST(BackendTestCase, PerSubfolderCollectorsAggregateIntoMain) {
   onnx_backend_test::CollectNanInfTestCases(nan_inf_only);
   EXPECT_FALSE(nan_inf_only.empty());
 
+  std::vector<TestCase> shape_tag_only;
+  onnx_backend_test::CollectShapeTagTestCases(shape_tag_only);
+  EXPECT_FALSE(shape_tag_only.empty());
+
   const auto all = CollectTestCases();
   EXPECT_EQ(all.size(), math_only.size() + logical_only.size() + tensor_only.size() +
                             controlflow_only.size() + generator_only.size() + image_only.size() +
@@ -412,7 +417,7 @@ TEST(BackendTestCase, PerSubfolderCollectorsAggregateIntoMain) {
                             sequence_only.size() + text_only.size() + traditionalml_only.size() +
                             training_only.size() + nn_only.size() + empty_shape_only.size() +
                             inplace_only.size() + shape_inference_only.size() +
-                            nan_inf_only.size());
+                            nan_inf_only.size() + shape_tag_only.size());
 }
 
 TEST(BackendTestCase, CollectTestCasesFilterByOpTypeKeepsOnlyMatchingOps) {

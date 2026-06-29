@@ -6,6 +6,7 @@
 #include "onnx_lib/checker.h"
 #include "onnx_lib/shape_inference/implementation.h"
 #include "onnx_optim/annotations/inplace_reuse.h"
+#include "onnx_optim/annotations/value_tags.h"
 #include "onnx_optim/optim_tensor.h"
 #include "onnx_optim/shapes/shape_inference.h"
 
@@ -40,9 +41,11 @@ std::vector<int64_t> DimsOf(const TypeProto::Tensor &tt) {
   return out;
 }
 
-std::unordered_map<std::string, std::string> MetadataOf(const NodeProto &node) {
-  std::unordered_map<std::string, std::string> out;
-  for (const auto &prop : node.ref_metadata_props()) {
+using MetadataMap = std::unordered_map<std::string, std::string>;
+
+template <typename Proto> MetadataMap MetadataOf(const Proto &proto) {
+  MetadataMap out;
+  for (const auto &prop : proto.ref_metadata_props()) {
     out[prop.ref_key().as_string()] = prop.ref_value().as_string();
   }
   return out;
@@ -1626,6 +1629,74 @@ TEST(BackendTestCaseShapeInference, ConvTransposeRejectsNonPositiveGroup) {
   EXPECT_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
                                             ShapeInferenceOptions(false, 1, false)),
                ONNX_LIGHT_NAMESPACE::InferenceError);
+}
+
+// Verifies that WriteValueAndNodeTagsToMetadata applied to a clean copy of the
+// shape-tag backend test case produces metadata that matches the expected
+// values pre-embedded in the model.
+TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagMetadataOnBackendCase) {
+  const std::vector<TestCase> cases = CollectTestCases("shape_tag");
+  bool found = false;
+  for (const TestCase &tc : cases) {
+    if (tc.name != "test_cc_shape_tag_shape_reshape") {
+      continue;
+    }
+    found = true;
+
+    // Collect the expected graph-level metadata pre-embedded in the case model.
+    const MetadataMap expected_graph_meta = MetadataOf(tc.model.ref_graph());
+    ASSERT_FALSE(expected_graph_meta.empty()) << "no graph metadata pre-embedded in case";
+
+    // Collect per-node expected metadata from the pre-embedded model.
+    const auto &src_nodes = tc.model.ref_graph().ref_node();
+    std::vector<MetadataMap> expected_node_meta;
+    expected_node_meta.reserve(src_nodes.size());
+    for (const auto &node : src_nodes) {
+      expected_node_meta.push_back(MetadataOf(node));
+    }
+
+    // Make a clean copy of the model and strip all metadata so
+    // WriteValueAndNodeTagsToMetadata starts from a blank slate.
+    ModelProto model_copy;
+    std::string serialized;
+    tc.model.SerializeToString(serialized);
+    model_copy.ParseFromString(serialized);
+
+    GraphProto *graph = model_copy.mutable_graph();
+    graph->mutable_metadata_props()->clear();
+    for (size_t n = 0; n < graph->node().size(); ++n) {
+      graph->mutable_node(n)->mutable_metadata_props()->clear();
+    }
+    for (size_t vi = 0; vi < graph->value_info().size(); ++vi) {
+      graph->mutable_value_info(vi)->mutable_metadata_props()->clear();
+    }
+
+    // Run WriteValueAndNodeTagsToMetadata and verify the result matches the
+    // pre-embedded expected values.
+    ASSERT_NO_THROW(onnx_optim::annotations::WriteValueAndNodeTagsToMetadata(*graph))
+        << "case: " << tc.name;
+
+    EXPECT_EQ(MetadataOf(*graph), expected_graph_meta)
+        << "graph metadata mismatch in case " << tc.name;
+
+    const auto &result_nodes = graph->ref_node();
+    ASSERT_EQ(result_nodes.size(), expected_node_meta.size());
+    for (size_t i = 0; i < result_nodes.size(); ++i) {
+      EXPECT_EQ(MetadataOf(result_nodes[i]), expected_node_meta[i])
+          << "node " << i << " metadata mismatch in case " << tc.name;
+    }
+
+    // Verify that WriteValueAndNodeTagsToMetadata also writes onnx_light.value_tag
+    // on the value_info entry for "S".
+    const auto &result_vis = graph->ref_value_info();
+    const auto &src_vis = tc.model.ref_graph().ref_value_info();
+    ASSERT_EQ(result_vis.size(), src_vis.size());
+    for (size_t vi = 0; vi < result_vis.size(); ++vi) {
+      EXPECT_EQ(MetadataOf(result_vis[vi]), MetadataOf(src_vis[vi]))
+          << "value_info[" << vi << "] metadata mismatch in case " << tc.name;
+    }
+  }
+  ASSERT_TRUE(found) << "test_cc_shape_tag_shape_reshape case not registered";
 }
 
 } // namespace Test

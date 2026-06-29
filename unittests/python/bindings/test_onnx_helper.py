@@ -20,7 +20,7 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertEqual(op.domain, "ai.onnx.ml")
         self.assertEqual(op.version, 5)
         s = str(op)
-        self.assertIn('domain: "ai.onnx.ml",', s)
+        self.assertIn('domain: "ai.onnx.ml"', s)
 
     def test_make_tensor_type_proto(self) -> None:
         proto = oh.make_tensor_type_proto(elem_type=2, shape=None)
@@ -28,7 +28,7 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertNotEmpty(proto.tensor_type.shape)
         self.assertEmpty(proto.sequence_type)
         s = str(proto)
-        self.assertIn("elem_type: 2,", s)
+        self.assertIn("elem_type: 2", s)
 
     def test_make_optional_value_info(self) -> None:
         tensor_type_proto = oh.make_tensor_type_proto(elem_type=2, shape=[5])

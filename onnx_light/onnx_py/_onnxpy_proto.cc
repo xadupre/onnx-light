@@ -24,7 +24,6 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace {
 constexpr size_t MAX_SHORT_REPR_LENGTH = 60;
-inline bool is_space_char(char c) { return std::isspace(static_cast<unsigned char>(c)) != 0; }
 
 // Adapts a Python callable to ParseOptions::raw_data_callback. The callable is invoked as
 // ``fn(tensor)`` for every parsed TensorProto that has raw_data and must return either ``None``
@@ -536,8 +535,9 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           "__str__",
           [](cls &self) -> std::string {
             utils::PrintOptions opts;
-            std::vector<std::string> rows = self.PrintToVectorString(opts);
-            return utils::join_string(rows);
+            std::stringstream ss;
+            self.PrintToVectorString(ss, opts);
+            return ss.str();
           },
           "Creates a printable string for this class.")
       .def(
@@ -586,53 +586,9 @@ template <typename cls>
 std::string proto_repr_with_short_line(cls &self,
                                        size_t max_short_repr_length = MAX_SHORT_REPR_LENGTH) {
   utils::PrintOptions opts;
-  std::vector<std::string> rows = self.PrintToVectorString(opts);
-  size_t compact_length = 0;
-  bool has_compact_content = false;
-  for (const auto &row : rows) {
-    size_t first = 0;
-    size_t last = row.size();
-    while (first < row.size() && is_space_char(row[first])) {
-      ++first;
-    }
-    while (last > first && is_space_char(row[last - 1])) {
-      --last;
-    }
-    if (first == last) {
-      continue;
-    }
-    if (has_compact_content) {
-      ++compact_length;
-    }
-    compact_length += last - first;
-    has_compact_content = true;
-    if (compact_length >= max_short_repr_length) {
-      return utils::join_string(rows);
-    }
-  }
-  if (!has_compact_content) {
-    return utils::join_string(rows);
-  }
-  std::string one_line;
-  one_line.reserve(compact_length);
-  for (const auto &row : rows) {
-    size_t first = 0;
-    size_t last = row.size();
-    while (first < row.size() && is_space_char(row[first])) {
-      ++first;
-    }
-    while (last > first && is_space_char(row[last - 1])) {
-      --last;
-    }
-    if (first == last) {
-      continue;
-    }
-    if (!one_line.empty()) {
-      one_line += " ";
-    }
-    one_line.append(row, first, last - first);
-  }
-  return one_line;
+  std::stringstream ss;
+  self.PrintToVectorString(ss, opts);
+  return ss.str();
 }
 
 template <typename T> void define_repeated_field_type(nb::class_<utils::RepeatedField<T>> &nbcls) {
@@ -1373,11 +1329,9 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .def_rw("raw_data_threshold", &utils::PrintOptions::raw_data_threshold,
               "if skip_raw_data is true, raw data will be printed only if it is larger than the "
               "threshold")
-      .def_rw("indentation", &utils::PrintOptions::indentation,
-              "number of spaces used for a single indentation level")
       .def_rw("inline_threshold", &utils::PrintOptions::inline_threshold,
-              "repeated fields with at most this many elements are printed inline on a single row, "
-              "larger fields are spread over multiple rows");
+              "repeated fields with at most this many elements are printed as a bracketed list; "
+              "all output is flat (no newlines)");
 
   nb::class_<utils::String>(m, "String", "Simplified string with no final null character.")
       .def(nb::init<std::string>())

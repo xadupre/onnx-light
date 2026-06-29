@@ -58,6 +58,7 @@ from ..onnx_proto._io_helper import (  # noqa: F401
     save_encrypted,
     save_encrypted_string,
 )
+from ..onnx_proto._helper import proto_str_to_multiline  # noqa: F401
 
 # Aliases matching the upstream onnx API.
 load_model = load

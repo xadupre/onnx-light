@@ -379,14 +379,14 @@ class TestProtoRepr(ExtTestCase):
         self.assertNotIn("\n", value)
         self.assertLess(len(value), MAX_SHORT_REPR_LENGTH)
 
-    def test_node_repr_long_keeps_multiline_format(self):
-        """Tests that a long NodeProto repr keeps multiline formatting."""
+    def test_node_repr_long_is_flat(self):
+        """Tests that a long NodeProto repr is always flat (no newlines)."""
         node = m.NodeProto()
         node.op_type = "Relu"
         node.input.extend(["x" * 30])
         node.output.extend(["y" * 30])
         value = repr(node)
-        self.assertIn("\n", value)
+        self.assertNotIn("\n", value)
 
     def test_node_repr_no_double_comma_with_attribute(self):
         """Tests that NodeProto repr with attributes does not contain double commas."""
@@ -427,12 +427,12 @@ class TestProtoRepr(ExtTestCase):
         self.assertNotIn("\n", value)
         self.assertLess(len(value), MAX_SHORT_REPR_LENGTH)
 
-    def test_model_repr_long_keeps_multiline_format(self):
-        """Tests that a long ModelProto repr keeps multiline formatting."""
+    def test_model_repr_long_is_flat(self):
+        """Tests that a long ModelProto repr is always flat (no newlines)."""
         model = m.ModelProto()
         model.producer_name = "a" * 60
         value = repr(model)
-        self.assertIn("\n", value)
+        self.assertNotIn("\n", value)
 
     def test_attribute_data_type(self):
         dt = m.AttributeProto.AttributeType.UNDEFINED

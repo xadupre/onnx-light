@@ -8,7 +8,11 @@ _ProtoT = TypeVar("_ProtoT")
 
 
 def coerce_proto(proto: Any, cls: type[_ProtoT]) -> _ProtoT:
-    """Returns *proto* as an ``onnx_light`` proto of type *cls*."""
+    """Converts *proto* to an ``onnx_light`` proto of type *cls*.
+
+    Returns:
+        The converted ``onnx_light`` proto instance.
+    """
 
     if isinstance(proto, cls):
         return proto
@@ -35,13 +39,21 @@ def coerce_proto(proto: Any, cls: type[_ProtoT]) -> _ProtoT:
 
 
 def matches_proto_class(proto: Any, cls: type[Any]) -> bool:
-    """Returns whether *proto* is an instance of *cls* or has the same proto class name."""
+    """Checks whether *proto* is an instance of *cls* or has the same proto class name.
+
+    Returns:
+        ``True`` when *proto* matches *cls*, ``False`` otherwise.
+    """
 
     return isinstance(proto, cls) or type(proto).__name__ == cls.__name__
 
 
 def copy_proto_back(dst: Any, src: Any) -> None:
-    """Copies the serialized contents of *src* back into *dst* when possible."""
+    """Copies the serialized contents of *src* back into *dst* when possible.
+
+    Returns:
+        ``None``.
+    """
 
     if dst is src:
         return

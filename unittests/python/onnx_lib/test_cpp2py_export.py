@@ -156,7 +156,7 @@ class TestCheckerSubmodule(ExtTestCase):
             checker.check_model(model)
 
     def test_check_model_accepts_upstream_model_proto(self):
-        """Tests checker.check_model accepts an upstream onnx ModelProto."""
+        """Tests that checker.check_model accepts an upstream onnx ModelProto."""
         graph = onnx.helper.make_graph(
             [onnx.helper.make_node("Relu", ["X"], ["Y"])],
             "test",
@@ -167,7 +167,7 @@ class TestCheckerSubmodule(ExtTestCase):
         checker.check_model(model)
 
     def test_check_model_proto_like_conversion_errors_raise_type_error(self):
-        """Tests proto-like conversion failures raise TypeError after SerializeToString runs."""
+        """Tests that proto-like conversion failures raise TypeError after SerializeToString."""
 
         class BadModelProto:
             def __init__(self):

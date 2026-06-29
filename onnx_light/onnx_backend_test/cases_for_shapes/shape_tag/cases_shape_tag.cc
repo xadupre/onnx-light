@@ -62,8 +62,11 @@ void RegisterShapeTagCases(std::vector<TestCase> &registry) {
   graph->add_metadata(onnx_optim::annotations::kValueTagsMetadataKey, "{\"S\":\"shape\"}");
   (*graph->mutable_node())[0].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey, "shape");
   // S (value_info[0]) also receives onnx_light.value_tag = "shape".
-  graph->mutable_value_info(0)->add_metadata(onnx_optim::annotations::kValueTagMetadataKey,
-                                             "shape");
+  {
+    StringStringEntryProto *entry = graph->mutable_value_info(0)->add_metadata_props();
+    entry->set_key(onnx_optim::annotations::kValueTagMetadataKey);
+    entry->set_value("shape");
+  }
 
   // Build the reference DataSet so the case is executable end-to-end.
   const Tensor x = Tensor::FromFloat("X", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});

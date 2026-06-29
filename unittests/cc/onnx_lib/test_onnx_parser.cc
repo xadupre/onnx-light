@@ -1,5 +1,6 @@
 #include "onnx.h"
 #include "onnx_manipulations/parser.h"
+#include <clocale>
 #include <gtest/gtest.h>
 
 #include <cmath>
@@ -8,6 +9,22 @@
 using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace {
+
+class LocaleGuard {
+public:
+  LocaleGuard() {
+    const char *loc = std::setlocale(LC_NUMERIC, nullptr);
+    saved_ = loc ? loc : "C";
+  }
+
+  ~LocaleGuard() { std::setlocale(LC_NUMERIC, saved_.c_str()); }
+
+  LocaleGuard(const LocaleGuard &) = delete;
+  LocaleGuard &operator=(const LocaleGuard &) = delete;
+
+private:
+  std::string saved_;
+};
 
 // Parse a single ONNX-text-format entity and assert the parse succeeded and
 // the entire input was consumed.
@@ -692,6 +709,48 @@ TEST(onnx_defs, Parser_EscapeStringLiteral) {
   EXPECT_TRUE(status.IsOK()) << status.ErrorMessage();
   EXPECT_TRUE(parser.EndOfInput()) << "Extra unparsed input unexpected.";
   EXPECT_EQ(s, std::string("123\"56\\89"));
+}
+
+TEST(onnx_defs, Parser_LocaleIndependentFloatParsing) {
+  LocaleGuard locale_guard;
+
+  const char *locale_candidates[] = {
+      "de_DE.UTF-8",
+      "German_Germany.1252",
+      "fr_FR.UTF-8",
+      "French_France.1252",
+  };
+
+  bool locale_set = false;
+  for (const auto *candidate : locale_candidates) {
+    if (std::setlocale(LC_NUMERIC, candidate) != nullptr) {
+      locale_set = true;
+      break;
+    }
+  }
+
+  if (!locale_set) {
+    GTEST_SKIP() << "No locale with comma decimal separator available on this system";
+  }
+
+  const char *code = R"ONNX(
+    <ir_version: 7, opset_import: ["" : 13]>
+    agraph (float[1, 5] X) => (float[1, 5] Y) {
+        Y = LeakyRelu <alpha = 0.123> (X)
+    }
+  )ONNX";
+
+  ModelProto model;
+  OnnxParser parser(code);
+  auto status = parser.Parse(model);
+  EXPECT_TRUE(status.IsOK()) << status.ErrorMessage();
+
+  ASSERT_EQ(model.graph().node_size(), 1);
+  const auto &node = model.graph().node(0);
+  ASSERT_EQ(node.attribute_size(), 1);
+  EXPECT_EQ(node.attribute(0).name(), "alpha");
+  const float alpha = node.attribute(0).f();
+  EXPECT_NEAR(alpha, 0.123f, 1e-6f);
 }
 
 TEST(onnx_defs, Parser_NonNulTerminatedStringView) {

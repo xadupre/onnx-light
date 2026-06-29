@@ -7,10 +7,6 @@
 
 #include "parser.h"
 
-#if !defined(__cpp_lib_to_chars) || __cpp_lib_to_chars < 201611L
-#include <locale.h> // NOLINT(modernize-deprecated-headers)
-#endif
-
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
@@ -56,6 +52,8 @@ double LocaleIndependentStod(const std::string &s) {
 
 #else
 
+#include <locale.h> // NOLINT(modernize-deprecated-headers)
+
 namespace {
 
 #ifdef _WIN32
@@ -92,7 +90,9 @@ const CLocale &GetCLocale() {
 float LocaleIndependentStof(const std::string &s) {
   const auto &cloc = GetCLocale();
   if (!cloc.loc) {
-    ONNX_THROW("Failed to create C locale for float parsing");
+    ONNX_THROW(
+        "Failed to create C locale for float parsing. This may indicate a system configuration "
+        "issue.");
   }
   char *end = nullptr;
   errno = 0;
@@ -110,7 +110,9 @@ float LocaleIndependentStof(const std::string &s) {
 double LocaleIndependentStod(const std::string &s) {
   const auto &cloc = GetCLocale();
   if (!cloc.loc) {
-    ONNX_THROW("Failed to create C locale for double parsing");
+    ONNX_THROW(
+        "Failed to create C locale for double parsing. This may indicate a system configuration "
+        "issue.");
   }
   char *end = nullptr;
   errno = 0;

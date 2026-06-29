@@ -385,8 +385,8 @@ class TestProtoStrToMultiline(ExtTestCase):
         flat = str(node)
         result = fn(flat)
         self.assertNotIn("\n" + " " * 0 + "{", result[1:])  # inner braces are indented
-        self.assertIn("name: relu1", result)
-        self.assertIn("op_type: Relu", result)
+        self.assertIn('name: "relu1"', result)
+        self.assertIn('op_type: "Relu"', result)
         self.assertIn("\n", result)
         # No trailing trailing space; each field on its own line.
         for line in result.splitlines():
@@ -447,7 +447,7 @@ class TestProtoStrToMultiline(ExtTestCase):
         self.assertTrue(hasattr(onnxl, "proto_str_to_multiline"))
         node = oh.make_node("Sigmoid", ["x"], ["y"])
         result = onnxl.proto_str_to_multiline(str(node))
-        self.assertIn("op_type: Sigmoid", result)
+        self.assertIn('op_type: "Sigmoid"', result)
 
 
 if __name__ == "__main__":

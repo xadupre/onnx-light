@@ -1033,15 +1033,15 @@ def proto_str_to_multiline(flat: str, indent: str = "  ") -> str:
     ``str(proto)`` (or ``proto.PrintToVectorString(ss, opts)``) produces a
     single-line representation such as::
 
-        { name: relu1 op_type: Relu input: [X] output: [Y] }
+        { name: "relu1" op_type: "Relu" input: ["X"] output: ["Y"] }
 
     This function reformats that string as a human-readable, indented block::
 
         {
-          name: relu1
-          op_type: Relu
-          input: [X]
-          output: [Y]
+          name: "relu1"
+          op_type: "Relu"
+          input: ["X"]
+          output: ["Y"]
         }
 
     Nested message fields are indented recursively; array values (``[…]``)

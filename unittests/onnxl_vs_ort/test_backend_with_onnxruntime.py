@@ -51,6 +51,7 @@ def ort_max_supported_opset() -> int:
 # Opset version at which the cases below were introduced. They are only excluded
 # when the installed ONNX Runtime does not yet support that opset.
 OPSET_27 = 27
+OPSET_28 = 28
 
 # Exclusions that only apply when ONNX Runtime does not support the given opset.
 ORT_OPSET_GATED_EXCLUDE_REGEX = {
@@ -62,7 +63,12 @@ ORT_OPSET_GATED_EXCLUDE_REGEX = {
         r"^test_cc_linear_attention_.*$",
         # CausalConvWithState is opset 27.
         r"^test_cc_causal_conv_with_state_.*$",
-    ]
+    ],
+    OPSET_28: [
+        # Celu-28 adds float16/bfloat16 support; these test cases target opset 28.
+        r"^test_cc_celu_float16$",
+        r"^test_cc_celu_bfloat16$",
+    ],
 }
 
 ORT_EXCLUDE_REGEX = [

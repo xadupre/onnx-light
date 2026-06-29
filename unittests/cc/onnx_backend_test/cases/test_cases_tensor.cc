@@ -1106,6 +1106,7 @@ TEST(BackendTestCase, OneHotCasesRegistered) {
       {"test_onehot_without_axis", {3, 12}},
       {"test_onehot_with_axis", {2, 10, 2}},
       {"test_onehot_negative_indices", {3, 10}},
+      {"test_onehot_out_of_range_indices", {3, 5}},
       {"test_onehot_with_negative_axis", {2, 10, 2}},
       {"test_cc_onehot_default_axis_int64_indices", {2, 3}},
   };

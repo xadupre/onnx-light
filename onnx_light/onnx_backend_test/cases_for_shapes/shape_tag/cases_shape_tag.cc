@@ -5,6 +5,7 @@
 #include "onnx_backend_test/cases_for_shapes/shape_tag/include_shape_tag_cases.h"
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
+#include "onnx_optim/annotations/inplace_reuse.h"
 #include "onnx_optim/annotations/value_tags.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -88,6 +89,66 @@ void RegisterShapeTagCases(std::vector<TestCase> &registry) {
     entry->set_key(onnx_optim::annotations::kValueTagMetadataKey);
     entry->set_value("weight");
   }
+
+  // Build the reference DataSet so the case is executable end-to-end.
+  const Tensor x = Tensor::FromFloat("X", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+  Tensor s = kernel::Shape(ctx)(x, kernel::Shape::Attributes{});
+  s.name = "S";
+  Tensor y = kernel::Reshape(ctx)(x, s);
+  y.name = "Y";
+
+  AppendDataSet(tc, {x}, {y});
+
+  registry.emplace_back(std::move(tc));
+}
+
+// ---------------------------------------------------------------------------
+// ``Shape → Reshape`` with pre-embedded ``release_after_shape_tag`` metadata.
+//
+// This case exercises the ``kReleaseShapeTag`` event path: ``S`` is the
+// output of ``Shape`` (tagged ``"shape"``), its last use is inside
+// ``Reshape``, so ``ComputeInPlaceReuseGraph`` must emit a
+// ``kReleaseShapeTag`` event for ``S`` at node index 1 (Reshape).
+//
+// The expected metadata written by ``ComputeContext::WriteToMetadata`` is
+// pre-embedded so tests can verify that the computation reproduces it:
+//
+//   * node 0 (Shape):   no release metadata.
+//   * node 1 (Reshape): ``onnx_light.release_after = "S"`` and
+//                        ``onnx_light.release_after_shape_tag = "S"``.
+// ---------------------------------------------------------------------------
+void RegisterShapeTagReleaseEventCases(std::vector<TestCase> &registry) {
+  const OpsetId opset = DefaultOpset(18);
+  const kernel::KernelContext ctx{opset};
+
+  const std::string name = "test_cc_shape_tag_release_event";
+
+  TestCase tc(name, name, "model", "shape_tag");
+  tc.rtol = 1e-3;
+  tc.atol = 1e-7;
+
+  ModelProto &model = tc.model;
+  InitModel(model, kDefaultIrVersion, {opset});
+
+  GraphProto *graph = model.add_graph();
+  graph->set_name(name);
+
+  AddNode(*graph, "Shape", {"X"}, {"S"});
+  AddNode(*graph, "Reshape", {"X", "S"}, {"Y"});
+
+  // Concrete input shape [2, 3] so the model is executable end-to-end.
+  AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
+  AppendValueInfo(*graph->add_value_info(), "S", DataType::INT64, {DimSpec(2)});
+  AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
+
+  // Pre-embed the expected release-after-shape-tag metadata.
+  // Node 0 (Shape): S is produced here; no release metadata.
+  // Node 1 (Reshape): S reaches its last use here and is shape-tagged,
+  // so both kReleaseAfterMetadataKey and kReleaseAfterShapeTagMetadataKey
+  // are written.
+  (*graph->mutable_node())[1].add_metadata(onnx_optim::annotations::kReleaseAfterMetadataKey, "S");
+  (*graph->mutable_node())[1].add_metadata(
+      onnx_optim::annotations::kReleaseAfterShapeTagMetadataKey, "S");
 
   // Build the reference DataSet so the case is executable end-to-end.
   const Tensor x = Tensor::FromFloat("X", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});

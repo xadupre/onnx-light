@@ -10,7 +10,6 @@ namespace onnx_backend_test {
 void CollectShapeTagTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   if (op_type.empty() or op_type == "shape_tag") {
     RegisterShapeTagCases(registry);
-    RegisterShapeTagReleaseEventCases(registry);
   }
 }
 

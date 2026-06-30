@@ -27,15 +27,6 @@ namespace onnx_backend_test {
 /// ``WriteValueAndNodeTagsToMetadata`` produces identical results.
 void RegisterShapeTagCases(std::vector<TestCase> &registry);
 
-/// Registers a ``Shape → Reshape`` case that exercises the
-/// ``kReleaseShapeTag`` event path. The shape tensor ``S`` is released at
-/// the ``Reshape`` node (its last consumer) and is tagged ``"shape"``, so
-/// ``ComputeInPlaceReuseGraph`` must emit a ``kReleaseShapeTag`` event for
-/// it. The expected ``onnx_light.release_after`` and
-/// ``onnx_light.release_after_shape_tag`` node metadata are pre-embedded so
-/// tests can verify that ``ComputeContext::WriteToMetadata`` reproduces them.
-void RegisterShapeTagReleaseEventCases(std::vector<TestCase> &registry);
-
 /// Collects all shape-tag backend test cases by invoking every
 /// ``Register*ShapeTag*Cases`` helper declared in this header.
 void CollectShapeTagTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");

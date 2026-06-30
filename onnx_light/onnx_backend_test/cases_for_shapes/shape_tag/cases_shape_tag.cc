@@ -142,13 +142,15 @@ void RegisterShapeTagReleaseEventCases(std::vector<TestCase> &registry) {
   AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
 
   // Pre-embed the expected release-after-shape-tag metadata.
+  // The graph has exactly two nodes added above: node 0 = Shape, node 1 = Reshape.
   // Node 0 (Shape): S is produced here; no release metadata.
   // Node 1 (Reshape): S reaches its last use here and is shape-tagged,
   // so both kReleaseAfterMetadataKey and kReleaseAfterShapeTagMetadataKey
   // are written.
-  (*graph->mutable_node())[1].add_metadata(onnx_optim::annotations::kReleaseAfterMetadataKey, "S");
-  (*graph->mutable_node())[1].add_metadata(
-      onnx_optim::annotations::kReleaseAfterShapeTagMetadataKey, "S");
+  auto &nodes = *graph->mutable_node();
+  // NOLINTNEXTLINE: nodes has exactly 2 elements (Shape + Reshape added above).
+  nodes[1].add_metadata(onnx_optim::annotations::kReleaseAfterMetadataKey, "S");
+  nodes[1].add_metadata(onnx_optim::annotations::kReleaseAfterShapeTagMetadataKey, "S");
 
   // Build the reference DataSet so the case is executable end-to-end.
   const Tensor x = Tensor::FromFloat("X", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});

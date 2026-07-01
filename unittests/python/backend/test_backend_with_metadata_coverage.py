@@ -1,10 +1,12 @@
 import unittest
 
-from onnx_light.ext_test_case import import_or_skip
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 
 # The backend test registries are only available in the full build; skip this
 # module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
-make_test_coverage = import_or_skip("onnx_light.onnx.backend", "make_test_coverage")
+collect_test_cases_by_name = import_or_skip(
+    "onnx_light.onnx.backend", "collect_test_cases_by_name"
+)
 
 
 def _metadata_map(entries):
@@ -56,15 +58,20 @@ def _check_shape_tag_test_case(tc):
     }, f"Unexpected metadata on node 1 for {tc.name!r}"
 
 
-TestBackendInPlaceCoverage = make_test_coverage(
-    _check_inplace_test_case, include_regex=["^test_cc_shape_inference_inplace_reuse$"]
-)
-TestBackendReleaseCoverage = make_test_coverage(
-    _check_release_test_case, include_regex=["^test_cc_release_shape_reshape$"]
-)
-TestBackendShapeTagCoverage = make_test_coverage(
-    _check_shape_tag_test_case, include_regex=["^test_cc_shape_tag_shape_reshape$"]
-)
+class TestBackendMetadataCoverage(ExtTestCase):
+    def _get_test_case(self, pattern):
+        cases = collect_test_cases_by_name(pattern)
+        self.assertEqual(len(cases), 1)
+        return cases[0]
+
+    def test_cc_shape_inference_inplace_reuse(self):
+        _check_inplace_test_case(self._get_test_case("^test_cc_shape_inference_inplace_reuse$"))
+
+    def test_cc_release_shape_reshape(self):
+        _check_release_test_case(self._get_test_case("^test_cc_release_shape_reshape$"))
+
+    def test_cc_shape_tag_shape_reshape(self):
+        _check_shape_tag_test_case(self._get_test_case("^test_cc_shape_tag_shape_reshape$"))
 
 
 if __name__ == "__main__":

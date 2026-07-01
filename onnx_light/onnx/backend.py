@@ -9,7 +9,7 @@ except ImportError as exc:  # pragma: no cover - exercised only in reduced build
         "(ONNX_LIGHT_BUILD_KERNELS=OFF); install the full build to use the "
         "backend test cases."
     ) from exc
-from ..onnx_lib.backend.test.case import collect_test_case, make_test_class  # type: ignore # noqa: F401
+from ..onnx_lib.backend.test.case import collect_test_case, make_test_class, make_test_coverage  # type: ignore # noqa: F401
 
 
 def collect_test_cases_by_name(pattern: Union[str, Pattern[str]]) -> list[TestCase]:

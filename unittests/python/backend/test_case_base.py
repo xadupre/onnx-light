@@ -237,9 +237,33 @@ class TestBackendFunction(ExtTestCase):
         # Check that test methods were created
         test_methods = [attr for attr in dir(TestClass) if attr.startswith("test_")]
         self.assertGreater(len(test_methods), 0)
-
         # Check that test_cc_abs exists (from C++ backend test library)
         self.assertIn("test_test_cc_abs", test_methods)
+
+    def test_make_test_coverage_returns_test_class(self):
+        """Verifies that make_test_coverage returns an ExtTestCase subclass."""
+        from onnx_light.onnx_lib.backend.test.case import make_test_coverage
+
+        def dummy_check(test_case):
+            self.assertIsInstance(test_case, TestCase)
+
+        TestClass = make_test_coverage(dummy_check, include_regex=["^test_cc_abs$"])
+        self.assertTrue(issubclass(TestClass, ExtTestCase))
+
+    def test_make_test_coverage_passes_test_case(self):
+        """Verifies that make_test_coverage passes the matching TestCase."""
+        from onnx_light.onnx_lib.backend.test.case import make_test_coverage
+
+        seen = []
+
+        def record_check(test_case):
+            seen.append(test_case.name)
+
+        TestClass = make_test_coverage(record_check, include_regex=["^test_cc_abs$"])
+        test_name = "test_test_cc_abs"
+        self.assertTrue(hasattr(TestClass, test_name))
+        getattr(TestClass(methodName=test_name), test_name)()
+        self.assertEqual(seen, ["test_cc_abs"])
 
     def test_make_test_class_with_include_regex(self):
         """Verifies that make_test_class filters tests with include_regex."""

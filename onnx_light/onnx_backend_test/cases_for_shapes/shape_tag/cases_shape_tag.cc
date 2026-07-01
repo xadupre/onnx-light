@@ -5,6 +5,7 @@
 #include "onnx_backend_test/cases_for_shapes/shape_tag/include_shape_tag_cases.h"
 #include "onnx_backend_test/test_case.h"
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
+#include "onnx_optim/annotations/inplace_reuse.h"
 #include "onnx_optim/annotations/value_tags.h"
 #include "onnx_proto/onnx_helper.h"
 

@@ -1,0 +1,82 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#include "onnx_backend_test/cases_for_shapes/release/include_release_cases.h"
+#include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
+#include "onnx_optim/annotations/inplace_reuse.h"
+#include "onnx_proto/onnx_helper.h"
+
+#include <cstdint>
+#include <string>
+#include <vector>
+
+namespace ONNX_LIGHT_NAMESPACE {
+namespace onnx_backend_test {
+
+namespace {
+
+constexpr int64_t kDefaultIrVersion = 10;
+
+} // namespace
+
+// ---------------------------------------------------------------------------
+// ``Shape → Reshape`` — exercises the ``kRelease`` event path.
+//
+// ``Shape(X)`` produces an INT64 tensor ``S`` whose last (and only) consumer
+// is ``Reshape``.  ``ComputeInPlaceReuseGraph`` must therefore emit a
+// ``kRelease`` event for ``S`` at node index 1 (the ``Reshape`` node) and
+// write ``onnx_light.release_after = "S"`` on that node.
+//
+// The expected metadata is pre-embedded into the model so tests can verify
+// that ``ComputeContext::ComputeInPlaceReuseGraph`` reproduces it exactly:
+//
+//   * node 0 (Shape):   no release metadata.
+//   * node 1 (Reshape): ``onnx_light.release_after = "S"``.
+// ---------------------------------------------------------------------------
+void RegisterReleaseCases(std::vector<TestCase> &registry) {
+  const OpsetId opset = DefaultOpset(18);
+  const kernel::KernelContext ctx{opset};
+
+  const std::string name = "test_cc_release_shape_reshape";
+
+  TestCase tc(name, name, "model", "release");
+  tc.rtol = 1e-3;
+  tc.atol = 1e-7;
+
+  ModelProto &model = tc.model;
+  InitModel(model, kDefaultIrVersion, {opset});
+
+  GraphProto *graph = model.add_graph();
+  graph->set_name(name);
+
+  AddNode(*graph, "Shape", {"X"}, {"S"});
+  AddNode(*graph, "Reshape", {"X", "S"}, {"Y"});
+
+  // Concrete input shape [2, 3] so the model is executable end-to-end.
+  AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
+  AppendValueInfo(*graph->add_value_info(), "S", DataType::INT64, {DimSpec(2)});
+  AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
+
+  // Pre-embed the expected release metadata.
+  // The graph has exactly two nodes: node 0 = Shape, node 1 = Reshape.
+  // S is produced by Shape and consumed only by Reshape, so the release point
+  // is node 1.  No shape-tag metadata is involved here.
+  // NOLINTNEXTLINE: nodes has exactly 2 elements (Shape + Reshape added above).
+  (*graph->mutable_node())[1].add_metadata(onnx_optim::annotations::kReleaseAfterMetadataKey, "S");
+
+  // Build the reference DataSet so the case is executable end-to-end.
+  const Tensor x = Tensor::FromFloat("X", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+  Tensor s = kernel::Shape(ctx)(x, kernel::Shape::Attributes{});
+  s.name = "S";
+  Tensor y = kernel::Reshape(ctx)(x, s);
+  y.name = "Y";
+
+  AppendDataSet(tc, {x}, {y});
+
+  registry.emplace_back(std::move(tc));
+}
+
+} // namespace onnx_backend_test
+} // namespace ONNX_LIGHT_NAMESPACE

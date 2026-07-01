@@ -1699,4 +1699,61 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagMetadataOnBackendCase
   ASSERT_TRUE(found) << "test_cc_shape_tag_shape_reshape case not registered";
 }
 
+// ---------------------------------------------------------------------------
+// kReleaseShapeTag event emitted by ComputeContext for the shape-tag release
+// backend test case
+// ---------------------------------------------------------------------------
+//
+// Verifies that ``ComputeInPlaceReuseGraph`` emits a ``kRelease`` event for
+// the tensor ``S`` at the ``Reshape`` node (node index 1), which is S's only
+// consumer.
+//
+// This test also confirms that the pre-embedded ``onnx_light.release_after``
+// node metadata in the backend test case (``test_cc_release_shape_reshape``)
+// matches what ``ComputeContext::WriteToMetadata`` would produce.
+TEST(BackendTestCaseShapeInference, ReleaseEventEmittedForBackendCase) {
+  const std::vector<TestCase> cases = CollectTestCases("release");
+  bool found = false;
+  for (const TestCase &tc : cases) {
+    if (tc.name != "test_cc_release_shape_reshape") {
+      continue;
+    }
+    found = true;
+
+    onnx_optim::shapes::ShapesContext ctx;
+    ASSERT_NO_THROW(ctx.ComputeShapeModel(tc.model)) << "case: " << tc.name;
+
+    onnx_optim::annotations::ComputeContext inplace;
+    inplace.set_events_enabled(true);
+    ASSERT_NO_THROW(inplace.ComputeInPlaceReuseGraph(tc.model.ref_graph(), ctx, false, {}))
+        << "case: " << tc.name;
+
+    // Exactly one kRelease event must be emitted, for "S" at node 1
+    // (the Reshape node, which is S's last consumer).
+    using onnx_optim::annotations::ComputeEventAction;
+    int release_count = 0;
+    for (const auto &ev : inplace.Events()) {
+      if (ev.action == ComputeEventAction::kRelease) {
+        ++release_count;
+        EXPECT_EQ(ev.name, "S") << "release event must name 'S'";
+        EXPECT_EQ(ev.node_index, 1u) << "release event must fire at node 1 (Reshape)";
+      }
+    }
+    EXPECT_EQ(release_count, 1) << "expected exactly one kRelease event";
+
+    // Verify that the pre-embedded node metadata matches what WriteToMetadata
+    // would produce: node 0 (Shape) has no release metadata, node 1 (Reshape)
+    // carries kReleaseAfterMetadataKey for "S".
+    const std::vector<MetadataMap> expected_node_meta = {
+        {}, {{std::string(onnx_optim::annotations::kReleaseAfterMetadataKey), "S"}}};
+    const auto &nodes = tc.model.ref_graph().ref_node();
+    ASSERT_EQ(nodes.size(), expected_node_meta.size());
+    for (size_t i = 0; i < nodes.size(); ++i) {
+      EXPECT_EQ(MetadataOf(nodes[i]), expected_node_meta[i])
+          << "node " << i << " metadata mismatch in case " << tc.name;
+    }
+  }
+  ASSERT_TRUE(found) << "test_cc_release_shape_reshape case not registered";
+}
+
 } // namespace Test

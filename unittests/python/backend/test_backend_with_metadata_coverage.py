@@ -9,6 +9,7 @@ import onnx_light.onnx_optim.shape_inference as shape_inference
 # The backend test registries are only available in the full build; skip this
 # module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
 make_test_class = import_or_skip("onnx_light.onnx.backend", "make_test_class")
+ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
 
 _EXPECTED_METADATA_KEYS = {
     shape_inference.INPLACE_REUSE_METADATA_KEY,
@@ -70,11 +71,14 @@ def _assert_metadata_matches(name, location, expected, computed):
 def metadata_coverage_check(model: onnxl.ModelProto, *_inputs):
     assert isinstance(model, onnxl.ModelProto), f"Unexpected type {type(model)}"
     name = model.graph.name
+    outputs = ReferenceEvaluator(model).run(
+        None, dict(zip([i.name for i in model.graph.input], _inputs))
+    )
     expected_graph = _expected_metadata_map(model.graph.metadata_props)
     expected_nodes = [_expected_metadata_map(node.metadata_props) for node in model.graph.node]
     expected_values = _value_metadata(model.graph)
     if not _has_expected_metadata(expected_graph, expected_nodes, expected_values):
-        return
+        return outputs
 
     model_copy = onnxl.ModelProto()
     model_copy.CopyFrom(model)
@@ -97,9 +101,13 @@ def metadata_coverage_check(model: onnxl.ModelProto, *_inputs):
             _assert_metadata_matches(
                 name, f"{field} {i}", expected, _metadata_map(values[i].metadata_props)
             )
+    return outputs
 
 
-TestBackendMetadataCoverage = make_test_class(metadata_coverage_check)
+TestBackendMetadataCoverage = make_test_class(
+    metadata_coverage_check,
+    include_regex=["^test_cc_shape_inference_.*", "^test_cc_release_.*", "^test_cc_shape_tag_.*"],
+)
 
 
 if __name__ == "__main__":

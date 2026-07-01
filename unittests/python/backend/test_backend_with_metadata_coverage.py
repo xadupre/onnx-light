@@ -1,4 +1,5 @@
 import unittest
+import re
 
 from onnx_light.ext_test_case import import_or_skip
 
@@ -6,7 +7,9 @@ import onnx_light.onnx as onnxl
 
 # The backend test registries are only available in the full build; skip this
 # module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
-collect_test_case = import_or_skip("onnx_light.onnx.backend", "collect_test_case")
+collect_test_cases_by_name = import_or_skip(
+    "onnx_light.onnx.backend", "collect_test_cases_by_name"
+)
 make_test_class = import_or_skip("onnx_light.onnx.backend", "make_test_class")
 
 
@@ -66,12 +69,13 @@ _METADATA_CHECKS = {
 }
 
 
-def metadata_coverage_check(model: onnxl.ModelProto, *inputs):
-    del inputs
+def metadata_coverage_check(model: onnxl.ModelProto, *_inputs):
     assert isinstance(model, onnxl.ModelProto), f"Unexpected type {type(model)}"
     name = model.graph.name
     assert name in _EXPECTED_TAGS, f"Unexpected model name {name!r}"
-    test_case = collect_test_case()[name]
+    test_cases = collect_test_cases_by_name(f"^{re.escape(name)}$")
+    assert len(test_cases) == 1, f"Unable to find unique backend test case for {name!r}"
+    test_case = test_cases[0]
     assert (
         test_case.tag == _EXPECTED_TAGS[name]
     ), f"Unexpected tag for {name!r}: {test_case.tag!r}"

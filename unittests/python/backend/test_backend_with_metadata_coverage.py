@@ -74,36 +74,30 @@ def metadata_coverage_check(model: onnxl.ModelProto, *_inputs):
     expected_graph = _expected_metadata_map(model.graph.metadata_props)
     expected_nodes = [_expected_metadata_map(node.metadata_props) for node in model.graph.node]
     expected_values = _value_metadata(model.graph)
-    if _has_expected_metadata(expected_graph, expected_nodes, expected_values):
-        model_copy = onnxl.ModelProto()
-        model_copy.CopyFrom(model)
-        _clear_metadata(model_copy)
+    model_copy = onnxl.ModelProto()
+    model_copy.CopyFrom(model)
+    _clear_metadata(model_copy)
 
-        ctx = shape_inference.ShapesContext()
-        shape_inference.compute_shape_model(ctx, model_copy)
-        value_tags, _ = shape_inference.compute_value_and_node_tags(model_copy.graph)
-        shape_inference.write_value_and_node_tags_to_metadata(model_copy.graph)
-        shape_inference.write_inplace_reuse_to_metadata(
-            ctx, model_copy.graph, value_tags=value_tags
-        )
+    ctx = shape_inference.ShapesContext()
+    shape_inference.compute_shape_model(ctx, model_copy)
+    value_tags, _ = shape_inference.compute_value_and_node_tags(model_copy.graph)
+    shape_inference.write_value_and_node_tags_to_metadata(model_copy.graph)
+    shape_inference.write_inplace_reuse_to_metadata(ctx, model_copy.graph, value_tags=value_tags)
 
-        _assert_metadata_matches(
-            name, "graph", expected_graph, _metadata_map(model_copy.graph.metadata_props)
-        )
-        for i, (expected, node) in enumerate(zip(expected_nodes, model_copy.graph.node)):
-            _assert_metadata_matches(
-                name, f"node {i}", expected, _metadata_map(node.metadata_props)
-            )
-        for field, expected_entries in expected_values.items():
-            values = getattr(model_copy.graph, field)
-            for i, expected in enumerate(expected_entries):
-                _assert_metadata_matches(
-                    name, f"{field} {i}", expected, _metadata_map(values[i].metadata_props)
-                )
-    outputs = ReferenceEvaluator(model).run(
-        None, dict(zip([i.name for i in model.graph.input], _inputs))
+    if not _has_expected_metadata(expected_graph, expected_nodes, expected_values):
+        return
+
+    _assert_metadata_matches(
+        name, "graph", expected_graph, _metadata_map(model_copy.graph.metadata_props)
     )
-    return outputs
+    for i, (expected, node) in enumerate(zip(expected_nodes, model_copy.graph.node)):
+        _assert_metadata_matches(name, f"node {i}", expected, _metadata_map(node.metadata_props))
+    for field, expected_entries in expected_values.items():
+        values = getattr(model_copy.graph, field)
+        for i, expected in enumerate(expected_entries):
+            _assert_metadata_matches(
+                name, f"{field} {i}", expected, _metadata_map(values[i].metadata_props)
+            )
 
 
 TestBackendMetadataCoverage = make_test_class(

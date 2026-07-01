@@ -237,7 +237,6 @@ class TestBackendFunction(ExtTestCase):
         # Check that test methods were created
         test_methods = [attr for attr in dir(TestClass) if attr.startswith("test_")]
         self.assertGreater(len(test_methods), 0)
-
         # Check that test_cc_abs exists (from C++ backend test library)
         self.assertIn("test_test_cc_abs", test_methods)
 

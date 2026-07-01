@@ -206,6 +206,33 @@ TEST(BackendTestCase, TagIsInferenceForShapeInferenceCases) {
   }
 }
 
+TEST(BackendTestCase, TagIsInPlaceForInPlaceCases) {
+  std::vector<TestCase> registry;
+  onnx_backend_test::CollectInPlaceTestCases(registry);
+  ASSERT_FALSE(registry.empty());
+  for (const auto &tc : registry) {
+    EXPECT_EQ(tc.tag, "inplace") << "case: " << tc.name;
+  }
+}
+
+TEST(BackendTestCase, TagIsReleaseForReleaseCases) {
+  std::vector<TestCase> registry;
+  onnx_backend_test::CollectReleaseTestCases(registry);
+  ASSERT_FALSE(registry.empty());
+  for (const auto &tc : registry) {
+    EXPECT_EQ(tc.tag, "release") << "case: " << tc.name;
+  }
+}
+
+TEST(BackendTestCase, TagIsShapeTagForShapeTagCases) {
+  std::vector<TestCase> registry;
+  onnx_backend_test::CollectShapeTagTestCases(registry);
+  ASSERT_FALSE(registry.empty());
+  for (const auto &tc : registry) {
+    EXPECT_EQ(tc.tag, "shape_tag") << "case: " << tc.name;
+  }
+}
+
 TEST(BackendTestCase, TagDefaultsToDomainForNonDefaultDomainNode) {
   // When the node belongs to a non-default operator domain (e.g.
   // ``ai.onnx.ml``) and no explicit tag is supplied, ``Expect`` should

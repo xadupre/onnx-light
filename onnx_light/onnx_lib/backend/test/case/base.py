@@ -628,6 +628,9 @@ def make_test_coverage(
     Keeps or removes tests based on include_regex and exclude_regex.
     Creates a test class which has a test method per test, like ``test_{name}``.
     Calls ``check`` with the matching :class:`TestCase`.
+
+    Returns:
+        A dynamically generated :class:`ExtTestCase` subclass.
     """
     all_tests = collect_test_case()
 

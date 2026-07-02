@@ -73,8 +73,8 @@ Checks: >-
   -readability-use-anyofallof,
 
 # Lint onnx-light headers; exclude generated *.pb.h, third_party, deps, and hidden build/env dirs.
-HeaderFilterRegex: 'onnx_light/'
-ExcludeHeaderFilterRegex: '(\.pb\.h$|/third_party/|/_deps/|/\.)'
+# Note: ExcludeHeaderFilterRegex requires clang-tidy >=19; use a negative-lookahead instead.
+HeaderFilterRegex: 'onnx_light/(?!.*\.pb\.h$)(?!.*/third_party/)(?!.*/_deps/)(?!.*/\.)'
 
 CheckOptions:
   # `cppcoreguidelines-special-member-functions` is enabled, refer to https://en.cppreference.com/w/cpp/language/rule_of_three

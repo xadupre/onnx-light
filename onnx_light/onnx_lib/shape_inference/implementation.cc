@@ -681,7 +681,8 @@ public:
       const ShapeInferenceOptions &options_in, SymbolTable *symbol_table_in,
       const ModelLocalFunctionsMap &model_local_functions_map_in,
       const ISchemaRegistry *schema_registry_in = OpSchemaRegistry::Instance(),
-      DataValueMap *generated_shape_data_by_name_in = nullptr, const int ir_version_in = IR_VERSION,
+      DataValueMap *generated_shape_data_by_name_in = nullptr,
+      const int64_t ir_version_in = IR_VERSION,
       std::shared_ptr<std::unordered_set<const FunctionProto *>> active_functions_in = nullptr)
       : inferred_types(graph), value_types_by_name(outer_scope_value_types_by_name_in),
         opset_imports(opset_imports_in), options(options_in), symbol_table(symbol_table_in),
@@ -729,7 +730,7 @@ private:
   const ModelLocalFunctionsMap &model_local_functions_map;
   const ISchemaRegistry *schema_registry;
   DataValueMap *generated_shape_data_by_name;
-  int ir_version;
+  int64_t ir_version;
   std::shared_ptr<std::unordered_set<const FunctionProto *>> active_functions;
   GraphInferenceContext graph_inference_context;
 
@@ -756,7 +757,7 @@ void InferShapesImpl(
     SymbolTable *symbol_table, const ModelLocalFunctionsMap &model_local_functions_map,
     const ISchemaRegistry *schema_registry = OpSchemaRegistry::Instance(),
     DataValueMap *generated_shape_data_by_name = nullptr,
-    const int ir_version = IR_VERSION // default the latest one
+    const int64_t ir_version = IR_VERSION // default the latest one
 ) {
   DataValueMap empty;
   if (generated_shape_data_by_name == nullptr) {

@@ -86,11 +86,9 @@ class TestVersionConverter(ExtTestCase):
 
         self.assertRaises(RuntimeError, test)
 
-    # A graph output that nothing produces must raise (ConvertError, seen as
-    # RuntimeError in Python since ONNX_LIGHT_NAMESPACE::ConvertError is not
-    # bound as version_converter.ConvertError), not crash. Regression test for a
-    # SEGV in graphProtoToGraph when a top-level graph output name was absent
-    # from the value map.
+    # A graph output that nothing produces must raise ConvertError, not crash.
+    # Regression test for a SEGV in graphProtoToGraph when a top-level
+    # graph output name was absent from the value map.
     def test_undefined_output(self) -> None:
         def test() -> None:
             nodes = [oh.make_node("Identity", ["X"], ["Y"])]
@@ -103,9 +101,9 @@ class TestVersionConverter(ExtTestCase):
             )
             self._converted(graph, oh.make_operatorsetid("", 13), 14)
 
-        self.assertRaises(RuntimeError, test)
+        self.assertRaises(version_converter.ConvertError, test)
 
-    # A node input that nothing produces must raise, not crash.
+    # A node input that nothing produces must raise ConvertError, not crash.
     def test_undefined_input(self) -> None:
         def test() -> None:
             # "W" is consumed but is neither a graph input nor an initializer.
@@ -118,7 +116,7 @@ class TestVersionConverter(ExtTestCase):
             )
             self._converted(graph, oh.make_operatorsetid("", 13), 14)
 
-        self.assertRaises(RuntimeError, test)
+        self.assertRaises(version_converter.ConvertError, test)
 
     # A nested (subgraph) output that resolves to a value captured from the
     # enclosing scope is handled via a dummy node, not a crash. Exercises the

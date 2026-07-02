@@ -59,9 +59,11 @@ struct ConvertError final : public std::runtime_error {
  *
  * @throws ConvertError Always (unless exceptions are disabled).
  */
+#ifndef fail_convert
 #define fail_convert(...)                                                                          \
   ONNX_THROW_EX(ONNX_LIGHT_NAMESPACE::version_conversion::ConvertError(                            \
       ONNX_LIGHT_NAMESPACE::MakeString(__VA_ARGS__)))
+#endif // fail_convert
 
 } // namespace version_conversion
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -52,4 +52,11 @@ jobs:
           run-clang-tidy \
             -p build \
             -j "$CMAKE_BUILD_PARALLEL_LEVEL" \
-            $(find onnx_light -name "*.cc" | grep -v "/build/" | sort)
+            $(find onnx_light -name "*.cc" | grep -v "/build/" | sort) \
+            > /tmp/clang_tidy_output.txt 2>&1
+          EXIT_CODE=$?
+          # Strip per-file statistics that clutter output; keep only real diagnostics.
+          grep -vE \
+            '(^Suppressed [0-9]+ warnings?|^[0-9]+ warnings? generated\.|^Use -header-filter=)' \
+            /tmp/clang_tidy_output.txt || true
+          exit $EXIT_CODE

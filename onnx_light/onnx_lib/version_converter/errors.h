@@ -59,6 +59,9 @@ struct ConvertError final : public std::runtime_error {
  *
  * @throws ConvertError Always (unless exceptions are disabled).
  */
+// Guard allows ir_pb_converter.h (which defines fail_convert against
+// ONNX_LIGHT_NAMESPACE::ConvertError) to be included before this header
+// without triggering a macro-redefinition warning.
 #ifndef fail_convert
 #define fail_convert(...)                                                                          \
   ONNX_THROW_EX(ONNX_LIGHT_NAMESPACE::version_conversion::ConvertError(                            \

@@ -11,6 +11,7 @@ void CollectShapeTagTestCases(std::vector<TestCase> &registry, const std::string
   if (op_type.empty() or op_type == "shape_tag") {
     RegisterShapeTagCases(registry);
     RegisterShapeTagAmbiguousCases(registry);
+    RegisterShapeTagConstantMulConcatReshapeCases(registry);
   }
 }
 

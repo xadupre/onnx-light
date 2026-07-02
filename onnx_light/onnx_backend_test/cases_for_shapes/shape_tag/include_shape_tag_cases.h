@@ -37,6 +37,18 @@ void RegisterShapeTagCases(std::vector<TestCase> &registry);
 /// ``WriteValueAndNodeTagsToMetadata`` produces identical results.
 void RegisterShapeTagAmbiguousCases(std::vector<TestCase> &registry);
 
+/// Registers a ``Constant → Mul → Concat → Reshape`` case.  A ``Constant``
+/// node produces the shape tensor ``S1`` (INT64 [1]), which is multiplied by
+/// 2 via ``Mul`` to produce ``S2``.  ``S1`` and ``S2`` are concatenated along
+/// axis 0 to form the full shape tensor ``S_full`` (INT64 [2]), which is then
+/// used as the *shape* input of ``Reshape``.  Because ``S_full`` is consumed
+/// as a shape input, all shape-carrying intermediates (``S1``, ``S2``,
+/// ``S_full``) receive the ``"shape"`` value tag, while the scalar multiplier
+/// constant ``two`` keeps its ``"weight"`` tag.  The expected metadata is
+/// pre-embedded into the model so the test can verify that
+/// ``WriteValueAndNodeTagsToMetadata`` produces identical results.
+void RegisterShapeTagConstantMulConcatReshapeCases(std::vector<TestCase> &registry);
+
 /// Collects all shape-tag backend test cases by invoking every
 /// ``Register*ShapeTag*Cases`` helper declared in this header.
 void CollectShapeTagTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");

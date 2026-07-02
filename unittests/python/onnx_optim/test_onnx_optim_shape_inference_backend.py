@@ -240,6 +240,61 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
         s_vi_meta = {entry.key: entry.value for entry in s_vi.metadata_props}
         self.assertEqual(s_vi_meta.get(VALUE_TAG_METADATA_KEY), "shape")
 
+    def test_shape_tag_ambiguous_backend_case_metadata(self):
+        """Verifies that the ambiguous shape-tag backend case has expected metadata
+        pre-embedded and that write_value_and_node_tags_to_metadata reproduces it."""
+        tests = [
+            test
+            for test in collect_test_cases("shape_tag")
+            if test.name == "test_cc_shape_tag_constant_reshape_ambiguous"
+        ]
+        self.assertEqual(len(tests), 1)
+        test = tests[0]
+
+        # Verify pre-embedded graph metadata.
+        graph_meta = {entry.key: entry.value for entry in test.model.graph.metadata_props}
+        self.assertIn(VALUE_TAGS_METADATA_KEY, graph_meta)
+        value_tags = json.loads(graph_meta[VALUE_TAGS_METADATA_KEY])
+        self.assertEqual(value_tags.get("S"), "ambiguous")
+
+        # Verify pre-embedded node metadata on the Constant node (node 0).
+        node_meta = {entry.key: entry.value for entry in test.model.graph.node[0].metadata_props}
+        self.assertEqual(node_meta.get(NODE_TAG_METADATA_KEY), "ambiguous")
+
+        # Reshape (node 1) must have no node_tag.
+        reshape_meta = {
+            entry.key: entry.value for entry in test.model.graph.node[1].metadata_props
+        }
+        self.assertNotIn(NODE_TAG_METADATA_KEY, reshape_meta)
+
+        # Make a blank copy (strip all metadata) and recompute.
+        model_copy = onnxl.ModelProto()
+        model_copy.CopyFrom(test.model)
+        model_copy.graph.metadata_props.clear()
+        for node in model_copy.graph.node:
+            node.metadata_props.clear()
+        for vi in model_copy.graph.value_info:
+            vi.metadata_props.clear()
+
+        write_value_and_node_tags_to_metadata(model_copy.graph)
+
+        computed_graph_meta = {
+            entry.key: entry.value for entry in model_copy.graph.metadata_props
+        }
+        self.assertIn(VALUE_TAGS_METADATA_KEY, computed_graph_meta)
+        computed_value_tags = json.loads(computed_graph_meta[VALUE_TAGS_METADATA_KEY])
+        self.assertEqual(computed_value_tags, value_tags)
+
+        computed_node_meta = {
+            entry.key: entry.value for entry in model_copy.graph.node[0].metadata_props
+        }
+        self.assertEqual(computed_node_meta.get(NODE_TAG_METADATA_KEY), "ambiguous")
+
+        # Verify onnx_light.value_tag = "ambiguous" is written on value_info for "S".
+        s_vi = next(vi for vi in model_copy.graph.value_info if vi.name == "S")
+        s_vi_meta = {entry.key: entry.value for entry in s_vi.metadata_props}
+        self.assertEqual(s_vi_meta.get(VALUE_TAG_METADATA_KEY), "ambiguous")
+
 
 if __name__ == "__main__":
     unittest.main()

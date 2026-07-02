@@ -27,6 +27,16 @@ namespace onnx_backend_test {
 /// ``WriteValueAndNodeTagsToMetadata`` produces identical results.
 void RegisterShapeTagCases(std::vector<TestCase> &registry);
 
+/// Registers a ``Constant → Reshape`` case whose intermediate tensor ``S``
+/// should receive the ``"ambiguous"`` value tag because the ``Constant``
+/// node's output is tagged ``"weight"`` while the ``Reshape`` node consumes
+/// it as its *shape* input (pushing tag ``"shape"``); the conflict promotes
+/// it to ``"ambiguous"``. The ``Constant`` node itself is also tagged
+/// ``"ambiguous"`` on the second inference pass. The expected metadata is
+/// pre-embedded into the model so the test can verify that
+/// ``WriteValueAndNodeTagsToMetadata`` produces identical results.
+void RegisterShapeTagAmbiguousCases(std::vector<TestCase> &registry);
+
 /// Collects all shape-tag backend test cases by invoking every
 /// ``Register*ShapeTag*Cases`` helper declared in this header.
 void CollectShapeTagTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");

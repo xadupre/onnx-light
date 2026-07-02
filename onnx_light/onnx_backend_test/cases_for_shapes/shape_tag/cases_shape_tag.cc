@@ -102,5 +102,87 @@ void RegisterShapeTagCases(std::vector<TestCase> &registry) {
   registry.emplace_back(std::move(tc));
 }
 
+// ---------------------------------------------------------------------------
+// ``Constant → Reshape`` — exercises the shape-tag-wins-over-weight-tag path.
+// The ``Constant`` node produces the shape tensor ``S`` (INT64 [2]), initially
+// tagged "weight". The ``Reshape`` node then consumes ``S`` as its *shape*
+// input, pushing tag "shape" onto ``S``. Because "shape" has higher priority
+// than "weight", ``S`` is tagged "shape".  The ``Constant`` node itself
+// inherits the "shape" output tag on the second inference pass.
+//
+// ``WriteValueAndNodeTagsToMetadata`` must therefore emit:
+//
+//   * ``onnx_light.node_tag = "shape"`` on the ``Constant`` node.
+//   * No ``onnx_light.node_tag`` on the ``Reshape`` node (no tag).
+//   * ``onnx_light.value_tags = {"S":"shape"}`` on the graph.
+//
+// The expected metadata is pre-embedded into the model so consumers can
+// verify that ``WriteValueAndNodeTagsToMetadata`` reproduces it exactly.
+// ---------------------------------------------------------------------------
+void RegisterShapeTagAmbiguousCases(std::vector<TestCase> &registry) {
+  const OpsetId opset = DefaultOpset(18);
+  const kernel::KernelContext ctx{opset};
+
+  const std::string name = "test_cc_shape_tag_constant_reshape_ambiguous";
+
+  TestCase tc(name, name, "model", "shape_tag");
+  tc.rtol = 1e-3;
+  tc.atol = 1e-7;
+
+  ModelProto &model = tc.model;
+  InitModel(model, kDefaultIrVersion, {opset});
+
+  GraphProto *graph = model.add_graph();
+  graph->set_name(name);
+
+  // Constant node: produces S (INT64 [2] = {2, 3}) from a tensor attribute.
+  NodeProto &const_node = AddNode(*graph, "Constant", {}, {"S"});
+  {
+    const Tensor s_value = Tensor::FromInt64("", {2}, {2, 3});
+    AttributeProto *attr = const_node.add_attribute();
+    attr->set_name("value");
+    attr->set_type(AttributeProto::AttributeType::TENSOR);
+    TensorProto *t = attr->add_t();
+    t->set_data_type(static_cast<DataType>(s_value.data_type));
+    for (int64_t d : s_value.shape) {
+      t->add_dims(static_cast<uint64_t>(d));
+    }
+    t->set_raw_data(utils::ByteSpan(s_value.data));
+  }
+  AddNode(*graph, "Reshape", {"X", "S"}, {"Y"});
+
+  // Concrete input shape [6] so the model is executable end-to-end.
+  AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {DimSpec(6)});
+  AppendValueInfo(*graph->add_value_info(), "S", DataType::INT64, {DimSpec(2)});
+  AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec(2), DimSpec(3)});
+
+  // Pre-embed the expected shape-tag metadata so tests can verify that
+  // WriteValueAndNodeTagsToMetadata produces identical results.
+  // S is produced by Constant ("weight") but consumed as Reshape's shape
+  // input ("shape"): "shape" has higher priority than "weight", so S is
+  // tagged "shape". The Constant node itself picks up "shape" on the second
+  // inference pass. Reshape (node[1]) has no tag. DumpValueTagsAsJson sorts keys.
+  graph->add_metadata(onnx_optim::annotations::kValueTagsMetadataKey, "{\"S\":\"shape\"}");
+  (*graph->mutable_node())[0].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey, "shape");
+  // S (value_info[0]) receives onnx_light.value_tag = "shape".
+  {
+    StringStringEntryProto *entry = graph->mutable_value_info(0)->add_metadata_props();
+    entry->set_key(onnx_optim::annotations::kValueTagMetadataKey);
+    entry->set_value("shape");
+  }
+
+  // Build the reference DataSet so the case is executable end-to-end.
+  // S is not a graph input (it is produced by the Constant node at runtime),
+  // so only X appears in the DataSet inputs.
+  const Tensor x = Tensor::FromFloat("X", {6}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+  const Tensor s = Tensor::FromInt64("S", {2}, {2, 3});
+  Tensor y = kernel::Reshape(ctx)(x, s);
+  y.name = "Y";
+
+  AppendDataSet(tc, {x}, {y});
+
+  registry.emplace_back(std::move(tc));
+}
+
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

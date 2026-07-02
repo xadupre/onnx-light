@@ -80,6 +80,38 @@ TEST(FunctionVerification, VerifyFunctionExpandHelper) {
   DeregisterDefaultAttrFunctionSchema();
 }
 
+TEST(FunctionVerification, VerifyFunctionExpandHelperMissingSchema) {
+  RegisterDefaultAttrFunctionSchema();
+
+  const auto *const schema =
+      OpSchemaRegistry::Schema(kFunctionVerifyOp, kFunctionVerifyOpset, kFunctionVerifyDomain);
+  ASSERT_NE(nullptr, schema);
+  ASSERT_TRUE(schema->HasFunction());
+
+  const FunctionProto *func = schema->GetFunction(kFunctionVerifyOpset);
+  ASSERT_NE(nullptr, func);
+
+  GraphProto graph;
+  NodeProto function_node;
+  function_node.set_name("missing_schema_node");
+  function_node.set_domain(kFunctionVerifyDomain);
+  function_node.set_op_type("MissingFunctionOp");
+  *function_node.add_input() = "x";
+  *function_node.add_output() = "y";
+
+  try {
+    FunctionExpandHelper(function_node, *func, graph);
+    FAIL() << "Expected FunctionExpandHelper to throw for a missing schema.";
+  } catch (const std::runtime_error &e) {
+    EXPECT_NE(std::string(e.what()).find("No schema registered for op 'MissingFunctionOp'"),
+              std::string::npos);
+    EXPECT_NE(std::string(e.what()).find("while expanding function node missing_schema_node"),
+              std::string::npos);
+  }
+
+  DeregisterDefaultAttrFunctionSchema();
+}
+
 TEST(FunctionVerification, VerifyFunctionBodyWithMultipleDomains) {
   OpSchema schema;
   schema.SetName("MultiDomainFunction")

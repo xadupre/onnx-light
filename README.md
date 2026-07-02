@@ -17,6 +17,7 @@
 [![Doxygen](https://github.com/xadupre/onnx-light/actions/workflows/doc_cpp.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/doc_cpp.yml)
 [![Style](https://github.com/xadupre/onnx-light/actions/workflows/style.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/style.yml)
 [![clang-format](https://github.com/xadupre/onnx-light/actions/workflows/clang_format.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/clang_format.yml)
+[![clang-tidy](https://github.com/xadupre/onnx-light/actions/workflows/clang_tidy.yml/badge.svg?event=schedule)](https://github.com/xadupre/onnx-light/actions/workflows/clang_tidy.yml)
 [![Typing](https://github.com/xadupre/onnx-light/actions/workflows/typing.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/typing.yml)
 [![SBOM](https://github.com/xadupre/onnx-light/actions/workflows/cq_sbom.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/cq_sbom.yml)
 [![Spelling](https://github.com/xadupre/onnx-light/actions/workflows/spelling.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/spelling.yml)

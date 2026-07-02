@@ -57,6 +57,7 @@ Checks: >-
   -modernize-use-nodiscard,
   readability-*,
   -readability-braces-around-statements,
+  -readability-suspicious-call-argument,
   -readability-container-contains,
   -readability-convert-member-functions-to-static,
   -readability-else-after-return,

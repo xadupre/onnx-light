@@ -103,18 +103,18 @@ void RegisterShapeTagCases(std::vector<TestCase> &registry) {
 }
 
 // ---------------------------------------------------------------------------
-// ``Constant → Reshape`` — exercises the ambiguous-tag annotation path.
-// The ``Constant`` node produces the shape tensor ``S`` (INT64 [2]), tagging
-// it as "weight". The ``Reshape`` node then consumes ``S`` as its *shape*
-// input, pushing tag "shape" onto ``S``. Because "weight" and "shape"
-// conflict, ``S`` is promoted to "ambiguous".  The ``Constant`` node itself
-// inherits the "ambiguous" output tag on the second inference pass.
+// ``Constant → Reshape`` — exercises the shape-tag-wins-over-weight-tag path.
+// The ``Constant`` node produces the shape tensor ``S`` (INT64 [2]), initially
+// tagged "weight". The ``Reshape`` node then consumes ``S`` as its *shape*
+// input, pushing tag "shape" onto ``S``. Because "shape" has higher priority
+// than "weight", ``S`` is tagged "shape".  The ``Constant`` node itself
+// inherits the "shape" output tag on the second inference pass.
 //
 // ``WriteValueAndNodeTagsToMetadata`` must therefore emit:
 //
-//   * ``onnx_light.node_tag = "ambiguous"`` on the ``Constant`` node.
+//   * ``onnx_light.node_tag = "shape"`` on the ``Constant`` node.
 //   * No ``onnx_light.node_tag`` on the ``Reshape`` node (no tag).
-//   * ``onnx_light.value_tags = {"S":"ambiguous"}`` on the graph.
+//   * ``onnx_light.value_tags = {"S":"shape"}`` on the graph.
 //
 // The expected metadata is pre-embedded into the model so consumers can
 // verify that ``WriteValueAndNodeTagsToMetadata`` reproduces it exactly.
@@ -159,17 +159,16 @@ void RegisterShapeTagAmbiguousCases(std::vector<TestCase> &registry) {
   // Pre-embed the expected shape-tag metadata so tests can verify that
   // WriteValueAndNodeTagsToMetadata produces identical results.
   // S is produced by Constant ("weight") but consumed as Reshape's shape
-  // input ("shape"): the conflict promotes S to "ambiguous".
-  // The Constant node itself picks up "ambiguous" on the second inference
-  // pass. Reshape (node[1]) has no tag. DumpValueTagsAsJson sorts keys.
-  graph->add_metadata(onnx_optim::annotations::kValueTagsMetadataKey, "{\"S\":\"ambiguous\"}");
-  (*graph->mutable_node())[0].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey,
-                                           "ambiguous");
-  // S (value_info[0]) receives onnx_light.value_tag = "ambiguous".
+  // input ("shape"): "shape" has higher priority than "weight", so S is
+  // tagged "shape". The Constant node itself picks up "shape" on the second
+  // inference pass. Reshape (node[1]) has no tag. DumpValueTagsAsJson sorts keys.
+  graph->add_metadata(onnx_optim::annotations::kValueTagsMetadataKey, "{\"S\":\"shape\"}");
+  (*graph->mutable_node())[0].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey, "shape");
+  // S (value_info[0]) receives onnx_light.value_tag = "shape".
   {
     StringStringEntryProto *entry = graph->mutable_value_info(0)->add_metadata_props();
     entry->set_key(onnx_optim::annotations::kValueTagMetadataKey);
-    entry->set_value("ambiguous");
+    entry->set_value("shape");
   }
 
   // Build the reference DataSet so the case is executable end-to-end.

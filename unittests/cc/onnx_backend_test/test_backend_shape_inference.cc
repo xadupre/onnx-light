@@ -1757,12 +1757,13 @@ TEST(BackendTestCaseShapeInference, ReleaseEventEmittedForBackendCase) {
 }
 
 // Verifies that WriteValueAndNodeTagsToMetadata applied to a clean copy of
-// the ambiguous shape-tag backend test case produces metadata that matches
-// the expected values pre-embedded in the model.  Specifically it confirms
-// that ``S`` (the output of the ``Constant`` node used as ``Reshape``'s
-// shape input) receives the ``"ambiguous"`` value tag and that the
-// ``Constant`` node itself is tagged ``"ambiguous"``.
-TEST(BackendTestCaseShapeInference, OnnxOptimWritesAmbiguousShapeTagMetadataOnBackendCase) {
+// the shape-tag backend test case (Constant→Reshape) produces metadata that
+// matches the expected values pre-embedded in the model.  Specifically it
+// confirms that ``S`` (the output of the ``Constant`` node used as
+// ``Reshape``'s shape input) receives the ``"shape"`` value tag — because
+// "shape" has higher priority than "weight" — and that the ``Constant`` node
+// itself is tagged ``"shape"``.
+TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagMetadataOnConstantReshapeBackendCase) {
   const std::vector<TestCase> cases = CollectTestCases("shape_tag");
   bool found = false;
   for (const TestCase &tc : cases) {
@@ -1815,7 +1816,7 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesAmbiguousShapeTagMetadataOnBa
     }
 
     // Verify that WriteValueAndNodeTagsToMetadata also writes
-    // onnx_light.value_tag = "ambiguous" on the value_info entry for "S".
+    // onnx_light.value_tag = "shape" on the value_info entry for "S".
     const auto &result_vis = graph->ref_value_info();
     const auto &src_vis = tc.model.ref_graph().ref_value_info();
     ASSERT_EQ(result_vis.size(), src_vis.size());

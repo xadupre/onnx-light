@@ -96,6 +96,14 @@ bool TrySetValueTag(std::unordered_map<std::string, std::string> &value_tags,
       if (it->second == "ambiguous") {
         return false;
       }
+      // "shape" and "axes" are more specific tags and win over "weight".
+      if (norm == "weight" && (it->second == "shape" || it->second == "axes")) {
+        return false;
+      }
+      if (it->second == "weight" && (norm == "shape" || norm == "axes")) {
+        it->second = norm;
+        return true;
+      }
       it->second = "ambiguous";
       return true;
     }

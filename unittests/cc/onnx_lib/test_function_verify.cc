@@ -98,14 +98,16 @@ TEST(FunctionVerification, VerifyFunctionExpandHelperMissingSchema) {
   function_node.set_op_type("MissingFunctionOp");
   *function_node.add_input() = "x";
   *function_node.add_output() = "y";
+  const std::string expected_message =
+      "No schema registered for op 'MissingFunctionOp' in domain '" +
+      std::string(kFunctionVerifyDomain) +
+      "' at version 1 while expanding function node missing_schema_node";
 
   try {
     FunctionExpandHelper(function_node, *func, graph);
     FAIL() << "Expected FunctionExpandHelper to throw for a missing schema.";
   } catch (const std::runtime_error &e) {
-    const std::string message = e.what();
-    EXPECT_NE(message.find("No schema registered for op 'MissingFunctionOp'"), std::string::npos);
-    EXPECT_NE(message.find("while expanding function node missing_schema_node"), std::string::npos);
+    EXPECT_EQ(std::string(e.what()), expected_message);
   }
 
   DeregisterDefaultAttrFunctionSchema();

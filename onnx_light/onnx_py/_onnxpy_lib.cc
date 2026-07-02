@@ -1,5 +1,6 @@
 #include "onnx.h"
 #include "onnx_lib/checker.h"
+#include "onnx_lib/common/ir_pb_converter.h"
 #include "onnx_lib/defs/schema.h"
 #include "onnx_lib/defs/shape_inference.h"
 #include "onnx_lib/inliner/inliner.h"
@@ -41,7 +42,7 @@ void AddOnnxPyLib(nb::module_ &m) {
   auto version_converter = m.def_submodule("version_converter");
   version_converter.doc() = "Version converter submodule";
 
-  nb::exception<version_conversion::ConvertError>(
+  nb::exception<ConvertError>(
       version_converter,
       "ConvertError"); // NOLINT(bugprone-unused-raii,bugprone-throw-keyword-missing)
 

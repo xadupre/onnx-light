@@ -1421,7 +1421,7 @@ TEST(KernelClass, OneHotOutOfRangeIndicesLeaveOffValue) {
 }
 
 // Regression test for onnx/onnx#8113: indices outside [-depth, depth-1]
-// must produce an all-off_value row. The previously incorrect behaviour
+// must produce an all-off_value row. The previously incorrect behavior
 // (np.mod wrapping) would have set on_value at position (index % depth)
 // for out-of-range indices such as 5 and -6 with depth=5.
 TEST(KernelClass, OneHotOutOfRangeIndicesIncludingNegativeLeaveOffValue) {

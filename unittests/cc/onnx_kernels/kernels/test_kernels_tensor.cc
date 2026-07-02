@@ -1420,6 +1420,39 @@ TEST(KernelClass, OneHotOutOfRangeIndicesLeaveOffValue) {
   }
 }
 
+// Regression test for onnx/onnx#8113: indices outside [-depth, depth-1]
+// must produce an all-off_value row. The previously incorrect behaviour
+// (np.mod wrapping) would have set on_value at position (index % depth)
+// for out-of-range indices such as 5 and -6 with depth=5.
+TEST(KernelClass, OneHotOutOfRangeIndicesIncludingNegativeLeaveOffValue) {
+  const KernelContext ctx{DefaultOpset(11)};
+  onnx_kernels::kernel::OneHot one_hot{ctx};
+  // indices 5 (>= depth=5) and -6 (-6+5=-1, still < 0) are out of range;
+  // index -1 (-1+5=4) is a valid negative index that maps to position 4.
+  Tensor indices = Tensor::FromInt64("", {3}, {5, -6, -1});
+  Tensor depth = Tensor::FromFloat("", {}, {5.0f});
+  Tensor values = Tensor::FromFloat("", {2}, {1.0f, 3.0f});
+  onnx_kernels::kernel::OneHot::Attributes attrs;
+  attrs.axis = 1;
+  Tensor y = one_hot(indices, depth, values, attrs);
+  // Output shape: (3 indices, depth=5) with axis=1 -> (3, 5).
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{3, 5}));
+  const float *py = y.AsFloat();
+  // Row 0 (index 5): all off_value.
+  for (int64_t k = 0; k < 5; ++k) {
+    EXPECT_FLOAT_EQ(py[0 * 5 + k], 1.0f) << "row=0 k=" << k;
+  }
+  // Row 1 (index -6): all off_value.
+  for (int64_t k = 0; k < 5; ++k) {
+    EXPECT_FLOAT_EQ(py[1 * 5 + k], 1.0f) << "row=1 k=" << k;
+  }
+  // Row 2 (index -1 -> position 4): on_value at k=4, off_value elsewhere.
+  for (int64_t k = 0; k < 5; ++k) {
+    const float expected = (k == 4) ? 3.0f : 1.0f;
+    EXPECT_FLOAT_EQ(py[2 * 5 + k], expected) << "row=2 k=" << k;
+  }
+}
+
 TEST(KernelClass, OneHotRejectsValuesNotRankOneOfTwo) {
   const KernelContext ctx{DefaultOpset(11)};
   onnx_kernels::kernel::OneHot one_hot{ctx};

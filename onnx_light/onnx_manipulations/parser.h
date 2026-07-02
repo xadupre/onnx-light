@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cctype>
 #include <cstdint>
 #include <string>
@@ -242,30 +243,25 @@ private:
 class ParserBase {
 public:
   /// Creates a parser from a contiguous character buffer.
-  /// The underlying buffer must remain valid and unchanged during the parser lifetime.
-  explicit ParserBase(std::string_view input)
-      : start_(input.data()), next_(input.data()), end_(input.data() + input.size()),
-        saved_pos_(input.data()) {}
+  explicit ParserBase(std::string_view input) : input_(input) {}
 
   /// Creates a parser from a string buffer.
-  /// The underlying buffer must remain valid and unchanged during the parser lifetime.
   explicit ParserBase(const std::string &str) : ParserBase(std::string_view(str)) {}
 
   /// Creates a parser from a null-terminated string.
-  /// The referenced character buffer must outlive the parser instance.
   explicit ParserBase(const char *cstr) : ParserBase(std::string_view(cstr)) {}
 
   /// Saves the current parser cursor position.
-  void SavePos() { saved_pos_ = next_; }
+  void SavePos() { saved_pos_ = pos_; }
 
   /// Restores the parser cursor to the most recently saved position.
-  void RestorePos() { next_ = saved_pos_; }
+  void RestorePos() { pos_ = saved_pos_; }
 
   /// Returns the current parser position as `(line, column)`.
   std::string GetCurrentPos() {
     uint32_t line = 1, col = 1;
-    for (const char *p = start_; p < next_; ++p) {
-      if (*p == '\n') {
+    for (size_t i = 0; i < pos_; ++i) {
+      if (input_[i] == '\n') {
         ++line;
         col = 1;
       } else {
@@ -279,19 +275,20 @@ public:
   // return the line containing the last non-space character preceding the error (if it exists).
   /// Returns a line of source context around the current cursor position for error messages.
   std::string GetErrorContext() {
-    if (start_ == end_)
+    if (input_.empty())
       return std::string();
-    // Special cases: empty input string, and parse-error at first character.
-    const char *p = next_ < end_ ? next_ : next_ - 1;
-    while ((p > start_) && std::isspace(static_cast<unsigned char>(*p)))
+    // Special case: a parse-error at end of input starts from the last character.
+    size_t p = (pos_ < input_.size()) ? pos_ : input_.size() - 1;
+    while ((p > 0) && IsSpace(input_[p]))
       --p;
-    while ((p > start_) && (*p != '\n'))
+    while ((p > 0) && (input_[p] != '\n'))
       --p;
     // Start at character after '\n' unless we are at start of input
-    const char *context_start = (p > start_) ? (p + 1) : start_;
-    for (p = context_start; (p < end_) && (*p != '\n'); ++p)
-      ;
-    return std::string(context_start, p - context_start);
+    size_t context_start = (p > 0) ? (p + 1) : 0;
+    size_t context_end = context_start;
+    while ((context_end < input_.size()) && (input_[context_end] != '\n'))
+      ++context_end;
+    return std::string(input_.substr(context_start, context_end - context_start));
   }
 
   /// Generates a parse error with current position and local context.
@@ -305,13 +302,12 @@ public:
   /// Advances the cursor past whitespace characters and `#`-prefixed line comments.
   void SkipWhiteSpace() {
     do {
-      while ((next_ < end_) && std::isspace(static_cast<unsigned char>(*next_)))
-        ++next_;
-      if ((next_ >= end_) || ((*next_) != '#'))
+      while (!AtEnd() && IsSpace(Cur()))
+        ++pos_;
+      if (AtEnd() || (Cur() != '#'))
         return;
-      // Skip rest of the line:
-      while ((next_ < end_) && ((*next_) != '\n'))
-        ++next_;
+      // Skip rest of the line; the loop then consumes the newline as whitespace.
+      pos_ = std::min(input_.find('\n', pos_), input_.size());
     } while (true);
   }
 
@@ -320,7 +316,8 @@ public:
   int NextChar(bool skipspace = true) {
     if (skipspace)
       SkipWhiteSpace();
-    return (next_ < end_) ? static_cast<unsigned char>(*next_) : 0;
+    // Return as unsigned char so the value is safe to pass to ctype functions.
+    return AtEnd() ? 0 : static_cast<unsigned char>(Cur());
   }
 
   /// Consumes `ch` if it is the next character and returns true; otherwise returns false.
@@ -328,8 +325,8 @@ public:
   bool Matches(char ch, bool skipspace = true) {
     if (skipspace)
       SkipWhiteSpace();
-    if ((next_ < end_) && (*next_ == ch)) {
-      ++next_;
+    if (!AtEnd() && (Cur() == ch)) {
+      ++pos_;
       return true;
     }
     return false;
@@ -346,7 +343,7 @@ public:
   /// Returns true when all remaining input (after skipping whitespace) has been consumed.
   bool EndOfInput() {
     SkipWhiteSpace();
-    return (next_ >= end_);
+    return AtEnd();
   }
 
   /// Classifies the kind of a parsed literal token.
@@ -366,10 +363,9 @@ public:
   Common::Status Parse(int64_t &val) {
     Literal literal;
     CHECK_PARSER_STATUS(Parse(literal))
-    std::string s = literal.value;
     if (literal.type != LiteralType::INT_LITERAL)
       return ParseError("Integer value expected, but not found.");
-    val = std::stoll(s);
+    val = std::stoll(literal.value);
     return Common::Status::OK();
   }
 
@@ -378,10 +374,9 @@ public:
   Common::Status Parse(uint64_t &val) {
     Literal literal;
     CHECK_PARSER_STATUS(Parse(literal))
-    std::string s = literal.value;
     if (literal.type != LiteralType::INT_LITERAL)
       return ParseError("Integer value expected, but not found.");
-    val = std::stoull(s);
+    val = std::stoull(literal.value);
     return Common::Status::OK();
   }
 
@@ -428,14 +423,13 @@ public:
   /// Parses an optional identifier (including keywords); returns an empty string if none found.
   std::string ParseOptionalIdentifier() {
     SkipWhiteSpace();
-    const auto *from = next_;
-    if ((next_ < end_) && (std::isalpha(static_cast<unsigned char>(*next_)) || (*next_ == '_'))) {
-      ++next_;
-      while ((next_ < end_) &&
-             (std::isalnum(static_cast<unsigned char>(*next_)) || (*next_ == '_')))
-        ++next_;
+    size_t from = pos_;
+    if (!AtEnd() && (IsAlpha(Cur()) || (Cur() == '_'))) {
+      ++pos_;
+      while (!AtEnd() && (IsAlnum(Cur()) || (Cur() == '_')))
+        ++pos_;
     }
-    return std::string(from, next_ - from);
+    return std::string(input_.substr(from, pos_ - from));
   }
 
   /// Parses an identifier and fails if none is found.
@@ -510,14 +504,19 @@ public:
   }
 
 protected:
-  /// Pointer to the beginning of the input buffer.
-  const char *start_;
-  /// Pointer to the current read position within the input buffer.
-  const char *next_;
-  /// Pointer to one past the last character of the input buffer.
-  const char *end_;
-  /// Cursor snapshot written by SavePos() and restored by RestorePos().
-  const char *saved_pos_;
+  /// Returns true when the cursor has consumed all input.
+  bool AtEnd() const { return pos_ >= input_.size(); }
+  /// Returns the character at the cursor; only valid when !AtEnd().
+  char Cur() const { return input_[pos_]; }
+  /// ctype wrapper that passes the character as unsigned char (UB otherwise for bytes > 127).
+  static bool IsSpace(char c) { return std::isspace(static_cast<unsigned char>(c)); }
+  static bool IsAlpha(char c) { return std::isalpha(static_cast<unsigned char>(c)); }
+  static bool IsAlnum(char c) { return std::isalnum(static_cast<unsigned char>(c)); }
+  static bool IsDigit(char c) { return std::isdigit(static_cast<unsigned char>(c)); }
+
+  std::string_view input_;
+  size_t pos_ = 0;
+  size_t saved_pos_ = 0;
 
   /// Returns true if the characters at the current position form a valid floating-point literal.
   bool NextIsValidFloatString();

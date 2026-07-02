@@ -296,6 +296,79 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
         s_vi_meta = {entry.key: entry.value for entry in s_vi.metadata_props}
         self.assertEqual(s_vi_meta.get(VALUE_TAG_METADATA_KEY), "shape")
 
+    def test_shape_tag_constant_mul_concat_reshape_backend_case_metadata(self):
+        """Verifies the Constant → Mul → Concat → Reshape shape-tag backend case.
+
+        Checks that the pre-embedded metadata is consistent and that
+        write_value_and_node_tags_to_metadata reproduces it on a blank copy.
+        Expected tags: S1, S2, S_full → ``"shape"``; two → ``"weight"``.
+        """
+        tests = [
+            test
+            for test in collect_test_cases("shape_tag")
+            if test.name == "test_cc_shape_tag_constant_mul_concat_reshape"
+        ]
+        self.assertEqual(len(tests), 1)
+        test = tests[0]
+
+        # Verify pre-embedded graph metadata.
+        graph_meta = {entry.key: entry.value for entry in test.model.graph.metadata_props}
+        self.assertIn(VALUE_TAGS_METADATA_KEY, graph_meta)
+        value_tags = json.loads(graph_meta[VALUE_TAGS_METADATA_KEY])
+        self.assertEqual(value_tags.get("S1"), "shape")
+        self.assertEqual(value_tags.get("S2"), "shape")
+        self.assertEqual(value_tags.get("S_full"), "shape")
+        self.assertEqual(value_tags.get("two"), "weight")
+
+        # Verify pre-embedded node metadata.
+        node0_meta = {entry.key: entry.value for entry in test.model.graph.node[0].metadata_props}
+        self.assertEqual(node0_meta.get(NODE_TAG_METADATA_KEY), "shape")  # Constant → S1
+
+        node1_meta = {entry.key: entry.value for entry in test.model.graph.node[1].metadata_props}
+        self.assertEqual(node1_meta.get(NODE_TAG_METADATA_KEY), "weight")  # Constant → two
+
+        node2_meta = {entry.key: entry.value for entry in test.model.graph.node[2].metadata_props}
+        self.assertEqual(node2_meta.get(NODE_TAG_METADATA_KEY), "shape")  # Mul
+
+        node3_meta = {entry.key: entry.value for entry in test.model.graph.node[3].metadata_props}
+        self.assertEqual(node3_meta.get(NODE_TAG_METADATA_KEY), "shape")  # Concat
+
+        node4_meta = {entry.key: entry.value for entry in test.model.graph.node[4].metadata_props}
+        self.assertNotIn(NODE_TAG_METADATA_KEY, node4_meta)  # Reshape has no tag
+
+        # Make a blank copy (strip all metadata) and recompute.
+        model_copy = onnxl.ModelProto()
+        model_copy.CopyFrom(test.model)
+        model_copy.graph.metadata_props.clear()
+        for node in model_copy.graph.node:
+            node.metadata_props.clear()
+        for vi in model_copy.graph.value_info:
+            vi.metadata_props.clear()
+
+        write_value_and_node_tags_to_metadata(model_copy.graph)
+
+        computed_graph_meta = {
+            entry.key: entry.value for entry in model_copy.graph.metadata_props
+        }
+        self.assertIn(VALUE_TAGS_METADATA_KEY, computed_graph_meta)
+        computed_value_tags = json.loads(computed_graph_meta[VALUE_TAGS_METADATA_KEY])
+        self.assertEqual(computed_value_tags, value_tags)
+
+        # Verify onnx_light.value_tag is written on each value_info.
+        vi_by_name = {vi.name: vi for vi in model_copy.graph.value_info}
+        for tensor_name, expected_tag in [
+            ("S1", "shape"),
+            ("two", "weight"),
+            ("S2", "shape"),
+            ("S_full", "shape"),
+        ]:
+            vi_meta = {entry.key: entry.value for entry in vi_by_name[tensor_name].metadata_props}
+            self.assertEqual(
+                vi_meta.get(VALUE_TAG_METADATA_KEY),
+                expected_tag,
+                f"value_tag mismatch for {tensor_name!r}",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

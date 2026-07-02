@@ -6,7 +6,6 @@
 
 #pragma once
 
-#include <cinttypes>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -43,11 +42,10 @@ public:
       MN.emplace_back(B_shape[1]);
     }
     int req_broadcast = check_numpy_unibroadcastable_and_require_broadcast(MN, C_shape);
-    ONNX_ASSERTM(req_broadcast != -1,
-                 "%s being converted from %" PRId64 " to %" PRId64 " does "
-                 "not have broadcastable inputs.",
-                 name().c_str(), static_cast<int64_t>(initial_version().version()),
-                 static_cast<int64_t>(target_version().version()))
+    ONNX_ASSERTM(req_broadcast != -1, name(), " being converted from ",
+                 static_cast<int64_t>(initial_version().version()), " to ",
+                 static_cast<int64_t>(target_version().version()),
+                 " does not have broadcastable inputs.")
     if (req_broadcast == 1) {
       node->i_(kbroadcast, 1);
     }

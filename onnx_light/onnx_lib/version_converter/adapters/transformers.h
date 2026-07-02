@@ -4,7 +4,6 @@
 
 #pragma once
 
-#include <cinttypes>
 #include <string>
 #include <vector>
 
@@ -32,7 +31,7 @@ inline NodeTransformerFunction RemoveAttribute(Symbol attr) {
 inline NodeTransformerFunction RemoveAttribute(Symbol attr, int64_t value) {
   return NODE_TRANSFORMER(node) {
     if (node->hasAttribute(attr)) {
-      ONNX_ASSERTM(node->i(attr) == value, "Attribute %s must have value %" PRId64, attr.toString(),
+      ONNX_ASSERTM(node->i(attr) == value, "Attribute ", attr.toString(), " must have value ",
                    value)
       node->removeAttribute(attr);
     }
@@ -43,9 +42,8 @@ inline NodeTransformerFunction RemoveAttribute(Symbol attr, int64_t value) {
 inline NodeTransformerFunction RemoveAttribute(Symbol attr, const std::string &value) {
   return NODE_TRANSFORMER(node) {
     if (node->hasAttribute(attr)) {
-      ONNX_ASSERTM(node->s(attr) == value,
-                   "Attribute %s must have value %s for this version conversion", attr.toString(),
-                   value.c_str())
+      ONNX_ASSERTM(node->s(attr) == value, "Attribute ", attr.toString(), " must have value ",
+                   value, " for this version conversion")
       node->removeAttribute(attr);
     }
     return node;
@@ -55,8 +53,8 @@ inline NodeTransformerFunction RemoveAttribute(Symbol attr, const std::string &v
 inline NodeTransformerFunction RemoveAttributeNotEq(Symbol attr, int64_t value) {
   return NODE_TRANSFORMER(node) {
     if (node->hasAttribute(attr)) {
-      ONNX_ASSERTM(node->i(attr) != value, "Attribute %s must not have value %" PRId64,
-                   attr.toString(), value)
+      ONNX_ASSERTM(node->i(attr) != value, "Attribute ", attr.toString(), " must not have value ",
+                   value)
       node->removeAttribute(attr);
     }
     return node;

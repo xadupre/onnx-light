@@ -6,7 +6,6 @@
 
 #pragma once
 
-#include <cinttypes>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -38,11 +37,10 @@ public:
     // This is because backwards conversion does not allow for an axis that is not
     // suffix matching
     int req_broadcast = check_numpy_unibroadcastable_and_require_broadcast(A_sizes, B_sizes);
-    ONNX_ASSERTM(req_broadcast != -1,
-                 "%s being converted from %" PRId64 " to %" PRId64 " does "
-                 "not have broadcastable inputs.",
-                 name().c_str(), static_cast<int64_t>(initial_version().version()),
-                 static_cast<int64_t>(target_version().version()))
+    ONNX_ASSERTM(req_broadcast != -1, name(), " being converted from ",
+                 static_cast<int64_t>(initial_version().version()), " to ",
+                 static_cast<int64_t>(target_version().version()),
+                 " does not have broadcastable inputs.")
     if (req_broadcast == 1) {
       // If conditional is not fulfilled, we have a default broadcast
       // Add broadcast attribute

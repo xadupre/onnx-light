@@ -416,7 +416,7 @@ const TypeProto *TryGetType(const ModelProto &model, const std::string &var) {
 
 const TypeProto &GetType(const ModelProto &model, const std::string &var) {
   const TypeProto *type = TryGetType(model, var);
-  ONNX_ASSERTM(type != nullptr, "Type unknown for %s", var.c_str())
+  ONNX_ASSERTM(type != nullptr, "Type unknown for ", var)
   return *type;
 }
 

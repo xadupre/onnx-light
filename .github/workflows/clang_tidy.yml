@@ -1,0 +1,108 @@
+name: clang-tidy
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "onnx_light/**/*.cc"
+      - "onnx_light/**/*.h"
+      - ".clang-tidy"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "onnx_light/**/*.cc"
+      - "onnx_light/**/*.h"
+      - ".clang-tidy"
+  schedule:
+    # Full scan every Monday at 03:00 UTC.
+    - cron: "0 3 * * 1"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  clang_tidy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install system dependencies
+        run: sudo apt-get install -y clang clang-tidy cmake ninja-build libssl-dev
+
+      - name: Install Python build dependencies
+        run: pip install nanobind scikit-build-core
+
+      - name: Set parallel build level
+        run: |
+          CMAKE_BUILD_PARALLEL_LEVEL=$(python -c 'import os; print(os.cpu_count() or 1)')
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
+
+      - name: Configure CMake
+        run: |
+          cmake -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DPython3_EXECUTABLE="$(python -c 'import sys; print(sys.executable)')"
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Collect files for clang-tidy
+        id: files
+        run: |
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            # Weekly full scan: check every source file.
+            FILES=$(find onnx_light -name "*.cc" | grep -v "/build/" | sort | tr '\n' ' ')
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            # PR: only files changed relative to the base branch.
+            FILES=$(git diff --name-only \
+                      "${{ github.event.pull_request.base.sha }}" HEAD \
+                      -- '*.cc' \
+                    | grep '^onnx_light/' | grep -v '/build/' | tr '\n' ' ')
+          else
+            # Push: only files changed in this push.
+            BEFORE="${{ github.event.before }}"
+            SHA="${{ github.sha }}"
+            if [[ "$BEFORE" == "0000000000000000000000000000000000000000" ]] \
+               || ! git cat-file -e "$BEFORE" 2>/dev/null; then
+              FILES=$(git diff --name-only HEAD~1 HEAD -- '*.cc' \
+                      | grep '^onnx_light/' | grep -v '/build/' | tr '\n' ' ')
+            else
+              FILES=$(git diff --name-only "$BEFORE" "$SHA" -- '*.cc' \
+                      | grep '^onnx_light/' | grep -v '/build/' | tr '\n' ' ')
+            fi
+          fi
+          echo "files=$FILES" >> "$GITHUB_OUTPUT"
+
+      - name: Run clang-tidy
+        run: |
+          FILES="${{ steps.files.outputs.files }}"
+          if [[ -z "${FILES// /}" ]]; then
+            echo "No C++ source files to check."
+            exit 0
+          fi
+          # shellcheck disable=SC2086
+          run-clang-tidy \
+            -p build \
+            -j "$CMAKE_BUILD_PARALLEL_LEVEL" \
+            $FILES \
+            > /tmp/clang_tidy_output.txt 2>&1
+          EXIT_CODE=$?
+          # Strip per-file statistics that clutter output; keep only real diagnostics.
+          grep -vE \
+            '(^Suppressed [0-9]+ warnings?|^[0-9]+ warnings? generated\.|^Use -header-filter=)' \
+            /tmp/clang_tidy_output.txt || true
+          exit $EXIT_CODE

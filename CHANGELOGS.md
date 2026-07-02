@@ -32,6 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Improvements
 
+- Add version-converter fuzzer seeds for topological-gap models and raise on undefined graph outputs/inputs instead of crashing (propagate [onnx/onnx#8122](https://github.com/onnx/onnx/pull/8122), [#3130](https://github.com/xadupre/onnx-light/pull/3130))
 - Add C++ backend test for `kRelease` event in shape inference ([#3105](https://github.com/xadupre/onnx-light/pull/3105))
 - Align floor-division simplification with Python `//` semantics ([#3026](https://github.com/xadupre/onnx-light/pull/3026))
 - Propagate Reshape shape-tag metadata backward through producer chains ([#3024](https://github.com/xadupre/onnx-light/pull/3024))

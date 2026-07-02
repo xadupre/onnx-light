@@ -4,6 +4,7 @@
 
 #include "onnx_backend_test/cases_for_shapes/shape_tag/include_shape_tag_cases.h"
 #include "onnx_backend_test/test_case.h"
+#include "onnx_kernels/kernels/math/include_math_kernels.h"
 #include "onnx_kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_optim/annotations/inplace_reuse.h"
 #include "onnx_optim/annotations/value_tags.h"
@@ -177,6 +178,157 @@ void RegisterShapeTagAmbiguousCases(std::vector<TestCase> &registry) {
   const Tensor x = Tensor::FromFloat("X", {6}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
   const Tensor s = Tensor::FromInt64("S", {2}, {2, 3});
   Tensor y = kernel::Reshape(ctx)(x, s);
+  y.name = "Y";
+
+  AppendDataSet(tc, {x}, {y});
+
+  registry.emplace_back(std::move(tc));
+}
+
+// ---------------------------------------------------------------------------
+// ``Constant → Mul → Concat → Reshape`` — exercises the shape-tag propagation
+// through arithmetic and concatenation.  One ``Constant`` node produces the
+// shape tensor ``S1`` (INT64 [1] = {3}), which is multiplied element-wise by
+// 2 (a second ``Constant`` node ``two``) to produce ``S2 = {6}``.  ``S1``
+// and ``S2`` are concatenated along axis 0 to form the full shape tensor
+// ``S_full = {3, 6}``.  ``S_full`` is then used as the *shape* input of
+// ``Reshape``, which reshapes the 18-element input ``X`` into a [3, 6] matrix.
+//
+// Expected value tags (backward-propagation through Concat, then Mul):
+//   * ``S1``, ``S2``, ``S_full`` → ``"shape"``
+//   * ``two`` → ``"weight"`` (only used as Mul's second input; Mul does not
+//     backward-propagate the shape tag to its inputs)
+//
+// Expected node tags:
+//   * node[0] (Constant → S1) → ``"shape"``  (output overridden by "shape")
+//   * node[1] (Constant → two) → ``"weight"`` (output stays "weight")
+//   * node[2] (Mul) → ``"shape"``  (inherited from first input S1)
+//   * node[3] (Concat) → ``"shape"`` (inherited from first input S1)
+//   * node[4] (Reshape) → no tag   (first input X has no tag)
+// ---------------------------------------------------------------------------
+void RegisterShapeTagConstantMulConcatReshapeCases(std::vector<TestCase> &registry) {
+  const OpsetId opset = DefaultOpset(18);
+  const kernel::KernelContext ctx{opset};
+
+  const std::string name = "test_cc_shape_tag_constant_mul_concat_reshape";
+
+  TestCase tc(name, name, "model", "shape_tag");
+  tc.rtol = 1e-3;
+  tc.atol = 1e-7;
+
+  ModelProto &model = tc.model;
+  InitModel(model, kDefaultIrVersion, {opset});
+
+  GraphProto *graph = model.add_graph();
+  graph->set_name(name);
+
+  // node[0]: Constant → S1 (INT64 [1] = {3})
+  NodeProto &const_s1_node = AddNode(*graph, "Constant", {}, {"S1"});
+  {
+    const Tensor s1_value = Tensor::FromInt64("", {1}, {3});
+    AttributeProto *attr = const_s1_node.add_attribute();
+    attr->set_name("value");
+    attr->set_type(AttributeProto::AttributeType::TENSOR);
+    TensorProto *t = attr->add_t();
+    t->set_data_type(static_cast<DataType>(s1_value.data_type));
+    for (int64_t d : s1_value.shape) {
+      t->add_dims(static_cast<uint64_t>(d));
+    }
+    t->set_raw_data(utils::ByteSpan(s1_value.data));
+  }
+
+  // node[1]: Constant → two (INT64 [1] = {2})
+  NodeProto &const_two_node = AddNode(*graph, "Constant", {}, {"two"});
+  {
+    const Tensor two_value = Tensor::FromInt64("", {1}, {2});
+    AttributeProto *attr = const_two_node.add_attribute();
+    attr->set_name("value");
+    attr->set_type(AttributeProto::AttributeType::TENSOR);
+    TensorProto *t = attr->add_t();
+    t->set_data_type(static_cast<DataType>(two_value.data_type));
+    for (int64_t d : two_value.shape) {
+      t->add_dims(static_cast<uint64_t>(d));
+    }
+    t->set_raw_data(utils::ByteSpan(two_value.data));
+  }
+
+  // node[2]: Mul(S1, two) → S2
+  AddNode(*graph, "Mul", {"S1", "two"}, {"S2"});
+
+  // node[3]: Concat([S1, S2], axis=0) → S_full
+  NodeProto &concat_node = AddNode(*graph, "Concat", {"S1", "S2"}, {"S_full"});
+  AddAxisAttribute(concat_node, 0);
+
+  // node[4]: Reshape(X, S_full) → Y
+  AddNode(*graph, "Reshape", {"X", "S_full"}, {"Y"});
+
+  // Concrete input shape [18] so the model is executable end-to-end.
+  AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {DimSpec(18)});
+  AppendValueInfo(*graph->add_value_info(), "S1", DataType::INT64, {DimSpec(1)});
+  AppendValueInfo(*graph->add_value_info(), "two", DataType::INT64, {DimSpec(1)});
+  AppendValueInfo(*graph->add_value_info(), "S2", DataType::INT64, {DimSpec(1)});
+  AppendValueInfo(*graph->add_value_info(), "S_full", DataType::INT64, {DimSpec(2)});
+  AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec(3), DimSpec(6)});
+
+  // Pre-embed the expected shape-tag metadata so tests can verify that
+  // WriteValueAndNodeTagsToMetadata produces identical results.
+  // S_full is the shape input of Reshape → "shape".  Concat backward-propagates
+  // "shape" to S1 and S2.  S1's Constant picks up "shape" on the next pass.
+  // Mul inherits "shape" from S1 (input 0) and S2 is already "shape".
+  // "two" stays "weight" (Mul does not backward-propagate through input 1).
+  // DumpValueTagsAsJson sorts keys: S1 < S2 < S_full < two.
+  graph->add_metadata(
+      onnx_optim::annotations::kValueTagsMetadataKey,
+      "{\"S1\":\"shape\",\"S2\":\"shape\",\"S_full\":\"shape\",\"two\":\"weight\"}");
+  (*graph->mutable_node())[0].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey,
+                                           "shape"); // Constant → S1
+  (*graph->mutable_node())[1].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey,
+                                           "weight"); // Constant → two
+  (*graph->mutable_node())[2].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey,
+                                           "shape"); // Mul
+  (*graph->mutable_node())[3].add_metadata(onnx_optim::annotations::kNodeTagMetadataKey,
+                                           "shape"); // Concat
+  // node[4] (Reshape) has no node_tag.
+
+  // S1 (value_info[0]) → "shape".
+  {
+    StringStringEntryProto *entry = graph->mutable_value_info(0)->add_metadata_props();
+    entry->set_key(onnx_optim::annotations::kValueTagMetadataKey);
+    entry->set_value("shape");
+  }
+  // two (value_info[1]) → "weight".
+  {
+    StringStringEntryProto *entry = graph->mutable_value_info(1)->add_metadata_props();
+    entry->set_key(onnx_optim::annotations::kValueTagMetadataKey);
+    entry->set_value("weight");
+  }
+  // S2 (value_info[2]) → "shape".
+  {
+    StringStringEntryProto *entry = graph->mutable_value_info(2)->add_metadata_props();
+    entry->set_key(onnx_optim::annotations::kValueTagMetadataKey);
+    entry->set_value("shape");
+  }
+  // S_full (value_info[3]) → "shape".
+  {
+    StringStringEntryProto *entry = graph->mutable_value_info(3)->add_metadata_props();
+    entry->set_key(onnx_optim::annotations::kValueTagMetadataKey);
+    entry->set_value("shape");
+  }
+
+  // Build the reference DataSet so the case is executable end-to-end.
+  // S1, two, S2, S_full are not graph inputs (produced by Constant/Mul/Concat),
+  // so only X appears in the DataSet inputs.
+  const Tensor s1 = Tensor::FromInt64("S1", {1}, {3});
+  const Tensor two = Tensor::FromInt64("two", {1}, {2});
+  Tensor s2 = kernel::Mul(ctx)(s1, two);
+  s2.name = "S2";
+  Tensor s_full = kernel::Concat(ctx)({s1, s2}, 0);
+  s_full.name = "S_full";
+
+  const std::vector<float> x_data = {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
+                                     10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f};
+  const Tensor x = Tensor::FromFloat("X", {18}, x_data);
+  Tensor y = kernel::Reshape(ctx)(x, s_full);
   y.name = "Y";
 
   AppendDataSet(tc, {x}, {y});

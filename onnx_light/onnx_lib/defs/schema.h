@@ -366,7 +366,10 @@ public:
   ONNX_API OpSchema &
   PartialDataPropagationFunction(DataPropagationFunction dataPropagationFunction);
   ONNX_API DataPropagationFunction GetDataPropagationFunction() const {
-    return data_propagation_function_ ? data_propagation_function_ : dummyDataPropagationFunction;
+    if (data_propagation_function_) {
+      return data_propagation_function_;
+    }
+    return dummyDataPropagationFunction;
   }
 
   // Set the support level for the op schema.
@@ -802,7 +805,7 @@ class ISchemaRegistry {
 public:
   virtual ~ISchemaRegistry() = default;
 
-  ONNX_API virtual const OpSchema *GetSchema(const std::string &key, const int maxInclusiveVersion,
+  ONNX_API virtual const OpSchema *GetSchema(const std::string &key, int maxInclusiveVersion,
                                              const std::string &domain = ONNX_DOMAIN) const = 0;
 
   ONNX_API virtual const OpSchema *GetSchema(const utils::String &key,

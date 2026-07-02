@@ -36,6 +36,9 @@
 #ifndef ONNX_COMMON_GRAPH_NODE_LIST_H_
 #define ONNX_COMMON_GRAPH_NODE_LIST_H_
 
+#include <cstdint>
+#include <iterator>
+
 #include "onnx_lib/common/assertions.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -70,6 +73,12 @@ using const_graph_node_list_iterator = generic_graph_node_list_iterator<const No
  * @tparam T Element type, either `Node` or `const Node`.
  */
 template <typename T> struct generic_graph_node_list_iterator final {
+  using iterator_category = std::bidirectional_iterator_tag;
+  using value_type = T *;
+  using difference_type = int64_t;
+  using pointer = T **;
+  using reference = T *&;
+
   /// Constructs an iterator that compares equal to a default-constructed `end()`.
   generic_graph_node_list_iterator() : cur(nullptr), d(kNextDirection) {}
 
@@ -252,27 +261,5 @@ static inline bool operator!=(generic_graph_node_list_iterator<T> a,
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE
-
-namespace std {
-
-/**
- * @brief `std::iterator_traits` specialisation for `generic_graph_node_list_iterator`.
- *
- * Enables standard algorithms and range adaptors to introspect the iterator's
- * value and difference types.  The iterator category is `bidirectional_iterator_tag`
- * because `operator--` is supported but random-access arithmetic is not.
- *
- * @tparam T Element type of the underlying node list.
- */
-template <typename T>
-struct iterator_traits<ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator<T>> {
-  using difference_type = int64_t;                      ///< Signed distance between iterators.
-  using value_type = T *;                               ///< Type produced by dereferencing.
-  using pointer = T **;                                 ///< Pointer-to-value type.
-  using reference = T *&;                               ///< Reference-to-value type.
-  using iterator_category = bidirectional_iterator_tag; ///< Supports `++` and `--`.
-};
-
-} // namespace std
 
 #endif // ONNX_COMMON_GRAPH_NODE_LIST_H_

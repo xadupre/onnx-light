@@ -100,7 +100,10 @@ OpSchemaRegistry *OpSchemaRegistry::Instance() {
 }
 
 InferenceFunction OpSchema::GetTypeAndShapeInferenceFunction() const {
-  return tensor_inference_function_ ? tensor_inference_function_ : dummyInferenceFunction;
+  if (tensor_inference_function_) {
+    return tensor_inference_function_;
+  }
+  return dummyInferenceFunction;
 }
 
 OpSchema &OpSchema::SetDoc(const char *doc [[maybe_unused]]) {

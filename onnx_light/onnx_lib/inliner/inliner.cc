@@ -661,10 +661,11 @@ struct InlinerImpl {
     Process(nodes, value_infos);
   }
 
-  static void RemoveInlinedFunctions(ModelProto &model, const FunctionMap &map) {
+  // Erase every model-local function whose id appears in `inlined`.
+  static void RemoveInlinedFunctions(ModelProto &model, const FunctionMap &inlined) {
     auto &local_functions = model.functions();
     for (auto it = local_functions.begin(); it != local_functions.end();) {
-      if (map.count(GetFunctionImplId(*it)) > 0)
+      if (inlined.count(GetFunctionImplId(*it)) > 0)
         it = local_functions.erase(it);
       else
         ++it;
@@ -701,8 +702,8 @@ struct InlinerImpl {
     InlinerImpl inliner(model, all_functions, &map, nullptr);
     inliner.ProcessGraph(model.graph());
 
-    // Remove all model-local functions. We do not remove functions with a mis-matched
-    // opset version. They need to be handled some other way, eg., using a version-adapter.
+    // Remove the model-local functions we inlined. Functions with a mis-matched opset
+    // version are not in `map`, so they are left for other handling (eg. a version-adapter).
     RemoveInlinedFunctions(model, map);
   }
 

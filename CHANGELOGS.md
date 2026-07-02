@@ -32,6 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Improvements
 
+- Sync `shape_inference.h` with [onnx/onnx#8130](https://github.com/onnx/onnx/pull/8130): merge redundant `getAttribute` overloads into one template and add default args to `updateOutputElemType`/`propagateElemTypeFromDtypeToOutput` ([#3121](https://github.com/xadupre/onnx-light/issues/3121))
 - Add C++ backend test for `kRelease` event in shape inference ([#3105](https://github.com/xadupre/onnx-light/pull/3105))
 - Align floor-division simplification with Python `//` semantics ([#3026](https://github.com/xadupre/onnx-light/pull/3026))
 - Propagate Reshape shape-tag metadata backward through producer chains ([#3024](https://github.com/xadupre/onnx-light/pull/3024))

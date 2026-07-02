@@ -61,7 +61,7 @@ TEST(onnx_common, AssertionsAndStatus) {
   EXPECT_THROW(ONNX_ASSERT(false), ONNX_LIGHT_NAMESPACE::assert_error);
 
   try {
-    ONNX_ASSERTM(false, "value=%d", 5);
+    ONNX_ASSERTM(false, "value=", 5);
     FAIL() << "Expected assert_error";
   } catch (const ONNX_LIGHT_NAMESPACE::assert_error &e) {
     EXPECT_NE(std::string(e.what()).find("value=5"), std::string::npos);

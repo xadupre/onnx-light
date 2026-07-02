@@ -1091,25 +1091,6 @@ private:
     this->next() = nullptr;
     this->prev() = nullptr;
   }
-
-protected:
-  /**
-   * @brief Allocates a new node of the same concrete type in graph @p g.
-   *
-   * Used by @c createClone to create a fresh instance in a different graph.
-   * Subclasses must override if they introduce additional state.
-   */
-  virtual Node *allocNewInstance(Graph *g) { return new Node(g, kind()); }
-  /**
-   * @brief Copies all attribute values from @p s into @c this.
-   *
-   * Subclasses should extend to also copy any additional state they introduce.
-   * @c this will have been allocated via @c s->allocNewInstance(g).
-   *
-   * @note Stage information is @em not cloned; set it explicitly if needed.
-   * @param s Source node (same concrete type as @c this).
-   */
-  virtual void cloneFrom(Node *s) { copyAttributes(*s); }
 };
 
 /**

@@ -327,8 +327,7 @@ void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry) {
     node_meta(15, ann::kInPlaceReuseMetadataKey, "0:0:equal");
     node_meta(15, ann::kReleaseAfterMetadataKey, "gate;gate_sigmoid");
     // node[16] MatMul(normed2, up_proj.weight) → up
-    //   normed2 last used here → released.  up=[batch,seq,32] ≠ normed2=[batch,seq,16] → no
-    //   inplace.
+    //   normed2 last used here → released; up=[batch,seq,32] ≠ normed2=[batch,seq,16] → no inplace.
     node_meta(16, ann::kNodeTagMetadataKey, "weight");
     node_meta(16, ann::kReleaseAfterMetadataKey, "normed2");
     // node[17] Mul(gate_silu, up) → mlp_hidden

@@ -35,3 +35,46 @@ jobs:
         run: mypy onnx_light
       - name: Run pyrefly
         run: pyrefly check
+
+  clang_tidy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install system dependencies
+        run: sudo apt-get install -y clang clang-tidy cmake ninja-build libssl-dev
+
+      - name: Install Python build dependencies
+        run: pip install nanobind scikit-build-core
+
+      - name: Set parallel build level
+        run: |
+          CMAKE_BUILD_PARALLEL_LEVEL=$(python -c 'import os; print(os.cpu_count() or 1)')
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL}" >> "$GITHUB_ENV"
+
+      - name: Configure CMake
+        run: |
+          cmake -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DPython3_EXECUTABLE="$(python -c 'import sys; print(sys.executable)')"
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Run clang-tidy
+        run: |
+          run-clang-tidy \
+            -p build \
+            -j "$CMAKE_BUILD_PARALLEL_LEVEL" \
+            $(find onnx_light -name "*.cc" | grep -v "/build/" | sort)

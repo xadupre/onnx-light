@@ -36,6 +36,9 @@ option(ONNX_LIGHT_BUILD_KERNELS
 option(ONNX_LIGHT_BUILD_IMAGE_CODECS
     "Build the TIFF, WebP and JPEG2000 decoders in the ImageDecoder kernel. Turn OFF to compile a lighter kernel library: those three formats then fall back to the empty-matrix path while BMP, JPEG, PNG and PNM remain decoded natively."
     ON)
+option(ONNX_LIGHT_PROVIDE_ONNX_TARGETS
+    "Expose drop-in `onnx` and `onnx_proto` CMake targets (aliasing the onnx-light libraries) so onnx-light can be consumed as a replacement for upstream onnx, e.g. via FetchContent from onnxruntime. When ON the aggregate `onnx` target bundles the schema / checker / shape-inference libraries and `onnx_proto` aliases lib_onnx_proto."
+    OFF)
 option(ONNX_ML "Enable ai.onnx.ml support." ON)
 option(ONNX_HARDENING
     "Enable OpenSSF Compiler Hardening Guide flags for C/C++ targets. \
@@ -419,7 +422,59 @@ target_precompile_headers(lib_onnx_backend_test PRIVATE
 )
 endif() # ONNX_LIGHT_BUILD_KERNELS
 
-# Builds _onnxpyprotoop, _onnxpyprotolib, _onnxpyoptim, _onnxpykernels and _onnxpybackend libraries.
+# Drop-in `onnx` / `onnx_proto` targets.
+# When ONNX_LIGHT_PROVIDE_ONNX_TARGETS=ON, expose CMake targets named exactly
+# like the ones upstream onnx defines (`onnx`, `onnx_proto`) so a downstream
+# project (for example onnxruntime configured with -Donnxruntime_USE_ONNX_LIGHT=ON)
+# can add_subdirectory(onnx-light) via FetchContent and keep linking against
+# `onnx` and `onnx_proto` unchanged.
+#
+# - `onnx_proto` aliases lib_onnx_proto (the protobuf-compatible message types
+#   plus parser / serializer).
+# - `onnx` is an INTERFACE aggregate that pulls in the ONNX C++ API
+#   (lib_onnx_lib), the operator schemas (lib_onnx_op), shape inference
+#   (lib_onnx_optim) and the graph manipulation helpers (lib_onnx_manipulations).
+#   When ONNX_LIGHT_BUILD_KERNELS=ON the reference kernels and backend-test
+#   registry are added as well so downstream backend tests can be implemented
+#   with onnx-light.
+# - `onnx_light`, `onnx::onnx` and `onnx::onnx_proto` are provided as additional
+#   aliases matching the namespaced names used by find_package(onnx_light) and
+#   find_package(onnx) consumers.
+if(ONNX_LIGHT_PROVIDE_ONNX_TARGETS)
+  if(NOT TARGET onnx_proto)
+    add_library(onnx_proto ALIAS lib_onnx_proto)
+  endif()
+
+  if(NOT TARGET onnx)
+    add_library(onnx_compat INTERFACE)
+    target_link_libraries(onnx_compat INTERFACE
+        lib_onnx_lib
+        lib_onnx_op
+        lib_onnx_optim
+        lib_onnx_manipulations
+        lib_onnx_proto)
+    if(ONNX_LIGHT_BUILD_KERNELS)
+      target_link_libraries(onnx_compat INTERFACE
+          lib_onnx_kernels
+          lib_onnx_backend_test)
+    endif()
+    add_library(onnx ALIAS onnx_compat)
+  endif()
+
+  # Namespaced aliases so consumers can reference the same names whether they
+  # link the in-build targets or the installed find_package() targets.
+  if(NOT TARGET onnx_light)
+    add_library(onnx_light ALIAS onnx_compat)
+  endif()
+  if(NOT TARGET onnx::onnx)
+    add_library(onnx::onnx ALIAS onnx_compat)
+  endif()
+  if(NOT TARGET onnx::onnx_proto)
+    add_library(onnx::onnx_proto ALIAS lib_onnx_proto)
+  endif()
+endif()
+
+
 if(ONNX_LIGHT_BUILD_PYTHON)
   # _onnxpyprotoop: proto bindings + onnx_op schema bindings.
   # STABLE_ABI: emit an abi3-tagged extension on CPython >= 3.12 so a single

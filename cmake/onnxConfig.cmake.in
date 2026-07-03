@@ -9,10 +9,22 @@ find_dependency(onnx_light CONFIG REQUIRED
   NO_DEFAULT_PATH
 )
 
+# Aggregate the onnx-light libraries that together provide the upstream-onnx
+# C++ API surface (message types, operator schemas, checker and shape
+# inference) behind a single drop-in `onnx::onnx` target.
 if(NOT TARGET onnx::onnx)
   add_library(onnx::onnx INTERFACE IMPORTED)
   set_target_properties(onnx::onnx PROPERTIES
-    INTERFACE_LINK_LIBRARIES onnx_light::onnx_light
+    INTERFACE_LINK_LIBRARIES
+      "onnx_light::lib_onnx_lib;onnx_light::lib_onnx_op;onnx_light::lib_onnx_optim;onnx_light::lib_onnx_manipulations;onnx_light::lib_onnx_proto"
+  )
+endif()
+
+# `onnx::onnx_proto` maps to the protobuf-compatible message library.
+if(NOT TARGET onnx::onnx_proto)
+  add_library(onnx::onnx_proto INTERFACE IMPORTED)
+  set_target_properties(onnx::onnx_proto PROPERTIES
+    INTERFACE_LINK_LIBRARIES onnx_light::lib_onnx_proto
   )
 endif()
 

@@ -320,6 +320,55 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
         self.assertTrue(_should_exclude_runtime_test_name("elu_example_expanded_ver18"))
         self.assertTrue(_should_exclude_runtime_test_name("attention_4d_fp16_expanded"))
         self.assertFalse(_should_exclude_runtime_test_name("attention_4d_fp16"))
+        # ReduceL1 expanded variants must be excluded so they do not appear as
+        # new failures even though onnx-light has no expanded test cases for them.
+        self.assertTrue(_should_exclude_runtime_test_name("reduce_l1_keep_dims_example_expanded"))
+        self.assertTrue(_should_exclude_runtime_test_name("reduce_l1_keep_dims_random_expanded"))
+        self.assertTrue(
+            _should_exclude_runtime_test_name("reduce_l1_do_not_keepdims_example_expanded")
+        )
+        self.assertTrue(
+            _should_exclude_runtime_test_name("reduce_l1_do_not_keepdims_random_expanded")
+        )
+        self.assertTrue(
+            _should_exclude_runtime_test_name("reduce_l1_default_axes_keepdims_example_expanded")
+        )
+        self.assertTrue(
+            _should_exclude_runtime_test_name("reduce_l1_default_axes_keepdims_random_expanded")
+        )
+        self.assertTrue(
+            _should_exclude_runtime_test_name(
+                "reduce_l1_negative_axes_keep_dims_example_expanded"
+            )
+        )
+        self.assertTrue(
+            _should_exclude_runtime_test_name("reduce_l1_negative_axes_keep_dims_random_expanded")
+        )
+        self.assertTrue(_should_exclude_runtime_test_name("reduce_l1_empty_set_expanded"))
+        # ReduceL2 expanded variants must be excluded for the same reason.
+        self.assertTrue(_should_exclude_runtime_test_name("reduce_l2_keep_dims_example_expanded"))
+        self.assertTrue(_should_exclude_runtime_test_name("reduce_l2_keep_dims_random_expanded"))
+        self.assertTrue(
+            _should_exclude_runtime_test_name("reduce_l2_do_not_keepdims_example_expanded")
+        )
+        self.assertTrue(
+            _should_exclude_runtime_test_name("reduce_l2_do_not_keepdims_random_expanded")
+        )
+        self.assertTrue(
+            _should_exclude_runtime_test_name("reduce_l2_default_axes_keepdims_example_expanded")
+        )
+        self.assertTrue(
+            _should_exclude_runtime_test_name("reduce_l2_default_axes_keepdims_random_expanded")
+        )
+        self.assertTrue(
+            _should_exclude_runtime_test_name(
+                "reduce_l2_negative_axes_keep_dims_example_expanded"
+            )
+        )
+        self.assertTrue(
+            _should_exclude_runtime_test_name("reduce_l2_negative_axes_keep_dims_random_expanded")
+        )
+        self.assertTrue(_should_exclude_runtime_test_name("reduce_l2_empty_set_expanded"))
 
     def test_load_known_discrepancies_excludes_expanded_names(self) -> None:
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as f:

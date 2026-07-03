@@ -16,6 +16,14 @@ expect = _case_base.expect
 get_test_cases_for_op = _case_base.get_test_cases_for_op
 
 
+def _expected_attention_opset_version(case_name: str) -> int:
+    """Returns the expected Attention opset version for a backend test case name."""
+    # ``cases_attention.cc`` registers opset-24 variants for names that contain
+    # ``nonpad`` (new ``nonpad_kv_seqlen`` input path) and for explicit ``_24_``
+    # parity aliases that mirror upstream ONNX backend names.
+    return 24 if ("nonpad" in case_name or "_24_" in case_name) else 23
+
+
 class TestBackendFunction(ExtTestCase):
     @classmethod
     def setUpClass(cls):
@@ -446,7 +454,7 @@ class TestBackendFunction(ExtTestCase):
             # Most cases target ``ai.onnx`` opset 23, but cases exercising the
             # ``nonpad_kv_seqlen`` input (7th input, added in opset 24) import
             # opset 24.
-            expected_version = 24 if ("nonpad" in case_name or "_24_" in case_name) else 23
+            expected_version = _expected_attention_opset_version(case_name)
             self.assertEqual(
                 [(opset.domain, opset.version) for opset in tc.model.opset_import],
                 [("", expected_version)],

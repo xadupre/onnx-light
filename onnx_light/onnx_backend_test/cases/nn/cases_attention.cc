@@ -1304,16 +1304,16 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
     Tensor Q = MakeQ_1_2_2_2();
     Tensor K = MakeK_1_2_3_2();
     Tensor V = MakeV_1_2_3_2();
-    Tensor mask = Tensor::FromBool("", {1, 2, 2, 3},
-                                   {0, 0, 0, 1, 1, 1,   // head 0
-                                    0, 0, 0, 1, 1, 1}); // head 1
+    Tensor bool_mask = Tensor::FromBool("", {1, 2, 2, 3},
+                                        {0, 0, 0, 1, 1, 1,   // head 0
+                                         0, 0, 0, 1, 1, 1}); // head 1
     kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
-    Tensor Y = attention(Q, K, V, attrs, &mask).Y;
+    Tensor Y = attention(Q, K, V, attrs, &bool_mask).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
     AddFloat(node, "scale", 0.5f);
-    Expect(node, {Q, K, V, mask}, {Y},
+    Expect(node, {Q, K, V, bool_mask}, {Y},
            "test_cc_attention_23_boolmask_fullymasked_row_nan_robustness", {opset}, "backend-test",
            registry);
   }
@@ -1322,35 +1322,35 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
     Tensor Q = MakeQ_1_2_2_2();
     Tensor K = MakeK_1_2_3_2();
     Tensor V = MakeV_1_2_3_2();
-    Tensor mask = Tensor::FromBool("", {1, 2, 2, 3},
-                                   {0, 0, 0, 1, 1, 1,   // head 0
-                                    0, 0, 0, 1, 1, 1}); // head 1
+    Tensor bool_mask = Tensor::FromBool("", {1, 2, 2, 3},
+                                        {0, 0, 0, 1, 1, 1,   // head 0
+                                         0, 0, 0, 1, 1, 1}); // head 1
     kernel::Attention::Attributes attrs;
     attrs.has_scale = true;
     attrs.scale = 0.5f;
     attrs.is_causal = true;
-    Tensor Y = attention(Q, K, V, attrs, &mask).Y;
+    Tensor Y = attention(Q, K, V, attrs, &bool_mask).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
     AddFloat(node, "scale", 0.5f);
     AddInt(node, "is_causal", 1);
-    Expect(node, {Q, K, V, mask}, {Y}, "test_cc_attention_causal_boolmask_nan_robustness", {opset},
-           "backend-test", registry);
+    Expect(node, {Q, K, V, bool_mask}, {Y}, "test_cc_attention_causal_boolmask_nan_robustness",
+           {opset}, "backend-test", registry);
   }
 
   {
     Tensor Q = MakeQ_1_2_2_2();
     Tensor K = MakeK_1_2_3_2();
     Tensor V = MakeV_1_2_3_2();
-    Tensor mask = Tensor::FromBool("", {1, 2, 2, 3},
-                                   {0, 0, 0, 0, 0, 0,   // head 0
-                                    0, 0, 0, 0, 0, 0}); // head 1
+    Tensor bool_mask = Tensor::FromBool("", {1, 2, 2, 3},
+                                        {0, 0, 0, 0, 0, 0,   // head 0
+                                         0, 0, 0, 0, 0, 0}); // head 1
     kernel::Attention::Attributes attrs;
     attrs.qk_matmul_output_mode = 3;
-    auto r = attention(Q, K, V, attrs, &mask);
+    auto r = attention(Q, K, V, attrs, &bool_mask);
     NodeProto node =
         MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y", "", "", "qk_matmul_output"});
     AddInt(node, "qk_matmul_output_mode", 3);
-    Expect(node, {Q, K, V, mask}, {r.Y, r.qk_matmul_output},
+    Expect(node, {Q, K, V, bool_mask}, {r.Y, r.qk_matmul_output},
            "test_cc_attention_23_fullymasked_qk_matmul_output_mode3_zero", {opset}, "backend-test",
            registry);
   }
@@ -1360,25 +1360,28 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
     Tensor Q = MakeQ_1_2_2_2();
     Tensor K = MakeK_1_2_3_2();
     Tensor V = MakeV_1_2_3_2();
-    Tensor mask = Tensor::FromBool("", {1, 2, 2, 3},
-                                   {0, 0, 0, 0, 0, 0,   // head 0
-                                    0, 0, 0, 0, 0, 0}); // head 1
+    Tensor bool_mask = Tensor::FromBool("", {1, 2, 2, 3},
+                                        {0, 0, 0, 0, 0, 0,   // head 0
+                                         0, 0, 0, 0, 0, 0}); // head 1
     kernel::Attention::Attributes attrs;
     attrs.qk_matmul_output_mode = 3;
-    auto r = attention(Q, K, V, attrs, &mask);
+    auto r = attention(Q, K, V, attrs, &bool_mask);
     NodeProto node =
         MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y", "", "", "qk_matmul_output"});
     AddInt(node, "qk_matmul_output_mode", 3);
-    Expect(node, {Q, K, V, mask}, {r.Y, r.qk_matmul_output},
+    Expect(node, {Q, K, V, bool_mask}, {r.Y, r.qk_matmul_output},
            "test_cc_attention_24_fullymasked_qk_matmul_output_mode3_zero", {opset24},
            "backend-test", registry);
   }
 
   {
     const OpsetId opset24 = DefaultOpset(24);
-    Tensor Q = MakeDeterministicFloatTensor({1, 2, 2, 4}, 0x62a1u, 0.0f, 1.0f);
-    Tensor K = MakeDeterministicFloatTensor({1, 2, 3, 4}, 0x62a2u, 0.0f, 1.0f);
-    Tensor V = MakeDeterministicFloatTensor({1, 2, 3, 4}, 0x62a3u, 0.0f, 1.0f);
+    constexpr uint32_t kSoftmaxPrecisionQSeed = 0x62a1u;
+    constexpr uint32_t kSoftmaxPrecisionKSeed = 0x62a2u;
+    constexpr uint32_t kSoftmaxPrecisionVSeed = 0x62a3u;
+    Tensor Q = MakeDeterministicFloatTensor({1, 2, 2, 4}, kSoftmaxPrecisionQSeed, 0.0f, 1.0f);
+    Tensor K = MakeDeterministicFloatTensor({1, 2, 3, 4}, kSoftmaxPrecisionKSeed, 0.0f, 1.0f);
+    Tensor V = MakeDeterministicFloatTensor({1, 2, 3, 4}, kSoftmaxPrecisionVSeed, 0.0f, 1.0f);
     kernel::Attention::Attributes attrs;
     attrs.qk_matmul_output_mode = 3;
     auto r = attention(Q, K, V, attrs);
@@ -1391,9 +1394,12 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
 
   {
     const OpsetId opset24 = DefaultOpset(24);
-    Tensor Q = MakeDeterministicFloatTensor({2, 2, 2, 2}, 0x73a1u, 0.0f, 1.0f);
-    Tensor K = MakeDeterministicFloatTensor({2, 2, 4, 2}, 0x73a2u, 0.0f, 1.0f);
-    Tensor V = MakeDeterministicFloatTensor({2, 2, 4, 2}, 0x73a3u, 0.0f, 1.0f);
+    constexpr uint32_t kNonPadCompositionQSeed = 0x73a1u;
+    constexpr uint32_t kNonPadCompositionKSeed = 0x73a2u;
+    constexpr uint32_t kNonPadCompositionVSeed = 0x73a3u;
+    Tensor Q = MakeDeterministicFloatTensor({2, 2, 2, 2}, kNonPadCompositionQSeed, 0.0f, 1.0f);
+    Tensor K = MakeDeterministicFloatTensor({2, 2, 4, 2}, kNonPadCompositionKSeed, 0.0f, 1.0f);
+    Tensor V = MakeDeterministicFloatTensor({2, 2, 4, 2}, kNonPadCompositionVSeed, 0.0f, 1.0f);
     Tensor mask = Tensor::FromFloat("", {2, 1, 2, 4},
                                     {0.0f, 0.0f, -2.0f, -4.0f, 0.0f, 0.0f, -1.0f, -2.0f, 0.0f,
                                      -0.5f, -2.0f, -4.0f, 0.0f, -0.5f, -1.5f, -3.0f});
@@ -1405,6 +1411,11 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
     NodeProto node =
         MakeAttentionNode({"Q", "K", "V", "attn_mask", "", "", "nonpad_kv_seqlen"}, {"Y"});
     AddInt(node, "is_causal", 1);
+    // Upstream exposes distinct backend test names for scenario variants that
+    // intentionally share the same numerics (attn_mask_composition,
+    // batch_prefill, continued_prefill, negative_offset_structural_empty).
+    // Register all aliases so the ONNX-vs-onnx-light name-parity check sees a
+    // matching case for each name.
     Expect(node, {Q, K, V, mask, nonpad_kv_seqlen}, {r.Y},
            "test_cc_attention_4d_causal_nonpad_attn_mask_composition", {opset24}, "backend-test",
            registry);
@@ -1747,12 +1758,11 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
         attention(Q_in, K_in, V_in, decode_attrs, /*attn_mask=*/nullptr, /*past_key=*/nullptr,
                   /*past_value=*/nullptr, &nonpad_kv_seqlen)
             .Y;
-    Tensor nonpad = Tensor::FromInt64("", {2}, {6, 5});
     Tensor decode_Y = kernel::FloatToFloat16Tensor("", decode_y);
     NodeProto decode_node =
         MakeAttentionNode({"Q", "K", "V", "", "", "", "nonpad_kv_seqlen"}, {"Y"});
     AddInt(decode_node, "is_causal", 1);
-    Expect(decode_node, {Q, K, V, nonpad}, {decode_Y},
+    Expect(decode_node, {Q, K, V, nonpad_kv_seqlen}, {decode_Y},
            "test_cc_attention_4d_gqa_causal_nonpad_decode_fp16", {opset24}, "backend-test",
            registry);
     registry.back().atol = 5e-3;

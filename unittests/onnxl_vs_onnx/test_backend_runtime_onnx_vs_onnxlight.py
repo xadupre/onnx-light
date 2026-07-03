@@ -320,6 +320,20 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
         self.assertTrue(_should_exclude_runtime_test_name("elu_example_expanded_ver18"))
         self.assertTrue(_should_exclude_runtime_test_name("attention_4d_fp16_expanded"))
         self.assertFalse(_should_exclude_runtime_test_name("attention_4d_fp16"))
+        # Range expanded variants must be excluded so they do not appear as
+        # new failures even though onnx-light has no expanded test cases for them.
+        self.assertTrue(
+            _should_exclude_runtime_test_name("range_float_type_positive_delta_expanded")
+        )
+        self.assertTrue(
+            _should_exclude_runtime_test_name("range_int32_type_negative_delta_expanded")
+        )
+        self.assertTrue(
+            _should_exclude_runtime_test_name("range_float16_type_positive_delta_expanded")
+        )
+        self.assertTrue(
+            _should_exclude_runtime_test_name("range_bfloat16_type_positive_delta_expanded")
+        )
 
     def test_load_known_discrepancies_excludes_expanded_names(self) -> None:
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as f:

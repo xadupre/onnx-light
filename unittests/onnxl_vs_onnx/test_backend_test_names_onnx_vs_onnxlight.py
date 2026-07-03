@@ -62,6 +62,20 @@ class TestBackendTestNameHelpers(ExtTestCase):
         self.assertTrue(_should_exclude_backend_test_name("elu_example_expanded_ver18"))
         self.assertTrue(_should_exclude_backend_test_name("bernoulli_expanded"))
         self.assertFalse(_should_exclude_backend_test_name("linear_attention_fp16"))
+        # Range expanded variants must be excluded so they do not appear as
+        # new_missing even though onnx-light has no expanded test cases for them.
+        self.assertTrue(
+            _should_exclude_backend_test_name("range_float_type_positive_delta_expanded")
+        )
+        self.assertTrue(
+            _should_exclude_backend_test_name("range_int32_type_negative_delta_expanded")
+        )
+        self.assertTrue(
+            _should_exclude_backend_test_name("range_float16_type_positive_delta_expanded")
+        )
+        self.assertTrue(
+            _should_exclude_backend_test_name("range_bfloat16_type_positive_delta_expanded")
+        )
 
     def test_load_known_missing_excludes_expanded_names(self):
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as f:

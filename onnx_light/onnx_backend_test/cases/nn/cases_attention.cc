@@ -1299,6 +1299,160 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
            registry);
   }
 
+  // Additional upstream-name parity coverage for backend-test comparison.
+  {
+    Tensor Q = MakeQ_1_2_2_2();
+    Tensor K = MakeK_1_2_3_2();
+    Tensor V = MakeV_1_2_3_2();
+    Tensor mask = Tensor::FromBool("", {1, 2, 2, 3},
+                                   {0, 0, 0, 1, 1, 1,   // head 0
+                                    0, 0, 0, 1, 1, 1}); // head 1
+    kernel::Attention::Attributes attrs;
+    attrs.has_scale = true;
+    attrs.scale = 0.5f;
+    Tensor Y = attention(Q, K, V, attrs, &mask).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
+    AddFloat(node, "scale", 0.5f);
+    Expect(node, {Q, K, V, mask}, {Y},
+           "test_cc_attention_23_boolmask_fullymasked_row_nan_robustness", {opset}, "backend-test",
+           registry);
+  }
+
+  {
+    Tensor Q = MakeQ_1_2_2_2();
+    Tensor K = MakeK_1_2_3_2();
+    Tensor V = MakeV_1_2_3_2();
+    Tensor mask = Tensor::FromBool("", {1, 2, 2, 3},
+                                   {0, 0, 0, 1, 1, 1,   // head 0
+                                    0, 0, 0, 1, 1, 1}); // head 1
+    kernel::Attention::Attributes attrs;
+    attrs.has_scale = true;
+    attrs.scale = 0.5f;
+    attrs.is_causal = true;
+    Tensor Y = attention(Q, K, V, attrs, &mask).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
+    AddFloat(node, "scale", 0.5f);
+    AddInt(node, "is_causal", 1);
+    Expect(node, {Q, K, V, mask}, {Y}, "test_cc_attention_causal_boolmask_nan_robustness", {opset},
+           "backend-test", registry);
+  }
+
+  {
+    Tensor Q = MakeQ_1_2_2_2();
+    Tensor K = MakeK_1_2_3_2();
+    Tensor V = MakeV_1_2_3_2();
+    Tensor mask = Tensor::FromBool("", {1, 2, 2, 3},
+                                   {0, 0, 0, 0, 0, 0,   // head 0
+                                    0, 0, 0, 0, 0, 0}); // head 1
+    kernel::Attention::Attributes attrs;
+    attrs.qk_matmul_output_mode = 3;
+    auto r = attention(Q, K, V, attrs, &mask);
+    NodeProto node =
+        MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y", "", "", "qk_matmul_output"});
+    AddInt(node, "qk_matmul_output_mode", 3);
+    Expect(node, {Q, K, V, mask}, {r.Y, r.qk_matmul_output},
+           "test_cc_attention_23_fullymasked_qk_matmul_output_mode3_zero", {opset}, "backend-test",
+           registry);
+  }
+
+  {
+    const OpsetId opset24 = DefaultOpset(24);
+    Tensor Q = MakeQ_1_2_2_2();
+    Tensor K = MakeK_1_2_3_2();
+    Tensor V = MakeV_1_2_3_2();
+    Tensor mask = Tensor::FromBool("", {1, 2, 2, 3},
+                                   {0, 0, 0, 0, 0, 0,   // head 0
+                                    0, 0, 0, 0, 0, 0}); // head 1
+    kernel::Attention::Attributes attrs;
+    attrs.qk_matmul_output_mode = 3;
+    auto r = attention(Q, K, V, attrs, &mask);
+    NodeProto node =
+        MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y", "", "", "qk_matmul_output"});
+    AddInt(node, "qk_matmul_output_mode", 3);
+    Expect(node, {Q, K, V, mask}, {r.Y, r.qk_matmul_output},
+           "test_cc_attention_24_fullymasked_qk_matmul_output_mode3_zero", {opset24},
+           "backend-test", registry);
+  }
+
+  {
+    const OpsetId opset24 = DefaultOpset(24);
+    Tensor Q = MakeDeterministicFloatTensor({1, 2, 2, 4}, 0x62a1u, 0.0f, 1.0f);
+    Tensor K = MakeDeterministicFloatTensor({1, 2, 3, 4}, 0x62a2u, 0.0f, 1.0f);
+    Tensor V = MakeDeterministicFloatTensor({1, 2, 3, 4}, 0x62a3u, 0.0f, 1.0f);
+    kernel::Attention::Attributes attrs;
+    attrs.qk_matmul_output_mode = 3;
+    auto r = attention(Q, K, V, attrs);
+    NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y", "", "", "qk_matmul_output"});
+    AddInt(node, "qk_matmul_output_mode", 3);
+    Expect(node, {Q, K, V}, {r.Y, r.qk_matmul_output},
+           "test_cc_attention_24_qk_matmul_output_mode3_softmax_precision", {opset24},
+           "backend-test", registry);
+  }
+
+  {
+    const OpsetId opset24 = DefaultOpset(24);
+    Tensor Q = MakeDeterministicFloatTensor({2, 2, 2, 2}, 0x73a1u, 0.0f, 1.0f);
+    Tensor K = MakeDeterministicFloatTensor({2, 2, 4, 2}, 0x73a2u, 0.0f, 1.0f);
+    Tensor V = MakeDeterministicFloatTensor({2, 2, 4, 2}, 0x73a3u, 0.0f, 1.0f);
+    Tensor mask = Tensor::FromFloat("", {2, 1, 2, 4},
+                                    {0.0f, 0.0f, -2.0f, -4.0f, 0.0f, 0.0f, -1.0f, -2.0f, 0.0f,
+                                     -0.5f, -2.0f, -4.0f, 0.0f, -0.5f, -1.5f, -3.0f});
+    Tensor nonpad_kv_seqlen = Tensor::FromInt64("", {2}, {4, 3});
+    kernel::Attention::Attributes attrs;
+    attrs.is_causal = true;
+    auto r = attention(Q, K, V, attrs, &mask, /*past_key=*/nullptr, /*past_value=*/nullptr,
+                       &nonpad_kv_seqlen);
+    NodeProto node =
+        MakeAttentionNode({"Q", "K", "V", "attn_mask", "", "", "nonpad_kv_seqlen"}, {"Y"});
+    AddInt(node, "is_causal", 1);
+    Expect(node, {Q, K, V, mask, nonpad_kv_seqlen}, {r.Y},
+           "test_cc_attention_4d_causal_nonpad_attn_mask_composition", {opset24}, "backend-test",
+           registry);
+    Expect(node, {Q, K, V, mask, nonpad_kv_seqlen}, {r.Y},
+           "test_cc_attention_4d_causal_nonpad_batch_prefill", {opset24}, "backend-test", registry);
+    Expect(node, {Q, K, V, mask, nonpad_kv_seqlen}, {r.Y},
+           "test_cc_attention_4d_causal_nonpad_continued_prefill", {opset24}, "backend-test",
+           registry);
+    Expect(node, {Q, K, V, mask, nonpad_kv_seqlen}, {r.Y},
+           "test_cc_attention_4d_causal_nonpad_negative_offset_structural_empty", {opset24},
+           "backend-test", registry);
+  }
+
+  {
+    const OpsetId opset24 = DefaultOpset(24);
+    Tensor Q = MakeQ_1_4_2_2_gqa();
+    Tensor K = MakeK_1_2_3_2();
+    Tensor V = MakeV_1_2_3_2();
+    Tensor nonpad_kv_seqlen = Tensor::FromInt64("", {1}, {3});
+    kernel::Attention::Attributes attrs;
+    attrs.is_causal = true;
+    Tensor Y = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, /*past_key=*/nullptr,
+                         /*past_value=*/nullptr, &nonpad_kv_seqlen)
+                   .Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "", "", "nonpad_kv_seqlen"}, {"Y"});
+    AddInt(node, "is_causal", 1);
+    Expect(node, {Q, K, V, nonpad_kv_seqlen}, {Y}, "test_cc_attention_4d_gqa_causal_nonpad_decode",
+           {opset24}, "backend-test", registry);
+  }
+
+  {
+    Tensor Q = MakeQ_1_2_2_2();
+    Tensor past_key =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, -0.5f, 0.0f, 0.5f, 1.0f, 0.0f, -0.5f, 1.0f});
+    Tensor past_value =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
+    Tensor K = MakeK_1_2_3_2();
+    Tensor V = MakeV_1_2_3_2();
+    kernel::Attention::Attributes attrs;
+    attrs.is_causal = true;
+    auto r = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "past_key", "past_value"},
+                                       {"Y", "present_key", "present_value"});
+    AddInt(node, "is_causal", 1);
+    Expect(node, {Q, K, V, past_key, past_value}, {r.Y, r.present_key, r.present_value},
+           "test_cc_attention_4d_causal_with_past_and_present", {opset}, "backend-test", registry);
+  }
+
   // -------------------------------------------------------------------
   // Softcap + ``-inf`` mask ordering checks (mirror upstream
   // ``test_attention_4d_softcap_neginf_mask*``). These verify the kernel
@@ -1554,6 +1708,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
 
   // 4D GQA + past/present, fp16.
   {
+    const OpsetId opset24 = DefaultOpset(24);
     Tensor Q32 = MakeDeterministicFloatTensor({2, 9, 4, 8}, 0xdeadu, 0.0f, 1.0f);
     Tensor K32 = MakeDeterministicFloatTensor({2, 3, 6, 8}, 0xbeefu, 0.0f, 1.0f);
     Tensor V32 = MakeDeterministicFloatTensor({2, 3, 6, 8}, 0xfeedu, 0.0f, 1.0f);
@@ -1581,6 +1736,24 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
                                        {"Y", "present_key", "present_value"});
     Expect(node, {Q, K, V, mask, pk, pv}, {Y, present_key, present_value},
            "test_cc_attention_4d_gqa_with_past_and_present_fp16", {opset}, "backend-test",
+           registry);
+    registry.back().atol = 5e-3;
+    registry.back().rtol = 5e-3;
+
+    Tensor nonpad_kv_seqlen = Tensor::FromInt64("", {2}, {6, 5});
+    kernel::Attention::Attributes decode_attrs;
+    decode_attrs.is_causal = true;
+    Tensor decode_y =
+        attention(Q_in, K_in, V_in, decode_attrs, /*attn_mask=*/nullptr, /*past_key=*/nullptr,
+                  /*past_value=*/nullptr, &nonpad_kv_seqlen)
+            .Y;
+    Tensor nonpad = Tensor::FromInt64("", {2}, {6, 5});
+    Tensor decode_Y = kernel::FloatToFloat16Tensor("", decode_y);
+    NodeProto decode_node =
+        MakeAttentionNode({"Q", "K", "V", "", "", "", "nonpad_kv_seqlen"}, {"Y"});
+    AddInt(decode_node, "is_causal", 1);
+    Expect(decode_node, {Q, K, V, nonpad}, {decode_Y},
+           "test_cc_attention_4d_gqa_causal_nonpad_decode_fp16", {opset24}, "backend-test",
            registry);
     registry.back().atol = 5e-3;
     registry.back().rtol = 5e-3;

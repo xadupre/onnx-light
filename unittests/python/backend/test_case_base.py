@@ -446,7 +446,7 @@ class TestBackendFunction(ExtTestCase):
             # Most cases target ``ai.onnx`` opset 23, but cases exercising the
             # ``nonpad_kv_seqlen`` input (7th input, added in opset 24) import
             # opset 24.
-            expected_version = 24 if "nonpad_kv" in case_name else 23
+            expected_version = 24 if ("nonpad" in case_name or "_24_" in case_name) else 23
             self.assertEqual(
                 [(opset.domain, opset.version) for opset in tc.model.opset_import],
                 [("", expected_version)],

@@ -319,7 +319,15 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
     def test_should_exclude_runtime_test_name(self) -> None:
         self.assertTrue(_should_exclude_runtime_test_name("elu_example_expanded_ver18"))
         self.assertTrue(_should_exclude_runtime_test_name("attention_4d_fp16_expanded"))
+        # RotaryEmbedding expanded variants should be excluded (issue #3182).
+        self.assertTrue(_should_exclude_runtime_test_name("test_rotary_embedding_expanded"))
+        self.assertTrue(
+            _should_exclude_runtime_test_name("test_rotary_embedding_interleaved_expanded")
+        )
         self.assertFalse(_should_exclude_runtime_test_name("attention_4d_fp16"))
+        # Non-expanded RotaryEmbedding variants must NOT be excluded.
+        self.assertFalse(_should_exclude_runtime_test_name("test_rotary_embedding"))
+        self.assertFalse(_should_exclude_runtime_test_name("test_rotary_embedding_interleaved"))
 
     def test_load_known_discrepancies_excludes_expanded_names(self) -> None:
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as f:

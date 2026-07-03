@@ -61,16 +61,24 @@ class TestBackendTestNameHelpers(ExtTestCase):
     def test_should_exclude_backend_test_name(self):
         self.assertTrue(_should_exclude_backend_test_name("elu_example_expanded_ver18"))
         self.assertTrue(_should_exclude_backend_test_name("bernoulli_expanded"))
+        # RotaryEmbedding expanded variants should be excluded (issue #3182).
+        self.assertTrue(_should_exclude_backend_test_name("rotary_embedding_expanded"))
+        self.assertTrue(
+            _should_exclude_backend_test_name("rotary_embedding_interleaved_expanded")
+        )
         self.assertFalse(_should_exclude_backend_test_name("linear_attention_fp16"))
+        # Non-expanded RotaryEmbedding variants must NOT be excluded.
+        self.assertFalse(_should_exclude_backend_test_name("rotary_embedding"))
+        self.assertFalse(_should_exclude_backend_test_name("rotary_embedding_interleaved"))
 
     def test_load_known_missing_excludes_expanded_names(self):
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as f:
-            f.write("bernoulli_expanded\n")
-            f.write("linear_attention_fp16\n")
+            f.write("rotary_embedding_expanded\n")
+            f.write("rotary_embedding\n")
             path = f.name
         try:
             with patch(f"{__name__}._KNOWN_MISSING_FILE", path):
-                self.assertEqual(_load_known_missing(), {"linear_attention_fp16"})
+                self.assertEqual(_load_known_missing(), {"rotary_embedding"})
         finally:
             os.unlink(path)
 

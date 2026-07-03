@@ -597,4 +597,121 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
   }
 }
 
+TEST(BackendTestCase, DynamicQuantizeLinearCaseIsPresent) {
+  auto cases = CollectTestCases("DynamicQuantizeLinear");
+  const TestCase *base_case = nullptr;
+  const TestCase *max_adjusted_case = nullptr;
+  const TestCase *min_adjusted_case = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_dynamicquantizelinear") {
+      base_case = &c;
+    } else if (c.name == "test_dynamicquantizelinear_max_adjusted") {
+      max_adjusted_case = &c;
+    } else if (c.name == "test_dynamicquantizelinear_min_adjusted") {
+      min_adjusted_case = &c;
+    }
+  }
+  ASSERT_NE(base_case, nullptr);
+  ASSERT_NE(max_adjusted_case, nullptr);
+  ASSERT_NE(min_adjusted_case, nullptr);
+
+  // Base case: 1-D input straddling zero.
+  // x = {0, 2, -3, -2.5, 1.34, 0.5}; scale = 5/255, zero_point = 153.
+  // y = {153, 255, 0, 25, 221, 179}.
+  {
+    const GraphProto &graph = base_case->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    const auto &op_type = node.ref_op_type();
+    EXPECT_EQ(std::string(op_type.data(), op_type.size()), "DynamicQuantizeLinear");
+    EXPECT_EQ(graph.ref_input().size(), 1u);
+    ASSERT_EQ(graph.ref_output().size(), 3u);
+
+    ASSERT_EQ(base_case->data_sets.size(), 1u);
+    const auto &ds = base_case->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 1u);
+    ASSERT_EQ(ds.outputs.size(), 3u);
+    // y: UINT8 tensor of shape {6}.
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::UINT8));
+    const std::vector<int64_t> y_shape = {6};
+    EXPECT_EQ(ds.outputs[0].shape, y_shape);
+    // y_scale: scalar FLOAT.
+    EXPECT_EQ(ds.outputs[1].data_type, static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+    EXPECT_TRUE(ds.outputs[1].shape.empty());
+    // y_zero_point: scalar UINT8.
+    EXPECT_EQ(ds.outputs[2].data_type, static_cast<int32_t>(onnx_kernels::DataType::UINT8));
+    EXPECT_TRUE(ds.outputs[2].shape.empty());
+    // Spot-check y values.
+    const uint8_t *py = ds.outputs[0].data.data();
+    EXPECT_EQ(py[0], static_cast<uint8_t>(153));
+    EXPECT_EQ(py[1], static_cast<uint8_t>(255));
+    EXPECT_EQ(py[2], static_cast<uint8_t>(0));
+    EXPECT_EQ(py[3], static_cast<uint8_t>(25));
+    EXPECT_EQ(py[4], static_cast<uint8_t>(221));
+    EXPECT_EQ(py[5], static_cast<uint8_t>(179));
+    // Spot-check scale and zero-point.
+    const float *pscale = reinterpret_cast<const float *>(ds.outputs[1].data.data());
+    EXPECT_FLOAT_EQ(pscale[0], 5.0f / 255.0f);
+    EXPECT_EQ(ds.outputs[2].data[0], static_cast<uint8_t>(153));
+  }
+
+  // max_adjusted case: all-negative 1-D input, max adjusted to 0.
+  // x = {-1, -2.1, -1.3, -2.5, -3.34, -4}; scale = 4/255, zero_point = 255.
+  // y = {191, 121, 172, 96, 42, 0}.
+  {
+    const GraphProto &graph = max_adjusted_case->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+
+    ASSERT_EQ(max_adjusted_case->data_sets.size(), 1u);
+    const auto &ds = max_adjusted_case->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 1u);
+    ASSERT_EQ(ds.outputs.size(), 3u);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::UINT8));
+    const std::vector<int64_t> y_shape = {6};
+    EXPECT_EQ(ds.outputs[0].shape, y_shape);
+    const uint8_t *py = ds.outputs[0].data.data();
+    EXPECT_EQ(py[0], static_cast<uint8_t>(191));
+    EXPECT_EQ(py[1], static_cast<uint8_t>(121));
+    EXPECT_EQ(py[2], static_cast<uint8_t>(172));
+    EXPECT_EQ(py[3], static_cast<uint8_t>(96));
+    EXPECT_EQ(py[4], static_cast<uint8_t>(42));
+    EXPECT_EQ(py[5], static_cast<uint8_t>(0));
+    const float *pscale = reinterpret_cast<const float *>(ds.outputs[1].data.data());
+    EXPECT_FLOAT_EQ(pscale[0], 4.0f / 255.0f);
+    EXPECT_EQ(ds.outputs[2].data[0], static_cast<uint8_t>(255));
+  }
+
+  // min_adjusted case: all-positive 2-D input, min adjusted to 0.
+  // x shape {3, 4}; scale = 4/255, zero_point = 0.
+  // y = {64, 134, 83, 159, 213, 255, 96, 166, 249, 255, 191, 149}.
+  {
+    const GraphProto &graph = min_adjusted_case->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+
+    ASSERT_EQ(min_adjusted_case->data_sets.size(), 1u);
+    const auto &ds = min_adjusted_case->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 1u);
+    ASSERT_EQ(ds.outputs.size(), 3u);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_kernels::DataType::UINT8));
+    const std::vector<int64_t> y_shape = {3, 4};
+    EXPECT_EQ(ds.outputs[0].shape, y_shape);
+    const uint8_t *py = ds.outputs[0].data.data();
+    EXPECT_EQ(py[0], static_cast<uint8_t>(64));
+    EXPECT_EQ(py[1], static_cast<uint8_t>(134));
+    EXPECT_EQ(py[2], static_cast<uint8_t>(83));
+    EXPECT_EQ(py[3], static_cast<uint8_t>(159));
+    EXPECT_EQ(py[4], static_cast<uint8_t>(213));
+    EXPECT_EQ(py[5], static_cast<uint8_t>(255));
+    EXPECT_EQ(py[6], static_cast<uint8_t>(96));
+    EXPECT_EQ(py[7], static_cast<uint8_t>(166));
+    EXPECT_EQ(py[8], static_cast<uint8_t>(249));
+    EXPECT_EQ(py[9], static_cast<uint8_t>(255));
+    EXPECT_EQ(py[10], static_cast<uint8_t>(191));
+    EXPECT_EQ(py[11], static_cast<uint8_t>(149));
+    const float *pscale = reinterpret_cast<const float *>(ds.outputs[1].data.data());
+    EXPECT_FLOAT_EQ(pscale[0], 4.0f / 255.0f);
+    EXPECT_EQ(ds.outputs[2].data[0], static_cast<uint8_t>(0));
+  }
+}
+
 } // namespace Test

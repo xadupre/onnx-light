@@ -332,6 +332,7 @@ void _SerializeToString(cls &self, std::string &out, SerializeOptions &opts) {
   // in size_field/size_optional_proto_field/size_repeated_field) so the
   // write pass reuses cached sub-message sizes without recomputing them.
   SerializeSizeResult total_size = self.SerializeSize(size_buf, opts);
+  EnforceMaxSerializedSize(total_size, opts, "SerializeToString");
   out.resize(static_cast<size_t>(total_size.size()));
   ONNX_LIGHT_NAMESPACE::utils::BorrowedStringWriteStream buf(
       reinterpret_cast<uint8_t *>(out.data()), total_size.size());

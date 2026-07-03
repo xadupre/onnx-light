@@ -1059,6 +1059,8 @@ void SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
       two_stream.StartWriteThreadPool(options.num_threads);
     }
   }
+  SerializeSizeResult total_size = model.SerializeSize(stream, options);
+  EnforceMaxSerializedSize(total_size, options, "SerializeModelProtoToStream");
   model.SerializeToStream(stream, options);
   if (options.is_parallel())
     stream.WaitForDelayedBlock();

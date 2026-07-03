@@ -444,6 +444,12 @@ struct SerializeOptions : TensorBufferOptions {
   /** if true, tensors already marked with data_location=EXTERNAL are serialized using their
    * external_data metadata location (can target multiple weights files). */
   bool use_external_data_location = true;
+  /** Maximum serialized size in bytes allowed for one serialization operation.
+   *  The limit applies to the total output size (protobuf payload + external data).
+   *  - ``0`` (default): no limit.
+   *  - ``> 0``: serialization raises an error when the computed size exceeds this limit.
+   */
+  int64_t max_serialized_size_bytes = 0;
   /** maximum size in bytes for one external weights file when saving with external data;
    * 0 means no limit (single weights file) */
   int64_t max_external_file_size = 0;
@@ -467,6 +473,21 @@ struct SerializeOptions : TensorBufferOptions {
    *  By default it is empty (no callback) and serialization behaves exactly as before. */
   std::function<int64_t(TensorProto &, uint8_t *, size_t, bool)> raw_data_callback = {};
 };
+
+/** Enforces ``SerializeOptions::max_serialized_size_bytes`` for a computed serialized size. */
+inline void EnforceMaxSerializedSize(const SerializeSizeResult &total_size,
+                                     const SerializeOptions &options, const char *where) {
+  EXT_ENFORCE(options.max_serialized_size_bytes >= 0, where,
+              ": SerializeOptions::max_serialized_size_bytes must be >= 0 (got ",
+              options.max_serialized_size_bytes,
+              "). Use 0 to disable the limit or a positive value to cap serialized output size.");
+  if (options.max_serialized_size_bytes > 0) {
+    EXT_ENFORCE(total_size.size() <= options.max_serialized_size_bytes, where,
+                ": serialized size (", total_size.size(),
+                " bytes) exceeds SerializeOptions::max_serialized_size_bytes (",
+                options.max_serialized_size_bytes, " bytes).");
+  }
+}
 
 using utils::offset_t;
 

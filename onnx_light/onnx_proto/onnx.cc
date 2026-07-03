@@ -1496,6 +1496,7 @@ void ModelProto::SerializeToString(std::string &out,
                            max_external_file_size, external_file_prefix, local_opts.alignment);
   MemoryExternalWriteStream stream;
   SerializeSizeResult total_size = copy.SerializeSize(stream, local_opts);
+  EnforceMaxSerializedSize(total_size, local_opts, "ModelProto::SerializeToString");
   stream.pre_allocate_main(static_cast<size_t>(total_size.proto_size));
   copy.SerializeToStream(stream, local_opts);
   stream.CopyOutputsTo(out, external_files);

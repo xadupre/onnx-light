@@ -1091,6 +1091,11 @@ void AddOnnxPyProto(nb::module_ &m) {
       .def_rw("use_external_data_location", &SerializeOptions::use_external_data_location,
               "if true, tensors already marked as EXTERNAL are written to the file specified by "
               "external_data.location; this allows serialization into one or more weights files.")
+      .def_rw("max_serialized_size_bytes", &SerializeOptions::max_serialized_size_bytes,
+              "Maximum serialized size in bytes allowed for one serialization operation "
+              "(default 0 = no limit). The limit applies to the total output size "
+              "(protobuf payload + external data). Serialization raises an error when "
+              "the computed size exceeds this value.")
       .def_rw("max_external_file_size", &SerializeOptions::max_external_file_size,
               "maximum size in bytes for one external weights file when writing external data; "
               "0 means no limit")

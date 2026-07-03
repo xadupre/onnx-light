@@ -458,6 +458,17 @@ if(ONNX_LIGHT_PROVIDE_ONNX_TARGETS)
           lib_onnx_kernels
           lib_onnx_backend_test)
     endif()
+    # Expose an `onnx/`-rooted include tree of forwarding headers so downstream
+    # code written against the standard onnx C++ package (which includes
+    # `onnx/onnx_pb.h`, `onnx/defs/schema.h`, ...) compiles unchanged against
+    # onnx-light without pulling in protobuf. The forwarding headers include the
+    # real onnx-light headers (`onnx_lib/...`, `onnx_manipulations/...`), which
+    # resolve via the PUBLIC include dirs propagated from the linked libraries.
+    target_include_directories(onnx_compat INTERFACE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_compat_include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_proto>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_compat_include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_proto>)
     add_library(onnx ALIAS onnx_compat)
   endif()
 
@@ -471,6 +482,27 @@ if(ONNX_LIGHT_PROVIDE_ONNX_TARGETS)
   endif()
   if(NOT TARGET onnx::onnx_proto)
     add_library(onnx::onnx_proto ALIAS lib_onnx_proto)
+  endif()
+
+  # Expose protobuf-compatible CMake targets so a downstream project that links
+  # `protobuf::libprotobuf` / `protobuf::libprotobuf-lite` (for example
+  # onnxruntime configured with -Donnxruntime_USE_ONNX_LIGHT=ON) can build
+  # without fetching or linking the real protobuf. These INTERFACE targets pull
+  # in lib_onnx_proto (which implements the RepeatedField / stream helpers used
+  # by google_protobuf_compat.h) and add the `google/protobuf/...` forwarding
+  # headers plus the compat shim to the include path.
+  if(NOT TARGET protobuf::libprotobuf)
+    add_library(onnx_light_protobuf_compat INTERFACE)
+    target_link_libraries(onnx_light_protobuf_compat INTERFACE lib_onnx_proto)
+    target_include_directories(onnx_light_protobuf_compat INTERFACE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_compat_include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_proto>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_compat_include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_proto>)
+    add_library(protobuf::libprotobuf ALIAS onnx_light_protobuf_compat)
+  endif()
+  if(NOT TARGET protobuf::libprotobuf-lite)
+    add_library(protobuf::libprotobuf-lite ALIAS onnx_light_protobuf_compat)
   endif()
 endif()
 

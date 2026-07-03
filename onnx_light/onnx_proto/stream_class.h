@@ -14,13 +14,14 @@
 /** Serialization/parsing API declaration macro for generated proto classes. */
 #define SERIALIZATION_METHOD()                                                                     \
   SerializeSizeResult SerializeSize() const;                                                       \
-  void ParseFromString(const std::string &raw);                                                    \
-  void ParseFromString(const std::string &raw, ParseOptions &opts);                                \
+  size_t ByteSizeLong() const;                                                                     \
+  bool ParseFromString(const std::string &raw);                                                    \
+  bool ParseFromString(const std::string &raw, ParseOptions &opts);                                \
   void ParseFromZeroCopyStream(utils::BinaryStream *stream);                                       \
   void ParseFromZeroCopyStream(utils::BinaryStream *stream, ParseOptions &opts);                   \
   bool ParseFromIstream(std::istream *input);                                                      \
-  void SerializeToString(std::string &out) const;                                                  \
-  void SerializeToString(std::string &out, SerializeOptions &opts) const;                          \
+  bool SerializeToString(std::string &out) const;                                                  \
+  bool SerializeToString(std::string &out, SerializeOptions &opts) const;                          \
   SerializeSizeResult SerializeSize(utils::BinaryWriteStream &stream, SerializeOptions &opts)      \
       const;                                                                                       \
   void ParseFromStream(utils::BinaryStream &stream, ParseOptions &options);                        \

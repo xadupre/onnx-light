@@ -17,9 +17,10 @@
 #define IMPLEMENT_PROTO(cls)                                                                       \
   void cls::CopyFrom(const cls &proto) { _CopyFrom(*this, proto); }                                \
   SerializeSizeResult cls::SerializeSize() const { return _SerializeSize(*this); }                 \
-  void cls::ParseFromString(const std::string &raw) { _ParseFromString(*this, raw); }              \
-  void cls::ParseFromString(const std::string &raw, ParseOptions &opts) {                          \
-    _ParseFromString(*this, raw, opts);                                                            \
+  size_t cls::ByteSizeLong() const { return static_cast<size_t>(SerializeSize().size()); }         \
+  bool cls::ParseFromString(const std::string &raw) { return _ParseFromString(*this, raw); }        \
+  bool cls::ParseFromString(const std::string &raw, ParseOptions &opts) {                          \
+    return _ParseFromString(*this, raw, opts);                                                      \
   }                                                                                                \
   void cls::ParseFromZeroCopyStream(utils::BinaryStream *stream) {                                 \
     _ParseFromZeroCopyStream(*this, stream);                                                       \
@@ -28,9 +29,9 @@
     _ParseFromZeroCopyStream(*this, stream, opts);                                                 \
   }                                                                                                \
   bool cls::ParseFromIstream(std::istream *input) { return _ParseFromIstream(*this, input); }      \
-  void cls::SerializeToString(std::string &out) const { _SerializeToString(*this, out); }          \
-  void cls::SerializeToString(std::string &out, SerializeOptions &opts) const {                    \
-    _SerializeToString(*this, out, opts);                                                          \
+  bool cls::SerializeToString(std::string &out) const { return _SerializeToString(*this, out); }    \
+  bool cls::SerializeToString(std::string &out, SerializeOptions &opts) const {                    \
+    return _SerializeToString(*this, out, opts);                                                    \
   }
 
 ///////////////////////
@@ -207,13 +208,13 @@ template <typename cls> SerializeSizeResult _SerializeSize(cls &self) {
   return self.SerializeSize(stream, opts);
 }
 
-template <typename cls> void _ParseFromString(cls &self, const std::string &raw) {
+template <typename cls> bool _ParseFromString(cls &self, const std::string &raw) {
   ParseOptions opts;
-  self.ParseFromString(raw, opts);
+  return self.ParseFromString(raw, opts);
 }
 
 template <typename cls>
-void _ParseFromString(cls &self, const std::string &raw, ParseOptions &opts) {
+bool _ParseFromString(cls &self, const std::string &raw, ParseOptions &opts) {
   if (opts.format == SerializeFormat::kOrtFlatbuffers) {
     // Recursion-OOM guard: validate the depth limit before any parsing begins.
     // When the flatbuffer reader is fully implemented this limit will be
@@ -247,6 +248,7 @@ void _ParseFromString(cls &self, const std::string &raw, ParseOptions &opts) {
     if (opts.is_parallel())
       st.WaitForDelayedBlock();
   }
+  return true;
 }
 
 template <typename cls>
@@ -303,13 +305,13 @@ template <typename cls> bool _ParseFromIstream(cls &self, std::istream *input) {
   return true;
 }
 
-template <typename cls> void _SerializeToString(cls &self, std::string &out) {
+template <typename cls> bool _SerializeToString(cls &self, std::string &out) {
   SerializeOptions opts;
-  self.SerializeToString(out, opts);
+  return self.SerializeToString(out, opts);
 }
 
 template <typename cls>
-void _SerializeToString(cls &self, std::string &out, SerializeOptions &opts) {
+bool _SerializeToString(cls &self, std::string &out, SerializeOptions &opts) {
   if constexpr (std::is_same_v<std::remove_cv_t<cls>, ModelProto>) {
     if (opts.raw_data_callback) {
       ModelProto copy;
@@ -317,8 +319,7 @@ void _SerializeToString(cls &self, std::string &out, SerializeOptions &opts) {
       ApplySerializeRawDataCallback(copy, opts);
       SerializeOptions local_opts = opts;
       local_opts.raw_data_callback = {};
-      _SerializeToString(copy, out, local_opts);
-      return;
+      return _SerializeToString(copy, out, local_opts);
     }
   }
   EXT_ENFORCE(opts.format == SerializeFormat::kOnnx,
@@ -343,6 +344,7 @@ void _SerializeToString(cls &self, std::string &out, SerializeOptions &opts) {
   if (buf.HasParallelizationStarted()) {
     buf.WaitForDelayedBlock();
   }
+  return true;
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE

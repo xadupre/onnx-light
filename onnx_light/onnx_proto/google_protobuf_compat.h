@@ -25,39 +25,16 @@ template <typename T> using RepeatedPtrField = ONNX_LIGHT_NAMESPACE::utils::Repe
 
 // --- RepeatedFieldBackInserter ---
 
-/** Output iterator that appends to a RepeatedField via push_back. */
-template <typename T> class RepeatedFieldBackInsertIterator {
-public:
-  using iterator_category = std::output_iterator_tag;
-  using value_type = void;
-  using difference_type = std::ptrdiff_t;
-  using pointer = void;
-  using reference = void;
-
-  explicit RepeatedFieldBackInsertIterator(RepeatedField<T> *field) : field_(field) {}
-
-  RepeatedFieldBackInsertIterator &operator=(const T &value) {
-    field_->push_back(value);
-    return *this;
-  }
-
-  RepeatedFieldBackInsertIterator &operator=(T &&value) {
-    field_->push_back(std::move(value));
-    return *this;
-  }
-
-  RepeatedFieldBackInsertIterator &operator*() { return *this; }
-  RepeatedFieldBackInsertIterator &operator++() { return *this; }
-  RepeatedFieldBackInsertIterator operator++(int) { return *this; }
-
-private:
-  RepeatedField<T> *field_;
-};
+/** Output iterator that appends to a RepeatedField via push_back.
+ *  onnx-light provides the concrete implementation; this is a pure alias. */
+template <typename T>
+using RepeatedFieldBackInsertIterator =
+    ONNX_LIGHT_NAMESPACE::utils::RepeatedFieldBackInsertIterator<T>;
 
 /** Creates a back-insert iterator for a RepeatedField. */
 template <typename T>
 RepeatedFieldBackInsertIterator<T> RepeatedFieldBackInserter(RepeatedField<T> *field) {
-  return RepeatedFieldBackInsertIterator<T>(field);
+  return ONNX_LIGHT_NAMESPACE::utils::RepeatedFieldBackInserter(field);
 }
 
 // --- Lifecycle ---
@@ -65,167 +42,35 @@ RepeatedFieldBackInsertIterator<T> RepeatedFieldBackInserter(RepeatedField<T> *f
 /** No-op: onnx-light has no global protobuf state to shut down. */
 inline void ShutdownProtobufLibrary() {}
 
-// --- I/O streams (minimal stubs) ---
+// --- I/O streams ---
+//
+// Every class below is a pure alias to a concrete onnx-light stream class
+// (defined in stream.h, namespace ONNX_LIGHT_NAMESPACE::utils). onnx-light owns
+// the implementations and its own stream hierarchy implements the protobuf
+// ZeroCopyInputStream / ZeroCopyOutputStream interfaces (Next / BackUp /
+// ByteCount / Flush), so no thin wrapper layer is needed here.
 
 namespace io {
 
-/** Minimal input stream wrapping a string. */
-class ArrayInputStream {
-public:
-  ArrayInputStream(const void *data, int size)
-      : data_(static_cast<const char *>(data)), size_(size), pos_(0) {}
-
-  bool Next(const void **data, int *size) {
-    if (pos_ >= size_)
-      return false;
-    *data = data_ + pos_;
-    *size = size_ - pos_;
-    pos_ = size_;
-    return true;
-  }
-
-  void BackUp(int count) { pos_ -= count; }
-  int64_t ByteCount() const { return pos_; }
-
-private:
-  const char *data_;
-  int size_;
-  int pos_;
-};
+/** Zero-copy input stream over an in-memory buffer.
+ *  onnx-light's StringStream (a concrete BinaryStream) implements the protobuf
+ *  ZeroCopyInputStream interface and accepts a (const void*, int) buffer. */
+using ArrayInputStream = ONNX_LIGHT_NAMESPACE::utils::StringStream;
 
 /** Minimal coded input stream wrapping an ArrayInputStream. */
-class CodedInputStream {
-public:
-  explicit CodedInputStream(ArrayInputStream *input) : input_(input), limit_(0x7FFFFFFF) {}
+using CodedInputStream = ONNX_LIGHT_NAMESPACE::utils::CodedInputStream;
 
-  void SetTotalBytesLimit(int total_bytes_limit) { limit_ = total_bytes_limit; }
-  int TotalBytesLimit() const { return limit_; }
+/** Zero-copy output stream that appends to a std::string. */
+using StringOutputStream = ONNX_LIGHT_NAMESPACE::utils::StdStringWriteStream;
 
-private:
-  ArrayInputStream *input_;
-  int limit_;
-};
+/** Zero-copy output stream wrapping a file descriptor. */
+using FileOutputStream = ONNX_LIGHT_NAMESPACE::utils::FdWriteStream;
 
-/** Minimal output stream wrapping a std::string. */
-class StringOutputStream {
-public:
-  explicit StringOutputStream(std::string *target) : target_(target) {}
+/** Zero-copy input stream that owns a copy of a std::istream's contents. */
+using IstreamInputStream = ONNX_LIGHT_NAMESPACE::utils::IstreamStream;
 
-  bool Next(void **data, int *size) {
-    size_t old_size = target_->size();
-    size_t new_size = old_size + 1024;
-    target_->resize(new_size);
-    *data = &(*target_)[old_size];
-    *size = static_cast<int>(new_size - old_size);
-    return true;
-  }
-
-  void BackUp(int count) { target_->resize(target_->size() - static_cast<size_t>(count)); }
-  int64_t ByteCount() const { return static_cast<int64_t>(target_->size()); }
-
-private:
-  std::string *target_;
-};
-
-/** Minimal zero-copy stream wrapping a file descriptor. */
-class FileOutputStream {
-public:
-  explicit FileOutputStream(int fd) : fd_(fd), buffer_size_(0) {}
-
-  bool Next(void **data, int *size) {
-    *data = buffer_;
-    *size = static_cast<int>(sizeof(buffer_));
-    buffer_size_ = sizeof(buffer_);
-    return true;
-  }
-
-  void BackUp(int count) { buffer_size_ -= static_cast<size_t>(count); }
-
-  bool Flush() {
-    if (buffer_size_ > 0) {
-      // Write is handled by caller flushing the fd
-      buffer_size_ = 0;
-    }
-    return true;
-  }
-
-  bool Close() { return Flush(); }
-  int64_t ByteCount() const { return 0; }
-
-private:
-  int fd_;
-  char buffer_[4096];
-  size_t buffer_size_;
-};
-
-/** Minimal zero-copy stream wrapping a std::istream. */
-class IstreamInputStream {
-public:
-  explicit IstreamInputStream(std::istream *stream, int block_size = 4096)
-      : stream_(stream), block_size_(block_size), buffer_(static_cast<size_t>(block_size)), pos_(0),
-        size_(0) {}
-
-  bool Next(const void **data, int *size) {
-    stream_->read(buffer_.data(), block_size_);
-    size_ = static_cast<int>(stream_->gcount());
-    if (size_ == 0)
-      return false;
-    *data = buffer_.data();
-    *size = size_;
-    pos_ += size_;
-    return true;
-  }
-
-  void BackUp(int count) {
-    stream_->seekg(-count, std::ios_base::cur);
-    pos_ -= count;
-  }
-
-  int64_t ByteCount() const { return pos_; }
-
-private:
-  std::istream *stream_;
-  int block_size_;
-  std::vector<char> buffer_;
-  int64_t pos_;
-  int size_;
-};
-
-/** Minimal zero-copy stream wrapping a std::ostream. */
-class OstreamOutputStream {
-public:
-  explicit OstreamOutputStream(std::ostream *stream, int block_size = 4096)
-      : stream_(stream), block_size_(block_size), buffer_(static_cast<size_t>(block_size)),
-        used_(0) {}
-
-  ~OstreamOutputStream() { Flush(); }
-
-  bool Next(void **data, int *size) {
-    Flush();
-    *data = buffer_.data();
-    *size = block_size_;
-    used_ = block_size_;
-    return true;
-  }
-
-  void BackUp(int count) { used_ -= count; }
-
-  bool Flush() {
-    if (used_ > 0) {
-      stream_->write(buffer_.data(), used_);
-      used_ = 0;
-    }
-    return stream_->good();
-  }
-
-  int64_t ByteCount() const { return 0; }
-
-private:
-  std::ostream *stream_;
-  int block_size_;
-  std::vector<char> buffer_;
-  int used_;
-};
+/** Zero-copy output stream wrapping a std::ostream. */
+using OstreamOutputStream = ONNX_LIGHT_NAMESPACE::utils::OstreamWriteStream;
 
 } // namespace io
 } // namespace protobuf

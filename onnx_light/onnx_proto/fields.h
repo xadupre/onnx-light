@@ -5,6 +5,7 @@
 #include "simple_string.h"
 #include <cstddef>
 #include <cstring>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -180,6 +181,46 @@ public:
 private:
   std::vector<T> values_;
 };
+
+/** Output iterator that appends to a RepeatedField via push_back.
+ *  Mirrors std::back_insert_iterator so it can back
+ *  google::protobuf::RepeatedFieldBackInsertIterator as a pure alias. */
+template <typename T> class RepeatedFieldBackInsertIterator {
+public:
+  using iterator_category = std::output_iterator_tag;
+  using value_type = void;
+  using difference_type = std::ptrdiff_t;
+  using pointer = void;
+  using reference = void;
+
+  /** Wraps *field*; appended values go to its end. */
+  explicit RepeatedFieldBackInsertIterator(RepeatedField<T> *field) : field_(field) {}
+
+  /** Appends a copy of *value*. */
+  RepeatedFieldBackInsertIterator &operator=(const T &value) {
+    field_->push_back(value);
+    return *this;
+  }
+
+  /** Appends *value* (moved). */
+  RepeatedFieldBackInsertIterator &operator=(T &&value) {
+    field_->push_back(std::move(value));
+    return *this;
+  }
+
+  RepeatedFieldBackInsertIterator &operator*() { return *this; }
+  RepeatedFieldBackInsertIterator &operator++() { return *this; }
+  RepeatedFieldBackInsertIterator operator++(int) { return *this; }
+
+private:
+  RepeatedField<T> *field_;
+};
+
+/** Creates a back-insert iterator for a RepeatedField. */
+template <typename T>
+RepeatedFieldBackInsertIterator<T> RepeatedFieldBackInserter(RepeatedField<T> *field) {
+  return RepeatedFieldBackInsertIterator<T>(field);
+}
 
 /** Repeated message field storage with owning pointers. */
 template <typename T> class RepeatedProtoField {

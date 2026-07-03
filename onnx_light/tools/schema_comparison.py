@@ -478,6 +478,12 @@ def _count_onnx_backend_tests(
     the convention used by the upstream ONNX project (one folder per
     operator variant, named ``test_<op>(_<variant>)*``).
 
+    Expanded variants (test folders containing ``_expanded`` in their name)
+    exercise the decomposition of an operator into primitive ops rather than
+    the operator itself; they are excluded from the count so that the
+    comparison with ``onnx_light`` is meaningful (``onnx_light`` does not
+    maintain expanded-variant test cases by design).
+
     Returns an empty counter when the upstream ``onnx`` package (or its
     backend test data) is not available.
     """
@@ -506,6 +512,11 @@ def _count_onnx_backend_tests(
 
     counts: Counter[tuple[str, str]] = Counter()
     for t in tests:
+        # Skip expanded variants: they test decompositions of operators into
+        # primitive ops, not the operators themselves, and ``onnx_light`` does
+        # not ship equivalent expanded test cases.
+        if "_expanded" in t.name:
+            continue
         # The backend-test attribution mirrors the data-folder name: each
         # ``test_<op>(_<variant>)*`` subfolder counts as one case for ``<op>``.
         key = _attribute_test_name(t.name, sorted_forms)

@@ -81,7 +81,28 @@ class TestSchemaComparison(ExtTestCase):
         self.assertEqual(n_data_rows, n_ops_in_either)
         self.assertEqual(n_header_rows, n_domains)
 
-    def test_op_name_forms_handles_camelcase_and_acronyms(self):
+    def test_count_onnx_backend_tests_excludes_expanded(self):
+        """Verifies that ``_expanded`` test folders are excluded from the ONNX count."""
+        from onnx_light.tools.schema_comparison import _count_onnx_backend_tests
+
+        # CausalConvWithState has 13 non-expanded and 13 expanded tests in onnx-weekly.
+        # Only the 13 non-expanded tests should be counted.
+        keys = {("ai.onnx", "CausalConvWithState")}
+        counts = _count_onnx_backend_tests(keys)
+        n = counts.get(("ai.onnx", "CausalConvWithState"), 0)
+        # Verify we have at least some tests (non-expanded tests are always present)
+        # and that we're not double-counting expanded variants.
+        self.assertGreater(n, 0, "Expected at least one CausalConvWithState test")
+        # With onnx-weekly installed there are exactly 13 non-expanded tests.
+        # Expanded variants (there are also 13) must not be counted.
+        if n > 0:
+            self.assertLessEqual(
+                n,
+                20,
+                f"Got {n} CausalConvWithState tests; expected ≤20 "
+                "(expanded variants must not be double-counted)",
+            )
+
         from onnx_light.tools.schema_comparison import _op_name_forms
 
         # Plain lowercase op: a single form.

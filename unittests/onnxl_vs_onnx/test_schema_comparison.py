@@ -91,17 +91,16 @@ class TestSchemaComparison(ExtTestCase):
         counts = _count_onnx_backend_tests(keys)
         n = counts.get(("ai.onnx", "CausalConvWithState"), 0)
         # Verify we have at least some tests (non-expanded tests are always present)
-        # and that we're not double-counting expanded variants.
+        # and that expanded variants are not double-counted.
         self.assertGreater(n, 0, "Expected at least one CausalConvWithState test")
         # With onnx-weekly installed there are exactly 13 non-expanded tests.
         # Expanded variants (there are also 13) must not be counted.
-        if n > 0:
-            self.assertLessEqual(
-                n,
-                20,
-                f"Got {n} CausalConvWithState tests; expected ≤20 "
-                "(expanded variants must not be double-counted)",
-            )
+        self.assertLessEqual(
+            n,
+            20,
+            f"Got {n} CausalConvWithState tests; expected ≤20 "
+            "(expanded variants must not be double-counted)",
+        )
 
         from onnx_light.tools.schema_comparison import _op_name_forms
 

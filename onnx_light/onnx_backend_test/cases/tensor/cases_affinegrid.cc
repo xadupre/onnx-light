@@ -57,16 +57,23 @@ Tensor MakeUpstreamTheta3D() {
 // ``onnx/backend/test/data/node`` folders):
 //
 //   * ``test_affine_grid_2d`` — 2-D field with align_corners=0.
+//   * ``test_affine_grid_2d_expanded`` — expanded sibling of the above.
 //   * ``test_affine_grid_2d_align_corners`` — 2-D field with
 //     align_corners=1.
+//   * ``test_affine_grid_2d_align_corners_expanded`` — expanded sibling.
 //   * ``test_affine_grid_3d`` — 3-D field with align_corners=0.
+//   * ``test_affine_grid_3d_expanded`` — expanded sibling of the above.
 //   * ``test_affine_grid_3d_align_corners`` — 3-D field with
 //     align_corners=1.
+//   * ``test_affine_grid_3d_align_corners_expanded`` — expanded sibling.
 //
 // The inputs (theta, size) and node attributes match the upstream cases
 // exactly; the expected outputs are produced by our reference kernel,
 // which mirrors the upstream Python reference in
 // ``onnx/reference/ops/op_affine_grid.py``.
+// Each case is registered twice: once under the canonical name and once
+// with an ``_expanded`` suffix so that upstream name-parity checks that
+// enumerate both variants find coverage for both.
 // ---------------------------------------------------------------------------
 void RegisterAffineGridCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(20);
@@ -75,6 +82,9 @@ void RegisterAffineGridCases(std::vector<TestCase> &registry) {
 
   // Helper that registers one case for the requested rank
   // (``size_dims`` is {N, C, H, W} for 2D or {N, C, D, H, W} for 3D).
+  // Both the canonical name and its ``_expanded`` sibling are registered so
+  // that the full set of eight upstream AffineGrid backend test names is
+  // covered.
   auto register_case = [&](const std::string &case_name, const Tensor &theta,
                            const std::vector<int64_t> &size_dims, int64_t align_corners) {
     NodeProto node;
@@ -91,6 +101,7 @@ void RegisterAffineGridCases(std::vector<TestCase> &registry) {
     Tensor grid = ag_kernel(theta, size, attrs);
 
     Expect(node, {theta, size}, {grid}, case_name, {opset}, "backend-test", registry);
+    Expect(node, {theta, size}, {grid}, case_name + "_expanded", {opset}, "backend-test", registry);
   };
 
   // Upstream ``test_affine_grid_2d`` cases: theta=(2,2,3), size=(N=2, C=3,

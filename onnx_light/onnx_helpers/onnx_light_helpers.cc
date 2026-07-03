@@ -202,8 +202,11 @@ Logger::Logger(const std::string &destination) : to_stdout_(false), enabled_(fal
 #ifdef _MSC_VER
     char *env = nullptr;
     std::size_t env_size = 0;
-    if (::_dupenv_s(&env, &env_size, "ONNX_LIGHT_LOG") == 0 && env != nullptr) {
+    int getenv_status = _dupenv_s(&env, &env_size, "ONNX_LIGHT_LOG");
+    if (getenv_status == 0 && env != nullptr) {
       dest = env;
+    }
+    if (env != nullptr) {
       std::free(env);
     }
 #else

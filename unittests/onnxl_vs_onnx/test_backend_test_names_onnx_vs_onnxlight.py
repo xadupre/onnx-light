@@ -62,6 +62,16 @@ class TestBackendTestNameHelpers(ExtTestCase):
         self.assertTrue(_should_exclude_backend_test_name("elu_example_expanded_ver18"))
         self.assertTrue(_should_exclude_backend_test_name("bernoulli_expanded"))
         self.assertFalse(_should_exclude_backend_test_name("linear_attention_fp16"))
+        # ThresholdedRelu expanded variants (ver18) must be excluded so they do not
+        # appear as ``new_missing`` even though onnx-light has no expanded test cases
+        # for them.
+        self.assertTrue(_should_exclude_backend_test_name("thresholdedrelu_expanded_ver18"))
+        self.assertTrue(
+            _should_exclude_backend_test_name("thresholdedrelu_default_expanded_ver18")
+        )
+        self.assertTrue(
+            _should_exclude_backend_test_name("thresholdedrelu_example_expanded_ver18")
+        )
 
     def test_load_known_missing_excludes_expanded_names(self):
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as f:

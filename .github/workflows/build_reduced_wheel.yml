@@ -126,16 +126,16 @@ jobs:
             unittests/python/bindings
 
       - name: Attach reduced wheels to GitHub Release
-        if: github.ref_type == 'tag' || (inputs.tag != null && inputs.tag != '')
+        if: github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && inputs.tag != '')
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag="${{ inputs.tag }}"
-          if [ -z "${tag}" ]; then
-            tag="${{ github.ref_name }}"
+          tag="${{ github.ref_name }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.tag }}" ]; then
+            tag="${{ inputs.tag }}"
+            tag="${tag#refs/tags/}"
           fi
-          tag="${tag#refs/tags/}"
           if gh release view "${tag}" >/dev/null 2>&1; then
             gh release upload "${tag}" ./wheelhouse/*.whl --clobber
           else

@@ -62,11 +62,20 @@ class TestBackendTestNameHelpers(ExtTestCase):
         self.assertTrue(_should_exclude_backend_test_name("elu_example_expanded_ver18"))
         self.assertTrue(_should_exclude_backend_test_name("bernoulli_expanded"))
         self.assertFalse(_should_exclude_backend_test_name("linear_attention_fp16"))
+        # Less / LessOrEqual expanded tests that triggered issue #3174.
+        self.assertTrue(_should_exclude_backend_test_name("less_equal_expanded"))
+        self.assertTrue(_should_exclude_backend_test_name("less_equal_int16_expanded"))
+        self.assertTrue(_should_exclude_backend_test_name("less_equal_uint16_expanded"))
+        self.assertTrue(_should_exclude_backend_test_name("less_equal_uint32_expanded"))
+        self.assertTrue(_should_exclude_backend_test_name("less_equal_uint64_expanded"))
+        self.assertFalse(_should_exclude_backend_test_name("less_equal_int16"))
+        self.assertFalse(_should_exclude_backend_test_name("less"))
 
     def test_load_known_missing_excludes_expanded_names(self):
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as f:
             f.write("bernoulli_expanded\n")
             f.write("linear_attention_fp16\n")
+            f.write("less_equal_int16_expanded\n")
             path = f.name
         try:
             with patch(f"{__name__}._KNOWN_MISSING_FILE", path):

@@ -320,11 +320,16 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
         self.assertTrue(_should_exclude_runtime_test_name("elu_example_expanded_ver18"))
         self.assertTrue(_should_exclude_runtime_test_name("attention_4d_fp16_expanded"))
         self.assertFalse(_should_exclude_runtime_test_name("attention_4d_fp16"))
+        # Less / LessOrEqual expanded tests that triggered issue #3174.
+        self.assertTrue(_should_exclude_runtime_test_name("less_equal_expanded"))
+        self.assertTrue(_should_exclude_runtime_test_name("less_equal_int16_expanded"))
+        self.assertFalse(_should_exclude_runtime_test_name("less_equal_int16"))
 
     def test_load_known_discrepancies_excludes_expanded_names(self) -> None:
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as f:
             f.write("test_attention_4d_fp16_expanded\n")
             f.write("test_training_dropout\n")
+            f.write("test_less_equal_int16_expanded\n")
             path = f.name
         try:
             with patch(f"{__name__}._KNOWN_DISCREPANCIES_FILE", path):

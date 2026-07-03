@@ -5,14 +5,22 @@ name: Build Reduced Wheels
 # backend-test registries) and runs the subset of unit tests that do not depend
 # on the kernels (protos / schemas / optim / manipulations / lib).
 #
-# This is an opt-in, low-frequency job: it runs on a weekly schedule and on
-# manual dispatch only, so it never gates pull requests.
+# This is an opt-in, low-frequency job: it runs on a weekly schedule, on
+# manual dispatch, and for release tags, so it never gates pull requests.
 
 on:
   schedule:
     # Every Monday at 06:00 UTC.
     - cron: "0 6 * * 1"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Git tag or ref to build (defaults to the branch the workflow is run from)."
+        required: false
+        type: string
+  push:
+    tags:
+      - "*"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -23,7 +31,7 @@ jobs:
     name: reduced wheel (ubuntu-latest, py${{ matrix.python-version }})
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -31,6 +39,8 @@ jobs:
         python-version: ["3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -114,3 +124,20 @@ jobs:
             unittests/python/onnx_optim \
             unittests/python/onnx_lib \
             unittests/python/bindings
+
+      - name: Attach reduced wheels to GitHub Release
+        if: github.ref_type == 'tag' || inputs.tag != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ inputs.tag }}"
+          if [ -z "${tag}" ]; then
+            tag="${{ github.ref_name }}"
+          fi
+          tag="${tag#refs/tags/}"
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            gh release upload "${tag}" ./wheelhouse/*.whl --clobber
+          else
+            echo "Release ${tag} does not exist, skipping release asset upload."
+          fi

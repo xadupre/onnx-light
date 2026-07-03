@@ -64,8 +64,8 @@ jobs:
       - name: Collect files for clang-tidy
         id: files
         run: |
-          if [[ "${{ github.event_name }}" == "schedule" ]]; then
-            # Weekly full scan: check every source file.
+          if [[ "${{ github.event_name }}" == "schedule" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            # Weekly or manual full scan: check every source file.
             FILES=$(find onnx_light -name "*.cc" | grep -v "/build/" | sort | tr '\n' ' ')
           elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
             # PR: only files changed relative to the base branch.

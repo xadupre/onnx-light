@@ -321,7 +321,7 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
         self.assertTrue(_should_exclude_runtime_test_name("attention_4d_fp16_expanded"))
         self.assertFalse(_should_exclude_runtime_test_name("attention_4d_fp16"))
         # ReduceL1 expanded variants must be excluded so they do not appear as
-        # new failures even though onnx-light has no expanded test cases for them.
+        # new_missing even though onnx-light has no expanded test cases for them.
         self.assertTrue(_should_exclude_runtime_test_name("reduce_l1_keep_dims_example_expanded"))
         self.assertTrue(_should_exclude_runtime_test_name("reduce_l1_keep_dims_random_expanded"))
         self.assertTrue(

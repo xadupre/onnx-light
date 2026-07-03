@@ -62,6 +62,13 @@ class TestBackendTestNameHelpers(ExtTestCase):
         self.assertTrue(_should_exclude_backend_test_name("elu_example_expanded_ver18"))
         self.assertTrue(_should_exclude_backend_test_name("bernoulli_expanded"))
         self.assertFalse(_should_exclude_backend_test_name("linear_attention_fp16"))
+        # FlexAttention: expanded variants must be excluded so that the longer
+        # stripped name (e.g. "flexattention_causal_mask_expanded_ver26") is not
+        # compared against shorter onnx-light names where it would never match.
+        self.assertTrue(
+            _should_exclude_backend_test_name("flexattention_causal_mask_expanded_ver26")
+        )
+        self.assertFalse(_should_exclude_backend_test_name("flexattention_causal_mask"))
 
     def test_load_known_missing_excludes_expanded_names(self):
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as f:

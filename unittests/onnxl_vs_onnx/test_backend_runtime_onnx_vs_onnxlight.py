@@ -320,6 +320,13 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
         self.assertTrue(_should_exclude_runtime_test_name("elu_example_expanded_ver18"))
         self.assertTrue(_should_exclude_runtime_test_name("attention_4d_fp16_expanded"))
         self.assertFalse(_should_exclude_runtime_test_name("attention_4d_fp16"))
+        # FlexAttention: expanded variants must be excluded so that the longer
+        # stripped name (e.g. "flexattention_causal_mask_expanded_ver26") is not
+        # compared against shorter onnx-light names where it would never match.
+        self.assertTrue(
+            _should_exclude_runtime_test_name("flexattention_causal_mask_expanded_ver26")
+        )
+        self.assertFalse(_should_exclude_runtime_test_name("flexattention_causal_mask"))
 
     def test_load_known_discrepancies_excludes_expanded_names(self) -> None:
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as f:

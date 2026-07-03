@@ -89,6 +89,16 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_attention_4d_with_past_and_present_qk_matmul_bias_4d_mask$",
     r"^test_cc_attention_4d_softcap_neginf_mask$",
     r"^test_cc_attention_4d_softcap_neginf_mask_poison$",
+    r"^test_cc_attention_23_boolmask_fullymasked_row_nan_robustness$",
+    r"^test_cc_attention_causal_boolmask_nan_robustness$",
+    r"^test_cc_attention_23_fullymasked_qk_matmul_output_mode3_zero$",
+    r"^test_cc_attention_24_fullymasked_qk_matmul_output_mode3_zero$",
+    r"^test_cc_attention_4d_causal_nonpad_attn_mask_composition$",
+    r"^test_cc_attention_4d_causal_nonpad_batch_prefill$",
+    r"^test_cc_attention_4d_causal_nonpad_continued_prefill$",
+    r"^test_cc_attention_4d_causal_nonpad_negative_offset_structural_empty$",
+    r"^test_cc_attention_4d_gqa_causal_nonpad_decode$",
+    r"^test_cc_attention_4d_gqa_causal_nonpad_decode_fp16$",
     # ORT does not yet implement the opset-24 offset-aware (bottom-right)
     # causal frontier for an external KV cache (``nonpad_kv_seqlen`` without
     # ``past_key``); see ONNX PR #8068.

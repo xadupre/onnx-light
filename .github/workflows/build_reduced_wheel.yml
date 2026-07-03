@@ -126,7 +126,7 @@ jobs:
             unittests/python/bindings
 
       - name: Attach reduced wheels to GitHub Release
-        if: github.ref_type == 'tag' || inputs.tag != ''
+        if: github.ref_type == 'tag' || (inputs.tag != null && inputs.tag != '')
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}

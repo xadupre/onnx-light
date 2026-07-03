@@ -148,42 +148,46 @@
 #define READ_FIELD(options, stream, name)                                                          \
   else if (static_cast<int>(field_number.field_number) == order_##name()) {                        \
     DEBUG_PRINT("  + field " #name)                                                                \
-    read_field(stream, field_number.wire_type, name##_, #name, options);                           \
+    read_field(stream, static_cast<int>(field_number.wire_type), name##_, #name, options);          \
     DEBUG_PRINT("  - field " #name)                                                                \
   }
 
 #define READ_FIELD_LIMIT_PARALLEL(options, stream, name)                                           \
   else if (static_cast<int>(field_number.field_number) == order_##name()) {                        \
     DEBUG_PRINT("  + field " #name)                                                                \
-    read_field_limit_parallel(stream, field_number.wire_type, name##_, #name, options);            \
+    read_field_limit_parallel(stream, static_cast<int>(field_number.wire_type), name##_, #name,     \
+                              options);                                                            \
     DEBUG_PRINT("  - field " #name)                                                                \
   }
 
 #define READ_OPTIONAL_PROTO_FIELD(options, stream, name)                                           \
   else if (static_cast<int>(field_number.field_number) == order_##name()) {                        \
     DEBUG_PRINT("  + optional field " #name)                                                       \
-    read_optional_proto_field(stream, field_number.wire_type, name##_, #name, options);            \
+    read_optional_proto_field(stream, static_cast<int>(field_number.wire_type), name##_, #name,     \
+                              options);                                                            \
     DEBUG_PRINT("  - optional field " #name)                                                       \
   }
 
 #define READ_ENUM_FIELD(options, stream, name)                                                     \
   else if (static_cast<int>(field_number.field_number) == order_##name()) {                        \
     DEBUG_PRINT("  + enum " #name)                                                                 \
-    read_enum_field(stream, field_number.wire_type, name##_, #name, options);                      \
+    read_enum_field(stream, static_cast<int>(field_number.wire_type), name##_, #name, options);     \
     DEBUG_PRINT("  - enum " #name)                                                                 \
   }
 
 #define READ_OPTIONAL_ENUM_FIELD(options, stream, name)                                            \
   else if (static_cast<int>(field_number.field_number) == order_##name()) {                        \
     DEBUG_PRINT("  + enum " #name)                                                                 \
-    read_optional_enum_field(stream, field_number.wire_type, name##_, #name, options);             \
+    read_optional_enum_field(stream, static_cast<int>(field_number.wire_type), name##_, #name,      \
+                             options);                                                             \
     DEBUG_PRINT("  - enum " #name)                                                                 \
   }
 
 #define READ_REPEATED_FIELD(options, stream, name)                                                 \
   else if (static_cast<int>(field_number.field_number) == order_##name()) {                        \
     DEBUG_PRINT("  + repeat " #name)                                                               \
-    read_repeated_field(stream, field_number.wire_type, name##_, #name, packed_##name(), options); \
+    read_repeated_field(stream, static_cast<int>(field_number.wire_type), name##_, #name,           \
+                        packed_##name(), options);                                                 \
     DEBUG_PRINT("  - repeat " #name)                                                               \
   }
 

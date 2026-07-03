@@ -405,7 +405,7 @@ void StringStream::ReadDelayedBlock(DelayedBlock &block) {
 
 void StringStream::WaitForDelayedBlock() { thread_pool_.Wait(); }
 
-void StringStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(n_threads); }
+void StringStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(static_cast<int32_t>(n_threads)); }
 
 ////////////////////
 // BinaryWriteStream
@@ -598,7 +598,7 @@ void StringWriteStream::BackUp(int count) {
   write_pos_ -= count;
 }
 
-void StringWriteStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(n_threads); }
+void StringWriteStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(static_cast<int32_t>(n_threads)); }
 
 void StringWriteStream::WriteDelayedBlock(DelayedWriteBlock &block) {
   EXT_ENFORCE(thread_pool_.IsStarted(), "Thread pool is not started, cannot write delayed block.");
@@ -736,7 +736,7 @@ const uint8_t *FileWriteStream::data() const {
   EXT_THROW("This method cannot be called on this class (FileWriteStream).");
 }
 
-void FileWriteStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(n_threads); }
+void FileWriteStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(static_cast<int32_t>(n_threads)); }
 
 void FileWriteStream::WriteDelayedBlock(DelayedWriteBlock &block) {
   EXT_ENFORCE(thread_pool_.IsStarted(), "Thread pool is not started, cannot write delayed block.");
@@ -968,7 +968,7 @@ void FileStream::ReadDelayedBlock(DelayedBlock &block) {
 
 void FileStream::WaitForDelayedBlock() { thread_pool_.Wait(); }
 
-void FileStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(n_threads); }
+void FileStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(static_cast<int32_t>(n_threads)); }
 
 //////////////////////
 // TwoFilesWriteStream

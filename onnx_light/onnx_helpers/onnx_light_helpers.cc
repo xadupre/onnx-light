@@ -12,7 +12,7 @@ namespace onnx_light_helpers {
 
 std::string Version() {
   auto s =
-      MakeString("onnx-light", 1, 1.1, 1.1f, "de", std::vector<int>{1}, std::vector<float>{1.1});
+      MakeString("onnx-light", 1, 1.1, 1.1f, "de", std::vector<int>{1}, std::vector<float>{1.1f});
   auto s2 = MakeString("Unable to allocate ", 5, " bytes on GPU.");
   return s + s2;
 }
@@ -199,7 +199,14 @@ void MakeStringInternalElement(StringStream &ss, const std::vector<double> &t) {
 Logger::Logger(const std::string &destination) : to_stdout_(false), enabled_(false) {
   std::string dest = destination;
   if (dest.empty()) {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)  // std::getenv is portable; MSVC deprecation is spurious here.
+#endif
     const char *env = std::getenv("ONNX_LIGHT_LOG");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
     if (env != nullptr) {
       dest = env;
     }

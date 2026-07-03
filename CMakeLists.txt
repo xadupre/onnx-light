@@ -67,7 +67,20 @@ endif()
 # at the project/target level on MSBuild).
 if(MSVC)
   add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/MP>)
-  add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/WX>)
+  # onnx-light relies on dynamic_cast in its stream/AST class hierarchies, so it
+  # requires RTTI. Force /GR on onnx-light's own targets so it still compiles
+  # when a consumer project (e.g. onnxruntime, which defaults to onnxruntime_DISABLE_RTTI)
+  # builds with /GR- disabled. RTTI is a per-translation-unit setting, so this
+  # does not force RTTI onto the consumer's own translation units. A trailing
+  # /GR overrides any earlier /GR- inherited from the parent project.
+  add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/GR>)
+  # Only treat warnings as errors for standalone (top-level) onnx-light builds.
+  # When onnx-light is consumed as a subproject (e.g. FetchContent from
+  # onnxruntime) the parent project may compile at a higher warning level, so
+  # imposing /WX on the consumer would turn its warnings into hard errors.
+  if(PROJECT_IS_TOP_LEVEL)
+    add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/WX>)
+  endif()
 endif()
 
 include(GNUInstallDirs)

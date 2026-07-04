@@ -19,7 +19,11 @@
   void ParseFromZeroCopyStream(utils::BinaryStream *stream);                                       \
   void ParseFromZeroCopyStream(utils::BinaryStream *stream, ParseOptions &opts);                   \
   bool ParseFromIstream(std::istream *input);                                                      \
+  /** Serializes this message to ``out`` and returns ``false`` when capped by                      \
+   * ``SerializeOptions::max_serialized_size_bytes`` (``out`` is cleared in this case). */         \
   bool SerializeToString(std::string &out) const;                                                  \
+  /** Serializes this message to ``out`` and returns ``false`` when capped by                      \
+   * ``SerializeOptions::max_serialized_size_bytes`` (``out`` is cleared in this case). */         \
   bool SerializeToString(std::string &out, SerializeOptions &opts) const;                          \
   SerializeSizeResult SerializeSize(utils::BinaryWriteStream &stream, SerializeOptions &opts)      \
       const;                                                                                       \

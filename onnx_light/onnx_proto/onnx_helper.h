@@ -321,6 +321,7 @@ inline bool SerializeProtoToStream(T &, utils::BinaryWriteStream &, SerializeOpt
  * @param options Serialization options.
  * @param clear_external_data If true, removes temporary external_data metadata after
  * serialization.
+ * @return ``false`` when ``options.max_serialized_size_bytes`` is exceeded.
  */
 bool SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &stream,
                                  SerializeOptions &options, bool clear_external_data = true);

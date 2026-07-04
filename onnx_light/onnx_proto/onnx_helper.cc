@@ -987,7 +987,7 @@ std::shared_ptr<uint8_t[]> ConsolidateTensorsToBuffer(ModelProto &model,
   return storage;
 }
 
-void SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &stream,
+bool SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &stream,
                                  SerializeOptions &options, bool clear_external_data) {
   if (options.raw_data_callback) {
     ModelProto copy;
@@ -995,8 +995,7 @@ void SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
     ApplySerializeRawDataCallback(copy, options);
     SerializeOptions local_options = options;
     local_options.raw_data_callback = {};
-    SerializeModelProtoToStream(copy, stream, local_options, clear_external_data);
-    return;
+    return SerializeModelProtoToStream(copy, stream, local_options, clear_external_data);
   }
   EXT_ENFORCE(options.format == SerializeFormat::kOnnx,
               "SerializeModelProtoToStream: SerializeFormat::kOrtFlatbuffers is not "
@@ -1060,7 +1059,9 @@ void SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
     }
   }
   SerializeSizeResult total_size = model.SerializeSize(stream, options);
-  EnforceMaxSerializedSize(total_size, options, "SerializeModelProtoToStream");
+  if (!EnforceMaxSerializedSize(total_size, options, "SerializeModelProtoToStream")) {
+    return false;
+  }
   model.SerializeToStream(stream, options);
   if (options.is_parallel())
     stream.WaitForDelayedBlock();
@@ -1075,6 +1076,7 @@ void SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
   }
   if (stream.ExternalWeights() && clear_external_data)
     ClearExternalData(model);
+  return true;
 }
 
 void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream,

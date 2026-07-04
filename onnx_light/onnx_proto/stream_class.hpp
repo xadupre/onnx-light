@@ -28,9 +28,9 @@
     _ParseFromZeroCopyStream(*this, stream, opts);                                                 \
   }                                                                                                \
   bool cls::ParseFromIstream(std::istream *input) { return _ParseFromIstream(*this, input); }      \
-  void cls::SerializeToString(std::string &out) const { _SerializeToString(*this, out); }          \
-  void cls::SerializeToString(std::string &out, SerializeOptions &opts) const {                    \
-    _SerializeToString(*this, out, opts);                                                          \
+  bool cls::SerializeToString(std::string &out) const { return _SerializeToString(*this, out); }   \
+  bool cls::SerializeToString(std::string &out, SerializeOptions &opts) const {                    \
+    return _SerializeToString(*this, out, opts);                                                   \
   }
 
 ///////////////////////
@@ -303,13 +303,13 @@ template <typename cls> bool _ParseFromIstream(cls &self, std::istream *input) {
   return true;
 }
 
-template <typename cls> void _SerializeToString(cls &self, std::string &out) {
+template <typename cls> bool _SerializeToString(cls &self, std::string &out) {
   SerializeOptions opts;
-  self.SerializeToString(out, opts);
+  return self.SerializeToString(out, opts);
 }
 
 template <typename cls>
-void _SerializeToString(cls &self, std::string &out, SerializeOptions &opts) {
+bool _SerializeToString(cls &self, std::string &out, SerializeOptions &opts) {
   if constexpr (std::is_same_v<std::remove_cv_t<cls>, ModelProto>) {
     if (opts.raw_data_callback) {
       ModelProto copy;
@@ -317,8 +317,7 @@ void _SerializeToString(cls &self, std::string &out, SerializeOptions &opts) {
       ApplySerializeRawDataCallback(copy, opts);
       SerializeOptions local_opts = opts;
       local_opts.raw_data_callback = {};
-      _SerializeToString(copy, out, local_opts);
-      return;
+      return _SerializeToString(copy, out, local_opts);
     }
   }
   EXT_ENFORCE(opts.format == SerializeFormat::kOnnx,
@@ -332,7 +331,10 @@ void _SerializeToString(cls &self, std::string &out, SerializeOptions &opts) {
   // in size_field/size_optional_proto_field/size_repeated_field) so the
   // write pass reuses cached sub-message sizes without recomputing them.
   SerializeSizeResult total_size = self.SerializeSize(size_buf, opts);
-  EnforceMaxSerializedSize(total_size, opts, "SerializeToString");
+  if (!EnforceMaxSerializedSize(total_size, opts, "SerializeToString")) {
+    out.clear();
+    return false;
+  }
   out.resize(static_cast<size_t>(total_size.size()));
   ONNX_LIGHT_NAMESPACE::utils::BorrowedStringWriteStream buf(
       reinterpret_cast<uint8_t *>(out.data()), total_size.size());
@@ -344,6 +346,7 @@ void _SerializeToString(cls &self, std::string &out, SerializeOptions &opts) {
   if (buf.HasParallelizationStarted()) {
     buf.WaitForDelayedBlock();
   }
+  return true;
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -19,8 +19,8 @@
   void ParseFromZeroCopyStream(utils::BinaryStream *stream);                                       \
   void ParseFromZeroCopyStream(utils::BinaryStream *stream, ParseOptions &opts);                   \
   bool ParseFromIstream(std::istream *input);                                                      \
-  void SerializeToString(std::string &out) const;                                                  \
-  void SerializeToString(std::string &out, SerializeOptions &opts) const;                          \
+  bool SerializeToString(std::string &out) const;                                                  \
+  bool SerializeToString(std::string &out, SerializeOptions &opts) const;                          \
   SerializeSizeResult SerializeSize(utils::BinaryWriteStream &stream, SerializeOptions &opts)      \
       const;                                                                                       \
   void ParseFromStream(utils::BinaryStream &stream, ParseOptions &options);                        \
@@ -447,7 +447,7 @@ struct SerializeOptions : TensorBufferOptions {
   /** Maximum serialized size in bytes allowed for one serialization operation.
    *  The limit applies to the total output size (protobuf payload + external data).
    *  - ``0`` (default): no limit.
-   *  - ``> 0``: serialization raises an error when the computed size exceeds this limit.
+   *  - ``> 0``: serialization returns ``false`` when the computed size exceeds this limit.
    */
   int64_t max_serialized_size_bytes = 0;
   /** maximum size in bytes for one external weights file when saving with external data;
@@ -475,18 +475,16 @@ struct SerializeOptions : TensorBufferOptions {
 };
 
 /** Enforces ``SerializeOptions::max_serialized_size_bytes`` for a computed serialized size. */
-inline void EnforceMaxSerializedSize(const SerializeSizeResult &total_size,
+inline bool EnforceMaxSerializedSize(const SerializeSizeResult &total_size,
                                      const SerializeOptions &options, const char *where) {
   EXT_ENFORCE(options.max_serialized_size_bytes >= 0, where,
               ": SerializeOptions::max_serialized_size_bytes must be >= 0 (got ",
               options.max_serialized_size_bytes,
               "). Use 0 to disable the limit or a positive value to cap serialized output size.");
   if (options.max_serialized_size_bytes > 0) {
-    EXT_ENFORCE(total_size.size() <= options.max_serialized_size_bytes, where,
-                ": serialized size (", total_size.size(),
-                " bytes) exceeds SerializeOptions::max_serialized_size_bytes (",
-                options.max_serialized_size_bytes, " bytes).");
+    return total_size.size() <= options.max_serialized_size_bytes;
   }
+  return true;
 }
 
 using utils::offset_t;

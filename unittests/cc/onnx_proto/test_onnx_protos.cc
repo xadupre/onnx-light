@@ -5945,8 +5945,8 @@ TEST(onnx_proto, MaxSerializedSizeBytesDefaultIsZero) {
   EXPECT_EQ(opts.max_serialized_size_bytes, 0);
 }
 
-TEST(onnx_proto, MaxSerializedSizeBytesTensorSerializeToStringThrows) {
-  // Serializing a tensor whose output exceeds the configured cap must throw.
+TEST(onnx_proto, MaxSerializedSizeBytesTensorSerializeToStringReturnsFalse) {
+  // Serializing a tensor whose output exceeds the configured cap must fail early.
   TensorProto tp;
   tp.set_data_type(static_cast<TensorProto::DataType>(1)); // FLOAT
   tp.add_dims(5);
@@ -5956,7 +5956,7 @@ TEST(onnx_proto, MaxSerializedSizeBytesTensorSerializeToStringThrows) {
   std::string serialized;
   SerializeOptions sopts;
   sopts.max_serialized_size_bytes = 10;
-  EXPECT_THROW(tp.SerializeToString(serialized, sopts), std::runtime_error);
+  EXPECT_FALSE(tp.SerializeToString(serialized, sopts));
 }
 
 TEST(onnx_proto, MaxSerializedSizeBytesTensorExactLimitAllowed) {
@@ -5973,7 +5973,7 @@ TEST(onnx_proto, MaxSerializedSizeBytesTensorExactLimitAllowed) {
   SerializeOptions sopts;
   sopts.max_serialized_size_bytes = total_size.size();
   std::string serialized;
-  EXPECT_NO_THROW(tp.SerializeToString(serialized, sopts));
+  EXPECT_TRUE(tp.SerializeToString(serialized, sopts));
 }
 
 TEST(onnx_proto, MaxSerializedSizeBytesZeroMeansNoLimit) {
@@ -5986,7 +5986,7 @@ TEST(onnx_proto, MaxSerializedSizeBytesZeroMeansNoLimit) {
   std::string serialized;
   SerializeOptions sopts;
   sopts.max_serialized_size_bytes = 0;
-  EXPECT_NO_THROW(tp.SerializeToString(serialized, sopts));
+  EXPECT_TRUE(tp.SerializeToString(serialized, sopts));
 }
 
 TEST(onnx_proto, NegativeMaxSerializedSizeBytesThrows) {
@@ -6002,7 +6002,7 @@ TEST(onnx_proto, NegativeMaxSerializedSizeBytesThrows) {
   EXPECT_THROW(tp.SerializeToString(serialized, sopts), std::runtime_error);
 }
 
-TEST(onnx_proto, MaxSerializedSizeBytesSerializeModelProtoToStreamThrows) {
+TEST(onnx_proto, MaxSerializedSizeBytesSerializeModelProtoToStreamReturnsFalse) {
   // File/stream serialization path must enforce the same size cap.
   ModelProto model;
   GraphProto *graph = model.add_graph();
@@ -6016,7 +6016,7 @@ TEST(onnx_proto, MaxSerializedSizeBytesSerializeModelProtoToStreamThrows) {
   SerializeOptions sopts;
   sopts.max_serialized_size_bytes = 10;
   utils::StringWriteStream stream;
-  EXPECT_THROW(SerializeModelProtoToStream(model, stream, sopts), std::runtime_error);
+  EXPECT_FALSE(SerializeModelProtoToStream(model, stream, sopts));
 }
 
 TEST(onnx_proto, MaxTensorSizeBytesPackedFloatDataThrows) {

@@ -140,6 +140,18 @@ FIELD_STR(denotation, 3,
           "semantic descriptions to ensure that operations are applied to the correct axis of a "
           "tensor. Refer to https://github.com/onnx/onnx/blob/main/docs/DimensionDenotation.md"
           "#axisdenotation-definition for pre-defined dimension denotations.")
+enum ValueCase : int32_t {
+  VALUE_NOT_SET = 0,
+  kDimValue = 1,
+  kDimParam = 2,
+};
+inline ValueCase value_case() const {
+  if (has_dim_value())
+    return ValueCase::kDimValue;
+  if (has_dim_param())
+    return ValueCase::kDimParam;
+  return ValueCase::VALUE_NOT_SET;
+}
 void Clear() {
   dim_value_.reset();
   dim_param_.clear();
@@ -207,7 +219,39 @@ enum DataType : int32_t {
 
   // 2-bit integer data type
   UINT2 = 25, // Unsigned integer in range [0, 3]
-  INT2 = 26   // Signed integer in range [-2, 1], using two's complement representation
+  INT2 = 26,  // Signed integer in range [-2, 1], using two's complement representation
+
+  // Flat protobuf-style enumerator aliases (drop-in compatibility with the
+  // protobuf-generated header, which exposes names such as
+  // TensorProto_DataType_FLOAT both at namespace scope and as members of the
+  // enum type).  Duplicate values are permitted in a C++ enumeration.
+  TensorProto_DataType_UNDEFINED = 0,
+  TensorProto_DataType_FLOAT = 1,
+  TensorProto_DataType_UINT8 = 2,
+  TensorProto_DataType_INT8 = 3,
+  TensorProto_DataType_UINT16 = 4,
+  TensorProto_DataType_INT16 = 5,
+  TensorProto_DataType_INT32 = 6,
+  TensorProto_DataType_INT64 = 7,
+  TensorProto_DataType_STRING = 8,
+  TensorProto_DataType_BOOL = 9,
+  TensorProto_DataType_FLOAT16 = 10,
+  TensorProto_DataType_DOUBLE = 11,
+  TensorProto_DataType_UINT32 = 12,
+  TensorProto_DataType_UINT64 = 13,
+  TensorProto_DataType_COMPLEX64 = 14,
+  TensorProto_DataType_COMPLEX128 = 15,
+  TensorProto_DataType_BFLOAT16 = 16,
+  TensorProto_DataType_FLOAT8E4M3FN = 17,
+  TensorProto_DataType_FLOAT8E4M3FNUZ = 18,
+  TensorProto_DataType_FLOAT8E5M2 = 19,
+  TensorProto_DataType_FLOAT8E5M2FNUZ = 20,
+  TensorProto_DataType_UINT4 = 21,
+  TensorProto_DataType_INT4 = 22,
+  TensorProto_DataType_FLOAT4E2M1 = 23,
+  TensorProto_DataType_FLOAT8E8M0 = 24,
+  TensorProto_DataType_UINT2 = 25,
+  TensorProto_DataType_INT2 = 26,
 
   // Future extensions go here.
 };
@@ -273,7 +317,13 @@ inline static const char *DataType_Name(DataType t) {
   }
 }
 
-enum DataLocation : int32_t { DEFAULT = 0, EXTERNAL = 1 };
+enum DataLocation : int32_t {
+  DEFAULT = 0,
+  EXTERNAL = 1,
+  // Flat protobuf-style enumerator aliases (drop-in compatibility).
+  TensorProto_DataLocation_DEFAULT = 0,
+  TensorProto_DataLocation_EXTERNAL = 1
+};
 
 BEGIN_PROTO(
     Segment,
@@ -367,6 +417,7 @@ FIELD_OPTIONAL_ENUM(
 FIELD_REPEATED(StringStringEntryProto, metadata_props, 16,
                "Named metadata values; keys should be distinct.")
 inline TensorProto() { data_type_ = DataType::UNDEFINED; }
+inline void Clear() { *this = TensorProto(); }
 inline void set_data_type(int v) { data_type_ = static_cast<DataType>(v); }
 inline bool is_raw_data() const { return !raw_data_.empty(); }
 /**
@@ -490,10 +541,16 @@ FIELD_DEFAULT(
 FIELD_OPTIONAL(TypeProto, value_type, 2, "This field MUST be present for this version of the IR.")
 END_PROTO()
 
+BEGIN_PROTO(Opaque, "Defines an opaque, runtime-specific type identified by a domain and name.")
+FIELD_STR(domain, 1, "The domain of the opaque type.")
+FIELD_STR(name, 2, "The name of the opaque type.")
+END_PROTO()
+
 inline TypeProto() {}
 FIELD_OPTIONAL_ONEOF(Tensor, tensor_type, 1, type, "The type of a tensor.")
 FIELD_OPTIONAL_ONEOF(Sequence, sequence_type, 4, type, "The type of a sequence.")
 FIELD_OPTIONAL_ONEOF(Map, map_type, 5, type, "The type of a map.")
+FIELD_OPTIONAL_ONEOF(Opaque, opaque_type, 7, type, "The type of an opaque object.")
 FIELD_STR(denotation, 6,
           "An optional denotation can be used to denote the whole type with a standard "
           "semantic description as to what is stored inside. Refer to "
@@ -503,11 +560,11 @@ FIELD_OPTIONAL_ONEOF(SparseTensor, sparse_tensor_type, 8, type, "Type of the spa
 FIELD_OPTIONAL_ONEOF(Optional, optional_type, 9, type, "The type of an optional.")
 inline bool has_type() const {
   return has_tensor_type() || has_sequence_type() || has_map_type() || has_sparse_tensor_type() ||
-         has_optional_type();
+         has_optional_type() || has_opaque_type();
 }
 inline bool is_set() const {
   return has_tensor_type() || has_sparse_tensor_type() || has_sequence_type() ||
-         has_optional_type() || has_map_type();
+         has_optional_type() || has_map_type() || has_opaque_type();
 }
 enum ValueCase : int32_t {
   kUndefined = 0,
@@ -516,6 +573,7 @@ enum ValueCase : int32_t {
   kSequenceType = 3,
   kMapType = 4,
   kOptionalType = 5,
+  kOpaqueType = 6,
 };
 static const ValueCase VALUE_NOT_SET = ValueCase::kUndefined;
 inline ValueCase value_case() const {
@@ -529,6 +587,8 @@ inline ValueCase value_case() const {
     return ValueCase::kMapType;
   if (has_optional_type())
     return ValueCase::kOptionalType;
+  if (has_opaque_type())
+    return ValueCase::kOpaqueType;
   return ValueCase::kUndefined;
 }
 END_PROTO()
@@ -573,6 +633,23 @@ enum AttributeType : int32_t {
   GRAPHS = 10,
   SPARSE_TENSORS = 12,
   TYPE_PROTOS = 14,
+
+  // Flat protobuf-style enumerator aliases (drop-in compatibility).
+  AttributeProto_AttributeType_UNDEFINED = 0,
+  AttributeProto_AttributeType_FLOAT = 1,
+  AttributeProto_AttributeType_INT = 2,
+  AttributeProto_AttributeType_STRING = 3,
+  AttributeProto_AttributeType_TENSOR = 4,
+  AttributeProto_AttributeType_GRAPH = 5,
+  AttributeProto_AttributeType_SPARSE_TENSOR = 11,
+  AttributeProto_AttributeType_TYPE_PROTO = 13,
+  AttributeProto_AttributeType_FLOATS = 6,
+  AttributeProto_AttributeType_INTS = 7,
+  AttributeProto_AttributeType_STRINGS = 8,
+  AttributeProto_AttributeType_TENSORS = 9,
+  AttributeProto_AttributeType_GRAPHS = 10,
+  AttributeProto_AttributeType_SPARSE_TENSORS = 12,
+  AttributeProto_AttributeType_TYPE_PROTOS = 14,
 };
 
 inline static const char *AttributeType_Name(AttributeType t) {
@@ -642,6 +719,7 @@ FIELD_REPEATED_PROTO(SparseTensorProto, sparse_tensors, 23, "Optional repeated t
 FIELD_REPEATED_PROTO(GraphProto, graphs, 11, "Optional repeated graph attribute.")
 FIELD_OPTIONAL(TypeProto, tp, 14, "Type proto")
 FIELD_REPEATED_PROTO(TypeProto, type_protos, 15, "Optional repeated type_proto attribute.")
+inline void Clear() { *this = AttributeProto(); }
 END_PROTO()
 
 // NodeProto

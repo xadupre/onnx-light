@@ -17,6 +17,15 @@
 namespace google {
 namespace protobuf {
 
+// --- Scalar integer typedefs (protobuf compat) ---
+// The protobuf runtime historically exposed these fixed-width integer aliases
+// in the google::protobuf namespace; some consumers (e.g. onnxruntime) still
+// reference them.  Map them onto the standard <cstdint> types.
+typedef std::int32_t int32;
+typedef std::int64_t int64;
+typedef std::uint32_t uint32;
+typedef std::uint64_t uint64;
+
 // --- Repeated field types ---
 
 template <typename T> using RepeatedField = ONNX_LIGHT_NAMESPACE::utils::RepeatedField<T>;

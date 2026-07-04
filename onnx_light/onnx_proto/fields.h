@@ -99,10 +99,16 @@ public:
   explicit inline RepeatedField() {}
   /** Reserves storage for at least n elements. */
   inline void reserve(size_t n) { values_.reserve(n); }
+  /** Reserves storage for at least n elements (protobuf compat). */
+  inline void Reserve(size_t n) { values_.reserve(static_cast<size_t>(n)); }
   /** Removes all elements. */
   inline void clear() { values_.clear(); }
   /** Removes all elements. */
-  inline void Clear() { values_.Clear(); }
+  inline void Clear() { values_.clear(); }
+  /** Returns a const iterator to the first element (protobuf compat). */
+  inline typename std::vector<T>::const_iterator cbegin() const { return values_.cbegin(); }
+  /** Returns a const iterator past the last element (protobuf compat). */
+  inline typename std::vector<T>::const_iterator cend() const { return values_.cend(); }
   /** Returns true if the field contains no elements. */
   inline bool empty() const { return values_.empty(); }
   /** Returns the number of elements. */
@@ -229,6 +235,8 @@ public:
   explicit inline RepeatedProtoField() {}
   /** Reserves storage for at least n elements. */
   inline void reserve(size_t n) { values_.reserve(n); }
+  /** Reserves storage for at least n elements (protobuf compat). */
+  inline void Reserve(size_t n) { values_.reserve(static_cast<size_t>(n)); }
   /** Returns true if the field contains no elements. */
   inline bool empty() const { return values_.empty(); }
   /** Returns the number of elements. */
@@ -350,6 +358,10 @@ public:
   inline const_iterator begin() const { return const_iterator(this, 0); }
   /** Returns a const iterator past the last element. */
   inline const_iterator end() const { return const_iterator(this, size()); }
+  /** Returns a const iterator to the first element (protobuf compat). */
+  inline const_iterator cbegin() const { return const_iterator(this, 0); }
+  /** Returns a const iterator past the last element (protobuf compat). */
+  inline const_iterator cend() const { return const_iterator(this, size()); }
 
 private:
   std::vector<std::shared_ptr<T>> values_;

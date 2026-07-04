@@ -64,6 +64,8 @@ public:                                                                         
   inline const type *ptr_##name() const { return &name##_; }                                       \
   inline bool has_##name() const { return _has_field_(name##_); }                                  \
   inline void set_##name(const type &v) { name##_ = v; }                                           \
+  /** Compatibility accessor returning a mutable pointer to the field. */                          \
+  inline type *mutable_##name() { return &name##_; }                                               \
   inline int order_##name() const { return order; }                                                \
   static inline constexpr const char *_name_##name = #name;                                        \
   static inline constexpr const char *DOC_##name = doc;                                            \
@@ -158,6 +160,7 @@ public:                                                                         
   inline bool has_##name() const { return _has_field_(name##_) && !name##_.empty(); }              \
   inline int order_##name() const { return order; }                                                \
   inline void clr_##name() { name##_.clear(); }                                                    \
+  inline void clear_##name() { name##_.clear(); }                                                  \
   inline size_t name##_size() const { return name##_.size(); }                                     \
   static inline constexpr const char *DOC_##name = doc;                                            \
   static inline constexpr const char *_name_##name = #name;                                        \
@@ -183,6 +186,10 @@ public:                                                                         
   inline bool has_##name() const { return _has_field_(name##_) && !name##_.empty(); }              \
   inline int order_##name() const { return order; }                                                \
   inline void clr_##name() { name##_.clear(); }                                                    \
+  inline void clear_##name() { name##_.clear(); }                                                  \
+  inline size_t name##_size() const { return name##_.size(); }                                     \
+  inline const type &name(size_t i) const { return name##_[i]; }                                   \
+  inline type *mutable_##name(size_t i) { return &name##_[i]; }                                     \
   static inline constexpr const char *DOC_##name = doc;                                            \
   static inline constexpr const char *_name_##name = #name;                                        \
   inline bool packed_##name() const { return true; }                                               \

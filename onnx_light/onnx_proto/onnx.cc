@@ -1467,15 +1467,15 @@ void ModelProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions 
                                  NAME_EXIST_VALUE(functions), NAME_EXIST_VALUE(configuration));
 }
 
-void ModelProto::SerializeToString(std::string &out,
+bool ModelProto::SerializeToString(std::string &out,
                                    std::unordered_map<std::string, std::string> &external_files,
                                    size_t max_external_file_size,
                                    const std::string &external_file_prefix) const {
   SerializeOptions opts;
-  SerializeToString(out, external_files, max_external_file_size, external_file_prefix, opts);
+  return SerializeToString(out, external_files, max_external_file_size, external_file_prefix, opts);
 }
 
-void ModelProto::SerializeToString(std::string &out,
+bool ModelProto::SerializeToString(std::string &out,
                                    std::unordered_map<std::string, std::string> &external_files,
                                    size_t max_external_file_size,
                                    const std::string &external_file_prefix,
@@ -1496,9 +1496,15 @@ void ModelProto::SerializeToString(std::string &out,
                            max_external_file_size, external_file_prefix, local_opts.alignment);
   MemoryExternalWriteStream stream;
   SerializeSizeResult total_size = copy.SerializeSize(stream, local_opts);
+  if (!EnforceMaxSerializedSize(total_size, local_opts, "ModelProto::SerializeToString")) {
+    out.clear();
+    external_files.clear();
+    return false;
+  }
   stream.pre_allocate_main(static_cast<size_t>(total_size.proto_size));
   copy.SerializeToStream(stream, local_opts);
   stream.CopyOutputsTo(out, external_files);
+  return true;
 }
 
 // SequenceProto

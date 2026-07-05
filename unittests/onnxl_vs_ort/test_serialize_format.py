@@ -262,6 +262,44 @@ class TestSerializeFormat(ExtTestCase):
         popts = onnxl.ParseOptions()
         self.assertEqual(popts.max_tensor_size_bytes, 0)
 
+    def test_serialize_options_max_serialized_size_bytes_default_is_zero(self) -> None:
+        # Default value for max_serialized_size_bytes must be 0 (no limit).
+        sopts = onnxl.SerializeOptions()
+        self.assertEqual(sopts.max_serialized_size_bytes, 0)
+
+    def test_max_serialized_size_bytes_throws(self) -> None:
+        # Serializing a tensor above the configured cap must raise.
+        import numpy as np
+
+        w = np.ones((5,), dtype=np.float32)  # 20 bytes raw data (+ protobuf overhead)
+        tp = onh.from_array(w, name="w")
+        sopts = onnxl.SerializeOptions()
+        sopts.max_serialized_size_bytes = 10
+        with self.assertRaisesRegex(RuntimeError, "max_serialized_size_bytes"):
+            tp.SerializeToString(sopts)
+
+    def test_max_serialized_size_bytes_zero_means_no_limit(self) -> None:
+        # max_serialized_size_bytes == 0 disables the limit.
+        import numpy as np
+
+        w = np.ones((100,), dtype=np.float32)
+        tp = onh.from_array(w, name="w")
+        sopts = onnxl.SerializeOptions()
+        sopts.max_serialized_size_bytes = 0
+        data = tp.SerializeToString(sopts)
+        self.assertGreater(len(data), 0)
+
+    def test_negative_max_serialized_size_bytes_raises(self) -> None:
+        # A negative max_serialized_size_bytes must be rejected.
+        import numpy as np
+
+        w = np.ones((5,), dtype=np.float32)
+        tp = onh.from_array(w, name="w")
+        sopts = onnxl.SerializeOptions()
+        sopts.max_serialized_size_bytes = -1
+        with self.assertRaisesRegex(RuntimeError, "max_serialized_size_bytes"):
+            tp.SerializeToString(sopts)
+
     def test_max_tensor_size_bytes_raw_data_throws(self) -> None:
         # Parsing a TensorProto whose raw_data exceeds the limit must raise.
         import numpy as np

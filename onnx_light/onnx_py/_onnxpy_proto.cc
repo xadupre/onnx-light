@@ -488,11 +488,16 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           "SerializeToString",
           [](cls &self, nb::object options) {
             std::string out;
+            bool ok = false;
             if (nb::isinstance<SerializeOptions &>(options)) {
-              self.SerializeToString(out, nb::cast<SerializeOptions &>(options));
+              ok = self.SerializeToString(out, nb::cast<SerializeOptions &>(options));
             } else {
               SerializeOptions opts;
-              self.SerializeToString(out, opts);
+              ok = self.SerializeToString(out, opts);
+            }
+            if (!ok) {
+              throw std::runtime_error(
+                  "SerializeToString: output exceeded SerializeOptions.max_serialized_size_bytes.");
             }
             return nb::bytes(out.data(), out.size());
           },
@@ -519,11 +524,17 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
                     : std::unique_ptr<utils::BinaryWriteStream>(
                           new utils::TwoFilesWriteStream(file_path, external_data_file));
             if (nb::isinstance<SerializeOptions &>(options)) {
-              SerializeProtoToStream(*to_write, *stream, nb::cast<SerializeOptions &>(options),
-                                     !external_data_file.empty());
+              if (!SerializeProtoToStream(*to_write, *stream, nb::cast<SerializeOptions &>(options),
+                                          !external_data_file.empty())) {
+                throw std::runtime_error("SerializeToFile: output exceeded "
+                                         "SerializeOptions.max_serialized_size_bytes.");
+              }
             } else {
               SerializeOptions opts;
-              SerializeProtoToStream(*to_write, *stream, opts, !external_data_file.empty());
+              if (!SerializeProtoToStream(*to_write, *stream, opts, !external_data_file.empty())) {
+                throw std::runtime_error("SerializeToFile: output exceeded "
+                                         "SerializeOptions.max_serialized_size_bytes.");
+              }
             }
           },
           nb::arg("name"), nb::arg("options") = nb::none(), nb::arg("external_data_file") = "",
@@ -1091,6 +1102,11 @@ void AddOnnxPyProto(nb::module_ &m) {
       .def_rw("use_external_data_location", &SerializeOptions::use_external_data_location,
               "if true, tensors already marked as EXTERNAL are written to the file specified by "
               "external_data.location; this allows serialization into one or more weights files.")
+      .def_rw("max_serialized_size_bytes", &SerializeOptions::max_serialized_size_bytes,
+              "Maximum serialized size in bytes allowed for one serialization operation "
+              "(default 0 = no limit). The limit applies to the total output size "
+              "(protobuf payload + external data). Serialization reports failure when "
+              "the computed size exceeds this value.")
       .def_rw("max_external_file_size", &SerializeOptions::max_external_file_size,
               "maximum size in bytes for one external weights file when writing external data; "
               "0 means no limit")

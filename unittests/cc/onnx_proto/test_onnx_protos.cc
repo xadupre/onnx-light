@@ -5939,6 +5939,86 @@ TEST(onnx_proto, MaxTensorSizeBytesZeroMeansNoLimit) {
   EXPECT_NO_THROW(parsed.ParseFromString(serialized, popts));
 }
 
+TEST(onnx_proto, MaxSerializedSizeBytesDefaultIsZero) {
+  // Default must be 0 (no limit) for backward compatibility.
+  SerializeOptions opts;
+  EXPECT_EQ(opts.max_serialized_size_bytes, 0);
+}
+
+TEST(onnx_proto, MaxSerializedSizeBytesTensorSerializeToStringReturnsFalse) {
+  // Serializing a tensor whose output exceeds the configured cap must fail early.
+  TensorProto tp;
+  tp.set_data_type(static_cast<TensorProto::DataType>(1)); // FLOAT
+  tp.add_dims(5);
+  std::string raw(20, '\x01'); // 5 floats = 20 bytes
+  for (char c : raw)
+    tp.ref_raw_data().push_back(static_cast<uint8_t>(c));
+  std::string serialized;
+  SerializeOptions sopts;
+  sopts.max_serialized_size_bytes = 10;
+  EXPECT_FALSE(tp.SerializeToString(serialized, sopts));
+}
+
+TEST(onnx_proto, MaxSerializedSizeBytesTensorExactLimitAllowed) {
+  // A cap equal to the computed serialized size must be accepted.
+  TensorProto tp;
+  tp.set_data_type(static_cast<TensorProto::DataType>(1)); // FLOAT
+  tp.add_dims(5);
+  std::string raw(20, '\x01'); // 5 floats = 20 bytes
+  for (char c : raw)
+    tp.ref_raw_data().push_back(static_cast<uint8_t>(c));
+  utils::StringWriteStream stream;
+  SerializeOptions size_opts;
+  SerializeSizeResult total_size = tp.SerializeSize(stream, size_opts);
+  SerializeOptions sopts;
+  sopts.max_serialized_size_bytes = total_size.size();
+  std::string serialized;
+  EXPECT_TRUE(tp.SerializeToString(serialized, sopts));
+}
+
+TEST(onnx_proto, MaxSerializedSizeBytesZeroMeansNoLimit) {
+  // max_serialized_size_bytes == 0 disables the limit entirely.
+  TensorProto tp;
+  tp.set_data_type(static_cast<TensorProto::DataType>(1)); // FLOAT
+  tp.add_dims(100);
+  for (int i = 0; i < 400; ++i)
+    tp.ref_raw_data().push_back(0);
+  std::string serialized;
+  SerializeOptions sopts;
+  sopts.max_serialized_size_bytes = 0;
+  EXPECT_TRUE(tp.SerializeToString(serialized, sopts));
+}
+
+TEST(onnx_proto, NegativeMaxSerializedSizeBytesThrows) {
+  // A negative cap must be rejected.
+  TensorProto tp;
+  tp.set_data_type(static_cast<TensorProto::DataType>(1)); // FLOAT
+  tp.add_dims(1);
+  for (int i = 0; i < 4; ++i)
+    tp.ref_raw_data().push_back(0);
+  std::string serialized;
+  SerializeOptions sopts;
+  sopts.max_serialized_size_bytes = -1;
+  EXPECT_THROW(tp.SerializeToString(serialized, sopts), std::runtime_error);
+}
+
+TEST(onnx_proto, MaxSerializedSizeBytesSerializeModelProtoToStreamReturnsFalse) {
+  // File/stream serialization path must enforce the same size cap.
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g_serialized_size");
+  TensorProto *initializer = graph->add_initializer();
+  initializer->set_name("W");
+  initializer->set_data_type(TensorProto::FLOAT);
+  initializer->add_dims(5);
+  for (int i = 0; i < 20; ++i)
+    initializer->ref_raw_data().push_back(1);
+  SerializeOptions sopts;
+  sopts.max_serialized_size_bytes = 10;
+  utils::StringWriteStream stream;
+  EXPECT_FALSE(SerializeModelProtoToStream(model, stream, sopts));
+}
+
 TEST(onnx_proto, MaxTensorSizeBytesPackedFloatDataThrows) {
   // The limit also applies to packed float_data (non-raw_data path).
   TensorProto tp;

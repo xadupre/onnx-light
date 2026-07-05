@@ -305,7 +305,7 @@ private:
  * serialization.
  */
 template <typename T>
-inline void SerializeProtoToStream(T &, utils::BinaryWriteStream &, SerializeOptions &,
+inline bool SerializeProtoToStream(T &, utils::BinaryWriteStream &, SerializeOptions &,
                                    bool clear_external_data = true) {
   EXT_THROW("SerializeProtoToStream is not implemented for type ", typeid(T).name(),
             ", clear_external_data=", clear_external_data);
@@ -321,17 +321,18 @@ inline void SerializeProtoToStream(T &, utils::BinaryWriteStream &, SerializeOpt
  * @param options Serialization options.
  * @param clear_external_data If true, removes temporary external_data metadata after
  * serialization.
+ * @return ``false`` when ``options.max_serialized_size_bytes`` is exceeded.
  */
-void SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &stream,
+bool SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &stream,
                                  SerializeOptions &options, bool clear_external_data = true);
 
 /**
  * Specializes SerializeProtoToStream for ModelProto.
  */
 template <>
-inline void SerializeProtoToStream(ModelProto &model, utils::BinaryWriteStream &stream,
+inline bool SerializeProtoToStream(ModelProto &model, utils::BinaryWriteStream &stream,
                                    SerializeOptions &options, bool clear_external_data) {
-  SerializeModelProtoToStream(model, stream, options, clear_external_data);
+  return SerializeModelProtoToStream(model, stream, options, clear_external_data);
 }
 
 //////////

@@ -958,16 +958,20 @@ StringStringEntryProto &add_metadata(const std::string &key, const std::string &
 /**
  * Serializes the proto into *out* and external weight payloads into *external_files*.
  * External files are split so each file size is at most *max_external_file_size*.
+ * Returns ``false`` when ``SerializeOptions.max_serialized_size_bytes`` is exceeded;
+ * in that case both *out* and *external_files* are cleared.
  */
-void SerializeToString(std::string &out,
+bool SerializeToString(std::string &out,
                        std::unordered_map<std::string, std::string> &external_files,
                        size_t max_external_file_size,
                        const std::string &external_file_prefix = "weights") const;
 /**
  * Serializes the proto into *out* and external weight payloads into *external_files*.
  * External files are split so each file size is at most *max_external_file_size*.
+ * Returns ``false`` when ``SerializeOptions.max_serialized_size_bytes`` is exceeded;
+ * in that case both *out* and *external_files* are cleared.
  */
-void SerializeToString(std::string &out,
+bool SerializeToString(std::string &out,
                        std::unordered_map<std::string, std::string> &external_files,
                        size_t max_external_file_size, const std::string &external_file_prefix,
                        const SerializeOptions &opts) const;

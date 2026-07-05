@@ -206,7 +206,9 @@ Logger::Logger(const std::string &destination) : to_stdout_(false), enabled_(fal
     if (getenv_status == 0 && env != nullptr) {
       dest = env;
     }
-    std::free(env);
+    if (env != nullptr) {
+      std::free(env);
+    }
 #else
     const char *env = std::getenv("ONNX_LIGHT_LOG");
     if (env != nullptr) {

@@ -76,11 +76,11 @@ jobs:
             tag="${{ github.ref_name }}"
           fi
           tag="${tag#refs/tags/}"
-          if gh release view "${tag}" >/dev/null 2>&1; then
-            gh release upload "${tag}" ./wheelhouse/*.whl --clobber
-          else
-            echo "Release ${tag} does not exist, skipping release asset upload."
+          if ! gh release view "${tag}" >/dev/null 2>&1; then
+            gh release create "${tag}" --verify-tag --title "${tag}" --notes "" >/dev/null 2>&1 || \
+              gh release view "${tag}" >/dev/null 2>&1
           fi
+          gh release upload "${tag}" ./wheelhouse/*.whl --clobber
 
   build_wheels_windows:
     name: wheels (windows, ${{ matrix.arch }})
@@ -137,11 +137,11 @@ jobs:
             tag="${{ github.ref_name }}"
           fi
           tag="${tag#refs/tags/}"
-          if gh release view "${tag}" >/dev/null 2>&1; then
-            gh release upload "${tag}" ./wheelhouse/*.whl --clobber
-          else
-            echo "Release ${tag} does not exist, skipping release asset upload."
+          if ! gh release view "${tag}" >/dev/null 2>&1; then
+            gh release create "${tag}" --verify-tag --title "${tag}" --notes "" >/dev/null 2>&1 || \
+              gh release view "${tag}" >/dev/null 2>&1
           fi
+          gh release upload "${tag}" ./wheelhouse/*.whl --clobber
 
   build_wheels_macos:
     name: wheels (macos, universal2)
@@ -197,8 +197,8 @@ jobs:
             tag="${{ github.ref_name }}"
           fi
           tag="${tag#refs/tags/}"
-          if gh release view "${tag}" >/dev/null 2>&1; then
-            gh release upload "${tag}" ./wheelhouse/*.whl --clobber
-          else
-            echo "Release ${tag} does not exist, skipping release asset upload."
+          if ! gh release view "${tag}" >/dev/null 2>&1; then
+            gh release create "${tag}" --verify-tag --title "${tag}" --notes "" >/dev/null 2>&1 || \
+              gh release view "${tag}" >/dev/null 2>&1
           fi
+          gh release upload "${tag}" ./wheelhouse/*.whl --clobber

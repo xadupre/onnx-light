@@ -199,17 +199,20 @@ void MakeStringInternalElement(StringStream &ss, const std::vector<double> &t) {
 Logger::Logger(const std::string &destination) : to_stdout_(false), enabled_(false) {
   std::string dest = destination;
   if (dest.empty()) {
-#if defined(_MSC_VER)
-#pragma warning(push)
-#pragma warning(disable : 4996)  // std::getenv is portable; MSVC deprecation is spurious here.
-#endif
+#ifdef _MSC_VER
+    char *env = nullptr;
+    std::size_t env_size = 0;
+    int getenv_status = _dupenv_s(&env, &env_size, "ONNX_LIGHT_LOG");
+    if (getenv_status == 0 && env != nullptr) {
+      dest = env;
+    }
+    std::free(env);
+#else
     const char *env = std::getenv("ONNX_LIGHT_LOG");
-#if defined(_MSC_VER)
-#pragma warning(pop)
-#endif
     if (env != nullptr) {
       dest = env;
     }
+#endif
   }
   if (dest.empty()) {
     return;

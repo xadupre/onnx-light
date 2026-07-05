@@ -4,6 +4,7 @@
 #include <cstring>
 #include <ostream>
 #include <string>
+#include <string_view>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace utils {
@@ -153,6 +154,8 @@ public:
   inline size_t length() const { return size_; }
   /** Returns the underlying pointer. */
   inline const char *data() const { return ptr_; }
+  /** Returns a null-terminated C string (never nullptr). */
+  inline const char *c_str() const { return ptr_ == nullptr ? "" : ptr_; }
   /** Indicates whether the string is empty. */
   inline bool empty() const { return size_ == 0; }
   /** Returns a string_view. */
@@ -207,6 +210,15 @@ public:
   bool operator>(const char *other) const;
   /** Converts the value into a standard string. */
   std::string as_string(bool quote = false) const;
+  /** Implicit conversion to a standard string so the type is a drop-in for
+   *  protobuf string fields (which are std::string) in consuming code. */
+  inline operator std::string() const {
+    return ptr_ == nullptr ? std::string() : std::string(ptr_, size_);
+  }
+  /** Implicit conversion to a string view (drop-in for protobuf string fields). */
+  inline operator std::string_view() const {
+    return ptr_ == nullptr ? std::string_view() : std::string_view(ptr_, size_);
+  }
   /** Parses the content as a signed 64-bit integer. */
   inline int64_t toint64() const { return RefString(ptr_, size_).toint64(); }
 
@@ -243,6 +255,33 @@ inline std::ostream &operator<<(std::ostream &os, const RefString &s) {
 inline std::ostream &operator<<(std::ostream &os, const String &s) {
   os.write(s.data(), static_cast<std::streamsize>(s.size()));
   return os;
+}
+
+// --- Concatenation helpers ---------------------------------------------------
+// std::operator+ for basic_string is a function template, so the String ->
+// std::string implicit conversion is not considered during template argument
+// deduction.  These non-template overloads make ``String`` concatenate with
+// ``std::string`` and C strings the same way a protobuf std::string field would.
+
+/** Concatenates an owning string followed by a standard string. */
+inline std::string operator+(const String &a, const std::string &b) {
+  return std::string(a.sv()) + b;
+}
+/** Concatenates a standard string followed by an owning string. */
+inline std::string operator+(const std::string &a, const String &b) {
+  return a + std::string(b.sv());
+}
+/** Concatenates an owning string followed by a null-terminated string. */
+inline std::string operator+(const String &a, const char *b) {
+  return std::string(a.sv()) + b;
+}
+/** Concatenates a null-terminated string followed by an owning string. */
+inline std::string operator+(const char *a, const String &b) {
+  return a + std::string(b.sv());
+}
+/** Concatenates two owning strings. */
+inline std::string operator+(const String &a, const String &b) {
+  return std::string(a.sv()) + std::string(b.sv());
 }
 
 } // namespace utils

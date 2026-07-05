@@ -418,6 +418,16 @@ FIELD_REPEATED(StringStringEntryProto, metadata_props, 16,
                "Named metadata values; keys should be distinct.")
 inline TensorProto() { data_type_ = DataType::UNDEFINED; }
 inline void Clear() { *this = TensorProto(); }
+/** Sets raw_data from a byte buffer (protobuf bytes-field compat). */
+inline void set_raw_data(const void *data, size_t size) {
+  raw_data_.resize(size);
+  if (size > 0)
+    std::memcpy(raw_data_.data(), data, size);
+}
+/** Sets raw_data from a std::string (protobuf bytes-field compat). */
+inline void set_raw_data(const std::string &data) {
+  set_raw_data(data.data(), data.size());
+}
 inline void set_data_type(int v) { data_type_ = static_cast<DataType>(v); }
 inline bool is_raw_data() const { return !raw_data_.empty(); }
 /**

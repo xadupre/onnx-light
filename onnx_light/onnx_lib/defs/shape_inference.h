@@ -665,7 +665,7 @@ multidirectionalBroadcastShapeInference(const std::vector<const TensorShapeProto
   size_t result_shape_size = 0;
   // Get the result shape size.
   for (const auto *shape : shapes) {
-    result_shape_size = std::max(shape->dim_size(), result_shape_size);
+    result_shape_size = std::max(static_cast<size_t>(shape->dim_size()), result_shape_size);
   }
 
   for (int i = 0; i < result_shape_size; ++i) {

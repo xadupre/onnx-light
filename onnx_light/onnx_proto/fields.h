@@ -147,6 +147,13 @@ public:
   }
   inline T &add() { return values_.emplace_back(); }
   inline T *Add() { return &values_.emplace_back(); }
+  /** Appends a single value (protobuf compat). Accepts anything convertible to T,
+   *  including types with an explicit conversion (e.g. std::string -> utils::String). */
+  template <class U> inline void Add(U &&v) { values_.emplace_back(std::forward<U>(v)); }
+  /** Appends all elements in [first, last) (protobuf RepeatedField::Add range compat). */
+  template <class InputIt> inline void Add(InputIt first, InputIt last) {
+    values_.insert(values_.end(), first, last);
+  }
   /** Returns a reference to the last element. */
   inline T &back() { return values_.back(); }
   /** Returns a mutable iterator to the first element. */
@@ -233,6 +240,17 @@ template <typename T> class RepeatedProtoField {
 public:
   /** Constructs an empty field. */
   explicit inline RepeatedProtoField() {}
+  /** Constructs by copying elements from a value-storage RepeatedField<T>.
+   *  This makes onnx-light's value-based repeated fields (used for message
+   *  entries such as StringStringEntryProto) usable wherever a protobuf
+   *  RepeatedPtrField (== RepeatedProtoField) is expected by drop-in consumers
+   *  such as onnxruntime, without changing the field's own storage. */
+  inline RepeatedProtoField(const RepeatedField<T> &src) {
+    values_.reserve(src.size());
+    for (size_t i = 0; i < src.size(); ++i) {
+      values_.push_back(std::make_shared<T>(src[i]));
+    }
+  }
   /** Reserves storage for at least n elements. */
   inline void reserve(size_t n) { values_.reserve(n); }
   /** Reserves storage for at least n elements (protobuf compat). */
@@ -278,6 +296,10 @@ public:
   T &add();
   /** Appends a default-constructed element and returns a pointer to it. */
   T *Add() { return &add(); }
+  /** Swaps the elements at positions i and j (protobuf RepeatedPtrField::SwapElements compat). */
+  inline void SwapElements(int i, int j) {
+    std::swap(values_[static_cast<size_t>(i)], values_[static_cast<size_t>(j)]);
+  }
   /** Constructs a new element in-place at the end. */
   template <class... Args> inline void emplace_back(Args &&...args) {
     if constexpr (sizeof...(Args) == 0) {
@@ -311,6 +333,18 @@ public:
     }
     /** Returns true if the iterators differ. */
     bool operator!=(const iterator &other) const { return !(*this == other); }
+    /** Returns the distance between two iterators (random-access compat). */
+    std::ptrdiff_t operator-(const iterator &other) const {
+      return static_cast<std::ptrdiff_t>(pos_) - static_cast<std::ptrdiff_t>(other.pos_);
+    }
+    /** Returns an iterator advanced backwards by n positions (random-access compat). */
+    iterator operator-(std::ptrdiff_t n) const {
+      return iterator(parent_, static_cast<size_t>(static_cast<std::ptrdiff_t>(pos_) - n));
+    }
+    /** Returns an iterator advanced forwards by n positions (random-access compat). */
+    iterator operator+(std::ptrdiff_t n) const {
+      return iterator(parent_, static_cast<size_t>(static_cast<std::ptrdiff_t>(pos_) + n));
+    }
     /** Dereferences to the current element. */
     T &operator*() const { return (*parent_)[pos_]; }
     T *operator->() const { return &(**this); }
@@ -322,11 +356,60 @@ public:
   inline iterator begin() { return iterator(this, 0); }
   /** Returns a mutable iterator past the last element. */
   inline iterator end() { return iterator(this, size()); }
+
+  /** Iterator over raw element pointers (protobuf pointer_begin/pointer_end compat). */
+  class pointer_iterator {
+  private:
+    RepeatedProtoField<T> *parent_;
+    size_t pos_;
+
+  public:
+    using iterator_category = std::forward_iterator_tag;
+    using value_type = T *;
+    using difference_type = std::ptrdiff_t;
+    using pointer = T **;
+    using reference = T *;
+    /** Constructs a pointer iterator for parent starting at pos. */
+    pointer_iterator(RepeatedProtoField<T> *parent, size_t pos = 0) : parent_(parent), pos_(pos) {}
+    /** Advances the iterator to the next element. */
+    pointer_iterator &operator++() {
+      ++pos_;
+      return *this;
+    }
+    /** Advances the iterator to the next element (post-increment). */
+    pointer_iterator operator++(int) {
+      pointer_iterator tmp = *this;
+      ++pos_;
+      return tmp;
+    }
+    /** Returns true if both iterators point to the same position in the same field. */
+    bool operator==(const pointer_iterator &other) const {
+      return pos_ == other.pos_ && parent_ == other.parent_;
+    }
+    /** Returns true if the iterators differ. */
+    bool operator!=(const pointer_iterator &other) const { return !(*this == other); }
+    /** Dereferences to the raw pointer of the current element. */
+    T *operator*() const { return parent_->values_[pos_].get(); }
+    /** Returns the current position index. */
+    size_t pos() const { return pos_; }
+  };
+
+  /** Returns a pointer iterator to the first element. */
+  inline pointer_iterator pointer_begin() { return pointer_iterator(this, 0); }
+  /** Returns a pointer iterator past the last element. */
+  inline pointer_iterator pointer_end() { return pointer_iterator(this, size()); }
   /** Removes the element at the given iterator position and returns an iterator to the next
    * element. */
   inline iterator erase(iterator it) {
     values_.erase(values_.begin() + static_cast<ptrdiff_t>(it.pos()));
     return iterator(this, it.pos());
+  }
+  /** Removes the elements in [first, last) and returns an iterator to the element
+   *  that followed the last removed element (protobuf RepeatedPtrField::erase compat). */
+  inline iterator erase(iterator first, iterator last) {
+    values_.erase(values_.begin() + static_cast<ptrdiff_t>(first.pos()),
+                  values_.begin() + static_cast<ptrdiff_t>(last.pos()));
+    return iterator(this, first.pos());
   }
 
   /** Const iterator for repeated proto fields. */

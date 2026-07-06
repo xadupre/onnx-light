@@ -78,11 +78,12 @@ directory into the matching `$OUT/fuzz_<target>_seed_corpus.zip`.
 
 ## Continuous fuzzing in CI
 
-The `.github/workflows/fuzz.yml` workflow builds the harnesses with
+The `.github/workflows/cq_fuzz.yml` workflow builds the harnesses with
 Clang + libFuzzer and runs a short smoke campaign (`-runs=2000` per
-harness) on a weekly schedule (Mondays at 06:00 UTC), on manual
-`workflow_dispatch`, and on pull requests that touch `fuzz/**`,
-`.github/workflows/fuzz.yml`, or `CMakeLists.txt`. It is meant to
+harness) on a daily schedule (06:00 UTC, skipped if there is no recent
+commit), on manual `workflow_dispatch`, and on pushes/pull requests
+that touch `fuzz/**`, `.github/workflows/cq_fuzz.yml`, or
+`CMakeLists.txt`. It is meant to
 catch regressions in the harnesses themselves and obvious shallow
 bugs; long-running coverage-guided campaigns are still expected to be
 driven by OSS-Fuzz.

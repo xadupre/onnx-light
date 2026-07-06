@@ -27,6 +27,7 @@ from onnx_light.onnx_lib import parser
 # The kernels runtime is only available in the full build; skip this module on a
 # reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
 rt = import_or_skip("onnx_light.onnx_py._onnxpykernels", "runtime")
+bt = import_or_skip("onnx_light.onnx_py._onnxpybackend", "backend_test")
 
 
 def _make_float_tensor(name: str, values: list[float]):
@@ -519,6 +520,14 @@ class TestTensorDLPack(ExtTestCase):
         out = np.from_dlpack(self._make_tensor(TensorProto.INT32, np.array(7, dtype=np.int32)))
         self.assertEqual(out.shape, ())
         self.assertEqual(int(out), 7)
+
+    def test_backend_test_tensor_from_dlpack(self):
+        cases = bt.collect_test_cases("Abs")
+        self.assertNotEmpty(cases)
+        tensor = cases[0].data_sets[0].inputs[0]
+        out = np.from_dlpack(tensor)
+        self.assertEqual(out.shape, tuple(tensor.shape))
+        self.assertEqual(out.size, tensor.element_count())
 
     def test_dlpack_string_tensor_raises(self):
         sp = TensorProto()

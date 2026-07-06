@@ -97,11 +97,14 @@ nb::object MakeTensorNdarray(nb::handle owner) {
   nb::dlpack::dtype dtype = DLPackDtypeFromOnnx(t.data_type);
   std::vector<size_t> shape;
   shape.reserve(t.shape.size());
-  for (int64_t dim : t.shape) {
-    EXT_ENFORCE_INVALID(dim >= 0, "Tensor.__dlpack__: shape dimensions must be non-negative.");
-    EXT_ENFORCE_INVALID(
-        static_cast<uint64_t>(dim) <= static_cast<uint64_t>(std::numeric_limits<size_t>::max()),
-        "Tensor.__dlpack__: shape dimension does not fit in the platform size type.");
+  for (size_t i = 0; i < t.shape.size(); ++i) {
+    int64_t dim = t.shape[i];
+    EXT_ENFORCE_INVALID(dim >= 0, "Tensor.__dlpack__: shape dimension at index ", i,
+                        " must be non-negative, got ", dim, ".");
+    EXT_ENFORCE_INVALID(static_cast<uint64_t>(dim) <=
+                            static_cast<uint64_t>(std::numeric_limits<size_t>::max()),
+                        "Tensor.__dlpack__: shape dimension at index ", i,
+                        " does not fit in the platform size type, got ", dim, ".");
     shape.push_back(static_cast<size_t>(dim));
   }
   nb::ndarray<nb::ro> array(t.bytes(), shape.size(), shape.data(), owner,

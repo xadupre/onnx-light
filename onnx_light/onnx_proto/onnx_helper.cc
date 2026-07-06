@@ -155,19 +155,6 @@ offset_t PopulateExternalData(ModelProto &model, size_t threshold,
   return offset;
 }
 
-bool EnforceMaxSerializedSize(const SerializeSizeResult &total_size,
-                              const SerializeOptions &options, const char *context) {
-  const char *error_context = context ? context : "EnforceMaxSerializedSize";
-  EXT_ENFORCE(options.max_serialized_size_bytes >= 0, error_context,
-              ": max_serialized_size_bytes must be >= 0 (got ", options.max_serialized_size_bytes,
-              ").");
-  if (options.max_serialized_size_bytes == 0) {
-    return true;
-  }
-  const int64_t total = total_size.size();
-  return total <= options.max_serialized_size_bytes;
-}
-
 void ClearExternalData(ModelProto &model) {
   IteratorTensorProto it(&model.ref_graph());
   while (it.next()) {

@@ -458,6 +458,9 @@ struct SerializeOptions : TensorBufferOptions {
   /** maximum size in bytes for one external weights file when saving with external data;
    * 0 means no limit (single weights file) */
   int64_t max_external_file_size = 0;
+  /** maximum total size in bytes for one serialization operation (protobuf payload +
+   *  external data); 0 means no limit */
+  int64_t max_serialized_size_bytes = 0;
   /** Holds an optional callback invoked for each TensorProto carrying ``raw_data`` immediately
    *  before serialization.
    *

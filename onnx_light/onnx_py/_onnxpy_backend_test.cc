@@ -101,6 +101,8 @@ nb::object MakeTensorNdarray(nb::handle owner) {
     int64_t dim = t.shape[i];
     EXT_ENFORCE_INVALID(dim >= 0, "Tensor.__dlpack__: shape dimension at index ", i,
                         " must be non-negative, got ", dim);
+    // Compare in a fixed unsigned width so 32-bit ``size_t`` platforms reject
+    // large ``int64_t`` dimensions before any narrowing conversion occurs.
     EXT_ENFORCE_INVALID(static_cast<uint64_t>(dim) <= std::numeric_limits<size_t>::max(),
                         "Tensor.__dlpack__: shape dimension at index ", i,
                         " does not fit in the platform size type, got ", dim);

@@ -489,7 +489,7 @@ class TestVersionConverter(ExtTestCase):
         assert converted_model.graph.node[0].op_type == "Sum"
         assert converted_model.opset_import[0].version == 8
 
-    # Test Sum Adapter: 5 -> 7
+    # Test Sum Adapter: 5 -> 8
     def test_sum_5_8(self) -> None:
         nodes = [oh.make_node("Sum", ["data_0", "data_1", "data_2", "data_3", "data_4"], ["sum"])]
         graph = oh.make_graph(
@@ -504,9 +504,9 @@ class TestVersionConverter(ExtTestCase):
             ],
             [oh.make_tensor_value_info("sum", onnxl.TensorProto.FLOAT, (5,))],
         )
-        converted_model = self._converted(graph, oh.make_operatorsetid("", 5), 7)
+        converted_model = self._converted(graph, oh.make_operatorsetid("", 5), 8)
         assert converted_model.graph.node[0].op_type == "Sum"
-        assert converted_model.opset_import[0].version == 7
+        assert converted_model.opset_import[0].version == 8
 
     # Test Sum Adapter: 8 -> 5
     def test_sum_8_5(self) -> None:

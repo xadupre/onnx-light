@@ -55,7 +55,7 @@ can link only what it needs:
 - `onnx_light::lib_onnx_proto` – protobuf-compatible message types,
   parser / serializer, external data, optional encrypted save / load
   (AES-256-CBC or ChaCha20-Poly1305).
-- `onnx_light::lib_onnx_bil` – current ONNX C++ API
+- `onnx_light::lib_onnx_lib` – current ONNX C++ API
 - `onnx_light::lib_onnx_op` – lightweight `LightOpSchema` registrations for
   ONNX operator domains, with no shape inference.
 - `onnx_light::onnx_light` – full ONNX-compatible schemas (with history),

@@ -32,6 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Improvements
 
+- Mirror upstream onnx#8157: fix nanobind Python target resolution in cross-compile CMake path ([#3217](https://github.com/xadupre/onnx-light/pull/3217))
 - Add C++ backend test for `kRelease` event in shape inference ([#3105](https://github.com/xadupre/onnx-light/pull/3105))
 - Align floor-division simplification with Python `//` semantics ([#3026](https://github.com/xadupre/onnx-light/pull/3026))
 - Propagate Reshape shape-tag metadata backward through producer chains ([#3024](https://github.com/xadupre/onnx-light/pull/3024))

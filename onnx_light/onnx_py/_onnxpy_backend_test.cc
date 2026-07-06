@@ -97,8 +97,8 @@ nb::object MakeTensorNdarray(nb::handle owner) {
   nb::dlpack::dtype dtype = DLPackDtypeFromOnnx(t.data_type);
   std::vector<size_t> shape;
   shape.reserve(t.shape.size());
-  size_t i = 0;
-  for (const int64_t dim : t.shape) {
+  for (size_t i = 0; i < t.shape.size(); ++i) {
+    int64_t dim = t.shape[i];
     EXT_ENFORCE_INVALID(dim >= 0, "Tensor.__dlpack__: shape dimension at index ", i,
                         " must be non-negative, got ", dim);
     // Compare in a fixed unsigned width so 32-bit ``size_t`` platforms reject
@@ -107,7 +107,6 @@ nb::object MakeTensorNdarray(nb::handle owner) {
                         "Tensor.__dlpack__: shape dimension at index ", i,
                         " does not fit in the platform size type, got ", dim);
     shape.push_back(static_cast<size_t>(dim));
-    ++i;
   }
   nb::ndarray<nb::ro> array(t.bytes(), shape.size(), shape.data(), owner,
                             /*strides=*/nullptr, dtype, nb::device::cpu::value, /*device_id=*/0);

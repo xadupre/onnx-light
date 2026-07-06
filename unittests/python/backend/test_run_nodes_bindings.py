@@ -523,7 +523,7 @@ class TestTensorDLPack(ExtTestCase):
 
     def test_backend_test_tensor_from_dlpack(self):
         cases = bt.collect_test_cases("Abs")
-        self.assertNotEmpty(cases)
+        self.assertGreater(len(cases), 0)
         tensor = cases[0].data_sets[0].inputs[0]
         out = np.from_dlpack(tensor)
         self.assertEqual(out.shape, tuple(tensor.shape))

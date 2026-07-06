@@ -4,7 +4,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "onnx-light"
-version = "0.1.3"
+version = "0.1.4"
 description = "onnx without protobuf"
 readme = "README.md"
 license = "Apache-2.0"
@@ -18,11 +18,11 @@ dependencies = [
 [project.optional-dependencies]
 style = [
     "black==26.5.1",
-    "ruff==0.15.17",
+    "ruff==0.15.20",
 ]
 typing = [
     "mypy==2.1.0",
-    "pyrefly==1.0.0",
+    "pyrefly==1.1.1",
 ]
 dev = [
     "onnx>=1.17",

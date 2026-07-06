@@ -157,9 +157,10 @@ offset_t PopulateExternalData(ModelProto &model, size_t threshold,
 
 bool EnforceMaxSerializedSize(const SerializeSizeResult &total_size,
                               const SerializeOptions &options, const char *context) {
-  EXT_ENFORCE(options.max_serialized_size_bytes >= 0, context,
-              ": SerializeOptions.max_serialized_size_bytes must be >= 0 (got ",
-              options.max_serialized_size_bytes, ").");
+  const char *ctx = context ? context : "EnforceMaxSerializedSize";
+  EXT_ENFORCE(options.max_serialized_size_bytes >= 0, ctx,
+              ": max_serialized_size_bytes must be >= 0 (got ", options.max_serialized_size_bytes,
+              ").");
   if (options.max_serialized_size_bytes == 0) {
     return true;
   }

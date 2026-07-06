@@ -111,6 +111,13 @@ class TestNumpyHelper(ExtTestCase):
         recovered = numpy_helper.to_array(tensor)
         np.testing.assert_array_almost_equal(recovered, data)
 
+    def test_roundtrip_float16(self) -> None:
+        data = np.random.rand(13, 37).astype(np.float16)
+        tensor = numpy_helper.from_array(data, name="test")
+        self.assertEqual(tensor.name, "test")
+        recovered = numpy_helper.to_array(tensor)
+        np.testing.assert_array_equal(recovered, data)
+
     def test_roundtrip_int8(self) -> None:
         data = np.array([-128, 0, 127], dtype=np.int8)
         tensor = numpy_helper.from_array(data)

@@ -131,7 +131,7 @@ public:                                                                         
   inline int order_##name() const { return order; }                                                \
   inline void clr_##name() { name##_.clear(); }                                                    \
   inline void clear_##name() { name##_.clear(); }                                                  \
-  inline int name##_size() const { return static_cast<int>(name##_.size()); }                                     \
+  inline int name##_size() const { return static_cast<int>(name##_.size()); }                      \
   static inline constexpr const char *DOC_##name = doc;                                            \
   static inline constexpr const char *_name_##name = #name;                                        \
   inline bool packed_##name() const { return false; }                                              \
@@ -163,7 +163,7 @@ public:                                                                         
   inline int order_##name() const { return order; }                                                \
   inline void clr_##name() { name##_.clear(); }                                                    \
   inline void clear_##name() { name##_.clear(); }                                                  \
-  inline int name##_size() const { return static_cast<int>(name##_.size()); }                                     \
+  inline int name##_size() const { return static_cast<int>(name##_.size()); }                      \
   static inline constexpr const char *DOC_##name = doc;                                            \
   static inline constexpr const char *_name_##name = #name;                                        \
   inline bool packed_##name() const { return false; }                                              \
@@ -189,9 +189,9 @@ public:                                                                         
   inline int order_##name() const { return order; }                                                \
   inline void clr_##name() { name##_.clear(); }                                                    \
   inline void clear_##name() { name##_.clear(); }                                                  \
-  inline int name##_size() const { return static_cast<int>(name##_.size()); }                                     \
+  inline int name##_size() const { return static_cast<int>(name##_.size()); }                      \
   inline const type &name(size_t i) const { return name##_[i]; }                                   \
-  inline type *mutable_##name(size_t i) { return &name##_[i]; }                                     \
+  inline type *mutable_##name(size_t i) { return &name##_[i]; }                                    \
   static inline constexpr const char *DOC_##name = doc;                                            \
   static inline constexpr const char *_name_##name = #name;                                        \
   inline bool packed_##name() const { return true; }                                               \
@@ -464,6 +464,9 @@ struct SerializeOptions : TensorBufferOptions {
   /** maximum size in bytes for one external weights file when saving with external data;
    * 0 means no limit (single weights file) */
   int64_t max_external_file_size = 0;
+  /** maximum total size in bytes for one serialization operation (protobuf payload +
+   *  external data); 0 means no limit */
+  int64_t max_serialized_size_bytes = 0;
   /** Holds an optional callback invoked for each TensorProto carrying ``raw_data`` immediately
    *  before serialization.
    *

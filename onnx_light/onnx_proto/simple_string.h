@@ -272,13 +272,9 @@ inline std::string operator+(const std::string &a, const String &b) {
   return a + std::string(b.sv());
 }
 /** Concatenates an owning string followed by a null-terminated string. */
-inline std::string operator+(const String &a, const char *b) {
-  return std::string(a.sv()) + b;
-}
+inline std::string operator+(const String &a, const char *b) { return std::string(a.sv()) + b; }
 /** Concatenates a null-terminated string followed by an owning string. */
-inline std::string operator+(const char *a, const String &b) {
-  return a + std::string(b.sv());
-}
+inline std::string operator+(const char *a, const String &b) { return a + std::string(b.sv()); }
 /** Concatenates two owning strings. */
 inline std::string operator+(const String &a, const String &b) {
   return std::string(a.sv()) + std::string(b.sv());

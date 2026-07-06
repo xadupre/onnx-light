@@ -14,8 +14,8 @@
 
 #include "onnx_lib/defs/schema.h"
 
-#include <gtest/gtest.h>
 #include <cstring>
+#include <gtest/gtest.h>
 #include <string>
 #include <type_traits>
 
@@ -52,11 +52,11 @@ TEST(onnxruntime_dropin, FlatDataTypeAliasMatchesScopedEnum) {
 
 TEST(onnxruntime_dropin, TensorProtoRoundTripAcrossFieldKinds) {
   TensorProto t;
-  t.set_name("weights");                     // plain string field
-  t.set_data_type(TensorProto::DataType::FLOAT);  // enum field
-  t.add_dims(2);                             // packed repeated field
+  t.set_name("weights");                         // plain string field
+  t.set_data_type(TensorProto::DataType::FLOAT); // enum field
+  t.add_dims(2);                                 // packed repeated field
   t.add_dims(3);
-  t.ref_raw_data() = std::vector<uint8_t>{1, 2, 3, 4, 5, 6, 7, 8};  // raw_data path
+  t.ref_raw_data() = std::vector<uint8_t>{1, 2, 3, 4, 5, 6, 7, 8}; // raw_data path
 
   std::string blob;
   ASSERT_TRUE(t.SerializeToString(blob));
@@ -116,9 +116,9 @@ TEST(onnxruntime_dropin, SchemaRegistryConstIntOverrideDispatches) {
   EXPECT_EQ(registry.last_domain_, "ai.onnx");
 
   // The String / RefString convenience overloads forward to the std::string one.
-  EXPECT_EQ(base.GetSchema(utils::String(std::string("Gemm")), 11,
-                           utils::String(std::string("ai.onnx"))),
-            nullptr);
+  EXPECT_EQ(
+      base.GetSchema(utils::String(std::string("Gemm")), 11, utils::String(std::string("ai.onnx"))),
+      nullptr);
   EXPECT_EQ(registry.calls_, 2);
   EXPECT_EQ(registry.last_key_, "Gemm");
   EXPECT_EQ(registry.last_version_, 11);

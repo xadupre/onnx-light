@@ -425,9 +425,7 @@ inline void set_raw_data(const void *data, size_t size) {
     std::memcpy(raw_data_.data(), data, size);
 }
 /** Sets raw_data from a std::string (protobuf bytes-field compat). */
-inline void set_raw_data(const std::string &data) {
-  set_raw_data(data.data(), data.size());
-}
+inline void set_raw_data(const std::string &data) { set_raw_data(data.data(), data.size()); }
 inline void set_data_type(int v) { data_type_ = static_cast<DataType>(v); }
 inline bool is_raw_data() const { return !raw_data_.empty(); }
 /**

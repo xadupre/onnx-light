@@ -68,7 +68,8 @@ inline constexpr TensorProto::DataType TensorProto_DataType_UINT64 = TensorProto
 inline constexpr TensorProto::DataType TensorProto_DataType_COMPLEX64 = TensorProto::COMPLEX64;
 inline constexpr TensorProto::DataType TensorProto_DataType_COMPLEX128 = TensorProto::COMPLEX128;
 inline constexpr TensorProto::DataType TensorProto_DataType_BFLOAT16 = TensorProto::BFLOAT16;
-inline constexpr TensorProto::DataType TensorProto_DataType_FLOAT8E4M3FN = TensorProto::FLOAT8E4M3FN;
+inline constexpr TensorProto::DataType TensorProto_DataType_FLOAT8E4M3FN =
+    TensorProto::FLOAT8E4M3FN;
 inline constexpr TensorProto::DataType TensorProto_DataType_FLOAT8E4M3FNUZ =
     TensorProto::FLOAT8E4M3FNUZ;
 inline constexpr TensorProto::DataType TensorProto_DataType_FLOAT8E5M2 = TensorProto::FLOAT8E5M2;

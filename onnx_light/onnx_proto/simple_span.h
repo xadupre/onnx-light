@@ -292,8 +292,7 @@ public:
    *  protobuf ``bytes`` fields (which are std::string) in consuming code. */
   inline operator std::string() const {
     const uint8_t *p = data();
-    return p == nullptr ? std::string()
-                        : std::string(reinterpret_cast<const char *>(p), size());
+    return p == nullptr ? std::string() : std::string(reinterpret_cast<const char *>(p), size());
   }
 
   /** Returns true when the data is in aligned-owned mode. */

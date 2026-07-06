@@ -287,9 +287,8 @@ bool BinaryStream::Next(const void **data, int *size) {
   }
   if (!NotEnd())
     return false;
-  EXT_ENFORCE(CanNoCopy(),
-              "BinaryStream::Next requires a no-copy (in-memory) stream so a "
-              "pointer into the backing buffer can be returned.");
+  EXT_ENFORCE(CanNoCopy(), "BinaryStream::Next requires a no-copy (in-memory) stream so a "
+                           "pointer into the backing buffer can be returned.");
   // ZeroCopyInputStream blocks are int-sized; cap huge remainders so the next
   // call keeps serving the rest.
   constexpr offset_t kMaxChunk = 0x7FFFFFFF;
@@ -306,9 +305,8 @@ bool BinaryStream::Next(const void **data, int *size) {
 
 void BinaryStream::BackUp(int count) {
   EXT_ENFORCE(count >= 0, "BinaryStream::BackUp: count must be non-negative, got ", count, ".");
-  EXT_ENFORCE(static_cast<int64_t>(count) <= last_next_size_,
-              "BinaryStream::BackUp: count (", count,
-              ") exceeds the size of the last Next() block (", last_next_size_, ").");
+  EXT_ENFORCE(static_cast<int64_t>(count) <= last_next_size_, "BinaryStream::BackUp: count (",
+              count, ") exceeds the size of the last Next() block (", last_next_size_, ").");
   backed_up_ = count;
 }
 
@@ -405,7 +403,9 @@ void StringStream::ReadDelayedBlock(DelayedBlock &block) {
 
 void StringStream::WaitForDelayedBlock() { thread_pool_.Wait(); }
 
-void StringStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(static_cast<int32_t>(n_threads)); }
+void StringStream::StartThreadPool(size_t n_threads) {
+  thread_pool_.Start(static_cast<int32_t>(n_threads));
+}
 
 ////////////////////
 // BinaryWriteStream
@@ -591,14 +591,16 @@ bool StringWriteStream::Next(void **data, int *size) {
 }
 
 void StringWriteStream::BackUp(int count) {
-  EXT_ENFORCE(count >= 0, "StringWriteStream::BackUp: count must be non-negative, got ", count, ".");
-  EXT_ENFORCE(static_cast<offset_t>(count) <= write_pos_,
-              "StringWriteStream::BackUp: count (", count, ") exceeds bytes produced (", write_pos_,
-              ").");
+  EXT_ENFORCE(count >= 0, "StringWriteStream::BackUp: count must be non-negative, got ", count,
+              ".");
+  EXT_ENFORCE(static_cast<offset_t>(count) <= write_pos_, "StringWriteStream::BackUp: count (",
+              count, ") exceeds bytes produced (", write_pos_, ").");
   write_pos_ -= count;
 }
 
-void StringWriteStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(static_cast<int32_t>(n_threads)); }
+void StringWriteStream::StartThreadPool(size_t n_threads) {
+  thread_pool_.Start(static_cast<int32_t>(n_threads));
+}
 
 void StringWriteStream::WriteDelayedBlock(DelayedWriteBlock &block) {
   EXT_ENFORCE(thread_pool_.IsStarted(), "Thread pool is not started, cannot write delayed block.");
@@ -736,7 +738,9 @@ const uint8_t *FileWriteStream::data() const {
   EXT_THROW("This method cannot be called on this class (FileWriteStream).");
 }
 
-void FileWriteStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(static_cast<int32_t>(n_threads)); }
+void FileWriteStream::StartThreadPool(size_t n_threads) {
+  thread_pool_.Start(static_cast<int32_t>(n_threads));
+}
 
 void FileWriteStream::WriteDelayedBlock(DelayedWriteBlock &block) {
   EXT_ENFORCE(thread_pool_.IsStarted(), "Thread pool is not started, cannot write delayed block.");
@@ -968,7 +972,9 @@ void FileStream::ReadDelayedBlock(DelayedBlock &block) {
 
 void FileStream::WaitForDelayedBlock() { thread_pool_.Wait(); }
 
-void FileStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(static_cast<int32_t>(n_threads)); }
+void FileStream::StartThreadPool(size_t n_threads) {
+  thread_pool_.Start(static_cast<int32_t>(n_threads));
+}
 
 //////////////////////
 // TwoFilesWriteStream

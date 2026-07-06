@@ -1,7 +1,7 @@
 #include "fields.h"
 #include "google_protobuf_compat.h"
-#include "gtest/gtest.h"
 #include "stream.h"
+#include "gtest/gtest.h"
 #include <algorithm>
 #include <cstring>
 #include <filesystem>

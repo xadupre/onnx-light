@@ -26,6 +26,8 @@ namespace ONNX_LIGHT_NAMESPACE {
 ///
 /// ``IR_VERSION`` is the latest IR version supported by this build of
 /// *onnx-light*.
+#ifndef ONNX_LIGHT_VERSION_ENUM_DEFINED
+#define ONNX_LIGHT_VERSION_ENUM_DEFINED
 enum Version {
   START_VERSION = 0,
   IR_VERSION_2017_10_10 = 1,
@@ -42,5 +44,6 @@ enum Version {
   IR_VERSION_2025_08_26 = 12,
   IR_VERSION = 13,
 };
+#endif // ONNX_LIGHT_VERSION_ENUM_DEFINED
 
 } // namespace ONNX_LIGHT_NAMESPACE

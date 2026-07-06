@@ -63,3 +63,26 @@
 #ifndef ONNX_API
 #define ONNX_API
 #endif
+
+/// @brief Namespace alias so that ONNX C++ code (and consumers such as
+///        onnxruntime) that refers to the literal ``onnx`` namespace — rather
+///        than the ``ONNX_NAMESPACE`` macro — resolves to the onnx-light
+///        namespace.  The standard onnx package lives in ``namespace onnx``;
+///        onnx-light uses ``onnx_light`` (via ONNX_LIGHT_NAMESPACE), so this
+///        alias keeps onnx-light a true drop-in.  It is only introduced when the
+///        onnx-light namespace differs from ``onnx``.
+namespace ONNX_LIGHT_NAMESPACE {}
+#ifndef ONNX_LIGHT_ONNX_NAMESPACE_ALIAS_DEFINED
+#define ONNX_LIGHT_ONNX_NAMESPACE_ALIAS_DEFINED
+namespace onnx = ONNX_LIGHT_NAMESPACE;
+#endif
+
+/// @brief Expose the flat protobuf-style enum aliases (``TensorProto_DataType``,
+///        ``TensorShapeProto_Dimension``, ...).
+///
+/// The standard protobuf-generated ``onnx_pb.h`` exposes these flat names, so
+/// consumers that include ``<onnx/onnx_pb.h>`` (for example onnxruntime) expect
+/// ``ONNX_NAMESPACE::TensorProto_DataType`` to resolve.  Pulling the aliases in
+/// here — after ``onnx.h`` (which defines the scoped message types) and the
+/// ``ONNX_LIGHT_NAMESPACE`` macro above — keeps onnx-light a true drop-in.
+#include "onnx_proto/onnx_alias.h"

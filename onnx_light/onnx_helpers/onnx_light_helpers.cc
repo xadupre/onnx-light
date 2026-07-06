@@ -12,7 +12,7 @@ namespace onnx_light_helpers {
 
 std::string Version() {
   auto s =
-      MakeString("onnx-light", 1, 1.1, 1.1f, "de", std::vector<int>{1}, std::vector<float>{1.1});
+      MakeString("onnx-light", 1, 1.1, 1.1f, "de", std::vector<int>{1}, std::vector<float>{1.1f});
   auto s2 = MakeString("Unable to allocate ", 5, " bytes on GPU.");
   return s + s2;
 }
@@ -206,7 +206,9 @@ Logger::Logger(const std::string &destination) : to_stdout_(false), enabled_(fal
     if (getenv_status == 0 && env != nullptr) {
       dest = env;
     }
-    std::free(env);
+    if (env != nullptr) {
+      std::free(env);
+    }
 #else
     const char *env = std::getenv("ONNX_LIGHT_LOG");
     if (env != nullptr) {

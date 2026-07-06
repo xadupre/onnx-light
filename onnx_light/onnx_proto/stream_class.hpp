@@ -17,9 +17,10 @@
 #define IMPLEMENT_PROTO(cls)                                                                       \
   void cls::CopyFrom(const cls &proto) { _CopyFrom(*this, proto); }                                \
   SerializeSizeResult cls::SerializeSize() const { return _SerializeSize(*this); }                 \
-  void cls::ParseFromString(const std::string &raw) { _ParseFromString(*this, raw); }              \
-  void cls::ParseFromString(const std::string &raw, ParseOptions &opts) {                          \
-    _ParseFromString(*this, raw, opts);                                                            \
+  size_t cls::ByteSizeLong() const { return static_cast<size_t>(SerializeSize().size()); }         \
+  bool cls::ParseFromString(const std::string &raw) { return _ParseFromString(*this, raw); }       \
+  bool cls::ParseFromString(const std::string &raw, ParseOptions &opts) {                          \
+    return _ParseFromString(*this, raw, opts);                                                     \
   }                                                                                                \
   void cls::ParseFromZeroCopyStream(utils::BinaryStream *stream) {                                 \
     _ParseFromZeroCopyStream(*this, stream);                                                       \
@@ -147,42 +148,46 @@
 #define READ_FIELD(options, stream, name)                                                          \
   else if (static_cast<int>(field_number.field_number) == order_##name()) {                        \
     DEBUG_PRINT("  + field " #name)                                                                \
-    read_field(stream, field_number.wire_type, name##_, #name, options);                           \
+    read_field(stream, static_cast<int>(field_number.wire_type), name##_, #name, options);         \
     DEBUG_PRINT("  - field " #name)                                                                \
   }
 
 #define READ_FIELD_LIMIT_PARALLEL(options, stream, name)                                           \
   else if (static_cast<int>(field_number.field_number) == order_##name()) {                        \
     DEBUG_PRINT("  + field " #name)                                                                \
-    read_field_limit_parallel(stream, field_number.wire_type, name##_, #name, options);            \
+    read_field_limit_parallel(stream, static_cast<int>(field_number.wire_type), name##_, #name,    \
+                              options);                                                            \
     DEBUG_PRINT("  - field " #name)                                                                \
   }
 
 #define READ_OPTIONAL_PROTO_FIELD(options, stream, name)                                           \
   else if (static_cast<int>(field_number.field_number) == order_##name()) {                        \
     DEBUG_PRINT("  + optional field " #name)                                                       \
-    read_optional_proto_field(stream, field_number.wire_type, name##_, #name, options);            \
+    read_optional_proto_field(stream, static_cast<int>(field_number.wire_type), name##_, #name,    \
+                              options);                                                            \
     DEBUG_PRINT("  - optional field " #name)                                                       \
   }
 
 #define READ_ENUM_FIELD(options, stream, name)                                                     \
   else if (static_cast<int>(field_number.field_number) == order_##name()) {                        \
     DEBUG_PRINT("  + enum " #name)                                                                 \
-    read_enum_field(stream, field_number.wire_type, name##_, #name, options);                      \
+    read_enum_field(stream, static_cast<int>(field_number.wire_type), name##_, #name, options);    \
     DEBUG_PRINT("  - enum " #name)                                                                 \
   }
 
 #define READ_OPTIONAL_ENUM_FIELD(options, stream, name)                                            \
   else if (static_cast<int>(field_number.field_number) == order_##name()) {                        \
     DEBUG_PRINT("  + enum " #name)                                                                 \
-    read_optional_enum_field(stream, field_number.wire_type, name##_, #name, options);             \
+    read_optional_enum_field(stream, static_cast<int>(field_number.wire_type), name##_, #name,     \
+                             options);                                                             \
     DEBUG_PRINT("  - enum " #name)                                                                 \
   }
 
 #define READ_REPEATED_FIELD(options, stream, name)                                                 \
   else if (static_cast<int>(field_number.field_number) == order_##name()) {                        \
     DEBUG_PRINT("  + repeat " #name)                                                               \
-    read_repeated_field(stream, field_number.wire_type, name##_, #name, packed_##name(), options); \
+    read_repeated_field(stream, static_cast<int>(field_number.wire_type), name##_, #name,          \
+                        packed_##name(), options);                                                 \
     DEBUG_PRINT("  - repeat " #name)                                                               \
   }
 
@@ -207,13 +212,13 @@ template <typename cls> SerializeSizeResult _SerializeSize(cls &self) {
   return self.SerializeSize(stream, opts);
 }
 
-template <typename cls> void _ParseFromString(cls &self, const std::string &raw) {
+template <typename cls> bool _ParseFromString(cls &self, const std::string &raw) {
   ParseOptions opts;
-  self.ParseFromString(raw, opts);
+  return self.ParseFromString(raw, opts);
 }
 
 template <typename cls>
-void _ParseFromString(cls &self, const std::string &raw, ParseOptions &opts) {
+bool _ParseFromString(cls &self, const std::string &raw, ParseOptions &opts) {
   if (opts.format == SerializeFormat::kOrtFlatbuffers) {
     // Recursion-OOM guard: validate the depth limit before any parsing begins.
     // When the flatbuffer reader is fully implemented this limit will be
@@ -247,6 +252,7 @@ void _ParseFromString(cls &self, const std::string &raw, ParseOptions &opts) {
     if (opts.is_parallel())
       st.WaitForDelayedBlock();
   }
+  return true;
 }
 
 template <typename cls>

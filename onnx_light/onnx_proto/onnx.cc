@@ -662,7 +662,8 @@ void TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
   READ_FIELD(options, stream, name)                        //
   READ_FIELD(options, stream, doc_string)                  //
   else if (static_cast<int>(field_number.field_number) == order_raw_data()) {
-    read_field_limit_parallel_nc(stream, field_number.wire_type, raw_data_, "raw_data", options);
+    read_field_limit_parallel_nc(stream, static_cast<int>(field_number.wire_type), raw_data_,
+                                 "raw_data", options);
   } //
   READ_REPEATED_FIELD(options, stream, external_data)  //
   READ_REPEATED_FIELD(options, stream, metadata_props) //
@@ -1034,6 +1035,32 @@ void TypeProto::Map::PrintToStringStream(std::stringstream &ss,
                                  NAME_EXIST_VALUE(value_type));
 }
 
+// TypeProto::Opaque
+
+IMPLEMENT_PROTO(TypeProto::Opaque)
+SerializeSizeResult TypeProto::Opaque::SerializeSize(utils::BinaryWriteStream &stream,
+                                                     SerializeOptions &options) const {
+  SerializeSizeResult size;
+  SIZE_FIELD(size, options, stream, domain)
+  SIZE_FIELD(size, options, stream, name)
+  return size;
+}
+void TypeProto::Opaque::SerializeToStream(utils::BinaryWriteStream &stream,
+                                          SerializeOptions &options) const {
+  WRITE_FIELD(options, stream, domain)
+  WRITE_FIELD(options, stream, name)
+}
+void TypeProto::Opaque::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, TypeProto::Opaque) //
+  READ_FIELD(options, stream, domain)            //
+  READ_FIELD(options, stream, name)              //
+  READ_END(options, stream, TypeProto::Opaque)   //
+}
+void TypeProto::Opaque::PrintToStringStream(std::stringstream &ss,
+                                            utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(domain), NAME_EXIST_VALUE(name));
+}
+
 // TypeProto::Optional
 
 IMPLEMENT_PROTO(TypeProto::Optional)
@@ -1066,6 +1093,7 @@ SerializeSizeResult TypeProto::SerializeSize(utils::BinaryWriteStream &stream,
   SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, tensor_type)
   SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, sequence_type)
   SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, map_type)
+  SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, opaque_type)
   SIZE_FIELD(size, options, stream, denotation)
   SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, sparse_tensor_type)
   SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, optional_type)
@@ -1076,6 +1104,7 @@ void TypeProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, tensor_type)
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, sequence_type)
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, map_type)
+  WRITE_OPTIONAL_PROTO_FIELD(options, stream, opaque_type)
   WRITE_FIELD(options, stream, denotation)
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, sparse_tensor_type)
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, optional_type)
@@ -1085,16 +1114,17 @@ void TypeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &optio
   READ_OPTIONAL_PROTO_FIELD(options, stream, tensor_type)        //
   READ_OPTIONAL_PROTO_FIELD(options, stream, sequence_type)      //
   READ_OPTIONAL_PROTO_FIELD(options, stream, map_type)           //
+  READ_OPTIONAL_PROTO_FIELD(options, stream, opaque_type)        //
   READ_FIELD(options, stream, denotation)                        //
   READ_OPTIONAL_PROTO_FIELD(options, stream, sparse_tensor_type) //
   READ_OPTIONAL_PROTO_FIELD(options, stream, optional_type)      //
   READ_END(options, stream, TypeProto)                           //
 }
 void TypeProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
-  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(tensor_type),
-                                 NAME_EXIST_VALUE(sequence_type), NAME_EXIST_VALUE(map_type),
-                                 NAME_EXIST_VALUE(denotation), NAME_EXIST_VALUE(sparse_tensor_type),
-                                 NAME_EXIST_VALUE(optional_type));
+  write_proto_into_vector_string(
+      ss, options, NAME_EXIST_VALUE(tensor_type), NAME_EXIST_VALUE(sequence_type),
+      NAME_EXIST_VALUE(map_type), NAME_EXIST_VALUE(opaque_type), NAME_EXIST_VALUE(denotation),
+      NAME_EXIST_VALUE(sparse_tensor_type), NAME_EXIST_VALUE(optional_type));
 }
 
 // ValueInfoProto

@@ -11,6 +11,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #else
+#include <io.h>
 #include <malloc.h>
 #define NOMINMAX
 #include <windows.h>
@@ -270,6 +271,47 @@ void BinaryStream::Restore() {
   limits_.pop_back();
 }
 
+bool BinaryStream::Next(const void **data, int *size) {
+  EXT_ENFORCE(data != nullptr && size != nullptr,
+              "BinaryStream::Next: output pointers must not be null.");
+  if (backed_up_ > 0) {
+    // Re-serve the tail of the previously returned block without touching the
+    // underlying stream (the position was already advanced past it).
+    const uint8_t *ptr = last_next_data_ + (last_next_size_ - backed_up_);
+    *data = ptr;
+    *size = static_cast<int>(backed_up_);
+    last_next_data_ = ptr;
+    last_next_size_ = backed_up_;
+    backed_up_ = 0;
+    return true;
+  }
+  if (!NotEnd())
+    return false;
+  EXT_ENFORCE(CanNoCopy(), "BinaryStream::Next requires a no-copy (in-memory) stream so a "
+                           "pointer into the backing buffer can be returned.");
+  // ZeroCopyInputStream blocks are int-sized; cap huge remainders so the next
+  // call keeps serving the rest.
+  constexpr offset_t kMaxChunk = 0x7FFFFFFF;
+  offset_t remaining = this->size() - tell();
+  if (remaining > kMaxChunk)
+    remaining = kMaxChunk;
+  const uint8_t *ptr = read_bytes(remaining);
+  *data = ptr;
+  *size = static_cast<int>(remaining);
+  last_next_data_ = ptr;
+  last_next_size_ = remaining;
+  return true;
+}
+
+void BinaryStream::BackUp(int count) {
+  EXT_ENFORCE(count >= 0, "BinaryStream::BackUp: count must be non-negative, got ", count, ".");
+  EXT_ENFORCE(static_cast<int64_t>(count) <= last_next_size_, "BinaryStream::BackUp: count (",
+              count, ") exceeds the size of the last Next() block (", last_next_size_, ").");
+  backed_up_ = count;
+}
+
+int64_t BinaryStream::ByteCount() const { return tell() - backed_up_; }
+
 ///////////////
 // StringStream
 ///////////////
@@ -361,7 +403,9 @@ void StringStream::ReadDelayedBlock(DelayedBlock &block) {
 
 void StringStream::WaitForDelayedBlock() { thread_pool_.Wait(); }
 
-void StringStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(n_threads); }
+void StringStream::StartThreadPool(size_t n_threads) {
+  thread_pool_.Start(static_cast<int32_t>(n_threads));
+}
 
 ////////////////////
 // BinaryWriteStream
@@ -522,7 +566,41 @@ void StringWriteStream::pre_allocate(int64_t total_bytes) {
   write_pos_ = 0;
 }
 
-void StringWriteStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(n_threads); }
+bool StringWriteStream::Next(void **data, int *size) {
+  EXT_ENFORCE(data != nullptr && size != nullptr,
+              "StringWriteStream::Next: output pointers must not be null.");
+  // Ensure there is spare room past the current write position, growing the
+  // buffer geometrically (matching write_raw_bytes' amortized growth).
+  if (write_pos_ >= static_cast<offset_t>(buffer_.size())) {
+    size_t old_capacity = buffer_.size();
+    size_t new_capacity = old_capacity + old_capacity / 2;
+    constexpr size_t kMinBlock = 1024;
+    if (new_capacity < old_capacity + kMinBlock)
+      new_capacity = old_capacity + kMinBlock;
+    buffer_.resize(new_capacity);
+  }
+  // ZeroCopyOutputStream blocks are int-sized; cap the handed-out span.
+  constexpr offset_t kMaxChunk = 0x7FFFFFFF;
+  offset_t available = static_cast<offset_t>(buffer_.size()) - write_pos_;
+  if (available > kMaxChunk)
+    available = kMaxChunk;
+  *data = buffer_.data() + write_pos_;
+  *size = static_cast<int>(available);
+  write_pos_ += available;
+  return true;
+}
+
+void StringWriteStream::BackUp(int count) {
+  EXT_ENFORCE(count >= 0, "StringWriteStream::BackUp: count must be non-negative, got ", count,
+              ".");
+  EXT_ENFORCE(static_cast<offset_t>(count) <= write_pos_, "StringWriteStream::BackUp: count (",
+              count, ") exceeds bytes produced (", write_pos_, ").");
+  write_pos_ -= count;
+}
+
+void StringWriteStream::StartThreadPool(size_t n_threads) {
+  thread_pool_.Start(static_cast<int32_t>(n_threads));
+}
 
 void StringWriteStream::WriteDelayedBlock(DelayedWriteBlock &block) {
   EXT_ENFORCE(thread_pool_.IsStarted(), "Thread pool is not started, cannot write delayed block.");
@@ -558,6 +636,22 @@ void BorrowedStringWriteStream::write_raw_bytes(const uint8_t *ptr, offset_t n_b
   write_pos_ += n_bytes;
 }
 
+bool BorrowedStringWriteStream::Next(void **data, int *size) {
+  EXT_ENFORCE(data != nullptr && size != nullptr,
+              "BorrowedStringWriteStream::Next: output pointers must not be null.");
+  // Fixed-capacity buffer: never grows. Report exhaustion by returning false.
+  if (write_pos_ >= capacity_)
+    return false;
+  constexpr offset_t kMaxChunk = 0x7FFFFFFF;
+  offset_t available = capacity_ - write_pos_;
+  if (available > kMaxChunk)
+    available = kMaxChunk;
+  *data = data_ + write_pos_;
+  *size = static_cast<int>(available);
+  write_pos_ += available;
+  return true;
+}
+
 void BorrowedStringWriteStream::WriteDelayedBlock(DelayedWriteBlock &block) {
   EXT_ENFORCE(thread_pool_.IsStarted(), "Thread pool is not started, cannot write delayed block.");
   if (block.offset == -1) {
@@ -572,6 +666,48 @@ void BorrowedStringWriteStream::WriteDelayedBlock(DelayedWriteBlock &block) {
   write_pos_ += static_cast<offset_t>(block.size);
   uint8_t *dest = data_ + block.offset;
   thread_pool_.SubmitTask([dest, block]() { std::memcpy(dest, block.data, block.size); });
+}
+
+////////////////
+// FdWriteStream
+////////////////
+
+namespace {
+
+// Writes the full buffer to a raw file descriptor, looping over partial writes.
+void fd_write_all(int fd, const char *data, size_t n_bytes) {
+  size_t written = 0;
+  while (written < n_bytes) {
+    size_t remaining = n_bytes - written;
+#if defined(_WIN32)
+    unsigned int chunk =
+        remaining > 0x7FFFFFFFu ? 0x7FFFFFFFu : static_cast<unsigned int>(remaining);
+    int n = _write(fd, data + written, chunk);
+#else
+    size_t chunk = remaining;
+    ssize_t n = ::write(fd, data + written, chunk);
+#endif
+    EXT_ENFORCE(n > 0, "FdWriteStream: failed to write ", static_cast<int64_t>(remaining),
+                " bytes to file descriptor ", fd, " (errno=", errno, ").");
+    written += static_cast<size_t>(n);
+  }
+}
+
+} // namespace
+
+void FdWriteStream::write_raw_bytes(const uint8_t *data, offset_t n_bytes) {
+  Flush();
+  fd_write_all(fd_, reinterpret_cast<const char *>(data), static_cast<size_t>(n_bytes));
+  written_ += static_cast<int64_t>(n_bytes);
+}
+
+bool FdWriteStream::Flush() {
+  if (used_ > 0) {
+    fd_write_all(fd_, buffer_, used_);
+    written_ += static_cast<int64_t>(used_);
+    used_ = 0;
+  }
+  return true;
 }
 
 //////////////////////
@@ -602,7 +738,9 @@ const uint8_t *FileWriteStream::data() const {
   EXT_THROW("This method cannot be called on this class (FileWriteStream).");
 }
 
-void FileWriteStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(n_threads); }
+void FileWriteStream::StartThreadPool(size_t n_threads) {
+  thread_pool_.Start(static_cast<int32_t>(n_threads));
+}
 
 void FileWriteStream::WriteDelayedBlock(DelayedWriteBlock &block) {
   EXT_ENFORCE(thread_pool_.IsStarted(), "Thread pool is not started, cannot write delayed block.");
@@ -834,7 +972,9 @@ void FileStream::ReadDelayedBlock(DelayedBlock &block) {
 
 void FileStream::WaitForDelayedBlock() { thread_pool_.Wait(); }
 
-void FileStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(n_threads); }
+void FileStream::StartThreadPool(size_t n_threads) {
+  thread_pool_.Start(static_cast<int32_t>(n_threads));
+}
 
 //////////////////////
 // TwoFilesWriteStream

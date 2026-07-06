@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <cassert>
 #include <cstring>
 #include <functional>
 #include <initializer_list>
@@ -805,7 +806,7 @@ class ISchemaRegistry {
 public:
   virtual ~ISchemaRegistry() = default;
 
-  ONNX_API virtual const OpSchema *GetSchema(const std::string &key, int maxInclusiveVersion,
+  ONNX_API virtual const OpSchema *GetSchema(const std::string &key, const int maxInclusiveVersion,
                                              const std::string &domain = ONNX_DOMAIN) const = 0;
 
   ONNX_API virtual const OpSchema *GetSchema(const utils::String &key,

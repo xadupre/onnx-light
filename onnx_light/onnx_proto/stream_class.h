@@ -5,6 +5,8 @@
 #include "stream.h"
 #include <functional>
 #include <sstream>
+#include <type_traits>
+#include <utility>
 
 #define FIELD_VARINT 0
 #define FIELD_FIXED64 1
@@ -14,16 +16,13 @@
 /** Serialization/parsing API declaration macro for generated proto classes. */
 #define SERIALIZATION_METHOD()                                                                     \
   SerializeSizeResult SerializeSize() const;                                                       \
-  void ParseFromString(const std::string &raw);                                                    \
-  void ParseFromString(const std::string &raw, ParseOptions &opts);                                \
+  size_t ByteSizeLong() const;                                                                     \
+  bool ParseFromString(const std::string &raw);                                                    \
+  bool ParseFromString(const std::string &raw, ParseOptions &opts);                                \
   void ParseFromZeroCopyStream(utils::BinaryStream *stream);                                       \
   void ParseFromZeroCopyStream(utils::BinaryStream *stream, ParseOptions &opts);                   \
   bool ParseFromIstream(std::istream *input);                                                      \
-  /** Serializes this message to ``out`` and returns ``false`` when capped by                      \
-   * ``SerializeOptions::max_serialized_size_bytes`` (``out`` is cleared in this case). */         \
   bool SerializeToString(std::string &out) const;                                                  \
-  /** Serializes this message to ``out`` and returns ``false`` when capped by                      \
-   * ``SerializeOptions::max_serialized_size_bytes`` (``out`` is cleared in this case). */         \
   bool SerializeToString(std::string &out, SerializeOptions &opts) const;                          \
   SerializeSizeResult SerializeSize(utils::BinaryWriteStream &stream, SerializeOptions &opts)      \
       const;                                                                                       \
@@ -67,6 +66,8 @@ public:                                                                         
   inline const type *ptr_##name() const { return &name##_; }                                       \
   inline bool has_##name() const { return _has_field_(name##_); }                                  \
   inline void set_##name(const type &v) { name##_ = v; }                                           \
+  /** Compatibility accessor returning a mutable pointer to the field. */                          \
+  inline type *mutable_##name() { return &name##_; }                                               \
   inline int order_##name() const { return order; }                                                \
   static inline constexpr const char *_name_##name = #name;                                        \
   static inline constexpr const char *DOC_##name = doc;                                            \
@@ -130,7 +131,7 @@ public:                                                                         
   inline int order_##name() const { return order; }                                                \
   inline void clr_##name() { name##_.clear(); }                                                    \
   inline void clear_##name() { name##_.clear(); }                                                  \
-  inline size_t name##_size() const { return name##_.size(); }                                     \
+  inline int name##_size() const { return static_cast<int>(name##_.size()); }                      \
   static inline constexpr const char *DOC_##name = doc;                                            \
   static inline constexpr const char *_name_##name = #name;                                        \
   inline bool packed_##name() const { return false; }                                              \
@@ -161,7 +162,8 @@ public:                                                                         
   inline bool has_##name() const { return _has_field_(name##_) && !name##_.empty(); }              \
   inline int order_##name() const { return order; }                                                \
   inline void clr_##name() { name##_.clear(); }                                                    \
-  inline size_t name##_size() const { return name##_.size(); }                                     \
+  inline void clear_##name() { name##_.clear(); }                                                  \
+  inline int name##_size() const { return static_cast<int>(name##_.size()); }                      \
   static inline constexpr const char *DOC_##name = doc;                                            \
   static inline constexpr const char *_name_##name = #name;                                        \
   inline bool packed_##name() const { return false; }                                              \
@@ -186,6 +188,10 @@ public:                                                                         
   inline bool has_##name() const { return _has_field_(name##_) && !name##_.empty(); }              \
   inline int order_##name() const { return order; }                                                \
   inline void clr_##name() { name##_.clear(); }                                                    \
+  inline void clear_##name() { name##_.clear(); }                                                  \
+  inline int name##_size() const { return static_cast<int>(name##_.size()); }                      \
+  inline const type &name(size_t i) const { return name##_[i]; }                                   \
+  inline type *mutable_##name(size_t i) { return &name##_[i]; }                                    \
   static inline constexpr const char *DOC_##name = doc;                                            \
   static inline constexpr const char *_name_##name = #name;                                        \
   inline bool packed_##name() const { return true; }                                               \
@@ -270,6 +276,7 @@ public:                                                                         
   }                                                                                                \
   inline void set_##name(const type &v) { name##_ = v; }                                           \
   inline void reset_##name() { name##_.reset(); }                                                  \
+  inline void clear_##name() { name##_.reset(); }                                                  \
   inline bool has_##name() const { return name##_.has_value(); }                                   \
   inline int order_##name() const { return order; }                                                \
   static inline constexpr const char *DOC_##name = doc;                                            \
@@ -517,5 +524,15 @@ public:
     EXT_THROW("operator == not implemented for a Message");
   }
 };
+
+/** ADL-visible swap for generated proto messages so that unqualified
+ *  ``swap(a, b)`` calls in consuming code (e.g. onnxruntime) resolve, mirroring
+ *  the friend ``swap`` that protobuf generates for every message class. */
+template <typename T, typename = std::enable_if_t<std::is_base_of<Message, T>::value>>
+inline void swap(T &a, T &b) noexcept {
+  T tmp(std::move(a));
+  a = std::move(b);
+  b = std::move(tmp);
+}
 
 } // namespace ONNX_LIGHT_NAMESPACE

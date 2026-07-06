@@ -5,7 +5,10 @@
 #include "thread_pool.h"
 #include <cstddef>
 #include <fstream>
+#include <istream>
+#include <iterator>
 #include <memory>
+#include <ostream>
 #include <stdexcept>
 #include <stdint.h>
 #include <string>
@@ -196,6 +199,22 @@ public:
   /** Blocks until all pending asynchronous read blocks have completed. */
   virtual void WaitForDelayedBlock();
 
+  // protobuf ZeroCopyInputStream-compatible interface. These mirror the methods
+  // of google::protobuf::io::ArrayInputStream (see ArrayInputStream in
+  // google_protobuf_compat.h) so a BinaryStream can be consumed anywhere a
+  // ZeroCopyInputStream is expected. They are implemented on top of the
+  // primitives above (tell/size/read_bytes) and require a no-copy stream
+  // (CanNoCopy() == true) because Next() hands out a pointer into the buffer.
+  /** Returns the next contiguous block of data and advances past it.
+   *  Sets the data pointer and size to the block and returns true, or returns
+   *  false at end. */
+  virtual bool Next(const void **data, int *size);
+  /** Pushes the last *count* bytes returned by Next() back so the following
+   *  Next() call serves them again. *count* must not exceed the last block. */
+  virtual void BackUp(int count);
+  /** Returns the number of bytes consumed so far (logical read position). */
+  virtual int64_t ByteCount() const;
+
 protected:
   /** Sets the internal read limit to *len* bytes from the current position. */
   virtual void LimitTo(uint64_t len) = 0;
@@ -203,6 +222,12 @@ protected:
   virtual void _check();
   /** Stack of absolute byte offsets used to implement nested LimitToNext/Restore pairs. */
   std::vector<uint64_t> limits_;
+  /** Pointer to the block last returned by Next(); used to implement BackUp(). */
+  const uint8_t *last_next_data_ = nullptr;
+  /** Size of the block last returned by Next(); used to bound BackUp(). */
+  int64_t last_next_size_ = 0;
+  /** Number of bytes pushed back by BackUp() and pending re-delivery by Next(). */
+  int64_t backed_up_ = 0;
 };
 
 class StringWriteStream;
@@ -315,6 +340,29 @@ public:
   /** Blocks until all pending asynchronous write blocks have completed. */
   virtual void WaitForDelayedBlock();
 
+  // protobuf ZeroCopyOutputStream-compatible interface. These mirror the methods
+  // of google::protobuf::io::StringOutputStream (see StringOutputStream in
+  // google_protobuf_compat.h) so a BinaryWriteStream can be used anywhere a
+  // ZeroCopyOutputStream is expected. Only growable in-memory streams
+  // (StringWriteStream / BorrowedStringWriteStream) implement Next()/BackUp();
+  // other backends throw.
+  /** Hands out a writable block and advances the write position past it.
+   *  Sets the data pointer and size to the block and returns true, or returns
+   *  false when no space is available. Bytes left unwritten must be returned via
+   *  BackUp(). */
+  virtual bool Next(void **data, int *size) {
+    (void)data;
+    (void)size;
+    EXT_THROW("BinaryWriteStream::Next is only supported by in-memory write streams.");
+  }
+  /** Returns the last *count* bytes handed out by Next() that were not used. */
+  virtual void BackUp(int count) {
+    (void)count;
+    EXT_THROW("BinaryWriteStream::BackUp is only supported by in-memory write streams.");
+  }
+  /** Returns the number of bytes produced so far (logical write position). */
+  virtual int64_t ByteCount() const { return size(); }
+
 protected:
   /** Per-object serialized-size cache used to avoid redundant recomputation. */
   std::unordered_map<const void *, SerializeSizeResult> size_cache_;
@@ -333,9 +381,11 @@ class StringStream : public BinaryStream {
 public:
   /** Initializes an empty stream pointing to no data. */
   explicit inline StringStream() : BinaryStream(), pos_(0), size_(0), data_(nullptr) {}
-  /** Initializes a stream that reads *size* bytes starting at *data*. */
-  explicit inline StringStream(const uint8_t *data, int64_t size)
-      : BinaryStream(), pos_(0), size_(size), data_(data) {}
+  /** Initializes a stream that reads *size* bytes starting at *data*.
+   *  Accepts protobuf-style const void* buffers so StringStream can serve as the
+   *  google::protobuf::io::ArrayInputStream alias. */
+  explicit inline StringStream(const void *data, int64_t size)
+      : BinaryStream(), pos_(0), size_(size), data_(static_cast<const uint8_t *>(data)) {}
   /** Resets the stream to read *size* bytes starting at *data*. */
   void Setup(const uint8_t *data, int64_t size);
   virtual void CanRead(uint64_t len, const char *msg) override;
@@ -426,6 +476,13 @@ public:
    *  stable so no reallocation occurs during concurrent writes. */
   void pre_allocate(int64_t total_bytes);
 
+  // ZeroCopyOutputStream-compatible interface (see BinaryWriteStream).
+  /** Grows the buffer as needed and returns a writable block past the current
+   *  write position; advances the write position to the end of that block. */
+  virtual bool Next(void **data, int *size) override;
+  /** Rewinds the write position by *count* bytes handed out by the last Next(). */
+  virtual void BackUp(int count) override;
+
   // parallelization of big blocks.
   /** Returns true once StartThreadPool() has been called and is still active. */
   virtual bool HasParallelizationStarted() const override { return thread_pool_.IsStarted(); }
@@ -462,6 +519,10 @@ public:
   virtual int64_t size() const override { return write_pos_; }
   /** Returns a pointer to the beginning of the borrowed buffer. */
   virtual const uint8_t *data() const override { return data_; }
+
+  /** Returns a writable block from the remaining borrowed capacity without
+   *  growing; returns false once the fixed buffer is exhausted. */
+  virtual bool Next(void **data, int *size) override;
 
 protected:
   /** Non-owning pointer to writable backing storage. */
@@ -770,6 +831,192 @@ protected:
   std::string default_weights_location_;
   /** Maps object pointers to their byte offsets in the weights file. */
   std::unordered_map<const void *, uint64_t> position_cache_;
+};
+
+///////////////////////////////////////////////////////////////////////////////
+// protobuf ZeroCopy adapter streams
+///////////////////////////////////////////////////////////////////////////////
+
+/** In-memory write stream whose bytes are appended to a caller-owned std::string.
+ *  Implements the full BinaryWriteStream interface plus the protobuf
+ *  ZeroCopyOutputStream methods (Next / BackUp / ByteCount), so it can back
+ *  google::protobuf::io::StringOutputStream as a pure alias. */
+class StdStringWriteStream : public BinaryWriteStream {
+public:
+  /** Initializes a write stream that appends to *target*.
+   *  The caller must ensure *target* outlives this stream. */
+  explicit inline StdStringWriteStream(std::string *target)
+      : BinaryWriteStream(), target_(target) {}
+  virtual void write_raw_bytes(const uint8_t *data, offset_t n_bytes) override {
+    target_->append(reinterpret_cast<const char *>(data), static_cast<size_t>(n_bytes));
+  }
+  /** Returns the number of bytes currently held by the target string. */
+  virtual int64_t size() const override { return static_cast<int64_t>(target_->size()); }
+  /** Returns a pointer to the beginning of the target string's storage. */
+  virtual const uint8_t *data() const override {
+    return reinterpret_cast<const uint8_t *>(target_->data());
+  }
+
+  // ZeroCopyOutputStream-compatible interface (see BinaryWriteStream).
+  /** Grows the target string by a chunk and returns a writable block at its
+   *  former end; the string size is advanced past that block. */
+  virtual bool Next(void **data, int *size) override {
+    size_t old_size = target_->size();
+    size_t new_size = old_size + 1024;
+    target_->resize(new_size);
+    *data = &(*target_)[old_size];
+    *size = static_cast<int>(new_size - old_size);
+    return true;
+  }
+  /** Trims the last *count* bytes handed out by the previous Next(). */
+  virtual void BackUp(int count) override {
+    target_->resize(target_->size() - static_cast<size_t>(count));
+  }
+  /** Returns the number of bytes produced so far (target string size). */
+  virtual int64_t ByteCount() const override { return static_cast<int64_t>(target_->size()); }
+
+protected:
+  /** Non-owning pointer to the destination string. */
+  std::string *target_;
+};
+
+/** In-memory reader that owns a full copy of a std::istream's contents.
+ *  The whole stream is drained into an owned std::string in the constructor and
+ *  exposed through StringStream's zero-copy read interface, so it can back
+ *  google::protobuf::io::IstreamInputStream as a pure alias. */
+class IstreamStream : public StringStream {
+public:
+  /** Reads the entire contents of *stream* into an owned buffer.
+   *  *block_size* is accepted for protobuf API compatibility but ignored. */
+  explicit inline IstreamStream(std::istream *stream, int block_size = 4096) : StringStream() {
+    (void)block_size;
+    owned_.assign(std::istreambuf_iterator<char>(*stream), std::istreambuf_iterator<char>());
+    Setup(reinterpret_cast<const uint8_t *>(owned_.data()), static_cast<int64_t>(owned_.size()));
+  }
+
+protected:
+  /** Owned copy of the source stream's bytes; keeps data_ valid for the stream's life. */
+  std::string owned_;
+};
+
+/** Write stream that forwards its bytes to a std::ostream.
+ *  Implements the BinaryWriteStream interface plus the protobuf
+ *  ZeroCopyOutputStream methods (Next / BackUp / ByteCount / Flush), so it can
+ *  back google::protobuf::io::OstreamOutputStream as a pure alias. */
+class OstreamWriteStream : public BinaryWriteStream {
+public:
+  /** Initializes a write stream that writes to *stream* using *block_size* chunks. */
+  explicit inline OstreamWriteStream(std::ostream *stream, int block_size = 4096)
+      : BinaryWriteStream(), stream_(stream), block_size_(block_size),
+        buffer_(static_cast<size_t>(block_size)), used_(0), written_(0) {}
+  inline ~OstreamWriteStream() override { Flush(); }
+  virtual void write_raw_bytes(const uint8_t *data, offset_t n_bytes) override {
+    Flush();
+    stream_->write(reinterpret_cast<const char *>(data), static_cast<std::streamsize>(n_bytes));
+    written_ += static_cast<int64_t>(n_bytes);
+  }
+  /** Returns the number of bytes produced so far (flushed plus pending). */
+  virtual int64_t size() const override { return written_ + static_cast<int64_t>(used_); }
+  /** Returns nullptr; ostream-backed streams do not expose an in-memory buffer. */
+  virtual const uint8_t *data() const override { return nullptr; }
+
+  // ZeroCopyOutputStream-compatible interface (see BinaryWriteStream).
+  /** Flushes any pending bytes and hands out the internal block buffer. */
+  virtual bool Next(void **data, int *size) override {
+    Flush();
+    *data = buffer_.data();
+    *size = block_size_;
+    used_ = block_size_;
+    return true;
+  }
+  /** Returns the last *count* bytes handed out by Next() that were not written. */
+  virtual void BackUp(int count) override { used_ -= count; }
+  /** Returns the number of bytes produced so far (flushed plus pending). */
+  virtual int64_t ByteCount() const override { return written_ + static_cast<int64_t>(used_); }
+  /** Writes any pending buffered bytes to the underlying ostream. */
+  inline bool Flush() {
+    if (used_ > 0) {
+      stream_->write(buffer_.data(), used_);
+      written_ += static_cast<int64_t>(used_);
+      used_ = 0;
+    }
+    return stream_->good();
+  }
+
+protected:
+  /** Non-owning pointer to the destination stream. */
+  std::ostream *stream_;
+  /** Size of each block handed out by Next(). */
+  int block_size_;
+  /** Scratch buffer backing the current Next() block. */
+  std::vector<char> buffer_;
+  /** Number of valid bytes currently pending in buffer_. */
+  int used_;
+  /** Number of bytes already flushed to the ostream. */
+  int64_t written_;
+};
+
+/** Write stream that forwards its bytes to a raw file descriptor.
+ *  Implements the BinaryWriteStream interface plus the protobuf
+ *  ZeroCopyOutputStream methods (Next / BackUp / ByteCount / Flush / Close), so
+ *  it can back google::protobuf::io::FileOutputStream as a pure alias.
+ *  Unlike the previous compat stub this performs real platform writes. */
+class FdWriteStream : public BinaryWriteStream {
+public:
+  /** Initializes a write stream over the open file descriptor *fd*. */
+  explicit inline FdWriteStream(int fd) : BinaryWriteStream(), fd_(fd), used_(0), written_(0) {}
+  inline ~FdWriteStream() override { Flush(); }
+  virtual void write_raw_bytes(const uint8_t *data, offset_t n_bytes) override;
+  /** Returns the number of bytes produced so far (written plus pending). */
+  virtual int64_t size() const override { return written_ + static_cast<int64_t>(used_); }
+  /** Returns nullptr; fd-backed streams do not expose an in-memory buffer. */
+  virtual const uint8_t *data() const override { return nullptr; }
+
+  // ZeroCopyOutputStream-compatible interface (see BinaryWriteStream).
+  /** Flushes any pending bytes and hands out the internal block buffer. */
+  virtual bool Next(void **data, int *size) override {
+    Flush();
+    *data = buffer_;
+    *size = static_cast<int>(sizeof(buffer_));
+    used_ = sizeof(buffer_);
+    return true;
+  }
+  /** Returns the last *count* bytes handed out by Next() that were not written. */
+  virtual void BackUp(int count) override { used_ -= static_cast<size_t>(count); }
+  /** Returns the number of bytes produced so far (written plus pending). */
+  virtual int64_t ByteCount() const override { return written_ + static_cast<int64_t>(used_); }
+  /** Writes any pending buffered bytes to the file descriptor. */
+  bool Flush();
+  /** Flushes and returns true; the descriptor itself is not closed. */
+  inline bool Close() { return Flush(); }
+
+protected:
+  /** File descriptor the bytes are written to (not owned). */
+  int fd_;
+  /** Scratch buffer backing the current Next() block. */
+  char buffer_[4096];
+  /** Number of valid bytes currently pending in buffer_. */
+  size_t used_;
+  /** Number of bytes already written to the descriptor. */
+  int64_t written_;
+};
+
+/** Minimal coded input stream wrapping a StringStream, providing the protobuf
+ *  total-bytes-limit accessors so it can back google::protobuf::io::CodedInputStream. */
+class CodedInputStream {
+public:
+  /** Wraps *input* with a default total-bytes limit of INT32_MAX. */
+  explicit inline CodedInputStream(StringStream *input) : input_(input), limit_(0x7FFFFFFF) {}
+  /** Sets the maximum number of bytes that may be read. */
+  inline void SetTotalBytesLimit(int total_bytes_limit) { limit_ = total_bytes_limit; }
+  /** Returns the configured total-bytes limit. */
+  inline int TotalBytesLimit() const { return limit_; }
+
+protected:
+  /** Non-owning pointer to the wrapped input stream. */
+  StringStream *input_;
+  /** Configured maximum number of readable bytes. */
+  int limit_;
 };
 
 } // namespace utils

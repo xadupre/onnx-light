@@ -327,6 +327,13 @@ bool SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
                                  SerializeOptions &options, bool clear_external_data = true);
 
 /**
+ * Returns ``false`` when ``options.max_serialized_size_bytes`` is non-zero and *total_size*
+ * exceeds the configured limit.
+ */
+bool EnforceMaxSerializedSize(const SerializeSizeResult &total_size,
+                              const SerializeOptions &options, const char *context);
+
+/**
  * Specializes SerializeProtoToStream for ModelProto.
  */
 template <>

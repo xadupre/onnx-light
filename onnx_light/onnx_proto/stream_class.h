@@ -131,7 +131,7 @@ public:                                                                         
   inline int order_##name() const { return order; }                                                \
   inline void clr_##name() { name##_.clear(); }                                                    \
   inline void clear_##name() { name##_.clear(); }                                                  \
-  inline int name##_size() const { return static_cast<int>(name##_.size()); }                                     \
+  inline int name##_size() const { return static_cast<int>(name##_.size()); }                      \
   static inline constexpr const char *DOC_##name = doc;                                            \
   static inline constexpr const char *_name_##name = #name;                                        \
   inline bool packed_##name() const { return false; }                                              \
@@ -163,7 +163,7 @@ public:                                                                         
   inline int order_##name() const { return order; }                                                \
   inline void clr_##name() { name##_.clear(); }                                                    \
   inline void clear_##name() { name##_.clear(); }                                                  \
-  inline int name##_size() const { return static_cast<int>(name##_.size()); }                                     \
+  inline int name##_size() const { return static_cast<int>(name##_.size()); }                      \
   static inline constexpr const char *DOC_##name = doc;                                            \
   static inline constexpr const char *_name_##name = #name;                                        \
   inline bool packed_##name() const { return false; }                                              \
@@ -189,9 +189,9 @@ public:                                                                         
   inline int order_##name() const { return order; }                                                \
   inline void clr_##name() { name##_.clear(); }                                                    \
   inline void clear_##name() { name##_.clear(); }                                                  \
-  inline int name##_size() const { return static_cast<int>(name##_.size()); }                                     \
+  inline int name##_size() const { return static_cast<int>(name##_.size()); }                      \
   inline const type &name(size_t i) const { return name##_[i]; }                                   \
-  inline type *mutable_##name(size_t i) { return &name##_[i]; }                                     \
+  inline type *mutable_##name(size_t i) { return &name##_[i]; }                                    \
   static inline constexpr const char *DOC_##name = doc;                                            \
   static inline constexpr const char *_name_##name = #name;                                        \
   inline bool packed_##name() const { return true; }                                               \

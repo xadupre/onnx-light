@@ -662,7 +662,8 @@ void TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
   READ_FIELD(options, stream, name)                        //
   READ_FIELD(options, stream, doc_string)                  //
   else if (static_cast<int>(field_number.field_number) == order_raw_data()) {
-    read_field_limit_parallel_nc(stream, static_cast<int>(field_number.wire_type), raw_data_, "raw_data", options);
+    read_field_limit_parallel_nc(stream, static_cast<int>(field_number.wire_type), raw_data_,
+                                 "raw_data", options);
   } //
   READ_REPEATED_FIELD(options, stream, external_data)  //
   READ_REPEATED_FIELD(options, stream, metadata_props) //
@@ -1120,11 +1121,10 @@ void TypeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &optio
   READ_END(options, stream, TypeProto)                           //
 }
 void TypeProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
-  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(tensor_type),
-                                 NAME_EXIST_VALUE(sequence_type), NAME_EXIST_VALUE(map_type),
-                                 NAME_EXIST_VALUE(opaque_type), NAME_EXIST_VALUE(denotation),
-                                 NAME_EXIST_VALUE(sparse_tensor_type),
-                                 NAME_EXIST_VALUE(optional_type));
+  write_proto_into_vector_string(
+      ss, options, NAME_EXIST_VALUE(tensor_type), NAME_EXIST_VALUE(sequence_type),
+      NAME_EXIST_VALUE(map_type), NAME_EXIST_VALUE(opaque_type), NAME_EXIST_VALUE(denotation),
+      NAME_EXIST_VALUE(sparse_tensor_type), NAME_EXIST_VALUE(optional_type));
 }
 
 // ValueInfoProto

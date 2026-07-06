@@ -90,8 +90,29 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # requested as an optional component so that older CMake installations (and
   # free-threaded interpreters, which do not expose this target) continue to
   # work without error.
-  find_package(Python 3.10 REQUIRED COMPONENTS Interpreter Development.Module
-    OPTIONAL_COMPONENTS Development.SABIModule)
+  if(CMAKE_CROSSCOMPILING)
+    # When cross-compiling, the interpreter and target dev libraries must be
+    # located independently (host ``Python`` interpreter + target ``Python3``
+    # development package).
+    find_package(Python3 3.10 REQUIRED COMPONENTS Development.Module
+      OPTIONAL_COMPONENTS Development.SABIModule)
+    find_package(Python 3.10 REQUIRED COMPONENTS Interpreter)
+
+    # nanobind >= 2.13 only auto-runs its own find_package(Python ...) when
+    # neither Python::Interpreter nor Python::Module exist yet. Since
+    # Python::Interpreter is already provided above (host interpreter, while
+    # Python3::Module above is the cross-compilation target's dev libs),
+    # nanobind would otherwise skip that step and fail to find Python::Module.
+    if(NOT TARGET Python::Module)
+      add_library(Python::Module ALIAS Python3::Module)
+    endif()
+    if(TARGET Python3::SABIModule AND NOT TARGET Python::SABIModule)
+      add_library(Python::SABIModule ALIAS Python3::SABIModule)
+    endif()
+  else()
+    find_package(Python 3.10 REQUIRED COMPONENTS Interpreter Development.Module
+      OPTIONAL_COMPONENTS Development.SABIModule)
+  endif()
 
   # Find nanobind
   execute_process(

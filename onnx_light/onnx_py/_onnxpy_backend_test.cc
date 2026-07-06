@@ -97,7 +97,8 @@ nb::object MakeTensorNdarray(nb::handle owner) {
   nb::dlpack::dtype dtype = DLPackDtypeFromOnnx(t.data_type);
   std::vector<size_t> shape;
   shape.reserve(t.shape.size());
-  for (size_t i = 0; const int64_t dim : t.shape) {
+  size_t i = 0;
+  for (const int64_t dim : t.shape) {
     EXT_ENFORCE_INVALID(dim >= 0, "Tensor.__dlpack__: shape dimension at index ", i,
                         " must be non-negative, got ", dim);
     // Compare in a fixed unsigned width so 32-bit ``size_t`` platforms reject

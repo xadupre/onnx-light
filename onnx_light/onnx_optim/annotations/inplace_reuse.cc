@@ -493,14 +493,22 @@ void ComputeContext::ComputeInPlaceReuseGraph(
           if (!ctx.Has(in_name)) {
             continue;
           }
-          const std::optional<InPlaceReuseKind> match = ClassifyReuse(out_tensor, ctx.Get(in_name));
+          std::optional<InPlaceReuseKind> match = ClassifyReuse(out_tensor, ctx.Get(in_name));
+          // Transpose rearranges elements: even when input and output happen to
+          // share the same shape (e.g. a square-matrix transposition) the kernel
+          // cannot overwrite the input buffer in-place.  Demote kEqual to
+          // kGreater so the allocator may still reuse the buffer slot while
+          // keeping kEqual reserved for true element-wise-overwrite ops.
+          if (match == InPlaceReuseKind::kEqual && node.op_type().as_string() == "Transpose") {
+            match = InPlaceReuseKind::kGreater;
+          }
           if (!match.has_value() || *match != kind) {
             continue;
           }
           InPlaceReuse reuse;
           reuse.output_index = o;
           reuse.input_index = k;
-          reuse.kind = kind;
+          reuse.kind = *match;
           result[static_cast<std::size_t>(i)].push_back(reuse);
           if (events_enabled_) {
             ComputeEvent ev;
@@ -508,7 +516,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
             ev.node_index = i;
             ev.output_index = o;
             ev.input_index = k;
-            ev.kind = kind;
+            ev.kind = *match;
             events_.push_back(std::move(ev));
           }
           used_inputs.insert(k);

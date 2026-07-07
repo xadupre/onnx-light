@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import unittest
@@ -230,6 +231,7 @@ class TestMainFillshape(ExtTestCase):
         from onnx_light.__main__ import main
         from onnx_light.onnx_optim.shape_inference import (
             NODE_TAG_METADATA_KEY,
+            VALUE_TAG_METADATA_KEY,
             VALUE_TAGS_METADATA_KEY,
         )
 
@@ -260,6 +262,56 @@ class TestMainFillshape(ExtTestCase):
             node0_meta = {entry.key: entry.value for entry in result.graph.node[0].metadata_props}
             self.assertIn(NODE_TAG_METADATA_KEY, node0_meta)
             self.assertEqual(node0_meta[NODE_TAG_METADATA_KEY], "shape")
+
+            # The graph output Y inherits "weight" from X (first Reshape input).
+            output_meta = {
+                entry.key: entry.value for entry in result.graph.output[0].metadata_props
+            }
+            self.assertEqual(output_meta.get(VALUE_TAG_METADATA_KEY), "weight")
+
+    def test_fillshape_shape_tag_output_is_shape(self):
+        """fillshape --shape-tag writes 'shape' value_tag on a model output that is a shape tensor."""  # noqa: E501
+        from onnx_light.__main__ import main
+        from onnx_light.onnx_optim.shape_inference import (
+            NODE_TAG_METADATA_KEY,
+            VALUE_TAG_METADATA_KEY,
+            VALUE_TAGS_METADATA_KEY,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            # Build Shape(X) → Y where Y is directly the graph output.
+            shape_node = oh.make_node("Shape", inputs=["X"], outputs=["Y"])
+            x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 3])
+            y = oh.make_tensor_value_info("Y", onnxl.TensorProto.INT64, None)
+            graph = oh.make_graph([shape_node], "g", [x], [y])
+            model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+            model.ir_version = 8
+            self._save_model(model, model_path)
+
+            main(["fillshape", model_path, "--shape-tag"])
+
+            result = load(model_path)
+            # Shape inference must fill the output shape ([2] — one dimension per input dim).
+            dims = list(result.graph.output[0].type.tensor_type.shape.dim)
+            self.assertEqual(len(dims), 1)
+
+            # The graph should carry value_tags metadata.
+            graph_meta = {entry.key: entry.value for entry in result.graph.metadata_props}
+            self.assertIn(VALUE_TAGS_METADATA_KEY, graph_meta)
+
+            tags = json.loads(graph_meta[VALUE_TAGS_METADATA_KEY])
+            self.assertEqual(tags.get("Y"), "shape")
+
+            # The Shape node should carry the "shape" node tag.
+            node0_meta = {entry.key: entry.value for entry in result.graph.node[0].metadata_props}
+            self.assertEqual(node0_meta.get(NODE_TAG_METADATA_KEY), "shape")
+
+            # The graph output Y must carry onnx_light.value_tag = "shape".
+            output_meta = {
+                entry.key: entry.value for entry in result.graph.output[0].metadata_props
+            }
+            self.assertEqual(output_meta.get(VALUE_TAG_METADATA_KEY), "shape")
 
     def test_fillshape_missing_file_raises(self):
         """fillshape raises when the model file does not exist."""

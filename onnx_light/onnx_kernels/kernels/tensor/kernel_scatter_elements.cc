@@ -38,7 +38,7 @@ std::vector<int64_t> ReadScatterElementsIndices(const Tensor &indices) {
 }
 
 template <typename T>
-void ApplyScatterElementsTyped(const Tensor &updates, std::vector<uint8_t> &out_bytes,
+void ApplyScatterElementsTyped(const Tensor &updates, RawBuffer &out_bytes,
                                const std::vector<int64_t> &idx_values, int64_t axis,
                                int64_t axis_dim, const std::vector<int64_t> &data_strides,
                                const std::vector<int64_t> &idx_strides,

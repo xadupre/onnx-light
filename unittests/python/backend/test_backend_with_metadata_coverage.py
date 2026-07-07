@@ -32,7 +32,7 @@ def _expected_metadata_map(entries):
 def _value_metadata(graph):
     return {
         field: [_expected_metadata_map(value.metadata_props) for value in getattr(graph, field)]
-        for field in ("input", "value_info", "output")
+        for field in ("input", "value_info", "output", "initializer")
     }
 
 
@@ -48,7 +48,7 @@ def _clear_metadata(model):
     model.graph.metadata_props.clear()
     for node in model.graph.node:
         node.metadata_props.clear()
-    for field in ("input", "value_info", "output"):
+    for field in ("input", "value_info", "output", "initializer"):
         for value in getattr(model.graph, field):
             value.metadata_props.clear()
 

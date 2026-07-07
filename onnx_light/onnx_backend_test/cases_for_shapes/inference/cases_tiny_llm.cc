@@ -489,6 +489,44 @@ void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry) {
       entry->set_key(ann::kValueTagMetadataKey);
       entry->set_value("weight");
     }
+
+    // Per-value kValueTagMetadataKey on initializers (insertion order, see
+    // AddInitializer calls above).
+    const auto init_meta = [&](std::size_t i, const char *tag) {
+      auto *entry = graph->mutable_initializer(i)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value(tag);
+    };
+    // initializer[0]  embed_tokens.weight → "weight"
+    init_meta(0, "weight");
+    // initializer[1]  input_layernorm.weight → "weight"
+    init_meta(1, "weight");
+    // initializer[2]  q_proj.weight → "weight"
+    init_meta(2, "weight");
+    // initializer[3]  k_proj.weight → "weight"
+    init_meta(3, "weight");
+    // initializer[4]  v_proj.weight → "weight"
+    init_meta(4, "weight");
+    // initializer[5]  o_proj.weight → "weight"
+    init_meta(5, "weight");
+    // initializer[6]  post_attention_layernorm.weight → "weight"
+    init_meta(6, "weight");
+    // initializer[7]  gate_proj.weight → "weight"
+    init_meta(7, "weight");
+    // initializer[8]  up_proj.weight → "weight"
+    init_meta(8, "weight");
+    // initializer[9]  down_proj.weight → "weight"
+    init_meta(9, "weight");
+    // initializer[10] norm.weight → "weight"
+    init_meta(10, "weight");
+    // initializer[11] lm_head.weight → "weight"
+    init_meta(11, "weight");
+    // initializer[12] mask_axes → "axes"
+    init_meta(12, "axes");
+    // initializer[13] mask_one → "weight"
+    init_meta(13, "weight");
+    // initializer[14] mask_neg → "weight"
+    init_meta(14, "weight");
   }
 
   registry.emplace_back(std::move(tc));
@@ -1283,6 +1321,54 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry) 
     }
     // output[1] present_key → no tag (Concat from untagged past_key as input[0])
     // output[2] present_value → no tag
+
+    // Per-value kValueTagMetadataKey on initializers (insertion order, see
+    // AddInitializer calls above).
+    const auto init_meta = [&](std::size_t i, const char *tag) {
+      auto *entry = graph->mutable_initializer(i)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value(tag);
+    };
+    // initializer[0]  embed_tokens.weight → "weight"
+    init_meta(0, "weight");
+    // initializer[1]  input_layernorm.weight → "weight"
+    init_meta(1, "weight");
+    // initializer[2]  q_proj.weight → "weight"
+    init_meta(2, "weight");
+    // initializer[3]  k_proj.weight → "weight"
+    init_meta(3, "weight");
+    // initializer[4]  v_proj.weight → "weight"
+    init_meta(4, "weight");
+    // initializer[5]  o_proj.weight → "weight"
+    init_meta(5, "weight");
+    // initializer[6]  post_attention_layernorm.weight → "weight"
+    init_meta(6, "weight");
+    // initializer[7]  gate_proj.weight → "weight"
+    init_meta(7, "weight");
+    // initializer[8]  up_proj.weight → "weight"
+    init_meta(8, "weight");
+    // initializer[9]  down_proj.weight → "weight"
+    init_meta(9, "weight");
+    // initializer[10] norm.weight → "weight"
+    init_meta(10, "weight");
+    // initializer[11] lm_head.weight → "weight"
+    init_meta(11, "weight");
+    // initializer[12] rms_axes → "axes"
+    init_meta(12, "axes");
+    // initializer[13] rms_eps → "weight"
+    init_meta(13, "weight");
+    // initializer[14] head_shape → "shape"
+    init_meta(14, "shape");
+    // initializer[15] merge_shape → "shape"
+    init_meta(15, "shape");
+    // initializer[16] attn_scale → "weight"
+    init_meta(16, "weight");
+    // initializer[17] mask_axes → "axes"
+    init_meta(17, "axes");
+    // initializer[18] mask_one → "weight"
+    init_meta(18, "weight");
+    // initializer[19] mask_neg → "weight"
+    init_meta(19, "weight");
   }
 
   registry.emplace_back(std::move(tc));

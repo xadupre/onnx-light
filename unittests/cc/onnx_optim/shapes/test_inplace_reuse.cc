@@ -176,8 +176,8 @@ TEST(OnnxOptimInPlaceReuse, TransposeWithSameByteSizeIsReportedAsGreater) {
 }
 
 // A square-matrix Transpose (same input and output shape) must also be
-// reported as kGreater, not kEqual. Even though SameStorage returns true
-// for same-shape tensors, Transpose rearranges elements so the kernel cannot
+// reported as kGreater, not kEqual. Even though SameStorage returns true for
+// same-shape tensors, Transpose rearranges elements, so the kernel cannot
 // overwrite the input buffer in-place.
 TEST(OnnxOptimInPlaceReuse, TransposeSquareShapeIsReportedAsGreater) {
   GraphProto graph;

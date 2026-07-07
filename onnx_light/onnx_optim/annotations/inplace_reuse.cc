@@ -227,22 +227,36 @@ std::optional<expressions::DimType> ByteSizeExpr(const OptimTensor &t) {
 // Classifies a candidate reuse of input ``in`` by output ``out`` by comparing
 // their buffer sizes. ``kEqual`` requires identical descriptors (same element
 // type and shape), so an element-wise overwrite keeps the layout valid even
-// for symbolic shapes. ``kGreater`` reports an input buffer that is strictly
-// larger in bytes than the output, so the output still fits. When descriptors
+// for symbolic shapes. ``kGreater`` reports an input buffer that is at least
+// as large in bytes as the output, so the output still fits. When descriptors
 // differ but byte sizes are equal (for example a transpose), the opportunity
 // is also reported as ``kGreater``: this keeps ``kEqual`` reserved for true
 // same-storage matches while still allowing shape-changing rewrites that fit.
 // Any other case (input smaller) yields no opportunity.
+//
+// When both tensors have symbolic dimensions, ``ByteSizeExpr`` is compared
+// symbolically. Two expressions that simplify to the same canonical string are
+// guaranteed to describe the same byte count at runtime (e.g. a permutation of
+// the same symbolic dimension names), so ``kGreater`` is returned for them too.
 std::optional<InPlaceReuseKind> ClassifyReuse(const OptimTensor &out, const OptimTensor &in) {
   if (SameStorage(out, in)) {
     return InPlaceReuseKind::kEqual;
   }
   const std::optional<int64_t> out_bytes = ConcreteByteSize(out);
   const std::optional<int64_t> in_bytes = ConcreteByteSize(in);
-  if (!out_bytes.has_value() || !in_bytes.has_value()) {
+  if (out_bytes.has_value() && in_bytes.has_value()) {
+    if (*in_bytes >= *out_bytes) {
+      return InPlaceReuseKind::kGreater;
+    }
     return std::nullopt;
   }
-  if (*in_bytes >= *out_bytes) {
+  // Fall back to symbolic comparison when concrete sizes are unavailable.
+  // Two byte-size expressions that simplify to the same canonical form
+  // describe equal buffer sizes regardless of the runtime values of symbolic
+  // dimension variables, so the output always fits inside the input buffer.
+  const auto out_expr = ByteSizeExpr(out);
+  const auto in_expr = ByteSizeExpr(in);
+  if (out_expr.has_value() && in_expr.has_value() && *out_expr == *in_expr) {
     return InPlaceReuseKind::kGreater;
   }
   return std::nullopt;

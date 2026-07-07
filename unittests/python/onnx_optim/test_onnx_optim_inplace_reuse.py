@@ -112,6 +112,33 @@ class TestInPlaceReuse(ExtTestCase):
         self.assertEqual(raw[1][0].kind, si.InPlaceReuseKind.kGreater)
         self.assertEqual(raw[2][0].kind, si.InPlaceReuseKind.kGreater)
 
+    def test_transpose_symbolic_dim_reported_as_greater(self):
+        """Tests that Transpose with a symbolic batch dimension reports kGreater.
+
+        When the input shape contains a symbolic dimension (e.g. batch), the
+        byte sizes cannot be compared concretely.  The fix uses the symbolic
+        ByteSizeExpr: both [batch, 4, 4] and [4, batch, 4] simplify to the same
+        canonical expression, so kGreater is correctly returned.
+        """
+        nodes = [oh.make_node("Abs", ["X"], ["A"]), oh.make_node("Transpose", ["A"], ["Y"])]
+        # Build a minimal model proto; shapes are injected via ctx.set below.
+        x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, None)
+        y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)
+        model = self._build_model(nodes, [x], [y])
+
+        ctx = si.ShapesContext()
+        ctx.set("X", si.OptimTensor(onnxl.TensorProto.FLOAT, ["batch", 4, 4]))
+        ctx.set("A", si.OptimTensor(onnxl.TensorProto.FLOAT, ["batch", 4, 4]))
+        ctx.set("Y", si.OptimTensor(onnxl.TensorProto.FLOAT, [4, "batch", 4]))
+
+        raw = si.compute_inplace_reuse(ctx, model.graph)
+        reuse = self._reuse_pairs(raw)
+
+        # Node 0: Abs(X) → A — X is a declared graph input, must not be reused.
+        # Node 1: Transpose(A) → Y — A's byte size equals Y's, so kGreater.
+        self.assertEqual(reuse, [[], [(0, 0)]])
+        self.assertEqual(raw[1][0].kind, si.InPlaceReuseKind.kGreater)
+
     def test_transpose_square_shape_reported_as_equal(self):
         """Tests that a square-matrix Transpose is reported as kEqual.
 

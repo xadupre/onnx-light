@@ -23,6 +23,7 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using onnx_optim::OptimDim;
 using onnx_optim::OptimShape;
 using onnx_optim::OptimTensor;
 using onnx_optim::TensorType;
@@ -173,6 +174,40 @@ TEST(OnnxOptimInPlaceReuse, TransposeWithSameByteSizeIsReportedAsGreater) {
   EXPECT_EQ(reuse[1][0], (InPlaceReuse{0, 0, InPlaceReuseKind::kGreater}));
   ASSERT_EQ(reuse[2].size(), 1u);
   EXPECT_EQ(reuse[2][0], (InPlaceReuse{0, 0, InPlaceReuseKind::kGreater}));
+}
+
+// A Transpose whose input has a symbolic batch dimension must also be reported
+// as kGreater: the byte-size expressions for [batch,4,4] and [4,batch,4] are
+// both "64*batch" after simplification, so the buffer is always large enough.
+TEST(OnnxOptimInPlaceReuse, TransposeWithSymbolicDimIsReportedAsGreater) {
+  GraphProto graph;
+  graph.set_name("g");
+
+  // Declare minimal input/output so the graph proto is valid; the actual
+  // shapes are supplied to the ShapesContext manually below.
+  graph.add_input()->set_name("X");
+  graph.add_output()->set_name("Y");
+
+  *graph.add_node() = MakeNode("Abs", {"X"}, {"A"});
+  *graph.add_node() = MakeNode("Transpose", {"A"}, {"Y"});
+
+  // Provide symbolic shapes directly — X and A share [batch, 4, 4]; the
+  // Transpose output Y has the same elements rearranged as [4, batch, 4].
+  ShapesContext ctx;
+  ctx.Set("X", OptimTensor(nullptr, TensorType::kFloat,
+                           OptimShape{OptimDim("batch"), OptimDim(4), OptimDim(4)}));
+  ctx.Set("A", OptimTensor(nullptr, TensorType::kFloat,
+                           OptimShape{OptimDim("batch"), OptimDim(4), OptimDim(4)}));
+  ctx.Set("Y", OptimTensor(nullptr, TensorType::kFloat,
+                           OptimShape{OptimDim(4), OptimDim("batch"), OptimDim(4)}));
+
+  std::vector<std::vector<InPlaceReuse>> reuse = ComputeInPlaceReuse(graph, ctx);
+  ASSERT_EQ(reuse.size(), 2u);
+  // Node 0: Abs(X) → A — X is a declared graph input, must not be overwritten.
+  EXPECT_TRUE(reuse[0].empty());
+  // Node 1: Transpose(A) → Y — A's buffer equals Y's byte size, so kGreater.
+  ASSERT_EQ(reuse[1].size(), 1u);
+  EXPECT_EQ(reuse[1][0], (InPlaceReuse{0, 0, InPlaceReuseKind::kGreater}));
 }
 
 // A square-matrix Transpose ([4,4] -> [4,4]) has identical input and output

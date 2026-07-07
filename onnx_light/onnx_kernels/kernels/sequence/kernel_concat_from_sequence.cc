@@ -110,7 +110,7 @@ void ResolveAndValidate(const std::vector<Tensor> &inputs, int64_t axis, int64_t
 // output tensor; ``elem_size`` is the per-element byte size.
 void CopyConcatenated(const std::vector<Tensor> &inputs, int resolved_axis,
                       const std::vector<int64_t> &out_shape, size_t elem_size,
-                      std::vector<uint8_t> &output_bytes) {
+                      RawBuffer &output_bytes) {
   // Block of consecutive bytes that the concat sees as a "row" of the
   // outer block: outer * inner * elem_size bytes per input contribute
   // a slab whose width along the concat axis equals the input's

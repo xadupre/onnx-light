@@ -137,7 +137,10 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
       .def(nb::init<>())
       .def_rw("name", &Tensor::name)
       .def_rw("data_type", &Tensor::data_type)
-      .def_rw("shape", &Tensor::shape)
+      .def_prop_rw(
+          "shape", [](const Tensor &t) -> std::vector<int64_t> { return t.shape; },
+          [](Tensor &t, std::vector<int64_t> s) { t.shape = std::move(s); },
+          "Tensor shape as a list of ``int64`` dimension values.")
       .def("element_count", &Tensor::element_count)
       .def("element_size", &Tensor::element_size)
       .def(

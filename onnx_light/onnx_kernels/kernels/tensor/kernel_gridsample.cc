@@ -288,7 +288,7 @@ void ForEachIndex(const std::vector<int64_t> &shape, std::vector<int64_t> &idx, 
 // Main per-channel computation, templated on the element type ``T``.
 template <typename T>
 void RunTyped(const Tensor &X, const Tensor &grid, Interp interp, Padding pad, bool align_corners,
-              std::vector<uint8_t> &out_bytes, const std::vector<int64_t> &out_shape) {
+              RawBuffer &out_bytes, const std::vector<int64_t> &out_shape) {
   const T *x_data = reinterpret_cast<const T *>(X.bytes());
   const T *grid_data = reinterpret_cast<const T *>(grid.bytes());
   T *y_data = reinterpret_cast<T *>(out_bytes.data());

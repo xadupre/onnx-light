@@ -25,6 +25,264 @@ namespace onnx_kernels {
 using DataType = TensorProto::DataType;
 
 /**
+ * Shape — a fixed-capacity tensor shape storing up to 16 dimensions.
+ *
+ * Stores dimension values in an inline ``int64_t[kMaxRank]`` array so no heap
+ * allocation is required for ordinary shapes.  The number of valid dimensions
+ * is tracked by ``size_``.  An empty shape (``size_ == 0``) represents a
+ * scalar.
+ *
+ * Implicit conversions to and from ``std::vector<int64_t>`` are provided for
+ * backward compatibility with existing call sites that use
+ * ``std::vector<int64_t>`` for shape parameters.
+ */
+struct Shape {
+  /// Maximum supported tensor rank.
+  static constexpr size_t kMaxRank = 16;
+
+  /// Constructs an empty shape (scalar).
+  Shape() noexcept : dims_{}, size_(0) {}
+
+  /// Constructs from a brace-enclosed initializer list, e.g. ``Shape{2, 3}``.
+  /// Throws ``std::invalid_argument`` when the list exceeds ``kMaxRank``.
+  Shape(std::initializer_list<int64_t> il) : dims_{}, size_(il.size()) {
+    EXT_ENFORCE_INVALID(il.size() <= kMaxRank, "Shape rank ", il.size(), " exceeds maximum of ",
+                        kMaxRank, ".");
+    size_t i = 0;
+    for (int64_t v : il)
+      dims_[i++] = v;
+  }
+
+  /// Constructs from a ``std::vector<int64_t>`` (copies all dimensions).
+  /// Throws ``std::invalid_argument`` when the vector size exceeds ``kMaxRank``.
+  Shape(const std::vector<int64_t> &v) : dims_{}, size_(v.size()) {
+    EXT_ENFORCE_INVALID(v.size() <= kMaxRank, "Shape rank ", v.size(), " exceeds maximum of ",
+                        kMaxRank, ".");
+    std::memcpy(dims_, v.data(), v.size() * sizeof(int64_t));
+  }
+
+  /// Constructs from a moved ``std::vector<int64_t>`` (copies all dimensions).
+  /// Throws ``std::invalid_argument`` when the vector size exceeds ``kMaxRank``.
+  Shape(std::vector<int64_t> &&v) : dims_{}, size_(v.size()) {
+    EXT_ENFORCE_INVALID(v.size() <= kMaxRank, "Shape rank ", v.size(), " exceeds maximum of ",
+                        kMaxRank, ".");
+    std::memcpy(dims_, v.data(), v.size() * sizeof(int64_t));
+  }
+
+  Shape(const Shape &) noexcept = default;
+  Shape(Shape &&) noexcept = default;
+  Shape &operator=(const Shape &) noexcept = default;
+  Shape &operator=(Shape &&) noexcept = default;
+
+  /// Assigns from a brace-enclosed initializer list.
+  /// Throws ``std::invalid_argument`` when the list exceeds ``kMaxRank``.
+  Shape &operator=(std::initializer_list<int64_t> il) {
+    EXT_ENFORCE_INVALID(il.size() <= kMaxRank, "Shape rank ", il.size(), " exceeds maximum of ",
+                        kMaxRank, ".");
+    size_ = il.size();
+    size_t i = 0;
+    for (int64_t v : il)
+      dims_[i++] = v;
+    return *this;
+  }
+
+  /// Assigns from a ``std::vector<int64_t>``.
+  /// Throws ``std::invalid_argument`` when the vector size exceeds ``kMaxRank``.
+  Shape &operator=(const std::vector<int64_t> &v) {
+    EXT_ENFORCE_INVALID(v.size() <= kMaxRank, "Shape rank ", v.size(), " exceeds maximum of ",
+                        kMaxRank, ".");
+    size_ = v.size();
+    std::memcpy(dims_, v.data(), v.size() * sizeof(int64_t));
+    return *this;
+  }
+
+  /// Assigns from a moved ``std::vector<int64_t>``.
+  /// Throws ``std::invalid_argument`` when the vector size exceeds ``kMaxRank``.
+  Shape &operator=(std::vector<int64_t> &&v) {
+    EXT_ENFORCE_INVALID(v.size() <= kMaxRank, "Shape rank ", v.size(), " exceeds maximum of ",
+                        kMaxRank, ".");
+    size_ = v.size();
+    std::memcpy(dims_, v.data(), v.size() * sizeof(int64_t));
+    return *this;
+  }
+
+  /// Implicitly converts to ``std::vector<int64_t>`` for backward compatibility.
+  operator std::vector<int64_t>() const { return std::vector<int64_t>(dims_, dims_ + size_); }
+
+  /// Returns the number of valid dimensions.
+  size_t size() const noexcept { return size_; }
+  /// Returns ``true`` when there are no dimensions (scalar shape).
+  bool empty() const noexcept { return size_ == 0; }
+
+  int64_t *begin() noexcept { return dims_; }
+  const int64_t *begin() const noexcept { return dims_; }
+  int64_t *end() noexcept { return dims_ + size_; }
+  const int64_t *end() const noexcept { return dims_ + size_; }
+
+  /// Returns a pointer to the underlying dimension array.
+  const int64_t *data() const noexcept { return dims_; }
+
+  int64_t &operator[](size_t i) noexcept { return dims_[i]; }
+  const int64_t &operator[](size_t i) const noexcept { return dims_[i]; }
+
+  /// Appends a dimension. Throws ``std::invalid_argument`` when already at ``kMaxRank``.
+  void push_back(int64_t v) {
+    EXT_ENFORCE_INVALID(size_ < kMaxRank, "Shape rank ", size_, " already at maximum of ", kMaxRank,
+                        ".");
+    dims_[size_++] = v;
+  }
+
+  /// No-op: storage is always inline; provided for interface parity with ``std::vector``.
+  void reserve(size_t) noexcept {}
+
+  /// Replaces the contents with ``count`` copies of ``value``.
+  /// Throws ``std::invalid_argument`` when ``count`` exceeds ``kMaxRank``.
+  void assign(size_t count, int64_t value) {
+    EXT_ENFORCE_INVALID(count <= kMaxRank, "Shape rank ", count, " exceeds maximum of ", kMaxRank,
+                        ".");
+    size_ = count;
+    for (size_t i = 0; i < count; ++i)
+      dims_[i] = value;
+  }
+
+  /// Returns a reference to the last dimension. Behaviour is undefined when the shape is empty.
+  int64_t &back() noexcept { return dims_[size_ - 1]; }
+  const int64_t &back() const noexcept { return dims_[size_ - 1]; }
+
+  /// Inserts ``value`` before the element pointed to by ``pos``.
+  /// Throws ``std::invalid_argument`` when already at ``kMaxRank``.
+  /// Returns an iterator to the inserted element.
+  int64_t *insert(int64_t *pos, int64_t value) {
+    EXT_ENFORCE_INVALID(size_ < kMaxRank, "Shape rank ", size_, " already at maximum of ", kMaxRank,
+                        ".");
+    const size_t idx = static_cast<size_t>(pos - dims_);
+    std::memmove(dims_ + idx + 1, dims_ + idx, (size_ - idx) * sizeof(int64_t));
+    dims_[idx] = value;
+    ++size_;
+    return dims_ + idx;
+  }
+
+  /// Inserts elements from ``[first, last)`` before the element pointed to by ``pos``.
+  /// Throws ``std::invalid_argument`` when the resulting rank would exceed ``kMaxRank``.
+  /// Returns an iterator to the first inserted element.
+  template <typename InputIt> int64_t *insert(int64_t *pos, InputIt first, InputIt last) {
+    size_t n = 0;
+    for (InputIt it = first; it != last; ++it)
+      ++n;
+    EXT_ENFORCE_INVALID(size_ + n <= kMaxRank, "Shape rank ", size_ + n, " exceeds maximum of ",
+                        kMaxRank, ".");
+    const size_t idx = static_cast<size_t>(pos - dims_);
+    std::memmove(dims_ + idx + n, dims_ + idx, (size_ - idx) * sizeof(int64_t));
+    size_t i = idx;
+    for (InputIt it = first; it != last; ++it)
+      dims_[i++] = *it;
+    size_ += n;
+    return dims_ + idx;
+  }
+
+  bool operator==(const Shape &other) const noexcept {
+    if (size_ != other.size_)
+      return false;
+    for (size_t i = 0; i < size_; ++i)
+      if (dims_[i] != other.dims_[i])
+        return false;
+    return true;
+  }
+
+  bool operator==(const std::vector<int64_t> &v) const noexcept {
+    if (size_ != v.size())
+      return false;
+    for (size_t i = 0; i < size_; ++i)
+      if (dims_[i] != v[i])
+        return false;
+    return true;
+  }
+
+  bool operator!=(const Shape &other) const noexcept { return !(*this == other); }
+  bool operator!=(const std::vector<int64_t> &v) const noexcept { return !(*this == v); }
+
+private:
+  int64_t dims_[kMaxRank];
+  size_t size_;
+};
+
+/// Symmetric comparison: ``std::vector<int64_t> == Shape``.
+inline bool operator==(const std::vector<int64_t> &v, const Shape &s) noexcept { return s == v; }
+/// Symmetric comparison: ``std::vector<int64_t> != Shape``.
+inline bool operator!=(const std::vector<int64_t> &v, const Shape &s) noexcept { return s != v; }
+
+/**
+ * RawBuffer — an owned byte buffer equivalent to ``std::vector<uint8_t>``.
+ *
+ * Wraps a ``std::vector<uint8_t>`` under a dedicated type name to make the
+ * ownership semantics of raw element bytes explicit in the ``Tensor`` struct
+ * and to provide a natural extension point should the storage strategy change
+ * in the future.
+ *
+ * The full ``std::vector<uint8_t>`` interface subset needed by the codebase
+ * is exposed: ``size``, ``empty``, ``data``, ``begin``/``end``, indexed
+ * access, and ``assign``.  Implicit conversions to and from
+ * ``std::vector<uint8_t>`` are provided for backward compatibility.
+ */
+struct RawBuffer {
+  RawBuffer() = default;
+
+  /// Constructs a zero-initialised buffer of ``n`` bytes.
+  explicit RawBuffer(size_t n) : storage_(n) {}
+
+  RawBuffer(const std::vector<uint8_t> &v) : storage_(v) {}
+  RawBuffer(std::vector<uint8_t> &&v) noexcept : storage_(std::move(v)) {}
+
+  RawBuffer(const RawBuffer &) = default;
+  RawBuffer(RawBuffer &&) noexcept = default;
+  RawBuffer &operator=(const RawBuffer &) = default;
+  RawBuffer &operator=(RawBuffer &&) noexcept = default;
+
+  RawBuffer &operator=(const std::vector<uint8_t> &v) {
+    storage_ = v;
+    return *this;
+  }
+
+  RawBuffer &operator=(std::vector<uint8_t> &&v) noexcept {
+    storage_ = std::move(v);
+    return *this;
+  }
+
+  /// Implicitly converts to ``std::vector<uint8_t>`` for backward compatibility.
+  operator std::vector<uint8_t>() const { return storage_; }
+
+  bool operator==(const RawBuffer &other) const noexcept { return storage_ == other.storage_; }
+  bool operator!=(const RawBuffer &other) const noexcept { return storage_ != other.storage_; }
+  bool operator==(const std::vector<uint8_t> &v) const noexcept { return storage_ == v; }
+  bool operator!=(const std::vector<uint8_t> &v) const noexcept { return storage_ != v; }
+
+  size_t size() const noexcept { return storage_.size(); }
+  bool empty() const noexcept { return storage_.empty(); }
+
+  uint8_t *data() noexcept { return storage_.data(); }
+  const uint8_t *data() const noexcept { return storage_.data(); }
+
+  uint8_t &operator[](size_t i) noexcept { return storage_[i]; }
+  const uint8_t &operator[](size_t i) const noexcept { return storage_[i]; }
+
+  auto begin() noexcept { return storage_.begin(); }
+  auto end() noexcept { return storage_.end(); }
+  auto begin() const noexcept { return storage_.begin(); }
+  auto end() const noexcept { return storage_.end(); }
+
+  /// Fills the buffer with ``count`` copies of ``value``, resizing as needed.
+  void assign(size_t count, uint8_t value) { storage_.assign(count, value); }
+
+  /// Replaces the buffer contents with the bytes from ``[first, last)``.
+  template <typename InputIt> void assign(InputIt first, InputIt last) {
+    storage_.assign(first, last);
+  }
+
+private:
+  std::vector<uint8_t> storage_;
+};
+
+/**
  * Tensor — minimal runtime tensor used by backend test cases.
  *
  * This struct is intentionally distinct from ``TensorProto``: it carries no
@@ -38,7 +296,7 @@ struct Tensor {
   /// Element data type stored as a ``DataType`` integer value.
   int32_t data_type = 0;
   /// Tensor shape; an empty shape denotes a scalar (element_count == 1).
-  std::vector<int64_t> shape;
+  Shape shape;
   /// Raw element bytes in row-major little-endian layout (owned storage).
   ///
   /// Empty when the tensor uses a borrowed (non-owning) view — use
@@ -46,7 +304,7 @@ struct Tensor {
   /// regardless of storage mode.  Also empty when ``data_type`` is
   /// ``DataType::STRING``; in that case the element values are stored in
   /// ``string_data`` instead.
-  std::vector<uint8_t> data;
+  RawBuffer data;
 
   /// String element values in row-major layout. Populated only when
   /// ``data_type`` is ``DataType::STRING``; empty for all other

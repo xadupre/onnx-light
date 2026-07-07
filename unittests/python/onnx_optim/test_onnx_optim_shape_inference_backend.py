@@ -369,6 +369,56 @@ class TestOnnxOptimShapeInferenceModelBackend(ExtTestCase):
                 f"value_tag mismatch for {tensor_name!r}",
             )
 
+    def test_sub_backward_propagation_tags_mask_tensors(self):
+        """Verifies that Sub backward propagation tags mask_float and mask_4d as
+        ``"weight"`` in the tiny-llm shape-inference case.
+
+        The propagation chain is:
+          Sub(mask_one:"weight", mask_4d:untagged) → mask_inv:"weight"
+          Sub backward {0,1} → mask_4d ← "weight"
+          Unsqueeze backward {0} → mask_float ← "weight"
+          Cast is excluded from backward (changes element type), so
+          attention_mask stays untagged.
+        """
+        tests = [
+            test
+            for test in collect_test_cases("inference")
+            if test.name == "test_cc_shape_inference_tiny_llm"
+        ]
+        self.assertEqual(len(tests), 1, "test_cc_shape_inference_tiny_llm not found")
+        test = tests[0]
+
+        # Verify pre-embedded graph-level value_tags include mask_float and mask_4d.
+        graph_meta = {entry.key: entry.value for entry in test.model.graph.metadata_props}
+        self.assertIn(VALUE_TAGS_METADATA_KEY, graph_meta)
+        value_tags = json.loads(graph_meta[VALUE_TAGS_METADATA_KEY])
+        self.assertEqual(value_tags.get("mask_float"), "weight")
+        self.assertEqual(value_tags.get("mask_4d"), "weight")
+        self.assertNotIn("attention_mask", value_tags)
+
+        # Make a blank copy (strip all metadata) and recompute.
+        model_copy = onnxl.ModelProto()
+        model_copy.CopyFrom(test.model)
+        model_copy.graph.metadata_props.clear()
+        for node in model_copy.graph.node:
+            node.metadata_props.clear()
+        for vi in model_copy.graph.value_info:
+            vi.metadata_props.clear()
+        for init in model_copy.graph.initializer:
+            init.metadata_props.clear()
+
+        write_value_and_node_tags_to_metadata(model_copy.graph)
+
+        computed_graph_meta = {
+            entry.key: entry.value for entry in model_copy.graph.metadata_props
+        }
+        self.assertIn(VALUE_TAGS_METADATA_KEY, computed_graph_meta)
+        computed_value_tags = json.loads(computed_graph_meta[VALUE_TAGS_METADATA_KEY])
+        self.assertEqual(computed_value_tags.get("mask_float"), "weight")
+        self.assertEqual(computed_value_tags.get("mask_4d"), "weight")
+        self.assertNotIn("attention_mask", computed_value_tags)
+        self.assertEqual(computed_value_tags, value_tags)
+
 
 if __name__ == "__main__":
     unittest.main()

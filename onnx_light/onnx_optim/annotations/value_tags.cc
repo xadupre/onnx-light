@@ -130,9 +130,16 @@ std::vector<int> BackwardTagInputIndices(const NodeProto &node) {
     }
     return all_inputs;
   }
-  if (op_type == "Identity" || op_type == "Cast" || op_type == "Squeeze" ||
-      op_type == "Unsqueeze" || op_type == "Gather" || op_type == "Slice") {
+  // Cast changes the element type, so backward propagation would incorrectly
+  // tag non-float inputs (e.g. INT64 attention masks) with the output's tag.
+  if (op_type == "Identity" || op_type == "Squeeze" || op_type == "Unsqueeze" ||
+      op_type == "Gather" || op_type == "Slice") {
     return {0};
+  }
+  // Element-wise binary ops: if the output is tagged, both operands belong to
+  // the same semantic category (e.g. both are activations tagged "weight").
+  if (op_type == "Sub") {
+    return {0, 1};
   }
   return {};
 }

@@ -235,8 +235,11 @@ void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry) {
   //
   // Value-tag seeds: all initializers → "weight"; mask_axes upgraded to "axes"
   // by Unsqueeze's input[1] rule.  The attention_mask / input_ids / past_key /
-  // past_value graph inputs are NOT rank-2 FLOAT, so they have no tag and
-  // mask_float / mask_4d (derived from attention_mask) also stay untagged.
+  // past_value graph inputs are NOT rank-2 FLOAT, so they have no tag.
+  // mask_float and mask_4d are tagged "weight" via Sub backward propagation:
+  // Sub(mask_one, mask_4d)→mask_inv tags mask_4d "weight", then Unsqueeze
+  // backward tags mask_float "weight".  attention_mask stays untagged because
+  // Cast is excluded from backward propagation (it changes the element type).
   {
     namespace ann = onnx_optim::annotations;
 
@@ -252,7 +255,8 @@ void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry) {
         "\"input_layernorm.weight\":\"weight\","
         "\"k_proj.weight\":\"weight\",\"key\":\"weight\","
         "\"lm_head.weight\":\"weight\",\"logits\":\"weight\","
-        "\"mask_axes\":\"axes\",\"mask_inv\":\"weight\","
+        "\"mask_4d\":\"weight\",\"mask_axes\":\"axes\","
+        "\"mask_float\":\"weight\",\"mask_inv\":\"weight\","
         "\"mask_neg\":\"weight\",\"mask_one\":\"weight\","
         "\"mlp_hidden\":\"weight\",\"mlp_out\":\"weight\","
         "\"norm.weight\":\"weight\","
@@ -286,8 +290,9 @@ void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry) {
     //   attention_mask has no tag → no node_tag; attention_mask is a graph
     //   input (keep) → no release.
     // node[6]  Unsqueeze(mask_float, mask_axes) → mask_4d
-    //   mask_float has no tag → no node_tag; mask_float last used here →
-    //   released.
+    //   mask_float inherits "weight" via Sub backward propagation; mask_float
+    //   last used here → released.
+    node_meta(6, ann::kNodeTagMetadataKey, "weight");
     node_meta(6, ann::kReleaseAfterMetadataKey, "mask_float");
     // node[7]  Sub(mask_one, mask_4d) → mask_inv
     //   mask_4d last used here (output 0 = mask_inv reuses mask_4d buffer).
@@ -413,8 +418,18 @@ void RegisterTinyLlmShapeInferenceCases(std::vector<TestCase> &registry) {
       entry->set_key(ann::kValueTagMetadataKey);
       entry->set_value("weight");
     }
-    // value_info[10] mask_4d   → no tag (derived from attention_mask, which has no tag)
-    // value_info[11] mask_float → no tag
+    // value_info[10] mask_4d → "weight" (backward-tagged via Sub)
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(10)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[11] mask_float → "weight" (backward-tagged via Unsqueeze → Sub)
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(11)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
     // value_info[12] mask_inv
     {
       StringStringEntryProto *entry = graph->mutable_value_info(12)->add_metadata_props();
@@ -778,8 +793,10 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry) 
     // Notes:
     //   attn_scale, rms_eps, rms_axes, head_shape, merge_shape, mask_* are
     //   initializers that get seed "weight" (or upgraded to "axes"/"shape").
-    //   key_heads_t, mask_4d, mask_float, present_key, present_value have
-    //   no tag (derivation from untagged inputs).
+    //   mask_float and mask_4d are now tagged "weight" via Sub backward
+    //   propagation (Sub(mask_one, mask_4d)→mask_inv with mask_one="weight").
+    //   key_heads_t, present_key, present_value have no tag (Concat from
+    //   untagged past_key/past_value as input[0]).
     graph->add_metadata(ann::kValueTagsMetadataKey,
                         "{\"attn_bias\":\"weight\",\"attn_out\":\"weight\","
                         "\"attn_proj\":\"weight\",\"attn_scale\":\"weight\","
@@ -802,7 +819,8 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry) 
                         "\"lnf_mean\":\"weight\",\"lnf_meaneps\":\"weight\","
                         "\"lnf_norm\":\"weight\",\"lnf_rms\":\"weight\",\"lnf_sq\":\"weight\","
                         "\"logits\":\"weight\","
-                        "\"mask_axes\":\"axes\",\"mask_inv\":\"weight\","
+                        "\"mask_4d\":\"weight\",\"mask_axes\":\"axes\","
+                        "\"mask_float\":\"weight\",\"mask_inv\":\"weight\","
                         "\"mask_neg\":\"weight\",\"mask_one\":\"weight\","
                         "\"merge_shape\":\"shape\","
                         "\"mlp_hidden\":\"weight\",\"mlp_out\":\"weight\","
@@ -867,7 +885,9 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry) 
     // node[10] Cast(attention_mask) → mask_float
     //   attention_mask has no tag → no node_tag.
     // node[11] Unsqueeze(mask_float, mask_axes) → mask_4d
-    //   mask_float has no tag → no node_tag; mask_float released here.
+    //   mask_float inherits "weight" via Sub backward propagation; mask_float
+    //   released here.
+    node_meta(11, ann::kNodeTagMetadataKey, "weight");
     node_meta(11, ann::kReleaseAfterMetadataKey, "mask_float");
     // node[12] Sub(mask_one, mask_4d) → mask_inv
     //   mask_4d last used here; mask_inv reuses mask_4d (input index=1).
@@ -1213,8 +1233,18 @@ void RegisterTinyLlmInlinedShapeInferenceCases(std::vector<TestCase> &registry) 
       entry->set_key(ann::kValueTagMetadataKey);
       entry->set_value("weight");
     }
-    // value_info[31] mask_4d   → no tag (derived from untagged attention_mask)
-    // value_info[32] mask_float → no tag
+    // value_info[31] mask_4d → "weight" (backward-tagged via Sub)
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(31)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
+    // value_info[32] mask_float → "weight" (backward-tagged via Unsqueeze → Sub)
+    {
+      StringStringEntryProto *entry = graph->mutable_value_info(32)->add_metadata_props();
+      entry->set_key(ann::kValueTagMetadataKey);
+      entry->set_value("weight");
+    }
     // value_info[33] mask_inv
     {
       StringStringEntryProto *entry = graph->mutable_value_info(33)->add_metadata_props();

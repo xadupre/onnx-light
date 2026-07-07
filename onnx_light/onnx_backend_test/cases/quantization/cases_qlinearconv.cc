@@ -25,6 +25,8 @@ namespace onnx_backend_test {
 //   * ``test_cc_qlinearconv`` — 1x1 UINT8 convolution mirroring the upstream
 //     ``test_qlinearconv`` backend test, with length-1 1-D ``w_scale``/
 //     ``w_zero_point`` (per-channel for the single output channel).
+//   * ``test_cc_qlinearconv_int8`` — self-contained 2x2 INT8 convolution
+//     covering signed zero-points and a negative INT8 output.
 // ---------------------------------------------------------------------------
 void RegisterQLinearConvCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(10);
@@ -71,6 +73,43 @@ void RegisterQLinearConvCases(std::vector<TestCase> &registry) {
 
     Expect(node, {x, x_scale, x_zero_point, w, w_scale, w_zero_point, y_scale, y_zero_point}, {y},
            "test_cc_qlinearconv", {opset}, "backend-test", registry);
+  }
+
+  {
+    const auto to_byte = [](int32_t value) {
+      return static_cast<uint8_t>(static_cast<int8_t>(value));
+    };
+
+    Tensor x("x", static_cast<int32_t>(DataType::INT8), {1, 1, 2, 2},
+             std::vector<uint8_t>{to_byte(10), to_byte(20), to_byte(30), to_byte(40)});
+    Tensor x_scale = Tensor::FromFloat("x_scale", {}, {0.1f});
+    Tensor x_zero_point("x_zero_point", static_cast<int32_t>(DataType::INT8), {},
+                        std::vector<uint8_t>{to_byte(5)});
+    Tensor w("w", static_cast<int32_t>(DataType::INT8), {1, 1, 2, 2},
+             std::vector<uint8_t>{to_byte(1), to_byte(1), to_byte(1), to_byte(1)});
+    Tensor w_scale = Tensor::FromFloat("w_scale", {1}, {1.0f});
+    Tensor w_zero_point("w_zero_point", static_cast<int32_t>(DataType::INT8), {1},
+                        std::vector<uint8_t>{to_byte(0)});
+    Tensor y_scale = Tensor::FromFloat("y_scale", {}, {1.0f});
+    Tensor y_zero_point("y_zero_point", static_cast<int32_t>(DataType::INT8), {},
+                        std::vector<uint8_t>{to_byte(-10)});
+    Tensor y("y", static_cast<int32_t>(DataType::INT8), {1, 1, 1, 1},
+             std::vector<uint8_t>{to_byte(-2)});
+
+    NodeProto node;
+    node.set_op_type("QLinearConv");
+    node.add_input("x");
+    node.add_input("x_scale");
+    node.add_input("x_zero_point");
+    node.add_input("w");
+    node.add_input("w_scale");
+    node.add_input("w_zero_point");
+    node.add_input("y_scale");
+    node.add_input("y_zero_point");
+    node.add_output("y");
+
+    Expect(node, {x, x_scale, x_zero_point, w, w_scale, w_zero_point, y_scale, y_zero_point}, {y},
+           "test_cc_qlinearconv_int8", {opset}, "backend-test", registry);
   }
 }
 

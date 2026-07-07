@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/pair.h>
@@ -94,7 +95,19 @@ nb::dlpack::dtype DLPackDtypeFromOnnx(int32_t data_type) {
 nb::object MakeTensorNdarray(nb::handle owner) {
   const Tensor &t = nb::cast<const Tensor &>(owner);
   nb::dlpack::dtype dtype = DLPackDtypeFromOnnx(t.data_type);
-  std::vector<size_t> shape(t.shape.begin(), t.shape.end());
+  std::vector<size_t> shape;
+  shape.reserve(t.shape.size());
+  for (size_t i = 0; i < t.shape.size(); ++i) {
+    int64_t dim = t.shape[i];
+    EXT_ENFORCE_INVALID(dim >= 0, "Tensor.__dlpack__: shape dimension at index ", i,
+                        " must be non-negative, got ", dim);
+    // Compare in a fixed unsigned width so 32-bit ``size_t`` platforms reject
+    // large ``int64_t`` dimensions before any narrowing conversion occurs.
+    EXT_ENFORCE_INVALID(static_cast<uint64_t>(dim) <= std::numeric_limits<size_t>::max(),
+                        "Tensor.__dlpack__: shape dimension at index ", i,
+                        " does not fit in the platform size type, got ", dim);
+    shape.push_back(static_cast<size_t>(dim));
+  }
   nb::ndarray<nb::ro> array(t.bytes(), shape.size(), shape.data(), owner,
                             /*strides=*/nullptr, dtype, nb::device::cpu::value, /*device_id=*/0);
   return nb::cast(std::move(array));

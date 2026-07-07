@@ -1,6 +1,18 @@
 name: acq - fuzz
 
 on:
+  pull_request:
+    paths:
+      - "fuzz/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/cq_fuzz.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "fuzz/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/cq_fuzz.yml"
   schedule:
     # Run daily at 06:00 UTC. The check_recent_commit job below skips the
     # build if no new commit landed on the default branch in the last 24 hours.

@@ -3,10 +3,19 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.1.3] – Unreleased
+## [0.1.5] – Unreleased
+
+## [0.1.4] – 2026-07-07
+
+### Fixes
+
+- Fix Win32 narrowing in backend-test DLPack shape conversion ([#3223](https://github.com/xadupre/onnx-light/pull/3223))
+
+## [0.1.3] – 2026-07-06
 
 ### New Features
 
+- Add `SerializeOptions.max_serialized_size_bytes` to hard-cap serialization output size ([#3207](https://github.com/xadupre/onnx-light/pull/3207))
 - Show node indexes in `pretty_onnx` graph output ([#3031](https://github.com/xadupre/onnx-light/pull/3031))
 - Add `--token` support to `fillshape` for binding symbolic dimension tokens to ranges ([#3028](https://github.com/xadupre/onnx-light/pull/3028))
 - Add `include_release` option to `to_svg` and `to_mermaid` ([#3020](https://github.com/xadupre/onnx-light/pull/3020))
@@ -32,6 +41,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Improvements
 
+- Update onnxruntime integration and related compatibility changes ([#3205](https://github.com/xadupre/onnx-light/pull/3205))
+- Mirror upstream onnx#8157: fix nanobind Python target resolution in cross-compile CMake path ([#3217](https://github.com/xadupre/onnx-light/pull/3217))
 - Add C++ backend test for `kRelease` event in shape inference ([#3105](https://github.com/xadupre/onnx-light/pull/3105))
 - Align floor-division simplification with Python `//` semantics ([#3026](https://github.com/xadupre/onnx-light/pull/3026))
 - Propagate Reshape shape-tag metadata backward through producer chains ([#3024](https://github.com/xadupre/onnx-light/pull/3024))

@@ -30,7 +30,7 @@ and its public headers. The Python extension is not required:
 ``-DONNX_LIGHT_BUILD_KERNELS=OFF`` skips building ``lib_onnx_kernels`` and
 ``lib_onnx_backend_test`` (the operator-kernel runtime and the backend-test
 case registry). They are not needed by this example, which only links the
-checker / shape-inference layer exposed by ``onnx_light::onnx_light``.
+checker / shape-inference layer exposed by ``onnx_light::lib_onnx_lib``.
 
 Step 2 – Build the example
 ---------------------------
@@ -74,7 +74,7 @@ CMakeLists.txt
 --------------
 
 The example uses ``find_package`` and links against the exported
-``onnx_light::onnx_light`` target. ``onnx_light::lib_onnx_optim`` is also
+``onnx_light::lib_onnx_lib`` target. ``onnx_light::lib_onnx_optim`` is also
 linked so the program can call onnx_optim shape inference:
 
 .. code-block:: cmake
@@ -89,7 +89,7 @@ linked so the program can call onnx_optim shape inference:
 
     add_executable(check_onnx_light_model main.cc)
     target_link_libraries(check_onnx_light_model
-      PRIVATE onnx_light::onnx_light onnx_light::lib_onnx_optim)
+      PRIVATE onnx_light::lib_onnx_lib onnx_light::lib_onnx_optim)
 
 main.cc
 --------

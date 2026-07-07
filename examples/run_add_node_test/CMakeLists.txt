@@ -1,5 +1,5 @@
 # Standalone C++ example: build the Add backend test node case via the
-# onnx_light::onnx_backend_test library, run a tiny runtime Add against it,
+# onnx_light::lib_onnx_backend_test library, run a tiny runtime Add against it,
 # and check that the runtime outputs match the expected outputs.
 #
 # Prerequisites
@@ -34,6 +34,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(onnx_light REQUIRED)
 
 add_executable(run_add_node_test main.cc)
-# onnx_light::onnx_backend_test is the exported CMake name of the
+# onnx_light::lib_onnx_backend_test is the exported CMake name of the
 # lib_onnx_backend_test target. It transitively pulls in onnx_proto.
-target_link_libraries(run_add_node_test PRIVATE onnx_light::onnx_backend_test)
+target_link_libraries(run_add_node_test PRIVATE onnx_light::lib_onnx_backend_test)

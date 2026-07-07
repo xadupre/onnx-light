@@ -110,7 +110,7 @@ add_executable(run_backend_test_ort main.cc)
 target_include_directories(run_backend_test_ort PRIVATE "${ONNXRUNTIME_INCLUDE_DIR}")
 target_link_libraries(run_backend_test_ort
   PRIVATE
-    onnx_light::onnx_backend_test
+    onnx_light::lib_onnx_backend_test
     "${ONNXRUNTIME_LIBRARY}")
 
 if(UNIX AND NOT APPLE)

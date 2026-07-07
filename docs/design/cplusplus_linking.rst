@@ -132,10 +132,10 @@ configure time to skip building and installing them:
     cmake --install build-install
 
 The exported CMake package then provides only the kernel-free targets —
-``onnx_light::onnx_light``, ``onnx_light::onnx_manipulations``,
+``onnx_light::lib_onnx_lib``, ``onnx_light::lib_onnx_manipulations``,
 ``onnx_light::lib_onnx_op``, ``onnx_light::lib_onnx_optim`` and
-``onnx_light::lib_onnx_proto``.  ``onnx_light::onnx_kernels`` and
-``onnx_light::onnx_backend_test`` are not built and not part of the package.
+``onnx_light::lib_onnx_proto``.  ``onnx_light::lib_onnx_kernels`` and
+``onnx_light::lib_onnx_backend_test`` are not built and not part of the package.
 
 ``ONNX_LIGHT_BUILD_KERNELS=OFF`` is incompatible with
 ``ONNX_LIGHT_BUILD_PYTHON=ON`` and ``ONNX_LIGHT_BUILD_TESTS=ON``: the Python
@@ -156,13 +156,13 @@ From the repository root, install the C++ library with CMake:
     cmake --install build-install
 
 When downstream code only needs the schema / checker / shape-inference /
-version-converter / proto layer (``onnx_light::onnx_light``,
-``onnx_light::onnx_manipulations``, ``onnx_light::lib_onnx_op``,
+version-converter / proto layer (``onnx_light::lib_onnx_lib``,
+``onnx_light::lib_onnx_manipulations``, ``onnx_light::lib_onnx_op``,
 ``onnx_light::lib_onnx_optim``, ``onnx_light::lib_onnx_proto``), pass
 ``-DONNX_LIGHT_BUILD_KERNELS=OFF`` at configure time to skip building and
 installing the much larger ``lib_onnx_kernels`` (operator-kernel runtime)
 and ``lib_onnx_backend_test`` (backend-test case registry) libraries.
-``onnx_light::onnx_kernels`` and ``onnx_light::onnx_backend_test`` are then
+``onnx_light::lib_onnx_kernels`` and ``onnx_light::lib_onnx_backend_test`` are then
 not part of the exported CMake package.
 
 Then downstream projects can rely on the exported CMake targets:
@@ -170,9 +170,9 @@ Then downstream projects can rely on the exported CMake targets:
 .. code-block:: cmake
 
     find_package(onnx_light REQUIRED)
-    target_link_libraries(my_target PRIVATE onnx_light::onnx_light)
+    target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_lib)
 
-Use ``onnx_light::onnx_light`` when the code needs higher-level ONNX features
+Use ``onnx_light::lib_onnx_lib`` when the code needs higher-level ONNX features
 implemented in ``onnx_light/onnx_lib`` such as operator schemas, checker, shape
 inference, or version conversion.
 
@@ -203,10 +203,10 @@ link the manipulations target, which only depends on ``lib_onnx_proto``:
 .. code-block:: cmake
 
     find_package(onnx_light REQUIRED)
-    target_link_libraries(my_target PRIVATE onnx_light::onnx_manipulations)
+    target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_manipulations)
 
 When shape inference dispatch and graph optimization passes are also needed
-(without pulling in the full ``onnx_light::onnx_light`` checker/inliner/version
+(without pulling in the full ``onnx_light::lib_onnx_lib`` checker/inliner/version
 converter), link the optim target instead, which transitively pulls in
 ``lib_onnx_op`` and ``lib_onnx_proto``:
 
@@ -223,11 +223,11 @@ To evaluate ONNX nodes / graphs / models in-process using the bundled C++
 .. code-block:: cmake
 
     find_package(onnx_light REQUIRED)
-    target_link_libraries(my_target PRIVATE onnx_light::onnx_kernels)
+    target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_kernels)
 
 The kernels live under ``onnx_light/onnx_kernels/kernels/<group>/`` and
 form a self-contained runtime that depends on
-``onnx_light::lib_onnx_proto`` and ``onnx_light::onnx_manipulations``
+``onnx_light::lib_onnx_proto`` and ``onnx_light::lib_onnx_manipulations``
 (for the graph-manipulation helpers).  See
 :doc:`../api/cpp/onnx_kernels/index` for the full C++ API reference.
 
@@ -239,13 +239,13 @@ call), link:
 .. code-block:: cmake
 
     find_package(onnx_light REQUIRED)
-    target_link_libraries(my_target PRIVATE onnx_light::onnx_backend_test)
+    target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_backend_test)
 
-``onnx_light::onnx_backend_test`` publicly depends on
-``onnx_light::onnx_kernels`` (which transitively brings in
+``onnx_light::lib_onnx_backend_test`` publicly depends on
+``onnx_light::lib_onnx_kernels`` (which transitively brings in
 ``onnx_light::lib_onnx_proto``) and is intentionally independent from
-``onnx_light::onnx_light`` / ``onnx_light::lib_onnx_op``; it can be
-combined with ``onnx_light::onnx_light`` when both schema validation and
+``onnx_light::lib_onnx_lib`` / ``onnx_light::lib_onnx_op``; it can be
+combined with ``onnx_light::lib_onnx_lib`` when both schema validation and
 execution are needed in the same binary.
 
 This keeps downstream CMake files independent from hardcoded include paths and

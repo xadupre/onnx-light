@@ -3,7 +3,7 @@
  * case and verify a tiny runtime Add implementation against it.
  *
  * Demonstrates that ``lib_onnx_backend_test`` is self-contained: linking with
- * only ``onnx_light::onnx_backend_test`` (which transitively pulls in
+ * only ``onnx_light::lib_onnx_backend_test`` (which transitively pulls in
  * ``onnx_proto``) is sufficient to enumerate backend test cases, inspect the
  * generated ``ModelProto``, read its inputs/outputs, run a runtime function
  * against them, and check the results match the expected outputs.

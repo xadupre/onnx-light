@@ -485,19 +485,6 @@ struct SerializeOptions : TensorBufferOptions {
   std::function<int64_t(TensorProto &, uint8_t *, size_t, bool)> raw_data_callback = {};
 };
 
-/** Enforces ``SerializeOptions::max_serialized_size_bytes`` for a computed serialized size. */
-inline bool EnforceMaxSerializedSize(const SerializeSizeResult &total_size,
-                                     const SerializeOptions &options, const char *where) {
-  EXT_ENFORCE(options.max_serialized_size_bytes >= 0, where,
-              ": SerializeOptions::max_serialized_size_bytes must be >= 0 (got ",
-              options.max_serialized_size_bytes,
-              "). Use 0 to disable the limit or a positive value to cap serialized output size.");
-  if (options.max_serialized_size_bytes > 0) {
-    return total_size.size() <= options.max_serialized_size_bytes;
-  }
-  return true;
-}
-
 using utils::offset_t;
 
 /** Returns true if the field holds a non-default value (always true for scalar types other

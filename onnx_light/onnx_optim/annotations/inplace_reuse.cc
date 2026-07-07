@@ -227,17 +227,18 @@ std::optional<expressions::DimType> ByteSizeExpr(const OptimTensor &t) {
 // Classifies a candidate reuse of input ``in`` by output ``out`` by comparing
 // their buffer sizes. ``kEqual`` requires identical descriptors (same element
 // type and shape), so an element-wise overwrite keeps the layout valid even
-// for symbolic shapes. ``kGreater`` reports an input buffer that is at least
-// as large in bytes as the output, so the output still fits. When descriptors
-// differ but byte sizes are equal (for example a transpose), the opportunity
-// is also reported as ``kGreater``: this keeps ``kEqual`` reserved for true
+// for symbolic shapes. ``kGreater`` is returned when the input buffer is
+// strictly larger than the output, or when the sizes are equal but the
+// descriptors differ (for example a transpose): in both cases the output
+// fits inside the input buffer. This keeps ``kEqual`` reserved for true
 // same-storage matches while still allowing shape-changing rewrites that fit.
 // Any other case (input smaller) yields no opportunity.
 //
-// When both tensors have symbolic dimensions, ``ByteSizeExpr`` is compared
-// symbolically. Two expressions that simplify to the same canonical string are
-// guaranteed to describe the same byte count at runtime (e.g. a permutation of
-// the same symbolic dimension names), so ``kGreater`` is returned for them too.
+// When a concrete byte-size comparison is unavailable for either tensor (e.g.
+// either has symbolic dimensions), ``ByteSizeExpr`` is compared symbolically.
+// Two expressions that simplify to the same canonical string are guaranteed to
+// describe equal byte counts at runtime (e.g. a permutation of the same
+// symbolic dimension names), so ``kGreater`` is returned for them too.
 std::optional<InPlaceReuseKind> ClassifyReuse(const OptimTensor &out, const OptimTensor &in) {
   if (SameStorage(out, in)) {
     return InPlaceReuseKind::kEqual;
@@ -250,10 +251,11 @@ std::optional<InPlaceReuseKind> ClassifyReuse(const OptimTensor &out, const Opti
     }
     return std::nullopt;
   }
-  // Fall back to symbolic comparison when concrete sizes are unavailable.
-  // Two byte-size expressions that simplify to the same canonical form
-  // describe equal buffer sizes regardless of the runtime values of symbolic
-  // dimension variables, so the output always fits inside the input buffer.
+  // Fall back to symbolic comparison when concrete sizes are unavailable for
+  // either tensor.  Two byte-size expressions that simplify to the same
+  // canonical form describe equal buffer sizes regardless of the runtime
+  // values of symbolic dimension variables, so the output always fits inside
+  // the input buffer.
   const auto out_expr = ByteSizeExpr(out);
   const auto in_expr = ByteSizeExpr(in);
   if (out_expr.has_value() && in_expr.has_value() && *out_expr == *in_expr) {

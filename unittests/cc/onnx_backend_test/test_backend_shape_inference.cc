@@ -2102,3 +2102,5 @@ TEST(BackendTestCaseShapeInference, OnnxOptimWritesShapeTagToOutputWhenOutputIsS
   }
   ASSERT_TRUE(found) << "test_cc_shape_tag_output_is_shape case not registered";
 }
+
+} // namespace Test

@@ -138,7 +138,11 @@ std::vector<int> BackwardTagInputIndices(const NodeProto &node) {
   }
   // Element-wise binary ops: if the output is tagged, both operands belong to
   // the same semantic category (e.g. both are activations tagged "weight").
-  if (op_type == "Sub") {
+  static const std::unordered_set<std::string> kBinaryElemwiseOps = {
+      "Add",   "And",     "BitAnd",         "BitOr", "BitShift",    "BitXor", "Div",
+      "Equal", "Greater", "GreaterOrEqual", "Less",  "LessOrEqual", "Mod",    "Mul",
+      "Or",    "Pow",     "PRelu",          "Sub",   "Xor"};
+  if (kBinaryElemwiseOps.count(op_type)) {
     return {0, 1};
   }
   return {};

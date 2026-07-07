@@ -31,9 +31,10 @@
   void SerializeToStream(utils::BinaryWriteStream &stream, SerializeOptions &options) const;       \
   void PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const;             \
   /** Returns the printed representation of this message as a vector of strings.                   \
-   *  Provides backward compatibility with code compiled against earlier releases.                 \
-   *  Callers needing the full representation as a single string should prefer                     \
-   *  @c PrintToStringStream() instead. */                                                         \
+   *  The vector contains exactly one element: the flat proto representation produced              \
+   *  by @c PrintToStringStream().  Provides backward compatibility with code compiled             \
+   *  against earlier releases that exposed this signature; prefer                                 \
+   *  @c PrintToStringStream() for new code. */                                                    \
   std::vector<std::string> PrintToVectorString(utils::PrintOptions &options) const;
 
 /** Macro for beginning a generated proto class with a default constructor. */

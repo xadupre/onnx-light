@@ -1908,11 +1908,9 @@ TEST(onnx_string, NodeDeviceConfigurationProto_PrintToVectorString) {
 
   std::vector<std::string> lines = proto.PrintToVectorString(options);
 
-  ASSERT_FALSE(lines.empty());
-  // The combined text must contain both fields.
-  std::string combined;
-  for (const auto &line : lines)
-    combined += line;
+  // PrintToVectorString returns exactly one element containing the flat representation.
+  ASSERT_EQ(lines.size(), static_cast<size_t>(1));
+  const std::string &combined = lines[0];
   EXPECT_TRUE(combined.find("configuration_id:") != std::string::npos);
   EXPECT_TRUE(combined.find("node_config_1") != std::string::npos);
   EXPECT_TRUE(combined.find("pipeline_stage:") != std::string::npos);

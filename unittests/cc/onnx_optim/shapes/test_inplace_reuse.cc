@@ -152,13 +152,13 @@ TEST(OnnxOptimInPlaceReuse, ValueReadTwiceIsReusedOnlyAtLastUse) {
 
 // A Transpose may still reuse its input buffer when the byte size matches even
 // though the shape layout differs.
-TEST(OnnxOptimInPlaceReuse, TransposeWithSameByteSizeIsReportedAsGreater) {
+TEST(OnnxOptimInPlaceReuse, TransposeWithSameByteSizeIsReportedAsEqual) {
   GraphProto graph;
   graph.set_name("g");
   AddInput(graph, "X", {3, 4});
   AddOutput(graph, "Y", {3, 4});
   // Abs keeps the shape; each Transpose changes the layout but keeps the same
-  // element count and dtype, so both opportunities are reported as kGreater.
+  // element count and dtype, so both opportunities are reported as kEqual.
   *graph.add_node() = MakeNode("Abs", {"X"}, {"A"});
   NodeProto transpose = MakeNode("Transpose", {"A"}, {"B"});
   *graph.add_node() = transpose;
@@ -171,15 +171,15 @@ TEST(OnnxOptimInPlaceReuse, TransposeWithSameByteSizeIsReportedAsGreater) {
   ASSERT_EQ(reuse.size(), 3u);
   EXPECT_TRUE(reuse[0].empty());
   ASSERT_EQ(reuse[1].size(), 1u);
-  EXPECT_EQ(reuse[1][0], (InPlaceReuse{0, 0, InPlaceReuseKind::kGreater}));
+  EXPECT_EQ(reuse[1][0], (InPlaceReuse{0, 0, InPlaceReuseKind::kEqual}));
   ASSERT_EQ(reuse[2].size(), 1u);
-  EXPECT_EQ(reuse[2][0], (InPlaceReuse{0, 0, InPlaceReuseKind::kGreater}));
+  EXPECT_EQ(reuse[2][0], (InPlaceReuse{0, 0, InPlaceReuseKind::kEqual}));
 }
 
-// A Transpose whose input has a symbolic batch dimension must also be reported
-// as kGreater: the byte-size expressions for [batch,4,4] and [4,batch,4] are
-// both "64*batch" after simplification, so the buffer is always large enough.
-TEST(OnnxOptimInPlaceReuse, TransposeWithSymbolicDimIsReportedAsGreater) {
+// A Transpose whose input has a symbolic batch dimension is reported as
+// kEqual: the byte-size expressions for [batch,4,4] and [4,batch,4] are
+// both "64*batch" after simplification, so the buffer sizes are equal.
+TEST(OnnxOptimInPlaceReuse, TransposeWithSymbolicDimIsReportedAsEqual) {
   GraphProto graph;
   graph.set_name("g");
 
@@ -205,9 +205,9 @@ TEST(OnnxOptimInPlaceReuse, TransposeWithSymbolicDimIsReportedAsGreater) {
   ASSERT_EQ(reuse.size(), 2u);
   // Node 0: Abs(X) → A — X is a declared graph input, must not be overwritten.
   EXPECT_TRUE(reuse[0].empty());
-  // Node 1: Transpose(A) → Y — A's buffer equals Y's byte size, so kGreater.
+  // Node 1: Transpose(A) → Y — A's buffer equals Y's byte size, so kEqual.
   ASSERT_EQ(reuse[1].size(), 1u);
-  EXPECT_EQ(reuse[1][0], (InPlaceReuse{0, 0, InPlaceReuseKind::kGreater}));
+  EXPECT_EQ(reuse[1][0], (InPlaceReuse{0, 0, InPlaceReuseKind::kEqual}));
 }
 
 // A square-matrix Transpose ([4,4] -> [4,4]) has identical input and output

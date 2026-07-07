@@ -474,6 +474,28 @@ TEST(onnx_defs, ParseData_Int64_FromRawData) {
   EXPECT_EQ(data[1], 99LL);
 }
 
+TEST(onnx_defs, ParseData_Float_FromRawData_InvalidAlignment_Tensor) {
+  float raw_val = 1.5f;
+  std::string raw_str(reinterpret_cast<const char *>(&raw_val), sizeof(float));
+  raw_str.push_back('\0');
+
+  Tensor tensor;
+  tensor.set_raw_data(raw_str);
+
+  EXPECT_THROW(ParseData<float>(&tensor), std::runtime_error);
+}
+
+TEST(onnx_defs, ParseData_Float_FromRawData_InvalidAlignment_TensorProto) {
+  float raw_val = 1.5f;
+  std::string raw_str(reinterpret_cast<const char *>(&raw_val), sizeof(float));
+  raw_str.push_back('\0');
+
+  TensorProto tensor;
+  tensor.set_raw_data(raw_str);
+
+  EXPECT_THROW(ParseData<float>(&tensor), std::runtime_error);
+}
+
 // ===========================================================================
 // doc_strings.cc tests
 // ===========================================================================

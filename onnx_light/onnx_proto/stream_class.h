@@ -7,6 +7,7 @@
 #include <sstream>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 #define FIELD_VARINT 0
 #define FIELD_FIXED64 1
@@ -28,7 +29,12 @@
       const;                                                                                       \
   void ParseFromStream(utils::BinaryStream &stream, ParseOptions &options);                        \
   void SerializeToStream(utils::BinaryWriteStream &stream, SerializeOptions &options) const;       \
-  void PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const;
+  void PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const;             \
+  /** Returns the printed representation of this message as a vector of strings.                   \
+   *  Provides backward compatibility with code compiled against earlier releases.                 \
+   *  Callers needing the full representation as a single string should prefer                     \
+   *  @c PrintToStringStream() instead. */                                                         \
+  std::vector<std::string> PrintToVectorString(utils::PrintOptions &options) const;
 
 /** Macro for beginning a generated proto class with a default constructor. */
 #define BEGIN_PROTO(cls, doc)                                                                      \

@@ -32,6 +32,11 @@
   bool cls::SerializeToString(std::string &out) const { return _SerializeToString(*this, out); }   \
   bool cls::SerializeToString(std::string &out, SerializeOptions &opts) const {                    \
     return _SerializeToString(*this, out, opts);                                                   \
+  }                                                                                                \
+  std::vector<std::string> cls::PrintToVectorString(utils::PrintOptions &options) const {          \
+    std::stringstream ss;                                                                          \
+    PrintToStringStream(ss, options);                                                              \
+    return {ss.str()};                                                                             \
   }
 
 ///////////////////////

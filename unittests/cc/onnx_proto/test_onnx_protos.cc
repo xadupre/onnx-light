@@ -1900,6 +1900,25 @@ TEST(onnx_string, NodeDeviceConfigurationProto) {
   EXPECT_TRUE(serialized.find("sharding_spec") != std::string::npos);
 }
 
+TEST(onnx_string, NodeDeviceConfigurationProto_PrintToVectorString) {
+  utils::PrintOptions options;
+  ONNX_LIGHT_NAMESPACE::NodeDeviceConfigurationProto proto;
+  proto.set_configuration_id("node_config_1");
+  proto.set_pipeline_stage(3);
+
+  std::vector<std::string> lines = proto.PrintToVectorString(options);
+
+  ASSERT_FALSE(lines.empty());
+  // The combined text must contain both fields.
+  std::string combined;
+  for (const auto &line : lines)
+    combined += line;
+  EXPECT_TRUE(combined.find("configuration_id:") != std::string::npos);
+  EXPECT_TRUE(combined.find("node_config_1") != std::string::npos);
+  EXPECT_TRUE(combined.find("pipeline_stage:") != std::string::npos);
+  EXPECT_TRUE(combined.find("3") != std::string::npos);
+}
+
 TEST(onnx_string, OperatorSetIdProto) {
   utils::PrintOptions options;
   ONNX_LIGHT_NAMESPACE::OperatorSetIdProto proto;

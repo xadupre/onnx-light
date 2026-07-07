@@ -231,6 +231,15 @@ inline int64_t ComputeInnerStride(const std::vector<int64_t> &shape, int64_t axi
 
 // Computes, for every element of ``x``, the flat index of the scale/ZP value
 // that governs it. Supports both per-axis (1-D scale) and blocked (N-D scale).
+//
+// GCC 13 emits a false-positive -Wfree-nonheap-object when it inlines the
+// destructor of the local ``coord`` vector and its interval analysis concludes
+// the allocated pointer might be non-heap.  The code is correct; suppress the
+// spurious diagnostic for GCC >= 12.
+#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 12
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfree-nonheap-object"
+#endif
 std::vector<int64_t> ComputeScaleIndex(const Tensor &x, const Tensor &y_scale, int64_t axis) {
   const std::vector<int64_t> &x_shape = x.shape;
   const std::size_t rank = x_shape.size();
@@ -273,6 +282,9 @@ std::vector<int64_t> ComputeScaleIndex(const Tensor &x, const Tensor &y_scale, i
   }
   return scale_index;
 }
+#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 12
+#pragma GCC diagnostic pop
+#endif
 
 // Per-block quantization for whole-byte integer output types.
 template <typename ZP>
